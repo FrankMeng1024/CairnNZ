@@ -28,11 +28,23 @@ jobs:
           buildsPath: builds
           allowDirtyBuild: false
 
+      - name: Locate Unity build output
+        run: |
+          echo "=== Looking for Unity iOS export ==="
+          find . -maxdepth 4 -name "Unity-iPhone.xcodeproj" -type d 2>/dev/null || true
+          echo "=== UnityARLib/builds/ contents ==="
+          ls -la UnityARLib/builds/ 2>/dev/null || echo "no UnityARLib/builds/"
+          echo "=== ./builds/ contents ==="
+          ls -la builds/ 2>/dev/null || echo "no ./builds/"
+
       - uses: actions/upload-artifact@v4
         with:
           name: unity-ios-export
-          path: builds/iOS/
+          path: |
+            UnityARLib/builds/iOS/
+            builds/iOS/
           retention-days: 1
+          if-no-files-found: error
 
   # ── Job 2: xcodebuild → xcframework (macOS required) ───────────────────────
   build-xcframework:
@@ -44,26 +56,26 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: unity-ios-export
-          path: builds/iOS/
+          path: ios-export/
 
-      - name: List exported Xcode project
+      - name: Locate downloaded Xcode project
+        id: locate
         run: |
-          echo "=== Exported contents ==="
-          find builds/iOS -maxdepth 3 -type f | head -40
+          XPROJ=$(find ios-export -name "Unity-iPhone.xcodeproj" -type d | head -1)
+          if [ -z "$XPROJ" ]; then
+            echo "ERROR: No Unity-iPhone.xcodeproj in artifact"
+            find ios-export -maxdepth 4 -type d
+            exit 1
+          fi
+          XDIR=$(dirname "$XPROJ")
+          echo "Found at: $XDIR"
+          echo "xcode_dir=$XDIR" >> $GITHUB_OUTPUT
 
       - name: Build UnityFramework.xcframework
         run: |
           set -e
 
-          PROJ="builds/iOS/Unity-iPhone.xcodeproj"
-
-          # Verify the project exists
-          if [ ! -d "$PROJ" ]; then
-            echo "ERROR: Unity-iPhone.xcodeproj not found at $PROJ"
-            echo "Available files:"
-            find builds/iOS -name "*.xcodeproj" -o -name "*.xcworkspace" | head -10
-            exit 1
-          fi
+          PROJ="${{ steps.locate.outputs.xcode_dir }}/Unity-iPhone.xcodeproj"
 
           # List available schemes
           echo "=== Available schemes ==="
