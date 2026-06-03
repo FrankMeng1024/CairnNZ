@@ -6,6 +6,9 @@ on:
       - 'UnityARLib/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   # ── Job 1: Unity iOS export (Linux + Docker, game-ci) ──────────────────────
   unity-export:
