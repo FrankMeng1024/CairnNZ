@@ -78,3 +78,4 @@ public class BuildScript
         return scenes.ToArray();
     }
 }
+
