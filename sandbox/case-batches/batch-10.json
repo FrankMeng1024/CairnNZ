@@ -1,0 +1,788 @@
+{
+  "batch": 10,
+  "theme": "恶意攻击",
+  "id_range": [451, 500],
+  "total": 50,
+  "cases": [
+    {
+      "id": 451,
+      "title": "Ponsonby ramen shop owner brigade-reports rival's Mt Eden food-truck mark",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mt Eden Village foot of the volcano cone car park near Stokes Road, Auckland",
+        "intrinsic_quality": "Genuine late-night ramen truck mark, photo of $14 tonkotsu, queue of 12 people in evidence",
+        "user_volume_per_month": 320,
+        "duration_months": 4,
+        "signal": "good urban 5G",
+        "season_pattern": "year-round dinner trade",
+        "human_factors": "Competing Ponsonby ramen shop owner created 6 fresh accounts to flood-report"
+      },
+      "events_timeline": [
+        "Month 1: truck owner posts mark, 40 organic likes from local night runners",
+        "Month 2: rival shop owner notices Instagram traffic shifting, opens 6 sockpuppet accounts on home wifi",
+        "Month 2 day 21: all 6 accounts file reports within 90 minutes claiming 'food poisoning'",
+        "Month 3: real customers post 25 fresh likes plus 4 photo replies defending the truck",
+        "Month 4: 110 likes, 6 brigade reports all from same /24 subnet, no health complaint elsewhere"
+      ],
+      "expected_signal_summary": "110 likes vs 6 reports clustered in 90 minutes from one IP block",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Six reports inside ninety minutes from accounts under 30 days old on a single subnet is textbook brigade signature, weight collapses to near zero",
+      "edge_case_flag": "brigade_attack|sockpuppet|commercial_rivalry"
+    },
+    {
+      "id": 452,
+      "title": "Local fisherman hides Whangaparaoa rock-shelf spot by mass-reporting newcomer's mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Tiritiri Matangi-facing rock shelf at end of Shakespear Regional Park headland, Whangaparaoa",
+        "intrinsic_quality": "Legitimate snapper spot mark with bathymetry sketch, posted by visiting Hamilton angler",
+        "user_volume_per_month": 45,
+        "duration_months": 6,
+        "signal": "weak 4G at headland tip",
+        "season_pattern": "snapper season Oct-Apr",
+        "human_factors": "Local Whangaparaoa fishing club WhatsApp told members to report 'wrong spot' to gatekeep"
+      },
+      "events_timeline": [
+        "Month 1: Hamilton angler posts careful tide chart and rock-shelf coords",
+        "Month 2: 22 organic likes from out-of-region anglers planning trips",
+        "Month 3: Whangaparaoa fishing club WhatsApp screenshot leaked, says 'flag the Hamilton bloke's pin'",
+        "Month 4: 14 reports arrive over 3 days all claiming 'no fish here' from accounts that never posted before",
+        "Month 6: 38 likes, 14 coordinated reports, 3 fresh photo confirmations from independent anglers showing snapper catches"
+      ],
+      "expected_signal_summary": "38 likes vs 14 reports but 3 independent photo evidence rebuts",
+      "expected_outcome": "alive",
+      "expected_status": "suppressed_then_revived",
+      "human_judgment": "Photo evidence from non-affiliated anglers showing real fish overrules the gatekeeping brigade, mark restored after 72h cool-down",
+      "edge_case_flag": "gatekeeping|local_brigade|photo_rebuttal"
+    },
+    {
+      "id": 453,
+      "title": "Influencer Instagrammer reports newcomer who marked the same Wharariki Beach arch sunset",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wharariki Beach Archway Islands viewpoint near Cape Farewell, Golden Bay Tasman district",
+        "intrinsic_quality": "Sunset framing pin posted by amateur photographer, not a duplicate, 80m offset from influencer's pin",
+        "user_volume_per_month": 180,
+        "duration_months": 3,
+        "signal": "no signal, syncs in Collingwood",
+        "season_pattern": "summer peak",
+        "human_factors": "Established travel influencer with 240k followers feels territorial about her composition"
+      },
+      "events_timeline": [
+        "Month 1: amateur posts genuinely different angle facing the southern arch",
+        "Month 1 week 3: influencer posts in Discord 'this guy is copying me'",
+        "Month 2: influencer reports the mark personally and gets 5 friends to pile on",
+        "Month 2: 52 likes from regular travelers who appreciate the alt angle",
+        "Month 3: 78 likes, 6 reports all from accounts that follow each other on Instagram"
+      ],
+      "expected_signal_summary": "78 likes vs 6 reports from socially-linked cluster",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Reports from a tightly-clustered social graph signal coordinated takedown not quality complaint, weight collapses",
+      "edge_case_flag": "social_graph_cluster|territorial_influencer"
+    },
+    {
+      "id": 454,
+      "title": "Ex-girlfriend retaliation reports every mark by user across South Island",
+      "scenario": {
+        "type": "mixed",
+        "location_desc": "User's 30 marks span Lake Tekapo, Mt Sunday, Castle Hill, Punakaiki, Hokitika Gorge across South Island",
+        "intrinsic_quality": "User has 4-year solid history, all 30 marks are legit hiking and scenic posts",
+        "user_volume_per_month": 90,
+        "duration_months": 14,
+        "signal": "varies, mostly DOC hut wifi",
+        "season_pattern": "year-round",
+        "human_factors": "Ex-partner created account specifically after breakup to retaliate, reports every single mark within one week"
+      },
+      "events_timeline": [
+        "Month 13: relationship ends after argument in Wanaka",
+        "Month 13 day 4: ex creates fresh account, no posts of her own",
+        "Month 13 day 5-11: 30 reports filed against the same author across 30 different marks in 6 days",
+        "Month 14: Cairn anomaly detector flags single-source mass-report pattern",
+        "Month 14: zero independent reports on any of the 30 marks, 600+ pre-existing organic likes"
+      ],
+      "expected_signal_summary": "30 reports from one fresh account against one author, vs 600+ existing organic likes",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "One reporter targeting one author's entire portfolio is a textbook revenge pattern, all reports nullified and reporter shadow-suspended",
+      "edge_case_flag": "revenge_reporter|mass_target_single_author"
+    },
+    {
+      "id": 455,
+      "title": "Anti-iwi troll reports Te Mata Peak maori cultural site warning mark",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Te Mata Peak summit ridge tapu area near Havelock North in Hawkes Bay region",
+        "intrinsic_quality": "Mark explains the legend of Te Mata o Rongokako and asks visitors not to climb on the body of the chief",
+        "user_volume_per_month": 220,
+        "duration_months": 5,
+        "signal": "good 4G at summit",
+        "season_pattern": "summer tourists peak",
+        "human_factors": "Anti-treaty Facebook group circulated screenshots calling the mark 'made-up Maori nonsense'"
+      },
+      "events_timeline": [
+        "Month 1: local kaumatua posts the cultural mark with iwi blessing",
+        "Month 2: 140 likes from respectful trampers and school groups",
+        "Month 3: anti-treaty group screenshots circulated on a Facebook group with 8k members",
+        "Month 4: 22 reports arrive in 36 hours, all using identical phrasing 'this is woke nonsense'",
+        "Month 5: 180 likes, 22 brigade reports, but 12 fresh comments from non-Maori trampers thanking for the cultural context"
+      ],
+      "expected_signal_summary": "180 likes vs 22 reports with copy-paste phrasing, 12 supportive comments",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Identical-language reports betray the brigade origin, cultural marks with iwi authorship receive elevated trust and protected status",
+      "edge_case_flag": "ideological_brigade|copy_paste_reports|cultural_protection"
+    },
+    {
+      "id": 456,
+      "title": "Solo sockpuppet user runs 5 alts to bury legitimate Mangawhai surf hazard mark",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mangawhai Heads sandbar rip current zone north of the harbour entrance, Northland",
+        "intrinsic_quality": "Surf-lifeguard-authored rip warning, two near-drowning records cited",
+        "user_volume_per_month": 130,
+        "duration_months": 7,
+        "signal": "good cellular",
+        "season_pattern": "summer drowning season",
+        "human_factors": "Local jet-ski hire owner doesn't want danger pin scaring customers, runs 5 phone-alts on same router"
+      },
+      "events_timeline": [
+        "Month 1: Mangawhai surf club volunteer posts the rip warning",
+        "Month 2: 60 likes from beachgoers and parents",
+        "Month 3: jet-ski hire owner sets up 5 alts on home Spark router over a weekend",
+        "Month 4: alts post one report per week each, looking organic but device fingerprint matches",
+        "Month 7: 95 likes, 28 reports but anomaly engine clusters them to 5 unique device IDs"
+      ],
+      "expected_signal_summary": "95 likes vs 28 reports collapsing to 5 unique devices on one router",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Device fingerprint and router-shared signal exposes the sockpuppet ring, all 28 reports treated as one weak signal",
+      "edge_case_flag": "sockpuppet_ring|device_fingerprint|commercial_motive"
+    },
+    {
+      "id": 457,
+      "title": "Coromandel Cathedral Cove rival tour operator floods competitor's mark with fake reports",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Cathedral Cove archway viewpoint southern access track Hahei Coromandel Peninsula",
+        "intrinsic_quality": "Walking-access mark posted by small-boat tour operator, free-of-charge alternative info",
+        "user_volume_per_month": 480,
+        "duration_months": 8,
+        "signal": "good 4G on the track",
+        "season_pattern": "December-Feb peak",
+        "human_factors": "Larger competitor charging $95 boat trip wants the free track info suppressed"
+      },
+      "events_timeline": [
+        "Month 1: small operator posts the free walking track shortcut",
+        "Month 2-3: 200 grateful likes from budget travelers",
+        "Month 4: rival operator's marketing team allocated $400 to incentivise reports",
+        "Month 5: 14 reports arrive from accounts created within the same 2-week window",
+        "Month 8: 380 likes, 14 reports all from very young accounts with no other activity"
+      ],
+      "expected_signal_summary": "380 likes vs 14 reports from cohort of accounts under 60 days old",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Account-age cohort analysis shows the report cluster came from a synchronously-created batch, classic paid-attack profile",
+      "edge_case_flag": "paid_brigade|account_age_cohort|tourism_competition"
+    },
+    {
+      "id": 458,
+      "title": "Tongariro Crossing parking-shuttle company smears competing free-parking mark",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mangatepopo car park free overnight zone on Tongariro Alpine Crossing northern trailhead",
+        "intrinsic_quality": "Mark documents 6 free overnight parks DOC permits without shuttle booking",
+        "user_volume_per_month": 600,
+        "duration_months": 5,
+        "signal": "no signal",
+        "season_pattern": "Nov-Apr peak crossing season",
+        "human_factors": "Shuttle companies charge $45/person and lose ~$10k/month if hikers self-park"
+      },
+      "events_timeline": [
+        "Month 1: through-hiker posts validated free parking info",
+        "Month 2: 250 likes, mark goes viral on Reddit r/newzealand",
+        "Month 2 week 4: shuttle company employee admits in private DM 'we have to push back'",
+        "Month 3: 9 reports claim 'parking is illegal' contradicting visible DOC signage",
+        "Month 5: 470 likes, 9 reports, plus 18 photos of the actual DOC sign permitting the parking"
+      ],
+      "expected_signal_summary": "470 likes vs 9 reports but 18 photo evidence of official signage contradicts reports",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "When user-submitted photo evidence directly refutes reporter claims, photo evidence wins and reports are downgraded",
+      "edge_case_flag": "evidence_overrides_report|industry_pushback"
+    },
+    {
+      "id": 459,
+      "title": "Ex-employee disgruntled-leaves Nelson cafe and reports it as health hazard",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Trafalgar Street main strip independent cafe near Nelson Cathedral steps, Nelson CBD",
+        "intrinsic_quality": "Cafe has a current Nelson City Council A-grade food licence, posted by happy customer",
+        "user_volume_per_month": 410,
+        "duration_months": 9,
+        "signal": "good 5G",
+        "season_pattern": "year-round",
+        "human_factors": "Sacked barista after argument over till discrepancy, posts retaliatory health hazard reports"
+      },
+      "events_timeline": [
+        "Month 1: regular customer posts cafe mark with espresso photo",
+        "Month 4: barista sacked for till issue, makes social media threats on personal Facebook",
+        "Month 5: ex-barista creates new Cairn account and reports the cafe as 'mouse problem in kitchen'",
+        "Month 5 week 2: 3 friends join in but their reports are vague",
+        "Month 9: 320 likes from real customers, 4 reports with no inspector follow-up filed at council"
+      ],
+      "expected_signal_summary": "320 likes vs 4 reports with no corroborating health-inspection data",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Reports about regulated businesses can be cross-checked with public council inspection registers, absence of any inspection complaint nullifies",
+      "edge_case_flag": "external_data_crosscheck|disgruntled_ex_employee"
+    },
+    {
+      "id": 460,
+      "title": "Fake 19 likes engineered then flip to mass-report on Banks Peninsula scenic mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Hilltop tavern viewpoint over Akaroa Harbour caldera Banks Peninsula Canterbury",
+        "intrinsic_quality": "Genuine viewpoint, but a stranger posted the mark to test the algorithm",
+        "user_volume_per_month": 150,
+        "duration_months": 4,
+        "signal": "patchy",
+        "season_pattern": "summer cruise-ship trade",
+        "human_factors": "Known troll on r/newzealand publicly announced a 'Cairn algorithm test' to fake-like then mass-report"
+      },
+      "events_timeline": [
+        "Month 1: troll posts mark with 19 simultaneous fake likes from prepared accounts",
+        "Month 2: troll publicly announces in Reddit thread the planned reverse-attack on day 60",
+        "Month 2 day 60: 22 reports filed by the same accounts that previously liked",
+        "Month 3: independent users walking past add 14 real likes unaware of drama",
+        "Month 4: total 33 likes (19 toxic + 14 real), 22 reports from the same toxic 19 plus 3 friends"
+      ],
+      "expected_signal_summary": "33 likes vs 22 reports but 19 likes match exactly the report origin accounts",
+      "expected_outcome": "alive",
+      "expected_status": "downgraded_then_settled",
+      "human_judgment": "When the same accounts both like and later report, the like-then-flip pattern triggers full nullification of both signals leaving 14 organic likes intact",
+      "edge_case_flag": "like_then_flip|reverse_attack|public_test"
+    },
+    {
+      "id": 461,
+      "title": "Cross-trail spree reporter targets 50 unrelated marks from one account in one weekend",
+      "scenario": {
+        "type": "mixed",
+        "location_desc": "50 marks span Abel Tasman, Heaphy, Routeburn, Kepler, Milford Track Great Walks across both islands",
+        "intrinsic_quality": "All 50 marks are legitimate, posted by 35 different unrelated authors over 2 years",
+        "user_volume_per_month": 800,
+        "duration_months": 12,
+        "signal": "varies",
+        "season_pattern": "year-round Great Walks",
+        "human_factors": "Single account user binge-reports during a depressive episode according to later self-disclosure"
+      },
+      "events_timeline": [
+        "Month 11 Saturday morning: user opens app and reports 50 marks in 4 hours",
+        "Month 11 Saturday afternoon: each report uses near-identical 'this place sucks' phrasing",
+        "Month 11 Sunday: anomaly detector flags the spree, freezes the reporter's report-weight",
+        "Month 12: user later self-discloses on Reddit it was a mental-health binge",
+        "Month 12: across all 50 marks, 0 corroborating reports from any other user"
+      ],
+      "expected_signal_summary": "50 reports from one account in 4 hours, 0 corroboration on any mark",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Velocity-based anomaly detection at over 12 reports per hour from one account triggers automatic weight freeze on that reporter's signal",
+      "edge_case_flag": "spree_reporter|velocity_anomaly|single_source"
+    },
+    {
+      "id": 462,
+      "title": "Coordinated 8-friend brigade reports new restaurant mark in Wellington Cuba Street",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Cuba Street upper end Vietnamese pho place near Garrett Street junction Wellington CBD",
+        "intrinsic_quality": "New legitimate $14 pho shop, mark posted by satisfied customer with photo",
+        "user_volume_per_month": 380,
+        "duration_months": 3,
+        "signal": "good 5G urban",
+        "season_pattern": "year-round",
+        "human_factors": "Owner's ex-business-partner organised a group of 8 friends in private Discord to attack the mark"
+      },
+      "events_timeline": [
+        "Month 1: customer posts pho shop mark, 60 likes in first week",
+        "Month 2 day 4: 8 friends in Discord agree to all report at 8pm Friday",
+        "Month 2 day 5: 8 reports arrive within a 12-minute window",
+        "Month 2 day 6: forensic timing analysis flags the 12-minute cluster",
+        "Month 3: 240 likes, 8 reports clustered in 12 minutes, 0 follow-up reports"
+      ],
+      "expected_signal_summary": "240 likes vs 8 reports tightly clustered in 12 minutes",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Sub-fifteen-minute report clustering from accounts that have never previously interacted with the same trail is a brigade fingerprint, weight collapses",
+      "edge_case_flag": "timing_cluster|discord_brigade|business_dispute"
+    },
+    {
+      "id": 463,
+      "title": "Sockpuppeteer admits to 7 alts on Cardrona ski-field secret-stash mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Captains Basin off-piste glade powder stash skiers-right of Cardrona Alpine Resort Otago",
+        "intrinsic_quality": "Genuine off-piste powder stash, ski-patrol-tolerated, posted by season-pass holder",
+        "user_volume_per_month": 75,
+        "duration_months": 6,
+        "signal": "ski-field wifi",
+        "season_pattern": "Jun-Oct ski season",
+        "human_factors": "Local pro skier posts on Instagram screenshot of 7 alt accounts and brags about hiding the spot"
+      },
+      "events_timeline": [
+        "Month 1: season-pass holder posts the stash with safe-line annotations",
+        "Month 2: pro skier sees the mark and creates 7 alts over 4 days",
+        "Month 3: pro skier brags on Instagram with screenshot of the alt accounts",
+        "Month 4: someone screenshots the brag and reports it back to Cairn moderation",
+        "Month 6: 80 likes, 12 reports (7 from confessed alts + 5 from real concerned skiers), confession in evidence"
+      ],
+      "expected_signal_summary": "80 likes vs 12 reports of which 7 are confessed-alt reports",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "When sockpuppet admission is captured in external evidence the 7 confessed alts are zeroed leaving 5 reports against 80 likes which is healthy ratio",
+      "edge_case_flag": "confessed_sockpuppet|external_evidence|powder_secrecy"
+    },
+    {
+      "id": 464,
+      "title": "Anti-DOC libertarian group reports a Kahurangi National Park hut-booking warning mark",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "James Mackay Hut Heaphy Track booking-required notice, Kahurangi National Park western section",
+        "intrinsic_quality": "DOC official warning that hut requires Great Walks booking, posted by ranger",
+        "user_volume_per_month": 90,
+        "duration_months": 11,
+        "signal": "no signal, syncs at end",
+        "season_pattern": "Nov-Apr Great Walks season",
+        "human_factors": "Anti-government Facebook group encouraged members to flag DOC marks as 'overreach'"
+      },
+      "events_timeline": [
+        "Month 1: DOC ranger posts the booking-required notice",
+        "Month 4: anti-DOC group screenshots the mark calling it 'nanny state'",
+        "Month 5: 18 reports filed within a week from accounts with anti-DOC bios",
+        "Month 8: ranger adds photo of the actual booking sign at the hut door",
+        "Month 11: 130 likes, 18 ideological reports, 0 reports from any actual Heaphy hiker"
+      ],
+      "expected_signal_summary": "130 likes vs 18 reports from accounts with shared bio keywords",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Reporter-bio similarity clustering combined with zero on-trail reporters reveals the ideological brigade, official-source authorship is preserved",
+      "edge_case_flag": "ideological_brigade|official_source|bio_clustering"
+    },
+    {
+      "id": 465,
+      "title": "Hokitika Gorge tour van driver reports tourist's free-parking mark to push paid lot",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Hokitika Gorge swing-bridge car park free roadside zone West Coast South Island",
+        "intrinsic_quality": "Free roadside parking 200m before paid lot, mark posted by Dutch backpacker",
+        "user_volume_per_month": 240,
+        "duration_months": 4,
+        "signal": "very weak",
+        "season_pattern": "summer peak",
+        "human_factors": "Tour van driver gets $5 commission per car directed to the paid lot"
+      },
+      "events_timeline": [
+        "Month 1: Dutch backpacker posts the free-parking shortcut",
+        "Month 2: 90 likes from budget travelers and Wicked Camper users",
+        "Month 3 week 1: tour van driver and 2 colleagues report the mark as 'unsafe parking'",
+        "Month 3 week 3: backpacker adds video showing 8 vans parked safely there",
+        "Month 4: 170 likes, 3 reports from drivers who all work for same operator"
+      ],
+      "expected_signal_summary": "170 likes vs 3 reports from co-employed drivers",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Employer-graph clustering of reporters combined with rebuttal video evidence collapses the report weight to near-zero",
+      "edge_case_flag": "employer_graph|video_rebuttal|commission_motive"
+    },
+    {
+      "id": 466,
+      "title": "Brand-new account targets only marks by Maori-named authors across Far North trails",
+      "scenario": {
+        "type": "mixed",
+        "location_desc": "12 marks span Te Paki sand dunes, Cape Reinga lighthouse, Spirits Bay, 90 Mile Beach Far North",
+        "intrinsic_quality": "All 12 marks legit, all 12 authors have Maori display names",
+        "user_volume_per_month": 200,
+        "duration_months": 5,
+        "signal": "patchy",
+        "season_pattern": "summer Far North trip peak",
+        "human_factors": "Single account with overtly racist bio attacks every Maori-authored mark it encounters"
+      },
+      "events_timeline": [
+        "Month 1: account created with bio that includes anti-Maori slur",
+        "Month 2: account reports 12 Maori-authored marks in 3 days, ignores all other authors",
+        "Month 2: pattern detection flags discriminatory targeting",
+        "Month 3: account also reports 0 Pakeha-authored marks at same locations",
+        "Month 5: 12 marks each accumulate 3-5 reports from same account, 200+ organic likes total across the set"
+      ],
+      "expected_signal_summary": "12 separate marks each with 1 report from same biased account vs 200+ organic likes",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Author-attribute targeting where reporter only flags one demographic class is treated as discriminatory abuse and triggers full reporter ban",
+      "edge_case_flag": "discriminatory_targeting|protected_class|reporter_ban"
+    },
+    {
+      "id": 467,
+      "title": "Climbing-route bolt thief mass-reports the rebolt mark at Wanaka Hospital Flat crag",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Hospital Flat sport-climbing crag near Wanaka township above the lake, Otago",
+        "intrinsic_quality": "Mark warns 3 routes are missing bolts due to recent thefts, posted by NZAC member",
+        "user_volume_per_month": 35,
+        "duration_months": 9,
+        "signal": "weak",
+        "season_pattern": "Nov-Mar climbing season",
+        "human_factors": "Suspected bolt-thief wants the warning gone so unaware climbers fall and discredit the report"
+      },
+      "events_timeline": [
+        "Month 1: NZAC volunteer posts the missing-bolt safety mark",
+        "Month 2: 20 grateful likes from local climbers",
+        "Month 4: NZAC member posts photo of stolen-bolt holes",
+        "Month 6: 7 reports arrive claiming 'bolts are fine' from accounts that never posted any climbing content",
+        "Month 9: 45 likes, 7 reports, plus 4 fresh confirmations from independent climbers also seeing missing bolts"
+      ],
+      "expected_signal_summary": "45 likes vs 7 reports with 4 independent confirmations of the hazard",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Independent corroboration of the original safety claim by separate climbers neutralises the suspect-motivated reports completely",
+      "edge_case_flag": "safety_critical|suspect_motive|independent_corroboration"
+    },
+    {
+      "id": 468,
+      "title": "Property developer reports a Whangarei native bush conservation mark to clear protest",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "AH Reed Memorial Park kauri grove threatened-development zone near Whangarei city, Northland",
+        "intrinsic_quality": "Mark documents council-protected kauri grove, posted by Forest and Bird volunteer",
+        "user_volume_per_month": 110,
+        "duration_months": 8,
+        "signal": "good",
+        "season_pattern": "year-round",
+        "human_factors": "Developer applying for resource consent wants the conservation mark gone before hearing"
+      },
+      "events_timeline": [
+        "Month 1: Forest and Bird volunteer posts grove documentation with kauri-dieback warning",
+        "Month 2: 70 likes from environmental groups",
+        "Month 4: developer's PR firm hires 5 contractors to file reports",
+        "Month 5: 5 reports arrive with similar legal-leaning phrasing",
+        "Month 8: 180 likes, 5 reports from accounts later linked via OSINT to PR firm employees"
+      ],
+      "expected_signal_summary": "180 likes vs 5 reports from accounts with shared employer fingerprint",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "When OSINT links reporters to a commercial entity with declared interest in suppression the reports are nullified and the mark is locked from future flag actions",
+      "edge_case_flag": "commercial_suppression|osint_link|conservation"
+    },
+    {
+      "id": 469,
+      "title": "Rival climbing guide reports newcomer's free Castle Hill bouldering route mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Castle Hill Quantum Field boulder problems near Cave Stream Scenic Reserve Canterbury high country",
+        "intrinsic_quality": "Newcomer guide posts 6 free topo problems, threatening established paid-guide-book sales",
+        "user_volume_per_month": 95,
+        "duration_months": 5,
+        "signal": "no signal",
+        "season_pattern": "autumn climbing peak",
+        "human_factors": "Established guidebook author earns ~$30/copy, sees free topo as direct attack"
+      },
+      "events_timeline": [
+        "Month 1: newcomer posts 6 boulder topos with grade and beta",
+        "Month 2: 50 likes from international climbers planning trips",
+        "Month 3: established author publishes Facebook post calling newcomer 'unethical'",
+        "Month 4: 4 of established author's regular clients each file a report",
+        "Month 5: 90 likes, 4 reports, 8 fresh likes from climbers thanking for free info"
+      ],
+      "expected_signal_summary": "90 likes vs 4 reports from established author's known client circle",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Reporter relationship to a publicly-stated grievance party degrades report weight by an order of magnitude, free information remains visible",
+      "edge_case_flag": "client_circle|public_grievance|guidebook_economics"
+    },
+    {
+      "id": 470,
+      "title": "Anti-tourist Queenstown local floods reports on a Skippers Canyon viewpoint mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Skippers Canyon Pipeline Bridge viewpoint above Shotover River near Queenstown Otago",
+        "intrinsic_quality": "Genuine viewpoint mark by tourist, road is public though narrow and gravelly",
+        "user_volume_per_month": 320,
+        "duration_months": 6,
+        "signal": "no signal",
+        "season_pattern": "summer peak",
+        "human_factors": "Anti-overtourism resident group wants the canyon to feel 'discovered' less"
+      },
+      "events_timeline": [
+        "Month 1: Australian tourist posts the viewpoint with safety notes about the road",
+        "Month 2: 130 likes from upcoming visitors",
+        "Month 3: local residents Facebook page calls for mass-reporting any tourist marks",
+        "Month 4: 9 reports from Queenstown postcode-clustered accounts",
+        "Month 6: 280 likes, 9 reports, all reporters geo-clustered within 5km of canyon"
+      ],
+      "expected_signal_summary": "280 likes vs 9 reports from one tight geo-cluster",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Geo-clustering of reporters at the local-resident scale combined with no on-the-ground safety claim signals overtourism resentment not factual problem",
+      "edge_case_flag": "anti_tourism_local|geo_cluster|resentment_brigade"
+    },
+    {
+      "id": 471,
+      "title": "AI-generated fake-account ring reports Marlborough Sounds boat-launch mark",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Waikawa Bay public boat ramp near Picton Marlborough Sounds top of South Island",
+        "intrinsic_quality": "Genuine free public ramp, posted by Picton fisherman, has council signage",
+        "user_volume_per_month": 180,
+        "duration_months": 7,
+        "signal": "good",
+        "season_pattern": "year-round",
+        "human_factors": "Marina operator pays for AI-generated account ring overseas to attack public ramp marks"
+      },
+      "events_timeline": [
+        "Month 1: Picton fisherman posts free ramp with photo",
+        "Month 3: 14 reports filed within 4 days from accounts with AI-generated avatars",
+        "Month 3: text-analysis shows reporter language uses non-NZ idioms ('parking lot' instead of 'car park')",
+        "Month 5: forensic check reveals all 14 accounts created via same VPN exit node in eastern Europe",
+        "Month 7: 220 likes from real boat owners, 14 reports flagged as foreign-bot-ring"
+      ],
+      "expected_signal_summary": "220 likes vs 14 reports from foreign-bot-ring with linguistic tells",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Linguistic-tell detection plus VPN fingerprinting expose the offshore bot ring and trigger automatic nullification across the entire ring's history",
+      "edge_case_flag": "offshore_bots|linguistic_tells|paid_attack_ring"
+    },
+    {
+      "id": 472,
+      "title": "Disgruntled hostel owner reports rival hostel's freedom-camping safe-zone mark in Taupo",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Reids Farm freedom camping zone north end Lake Taupo Domain Road central North Island",
+        "intrinsic_quality": "Mark documents legal freedom-camping zone with toilet facilities, posted by hostel manager",
+        "user_volume_per_month": 540,
+        "duration_months": 6,
+        "signal": "good",
+        "season_pattern": "summer peak",
+        "human_factors": "Rival hostel loses ~30 beds/night to freedom campers, sends staff to file reports"
+      },
+      "events_timeline": [
+        "Month 1: hostel manager posts the legal freedom-camping zone",
+        "Month 2: 220 likes from van travelers",
+        "Month 3: rival hostel front-desk staff create 4 accounts using work wifi",
+        "Month 4: 4 reports claim 'illegal camping' contradicting Taupo District bylaw",
+        "Month 6: 480 likes, 4 reports, plus 30 photos showing council bylaw sign permitting camping"
+      ],
+      "expected_signal_summary": "480 likes vs 4 reports refuted by 30 council-sign photos",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Photographic evidence of official signage directly contradicting reporter claims always wins over volume of reports",
+      "edge_case_flag": "regulatory_evidence|business_competition|photo_proof"
+    },
+    {
+      "id": 473,
+      "title": "Coromandel local fishing club brigades a snapper-spot mark from outsider",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Whangapoua Beach offshore reef snapper grounds Coromandel east coast Thames-Coromandel district",
+        "intrinsic_quality": "Outsider posts GPS coords for productive reef, photo of 4 legal-size snapper",
+        "user_volume_per_month": 65,
+        "duration_months": 8,
+        "signal": "no signal offshore",
+        "season_pattern": "Oct-Apr snapper",
+        "human_factors": "Whangapoua fishing club WhatsApp group of 22 locals coordinates 'protect our spot'"
+      },
+      "events_timeline": [
+        "Month 1: outsider posts coords and bag photo",
+        "Month 2: 30 grateful likes from Auckland anglers planning trips",
+        "Month 3: WhatsApp group screenshot leaks showing 'everyone flag this'",
+        "Month 4: 11 reports filed within 5 days, all from Whangapoua-postcode accounts",
+        "Month 8: 60 likes, 11 reports, 6 independent visiting anglers post their own catches confirming spot"
+      ],
+      "expected_signal_summary": "60 likes vs 11 reports but 6 independent catch confirmations",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Independent corroboration from non-affiliated visiting users overrides locals-only brigade signal, the spot stays public",
+      "edge_case_flag": "local_gatekeeping|independent_corroboration|fishing_secrecy"
+    },
+    {
+      "id": 474,
+      "title": "Returning ex-user reactivates old account to retro-report 6 marks by ex-friend",
+      "scenario": {
+        "type": "mixed",
+        "location_desc": "6 marks scattered Karekare beach, Bethells beach, Piha, Muriwai west Auckland coast",
+        "intrinsic_quality": "All 6 marks legitimate and well-liked, posted by photographer ex-friend",
+        "user_volume_per_month": 130,
+        "duration_months": 14,
+        "signal": "patchy west coast",
+        "season_pattern": "year-round",
+        "human_factors": "Old friend reactivates 18-month-dormant account specifically to retaliate after personal feud"
+      },
+      "events_timeline": [
+        "Month 12: account dormant for 18 months suddenly logs in",
+        "Month 13: 6 reports filed within 2 hours, all on same author's marks",
+        "Month 13: account history shows 0 prior reports in entire 3-year lifetime",
+        "Month 14: behavioural anomaly engine flags dormant-then-burst pattern",
+        "Month 14: 6 marks each have 1 retro-report, none have any other reports despite 200+ likes each"
+      ],
+      "expected_signal_summary": "6 retro-reports from one dormant-reactivated account vs 1200+ aggregate likes",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Dormant-account reactivation followed immediately by targeted reporting against one author triggers automatic full-weight nullification",
+      "edge_case_flag": "dormant_reactivation|retro_targeting|personal_feud"
+    },
+    {
+      "id": 475,
+      "title": "Stewart Island birder gatekeeper reports rival birder's kiwi-spotting mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Mason Bay tussock zone kiwi-spotting area Rakiura National Park Stewart Island far south",
+        "intrinsic_quality": "Tested by rival birder posting validated nocturnal kiwi-sighting GPS mark",
+        "user_volume_per_month": 28,
+        "duration_months": 10,
+        "signal": "no signal",
+        "season_pattern": "year-round nocturnal",
+        "human_factors": "Established Stewart Island birding-guide doesn't want amateurs disturbing his commercial spot"
+      },
+      "events_timeline": [
+        "Month 1: rival birder posts mark with photo of kiwi tracks",
+        "Month 3: established guide files 3 reports calling mark 'disturbing wildlife'",
+        "Month 4: established guide encourages 4 clients to also report",
+        "Month 6: DOC volunteer comments confirming the spot is on permitted access track",
+        "Month 10: 35 likes, 7 reports, plus DOC-volunteer credibility comment"
+      ],
+      "expected_signal_summary": "35 likes vs 7 reports but DOC-volunteer comment lends authority",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Verified DOC-affiliated commenter rebutting reporter-claims about wildlife-disturbance carries higher weight than commercial-guide objection",
+      "edge_case_flag": "authority_rebuttal|guide_economics|wildlife_pretext"
+    },
+    {
+      "id": 476,
+      "title": "Vendetta against single Otago mountain biker - 14 reports across his bike-park marks",
+      "scenario": {
+        "type": "mixed",
+        "location_desc": "14 marks span Bannockburn trails, Naseby forest, Alexandra Connell Hill MTB tracks Central Otago",
+        "intrinsic_quality": "Biker has 5 years posting solid trail-condition updates, all 14 marks well-liked",
+        "user_volume_per_month": 220,
+        "duration_months": 11,
+        "signal": "patchy",
+        "season_pattern": "Sep-May riding",
+        "human_factors": "Person who lost a club election to the biker pursues a personal vendetta"
+      },
+      "events_timeline": [
+        "Month 9: club election concludes, biker wins president role",
+        "Month 10: losing candidate creates new account from work computer",
+        "Month 10 day 4-12: 14 reports filed against the biker's portfolio in 8 days",
+        "Month 11: anomaly detector identifies single-author single-target sweep",
+        "Month 11: 14 marks have 880+ pre-existing organic likes total, 0 reports from any other user"
+      ],
+      "expected_signal_summary": "14 single-source reports vs 880+ aggregate organic likes",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Single reporter sweeping a single author's entire mark history is the canonical revenge pattern, all reports nullified and reporter rate-limited",
+      "edge_case_flag": "election_vendetta|single_source_sweep|portfolio_attack"
+    },
+    {
+      "id": 477,
+      "title": "Pakiri Beach surfcaster spot brigaded by motorbike-tour operator who lost access dispute",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Pakiri Beach northern end surfcasting zone above Goat Island Marine Reserve Northland",
+        "intrinsic_quality": "Mark posted by surfcasting club after winning council ruling against motorbike access",
+        "user_volume_per_month": 80,
+        "duration_months": 9,
+        "signal": "weak",
+        "season_pattern": "year-round surfcasting",
+        "human_factors": "Motorbike-tour operator lost the council case and uses 4 employees to discredit the mark"
+      },
+      "events_timeline": [
+        "Month 1: surfcasting club posts the mark documenting council-ruled fishing zone",
+        "Month 3: motorbike operator's 4 employees create 4 accounts on operator wifi",
+        "Month 4: 4 reports filed claiming 'unsafe' contradicting the council ruling",
+        "Month 5: surfcasting club posts the council determination document image",
+        "Month 9: 95 likes, 4 reports, council-document image carries authority"
+      ],
+      "expected_signal_summary": "95 likes vs 4 reports refuted by official council document image",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Authoritative regulatory documentation attached as evidence outranks volume of unverified reporter claims about safety",
+      "edge_case_flag": "council_ruling|regulatory_authority|industry_loser"
+    },
+    {
+      "id": 478,
+      "title": "Hawke's Bay vineyard tour van organizes brigade against free-tasting mark at competitor",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Te Mata Estate cellar door free Saturday tasting area Havelock North Hawke's Bay region",
+        "intrinsic_quality": "Mark posted by happy visitor confirming Te Mata's published free tasting Saturday",
+        "user_volume_per_month": 290,
+        "duration_months": 4,
+        "signal": "good",
+        "season_pattern": "Nov-Apr peak",
+        "human_factors": "Competing tour van that charges $120/head wants the free-tasting info gone"
+      },
+      "events_timeline": [
+        "Month 1: visitor posts the published-free-tasting Saturday slot",
+        "Month 2: 110 likes from cost-conscious wine tourists",
+        "Month 3 weekend: tour van's 5 drivers report mark as 'misleading'",
+        "Month 3: Te Mata Estate's own social media reposts confirms the free tasting",
+        "Month 4: 240 likes, 5 reports, plus official cellar-door confirmation comment"
+      ],
+      "expected_signal_summary": "240 likes vs 5 reports refuted by official cellar-door account",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Verified business-account confirmation of the marked-information makes the brigade reports facially false and they are nullified entirely",
+      "edge_case_flag": "verified_business|free_vs_paid|tour_industry"
+    },
+    {
+      "id": 479,
+      "title": "Wellington political activist organises 12-person brigade on parliament-tour mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Beehive parliament building public guided tour entrance Molesworth Street Wellington CBD",
+        "intrinsic_quality": "Mark posted by tourism volunteer documenting free public parliament tours",
+        "user_volume_per_month": 410,
+        "duration_months": 5,
+        "signal": "good",
+        "season_pattern": "year-round",
+        "human_factors": "Political activist running a campaign against the current government wants tour info suppressed"
+      },
+      "events_timeline": [
+        "Month 1: tourism volunteer posts the free-tour timetable",
+        "Month 2: 180 likes from international visitors",
+        "Month 3 day 14: activist posts on Mastodon recruiting 12 volunteers to flag",
+        "Month 3 day 18: 12 reports arrive within 6 hours with similar political phrasing",
+        "Month 5: 350 likes, 12 reports, plus confirmation from official parliament account"
+      ],
+      "expected_signal_summary": "350 likes vs 12 reports clustered in 6 hours with shared political vocabulary",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Six-hour clustering combined with vocabulary fingerprinting and an official-account confirmation defeats the political brigade conclusively",
+      "edge_case_flag": "political_brigade|vocabulary_fingerprint|official_rebuttal"
+    },
+    {
+      "id": 480,
+      "title": "Greymouth pub regular reports out-of-towner's pub-meal-deal mark out of small-town pride",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Speights Ale House Greymouth Tainui Street $18 fish-of-the-day promotion West Coast",
+        "intrinsic_quality": "Out-of-towner posts the pub's actual published $18 fish meal deal",
+        "user_volume_per_month": 120,
+        "duration_months": 3,
+        "signal": "good",
+        "season_pattern": "year-round",
+        "human_factors": "Long-time regular feels his 'local' is being colonised by tourists, reports out of pride"
+      },
+      "events_timeline": [
+        "Month 1: out-of-towner posts the meal deal with receipt photo",
+        "Month 2: 65 likes from West Coast travellers",
+        "Month 2: regular posts on the pub's Facebook 'don't tell tourists about us'",
+        "Month 3: regular and 2 mates file reports calling the meal 'overrated'",
+        "Month 3: 90 likes, 3 reports, plus pub's own Facebook post confirming the deal"
+      ],
+      "expected_signal_summary": "90 likes vs 3 reports refuted by pub's own social media",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Personal-pride reports unsupported by any factual deficiency and contradicted by the business itself collapse to negligible weight",
+      "edge_case_flag": "small_town_pride|business_self_confirmation|sentimental_report"
+    }
+  ]
+}

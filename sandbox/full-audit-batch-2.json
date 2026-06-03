@@ -1,0 +1,926 @@
+{
+  "batch": 2,
+  "total": 131,
+  "agree": 129,
+  "doubt": 2,
+  "disagree": 0,
+  "details": [
+    {
+      "id": 138,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 139,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 140,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 141,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 142,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 143,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 144,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 145,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 146,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 147,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 148,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 149,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 150,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 151,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 152,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 153,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 154,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 155,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 156,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 157,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 158,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 159,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 160,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "葡萄牙战舰水母季节性危险,context_dependent 正确,v6.6 §九季节性接受。"
+    },
+    {
+      "id": 161,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 162,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 163,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 164,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 165,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 166,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 167,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 168,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 170,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 171,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 172,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 173,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 174,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "海狮繁殖期季节性,context_dependent 正确。"
+    },
+    {
+      "id": 175,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 176,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 177,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 178,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 179,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 180,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 181,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 182,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 183,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 184,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "鲨鱼袭击夏末季节性,context_dependent 正确。"
+    },
+    {
+      "id": 185,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 186,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 187,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 188,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 189,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 190,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 191,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 192,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 193,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 194,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "邮轮季季节性诈骗警告,context_dependent 正确。"
+    },
+    {
+      "id": 195,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 196,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 197,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 198,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 199,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "6-9 月封闭季节性 mark,context_dependent 正确。"
+    },
+    {
+      "id": 200,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 251,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "31:3 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 252,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "47:4 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 253,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "18:14 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 254,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "9:19 占比/集中性符合 v6.6 §3 向下急转或权威反驳,dead_sick 入口正确。"
+    },
+    {
+      "id": 255,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "68:5 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 256,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "6:24 占比/集中性符合 v6.6 §3 向下急转或权威反驳,dead_sick 入口正确。"
+    },
+    {
+      "id": 257,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "53:4 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 259,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "31:8 与 v6.6 一致。"
+    },
+    {
+      "id": 260,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "36:3 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 261,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "4:27 占比/集中性符合 v6.6 §3 向下急转或权威反驳,dead_sick 入口正确。"
+    },
+    {
+      "id": 262,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "11:18 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 263,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "5:22 占比/集中性符合 v6.6 §3 向下急转或权威反驳,dead_sick 入口正确。"
+    },
+    {
+      "id": 264,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "87:5 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 265,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "41:1 1 条不构成趋势(v6.6 §3 支柱1),HEALTHY 正确。"
+    },
+    {
+      "id": 266,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "18:21 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 267,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "78:4 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 268,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "8:17 占比/集中性符合 v6.6 §3 向下急转或权威反驳,dead_sick 入口正确。"
+    },
+    {
+      "id": 269,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "73:5 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 270,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "14:16 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 271,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "142:3 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 272,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "44:2 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 273,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "56:2 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 274,
+      "verdict": "DOUBT",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "rationale 自承 '持续 report 构成趋势' 与 v6.6 §3 急转识别矛盾——22:13 (16个月) 学者反驳+官方更准 mark 存在,若 13 条集中近期则应 SUSPICIOUS;若历史均匀分布则 healthy 合理。无 timeline 时间分布信息,需要算法层窗口判定。倾向 SUSPICIOUS,但若分散则 AGREE。"
+    },
+    {
+      "id": 275,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "64:3 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 276,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "88:7 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 277,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "67:2 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 278,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "71:9 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 279,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "1:14 占比/集中性符合 v6.6 §3 向下急转或权威反驳,dead_sick 入口正确。"
+    },
+    {
+      "id": 280,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "18:12 集体 report 构成趋势,SUSPICIOUS 入口正确;NZAC+DOC 中性留言不构成强心剂(无向上急转 burst)。v6.6 §3 急转入口 OK。"
+    },
+    {
+      "id": 301,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "47:312 (0.15:1) 大量集中向下急转 + 严重度足以 → CRITICAL → DEAD,sick_death 正确。"
+    },
+    {
+      "id": 302,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1.05:1 持续争议,v6.6 §7 Case R 明确维持 HEALTHY。"
+    },
+    {
+      "id": 303,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "890:12 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 305,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "680:1450 (0.47:1) 占比悬殊+生态破坏严重度高,SUSPICIOUS 入口正确。"
+    },
+    {
+      "id": 307,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1320:95 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 311,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "2:1 多数正向,踩花是次要信号未构成急转,HEALTHY 正确。"
+    },
+    {
+      "id": 312,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1180:35 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 316,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1340:220 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 317,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "已自审核修正为 healthy(0.79:1 持续争议 = Case R);final_state 与 rationale 现一致。"
+    },
+    {
+      "id": 318,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1660:290 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 319,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "2400:410 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 320,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1520:380 与 v6.6 一致。"
+    },
+    {
+      "id": 321,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1180:65 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 322,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1340:45 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 326,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0.9:1 持续争议(价格/价值分歧),v6.6 Case R → HEALTHY。"
+    },
+    {
+      "id": 327,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "480:18 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 328,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "920:110 高赞主导无急转,HEALTHY 正确。"
+    },
+    {
+      "id": 351,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "5:13 持续递增 report+视野永久改变,中严重度 SUSPICIOUS→CRITICAL→sick_death。"
+    },
+    {
+      "id": 352,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "18:16 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 353,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "9:7 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 354,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "22:13 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 355,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "47:17 整体高赞,但 Month 78 后近期 9 条集中 = 向下急转 → SUSPICIOUS。v6.6 §3 占比驱动+滑动窗口正确应用。"
+    },
+    {
+      "id": 356,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "48:27 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 357,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "33:11 总体高赞,但 Month 31 后 11 条全部新近 unanimous → 滑动窗口近期向下急转 → SUSPICIOUS,正确。"
+    },
+    {
+      "id": 358,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "14:8 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 359,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "22:11 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 360,
+      "verdict": "DOUBT",
+      "current_state": "dead_sick",
+      "suggested_state": "suspicious",
+      "comment": "26:23 (6 年累积),DOC 长期闭门是慢性恶化非急转;v6.6 §3 明确'慢性恶化不是 SUSPICIOUS 入口,通过转化率系数自动消亡'。23 条若分散在 6 年应为 healthy 寿命走完→dead_natural;若 Month 8 后开始集中累积才属急转。flag=long_closure 暗示渐进而非突变。建议: dead_natural 或 suspicious(后续→dead),但 dead_sick 偏激进。"
+    },
+    {
+      "id": 361,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "17:11 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 362,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "11:9 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 363,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "28:17 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 364,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "19:13 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 365,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "65:24 整体高赞,Month 31 后 24 条 unanimous 集中 → 近期向下急转 SUSPICIOUS,符合滑动窗口判定。"
+    },
+    {
+      "id": 366,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "24:8,Month 19 后 8 条 unanimous 全部新近 → 近期向下急转 SUSPICIOUS。"
+    },
+    {
+      "id": 367,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "80:38 长期 enforcement 政策变更 + cost-of-failure(游客 stranded),严重度高,sick_death 合理。"
+    },
+    {
+      "id": 368,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "26:12 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 369,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "56:14 整体高赞但 Month 19 后 14 条集中 closure unanimous,近期向下急转 → SUSPICIOUS。"
+    },
+    {
+      "id": 371,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "17:9 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 372,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "78:32 整体高赞但 Month 13 后 32 条全部 closure 集中 → 近期向下急转 SUSPICIOUS。"
+    },
+    {
+      "id": 373,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "12:7 占比/集中性符合 v6.6 §3 向下急转或权威反驳,suspicious 入口正确。"
+    },
+    {
+      "id": 374,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "29:14 forestry harvest 永久消失+5+ 年不重建,track gone permanently → sick_death 合理。"
+    }
+  ]
+}

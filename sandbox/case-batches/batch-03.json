@@ -1,0 +1,808 @@
+{
+  "batch": 3,
+  "theme": "季节性危险",
+  "id_range": [101, 150],
+  "author_note": "NZ Mountain Rescue volunteer hand-written cases. Each case represents a mark whose danger is time-sensitive — same place may be benign or lethal depending on season/conditions. Common pattern: out-of-season hiker dismisses mark as 'overcautious' because they see calm conditions, missing that the mark exists for the OTHER season.",
+  "cases": [
+    {
+      "id": 101,
+      "location_desc": "Mueller Hut Route 上方 Sealy Tarns 之后约 1.5km 的 ridge 段，海拔 1600m 处一个开阔的 scree slope，冬天会从 Mt Olliver 北坡积累 wind-loaded snow",
+      "season_context": "winter (Jun-Oct), wind-loaded snow slab",
+      "mark_intent": "AVALANCHE_SLAB - 冬季雪崩高风险区，slab 在风积后可能 remote-trigger",
+      "events_timeline": [
+        "Mark 由资深 alpine guide 在 Aug 2024 大风后第三天放置，他亲眼目睹 200m 远处自发雪崩",
+        "Sep 早春有 party 触发 size 2 slab，无人受伤但 close call",
+        "Dec 夏季一对夫妇路过此地，路面是干燥 scree，看不到任何雪迹象",
+        "他们查看 mark 后认为'警告过分'，在 Cairn 上点 dismiss",
+        "实际此 mark 仅冬季-初春相关，夏季此处确实无危险"
+      ],
+      "user_action": "夏季用户 dismiss mark 并留评论 '路面干燥 scree，没看到任何危险，标记过度警示'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Mark 是季节限定的雪崩警告，夏季用户没看到雪所以判断 mark 错——但他不知道这个 mark 的季节标签。系统应该显示 mark 的有效季节，而不是惩罚 mark 创建者。算法不应降权这个 mark。"
+    },
+    {
+      "id": 102,
+      "location_desc": "Tongariro Alpine Crossing 在 Red Crater 顶部往 Emerald Lakes 下降的 scoria slope，海拔 1886m，冬季此段经常 70km/h 横风 + 冰面",
+      "season_context": "winter (Jun-Sep), gale + verglas",
+      "mark_intent": "WIND_EXPOSURE_LETHAL - 冬季强风 + 冰面，无冰爪不可通过",
+      "events_timeline": [
+        "Aug 2023 一名英国背包客在此被风吹倒滑下 200m，DOC SAR 抬出，骨折",
+        "事故后当地 guide 在 Cairn 放下 mark，标注 'winter only - requires crampons & ice axe'",
+        "Feb 2024 夏季中午，一名澳洲游客在 25 度晴天经过，看到 mark 后困惑",
+        "他在 mark 上留 comment 'beautiful day, no wind, mark seems wrong'",
+        "他没注意到 mark 描述里写了 'Jun-Sep only'"
+      ],
+      "user_action": "夏季用户在 mark 上写 'no danger, sunny day, removing this exaggeration'，并 downvote",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "夏季 Tongariro 确实是 walk in the park，冬季是 alpine expedition。同一个 mark 在不同季节是两个完全不同的世界。用户 downvote 是因为他没读 mark 的季节字段——产品设计问题，不是 mark 错误。"
+    },
+    {
+      "id": 103,
+      "location_desc": "Hooker Valley Track 第三个 swing bridge 之后约 800m，Hooker River 从 Mueller Glacier 流下的 outwash plain，融雪季 11 月 - 1 月此处水位每日下午暴涨",
+      "season_context": "spring snowmelt (Nov-Jan), diurnal flooding",
+      "mark_intent": "RIVER_SURGE_AFTERNOON - 融雪季下午 3pm 后 side stream 不可涉水",
+      "events_timeline": [
+        "Dec 2022 一对德国徒步者下午 4pm 试图涉水，女方被冲下游 50m，男方救起",
+        "本地 guide 第二天放 mark 标注 'cross before 11am only Nov-Jan'",
+        "Apr 2024 秋季水位低，一名 solo tramper 上午 10am 路过，水流缓慢清澈",
+        "他认为 mark 'fearmongering'，留言 'water is ankle deep, mark is wrong'",
+        "他不知道这个 mark 仅在融雪季的下午时段相关"
+      ],
+      "user_action": "秋季用户 dismiss mark 并 comment '水深及踝，mark 完全错误'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Hooker River 的水量受太阳直接驱动——上游冰川 11 月开始大量融化，午后水位是早晨的 3-4 倍。秋季水位低是真的，但 mark 针对的是夏季下午。算法应保留这个 mark，并在产品上做时间窗口提示。"
+    },
+    {
+      "id": 104,
+      "location_desc": "Cape Reinga 北端 Te Werahi Beach 与 Twilight Beach 之间的 rock platform，仅在退潮前后 2 小时窗口可通过，涨潮时 cliff base 完全淹没",
+      "season_context": "year-round but tide-dependent",
+      "mark_intent": "TIDAL_TRAP - 涨潮窗口期不可通过，被困会需要海上救援",
+      "events_timeline": [
+        "May 2023 两名中国游客在退潮 1 小时后开始 traverse，未查潮汐表",
+        "他们走到一半发现水位已经回升淹没回路",
+        "DOC 联合 Far North SAR 用 jet boat 从海上救出，距离涨潮高峰 40 分钟",
+        "事故后当地 iwi guide 放 mark 'CHECK TIDE - traverse only -2h to +1h from low tide'",
+        "Aug 2023 一名 fisherman 在 perfect low tide 时路过，看到 mark 不解"
+      ],
+      "user_action": "fisherman 在 mark 上留言 '我每周来这里钓鱼从没遇到问题，mark 是给游客看的吗？'",
+      "ground_truth": "MARK_VALID_USER_RIGHT_PARTIAL",
+      "human_judgment": "fisherman 是对的——他懂潮汐窗口。但 mark 也是对的——它是给不懂潮汐的徒步者看的。这是 audience mismatch，不是 mark 错误。算法不应降权 mark。如果有 'experience level' 字段可以智能过滤会更好。"
+    },
+    {
+      "id": 105,
+      "location_desc": "Mt Cook Village 后方 Kea Point Track 终点，Mueller Lake outflow 上方 200m 处的 lateral moraine ridge，夏季干热季落石频繁，冬季冰冻反而稳定",
+      "season_context": "summer hot afternoon (Jan-Mar)",
+      "mark_intent": "ROCKFALL_HEAT_TRIGGERED - 夏季午后冰川 ablation 加速，moraine 不稳定",
+      "events_timeline": [
+        "Feb 2024 下午 2pm 一块 housesize 巨石从 200m 上方滚下，差点击中观景台",
+        "DOC 关闭 viewing platform 一周，重新评估安全距离",
+        "本地 guide 放 mark 'Summer afternoons - rockfall risk, stay back from edge'",
+        "Jul 2024 冬季一名摄影师在结冰晴天靠近边缘拍摄，10 分钟内无任何动静",
+        "他认为 mark '过分谨慎'，在社交媒体抱怨 NZ 步道 'over-warned'"
+      ],
+      "user_action": "冬季用户拍照后 comment 'edge is solid, mark is bureaucratic nonsense'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "冬季 moraine 是结冰胶结的，确实稳定。夏季午后的 freeze-thaw cycle 让石头松动。同一面坡，温度差 20 度就是两种地质行为。Mark 是对的——但用户从冬天的视角看不到这一点。算法保留 mark。"
+    },
+    {
+      "id": 106,
+      "location_desc": "Rees-Dart Track 上 Rees Saddle 北侧下降段，海拔 1471m，夏季是普通 tussock slope，冬季和初春 (Sep-Nov) cornice 经常崩塌",
+      "season_context": "winter and shoulder season (Jun-Nov)",
+      "mark_intent": "CORNICE_COLLAPSE - 不要走在 ridge 边缘，cornice 可能在脚下断裂",
+      "events_timeline": [
+        "Oct 2022 一名 ski tourer 站在 ridge 拍照，cornice 在他脚下断裂",
+        "他下坠 80m，自救爬出无重伤，运气极好",
+        "事故后 NZ Avalanche Advisory 放 mark 标注此为 'persistent weak layer area'",
+        "Jan 2024 夏季 NOBO 徒步者经过，ridge 全是 dry tussock，无任何雪",
+        "他在 Cairn 留言 '完全是 grassland，没有任何 cornice，mark 错误'"
+      ],
+      "user_action": "夏季用户写 'no snow no cornice, this is misinformation' 并 dismiss",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Cornice 是冬季-春季现象，夏季当然没有。但 mark 是为了警告冬季 ski tourer 的，他们看到这个 mark 会知道哪里 fracture line 通常出现。夏季用户标 mark 错纯属信息错位。这个 mark 不应被算法降权。"
+    },
+    {
+      "id": 107,
+      "location_desc": "Mt Taranaki Pouakai Circuit 在 Henry Peak 西侧的 lahar channel 横切处，海拔 1224m，火山活动期 GeoNet alert level ≥ 2 时禁止通过",
+      "season_context": "volcanic activity dependent (not calendar)",
+      "mark_intent": "LAHAR_CHANNEL - 火山预警时此处可能在 minutes 内被 lahar 淹没",
+      "events_timeline": [
+        "Mark 由 DOC ranger 在 2019 alert level 2 期间放置",
+        "2020-2024 alert level 一直为 1 (background)，无任何 lahar 事件",
+        "Mar 2024 一名地质学生路过看到 mark，知道 GeoNet 当时 level 1",
+        "她在 Cairn 留言 'GeoNet level 1, no current risk, mark outdated'",
+        "她的 comment 技术上正确——但 mark 的意义是 'when alert raises, this is where the danger is'"
+      ],
+      "user_action": "用户标记 mark 为 outdated 因为当前 GeoNet level 低",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "这是 latent hazard mark——平时无害，警报升级时关键。删除等于把 institutional memory 抹掉。当下次 alert 升级，没人知道 lahar channel 在哪。算法必须保留'条件触发'类 mark，不能用'最近无事故'来判断。"
+    },
+    {
+      "id": 108,
+      "location_desc": "Arthurs Pass Devils Punchbowl Track 终点瀑布下方 pool 区，瀑布 131m，冬季 (Jun-Aug) 瀑布顶部 spray 冻结后大块冰柱坠落",
+      "season_context": "winter (Jun-Aug), ice fall from spray",
+      "mark_intent": "ICE_FALL_FROM_HEIGHT - 冬季瀑布旁观景区域被冰柱命中过游客",
+      "events_timeline": [
+        "Jul 2023 一名 backpacker 在瀑布观景平台被坠落冰块砸中肩膀，骨裂",
+        "DOC 在事故后冬季关闭最后 50m 步道，放 mark 标注 'Winter ice fall hazard'",
+        "Mar 2024 秋末一对情侣经过，瀑布周围已无冰",
+        "他们认为 mark 'should be removed seasonally'，在 Cairn 留言负面评价",
+        "DOC 实际上每年只在 Jun-Aug 物理关闭，但 Cairn mark 是全年显示"
+      ],
+      "user_action": "秋末用户 downvote mark 因为 'no ice present, warning irrelevant'",
+      "ground_truth": "MARK_VALID_USER_WRONG_DESIGN_GAP",
+      "human_judgment": "Mark 内容是对的，但 Cairn 产品没有'季节有效'字段是设计漏洞。用户的 frustration 合理，但 mark 创建者无错。算法不该惩罚 mark，应该把这个 frustration 反馈到产品 backlog——加 seasonal validity field。"
+    },
+    {
+      "id": 109,
+      "location_desc": "Cascade Saddle 路线从 Dart Hut 到 Aspiring Hut 中段，海拔 1524m 的 alpine traverse，冬春雪崩季死过多人，夏季是普通 grade 4 tramping",
+      "season_context": "winter and spring (May-Nov)",
+      "mark_intent": "MULTI_FATALITY_AVALANCHE_HISTORY - 此路线冬春雪崩已造成 5+ 人死亡，建议夏季前往",
+      "events_timeline": [
+        "1999, 2008, 2013 多起致命事故，DOC 把此路线列为 'experienced trampers only'",
+        "Mark 由 NZ Mountain Safety Council 放置，标注 'Summer Dec-Mar only - lethal in winter'",
+        "Feb 2024 夏季一群 well-equipped trampers 顺利通过，遇到良好天气",
+        "他们在 mark 评论 'route was straightforward, mark seems excessive'",
+        "实际上他们做的是 mark 推荐的事——夏季前往——但他们没意识到"
+      ],
+      "user_action": "夏季用户留言 'route is fine in summer, mark too dramatic'",
+      "ground_truth": "MARK_VALID_USER_RIGHT_PARTIAL",
+      "human_judgment": "用户 ironically 通过遵循 mark 的建议（夏季去）证明了 mark 的价值。他们说 mark 'too dramatic' 但他们活下来正是因为 mark 暗含的季节限制被路线 culture 强化了。算法应保留 mark——这种 generational safety memory 是无价的。"
+    },
+    {
+      "id": 110,
+      "location_desc": "Mt Brewster Hut Route 在海拔 1100m 处的 beech forest 边缘，每年 Feb-Apr 黄蜂 (German wasp) 巢密集，被攻击事件年发数十起",
+      "season_context": "late summer / autumn (Feb-Apr)",
+      "mark_intent": "WASP_SWARM_ZONE - 晚夏踩到地下 wasp 巢被群攻概率极高",
+      "events_timeline": [
+        "Mar 2023 一名独行 tramper 踩到地下 wasp 巢，被蛰 30+ 处，过敏休克",
+        "他自救服用 antihistamine，撤回 hut 等到 PLB 救援",
+        "DOC 放 mark 'Late summer wasp nests - carry antihistamine'",
+        "Sep 2024 春季一名 tramper 经过，温度低 wasp 活动稀少",
+        "她认为 mark 'sees no wasps, must be wrong'，dismiss"
+      ],
+      "user_action": "春季用户 dismiss mark '没看到 wasp，mark 错误'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Wasp 在 NZ 的活跃期非常明确——9 月零星出现，2-4 月达到峰值。春季当然看不到。Mark 是给晚夏 tramper 的救命信息（特别是过敏体质）。算法保留。"
+    },
+    {
+      "id": 111,
+      "location_desc": "Mueller Glacier terminal lake 北岸 climbers' track，从 Mueller Hut 下来汇入 Hooker Valley 之前的 50m moraine wall，冬季冻土稳定夏季崩塌",
+      "season_context": "summer (Dec-Feb), thaw destabilization",
+      "mark_intent": "MORAINE_WALL_COLLAPSE - 夏季冰川退缩，moraine wall 边缘随时崩",
+      "events_timeline": [
+        "Jan 2024 一段 30m moraine wall 在午后 3pm 整体崩塌，无人受伤但 close call",
+        "Climbing guide 放 mark 'Stay back 5m from moraine edge - summer collapse'",
+        "Aug 2024 冬季 ice climber 在结冰 moraine 边训练，毫无问题",
+        "他们 comment 'moraine is solid frozen, mark not relevant for winter'",
+        "他们其实是对的——冬季此处的物理学完全不同"
+      ],
+      "user_action": "冬季 ice climber 留言指出 mark 在冬季不适用",
+      "ground_truth": "MARK_VALID_USER_RIGHT_PARTIAL",
+      "human_judgment": "用户的观察正确：冬季 moraine 是 frozen monolith，物理上稳定。但他们的结论错——mark 应该保留，因为夏季该位置每年都崩。这是 Cairn 缺 'seasonal context' 字段的产品问题。Mark 创建者无错，算法保留。"
+    },
+    {
+      "id": 112,
+      "location_desc": "Crucible Lake Track 在 Siberia Valley 上方 hanging valley 入口，海拔 1280m，仅 Jan-Mar 雪线退到此 elevation 以上，其它季节为雪原",
+      "season_context": "navigable only Jan-Mar",
+      "mark_intent": "SEASONAL_ROUTE_CLOSURE - 非夏季此 route 被雪覆盖，需要 alpine 装备",
+      "events_timeline": [
+        "Nov 2022 一名 NOBO tramper 没查季节信息，到此发现仍是 100% 雪覆盖",
+        "他没冰爪没冰镐，硬上滑下 50m，PLB 救援",
+        "事故后 SAR team 放 mark 'Snow-free Jan-Mar only - alpine gear required other times'",
+        "Feb 2024 夏季 tramper 顺利通过，发现路线干燥清晰",
+        "他们留言 'mark unnecessary, route is obvious and easy'"
+      ],
+      "user_action": "夏季用户 dismiss mark 因为'路线显然简单'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "夏季用户成功通过恰恰是因为他们在 mark 标注的'安全季节'里。他们感受到的'easy'是 mark 间接保护的结果。如果 mark 被 dismiss 了，下个 NOBO 春季 tramper 就会重蹈覆辙。算法保留 mark。"
+    },
+    {
+      "id": 113,
+      "location_desc": "Mt Hutt 滑雪场 South Face Bowl 出 boundary 后 200m 的 cliff band，海拔 2086m，雪季 (Jun-Oct) 是雪崩高发区，夏季是普通 scree",
+      "season_context": "ski season (Jun-Oct)",
+      "mark_intent": "OUT_OF_BOUNDS_AVALANCHE - 滑雪场边界外雪崩死亡区",
+      "events_timeline": [
+        "Aug 2019 一名 Australian skier 出 boundary 触发 size 3 avalanche，遇难",
+        "Mt Hutt patrol 与 NZ Avalanche Advisory 联合放 mark",
+        "Mark 标注 'Closed terrain - avalanche fatality site'",
+        "Mar 2024 夏季登山者沿同一线路徒步，路面是干 scree",
+        "他们 comment 'no avalanche risk in summer, mark misleading'"
+      ],
+      "user_action": "夏季登山者 comment '夏天没雪崩，mark 误导'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Mark 明确标注 ski season 风险。夏季用户用夏季视角评判冬季 mark 是逻辑错误。NZ 雪崩死亡平均一年 2-3 起，多在 known terrain traps 上，这种 mark 是 generational safety knowledge。算法保留。"
+    },
+    {
+      "id": 114,
+      "location_desc": "Bridal Veil Falls 下方 plunge pool 北岸的 rock shelf，潮汐与降雨双重影响，雨季 (Jun-Aug) 后瀑布流量 5x 平时，pool 涡流可拉人下水",
+      "season_context": "winter wet season (Jun-Aug)",
+      "mark_intent": "PLUNGE_POOL_VORTEX - 雨季瀑布流量大，pool 边缘有下沉涡流",
+      "events_timeline": [
+        "Jul 2023 一名当地 swimmer 下水后被涡流拉到瀑布下方，friend 救起昏迷",
+        "Local iwi 放 mark 'Winter wet season - pool unsafe due to undertow'",
+        "Feb 2024 夏季干旱期一群 backpacker 游泳，pool 平静，瀑布只是细流",
+        "他们留言 'pool is safe, marker is exaggerating'",
+        "他们说的没错——但只对夏季成立"
+      ],
+      "user_action": "夏季用户 dismiss mark 因为 pool 看起来平静",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Bridal Veil Falls 流量在雨季和干季差异 5-10 倍。夏季的 pool 几乎是 swimming hole，雨季是 hydraulic trap。Mark 是对雨季用户的，夏季用户感受不到不代表 mark 错。这是经典的'季节性危险被反季节用户误判'。算法保留。"
+    },
+    {
+      "id": 115,
+      "location_desc": "Canterbury Hinewai Reserve 在 Banks Peninsula 山脊步道，海拔 700m，每年 Jan-Mar 极度干燥期火灾警告 Extreme，禁烟禁明火",
+      "season_context": "summer fire season (Jan-Mar)",
+      "mark_intent": "FIRE_BAN_ZONE - 夏季火险极端，一根烟头可点燃整个保护区",
+      "events_timeline": [
+        "2017 Port Hills fire 烧毁 2000 公顷 + 9 栋房屋 + 1 死亡",
+        "Banks Peninsula 自此每年 Jan-Mar 实施 total fire ban",
+        "Mark 由 Christchurch City Council 放置，标注 'Summer fire ban Jan-Mar'",
+        "Aug 2024 冬季 tramper 露营煮食，无任何问题",
+        "他在 Cairn 留言 'campfire was fine, mark too restrictive'"
+      ],
+      "user_action": "冬季用户 comment 'fire was no issue in winter, mark wrong'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "冬季 Banks Peninsula 湿润多雨，mark 当然不针对冬季。但删除会让明年 Jan 的露营者错过 fire ban 提示，潜在后果是另一场 Port Hills fire。算法必须保留这种'灾难记忆'类 mark。"
+    },
+    {
+      "id": 116,
+      "location_desc": "Tongariro Northern Circuit Oturere Hut 上方 1.5km，海拔 1360m 的 exposed plateau，雷暴季 (Nov-Feb) 午后 lightning strike 致死 risk",
+      "season_context": "summer thunderstorm season (Nov-Feb afternoons)",
+      "mark_intent": "LIGHTNING_STRIKE_ZONE - 夏季午后高地雷暴击中过 tramper",
+      "events_timeline": [
+        "Jan 2018 一名英国 tramper 在午后雷暴中被 ground strike 击中，重伤幸存",
+        "DOC 放 mark 'Avoid plateau 2-6pm Nov-Feb on stormy days'",
+        "Sep 2023 春季 tramper 在 stable high pressure 天气路过，万里无云",
+        "他留言 'no storm, no risk, mark fearmongering'",
+        "他不知道 mark 是季节性 + 天气条件双重 trigger"
+      ],
+      "user_action": "春季用户 dismiss mark 因为 'no storm visible'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Lightning mark 不是连续生效的——是给夏季有雷暴 forecast 时才相关。但'雷暴在哪里典型出现'是 institutional memory。MetService forecast 不会精确到这个 plateau。Mark 提供 microclimate 知识，必须保留。"
+    },
+    {
+      "id": 117,
+      "location_desc": "Mt Aspiring French Ridge Hut 上方 alpine route 起点，海拔 1500m，融雪季 (Oct-Dec) 早晨 snow bridge 跨 bergschrund 看似稳实际中空",
+      "season_context": "spring melt (Oct-Dec)",
+      "mark_intent": "SNOW_BRIDGE_COLLAPSE - 融雪季 snow bridge 看似稳但下方 bergschrund 可掉人",
+      "events_timeline": [
+        "Nov 2021 一名 climber 踏上 snow bridge 后掉入 8m 深 bergschrund",
+        "Partner 用 prussik 拉出，无重伤但教训深刻",
+        "NZAC (NZ Alpine Club) 放 mark 'Spring snow bridges over bergschrund - probe always'",
+        "Feb 2024 盛夏 climber 此处全是干 rock，看不到任何 snow",
+        "他 comment 'no snow no bridge, mark obsolete'"
+      ],
+      "user_action": "盛夏 climber comment 'no snow, mark obsolete'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "盛夏 bergschrund 完全 open，肉眼可见根本不会有人踏空。融雪季 snow bridge 才是 trap——它'看起来'是路。Mark 是为了那个最危险的中间季节。盛夏看不到不等于不存在。算法保留。"
+    },
+    {
+      "id": 118,
+      "location_desc": "Mt Cook Plateau Hut 上方 Linda Glacier 起点，海拔 2200m，温暖季节 (Dec-Feb) 中午 serac collapse 频率最高",
+      "season_context": "warm summer days (Dec-Feb)",
+      "mark_intent": "SERAC_FALL_HOT_DAYS - 暖夏中午 serac 崩塌密集",
+      "events_timeline": [
+        "Mar 1995 多名 climbers 在 Linda Shelf 被 serac fall 击中遇难",
+        "近 30 年此区域多次致命事故",
+        "Mark 由 Aoraki/Mt Cook guides 集体维护，标注 'Move pre-dawn warm days'",
+        "Jul 2024 冬季 ice climber 在低温中午经过，serac 完全冻结无活动",
+        "他 comment 'no serac fall in cold, mark season-specific'"
+      ],
+      "user_action": "冬季 climber 评论 mark '不适用冬季'",
+      "ground_truth": "MARK_VALID_USER_RIGHT_PARTIAL",
+      "human_judgment": "用户观察正确——冬季 serac 确实冻结稳定。但 mark 的目标受众是夏季 climber（NZ 攀登季高峰）。冬季 climber 通过这条路的人极少。Mark 不该被降权。Cairn 应该有 season-specific 字段。"
+    },
+    {
+      "id": 119,
+      "location_desc": "Tasman Glacier Lake 北岸 boat ramp 上方 200m moraine slope，海拔 880m，夏季午后 (Dec-Feb) 持续 calving 产生 lake tsunami 1-2m",
+      "season_context": "summer afternoon (Dec-Feb)",
+      "mark_intent": "GLACIER_CALVING_TSUNAMI - 夏季午后冰川崩裂产生湖浪到岸",
+      "events_timeline": [
+        "Feb 2019 一艘 tour boat 在 calving 后被 1.5m 浪推到岸，无伤但极惊险",
+        "Glacier Explorers 公司放 mark 'Stay 100m back from shore Dec-Feb afternoons'",
+        "Jun 2024 冬季 tourist 走到 lake edge 拍照，冰川活动几乎停止",
+        "她 comment 'lake is calm, mark unnecessary'",
+        "她不知道夏季同一地点的物理学是另一回事"
+      ],
+      "user_action": "冬季游客 dismiss mark 因为 lake 平静",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Tasman Glacier 是 NZ 最大冰川，夏季 calving 几乎每天发生。冬季冻结后几乎无活动。这是温度直接驱动的现象。冬季用户的 dismiss 反映了 Cairn 没有'季节性条件'字段的产品空白。Mark 创建者无错。"
+    },
+    {
+      "id": 120,
+      "location_desc": "Mt Olympus Ski Field 出 boundary 进入 backcountry 的 col，海拔 1850m，冬季 (Jun-Oct) wind-loaded slab 区，夏季是普通 ridge walk",
+      "season_context": "winter (Jun-Oct)",
+      "mark_intent": "WIND_LOADED_SLAB_BOUNDARY - 雪场边界外 lee slope 风积雪崩区",
+      "events_timeline": [
+        "Sep 2020 两名 skier 出 boundary 触发 size 2 avalanche，1 人埋 30 分钟救出",
+        "Mt Olympus club 放 mark 'Out of bounds - wind slab in winter'",
+        "Jan 2024 夏季 tramper 走 ridge route 经过，全是 dry tussock",
+        "他在 mark 留言 'no avalanche terrain, summer is fine'",
+        "他说的对——但 mark 不是给他的"
+      ],
+      "user_action": "夏季 tramper 留言 mark 在夏季无意义",
+      "ground_truth": "MARK_VALID_USER_RIGHT_PARTIAL",
+      "human_judgment": "Mark 季节性属性明确——它防的是冬季 ski tourer，不是夏季 tramper。两者目标人群完全不同。夏季 tramper 的'mark 在夏季无意义'observation 正确，但'因此应删除' conclusion 错误。算法应保留。"
+    },
+    {
+      "id": 121,
+      "location_desc": "Otira Valley Track 起点 swing bridge 上游 50m 的 ford，秋季 (Mar-May) 暴雨后 24 小时内水位仍高，看似清澈但流速 3m/s",
+      "season_context": "autumn heavy rain aftermath (Mar-May)",
+      "mark_intent": "RIVER_FORD_SWIFT_CLEAR - 雨后水清但流速致命",
+      "events_timeline": [
+        "Apr 2023 一对 trampers 雨后第二天涉水，水清见底以为安全",
+        "男方失足被冲下游 200m，partner 用 PLB 求救，男方溺亡",
+        "Coroner 报告强调 '水的清澈不等于安全'",
+        "DOC 放 mark 'Clear water can still kill - check rainfall last 48h'",
+        "Aug 2024 冬季干燥期 tramper 涉水，水深及膝缓慢"
+      ],
+      "user_action": "冬季 tramper 看到 mark 觉得 '小题大做'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "这个 mark 是 hard-won lesson——'清澈水流被低估'。删除等于让下次秋季雨后涉水的人重蹈覆辙。Mark 价值是教育性的，不是当下风险。算法必须给这种'lesson learned' mark 保护权重。"
+    },
+    {
+      "id": 122,
+      "location_desc": "Mt Ruapehu Tahurangi Lodge 上方 Pinnacle Ridge，海拔 2240m，火山 GeoNet level ≥ 2 时 acid gas plume 顺风扩散到此",
+      "season_context": "volcanic activity dependent",
+      "mark_intent": "VOLCANIC_GAS_DOWNWIND - GeoNet 警报时此处 acid gas 浓度危险",
+      "events_timeline": [
+        "2007 Ruapehu phreatic eruption 后 gas plume 影响周边 5km",
+        "GNS 与 DOC 联合放 mark 标注 gas plume 典型路径",
+        "2010-2024 GeoNet level 大部分时间为 1，无 gas event",
+        "Feb 2024 一名地理老师带学生路过，level 1，无任何 gas 异常",
+        "她 comment 'GeoNet 1, no gas, mark scaring tourists'"
+      ],
+      "user_action": "用户 dismiss mark 因为 GeoNet 当前低",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Volcanic mark 是条件触发型——平时静默，警报时关键。删除等于丢失 'gas plume 风向地图'。下次 phreatic event 没人知道哪里 downwind。算法对此类 latent hazard mark 必须有特殊保护逻辑。"
+    },
+    {
+      "id": 123,
+      "location_desc": "Whakapapa Ski Field Knoll Ridge 上方 backcountry gate，海拔 2020m，雪季 wind slab 区，所有死亡 avalanche 都发生在 6-9 月",
+      "season_context": "ski season (Jun-Sep)",
+      "mark_intent": "AVALANCHE_HISTORY_AREA - 雪季致命雪崩历史区域",
+      "events_timeline": [
+        "Aug 2007 多名 skier 在此区域被 avalanche 埋，1 死亡",
+        "RAL (Ruapehu Alpine Lifts) 放 mark 'Out of bounds - avalanche fatality site'",
+        "Mar 2024 夏季 hiker 经过 Crater Lake 路线，从此 ridge 上看下去全是 scree",
+        "他 comment 'just a rocky ridge in summer, mark dramatic'",
+        "他不知道同一面坡 8 月 wind-loaded 后是 size 3 release zone"
+      ],
+      "user_action": "夏季 hiker comment mark 'too dramatic'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "这是 NZ 最 well-documented 雪崩死亡点之一。'夏天看起来 boring' 不是删除依据。地形是雪崩 trigger 的核心因子（slope angle, wind exposure, terrain trap），夏季和冬季是同一面坡。Mark 必须保留。"
+    },
+    {
+      "id": 124,
+      "location_desc": "Lake Tekapo 北岸 Mt John Track 终点 observatory 下方 cliff edge，夏季傍晚 (Dec-Feb) 强 nor'wester 阵风 80km/h+ 把人吹向 cliff",
+      "season_context": "summer evening nor'westers (Dec-Feb)",
+      "mark_intent": "WIND_GUST_CLIFF_EDGE - 夏季傍晚强风把人吹向 200m cliff",
+      "events_timeline": [
+        "Jan 2022 一名摄影师拍 starlight 时被阵风吹倒滑向边缘，被同伴拉回",
+        "Mt John 天文台员工放 mark '6-10pm summer - stay 5m back from edge'",
+        "Jul 2024 冬季 calm day tourist 路过，无任何风",
+        "她 comment 'no wind, mark wrong'",
+        "她不知道 nor'wester 是夏季 Canterbury 标志性风"
+      ],
+      "user_action": "冬季 calm 天用户 dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Canterbury nor'wester 是夏季典型风系，可以从 calm 突然涨到 80km/h，预报常常 miss。Mark 是 local knowledge——天文台员工常年在此目睹。冬季感受不到不能否定夏季现象。算法保留。"
+    },
+    {
+      "id": 125,
+      "location_desc": "Routeburn Track Conical Hill 顶部 viewpoint，海拔 1515m，融雪季 (Oct-Nov) hut 工作人员观察到 ground avalanche 频发于午后",
+      "season_context": "spring melt (Oct-Nov afternoons)",
+      "mark_intent": "WET_SNOW_AVALANCHE - 春季午后湿雪崩易发于此 face",
+      "events_timeline": [
+        "Oct 2018 一组 trampers 在午后被 wet slide 推下 30m 但无伤",
+        "Lake Mackenzie Hut warden 放 mark 'Spring afternoons - climb pre-noon'",
+        "Feb 2024 夏季 tramper 顺利通过，无任何雪",
+        "他 comment 'route is excellent, mark conservative'",
+        "他不知道 mark 针对春季融雪窗口"
+      ],
+      "user_action": "夏季 tramper dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Wet snow avalanche 是温度 driver——只发生在融雪季的暖午后。夏季和冬季都不会。Mark 针对 narrow 时间窗口。Hut warden 是最 trusted 的 local source，他们的观察具有 multi-year baseline。算法保留。"
+    },
+    {
+      "id": 126,
+      "location_desc": "Mt Cheeseman 雪场边界外 Tarn Basin，海拔 1700m，雪季 (Jul-Sep) 此 basin 是 known terrain trap，雪崩堆积深度 2-3m",
+      "season_context": "ski season (Jul-Sep)",
+      "mark_intent": "TERRAIN_TRAP_DEPOSITION - 雪季 avalanche 堆积深度致命",
+      "events_timeline": [
+        "Aug 2015 一名 skier 出 boundary 触发 slide 被埋 2m，搜救 25 分钟救出昏迷",
+        "Mt Cheeseman patrol 放 mark 'Terrain trap - extra burial depth'",
+        "Jan 2024 夏季 NOBO tramper 走 Polar Range 路线经过，basin 干燥",
+        "他 comment 'terrain trap means nothing here, just a flat basin'",
+        "他正确——但只对夏季成立"
+      ],
+      "user_action": "夏季 tramper 误读 'terrain trap' 概念",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "'Terrain trap' 是雪崩术语——指地形导致 avalanche debris 集中堆积的位置。夏季无雪当然无 trap。但这个术语对冬季 backcountry skier 是关键 vocabulary。Mark 用了正确的 winter terminology，被夏季用户 mis-applied 不是 mark 的错。算法保留。"
+    },
+    {
+      "id": 127,
+      "location_desc": "Hollyford Track 在 Lake Alabaster Hut 之前的 Pyke River 涉水点，西海岸雨季 (May-Sep) 24h 内 200mm 降雨可让此处不可通过",
+      "season_context": "west coast wet season (May-Sep)",
+      "mark_intent": "FLASH_FLOOD_FORD - 雨季 24h 内不可预测暴涨",
+      "events_timeline": [
+        "Jun 2021 一群 trampers 被困 hut 6 天等水位降",
+        "DOC 放 mark 'Wet season - check forecast 48h, may be impassable'",
+        "Mar 2024 秋季干燥期 tramper 涉水，水深及膝",
+        "她 comment 'easy crossing, mark unnecessary'",
+        "她不知道同一处 6 月水深可达 2m+"
+      ],
+      "user_action": "秋季 tramper dismiss mark 因 'easy crossing'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Fiordland West Coast 雨量极端——年降水 6000mm+，集中在冬春。Pyke River 在干季是 wadeable，雨季 24h 涨 1.5m。Mark 是西海岸 tramping 必备知识。算法保留。"
+    },
+    {
+      "id": 128,
+      "location_desc": "Heaphy Track James Mackay Hut 上方 1km plateau，秋季 (Mar-May) 早晨地面薄冰 (hoar frost) 2 小时窗口让 boardwalk 极滑",
+      "season_context": "autumn morning frost (Mar-May)",
+      "mark_intent": "FROST_BOARDWALK_SLIP - 秋晨 boardwalk 结薄冰滑倒",
+      "events_timeline": [
+        "Apr 2022 一名 mountain biker 7am 在 boardwalk 上滑倒，肋骨骨折 PLB 求救",
+        "DOC 放 mark 'Autumn dawn - boardwalks slippery, walk first 2 hours'",
+        "Dec 2023 夏季 cyclist 通过 boardwalk 完美干燥",
+        "他 comment 'boardwalks fine, mark unnecessary'",
+        "他不知道这个 mark 是给秋晨 cyclist 的"
+      ],
+      "user_action": "夏季 cyclist dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Boardwalk 在秋晨结的 hoar frost 是看不出来的薄冰——温度刚好 -1 到 0。Mountain biker 在 cycling speed 下滑倒后果严重。Mark 是窄时间窗口（2-3 小时）但价值高。算法保留。"
+    },
+    {
+      "id": 129,
+      "location_desc": "Mt Taranaki Summit Track 在 1900m 处的 Lizard Ridge，冬季 (Jun-Sep) ice axe + crampons 必须，夏季是 grade 3 scramble",
+      "season_context": "winter (Jun-Sep)",
+      "mark_intent": "ALPINE_ICE_REQUIRED - 冬季此 ridge 没有 ice gear 致命",
+      "events_timeline": [
+        "Jul 2013 一名 inexperienced climber 无装备尝试，滑下 600m 遇难",
+        "Mt Taranaki SAR 放 mark 'Winter - full alpine kit mandatory'",
+        "Jan 2024 夏季 climber 顺利登顶，仅 trail runners",
+        "他 comment 'route is straightforward scramble, mark over-gears'",
+        "他不知道 11 个月前同一段是 sheet ice"
+      ],
+      "user_action": "夏季 climber comment mark 'over-gears'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Mt Taranaki 是 NZ 死亡率最高的 mountain（83+ 死亡），多数发生在冬季。夏季 trail runner 能上的同一段，冬季是 alpine climb。Mark 区分这一点是救命的。算法绝对保留。"
+    },
+    {
+      "id": 130,
+      "location_desc": "Abel Tasman Coast Track Onetahuti Beach 北端 estuary 涉水点，仅 low tide ±1.5h 窗口可通过，high tide 时水深 1.8m 流速强",
+      "season_context": "year-round but tide-dependent",
+      "mark_intent": "TIDAL_CROSSING_WINDOW - 涨潮窗口外不可通过",
+      "events_timeline": [
+        "Mar 2023 一对游客在 high tide 时尝试涉水，被冲到下游需 kayak 救援",
+        "DOC 与 Project Janszoon 放 mark 'Cross 1.5h either side of low tide'",
+        "Sep 2024 一名当地 sea kayaker 在 perfect low tide 路过",
+        "他 comment '潮汐表查就好了，mark obvious'",
+        "他不知道每年有数十名游客没查潮汐"
+      ],
+      "user_action": "经验用户 comment mark 'obvious 多余'",
+      "ground_truth": "MARK_VALID_USER_RIGHT_PARTIAL",
+      "human_judgment": "经验用户对——潮汐表确实是 standard reference。但 Abel Tasman 大量游客是 international visitors，对潮汐缺乏直觉。Mark 是给他们的。算法不应根据 'obvious to experts' 删除 mark。"
+    },
+    {
+      "id": 131,
+      "location_desc": "Mt Cook Mueller Hut 之上 Mt Olliver 简单登顶路线，海拔 1933m，冬季 (Jun-Sep) ridge 上 verglas + cornice 双重风险",
+      "season_context": "winter (Jun-Sep)",
+      "mark_intent": "VERGLAS_CORNICE_DOUBLE - 冬季 ridge 同时有薄冰和雪檐",
+      "events_timeline": [
+        "Aug 2018 一名 climber 在 verglas 上滑倒，cornice 同时 collapse，下坠 80m 重伤",
+        "Aoraki Alpine guides 放 mark 'Winter - both verglas and cornice hazards'",
+        "Feb 2024 夏季 hiker 顺利登顶 30 分钟",
+        "他 comment 'easiest peak ever, mark melodramatic'",
+        "他不知道这是 dual seasonal hazard mark"
+      ],
+      "user_action": "夏季用户 dismiss mark '过度戏剧化'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Mt Olliver 是 Hillary's first major peak，看似 trivial 但冬季杀过人。'easy in summer, alpine in winter' 是 NZ peaks 普遍现象。Mark 强调 dual hazard 是因为它们同时出现的概率冬季高。算法保留。"
+    },
+    {
+      "id": 132,
+      "location_desc": "Kepler Track Luxmore Hut 上方 ridge route 起点，海拔 1085m，冬季 (Jun-Aug) 大风 100km/h+ 频繁，夏季是普通 ridge walk",
+      "season_context": "winter gales (Jun-Aug)",
+      "mark_intent": "WIND_EXPOSURE_RIDGE - 冬季 ridge 暴露在 Fiordland 风暴中",
+      "events_timeline": [
+        "Jul 2019 一名 tramper 在 100km/h 风中被吹倒滑下 ridge 50m，重伤 PLB 救援",
+        "DOC 放 mark 'Winter gales - turn back if wind > 60km/h'",
+        "Mar 2024 秋季无风晴天 tramper 通过，毫无问题",
+        "她 comment 'route is benign, mark exaggerated'",
+        "她不知道 Fiordland 冬季风暴 baseline 是 Hurricane scale"
+      ],
+      "user_action": "秋季 calm 天用户 dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Fiordland 冬季是 Roaring Forties 风带正中。Luxmore ridge 暴露 face NW，每个冬季 storm 都打。秋季的 calm 天是窄窗口。Mark 反映 baseline winter conditions，秋季用户的 dismiss 是 small sample 谬误。算法保留。"
+    },
+    {
+      "id": 133,
+      "location_desc": "Wanaka Roys Peak Track 在海拔 1450m 处的 fence stile，融雪季 (Sep-Nov) 此处下方 50m grass slope 因冻土融化变滑",
+      "season_context": "spring thaw (Sep-Nov)",
+      "mark_intent": "GRASS_SLOPE_THAW_SLIP - 春季融雪后 grass 滑度大",
+      "events_timeline": [
+        "Oct 2022 一名 tourist 滑下 80m 撞到 fence post，骨折",
+        "DOC 放 mark 'Spring thaw - grass slope slippery, descend slowly'",
+        "Feb 2024 干燥盛夏 tourist 路过，grass 干硬",
+        "他 comment 'grass is fine, mark too cautious'",
+        "他不知道 mark 针对融雪期短窗口"
+      ],
+      "user_action": "盛夏用户 dismiss mark '太谨慎'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Roys Peak 步道每年因融雪期事故多起，集中在 9-11 月。盛夏 grass 当然干硬。这是 short seasonal window 的 mark，但价值高。算法保留——并且应有 seasonal 字段提示用户。"
+    },
+    {
+      "id": 134,
+      "location_desc": "Coromandel Pinnacles Hut 之下 the Pinnacles steep section，雨季 (Apr-Sep) 后 24h 内 ladder rungs 滑可致命",
+      "season_context": "wet season aftermath (Apr-Sep)",
+      "mark_intent": "WET_LADDER_SLIP - 雨季 ladder 锈滑可滑落",
+      "events_timeline": [
+        "Jun 2021 一名 tramper 在湿 ladder 滑下，幸有下一级接住肋骨骨折",
+        "DOC 放 mark 'Wet weather - check rungs before stepping'",
+        "Feb 2024 干燥盛夏 tramper 通过，ladder 干燥",
+        "他 comment 'ladder is fine, mark unnecessary'",
+        "他不知道雨季同 ladder 死过人"
+      ],
+      "user_action": "盛夏 tramper dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Coromandel 在雨季湿度极高，ladder rungs 长 algae 后极滑。盛夏完全晒干。Mark 是给雨季 tramper 的关键 reminder。算法保留。"
+    },
+    {
+      "id": 135,
+      "location_desc": "Mt Ruapehu Crater Lake rim 北侧 viewpoint，海拔 2640m，火山 lahar drill 期间 (每年 Sep-Nov DOC 测试) 警报频繁",
+      "season_context": "DOC drill season (Sep-Nov)",
+      "mark_intent": "LAHAR_DRILL_PERIOD - 演习期间警报频发，需熟悉撤离路线",
+      "events_timeline": [
+        "DOC 每年 Sep-Nov 进行 lahar drill，测试 ERLAWS 警报系统",
+        "Mark 由 DOC 放置 'Drill period - know escape route'",
+        "Feb 2024 非演习期 tramper 路过，无任何警报",
+        "他 comment 'no alarms, mark obsolete'",
+        "他不知道演习是 prepare for real event"
+      ],
+      "user_action": "用户 dismiss mark 因为 '没听到警报'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Mark 教育意义大于即时风险——它告诉 tramper 演习时该做什么、撤离路线在哪。删除等于让 next drill 时游客困惑。算法对这种 educational mark 必须保护。"
+    },
+    {
+      "id": 136,
+      "location_desc": "Routeburn Track Harris Saddle 上方 1.5km 的 Conical Hill 支线，雪崩季 (Jun-Oct) ridge 北侧 lee slope 是 known release zone",
+      "season_context": "winter (Jun-Oct)",
+      "mark_intent": "LEE_SLOPE_RELEASE - 冬季 ridge 北侧风积雪崩释放区",
+      "events_timeline": [
+        "Aug 2017 一组 ski tourer 触发 size 2 slide，1 人埋 15 分钟救出",
+        "NZAA 放 mark '冬季 ridge 北侧避开'",
+        "Feb 2024 夏季 tramper 通过，全是 dry tussock",
+        "她 comment 'just a grassy ridge, mark wrong'",
+        "她不知道 mark 是 winter ski tourer specific"
+      ],
+      "user_action": "夏季 tramper dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Routeburn 夏季是 Great Walk，冬季是 alpine ski tour route。同一条 trail 的不同季节是不同 sport。Mark 对冬季 ski tourer 是 critical info，对夏季 tramper 是 irrelevant。算法保留。"
+    },
+    {
+      "id": 137,
+      "location_desc": "Lake Wakatipu 西岸 Mt Crichton Loop 在 Twelve Mile Delta 涉水点，融雪季 (Oct-Dec) 早晨水位低下午暴涨",
+      "season_context": "spring melt diurnal (Oct-Dec)",
+      "mark_intent": "DIURNAL_FLOW_VARIATION - 融雪季水位下午是早晨 3 倍",
+      "events_timeline": [
+        "Nov 2020 一名 tramper 早晨涉水容易，下午回程被冲下游 30m",
+        "DOC 放 mark 'Spring - cross before noon, after may be impassable'",
+        "Feb 2024 夏季稳定水位 tramper 通过 morning + afternoon 都安全",
+        "她 comment 'water level same all day, mark wrong'",
+        "她不知道融雪季 diurnal flow 是冰川驱动"
+      ],
+      "user_action": "夏季用户 dismiss mark '水位一天都一样'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Diurnal flow 是融雪期独有现象——太阳直接驱动冰川融水，下午峰值。盛夏冰川已'稳态'，水位平稳。同一条河两个季节物理学不同。Mark 反映 spring 特殊性。算法保留。"
+    },
+    {
+      "id": 138,
+      "location_desc": "Stewart Island North-West Circuit 在 Mason Bay 沙丘上方 forest edge，秋季 (Mar-May) sand fly 密度年最高，无 DEET 不可逗留",
+      "season_context": "autumn peak biting (Mar-May)",
+      "mark_intent": "SAND_FLY_PEAK - 秋季 sand fly 密度致 misery",
+      "events_timeline": [
+        "Apr 2023 一名 tramper 无 DEET 在此露营，全身 200+ 蛰咬，过敏休克 PLB 求救",
+        "DOC 放 mark 'Autumn peak - mandatory DEET, full coverage clothing'",
+        "Aug 2024 冬季 tramper 通过，sand fly 几乎绝迹",
+        "他 comment 'no sand flies, mark hysteric'",
+        "他不知道 4 月同地点 sand fly 密度可达 100/min/face"
+      ],
+      "user_action": "冬季 tramper comment mark 'hysteric'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Stewart Island sand fly 在秋季达到年峰值，与 forest edge + dune 微环境结合密度极高。冬季冷下来活动锐减。Mark 是秋季 tramper 救命信息（特别是过敏体质）。算法保留。"
+    },
+    {
+      "id": 139,
+      "location_desc": "Mt Cook Plateau Hut 周围 5km 半径，海拔 2200m，winter storm cycle (Jun-Sep) 期间 whiteout 持续 48h+ 不退",
+      "season_context": "winter storm cycles (Jun-Sep)",
+      "mark_intent": "EXTENDED_WHITEOUT - 冬季 storm 期间 whiteout 持续多日",
+      "events_timeline": [
+        "Jul 2014 5 名 climber 被 whiteout 困 hut 4 天，食物耗尽",
+        "Aoraki guides 放 mark 'Winter storms - carry 5 days food + fuel'",
+        "Feb 2024 夏季 climber 同地点遇 stable high pressure",
+        "他 comment 'visibility perfect, mark over-prepared'",
+        "他不知道冬季同地点能 zero visibility 4 天"
+      ],
+      "user_action": "夏季 climber dismiss mark '过度准备'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Aoraki 冬季 weather window 极不稳定，多年 alpine accidents 都因低估 storm duration。Mark 反映 multi-day storm reality。夏季的 stable HP 是另一种季节。算法保留——这种 'preparation level' mark 是命脉。"
+    },
+    {
+      "id": 140,
+      "location_desc": "Mt Ngauruhoe 火山锥步道 (官方禁止登顶但仍有人攀)，火山活动期 (GeoNet ≥ 2) 落石密度暴增",
+      "season_context": "volcanic activity dependent",
+      "mark_intent": "VOLCANIC_ROCKFALL - 火山活动期间落石频率暴增",
+      "events_timeline": [
+        "1995 Ngauruhoe last eruption，活动期间多名 climber 被落石伤",
+        "DOC 放 mark 'Closed - volcanic rockfall risk'",
+        "2010-2024 GeoNet level 大部分为 1，无 active eruption",
+        "Mar 2024 一名摄影师 GeoNet level 1 时尝试登顶，路上偶有自然落石",
+        "他 comment 'volcano dormant, mark obsolete'"
+      ],
+      "user_action": "用户 GeoNet level 1 时 dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Ngauruhoe 是 active volcano，dormancy 不等于 extinction。Mark 是 latent hazard——next eruption 来时这个 mark 是关键信息。算法对 volcanic mark 必须有 special preservation logic，不依赖近期活动。"
+    },
+    {
+      "id": 141,
+      "location_desc": "Lake Pukaki 西岸 Tasman Valley road 在 SH80 之外的 unsealed section，融雪季 (Oct-Dec) road 经常被 side stream wash out",
+      "season_context": "spring melt (Oct-Dec)",
+      "mark_intent": "ROAD_WASHOUT_SPRING - 融雪季此 road section 经常断",
+      "events_timeline": [
+        "Nov 2022 一辆 campervan 在 road washout 处被困 6 小时等水退",
+        "DOC 放 mark 'Spring - check road conditions before driving'",
+        "Feb 2024 干燥夏季 tourist driver 通过 road perfect",
+        "她 comment 'road is great, mark scaremongering'",
+        "她不知道 6 周前同一 section 完全 underwater"
+      ],
+      "user_action": "夏季 driver dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Tasman Valley road 是 unsealed，融雪 + side stream 在春季常断。夏季 stable。Mark 反映 spring vulnerability，对春季 driver 是 trip planning 关键。算法保留。"
+    },
+    {
+      "id": 142,
+      "location_desc": "Punakaiki Pancake Rocks 海岸 blowhole 区，西海岸冬季 storm (May-Sep) swell 6m+ 时 blowhole 会喷过观景台拉人下海",
+      "season_context": "winter swell (May-Sep)",
+      "mark_intent": "BLOWHOLE_SWELL_RISK - 冬季大浪 blowhole 喷过 viewpoint",
+      "events_timeline": [
+        "Jul 2018 一名 tourist 在 6m swell 期被 blowhole spray 推倒，差点被 next wave 拉下海",
+        "DOC 放 mark 'Winter big swell - viewing platform unsafe'",
+        "Feb 2024 calm summer day tourist 拍照无任何危险",
+        "他 comment 'blowhole is gentle, mark dramatic'",
+        "他不知道冬季 swell 6m 时同 viewpoint 是 lethal"
+      ],
+      "user_action": "夏季 calm 天 tourist dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "West Coast 冬季 swell 由 Tasman Sea 风暴驱动，可达 6m+。Punakaiki blowhole 在大 swell 时是 dangerous，calm 时是 photo op。Mark 是季节-条件双重 mark。算法保留。"
+    },
+    {
+      "id": 143,
+      "location_desc": "Old Ghost Road 单车道在 Mokihinui Forks 之前的 cliff edge section，融雪季 (Sep-Nov) gravel 上薄冰晨间 2 小时窗口",
+      "season_context": "spring morning ice (Sep-Nov)",
+      "mark_intent": "GRAVEL_BLACK_ICE - 春晨砾石路面薄冰滑车",
+      "events_timeline": [
+        "Oct 2021 一名 mountain biker 7am 在薄冰上滑下 cliff edge 5m，幸有树挡",
+        "Trail Trust 放 mark 'Spring dawn - black ice 2-3h after sunrise'",
+        "Feb 2024 干燥夏天 cyclist 通过 perfect grip",
+        "他 comment 'gravel is grippy, mark wrong'",
+        "他不知道春晨同地点冻得像 ice rink"
+      ],
+      "user_action": "夏季 cyclist dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Black ice on gravel 是 NZ mountain biking 公认 spring 危险。短窗口（sunrise + 2h），但严重程度高（cyclist 速度下落 cliff）。Mark 价值 disproportionate to 时长。算法保留。"
+    },
+    {
+      "id": 144,
+      "location_desc": "Mt Cook Lake Tasman jet boat tour 终点 stop 处，海拔 880m，盛夏 (Jan-Feb) UV index 13+ 反射雪盲风险高",
+      "season_context": "summer UV peak (Jan-Feb)",
+      "mark_intent": "UV_SNOWBLINDNESS - 夏季冰川反射 UV 致雪盲",
+      "events_timeline": [
+        "Feb 2019 多名 tourist 无 sunglasses 在 lake 边停留 1 小时后雪盲，eyepatch 治疗",
+        "Glacier Explorers 放 mark 'Summer - UV 13+, sunglasses mandatory'",
+        "Aug 2024 冬季 overcast 天 tourist 路过，UV 低",
+        "她 comment 'no UV concern, mark unnecessary'",
+        "她不知道夏季同地点 UV 反射致 30 分钟雪盲"
+      ],
+      "user_action": "冬季 overcast tourist dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "NZ summer UV 是世界最强（thin ozone + altitude + reflection）。Tasman Lake 冰川反射加倍。冬季 overcast 当然不构成威胁。Mark 是 strict seasonal hazard，算法保留。"
+    },
+    {
+      "id": 145,
+      "location_desc": "Tongariro Northern Circuit Mangatepopo Hut 上方 lava flow 横切处，海拔 1480m，冬季 storm (Jun-Sep) 大风 + 低温 hypothermia 30 分钟",
+      "season_context": "winter storms (Jun-Sep)",
+      "mark_intent": "RAPID_HYPOTHERMIA - 冬季 storm exposed lava 30 分钟低温休克",
+      "events_timeline": [
+        "Aug 2008 一名 tramper 在此 storm 中失温 30 分钟死亡，inquest 强调'快速 onset'",
+        "DOC 放 mark 'Winter storms - hypothermia in 30 minutes, retreat fast'",
+        "Feb 2024 calm summer afternoon tramper 通过 30 分钟",
+        "他 comment 'easy section, mark over-warning'",
+        "他不知道 14 年前同 spot 同 30 分钟死过人"
+      ],
+      "user_action": "夏季 tramper dismiss mark '过度警告'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Tongariro 是 NZ tramping fatality 高发区，多数因冬季低估 weather。Mark 引用 specific inquest finding（30 分钟 hypothermia onset）。删除是 erasing institutional safety memory。算法绝对保留。"
+    },
+    {
+      "id": 146,
+      "location_desc": "Fox Glacier valley walk 终点 viewpoint，海拔 200m，冬季 (Jun-Aug) glacier face 退缩稳定夏季 (Dec-Feb) 持续 calving",
+      "season_context": "summer calving (Dec-Feb)",
+      "mark_intent": "ICE_FACE_CALVING_SUMMER - 夏季冰川面 calving 频繁，碎冰飞 100m",
+      "events_timeline": [
+        "Jan 2009 一对 tourist 在 viewpoint 被飞溅冰块击中遇难，DOC 关闭区域",
+        "DOC 重新设置 viewpoint 距离，放 mark '100m exclusion zone summer'",
+        "Jul 2024 冬季 tourist 接近 ice face 50m 拍照，无任何活动",
+        "他 comment 'glacier is stable, mark wrong'",
+        "他不知道夏季同地点死过人"
+      ],
+      "user_action": "冬季 tourist dismiss mark '稳定'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Fox Glacier 2009 双重死亡事件改变了 NZ glacier viewing 安全标准。Mark 是 fatality-driven 设置。冬季 calving 几乎停（温度低），但 6 个月后会回来。算法保留——fatality mark 应有最高保护权重。"
+    },
+    {
+      "id": 147,
+      "location_desc": "Mt Aspiring National Park Cascade Saddle Pylon 路标，海拔 1524m，雪崩季 (May-Nov) 此 pylon 是 known whiteout reference 但被雪覆盖",
+      "season_context": "winter / spring (May-Nov)",
+      "mark_intent": "WHITEOUT_NAVIGATION_AID - 冬季 pylon 部分埋雪难找，需 GPS",
+      "events_timeline": [
+        "Sep 2007 多名 tramper 在 whiteout 中错过 pylon，被困 2 天",
+        "DOC 放 mark '冬季 whiteout - GPS waypoint critical, pylon may be buried'",
+        "Feb 2024 夏季 tramper 在晴天看到 pylon 老远",
+        "她 comment 'pylon is obvious, mark unnecessary'",
+        "她不知道冬季 whiteout 中 pylon 完全消失"
+      ],
+      "user_action": "夏季 tramper dismiss mark '老远就看到 pylon'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Cascade Saddle 是 NZ tramping 死亡率最高的 routes 之一，多在冬季 whiteout。Mark 教 winter tramper 不能依赖 visual aids。夏季用户的 dismiss 是 sample size 1 的 confirmation bias。算法保留。"
+    },
+    {
+      "id": 148,
+      "location_desc": "Catlins Nugget Point 灯塔下方 cliff edge，海拔 110m，西南向 storm (May-Sep) 阵风 130km/h+ 把人吹下 cliff",
+      "season_context": "winter SW storms (May-Sep)",
+      "mark_intent": "CLIFF_EDGE_WIND_GUST - 冬季 SW 阵风 cliff edge 致命",
+      "events_timeline": [
+        "Jul 2017 一名 photographer 在 storm 中被吹倒滑向 edge，被 fence 拦下",
+        "DOC 放 mark 'Winter SW storms - 5m back from edge minimum'",
+        "Feb 2024 calm summer afternoon tourist 在 edge 拍照无危险",
+        "他 comment 'edge is fine, mark melodramatic'",
+        "他不知道 SW storm 期间同 edge 死过 1 人 (2003)"
+      ],
+      "user_action": "夏季 calm tourist dismiss mark",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Nugget Point 突出 SW 海岸，冬季 SW storm baseline 风速可达 130km/h。Mark 是 fatality-driven (2003 incident) + storm season specific。Calm summer 不能 invalidate winter mark。算法保留。"
+    },
+    {
+      "id": 149,
+      "location_desc": "Mt Hutt 滑雪场基地下方 access road 在 km 6 处的 hairpin，雪季 (Jun-Sep) 黑冰每天早晨 7-9am 致 1-2 起 vehicle accidents",
+      "season_context": "ski season morning (Jun-Sep)",
+      "mark_intent": "ROAD_BLACK_ICE - 雪季早晨 access road 黑冰",
+      "events_timeline": [
+        "Jul 2022 一辆 4WD 在 hairpin 滑下路 5m embankment，driver 重伤",
+        "Mt Hutt 与 NZTA 放 mark 'Ski season morning - chains mandatory before 9am'",
+        "Feb 2024 干燥夏季 driver 路过，road 完美 grip",
+        "他 comment 'road is fine, chains pointless'",
+        "他不知道 5 个月后同地点几乎每天结冰"
+      ],
+      "user_action": "夏季 driver dismiss mark '链条多余'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Mt Hutt access road 在雪季是 NZ 最危险 ski access road 之一。Mark 是 chain regulation 的 reference。删除等于雪季新 driver 不知道为什么强制链条。算法保留——regulatory context mark 是 critical。"
+    },
+    {
+      "id": 150,
+      "location_desc": "Whanganui River 60km 段从 Whakahoro 到 Pipiriki，融雪 + 雨季叠加期 (Aug-Oct) 水位涨 2m+，rapid grade 从 II 升到 III+",
+      "season_context": "spring high water (Aug-Oct)",
+      "mark_intent": "RAPID_GRADE_ESCALATION - 春季高水位 rapid 从 II 升到 III+",
+      "events_timeline": [
+        "Sep 2019 一群 canoeist 在 grade III+ 中翻船，1 人 hypothermia 重伤",
+        "DOC + iwi 放 mark '春季高水位 - rapid 升级，仅 grade III paddler'",
+        "Feb 2024 干燥夏季 canoeist 通过 grade II 全程顺利",
+        "他 comment 'rapids are easy, mark over-grading'",
+        "他不知道 6 周前同 rapid 是 grade III+"
+      ],
+      "user_action": "夏季 canoeist dismiss mark '过度评级'",
+      "ground_truth": "MARK_VALID_USER_WRONG",
+      "human_judgment": "Whanganui rapid grading 是 water-level dependent，不是 static。Spring melt 后水量大 rapid 升级是 paddling 常识，但许多 first-time canoeist 不知道。Mark 教育性强。算法保留。"
+    }
+  ]
+}

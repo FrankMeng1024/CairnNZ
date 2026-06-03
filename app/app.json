@@ -1,0 +1,116 @@
+{
+  "expo": {
+    "name": "Cairn",
+    "slug": "cairn",
+    "version": "0.2.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#faf7f2"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.yiiling.cairn",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Cairn needs your location to track your track and show nearby markers.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Cairn needs background location to keep recording your track when the screen is locked or you switch apps.",
+        "NSCameraUsageDescription": "Cairn uses the camera to anchor flags in the AR view, letting you place markers at real-world spots and see them again on future hikes.",
+        "NSMotionUsageDescription": "Cairn reads device orientation to point the in-app compass to true north and to anchor AR flags as you turn.",
+        "NSPhotoLibraryUsageDescription": "Cairn needs photo library access so you can attach photos to your routes and cairns.",
+        "NSPhotoLibraryAddUsageDescription": "Cairn saves the photos you capture in the app to your photo library.",
+        "NSMicrophoneUsageDescription": "Cairn uses the microphone for voice notes attached to flags (optional).",
+        "UIBackgroundModes": [
+          "location",
+          "audio"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.cairn.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#faf7f2"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Cairn needs background location to keep recording your track when the screen is locked."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cairn uses the camera to anchor flags in the AR view, letting you place markers at real-world spots."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cairn needs photo library access so you can attach photos to your routes and cairns.",
+          "cameraPermission": "Cairn uses the camera so you can capture photos for your routes and cairns.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#5d7c46"
+        }
+      ],
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsImpl": "mapbox"
+        }
+      ],
+      "expo-asset",
+      "expo-font",
+      [
+        "@reactvision/react-viro",
+        {
+          "ios": {
+            "cameraUsagePermission": "Cairn uses the camera to anchor 3D markers in AR.",
+            "microphoneUsagePermission": "Cairn uses the microphone for AR voice notes.",
+            "locationUsagePermission": "Cairn uses your location to anchor AR markers to real-world places."
+          },
+          "provider": "none"
+        }
+      ],
+      "./plugins/withViroPodfileFix"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8c80a6aa-1c08-44a7-8f21-e331ae7548fb"
+      }
+    },
+    "owner": "frankmeng920313",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/8c80a6aa-1c08-44a7-8f21-e331ae7548fb"
+    }
+  }
+}

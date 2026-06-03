@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-05-31T04:49:02.952Z",
+  "dimensions": {
+    "correctness": {
+      "score": 7.5,
+      "weight": 0.4,
+      "weighted": 3,
+      "notes": [
+        "好 marker 沉底率 < 5% ✓",
+        "坏 marker 沉底率 > 90% ✓",
+        "刷子识别率 > 80% ✓"
+      ]
+    },
+    "realism": {
+      "score": 10,
+      "weight": 0.3,
+      "weighted": 3,
+      "notes": [
+        "marker 分布到 popular/normal/remote 3 个 bucket ✓",
+        "persona 多样性: 6 种 ✓",
+        "virtual walker: 100 ≥ 100 ✓",
+        "心跳复活机制覆盖 (false-positive marker 救回) ✓"
+      ]
+    },
+    "edge_case": {
+      "score": 10,
+      "weight": 0.2,
+      "weighted": 2,
+      "notes": [
+        "Fleet 跨 10 seed 聚合 PASS ✓",
+        "参数 ±20% sweep: 10/12 配置 PASS ✓",
+        "math-cases.mjs: 61/61 hand-crafted cases PASS ✓"
+      ]
+    },
+    "ux_clarity": {
+      "score": 10,
+      "weight": 0.1,
+      "weighted": 1,
+      "notes": [
+        "demo.html 全中文 UI ✓",
+        "demo.html 提供 like/report/reset 交互 ✓",
+        "demo.html 有批量模拟控制面板 ✓",
+        "evidence verdict.md 存在 ✓"
+      ]
+    }
+  },
+  "weightedTotal": 9,
+  "pass": true,
+  "threshold": 8
+}

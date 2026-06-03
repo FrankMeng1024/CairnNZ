@@ -1,0 +1,40 @@
+{
+  "total": 653,
+  "pass": 650,
+  "fail": 3,
+  "failDetail": [
+    {
+      "id": 54,
+      "title": "Cornwallis Beach Track 厕所关闭通知",
+      "type": "supply",
+      "L": 80,
+      "R": 0,
+      "duration": 2,
+      "expected": "dead_sick",
+      "actual": "healthy",
+      "life": "568"
+    },
+    {
+      "id": 511,
+      "title": "Open Bay Islands 海上礁石 — 错放在禁区里",
+      "type": "scenic",
+      "L": 0,
+      "R": 2,
+      "duration": 5,
+      "expected": "dead_sick",
+      "actual": "healthy",
+      "life": "622"
+    },
+    {
+      "id": 857,
+      "title": "Crater to Lake Run 一次性赛跑 supply 沿途补给 mark",
+      "type": "supply",
+      "L": 131,
+      "R": 5,
+      "duration": 0.2,
+      "expected": "dead_sick",
+      "actual": "healthy",
+      "life": "533"
+    }
+  ]
+}

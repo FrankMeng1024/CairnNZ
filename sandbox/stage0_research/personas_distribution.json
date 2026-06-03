@@ -1,0 +1,342 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "generated": "2026-05-30",
+    "method": "AI综合 + 公开领域知识 + web search 碎片",
+    "confidence": "MEDIUM (需要 stage 2 沙盒后用真实数据 calibrate)",
+    "sources": [
+      "Jakob Nielsen 1% rule (90-9-1 lurkers/contributors/heavy-creators)",
+      "AllTrails 公开 review 行为模式 (隐性观察)",
+      "Reddit voting research (Stack Overflow community)",
+      "新西兰 DOC Great Walks 访问数据",
+      "豆瓣户外徒步社区结伴比例观察",
+      "户外'搭子'社交模式研究 (中文社区)",
+      "Stack Overflow community moderation report rate"
+    ]
+  },
+
+  "personas": {
+    "explorer_solo": {
+      "_description": "单独 tramper, 经验丰富, 谨慎判断",
+      "share_in_population": 0.30,
+      "behavior": {
+        "encounter_marker": {
+          "see_high_like_low_report": {
+            "like_prob": 0.45,
+            "report_prob": 0.02,
+            "ignore_prob": 0.53,
+            "_note": "认同集体智慧, 倾向 Like"
+          },
+          "see_low_like_high_report": {
+            "like_prob": 0.05,
+            "report_prob": 0.30,
+            "ignore_prob": 0.65,
+            "report_reason_dist": {
+              "info_wrong": 0.50,
+              "danger_wrong": 0.20,
+              "spam": 0.10,
+              "dislike": 0.20
+            }
+          },
+          "see_neutral_no_data": {
+            "like_prob": 0.20,
+            "report_prob": 0.05,
+            "ignore_prob": 0.75,
+            "_note": "新 marker, 谨慎反应"
+          },
+          "matches_personal_judgment": {
+            "like_prob": 0.65,
+            "report_prob": 0.01,
+            "ignore_prob": 0.34,
+            "_note": "事实与认知一致 = 强烈正反馈"
+          },
+          "contradicts_personal_judgment": {
+            "like_prob": 0.03,
+            "report_prob": 0.40,
+            "ignore_prob": 0.57,
+            "report_reason_dist": {
+              "info_wrong": 0.60,
+              "danger_wrong": 0.15,
+              "dislike": 0.25
+            }
+          }
+        },
+        "create_marker_prob": 0.15,
+        "marker_type_preference": {
+          "danger": 0.30,
+          "supply": 0.30,
+          "junction": 0.25,
+          "scenic": 0.10,
+          "cairn": 0.05
+        }
+      }
+    },
+
+    "social_group": {
+      "_description": "结伴 tramper, 跟朋友一起, 行为更跟随",
+      "share_in_population": 0.40,
+      "_note": "户外结伴占比 40-60% (NZ DOC + 中文搭子文化)",
+      "behavior": {
+        "encounter_marker": {
+          "see_high_like_low_report": {
+            "like_prob": 0.55,
+            "report_prob": 0.01,
+            "ignore_prob": 0.44,
+            "_note": "群体跟随效应强"
+          },
+          "see_low_like_high_report": {
+            "like_prob": 0.03,
+            "report_prob": 0.10,
+            "ignore_prob": 0.87,
+            "_note": "跟朋友聊天忽略"
+          },
+          "see_neutral_no_data": {
+            "like_prob": 0.15,
+            "report_prob": 0.02,
+            "ignore_prob": 0.83
+          },
+          "matches_personal_judgment": {
+            "like_prob": 0.50,
+            "report_prob": 0.01,
+            "ignore_prob": 0.49
+          },
+          "contradicts_personal_judgment": {
+            "like_prob": 0.05,
+            "report_prob": 0.20,
+            "ignore_prob": 0.75
+          }
+        },
+        "create_marker_prob": 0.05,
+        "_note": "结伴时较少自己 plant, 朋友会聊代替留言"
+      }
+    },
+
+    "enthusiast_creator": {
+      "_description": "热情贡献者, 频繁 plant + Like, 1% rule 中的 1%",
+      "share_in_population": 0.05,
+      "_note": "Jakob Nielsen 1% rule: 1% 重度创作者",
+      "behavior": {
+        "encounter_marker": {
+          "see_high_like_low_report": {
+            "like_prob": 0.80,
+            "report_prob": 0.01,
+            "ignore_prob": 0.19
+          },
+          "see_low_like_high_report": {
+            "like_prob": 0.10,
+            "report_prob": 0.40,
+            "ignore_prob": 0.50,
+            "report_reason_dist": {
+              "info_wrong": 0.45,
+              "danger_wrong": 0.25,
+              "spam": 0.15,
+              "hate": 0.05,
+              "dislike": 0.10
+            }
+          },
+          "see_neutral_no_data": {
+            "like_prob": 0.50,
+            "report_prob": 0.05,
+            "ignore_prob": 0.45,
+            "_note": "热情用户给新内容更多机会"
+          },
+          "matches_personal_judgment": {
+            "like_prob": 0.85,
+            "report_prob": 0.00,
+            "ignore_prob": 0.15
+          },
+          "contradicts_personal_judgment": {
+            "like_prob": 0.02,
+            "report_prob": 0.55,
+            "ignore_prob": 0.43
+          }
+        },
+        "create_marker_prob": 0.40,
+        "marker_type_preference": {
+          "danger": 0.20,
+          "supply": 0.25,
+          "junction": 0.20,
+          "scenic": 0.25,
+          "cairn": 0.10
+        }
+      }
+    },
+
+    "lurker_silent": {
+      "_description": "潜水用户, 看不操作, 90-9-1 中的 90%",
+      "share_in_population": 0.20,
+      "_note": "Jakob Nielsen: 90% 潜水用户",
+      "behavior": {
+        "encounter_marker": {
+          "see_high_like_low_report": {
+            "like_prob": 0.05,
+            "report_prob": 0.00,
+            "ignore_prob": 0.95
+          },
+          "see_low_like_high_report": {
+            "like_prob": 0.00,
+            "report_prob": 0.01,
+            "ignore_prob": 0.99
+          },
+          "see_neutral_no_data": {
+            "like_prob": 0.01,
+            "report_prob": 0.00,
+            "ignore_prob": 0.99
+          },
+          "matches_personal_judgment": {
+            "like_prob": 0.08,
+            "report_prob": 0.00,
+            "ignore_prob": 0.92
+          },
+          "contradicts_personal_judgment": {
+            "like_prob": 0.00,
+            "report_prob": 0.02,
+            "ignore_prob": 0.98
+          }
+        },
+        "create_marker_prob": 0.01
+      }
+    },
+
+    "critic_skeptical": {
+      "_description": "严苛 / 怀疑型, 倾向 Report 不爽",
+      "share_in_population": 0.04,
+      "behavior": {
+        "encounter_marker": {
+          "see_high_like_low_report": {
+            "like_prob": 0.20,
+            "report_prob": 0.05,
+            "ignore_prob": 0.75,
+            "_note": "对 mainstream 看法保留"
+          },
+          "see_low_like_high_report": {
+            "like_prob": 0.02,
+            "report_prob": 0.50,
+            "ignore_prob": 0.48,
+            "report_reason_dist": {
+              "info_wrong": 0.40,
+              "danger_wrong": 0.20,
+              "spam": 0.10,
+              "dislike": 0.30
+            }
+          },
+          "see_neutral_no_data": {
+            "like_prob": 0.05,
+            "report_prob": 0.10,
+            "ignore_prob": 0.85
+          },
+          "matches_personal_judgment": {
+            "like_prob": 0.40,
+            "report_prob": 0.02,
+            "ignore_prob": 0.58
+          },
+          "contradicts_personal_judgment": {
+            "like_prob": 0.01,
+            "report_prob": 0.65,
+            "ignore_prob": 0.34,
+            "_note": "强烈反对错误信息"
+          }
+        },
+        "create_marker_prob": 0.10
+      }
+    },
+
+    "spammer": {
+      "_description": "刷子, 集中刷某 marker (反复 Like / Unlike)",
+      "share_in_population": 0.005,
+      "_note": "极少数, 但需要算法防御",
+      "behavior": {
+        "target_marker_prob": 0.95,
+        "rapid_toggle_prob": 0.80,
+        "create_spam_marker_prob": 0.30,
+        "_note": "10 分钟内反复操作 5 次切换上限会被算法限制"
+      }
+    },
+
+    "malicious_reporter": {
+      "_description": "恶意举报者, 集中 Report 特定 marker",
+      "share_in_population": 0.005,
+      "_note": "平台审核数据: 0.5-1% 恶意举报率",
+      "behavior": {
+        "encounter_marker": {
+          "report_specific_target_prob": 0.70,
+          "report_random_prob": 0.20,
+          "ignore_prob": 0.10,
+          "report_reason_dist": {
+            "hate": 0.30,
+            "spam": 0.30,
+            "dislike": 0.40
+          }
+        },
+        "create_marker_prob": 0.02
+      }
+    }
+  },
+
+  "_share_total_check": "0.30 + 0.40 + 0.05 + 0.20 + 0.04 + 0.005 + 0.005 = 1.000",
+
+  "group_dynamics": {
+    "_description": "结伴行为模型, 影响 social_group persona",
+    "group_size_distribution": {
+      "1": 0.30,
+      "2": 0.35,
+      "3-4": 0.25,
+      "5+": 0.10
+    },
+    "group_synchronization": {
+      "movement_sync_radius_m": 50,
+      "decision_influence": 0.60,
+      "_note": "群体内 60% 概率第二个人跟随第一个的决策"
+    }
+  },
+
+  "encounter_dynamics": {
+    "passing_speed_kmh": {
+      "leisurely_walk": 3,
+      "tramping": 4.5,
+      "running": 8
+    },
+    "encounter_radius_m": 30,
+    "encounter_duration_s": {
+      "running_pass": 5,
+      "walking_pass": 15,
+      "stop_to_check": 60
+    },
+    "decision_lag_ms": {
+      "fast_decision": 500,
+      "considered": 2000,
+      "deep_thought": 5000
+    }
+  },
+
+  "marker_creation": {
+    "creation_rate_per_session_per_user": {
+      "explorer_solo": 0.15,
+      "social_group": 0.05,
+      "enthusiast_creator": 0.40,
+      "lurker_silent": 0.01,
+      "critic_skeptical": 0.10,
+      "spammer": 0.30,
+      "malicious_reporter": 0.02
+    }
+  },
+
+  "type_distribution_overall": {
+    "danger": 0.18,
+    "supply": 0.22,
+    "junction": 0.20,
+    "scenic": 0.30,
+    "cairn": 0.10
+  },
+
+  "report_reason_overall": {
+    "info_wrong": 0.30,
+    "danger_wrong": 0.10,
+    "spam": 0.15,
+    "hate": 0.05,
+    "privacy": 0.03,
+    "cultural": 0.02,
+    "dislike": 0.30,
+    "other": 0.05
+  }
+}

@@ -1,0 +1,839 @@
+{
+  "batch": 6,
+  "theme": "商业mark",
+  "id_range": [251, 300],
+  "total": 30,
+  "note": "手写30条停笔。商业意图mark的真实价值光谱从客观有用到赤裸宣传，算法判别核心：商业身份不是死刑，但宣传强度+用户回报信号比是关键。",
+  "cases": [
+    {
+      "id": 251,
+      "title": "Routeburn Flats Hut 旁 Glenorchy 私营 lodge 老板标自家床位",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Glenorchy 镇外 Kinloch Road 尽头 Mt Earnslaw Lodge，距 Routeburn Track Glenorchy 端起点 23 公里，自营山间小木屋",
+        "intrinsic_quality": "私营，但确实在 DOC Routeburn Flats Hut 满员季节是 trampers 撤退备选，价格透明 $85/晚含早餐",
+        "user_volume_per_month": 25,
+        "duration_months": 14,
+        "signal": "Glenorchy 镇内 4G 满格，Routeburn 步道上无信号，标 sync 在用户回到 Queenstown 后",
+        "season_pattern": "11-4月旺季满员率 90%+，5-10月几乎无人",
+        "human_factors": "老板自己发的 mark 写得很克制，只说'有床位 24 小时可达 trailhead'，不吹"
+      },
+      "events_timeline": [
+        "Month 1: 老板 Dave（kiwi，本地经营 12 年）发 mark，附 lodge 照片和 Routeburn 接驳时刻表",
+        "Month 2: 一队从 Routeburn Falls Hut 提前撤退的德国背包客在 Glenorchy 看到 mark，住下感谢",
+        "Month 3-5: 9 likes，2 条评论说'救命稻草，DOC 满员时唯一选择'",
+        "Month 6: 一名澳洲游客 report '商业广告，应该禁止'",
+        "Month 8: Routeburn Track 因山火封闭一周，lodge 接收 14 名滞留者，老板没涨价，4 likes",
+        "Month 11: Queenstown Lakes District Council tourism office 自发引用了这个 mark 推荐",
+        "Month 14: 累积 31 likes vs 3 reports"
+      ],
+      "expected_signal_summary": "31 likes vs 3 reports (10.3:1)，commercial 但用户回报极正",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业身份不等于价值低，本地经营者发的真实信息且用户大量受益，likes/reports 比 10:1，应保留，但算法可加 commercial_disclosed 标记。",
+      "edge_case_flag": "commercial_owner|honest_disclosure|positive_signal"
+    },
+    {
+      "id": 252,
+      "title": "Te Anau Lakefront 餐厅 Redcliff Café 标自己'Kepler Track 后第一杯啤酒'",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Te Anau Lakefront Drive 12 号 Redcliff Café，距 Kepler Track Control Gates 终点 2.4 公里，老牌野味餐厅",
+        "intrinsic_quality": "Kepler Track 完赛 trampers 的传统聚集地，餐厅本身在 lonely planet 上有独立条目",
+        "user_volume_per_month": 60,
+        "duration_months": 11,
+        "signal": "Te Anau 镇 4G 良好，sync 立即",
+        "season_pattern": "10-4月 Kepler 旺季每天接待 30+ trampers",
+        "human_factors": "店主 Ash（前 DOC ranger）发的 mark 写'热水澡之外的下一站'，自嘲式"
+      },
+      "events_timeline": [
+        "Month 1: Ash 发 mark，附店内 Fiordland Brewing 啤酒清单",
+        "Month 2: 一队完成 Kepler 4 天的英国 trampers 到店打卡，8 likes",
+        "Month 4: Kepler Challenge 跑山赛 250 名选手中约 80 人赛后到店，22 likes 集中爆发",
+        "Month 5: 一名 vegan 游客 report '不友好菜单宣传'，Ash 评论回复并加了素菜选项",
+        "Month 7: Fiordland i-SITE 工作人员把这个 mark 推给问'终点哪里吃饭'的游客",
+        "Month 9: 一队美国家庭说 mark 让他们发现餐厅，孩子记忆点最深的部分",
+        "Month 11: 累积 47 likes vs 4 reports"
+      ],
+      "expected_signal_summary": "47 likes vs 4 reports (11.8:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业餐厅自标但情感真实，Kepler 完赛仪式感的一部分，likes 集中在赛事后属真实用户行为，保留。",
+      "edge_case_flag": "commercial_restaurant|tradition_anchor|event_driven_likes"
+    },
+    {
+      "id": 253,
+      "title": "Bob's Peak Skyline Queenstown 直升机观光公司标'最佳 Remarkables 取景点'",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Queenstown Bob's Peak gondola top station 后方 200 米山脊，对面正对 The Remarkables 山脉",
+        "intrinsic_quality": "取景客观真的好，但被直升机公司 Over The Top Helicopters 标记是为了他们悬停拍照路线",
+        "user_volume_per_month": 200,
+        "duration_months": 8,
+        "signal": "Skyline 缆车顶 4G 满格",
+        "season_pattern": "全年，冬季雪景加分",
+        "human_factors": "公司销售用 mark 引流到他们 $499 的'photographer flight'，文字隐晦'专业摄影师推荐位置'"
+      },
+      "events_timeline": [
+        "Month 1: 公司账号发 mark，配图带细微 watermark，文字提'专业摄影师推荐'",
+        "Month 2: 一队中国游客确实来到这个点拍照，8 likes",
+        "Month 3: 当地摄影师 Lisa report '商业引流伪装成 tip'",
+        "Month 4: 直升机公司在 mark 评论区直接 promote 他们的 flight package，5 reports",
+        "Month 5: Queenstown Photo Club 集体讨论，6 名成员 report '点位本身好但商业意图过重'",
+        "Month 7: Skyline gondola 自家也发了同地点 mark，纯粹无商业，那个 mark 21 likes vs 0 reports",
+        "Month 8: 累积 18 likes vs 14 reports"
+      ],
+      "expected_signal_summary": "18 likes vs 14 reports (1.3:1) + 评论区被识别为推广",
+      "expected_outcome": "challenged",
+      "expected_status": "needs_review",
+      "human_judgment": "取景点本身客观好但商业引流过强，存在更干净替代 mark，应降权或合并到非商业版本，不一定 kill 但 needs_review。",
+      "edge_case_flag": "commercial_promotion|disguised_ad|cleaner_alternative_exists"
+    },
+    {
+      "id": 254,
+      "title": "Skippers Canyon 私营钓鱼向导标'独家 Shotover trout pool'",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Skippers Canyon Road 17 公里处 Shotover River 一处深潭，私营 fishing guide 公司 Skippers Sports 标记",
+        "intrinsic_quality": "确实是 brown trout 多发区，但向导公司宣称'独家'是误导——任何持 Otago Fish & Game 执照的人都可去",
+        "user_volume_per_month": 18,
+        "duration_months": 12,
+        "signal": "Skippers Canyon 几乎全段无信号，sync 在 Queenstown 镇内",
+        "season_pattern": "10月-4月 trout 季",
+        "human_factors": "guide 公司用 mark 暗示 access 困难需要他们带路，实际 4WD 自驾可达"
+      },
+      "events_timeline": [
+        "Month 1: Skippers Sports 发 mark，文字'我们的 secret pool'",
+        "Month 3: 一名独自来钓鱼的本地 angler John 自驾 4WD 到达，发现路并不难，留言'根本不是独家'",
+        "Month 5: Otago Fish & Game 协会成员 report '误导，任何执照持有者均可访问'",
+        "Month 7: 一队听信 guide 公司付了 $850 的游客发现自驾就能到，1 star review，4 reports",
+        "Month 9: Queenstown 4WD 俱乐部 8 人集体去过此点，集体 report '商业误导'",
+        "Month 10: Skippers Sports 删评论被截图扩散",
+        "Month 12: 累积 9 likes vs 19 reports"
+      ],
+      "expected_signal_summary": "9 likes vs 19 reports (0.47:1)，且声称'独家'被本地权威组织反驳",
+      "expected_outcome": "killed",
+      "expected_status": "removed",
+      "human_judgment": "商业 mark 含明确虚假主张（'独家'），且被本地协会和角钓爱好者实地反驳，likes 不及 reports，应 kill。",
+      "edge_case_flag": "commercial_false_claim|exclusivity_lie|authority_refutation"
+    },
+    {
+      "id": 255,
+      "title": "Wanaka Cardrona Valley 酒庄 Rippon Wines 标自家品酒 deck",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wanaka 西岸 Mt Aspiring Road 246 号 Rippon Vineyard 品酒露台，俯瞰 Lake Wanaka 和 Buchanan Peaks",
+        "intrinsic_quality": "Rippon 是 NZ 最有名的有机酒庄之一，露台景观本身就是 Wanaka 旅游必到点",
+        "user_volume_per_month": 90,
+        "duration_months": 10,
+        "signal": "Wanaka 镇外 4G 良好",
+        "season_pattern": "10月-5月品酒室开放",
+        "human_factors": "酒庄用孙辈 Nick Mills 个人账号发 mark，写'家族第三代欢迎来坐'，没硬推产品"
+      },
+      "events_timeline": [
+        "Month 1: Nick 发 mark，附露台日落实拍，没价格没酒单",
+        "Month 2: 一队来 Wanaka tree 打卡的游客顺路过来，留言说'比 Wanaka tree 还美还安静'，14 likes",
+        "Month 4: Wine Folly 编辑路过点了 like 并转发",
+        "Month 5: 一名 teetotaler report '酒精相关地点不应在徒步 app'",
+        "Month 7: 当地 cycle trail 用户把这个 mark 标进自己的 Wanaka 一日路线",
+        "Month 9: NZ Wine Society 引用 mark 作为 Pinot Noir tour 推荐",
+        "Month 10: 累积 68 likes vs 5 reports"
+      ],
+      "expected_signal_summary": "68 likes vs 5 reports (13.6:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业但本身是地标级目的地，发布人克制无硬推，用户回报压倒性正向，保留。teetotaler report 是个人偏好不是 mark 质量问题。",
+      "edge_case_flag": "commercial_landmark|restrained_promotion|preference_report"
+    },
+    {
+      "id": 256,
+      "title": "Franz Josef Glacier Guides 公司标'安全冰川入口'（实为引流）",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Franz Josef Glacier valley 冰川舌部 1.2 公里处 Sentinel Rock viewpoint 侧方，被 Franz Josef Glacier Guides 标为'冰川安全入口'",
+        "intrinsic_quality": "DOC 自 2012 年因冰川后退已永久关闭徒步入冰川，guide 公司说的'安全入口'指的是他们直升机降落点",
+        "user_volume_per_month": 40,
+        "duration_months": 9,
+        "signal": "Franz Josef 镇 4G 良好，山谷内无",
+        "season_pattern": "全年",
+        "human_factors": "guide 公司 mark 用词模糊'safe access for visitors'，未说明只能跟团"
+      },
+      "events_timeline": [
+        "Month 1: Franz Josef Glacier Guides 账号发 mark",
+        "Month 2: 一对德国夫妇按 mark 走到 Sentinel Rock 后想继续前进，被 DOC ranger 拦下",
+        "Month 3: ranger 在 mark 评论区留言'此处徒步入冰川已自 2012 永久关闭'，正式 flag",
+        "Month 4: West Coast Penguin Trust 同时 report '误导可能害游客冒险'",
+        "Month 6: 当地 backpacker hostel 老板汇报 4 起客人被同样 mark 误导事件",
+        "Month 7: NZ Mountain Safety Council 加入 report，称 mark 有公共安全风险",
+        "Month 9: 累积 6 likes vs 24 reports，DOC 直接邮件 Cairn 平台要求处理"
+      ],
+      "expected_signal_summary": "6 likes vs 24 reports (0.25:1) + DOC ranger 实地反驳 + MSC 安全警告",
+      "expected_outcome": "killed",
+      "expected_status": "removed",
+      "human_judgment": "商业引流伪装成安全信息，DOC 和 MSC 双重权威反驳，存在公共安全风险，必须 kill 不是降权。",
+      "edge_case_flag": "commercial_safety_lie|authority_refutation|public_danger"
+    },
+    {
+      "id": 257,
+      "title": "Hokitika 户外用品店 Wilderness Lodge 标'最后补给点'（事实陈述）",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Hokitika 镇 Weld Street 38 号 Wild West Outdoors，距离 Hokitika Gorge 起点 33 公里，沿途无补给",
+        "intrinsic_quality": "店铺确实是 Hokitika Gorge / Whitcombe Valley 路线的最后补给点，事实陈述",
+        "user_volume_per_month": 32,
+        "duration_months": 16,
+        "signal": "Hokitika 镇 4G 满格",
+        "season_pattern": "全年",
+        "human_factors": "店主 Sarah 发的 mark 配上自家店铺照和 Whitcombe valley 路况描述，写实"
+      },
+      "events_timeline": [
+        "Month 1: Sarah 发 mark，附店内炉头 gas 罐和应急食品照",
+        "Month 3: 一队从 Hokitika Gorge swing bridge 出来的法国 backpackers 留言'幸亏看到这个 mark'",
+        "Month 5: 一名 Christchurch 游客 report '商业广告应禁止'",
+        "Month 7: West Coast Wilderness Trail cycle 联盟把 mark 标进官方推荐补给点",
+        "Month 9: 一对从 Whitcombe Valley 撤退的 trampers 因为这个 mark 知道 Hokitika 还有 gas 卖",
+        "Month 12: Department of Conservation Westland 区域办公室提及该 mark 为'有用的本地信息'",
+        "Month 16: 累积 53 likes vs 4 reports"
+      ],
+      "expected_signal_summary": "53 likes vs 4 reports (13.3:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业身份但陈述客观真实，DOC 和 cycle 联盟双重背书，likes 大幅压倒 reports，保留。",
+      "edge_case_flag": "commercial_factual|authority_endorsement|practical_value"
+    },
+    {
+      "id": 258,
+      "title": "Tekapo 流动咖啡车 Astro Café 标自己（每周两次换地点）",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Tekapo Mt John Observatory parking lot，流动咖啡车，每周一三五在此，二四六移到 Lake Pukaki 看点",
+        "intrinsic_quality": "确实存在但位置浮动，mark 写明'mon/wed/fri 这里'但 trampers 经常扑空",
+        "user_volume_per_month": 15,
+        "duration_months": 8,
+        "signal": "Mt John 顶部 4G 弱，Tekapo 镇好",
+        "season_pattern": "10-4月旺季营业，5-9月暂停",
+        "human_factors": "车主 Mei 是个一人经营的咖啡师，发 mark 时心情好就发，时间表会变"
+      },
+      "events_timeline": [
+        "Month 1: Mei 发 mark 写'mon wed fri 在这里'",
+        "Month 2: 一名 stargazer 周二来扑空，report '不在'",
+        "Month 3: Mei 评论区道歉并解释时间表，更新 mark 文字",
+        "Month 4: 又两次 report 因游客没读评论",
+        "Month 5: 冬季停业，mark 没及时更新，3 reports'营业不存在'",
+        "Month 6: Mei 春季回来后更新 mark，加'check Instagram for daily location'",
+        "Month 8: 累积 14 likes vs 11 reports"
+      ],
+      "expected_signal_summary": "14 likes vs 11 reports (1.27:1)，浮动位置导致 mismatch",
+      "expected_outcome": "challenged",
+      "expected_status": "needs_review",
+      "human_judgment": "商业 mark 本身真实但位置浮动天然不适合 pin-based 系统，mark 形式与场地特性 mismatch，建议转为 area mark 或加 schedule warning。",
+      "edge_case_flag": "commercial_mobile|format_mismatch|honest_but_unstable"
+    },
+    {
+      "id": 259,
+      "title": "Mt Hutt skifield 滑雪学校标'最佳初学者缓坡'",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Mt Hutt skifield Sunrise Quad chairlift 顶站缓坡区，被 NZSki Mt Hutt Snow Sports School 标记",
+        "intrinsic_quality": "确实是 ski school 教学区，对真初学者有帮助但 mark 暗示需要报班",
+        "user_volume_per_month": 80,
+        "duration_months": 6,
+        "signal": "skifield 4G 弱但 lodge 有 wifi",
+        "season_pattern": "6月-10月雪季",
+        "human_factors": "ski school manager 发 mark 客观描述坡度和雪况但放了 lesson booking link"
+      },
+      "events_timeline": [
+        "Month 1: Snow Sports School 账号发 mark，附坡度和 lesson 价格",
+        "Month 2: 一队 Christchurch 大学滑雪社新手用 mark 找到点，自己练，10 likes",
+        "Month 3: Snow Sports School 评论区追加'first lesson $89'，2 reports",
+        "Month 4: Methven 当地 ski instructor 联盟讨论后认为 mark 信息客观",
+        "Month 5: 一名 Wanaka 来的资深滑雪者 report '商业 mark 不应在公共信息层'",
+        "Month 6: 累积 31 likes vs 8 reports"
+      ],
+      "expected_signal_summary": "31 likes vs 8 reports (3.9:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业但信息客观有用，初学者真实受益，likes 显著高于 reports，保留并标 commercial_disclosed。",
+      "edge_case_flag": "commercial_disclosed|skill_calibrated|honest_link"
+    },
+    {
+      "id": 260,
+      "title": "Methven 自行车租赁店 Big Al's Bikes 标 Mt Hutt cycle trail 起点",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Methven 镇 Forest Drive 19 号 Big Al's Bikes，距 Mt Hutt Forest cycle trail 起点 4 公里，提供 e-bike 租赁",
+        "intrinsic_quality": "店铺真实存在，是 Mt Hutt Forest 路线少数租车点之一",
+        "user_volume_per_month": 22,
+        "duration_months": 10,
+        "signal": "Methven 镇 4G 良好",
+        "season_pattern": "10-4月骑行季",
+        "human_factors": "Al 自己发的 mark 提了路线难度和电池续航数据，附带租金 $65/天"
+      },
+      "events_timeline": [
+        "Month 1: Al 发 mark，配店面照和 trail 地图",
+        "Month 3: 一对澳洲夫妇租车骑完 Mt Hutt Forest 全程，留言感谢，14 likes",
+        "Month 5: NZ Cycle Trail Methven 段官方账号转发该 mark",
+        "Month 6: 一名 self-supported tourer report '不需要租车信息'",
+        "Month 8: 一队 Christchurch 周末骑行者用 mark 找到 Al，6 likes 集中爆发",
+        "Month 10: 累积 36 likes vs 3 reports"
+      ],
+      "expected_signal_summary": "36 likes vs 3 reports (12:1)，NZ Cycle Trail 官方背书",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业但提供路线唯一的实用 service，官方账号背书且回报积极，保留。",
+      "edge_case_flag": "commercial_unique_service|official_endorsement|honest_pricing"
+    },
+    {
+      "id": 261,
+      "title": "Fox Glacier 直升机滑雪运营商标'powder bowl'位置（季节性危险）",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Fox Glacier 上方 Burton Glacier 海拔 2400m powder bowl，被 Alpine Adventures heli-ski 公司标为'最佳粉雪'",
+        "intrinsic_quality": "powder 雪况确实顶级但是 avalanche terrain，公司标 mark 有引流且对自由滑雪者构成误导",
+        "user_volume_per_month": 8,
+        "duration_months": 11,
+        "signal": "整个区域无信号，sync 极少",
+        "season_pattern": "7月-9月深冬",
+        "human_factors": "运营商写'experienced skiers welcome'但实际此点离最近 patrol 30 分钟直升机"
+      },
+      "events_timeline": [
+        "Month 1: Alpine Adventures 发 mark",
+        "Month 3: NZ Mountain Safety Council 工作人员 report'avalanche zone 不应推荐给自由滑雪者'",
+        "Month 5: 一队尝试自滑的瑞士滑雪者被困 6 小时被 SAR 救出，事件报告引用 mark 为诱因",
+        "Month 7: West Coast Avalanche Forecast service 加入 report",
+        "Month 8: SAR Otago 区域官方在 Cairn 平台发反向 danger mark 在同一坐标",
+        "Month 9: Alpine Adventures 仍未撤回原 mark，本地导游协会公开谴责",
+        "Month 11: 累积 4 likes vs 27 reports"
+      ],
+      "expected_signal_summary": "4 likes vs 27 reports (0.15:1) + SAR 反向 danger mark 在同坐标",
+      "expected_outcome": "killed",
+      "expected_status": "removed",
+      "human_judgment": "商业 mark 直接造成 SAR 救援事件，多重权威反驳并发了反向 danger mark，必须 kill 且记录运营商账号信誉降级。",
+      "edge_case_flag": "commercial_dangerous_promotion|sar_event|counter_mark_exists"
+    },
+    {
+      "id": 262,
+      "title": "Fiordland Te Anau 钓鱼船码头被举报为'商业入侵'",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Te Anau Lakefront 西端 boat ramp，被 Fiordland Fishing Charters 公司标为'集合点'",
+        "intrinsic_quality": "码头本身是 DOC 公共设施，公司标记自己集合点尚可，但 mark 文字暗示码头是其'expedition base'",
+        "user_volume_per_month": 35,
+        "duration_months": 9,
+        "signal": "Te Anau 镇 4G 良好",
+        "season_pattern": "11月-4月",
+        "human_factors": "本地划船俱乐部和独立 anglers 觉得公司在公共码头插私人 mark 很冒犯"
+      },
+      "events_timeline": [
+        "Month 1: Fiordland Fishing Charters 发 mark 写'our expedition base'",
+        "Month 2: Te Anau Boat Club 主席 Bruce 评论区指出码头是公共设施",
+        "Month 3: 12 名独立 anglers 集体 report '商业占用公共空间表述'",
+        "Month 4: DOC Fiordland 区域 ranger 评论区中性留言'码头属公共设施可自由使用'",
+        "Month 6: 公司修改 mark 文字为'pickup point'，撤了'expedition base'",
+        "Month 7: 修改后 reports 速度放缓，但前 4 个月已积累",
+        "Month 9: 累积 11 likes vs 18 reports"
+      ],
+      "expected_signal_summary": "11 likes vs 18 reports (0.61:1)，公司修改后行为改善",
+      "expected_outcome": "challenged",
+      "expected_status": "needs_review",
+      "human_judgment": "商业 mark 占用公共空间表述初次违规，但发布者已修改文字，应观察 6 个月，若新 reports 显著下降则保留低权重，否则 kill。",
+      "edge_case_flag": "commercial_public_space|self_corrected|observation_period"
+    },
+    {
+      "id": 263,
+      "title": "Queenstown Bob's Cove 浮潜运营商标'private beach access'（虚假）",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Bob's Cove Track 岔路口尽头一处砂石小湾，被 Queenstown Snorkel Tours 标为'private beach access via our boat'",
+        "intrinsic_quality": "Bob's Cove 是 Queenstown Lakes District Council 公共保留地，绝无私人海滩",
+        "user_volume_per_month": 25,
+        "duration_months": 7,
+        "signal": "Bob's Cove Track 末端 4G 弱",
+        "season_pattern": "11月-3月",
+        "human_factors": "公司想把自己的游船 tour 包装成'独家'，文字夸大"
+      },
+      "events_timeline": [
+        "Month 1: Queenstown Snorkel Tours 发 mark",
+        "Month 2: Queenstown Lakes District Council park ranger 评论区反驳",
+        "Month 3: 4 名当地 paddleboarders 集体 report",
+        "Month 4: NZ Reserves and Parks 网站直接引用 mark 作为'misleading commercial claim'例子",
+        "Month 5: Cairn 平台收到 LDC 律师函要求处理",
+        "Month 6: 多名游客付了 tour 后发现可以自己步行到达，1 star reviews",
+        "Month 7: 累积 5 likes vs 22 reports，律师函立案"
+      ],
+      "expected_signal_summary": "5 likes vs 22 reports (0.23:1) + 政府律师函",
+      "expected_outcome": "killed",
+      "expected_status": "removed",
+      "human_judgment": "商业 mark 含违法虚假主张（公共地标为'私人'），政府律师函介入，必须立即 kill 并对该商家账号 ban。",
+      "edge_case_flag": "commercial_illegal_claim|legal_action|account_ban_candidate"
+    },
+    {
+      "id": 264,
+      "title": "Glenorchy 马术 tour 公司标 Paradise 路尽头取景点",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Glenorchy 北 Paradise Road 23 公里处尽头，魔戒取景地 Isengard 视角，被 High Country Horses 标记",
+        "intrinsic_quality": "取景地客观存在且公开，公司只是标了一个真实美景但意图引流到自家骑马 tour",
+        "user_volume_per_month": 110,
+        "duration_months": 13,
+        "signal": "Paradise Road 末端无信号",
+        "season_pattern": "全年",
+        "human_factors": "公司 mark 写'best photo from horseback'，没硬推但隐含"
+      },
+      "events_timeline": [
+        "Month 1: High Country Horses 发 mark",
+        "Month 3: 多个独立游客自驾到达确认景点真实，22 likes",
+        "Month 5: 一队 LOTR 粉丝来看自己点了 like 并感谢",
+        "Month 7: 一名 anti-commercial 用户 report '所有商业账号 mark 都应禁'",
+        "Month 9: 一篇 NZ Herald 旅游版文章引用了 mark 推荐",
+        "Month 11: Glenorchy Information Centre 把 mark 加入推荐列表",
+        "Month 13: 累积 87 likes vs 5 reports"
+      ],
+      "expected_signal_summary": "87 likes vs 5 reports (17.4:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业身份但景点客观真实，引流暗示克制，本地 i-SITE 和媒体均背书，保留。anti-commercial 反对意见不构成 mark 质量问题。",
+      "edge_case_flag": "commercial_real_landmark|soft_promotion|media_backed"
+    },
+    {
+      "id": 265,
+      "title": "Wanaka Treble Cone skifield 缆车公司标'家庭友好午餐区'",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Treble Cone skifield Saddle Basin 中心餐厅外露台，被 Cardrona-Treble Cone Alpine Resort 标记",
+        "intrinsic_quality": "餐厅露台确实是雪场最舒适的家庭午餐位置",
+        "user_volume_per_month": 70,
+        "duration_months": 5,
+        "signal": "skifield 4G 弱但 wifi 有",
+        "season_pattern": "6月-10月雪季",
+        "human_factors": "雪场官方账号发的，配孩子吃 hot chips 照片，温度计显示 -2°C 但有阳光"
+      },
+      "events_timeline": [
+        "Month 1: 雪场账号发 mark",
+        "Month 2: Wanaka 当地家庭社群 6 人转发并打卡，14 likes",
+        "Month 3: 一对从 Christchurch 来的 4 口之家通过 mark 提前规划午餐位置",
+        "Month 4: 1 条 report 来自'反对所有 commercial 内容'用户",
+        "Month 5: 累积 41 likes vs 1 reports"
+      ],
+      "expected_signal_summary": "41 likes vs 1 reports (41:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业但官方账号信息透明实用，回报极好，保留无争议。",
+      "edge_case_flag": "commercial_official|family_practical|negligible_reports"
+    },
+    {
+      "id": 266,
+      "title": "Tekapo 婚礼摄影公司在 Church of the Good Shepherd 标自己作品集背景",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Tekapo Lakefront Pioneer Drive Church of the Good Shepherd 教堂北侧 50 米湖岸",
+        "intrinsic_quality": "地标本身是世界级，但摄影公司 Tekapo Wedding Photography 标自己作品集是 mark 平台不该承担的",
+        "user_volume_per_month": 250,
+        "duration_months": 9,
+        "signal": "Tekapo 4G 满格",
+        "season_pattern": "全年但夏季婚礼旺季",
+        "human_factors": "公司 mark 文字'我们最常拍的角度'，附作品 watermark 照"
+      },
+      "events_timeline": [
+        "Month 1: Tekapo Wedding Photography 发 mark",
+        "Month 2: 一对 self-photographer 夫妇按 mark 找到角度，留言'有用'，6 likes",
+        "Month 3: Mackenzie District Council tourism office 自己发了同地点 mark 不带商业，那个 47 likes vs 0 reports",
+        "Month 4: 多名婚礼摄影同行 report '商业自我推广不应在 trail mark 平台'",
+        "Month 5: 当地教会成员 report '神圣场所被商业化'",
+        "Month 7: 6 名婚礼摄影同行集体投诉",
+        "Month 9: 累积 18 likes vs 21 reports"
+      ],
+      "expected_signal_summary": "18 likes vs 21 reports (0.86:1)，且更干净官方 mark 已存在",
+      "expected_outcome": "challenged",
+      "expected_status": "needs_review",
+      "human_judgment": "商业自我推广 mark 在已有官方 cleaner 替代时应合并/降权，加上当地宗教社区反感，建议 needs_review 后倾向 kill。",
+      "edge_case_flag": "commercial_self_portfolio|cleaner_alternative|cultural_offense"
+    },
+    {
+      "id": 267,
+      "title": "Te Anau Lake Manapouri 游船公司标'fjord entrance lookout'（事实但有引流）",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Lake Manapouri 西岸 West Arm 一处 lookout，被 Real Journeys（现 RealNZ）标记",
+        "intrinsic_quality": "lookout 客观真实存在，且只能通过游船公司船到达——商业是唯一访问途径",
+        "user_volume_per_month": 45,
+        "duration_months": 14,
+        "signal": "West Arm 完全无信号，sync 在 Te Anau",
+        "season_pattern": "10月-4月旺季",
+        "human_factors": "RealNZ 是 NZ 最大旅游运营商，mark 写得官方风，没硬推"
+      },
+      "events_timeline": [
+        "Month 1: RealNZ 账号发 mark，附 Doubtful Sound 入口的真实照",
+        "Month 3: 多名搭船游客确认景点存在，30 likes",
+        "Month 5: DOC Fiordland office 在 mark 评论区中性留言'仅可通过游船 access'",
+        "Month 7: 一名独立 kayaker 报告自己 6 天划过去也能到，1 like + 评论",
+        "Month 9: TripAdvisor reviews 引用了 mark",
+        "Month 12: 一名 anti-corporate 用户 report '大公司不应标 mark'",
+        "Month 14: 累积 78 likes vs 4 reports"
+      ],
+      "expected_signal_summary": "78 likes vs 4 reports (19.5:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业是唯一 access，mark 信息客观，DOC 中性确认，回报极好，保留。",
+      "edge_case_flag": "commercial_only_access|factual|doc_acknowledged"
+    },
+    {
+      "id": 268,
+      "title": "Hokitika Wilderness 私营 jet boat 公司标 Whataroa River 起点（与公共河滩冲突）",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Whataroa River 北岸 Glacier Country Tours 私人码头，紧邻 DOC 公共河滩",
+        "intrinsic_quality": "公司确实有 jet boat 服务，但 mark 标在紧邻公共河滩处暗示需要从此进入",
+        "user_volume_per_month": 18,
+        "duration_months": 8,
+        "signal": "Whataroa 镇内 4G 弱",
+        "season_pattern": "10月-4月",
+        "human_factors": "公共河滩本可徒步 access white heron colony viewpoint，公司想把通道商业化"
+      },
+      "events_timeline": [
+        "Month 1: Glacier Country Tours 发 mark 含'main access'字样",
+        "Month 2: West Coast DOC 区域 ranger 评论指出公共河滩可徒步进入",
+        "Month 4: 一队 birders 自己徒步成功到达 viewpoint，3 likes 评论说不需要付费",
+        "Month 6: 8 名独立 birder 集体 report '误导唯一通道'",
+        "Month 7: West Coast Penguin Trust 加入 report",
+        "Month 8: 累积 8 likes vs 17 reports"
+      ],
+      "expected_signal_summary": "8 likes vs 17 reports (0.47:1) + DOC 实地反驳",
+      "expected_outcome": "killed",
+      "expected_status": "removed",
+      "human_judgment": "商业 mark 暗示公共通道为商业唯一入口，DOC 反驳且独立访问被验证，应 kill。",
+      "edge_case_flag": "commercial_gatekeeping|public_access_lie|doc_refutation"
+    },
+    {
+      "id": 269,
+      "title": "Queenstown Arrowtown 葡萄园午餐 tour 标 Kawarau Bridge 蹦极点",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Queenstown 东 Kawarau Bridge AJ Hackett 蹦极点观景台，被 Appellation Wine Tours 标为'tour 第一站合影点'",
+        "intrinsic_quality": "蹦极桥是世界第一蹦极地标，公开，公司只是标自己 tour 包含的合影位置",
+        "user_volume_per_month": 180,
+        "duration_months": 12,
+        "signal": "Kawarau 桥 4G 满格",
+        "season_pattern": "全年",
+        "human_factors": "Appellation Wine Tours 把蹦极当 tour 的一站打卡，文字克制"
+      },
+      "events_timeline": [
+        "Month 1: Appellation 账号发 mark",
+        "Month 2: AJ Hackett 官方账号点赞但未转发",
+        "Month 3: 12 名 self-driving 游客确认景点公开可达，20 likes",
+        "Month 5: 一名'同行竞品' Wine tour 公司账号 report '不公平宣传'",
+        "Month 8: Queenstown Tourism Bureau 引用 mark 作为推荐",
+        "Month 10: AJ Hackett 自己发了同地点 mark，那个 60+ likes",
+        "Month 12: 累积 73 likes vs 5 reports"
+      ],
+      "expected_signal_summary": "73 likes vs 5 reports (14.6:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业 mark 但景点本身公开可达，竞品 report 是商业战不是 mark 质量问题，保留。",
+      "edge_case_flag": "commercial_competitor_report|public_landmark|noise_filter"
+    },
+    {
+      "id": 270,
+      "title": "Wanaka 跳伞公司 Skydive Wanaka 标'最佳着陆区视角'（半误导）",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wanaka 机场北侧 Project Way 沿线一片牧场，被 Skydive Wanaka 标为'best public viewing'",
+        "intrinsic_quality": "牧场是私人土地，公司说'public viewing'轻微误导，实际只能从公路边远眺",
+        "user_volume_per_month": 35,
+        "duration_months": 10,
+        "signal": "Wanaka 机场区 4G 良好",
+        "season_pattern": "全年",
+        "human_factors": "公司想引流到他们 $349 体验包，文字模糊"
+      },
+      "events_timeline": [
+        "Month 1: Skydive Wanaka 账号发 mark",
+        "Month 3: 一对游客按 mark 走入牧场被牧主驱赶，report",
+        "Month 4: 牧场主 Bruce 评论区私信抗议，公司未回应",
+        "Month 6: 当地 Wanaka Stations 农民协会 4 人 report '私人土地被标为公共'",
+        "Month 7: 公司被迫修改 mark 文字为'roadside viewing only'",
+        "Month 8: 修改后访客行为改善",
+        "Month 10: 累积 14 likes vs 16 reports"
+      ],
+      "expected_signal_summary": "14 likes vs 16 reports (0.88:1)，但公司已修正",
+      "expected_outcome": "challenged",
+      "expected_status": "needs_review",
+      "human_judgment": "商业 mark 初次涉及私人土地表述错误但已修正，需观察 3-6 个月新数据再决定，倾向降权保留。",
+      "edge_case_flag": "commercial_private_land|self_corrected|grace_period"
+    },
+    {
+      "id": 271,
+      "title": "Glenorchy 私营 Routeburn shuttle 公司标 Routeburn Shelter 接驳点（事实垄断）",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Routeburn Shelter trailhead 停车场，被 Info & Track Glenorchy shuttle 公司标记接驳时间表",
+        "intrinsic_quality": "DOC trailhead 公共，但 shuttle 是该路线唯一商业接驳——独立交通必须自驾或徒步 22 公里",
+        "user_volume_per_month": 95,
+        "duration_months": 18,
+        "signal": "Routeburn Shelter 完全无信号",
+        "season_pattern": "10月-4月 Routeburn 步道开放期",
+        "human_factors": "公司 25 年历史，时间表精准，trampers 极度依赖"
+      },
+      "events_timeline": [
+        "Month 1: Info & Track 发 mark 含 Glenorchy-Routeburn-Divide shuttle 全表",
+        "Month 3: 一对完成 Routeburn-Greenstone 连穿的游客留言救命级感谢，18 likes",
+        "Month 6: DOC Glenorchy ranger 评论区确认时间表与 hut booking 同步",
+        "Month 9: 1 条 report 来自 anti-commercial",
+        "Month 12: NZ Tramper 论坛把 mark 加入 must-see 列表",
+        "Month 15: 一队从 Lake Mackenzie Hut 撤退的 trampers 通过 mark 联系到紧急接驳",
+        "Month 18: 累积 142 likes vs 3 reports"
+      ],
+      "expected_signal_summary": "142 likes vs 3 reports (47.3:1)，DOC 和论坛双重背书",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业但提供步道关键服务，DOC 背书，回报压倒性正向，保留并 pin 在该 trailhead 优先级最高。",
+      "edge_case_flag": "commercial_critical_service|long_history|doc_synced"
+    },
+    {
+      "id": 272,
+      "title": "Methven Mt Hutt cycle trail 旁咖啡馆 Brown Pub 标自家露台（小镇真小确幸）",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Methven 镇 Main Street 31 号 Brown Pub，距 Mt Hutt Forest cycle trail 终点 1.8 公里",
+        "intrinsic_quality": "镇上唯一对自行车手友好的 pub，有 bike rack 和补水站，本地人都知道",
+        "user_volume_per_month": 28,
+        "duration_months": 9,
+        "signal": "Methven 4G 良好",
+        "season_pattern": "全年",
+        "human_factors": "酒吧老板 Carl 是退休 cycle racer，发 mark 时附自己 1992 NZ 自行车赛照片"
+      },
+      "events_timeline": [
+        "Month 1: Carl 发 mark，bike rack 和露台照",
+        "Month 2: 一队从 Mt Hutt Forest 骑下来的 weekend riders 留言，10 likes",
+        "Month 4: Methven Cycle Club 自发把 mark 加入俱乐部地图",
+        "Month 6: 1 条 report '商业 mark'",
+        "Month 7: NZ Cycle Trail 全国账号转发该 mark 作为 trail-friendly business 例子",
+        "Month 9: 累积 44 likes vs 2 reports"
+      ],
+      "expected_signal_summary": "44 likes vs 2 reports (22:1)，全国 cycle 联盟转发",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "本地小商家诚意 mark，骑行社群强力背书，保留。",
+      "edge_case_flag": "commercial_local_owner|community_endorsed|micro_business"
+    },
+    {
+      "id": 273,
+      "title": "Franz Josef 温泉浴场 Glacier Hot Pools 标'冰川徒步后必去'",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Franz Josef 镇 Cron Street 63 号 Glacier Hot Pools，距 Sentinel Rock viewpoint 4.5 公里",
+        "intrinsic_quality": "真实存在的商业温泉，确实是镇上唯一选择",
+        "user_volume_per_month": 65,
+        "duration_months": 11,
+        "signal": "Franz Josef 镇 4G 良好",
+        "season_pattern": "全年",
+        "human_factors": "温泉运营经理 Lina 发 mark 含价格 $32 单次"
+      },
+      "events_timeline": [
+        "Month 1: Lina 发 mark",
+        "Month 2: 一队从 Copland Track 4 天出来的 trampers 留言救命级感谢，12 likes",
+        "Month 4: Westland District Council 把 mark 引用为推荐",
+        "Month 6: 1 条 report 来自素食极简主义者'反对所有商业服务'",
+        "Month 8: 又一队从 Roberts Point Track 出来的 trampers 留言",
+        "Month 11: 累积 56 likes vs 2 reports"
+      ],
+      "expected_signal_summary": "56 likes vs 2 reports (28:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业 mark 是镇上唯一温泉选项，trampers 实用价值极高，回报压倒性正向，保留。",
+      "edge_case_flag": "commercial_unique|sole_option|community_value"
+    },
+    {
+      "id": 274,
+      "title": "Te Anau Hidden Lakes 直升机公司标 Lake Quill 上方'隐藏湖'",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Sutherland Falls 上方 Lake Quill 西岸 1850m 高山湖，被 Southern Lakes Helicopters 标为'hidden alpine lake'",
+        "intrinsic_quality": "湖确实存在，但只能直升机访问，'hidden'是商业话术——它是 Sutherland Falls 水源众所周知",
+        "user_volume_per_month": 12,
+        "duration_months": 16,
+        "signal": "完全无信号",
+        "season_pattern": "全年但冬季降落困难",
+        "human_factors": "公司挣的是 Milford Track 完赛者升级体验"
+      },
+      "events_timeline": [
+        "Month 1: Southern Lakes Helicopters 发 mark",
+        "Month 4: Milford Track 长期向导评论区指出'hidden'不准确，是 Sutherland Falls 水源",
+        "Month 7: 完成 heli tour 的游客留言确认景观真实，14 likes",
+        "Month 10: 当地地理学者发文反驳'hidden'描述",
+        "Month 13: Fiordland National Park 官方账号发了同点 mark，写'Lake Quill, source of Sutherland Falls'",
+        "Month 16: 累积 22 likes vs 13 reports"
+      ],
+      "expected_signal_summary": "22 likes vs 13 reports (1.69:1)，存在更准确官方 mark",
+      "expected_outcome": "challenged",
+      "expected_status": "needs_review",
+      "human_judgment": "商业 mark 用'hidden'话术夸大但景观真实，存在官方更准确替代，应合并到官方 mark 或降权保留。",
+      "edge_case_flag": "commercial_marketing_language|truth_with_spin|merge_candidate"
+    },
+    {
+      "id": 275,
+      "title": "Mt Cook Aoraki Glentanner 直升机公司标 Tasman Glacier 着陆点",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Tasman Glacier 中段 Ball Hut 上方海拔 1750m 一处冰原平台，被 Glentanner Heli 标为'glacier landing experience'",
+        "intrinsic_quality": "DOC 批准的合法直升机着陆点，景观真实顶级",
+        "user_volume_per_month": 30,
+        "duration_months": 13,
+        "signal": "无信号",
+        "season_pattern": "9月-5月",
+        "human_factors": "公司发 mark 写明'仅 heli tour 可达，DOC permit 编号 ABF-2019'"
+      },
+      "events_timeline": [
+        "Month 1: Glentanner Heli 发 mark 含 DOC permit 号",
+        "Month 3: DOC Aoraki 官方评论区确认 permit 真实",
+        "Month 5: 多名 heli tour 完成者留言确认景观，20 likes",
+        "Month 8: NZ Alpine Club 引用 mark 作为合法商业访问例子",
+        "Month 11: 1 条 report 来自'反所有商业'用户",
+        "Month 13: 累积 64 likes vs 3 reports"
+      ],
+      "expected_signal_summary": "64 likes vs 3 reports (21.3:1) + DOC permit 公开",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业但 permit 透明公开，DOC 确认合法，景观唯一，保留并标 permit_disclosed。",
+      "edge_case_flag": "commercial_permit_transparent|legal_access|alpine_club_endorsed"
+    },
+    {
+      "id": 276,
+      "title": "Wanaka Cardrona Hotel 标'NZ 最古老 pub'（事实但 mark 频繁更新菜单）",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Cardrona Valley Road 历史地标 Cardrona Hotel，1863 年建，距 Cardrona skifield 5 公里",
+        "intrinsic_quality": "NZ 第二古 pub，文化遗产，本身值得 mark，但运营者每周更新 mark 文字推菜单",
+        "user_volume_per_month": 200,
+        "duration_months": 10,
+        "signal": "Cardrona Valley 4G 弱",
+        "season_pattern": "全年",
+        "human_factors": "酒吧 mark 频繁修改触发 sync 冲突，但景点本身永远 alive"
+      },
+      "events_timeline": [
+        "Month 1: Cardrona Hotel 账号发 mark，附 1863 历史照",
+        "Month 2: NZ Heritage 协会评论区确认地标价值",
+        "Month 4: 酒吧把 mark 改成本周菜单广告，3 reports",
+        "Month 5: 改回历史介绍后 reports 停",
+        "Month 7: Wanaka 旅游局把 mark 加入推荐",
+        "Month 9: 又一次改菜单广告，2 reports",
+        "Month 10: 累积 88 likes vs 7 reports"
+      ],
+      "expected_signal_summary": "88 likes vs 7 reports (12.6:1)，但内容稳定性差",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "地标本身价值高，回报压倒性好，但应限制 mark 文字编辑频率（如每月一次），属算法层面的 content_velocity 警告而非 kill。",
+      "edge_case_flag": "commercial_landmark|content_volatility|edit_rate_limit"
+    },
+    {
+      "id": 277,
+      "title": "Hokitika Driftwood Beach 木雕艺术家 Steve 标自己的海滩工作室",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Hokitika Beach 北端 Beach Street 尽头 Hokitika Driftwood Sculpture Studio，露天工作室",
+        "intrinsic_quality": "Hokitika Driftwood Festival 期间一个有名的本地艺术家工作室，平时也对游客开放",
+        "user_volume_per_month": 22,
+        "duration_months": 14,
+        "signal": "Hokitika 海滨 4G 良好",
+        "season_pattern": "全年但 1月 festival 高峰",
+        "human_factors": "Steve 是个老 hippie 艺术家，发 mark 写'come watch, no pressure to buy'"
+      },
+      "events_timeline": [
+        "Month 1: Steve 发 mark 配 driftwood 雕塑照",
+        "Month 2: 一对路过 trampers 留言说看了 1 小时没买什么也没被催，10 likes",
+        "Month 4: West Coast Arts Trust 评论区背书",
+        "Month 6: 1 条 report '商业广告'",
+        "Month 9: Driftwood Festival 期间 mark 阅读量爆发",
+        "Month 11: 一名艺术学生从 Wellington 专程来访，留长篇评论",
+        "Month 14: 累积 67 likes vs 2 reports"
+      ],
+      "expected_signal_summary": "67 likes vs 2 reports (33.5:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "本地艺术家自标但意图克制，社区背书，回报极好，保留。",
+      "edge_case_flag": "commercial_artist|low_pressure|community_value"
+    },
+    {
+      "id": 278,
+      "title": "Queenstown Skippers Canyon 4WD tour 公司标'危险路段'（双面意图）",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Skippers Canyon Road 12 公里处 Pinchgut 段悬崖弯道，被 Skippers Canyon Jet 公司标记",
+        "intrinsic_quality": "路段确实危险，自驾游客死亡过，但公司标记意图既是安全提醒也是引流自家 tour",
+        "user_volume_per_month": 50,
+        "duration_months": 17,
+        "signal": "Skippers Canyon 全段无信号",
+        "season_pattern": "全年",
+        "human_factors": "公司用 mark 既警告又暗示'让我们带你'"
+      },
+      "events_timeline": [
+        "Month 1: Skippers Canyon Jet 发 mark 写'extreme caution—or let our drivers'",
+        "Month 3: Queenstown Lakes District Council Roads 部门评论区确认路段难度",
+        "Month 5: 自驾通过的 4WD 老手留言'路是难但不至于必须找 tour'",
+        "Month 8: 又一起自驾游客侧滑事故，公司用作宣传素材",
+        "Month 11: NZ Mountain Safety Council 评论区中性 'recommend professional access'",
+        "Month 14: AA NZ 路况服务直接在 mark 上确认 advisory",
+        "Month 17: 累积 71 likes vs 9 reports"
+      ],
+      "expected_signal_summary": "71 likes vs 9 reports (7.9:1)，多权威确认路段危险",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业引流意图存在但安全信息客观真实且 LDC/AA/MSC 三重背书，公共安全价值压倒商业意图，保留。",
+      "edge_case_flag": "commercial_safety_dual|authority_endorsed|public_value_dominant"
+    },
+    {
+      "id": 279,
+      "title": "Te Anau Fiordland 私人飞行学校标 'best aerial Mitre Peak photo' 拍照位",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Mitre Peak 西侧空中坐标点（飞行 GPS 标记），被 Wings & Water 飞行学校发为 trail mark",
+        "intrinsic_quality": "空中位置在 trail mark 平台本身就 mismatch——徒步者无法到达",
+        "user_volume_per_month": 5,
+        "duration_months": 6,
+        "signal": "无",
+        "season_pattern": "全年",
+        "human_factors": "公司试图把 trail mark 平台用作飞行 GPS 推广，错位严重"
+      },
+      "events_timeline": [
+        "Month 1: Wings & Water 发 mark 在飞行坐标",
+        "Month 2: Cairn 平台用户协会评论'此点徒步无法到达，错位'",
+        "Month 3: 多名独立用户 report 'mark 形式与平台不符'",
+        "Month 4: DOC Fiordland 评论区确认 Mitre Peak 北壁徒步禁止",
+        "Month 5: NZ Trampers Association report",
+        "Month 6: 累积 1 like vs 14 reports"
+      ],
+      "expected_signal_summary": "1 like vs 14 reports (0.07:1)，且 mark 形式与 trail 平台错位",
+      "expected_outcome": "killed",
+      "expected_status": "removed",
+      "human_judgment": "商业 mark 在错误平台（trail mark 用作飞行 GPS），形式与功能 mismatch，应 kill 并标记账号 misuse。",
+      "edge_case_flag": "commercial_platform_misuse|format_mismatch|account_warning"
+    },
+    {
+      "id": 280,
+      "title": "Glenorchy 滑翔伞公司标 Mt Larkins 起飞点（合法但被 trampers 反感）",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Glenorchy 北 Mt Larkins 海拔 1700m 山脊 SE 风向起飞点，被 Coronet Peak Tandem Paragliding 标记",
+        "intrinsic_quality": "起飞点合法（NZ Hang Gliding & Paragliding 协会注册），但徒步者经常被滑翔伞低空飞越觉得被打扰",
+        "user_volume_per_month": 14,
+        "duration_months": 11,
+        "signal": "Mt Larkins 山脊无信号",
+        "season_pattern": "10月-4月",
+        "human_factors": "Mark 引发 trampers 与 paragliders 的领空争议"
+      },
+      "events_timeline": [
+        "Month 1: Coronet Peak Tandem 发 mark",
+        "Month 3: NZ HGPA 协会评论区确认起飞点合法",
+        "Month 5: 一名 Routeburn-Greenstone 长穿 tramper 抱怨'飞过头顶'，1 report",
+        "Month 7: 6 名 trampers 集体 report '降低 wilderness 体验'",
+        "Month 8: DOC Glenorchy 评论中性'两种活动均合法'",
+        "Month 9: NZ Alpine Club 评论支持'空中活动是合法 alpine 使用'",
+        "Month 11: 累积 18 likes vs 12 reports"
+      ],
+      "expected_signal_summary": "18 likes vs 12 reports (1.5:1)，价值分歧而非误导",
+      "expected_outcome": "challenged",
+      "expected_status": "needs_review",
+      "human_judgment": "商业 mark 合法且信息真实，但引发用户群体价值冲突，应保留但加 wilderness_impact 标签让用户自行 filter，不 kill。",
+      "edge_case_flag": "commercial_legal_conflict|user_group_friction|filter_tag"
+    }
+  ]
+}

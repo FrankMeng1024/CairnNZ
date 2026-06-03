@@ -1,0 +1,926 @@
+{
+  "batch": 1,
+  "total": 131,
+  "agree": 131,
+  "doubt": 0,
+  "disagree": 0,
+  "details": [
+    {
+      "id": 1,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 2,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 3,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 4,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 5,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 6,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比正向无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 7,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 8,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 9,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 10,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 11,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 12,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 13,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 14,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 15,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 16,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 17,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 18,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 19,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比仍正向但争议持续无急转 → Case R 维持 healthy"
+    },
+    {
+      "id": 20,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 21,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 23,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "季节性差异无急转 → context_dependent 合理"
+    },
+    {
+      "id": 24,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 26,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 27,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 28,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比仍正向但争议持续无急转 → Case R 维持 healthy"
+    },
+    {
+      "id": 29,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 30,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 31,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 32,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 33,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 34,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 35,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 36,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 37,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 38,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 39,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 40,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比正向无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 41,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 42,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "季节性差异无急转 → context_dependent 合理"
+    },
+    {
+      "id": 43,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 44,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 45,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 46,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 47,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 48,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 49,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比仍正向但争议持续无急转 → Case R 维持 healthy"
+    },
+    {
+      "id": 50,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 51,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 52,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 53,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 54,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 55,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 57,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 59,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "user-arbitration ground truth, rationale 与 v6.6 一致"
+    },
+    {
+      "id": 60,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 61,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 62,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 63,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 64,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 65,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 66,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 67,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "负向集中导致向下急转 → SUSPICIOUS,符合 v6.6"
+    },
+    {
+      "id": 68,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 69,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 70,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 71,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 72,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 73,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 74,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 75,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "user-arbitration ground truth, rationale 与 v6.6 一致"
+    },
+    {
+      "id": 76,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration ground truth, rationale 与 v6.6 一致"
+    },
+    {
+      "id": 77,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 78,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 79,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 80,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 81,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "user-arbitration ground truth, rationale 与 v6.6 一致"
+    },
+    {
+      "id": 82,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 83,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 84,
+      "verdict": "AGREE",
+      "current_state": "dead_natural",
+      "suggested_state": "dead_natural",
+      "comment": "寿命走完自然结束,符合 Case B/I"
+    },
+    {
+      "id": 85,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 86,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 87,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 88,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 89,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 90,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 91,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 92,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 93,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 94,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 95,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 96,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 97,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 98,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 99,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "负向反转/集中举报构成趋势 → 向下急转 SUSPICIOUS→DEAD,符合 Case G/N"
+    },
+    {
+      "id": 100,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 101,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 102,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 103,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 104,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 106,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 107,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 108,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 109,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 110,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 111,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 112,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 113,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 114,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 115,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 116,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 117,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 119,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 120,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 121,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 122,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 123,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 124,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 125,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 126,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 127,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 128,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 129,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 130,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 131,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 132,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 133,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 134,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 135,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 136,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    },
+    {
+      "id": 137,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "强正向占比无急转 → healthy 符合 v6.6"
+    }
+  ]
+}

@@ -1,0 +1,837 @@
+{
+  "batch": 14,
+  "theme": "一日往返热门步道",
+  "id_range": [651, 700],
+  "total": 50,
+  "cases": [
+    {
+      "id": 651,
+      "title": "Tongariro Alpine Crossing Red Crater 强风脊线警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tongariro Alpine Crossing Red Crater 顶段约 1886m 脊线，狭窄碎石路，西风穿过 South Crater 后在此加速，DOC 已多次报告 80km/h 阵风掀翻徒步者",
+        "intrinsic_quality": "脊线 30m 段两侧悬崖，被吹倒即滚落 200m，是 Crossing 全线最危险点之一",
+        "user_volume_per_month": 9000,
+        "duration_months": 14,
+        "signal": "Mangatepopo 端 Spark 信号弱，Ketetahi 端有信号，多数同步发生在徒步结束 Shuttle 巴士上",
+        "season_pattern": "全年均有，11-3 月旺季用户量最大、4-10 月雪冰期同样致命",
+        "human_factors": "9000 人/月里有 1500 是首次穿越者，没穿冲锋衣的家庭组在停车场看到太阳就以为天气好"
+      },
+      "events_timeline": [
+        "Month 1: 一名当地 guide 在 8 月暴风后被吹倒擦伤后写下，附近期 metservice 截图",
+        "Month 2-3: 100 likes，全是冬季穿越者，3 人留言说当天差点被吹下 Red Crater 北坡",
+        "Month 4: 一群澳洲家庭夏季无风晴天经过，5 人陆续 report '夸大 / 这里根本没风'",
+        "Month 5: DOC visitor centre 引用此 mark 在 hut 里贴打印版",
+        "Month 7: 7 月再次发生吹倒事件，同位置原作者更新照片",
+        "Month 9: 婚礼团 8 人晴天过境同时 report，称'破坏拍照体验'",
+        "Month 12: 总计 380 likes vs 25 reports",
+        "Month 14: 又一次冬季吹倒事件后 likes 涨到 460"
+      ],
+      "expected_signal_summary": "460 likes vs 25 reports (18.4:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Red Crater 风险高度季节依赖且与个人天气运气强相关，dry-day 用户体验不到不代表标记错误。点赞绝对量级压倒性，且来自冬季高风险用户群，应永久保留",
+      "edge_case_flag": "alpine_wind|seasonal_dependent|tourist_volume_distortion"
+    },
+    {
+      "id": 652,
+      "title": "Roy's Peak Track 第二个山脊 Instagram 拍照点排队提示",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Roy's Peak Track 海拔约 1430m 处第二个山脊弯，正对 Lake Wanaka 与 Mount Aspiring 的网红打卡机位，距山顶仍有 250m 垂直爬升",
+        "intrinsic_quality": "拍照角度在 Instagram 上被复制百万次，但 90% 游客在此误以为已到顶点而折返",
+        "user_volume_per_month": 5500,
+        "duration_months": 18,
+        "signal": "海拔较高 Spark 4G 可用，多数用户在此停留 30 分钟内同步",
+        "season_pattern": "12-3 月日出后 2 小时排队最长，可达 40 人",
+        "human_factors": "亚洲游客占比高，跑者厌恶排队"
+      },
+      "events_timeline": [
+        "Month 1: 当地 trail runner 写下'这不是山顶，再走 40 分钟才到'附实拍 GPS",
+        "Month 3: 200 likes，多是失败游客回家后补点赞",
+        "Month 5: 一群韩国摄影团 6 人 report，认为是恶意误导他们登顶",
+        "Month 8: Wanaka i-SITE 工作人员留言确认这是常见误解",
+        "Month 10: 跑者社群 Strava 链接此 mark，liked 上涨",
+        "Month 13: 婚纱摄影队报告'抢机位'抱怨被解读为有用",
+        "Month 16: 总计 620 likes vs 18 reports",
+        "Month 18: 仍持续涨赞"
+      ],
+      "expected_signal_summary": "620 likes vs 18 reports (34:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "信息内容本身真实可验证 (GPS 高度差)，举报来自情绪受伤的游客而非事实纠错，应保留并对游客有教育意义",
+      "edge_case_flag": "false_summit|tourist_hotspot|emotional_report"
+    },
+    {
+      "id": 653,
+      "title": "Hooker Valley Track 第二吊桥强风关闭历史警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Hooker Valley Track 第二座 swing bridge，跨 Hooker River 冰川河谷，位于 Aoraki/Mount Cook National Park 内最常被风吹关的吊桥",
+        "intrinsic_quality": "DOC 在 60km/h 阵风时强制关闭，桥面距河面 18m，曾有游客被吹得抓不住扶手",
+        "user_volume_per_month": 18000,
+        "duration_months": 11,
+        "signal": "Mt Cook Village 有 Spark/Vodafone 信号，多数游客返程时同步",
+        "season_pattern": "9-11 月春季西北风最强，关闭最频繁",
+        "human_factors": "全家庭/老人/婴儿车比例极高，这是 NZ 最 family-friendly 的步道之一"
+      },
+      "events_timeline": [
+        "Month 1: 一位当地 guide 在春季桥被关后写下提醒查看天气",
+        "Month 2: 200 likes 全在春季",
+        "Month 4: 夏季无风期游客 report 8 次称从未遇到关桥",
+        "Month 5: DOC 张贴公告印证 mark 内容",
+        "Month 7: 一对德国情侣 9 月真遇到关闭并在 mark 下留言感谢",
+        "Month 9: 又一春季关闭事件 likes 涨到 380",
+        "Month 11: 总计 480 likes vs 20 reports"
+      ],
+      "expected_signal_summary": "480 likes vs 20 reports (24:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "DOC 实际操作行为可佐证，季节性导致大量游客感受不到不代表 mark 失效，应保持",
+      "edge_case_flag": "seasonal_closure|family_volume|wind_specific"
+    },
+    {
+      "id": 654,
+      "title": "Rob Roy Glacier Track 雨后 Matukituki River ford 涨水提醒",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Rob Roy Glacier Track 入口前需要从 Raspberry Flat 停车场涉过 West Matukituki River 支流的低位 ford，西海岸雨水 6 小时内可让水位从脚踝涨到大腿",
+        "intrinsic_quality": "当 ford 不可过时整条 track 当天无法进入，已有游客被困对岸过夜",
+        "user_volume_per_month": 1200,
+        "duration_months": 22,
+        "signal": "Raspberry Flat 无任何信号，最近同步点在 Wanaka 镇约 50km 外",
+        "season_pattern": "10-12 月融雪 + 雨水叠加，水位变化最不可预测",
+        "human_factors": "多数是 Wanaka 一日往返游客，没装备过夜"
+      },
+      "events_timeline": [
+        "Month 1: 一位 Wanaka 当地登山者目睹一对夫妇被困，写下警告",
+        "Month 3: 60 likes 缓慢累积",
+        "Month 6: 一队美国游客旱季无问题通过，3 人 report '吓唬人'",
+        "Month 9: 又一次 11 月被困事件，原作者补充照片",
+        "Month 12: DOC 在 Wanaka i-SITE 的简报里引用此提醒",
+        "Month 15: trail runner 社群点赞，likes 涨到 180",
+        "Month 18: 总计 240 likes vs 12 reports",
+        "Month 22: 涨到 290 likes"
+      ],
+      "expected_signal_summary": "290 likes vs 12 reports (24:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "极端依赖天气，旱季 95% 用户不会遇到，但雨季是真实致命点，volume 虽不大但救命价值高",
+      "edge_case_flag": "river_crossing|weather_dependent|low_volume_high_stakes"
+    },
+    {
+      "id": 655,
+      "title": "Avalanche Peak Scotts Track 山顶下午雷暴提醒",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Avalanche Peak via Scotts Track 海拔 1833m 暴露山脊段，位于 Arthur's Pass National Park，下午积云在山顶集结引发雷击事件已记录 3 次",
+        "intrinsic_quality": "山顶下午雷击概率高于 NZ 多数同高度山峰，DOC 强烈建议早上 11 点前下撤",
+        "user_volume_per_month": 700,
+        "duration_months": 16,
+        "signal": "Arthur's Pass 镇有信号，山顶无，下山到 bushline 后才同步",
+        "season_pattern": "12-2 月夏季午后雷暴最频繁",
+        "human_factors": "周末跑者/初级登山者，不少认为午后下山就好"
+      },
+      "events_timeline": [
+        "Month 1: 一名 Canterbury 登山俱乐部成员在亲历雷暴后写下",
+        "Month 2: 山地俱乐部内部分享 likes 涨到 90",
+        "Month 5: 冬季登山者 report 4 次说'冬天根本没雷'",
+        "Month 7: MetService 雷暴预警当天有人下撤靠这条 mark",
+        "Month 10: 又一夏季事件后原作者更新照片",
+        "Month 13: 总计 200 likes vs 10 reports",
+        "Month 16: 涨到 260 likes"
+      ],
+      "expected_signal_summary": "260 likes vs 10 reports (26:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "夏季雷暴是真实且高风险的事件，冬季用户感受不到属正常季节差异，应保留",
+      "edge_case_flag": "thunderstorm|seasonal|ridge_exposure"
+    },
+    {
+      "id": 656,
+      "title": "Mt Robert Pinchgut Track 直上段错走分岔提醒",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Mt Robert Circuit 在 Pinchgut Track 直上段约 1100m 处与 Paddy's Track 的隐蔽岔口，标牌被风雪损坏多次，位于 Nelson Lakes National Park",
+        "intrinsic_quality": "走错会绕路 2.5 小时甚至下到错误山谷，无信号难自救",
+        "user_volume_per_month": 400,
+        "duration_months": 13,
+        "signal": "山顶 hut 附近有 Vodafone 信号，岔口无",
+        "season_pattern": "全年，冬季雪覆盖标牌后最易错",
+        "human_factors": "多为 Nelson 周末 hiker，自信不带地图"
+      },
+      "events_timeline": [
+        "Month 1: 一名当地 SAR 志愿者修完标牌后写下提醒",
+        "Month 3: 110 likes，多来自走错过的人",
+        "Month 5: 一个有经验登山团 report '这岔口很明显'",
+        "Month 7: 冬季雪期一人走错下到 St Arnaud 求救，事件后 likes 涨到 180",
+        "Month 9: DOC 重新立标牌，但 mark 仍被认可保留",
+        "Month 11: 总计 230 likes vs 8 reports",
+        "Month 13: 涨到 270 likes"
+      ],
+      "expected_signal_summary": "270 likes vs 8 reports (33.7:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "实际 SAR 救援记录可验证危险性，少数有经验用户的反对不代表对新手无效",
+      "edge_case_flag": "junction|sign_damage|seasonal_visibility"
+    },
+    {
+      "id": 657,
+      "title": "Pinnacles Track Webb Creek 段湿滑石阶警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Pinnacles Track 由 Kauaeranga Valley 上 Pinnacles Hut 途中 Webb Creek 段 1.2km 的湿滑大石阶，位于 Coromandel Forest Park，雨后摔伤事件每月至少 1 起",
+        "intrinsic_quality": "石阶被瀑布水雾常年湿润，登山靴防滑等级不够时极易滑倒",
+        "user_volume_per_month": 2500,
+        "duration_months": 17,
+        "signal": "Kauaeranga visitor centre 有信号，Webb Creek 段无",
+        "season_pattern": "全年湿，冬季 6-8 月最滑",
+        "human_factors": "Auckland 周末 day hiker 居多，运动鞋登山者占比高"
+      },
+      "events_timeline": [
+        "Month 1: Coromandel 当地 guide 在朋友摔断脚踝后写下",
+        "Month 3: 200 likes，多是吃过亏的",
+        "Month 5: 干旱周报告'这里完全不滑'，4 人 report",
+        "Month 8: 冬季摔伤事件，DOC 公告印证",
+        "Month 10: 一个学校徒步团 30 人感谢提醒未受伤",
+        "Month 14: 总计 410 likes vs 15 reports",
+        "Month 17: 涨到 490 likes"
+      ],
+      "expected_signal_summary": "490 likes vs 15 reports (32.7:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "鞋子防滑等级是用户变量，湿滑本身是地形客观特性，提醒救助效益高",
+      "edge_case_flag": "wet_terrain|gear_dependent|chronic_injury_site"
+    },
+    {
+      "id": 658,
+      "title": "Kaikoura Peninsula Walkway 海豹崖边距离警示",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Kaikoura Peninsula Walkway 沿 Point Kean 一段，崖边毛海豹 (NZ fur seal) 群距步道边缘仅 1m，位于 Kaikoura South Bay 北侧",
+        "intrinsic_quality": "海豹会突然冲咬靠近 5m 内的人，一日游客以为温顺，攻击事件每年 5-6 起",
+        "user_volume_per_month": 8000,
+        "duration_months": 12,
+        "signal": "Kaikoura 镇有信号，walkway 全程可同步",
+        "season_pattern": "11-3 月幼海豹季节攻击性最强",
+        "human_factors": "邮轮游客带小孩占比极高，毫无野生动物经验"
+      },
+      "events_timeline": [
+        "Month 1: 当地 DOC 工作人员在邮轮季前写下",
+        "Month 2: 250 likes 涌入，旅游运营商引用",
+        "Month 4: 一对游客 report '夸张 / 海豹只是趴着'",
+        "Month 6: 一名儿童被海豹咬伤事件，新闻报道",
+        "Month 8: 该事件后 likes 暴涨到 580",
+        "Month 10: 总计 720 likes vs 12 reports",
+        "Month 12: 涨到 850 likes"
+      ],
+      "expected_signal_summary": "850 likes vs 12 reports (70.8:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "野生动物攻击有真实新闻佐证，少数游客感受不到攻击不代表危险不存在，必须保留",
+      "edge_case_flag": "wildlife_danger|tourist_volume|seasonal_aggression"
+    },
+    {
+      "id": 659,
+      "title": "Cape Reinga Te Rerenga Wairua 灯塔风口低体温提醒",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Cape Reinga 灯塔走道末端，Tasman Sea 与 Pacific Ocean 交汇处，海风 50-70km/h 是常态，位于 Northland 最北端 Te Rerenga Wairua 圣地",
+        "intrinsic_quality": "夏季穿短袖游客被风吹到失温就医每月 1-2 起",
+        "user_volume_per_month": 7000,
+        "duration_months": 9,
+        "signal": "灯塔有信号，多数游客上巴士时同步",
+        "season_pattern": "全年大风，11-2 月游客数量最大反差最强",
+        "human_factors": "大巴游客 70%，从 Auckland 一日往返不带外套"
+      },
+      "events_timeline": [
+        "Month 1: 当地 Maori guide 在向导中加入此提醒",
+        "Month 2: 180 likes",
+        "Month 4: 旺季游客 report 6 次称'风很舒服'",
+        "Month 5: 一名长者失温被救援后 likes 涨到 290",
+        "Month 7: 旅游公司 itinerary 内置此提醒",
+        "Month 9: 总计 380 likes vs 10 reports"
+      ],
+      "expected_signal_summary": "380 likes vs 10 reports (38:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "失温就医是可验证医疗记录，游客主观感受冷暖差异巨大，应保留",
+      "edge_case_flag": "wind_exposure|tourist_unprepared|hypothermia_risk"
+    },
+    {
+      "id": 660,
+      "title": "Mt Taranaki summit 一日往返夏季顶部冰原警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mt Taranaki/Egmont 海拔 2400m 以上 summit cone 段火山碎石覆盖薄冰，位于 Egmont National Park，是 NZ 死亡率最高的一日山，已有 80+ 死亡记录",
+        "intrinsic_quality": "夏季火山口边缘融冰滑落事件每年 3-5 起，没冰爪几乎必滑",
+        "user_volume_per_month": 1500,
+        "duration_months": 20,
+        "signal": "North Egmont visitor centre 有信号，山上无",
+        "season_pattern": "12-3 月夏季旺季死亡率最高，因为表面看起来无雪",
+        "human_factors": "国际游客认为 NZ 山简单，不带冰爪占 60%"
+      },
+      "events_timeline": [
+        "Month 1: 当地 LandSAR 写下含历史死亡数字",
+        "Month 3: 250 likes 在山地俱乐部传播",
+        "Month 5: 旱季无冰登顶者 report 5 次",
+        "Month 7: 一名游客滑坠死亡新闻当周 likes +200",
+        "Month 10: Taranaki Alpine Club 印此 mark 在 club hut",
+        "Month 15: 总计 580 likes vs 15 reports",
+        "Month 20: 涨到 720 likes"
+      ],
+      "expected_signal_summary": "720 likes vs 15 reports (48:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Taranaki 死亡率是 NZ 最高的山之一，反对意见来自运气好的少数，必须永久保留",
+      "edge_case_flag": "fatality_history|gear_dependent|tourist_underestimation"
+    },
+    {
+      "id": 661,
+      "title": "Hooker Valley Track 第三吊桥婴儿车通过提示",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Hooker Valley Track 第三 swing bridge，跨 Hooker Lake 出口，桥面 90cm 宽，位于 Aoraki/Mount Cook National Park",
+        "intrinsic_quality": "标准婴儿车可勉强通过但需要折叠扶手，多数家庭在此被迫返回",
+        "user_volume_per_month": 18000,
+        "duration_months": 10,
+        "signal": "全程有信号",
+        "season_pattern": "夏季家庭游客最多",
+        "human_factors": "邮轮日游团带小孩占 40%"
+      },
+      "events_timeline": [
+        "Month 1: 一位本地母亲写下亲身经验",
+        "Month 2: 280 likes，妈妈群转发",
+        "Month 4: 个别家庭 report '宽度足够'",
+        "Month 6: 旅游公司 Tasman Valley Tours 引用",
+        "Month 8: 总计 410 likes vs 4 reports",
+        "Month 10: 涨到 480 likes"
+      ],
+      "expected_signal_summary": "480 likes vs 4 reports (120:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "婴儿车款式不同导致体验差异是合理的，本地家长亲身验证的实用信息",
+      "edge_case_flag": "accessibility|family_specific|practical_info"
+    },
+    {
+      "id": 662,
+      "title": "Tongariro Soda Springs 支线一日组团易超时提醒",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Tongariro Alpine Crossing 在 Mangatepopo Hut 后约 2.5km 处的 Soda Springs 支线，往返 30 分钟，位于 Tongariro National Park",
+        "intrinsic_quality": "走支线导致 Crossing 整体超时错过 Ketetahi shuttle，重新订车 NZD 35",
+        "user_volume_per_month": 9000,
+        "duration_months": 11,
+        "signal": "全程信号差，Ketetahi 端有信号",
+        "season_pattern": "11-3 月 shuttle 班次满，错过即过夜",
+        "human_factors": "首次穿越者不知道 shuttle 时间硬约束"
+      },
+      "events_timeline": [
+        "Month 1: shuttle 公司司机写下提醒",
+        "Month 2: 150 likes 多来自被坑过的",
+        "Month 4: 几位老穿越者 report '走得快支线没问题'",
+        "Month 6: shuttle 公司打印此 mark 贴车上",
+        "Month 8: 总计 240 likes vs 9 reports",
+        "Month 11: 涨到 320 likes"
+      ],
+      "expected_signal_summary": "320 likes vs 9 reports (35.5:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "对新手实用，老手不需要不代表标记错，shuttle 业务方亲自背书",
+      "edge_case_flag": "schedule_constraint|skill_dependent|shuttle_logistics"
+    },
+    {
+      "id": 663,
+      "title": "Bridal Veil Falls Pakoka 步道湿滑下行段警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Bridal Veil Falls/Waireinga 通往瀑布底层观景台的木阶梯，位于 Waikato Raglan 东南 20km 的 Pakoka River，常年水雾使木板长青苔",
+        "intrinsic_quality": "下行 261 级阶梯每年滑伤 8-10 起，多数为穿运动鞋家庭",
+        "user_volume_per_month": 3500,
+        "duration_months": 14,
+        "signal": "停车场有信号，瀑布底无",
+        "season_pattern": "全年湿，5-9 月最危险",
+        "human_factors": "Hamilton 一日游家庭带小孩占多数"
+      },
+      "events_timeline": [
+        "Month 1: 当地 Raglan i-SITE 工作人员写下",
+        "Month 3: 230 likes",
+        "Month 5: 旱季游客 report 3 次",
+        "Month 7: 一名儿童摔下 5 级新闻报导",
+        "Month 9: DOC 增加防滑垫但 mark 仍保留",
+        "Month 11: 总计 410 likes vs 10 reports",
+        "Month 14: 涨到 510 likes"
+      ],
+      "expected_signal_summary": "510 likes vs 10 reports (51:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "事故记录可验证，游客鞋具差异大，是值得长期保留的安全提醒",
+      "edge_case_flag": "wet_steps|family_volume|footwear_dependent"
+    },
+    {
+      "id": 664,
+      "title": "Wai-O-Tapu Thermal 步道有毒气体下风口提醒",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Wai-O-Tapu Thermal Wonderland 内 Champagne Pool 下风口约 30m 段，硫化氢 (H2S) 浓度超标短时可致咳嗽，位于 Rotorua 南 30km 地热区",
+        "intrinsic_quality": "哮喘患者和婴儿 5 分钟内可触发症状，已有就医记录",
+        "user_volume_per_month": 12000,
+        "duration_months": 12,
+        "signal": "全程有 4G 信号",
+        "season_pattern": "全年，无风日浓度最高",
+        "human_factors": "邮轮游客 80%，亚洲家庭带婴儿不知风险"
+      },
+      "events_timeline": [
+        "Month 1: 一位在 Rotorua Hospital 工作的护士写下",
+        "Month 3: 320 likes",
+        "Month 5: 部分游客 report '味道大但没事'",
+        "Month 6: 一婴儿就医新闻当周 likes +180",
+        "Month 9: 公园方在入口公告里引用",
+        "Month 12: 总计 580 likes vs 18 reports"
+      ],
+      "expected_signal_summary": "580 likes vs 18 reports (32:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "医疗事件可验证，对易感人群是必要警告，健康成人感受不到不代表对所有人安全",
+      "edge_case_flag": "geothermal_gas|vulnerable_population|medical_evidence"
+    },
+    {
+      "id": 665,
+      "title": "Roy's Peak 凌晨 4 点出发停车场满员提醒",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Roy's Peak Track 入口停车场仅 60 车位，距 Wanaka 镇 6km，位于 Mount Aspiring National Park 边缘，旺季凌晨 4 点已满",
+        "intrinsic_quality": "停不到要在 Wanaka-Mount Aspiring Road 路边停 1km 外，且有罚单风险",
+        "user_volume_per_month": 5500,
+        "duration_months": 9,
+        "signal": "Wanaka 镇 4G 全程",
+        "season_pattern": "12-2 月日出徒步者爆满",
+        "human_factors": "Instagram 网红日出打卡组多"
+      },
+      "events_timeline": [
+        "Month 1: Wanaka 当地 BnB 老板写下",
+        "Month 2: 380 likes 来自被坑游客",
+        "Month 4: 淡季用户 report 5 次说 '从没满过'",
+        "Month 5: Wanaka i-SITE 在咨询时引用",
+        "Month 7: 旺季罚单事件在 reddit 传播",
+        "Month 9: 总计 520 likes vs 8 reports"
+      ],
+      "expected_signal_summary": "520 likes vs 8 reports (65:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高度季节性的实用信息，淡季用户体验不到属正常，旺季实际罚单证据存在",
+      "edge_case_flag": "parking|seasonal_peak|instagram_driven"
+    },
+    {
+      "id": 666,
+      "title": "Tongariro Alpine Crossing 北坡 Ketetahi 私人土地穿越规则",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Tongariro Alpine Crossing 北段 Ketetahi 一段穿越 Ngāti Tūwharetoa iwi 私人土地，规定不可下水/不可野餐，位于 Ketetahi Hot Springs 上方",
+        "intrinsic_quality": "iwi 投诉游客泡温泉、野餐，触发可能关闭整段步道的危机",
+        "user_volume_per_month": 9000,
+        "duration_months": 13,
+        "signal": "信号差，下到 Ketetahi 端有信号",
+        "season_pattern": "全年",
+        "human_factors": "国际游客不了解 iwi 文化习俗"
+      },
+      "events_timeline": [
+        "Month 1: 一名 Tūwharetoa hapū 长者写下",
+        "Month 3: 280 likes 来自尊重原住民的徒步者",
+        "Month 5: 几名游客 report 称'不知道有这种限制'",
+        "Month 7: DOC 在小册子里加入此 mark 文字",
+        "Month 9: 当地报纸 Taupō Times 报道相关投诉事件",
+        "Month 11: 总计 420 likes vs 10 reports",
+        "Month 13: 涨到 510 likes"
+      ],
+      "expected_signal_summary": "510 likes vs 10 reports (51:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "原住民土地权利和文化规则有不可置疑的合法性，游客不了解不代表规则不存在，必须保留",
+      "edge_case_flag": "iwi_cultural|access_rule|political_sensitive"
+    },
+    {
+      "id": 667,
+      "title": "Hooker Valley Track 蓝湖冰山观景台冰崩噪音误以为雷声",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Hooker Valley Track 终点观景台正对 Hooker Lake，正面为 Aoraki/Mount Cook 东壁，冰崩频繁声响有时被误为雷暴",
+        "intrinsic_quality": "正面观察冰崩需要安静，新手在此误以为天气变坏掉头",
+        "user_volume_per_month": 18000,
+        "duration_months": 16,
+        "signal": "Mt Cook Village 信号可达观景台",
+        "season_pattern": "11-3 月融冰期声音最频繁",
+        "human_factors": "城市游客没听过冰崩"
+      },
+      "events_timeline": [
+        "Month 1: 当地 mountain guide 写下解释冰崩声",
+        "Month 3: 200 likes",
+        "Month 5: 极少 report 称'根本听不到'",
+        "Month 7: Aoraki visitor centre 在播放冰崩录音教育游客",
+        "Month 10: 一篇科普文章引用此 mark",
+        "Month 13: 总计 380 likes vs 4 reports",
+        "Month 16: 涨到 460 likes"
+      ],
+      "expected_signal_summary": "460 likes vs 4 reports (115:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "教育性质的 mark，提升游客体验且降低误判风险，争议极小",
+      "edge_case_flag": "education|scenic_phenomenon|rare_misinterpretation"
+    },
+    {
+      "id": 668,
+      "title": "Avalanche Peak 冬季登顶需冰镐冰爪明示",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Avalanche Peak 在 Arthur's Pass National Park，冬季 6-9 月山顶段 1700m 以上结冰严重",
+        "intrinsic_quality": "无冰镐冰爪冬季登顶死亡率历史记录约每 2 年 1 起",
+        "user_volume_per_month": 350,
+        "duration_months": 19,
+        "signal": "Arthur's Pass 镇有信号，山上无",
+        "season_pattern": "6-9 月致命",
+        "human_factors": "国际游客冬季想免费看雪低估难度"
+      },
+      "events_timeline": [
+        "Month 1: Canterbury Mountaineering Club 集体撰写",
+        "Month 3: 180 likes",
+        "Month 5: 夏季游客 report 7 次称'根本没雪'",
+        "Month 7: 冬季一起死亡事件后 likes +200",
+        "Month 10: NZ Mountain Safety Council 引用",
+        "Month 14: 总计 460 likes vs 14 reports",
+        "Month 19: 涨到 580 likes"
+      ],
+      "expected_signal_summary": "580 likes vs 14 reports (41.4:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "死亡事件可验证，夏季用户感受不到属季节差异，冬季救命价值高",
+      "edge_case_flag": "winter_alpine|fatality_recorded|gear_critical"
+    },
+    {
+      "id": 669,
+      "title": "Pinnacles Hut 周末凌晨 4 点 sunrise rush 噪音抱怨",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Pinnacles Hut 在 Coromandel Forest Park，80 床位，每周末凌晨 4 点 sunrise hiker 集体出发声响巨大",
+        "intrinsic_quality": "敏感睡眠者建议带耳塞，DOC 已多次发提醒",
+        "user_volume_per_month": 800,
+        "duration_months": 15,
+        "signal": "Hut 周边 Spark 1 格",
+        "season_pattern": "全年周末",
+        "human_factors": "Auckland 周末高频户外人群"
+      },
+      "events_timeline": [
+        "Month 1: 一位 hut warden 写下",
+        "Month 3: 150 likes",
+        "Month 5: 几个跑团 report 觉得 mark 是抱怨他们",
+        "Month 7: DOC 公告印此提醒带耳塞",
+        "Month 10: 总计 240 likes vs 6 reports",
+        "Month 15: 涨到 320 likes"
+      ],
+      "expected_signal_summary": "320 likes vs 6 reports (53:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "实用 hut etiquette 提醒，DOC 背书，反对来自被影射人群属正常情绪",
+      "edge_case_flag": "hut_etiquette|noise|weekend_rush"
+    },
+    {
+      "id": 670,
+      "title": "Cape Reinga to Tapotupotu Bay 一日延伸海滩涨潮警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Cape Reinga 一日延伸到 Tapotupotu Bay 的海滩段，位于 Northland 最北端，涨潮时整段海滩消失需绕道 4km",
+        "intrinsic_quality": "已有家庭被困潮位中需 SAR 救援",
+        "user_volume_per_month": 600,
+        "duration_months": 11,
+        "signal": "Cape Reinga 信号好，Tapotupotu 段无",
+        "season_pattern": "全年，大潮日最危险",
+        "human_factors": "自驾游客不查潮汐表"
+      },
+      "events_timeline": [
+        "Month 1: Northland LandSAR 成员写下含潮汐表 link",
+        "Month 3: 130 likes",
+        "Month 5: 低潮经过游客 report 4 次",
+        "Month 7: 一家庭被困事件 likes +120",
+        "Month 9: 当地 Te Hapua 旅游局印此提醒",
+        "Month 11: 总计 280 likes vs 8 reports"
+      ],
+      "expected_signal_summary": "280 likes vs 8 reports (35:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "实际 SAR 救援可验证，潮汐与时间相关性强，应保留",
+      "edge_case_flag": "tidal|coastal|sar_recorded"
+    },
+    {
+      "id": 671,
+      "title": "Mt Taranaki Pouakai Crossing 一日尝试者超时提醒",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Pouakai Crossing 一日往返 19km 含 Henry Peak，位于 Egmont National Park，多数一日尝试者低估了从 Mangorei Road 端往返的时间",
+        "intrinsic_quality": "DOC 建议 8-10 小时但游客以为 6 小时，黄昏被困事件多",
+        "user_volume_per_month": 900,
+        "duration_months": 13,
+        "signal": "山下两端有信号，山上无",
+        "season_pattern": "11-3 月日长期最多人尝试",
+        "human_factors": "Auckland 周末 hiker 急于赶回"
+      },
+      "events_timeline": [
+        "Month 1: New Plymouth 当地登山者写下亲历",
+        "Month 3: 170 likes",
+        "Month 5: 体能强者 report '6 小时够了'",
+        "Month 7: 一对夫妇黄昏被困事件",
+        "Month 10: Taranaki Tramping Club 引用",
+        "Month 13: 总计 320 likes vs 12 reports"
+      ],
+      "expected_signal_summary": "320 likes vs 12 reports (26.7:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "时间估算因人而异，但平均水平用户的提醒是合理的",
+      "edge_case_flag": "time_estimate|fitness_dependent|after_dark_risk"
+    },
+    {
+      "id": 672,
+      "title": "Tongariro Crossing Mangatepopo 端禁烟禁火明示",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Tongariro Crossing Mangatepopo 入口的火山岩与 tussock grass 高度易燃，位于 Tongariro National Park UNESCO 双重世界遗产范围",
+        "intrinsic_quality": "一根烟头可能引发整个国家公园火灾",
+        "user_volume_per_month": 9000,
+        "duration_months": 14,
+        "signal": "入口有信号",
+        "season_pattern": "12-3 月干旱期最危险",
+        "human_factors": "国际游客不了解 NZ 火险等级体系"
+      },
+      "events_timeline": [
+        "Month 1: DOC ranger 写下含 fire danger 等级链接",
+        "Month 3: 220 likes",
+        "Month 5: 极少 report 称'多余'",
+        "Month 7: 邻近 Ruapehu 一起小火灾后 likes +150",
+        "Month 11: 总计 410 likes vs 3 reports",
+        "Month 14: 涨到 510 likes"
+      ],
+      "expected_signal_summary": "510 likes vs 3 reports (170:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "DOC 官方规则不容置疑，且对国家公园保护至关重要",
+      "edge_case_flag": "fire_safety|doc_rule|world_heritage"
+    },
+    {
+      "id": 673,
+      "title": "Hooker Valley Track 反向出发避开旅游团方案",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Hooker Valley Track 多数游客 9-11 点入场，反向从 Aoraki Lodge 端少有人走，位于 Aoraki/Mount Cook 国家公园",
+        "intrinsic_quality": "反向走可享 30 分钟无人，对摄影师极有价值",
+        "user_volume_per_month": 18000,
+        "duration_months": 10,
+        "signal": "全程有信号",
+        "season_pattern": "11-3 月旺季差距最明显",
+        "human_factors": "摄影师/早起者最受益"
+      },
+      "events_timeline": [
+        "Month 1: 一名 Wanaka 摄影师写下",
+        "Month 2: 180 likes 摄影圈传播",
+        "Month 4: 散客 report 称'反着走没意义'",
+        "Month 6: NZ Geographic 杂志提及",
+        "Month 8: 总计 280 likes vs 7 reports",
+        "Month 10: 涨到 360 likes"
+      ],
+      "expected_signal_summary": "360 likes vs 7 reports (51:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "对特定人群高度有用的小众建议，反对意见来自需求不同的人群",
+      "edge_case_flag": "niche_advice|photographer|crowd_avoidance"
+    },
+    {
+      "id": 674,
+      "title": "Rob Roy Glacier 入口 Aspiring Hut 4WD 路况季节差异",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Wanaka 至 Raspberry Flat 停车场的 West Matukituki Valley Road 共 30km 中后段 Wanaka-Mt Aspiring Road，雨季泥泞需 4WD",
+        "intrinsic_quality": "普通轿车雨季陷车每月 3-5 次",
+        "user_volume_per_month": 1200,
+        "duration_months": 16,
+        "signal": "Wanaka 镇有，路上无",
+        "season_pattern": "5-9 月雨季差，11-3 月好",
+        "human_factors": "租车游客只租轿车"
+      },
+      "events_timeline": [
+        "Month 1: Wanaka 租车公司员工写下",
+        "Month 3: 150 likes",
+        "Month 5: 旱季用户 report 4 次",
+        "Month 8: 雨季陷车事件后 likes +100",
+        "Month 12: 总计 280 likes vs 8 reports",
+        "Month 16: 涨到 360 likes"
+      ],
+      "expected_signal_summary": "360 likes vs 8 reports (45:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "季节性强但实用，租车决策影响大",
+      "edge_case_flag": "road_condition|seasonal|rental_car_logistics"
+    },
+    {
+      "id": 675,
+      "title": "Kaikoura Peninsula Walkway 高潮位崖底段不可通过",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Kaikoura Peninsula Walkway 低位崖底段在高潮位时被海浪覆盖，位于 South Bay 与 Point Kean 之间",
+        "intrinsic_quality": "高潮硬走会被卷下海，已有死亡记录",
+        "user_volume_per_month": 8000,
+        "duration_months": 18,
+        "signal": "全程信号好",
+        "season_pattern": "全年，spring tide 最危险",
+        "human_factors": "邮轮游客以为海边走道 24 小时通"
+      },
+      "events_timeline": [
+        "Month 1: Kaikoura SAR 写下",
+        "Month 3: 380 likes",
+        "Month 5: 低潮通过游客 report 6 次",
+        "Month 7: 一起死亡事件 likes +280",
+        "Month 12: i-SITE 强制游客出发前查潮汐",
+        "Month 18: 总计 820 likes vs 14 reports"
+      ],
+      "expected_signal_summary": "820 likes vs 14 reports (58.6:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "致死历史 + SAR 背书，必须长期保留",
+      "edge_case_flag": "fatal_tidal|coastal|spring_tide"
+    },
+    {
+      "id": 676,
+      "title": "Wai-O-Tapu Lady Knox Geyser 10:15 表演前 30 分钟到位提醒",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Wai-O-Tapu Lady Knox Geyser 每天 10:15 准点表演，位于 Rotorua 南 30km，停车场到表演点要走 5 分钟",
+        "intrinsic_quality": "迟到 5 分钟基本看不见，需等下次开放日",
+        "user_volume_per_month": 6000,
+        "duration_months": 11,
+        "signal": "全程有信号",
+        "season_pattern": "全年",
+        "human_factors": "邮轮游客时间紧"
+      },
+      "events_timeline": [
+        "Month 1: Rotorua 当地 guide 写下",
+        "Month 2: 220 likes",
+        "Month 4: 几位用户 report '夸张，9:50 到也行'",
+        "Month 6: Wai-O-Tapu 官方在 ticket 上印此提醒",
+        "Month 8: 总计 320 likes vs 7 reports",
+        "Month 11: 涨到 410 likes"
+      ],
+      "expected_signal_summary": "410 likes vs 7 reports (58.6:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "实用时间管理建议，运营方背书",
+      "edge_case_flag": "schedule|time_critical|operator_endorsed"
+    },
+    {
+      "id": 677,
+      "title": "Mt Robert Circuit 山顶 hut 周末满床预警",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mt Robert Lodge 8 床位，位于 Nelson Lakes National Park，周末经常满员，DOC online booking 提前 1 周才出现",
+        "intrinsic_quality": "一日往返者占 80% 不需 hut，但留宿者需早订",
+        "user_volume_per_month": 400,
+        "duration_months": 13,
+        "signal": "Hut 附近 Vodafone 1 格",
+        "season_pattern": "11-3 月周末满",
+        "human_factors": "Nelson 周末 hiker"
+      },
+      "events_timeline": [
+        "Month 1: DOC ranger 写下含 booking link",
+        "Month 3: 90 likes",
+        "Month 5: 几位 day-tripper report 称'我又不留宿'",
+        "Month 7: 一对情侣无 booking 被拒事件",
+        "Month 10: 总计 160 likes vs 6 reports",
+        "Month 13: 涨到 210 likes"
+      ],
+      "expected_signal_summary": "210 likes vs 6 reports (35:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "对小众但具体人群有用，反对来自不相关用户",
+      "edge_case_flag": "booking|hut_capacity|niche_audience"
+    },
+    {
+      "id": 678,
+      "title": "Avalanche Peak 顶部山脊误走 Crow Valley 下错坡警告",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Avalanche Peak 顶部山脊向南极易走错下入 Crow Valley 而非返回 Scotts Track，位于 Arthur's Pass National Park",
+        "intrinsic_quality": "走错需要 2 天才能徒步出 Crow Valley，多次 SAR",
+        "user_volume_per_month": 700,
+        "duration_months": 17,
+        "signal": "山顶无信号",
+        "season_pattern": "云雾天最危险",
+        "human_factors": "Canterbury 周末 hiker 自信不带地图"
+      },
+      "events_timeline": [
+        "Month 1: 一位 Arthur's Pass 当地 guide 写下亲历",
+        "Month 3: 200 likes",
+        "Month 5: 晴天用户 report 称'方向很明显'",
+        "Month 8: 一起 SAR 救援事件 likes +180",
+        "Month 12: NZ Mountain Safety Council 把此 mark 案例化",
+        "Month 17: 总计 480 likes vs 12 reports"
+      ],
+      "expected_signal_summary": "480 likes vs 12 reports (40:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "云雾依赖且 SAR 历史可证，必须保留",
+      "edge_case_flag": "navigation|cloud_dependent|sar_history"
+    },
+    {
+      "id": 679,
+      "title": "Pinnacles Track 山顶 Pinnacles Rock 铁梯恐高警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Pinnacles Track 终点 Pinnacles Rock 山顶最后 80m 垂直铁梯+铁链，位于 Coromandel Forest Park",
+        "intrinsic_quality": "恐高者 30% 半路放弃，狭窄段堵塞风险高",
+        "user_volume_per_month": 2500,
+        "duration_months": 15,
+        "signal": "山顶有 Spark 信号",
+        "season_pattern": "全年",
+        "human_factors": "周末 family hiker 不知道有铁梯"
+      },
+      "events_timeline": [
+        "Month 1: 一位 Coromandel 当地 hiker 写下",
+        "Month 2: 180 likes",
+        "Month 4: 体能强者 report 称'小事'",
+        "Month 6: 一恐高者半路下不来需 SAR",
+        "Month 9: DOC 在 hut 公告板贴此 mark",
+        "Month 12: 总计 320 likes vs 9 reports",
+        "Month 15: 涨到 410 likes"
+      ],
+      "expected_signal_summary": "410 likes vs 9 reports (45.5:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "恐高是真实生理特征，提醒可避免堵塞和 SAR",
+      "edge_case_flag": "vertigo|ladder|family_underestimate"
+    },
+    {
+      "id": 680,
+      "title": "Bridal Veil Falls 顶层观景台与底层不同提醒",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Bridal Veil Falls/Waireinga 有顶层和底层两个观景台，多数游客只走顶层错过更壮观的底层，位于 Pakoka River",
+        "intrinsic_quality": "顶层 5 分钟，底层来回 30 分钟体验差异大",
+        "user_volume_per_month": 3500,
+        "duration_months": 14,
+        "signal": "全程有信号",
+        "season_pattern": "全年",
+        "human_factors": "短停游客错过亮点"
+      },
+      "events_timeline": [
+        "Month 1: 一位 Raglan 摄影师写下",
+        "Month 2: 240 likes",
+        "Month 4: 时间紧者 report '那么深没必要'",
+        "Month 6: Hamilton 当地报纸 Waikato Times 提及",
+        "Month 9: 总计 360 likes vs 5 reports",
+        "Month 14: 涨到 460 likes"
+      ],
+      "expected_signal_summary": "460 likes vs 5 reports (92:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "体验提升类信息，反对来自时间限制者，对多数游客有价值",
+      "edge_case_flag": "experience_uplift|two_tier_view|time_dependent"
+    }
+  ],
+  "stopped_at": 30,
+  "stop_reason": "context budget — 30 cases written meeting all red-line constraints (real NZ place names ≥30 chars, events_timeline ≥5 items, human_judgment ≥25 chars, no template reuse, no code generation)"
+}

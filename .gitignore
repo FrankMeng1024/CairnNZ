@@ -1,0 +1,48 @@
+# Build artifacts and dev tools
+unity_setup/
+.playwright-mcp/
+debug-snapshots/
+docs/qa/
+docs/ux/
+docs/virtual-user/
+node_modules/
+*.exe
+*.dmg
+*.pdf
+
+# Logs and temp data
+*.log
+tuanjie_results*.json
+
+# Prototype/design files (root level, not part of app)
+/ar_style*.html
+/ar_styles_index.html
+/ar_3d_test.html
+/arkit_*.html
+/cairn_*.html
+/cairn-*.png
+/aim_lock*.html
+/orb_styles*.html
+/icon_*.html
+/icon_*.png
+/export_ritual*.html
+/pw_*.js
+/scan_reminder*.ps1
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Build outputs
+.expo/
+dist/
+build/
+ios/
+android/
+.eas/
+
+# Cache
+.cache/
+*.tsbuildinfo

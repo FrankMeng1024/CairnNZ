@@ -1,0 +1,431 @@
+/**
+ * HomeScreen — Sprint 41 full-screen layout
+ *
+ * Layout: flex column, no ScrollView, fills SafeArea exactly.
+ * Hierarchy: Header → Stats? → Recent? → Activity Cards (dominant) → Tools row
+ * Design: Golden ratio φ=1.618 applied to card proportions and spacing.
+ */
+import React, { useRef, useState, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, useWindowDimensions,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/RootNavigator';
+import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
+import { Icon, type IconName } from '../components/Icon';
+import { HikingIcon, RunningIcon, FlagMarkerIcon, CairnLogo } from '../components/ActivityIcons';
+import { useAppStore } from '../store/useAppStore';
+import { useSessionStore } from '../store/useSessionStore';
+import { useMarkerStore } from '../store/useMarkerStore';
+import { useTrackingStore } from '../store/useTrackingStore';
+import { formatDistance, formatDuration, getRelativeTime } from '../utils/geo';
+import { getCurrentRegion } from '../config/regions';
+import { OtaBadge } from '../components/OtaBadge';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+function getGreeting(mode: 'beginner' | 'expert') {
+  const h = new Date().getHours();
+  const label = mode === 'expert' ? 'Navigator' : 'Explorer';
+  // PRD3 E-014: occasional Te Reo touch — Kia ora as morning variant
+  // (registered translator review pending — Kia ora is a well-established greeting)
+  if (h >= 5 && h < 12) return `Kia ora, ${label}`;
+  if (h >= 12 && h < 18) return `Good afternoon, ${label}`;
+  return `Good evening, ${label}`;
+}
+
+// ── Recent / Live activity row ───────────────────────────────────────────
+// Single row that occupies one fixed slot on the home dashboard.
+//   • If a hike/run is actively recording → show "Hiking in progress" with
+//     live distance + duration, tap → resume the in-progress screen.
+//     Replaces (does NOT stack on top of) the most-recent-activity row,
+//     so the user sees one row in one position no matter the state.
+//   • Else if the most recent activity was within 24h → show it.
+//   • Else render nothing.
+// This unification fixes the "stacked Resume + Last activity" duplication
+// reported on V8.
+function RecentRow({ onPress }: { onPress: (id: string) => void }) {
+  const sessions = useSessionStore(s => s.sessions);
+  const status = useTrackingStore(s => s.status);
+  const liveActivityMode = useTrackingStore(s => s.activityMode);
+  const liveDistanceM = useTrackingStore(s => s.distanceM);
+  const liveDurationS = useTrackingStore(s => s.durationS);
+  const nav = useNavigation<Nav>();
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  // Pulse the dot when live so the row visually communicates "this is
+  // moving right now" rather than feeling identical to a stale entry.
+  useEffect(() => {
+    if (status !== 'tracking') {
+      pulse.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.4, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1.0, duration: 900, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [status]);
+
+  // ── Live mode ──
+  if (status === 'tracking') {
+    const isRun = liveActivityMode === 'running';
+    const accent = isRun ? Colors.running : Colors.primary;
+    const bg = isRun ? Colors.runningLight : Colors.primaryLight;
+    const label = isRun ? 'Running' : 'Hiking';
+    const target = isRun ? 'Running' : 'Hiking';
+    return (
+      <TouchableOpacity
+        style={recentStyles.row}
+        onPress={() => nav.navigate(target as any)}
+        activeOpacity={0.85}
+      >
+        <Animated.View
+          style={[recentStyles.dot, { backgroundColor: bg, transform: [{ scale: pulse }] }]}
+        >
+          {isRun
+            ? <RunningIcon size={14} color={accent} />
+            : <HikingIcon size={14} color={accent} />
+          }
+        </Animated.View>
+        <View style={recentStyles.textGroup}>
+          <Text style={[recentStyles.badge, { color: accent }]}>{label} in progress</Text>
+          <Text style={recentStyles.stat}>
+            {`${formatDistance(liveDistanceM, 'km', 2)} km · ${formatDuration(liveDurationS)}`}
+          </Text>
+        </View>
+        <Text style={[recentStyles.when, { color: accent, fontWeight: '700' }]}>Resume</Text>
+        <Icon name="ChevronRight" size={14} color={accent} strokeWidth={2.5} />
+      </TouchableOpacity>
+    );
+  }
+
+  // ── Last activity mode (only within 24h) ──
+  if (sessions.length === 0) return null;
+  const last = sessions.reduce((best, s) => s.startedAt > best.startedAt ? s : best);
+  const ageMs = Date.now() - last.startedAt;
+  if (ageMs > 24 * 60 * 60 * 1000) return null;
+
+  const isRun = last.activityMode === 'running';
+  const accent = isRun ? Colors.running : Colors.primary;
+  const bg = isRun ? Colors.runningLight : Colors.primaryLight;
+  const label = isRun ? 'Run' : 'Hike';
+  const stat = last.distanceM > 10
+    ? `${formatDistance(last.distanceM, 'km', 1)} km`
+    : formatDuration(last.durationS);
+  const when = getRelativeTime(last.startedAt);
+
+  return (
+    <TouchableOpacity style={recentStyles.row} onPress={() => onPress(last.id)} activeOpacity={0.7}>
+      <View style={[recentStyles.dot, { backgroundColor: bg }]}>
+        {isRun
+          ? <RunningIcon size={14} color={accent} />
+          : <HikingIcon size={14} color={accent} />
+        }
+      </View>
+      <View style={recentStyles.textGroup}>
+        <Text style={[recentStyles.badge, { color: accent }]}>{label}</Text>
+        <Text style={recentStyles.stat}>{stat}</Text>
+      </View>
+      <Text style={recentStyles.when}>{when}</Text>
+      <Icon name="ChevronRight" size={14} color={Colors.textMuted} strokeWidth={2} />
+    </TouchableOpacity>
+  );
+}
+
+// ── Big activity card — flex-based, no parent height dependency ──────────────
+function ActivityCard({
+  icon, title, subtitle, accentColor, lightBg, cardBg, onPress, anim,
+}: {
+  icon: (size: number) => React.ReactNode;
+  title: string;
+  subtitle: string;
+  accentColor: string;
+  lightBg: string;
+  cardBg: string;
+  onPress: () => void;
+  anim: Animated.Value;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  // Panel width is derived from screen width — known on first paint —
+  // so the card never re-measures and re-renders. Was: useState(h) +
+  // onLayout, which caused a visible "jump" on first sign-in as the
+  // initial 90px panel resized to ~110px after layout.
+  const { width: screenW } = useWindowDimensions();
+  const panelW = Math.min(Math.round(screenW * 0.32), 130);
+  const iconSize = Math.round(panelW * 0.55);
+
+  return (
+    <Animated.View style={{ flex: 1, opacity: anim, transform: [{ scale }] }}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={onPress}
+        onPressIn={() => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, tension: 200, friction: 10 }).start()}
+        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 8 }).start()}
+        style={[cardStyles.card, { backgroundColor: cardBg, flex: 1 }]}
+      >
+        {/* Left panel */}
+        <View style={[cardStyles.leftPanel, { width: panelW, backgroundColor: lightBg }]}>
+          {icon(iconSize)}
+        </View>
+
+        {/* Text area */}
+        <View style={[cardStyles.innerRow, { marginLeft: panelW }]}>
+          <View style={cardStyles.textCol}>
+            <Text style={[cardStyles.title, { color: Colors.textPrimary }]}>{title}</Text>
+            <Text style={cardStyles.subtitle}>{subtitle}</Text>
+            <View style={[cardStyles.accentLine, { backgroundColor: accentColor }]} />
+          </View>
+          <View style={[cardStyles.chevron, { backgroundColor: lightBg }]}>
+            <Icon name="ChevronRight" size={16} color={accentColor} strokeWidth={2.5} />
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+// ── Tool button ───────────────────────────────────────────────────────────────
+function ToolBtn({ iconName, label, onPress }: { iconName: IconName; label: string; onPress: () => void }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  return (
+    <Animated.View style={{ flex: 1, transform: [{ scale }] }}>
+      <TouchableOpacity
+        style={toolStyles.btn}
+        onPress={onPress}
+        activeOpacity={1}
+        onPressIn={() => Animated.spring(scale, { toValue: 0.93, useNativeDriver: true, tension: 300, friction: 10 }).start()}
+        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 8 }).start()}
+      >
+        <View style={toolStyles.iconWrap}>
+          <Icon name={iconName} size={20} color={Colors.primary} strokeWidth={1.8} />
+        </View>
+        <Text style={toolStyles.label} numberOfLines={1}>{label}</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+export function HomeScreen() {
+  const nav = useNavigation<Nav>();
+  const uiMode = useAppStore(s => s.uiMode);
+  const sessions = useSessionStore(s => s.sessions);
+  const allMarkers = useMarkerStore(s => s.markers);
+  const region = getCurrentRegion();
+  const markerCount = allMarkers.filter(m => m.regionCode === region.code).length;
+  const hasData = sessions.length > 0 || markerCount > 0;
+  const hasRecent = sessions.length > 0;
+
+  const opacity = useRef(new Animated.Value(1)).current;
+  const card1 = useRef(new Animated.Value(1)).current;
+  const card2 = useRef(new Animated.Value(1)).current;
+  const insets = useSafeAreaInsets();
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
+      <OtaBadge />
+      <Animated.View
+        style={[
+          styles.screen,
+          {
+            // Honour the device's bottom inset (home indicator). We can't
+            // rely on SafeAreaView edges:['bottom'] alone — on Pro Max the
+            // indicator strip was eating the toolsRow labels.
+            paddingBottom: Math.max(insets.bottom, Spacing.sm) + Spacing.xs,
+          },
+          { opacity },
+        ]}
+      >
+
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.logoRow}>
+            {/* Match Sign In page exactly: size=28 + marginTop:-7 + center
+                alignment + gap=Spacing.xs. Keeps the brand mark visually
+                consistent across the whole app. */}
+            <View style={{ marginTop: -7 }}>
+              <CairnLogo size={28} color={Colors.primary} />
+            </View>
+            <Text style={styles.logo}>Cairn</Text>
+          </View>
+          <Text style={styles.greeting}>{getGreeting(uiMode)}</Text>
+        </View>
+
+        {/* Stats strip — only when data exists */}
+        {hasData && (
+          <View style={styles.statsRow}>
+            <View style={styles.statChip}>
+              <Icon name="Route" size={12} color={Colors.primary} strokeWidth={2} />
+              <Text style={styles.statText}>{plural(sessions.length, 'session')}</Text>
+            </View>
+            <View style={styles.statChip}>
+              <FlagMarkerIcon size={14} stoneColor={Colors.flag} flagColor={Colors.primary} />
+              <Text style={styles.statText}>{plural(markerCount, 'flag')}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Recent activity — above the cards so user sees it before cards */}
+        {hasRecent && <RecentRow onPress={(id) => nav.navigate('MapHistory', { sessionId: id })} />}
+
+        {/* Activity Cards — fill remaining vertical space, two equal halves */}
+        <View style={styles.cardsArea}>
+          <ActivityCard
+            icon={(sz) => <HikingIcon size={sz} color={Colors.primary} />}
+            title="Hiking"
+            subtitle="Navigate tracks · Leave cairns · Explore at your pace"
+            accentColor={Colors.primary}
+            lightBg={Colors.primaryLight}
+            cardBg="#eef4e8"
+            onPress={() => nav.navigate('Hiking')}
+            anim={card1}
+          />
+          <ActivityCard
+            icon={(sz) => <RunningIcon size={sz} color={Colors.running} />}
+            title="Running"
+            subtitle="Route planning · Voice guidance · Lock mode"
+            accentColor={Colors.running}
+            lightBg={Colors.runningLight}
+            cardBg="#e8f1f8"
+            onPress={() => nav.navigate('Running')}
+            anim={card2}
+          />
+        </View>
+
+        {/* Tools */}
+        <View style={styles.toolsRow}>
+          <ToolBtn iconName="Route" label="Routes" onPress={() => nav.navigate('Routes')} />
+          <ToolBtn iconName="Users" label="Friends" onPress={() => nav.navigate('Friends')} />
+          <ToolBtn iconName="Compass" label="AR" onPress={() => nav.navigate('AR')} />
+          <ToolBtn iconName="Settings2" label="Settings" onPress={() => nav.navigate('Settings')} />
+        </View>
+
+      </Animated.View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: Colors.bg },
+  screen: {
+    flex: 1,
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.sm,
+    // paddingBottom set inline using useSafeAreaInsets — see the JSX.
+    gap: Spacing.sm,
+  },
+
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  logo: {
+    fontSize: FontSize.h1, fontWeight: '900', color: Colors.textPrimary,
+    letterSpacing: -1, lineHeight: 32, includeFontPadding: false,
+  },
+  greeting: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textSecondary },
+
+  statsRow: { flexDirection: 'row', gap: Spacing.sm },
+  statChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: Radius.pill,
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
+  },
+  statText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary },
+
+  cardsArea: { flex: 1, gap: Spacing.sm },
+
+  toolsRow: { flexDirection: 'row', gap: Spacing.sm },
+});
+
+const cardStyles = StyleSheet.create({
+  card: {
+    borderRadius: Radius.cardLg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    overflow: 'hidden',
+    flexDirection: 'row',
+    // Upgraded shadow: deeper, more layered (elevation-3 feel)
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    elevation: 6,
+  },
+  leftPanel: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  innerRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.base,
+    gap: Spacing.sm,
+  },
+  iconBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  textCol: { flex: 1, gap: 5 },
+  title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  subtitle: { fontSize: FontSize.small, color: Colors.textSecondary, lineHeight: 17 },
+  accentLine: { width: 28, height: 3, borderRadius: 2, marginTop: 4, opacity: 0.8 },
+  chevron: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+});
+
+const recentStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: Radius.card,
+    paddingHorizontal: Spacing.md, paddingVertical: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
+  },
+  dot: {
+    width: 28, height: 28, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+  },
+  textGroup: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
+  badge: { fontSize: FontSize.small, fontWeight: '700' },
+  stat: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textPrimary },
+  when: { fontSize: FontSize.small, color: Colors.textMuted, flexShrink: 0 },
+});
+
+const toolStyles = StyleSheet.create({
+  btn: {
+    flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.card,
+    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: Spacing.sm, gap: 4,
+    minHeight: 64,
+    borderWidth: 1, borderColor: Colors.border, ...Shadow.card,
+  },
+  iconWrap: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  label: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary },
+});

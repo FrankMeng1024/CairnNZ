@@ -1,0 +1,3767 @@
+{
+  "total": 100,
+  "arcs_meta": [
+    {
+      "name": "stable_good",
+      "weight": 0.15,
+      "expected": "alive",
+      "description": "稳定的高质量 mark, 持续被路过用户认可"
+    },
+    {
+      "name": "stable_bad",
+      "weight": 0.1,
+      "expected": "sunk",
+      "description": "稳定低质量内容, 持续被举报"
+    },
+    {
+      "name": "collapse",
+      "weight": 0.15,
+      "expected": "sunk_or_borderline",
+      "description": "曾经辉煌但后期崩塌, 近期口碑反转"
+    },
+    {
+      "name": "recovery",
+      "weight": 0.1,
+      "expected": "alive",
+      "description": "早期被误判, 慢慢回暖"
+    },
+    {
+      "name": "seasonal",
+      "weight": 0.1,
+      "expected": "alive",
+      "description": "季节性 mark, 旺季好淡季差"
+    },
+    {
+      "name": "remote_silent",
+      "weight": 0.1,
+      "expected": "alive",
+      "description": "极偏远地区, 几个月才一个人路过"
+    },
+    {
+      "name": "short_burst",
+      "weight": 0.08,
+      "expected": "sunk",
+      "description": "节日活动短期, 活动结束后 mark 失效"
+    },
+    {
+      "name": "controversial_persistent",
+      "weight": 0.08,
+      "expected": "alive",
+      "description": "内容有争议, 但持续被使用"
+    },
+    {
+      "name": "short_attack",
+      "weight": 0.07,
+      "expected": "alive",
+      "description": "本质好 mark, 中段被短暂集中差评攻击"
+    },
+    {
+      "name": "doc_official",
+      "weight": 0.07,
+      "expected": "alive",
+      "description": "DOC 官方预热数据, 缓慢但稳定被认可"
+    }
+  ],
+  "samples": [
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "9.5",
+      "encounter_desc": "中等流量(每天 0.9人)",
+      "total_estimated_visitors": 259,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "2.0",
+      "encounter_desc": "中等流量(每天 0.7人)",
+      "total_estimated_visitors": 39,
+      "arc_name": "short_burst",
+      "arc_description": "节日活动短期, 活动结束后 mark 失效",
+      "expected": "sunk",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.05",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.05
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "7.0",
+      "encounter_desc": "偏远稀少(8天才一个人路过)",
+      "total_estimated_visitors": 26,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "6.6",
+      "encounter_desc": "中等流量(每天 1.0人)",
+      "total_estimated_visitors": 192,
+      "arc_name": "recovery",
+      "arc_description": "早期被误判, 慢慢回暖",
+      "expected": "alive",
+      "quality_at_start": "0.20",
+      "quality_at_mid": "0.32",
+      "quality_at_end": "0.92",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.32
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.62
+        },
+        {
+          "progress": 1,
+          "quality": 0.92
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": true,
+      "author_role": "official",
+      "duration_months": "3.7",
+      "encounter_desc": "偏远稀少(4天才一个人路过)",
+      "total_estimated_visitors": 31,
+      "arc_name": "doc_official",
+      "arc_description": "DOC 官方预热数据, 缓慢但稳定被认可",
+      "expected": "alive",
+      "quality_at_start": "0.75",
+      "quality_at_mid": "0.75",
+      "quality_at_end": "0.75",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.75
+        },
+        {
+          "progress": 1,
+          "quality": 0.75
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.6",
+      "encounter_desc": "中等流量(每天 1.3人)",
+      "total_estimated_visitors": 448,
+      "arc_name": "recovery",
+      "arc_description": "早期被误判, 慢慢回暖",
+      "expected": "alive",
+      "quality_at_start": "0.20",
+      "quality_at_mid": "0.32",
+      "quality_at_end": "0.92",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.32
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.62
+        },
+        {
+          "progress": 1,
+          "quality": 0.92
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "0.9",
+      "encounter_desc": "中等流量(每天 1.6人)",
+      "total_estimated_visitors": 42,
+      "arc_name": "short_burst",
+      "arc_description": "节日活动短期, 活动结束后 mark 失效",
+      "expected": "sunk",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.05",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.05
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "10.1",
+      "encounter_desc": "中等流量(每天 1.2人)",
+      "total_estimated_visitors": 361,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "7.7",
+      "encounter_desc": "偏远稀少(4天才一个人路过)",
+      "total_estimated_visitors": 63,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.4",
+      "encounter_desc": "中等流量(每天 3.1人)",
+      "total_estimated_visitors": 1079,
+      "arc_name": "recovery",
+      "arc_description": "早期被误判, 慢慢回暖",
+      "expected": "alive",
+      "quality_at_start": "0.20",
+      "quality_at_mid": "0.32",
+      "quality_at_end": "0.92",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.32
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.62
+        },
+        {
+          "progress": 1,
+          "quality": 0.92
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "9.6",
+      "encounter_desc": "偏远稀少(6天才一个人路过)",
+      "total_estimated_visitors": 51,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "8.5",
+      "encounter_desc": "热门(每天 12.6人)",
+      "total_estimated_visitors": 3217,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.0",
+      "encounter_desc": "热门(每天 9.9人)",
+      "total_estimated_visitors": 3283,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "3.8",
+      "encounter_desc": "偏远稀少(3天才一个人路过)",
+      "total_estimated_visitors": 42,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.8",
+      "encounter_desc": "中等流量(每天 4.9人)",
+      "total_estimated_visitors": 1745,
+      "arc_name": "recovery",
+      "arc_description": "早期被误判, 慢慢回暖",
+      "expected": "alive",
+      "quality_at_start": "0.20",
+      "quality_at_mid": "0.32",
+      "quality_at_end": "0.92",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.32
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.62
+        },
+        {
+          "progress": 1,
+          "quality": 0.92
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "commercial_spam",
+      "duration_months": "1.5",
+      "encounter_desc": "中等流量(每天 0.6人)",
+      "total_estimated_visitors": 28,
+      "arc_name": "stable_bad",
+      "arc_description": "稳定低质量内容, 持续被举报",
+      "expected": "sunk",
+      "quality_at_start": "0.10",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.10",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.1
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "commercial_spam",
+      "duration_months": "6.4",
+      "encounter_desc": "偏远稀少(6天才一个人路过)",
+      "total_estimated_visitors": 32,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "7.6",
+      "encounter_desc": "中等流量(每天 1.7人)",
+      "total_estimated_visitors": 386,
+      "arc_name": "recovery",
+      "arc_description": "早期被误判, 慢慢回暖",
+      "expected": "alive",
+      "quality_at_start": "0.20",
+      "quality_at_mid": "0.32",
+      "quality_at_end": "0.92",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.32
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.62
+        },
+        {
+          "progress": 1,
+          "quality": 0.92
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.6",
+      "encounter_desc": "偏远稀少(5天才一个人路过)",
+      "total_estimated_visitors": 70,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "8.4",
+      "encounter_desc": "热门(每天 12.9人)",
+      "total_estimated_visitors": 3239,
+      "arc_name": "short_attack",
+      "arc_description": "本质好 mark, 中段被短暂集中差评攻击",
+      "expected": "alive",
+      "quality_at_start": "0.80",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.80",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.8
+        },
+        {
+          "progress": 1,
+          "quality": 0.8
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "1.6",
+      "encounter_desc": "偏远稀少(3天才一个人路过)",
+      "total_estimated_visitors": 19,
+      "arc_name": "short_burst",
+      "arc_description": "节日活动短期, 活动结束后 mark 失效",
+      "expected": "sunk",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.05",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.05
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "7.7",
+      "encounter_desc": "偏远稀少(9天才一个人路过)",
+      "total_estimated_visitors": 24,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "3.5",
+      "encounter_desc": "偏远稀少(8天才一个人路过)",
+      "total_estimated_visitors": 14,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "6.2",
+      "encounter_desc": "热门(每天 8.7人)",
+      "total_estimated_visitors": 1620,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "2.3",
+      "encounter_desc": "偏远稀少(2天才一个人路过)",
+      "total_estimated_visitors": 29,
+      "arc_name": "short_attack",
+      "arc_description": "本质好 mark, 中段被短暂集中差评攻击",
+      "expected": "alive",
+      "quality_at_start": "0.80",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.80",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.8
+        },
+        {
+          "progress": 1,
+          "quality": 0.8
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "9.4",
+      "encounter_desc": "偏远稀少(2天才一个人路过)",
+      "total_estimated_visitors": 117,
+      "arc_name": "short_attack",
+      "arc_description": "本质好 mark, 中段被短暂集中差评攻击",
+      "expected": "alive",
+      "quality_at_start": "0.80",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.80",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.8
+        },
+        {
+          "progress": 1,
+          "quality": 0.8
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "3.1",
+      "encounter_desc": "偏远稀少(2天才一个人路过)",
+      "total_estimated_visitors": 44,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "commercial_spam",
+      "duration_months": "0.3",
+      "encounter_desc": "偏远稀少(2天才一个人路过)",
+      "total_estimated_visitors": 4,
+      "arc_name": "short_burst",
+      "arc_description": "节日活动短期, 活动结束后 mark 失效",
+      "expected": "sunk",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.05",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.05
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "6.5",
+      "encounter_desc": "热门(每天 5.3人)",
+      "total_estimated_visitors": 1038,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": true,
+      "author_role": "official",
+      "duration_months": "10.8",
+      "encounter_desc": "中等流量(每天 1.1人)",
+      "total_estimated_visitors": 361,
+      "arc_name": "doc_official",
+      "arc_description": "DOC 官方预热数据, 缓慢但稳定被认可",
+      "expected": "alive",
+      "quality_at_start": "0.75",
+      "quality_at_mid": "0.75",
+      "quality_at_end": "0.75",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.75
+        },
+        {
+          "progress": 1,
+          "quality": 0.75
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.5",
+      "encounter_desc": "偏远稀少(4天才一个人路过)",
+      "total_estimated_visitors": 84,
+      "arc_name": "seasonal",
+      "arc_description": "季节性 mark, 旺季好淡季差",
+      "expected": "alive",
+      "quality_at_start": "0.90",
+      "quality_at_mid": "0.90",
+      "quality_at_end": "0.90",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.9
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.9
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.9
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "4.5",
+      "encounter_desc": "偏远稀少(30天才一个人路过)",
+      "total_estimated_visitors": 5,
+      "arc_name": "remote_silent",
+      "arc_description": "极偏远地区, 几个月才一个人路过",
+      "expected": "alive",
+      "quality_at_start": "0.70",
+      "quality_at_mid": "0.70",
+      "quality_at_end": "0.70",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.7
+        },
+        {
+          "progress": 1,
+          "quality": 0.7
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "9.5",
+      "encounter_desc": "偏远稀少(9天才一个人路过)",
+      "total_estimated_visitors": 33,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "2.9",
+      "encounter_desc": "中等流量(每天 3.8人)",
+      "total_estimated_visitors": 327,
+      "arc_name": "stable_bad",
+      "arc_description": "稳定低质量内容, 持续被举报",
+      "expected": "sunk",
+      "quality_at_start": "0.10",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.10",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.1
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "6.0",
+      "encounter_desc": "热门(每天 9.4人)",
+      "total_estimated_visitors": 1679,
+      "arc_name": "recovery",
+      "arc_description": "早期被误判, 慢慢回暖",
+      "expected": "alive",
+      "quality_at_start": "0.20",
+      "quality_at_mid": "0.32",
+      "quality_at_end": "0.92",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.32
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.62
+        },
+        {
+          "progress": 1,
+          "quality": 0.92
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "1.7",
+      "encounter_desc": "热门(每天 5.2人)",
+      "total_estimated_visitors": 260,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "10.1",
+      "encounter_desc": "中等流量(每天 0.6人)",
+      "total_estimated_visitors": 185,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "3.4",
+      "encounter_desc": "偏远稀少(3天才一个人路过)",
+      "total_estimated_visitors": 39,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "6.4",
+      "encounter_desc": "中等流量(每天 4.6人)",
+      "total_estimated_visitors": 885,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "8.8",
+      "encounter_desc": "偏远稀少(5天才一个人路过)",
+      "total_estimated_visitors": 54,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.8",
+      "encounter_desc": "偏远稀少(8天才一个人路过)",
+      "total_estimated_visitors": 43,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "1.5",
+      "encounter_desc": "热门(每天 5.9人)",
+      "total_estimated_visitors": 264,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "1.1",
+      "encounter_desc": "中等流量(每天 0.7人)",
+      "total_estimated_visitors": 21,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.6",
+      "encounter_desc": "中等流量(每天 2.1人)",
+      "total_estimated_visitors": 737,
+      "arc_name": "seasonal",
+      "arc_description": "季节性 mark, 旺季好淡季差",
+      "expected": "alive",
+      "quality_at_start": "0.90",
+      "quality_at_mid": "0.90",
+      "quality_at_end": "0.90",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.9
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.9
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.9
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "6.8",
+      "encounter_desc": "中等流量(每天 0.9人)",
+      "total_estimated_visitors": 181,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "3.4",
+      "encounter_desc": "偏远稀少(5天才一个人路过)",
+      "total_estimated_visitors": 21,
+      "arc_name": "remote_silent",
+      "arc_description": "极偏远地区, 几个月才一个人路过",
+      "expected": "alive",
+      "quality_at_start": "0.70",
+      "quality_at_mid": "0.70",
+      "quality_at_end": "0.70",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.7
+        },
+        {
+          "progress": 1,
+          "quality": 0.7
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "9.5",
+      "encounter_desc": "偏远稀少(6天才一个人路过)",
+      "total_estimated_visitors": 51,
+      "arc_name": "short_attack",
+      "arc_description": "本质好 mark, 中段被短暂集中差评攻击",
+      "expected": "alive",
+      "quality_at_start": "0.80",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.80",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.8
+        },
+        {
+          "progress": 1,
+          "quality": 0.8
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "6.0",
+      "encounter_desc": "偏远稀少(5天才一个人路过)",
+      "total_estimated_visitors": 40,
+      "arc_name": "stable_bad",
+      "arc_description": "稳定低质量内容, 持续被举报",
+      "expected": "sunk",
+      "quality_at_start": "0.10",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.10",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.1
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "8.5",
+      "encounter_desc": "偏远稀少(6天才一个人路过)",
+      "total_estimated_visitors": 40,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "5.0",
+      "encounter_desc": "偏远稀少(4天才一个人路过)",
+      "total_estimated_visitors": 41,
+      "arc_name": "remote_silent",
+      "arc_description": "极偏远地区, 几个月才一个人路过",
+      "expected": "alive",
+      "quality_at_start": "0.70",
+      "quality_at_mid": "0.70",
+      "quality_at_end": "0.70",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.7
+        },
+        {
+          "progress": 1,
+          "quality": 0.7
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "9.1",
+      "encounter_desc": "偏远稀少(4天才一个人路过)",
+      "total_estimated_visitors": 74,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.1",
+      "encounter_desc": "热门(每天 14.2人)",
+      "total_estimated_visitors": 4745,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "7.5",
+      "encounter_desc": "中等流量(每天 3.4人)",
+      "total_estimated_visitors": 760,
+      "arc_name": "stable_bad",
+      "arc_description": "稳定低质量内容, 持续被举报",
+      "expected": "sunk",
+      "quality_at_start": "0.10",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.10",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.1
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "9.0",
+      "encounter_desc": "热门(每天 5.3人)",
+      "total_estimated_visitors": 1424,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": true,
+      "author_role": "official",
+      "duration_months": "1.9",
+      "encounter_desc": "中等流量(每天 1.4人)",
+      "total_estimated_visitors": 81,
+      "arc_name": "doc_official",
+      "arc_description": "DOC 官方预热数据, 缓慢但稳定被认可",
+      "expected": "alive",
+      "quality_at_start": "0.75",
+      "quality_at_mid": "0.75",
+      "quality_at_end": "0.75",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.75
+        },
+        {
+          "progress": 1,
+          "quality": 0.75
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "3.6",
+      "encounter_desc": "中等流量(每天 3.4人)",
+      "total_estimated_visitors": 362,
+      "arc_name": "short_attack",
+      "arc_description": "本质好 mark, 中段被短暂集中差评攻击",
+      "expected": "alive",
+      "quality_at_start": "0.80",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.80",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.8
+        },
+        {
+          "progress": 1,
+          "quality": 0.8
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "8.1",
+      "encounter_desc": "中等流量(每天 0.8人)",
+      "total_estimated_visitors": 184,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "10.2",
+      "encounter_desc": "中等流量(每天 1.4人)",
+      "total_estimated_visitors": 426,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "7.0",
+      "encounter_desc": "中等流量(每天 2.5人)",
+      "total_estimated_visitors": 536,
+      "arc_name": "stable_bad",
+      "arc_description": "稳定低质量内容, 持续被举报",
+      "expected": "sunk",
+      "quality_at_start": "0.10",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.10",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.1
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "1.5",
+      "encounter_desc": "热门(每天 7.1人)",
+      "total_estimated_visitors": 327,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "8.0",
+      "encounter_desc": "中等流量(每天 0.9人)",
+      "total_estimated_visitors": 217,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "4.6",
+      "encounter_desc": "中等流量(每天 4.0人)",
+      "total_estimated_visitors": 547,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "8.4",
+      "encounter_desc": "中等流量(每天 0.5人)",
+      "total_estimated_visitors": 135,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "1.3",
+      "encounter_desc": "中等流量(每天 0.5人)",
+      "total_estimated_visitors": 21,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "4.8",
+      "encounter_desc": "偏远稀少(4天才一个人路过)",
+      "total_estimated_visitors": 40,
+      "arc_name": "remote_silent",
+      "arc_description": "极偏远地区, 几个月才一个人路过",
+      "expected": "alive",
+      "quality_at_start": "0.70",
+      "quality_at_mid": "0.70",
+      "quality_at_end": "0.70",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.7
+        },
+        {
+          "progress": 1,
+          "quality": 0.7
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "0.3",
+      "encounter_desc": "热门(每天 5.0人)",
+      "total_estimated_visitors": 40,
+      "arc_name": "short_burst",
+      "arc_description": "节日活动短期, 活动结束后 mark 失效",
+      "expected": "sunk",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.05",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.05
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "5.6",
+      "encounter_desc": "热门(每天 11.8人)",
+      "total_estimated_visitors": 1977,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": true,
+      "author_role": "official",
+      "duration_months": "1.0",
+      "encounter_desc": "偏远稀少(4天才一个人路过)",
+      "total_estimated_visitors": 7,
+      "arc_name": "doc_official",
+      "arc_description": "DOC 官方预热数据, 缓慢但稳定被认可",
+      "expected": "alive",
+      "quality_at_start": "0.75",
+      "quality_at_mid": "0.75",
+      "quality_at_end": "0.75",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.75
+        },
+        {
+          "progress": 1,
+          "quality": 0.75
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "7.8",
+      "encounter_desc": "偏远稀少(5天才一个人路过)",
+      "total_estimated_visitors": 51,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.2",
+      "encounter_desc": "偏远稀少(20天才一个人路过)",
+      "total_estimated_visitors": 17,
+      "arc_name": "remote_silent",
+      "arc_description": "极偏远地区, 几个月才一个人路过",
+      "expected": "alive",
+      "quality_at_start": "0.70",
+      "quality_at_mid": "0.70",
+      "quality_at_end": "0.70",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.7
+        },
+        {
+          "progress": 1,
+          "quality": 0.7
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.9",
+      "encounter_desc": "偏远稀少(9天才一个人路过)",
+      "total_estimated_visitors": 42,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "3.4",
+      "encounter_desc": "中等流量(每天 3.6人)",
+      "total_estimated_visitors": 367,
+      "arc_name": "stable_bad",
+      "arc_description": "稳定低质量内容, 持续被举报",
+      "expected": "sunk",
+      "quality_at_start": "0.10",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.10",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.1
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "9.4",
+      "encounter_desc": "中等流量(每天 3.0人)",
+      "total_estimated_visitors": 847,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "6.7",
+      "encounter_desc": "中等流量(每天 4.6人)",
+      "total_estimated_visitors": 924,
+      "arc_name": "stable_bad",
+      "arc_description": "稳定低质量内容, 持续被举报",
+      "expected": "sunk",
+      "quality_at_start": "0.10",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.10",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.1
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "8.4",
+      "encounter_desc": "中等流量(每天 1.6人)",
+      "total_estimated_visitors": 399,
+      "arc_name": "seasonal",
+      "arc_description": "季节性 mark, 旺季好淡季差",
+      "expected": "alive",
+      "quality_at_start": "0.90",
+      "quality_at_mid": "0.90",
+      "quality_at_end": "0.90",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.9
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.9
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.9
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": true,
+      "author_role": "official",
+      "duration_months": "2.3",
+      "encounter_desc": "中等流量(每天 2.4人)",
+      "total_estimated_visitors": 161,
+      "arc_name": "doc_official",
+      "arc_description": "DOC 官方预热数据, 缓慢但稳定被认可",
+      "expected": "alive",
+      "quality_at_start": "0.75",
+      "quality_at_mid": "0.75",
+      "quality_at_end": "0.75",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.75
+        },
+        {
+          "progress": 1,
+          "quality": 0.75
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": true,
+      "author_role": "user",
+      "duration_months": "4.2",
+      "encounter_desc": "中等流量(每天 1.3人)",
+      "total_estimated_visitors": 159,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "3.3",
+      "encounter_desc": "偏远稀少(6天才一个人路过)",
+      "total_estimated_visitors": 15,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "1.4",
+      "encounter_desc": "中等流量(每天 2.9人)",
+      "total_estimated_visitors": 121,
+      "arc_name": "short_burst",
+      "arc_description": "节日活动短期, 活动结束后 mark 失效",
+      "expected": "sunk",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.05",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.05
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "7.9",
+      "encounter_desc": "中等流量(每天 1.4人)",
+      "total_estimated_visitors": 323,
+      "arc_name": "seasonal",
+      "arc_description": "季节性 mark, 旺季好淡季差",
+      "expected": "alive",
+      "quality_at_start": "0.90",
+      "quality_at_mid": "0.90",
+      "quality_at_end": "0.90",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.9
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.9
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.9
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.0",
+      "encounter_desc": "中等流量(每天 1.5人)",
+      "total_estimated_visitors": 489,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "3.2",
+      "encounter_desc": "热门(每天 8.1人)",
+      "total_estimated_visitors": 780,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": true,
+      "author_role": "official",
+      "duration_months": "9.4",
+      "encounter_desc": "中等流量(每天 1.1人)",
+      "total_estimated_visitors": 321,
+      "arc_name": "doc_official",
+      "arc_description": "DOC 官方预热数据, 缓慢但稳定被认可",
+      "expected": "alive",
+      "quality_at_start": "0.75",
+      "quality_at_mid": "0.75",
+      "quality_at_end": "0.75",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.75
+        },
+        {
+          "progress": 1,
+          "quality": 0.75
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "11.8",
+      "encounter_desc": "偏远稀少(2天才一个人路过)",
+      "total_estimated_visitors": 167,
+      "arc_name": "stable_good",
+      "arc_description": "稳定的高质量 mark, 持续被路过用户认可",
+      "expected": "alive",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.85",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.85
+        },
+        {
+          "progress": 1,
+          "quality": 0.85
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "7.5",
+      "encounter_desc": "偏远稀少(5天才一个人路过)",
+      "total_estimated_visitors": 47,
+      "arc_name": "recovery",
+      "arc_description": "早期被误判, 慢慢回暖",
+      "expected": "alive",
+      "quality_at_start": "0.20",
+      "quality_at_mid": "0.32",
+      "quality_at_end": "0.92",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.32
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.62
+        },
+        {
+          "progress": 1,
+          "quality": 0.92
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "9.4",
+      "encounter_desc": "偏远稀少(7天才一个人路过)",
+      "total_estimated_visitors": 41,
+      "arc_name": "stable_bad",
+      "arc_description": "稳定低质量内容, 持续被举报",
+      "expected": "sunk",
+      "quality_at_start": "0.10",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.10",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.1
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "0.8",
+      "encounter_desc": "中等流量(每天 2.2人)",
+      "total_estimated_visitors": 55,
+      "arc_name": "short_burst",
+      "arc_description": "节日活动短期, 活动结束后 mark 失效",
+      "expected": "sunk",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.05",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.05
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "风景",
+      "type": "scenic",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "5.0",
+      "encounter_desc": "偏远稀少(23天才一个人路过)",
+      "total_estimated_visitors": 6,
+      "arc_name": "remote_silent",
+      "arc_description": "极偏远地区, 几个月才一个人路过",
+      "expected": "alive",
+      "quality_at_start": "0.70",
+      "quality_at_mid": "0.70",
+      "quality_at_end": "0.70",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.7
+        },
+        {
+          "progress": 1,
+          "quality": 0.7
+        }
+      ]
+    },
+    {
+      "type_cn": "石堆传统",
+      "type": "cairn",
+      "is_doc": true,
+      "author_role": "official",
+      "duration_months": "3.4",
+      "encounter_desc": "偏远稀少(3天才一个人路过)",
+      "total_estimated_visitors": 31,
+      "arc_name": "doc_official",
+      "arc_description": "DOC 官方预热数据, 缓慢但稳定被认可",
+      "expected": "alive",
+      "quality_at_start": "0.75",
+      "quality_at_mid": "0.75",
+      "quality_at_end": "0.75",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.75
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.75
+        },
+        {
+          "progress": 1,
+          "quality": 0.75
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "7.2",
+      "encounter_desc": "中等流量(每天 1.0人)",
+      "total_estimated_visitors": 216,
+      "arc_name": "recovery",
+      "arc_description": "早期被误判, 慢慢回暖",
+      "expected": "alive",
+      "quality_at_start": "0.20",
+      "quality_at_mid": "0.32",
+      "quality_at_end": "0.92",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.2
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.32
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.62
+        },
+        {
+          "progress": 1,
+          "quality": 0.92
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "5.0",
+      "encounter_desc": "偏远稀少(4天才一个人路过)",
+      "total_estimated_visitors": 42,
+      "arc_name": "remote_silent",
+      "arc_description": "极偏远地区, 几个月才一个人路过",
+      "expected": "alive",
+      "quality_at_start": "0.70",
+      "quality_at_mid": "0.70",
+      "quality_at_end": "0.70",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.7
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.7
+        },
+        {
+          "progress": 1,
+          "quality": 0.7
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "4.7",
+      "encounter_desc": "热门(每天 5.9人)",
+      "total_estimated_visitors": 843,
+      "arc_name": "controversial_persistent",
+      "arc_description": "内容有争议, 但持续被使用",
+      "expected": "alive",
+      "quality_at_start": "0.50",
+      "quality_at_mid": "0.50",
+      "quality_at_end": "0.50",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.6
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.5
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.4
+        },
+        {
+          "progress": 1,
+          "quality": 0.5
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": true,
+      "author_role": "user",
+      "duration_months": "1.9",
+      "encounter_desc": "偏远稀少(5天才一个人路过)",
+      "total_estimated_visitors": 11,
+      "arc_name": "short_attack",
+      "arc_description": "本质好 mark, 中段被短暂集中差评攻击",
+      "expected": "alive",
+      "quality_at_start": "0.80",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.80",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.8
+        },
+        {
+          "progress": 1,
+          "quality": 0.8
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "10.2",
+      "encounter_desc": "中等流量(每天 1.1人)",
+      "total_estimated_visitors": 331,
+      "arc_name": "stable_bad",
+      "arc_description": "稳定低质量内容, 持续被举报",
+      "expected": "sunk",
+      "quality_at_start": "0.10",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.10",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.1
+        }
+      ]
+    },
+    {
+      "type_cn": "岔路提示",
+      "type": "junction",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "9.7",
+      "encounter_desc": "中等流量(每天 2.6人)",
+      "total_estimated_visitors": 757,
+      "arc_name": "collapse",
+      "arc_description": "曾经辉煌但后期崩塌, 近期口碑反转",
+      "expected": "sunk_or_borderline",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.85",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.55
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "6.6",
+      "encounter_desc": "中等流量(每天 0.9人)",
+      "total_estimated_visitors": 170,
+      "arc_name": "short_attack",
+      "arc_description": "本质好 mark, 中段被短暂集中差评攻击",
+      "expected": "alive",
+      "quality_at_start": "0.80",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.80",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.8
+        },
+        {
+          "progress": 1,
+          "quality": 0.8
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "4.6",
+      "encounter_desc": "偏远稀少(4天才一个人路过)",
+      "total_estimated_visitors": 33,
+      "arc_name": "short_attack",
+      "arc_description": "本质好 mark, 中段被短暂集中差评攻击",
+      "expected": "alive",
+      "quality_at_start": "0.80",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.80",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.8
+        },
+        {
+          "progress": 1,
+          "quality": 0.8
+        }
+      ]
+    },
+    {
+      "type_cn": "危险警告",
+      "type": "danger",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "8.9",
+      "encounter_desc": "中等流量(每天 1.5人)",
+      "total_estimated_visitors": 402,
+      "arc_name": "stable_bad",
+      "arc_description": "稳定低质量内容, 持续被举报",
+      "expected": "sunk",
+      "quality_at_start": "0.10",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.10",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.1
+        },
+        {
+          "progress": 1,
+          "quality": 0.1
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "1.9",
+      "encounter_desc": "中等流量(每天 4.0人)",
+      "total_estimated_visitors": 228,
+      "arc_name": "short_burst",
+      "arc_description": "节日活动短期, 活动结束后 mark 失效",
+      "expected": "sunk",
+      "quality_at_start": "0.85",
+      "quality_at_mid": "0.05",
+      "quality_at_end": "0.05",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.85
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.05
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.05
+        },
+        {
+          "progress": 1,
+          "quality": 0.05
+        }
+      ]
+    },
+    {
+      "type_cn": "补给点",
+      "type": "supply",
+      "is_doc": false,
+      "author_role": "user",
+      "duration_months": "7.5",
+      "encounter_desc": "偏远稀少(2天才一个人路过)",
+      "total_estimated_visitors": 108,
+      "arc_name": "short_attack",
+      "arc_description": "本质好 mark, 中段被短暂集中差评攻击",
+      "expected": "alive",
+      "quality_at_start": "0.80",
+      "quality_at_mid": "0.10",
+      "quality_at_end": "0.80",
+      "quality_arc": [
+        {
+          "progress": 0,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.25,
+          "quality": 0.8
+        },
+        {
+          "progress": 0.5,
+          "quality": 0.1
+        },
+        {
+          "progress": 0.75,
+          "quality": 0.8
+        },
+        {
+          "progress": 1,
+          "quality": 0.8
+        }
+      ]
+    }
+  ]
+}

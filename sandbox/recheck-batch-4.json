@@ -1,0 +1,926 @@
+{
+  "batch": 4,
+  "total": 131,
+  "agree": 131,
+  "doubt": 0,
+  "disagree": 0,
+  "details": [
+    {
+      "id": 578,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 579,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 580,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 581,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 582,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 583,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 584,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 585,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 586,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 587,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 588,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 589,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 590,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 592,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 593,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 不质疑"
+    },
+    {
+      "id": 594,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 595,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 596,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 597,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 598,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 599,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 600,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 601,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "7L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 602,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 603,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "22L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 604,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "5L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 605,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "4L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 606,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "25L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 607,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "80L:4R (20.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 608,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 609,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 610,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "7L:3R 持续争议无急转 → 按 Case R 维持 healthy"
+    },
+    {
+      "id": 611,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:1R (8.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 612,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "18L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 613,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 614,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "35L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 615,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 616,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "40L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 617,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "45L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 618,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "50L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 619,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "25L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 621,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "18L:5R 持续争议无急转 → 按 Case R 维持 healthy"
+    },
+    {
+      "id": 622,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "50L:6R (8.3:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 623,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "30L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 624,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "28L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 625,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "14L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 626,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "18L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 627,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "30L:3R (10.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 628,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "10L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 629,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "18L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 630,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "14L:4R 持续争议无急转 → 按 Case R 维持 healthy"
+    },
+    {
+      "id": 651,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "460L:25R (18.4:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 653,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "480L:20R (24.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 654,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "290L:12R (24.2:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 655,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "260L:10R (26.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 656,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "270L:8R (33.8:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 657,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "490L:15R (32.7:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 658,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "850L:12R (70.8:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 659,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "380L:10R (38.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 660,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "720L:15R (48.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 661,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "480L:4R (120.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 662,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "320L:9R (35.6:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 663,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "510L:10R (51.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 664,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "580L:18R (32.2:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 666,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "510L:10R (51.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 667,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "460L:4R (115.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 668,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 669,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "320L:6R (53.3:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 670,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "280L:8R (35.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 671,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "320L:12R (26.7:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 672,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "510L:3R (170.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 673,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "360L:7R (51.4:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 674,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "360L:8R (45.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 675,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "820L:14R (58.6:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 676,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "410L:7R (58.6:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 677,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "210L:6R (35.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 678,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "480L:12R (40.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 679,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "410L:9R (45.6:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 680,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "460L:5R (92.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 701,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "38L:2R (19.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 702,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "220L:4R (55.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 703,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 不质疑"
+    },
+    {
+      "id": 704,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1800L:5R (360.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 705,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1400L:8R (175.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 706,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "510L:3R (170.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 708,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1200L:4R (300.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 709,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "950L:6R (158.3:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 710,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "95L:1R (95.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 711,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "380L:2R (190.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 713,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "1900L:5R (380.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 714,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "130L:1R (130.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 715,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 不质疑"
+    },
+    {
+      "id": 717,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 不质疑"
+    },
+    {
+      "id": 718,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "240L:3R (80.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 719,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "290L:2R (145.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 720,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "340L:3R (113.3:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 721,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "580L:4R (145.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 722,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "110L:1R (110.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 723,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 不质疑"
+    },
+    {
+      "id": 724,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "480L:3R (160.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 725,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 726,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "175L:2R (87.5:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 727,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "340L:3R (113.3:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 728,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "480L:4R (120.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 729,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "195L:2R (97.5:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 751,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "14L:1R (14.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 752,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "9L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 753,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "28L:1R (28.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 754,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "24L:1R (24.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 755,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    },
+    {
+      "id": 757,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "20L:1R (20.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 758,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "60L:4R (15.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 759,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 760,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 761,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "9L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 762,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "11L:1R (11.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 763,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "7L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 764,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "24L:1R (24.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 766,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "21L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 767,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "14L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 768,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "9L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 769,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "10L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 770,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "6L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 771,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "6L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 772,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "14L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 773,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "22L:1R (22.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 774,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "78L:3R (26.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 775,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "24L:1R (24.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 776,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "26L:1R (26.0:1) 占比好且无急转 → healthy 合理"
+    },
+    {
+      "id": 777,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "12L:0R 无负向 → healthy 合理"
+    },
+    {
+      "id": 778,
+      "verdict": "AGREE",
+      "current_state": "context_dependent",
+      "suggested_state": "context_dependent",
+      "comment": "明确季节性 → context_dependent 合理"
+    }
+  ]
+}

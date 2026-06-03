@@ -1,0 +1,256 @@
+{
+  "total": 138,
+  "allFour": 48,
+  "threeAgree": 71,
+  "twoTwo": 5,
+  "allDiff": 14,
+  "disputed": [
+    {
+      "id": 59,
+      "states": [
+        "suspicious",
+        "healthy",
+        "any_alive_or_susp",
+        "healthy"
+      ],
+      "p1": "suspicious",
+      "A": "healthy",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    {
+      "id": 76,
+      "states": [
+        "dead_natural",
+        "heartbeat",
+        "any_alive_or_susp",
+        "healthy"
+      ],
+      "p1": "dead_natural",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    {
+      "id": 81,
+      "states": [
+        "dead_sick",
+        "dead_sick",
+        "suspicious",
+        "suspicious"
+      ],
+      "p1": "dead_sick",
+      "A": "dead_sick",
+      "B": "suspicious",
+      "C": "suspicious"
+    },
+    {
+      "id": 375,
+      "states": [
+        "healthy",
+        "dead_sick",
+        "suspicious",
+        "suspicious"
+      ],
+      "p1": "healthy",
+      "A": "dead_sick",
+      "B": "suspicious",
+      "C": "suspicious"
+    },
+    {
+      "id": 404,
+      "states": [
+        "healthy",
+        "heartbeat",
+        "any_alive_or_susp",
+        "healthy"
+      ],
+      "p1": "healthy",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    {
+      "id": 412,
+      "states": [
+        "any_alive_or_susp",
+        "heartbeat",
+        "any_alive_or_susp",
+        "healthy"
+      ],
+      "p1": "any_alive_or_susp",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    {
+      "id": 418,
+      "states": [
+        "healthy",
+        "heartbeat",
+        "any_alive_or_susp",
+        "healthy"
+      ],
+      "p1": "healthy",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    {
+      "id": 419,
+      "states": [
+        "healthy",
+        "suspicious",
+        "any_alive_or_susp",
+        "healthy"
+      ],
+      "p1": "healthy",
+      "A": "suspicious",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    {
+      "id": 426,
+      "states": [
+        "suspicious",
+        "healthy",
+        "any_alive_or_susp",
+        "healthy"
+      ],
+      "p1": "suspicious",
+      "A": "healthy",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    {
+      "id": 515,
+      "states": [
+        "healthy",
+        "heartbeat",
+        "any_alive_or_susp",
+        "any_alive_or_susp"
+      ],
+      "p1": "healthy",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "any_alive_or_susp"
+    },
+    {
+      "id": 531,
+      "states": [
+        "healthy",
+        "heartbeat",
+        "any_alive_or_susp",
+        "heartbeat"
+      ],
+      "p1": "healthy",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "heartbeat"
+    },
+    {
+      "id": 536,
+      "states": [
+        "dead_sick",
+        "heartbeat",
+        "any_alive_or_susp",
+        "suspicious"
+      ],
+      "p1": "dead_sick",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "suspicious"
+    },
+    {
+      "id": 593,
+      "states": [
+        "context_dependent",
+        "healthy",
+        "context_dependent",
+        "healthy"
+      ],
+      "p1": "context_dependent",
+      "A": "healthy",
+      "B": "context_dependent",
+      "C": "healthy"
+    },
+    {
+      "id": 703,
+      "states": [
+        "healthy",
+        "healthy",
+        "context_dependent",
+        "context_dependent"
+      ],
+      "p1": "healthy",
+      "A": "healthy",
+      "B": "context_dependent",
+      "C": "context_dependent"
+    },
+    {
+      "id": 715,
+      "states": [
+        "context_dependent",
+        "healthy",
+        "healthy",
+        "context_dependent"
+      ],
+      "p1": "context_dependent",
+      "A": "healthy",
+      "B": "healthy",
+      "C": "context_dependent"
+    },
+    {
+      "id": 717,
+      "states": [
+        "context_dependent",
+        "healthy",
+        "healthy",
+        "context_dependent"
+      ],
+      "p1": "context_dependent",
+      "A": "healthy",
+      "B": "healthy",
+      "C": "context_dependent"
+    },
+    {
+      "id": 723,
+      "states": [
+        "revivable",
+        "healthy",
+        "dead_natural",
+        "dead_natural"
+      ],
+      "p1": "revivable",
+      "A": "healthy",
+      "B": "dead_natural",
+      "C": "dead_natural"
+    },
+    {
+      "id": 958,
+      "states": [
+        "any_alive_or_susp",
+        "heartbeat",
+        "suspicious",
+        "suspicious"
+      ],
+      "p1": "any_alive_or_susp",
+      "A": "heartbeat",
+      "B": "suspicious",
+      "C": "suspicious"
+    },
+    {
+      "id": 968,
+      "states": [
+        "any_alive_or_susp",
+        "healthy",
+        "suspicious",
+        "healthy"
+      ],
+      "p1": "any_alive_or_susp",
+      "A": "healthy",
+      "B": "suspicious",
+      "C": "healthy"
+    }
+  ]
+}

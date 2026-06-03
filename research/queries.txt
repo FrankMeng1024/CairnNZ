@@ -1,0 +1,72 @@
+# Cairn Market Research Queries
+# 维度1：新西兰户外情况
+New Zealand Department of Conservation visitor statistics 2023 2024 annual report
+New Zealand Great Walks bookings numbers 2024 2025 how many visitors
+Sport New Zealand Active NZ survey outdoor recreation participation rate 2024
+New Zealand tramping hiking trail running growth trend 2023 2024 2025
+New Zealand outdoor recreation economic impact billion dollars
+New Zealand population percentage participating outdoor hiking tramping annually
+
+# 维度2：当前使用的App
+Most popular hiking trail running apps in New Zealand 2024 2025 download numbers
+Strava New Zealand active users statistics market share
+AllTrails New Zealand trails coverage number of trails listed user reviews
+DOC Department of Conservation official app NZ features downloads
+NZ Topo Map app usage offline maps New Zealand backcountry
+best GPS navigation apps for tramping hiking New Zealand 2024 recommendations
+health fitness app revenue New Zealand market 2024 2025
+
+# 维度3：竞品信息
+AR augmented reality hiking outdoor trail apps 2024 2025 existing products
+AllTrails vs Strava vs Komoot vs Wikiloc feature comparison 2025
+Relive app 3D trail replay features pricing users
+Fatmap 3D outdoor maps acquired by Strava what happened
+PeakVisor AR mountain identification app features
+Cairn safety app hiking emergency contacts features
+social hiking apps community features trail sharing 2024 2025
+geocaching Pokemon Go outdoor AR apps user engagement statistics
+
+# 维度4：竞争力分析
+hiking app user complaints reviews pain points AllTrails Strava 2024 2025
+AR technology outdoor recreation maturity ARKit ARCore GPS accuracy
+offline maps hiking demand user expectations 2024
+social features in outdoor apps user demand research survey
+user engagement gamification outdoor sports apps retention
+trail markers flags digital waypoints user interest demand
+
+# 维度5：社区/论坛
+New Zealand tramping hiking forums online communities list
+Reddit r/newzealand hiking tramping subreddit active members
+New Zealand trail running clubs communities online forums 2024
+Facebook groups New Zealand hiking tramping outdoor active members
+Meetup.com New Zealand hiking walking outdoor groups
+NZ Tramper community forum website active discussions
+Wilderness magazine New Zealand outdoor community
+
+# 维度6：中国开发者发布NZ
+Chinese developer publish app Apple App Store New Zealand requirements process
+individual developer China Apple Developer Program registration overseas market
+Google Play Console publish app New Zealand region Chinese developer
+payment receiving methods Chinese developer app store revenue overseas Stripe Wise
+New Zealand Privacy Act 2020 requirements mobile app location data compliance
+GST tax obligations foreign developer selling apps New Zealand
+Chinese indie app developer success stories publishing overseas Australia NZ
+
+# 维度7：投入预估
+individual developer AR mobile app development cost timeline 2025 realistic
+React Native vs Flutter AR app development solo developer cost
+Mapbox pricing free tier offline maps usage cost 2025
+OpenWeatherMap API pricing free tier limits
+MetService New Zealand weather API access cost developer
+AWS cloud hosting cost small mobile app backend monthly 2025
+indie developer first year app operating cost breakdown 2025
+
+# 维度8：开发前建议
+how to validate mobile app idea before development MVP approach 2025
+lean startup methodology outdoor sports app market validation
+landing page app idea validation tools conversion rate benchmark
+user research methods New Zealand market online survey tools
+legal requirements location tracking app privacy GPS data
+AR app technical challenges outdoor GPS accuracy battery consumption
+indie developer app launch strategy outdoor sports niche 2025
+pre-development app idea validation checklist indie developer

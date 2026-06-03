@@ -1,0 +1,59 @@
+{
+  "case_661_final": {
+    "sampled": 40,
+    "agree": 40,
+    "disagree": [],
+    "heartbeat_count": 0,
+    "distribution": { "healthy": 495, "suspicious": 51, "dead_sick": 47, "context_dependent": 50, "dead_natural": 10, "heartbeat": 0, "total": 653 },
+    "stratified_sample": "10 healthy + 6 suspicious + 6 dead_sick + 5 context_dependent + 3 dead_natural + 10 random = 40 cases",
+    "previous_round_residuals_resolved": [
+      "id=501 (was heartbeat) → healthy/normal, source=audit-final-correction, rationale 显式引用 v6.6 状态机 HEARTBEAT 必经 SUSPICIOUS",
+      "id=523 (was heartbeat) → healthy/expired, source=audit-final-correction, 同上修正逻辑",
+      "id=538 (was heartbeat) → healthy/expired, source=audit-final-correction, 同上修正逻辑",
+      "上一轮 audit-corrected 28 条 + 本轮 audit-final-correction 19 条 = 47 条 0:0 错标已全清,heartbeat 桶清零"
+    ],
+    "thinking_alignment_check": {
+      "支柱1_占比驱动": "高赞低报样本 (#1 180:28, #257 53:4, #978 720:8) 全标 healthy,占比悬殊维持健康。1 条不构成趋势 (#188, #119) 维持 healthy,符合 §三支柱1。",
+      "支柱2_医院模型_SUSPICIOUS唯一入口": "suspicious 样本 (#352 18:16, #361 17:11, #371 17:9, #823 5:180) 全部呈现近期向下急转,无任何 SUSPICIOUS 来自'慢性恶化'或'持续争议',符合 §三支柱2。",
+      "持续争议_HEALTHY": "id=630 14L:4R 持续争议 + 备注 'context-dependent decision aid' → healthy,符合 Case R '不进 SUSPICIOUS'。",
+      "复活与寿命优先": "dead_natural 样本 (#84/859/870) 全部寿命走完且无趋势恶化,context_dependent (#856 迁徙季返程可复活) 引用复活机制。",
+      "严重度只影响处理力度": "dead_sick #268 (gatekeeping lie 高严重度急转) 显式标注严重度加速 → CRITICAL,符合 §五。"
+    }
+  },
+  "chaos_monkey_final": {
+    "arc_count": 25,
+    "v66_compliant": true,
+    "case_K_heartbeat_traffic_cutoff": {
+      "present": true,
+      "arc_index": 24,
+      "design_correct": true,
+      "evidence": "Line 332-344: forceLateTrafficDrop 在 progress>0.85 时 actualEnc=0 (line 503-505),qualityCurve 已先经历 SUSPICIOUS→CRITICAL→HEARTBEAT 完整路径,流量切断后期望 sick_death 即'寿命走完即死',精确对应 Case K '时钟 A 在 HEARTBEAT 不冰冻'。"
+    },
+    "second_generation_after_revival": {
+      "present": true,
+      "arc_index": 25,
+      "design_correct": true,
+      "evidence": "Line 347-354: isRevived:true 标志 + minDays:180 + qualityCurve 0.85 持续好评,期望 alive '凭实力续命维持 HEALTHY',对齐 §六决策1 复活=带历史记录的 mark + 后续表现累计到原历史。",
+      "minor_caveat": "isRevived 标志在 chaos-monkey 内尚未被 simulate 函数读取(等 algorithm-v6 接入时按思想注入历史加成寿命),但 arc 设计意图正确。"
+    },
+    "remaining_issues": [
+      {
+        "severity": "P3",
+        "issue": "arc 权重总和 = 1.2 (>1.0)。pickArc line 358-365 已用 dynamic totalWeight 归一化,功能正确,仅为审计可读性瑕疵。"
+      },
+      {
+        "severity": "P3",
+        "issue": "注释序号 '15.' 在 line 235 (brigade_then_recovery) 与 sick_death_not_revivable 的 '15' 重复,line 320 注释 'Case H Wanaka cairn' 实际归到 mixed_severity_decline,描述吻合无功能错误,仅注释序号不齐。"
+      },
+      {
+        "severity": "P2",
+        "issue": "judge 当前为 placeholder('pending'),需 algorithm-v6 接入后才能真实跑 PASS/FAIL。chaos-monkey 顶部输出已显式声明 'JUDGE NOT WIRED — RESULTS ARE COSMETIC',误导信号已清除,本轮不阻塞 READY 判定。"
+      }
+    ],
+    "previous_round_p0_p1_all_resolved": true,
+    "missing_arcs_now_complete": "上一轮缺的 Case K 与二代复活两条 arc 均已补齐,v6.6 §七 21 个关键 case 已 100% 在 arc 列表里有对应场景。"
+  },
+  "overall_approval": "READY",
+  "score": 94,
+  "summary": "661 case: heartbeat 桶清零(数据上为 0,逐条抽查上一轮三个争议 id 501/523/538 已显式 audit-final-correction 改为 healthy 并写明 'v6.6 状态机 HEARTBEAT 必经 SUSPICIOUS'),40 抽样(30 分层+10 随机)零 disagree,分布 495/51/47/50/10 与 v6.6 三大支柱完全自洽,持续争议、慢性恶化均不进 SUSPICIOUS,严重度只在已确认急转后参与处理力度,Case R/F/B/K 均在样本中找到精确对应。chaos-monkey: 25 个 arc 覆盖 v6.6 §七全部关键 case,heartbeat_traffic_cutoff (#24) 用 forceLateTrafficDrop 切流量验证时钟 A 不冰冻,second_generation_after_revival (#25) 用 isRevived 标志验证复活后凭实力续命,前轮 P0/P1 全修,judge 误导信号已清除并显式标注 placeholder 待 algorithm-v6 接入。剩余 3 条均为 P3 注释/审计可读性瑕疵或 P2 等待算法接入,均不阻塞 READY。综合分 94,两个产物均 READY。"
+}

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Sandbox Demo C — Data-Viz</title>
+<style>
+  body { margin: 0; padding: 0; background: #fafbfc; font-family: 'Inter', -apple-system, sans-serif; height: 100vh; overflow: hidden; display: flex; color: #1a202c; }
+
+  #panel { width: 300px; background: #fff; border-right: 1px solid #e2e8f0; padding: 20px; box-sizing: border-box; font-size: 12px; overflow-y: auto; }
+  #panel h1 { font-size: 16px; margin: 0 0 4px; color: #1a202c; font-weight: 700; letter-spacing: -0.5px; }
+  #panel .sub { color: #718096; font-size: 11px; margin-bottom: 20px; }
+  .section { margin-bottom: 18px; }
+  .section h3 { font-size: 10px; color: #4a5568; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 700; border-bottom: 1px solid #edf2f7; padding-bottom: 4px; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 11px; }
+  .row label { color: #4a5568; }
+  .row .val { color: #2d3748; font-weight: 600; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 11px; }
+  input[type="range"] { width: 100%; accent-color: #3182ce; margin: 4px 0; }
+
+  /* Persona bar — 显示真实分布 */
+  .persona-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin: 4px 0 8px; background: #edf2f7; }
+  .persona-bar div { height: 100%; }
+
+  button { width: 100%; padding: 8px; background: #fff; border: 1px solid #cbd5e0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #2d3748; margin-bottom: 5px; font-weight: 500; transition: all 0.15s; }
+  button:hover { border-color: #3182ce; color: #3182ce; }
+  button.primary { background: #3182ce; color: #fff; border-color: #3182ce; }
+  button.primary:hover { background: #2c5282; }
+
+  #stage { flex: 1; position: relative; overflow: hidden; }
+  canvas { display: block; }
+
+  /* Top stats — 卡片网格 */
+  #topbar { position: absolute; top: 16px; left: 16px; right: 16px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .stat-card { background: #fff; border: 1px solid #e2e8f0; padding: 10px 14px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .stat-card .label { font-size: 10px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .stat-card .value { font-size: 20px; color: #2d3748; font-weight: 700; font-family: 'JetBrains Mono', Consolas, monospace; }
+  .stat-card .delta { font-size: 10px; color: #38a169; margin-top: 2px; }
+  .stat-card .delta.down { color: #e53e3e; }
+
+  /* Marker info card — 数据卡片 */
+  .marker-card { position: absolute; background: #fff; border: 1px solid #e2e8f0; padding: 8px 12px; border-radius: 6px; font-size: 11px; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.08); min-width: 160px; }
+  .marker-card .title { font-weight: 700; color: #1a202c; margin-bottom: 4px; font-size: 12px; }
+  .marker-card .metrics { display: flex; gap: 12px; margin-bottom: 4px; }
+  .marker-card .metric { flex: 1; }
+  .marker-card .metric .num { font-size: 16px; font-weight: 700; color: #1a202c; font-family: 'JetBrains Mono', Consolas, monospace; }
+  .marker-card .metric .lbl { font-size: 9px; color: #718096; text-transform: uppercase; }
+  .marker-card .reasons { font-size: 10px; color: #4a5568; padding-top: 4px; border-top: 1px solid #edf2f7; }
+  .marker-card .reasons span { margin-right: 6px; }
+
+  /* Mini chart in card */
+  .health-bar { height: 4px; background: #edf2f7; border-radius: 2px; margin-top: 4px; overflow: hidden; }
+  .health-bar div { height: 100%; background: #38a169; }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <h1>Cairn Sandbox</h1>
+  <div class="sub">Demo C · Data Visualization</div>
+
+  <div class="section">
+    <h3>Population</h3>
+    <div class="row"><label>Walkers</label><span class="val">500</span></div>
+    <input type="range" min="10" max="500" value="500" />
+  </div>
+
+  <div class="section">
+    <h3>Time</h3>
+    <div class="row"><label>Speed</label><span class="val">100×</span></div>
+    <input type="range" min="1" max="10000" value="100" />
+    <div class="row"><label>Day</label><span class="val">42 / 365</span></div>
+  </div>
+
+  <div class="section">
+    <h3>Persona Mix</h3>
+    <div class="persona-bar">
+      <div style="width: 30%; background: #4CAF50;"></div>
+      <div style="width: 40%; background: #FF9800;"></div>
+      <div style="width: 5%; background: #2196F3;"></div>
+      <div style="width: 20%; background: #9E9E9E;"></div>
+      <div style="width: 4%; background: #9C27B0;"></div>
+      <div style="width: 0.5%; background: #F44336;"></div>
+      <div style="width: 0.5%; background: #E91E63;"></div>
+    </div>
+    <div class="row"><label>● Explorer</label><span class="val">30.0%</span></div>
+    <div class="row"><label>● Social</label><span class="val">40.0%</span></div>
+    <div class="row"><label>● Enthusiast</label><span class="val">5.0%</span></div>
+    <div class="row"><label>● Lurker</label><span class="val">20.0%</span></div>
+    <div class="row"><label>● Critic</label><span class="val">4.0%</span></div>
+    <div class="row"><label>● Spammer</label><span class="val">0.5%</span></div>
+    <div class="row"><label>● Malicious</label><span class="val">0.5%</span></div>
+  </div>
+
+  <div class="section">
+    <h3>Algorithm Params</h3>
+    <div class="row"><label>τ supply</label><span class="val">30d</span></div>
+    <div class="row"><label>τ report</label><span class="val">30d</span></div>
+    <div class="row"><label>heartbeat</label><span class="val">20%</span></div>
+  </div>
+
+  <div class="section">
+    <button class="primary">▶ Start Simulation</button>
+    <button>⏸ Pause</button>
+    <button>↻ Reset</button>
+    <button>📷 Screenshot</button>
+    <button>💾 Export State JSON</button>
+  </div>
+</div>
+
+<div id="stage">
+  <canvas id="canvas"></canvas>
+  <div id="topbar">
+    <div class="stat-card">
+      <div class="label">Markers</div>
+      <div class="value">87</div>
+      <div class="delta">+5 last 24h</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Healthy</div>
+      <div class="value">71</div>
+      <div class="delta">82%</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Sunk</div>
+      <div class="value">14</div>
+      <div class="delta down">+2 last 24h</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Heartbeat</div>
+      <div class="value">2</div>
+      <div class="delta">on revival</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Likes</div>
+      <div class="value">1,247</div>
+      <div class="delta">+89 last 24h</div>
+    </div>
+  </div>
+
+  <div class="marker-card" style="left: 320px; top: 200px;">
+    <div class="title">⚠ danger #34</div>
+    <div class="metrics">
+      <div class="metric"><div class="num">23</div><div class="lbl">❤ Likes</div></div>
+      <div class="metric"><div class="num">7</div><div class="lbl">🚩 Reports</div></div>
+    </div>
+    <div class="reasons"><span>info: 3</span><span>dislike: 2</span><span>spam: 1</span><span>other: 1</span></div>
+    <div class="health-bar"><div style="width: 65%;"></div></div>
+  </div>
+
+  <div class="marker-card" style="left: 580px; top: 320px;">
+    <div class="title">💧 supply #12</div>
+    <div class="metrics">
+      <div class="metric"><div class="num">45</div><div class="lbl">❤ Likes</div></div>
+      <div class="metric"><div class="num">0</div><div class="lbl">🚩 Reports</div></div>
+    </div>
+    <div class="health-bar"><div style="width: 95%;"></div></div>
+  </div>
+
+  <div class="marker-card" style="left: 780px; top: 460px;">
+    <div class="title">🪨 cairn #08</div>
+    <div class="metrics">
+      <div class="metric"><div class="num">12</div><div class="lbl">❤ Likes</div></div>
+      <div class="metric"><div class="num">2</div><div class="lbl">🚩 Reports</div></div>
+    </div>
+    <div class="reasons"><span>dislike: 2</span></div>
+    <div class="health-bar"><div style="width: 78%; background: #d69e2e;"></div></div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth - 300;
+canvas.height = window.innerHeight;
+
+// 浅色背景
+ctx.fillStyle = '#fafbfc';
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+// 网格
+ctx.strokeStyle = '#edf2f7';
+ctx.lineWidth = 1;
+for (let x = 0; x < canvas.width; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+for (let y = 0; y < canvas.height; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
+
+const personaColors = {
+  explorer: '#4CAF50',
+  social: '#FF9800',
+  enthusiast: '#2196F3',
+  lurker: '#9E9E9E',
+  critic: '#9C27B0',
+  spammer: '#F44336',
+  malicious: '#E91E63'
+};
+
+const types = ['explorer', 'social', 'enthusiast', 'lurker', 'critic', 'spammer'];
+const counts = [60, 80, 10, 40, 8, 2];
+let walkers = [];
+types.forEach((t, i) => {
+  for (let j = 0; j < counts[i]; j++) {
+    walkers.push({
+      x: Math.random() * canvas.width,
+      y: 80 + Math.random() * (canvas.height - 100),
+      type: t
+    });
+  }
+});
+
+walkers.forEach(w => {
+  ctx.fillStyle = personaColors[w.type];
+  ctx.beginPath();
+  ctx.arc(w.x, w.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+});
+
+const markerTypes = ['danger', 'supply', 'junction', 'scenic', 'cairn'];
+const markerColors = {
+  danger: '#D32F2F',
+  supply: '#388E3C',
+  junction: '#F57C00',
+  scenic: '#1976D2',
+  cairn: '#795548'
+};
+for (let i = 0; i < 30; i++) {
+  const t = markerTypes[i % 5];
+  const x = Math.random() * canvas.width;
+  const y = 100 + Math.random() * (canvas.height - 120);
+  ctx.strokeStyle = '#a0aec0';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - 15);
+  ctx.stroke();
+  ctx.fillStyle = markerColors[t];
+  ctx.beginPath();
+  ctx.moveTo(x, y - 15);
+  ctx.lineTo(x + 11, y - 12);
+  ctx.lineTo(x, y - 9);
+  ctx.fill();
+}
+</script>
+
+</body>
+</html>

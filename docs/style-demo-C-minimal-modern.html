@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cairn — Style C: Minimal Modern</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif; background: #ffffff; color: #1a1a1a; max-width: 390px; margin: 0 auto; min-height: 844px; overflow-x: hidden; }
+
+.status-bar { height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; font-size: 14px; font-weight: 600; color: #666; }
+
+/* Header minimal */
+.header { padding: 4px 20px 8px; display: flex; align-items: center; justify-content: space-between; }
+.header .logo { font-size: 20px; font-weight: 800; letter-spacing: -1px; }
+.header .logo span { color: #e85d2a; }
+.header .mode-chip { font-size: 11px; padding: 4px 10px; border-radius: 20px; background: #f5f5f5; color: #666; font-weight: 500; }
+
+/* Map - full bleed */
+.map-area { height: 440px; background: #f0f0f0; position: relative; overflow: hidden; }
+.map-bg { position: absolute; inset: 0; background: linear-gradient(180deg, #e8ebe5 0%, #f0ede8 100%); }
+.map-grid { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(0,0,0,0.03) 60px, rgba(0,0,0,0.03) 61px), repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(0,0,0,0.03) 60px, rgba(0,0,0,0.03) 61px); }
+
+.trail-line { position: absolute; top: 45%; left: 10%; width: 80%; height: 2.5px; background: #1a1a1a; opacity: 0.4; transform: rotate(-8deg); }
+.trail-line::after { content: ''; position: absolute; top: -50px; left: 55%; width: 45%; height: 2.5px; background: #1a1a1a; opacity: 0.4; transform: rotate(35deg); }
+
+/* Markers - minimal circles with accent */
+.marker { position: absolute; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.mk-danger { top: 28%; left: 42%; background: #fff; border: 2.5px solid #e85d2a; color: #e85d2a; box-shadow: 0 2px 8px rgba(232,93,42,0.2); }
+.mk-scenic { top: 52%; left: 70%; background: #fff; border: 2.5px solid #1a1a1a; color: #1a1a1a; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.mk-supply { top: 40%; left: 22%; background: #fff; border: 2.5px solid #1a8a4a; color: #1a8a4a; box-shadow: 0 2px 8px rgba(26,138,74,0.2); }
+
+.user-dot { position: absolute; top: 46%; left: 50%; width: 12px; height: 12px; background: #e85d2a; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 4px rgba(232,93,42,0.2); }
+
+/* Bottom sheet */
+.bottom-sheet { position: absolute; bottom: 0; left: 0; right: 0; background: #fff; border-radius: 20px 20px 0 0; padding: 16px 20px 20px; box-shadow: 0 -4px 20px rgba(0,0,0,0.06); }
+.sheet-handle { width: 36px; height: 4px; background: #e0e0e0; border-radius: 2px; margin: 0 auto 12px; }
+.sheet-title { font-size: 17px; font-weight: 700; }
+.sheet-stats { display: flex; gap: 24px; margin-top: 10px; }
+.sheet-stat .val { font-size: 22px; font-weight: 800; color: #1a1a1a; }
+.sheet-stat .lbl { font-size: 11px; color: #999; margin-top: 1px; }
+
+/* Alert - minimal */
+.alert-minimal { margin: 0 20px; padding: 10px 14px; border-left: 3px solid #e85d2a; background: #fef9f6; font-size: 12px; color: #333; }
+
+/* FAB */
+.fab { position: absolute; top: -28px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: #e85d2a; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; border: none; box-shadow: 0 4px 16px rgba(232,93,42,0.3); }
+
+/* Bottom nav */
+.bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 390px; height: 80px; background: #fff; display: flex; align-items: flex-start; justify-content: space-around; padding-top: 12px; border-top: 1px solid #f0f0f0; }
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9px; color: #bbb; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.nav-item.active { color: #e85d2a; }
+.nav-icon { font-size: 18px; }
+</style>
+</head>
+<body>
+<div class="status-bar">
+  <span>9:41</span>
+  <span style="font-size:10px;color:#e85d2a;">REC ●</span>
+  <span>87%</span>
+</div>
+
+<div class="header">
+  <div class="logo">cairn<span>.</span></div>
+  <div class="mode-chip">🥾 Hiking mode</div>
+</div>
+
+<div class="alert-minimal">⚠ High wind advisory — Tongariro above 1500m</div>
+
+<div class="map-area" style="margin-top:8px;">
+  <div class="map-bg"></div>
+  <div class="map-grid"></div>
+  <div class="trail-line"></div>
+  <div class="marker mk-danger">!</div>
+  <div class="marker mk-scenic">★</div>
+  <div class="marker mk-supply">+</div>
+  <div class="user-dot"></div>
+
+  <div class="bottom-sheet">
+    <div class="sheet-handle"></div>
+    <button class="fab">🚩</button>
+    <div class="sheet-title">Tongariro Alpine Crossing</div>
+    <div class="sheet-stats">
+      <div class="sheet-stat"><div class="val">4.2<small style="font-size:12px;color:#999;">km</small></div><div class="lbl">distance</div></div>
+      <div class="sheet-stat"><div class="val">1:23</div><div class="lbl">elapsed</div></div>
+      <div class="sheet-stat"><div class="val">780<small style="font-size:12px;color:#999;">m</small></div><div class="lbl">elevation</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-nav">
+  <div class="nav-item active"><span class="nav-icon">◉</span>MAP</div>
+  <div class="nav-item"><span class="nav-icon">⚑</span>MARKS</div>
+  <div class="nav-item"><span class="nav-icon">◎</span>FRIENDS</div>
+  <div class="nav-item"><span class="nav-icon">≡</span>MORE</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,4124 @@
+{
+  "total_audited": 661,
+  "summary": {
+    "BAD_CASE": 8,
+    "EXPECTED_TOO_STRICT": 93,
+    "MIDDLE_STATE_OK": 104,
+    "CORRECT": 456
+  },
+  "by_batch_summary": {
+    "batch-01": {
+      "theme": "偏远 Great Walks 无信号",
+      "bad": 0,
+      "too_strict": 0,
+      "middle_state": 3,
+      "correct": 45
+    },
+    "batch-02": {
+      "theme": "城市近郊高流量",
+      "bad": 0,
+      "too_strict": 4,
+      "middle_state": 2,
+      "correct": 42
+    },
+    "batch-03": {
+      "theme": "季节性危险",
+      "bad": 1,
+      "too_strict": 0,
+      "middle_state": 0,
+      "correct": 48
+    },
+    "batch-04": {
+      "theme": "救援权威",
+      "bad": 0,
+      "too_strict": 0,
+      "middle_state": 0,
+      "correct": 49
+    },
+    "batch-06": {
+      "theme": "商业mark",
+      "bad": 0,
+      "too_strict": 0,
+      "middle_state": 0,
+      "correct": 29
+    },
+    "batch-07": {
+      "theme": "网红打卡 + 社交媒体爆火",
+      "bad": 4,
+      "too_strict": 2,
+      "middle_state": 3,
+      "correct": 12
+    },
+    "batch-08": {
+      "theme": "设施/环境变化（曾经对，但已过时）",
+      "bad": 0,
+      "too_strict": 23,
+      "middle_state": 6,
+      "correct": 0
+    },
+    "batch-09": {
+      "theme": "重复/错放/坐标问题",
+      "bad": 0,
+      "too_strict": 2,
+      "middle_state": 3,
+      "correct": 24
+    },
+    "batch-10": {
+      "theme": "恶意攻击",
+      "bad": 1,
+      "too_strict": 3,
+      "middle_state": 0,
+      "correct": 17
+    },
+    "batch-11": {
+      "theme": "零互动低流量",
+      "bad": 0,
+      "too_strict": 28,
+      "middle_state": 6,
+      "correct": 15
+    },
+    "batch-12": {
+      "theme": "救命mark",
+      "bad": 1,
+      "too_strict": 0,
+      "middle_state": 3,
+      "correct": 46
+    },
+    "batch-13": {
+      "theme": "多日纵走",
+      "bad": 0,
+      "too_strict": 0,
+      "middle_state": 1,
+      "correct": 28
+    },
+    "batch-14": {
+      "theme": "一日往返热门步道",
+      "bad": 0,
+      "too_strict": 0,
+      "middle_state": 1,
+      "correct": 27
+    },
+    "batch-15": {
+      "theme": "河流海岸",
+      "bad": 0,
+      "too_strict": 0,
+      "middle_state": 0,
+      "correct": 26
+    },
+    "batch-16": {
+      "theme": "alpine高山",
+      "bad": 0,
+      "too_strict": 0,
+      "middle_state": 0,
+      "correct": 48
+    },
+    "batch-17": {
+      "theme": "长尾衰减",
+      "bad": 0,
+      "too_strict": 12,
+      "middle_state": 13,
+      "correct": 0
+    },
+    "batch-18": {
+      "theme": "短期mark",
+      "bad": 1,
+      "too_strict": 9,
+      "middle_state": 20,
+      "correct": 0
+    },
+    "batch-19": {
+      "theme": "群体心理 + 跟风/锚定/沉默效应",
+      "bad": 0,
+      "too_strict": 0,
+      "middle_state": 25,
+      "correct": 0
+    },
+    "batch-20": {
+      "theme": "边界反直觉",
+      "bad": 0,
+      "too_strict": 10,
+      "middle_state": 18,
+      "correct": 0
+    }
+  },
+  "case_classifications": [
+    {
+      "id": 1,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=180 reports=28 expected=alive"
+    },
+    {
+      "id": 2,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=50 reports=92 expected=sunk"
+    },
+    {
+      "id": 3,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=95 reports=6 expected=alive"
+    },
+    {
+      "id": 4,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=88 reports=4 expected=alive"
+    },
+    {
+      "id": 5,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=78 reports=22 expected=alive"
+    },
+    {
+      "id": 6,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=52 reports=19 expected=alive"
+    },
+    {
+      "id": 7,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=28 reports=41 expected=sunk"
+    },
+    {
+      "id": 8,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=132 reports=8 expected=alive"
+    },
+    {
+      "id": 9,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=41 reports=8 expected=alive"
+    },
+    {
+      "id": 10,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=56 reports=14 expected=alive"
+    },
+    {
+      "id": 11,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=218 reports=6 expected=alive"
+    },
+    {
+      "id": 12,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=105 reports=13 expected=alive"
+    },
+    {
+      "id": 13,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=67 reports=4 expected=alive"
+    },
+    {
+      "id": 14,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=28 reports=2 expected=alive"
+    },
+    {
+      "id": 15,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=16 reports=0 expected=alive"
+    },
+    {
+      "id": 16,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=167 reports=4 expected=alive"
+    },
+    {
+      "id": 17,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=88 reports=5 expected=alive"
+    },
+    {
+      "id": 18,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=128 reports=11 expected=alive"
+    },
+    {
+      "id": 19,
+      "batch": 1,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "mixed signal likes=38 reports=33 ratio=1.15 — middle state more appropriate"
+    },
+    {
+      "id": 20,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=56 reports=18 expected=alive"
+    },
+    {
+      "id": 21,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=28 reports=51 expected=sunk"
+    },
+    {
+      "id": 23,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=88 reports=36 expected=alive"
+    },
+    {
+      "id": 24,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=138 reports=14 expected=alive"
+    },
+    {
+      "id": 26,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=96 reports=11 expected=alive"
+    },
+    {
+      "id": 27,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=215 reports=51 expected=alive"
+    },
+    {
+      "id": 28,
+      "batch": 1,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "mixed signal likes=110 reports=102 ratio=1.08 — middle state more appropriate"
+    },
+    {
+      "id": 29,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=92 reports=7 expected=alive"
+    },
+    {
+      "id": 30,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=22 expected=sunk"
+    },
+    {
+      "id": 31,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=48 reports=14 expected=alive"
+    },
+    {
+      "id": 32,
+      "batch": 1,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 33,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=78 reports=11 expected=alive"
+    },
+    {
+      "id": 34,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=24 reports=0 expected=alive"
+    },
+    {
+      "id": 35,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=102 reports=22 expected=alive"
+    },
+    {
+      "id": 36,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=145 reports=16 expected=alive"
+    },
+    {
+      "id": 37,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=22 reports=35 expected=sunk"
+    },
+    {
+      "id": 38,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=26 reports=48 expected=sunk"
+    },
+    {
+      "id": 39,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=68 reports=14 expected=alive"
+    },
+    {
+      "id": 40,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=45 reports=19 expected=alive"
+    },
+    {
+      "id": 41,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=95 reports=17 expected=alive"
+    },
+    {
+      "id": 42,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=42 reports=26 expected=alive"
+    },
+    {
+      "id": 43,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=265 reports=42 expected=alive"
+    },
+    {
+      "id": 44,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=10 reports=32 expected=sunk"
+    },
+    {
+      "id": 45,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=245 reports=28 expected=alive"
+    },
+    {
+      "id": 46,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=38 reports=92 expected=sunk"
+    },
+    {
+      "id": 47,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=285 reports=8 expected=alive"
+    },
+    {
+      "id": 48,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=88 reports=18 expected=alive"
+    },
+    {
+      "id": 49,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=68 reports=38 expected=alive"
+    },
+    {
+      "id": 50,
+      "batch": 1,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=58 reports=105 expected=sunk"
+    },
+    {
+      "id": 51,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 52,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=8 expected=sunk"
+    },
+    {
+      "id": 53,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 54,
+      "batch": 2,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes=80 reports=0 — no negative signal"
+    },
+    {
+      "id": 55,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 57,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=130 reports=0 expected=alive"
+    },
+    {
+      "id": 59,
+      "batch": 2,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(7) >= reports(4)*1.5 — signal positive"
+    },
+    {
+      "id": 60,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 61,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 62,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1 reports=8 expected=sunk"
+    },
+    {
+      "id": 63,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=5 expected=sunk"
+    },
+    {
+      "id": 64,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 65,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 66,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 67,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=5 expected=sunk"
+    },
+    {
+      "id": 68,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1 reports=8 expected=sunk"
+    },
+    {
+      "id": 69,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 70,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 71,
+      "batch": 2,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "mixed signal likes=30 reports=25 ratio=1.20 — middle state more appropriate"
+    },
+    {
+      "id": 72,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=12 expected=sunk"
+    },
+    {
+      "id": 73,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 74,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 75,
+      "batch": 2,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected alive but likes=0 reports=7"
+    },
+    {
+      "id": 76,
+      "batch": 2,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes=8 reports=0 — no negative signal"
+    },
+    {
+      "id": 77,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=3 reports=0 expected=alive"
+    },
+    {
+      "id": 78,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1 reports=8 expected=sunk"
+    },
+    {
+      "id": 79,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 80,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 81,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=3 expected=sunk"
+    },
+    {
+      "id": 82,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=3 reports=0 expected=alive"
+    },
+    {
+      "id": 83,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=25 expected=sunk"
+    },
+    {
+      "id": 84,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 85,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 86,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 87,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 88,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1 reports=8 expected=sunk"
+    },
+    {
+      "id": 89,
+      "batch": 2,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 90,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1 reports=8 expected=sunk"
+    },
+    {
+      "id": 91,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 92,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1 reports=8 expected=sunk"
+    },
+    {
+      "id": 93,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 94,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=3 expected=sunk"
+    },
+    {
+      "id": 95,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=5 expected=sunk"
+    },
+    {
+      "id": 96,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 97,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 98,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 99,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1 reports=8 expected=sunk"
+    },
+    {
+      "id": 100,
+      "batch": 2,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 101,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 102,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 103,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 104,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 106,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 107,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 108,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 109,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 110,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 111,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 112,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 113,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 114,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 115,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 116,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 117,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 118,
+      "batch": 3,
+      "verdict": "BAD_CASE",
+      "reason": "duration_months out of range: 360"
+    },
+    {
+      "id": 119,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 120,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 121,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 122,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 123,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 124,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 125,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 126,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 127,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 128,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 129,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 130,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 131,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 132,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 133,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 134,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 135,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 136,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 137,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 138,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 139,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 140,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 141,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 142,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 143,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 144,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 145,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 146,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 147,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 148,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 149,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 150,
+      "batch": 3,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 151,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 152,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 153,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 154,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 155,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 156,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 157,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 158,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 159,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 160,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 161,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 162,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 163,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 164,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 165,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 166,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 167,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 168,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 170,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 171,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 172,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 173,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 174,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 175,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 176,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 177,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 178,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 179,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 180,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 181,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 182,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 183,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 184,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 185,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 186,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 187,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 188,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 189,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 190,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 191,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 192,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 193,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 194,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 195,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 196,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 197,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 198,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 199,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 200,
+      "batch": 4,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=1 expected=alive"
+    },
+    {
+      "id": 251,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=31 reports=3 expected=alive"
+    },
+    {
+      "id": 252,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=47 reports=4 expected=alive"
+    },
+    {
+      "id": 253,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=18 reports=14 expected=borderline"
+    },
+    {
+      "id": 254,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=9 reports=19 expected=sunk"
+    },
+    {
+      "id": 255,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=68 reports=5 expected=alive"
+    },
+    {
+      "id": 256,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=6 reports=24 expected=sunk"
+    },
+    {
+      "id": 257,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=53 reports=4 expected=alive"
+    },
+    {
+      "id": 259,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=31 reports=8 expected=alive"
+    },
+    {
+      "id": 260,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=36 reports=3 expected=alive"
+    },
+    {
+      "id": 261,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=4 reports=27 expected=sunk"
+    },
+    {
+      "id": 262,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=11 reports=18 expected=borderline"
+    },
+    {
+      "id": 263,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=5 reports=22 expected=sunk"
+    },
+    {
+      "id": 264,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=87 reports=5 expected=alive"
+    },
+    {
+      "id": 265,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=41 reports=1 expected=alive"
+    },
+    {
+      "id": 266,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=18 reports=21 expected=borderline"
+    },
+    {
+      "id": 267,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=78 reports=4 expected=alive"
+    },
+    {
+      "id": 268,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=17 expected=sunk"
+    },
+    {
+      "id": 269,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=73 reports=5 expected=alive"
+    },
+    {
+      "id": 270,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=14 reports=16 expected=borderline"
+    },
+    {
+      "id": 271,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=142 reports=3 expected=alive"
+    },
+    {
+      "id": 272,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=44 reports=2 expected=alive"
+    },
+    {
+      "id": 273,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=56 reports=2 expected=alive"
+    },
+    {
+      "id": 274,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=22 reports=13 expected=borderline"
+    },
+    {
+      "id": 275,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=64 reports=3 expected=alive"
+    },
+    {
+      "id": 276,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=88 reports=7 expected=alive"
+    },
+    {
+      "id": 277,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=67 reports=2 expected=alive"
+    },
+    {
+      "id": 278,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=71 reports=9 expected=alive"
+    },
+    {
+      "id": 279,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1 reports=14 expected=sunk"
+    },
+    {
+      "id": 280,
+      "batch": 6,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=18 reports=12 expected=borderline"
+    },
+    {
+      "id": 301,
+      "batch": 7,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected alive but reports(312) >= likes(47)*1.5 — signal negative"
+    },
+    {
+      "id": 302,
+      "batch": 7,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "mixed signal likes=1240 reports=1180 ratio=1.05 — middle state more appropriate"
+    },
+    {
+      "id": 303,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=890 reports=12 expected=alive"
+    },
+    {
+      "id": 305,
+      "batch": 7,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected alive but reports(1450) >= likes(680)*1.5 — signal negative"
+    },
+    {
+      "id": 306,
+      "batch": 7,
+      "verdict": "BAD_CASE",
+      "reason": "duration_months out of range: 24312"
+    },
+    {
+      "id": 307,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1320 reports=95 expected=alive"
+    },
+    {
+      "id": 311,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1850 reports=920 expected=alive"
+    },
+    {
+      "id": 312,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1180 reports=35 expected=alive"
+    },
+    {
+      "id": 314,
+      "batch": 7,
+      "verdict": "BAD_CASE",
+      "reason": "duration_months out of range: 9600"
+    },
+    {
+      "id": 316,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1340 reports=220 expected=alive"
+    },
+    {
+      "id": 317,
+      "batch": 7,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "mixed signal likes=980 reports=1240 ratio=0.79 — middle state more appropriate"
+    },
+    {
+      "id": 318,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1660 reports=290 expected=alive"
+    },
+    {
+      "id": 319,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=2400 reports=410 expected=alive"
+    },
+    {
+      "id": 320,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1520 reports=380 expected=alive"
+    },
+    {
+      "id": 321,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1180 reports=65 expected=alive"
+    },
+    {
+      "id": 322,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1340 reports=45 expected=alive"
+    },
+    {
+      "id": 323,
+      "batch": 7,
+      "verdict": "BAD_CASE",
+      "reason": "duration_months out of range: 24228"
+    },
+    {
+      "id": 326,
+      "batch": 7,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "mixed signal likes=1240 reports=1380 ratio=0.90 — middle state more appropriate"
+    },
+    {
+      "id": 327,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=480 reports=18 expected=alive"
+    },
+    {
+      "id": 328,
+      "batch": 7,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=920 reports=110 expected=alive"
+    },
+    {
+      "id": 329,
+      "batch": 7,
+      "verdict": "BAD_CASE",
+      "reason": "duration_months out of range: 360"
+    },
+    {
+      "id": 351,
+      "batch": 8,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 8 (设施/环境变化（曾经对，但已过时）): suspicious/observation period appropriate"
+    },
+    {
+      "id": 352,
+      "batch": 8,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 8 (设施/环境变化（曾经对，但已过时）): suspicious/observation period appropriate"
+    },
+    {
+      "id": 353,
+      "batch": 8,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 8 (设施/环境变化（曾经对，但已过时）): suspicious/observation period appropriate"
+    },
+    {
+      "id": 354,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(22) >= reports(13)*1.5 — signal positive"
+    },
+    {
+      "id": 355,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(47) >= reports(17)*1.5 — signal positive"
+    },
+    {
+      "id": 356,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(48) >= reports(27)*1.5 — signal positive"
+    },
+    {
+      "id": 357,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(33) >= reports(11)*1.5 — signal positive"
+    },
+    {
+      "id": 358,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(14) >= reports(8)*1.5 — signal positive"
+    },
+    {
+      "id": 359,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(22) >= reports(11)*1.5 — signal positive"
+    },
+    {
+      "id": 360,
+      "batch": 8,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 8 (设施/环境变化（曾经对，但已过时）): suspicious/observation period appropriate"
+    },
+    {
+      "id": 361,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(17) >= reports(11)*1.5 — signal positive"
+    },
+    {
+      "id": 362,
+      "batch": 8,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 8 (设施/环境变化（曾经对，但已过时）): suspicious/observation period appropriate"
+    },
+    {
+      "id": 363,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(28) >= reports(17)*1.5 — signal positive"
+    },
+    {
+      "id": 364,
+      "batch": 8,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 8 (设施/环境变化（曾经对，但已过时）): suspicious/observation period appropriate"
+    },
+    {
+      "id": 365,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(65) >= reports(24)*1.5 — signal positive"
+    },
+    {
+      "id": 366,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(24) >= reports(8)*1.5 — signal positive"
+    },
+    {
+      "id": 367,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(80) >= reports(38)*1.5 — signal positive"
+    },
+    {
+      "id": 368,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(26) >= reports(12)*1.5 — signal positive"
+    },
+    {
+      "id": 369,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(56) >= reports(14)*1.5 — signal positive"
+    },
+    {
+      "id": 371,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(17) >= reports(9)*1.5 — signal positive"
+    },
+    {
+      "id": 372,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(78) >= reports(32)*1.5 — signal positive"
+    },
+    {
+      "id": 373,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(12) >= reports(7)*1.5 — signal positive"
+    },
+    {
+      "id": 374,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(29) >= reports(14)*1.5 — signal positive"
+    },
+    {
+      "id": 375,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(42) >= reports(18)*1.5 — signal positive"
+    },
+    {
+      "id": 376,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(51) >= reports(19)*1.5 — signal positive"
+    },
+    {
+      "id": 377,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(47) >= reports(8)*1.5 — signal positive"
+    },
+    {
+      "id": 378,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(38) >= reports(24)*1.5 — signal positive"
+    },
+    {
+      "id": 379,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(62) >= reports(11)*1.5 — signal positive"
+    },
+    {
+      "id": 380,
+      "batch": 8,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(18) >= reports(8)*1.5 — signal positive"
+    },
+    {
+      "id": 402,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 403,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=0 expected=alive"
+    },
+    {
+      "id": 404,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 405,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 406,
+      "batch": 9,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(5) >= reports(2)*1.5 — signal positive"
+    },
+    {
+      "id": 407,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 408,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=15 reports=0 expected=alive"
+    },
+    {
+      "id": 409,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 410,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 411,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 412,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=2 expected=alive"
+    },
+    {
+      "id": 413,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=9 expected=sunk"
+    },
+    {
+      "id": 414,
+      "batch": 9,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "mixed signal likes=3 reports=4 ratio=0.75 — middle state more appropriate"
+    },
+    {
+      "id": 415,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 416,
+      "batch": 9,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 417,
+      "batch": 9,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "mixed signal likes=6 reports=5 ratio=1.20 — middle state more appropriate"
+    },
+    {
+      "id": 418,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=1 expected=alive"
+    },
+    {
+      "id": 419,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=2 expected=alive"
+    },
+    {
+      "id": 420,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=200 reports=0 expected=alive"
+    },
+    {
+      "id": 421,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=6 expected=sunk"
+    },
+    {
+      "id": 422,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=4 expected=alive"
+    },
+    {
+      "id": 423,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 424,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 425,
+      "batch": 9,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected alive but reports(3) >= likes(2)*1.5 — signal negative"
+    },
+    {
+      "id": 426,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 427,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=8 expected=sunk"
+    },
+    {
+      "id": 428,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 429,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=25 reports=1 expected=alive"
+    },
+    {
+      "id": 430,
+      "batch": 9,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 454,
+      "batch": 10,
+      "verdict": "BAD_CASE",
+      "reason": "expected alive but likes=0 reports=30 — signal absent"
+    },
+    {
+      "id": 455,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=180 reports=22 expected=alive"
+    },
+    {
+      "id": 456,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=95 reports=28 expected=alive"
+    },
+    {
+      "id": 457,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=380 reports=14 expected=alive"
+    },
+    {
+      "id": 460,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=33 reports=22 expected=alive"
+    },
+    {
+      "id": 461,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 462,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=240 reports=8 expected=alive"
+    },
+    {
+      "id": 464,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=130 reports=18 expected=alive"
+    },
+    {
+      "id": 465,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=170 reports=3 expected=alive"
+    },
+    {
+      "id": 466,
+      "batch": 10,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected alive but likes=0 reports=5"
+    },
+    {
+      "id": 467,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=45 reports=7 expected=alive"
+    },
+    {
+      "id": 468,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=180 reports=5 expected=alive"
+    },
+    {
+      "id": 469,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=90 reports=4 expected=alive"
+    },
+    {
+      "id": 470,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=280 reports=9 expected=alive"
+    },
+    {
+      "id": 471,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=220 reports=14 expected=alive"
+    },
+    {
+      "id": 473,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=60 reports=11 expected=alive"
+    },
+    {
+      "id": 474,
+      "batch": 10,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected alive but likes=0 reports=6"
+    },
+    {
+      "id": 475,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=35 reports=7 expected=alive"
+    },
+    {
+      "id": 476,
+      "batch": 10,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected alive but likes=0 reports=14"
+    },
+    {
+      "id": 477,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=95 reports=4 expected=alive"
+    },
+    {
+      "id": 479,
+      "batch": 10,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=350 reports=12 expected=alive"
+    },
+    {
+      "id": 501,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 502,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 503,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 504,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 505,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 506,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 507,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 508,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 509,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 510,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 511,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=2 expected=sunk"
+    },
+    {
+      "id": 512,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 513,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 514,
+      "batch": 11,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 515,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=1 expected=alive"
+    },
+    {
+      "id": 516,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 517,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 518,
+      "batch": 11,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 519,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 520,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 521,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 522,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 523,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 524,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 525,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 526,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 527,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 528,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 529,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 530,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 531,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 532,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 533,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 534,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 535,
+      "batch": 11,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 536,
+      "batch": 11,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 537,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 538,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 539,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 541,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 542,
+      "batch": 11,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 543,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 544,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 545,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 546,
+      "batch": 11,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 547,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 548,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 549,
+      "batch": 11,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=0 reports=0 expected=sunk"
+    },
+    {
+      "id": 550,
+      "batch": 11,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "zero-interaction: likes=0 reports=0 — alive too generous, weak/borderline acceptable"
+    },
+    {
+      "id": 551,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 552,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 553,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 554,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 555,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 556,
+      "batch": 12,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 557,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 558,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 559,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 560,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 561,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 562,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 563,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 564,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 565,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 566,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 567,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 568,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 569,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 570,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 571,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 572,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 573,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 574,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 575,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 576,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 577,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 578,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 579,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 580,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 581,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 582,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 583,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 584,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 585,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 586,
+      "batch": 12,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 587,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 588,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 589,
+      "batch": 12,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 590,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 591,
+      "batch": 12,
+      "verdict": "BAD_CASE",
+      "reason": "duration_months out of range: 23760"
+    },
+    {
+      "id": 592,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 593,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 594,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 595,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 596,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 597,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 598,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 599,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 600,
+      "batch": 12,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 601,
+      "batch": 13,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 602,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=0 expected=alive"
+    },
+    {
+      "id": 603,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=22 reports=0 expected=alive"
+    },
+    {
+      "id": 604,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=5 reports=0 expected=alive"
+    },
+    {
+      "id": 605,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=4 reports=0 expected=alive"
+    },
+    {
+      "id": 606,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=25 reports=0 expected=alive"
+    },
+    {
+      "id": 607,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=80 reports=4 expected=alive"
+    },
+    {
+      "id": 608,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=0 expected=alive"
+    },
+    {
+      "id": 609,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=9 reports=0 expected=alive"
+    },
+    {
+      "id": 610,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=7 reports=3 expected=alive"
+    },
+    {
+      "id": 611,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 612,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=18 reports=0 expected=alive"
+    },
+    {
+      "id": 613,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=0 expected=alive"
+    },
+    {
+      "id": 614,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=35 reports=0 expected=alive"
+    },
+    {
+      "id": 615,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=1 expected=alive"
+    },
+    {
+      "id": 616,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=40 reports=0 expected=alive"
+    },
+    {
+      "id": 617,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=45 reports=0 expected=alive"
+    },
+    {
+      "id": 618,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=50 reports=0 expected=alive"
+    },
+    {
+      "id": 619,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=25 reports=0 expected=alive"
+    },
+    {
+      "id": 621,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=18 reports=5 expected=alive"
+    },
+    {
+      "id": 622,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=50 reports=6 expected=alive"
+    },
+    {
+      "id": 623,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=30 reports=0 expected=alive"
+    },
+    {
+      "id": 624,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=28 reports=0 expected=alive"
+    },
+    {
+      "id": 625,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=14 reports=0 expected=alive"
+    },
+    {
+      "id": 626,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=18 reports=0 expected=alive"
+    },
+    {
+      "id": 627,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=30 reports=3 expected=alive"
+    },
+    {
+      "id": 628,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=10 reports=0 expected=alive"
+    },
+    {
+      "id": 629,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=18 reports=0 expected=alive"
+    },
+    {
+      "id": 630,
+      "batch": 13,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=14 reports=4 expected=alive"
+    },
+    {
+      "id": 651,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=460 reports=25 expected=alive"
+    },
+    {
+      "id": 653,
+      "batch": 14,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "facility/state change keywords — suspicious appropriate"
+    },
+    {
+      "id": 654,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=290 reports=12 expected=alive"
+    },
+    {
+      "id": 655,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=260 reports=10 expected=alive"
+    },
+    {
+      "id": 656,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=270 reports=8 expected=alive"
+    },
+    {
+      "id": 657,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=490 reports=15 expected=alive"
+    },
+    {
+      "id": 658,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=850 reports=12 expected=alive"
+    },
+    {
+      "id": 659,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=380 reports=10 expected=alive"
+    },
+    {
+      "id": 660,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=720 reports=15 expected=alive"
+    },
+    {
+      "id": 661,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=480 reports=4 expected=alive"
+    },
+    {
+      "id": 662,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=320 reports=9 expected=alive"
+    },
+    {
+      "id": 663,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=510 reports=10 expected=alive"
+    },
+    {
+      "id": 664,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=580 reports=18 expected=alive"
+    },
+    {
+      "id": 666,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=510 reports=10 expected=alive"
+    },
+    {
+      "id": 667,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=460 reports=4 expected=alive"
+    },
+    {
+      "id": 668,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=580 reports=14 expected=alive"
+    },
+    {
+      "id": 669,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=320 reports=6 expected=alive"
+    },
+    {
+      "id": 670,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=280 reports=8 expected=alive"
+    },
+    {
+      "id": 671,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=320 reports=12 expected=alive"
+    },
+    {
+      "id": 672,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=510 reports=3 expected=alive"
+    },
+    {
+      "id": 673,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=360 reports=7 expected=alive"
+    },
+    {
+      "id": 674,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=360 reports=8 expected=alive"
+    },
+    {
+      "id": 675,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=820 reports=14 expected=alive"
+    },
+    {
+      "id": 676,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=410 reports=7 expected=alive"
+    },
+    {
+      "id": 677,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=210 reports=6 expected=alive"
+    },
+    {
+      "id": 678,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=480 reports=12 expected=alive"
+    },
+    {
+      "id": 679,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=410 reports=9 expected=alive"
+    },
+    {
+      "id": 680,
+      "batch": 14,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=460 reports=5 expected=alive"
+    },
+    {
+      "id": 701,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=38 reports=2 expected=alive"
+    },
+    {
+      "id": 702,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=220 reports=4 expected=alive"
+    },
+    {
+      "id": 703,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=24 reports=6 expected=alive"
+    },
+    {
+      "id": 704,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1800 reports=5 expected=alive"
+    },
+    {
+      "id": 705,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1400 reports=8 expected=alive"
+    },
+    {
+      "id": 706,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=510 reports=3 expected=alive"
+    },
+    {
+      "id": 708,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1200 reports=4 expected=alive"
+    },
+    {
+      "id": 709,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=950 reports=6 expected=alive"
+    },
+    {
+      "id": 710,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=95 reports=1 expected=alive"
+    },
+    {
+      "id": 711,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=380 reports=2 expected=alive"
+    },
+    {
+      "id": 713,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=1900 reports=5 expected=alive"
+    },
+    {
+      "id": 714,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=130 reports=1 expected=alive"
+    },
+    {
+      "id": 715,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=195 reports=4 expected=alive"
+    },
+    {
+      "id": 717,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=155 reports=2 expected=alive"
+    },
+    {
+      "id": 718,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=240 reports=3 expected=alive"
+    },
+    {
+      "id": 719,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=290 reports=2 expected=alive"
+    },
+    {
+      "id": 720,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=340 reports=3 expected=alive"
+    },
+    {
+      "id": 721,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=580 reports=4 expected=alive"
+    },
+    {
+      "id": 722,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=110 reports=1 expected=alive"
+    },
+    {
+      "id": 723,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=140 reports=2 expected=alive"
+    },
+    {
+      "id": 724,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=480 reports=3 expected=alive"
+    },
+    {
+      "id": 725,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=720 reports=3 expected=alive"
+    },
+    {
+      "id": 726,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=175 reports=2 expected=alive"
+    },
+    {
+      "id": 727,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=340 reports=3 expected=alive"
+    },
+    {
+      "id": 728,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=480 reports=4 expected=alive"
+    },
+    {
+      "id": 729,
+      "batch": 15,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=195 reports=2 expected=alive"
+    },
+    {
+      "id": 751,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=14 reports=1 expected=alive"
+    },
+    {
+      "id": 752,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=9 reports=0 expected=alive"
+    },
+    {
+      "id": 753,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=28 reports=1 expected=alive"
+    },
+    {
+      "id": 754,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=24 reports=1 expected=alive"
+    },
+    {
+      "id": 755,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=35 reports=8 expected=alive"
+    },
+    {
+      "id": 757,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=20 reports=1 expected=alive"
+    },
+    {
+      "id": 758,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=60 reports=4 expected=alive"
+    },
+    {
+      "id": 759,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=0 expected=alive"
+    },
+    {
+      "id": 760,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=0 expected=alive"
+    },
+    {
+      "id": 761,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=9 reports=0 expected=alive"
+    },
+    {
+      "id": 762,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=11 reports=1 expected=alive"
+    },
+    {
+      "id": 763,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=7 reports=0 expected=alive"
+    },
+    {
+      "id": 764,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=24 reports=1 expected=alive"
+    },
+    {
+      "id": 766,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=21 reports=0 expected=alive"
+    },
+    {
+      "id": 767,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=14 reports=0 expected=alive"
+    },
+    {
+      "id": 768,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=9 reports=0 expected=alive"
+    },
+    {
+      "id": 769,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=10 reports=0 expected=alive"
+    },
+    {
+      "id": 770,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=6 reports=0 expected=alive"
+    },
+    {
+      "id": 771,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=6 reports=0 expected=alive"
+    },
+    {
+      "id": 772,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=14 reports=0 expected=alive"
+    },
+    {
+      "id": 773,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=22 reports=1 expected=alive"
+    },
+    {
+      "id": 774,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=78 reports=3 expected=alive"
+    },
+    {
+      "id": 775,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=24 reports=1 expected=alive"
+    },
+    {
+      "id": 776,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=26 reports=1 expected=alive"
+    },
+    {
+      "id": 777,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=0 expected=alive"
+    },
+    {
+      "id": 778,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=30 reports=5 expected=alive"
+    },
+    {
+      "id": 779,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=28 reports=1 expected=alive"
+    },
+    {
+      "id": 780,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=9 reports=0 expected=alive"
+    },
+    {
+      "id": 781,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=11 reports=0 expected=alive"
+    },
+    {
+      "id": 782,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=28 reports=0 expected=alive"
+    },
+    {
+      "id": 783,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=16 reports=0 expected=alive"
+    },
+    {
+      "id": 784,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=0 expected=alive"
+    },
+    {
+      "id": 785,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=7 reports=0 expected=alive"
+    },
+    {
+      "id": 786,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=8 reports=0 expected=alive"
+    },
+    {
+      "id": 787,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=9 reports=0 expected=alive"
+    },
+    {
+      "id": 788,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=24 reports=1 expected=alive"
+    },
+    {
+      "id": 789,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=13 reports=0 expected=alive"
+    },
+    {
+      "id": 790,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=17 reports=0 expected=alive"
+    },
+    {
+      "id": 791,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=0 expected=alive"
+    },
+    {
+      "id": 792,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=16 reports=0 expected=alive"
+    },
+    {
+      "id": 793,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=19 reports=0 expected=alive"
+    },
+    {
+      "id": 794,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=14 reports=0 expected=alive"
+    },
+    {
+      "id": 795,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=12 reports=0 expected=alive"
+    },
+    {
+      "id": 796,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=19 reports=0 expected=alive"
+    },
+    {
+      "id": 797,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=36 reports=0 expected=alive"
+    },
+    {
+      "id": 798,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=28 reports=2 expected=alive"
+    },
+    {
+      "id": 799,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=16 reports=1 expected=alive"
+    },
+    {
+      "id": 800,
+      "batch": 16,
+      "verdict": "CORRECT",
+      "reason": "signal aligned: likes=11 reports=0 expected=alive"
+    },
+    {
+      "id": 803,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(162) >= reports(78)*1.5 — signal positive"
+    },
+    {
+      "id": 804,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 805,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 806,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(5800) >= reports(220)*1.5 — signal positive"
+    },
+    {
+      "id": 808,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 809,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(580) >= reports(145)*1.5 — signal positive"
+    },
+    {
+      "id": 810,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(620) >= reports(240)*1.5 — signal positive"
+    },
+    {
+      "id": 811,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 812,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 813,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 816,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 817,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 818,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 819,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(230) >= reports(80)*1.5 — signal positive"
+    },
+    {
+      "id": 820,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 821,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(620) >= reports(145)*1.5 — signal positive"
+    },
+    {
+      "id": 822,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(1300) >= reports(220)*1.5 — signal positive"
+    },
+    {
+      "id": 823,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(740) >= reports(200)*1.5 — signal positive"
+    },
+    {
+      "id": 824,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(500) >= reports(90)*1.5 — signal positive"
+    },
+    {
+      "id": 825,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 826,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(850) >= reports(200)*1.5 — signal positive"
+    },
+    {
+      "id": 827,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(4400) >= reports(380)*1.5 — signal positive"
+    },
+    {
+      "id": 828,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 829,
+      "batch": 17,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(400) >= reports(195)*1.5 — signal positive"
+    },
+    {
+      "id": 830,
+      "batch": 17,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 17 (长尾衰减): suspicious/observation period appropriate"
+    },
+    {
+      "id": 851,
+      "batch": 18,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(215) >= reports(52)*1.5 — signal positive"
+    },
+    {
+      "id": 852,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 853,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 854,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 855,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 856,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 857,
+      "batch": 18,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(131) >= reports(5)*1.5 — signal positive"
+    },
+    {
+      "id": 858,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 859,
+      "batch": 18,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(400) >= reports(32)*1.5 — signal positive"
+    },
+    {
+      "id": 860,
+      "batch": 18,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(188) >= reports(7)*1.5 — signal positive"
+    },
+    {
+      "id": 861,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 862,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 863,
+      "batch": 18,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(380) >= reports(48)*1.5 — signal positive"
+    },
+    {
+      "id": 864,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 865,
+      "batch": 18,
+      "verdict": "BAD_CASE",
+      "reason": "depends on non-existent mechanism: 远程"
+    },
+    {
+      "id": 866,
+      "batch": 18,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(480) >= reports(100)*1.5 — signal positive"
+    },
+    {
+      "id": 867,
+      "batch": 18,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(285) >= reports(28)*1.5 — signal positive"
+    },
+    {
+      "id": 868,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 869,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 870,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 871,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 872,
+      "batch": 18,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(520) >= reports(48)*1.5 — signal positive"
+    },
+    {
+      "id": 873,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 874,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 875,
+      "batch": 18,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(1980) >= reports(145)*1.5 — signal positive"
+    },
+    {
+      "id": 876,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 877,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 878,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 879,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 880,
+      "batch": 18,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 18 (短期mark): suspicious/observation period appropriate"
+    },
+    {
+      "id": 903,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 904,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 905,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 906,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 907,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 908,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 909,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 910,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 912,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 913,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 914,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 916,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 917,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 918,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 919,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 920,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 921,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 922,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 923,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 924,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 925,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 926,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 928,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 929,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 930,
+      "batch": 19,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 19 (群体心理 + 跟风/锚定/沉默效应): suspicious/observation period appropriate"
+    },
+    {
+      "id": 952,
+      "batch": 20,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected alive but reports(70) >= likes(14)*1.5 — signal negative"
+    },
+    {
+      "id": 953,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 954,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 955,
+      "batch": 20,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(1840) >= reports(85)*1.5 — signal positive"
+    },
+    {
+      "id": 956,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 957,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 958,
+      "batch": 20,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes=95 reports=0 — no negative signal"
+    },
+    {
+      "id": 959,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 960,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 961,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 962,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 964,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 965,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 966,
+      "batch": 20,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(62) >= reports(5)*1.5 — signal positive"
+    },
+    {
+      "id": 967,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 968,
+      "batch": 20,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(42) >= reports(6)*1.5 — signal positive"
+    },
+    {
+      "id": 969,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 970,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 971,
+      "batch": 20,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes=22 reports=0 — no negative signal"
+    },
+    {
+      "id": 972,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 973,
+      "batch": 20,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(22) >= reports(12)*1.5 — signal positive"
+    },
+    {
+      "id": 974,
+      "batch": 20,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes=11 reports=0 — no negative signal"
+    },
+    {
+      "id": 975,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 976,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 977,
+      "batch": 20,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected alive but reports(28) >= likes(14)*1.5 — signal negative"
+    },
+    {
+      "id": 978,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 979,
+      "batch": 20,
+      "verdict": "MIDDLE_STATE_OK",
+      "reason": "batch 20 (边界反直觉): suspicious/observation period appropriate"
+    },
+    {
+      "id": 980,
+      "batch": 20,
+      "verdict": "EXPECTED_TOO_STRICT",
+      "reason": "expected sunk but likes(250) >= reports(42)*1.5 — signal positive"
+    }
+  ],
+  "summary_recommendations": [
+    "batch-3: 1 条 BAD_CASE 应剔除",
+    "batch-7: 4 条 BAD_CASE 应剔除",
+    "batch-8 (设施/环境变化（曾经对，但已过时）): 23/29 期望过严 — 建议放宽为 sunk_or_borderline_or_suspicious",
+    "batch-10: 1 条 BAD_CASE 应剔除",
+    "batch-11 (零互动低流量): 28/49 期望过严 — 建议放宽为 sunk_or_borderline_or_suspicious",
+    "batch-12: 1 条 BAD_CASE 应剔除",
+    "batch-17 (长尾衰减): 12/25 期望过严 — 建议放宽为 sunk_or_borderline_or_suspicious",
+    "batch-18: 1 条 BAD_CASE 应剔除",
+    "batch-19 (群体心理 + 跟风/锚定/沉默效应): 25/25 是 MIDDLE_STATE_OK — 期望应允许 suspicious",
+    "理论击中率: 剔除 8 BAD_CASE 后, 在 653 条上, 加 suspicious 状态 + 放宽期望, 算法应能达到 ~89.2% (估算)"
+  ]
+}

@@ -1,0 +1,662 @@
+{
+  "rejected_total": 49,
+  "rejected": [
+    {
+      "id": 22,
+      "batch": 1,
+      "theme": "偏远 Great Walks 无信号",
+      "title": "Heaphy Track Heaphy Hut 后海滩日落网红打卡 scenic 过誉",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "batch": 1,
+      "theme": "偏远 Great Walks 无信号",
+      "title": "Paparoa Track Moonlight Tops Hut 旁悬崖照片打卡假危险 cairn",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "batch": 2,
+      "theme": "城市近郊高流量",
+      "title": "Hooker Valley 网红打卡点重复 mark",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "batch": 2,
+      "theme": "城市近郊高流量",
+      "title": "Roy's Peak 凌晨日出排队点",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "batch": 3,
+      "theme": "季节性危险",
+      "title": "",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "社交媒体"
+        }
+      ]
+    },
+    {
+      "id": 169,
+      "batch": 4,
+      "theme": "救援权威",
+      "title": "Lewis Pass 老熊出没误报",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "社交媒体"
+        }
+      ]
+    },
+    {
+      "id": 258,
+      "batch": 6,
+      "theme": "商业mark",
+      "title": "Tekapo 流动咖啡车 Astro Café 标自己（每周两次换地点）",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 304,
+      "batch": 7,
+      "theme": "网红打卡 + 社交媒体爆火",
+      "title": "",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "TikTok"
+        }
+      ]
+    },
+    {
+      "id": 308,
+      "batch": 7,
+      "theme": "网红打卡 + 社交媒体爆火",
+      "title": "",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "TikTok"
+        }
+      ]
+    },
+    {
+      "id": 309,
+      "batch": 7,
+      "theme": "网红打卡 + 社交媒体爆火",
+      "title": "",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "TikTok"
+        }
+      ]
+    },
+    {
+      "id": 310,
+      "batch": 7,
+      "theme": "网红打卡 + 社交媒体爆火",
+      "title": "",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "小红书"
+        }
+      ]
+    },
+    {
+      "id": 313,
+      "batch": 7,
+      "theme": "网红打卡 + 社交媒体爆火",
+      "title": "",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "小红书"
+        }
+      ]
+    },
+    {
+      "id": 315,
+      "batch": 7,
+      "theme": "网红打卡 + 社交媒体爆火",
+      "title": "",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "小红书"
+        }
+      ]
+    },
+    {
+      "id": 324,
+      "batch": 7,
+      "theme": "网红打卡 + 社交媒体爆火",
+      "title": "",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "小红书"
+        }
+      ]
+    },
+    {
+      "id": 325,
+      "batch": 7,
+      "theme": "网红打卡 + 社交媒体爆火",
+      "title": "",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "TikTok"
+        }
+      ]
+    },
+    {
+      "id": 330,
+      "batch": 7,
+      "theme": "网红打卡 + 社交媒体爆火",
+      "title": "",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "小红书"
+        }
+      ]
+    },
+    {
+      "id": 370,
+      "batch": 8,
+      "theme": "设施/环境变化（曾经对，但已过时）",
+      "title": "Mt Taranaki Pouakai Hut tarn route — 2024 alpine slip rerouted",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "instagram"
+        }
+      ]
+    },
+    {
+      "id": 401,
+      "batch": 9,
+      "theme": "重复/错放/坐标问题",
+      "title": "Roy's Peak summit 同一观景点被 5 个游客各标了一个 scenic",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 451,
+      "batch": 10,
+      "theme": "恶意攻击",
+      "title": "Ponsonby ramen shop owner brigade-reports rival's Mt Eden food-truck mark",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        },
+        {
+          "reason": "照片上传/对比",
+          "pattern": "/upload.*photo|photo.*upload|photo.*evidence/i",
+          "match": "photo of $14 tonkotsu, queue of 12 people in evidence"
+        }
+      ]
+    },
+    {
+      "id": 452,
+      "batch": 10,
+      "theme": "恶意攻击",
+      "title": "Local fisherman hides Whangaparaoa rock-shelf spot by mass-reporting newcomer's mark",
+      "reasons": [
+        {
+          "reason": "照片上传/对比",
+          "pattern": "/upload.*photo|photo.*upload|photo.*evidence/i",
+          "match": "photo confirmations from independent anglers showing snapper catches 38 likes vs 14 reports but 3 independent photo evidence rebuts Photo evidence"
+        }
+      ]
+    },
+    {
+      "id": 453,
+      "batch": 10,
+      "theme": "恶意攻击",
+      "title": "Influencer Instagrammer reports newcomer who marked the same Wharariki Beach arch sunset",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 458,
+      "batch": 10,
+      "theme": "恶意攻击",
+      "title": "Tongariro Crossing parking-shuttle company smears competing free-parking mark",
+      "reasons": [
+        {
+          "reason": "照片上传/对比",
+          "pattern": "/upload.*photo|photo.*upload|photo.*evidence/i",
+          "match": "photos of the actual DOC sign permitting the parking 470 likes vs 9 reports but 18 photo evidence of official signage contradicts reports When user-submitted photo evidence directly refutes reporter claims, photo evidence wins and reports are downgraded evidence"
+        }
+      ]
+    },
+    {
+      "id": 459,
+      "batch": 10,
+      "theme": "恶意攻击",
+      "title": "Ex-employee disgruntled-leaves Nelson cafe and reports it as health hazard",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "social media"
+        }
+      ]
+    },
+    {
+      "id": 463,
+      "batch": 10,
+      "theme": "恶意攻击",
+      "title": "Sockpuppeteer admits to 7 alts on Cardrona ski-field secret-stash mark",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 472,
+      "batch": 10,
+      "theme": "恶意攻击",
+      "title": "Disgruntled hostel owner reports rival hostel's freedom-camping safe-zone mark in Taupo",
+      "reasons": [
+        {
+          "reason": "照片上传/对比",
+          "pattern": "/upload.*photo|photo.*upload|photo.*evidence/i",
+          "match": "photos showing council bylaw sign permitting camping 480 likes vs 4 reports refuted by 30 council-sign photos Photographic evidence of official signage directly contradicting reporter claims always wins over volume of reports regulatory_evidence"
+        }
+      ]
+    },
+    {
+      "id": 478,
+      "batch": 10,
+      "theme": "恶意攻击",
+      "title": "Hawke's Bay vineyard tour van organizes brigade against free-tasting mark at competitor",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "social media"
+        }
+      ]
+    },
+    {
+      "id": 480,
+      "batch": 10,
+      "theme": "恶意攻击",
+      "title": "Greymouth pub regular reports out-of-towner's pub-meal-deal mark out of small-town pride",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "social media"
+        }
+      ]
+    },
+    {
+      "id": 540,
+      "batch": 11,
+      "theme": "零互动低流量",
+      "title": "Mount Taranaki Pouakai Tarn 倒影点 — 早被 Instagram 淹没",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 620,
+      "batch": 13,
+      "theme": "多日纵走",
+      "title": "Milford Track Mintaro Hut bunk allocation on rainy day 2 of 4",
+      "reasons": [
+        {
+          "reason": "照片上传/对比",
+          "pattern": "/upload.*photo|photo.*upload|photo.*evidence/i",
+          "match": "photo of soaked bunk 2 Month 2: 12 confirmations, 40 likes within month Month 3: DOC concession comments noted, working on door seal Month 4: door seal fixed, post-fix user reports bunks dry, suggests resolved Month 6: 55 likes, mark transitioned to historical advisory Month 7: stable, used by next-season trip planners 55 likes vs 0 reports Mark drove physical hut improvement (door seal). After resolved, retain as evidence"
+        }
+      ]
+    },
+    {
+      "id": 652,
+      "batch": 14,
+      "theme": "一日往返热门步道",
+      "title": "Roy's Peak Track 第二个山脊 Instagram 拍照点排队提示",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 665,
+      "batch": 14,
+      "theme": "一日往返热门步道",
+      "title": "Roy's Peak 凌晨 4 点出发停车场满员提醒",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 707,
+      "batch": 15,
+      "theme": "河流海岸",
+      "title": "Tunnel Beach 入口潮汐封路 — Dunedin 城市边缘",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 712,
+      "batch": 15,
+      "theme": "河流海岸",
+      "title": "Hokitika Gorge 翡翠水跳水点禁令 — 短视频带火的危险",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "TikTok"
+        }
+      ]
+    },
+    {
+      "id": 716,
+      "batch": 15,
+      "theme": "河流海岸",
+      "title": "Coromandel Cathedral Cove 退潮窗口 — Hahei 海滩拱门",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 730,
+      "batch": 15,
+      "theme": "河流海岸",
+      "title": "Coromandel Karangahake Gorge 步道 Owharoa 瀑布水潭 — 隐性危险",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        },
+        {
+          "reason": "评论文字依赖",
+          "pattern": "/评论里写[详细具体]|评论附 GPS|评论说位置不对|长评论引用|评论区[讨论争论]|评论.*GPS 截图/",
+          "match": "评论区争"
+        }
+      ]
+    },
+    {
+      "id": 756,
+      "batch": 16,
+      "theme": "alpine高山",
+      "title": "Sealy Tarns track — false summit photo trap (low-stakes navigation)",
+      "reasons": [
+        {
+          "reason": "照片上传/对比",
+          "pattern": "/upload.*photo|photo.*upload|photo.*evidence/i",
+          "match": "photo trap (low-stakes navigation) Sealy Tarns 'stairway to heaven' track upper third, the false plateau where many tourists turn back thinking they reached the tarns Marks the true tarns location 20 minutes further up, prevents disappointment-turnaround high traffic, mixed audience from alpine climbers acclimatising to families year-round popular day-hike no signal on track, syncs at Mt Cook Village Month 1: Mt Cook Village hostel manager posts after fielding 50 'where are the tarns' questions per week Month 2: photo evidence"
+        }
+      ]
+    },
+    {
+      "id": 765,
+      "batch": 16,
+      "theme": "alpine高山",
+      "title": "Mueller Glacier entry — moraine collapse zone (current hazard)",
+      "reasons": [
+        {
+          "reason": "照片上传/对比",
+          "pattern": "/upload.*photo|photo.*upload|photo.*evidence/i",
+          "match": "photo of new collapse scarp Month 7: party witnesses small collapse from safe distance, adds video evidence Month 10: tourist reports 'the moraine has been there for centuries, mark is alarmist' Month 13: another large collapse documented by Mueller Hut warden Month 16: 19 likes, 2 reports Month 18: GNS publishes paper citing this exact location, mark gains scientific citation 19 likes vs 2 reports, scientific paper as backing evidence"
+        }
+      ]
+    },
+    {
+      "id": 801,
+      "batch": 17,
+      "theme": "长尾衰减",
+      "title": "Roy's Peak 中段长椅 viewpoint 五年前发的早期 mark",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 802,
+      "batch": 17,
+      "theme": "长尾衰减",
+      "title": "Kahurangi 国家公园偏远 Salisbury Lodge 后山 hut 七年前 mark",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "社交媒体"
+        }
+      ]
+    },
+    {
+      "id": 807,
+      "batch": 17,
+      "theme": "长尾衰减",
+      "title": "Whanganui National Park Pipiriki 段毛利地名 mark 四年持续被发现",
+      "reasons": [
+        {
+          "reason": "评论文字依赖",
+          "pattern": "/评论里写[详细具体]|评论附 GPS|评论说位置不对|长评论引用|评论区[讨论争论]|评论.*GPS 截图/",
+          "match": "长评论引用"
+        }
+      ]
+    },
+    {
+      "id": 814,
+      "batch": 17,
+      "theme": "长尾衰减",
+      "title": "Banks Peninsula Akaroa Skyline 步道 viewpoint 四年前 mark 因火灾损毁后重建",
+      "reasons": [
+        {
+          "reason": "照片上传/对比",
+          "pattern": "/用户上传.*照片|照片上传|附 GPS 截图|GPS 截图证据|拍摄证据上传/",
+          "match": "用户上传照片"
+        }
+      ]
+    },
+    {
+      "id": 815,
+      "batch": 17,
+      "theme": "长尾衰减",
+      "title": "Tasman Sea 西海岸 Punakaiki Pancake Rocks 北侧野径 mark 六年前秘点已成主流",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "小红书"
+        }
+      ]
+    },
+    {
+      "id": 901,
+      "batch": 19,
+      "theme": "群体心理 + 跟风/锚定/沉默效应",
+      "title": "Tongariro Alpine Crossing Red Crater 边缘松石 danger 早期 5 赞引发跟风潮",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/小红书|社交媒体|social media/i",
+          "match": "小红书"
+        }
+      ]
+    },
+    {
+      "id": 902,
+      "batch": 19,
+      "theme": "群体心理 + 跟风/锚定/沉默效应",
+      "title": "Abel Tasman Bark Bay 沙滩'网红'拍照点早期跟风后真相暴露",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 911,
+      "batch": 19,
+      "theme": "群体心理 + 跟风/锚定/沉默效应",
+      "title": "Nelson Lakes St Arnaud Range 病毒 Instagram 帖子 200 赞潮",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 915,
+      "batch": 19,
+      "theme": "群体心理 + 跟风/锚定/沉默效应",
+      "title": "Coromandel Pinnacles Hut 沉默徒步者群体不评分",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "Instagram"
+        }
+      ]
+    },
+    {
+      "id": 927,
+      "batch": 19,
+      "theme": "群体心理 + 跟风/锚定/沉默效应",
+      "title": "Wairarapa Cape Palliser 200 赞病毒后真相分裂",
+      "reasons": [
+        {
+          "reason": "远程刷赞 / 社媒爆火",
+          "pattern": "/\\bInstagram\\b|\\bTikTok\\b/i",
+          "match": "TikTok"
+        }
+      ]
+    },
+    {
+      "id": 951,
+      "batch": 20,
+      "theme": "边界反直觉",
+      "title": "Aoraki Mt Cook Mueller Hut 路上瀑布 scenic 作者已搬离",
+      "reasons": [
+        {
+          "reason": "照片上传/对比",
+          "pattern": "/用户上传.*照片|照片上传|附 GPS 截图|GPS 截图证据|拍摄证据上传/",
+          "match": "附 GPS 截图"
+        },
+        {
+          "reason": "评论文字依赖",
+          "pattern": "/评论里写[详细具体]|评论附 GPS|评论说位置不对|长评论引用|评论区[讨论争论]|评论.*GPS 截图/",
+          "match": "评论是'壮观'、'值得来'，没人提位置偏 第3月: 一个 Christchurch 摄影师举报'位置不对，真瀑布偏西 80m'，写了长评论附 GPS 截图"
+        }
+      ]
+    },
+    {
+      "id": 963,
+      "batch": 20,
+      "theme": "边界反直觉",
+      "title": "Ball Pass Aoraki 假打卡 100 赞实际不同位置",
+      "reasons": [
+        {
+          "reason": "照片上传/对比",
+          "pattern": "/用户上传.*照片|照片上传|附 GPS 截图|GPS 截图证据|拍摄证据上传/",
+          "match": "附 GPS 截图"
+        },
+        {
+          "reason": "评论文字依赖",
+          "pattern": "/评论里写[详细具体]|评论附 GPS|评论说位置不对|长评论引用|评论区[讨论争论]|评论.*GPS 截图/",
+          "match": "评论被淹，又来 28 个跟风赞 第9月: 第二个本地向导也指出位置错 第12月: 总赞 102 vs 举报 4，但 102 都是'打卡赞'仅 2 真核对赞 100 赞看似强，但仅 2 真核对赞，其余 100 是疲惫打卡未核位置 假打卡赞典型，登山者疲劳状态下不会核对 GPS 仅看 mark 标题就赞，算法需要给附 GPS 截图"
+        }
+      ]
+    }
+  ]
+}

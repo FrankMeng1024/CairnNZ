@@ -1,0 +1,906 @@
+{
+  "batch": 4,
+  "theme": "救援权威",
+  "id_range": [151, 200],
+  "cases": [
+    {
+      "id": 151,
+      "title": "Hooker Valley Track 滑坡警告",
+      "location": "Aoraki/Mt Cook National Park, Hooker Valley Track 第二吊桥北侧 200m",
+      "author_role": "DOC ranger Te Manahuna/Twizel office",
+      "mark_text": "ROCKFALL ZONE — 2024年6月地震后此段坡面松动，已有三块巴士大小落石。雨后48小时内绝对禁止穿越，请改走河谷低位绕行。",
+      "events_timeline": [
+        "2024-06-15 凌晨地震 M5.2，DOC 巡线员发现新裂缝",
+        "2024-06-18 ranger Hemi 立桩并发布 mark，附 GPS 坐标",
+        "2024-07-02 一名以色列徒步者无视警告通过，落石擦伤手臂",
+        "2024-08 Mountain Safety Council 转发到官方 app",
+        "2024-12 暴雨后又有两块岩石滑落，mark 文本被 DOC 更新加粗",
+        "2025-03 ranger 实地复查确认仍危险，保留 mark"
+      ],
+      "human_judgment": "DOC 官方发布、有具体地震关联和实地复查记录，可信度极高，必须严格遵守而非参考",
+      "expected_score": 9.6,
+      "expected_decay_days": 730
+    },
+    {
+      "id": 152,
+      "title": "Routeburn Falls Hut 蜂群提示",
+      "location": "Fiordland National Park, Routeburn Track Falls Hut 后方厕所小径",
+      "author_role": "Wilderness First Aid 志愿医生 Dr. Sarah O'Connell",
+      "mark_text": "WASP NEST — 厕所小径左侧 manuka 丛中黄蜂巢，已有两名 tramper 严重过敏送 Queenstown Lakes Hospital。携带 EpiPen，傍晚最活跃。",
+      "events_timeline": [
+        "2025-01-12 一名英国徒步者被叮后 anaphylaxis，直升机送医",
+        "2025-01-14 Dr. O'Connell 作为志愿医生留 mark 警示",
+        "2025-01-20 hut warden Tane 报告又有两次叮咬事件",
+        "2025-02-03 DOC 派 pest control 团队尝试清除但未根除",
+        "2025-02-15 复查发现新巢已重建，mark 保留有效"
+      ],
+      "human_judgment": "医疗志愿者身份+具体送医记录+hut warden 二次确认，是高质量危险预警",
+      "expected_score": 9.3,
+      "expected_decay_days": 180
+    },
+    {
+      "id": 153,
+      "title": "Franz Josef 停车场偷窃警告",
+      "location": "Westland Tai Poutini National Park, Franz Josef Glacier Valley Walk 起点停车场",
+      "author_role": "West Coast Police 社区联络警官 Constable Wiremu Patuwai",
+      "mark_text": "VEHICLE BREAK-INS — 2025年3-5月此停车场发生11起砸窗盗窃，目标多为租车后备箱行李。请勿留任何贵重物品在车内可见处。",
+      "events_timeline": [
+        "2025-03-08 首起德国游客租车被砸，损失护照和相机",
+        "2025-04 警方监控锁定一辆白色 Hilux，但未抓获",
+        "2025-04-22 Constable Patuwai 主动来旅游中心发布 mark",
+        "2025-05 又有 5 起，i-SITE 也开始口头提醒",
+        "2025-06 警方设伏，抓获两名嫌疑人，案件减少",
+        "2025-08 mark 仍保留作为长期提醒"
+      ],
+      "human_judgment": "警察实名+具体案件数字+破案后果，权威性强且对游客实用",
+      "expected_score": 9.4,
+      "expected_decay_days": 365
+    },
+    {
+      "id": 154,
+      "title": "Cave Creek 历史事故纪念",
+      "location": "Paparoa National Park, Cave Creek 观景台旧址北侧",
+      "author_role": "DOC 历史保护科 + 遇难者家属代表",
+      "mark_text": "MEMORIAL — 1995年4月28日观景平台坍塌14人遇难。新平台已建于安全位置，请勿翻越围栏接近原址崖壁，结构基础仍不稳定。",
+      "events_timeline": [
+        "1995-04-28 平台坍塌，造成新西兰史上最严重户外事故之一",
+        "1996 DOC 重建并设永久围栏",
+        "2015-04 二十周年纪念家属要求加强警示",
+        "2020 DOC 与家属共同设计 mark 文本",
+        "2024 仍有游客翻越拍照，ranger 加固围栏并重申 mark",
+        "2025-04 三十周年仪式后 mark 文本更新"
+      ],
+      "human_judgment": "国家级历史事故+家属参与+持续维护，具备强烈道德和安全双重权重",
+      "expected_score": 9.7,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 155,
+      "title": "Mt Taranaki 失踪者搜索区域",
+      "location": "Egmont National Park, Mt Taranaki 北坡 Translator Knob 上方 1900m",
+      "author_role": "Taranaki Alpine Cliff Rescue (TACR) 队长 Steve Lange",
+      "mark_text": "SAR HISTORY — 此区域 2013年以来 7 起致命跌落，多在冬季冰雪覆盖时。无 alpine 经验和冰镐绝对不要单独通过。",
+      "events_timeline": [
+        "2013-07 一名 Auckland 登山者跌落，搜救三天找到遗体",
+        "2017-08 双人结组其中一人滑坠 200m 死亡",
+        "2021-06 TACR 队长 Lange 累计参与 7 次搜救后立 mark",
+        "2023-09 又一起跌落事故，幸运获救但截肢",
+        "2024-08 mark 翻新加上 GPS 边界范围",
+        "2025-07 冬季前 TACR 复查仍认定为高危"
+      ],
+      "human_judgment": "实战 SAR 队长发布+量化死亡数据+冬季特异性，专业可信度顶级",
+      "expected_score": 9.8,
+      "expected_decay_days": 1825
+    },
+    {
+      "id": 156,
+      "title": "Te Urewera 文化禁地（rāhui）",
+      "location": "Te Urewera, Lake Waikaremoana 西岸 Panekire Bluff 下 Te Whaiti-Nui-A-Toi 山谷",
+      "author_role": "Tūhoe iwi 与 DOC 联合发布",
+      "mark_text": "RĀHUI — 此山谷为 Tūhoe wāhi tapu（圣地），2022年起永久禁入。非 iwi 成员请勿进入，违者将被 ranger 劝离并通报。",
+      "events_timeline": [
+        "2014 Te Urewera Act 通过，土地法人地位特殊",
+        "2022-03 Tūhoe te uru taumatua 决定 rāhui",
+        "2022-05 与 DOC 联合声明并立标牌",
+        "2023 一名摄影师无视进入被劝离并罚款",
+        "2024-11 iwi ranger 与 DOC 共同巡视确认有效",
+        "2025-04 mark 文本更新加 te reo Māori 双语"
+      ],
+      "human_judgment": "iwi+DOC 双重权威+法律地位+文化敏感性，必须无条件尊重",
+      "expected_score": 9.9,
+      "expected_decay_days": 7300
+    },
+    {
+      "id": 157,
+      "title": "Mueller Hut 直升机降落点",
+      "location": "Aoraki/Mt Cook National Park, Mueller Hut 东侧平台 GPS S43.7234 E170.0876",
+      "author_role": "Helicopter Line 首席飞行员 Captain Mark Burgess",
+      "mark_text": "HELI LZ — 紧急医疗撤离指定降落点。请勿堆放石堆 cairn 或扎帐篷，影响降落视线和安全。已被使用 14 次救援。",
+      "events_timeline": [
+        "2018 Helicopter Line 与 DOC 协商确定此点为标准 LZ",
+        "2020-12 一名扭脚徒步者从此点撤离",
+        "2022 游客在 LZ 中心堆 cairn 拍照，差点延误救援",
+        "2023-01 Captain Burgess 发布 mark 明令禁止",
+        "2024 hut warden 加木桩标识 LZ 边界",
+        "2025-02 一次心脏病紧急救援成功使用此 LZ"
+      ],
+      "human_judgment": "首席飞行员+具体救援使用次数+操作性指引，对生命至关重要",
+      "expected_score": 9.5,
+      "expected_decay_days": 1825
+    },
+    {
+      "id": 158,
+      "title": "Heaphy Track 河水暴涨警告",
+      "location": "Kahurangi National Park, Heaphy Track 终点 Kohaihai River 渡口",
+      "author_role": "DOC Karamea field centre supervisor Jenny McLeod",
+      "mark_text": "FLASH FLOOD ZONE — Kohaihai 河 24小时内可上涨 3m，西海岸雨季尤其危险。出发前查 metservice，水过膝绝不强渡。",
+      "events_timeline": [
+        "2019-12 两名捷克徒步者被冲走获救但失温严重",
+        "2021-05 一名 Nelson 本地人不幸溺亡",
+        "2022 supervisor McLeod 发布 mark 含历史水位数据",
+        "2023-08 mark 加上 metservice 查询二维码",
+        "2024-11 DOC 在两端 hut 都展示同一警告",
+        "2025-03 一次飓风后 mark 临时升级为 ROAD CLOSED"
+      ],
+      "human_judgment": "DOC 现场主管+死亡案例+具体应对建议，标准的高质量官方警告",
+      "expected_score": 9.4,
+      "expected_decay_days": 1095
+    },
+    {
+      "id": 159,
+      "title": "Tongariro Crossing 火山活动撤离点",
+      "location": "Tongariro National Park, Tongariro Alpine Crossing, Red Crater 上风口 1750m",
+      "author_role": "GNS Science volcanologist Dr. Brad Scott + DOC",
+      "mark_text": "VOLCANIC ALERT — Te Maari 火山口活动期此点为撤离集合处。听到警报立刻向 Mangatepopo 方向撤退，勿向 Ketetahi 方向（毒气风向）。",
+      "events_timeline": [
+        "2012-08 Te Maari 喷发，Ketetahi Hut 被弹石砸穿",
+        "2013 GNS 与 DOC 制定撤离协议",
+        "2016 GeoNet 警报系统覆盖此区域",
+        "2020 alert level 升至 2，mark 启用更新",
+        "2023-04 一次小型喷发警告，mark 指引成功疏散 200+ 人",
+        "2025-06 GNS 例行复查保留 mark"
+      ],
+      "human_judgment": "GNS 火山学家+DOC+实战疏散记录，极高权威性的生命线级提示",
+      "expected_score": 9.9,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 160,
+      "title": "Abel Tasman 海岸毒水母",
+      "location": "Abel Tasman National Park, Onetahuti Bay 北端潮间带",
+      "author_role": "Wilderness First Aid 志愿者 + Mārahau Surf Lifesaving",
+      "mark_text": "BLUEBOTTLE SWARM — 2025年1月起东北风后此湾常见葡萄牙战舰水母群。被刺立即热水（45度）浸泡并速送 Motueka 医院。",
+      "events_timeline": [
+        "2025-01-08 三名儿童同时被刺，水上的士紧急运回",
+        "2025-01-15 SLSC 与志愿医生联合勘察后立 mark",
+        "2025-01-22 又有一名澳大利亚游客重度反应",
+        "2025-02 DOC 加入官方 app 推送",
+        "2025-02-20 一周无新增案例，但东北风又起 mark 仍生效",
+        "2025-03 季节末改为季节性提示"
+      ],
+      "human_judgment": "SLSC 与医疗志愿者双重专业身份，案例集中且急救建议具体可操作",
+      "expected_score": 9.2,
+      "expected_decay_days": 90
+    },
+    {
+      "id": 161,
+      "title": "Pinnacles 失温事故纪念",
+      "location": "Coromandel Forest Park, Kauaeranga Valley Pinnacles Hut 西侧步道",
+      "author_role": "DOC + 遇难者父母 Bruce 与 Sandra Henderson",
+      "mark_text": "MEMORIAL & WARNING — 2008年7月一名15岁童军在此失温遇难。冬季此段无遮挡且温度可降至 -5度，请确认装备充足再出发。",
+      "events_timeline": [
+        "2008-07 童军团遇暴风雪一名学生失温死亡",
+        "2009 调查报告发布，归因装备和判断不足",
+        "2010 父母与 DOC 协商立纪念兼警示",
+        "2018 十周年家属要求保留 mark 并更新装备清单",
+        "2023 mark 中加入 MetService 冬季气温链接",
+        "2025-07 又一次冷锋警告时 mark 被特别推送"
+      ],
+      "human_judgment": "DOC+遇难家属共同发布，含调查归因，是教育性极强的警示",
+      "expected_score": 9.6,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 162,
+      "title": "Milford Sound 雪崩走廊",
+      "location": "Fiordland National Park, Homer Tunnel 西侧 1km Cleddau Valley 山谷",
+      "author_role": "NZ Avalanche Advisory + NZTA",
+      "mark_text": "AVALANCHE PATH — 冬季此走廊每年发生雪崩 5-15 次，路过停车拍照禁止。听到山顶轰隆声立即开车驶离，不要回头。",
+      "events_timeline": [
+        "2019-08 一名旅游巴士司机停车被雪崩擦中受伤",
+        "2020 NZ Avalanche Advisory 与 NZTA 发布联合 mark",
+        "2022-07 一次大雪崩封路 18 小时",
+        "2023 NZTA 加雪崩预警闪烁灯",
+        "2024-09 一名摄影师无视 mark 拍照差点遇难",
+        "2025-07 冬季 mark 升级附 NZAA 当日危险等级"
+      ],
+      "human_judgment": "NZ Avalanche Advisory+NZTA 国家级双权威，雪崩频次量化，绝对服从",
+      "expected_score": 9.7,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 163,
+      "title": "Stewart Island 大白鲨警告",
+      "location": "Rakiura National Park, Halfmoon Bay 至 Bench Island 之间海域",
+      "author_role": "DOC marine ranger + Stewart Island Promotion Association",
+      "mark_text": "WHITE POINTER ZONE — Edwards Island 周边鲨鱼笼潜活动区域，独自游泳/划 SUP 风险高。2014年潜水员遇袭后此区不再推荐独行水上活动。",
+      "events_timeline": [
+        "2014-11 一名潜水员被大白鲨袭击重伤",
+        "2015 商业鲨笼潜公司开始运营但争议大",
+        "2018 DOC marine ranger 与岛民协会发布 mark",
+        "2022 又一次咬船事件后更新文本",
+        "2024-12 Niwa 鲨鱼追踪研究证实数量增多",
+        "2025-02 mark 加入夏季航行注意事项"
+      ],
+      "human_judgment": "DOC 海洋 ranger+岛民协会+科研数据，专业且地理特异性强",
+      "expected_score": 9.3,
+      "expected_decay_days": 1825
+    },
+    {
+      "id": 164,
+      "title": "Mt Aspiring French Ridge 雪檐",
+      "location": "Mt Aspiring National Park, French Ridge Hut 上方 Quarterdeck Pass",
+      "author_role": "Wanaka SAR + NZ Alpine Club 资深向导 Hugh Barnard",
+      "mark_text": "CORNICE COLLAPSE — 此山脊东侧雪檐冬末 9-11月最危险，已发生 4 起雪檐断裂坠落。务必沿西侧岩石线行走。",
+      "events_timeline": [
+        "2017-10 一名澳大利亚登山者因雪檐断裂坠亡",
+        "2019-09 双人结组其中一人坠落幸存",
+        "2021 Hugh Barnard 与 Wanaka SAR 合作发布 mark",
+        "2023-10 又一起雪檐事件，三人结组全员幸存",
+        "2024 NZAC 杂志专门撰文复盘",
+        "2025-09 mark 翻新加照片示意安全路线"
+      ],
+      "human_judgment": "Wanaka SAR+资深向导双背书，含死亡案例和具体路线建议，alpine 级权威",
+      "expected_score": 9.6,
+      "expected_decay_days": 1825
+    },
+    {
+      "id": 165,
+      "title": "Whanganui Journey 漂流溺水点",
+      "location": "Whanganui National Park, Whanganui River 50/50 rapid 上方 Pipiriki 下游 12km",
+      "author_role": "Whanganui Iwi River Trust + DOC",
+      "mark_text": "DROWNING SPOT — 此处水流回旋，2010年以来 3 名漂流者溺亡。务必穿 PFD 救生衣，从右岸内侧通过，勿在中央停桨。",
+      "events_timeline": [
+        "2010-12 一名英国背包客翻船溺亡",
+        "2015-01 当地 iwi 提议在此立警示",
+        "2017 Te Awa Tupua 法案通过后 iwi 与 DOC 协作",
+        "2019 又一名加拿大游客溺亡",
+        "2022 Iwi River Trust 与 DOC 联合发 mark",
+        "2024 mark 翻新加水流示意图"
+      ],
+      "human_judgment": "iwi+DOC+具体溺亡数据+操作建议，文化与安全权威双重",
+      "expected_score": 9.5,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 166,
+      "title": "Arthurs Pass 落石黑点",
+      "location": "Arthur's Pass National Park, Otira Viaduct 北端 SH73 公路下方 Devils Punchbowl 步道入口",
+      "author_role": "DOC ranger Andy Thompson + NZTA",
+      "mark_text": "ROCKFALL FROM HIGHWAY — 上方 SH73 高速车辆抛石+自然落石叠加，请勿在步道前 50m 停留。最近一起 2024年12月。",
+      "events_timeline": [
+        "2018 NZTA 加防护网但有缝隙",
+        "2022-03 一名步行者头部被砸送医",
+        "2023 DOC 与 NZTA 联合考察",
+        "2024-04 ranger Thompson 发布 mark 含 GPS 范围",
+        "2024-12 又一次落石击中游客背包未受伤",
+        "2025-02 NZTA 计划升级防护网，mark 持续有效"
+      ],
+      "human_judgment": "DOC+NZTA 双部门+持续事故记录+具体距离指引，多源权威",
+      "expected_score": 9.3,
+      "expected_decay_days": 730
+    },
+    {
+      "id": 167,
+      "title": "Hump Ridge 失踪者搜索遗物",
+      "location": "Fiordland National Park 边缘, Tuatapere Hump Ridge Track Okaka Lodge 上方山脊",
+      "author_role": "LandSAR Southland 队长 Tom Cocker",
+      "mark_text": "SAR HISTORICAL — 2016年一名失踪 tramper Sam Hutchinson 此地搜索 12 天未果，请勿移动可疑遗物，发现立刻通话 111。",
+      "events_timeline": [
+        "2016-04 Hutchinson 独行失踪",
+        "2016-04-15 LandSAR 投入 80+ 人 12 天搜索未果",
+        "2018 一名徒步者发现疑似背包碎片",
+        "2020 队长 Cocker 发布 mark 含识别要点",
+        "2023 又一次小规模复查无新发现",
+        "2025 mark 保留作为家属要求"
+      ],
+      "human_judgment": "LandSAR 实名队长+具体失踪人姓名+操作流程，对家属和搜救流程都重要",
+      "expected_score": 9.4,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 168,
+      "title": "Coromandel 鲸群搁浅救援点",
+      "location": "Coromandel Peninsula, Whangapoua Beach 北端 New Chum Beach",
+      "author_role": "Project Jonah 鲸豚救援组织 + DOC",
+      "mark_text": "WHALE STRANDING ZONE — 此沙滩地形导致领航鲸频繁搁浅，2017、2021、2024 各一次 50+ 头规模。发现搁浅勿推回水中，立刻通话 0800 DOC HOT。",
+      "events_timeline": [
+        "2017-02 一次 80 头领航鲸搁浅，70 头死亡",
+        "2021-11 另一次 60 头规模，志愿者通宵守护",
+        "2022 Project Jonah 与 DOC 联合发 mark",
+        "2024-03 又一次搁浅，mark 流程引导有效",
+        "2025-01 ranger 例行复查保留",
+        "2025-04 NIWA 海流研究确认地形原因"
+      ],
+      "human_judgment": "Project Jonah 国家级鲸豚组织+DOC+具体事件历史+应对热线，权威完整",
+      "expected_score": 9.5,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 169,
+      "title": "Lewis Pass 老熊出没误报",
+      "location": "Lewis Pass National Reserve, St James Walkway Boyle Village 入口处",
+      "author_role": "DOC ranger Lisa Murray",
+      "mark_text": "NOT A BEAR — 近期游客上传'熊踪'实为大型 stoat 或漂浮羊毛球。NZ 无熊，请放心徒步。如见可疑动物拍照发 DOC 鉴定。",
+      "events_timeline": [
+        "2024-12 一名美国游客社交媒体发'熊脚印'引发恐慌",
+        "2025-01 ranger Murray 实地查验确认是 stoat",
+        "2025-01-15 立 mark 公开辟谣并教育",
+        "2025-02 一名加拿大游客又上传类似视频",
+        "2025-03 ranger 加上动物对照图",
+        "2025-04 mark 转为长期教育性"
+      ],
+      "human_judgment": "DOC ranger 主动辟谣+实地验证+科普教育，反向应对网络误传的优秀范例",
+      "expected_score": 9.0,
+      "expected_decay_days": 730
+    },
+    {
+      "id": 170,
+      "title": "Ruapehu Crater Lake 酸雾区",
+      "location": "Tongariro National Park, Mt Ruapehu Crater Lake 火口湖南缘 2670m",
+      "author_role": "GNS Science + DOC + Ruapehu Alpine Lifts 安全官",
+      "mark_text": "ACID GAS PLUME — 火口湖溢出 SO2 在下风向 200m 内可致呼吸道烧伤。佩戴口罩，停留不超过 10 分钟，咳嗽立刻撤离。",
+      "events_timeline": [
+        "2007 一次 lahar 后火口湖性质改变",
+        "2016 GNS 测量 SO2 浓度大幅上升",
+        "2019 RAL 安全官与 DOC 协调发 mark",
+        "2022 一名登山者吸入烟雾送 Taupo 医院",
+        "2024-08 alert level 1 期间 mark 升级",
+        "2025-04 GNS 复查 mark 仍有效"
+      ],
+      "human_judgment": "GNS+DOC+RAL 安全官三方+量化暴露建议，火山危险信息顶级",
+      "expected_score": 9.7,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 171,
+      "title": "Karangahake Gorge 矿洞坍塌",
+      "location": "Coromandel, Karangahake Gorge Windows Walk 第三个矿洞分支 50m 深处",
+      "author_role": "DOC + Hauraki District Council heritage officer",
+      "mark_text": "MINE COLLAPSE RISK — 此分支 2023年 探测显示顶部裂缝，绝对禁入。主步道安全，仅此分支封闭。违者罚款 NZ$300。",
+      "events_timeline": [
+        "1880s 此矿洞历史开采遗迹",
+        "2010 列入 heritage trail",
+        "2023-06 council 工程师探测发现新裂缝",
+        "2023-08 DOC 与 council 联合封闭并立 mark",
+        "2024 一名游客无视进入被罚",
+        "2025-03 复查仍危险，mark 保留"
+      ],
+      "human_judgment": "DOC+council+工程师专业评估+罚款条款，多权威综合可信",
+      "expected_score": 9.2,
+      "expected_decay_days": 1825
+    },
+    {
+      "id": 172,
+      "title": "Greenstone Track 桥梁损坏",
+      "location": "Mt Aspiring National Park, Greenstone Track Mid Caples Hut 西侧 2km 木桥",
+      "author_role": "DOC track crew leader Hemi Walker",
+      "mark_text": "BRIDGE OUT — 2025年4月暴雨冲毁桥面木板，绕行下游 500m 河滩浅滩。雨季水深可至腰部，确认水位再渡。",
+      "events_timeline": [
+        "2025-04-15 大雨后桥被冲毁",
+        "2025-04-17 track crew 发现并立即立 mark",
+        "2025-04-22 一组徒步者按指引绕行成功",
+        "2025-05 临时维修计划推迟到夏季",
+        "2025-08 仍未修复，mark 持续有效",
+        "2025-10 维修完成后 mark 移除"
+      ],
+      "human_judgment": "DOC 实名 track crew+具体绕行方案+水位提示，操作性极强",
+      "expected_score": 9.3,
+      "expected_decay_days": 180
+    },
+    {
+      "id": 173,
+      "title": "Goat Pass 直升机绳降区",
+      "location": "Arthur's Pass National Park, Goat Pass Hut 北侧山脊 1300m",
+      "author_role": "Garden City Helicopters 救援队",
+      "mark_text": "WINCH POINT — 此点为复杂地形 winch 救援唯一可用点，请勿在此堆 cairn 或扎帐影响绳降。已成功救援 6 次。",
+      "events_timeline": [
+        "2017 GCH 与 DOC 协议确定此点",
+        "2019-12 首次 winch 救援一名骨折 tramper",
+        "2021 一组游客在此堆 cairn 险些干扰救援",
+        "2022 GCH 飞行员发布 mark 含警告",
+        "2024-02 一次心脏病救援使用此点",
+        "2025-06 hut warden 加木桩标记"
+      ],
+      "human_judgment": "Garden City Helicopters 实战救援队+使用次数+干扰案例，关键操作信息",
+      "expected_score": 9.4,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 174,
+      "title": "Catlins 海狮攻击点",
+      "location": "Catlins, Surat Bay Cannibal Bay 沙丘后小径",
+      "author_role": "DOC marine ranger + Yellow-Eyed Penguin Trust",
+      "mark_text": "NZ SEA LION HOTSPOT — 雄性 NZ 海狮繁殖期攻击性强。保持 20m 距离，被追立刻向沙丘高处或灌木躲避，勿背向逃跑。",
+      "events_timeline": [
+        "2020-01 一名摄影师被追逐摔伤",
+        "2022-12 又一次接近距离咬伤事件",
+        "2023 DOC 与 YEPT 联合发 mark",
+        "2024-11 繁殖期 ranger 加固定标识",
+        "2025-01 一名研究员证实 mark 范围有效",
+        "2025-03 季节末调整为低强度版本"
+      ],
+      "human_judgment": "DOC marine ranger+YEPT+具体行为指引（向高处逃），野生动物专业建议",
+      "expected_score": 9.3,
+      "expected_decay_days": 365
+    },
+    {
+      "id": 175,
+      "title": "Ball Pass 雪盲警告",
+      "location": "Aoraki/Mt Cook National Park, Ball Pass Crossing Ball Hut 上方雪原",
+      "author_role": "Mountain Safety Council + Alpine Guides Aoraki",
+      "mark_text": "SNOW BLINDNESS RISK — 春季雪反射 UV 极强，无 cat 4 雪镜 30 分钟即可雪盲。已 2 起紧急救援。",
+      "events_timeline": [
+        "2022-10 一名以色列游客无墨镜雪盲送医",
+        "2023-11 又一起类似事件",
+        "2024 MSC 与 Alpine Guides 发联合 mark",
+        "2024-12 mark 加入 cat 4 镜片说明",
+        "2025-04 hut book 同步警示",
+        "2025-09 春季前 ranger 复查保留"
+      ],
+      "human_judgment": "MSC+商业向导双背书+量化暴露时间+具体装备建议，alpine 教育典范",
+      "expected_score": 9.2,
+      "expected_decay_days": 365
+    },
+    {
+      "id": 176,
+      "title": "Kepler Track 雷击危险点",
+      "location": "Fiordland National Park, Kepler Track Mt Luxmore 至 Forest Burn Shelter 之间裸露山脊",
+      "author_role": "DOC + MetService 气象学家 Lisa Murray",
+      "mark_text": "LIGHTNING EXPOSURE — 此 4km 山脊无遮蔽，雷暴预警时立刻向 Luxmore Hut 或 Forest Burn 撤退。已两次雷击事件。",
+      "events_timeline": [
+        "2018-12 一组徒步者被闪电击中边缘草地，无重伤但震惊",
+        "2021-01 又一次雷击导致 GPS 设备损坏",
+        "2022 DOC 与 MetService 联合发 mark",
+        "2023 mark 加入 MetService Thunderstorm Outlook 二维码",
+        "2024-12 一次预警后多组成功撤退",
+        "2025-01 ranger 复查保留"
+      ],
+      "human_judgment": "DOC+MetService 气象学家+实例+撤退点指引，山地气象级权威",
+      "expected_score": 9.3,
+      "expected_decay_days": 1095
+    },
+    {
+      "id": 177,
+      "title": "Wilkin Valley 直升机失事点",
+      "location": "Mt Aspiring National Park, Wilkin Valley Top Forks Hut 上方 2km",
+      "author_role": "TAIC (Transport Accident Investigation Commission) + Wanaka SAR",
+      "mark_text": "ACCIDENT SITE — 2018年8月一架观光直升机在此失事 7 人遇难。残骸已清理，但请勿在此扎营或搭 cairn 出于尊重。",
+      "events_timeline": [
+        "2018-08-06 直升机撞山失事",
+        "2019 TAIC 完成调查报告",
+        "2020 家属与 SAR 共同立纪念 mark",
+        "2022 DOC 同意保留 mark 作为永久标识",
+        "2024-08 周年家属访问，mark 完好",
+        "2025 mark 翻新但文本不变"
+      ],
+      "human_judgment": "TAIC 国家级调查+SAR+家属共立，灾难纪念性高且具尊重含义",
+      "expected_score": 9.6,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 178,
+      "title": "Raglan 离岸流冲浪危险",
+      "location": "Raglan, Manu Bay 冲浪点北端礁石外 50m",
+      "author_role": "Surf Life Saving NZ Raglan club + Whaingaroa Harbour Care",
+      "mark_text": "RIP CURRENT — 此点退潮时离岸流速 2m/s，已 2017、2021、2024 各一次溺水事故。务必结伴并通知岸上观察员。",
+      "events_timeline": [
+        "2017-02 一名澳大利亚冲浪者溺亡",
+        "2021-12 SLSNZ 救起一名学生",
+        "2022 SLSNZ 与 harbour care 联合发 mark",
+        "2024-01 又一次救援成功",
+        "2025-01 mark 翻新加潮汐表",
+        "2025-04 季节性 mark 持续有效"
+      ],
+      "human_judgment": "SLSNZ+地方海港组织+量化流速+多次事故，水上安全专业建议",
+      "expected_score": 9.3,
+      "expected_decay_days": 1095
+    },
+    {
+      "id": 179,
+      "title": "Mt Hutt 雪崩观测点",
+      "location": "Canterbury, Mt Hutt 滑雪场边界外 South Face 1800m",
+      "author_role": "NZ Avalanche Advisory + Mt Hutt ski patrol",
+      "mark_text": "OUT OF BOUNDS AVALANCHE — 滑雪场边界外此面冬季雪崩频发，2014年 2 名滑雪者遇难后明令禁止越界。",
+      "events_timeline": [
+        "2014-08 两名滑雪者越界遇雪崩死亡",
+        "2015 ski patrol 与 NZAA 联合勘察",
+        "2016 设永久 mark 与物理边界",
+        "2020 又一名越界者获救但严重受伤",
+        "2024 NZAA 复查仍高危",
+        "2025-07 冬季前 patrol 加强 mark 巡逻"
+      ],
+      "human_judgment": "NZAA+ski patrol+死亡案例+物理边界，雪崩区强约束",
+      "expected_score": 9.6,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 180,
+      "title": "Northland Cape Reinga 文化禁拍",
+      "location": "Cape Reinga / Te Rerenga Wairua, 灯塔下方 pohutukawa 神圣老树",
+      "author_role": "Ngāti Kuri iwi + DOC Kaitaia office",
+      "mark_text": "TAPU TREE — 此 800 岁 pohutukawa 为亡灵离开 Aotearoa 的通道，请勿触碰、攀爬或合影。Ngāti Kuri 文化最高敏感地。",
+      "events_timeline": [
+        "2010 Treaty settlement 后 iwi 监管加强",
+        "2015 一名网红爬树拍摄引发抗议",
+        "2018 iwi 与 DOC 联合发 mark",
+        "2022 iwi ranger 培训上岗",
+        "2024 又一次违规者被劝离并道歉",
+        "2025-02 mark 加入 te reo 双语解说"
+      ],
+      "human_judgment": "iwi+DOC+文化历史背景+实例，文化禁忌权威性顶级",
+      "expected_score": 9.8,
+      "expected_decay_days": 7300
+    },
+    {
+      "id": 181,
+      "title": "Westport 海岸塌方",
+      "location": "West Coast, Cape Foulwind walkway 灯塔南端步道",
+      "author_role": "DOC ranger + Buller District Council",
+      "mark_text": "CLIFF EROSION — 2024年风暴后步道悬崖侧塌方 3m，已临时改道。原步道边缘仍不稳定，请勿越栏拍照。",
+      "events_timeline": [
+        "2024-07 风暴 ex-cyclone Lola 残留导致塌方",
+        "2024-07-20 ranger 与 council 联合勘察",
+        "2024-08 临时改道并立 mark",
+        "2024-12 一名游客越栏被警示",
+        "2025-04 永久改道工程开始",
+        "2025-09 完工后 mark 调整为历史警示"
+      ],
+      "human_judgment": "DOC+council+具体改道方案+实施时间表，地质灾害响应规范",
+      "expected_score": 9.1,
+      "expected_decay_days": 365
+    },
+    {
+      "id": 182,
+      "title": "Lake Tekapo 寒夜冻死纪念",
+      "location": "Mackenzie Country, Mt John Observatory 步道 Lake Tekapo 上方山顶",
+      "author_role": "DOC + 遇难游客父亲 Wang Jianhui",
+      "mark_text": "MEMORIAL — 2019年6月一名中国留学生因装备不足夜间下山失温遇难。冬季夜温可至 -10度，单层薄外套绝对不够。",
+      "events_timeline": [
+        "2019-06 留学生 Liu 失温死亡",
+        "2020 父亲访问 NZ 要求设警示",
+        "2021 DOC 与家属合作立 mark",
+        "2022 i-SITE 加中文版本",
+        "2024-06 五周年家属再次访问",
+        "2025 mark 加上简体中文翻译"
+      ],
+      "human_judgment": "DOC+遇难家属+针对中文游客特别警示，国际化教育价值高",
+      "expected_score": 9.5,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 183,
+      "title": "Tararua Holdsworth 雷击伤人",
+      "location": "Tararua Forest Park, Mt Holdsworth-Jumbo Circuit 东侧 Powell Hut 上方山脊",
+      "author_role": "Wellington LandSAR + Massey University 户外教育",
+      "mark_text": "LIGHTNING STRUCK — 2023年12月此地一组学生被闪电击中，2人重伤。雷暴时立即蹲低，远离金属和山脊线。",
+      "events_timeline": [
+        "2023-12-15 闪电击中 5 人小组",
+        "2023-12-16 LandSAR 紧急撤离",
+        "2024-01 Massey 调查报告发布",
+        "2024-04 SAR 与 Massey 联合发 mark",
+        "2024-12 mark 加入避雷指引图",
+        "2025-12 周年 mark 翻新"
+      ],
+      "human_judgment": "LandSAR+大学户外教育+具体伤亡+避雷指引，教学性极强",
+      "expected_score": 9.4,
+      "expected_decay_days": 1825
+    },
+    {
+      "id": 184,
+      "title": "Bay of Islands 鲨鱼袭击点",
+      "location": "Bay of Islands, Roberton Island 西侧浮潜区",
+      "author_role": "DOC marine + Far North District Lifeguard",
+      "mark_text": "SHARK INCIDENT — 2024年1月一名浮潜者被 bronze whaler 咬伤大腿。建议夏末避开此点黄昏游泳。",
+      "events_timeline": [
+        "2024-01-22 浮潜者被咬伤",
+        "2024-01-23 直升机送 Whangarei 医院",
+        "2024-02 lifeguard 与 DOC 调查",
+        "2024-03 联合发 mark",
+        "2024-12 又一次目击但无攻击",
+        "2025-02 ranger 复查保留 mark"
+      ],
+      "human_judgment": "DOC marine+lifeguard+具体物种+季节建议，水上专业警示",
+      "expected_score": 9.1,
+      "expected_decay_days": 730
+    },
+    {
+      "id": 185,
+      "title": "Kaikoura 地震断层观察",
+      "location": "Kaikoura coast, Ohau Point 海狮聚居地北端公路下海岸",
+      "author_role": "GNS Science + DOC + Department of Conservation marine",
+      "mark_text": "FAULT SCARP & UNSTABLE CLIFF — 2016年地震抬升海床 6m。地形仍在调整，请勿接近悬崖底部，落石频发。",
+      "events_timeline": [
+        "2016-11 7.8 级地震彻底改变此地形",
+        "2017 GNS 长期监测确立",
+        "2019 DOC 与 GNS 联合发 mark",
+        "2021 一次余震后落石量增加",
+        "2023 mark 加上地震科普",
+        "2025 GNS 复查仍处调整期"
+      ],
+      "human_judgment": "GNS+DOC 双权威+地震科学背景+长期监测，地质级专业警示",
+      "expected_score": 9.5,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 186,
+      "title": "Cathedral Cove 落石封闭",
+      "location": "Coromandel, Cathedral Cove 至 Hahei 步道沿岸",
+      "author_role": "DOC Coromandel area office + Waikato Regional Council",
+      "mark_text": "TRACK CLOSED — 2024年Cyclone Gabrielle 后步道多处塌方。请勿尝试绕行，工程预计 2026 重开。海上小船仍可达。",
+      "events_timeline": [
+        "2023-02 Cyclone Gabrielle 重创步道",
+        "2023-03 DOC 全面封闭",
+        "2024 工程评估完成",
+        "2024-09 mark 更新预计开放时间",
+        "2025-04 一组游客绕行被警示",
+        "2025-08 工程进度公告"
+      ],
+      "human_judgment": "DOC+regional council+灾害背景+替代方案，灾后管理透明",
+      "expected_score": 9.2,
+      "expected_decay_days": 730
+    },
+    {
+      "id": 187,
+      "title": "Mangawhai 蛇形步道犯罪",
+      "location": "Northland, Mangawhai Heads 海滩停车场南端步道入口",
+      "author_role": "Northland Police community officer + Mangawhai Ratepayers",
+      "mark_text": "ROBBERY HOTSPOT — 2025年初春此地3起独行女性被骚扰报案。建议结伴清晨或傍晚行走，遇情况立刻 111。",
+      "events_timeline": [
+        "2025-03 首起骚扰报案",
+        "2025-04 又两起类似事件",
+        "2025-04-15 警察社区官与居民会联合 mark",
+        "2025-05 警方加巡逻频次",
+        "2025-06 一名嫌疑人被捕",
+        "2025-08 mark 持续作为长期警示"
+      ],
+      "human_judgment": "警察社区联络+居民会+具体应对建议，社区安全合作典范",
+      "expected_score": 9.0,
+      "expected_decay_days": 365
+    },
+    {
+      "id": 188,
+      "title": "Blue Lake 颜色保护禁碰",
+      "location": "Nelson Lakes National Park, Lake Constance 上方 Blue Lake 全球最清水域",
+      "author_role": "DOC + NIWA 水质科学家 Dr. Rob Davies-Colley",
+      "mark_text": "WORLDS CLEAREST WATER — 任何接触会引入微粒。绝对禁止下水、饮用或丢入物品，违者 NZ$5000 罚款。",
+      "events_timeline": [
+        "2011 NIWA 测定为全球最清",
+        "2013 DOC 立法保护",
+        "2016 一名游客洗手被罚",
+        "2019 NIWA 与 DOC 联合更新 mark",
+        "2023 又一次违规事件",
+        "2025-01 ranger 加固铜牌"
+      ],
+      "human_judgment": "DOC+NIWA 科学家+全球科学价值+罚款条款，独特保护权威",
+      "expected_score": 9.7,
+      "expected_decay_days": 7300
+    },
+    {
+      "id": 189,
+      "title": "Mt Egmont 高海拔失温",
+      "location": "Egmont National Park, Mt Taranaki The Lizard 山脊 1800m",
+      "author_role": "Taranaki SAR + LandSAR Taranaki",
+      "mark_text": "HYPOTHERMIA DEATHS — 此山脊裸露多风，2010年以来 4 人冬季失温死亡。无 alpine 装备者 3pm 后绝对不要继续上行。",
+      "events_timeline": [
+        "2010 第一起失温事故",
+        "2017 第三起后 SAR 决定立永久 mark",
+        "2019 LandSAR 加入并更新装备清单",
+        "2022 又一起死亡，mark 加红色警告条",
+        "2024 SAR 复查保留",
+        "2025-06 冬季前再次推送"
+      ],
+      "human_judgment": "Taranaki SAR+LandSAR+死亡数据+时间限制建议，alpine 安全权威",
+      "expected_score": 9.6,
+      "expected_decay_days": 3650
+    },
+    {
+      "id": 190,
+      "title": "Hawke's Bay Cyclone 残留路桥",
+      "location": "Hawke's Bay, Eskdale Esk Valley 步道残留旧 SH5 高速段",
+      "author_role": "DOC + Hawke's Bay Regional Council + NZ Defence Force engineers",
+      "mark_text": "GABRIELLE DEBRIS — 2023年Cyclone Gabrielle 残留扭曲钢筋和泥浆。看似可走但下方掏空，请走新指定步道。",
+      "events_timeline": [
+        "2023-02 Cyclone Gabrielle 重创",
+        "2023-04 NZDF 工程师评估并发 mark",
+        "2024 临时步道开通",
+        "2024-09 一名摄影师下到旧路被警告",
+        "2025-02 周年地区纪念 mark 翻新",
+        "2025-06 永久解决方案讨论中"
+      ],
+      "human_judgment": "DOC+regional council+NZDF 工程师+具体替代方案，灾后基础设施警示",
+      "expected_score": 9.2,
+      "expected_decay_days": 1825
+    },
+    {
+      "id": 191,
+      "title": "Hokitika Gorge 桥梁过载",
+      "location": "West Coast, Hokitika Gorge swing bridge 西侧入口",
+      "author_role": "DOC ranger + Westland engineer report",
+      "mark_text": "BRIDGE LOAD LIMIT — 同时通过最多 8 人，违反者承担风险。已两次因游客团队过 20 人导致桥剧烈晃动报警。",
+      "events_timeline": [
+        "2020 桥梁工程检查确立 8 人限制",
+        "2022 一团 25 人无视限制差点出事",
+        "2023 ranger 立永久 mark",
+        "2024-12 一团中国旅行团遵守了限制",
+        "2025-02 mark 加多语种",
+        "2025-05 工程师复查仍有效"
+      ],
+      "human_judgment": "DOC+工程师报告+具体载重数字+多语言，工程级精确警示",
+      "expected_score": 9.1,
+      "expected_decay_days": 1095
+    },
+    {
+      "id": 192,
+      "title": "Stewart Island 失踪猎人区",
+      "location": "Rakiura National Park, Mason Bay 内陆 Big Hellfire Hut 西侧灌木区",
+      "author_role": "Stewart Island SAR + DOC",
+      "mark_text": "MISSING HUNTER 2009 — 一名 deer hunter Steve Stewart 此处失踪从未寻回。地形复杂雾大，无 PLB 不要单独深入。",
+      "events_timeline": [
+        "2009-07 hunter 失踪",
+        "2009-08 SAR 投入大规模搜救 21 天未果",
+        "2014 五周年家属访问",
+        "2016 SAR 与 DOC 立永久 mark",
+        "2022 一名 tramper 报告可疑遗物经鉴定无关",
+        "2025 mark 保留作为家属心愿"
+      ],
+      "human_judgment": "Stewart Island SAR+DOC+真实失踪人姓名+地形警示，SAR 史的活记录",
+      "expected_score": 9.4,
+      "expected_decay_days": 7300
+    },
+    {
+      "id": 193,
+      "title": "Rotorua 地热烫伤点",
+      "location": "Rotorua, Kuirau Park 北端非游客区围栏外热泥潭",
+      "author_role": "Rotorua Lakes Council + GNS geothermal team",
+      "mark_text": "BOILING MUD — 表面温度 95度可瞬间烧伤。围栏外的'空地'可能是新形成的薄壳热坑。2023年一名儿童跌入获救。",
+      "events_timeline": [
+        "2003 历史上多次地热活动改变",
+        "2023-01 儿童跌入热泥幸亏家长拉出",
+        "2023-02 council 与 GNS 联合发 mark",
+        "2024 又一次新热坑出现，mark 范围扩大",
+        "2024-12 GNS 红外监测部署",
+        "2025-04 mark 翻新"
+      ],
+      "human_judgment": "council+GNS+具体烫伤事件+地形动态警告，地热区独特警示",
+      "expected_score": 9.5,
+      "expected_decay_days": 1825
+    },
+    {
+      "id": 194,
+      "title": "Dunedin Port Chalmers 港口偷盗",
+      "location": "Dunedin, Port Chalmers 邮轮码头 Boulton's Walkway 入口",
+      "author_role": "Dunedin Police tourism liaison + Cruise NZ",
+      "mark_text": "CRUISE SCAM ZONE — 邮轮日有团伙以'代叫的士'为名偷行李。仅使用官方计程车队 Dunedin Taxis 0800 505 010。",
+      "events_timeline": [
+        "2024-11 邮轮季首起报案",
+        "2024-12 三起类似手法",
+        "2025-01 警察与 Cruise NZ 联合 mark",
+        "2025-02 一团人被抓",
+        "2025-03 邮轮季结束 mark 转季节性",
+        "2025-10 新邮轮季前 mark 重新激活"
+      ],
+      "human_judgment": "警察+邮轮协会+具体诈骗手法+官方电话，旅游安全协作典范",
+      "expected_score": 9.1,
+      "expected_decay_days": 365
+    },
+    {
+      "id": 195,
+      "title": "Lake Wakatipu 寒冷溺水点",
+      "location": "Otago, Lake Wakatipu Frankton Beach 跳水台",
+      "author_role": "Queenstown Lakes District Council + Coastguard NZ Wakatipu",
+      "mark_text": "COLD SHOCK DROWNING — 水温常年 8度，跳入瞬间 cold shock 可致溺水。务必先入水适应再深游。已 3 起。",
+      "events_timeline": [
+        "2018-12 一名游客跳水后心脏骤停溺亡",
+        "2021 又两起 cold shock 救援",
+        "2022 council 与 Coastguard 联合发 mark",
+        "2024 mark 加生理科普",
+        "2025-01 又一起救援成功",
+        "2025-02 mark 翻新加多语种"
+      ],
+      "human_judgment": "council+Coastguard+生理机制解释+多语种，水域特异警示",
+      "expected_score": 9.3,
+      "expected_decay_days": 1825
+    },
+    {
+      "id": 196,
+      "title": "Punakaiki 海蚀洞危险",
+      "location": "Paparoa National Park, Pancake Rocks blowhole 北侧礁石平台",
+      "author_role": "DOC ranger + NIWA marine geologist",
+      "mark_text": "WAVE TRAP — 大潮 + 西风时浪可越围栏冲入观景平台。已3名游客被冲下平台救起。10am-2pm 大潮日避开。",
+      "events_timeline": [
+        "2019 一名游客被浪冲下骨折",
+        "2022 又两起类似事件",
+        "2023 DOC 与 NIWA 联合发 mark",
+        "2024 加上潮汐警告灯",
+        "2025-01 mark 加多语种",
+        "2025-04 ranger 实测后保留"
+      ],
+      "human_judgment": "DOC+NIWA 海洋地质学家+潮汐时间建议+多语种，海洋地理专业",
+      "expected_score": 9.3,
+      "expected_decay_days": 1825
+    },
+    {
+      "id": 197,
+      "title": "Mt Ruapehu Lahar 警报系统",
+      "location": "Tongariro National Park, Whangaehu Valley 上游 lahar 警报传感器位置",
+      "author_role": "GNS Science + DOC + ERLAWS lahar warning system",
+      "mark_text": "LAHAR PATH — 2007年此处 lahar 流过冲毁桥梁。听到警报立刻向高处撤离，勿停车拍照。系统全年 24小时监测。",
+      "events_timeline": [
+        "2007-03 大规模 lahar 事件",
+        "2008 ERLAWS 系统启用",
+        "2015 GNS 与 DOC 联合 mark",
+        "2020 系统测试演练全员 mark 引导有效",
+        "2024-09 alert level 1 期间 mark 强调",
+        "2025-04 系统升级 mark 同步"
+      ],
+      "human_judgment": "GNS+DOC+ERLAWS 国家级警报+真实历史事件，火山次生灾害顶级警示",
+      "expected_score": 9.8,
+      "expected_decay_days": 7300
+    },
+    {
+      "id": 198,
+      "title": "Auckland Waitakere kauri dieback 封闭",
+      "location": "Waitakere Ranges, Cascade Kauri Loop Track 入口",
+      "author_role": "Auckland Council biosecurity + Te Kawerau ā Maki iwi",
+      "mark_text": "RĀHUI & DIEBACK — 此步道封闭至 kauri 病害解决。强行进入危害 kauri 古树并触犯 iwi rāhui，罚款 NZ$2000。",
+      "events_timeline": [
+        "2017 kauri dieback 严重确认",
+        "2018 Te Kawerau 发 rāhui",
+        "2019 council 与 iwi 联合永久 mark",
+        "2022 一名游客无视进入被罚",
+        "2024 病害仍未控制",
+        "2025-04 mark 翻新加双语"
+      ],
+      "human_judgment": "council+iwi+生态病害科学+文化禁忌，自然与文化双重权威",
+      "expected_score": 9.7,
+      "expected_decay_days": 7300
+    },
+    {
+      "id": 199,
+      "title": "Wairarapa Cape Palliser 冬季灯塔关闭",
+      "location": "Wairarapa, Cape Palliser 灯塔 252 级阶梯上方平台",
+      "author_role": "DOC + Maritime NZ heritage division",
+      "mark_text": "SEASONAL CLOSURE — 6-9月强风期阶梯结冰已发生 2 起跌落骨折。冬季关闭，平台仅夏季开放。",
+      "events_timeline": [
+        "2019-07 一名游客冰滑骨折",
+        "2021-08 又一起类似事件",
+        "2022 DOC 与 Maritime NZ 联合发季节性 mark",
+        "2023 加上冰滑警告图",
+        "2024-06 季节性封闭按期执行",
+        "2025-09 春季解封 mark 调整"
+      ],
+      "human_judgment": "DOC+Maritime NZ+季节限制+具体伤情，季节性安全管理标准",
+      "expected_score": 9.2,
+      "expected_decay_days": 1095
+    },
+    {
+      "id": 200,
+      "title": "Marlborough Sounds 沉船潜水点纪念",
+      "location": "Marlborough Sounds, Port Gore 外侧 Mikhail Lermontov 号苏联邮轮 1986 年沉船遗址",
+      "author_role": "Maritime NZ + Picton dive operator + DOC",
+      "mark_text": "WRECK MEMORIAL — 1986年此处苏联邮轮沉没 1 人遇难。仅认证 wreck diver 可下潜，禁止移除任何物品。",
+      "events_timeline": [
+        "1986-02 Mikhail Lermontov 触礁沉没",
+        "1990 列入潜水保护区",
+        "2010 一名潜水员违规取物被起诉",
+        "2016 Maritime NZ 与 DOC 联合 mark",
+        "2021 35 周年纪念活动",
+        "2025-02 mark 翻新加双语"
+      ],
+      "human_judgment": "Maritime NZ+DOC+潜水商业认证要求+具体历史，海事文化遗产保护",
+      "expected_score": 9.4,
+      "expected_decay_days": 7300
+    }
+  ]
+}

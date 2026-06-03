@@ -1,0 +1,103 @@
+{
+  "algorithm_version": "v3.9",
+  "rounds": 10,
+  "n_per_round": 1000,
+  "total_cases": 10000,
+  "total_passed": 9995,
+  "total_failed": 5,
+  "overall_rate": "99.95%",
+  "min_rate": "99.9%",
+  "stable_rounds": "10/10",
+  "per_round": [
+    {
+      "seed": 42,
+      "passed": 1000,
+      "total": 1000,
+      "rate": "100.0",
+      "goodSunk": 0,
+      "badAlive": 0,
+      "docSunk": 0
+    },
+    {
+      "seed": 1,
+      "passed": 999,
+      "total": 1000,
+      "rate": "99.9",
+      "goodSunk": 1,
+      "badAlive": 0,
+      "docSunk": 0
+    },
+    {
+      "seed": 7,
+      "passed": 1000,
+      "total": 1000,
+      "rate": "100.0",
+      "goodSunk": 0,
+      "badAlive": 0,
+      "docSunk": 0
+    },
+    {
+      "seed": 13,
+      "passed": 1000,
+      "total": 1000,
+      "rate": "100.0",
+      "goodSunk": 0,
+      "badAlive": 0,
+      "docSunk": 0
+    },
+    {
+      "seed": 99,
+      "passed": 999,
+      "total": 1000,
+      "rate": "99.9",
+      "goodSunk": 1,
+      "badAlive": 0,
+      "docSunk": 0
+    },
+    {
+      "seed": 314,
+      "passed": 999,
+      "total": 1000,
+      "rate": "99.9",
+      "goodSunk": 1,
+      "badAlive": 0,
+      "docSunk": 0
+    },
+    {
+      "seed": 1234,
+      "passed": 999,
+      "total": 1000,
+      "rate": "99.9",
+      "goodSunk": 1,
+      "badAlive": 0,
+      "docSunk": 0
+    },
+    {
+      "seed": 2024,
+      "passed": 999,
+      "total": 1000,
+      "rate": "99.9",
+      "goodSunk": 1,
+      "badAlive": 0,
+      "docSunk": 0
+    },
+    {
+      "seed": 9999,
+      "passed": 1000,
+      "total": 1000,
+      "rate": "100.0",
+      "goodSunk": 0,
+      "badAlive": 0,
+      "docSunk": 0
+    },
+    {
+      "seed": 31415,
+      "passed": 1000,
+      "total": 1000,
+      "rate": "100.0",
+      "goodSunk": 0,
+      "badAlive": 0,
+      "docSunk": 0
+    }
+  ]
+}

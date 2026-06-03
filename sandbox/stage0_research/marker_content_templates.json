@@ -1,0 +1,112 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "generated": "2026-05-30",
+    "purpose": "提供给沙盒虚拟人作为 plant marker 时的内容模板, 增加真实感",
+    "language": "中英混合 (NZ 实际场景)"
+  },
+
+  "templates": {
+    "danger": [
+      "陡坡碎石, 建议有登山杖",
+      "Steep loose rock, hiking poles recommended",
+      "落石区, 注意头顶",
+      "Rockfall zone, watch overhead",
+      "桥已断, 需绕路",
+      "Bridge broken, detour needed",
+      "河水深, 涉水危险",
+      "Deep stream crossing, dangerous in flood",
+      "雪线之上, 需冰爪",
+      "Above snowline, crampons required",
+      "悬崖边缘, 大风时危险",
+      "Cliff edge, dangerous in wind",
+      "积雪未化, 路径不清晰",
+      "Snow covered, trail unclear",
+      "野生动物出没",
+      "Wild boar sighting",
+      "蜜蜂巢, 绕远",
+      "Wasp nest, give wide berth",
+      "暗冰路面",
+      "Black ice on trail"
+    ],
+
+    "supply": [
+      "干净溪水, 可饮",
+      "Clean stream, drinkable",
+      "DOC hut 25 米外",
+      "DOC hut 25m off trail",
+      "营地空地",
+      "Flat camping spot",
+      "公共厕所",
+      "Public toilet here",
+      "煮水点, 有炉灶",
+      "Cooking shelter with stove",
+      "信号点 (短暂 Spark 4G)",
+      "Phone signal spot (Spark 4G occasional)",
+      "天然遮蔽点 (大石头下)",
+      "Natural shelter under rock overhang",
+      "DOC 维护牌, 有信息",
+      "DOC info board"
+    ],
+
+    "junction": [
+      "向左去 Routeburn Falls",
+      "Left to Routeburn Falls",
+      "三岔路口, 主线在右",
+      "Three-way junction, main trail right",
+      "回头路, 不要走右边",
+      "Dead end right, do not enter",
+      "短切走小径",
+      "Shortcut via minor track",
+      "环线起点",
+      "Loop trail starts here",
+      "DOC orange triangle marker",
+      "下山路线左转"
+    ],
+
+    "scenic": [
+      "日落最美, 17:30 后",
+      "Best sunset spot, after 17:30",
+      "湖面倒影, 早晨无风时",
+      "Lake reflections, calm mornings only",
+      "可见 Aoraki / Mt Cook",
+      "Aoraki / Mt Cook visible from here",
+      "瀑布全景",
+      "Full waterfall view",
+      "Tussock 草原 + 雪山",
+      "Tussock plain + snowy peaks",
+      "古老 beech 树, 千年以上",
+      "Ancient beech tree, 1000+ years",
+      "鸟鸣集中处 (tūī, korimako)",
+      "Bird song hotspot (tūī, korimako)",
+      "原生灌木林"
+    ],
+
+    "cairn": [
+      "致信陌生人: 慢慢走, 享受",
+      "To strangers: walk slowly, enjoy",
+      "我妈妈在这里教我系鞋带",
+      "My mother taught me to tie my shoes here",
+      "20 年前我和爸爸来过这里",
+      "20 years ago I came here with dad",
+      "感谢 leave no trace",
+      "Thank you for leaving no trace",
+      "Kia kaha, 还有 5km",
+      "Kia kaha, 5km to go",
+      "你已经走了一半",
+      "You're halfway",
+      "回头看, 风景不一样",
+      "Look back, the view is different",
+      "Te wāhi pai - good place"
+    ]
+  },
+
+  "_total": 50,
+  "_per_type_count": {
+    "danger": 10,
+    "supply": 8,
+    "junction": 7,
+    "scenic": 8,
+    "cairn": 7
+  }
+}

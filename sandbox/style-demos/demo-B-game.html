@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Sandbox Demo B — Game</title>
+<style>
+  body { margin: 0; padding: 0; background: #1a1d24; font-family: -apple-system, sans-serif; height: 100vh; overflow: hidden; display: flex; color: #e0e0e0; }
+
+  /* Sidebar — 深色游戏感 */
+  #panel { width: 280px; background: #22262e; border-right: 2px solid #2d3139; padding: 18px; box-sizing: border-box; font-size: 12px; box-shadow: 4px 0 12px rgba(0,0,0,0.3); }
+  #panel h1 { font-size: 16px; margin: 0 0 4px; color: #fff; font-weight: 700; letter-spacing: 0.5px; }
+  #panel .sub { color: #888; font-size: 11px; margin-bottom: 18px; font-style: italic; }
+  .section { margin-bottom: 16px; padding: 10px; background: #1d2027; border-radius: 6px; border: 1px solid #2d3139; }
+  .section h3 { font-size: 10px; color: #d4a878; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 11px; }
+  .row label { color: #aaa; }
+  .row .val { color: #d4a878; font-weight: 600; font-family: 'SF Mono', Consolas, monospace; }
+  input[type="range"] { width: 100%; accent-color: #d4a878; }
+  button { width: 100%; padding: 8px; background: linear-gradient(180deg, #2d3139, #22262e); border: 1px solid #3a3f47; border-radius: 4px; cursor: pointer; font-size: 12px; color: #e0e0e0; margin-bottom: 5px; transition: all 0.15s; font-weight: 500; }
+  button:hover { background: linear-gradient(180deg, #3a3f47, #2d3139); border-color: #d4a878; }
+  button.primary { background: linear-gradient(180deg, #c95620, #a04219); color: #fff; border-color: #c95620; }
+  button.primary:hover { background: linear-gradient(180deg, #d4a878, #c95620); }
+
+  /* Stage */
+  #stage { flex: 1; position: relative; overflow: hidden; }
+  canvas { display: block; }
+
+  /* Status bar — game HUD */
+  #statusbar { position: absolute; top: 12px; left: 12px; background: rgba(34,38,46,0.9); padding: 8px 14px; border-radius: 4px; font-size: 12px; color: #e0e0e0; border: 1px solid #3a3f47; backdrop-filter: blur(4px); }
+  #statusbar span { margin-right: 16px; }
+  #statusbar strong { color: #d4a878; font-family: 'SF Mono', Consolas, monospace; }
+
+  /* Marker info card — game tooltip 风格 */
+  .marker-card { position: absolute; background: rgba(34,38,46,0.95); border: 1px solid #d4a878; padding: 8px 12px; border-radius: 4px; font-size: 11px; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.5); backdrop-filter: blur(8px); }
+  .marker-card .title { font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .marker-card .stat { color: #aaa; }
+  .marker-card .stat .num { color: #4CAF50; font-weight: 700; font-family: 'SF Mono', Consolas, monospace; }
+  .marker-card .stat .red { color: #F44336; }
+  .marker-card .reasons { color: #888; margin-top: 4px; padding-top: 4px; border-top: 1px solid #3a3f47; font-size: 10px; }
+
+  /* View mode toggle */
+  #view-toggle { position: absolute; top: 12px; right: 12px; background: rgba(34,38,46,0.9); padding: 6px 10px; border-radius: 4px; font-size: 11px; color: #e0e0e0; border: 1px solid #3a3f47; cursor: pointer; }
+  #view-toggle:hover { border-color: #d4a878; }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <h1>⚙ CAIRN SANDBOX</h1>
+  <div class="sub">Demo B — Game Style</div>
+
+  <div class="section">
+    <h3>▎ Population</h3>
+    <div class="row"><label>Walkers</label><span class="val">500</span></div>
+    <input type="range" min="10" max="500" value="500" />
+  </div>
+
+  <div class="section">
+    <h3>▎ Time Control</h3>
+    <div class="row"><label>Speed</label><span class="val">100×</span></div>
+    <input type="range" min="1" max="10000" value="100" />
+  </div>
+
+  <div class="section">
+    <h3>▎ Persona Mix</h3>
+    <div class="row"><label>🟢 Explorer</label><span class="val">30%</span></div>
+    <div class="row"><label>🟠 Social</label><span class="val">40%</span></div>
+    <div class="row"><label>🔵 Enthusiast</label><span class="val">5%</span></div>
+    <div class="row"><label>⚪ Lurker</label><span class="val">20%</span></div>
+    <div class="row"><label>🟣 Critic</label><span class="val">4%</span></div>
+    <div class="row"><label>🔴 Spammer</label><span class="val">0.5%</span></div>
+    <div class="row"><label>🩷 Malicious</label><span class="val">0.5%</span></div>
+  </div>
+
+  <div class="section">
+    <h3>▎ Algorithm</h3>
+    <div class="row"><label>τ supply</label><span class="val">30d</span></div>
+    <div class="row"><label>τ report</label><span class="val">30d</span></div>
+    <div class="row"><label>heartbeat</label><span class="val">20%</span></div>
+  </div>
+
+  <div class="section">
+    <button class="primary">▶ START SIMULATION</button>
+    <button>⏸ PAUSE</button>
+    <button>↻ RESET</button>
+    <button>📷 SCREENSHOT</button>
+    <button>💾 EXPORT JSON</button>
+  </div>
+</div>
+
+<div id="stage">
+  <canvas id="canvas"></canvas>
+  <div id="statusbar">
+    <span>Day: <strong>42</strong></span>
+    <span>Markers: <strong>87</strong></span>
+    <span>Healthy: <strong>71</strong></span>
+    <span>Sunk: <strong>14</strong></span>
+    <span>Heartbeat: <strong>2</strong></span>
+  </div>
+  <div id="view-toggle">👁 GOD VIEW</div>
+
+  <div class="marker-card" style="left: 320px; top: 150px;">
+    <div class="title">⚠ danger #34</div>
+    <div class="stat">❤ <span class="num">23</span> &nbsp; 🚩 <span class="num red">7</span></div>
+    <div class="reasons">info: 3 · dislike: 2 · spam: 1 · other: 1</div>
+  </div>
+  <div class="marker-card" style="left: 580px; top: 280px;">
+    <div class="title">💧 supply #12</div>
+    <div class="stat">❤ <span class="num">45</span> &nbsp; 🚩 <span class="num">0</span></div>
+  </div>
+  <div class="marker-card" style="left: 750px; top: 420px;">
+    <div class="title">🪨 cairn #08</div>
+    <div class="stat">❤ <span class="num">12</span> &nbsp; 🚩 <span class="num red">2</span></div>
+    <div class="reasons">dislike: 2</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth - 280;
+canvas.height = window.innerHeight;
+
+// 深色背景 + 网格
+const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+grad.addColorStop(0, '#0e1014');
+grad.addColorStop(1, '#1a1d24');
+ctx.fillStyle = grad;
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+// 网格 — 暗色
+ctx.strokeStyle = 'rgba(212, 168, 120, 0.06)';
+ctx.lineWidth = 1;
+for (let x = 0; x < canvas.width; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+for (let y = 0; y < canvas.height; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
+
+// Persona 颜色 — 鲜艳游戏感
+const personaColors = {
+  explorer: '#4CAF50',
+  social: '#FF9800',
+  enthusiast: '#2196F3',
+  lurker: '#9E9E9E',
+  critic: '#9C27B0',
+  spammer: '#F44336',
+  malicious: '#E91E63'
+};
+
+const types = ['explorer', 'social', 'enthusiast', 'lurker', 'critic', 'spammer'];
+const counts = [60, 80, 10, 40, 8, 2];
+let walkers = [];
+types.forEach((t, i) => {
+  for (let j = 0; j < counts[i]; j++) {
+    walkers.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      type: t
+    });
+  }
+});
+
+// 画虚拟人 — 带光晕
+walkers.forEach(w => {
+  ctx.fillStyle = personaColors[w.type] + '40';
+  ctx.beginPath();
+  ctx.arc(w.x, w.y, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = personaColors[w.type];
+  ctx.beginPath();
+  ctx.arc(w.x, w.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+});
+
+// 旗帜 — 立体感
+const markerTypes = ['danger', 'supply', 'junction', 'scenic', 'cairn'];
+const markerColors = {
+  danger: '#D32F2F',
+  supply: '#388E3C',
+  junction: '#F57C00',
+  scenic: '#1976D2',
+  cairn: '#795548'
+};
+for (let i = 0; i < 30; i++) {
+  const t = markerTypes[i % 5];
+  const x = Math.random() * canvas.width;
+  const y = Math.random() * canvas.height;
+  // 阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(x, y + 1, 6, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 旗杆
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - 18);
+  ctx.stroke();
+  // 旗 (含外圈光)
+  ctx.fillStyle = markerColors[t] + '60';
+  ctx.beginPath();
+  ctx.moveTo(x, y - 18);
+  ctx.lineTo(x + 14, y - 14);
+  ctx.lineTo(x, y - 10);
+  ctx.fill();
+  ctx.fillStyle = markerColors[t];
+  ctx.beginPath();
+  ctx.moveTo(x + 1, y - 17);
+  ctx.lineTo(x + 12, y - 14);
+  ctx.lineTo(x + 1, y - 11);
+  ctx.fill();
+}
+
+// 结伴: 同色圆圈 + 虚线
+ctx.strokeStyle = '#FF9800';
+ctx.lineWidth = 1.5;
+ctx.setLineDash([3, 3]);
+ctx.beginPath();
+ctx.moveTo(380, 220);
+ctx.lineTo(400, 240);
+ctx.stroke();
+ctx.setLineDash([]);
+[[380, 220], [400, 240]].forEach(([x, y]) => {
+  ctx.fillStyle = '#FF980040';
+  ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#FF9800';
+  ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,73 @@
+{
+  "case_661_review": {
+    "sampled": 30,
+    "agree": 27,
+    "disagree": [
+      {
+        "id": 501,
+        "current_state": "heartbeat",
+        "suggested_state": "healthy_or_dead_natural",
+        "comment": "0 互动偏远 hut 14 个月,无任何负向信号。v6.6 状态机 HEARTBEAT 只能从 SUSPICIOUS→CRITICAL 进入,与上轮 audit 修正的 502/504/...547 同型。rationale 自己写'寿命自然流失/可能仍 alive',却给 heartbeat,内部矛盾。"
+      },
+      {
+        "id": 523,
+        "current_state": "heartbeat",
+        "suggested_state": "healthy_or_dead_natural",
+        "comment": "100/月 6 月 0 互动 0 报告,rationale 自己写'寿命走完 dead_natural',应是 healthy(若寿命未尽)或 dead_natural(若已尽),不是 heartbeat。"
+      },
+      {
+        "id": 538,
+        "current_state": "heartbeat",
+        "suggested_state": "healthy_or_dead_natural",
+        "comment": "200/月 5 月 0 互动 0 报告,rationale 自己写'寿命走完',与 heartbeat 标签矛盾,同 502 系统性错误。"
+      }
+    ],
+    "systemic_issue": "上一轮 audit 修复了 26 条 0:0 mis-labeled-as-heartbeat,但当前 19 条 heartbeat 中仍全部是 0 互动 + 无负向信号(503/507/513/514/518/525/527/528/529/535/539/542/545/546/548/549 + 抽到的 501/523/538)。rationale 普遍包含'寿命走完 dead_natural'或'仍 alive 心跳状态'——内部矛盾。这些应该全部归 healthy(寿命未尽)或 dead_natural(寿命已尽),不应是 heartbeat。修复不彻底。",
+    "other_findings": "30 抽样中 healthy 类 10 条全部合理(高赞低报、季节性正向、新 mark 高占比);suspicious 5 条都有明确向下急转或近期 unanimous 反转(354/365/823 占比反转 → 急转,符合 v6.6 §三);dead_sick 5 条全部呈现急转→治疗失败路径(2/52/88/263/416);context_dependent 4 条均季节性占比稳定无急转;dead_natural 3 条均寿命走完无趋势恶化。AGREE 率 27/30 = 90%,核心思想已贯彻,残余偏差全部集中在 heartbeat 桶。"
+  },
+  "chaos_monkey_review": {
+    "p0_fixed": [
+      "P0-1 controversial_50_50 expected='alive_no_suspicious' (line 159) — 已对齐 Case R '不进 SUSPICIOUS' 的核心断言",
+      "P0-2 复活三档已建立: revivable (natural_death_revivable, line 203) / revivable_on_site (sick_death_on_site_only, line 213) / not_revivable (sick_death_not_revivable, line 224) — 与 v6.6 §六决策 1 三档对齐",
+      "P0-3 judge 返回 pass:'pending' (line 534) + 顶部输出 'JUDGE NOT WIRED — RESULTS ARE COSMETIC' (line 555) — 误导信号已清除"
+    ],
+    "p1_fixed": [
+      "P1-1 商业 fake_ad 不再依赖 quality 阈值 (pickReportCategory line 423-426 直接 70% fake_ad 不 gating)",
+      "P1-2 pickArc 用动态 totalWeight 归一化 (line 334)",
+      "P1-3 view 事件每 visitor 必产生 (simulate line 484)"
+    ],
+    "missing_arcs_resolved": [
+      "Case F clean_mark_single_fake_ad (#17) ✓",
+      "Case I lifespan_expired_in_suspicious (#18) ✓",
+      "Case J late_burst_extends_life (#19) ✓",
+      "Case M doc_warning_brigade_attacked (#20) ✓",
+      "信号消化第二轮 second_round_decline (#21) ✓",
+      "混合严重度 mixed_severity_decline (#22) ✓"
+    ],
+    "remaining_issues": [
+      {
+        "severity": "P2",
+        "issue": "Case K (HEARTBEAT 后切流量伪永生 / 时钟 A 在 HEARTBEAT 不冰冻) 仍未补 arc。原 audit 的 8 条缺失里这条没补。"
+      },
+      {
+        "severity": "P2",
+        "issue": "复活后继续累计的二代 mark arc (Case O 后续凭实力续命) 未补 — sick_death_not_revivable 不等价于二代复活验证。"
+      },
+      {
+        "severity": "P3",
+        "issue": "23 个 arc 权重总和 = 1.16 (>1.0)。pickArc 已用 dynamic totalWeight 动态归一化所以不会出错,但权重设计与文档默认 sum=1 假设不一致,易误导审计者。"
+      },
+      {
+        "severity": "P3",
+        "issue": "注释序号有重复:第 235 行 brigade_then_recovery 注释为 '15.' 但实际位置是第 16 个 arc (sick_death_not_revivable 已占 #15)。第 320 行注释写 'Case H Wanaka cairn' 但归到了 'mixed_severity_decline'(描述吻合 Case H,无功能错误,仅注释序号不齐)。"
+      },
+      {
+        "severity": "P2",
+        "issue": "judge 现状仅返回 'pending','judge ratio-based 放宽逻辑'(原 P1)和 'context_dependent 极小样本分支'(原 P2)实际上都未被验证因为 judge 还没接入算法 — 这两项目前不阻塞,但接入 algorithm-v6 时务必复核。"
+      }
+    ]
+  },
+  "overall_approval": "NEEDS_FIX",
+  "score": 78,
+  "summary": "chaos-monkey 修复合格 (P0 全修 / P1 全修 / 6 个新 arc 已补,judge 误导信号已清除),分数 88/100。但 661 case 修复不彻底 — 19 条 heartbeat 仍全部是 0:0 零互动且 rationale 自相矛盾,与上一轮已修复的 502 系列同型,系统性错误未根除。建议将所有剩余 heartbeat 标签按其 rationale 中的 '寿命走完' 字样改为 healthy 或 dead_natural,这是上一轮 28 条修正的逻辑延伸。chaos-monkey 还差 Case K (HEARTBEAT 不冰冻) + 二代复活 arc 即可圆满。综合分 78,主要被 661 拖累。修完 heartbeat 桶 + 补 2 个缺失 arc 即 READY。"
+}

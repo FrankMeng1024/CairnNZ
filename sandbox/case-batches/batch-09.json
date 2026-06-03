@@ -1,0 +1,814 @@
+{
+  "batch": 9,
+  "theme": "重复/错放/坐标问题",
+  "id_range": [401, 450],
+  "total": 50,
+  "cases": [
+    {
+      "id": 401,
+      "title": "Roy's Peak summit 同一观景点被 5 个游客各标了一个 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Roy's Peak summit 之前 200m 那个全 NZ Instagram 最火的山脊点，Wanaka 湖一览无余的位置，每天日出日落两批人涌上去",
+        "intrinsic_quality": "景是真的好，但 5 个 mark 挤在 30m 半径里，地图上叠成一坨",
+        "user_volume_per_month": 800,
+        "duration_months": 6,
+        "signal": "好 — 半山有 Spark 信号",
+        "season_pattern": "11月-3月暴涨，6-8月雪封但仍有人爬，赞量一年都不停",
+        "human_factors": "海外游客 60%，多数标完不删；本地人看到重复也懒得清；少数老炮在群里吐槽地图脏"
+      },
+      "events_timeline": [
+        "第1月: 一个韩国游客 Hyejin 第一个标，写'Wanaka view spot'，配日出图",
+        "第1月: 三天后一个德国家庭 Müller 没注意到已有 mark，又标一个'Best photo here'",
+        "第2月: 一个澳洲背包客直接从'最近的 mark'功能新建第三个，写'sunrise point'",
+        "第3月: 本地 tramper Dave 在 Wanaka tramping FB 群发帖：'Roy's Peak 上有 4 个一样的 mark 谁能合并下'，60 赞没人动",
+        "第4月: 第 5 个 mark 出现，是一个旅行博主，标完截图发 Reels，又带来一波点赞",
+        "第6月: 5 个 mark 各自有 80-200 赞，没人举报，地图缩放到山顶层级时全挤成一团彩色圆点"
+      ],
+      "expected_signal_summary": "5 个 mark 总赞约 700，举报 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "重复但全部 alive — 每个 mark 单独看都是高赞健康 scenic，算法没办法判断'这是同一景点'，需要去重逻辑而不是健康度逻辑解决",
+      "edge_case_flag": "重复错放 + 同地点多 mark"
+    },
+    {
+      "id": 402,
+      "title": "Hooker Valley swing bridge 第一座桥被三个用户重复标 junction",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Aoraki/Mt Cook 国家公园 Hooker Valley track 第一座 swing bridge 北端，过桥后路其实只有一条没有岔，但桥头有个补水的小路下到河边",
+        "intrinsic_quality": "其实不是真的 junction，三个用户都把'下河取水的支路'当成主路岔了",
+        "user_volume_per_month": 1200,
+        "duration_months": 4,
+        "signal": "断续 — 山谷里 Vodafone 偶尔有信号",
+        "season_pattern": "夏季每天 200+ 人，冬季也开但减半，桥结冰时关闭",
+        "human_factors": "游客多为 day-walker，看到 junction mark 会停下看，发现'其实没岔'就疑惑，少数会举报"
+      },
+      "events_timeline": [
+        "第1月: 一个新西兰本地家长 Sarah 标 junction，意思是'这里能下到河边给小孩玩水'",
+        "第1月: 一个意大利游客 Marco 没看到 Sarah 的 mark（他是离线模式），又标一个 junction，写'water access'",
+        "第2月: DOC 巡逻员路过看到两个 mark 写在同一桥头，没干预",
+        "第2月: 第三个 mark 来自一个 hut warden 训练班的学员，标'side track to riverbed'",
+        "第3月: 一个挪威 tramper 走过来看到三个 junction 圆点重叠，按了举报：'no actual junction here, just a path to water'",
+        "第4月: 三个 mark 都还在，举报只 1 条，赞各 30-50，作者都没回应"
+      ],
+      "expected_signal_summary": "3 个 mark 总赞约 120，举报 1",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "类型选错了——这不是 junction 是 supply，但赞量稳健，算法看不出语义错误，需要类型审核机制而不是淹没",
+      "edge_case_flag": "重复错放 + 类型选错"
+    },
+    {
+      "id": 403,
+      "title": "Tongariro Crossing Red Crater 顶 GPS 偏移 200m 的 danger mark",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tongariro Alpine Crossing Red Crater 顶最高点附近，刮 60km/h 大风的山脊，标的人想警告强风但 GPS 把点丢到了西侧 Emerald Lakes 上方 200m 的湖面位置",
+        "intrinsic_quality": "信息是对的（强风+陡坡），但坐标完全错位，落到一个安全的湖区",
+        "user_volume_per_month": 1500,
+        "duration_months": 8,
+        "signal": "无 — 火山区 Spark/Vodafone 都没信号",
+        "season_pattern": "12-3月每天 2000+ 人，4-11月减少但仍开放，强风警告 6-9 月最频繁",
+        "human_factors": "游客看到 danger 在湖面会困惑'危险在哪'，本地向导知道是 GPS 误差但不会修"
+      },
+      "events_timeline": [
+        "第1月: 标这个 mark 的是一个本地向导 Whetu，他下山后才同步，手机 GPS 在山脊飘了",
+        "第2月: 一个英国游客在 Emerald Lakes 看到红圆点，绕路 100m 试图避开'危险'，发帖问是什么",
+        "第3月: 第二个用户在 Red Crater 真实位置又标了一个 danger（坐标也飘但飘到东侧 80m），算两个 mark",
+        "第4月: 一个新西兰 DOC 巡逻员看到湖面那个 danger 圆点笑了笑，没动",
+        "第5月: 第一个 mark 收到 12 个赞，多数是'谢谢警告'但其实赞错位置；3 个困惑的举报",
+        "第8月: 两个 mark 都活着，没合并，地图上一个山脊一个湖各显示一个 danger 圆点"
+      ],
+      "expected_signal_summary": "总赞约 35，举报 4",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "坐标偏移的 mark 信息有价值但位置误导，算法该不该 sink 取决于'位置错=信号错'的判断，目前停在 borderline 是合理的",
+      "edge_case_flag": "重复错放 + GPS 偏移"
+    },
+    {
+      "id": 404,
+      "title": "Mt Taranaki Pouakai Hut 屋顶下补给箱被错标成 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Mt Taranaki Pouakai Circuit 上 Pouakai Hut 木屋的屋檐下，DOC 维护一个紧急补给塑料箱（火柴+急救包+干燥燃料），背包客一个 25 岁的德国女生 Lena 标成了 scenic",
+        "intrinsic_quality": "实际是 supply 关键信息，标错类型导致 supply 搜索的人看不到",
+        "user_volume_per_month": 80,
+        "duration_months": 5,
+        "signal": "无 — Egmont 国家公园全境无信号",
+        "season_pattern": "11-4月主季，5-10月雪季只有有经验 tramper 来",
+        "human_factors": "走 Pouakai Circuit 的多是中级 tramper，对错标类型敏感但很少回到出发点修"
+      },
+      "events_timeline": [
+        "第1月: Lena 标的时候点错了下拉菜单，写描述是'emergency supplies under hut roof'但类型选了 scenic",
+        "第1月: 第一个看到的 tramper Mark 在 hut intentionsbook 写'someone marked this as scenic but it's a supply box, FYI'",
+        "第2月: 一个 hut warden 巡逻看到 mark 类型错，没账号无法直接改，向 DOC 反馈被搁置",
+        "第3月: 三个 supply 类型搜索的用户错过了这个 mark 因为搜不到——他们其中一个在 hut 抱怨没找到火柴",
+        "第4月: 一个澳洲 tramper Patrick 看到 scenic 圆点点开发现是补给信息，按赞但没改",
+        "第5月: 一个新 mark 出现在同 hut，正确标 supply，类型对，描述简单：'fire starter under eaves'"
+      ],
+      "expected_signal_summary": "scenic mark 总赞约 8，supply 新 mark 总赞约 25",
+      "expected_outcome": "alive",
+      "expected_status": "weak",
+      "human_judgment": "错标类型让信号不进对的搜索池，赞量也低于 supply 的合理水平——这种 case 算法不能识别，但会自然在 weak 状态徘徊",
+      "edge_case_flag": "重复错放 + 类型选错"
+    },
+    {
+      "id": 405,
+      "title": "Cape Reinga 灯塔基座一个 cairn 被四个用户分别标四次",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "新西兰最北端 Cape Reinga 灯塔下方 20m 的陡坡上，毛利人传统认为亡灵从此跃入大海，灯塔基座旁有一个游客自发堆的小石堆，四个不同时间的游客各自标了一次",
+        "intrinsic_quality": "石堆本身是非传统的（不在毛利文化原意里），多次重复标记进一步弱化语义",
+        "user_volume_per_month": 4000,
+        "duration_months": 7,
+        "signal": "弱 — 灯塔最高处偶尔 Spark",
+        "season_pattern": "全年游客流量大，summer 每天数百，冬季也有 tour bus",
+        "human_factors": "海外游客 80%，到此一游心态，标完拍照发 ig 不在乎重复"
+      },
+      "events_timeline": [
+        "第1月: 一个加拿大 backpacker 第一次标 cairn，写'tiny stone stack at lighthouse'",
+        "第2月: 一个日本旅游团里的 60 岁阿姨标第二次，描述是日语'灯台横の石塚'",
+        "第3月: 一个本地 Iwi 成员 Tane 看到这些标记很不爽，但选择不举报（不想让平台'文化巡查'）",
+        "第4月: 一个法国情侣标第三次，加了四张同角度照片",
+        "第5月: 第四个 mark 来自一个新加坡 vlogger，标完直接 link 到 youtube",
+        "第6月: 四个 mark 总赞 200+，无举报，全 alive"
+      ],
+      "expected_signal_summary": "总赞约 250，举报 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高流量打卡点的 cairn 重复 mark 是常态，算法看每条都健康，但社区/文化层面其实是 noise——这是产品设计而非健康度问题",
+      "edge_case_flag": "重复错放 + 同地点多 mark"
+    },
+    {
+      "id": 406,
+      "title": "Cathedral Cove 海滩 GPS 飘到了海里 50m 的 scenic mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Coromandel 半岛 Cathedral Cove 那个穿洞海蚀岩拱门，一个游客在岩拱下方拍照时 GPS 把坐标飘到了离岸 50m 的海面上",
+        "intrinsic_quality": "景点本身没问题，但坐标显示在海里，地图上是个浮在 Pacific Ocean 的圆点",
+        "user_volume_per_month": 6000,
+        "duration_months": 3,
+        "signal": "好 — 海岸线 Spark 信号稳定",
+        "season_pattern": "12-2月旺季每天 1000+，冬季关闭部分时段防落石",
+        "human_factors": "游客多数当晚回酒店看地图发现 mark 在海里就笑笑，少数较真的会举报"
+      },
+      "events_timeline": [
+        "第1月: 一个 NZ Auckland 大学生 Aroha 在岩拱下标 mark，发完没看坐标",
+        "第1月: 当晚她在 Hahei 民宿打开 app 发现 mark 浮在海里，犹豫要不要删——最后没删",
+        "第2月: 三个游客打开地图看到海里的 scenic mark 困惑，其中一个举报'wrong location'",
+        "第2月: 另外两个用户在岩拱真实位置上各标了新的 scenic mark（坐标对的）",
+        "第3月: Aroha 海里那个 mark 收到 5 赞 2 举报，但还活着；陆地上两个新 mark 各 30+ 赞",
+        "第3月: 一个 tour guide 在 fb 发图吐槽地图上 Cathedral Cove 有 3 个 mark 一个还在海里"
+      ],
+      "expected_signal_summary": "海里 mark 总赞 5 / 举报 2，陆地 mark 总赞 70",
+      "expected_outcome": "sunk",
+      "expected_status": "weak",
+      "human_judgment": "坐标在海里直接降低社区信任，举报与赞比异常高，应当被 sink，但平台的算法看到的是低活跃而不是位置错",
+      "edge_case_flag": "重复错放 + GPS 极端偏移"
+    },
+    {
+      "id": 407,
+      "title": "Kepler Track Luxmore Hut 走廊一个 supply 被三个 hut 用户重复标",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Fiordland Kepler Track 第一晚 Luxmore Hut 木屋内走廊靠墙位置，DOC 维护一个紧急哨子+急救哨说明书的小盒，三个不同 booking 周期的用户分别标了 supply",
+        "intrinsic_quality": "信息有用但完全重复，三个 mark 在 hut 平面图上叠成一个圆",
+        "user_volume_per_month": 60,
+        "duration_months": 4,
+        "signal": "无 — Fiordland 国家公园无信号区",
+        "season_pattern": "10-4月 booking 必须，5-9月 winter 模式 hut 半开放",
+        "human_factors": "Great Walk 用户多为认真的 tramper，看到重复 mark 会皱眉但很少删除别人的"
+      },
+      "events_timeline": [
+        "第1月: 一个 American thru-hiker Rebecca 标第一个 supply，描述详细：'whistle box on east wall by bunkroom door'",
+        "第2月: 一个澳洲家庭的爸爸没意识到已经有 mark，又标一个，描述简短：'first aid info'",
+        "第3月: 第三个 mark 来自一个 hut warden 训练学员标的'orientation aid'",
+        "第3月: 一个英国 tramper Henry 在 hut 留言板写：'app 上这里三个 mark 重复'",
+        "第4月: 三个 mark 都活着，赞量分别 18/12/8，无举报"
+      ],
+      "expected_signal_summary": "总赞约 38，举报 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "封闭小空间 hut 内的重复 mark 比开放山顶更扎眼但都是真实有用信息，算法判每条都健康是对的，去重是 UX 层面的事",
+      "edge_case_flag": "重复错放 + hut 内重复"
+    },
+    {
+      "id": 408,
+      "title": "Mueller Hut 路上 GPS 把 danger mark 飘到了相邻雪坡的安全位置",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Aoraki/Mt Cook Sealy Tarns 之上通往 Mueller Hut 的最后陡坡，一个 tramper 想标'落石区'但 GPS 把坐标飘到了相邻一个温和的雪坡上 100m 外",
+        "intrinsic_quality": "落石警告是真实的但点错位置，飘过去的位置反而是安全的",
+        "user_volume_per_month": 200,
+        "duration_months": 5,
+        "signal": "断续 — 山谷里 Vodafone 几个点能连",
+        "season_pattern": "11-4月主季，winter overnight 仅经验 tramper",
+        "human_factors": "上 Mueller Hut 的 tramper 中级以上居多，会认真看地图，GPS 错位会引起讨论"
+      },
+      "events_timeline": [
+        "第1月: 一个新西兰 Christchurch 来的 35 岁工程师 Owen 标 danger，写'rockfall zone, helmet recommended'",
+        "第2月: 一个澳洲游客在他标的位置（飘过去的安全雪坡）按 app 提示绕了一圈结果走更远的路",
+        "第3月: 一个 DOC ranger 路过看到圆点在错的位置，回办公室提了 ticket 没人理",
+        "第4月: 第二个用户在真实落石区标了一个新 danger，描述简单'rocks'",
+        "第4月: Owen 那条收到 4 个'谢谢'赞和 3 个'位置错了'举报，新 mark 收到 15 赞",
+        "第5月: 老 mark 还活着但被边缘化，新 mark 占据社区注意力"
+      ],
+      "expected_signal_summary": "老 mark 赞 4 举报 3，新 mark 赞 15",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "老 mark 的赞举报比已经反映社区不信任，但还没到 sink 阈值，这是坐标错位 case 的典型——慢性消亡而非急速 sink",
+      "edge_case_flag": "重复错放 + GPS 偏移导致信息错位"
+    },
+    {
+      "id": 409,
+      "title": "Abel Tasman Coast Track Bark Bay 一个 mark 被中文/英文/德文三种语言版本各标了一次",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Abel Tasman Coast Track Bark Bay 露营地北端礁石上，一个看 Tasman Bay 日落的极佳位置，三个不同语言用户在 6 周内分别标了三次",
+        "intrinsic_quality": "景点真实有价值，但三个 mark 是同一礁石不同用户语言习惯",
+        "user_volume_per_month": 400,
+        "duration_months": 4,
+        "signal": "弱 — 海岸线偶尔有 Spark",
+        "season_pattern": "12-3月旺季 booking 满，4-11月半价开放",
+        "human_factors": "Abel Tasman 海外游客占比高，多语种用户互相看不懂彼此 mark 描述"
+      },
+      "events_timeline": [
+        "第1月: 一个上海游客 Wei 标了第一个，描述全中文'看日落最佳的礁石，傍晚很多寄居蟹'",
+        "第2月: 一个英国背包客 Emma 没看懂中文描述（地图上只显示标题），自己又标一个英文'sunset rock with hermit crabs'",
+        "第3月: 一个德国家庭的妈妈 Hannah 同样情况，标'Sonnenuntergangsfelsen'",
+        "第3月: 一个 NZ 本地的 kayak guide Tama 看到三个圆点在同一礁石笑笑发到群里",
+        "第4月: 三个 mark 各自被同语种用户点赞 30-60 个，赞流不互通"
+      ],
+      "expected_signal_summary": "总赞约 130，分布在三语言用户群里",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "语言隔离导致的重复 mark 是国际化产品天然问题，每个 mark 在自己语言池里都健康——算法没毛病，是产品设计选择",
+      "edge_case_flag": "重复错放 + 多语言重复"
+    },
+    {
+      "id": 410,
+      "title": "Heaphy Track 一个 cairn mark 被原作者搬到 800m 外的另一处石堆",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Kahurangi 国家公园 Heaphy Track 上 Saxon Hut 之后 1.2km 沼泽地里有一个 DOC 维护的 marker cairn，原作者标完后两月发现自己标错了一个相邻的（自然形成的）小石堆，把 mark 拖到了真实 marker cairn 位置",
+        "intrinsic_quality": "新位置正确，但原位置仍有那个'被错标过'的自然石堆，看到老照片的人会困惑",
+        "user_volume_per_month": 30,
+        "duration_months": 6,
+        "signal": "无 — Heaphy 几乎全程无信号",
+        "season_pattern": "11-4月主季，winter 雪和泥泞限制",
+        "human_factors": "Heaphy 用户多为认真 tramper，对 marker cairn 准确性敏感"
+      },
+      "events_timeline": [
+        "第1月: 原作者 Stephen 在自然石堆位置标 cairn，描述'route marker by swamp'",
+        "第2月: 一个 tramper 找不到下一段方向，按 mark 走结果偏离 trail 200m",
+        "第3月: Stephen 自己重走 Heaphy 时发现错了，把 mark 拖到真正 DOC marker cairn 位置",
+        "第3月: 旧位置的赞和评论历史跟着 mark 转移，但旧地点照片仍在评论里",
+        "第4月: 新位置标记开始正确指引，旧地点没有任何 mark 但仍可能有 tramper 凭老评论照片走到那",
+        "第6月: 新 mark 收到 12 个'谢谢更新'赞，老评论里 3 个用户写'我之前被这个误导过'"
+      ],
+      "expected_signal_summary": "总赞约 12，举报 0，含旧版评论困惑",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "作者搬位置是好行为但历史评论的位置语义错位，算法看现状是健康的，但用户体验里仍有遗留模糊性",
+      "edge_case_flag": "重复错放 + 作者迁移坐标"
+    },
+    {
+      "id": 411,
+      "title": "Milford Track 一个 6 人 group 在 MacKinnon Pass 标了 3 个一样的 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Milford Track 第三天翻过 MacKinnon Pass 1154m 顶部纪念碑旁，一个 6 人 NZ 朋友 group 中 3 个人在 group chat 没看到彼此的 mark 各标了一个 scenic（其余 3 个看到了没标）",
+        "intrinsic_quality": "景是真好但同 group 内部重复 mark 是 UX 失败",
+        "user_volume_per_month": 100,
+        "duration_months": 3,
+        "signal": "无 — 山顶完全无信号，离开 hut 才能同步",
+        "season_pattern": "10-4月 booking 期，其他时间 track 关闭",
+        "human_factors": "Milford 是 booking 制少有重游客，大多游客一辈子来一次，完赛后才同步 mark"
+      },
+      "events_timeline": [
+        "第1月: group leader Jess 在山顶标第一个 mark，但当时离线，回 Quintin Hut 才同步",
+        "第1月: 同 group 的 Tom 离线时也标了一个，他没意识到 Jess 也标了",
+        "第1月: 第三个 group 成员 Priya 一样的事，三人 mark 在 hut 同时同步",
+        "第2月: 另外 3 个 group 成员看到 group chat 里互相分享笑了'我们一个山顶三个 mark'",
+        "第2月: Jess 想合并发现没合并功能",
+        "第3月: 三个 mark 各 50+ 赞，无举报，外人不知道是同 group"
+      ],
+      "expected_signal_summary": "总赞约 180，举报 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "离线同步导致的同 group 重复是 app 离线设计的副作用，三个 mark 都正常健康，社区不知情就不会反感",
+      "edge_case_flag": "重复错放 + 离线同步重复"
+    },
+    {
+      "id": 412,
+      "title": "Lake Waikaremoana Panekire Bluff 一个 supply 被错标成 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Te Urewera Lake Waikaremoana Great Walk Panekire Bluff 顶部 1180m，那有一个 DOC 紧急避难屋（emergency shelter），一个用户标了 danger 而不是 supply，描述写'emergency shelter, use in storm'",
+        "intrinsic_quality": "实际是 supply（避难屋），错标成 danger 让看 danger 池的人误解",
+        "user_volume_per_month": 25,
+        "duration_months": 7,
+        "signal": "无 — Te Urewera 全境几乎无信号",
+        "season_pattern": "11-3月主季，4-10月 winter 模式仍可走但人少",
+        "human_factors": "Te Urewera 受 Tūhoe iwi 管辖，用户尊重当地规矩，标错类型很少有人改"
+      },
+      "events_timeline": [
+        "第1月: 标 mark 的是一个澳洲 backpacker Jake，他理解 'storm shelter' 是 danger 信号",
+        "第2月: 三个 supply 类型搜索的 tramper 错过这个 mark，其中一个差点没找到避难屋",
+        "第3月: 一个本地 Tūhoe 向导 Hemi 看到 danger 圆点点开发现是避难屋介绍，没改",
+        "第4月: 一个英国 solo tramper 看到 danger 后绕远路怕'山顶有危险'",
+        "第5月: 第二个用户在同位置标了正确的 supply mark，描述简短'shelter'",
+        "第7月: 老 danger mark 收到 8 赞 2 举报但还活着，新 supply mark 收到 18 赞"
+      ],
+      "expected_signal_summary": "danger mark 8/2，supply mark 18/0",
+      "expected_outcome": "alive",
+      "expected_status": "weak",
+      "human_judgment": "类型错让 mark 在错的搜索池里弱赞累积，从信号上看是 weak 但仍存活——这是类型系统的盲区",
+      "edge_case_flag": "重复错放 + 类型选错严重"
+    },
+    {
+      "id": 413,
+      "title": "Wellington Mt Victoria summit 一个 mark 坐标飘到了 Oriental Bay 海里 1.5km",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wellington Mt Victoria 山顶 196m 那个看市区+港的 lookout，一个用户的手机在山顶 GPS 抽风把坐标丢到了 Oriental Bay 海湾里 1.5km 外的水面",
+        "intrinsic_quality": "城市山顶有 4G 信号一般 GPS 准，这次是极端 outlier",
+        "user_volume_per_month": 1500,
+        "duration_months": 2,
+        "signal": "完美 — Wellington 市区 4G 全覆盖",
+        "season_pattern": "全年游客流量稳定，summer 多本地人遛狗",
+        "human_factors": "Wellington 本地用户多对 app 熟悉，看到海里 mark 立刻反应是 GPS 错"
+      },
+      "events_timeline": [
+        "第1月: 一个 Wellington Vic 大学学生 Olivia 在山顶标 mark，发完看到坐标在海里了",
+        "第1月: 她当场尝试编辑坐标但发现 app 不允许编辑，只能删了重标——但她懒得删",
+        "第1月: 第一周内 5 个本地用户看到海里圆点直接举报",
+        "第2月: 山顶真实位置又被 12 个不同用户分别标了 12 个新 scenic（很常见的'城市观景台多 mark'现象）",
+        "第2月: Olivia 那条收到 0 赞 9 举报",
+        "第2月: 算法把 Olivia 那条 sunk 了，山顶仍剩 12 个重复 mark 健康并存"
+      ],
+      "expected_signal_summary": "Olivia mark 0/9 sunk，山顶 12 mark 总赞 400+",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "高流量城市点位异常 GPS 会快速被举报淹没，举报机制在这种 case 是有效的——但同一山顶其他 12 个重复 mark 反映 UX 没解决去重问题",
+      "edge_case_flag": "重复错放 + GPS 极端偏移 + 城市快速 sink"
+    },
+    {
+      "id": 414,
+      "title": "Stewart Island Rakiura Track North Arm Hut 一个 junction 被标到了 hut 屋内",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Rakiura/Stewart Island 三天 Great Walk Rakiura Track 上 North Arm Hut 木屋内部的厨房柱子位置，标 mark 的人想标 hut 外的真正岔路（去 longer beach 那条），但 GPS 卡在 hut 室内",
+        "intrinsic_quality": "信息描述对，但坐标在 hut 室内毫无意义",
+        "user_volume_per_month": 40,
+        "duration_months": 6,
+        "signal": "无 — Stewart Island 几乎全境无信号",
+        "season_pattern": "10-4月主季，5-9月 winter mode 仅经验 tramper",
+        "human_factors": "Rakiura 用户多为认真 tramper 或岛上当地人，看到 hut 内 mark 觉得离谱但不会专门处理"
+      },
+      "events_timeline": [
+        "第1月: 一个澳洲 tramper Alice 在 hut 内躲雨同步 mark，GPS 抓在最后能信号的位置（hut 室内）",
+        "第2月: 一个英国 tramper 看到 hut 内有 junction 圆点点开看描述是户外岔路，去外面找了半天",
+        "第3月: 一个本地 hut warden 路过看到笑了，没动",
+        "第4月: 第二个用户在真实岔路标了一个新 junction，简短'fork to long beach'",
+        "第5月: Alice 那条收到 3 赞 4 举报但活着，新 mark 收到 9 赞",
+        "第6月: 老 mark 仍未被 sink，因为流量少举报积累慢"
+      ],
+      "expected_signal_summary": "老 mark 3/4，新 mark 9/0",
+      "expected_outcome": "alive",
+      "expected_status": "weak",
+      "human_judgment": "低流量地区 GPS 错位 mark 不容易被快速 sink，会长期低赞徘徊——算法在低流量场景的反应迟钝是结构性问题",
+      "edge_case_flag": "重复错放 + GPS 卡室内 + 低流量"
+    },
+    {
+      "id": 415,
+      "title": "Routeburn Track Harris Saddle 一个 cairn 被三种不同坐标标三次（同一石堆三个圆点）",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Routeburn Track Harris Saddle 1255m 鞍部上一个 1.2m 高的传统 marker cairn，三个不同时间用户的 GPS 给出三组不同坐标：实际位置、东偏 30m、南偏 50m",
+        "intrinsic_quality": "石堆是同一个但 GPS 漂移让三个 mark 在地图上是分开的圆点",
+        "user_volume_per_month": 250,
+        "duration_months": 4,
+        "signal": "断续 — 山脊偶尔有信号",
+        "season_pattern": "11-4月主季，winter Routeburn 部分关闭",
+        "human_factors": "Routeburn 国际游客比例高，对 marker cairn 拍照打卡心态"
+      },
+      "events_timeline": [
+        "第1月: 第一个 mark 来自一个本地 Queenstown 向导 Mia，坐标准确",
+        "第2月: 一个韩国游客手机 GPS 漂 30m 又标一个，他自己以为是不同石堆",
+        "第3月: 第三个 mark 来自一个新加坡情侣手机漂 50m，描述完全一样",
+        "第3月: 一个 thru-hiker 路过 Harris Saddle 看到地图三个圆点很疑惑：'到底有几个石堆？'",
+        "第4月: 三个 mark 各 30+ 赞，无举报，地图缩放近时三圆点重叠像云朵"
+      ],
+      "expected_signal_summary": "总赞约 100，举报 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "GPS 漂移导致看起来是不同 mark 的同石堆，每条都健康活着，算法无能为力——这是 GPS 物理精度限制",
+      "edge_case_flag": "重复错放 + GPS 漂移误判为不同 mark"
+    },
+    {
+      "id": 416,
+      "title": "Nelson Lakes Lake Angelus Hut 路上一个 supply mark 在 hut 已废弃后还活着",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Nelson Lakes 国家公园 Lake Angelus Hut 旁 50m 的小屋（不是主 hut，是上世纪一个旧 musterer 小屋），一个 tramper 当年在那找到一个紧急燃料罐标 supply，但 DOC 后来拆了那个小屋",
+        "intrinsic_quality": "供应已不存在但 mark 仍在地图上",
+        "user_volume_per_month": 35,
+        "duration_months": 9,
+        "signal": "无 — Nelson Lakes 大部分无信号",
+        "season_pattern": "11-4月主季，winter 雪季封闭半数",
+        "human_factors": "Nelson Lakes 用户多为本地 Nelson tramper，知道老 musterer hut 历史的人少"
+      },
+      "events_timeline": [
+        "第1月: 一个 Nelson 本地的退休 tramper Alan 标 supply，描述'spare fuel can in old musterer hut'",
+        "第3月: DOC 拆除 musterer 小屋（结构不安全），mark 仍在地图上",
+        "第4月: 一个澳洲 tramper Marcus 走到那找燃料罐发现啥都没有，hut 拆了",
+        "第5月: Marcus 在 trip report 写'app 上 supply mark 是假的'",
+        "第6月: 三个其他用户也踩坑，其中两个举报",
+        "第7月: 一个本地巡逻员看到 mark 在 trip report 里被吐槽，没账号无法删",
+        "第9月: mark 收到 4 历史赞 5 举报，被算法 sink"
+      ],
+      "expected_signal_summary": "总赞 4，举报 5，sunk",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "环境物理变化导致 mark 失效是 UGC 系统经典问题，慢性举报积累最终 sink，算法工作了但慢——9 个月里有人踩坑",
+      "edge_case_flag": "重复错放 + 物理环境消失"
+    },
+    {
+      "id": 417,
+      "title": "Tongariro Crossing Soda Springs 一个 scenic 飘到了山顶火山口边缘",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Tongariro Alpine Crossing 上 Soda Springs 那个温水泉小瀑布，一个游客标 scenic 时 GPS 飘到 1.2km 外 Mount Ngauruhoe 火山口边缘",
+        "intrinsic_quality": "Soda Springs 真景，但坐标错到火山口让人以为是新的 scenic 点",
+        "user_volume_per_month": 1500,
+        "duration_months": 5,
+        "signal": "无 — Tongariro 全程几乎无信号",
+        "season_pattern": "12-3月每天 2000+，4-11月减半",
+        "human_factors": "Crossing 是日游为主，游客标完下山才同步，发现 GPS 错很多人懒得删"
+      },
+      "events_timeline": [
+        "第1月: 一个法国游客 Léa 在 Soda Springs 标 scenic 但 GPS 信号极差飘到火山口",
+        "第2月: 三个其他游客在火山口附近看到 scenic 圆点疑惑'这是什么'，专门绕过去看",
+        "第3月: 一个 Wellington 来的 tramper 看到 mark 描述写 Soda Springs 但坐标在火山口写了举报",
+        "第4月: Léa 自己看回放发现错了，但她已经回法国懒得删",
+        "第5月: 第二个 mark 在 Soda Springs 真实位置出现（正确坐标），收到正常流量",
+        "第5月: 老 mark 收到 6 赞 5 举报，处于 sink 边缘"
+      ],
+      "expected_signal_summary": "老 mark 6/5 borderline，新 mark 35/0",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "GPS 偏移过远的 mark 在中流量地区缓慢被举报追平，最终是否 sink 取决于流量是否足够积累——典型边缘 case",
+      "edge_case_flag": "重复错放 + 大幅 GPS 偏移"
+    },
+    {
+      "id": 418,
+      "title": "Banks Peninsula Akaroa 一个用户在自家厨房标了一个 scenic 测试",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Banks Peninsula Akaroa 镇里一个用户家的厨房窗户旁，他想试试 app 怎么标 mark 就在自家厨房标了一个'scenic — view of harbour'",
+        "intrinsic_quality": "完全是测试 mark，私人住宅位置，但描述和类型看起来正常",
+        "user_volume_per_month": 0,
+        "duration_months": 11,
+        "signal": "完美 — 镇里 4G",
+        "season_pattern": "无关，私人住宅位置一年到头无人到访",
+        "human_factors": "Akaroa 镇里偶尔会有游客打开地图看周边 mark 发现住宅区有 scenic 圆点"
+      },
+      "events_timeline": [
+        "第1月: 用户 Ben 测试 app 在自家厨房标 mark 然后忘了删",
+        "第3月: 第一个游客打开地图看 Akaroa 周边发现住宅区有 scenic 圆点，没去现场（隐私感）",
+        "第5月: 第二个游客点开看到描述'view of harbour'觉得挺正常没察觉",
+        "第7月: 第三个游客实际尝试导航过去，停在 Ben 家门外觉得不对，按了举报",
+        "第9月: 一个 Akaroa 本地居民认出 Ben 家地址在 fb 发文吐槽",
+        "第11月: mark 收到 0 赞 1 举报，仍在地图上活着但完全孤岛"
+      ],
+      "expected_signal_summary": "总赞 0，举报 1",
+      "expected_outcome": "alive",
+      "expected_status": "weak",
+      "human_judgment": "测试 mark 没人到访没人点赞但因为只 1 举报算法不 sink，会长期僵尸状态，这是低举报阈值的问题",
+      "edge_case_flag": "重复错放 + 测试残留"
+    },
+    {
+      "id": 419,
+      "title": "Paparoa Track Pororari River 河边一个 cairn 被洪水冲走但 mark 还在",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "West Coast Paparoa Track 起点附近 Pororari River 河谷岩石上有个本地用户堆的小石堆（路标用），河水暴涨后石堆被冲散，但 app 上 mark 没人删",
+        "intrinsic_quality": "现场已无石堆，mark 在 app 上变成幽灵",
+        "user_volume_per_month": 80,
+        "duration_months": 5,
+        "signal": "弱 — 河谷里 Spark 偶尔",
+        "season_pattern": "11-4月主季，winter 西海岸大雨频发",
+        "human_factors": "West Coast 游客比 Routeburn 等少，但洪水季后人会重新踏查现场"
+      },
+      "events_timeline": [
+        "第1月: 一个本地 Punakaiki 居民 Ngaire 标 cairn，描述'small stack on river boulder'",
+        "第2月: 一场 cyclone 带来 200mm 雨 Pororari 暴涨 4m，石堆冲散",
+        "第3月: 第一个走 Paparoa 的游客找不到石堆但找到 mark 圆点，疑惑'哪里有石堆'",
+        "第3月: 他在 trip report 写'cairn gone, washed away'",
+        "第4月: 三个后来 tramper 看到 trip report 心里有数但仍按 mark 走过那段（地形熟）",
+        "第5月: mark 收到 5 历史赞 2 举报，处于 weak 但还活"
+      ],
+      "expected_signal_summary": "总赞 5，举报 2",
+      "expected_outcome": "alive",
+      "expected_status": "weak",
+      "human_judgment": "环境物理消失 mark 仍在的经典 case，赞举报比缓慢恶化但因低流量没快速 sink——这是 UGC 系统结构性时滞",
+      "edge_case_flag": "重复错放 + 物理环境消失"
+    },
+    {
+      "id": 420,
+      "title": "Queenstown Ben Lomond 顶 6 个用户在不同年份各标一个 scenic 全部存活",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Queenstown 后山 Ben Lomond summit 1748m 那个看 Wakatipu 湖+The Remarkables 的山顶平台，6 年里 6 个不同用户分别标了 6 个 scenic，全部存活",
+        "intrinsic_quality": "景是全 NZ top 5 之一，6 个 mark 描述各异但位置同一",
+        "user_volume_per_month": 600,
+        "duration_months": 24,
+        "signal": "好 — Queenstown 后山 4G 部分覆盖",
+        "season_pattern": "11-3月暴涨，4-10月雪季少人但 hardcore 仍来",
+        "human_factors": "Queenstown 是国际旅游中心 mark 用户更新换代快，新人不知道老 mark"
+      },
+      "events_timeline": [
+        "第3月: 最早一个 mark 来自 2019 年一个澳洲游客，2024 年仍 200 赞",
+        "第8月: 第二个 mark 是 2021 年一个本地 hut warden 训练班，赞 80",
+        "第12月: 第三个 mark 是 2022 年一个英国 vlogger 视频里的，赞 150 自带流量",
+        "第16月: 第四个 mark 是 2023 年一个新西兰留学生用中文标的，赞 60（华人圈传播）",
+        "第20月: 第五个 mark 是 2024 年一个 hut warden Queenstown 本地，赞 40",
+        "第24月: 第六个 mark 是 2025 年最新加入的，已 30 赞"
+      ],
+      "expected_signal_summary": "6 个 mark 总赞约 560，举报 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高流量+长时间累积让同一山顶的重复 mark 全部健康，每条都有自己的赞流——算法无错，是产品没去重",
+      "edge_case_flag": "重复错放 + 长期同点累积"
+    },
+    {
+      "id": 421,
+      "title": "Avalanche Peak Arthur's Pass 一个 danger mark 被错标在停车场",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Arthur's Pass Avalanche Peak track 起点 Devil's Punchbowl 停车场，一个游客想标山顶 1833m 的悬崖危险但 GPS 在停车场就锁定了（他还没开始爬）",
+        "intrinsic_quality": "危险信息有效但坐标在车场无意义",
+        "user_volume_per_month": 400,
+        "duration_months": 4,
+        "signal": "好 — 停车场 Spark 信号稳",
+        "season_pattern": "11-3月主季，4-10月仅经验 tramper",
+        "human_factors": "Arthur's Pass 用户半本地半游客，看到停车场 danger mark 多数会笑笑或举报"
+      },
+      "events_timeline": [
+        "第1月: 一个 Christchurch 来的 26 岁 tramper Sophie 在停车场预先标 danger 想着'之后填描述'，结果忘了改坐标",
+        "第1月: 当晚她意识到错了想编辑 mark 但 app 不允许，删除重标她也没做",
+        "第2月: 三个游客打开地图看到停车场红圆点疑惑，按了一个举报",
+        "第3月: 一个本地 Christchurch club tramper 在 fb 发图吐槽'谁把停车场标成 danger 了'",
+        "第3月: 第二个用户在山顶真实悬崖位置标了正确的 danger",
+        "第4月: 老 mark 收到 0 赞 6 举报最终 sunk"
+      ],
+      "expected_signal_summary": "老 mark 0/6 sunk，新 mark 25/0",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "明显错位的 danger mark 在中流量地区被有效 sink，举报阈值合理——这是举报机制工作良好的正面 case",
+      "edge_case_flag": "重复错放 + 起点 GPS 锁定"
+    },
+    {
+      "id": 422,
+      "title": "Lake Tekapo Mt John 一个 scenic mark 标到了天文台围栏内（私人区域）",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Mackenzie Basin Lake Tekapo 旁 Mt John 顶 1031m 大学天文台围栏内部，一个游客在天文台围栏外标 scenic 但 GPS 飘进围栏内",
+        "intrinsic_quality": "景是好的（暗夜星空保留区）但坐标在围栏内是私人科研区",
+        "user_volume_per_month": 1000,
+        "duration_months": 3,
+        "signal": "好 — Mt John 4G",
+        "season_pattern": "全年开放，winter 多旅游团看星空",
+        "human_factors": "海外游客 70%+，多数不会注意 mark 是否在围栏内"
+      },
+      "events_timeline": [
+        "第1月: 一个中国游客 Wei 标 scenic 描述'best stargazing'但 GPS 飘围栏内",
+        "第1月: 一个天文台职员看到 mark 在自己工作区域困惑了一下，没账号没动",
+        "第2月: 三个游客试图按 mark 导航撞围栏，其中一个翻栏被劝退",
+        "第2月: 该 tramper 举报 mark'private zone'",
+        "第3月: 第二个 mark 在围栏外正确位置出现",
+        "第3月: 老 mark 收到 8 赞 4 举报 borderline"
+      ],
+      "expected_signal_summary": "老 mark 8/4，新 mark 25/0",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "私人区域内的 mark 引起信任问题但赞量也有，缓慢被新 mark 取代但不会快速 sink",
+      "edge_case_flag": "重复错放 + GPS 飘进私人区"
+    },
+    {
+      "id": 423,
+      "title": "Egmont National Park Wilkies Pools 一个 supply 被三人在不同岩石标三次",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mt Taranaki Egmont 国家公园 Wilkies Pools loop 上有一个 DOC 维护的紧急哨子盒，三个用户在不同月份分别在三块不同岩石上标了 supply（都不在哨子盒真实位置）",
+        "intrinsic_quality": "三个 mark 都不准但都'近似'对，地图上一团乱",
+        "user_volume_per_month": 150,
+        "duration_months": 4,
+        "signal": "无 — Egmont 几乎全境无信号",
+        "season_pattern": "11-3月主季，winter 雪封闭部分",
+        "human_factors": "Egmont 用户半本地半游客，对 supply mark 准确性敏感但很少修"
+      },
+      "events_timeline": [
+        "第1月: 第一个 mark 来自一个澳洲游客 Ryan，他在哨子盒东 30m 标的",
+        "第2月: 第二个 mark 来自一个本地 New Plymouth 居民 Hone，他在哨子盒西 40m 标的",
+        "第3月: 第三个 mark 来自一个英国 backpacker，南 25m",
+        "第3月: 一个 tramper 找哨子盒按地图三个 mark 转圈跑",
+        "第4月: 三个 mark 各赞 15-20，举报 1"
+      ],
+      "expected_signal_summary": "总赞约 50，举报 1",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "三个 mark 都近似但不准，地图上是一片三角，社区大概知道'真实位置在中间'但算法不知道——典型 GPS 噪声叠加",
+      "edge_case_flag": "重复错放 + 多 GPS 漂移叠加"
+    },
+    {
+      "id": 424,
+      "title": "Coromandel Pinnacles Hut 一个 junction 被作者两次搬位置最后回到原点",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Coromandel 半岛 Pinnacles Track 上 Pinnacles Hut 之前最后一段 ladder section 之前，一个 tramper 标了 junction 后两次搬位置（觉得不准）最后又搬回最初位置",
+        "intrinsic_quality": "信息正确（ladder 之前的下河岔路）但坐标历史混乱",
+        "user_volume_per_month": 300,
+        "duration_months": 5,
+        "signal": "断续 — 山谷偶尔",
+        "season_pattern": "全年开放，旺季 summer holiday 学生多",
+        "human_factors": "Coromandel 用户多 Auckland 周末游客，对 junction mark 依赖度高"
+      },
+      "events_timeline": [
+        "第1月: 标 mark 的 Auckland 律师 Karen 在 ladder section 标 junction",
+        "第2月: 她重走时觉得位置不准搬到东 20m",
+        "第3月: 又重走觉得不对搬到西 15m",
+        "第4月: 最后一次重走又搬回最初位置（其实最初是对的）",
+        "第4月: 评论区累积 4 个游客抱怨'mark 一直在动我导航失效'",
+        "第5月: 现状 mark 在最初位置准确，但赞量被搬动消耗只剩 5"
+      ],
+      "expected_signal_summary": "总赞 5，举报 2",
+      "expected_outcome": "alive",
+      "expected_status": "weak",
+      "human_judgment": "频繁搬动让 mark 信任度被啃光，即使最终位置正确赞流也已被打断——算法不知道历史搬动",
+      "edge_case_flag": "重复错放 + 作者多次迁移"
+    },
+    {
+      "id": 425,
+      "title": "Mt Cook Mueller Hut 旁一个 cairn 标在了 hut 屋顶 GPS",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Aoraki/Mt Cook Mueller Hut 1800m 旁 50m 那个传统 marker cairn，一个 tramper 在 hut 屋内同步 mark 时 GPS 抓了 hut 屋顶的高度+位置，圆点显示在 hut 楼上",
+        "intrinsic_quality": "石堆是真实的但坐标在 hut 屋顶毫无意义",
+        "user_volume_per_month": 60,
+        "duration_months": 6,
+        "signal": "无 — Mt Cook 区无信号",
+        "season_pattern": "11-3月主季，winter 仅 alpinist",
+        "human_factors": "Mueller Hut 用户多为 alpinist 或硬核 tramper，对 GPS 错位敏感但忙着爬山没空改"
+      },
+      "events_timeline": [
+        "第1月: 标 mark 的 Otago 大学生 James 在 hut 内同步 GPS 抓在屋顶",
+        "第2月: 一个 alpinist 看到 mark 圆点在 hut 上方笑了在 fb 发图",
+        "第3月: 第二个 mark 在 cairn 真实位置出现",
+        "第4月: James 那条收到 2 赞 3 举报",
+        "第5月: 一个新西兰 alpine club 老炮在 trip report 提'app 上 Mueller Hut 屋顶有 cairn 圆点'",
+        "第6月: 老 mark 处于 sink 边缘，新 mark 健康"
+      ],
+      "expected_signal_summary": "老 mark 2/3 borderline，新 mark 18/0",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "低流量山区 GPS 错位 mark 缓慢退化但不快速 sink，新 mark 自然取代但老 mark 长期残留是结构性时滞",
+      "edge_case_flag": "重复错放 + GPS 高度异常"
+    },
+    {
+      "id": 426,
+      "title": "Bay of Islands Cape Brett Track 一个 scenic 被旅游公司账号批量标 5 次",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Northland Bay of Islands Cape Brett Track 终点 lighthouse 附近一个海崖 lookout，一个 kayak 旅游公司用 5 个不同员工账号在同一位置标了 5 次 scenic 想刷曝光",
+        "intrinsic_quality": "景是真实的但 5 个 mark 是市场行为不是社区贡献",
+        "user_volume_per_month": 200,
+        "duration_months": 4,
+        "signal": "弱 — 海角偶尔有 Spark",
+        "season_pattern": "12-3月主季，4-11月减半",
+        "human_factors": "Cape Brett 是 multi-day 大走，到达者少但都很认真，对营销刷量敏感"
+      },
+      "events_timeline": [
+        "第1月: 旅游公司 Cape Brett Walks 用 5 个员工账号在两周内标了 5 个 scenic",
+        "第2月: 一个本地 tramper 看到地图上 5 个圆点重叠认出是同一公司账号风格",
+        "第2月: 该 tramper 在 NZ tramping subreddit 发帖吐槽'公司账号刷 mark'",
+        "第3月: 6 个不同用户陆续举报这 5 个 mark",
+        "第3月: 三个 mark 被算法 sink，剩 2 个继续残留",
+        "第4月: 公司账号未被封，两个剩余 mark 仍 alive"
+      ],
+      "expected_signal_summary": "5 个 mark 总赞 15，举报 14，3 个 sunk 2 个 alive",
+      "expected_outcome": "alive",
+      "expected_status": "weak",
+      "human_judgment": "市场刷量类 mark 算法在举报压力下能 sink 一部分但不全，需要账号风控而不是单 mark 健康度判断",
+      "edge_case_flag": "重复错放 + 账号刷量"
+    },
+    {
+      "id": 427,
+      "title": "Otago Tunnel Beach 一个 cairn 被坐标飘到内陆牧场",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Dunedin 旁 Tunnel Beach 海蚀洞口悬崖上一个 surfer 堆的小石堆，标 mark 的人 GPS 飘到了 800m 内陆一个牧场中央",
+        "intrinsic_quality": "石堆真实但坐标在牧场让 mark 完全错位",
+        "user_volume_per_month": 350,
+        "duration_months": 3,
+        "signal": "断续 — 海岸断崖偶尔",
+        "season_pattern": "全年开放，summer 多家庭",
+        "human_factors": "Dunedin 本地用户多，看到牧场里有 cairn 圆点立刻反应是错的"
+      },
+      "events_timeline": [
+        "第1月: Otago 大学生 Lara 在 Tunnel Beach 标 cairn 但 GPS 飘",
+        "第1月: 三个本地用户当周看到牧场圆点直接举报",
+        "第2月: 牧场主人收到牧场附近游客投诉路过他家'按 app 找 cairn'",
+        "第2月: 第二个 mark 在 Tunnel Beach 真实位置出现",
+        "第3月: Lara 那条 sunk（0 赞 8 举报）",
+        "第3月: 新 mark 健康活着"
+      ],
+      "expected_signal_summary": "老 mark 0/8 sunk，新 mark 22/0",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "极端 GPS 错位+本地用户高敏感导致快速 sink，举报机制有效——需要本地用户密度才有效",
+      "edge_case_flag": "重复错放 + 大幅 GPS 偏移"
+    },
+    {
+      "id": 428,
+      "title": "Whanganui Journey 终点 Pipiriki 码头一个 supply 被 4 个 kayaker 重复标",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Whanganui Journey 河上之旅终点 Pipiriki boat ramp 旁有一个 DOC 提供的紧急水罐+应急通讯卡，4 个不同 kayak 团体的成员各自标了 supply",
+        "intrinsic_quality": "信息有用但 4 个 mark 在码头同位置叠加",
+        "user_volume_per_month": 50,
+        "duration_months": 5,
+        "signal": "弱 — 河谷偶尔",
+        "season_pattern": "11-3月主季 booking 制，winter 关闭",
+        "human_factors": "Whanganui kayaker 多为 5 天行程结束极度疲惫，到达 Pipiriki 标完 mark 不会查重"
+      },
+      "events_timeline": [
+        "第1月: 第一个 kayaker 团体的领队 Toni 标 supply'water+comm card'",
+        "第2月: 第二个团体的一个澳洲游客没看到老 mark 又标一个'emergency water'",
+        "第3月: 第三个 mark 来自一个家庭团 9 岁小孩用爸爸账号标的",
+        "第4月: 第四个 mark 来自 Maori cultural tour group 一个向导，描述包含 te reo",
+        "第5月: 4 个 mark 总赞 60，无举报"
+      ],
+      "expected_signal_summary": "总赞约 60，举报 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "终点疲劳标 mark 是行为模式，4 个重复都是真实有用，算法看每条都健康——这是 UX 去重而非健康度问题",
+      "edge_case_flag": "重复错放 + 终点重复行为"
+    },
+    {
+      "id": 429,
+      "title": "Catlins Cathedral Caves 一个 scenic 被涨潮时标导致坐标在海里",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Southland Catlins Cathedral Caves 那个有名的海蚀洞，只有低潮能进，一个游客在低潮进洞内标 scenic 后涨潮，几小时后 app 上看 mark 显示在海里（其实是洞被淹了）",
+        "intrinsic_quality": "mark 位置物理正确但因为涨潮时段地图视觉显示在海里",
+        "user_volume_per_month": 150,
+        "duration_months": 4,
+        "signal": "无 — Catlins 海岸偶有断续",
+        "season_pattern": "全年开放但低潮窗口 2-3 小时",
+        "human_factors": "Catlins 游客对潮汐规律不熟，看到 mark 在海里第一反应是 GPS 错"
+      },
+      "events_timeline": [
+        "第1月: Christchurch 来的 Sarah 低潮进洞标 scenic，描述'cave interior'",
+        "第1月: 当晚她在民宿打开 app 看到 mark 在海里，疑惑了一晚才想起涨潮",
+        "第2月: 三个游客查地图看到海里 scenic 圆点疑惑，其中一个举报",
+        "第2月: 一个 Catlins local 在评论区科普'this is correct, it's a cave only at low tide'",
+        "第3月: 评论区共识形成，举报停止",
+        "第4月: mark 收到 25 赞 1 举报，alive 但视觉上仍困惑游客"
+      ],
+      "expected_signal_summary": "总赞 25，举报 1",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "看似坐标错但实际是潮汐+海蚀洞的特殊地理，社区评论自发科普化解了 GPS 错觉——这是低举报但健康的 case",
+      "edge_case_flag": "重复错放 + 潮汐导致视觉误判"
+    },
+    {
+      "id": 430,
+      "title": "Auckland Rangitoto summit 顶 8 个用户在同一火山口边各标一个 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Auckland 海湾 Rangitoto Island summit 260m 火山口边缘 lookout，8 个不同游客在一年内各标了 8 个 scenic 全部存活",
+        "intrinsic_quality": "景是 Auckland 必看，每个 mark 都'独立有理'但叠在一起是混乱",
+        "user_volume_per_month": 800,
+        "duration_months": 12,
+        "signal": "弱 — 海湾偶有 Spark",
+        "season_pattern": "全年游客流量大，summer 周末渡轮满载",
+        "human_factors": "Rangitoto 是 Auckland 最大旅游打卡，海外游客 60%+，标完不删"
+      },
+      "events_timeline": [
+        "第2月: 第一个 mark 来自一个 Auckland 本地 family 妈妈标的",
+        "第4月: 第二个是中国游客的中文'兰吉托托火山口'",
+        "第6月: 第三个是英国 backpacker 写的'volcano summit lookout'",
+        "第8月: 第四到第七个 mark 在 4 个月内陆续出现，都是不同语言/不同角度",
+        "第10月: 第八个最新 mark 来自 youtube vlogger，标完 link 视频带流量",
+        "第12月: 8 个 mark 总赞 400+，无举报，地图上山顶火山口边像彩虹圆点"
+      ],
+      "expected_signal_summary": "总赞约 400，举报 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高流量打卡点的重复 mark 是社区生态自然结果，算法没法识别去重，每条都健康 — 这是产品哲学层面的 UGC 容忍度问题",
+      "edge_case_flag": "重复错放 + 极端高重复"
+    }
+  ]
+}

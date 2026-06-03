@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Cairn Algorithm Sandbox</title>
+<style>
+  body { margin: 0; padding: 0; background: #f5f5f5; font-family: -apple-system, sans-serif; height: 100vh; overflow: hidden; display: flex; }
+
+  #panel { width: 260px; background: #fff; border-right: 1px solid #e0e0e0; padding: 16px; box-sizing: border-box; font-size: 12px; overflow-y: auto; flex-shrink: 0; }
+  #panel h1 { font-size: 14px; margin: 0 0 4px; color: #333; font-weight: 600; }
+  #panel .sub { color: #888; font-size: 11px; margin-bottom: 16px; }
+  .section { margin-bottom: 14px; }
+  .section h3 { font-size: 11px; color: #666; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 11px; }
+  .row label { color: #555; }
+  .row .val { color: #000; font-weight: 500; font-family: 'SF Mono', Consolas, monospace; }
+  input[type="range"] { width: 100%; }
+  button { width: 100%; padding: 6px; background: #fff; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; font-size: 11px; color: #333; margin-bottom: 4px; }
+  button:hover { background: #f0f0f0; }
+  button.primary { background: #333; color: #fff; border-color: #333; }
+  .pdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+  #stage { flex: 1; position: relative; background: #fafafa; }
+  canvas { display: block; cursor: pointer; }
+
+  #statusbar { position: absolute; top: 8px; left: 8px; background: rgba(255,255,255,0.95); padding: 6px 10px; border-radius: 3px; font-size: 11px; color: #333; border: 1px solid #e0e0e0; z-index: 10; }
+  #statusbar span { margin-right: 12px; }
+  #statusbar strong { font-family: 'SF Mono', Consolas, monospace; }
+
+  #view-mode { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.95); padding: 6px 10px; border-radius: 3px; font-size: 11px; color: #333; border: 1px solid #e0e0e0; z-index: 10; }
+  #view-mode.single { background: #FFF3E0; border-color: #FF9800; color: #E65100; font-weight: 600; }
+
+  #persona-detail {
+    position: absolute; top: 50px; right: 10px; width: 280px;
+    background: #fff; border: 1px solid #ccc; border-radius: 4px;
+    padding: 12px; font-size: 11px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    z-index: 20; display: none; max-height: calc(100vh - 80px); overflow-y: auto;
+  }
+  #persona-detail.show { display: block; }
+  #persona-detail h2 { font-size: 13px; margin: 0 0 8px; color: #000; font-weight: 600; }
+  #persona-detail .pid { display: inline-block; padding: 2px 6px; border-radius: 3px; color: #fff; font-size: 10px; margin-right: 4px; }
+  #persona-detail .meta { color: #555; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; }
+  #persona-detail h3 { font-size: 11px; color: #666; margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  #persona-detail .flag-item { padding: 6px; background: #f9f9f9; border-radius: 3px; margin-bottom: 4px; font-size: 10px; }
+  #persona-detail .flag-item .ftitle { font-weight: 600; }
+  #persona-detail .flag-item .fstats { color: #555; margin-top: 2px; }
+  #persona-detail .flag-item .fstats .num { color: #000; font-weight: 500; }
+  #persona-detail .flag-item .freasons { color: #888; margin-top: 2px; font-size: 9px; }
+  #persona-detail .flag-item .fstatus { display: inline-block; padding: 1px 5px; border-radius: 2px; font-size: 9px; margin-left: 4px; }
+  #persona-detail .empty { color: #aaa; font-style: italic; padding: 8px; text-align: center; font-size: 10px; }
+  #persona-detail .close { position: absolute; top: 8px; right: 10px; color: #999; cursor: pointer; font-size: 16px; line-height: 1; }
+  #persona-detail .close:hover { color: #000; }
+
+  .legend { position: absolute; bottom: 8px; left: 8px; background: rgba(255,255,255,0.95); padding: 8px 10px; border-radius: 3px; font-size: 10px; color: #555; border: 1px solid #e0e0e0; z-index: 10; }
+  .legend-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.1); }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <h1>Cairn Sandbox</h1>
+  <div class="sub">v3.2 algorithm · 100 walkers</div>
+
+  <div class="section">
+    <h3>Time</h3>
+    <div class="row"><label>Speed</label><span class="val" id="speed-val">1×</span></div>
+    <input type="range" min="1" max="100" value="1" id="speed-slider" />
+    <div class="row"><label>Sim Day</label><span class="val" id="sim-day">0.0</span></div>
+  </div>
+
+  <div class="section">
+    <h3>Population</h3>
+    <div class="row"><label><span class="pdot" style="background:#4CAF50"></span>Explorer</label><span class="val">30</span></div>
+    <div class="row"><label><span class="pdot" style="background:#FF9800"></span>Social</label><span class="val">40</span></div>
+    <div class="row"><label><span class="pdot" style="background:#2196F3"></span>Enthusiast</label><span class="val">5</span></div>
+    <div class="row"><label><span class="pdot" style="background:#9E9E9E"></span>Lurker</label><span class="val">20</span></div>
+    <div class="row"><label><span class="pdot" style="background:#9C27B0"></span>Critic</label><span class="val">4</span></div>
+    <div class="row"><label><span class="pdot" style="background:#F44336"></span>Spammer</label><span class="val">1</span></div>
+  </div>
+
+  <div class="section">
+    <h3>Marker Stats</h3>
+    <div class="row"><label>Total</label><span class="val" id="m-total">0</span></div>
+    <div class="row"><label>Healthy</label><span class="val" id="m-healthy" style="color:#4CAF50">0</span></div>
+    <div class="row"><label>Borderline</label><span class="val" id="m-border" style="color:#FF9800">0</span></div>
+    <div class="row"><label>Heartbeat</label><span class="val" id="m-hb" style="color:#2196F3">0</span></div>
+    <div class="row"><label>Sunk</label><span class="val" id="m-sunk" style="color:#888">0</span></div>
+  </div>
+
+  <div class="section">
+    <h3>Activity</h3>
+    <div class="row"><label>Total Likes</label><span class="val" id="t-likes">0</span></div>
+    <div class="row"><label>Total Reports</label><span class="val" id="t-reports">0</span></div>
+    <div class="row"><label>Encounters</label><span class="val" id="t-enc">0</span></div>
+  </div>
+
+  <div class="section">
+    <button class="primary" id="btn-pause">⏸ Pause</button>
+    <button id="btn-reset">↻ Reset</button>
+    <button id="btn-godview">👁 God View</button>
+    <button id="btn-export">💾 Export JSON</button>
+  </div>
+</div>
+
+<div id="stage">
+  <canvas id="canvas"></canvas>
+
+  <div id="statusbar">
+    <span>Frame: <strong id="frame">0</strong></span>
+    <span>Walkers: <strong id="walker-count">0</strong></span>
+    <span>Markers: <strong id="marker-count">0</strong></span>
+  </div>
+
+  <div id="view-mode">👁 God View</div>
+
+  <div id="persona-detail">
+    <span class="close" onclick="window.exitSingleView()">✕</span>
+    <h2 id="pd-title">Walker</h2>
+    <div class="meta" id="pd-meta">—</div>
+    <h3>Flags in visible range (30m)</h3>
+    <div id="pd-flags"></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-row"><div class="legend-dot" style="background:#4CAF50"></div>Explorer (solo)</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#FF9800"></div>Social (group)</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#2196F3"></div>Enthusiast</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#9E9E9E"></div>Lurker</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#9C27B0"></div>Critic</div>
+    <div style="margin-top:6px; padding-top:6px; border-top:1px solid #eee;">
+      <span style="color:#D32F2F">⚑</span> danger ·
+      <span style="color:#388E3C">⚑</span> supply ·
+      <span style="color:#F57C00">⚑</span> junction ·
+      <span style="color:#1976D2">⚑</span> scenic ·
+      <span style="color:#795548">⚑</span> cairn
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as algo from './js/algorithm.js';
+import * as P from './js/persona.js';
+
+// ==== Setup ====
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const W = window.innerWidth - 260;
+const H = window.innerHeight;
+canvas.width = W;
+canvas.height = H;
+
+// ==== Trails (designed) ====
+const trails = [
+  [[60, 150], [180, 130], [320, 165], [460, 140], [620, 175], [780, 150], [920, 180], [1080, 160], [1240, 195]],
+  [[320, 165], [380, 230], [430, 310], [490, 380], [560, 450]],
+  [[620, 175], [580, 280], [650, 380], [720, 460], [780, 540], [870, 580]],
+  [[180, 130], [220, 70], [340, 50], [490, 80], [620, 60]],
+  [[460, 140], [510, 90], [590, 65], [690, 80]],
+  [[780, 150], [820, 240], [870, 320], [930, 380]],
+  [[60, 150], [70, 280], [120, 400], [200, 480], [310, 530], [430, 560], [560, 540]],
+  [[920, 180], [990, 280], [1050, 360], [1110, 440], [1180, 510]],
+];
+
+const personaColors = {
+  explorer_solo: '#4CAF50', social_group: '#FF9800', enthusiast_creator: '#2196F3',
+  lurker_silent: '#9E9E9E', critic_skeptical: '#9C27B0',
+  spammer: '#F44336', malicious_reporter: '#E91E63'
+};
+const personaShortNames = {
+  explorer_solo: 'Explorer', social_group: 'Social', enthusiast_creator: 'Enthusiast',
+  lurker_silent: 'Lurker', critic_skeptical: 'Critic',
+  spammer: 'Spammer', malicious_reporter: 'Malicious'
+};
+const markerColors = {
+  danger: '#D32F2F', supply: '#388E3C', junction: '#F57C00',
+  scenic: '#1976D2', cairn: '#795548'
+};
+const markerIcons = { danger: '⚠', supply: '💧', junction: '↗', scenic: '⛰', cairn: '🪨' };
+const statusColors = {
+  healthy: '#4CAF50', borderline: '#FF9800', weak: '#FFA726',
+  heartbeat: '#2196F3', sunk: '#888', archived: '#444'
+};
+
+// ==== Sandbox state ====
+const state = {
+  walkers: [],
+  markers: [],
+  simNow: Date.now(),    // simulated clock
+  realStart: Date.now(),
+  speedMultiplier: 1,    // 1× = 1 sim-day per real-second
+  paused: false,  selectedWalkerId: null,
+  frame: 0,
+  totalLikes: 0,
+  totalReports: 0,
+  totalEncounters: 0,
+};
+
+// Time scaling: 1 real-second = speedMultiplier sim-days
+// at 60fps, 1 frame = 1/60 real-second = speedMult/60 sim-days
+const SIM_DAYS_PER_SECOND = () => state.speedMultiplier;
+const MS_PER_SIM_DAY = 24 * 3600 * 1000;
+
+// ==== Walker init ====
+async function initWalkers() {
+  await P.loadDistribution('../stage0_research/personas_distribution.json');
+  state.walkers = P.buildPopulation(100);
+  P.assignGroups(state.walkers);
+
+  state.walkers.forEach(w => {
+    const trailIdx = Math.floor(Math.random() * trails.length);
+    w.trailIdx = trailIdx;
+    w.segIdx = Math.floor(Math.random() * (trails[trailIdx].length - 1));
+    w.segT = Math.random();
+    w.direction = Math.random() < 0.5 ? 1 : -1;
+    w.speed = 0.0008 + Math.random() * 0.0006;  // path-T per frame at 1×
+  });
+
+  document.getElementById('walker-count').textContent = state.walkers.length;
+  // v124: 暴露给 Playwright 测试
+  window.state = state;
+}
+
+// ==== Plant initial markers (from a few enthusiasts to seed) ====
+function plantInitialMarkers() {
+  // Plant 12 markers on random trails, 2 days "ago"
+  const types = ['danger', 'supply', 'junction', 'scenic', 'cairn'];
+  for (let i = 0; i < 12; i++) {
+    const trail = trails[i % trails.length];
+    const segIdx = Math.floor(Math.random() * (trail.length - 1));
+    const segT = Math.random();
+    const x = trail[segIdx][0] * (1 - segT) + trail[segIdx + 1][0] * segT;
+    const y = trail[segIdx][1] * (1 - segT) + trail[segIdx + 1][1] * segT;
+    const m = algo.createMarker({
+      id: 'm' + i, type: types[i % 5], x, y, authorId: 'seed',
+      tCreate: state.simNow - 2 * MS_PER_SIM_DAY,
+    });
+    state.markers.push(m);
+  }
+}
+
+// ==== Walker movement ====
+function walkerPos(w) {
+  const trail = trails[w.trailIdx];
+  const a = trail[w.segIdx];
+  const b = trail[w.segIdx + 1];
+  return [
+    a[0] * (1 - w.segT) + b[0] * w.segT,
+    a[1] * (1 - w.segT) + b[1] * w.segT
+  ];
+}
+
+function advanceWalker(w, simSeconds) {
+  const trail = trails[w.trailIdx];
+  // Advance proportional to sim time (1 day = full trail traversal at speed=1)
+  const dt = w.speed * simSeconds * 60;  // tuned so default speed crosses trail in ~10s real time @ 1×
+  w.segT += w.direction * dt;
+  while (w.segT >= 1) {
+    w.segT -= 1; w.segIdx += 1;
+    if (w.segIdx >= trail.length - 1) { w.segIdx = trail.length - 2; w.segT = 1; w.direction = -1; }
+  }
+  while (w.segT < 0) {
+    w.segT += 1; w.segIdx -= 1;
+    if (w.segIdx < 0) { w.segIdx = 0; w.segT = 0; w.direction = 1; }
+  }
+}
+
+// ==== Encounter detection + decision ====
+const ENCOUNTER_RADIUS = 30;
+const PLANT_PROBABILITY_PER_DAY = {
+  explorer_solo: 0.15,
+  social_group: 0.05,
+  enthusiast_creator: 0.40,
+  lurker_silent: 0.01,
+  critic_skeptical: 0.10,
+  spammer: 0.30,
+  malicious_reporter: 0.02,
+};
+
+function processEncounters(simDtSec) {
+  state.walkers.forEach(w => {
+    const [wx, wy] = walkerPos(w);
+
+    // Check encounter with each marker
+    state.markers.forEach(m => {
+      // Skip rendered-hidden markers
+      const status = algo.markerStatus(m, state.simNow);
+      if (status === 'sunk' || status === 'archived') return;
+
+      const d = Math.hypot(wx - m.x, wy - m.y);
+      if (d > ENCOUNTER_RADIUS) return;
+
+      // Cooldown
+      if (!P.canDecide(w, m.id, state.simNow)) return;
+      P.recordEncounter(w, m.id, state.simNow);
+      state.totalEncounters++;
+
+      // Decide
+      const decision = P.decide(w.personaType, m);
+      if (decision.action === 'like') {
+        if (algo.addLike(m, w.id, state.simNow)) state.totalLikes++;
+      } else if (decision.action === 'unlike') {
+        algo.removeLike(m, w.id);
+      } else if (decision.action === 'report') {
+        if (algo.addReport(m, w.id, decision.reason || 'other', state.simNow)) state.totalReports++;
+      }
+    });
+
+    // Plant new marker probabilistically
+    const plantProb = (PLANT_PROBABILITY_PER_DAY[w.personaType] || 0.05) * (simDtSec / 86400);
+    if (Math.random() < plantProb) {
+      const types = ['danger', 'supply', 'junction', 'scenic', 'cairn'];
+      const t = types[Math.floor(Math.random() * 5)];
+      const m = algo.createMarker({
+        id: 'm' + Date.now() + '-' + w.id,
+        type: t, x: wx, y: wy, authorId: w.id,
+        tCreate: state.simNow,
+      });
+      state.markers.push(m);
+    }
+  });
+}
+
+// ==== Rendering ====
+function drawTrails() {
+  const RW = 14;
+  function offset(trail, off) {
+    const result = [];
+    for (let i = 0; i < trail.length; i++) {
+      let dx, dy;
+      if (i === 0) { dx = trail[1][0]-trail[0][0]; dy = trail[1][1]-trail[0][1]; }
+      else if (i === trail.length-1) { dx = trail[i][0]-trail[i-1][0]; dy = trail[i][1]-trail[i-1][1]; }
+      else {
+        dx = (trail[i+1][0]-trail[i-1][0])/2; dy = (trail[i+1][1]-trail[i-1][1])/2;
+      }
+      const len = Math.hypot(dx, dy) || 1;
+      result.push([trail[i][0] + (-dy/len)*off, trail[i][1] + (dx/len)*off]);
+    }
+    return result;
+  }
+  function poly(coords, lw, ss) {
+    ctx.strokeStyle = ss; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(coords[0][0], coords[0][1]);
+    for (let i = 1; i < coords.length; i++) ctx.lineTo(coords[i][0], coords[i][1]);
+    ctx.stroke();
+  }
+  trails.forEach(t => {
+    poly(t, RW, '#e8e4dc');
+    poly(offset(t, RW/2), 1.2, '#8B7355');
+    poly(offset(t, -RW/2), 1.2, '#8B7355');
+    ctx.setLineDash([4,4]); poly(t, 0.6, 'rgba(139,115,85,0.4)'); ctx.setLineDash([]);
+  });
+}
+
+function drawBackground() {
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0, '#fafafa'); bg.addColorStop(1, '#f0f0f0');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(139,115,85,0.06)'; ctx.lineWidth = 1;
+  for (let i = 0; i < 8; i++) {
+    ctx.beginPath();
+    const cx = 100 + i*180, cy = 100 + (i%3)*200;
+    ctx.ellipse(cx, cy, 80+i*15, 60+i*8, i*0.3, 0, Math.PI*2);
+    ctx.stroke();
+  }
+}
+
+function drawWalker(w, dimmed) {
+  const [x, y] = walkerPos(w);
+  const isSelected = (w.id === state.selectedWalkerId);
+  if (dimmed && !isSelected) return;
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.beginPath(); ctx.arc(x+0.5, y+1, 5, 0, Math.PI*2); ctx.fill();
+
+  if (isSelected) {
+    ctx.strokeStyle = personaColors[w.personaType] + '80';
+    ctx.fillStyle = personaColors[w.personaType] + '15';
+    ctx.lineWidth = 1.5; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.arc(x, y, ENCOUNTER_RADIUS, 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(x, y, isSelected ? 7 : 5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = personaColors[w.personaType];
+  ctx.beginPath(); ctx.arc(x, y, isSelected ? 6 : 4, 0, Math.PI*2); ctx.fill();
+
+  if (isSelected) {
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI*2); ctx.stroke();
+  }
+}
+
+function drawMarker(m, dimmed) {
+  const status = algo.markerStatus(m, state.simNow);
+  if (status === 'sunk' || status === 'archived') {
+    // Show in heartbeat: 20% sample
+    if (status === 'sunk' && Math.random() > 0.05) return;
+    if (status === 'archived') return;
+  }
+
+  let visible = true;
+  if (dimmed) {
+    const sw = state.walkers.find(w => w.id === state.selectedWalkerId);
+    if (sw) {
+      const [sx, sy] = walkerPos(sw);
+      visible = Math.hypot(m.x - sx, m.y - sy) <= ENCOUNTER_RADIUS;
+    }
+  }
+
+  ctx.globalAlpha = visible ? 1 : 0.15;
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath(); ctx.ellipse(m.x, m.y+1, 5, 1.5, 0, 0, Math.PI*2); ctx.fill();
+
+  // Pole
+  ctx.strokeStyle = '#444'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(m.x, m.y-16); ctx.stroke();
+
+  // Flag (color = type, opacity by status)
+  const baseColor = markerColors[m.type];
+  const statusAlpha = status === 'healthy' ? 1.0 :
+                      status === 'borderline' ? 0.85 :
+                      status === 'weak' ? 0.65 :
+                      status === 'heartbeat' ? 0.45 : 0.3;
+  ctx.fillStyle = baseColor;
+  ctx.globalAlpha = (visible ? 1 : 0.15) * statusAlpha;
+  ctx.beginPath();
+  ctx.moveTo(m.x, m.y-16); ctx.lineTo(m.x+12, m.y-13); ctx.lineTo(m.x, m.y-10);
+  ctx.fill();
+
+  if (visible) {
+    ctx.globalAlpha = 1;
+    ctx.font = '9px -apple-system, sans-serif';
+    ctx.fillStyle = '#000';
+    ctx.fillText(`❤${m.likes.length} 🚩${m.reports.length}`, m.x + 14, m.y - 11);
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+function renderAll() {
+  ctx.clearRect(0, 0, W, H);
+  drawBackground();
+  drawTrails();
+  const isSingle = state.selectedWalkerId !== null;
+  state.markers.forEach(m => drawMarker(m, isSingle));
+  state.walkers.forEach(w => drawWalker(w, isSingle));
+}
+
+// ==== Stats UI update ====
+function updateStats() {
+  const stats = { healthy: 0, borderline: 0, weak: 0, heartbeat: 0, sunk: 0, archived: 0 };
+  state.markers.forEach(m => {
+    const s = algo.markerStatus(m, state.simNow);
+    stats[s] = (stats[s] || 0) + 1;
+  });
+
+  document.getElementById('m-total').textContent = state.markers.length;
+  document.getElementById('m-healthy').textContent = stats.healthy;
+  document.getElementById('m-border').textContent = stats.borderline + stats.weak;
+  document.getElementById('m-hb').textContent = stats.heartbeat;
+  document.getElementById('m-sunk').textContent = stats.sunk + stats.archived;
+  document.getElementById('marker-count').textContent = state.markers.length;
+  document.getElementById('frame').textContent = state.frame;
+
+  document.getElementById('t-likes').textContent = state.totalLikes;
+  document.getElementById('t-reports').textContent = state.totalReports;
+  document.getElementById('t-enc').textContent = state.totalEncounters;
+
+  const simDays = (state.simNow - state.realStart) / MS_PER_SIM_DAY;
+  document.getElementById('sim-day').textContent = simDays.toFixed(1);
+}
+
+// ==== Main loop ====
+let lastTime = performance.now();
+function tick(now) {
+  const realDt = (now - lastTime) / 1000;  // real seconds
+  lastTime = now;
+
+  if (!state.paused) {
+    const simDtSec = realDt * SIM_DAYS_PER_SECOND() * 86400;
+    state.simNow += simDtSec * 1000;
+
+    state.walkers.forEach(w => advanceWalker(w, simDtSec));
+    processEncounters(simDtSec);
+
+    state.frame++;
+  }
+
+  renderAll();
+  if (state.frame % 6 === 0) updateStats();
+
+  requestAnimationFrame(tick);
+}
+
+// ==== Click handler ====
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  let closest = null, minDist = 12;
+  state.walkers.forEach(w => {
+    const [wx, wy] = walkerPos(w);
+    const d = Math.hypot(wx - x, wy - y);
+    if (d < minDist) { minDist = d; closest = w; }
+  });
+
+  if (closest) {
+    state.selectedWalkerId = closest.id;
+    showSingleView(closest);
+  }
+});
+
+function showSingleView(w) {
+  const [wx, wy] = walkerPos(w);
+  const visible = state.markers.filter(m => Math.hypot(m.x - wx, m.y - wy) <= ENCOUNTER_RADIUS);
+
+  document.getElementById('view-mode').textContent = `👤 Walker #${w.id}`;
+  document.getElementById('view-mode').classList.add('single');
+
+  document.getElementById('pd-title').innerHTML =
+    `Walker #${w.id} <span class="pid" style="background:${personaColors[w.personaType]}">${personaShortNames[w.personaType]}</span>`;
+
+  const groupInfo = w.groupId ? `Group #${w.groupId}${w.isGroupLeader ? ' (leader)' : ''}` : 'Solo';
+  document.getElementById('pd-meta').innerHTML = `
+    <div>Position: (${Math.round(wx)}, ${Math.round(wy)})</div>
+    <div>Trail: #${w.trailIdx} · Direction: ${w.direction === 1 ? '→' : '←'}</div>
+    <div>${groupInfo}</div>
+    <div>Decisions made: ${w.lastEncounterT.size}</div>
+  `;
+
+  const flagsHtml = visible.length === 0
+    ? '<div class="empty">No flags within 30m</div>'
+    : visible.map(f => {
+        const stats = algo.markerStats(f, state.simNow);
+        const reasonsStr = Object.entries(stats.reportReasons).map(([k,v]) => `${k}:${v}`).join(' · ') || '';
+        return `
+          <div class="flag-item">
+            <div class="ftitle" style="color:${markerColors[f.type]}">${markerIcons[f.type]} ${f.type} #${f.id.slice(-4)}<span class="fstatus" style="background:${statusColors[stats.status]};color:#fff">${stats.status}</span></div>
+            <div class="fstats">❤ <span class="num">${stats.likes}</span> &nbsp; 🚩 <span class="num">${stats.reports}</span> &nbsp; life: <span class="num">${stats.lifeLeft.toFixed(1)}d</span></div>
+            ${reasonsStr ? `<div class="freasons">${reasonsStr}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+  document.getElementById('pd-flags').innerHTML = flagsHtml;
+  document.getElementById('persona-detail').classList.add('show');
+}
+
+window.exitSingleView = () => {
+  state.selectedWalkerId = null;
+  document.getElementById('view-mode').textContent = '👁 God View';
+  document.getElementById('view-mode').classList.remove('single');
+  document.getElementById('persona-detail').classList.remove('show');
+};
+
+// Refresh single view periodically (walker keeps walking)
+setInterval(() => {
+  if (state.selectedWalkerId !== null) {
+    const w = state.walkers.find(ww => ww.id === state.selectedWalkerId);
+    if (w) showSingleView(w);
+  }
+}, 500);
+
+// ==== Controls ====
+document.getElementById('btn-pause').addEventListener('click', (e) => {
+  state.paused = !state.paused;
+  e.target.textContent = state.paused ? '▶ Resume' : '⏸ Pause';
+});
+document.getElementById('btn-reset').addEventListener('click', () => location.reload());
+document.getElementById('btn-godview').addEventListener('click', window.exitSingleView);
+document.getElementById('btn-export').addEventListener('click', () => {
+  const data = {
+    simDay: (state.simNow - state.realStart) / MS_PER_SIM_DAY,
+    frame: state.frame,
+    walkers: state.walkers.length,
+    markers: state.markers.map(m => ({
+      ...m,
+      stats: algo.markerStats(m, state.simNow),
+    })),
+    totals: { likes: state.totalLikes, reports: state.totalReports, encounters: state.totalEncounters },
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `sandbox-state-${Date.now()}.json`; a.click();
+});
+
+document.getElementById('speed-slider').addEventListener('input', (e) => {
+  state.speedMultiplier = parseInt(e.target.value);
+  document.getElementById('speed-val').textContent = state.speedMultiplier + '×';
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.selectedWalkerId !== null) window.exitSingleView();
+});
+
+// ==== Init ====
+async function init() {
+  await initWalkers();
+  plantInitialMarkers();
+  updateStats();
+  requestAnimationFrame(tick);
+
+  // Expose for Playwright / external testing
+  window.__sandboxState = state;
+  window.__sandboxAlgo = algo;
+  window.__sandboxPersona = P;
+}
+init();
+</script>
+
+</body>
+</html>

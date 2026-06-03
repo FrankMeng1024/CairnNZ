@@ -1,0 +1,817 @@
+{
+  "batch": 13,
+  "theme": "多日纵走",
+  "id_range": [601, 650],
+  "total": 30,
+  "note": "Hand-written 30 cases (601-630). Stopped at 30 per author's instruction. Multi-day tramps in NZ backcountry: cumulative fatigue judgment, full-route perspective, batch sync after returning to civilization, opinion shifts after hut-mates discussion.",
+  "cases": [
+    {
+      "id": 601,
+      "title": "Te Araroa Richmond Range Rintoul Hut bunk count wrong",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Te Araroa southbound, Day 78, Old Man Hut to Rintoul Hut leg in Richmond Range Marlborough, sign at hut says 6 bunks but only 4 usable mattresses on day 3 of 5-day section",
+        "intrinsic_quality": "Useful for TA thru-hikers planning where to sleep when huts overlap",
+        "user_volume_per_month": 8,
+        "duration_months": 14,
+        "signal": "no signal entire 5-day section, syncs only at Pelorus Bridge after exit",
+        "season_pattern": "TA southbound peak Jan-Mar",
+        "human_factors": "thru-hikers carry full record but only post days later"
+      },
+      "events_timeline": [
+        "Month 1: TA SOBO hiker drops mark on exit day at Havelock cafe wifi",
+        "Month 3: NOBO hiker confirms still only 4 mattresses, 2 likes",
+        "Month 5: another SOBO confirms but adds DOC fixed it that week, ambiguity",
+        "Month 8: DOC volunteer leaves comment that mattresses were replaced",
+        "Month 11: 6 likes 0 reports, mostly grateful TA community",
+        "Month 14: still 7 likes, no reports, mark useful for planners"
+      ],
+      "expected_signal_summary": "7 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "stale_warning",
+      "human_judgment": "Real facility info from TA thru-hiker. After DOC fix it became outdated but never harmful. Should fade to stale not be killed; future TA cohorts still benefit from the mattress-count history when planning bunk competition.",
+      "edge_case_flag": "ta_thru|delayed_sync|self_resolving_facility"
+    },
+    {
+      "id": 602,
+      "title": "Routeburn-Greenstone-Caples loop McKellar Saddle wasp nest",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Routeburn-Greenstone-Caples 4-day loop, McKellar Saddle descent into Greenstone valley, ground wasp nest 30m past the saddle marker, late Feb",
+        "intrinsic_quality": "Anaphylactic risk for wasp-allergic trampers, late-summer NZ wasp season is real",
+        "user_volume_per_month": 45,
+        "duration_months": 9,
+        "signal": "no signal at saddle, syncs at Greenstone Hut radio relay or Te Anau",
+        "season_pattern": "Feb-Apr wasp activity peak, dies in winter",
+        "human_factors": "trampers want to warn next day's group but can only post on exit"
+      },
+      "events_timeline": [
+        "Month 1: tramper stung 4 times posts mark from Te Anau motel after exit",
+        "Month 2: 3 separate parties confirm same nest, 12 likes accumulated",
+        "Month 4: DOC ranger comments will deal with it after season ends",
+        "Month 5: winter, no activity, 0 new reports",
+        "Month 7: spring, one user reports nest empty, suggest remove",
+        "Month 9: next summer, new mark spawned at same spot by different user"
+      ],
+      "expected_signal_summary": "12 likes vs 1 remove-suggest",
+      "expected_outcome": "alive",
+      "expected_status": "seasonal_dormant",
+      "human_judgment": "Seasonal hazard with real medical risk. Empty in winter doesn't mean fixed; wasps return. System must support seasonal dormancy without killing the mark, since the next Feb cohort will face the same nest pattern.",
+      "edge_case_flag": "seasonal|delayed_sync|anaphylaxis_risk"
+    },
+    {
+      "id": 603,
+      "title": "Rees-Dart Cascade Saddle scree route changed after slip",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Rees-Dart 5-day with Cascade Saddle side trip, the standard scree descent line from Cascade Saddle to Dart Hut moved 200m east after a major slip in autumn rains",
+        "intrinsic_quality": "Critical navigation in alpine terrain where wrong line means cliff bands",
+        "user_volume_per_month": 25,
+        "duration_months": 7,
+        "signal": "PLB only at saddle, voice cell at Dart Hut's hilltop",
+        "season_pattern": "Cascade Saddle closes May-Nov officially, season Dec-Apr",
+        "human_factors": "tramper notices slip on day 3 of 5, can only sync after Glenorchy"
+      },
+      "events_timeline": [
+        "Month 1: experienced party posts mark with photos from Glenorchy hostel",
+        "Month 2: NZAC member confirms new line and adds GPX track",
+        "Month 3: DOC route alert published, references the user mark",
+        "Month 4: 22 likes, the GPX downloaded 80 times via mark thread",
+        "Month 5: tour guide thanks community for early warning",
+        "Month 7: official DOC marker poles relocated, mark now redundant but historically valuable"
+      ],
+      "expected_signal_summary": "22 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "superseded_by_official",
+      "human_judgment": "User-generated emergency navigation that bridged a 5-month gap until DOC re-marked the route. Real lives potentially saved. Even after DOC fix, mark should remain alive as historical record of how community filled the gap.",
+      "edge_case_flag": "alpine_critical|user_filled_official_gap|long_lived"
+    },
+    {
+      "id": 604,
+      "title": "Dusky Track Loch Maree Hut roof leak day 4 of 8",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Dusky Track 8-day Lake Hauroko to Supper Cove return, Loch Maree Hut northeast corner of roof leaks onto bunk 4 in heavy rain, NZ's hardest Great-Walk-tier track",
+        "intrinsic_quality": "On 8-day track with no exit, knowing which bunks stay dry matters for hypothermia risk",
+        "user_volume_per_month": 6,
+        "duration_months": 16,
+        "signal": "zero signal entire track, syncs only at Tuatapere or Te Anau",
+        "season_pattern": "Dec-Mar only, otherwise treacherous",
+        "human_factors": "Dusky users are hardcore but small community, slow propagation"
+      },
+      "events_timeline": [
+        "Month 1: tramper posts after 8 days of being soaked, very detailed mark",
+        "Month 4: another Dusky veteran confirms same bunk leaks, adds bunk 5 dry",
+        "Month 8: DOC hut warden volunteer responds will patch next maintenance",
+        "Month 12: maintenance done, user posts updated photo of dry roof",
+        "Month 14: mark editor updates to RESOLVED with timestamp",
+        "Month 16: still useful as historical context for hut state"
+      ],
+      "expected_signal_summary": "5 likes vs 0 reports, 1 resolved-update",
+      "expected_outcome": "alive",
+      "expected_status": "resolved",
+      "human_judgment": "Tiny community but high-value mark. Eight-day no-exit context elevates a roof leak from cosmetic to safety. Resolved status correct after DOC fix, but kill-policy must respect that 6/month volume can take 4+ months to confirm anything.",
+      "edge_case_flag": "low_volume_high_stakes|long_track|self_resolving"
+    },
+    {
+      "id": 605,
+      "title": "Five Passes Route Olivine Ledge biv missing on day 3",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Five Passes Route 7-day off-track from Routeburn to Olivine, the unmarked Olivine Ledge biv referenced in Moir's Guide is no longer there, found on day 3 by party expecting shelter",
+        "intrinsic_quality": "Critical for trip planning, bivvy-vs-tent decisions on remote off-track route",
+        "user_volume_per_month": 3,
+        "duration_months": 22,
+        "signal": "no signal entire route, syncs after exit at Glenorchy",
+        "season_pattern": "Jan-Mar only, snow-blocked otherwise",
+        "human_factors": "tiny user pool, NZAC-class trampers, will defend or kill the mark with high authority"
+      },
+      "events_timeline": [
+        "Month 1: NZAC member posts mark after returning to Queenstown",
+        "Month 4: another NZAC party confirms biv truly gone, suggests collapsed in 2019 storm",
+        "Month 8: Moir's Guide editor comments thanks for community update",
+        "Month 14: 4 likes, 0 reports, mark referenced in next Moir's edition",
+        "Month 18: one user reports new biv built nearby by NZDA",
+        "Month 22: mark updated with new biv location, history preserved"
+      ],
+      "expected_signal_summary": "4 likes vs 0 reports across 22 months",
+      "expected_outcome": "alive",
+      "expected_status": "evolving_with_terrain",
+      "human_judgment": "Three users a month on Five Passes is the entire NZ universe of users for that mark. Time-decay and like-threshold rules from urban trails would kill this incorrectly. Mark must persist on volume-aware rules, since that's its actual relevance to a 3/month population.",
+      "edge_case_flag": "ultra_low_volume|expert_only|guidebook_referenced"
+    },
+    {
+      "id": 606,
+      "title": "St James Walkway Anne Hut bunk bed bedbugs day 2 of 4",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "St James Walkway 4-5 day from Lewis Pass, Anne Hut large bunkroom east-side bunks have confirmed bedbugs as of late summer, trampers carry contamination forward",
+        "intrinsic_quality": "Bedbugs spread to home and to other huts via sleeping bag, real cost not just discomfort",
+        "user_volume_per_month": 30,
+        "duration_months": 10,
+        "signal": "occasional signal on top of saddles, full sync at Hanmer Springs",
+        "season_pattern": "year round, slightly worse summer due to volume",
+        "human_factors": "trampers embarrassed but motivated to warn, post detailed accounts"
+      },
+      "events_timeline": [
+        "Month 1: tramper finds bites, posts after Hanmer hot pools wifi sync",
+        "Month 2: 3 confirmations same week, all east-side bunks, 18 likes",
+        "Month 3: DOC closes hut for fumigation, posts official notice referencing the mark",
+        "Month 4: hut reopened, user verifies no bites in two consecutive trips",
+        "Month 7: 25 likes, mark functioning as historical advisory",
+        "Month 10: new bedbug report by different user, treated as new incident not revival"
+      ],
+      "expected_signal_summary": "25 likes vs 0 reports, 1 confirmed-resolved",
+      "expected_outcome": "alive",
+      "expected_status": "resolved_with_history",
+      "human_judgment": "Mark triggered DOC official action, that alone is huge user value. After fumigation it should NOT be killed; future bedbug occurrences benefit from people seeing this hut has prior history. Important: separate the OLD mark from any NEW incident, don't merge.",
+      "edge_case_flag": "triggered_official_action|hygiene|continuity_value"
+    },
+    {
+      "id": 607,
+      "title": "Travers-Sabine Circuit Blue Lake side trip cumulative fatigue judgment",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Travers-Sabine Circuit 5-7 day in Nelson Lakes, Blue Lake side trip from West Sabine Hut, mark says world's clearest water, on day 5 of trip user disagreed because cloudy that morning",
+        "intrinsic_quality": "Iconic scenic mark, world-rated optical clarity, reality varies with weather",
+        "user_volume_per_month": 40,
+        "duration_months": 18,
+        "signal": "no signal at Blue Lake, syncs at St Arnaud",
+        "season_pattern": "Dec-Apr accessible, weather always variable",
+        "human_factors": "fatigued day-5 user judges differently from fresh dayhiker, important bias"
+      },
+      "events_timeline": [
+        "Month 1: original poster makes the scenic mark, 50 likes early",
+        "Month 6: day-5 fatigued user reports lake was cloudy, suggests downgrade",
+        "Month 7: 4 follow-up users who happened to visit on bluebird days defend mark",
+        "Month 9: NIWA scientist comments lake clarity varies by inflow turbidity that week",
+        "Month 12: 80 likes 4 reports, hut warden confirms lake fine 90 percent of days",
+        "Month 18: stable signal, mark remains as canonical scenic"
+      ],
+      "expected_signal_summary": "80 likes vs 4 reports (20:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Reports came from cumulative-fatigue or weather-unlucky users on the back end of multi-day trips. The truth of the mark (clearest water in world) is intrinsic, not abolished by one cloudy morning. Must not let day-5 grumpy votes kill canonical scenic.",
+      "edge_case_flag": "fatigue_bias|weather_variance|canonical_scenic"
+    },
+    {
+      "id": 608,
+      "title": "Heaphy Track cyclist-only segment hidden bog after rain",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Heaphy Track winter cyclist season May-Nov, the Saxon to MacKay segment has a bog hole grown to 1m deep after a wet July, posted by mountain biker who endo'd into it",
+        "intrinsic_quality": "Real injury risk for fast-moving cyclists, unique to bike season, tramper season closes",
+        "user_volume_per_month": 18,
+        "duration_months": 8,
+        "signal": "patchy along ridge, syncs at Karamea",
+        "season_pattern": "May-Nov bike-only season, otherwise tramper foot traffic doesn't notice",
+        "human_factors": "cyclist community small but tight-knit, mark spreads via Facebook bike groups"
+      },
+      "events_timeline": [
+        "Month 1: cyclist posts with helmet-cam screenshot from Karamea Tavern wifi",
+        "Month 2: 6 confirmations from following weekend's riders",
+        "Month 3: DOC adds wooden boards, half-fix",
+        "Month 4: new riders confirm boards help but bog reopens after rain",
+        "Month 6: end of bike season, hut goes back to foot traffic, mark becomes irrelevant",
+        "Month 8: next bike season begins, mark referenced in pre-trip planning forums"
+      ],
+      "expected_signal_summary": "12 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "seasonal_dormant",
+      "human_judgment": "Mode-specific hazard: only matters during bike season May-Nov. Correct behavior is dormant in tramper months without killing. Mark should reawaken when next bike season starts. System must understand that user volume going to zero is not signal-of-falsehood.",
+      "edge_case_flag": "mode_specific|seasonal|cyclist_only"
+    },
+    {
+      "id": 609,
+      "title": "Inland Pack Track Ballroom Overhang water stagnant on day 3",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Inland Pack Track 2-3 day Punakaiki to Fox River, the Ballroom Overhang water source 100m upstream is stagnant after dry summer, party realised on day 2 they should have filled at Pororari",
+        "intrinsic_quality": "Drinking water knowledge for a 3-day track with limited resupply",
+        "user_volume_per_month": 22,
+        "duration_months": 6,
+        "signal": "no signal in gorge, syncs at Punakaiki cafe",
+        "season_pattern": "summer dry-out Jan-Apr, fine other months",
+        "human_factors": "users learn the hard way and want next group to know"
+      },
+      "events_timeline": [
+        "Month 1: party posts after 36 hours of mild dehydration, very specific mark",
+        "Month 2: 3 confirmations same dry stretch, 9 likes",
+        "Month 3: rain arrives, user reports water now flowing again",
+        "Month 4: post-rain user marks RESOLVED but original poster contests",
+        "Month 5: drought returns, original mark vindicated",
+        "Month 6: established as seasonal-dry advisory, stable"
+      ],
+      "expected_signal_summary": "11 likes vs 1 contest",
+      "expected_outcome": "alive",
+      "expected_status": "seasonal_advisory",
+      "human_judgment": "Water source state genuinely fluctuates with rainfall, neither alive nor dead is right. Must capture this as conditional-truth seasonal advisory. Single resolved-vote should not flip the mark; truth pattern repeats every dry summer.",
+      "edge_case_flag": "fluctuating_truth|seasonal|water_safety"
+    },
+    {
+      "id": 610,
+      "title": "Mavora Walkway South Mavora Lake jet ski noise mark debated by hut group",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mavora Walkway 4-day, South Mavora Lake mark complains about jet ski noise ruining wilderness experience, a hut group of 5 disagreed on day 3 whether mark was reasonable",
+        "intrinsic_quality": "Subjective experience mark, contested even within single group's discussion",
+        "user_volume_per_month": 12,
+        "duration_months": 11,
+        "signal": "no signal, syncs at Te Anau or Mossburn",
+        "season_pattern": "summer jet skis, winter no boats",
+        "human_factors": "user changed own opinion after 3 hours of hut discussion with 4 strangers"
+      },
+      "events_timeline": [
+        "Month 1: original poster marks danger because jet ski almost hit kayaker",
+        "Month 2: hut companion who was on same day-3 contests, jet skis legal there",
+        "Month 3: original poster updates mark text after reflection, downgrades to advisory",
+        "Month 6: 4 more users add nuance, distinguishing actual incidents from noise complaint",
+        "Month 9: DOC concession comment clarifies legal jet-ski zone boundaries",
+        "Month 11: mark stable as advisory with proper context"
+      ],
+      "expected_signal_summary": "7 likes vs 3 reports, 1 self-edit",
+      "expected_outcome": "alive",
+      "expected_status": "downgraded_with_context",
+      "human_judgment": "Original poster updated their own mark after hut conversation, the most honest signal possible. System should reward self-correction not punish it. Final state is advisory not danger, and that history adds credibility, not noise.",
+      "edge_case_flag": "self_correction|hut_discussion|opinion_evolution"
+    },
+    {
+      "id": 611,
+      "title": "Te Araroa Tararuas Waitewaewae Hut mouse infestation on day 2 of 6",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Te Araroa southbound Tararua section, Waitewaewae Hut bunkroom mice eat through every dry-bag overnight, day 2 of 6-day Tararua leg, classic NZ backcountry hut problem",
+        "intrinsic_quality": "Practical food-safety knowledge for hut sleepers",
+        "user_volume_per_month": 14,
+        "duration_months": 13,
+        "signal": "no signal entire Tararuas, sync at Otaki Forks",
+        "season_pattern": "year round, worse winter when mice come inside",
+        "human_factors": "TA hikers always carry damaged-food story, post immediately on exit"
+      },
+      "events_timeline": [
+        "Month 1: TA hiker posts photo of chewed peanut butter packet from Otaki",
+        "Month 2: 4 more TA hikers confirm same hut, suggest hanging food",
+        "Month 3: DOC volunteer comments hut warden traps mice quarterly",
+        "Month 6: post-trapping user reports no mice, suggests RESOLVED",
+        "Month 9: new TA cohort encounters mice again, mark revived without recreating",
+        "Month 13: stable cyclical problem, treated as enduring advisory"
+      ],
+      "expected_signal_summary": "16 likes vs 1 resolved-suggest",
+      "expected_outcome": "alive",
+      "expected_status": "cyclical_advisory",
+      "human_judgment": "Mice aren't going away, they're a feature of NZ backcountry huts. Resolving the mark is wrong; it just papers over the cycle. Best is enduring advisory with timestamps showing when each cohort encountered them. Helps users decide on rodent-proof food storage.",
+      "edge_case_flag": "cyclical_problem|backcountry_constant|do_not_resolve"
+    },
+    {
+      "id": 612,
+      "title": "Greenstone Track Slip Flat new slip blocks track on day 3 of 4",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Greenstone Track 3-4 day Lake Wakatipu side, Slip Flat name now literal after Aug storm caused 50m wide debris slip across track, day 3 user had to bushbash detour 200m",
+        "intrinsic_quality": "Active route obstruction, navigation safety, route-time impact for groups still in",
+        "user_volume_per_month": 35,
+        "duration_months": 5,
+        "signal": "PLB only, syncs at Glenorchy",
+        "season_pattern": "year round but slip likely to grow each rain",
+        "human_factors": "users behind the poster benefit greatly, motivation to post fast"
+      },
+      "events_timeline": [
+        "Month 1: original poster marks danger with photos and GPX of detour",
+        "Month 1: 3 follow-up trampers confirm within 2 weeks, 18 likes accumulated",
+        "Month 2: DOC posts official track alert, references the user mark by ID",
+        "Month 3: DOC clears track with chainsaw crew, official ALL CLEAR",
+        "Month 4: post-clear users confirm track open, mark transitions to RESOLVED",
+        "Month 5: aftermath visible but track passable, mark still useful as history"
+      ],
+      "expected_signal_summary": "18 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "resolved",
+      "human_judgment": "Textbook case of user mark filling official-info gap until DOC could respond. Resolved status correct after track clear. Mark should remain visible as resolved with history, since users planning future trips benefit from knowing this terrain is slip-prone.",
+      "edge_case_flag": "rapid_official_response|gap_filler|resolved_with_history"
+    },
+    {
+      "id": 613,
+      "title": "Caples Track Mid Caples Hut woodstove broken cumulative cold day 4",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Caples Track 2-day or longer combined with Greenstone, Mid Caples Hut woodstove flue cracked, on day 4 of combined Routeburn-Caples loop user already cold-soaked judges severely",
+        "intrinsic_quality": "Cold-weather hut function, real hypothermia risk in winter shoulder season",
+        "user_volume_per_month": 28,
+        "duration_months": 7,
+        "signal": "no signal, sync at Glenorchy",
+        "season_pattern": "matters most in May-Sep cold months",
+        "human_factors": "day-4 cold tramper judgment vs DOC summer assessment differs"
+      },
+      "events_timeline": [
+        "Month 1: tramper posts after a cold night, very angry tone",
+        "Month 2: DOC responds woodstove inspected fine in summer, suggests false report",
+        "Month 3: 4 winter trampers confirm flue cracked when stove hot, 12 likes",
+        "Month 4: DOC re-inspects in cold conditions, finds the crack, repairs",
+        "Month 5: post-repair user confirms stove works, suggests resolved",
+        "Month 7: stable resolved with credit to original poster"
+      ],
+      "expected_signal_summary": "13 likes vs 1 DOC-contest then retracted",
+      "expected_outcome": "alive",
+      "expected_status": "resolved",
+      "human_judgment": "Important lesson: official inspection in summer missed a temperature-dependent crack. Cumulative-cold day-4 user was right and DOC was wrong, until DOC re-inspected. System must not weight DOC dismissals over multiple consistent user reports.",
+      "edge_case_flag": "official_initially_wrong|temp_dependent|user_validated"
+    },
+    {
+      "id": 614,
+      "title": "Routeburn Lake Mackenzie Hut mice but only northeast bunks day 2 of 3",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Routeburn Track 2-4 day, Lake Mackenzie Hut mice present in northeast bunkroom only, southwest bunkroom clean, mark posted by group that split sleeping locations day 2",
+        "intrinsic_quality": "Granular hut info, choose-your-bunk strategy",
+        "user_volume_per_month": 60,
+        "duration_months": 9,
+        "signal": "limited at hut, syncs at Te Anau",
+        "season_pattern": "Great Walk season Oct-Apr",
+        "human_factors": "high-volume Great Walk, fast-cycling validation"
+      },
+      "events_timeline": [
+        "Month 1: split-group posts comparing bunkrooms with photos",
+        "Month 2: 8 followup confirmations, 28 likes, very fast validation",
+        "Month 3: DOC hut warden adds note in physical hut book referencing the mark",
+        "Month 4: DOC sets traps, mice cleared, mark transitions to RESOLVED",
+        "Month 6: 35 likes, no reports, mark functioning as historical guide",
+        "Month 9: stable, helpful for next-season planners"
+      ],
+      "expected_signal_summary": "35 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "resolved",
+      "human_judgment": "High volume Great Walk means fast confirmation cycle. Mark with very specific spatial info (NE not SW bunkroom) is exactly the type users need but DOC won't post. Even after resolved, history valuable for showing pattern of which bunkroom has mouse access.",
+      "edge_case_flag": "high_volume|spatial_specificity|fast_validation"
+    },
+    {
+      "id": 615,
+      "title": "Te Araroa Tongariro Crossing winter avalanche zone day 5 of section",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Te Araroa central section, Tongariro Alpine Crossing in late June, the Red Crater eastern slope avalanche-loaded after snowfall, TA southbound user posts after exit",
+        "intrinsic_quality": "Genuine avalanche risk for unprepared TA hikers in winter",
+        "user_volume_per_month": 20,
+        "duration_months": 6,
+        "signal": "spotty at saddles, syncs at National Park or Whakapapa",
+        "season_pattern": "May-Oct snow risk, summer fine",
+        "human_factors": "winter TA hikers are minority but high-stakes audience"
+      },
+      "events_timeline": [
+        "Month 1: TA SOBO winter hiker posts danger mark after Whakapapa village sync",
+        "Month 2: NZAC instructor confirms avalanche conditions that week, adds info",
+        "Month 3: DOC alpine alert published referencing user mark",
+        "Month 4: snow melts, summer users start visiting, danger goes dormant",
+        "Month 5: late spring user marks not-applicable due to clear conditions",
+        "Month 6: next winter approaches, mark archive valuable for re-emerging risk"
+      ],
+      "expected_signal_summary": "8 likes vs 1 not-applicable (seasonal)",
+      "expected_outcome": "alive",
+      "expected_status": "seasonal_dormant",
+      "human_judgment": "Seasonal alpine danger that disappears in summer but absolutely returns in winter. Mark must persist year-round even when summer reports say not-applicable. Killing in summer means winter cohort loses 5 months of aggregated knowledge.",
+      "edge_case_flag": "alpine_seasonal|ta_winter|cyclical_danger"
+    },
+    {
+      "id": 616,
+      "title": "Old Ghost Road 5-day Ghost Lake Hut mountain bike collision warning",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Old Ghost Road 80km 4-5 day bike or hike, blind corner descent before Ghost Lake Hut, multiple near-collisions between uphill hikers and downhill bikers reported by hut group on day 3",
+        "intrinsic_quality": "Real injury risk at blind-corner shared-use trail",
+        "user_volume_per_month": 50,
+        "duration_months": 12,
+        "signal": "no signal entire trail, syncs at Lyell or Seddonville",
+        "season_pattern": "year round but bike volume peaks summer",
+        "human_factors": "bikers and hikers both motivated to warn, cross-mode mark"
+      },
+      "events_timeline": [
+        "Month 1: hiker hut group posts after near-miss, photos of blind corner",
+        "Month 2: 6 bikers and 4 hikers confirm same corner, 25 likes",
+        "Month 3: trail trust adds physical warning signage",
+        "Month 5: post-signage users confirm signs help but bikers still fast",
+        "Month 8: 40 likes, ongoing advisory rather than fixed",
+        "Month 12: stable advisory, integrates into pre-trip briefing materials"
+      ],
+      "expected_signal_summary": "40 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "ongoing_advisory",
+      "human_judgment": "Multi-modal trail with inherent geometric hazard not fully solvable by signage. Mark should remain alive as ongoing advisory rather than resolved, because the underlying blind-corner physics doesn't change. Both biker and hiker likes show cross-mode validation.",
+      "edge_case_flag": "multi_modal|geometric_hazard|cross_mode_validation"
+    },
+    {
+      "id": 617,
+      "title": "Hump Ridge Track Stag Point sandflies extreme on day 2 of 3",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Hump Ridge Track 3-day Tuatapere Fiordland, Stag Point lookout has extreme sandfly density during westerly humid days, found on day 2 by group running out of repellent",
+        "intrinsic_quality": "Sandfly density real and impactful, worst in NZ tied with West Coast",
+        "user_volume_per_month": 40,
+        "duration_months": 8,
+        "signal": "limited at lookout, sync at Tuatapere",
+        "season_pattern": "Nov-Mar peak, year round otherwise present",
+        "human_factors": "well-known but always shocks first-timers"
+      },
+      "events_timeline": [
+        "Month 1: tourist group posts mark, 50 sandfly bites count, very vivid description",
+        "Month 2: locals comment well-known thing, suggest mark redundant with general knowledge",
+        "Month 3: 12 international visitors thank for warning, 30 likes",
+        "Month 5: track concession adds repellent vending machine at hut",
+        "Month 7: 45 likes, mark stable as international-visitor advisory",
+        "Month 8: track marketing references mark as community resource"
+      ],
+      "expected_signal_summary": "45 likes vs 3 redundancy reports",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Locals say redundant but international visitors have no Aotearoa sandfly priors. Mark serves the audience that needs it. Local-knowledge dismissal is exactly the bias the system must filter out. Volume of likes from international users is the real signal.",
+      "edge_case_flag": "local_vs_visitor_bias|sandfly|known_unknowns"
+    },
+    {
+      "id": 618,
+      "title": "Kepler Track Iris Burn Hut helicopter resupply noise pattern day 3",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Kepler Track 4-day Te Anau, Iris Burn Hut campsite gets helicopter resupply Tuesday mornings 7am, mark warns wilderness-experience seekers, posted by user who chose Tue night by mistake",
+        "intrinsic_quality": "Wilderness experience expectation management",
+        "user_volume_per_month": 80,
+        "duration_months": 6,
+        "signal": "limited, sync at Te Anau",
+        "season_pattern": "Great Walk season helicopter scheduled, off-season unpredictable",
+        "human_factors": "user posts so others can choose Wed or Mon nights instead"
+      },
+      "events_timeline": [
+        "Month 1: original poster makes mark with 7am helicopter video",
+        "Month 2: 8 confirmations of Tuesday pattern, 35 likes",
+        "Month 3: DOC concession confirms scheduled resupply, suggests booking pattern",
+        "Month 4: smart users start booking Wed-Sun avoiding Tue, mark drives behavior",
+        "Month 5: 50 likes, mark stable as practical scheduling advisory",
+        "Month 6: confirmed-useful by tourism boards"
+      ],
+      "expected_signal_summary": "50 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Mark drives actual booking behavior change. Not danger, not facility, but high practical value. System should value behavior-impact marks even when they sound trivial. Pattern-based marks (every Tuesday) are uniquely user-discoverable, DOC won't post these.",
+      "edge_case_flag": "behavior_driving|pattern_based|unique_user_value"
+    },
+    {
+      "id": 619,
+      "title": "Abel Tasman inland track 3-day vs coast disagreement post-trip",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Abel Tasman Inland Track 3-day separate from coast track, mark says better wilderness than coast, but user came back to it after coastal track on day 4 of combined trip and disagreed",
+        "intrinsic_quality": "Subjective comparison, opinion shifts after seeing both",
+        "user_volume_per_month": 25,
+        "duration_months": 14,
+        "signal": "limited inland, full at Marahau or Totaranui",
+        "season_pattern": "year round inland track",
+        "human_factors": "opinion changed after experiencing both routes back-to-back"
+      },
+      "events_timeline": [
+        "Month 1: original poster marks inland better, 15 likes",
+        "Month 4: combined-trip user reports inland not better after seeing coast, suggests downgrade",
+        "Month 6: 5 more combined-trip users add nuance, both have value",
+        "Month 9: mark text edited by community to comparative not absolute",
+        "Month 11: 25 likes, stable nuanced version",
+        "Month 14: mark serves as decision aid rather than absolute claim"
+      ],
+      "expected_signal_summary": "25 likes vs 4 downgrade-suggests",
+      "expected_outcome": "alive",
+      "expected_status": "evolved_to_nuanced",
+      "human_judgment": "Mark improved through community editing from absolute to comparative claim. This is the system working: opinion shifts after broader context naturally refine the mark. Should NOT kill, the evolution itself is the value. Combined-trip users have higher epistemic standing than single-route.",
+      "edge_case_flag": "comparative_evolution|community_edit|epistemic_weight"
+    },
+    {
+      "id": 620,
+      "title": "Milford Track Mintaro Hut bunk allocation on rainy day 2 of 4",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Milford Track 4-day Great Walk, Mintaro Hut on heavy rain day 2 the drying room overcrowded and bunks 1-3 closest to the door soaked, posted by user who got soaked",
+        "intrinsic_quality": "Bunk choice strategy specific to weather, granular and useful",
+        "user_volume_per_month": 100,
+        "duration_months": 7,
+        "signal": "limited, syncs at Milford Sound or Te Anau",
+        "season_pattern": "Great Walk season high volume Oct-Apr",
+        "human_factors": "Milford peak volume means rapid validation"
+      },
+      "events_timeline": [
+        "Month 1: rainy-day user posts with photo of soaked bunk 2",
+        "Month 2: 12 confirmations, 40 likes within month",
+        "Month 3: DOC concession comments noted, working on door seal",
+        "Month 4: door seal fixed, post-fix user reports bunks dry, suggests resolved",
+        "Month 6: 55 likes, mark transitioned to historical advisory",
+        "Month 7: stable, used by next-season trip planners"
+      ],
+      "expected_signal_summary": "55 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "resolved_with_history",
+      "human_judgment": "Mark drove physical hut improvement (door seal). After resolved, retain as evidence of community-to-DOC feedback loop. Future similar issues benefit when users see their reports lead to actual fixes. Killing the mark erases that institutional memory.",
+      "edge_case_flag": "drove_official_fix|institutional_memory|weather_specific"
+    },
+    {
+      "id": 621,
+      "title": "Cape Brett Track day-3 cumulative knee pain mark questionable validity",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Cape Brett Track 16km return 2-3 days, mark warns of treacherous knee-killing descent, posted by user on day 3 with cumulative 30km of fatigue, suspected fatigue-bias",
+        "intrinsic_quality": "Real terrain difficulty but exaggerated by fatigue context",
+        "user_volume_per_month": 35,
+        "duration_months": 10,
+        "signal": "patchy on cape, sync at Russell or Rawhiti",
+        "season_pattern": "year round but wet winter increases mud difficulty",
+        "human_factors": "fatigue-bias real consideration, fresh hikers report easier"
+      },
+      "events_timeline": [
+        "Month 1: cumulative-fatigue user posts danger mark, intense tone",
+        "Month 2: fresh dayhikers report descent moderate not treacherous, 5 reports",
+        "Month 4: 10 multi-day users confirm cumulative-fatigue version, 18 likes",
+        "Month 6: physiotherapist comments knee strain plausible after 30km cumulative",
+        "Month 8: mark text edited to advisory contingent on cumulative load",
+        "Month 10: stable nuanced version, distinguishes day-3 vs day-1 experience"
+      ],
+      "expected_signal_summary": "18 likes vs 5 contests, 1 self-edit",
+      "expected_outcome": "alive",
+      "expected_status": "context_dependent",
+      "human_judgment": "Mark validity depends on whether user is on day 1 or day 3. System needs to capture context-dependent truth, not flatten to alive-or-dead. Reports from fresh dayhikers shouldn't kill mark useful to multi-day users; they're describing different experiences of the same terrain.",
+      "edge_case_flag": "fatigue_dependent|context_truth|preserve_for_subset"
+    },
+    {
+      "id": 622,
+      "title": "Pouakai Circuit Mt Taranaki tarn reflection mark cloudy on day 2 of 3",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Pouakai Circuit 2-3 day Mt Taranaki, the iconic Pouakai Tarns reflection of Taranaki posted as world-class scenic, day-2 user found cloud-covered mountain and questioned",
+        "intrinsic_quality": "Real iconic scenery when conditions allow, weather dependent",
+        "user_volume_per_month": 55,
+        "duration_months": 11,
+        "signal": "patchy on circuit, syncs at New Plymouth",
+        "season_pattern": "year round but Taranaki weather notoriously fickle",
+        "human_factors": "frustrated cloud-day users vs blue-sky users diverge sharply"
+      },
+      "events_timeline": [
+        "Month 1: original blue-sky photographer marks the scenic with hero photo",
+        "Month 2: cloudy-day user reports mountain not visible, suggests downgrade",
+        "Month 3: 8 blue-sky users confirm iconic, 30 likes",
+        "Month 5: weather forecaster comments mountain visible 40 percent of summer days",
+        "Month 7: 50 likes 6 reports, mark stable as canonical with weather caveat",
+        "Month 11: long-term stable, mark text references weather statistics"
+      ],
+      "expected_signal_summary": "50 likes vs 6 reports (8.3:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Cloud-day reports are real experience but not falsification of underlying scenery. Mark for iconic-when-clear must survive cloudy votes; otherwise every weather-dependent NZ peak loses its mark. Statistical caveat (40 percent visibility) is good evolution, killing is wrong.",
+      "edge_case_flag": "weather_dependent_iconic|statistical_truth|cloud_bias"
+    },
+    {
+      "id": 623,
+      "title": "Tongariro Northern Circuit Oturere Hut bunkroom snoring symphony day 3",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Tongariro Northern Circuit 3-4 day, Oturere Hut large bunkroom severe snoring from group of 8, day-3 sleep-deprived user marks as advisory to bring earplugs",
+        "intrinsic_quality": "Sleep-quality practical advisory, well-meaning",
+        "user_volume_per_month": 45,
+        "duration_months": 5,
+        "signal": "limited, sync at Whakapapa",
+        "season_pattern": "Great Walk season high volume",
+        "human_factors": "subjective but consistent across many trips"
+      },
+      "events_timeline": [
+        "Month 1: sleep-deprived user posts earplugs advisory",
+        "Month 2: 6 confirmations of similar experiences, 22 likes",
+        "Month 3: DOC posts joke comment that all huts have this problem",
+        "Month 4: 30 likes, no reports, light-hearted but useful",
+        "Month 5: stable as bring-earplugs reminder for hut sleepers"
+      ],
+      "expected_signal_summary": "30 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Low-stakes but high-value-for-sleep mark. System should not bias toward only Serious Safety marks. Volume of grateful likes shows genuine utility. Earplug recommendation is the kind of practical wisdom DOC won't post but every hut user wants.",
+      "edge_case_flag": "low_stakes_high_utility|practical_wisdom|hut_culture"
+    },
+    {
+      "id": 624,
+      "title": "Cascade Saddle Glenorchy track plummet warning team consensus on day 4",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Cascade Saddle from Dart Hut side 5-day, the Pylon descent infamous for fatal slips in wet conditions, posted by team of 4 who debated 30 minutes whether to descend on day 4 wet morning",
+        "intrinsic_quality": "Genuine fatal-fall terrain, multiple deaths historically",
+        "user_volume_per_month": 18,
+        "duration_months": 21,
+        "signal": "no signal at saddle, sync at Glenorchy",
+        "season_pattern": "Dec-Mar season, otherwise officially closed",
+        "human_factors": "team consensus mark with high deliberation, high credibility"
+      },
+      "events_timeline": [
+        "Month 1: 4-person team posts collective danger mark with deliberation notes",
+        "Month 3: NZAC veteran adds incident history, 15 likes",
+        "Month 6: DOC alpine alerts cite the user mark for current conditions",
+        "Month 12: ongoing advisory, periodic confirmations every season",
+        "Month 18: 28 likes, mark canonical for this descent",
+        "Month 21: stable, referenced in NZAC handbook updates"
+      ],
+      "expected_signal_summary": "28 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "canonical_warning",
+      "human_judgment": "Team-consensus mark with documented deliberation is the highest-quality user mark. Multi-person agreement after debate carries more signal than 10 solo posts. System should reward provenance, not just count likes. Cascade Saddle has killed people; this mark is forever.",
+      "edge_case_flag": "team_consensus|fatal_terrain|provenance_weighted"
+    },
+    {
+      "id": 625,
+      "title": "Wangapeka Track Stone Hut firewood absent on cold day 4 of 5",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Wangapeka Track 4-5 day Kahurangi, Stone Hut firewood pile empty on day 4 of trip, group of 3 cold-soaked, suspected previous group took everything",
+        "intrinsic_quality": "Cold-night risk, firewood etiquette problem",
+        "user_volume_per_month": 12,
+        "duration_months": 8,
+        "signal": "no signal, sync at Tapawera or Karamea",
+        "season_pattern": "matters cold months Apr-Oct",
+        "human_factors": "fellow-tramper antagonism, advisory tone"
+      },
+      "events_timeline": [
+        "Month 1: cold group posts firewood-empty mark, polite but pointed",
+        "Month 2: 4 winter trampers confirm pattern of empty pile, 14 likes",
+        "Month 3: DOC volunteer comments hut warden checks monthly, leaves logs",
+        "Month 5: post-restock users confirm logs there, suggests cyclical not chronic",
+        "Month 7: stable, mark functions as please-leave-some advisory",
+        "Month 8: integrated into hut culture reminder"
+      ],
+      "expected_signal_summary": "14 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "cyclical_advisory",
+      "human_judgment": "Mark addresses tramper-vs-tramper etiquette not infrastructure. Resolution by DOC restocking misses the point; the pattern is human behavior. Should remain as ongoing community reminder. Future winter cohorts benefit from awareness even after current restock.",
+      "edge_case_flag": "etiquette|cyclical_human_behavior|community_reminder"
+    },
+    {
+      "id": 626,
+      "title": "Stewart Island Northwest Circuit mud reality day 6 of 9",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Stewart Island Rakiura Northwest Circuit 9-11 day, day 6 user marks knee-deep mud through Mason Bay section, common knowledge but first-timers underestimate",
+        "intrinsic_quality": "Real mud reality, gear-failure risk wet feet for days",
+        "user_volume_per_month": 6,
+        "duration_months": 19,
+        "signal": "no signal entire circuit, sync at Oban after exit",
+        "season_pattern": "year round mud, slightly drier Feb",
+        "human_factors": "experienced trampers know but international visitors shocked"
+      },
+      "events_timeline": [
+        "Month 1: international visitor posts mud-shock mark from Oban ferry wifi",
+        "Month 4: 3 more international visitors confirm, locals comment well-known",
+        "Month 8: 12 likes mostly international, 2 dismissive local reports",
+        "Month 14: tourism brochure starts citing the user mark",
+        "Month 17: 18 likes, established as international-visitor advisory",
+        "Month 19: stable, helpful for first-timer expectation setting"
+      ],
+      "expected_signal_summary": "18 likes vs 2 dismissive reports",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Locals dismissing well-known mud miss that 90 percent of users are international first-timers. Mark serves them, not locals. Tourism citation validates value. Local-knowledge dismissal cannot kill marks aimed at non-local audiences.",
+      "edge_case_flag": "audience_mismatch|locals_vs_visitors|cited_externally"
+    },
+    {
+      "id": 627,
+      "title": "Lake Waikaremoana Panekire Bluff vista cumulative-magic day 4 of 4",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Lake Waikaremoana Great Walk 3-4 day, Panekire Bluff lookout above the lake, user marks transcendent on day 4 due to cumulative immersion, harder to convey to dayhikers",
+        "intrinsic_quality": "Real iconic NZ scenery, additional wonder when accessed by foot over days",
+        "user_volume_per_month": 30,
+        "duration_months": 12,
+        "signal": "no signal on bluff, sync at Wairoa or Murupara",
+        "season_pattern": "year round, fog-prone winter",
+        "human_factors": "cumulative-immersion appreciation differs from helicopter dropoff"
+      },
+      "events_timeline": [
+        "Month 1: 4-day tramper posts transcendent scenic mark from Wairoa",
+        "Month 3: dayhike-style user reports nice but not transcendent, 2 reports",
+        "Month 5: 10 multi-day completers confirm cumulative wonder, 22 likes",
+        "Month 8: Te Urewera iwi rep adds context about whakapapa connection",
+        "Month 11: 30 likes 3 reports, stable canonical with cultural framing",
+        "Month 12: integrated with iwi storytelling content"
+      ],
+      "expected_signal_summary": "30 likes vs 3 reports (10:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Cumulative-immersion scenic mark validated by both multi-day users and iwi cultural context. Dayhiker contests measure a different experience. System must understand the same place produces different truths for different access patterns. Mark for the 4-day experience.",
+      "edge_case_flag": "cumulative_immersion|iwi_context|access_dependent"
+    },
+    {
+      "id": 628,
+      "title": "Six Foot Track Australia tramper compares NZ Tararua S-K day 3 mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Tararua S-K route 3-day classic, day-3 user posts mark comparing positively to Australia's Six Foot Track, slightly off-topic comparative mark contested",
+        "intrinsic_quality": "Genuine experience comparison but cross-country reference confusing",
+        "user_volume_per_month": 16,
+        "duration_months": 6,
+        "signal": "no signal in Tararuas, sync at Otaki",
+        "season_pattern": "year round but winter snow on tops",
+        "human_factors": "Australian-NZ tramper crossover audience small but engaged"
+      },
+      "events_timeline": [
+        "Month 1: Aussie-Kiwi tramper posts comparative mark from Otaki",
+        "Month 2: locals comment cross-country comparison off-topic",
+        "Month 3: 4 Australian visitors find the comparison helpful, 8 likes",
+        "Month 4: mark text edited to be NZ-focused with Australian aside",
+        "Month 5: 10 likes, stable accepted edit",
+        "Month 6: useful niche reference for AU-NZ tramping community"
+      ],
+      "expected_signal_summary": "10 likes vs 3 off-topic reports, 1 self-edit",
+      "expected_outcome": "alive",
+      "expected_status": "evolved_acceptable",
+      "human_judgment": "Self-edit after community feedback is the ideal correction loop. Mark serves a real cross-country audience. Locals' off-topic complaint reflects scope preference, not falsification. Edit preserved value for niche audience, system worked.",
+      "edge_case_flag": "cross_country_audience|self_edit|niche_value"
+    },
+    {
+      "id": 629,
+      "title": "Te Araroa Tongariro to Whanganui section river ford 7-day cumulative",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Te Araroa NOBO Whanganui Journey or alternative, the Tieke Kainga to Pipiriki section ford had unmarked deep pool, user found on day 5 of 7-day section after partner slip-injury",
+        "intrinsic_quality": "Real river hazard, partner injury context",
+        "user_volume_per_month": 10,
+        "duration_months": 13,
+        "signal": "occasional, sync at Pipiriki",
+        "season_pattern": "rain dependent, deeper after weather",
+        "human_factors": "partner-injury motivates very detailed mark"
+      },
+      "events_timeline": [
+        "Month 1: tramper posts after partner ankle injury, very detailed",
+        "Month 3: 4 confirmations same season, 12 likes",
+        "Month 5: iwi authority comments concerns about safety, suggests tape marker",
+        "Month 7: tape marker installed, post-marker users confirm helpful",
+        "Month 10: 18 likes, mark stable as historical with marker reference",
+        "Month 13: integrated with TA pre-trip briefing"
+      ],
+      "expected_signal_summary": "18 likes vs 0 reports",
+      "expected_outcome": "alive",
+      "expected_status": "resolved_with_history",
+      "human_judgment": "Mark drove physical infrastructure improvement (tape marker). Post-resolution must remain as institutional memory. TA hikers planning years out benefit from seeing this section had a hazard before the marker was added. Iwi engagement is added validation.",
+      "edge_case_flag": "drove_infrastructure|iwi_engagement|ta_long_view"
+    },
+    {
+      "id": 630,
+      "title": "Gillespie Pass Circuit Crucible Lake side trip cumulative mark accuracy day 3",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Gillespie Pass Circuit 3-4 day Mt Aspiring, Crucible Lake side trip from Siberia Hut, day-3 user posts mark with caveat that the steep uphill side trip questionable on cumulative tired legs",
+        "intrinsic_quality": "Real choice for tired multi-day users, side-trip cost benefit",
+        "user_volume_per_month": 22,
+        "duration_months": 9,
+        "signal": "no signal on side trip, sync at Makarora or Wanaka",
+        "season_pattern": "Dec-Apr accessible, snow-blocked otherwise",
+        "human_factors": "multi-day users prioritize main route over side detours"
+      },
+      "events_timeline": [
+        "Month 1: tired day-3 user posts skip-side-trip-if-tired advisory",
+        "Month 3: rested side-trippers contest, lake worth it always, 4 reports",
+        "Month 5: 8 multi-day completers agree day-3 fatigue real factor, 14 likes",
+        "Month 7: mark text edited to balanced if-you-have-energy",
+        "Month 9: stable as decision-aid not absolute claim"
+      ],
+      "expected_signal_summary": "14 likes vs 4 contests, 1 self-edit",
+      "expected_outcome": "alive",
+      "expected_status": "decision_aid",
+      "human_judgment": "Mark evolved through community feedback into a better decision-aid version. Day-3 fatigue judgment is real for multi-day users; rested trippers describe different experience. Self-edit preserves both perspectives. Killing on report count would lose useful nuance for tired hikers.",
+      "edge_case_flag": "decision_aid|fatigue_dependent|community_evolved"
+    }
+  ]
+}

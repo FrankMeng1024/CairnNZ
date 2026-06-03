@@ -1,0 +1,13 @@
+sweep,good_avg,bad_avg,spam_avg,good_pass,bad_pass,spam_pass,overall
+"baseline",0.00,93.34,100.00,true,true,true,true
+"tau   +10%",0.00,93.34,100.00,true,true,true,true
+"tau   -10%",0.00,93.34,100.00,true,true,true,true
+"tau   +20%",0.00,93.34,100.00,true,true,true,true
+"tau   -20%",0.00,93.34,100.00,true,true,true,true
+"boost +20%",0.00,93.34,100.00,true,true,true,true
+"boost -20%",0.00,93.34,100.00,true,true,true,true
+"baseLifetime +20%",0.00,93.34,100.00,true,true,true,true
+"baseLifetime -20%",0.00,93.34,100.00,true,true,true,true
+"reportWeight 1.0× (default报告权重)",0.00,84.42,100.00,true,false,true,false
+"reportWeight 1.8× (更激进)",0.00,97.16,100.00,true,true,true,true
+"reportWeight 1.2× (更宽容)",0.00,89.68,100.00,true,false,true,false

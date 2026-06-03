@@ -1,0 +1,56 @@
+# Cairn backend deployment.
+#
+# IMPORTANT: this compose file does NOT spin up its own MySQL.
+# It assumes a MySQL instance is already running on the host (e.g. the shared
+# `ainews-db` container that already serves multiple projects on port 3306).
+# We connect to it via the host gateway.
+#
+# DB_HOST in `.env` should be:
+#   - `host.docker.internal`  (modern Docker, Mac/Windows)
+#   - the host's LAN IP (e.g. 172.17.0.1 on Linux Docker default bridge)
+#   - or the public IP if MySQL is published there
+#
+# The `cairn` database must already exist with a user that has full grants on
+# it. If starting from scratch, connect to the existing MySQL and run the
+# migrations from backend/src/migrations/*.sql in order, OR use init.sql in
+# the same directory as a one-shot bootstrap script.
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: cairn-backend
+    # Bind to 127.0.0.1 only — backend is reached from the public internet
+    # exclusively through nginx (api.yiiling.cn -> :443 -> proxy_pass :3001).
+    # Removing the 0.0.0.0 binding closes off direct :3001 access from the LAN
+    # / public IP, which is the desired security posture once HTTPS is up.
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_HOST=${DB_HOST:-host.docker.internal}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME:-cairn}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      - CAIRN_TELEMETRY_API_KEY=${CAIRN_TELEMETRY_API_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8082,http://localhost:19006}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - EMAIL_PASS=${EMAIL_PASS:-}
+      - TRUST_PROXY=${TRUST_PROXY:-1}
+    # On Linux, host.docker.internal needs to be mapped explicitly to the host
+    # gateway so the backend container can reach the host's MySQL.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped

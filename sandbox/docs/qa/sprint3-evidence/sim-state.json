@@ -1,0 +1,125 @@
+{
+  "timestamp": "2026-05-31T04:50:14.077Z",
+  "days": 30,
+  "walkerCount": 100,
+  "personaCount": {
+    "social_group": 35,
+    "malicious_reporter": 2,
+    "explorer_solo": 30,
+    "lurker_silent": 20,
+    "critic_skeptical": 7,
+    "enthusiast_creator": 6
+  },
+  "locCount": {
+    "popular": 45,
+    "normal": 60,
+    "remote": 45
+  },
+  "buckets": {
+    "good": {
+      "sunk": 4,
+      "healthy": 46,
+      "borderline": 0,
+      "weak": 0,
+      "heartbeat": 0,
+      "total": 50
+    },
+    "bad": {
+      "sunk": 46,
+      "healthy": 0,
+      "borderline": 4,
+      "weak": 0,
+      "heartbeat": 0,
+      "total": 50
+    },
+    "neutral": {
+      "sunk": 4,
+      "healthy": 25,
+      "borderline": 1,
+      "weak": 0,
+      "heartbeat": 0,
+      "total": 30
+    },
+    "spam": {
+      "sunk": 19,
+      "healthy": 0,
+      "borderline": 1,
+      "weak": 0,
+      "heartbeat": 0,
+      "total": 20
+    }
+  },
+  "matrix": {
+    "good": {
+      "popular": {
+        "sunk": 0,
+        "total": 15
+      },
+      "normal": {
+        "sunk": 0,
+        "total": 20
+      },
+      "remote": {
+        "sunk": 4,
+        "total": 15
+      }
+    },
+    "bad": {
+      "popular": {
+        "sunk": 15,
+        "total": 15
+      },
+      "normal": {
+        "sunk": 18,
+        "total": 20
+      },
+      "remote": {
+        "sunk": 13,
+        "total": 15
+      }
+    },
+    "neutral": {
+      "popular": {
+        "sunk": 0,
+        "total": 9
+      },
+      "normal": {
+        "sunk": 1,
+        "total": 12
+      },
+      "remote": {
+        "sunk": 3,
+        "total": 9
+      }
+    },
+    "spam": {
+      "popular": {
+        "sunk": 6,
+        "total": 6
+      },
+      "normal": {
+        "sunk": 8,
+        "total": 8
+      },
+      "remote": {
+        "sunk": 5,
+        "total": 6
+      }
+    }
+  },
+  "verdicts": {
+    "goodSunkRate": 0,
+    "goodTestedCount": 37,
+    "badSunkRate": 1,
+    "badTestedCount": 25,
+    "spamSunkRate": 1,
+    "spamTestedCount": 9,
+    "goodSunkPass": true,
+    "badSunkPass": true,
+    "spamRecognised": true,
+    "heartbeatRevival": false
+  },
+  "revivalCount": 0,
+  "revivalLog": [],
+  "overallPass": false
+}

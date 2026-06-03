@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Sandbox Demo A.2 — Real Map (Street Level)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  body { margin: 0; padding: 0; background: #f5f5f5; font-family: -apple-system, sans-serif; height: 100vh; overflow: hidden; display: flex; }
+
+  #panel { width: 240px; background: #fff; border-right: 1px solid #e0e0e0; padding: 16px; box-sizing: border-box; font-size: 12px; overflow-y: auto; flex-shrink: 0; z-index: 1001; }
+  #panel h1 { font-size: 14px; margin: 0 0 4px; color: #333; font-weight: 600; }
+  #panel .sub { color: #888; font-size: 11px; margin-bottom: 16px; }
+  .section { margin-bottom: 14px; }
+  .section h3 { font-size: 11px; color: #666; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 11px; }
+  .row label { color: #555; }
+  .row .val { color: #000; font-weight: 500; }
+  input[type="range"] { width: 100%; }
+  button { width: 100%; padding: 6px; background: #fff; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; font-size: 11px; color: #333; margin-bottom: 4px; }
+  button:hover { background: #f0f0f0; }
+  button.primary { background: #333; color: #fff; border-color: #333; }
+
+  #stage { flex: 1; position: relative; }
+  #map { width: 100%; height: 100%; }
+
+  #statusbar { position: absolute; top: 8px; left: 8px; background: rgba(255,255,255,0.95); padding: 6px 10px; border-radius: 3px; font-size: 11px; color: #333; border: 1px solid #e0e0e0; z-index: 1000; }
+  #statusbar span { margin-right: 12px; }
+
+  .marker-card { background: #fff; border: 1px solid #ccc; padding: 6px 8px; border-radius: 3px; font-size: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+  .marker-card .title { font-weight: 600; color: #000; }
+  .marker-card .stat { color: #555; }
+  .marker-card .stat .num { color: #000; font-weight: 500; }
+  .marker-card .reasons { color: #888; margin-top: 2px; padding-top: 2px; border-top: 1px dashed #eee; }
+
+  .legend { position: absolute; bottom: 8px; left: 8px; background: rgba(255,255,255,0.95); padding: 8px 10px; border-radius: 3px; font-size: 10px; color: #555; border: 1px solid #e0e0e0; z-index: 1000; }
+  .legend-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.2); }
+
+  /* Leaflet popup 样式覆盖 — 白色卡片极简 */
+  .leaflet-popup-content-wrapper {
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    padding: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  .leaflet-popup-content {
+    margin: 6px 8px;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+  .leaflet-popup-tip {
+    background: #fff;
+    border-right: 1px solid #ccc;
+    border-bottom: 1px solid #ccc;
+  }
+
+  /* 隐藏 Leaflet attribution (后期可加回) */
+  .leaflet-control-attribution { font-size: 9px; opacity: 0.5; }
+
+  /* 走路圆球 - 用 div + transform 渲染 */
+  .walker {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 600;
+  }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <h1>Cairn Sandbox</h1>
+  <div class="sub">Demo A.2 — Real Streets · 100 walkers</div>
+
+  <div class="section">
+    <h3>Population</h3>
+    <div class="row"><label>Walkers</label><span class="val">100</span></div>
+    <input type="range" min="10" max="100" value="100" />
+  </div>
+
+  <div class="section">
+    <h3>Time</h3>
+    <div class="row"><label>Speed</label><span class="val">100×</span></div>
+    <input type="range" min="1" max="10000" value="100" />
+  </div>
+
+  <div class="section">
+    <h3>Persona Mix</h3>
+    <div class="row"><label>Explorer</label><span class="val">30%</span></div>
+    <div class="row"><label>Social</label><span class="val">40%</span></div>
+    <div class="row"><label>Enthusiast</label><span class="val">5%</span></div>
+    <div class="row"><label>Lurker</label><span class="val">20%</span></div>
+    <div class="row"><label>Critic</label><span class="val">4%</span></div>
+    <div class="row"><label>Spammer</label><span class="val">0.5%</span></div>
+    <div class="row"><label>Malicious</label><span class="val">0.5%</span></div>
+  </div>
+
+  <div class="section">
+    <h3>Algorithm</h3>
+    <div class="row"><label>τ supply</label><span class="val">30d</span></div>
+    <div class="row"><label>τ report</label><span class="val">30d</span></div>
+    <div class="row"><label>heartbeat</label><span class="val">20%</span></div>
+  </div>
+
+  <div class="section">
+    <button class="primary">▶ Start</button>
+    <button>⏸ Pause</button>
+    <button>↻ Reset</button>
+    <button>📷 Screenshot</button>
+    <button>💾 Export JSON</button>
+  </div>
+</div>
+
+<div id="stage">
+  <div id="map"></div>
+
+  <div id="statusbar">
+    <span>Day: <strong>42</strong></span>
+    <span>Markers: <strong>23</strong></span>
+    <span>Healthy: <strong>19</strong></span>
+    <span>Sunk: <strong>3</strong></span>
+    <span>Heartbeat: <strong>1</strong></span>
+  </div>
+
+  <div class="legend">
+    <div class="legend-row"><div class="legend-dot" style="background:#4CAF50"></div>Explorer</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#FF9800"></div>Social</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#2196F3"></div>Enthusiast</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#9E9E9E"></div>Lurker</div>
+    <div style="margin-top:6px; padding-top:6px; border-top:1px solid #eee;">
+      <span style="color:#D32F2F">⚑</span> danger ·
+      <span style="color:#388E3C">⚑</span> supply ·
+      <span style="color:#F57C00">⚑</span> junction
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ==== 地图 — 选 Auckland 城区 (有清晰街道网格的地方, 不选 Tongariro 山区) ====
+// Auckland CBD 中心: -36.8485, 174.7633, zoom 17 能看到清晰街道
+const map = L.map('map', {
+  zoomControl: true,
+  attributionControl: true,
+  preferCanvas: true,
+  zoomSnap: 0.5
+}).setView([-36.8485, 174.7633], 17);
+
+// OSM 标准 tile — 不再做灰度滤镜, 保留真实街道感
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '© OpenStreetMap'
+}).addTo(map);
+
+// ==== Marker 类型颜色 ====
+const personaColors = {
+  explorer: '#4CAF50',
+  social: '#FF9800',
+  enthusiast: '#2196F3',
+  lurker: '#9E9E9E',
+  critic: '#9C27B0',
+  spammer: '#F44336',
+  malicious: '#E91E63'
+};
+
+const markerColors = {
+  danger: '#D32F2F',
+  supply: '#388E3C',
+  junction: '#F57C00',
+  scenic: '#1976D2',
+  cairn: '#795548'
+};
+
+// ==== Auckland CBD 真实街道 polyline (手工抽几条主街) ====
+// 这些是 Queen St, Customs St, Quay St 等 Auckland 主街道的近似坐标
+const streets = [
+  // Queen Street (主街)
+  [[-36.8434, 174.7665], [-36.8454, 174.7660], [-36.8480, 174.7650], [-36.8510, 174.7635], [-36.8540, 174.7625], [-36.8568, 174.7615]],
+  // Customs Street (横街)
+  [[-36.8443, 174.7600], [-36.8447, 174.7635], [-36.8450, 174.7665], [-36.8453, 174.7700], [-36.8455, 174.7735]],
+  // Quay Street (海边)
+  [[-36.8430, 174.7600], [-36.8432, 174.7650], [-36.8435, 174.7700], [-36.8438, 174.7750]],
+  // Albert Street
+  [[-36.8455, 174.7610], [-36.8475, 174.7605], [-36.8500, 174.7600], [-36.8525, 174.7595], [-36.8555, 174.7588]],
+  // Wellesley Street
+  [[-36.8500, 174.7570], [-36.8505, 174.7610], [-36.8508, 174.7660], [-36.8510, 174.7700]],
+  // Symonds Street
+  [[-36.8530, 174.7700], [-36.8550, 174.7715], [-36.8580, 174.7720], [-36.8610, 174.7720]],
+  // Hobson Street
+  [[-36.8480, 174.7570], [-36.8500, 174.7565], [-36.8525, 174.7560], [-36.8555, 174.7555]],
+  // Victoria Street
+  [[-36.8470, 174.7575], [-36.8473, 174.7615], [-36.8475, 174.7660], [-36.8478, 174.7705]],
+  // Karangahape Road
+  [[-36.8580, 174.7550], [-36.8585, 174.7600], [-36.8588, 174.7660], [-36.8590, 174.7715]],
+];
+
+// 不画 polyline (因为底图本身就有街道渲染) - 步道靠 OSM tile 自身展示
+// 但需要把这些 polyline 作为 walker 行走的"路径数据"
+
+// ==== 100 个虚拟人 ====
+const types = ['explorer', 'social', 'enthusiast', 'lurker', 'critic', 'spammer'];
+const counts = [30, 40, 5, 20, 4, 1];
+
+const walkers = [];
+types.forEach((t, i) => {
+  for (let j = 0; j < counts[i]; j++) {
+    const street = streets[Math.floor(Math.random() * streets.length)];
+    const segIdx = Math.floor(Math.random() * (street.length - 1));
+    const segT = Math.random();
+    const lat = street[segIdx][0] * (1 - segT) + street[segIdx + 1][0] * segT;
+    const lng = street[segIdx][1] * (1 - segT) + street[segIdx + 1][1] * segT;
+    walkers.push({ type: t, lat, lng });
+  }
+});
+
+// 虚拟人用 div + Leaflet projection 渲染 (而不是 CircleMarker, 这样更像"圆球")
+const walkerLayer = L.layerGroup().addTo(map);
+const walkerDivs = [];
+walkers.forEach(w => {
+  const icon = L.divIcon({
+    html: `<div class="walker" style="background:${personaColors[w.type]};"></div>`,
+    className: 'walker-icon',
+    iconSize: [10, 10],
+    iconAnchor: [5, 5]
+  });
+  const m = L.marker([w.lat, w.lng], { icon, interactive: false }).addTo(walkerLayer);
+  walkerDivs.push(m);
+});
+
+// ==== Marker — 旗帜在街道上 (15 个示例, 不用太密) ====
+const markerTypesArr = ['danger', 'supply', 'junction', 'scenic', 'cairn'];
+
+const sampleMarkers = [];
+for (let i = 0; i < 15; i++) {
+  const street = streets[i % streets.length];
+  const segIdx = Math.floor(Math.random() * (street.length - 1));
+  const segT = Math.random();
+  const lat = street[segIdx][0] * (1 - segT) + street[segIdx + 1][0] * segT;
+  const lng = street[segIdx][1] * (1 - segT) + street[segIdx + 1][1] * segT;
+  const t = markerTypesArr[i % 5];
+
+  sampleMarkers.push({ type: t, lat, lng, idx: i });
+
+  const flagIcon = L.divIcon({
+    html: `<svg width="18" height="22" viewBox="0 0 18 22" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3));">
+             <line x1="3" y1="3" x2="3" y2="22" stroke="#333" stroke-width="2"/>
+             <polygon points="3,3 16,7 3,11" fill="${markerColors[t]}"/>
+           </svg>`,
+    className: 'flag-marker',
+    iconSize: [18, 22],
+    iconAnchor: [3, 22]
+  });
+
+  const flagMarker = L.marker([lat, lng], { icon: flagIcon }).addTo(map);
+
+  // popup with stats
+  const stats = i === 2
+    ? `<div class="title">⚠ danger #${i}</div><div class="stat">❤ <span class="num">23</span> &nbsp; 🚩 <span class="num">7</span></div><div class="reasons">info: 3 · dislike: 2 · spam: 1 · other: 1</div>`
+    : i === 7
+    ? `<div class="title">💧 supply #${i}</div><div class="stat">❤ <span class="num">45</span> &nbsp; 🚩 <span class="num">0</span></div>`
+    : `<div class="title">${t === 'cairn' ? '🪨' : t === 'scenic' ? '⛰' : t === 'junction' ? '↗' : t === 'supply' ? '💧' : '⚠'} ${t} #${i}</div><div class="stat">❤ <span class="num">${Math.floor(Math.random() * 30 + 5)}</span> &nbsp; 🚩 <span class="num">${Math.floor(Math.random() * 4)}</span></div>`;
+
+  flagMarker.bindPopup(stats, { className: 'marker-card-popup' });
+}
+
+// 自动打开 3 个 popup 作为示例
+setTimeout(() => {
+  // 不能同时打开多个 popup, 改用 Tooltip permanent 显示
+  [2, 7, 12].forEach(i => {
+    const m = sampleMarkers[i];
+    if (!m) return;
+    const stats = i === 2
+      ? `<div style="font-size:10px;"><b>⚠ danger #${i}</b><br>❤ 23 · 🚩 7<br><span style="color:#888">info: 3 · dislike: 2 · spam: 1</span></div>`
+      : i === 7
+      ? `<div style="font-size:10px;"><b>💧 supply #${i}</b><br>❤ 45 · 🚩 0</div>`
+      : `<div style="font-size:10px;"><b>🪨 cairn #${i}</b><br>❤ 12 · 🚩 2<br><span style="color:#888">dislike: 2</span></div>`;
+    L.tooltip({
+      permanent: true,
+      direction: 'top',
+      offset: [0, -20],
+      className: 'marker-stat-tip'
+    }).setContent(stats).setLatLng([m.lat, m.lng]).addTo(map);
+  });
+}, 300);
+
+// 自定义 tooltip 样式
+const tipStyle = document.createElement('style');
+tipStyle.innerHTML = `
+  .marker-stat-tip {
+    background: #fff !important;
+    border: 1px solid #ccc !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15) !important;
+    border-radius: 3px !important;
+    padding: 4px 6px !important;
+    font-family: -apple-system, sans-serif !important;
+  }
+  .marker-stat-tip::before { display: none !important; }
+`;
+document.head.appendChild(tipStyle);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,63 @@
+# Cairn Market Research - Optimized Queries (Mix CN/EN for best results)
+# Phase 1: NZ Outdoor Market + App Landscape
+
+# 维度1: 新西兰户外市场
+新西兰户外运动市场规模 参与人数 徒步 2024 2025
+New Zealand Department of Conservation visitor statistics Great Walks 2024
+新西兰trail running越野跑参与人数增长趋势 2023 2024
+Sport New Zealand Active NZ outdoor participation rate hiking
+新西兰旅游户外活动数据 DOC步道年访客量
+
+# 维度2: App使用情况
+新西兰徒步app推荐 AllTrails Strava 使用体验 2024
+AllTrails用户数量 全球市场份额 收入 2024 2025
+Strava用户数 活跃用户 2024 2025 revenue
+户外运动GPS导航app市场份额 下载量排行 2024
+新西兰离线地图app NZ Topo Map backcountry navigation
+running app market share global Strava Nike Run Club Garmin 2024
+
+# 维度3: 竞品深度分析
+AllTrails功能特点 订阅价格 优缺点 用户评价 2024 2025
+Strava功能对比 优缺点 社交功能 segments challenges
+Komoot户外徒步骑行app功能 欧洲市场 全球扩张
+AR增强现实户外应用 augmented reality hiking app 2024 2025
+PeakVisor AR山脉识别app功能 用户评价
+社交徒步app 好友分享路线 社区功能 trail social
+Relive app 3D路线回放 功能 用户数
+Geocaching app活跃用户数 参与度 2024 gamification outdoor
+
+# 维度4: 市场差异化和机会
+AllTrails Strava用户差评 痛点 不满 app store reviews
+户外app用户需求未被满足 gap analysis hiking running
+AR户外市场规模 增长率 augmented reality outdoor recreation
+离线地图功能 户外app刚需 用户调查 offline maps
+户外app社交功能需求 trail sharing community features survey
+
+# 维度5: 社区和调研渠道
+新西兰户外论坛社区 tramping hiking clubs online
+New Zealand hiking Reddit community r/newzealand outdoor
+新西兰跑步俱乐部 trail running community Facebook groups
+Meetup新西兰 hiking outdoor adventure groups活跃度
+新西兰户外运动协会 组织 网站
+
+# 维度6: 中国开发者出海
+中国个人开发者 发布app到 新西兰 澳洲 Apple App Store 流程 2024
+Apple Developer Program个人开发者注册 中国公民 海外市场
+Google Play上架app 海外市场 新西兰 注册 费用 流程
+中国独立开发者 出海 收款方案 Stripe Wise Payoneer
+新西兰Privacy Act 2020 app隐私合规要求 位置数据
+中国开发者 app出海 成功案例 个人独立开发
+
+# 维度7: 成本和时间预估
+个人开发者 AR app开发 时间周期 成本 2024 2025
+React Native Flutter AR开发 个人开发者 可行性 工期
+Mapbox定价 免费额度 离线地图 移动app 2024 2025
+户外app后端服务器成本 AWS 月费用 小型app
+个人独立开发app 第一年运营成本 推广费用 总投入
+
+# 维度8: 开发前建议
+app idea validation 验证想法 方法 MVP 2024 lean startup
+独立开发者 户外app 上线前准备 checklist
+位置追踪app 法律合规 隐私政策 GDPR 要求
+AR应用 户外场景 技术挑战 GPS精度 电池消耗 解决方案
+indie app developer launch strategy 独立开发者发布策略 niche market

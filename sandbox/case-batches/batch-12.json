@@ -1,0 +1,959 @@
+{
+  "batch": 12,
+  "theme": "救命mark",
+  "id_range": [551, 600],
+  "total": 50,
+  "note": "Life-saving marks. Signal often weak (rescued people rarely upvote afterward), but algorithm MUST keep these alive. Each case is hand-written with real NZ alpine geography.",
+  "cases": [
+    {
+      "id": 551,
+      "title": "Routeburn Falls Hut 上方 Harris Saddle 河流暴涨警告",
+      "location": "Harris Saddle saddle stream crossing, Routeburn Track, Mt Aspiring National Park",
+      "category": "river_flood_warning",
+      "events_timeline": [
+        "2024-02-11 author Otago SAR volunteer 巡线时看到 Harris Creek 12小时内涨了 1.4 米",
+        "2024-02-11 立刻在 saddle 北侧 cairn 旁 mark '不要下水 → 走 high route 绕到 Lake Mackenzie'",
+        "2024-02-12 三个 Aussie 背包客接近河边，看到 mark 后 U-turn 回 Routeburn Falls Hut 等水退",
+        "2024-02-12 当天下午两个没看到 mark 的德国徒步者强渡，被冲下游 80 米，其中一人被发现卡在岩石中获救",
+        "2024-02-13 DOC ranger 在事故报告中明确写出该 mark 阻止了第二起类似事故",
+        "2024-03-至今 mark 被超过 200 个徒步者看到，但只有 4 个人点赞，因为路过的人不知道自己被救了"
+      ],
+      "raw_signals": { "upvotes": 4, "downvotes": 0, "saves": 12, "reports": 0, "exposure_count": 217 },
+      "engagement_rate": 0.018,
+      "human_judgment": "救命级别。低 engagement 是因为被救者本人不知道被救——经过的人 U-turn 之后再也没回来确认。算法必须保住，目标 score ≥ 0.85。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.85
+    },
+    {
+      "id": 552,
+      "title": "Avalanche Peak 北脊雪檐崩塌区警告（救一队 6 人登山队）",
+      "location": "Avalanche Peak north ridge cornice zone, Arthur's Pass National Park",
+      "category": "avalanche_warning",
+      "events_timeline": [
+        "2024-08-22 NZAC member 登山途中看到东侧 cornice 出现 30cm 宽张开裂缝，宽 12 米",
+        "2024-08-22 在 ridge crest 第二个 cairn 处 mark：'东侧 cornice 即将崩，sticky 走脊线西 2 米内'",
+        "2024-08-23 一队 6 人 Christchurch tramping club 队员看到 mark 后改路线",
+        "2024-08-23 当天下午 cornice 真的崩了，崩塌带正好覆盖原本 6 人会经过的位置",
+        "2024-08-23 队长 Greg 当晚在 Arthur's Pass village 酒吧亲自找到 mark 作者道谢",
+        "2024-08-24 DOC 关闭该路段一周，mark 被并入官方 alert 系统"
+      ],
+      "raw_signals": { "upvotes": 11, "downvotes": 0, "saves": 8, "reports": 0, "exposure_count": 95 },
+      "engagement_rate": 0.115,
+      "human_judgment": "救了 6 条命的 mark，engagement 高于平均但绝对值仍小，因为冬季登山 traffic 本就少。必须保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.9
+    },
+    {
+      "id": 553,
+      "title": "Hump Ridge Track Edwin Burn 失温避难所位置 mark",
+      "location": "Edwin Burn shelter side trail, Hump Ridge Track, Fiordland",
+      "category": "shelter_location",
+      "events_timeline": [
+        "2023-11-09 一位老 ranger 退休后回访，把废弃 musterer hut 位置 mark 在主线分叉 80 米处",
+        "2023-11-09 mark 内容：'雪雨天偏离主线 80m 西，老 musterer hut，干木柴在炉子里'",
+        "2024-04-15 独行者 Sam 在 暴雨 + 8°C 大风中失温前期，凭 mark 找到 hut",
+        "2024-04-15 Sam 在 hut 留下感谢便条，DOC ranger 后来贴照片到 facebook",
+        "2024-04-16 Sam 写信给 mark 作者：'如果不是这个 mark，我那晚走不到 Okaka Hut'",
+        "2024-至今 该 mark 总曝光 340 次，只有 6 个 saves（路过的人天气好不需要）"
+      ],
+      "raw_signals": { "upvotes": 7, "downvotes": 0, "saves": 6, "reports": 0, "exposure_count": 340 },
+      "engagement_rate": 0.038,
+      "human_judgment": "典型救命 mark 信号弱模式：99% 路过的人天气好用不到。那 1% 用到的，就是命。必须保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.85
+    },
+    {
+      "id": 554,
+      "title": "Mueller Hut 上 Sealy Tarns 阶梯第 1800 阶急救箱位置",
+      "location": "Sealy Tarns stairway step ~1800, between Kea Point and Mueller Hut, Aoraki/Mt Cook National Park",
+      "category": "first_aid_kit",
+      "events_timeline": [
+        "2023-12-02 NZ Mountain Safety 老志愿者把一个防水急救箱固定在岩缝中，附近有 cairn",
+        "2023-12-02 mark：'急救箱在 cairn 北侧岩缝深 40cm，弹绷+ panadol+ 哨子'",
+        "2024-01-19 一位香港游客脚崴到 grade 2 sprain，同行同伴用箱中弹绷固定，撑到下撤",
+        "2024-02-08 Mueller Hut warden 发现箱被使用并补充了用品",
+        "2024-03-11 又有一对 couple 用箱中 antiseptic 处理 nasty 擦伤，避免感染恶化",
+        "2024-至今 这个 mark 一年内被实际救援使用 4 次，但只有 9 个明确点赞"
+      ],
+      "raw_signals": { "upvotes": 9, "downvotes": 0, "saves": 23, "reports": 0, "exposure_count": 412 },
+      "engagement_rate": 0.078,
+      "human_judgment": "实际救援使用 4 次 = 救命级。saves 比 upvotes 高是因为大家先 save 着以防万一。绝对保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.88
+    },
+    {
+      "id": 555,
+      "title": "Tongariro Alpine Crossing Red Crater 风暴段紧急下撤路线",
+      "location": "Red Crater rim emergency descent to Mangatepopo Hut, Tongariro Alpine Crossing",
+      "category": "storm_escape_route",
+      "events_timeline": [
+        "2024-06-18 风暴前夜，mark 作者（local 向导）在 Red Crater rim 标 emergency 下撤路线",
+        "2024-06-18 mark：'风超过 70km/h 不要继续，沿西脊下撤 Mangatepopo，看 orange poles'",
+        "2024-07-02 一对 Korean couple 在 Red Crater 遇到 80km/h 阵风+冰雹",
+        "2024-07-02 妻子已经开始 disorientation，看到 mark 后丈夫坚持按 mark 路线下撤",
+        "2024-07-02 90 分钟后两人安全抵达 Mangatepopo Hut，hut warden 给他们煮了热汤",
+        "2024-07-03 丈夫上传感谢评论但只有 3 行字，没有点赞功能因为他不会用 app"
+      ],
+      "raw_signals": { "upvotes": 3, "downvotes": 0, "saves": 17, "reports": 0, "exposure_count": 588 },
+      "engagement_rate": 0.034,
+      "human_judgment": "Tongariro 是 NZ 风险最高 day walk 之一。这种 mark 一次救命就值得永久保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.87
+    },
+    {
+      "id": 556,
+      "title": "Mt Taranaki Pouakai Circuit 雾天 errant 指示桩警告",
+      "location": "Pouakai Circuit between Pouakai Hut and Henry Peak, Egmont National Park",
+      "category": "wrong_route_warning",
+      "events_timeline": [
+        "2024-03-30 local 老猎人发现一根旧 marker pole 倾倒，指向悬崖方向",
+        "2024-03-30 mark：'雾天注意，倒下 pole 指向是错的，正确方向是磁北 340°'",
+        "2024-04-12 独行女性徒步者在浓雾中差点跟错 pole，幸亏看到 mark 停下来用指南针",
+        "2024-04-12 她当晚在 Pouakai Hut 留言本写：'那个 mark 救了我的命'",
+        "2024-04-20 DOC 收到通知后正式重新插了 pole",
+        "2024-至今 mark 仍保留作为历史警告，因为雾天还是经常有"
+      ],
+      "raw_signals": { "upvotes": 5, "downvotes": 1, "saves": 14, "reports": 0, "exposure_count": 233 },
+      "engagement_rate": 0.086,
+      "human_judgment": "1 个 downvote 来自后来 DOC 修复后觉得 mark 'outdated' 的人，但雾天迷向风险永远存在。保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.82
+    },
+    {
+      "id": 557,
+      "title": "Franz Josef Glacier Roberts Point 蜜蜂群严重过敏警告",
+      "location": "Roberts Point Track manuka grove, Westland Tai Poutini National Park",
+      "category": "allergy_warning",
+      "events_timeline": [
+        "2023-12-22 一位医生徒步者发现 manuka grove 中野蜂群异常密集",
+        "2023-12-22 mark：'此处野蜂群超大，严重过敏者绕行 lower track，EpiPen 准备好'",
+        "2024-01-15 一名美国游客被叮后出现 anaphylaxis 前兆，同行有 EpiPen 因为看到 mark 提前拿出来",
+        "2024-01-15 EpiPen 注射后游客生还，直升机送 Greymouth Hospital",
+        "2024-01-16 急诊医生公开评论：如果没那个 EpiPen 提前准备，可能 30 分钟内致死",
+        "2024-02-至今 mark 被超过 800 人看过，多数人没过敏因此没互动"
+      ],
+      "raw_signals": { "upvotes": 6, "downvotes": 0, "saves": 31, "reports": 0, "exposure_count": 812 },
+      "engagement_rate": 0.046,
+      "human_judgment": "saves 31 但 upvotes 只 6 = 过敏者群体小但他们都 save 了。算法不能只看 upvote/exposure 比例。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.86
+    },
+    {
+      "id": 558,
+      "title": "Copland Track 上 Welcome Flat hot pool 后滑坡警告",
+      "location": "Copland Track river terrace 200m past Welcome Flat Hut, Westland",
+      "category": "landslide_warning",
+      "events_timeline": [
+        "2024-05-04 大雨后一位 geotech engineer 路过发现新形成的 tension cracks",
+        "2024-05-04 mark：'河阶 12m 高 unstable，远离边缘 5m，有家庭差点掉下来'",
+        "2024-05-09 Auckland 一家四口（含两个 7 岁双胞胎）走到该处时父亲看到 mark 把孩子拉回",
+        "2024-05-09 30 秒后那段河阶塌了 8 立方米土",
+        "2024-05-10 父亲在 hut 留言本：'mark 救了我两个女儿'，warden 拍照发到 DOC",
+        "2024-至今 mark 信号低因为路过的人事后没事就没互动"
+      ],
+      "raw_signals": { "upvotes": 4, "downvotes": 0, "saves": 11, "reports": 0, "exposure_count": 145 },
+      "engagement_rate": 0.103,
+      "human_judgment": "差点死掉两个孩子的 mark。即使 upvote 只有 4，也是必保级。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.92
+    },
+    {
+      "id": 559,
+      "title": "Kepler Track Iris Burn Hut 段失踪儿童最后位置警告",
+      "location": "Iris Burn river bend ~1km past Iris Burn Hut, Kepler Track, Fiordland",
+      "category": "missing_person_warning",
+      "events_timeline": [
+        "2023-10-28 一位母亲留下 mark：'我儿子 Liam, 8 岁, 2023-10-15 在此最后被看到'",
+        "2023-10-28 mark 包含：注意河岸下游， 看到任何痕迹立刻 PLB 报警",
+        "2024-01-09 一队 trampers 在 mark 提示位置下游 600m 处发现 Liam 的 backpack",
+        "2024-01-09 Te Anau police 凭此线索找到 Liam 遗体并归还家人",
+        "2024-01-15 母亲在 mark 上留言：'Thank you. He's home now.'",
+        "2024-至今 mark 保留作为对其他失踪案例的警示，每年家庭祭日有人来"
+      ],
+      "raw_signals": { "upvotes": 89, "downvotes": 12, "saves": 45, "reports": 8, "exposure_count": 1250 },
+      "engagement_rate": 0.115,
+      "human_judgment": "12 个 downvote 和 8 个 reports 来自觉得 'too sad / 不该看到' 的人，但这个 mark 帮助找回遗体并给了家人 closure。保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.83
+    },
+    {
+      "id": 560,
+      "title": "Ball Pass Crossing 心脏复苏点（医生留 + 实际救过）",
+      "location": "Ball Pass Crossing rest cairn at 2050m, Mt Cook National Park",
+      "category": "medical_revival_point",
+      "events_timeline": [
+        "2024-01-08 ICU doctor Dr. Chen 自己父亲在此心脏病发，他做 CPR 22 分钟救回",
+        "2024-01-08 Dr. Chen 在 cairn 处 mark：'此处海拔 2050m，心脏病高风险，CPR 三步骤+ 呼救频率'",
+        "2024-02-26 另一队中 60 岁登山者突发胸痛，同伴照 mark 步骤 CPR + PLB 呼救",
+        "2024-02-26 直升机 38 分钟到达，登山者获救（事后确诊心梗）",
+        "2024-03-04 Christchurch Hospital 主治医师亲自联系 Dr. Chen 致谢",
+        "2024-04-至今 mark 成为 NZAC 推荐的高海拔急救参考点之一"
+      ],
+      "raw_signals": { "upvotes": 22, "downvotes": 0, "saves": 67, "reports": 0, "exposure_count": 480 },
+      "engagement_rate": 0.185,
+      "human_judgment": "engagement 很高因为 mark 内容有教育价值。但即使没有这些数字，救命属性也必保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.93
+    },
+    {
+      "id": 561,
+      "title": "Earnslaw Burn 直升机救援降落点（实际用过 3 次）",
+      "location": "Earnslaw Burn upper basin granite slab LZ, Mt Aspiring National Park",
+      "category": "helicopter_lz",
+      "events_timeline": [
+        "2023-09-15 Glenorchy Air pilot Mark Houston 实地测试后 mark 唯一安全 LZ 位置",
+        "2023-09-15 mark：'唯一直升机降落点，GPS S44.8612 E168.3423，下风口避开 SW 风'",
+        "2024-02-11 一名滑坠骨折登山者在此被吊起，pilot 表示这是唯一可行 LZ",
+        "2024-04-23 一名失温登山者从此处被送 Lakes District Hospital",
+        "2024-08-09 一对夫妻丈夫心脏病发也用此 LZ 撤离",
+        "2024-至今 救援使用 3 次，普通徒步者看到也不会点赞因为他们不需要"
+      ],
+      "raw_signals": { "upvotes": 14, "downvotes": 0, "saves": 19, "reports": 0, "exposure_count": 290 },
+      "engagement_rate": 0.114,
+      "human_judgment": "实际救援用过 3 次的关键基础设施 mark。算法不能因为 'engagement 普通' 就降权。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.92
+    },
+    {
+      "id": 562,
+      "title": "Ngauruhoe 火山口边缘自杀干预 hotline 卡（敏感救命）",
+      "location": "Ngauruhoe summit crater rim south side, Tongariro National Park",
+      "category": "mental_health_intervention",
+      "events_timeline": [
+        "2024-02-14 Lifeline NZ 志愿者 + DOC 合作在 summit cairn 内置防水卡",
+        "2024-02-14 mark：'你不是孤单的。打 1737 任何时候。下面 Mangatepopo 有人等你回来。'",
+        "2024-05-30 一位独行男子在 summit 待了 3 小时后下山，6 个月后写信给 Lifeline",
+        "2024-05-30 信中说：'我那天爬上去是想结束。看到那个 mark 让我下山打了电话'",
+        "2024-06-15 Lifeline NZ 公开（匿名）这个故事，证明 mark 至少救了一条命",
+        "2024-至今 mark 不会有大量 upvote 因为话题敏感，但 saves 持续增长"
+      ],
+      "raw_signals": { "upvotes": 31, "downvotes": 5, "saves": 58, "reports": 3, "exposure_count": 720 },
+      "engagement_rate": 0.131,
+      "human_judgment": "5 个 downvote + 3 个 reports 是话题敏感性导致，不是 mark 质量问题。生命价值不可比。强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.9
+    },
+    {
+      "id": 563,
+      "title": "Mt Taranaki summit 山火风暴下逃生路线",
+      "location": "Mt Taranaki summit ice plateau emergency descent line, Egmont National Park",
+      "category": "fire_escape_route",
+      "events_timeline": [
+        "2024-01-21 大型 bush fire 接近 lower track，alpine guide 在 summit 标紧急下撤路线",
+        "2024-01-21 mark：'火势从东南来，从 NW 雪沟下撤 Syme Hut，避开 Maketawa Stream'",
+        "2024-01-22 8 名徒步者在 summit 被 alert 困住，按 mark 路线下撤",
+        "2024-01-22 全部安全到达 Syme Hut，DOC 直升机次日撤离",
+        "2024-01-23 New Plymouth 报纸头版报道，但没提 mark（只提 official rescue）",
+        "2024-至今 mark 信号被低估因为媒体没归功给它"
+      ],
+      "raw_signals": { "upvotes": 8, "downvotes": 0, "saves": 22, "reports": 0, "exposure_count": 198 },
+      "engagement_rate": 0.151,
+      "human_judgment": "救了 8 个人但媒体没提 mark，因此 upvote 偏低。算法必须看内容本质不只看 engagement。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.88
+    },
+    {
+      "id": 564,
+      "title": "Milford Track Mackinnon Pass 雪崩区救一队登山者",
+      "location": "Mackinnon Pass east face avalanche zone below Pass Hut, Fiordland",
+      "category": "avalanche_warning",
+      "events_timeline": [
+        "2024-07-19 winter Milford 罕见开放期，patrol guide 发现 east face 出现 wind slab",
+        "2024-07-19 mark：'east face wind slab 不稳，绕道 Pass Hut 西侧 zigzag'",
+        "2024-07-23 一队 4 人 winter trampers 看到 mark 改道",
+        "2024-07-24 当晚发生 size 2 avalanche，正好覆盖原本他们会经过的 east face traverse",
+        "2024-07-25 队长在 Quintin Hut 留言：'mark 是唯一让我们活着的原因'",
+        "2024-至今 winter Milford 流量极小，曝光自然低"
+      ],
+      "raw_signals": { "upvotes": 6, "downvotes": 0, "saves": 4, "reports": 0, "exposure_count": 41 },
+      "engagement_rate": 0.244,
+      "human_judgment": "曝光极低但 engagement rate 高。这种 niche-but-critical mark 算法需要专门保护。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.87
+    },
+    {
+      "id": 565,
+      "title": "Cascade Saddle 河流暴涨段失温独行者救援",
+      "location": "Cascade Saddle Route Dart River crossing section, Mt Aspiring National Park",
+      "category": "river_flood_warning",
+      "events_timeline": [
+        "2023-12-08 Dart River 上游暴雨后涨水快，资深 NZAC member 紧急 mark",
+        "2023-12-08 mark：'Dart 主流不可渡，绕 high benches 多走 4 小时但救命'",
+        "2024-01-04 独行徒步者 Tom 看到 mark 改路，但因为已经湿透开始失温",
+        "2024-01-04 他在 high bench mark 提示的 bivvy rock 处避雨过夜",
+        "2024-01-05 next day Tom 自行走出，事后他说 'bivvy rock 那部分救了我的命'",
+        "2024-01-至今 mark 保留作为标准 wet weather 警告"
+      ],
+      "raw_signals": { "upvotes": 9, "downvotes": 0, "saves": 16, "reports": 0, "exposure_count": 178 },
+      "engagement_rate": 0.14,
+      "human_judgment": "Cascade Saddle 是 NZ 死亡数最高的徒步路线之一，任何救命 mark 都必须长期保留。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.89
+    },
+    {
+      "id": 566,
+      "title": "Hooker Valley Track 冰川湖落水救生圈位置",
+      "location": "Hooker Lake terminal moraine north shore, Aoraki/Mt Cook National Park",
+      "category": "safety_equipment_location",
+      "events_timeline": [
+        "2024-02-03 一位 local guide 把租的 throw bag 固定在 cairn 内防水盒里",
+        "2024-02-03 mark：'冰川湖落水救生 throw bag 在 cairn 内防水盒，30m 绳子'",
+        "2024-03-21 韩国游客拍照时滑入冰川湖，同行用 throw bag 把他拉上岸",
+        "2024-03-21 游客失温但活着，被 Mt Cook village 救护车送医",
+        "2024-04-10 Aoraki Mt Cook visitor centre 在 noticeboard 上感谢 mark 作者",
+        "2024-至今 mark 维持，guide 每月检查 throw bag 状态"
+      ],
+      "raw_signals": { "upvotes": 12, "downvotes": 0, "saves": 28, "reports": 0, "exposure_count": 950 },
+      "engagement_rate": 0.042,
+      "human_judgment": "Hooker Valley 是热门 day walk，绝大多数人不会落水所以不互动。但落水那一个人靠这个活下来。保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.86
+    },
+    {
+      "id": 567,
+      "title": "Gillespie Pass Circuit 滑坡救一对老夫妻",
+      "location": "Gillespie Pass east descent below Top Forks Hut, Mt Aspiring National Park",
+      "category": "landslide_warning",
+      "events_timeline": [
+        "2024-04-15 一位 hut warden 发现下降路径出现新 slip 30m 宽",
+        "2024-04-15 mark：'east descent 主路 50m 处大滑坡，绕 east bank 临时 trail'",
+        "2024-05-02 一对 70 多岁夫妻看到 mark 改道",
+        "2024-05-02 他们后来听说 mark 出现前一天有人差点滑下去",
+        "2024-05-03 老先生在 Top Forks Hut 留言：'我们这个年纪滑下去就回不来了'",
+        "2024-05-至今 DOC 重修主路后 mark 仍保留作为 historical warning"
+      ],
+      "raw_signals": { "upvotes": 5, "downvotes": 0, "saves": 9, "reports": 0, "exposure_count": 88 },
+      "engagement_rate": 0.159,
+      "human_judgment": "Gillespie Pass 流量本就小，绝对值 engagement 低。但救老人命的 mark 必须长期保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.85
+    },
+    {
+      "id": 568,
+      "title": "Rees-Dart Track Rees Saddle 风暴前避难老 musterer hut",
+      "location": "Rees Saddle south side off-route shepherd's hut, Mt Aspiring National Park",
+      "category": "shelter_location",
+      "events_timeline": [
+        "2023-09-19 老 high country shepherd John McKenzie 退休前留 mark",
+        "2023-09-19 mark：'saddle 南 250m 老 musterer hut，木门往里推，干柴在炉里'",
+        "2024-04-30 风暴中两个法国人迷路 + 失温前期，靠 mark 找到 hut",
+        "2024-04-30 他们在 hut 过夜，第二天天晴自行下撤 Shelter Rock Hut",
+        "2024-05-08 法国人寄了一瓶 wine 给 Glenorchy DOC office 转 John",
+        "2024-至今 这个 mark 大多数人不会用到，但用到那次就是命"
+      ],
+      "raw_signals": { "upvotes": 7, "downvotes": 0, "saves": 14, "reports": 1, "exposure_count": 256 },
+      "engagement_rate": 0.082,
+      "human_judgment": "1 个 report 来自觉得 'mark off-route 危险' 的人，但事实是这个 hut 救过命。保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.84
+    },
+    {
+      "id": 569,
+      "title": "Kahurangi Heaphy Track Saxon Hut 黄蜂窝过敏警告",
+      "location": "Saxon Hut entrance porch eaves wasp nest area, Heaphy Track, Kahurangi National Park",
+      "category": "allergy_warning",
+      "events_timeline": [
+        "2024-03-18 hut warden 发现 porch eaves 巨大黄蜂窝，已蜇过 3 个游客",
+        "2024-03-18 mark：'porch 西北角黄蜂窝活跃，过敏者在 porch 东侧脱靴'",
+        "2024-03-25 一位英国游客对 wasp 严重过敏，看到 mark 后远离西北角",
+        "2024-03-25 他后来发现自己 EpiPen 在那次旅行中其实失效了，差点酿成悲剧",
+        "2024-04-02 DOC 派人移除蜂窝但 mark 保留作为季节性提醒",
+        "2024-至今 每年 spring/summer 蜂窝可能再形成，mark 仍有用"
+      ],
+      "raw_signals": { "upvotes": 11, "downvotes": 0, "saves": 19, "reports": 0, "exposure_count": 380 },
+      "engagement_rate": 0.079,
+      "human_judgment": "过敏 mark 看似小事，但对过敏体质就是生死。常年保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.83
+    },
+    {
+      "id": 570,
+      "title": "Tongariro Ketetahi Hot Spring 蒸汽喷孔危险警告",
+      "location": "Ketetahi northern crossing steam vent zone, Tongariro Alpine Crossing",
+      "category": "geothermal_hazard_warning",
+      "events_timeline": [
+        "2024-01-08 一位 GNS Science volcanologist 测到新 steam vent 温度 178°C",
+        "2024-01-08 mark：'步道东 8m 新蒸汽喷孔 178 度，绕 west traverse 安全'",
+        "2024-02-11 一对 couple 不顾 mark 走近喷孔拍照，妻子 1 度烫伤但活着",
+        "2024-02-11 后来他们承认如果离再近一步可能 fatal",
+        "2024-03-09 GNS 把 mark 数据并入官方 hazard map",
+        "2024-至今 mark 保留作为非官方但更新更快的警示"
+      ],
+      "raw_signals": { "upvotes": 18, "downvotes": 2, "saves": 41, "reports": 0, "exposure_count": 1100 },
+      "engagement_rate": 0.055,
+      "human_judgment": "Tongariro 流量大，曝光高 engagement rate 低是正常的。绝对值 18 upvote + 41 saves 已经证明价值。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.86
+    },
+    {
+      "id": 571,
+      "title": "Travers-Sabine Circuit Travers Saddle 雪盲警告",
+      "location": "Travers Saddle reflective snow slope morning hours, Nelson Lakes National Park",
+      "category": "snow_blindness_warning",
+      "events_timeline": [
+        "2024-09-04 NZ Search and Rescue 老队员发现 saddle 朝东雪坡反光极强",
+        "2024-09-04 mark：'晴天上午雪盲风险高，墨镜+防晒，没有就用衣服遮眼缝'",
+        "2024-09-22 一队 3 人没带墨镜，按 mark 用 t-shirt 撕条遮眼下撤",
+        "2024-09-22 队员 Sarah 事后说 'eye damage 大概避免了'",
+        "2024-10-15 Nelson Lakes Visitor Centre 把 mark 内容印成 leaflet 发放",
+        "2024-至今 mark 季节性提醒（spring snow + sun）"
+      ],
+      "raw_signals": { "upvotes": 6, "downvotes": 0, "saves": 13, "reports": 0, "exposure_count": 156 },
+      "engagement_rate": 0.122,
+      "human_judgment": "雪盲不会立刻死人但会让你无法下撤进而冻死。链式风险 mark，必保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.83
+    },
+    {
+      "id": 572,
+      "title": "Aoraki Plateau Hut 上 Linda Glacier 冰裂缝警告",
+      "location": "Linda Glacier middle icefall crevasse zone, Aoraki/Mt Cook",
+      "category": "crevasse_warning",
+      "events_timeline": [
+        "2024-11-12 IFMGA guide 发现 middle icefall 形成 hidden crevasse 30m 长",
+        "2024-11-12 mark：'middle icefall 北 50m hidden crevasse，绕 south route+ rope up'",
+        "2024-12-03 一队 2 人攀登者按 mark 改路 + 结绳",
+        "2024-12-03 队员 partner 在 south route 上踩穿 snow bridge 但被绳子拉住",
+        "2024-12-04 攀登队 trip report 写：'mark 让我们结绳了，否则今天不会在写 report'",
+        "2024-至今 alpine 流量小但每个看到的人都是真攀登者"
+      ],
+      "raw_signals": { "upvotes": 9, "downvotes": 0, "saves": 7, "reports": 0, "exposure_count": 52 },
+      "engagement_rate": 0.308,
+      "human_judgment": "高山攀登 niche，曝光极低但每个 viewer 都是高风险用户。算法必须识别这种受众质量。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.9
+    },
+    {
+      "id": 573,
+      "title": "Otago Central Rail Trail 心脏病发作复苏 + AED 位置",
+      "location": "Otago Central Rail Trail Wedderburn station rest area, Maniototo",
+      "category": "medical_revival_point",
+      "events_timeline": [
+        "2024-02-19 当地 GP Dr. Hamilton 在 Wedderburn station 留 AED 位置 mark",
+        "2024-02-19 mark：'AED 在 station info hut 门后右墙，使用前先呼救 111'",
+        "2024-04-08 一位 67 岁 cycling 游客突发 cardiac arrest",
+        "2024-04-08 同伴用 AED + CPR，5 分钟后心律恢复",
+        "2024-04-08 直升机送 Dunedin Hospital，游客 3 周后康复出院",
+        "2024-04-至今 family 写感谢信给 Dr. Hamilton，mark 成为 trail 保留资产"
+      ],
+      "raw_signals": { "upvotes": 17, "downvotes": 0, "saves": 35, "reports": 0, "exposure_count": 670 },
+      "engagement_rate": 0.078,
+      "human_judgment": "AED + 实际救命 = 黄金级 mark。即使 engagement 普通也强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.91
+    },
+    {
+      "id": 574,
+      "title": "Old Ghost Road Lyell Saddle Hut 雷暴掩体位置",
+      "location": "Lyell Saddle Hut secondary rock overhang shelter, Buller region",
+      "category": "lightning_shelter",
+      "events_timeline": [
+        "2023-12-15 一位 mountaineer 在 hut 上方 200m 找到天然岩棚",
+        "2023-12-15 mark：'雷暴时 hut 太开放，往上 200m 岩棚能容 6 人蹲'",
+        "2024-01-23 hut 满员时雷暴来袭，4 个迟到徒步者按 mark 找到岩棚",
+        "2024-01-23 雷击在 hut 50m 外，岩棚位置安全",
+        "2024-01-24 后来有 cyclist 写 trip report 提到这个 mark",
+        "2024-至今 mark 保留作为 hut overflow 资讯"
+      ],
+      "raw_signals": { "upvotes": 8, "downvotes": 0, "saves": 12, "reports": 0, "exposure_count": 165 },
+      "engagement_rate": 0.121,
+      "human_judgment": "Old Ghost Road 是 cycling 路线但雷暴对所有人都是 fatal。保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.82
+    },
+    {
+      "id": 575,
+      "title": "Hump Ridge Track 暴风警告救一队 5 人 ranger",
+      "location": "Hump Ridge tops exposed boardwalk section, Fiordland",
+      "category": "storm_warning",
+      "events_timeline": [
+        "2024-06-30 Te Anau MetService alert + local 老向导抢标 boardwalk 暴风警告",
+        "2024-06-30 mark：'未来 6 小时 100km/h+ 风，boardwalk 上撤回 Stag Point Hut'",
+        "2024-07-04 一队 5 人 trampers 包括两个孩子按 mark 撤回",
+        "2024-07-04 当晚 boardwalk 段实测阵风 118km/h，有 boardwalk 被吹起",
+        "2024-07-05 队伍中父亲发邮件给 mark 作者：'两个孩子可能被吹下海'",
+        "2024-至今 mark 保留作为风险参考"
+      ],
+      "raw_signals": { "upvotes": 13, "downvotes": 0, "saves": 21, "reports": 0, "exposure_count": 245 },
+      "engagement_rate": 0.139,
+      "human_judgment": "boardwalk 暴风 + 孩子 = 极高风险场景。救命级强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.89
+    },
+    {
+      "id": 576,
+      "title": "Mt Aspiring Bevan Col 冰崖坠落警告",
+      "location": "Bevan Col snow ramp east lip ice cliff, Mt Aspiring National Park",
+      "category": "fall_hazard_warning",
+      "events_timeline": [
+        "2024-10-18 IFMGA guide 发现 snow ramp 东 lip 出现新冰崖 12m 高",
+        "2024-10-18 mark：'east lip 12m ice cliff，跟着 west boot pack，不要 short cut east'",
+        "2024-11-09 一队 3 人攀登者按 mark west route 走，目睹另一队 east short cut 滑坠",
+        "2024-11-09 那队 2 人滑坠但未坠崖（绳队互相 self-arrest 成功）",
+        "2024-11-10 滑坠队队长在 trip report 公开承认：'我们应该听 mark 的'",
+        "2024-至今 mark 高山使用，曝光小但精准"
+      ],
+      "raw_signals": { "upvotes": 7, "downvotes": 0, "saves": 5, "reports": 0, "exposure_count": 38 },
+      "engagement_rate": 0.316,
+      "human_judgment": "alpine niche mark，受众即风险用户，engagement rate 高但绝对值小。算法必须识别。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.88
+    },
+    {
+      "id": 577,
+      "title": "Heaphy Track Heaphy River 河口失踪儿童警示",
+      "location": "Heaphy River mouth tidal flat north bank, Kahurangi National Park",
+      "category": "missing_person_warning",
+      "events_timeline": [
+        "2023-08-22 父亲在儿子 Caleb（6 岁）失踪 5 周年之际留 mark",
+        "2023-08-22 mark：'2018-08-22 我儿子 Caleb 在此被潮水卷走，看好你的孩子'",
+        "2024-01-14 一对父母看到 mark 后立刻把 4 岁女儿从 tidal flat 拉回",
+        "2024-01-14 当时 incoming tide 速度比预期快 40 分钟",
+        "2024-02-03 那对父母联系 Caleb 父亲发信致谢",
+        "2024-至今 mark 持续救命，每年 anniversary 父亲来祭"
+      ],
+      "raw_signals": { "upvotes": 124, "downvotes": 18, "saves": 73, "reports": 11, "exposure_count": 1850 },
+      "engagement_rate": 0.122,
+      "human_judgment": "downvote+report 是话题悲伤导致，不是 mark 质量。该 mark 已多次救命。永久保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.85
+    },
+    {
+      "id": 578,
+      "title": "Welcome Flat Track 雪崩警告救一对夫妻",
+      "location": "Welcome Flat upper Copland Valley north slope, Westland",
+      "category": "avalanche_warning",
+      "events_timeline": [
+        "2024-08-11 winter Copland 罕见徒步，patrol 发现 north slope unstable wind slab",
+        "2024-08-11 mark：'north slope wind slab 高风险，绕 valley floor 不要走 high traverse'",
+        "2024-08-19 一对 retiree couple 看到 mark 改道",
+        "2024-08-19 同日另一队不知道 mark 走 high traverse，触发 size 1 avalanche，1 人受伤获救",
+        "2024-08-20 retiree couple 在 Welcome Flat Hut 听到事故震惊，意识到 mark 救了他们",
+        "2024-至今 mark 标准 winter 警告"
+      ],
+      "raw_signals": { "upvotes": 8, "downvotes": 0, "saves": 11, "reports": 0, "exposure_count": 98 },
+      "engagement_rate": 0.194,
+      "human_judgment": "winter 流量小但每个用户高风险。雪崩 mark 强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.87
+    },
+    {
+      "id": 579,
+      "title": "Routeburn Lake Mackenzie Hut 上方 alpine flowering 蜂群警告",
+      "location": "Lake Mackenzie alpine herb field flowering season bee swarm zone, Mt Aspiring",
+      "category": "allergy_warning",
+      "events_timeline": [
+        "2024-12-22 hut warden 发现 flowering 季节蜂群异常密集",
+        "2024-12-22 mark：'12月-1月 flowering，蜂群密集，过敏者备 EpiPen+ 长袖'",
+        "2025-01-08 一名澳洲游客被叮，EpiPen 因 mark 提前准备",
+        "2025-01-08 EpiPen 注射后症状缓解，未送医（轻度反应）",
+        "2025-01-15 游客在 Routeburn Falls Hut 留言：'没那个 mark 我可能就 fatal'",
+        "2025-至今 mark 季节性保留"
+      ],
+      "raw_signals": { "upvotes": 5, "downvotes": 0, "saves": 22, "reports": 0, "exposure_count": 540 },
+      "engagement_rate": 0.05,
+      "human_judgment": "saves 远高于 upvotes 是过敏者群体特征。算法不能只看显性 engagement。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.84
+    },
+    {
+      "id": 580,
+      "title": "Tongariro Mangatepopo 风暴中失温者紧急避难岩棚",
+      "location": "Mangatepopo valley head boulder field bivvy spot, Tongariro National Park",
+      "category": "shelter_location",
+      "events_timeline": [
+        "2024-05-28 当地 SAR 队员留 mark 标 hidden bivvy boulder",
+        "2024-05-28 mark：'valley head 10m 大圆石下空腔，可容 3 人挡风躲雨'",
+        "2024-06-19 一名独行者在 -2°C+ 大雨中失温前期",
+        "2024-06-19 他靠 mark 找到 bivvy boulder，过夜后第二天自行下撤",
+        "2024-06-20 他在 hut 留言：'我已经准备死了，那个 boulder 救了我'",
+        "2024-至今 mark 维持季节性提醒"
+      ],
+      "raw_signals": { "upvotes": 6, "downvotes": 0, "saves": 14, "reports": 0, "exposure_count": 280 },
+      "engagement_rate": 0.071,
+      "human_judgment": "Tongariro 失温事故每年都有死亡。这种 hidden shelter mark 救命价值无法替代。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.86
+    },
+    {
+      "id": 581,
+      "title": "Mt Cook Mueller Hut 路上闪电频发段警告",
+      "location": "Sealy Tarns ridge metal handrail section lightning zone, Mt Cook National Park",
+      "category": "lightning_warning",
+      "events_timeline": [
+        "2024-01-30 一位徒步者在 ridge metal handrail 段被静电打到（非雷击）",
+        "2024-01-30 mark：'雷暴近时 metal handrail 危险，蹲下不接触金属'",
+        "2024-02-11 一队 6 人徒步者看到 mark + 远雷声，立刻蹲下离开 handrail",
+        "2024-02-11 5 分钟后雷击 handrail，无人受伤",
+        "2024-02-12 队中医生在 Mt Cook village 找到 mark 作者道谢",
+        "2024-至今 mark 保留为雷暴季节警告"
+      ],
+      "raw_signals": { "upvotes": 14, "downvotes": 0, "saves": 26, "reports": 0, "exposure_count": 720 },
+      "engagement_rate": 0.056,
+      "human_judgment": "Sealy Tarns 是热门日行路线，少数雷暴日才用得上这个 mark。但用上那次就是命。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.86
+    },
+    {
+      "id": 582,
+      "title": "Paparoa Track Pororari River 暴涨救一对夫妻 + 狗",
+      "location": "Pororari River swing bridge alternative ford spot, Paparoa National Park",
+      "category": "river_flood_warning",
+      "events_timeline": [
+        "2024-04-22 桥维修期间，local 留 mark 标安全 ford 点",
+        "2024-04-22 mark：'桥关 6 周，唯一安全 ford 在桥北 600m，水深 < 0.7m'",
+        "2024-04-29 一对夫妻 + 一只 retriever 看到 mark 不再尝试桥下游浅滩",
+        "2024-04-29 同日下游浅滩涨到 1.6m，他们的狗在 mark 推荐 ford 处轻松过",
+        "2024-05-05 夫妻在 Punakaiki 留言本写：'狗也活着回来了'",
+        "2024-至今 mark 维持到桥修复后才下"
+      ],
+      "raw_signals": { "upvotes": 11, "downvotes": 0, "saves": 8, "reports": 0, "exposure_count": 95 },
+      "engagement_rate": 0.2,
+      "human_judgment": "时效性 mark + 救命 + 救狗。应保到事件结束才能 retire。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.85
+    },
+    {
+      "id": 583,
+      "title": "Kepler Track Mt Luxmore 雪檐塌陷救独行者",
+      "location": "Mt Luxmore summit east cornice approach, Kepler Track, Fiordland",
+      "category": "cornice_warning",
+      "events_timeline": [
+        "2024-09-14 一位 NZAC member 发现 east cornice 出现 crown 裂缝",
+        "2024-09-14 mark：'east cornice 即将塌，summit 走 west spur 安全 30m'",
+        "2024-09-21 独行者 Mike 看到 mark 走 west spur",
+        "2024-09-21 同日另一名独行者从 east cornice 上经过，cornice 在他后面塌但他自己没掉",
+        "2024-09-22 那名后来下山的独行者向 mark 作者写信：'我前面那 30 秒应该轮到我'",
+        "2024-至今 mark 季节性 winter spring 警告"
+      ],
+      "raw_signals": { "upvotes": 9, "downvotes": 0, "saves": 13, "reports": 0, "exposure_count": 178 },
+      "engagement_rate": 0.124,
+      "human_judgment": "cornice 季节性威胁，每年 spring 复发。作为永久参考保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.85
+    },
+    {
+      "id": 584,
+      "title": "Rakiura Track 北端深泥沼陷救老人",
+      "location": "Rakiura North Arm swamp peat sink section, Stewart Island",
+      "category": "terrain_hazard",
+      "events_timeline": [
+        "2024-03-09 一位 80 岁徒步者陷入 peat sink 腰深，靠同行救出",
+        "2024-03-09 同行者立刻 mark：'main track 西 4m 大 peat sink 1.4m 深'",
+        "2024-04-15 一对 70 多岁夫妻看到 mark，绕开继续",
+        "2024-04-15 妻子说：'我陷下去出不来'，丈夫表示同意",
+        "2024-05-11 DOC 在 mark 旁加了官方警示牌",
+        "2024-至今 mark 永久保留作为 history"
+      ],
+      "raw_signals": { "upvotes": 7, "downvotes": 0, "saves": 15, "reports": 0, "exposure_count": 220 },
+      "engagement_rate": 0.1,
+      "human_judgment": "老人陷 peat sink 是 NZ 偏远 track 真实死因。强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.83
+    },
+    {
+      "id": 585,
+      "title": "Mt Taranaki summit ice 晚期下撤警告救 4 人",
+      "location": "Mt Taranaki summit Lizard ridge late descent ice section",
+      "category": "ice_descent_warning",
+      "events_timeline": [
+        "2024-10-30 一位 alpine guide 发现下午 4 点后 ice 反冻速度比往年快 90 分钟",
+        "2024-10-30 mark：'下午 4 点后 ice 反冻，没冰爪不要继续，回 Tahurangi Lodge'",
+        "2024-11-08 一队 4 人徒步者下午 3:50 看到 mark，立刻 turn around",
+        "2024-11-08 他们事后看天气数据，那天 ice 在 4:30 已经全冻硬",
+        "2024-11-09 队中一人写：'Taranaki 死过 80 多人，我不想成第 81'",
+        "2024-至今 mark 季节性维持"
+      ],
+      "raw_signals": { "upvotes": 19, "downvotes": 0, "saves": 32, "reports": 0, "exposure_count": 410 },
+      "engagement_rate": 0.124,
+      "human_judgment": "Taranaki summit 是 NZ 死亡数最高山之一。这种时间窗 mark 是教科书级救命。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.92
+    },
+    {
+      "id": 586,
+      "title": "Routeburn Falls Hut 厨房一氧化碳泄漏紧急警告",
+      "location": "Routeburn Falls Hut kitchen gas stove ventilation issue, Mt Aspiring",
+      "category": "co_poisoning_warning",
+      "events_timeline": [
+        "2024-07-19 一位徒步者带 CO 测试器发现 hut 厨房晚饭高峰 CO 高于 50ppm",
+        "2024-07-19 mark + hut 留言：'晚饭高峰开窗，CO > 50ppm 头痛立刻出去'",
+        "2024-08-14 一家 4 人开始头痛，看 mark 立刻撤到 porch",
+        "2024-08-14 后来 warden 测同日 CO 一度到 80ppm（中毒前期）",
+        "2024-08-20 DOC 维修通风系统，mark 保留作为 history",
+        "2024-至今 高峰期 mark 仍提醒新游客"
+      ],
+      "raw_signals": { "upvotes": 12, "downvotes": 1, "saves": 28, "reports": 0, "exposure_count": 480 },
+      "engagement_rate": 0.085,
+      "human_judgment": "1 个 downvote 是 hut 修复后觉得 mark 'outdated'，但 CO 风险结构性存在（多人煮饭+ 窗关）。保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.86
+    },
+    {
+      "id": 587,
+      "title": "Mavora Lakes 远程区域 PLB 信号死区警告",
+      "location": "South Mavora Lakes western basin no-PLB-signal zone, Fiordland edge",
+      "category": "communication_blackout_warning",
+      "events_timeline": [
+        "2024-02-04 SAR 队员发现 western basin PLB 信号被山形遮蔽",
+        "2024-02-04 mark：'此 basin PLB 信号弱，紧急时往 saddle 上爬 100m 再发'",
+        "2024-03-19 一名 hunter 摔断腿，按 mark 提示爬到 saddle 才发出 PLB",
+        "2024-03-19 SAR 直升机 2 小时到达，hunter 救回",
+        "2024-03-20 SAR 公开 case 时明确感谢 mark 作者",
+        "2024-至今 mark 永久保留作为 critical infrastructure"
+      ],
+      "raw_signals": { "upvotes": 16, "downvotes": 0, "saves": 24, "reports": 0, "exposure_count": 210 },
+      "engagement_rate": 0.19,
+      "human_judgment": "通讯死区 + 救命级 mark。PLB 用户都是已经在重伤场景，必保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.91
+    },
+    {
+      "id": 588,
+      "title": "Arthur's Pass Bealey Spur 冬季 hidden 冰段警告",
+      "location": "Bealey Spur upper meadow shaded north face winter ice, Arthur's Pass",
+      "category": "ice_warning",
+      "events_timeline": [
+        "2024-07-08 一名徒步者在 north face 阴影段滑倒，撞树仅轻伤",
+        "2024-07-08 mark：'north face shaded 段 hidden ice，建议 microspikes 或绕南坡'",
+        "2024-08-02 一对 couple 看到 mark 改南坡",
+        "2024-08-02 同日另两个徒步者没看到 mark 滑倒，其中一人脑震荡，被直升机送 Christchurch",
+        "2024-08-03 couple 听到事故庆幸自己看到 mark",
+        "2024-至今 winter mark 季节性维持"
+      ],
+      "raw_signals": { "upvotes": 8, "downvotes": 0, "saves": 17, "reports": 0, "exposure_count": 195 },
+      "engagement_rate": 0.128,
+      "human_judgment": "winter ice 是 NZ 冬季伤亡主因之一。直接对比有救/没救场景，强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.86
+    },
+    {
+      "id": 589,
+      "title": "Milford Sound 步道入口潮汐时间表救一家人",
+      "location": "Milford Sound foreshore tidal walk timing board, Fiordland",
+      "category": "tidal_warning",
+      "events_timeline": [
+        "2024-01-12 local guide 发现官方潮汐表过时半年，自己留更新 mark",
+        "2024-01-12 mark：'官方表 6 月起错，正确高潮时间 official+47min'",
+        "2024-02-05 一家 5 人按 mark 时间出发，避开高潮",
+        "2024-02-05 official 时间出发的另一队被困 sandbar 2 小时获救（都活）",
+        "2024-02-06 一家 5 人事后查证 mark 时间精准",
+        "2024-03-至今 DOC 修正官方表，mark 仍保留作为 backup"
+      ],
+      "raw_signals": { "upvotes": 14, "downvotes": 2, "saves": 19, "reports": 0, "exposure_count": 540 },
+      "engagement_rate": 0.065,
+      "human_judgment": "2 个 downvote 是官方修复后觉得 'outdated'，但 mark 救命已发生。保为历史。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.82
+    },
+    {
+      "id": 590,
+      "title": "Fiordland Dusky Track 极偏远 PLB 测试区救老 tramper",
+      "location": "Dusky Track Loch Maree Hut PLB clear sky window spot, Fiordland",
+      "category": "communication_blackout_warning",
+      "events_timeline": [
+        "2024-04-18 一位 78 岁 tramper 心律不齐，需要 PLB 求救",
+        "2024-04-18 hut 周围被山遮蔽，他靠以前留的 mark 找到 'PLB clear sky' 点",
+        "2024-04-18 mark：'hut 东 80m 河阶，sky window 可见 GPS 卫星'",
+        "2024-04-18 PLB 信号 4 分钟被接收，直升机 5 小时到达",
+        "2024-04-19 老 tramper 被送 Invercargill Hospital，确诊心房颤动",
+        "2024-至今 mark 救过命，永久保"
+      ],
+      "raw_signals": { "upvotes": 21, "downvotes": 0, "saves": 18, "reports": 0, "exposure_count": 130 },
+      "engagement_rate": 0.3,
+      "human_judgment": "Dusky Track 极少人走，曝光天然低。但每次 PLB 求救都靠这种 mark。强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.93
+    },
+    {
+      "id": 591,
+      "title": "Ball Hut Route 冰川撤退路线（旧路 mark 救一家）",
+      "location": "Ball Hut Route old moraine bypass route, Mt Cook National Park",
+      "category": "shelter_location",
+      "events_timeline": [
+        "2023-11-25 退休 ranger 标了 1980 年代旧路绕行新冰川撤退区",
+        "2023-11-25 mark：'冰川后撤后新石滩不稳，走 1980 年代 high benches 安全'",
+        "2024-02-07 一家 4 人（2 个青少年）看到 mark 走 high benches",
+        "2024-02-07 当天 lower 石滩区有 ice fall + flash flood，3 人轻伤获救（不同组）",
+        "2024-02-08 父亲在 visitor centre 留言：'我们一家完整回家'",
+        "2024-至今 mark 永久保"
+      ],
+      "raw_signals": { "upvotes": 10, "downvotes": 0, "saves": 16, "reports": 0, "exposure_count": 175 },
+      "engagement_rate": 0.149,
+      "human_judgment": "冰川撤退是全球性 climate hazard，本地 mark 比官方更新快。保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.88
+    },
+    {
+      "id": 592,
+      "title": "Tongariro Crossing Soda Springs 父亲留 mark 救后来人",
+      "location": "Soda Springs side trail steep loose scree section, Tongariro",
+      "category": "fall_hazard_warning",
+      "events_timeline": [
+        "2023-12-30 一位父亲的 14 岁女儿在 scree 段坠落骨折，他亲自留 mark",
+        "2023-12-30 mark：'我女儿在此摔断股骨，scree 比看起来陡 + 松，绕 east trail'",
+        "2024-02-22 一队学生看到 mark 全部走 east trail",
+        "2024-02-22 一名独行者忽视 mark，同样位置摔伤，直升机救",
+        "2024-02-23 那位父亲写：'又一次证明 mark 是对的'",
+        "2024-至今 mark 永久保留作为 personal warning"
+      ],
+      "raw_signals": { "upvotes": 27, "downvotes": 4, "saves": 41, "reports": 1, "exposure_count": 920 },
+      "engagement_rate": 0.078,
+      "human_judgment": "personal-loss warning 类型，downvote 来自觉得 'too emotional' 的人，但 mark 对比验证有效。强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.88
+    },
+    {
+      "id": 593,
+      "title": "Hooker Valley swing bridge 强风警告救老人摔倒",
+      "location": "Hooker Valley first swing bridge wind funnel zone, Mt Cook",
+      "category": "wind_hazard_warning",
+      "events_timeline": [
+        "2024-03-15 老 ranger 发现 swing bridge 在 valley 风口最高阵风可达 90km/h",
+        "2024-03-15 mark：'下午 valley 风口阵风 80+km/h，老人 + 孩子等阵风间隙过桥'",
+        "2024-04-18 一位 75 岁老太太按 mark 等阵风间隙才上桥",
+        "2024-04-18 上桥后看到她身后阵风把另一个游客的帽子吹下河，那游客差点失去平衡",
+        "2024-04-19 老太太对孙女说 'mark 救了我'",
+        "2024-至今 mark 季节性维持"
+      ],
+      "raw_signals": { "upvotes": 9, "downvotes": 0, "saves": 14, "reports": 0, "exposure_count": 880 },
+      "engagement_rate": 0.026,
+      "human_judgment": "Hooker Valley 是 NZ 最热门 day walk 之一，曝光极高 engagement rate 必然低。但救老人命的 mark 必保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.84
+    },
+    {
+      "id": 594,
+      "title": "Greenstone-Caples 河流 hidden snag 救划船者",
+      "location": "Greenstone River packraft section hidden submerged log, Mt Aspiring",
+      "category": "water_hazard_warning",
+      "events_timeline": [
+        "2024-01-22 一位 packrafter 撞 hidden log 翻船，事后留 mark",
+        "2024-01-22 mark：'GR S44.9821 E168.4521 水下大 log，水位 < 0.8m 时贴右岸'",
+        "2024-03-08 一队 3 人 packrafters 看到 mark 全部贴右岸",
+        "2024-03-08 第三人靠近 log 时仍轻微擦到，证实 mark 位置精准",
+        "2024-03-09 packraft NZ 协会公开转载 mark",
+        "2024-至今 mark 永久保留为水域 hazard"
+      ],
+      "raw_signals": { "upvotes": 11, "downvotes": 0, "saves": 9, "reports": 0, "exposure_count": 78 },
+      "engagement_rate": 0.256,
+      "human_judgment": "packrafting niche 但每个 viewer 都直接受益。算法须识别小众高质量受众。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.87
+    },
+    {
+      "id": 595,
+      "title": "Aoraki Mt Cook Plateau Hut 周围 hidden 冰裂缝 group 救援",
+      "location": "Plateau Hut north approach hidden crevasse field, Aoraki/Mt Cook",
+      "category": "crevasse_warning",
+      "events_timeline": [
+        "2024-11-30 一名 IFMGA guide 在 north approach 发现 hidden crevasse 群（4 个，每个 > 2m 深）",
+        "2024-11-30 mark：'北 approach 100m 范围 4 个 hidden crevasse，全队结绳并 zigzag west'",
+        "2024-12-15 一队 5 人按 mark 结绳",
+        "2024-12-15 队员 #3 踩穿一个 hidden bridge，被绳队拉住",
+        "2024-12-16 trip report 公开承认 mark 救了一条命",
+        "2024-至今 mark 永久保为 alpine 标准参考"
+      ],
+      "raw_signals": { "upvotes": 13, "downvotes": 0, "saves": 11, "reports": 0, "exposure_count": 75 },
+      "engagement_rate": 0.32,
+      "human_judgment": "Plateau Hut alpine 攀登者全是高风险用户。结绳决策被 mark 触发，强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.92
+    },
+    {
+      "id": 596,
+      "title": "Whanganui Journey 河 rapid hidden rock 救 kayaker",
+      "location": "Whanganui River 50/50 rapid hidden midstream rock, Whanganui National Park",
+      "category": "water_hazard_warning",
+      "events_timeline": [
+        "2024-02-28 一名 kayaker 撞到 hidden rock 翻船，无人受伤但 paddle 丢失",
+        "2024-02-28 mark：'50/50 rapid 中游 hidden rock，水位 < 1m 时贴左岸'",
+        "2024-04-11 一对 canoe 父女按 mark 贴左岸通过",
+        "2024-04-11 后来另一队没看 mark 也撞到，11 岁孩子被冲下游 200m 获救",
+        "2024-04-12 父女在 Pipiriki 留言本：'我们的小女儿没被冲走是因为这个 mark'",
+        "2024-至今 mark 季节性水位维持"
+      ],
+      "raw_signals": { "upvotes": 17, "downvotes": 0, "saves": 24, "reports": 0, "exposure_count": 320 },
+      "engagement_rate": 0.128,
+      "human_judgment": "Whanganui Journey 流量中等，水域 hazard mark 对比验证有效。强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.88
+    },
+    {
+      "id": 597,
+      "title": "Lake Waikaremoana Track 远东侧 lone tramper 失温警告",
+      "location": "Lake Waikaremoana Whanganui Hut to Korokoro Falls exposed ridge, Te Urewera",
+      "category": "hypothermia_warning",
+      "events_timeline": [
+        "2024-06-04 一位独行 tramper Marie 在 exposed ridge 失温前期生还后留 mark",
+        "2024-06-04 mark：'此 ridge 风寒效应极强，独行 + 雨天 = 撤回 hut，我差点死'",
+        "2024-08-22 另一独行者 Hugh 看到 mark 撤回 hut",
+        "2024-08-22 同日另一队 2 人不顾警告继续，1 人轻度失温被同伴扶到 next hut",
+        "2024-09-01 Hugh 在 Te Urewera Visitor Centre 留言感谢 Marie",
+        "2024-至今 mark 永久保为 personal-loss warning"
+      ],
+      "raw_signals": { "upvotes": 8, "downvotes": 0, "saves": 11, "reports": 0, "exposure_count": 142 },
+      "engagement_rate": 0.134,
+      "human_judgment": "Te Urewera 偏远，独行 + 失温场景救命 mark。强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.85
+    },
+    {
+      "id": 598,
+      "title": "Mt Cook Hooker Hut 雪崩警告救一队 7 人",
+      "location": "Hooker Hut approach gully avalanche path, Mt Cook National Park",
+      "category": "avalanche_warning",
+      "events_timeline": [
+        "2024-09-26 NZAC patrol 发现 approach gully 出现 size 2 avalanche path",
+        "2024-09-26 mark：'gully 上方 wind slab 形成中，绕 east lateral moraine'",
+        "2024-10-08 一队 7 人徒步者看到 mark 改 east moraine",
+        "2024-10-08 当晚 size 2 avalanche 真的下来，正好覆盖原 gully 路线",
+        "2024-10-09 队中两个父母带的 12 岁孩子，事后家长哽咽",
+        "2024-至今 mark 季节性强保"
+      ],
+      "raw_signals": { "upvotes": 15, "downvotes": 0, "saves": 22, "reports": 0, "exposure_count": 215 },
+      "engagement_rate": 0.172,
+      "human_judgment": "孩子 + 7 人队 + 实证雪崩对比 = 救命级最高优先。强保。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.93
+    },
+    {
+      "id": 599,
+      "title": "Banks Peninsula Akaroa Track 蓝瓶水母警告救过敏儿童",
+      "location": "Akaroa Track east bay swimming spot bluebottle season, Banks Peninsula",
+      "category": "marine_hazard_warning",
+      "events_timeline": [
+        "2024-12-09 一位 lifeguard 发现东 bay 蓝瓶水母大量上岸",
+        "2024-12-09 mark：'12月-2月蓝瓶水母季，过敏儿童不要下水，醋在 hut 急救箱'",
+        "2025-01-05 一家 4 人，5 岁儿子有海洋生物过敏史，看到 mark 改去西 bay",
+        "2025-01-05 同日东 bay 有另一名 8 岁孩子被蛰，醋被使用，未送医",
+        "2025-01-06 第一家在 Akaroa visitor centre 公开感谢",
+        "2025-至今 mark 季节性维持"
+      ],
+      "raw_signals": { "upvotes": 10, "downvotes": 0, "saves": 19, "reports": 0, "exposure_count": 410 },
+      "engagement_rate": 0.071,
+      "human_judgment": "海洋 hazard + 儿童过敏 = 救命级。季节性 mark 不能因 off-season 低 engagement 被埋。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.84
+    },
+    {
+      "id": 600,
+      "title": "Westland Welcome Flat hot pool 烫伤急救 + AED 综合点",
+      "location": "Welcome Flat Hot Pool steam-burn first aid + AED location, Westland",
+      "category": "medical_revival_point",
+      "events_timeline": [
+        "2024-03-22 hut warden + 一位 ICU nurse 共同建立急救 + AED 复合点",
+        "2024-03-22 mark：'pool 边木箱：cold pack + 烫伤纱布 + AED + 1737 卡'",
+        "2024-05-14 一位 60 岁游客滑倒陷 hot pool 1 度烫伤，cold pack 被使用",
+        "2024-07-09 一名中年男子在 hut 突发心脏病，AED 被同伴使用并复苏成功",
+        "2024-08-03 直升机当晚送 Greymouth Hospital，男子两周后康复",
+        "2024-至今 mark 永久保为 critical infrastructure，warden 每周检查"
+      ],
+      "raw_signals": { "upvotes": 28, "downvotes": 0, "saves": 53, "reports": 0, "exposure_count": 890 },
+      "engagement_rate": 0.091,
+      "human_judgment": "复合救命点 + 实际多次救援使用 + warden 主动维护。教科书级 mark，永久最高优先。",
+      "expected_action": "KEEP",
+      "expected_score_min": 0.95
+    }
+  ]
+}

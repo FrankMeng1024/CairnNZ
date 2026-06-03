@@ -1,0 +1,818 @@
+{
+  "batch": 19,
+  "theme": "群体心理 + 跟风/锚定/沉默效应",
+  "id_range": [901, 950],
+  "total": 30,
+  "note": "原计划 50 条，质量优先停在 30 条；剩余 20 条留待 batch-20 续写",
+  "cases": [
+    {
+      "id": 901,
+      "title": "Tongariro Alpine Crossing Red Crater 边缘松石 danger 早期 5 赞引发跟风潮",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tongariro Alpine Crossing 海拔 1886m Red Crater 顶东侧火山口边缘 30m 一片松动 scoria 碎石带，靠近就会触发滑落到下方 Emerald Lakes 上 200m 陡坡",
+        "intrinsic_quality": "真实危险但只在风从西吹时人会被推向边缘，平时绕开 2m 即安全",
+        "user_volume_per_month": 4200,
+        "duration_months": 9,
+        "signal": "Whakapapa 一侧偶有信号，Ketetahi 一侧出山才能同步",
+        "season_pattern": "Crossing 全年开但 6-9 月雪季封闭率 70%，10-5 月每天 300-500 人通过",
+        "human_factors": "Crossing 是 NZ 最热门一日徒步，群体心理极强，前几个赞决定后续走向"
+      },
+      "events_timeline": [
+        "第1月头三天: 一个 Wellington 户外俱乐部 5 人组先后出山同步并互相点赞，5 个赞快速堆出",
+        "第1月第二周: 接下来通过的徒步者看到已有 5 个本地赞，'安全选择'心态下大量跟风赞，单周 86 个赞",
+        "第2月: 跟风潮持续，但开始有少数人出山举报'我没看到危险'，因为他们走的那天没风",
+        "第3月: 一个澳洲博主写小红书风格长评论盛赞这个 mark，引来 40 个国际游客补赞",
+        "第5月: 累计赞数 580，举报仅 22，但 22 条举报都说'其实不危险'",
+        "第7月: DOC 一个 ranger 正式出山同步证实'风向决定危险'，举报开始减少",
+        "第9月: 总赞约 720，举报约 31，跟风潮稳定后真实危险得到验证"
+      ],
+      "expected_signal_summary": "总赞约 720，总举报约 31",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "早期跟风赞虽然让人警惕但底层 mark 真实危险，举报量小且后续被 ranger 验证，系统应该保留并视为 healthy",
+      "edge_case_flag": "early_5_likes_bandwagon + real_underlying_danger"
+    },
+    {
+      "id": 902,
+      "title": "Abel Tasman Bark Bay 沙滩'网红'拍照点早期跟风后真相暴露",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Abel Tasman Coast Track Bark Bay 营地南端一棵被海水雕刻的 Pohutukawa 老树根，被某 Auckland 摄影师标 mark 后说是'NZ 最美沙滩树'",
+        "intrinsic_quality": "确实上镜但只在退潮且日落时 30 分钟窗口才美，平时被海水淹没看不到树根",
+        "user_volume_per_month": 1800,
+        "duration_months": 11,
+        "signal": "Bark Bay 营地有微弱 4G 但同步多在 Marahau 出山后",
+        "season_pattern": "全年开放，11-3 月旺季每天 60-100 人，冬季每天 10-20",
+        "human_factors": "Instagram 跟风现象重灾区，前 10 个赞决定 mark 命运"
+      },
+      "events_timeline": [
+        "第1月: 摄影师 Sarah 标 mark 后自己同步赞，第一周她朋友圈 8 个朋友陆续点赞",
+        "第1月底: 早期 8 赞建立信任锚点，新用户'反正大家都觉得好'式跟风，单月 124 个赞",
+        "第3月: Instagram 病毒帖子带来 200+ 赞潮，但同期开始出现'到了发现是普通树'举报",
+        "第5月: 退潮窗口外到达的徒步者写举报'什么都没有就一团海带'，单月 38 个举报",
+        "第7月: 一个 Marahau 当地 kayak guide 出山同步评论'退潮才有，时机不对就别浪费时间'，被引用",
+        "第9月: 跟风潮退去，新用户开始查看举报内容再决定，赞速明显减慢",
+        "第11月: 总赞 412，总举报 178，赞举比 2.3:1，远不如普通 scenic"
+      ],
+      "expected_signal_summary": "总赞约 412，总举报约 178",
+      "expected_outcome": "weakened",
+      "expected_status": "controversial",
+      "human_judgment": "典型早期跟风后真相暴露案例，应该降权但不沉，时机依赖型 scenic 需要保留信息但不能高排名",
+      "edge_case_flag": "instagram_bandwagon + tide_dependent_scenic"
+    },
+    {
+      "id": 903,
+      "title": "Routeburn Lake Mackenzie Hut 木栈道松动早期 1 举报引发破窗效应",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Routeburn Track Lake Mackenzie Hut 前 400m 木栈道一处中段木板钉子翘起，绊倒过一个老年人",
+        "intrinsic_quality": "真实问题 DOC 已知但未排上修缮表，绊倒概率每天 1-2 次",
+        "user_volume_per_month": 380,
+        "duration_months": 8,
+        "signal": "无 - 出山到 The Divide 才能同步",
+        "season_pattern": "Great Walk 11-4 月每天 40 人通过，5-10 月关闭",
+        "human_factors": "破窗效应案例：第一条评论定调，后续跟风模仿"
+      },
+      "events_timeline": [
+        "第1月: 第一个出山的徒步者在 The Divide 同步时心情不好，写'这破栈道也叫 Great Walk？'举报",
+        "第2月: 接下来 3 周内 14 个出山者跟风举报，多数实际只是看到栈道平常磨损不是真翘钉子",
+        "第3月: 一个真被钉子绊倒的人出山同步赞 mark 并写'救我一脚'，但被淹没在举报潮里",
+        "第4月: 累计举报 47 赞 9，看起来明显是个'差 mark'",
+        "第5月: 一个 Glenorchy 步道维护志愿者出山同步认真观察后留'确实有翘钉，举报内容不准但 mark 标的位置真实'",
+        "第6月: DOC 修复了钉子，但 mark 还在",
+        "第7月: 修复后通过的徒步者出山同步举报'什么都没有'，又一波跟风",
+        "第8月: 总赞 12 总举报 89，看起来该沉，但底层是真问题被修复后未及时撤 mark"
+      ],
+      "expected_signal_summary": "总赞约 12，总举报约 89",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "典型破窗效应+真问题已修复双重作用，第一条负面评论定调后跟风举报掩盖少数真实赞，但因为问题已修这个 mark 也确实该沉",
+      "edge_case_flag": "broken_window_pile_on + real_issue_already_fixed"
+    },
+    {
+      "id": 904,
+      "title": "Banks Peninsula Akaroa Summit Walk 沉默大多数 4800 人 25 赞",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Banks Peninsula Akaroa 港口南侧 Summit Walk 870m 处一个无名 viewpoint 可同时看到 Akaroa Harbour 和 Pacific Ocean 双海湾",
+        "intrinsic_quality": "晴天极美但极少有人驻足拍照，多数游客是邮轮一日游赶时间",
+        "user_volume_per_month": 4800,
+        "duration_months": 12,
+        "signal": "山顶有信号但游客 90% 不会即时同步",
+        "season_pattern": "12-3 月邮轮旺季每天 200+ 人，4-11 月当地散客每天 30-60",
+        "human_factors": "沉默大多数典型：风景好但赶时间或文化差异不打分"
+      },
+      "events_timeline": [
+        "第1月: 一个 Christchurch 退休登山客标 mark 并赞，单月仅 3 个赞跟进",
+        "第3月: 邮轮季开始，每天 200+ 人通过但同步赞的只有零星 2-3 个/月",
+        "第5月: 累计仅 14 个赞，但路过人数已超 8000",
+        "第7月: 一个本地登山博主写文章引流，单月赞数提升到 8 个",
+        "第9月: 沉默继续，但举报也是 0",
+        "第12月: 总赞 25 总举报 0，对比通过人数 4800/月看起来非常冷清"
+      ],
+      "expected_signal_summary": "总赞约 25，总举报约 0",
+      "expected_outcome": "alive_low_signal",
+      "expected_status": "healthy",
+      "human_judgment": "经典沉默大多数案例：通过量巨大但同步率极低，零举报且少数同步者全部认可，系统不能因低赞数误判为冷门，应保留",
+      "edge_case_flag": "silent_majority + cruise_tourism_no_sync"
+    },
+    {
+      "id": 905,
+      "title": "Mt Cook Hooker Valley 30 用户 50 评分爱评分少数派",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Aoraki/Mt Cook Hooker Valley Track 第二吊桥后 800m 一块特定角度可框 Mt Sefton 雪崩面的取景石",
+        "intrinsic_quality": "需要特定身高和站位才能拍到完美构图，是摄影师圈内传说点",
+        "user_volume_per_month": 6500,
+        "duration_months": 10,
+        "signal": "Hooker Valley 全程信号好",
+        "season_pattern": "全年通行但 12-3 月每天 400+ 人，冬季每天 50",
+        "human_factors": "爱评分少数派典型：摄影圈核心用户 30 人贡献了大部分互动"
+      },
+      "events_timeline": [
+        "第1月: NZ 风光摄影圈 5 个核心摄影师互相标 mark 并各写一篇长评，5 人贡献 9 个赞 3 个评论",
+        "第2月: 摄影师社群口耳相传，又来 8 个摄影师专程到访，每人留下 1-2 条多媒体评分",
+        "第4月: 累计 25 个独立用户 41 条评分，平均每人 1.6 条",
+        "第6月: 普通游客通过量 25000+ 但只有 7 个普通用户写过评分",
+        "第8月: 一篇 NZ Geographic 杂志专题报道引流，但报道说'摄影师专属'，普通人继续不评",
+        "第10月: 总评分约 50 来自 30 用户，零举报，正向极端"
+      ],
+      "expected_signal_summary": "总赞/评分约 50（来自 30 用户），总举报约 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "少数高活跃用户贡献多评分是正常聚合行为，不是刷量，系统应该信任摄影师群体的内行判断",
+      "edge_case_flag": "rabid_minority + photographer_niche_appeal"
+    },
+    {
+      "id": 906,
+      "title": "Wanaka Roys Peak 网红打卡作者 50 mark 高声誉迁移到新 mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Roys Peak 上山 80% 处一个比著名打卡点低 200m 但人少 90% 的替代取景台",
+        "intrinsic_quality": "构图相似但更安静，作者亲自验证过 12 次",
+        "user_volume_per_month": 2400,
+        "duration_months": 6,
+        "signal": "山上多数路段有 4G",
+        "season_pattern": "全年开放，11-3 月每天 200 人，冬季每天 40",
+        "human_factors": "声誉迁移：作者是已知良性 mark 大户"
+      },
+      "events_timeline": [
+        "第1月: 作者 Mike (此前 50 个 mark 全部 healthy) 标新 mark，第一周即获 32 个赞",
+        "第2月: 系统识别到作者声誉，新 mark 默认排序靠前曝光",
+        "第3月: 跟风加自然流量，赞数累积到 180，但出现 11 个举报'就是普通山坡'",
+        "第4月: 一个 Wanaka 本地登山指南出山同步认证'确实是好替代点'平息争议",
+        "第5月: 一个新用户写长评论对比两个点的优劣引来 50 个补赞",
+        "第6月: 总赞 320 总举报 18，作者声誉成功迁移"
+      ],
+      "expected_signal_summary": "总赞约 320，总举报约 18",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高声誉作者的新 mark 享受信任红利是合理设计，前提是作者自己也确实持续输出真实点，举报理由没站得住脚",
+      "edge_case_flag": "author_reputation_transfer_positive"
+    },
+    {
+      "id": 907,
+      "title": "Catlins Nugget Point 作者声誉差冤枉新 mark 被牵连",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Catlins Nugget Point 灯塔南侧一个低位 viewpoint 可看到海狮繁殖地，本身完全合法且真实",
+        "intrinsic_quality": "真好点，但作者 Tony 之前 8 个 mark 中有 5 个被举报沉",
+        "user_volume_per_month": 950,
+        "duration_months": 7,
+        "signal": "灯塔区有信号",
+        "season_pattern": "全年开放，10-4 月旅游旺季每天 80 人",
+        "human_factors": "反向声誉迁移：作者历史差，新 mark 被冤枉"
+      },
+      "events_timeline": [
+        "第1月: Tony 标 mark，系统因其历史差降权曝光，第一周仅 2 个赞",
+        "第2月: 偶然路过的一个海洋生物学家发现并赞，留长评论'真海狮区'",
+        "第3月: 学者评论引流来 14 个赞，但开始有人查作者历史后跟风举报'又是 Tony 又来骗'",
+        "第4月: pile-on 效应：12 个举报集中在一周内涌入，举报理由都没具体内容",
+        "第5月: 一个 Owaka 当地 ranger 出山同步认证'此 mark 真实有用'",
+        "第6月: ranger 认证慢慢扭转风向，但赞速依然受作者历史拖累",
+        "第7月: 总赞 68 总举报 41，被冤枉但底层真实"
+      ],
+      "expected_signal_summary": "总赞约 68，总举报约 41",
+      "expected_outcome": "weakened",
+      "expected_status": "controversial",
+      "human_judgment": "作者声誉负面迁移导致真实 mark 被低估，系统应有 ranger 等高权重信号反向修正机制，否则会冤枉好 mark",
+      "edge_case_flag": "negative_reputation_transfer_unfair"
+    },
+    {
+      "id": 908,
+      "title": "Queen Charlotte Track Punga Cove 第一条评论锚定后续",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Queen Charlotte Track Punga Cove Resort 后门一个登山者免费水龙头",
+        "intrinsic_quality": "真实可用 24/7，Resort 老板友好",
+        "user_volume_per_month": 320,
+        "duration_months": 9,
+        "signal": "Resort 有 wifi",
+        "season_pattern": "11-4 月每天 30 人，冬季关闭",
+        "human_factors": "锚定效应：第一条评论决定后续基调"
+      },
+      "events_timeline": [
+        "第1月: 第一个使用者出山同步举报'水有铁锈味'，其实是当天刚换管未冲净",
+        "第2月: 锚定效应启动，后来用户先看到铁锈举报心生疑虑，跟风举报 8 条",
+        "第3月: 一个 Picton 当地登山者出山同步赞'我喝了 3 年没事'反向锚定",
+        "第4月: 当地人评论后赞数开始上升，单月 22 个赞",
+        "第5月: 系统继续沉淀，赞数稳步增加",
+        "第7月: 累计 95 赞 14 举报，第一条锚定影响逐渐被洗刷",
+        "第9月: 总赞 142 总举报 17"
+      ],
+      "expected_signal_summary": "总赞约 142，总举报约 17",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "第一条负面锚定虽然带偏前期但底层真实 supply 经过时间最终赢回信号，系统不应过度依赖早期信号",
+      "edge_case_flag": "first_comment_anchor_overcome_by_truth"
+    },
+    {
+      "id": 909,
+      "title": "Mt Taranaki Pouakai Hut 本地登山团回声室互赞",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Pouakai Circuit Pouakai Hut 北侧 200m 一个反射 Mt Taranaki 倒影的小水塘",
+        "intrinsic_quality": "真美但需要无风晴天且日出后 1 小时窗口",
+        "user_volume_per_month": 280,
+        "duration_months": 10,
+        "signal": "无 - 出山到 New Plymouth 才同步",
+        "season_pattern": "11-4 月每天 15-25 人，冬季雪季",
+        "human_factors": "回声室效应：本地 Taranaki 登山俱乐部 40 人核心圈互赞"
+      },
+      "events_timeline": [
+        "第1月: New Plymouth 登山俱乐部 Bruce 标 mark，俱乐部 12 个核心成员一周内全部点赞",
+        "第2月: 俱乐部年度活动 25 人专程去拍倒影，全部出山同步赞",
+        "第3月: 累计 41 赞但全部来自同一俱乐部，国际游客 0 互动",
+        "第4月: 系统检测到聚类风险但未降权",
+        "第5月: 第一个非俱乐部国际游客到访发现确实美也赞了，破除回声室",
+        "第7月: 国际游客口碑发酵，赞数自然增长，俱乐部占比降到 30%",
+        "第10月: 总赞 178 总举报 8，回声室破裂为良性扩散"
+      ],
+      "expected_signal_summary": "总赞约 178，总举报约 8",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "本地登山团早期互赞虽有回声室嫌疑但底层 mark 真实，最终通过外部用户验证扩散为良性信号，系统应监控聚类但不应早期降权",
+      "edge_case_flag": "local_club_echo_chamber_eventually_validated"
+    },
+    {
+      "id": 910,
+      "title": "Stewart Island Rakiura Track 群体盲区无人评分",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Rakiura Track 第二天 Port William Hut 后 600m 一处通往海滩的隐藏分岔，没 DOC 标识但走错会多绕 2 小时",
+        "intrinsic_quality": "真实易错点，但人人觉得'这么明显别人会标'结果 14 个月没人标",
+        "user_volume_per_month": 75,
+        "duration_months": 14,
+        "signal": "无 - 出岛回 Bluff 同步",
+        "season_pattern": "10-4 月每天 5-8 人，冬季 1-2 人",
+        "human_factors": "群体盲区：所有人都以为别人会标"
+      },
+      "events_timeline": [
+        "第1-8月: 估计 480 个徒步者通过，其中 30+ 人走错过又绕回，但没人主动标 mark 也没人评分已有的低质 mark",
+        "第9月: 一个澳洲徒步者 Lisa 终于标 mark 并写'为什么这么明显的点没人标'",
+        "第10月: Lisa 的 mark 第一周仅 4 个赞，多数老用户'早就知道'懒得评",
+        "第12月: 一个 Oban 当地猎人出山同步赞 'finally someone marked it'",
+        "第13月: 国际游客开始查到这个 mark 后受益，赞速加快",
+        "第14月: 总赞 38 总举报 1，14 个月才积累的信号但价值极高"
+      ],
+      "expected_signal_summary": "总赞约 38，总举报约 1",
+      "expected_outcome": "alive_late_emerge",
+      "expected_status": "healthy",
+      "human_judgment": "群体盲区导致明显需要的 mark 长期缺失，一旦出现应快速曝光提升信号采集，系统不能仅以早期低赞数判断价值",
+      "edge_case_flag": "bystander_effect_on_marking + late_emerging_value"
+    },
+    {
+      "id": 911,
+      "title": "Nelson Lakes St Arnaud Range 病毒 Instagram 帖子 200 赞潮",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "St Arnaud Range Track 海拔 1650m 一块可俯瞰 Lake Rotoiti 全景的岩石平台",
+        "intrinsic_quality": "确实美但需要陡爬 6 小时单程，并非新发现",
+        "user_volume_per_month": 180,
+        "duration_months": 8,
+        "signal": "山顶有信号",
+        "season_pattern": "11-4 月每天 8-15 人，冬季关闭",
+        "human_factors": "病毒传播：Instagram KOL 一帖引爆"
+      },
+      "events_timeline": [
+        "第1-3月: mark 静默累积 22 个赞",
+        "第4月初: NZ 旅游 Instagram 大 V (180k 粉丝) 发帖标记此 mark，48 小时内涌入 142 个赞",
+        "第4月中: 跟风潮持续，单月赞数破 230",
+        "第5月: 大量人爬不上去转身举报'累死人不值'，单月 78 个举报",
+        "第6月: 病毒退潮，但底层真实景观仍获持续赞",
+        "第7月: 一个 St Arnaud 当地登山者出山同步评论'确实美但不是给打卡客'",
+        "第8月: 总赞 412 总举报 124，病毒+真实双重信号"
+      ],
+      "expected_signal_summary": "总赞约 412，总举报约 124",
+      "expected_outcome": "weakened",
+      "expected_status": "controversial",
+      "human_judgment": "病毒传播带来异常赞潮但同时带来不匹配人群的高举报，底层 scenic 真实但需降权避免误导轻量徒步者",
+      "edge_case_flag": "viral_instagram_spike + difficulty_mismatch"
+    },
+    {
+      "id": 912,
+      "title": "Whanganui Journey John Coull Hut pile-on 跟风举报",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Whanganui Journey John Coull Hut 后侧一个划皮筏者标的应急修补包储藏点",
+        "intrinsic_quality": "真实有用但需要懂如何使用，普通游客打开发现是工具会迷茫",
+        "user_volume_per_month": 90,
+        "duration_months": 10,
+        "signal": "无 - 出河到 Pipiriki 才同步",
+        "season_pattern": "11-3 月每天 6-10 艘船，冬季关闭",
+        "human_factors": "pile-on 跟风举报：第一个抱怨后大家'我也觉得'"
+      },
+      "events_timeline": [
+        "第1月: 一个新手皮筏客出河同步举报'打开是一堆工具不是食物，骗人'",
+        "第2月: pile-on 启动，后续 9 个新手出河'我也觉得有问题'跟风举报",
+        "第3月: 一个资深 Whanganui guide 出河同步留长评论'这是修补包不是补给，标签写得很清楚'",
+        "第4月: guide 评论开始扭转风向，但举报继续累积",
+        "第6月: 系统沉淀后赞数缓慢上升，多来自识货的资深划船者",
+        "第10月: 总赞 24 总举报 38，被错误归类的 pile-on 受害"
+      ],
+      "expected_signal_summary": "总赞约 24，总举报约 38",
+      "expected_outcome": "weakened",
+      "expected_status": "controversial",
+      "human_judgment": "pile-on 跟风举报导致真实有用但小众的 supply 被压低，系统应识别举报理由的具体性，缺乏理由的跟风举报应降权",
+      "edge_case_flag": "pile_on_reporting + niche_supply_misread"
+    },
+    {
+      "id": 913,
+      "title": "Wellington Mt Victoria Lookout 旁观者效应危险被忽略",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Wellington Mt Victoria 步道 Carlton Gore Rd 入口一个长期松动的金属护栏可能在大风时倒下",
+        "intrinsic_quality": "真危险但每天上千游客经过，所有人觉得'市政府会管'",
+        "user_volume_per_month": 12000,
+        "duration_months": 6,
+        "signal": "市区全程信号",
+        "season_pattern": "全年每天 300-500 游客",
+        "human_factors": "旁观者效应：人多反而没人标"
+      },
+      "events_timeline": [
+        "第1-3月: 估计 36000 人通过，无人标 mark",
+        "第4月: 一个 Brooklyn 当地老人路过被风险吓到主动标 mark",
+        "第4月底: 第一周仅 6 个赞，多数游客觉得'市区步道还要标 danger？太敏感'",
+        "第5月: 7 个跟风举报'草木皆兵'，但有 2 个 Wellington 居民赞 '一直觉得有问题'",
+        "第6月: 一阵 130km/h 大风后栏杆真倒了，市政紧急修，mark 一周内涌入 84 个补赞",
+        "第6月底: 总赞 96 总举报 11，事件后真实价值显现"
+      ],
+      "expected_signal_summary": "总赞约 96，总举报约 11",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "旁观者效应导致城市步道真实风险长期无人标记，少数主动者 mark 价值极高，系统应在事件验证后快速调整权重",
+      "edge_case_flag": "bystander_effect_in_urban + danger_validated_post_event"
+    },
+    {
+      "id": 914,
+      "title": "Waitomo Mangapohue Bridge 5 早期赞引发盲目跟风",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Waitomo Mangapohue Natural Bridge 步道一个被吹捧的'秘密角度'，实际是普通拍照点",
+        "intrinsic_quality": "普通，与主步道公开点几乎无差别",
+        "user_volume_per_month": 850,
+        "duration_months": 8,
+        "signal": "区域信号好",
+        "season_pattern": "全年每天 30-50 人",
+        "human_factors": "早期 5 赞建立锚点后跟风泛滥"
+      },
+      "events_timeline": [
+        "第1月: 标 mark 者拉了 4 个朋友各点 1 赞，凑出 5 个'本地认可'锚点",
+        "第2月: 跟风者看到 5 赞放心点赞，单月 38 个跟风赞",
+        "第3月: 一个 Hamilton 当地导游出山同步评论'这就是普通点，主步道更好'",
+        "第4月: 评论开始让一部分人警觉举报'被骗'，单月 14 举报",
+        "第5月: 跟风潮和反向潮拉锯",
+        "第7月: 累积赞 92 举报 67，比例接近",
+        "第8月: 总赞 105 总举报 81，争议明显"
+      ],
+      "expected_signal_summary": "总赞约 105，总举报约 81",
+      "expected_outcome": "weakened",
+      "expected_status": "controversial",
+      "human_judgment": "刻意制造的早期 5 赞锚点带偏跟风群体但缺乏真实价值，最终被反向声音追上，系统应识别早期赞的来源聚类",
+      "edge_case_flag": "manufactured_early_likes + no_real_value"
+    },
+    {
+      "id": 915,
+      "title": "Coromandel Pinnacles Hut 沉默徒步者群体不评分",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Coromandel Pinnacles Hut 后山顶日出点，比著名 Pinnacles 顶低但人少",
+        "intrinsic_quality": "真好点但徒步者普遍不爱评分，多数只发个人 Instagram",
+        "user_volume_per_month": 1100,
+        "duration_months": 12,
+        "signal": "山顶有信号",
+        "season_pattern": "全年每天 30-50 人",
+        "human_factors": "沉默大多数：体验好但不打分"
+      },
+      "events_timeline": [
+        "第1月: mark 标后第一周仅 2 赞",
+        "第3月: 累计 9 赞，但通过人数已 3300+",
+        "第6月: 一个 NZ 徒步博客文章引流，单月赞数升到 12",
+        "第9月: 持续低赞高通过量，零举报",
+        "第12月: 总赞 42 总举报 0，对比 13200+ 通过人数极低同步率"
+      ],
+      "expected_signal_summary": "总赞约 42，总举报约 0",
+      "expected_outcome": "alive_low_signal",
+      "expected_status": "healthy",
+      "human_judgment": "通过量大但同步率低且零举报是典型沉默大多数良性信号，系统应该用相对而非绝对数判断",
+      "edge_case_flag": "silent_majority_high_volume_low_sync"
+    },
+    {
+      "id": 916,
+      "title": "Otago Central Rail Trail Lauder Station 反向锚定第一条赞引爆",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Otago Central Rail Trail Lauder 旧站台一个本地农民放的 self-serve 水果摊",
+        "intrinsic_quality": "真实存在，每天上午补货",
+        "user_volume_per_month": 450,
+        "duration_months": 7,
+        "signal": "区域有信号",
+        "season_pattern": "10-4 月每天 20-30 骑行者",
+        "human_factors": "正向锚定：第一条赞带详细描述定调"
+      },
+      "events_timeline": [
+        "第1月: 第一个发现者写长评论'Lauder 农民 Bob 自营，请投币 5 元，新鲜杏'",
+        "第1月底: 详细描述带动跟风赞，单月 34 个赞",
+        "第2月: 真实使用者持续验证，无举报",
+        "第4月: Bob 本人加入 app 致谢，引发 12 个补赞",
+        "第7月: 总赞 168 总举报 2，正向锚定建立长期信任"
+      ],
+      "expected_signal_summary": "总赞约 168，总举报约 2",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "第一条评论质量极高带动良性跟风，系统应鼓励详细评论作为锚点而非盲目计数",
+      "edge_case_flag": "positive_anchor_quality_comment"
+    },
+    {
+      "id": 917,
+      "title": "Fiordland Kepler Mt Luxmore 回声室破裂被外部修正",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Kepler Track Mt Luxmore 顶 1472m 一处雪季冰面，本地登山团认为是 'mild'",
+        "intrinsic_quality": "其实对国际游客不 mild，每年 2-3 次 SAR",
+        "user_volume_per_month": 320,
+        "duration_months": 9,
+        "signal": "无 - 出山才同步",
+        "season_pattern": "11-4 月 Great Walk 季每天 20-40 人",
+        "human_factors": "Te Anau 登山圈回声室判断标准与游客脱节"
+      },
+      "events_timeline": [
+        "第1月: 一个国际游客 mark 此点为 danger，第一周 Te Anau 当地登山团 5 个核心成员集中举报'本地人都说没事'",
+        "第2月: 回声室拒绝信号，举报继续",
+        "第3月: 一次 SAR 事件后 3 个被救的游客出山同步赞 mark",
+        "第4月: SAR 报告公开，国际游客大量补赞，单月 45 赞",
+        "第6月: 回声室被打破，本地圈也开始承认对游客危险",
+        "第9月: 总赞 168 总举报 31，外部信号成功修正本地偏见"
+      ],
+      "expected_signal_summary": "总赞约 168，总举报约 31",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "本地回声室早期否定真实危险，需要外部事件信号介入修正，系统应对国际游客和本地人评分加权区分",
+      "edge_case_flag": "local_echo_chamber_corrected_by_SAR"
+    },
+    {
+      "id": 918,
+      "title": "Auckland Rangitoto Summit 邮轮一日游群体盲区",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Rangitoto Island Summit Track 中段一个通往 Lava Caves 的分岔，错过会浪费往返 1.5 小时",
+        "intrinsic_quality": "真实易错点",
+        "user_volume_per_month": 8500,
+        "duration_months": 11,
+        "signal": "岛上信号弱出岛同步",
+        "season_pattern": "11-4 月邮轮季每天 300+ 人，冬季每天 50",
+        "human_factors": "邮轮游客赶时间不评分群体盲区"
+      },
+      "events_timeline": [
+        "第1-5月: 估计 42500 人通过，无人 mark",
+        "第6月: 一个 Devonport 当地登山者主动 mark",
+        "第7月: 第一周仅 5 赞，邮轮客继续不评",
+        "第9月: 一个 Auckland 徒步博客提到此 mark 引流",
+        "第11月: 总赞 48 总举报 0，相对通过量同步率极低但零举报"
+      ],
+      "expected_signal_summary": "总赞约 48，总举报约 0",
+      "expected_outcome": "alive_low_signal",
+      "expected_status": "healthy",
+      "human_judgment": "邮轮一日游群体性不评分是结构性沉默，零举报+本地人 mark 是良性信号，应保留",
+      "edge_case_flag": "cruise_tourism_silence + structural_no_sync"
+    },
+    {
+      "id": 919,
+      "title": "Marlborough Sounds Kenepuru Saddle scenic 作者高声誉迁移",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Kenepuru Saddle 一个俯瞰 Pelorus Sound 的隐藏角度",
+        "intrinsic_quality": "真好点",
+        "user_volume_per_month": 220,
+        "duration_months": 6,
+        "signal": "Saddle 有信号",
+        "season_pattern": "11-4 月每天 8-15 人",
+        "human_factors": "作者 Helen 已有 73 个 healthy mark 高声誉"
+      },
+      "events_timeline": [
+        "第1月: Helen 标 mark，系统因高声誉给予前位曝光",
+        "第1月底: 首周 28 赞，包括她的固定关注用户",
+        "第3月: 自然流量持续，无举报",
+        "第5月: 一个 Picton 当地船员出山同步评论验证",
+        "第6月: 总赞 142 总举报 3"
+      ],
+      "expected_signal_summary": "总赞约 142，总举报约 3",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高声誉作者迁移红利合理且作者持续输出真实点，系统应鼓励此类正反馈循环",
+      "edge_case_flag": "author_reputation_positive_continued"
+    },
+    {
+      "id": 920,
+      "title": "West Coast Punakaiki Pancake Rocks 第一条评论带偏整体",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Punakaiki Pancake Rocks 主步道末端一个能拍到喷水洞同框点",
+        "intrinsic_quality": "需要涨潮+南风同时满足才能看到喷水",
+        "user_volume_per_month": 6500,
+        "duration_months": 8,
+        "signal": "区域有信号",
+        "season_pattern": "全年每天 200+ 游客",
+        "human_factors": "第一条负向评论锚定后续"
+      },
+      "events_timeline": [
+        "第1月: 第一个游客出山同步举报'什么都没看到，骗人'，因为他去时退潮无风",
+        "第2月: 锚定效应，跟风举报 22 条",
+        "第3月: 一个 Greymouth 本地评论详细解释潮汐+风条件",
+        "第4月: 评论引流来知情用户大量补赞",
+        "第6月: 拉锯期，赞举报双增",
+        "第8月: 总赞 280 总举报 145，被锚定带偏后真相补救"
+      ],
+      "expected_signal_summary": "总赞约 280，总举报约 145",
+      "expected_outcome": "weakened",
+      "expected_status": "controversial",
+      "human_judgment": "条件依赖型 scenic 第一条评论带偏，系统应在元数据明确条件依赖性以减少误判",
+      "edge_case_flag": "first_negative_anchor + condition_dependent_scenic"
+    },
+    {
+      "id": 921,
+      "title": "Hawke's Bay Te Mata Peak 本地跑步社群回声室赞",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Hawke's Bay Te Mata Peak 西侧一处跑步社群最爱的日出 viewpoint，可俯瞰 Heretaunga Plains",
+        "intrinsic_quality": "真好点但只对早起者",
+        "user_volume_per_month": 2400,
+        "duration_months": 9,
+        "signal": "山顶有信号",
+        "season_pattern": "全年每天 50-100 人",
+        "human_factors": "Hawke's Bay Trail Runners 社群 60 人核心圈"
+      },
+      "events_timeline": [
+        "第1月: 社群创始人 Jack 标 mark，第一周 28 个跑友赞",
+        "第2月: 社群周末跑全部到访，单月 67 赞集中来自同一社群",
+        "第4月: 系统检测聚类但未降权",
+        "第5月: 一个 Hastings 当地非跑步游客赞证实",
+        "第7月: 国际游客发现，回声室破裂",
+        "第9月: 总赞 320 总举报 12"
+      ],
+      "expected_signal_summary": "总赞约 320，总举报约 12",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "社群早期回声室扩散但底层真实最终被外部验证，系统监控聚类但应耐心等待扩散",
+      "edge_case_flag": "running_club_echo_chamber_validated"
+    },
+    {
+      "id": 922,
+      "title": "Northland Cape Reinga 旁观者效应文化敬畏不评分",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Cape Reinga 灯塔南侧一处通往原住民圣地的隐藏分岔，需绕开尊重当地",
+        "intrinsic_quality": "真实存在，分岔不明显",
+        "user_volume_per_month": 5400,
+        "duration_months": 13,
+        "signal": "区域信号好",
+        "season_pattern": "全年每天 100-300 游客",
+        "human_factors": "Maori 文化敬畏感游客不愿评分"
+      },
+      "events_timeline": [
+        "第1-7月: 估计 38000 人通过，无人 mark",
+        "第8月: 一个 Kaitaia 当地 Maori 向导主动 mark 并写'尊重 Te Rerenga Wairua 圣地，请勿误入'",
+        "第9月: 第一周仅 8 赞，多数游客文化敬畏不愿评分",
+        "第11月: 一个国际游客论坛文章引流",
+        "第13月: 总赞 62 总举报 1"
+      ],
+      "expected_signal_summary": "总赞约 62，总举报约 1",
+      "expected_outcome": "alive_low_signal",
+      "expected_status": "healthy",
+      "human_judgment": "文化敬畏导致结构性沉默是合理现象，少数本地权威 mark 价值极高，应单独保护",
+      "edge_case_flag": "cultural_silence + maori_sacred_site"
+    },
+    {
+      "id": 923,
+      "title": "Canterbury Mt Somers 早期 5 赞跟风但真实危险",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mt Somers Track Pinnacles Hut 上方一处雪季冰面陡坡",
+        "intrinsic_quality": "真实危险冬季每年 1-2 次扭伤",
+        "user_volume_per_month": 220,
+        "duration_months": 8,
+        "signal": "无",
+        "season_pattern": "11-4 月每天 10-15 人，冬季 5-8 人",
+        "human_factors": "早期 5 赞跟风但底层真实"
+      },
+      "events_timeline": [
+        "第1月: Methven 登山俱乐部 5 人组互赞建立锚点",
+        "第2月: 跟风赞 32 条但都来自冬季通过者实际遇到冰面",
+        "第4月: 夏季通过者举报'什么冰面都没有'8 条",
+        "第6月: ranger 出山同步证实季节性",
+        "第8月: 总赞 158 总举报 22"
+      ],
+      "expected_signal_summary": "总赞约 158，总举报约 22",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "早期跟风+底层真实+季节性举报符合预期，系统应识别季节性举报模式",
+      "edge_case_flag": "early_likes_with_real_seasonal_danger"
+    },
+    {
+      "id": 924,
+      "title": "Bay of Plenty White Island viewpoint 病毒新闻后举报潮",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Whakatane 港口 Heads Track 一个观看 Whakaari 火山的远程 viewpoint",
+        "intrinsic_quality": "看火山真实但不是危险点本身",
+        "user_volume_per_month": 1800,
+        "duration_months": 14,
+        "signal": "区域有信号",
+        "season_pattern": "全年每天 50-80 人",
+        "human_factors": "2019 火山喷发新闻后举报激增"
+      },
+      "events_timeline": [
+        "第1-5月: 累计 80 个赞，作为 scenic 性质无举报",
+        "第6月: 火山喷发新闻爆发，跟风举报'宣传危险景点不当'42 条",
+        "第7月: pile-on 持续，单月 67 举报",
+        "第8月: 一个 Whakatane 当地详细评论'此 mark 是远程观察点不是登岛'",
+        "第10月: 误解逐渐澄清，举报放缓",
+        "第14月: 总赞 168 总举报 124"
+      ],
+      "expected_signal_summary": "总赞约 168，总举报约 124",
+      "expected_outcome": "weakened",
+      "expected_status": "controversial",
+      "human_judgment": "外部新闻事件触发的 pile-on 举报 vs 真实 scenic 价值之间的拉锯，系统应识别情绪化跟风",
+      "edge_case_flag": "external_news_pile_on + misunderstood_safe_viewpoint"
+    },
+    {
+      "id": 925,
+      "title": "Southland Bluff Hill 沉默通勤者群体不评分",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Bluff Hill 顶部一个 Foveaux Strait 全景点",
+        "intrinsic_quality": "真好但本地人天天看习以为常",
+        "user_volume_per_month": 1200,
+        "duration_months": 10,
+        "signal": "山顶信号好",
+        "season_pattern": "全年每天 30-50 人",
+        "human_factors": "本地通勤者沉默大多数"
+      },
+      "events_timeline": [
+        "第1-4月: 累计 11 个赞，多为外地游客",
+        "第5月: 一个 Stewart Island 渡轮乘客出山同步赞，是当月唯一互动",
+        "第6月: 一个 Invercargill 摄影博主推荐",
+        "第8月: 单月赞数升到 8",
+        "第9月: 一个 Bluff 当地咖啡店主加入 app 后赞，零举报继续",
+        "第10月: 总赞 38 总举报 0"
+      ],
+      "expected_signal_summary": "总赞约 38，总举报约 0",
+      "expected_outcome": "alive_low_signal",
+      "expected_status": "healthy",
+      "human_judgment": "本地人习以为常导致结构性沉默，零举报代表真实价值，应保留",
+      "edge_case_flag": "local_habituation_silence"
+    },
+    {
+      "id": 926,
+      "title": "Taranaki Wilkies Pools 作者前 8 mark 全沉影响新 mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Egmont National Park Wilkies Pools 上游 200m 一处隐藏小瀑布",
+        "intrinsic_quality": "真实存在但不如主步道",
+        "user_volume_per_month": 480,
+        "duration_months": 7,
+        "signal": "区域信号弱",
+        "season_pattern": "11-4 月每天 15-25 人",
+        "human_factors": "作者 Carlos 前 8 个 mark 7 个被沉，新 mark 受牵连"
+      },
+      "events_timeline": [
+        "第1月: Carlos 标 mark，系统降权曝光，第一周 0 赞",
+        "第2月: 一个 New Plymouth 摄影师独立发现并赞",
+        "第3月: pile-on 跟风举报 12 条，多基于作者历史而非内容",
+        "第5月: 一个 ranger 出山同步认证局部真实",
+        "第7月: 总赞 22 总举报 35"
+      ],
+      "expected_signal_summary": "总赞约 22，总举报约 35",
+      "expected_outcome": "weakened",
+      "expected_status": "controversial",
+      "human_judgment": "负面声誉迁移 + pile-on 双重作用压低真实但中等价值的 mark，系统应给作者改善的余地不应永久封死",
+      "edge_case_flag": "negative_reputation + pile_on_combined"
+    },
+    {
+      "id": 927,
+      "title": "Wairarapa Cape Palliser 200 赞病毒后真相分裂",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Cape Palliser 灯塔下方一个海豹群 viewpoint",
+        "intrinsic_quality": "海豹群真实但只在繁殖季",
+        "user_volume_per_month": 1500,
+        "duration_months": 9,
+        "signal": "区域信号好",
+        "season_pattern": "全年但 11-2 月繁殖季最佳",
+        "human_factors": "TikTok 病毒视频带来 200+ 赞潮"
+      },
+      "events_timeline": [
+        "第1-2月: 累计 28 赞",
+        "第3月: TikTok 视频爆红，单月 215 赞",
+        "第4月: 非繁殖季访客 38 人举报'什么海豹都没有'",
+        "第6月: 一个 Martinborough 当地评论解释季节性",
+        "第9月: 总赞 412 总举报 98"
+      ],
+      "expected_signal_summary": "总赞约 412，总举报约 98",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "病毒带来真实信号但季节性导致部分举报合理，整体仍为正向，系统应在元数据加注季节",
+      "edge_case_flag": "tiktok_viral + seasonal_wildlife"
+    },
+    {
+      "id": 928,
+      "title": "King Country Pureora Forest 群体盲区 14 月无人标",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Pureora Forest Park Timber Trail 一处通往猎人营地的分岔，主道继续向北",
+        "intrinsic_quality": "真实分岔走错绕 3 小时",
+        "user_volume_per_month": 65,
+        "duration_months": 16,
+        "signal": "无",
+        "season_pattern": "10-4 月每天 5-8 骑行者",
+        "human_factors": "群体盲区 + 低通行量延迟标记"
+      },
+      "events_timeline": [
+        "第1-13月: 估计 850 人通过，30+ 走错过又绕回，无人标",
+        "第14月: 一个 Hamilton 山地车手主动标",
+        "第14月底: 第一周 4 赞均来自 Pureora 当地骑手",
+        "第15月: 一个 Te Kuiti 山地车协会成员转发，慢慢扩散",
+        "第16月: 总赞 18 总举报 0"
+      ],
+      "expected_signal_summary": "总赞约 18，总举报约 0",
+      "expected_outcome": "alive_late_emerge",
+      "expected_status": "healthy",
+      "human_judgment": "低通行量+群体盲区导致超长延迟标记，一旦标出价值极高，系统应快速给予基础曝光",
+      "edge_case_flag": "low_traffic_bystander_long_delay"
+    },
+    {
+      "id": 929,
+      "title": "Manawatu Tararua Powell Hut 早期反向锚定后逆转",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Tararua Powell Hut 后侧一个登山协会维护的应急柴火堆",
+        "intrinsic_quality": "真实存在每月补一次",
+        "user_volume_per_month": 110,
+        "duration_months": 9,
+        "signal": "无",
+        "season_pattern": "全年每天 3-8 人，冬季更多",
+        "human_factors": "第一条评论举报'湿了无法用'锚定负向"
+      },
+      "events_timeline": [
+        "第1月: 第一个用户出山举报'柴火湿透没用'，其实是补给周期间隙",
+        "第2月: 锚定 + pile-on 跟风举报 14 条",
+        "第3月: 一个 Tararua Tramping Club 成员出山详细解释维护周期",
+        "第4月: 评论引流真实使用者赞",
+        "第6月: 赞数追上举报",
+        "第9月: 总赞 88 总举报 31"
+      ],
+      "expected_signal_summary": "总赞约 88，总举报约 31",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "早期反向锚定通过权威评论逆转，系统应支持具体高质量评论的反向修正能力",
+      "edge_case_flag": "negative_anchor_reversed_by_authority"
+    },
+    {
+      "id": 930,
+      "title": "Otago Tunnel Beach 30 摄影师贡献 50 评分爱评分少数派",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Tunnel Beach Track 沙滩末端一个隧道内回望日落构图点",
+        "intrinsic_quality": "真好点但只在日落+低潮+构图角度三重满足",
+        "user_volume_per_month": 3200,
+        "duration_months": 8,
+        "signal": "区域有信号",
+        "season_pattern": "全年每天 80-150 人",
+        "human_factors": "Dunedin 摄影圈 30 人贡献绝大多数评分"
+      },
+      "events_timeline": [
+        "第1月: Dunedin 摄影协会 6 人核心标 mark 互赞",
+        "第2月: 摄影圈口耳相传，单月 18 个独立摄影师评分",
+        "第4月: 累计 25 用户 38 评分",
+        "第6月: 普通游客通过量 19000+ 但只有 5 个普通用户评",
+        "第8月: 总评分 52 来自 31 用户，零举报"
+      ],
+      "expected_signal_summary": "总赞/评分约 52（来自 31 用户），总举报约 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "摄影少数派高活跃贡献多评分是正常聚合，零举报+条件依赖型 scenic 的合理信号模式，系统不应误判为刷量",
+      "edge_case_flag": "rabid_minority_photographers + multi_condition_scenic"
+    }
+  ]
+}

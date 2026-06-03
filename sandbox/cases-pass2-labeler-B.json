@@ -1,0 +1,972 @@
+{
+  "labeler": "B",
+  "total": 138,
+  "labels": [
+    {
+      "id": 5,
+      "expected_state": "healthy",
+      "expected_lifespan": "long",
+      "rationale": "78/22 持续争议无急转,占比稳定且赞占多数,v6.6 持续争议维持 HEALTHY,UI 展示比例由用户判断",
+      "confidence": "high"
+    },
+    {
+      "id": 6,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "52/19 慢性变化无急转,占比稳定 73% 赞,慢性恶化通过转化率自然消退,不进 SUSPICIOUS",
+      "confidence": "high"
+    },
+    {
+      "id": 10,
+      "expected_state": "healthy",
+      "expected_lifespan": "long",
+      "rationale": "56/14 持续高赞占比 80%,后期摄影师评论引流再涨 → 向上急转,续命系数加成",
+      "confidence": "high"
+    },
+    {
+      "id": 19,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "38/33 持续争议接近 50:50,无急转,v6.6 Case R 明确不进 SUSPICIOUS,转化率低自然走完",
+      "confidence": "high"
+    },
+    {
+      "id": 20,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "56/18 慢性争议无急转,76% 赞占比稳定,慢性变化由转化率系数自动处理",
+      "confidence": "high"
+    },
+    {
+      "id": 23,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "88/36 季节性反差极端(冬危险/夏无威胁),无急转,赞占比 71%,context_dependent 标识",
+      "confidence": "high"
+    },
+    {
+      "id": 28,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "110/102 持续争议接近 50:50,无急转,Case R 模式维持 HEALTHY,转化率低自然走完",
+      "confidence": "high"
+    },
+    {
+      "id": 40,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "45/19 慢性温和争议无急转,赞占比 70% 稳定,小众科研价值靠 niche 用户续命",
+      "confidence": "medium"
+    },
+    {
+      "id": 42,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "42/26 冬季救命/夏季无意义,典型季节性 mark,context_dependent",
+      "confidence": "high"
+    },
+    {
+      "id": 49,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "68/38 持续争议高级 vs 新手,无急转,赞占 64%,Case R 模式维持 HEALTHY",
+      "confidence": "medium"
+    },
+    {
+      "id": 59,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "7赞 4举报,环境改善后 mark 信息过期,后期举报递增是慢性恶化,转化率系数会缩短寿命直至自然死亡",
+      "confidence": "medium"
+    },
+    {
+      "id": 67,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "0赞 5举报,无赞且举报集中,从初始就向下急转(任何>0 报告对 0 赞构成方向),低质量信号疑似 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 75,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "0赞 7举报但作者主动更新挽救 → 向上急转/强心剂触发,信号消化旧报告,回 HEALTHY",
+      "confidence": "medium"
+    },
+    {
+      "id": 76,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "8赞 0举报但是第7个重复 mark,转化率极低(8/10400),续命少,自然走完",
+      "confidence": "medium"
+    },
+    {
+      "id": 77,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "3赞 0举报,慢性低互动但无负向急转,转化率低 → 续命少自然消亡",
+      "confidence": "medium"
+    },
+    {
+      "id": 81,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "0赞 3举报集中在商业占用,小流量但报告占比 100%,向下急转入 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 84,
+      "expected_state": "dead_natural",
+      "expected_lifespan": "expired",
+      "rationale": "8赞 1举报作者主动 archive,短期高价值但事件已过,寿命走完自然 DEAD,可凭历史复活",
+      "confidence": "high"
+    },
+    {
+      "id": 86,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "8赞 1举报,信号有效占比高 89%,无急转,持续争议维持 HEALTHY",
+      "confidence": "medium"
+    },
+    {
+      "id": 94,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "0赞 3举报+作者删 mark,因果牵强+社区不认同,集中负向 → SUSPICIOUS → 死亡",
+      "confidence": "medium"
+    },
+    {
+      "id": 160,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "12赞 1举报季节性海洋 hazard,东北风期才有效,典型季节性 mark",
+      "confidence": "high"
+    },
+    {
+      "id": 174,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "12赞 1举报海狮繁殖期攻击,季节性危险,context_dependent",
+      "confidence": "high"
+    },
+    {
+      "id": 184,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "12赞 1举报夏末黄昏鲨鱼袭击,季节性,context_dependent",
+      "confidence": "high"
+    },
+    {
+      "id": 194,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "12赞 1举报邮轮季诈骗,季节性,context_dependent",
+      "confidence": "high"
+    },
+    {
+      "id": 199,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "12赞 1举报 6-9月冬季封闭,典型季节性",
+      "confidence": "high"
+    },
+    {
+      "id": 253,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "18赞 14举报且评论区识别为推广,后期集中举报 → 向下急转 SUSPICIOUS,商业意图加严重度处理",
+      "confidence": "medium"
+    },
+    {
+      "id": 262,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "11赞 18举报商业占用公共空间,集中报告 + 报告多于赞 → 向下急转 SUSPICIOUS",
+      "confidence": "high"
+    },
+    {
+      "id": 266,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "18赞 21举报商业自我推广 + 文化冒犯,负向急转 SUSPICIOUS,严重度高加速 CRITICAL",
+      "confidence": "high"
+    },
+    {
+      "id": 270,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "14赞 16举报商业 + 私人土地误导,负向急转 SUSPICIOUS,公司虽修正但已积累报告",
+      "confidence": "medium"
+    },
+    {
+      "id": 274,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "22赞 13举报赞占比 63% 持续争议无急转,Case R 模式维持 HEALTHY",
+      "confidence": "medium"
+    },
+    {
+      "id": 276,
+      "expected_state": "healthy",
+      "expected_lifespan": "long",
+      "rationale": "88赞 7举报极高占比 92.6%,慢性内容反复但赞主导,持续高赞 → HEALTHY",
+      "confidence": "high"
+    },
+    {
+      "id": 280,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "18赞 12举报价值分歧而非误导,持续争议无急转,Case R 模式 HEALTHY",
+      "confidence": "medium"
+    },
+    {
+      "id": 305,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "680赞 1450举报反向占比(报告 68%),负向急转明确 SUSPICIOUS",
+      "confidence": "high"
+    },
+    {
+      "id": 311,
+      "expected_state": "healthy",
+      "expected_lifespan": "long",
+      "rationale": "1850赞 920举报赞占 67% 持续高赞主导,UI 让用户自判争议",
+      "confidence": "high"
+    },
+    {
+      "id": 317,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "980赞 1240举报报告 56% 占多数,负向急转 SUSPICIOUS",
+      "confidence": "high"
+    },
+    {
+      "id": 326,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "1240赞 1380举报接近 50:50 持续争议无急转,Case R 模式维持 HEALTHY",
+      "confidence": "high"
+    },
+    {
+      "id": 354,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "22赞 13举报 + 后期举报集中(governance shift),向下急转 SUSPICIOUS,信息过期",
+      "confidence": "medium"
+    },
+    {
+      "id": 355,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "47赞 17举报后期 council 关闭后举报集中爆发 → 向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 357,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "33赞 11举报后期 hut 翻新后报告突然集中 → 向下急转 SUSPICIOUS,信息过期",
+      "confidence": "medium"
+    },
+    {
+      "id": 359,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "22赞 11举报后期 boardwalk 完工后报告集中 → 向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 366,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "24赞 8举报后期搬迁后报告集中爆发 → 向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 375,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "42赞 18举报后期所有权变更后举报集中 → 向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 376,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "51赞 19举报后期门禁变更举报集中 → 向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 378,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "38赞 24举报长期关闭报告持续累积 → 向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 379,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "62赞 11举报最近一月集中 11 举报(rockfall closure),向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 380,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "18赞 8举报后期 slip 后报告集中 → 向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 404,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "8赞 1举报小流量低互动,转化率低 → 续命少,被新正确 mark 边缘化,自然走向死亡",
+      "confidence": "medium"
+    },
+    {
+      "id": 406,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "5赞 2举报报告占比 28%,GPS 极端偏移,负向比例显著 → SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 408,
+      "expected_state": "healthy",
+      "expected_lifespan": "short",
+      "rationale": "15赞 0举报但实际 mark 存在位置错误,纯信号看赞主导无急转,持续 HEALTHY 直到转化率衰减",
+      "confidence": "low"
+    },
+    {
+      "id": 412,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "8赞 2举报赞占 80% 但小流量低互动,慢性边缘化,自然衰减",
+      "confidence": "medium"
+    },
+    {
+      "id": 414,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "3赞 4举报报告占多数 → 向下急转 SUSPICIOUS,低流量加速死亡",
+      "confidence": "medium"
+    },
+    {
+      "id": 417,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "6赞 5举报接近 50:50 但后期举报集中 → 向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 418,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 1举报极小信号,无足够流量,转化率近 0 → 自然衰减死亡",
+      "confidence": "medium"
+    },
+    {
+      "id": 419,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 2举报物理环境消失,慢性恶化无人维护 → 转化率系数自然消亡",
+      "confidence": "medium"
+    },
+    {
+      "id": 422,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "8赞 4举报报告 33% 集中负向(私人区) → 向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 424,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "8赞 1举报赞占 89% 无急转,但作者多次搬动消耗信号 → 慢性衰减",
+      "confidence": "medium"
+    },
+    {
+      "id": 425,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "2赞 3举报报告 60% 占多数 → 向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 426,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "8赞 1举报为剩余 2 个 alive 中之一,营销刷量但当前赞占多数,信誉权重应降低 → 慢性衰减",
+      "confidence": "low"
+    },
+    {
+      "id": 460,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "33赞 22举报但 19 赞和 22 报告同源 sock 账号,信誉权重低,真实 14 赞稀释,负向急转 → SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 501,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报偏远 hut 低流量,无急转无衰减信号,heartbeat 0 view 不消耗资源",
+      "confidence": "high"
+    },
+    {
+      "id": 502,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报极偏远 1/月,客观危险无信号验证,heartbeat 维持",
+      "confidence": "high"
+    },
+    {
+      "id": 503,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报私人土地友好通道,低流量无互动,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 504,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报极偏远直升机访问,heartbeat 0 view 不耗资源",
+      "confidence": "high"
+    },
+    {
+      "id": 505,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报错配受众小流量,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 506,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报野生动物敏感静默,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 507,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报但 800/月流量,转化率为 0 → 寿命正常流失,heartbeat 状态",
+      "confidence": "medium"
+    },
+    {
+      "id": 509,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报季节封闭期,heartbeat 等待重启",
+      "confidence": "high"
+    },
+    {
+      "id": 510,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报 1/月,官方修复后无验证,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 512,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报专业受众有更好渠道,极小流量 heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 515,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "normal",
+      "rationale": "0赞 1举报论坛批评但极小流量,1 条不构成趋势,慢性衰减",
+      "confidence": "medium"
+    },
+    {
+      "id": 516,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报 NZDA 文化沉默低流量,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 517,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报极少数受众高价值,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 518,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报但流量虽低 mark 已隐性失效(地主变更),无负向信号,只能慢性衰减",
+      "confidence": "low"
+    },
+    {
+      "id": 519,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报应急高价值低频,1500/月流量但 0 互动,heartbeat 转化率为 0 寿命走完即死",
+      "confidence": "medium"
+    },
+    {
+      "id": 521,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报 DOC 维护滞后填补,小流量 heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 522,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报跨社群工具不重叠,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 523,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报低质量主观判断,流量 100/月转化率 0 → 寿命流失死亡",
+      "confidence": "medium"
+    },
+    {
+      "id": 524,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报钓鱼亚文化封闭,heartbeat 1/月流量",
+      "confidence": "high"
+    },
+    {
+      "id": 525,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报访问类型错配,800/月流量转化率 0 → 寿命流失",
+      "confidence": "medium"
+    },
+    {
+      "id": 526,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报季节蛰伏待启动,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 527,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报公知景点冗余,600/月流量转化率 0 → 寿命流失自然死",
+      "confidence": "medium"
+    },
+    {
+      "id": 530,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报毛利语小众语言,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 531,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报社交禁忌话题,1500/月流量转化率 0 → 寿命流失",
+      "confidence": "medium"
+    },
+    {
+      "id": 532,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报极小流量 hardcore 圈,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 533,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报极小流量灾后修复,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 534,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报纪念性文化静默,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 535,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报动物迁移失效,400/月流量转化率 0 → 寿命流失",
+      "confidence": "medium"
+    },
+    {
+      "id": 536,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 1举报临时位置错误,流量 900 但转化率近 0,慢性衰减",
+      "confidence": "medium"
+    },
+    {
+      "id": 537,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报已故作者纪念,小流量 heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 538,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报同地重复被聚类,流量被淹没,转化率 0 寿命流失",
+      "confidence": "medium"
+    },
+    {
+      "id": 539,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报商业服务渠道冗余,600/月流量转化率 0 → 寿命流失",
+      "confidence": "medium"
+    },
+    {
+      "id": 541,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报学术专业小圈,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 542,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报 GPS 漂移技术性失效,80/月流量低互动慢性衰减",
+      "confidence": "medium"
+    },
+    {
+      "id": 543,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报小专业受众高风险,5/月 heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 544,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报极高技术门槛,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 545,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报土地权变更隐性,30/月小流量慢性衰减",
+      "confidence": "medium"
+    },
+    {
+      "id": 546,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报 DOC 实地覆盖完整 mark 冗余,转化率 0 → 寿命流失",
+      "confidence": "medium"
+    },
+    {
+      "id": 547,
+      "expected_state": "heartbeat",
+      "expected_lifespan": "long",
+      "rationale": "0赞 0举报赛事周期高度集中非赛日近 0 流量,heartbeat",
+      "confidence": "high"
+    },
+    {
+      "id": 548,
+      "expected_state": "any_alive_or_susp",
+      "expected_lifespan": "short",
+      "rationale": "0赞 0举报基础设施搬迁滞后,250/月流量转化率 0 → 寿命流失",
+      "confidence": "medium"
+    },
+    {
+      "id": 579,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "8赞 1举报 12-1月 flowering 季节性蜂群,context_dependent",
+      "confidence": "high"
+    },
+    {
+      "id": 583,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "8赞 1举报 winter spring 雪檐警告,典型季节性",
+      "confidence": "high"
+    },
+    {
+      "id": 585,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "8赞 1举报 ice 反冻警告季节性,context_dependent",
+      "confidence": "high"
+    },
+    {
+      "id": 588,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "8赞 1举报 winter hidden ice 季节性",
+      "confidence": "high"
+    },
+    {
+      "id": 593,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "8赞 1举报下午阵风警告,部分季节性,赞占主导",
+      "confidence": "medium"
+    },
+    {
+      "id": 596,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "8赞 1举报 hidden rock 水位条件依赖,季节性",
+      "confidence": "high"
+    },
+    {
+      "id": 598,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "8赞 1举报雪崩季节性强保 mark",
+      "confidence": "high"
+    },
+    {
+      "id": 604,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "5赞 0举报 100% 赞 + 自我解决更新,无急转 HEALTHY",
+      "confidence": "high"
+    },
+    {
+      "id": 609,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "9赞 0举报季节性 dry 警告,水波动 context_dependent",
+      "confidence": "high"
+    },
+    {
+      "id": 610,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "7赞 3举报作者自我修正后稳定为 advisory,无急转 HEALTHY",
+      "confidence": "medium"
+    },
+    {
+      "id": 621,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "18赞 5举报 78% 赞占主导,作者自我修正为 context-dependent advisory,HEALTHY",
+      "confidence": "medium"
+    },
+    {
+      "id": 628,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "10赞 0举报作者自我编辑变 NZ-focused,HEALTHY",
+      "confidence": "high"
+    },
+    {
+      "id": 630,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "14赞 4举报赞占 78% 自我修正为 decision-aid,HEALTHY",
+      "confidence": "medium"
+    },
+    {
+      "id": 703,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "24赞 6举报海岸潮汐+季节切换,context_dependent",
+      "confidence": "high"
+    },
+    {
+      "id": 715,
+      "expected_state": "healthy",
+      "expected_lifespan": "long",
+      "rationale": "195赞 4举报极高占比 98%,持续高赞 HEALTHY",
+      "confidence": "high"
+    },
+    {
+      "id": 717,
+      "expected_state": "healthy",
+      "expected_lifespan": "long",
+      "rationale": "155赞 2举报极高占比 99%,持续高赞 HEALTHY",
+      "confidence": "high"
+    },
+    {
+      "id": 723,
+      "expected_state": "dead_natural",
+      "expected_lifespan": "expired",
+      "rationale": "140赞 2举报但 DOC 关闭步道改线,mark 归档(寿命走完),可凭历史复活",
+      "confidence": "medium"
+    },
+    {
+      "id": 805,
+      "expected_state": "healthy",
+      "expected_lifespan": "long",
+      "rationale": "1100赞 180举报赞占 86% 持续增长,emergent 行为但赞主导,HEALTHY",
+      "confidence": "high"
+    },
+    {
+      "id": 812,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "920赞 145举报但近期 6 月 40 vs 50 出现负向急转(气候变化),季节性 context_dependent",
+      "confidence": "medium"
+    },
+    {
+      "id": 830,
+      "expected_state": "healthy",
+      "expected_lifespan": "long",
+      "rationale": "1100赞 65举报赞占 94%,主卖点弱化但比例持续高,HEALTHY",
+      "confidence": "medium"
+    },
+    {
+      "id": 855,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "78赞 38举报年度复发文化活动,典型季节性",
+      "confidence": "high"
+    },
+    {
+      "id": 859,
+      "expected_state": "dead_natural",
+      "expected_lifespan": "expired",
+      "rationale": "400赞 32举报艺术装置已撤,寿命走完归档,可作明年预告锚点",
+      "confidence": "high"
+    },
+    {
+      "id": 863,
+      "expected_state": "dead_natural",
+      "expected_lifespan": "expired",
+      "rationale": "380赞 48举报放映季结束 mark 已归档,寿命走完",
+      "confidence": "high"
+    },
+    {
+      "id": 868,
+      "expected_state": "dead_natural",
+      "expected_lifespan": "expired",
+      "rationale": "145赞 28举报修复后 mark 已标记修复,寿命走完归档",
+      "confidence": "high"
+    },
+    {
+      "id": 870,
+      "expected_state": "dead_natural",
+      "expected_lifespan": "expired",
+      "rationale": "220赞 38举报警戒解除步道重开,mark 已解除,寿命走完",
+      "confidence": "high"
+    },
+    {
+      "id": 872,
+      "expected_state": "dead_natural",
+      "expected_lifespan": "expired",
+      "rationale": "520赞 48举报志愿者周一次性活动结束,寿命走完归档",
+      "confidence": "high"
+    },
+    {
+      "id": 907,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "68赞 41举报赞占 62% 持续争议,作者声誉低权重影响但 ranger 权威赞抵消,HEALTHY",
+      "confidence": "low"
+    },
+    {
+      "id": 912,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "24赞 38举报报告占 61% pile-on 集中负向 → 向下急转 SUSPICIOUS,严重度低给治疗机会",
+      "confidence": "medium"
+    },
+    {
+      "id": 914,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "105赞 81举报赞占 56% 持续争议无急转,Case R 模式 HEALTHY,转化率低自然消亡",
+      "confidence": "low"
+    },
+    {
+      "id": 920,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "280赞 145举报赞占 66% 条件依赖型景观,无急转 HEALTHY",
+      "confidence": "medium"
+    },
+    {
+      "id": 924,
+      "expected_state": "healthy",
+      "expected_lifespan": "normal",
+      "rationale": "168赞 124举报外部新闻 pile-on 后澄清,赞 58% 占多数,持续争议 HEALTHY",
+      "confidence": "low"
+    },
+    {
+      "id": 926,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "22赞 35举报报告占 61% pile-on + 作者负声誉,向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 952,
+      "expected_state": "context_dependent",
+      "expected_lifespan": "long",
+      "rationale": "14赞 70举报但报告全为夏季无威胁误报,信誉权重低应大幅降权,真实是 SAR-grade 季节性救命 mark,context_dependent 强保",
+      "confidence": "medium"
+    },
+    {
+      "id": 958,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "95赞 0举报但 95 中 90 是 sock 集群,信誉权重大幅降权后真实仅 7赞 vs 8 真举报,负向急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 959,
+      "expected_state": "healthy",
+      "expected_lifespan": "long",
+      "rationale": "95赞 20举报但 17 报告是 sock 信誉权重低,真实 95 vs 3,赞主导 HEALTHY",
+      "confidence": "medium"
+    },
+    {
+      "id": 966,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "62赞 5举报赞主要是天真识别,但本地权威 ranger 举报严重度高,触发 SUSPICIOUS,严重度高加速死亡",
+      "confidence": "low"
+    },
+    {
+      "id": 968,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "42赞 6举报但 28 赞为运营商 sock 集群,信誉权重低后真实 14 vs 6 接近,商业刷量动机 → SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 972,
+      "expected_state": "healthy",
+      "expected_lifespan": "long",
+      "rationale": "220赞 42举报赞占 84% 持续高赞,举报为哲学反对而非 mark 错,HEALTHY",
+      "confidence": "high"
+    },
+    {
+      "id": 973,
+      "expected_state": "suspicious",
+      "expected_lifespan": "short",
+      "rationale": "22赞 12举报但举报来自地权所有者+Federated Farmers 权威方信誉权重高,法律灰区 → 向下急转 SUSPICIOUS",
+      "confidence": "medium"
+    },
+    {
+      "id": 977,
+      "expected_state": "healthy",
+      "expected_lifespan": "long",
+      "rationale": "14赞 28举报但赞全部来自体重 80kg+ 实证用户 + SAR 工程师确认,举报为感知差异非真实否定,赞信誉权重高,HEALTHY",
+      "confidence": "low"
+    }
+  ]
+}

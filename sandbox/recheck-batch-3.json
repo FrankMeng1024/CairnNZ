@@ -1,0 +1,926 @@
+{
+  "batch": 3,
+  "total": 131,
+  "agree": 127,
+  "doubt": 4,
+  "disagree": 0,
+  "details": [
+    {
+      "id": 375,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "user-arbitration 用户决定不质疑"
+    },
+    {
+      "id": 376,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比/趋势支持HEALTHY"
+    },
+    {
+      "id": 377,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 378,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比/趋势支持HEALTHY"
+    },
+    {
+      "id": 379,
+      "verdict": "DOUBT",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "边界case,信号量小是否构成趋势?"
+    },
+    {
+      "id": 380,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比/趋势支持HEALTHY"
+    },
+    {
+      "id": 402,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 403,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "高赞低报,1-2条不构成趋势"
+    },
+    {
+      "id": 404,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 用户决定不质疑"
+    },
+    {
+      "id": 405,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 406,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "占比向负向急转 → SUSPICIOUS 合理"
+    },
+    {
+      "id": 407,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 408,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "高赞低报,1-2条不构成趋势"
+    },
+    {
+      "id": 409,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 410,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 411,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 412,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 用户决定不质疑"
+    },
+    {
+      "id": 413,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "0:N纯负向 → SUSPICIOUS/dead_sick合理"
+    },
+    {
+      "id": 414,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "占比向负向急转 → SUSPICIOUS 合理"
+    },
+    {
+      "id": 415,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 416,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "0:N纯负向 → SUSPICIOUS/dead_sick合理"
+    },
+    {
+      "id": 417,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比/趋势支持HEALTHY"
+    },
+    {
+      "id": 418,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 用户决定不质疑"
+    },
+    {
+      "id": 419,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 用户决定不质疑"
+    },
+    {
+      "id": 420,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "高赞低报,1-2条不构成趋势"
+    },
+    {
+      "id": 421,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "0:N纯负向 → SUSPICIOUS/dead_sick合理"
+    },
+    {
+      "id": 422,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "占比向负向急转 → SUSPICIOUS 合理"
+    },
+    {
+      "id": 423,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 424,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 425,
+      "verdict": "AGREE",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "占比向负向急转 → SUSPICIOUS 合理"
+    },
+    {
+      "id": 426,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 用户决定不质疑"
+    },
+    {
+      "id": 427,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "0:N纯负向 → SUSPICIOUS/dead_sick合理"
+    },
+    {
+      "id": 428,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 429,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "高赞低报,1-2条不构成趋势"
+    },
+    {
+      "id": 430,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 455,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 456,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比/趋势支持HEALTHY"
+    },
+    {
+      "id": 457,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 460,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比/趋势支持HEALTHY"
+    },
+    {
+      "id": 461,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 462,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 464,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 465,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 466,
+      "verdict": "DOUBT",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:5 纯负向是否应进S?"
+    },
+    {
+      "id": 467,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 468,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 469,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 470,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 471,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 473,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 474,
+      "verdict": "DOUBT",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:6 纯负向是否应进S?"
+    },
+    {
+      "id": 475,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 476,
+      "verdict": "DOUBT",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:14 纯负向是否应进S?"
+    },
+    {
+      "id": 477,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 479,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "占比强正向,brigade被产品层/信誉权重消化"
+    },
+    {
+      "id": 501,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 502,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 503,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 504,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 505,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 506,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 507,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 508,
+      "verdict": "AGREE",
+      "current_state": "dead_natural",
+      "suggested_state": "dead_natural",
+      "comment": "0:0 转化率0,寿命可走完→dead_natural合理"
+    },
+    {
+      "id": 509,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 510,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 511,
+      "verdict": "AGREE",
+      "current_state": "dead_sick",
+      "suggested_state": "dead_sick",
+      "comment": "占比向负向急转 → SUSPICIOUS 合理"
+    },
+    {
+      "id": 512,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 513,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 514,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 515,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 用户决定不质疑"
+    },
+    {
+      "id": 516,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 517,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 518,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 519,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 520,
+      "verdict": "AGREE",
+      "current_state": "dead_natural",
+      "suggested_state": "dead_natural",
+      "comment": "0:0 转化率0,寿命可走完→dead_natural合理"
+    },
+    {
+      "id": 521,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 522,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 523,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 524,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 525,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 526,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 527,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 528,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 529,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 530,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 531,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 用户决定不质疑"
+    },
+    {
+      "id": 532,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 533,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 534,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 535,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 536,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "user-arbitration 用户决定不质疑"
+    },
+    {
+      "id": 537,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 538,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 539,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 541,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 542,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 543,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 544,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 545,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 546,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 547,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 548,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 549,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 550,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "0:0 无负向, HEALTHY 正常流失"
+    },
+    {
+      "id": 551,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 552,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 553,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 554,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 555,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 556,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 557,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 558,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 559,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 560,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 561,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 562,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 563,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 564,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 565,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 566,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 567,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 568,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 569,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 570,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 571,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 572,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 573,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 574,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 575,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 576,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    },
+    {
+      "id": 577,
+      "verdict": "AGREE",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "8:1 持续高赞 1条不构成趋势"
+    }
+  ]
+}

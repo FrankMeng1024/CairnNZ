@@ -1,0 +1,548 @@
+[
+  {
+    "success": true,
+    "query": "react-native bridge RealityKit Swift RCTViewManager production app",
+    "content": "**react native** (2023-11-28)\n\"React Native (简称RN)是Facebook于2015年4月开源的跨平台移动应用开发框架,是Facebook早先开源的JS框架 React 在原生移动应用平台的衍生产物,支持iOS和安卓两大平台｡RN使用Javascript语言,类似于HTML的JSX,以及CSS来开发移动应用,因此熟悉Web前端开发的技术人员只需很少的学习就可以进入移动应用开发领域｡产生背景React \nSource: https://baike.baidu.com/item/react%20native/20307162\n\n**react-native-create-bridge常见问题解答:新手必知的10个实用技巧-CSDN博客** (2026-05-25)\n如果需要测试本地修改,可以先运行npm run package:dev构建项目并创建符号链接,然后在测试项目中执行npm install --save react-native-create-bridge && npm link react-native-create-bridge链接到本地副本,之后就能用react-native new-module测试你的更改了｡ 2. 初始化命令的正确使用 \nSource: https://blog.csdn.net/gitblog_00073/article/details/152196905\n",
+    "web_references": [
+      {
+        "content": "\"React Native (简称RN)是Facebook于2015年4月开源的跨平台移动应用开发框架,是Facebook早先开源的JS框架 React 在原生移动应用平台的衍生产物,支持iOS和安卓两大平台｡RN使用Javascript语言,类似于HTML的JSX,以及CSS来开发移动应用,因此熟悉Web前端开发的技术人员只需很少的学习就可以进入移动应用开发领域｡产生背景React ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/react%20native/20307162",
+        "media": "百度百科",
+        "publish_date": "2023-11-28",
+        "refer": "ref_1",
+        "title": "react native"
+      },
+      {
+        "content": "如果需要测试本地修改,可以先运行npm run package:dev构建项目并创建符号链接,然后在测试项目中执行npm install --save react-native-create-bridge && npm link react-native-create-bridge链接到本地副本,之后就能用react-native new-module测试你的更改了｡ 2. 初始化命令的正确使用 ",
+        "icon": "",
+        "link": "https://blog.csdn.net/gitblog_00073/article/details/152196905",
+        "media": "",
+        "publish_date": "2026-05-25",
+        "refer": "ref_2",
+        "title": "react-native-create-bridge常见问题解答:新手必知的10个实用技巧-CSDN博客"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "react-native bridge realitykit swift rctviewmanager production app",
+        "query": "react-native bridge RealityKit Swift RCTViewManager production app"
+      }
+    ],
+    "latency_seconds": 2.98,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": false,
+    "query": "RealityKit PostProcessEffect bloom custom Metal shader iOS 17 18 visionOS",
+    "error": "[WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond",
+    "latency_seconds": 22.75,
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "React Native ARKit native module 2024 2025 maintained library list",
+    "content": "**react native** (2023-11-28)\n\"React Native (简称RN)是Facebook于2015年4月开源的跨平台移动应用开发框架,是Facebook早先开源的JS框架 React 在原生移动应用平台的衍生产物,支持iOS和安卓两大平台｡RN使用Javascript语言,类似于HTML的JSX,以及CSS来开发移动应用,因此熟悉Web前端开发的技术人员只需很少的学习就可以进入移动应用开发领域｡产生背景React \nSource: https://baike.baidu.com/item/react%20native/20307162\n",
+    "web_references": [
+      {
+        "content": "\"React Native (简称RN)是Facebook于2015年4月开源的跨平台移动应用开发框架,是Facebook早先开源的JS框架 React 在原生移动应用平台的衍生产物,支持iOS和安卓两大平台｡RN使用Javascript语言,类似于HTML的JSX,以及CSS来开发移动应用,因此熟悉Web前端开发的技术人员只需很少的学习就可以进入移动应用开发领域｡产生背景React ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/react%20native/20307162",
+        "media": "百度百科",
+        "publish_date": "2023-11-28",
+        "refer": "ref_1",
+        "title": "react native"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "react native artit 2024 2025 maintained library list",
+        "query": "React Native ARKit native module 2024 2025 maintained library list"
+      }
+    ],
+    "latency_seconds": 4.35,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "expo-three expo-gl AR ARKit production case",
+    "content": "**EVE: Project Galaxy** (2023-10-30)\n\"《EVE: Project Galaxy》是一款MMO手机游戏,其中有AR相关的玩法,游戏以太空对战为主题,玩家们可以在现实空间中操作飞船进行游戏｡ AR玩法是基于苹果 ARKit2 功能开发的,目标是将《EVE》的游戏体验迁移到移动端上｡基本内容《EVE: Project Galaxy》是一款AR游戏,游戏以太空对战为主题,玩家们可以在现实空间中操作飞船进行游戏｡这是一款基于苹果 \nSource: https://baike.baidu.com/item/EVE:%20Project%20Galaxy/22640485\n\n**ARKit** (2023-04-06)\n\"ARKit是苹果在2017年WWDC推出的AR开发平台｡开发人员可以使用这套工具为iPhone和iPad创建增强现实应用程序｡ 2018年6月5日,苹果全球开发者大会WWDC 2018 在加州圣何塞召开,会上,苹果宣布推出旗下AR工具的新版本:ARkit 2.0｡发展历程2017年,苹果在WWDC 2017大会上推出ARKit｡ 2018年6月5日,苹果公司在WWDC \nSource: https://baike.baidu.com/item/ARKit/9256920\n\n**ARKit 2** (2018-06-08)\n\"ARKit 2由苹果在2018年6月5日于美国圣何塞举行了WWDC 2018年度开发者大会推出,该技术可以更好地实现面容识别,支持3D物体检测,可以针对一个位置持续地推出AR体验,并且支持分享｡技术描述ARKit 2由苹果在2018年6月5日于美国圣何塞举行了WWDC 2018年度开发者大会推出,支持3D物体检测,可以针对一个位置持续地推出AR体验,并且支持分享｡ \nSource: https://baike.sogou.com/v174821042.htm\n",
+    "web_references": [
+      {
+        "content": "\"《EVE: Project Galaxy》是一款MMO手机游戏,其中有AR相关的玩法,游戏以太空对战为主题,玩家们可以在现实空间中操作飞船进行游戏｡ AR玩法是基于苹果 ARKit2 功能开发的,目标是将《EVE》的游戏体验迁移到移动端上｡基本内容《EVE: Project Galaxy》是一款AR游戏,游戏以太空对战为主题,玩家们可以在现实空间中操作飞船进行游戏｡这是一款基于苹果 ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/EVE:%20Project%20Galaxy/22640485",
+        "media": "百度百科",
+        "publish_date": "2023-10-30",
+        "refer": "ref_1",
+        "title": "EVE: Project Galaxy"
+      },
+      {
+        "content": "\"ARKit是苹果在2017年WWDC推出的AR开发平台｡开发人员可以使用这套工具为iPhone和iPad创建增强现实应用程序｡ 2018年6月5日,苹果全球开发者大会WWDC 2018 在加州圣何塞召开,会上,苹果宣布推出旗下AR工具的新版本:ARkit 2.0｡发展历程2017年,苹果在WWDC 2017大会上推出ARKit｡ 2018年6月5日,苹果公司在WWDC ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/ARKit/9256920",
+        "media": "百度百科",
+        "publish_date": "2023-04-06",
+        "refer": "ref_2",
+        "title": "ARKit"
+      },
+      {
+        "content": "\"ARKit 2由苹果在2018年6月5日于美国圣何塞举行了WWDC 2018年度开发者大会推出,该技术可以更好地实现面容识别,支持3D物体检测,可以针对一个位置持续地推出AR体验,并且支持分享｡技术描述ARKit 2由苹果在2018年6月5日于美国圣何塞举行了WWDC 2018年度开发者大会推出,支持3D物体检测,可以针对一个位置持续地推出AR体验,并且支持分享｡ ",
+        "icon": "",
+        "link": "https://baike.sogou.com/v174821042.htm",
+        "media": "搜狗百科",
+        "publish_date": "2018-06-08",
+        "refer": "ref_3",
+        "title": "ARKit 2"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "expo-three ar arkit production case",
+        "query": "expo-three expo-gl AR ARKit production case"
+      }
+    ],
+    "latency_seconds": 3.12,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "react-three-fiber expo react native AR ARKit",
+    "content": "**Creating a Sky shader in React using React-Three-Fiber** (2026-06-01)\nfrom \"react\";import { Canvas } from \"react-three-fiber\";import { Sky } from \"@react-three/drei\";export default function App(props) {   return (      <Canvas>Sky distance={450000}sunPosition={[5, 1, 8]inclination={0} azimuth={0.25} {...props} /> </Canvas> );} Explanation Here we simply created a Canvas inside which we created the objec\nSource: https://www.tutorialspoint.com/article/creating-a-sky-shader-in-react-using-react-three-fiber\n\n**react native** (2023-11-28)\n\"React Native (简称RN)是Facebook于2015年4月开源的跨平台移动应用开发框架,是Facebook早先开源的JS框架 React 在原生移动应用平台的衍生产物,支持iOS和安卓两大平台｡RN使用Javascript语言,类似于HTML的JSX,以及CSS来开发移动应用,因此熟悉Web前端开发的技术人员只需很少的学习就可以进入移动应用开发领域｡产生背景React \nSource: https://baike.baidu.com/item/react%20native/20307162\n",
+    "web_references": [
+      {
+        "content": "from \"react\";import { Canvas } from \"react-three-fiber\";import { Sky } from \"@react-three/drei\";export default function App(props) {   return (      <Canvas>Sky distance={450000}sunPosition={[5, 1, 8]inclination={0} azimuth={0.25} {...props} /> </Canvas> );} Explanation Here we simply created a Canvas inside which we created the objec",
+        "icon": "",
+        "link": "https://www.tutorialspoint.com/article/creating-a-sky-shader-in-react-using-react-three-fiber",
+        "media": "",
+        "publish_date": "2026-06-01",
+        "refer": "ref_1",
+        "title": "Creating a Sky shader in React using React-Three-Fiber"
+      },
+      {
+        "content": "\"React Native (简称RN)是Facebook于2015年4月开源的跨平台移动应用开发框架,是Facebook早先开源的JS框架 React 在原生移动应用平台的衍生产物,支持iOS和安卓两大平台｡RN使用Javascript语言,类似于HTML的JSX,以及CSS来开发移动应用,因此熟悉Web前端开发的技术人员只需很少的学习就可以进入移动应用开发领域｡产生背景React ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/react%20native/20307162",
+        "media": "百度百科",
+        "publish_date": "2023-11-28",
+        "refer": "ref_2",
+        "title": "react native"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "react-three-fiber expo react native ar arkit",
+        "query": "react-three-fiber expo react native AR ARKit"
+      }
+    ],
+    "latency_seconds": 18.04,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": false,
+    "query": "8th Wall WebAR React Native iOS production case 2024",
+    "error": "[WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond",
+    "latency_seconds": 22.72,
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Niantic Lightship ARDK React Native bridge SDK",
+    "content": "**Niantic发布Lightship ARDK 3.0,加速跨平台AR生态arvr插件功能unitynianticlightship_网易订阅** (2023-06-02)\n6月2日消息,Niantic在AWE 2023期间发布Lightship ARDK 3.0版本,新版本带来重大功能更新,比如:集成Unity AR Foundation､简化AR应用与地图集成､8th Wall Metaversal Deployment支持VST VR头显､Shared AR工具扩展｡\nSource: https://www.163.com/dy/article/I67R77S50511BQR8.html\n\n**Niantic发布Lightship SDK和2000万美元开发者基金应用程序arniantic工具包sdk_网易订阅** (2021-11-09)\n在发布会上,Niantic 宣布将开放Lightship AR 开发工具包(ARDK)平台,这是一个软件开发工具包,其中包含公司用来使Pokémon Go 的“世界级”游戏玩法成为可能的各种工具｡为了吸引第三方开发者加入该平台,它还宣布了 2000 万美元的基金,希望能启动 AR 开发｡ Niantic 正在发布其增强现实工具,该工具具有我们在其他 Niantic \nSource: https://www.163.com/dy/article/GOCC3NQ30511A3UP.html\n\n**Niantic成立2000万美元开发基金,开放Lightship AR SDKarar技术sdknianticlightship_网易订阅** (2021-11-10)\n据RoadtoVR报道,为推动AR开发,美国AR技术厂商Niantic成立2000万美元开发基金,并宣布开放Lightship AR SDK,基于该SDK,Niantic开发了包括｢Pokemon Go｣､｢哈利波特:巫师联盟｣､｢Ingress｣在内的热门LBS AR手游｡着眼于AR生态系统的未来,Niantic将称之为“元宇宙”的Lightship AR \nSource: https://www.163.com/dy/article/GODC3P9G05269O3G.html\n\n**Niantic开放Lightship开发平台ARDK,助力开发者构建AR世界体验_Reality** (2021-11-09)\n2021年11月09日)为帮助世界各地的开发者实现自己对元宇宙的愿景,AR工作室Niantic日前正式开放Niantic Lightship平台的增强现实工具｡目前,Niantic Lightship Augmented Reality Developer Kit(ARDK )已经托管至Lightship官网｡ Niantic创始人兼首席执行官约翰·汉克(John \nSource: https://www.sohu.com/a/499986231_213766\n\n**调试完 Niantic 的Lightship - ARDK,并与... 来自蒋文明in南京 - 微博** (2022-08-17)\n调试完 Niantic 的Lightship - ARDK,并与华为河图 Toolya 作了一些比对,然后再回头来看 Matt Miesnieks 的《Reality is Scare ..and The Metaverse is infinitely abundant.》(现实是稀缺的,而元宇宙是无限丰富的)这篇创始文章,除去当下前沿技术的引用,还有以下几个亮点:连接真实与虚拟 \nSource: https://weibo.com/2371583494/M1s7G1xW4\n\n**react native** (2023-11-28)\n\"React Native (简称RN)是Facebook于2015年4月开源的跨平台移动应用开发框架,是Facebook早先开源的JS框架 React 在原生移动应用平台的衍生产物,支持iOS和安卓两大平台｡RN使用Javascript语言,类似于HTML的JSX,以及CSS来开发移动应用,因此熟悉Web前端开发的技术人员只需很少的学习就可以进入移动应用开发领域｡产生背景React \nSource: https://baike.baidu.com/item/react%20native/20307162\n",
+    "web_references": [
+      {
+        "content": "6月2日消息,Niantic在AWE 2023期间发布Lightship ARDK 3.0版本,新版本带来重大功能更新,比如:集成Unity AR Foundation､简化AR应用与地图集成､8th Wall Metaversal Deployment支持VST VR头显､Shared AR工具扩展｡",
+        "icon": "",
+        "link": "https://www.163.com/dy/article/I67R77S50511BQR8.html",
+        "media": "网易",
+        "publish_date": "2023-06-02",
+        "refer": "ref_1",
+        "title": "Niantic发布Lightship ARDK 3.0,加速跨平台AR生态arvr插件功能unitynianticlightship_网易订阅"
+      },
+      {
+        "content": "在发布会上,Niantic 宣布将开放Lightship AR 开发工具包(ARDK)平台,这是一个软件开发工具包,其中包含公司用来使Pokémon Go 的“世界级”游戏玩法成为可能的各种工具｡为了吸引第三方开发者加入该平台,它还宣布了 2000 万美元的基金,希望能启动 AR 开发｡ Niantic 正在发布其增强现实工具,该工具具有我们在其他 Niantic ",
+        "icon": "",
+        "link": "https://www.163.com/dy/article/GOCC3NQ30511A3UP.html",
+        "media": "网易",
+        "publish_date": "2021-11-09",
+        "refer": "ref_2",
+        "title": "Niantic发布Lightship SDK和2000万美元开发者基金应用程序arniantic工具包sdk_网易订阅"
+      },
+      {
+        "content": "据RoadtoVR报道,为推动AR开发,美国AR技术厂商Niantic成立2000万美元开发基金,并宣布开放Lightship AR SDK,基于该SDK,Niantic开发了包括｢Pokemon Go｣､｢哈利波特:巫师联盟｣､｢Ingress｣在内的热门LBS AR手游｡着眼于AR生态系统的未来,Niantic将称之为“元宇宙”的Lightship AR ",
+        "icon": "",
+        "link": "https://www.163.com/dy/article/GODC3P9G05269O3G.html",
+        "media": "网易",
+        "publish_date": "2021-11-10",
+        "refer": "ref_3",
+        "title": "Niantic成立2000万美元开发基金,开放Lightship AR SDKarar技术sdknianticlightship_网易订阅"
+      },
+      {
+        "content": "2021年11月09日)为帮助世界各地的开发者实现自己对元宇宙的愿景,AR工作室Niantic日前正式开放Niantic Lightship平台的增强现实工具｡目前,Niantic Lightship Augmented Reality Developer Kit(ARDK )已经托管至Lightship官网｡ Niantic创始人兼首席执行官约翰·汉克(John ",
+        "icon": "",
+        "link": "https://www.sohu.com/a/499986231_213766",
+        "media": "搜狐",
+        "publish_date": "2021-11-09",
+        "refer": "ref_4",
+        "title": "Niantic开放Lightship开发平台ARDK,助力开发者构建AR世界体验_Reality"
+      },
+      {
+        "content": "调试完 Niantic 的Lightship - ARDK,并与华为河图 Toolya 作了一些比对,然后再回头来看 Matt Miesnieks 的《Reality is Scare ..and The Metaverse is infinitely abundant.》(现实是稀缺的,而元宇宙是无限丰富的)这篇创始文章,除去当下前沿技术的引用,还有以下几个亮点:连接真实与虚拟 ",
+        "icon": "",
+        "link": "https://weibo.com/2371583494/M1s7G1xW4",
+        "media": "微博",
+        "publish_date": "2022-08-17",
+        "refer": "ref_5",
+        "title": "调试完 Niantic 的Lightship - ARDK,并与... 来自蒋文明in南京 - 微博"
+      },
+      {
+        "content": "\"React Native (简称RN)是Facebook于2015年4月开源的跨平台移动应用开发框架,是Facebook早先开源的JS框架 React 在原生移动应用平台的衍生产物,支持iOS和安卓两大平台｡RN使用Javascript语言,类似于HTML的JSX,以及CSS来开发移动应用,因此熟悉Web前端开发的技术人员只需很少的学习就可以进入移动应用开发领域｡产生背景React ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/react%20native/20307162",
+        "media": "百度百科",
+        "publish_date": "2023-11-28",
+        "refer": "ref_6",
+        "title": "react native"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "niantic lightship ardk react native bridge sdk",
+        "query": "Niantic Lightship ARDK React Native bridge SDK"
+      }
+    ],
+    "latency_seconds": 10.21,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Snap Camera Kit React Native iOS bridge integration",
+    "content": "**snapbridge苹果版-snapbridge ios版下载v2.13.3苹果手机-k73游戏之家** (2022-08-11)\n《snapbridge苹果版》是一款比较实用的相机辅助软件,软件里功能十分强大,用户可以将自己的手机与软件相连接就能传输相应的照片,是一款比较方便的应用软件! snapbridge点评 自由操控相机调整度数 连接方式比较智能 是一款相机辅助软件 多种功能随意使用 snapbridge简介 snapbridge安卓版是一款十分强大的掌上照片管理､分享软件｡\nSource: http://www.k73.com/down/ios/640597.html\n\n**Snap照相机** (2023-08-10)\n\"《Snap照相机》是一款Android4.2风格的拍照软件｡应用信息语言:中文 支持屏幕:中 大 超大 最低支持系统:1.5应用简介《Snap照相机 Snap Camera 》是一款Android4.2风格的拍照软件,同时还内置了相册功能,提供了多种特效可对照片进行编辑｡\nSource: https://baike.baidu.com/item/Snap%E7%85%A7%E7%9B%B8%E6%9C%BA/1936730\n\n**尼康SnapBridge安卓版软件下载-尼康SnapBridge官方安装包v2.10.0_gg下载站** (2023-06-17)\n软件大小: 59.18MB 软件语言: 简体中文 软件类别: 安卓应用 / 主题美化 软件性质: 共享版 运行环境: Android 厂商: 未知 SnapBridge \nSource: https://www.ggzha.com/az/57775.html\n\n**Snap Camera** (2023-07-24)\n\"《Snap Camera》是一款Android4.2风格的拍照软件,软件大小6.56MB｡ 2023年1月25日,Snap Camera 应用将正式关闭｡软件简介开启全新的拍照体验｡ SnapCamera没有杂乱的预览画面,就两个实用按钮,一个拍摄照片一个录制视频｡ \nSource: https://baike.baidu.com/item/Snap%20Camera/1876943\n\n**snapbridge安装包下载-snapbridge2.10.0安装包最新版下载-游侠软件下载** (2024-05-02)\n游戏类型: 摄影美颜 游戏语言: 中文 游戏平台: android 更新时间: 2024-05-02 13:50:56 开发商: Nikon Corporation snapbridge安装包是一款好用的相机拍摄软件,软件中的功能强大且全面,还支持对拍摄的照片进行便捷编辑,您可以轻松裁剪掉不需要的部分,让您的照片更加精致,多种精美的滤镜可供用户选择以及使用｡ 软件用法 【美颜功能】 \nSource: https://m.ali213.net/aznew/615161.html\n\n**-snapbridge最新版-snapbridge安卓版下载-snapbridge中文版下载-游侠手游** (2024-04-30)\nsnapbridge最新版是一种拥有超多照片美颜工具的软件合集,这里面有超多的功能可以使用,每种功能都可以轻松的使用,点击这里面的图片就可以进行编辑,在完成编辑之后需要进行保存,之后保存之后才可以进行使用,还有很多的功能区间可以使用,还在等什么,赶紧来下载体验吧｡\nSource: https://app.ali213.net/heji/snapbridgezxb.html\n\n**连拍相机** (2017-03-07)\n\"连拍相机Action Snap是一款能够快速捕捉一系列动作,同时进行多张连续拍照的应用,且可以自动组合拼接｡基本介绍名称:连拍相机 英文:Action Snap 版本:V2.2.1 下载:29次 大小:804KB 时间:2012-07-24 类别:图形图像 语言:英语 系统:Android 2.1+/iOS 4.3及以上软件介绍连拍相机Action \nSource: https://baike.sogou.com/v71339899.htm\n",
+    "web_references": [
+      {
+        "content": "《snapbridge苹果版》是一款比较实用的相机辅助软件,软件里功能十分强大,用户可以将自己的手机与软件相连接就能传输相应的照片,是一款比较方便的应用软件! snapbridge点评 自由操控相机调整度数 连接方式比较智能 是一款相机辅助软件 多种功能随意使用 snapbridge简介 snapbridge安卓版是一款十分强大的掌上照片管理､分享软件｡",
+        "icon": "",
+        "link": "http://www.k73.com/down/ios/640597.html",
+        "media": "",
+        "publish_date": "2022-08-11",
+        "refer": "ref_1",
+        "title": "snapbridge苹果版-snapbridge ios版下载v2.13.3苹果手机-k73游戏之家"
+      },
+      {
+        "content": "\"《Snap照相机》是一款Android4.2风格的拍照软件｡应用信息语言:中文 支持屏幕:中 大 超大 最低支持系统:1.5应用简介《Snap照相机 Snap Camera 》是一款Android4.2风格的拍照软件,同时还内置了相册功能,提供了多种特效可对照片进行编辑｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/Snap%E7%85%A7%E7%9B%B8%E6%9C%BA/1936730",
+        "media": "百度百科",
+        "publish_date": "2023-08-10",
+        "refer": "ref_2",
+        "title": "Snap照相机"
+      },
+      {
+        "content": "软件大小: 59.18MB 软件语言: 简体中文 软件类别: 安卓应用 / 主题美化 软件性质: 共享版 运行环境: Android 厂商: 未知 SnapBridge ",
+        "icon": "",
+        "link": "https://www.ggzha.com/az/57775.html",
+        "media": "",
+        "publish_date": "2023-06-17",
+        "refer": "ref_3",
+        "title": "尼康SnapBridge安卓版软件下载-尼康SnapBridge官方安装包v2.10.0_gg下载站"
+      },
+      {
+        "content": "\"《Snap Camera》是一款Android4.2风格的拍照软件,软件大小6.56MB｡ 2023年1月25日,Snap Camera 应用将正式关闭｡软件简介开启全新的拍照体验｡ SnapCamera没有杂乱的预览画面,就两个实用按钮,一个拍摄照片一个录制视频｡ ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/Snap%20Camera/1876943",
+        "media": "百度百科",
+        "publish_date": "2023-07-24",
+        "refer": "ref_4",
+        "title": "Snap Camera"
+      },
+      {
+        "content": "游戏类型: 摄影美颜 游戏语言: 中文 游戏平台: android 更新时间: 2024-05-02 13:50:56 开发商: Nikon Corporation snapbridge安装包是一款好用的相机拍摄软件,软件中的功能强大且全面,还支持对拍摄的照片进行便捷编辑,您可以轻松裁剪掉不需要的部分,让您的照片更加精致,多种精美的滤镜可供用户选择以及使用｡ 软件用法 【美颜功能】 ",
+        "icon": "",
+        "link": "https://m.ali213.net/aznew/615161.html",
+        "media": "",
+        "publish_date": "2024-05-02",
+        "refer": "ref_5",
+        "title": "snapbridge安装包下载-snapbridge2.10.0安装包最新版下载-游侠软件下载"
+      },
+      {
+        "content": "snapbridge最新版是一种拥有超多照片美颜工具的软件合集,这里面有超多的功能可以使用,每种功能都可以轻松的使用,点击这里面的图片就可以进行编辑,在完成编辑之后需要进行保存,之后保存之后才可以进行使用,还有很多的功能区间可以使用,还在等什么,赶紧来下载体验吧｡",
+        "icon": "",
+        "link": "https://app.ali213.net/heji/snapbridgezxb.html",
+        "media": "游侠网",
+        "publish_date": "2024-04-30",
+        "refer": "ref_6",
+        "title": "-snapbridge最新版-snapbridge安卓版下载-snapbridge中文版下载-游侠手游"
+      },
+      {
+        "content": "\"连拍相机Action Snap是一款能够快速捕捉一系列动作,同时进行多张连续拍照的应用,且可以自动组合拼接｡基本介绍名称:连拍相机 英文:Action Snap 版本:V2.2.1 下载:29次 大小:804KB 时间:2012-07-24 类别:图形图像 语言:英语 系统:Android 2.1+/iOS 4.3及以上软件介绍连拍相机Action ",
+        "icon": "",
+        "link": "https://baike.sogou.com/v71339899.htm",
+        "media": "搜狗百科",
+        "publish_date": "2017-03-07",
+        "refer": "ref_7",
+        "title": "连拍相机"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "snap camera kit react native ios bridge integrate",
+        "query": "Snap Camera Kit React Native iOS bridge integration"
+      }
+    ],
+    "latency_seconds": 17.96,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "RealityKit React Native bridge npm package github",
+    "content": "**GitHub - LibertyPie/binance-bridge-sdk: An npm package for binance bridge v2 · GitHub** (2026-04-05)\nanother tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert LibertyPie/binance-bridge-sdk   main Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit   History 1 Commit 1 Commit .gitignore .gitignore     LICENSE LICENSE     README.md README.md     View all files Repository files navigation binance-bridge-sdk An npm package for binance bridge v2 No releases published Uh oh! There was an error while loading. Please \nSource: https://github.com/LibertyPie/binance-bridge-sdk\n\n**GitHub 上如何使用 GitHub Packages 发布 npm 包All In One - xgqfrms - 博客园** (2022-08-09)\nnpm publish PAT === Personal Access Token GitHub Packages only supports scoped npm packages. https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#publishing-a-package GitHub Actions CI/CD https://github.com/xgqfrms/wcui/actions/new?category=none&query=npm GITHUB_TOKEN https://github.com/xgqfrms/wcui/runs/7739088278?check_suite_focus=true#step:4:26 https://github.com/xgqfrms/wcui/blob/main/.github/workflows/npm-publish-github-packages.yml demo before after ✅ git delete tags .npmrc & publishConfig https://docs.github.\nSource: https://www.cnblogs.com/xgqfrms/p/16565524.html\n\n**Github Actions实践--自动化发布npm包-知乎** (2022-04-07)\n首先把需要自动化发布的npm包上传到github｡ 然后进入 Actions -> 点击 set up a workflow yourself 开始搭建自己的workflow: 默认创建了 main.yml ,后续重点之一就是修改它,操作面板的右侧提供了编辑改文件的文档 点击文档中的 Configuring workflows 可以进入更详细的创建和管理 GitHub Actions 工作流程的配置内容｡ 简单分析下默认创建的 main.yml 文件: 1. name: CI 给我们的工作流workflow取名,我推测,工作流可以设置多条,用name加以区分 on: 用on键定义工作流程触发器 on: # 通过推送或拉取主分支(main)事件触发工作流 push: branches: [ main ] pull_request: branches: [ main ] # 从“actions”选项卡手动运行工作流 workflow_dispatch: jobs 一个工作流中可以有一个或多个 作业 通过按 顺序 或者 并行 的方式执行｡ # 创建了一个名叫‘build’的作业 build: # 指定了操作系统为‘ubuntu-latest’ runs-on: ubuntu-latest # Steps 代表一系列任务作为作业的一部分而被执行 steps: # 检查仓库以便作业能正常访问 - uses: actions/checkout@v3 # 执行单条脚本 - name: Run \nSource: https://zhuanlan.zhihu.com/p/494193833\n",
+    "web_references": [
+      {
+        "content": "another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert LibertyPie/binance-bridge-sdk   main Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit   History 1 Commit 1 Commit .gitignore .gitignore     LICENSE LICENSE     README.md README.md     View all files Repository files navigation binance-bridge-sdk An npm package for binance bridge v2 No releases published Uh oh! There was an error while loading. Please ",
+        "icon": "",
+        "link": "https://github.com/LibertyPie/binance-bridge-sdk",
+        "media": "",
+        "publish_date": "2026-04-05",
+        "refer": "ref_1",
+        "title": "GitHub - LibertyPie/binance-bridge-sdk: An npm package for binance bridge v2 · GitHub"
+      },
+      {
+        "content": "npm publish PAT === Personal Access Token GitHub Packages only supports scoped npm packages. https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#publishing-a-package GitHub Actions CI/CD https://github.com/xgqfrms/wcui/actions/new?category=none&query=npm GITHUB_TOKEN https://github.com/xgqfrms/wcui/runs/7739088278?check_suite_focus=true#step:4:26 https://github.com/xgqfrms/wcui/blob/main/.github/workflows/npm-publish-github-packages.yml demo before after ✅ git delete tags .npmrc & publishConfig https://docs.github.",
+        "icon": "",
+        "link": "https://www.cnblogs.com/xgqfrms/p/16565524.html",
+        "media": "博客园",
+        "publish_date": "2022-08-09",
+        "refer": "ref_2",
+        "title": "GitHub 上如何使用 GitHub Packages 发布 npm 包All In One - xgqfrms - 博客园"
+      },
+      {
+        "content": "首先把需要自动化发布的npm包上传到github｡ 然后进入 Actions -> 点击 set up a workflow yourself 开始搭建自己的workflow: 默认创建了 main.yml ,后续重点之一就是修改它,操作面板的右侧提供了编辑改文件的文档 点击文档中的 Configuring workflows 可以进入更详细的创建和管理 GitHub Actions 工作流程的配置内容｡ 简单分析下默认创建的 main.yml 文件: 1. name: CI 给我们的工作流workflow取名,我推测,工作流可以设置多条,用name加以区分 on: 用on键定义工作流程触发器 on: # 通过推送或拉取主分支(main)事件触发工作流 push: branches: [ main ] pull_request: branches: [ main ] # 从“actions”选项卡手动运行工作流 workflow_dispatch: jobs 一个工作流中可以有一个或多个 作业 通过按 顺序 或者 并行 的方式执行｡ # 创建了一个名叫‘build’的作业 build: # 指定了操作系统为‘ubuntu-latest’ runs-on: ubuntu-latest # Steps 代表一系列任务作为作业的一部分而被执行 steps: # 检查仓库以便作业能正常访问 - uses: actions/checkout@v3 # 执行单条脚本 - name: Run ",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/494193833",
+        "media": "知乎",
+        "publish_date": "2022-04-07",
+        "refer": "ref_3",
+        "title": "Github Actions实践--自动化发布npm包-知乎"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "github native bridge npm package",
+        "query": "RealityKit React Native bridge npm package github"
+      }
+    ],
+    "latency_seconds": 10.17,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": false,
+    "query": "SceneKit React Native bridge SCNTechnique multi-pass bloom",
+    "error": "[WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond",
+    "latency_seconds": 22.68,
+    "mode": "tools"
+  },
+  {
+    "success": false,
+    "query": "IKEA Place AR app technology stack Unity React Native",
+    "error": "[WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond",
+    "latency_seconds": 22.75,
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Pokemon GO Niantic technology stack Unity AR",
+    "content": "**精灵宝可梦GO** (2024-06-12)\n《精灵宝可梦Go》(Pokemon Go),是一款现实增强(AR)宠物养成对战类RPG手游,由Nintendo(任天堂)､The Pokemon Company(口袋妖怪公司)和谷歌Niantic Labs公司联合制作开发｡该作于2016年7月7日在澳大利亚新西兰区域首发,登陆Android和ios平台,首发于App Store和Google \nSource: https://baike.sogou.com/v106317288.htm\n\n**像素妖怪Go** (2021-12-25)\n像素妖怪go是一款AR游戏,玩起来和口袋妖怪go非常相似的游戏,唯一的不同就在于游戏的画风｡基本内容游戏介绍 《像素妖怪GOPixelmon GO》是一款AR游戏｡拿着设备,行走在现实生活中的每个地方,捕捉每个地方的妖怪,充实自己的收集图鉴｡在地图上能遇到许许多多不同的妖怪,在设备摄像头的帮助下,你将能在设备上看到它们,然后利用手中的像素球将他们抓获｡\nSource: https://baike.baidu.com/item/%E5%83%8F%E7%B4%A0%E5%A6%96%E6%80%AAGo/19918775\n\n**Unity娘AR** (2024-03-14)\n《Unity娘AR UnityChanAR》是一款非常有趣的休闲娱乐游戏｡游戏简介游戏采用了时下热门的AR技术,玩家可以通过摄像头将unity娘投射到现实场景当中,unity娘拥有十几种不同的姿势和表情供玩家使用,从而拍摄出满意的照片｡让unity娘陪伴你度过每一天!更新提示1.新增暂停选项; 2.追加角色新表情; 3.新增部分隐藏成就; 4.修复游戏Bug｡\nSource: https://baike.baidu.com/item/Unity%E5%A8%98AR/22065550\n\n**Unity AR 增强现实完全自学教程** (2023-07-15)\n\"《Unity AR 增强现实完全自学教程》是2017年9月电子工业出版社出版的书籍,作者是李晔｡内容提要《Unity AR 增强现实完全自学教程》是初学者快速学习AR应用的全面教程,从基础理论到经典的AR案例都进行了详尽的讲解｡保证即便是零基础的读者也可以通过《Unity AR 增强现实完全自学教程》学习并制作出常见的AR应用｡ 《Unity AR \nSource: https://baike.baidu.com/item/Unity%20AR%20%E5%A2%9E%E5%BC%BA%E7%8E%B0%E5%AE%9E%E5%AE%8C%E5%85%A8%E8%87%AA%E5%AD%A6%E6%95%99%E7%A8%8B/22105184\n\n**Unity** (2025-02-09)\n\"Unity是实时3D互动内容创作和运营平台｡包括游戏开发､美术､建筑､汽车设计､影视在内的所有创作者,借助Unity将创意变成现实｡Unity平台提供一整套完善的软件解决方案,可用于创作､运营和变现任何实时互动的2D和3D内容,支持平台包括手机､平板电脑､PC､游戏主机､增强现实和虚拟现实设备｡ 基于Unity开发的游戏和体验月均下载量高达30亿次,并且其在2019年的安装量已超过370亿次｡\nSource: https://baike.baidu.com/item/Unity/10793\n\n**传媒视线:Pokemon Go席卷全球 当老牌IP遇见AR技术--传媒--人民网** (2026-05-21)\n·玩家隐私有泄露风险 这款游戏需要玩家用谷歌账号登录游戏,并且要求获取他们的地理位置､基本用户信息､谷歌地图里常去的地方,甚至一度要求获取full access的权限,也就是包含查看私人邮件以及个人隐私的权限｡后来游戏开发公司Niantic澄清说是技术错误并且已经修复｡【详细】·游戏地标设置不合理 游戏设置的一些地标不合理,造成了不少负面影响｡\nSource: http://media.people.com.cn/GB/143237/406153/index.html\n",
+    "web_references": [
+      {
+        "content": "《精灵宝可梦Go》(Pokemon Go),是一款现实增强(AR)宠物养成对战类RPG手游,由Nintendo(任天堂)､The Pokemon Company(口袋妖怪公司)和谷歌Niantic Labs公司联合制作开发｡该作于2016年7月7日在澳大利亚新西兰区域首发,登陆Android和ios平台,首发于App Store和Google ",
+        "icon": "",
+        "link": "https://baike.sogou.com/v106317288.htm",
+        "media": "搜狗百科",
+        "publish_date": "2024-06-12",
+        "refer": "ref_1",
+        "title": "精灵宝可梦GO"
+      },
+      {
+        "content": "像素妖怪go是一款AR游戏,玩起来和口袋妖怪go非常相似的游戏,唯一的不同就在于游戏的画风｡基本内容游戏介绍 《像素妖怪GOPixelmon GO》是一款AR游戏｡拿着设备,行走在现实生活中的每个地方,捕捉每个地方的妖怪,充实自己的收集图鉴｡在地图上能遇到许许多多不同的妖怪,在设备摄像头的帮助下,你将能在设备上看到它们,然后利用手中的像素球将他们抓获｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E5%83%8F%E7%B4%A0%E5%A6%96%E6%80%AAGo/19918775",
+        "media": "百度百科",
+        "publish_date": "2021-12-25",
+        "refer": "ref_2",
+        "title": "像素妖怪Go"
+      },
+      {
+        "content": "《Unity娘AR UnityChanAR》是一款非常有趣的休闲娱乐游戏｡游戏简介游戏采用了时下热门的AR技术,玩家可以通过摄像头将unity娘投射到现实场景当中,unity娘拥有十几种不同的姿势和表情供玩家使用,从而拍摄出满意的照片｡让unity娘陪伴你度过每一天!更新提示1.新增暂停选项; 2.追加角色新表情; 3.新增部分隐藏成就; 4.修复游戏Bug｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/Unity%E5%A8%98AR/22065550",
+        "media": "百度百科",
+        "publish_date": "2024-03-14",
+        "refer": "ref_3",
+        "title": "Unity娘AR"
+      },
+      {
+        "content": "\"《Unity AR 增强现实完全自学教程》是2017年9月电子工业出版社出版的书籍,作者是李晔｡内容提要《Unity AR 增强现实完全自学教程》是初学者快速学习AR应用的全面教程,从基础理论到经典的AR案例都进行了详尽的讲解｡保证即便是零基础的读者也可以通过《Unity AR 增强现实完全自学教程》学习并制作出常见的AR应用｡ 《Unity AR ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/Unity%20AR%20%E5%A2%9E%E5%BC%BA%E7%8E%B0%E5%AE%9E%E5%AE%8C%E5%85%A8%E8%87%AA%E5%AD%A6%E6%95%99%E7%A8%8B/22105184",
+        "media": "百度百科",
+        "publish_date": "2023-07-15",
+        "refer": "ref_4",
+        "title": "Unity AR 增强现实完全自学教程"
+      },
+      {
+        "content": "\"Unity是实时3D互动内容创作和运营平台｡包括游戏开发､美术､建筑､汽车设计､影视在内的所有创作者,借助Unity将创意变成现实｡Unity平台提供一整套完善的软件解决方案,可用于创作､运营和变现任何实时互动的2D和3D内容,支持平台包括手机､平板电脑､PC､游戏主机､增强现实和虚拟现实设备｡ 基于Unity开发的游戏和体验月均下载量高达30亿次,并且其在2019年的安装量已超过370亿次｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/Unity/10793",
+        "media": "百度百科",
+        "publish_date": "2025-02-09",
+        "refer": "ref_5",
+        "title": "Unity"
+      },
+      {
+        "content": "·玩家隐私有泄露风险 这款游戏需要玩家用谷歌账号登录游戏,并且要求获取他们的地理位置､基本用户信息､谷歌地图里常去的地方,甚至一度要求获取full access的权限,也就是包含查看私人邮件以及个人隐私的权限｡后来游戏开发公司Niantic澄清说是技术错误并且已经修复｡【详细】·游戏地标设置不合理 游戏设置的一些地标不合理,造成了不少负面影响｡",
+        "icon": "",
+        "link": "http://media.people.com.cn/GB/143237/406153/index.html",
+        "media": "人民网",
+        "publish_date": "2026-05-21",
+        "refer": "ref_6",
+        "title": "传媒视线:Pokemon Go席卷全球 当老牌IP遇见AR技术--传媒--人民网"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "pokemon go niantic technology stack unity ar",
+        "query": "Pokemon GO Niantic technology stack Unity AR"
+      }
+    ],
+    "latency_seconds": 3.21,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": false,
+    "query": "Adobe Aero AR app architecture",
+    "error": "[WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond",
+    "latency_seconds": 22.77,
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "RealityKit particle system VFX bloom Death Stranding portal effect",
+    "content": "**BORIS** (2024-10-24)\n\"BORIS,中文名称鲍里斯,一款动画特效制作软件,可以做市面上大部分视频软件的插件,又可制作3D特效,功能十分强大｡BORIS的功能一款动画特效制作软件,其中整合了20多个非线性编辑系统,和多种预置的自然效果,如雪,雨,火,云,火花,彗星等,并且提供强大的实景光线效果,颜色修正功能,微粒过滤功能等｡Boris FX 8.0支持Adobe After Effects, Adobe \nSource: https://baike.sogou.com/v64326756.htm\n\n**Fig. 4: Analysis of particle-by-particle variation of SoL under different operating conditions.  Nature Communications** (2026-04-25)\nfigure Fig. 4: Analysis of particle-by-particle variation of SoL under different operating conditions. | Nature Communications From: 3D microstructure design of lithium-ion battery electrodes \nSource: https://www.nature.com/articles/s41467-020-15811-x/figures/4\n\n**动画设计专业** (2024-07-31)\n\"动画设计专业,是培养动画设计人才的专业｡动画设计是新兴的设计｡ 动画影片中负责绘制动画的工作人员｡动画设计分为人物造型设计和场景设计,动画设计师要运用运动学原理,使静态的人物､场景在二维､三维中连贯的运动｡同时为这个动画提供艺术的诙谐性,这是动画的主流｡\nSource: https://baike.sogou.com/v54245098.htm\n\n**topic Re: Particle ID to filter/modify influence? in Bifrost Forum** (2026-05-22)\nbifrost-forum/particle-id-to-filter-modify-influence/m-p/11234609#M1997 <P>Thanks for responding! The idea was to make a branching treelike structure. I could not achieve the effect with the \nSource: https://forums.autodesk.com/rss/message?board.id=bifrost-forum-en&message.id=1997\n\n**Papers/DBA_ A Dynamic Bloom Filter Array for Scalable Membership Representation of Variable Large Data Sets.pdf at master · BackupGithub** (2026-05-22)\nSkip to content Files Expand file tree   master Breadcrumbs Copy path More file actions More file actions Latest commit History History 503 KB   master Breadcrumbs DBA_ A Dynamic Bloom Filter Array \nSource: https://github.com/BackupGithub-AI/Papers/blob/master/DBA_%2520A%2520Dynamic%2520Bloom%2520Filter%2520Array%2520for%2520Scalable%2520Membership%2520Representation%2520of%2520Variable%2520Large%2520Data%2520Sets.pdf\n\n**该词条未找到_海词词典** (2026-04-18)\nColloidal particles are bombarded by molecules of the dispersion medium. 胶粒会受到分散介质分子的碰撞｡ Similarly charged colloidal particles cannot come close enough together to agglomerate into larger particles. \nSource: http://m.corp.dict.cn/colloidal+particles\n\n**ADOBE AFTER EFFECTS CS6标准培训教材** (2024-07-08)\n\"《ADOBEAFTEREFFECTSCS6标准培训教材》是2013年人民邮电出版社出版的图书｡内容简介《ACAA教育发展计划ADOBE标准培训教材:Adobe After Effects CS6标准培训教材》为了让读者系统､快速地掌握Adobe After Effects CS6软件,《ACAA教育发展计划ADOBE标准培训教材:Adobe After Effects \nSource: https://baike.baidu.com/item/ADOBE%20AFTER%20EFFECTS%20CS6%E6%A0%87%E5%87%86%E5%9F%B9%E8%AE%AD%E6%95%99%E6%9D%90/12266958\n\n**杨建成** (2025-01-08)\n\"杨建成,男,汉族,第十四届全国政协委员｡ 现任中国科学院近代物理研究所副所长｡教育经历2004-12--2006-04,德国重离子研究中心,访问学者 2000-09--2004-12,中国科学院近代物理研究所,工学博士 1996-09--2000-07,兰州大学核科学与技术学院,理学学士工作经历2013-11~ ,中国科学院近代物理研究所,研究员,加速器总体室副主任 \nSource: https://baike.baidu.com/item/%E6%9D%A8%E5%BB%BA%E6%88%90/22062857\n\n**鲁正** (2023-05-03)\n\"鲁正:博士､教授､硕士生导师､博士生导师､同济大学结构工程与防灾研究所所长助理｡教育经历2000.09-2004.07 同济大学,土木工程学院,土木工程专业,本科 2004.09-2006.03 同济大学,结构工程与防灾研究所,结构工程专业,硕士(保送,直接攻博,导师:吕西林教授) 2006.03-2011.02 同济大学,结构工程与防灾研究所,结构工程专业, 博士(导师:吕西林教授) \nSource: https://baike.baidu.com/item/%E9%B2%81%E6%AD%A3/20485151\n",
+    "web_references": [
+      {
+        "content": "\"BORIS,中文名称鲍里斯,一款动画特效制作软件,可以做市面上大部分视频软件的插件,又可制作3D特效,功能十分强大｡BORIS的功能一款动画特效制作软件,其中整合了20多个非线性编辑系统,和多种预置的自然效果,如雪,雨,火,云,火花,彗星等,并且提供强大的实景光线效果,颜色修正功能,微粒过滤功能等｡Boris FX 8.0支持Adobe After Effects, Adobe ",
+        "icon": "",
+        "link": "https://baike.sogou.com/v64326756.htm",
+        "media": "搜狗百科",
+        "publish_date": "2024-10-24",
+        "refer": "ref_1",
+        "title": "BORIS"
+      },
+      {
+        "content": "figure Fig. 4: Analysis of particle-by-particle variation of SoL under different operating conditions. | Nature Communications From: 3D microstructure design of lithium-ion battery electrodes ",
+        "icon": "",
+        "link": "https://www.nature.com/articles/s41467-020-15811-x/figures/4",
+        "media": "Nature",
+        "publish_date": "2026-04-25",
+        "refer": "ref_2",
+        "title": "Fig. 4: Analysis of particle-by-particle variation of SoL under different operating conditions.  Nature Communications"
+      },
+      {
+        "content": "\"动画设计专业,是培养动画设计人才的专业｡动画设计是新兴的设计｡ 动画影片中负责绘制动画的工作人员｡动画设计分为人物造型设计和场景设计,动画设计师要运用运动学原理,使静态的人物､场景在二维､三维中连贯的运动｡同时为这个动画提供艺术的诙谐性,这是动画的主流｡",
+        "icon": "",
+        "link": "https://baike.sogou.com/v54245098.htm",
+        "media": "搜狗百科",
+        "publish_date": "2024-07-31",
+        "refer": "ref_3",
+        "title": "动画设计专业"
+      },
+      {
+        "content": "bifrost-forum/particle-id-to-filter-modify-influence/m-p/11234609#M1997 <P>Thanks for responding! The idea was to make a branching treelike structure. I could not achieve the effect with the ",
+        "icon": "",
+        "link": "https://forums.autodesk.com/rss/message?board.id=bifrost-forum-en&message.id=1997",
+        "media": "",
+        "publish_date": "2026-05-22",
+        "refer": "ref_4",
+        "title": "topic Re: Particle ID to filter/modify influence? in Bifrost Forum"
+      },
+      {
+        "content": "Skip to content Files Expand file tree   master Breadcrumbs Copy path More file actions More file actions Latest commit History History 503 KB   master Breadcrumbs DBA_ A Dynamic Bloom Filter Array ",
+        "icon": "",
+        "link": "https://github.com/BackupGithub-AI/Papers/blob/master/DBA_%2520A%2520Dynamic%2520Bloom%2520Filter%2520Array%2520for%2520Scalable%2520Membership%2520Representation%2520of%2520Variable%2520Large%2520Data%2520Sets.pdf",
+        "media": "",
+        "publish_date": "2026-05-22",
+        "refer": "ref_5",
+        "title": "Papers/DBA_ A Dynamic Bloom Filter Array for Scalable Membership Representation of Variable Large Data Sets.pdf at master · BackupGithub"
+      },
+      {
+        "content": "Colloidal particles are bombarded by molecules of the dispersion medium. 胶粒会受到分散介质分子的碰撞｡ Similarly charged colloidal particles cannot come close enough together to agglomerate into larger particles. ",
+        "icon": "",
+        "link": "http://m.corp.dict.cn/colloidal+particles",
+        "media": "",
+        "publish_date": "2026-04-18",
+        "refer": "ref_6",
+        "title": "该词条未找到_海词词典"
+      },
+      {
+        "content": "\"《ADOBEAFTEREFFECTSCS6标准培训教材》是2013年人民邮电出版社出版的图书｡内容简介《ACAA教育发展计划ADOBE标准培训教材:Adobe After Effects CS6标准培训教材》为了让读者系统､快速地掌握Adobe After Effects CS6软件,《ACAA教育发展计划ADOBE标准培训教材:Adobe After Effects ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/ADOBE%20AFTER%20EFFECTS%20CS6%E6%A0%87%E5%87%86%E5%9F%B9%E8%AE%AD%E6%95%99%E6%9D%90/12266958",
+        "media": "百度百科",
+        "publish_date": "2024-07-08",
+        "refer": "ref_7",
+        "title": "ADOBE AFTER EFFECTS CS6标准培训教材"
+      },
+      {
+        "content": "\"杨建成,男,汉族,第十四届全国政协委员｡ 现任中国科学院近代物理研究所副所长｡教育经历2004-12--2006-04,德国重离子研究中心,访问学者 2000-09--2004-12,中国科学院近代物理研究所,工学博士 1996-09--2000-07,兰州大学核科学与技术学院,理学学士工作经历2013-11~ ,中国科学院近代物理研究所,研究员,加速器总体室副主任 ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E6%9D%A8%E5%BB%BA%E6%88%90/22062857",
+        "media": "百度百科",
+        "publish_date": "2025-01-08",
+        "refer": "ref_8",
+        "title": "杨建成"
+      },
+      {
+        "content": "\"鲁正:博士､教授､硕士生导师､博士生导师､同济大学结构工程与防灾研究所所长助理｡教育经历2000.09-2004.07 同济大学,土木工程学院,土木工程专业,本科 2004.09-2006.03 同济大学,结构工程与防灾研究所,结构工程专业,硕士(保送,直接攻博,导师:吕西林教授) 2006.03-2011.02 同济大学,结构工程与防灾研究所,结构工程专业, 博士(导师:吕西林教授) ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E9%B2%81%E6%AD%A3/20485151",
+        "media": "百度百科",
+        "publish_date": "2023-05-03",
+        "refer": "ref_9",
+        "title": "鲁正"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "particle system vfx bloom deathstranding portal effect realistickit",
+        "query": "RealityKit particle system VFX bloom Death Stranding portal effect"
+      }
+    ],
+    "latency_seconds": 5.82,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": false,
+    "query": "react-native-arkit successor 2024 2025 active maintained",
+    "error": "[WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond",
+    "latency_seconds": 22.76,
+    "mode": "tools"
+  }
+]

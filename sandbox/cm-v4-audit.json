@@ -1,0 +1,238 @@
+{
+  "auditor": "test-set quality reviewer (Claude opus)",
+  "total_audited": 100,
+  "summary": {
+    "all_reasonable": 67,
+    "needs_arc_design_change": 19,
+    "needs_param_tuning": 8,
+    "case_specific_issues": 6
+  },
+  "arc_problems": [
+    {
+      "arc": "seasonal",
+      "issue": "quality_arc 在 progress=0/0.25/0.5/0.75/1.0 五个固定采样点上是 [0.90, 0.10, 0.90, 0.10, 0.90]——也就是说不论 duration_months 是多少，结尾时刻 (progress=1.0) 永远是峰值 0.90。这是生成器的设计 bug：真实的季节性 mark 在月 7.9 结束时应该处于半周期/低谷，而不是恰好在旺季峰值。所有 4 个季节性 case (i=30,43,74,79) 的 duration_months 都不是整年倍数 (11.5/11.6/8.4/7.9)，但被强制采样到 'ending at peak'。算法看到的累积口碑是一年完整波动均值——但生成器没真模拟这个，反而是在 5 个固定点上插值。结果：算法判 'alive' 因为最近时段质量是 0.90，但其实这是采样人造出来的，不是真实季节性故事。",
+      "recommendation": "(A) 改用真实日历日采样：每天根据 cos(2π × dayOfYear/365) 决定当天质量，不用 progress 标准化。这样 duration_months=7.9 会真的停在半周期。(B) 或者 expected 改为 'sunk_or_borderline'，承认季节性 mark 在淡季结束时本来就该被 'sunk'——只是它在下个旺季会被人工/DOC 重新激活。",
+      "examples": [30, 43, 74, 79]
+    },
+    {
+      "arc": "recovery",
+      "issue": "所有 8 个 recovery case 的 qStart=0.20, qEnd=0.92——这是过于理想的翻身曲线。现实中：mark 在 0.20 质量下早期路过 100+ 人，至少 30-50 人 report，曝光被压低；mark 变得不显眼，后期路过的人变少，所以即使内容变好也少有人能赞。recovery 在 NZ 步道场景几乎不存在——实地标志要么换人重发（新 mark），要么自然腐烂。让算法判这种为 'alive' 等于教算法'见到大量早期 report 也不能下沉'，会污染 collapse 检测。",
+      "recommendation": "(A) 这个 arc 的 expected 改为 'sunk_or_borderline'——early reports 累积已经实质上 sunk 了，让 algorithm 学会按累积证据判，不要假设它能预知未来。(B) 或者把 qStart 提高到 0.45 (轻度被误判而非重度)，这样 early reports 量少，recovery 可信。(C) 同时降低 recovery case 在测试集中的占比 (现在 8%)。",
+      "examples": [3, 5, 9, 14, 17, 34, 84, 89]
+    },
+    {
+      "arc": "short_burst",
+      "issue": "短期活动 case 普遍有两个问题：(1) i=27 只有 4 个 total_visitors，i=65 只有 0.3 月时长——无足够样本让 algorithm 区分 'burst' vs 'genuine attack'，任何判断都是统计噪声。(2) duration 太短的 case 没有 '活动后静默期' 让 algorithm 检测衰退——质量曲线第二个采样点 (progress=0.25, 即活动结束后) 已经是 0.05，但活动后到 mark 'now' 只有非常少的天数+访客，算法看到的是 '总累积赞 > 总累积 report'。",
+      "recommendation": "(A) 强制 short_burst 的 duration_months >= 3.0，让活动后至少有 70%+ 静默期让 algorithm 检测衰退。(B) 删除 visitors < 20 的 short_burst case——样本太薄，无法让 algorithm 做出有依据的判断。(C) i=27 (4 visitors) + i=65 (0.3 months) 应直接剔除。",
+      "examples": [27, 65, 86, 6]
+    },
+    {
+      "arc": "controversial_persistent",
+      "issue": "12 个 case 的 quality 都在 0.4-0.6 之间正弦波动，平均接近 0.5。这意味着每个时段的赞和 report 几乎 1:1。expected='alive' 隐含着 '中性争议 = 仍有价值 = 应保留'，但这是产品哲学决策，不是算法决策。一半路过的人觉得这 mark 误导/无用——这不是 'alive'。建议这类 case 的 expected 改为 'borderline'（识别衰退而非保留）。",
+      "recommendation": "(A) expected 改为 'sunk_or_borderline'——让 algorithm 学会识别中性即衰退。(B) 或者保持 alive 但只在 quality 持续 > 0.55 的子集上设 alive，质量 0.4-0.6 的中性子集设 borderline。",
+      "examples": [10, 21, 37, 38, 39, 41, 53, 60, 68, 72, 80, 91]
+    }
+  ],
+  "specific_problem_cases": [
+    {
+      "sample_index": 16,
+      "problem": "author_role=commercial_spam 但是 stable_good arc，质量 0.85 持续 6.4 月。商业垃圾作者写持续 6 个月高质量内容——故事不成立。垃圾发布者要么短期收获要么频繁切号，不会持续 6+ 月维持 0.85 质量。",
+      "fix": "author_role 改为 'user'，或者把 arc 改为 short_burst。"
+    },
+    {
+      "sample_index": 15,
+      "problem": "commercial_spam + stable_bad + 1.5 月——OK 故事合理，但 visitors 只有 28，algorithm 仅靠 ~3-5 reports 就要判 sunk。样本太薄，判断置信度低。",
+      "fix": "stable_bad 应该至少 90+ 天 + 50+ visitors 才能让 algorithm 累积足够 report 信号。i=15 边界保留可，但需要其他 stable_bad case 有更高 visitor 量补偿。"
+    },
+    {
+      "sample_index": 22,
+      "problem": "collapse arc 但 14 visitors 总数。8.5 quality 早期 + 0.05 后期 = 大约 7 likes early + 7 reports late。signal/noise ratio 太低，algorithm 判 borderline 都勉强。",
+      "fix": "collapse 强制 visitors >= 50。删除此 case 或换更高流量。"
+    },
+    {
+      "sample_index": 27,
+      "problem": "short_burst + commercial_spam + 0.3 月 + 4 visitors——只有 4 个互动，所有判断都是噪声。",
+      "fix": "删除。"
+    },
+    {
+      "sample_index": 65,
+      "problem": "short_burst + 0.3 月 + 40 visitors（5/天）——活动结束后到 'now' 没有静默期 (progress 跳到 0.25 已经是活动后)，algorithm 看不到 '不再有人赞' 的衰退信号。",
+      "fix": "duration 改为至少 1.5 月，让活动后有 60%+ 静默期。"
+    },
+    {
+      "sample_index": 92,
+      "problem": "short_attack + is_doc=true 但 author_role='user'——is_doc 暗示 DOC 预热数据，但 role=user 矛盾。DOC 预热数据按定义是 official 作者。",
+      "fix": "若 is_doc=true，则 author_role 必须='official'；否则 is_doc=false。"
+    }
+  ],
+  "arc_redesign_suggestions": {
+    "seasonal": "改用真实日历日生成质量曲线，按 cos(2π × dayOfYear / 365) 计算每天质量。允许 duration_months 落在任意相位——结尾在淡季的 case 应该 expected='sunk_or_borderline'，结尾在旺季的 case 才是 'alive'。当前实现把结尾相位强制对齐到峰值，是测试集做假。",
+    "short_burst": "强制 duration_months >= 3.0 + visitors >= 50。前 15-25% 时间高质量 (活动期)，剩下 75%+ 时间静默或低质量。让 algorithm 有充足静默期检测衰退。",
+    "recovery": "下调 expected 到 'sunk_or_borderline'，承认大量早期 report 累积下来已经是 sunk。或者 qStart 提到 0.45 让早期 report 量级合理。当前 0.20 起点 + 0.92 终点的曲线在产品现实中近乎不存在。",
+    "controversial_persistent": "expected 改为 'sunk_or_borderline'。中性争议=衰退=用户体验差。或者拆成两个 sub-arc：'mildly_useful' (quality 0.55-0.7, alive) 和 'genuinely_split' (quality 0.4-0.6, borderline)。",
+    "remote_silent": "保持现状。这是产品默认 alive 政策的边界测试，合理。",
+    "doc_official": "增加一个 'doc_stale' 子 arc：is_doc=true + 早期质量 0.75 + 后期质量 0.30 (路改了/季节关闭)，expected='sunk_or_borderline'，测试 algorithm 是否能在 DOC 数据上识别 staleness 而非盲目信任。",
+    "short_attack": "保持现状。这个 arc 设计合理——本质好 mark 中段被攻击，前后都是高质量，algorithm 应能透过中段噪声识别本质。",
+    "collapse": "强制 visitors >= 50。剔除 i=22。",
+    "stable_bad": "保持现状但增加 visitors 下限 30。",
+    "stable_good": "禁止 commercial_spam role 进入此 arc。剔除 i=16。"
+  },
+  "expected_judgment_corrections": [
+    {
+      "sample_index": 30,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "seasonal 7.9 月结束 (非整年倍数) 在真实日历下应处淡季，质量低，algorithm 判 sunk 是合理的。当前 expected=alive 是因为生成器人造把结尾对齐到峰值。"
+    },
+    {
+      "sample_index": 43,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "同上 (11.6 月不是整年)。"
+    },
+    {
+      "sample_index": 74,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "同上 (8.4 月不是整年)。"
+    },
+    {
+      "sample_index": 79,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "同上 (7.9 月不是整年)。"
+    },
+    {
+      "sample_index": 10,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "controversial_persistent 中性 0.5 质量——一半人觉得有用一半觉得误导，不应判 alive。"
+    },
+    {
+      "sample_index": 21,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "danger mark + 中性争议——危险警告半数被举报为不准，应识别为衰退。"
+    },
+    {
+      "sample_index": 37,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "同 i=21，danger 类型不应在中性争议下判 alive。"
+    },
+    {
+      "sample_index": 38,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "controversial_persistent 中性争议 = 边界。"
+    },
+    {
+      "sample_index": 39,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "controversial_persistent 中性争议 = 边界。"
+    },
+    {
+      "sample_index": 41,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "controversial_persistent + danger + 1.5 月——质量中性的危险警告应更严格判沉。"
+    },
+    {
+      "sample_index": 53,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "热门 + 9 月持续中性争议 = 大量用户都觉得不行——应识别为衰退。"
+    },
+    {
+      "sample_index": 60,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "danger + controversial = 边界。"
+    },
+    {
+      "sample_index": 68,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "controversial_persistent = 边界。"
+    },
+    {
+      "sample_index": 72,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "controversial_persistent = 边界。"
+    },
+    {
+      "sample_index": 80,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "controversial_persistent = 边界。"
+    },
+    {
+      "sample_index": 91,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "controversial_persistent + danger = 严格边界。"
+    },
+    {
+      "sample_index": 3,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "recovery arc 早期 0.20 质量 6.6 月累积大量早期 report——algorithm 看累积证据应判沉，让它判 alive 等于教它忽略早期信号。"
+    },
+    {
+      "sample_index": 5,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "recovery 11.6 月，早期累积 report 量大。"
+    },
+    {
+      "sample_index": 9,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "recovery + 1079 visitors——早期 200+ reports，无法逆转。"
+    },
+    {
+      "sample_index": 14,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "recovery + 1745 visitors + danger——危险警告早期被大量举报应已实质 sunk。"
+    },
+    {
+      "sample_index": 17,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "recovery 7.6 月。"
+    },
+    {
+      "sample_index": 34,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "recovery + 1679 visitors + 热门——早期举报量级最大，最不该判 alive。"
+    },
+    {
+      "sample_index": 89,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "recovery 7.2 月。"
+    },
+    {
+      "sample_index": 84,
+      "current_expected": "alive",
+      "should_be": "sunk_or_borderline",
+      "reason": "recovery 但 47 visitors——早期 report 累积少，可勉强判 borderline 而非 alive。"
+    },
+    {
+      "sample_index": 16,
+      "current_expected": "alive",
+      "should_be": "sunk",
+      "reason": "commercial_spam 作者无论 arc 如何，author_role 本身就该让 algorithm 识别为可疑。这是参数组合矛盾，最干净的做法是直接 sunk。"
+    },
+    {
+      "sample_index": 92,
+      "current_expected": "alive",
+      "should_be": "alive",
+      "reason": "expected 不变，但 is_doc/role 矛盾需修复。"
+    }
+  ]
+}

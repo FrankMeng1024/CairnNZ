@@ -1,0 +1,1370 @@
+{
+  "batch": 16,
+  "theme": "alpine高山",
+  "id_range": [751, 800],
+  "total": 50,
+  "cases": [
+    {
+      "id": 751,
+      "title": "Aoraki/Mt Cook Linda Glacier route — bergschrund crossing waypoint",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Linda Glacier upper neve below Summit Rocks, the standard summer route to Aoraki summit, bergschrund crossing point that shifts annually",
+        "intrinsic_quality": "Marks the current-season bergschrund crossing — without it parties wander 200m looking for a bridge in the dark",
+        "user_volume_per_month": 12,
+        "duration_months": 8,
+        "signal": "no signal above Plateau Hut, only syncs on descent to Mt Cook Village",
+        "season_pattern": "valid Nov-Feb only, becomes lethal misinformation by March when bridge collapses",
+        "human_factors": "posted by NZAC instructor leading guided ascent, refreshed each season by guides"
+      },
+      "events_timeline": [
+        "Month 1 (Dec): Alpine Guides instructor drops mark at 2am during summit push, photo of snow bridge with ice screw runner",
+        "Month 2: 4 independent parties confirm bridge held, 8 likes from named NZAC members",
+        "Month 3 (Feb): bridge sags visibly, instructor updates note 'east side only, west collapsed'",
+        "Month 4 (March): bridge gone, original poster archives mark with 'season closed' tag",
+        "Month 5: solo tourist who climbed Hooker Valley track reports 'cant find this, fake'",
+        "Month 6 (Nov): new season opens, second NZAC instructor reposts updated coordinates",
+        "Month 8: 14 likes from verified summit logbook entries, 1 misplaced report from non-climber"
+      ],
+      "expected_signal_summary": "14 likes vs 1 report, all likes from confirmed climbers with logbook entries",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Seasonally-archived high-skill mark with NZAC authorship. Tourist report should not weight against climber consensus. Mark must persist with season tag.",
+      "edge_case_flag": "alpine_seasonal|nzac_authored|skill_gated_audience"
+    },
+    {
+      "id": 752,
+      "title": "Mt Tasman Silberhorn Ridge — fixed line anchor station",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Silberhorn Ridge midway up Mt Tasman north face, fixed-rope anchor on rock band at 3200m where ice runs out and mixed climbing begins",
+        "intrinsic_quality": "Three bomber rock anchors with 60m static line left by Aspiring Guides, saves an hour of pitching",
+        "user_volume_per_month": 4,
+        "duration_months": 14,
+        "signal": "zero signal, syncs only at Pioneer Hut on descent",
+        "season_pattern": "year-round but only attempted in stable high pressure",
+        "human_factors": "tiny user pool — maybe 30 ascents per year nationwide, every user is a known quantity"
+      },
+      "events_timeline": [
+        "Month 1: Aspiring Guides team rebolts old anchors, marks all three with photos and 8mm bolt specs",
+        "Month 3: independent party from Christchurch Alpine Club confirms, adds note about icy approach traverse",
+        "Month 6: NZ Mountain Safety Council shares mark on their winter alpine bulletin",
+        "Month 8: 6 likes from verified summit-day climbers",
+        "Month 10: anchor #2 found loose by repeat party, they rebolt and update mark with new photo",
+        "Month 12: 9 likes total, zero reports — user pool too small and skilled to misjudge",
+        "Month 14: still active, last sync from party who used the line in whiteout descent"
+      ],
+      "expected_signal_summary": "9 likes vs 0 reports, all from named guides or club members",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "High-consequence supply mark for tiny expert audience. Low engagement is expected and is itself a quality signal — only competent users find it.",
+      "edge_case_flag": "low_volume_high_skill|guide_maintained|quality_via_obscurity"
+    },
+    {
+      "id": 753,
+      "title": "Mt Sefton east face — serac fall hazard zone (lethal danger)",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mt Sefton east face hanging serac directly above the Footstool approach gully, ice cliff that has calved twice in last 5 years killing 1 climber in 2019",
+        "intrinsic_quality": "Names a no-go zone where standing for 60 seconds risks ice avalanche burial",
+        "user_volume_per_month": 8,
+        "duration_months": 18,
+        "signal": "no signal, GPS-only, syncs at Mueller Hut",
+        "season_pattern": "worst in late summer when ice destabilises in afternoon sun",
+        "human_factors": "DOC alpine ranger plus survivor of 2019 incident co-authored, attached coronial report PDF"
+      },
+      "events_timeline": [
+        "Month 1: DOC ranger posts after annual hazard review, marks 80m exclusion radius with red polygon",
+        "Month 2: 2019 incident survivor adds testimony, mark gets 12 immediate likes",
+        "Month 5: party traversing in pre-dawn confirms hearing serac groan, adds audio recording",
+        "Month 9: scenic overflight pilot reports debris cone visible from chopper, mark gets 18 likes",
+        "Month 12: tourist who hiked Sealy Tarns lookout reports 'not visible from track, mark misplaced'",
+        "Month 14: actual serac collapse witnessed by Mueller Hut warden, mark validated dramatically",
+        "Month 18: 28 likes vs 1 report, ranger refreshes annually"
+      ],
+      "expected_signal_summary": "28 likes (alpine community) vs 1 report (non-alpine tourist looking from below)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Lethal hazard mark with coronial-record backing. Single tourist report from outside the hazard zone is irrelevant — they could not see the serac. Permanent.",
+      "edge_case_flag": "lethal_alpine|coronial_record|geometric_invisibility_to_reporter"
+    },
+    {
+      "id": 754,
+      "title": "Mt Aspiring NW Ridge — Quarterdeck Pass crampon-on point",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Quarterdeck Pass on Mt Aspiring NW Ridge approach, the transition from Bonar Glacier flat to steep snow where every party puts crampons on",
+        "intrinsic_quality": "Saves 15 min of fumbling with crampons in wind, marks a flat boulder used as gear platform",
+        "user_volume_per_month": 18,
+        "duration_months": 22,
+        "signal": "no signal anywhere on Bonar, syncs at French Ridge Hut",
+        "season_pattern": "summer climbing season Nov-Feb",
+        "human_factors": "posted by Wanaka guide, used by every Aspiring climber"
+      },
+      "events_timeline": [
+        "Month 1: Wanaka-based IFMGA guide posts during client trip, photo of the gear-up boulder",
+        "Month 4: 8 likes from French Ridge Hut overnight parties",
+        "Month 7: party reports boulder is partly buried by spring snow, guide updates with secondary marker",
+        "Month 11: 16 likes accumulated, no reports",
+        "Month 14: independent solo climber confirms still useful even when buried, mark gains 'all-season' tag",
+        "Month 18: tramper who only walked to French Ridge Hut reports 'didnt go that far, cant verify'",
+        "Month 22: 24 likes vs 1 unverified report"
+      ],
+      "expected_signal_summary": "24 likes vs 1 report from non-climber who never reached the location",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Standard alpine waypoint, well-validated. Non-reaching reporter has zero evidentiary weight in alpine zone marks.",
+      "edge_case_flag": "alpine_navigation|reporter_geographic_invalid"
+    },
+    {
+      "id": 755,
+      "title": "Mueller Hut Route — winter avalanche start zone (seasonal danger)",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mueller Hut Route between Sealy Tarns and the hut, the windslab-prone slope at 1500m that releases on every significant northwest storm",
+        "intrinsic_quality": "Marks documented avalanche path that took out a guided party in 2017 (no fatalities, two injuries)",
+        "user_volume_per_month": 20,
+        "duration_months": 30,
+        "signal": "patchy at hut, no signal on slope",
+        "season_pattern": "lethal June-October, benign November-April",
+        "human_factors": "NZ Avalanche Advisory plus DOC senior ranger co-authored"
+      },
+      "events_timeline": [
+        "Month 1 (June): NZAA posts at start of winter season, links current windslab forecast",
+        "Month 3 (Aug): party of 3 triggers minor slide, self-rescues, confirms mark and adds new crown line photo",
+        "Month 6 (Nov): summer hikers in shorts report 'no danger here, scaremongering' — 4 reports in one week",
+        "Month 8 (Jan): mark gets seasonal-only flag added by ranger",
+        "Month 12 (June): new winter, mark reactivates with refreshed bulletin",
+        "Month 18: 22 likes from winter mountaineers, 6 reports from summer trampers",
+        "Month 24: another avalanche on same slope, 1 ski tourer caught, partial burial, survives",
+        "Month 30: 35 likes vs 8 reports, all reports clustered in summer months"
+      ],
+      "expected_signal_summary": "35 likes vs 8 reports, but reports temporally separated from danger window",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Seasonal hazard validated by repeated incidents. Summer reports must not delete a winter-season life-saver. Algorithm should weight reports by season match.",
+      "edge_case_flag": "seasonal_alpine_danger|temporal_report_mismatch|nzaa_authored"
+    },
+    {
+      "id": 756,
+      "title": "Sealy Tarns track — false summit photo trap (low-stakes navigation)",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Sealy Tarns 'stairway to heaven' track upper third, the false plateau where many tourists turn back thinking they reached the tarns",
+        "intrinsic_quality": "Marks the true tarns location 20 minutes further up, prevents disappointment-turnaround",
+        "user_volume_per_month": 280,
+        "duration_months": 16,
+        "signal": "no signal on track, syncs at Mt Cook Village",
+        "season_pattern": "year-round popular day-hike",
+        "human_factors": "high traffic, mixed audience from alpine climbers acclimatising to families"
+      },
+      "events_timeline": [
+        "Month 1: Mt Cook Village hostel manager posts after fielding 50 'where are the tarns' questions per week",
+        "Month 2: photo evidence of true tarns vs false plateau, 24 likes",
+        "Month 4: cruise-ship daytripper reports 'unnecessary, signs are clear' — but signs do not exist there",
+        "Month 7: 60 likes accumulated, mark referenced in two AllTrails reviews",
+        "Month 10: track maintenance team confirms in passing, no formal endorsement",
+        "Month 13: 95 likes, 4 reports (all from people who never reached the false plateau)",
+        "Month 16: hut warden adds confirmation note"
+      ],
+      "expected_signal_summary": "95 likes vs 4 reports (24:1)",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Helpful navigation mark for non-alpine traffic on alpine-adjacent track. Strong like ratio, reports are uninformed.",
+      "edge_case_flag": "alpine_adjacent|tourist_volume|false_summit"
+    },
+    {
+      "id": 757,
+      "title": "Ball Pass Route — east face descent gully, fatal fall site memorial",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Ball Pass Route eastern descent gully, the loose-rock chute where a Czech climber died in a 2021 trundle accident, marked as memorial-and-warning",
+        "intrinsic_quality": "Names the specific gully bend where rockfall concentrates, recommends the alternative line 30m climbers-right",
+        "user_volume_per_month": 6,
+        "duration_months": 20,
+        "signal": "no signal, syncs at Caroline Hut or Ball Hut",
+        "season_pattern": "spring-autumn alpine traverse",
+        "human_factors": "co-authored by deceased's climbing partner and NZ Police SAR"
+      },
+      "events_timeline": [
+        "Month 1: SAR posts memorial mark with permission of family, photo of memorial cairn",
+        "Month 3: NZAC bulletin links to mark, 14 likes from senior alpine community",
+        "Month 6: party descends, confirms loose rock, adds 'helmet mandatory' note",
+        "Month 9: tourist photographer reports 'inappropriate to mark a death' — content reviewed, retained",
+        "Month 12: another party finds new rockfall pattern, updates suggested alt line",
+        "Month 16: 20 likes, 1 unrelated report (about display, not accuracy)",
+        "Month 20: family adds anniversary tribute, mark becomes community-curated"
+      ],
+      "expected_signal_summary": "20 likes vs 1 report, report contests format not accuracy",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Memorial-warning mark with SAR endorsement. Single sentimentally-motivated report does not invalidate documented hazard. Permanent.",
+      "edge_case_flag": "memorial_mark|sar_co_authored|format_complaint_not_accuracy"
+    },
+    {
+      "id": 758,
+      "title": "Cascade Saddle — Pylon descent slip zone (technical danger)",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Cascade Saddle Route descent from Pylon toward Dart Hut, the steep tussock-and-scree section where 6 fatalities have occurred since 1999",
+        "intrinsic_quality": "Most dangerous DOC-graded tramping route in NZ — mark identifies the slip-prone wet rock band specifically",
+        "user_volume_per_month": 35,
+        "duration_months": 36,
+        "signal": "no signal, syncs at Dart Hut wifi",
+        "season_pattern": "lethal year-round, worst in wet conditions",
+        "human_factors": "DOC posted following 2019 fatality coronial inquiry recommendation"
+      },
+      "events_timeline": [
+        "Month 1: DOC posts as part of Coroner Court mandate, links inquiry findings",
+        "Month 3: 18 likes from trampers who descended successfully, all confirm wet-rock band scariest",
+        "Month 8: another fatality on same route, mark validated again grimly",
+        "Month 12: 30 likes, 2 reports from people who ascended (didn't see descent hazard)",
+        "Month 18: foreign tourist reports 'overdramatic, was fine in dry weather'",
+        "Month 24: third fatality during the 36-month window of the mark",
+        "Month 30: 50 likes, mark featured on DOC alpine safety video",
+        "Month 36: 60 likes vs 4 reports"
+      ],
+      "expected_signal_summary": "60 likes vs 4 reports, three actual fatalities during mark lifetime",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Coronial-mandated mark on NZs deadliest tramping route. Fatality evidence overwhelms any report volume. Permanent.",
+      "edge_case_flag": "coronial_mandated|fatality_validated|deadliest_route"
+    },
+    {
+      "id": 759,
+      "title": "Mt Earnslaw — east peak summit register location",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Mt Earnslaw east peak summit cairn, the smaller of the twin peaks above Glenorchy, summit register in waterproof tube under flat capstone",
+        "intrinsic_quality": "Helps climbers find the register in cloud — without it people summit and never sign in",
+        "user_volume_per_month": 3,
+        "duration_months": 28,
+        "signal": "no signal, syncs in Glenorchy",
+        "season_pattern": "year-round summit but most attempts Nov-March",
+        "human_factors": "tiny user pool, all serious mountaineers"
+      },
+      "events_timeline": [
+        "Month 1: NZAC member posts after restocking the register tube",
+        "Month 6: 4 likes from confirmed summit log entries cross-referenced",
+        "Month 12: party in cloud confirms mark led them straight to cairn, 'invaluable'",
+        "Month 18: register tube damaged by lightning strike, mark updated with new tube location",
+        "Month 22: 8 likes total, no reports across nearly 2 years",
+        "Month 28: tube fully replaced, mark refreshed by Otago Section NZAC"
+      ],
+      "expected_signal_summary": "8 likes vs 0 reports across 28 months",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Niche but high-value summit-feature mark. Engagement floor is set by population not quality. Maintained by club, persistent.",
+      "edge_case_flag": "summit_register|tiny_audience|club_maintained"
+    },
+    {
+      "id": 760,
+      "title": "Mt Brewster — Brewster Glacier crevasse field entry waypoint",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Mt Brewster south side, the crevasse field entry above Brewster Hut where the rope-up point is non-obvious in flat light",
+        "intrinsic_quality": "Marks rope-up location and indicates safe vs unsafe glacier entry corridors",
+        "user_volume_per_month": 9,
+        "duration_months": 24,
+        "signal": "no signal, syncs at Brewster Hut radio room then on exit to Haast Pass",
+        "season_pattern": "year-round, crevasses change pattern each season",
+        "human_factors": "annual refresh required as crevasses shift"
+      },
+      "events_timeline": [
+        "Month 1 (Dec): NZAC Canterbury posts after summer survey, photos of three open crevasses",
+        "Month 4: party uses mark, confirms crevasses match, updates GPS slightly",
+        "Month 8 (winter): different party reports crevasses fully bridged in winter, less critical",
+        "Month 12: annual update — old mark archived, new mark posted by same author with current crevasse layout",
+        "Month 16: solo climber falls into unmarked side crevasse, self-rescues, posts new sub-mark",
+        "Month 20: 12 likes vs 0 reports (community keeps it fresh)",
+        "Month 24: third annual refresh"
+      ],
+      "expected_signal_summary": "12 likes vs 0 reports, annually refreshed",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Living mark with active community curation. Crevasse navigation is high-consequence and refresh cadence is a quality signal.",
+      "edge_case_flag": "annually_refreshed|crevasse_navigation|community_curated"
+    },
+    {
+      "id": 761,
+      "title": "Plateau Hut access — Boys Glacier icefall route (technical approach)",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Boys Glacier icefall on approach to Plateau Hut, the technical alternative to the Haast Ridge ladder route, used when ladders are damaged",
+        "intrinsic_quality": "Documents the only viable icefall route through the fall zone, requiring two pitches of WI3",
+        "user_volume_per_month": 2,
+        "duration_months": 16,
+        "signal": "no signal, syncs at Plateau Hut on arrival",
+        "season_pattern": "winter only, summer the icefall is too broken",
+        "human_factors": "extreme niche use, called upon when DOC closes the ladders"
+      },
+      "events_timeline": [
+        "Month 1: NZAC senior climber posts after first traversing the icefall route during 2023 ladder closure",
+        "Month 3: NZ Mountain Guides Association references mark in winter advisory",
+        "Month 6: second party uses route, confirms two-pitch grade, adds screw placement notes",
+        "Month 9: ladders reopen, mark goes dormant but stays alive",
+        "Month 12: ladders close again after storm, mark spikes back into use, 6 likes added",
+        "Month 16: 9 likes total, no reports — too niche to attract uninformed reporters"
+      ],
+      "expected_signal_summary": "9 likes vs 0 reports across 16 months of episodic use",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Episodic-use technical mark with NZAC pedigree. Dormancy is not death — it is correct behaviour for a backup route.",
+      "edge_case_flag": "episodic_use|backup_route|technical_grade_specified"
+    },
+    {
+      "id": 762,
+      "title": "Pioneer Hut — La Perouse Glacier wand line (whiteout navigation)",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "La Perouse Glacier between Pioneer Hut and the foot of Mt Tasman, wand line marking the safe corridor between two crevasse zones",
+        "intrinsic_quality": "Saves climbers in whiteout — without wands the corridor is invisible and either edge is lethal",
+        "user_volume_per_month": 5,
+        "duration_months": 20,
+        "signal": "no signal, syncs at Pioneer Hut",
+        "season_pattern": "year-round, wands maintained by hut wardens",
+        "human_factors": "Pioneer Hut warden refreshes wands at season start"
+      },
+      "events_timeline": [
+        "Month 1: hut warden posts mark with photo of fresh wand line in November",
+        "Month 4: party in whiteout confirms wands are present, 'genuinely lifesaving' note added",
+        "Month 8: storm flattens half the wands, party that arrives next reports gap and replaces",
+        "Month 12: NZAC bulletin shares the mark in winter alpine notes",
+        "Month 16: 11 likes, 1 report from heli-passenger who saw glacier from above ('cant see wands')",
+        "Month 20: warden refreshes for new season, mark updated with new wand colour code"
+      ],
+      "expected_signal_summary": "11 likes vs 1 report, report from non-user who could not have seen wands from helicopter",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Hut-warden-maintained safety infrastructure mark. Heli-passenger report is geometrically irrelevant. Persistent.",
+      "edge_case_flag": "warden_maintained|whiteout_critical|reporter_invalid_perspective"
+    },
+    {
+      "id": 763,
+      "title": "Centennial Hut — Fox Glacier neve fixed picket (technical supply)",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Fox Glacier neve approach to Centennial Hut, fixed snow picket left at the steep step where most parties want a top-rope belay",
+        "intrinsic_quality": "Shared picket eliminates the need for every party to place gear at the same spot, reduces accumulated wear",
+        "user_volume_per_month": 3,
+        "duration_months": 14,
+        "signal": "no signal, syncs at Centennial Hut",
+        "season_pattern": "winter primary, summer the step is bare ice",
+        "human_factors": "Westland guides cooperative installation"
+      },
+      "events_timeline": [
+        "Month 1: Fox Glacier Guides team installs picket, posts mark with bombproof placement photo",
+        "Month 3: independent party uses picket, confirms it held two falls, adds note about snow stake angle",
+        "Month 6: NZ Mountain Guides Assoc shares in winter bulletin",
+        "Month 9: picket pulled by warming snow, party that finds it loose reposts with 'reset needed'",
+        "Month 11: Westland guides repost after re-driving picket deeper",
+        "Month 14: 7 likes, no reports, mark functions as community-asset notice"
+      ],
+      "expected_signal_summary": "7 likes vs 0 reports, mark functions as cooperative-asset notice",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Shared technical-asset mark, value not measured by raw engagement but by maintenance cycle. Active.",
+      "edge_case_flag": "cooperative_asset|technical_supply|guide_maintained"
+    },
+    {
+      "id": 764,
+      "title": "Tasman Glacier upper neve — ski touring transition zone",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Tasman Glacier upper neve at 2000m, the transition zone between safe ski terrain and the heavily crevassed lower glacier",
+        "intrinsic_quality": "Marks the no-ski-below-this-line GPS boundary used by NZ ski touring community",
+        "user_volume_per_month": 14,
+        "duration_months": 24,
+        "signal": "no signal, syncs at Murchison Hut or Tasman Saddle Hut",
+        "season_pattern": "ski touring season July-October",
+        "human_factors": "NZ Backcountry Skiing Association posted, refreshed annually"
+      },
+      "events_timeline": [
+        "Month 1 (July): NZBSA post at start of winter season, GPS polygon for safe zone",
+        "Month 3: ski tourers confirm boundary matches actual crevasse exposure",
+        "Month 6 (Oct): season closing update, 16 likes",
+        "Month 9 (summer): mountaineer not skiing reports 'irrelevant to me' — review keeps mark",
+        "Month 12 (next winter): refreshed by same association",
+        "Month 18: 24 likes accumulated, 1 dismissive report from non-skier",
+        "Month 24: third winter season, mark a fixture in NZBSA annual bulletin"
+      ],
+      "expected_signal_summary": "24 likes vs 1 report from out-of-context reporter",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Activity-specific safety mark. Non-skier report is out of scope. Mark serves a defined audience well.",
+      "edge_case_flag": "activity_specific|ski_touring|seasonal_refresh"
+    },
+    {
+      "id": 765,
+      "title": "Mueller Glacier entry — moraine collapse zone (current hazard)",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mueller Glacier lateral moraine at the entry to the glacier proper, the collapsing moraine wall that dropped 50m in 2022 storms",
+        "intrinsic_quality": "Marks active collapse zone where standing on the lip risks 50m fall onto glacier ice",
+        "user_volume_per_month": 11,
+        "duration_months": 18,
+        "signal": "no signal, syncs at Mueller Hut",
+        "season_pattern": "year-round, worse after rain or freeze-thaw",
+        "human_factors": "DOC ranger plus geological survey co-author"
+      },
+      "events_timeline": [
+        "Month 1: GNS Science geologist drops mark after annual moraine survey, links instability report",
+        "Month 4: DOC ranger adds confirmation, photo of new collapse scarp",
+        "Month 7: party witnesses small collapse from safe distance, adds video evidence",
+        "Month 10: tourist reports 'the moraine has been there for centuries, mark is alarmist'",
+        "Month 13: another large collapse documented by Mueller Hut warden",
+        "Month 16: 19 likes, 2 reports",
+        "Month 18: GNS publishes paper citing this exact location, mark gains scientific citation"
+      ],
+      "expected_signal_summary": "19 likes vs 2 reports, scientific paper as backing evidence",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "GNS-backed geomorphic hazard mark. Tourist intuition does not override published science. Permanent.",
+      "edge_case_flag": "scientific_citation|geomorphic_hazard|tourist_misintuition"
+    },
+    {
+      "id": 766,
+      "title": "Mt Cook Village — Aoraki summit weather window radio relay",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Plateau Hut weather window radio relay schedule, mark documents the 6am and 6pm radio sched for summit-bound parties",
+        "intrinsic_quality": "Lets parties at Plateau Hut catch reliable weather updates from MetService aviation forecast via Mt Cook Village base",
+        "user_volume_per_month": 16,
+        "duration_months": 22,
+        "signal": "VHF radio only, no cellular",
+        "season_pattern": "summer summit season Nov-March primary use",
+        "human_factors": "Mt Cook Village SAR base maintains schedule"
+      },
+      "events_timeline": [
+        "Month 1: SAR base posts the schedule with frequencies",
+        "Month 3: party uses sched to abort summit ahead of front, credits mark",
+        "Month 6: schedule changes, SAR updates mark with new times",
+        "Month 9: 14 likes from summit logbook climbers",
+        "Month 12: hut warden adds note about radio battery cache location",
+        "Month 16: 21 likes, 0 reports",
+        "Month 22: schedule refreshed for new season"
+      ],
+      "expected_signal_summary": "21 likes vs 0 reports, SAR-maintained operational data",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Operational radio infrastructure mark. SAR-authored, life-saving in weather decisions. Permanent.",
+      "edge_case_flag": "radio_schedule|sar_operational|weather_decision_critical"
+    },
+    {
+      "id": 767,
+      "title": "Mt Aspiring SW Ridge — ridge gendarme rappel station",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mt Aspiring SW Ridge mid-ridge gendarme, fixed double-bolt rappel station to bypass an exposed step on the standard descent",
+        "intrinsic_quality": "30m rappel anchor that saves down-climbing a 5.6 step in mountaineering boots",
+        "user_volume_per_month": 7,
+        "duration_months": 16,
+        "signal": "no signal",
+        "season_pattern": "summit season Nov-Feb",
+        "human_factors": "rebolted by Aspiring Guides 2023, confirmed by ASCA bolting standards"
+      },
+      "events_timeline": [
+        "Month 1: Aspiring Guides team rebolts, posts with hardware specs (12mm glue-in)",
+        "Month 4: independent party uses rappel, confirms anchor, adds note on rope drag",
+        "Month 7: NZAC bulletin includes mark in standard route description",
+        "Month 10: 11 likes from named summit logbook climbers",
+        "Month 13: rope-test party confirms anchor still bombproof after 2 winters",
+        "Month 16: 14 likes, 0 reports"
+      ],
+      "expected_signal_summary": "14 likes vs 0 reports, ASCA-standard hardware",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Standard rappel station mark. Hardware spec and ASCA compliance make this a reference, not an opinion.",
+      "edge_case_flag": "asca_hardware|rappel_station|guide_rebolted"
+    },
+    {
+      "id": 768,
+      "title": "Mt Sefton — Footstool basin avalanche debris field bivvy site",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Footstool basin under Mt Sefton, an emergency bivvy site in the lee of an avalanche-debris boulder used by parties caught out late",
+        "intrinsic_quality": "Marks a survivable bivvy spot if descent is not possible by nightfall, sheltered from west wind",
+        "user_volume_per_month": 4,
+        "duration_months": 18,
+        "signal": "no signal, syncs at Mueller Hut",
+        "season_pattern": "year-round but rare use",
+        "human_factors": "posted after 2022 SAR incident where party survived overnight here"
+      },
+      "events_timeline": [
+        "Month 1: SAR posts after debrief of party who used the spot to survive a storm",
+        "Month 4: NZAC mountain skills instructor adds the location to syllabus mark list",
+        "Month 8: 6 likes from instructors and one party who used it preventively",
+        "Month 12: party posts photo confirming the boulder is still there post-winter",
+        "Month 15: 9 likes total, no reports",
+        "Month 18: SAR refreshes after annual review"
+      ],
+      "expected_signal_summary": "9 likes vs 0 reports, low-volume but high-consequence",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Emergency bivvy mark — low engagement reflects rare use, not low quality. SAR-authored. Permanent.",
+      "edge_case_flag": "emergency_bivvy|sar_authored|rare_high_consequence"
+    },
+    {
+      "id": 769,
+      "title": "Mt Tasman — Marcel Couloir cornice break detection",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Marcel Couloir on Mt Tasman, the cornice at the top of the couloir that breaks predictably after warm afternoons",
+        "intrinsic_quality": "Marks the cornice with windward GPS line so climbers know when they are in fall zone",
+        "user_volume_per_month": 3,
+        "duration_months": 20,
+        "signal": "no signal",
+        "season_pattern": "winter alpine ice climbing primarily",
+        "human_factors": "NZAC ice climbing community"
+      },
+      "events_timeline": [
+        "Month 1: NZAC ice climber posts after near-miss, photo of broken cornice debris",
+        "Month 4: second party confirms approximate cornice line",
+        "Month 8: cornice breaks while party watches from below, mark validated visually",
+        "Month 12: 7 likes from named ice climbers",
+        "Month 15: solo climber adds note about morning temperature threshold for breakage",
+        "Month 20: 10 likes, 0 reports"
+      ],
+      "expected_signal_summary": "10 likes vs 0 reports, community-curated cornice intel",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Specialist hazard mark for ice climbers. Tiny audience, no contention. Persistent.",
+      "edge_case_flag": "ice_climbing_specific|cornice_hazard|community_curated"
+    },
+    {
+      "id": 770,
+      "title": "Aoraki — Anzac Peaks traverse, technical chimney pitch",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Anzac Peaks traverse on Aoraki, a hidden chimney pitch on the mid-traverse that is invisible until you are 5m from it",
+        "intrinsic_quality": "Without mark, parties spend up to an hour searching for the entry, in a no-stop zone",
+        "user_volume_per_month": 2,
+        "duration_months": 24,
+        "signal": "no signal",
+        "season_pattern": "summer alpine season only",
+        "human_factors": "extreme niche, only top-tier guided ascents"
+      },
+      "events_timeline": [
+        "Month 1: senior IFMGA guide posts after multi-decade familiarity with route",
+        "Month 6: another guide confirms with photo from chimney mouth",
+        "Month 12: 4 likes total, but every like from named summit log climber",
+        "Month 18: NZAC traversers thank guide directly",
+        "Month 24: 6 likes, 0 reports — the audience is 20 people in NZ"
+      ],
+      "expected_signal_summary": "6 likes vs 0 reports across 24 months",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Tiniest possible audience, highest-skill mark. Engagement is irrelevant — survival of the mark depends on community trust, which is total here.",
+      "edge_case_flag": "extreme_niche|ifmga_authored|trust_based_quality"
+    },
+    {
+      "id": 771,
+      "title": "Mt Earnslaw — west peak NW ridge variant snow stake bivvy gear cache",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mt Earnslaw west peak NW ridge, gear cache at 2400m platform with shared snow stakes and a pulk for emergency descent",
+        "intrinsic_quality": "Cooperative gear cache maintained by Glenorchy alpine community, reduces solo party risk",
+        "user_volume_per_month": 2,
+        "duration_months": 16,
+        "signal": "no signal, syncs at Earnslaw Burn campsite",
+        "season_pattern": "year-round, more use winter",
+        "human_factors": "Glenorchy alpine club cooperative"
+      },
+      "events_timeline": [
+        "Month 1: Glenorchy alpine club posts cache location after annual restock",
+        "Month 4: party uses cache after broken crampon, returns replacement gear",
+        "Month 8: 4 likes, all from confirmed users who left replacement gear",
+        "Month 12: cache audited, all gear present, mark refreshed",
+        "Month 16: 6 likes, 0 reports"
+      ],
+      "expected_signal_summary": "6 likes vs 0 reports, cooperative cache with audit cycle",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Community-cooperative cache, audit-validated. Engagement reflects cache use, not popularity contest.",
+      "edge_case_flag": "cooperative_cache|audit_cycle|low_popularity_high_function"
+    },
+    {
+      "id": 772,
+      "title": "Mt Sefton — Footstool ridge lightning rod hazard zone",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mt Sefton Footstool ridge crest at 2300m, exposed metal anchor that has been struck by lightning twice and acts as electrical attractor in storms",
+        "intrinsic_quality": "Names a no-go-during-electrical-activity zone, advises 100m descent if storm approaches",
+        "user_volume_per_month": 5,
+        "duration_months": 14,
+        "signal": "no signal",
+        "season_pattern": "summer thunderstorm season worst Dec-Feb",
+        "human_factors": "MetService alpine forecaster collaborated"
+      },
+      "events_timeline": [
+        "Month 1: NZAC member posts after watching strike during 2024 storm",
+        "Month 3: MetService forecaster confirms electrical exposure of ridge",
+        "Month 6: party retreats correctly, credits mark with avoiding strike",
+        "Month 9: 11 likes, including from MetService alpine team",
+        "Month 12: another strike documented at same anchor",
+        "Month 14: 14 likes, 0 reports"
+      ],
+      "expected_signal_summary": "14 likes vs 0 reports, two strike events documented during mark life",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Lightning hazard mark with MetService backing and witnessed strike events. Permanent through storm season cycles.",
+      "edge_case_flag": "lightning_hazard|metservice_backed|strike_witnessed"
+    },
+    {
+      "id": 773,
+      "title": "Mt Aspiring — Bonar Glacier sastrugi false trail",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Bonar Glacier between French Ridge Hut and Quarterdeck, a sastrugi pattern that looks like an obvious party-trail leading northeast but actually goes into crevasse zone",
+        "intrinsic_quality": "Anti-mark warning that the false trail is a wind feature, real route is 50m south",
+        "user_volume_per_month": 18,
+        "duration_months": 20,
+        "signal": "no signal",
+        "season_pattern": "spring after wind events most deceptive",
+        "human_factors": "posted after near-miss by NZAC training course"
+      },
+      "events_timeline": [
+        "Month 1: NZAC instructor posts after course participant followed false trail and roped party caught the slip",
+        "Month 4: party in flat light confirms the trap is real, adds photo of both lines side by side",
+        "Month 8: hut warden refreshes after spring storm",
+        "Month 12: 16 likes, including from instructor consortium",
+        "Month 16: tourist reports 'I followed the obvious tracks and was fine' — but tourist had clear weather",
+        "Month 20: 22 likes vs 1 report"
+      ],
+      "expected_signal_summary": "22 likes vs 1 report, condition-dependent hazard",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Anti-pattern hazard mark — danger only manifests in flat light. Clear-weather report does not invalidate. Permanent.",
+      "edge_case_flag": "condition_dependent|false_trail|flat_light_only"
+    },
+    {
+      "id": 774,
+      "title": "Mueller Hut Route — water source midway, tarn behind moraine",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mueller Hut Route midway up, hidden tarn 30m off-track behind a moraine fold, drinkable in summer when hut tank is low",
+        "intrinsic_quality": "Critical in summer when 200+ visitors per day deplete hut water tank by afternoon",
+        "user_volume_per_month": 95,
+        "duration_months": 18,
+        "signal": "no signal, syncs at hut",
+        "season_pattern": "summer-only relevant",
+        "human_factors": "hut warden posted, used by overflow trampers"
+      },
+      "events_timeline": [
+        "Month 1: warden posts during peak season after hut runs dry",
+        "Month 2: 30 likes within 2 weeks from same-week visitors",
+        "Month 5 (winter): tarn frozen, mark gets seasonal-only flag",
+        "Month 8 (summer): mark reactivates, 22 more likes",
+        "Month 12: 60 likes, 2 reports from people who couldn't find it",
+        "Month 14: warden adds bearing-from-track instructions",
+        "Month 18: 78 likes vs 3 reports"
+      ],
+      "expected_signal_summary": "78 likes vs 3 reports, all reports from people who didn't follow bearing",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Seasonal-active supply mark from hut warden. Reports reflect difficulty finding without bearing, not falsehood. Persistent.",
+      "edge_case_flag": "warden_authored|seasonal_water|bearing_dependent"
+    },
+    {
+      "id": 775,
+      "title": "Ball Pass — Caroline Hut access, river crossing bypass route",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Ball Pass approach to Caroline Hut, a moraine bypass to avoid a chest-deep glacial-fed river crossing in melt season",
+        "intrinsic_quality": "Adds 40 minutes but eliminates a non-trivial drowning risk on the standard approach",
+        "user_volume_per_month": 13,
+        "duration_months": 22,
+        "signal": "no signal",
+        "season_pattern": "critical in summer melt, less needed in winter freeze",
+        "human_factors": "Caroline Hut warden plus DOC backcountry team"
+      },
+      "events_timeline": [
+        "Month 1 (Dec): warden posts during peak melt season",
+        "Month 4: party that bypassed credits mark, photo of unbypassed river chest-deep",
+        "Month 7 (winter): river frozen, mark less relevant, but stays alive with seasonal note",
+        "Month 11 (next summer): refreshed",
+        "Month 14: a Land SAR rescue happens at the unbypassed crossing, mark validated",
+        "Month 18: 17 likes, 1 report from winter user who didnt need it",
+        "Month 22: 24 likes vs 1 report"
+      ],
+      "expected_signal_summary": "24 likes vs 1 report, validated by SAR rescue at the bypassed crossing",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Seasonal alpine bypass with SAR-incident validation. Winter report is out of season scope. Permanent.",
+      "edge_case_flag": "seasonal_bypass|sar_validated|drowning_risk_reduction"
+    },
+    {
+      "id": 776,
+      "title": "Cascade Saddle — emergency shelter rock overhang midway",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Cascade Saddle midway between Pylon and Dart Hut, a rock overhang that fits 4 people standing, used as last-resort lightning shelter",
+        "intrinsic_quality": "Only viable shelter on the most exposed section of NZs deadliest tramping route",
+        "user_volume_per_month": 25,
+        "duration_months": 20,
+        "signal": "no signal",
+        "season_pattern": "year-round, summer thunderstorm and winter wind",
+        "human_factors": "DOC and a survivor of 2018 storm-rescue co-authored"
+      },
+      "events_timeline": [
+        "Month 1: 2018 incident survivor posts mark with photo of the overhang",
+        "Month 3: DOC ranger validates and adds it to safety briefing",
+        "Month 6: party uses overhang during thunderstorm, posts thanks",
+        "Month 10: 19 likes, 0 reports",
+        "Month 14: another party uses during whiteout, mark gains 'all-conditions shelter' tag",
+        "Month 17: tourist reports 'doesnt look like much of a shelter' — but they were in clear weather",
+        "Month 20: 26 likes vs 1 report"
+      ],
+      "expected_signal_summary": "26 likes vs 1 report, multiple use-case validations",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Last-resort shelter on highest-exposure route. Aesthetic complaint is irrelevant to function. Permanent.",
+      "edge_case_flag": "shelter_of_last_resort|deadliest_route_supplement"
+    },
+    {
+      "id": 777,
+      "title": "Mt Cook Range — Sealy Range traverse, false col navigation trap",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Sealy Range traverse near Mt Annette, a false col that draws parties off-route into a 200m drop above bluffs",
+        "intrinsic_quality": "Marks the misleading col and indicates the true col 100m further along ridge",
+        "user_volume_per_month": 6,
+        "duration_months": 24,
+        "signal": "no signal",
+        "season_pattern": "year-round alpine traverse",
+        "human_factors": "NZAC Canterbury authored after club trip near-miss"
+      },
+      "events_timeline": [
+        "Month 1: NZAC posts after club trip nearly went off-route",
+        "Month 4: independent solo confirms the trap from below",
+        "Month 9: 8 likes from confirmed traverse completers",
+        "Month 14: another party reports tracks leading to false col, validates persistence of trap",
+        "Month 18: 12 likes, 0 reports",
+        "Month 24: NZAC refreshes mark with topo overlay"
+      ],
+      "expected_signal_summary": "12 likes vs 0 reports across 24 months",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Persistent navigation trap mark. Low traffic but consistent validation. Persistent.",
+      "edge_case_flag": "false_col|navigation_trap|club_authored"
+    },
+    {
+      "id": 778,
+      "title": "Mt Brewster Hut — winter approach avalanche corridor",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Approach to Mt Brewster Hut from Haast Pass, the winter avalanche corridor where the standard summer track becomes a slide path under windslab",
+        "intrinsic_quality": "Reroutes parties up an alternate ridge in winter, adding 90 minutes but eliminating slide exposure",
+        "user_volume_per_month": 8,
+        "duration_months": 28,
+        "signal": "no signal",
+        "season_pattern": "winter only critical (June-Oct)",
+        "human_factors": "NZ Avalanche Advisory + Brewster Hut warden"
+      },
+      "events_timeline": [
+        "Month 1 (June): NZAA posts at start of winter season",
+        "Month 3: a slide releases naturally during a warming event, captured on camera by hut warden",
+        "Month 6: 14 likes from winter mountaineers",
+        "Month 8 (Nov): summer trampers report 'the standard track was fine' — yes, in summer",
+        "Month 12: next winter, mark refreshes",
+        "Month 18: 22 likes, 4 summer reports",
+        "Month 24: third winter cycle",
+        "Month 28: 30 likes vs 5 reports, all reports from non-winter users"
+      ],
+      "expected_signal_summary": "30 likes vs 5 reports, reports temporally separate from danger window",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Winter-only avalanche bypass mark. Summer reports are out of seasonal scope and should not weight. Permanent.",
+      "edge_case_flag": "winter_only|seasonal_bypass|nzaa_authored"
+    },
+    {
+      "id": 779,
+      "title": "Mt Aspiring — French Ridge Hut to Quarterdeck rope-up zone",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "French Ridge Hut to Quarterdeck Pass, the rope-up zone where the snow gets crevasse-prone, GPS-marked because cloud often obscures visual cues",
+        "intrinsic_quality": "Standardises rope-up location across all parties, prevents some-rope some-not confusion that has caused incidents",
+        "user_volume_per_month": 22,
+        "duration_months": 26,
+        "signal": "no signal",
+        "season_pattern": "year-round alpine usage, summer primary",
+        "human_factors": "Wanaka guides + NZ Mountain Guides Assoc"
+      },
+      "events_timeline": [
+        "Month 1: NZMGA standard-route document references this mark",
+        "Month 4: 18 likes from summer climbers",
+        "Month 8: party reports rope-up worked exactly as marked, photo confirms crevasse 30m past",
+        "Month 14: solo climber reports 'I dont need a rope-up zone, Im solo' — keeps anyway",
+        "Month 20: 28 likes, 1 unhelpful report",
+        "Month 26: refreshed, third season's data"
+      ],
+      "expected_signal_summary": "28 likes vs 1 report, NZMGA-referenced",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Standardisation mark with NZMGA reference. Solo-climber complaint is out of audience scope. Persistent.",
+      "edge_case_flag": "nzmga_referenced|standardisation_mark|solo_irrelevant_complaint"
+    },
+    {
+      "id": 780,
+      "title": "Aoraki/Mt Cook — Empress Hut access via Hooker Glacier",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Empress Hut access route via Hooker Glacier, the crevasse-bridged corridor that changes annually, marked seasonally by NZAC",
+        "intrinsic_quality": "Marks the current safe corridor through 8 large crevasses, life-essential in cloud",
+        "user_volume_per_month": 4,
+        "duration_months": 24,
+        "signal": "no signal, syncs at Empress Hut",
+        "season_pattern": "summer climbing season",
+        "human_factors": "NZAC Canterbury + Empress Hut visitors maintain"
+      },
+      "events_timeline": [
+        "Month 1 (Dec): NZAC member posts updated corridor after summer survey",
+        "Month 4: client trip from Mt Cook Village confirms",
+        "Month 9 (Mar): corridor changes after warm spell, mark updated",
+        "Month 12 (next Dec): full re-survey by next season's first party",
+        "Month 18: 9 likes from summit-log-confirmed climbers",
+        "Month 24: third season cycle, mark a fixture in NZAC bulletin"
+      ],
+      "expected_signal_summary": "9 likes vs 0 reports across 24 months",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Annually-resurveyed life-essential glacier corridor. Refresh cadence proves quality. Permanent through annual cycle.",
+      "edge_case_flag": "annual_resurvey|glacier_corridor|life_essential"
+    },
+    {
+      "id": 781,
+      "title": "Mt Earnslaw Glacier — east peak col cornice break line",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mt Earnslaw east peak col, cornice that develops on every south wind cycle and breaks at predictable line marked by old fracture scar",
+        "intrinsic_quality": "Marks the safe-side-of-cornice line so parties traversing the col know which side will collapse",
+        "user_volume_per_month": 3,
+        "duration_months": 20,
+        "signal": "no signal",
+        "season_pattern": "winter primary (cornice forms June-October)",
+        "human_factors": "NZAC Otago section + Glenorchy guides"
+      },
+      "events_timeline": [
+        "Month 1: NZAC Otago posts cornice mark after a near-break event",
+        "Month 4: cornice breaks naturally during winter storm, validates mark line within 5m",
+        "Month 8 (summer): cornice gone, mark dormant but alive",
+        "Month 12 (next winter): cornice reforms, mark spikes back into use",
+        "Month 16: 8 likes vs 0 reports",
+        "Month 20: 11 likes after second break event documented"
+      ],
+      "expected_signal_summary": "11 likes vs 0 reports, two cornice break events documented",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Predictable cornice hazard mark with break-line evidence. Dormancy in summer is correct, not death.",
+      "edge_case_flag": "cornice_break_line|predictable_seasonal|dormancy_is_normal"
+    },
+    {
+      "id": 782,
+      "title": "Mt Cook — Plateau Hut radio battery cache",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Plateau Hut radio battery cache, sealed waterproof box containing spare D-cells and a spare handset for emergency communications",
+        "intrinsic_quality": "Critical infrastructure when extended weather windows drain primary radios over 4-5 day stays",
+        "user_volume_per_month": 14,
+        "duration_months": 30,
+        "signal": "syncs at hut after radio restart",
+        "season_pattern": "year-round",
+        "human_factors": "DOC alpine team + Mt Cook SAR"
+      },
+      "events_timeline": [
+        "Month 1: DOC posts location after annual maintenance",
+        "Month 6: party uses spare battery during 5-day storm, restocks on exit",
+        "Month 12: 18 likes from summit-log climbers",
+        "Month 18: cache restocked with newer battery chemistry, mark updated",
+        "Month 24: 28 likes total, 0 reports",
+        "Month 30: third annual maintenance cycle"
+      ],
+      "expected_signal_summary": "28 likes vs 0 reports across 30 months",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "DOC-maintained operational infrastructure mark. Annual cycle, total trust. Permanent.",
+      "edge_case_flag": "doc_maintained|operational_cache|annual_cycle"
+    },
+    {
+      "id": 783,
+      "title": "Mt Aspiring NW Ridge — summit ridge running belay anchors",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mt Aspiring NW Ridge summit ridge, three pre-placed running belay anchors for short-rope technique through exposed mid-ridge",
+        "intrinsic_quality": "Reduces summit-ridge crossing time from 3 hours pitched to 1 hour short-roped",
+        "user_volume_per_month": 9,
+        "duration_months": 16,
+        "signal": "no signal",
+        "season_pattern": "summer summit season",
+        "human_factors": "Wanaka guides cooperative"
+      },
+      "events_timeline": [
+        "Month 1: Wanaka guides post after pre-season anchor inspection",
+        "Month 3: client trip uses, confirms placements bombproof, photos added",
+        "Month 7: anchor #1 found bent, replaced and mark updated",
+        "Month 11: 13 likes from named summit logbook entries",
+        "Month 14: NZAC bulletin includes in summer alpine notes",
+        "Month 16: 16 likes vs 0 reports"
+      ],
+      "expected_signal_summary": "16 likes vs 0 reports, hardware-spec validated",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Guide-maintained running-belay infrastructure. Hardware audit cycle, club-referenced. Persistent.",
+      "edge_case_flag": "running_belay_anchors|guide_maintained|club_referenced"
+    },
+    {
+      "id": 784,
+      "title": "Mueller Glacier — moulin location warning (lethal)",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mueller Glacier mid-glacier moulin (vertical ice shaft), 6m diameter, drains into glacier interior, fatal if unroped party walks over snow bridge",
+        "intrinsic_quality": "Marks the largest active moulin which migrates 10-20m per year as glacier moves",
+        "user_volume_per_month": 4,
+        "duration_months": 24,
+        "signal": "no signal",
+        "season_pattern": "year-round, snow bridge worse in spring",
+        "human_factors": "NZAC + DOC + GNS Science"
+      },
+      "events_timeline": [
+        "Month 1: NZAC member posts after seeing moulin from above with safe ice axe poke test",
+        "Month 6: GNS Science adds glaciological context, links research paper",
+        "Month 12: party confirms moulin still active, location updated 12m down-glacier",
+        "Month 18: 12 likes, 0 reports",
+        "Month 21: another moulin opens nearby, secondary mark added",
+        "Month 24: third annual position update"
+      ],
+      "expected_signal_summary": "12 likes vs 0 reports, position updated as glacier flows",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Lethal hazard mark with active position tracking. Maintenance cadence is part of its quality. Permanent.",
+      "edge_case_flag": "lethal_glacier_hazard|migrating_position|gns_backed"
+    },
+    {
+      "id": 785,
+      "title": "Mt Sefton — Tuckett Pinnacle abseil descent route",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Tuckett Pinnacle on the Mt Sefton ridge, an abseil descent route that bypasses a mid-ridge gendarme, pre-rigged with tat that needs annual replacement",
+        "intrinsic_quality": "Without abseil route, parties must reverse a 5.7 down-climb in mountaineering boots — high-consequence",
+        "user_volume_per_month": 3,
+        "duration_months": 18,
+        "signal": "no signal",
+        "season_pattern": "summer alpine route",
+        "human_factors": "NZAC Canterbury maintenance"
+      },
+      "events_timeline": [
+        "Month 1: NZAC Canterbury posts after annual tat replacement",
+        "Month 5: party uses abseil successfully, photo of fresh anchors",
+        "Month 10: tat condition checked by passing party, still good",
+        "Month 14: 7 likes from named NZAC members",
+        "Month 18: annual tat replacement, mark refreshed"
+      ],
+      "expected_signal_summary": "7 likes vs 0 reports, annual replacement cycle",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Standard alpine abseil route mark with maintenance cadence. Trusted by club. Persistent.",
+      "edge_case_flag": "abseil_route|annual_tat_replacement|club_maintained"
+    },
+    {
+      "id": 786,
+      "title": "Pioneer Hut — schrund crossing at Mt Tasman approach",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Schrund (bergschrund) crossing on Mt Tasman approach from Pioneer Hut, the snow bridge that forms each season at variable location",
+        "intrinsic_quality": "Marks the current season's crossing, saves an hour of probing in the dark on summit day",
+        "user_volume_per_month": 4,
+        "duration_months": 14,
+        "signal": "no signal",
+        "season_pattern": "summer climbing season",
+        "human_factors": "NZAC + IFMGA guides"
+      },
+      "events_timeline": [
+        "Month 1 (Dec): IFMGA guide posts after pre-season recce",
+        "Month 3: independent party crosses successfully, ice screw runner photo added",
+        "Month 5 (Mar): bridge fails as season ends, mark archived with 'season closed' tag",
+        "Month 8: dormant",
+        "Month 12 (next Dec): new bridge forms, new mark posted by next first-of-season party",
+        "Month 14: 8 likes vs 0 reports across two seasons"
+      ],
+      "expected_signal_summary": "8 likes vs 0 reports, two-season cycle",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Standard alpine seasonal mark with archive-and-renew cycle. Trusted protocol. Persistent.",
+      "edge_case_flag": "seasonal_archive_renew|bergschrund|nzac_ifmga"
+    },
+    {
+      "id": 787,
+      "title": "Centennial Hut — Fox Range traverse high point waypoint",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Fox Range traverse high point en route to Centennial Hut, GPS waypoint at the col where the route turns 90 degrees and is invisible in cloud",
+        "intrinsic_quality": "Without waypoint, parties continue straight in cloud and end up on the wrong glacier",
+        "user_volume_per_month": 3,
+        "duration_months": 22,
+        "signal": "no signal",
+        "season_pattern": "year-round alpine traverse",
+        "human_factors": "NZAC West Coast section"
+      },
+      "events_timeline": [
+        "Month 1: NZAC posts after club traverse",
+        "Month 6: solo climber confirms in cloud, credits mark",
+        "Month 11: 6 likes from named traverse completers",
+        "Month 16: another party in clear weather adds visual reference photo",
+        "Month 22: 9 likes vs 0 reports"
+      ],
+      "expected_signal_summary": "9 likes vs 0 reports across 22 months",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Niche navigation mark for an obscure traverse. Quality validated by completer testimony. Persistent.",
+      "edge_case_flag": "obscure_traverse|cloud_navigation|completer_validated"
+    },
+    {
+      "id": 788,
+      "title": "Tasman Glacier — middle moraine medial avalanche debris zone",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tasman Glacier middle moraine medial zone, the avalanche debris field at the foot of Mt Tasman east face that gets refreshed by serac fall every few weeks",
+        "intrinsic_quality": "Marks no-traverse zone for guided ski parties on the lower glacier",
+        "user_volume_per_month": 18,
+        "duration_months": 20,
+        "signal": "no signal",
+        "season_pattern": "winter ski touring season + summer climbers",
+        "human_factors": "Tasman Glacier ski guides + NZAA"
+      },
+      "events_timeline": [
+        "Month 1 (July): ski guides post at start of winter season",
+        "Month 3: serac fall observed by guided party, mark validated",
+        "Month 6: NZAA references in winter bulletin",
+        "Month 10 (summer): climbing parties also use the mark",
+        "Month 14: tourist on scenic glacier walk reports 'I walked there fine' — but tourist was 200m away from actual zone",
+        "Month 18: 24 likes, 1 mislocated report",
+        "Month 20: refreshed for next winter"
+      ],
+      "expected_signal_summary": "24 likes vs 1 report from tourist who didn't enter zone",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Cross-discipline alpine hazard mark with serac validation. Tourist misreport is location-invalid. Permanent.",
+      "edge_case_flag": "cross_discipline|serac_validated|tourist_location_invalid"
+    },
+    {
+      "id": 789,
+      "title": "Aoraki — Tasman Saddle Hut to Plateau Hut traverse, schrund jump",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Tasman Saddle Hut to Plateau Hut traverse, the schrund jump near the Anna Plateau where the only crossing is a 1.5m horizontal step over open ice",
+        "intrinsic_quality": "Marks the optimal crossing point and the safe approach line, alternative routes have large open crevasses",
+        "user_volume_per_month": 5,
+        "duration_months": 18,
+        "signal": "no signal",
+        "season_pattern": "summer alpine traverse",
+        "human_factors": "NZAC + Mt Cook SAR"
+      },
+      "events_timeline": [
+        "Month 1: NZAC posts after first-of-season survey",
+        "Month 4: party crosses, confirms 1.5m gap, photo added",
+        "Month 8: Mt Cook SAR adds it to their hut-to-hut briefing",
+        "Month 12: 9 likes vs 0 reports",
+        "Month 16: gap widens to 2m, mark updated with rope-belay note",
+        "Month 18: 13 likes total"
+      ],
+      "expected_signal_summary": "13 likes vs 0 reports, evolving gap width tracked",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Hut-to-hut alpine traverse mark with SAR reference and condition evolution tracking. Persistent.",
+      "edge_case_flag": "hut_to_hut|evolving_gap|sar_referenced"
+    },
+    {
+      "id": 790,
+      "title": "Mt Aspiring — Colin Todd Hut access, Bonar Glacier rope team waypoint",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Bonar Glacier en route to Colin Todd Hut, GPS waypoint marking where rope teams should reform after spreading out across the flat",
+        "intrinsic_quality": "Crevasses begin abruptly past this point — rope discipline failure is the leading cause of hut-approach incidents",
+        "user_volume_per_month": 11,
+        "duration_months": 18,
+        "signal": "no signal",
+        "season_pattern": "summer alpine season",
+        "human_factors": "NZ Mountain Guides Assoc + Wanaka guides"
+      },
+      "events_timeline": [
+        "Month 1: NZMGA posts as standard route waypoint",
+        "Month 5: party reports the waypoint matched exactly the visual crevasse onset",
+        "Month 10: 12 likes from confirmed Colin Todd Hut visitors",
+        "Month 14: hut warden adds confirmation",
+        "Month 18: 17 likes vs 0 reports"
+      ],
+      "expected_signal_summary": "17 likes vs 0 reports, NZMGA-standard",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "NZMGA standard-route waypoint with hut warden confirmation. Persistent reference.",
+      "edge_case_flag": "nzmga_standard|rope_discipline_waypoint"
+    },
+    {
+      "id": 791,
+      "title": "Mt Earnslaw — Wright Col bivvy site, ice axe arrest zone",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Wright Col on Mt Earnslaw, the descent slope below the col that requires ice axe self-arrest practice — has caused multiple injury slides",
+        "intrinsic_quality": "Marks the mandatory self-arrest practice zone before parties commit to the steep descent",
+        "user_volume_per_month": 4,
+        "duration_months": 22,
+        "signal": "no signal",
+        "season_pattern": "year-round, worst in icy spring conditions",
+        "human_factors": "NZAC mountain skills instructor"
+      },
+      "events_timeline": [
+        "Month 1: NZAC instructor posts after observing two near-misses on a course",
+        "Month 6: party reports doing arrest practice exactly as marked, descended safely",
+        "Month 12: 8 likes from course alumni",
+        "Month 18: another slip-and-arrest incident, party self-rescued, validates mark",
+        "Month 22: 12 likes vs 0 reports"
+      ],
+      "expected_signal_summary": "12 likes vs 0 reports, multiple validation incidents",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Skills-checkpoint mark — unique alpine concept, validated by incidents. Permanent.",
+      "edge_case_flag": "skills_checkpoint|arrest_practice|incident_validated"
+    },
+    {
+      "id": 792,
+      "title": "Mt Brewster — Brewster Hut summit attempt turn-around landmark",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Mt Brewster summit route from Brewster Hut, the 'point of no return' rock landmark used as turn-around if party is not there by 10am",
+        "intrinsic_quality": "Codifies a turn-around discipline that has prevented multiple benighting incidents",
+        "user_volume_per_month": 9,
+        "duration_months": 20,
+        "signal": "no signal",
+        "season_pattern": "year-round summit attempts",
+        "human_factors": "Brewster Hut warden + NZAC instructor"
+      },
+      "events_timeline": [
+        "Month 1: warden posts the rock with 10am rule",
+        "Month 4: party turns around at landmark per rule, avoids storm, credits mark",
+        "Month 9: 11 likes",
+        "Month 14: another party reports successful summit with disciplined turn-around",
+        "Month 18: 16 likes, 0 reports",
+        "Month 20: warden refreshes annually"
+      ],
+      "expected_signal_summary": "16 likes vs 0 reports, discipline-codification mark",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Decision-discipline mark, validated by avoidance outcomes. Genuine alpine wisdom encoded. Permanent.",
+      "edge_case_flag": "turn_around_discipline|warden_authored|outcome_validated"
+    },
+    {
+      "id": 793,
+      "title": "Aoraki — Linda Glacier upper neve, summit-day weather observation point",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Linda Glacier upper neve below Summit Rocks, the 360-degree weather observation point where summit-day parties can see fronts arriving from the Tasman 30 minutes early",
+        "intrinsic_quality": "Marks the spot used for go/no-go summit decisions based on incoming cloud bank",
+        "user_volume_per_month": 12,
+        "duration_months": 16,
+        "signal": "no signal",
+        "season_pattern": "summer summit season",
+        "human_factors": "Aspiring Guides + NZ Alpine Team"
+      },
+      "events_timeline": [
+        "Month 1: Aspiring Guides post during summit-week guide trip",
+        "Month 3: client party turns around based on observation from this point, credits mark",
+        "Month 7: NZ Alpine Team adds it to their summit-prep brief",
+        "Month 11: 14 likes from confirmed summit attempts",
+        "Month 16: 19 likes vs 0 reports"
+      ],
+      "expected_signal_summary": "19 likes vs 0 reports, decision-support mark",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Weather-observation decision-support mark with NZ Alpine Team backing. Persistent.",
+      "edge_case_flag": "decision_support|weather_observation|nzalpine_team"
+    },
+    {
+      "id": 794,
+      "title": "Mt Tasman Marcel — couloir entry, mid-day rockfall window",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Marcel Couloir entry on Mt Tasman, where the south-facing rock band sheds rock between 11am and 2pm in summer warming",
+        "intrinsic_quality": "Codifies the time-window hazard and the pre-9am entry rule",
+        "user_volume_per_month": 5,
+        "duration_months": 18,
+        "signal": "no signal",
+        "season_pattern": "summer when rock warms",
+        "human_factors": "NZAC ice climbing community"
+      },
+      "events_timeline": [
+        "Month 1: NZAC ice climber posts after near-miss with a refrigerator-sized block",
+        "Month 4: rockfall observed at 12:30pm, mark window validated",
+        "Month 8: 9 likes from named ice climbers",
+        "Month 12: another rockfall observed mid-window, debris photo added",
+        "Month 18: 14 likes vs 0 reports"
+      ],
+      "expected_signal_summary": "14 likes vs 0 reports, time-window validated by observed events",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Time-window hazard mark — alpine wisdom encoded. Multiple validation events. Permanent.",
+      "edge_case_flag": "time_window_hazard|rockfall|validated_observations"
+    },
+    {
+      "id": 795,
+      "title": "Mt Sefton — Footstool col emergency descent line",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Footstool col on Mt Sefton ridge, the only viable emergency descent line if weather closes in mid-traverse, drops 800m to Mueller Glacier",
+        "intrinsic_quality": "Last-resort escape route, 60-degree snow with crevasse exit at base",
+        "user_volume_per_month": 4,
+        "duration_months": 16,
+        "signal": "no signal",
+        "season_pattern": "summer climbing season",
+        "human_factors": "NZAC Canterbury + Mt Cook SAR"
+      },
+      "events_timeline": [
+        "Month 1: NZAC posts as part of Sefton route description",
+        "Month 5: SAR references in alpine briefing",
+        "Month 9: party uses descent during storm, all returned safely, mark validated",
+        "Month 13: 9 likes from successful Sefton parties",
+        "Month 16: 12 likes vs 0 reports"
+      ],
+      "expected_signal_summary": "12 likes vs 0 reports, SAR-validated by use",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Emergency descent line mark, SAR-referenced and use-validated. Permanent.",
+      "edge_case_flag": "emergency_descent|sar_referenced|use_validated"
+    },
+    {
+      "id": 796,
+      "title": "Mt Aspiring — Bevan Col, glacier exit pickup zone",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Bevan Col exit from Bonar Glacier, the heli-pickup safe zone for parties exiting via the col rather than French Ridge",
+        "intrinsic_quality": "Marks the only flat heli-suitable area within 500m of the col, used in rescue and weather-contingency pickups",
+        "user_volume_per_month": 8,
+        "duration_months": 24,
+        "signal": "no signal",
+        "season_pattern": "year-round, primary use spring/autumn",
+        "human_factors": "Wanaka Heliservices + Mt Aspiring SAR"
+      },
+      "events_timeline": [
+        "Month 1: Wanaka Heliservices posts coordinates after using zone for pickup",
+        "Month 6: Mt Aspiring SAR confirms in operational manual",
+        "Month 12: party uses zone for arranged pickup, photo of helicopter on landing area",
+        "Month 18: 14 likes from heli-supported parties",
+        "Month 24: 19 likes vs 0 reports"
+      ],
+      "expected_signal_summary": "19 likes vs 0 reports, operational reference",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Heli-operational mark with commercial and SAR backing. Permanent reference.",
+      "edge_case_flag": "heli_pickup_zone|commercial_operator|sar_manual"
+    },
+    {
+      "id": 797,
+      "title": "Aoraki — Plateau Hut summit-day pre-dawn departure marker",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Plateau Hut, the GPS waypoint outside the hut that is the standard 1am departure point for summit attempts on Aoraki",
+        "intrinsic_quality": "Standardises departure to enable parties on different routes to coordinate, also marks where headlamp checks are done",
+        "user_volume_per_month": 16,
+        "duration_months": 26,
+        "signal": "syncs at hut wifi after return",
+        "season_pattern": "summer summit season",
+        "human_factors": "Plateau Hut warden tradition"
+      },
+      "events_timeline": [
+        "Month 1: hut warden posts as part of summit-coordination tradition",
+        "Month 4: 18 likes from summit-log parties",
+        "Month 9: NZAC Aoraki section formalises in route notes",
+        "Month 14: 26 likes total",
+        "Month 18: warden adds note about gear-up rope coiling area",
+        "Month 22: 32 likes",
+        "Month 26: 36 likes vs 0 reports"
+      ],
+      "expected_signal_summary": "36 likes vs 0 reports across 26 months",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Coordination tradition mark, NZAC-formalised. High community trust. Permanent.",
+      "edge_case_flag": "coordination_tradition|warden_authored|nzac_formalised"
+    },
+    {
+      "id": 798,
+      "title": "Cascade Saddle — Pylon descent, scree ankle-break zone",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Cascade Saddle Pylon descent middle scree section, the loose-scree zone where ankle-break injuries occur most frequently per DOC injury data",
+        "intrinsic_quality": "Marks the recommended slow-traverse zone where running the scree is contraindicated despite tempting downhill momentum",
+        "user_volume_per_month": 30,
+        "duration_months": 22,
+        "signal": "no signal",
+        "season_pattern": "summer-autumn primary tramping season",
+        "human_factors": "DOC + NZ Land SAR Otago"
+      },
+      "events_timeline": [
+        "Month 1: DOC posts after injury statistics review",
+        "Month 4: SAR Otago adds rescue records of 3 ankle injuries from this scree",
+        "Month 9: party that descended slowly per mark thanks DOC",
+        "Month 14: 20 likes",
+        "Month 18: another ankle-break SAR call-out at same location",
+        "Month 22: 28 likes vs 2 reports (from people who ran it and were fine)"
+      ],
+      "expected_signal_summary": "28 likes vs 2 reports, statistical injury backing",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Statistical-injury-backed safety mark. Survivor reports do not invalidate documented injury rate. Permanent.",
+      "edge_case_flag": "statistical_injury|survivor_bias_reports|doc_authored"
+    },
+    {
+      "id": 799,
+      "title": "Mueller Hut — winter route alternative via Annette Plateau",
+      "scenario": {
+        "type": "navigation",
+        "location_desc": "Mueller Hut winter access via Annette Plateau, the safer-than-standard route that bypasses the avalanche-prone Sealy slope in winter",
+        "intrinsic_quality": "Adds 2 hours but eliminates avalanche exposure, used by every winter party that knows it",
+        "user_volume_per_month": 6,
+        "duration_months": 28,
+        "signal": "no signal",
+        "season_pattern": "winter only (June-October)",
+        "human_factors": "NZAA + Mueller Hut warden"
+      },
+      "events_timeline": [
+        "Month 1 (June): NZAA posts at start of winter season",
+        "Month 4: party uses route during high-hazard week, avoids slide path that released",
+        "Month 8 (summer): mark dormant",
+        "Month 12 (next winter): refreshed",
+        "Month 18: 12 likes from winter parties",
+        "Month 24: third winter cycle, mark a fixture",
+        "Month 28: 16 likes vs 1 summer report from someone who didn't need it"
+      ],
+      "expected_signal_summary": "16 likes vs 1 report, three-winter validation",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Winter-only NZAA-backed bypass route. Summer report is out of seasonal scope. Permanent.",
+      "edge_case_flag": "winter_only|nzaa_bypass|three_season_validation"
+    },
+    {
+      "id": 800,
+      "title": "Mt Cook — Empress Hut summit-day shelter cache, emergency stove",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Empress Hut summit-day shelter cache, sealed bin with emergency stove, fuel, and a sleeping bag for parties caught out on Aoraki south ridge attempts",
+        "intrinsic_quality": "Last-line emergency cache that has been used at least twice in confirmed self-rescues",
+        "user_volume_per_month": 3,
+        "duration_months": 30,
+        "signal": "syncs at hut",
+        "season_pattern": "year-round, primary summer use",
+        "human_factors": "NZAC Canterbury + Mt Cook SAR"
+      },
+      "events_timeline": [
+        "Month 1: NZAC posts cache contents and audit schedule",
+        "Month 8: party uses stove to brew hot drinks during forced bivvy, all survived, audit restocked",
+        "Month 14: SAR adds reference in hut briefing materials",
+        "Month 20: second self-rescue use, sleeping bag deployed, replaced by SAR within a week",
+        "Month 26: 11 likes, 0 reports",
+        "Month 30: third annual audit cycle, mark refreshed"
+      ],
+      "expected_signal_summary": "11 likes vs 0 reports, two self-rescue validation events",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Last-line emergency cache mark, twice validated by actual self-rescues. SAR-referenced. Permanent infrastructure.",
+      "edge_case_flag": "emergency_cache|twice_validated|sar_referenced"
+    }
+  ]
+}

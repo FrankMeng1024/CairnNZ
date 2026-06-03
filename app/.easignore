@@ -1,0 +1,48 @@
+# EAS ignore — keep ONLY what's needed at runtime.
+# Everything below is dev/test/build-output, not part of the running app.
+
+# Tests (jest)
+__tests__/
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/__tests__/
+
+# Dev scripts (icon generation, smoke tests, etc.)
+scripts/
+pw_screenshot.js
+pw_shot.js
+
+# QA / UX / arch docs (screenshots, reviews, sprint evidence)
+docs/
+
+# Expo web export (52MB — only used for `expo export` web target)
+dist/
+
+# Expo dev cache
+.expo/
+.expo-shared/
+expo-env.d.ts
+
+# HTML prototypes
+*.html
+
+# TypeScript build info
+*.tsbuildinfo
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Coverage / logs
+coverage/
+*.log
+npm-debug.log*
+
+# Source maps not needed in build (Expo regenerates)
+*.map

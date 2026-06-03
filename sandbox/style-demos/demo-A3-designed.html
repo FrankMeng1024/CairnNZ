@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Sandbox Demo A.3 — Designed Trails</title>
+<style>
+  body { margin: 0; padding: 0; background: #f5f5f5; font-family: -apple-system, sans-serif; height: 100vh; overflow: hidden; display: flex; }
+
+  #panel { width: 240px; background: #fff; border-right: 1px solid #e0e0e0; padding: 16px; box-sizing: border-box; font-size: 12px; overflow-y: auto; flex-shrink: 0; }
+  #panel h1 { font-size: 14px; margin: 0 0 4px; color: #333; font-weight: 600; }
+  #panel .sub { color: #888; font-size: 11px; margin-bottom: 16px; }
+  .section { margin-bottom: 14px; }
+  .section h3 { font-size: 11px; color: #666; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 11px; }
+  .row label { color: #555; }
+  .row .val { color: #000; font-weight: 500; }
+  input[type="range"] { width: 100%; }
+  button { width: 100%; padding: 6px; background: #fff; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; font-size: 11px; color: #333; margin-bottom: 4px; }
+  button:hover { background: #f0f0f0; }
+  button.primary { background: #333; color: #fff; border-color: #333; }
+
+  #stage { flex: 1; position: relative; background: #fafafa; }
+  canvas { display: block; }
+
+  #statusbar { position: absolute; top: 8px; left: 8px; background: rgba(255,255,255,0.95); padding: 6px 10px; border-radius: 3px; font-size: 11px; color: #333; border: 1px solid #e0e0e0; z-index: 10; }
+  #statusbar span { margin-right: 12px; }
+
+  .marker-card { position: absolute; background: #fff; border: 1px solid #ccc; padding: 6px 8px; border-radius: 3px; font-size: 10px; pointer-events: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05); z-index: 9; }
+  .marker-card .title { font-weight: 600; color: #000; }
+  .marker-card .stat { color: #555; }
+  .marker-card .stat .num { color: #000; font-weight: 500; }
+  .marker-card .reasons { color: #888; margin-top: 2px; padding-top: 2px; border-top: 1px dashed #eee; }
+
+  .legend { position: absolute; bottom: 8px; left: 8px; background: rgba(255,255,255,0.95); padding: 8px 10px; border-radius: 3px; font-size: 10px; color: #555; border: 1px solid #e0e0e0; z-index: 10; }
+  .legend-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.1); }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <h1>Cairn Sandbox</h1>
+  <div class="sub">Demo A.3 — Designed Trails · 100 walkers</div>
+
+  <div class="section">
+    <h3>Population</h3>
+    <div class="row"><label>Walkers (visual)</label><span class="val">100</span></div>
+    <input type="range" min="10" max="100" value="100" />
+    <div class="row" style="color: #888; font-size: 10px; margin-top: 4px;">
+      <label>Headless mode</label><span class="val">100-1000</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Time</h3>
+    <div class="row"><label>Speed</label><span class="val">100×</span></div>
+    <input type="range" min="1" max="10000" value="100" />
+  </div>
+
+  <div class="section">
+    <h3>Persona Mix</h3>
+    <div class="row"><label>● Explorer</label><span class="val">30%</span></div>
+    <div class="row"><label>● Social</label><span class="val">40%</span></div>
+    <div class="row"><label>● Enthusiast</label><span class="val">5%</span></div>
+    <div class="row"><label>● Lurker</label><span class="val">20%</span></div>
+    <div class="row"><label>● Critic</label><span class="val">4%</span></div>
+    <div class="row"><label>● Spammer</label><span class="val">0.5%</span></div>
+    <div class="row"><label>● Malicious</label><span class="val">0.5%</span></div>
+  </div>
+
+  <div class="section">
+    <h3>Algorithm</h3>
+    <div class="row"><label>τ supply</label><span class="val">30d</span></div>
+    <div class="row"><label>τ report</label><span class="val">30d</span></div>
+    <div class="row"><label>heartbeat</label><span class="val">20%</span></div>
+  </div>
+
+  <div class="section">
+    <button class="primary">▶ Start</button>
+    <button>⏸ Pause</button>
+    <button>↻ Reset</button>
+    <button>📷 Screenshot</button>
+    <button>💾 Export JSON</button>
+  </div>
+</div>
+
+<div id="stage">
+  <canvas id="canvas"></canvas>
+
+  <div id="statusbar">
+    <span>Day: <strong>42</strong></span>
+    <span>Markers: <strong>23</strong></span>
+    <span>Healthy: <strong>19</strong></span>
+    <span>Sunk: <strong>3</strong></span>
+    <span>Heartbeat: <strong>1</strong></span>
+  </div>
+
+  <div class="legend">
+    <div class="legend-row"><div class="legend-dot" style="background:#4CAF50"></div>Explorer</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#FF9800"></div>Social</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#2196F3"></div>Enthusiast</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#9E9E9E"></div>Lurker</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#9C27B0"></div>Critic</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth - 240;
+canvas.height = window.innerHeight;
+
+// ==== 设计预设步道 (8 条) — 像 NZ 步道的视觉感觉 ====
+const W = canvas.width;
+const H = canvas.height;
+const trails = [
+  // 主线 1: 横贯曲折
+  [[60, 150], [180, 130], [320, 165], [460, 140], [620, 175], [780, 150], [920, 180], [1080, 160], [1240, 195]],
+  // 主线 2: 分叉
+  [[320, 165], [380, 230], [430, 310], [490, 380], [560, 450]],
+  // 主线 3: S 形
+  [[620, 175], [580, 280], [650, 380], [720, 460], [780, 540], [870, 580]],
+  // 主线 4: 北段
+  [[180, 130], [220, 70], [340, 50], [490, 80], [620, 60]],
+  // 支线 1
+  [[460, 140], [510, 90], [590, 65], [690, 80]],
+  // 支线 2
+  [[780, 150], [820, 240], [870, 320], [930, 380]],
+  // 南段湖边
+  [[60, 150], [70, 280], [120, 400], [200, 480], [310, 530], [430, 560], [560, 540]],
+  // Hut 连接线
+  [[920, 180], [990, 280], [1050, 360], [1110, 440], [1180, 510]],
+];
+
+// ==== 渲染 ====
+function render() {
+  // 背景 — 极淡渐变
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#fafafa');
+  bg.addColorStop(1, '#f0f0f0');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // 等高线/装饰线 (极淡, 营造户外感)
+  ctx.strokeStyle = 'rgba(139, 115, 85, 0.06)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 8; i++) {
+    ctx.beginPath();
+    const cx = 100 + i * 180;
+    const cy = 100 + (i % 3) * 200;
+    ctx.ellipse(cx, cy, 80 + i * 15, 60 + i * 8, i * 0.3, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // 步道 — 用两条平行边线 + 中间浅色路面 (像 OSM 街道渲染)
+  const ROAD_WIDTH = 14;  // 路宽 px
+
+  // 工具: 计算 polyline 每段的法向量, 用于偏移
+  function offsetPolyline(trail, offset) {
+    const result = [];
+    for (let i = 0; i < trail.length; i++) {
+      let dx, dy;
+      if (i === 0) {
+        dx = trail[1][0] - trail[0][0];
+        dy = trail[1][1] - trail[0][1];
+      } else if (i === trail.length - 1) {
+        dx = trail[i][0] - trail[i - 1][0];
+        dy = trail[i][1] - trail[i - 1][1];
+      } else {
+        // 平均前后两段方向, 让转弯处不卡
+        const dx1 = trail[i][0] - trail[i - 1][0];
+        const dy1 = trail[i][1] - trail[i - 1][1];
+        const dx2 = trail[i + 1][0] - trail[i][0];
+        const dy2 = trail[i + 1][1] - trail[i][1];
+        dx = (dx1 + dx2) / 2;
+        dy = (dy1 + dy2) / 2;
+      }
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      // 法向量 (垂直于方向)
+      const nx = -dy / len;
+      const ny = dx / len;
+      result.push([trail[i][0] + nx * offset, trail[i][1] + ny * offset]);
+    }
+    return result;
+  }
+
+  function drawPolyline(coords, lineWidth, strokeStyle) {
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(coords[0][0], coords[0][1]);
+    for (let i = 1; i < coords.length; i++) {
+      ctx.lineTo(coords[i][0], coords[i][1]);
+    }
+    ctx.stroke();
+  }
+
+  trails.forEach(trail => {
+    // 1. 路面填充 (灰白色, 路宽)
+    drawPolyline(trail, ROAD_WIDTH, '#e8e4dc');
+    // 2. 两条边线 (深棕)
+    const left = offsetPolyline(trail, ROAD_WIDTH / 2);
+    const right = offsetPolyline(trail, -ROAD_WIDTH / 2);
+    drawPolyline(left, 1.2, '#8B7355');
+    drawPolyline(right, 1.2, '#8B7355');
+    // 3. 中间虚线 (车道分隔, 极淡)
+    ctx.setLineDash([4, 4]);
+    drawPolyline(trail, 0.6, 'rgba(139, 115, 85, 0.4)');
+    ctx.setLineDash([]);
+  });
+}
+
+render();
+
+// ==== 虚拟人 — 100 个圆球, 沿步道分布 ====
+const personaColors = {
+  explorer: '#4CAF50',
+  social: '#FF9800',
+  enthusiast: '#2196F3',
+  lurker: '#9E9E9E',
+  critic: '#9C27B0',
+  spammer: '#F44336',
+  malicious: '#E91E63'
+};
+
+const types = ['explorer', 'social', 'enthusiast', 'lurker', 'critic', 'spammer', 'malicious'];
+const counts = [30, 40, 5, 20, 4, 1, 0];
+
+function pointOnTrail(trail) {
+  const segIdx = Math.floor(Math.random() * (trail.length - 1));
+  const segT = Math.random();
+  const x = trail[segIdx][0] * (1 - segT) + trail[segIdx + 1][0] * segT;
+  const y = trail[segIdx][1] * (1 - segT) + trail[segIdx + 1][1] * segT;
+  return [x, y];
+}
+
+const walkers = [];
+types.forEach((t, i) => {
+  for (let j = 0; j < counts[i]; j++) {
+    const trail = trails[Math.floor(Math.random() * trails.length)];
+    const [x, y] = pointOnTrail(trail);
+    walkers.push({ type: t, x, y });
+  }
+});
+
+// 画虚拟人 — 圆球带白边
+walkers.forEach(w => {
+  // 阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.beginPath();
+  ctx.arc(w.x + 0.5, w.y + 1, 5, 0, Math.PI * 2);
+  ctx.fill();
+  // 白边
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(w.x, w.y, 5, 0, Math.PI * 2);
+  ctx.fill();
+  // 主体
+  ctx.fillStyle = personaColors[w.type];
+  ctx.beginPath();
+  ctx.arc(w.x, w.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+});
+
+// ==== Marker — 旗帜在步道上 (23 个) ====
+const markerColors = {
+  danger: '#D32F2F',
+  supply: '#388E3C',
+  junction: '#F57C00',
+  scenic: '#1976D2',
+  cairn: '#795548'
+};
+const markerTypes = ['danger', 'supply', 'junction', 'scenic', 'cairn'];
+
+const sampleMarkers = [];
+for (let i = 0; i < 23; i++) {
+  const trail = trails[i % trails.length];
+  const [x, y] = pointOnTrail(trail);
+  const t = markerTypes[i % 5];
+  sampleMarkers.push({ type: t, x, y, idx: i });
+
+  // 阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(x, y + 1, 5, 1.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 旗杆
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - 16);
+  ctx.stroke();
+
+  // 旗
+  ctx.fillStyle = markerColors[t];
+  ctx.beginPath();
+  ctx.moveTo(x, y - 16);
+  ctx.lineTo(x + 12, y - 13);
+  ctx.lineTo(x, y - 10);
+  ctx.fill();
+}
+
+// ==== Marker info card ====
+function showMarkerCard(marker, content) {
+  const card = document.createElement('div');
+  card.className = 'marker-card';
+  card.style.left = (marker.x + 12) + 'px';
+  card.style.top = (marker.y - 32) + 'px';
+  card.innerHTML = content;
+  document.getElementById('stage').appendChild(card);
+}
+
+const m1 = sampleMarkers[2];
+const m2 = sampleMarkers[7];
+const m3 = sampleMarkers[14];
+
+if (m1) showMarkerCard(m1, `
+  <div class="title">⚠ danger #${m1.idx}</div>
+  <div class="stat">❤ <span class="num">23</span> &nbsp; 🚩 <span class="num">7</span></div>
+  <div class="reasons">info: 3 · dislike: 2 · spam: 1 · other: 1</div>
+`);
+if (m2) showMarkerCard(m2, `
+  <div class="title">💧 supply #${m2.idx}</div>
+  <div class="stat">❤ <span class="num">45</span> &nbsp; 🚩 <span class="num">0</span></div>
+`);
+if (m3) showMarkerCard(m3, `
+  <div class="title">🪨 cairn #${m3.idx}</div>
+  <div class="stat">❤ <span class="num">12</span> &nbsp; 🚩 <span class="num">2</span></div>
+  <div class="reasons">dislike: 2</div>
+`);
+</script>
+
+</body>
+</html>

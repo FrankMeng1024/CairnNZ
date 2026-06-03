@@ -1,0 +1,118 @@
+{
+  "total": 653,
+  "agree": 635,
+  "doubt": 15,
+  "disagree": 3,
+  "disagrees": [
+    {
+      "id": 75,
+      "verdict": "DISAGREE",
+      "current_state": "healthy",
+      "suggested_state": "suspicious 或 dead_sick",
+      "comment": "0:7 纯负向 100% 占比 + events 中无任何向上急转(无 like burst 出现),rationale 称'转化为感谢→向上急转'但 timeline 完全没有这个证据。按 v6.6 应该进 SUSPICIOUS"
+    },
+    {
+      "id": 980,
+      "verdict": "DISAGREE",
+      "current_state": "suspicious",
+      "suggested_state": "dead_natural",
+      "comment": "近24月0:42=0赞42举报+气候永久淘汰=慢性恶化无急转,§Case R/B思想:慢性恶化不进SUSPICIOUS,转化率=0自然走完寿命应判dead_natural;若近24月条数集中且陡变可视为趋势,但'气候变化历史惯性'=慢性,不符合急转定义"
+    }
+  ],
+  "doubts": [
+    {
+      "id": 59,
+      "verdict": "DOUBT",
+      "current_state": "suspicious",
+      "comment": "7:4 占比仍正向,4 条 report 是否构成向下急转处于阈值边缘。user-arbitration 决定为 suspicious 可接受,但严格按 v6.6 占比驱动,7:4 接近 60:40 是否够'急转'量级存疑"
+    },
+    {
+      "id": 94,
+      "verdict": "DOUBT",
+      "current_state": "dead_sick",
+      "comment": "0:3 纯负向但仅 3 条 report 是否构成趋势量级存疑;v6.6 §三-1 称'1 条不构成趋势'但 3 条边界。结合事件演变(因果牵强 + 两极化)倾向接受 dead_sick,但 suspicious 也可"
+    },
+    {
+      "id": 135,
+      "verdict": "DOUBT",
+      "current_state": "healthy",
+      "comment": "8:1 Case F 适用,但 mark 内容是定期演习提醒,非演习期已 obsolete。算法层不识别内容时效性,按占比仍是 healthy。但若考虑 events 中显示的'obsolete'举报性质,可能演变为 stale_info 类的慢性恶化(自然 dead_natural)"
+    },
+    {
+      "id": 137,
+      "verdict": "DOUBT",
+      "current_state": "healthy",
+      "comment": "8:1 Case F 适用,1 条夏季 comment 不构成向下急转,但与同类 102/103/108 等季节性误解 case 一致。倾向 AGREE,记为 DOUBT 仅因这是大量同质 case 集合是否需差异化标注的问题"
+    },
+    {
+      "id": 274,
+      "verdict": "DOUBT",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "rationale 自承 '持续 report 构成趋势' 与 v6.6 §3 急转识别矛盾——22:13 (16个月) 学者反驳+官方更准 mark 存在,若 13 条集中近期则应 SUSPICIOUS;若历史均匀分布则 healthy 合理。无 timeline 时间分布信息,需要算法层窗口判定。倾向 SUSPICIOUS,但若分散则 AGREE。"
+    },
+    {
+      "id": 360,
+      "verdict": "DOUBT",
+      "current_state": "dead_sick",
+      "suggested_state": "suspicious",
+      "comment": "26:23 (6 年累积),DOC 长期闭门是慢性恶化非急转;v6.6 §3 明确'慢性恶化不是 SUSPICIOUS 入口,通过转化率系数自动消亡'。23 条若分散在 6 年应为 healthy 寿命走完→dead_natural;若 Month 8 后开始集中累积才属急转。flag=long_closure 暗示渐进而非突变。建议: dead_natural 或 suspicious(后续→dead),但 dead_sick 偏激进。"
+    },
+    {
+      "id": 406,
+      "verdict": "DOUBT",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious_or_healthy",
+      "comment": "5:2 弱信号,2条是否构成趋势borderline,3月内向下趋势可接受"
+    },
+    {
+      "id": 422,
+      "verdict": "DOUBT",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious_or_healthy",
+      "comment": "8:4 borderline,4条占比33%可入S但borderline"
+    },
+    {
+      "id": 425,
+      "verdict": "DOUBT",
+      "current_state": "suspicious",
+      "suggested_state": "healthy_or_suspicious",
+      "comment": "2:3低流量比例向负,信号量小borderline"
+    },
+    {
+      "id": 511,
+      "verdict": "DOUBT",
+      "current_state": "dead_sick",
+      "suggested_state": "suspicious_or_dead_sick",
+      "comment": "0:2纯负向但仅2条borderline,禁区mark死亡可接受"
+    },
+    {
+      "id": 907,
+      "verdict": "DOUBT",
+      "current_state": "healthy",
+      "suggested_state": "suspicious",
+      "comment": "68:41近1.6:1+pile-on,可能向下急转,边界case"
+    },
+    {
+      "id": 924,
+      "verdict": "DOUBT",
+      "current_state": "healthy",
+      "suggested_state": "suspicious",
+      "comment": "168:124外部新闻pile-on,若条数趋势成立应进SUSPICIOUS,UI展示比例可保healthy,边界"
+    },
+    {
+      "id": 964,
+      "verdict": "DOUBT",
+      "current_state": "healthy",
+      "suggested_state": "healthy",
+      "comment": "私密SAR可见性属产品层,算法不可见时按零互动dead_natural,但如果可见则healthy,标注合理但有隐含假设"
+    },
+    {
+      "id": 973,
+      "verdict": "DOUBT",
+      "current_state": "suspicious",
+      "suggested_state": "suspicious",
+      "comment": "22:12判定suspicious合理但比例尚未明显反转,趋势依赖法律权威严重度,边界case可接受"
+    }
+  ]
+}

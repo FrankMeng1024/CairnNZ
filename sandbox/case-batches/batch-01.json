@@ -1,0 +1,1378 @@
+{
+  "batch": 1,
+  "theme": "偏远 Great Walks 无信号",
+  "id_range": [1, 50],
+  "total": 50,
+  "cases": [
+    {
+      "id": 1,
+      "title": "Routeburn Falls Hut 上方 Harris Saddle 下坡裂缝 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Routeburn Track 从 Harris Saddle 下到 Lake Mackenzie 段，海拔 1255m 处一道横切步道的冰川裂缝，雪季后被融雪掩盖只剩薄壳",
+        "intrinsic_quality": "踩破薄壳会摔进 1.5m 深裂缝，已有两人扭伤踝",
+        "user_volume_per_month": 380,
+        "duration_months": 14,
+        "signal": "无 - 海拔太高且 Routeburn 中段全程无 cell tower 覆盖",
+        "season_pattern": "11 月开始融雪期最危险，3 月雪壳完全消失风险解除，4-10 月被新雪覆盖看不见也踩不破",
+        "human_factors": "Great Walk 上的徒步者多数有经验，看到 mark 会认真核对位置；夏天人最多但同步要等出山"
+      },
+      "events_timeline": [
+        "第1月: 11 月初一个 DOC ranger 巡线发现裂缝，立 mark 后下山到 Glenorchy 才同步",
+        "第1月底: 当周 32 个徒步者中 14 人在出山后同步系统点赞，因为他们真的看到裂缝",
+        "第2月: 一个澳洲团队踩到边缘掉进去崴脚，出山后写长篇举报但内容是'感谢这个 mark 救了我'",
+        "第3月: 雪壳逐渐消失，3 月底一个 thru-hiker 在 Glenorchy 同步时举报'看不到任何裂缝'，但他经过时其实已经被融雪冲平",
+        "第5月: 5 月新雪覆盖后没人能看到 mark 标的位置，9 个用户出山同步举报'此处什么都没有'",
+        "第11月: 又一个雪季融化期，新一批 ranger 重新确认裂缝复现，老用户出山同步赞继续涌入",
+        "第14月: 总赞数稳定累积，举报集中在冬季季节性消失期"
+      ],
+      "expected_signal_summary": "总赞约 180，总举报约 28（多为冬季覆盖期的误报）",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "这是真危险且季节性复现，赞远超举报，举报集中在'mark 看不到'而非'mark 错'，系统应该理解季节性并保留",
+      "edge_case_flag": "remote_no_signal + seasonal_real_danger"
+    },
+    {
+      "id": 2,
+      "title": "Milford Track Mackinnon Pass 顶上风太大 scenic 过誉点",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Milford Track 第三天 Mackinnon Pass 顶 1154m 处一块平台，旧导览图标为'最佳全景点'，但实际全年 80% 时间云雾或 70km/h 大风看不见东西",
+        "intrinsic_quality": "晴天确实壮丽，但能见度概率太低；下方 200m 处 Pass Hut 后侧反而经常云开",
+        "user_volume_per_month": 220,
+        "duration_months": 18,
+        "signal": "无 - Fiordland 内部 deep valley 全无信号",
+        "season_pattern": "12-2 月夏季是 Great Walk 季，每天 40 人通过；冬季关闭无人；过冬重开后头几个月雪未退也看不见",
+        "human_factors": "Milford 走的人多是慕名而来，第一次走容易因为是'官方推荐点'而点赞，但走过几次的会知道这里是骗局"
+      },
+      "events_timeline": [
+        "第1月: 一个新西兰徒步博主下山后同步标 mark 并配晴天照片，前两周 18 个跟风赞",
+        "第2月: 连续 11 天云雾覆盖，期间 35 个徒步者出山同步举报'什么都看不到'",
+        "第4月: 一个 Te Anau 当地向导出山同步留长评论：'这里风太大留不住，往下走 5 分钟才是真正景点'",
+        "第6月: 冬季关闭，无任何同步活动",
+        "第10月: 重开后头一周 7 人赞（晴天侥幸），但接下来一个月 22 个举报",
+        "第14月: 累积举报开始超过赞，向导评论被新用户引用越来越多",
+        "第18月: 总举报约 92，总赞约 50，明显是过誉点"
+      ],
+      "expected_signal_summary": "总赞约 50，总举报约 92",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "举报远超赞且理由具体（'看不到'+'另有更好点'），这是被名气加持的伪 scenic，系统应该让它沉",
+      "edge_case_flag": "remote_no_signal + overrated_scenic"
+    },
+    {
+      "id": 3,
+      "title": "Kepler Track Iris Burn Hut 后方私人捐款盒 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Kepler Track 第二夜 Iris Burn Hut 后方 200m 一棵 Beech 树下铁皮盒，本地猎人放的应急果干和打火机，捐款盒投 NZ$2",
+        "intrinsic_quality": "猎人每两月补一次，物资真实可用，但官方没有标记",
+        "user_volume_per_month": 160,
+        "duration_months": 22,
+        "signal": "无 - Iris Burn 山谷无信号",
+        "season_pattern": "10-4 月 Great Walk 旺季每月 200+ 通过，冬季 Kepler 关闭仅猎人进入",
+        "human_factors": "登山者发现这种隐藏点会兴奋地标 mark，但也有人觉得不该公开破坏猎人善意"
+      },
+      "events_timeline": [
+        "第1月: 一个 Te Anau 本地登山者发现并标 mark，下山后同步留言'猎人 Dave 维护，请投币'",
+        "第2月: 12 个用户出山后同步赞，其中 3 人专程绕去试用过",
+        "第4月: 一个国际游客投诉'盒子是空的'举报 mark，但其实是补给周期间隙",
+        "第6月: 猎人本人 Dave 加入 app 看到 mark 后没说什么，默默继续补给",
+        "第9月: 一个 PCT 走过的美国人写长评论'这是 NZ 最美的徒步文化'，引发 27 人补赞",
+        "第13月: 冬季关闭期 4 个月零互动",
+        "第18月: 重开后老用户继续赞，新一波国际游客也认领",
+        "第22月: 总赞累积超过 95，举报仅 6 条且都是补给周期问题"
+      ],
+      "expected_signal_summary": "总赞约 95，总举报约 6",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "稀有且真实的 supply 点，赞累积速度慢但稳定，举报理由都不站得住脚，应该长期保留",
+      "edge_case_flag": "remote_no_signal + private_supply_point"
+    },
+    {
+      "id": 4,
+      "title": "Heaphy Track Mackay Hut 上方河流 junction 错过点",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Heaphy Track 第二天 Mackay Hut 上方 1.2km 处，主道与一条通往废弃 Whareatea 矿场的旧测量道交叉，没 DOC 标识",
+        "intrinsic_quality": "走错会进入矿场区迷路 4-6 小时，至少两次 SAR 救援源于此",
+        "user_volume_per_month": 95,
+        "duration_months": 20,
+        "signal": "无 - Kahurangi 国家公园内部全无 cell 覆盖",
+        "season_pattern": "全年开放但 11-3 月旺季月通过 150 人，冬季月仅 30",
+        "human_factors": "Heaphy 在 Great Walks 中算偏门，徒步者经验普遍较深，会认真对待 junction 警告"
+      },
+      "events_timeline": [
+        "第1月: 一个曾差点走错的英国徒步者在 Karamea 出山后同步建立 mark，配 GPS 坐标",
+        "第2月: 一对新西兰夫妇也差点走错，出山后立刻同步赞并加注'入口处有一棵双叉 beech 是路标'",
+        "第4月: DOC ranger 看到 mark 后官方派人去钉了实体警示牌，但 mark 仍存在且持续被引用",
+        "第7月: 一个 SAR 队员匿名同步赞'这个 mark 应该早点出现'",
+        "第11月: 累积赞超过 70，举报仅 2 条且都是用户没注意到双叉树",
+        "第15月: 一个走偏门路线的 thru-hiker 写长评'这是我整个 Heaphy 看到最有用的 mark'",
+        "第20月: 持续保持高赞低举报，成为 Heaphy 标志 mark"
+      ],
+      "expected_signal_summary": "总赞约 88，总举报约 4",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "真实救命级 junction，SAR 案例佐证，赞数稳定累积，应该长期保留",
+      "edge_case_flag": "remote_no_signal + critical_junction"
+    },
+    {
+      "id": 5,
+      "title": "Tongariro Northern Circuit Oturere 火山熔岩区假 cairn",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Tongariro Northern Circuit 从 Emerald Lakes 下到 Oturere Hut 段熔岩平原，2024 年游客新堆的一座 80cm cairn，距离真正的 DOC 橙杆 30m",
+        "intrinsic_quality": "误导走错方向，熔岩区雾天极容易迷路",
+        "user_volume_per_month": 280,
+        "duration_months": 16,
+        "signal": "无 - 火山高原内部",
+        "season_pattern": "夏季每天 30+ 通过，冬季雪覆盖且高风险下徒步者锐减",
+        "human_factors": "登山者意见两极：环保派痛恨游客新堆 cairn 破坏景观，新手则觉得 cairn 帮助导航"
+      },
+      "events_timeline": [
+        "第1月: 一个 Auckland 登山俱乐部成员发现新 cairn 后建立 mark，类型标 cairn 但留言'此 cairn 为游客新堆，应忽略'",
+        "第2月: 6 人赞同意见，但也有 3 人举报'cairn 看起来很正常啊为什么贬低'",
+        "第4月: 一个雾天迷路的法国游客出山后举报这个 mark'你说不要信但我没看 mark 直接信了 cairn 走错了'",
+        "第6月: DOC 派人推倒 cairn 后 mark 一度无意义，但两月后游客又重新堆起",
+        "第9月: 真正的环保 ranger 出山同步赞并补充'每次推倒都会被重堆，这个 mark 是唯一长期警告'",
+        "第13月: 累积赞 65，举报 18，争议持续",
+        "第16月: 一个 NZ 长距离协会会长写长文支持，赞数再涨"
+      ],
+      "expected_signal_summary": "总赞约 78，总举报约 22",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "争议 mark 但内核是反假 cairn 的环保信号，赞略多于举报且有权威背书，应该保留但状态应反映争议",
+      "edge_case_flag": "remote_no_signal + fake_tourist_cairn_warning"
+    },
+    {
+      "id": 6,
+      "title": "Lake Waikaremoana 第二天废弃避难所 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Lake Waikaremoana 步道 Marauiti Hut 与 Waiopaoa 之间一座 1970 年代废弃 NZFS 木屋，屋顶半塌但内部干燥，墙角有铁炉但烟囱锈穿",
+        "intrinsic_quality": "极端天气下能挡风 3-4 小时，但不安全过夜（屋顶有掉落风险）",
+        "user_volume_per_month": 70,
+        "duration_months": 30,
+        "signal": "无 - Te Urewera 内部 cell 死区",
+        "season_pattern": "Lake Waikaremoana 一年四季可走但冬季仅 30/月，夏季 130/月",
+        "human_factors": "Te Urewera 被 Tūhoe 部落管辖后访问规则更严格，游客对 mark 此类隐性资源态度复杂"
+      },
+      "events_timeline": [
+        "第1月: 一个本地 Tūhoe 向导发现并 mark，但用 'supply' 标且留言强调'紧急避难，非住宿'",
+        "第3月: 一个被暴雨困住 6 小时的徒步者获救后出山同步赞，留言'这个 mark 救了我'",
+        "第8月: 一个 DOC 工作人员举报'此屋不安全应当拆除而非推广'",
+        "第14月: 一个建筑工程师徒步者出山同步'屋顶承重已计算可挡 8 级风但不能宿营'，提供专业意见",
+        "第22月: 屋顶在一场暴风雨后部分塌方，新通过的徒步者举报'已不能用'",
+        "第26月: 老用户回访发现可用部分仍在，重新赞并更新留言",
+        "第30月: 总赞 52，总举报 19，争议持续但实用性仍有"
+      ],
+      "expected_signal_summary": "总赞约 52，总举报约 19",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "存在真实价值但也有真实风险，赞稍多但举报理由严肃，系统应保留为 borderline 让用户自行判断",
+      "edge_case_flag": "remote_no_signal + degraded_emergency_shelter"
+    },
+    {
+      "id": 7,
+      "title": "Whanganui Journey 第三天回水区废弃 cairn",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Whanganui Journey 划船第三天 Tieke Kainga 下游 4km 处一个回水弯，岸边沙丘上 2010 年代某皮划艇队堆的 50cm cairn，标记一个上岸便餐点",
+        "intrinsic_quality": "原本标记的便餐点已被 2018 年洪水冲毁，cairn 本身已无指向意义",
+        "user_volume_per_month": 180,
+        "duration_months": 24,
+        "signal": "无 - Whanganui 河谷深处",
+        "season_pattern": "10-4 月划船季月 250+，冬季水位变化划船人锐减",
+        "human_factors": "划船者节奏紧不会专门停下来 mark，多数人是回 Pipiriki 后才同步"
+      },
+      "events_timeline": [
+        "第1月: 旧 mark 已存在多年，新季节首批划船者中 5 人同步赞但未停留",
+        "第3月: 一个皮划艇向导举报'此点已无任何价值，洪水改变了岸线'",
+        "第6月: 一对夫妇尝试停靠发现根本没有便餐点，举报且配照片证明",
+        "第10月: 5 个新划船者跟风赞（没下船只看到 cairn）",
+        "第13月: 累积赞慢于累积举报，比例倒挂",
+        "第18月: 又一场洪水冲走 cairn 本体，但 mark 仍在 app 中漂浮",
+        "第24月: 总赞 28，总举报 41，明显应该沉"
+      ],
+      "expected_signal_summary": "总赞约 28，总举报约 41",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "原标记物已物理消失，举报真实且具体，赞多为不下船的虚假认领，系统应让其沉没",
+      "edge_case_flag": "remote_no_signal + obsolete_cairn"
+    },
+    {
+      "id": 8,
+      "title": "Paparoa Track Pororari 桥前急湾 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Paparoa Track 从 Ces Clark Hut 下行第二天接近 Pororari River 段，一个石灰岩急湾步道紧贴 12m 悬崖且无栏杆，雨后湿滑致命",
+        "intrinsic_quality": "干燥天气没问题，但 Paparoa 西海岸雨水频繁，每月有 1-2 次极湿期",
+        "user_volume_per_month": 240,
+        "duration_months": 12,
+        "signal": "无 - Paparoa 国家公园内部",
+        "season_pattern": "全年开放，西海岸雨季 5-9 月最危险但徒步者也最少；旺季 12-2 月反而干燥",
+        "human_factors": "Paparoa 是新 Great Walk（2019 开放），徒步者多是慕名而来的老手，对 danger mark 重视"
+      },
+      "events_timeline": [
+        "第1月: 一个 SAR 西海岸分队员标 mark，配三张不同湿度照片",
+        "第2月: 雨季开始第二个月一个游客在湿滑处摔伤膝盖，下山后赞并写'我看到 mark 了但还是滑倒说明这个 mark 应该更显眼'",
+        "第4月: 当地向导建议 DOC 加装临时绳索，DOC 接受",
+        "第6月: 绳索装好后老用户怀疑 mark 是否还需要，但 SAR 回复'绳索会被风吹走 mark 是永久的'",
+        "第9月: 旱季新一批游客赞，其中 7 人专门提到'看到 mark 后特别小心'",
+        "第12月: 累积赞 132，举报 8（多为'我没事所以不需要警告'类）"
+      ],
+      "expected_signal_summary": "总赞约 132，总举报约 8",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高人流真危险且 SAR 背书，赞远超举报且举报理由弱，应该长期保留",
+      "edge_case_flag": "remote_no_signal + weather_dependent_danger"
+    },
+    {
+      "id": 9,
+      "title": "Rakiura (Stewart Island) North West Circuit 烂泥沼 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Rakiura North West Circuit 第六天 East Ruggedy Hut 与 Hellfire Pass Hut 之间一段长 800m 烂泥沼，最深处可没膝，曾有人陷入 40 分钟才被同伴拉出",
+        "intrinsic_quality": "全 NZ 最烂的步道之一，本身就是 Stewart Island 文化的一部分",
+        "user_volume_per_month": 25,
+        "duration_months": 36,
+        "signal": "无 - Stewart Island 内陆完全无信号",
+        "season_pattern": "全年都烂，但 6-9 月雨季最深，1-3 月相对浅但仍危险",
+        "human_factors": "走 Rakiura NWC 的人极少（年访客约 300）但都是硬核徒步者，文化上甚至以走过为荣"
+      },
+      "events_timeline": [
+        "第1月: 一个完成全程的德国徒步者出 Oban 后同步建立 mark",
+        "第3月: 一对夫妇出山赞并附'我们用了备用裤子还是没扛住'",
+        "第8月: 一个本地 Stewart Island 居民举报'这就是 NWC 不需要 mark'，从文化角度",
+        "第14月: 一个被困 40 分钟的英国徒步者出山后赞并写下整个救援过程",
+        "第22月: 累计 28 赞，多数附带故事；举报仅 5 条都是文化派",
+        "第30月: mark 成为 NWC 攻略的标准引用",
+        "第36月: 总赞 41，总举报 8"
+      ],
+      "expected_signal_summary": "总赞约 41，总举报约 8",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "极低流量但每条赞都是亲历者写的长篇，举报理由是文化分歧而非 mark 错误，应保留",
+      "edge_case_flag": "remote_no_signal + ultra_low_volume_quality_signal"
+    },
+    {
+      "id": 10,
+      "title": "Hump Ridge Track Okaka Lodge 后稀有日落 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Hump Ridge Track 第一夜 Okaka Lodge 后山 700m 处一块南向悬崖，可看到 Te Waewae Bay 海岸线和 Stewart Island 轮廓，仅在西南方向云层散开时出现",
+        "intrinsic_quality": "晴天概率 25%，但当出现时是 NZ 南端独一无二的视角",
+        "user_volume_per_month": 110,
+        "duration_months": 18,
+        "signal": "无 - Fiordland 边缘 cell 死区",
+        "season_pattern": "11-3 月夏季 90% 徒步发生，冬季仅向导团；西南风暴是常态",
+        "human_factors": "Hump Ridge 是私营步道（2024 年加入 Great Walks），徒步者为高付费客户，对景点真实性敏感"
+      },
+      "events_timeline": [
+        "第1月: 私营步道 Hump Ridge 第一波徒步者中一对老夫妇看到罕见日落标 mark",
+        "第2月: 8 人赞但其中 5 人写'我们去了没看到，但相信原作者'",
+        "第4月: 一个澳洲摄影师专程晴天去拍到，出山后写长评带照片",
+        "第8月: 一个雨天去的徒步者举报'此点 80% 时间没意义'",
+        "第13月: 累积赞 56（多为相信派），举报 14（实拍未见派）",
+        "第18月: 摄影师评论被广泛引用，新用户即使没看到也愿意保留 mark"
+      ],
+      "expected_signal_summary": "总赞约 56，总举报约 14",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "稀有但真实的景点，赞虽然不全是亲见但理由都成立，举报理由是统计概率不是 mark 错，应保留",
+      "edge_case_flag": "remote_no_signal + rare_visibility_scenic"
+    },
+    {
+      "id": 11,
+      "title": "Old Ghost Road 中段 Ghost Lake Hut 上方塌方 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Old Ghost Road 山地车/徒步双用步道 Ghost Lake Hut 北侧 1.5km 处 2023 年地震后形成的悬崖塌方区，步道宽度从 1.5m 缩到 60cm 且外侧是 80m 直落",
+        "intrinsic_quality": "对徒步者紧张但可过；对山地车客是真死亡风险",
+        "user_volume_per_month": 320,
+        "duration_months": 13,
+        "signal": "无 - Lyell-Mokihinui 山区深处",
+        "season_pattern": "11-4 月旺季每天 30 人通过含车手徒步混合；冬季仅徒步少量",
+        "human_factors": "山地车社群对 OGR 极度热爱，遇到危险 mark 反应激烈且会大量同步"
+      },
+      "events_timeline": [
+        "第1月: 地震后第一周一个本地车手在 Seddonville 出山后建 mark，留言'车手务必下推'",
+        "第1月底: 当月 200 多人通过，35 人出山同步赞，5 人是擦伤后赞",
+        "第3月: OGR 维护团队官方账号同步赞并发出警告通告",
+        "第5月: 一个无视 mark 强行骑过的车手摔下崖侥幸卡在树枝救回，出山后写公开道歉信赞这个 mark",
+        "第8月: DOC 投资修建临时绕行小道，但 mark 仍被引用",
+        "第11月: 累积赞 218，举报 6（都是徒步者觉得没那么严重）",
+        "第13月: 山地车媒体专题报道这个 mark"
+      ],
+      "expected_signal_summary": "总赞约 218，总举报约 6",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "媒体级别真危险，社群响应强烈，举报理由站不住脚（徒步无视车手风险），必须长期保留",
+      "edge_case_flag": "remote_no_signal + post_earthquake_danger"
+    },
+    {
+      "id": 12,
+      "title": "St James Walkway Anne Hut 前河流暴涨警告 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "St James Walkway 第二天 Anne Hut 前 30 分钟一条不知名支流，平时只到脚踝，雨后 4 小时内可暴涨到腰深且有漂流木",
+        "intrinsic_quality": "DOC 警告级支流，每年 2-3 起被困事件",
+        "user_volume_per_month": 60,
+        "duration_months": 24,
+        "signal": "无 - Lewis Pass 后山",
+        "season_pattern": "10-4 月可走，但西风带雨锋来得快；冬季雪封无人",
+        "human_factors": "St James 在 NZ 算冷门 walkway（相比 Great Walks 名气小），徒步者多数是 NZ 本地老手"
+      },
+      "events_timeline": [
+        "第1月: 一个 Christchurch 登山俱乐部成员被河流暴涨困 6 小时后建 mark，配水位标尺照片",
+        "第3月: 一对刚被困的夫妇出山赞并补充'按 mark 提示等了 4 小时果然能过'",
+        "第6月: 一个独行者举报'天气好时就是小溪没必要紧张'",
+        "第10月: DOC 西海岸 ranger 同步赞并补充：'此 mark 信息比我们的官方警告更精准'",
+        "第14月: 累积赞 78，举报 9（多为旱季体验者）",
+        "第19月: 一篇 Wilderness 杂志专栏引用了这个 mark",
+        "第24月: 总赞 105，总举报 13"
+      ],
+      "expected_signal_summary": "总赞约 105，总举报约 13",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "DOC 级别认证，赞数稳定增长且每条都有故事，举报来自旱季体验者无法否定整体危险性",
+      "edge_case_flag": "remote_no_signal + flash_flood_river"
+    },
+    {
+      "id": 13,
+      "title": "Wangapeka Track Helicopter Flat 私人猪肉面饼供给点 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Wangapeka Track 中段 Helicopter Flat 一个由 Tasman 区域 deer hunter Murray 维护的小铁箱，内装真空包装猪肉面饼和盐袋，月补一次",
+        "intrinsic_quality": "新鲜度依赖 Murray 的航班，旱季补给可能延迟到 6 周",
+        "user_volume_per_month": 35,
+        "duration_months": 28,
+        "signal": "无 - Kahurangi 国家公园核心区",
+        "season_pattern": "11-3 月主要徒步季月 50 人，冬季 5-10 人猎鹿期",
+        "human_factors": "Wangapeka 是 NZ 长距离徒步老炮的圣地，对 Murray 这种本地传奇敬重"
+      },
+      "events_timeline": [
+        "第1月: 一个三度走完 Wangapeka 的资深徒步者建 mark 并附 Murray 联系方式",
+        "第4月: Murray 本人加入 app 后赞并补充'每包都自己做的请尊重'",
+        "第8月: 一个国际游客发现箱内空举报，老用户回复'你来的不是时候，请等下次补给'",
+        "第14月: 一个 thru-hiker 写长评'NZ 山野文化的活化石'，引发 12 人补赞",
+        "第20月: Murray 因健康原因暂停补给 3 月，mark 标记暂时静默期但未删除",
+        "第24月: 重启补给后老用户回访连续赞",
+        "第28月: 总赞 67，总举报 4（都是补给周期问题）"
+      ],
+      "expected_signal_summary": "总赞约 67，总举报约 4",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "本人加持的真供给点，社群敬重度高，举报量低且理由不站，应长期保留为传奇 mark",
+      "edge_case_flag": "remote_no_signal + named_local_legend_supply"
+    },
+    {
+      "id": 14,
+      "title": "Leslie-Karamea Track Trevor Carter Hut 后塌方 junction",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Leslie-Karamea 中段 Trevor Carter Hut 上方 600m 处步道因 2022 滑坡完全消失，新临时绕行需向河岸方向偏移 200m 找一个浅滩过河",
+        "intrinsic_quality": "无 mark 至少 50% 走错率，错走会被困谷地",
+        "user_volume_per_month": 18,
+        "duration_months": 26,
+        "signal": "无 - Karamea 河谷深处",
+        "season_pattern": "夏季月 25 人，冬季几乎无人，水位低时浅滩易找，雨后变深要等",
+        "human_factors": "Leslie-Karamea 是 NZ 最偏远 tracks 之一（年访客 250），徒步者全是计划周密的老手"
+      },
+      "events_timeline": [
+        "第1月: 滑坡后第一组通过的徒步者（一对兄妹）成功绕路后在 Karamea 镇建 mark",
+        "第3月: 一个迷路 4 小时的孤狼徒步者出山后赞，写下完整迷路过程",
+        "第7月: 一个本地 NZDA 成员补充更精确坐标",
+        "第13月: DOC 派员考察后官方放置橙杆，但绕路 mark 仍是首要参考",
+        "第19月: 累积赞 22，举报 1（一个误以为塌方已修的用户）",
+        "第26月: 滑坡仍未完全修复，mark 持续有效"
+      ],
+      "expected_signal_summary": "总赞约 28，总举报约 2",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "极低流量但每个赞都是关键性的救命引用，举报极少，应该长期保留",
+      "edge_case_flag": "remote_no_signal + landslide_reroute_junction"
+    },
+    {
+      "id": 15,
+      "title": "Five Passes Route Cow Saddle 顶悬崖边迷你 cairn",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Five Passes Route（Mt Aspiring NP 内非官方线路）Cow Saddle 顶 1620m 处一座 30cm 老 cairn，1980 年代登山俱乐部建立，标记下一个 saddle 的入口",
+        "intrinsic_quality": "无替代物，cairn 倒了就要自己用 GPS 找路",
+        "user_volume_per_month": 8,
+        "duration_months": 40,
+        "signal": "无 - Mt Aspiring 核心区",
+        "season_pattern": "Five Passes 仅 12-3 月夏季可尝试，月通过 15 人极限",
+        "human_factors": "Five Passes 是 NZ 攀登/越野徒步圈传奇路线，走过的人都是高手，对历史 cairn 极度敬畏"
+      },
+      "events_timeline": [
+        "第2月: 一个 Wanaka 攀登向导发现 cairn 仍在并 mark，留言'感谢前辈'",
+        "第5月: 一对完成全程的瑞士徒步者赞并附 GPS 坐标供后人参考",
+        "第14月: 一场暴风雪后下一波徒步者发现 cairn 部分倒塌，未删 mark 而是留言'我重新堆好了'",
+        "第22月: 一个研究 NZ 登山史的作者出山后赞并写文章引用",
+        "第30月: 累积赞 14（每条都是高质量长评），举报 0",
+        "第40月: 成为 Five Passes 文化遗产，从未被举报"
+      ],
+      "expected_signal_summary": "总赞约 16，总举报约 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "传奇路线传奇 cairn，零举报且每个赞都是亲历者长评，应永久保留",
+      "edge_case_flag": "remote_no_signal + heritage_cairn"
+    },
+    {
+      "id": 16,
+      "title": "Cascade Saddle Route 死亡崖边 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Cascade Saddle Route 从 Dart Valley 上 Cascade Saddle 段 1500m 海拔的暴露山脊，宽 30cm 两侧均是 200m+ 直落，1990 年以来已有 7 人死亡",
+        "intrinsic_quality": "NZ 最高致死率 marked 步道之一",
+        "user_volume_per_month": 80,
+        "duration_months": 18,
+        "signal": "无 - Aspiring 山区",
+        "season_pattern": "12-3 月可走，但融雪期前后岩石松动；任何降雨后都极度危险",
+        "human_factors": "Cascade Saddle 名声在外，徒步者多是知道风险才来，但也每年有不知情新手"
+      },
+      "events_timeline": [
+        "第1月: 一个 Wanaka SAR 队员 mark，配死亡统计",
+        "第2月: 一对刚目睹滑坠未遂的夫妇出山后赞并提供时间细节",
+        "第4月: DOC 官方账号同步赞并链接到官方警告页",
+        "第7月: 一个新手举报'这只是吓人没那么严重'，引发社群激烈反驳",
+        "第11月: 当年又有一起非致命滑坠，受害者出院后写长评赞",
+        "第15月: 累积赞 167（多为长评），举报仅 4 条均被反驳",
+        "第18月: 该 mark 成为新手准备 Cascade Saddle 必看"
+      ],
+      "expected_signal_summary": "总赞约 167，总举报约 4",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "致死统计佐证、SAR 和 DOC 双重背书、社群反驳否定派，必须永久保留",
+      "edge_case_flag": "remote_no_signal + lethal_exposure_danger"
+    },
+    {
+      "id": 17,
+      "title": "Gillespie Pass Circuit Crucible Lake 支线路口 junction",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Gillespie Pass Circuit 第二天 Siberia Hut 后向 Crucible Lake 支线路口，主路继续 Gillespie 方向，支线右拐进谷，路口仅一个褪色橙箭头",
+        "intrinsic_quality": "Crucible Lake 是 Aspiring NP 标志景点，错过就少看世界级冰湖",
+        "user_volume_per_month": 130,
+        "duration_months": 15,
+        "signal": "无 - Mt Aspiring 内部",
+        "season_pattern": "12-3 月旺季月 200 人，冬季关闭",
+        "human_factors": "走 Gillespie 的多数知道有 Crucible 但容易被疲劳冲昏忽略路口"
+      },
+      "events_timeline": [
+        "第1月: 一个错过 Crucible 的徒步者懊悔后出山补 mark，写'走完 Gillespie 后悔一辈子没看到湖'",
+        "第3月: 一个看到 mark 后专门走支线的徒步者赞并发湖照",
+        "第6月: 一对夫妇赞'mark 救了我们的行程亮点'",
+        "第10月: 一个本地向导举报'这不是 junction 这是 side trip'类型分类错",
+        "第13月: 累积赞 88，举报 5（多为类型分类质疑）",
+        "第15月: 仍是引导 Crucible 访问的关键 mark"
+      ],
+      "expected_signal_summary": "总赞约 88，总举报约 5",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高价值导向 junction，赞远超举报且举报理由是分类细节非内容错误，应保留",
+      "edge_case_flag": "remote_no_signal + side_trip_junction"
+    },
+    {
+      "id": 18,
+      "title": "Rees-Dart Track Dart Hut 后冰川观察点 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Rees-Dart Track 第三天 Dart Hut 后向 Cascade Saddle 方向 1.2km 处一块岩台，可看到 Dart Glacier 终碛，全 NZ 极少数仍在退缩中可观察的冰川",
+        "intrinsic_quality": "气候变化背景下科学价值极高，每年冰川后退的肉眼可见",
+        "user_volume_per_month": 95,
+        "duration_months": 22,
+        "signal": "无 - Aspiring NP 深处",
+        "season_pattern": "夏季 12-3 月月 200 人，冬季关闭无人，过冬重开后头一两月雪未退视野有限",
+        "human_factors": "Rees-Dart 徒步者中科研型比例高（地质学生、气候摄影师），他们尤其重视这个 mark"
+      },
+      "events_timeline": [
+        "第1月: 一个 Otago 大学地质博士生建 mark 并附冰川后退年度对比照",
+        "第3月: 一个 NIWA 研究员同步赞并补充'每年退缩约 12 米'",
+        "第7月: 一个国际气候记者出山后赞并写文章用这个 mark",
+        "第12月: 一个普通游客举报'就是块石头看不出冰川'，但被科研用户反驳",
+        "第18月: 累积赞 128（多为科研背景长评），举报 11（多为普通游客'看不懂'）",
+        "第22月: 成为 NZ 气候教育的实景 mark"
+      ],
+      "expected_signal_summary": "总赞约 128，总举报约 11",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "科研价值强、累积赞为高质量长评、举报理由是观察者素质而非 mark 本身，应保留",
+      "edge_case_flag": "remote_no_signal + scientific_value_scenic"
+    },
+    {
+      "id": 19,
+      "title": "Greenstone Caples Track 河边可疑 cairn",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Greenstone Caples Track Greenstone Hut 下游 800m 一座 1m 高 cairn，建立时间不明，疑似某向导团内部标记，但无任何文字说明，离主道 50m",
+        "intrinsic_quality": "可能是历史遗迹也可能是误导，无人能确认意义",
+        "user_volume_per_month": 140,
+        "duration_months": 20,
+        "signal": "无 - Caples 河谷",
+        "season_pattern": "11-4 月月 250 人，冬季月 30 人",
+        "human_factors": "Greenstone 徒步者比 Routeburn 少但有相当一部分老手，对不明 cairn 反应分歧"
+      },
+      "events_timeline": [
+        "第1月: 一个好奇徒步者建 mark 类型 cairn 但留言'不知道意义请补充'",
+        "第3月: 5 个用户赞但都说不出原因",
+        "第6月: 一个 Glenorchy 老向导举报'这个 cairn 没有意义请删除'",
+        "第10月: 一个 deer hunter 留言'我家祖父 1960 年代为标鹿群迁徙堆的'但无证据",
+        "第14月: 用户开始两派吵架，一派要保留历史，一派要删除",
+        "第18月: 赞 32 举报 28，比例胶着",
+        "第20月: 总赞 38，总举报 33"
+      ],
+      "expected_signal_summary": "总赞约 38，总举报约 33",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "争议持续无定论，赞略多但举报理由严肃（误导风险），系统应保留为 borderline 让用户自决",
+      "edge_case_flag": "remote_no_signal + ambiguous_origin_cairn"
+    },
+    {
+      "id": 20,
+      "title": "Routeburn Lake Mackenzie Hut 厨房旁神秘小炉 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Routeburn 第二夜 Lake Mackenzie Hut 厨房后侧一个非官方小煤气炉，由前任 hut warden 留下，仅在主气罐用尽时启用",
+        "intrinsic_quality": "DOC 默认存在但不官方记录，每月手动补气",
+        "user_volume_per_month": 380,
+        "duration_months": 16,
+        "signal": "无 - Routeburn 中段",
+        "season_pattern": "Great Walks 季节 11-4 月每天 40 人，冬季关闭",
+        "human_factors": "新 warden 接手后对这个 mark 态度不一，有人喜欢有人嫌官方化"
+      },
+      "events_timeline": [
+        "第1月: 一个常住 Te Anau 的 thru-hiker 建 mark",
+        "第2月: 主气罐当月用尽，5 个徒步者用了备炉后赞",
+        "第6月: 新任 warden 上任后举报'我不希望这个被公开'",
+        "第10月: 一个争议讨论后 DOC 出面声明'我们既不否认也不推广'",
+        "第14月: 老用户继续赞，新用户因争议谨慎",
+        "第16月: 总赞 56，总举报 18"
+      ],
+      "expected_signal_summary": "总赞约 56，总举报约 18",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "存在但官方暧昧，赞举报均有道理，应保留为 borderline 反映争议",
+      "edge_case_flag": "remote_no_signal + grey_zone_supply"
+    },
+    {
+      "id": 21,
+      "title": "Milford Track Clinton Hut 后伪危险新手警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Milford Track 第一天 Clinton Hut 出发后 3km 一段 30m 缓上坡，海拔仅升 15m 但泥土松动看起来陡，新手第一次走会怕",
+        "intrinsic_quality": "对任何健康成人完全无危险，仅是视觉错觉",
+        "user_volume_per_month": 380,
+        "duration_months": 14,
+        "signal": "无 - Fiordland 内部",
+        "season_pattern": "10-4 月旺季 480/月，冬季关闭",
+        "human_factors": "Milford 吸引了大量首次徒步者（包括 Booking.com 来的游客），他们对真实难度判断差"
+      },
+      "events_timeline": [
+        "第1月: 一个 60 岁韩国游客上山时心慌，下山后建 danger mark",
+        "第2月: 又有 3 个新手赞，但都是出山才赞",
+        "第3月: 一个 Te Anau 老向导举报'此处一点危险都没有不要吓人'",
+        "第4月: 第二个本地向导也举报，并附爬升数据'垂直 15m 任何人能过'",
+        "第7月: DOC 工作人员同步举报，强调'如果连这个都怕请考虑短步道'",
+        "第10月: 累积赞 22（全是新手），举报 38（专业人士+老手）",
+        "第14月: 总赞 28，总举报 51"
+      ],
+      "expected_signal_summary": "总赞约 28，总举报约 51",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "举报权威性远高于赞（向导/DOC vs 新手），数据也不支持危险声明，应让其沉没",
+      "edge_case_flag": "remote_no_signal + false_alarm_newbie"
+    },
+    {
+      "id": 22,
+      "title": "Heaphy Track Heaphy Hut 后海滩日落网红打卡 scenic 过誉",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Heaphy Track 西海岸第三天 Heaphy Hut 后方海滩一块岩石，2022 年某 Instagrammer 拍夕阳后爆红，实际海滩任何位置看夕阳都一样",
+        "intrinsic_quality": "整段海滩夕阳都好看，单点没特别价值",
+        "user_volume_per_month": 110,
+        "duration_months": 18,
+        "signal": "无 - Kahurangi 西海岸",
+        "season_pattern": "11-4 月旺季月 200，雨季 80",
+        "human_factors": "年轻徒步者跟风打卡为主，老手对'网红化'反感"
+      },
+      "events_timeline": [
+        "第1月: Instagram 爆红后第一波打卡者建 mark",
+        "第2月: 22 个跟风赞但没人写出具体特别之处",
+        "第4月: 一个 Karamea 本地老炮举报'整段海滩都一样为什么单挑这块'",
+        "第6月: 一个摄影师徒步者举报并发对比照'其他位置也一样美'",
+        "第10月: 老手陆续加入举报派",
+        "第14月: 累积赞 65（多为浅赞），举报 48（多为有论据）",
+        "第18月: 总赞 78，总举报 66"
+      ],
+      "expected_signal_summary": "总赞约 78，总举报约 66",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "赞举报接近，赞质量浅但数量多，举报有专业论据但不能否定个人审美，应保留为 borderline",
+      "edge_case_flag": "remote_no_signal + instagram_overrated_scenic"
+    },
+    {
+      "id": 23,
+      "title": "Tongariro Northern Circuit Waihohonu Hut 后冬季雪崩区 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tongariro Northern Circuit Waihohonu Hut 后向 Oturere 段一片东南坡雪崩槽，冬季雪深 1m+ 坡度 35°，每年都有雪崩痕迹但夏天完全无害",
+        "intrinsic_quality": "冬季致命真危险，夏季毫无威胁，季节性反差极端的典型案例",
+        "user_volume_per_month": 280,
+        "duration_months": 20,
+        "signal": "无 - Tongariro 高原",
+        "season_pattern": "夏季 12-3 月月 400 人通过完全无危险，冬季 5-9 月月 30 人滑雪登山危险",
+        "human_factors": "夏季徒步者绝大多数完全无意识，冬季登山者数量少但全是专业人士"
+      },
+      "events_timeline": [
+        "第1月: 一个雪崩培训师在 Whakapapa 出山后 mark，专门标注'仅冬季有效'",
+        "第3月: 当年冬季有人触发小型雪崩侥幸无伤，出山后赞并附视频",
+        "第6月: 一个夏季徒步者举报'我刚走过没看到任何危险'",
+        "第8月: 又有 4 个夏季徒步者跟着举报",
+        "第11月: 雪崩培训师重新出来留长评解释季节性",
+        "第14月: 当年冬季又有一起雪崩险情，受害者赞",
+        "第20月: 总赞 88（含 cold season 用户），总举报 36（多为夏季用户）"
+      ],
+      "expected_signal_summary": "总赞约 88，总举报约 36",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "季节性真危险，赞来自专业冬季用户，举报来自不懂上下文的夏季用户，应保留并强调季节标签",
+      "edge_case_flag": "remote_no_signal + season_specific_danger"
+    },
+    {
+      "id": 24,
+      "title": "Whanganui Journey Tieke Kainga 部落欢迎仪式 supply（文化资源）",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Whanganui Journey 第二夜 Tieke Kainga 是 Tangata Whenua 部落直接管理的营地，部落成员有时举行 powhiri 欢迎仪式，新鲜面包和茶免费提供",
+        "intrinsic_quality": "并非每天都有，依赖部落是否在场",
+        "user_volume_per_month": 220,
+        "duration_months": 24,
+        "signal": "无 - Whanganui 河深处",
+        "season_pattern": "10-4 月划船季月 350，冬季月 50",
+        "human_factors": "划船者对 Māori 文化体验普遍敬重，但部分国际游客不理解 powhiri 不是定期活动"
+      },
+      "events_timeline": [
+        "第1月: 一个经历过欢迎仪式的划船者建 mark，留言'如部落在请尊重'",
+        "第3月: 一个国际游客举报'我去时没人举办，浪费时间'",
+        "第6月: 一个本地 Tangata 长老看到 mark 后赞并补充时间表（仅周末）",
+        "第10月: 一个文化记者出山后写长评赞此 mark",
+        "第15月: DOC 文化保护办公室 email 表示支持",
+        "第20月: 累积赞 138，举报 14（多为不理解仪式不定期）",
+        "第24月: 成为 Whanganui 文化体验的标杆 mark"
+      ],
+      "expected_signal_summary": "总赞约 138，总举报约 14",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "文化资源 mark 有部落本人加持，赞远超举报，举报理由是不理解非定期性，应保留",
+      "edge_case_flag": "remote_no_signal + cultural_resource_supply"
+    },
+    {
+      "id": 25,
+      "title": "Paparoa Track Moonlight Tops Hut 旁悬崖照片打卡假危险 cairn",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Paparoa Track Moonlight Tops Hut 旁 100m 一座游客新堆 60cm cairn，建在悬崖边吓人但其实步道距离边缘 2m，cairn 本身无意义",
+        "intrinsic_quality": "毫无导航价值，纯网红打卡的视觉刺激产物",
+        "user_volume_per_month": 240,
+        "duration_months": 14,
+        "signal": "无 - Paparoa 内部",
+        "season_pattern": "全年开放夏季月 320 冬季 150",
+        "human_factors": "新 Great Walk 吸引很多 Instagram 群体，他们爱堆 cairn 拍照"
+      },
+      "events_timeline": [
+        "第1月: 一个慕名而来的 IG 博主建 mark 配照片",
+        "第2月: 18 人跟风赞但没人解释 cairn 含义",
+        "第4月: 一个本地 ranger 举报'这是新堆的请勿鼓励'",
+        "第6月: DOC 推倒后重新堆，举报派和支持派吵架",
+        "第10月: 累积赞 65，举报 72，举报反超",
+        "第14月: 总赞 70，总举报 88"
+      ],
+      "expected_signal_summary": "总赞约 70，总举报约 88",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "纯网红 cairn 无导航价值，举报反超且 DOC 介入，应让其沉",
+      "edge_case_flag": "remote_no_signal + tourist_trap_cairn"
+    },
+    {
+      "id": 26,
+      "title": "Kepler Track Luxmore Hut 后云海日出 scenic（真宝藏）",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Kepler Track Luxmore Hut 后山顶 1472m 处一块朝东岩台，特定大气条件下可看到 Te Anau 湖云海日出，本地知情人少",
+        "intrinsic_quality": "条件苛刻但出现时是 NZ 南岛之最",
+        "user_volume_per_month": 220,
+        "duration_months": 20,
+        "signal": "无 - Fiordland 高山",
+        "season_pattern": "11-4 月可走但云海仅在 2-3 月低气压期出现",
+        "human_factors": "Kepler 徒步者多为有点经验的 Tramping Club 成员，对小众景点敏感"
+      },
+      "events_timeline": [
+        "第1月: 一个 Te Anau Tramping Club 成员看到云海后建 mark，附气象条件",
+        "第3月: 一个气象学家徒步者赞并补充'气压 1015 + 风速<5kt 即出现'",
+        "第7月: 一个专程去拍但失败的摄影师举报'白等一晚'",
+        "第11月: 当年云海出现 4 次，连续 12 人成功目击赞",
+        "第15月: 累积赞 96（多有具体条件），举报 11（多为时机不对）",
+        "第20月: 成为 Kepler 内行 mark"
+      ],
+      "expected_signal_summary": "总赞约 96，总举报约 11",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "稀有但真实，赞带气象数据精确，举报是运气问题非 mark 错，应保留",
+      "edge_case_flag": "remote_no_signal + rare_atmospheric_scenic"
+    },
+    {
+      "id": 27,
+      "title": "Old Ghost Road Stern Valley Hut 旁河水可饮 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Old Ghost Road Stern Valley Hut 旁一条小支流，水源经测试可直饮（无 giardia），DOC 默认推荐过滤但实测多年无问题",
+        "intrinsic_quality": "省过滤器寿命对长程车手价值高，但官方 DOC 不背书",
+        "user_volume_per_month": 320,
+        "duration_months": 22,
+        "signal": "无 - OGR 山谷",
+        "season_pattern": "11-4 月旺季月 450，冬季 100",
+        "human_factors": "山地车手对补水 mark 极敏感（重量敏感），徒步者更保守"
+      },
+      "events_timeline": [
+        "第1月: 一个长年走 OGR 的车手建 mark，附自费水质检测报告",
+        "第3月: 38 个车手赞，因为减重",
+        "第7月: 一个保守徒步者举报'未经 DOC 认证的水源不应推广'",
+        "第11月: 一场暴雨后水源短暂浑浊，几个用户中招举报",
+        "第14月: 老车手回访发现水恢复重新赞",
+        "第18月: 累积赞 178，举报 42，主要是天气敏感期",
+        "第22月: 总赞 215，总举报 51"
+      ],
+      "expected_signal_summary": "总赞约 215，总举报约 51",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "赞远超举报且有检测数据，举报是天气敏感的局部问题，应保留",
+      "edge_case_flag": "remote_no_signal + drinkable_water_source"
+    },
+    {
+      "id": 28,
+      "title": "Routeburn Falls Hut 后山顶过誉景观",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Routeburn Falls Hut 后山顶 1500m 处一块石板，被某博客标注'Routeburn 之最'，但实际只是普通山景，比 Harris Saddle 差远了",
+        "intrinsic_quality": "OK 但不卓越，相比同步道其他景点平庸",
+        "user_volume_per_month": 380,
+        "duration_months": 13,
+        "signal": "无 - Routeburn",
+        "season_pattern": "11-4 月旺季月 480 人，冬季关闭仅向导团进入",
+        "human_factors": "走 Routeburn 全程的人对每个景点会比较，容易识破过誉"
+      },
+      "events_timeline": [
+        "第1月: 跟风博客的徒步者建 mark",
+        "第2月: 30 跟风赞",
+        "第4月: 一个走过 4 次 Routeburn 的老手举报'Harris Saddle 完爆这里'",
+        "第6月: 多个对比型用户加入举报",
+        "第9月: 累积赞 95，举报 88",
+        "第13月: 总赞 110，总举报 102"
+      ],
+      "expected_signal_summary": "总赞约 110，总举报约 102",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "OK 但不卓越，赞举报接近反映真实'还行'状态，应保留为 borderline",
+      "edge_case_flag": "remote_no_signal + mediocre_overrated"
+    },
+    {
+      "id": 29,
+      "title": "Hump Ridge Track 木栈道 1900 年代遗迹 cairn 历史 mark",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Hump Ridge Track 第二天 Port Craig 段一段 1920 年代林业铁道残留石堆，本地视为遗迹，cairn 形式但历史价值",
+        "intrinsic_quality": "历史文物级别，DOC heritage 项目登记在案",
+        "user_volume_per_month": 110,
+        "duration_months": 26,
+        "signal": "无 - 西南角",
+        "season_pattern": "11-3 月私营步道每月 150",
+        "human_factors": "Hump Ridge 徒步者多数为 50+ 岁付费客户，对历史 mark 敬重"
+      },
+      "events_timeline": [
+        "第1月: 一个 Tuatapere 本地历史学家徒步者建 mark 详细注释",
+        "第3月: 私营步道公司官方账号赞并补充故事",
+        "第8月: DOC heritage 部门同步赞",
+        "第14月: 一个不懂历史的游客举报'就是堆石头有什么意思'",
+        "第20月: 累积赞 78（多为长评），举报 5（多为不解派）",
+        "第26月: 总赞 92，总举报 7"
+      ],
+      "expected_signal_summary": "总赞约 92，总举报约 7",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "DOC heritage 双背书，举报理由是观察者素质问题，应永久保留",
+      "edge_case_flag": "remote_no_signal + heritage_historical_cairn"
+    },
+    {
+      "id": 30,
+      "title": "Wangapeka Track Stone Hut 上方 junction 已 obsolete",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Wangapeka Track Stone Hut 上方 800m 一个旧 junction，原本通往一条 1980 年代废弃的 deer cull 工作道，现该工作道已被丛林吞没",
+        "intrinsic_quality": "原本无意义但 mark 留存，新走的人困惑'为什么有 junction mark'",
+        "user_volume_per_month": 35,
+        "duration_months": 30,
+        "signal": "无 - Kahurangi",
+        "season_pattern": "夏季月通过 50 人，冬季月仅 5 人猎鹿期，季节性流量差距大",
+        "human_factors": "Wangapeka 老炮多，对历史 mark 心情复杂"
+      },
+      "events_timeline": [
+        "第1月: 旧 mark 来自老一辈徒步者，无最近活动",
+        "第6月: 一个 thru-hiker 举报'我没看到任何 junction'",
+        "第12月: 一个 1980 年代曾走那条工作道的退休 ranger 留言'这是历史，但现在没用了'",
+        "第18月: 8 个新用户陆续举报",
+        "第24月: 老 mark 没有新赞流入",
+        "第30月: 总赞 12（全是 5 年前的），总举报 22"
+      ],
+      "expected_signal_summary": "总赞约 12，总举报约 22",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "现已无指向意义，新举报远超无新赞，应让其沉但保留历史价值标签",
+      "edge_case_flag": "remote_no_signal + obsolete_junction"
+    },
+    {
+      "id": 31,
+      "title": "Tongariro Northern Circuit Mangatepopo 山脊隐藏避雨洞 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Tongariro NC 第一天 Mangatepopo Hut 后向 South Crater 段一处熔岩气泡形成的 2x3m 浅洞，可挡 30 分钟暴雨，仅本地向导知道",
+        "intrinsic_quality": "暴雨时救命，但雪季完全被雪盖看不见",
+        "user_volume_per_month": 280,
+        "duration_months": 16,
+        "signal": "无 - 火山高原",
+        "season_pattern": "夏季 12-3 月旺季每天 30+ 通过；冬季雪季雪盖看不见洞口",
+        "human_factors": "Tongariro 也包含日游客（不需多日）但 NC 全程是徒步者；本地向导社群对这种隐藏点态度复杂"
+      },
+      "events_timeline": [
+        "第1月: 一个 Whakapapa 山地向导（已退休）建 mark 但留言'仅紧急用'",
+        "第3月: 一个被暴雨突袭的徒步者用洞躲避后赞，写'不躲就失温'",
+        "第6月: 现役向导举报'公开化会引来不必要游客'",
+        "第10月: 第二个躲避者赞，给具体位置补正",
+        "第13月: 一对夫妇赞但补充'我们差点没找到，需要更详细 GPS'",
+        "第16月: 总赞 48，总举报 14"
+      ],
+      "expected_signal_summary": "总赞约 48，总举报约 14",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "真实救命资源虽有曝光争议但赞多于举报且都是亲历，应保留",
+      "edge_case_flag": "remote_no_signal + emergency_shelter_lava_cave"
+    },
+    {
+      "id": 32,
+      "title": "Lake Waikaremoana Korokoro Falls 支线路口 junction",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Lake Waikaremoana 第二天 Marauiti Hut 前 Korokoro Falls 支线 1.5km 来回，路口仅 DOC 小指示牌，雨季牌子常被吹倒",
+        "intrinsic_quality": "Korokoro Falls 是这条 Great Walk 的主要支线景点，错过等于少看一半",
+        "user_volume_per_month": 70,
+        "duration_months": 24,
+        "signal": "无 - Te Urewera",
+        "season_pattern": "全年开放夏季月 130 冬季 30",
+        "human_factors": "Lake Waikaremoana 徒步者比 Routeburn 经验老，对支线 mark 重视"
+      },
+      "events_timeline": [
+        "第1月: 一个错过 Falls 的徒步者懊悔后建 mark 配 GPS",
+        "第3月: 一对完成支线的夫妇赞并补充'走 1.5km 完全值'",
+        "第7月: 一个 Tūhoe 向导赞并强调文化重要性（瀑布是 wāhi tapu）",
+        "第14月: 一个雨季去的徒步者发现 DOC 牌子倒了，特别赞 mark 救了行程",
+        "第20月: 累积赞 65，举报 4",
+        "第24月: 总赞 76，总举报 5"
+      ],
+      "expected_signal_summary": "总赞约 76，总举报约 5",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "弥补 DOC 牌子失效的关键 junction，文化和实用双价值，应永久保留",
+      "edge_case_flag": "remote_no_signal + wahi_tapu_junction"
+    },
+    {
+      "id": 33,
+      "title": "Routeburn Lake Howden Hut 后木桥 1990 老 cairn",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Routeburn 第三天 Lake Howden Hut 后向 The Divide 一座 1990 年代搭木桥时本地施工队留下的 40cm cairn，标记原始测量基准点",
+        "intrinsic_quality": "工程历史价值，但对徒步导航无用",
+        "user_volume_per_month": 380,
+        "duration_months": 20,
+        "signal": "无 - Routeburn 西段",
+        "season_pattern": "11-4 月旺季月通过 480 人，冬季关闭无人",
+        "human_factors": "Routeburn 流量极大，多数徒步者跟风赞但很少了解背景"
+      },
+      "events_timeline": [
+        "第1月: 一个建桥团队成员的儿子（也是徒步者）建 mark 详述背景",
+        "第3月: 长评得到 22 赞",
+        "第8月: 一个工程师徒步者赞并补充测量原理",
+        "第14月: 一个普通徒步者举报'就是石头堆没意义'",
+        "第18月: 累积赞 68（多为长评），举报 9",
+        "第20月: 总赞 78，总举报 11"
+      ],
+      "expected_signal_summary": "总赞约 78，总举报约 11",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "工程历史价值有家属和工程师双重背书，赞远超不解派举报，应作为 Routeburn 历史 mark 保留",
+      "edge_case_flag": "remote_no_signal + engineering_heritage_cairn"
+    },
+    {
+      "id": 34,
+      "title": "Five Passes Route Park Pass 真危险 ice axe 段",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Five Passes Route Park Pass 顶 1530m 一段 200m 长冰雪坡，12 月初仍硬冰，需 ice axe 自停，无 mark 容易低估",
+        "intrinsic_quality": "至少 3 起非致命滑坠记录，需冰镐技术的真危险段",
+        "user_volume_per_month": 8,
+        "duration_months": 36,
+        "signal": "无 - Mt Aspiring 核心",
+        "season_pattern": "12-3 月可走，12 月最硬冰，1 月软化但仍需谨慎",
+        "human_factors": "Five Passes 徒步者全是高手，对真危险信息极度饥渴"
+      },
+      "events_timeline": [
+        "第3月: 一个 Wanaka 攀登向导建 mark 配冰况照片",
+        "第8月: 一个滑坠未受伤的徒步者出山赞并描述细节",
+        "第15月: 一个新西兰高山协会成员赞并补充长期观察数据",
+        "第22月: 累积赞 18（每条都是长评），举报 0",
+        "第30月: 一个国际向导专程考察后赞",
+        "第36月: 总赞 24，总举报 0"
+      ],
+      "expected_signal_summary": "总赞约 24，总举报约 0",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "极低流量但零举报且每条赞都是高山向导级亲历数据，对未来高手是救命信息，应永久保留",
+      "edge_case_flag": "remote_no_signal + technical_alpine_danger"
+    },
+    {
+      "id": 35,
+      "title": "Heaphy Track Lewis Hut 前夜 kiwi 出没 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Heaphy Track 第二夜 Lewis Hut 后方 Heaphy 河边一片湿地，傍晚黄昏 great spotted kiwi 出没概率较高（约 30%）",
+        "intrinsic_quality": "野生 kiwi 是 NZ 终极体验，30% 概率算高",
+        "user_volume_per_month": 95,
+        "duration_months": 18,
+        "signal": "无 - Kahurangi 西海岸",
+        "season_pattern": "全年开放，夏季月 200 冬季 50；冬季 kiwi 反而更活跃",
+        "human_factors": "Heaphy 徒步者中很多是为了 kiwi 而来，赞热情高"
+      },
+      "events_timeline": [
+        "第1月: 一个看到 kiwi 的徒步者激动建 mark",
+        "第2月: 12 个跟随的徒步者中 4 人成功看到，全员赞",
+        "第6月: DOC kiwi 保护项目同步赞并提供观察建议",
+        "第10月: 一个等了 3 晚未见的徒步者举报'白等'",
+        "第14月: 累积赞 85，举报 18（多为运气问题）",
+        "第18月: 总赞 102，总举报 22"
+      ],
+      "expected_signal_summary": "总赞约 102，总举报约 22",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "野生 kiwi 是黄金体验，30% 概率合理，举报是运气问题非 mark 错，应保留",
+      "edge_case_flag": "remote_no_signal + wildlife_observation_scenic"
+    },
+    {
+      "id": 36,
+      "title": "Old Ghost Road Goat Creek Hut 旁电池充电点 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Old Ghost Road Goat Creek Hut 旁 OGR Trust 安装的小型太阳能 USB 充电桩（仅 2 个口）2024 年新增",
+        "intrinsic_quality": "对长程车手手机/GPS 充电真实救命",
+        "user_volume_per_month": 320,
+        "duration_months": 8,
+        "signal": "无 - OGR 中段",
+        "season_pattern": "11-4 月旺季月 450 人，冬季月 100 含徒步与雪季少量",
+        "human_factors": "山地车手依赖电子导航对充电极敏感，徒步者反而不甚关心"
+      },
+      "events_timeline": [
+        "第1月: 一个完成全程的车手建 mark",
+        "第2月: 35 个车手赞，多数留言'救了 GPS'",
+        "第4月: 一个雨天去的发现充电桩故障举报",
+        "第5月: OGR Trust 修复后老用户回访赞",
+        "第7月: 累积赞 128，举报 14（多为天气故障期）",
+        "第8月: 总赞 145，总举报 16"
+      ],
+      "expected_signal_summary": "总赞约 145，总举报约 16",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高频使用真补给，赞远超举报且举报理由是临时故障非 mark 错，应保留",
+      "edge_case_flag": "remote_no_signal + solar_charging_supply"
+    },
+    {
+      "id": 37,
+      "title": "Rakiura NWC Mason Bay 沙滩 kiwi 误传 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Rakiura North West Circuit Mason Bay 沙滩某段被博客描述为'白天看 kiwi 概率最高'，但实际 Stewart Island kiwi 白天活动在岛全岛随机分布",
+        "intrinsic_quality": "Mason Bay 整体是好景点但'最高概率'是夸大",
+        "user_volume_per_month": 25,
+        "duration_months": 30,
+        "signal": "无 - Stewart Island",
+        "season_pattern": "全年偶有徒步者月通过 30 人左右，旺季淡季差异不大",
+        "human_factors": "Stewart Island 徒步者老手多，对夸大宣传敏感"
+      },
+      "events_timeline": [
+        "第1月: 跟博客的国际游客建 mark",
+        "第6月: 一个 DOC ranger 举报'整个岛都一样不要误导'",
+        "第12月: 第二个本地举报",
+        "第18月: 14 个跟风赞但无亲见者",
+        "第24月: 累积赞 18，举报 28",
+        "第30月: 总赞 22，总举报 35"
+      ],
+      "expected_signal_summary": "总赞约 22，总举报约 35",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "误导性夸大被 DOC ranger 和本地权威否定，跟风赞无亲见佐证，举报压倒性应让其沉",
+      "edge_case_flag": "remote_no_signal + misinformation_scenic"
+    },
+    {
+      "id": 38,
+      "title": "Hump Ridge Track Stage 1 第一天爬升假危险 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Hump Ridge Track 第一天 Bluecliffs Beach 后向 Okaka Lodge 段一段 800m 持续爬升 600m，对没准备的旅游团客紧张但实则正常 grade",
+        "intrinsic_quality": "对一般 fitness 完全可控，仅是慢但不险",
+        "user_volume_per_month": 110,
+        "duration_months": 14,
+        "signal": "无 - 西南角",
+        "season_pattern": "11-3 月旺季 150/月，雨季锐减至 30 几乎不走",
+        "human_factors": "Hump Ridge 私营客户多为 50+ 付费客户，体力差距大"
+      },
+      "events_timeline": [
+        "第1月: 一个体力差的游客上山时心慌建 mark",
+        "第2月: 5 个相似游客跟风赞",
+        "第4月: 私营公司向导举报'这是正常 grade 不该标 danger'",
+        "第8月: 多个本地老手举报",
+        "第11月: 累积赞 22，举报 38",
+        "第14月: 总赞 26，总举报 48"
+      ],
+      "expected_signal_summary": "总赞约 26，总举报约 48",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "向导和老手举报权威性高，是体力问题非 mark 应表达，应让其沉",
+      "edge_case_flag": "remote_no_signal + fitness_complaint_false_danger"
+    },
+    {
+      "id": 39,
+      "title": "Kepler Mt Luxmore 山顶向南支线 junction 未标",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Kepler Track Mt Luxmore 山顶有一条非官方向南通往 Snowdon 的山脊路，DOC 不标但天气好时可加 4 小时绕路看更壮观景观",
+        "intrinsic_quality": "高级徒步者额外奖励，但天气恶劣时极危险",
+        "user_volume_per_month": 220,
+        "duration_months": 18,
+        "signal": "无 - Fiordland 高山",
+        "season_pattern": "12-3 月晴天可尝试，其他时间不建议",
+        "human_factors": "Kepler 徒步者中 Tramping Club 老手会想做这条延伸"
+      },
+      "events_timeline": [
+        "第1月: 一个 Te Anau 老炮建 mark 严格标注'仅晴天 + 老手'",
+        "第3月: 5 个完成扩展线路的徒步者赞",
+        "第7月: 一个新手不顾警告硬上后被困出山赞 mark'救了我'但写'我不该忽略警告'",
+        "第11月: DOC 看到 mark 后中性回应'不鼓励但可保留'",
+        "第14月: 累积赞 58，举报 12（多为新手抱怨警告太严）",
+        "第18月: 总赞 68，总举报 14"
+      ],
+      "expected_signal_summary": "总赞约 68，总举报约 14",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高级徒步真实奖励 mark，赞数稳定且 DOC 中立，应保留",
+      "edge_case_flag": "remote_no_signal + advanced_extension_junction"
+    },
+    {
+      "id": 40,
+      "title": "Cascade Saddle 下山段 Dart 河谷废弃 cairn",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Cascade Saddle 下到 Dart 河谷段一座 80cm cairn，1970 年代某地质勘探队留下，标记当年钻探点位，今已无意义",
+        "intrinsic_quality": "对徒步导航无用，但有地质史料价值",
+        "user_volume_per_month": 80,
+        "duration_months": 28,
+        "signal": "无 - Aspiring",
+        "season_pattern": "12-3 月夏季可走，其他时间封山或雪季高风险",
+        "human_factors": "Cascade Saddle 徒步者全是有备而来的老手"
+      },
+      "events_timeline": [
+        "第1月: 一个 GNS Science 退休员工建 mark 详述地质背景",
+        "第6月: 一个地质学生赞并配学术资料",
+        "第14月: 一个普通徒步者举报'看不出意义'",
+        "第20月: 累积赞 38（多为科研背景），举报 15",
+        "第28月: 总赞 45，总举报 19"
+      ],
+      "expected_signal_summary": "总赞约 45，总举报约 19",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "小众科研价值但普通用户难懂，赞多于举报但比例胶着，应保留为 borderline",
+      "edge_case_flag": "remote_no_signal + niche_scientific_cairn"
+    },
+    {
+      "id": 41,
+      "title": "Greenstone Caples Mid Caples Hut 旁马匹饮水点 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Greenstone Caples 第二夜 Mid Caples Hut 后 200m 一个 1900 年代牧场遗留石砌饮水槽，现仍有清泉流出可补水",
+        "intrinsic_quality": "历史 + 实用双重，水质清澈但官方不背书",
+        "user_volume_per_month": 140,
+        "duration_months": 22,
+        "signal": "无 - Caples 河谷",
+        "season_pattern": "11-4 月旺季月 250 人，冬季月 50 锐减但仍可走",
+        "human_factors": "Greenstone 徒步者常带历史好奇心"
+      },
+      "events_timeline": [
+        "第1月: 一个 Glenorchy 历史协会成员建 mark 配 1908 年照片",
+        "第4月: 8 个徒步者用槽补水后赞",
+        "第10月: 一个保守徒步者举报'未消毒水源不该推广'",
+        "第16月: 一个 NIWA 水质学家赞并附测试数据'菌落低于 DOC 标准'",
+        "第20月: 累积赞 88，举报 14",
+        "第22月: 总赞 95，总举报 17"
+      ],
+      "expected_signal_summary": "总赞约 95，总举报约 17",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "历史 + 实用 + 科学背书三重价值，赞远超举报，应保留",
+      "edge_case_flag": "remote_no_signal + heritage_water_supply"
+    },
+    {
+      "id": 42,
+      "title": "St James Walkway 雪季入口封闭 junction 季节性",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "St James Walkway Lewis Pass 入口处冬季封闭 gate，封闭期间走需要绕行 5km 旧公路，6-9 月有效",
+        "intrinsic_quality": "冬季关键导航信息救命，夏季完全无意义对照",
+        "user_volume_per_month": 60,
+        "duration_months": 24,
+        "signal": "无 - Lewis Pass",
+        "season_pattern": "10-4 月正常通行 60/月，5-9 月关闭后偶有 5/月勇敢者",
+        "human_factors": "St James 冬季走的人是真硬核，对季节性 mark 敬重"
+      },
+      "events_timeline": [
+        "第1月: 一个冬季想走的 NZ 老炮建 mark 标'仅 6-9 月'",
+        "第3月: 第一个冬季成功绕行的徒步者赞",
+        "第8月: 一个夏季用户举报'gate 是开的我看不到任何关闭'",
+        "第14月: 老用户冬季回来再赞",
+        "第20月: 累积赞 35（多为冬季用户长评），举报 22（多为夏季）",
+        "第24月: 总赞 42，总举报 26"
+      ],
+      "expected_signal_summary": "总赞约 42，总举报约 26",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "季节性 mark 赞举报反映上下文不同，赞略多但不压倒，应保留为 borderline 让用户看季节标签",
+      "edge_case_flag": "remote_no_signal + seasonal_gate_junction"
+    },
+    {
+      "id": 43,
+      "title": "Routeburn Conical Hill 支线打卡站 scenic 极挤",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Routeburn Harris Saddle 旁 Conical Hill 1.5km 支线，是 Routeburn 标志景点之一，旺季每天 200+ 人挤在山顶",
+        "intrinsic_quality": "景观真好但旺季体验差到反向影响",
+        "user_volume_per_month": 380,
+        "duration_months": 14,
+        "signal": "无 - Routeburn 中段",
+        "season_pattern": "11-4 月每天 200+，淡季月初值得",
+        "human_factors": "国际游客必拍打卡热情高，老手反感拥挤造成体验显著下降"
+      },
+      "events_timeline": [
+        "第1月: 跟风游客建 mark 配晴天照",
+        "第2月: 80 个跟风赞",
+        "第4月: 一个 Tramping Club 老手举报'拥挤毁掉体验'",
+        "第7月: 多个老手加入举报但游客也持续赞",
+        "第11月: 累积赞 220，举报 35（少数派）",
+        "第14月: 总赞 265，总举报 42"
+      ],
+      "expected_signal_summary": "总赞约 265，总举报约 42",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "经典景点客观值得，举报是体验问题非 mark 错，应保留",
+      "edge_case_flag": "remote_no_signal + crowded_classic_scenic"
+    },
+    {
+      "id": 44,
+      "title": "Wangapeka Cecil King Hut 上 deer hunter 私人小屋 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Wangapeka Track Cecil King Hut 后山非官方路 1.2km 处一个本地猎人 1980 年代建的私人小屋，紧急时可用",
+        "intrinsic_quality": "完全私产，主人愿意紧急救援但不希望公开",
+        "user_volume_per_month": 35,
+        "duration_months": 30,
+        "signal": "无 - Kahurangi",
+        "season_pattern": "夏季月 50 人通过，冬季几乎无人仅猎人偶尔进入",
+        "human_factors": "Wangapeka 老炮深知不能广泛公开私产"
+      },
+      "events_timeline": [
+        "第3月: 一个无知徒步者建 mark 详细公开位置",
+        "第5月: 主人本人在 Tasman 镇得知后举报'请删除这个 mark'",
+        "第8月: 老炮们集体支持举报'不该公开私产'",
+        "第14月: 一个被困徒步者用过小屋后赞，但留言'同意未来不该有 mark'",
+        "第22月: 累积赞 8，举报 25",
+        "第30月: 总赞 10，总举报 32"
+      ],
+      "expected_signal_summary": "总赞约 10，总举报约 32",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "侵犯私产是社群红线，主人本人和老炮共识反对，举报远超赞，应坚决让其沉",
+      "edge_case_flag": "remote_no_signal + private_property_violation"
+    },
+    {
+      "id": 45,
+      "title": "Tongariro Red Crater 顶火山活动 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tongariro Northern Circuit 第二天 Red Crater 顶 1886m，活火山，2012 年喷发后地质学家持续监测，特定日子有毒气积聚",
+        "intrinsic_quality": "GeoNet 监测的真活火山危险",
+        "user_volume_per_month": 280,
+        "duration_months": 20,
+        "signal": "无 - 火山顶",
+        "season_pattern": "全年开放但喷发警告期会临时关闭，冬季雪天气降低人流",
+        "human_factors": "Tongariro 跨国游客极多，对火山警告普遍重视"
+      },
+      "events_timeline": [
+        "第1月: 一个 GNS Science 火山学家建 mark 链接 GeoNet",
+        "第2月: 一个气体浓度高日上山的游客喉咙不适后赞",
+        "第6月: 一个晴天游客举报'我什么感觉都没有'",
+        "第11月: 当年一次小喷发警报，mark 引用激增",
+        "第15月: 累积赞 198，举报 22",
+        "第20月: 总赞 245，总举报 28"
+      ],
+      "expected_signal_summary": "总赞约 245，总举报约 28",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "GNS 权威背书真活火山危险，赞远超举报，应永久保留",
+      "edge_case_flag": "remote_no_signal + active_volcano_danger"
+    },
+    {
+      "id": 46,
+      "title": "Heaphy Track Gouland Downs 沼泽小径游客踏出捷径 cairn 误导",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Heaphy Track Gouland Downs Hut 后沼泽地一群游客 2023 年踩出小径堆 cairn 当快捷方式，但实际穿越受保护湿地破坏生态",
+        "intrinsic_quality": "对人类'快'但对生态破坏，DOC 强烈反对",
+        "user_volume_per_month": 95,
+        "duration_months": 16,
+        "signal": "无 - Kahurangi",
+        "season_pattern": "11-4 月旺季月通过 200 人，冬季月 60 锐减",
+        "human_factors": "环保派和便利派完全分裂，社群舆论两极对抗持续中"
+      },
+      "events_timeline": [
+        "第1月: 一个跟随捷径的游客建 mark",
+        "第2月: 18 个跟风赞",
+        "第3月: 一个 DOC ranger 强烈举报并附湿地破坏照",
+        "第6月: 多个环保团体加入举报",
+        "第10月: DOC 派员在 cairn 旁立警告牌",
+        "第14月: 累积赞 32，举报 78",
+        "第16月: 总赞 38，总举报 92"
+      ],
+      "expected_signal_summary": "总赞约 38，总举报约 92",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "湿地破坏是 DOC 红线问题，环保举报有照片和官方介入，举报远超便利派赞，应让其沉",
+      "edge_case_flag": "remote_no_signal + ecological_damage_cairn"
+    },
+    {
+      "id": 47,
+      "title": "Paparoa Track 1981 年矿难纪念点 scenic（历史悲剧）",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Paparoa Track 第二天 Pike29 Memorial 旁一块石碑（2019 年立），纪念 2010 Pike River 矿难 29 名工人，是步道的精神核心",
+        "intrinsic_quality": "NZ 重大历史，所有徒步者都应该在此停留",
+        "user_volume_per_month": 240,
+        "duration_months": 12,
+        "signal": "无 - Paparoa",
+        "season_pattern": "全年开放 320/月稳定流量，雨季略低但仍持续访问",
+        "human_factors": "Paparoa Track 设计就是为了纪念，全民共识"
+      },
+      "events_timeline": [
+        "第1月: 一个矿难家属建 mark",
+        "第2月: 第一周 60 个徒步者赞且全是长评",
+        "第4月: 西海岸 mayor 同步赞",
+        "第7月: 一个不知背景的国际游客举报'就是石碑没什么'",
+        "第10月: 一群 Greymouth 居民组团反驳",
+        "第12月: 总赞 285，总举报 8"
+      ],
+      "expected_signal_summary": "总赞约 285，总举报约 8",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "国家级纪念意义全民共识，赞远超无知举报，应永久保留",
+      "edge_case_flag": "remote_no_signal + national_memorial_scenic"
+    },
+    {
+      "id": 48,
+      "title": "Lake Waikaremoana Whanganui Hut 之间野猪危险 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Lake Waikaremoana Whanganui Hut 周边 Te Urewera 野猪族群密度高，2023 起有 4 起野猪冲撞徒步者事件",
+        "intrinsic_quality": "新出现的真威胁，DOC 正在评估狩猎管理",
+        "user_volume_per_month": 70,
+        "duration_months": 16,
+        "signal": "无 - Te Urewera",
+        "season_pattern": "野猪繁殖期 10-12 月最危险",
+        "human_factors": "Te Urewera 徒步者多数已知野猪存在但低估攻击性"
+      },
+      "events_timeline": [
+        "第1月: 一个被野猪冲撞的徒步者建 mark",
+        "第3月: DOC 同步赞并附狩猎管理通知",
+        "第6月: 又一起冲撞事件，受害者赞",
+        "第9月: 一个走过 5 次都没遇野猪的徒步者举报'夸大'",
+        "第13月: 第三起事件后老用户压倒性赞",
+        "第16月: 总赞 88，总举报 18"
+      ],
+      "expected_signal_summary": "总赞约 88，总举报约 18",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "新出现真威胁有 DOC 介入，赞远超运气派举报，应保留",
+      "edge_case_flag": "remote_no_signal + emerging_wildlife_danger"
+    },
+    {
+      "id": 49,
+      "title": "Rees-Dart Cascade Saddle 路口非官方延伸 junction 灰区",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Rees-Dart Track Dart Hut 旁向 Cascade Saddle 延伸的非官方路口，DOC 在牌子上写'Experienced trampers only'但路口本身只有褪色油漆",
+        "intrinsic_quality": "高级徒步者会想走，新手错认会送命",
+        "user_volume_per_month": 95,
+        "duration_months": 22,
+        "signal": "无 - Aspiring",
+        "season_pattern": "12-3 月可尝试夏季无雪期，其他时间高风险不建议",
+        "human_factors": "极端两极：老手要详细 mark 新手不该看到"
+      },
+      "events_timeline": [
+        "第1月: 一个完成 Cascade 的徒步者建 mark 严格警告",
+        "第3月: 5 个老手赞并补充技术细节",
+        "第7月: 一个新手忽略警告硬走出事获救后赞，写'我错了不该看 mark 就上'",
+        "第13月: DOC 中性'我们既不删也不推'",
+        "第18月: 累积赞 56，举报 32",
+        "第22月: 总赞 68，总举报 38"
+      ],
+      "expected_signal_summary": "总赞约 68，总举报约 38",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "争议持续但核心是有用信息，赞略多举报有理由，应保留为 borderline",
+      "edge_case_flag": "remote_no_signal + experienced_only_junction"
+    },
+    {
+      "id": 50,
+      "title": "Kepler Track Iris Burn Falls 支线被博客标错 cairn",
+      "scenario": {
+        "type": "cairn",
+        "location_desc": "Kepler Track Iris Burn Hut 附近瀑布支线一座 2023 游客新堆 cairn，标在错误的瀑布支路口（真支路口在前方 200m），博客已传播错误",
+        "intrinsic_quality": "导航错误的活案例，已造成多个被困事件",
+        "user_volume_per_month": 220,
+        "duration_months": 14,
+        "signal": "无 - Fiordland",
+        "season_pattern": "11-4 月旺季月通过 350 人，冬季关闭无访问",
+        "human_factors": "Kepler 是中级 Great Walk，徒步者一半新手一半老手"
+      },
+      "events_timeline": [
+        "第1月: 跟错误博客的游客建 mark",
+        "第2月: 25 跟风赞",
+        "第3月: 第一个走错被困 1 小时的徒步者举报",
+        "第5月: 一个 Te Anau ranger 实地验证后举报并附正确 GPS",
+        "第8月: 多个被误导者陆续举报",
+        "第11月: 累积赞 50，举报 88",
+        "第14月: 总赞 58，总举报 105"
+      ],
+      "expected_signal_summary": "总赞约 58，总举报约 105",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "导航错误证据明确，受害者增多，ranger 介入，应让其沉",
+      "edge_case_flag": "remote_no_signal + misplaced_navigation_cairn"
+    }
+  ]
+}

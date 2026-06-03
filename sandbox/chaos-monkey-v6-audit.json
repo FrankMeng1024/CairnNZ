@@ -1,0 +1,103 @@
+{
+  "overall_score": 72,
+  "arc_coverage": {
+    "covered": [
+      "stable_healthy (Case B/Q 部分)",
+      "natural_death_long_life (Case B 自然老死)",
+      "remote_good (Case B 偏远 + Case C 起点)",
+      "sick_death_full (Case G/H 病死全程)",
+      "recovered_via_heart_starter (Case L 强心剂回退)",
+      "in_suspicious_unresolved (mid-state)",
+      "new_mark_burst (Case E 新 mark burst)",
+      "sudden_viral (Case C 偏远突爆)",
+      "controversial_50_50 (Case R)",
+      "chronic_decline (v6.6 慢性恶化)",
+      "commercial_fake_ad (Case N 商业 mark)",
+      "dislike_storm_recovered (低严重度集中)",
+      "natural_death_revivable (Case O 远程复活)",
+      "sick_death_on_site_only (Case P 历史一般)",
+      "brigade_then_recovery (Case L/信号消化)",
+      "seasonal_real_calendar (Case A 季节)"
+    ],
+    "missing": [
+      "Case F 类: 干净 mark + 1 条最严重 report 不构成趋势 (验证条数门槛 + 严重度不参与入口判定)",
+      "Case I 类: 寿命末期进 SUSPICIOUS 后无人来,寿命走完即死 (寿命优先绝对规则)",
+      "Case J 类: 寿命末期 SUSPICIOUS 期间 burst 续命到 30 天后再死 (续命有效但寿命优先)",
+      "Case K 类: HEARTBEAT 后切流量伪永生 (验证时钟 A 在 HEARTBEAT 不冰冻)",
+      "Case M 类: DOC 官方账号被 brigade 干掉,算法不豁免 (虽 isOfficial 字段有,但无独立 arc 验证)",
+      "复活后继续累计的二代 mark arc (Case O 后续凭实力续命)",
+      "信号消化后新一轮利空再次进 SUSPICIOUS 的二轮急转 arc (§三利空利好第二轮)",
+      "纯混合 report 类型(Case H Wanaka cairn fake_ad+info_mismatch+dislike 组合,验证严重度组合处理力度)"
+    ]
+  },
+  "issues": [
+    {
+      "severity": "P0",
+      "location": "ARCS[8] controversial_50_50, expected='any_alive_or_natural'",
+      "issue": "expected 类型 'any_alive_or_natural' 在文档头部 expected 枚举里不存在 (枚举里只有 alive/natural_death/sick_death/in_suspicious/in_critical/recovered/revivable/not_revivable/any_alive_or_susp/context_dependent)。该 arc 文档头部声称只允许 alive/natural_death,但用了未定义 token,judge 函数无法识别,会导致 placeholder 通过但接入算法后必出错。",
+      "fix": "expected 改为已定义的 'alive' (符合 Case R '维持 HEALTHY 直到寿命走完') 或在 expected 枚举里新增 'any_alive_or_natural' 并在 judge 里加分支。Case R 的核心断言是『不进 SUSPICIOUS』,judge 必须显式验证未触发 SUSPICIOUS 状态,而不是接受任何状态。"
+    },
+    {
+      "severity": "P0",
+      "location": "ARCS[12] natural_death_revivable expected='revivable' vs ARCS[13] sick_death_on_site_only expected='not_revivable'",
+      "issue": "expected 标签与描述矛盾。ARCS[13] 描述说『远程复活资格不够,必须到场』,这在 v6.6 §六决策 1 是『历史一般 → on_site 可复活』,不是 not_revivable。not_revivable 应是『历史信誉差/无 → 用户须新建』。当前用 not_revivable 标签覆盖『需到场』case 会让算法 judge 判错——on_site 复活资格 ≠ 不可复活。",
+      "fix": "新增 expected='revivable_on_site_only' 区分三档(remote / on_site / not_revivable),与思想 §六决策 1 三档判断对齐。"
+    },
+    {
+      "severity": "P0",
+      "location": "judge() 函数 line 432-455",
+      "issue": "judge 当前对所有 case 返回 pass:true,且 placeholder 注释说『待 algorithm-v6 接入』。但主程序还是统计 passed/N 并打印 100% 通过率,这是误导性输出——任何 arc 设计错误都会被 100% 通过掩盖。chaos-monkey 现状无任何检验能力,审计这个测试框架的人会被 99-100% pass 数字误导,以为框架已可用。",
+      "fix": "在 algorithm-v6 接入前,judge 应返回 pass:'pending' 或 skip 而非 pass:true,主程序输出『N 个场景已生成,judge 待接入』而不是『通过 N/N』。或在文件顶部 banner 用红字打印 'JUDGE NOT WIRED — RESULTS ARE COSMETIC'。"
+    },
+    {
+      "severity": "P1",
+      "location": "ARCS[9] chronic_decline expected='natural_death'",
+      "issue": "v6.6 §三支柱 1 明确『慢性恶化不是 SUSPICIOUS 入口...自然消退』,但 qualityCurve 0.85→0.15 的平滑下降在末期(progress>0.85, quality<0.27)会产生大量 report,占比可能突破急转门槛被判 SUSPICIOUS。这是『慢性』vs『急转』的边界 case——若曲线下降速率被算法误判为急转,就违反了 Case R 类思想。当前曲线没有明确『慢到不构成急转』的保证。",
+      "fix": "曲线应更平滑(如 0.85→0.40)或拉长到 minDays>=200,同时在 expected 注明『若被算法判 sick_death 也接受,但必须验证未触发 SUSPICIOUS 是 v6.6 期望』。或新增对照 arc 'chronic_decline_steep' 测试急转边界。"
+    },
+    {
+      "severity": "P1",
+      "location": "pickReportCategory() line 333-352",
+      "issue": "商业 mark 触发条件用 currentQuality<0.4,但 commercial_fake_ad arc 的 qualityCurve 在 p<0.3 返回 0.6 (>0.4),意味着商业 mark 前 30% 时间走的是 quality<0.6 分支(50% info_mismatch / 50% dislike),fake_ad 占比为 0。只有 p>=0.3 后 quality=0.15 才进入商业 70% fake_ad 分支。结果是 commercial mark 的 fake_ad 占比可能不够『多』,无法测试 v6.6 Case N『加速 CRITICAL → DEAD』的高严重度组合。",
+      "fix": "isCommercial 分支应独立于 currentQuality 阈值,只要 forceCommercial=true 就 70% fake_ad。或将 commercial_fake_ad 的 qualityCurve 起点调到 0.4 以下让 commercial 分支立即生效。"
+    },
+    {
+      "severity": "P1",
+      "location": "ARCS 整体权重总和",
+      "issue": "16 个 arc 权重相加 = 0.15+0.08+0.08+0.10+0.08+0.06+0.05+0.05+0.05+0.05+0.05+0.04+0.04+0.04+0.04+0.04 = 1.00 刚好,但因浮点累积 pickArc 末尾 fallback 永远命中 ARCS[15] (seasonal),seasonal 实际权重略高于 0.04。这不是大 bug 但破坏权重精度。",
+      "fix": "pickArc 用 normalizeWeights 或显式 sum 归一化。"
+    },
+    {
+      "severity": "P1",
+      "location": "judge() ratio-based 放宽逻辑 line 446-451",
+      "issue": "用『累积 like/total ratio』作为 escape hatch (ratio>=0.7 期望病死但活了→pass) 是合理的现实约束,但这与 v6.6 占比驱动思想存在张力——v6.6 用滑动窗口 ratio,不是累积 ratio。一个『前期全 like、后期全 report 急转病死』的 mark 累积 ratio 仍可能 0.5+,judge 会错误放过。",
+      "fix": "judge 应用『近期窗口 ratio』(最后 N 天) 而非累积 ratio,与算法层占比驱动一致。"
+    },
+    {
+      "severity": "P2",
+      "location": "isOfficial 字段未驱动任何 arc 行为",
+      "issue": "scenario 生成 isOfficial 但只在非强制 arc 里被覆盖到 authorRole,没有任何 arc 专门测试 v6.6『不豁免 DOC』 (Case M)。该字段当前是死字段。",
+      "fix": "新增 arc 'doc_warning_brigade_attacked' 验证官方账号 mark 被 brigade 后照常进 SUSPICIOUS。"
+    },
+    {
+      "severity": "P2",
+      "location": "minVisitors 与 encountersPerDay 公式 line 287-293",
+      "issue": "对 minDays>=365 + minVisitors=200 (natural_death_revivable) 的 case,minEnc=0.55, lo=0.55, encountersPerDay 在 [0.55, 1.1] 区间。365 天 × 0.55 ≈ 200 vistors 刚到下限。流量太低可能导致触发不到向上急转,Case O 历史加成测试覆盖不充分。",
+      "fix": "minVisitors 提到 500+ 或独立设 baseEncountersPerDay。"
+    },
+    {
+      "severity": "P2",
+      "location": "simulate() 没有产生 view 事件,只有 like/report 事件",
+      "issue": "v6.6 §三支柱 3 核心是『单位时间 like/view 转化率』,但 simulate 没记录 view (visitor 即使不 like/report 也是一次 view)。等 algorithm-v6 接入时,转化率计算缺数据。",
+      "fix": "events 里加 {kind:'view', uid, t},每个 visitor 至少产生一次 view,然后再决定 like/report/null。"
+    },
+    {
+      "severity": "P2",
+      "location": "expected='context_dependent' 在 judge 极小样本分支会被过早 pass",
+      "issue": "line 441 `if (total < 5 && expected !== 'context_dependent')` 把 context_dependent 排除在极小样本 pass 之外,但季节性 arc 在低流量 + 单 seed 下完全可能 total<5,导致 seasonal arc 反而无法 pass。逻辑反了。",
+      "fix": "条件改为 `if (total < 5) return pass:true,理由='样本不足'` 不区分 expected。"
+    }
+  ],
+  "approval": "NEEDS_FIX",
+  "summary": "chaos-monkey-v6.mjs 在 v6.6 思想覆盖度上达到 16 arc / 18+ 概念的 ~75% 覆盖,主体方向正确(双路径生命周期、急转双向、严重度差异、复活、信号消化、季节性都有 arc)。但有 3 个 P0 问题阻碍接入: (1) controversial_50_50 用了未定义 expected token 'any_alive_or_natural';(2) sick_death_on_site_only 把『需到场复活』错标为 not_revivable,与 v6.6 §六决策 1 三档判断不对齐;(3) judge 当前 100% 返回 pass 但主程序输出『通过 N/N』产生误导性绿色信号,在 algorithm-v6 接入前应明确标注 placeholder 状态。另缺失关键 case: F (1 条不构成趋势)、I/J (寿命优先绝对规则)、K (HEARTBEAT 不冰冻)、M (DOC 不豁免)、信号消化第二轮、混合 report 严重度组合。chronic_decline 的 qualityCurve 没有明确『慢到不构成急转』保证,可能与 v6.6 慢性恶化思想冲突。修复 P0 + 补充 4-5 个缺失 arc + 加 view 事件后可投入使用。"
+}

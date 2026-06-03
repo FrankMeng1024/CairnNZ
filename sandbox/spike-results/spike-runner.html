@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Spike Test — All 4 in 1</title>
+<style>
+  body { margin: 0; padding: 16px; font-family: 'SF Mono', Consolas, monospace; background: #1a1a1a; color: #ddd; font-size: 12px; }
+  h2 { color: #4CAF50; margin-top: 24px; font-size: 14px; }
+  .pass { color: #4CAF50; }
+  .fail { color: #F44336; }
+  .warn { color: #FF9800; }
+  pre { background: #0a0a0a; padding: 10px; border-left: 3px solid #4CAF50; overflow-x: auto; }
+  pre.fail { border-color: #F44336; }
+  #canvas { background: #fafafa; display: block; margin: 8px 0; }
+  .stat { display: inline-block; margin-right: 16px; padding: 4px 8px; background: #2a2a2a; border-radius: 3px; }
+  .stat .v { color: #4CAF50; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>Cairn Sandbox — Sprint 1 Spike Test</h1>
+<div id="status">Initializing...</div>
+
+<canvas id="canvas" width="800" height="400"></canvas>
+
+<div id="results"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const status = $('status');
+const results = $('results');
+
+function log(html) { results.innerHTML += html; }
+function logPass(msg, data) { log(`<pre><span class="pass">✓ PASS</span>  ${msg}\n${data || ''}</pre>`); }
+function logFail(msg, data) { log(`<pre class="fail"><span class="fail">✗ FAIL</span>  ${msg}\n${data || ''}</pre>`); }
+function logWarn(msg, data) { log(`<pre><span class="warn">⚠ WARN</span>  ${msg}\n${data || ''}</pre>`); }
+
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+
+// ============================================================
+// SPIKE-001: Canvas 2D 100 walkers performance (synchronous)
+// ============================================================
+function spike001() {
+  log('<h2>SPIKE-001: Canvas 2D 100 walkers performance</h2>');
+
+  const W = 800, H = 400;
+  const N_WALKERS = 100;
+  const N_MARKERS = 30;
+
+  const walkers = [];
+  for (let i = 0; i < N_WALKERS; i++) {
+    walkers.push({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2,
+    });
+  }
+
+  const markers = [];
+  for (let i = 0; i < N_MARKERS; i++) {
+    markers.push({ x: Math.random() * W, y: Math.random() * H });
+  }
+
+  const FRAMES_TO_TEST = 300;
+  const timings = [];
+
+  // 同步跑 300 帧 (不依赖 RAF, 避免 Playwright headless throttle)
+  for (let f = 0; f < FRAMES_TO_TEST; f++) {
+    const t0 = performance.now();
+
+    ctx.fillStyle = '#fafafa';
+    ctx.fillRect(0, 0, W, H);
+
+    let encounters = 0;
+    walkers.forEach(w => {
+      markers.forEach(m => {
+        const d = Math.hypot(w.x - m.x, w.y - m.y);
+        if (d < 30) encounters++;
+      });
+    });
+
+    walkers.forEach(w => {
+      w.x += w.vx; w.y += w.vy;
+      if (w.x < 0 || w.x > W) w.vx = -w.vx;
+      if (w.y < 0 || w.y > H) w.vy = -w.vy;
+    });
+
+    walkers.forEach(w => {
+      ctx.fillStyle = '#4CAF50';
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    markers.forEach(m => {
+      ctx.fillStyle = '#D32F2F';
+      ctx.fillRect(m.x - 3, m.y - 8, 8, 6);
+    });
+
+    timings.push(performance.now() - t0);
+  }
+
+  const avgFrame = timings.reduce((a, b) => a + b) / timings.length;
+  const maxFrame = Math.max(...timings);
+  const fps = 1000 / avgFrame;
+
+  const data = `
+  Walkers: ${N_WALKERS}  Markers: ${N_MARKERS}  Frames: ${FRAMES_TO_TEST}
+  Avg frame work time: ${avgFrame.toFixed(3)}ms (rendering+logic, not RAF-bound)
+  Max frame work time: ${maxFrame.toFixed(3)}ms
+  Theoretical max FPS: ${fps.toFixed(1)}
+  Path: O(n×m) naive = ${N_WALKERS * N_MARKERS} dist calcs/frame`;
+
+  if (avgFrame < 16) {
+    logPass('Frame work time < 16ms — 60fps achievable, naive O(n×m) sufficient', data);
+  } else if (avgFrame < 33) {
+    logWarn('VIABLE WITH CONDITIONS — 30fps OK, quadtree may improve', data);
+  } else {
+    logFail('Frame work too slow', data);
+  }
+}
+
+// ============================================================
+// SPIKE-002: Quadtree vs Naive
+// ============================================================
+function spike002() {
+  log('<h2>SPIKE-002: Quadtree vs Naive (n=100, m=30)</h2>');
+
+  const W = 800, H = 400;
+  const walkers = [];
+  for (let i = 0; i < 100; i++) walkers.push({ x: Math.random() * W, y: Math.random() * H });
+  const markers = [];
+  for (let i = 0; i < 30; i++) markers.push({ x: Math.random() * W, y: Math.random() * H });
+
+  // Naive
+  const t1 = performance.now();
+  for (let iter = 0; iter < 1000; iter++) {
+    walkers.forEach(w => {
+      markers.forEach(m => Math.hypot(w.x - m.x, w.y - m.y) < 30);
+    });
+  }
+  const naiveMs = performance.now() - t1;
+
+  // Simple grid index (poor man's quadtree)
+  const CELL = 60;
+  const grid = {};
+  markers.forEach((m, idx) => {
+    const cx = Math.floor(m.x / CELL), cy = Math.floor(m.y / CELL);
+    const key = cx + ',' + cy;
+    if (!grid[key]) grid[key] = [];
+    grid[key].push(idx);
+  });
+
+  const t2 = performance.now();
+  for (let iter = 0; iter < 1000; iter++) {
+    walkers.forEach(w => {
+      const cx = Math.floor(w.x / CELL), cy = Math.floor(w.y / CELL);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const cell = grid[(cx + dx) + ',' + (cy + dy)];
+          if (cell) cell.forEach(idx => {
+            const m = markers[idx];
+            Math.hypot(w.x - m.x, w.y - m.y) < 30;
+          });
+        }
+      }
+    });
+  }
+  const gridMs = performance.now() - t2;
+
+  const speedup = (naiveMs / gridMs).toFixed(2);
+  const data = `
+  Naive O(n×m) 1000 iters: ${naiveMs.toFixed(1)}ms (${(naiveMs/1000).toFixed(3)}ms per frame)
+  Grid index 1000 iters: ${gridMs.toFixed(1)}ms (${(gridMs/1000).toFixed(3)}ms per frame)
+  Speedup: ${speedup}×`;
+
+  if (naiveMs / 1000 < 5) {
+    logPass('Naive is fast enough at this scale, quadtree NOT needed', data);
+  } else if (gridMs / 1000 < 5) {
+    logPass('Grid index works, use it', data);
+  } else {
+    logFail('Even grid is slow, need real quadtree', data);
+  }
+}
+
+// ============================================================
+// SPIKE-003: Persona probability sampling
+// ============================================================
+async function spike003() {
+  log('<h2>SPIKE-003: Persona probability sampling</h2>');
+
+  const res = await fetch('../stage0_research/personas_distribution.json');
+  if (!res.ok) {
+    logFail('Failed to load personas_distribution.json', `HTTP ${res.status}`);
+    return;
+  }
+  const data = await res.json();
+  const personas = data.personas;
+
+  // 测试 explorer_solo 在 see_high_like_low_report 情境下的抽样
+  const persona = personas.explorer_solo;
+  const dist = persona.behavior.encounter_marker.see_high_like_low_report;
+
+  function sample(d) {
+    const r = Math.random();
+    if (r < d.like_prob) return 'like';
+    if (r < d.like_prob + d.report_prob) return 'report';
+    return 'ignore';
+  }
+
+  const counts = { like: 0, report: 0, ignore: 0 };
+  const N = 100000;
+  const t0 = performance.now();
+  for (let i = 0; i < N; i++) counts[sample(dist)]++;
+  const ms = performance.now() - t0;
+
+  const expected = `expected like:${dist.like_prob} report:${dist.report_prob} ignore:${dist.ignore_prob}`;
+  const actual = `actual   like:${(counts.like/N).toFixed(3)} report:${(counts.report/N).toFixed(3)} ignore:${(counts.ignore/N).toFixed(3)}`;
+
+  const likeErr = Math.abs(counts.like/N - dist.like_prob);
+  const reportErr = Math.abs(counts.report/N - dist.report_prob);
+
+  const stats = `
+  ${N} samples in ${ms.toFixed(1)}ms (${(ms/N*1000).toFixed(2)}ns per sample)
+  ${expected}
+  ${actual}
+  errors: like=${likeErr.toFixed(4)} report=${reportErr.toFixed(4)}`;
+
+  if (likeErr < 0.01 && reportErr < 0.01 && ms < 100) {
+    logPass('Distribution matches, sampling fast', stats);
+  } else {
+    logWarn('VIABLE WITH CONDITIONS', stats);
+  }
+}
+
+// ============================================================
+// SPIKE-004: v3.2 algorithm verification (6 cases)
+// ============================================================
+function spike004() {
+  log('<h2>SPIKE-004: v3.2 algorithm — 6 case verification</h2>');
+
+  // v3.2 公式
+  function lifeBoost(L, H) { return H * Math.log10(L + 1) * 24; }
+
+  function currentHeat(likes, tau, now) {
+    return likes.reduce((sum, like) => sum + Math.exp(-(now - like.t) / (tau * 24 * 3600 * 1000)), 0);
+  }
+
+  function lifeLeft(marker, now) {
+    if (marker.is_doc) return 99999;
+    const daysAlive = (now - marker.tCreate) / (24 * 3600 * 1000);
+    if (daysAlive > 730) return -1;
+    const heat = currentHeat(marker.likes, marker.tau, now);
+    return marker.baseLifetime + heat * marker.boost - daysAlive;
+  }
+
+  const supply = { tau: 30, baseLifetime: 30, boost: 5 };
+  const NOW = Date.now();
+  const D = 24 * 3600 * 1000;
+
+  const cases = [
+    {
+      name: 'Case 1: 新建 0赞',
+      marker: { ...supply, tCreate: NOW, likes: [] },
+      expected: 30,
+      tolerance: 1
+    },
+    {
+      name: 'Case 2: 1年 100赞 最近90天0赞',
+      marker: { ...supply, tCreate: NOW - 365*D, likes: Array.from({length:100},(_,i)=>({t:NOW - (90+i*0.5)*D})) },
+      expectedNeg: true  // 应该 < 0 (沉)
+    },
+    {
+      name: 'Case 3: 30天 100赞 最近还在涨',
+      marker: { ...supply, tCreate: NOW - 30*D, likes: Array.from({length:100},(_,i)=>({t:NOW - i*0.3*D})) },
+      expectedPos: true  // 应该 > 0 (活)
+    },
+    {
+      name: 'Case 4: 5赞集中(当天)',
+      marker: { ...supply, tCreate: NOW - 5*D, likes: Array.from({length:5},()=>({t:NOW - 1*D})) },
+      expectedHeat: 5
+    },
+    {
+      name: 'Case 5: 90天 0赞 → 5赞当天',
+      marker: { ...supply, tCreate: NOW - 90*D, likes: Array.from({length:5},()=>({t:NOW})) },
+      expectedNeg: true  // 仍沉, 因为基础+续命 < 已活
+    },
+    {
+      name: 'Case 6: 12赞当天 (复活门槛)',
+      marker: { ...supply, tCreate: NOW - 90*D, likes: Array.from({length:12},()=>({t:NOW})) },
+      expectedNonNeg: true  // 应该 >= 0 (复活)
+    }
+  ];
+
+  let passCount = 0;
+  let report = '';
+
+  cases.forEach(c => {
+    const left = lifeLeft(c.marker, NOW);
+    let pass = false;
+
+    if (c.expected !== undefined) {
+      pass = Math.abs(left - c.expected) < c.tolerance;
+    } else if (c.expectedNeg) {
+      pass = left < 0;
+    } else if (c.expectedPos) {
+      pass = left > 0;
+    } else if (c.expectedNonNeg) {
+      pass = left >= 0;
+    } else if (c.expectedHeat !== undefined) {
+      const heat = currentHeat(c.marker.likes, c.marker.tau, NOW);
+      pass = Math.abs(heat - c.expectedHeat) < 0.5;
+      report += `  ${pass?'✓':'✗'} ${c.name}\n    heat=${heat.toFixed(2)} expected~${c.expectedHeat}\n`;
+      if (pass) passCount++;
+      return;
+    }
+
+    if (pass) passCount++;
+    report += `  ${pass?'✓':'✗'} ${c.name}\n    lifeLeft=${left.toFixed(2)}\n`;
+  });
+
+  const stats = `${passCount} / ${cases.length} cases passed\n\n${report}`;
+
+  if (passCount === cases.length) {
+    logPass('v3.2 algorithm verified', stats);
+  } else if (passCount >= 4) {
+    logWarn(`${passCount}/${cases.length} — VIABLE WITH CONDITIONS`, stats);
+  } else {
+    logFail('Algorithm needs revision', stats);
+  }
+}
+
+// ============================================================
+// Run all spikes
+// ============================================================
+async function runAll() {
+  status.innerHTML = '🟢 Running spike tests...';
+  spike001();
+  spike002();
+  await spike003();
+  spike004();
+  status.innerHTML = '✅ All spikes complete';
+  window.__spikeResults = { complete: true };
+}
+
+runAll();
+</script>
+
+</body>
+</html>

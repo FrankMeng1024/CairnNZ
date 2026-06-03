@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Cairn 3D Icon Picker — 真实 Three.js 渲染</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: linear-gradient(180deg, #2a3340 0%, #15191f 100%);
+    color: #eee;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+  }
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  .subtitle { color: #888; font-size: 14px; margin-bottom: 32px; }
+
+  .type-section { margin-bottom: 48px; }
+  .type-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid rgba(255,255,255,0.1);
+  }
+  .type-color { width: 24px; height: 24px; border-radius: 6px; }
+  .type-name { font-size: 22px; font-weight: 700; }
+  .type-desc { color: #888; font-size: 13px; margin-left: auto; }
+
+  .icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .icon-card {
+    background: rgba(255,255,255,0.04);
+    border: 2px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s;
+  }
+  .icon-card:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.20);
+  }
+  .icon-card.current {
+    border-color: #d4a878;
+    background: rgba(212,168,120,0.10);
+  }
+  .icon-card.current::after {
+    content: "✓ 当前";
+    color: #d4a878;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .canvas-wrap {
+    width: 200px; height: 200px;
+    background: radial-gradient(ellipse at center, #2a3340 0%, #0a0d12 100%);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .icon-id { font-size: 18px; font-weight: 700; font-family: 'SF Mono', monospace; }
+  .icon-name { font-size: 13px; color: #aaa; text-align: center; }
+  .icon-tip { font-size: 11px; color: #777; text-align: center; min-height: 26px; }
+
+  .danger .type-color { background: #ff5a3a; }
+  .junction .type-color { background: #f0a838; }
+  .water .type-color { background: #6ac8f0; }
+  .hut .type-color { background: #b5823d; }
+  .cairn .type-color { background: #b5823d; }
+
+  .water-locked {
+    background: rgba(106, 200, 240, 0.08);
+    border: 2px dashed rgba(106, 200, 240, 0.3);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    color: #6ac8f0;
+  }
+
+  .selection-box {
+    position: fixed; bottom: 24px; right: 24px;
+    background: rgba(212,168,120,0.95); color: #1a1a1a;
+    padding: 16px 24px; border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    font-weight: 700; font-size: 14px; max-width: 320px;
+  }
+  .selection-box code {
+    background: #1a1a1a; color: #d4a878;
+    padding: 4px 8px; border-radius: 4px;
+    font-family: 'SF Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<h1>🎨 Cairn 3D Icon Picker — 真 3D 渲染</h1>
+<p class="subtitle">每个 icon 都是 Three.js 真 3D, 自动旋转你能看到所有角度. 跟 reference HTML 同质量.</p>
+
+<!-- Danger -->
+<div class="type-section danger">
+  <div class="type-header">
+    <div class="type-color"></div>
+    <div class="type-name">🔴 Danger 危险</div>
+    <div class="type-desc">所有候选都是真 3D 几何</div>
+  </div>
+  <div class="icon-grid" id="grid-danger"></div>
+</div>
+
+<!-- Junction -->
+<div class="type-section junction">
+  <div class="type-header">
+    <div class="type-color"></div>
+    <div class="type-name">🟠 Junction 路口</div>
+    <div class="type-desc">岔路 / 路径决策</div>
+  </div>
+  <div class="icon-grid" id="grid-junction"></div>
+</div>
+
+<!-- Water Locked -->
+<div class="type-section water">
+  <div class="type-header">
+    <div class="type-color"></div>
+    <div class="type-name">🔵 Water 水源</div>
+    <div class="type-desc">已锁定</div>
+  </div>
+  <div class="water-locked">
+    <div style="font-size:36px">🔒</div>
+    <div style="font-size:16px;font-weight:700;margin:8px 0">水滴 LOCKED</div>
+    <div style="color:#888;font-size:13px">v107 你说"完美", 不动</div>
+  </div>
+</div>
+
+<!-- Hut -->
+<div class="type-section hut">
+  <div class="type-header">
+    <div class="type-color"></div>
+    <div class="type-name">🟫 Hut 避难屋</div>
+    <div class="type-desc">DOC hut / 帐篷 / 营地</div>
+  </div>
+  <div class="icon-grid" id="grid-hut"></div>
+</div>
+
+<!-- Cairn -->
+<div class="type-section cairn">
+  <div class="type-header">
+    <div class="type-color"></div>
+    <div class="type-name">🟤 Cairn 留言</div>
+    <div class="type-desc">石堆 / 留言 / 拍照</div>
+  </div>
+  <div class="icon-grid" id="grid-cairn"></div>
+</div>
+
+<div class="selection-box">
+  📌 选完告诉我 4 个编号<br>
+  例: <code>D2, J3, H2, C2</code>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.166.1/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ================== Icon 几何工厂 ==================
+
+// D1: TriangleAlert (倒三角 + 感叹号)
+function buildD1() {
+  const g = new THREE.Group();
+  const triShape = new THREE.Shape();
+  triShape.moveTo(0, -0.7); triShape.lineTo(-0.7, 0.5); triShape.lineTo(0.7, 0.5); triShape.lineTo(0, -0.7);
+  const tri = new THREE.Mesh(new THREE.ExtrudeGeometry(triShape, {depth: 0.15, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.02}),
+    new THREE.MeshPhysicalMaterial({color: 0xff5a3a, metalness: 0.3, roughness: 0.4}));
+  g.add(tri);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 16), new THREE.MeshStandardMaterial({color: 0xfff0c8, emissive: 0xff8800, emissiveIntensity: 0.6}));
+  bar.position.set(0, 0.05, 0.18); g.add(bar);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16), new THREE.MeshStandardMaterial({color: 0xfff0c8, emissive: 0xff8800, emissiveIntensity: 0.6}));
+  dot.position.set(0, -0.2, 0.18); g.add(dot);
+  return g;
+}
+
+// D2: OctagonAlert (八角形 + 感叹号)
+function buildD2() {
+  const g = new THREE.Group();
+  const octShape = new THREE.Shape();
+  const N = 8, R = 0.7;
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * Math.PI * 2 - Math.PI/N;
+    const x = Math.cos(a) * R, y = Math.sin(a) * R;
+    if (i === 0) octShape.moveTo(x, y); else octShape.lineTo(x, y);
+  }
+  const oct = new THREE.Mesh(new THREE.ExtrudeGeometry(octShape, {depth: 0.15, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.02}),
+    new THREE.MeshPhysicalMaterial({color: 0xff5a3a, metalness: 0.4, roughness: 0.3}));
+  g.add(oct);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.32, 16), new THREE.MeshStandardMaterial({color: 0xfff0c8, emissive: 0xff8800, emissiveIntensity: 0.6}));
+  bar.position.set(0, 0.1, 0.18); g.add(bar);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), new THREE.MeshStandardMaterial({color: 0xfff0c8, emissive: 0xff8800, emissiveIntensity: 0.6}));
+  dot.position.set(0, -0.2, 0.18); g.add(dot);
+  return g;
+}
+
+// D5: Flame 混合 (lathe 底 + path extrude 上)
+function buildD5() {
+  const g = new THREE.Group();
+  // 底部 lathe (橙红水滴底)
+  const pts = [];
+  for (let i = 0; i <= 16; i++) {
+    const t = i / 16, y = -0.5 + t * 0.5;  // -0.5 到 0
+    const r = 0.45 * Math.sin(t * Math.PI * 0.7);
+    pts.push(new THREE.Vector2(Math.max(r, 0.001), y));
+  }
+  const base = new THREE.Mesh(new THREE.LatheGeometry(pts, 24),
+    new THREE.MeshPhysicalMaterial({color: 0xaa3520, metalness: 0.2, roughness: 0.4}));
+  g.add(base);
+  // 上半 火焰 path extrude
+  const flame = new THREE.Shape();
+  flame.moveTo(0, 0.7);
+  flame.bezierCurveTo(-0.2, 0.5, -0.4, 0.3, -0.25, 0.1);
+  flame.bezierCurveTo(-0.15, -0.05, -0.1, -0.1, 0, 0);
+  flame.bezierCurveTo(0.1, -0.1, 0.15, -0.05, 0.25, 0.1);
+  flame.bezierCurveTo(0.4, 0.3, 0.2, 0.5, 0, 0.7);
+  const flameMesh = new THREE.Mesh(new THREE.ExtrudeGeometry(flame, {depth: 0.12, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.02}),
+    new THREE.MeshPhysicalMaterial({color: 0xff5a3a, emissive: 0xff8800, emissiveIntensity: 0.4, metalness: 0.0, roughness: 0.5}));
+  g.add(flameMesh);
+  return g;
+}
+
+// D6: ShieldAlert (盾牌 + 感叹号)
+function buildD6() {
+  const g = new THREE.Group();
+  const shield = new THREE.Shape();
+  shield.moveTo(0, 0.7);
+  shield.bezierCurveTo(0.5, 0.6, 0.6, 0.4, 0.6, 0.0);
+  shield.bezierCurveTo(0.6, -0.4, 0.3, -0.6, 0, -0.7);
+  shield.bezierCurveTo(-0.3, -0.6, -0.6, -0.4, -0.6, 0.0);
+  shield.bezierCurveTo(-0.6, 0.4, -0.5, 0.6, 0, 0.7);
+  const sm = new THREE.Mesh(new THREE.ExtrudeGeometry(shield, {depth: 0.15, bevelEnabled: true, bevelSize: 0.025, bevelThickness: 0.02}),
+    new THREE.MeshPhysicalMaterial({color: 0xff5a3a, metalness: 0.5, roughness: 0.3}));
+  g.add(sm);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 16), new THREE.MeshStandardMaterial({color: 0xfff0c8, emissive: 0xff8800, emissiveIntensity: 0.6}));
+  bar.position.set(0, 0.05, 0.18); g.add(bar);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), new THREE.MeshStandardMaterial({color: 0xfff0c8, emissive: 0xff8800, emissiveIntensity: 0.6}));
+  dot.position.set(0, -0.25, 0.18); g.add(dot);
+  return g;
+}
+
+// J1: Y-Fork (当前)
+function buildJ1() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshPhysicalMaterial({color: 0xf0a838, metalness: 0.4, roughness: 0.3});
+  // 底座柱
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.4, 16), mat);
+  base.position.y = -0.4; g.add(base);
+  // 左斜杆
+  const leftG = new THREE.CylinderGeometry(0.08, 0.08, 0.7, 16);
+  const left = new THREE.Mesh(leftG, mat);
+  left.position.set(-0.25, 0.1, 0); left.rotation.z = Math.PI/4; g.add(left);
+  // 右斜杆
+  const right = new THREE.Mesh(leftG, mat);
+  right.position.set(0.25, 0.1, 0); right.rotation.z = -Math.PI/4; g.add(right);
+  // 端帽球
+  const ball = new THREE.SphereGeometry(0.1, 16, 16);
+  const b1 = new THREE.Mesh(ball, mat); b1.position.y = -0.6; g.add(b1);
+  const b2 = new THREE.Mesh(ball, mat); b2.position.set(-0.5, 0.45, 0); g.add(b2);
+  const b3 = new THREE.Mesh(ball, mat); b3.position.set(0.5, 0.45, 0); g.add(b3);
+  return g;
+}
+
+// J2: Split (两个箭头)
+function buildJ2() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshPhysicalMaterial({color: 0xf0a838, metalness: 0.4, roughness: 0.3});
+  // 主杆
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.4, 16), mat);
+  trunk.position.y = -0.4; g.add(trunk);
+  // 两个分叉箭头
+  function arrow(side) {
+    const ag = new THREE.Group();
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.5, 16), mat);
+    ag.add(shaft);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.25, 16), mat);
+    head.position.y = 0.35; ag.add(head);
+    ag.rotation.z = side * -Math.PI/4;
+    ag.position.set(side * 0.25, 0.1, 0);
+    return ag;
+  }
+  g.add(arrow(-1)); g.add(arrow(1));
+  return g;
+}
+
+// J3: Milestone (路标)
+function buildJ3() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshPhysicalMaterial({color: 0xf0a838, metalness: 0.5, roughness: 0.3});
+  // 杆
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.0, 16), mat);
+  g.add(pole);
+  // 顶部牌子 (有箭头形)
+  const signShape = new THREE.Shape();
+  signShape.moveTo(-0.5, 0.1); signShape.lineTo(0.4, 0.1); signShape.lineTo(0.6, 0); signShape.lineTo(0.4, -0.1); signShape.lineTo(-0.5, -0.1);
+  signShape.lineTo(-0.5, 0.1);
+  const sign = new THREE.Mesh(new THREE.ExtrudeGeometry(signShape, {depth: 0.08, bevelEnabled: true, bevelSize: 0.01, bevelThickness: 0.01}), mat);
+  sign.position.set(0.0, 0.3, 0); g.add(sign);
+  return g;
+}
+
+// J4: SignPost (双向路牌)
+function buildJ4() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshPhysicalMaterial({color: 0xf0a838, metalness: 0.5, roughness: 0.3});
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.0, 16), mat);
+  g.add(pole);
+  // 双向箭头牌
+  const sShape = new THREE.Shape();
+  sShape.moveTo(-0.6, 0); sShape.lineTo(-0.5, 0.1); sShape.lineTo(0.5, 0.1); sShape.lineTo(0.6, 0); sShape.lineTo(0.5, -0.1); sShape.lineTo(-0.5, -0.1);
+  sShape.lineTo(-0.6, 0);
+  const s = new THREE.Mesh(new THREE.ExtrudeGeometry(sShape, {depth: 0.08, bevelEnabled: true, bevelSize: 0.01, bevelThickness: 0.01}), mat);
+  s.position.set(0, 0.2, 0); g.add(s);
+  return g;
+}
+
+// H1: House (当前)
+function buildH1() {
+  const g = new THREE.Group();
+  const wallMat = new THREE.MeshPhysicalMaterial({color: 0xc4a576, metalness: 0.1, roughness: 0.8});
+  const roofMat = new THREE.MeshPhysicalMaterial({color: 0x6b4530, metalness: 0.2, roughness: 0.7});
+  // Cube body
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.7), wallMat);
+  body.position.y = -0.1; g.add(body);
+  // 屋顶 pyramid
+  const roofG = new THREE.ConeGeometry(0.55, 0.4, 4);
+  const roof = new THREE.Mesh(roofG, roofMat);
+  roof.position.y = 0.35; roof.rotation.y = Math.PI/4; g.add(roof);
+  return g;
+}
+
+// H2: Tent 帐篷
+function buildH2() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshPhysicalMaterial({color: 0xc97350, metalness: 0.1, roughness: 0.7});
+  // 三棱柱: 用三角棱柱
+  const tentShape = new THREE.Shape();
+  tentShape.moveTo(0, 0.6); tentShape.lineTo(-0.6, -0.5); tentShape.lineTo(0.6, -0.5); tentShape.lineTo(0, 0.6);
+  const tent = new THREE.Mesh(new THREE.ExtrudeGeometry(tentShape, {depth: 0.8, bevelEnabled: false}), mat);
+  tent.position.z = -0.4;
+  g.add(tent);
+  // 入口竖线
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.8), new THREE.MeshBasicMaterial({color: 0x000000, side: THREE.DoubleSide}));
+  door.position.set(0, 0.05, 0.41); g.add(door);
+  return g;
+}
+
+// H3: Castle 城堡 (简化)
+function buildH3() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshPhysicalMaterial({color: 0x8a7a6a, metalness: 0.3, roughness: 0.6});
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.6), mat);
+  g.add(body);
+  // 4 个角塔
+  for (const dx of [-0.4, 0.4]) {
+    for (const dz of [-0.25, 0.25]) {
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.9, 8), mat);
+      tower.position.set(dx, 0.1, dz);
+      g.add(tower);
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.15, 8), new THREE.MeshPhysicalMaterial({color: 0x6b4530}));
+      cone.position.set(dx, 0.625, dz);
+      g.add(cone);
+    }
+  }
+  return g;
+}
+
+// H4: Warehouse 仓库
+function buildH4() {
+  const g = new THREE.Group();
+  const wall = new THREE.MeshPhysicalMaterial({color: 0xb8a07a, metalness: 0.2, roughness: 0.7});
+  const roof = new THREE.MeshPhysicalMaterial({color: 0x4a3a2a, metalness: 0.3, roughness: 0.5});
+  // 主体
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 0.6), wall);
+  body.position.y = -0.15; g.add(body);
+  // 弧形屋顶 (用半圆柱)
+  const roofMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.0, 16, 1, false, 0, Math.PI), roof);
+  roofMesh.rotation.z = Math.PI/2;
+  roofMesh.position.y = 0.1;
+  g.add(roofMesh);
+  return g;
+}
+
+// H5: Cabin 木屋 (NZ DOC 风格矮木屋)
+function buildH5() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshPhysicalMaterial({color: 0x8a5a3a, metalness: 0.1, roughness: 0.85});
+  const roof = new THREE.MeshPhysicalMaterial({color: 0x4a3020, metalness: 0.2, roughness: 0.7});
+  // 矮主体
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 0.7), wood);
+  body.position.y = -0.2; g.add(body);
+  // 三角屋顶
+  const roofShape = new THREE.Shape();
+  roofShape.moveTo(-0.5, -0.05); roofShape.lineTo(0, 0.3); roofShape.lineTo(0.5, -0.05); roofShape.lineTo(-0.5, -0.05);
+  const roofMesh = new THREE.Mesh(new THREE.ExtrudeGeometry(roofShape, {depth: 0.7, bevelEnabled: false}), roof);
+  roofMesh.position.set(0, 0.05, -0.35); g.add(roofMesh);
+  // 烟囱
+  const chim = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.08), new THREE.MeshPhysicalMaterial({color: 0x504030}));
+  chim.position.set(0.2, 0.25, 0); g.add(chim);
+  return g;
+}
+
+// C1: Cairn Stack (3 球叠 当前)
+function buildC1() {
+  const g = new THREE.Group();
+  const stoneMat = (h) => new THREE.MeshPhysicalMaterial({color: new THREE.Color(0xb5823d).lerp(new THREE.Color(0xfff), h*0.15), metalness: 0.0, roughness: 0.85});
+  const s1 = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), stoneMat(0));
+  s1.scale.set(1.3, 0.7, 1.1); s1.position.y = -0.4; g.add(s1);
+  const s2 = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), stoneMat(1));
+  s2.scale.set(1.2, 0.7, 1.0); s2.position.y = -0.05; g.add(s2);
+  const s3 = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), stoneMat(2));
+  s3.scale.set(1.1, 0.7, 1.0); s3.position.y = 0.3; g.add(s3);
+  return g;
+}
+
+// C2: Mountain 山峰
+function buildC2() {
+  const mShape = new THREE.Shape();
+  mShape.moveTo(-0.7, -0.5); mShape.lineTo(-0.3, 0.0); mShape.lineTo(-0.1, -0.2); mShape.lineTo(0.2, 0.4); mShape.lineTo(0.7, -0.5); mShape.lineTo(-0.7, -0.5);
+  return new THREE.Mesh(new THREE.ExtrudeGeometry(mShape, {depth: 0.15, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.02}),
+    new THREE.MeshPhysicalMaterial({color: 0xb5823d, metalness: 0.2, roughness: 0.7}));
+}
+
+// C3: MapPin 地图针
+function buildC3() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshPhysicalMaterial({color: 0xb5823d, metalness: 0.3, roughness: 0.4});
+  // 水滴形 lathe (上圆下尖)
+  const pts = [];
+  for (let i = 0; i <= 24; i++) {
+    const t = i / 24;
+    const y = 0.5 - t * 1.0;
+    let r;
+    if (t < 0.6) {
+      // 上半圆
+      r = 0.4 * Math.sin(t * Math.PI / 1.2);
+    } else {
+      // 下半收尖
+      r = 0.4 * (1 - (t - 0.6) / 0.4) * 0.8;
+    }
+    pts.push(new THREE.Vector2(Math.max(r, 0.001), y));
+  }
+  const pin = new THREE.Mesh(new THREE.LatheGeometry(pts, 24), mat);
+  g.add(pin);
+  // 中心圆球
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 16),
+    new THREE.MeshPhysicalMaterial({color: 0xfff5e6, metalness: 0.3, roughness: 0.3}));
+  dot.position.y = 0.18; g.add(dot);
+  return g;
+}
+
+// C4: Heart 混合 (lathe 底 + path extrude 上)
+function buildC4() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshPhysicalMaterial({color: 0xb5823d, metalness: 0.3, roughness: 0.4});
+  const heart = new THREE.Shape();
+  heart.moveTo(0, -0.4);
+  heart.bezierCurveTo(-0.6, -0.1, -0.6, 0.4, 0, 0.5);
+  heart.bezierCurveTo(0.6, 0.4, 0.6, -0.1, 0, -0.4);
+  const h = new THREE.Mesh(new THREE.ExtrudeGeometry(heart, {depth: 0.2, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.03}), mat);
+  g.add(h);
+  return g;
+}
+
+// C6: Bookmark 书签
+function buildC6() {
+  const bShape = new THREE.Shape();
+  bShape.moveTo(-0.4, -0.7); bShape.lineTo(-0.4, 0.7); bShape.lineTo(0.4, 0.7); bShape.lineTo(0.4, -0.7); bShape.lineTo(0, -0.4); bShape.lineTo(-0.4, -0.7);
+  return new THREE.Mesh(new THREE.ExtrudeGeometry(bShape, {depth: 0.15, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.02}),
+    new THREE.MeshPhysicalMaterial({color: 0xb5823d, metalness: 0.4, roughness: 0.4}));
+}
+
+// ================== 渲染卡片 ==================
+
+const ICONS = {
+  danger: [
+    {id: 'D1', name: 'TriangleAlert', tip: '国际通用警告', build: buildD1, current: true},
+    {id: 'D2', name: 'OctagonAlert', tip: '八角 STOP', build: buildD2},
+    {id: 'D5', name: 'Flame 火焰 (混合)', tip: 'lathe 底 + 火焰顶', build: buildD5},
+    {id: 'D6', name: 'ShieldAlert 盾警', tip: '防护警告', build: buildD6},
+  ],
+  junction: [
+    {id: 'J1', name: 'Y-Fork (当前)', tip: 'Y 形分叉', build: buildJ1, current: true},
+    {id: 'J2', name: 'Split 双箭头', tip: '分叉箭头', build: buildJ2},
+    {id: 'J3', name: 'Milestone 路标', tip: '里程碑', build: buildJ3},
+    {id: 'J4', name: 'SignPost 路牌', tip: '指示牌', build: buildJ4},
+  ],
+  hut: [
+    {id: 'H1', name: 'House (当前)', tip: '通用住宅', build: buildH1, current: true},
+    {id: 'H2', name: 'Tent 帐篷', tip: '露营', build: buildH2},
+    {id: 'H3', name: 'Castle 城堡', tip: '大型避难', build: buildH3},
+    {id: 'H4', name: 'Warehouse 仓库', tip: '弧顶仓库', build: buildH4},
+    {id: 'H5', name: 'Cabin 木屋', tip: 'DOC 风格矮屋', build: buildH5},
+  ],
+  cairn: [
+    {id: 'C1', name: 'Cairn Stack (当前)', tip: '3 球叠 NZ alpine', build: buildC1, current: true},
+    {id: 'C2', name: 'Mountain 山峰', tip: '三角山形', build: buildC2},
+    {id: 'C3', name: 'MapPin 地图针', tip: '经典 marker', build: buildC3},
+    {id: 'C4', name: 'Heart 爱心', tip: '留言/分享', build: buildC4},
+    {id: 'C6', name: 'Bookmark 书签', tip: '标记重要', build: buildC6},
+  ],
+};
+
+const renderers = [];
+
+function createIconCard(icon, type) {
+  const card = document.createElement('div');
+  card.className = 'icon-card' + (icon.current ? ' current' : '');
+  const wrap = document.createElement('div');
+  wrap.className = 'canvas-wrap';
+  card.appendChild(wrap);
+
+  const idEl = document.createElement('div'); idEl.className = 'icon-id'; idEl.textContent = icon.id;
+  const nm = document.createElement('div'); nm.className = 'icon-name'; nm.textContent = icon.name;
+  const tip = document.createElement('div'); tip.className = 'icon-tip'; tip.textContent = icon.tip;
+  card.appendChild(idEl); card.appendChild(nm); card.appendChild(tip);
+
+  // Three.js scene
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+  camera.position.set(1.3, 0.8, 1.8); camera.lookAt(0, 0, 0);
+  const renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
+  renderer.setSize(200, 200);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  wrap.appendChild(renderer.domElement);
+
+  // 灯光
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+  const dir1 = new THREE.DirectionalLight(0xffffff, 1.5);
+  dir1.position.set(2, 3, 2); scene.add(dir1);
+  const dir2 = new THREE.DirectionalLight(0xffd6a8, 0.6);
+  dir2.position.set(-2, 1, 1); scene.add(dir2);
+
+  const obj = icon.build();
+  scene.add(obj);
+
+  renderers.push({renderer, scene, camera, obj});
+  return card;
+}
+
+for (const [type, icons] of Object.entries(ICONS)) {
+  const grid = document.getElementById('grid-' + type);
+  for (const icon of icons) {
+    grid.appendChild(createIconCard(icon, type));
+  }
+}
+
+// 自动旋转所有 icon
+function animate() {
+  requestAnimationFrame(animate);
+  for (const r of renderers) {
+    r.obj.rotation.y += 0.008;
+    r.renderer.render(r.scene, r.camera);
+  }
+}
+animate();
+</script>
+
+</body>
+</html>

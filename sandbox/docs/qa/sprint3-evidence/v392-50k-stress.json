@@ -1,0 +1,117 @@
+{
+  "algorithm_version": "v3.9.2",
+  "rounds": 10,
+  "n_per_round": 5000,
+  "total_cases": 50000,
+  "total_passed": 49984,
+  "total_failed": 16,
+  "overall_rate": "99.968%",
+  "error_breakdown": {
+    "goodSunk": 14,
+    "badAlive": 2,
+    "docSunk": 0
+  },
+  "total_elapsed_seconds": 4414.2,
+  "per_round": [
+    {
+      "seed": 42,
+      "passed": 4997,
+      "total": 5000,
+      "rate": "99.94",
+      "goodSunk": 2,
+      "badAlive": 1,
+      "docSunk": 0,
+      "elapsed": "502.2"
+    },
+    {
+      "seed": 1,
+      "passed": 4999,
+      "total": 5000,
+      "rate": "99.98",
+      "goodSunk": 1,
+      "badAlive": 0,
+      "docSunk": 0,
+      "elapsed": "489.2"
+    },
+    {
+      "seed": 7,
+      "passed": 4999,
+      "total": 5000,
+      "rate": "99.98",
+      "goodSunk": 1,
+      "badAlive": 0,
+      "docSunk": 0,
+      "elapsed": "567.8"
+    },
+    {
+      "seed": 13,
+      "passed": 4997,
+      "total": 5000,
+      "rate": "99.94",
+      "goodSunk": 2,
+      "badAlive": 1,
+      "docSunk": 0,
+      "elapsed": "434.5"
+    },
+    {
+      "seed": 99,
+      "passed": 4999,
+      "total": 5000,
+      "rate": "99.98",
+      "goodSunk": 1,
+      "badAlive": 0,
+      "docSunk": 0,
+      "elapsed": "540.6"
+    },
+    {
+      "seed": 314,
+      "passed": 4998,
+      "total": 5000,
+      "rate": "99.96",
+      "goodSunk": 2,
+      "badAlive": 0,
+      "docSunk": 0,
+      "elapsed": "224.8"
+    },
+    {
+      "seed": 1234,
+      "passed": 4997,
+      "total": 5000,
+      "rate": "99.94",
+      "goodSunk": 3,
+      "badAlive": 0,
+      "docSunk": 0,
+      "elapsed": "255.6"
+    },
+    {
+      "seed": 2024,
+      "passed": 4998,
+      "total": 5000,
+      "rate": "99.96",
+      "goodSunk": 2,
+      "badAlive": 0,
+      "docSunk": 0,
+      "elapsed": "508.1"
+    },
+    {
+      "seed": 9999,
+      "passed": 5000,
+      "total": 5000,
+      "rate": "100.00",
+      "goodSunk": 0,
+      "badAlive": 0,
+      "docSunk": 0,
+      "elapsed": "457.9"
+    },
+    {
+      "seed": 31415,
+      "passed": 5000,
+      "total": 5000,
+      "rate": "100.00",
+      "goodSunk": 0,
+      "badAlive": 0,
+      "docSunk": 0,
+      "elapsed": "433.5"
+    }
+  ]
+}

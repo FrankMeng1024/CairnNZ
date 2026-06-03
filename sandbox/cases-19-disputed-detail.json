@@ -1,0 +1,420 @@
+[
+  {
+    "id": 59,
+    "max": 2,
+    "title": "Mt Maunganui 基座步道苔藓滑跌点",
+    "type": "danger",
+    "likes": 7,
+    "reports": 4,
+    "duration": 7,
+    "volume": 5500,
+    "labels": {
+      "p1": "suspicious",
+      "A": "healthy",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    "rationales": {
+      "p1": "环境改善后 mark 过期,举报每月增加 → 向下急转入 SUSPICIOUS",
+      "A": "7L/4R信息已过期(物理改善),慢性恶化无急转→维持HEALTHY但寿命短自然死",
+      "B": "7赞 4举报,环境改善后 mark 信息过期,后期举报递增是慢性恶化,转化率系数会缩短寿命直至自然死亡",
+      "C": "7赞4举报小数据慢性恶化(已remediate),无急转门槛,转化率低自然走完寿命"
+    }
+  },
+  {
+    "id": 76,
+    "max": 1,
+    "title": "Cape Reinga 灯塔重复 mark 第七个",
+    "type": "scenic",
+    "likes": 8,
+    "reports": 0,
+    "duration": 2,
+    "volume": 5200,
+    "labels": {
+      "p1": "dead_natural",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    "rationales": {
+      "p1": "8 like 0 report 但是重复 mark,无新流量 → 寿命自然走完",
+      "A": "重复mark第7个仅8赞,作者承认重复,信号弱→自然边缘化",
+      "B": "8赞 0举报但是第7个重复 mark,转化率极低(8/10400),续命少,自然走完",
+      "C": "8赞0举报小流量重复,无急转入口,低转化率续命少自然走完"
+    }
+  },
+  {
+    "id": 81,
+    "max": 2,
+    "title": "Lake Hayes Loop 婚礼场地引导",
+    "type": "scenic",
+    "likes": 0,
+    "reports": 3,
+    "duration": 4,
+    "volume": 1200,
+    "labels": {
+      "p1": "dead_sick",
+      "A": "dead_sick",
+      "B": "suspicious",
+      "C": "suspicious"
+    },
+    "rationales": {
+      "p1": "0 like 3 report 商业占用举报集中",
+      "A": "0L/3R集中商业占用举报+作者已弃,纯负向急转→sick_death",
+      "B": "0赞 3举报集中在商业占用,小流量但报告占比 100%,向下急转入 SUSPICIOUS",
+      "C": "0赞3举报集中商业占用举报,无正向支撑,向下急转"
+    }
+  },
+  {
+    "id": 375,
+    "max": 2,
+    "title": "Coromandel New Chums Beach — owner restricted access 2023",
+    "type": "scenic",
+    "likes": 42,
+    "reports": 18,
+    "duration": 24,
+    "volume": 90,
+    "labels": {
+      "p1": "healthy",
+      "A": "dead_sick",
+      "B": "suspicious",
+      "C": "suspicious"
+    },
+    "rationales": {
+      "p1": "42 likes vs 18 reports 慢性恶化无急转,慢慢变差不进 SUSPICIOUS,转化率自动降低续命",
+      "A": "42L/18R+ownership变更阻挡访问+持续举报累积=趋势恶化病死",
+      "B": "42赞 18举报后期所有权变更后举报集中 → 向下急转 SUSPICIOUS",
+      "C": "42赞18举报2.3:1但近期owner restriction后举报集中,近期向下急转"
+    }
+  },
+  {
+    "id": 404,
+    "max": 2,
+    "title": "Mt Taranaki Pouakai Hut 屋顶下补给箱被错标成 scenic",
+    "type": "scenic",
+    "likes": 8,
+    "reports": 1,
+    "duration": 5,
+    "volume": 80,
+    "labels": {
+      "p1": "healthy",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    "rationales": {
+      "p1": "8:1 类型错配但赞够维持 HEALTHY,转化率低自然死",
+      "A": "8L/1R类型选错+被新正确mark替代+流量分流=信号弱化心跳",
+      "B": "8赞 1举报小流量低互动,转化率低 → 续命少,被新正确 mark 边缘化,自然走向死亡",
+      "C": "8赞1举报小数据但占比好,类型选错是产品层问题非算法判定,维持HEALTHY自然消亡"
+    }
+  },
+  {
+    "id": 412,
+    "max": 2,
+    "title": "Lake Waikaremoana Panekire Bluff 一个 supply 被错标成 danger",
+    "type": "danger",
+    "likes": 8,
+    "reports": 2,
+    "duration": 7,
+    "volume": 25,
+    "labels": {
+      "p1": "any_alive_or_susp",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    "rationales": {
+      "p1": "老 danger mark 8:2,2 条 report 集中可能弱向下急转,boundary",
+      "A": "8L/2R类型选错+supply新mark替代+低流量=信号微弱心跳",
+      "B": "8赞 2举报赞占 80% 但小流量低互动,慢性边缘化,自然衰减",
+      "C": "8赞2举报4:1占比好但类型错放,算法层维持HEALTHY,产品层问题"
+    }
+  },
+  {
+    "id": 418,
+    "max": 2,
+    "title": "Banks Peninsula Akaroa 一个用户在自家厨房标了一个 scenic 测试",
+    "type": "scenic",
+    "likes": 0,
+    "reports": 1,
+    "duration": 11,
+    "volume": 50,
+    "labels": {
+      "p1": "healthy",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    "rationales": {
+      "p1": "0 likes 1 report,弱信号不构成趋势,转化率极低自然死",
+      "A": "0L/1R+测试残留+无人去现场=低流量信号空,1条不构成急转维持但接近边缘",
+      "B": "0赞 1举报极小信号,无足够流量,转化率近 0 → 自然衰减死亡",
+      "C": "0赞1举报极小数据,无急转触发条件,heartbeat或自然消亡"
+    }
+  },
+  {
+    "id": 419,
+    "max": 2,
+    "title": "Paparoa Track Pororari River 河边一个 cairn 被洪水冲走但 mark 还在",
+    "type": "cairn",
+    "likes": 0,
+    "reports": 2,
+    "duration": 5,
+    "volume": 80,
+    "labels": {
+      "p1": "healthy",
+      "A": "suspicious",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    "rationales": {
+      "p1": "5 likes 2 reports 弱信号,慢性,无急转",
+      "A": "0L/2R+物理消失+举报具体=负向急转入SUSPICIOUS",
+      "B": "0赞 2举报物理环境消失,慢性恶化无人维护 → 转化率系数自然消亡",
+      "C": "0赞2举报数据不一致(说5赞2举报),物理消失但mark在,转化率为0自然消亡"
+    }
+  },
+  {
+    "id": 426,
+    "max": 2,
+    "title": "Bay of Islands Cape Brett Track 一个 scenic 被旅游公司账号批量标 5 次",
+    "type": "scenic",
+    "likes": 8,
+    "reports": 1,
+    "duration": 4,
+    "volume": 200,
+    "labels": {
+      "p1": "suspicious",
+      "A": "healthy",
+      "B": "any_alive_or_susp",
+      "C": "healthy"
+    },
+    "rationales": {
+      "p1": "5 个 mark 总 15 likes 14 reports,接近 50:50 但 IP 设备或许已被产品层挡部分,仍有较强 negative 信号",
+      "A": "8L/1R这条mark本身无足够举报构成趋势(集群中3个被sink但这条剩余alive)",
+      "B": "8赞 1举报为剩余 2 个 alive 中之一,营销刷量但当前赞占多数,信誉权重应降低 → 慢性衰减",
+      "C": "8赞1举报小数据但占比好,平台层应处理刷量,算法层维持HEALTHY"
+    }
+  },
+  {
+    "id": 515,
+    "max": 2,
+    "title": "Five Passes Route Cow Saddle — 老炮专用路无新手",
+    "type": "junction",
+    "likes": 0,
+    "reports": 1,
+    "duration": 15,
+    "volume": 1,
+    "labels": {
+      "p1": "healthy",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "any_alive_or_susp"
+    },
+    "rationales": {
+      "p1": "1/月极偏远 0 likes 1 论坛批评 report,1 条不构成趋势",
+      "A": "0L/1R论坛批评者反对但1条不构成急转,heartbeat",
+      "B": "0赞 1举报论坛批评但极小流量,1 条不构成趋势,慢性衰减",
+      "C": "0赞1举报论坛批评者,信号不明微负,可能heartbeat或SUSPICIOUS边缘"
+    }
+  },
+  {
+    "id": 531,
+    "max": 2,
+    "title": "Routeburn Falls Hut 后山隐蔽厕所 — 极冷僻但救急",
+    "type": "supply",
+    "likes": 0,
+    "reports": 0,
+    "duration": 7,
+    "volume": 1500,
+    "labels": {
+      "p1": "healthy",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "heartbeat"
+    },
+    "rationales": {
+      "p1": "1500/月高流量 7 月 0 互动社交禁忌,supply 类长寿命",
+      "A": "0L/0R社交禁忌话题厕所没人公开点赞,heartbeat",
+      "B": "0赞 0举报社交禁忌话题,1500/月流量转化率 0 → 寿命流失",
+      "C": "1500流量0互动社交禁忌话题,转化率低续命少"
+    }
+  },
+  {
+    "id": 536,
+    "max": 1,
+    "title": "Coromandel Pinnacles 山顶上厕所 — 维修期错放 mark",
+    "type": "supply",
+    "likes": 0,
+    "reports": 1,
+    "duration": 3,
+    "volume": 900,
+    "labels": {
+      "p1": "dead_sick",
+      "A": "heartbeat",
+      "B": "any_alive_or_susp",
+      "C": "suspicious"
+    },
+    "rationales": {
+      "p1": "0 likes 1 report + 高流量 0 互动错位,弱负向但短期",
+      "A": "0L/1R位置错临时+1条举报不构成急转,信号空heartbeat,寿命短",
+      "B": "0赞 1举报临时位置错误,流量 900 但转化率近 0,慢性衰减",
+      "C": "0赞1举报小流量但信息错且临时性,寿命短自然消亡"
+    }
+  },
+  {
+    "id": 593,
+    "max": 2,
+    "title": "Hooker Valley swing bridge 强风警告救老人摔倒",
+    "type": "danger",
+    "likes": 8,
+    "reports": 1,
+    "duration": 12,
+    "volume": 800,
+    "labels": {
+      "p1": "context_dependent",
+      "A": "healthy",
+      "B": "context_dependent",
+      "C": "healthy"
+    },
+    "rationales": {
+      "p1": "下午风口阵风季节性，800/月高流量但风险有时段",
+      "A": "8L/1R风桥救老人警告,流量800/月+持续认可",
+      "B": "8赞 1举报下午阵风警告,部分季节性,赞占主导",
+      "C": "8赞1举报8:1占比好,strong wind警告救命,维持HEALTHY"
+    }
+  },
+  {
+    "id": 703,
+    "max": 2,
+    "title": "Catlins Cathedral Caves 入口潮汐封路 — 隐藏入口的备用路径",
+    "type": "junction",
+    "likes": 24,
+    "reports": 6,
+    "duration": 22,
+    "volume": 35,
+    "labels": {
+      "p1": "healthy",
+      "A": "healthy",
+      "B": "context_dependent",
+      "C": "context_dependent"
+    },
+    "rationales": {
+      "p1": "24L:6R borderline 持续争议，community vote 保留，按v6.6 HEALTHY",
+      "A": "24L/6R community vote保留+本地权威支持+季节性切换,无急转",
+      "B": "24赞 6举报海岸潮汐+季节切换,context_dependent",
+      "C": "24赞6举报4:1季节性潮汐+冬夏切换,context_dependent"
+    }
+  },
+  {
+    "id": 715,
+    "max": 2,
+    "title": "Tongariro 湖区 Lake Rotopounamu 步道泥泞段 — 雨季陷阱",
+    "type": "danger",
+    "likes": 195,
+    "reports": 4,
+    "duration": 14,
+    "volume": 380,
+    "labels": {
+      "p1": "context_dependent",
+      "A": "healthy",
+      "B": "healthy",
+      "C": "context_dependent"
+    },
+    "rationales": {
+      "p1": "雨季泥泞强季节性，干旱季节争议",
+      "A": "195L/4R(48:1)绝对压倒性赞,DOC缺位下持续高质量信号",
+      "B": "195赞 4举报极高占比 98%,持续高赞 HEALTHY",
+      "C": "195赞4举报极优占比,雨季陷阱季节性,context_dependent"
+    }
+  },
+  {
+    "id": 717,
+    "max": 2,
+    "title": "Banks Peninsula Akaroa Harbour 海豹突袭区 — 划皮艇警告",
+    "type": "danger",
+    "likes": 155,
+    "reports": 2,
+    "duration": 18,
+    "volume": 110,
+    "labels": {
+      "p1": "context_dependent",
+      "A": "healthy",
+      "B": "healthy",
+      "C": "context_dependent"
+    },
+    "rationales": {
+      "p1": "6-9月繁殖期海豹攻击，季节性强",
+      "A": "155L/2R(78:1)商业向导15年记录,持续真实警告",
+      "B": "155赞 2举报极高占比 99%,持续高赞 HEALTHY",
+      "C": "155赞2举报极优占比,6-9月繁殖期警告季节性,context_dependent"
+    }
+  },
+  {
+    "id": 723,
+    "max": 2,
+    "title": "Bay of Islands Russell 步道海岸侵蚀点 — 步道边缘悬空",
+    "type": "danger",
+    "likes": 140,
+    "reports": 2,
+    "duration": 8,
+    "volume": 320,
+    "labels": {
+      "p1": "revivable",
+      "A": "healthy",
+      "B": "dead_natural",
+      "C": "dead_natural"
+    },
+    "rationales": {
+      "p1": "8月 DOC 关闭步道改线后 mark 关闭归档但历史可查",
+      "A": "140L/2R高质量+步道改线后mark已自动归档,生命周期完整",
+      "B": "140赞 2举报但 DOC 关闭步道改线,mark 归档(寿命走完),可凭历史复活",
+      "C": "DOC修复完成步道改线,mark归档自然死亡,140赞2举报历史好,可远程复活"
+    }
+  },
+  {
+    "id": 958,
+    "max": 2,
+    "title": "Cape Reinga 灯塔下 5 真赞 95 机器人赞 vs 8 真举报",
+    "type": "scenic",
+    "likes": 95,
+    "reports": 0,
+    "duration": 14,
+    "volume": 1800,
+    "labels": {
+      "p1": "any_alive_or_susp",
+      "A": "heartbeat",
+      "B": "suspicious",
+      "C": "suspicious"
+    },
+    "rationales": {
+      "p1": "95 sock 赞 vs 8 真举报,产品层 IP 封锁应预先过滤,算法层只看进来的信号 = 看似 healthy 但真实价值低",
+      "A": "95赞中90sock被信誉权重过滤后真信号=7L/8R低流量信号弱,heartbeat边缘",
+      "B": "95赞 0举报但 95 中 90 是 sock 集群,信誉权重大幅降权后真实仅 7赞 vs 8 真举报,负向急转 SUSPICIOUS",
+      "C": "95赞0举报看似强但5sock集群刷量(信誉权重低),真实7赞vs8举报反向,平台层应封sock,算法层若不识别需向下急转"
+    }
+  },
+  {
+    "id": 968,
+    "max": 2,
+    "title": "Hump Ridge Track 商业化 scenic 点击农场",
+    "type": "scenic",
+    "likes": 42,
+    "reports": 6,
+    "duration": 5,
+    "volume": 380,
+    "labels": {
+      "p1": "any_alive_or_susp",
+      "A": "healthy",
+      "B": "suspicious",
+      "C": "healthy"
+    },
+    "rationales": {
+      "p1": "42:6 sock 占多,产品层应预过滤;算法层看来比例尚可",
+      "A": "42L/6R sock信誉过滤后真信号弱但景观真实,无下急转",
+      "B": "42赞 6举报但 28 赞为运营商 sock 集群,信誉权重低后真实 14 vs 6 接近,商业刷量动机 → SUSPICIOUS",
+      "C": "42赞6举报7:1占比但28sock占主导,信誉权重削弱后真14:6接近,商业渗透平台层处理,算法层维持HEALTHY"
+    }
+  }
+]

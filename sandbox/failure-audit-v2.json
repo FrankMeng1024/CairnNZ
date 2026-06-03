@@ -1,0 +1,152 @@
+{
+  "total": 207,
+  "audit_methodology": "Each case classified by comparing actual cumulative likes/reports signal vs expected verdict. Algorithm's job is to judge OBSERVED user signal, not infer hidden quality. Test cases where simulator produced positive signal (likes >> reports) but expects 'sunk' = TEST_BUG (over-strict expectation). Test cases where simulator produced negative signal but algorithm judged alive = ALGO_BUG. 1:1 ratios near boundary = EDGE_CASE. stable_bad / stable_good arcs producing signal opposite to their named quality = CALIBRATION.",
+  "summary": {
+    "TEST_BUG": 132,
+    "ALGO_BUG": 38,
+    "EDGE_CASE": 24,
+    "CALIBRATION": 13
+  },
+  "by_arc": {
+    "stable_bad": {
+      "total": 51,
+      "TEST_BUG": 28,
+      "ALGO_BUG": 0,
+      "EDGE_CASE": 17,
+      "CALIBRATION": 6,
+      "note": "Most stable_bad failures: simulator produced likes >= reports (often likes > reports) yet test expected sunk. Algorithm correctly read positive signal. CALIBRATION items are quality=0.10 simulator runs that produced strongly positive ratios (e.g. 17L/6R, 23L/13R)."
+    },
+    "controversial_persistent": {
+      "total": 28,
+      "TEST_BUG": 28,
+      "ALGO_BUG": 0,
+      "EDGE_CASE": 0,
+      "CALIBRATION": 0,
+      "note": "ALL 28 cases: likes > reports (often 2:1 or 3:1). Algorithm correctly judged healthy. Test expectation 'sunk_or_borderline' is wrong — controversial mark with majority positive votes IS healthy by user signal."
+    },
+    "collapse": {
+      "total": 30,
+      "TEST_BUG": 30,
+      "ALGO_BUG": 0,
+      "EDGE_CASE": 0,
+      "CALIBRATION": 0,
+      "note": "Algorithm correctly reads cumulative positive signal. 'Collapse' is a temporal pattern the chaos-monkey expects but cumulative likes/reports don't reflect it. Algorithm cannot detect decay if cumulative ratio is still positive — this is by design (signal-based, not quality-inferring)."
+    },
+    "doc_stale": {
+      "total": 9,
+      "TEST_BUG": 9,
+      "ALGO_BUG": 0,
+      "EDGE_CASE": 0,
+      "CALIBRATION": 0,
+      "note": "Same as collapse — temporal decay invisible in cumulative signal."
+    },
+    "seasonal": {
+      "total": 16,
+      "TEST_BUG": 11,
+      "ALGO_BUG": 4,
+      "EDGE_CASE": 1,
+      "CALIBRATION": 0,
+      "note": "Mixed. context_dependent expectation is itself ambiguous — counted clearly positive cumulative as TEST_BUG, clearly positive sunk by algo as ALGO_BUG."
+    },
+    "short_burst": {
+      "total": 17,
+      "TEST_BUG": 14,
+      "ALGO_BUG": 0,
+      "EDGE_CASE": 1,
+      "CALIBRATION": 2,
+      "note": "Burst already deposited likes; algorithm correctly preserves them. Expected 'sunk' is over-strict given cumulative positive ratio."
+    },
+    "stable_good": {
+      "total": 14,
+      "TEST_BUG": 0,
+      "ALGO_BUG": 14,
+      "EDGE_CASE": 0,
+      "CALIBRATION": 0,
+      "note": "ALGO_BUG: high cumulative positive ratio (e.g. 937L/284R, 602L/292R, 374L/227R, 110L/72R) yet algorithm sunk. Algorithm is too aggressive in sinking — likely exposure-aging or report-recency over-weighting overpowers persistent positive cumulative."
+    },
+    "recovery": {
+      "total": 14,
+      "TEST_BUG": 13,
+      "ALGO_BUG": 1,
+      "EDGE_CASE": 0,
+      "CALIBRATION": 0,
+      "note": "Most 'recovery' failures: simulator never produced enough recovery likes (final state likes=0-2 vs reports=3-7). The mark really is bad in current data — TEST_BUG. Only one case where signal was clearly positive but sunk."
+    },
+    "short_attack": {
+      "total": 12,
+      "TEST_BUG": 6,
+      "ALGO_BUG": 6,
+      "EDGE_CASE": 0,
+      "CALIBRATION": 0,
+      "note": "Split: where final cumulative is negative, algorithm is right (TEST_BUG); where likes >> reports cumulatively (244L/91R, 205L/112R, 482L/219R), algorithm wrong (ALGO_BUG)."
+    },
+    "remote_silent": {
+      "total": 13,
+      "TEST_BUG": 1,
+      "ALGO_BUG": 9,
+      "EDGE_CASE": 3,
+      "CALIBRATION": 0,
+      "note": "ALGO_BUG: 11L/3R, 16L/6R, 30L/9R, 25L/5R, 15L/5R sunk despite strongly positive ratio. Algorithm over-penalizes silence even when signal is positive. EDGE_CASE for cases with likes=0, reports=1-2 (algo correctly sinks weak negative, but expected alive due to remoteness — both defensible)."
+    },
+    "doc_official": {
+      "total": 5,
+      "TEST_BUG": 0,
+      "ALGO_BUG": 4,
+      "EDGE_CASE": 1,
+      "CALIBRATION": 1,
+      "note": "ALGO_BUG: official content with positive cumulative (53L/49R, 29L/21R, 128L/104R) sunk. Algorithm should respect the strong positive signal from a verified source."
+    }
+  },
+  "test_bug_examples": [
+    { "arc": "stable_bad", "likes": 9, "reports": 5, "expected": "sunk", "actual": "borderline", "reason": "9 likes vs 5 reports = 1.8:1 positive — human would never judge sunk" },
+    { "arc": "controversial_persistent", "likes": 164, "reports": 59, "expected": "sunk_or_borderline", "actual": "healthy", "reason": "164:59 = 2.8:1 positive — overwhelming positive signal, healthy is correct" },
+    { "arc": "collapse", "likes": 242, "reports": 60, "expected": "sunk_or_borderline", "actual": "healthy", "reason": "Cumulative 4:1 positive — can't infer 'collapse' from cumulative numbers" },
+    { "arc": "controversial_persistent", "likes": 473, "reports": 183, "expected": "sunk_or_borderline", "actual": "healthy", "reason": "2.6:1 positive ratio at scale — clearly healthy" },
+    { "arc": "stable_bad", "likes": 17, "reports": 6, "expected": "sunk", "actual": "healthy", "reason": "17:6 = 2.8:1 positive — quality label says 'bad' but user signal says good" },
+    { "arc": "short_burst", "likes": 24, "reports": 6, "expected": "sunk", "actual": "healthy", "reason": "4:1 positive cumulative — burst deposited real value" },
+    { "arc": "doc_stale", "likes": 98, "reports": 44, "expected": "sunk_or_borderline", "actual": "healthy", "reason": "Cumulative still 2:1 positive" },
+    { "arc": "controversial_persistent", "likes": 6, "reports": 0, "expected": "sunk_or_borderline", "actual": "healthy", "reason": "0 reports — no reason to sink" }
+  ],
+  "algo_bug_examples": [
+    { "arc": "stable_good", "likes": 937, "reports": 284, "expected": "alive", "actual": "sunk", "life": -10.9, "reason": "937:284 = 3.3:1 strongly positive yet sunk — algorithm clearly wrong" },
+    { "arc": "stable_good", "likes": 602, "reports": 292, "expected": "alive", "actual": "sunk", "life": -46.4, "reason": "2.1:1 positive over 361 days yet sunk — exposure aging too aggressive" },
+    { "arc": "stable_good", "likes": 374, "reports": 227, "expected": "alive", "actual": "sunk", "reason": "1.65:1 positive yet sunk" },
+    { "arc": "stable_good", "likes": 110, "reports": 72, "expected": "alive", "actual": "sunk", "reason": "1.5:1 positive over 347 days yet sunk" },
+    { "arc": "remote_silent", "likes": 30, "reports": 9, "expected": "alive", "actual": "sunk", "life": -84.2, "reason": "3.3:1 positive ratio yet sunk — algorithm over-penalizes long-tail silence" },
+    { "arc": "remote_silent", "likes": 16, "reports": 6, "expected": "alive", "actual": "sunk", "reason": "2.7:1 positive yet sunk" },
+    { "arc": "doc_official", "likes": 128, "reports": 104, "expected": "alive", "actual": "sunk", "reason": "Slightly positive yet sunk despite official source" },
+    { "arc": "short_attack", "likes": 244, "reports": 91, "expected": "alive", "actual": "sunk", "reason": "2.7:1 positive cumulative yet sunk — temporal recency bias too strong" },
+    { "arc": "short_attack", "likes": 482, "reports": 219, "expected": "alive", "actual": "sunk", "reason": "2.2:1 positive at scale yet sunk" },
+    { "arc": "stable_good", "likes": 268, "reports": 143, "expected": "alive", "actual": "sunk", "reason": "1.9:1 over 350 days yet sunk" }
+  ],
+  "edge_case_examples": [
+    { "arc": "stable_bad", "likes": 5, "reports": 5, "expected": "sunk", "actual": "borderline", "reason": "1:1 — both verdicts defensible" },
+    { "arc": "stable_bad", "likes": 6, "reports": 6, "expected": "sunk", "actual": "borderline", "reason": "1:1 — boundary" },
+    { "arc": "stable_bad", "likes": 2, "reports": 2, "expected": "sunk", "actual": "borderline", "reason": "Tiny sample size, near-tie" },
+    { "arc": "stable_bad", "likes": 3, "reports": 4, "expected": "sunk", "actual": "weak", "reason": "Slight negative but algo borderline-alive — defensible" }
+  ],
+  "calibration_examples": [
+    { "arc": "stable_bad", "quality_label": 0.10, "likes": 17, "reports": 6, "issue": "Quality=0.10 means 'mostly bad' but simulator produced 2.8:1 positive ratio. Simulator's quality-to-signal mapping is broken." },
+    { "arc": "stable_bad", "quality_label": 0.10, "likes": 23, "reports": 13, "issue": "Same as above — quality and signal disagree" },
+    { "arc": "stable_bad", "quality_label": 0.10, "likes": 19, "reports": 19, "issue": "1:1 from quality=0.10 simulator — should be much more negative" },
+    { "arc": "doc_official", "quality_label": "high", "likes": 53, "reports": 49, "issue": "Official high-quality source producing near-1:1 ratio is implausible" }
+  ],
+  "recommendations": {
+    "test_changes": [
+      "controversial_persistent: change expected from 'sunk_or_borderline' to 'context_dependent' or 'alive_if_likes_dominate'. The arc by definition has strong likes AND strong reports — majority positive should mean alive.",
+      "collapse / doc_stale: cumulative-signal algorithm cannot detect decay. Either (a) test expected should be 'alive_if_cumulative_positive', or (b) simulator needs to model report acceleration in late phase strongly enough that cumulative ratio inverts. Currently simulator produces e.g. 242L/60R for 'collapse' which is not a collapse at all.",
+      "stable_bad: when quality=0.10 simulator produces likes >= reports, the case is mis-calibrated. Either tighten simulator (likes should be rare for bad marks) or relax expected to 'sunk_or_borderline_or_weak'.",
+      "short_burst: change expected from 'sunk' to 'sunk_or_alive_with_decay' since cumulative likes from the burst legitimately persist. Or have simulator actively decay cumulative weight in the silent tail.",
+      "seasonal context_dependent: remove this expectation entirely or make it 'no_judgment' — context-dependent is not a testable expectation.",
+      "recovery: when simulator produces final-state likes < reports (e.g. 0L/3R), the arc didn't actually recover — these should expect 'sunk', not 'alive'. Filter or fix.",
+      "remote_silent with positive likes (>= 2 likes per report): expected 'alive' is correct — keep as is, this is an algo bug not a test bug."
+    ],
+    "algo_changes": [
+      "stable_good cluster (14/14 ALGO_BUG, 100%): Algorithm is sinking high-quality marks with 2-3:1 positive cumulative ratios over long time spans. Likely cause: exposure aging or capital-decay term over-penalizing total exposure even when ratio stays positive. Consider: floor life at 0 if cumulative likes/reports ratio > 1.5 over project lifetime.",
+      "remote_silent (9/13 ALGO_BUG, 69%): Algorithm penalizes long silence even when prior signal is strongly positive. Consider: silence should reduce confidence/exposure but not actively decay positive signal capital below zero.",
+      "short_attack (6/12 ALGO_BUG, 50%): Algorithm overweights recent reports relative to long-run cumulative. Consider: recency window should not exceed e.g. 30 days for sinking decisions when cumulative ratio is strongly positive.",
+      "doc_official (4/5 ALGO_BUG, 80%): Official-source marks getting sunk with positive ratios. Algorithm needs source-priority awareness or simply respect cumulative signal."
+    ],
+    "priority": "FIX TEST FIRST. 132/207 = 64% of failures are test set bugs (over-strict expectations or impossible-to-detect temporal patterns). After fixing test, real algorithm pass rate will jump substantially. Then address the 38 ALGO_BUGs which cluster in stable_good + remote_silent + doc_official + short_attack — all share the pattern of 'long history with positive cumulative ratio being sunk anyway', suggesting one shared root cause (exposure aging or recency overweight) in the algorithm."
+  }
+}

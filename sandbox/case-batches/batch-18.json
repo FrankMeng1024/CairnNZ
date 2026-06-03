@@ -1,0 +1,880 @@
+{
+  "batch": 18,
+  "theme": "短期mark",
+  "id_range": [851, 900],
+  "total": 50,
+  "cases": [
+    {
+      "id": 851,
+      "title": "Hillary Trail Challenge 周末活动 supply 临时水站",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Hillary Trail 西海岸 Karekare 到 Whatipu 段 Pararaha Valley 入口，Auckland Council Parks 在年度 Hillary Trail Challenge 周六凌晨架设的临时水站，桌子+15L 水桶+电解质粉",
+        "intrinsic_quality": "活动 48 小时窗口内真实可用，活动结束周一早上拆除，桌子和水桶都不留",
+        "user_volume_per_month": 480,
+        "duration_months": 1,
+        "signal": "活动期间志愿者用 Starlink mini 临时建立 wifi，平时无信号",
+        "season_pattern": "活动只此一周末，前后均无任何活动",
+        "human_factors": "参赛者 320 人 + 周末徒步爱好者闻风而来，所有人都知道这是临时点但仍想标记给后续参赛者用"
+      },
+      "events_timeline": [
+        "第1天清晨: Auckland Council 工作人员架设水站 04:30，第一批参赛者 06:00 出发",
+        "第1天上午: 参赛者陆续通过，志愿者 Mike 标 mark 并附'仅至周日 18:00'说明",
+        "第1天傍晚: 87 个参赛者 + 21 个观赛徒步者赞，全是出山后同步",
+        "第2天: 周日活动达到高峰，水站运转良好，又 96 人赞",
+        "第3天: 志愿者周一 07:00 拆除水站，留 mark 状态'已结束'，3 人当天到达举报'空地什么都没有'",
+        "第7天: 又有 14 个非参赛徒步者举报'mark 是骗的'",
+        "第15天: 累积举报达 38 条但都是活动结束后到达的人",
+        "第30天: mark 时效已过，所有后续到达者都举报"
+      ],
+      "expected_signal_summary": "总赞约 215，总举报约 52，但赞集中在 48 小时活动内，举报全部在活动后",
+      "expected_outcome": "sunk",
+      "expected_status": "sunk",
+      "human_judgment": "短期 supply 在活动期内是真信号，活动结束后变成误导，系统应该识别 duration 极短并在活动结束后让其沉，赞虽多但时效已过",
+      "edge_case_flag": "ephemeral_event + valid_then_invalid"
+    },
+    {
+      "id": 852,
+      "title": "Tongariro Northern Circuit DOC 鸟巢保护封闭 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tongariro Northern Circuit 第二日 Oturere Hut 到 Waihohonu Hut 段，Te Maari 火山口侧翼一段 600m 步道，DOC 因 NZ Falcon (kārearea) 筑巢期临时封闭 30 天",
+        "intrinsic_quality": "封闭区改道往北 1.5km 绕行，原步道有 ranger 拉黄带和 A4 告示，违反规定罚款 NZ$800",
+        "user_volume_per_month": 220,
+        "duration_months": 1,
+        "signal": "封闭区域无信号，绕行段中 Mt Ruapehu 视线方向偶有 Telecom",
+        "season_pattern": "11 月中到 12 月中筑巢期，过完即解除，明年同期可能再来或不来取决于鸟",
+        "human_factors": "DOC 官方告示牌让多数徒步者认真遵守，但少数人觉得绕路浪费时间想钻"
+      },
+      "events_timeline": [
+        "第1天: DOC ranger 拉黄带后用 Cairn 标 mark 并附 DOC 公告 PDF 链接",
+        "第3天: 第一批 Northern Circuit 走者 11 人赞 mark 并标'已绕行'",
+        "第7天: 一个本地徒步博主 Mark Watson 出山同步并写长 post 解释鸟巢保护",
+        "第10天: 累积赞 43，举报 2 条都是'我看不到鸟为什么要绕'",
+        "第18天: DOC 中期检查鸟巢状态良好，决定按计划 30 天解封",
+        "第28天: 临近解封日，赞累积到 78",
+        "第30天: 解封日 ranger 撤黄带并在 mark 上标记'已解除'",
+        "第35天: 解封后 5 个徒步者举报'mark 还在但路通了'"
+      ],
+      "expected_signal_summary": "总赞约 78，总举报约 9",
+      "expected_outcome": "alive",
+      "expected_status": "expired",
+      "human_judgment": "短期 danger 在封闭期内是真实强信号，DOC 官方背书且赞远超举报，但 duration 一过就不该继续触发提示，状态应转为已过期归档而非完全清除（明年同期可能复用）",
+      "edge_case_flag": "ephemeral_official_closure + recurring_possibility"
+    },
+    {
+      "id": 853,
+      "title": "Abel Tasman Coast Track 山泥滑施工警告 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Abel Tasman Coast Track 第三日 Awaroa Hut 到 Totaranui 段，Skinner Point 上方 80m 处一段去年大雨冲下来的山泥滑，DOC 承包商 Tasman Civil 周一到周五施工，重型机械占道 5 米",
+        "intrinsic_quality": "施工期 6 周，每天 07:00-17:00 步道完全封闭，工人引导徒步者绕海滩低潮线",
+        "user_volume_per_month": 1800,
+        "duration_months": 1.5,
+        "signal": "Awaroa 区域有 Vodafone 弱信号，能同步但延迟约 6 小时",
+        "season_pattern": "施工选在 4-5 月秋季淡季，但 Coast Track 全年开放仍每月 1500+ 人",
+        "human_factors": "Coast Track 多数是家庭和短期游客，不熟悉 NZ 徒步规则，看到工人挥旗才意识到要绕"
+      },
+      "events_timeline": [
+        "第1天: 施工首日工头 Steve 标 mark 并附绕行潮汐时刻表",
+        "第2天: 6 个徒步者按潮汐绕行后出山同步赞",
+        "第4天: 一个家庭团没看 mark 撞上施工，被工人骂后出山同步举报但内容是'mark 救了我们'",
+        "第10天: 累积赞 145，举报 8 条都是潮汐错过的抱怨",
+        "第18天: Marahau 出口处水上的士开始主动告知乘客查看此 mark",
+        "第30天: 赞累积到 320，DOC 把这个 mark 加入官方 brief",
+        "第42天: 施工结束步道恢复，工头标记'已完成'",
+        "第50天: 8 个后续徒步者举报'施工不在了'"
+      ],
+      "expected_signal_summary": "总赞约 320，总举报约 22",
+      "expected_outcome": "alive",
+      "expected_status": "expired",
+      "human_judgment": "施工期内是 Coast Track 必看的强 danger，赞数压倒性，DOC 都引用，但 6 周一过必须立刻失效否则误导新到游客",
+      "edge_case_flag": "ephemeral_construction + auto_expire_critical"
+    },
+    {
+      "id": 854,
+      "title": "Lake Waikaremoana Track 雪季前临时木桥 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Lake Waikaremoana 第二日 Marauiti Hut 到 Waiopaoa Hut 段 Hopuruahine 河支流，DOC Te Urewera 团队每年 11 月架设的临时木板桥，5 月底雪季前撤除以防被洪水冲走",
+        "intrinsic_quality": "木板桥承重 200kg 可单人通过，旁边是齐腰冰河需脱裤涉水替代方案",
+        "user_volume_per_month": 110,
+        "duration_months": 6,
+        "signal": "Te Urewera 内部全无信号，唯一同步点是 Onepoto 出口或对岸 Mokau Inlet 船码头",
+        "season_pattern": "11 月初架设，5 月末撤除，雪季 6-10 月只能涉水或绕远",
+        "human_factors": "Tūhoe iwi 本地徒步者很熟悉节奏，国际游客往往不知道有桥，看到 mark 会专门规划夏季通过"
+      },
+      "events_timeline": [
+        "第1月: 11 月 4 日 DOC 工人 Wiremu 架设完成后标 mark",
+        "第1月: 17 个 Wairoa 本地徒步者出山同步赞",
+        "第3月: 1 月旺季每周 25 人通过，赞累积到 84",
+        "第5月: 3 月开始气温降, 30 个徒步者赞并附照片确认桥在",
+        "第6月: 5 月底 DOC 撤桥前 ranger Tane 标记 mark 状态'即将结束'",
+        "第7月: 6 月初冬季无人通过，桥已撤除",
+        "第8月: 12 月前 Mokau 船家提醒乘客新一季桥已架，老 mark 被复用",
+        "第18月: 跨两个夏季总赞 215，举报 12 多为冬季到达者"
+      ],
+      "expected_signal_summary": "总赞约 215，总举报约 12",
+      "expected_outcome": "alive",
+      "expected_status": "seasonal",
+      "human_judgment": "周期性短期 supply，DOC 每年规律架设撤除，赞集中在 11-5 月活跃期，举报集中在 6-10 月冬季，系统应识别季节性循环不彻底删除而是周期切换",
+      "edge_case_flag": "seasonal_recurring + biannual_cycle"
+    },
+    {
+      "id": 855,
+      "title": "Cape Reinga Te Werahi Beach Waitangi Day 集会 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Cape Reinga 步道 Te Werahi Gate 下方 Te Werahi Beach 沙滩中段，每年 2 月 6 日 Waitangi Day 当地 Ngāti Kuri iwi 在此举办晨间 karakia 集会，临时摆 wharenui 帐篷和 hāngi 坑",
+        "intrinsic_quality": "集会从清晨 5:30 日出 karakia 开始持续到中午，外人欢迎参与但需尊重 tikanga",
+        "user_volume_per_month": 95,
+        "duration_months": 0.25,
+        "signal": "Cape Reinga 区域 2degrees 弱信号，集会时志愿者发起 wifi 让长老远程联线",
+        "season_pattern": "仅 Waitangi Day 当天 12 小时窗口，前后均无任何活动",
+        "human_factors": "国际游客慕名而来想体验，但本地 iwi 担心人太多影响仪式神圣性，徒步者多数有自觉"
+      },
+      "events_timeline": [
+        "前夜: iwi 长老 Hēmi 提前一周标 mark 并附 tikanga 守则",
+        "当日早 5:00: 第一批参与者 12 人到场，活动正式开始",
+        "当日早 7:00: 参与人数达 80，多数是 Far North 当地",
+        "当日中午: 活动结束前 56 人出山后同步赞并描述 karakia 体验",
+        "次日: 9 个未及时到场的游客举报'什么都没看到'",
+        "第7天: 累积赞 78，举报 22",
+        "第30天: mark 仍在但所有后续到达者都举报",
+        "第90天: iwi 决定保留 mark 作为明年同日的预告，但状态标记'年度活动'"
+      ],
+      "expected_signal_summary": "总赞约 78，总举报约 38",
+      "expected_outcome": "alive",
+      "expected_status": "annual_recurring",
+      "human_judgment": "极短窗口的文化活动，赞集中在当日且具体描述仪式细节，举报全是错过时间窗的人，系统应该识别这是年度循环并保留预告价值，而非按举报多就让其沉",
+      "edge_case_flag": "ephemeral_cultural_event + annual_anchor"
+    },
+    {
+      "id": 856,
+      "title": "Miranda Shorebird Centre 候鸟迁徙季 6 周 mark scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Firth of Thames Miranda 海岸步道 Limeworks 路尽头观鸟塔后方 300m 泥滩，每年 9 月中到 10 月底 Bar-tailed Godwit 从阿拉斯加迁徙抵达，约 8000 只在此聚集休整",
+        "intrinsic_quality": "潮汐配合时（高潮位前后 2 小时）观鸟最佳，Miranda Shorebird Centre 提供望远镜和向导",
+        "user_volume_per_month": 350,
+        "duration_months": 1.5,
+        "signal": "Miranda 区域 Spark 4G 全覆盖，同步即时",
+        "season_pattern": "迁徙季 6 周固定，3 月候鸟北飞回阿拉斯加再短暂出现 2 周，其余时间泥滩空旷",
+        "human_factors": "观鸟爱好者群体专程来，徒步者顺路看；本地学校组织春假野营有教育价值"
+      },
+      "events_timeline": [
+        "第1天: Miranda Shorebird Centre 经理 Keith Woodley 在 9 月 18 日观察到第一批 godwit 抵达后标 mark",
+        "第3天: 鸟数从 200 增到 3500，47 个观鸟者赞并附数鸟统计",
+        "第10天: 鸟数稳定 7800，Auckland 学校巴士涌入，累积赞 198",
+        "第20天: 一个国际观鸟杂志记者出山同步留长评论，引发新一波 80 人赞",
+        "第35天: 10 月末迁徙季尾声，鸟群开始向南扩散，Keith 标记 mark 状态'即将结束'",
+        "第45天: 11 月初泥滩仅余 30 只 godwit，已不构成 scenic",
+        "第50天: 14 个 11 月到访者举报'看不到鸟'",
+        "第180天: 3 月返程季短暂复活，Keith 重新激活 mark"
+      ],
+      "expected_signal_summary": "总赞约 285，总举报约 24",
+      "expected_outcome": "alive",
+      "expected_status": "seasonal",
+      "human_judgment": "高质量短期 scenic 有明确生物学时间窗，赞理由都附鸟数和潮汐细节非常具体，举报全是错过窗口期的，系统应识别迁徙季双峰节奏",
+      "edge_case_flag": "ephemeral_natural_event + biological_calendar"
+    },
+    {
+      "id": 857,
+      "title": "Crater to Lake Run 一次性赛跑 supply 沿途补给 mark",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mt Ruapehu 北坡 Whakapapa 滑雪场底站到 Lake Rotoaira 单程 27km 山地跑赛事，CP3 在 Te Porere Redoubt 历史遗址旁，主办方 Ruapehu Adventure Centre 设临时补给桌：水、香蕉、运动凝胶",
+        "intrinsic_quality": "赛事仅当天上午 8:00-13:00 开放 5 小时，过截止时间补给撤掉",
+        "user_volume_per_month": 280,
+        "duration_months": 0.2,
+        "signal": "CP3 位置 Vodafone 边缘信号，主办方架设 Starlink 用于实时跑者追踪",
+        "season_pattern": "一次性赛事，明年同日可能续办取决于赞助",
+        "human_factors": "280 名注册跑者 + 50 名陪跑亲友 + 偶遇徒步者，所有人都明白是赛事限定"
+      },
+      "events_timeline": [
+        "赛前一周: 主办方在 Cairn 上预告 mark 并附赛事时间",
+        "赛事当日 7:30: 主办方激活 mark 状态'活动中'",
+        "赛事当日 9:00-12:30: 230 个跑者通过 CP3，其中 84 人当场同步赞",
+        "赛事当日 13:00: 主办方撤补给并标记 mark 状态'已结束'",
+        "赛事次日: 47 个跑者出山后补充同步赞并附完赛照片",
+        "第3天: 2 个独立徒步者到达举报'什么都没有'",
+        "第7天: 累积赞 131，举报 5",
+        "第30天: 赛事 mark 进入历史归档"
+      ],
+      "expected_signal_summary": "总赞约 131，总举报约 5",
+      "expected_outcome": "sunk",
+      "expected_status": "expired",
+      "human_judgment": "极短窗口（5 小时）一次性赛事 supply，赞数集中且高质量，但活动一结束 mark 必须自动失效，举报数低不代表 mark 仍有效",
+      "edge_case_flag": "ephemeral_one_off_event + auto_expire_strict"
+    },
+    {
+      "id": 858,
+      "title": "Whangarei Heads Bream Head 圣诞旺季临时停车场 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Bream Head Conservation Trust 步道入口 Urquharts Bay 路尾 800m 处一块私人草地，业主 McKenzie 家族 12 月 20 日到 1 月 31 日开放为临时停车场，每车 NZ$5 投币",
+        "intrinsic_quality": "可停 60 辆，主停车场常年仅 15 位旺季严重不够，临时停车场救命",
+        "user_volume_per_month": 1200,
+        "duration_months": 1.4,
+        "signal": "Whangarei Heads 区域 Vodafone 4G 良好",
+        "season_pattern": "仅每年圣诞到 Auckland Anniversary 旺季 6 周开放，平日草地是放牛区",
+        "human_factors": "Auckland 家庭驾车 2 小时来 Bream Head 一日游，旺季找不到停车位是头号痛点"
+      },
+      "events_timeline": [
+        "第1天: 12 月 20 日 McKenzie 家儿子 Ben 标 mark 并附投币说明",
+        "第3天: 圣诞节当天 89 个家庭使用并同步赞",
+        "第10天: 元旦周累积赞 312，举报 4 都是关于'草地泥泞'",
+        "第20天: 1 月中 NZ Herald 文章引用此 mark 作为旺季解决方案",
+        "第30天: 累积赞 580",
+        "第42天: 1 月 31 日 McKenzie 家关闭草地，Ben 标记 mark 状态'下次圣诞再开'",
+        "第50天: 2 月初 8 个迟到游客举报'草地有牛'",
+        "第180天: 11 月秋季再无任何活动，等待 12 月复活"
+      ],
+      "expected_signal_summary": "总赞约 580，总举报约 18",
+      "expected_outcome": "alive",
+      "expected_status": "annual_recurring",
+      "human_judgment": "周期性极强的私人 supply，每年旺季高密度好评，淡季完全静默，系统应保留为年度循环 mark 而非彻底删除，否则明年圣诞旺季又得重新建立信号",
+      "edge_case_flag": "annual_seasonal_supply + private_recurring"
+    },
+    {
+      "id": 859,
+      "title": "Coastal Walk Festival Whangamata 节日活动周 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Coromandel Peninsula Whangamata 海岸步道 Williamson Park 入口到 Otahu Estuary 段，每年 1 月 Whangamata Beach Hop 节日延伸出的'Coastal Walk Festival'，沿步道每 500m 设主题艺术装置共 8 个，节日 7 天展出",
+        "intrinsic_quality": "艺术装置由 Hauraki District Council 委托本地艺术家制作，主题为海洋保育，节后送 Whangamata 学校",
+        "user_volume_per_month": 850,
+        "duration_months": 0.25,
+        "signal": "Whangamata 镇 Spark 4G 全覆盖，步道沿线信号稳定",
+        "season_pattern": "1 月第二周固定 7 天，前后无任何装置",
+        "human_factors": "Beach Hop 老车迷顺道游步道，加上度假者和本地家庭，文化氛围浓"
+      },
+      "events_timeline": [
+        "活动前 2 天: Council 工作人员安装完毕并标 mark 附装置地图",
+        "活动第 1-2 天: 220 个游客赞并附装置照片",
+        "活动第 4 天: 一个 Stuff 记者撰文报道，引发当周再 180 人涌入和赞",
+        "活动第 7 天: 节日结束 Council 撤装置标记 mark 状态'已结束'",
+        "活动后第 1 天: 装置撤除当天傍晚 5 个游客举报'看不到艺术'",
+        "活动后第 3 天: 累积举报 24",
+        "活动后第 14 天: 装置已安装到 Whangamata Area School 操场",
+        "活动后第 30 天: mark 历史归档但保留作为明年预告锚点"
+      ],
+      "expected_signal_summary": "总赞约 400，总举报约 32",
+      "expected_outcome": "sunk",
+      "expected_status": "expired",
+      "human_judgment": "短期文化活动 scenic 有明确时间窗，赞质量高且有具体装置照片，但活动一结束 mark 即失效，年度复发性低（艺术装置不重复），不应作为年度锚点",
+      "edge_case_flag": "ephemeral_festival + non_recurring_content"
+    },
+    {
+      "id": 860,
+      "title": "Mt Pirongia 24 小时挑战活动 supply 山顶守夜点",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mt Pirongia (Waikato) 山顶 Pahautea Hut 旁草坪，Pirongia Tramping Club 周年纪念 24 小时连续登顶挑战，志愿者周六中午到周日中午轮班看护，提供热茶/姜饼/急救",
+        "intrinsic_quality": "活动 24 小时窗口内任何登顶者可使用，志愿者 4 人轮班 6 小时一换",
+        "user_volume_per_month": 180,
+        "duration_months": 0.05,
+        "signal": "Pahautea Hut 区域 Spark 边缘信号，志愿者带车载放大器临时增强",
+        "season_pattern": "一次性周年活动，俱乐部决定明年是否续办",
+        "human_factors": "Tramping Club 70 位会员 + 邀请客 + 偶遇登山者，整夜登顶有探险氛围"
+      },
+      "events_timeline": [
+        "活动前 3 天: 俱乐部主席 Bruce 在 Cairn 标 mark 并附时间表",
+        "活动当日中午 12:00: mark 激活，第一波 28 个登山者到达",
+        "下午 3-6 点: 80 个登山者通过赞 mark",
+        "夜间 10 点-凌晨 2 点: 夜爬队 35 人专程来体验，全部赞",
+        "次日早 6-10 点: 日出登顶组 65 人到达赞",
+        "活动结束周日中午 12:00: 志愿者撤离标记 mark '已结束'",
+        "活动后 24 小时: 4 个独立登山者到达举报'空地'",
+        "第7天: 累积赞 188，举报 7"
+      ],
+      "expected_signal_summary": "总赞约 188，总举报约 7",
+      "expected_outcome": "sunk",
+      "expected_status": "expired",
+      "human_judgment": "极短（24 小时）一次性活动 supply，赞数密集但 mark 必须严格随活动结束失效，否则误导新登山者期待山顶有补给",
+      "edge_case_flag": "ephemeral_one_off + 24h_window_strict"
+    },
+    {
+      "id": 861,
+      "title": "Otago Central Rail Trail 春季临时医疗站 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Otago Central Rail Trail Wedderburn 站旁红色木屋，Central Otago Health Trust 在春季旅游开局 9 月中到 10 月底设临时医疗站，St John 志愿者驻点提供基础急救和水补给",
+        "intrinsic_quality": "周一三五 09:00-15:00 开放，配备 AED、绷带、电解质冲剂，重伤直接拨 St John 直升机",
+        "user_volume_per_month": 480,
+        "duration_months": 1.5,
+        "signal": "Wedderburn 站点 Vodafone 4G，St John 还备有卫星电话",
+        "season_pattern": "9 月 15 日到 10 月 31 日开放 6 周，旺季 11-3 月反而不开（认为骑行者多自助能力强）",
+        "human_factors": "Rail Trail 主流游客是 50+ 老年骑行群，春季开局摔车率高，医疗站救命"
+      },
+      "events_timeline": [
+        "第1天: St John 协调员 Sarah 启用站点并标 mark",
+        "第7天: 一个老年骑行者摔车被处理后出山同步留长感谢评，引发首波 38 人赞",
+        "第14天: 累积赞 92",
+        "第30天: 一个心脏不适骑行者用 AED 救回，St John 内部公告引爆社区，赞达 180",
+        "第42天: 10 月末关闭前累积赞 245",
+        "第45天: 关闭后 12 个 11 月骑行者举报'木屋锁着'",
+        "第180天: 冬季完全静默",
+        "第365天: 次年 9 月 St John 重启 mark"
+      ],
+      "expected_signal_summary": "总赞约 245，总举报约 28",
+      "expected_outcome": "alive",
+      "expected_status": "seasonal",
+      "human_judgment": "短期 supply 但年度规律开放，关键服务（救命级别）应识别为季节性循环，关闭期间状态切换而非删除",
+      "edge_case_flag": "ephemeral_seasonal_medical + life_critical"
+    },
+    {
+      "id": 862,
+      "title": "Lake Tekapo Mt John 一周特殊星空导览 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Lake Tekapo Mt John University Observatory 步道顶 Astro Cafe 后侧观测平台，University of Canterbury 天文系每年 6 月 Matariki 周举办特别公众导览 7 个夜晚",
+        "intrinsic_quality": "Aoraki Mackenzie Dark Sky Reserve 内部，肉眼可见 Matariki 星团 + 银河，导览员博士生用激光笔指认星座",
+        "user_volume_per_month": 320,
+        "duration_months": 0.25,
+        "signal": "Astro Cafe 有 wifi，平台距 Cafe 200m 信号稳定",
+        "season_pattern": "Matariki 周固定 7 晚，前后日期由 māori 月相决定每年浮动",
+        "human_factors": "天文爱好者 + 文化好奇游客 + 摄影师，所有人都尊重黑暗保护规定不开手机闪光"
+      },
+      "events_timeline": [
+        "活动前 1 周: Canterbury Uni 天文系发布并标 mark 附预约链接",
+        "活动第 1 晚: 45 个观测者参与，活动后 32 人同步赞",
+        "活动第 3 晚: 主办方临时增加一晚但 mark 标错日期，3 人举报'活动取消了'",
+        "活动第 5 晚: NZ Geographic 摄影师参与后写专题，引发新增 60 人赞",
+        "活动结束: 7 晚累积参与 280 人，赞 168",
+        "活动后 3 天: 12 个游客错过举报'平台没人讲解'",
+        "活动后 30 天: mark 标记'明年 Matariki 周再开'",
+        "次年: Matariki 日期不同，需要手动更新 mark 时间锚"
+      ],
+      "expected_signal_summary": "总赞约 168，总举报约 22",
+      "expected_outcome": "alive",
+      "expected_status": "annual_recurring_floating",
+      "human_judgment": "短期 scenic 有文化重要性（Matariki）且年度复发，但日期非固定阳历需要 māori 月相浮动，系统应支持浮动锚点而非简单年度循环",
+      "edge_case_flag": "ephemeral_cultural_recurring + lunar_calendar"
+    },
+    {
+      "id": 863,
+      "title": "Wellington Mt Victoria 露天电影夜临时 mark scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wellington Mt Victoria 步道顶 lookout 旁草坪，Wellington City Council 在 1 月夏季 4 个周六晚连续 4 周举办露天电影夜，临时投影银幕+折叠椅 200 把",
+        "intrinsic_quality": "免费公众活动，日落 21:00 开始放映 NZ 电影经典 (Whale Rider/Boy/Hunt for the Wilderpeople 等)",
+        "user_volume_per_month": 1100,
+        "duration_months": 1,
+        "signal": "Mt Victoria 顶 Spark/Vodafone/2degrees 三网全覆盖",
+        "season_pattern": "仅 1 月连续 4 个周六，2 月起再无活动",
+        "human_factors": "Wellington 本地家庭和情侣徒步上山看电影，氛围社区化"
+      },
+      "events_timeline": [
+        "活动前周: Council 标 mark 附 4 周日程",
+        "第1个周六: 180 人参与，活动后 95 人赞",
+        "第2个周六: 雨天取消，主办方更新 mark 但 25 人没看到上山后扑空举报",
+        "第3个周六: 晴天 220 人参与，赞累积 240",
+        "第4个周六: 最后一场 250 人参与，赞累积 380",
+        "活动后第 1 天: 12 个游客上山举报'银幕拆了'",
+        "活动后第 7 天: 累积举报 35",
+        "活动后第 60 天: mark 进入历史归档"
+      ],
+      "expected_signal_summary": "总赞约 380，总举报约 48",
+      "expected_outcome": "sunk",
+      "expected_status": "expired",
+      "human_judgment": "短期文化活动 scenic 限定 4 个周六，赞质量高但活动结束后 mark 必须立刻失效，下次复办由 Council 重启而非系统保留",
+      "edge_case_flag": "ephemeral_recurring_within_window + multi_session"
+    },
+    {
+      "id": 864,
+      "title": "Akaroa Coastal Walk 节日 marathon 临时水站 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Banks Peninsula Akaroa Coastal Walk 第 12km 处 Onuku Marae 路口，Akaroa Marathon 主办方在赛事日设临时水站，水+海绵+电解质",
+        "intrinsic_quality": "赛事 09:00-14:00 共 5 小时窗口内开放，跑者优先但徒步者也可用",
+        "user_volume_per_month": 380,
+        "duration_months": 0.05,
+        "signal": "Onuku 区域 2degrees 弱信号，主办方有移动通讯车增强",
+        "season_pattern": "一次性年度赛事固定 3 月第一个周日",
+        "human_factors": "本地 Akaroa 跑者 + Christchurch 来挑战的市民跑者 + Onuku Marae 提供祝福"
+      },
+      "events_timeline": [
+        "赛前 5 天: 主办方标 mark 并附时间窗",
+        "赛事当日 8:30: 水站架设完毕，志愿者 6 人就位",
+        "赛事 10-13 点: 320 个跑者通过，120 人当场同步赞",
+        "赛事 14:00: 水站撤除标记 mark '已结束'",
+        "赛事次日: 一个 Christchurch 跑者出山写长 blog 引发 45 人补赞",
+        "赛事后第 3 天: 5 个独立徒步者举报'路口什么都没有'",
+        "赛事后第 30 天: 累积赞 168，举报 12",
+        "次年 3 月: 主办方决定续办，mark 重启"
+      ],
+      "expected_signal_summary": "总赞约 168，总举报约 12",
+      "expected_outcome": "alive",
+      "expected_status": "annual_recurring",
+      "human_judgment": "极短窗口年度赛事，赞集中在赛事日，但 mark 应保留为年度锚点因为赛事每年同期固定办，系统识别复发节奏",
+      "edge_case_flag": "ephemeral_annual_race + fixed_month"
+    },
+    {
+      "id": 865,
+      "title": "Stewart Island Rakiura Track 极光夜临时观测 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Stewart Island Rakiura Track 第二日 North Arm Hut 后方 Sealers Bay 海滩，2024 年 5 月 11 日 Aurora Australis 极光大爆发期间一名 hut warden Mike Cooper 在海滩临时标 mark",
+        "intrinsic_quality": "极光强度 Kp9 罕见在 NZ 北至 Auckland 都可见，Stewart Island 是 NZ 最佳观测地",
+        "user_volume_per_month": 45,
+        "duration_months": 0.1,
+        "signal": "North Arm Hut 区域无信号，hut warden 用卫星电话同步 mark",
+        "season_pattern": "一次性 3 晚极光爆发，太阳活动周期决定下次几年后",
+        "human_factors": "当时在 Rakiura Track 的 12 个徒步者亲眼见证，事件成为他们一生记忆"
+      },
+      "events_timeline": [
+        "事件第 1 晚: Mike 凌晨 02:00 标 mark，6 个徒步者起床观看",
+        "事件第 2 晚: 又 4 人专门半夜起来看",
+        "事件第 3 晚: 极光减弱但仍可见",
+        "事件后: 12 个徒步者全部出山后同步赞并附极光照片",
+        "事件后 1 周: NZ Herald 报道引用 mark 引发 80 人围观赞",
+        "事件后 1 月: 累积赞 145 多为远程围观非现场",
+        "事件后 3 月: 8 个朝圣者专程去 Sealers Bay 但极光不在举报'空海滩'",
+        "事件后 1 年: 太阳活动平静期 mark 已无新赞但仍保留作为历史"
+      ],
+      "expected_signal_summary": "总赞约 145，总举报约 18",
+      "expected_outcome": "alive",
+      "expected_status": "historic_anchor",
+      "human_judgment": "极罕见自然现象一次性短期 scenic，赞数高但其中多数是远程围观非现场，系统应识别这是历史锚点而非未来可重复体验，状态归档但不删除",
+      "edge_case_flag": "ephemeral_natural_phenomenon + historic_value"
+    },
+    {
+      "id": 866,
+      "title": "Queenstown Skyline Ben Lomond 滑翔伞节临时起飞点 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Queenstown Ben Lomond 步道顶下方 200m 平台，2026 年 2 月 NZ Paragliding Open 赛事期间临时辟为参赛起飞点，地面满布张紧绳和飞行员",
+        "intrinsic_quality": "徒步者误闯会被起飞滑翔伞击中或自己被绳绊倒摔下 50m 山崖",
+        "user_volume_per_month": 2400,
+        "duration_months": 0.4,
+        "signal": "Ben Lomond 顶 Spark 2degrees 4G",
+        "season_pattern": "赛事 12 天窗口，平时 Ben Lomond 是普通登山步道",
+        "human_factors": "Queenstown 是国际旅游热点徒步者来自全世界，多数英语二语对'危险'告示牌敏感度低"
+      },
+      "events_timeline": [
+        "赛事前 1 周: NZ Paragliding 主席 Louis Tapper 标 mark 附绕行图",
+        "赛事第 1-3 天: 380 个徒步者按 mark 绕行，180 人赞",
+        "赛事第 5 天: 一个韩国游客没看 mark 闯入被飞行员怒骂，事后出山同步举报但内容是'幸亏 mark 在'",
+        "赛事第 7 天: 一个法国徒步者真的被绳绊倒擦伤，赛事组立刻强化围栏",
+        "赛事第 10 天: 累积赞 480，举报 18",
+        "赛事结束: 围栏拆除 mark 标记'已结束'",
+        "赛事后第 2 天: 35 个徒步者举报'平台空着没看到伞'",
+        "赛事后第 14 天: 累积举报 82"
+      ],
+      "expected_signal_summary": "总赞约 480，总举报约 100",
+      "expected_outcome": "sunk",
+      "expected_status": "expired",
+      "human_judgment": "高人流量短期 danger，赛事期内 mark 救命作用明显赞数压倒性，但赛事一结束 mark 必须严格失效否则错误警告新到游客地点'危险'",
+      "edge_case_flag": "ephemeral_high_volume_event + critical_timely_expire"
+    },
+    {
+      "id": 867,
+      "title": "Oamaru Bushy Beach 黄眼企鹅观测台关闭维护 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Oamaru Bushy Beach 步道末端 Hoiho 黄眼企鹅观测台，DOC 在 2025 年 11 月维护期 14 天关闭主观测台并临时改道穿越企鹅栖息地边缘",
+        "intrinsic_quality": "改道路径离企鹅巢仅 8m，徒步者大声或闪光会驱散孵蛋亲鸟导致幼鸟死亡，DOC 罚款 NZ$1500",
+        "user_volume_per_month": 1100,
+        "duration_months": 0.5,
+        "signal": "Bushy Beach 区域 Vodafone 4G 良好",
+        "season_pattern": "维护一次性 14 天，下次维护周期 3-4 年",
+        "human_factors": "国际游客慕名来看企鹅，对 NZ 野生动物保护规则敏感度低，DOC 教育压力大"
+      },
+      "events_timeline": [
+        "维护第 1 天: DOC ranger Cara 标 mark 并附'保持安静禁闪光'告示",
+        "维护第 3 天: 88 个游客按 mark 通过，55 人赞",
+        "维护第 5 天: 一个中国旅游团没看 mark 大声喧哗，DOC 介入罚款一人 NZ$1500，事件上 RNZ 新闻",
+        "维护第 8 天: 新闻效应引发一波 130 人专程来体验后赞",
+        "维护第 12 天: 累积赞 280，举报 8",
+        "维护结束: 主观测台重开，临时路径关闭",
+        "维护后第 1 天: 12 个游客举报'临时路径不在了'",
+        "维护后第 30 天: 累积赞 285，举报 28"
+      ],
+      "expected_signal_summary": "总赞约 285，总举报约 28",
+      "expected_outcome": "sunk",
+      "expected_status": "expired",
+      "human_judgment": "短期维护期 danger 救命级别（保护珍稀物种），赞高但维护一结束必须立即失效，否则新游客被误导走已封闭路径",
+      "edge_case_flag": "ephemeral_maintenance + endangered_species_protection"
+    },
+    {
+      "id": 868,
+      "title": "Westport Charming Creek Walkway 山火封闭临时绕道 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "West Coast Charming Creek Walkway 中段 Mangatini Falls 上方 1km，2025 年 1 月 Westport 山火烧毁一段木桥和 200m 步道，DOC 紧急绕行经河床下方需涉水",
+        "intrinsic_quality": "绕行路径滑且洪水期淹没，DOC 评估重建至少 8 个月",
+        "user_volume_per_month": 320,
+        "duration_months": 8,
+        "signal": "Charming Creek 区域无信号，Westport 镇内同步",
+        "season_pattern": "山火一次性事件后修复期 8 个月，无规律可循",
+        "human_factors": "West Coast 徒步者多有经验，看到 mark 会评估自身能力决定是否走"
+      },
+      "events_timeline": [
+        "事件后第 3 天: DOC ranger Pete 标 mark 附绕行 GPS",
+        "第1周: 28 人按 mark 绕行，22 人赞",
+        "第1月: 累积赞 78，举报 4 都是'绕行太累'",
+        "第3月: 西海岸下大雨绕行被淹，DOC 升级 mark 为'仅干燥期可通'",
+        "第5月: 累积赞 145，举报 18 多为雨季抱怨",
+        "第7月: DOC 完成新桥架设，mark 标记'修复中'",
+        "第8月: 新步道开通 mark 标记'已修复'",
+        "第9月: 6 个徒步者迟到举报'mark 还在但步道好了'"
+      ],
+      "expected_signal_summary": "总赞约 145，总举报约 28",
+      "expected_outcome": "alive",
+      "expected_status": "expired",
+      "human_judgment": "中期 danger 由不可预测自然事件触发，修复完成即失效，赞数稳定增长说明 mark 在修复期内持续有用，系统应识别 mark 完成历史使命而非删除",
+      "edge_case_flag": "ephemeral_disaster_response + repair_window"
+    },
+    {
+      "id": 869,
+      "title": "Kaikoura Peninsula Walkway 海豹幼崽季临时路径 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Kaikoura Peninsula Walkway South Bay 起点附近 Point Kean 海豹聚集地，每年 11 月到 1 月幼崽出生季 DOC 设临时观赏路径距母豹 20m 安全距离",
+        "intrinsic_quality": "幼崽季可见百只新生海豹，平时仅成年海豹 30 只",
+        "user_volume_per_month": 1800,
+        "duration_months": 3,
+        "signal": "Kaikoura 镇全网覆盖步道沿线信号良好",
+        "season_pattern": "11 月初开始 1 月底结束，幼崽长大后路径关闭恢复 60m 距离",
+        "human_factors": "Kaikoura 旅游业核心吸引力，国际游客慕名而来"
+      },
+      "events_timeline": [
+        "第1天: DOC ranger Sarah 标 mark 11 月 5 日激活",
+        "第7天: 第一周 320 人参观，180 人赞",
+        "第14天: 一个海豹幼崽被游客抚摸事件后 DOC 强化教育，mark 更新附规则",
+        "第30天: 12 月旺季每天 80+ 人，累积赞 580",
+        "第60天: 1 月圣诞期累积赞 980",
+        "第85天: 1 月底幼崽长大，DOC 准备关闭路径",
+        "第92天: 路径关闭 mark 标记'明年 11 月再开'",
+        "次年 11 月: DOC 重启 mark"
+      ],
+      "expected_signal_summary": "总赞约 980，总举报约 35",
+      "expected_outcome": "alive",
+      "expected_status": "seasonal",
+      "human_judgment": "明确 3 个月生物学时间窗 scenic，赞数极高且年度规律复发，系统应保留为季节性锚点而非每年重建",
+      "edge_case_flag": "ephemeral_biological_breeding + annual_high_volume"
+    },
+    {
+      "id": 870,
+      "title": "Mt Taranaki Pouakai Crossing 火山警戒升级临时关闭 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mt Taranaki / Mt Egmont Pouakai Crossing 步道全段，GeoNet 在 2025 年 8 月将 Taranaki 火山警戒等级从 0 升 1 后 DOC 临时关闭 6 周以预防",
+        "intrinsic_quality": "警戒 1 级表示火山活动异常但未达喷发，DOC 谨慎执行预案",
+        "user_volume_per_month": 850,
+        "duration_months": 1.5,
+        "signal": "North Egmont Visitor Centre 有信号，步道内无",
+        "season_pattern": "由 GeoNet 实时监测决定，6 周后若警戒回 0 重开，否则继续延长",
+        "human_factors": "本地新普利茅斯居民认真看待火山警戒，但国际游客可能不理解 1 级仍很安全为何关闭"
+      },
+      "events_timeline": [
+        "第1天: GeoNet 公告后 DOC 立即标 mark 附 GeoNet 链接",
+        "第3天: 一些徒步者抱怨过度谨慎但仍尊重，48 人赞",
+        "第14天: 累积赞 180，举报 22 多为'火山没事为何关步道'",
+        "第28天: GeoNet 月度评估警戒维持 1 级 DOC 决定继续关闭",
+        "第42天: GeoNet 警戒降回 0 DOC 准备重开",
+        "第45天: 步道重开 mark 标记'已解除'",
+        "第50天: 8 个迟到徒步者举报'步道开了 mark 还在'",
+        "第90天: 累积赞 220，举报 38"
+      ],
+      "expected_signal_summary": "总赞约 220，总举报约 38",
+      "expected_outcome": "alive",
+      "expected_status": "expired",
+      "human_judgment": "短期 danger 由权威机构（GeoNet+DOC）触发关闭，赞代表认可官方决策，关闭一解除 mark 立即失效但保留作为'此点曾因火山关闭'的历史参考",
+      "edge_case_flag": "ephemeral_geohazard + official_authority"
+    },
+    {
+      "id": 871,
+      "title": "Hawkes Bay Cape Kidnappers 涨潮窗口关闭警告 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Hawkes Bay Cape Kidnappers 步道沿海 8km 段，2026 年 4 月一次特殊大潮 King Tide 期间 DOC 临时升级警告，安全通行窗口从平日 4 小时缩到 1.5 小时",
+        "intrinsic_quality": "大潮期错过窗口被困潮线下方需 SAR 救援，每年此事件死亡 1-2 人",
+        "user_volume_per_month": 420,
+        "duration_months": 0.3,
+        "signal": "Cape Kidnappers 步道前段 Spark 信号，gannet colony 附近无",
+        "season_pattern": "King Tide 一年 3-4 次每次持续 9 天，由月相和气压决定",
+        "human_factors": "国际游客来看 gannet colony 不熟潮汐"
+      },
+      "events_timeline": [
+        "第1天: DOC ranger Rachel 标 mark 附 9 天逐日潮汐表",
+        "第2天: 32 个游客按精准窗口通过赞",
+        "第4天: 一个澳洲家庭误判窗口被困需 SAR 救援，事件后赞激增",
+        "第6天: 累积赞 145，举报 5",
+        "第9天: King Tide 结束 mark 标记'已结束'",
+        "第10天: 18 个迟到游客上山举报'潮汐警告还在但已是平潮'",
+        "第30天: 累积举报 38",
+        "第120天: 下次 King Tide 来临 DOC 重启 mark"
+      ],
+      "expected_signal_summary": "总赞约 145，总举报约 38",
+      "expected_outcome": "alive",
+      "expected_status": "recurring_irregular",
+      "human_judgment": "短期 danger 由不规则天文事件触发（每年 3-4 次但日期不固定），赞高但每次窗口结束必须立即失效，系统支持不规则复发模式",
+      "edge_case_flag": "ephemeral_tidal_event + irregular_recurring"
+    },
+    {
+      "id": 872,
+      "title": "Christchurch Port Hills 火灾后绿化志愿者一周 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Christchurch Port Hills Bridle Path 起点旁，2017 年大火后 10 年纪念 Christchurch City Council 组织志愿者一周连续植树活动，临时设水站+点心+苗木",
+        "intrinsic_quality": "周一到周日 09:00-15:00 开放，每天志愿者轮换 30 人",
+        "user_volume_per_month": 920,
+        "duration_months": 0.25,
+        "signal": "Port Hills 区域三网全覆盖",
+        "season_pattern": "10 年纪念一次性，下次未定",
+        "human_factors": "Christchurch 市民对火灾创伤记忆犹新，参与意愿高"
+      },
+      "events_timeline": [
+        "活动前 1 周: Council 标 mark 附预约志愿者链接",
+        "第 1 天: 280 人参与种 1200 棵苗，180 人赞",
+        "第 3 天: NZ Herald 报道，引发新一波志愿者涌入",
+        "第 5 天: 累积赞 480",
+        "第 7 天: 活动结束累积志愿者 1800 人种树 8000 棵",
+        "活动后第 1 天: 标记 mark '已结束'",
+        "活动后第 3 天: 25 个游客举报'水站没了'",
+        "活动后第 30 天: 累积赞 520，举报 48"
+      ],
+      "expected_signal_summary": "总赞约 520，总举报约 48",
+      "expected_outcome": "sunk",
+      "expected_status": "expired",
+      "human_judgment": "一次性纪念活动短期 supply，赞数高但活动结束 mark 失效，纪念性质决定不会年度复发，系统归档为历史不作为锚点",
+      "edge_case_flag": "ephemeral_commemoration + non_recurring"
+    },
+    {
+      "id": 873,
+      "title": "Nelson Lakes Travers Saddle 直升机救援演习临时降落区 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Nelson Lakes National Park Travers Saddle 顶 1787m 一块平地，Nelson SAR 在 2025 年 11 月 16-17 日进行年度直升机救援演习划临时降落区",
+        "intrinsic_quality": "演习 48 小时窗口直升机每 30 分钟降落一次，徒步者闯入被旋翼伤害风险",
+        "user_volume_per_month": 95,
+        "duration_months": 0.07,
+        "signal": "Travers Saddle 顶 Vodafone 偶有信号，演习时 SAR 架卫星通讯",
+        "season_pattern": "年度演习一次性 48 小时，明年同期再来",
+        "human_factors": "Nelson Lakes 走 Travers-Sabine Circuit 的徒步者有经验，多数会避让"
+      },
+      "events_timeline": [
+        "活动前 5 天: SAR 队长 Ian 标 mark 附绕行图",
+        "活动第 1 天: 28 个徒步者按 mark 绕行，22 人赞",
+        "活动第 1 天下午: 一个西班牙背包客没看 mark 闯入被赶离写长 blog 引发讨论",
+        "活动第 2 天: 累积赞 65 举报 3",
+        "活动结束: SAR 撤离标记 mark '已结束'",
+        "活动后第 1 天: 4 个徒步者举报'没看到直升机'",
+        "活动后第 30 天: 累积赞 65，举报 12",
+        "次年 11 月: SAR 重启 mark 同一地点"
+      ],
+      "expected_signal_summary": "总赞约 65，总举报约 12",
+      "expected_outcome": "alive",
+      "expected_status": "annual_recurring",
+      "human_judgment": "极短窗口（48 小时）年度演习 danger，赞数适中但 SAR 是权威发布方，系统应识别为年度循环 mark 而非删除，明年同地复用",
+      "edge_case_flag": "ephemeral_official_drill + annual_recurring"
+    },
+    {
+      "id": 874,
+      "title": "Whanganui National Park 国家公园周末免费导览 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Whanganui National Park Pipiriki 入口 DOC 中心，每年 Conservation Week 第二个周末 DOC 联合本地 iwi 提供免费 Mātauranga Māori 导览",
+        "intrinsic_quality": "周六周日各 4 场每场 90 分钟，导览员是 Te Ātihaunui-a-Pāpārangi 长老",
+        "user_volume_per_month": 280,
+        "duration_months": 0.15,
+        "signal": "Pipiriki Vodafone 弱信号 DOC 中心 wifi 可用",
+        "season_pattern": "Conservation Week 一年一次 9 月第二周",
+        "human_factors": "国际游客认为是难得的文化体验，本地家庭也来"
+      },
+      "events_timeline": [
+        "活动前 2 周: DOC 标 mark 附预约链接",
+        "第 1 天: 周六 4 场满员 64 人参与赞",
+        "第 2 天: 周日 4 场满员加候补 80 人，累积赞 128",
+        "活动后第 1 天: 标记 mark '已结束'",
+        "活动后第 3 天: 12 个游客错过举报'DOC 中心没特别活动'",
+        "活动后第 30 天: 累积赞 132，举报 22",
+        "次年 9 月: DOC 重启 mark 时间窗每年浮动一周",
+        "第 730 天: 第二次年度循环结束累积总赞 280"
+      ],
+      "expected_signal_summary": "总赞约 280（两年累积），总举报约 45",
+      "expected_outcome": "alive",
+      "expected_status": "annual_recurring",
+      "human_judgment": "短期文化 supply 年度循环（Conservation Week），赞质量高且 DOC 官方背书，系统保留为年度锚点跨年累积信号",
+      "edge_case_flag": "ephemeral_official_program + annual_floating_week"
+    },
+    {
+      "id": 875,
+      "title": "Auckland Rangitoto Island 免费渡轮日临时 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Rangitoto Island 步道入口 Rangitoto Wharf，Auckland Council 在 2026 年 Auckland Anniversary Day 提供免费 Fullers 渡轮往返一日，平日单程 NZ$45",
+        "intrinsic_quality": "活动当日 24 小时免费 6 班船次，预计 4000 人涌入",
+        "user_volume_per_month": 3200,
+        "duration_months": 0.05,
+        "signal": "Rangitoto Wharf Vodafone 4G 良好",
+        "season_pattern": "一次性年度市民福利日，未来未定取决于 Council 预算",
+        "human_factors": "Auckland 市民倾巢出动，火山岛人满为患"
+      },
+      "events_timeline": [
+        "活动前 1 周: Auckland Council 公布并标 mark",
+        "活动当日凌晨: mark 激活，第一班船 06:00",
+        "活动当日: 4280 人涌入，岛上拥挤但氛围欢乐",
+        "活动当日: 1850 人同步赞 mark",
+        "活动结束 24 小时后: mark 标记'已结束'",
+        "活动后第 1 天: 35 个迟到游客举报'渡轮要钱'",
+        "活动后第 7 天: 累积赞 1850，举报 88",
+        "活动后第 30 天: 总赞 1980，举报 145"
+      ],
+      "expected_signal_summary": "总赞约 1980，总举报约 145",
+      "expected_outcome": "sunk",
+      "expected_status": "expired",
+      "human_judgment": "极短窗口（24 小时）大规模一次性活动 supply，赞数压倒性但 mark 必须严格随活动结束失效，避免误导后续游客以为渡轮免费",
+      "edge_case_flag": "ephemeral_one_off_civic + high_volume_strict_expire"
+    },
+    {
+      "id": 876,
+      "title": "Coromandel Cathedral Cove 风暴后路径关闭 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Coromandel Cathedral Cove 步道，2023 年 Cyclone Gabrielle 后步道一半被冲毁，DOC 临时关闭 18 个月 修复，2025 年 6 月重开但 2025 年 12 月新风暴再次损毁需再次关闭 4 个月",
+        "intrinsic_quality": "二次关闭期路径滑坡 + 步道部分悬空，DOC 评估必须等地质稳定",
+        "user_volume_per_month": 6500,
+        "duration_months": 4,
+        "signal": "Hahei 镇全网覆盖步道入口 Vodafone",
+        "season_pattern": "二次关闭一次性 4 个月，再下次关闭未定",
+        "human_factors": "Cathedral Cove 是 Coromandel 头号网红景点国际游客大失所望"
+      },
+      "events_timeline": [
+        "第1天: DOC 二次关闭后 ranger James 标 mark",
+        "第3天: 380 个游客试图前往后扑空，48 人赞 mark 标'还好提前看到'",
+        "第14天: 累积赞 580 举报 65 多为'非常失望'但理解",
+        "第60天: NZ Herald 文章提及'Cathedral Cove 又关了'引发新一波认知",
+        "第90天: 累积赞 1200",
+        "第120天: DOC 完成修复重开 mark 标记'已恢复'",
+        "第125天: 28 个游客举报'mark 还在路通了'",
+        "第150天: 累积赞 1250 举报 145"
+      ],
+      "expected_signal_summary": "总赞约 1250，总举报约 145",
+      "expected_outcome": "alive",
+      "expected_status": "expired",
+      "human_judgment": "高人流量短期 danger 由灾后修复触发，赞数高代表大量游客被'救'于白跑，但修复完成必须立刻失效，DOC 是权威发布方",
+      "edge_case_flag": "ephemeral_disaster_repair + high_traffic_landmark"
+    },
+    {
+      "id": 877,
+      "title": "Tauranga Mt Maunganui 烟花节临时观赏点 scenic",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Tauranga Mt Maunganui 步道顶下方 100m 一块草坪，每年 12 月 31 日跨年烟花表演 Tauranga Council 临时辟为最佳观赏点",
+        "intrinsic_quality": "顶峰朝海面看烟花从水面绽放角度独特，但仅 12 月 31 日 23:30-00:30 一小时窗口",
+        "user_volume_per_month": 4800,
+        "duration_months": 0.04,
+        "signal": "Mt Maunganui 顶三网全覆盖",
+        "season_pattern": "年度跨年一次，每年 12 月 31 日固定",
+        "human_factors": "Tauranga + 国际度假客 + Auckland 来跨年的人，气氛极嗨"
+      },
+      "events_timeline": [
+        "活动前 3 天: Council 标 mark",
+        "活动当晚 22:00: 第一批 800 人上山",
+        "活动当晚 23:30: 烟花开始 1500 人在场",
+        "活动结束 00:30: 700 人下山",
+        "活动后 1 小时: 580 人当场同步赞",
+        "次日: 累积赞 980",
+        "次日 + 5 天: 18 个迟到游客举报'山顶平淡'",
+        "次年 12 月: Council 重启 mark"
+      ],
+      "expected_signal_summary": "总赞约 980，总举报约 22",
+      "expected_outcome": "alive",
+      "expected_status": "annual_recurring",
+      "human_judgment": "极短窗口（1 小时）年度跨年活动 scenic，赞数密集且年度规律，系统识别为年度锚点每年同期复活",
+      "edge_case_flag": "ephemeral_annual_fireworks + 1hour_window"
+    },
+    {
+      "id": 878,
+      "title": "Picton Queen Charlotte Track 山火警告极高风险天 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Marlborough Queen Charlotte Track 全段，2026 年 1 月 15 日 Fire and Emergency NZ 宣布 Extreme Fire Danger 警告 DOC 临时关闭步道 5 天",
+        "intrinsic_quality": "极高风险天禁止任何明火和带火源装备，违反罚款 NZ$10000",
+        "user_volume_per_month": 1200,
+        "duration_months": 0.17,
+        "signal": "Picton 镇全覆盖步道沿线信号波动",
+        "season_pattern": "由 FENZ 实时评估决定，旱季 12-3 月可能多次触发",
+        "human_factors": "本地居民熟悉规则，国际背包客可能轻视"
+      },
+      "events_timeline": [
+        "第1天: FENZ 公告后 DOC 立即标 mark",
+        "第1天: 88 个徒步者出发前看到 mark 取消行程，55 人赞",
+        "第2天: 一个法国背包客被发现在步道生火被罚 NZ$10000 上新闻",
+        "第3天: 新闻效应 mark 赞激增到 280",
+        "第5天: 风险等级降为 High DOC 重开步道",
+        "第6天: 标记 mark '已解除'",
+        "第7天: 12 个迟到徒步者举报'mark 还在但路通了'",
+        "第30天: 累积赞 320 举报 38"
+      ],
+      "expected_signal_summary": "总赞约 320，总举报约 38",
+      "expected_outcome": "alive",
+      "expected_status": "recurring_irregular",
+      "human_judgment": "短期 danger 由不规则天气事件触发（旱季多发），赞高代表权威认可，每次窗口结束必须立即失效，系统支持旱季多次复发模式",
+      "edge_case_flag": "ephemeral_fire_danger + irregular_seasonal_recurring"
+    },
+    {
+      "id": 879,
+      "title": "Dunedin Tunnel Beach 一次性海洋清理活动 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Dunedin Tunnel Beach 步道末端海滩，Sustainable Coastlines NZ 在 2026 年 3 月 8 日组织一次性海洋垃圾清理日提供手套+垃圾袋+点心",
+        "intrinsic_quality": "活动 09:00-14:00 开放志愿者中央台收回垃圾秤重",
+        "user_volume_per_month": 380,
+        "duration_months": 0.04,
+        "signal": "Tunnel Beach 步道入口 Spark 4G 海滩弱",
+        "season_pattern": "一次性环保活动",
+        "human_factors": "Dunedin 学生 + 环保意识强的市民积极参与"
+      },
+      "events_timeline": [
+        "活动前 5 天: 主办方标 mark 附预约链接",
+        "活动当日: 165 人参与清理收回垃圾 480kg",
+        "活动当日: 95 人同步赞",
+        "活动结束: mark 标记'已结束'",
+        "活动后 1 天: 标记后 8 人举报'海滩没装备'",
+        "活动后 7 天: 累积赞 95 举报 18",
+        "活动后 30 天: 主办方决定明年同期续办",
+        "次年: mark 重启"
+      ],
+      "expected_signal_summary": "总赞约 95，总举报约 18",
+      "expected_outcome": "alive",
+      "expected_status": "annual_recurring",
+      "human_judgment": "极短窗口环保活动短期 supply，年度复发性高（环保 NGO 多年坚持），系统保留为年度锚点",
+      "edge_case_flag": "ephemeral_civic_environmental + annual_intent"
+    },
+    {
+      "id": 880,
+      "title": "Mt Aspiring Cascade Saddle 雪崩警告临时绕道 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mt Aspiring National Park Cascade Saddle 路线 1524m 处一段 50m 雪坡，2025 年 10 月 NZ Avalanche Advisory 评估雪崩风险 Considerable 持续 12 天，DOC 临时建议绕行下方林线",
+        "intrinsic_quality": "绕行多耗 4 小时但避免必死雪崩区，已有两人此处遇难",
+        "user_volume_per_month": 65,
+        "duration_months": 0.4,
+        "signal": "Cascade Saddle 全程无信号，Mt Aspiring Hut 卫星电话",
+        "season_pattern": "雪崩风险窗口由 NZAA 实时评估每年 9-11 月最高",
+        "human_factors": "Cascade Saddle 是高难度路线徒步者多有冰雪经验"
+      },
+      "events_timeline": [
+        "第1天: NZAA 评估后 DOC ranger Tom 标 mark",
+        "第3天: 12 个徒步者按绕行通过，9 人赞",
+        "第7天: NZAA 风险评估升至 High DOC 升级 mark 为'必须绕行'",
+        "第10天: 累积赞 28 举报 2",
+        "第12天: 雪坡稳定 NZAA 降至 Moderate DOC 撤建议",
+        "第13天: 标记 mark '已解除'",
+        "第20天: 5 个迟到徒步者举报'mark 还在路安全了'",
+        "第60天: 累积赞 32 举报 12"
+      ],
+      "expected_signal_summary": "总赞约 32，总举报约 12",
+      "expected_outcome": "alive",
+      "expected_status": "expired",
+      "human_judgment": "短期 danger 由专业机构（NZAA）评估触发，赞数虽少但代表救命级别建议，窗口结束必须立即失效，明年雪崩季可能复发",
+      "edge_case_flag": "ephemeral_avalanche + professional_authority"
+    }
+  ],
+  "stopped_at_id": 880,
+  "stopped_reason": "30 cases hand-written; per user instruction (写不下停在 30) stopping here. Cases 851-880 cover: 周末活动(851), DOC鸟巢封闭(852), 山泥滑施工(853), 雪季前木桥(854), Waitangi Day集会(855), 候鸟迁徙(856), Crater to Lake Run(857), 圣诞旺季停车(858), Coastal Walk Festival(859), 24小时挑战(860), 春季医疗站(861), Matariki星空导览(862), 露天电影夜(863), Akaroa marathon(864), 极光夜(865), 滑翔伞节(866), 企鹅观测维护(867), 山火封闭(868), 海豹幼崽季(869), 火山警戒(870), King Tide(871), 火灾纪念植树(872), 直升机演习(873), Conservation Week导览(874), 免费渡轮日(875), Cyclone修复关闭(876), 跨年烟花(877), Extreme Fire Danger(878), 海洋清理日(879), 雪崩警告(880)."
+}

@@ -1,0 +1,1339 @@
+{
+  "batch": 2,
+  "theme": "城市近郊高流量",
+  "id_range": [51, 100],
+  "total": 50,
+  "cases": [
+    {
+      "id": 51,
+      "title": "Kitekite Falls 雨后湿滑岩石警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Waitakere Ranges 西海岸 Piha 入口的 Kitekite Falls，瀑布池下方那块倾斜的黑色玄武岩平台，周末家庭最爱跳水的位置",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 1800,
+        "duration_months": 14,
+        "signal": "5g",
+        "season_pattern": "雨季泥泞但信号一直在",
+        "human_factors": "本地家庭+游客混合，周日上午爆量"
+      },
+      "events_timeline": [
+        "M1 周日下午一个 Pakuranga 来的爸爸在岩石上滑了一跤，膝盖擦伤，立刻 mark 了警告并附了张血迹照",
+        "M1 当晚就有 23 个本地人点赞，评论区出现 '我女儿上周也在那滑了'",
+        "M2 Auckland Tramping Club 的群里被转发，赞数破百",
+        "M3 雨季开始，每周都有人补充 '今天更滑了' 的现场照",
+        "M5 一个游客差点踩着这个 mark 滑下去，回来后留言 '救了我一命'",
+        "M9 雨季结束，赞数增长放缓但举报为零",
+        "M14 已经成为这条步道的 unofficial 标识，新人来了就找这个 mark"
+      ],
+      "expected_signal_summary": "持续累积、跨季节验证、零举报、强用户认同",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "高流量场景下零举报本身就是强信号，加上跨季节的现场照补充，说明这个危险是真实且持续的，社区已经形成对这个 mark 的依赖",
+      "edge_case_flag": "urban_high_traffic + persistent_real_danger"
+    },
+    {
+      "id": 52,
+      "title": "Mt Eden 火山口商业咖啡车广告 mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Auckland Mt Eden 火山口顶部南侧观景台旁，一辆叫 Crater Coffee 的流动咖啡车每天早晨 7-10 点停的位置",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 4200,
+        "duration_months": 3,
+        "signal": "5g",
+        "season_pattern": "全年同质",
+        "human_factors": "晨跑者+游客大巴混合"
+      },
+      "events_timeline": [
+        "M1 第一天 mark 上线，标题写的是 'Best coffee with the best view'，明显商业口吻",
+        "M1 一周内涌入 60+ 个赞，但有 8 个举报说这是车主小号",
+        "M2 一个晨跑老哥发现这台咖啡车实际上经常不在，根据天气看心情出摊",
+        "M2 中旬 mark 被悄悄编辑过两次，把 'Crater Coffee' 三个字加粗了",
+        "M3 举报数追上赞数，社区议论 '这是 mark 还是广告位'"
+      ],
+      "expected_signal_summary": "高赞但举报同比例增长，内容指向商业自我推广",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "城市步道商业 mark 的典型套路，赞数被同好或托堆出来，但实际信息价值低且不稳定，举报方向一致就是商业嫌疑",
+      "edge_case_flag": "urban_high_traffic + commercial_self_promo"
+    },
+    {
+      "id": 53,
+      "title": "Rangitoto Summit Track 落石区警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Rangitoto Island 火山顶往 lava caves 方向那段裸露的火山碎石坡，最后 200 米左侧有松动的岩壁",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 950,
+        "duration_months": 8,
+        "signal": "4g",
+        "season_pattern": "夏季游客爆量冬季冷清",
+        "human_factors": "Devonport 渡轮带来的一日游客为主"
+      },
+      "events_timeline": [
+        "M1 一个本地 hiker 看到游客儿童在岩壁下方野餐，立刻 mark 警告",
+        "M2 DOC volunteer 在 Facebook 群确认这段确实有落石历史",
+        "M3 夏季游客高峰，赞数累积到 180+",
+        "M4 一块小石头实际掉下来砸到背包，受害者补图证实",
+        "M6 冬季流量骤降但 mark 依然被引用",
+        "M8 一个游客爸爸说看到 mark 后改了野餐位置，避免了意外"
+      ],
+      "expected_signal_summary": "高质量 mark，跨季节存活，有真实事件验证",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "本地+游客双重验证 + 真实落石事件 + DOC 隐性背书，这种 mark 即使流量周期性下降也应该保留，因为它在游客季能救命",
+      "edge_case_flag": "urban_high_traffic + tourist_safety"
+    },
+    {
+      "id": 54,
+      "title": "Cornwallis Beach Track 厕所关闭通知",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Manukau Harbour 西岸 Cornwallis Beach 步道入口停车场旁的公共厕所，周末家庭烧烤的必经设施",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 1200,
+        "duration_months": 2,
+        "signal": "4g",
+        "season_pattern": "夏季高峰",
+        "human_factors": "南岛家庭+学校团"
+      },
+      "events_timeline": [
+        "M1 周六一个妈妈发现厕所被锁，门上贴着 Auckland Council 的小纸条说水管爆了，立刻 mark",
+        "M1 一周内 80 个赞，全是 '感谢提醒，改去 Huia 了'",
+        "M1 末 Council 修好了，厕所重开",
+        "M2 mark 还在但内容已经过时，新来的用户开始抱怨 '厕所明明开着'",
+        "M2 中旬举报涌入，赞数和举报数同步上涨"
+      ],
+      "expected_signal_summary": "短期价值高但信息过期后举报激增",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "设施 mark 的典型寿命问题，信息一旦过期就从帮手变成噪音，举报方向一致指向 stale，没有人编辑更新就该让它沉",
+      "edge_case_flag": "urban_high_traffic + stale_facility_info"
+    },
+    {
+      "id": 55,
+      "title": "Mt Victoria Wellington 隐藏观景台",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wellington Mt Victoria 主步道东侧分岔下去 80 米的一块花岗岩平台，能看到 Oriental Bay 全景但不在地图上",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 2800,
+        "duration_months": 18,
+        "signal": "5g",
+        "season_pattern": "全年通勤+跑步用户",
+        "human_factors": "本地通勤 hiker 居多"
+      },
+      "events_timeline": [
+        "M1 一个 Newtown 的本地 photographer 发了这个 mark，配了张日落照",
+        "M2 Wellington running club 群里疯传，但有人担心人多了就毁了",
+        "M4 周末出现轻微踩踏痕迹，但社区自发提醒 'leave no trace'",
+        "M9 一个游客留言 '这是来 Wellington 必去的隐藏点'",
+        "M14 持续被引用进 Reddit r/Wellington 的 hiking 推荐",
+        "M18 仍然没有举报，赞数稳定增长"
+      ],
+      "expected_signal_summary": "本地认证 + 长期跨季节 + 社区自我管理",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "城市步道里的 hidden gem 类 mark 最有生命力，因为本地用户有归属感会主动维护，1.5 年零举报是非常强的信号",
+      "edge_case_flag": "urban_high_traffic + hidden_gem"
+    },
+    {
+      "id": 56,
+      "title": "Hooker Valley 网红打卡点重复 mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Aoraki Mt Cook 国家公园 Hooker Valley Track 第三吊桥过后冰川湖前那块经常出现在 Instagram 的大石头",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 6500,
+        "duration_months": 4,
+        "signal": "4g",
+        "season_pattern": "夏季旺季",
+        "human_factors": "85% 国际游客大巴"
+      },
+      "events_timeline": [
+        "M1 第一个 mark 上线，赞数当周破 200",
+        "M1 第二个用户在同一块石头 5 米外又开了一个 mark，标题不同但场景一样",
+        "M2 第三、第四个重复 mark 出现，分布在 10 米半径内",
+        "M2 中旬本地 hiker 开始举报 '这地方哪需要四个 mark'",
+        "M3 赞数最高的那个开始吸虹效应，其他三个赞停滞",
+        "M4 社区 mod 在 Reddit 讨论是否合并这些重复 mark"
+      ],
+      "expected_signal_summary": "高流量但 mark 重复污染，赞数被分散",
+      "expected_outcome": "sunk",
+      "expected_status": "YELLOW",
+      "human_judgment": "网红打卡点天生招重复 mark，单个 mark 即使本身没问题也会因为生态污染被算法降权，留最强的那个，其余应该 sink",
+      "edge_case_flag": "urban_high_traffic + duplicate_pollution"
+    },
+    {
+      "id": 57,
+      "title": "Makara Peak MTB 危险下坡警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Wellington Makara Peak Mountain Bike Park 的 Koru 下坡线最后那个右弯，路面有树根突起且急转",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 1600,
+        "duration_months": 10,
+        "signal": "4g",
+        "season_pattern": "全年但雨季更危险",
+        "human_factors": "MTB 玩家为主，少量徒步"
+      },
+      "events_timeline": [
+        "M1 一个本地 MTB 老炮在摔车后 mark，附上自己的擦伤照",
+        "M1 立刻被 Wellington MTB Club 的群引爆，48 小时内 130 个赞",
+        "M3 Makara 的志愿者在原地加了实物警示牌",
+        "M4 mark 内容被编辑过一次，加上了 'speed under 15kmh' 的具体建议",
+        "M7 一个跨城来的骑手留言 'mark 救了我一摔'",
+        "M10 雨季中赞数继续增长，零举报"
+      ],
+      "expected_signal_summary": "强社区认同 + 实物呼应 + 内容主动维护",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "MTB 圈子小但黏性极高，他们 mark 危险点是靠摔车经验堆出来的，加上 mark 内容被持续编辑优化，这是健康 mark 的样板",
+      "edge_case_flag": "urban_high_traffic + niche_community_validated"
+    },
+    {
+      "id": 58,
+      "title": "Roy's Peak 凌晨日出排队点",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wanaka Roy's Peak 山顶下方那块著名的 zig-zag 拍照山脊，凌晨 5 点游客排队拍 Instagram 同款的位置",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 3800,
+        "duration_months": 6,
+        "signal": "4g",
+        "season_pattern": "夏季爆量",
+        "human_factors": "国际游客 90%，本地极少"
+      },
+      "events_timeline": [
+        "M1 一个游客 mark 这个排队点，附说明 '提前 1 小时到不然拍不到独照'",
+        "M2 赞数 300+，但开始出现游客抱怨 'mark 的人太多排队反而更长了'",
+        "M3 一个本地人留言 '这地方根本不该被推广'",
+        "M3 末出现 Wanaka 本地社区的反对声，举报开始累积",
+        "M5 旅游淡季后流量骤降但 mark 还挂着",
+        "M6 总举报数过 50，赞数停滞"
+      ],
+      "expected_signal_summary": "短期热度但本地反对声+使用价值随流量贬值",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "网红 mark 的悖论是越被推广越没用，本地举报方向一致说明 mark 在制造问题不是解决问题，应该让它沉",
+      "edge_case_flag": "urban_high_traffic + influencer_overexposure"
+    },
+    {
+      "id": 59,
+      "title": "Mt Maunganui 基座步道苔藓滑跌点",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tauranga Mt Maunganui 山脚环线步道东北段那一小段木栈道接石阶的过渡处，常年潮湿长苔藓",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 5500,
+        "duration_months": 7,
+        "signal": "5g",
+        "season_pattern": "全年高流量",
+        "human_factors": "本地晨跑+游客混合"
+      },
+      "events_timeline": [
+        "M1 一个本地遛狗的阿姨滑倒后 mark，狗没事她扭了脚踝",
+        "M2 Tauranga community Facebook 群转发后赞数 90",
+        "M3 一个游客实拍 'I slipped here too'",
+        "M4 Council 派人在木栈道贴了防滑条，但 mark 没更新",
+        "M5 部分用户留言 '现在没那么滑了'，开始有 4 条举报说 mark 过时",
+        "M7 赞数稳定但举报每月增加"
+      ],
+      "expected_signal_summary": "曾经真实但物理环境改善后 mark 信息过期",
+      "expected_outcome": "sunk",
+      "expected_status": "YELLOW",
+      "human_judgment": "市政干预改变了原始危险后 mark 没人维护就成了误导，举报方向一致说明社区已经感知到这个 mark 的过期性",
+      "edge_case_flag": "urban_high_traffic + remediated_hazard"
+    },
+    {
+      "id": 60,
+      "title": "Ben Lomond Saddle 风口紧急避难岩",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Queenstown Ben Lomond saddle 和 summit 之间那段 ridgeline 的西侧大岩石背风面，是本地人公认的应急避风点",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 2100,
+        "duration_months": 22,
+        "signal": "3g",
+        "season_pattern": "全年但冬季最关键",
+        "human_factors": "游客+本地 tramper"
+      },
+      "events_timeline": [
+        "M1 一个 Queenstown Mountain Club 的成员 mark 这个避风点",
+        "M3 冬季一个游客在突变天气下找到这块岩石躲了 40 分钟，回来留言感谢",
+        "M7 第二个真实救命案例，被本地媒体 Crux 短报道",
+        "M12 mark 内容被编辑过三次，加了风向、容纳人数、最近水源",
+        "M18 一年多过去仍零举报",
+        "M22 已成为本地导游推荐新人 hiker 必读的 mark"
+      ],
+      "expected_signal_summary": "极长生命周期 + 真实救命验证 + 内容持续完善",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "22 个月零举报 + 多次真实救命 + 内容主动优化，这是教科书级别的 mark，城市附近但实际是高山 ridgeline，命比赞重要",
+      "edge_case_flag": "urban_high_traffic + life_saving_persistent"
+    },
+    {
+      "id": 61,
+      "title": "Bob's Peak 缆车下休息长椅",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Queenstown Bob's Peak Skyline gondola 上山步道中段那张能看到 Wakatipu 湖的木长椅，是本地老年 walker 常坐的地方",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 1400,
+        "duration_months": 9,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "本地老年人+少量游客"
+      },
+      "events_timeline": [
+        "M1 一位 70 岁的本地 walker mark 这张椅子，标题 '休息一下再爬'",
+        "M2 评论区变成本地老年 walker 的小聊天室",
+        "M4 椅子被破坏，断了一条腿，mark 被更新成 '小心椅子坏了'",
+        "M5 Council 修好椅子，mark 再次更新",
+        "M7 持续被本地老年人引用",
+        "M9 偶尔游客也来留言 '这把椅子是 Queenstown 的灵魂'"
+      ],
+      "expected_signal_summary": "小众但极忠实用户群 + 内容主动维护 + 跨设施变化存活",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "用户量不算高但用户群极忠实，mark 内容跟着物理设施变化主动更新，这种社区维护行为本身就是最强的存活证明",
+      "edge_case_flag": "urban_high_traffic + niche_loyal_users"
+    },
+    {
+      "id": 62,
+      "title": "Cathedral Cove 关闭后过期警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Coromandel Cathedral Cove 步道入口的悬崖塌方警告区，2023 年 Cyclone Gabrielle 后被永久关闭的位置",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 3200,
+        "duration_months": 16,
+        "signal": "4g",
+        "season_pattern": "夏季旺季",
+        "human_factors": "国际游客大巴+本地家庭"
+      },
+      "events_timeline": [
+        "M1 风灾刚过，一个本地 mark 警告悬崖不稳",
+        "M2 DOC 正式关闭步道，赞数已经 400+",
+        "M4 游客继续来打卡找路，mark 仍在引导他们",
+        "M8 步道宣布永久关闭，但 mark 没改过",
+        "M12 出现新 mark 直接说 '这里关闭了别来'",
+        "M16 旧的危险 mark 仍在，举报开始堆积说它在误导新游客"
+      ],
+      "expected_signal_summary": "原始信息正确但官方处置后没人维护变成误导",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "高流量旅游点的致命问题就是官方动作快但 mark 跟不上，原 mark 性质已经从警告变成误导，举报方向一致就该 sink",
+      "edge_case_flag": "urban_high_traffic + post_disaster_stale"
+    },
+    {
+      "id": 63,
+      "title": "Waiheke Island 葡萄酒步道 Cable Bay 餐厅 mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Waiheke Island 北岸 Cable Bay Vineyards 餐厅旁那段连接 Onetangi 步道的小路口，能看到 Hauraki Gulf 的位置",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 900,
+        "duration_months": 4,
+        "signal": "4g",
+        "season_pattern": "夏季",
+        "human_factors": "Auckland 周末游客"
+      },
+      "events_timeline": [
+        "M1 mark 上线，标题 'Best wine spot on the trail'",
+        "M1 末赞数 50 但出现 5 条举报指控餐厅营销",
+        "M2 一个游客留言 '我从 mark 点过去发现就是餐厅入口'",
+        "M3 举报数追上赞数",
+        "M4 Cable Bay 官方 IG 转发了这个 mark，社区确认是商业行为"
+      ],
+      "expected_signal_summary": "商业意图明确，社区识别迅速",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "餐厅官方 IG 转发是最直接的商业证据，加上举报方向一致，这种 mark 即使有真实景观也应该 sink",
+      "edge_case_flag": "urban_high_traffic + commercial_disguised"
+    },
+    {
+      "id": 64,
+      "title": "Pirongia summit shelter 野营警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Hamilton 西边 Pirongia Forest Park 山顶 Pahautea Hut 旁那块经常被 freedom camper 占用的草地",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 320,
+        "duration_months": 11,
+        "signal": "weak",
+        "season_pattern": "夏季有人冬季空",
+        "human_factors": "Hamilton 本地 day-tripper + 少量过夜"
+      },
+      "events_timeline": [
+        "M1 一个本地 tramper mark '别在这里搭帐篷会被罚款 DOC 巡查很勤'",
+        "M2 评论区分裂，一半支持一半说 'DOC 才不来'",
+        "M4 一个 freedom camper 真被罚了 200 刀，回来 mark 下面认证",
+        "M6 又一个被罚的案例",
+        "M9 mark 被 DOC volunteer 默认认可",
+        "M11 持续低流量但 mark 引用率稳定"
+      ],
+      "expected_signal_summary": "低流量但有真实案例验证 + 隐性官方背书",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "用户量不在城市高流量典型范围但物理位置近郊，关键是有具体罚款案例做证据，这种执法类 mark 的价值在于警告而非规模",
+      "edge_case_flag": "urban_high_traffic + enforcement_warning"
+    },
+    {
+      "id": 65,
+      "title": "Mt Iron Wanaka 晨跑日出 mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wanaka Mt Iron Loop 步道东侧 ridge 那块能 360 度看到 Wanaka 湖+Aspiring 山的小平台，本地晨跑必经",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 2400,
+        "duration_months": 13,
+        "signal": "4g",
+        "season_pattern": "全年但冬季日出最壮",
+        "human_factors": "本地晨跑+长居 hiker"
+      },
+      "events_timeline": [
+        "M1 一个 Wanaka 跑团成员 mark '日出黄金 5 分钟'",
+        "M2 跑团群转发，赞数 80",
+        "M5 出现冬季雪景的更新照片",
+        "M7 游客也开始引用 mark，但本地仍占主导",
+        "M10 跑团组织过晨跑集合就在这个 mark 点",
+        "M13 持续零举报，本地认同度极高"
+      ],
+      "expected_signal_summary": "本地黏性强 + 跨季节验证 + 社区聚集效应",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "本地跑团把 mark 当集合点用是最强的存活证明，因为他们对自己的训练地点有归属感，会自发维护信息质量",
+      "edge_case_flag": "urban_high_traffic + local_running_community"
+    },
+    {
+      "id": 66,
+      "title": "Hunua Falls 跳水点 fatal mark",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Auckland 南郊 Hunua Ranges 主瀑布下方那个深潭的西岩，2017 年有人跳水身亡的位置",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 2700,
+        "duration_months": 30,
+        "signal": "weak",
+        "season_pattern": "夏季爆量",
+        "human_factors": "Auckland 南区年轻人为主"
+      },
+      "events_timeline": [
+        "M1 一个本地 mark 详细描述跳水死亡历史 + 水下尖石位置",
+        "M3 Auckland Council 看到 mark 后增设了实物警示牌",
+        "M8 又一个差点淹死的案例补充",
+        "M14 夏季每月都有用户更新水位变化",
+        "M22 一个游客回访说 mark 救了他朋友",
+        "M30 历经多次 Auckland 夏季高峰仍稳定"
+      ],
+      "expected_signal_summary": "致命危险 + 实物呼应 + 跨多年验证 + 内容持续更新",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "致命级别的 mark 应该用最严苛的标准保留，30 个月的存活+实物警示牌呼应+多次救命案例已经超出任何怀疑空间",
+      "edge_case_flag": "urban_high_traffic + fatality_history"
+    },
+    {
+      "id": 67,
+      "title": "Khandallah Park 遛狗失控点",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Wellington Khandallah Park 步道东段一个隐蔽的小斜坡，本地遛狗常发生 dog-on-dog 攻击的位置",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 800,
+        "duration_months": 5,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "本地遛狗为主"
+      },
+      "events_timeline": [
+        "M1 一个本地养狗的 mark '我家狗在这里被扑过两次'",
+        "M2 评论区分裂严重，部分本地说 '我家狗也在这里被攻击' 部分说 '别污名化'",
+        "M3 出现攻击主对应主小号的互怼",
+        "M4 内容被编辑过 6 次，每次方向不同",
+        "M5 举报数和赞数同步上涨，社区两极化"
+      ],
+      "expected_signal_summary": "信号混乱社区分裂",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "城市步道里牵涉私人纠纷的 mark 永远赢不了，因为它本质是本地八卦不是公共安全信息，举报方向不一致但内容也不稳定，应 sink",
+      "edge_case_flag": "urban_high_traffic + interpersonal_dispute"
+    },
+    {
+      "id": 68,
+      "title": "Mt Eden Loop 路面修复警告",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Auckland Mt Eden 北侧 loop 步道的一段被 Council 围起来修复的木栈道",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 5800,
+        "duration_months": 1,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "通勤晨跑+游客大巴"
+      },
+      "events_timeline": [
+        "M1 第一周 mark 上线 '木栈道关闭，绕行走南线'",
+        "M1 第二周赞数 200+，每天都有人引用",
+        "M1 末工程完成，木栈道重开",
+        "M1 mark 没改，开始有游客困惑 '为什么写关闭实际开着'",
+        "M1 末举报 12 条"
+      ],
+      "expected_signal_summary": "短期高价值但工程结束后没维护",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "施工类 mark 的天然寿命就是工程周期，没人在工程结束后更新就该 sink，这种 mark 本来就不该追求长期存活",
+      "edge_case_flag": "urban_high_traffic + construction_temporary"
+    },
+    {
+      "id": 69,
+      "title": "Te Ahumairangi Hill 风口跑步警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Wellington Te Ahumairangi Hill 山脊步道中段那个被本地跑者称为 'wind tunnel' 的开阔段",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 1100,
+        "duration_months": 8,
+        "signal": "4g",
+        "season_pattern": "冬春季风大",
+        "human_factors": "Wellington 本地跑者为主"
+      },
+      "events_timeline": [
+        "M1 一个本地越野跑者 mark '风速过 80kmh 的日子别上来'",
+        "M2 Wellington Trail Runners 群转发",
+        "M4 一个跑者真被吹倒擦伤，补图证实",
+        "M5 mark 内容被加上了 metservice 风速参考链接",
+        "M6 冬季风季来临，引用率上升",
+        "M8 持续零举报"
+      ],
+      "expected_signal_summary": "本地跑者社区持续验证 + 内容质量提升",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "Wellington 风是本地永恒话题，跑者社区把 mark 当训练参考，加上具体数值化建议（80kmh）让信息可操作，这种 mark 比模糊危险警告更有价值",
+      "edge_case_flag": "urban_high_traffic + actionable_threshold"
+    },
+    {
+      "id": 70,
+      "title": "Port Hills 火灾恢复区警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Christchurch Port Hills Sugarloaf 步道东段 2017 年大火烧过的区域，仍有不稳定枯树",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 1700,
+        "duration_months": 26,
+        "signal": "4g",
+        "season_pattern": "全年",
+        "human_factors": "Christchurch 本地 hiker + 少量游客"
+      },
+      "events_timeline": [
+        "M1 一个本地 mark 警告 'burnt zone 枯树会倒'",
+        "M3 一棵枯树真倒了砸坏步道，照片被补到 mark",
+        "M8 Selwyn District Council 出工程清理但仍有未清完的区域",
+        "M14 mark 被编辑加上 '已清理段' vs '未清理段' 的具体位置",
+        "M20 Christchurch hiking 论坛把它列为必读 mark",
+        "M26 仍稳定零举报"
+      ],
+      "expected_signal_summary": "灾后真实危险 + 内容随治理进度更新 + 论坛认可",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "Port Hills 火灾是 Christchurch 集体记忆，相关安全 mark 有强情感支撑，加上 26 个月跨季节验证和持续编辑，应该长期保留",
+      "edge_case_flag": "urban_high_traffic + post_disaster_persistent"
+    },
+    {
+      "id": 71,
+      "title": "Auckland Domain 阶梯滑跌点（误报）",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Auckland Domain 博物馆下方那段花岗岩阶梯的中段第三块石头",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 7000,
+        "duration_months": 3,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "通勤+学生+游客混合"
+      },
+      "events_timeline": [
+        "M1 一个用户 mark 这块阶梯滑，但当天其实是他自己穿了拖鞋",
+        "M1 末有 30 个赞但 25 个举报说 '这阶梯一点不滑'",
+        "M2 Auckland 大学生在 Reddit 嘲讽这个 mark",
+        "M2 末原作者删了自己的赞",
+        "M3 mark 仍挂着但已成笑话"
+      ],
+      "expected_signal_summary": "原始信息错误社区强烈反向",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "高流量场景下错误 mark 死得最快，因为短时间内就能积累大量反向数据，举报数追平赞数+具体反驳证据齐全应立即 sink",
+      "edge_case_flag": "urban_high_traffic + false_alarm"
+    },
+    {
+      "id": 72,
+      "title": "Tongariro Crossing 起点接驳 mark",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Tongariro Alpine Crossing Mangatepopo 起点停车场附近的一个非官方接驳车上车点，本地公司提供更便宜服务的位置",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 4100,
+        "duration_months": 2,
+        "signal": "weak",
+        "season_pattern": "夏季旺季",
+        "human_factors": "国际游客几乎 100%"
+      },
+      "events_timeline": [
+        "M1 mark 上线，写着 '$25 接驳比官方 $50 便宜'",
+        "M1 末赞数 80 但出现 12 条举报怀疑商业",
+        "M2 一个游客实际尝试发现接驳车经常不来",
+        "M2 中举报追上赞数",
+        "M2 末有用户质疑这是接驳车主自己开的 mark"
+      ],
+      "expected_signal_summary": "明显商业意图 + 服务不稳定 + 举报方向一致",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "把价格写在 mark 标题里就是最直接的商业意图，加上服务实际不可靠和举报方向一致，没必要给它机会",
+      "edge_case_flag": "urban_high_traffic + commercial_shuttle"
+    },
+    {
+      "id": 73,
+      "title": "Tunnel Beach 悬崖游客失踪点",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Dunedin Tunnel Beach 步道末端那个穿过隧道后的悬崖边缘，曾有游客越过围栏被海浪卷走",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 1500,
+        "duration_months": 17,
+        "signal": "4g",
+        "season_pattern": "全年但冬季最危险",
+        "human_factors": "本地家庭+少量游客"
+      },
+      "events_timeline": [
+        "M1 一个 Dunedin 本地 mark 详细描述失踪事件",
+        "M3 出现游客自拍滑倒的照片附在 mark 下",
+        "M6 Dunedin City Council 看到 mark 后修复了围栏",
+        "M10 一个游客留言 '看了 mark 才没让孩子翻围栏'",
+        "M14 ODT（Otago Daily Times）报道引用过这个 mark",
+        "M17 持续零举报"
+      ],
+      "expected_signal_summary": "致命历史 + 媒体引用 + 实物呼应 + 长期存活",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "媒体引用 + Council 实物呼应 + 17 个月零举报，这是城市附近危险 mark 能达到的最高质量等级",
+      "edge_case_flag": "urban_high_traffic + media_validated"
+    },
+    {
+      "id": 74,
+      "title": "One Tree Hill 黄昏抢劫警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Auckland One Tree Hill / Maungakiekie 西侧停车场夜间不安全的提醒",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 3300,
+        "duration_months": 6,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "本地通勤+游客"
+      },
+      "events_timeline": [
+        "M1 一个本地被砸车窗后 mark 警告",
+        "M2 NZ Herald 短报道当地多起类似事件",
+        "M3 mark 内容更新加上 '黄昏后别停西侧停车场'",
+        "M4 警方在论坛回应承认是高发区",
+        "M5 一个游客被砸车窗后引用了 mark 表示后悔没看",
+        "M6 持续被本地论坛引用"
+      ],
+      "expected_signal_summary": "媒体+警方双重背书 + 真实事件持续",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "犯罪类 mark 在城市公园里其实最有用，因为官方很少明确说哪个停车场不安全，警方间接确认+媒体报道是最有力的存活理由",
+      "edge_case_flag": "urban_high_traffic + crime_warning"
+    },
+    {
+      "id": 75,
+      "title": "Devonport North Head 隧道闭合时间",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Auckland Devonport North Head 步道里那些 WW1 军事隧道的开放时间提醒",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 1900,
+        "duration_months": 7,
+        "signal": "4g",
+        "season_pattern": "全年",
+        "human_factors": "Auckland 本地家庭+渡轮游客"
+      },
+      "events_timeline": [
+        "M1 mark 上线 '隧道日落后关闭，黑了别去'",
+        "M2 几个游客被关里面过的留言印证",
+        "M4 DOC 调整冬季开放时间，mark 没跟上",
+        "M5 出现 '冬季 4 点就关 mark 写错了' 的举报",
+        "M6 原作者更新 mark 加上季节性时间表",
+        "M7 举报转化为感谢"
+      ],
+      "expected_signal_summary": "原信息正确但有过期风险 + 作者主动更新挽救",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "设施 mark 能存活的关键在于作者是否回应过期信号，这个例子里作者主动加了季节性时间表，举报变感谢就是最好的存活证明",
+      "edge_case_flag": "urban_high_traffic + author_responsive"
+    },
+    {
+      "id": 76,
+      "title": "Cape Reinga 灯塔重复 mark 第七个",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Cape Reinga 灯塔旁那个游客必拍的 Tasman 海与 Pacific 海交汇处观景台",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 5200,
+        "duration_months": 2,
+        "signal": "weak",
+        "season_pattern": "夏季旺季",
+        "human_factors": "国际游客 95%"
+      },
+      "events_timeline": [
+        "M1 这是同一观景台的第 7 个 mark",
+        "M1 已经存在的前 6 个赞数都几百",
+        "M2 这个新 mark 只拿到 8 个赞",
+        "M2 末出现 '不要再开 mark 了' 的举报",
+        "M2 末原作者自己也意识到重复"
+      ],
+      "expected_signal_summary": "重复污染中的最弱一个",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "同一地点第 7 个 mark 即使内容质量过得去也不应存活，生态健康优先于个体 mark 的善意",
+      "edge_case_flag": "urban_high_traffic + redundant_late_entry"
+    },
+    {
+      "id": 77,
+      "title": "Mission Bay 沿岸日落跑步路线",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Auckland Mission Bay 沿海步道从 Kohimarama 到 St Heliers 那段日落能看到 Rangitoto 剪影的 4 公里",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 8500,
+        "duration_months": 11,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "本地跑步+游客+遛狗"
+      },
+      "events_timeline": [
+        "M1 一个本地跑者 mark 这条路线 'best urban sunset run'",
+        "M3 赞数 400+，被 Auckland running scene IG 转发",
+        "M5 一个游客留言 '从 CBD 来值得'",
+        "M7 出现冬季无日落季节的举报，但作者没改",
+        "M9 Mission Bay 商家联盟分享了这个 mark（轻微商业嫌疑）",
+        "M11 仍稳定但商业嫌疑被讨论"
+      ],
+      "expected_signal_summary": "本地+游客双重认证但有轻微商业渗透",
+      "expected_outcome": "alive",
+      "expected_status": "YELLOW",
+      "human_judgment": "商业转发是城市步道无法避免的现实，关键在于商业方有没有篡改原内容，这个例子里 mark 本身没有商业改动，可以保留但需要持续观察",
+      "edge_case_flag": "urban_high_traffic + commercial_adjacent"
+    },
+    {
+      "id": 78,
+      "title": "Lake Wanaka 那棵网红树排队点",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wanaka 湖畔 #ThatWanakaTree 那棵 willow 拍照点的排队等位规则提示",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 6700,
+        "duration_months": 3,
+        "signal": "4g",
+        "season_pattern": "全年但夏季最挤",
+        "human_factors": "国际游客 90%+"
+      },
+      "events_timeline": [
+        "M1 一个本地烦透了排队的人 mark '请尊重排队顺序'",
+        "M1 末赞数 200 但举报 50 说 '这是步道 mark 不是排队 mark'",
+        "M2 mark 内容被改了 3 次试图保留",
+        "M2 末出现 'Wanaka 本地 vs 游客' 的争论",
+        "M3 失去焦点没人维护"
+      ],
+      "expected_signal_summary": "用户量大但 mark 性质偏离平台用途",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "mark 系统是用来标地理信息不是社会规则，即使本地动机良善也偏离了平台核心用途，举报方向一致就该 sink",
+      "edge_case_flag": "urban_high_traffic + off_topic_social"
+    },
+    {
+      "id": 79,
+      "title": "Mt Maunganui Base Track 海狮出没点",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tauranga Mt Maunganui 山脚环线步道东南段一段近海的岩岸，2024 年开始有 NZ fur seal 上岸的位置",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 5500,
+        "duration_months": 5,
+        "signal": "5g",
+        "season_pattern": "全年但夏季最频繁",
+        "human_factors": "本地+游客混合"
+      },
+      "events_timeline": [
+        "M1 一个本地遛狗的 mark '海狮上岸了，狗别靠近'",
+        "M2 DOC marine officer 在 BOP Times 报道里证实",
+        "M3 一只狗咬了海狮，主人被罚 $300",
+        "M4 mark 内容补充罚款案例",
+        "M5 持续高引用率"
+      ],
+      "expected_signal_summary": "野生动物保护 + 媒体证实 + 法律后果具体",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "野生动物相关 mark 在城市附近少见但极有价值，加上媒体证实和具体罚款案例，是 mark 系统应该重点保护的类型",
+      "edge_case_flag": "urban_high_traffic + wildlife_interaction"
+    },
+    {
+      "id": 80,
+      "title": "Christchurch Bottle Lake 林场迷路警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Christchurch 北郊 Bottle Lake Forest Park 多条 MTB 和 walker 共用步道的一个无标识三岔口",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 2900,
+        "duration_months": 15,
+        "signal": "4g",
+        "season_pattern": "全年",
+        "human_factors": "Christchurch 本地+少量游客"
+      },
+      "events_timeline": [
+        "M1 一个本地家庭走错路 90 分钟后 mark 警告",
+        "M2 Christchurch hiking 群转发，赞数 100",
+        "M5 Council 看到后立了一个简单的方向牌",
+        "M8 mark 被更新 '现在有牌了但仍易错'",
+        "M11 持续被新人引用",
+        "M15 跨季节稳定"
+      ],
+      "expected_signal_summary": "实物补救后 mark 调整内容继续存活",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "市政干预后 mark 没沉反而调整内容继续提供价值，这种动态适应是健康 mark 的特征，比僵硬不变的 mark 更有生命力",
+      "edge_case_flag": "urban_high_traffic + adaptive_to_remediation"
+    },
+    {
+      "id": 81,
+      "title": "Lake Hayes Loop 婚礼场地引导",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Queenstown 附近 Lake Hayes 环湖步道东南角一个本地婚礼公司常用的拍摄点",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 1200,
+        "duration_months": 4,
+        "signal": "4g",
+        "season_pattern": "夏秋季婚礼旺季",
+        "human_factors": "婚礼参与者+少量 hiker"
+      },
+      "events_timeline": [
+        "M1 一个婚礼摄影师 mark '完美拍照点'",
+        "M2 一周内三个婚礼公司 IG 转发",
+        "M3 普通 hiker 抱怨 '走过去发现在拍婚纱'",
+        "M3 举报方向集中在商业占用",
+        "M4 婚礼公司影响力减退后 mark 失去活力"
+      ],
+      "expected_signal_summary": "商业生态污染普通用户体验",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "城市步道商业 mark 的隐蔽形式是行业生态而非个人推广，多家公司同期转发是最强的商业信号，普通用户体验被挤压时就该 sink",
+      "edge_case_flag": "urban_high_traffic + industry_capture"
+    },
+    {
+      "id": 82,
+      "title": "Wellington Botanic Garden 隐蔽厕所",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Wellington Botanic Garden 北端缆车站附近一个游客容易错过的厕所",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 4500,
+        "duration_months": 12,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "游客+本地家庭"
+      },
+      "events_timeline": [
+        "M1 一个带小孩的妈妈 mark 这个厕所 '救命别错过'",
+        "M3 赞数 250+，全是带娃家长",
+        "M6 Wellington City Council 维护时短暂关闭，mark 被更新通知",
+        "M8 重开后 mark 再次更新",
+        "M10 持续被新游客引用",
+        "M12 跨季节零举报"
+      ],
+      "expected_signal_summary": "高频用户痛点 + 作者持续维护",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "带娃家长是高黏性用户群，他们对厕所信息的需求是刚性的，作者跟着设施变化更新 mark 就是城市步道 mark 的最佳实践",
+      "edge_case_flag": "urban_high_traffic + parent_usability"
+    },
+    {
+      "id": 83,
+      "title": "Bayswater 海滨步道犬只走失警告（个人事件）",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Auckland North Shore Bayswater 沿海步道的一个具体位置",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 1100,
+        "duration_months": 3,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "本地遛狗"
+      },
+      "events_timeline": [
+        "M1 一个失主 mark '我的狗 Buddy 在这里走失了如果看到请联系'",
+        "M1 末赞数 30 但 25 个举报说 '这是寻狗启事不是步道 mark'",
+        "M2 失主找到狗后没删 mark",
+        "M2 末新用户继续被旧寻狗信息困惑",
+        "M3 mark 完全过期"
+      ],
+      "expected_signal_summary": "个人事件性 mark 性质不符平台",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "寻狗、寻物、寻人这类个人事件 mark 即使情感上同情也不该出现在步道平台，原始动机和平台用途错配，应 sink",
+      "edge_case_flag": "urban_high_traffic + personal_lost_item"
+    },
+    {
+      "id": 84,
+      "title": "Mt Pirongia 风暴倒树临时改道",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Hamilton Pirongia Forest Park 主步道一段被 2024 年风暴倒树堵住的位置",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 320,
+        "duration_months": 4,
+        "signal": "weak",
+        "season_pattern": "冬春风季",
+        "human_factors": "Hamilton 本地 tramper"
+      },
+      "events_timeline": [
+        "M1 风暴第二天本地 tramper mark '步道被树堵了，绕走北线 1.2km'",
+        "M1 末 Hamilton hiking 群转发，赞数 60",
+        "M2 DOC 派人锯开树，主线恢复",
+        "M2 mark 立刻被更新 '已清理'",
+        "M3 作者主动 archive 自己的 mark",
+        "M4 用户反馈 'mark 撤得很及时'"
+      ],
+      "expected_signal_summary": "短期高价值 + 作者主动 archive",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "短期 mark 能 alive 的关键不是流量而是作者负责任地处理生命周期，主动 archive 比僵化保留更有平台价值",
+      "edge_case_flag": "urban_high_traffic + author_archived_well"
+    },
+    {
+      "id": 85,
+      "title": "Coromandel 309 Road kauri dieback 警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Coromandel 309 Road 旁的 Kauri Grove 步道入口的鞋底消毒站使用提醒",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 2200,
+        "duration_months": 19,
+        "signal": "weak",
+        "season_pattern": "夏季旺季",
+        "human_factors": "国际游客+本地"
+      },
+      "events_timeline": [
+        "M1 一个 DOC volunteer mark 详细描述 dieback 风险和消毒步骤",
+        "M3 出现游客实拍 '我看了 mark 才知道要消毒'",
+        "M8 NZ Herald 报道引用 kauri 保护现状",
+        "M14 一个国际游客留言 '从你们这学到的'",
+        "M19 跨多个夏季持续引用"
+      ],
+      "expected_signal_summary": "环保教育价值 + 跨年份验证",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "Kauri dieback 是 NZ 国家级生态议题，相关 mark 即使流量不顶级也具有教育意义，19 个月零举报已证明社区对它的认可",
+      "edge_case_flag": "urban_high_traffic + ecological_education"
+    },
+    {
+      "id": 86,
+      "title": "Mt Albert 火山口私人土地警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Auckland Mt Albert / Owairaka 山顶东侧一段非官方步道穿越私人土地的提醒",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 850,
+        "duration_months": 9,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "本地 hiker"
+      },
+      "events_timeline": [
+        "M1 一个本地被地主驱赶过后 mark 警告",
+        "M2 出现地主家属反对 mark 的评论",
+        "M4 一个 tramper 实际遇到地主，证实 mark 有效",
+        "M5 评论区分裂但 mark 主体内容稳定",
+        "M7 律师朋友留言 'public access act 有法律灰色区'",
+        "M9 mark 持续但讨论不止"
+      ],
+      "expected_signal_summary": "信息有效但牵涉法律灰色 + 部分反对声",
+      "expected_outcome": "alive",
+      "expected_status": "YELLOW",
+      "human_judgment": "土地权属类 mark 永远存在争议，但这个 mark 的核心信息（被驱赶过）是事实，反对声更多是法律解释而非信息真伪，可保留但需持续观察",
+      "edge_case_flag": "urban_high_traffic + access_dispute"
+    },
+    {
+      "id": 87,
+      "title": "Karori Wildlife Sanctuary 围栏外鸟点",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wellington Zealandia 围栏外侧一段免费步道的最佳观鸟位置",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 1700,
+        "duration_months": 14,
+        "signal": "4g",
+        "season_pattern": "全年但春季鸟最多",
+        "human_factors": "Wellington 本地观鸟+少量游客"
+      },
+      "events_timeline": [
+        "M1 一个本地 birder mark '不进 Zealandia 也能看到 tui 和 kaka'",
+        "M3 Wellington Bird Club 群转发",
+        "M6 一个国际游客拍到 kaka 后引用 mark 致谢",
+        "M9 春季鸟季 mark 引用率峰值",
+        "M11 出现一个 Zealandia 工作人员评论 '这是真的'",
+        "M14 持续零举报"
+      ],
+      "expected_signal_summary": "小众但高质量社区认证 + 官方默许",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "观鸟社区对 mark 的认证质量极高，因为他们对地点准确性有极致要求，加上 Zealandia 工作人员的非官方背书，这个 mark 的可信度近乎完美",
+      "edge_case_flag": "urban_high_traffic + birding_community"
+    },
+    {
+      "id": 88,
+      "title": "Lyttelton Crater Rim 火山观测点（虚假）",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Christchurch Lyttelton 港口南侧 Crater Rim 步道东段一个号称能看到海底火山活动的位置",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 1300,
+        "duration_months": 4,
+        "signal": "4g",
+        "season_pattern": "全年",
+        "human_factors": "Christchurch 本地+游客"
+      },
+      "events_timeline": [
+        "M1 mark 上线声称 '能看到海底火山泡泡'",
+        "M2 GNS Science 网友评论 '该区域没有活跃海底火山'",
+        "M3 几个游客实地查看后举报 '什么都没看到'",
+        "M4 GNS Science 官方在 Twitter 间接否认",
+        "M4 末 mark 信誉崩塌"
+      ],
+      "expected_signal_summary": "虚假地理信息 + 权威否认",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "权威机构（GNS Science）的否认是最强 sink 信号，即使流量再大也不能让虚假科学信息存活",
+      "edge_case_flag": "urban_high_traffic + pseudoscience"
+    },
+    {
+      "id": 89,
+      "title": "Ngaio Gorge 通勤泥泞段",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Wellington Ngaio Gorge 步道连接 Khandallah 到 CBD 通勤路线中段那段雨后必泥的位置",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 2100,
+        "duration_months": 23,
+        "signal": "4g",
+        "season_pattern": "雨季加剧",
+        "human_factors": "Wellington 本地通勤者"
+      },
+      "events_timeline": [
+        "M1 一个通勤者 mark '雨后这里泥到没踝'",
+        "M3 Wellington commuter group 转发",
+        "M8 雨季每周补充实时泥况照片",
+        "M14 Wellington City Council 看到 mark 后铺了部分木板",
+        "M18 mark 更新 '木板铺了一半其余仍泥'",
+        "M23 跨两个雨季稳定"
+      ],
+      "expected_signal_summary": "通勤社区高频验证 + 实物干预 + 持续维护",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "通勤者对路况敏感度远高于游客，他们的 mark 一旦稳定就极难失效，加上 Council 部分干预后作者还在维护差异，是城市近郊 mark 的成熟样板",
+      "edge_case_flag": "urban_high_traffic + commuter_validated"
+    },
+    {
+      "id": 90,
+      "title": "Coromandel Pinnacles 凌晨拥挤吐槽",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Coromandel Pinnacles 步道凌晨 4 点上山的拥挤现状抱怨",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 2800,
+        "duration_months": 5,
+        "signal": "weak",
+        "season_pattern": "夏季",
+        "human_factors": "国际游客为主"
+      },
+      "events_timeline": [
+        "M1 一个失望的本地 mark '凌晨上去 200 人挤一起'",
+        "M2 评论区分裂，一半同情一半说 '那你别去'",
+        "M3 mark 内容偏吐槽不偏地理",
+        "M4 出现 30+ 举报说 '这不是步道信息'",
+        "M5 失去维护"
+      ],
+      "expected_signal_summary": "情绪性内容 + 平台用途错位",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "吐槽性 mark 即使描述事实也不属于地理信息平台的用途，举报方向集中在性质错位就该 sink",
+      "edge_case_flag": "urban_high_traffic + emotional_complaint"
+    },
+    {
+      "id": 91,
+      "title": "Mt Cargill 学校教学点",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Dunedin Mt Cargill 步道中段一处地质教学点，本地学校经常带学生来",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 600,
+        "duration_months": 16,
+        "signal": "4g",
+        "season_pattern": "学期内多",
+        "human_factors": "学校团 + 少量公众"
+      },
+      "events_timeline": [
+        "M1 一个 Otago 大学地质系教授 mark 解释岩层历史",
+        "M4 几所 Dunedin 中学引用进 field trip 资料",
+        "M8 出现学生留言感谢",
+        "M12 教授的同事补充了周边其他岩层信息",
+        "M16 已成本地教育资源"
+      ],
+      "expected_signal_summary": "学术权威 + 教育系统采纳 + 内容深化",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "学术权威 mark 流量永远不会顶级但价值密度极高，教育系统正式采纳是最强的存活理由",
+      "edge_case_flag": "urban_high_traffic + educational_authority"
+    },
+    {
+      "id": 92,
+      "title": "Whitford 沿岸熊出没幻觉",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Auckland Whitford 沿岸步道某段，有人 mark 说看到了 'bear-like animal'",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 700,
+        "duration_months": 2,
+        "signal": "4g",
+        "season_pattern": "全年",
+        "human_factors": "本地家庭"
+      },
+      "events_timeline": [
+        "M1 mark 上线 '我看到一只像熊的动物'",
+        "M1 末 NZ 没有原生熊的事实被多人指出",
+        "M2 DOC 评论 '可能是大型 possum 或迷路宠物猪'",
+        "M2 末赞数被举报淹没",
+        "M2 mark 成为 Reddit r/newzealand 笑话"
+      ],
+      "expected_signal_summary": "事实性错误 + 权威否认 + 社区嘲讽",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "NZ 没有原生熊是地理事实，DOC 否认+社区嘲讽组合是清晰的 sink 信号",
+      "edge_case_flag": "urban_high_traffic + factually_impossible"
+    },
+    {
+      "id": 93,
+      "title": "Auckland 地铁 Britomart 步道连接 mark",
+      "scenario": {
+        "type": "facility",
+        "location_desc": "Auckland Britomart 火车站到 Wynyard Quarter 沿海步道连接处一段隐蔽的 underpass",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 6200,
+        "duration_months": 8,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "通勤+游客混合"
+      },
+      "events_timeline": [
+        "M1 一个本地通勤者 mark '走 underpass 比绕马路省 8 分钟'",
+        "M3 Auckland Transport 看到 mark 后增加了指示牌",
+        "M5 mark 内容更新 '现在有官方牌了但仍易错过'",
+        "M7 跨季节稳定",
+        "M8 持续被新通勤者引用"
+      ],
+      "expected_signal_summary": "通勤实用性 + 官方呼应 + 内容动态调整",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "通勤捷径类 mark 在大流量场景里特别有价值，官方增设指示牌后 mark 调整内容继续提供边际价值，是健康进化的样板",
+      "edge_case_flag": "urban_high_traffic + commute_shortcut"
+    },
+    {
+      "id": 94,
+      "title": "Mt Eden 山顶情侣涂鸦警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Auckland Mt Eden 火山口顶部围栏一处情侣涂鸦集中区域，有人因为读涂鸦走神跌倒",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 4200,
+        "duration_months": 3,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "游客为主"
+      },
+      "events_timeline": [
+        "M1 一个跌倒的游客 mark 警告",
+        "M2 评论说 '是你自己不看路'",
+        "M2 末出现两极化讨论",
+        "M3 举报增加但赞也持续",
+        "M3 末作者删 mark"
+      ],
+      "expected_signal_summary": "因果牵强 + 社区不认同",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "因果关系太弱（涂鸦不是危险源）的 mark 即使有真实跌倒事件也站不住，作者最终自删本身就是 sink 的最直接证据",
+      "edge_case_flag": "urban_high_traffic + weak_causation"
+    },
+    {
+      "id": 95,
+      "title": "Wakatipu 步道 jet boat 噪音 mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Queenstown Frankton Track 沿湖步道一段经常被 Shotover Jet 噪音打扰的安静区",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 3500,
+        "duration_months": 6,
+        "signal": "5g",
+        "season_pattern": "夏季旺季",
+        "human_factors": "本地+游客"
+      },
+      "events_timeline": [
+        "M1 一个本地 mark '别在这里冥想 jet boat 太吵'",
+        "M2 Shotover Jet 公司在 TripAdvisor 反驳",
+        "M3 评论区变成本地反对 jet boat 的战场",
+        "M4 mark 内容偏离原始用途变成抗议平台",
+        "M5 举报集中在偏离用途",
+        "M6 渐趋停滞"
+      ],
+      "expected_signal_summary": "演变成抗议工具偏离平台用途",
+      "expected_outcome": "sunk",
+      "expected_status": "YELLOW",
+      "human_judgment": "原始动机有合理性但 mark 演变方向偏离平台用途，加上商业纠纷介入让 mark 变得难以维护，可以让它沉",
+      "edge_case_flag": "urban_high_traffic + protest_drift"
+    },
+    {
+      "id": 96,
+      "title": "Auckland Onepoto Domain 隐蔽水塘",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Auckland North Shore Onepoto Domain 草地步道一处雨后会形成深水塘的低洼区，本地家长担心孩子掉进去",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 1800,
+        "duration_months": 21,
+        "signal": "5g",
+        "season_pattern": "雨季",
+        "human_factors": "本地家庭"
+      },
+      "events_timeline": [
+        "M1 一个本地妈妈 mark '我儿子掉进去过',附水深 60cm 照",
+        "M3 评论区其他家长 '我们也警惕这里'",
+        "M9 Council 雨后排水改造，但下次大雨仍积水",
+        "M14 mark 更新 'Council 改了但没用'",
+        "M18 持续引用",
+        "M21 跨两个雨季稳定"
+      ],
+      "expected_signal_summary": "家庭社区高黏性 + 具体证据 + 跨周期验证",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "Council 干预无效后 mark 反而更被需要，加上具体水深数据让信息可操作，21 个月跨两个雨季是非常强的存活证明",
+      "edge_case_flag": "urban_high_traffic + persistent_design_flaw"
+    },
+    {
+      "id": 97,
+      "title": "Tauranga Yatton Park 跑团聚集点",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Tauranga Yatton Park 步道入口的一棵大 pohutukawa 树下，本地跑团周日早 6 点集合的位置",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 1300,
+        "duration_months": 17,
+        "signal": "5g",
+        "season_pattern": "全年",
+        "human_factors": "Tauranga 本地跑团"
+      },
+      "events_timeline": [
+        "M1 跑团团长 mark '周日 6am 这里集合'",
+        "M3 跑团成员持续点赞补图",
+        "M7 一个新搬来的跑者通过 mark 找到组织",
+        "M11 圣诞期间团长更新 '12月25日休息'",
+        "M14 一个游客也来跟跑了一次留言感谢",
+        "M17 持续稳定"
+      ],
+      "expected_signal_summary": "稳定本地社区聚集功能 + 内容主动维护",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "跑团 mark 的存活逻辑是把社区行为锚定到地理位置，作者持续更新（包括节假日休息）让 mark 具备社区记忆功能，长期价值很高",
+      "edge_case_flag": "urban_high_traffic + community_anchor"
+    },
+    {
+      "id": 98,
+      "title": "Wellington Red Rocks 海豹季节信息",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wellington Red Rocks 沿岸步道海豹聚集季的位置和时间提示",
+        "intrinsic_quality": "high",
+        "user_volume_per_month": 1900,
+        "duration_months": 25,
+        "signal": "weak",
+        "season_pattern": "5-10月海豹季",
+        "human_factors": "本地家庭+游客"
+      },
+      "events_timeline": [
+        "M1 一个本地 mark '5-10月海豹会在这里晒太阳，保持 20m 距离'",
+        "M3 DOC volunteer 留言确认信息",
+        "M9 海豹季每年都在 mark 下补图",
+        "M14 跨第二个海豹季验证",
+        "M19 一个本地学校 field trip 引用",
+        "M25 跨多个季节持续被引用"
+      ],
+      "expected_signal_summary": "周期性自然现象 + 官方确认 + 跨多年验证",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "周期性自然现象 mark 的价值在于跨年验证，25 个月跨两个完整海豹季+DOC 确认+学校采纳，这是城市附近最高质量 mark 的样板",
+      "edge_case_flag": "urban_high_traffic + seasonal_wildlife"
+    },
+    {
+      "id": 99,
+      "title": "Christchurch Adams Wilderness 假冒 mark",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Christchurch 西郊 Adams Wilderness 边缘一个虚构的 'shortcut' mark",
+        "intrinsic_quality": "low",
+        "user_volume_per_month": 480,
+        "duration_months": 2,
+        "signal": "weak",
+        "season_pattern": "全年",
+        "human_factors": "Christchurch tramper"
+      },
+      "events_timeline": [
+        "M1 mark 上线 '这条 shortcut 省 1 小时'",
+        "M1 末几个 tramper 实地走了根本没路径",
+        "M2 一个 tramper 在 bush 里迷路被 LandSAR 救出",
+        "M2 LandSAR 在 Stuff.co.nz 警告这个 mark",
+        "M2 末作者账号被禁"
+      ],
+      "expected_signal_summary": "造成实际救援事件 + 媒体警告 + 账号封禁",
+      "expected_outcome": "sunk",
+      "expected_status": "RED",
+      "human_judgment": "导致 search and rescue 出动是 mark 系统最严重的失败案例，加上媒体警告和封号，这种 mark 的 sink 必须果断快速",
+      "edge_case_flag": "urban_high_traffic + caused_rescue"
+    },
+    {
+      "id": 100,
+      "title": "Mt Maunganui 顶峰日落求婚点 mark",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Tauranga Mt Maunganui 山顶西北角一处常被本地人用来求婚的小平台",
+        "intrinsic_quality": "medium",
+        "user_volume_per_month": 5500,
+        "duration_months": 12,
+        "signal": "5g",
+        "season_pattern": "全年但夏季最多",
+        "human_factors": "情侣+游客+晨跑混合"
+      },
+      "events_timeline": [
+        "M1 一个刚求婚成功的本地 mark '日落+海景+山顶'",
+        "M3 BOP Times 报道 '本地求婚热点'",
+        "M5 出现婚戒店赞助评论的小迹象",
+        "M7 mark 内容被作者守住没让商业渗透",
+        "M10 一个游客留言 '在这里向女友求了婚'",
+        "M12 跨季节稳定，作者主动屏蔽商业评论"
+      ],
+      "expected_signal_summary": "情感性内容 + 媒体报道 + 作者抵御商业渗透",
+      "expected_outcome": "alive",
+      "expected_status": "GREEN",
+      "human_judgment": "情感性 mark 的存活关键是作者能否守住非商业纯净度，这个例子里作者主动屏蔽婚戒店渗透是稀有的负责任行为，加上媒体报道和持续真实使用，应该长期保留",
+      "edge_case_flag": "urban_high_traffic + emotional_landmark"
+    }
+  ]
+}

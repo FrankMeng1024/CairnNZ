@@ -1,0 +1,829 @@
+{
+  "batch": 15,
+  "theme": "河流海岸",
+  "id_range": [701, 750],
+  "total": 50,
+  "cases": [
+    {
+      "id": 701,
+      "title": "Whanganui River Journey 第 35 公里 Mangapurua Landing 上岸点 — 雨季暗流警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Whanganui National Park 内 Whanganui River Journey 第三天，Mangapurua Landing 渡口下游 200 米的回水弯处，左岸有一棵被洪水削平树皮的 rimu",
+        "intrinsic_quality": "雨后 24 小时内回水变成顺时针漩涡，新手皮划艇会被吸到岸边树根下",
+        "user_volume_per_month": 90,
+        "duration_months": 14,
+        "signal": "无 — 峡谷深 200 米完全屏蔽信号",
+        "season_pattern": "10 月 - 4 月划船季密度高，5-9 月几乎无人下水",
+        "human_factors": "Pipiriki 出发的导览队会提前警告，但 Taumarunui 自助下水的散客根本没听过这点"
+      },
+      "events_timeline": [
+        "第 1 月: 自助租船的 Auckland 大学生 Jamie 翻船后游上岸用 PLB 求救，回到 Pipiriki 当晚标了这个点",
+        "第 2 月: Whanganui Journeys 的导游 Hemi 看到 mark 后专门带新手在这里练 ferry glide，给了赞并补一句'等水位 <2 米再放心'",
+        "第 5 月: 雨季暴涨水位过 4 米，整个回水变直流，mark 暂时'失效'，有人留言说'今天根本看不到漩涡'",
+        "第 9 月: 一队墨尔本来的双人船没看 mark，撞树根破洞，回 Pipiriki 后专门翻 app 找到这条点了赞",
+        "第 11 月: DOC ranger 沿河巡查时拍照存档，备注'与已知风险点一致'",
+        "第 14 月: Mangapurua 上方塌方改变水流走向，漩涡位置整体下移 50 米，老 mark 被新来的 Wellington 划手标记为'位置已偏'"
+      ],
+      "expected_signal_summary": "总赞约 38，总举报约 2",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "导游群体把它当训练点反复使用，量虽不大但质量高；地形改变后会被新 mark 接力，老 mark 自然降权而非被删",
+      "edge_case_flag": "河流-峡谷无信号-导游强化"
+    },
+    {
+      "id": 702,
+      "title": "Abel Tasman Coast Track Awaroa 潮汐渡口 — 退潮窗口实时标注",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Abel Tasman National Park 内 Awaroa Inlet 北岸渡口，DOC 木牌处沙滩，从 Awaroa Lodge 走过来约 800 米",
+        "intrinsic_quality": "潮汐表 ±1.5 小时内可徒步过对岸，错过窗口要绕 4 小时林道",
+        "user_volume_per_month": 1100,
+        "duration_months": 18,
+        "signal": "弱 — Vodafone 偶尔有 1 格但不够发图",
+        "season_pattern": "12-3 月旺季每天上百人过渡，6-8 月每天个位数",
+        "human_factors": "海外游客对 NZ 潮汐表读法不熟，本地 tramping club 的人会写当天的具体退潮时间"
+      },
+      "events_timeline": [
+        "第 1 月: Nelson 的退休测量员 Brian 把当天 11:40 退潮的精确秒数标进去，给 mark 加了'潮高 0.4 米可过'的注释",
+        "第 2 月: 一个法国家庭看 mark 看不懂英文 tide 缩写，留言问'什么意思'，本地人补了图",
+        "第 4 月: 春季满月大潮窗口缩到 45 分钟，Wellington 的徒步博主拍视频上传，赞数飙升",
+        "第 7 月: 冬季有 3 周整个 inlet 因暴雨水位异常，mark 被标'本周不准用'",
+        "第 10 月: DOC 装了新的潮汐告示牌就在 mark 旁边，赞数没掉反而涨——大家用 app 互相确认 DOC 牌没贴错日期",
+        "第 14 月: 一个韩国 vlogger 把 mark 嵌入视频里推广，单月新增 80 个赞",
+        "第 17 月: 持续的高互动让这条 mark 成了 Awaroa 段的隐性默认参考点"
+      ],
+      "expected_signal_summary": "总赞约 220，总举报约 4",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高密度 + DOC 物理牌互证 + 海外用户依赖度极高，是典型的'活体地标'，季节性低谷也撑得住",
+      "edge_case_flag": "潮汐-高密度旅游-跨语言"
+    },
+    {
+      "id": 703,
+      "title": "Catlins Cathedral Caves 入口潮汐封路 — 隐藏入口的备用路径",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Southland Catlins Conservation Park 内 Cathedral Caves 海滩入口，正式门票处南侧 300 米的灌木丛缺口",
+        "intrinsic_quality": "正式入口涨潮关闭后，本地人知道有条沿崖根走的备用通道，但只在中潮以下安全",
+        "user_volume_per_month": 35,
+        "duration_months": 22,
+        "signal": "无 — 海岸悬崖完全无覆盖",
+        "season_pattern": "10-4 月开放季，5-9 月正式入口因塌方风险关闭",
+        "human_factors": "Owaka 镇本地人和摄影师群体维护这条 mark，反对游客知道太多"
+      },
+      "events_timeline": [
+        "第 2 月: 摄影师 Greg 第一次标记，备注'仅供熟悉海岸的人'",
+        "第 5 月: 一个 Auckland 游客按 mark 走但不懂判潮，被困两小时，写了举报说'误导'",
+        "第 6 月: 本地 Catlins Coast 协会成员留言反驳，附 Greg 的原警告截图，举报被反向赞淹没",
+        "第 9 月: 冬季正门关闭期间这条 mark 突然成了唯一选项，本地人在 mark 上加注'冬天千万别试'",
+        "第 13 月: 暴风后崖根路径被冲断 5 米，mark 被一位 Invercargill 大学生标'已不可通行'",
+        "第 18 月: 半年后重新积砂铺平，Greg 本人回来确认，把 mark 重新激活",
+        "第 21 月: DOC 被举报含义后曾联系 Cairn 想删除，但 community vote 通过保留并加强警告"
+      ],
+      "expected_signal_summary": "总赞约 24，总举报约 6",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "低量但社区粘性极强，举报和赞之间是一场关于'信息开放程度'的拉锯，最终因维护者的持续在场而保留",
+      "edge_case_flag": "海岸-社区争议-季节切换"
+    },
+    {
+      "id": 704,
+      "title": "Cape Reinga 灯塔下方 Spirits Bay 海流交汇点 — 严重海洋警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Te Paki / Cape Reinga 灯塔正北 80 米的观景平台下方海面，Tasman Sea 与 Pacific Ocean 撞击形成的可见漩涡",
+        "intrinsic_quality": "曾有游客攀下岩石试图拍漩涡近景被卷走，从平台几乎看不出岩石湿滑",
+        "user_volume_per_month": 4500,
+        "duration_months": 30,
+        "signal": "好 — 平台高处 Spark 满格",
+        "season_pattern": "全年人流稳定，12-2 月旺季每天上千游客，6-8 月减半",
+        "human_factors": "毛利文化圣地，毛利向导对'下到海边'极反感；海外大巴游客占 70%"
+      },
+      "events_timeline": [
+        "第 1 月: Ngāti Kuri iwi 的文化向导 Wiremu 标记并写了三段警告，引用毛利传统'灵魂跳跃之地'",
+        "第 3 月: 一个西班牙背包客无视 mark 翻栏杆下去，被 Search & Rescue 直升机吊上来，全国新闻",
+        "第 4 月: 事件后两周 mark 赞数从 80 跳到 340，海外旅行博主集体引用",
+        "第 8 月: DOC 加装了金属高栏，mark 上多了一句'即使有栏杆也不要靠近'",
+        "第 14 月: 第二起几乎相同事故，新一轮赞数潮",
+        "第 22 月: Wiremu 退休，但他的 mark 被 iwi 接班人维护并翻译成五种语言",
+        "第 28 月: 成为 Cape Reinga 全网最高赞 mark 之一，进入官方旅游手册引用"
+      ],
+      "expected_signal_summary": "总赞约 1800，总举报约 5",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高人流 + 真实事故反复印证 + 毛利文化背书 + 多语言传播，构成了几乎不可能下沉的'纪念碑级' mark",
+      "edge_case_flag": "海岸-文化圣地-跨文化警告"
+    },
+    {
+      "id": 705,
+      "title": "Hot Water Beach 温泉沙坑挖掘窗口 — Hahei 退潮 2 小时",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Coromandel Peninsula 的 Hot Water Beach，主停车场南侧约 150 米沙滩，靠近黑色岩石带",
+        "intrinsic_quality": "退潮前后 2 小时可挖出温泉，过早过晚要么没温泉要么被海浪填",
+        "user_volume_per_month": 3200,
+        "duration_months": 20,
+        "signal": "好 — 镇上和沙滩交界 Spark 满格",
+        "season_pattern": "全年游客都来，12-2 月排队挖坑，冬季挖的人少但水温体感更爽",
+        "human_factors": "本地咖啡店租铲子的老板 Dave 每天更新当天最佳窗口，海外游客粘性极高"
+      },
+      "events_timeline": [
+        "第 1 月: Dave 的女儿 Mia 在 app 上首次标记，连接到自家咖啡店当日窗口板",
+        "第 2 月: 一对德国情侣按 mark 来挖坑，回去给五星好评带火 mark",
+        "第 4 月: 一队中国旅游团 30 人按 mark 同时来，沙滩挖成蜂窝，mark 评论区出现'人太多'抱怨",
+        "第 7 月: 冬季 mark 被一位 Tairua 本地维护者标为'冬季更舒服来这'，反季流量上涨",
+        "第 11 月: Dave 咖啡店搬迁，新店主 Karen 接手 mark 维护",
+        "第 16 月: 高峰期出现假冒 mark 在错误位置，原 mark 评论区被'谁是真的'问爆，最后通过 Karen 现场拍照定锚",
+        "第 19 月: 成为 Coromandel 北海岸长寿 mark 标杆"
+      ],
+      "expected_signal_summary": "总赞约 1400，总举报约 8",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业用户 + 高密度旅游 + 本地维护接力链，三条都强；少量举报来自人流过载抱怨而非信息错误",
+      "edge_case_flag": "温泉-潮汐窗口-商业捆绑"
+    },
+    {
+      "id": 706,
+      "title": "Bridal Veil Falls 上方禁跳水点 — 致命隐患",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Waikato 区 Raglan 附近 Bridal Veil Falls / Waireinga 顶部观景平台正上游 30 米的水潭，灌木遮挡的入水点",
+        "intrinsic_quality": "外观平静的水潭实际有水下凹槽和 55 米直落，2010 年起至少 4 起致命事件",
+        "user_volume_per_month": 280,
+        "duration_months": 26,
+        "signal": "断续 — 林子深 2 小时内会切换",
+        "season_pattern": "12-3 月本地青少年高峰，冬季几乎无人尝试",
+        "human_factors": "Raglan 本地高中生有'瀑布顶游泳'的危险传统，长辈和救援队反复劝阻"
+      },
+      "events_timeline": [
+        "第 1 月: Hamilton 救援队志愿者 Pete 标记，附 2018 年事故的官方报告链接",
+        "第 3 月: 一个 19 岁本地少年 Liam 仍跳了，被拉上来后亲自留言加赞 mark 说'真的差点死'",
+        "第 6 月: 寒假青少年集体出现，mark 评论区被'我朋友说没事'刷屏",
+        "第 8 月: 第 5 起致命事故，新闻报道，mark 被全国转发，单月加 200 赞",
+        "第 12 月: 当地 iwi 在水潭上方立 rāhui 牌（毛利禁忌），mark 被更新连接到 rāhui",
+        "第 18 月: 事故周年纪念日 Pete 重新发文，mark 重新置顶",
+        "第 24 月: DOC 加装钢丝网遮挡入水点，mark 仍保留作为历史警示"
+      ],
+      "expected_signal_summary": "总赞约 510，总举报约 3",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "致命级别 mark 一旦被悲剧背书，社区会自发把它升格为'纪念碑'级别，物理改造后仍保留作教育意义",
+      "edge_case_flag": "瀑布-青少年文化-rāhui"
+    },
+    {
+      "id": 707,
+      "title": "Tunnel Beach 入口潮汐封路 — Dunedin 城市边缘",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Dunedin 西南 7 公里 Tunnel Beach Walkway 末端，1870 年代手凿隧道出口，海滩入口距隧道口 12 米",
+        "intrinsic_quality": "涨潮时隧道下方海水会淹到膝盖，新手不知道要算潮汐",
+        "user_volume_per_month": 850,
+        "duration_months": 16,
+        "signal": "弱 — 隧道里完全无信号，出口外勉强 1 格",
+        "season_pattern": "12-3 月旅游高峰每天上百人，冬季每天几人但风浪更危险",
+        "human_factors": "Otago 大学学生周末聚集地，本地人爱在隧道里喊回声，海外游客主要看 Instagram 来"
+      },
+      "events_timeline": [
+        "第 1 月: Otago 大学地理系学生 Sophie 用她的实习潮汐数据建了第一版",
+        "第 2 月: 一对悉尼游客被困隧道半小时，等退潮才出来，事后给 mark 加了惊悚版描述",
+        "第 5 月: 一位 Dunedin 本地摄影师每月更新 mark 评论补当月窗口表",
+        "第 9 月: 冬季暴风夜大浪冲到隧道里 30 米，mark 被标为'冬季危险升级'",
+        "第 11 月: DOC 加了潮汐警告牌但放在停车场（远离隧道），mark 评论区吐槽'放错地方'",
+        "第 14 月: 摄影师搬去澳洲，mark 维护断了 2 月，赞速放缓",
+        "第 15 月: 一位新来的 Mosgiel 跑步者接手维护"
+      ],
+      "expected_signal_summary": "总赞约 320，总举报约 3",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "城市边缘 + 大学生群体 + 摄影师文化构成稳定维护链，断档时有人接力是这类 mark 长寿的关键",
+      "edge_case_flag": "海岸-城市步道-潮汐"
+    },
+    {
+      "id": 708,
+      "title": "Karekare Beach 北段 rip current 死亡区 — 救生员管不到的地方",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "West Auckland Waitākere 海岸 Karekare Beach，主泳区北端旗杆外 200 米，Pohutukawa Bay 方向的固定回流",
+        "intrinsic_quality": "肉眼可见的'平静水道'其实是 Auckland 西海岸最强的固定 rip current 之一",
+        "user_volume_per_month": 1500,
+        "duration_months": 28,
+        "signal": "弱 — 海滩边缘 2degrees 1-2 格",
+        "season_pattern": "11-4 月泳季旗内有救生员，5-10 月无人值守但仍有冲浪者来",
+        "human_factors": "Piha SLSC 救生员把这条 mark 当工具用，初学冲浪者最容易误判"
+      },
+      "events_timeline": [
+        "第 1 月: Karekare SLSC 现役救生员 Tane 用 mark 标记并附 2019 年的 5 起救援坐标",
+        "第 4 月: 一对加拿大背包客无视红旗游过去，被 Tane 团队救起后亲自加赞",
+        "第 7 月: Surf Life Saving NZ 把 mark 截图嵌入官方安全宣传",
+        "第 11 月: 旺季高峰每周 2-3 起救援，mark 评论区每周更新当周事件",
+        "第 16 月: 一名澳洲冲浪者死于此 rip，mark 被加上纪念评论",
+        "第 22 月: SLSNZ 在岸上立了永久警告牌指向 mark 描述位置",
+        "第 27 月: mark 已成为 Auckland 西海岸最高传播度安全资源之一"
+      ],
+      "expected_signal_summary": "总赞约 1200，总举报约 4",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "专业救生员维护 + 真实致命事故 + 官方机构二次引用，是社区 + 机构共建型 mark 的典范",
+      "edge_case_flag": "海岸-rip current-机构联动"
+    },
+    {
+      "id": 709,
+      "title": "Piha Beach Lion Rock 南北分界 — 救生员旗内 vs 旗外",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "West Auckland Piha Beach 中央地标 Lion Rock 正北 50 米沙滩，红黄旗西侧第三根旗的位置",
+        "intrinsic_quality": "Lion Rock 北侧平静假象但实际有 rip，旗内 50 米外就完全不一样",
+        "user_volume_per_month": 4500,
+        "duration_months": 24,
+        "signal": "好 — Spark 海滩满格",
+        "season_pattern": "12-3 月家庭高峰，冬季冲浪者依然不断",
+        "human_factors": "海外游客分不清 Piha 北滩南滩，'Lion Rock 哪一侧能游泳'是经典困惑点"
+      },
+      "events_timeline": [
+        "第 1 月: Piha SLSC 老成员 Brett 把 mark 设为'旗内分界基准点'",
+        "第 3 月: 一个圣诞节家庭把孩子放到岩石北侧'看起来浅'的地方，差点出事，回去加赞",
+        "第 6 月: SLSC 把 mark 截图打印贴在沙滩咖啡店",
+        "第 10 月: 旺季高峰 Brett 每天更新当日旗位（旗会随潮汐微调）",
+        "第 14 月: 一位旅居 Auckland 的法国博主把 mark 翻译成法语版广为传播",
+        "第 19 月: SLSC 装了固定 GPS 旗杆，mark 不再每天更新但仍是新人参考",
+        "第 22 月: 成为 Piha 三大基础 mark 之一（其他两个是停车场和 Lion Rock 顶）"
+      ],
+      "expected_signal_summary": "总赞约 950，总举报约 6",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高密度家庭客 + 跨语言传播 + SLSC 官方背书，构成多层冗余；即使维护频率降低也撑得住",
+      "edge_case_flag": "海岸-救生员旗-跨语言"
+    },
+    {
+      "id": 710,
+      "title": "Wairarapa Coast Castle Point 灯塔下渡溪 — 雨后水位",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Wairarapa 区 Castlepoint Lighthouse 步道，灯塔山脚向 Castle Rock 走的途中要渡过的无名小溪，宽 4 米",
+        "intrinsic_quality": "晴天没膝深，雨后 12 小时内会涨到腰部并夹石头",
+        "user_volume_per_month": 60,
+        "duration_months": 18,
+        "signal": "断续 — 灯塔顶 Spark 1 格但溪边断",
+        "season_pattern": "全年开放但雨季 6-9 月渡溪危险显著上升",
+        "human_factors": "Wellington 周末驴友主力，海外游客极少，本地老炮维护文化强"
+      },
+      "events_timeline": [
+        "第 1 月: Masterton 退休向导 Bob 用他 30 年经验标了第一版",
+        "第 4 月: 一对 Wellington 来的情侣雨后翻车被冲倒，回去加赞并补图",
+        "第 7 月: 一次 Bob 自己渡溪滑倒擦伤，他笑着把事故照片更新到 mark 评论",
+        "第 11 月: 冬季 4 周连续暴雨期间 mark 被改成'本月禁止尝试'",
+        "第 14 月: 春季水位回归 mark 被本地老炮重新激活",
+        "第 17 月: Bob 把 mark 的'监护权'正式交给一位 Greytown 的女徒步者 Linda"
+      ],
+      "expected_signal_summary": "总赞约 95，总举报约 1",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "低密度但维护者代际传承明确，是 NZ 本土驴友文化最典型的 mark 形态——量小但生命力强",
+      "edge_case_flag": "海岸渡溪-代际传承"
+    },
+    {
+      "id": 711,
+      "title": "Westland Fox Glacier 末端融水溢流 — 突发洪峰预警",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Westland Tai Poutini National Park 内 Fox Glacier 步道终点，冰川舌正前方 80 米的 Fox River 起源点",
+        "intrinsic_quality": "冰川下融水池在午后阳光强时会突然溢流，水位 5 分钟可上涨 1 米",
+        "user_volume_per_month": 1800,
+        "duration_months": 12,
+        "signal": "无 — 山谷深屏蔽信号",
+        "season_pattern": "11-3 月融水活跃，4-10 月冬季冰川稳定但步道仍开放",
+        "human_factors": "向导队伍是主要使用者，海外游客 80% 跟团但 20% 自由行根本不知道这点"
+      },
+      "events_timeline": [
+        "第 1 月: Fox Glacier Guiding 公司向导 Hemi 标记，附气温和水位的关联表",
+        "第 3 月: 一队香港游客自由行没看 mark，午后差点被卷，回酒店加赞",
+        "第 5 月: 一次大溢流冲走步道边缘，Hemi 当场更新 mark 为'本周路线南偏 10 米'",
+        "第 8 月: 冬季水量低 mark 互动减少但向导仍每周更新维持活性",
+        "第 10 月: DOC 装了实时水位告示牌但只更新 24 小时延迟，mark 反而更受欢迎因为是实时",
+        "第 12 月: 整个步道因冰川退缩改线，mark 被关联到新路径继续使用"
+      ],
+      "expected_signal_summary": "总赞约 380，总举报约 2",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "向导公司当工具用 + 实时性碾压 DOC 牌 + 路线改动后能跟进，专业用户维持的 mark 比纯游客 mark 更稳",
+      "edge_case_flag": "冰川-融水-向导维护"
+    },
+    {
+      "id": 712,
+      "title": "Hokitika Gorge 翡翠水跳水点禁令 — 短视频带火的危险",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "West Coast Hokitika Gorge Walk 第二座吊桥南端下游 60 米，悬崖突出处俯视碧绿水潭",
+        "intrinsic_quality": "TikTok 上传播的'跳水点'实际水下有不可见尖石和暗流，2022 年起 3 起重伤",
+        "user_volume_per_month": 2100,
+        "duration_months": 14,
+        "signal": "弱 — 吊桥处 1 格",
+        "season_pattern": "12-3 月旅游旺季高峰，冬季水冷无人尝试",
+        "human_factors": "TikTok 网红群体 vs 本地保护者两极分化，社交媒体争议大"
+      },
+      "events_timeline": [
+        "第 1 月: Hokitika 当地医院急诊护士 Sarah 标记，附三起伤员病历摘要（已脱敏）",
+        "第 2 月: TikTok 跳水视频原作者来挑衅 mark，留下'水里没东西'的反驳评论",
+        "第 4 月: 第四起重伤事故视频在新闻爆发，mark 单月加 600 赞",
+        "第 6 月: 原 TikTok 视频被平台下架，原作者删评道歉",
+        "第 9 月: DOC 加装 1.8 米高栏，mark 评论区有人吐槽'破坏景观'但赞数继续涨",
+        "第 12 月: 成为 West Coast 高传播度安全 mark，被旅行博客大量引用",
+        "第 13 月: 一位医生加入维护队伍，把 mark 关联到 Greymouth 医院公益项目"
+      ],
+      "expected_signal_summary": "总赞约 870，总举报约 12",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "争议本身就是流量；社交媒体反向放大让 mark 在'攻击者'撤退后留下广泛认知度",
+      "edge_case_flag": "瀑布水潭-社交媒体反击"
+    },
+    {
+      "id": 713,
+      "title": "Punakaiki Pancake Rocks blowhole 喷水时机 — 涨潮西南风",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Paparoa National Park 内 Pancake Rocks Walk 的主 blowhole 观景平台，DOC 步道 200 米环线最西端",
+        "intrinsic_quality": "blowhole 喷水需要涨潮 + 西南风同时满足，每天有效窗口仅 2-4 小时",
+        "user_volume_per_month": 6500,
+        "duration_months": 20,
+        "signal": "好 — Spark 平台满格",
+        "season_pattern": "全年开放，4-9 月 Tasman 西南风季是最佳期",
+        "human_factors": "中老年大巴游客占主力，到了不喷就失望走人，mark 用来事先查窗口"
+      },
+      "events_timeline": [
+        "第 1 月: Punakaiki 旅游中心员工 Hana 用她每天的潮汐风向记录建首版",
+        "第 3 月: 一队美国邮轮游客提前查 mark 选了下午 3 点来，看到 8 米高喷水，集体加赞",
+        "第 6 月: 旅游淡季喷水罕见，mark 评论区有人记录'连续 4 天没看到'",
+        "第 10 月: Hana 把 mark 关联到 MetService 的 Westport 风向 API 自动更新",
+        "第 13 月: 一次罕见的 12 米超大喷水被 mark 评论区实时记录",
+        "第 16 月: 成为 West Coast 大巴司机的标配工具",
+        "第 19 月: 自动化数据 + 人工评论混合维护，活跃度持续"
+      ],
+      "expected_signal_summary": "总赞约 1900，总举报约 5",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "高密度大巴游客 + 自动化数据接入 + 真实奇观回报，三层叠加让 mark 几乎不下沉",
+      "edge_case_flag": "海岸奇观-自动化数据-旅游业"
+    },
+    {
+      "id": 714,
+      "title": "Whanganui River 第 18 公里 John Coull Hut 上游急流入口 — 新手反向",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Whanganui National Park 内 Whanganui River Journey 第二天，John Coull Hut 上游 600 米的 Y 字形岔流，左岔通向急流",
+        "intrinsic_quality": "看上去较宽的左岔实际上是急流，正确的是显得窄的右岔",
+        "user_volume_per_month": 75,
+        "duration_months": 16,
+        "signal": "无 — 峡谷深",
+        "season_pattern": "10-4 月划船季，雨后水位变化会改变岔流外观",
+        "human_factors": "Taumarunui 自助租船的散客最易反向，导览队都知道"
+      },
+      "events_timeline": [
+        "第 1 月: Whanganui Journeys 老板儿子 Sam 自己倒过一次后标记",
+        "第 3 月: 一对挪威双人船按 mark 走对了，回 Pipiriki 留长评感谢",
+        "第 6 月: 一队没看 mark 的 8 人船队反向冲入急流，3 条船翻，靠 PLB 求救",
+        "第 8 月: 事件后 Whanganui Journeys 把 mark 截图打印发给所有自助租船客",
+        "第 11 月: 一次大水改变岔流形态，Sam 当周下河确认并更新",
+        "第 14 月: 成为河流 journey 的标准教学案例"
+      ],
+      "expected_signal_summary": "总赞约 130，总举报约 1",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "商业向导主动推广 + 真实事故印证 + 维护者亲历，让低密度 mark 有不成比例的影响力",
+      "edge_case_flag": "河流-岔流-商业推广"
+    },
+    {
+      "id": 715,
+      "title": "Tongariro 湖区 Lake Rotopounamu 步道泥泞段 — 雨季陷阱",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tongariro National Park 内 Lake Rotopounamu Walk 主环线西北段，距离 Pihanga Saddle 约 1.5 公里的低洼林区",
+        "intrinsic_quality": "雨后泥泞深度可达大腿，看起来只是地面湿",
+        "user_volume_per_month": 380,
+        "duration_months": 14,
+        "signal": "无 — 火山林区屏蔽",
+        "season_pattern": "5-9 月连续湿润期最严重，夏季干燥时几乎察觉不到",
+        "human_factors": "Turangi 本地家庭周末客和 day walker，多数没穿合适鞋"
+      },
+      "events_timeline": [
+        "第 1 月: Turangi 学校老师 Mere 带学生远足陷一脚后标记",
+        "第 3 月: 一位 Auckland 来的退休夫妇按 mark 提前换 gaiter，写感谢评论",
+        "第 6 月: 干旱夏季 mark 评论区有人质疑'我没看到泥'，Mere 回复'等冬天再来'",
+        "第 9 月: 冬季暴雨周 mark 被多人补充实测照片",
+        "第 12 月: DOC 计划铺木板路但预算延迟，mark 仍是唯一信息源",
+        "第 13 月: Mere 调离学校但本地 tramping club 接手维护"
+      ],
+      "expected_signal_summary": "总赞约 195，总举报约 4",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "季节性 mark 的典型考验是淡季质疑，靠维护者反复回应抵御；DOC 设施缺位反而让 mark 更被需要",
+      "edge_case_flag": "湖区-季节性-DOC缺位"
+    },
+    {
+      "id": 716,
+      "title": "Coromandel Cathedral Cove 退潮窗口 — Hahei 海滩拱门",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Coromandel Peninsula 的 Cathedral Cove，Hahei 步道终点的著名拱门，仅退潮 2 小时窗口可穿过到对面海滩",
+        "intrinsic_quality": "涨潮时拱门下海水及胸，对面海滩被困是常事",
+        "user_volume_per_month": 7800,
+        "duration_months": 22,
+        "signal": "好 — Spark 海滩满格",
+        "season_pattern": "12-3 月旺季每天上千游客，冬季减半",
+        "human_factors": "Instagram 网红压力让人无视警告硬过，本地义工反复劝阻"
+      },
+      "events_timeline": [
+        "第 1 月: Hahei 本地海滩义工 Tara 标记，附 DOC 当日潮汐链接",
+        "第 3 月: Lord of the Rings 取景地热度让 mark 被海外博客大量引用",
+        "第 7 月: 一次涨潮把 12 个游客困对面海滩，海岸警卫队出动，mark 单月加 400 赞",
+        "第 11 月: 2018 年 Cyclone Gita 后 Cathedral Cove 步道关闭半年，mark 暂时休眠",
+        "第 14 月: 步道重开 mark 立刻被 Tara 重新激活并加上 cyclone 后地形变化提醒",
+        "第 18 月: Hahei Beach Bus 司机们把 mark 当行车信息工具",
+        "第 21 月: 全平台 mark 影响力达到峰值"
+      ],
+      "expected_signal_summary": "总赞约 2400，总举报约 7",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "灾后休眠 + 重新激活的能力是检验 mark 真实生命力的关键；旺季旅游 + 影视效应让维护成本不断被冲抵",
+      "edge_case_flag": "海岸拱门-灾后重启-影视效应"
+    },
+    {
+      "id": 717,
+      "title": "Banks Peninsula Akaroa Harbour 海豹突袭区 — 划皮艇警告",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Canterbury Banks Peninsula 内 Akaroa Harbour 北侧 Onuku 海岸外 200 米，新西兰海豹 (kekeno) 繁殖区边缘",
+        "intrinsic_quality": "公海豹会主动撞击靠近的皮划艇，特别是 6-9 月繁殖期",
+        "user_volume_per_month": 110,
+        "duration_months": 18,
+        "signal": "弱 — Spark 港湾边 1-2 格",
+        "season_pattern": "全年都有但 6-9 月繁殖季最危险",
+        "human_factors": "Akaroa 海上向导和本地皮划艇出租店是核心维护者"
+      },
+      "events_timeline": [
+        "第 1 月: Akaroa Sea Kayaking 老板 Mike 标记，附他 15 年的事件记录",
+        "第 3 月: 一对悉尼游客被海豹撞翻船，无伤但震惊，回去加赞",
+        "第 6 月: 繁殖季高峰 mark 评论区每周新事件",
+        "第 10 月: 一只名叫 'Ranger' 的攻击性公海豹去世，mark 评论区有人标'本月无大事件'",
+        "第 14 月: DOC 装了浮标警告牌但只在英文，mark 多语言版本继续被海外用户依赖",
+        "第 17 月: 商业出租店的入门简介必提 mark"
+      ],
+      "expected_signal_summary": "总赞约 155，总举报约 2",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "野生动物相关的 mark 维护极依赖少数专家观察，商业绑定让信息更新有动力",
+      "edge_case_flag": "海湾-野生动物-商业向导"
+    },
+    {
+      "id": 718,
+      "title": "Northland Ninety Mile Beach 沙地驾车陷沙点 — 涨潮时间",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Far North Te Oneroa-a-Tōhē / Ninety Mile Beach 北段距 Cape Reinga 28 公里处，固定的软沙带宽约 200 米",
+        "intrinsic_quality": "退潮 2 小时内可硬路面通行，涨潮硬沙变软会陷车",
+        "user_volume_per_month": 180,
+        "duration_months": 26,
+        "signal": "无 — 海岸大段无信号",
+        "season_pattern": "全年但 5-9 月暴风季沙带不稳定",
+        "human_factors": "Kaitaia 本地 4WD 司机熟门熟路，大巴司机和租车自驾客最易陷"
+      },
+      "events_timeline": [
+        "第 1 月: Kaitaia 拖车公司 Boss Russ 标记，附他过去三年拖出来的 27 辆车记录",
+        "第 4 月: 一辆德国自驾房车陷在 mark 警告区，等了 6 小时退潮，事后给 mark 加 5 星评论",
+        "第 9 月: 一次恶性事故房车被海水淹没，mark 单月加 150 赞",
+        "第 14 月: 大巴公司把 mark 加入司机培训资料",
+        "第 19 月: 一次飓风后沙带位置整体南移 80 米，Russ 当周更新 mark 坐标",
+        "第 24 月: 成为 Northland 自驾必查 mark"
+      ],
+      "expected_signal_summary": "总赞约 240，总举报约 3",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "拖车业主天然有维护动机（救援数据 = 业务），加上飓风后能跟踪地形变化，是工具型 mark 的极致",
+      "edge_case_flag": "沙地驾车-商业激励-飓风跟踪"
+    },
+    {
+      "id": 719,
+      "title": "Marlborough Sounds Queen Charlotte Track Torea Saddle 渡口 — 水上巴士时刻",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Marlborough Sounds 内 Queen Charlotte Track 中段 Torea Saddle 下方 Torea Bay，水上巴士停靠的小木码头",
+        "intrinsic_quality": "Beachcomber Cruises 的水上巴士每天 2 班，错过等 24 小时，时刻表受天气影响",
+        "user_volume_per_month": 250,
+        "duration_months": 18,
+        "signal": "弱 — 港湾边 1 格但林子深无",
+        "season_pattern": "11-4 月每天班次稳定，5-10 月减为周三、周六、周日",
+        "human_factors": "多日徒步者依赖巴士运行李，错过班次行李被带走是惨剧"
+      },
+      "events_timeline": [
+        "第 1 月: Beachcomber 公司船长 Ben 自己标记，附实时班次链接",
+        "第 3 月: 一个 Wellington 周末徒步者错过班次徒步连夜赶 18 公里，回去标 mark 救人无数",
+        "第 6 月: 冬季减班期间一个海外背包客没看 mark 困了一晚，回去加赞写'救命信息'",
+        "第 11 月: 一次大风班次取消 mark 被 Ben 当天更新 7 次",
+        "第 14 月: Beachcomber 把 mark 嵌入官方网站",
+        "第 17 月: 成为 QCT 多日徒步规划的标准参考之一"
+      ],
+      "expected_signal_summary": "总赞约 290，总举报约 2",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "交通时刻表 mark 的生命力靠'即时性'，公司内部人维护 + 用户血泪故事双重驱动",
+      "edge_case_flag": "海上巴士-时刻表-多日徒步"
+    },
+    {
+      "id": 720,
+      "title": "Fiordland Milford Sound 步道 Sandfly Point 渡船等待 — 夏季蚊虫地狱",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Fiordland National Park 内 Milford Track 终点 Sandfly Point 渡船码头，等待 Real Journeys 渡船的 50 米沙地",
+        "intrinsic_quality": "命名 Sandfly Point 实至名归，等船 1 小时被咬上百口是常事，需要驱虫剂",
+        "user_volume_per_month": 220,
+        "duration_months": 24,
+        "signal": "无 — 峡湾深处全无",
+        "season_pattern": "11-4 月开放期，蚊虫季节高峰 12-2 月",
+        "human_factors": "Milford Track 'Greatest Walk' 完成者多数是国际游客，没准备 DEET"
+      },
+      "events_timeline": [
+        "第 1 月: 一位 Te Anau 当地导游 Kate 标记，附'必带 DEET 80%'警告",
+        "第 4 月: 一对日本徒步者按 mark 提前买驱虫剂，安然过关，写感谢日语长评",
+        "第 8 月: Real Journeys 渡船延迟 90 分钟事件，mark 评论区被'救命驱虫剂用光'刷屏",
+        "第 13 月: Te Anau 户外店 Bivouac 把 mark 截图贴店里推销驱虫剂",
+        "第 18 月: Kate 把 mark 翻译成中、日、德三语",
+        "第 22 月: 成为 Milford Track 完成者圈子里的'通过仪式' mark"
+      ],
+      "expected_signal_summary": "总赞约 340，总举报约 3",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Great Walk 终点的高完成度人流 + 商业绑定 + 跨语言 + 痛苦记忆共鸣，让 mark 自我增强",
+      "edge_case_flag": "峡湾-蚊虫-Great Walk终点"
+    },
+    {
+      "id": 721,
+      "title": "Otago Peninsula Sandfly Bay 海狮区警告 — 看似空旷的沙滩",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Dunedin 东郊 Otago Peninsula 的 Sandfly Bay 步道末端，沙丘脚下沙地，新西兰海狮 (rāpoka) 经常隐藏睡觉",
+        "intrinsic_quality": "看起来是块沙包但实际是体重 350 公斤的雄性海狮，突然抬头会扑过来",
+        "user_volume_per_month": 420,
+        "duration_months": 20,
+        "signal": "弱 — 海边 Spark 1 格",
+        "season_pattern": "全年都有但 12-2 月最活跃",
+        "human_factors": "海外游客对 NZ 海狮极不熟悉，本地 DOC 志愿者每周巡查"
+      },
+      "events_timeline": [
+        "第 1 月: DOC Otago 志愿者 Pippa 标记，附海狮识别图（与海豹的区别）",
+        "第 3 月: 一对法国情侣靠近自拍，雄性海狮冲上来撞翻三脚架，回去加赞补法语描述",
+        "第 7 月: 一只名叫 'Hercules' 的常驻雄海狮成了 Sandfly Bay 标志，mark 评论区每周报告位置",
+        "第 12 月: Hercules 死亡 mark 评论区集体哀悼，数日上千次浏览",
+        "第 16 月: 新雄性 'Apollo' 接管区域 mark 被更新",
+        "第 19 月: 成为 Otago Peninsula 野生动物 mark 的代表"
+      ],
+      "expected_signal_summary": "总赞约 580，总举报约 4",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "野生动物'人格化'让 mark 拥有持续话题；DOC 志愿者 + 游客故事 + 个体动物追踪三轨同行",
+      "edge_case_flag": "海岸-野生动物-人格化"
+    },
+    {
+      "id": 722,
+      "title": "Stewart Island Mason Bay 涉水段 — 大潮陷阱",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Stewart Island Rakiura 西海岸 Mason Bay，从 Freshwater Hut 到 Mason Bay Hut 途中要涉过 Freshwater River 入海口的浅滩段",
+        "intrinsic_quality": "正常退潮齐膝，大潮 + 风暴时可达腰部并有强流",
+        "user_volume_per_month": 45,
+        "duration_months": 20,
+        "signal": "无 — Stewart Island 西岸完全无信号",
+        "season_pattern": "10-4 月主要徒步季，5-9 月几乎无人",
+        "human_factors": "Rakiura 本地 jet boat 司机和 DOC ranger 是主要信息源"
+      },
+      "events_timeline": [
+        "第 1 月: Rakiura Helicopters 飞行员 Dion 在飞客户进 Mason Bay 时标记",
+        "第 4 月: 一对 Christchurch 大学生大潮日按 mark 提前等了 90 分钟才过，安全",
+        "第 8 月: 一位独自徒步的德国老人没看 mark 强渡被冲倒，靠 PLB 求救",
+        "第 11 月: 事件后 DOC 把 mark 内容嵌入 Rakiura Visitor Centre 的简报",
+        "第 16 月: 一次飓风改变河口砂洲，Dion 飞回去重新拍照更新",
+        "第 19 月: 成为 Rakiura 西岸纵走必查 mark"
+      ],
+      "expected_signal_summary": "总赞约 110，总举报约 1",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "极偏远 mark 的维护几乎全靠航空和 DOC 专业人员；量小但每条赞的代表性极高",
+      "edge_case_flag": "偏远海岸-飞行员维护"
+    },
+    {
+      "id": 723,
+      "title": "Bay of Islands Russell 步道海岸侵蚀点 — 步道边缘悬空",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Northland Bay of Islands 内 Russell Long Beach Walk 北段悬崖边步道，距 Tapeka Point 约 800 米的侵蚀塌方区",
+        "intrinsic_quality": "步道看起来还在但下方土层已被掏空 60 厘米，重压会塌",
+        "user_volume_per_month": 320,
+        "duration_months": 8,
+        "signal": "好 — Russell 镇附近 Spark 满格",
+        "season_pattern": "全年但 5-8 月暴雨期侵蚀加速",
+        "human_factors": "Russell 本地老居民和 DOC 志愿者维护，海外游客主要是邮轮短期登陆者"
+      },
+      "events_timeline": [
+        "第 1 月: Russell 退休测量员 Ted 用工程经验标记并附测量数据",
+        "第 3 月: 一对意大利邮轮客没看 mark 走过塌了 1 米，无伤但惊魂，加赞",
+        "第 5 月: 暴雨周侵蚀加剧 Ted 当周三次更新 mark",
+        "第 7 月: DOC 暂时关闭这段步道改设临时绕行 mark 自动降权",
+        "第 8 月: 步道改线完成 mark 关闭归档但仍在历史中可查"
+      ],
+      "expected_signal_summary": "总赞约 140，总举报约 2",
+      "expected_outcome": "alive",
+      "expected_status": "borderline",
+      "human_judgment": "短期 mark 的典型——问题被 DOC 永久解决后自动'退役'，但留存价值在历史档案而非未来导航",
+      "edge_case_flag": "海岸侵蚀-DOC修复-mark退役"
+    },
+    {
+      "id": 724,
+      "title": "Tauranga Mount Maunganui 主峰下方海岸礁石 — 海钓滑落",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Bay of Plenty 的 Mount Maunganui / Mauao 步道东南侧，主峰悬崖下方 50 米的'钓鱼平台'礁石区",
+        "intrinsic_quality": "本地钓鱼者下去的礁石路看似简单实则浪打滑，每年 1-2 起溺水",
+        "user_volume_per_month": 95,
+        "duration_months": 24,
+        "signal": "好 — Mauao 顶满格",
+        "season_pattern": "全年但 3-5 月鱼汛期下去的人最多",
+        "human_factors": "Tauranga Tangata Whenua（Ngāi Te Rangi）和本地钓友会维护"
+      },
+      "events_timeline": [
+        "第 1 月: Mount 钓友会主席 Wiremu 标记，附 5 起事故名单",
+        "第 5 月: 一名 Tauranga 中年钓鱼者按 mark 路线但仍被浪卷，Wiremu 写补充警告",
+        "第 9 月: 一队海外大学生没看 mark 下去自拍滑落，Search & Rescue 出动",
+        "第 14 月: 事件登上 NZ Herald，mark 单月加 350 赞",
+        "第 19 月: 当地 iwi 在礁石顶立 rāhui 牌",
+        "第 23 月: mark 关联到 SLSNZ 的官方安全地图"
+      ],
+      "expected_signal_summary": "总赞约 480，总举报约 3",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "本地利益群体（钓友）主导 + iwi 文化加持 + 真实事故反复印证，是城市边缘海岸 mark 的稳定形态",
+      "edge_case_flag": "海岸礁石-钓鱼-iwi rāhui"
+    },
+    {
+      "id": 725,
+      "title": "Wellington 南海岸 Red Rocks 海豹观察点 — 冬季公海豹聚集",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Wellington 南海岸 Red Rocks Coastal Walk 距停车场 3.5 公里的红色岩石区，雄性新西兰海豹冬季聚集",
+        "intrinsic_quality": "5-9 月可看 30-80 只雄海豹晒太阳，距离仅 5 米但有警戒线",
+        "user_volume_per_month": 580,
+        "duration_months": 22,
+        "signal": "弱 — 海岸 1-2 格",
+        "season_pattern": "5-9 月聚集季，10-4 月几乎没有",
+        "human_factors": "Wellington 周末家庭客和本地学校生物课，DOC 海狗志愿者主动维护"
+      },
+      "events_timeline": [
+        "第 1 月: Wellington 中学生物老师 Anna 标记并连接到学校 fieldwork 路线",
+        "第 4 月: 冬季高峰 mark 评论区每天有人报告当日海豹数",
+        "第 8 月: 一位 Berlin 来的访问学者拍纪录片用 mark 做导航",
+        "第 11 月: 夏季海豹散去 mark 进入低谷期",
+        "第 14 月: 第二个冬季 mark 重新激活，互动量回升",
+        "第 18 月: DOC 在停车场加海豹观察简报但没替代 mark",
+        "第 21 月: 成为 Wellington 城市步道里季节性最显著的 mark 之一"
+      ],
+      "expected_signal_summary": "总赞约 720，总举报约 3",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "明显季节性 mark 的考验是淡季是否能挺过，本案靠'下一个冬天会回来'的预期保持活性",
+      "edge_case_flag": "海岸野生动物-季节循环"
+    },
+    {
+      "id": 726,
+      "title": "Fiordland Milford Track Mackinnon Pass 上方融雪溪 — Clinton 河源",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Fiordland Milford Track 第三天 Mackinnon Pass 顶部下行约 600 米的无名融雪小溪，Clinton River 上游汇流点",
+        "intrinsic_quality": "晴天没膝，雨天 + 上游融雪可在 30 分钟暴涨到腰",
+        "user_volume_per_month": 110,
+        "duration_months": 18,
+        "signal": "无 — 山口背风面屏蔽",
+        "season_pattern": "11-4 月开放期，1-2 月雪融最快",
+        "human_factors": "Ultimate Hikes 导览队 vs DOC 自助徒步者两大群体共用"
+      },
+      "events_timeline": [
+        "第 1 月: Ultimate Hikes 资深向导 Jess 标记，附她从 2017 年开始的 12 次过桥记录",
+        "第 4 月: 一队 DOC 独立徒步者雨天按 mark 提前 1 小时下山，避开洪峰",
+        "第 8 月: 一次极端雨日 Jess 当天三次更新 mark 数据",
+        "第 12 月: DOC 装了简易桥但仍受洪水影响，mark 评论区记录'桥被冲走两次'",
+        "第 14 月: Jess 退休但她带的徒弟 Kim 继续维护",
+        "第 17 月: 成为 Milford Track 三日行的关键安全 mark"
+      ],
+      "expected_signal_summary": "总赞约 175，总举报约 2",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "Great Walk 上的 mark 受双重压力但也享受双重维护——商业向导专业知识 + DOC 自助客血泪反馈",
+      "edge_case_flag": "Great Walk-融雪-双群体维护"
+    },
+    {
+      "id": 727,
+      "title": "Coromandel New Chums Beach 退潮通道 — 唯一进入路径",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Coromandel Peninsula 北端 Wainuiototo / New Chums Beach，从 Whangapoua 海滩跨过潮汐溪和岩石带的唯一入口",
+        "intrinsic_quality": "退潮 ±2 小时窗口期可徒步过去，错过窗口完全进不去",
+        "user_volume_per_month": 290,
+        "duration_months": 16,
+        "signal": "弱 — 海滩边 1 格",
+        "season_pattern": "12-3 月旺季每天数十人尝试，冬季每周 1-2 人",
+        "human_factors": "海外游客向往这片'被评全球最美沙滩之一'，但根本不查潮汐"
+      },
+      "events_timeline": [
+        "第 1 月: Whangapoua 度假屋老板娘 Jen 标记，附 30 天的潮汐窗口表",
+        "第 4 月: 一对加州夫妇看 mark 后调整行程，回去加赞写'本来打算第二天去会被困'",
+        "第 7 月: 一个 Tauranga 家庭没看 mark 涨潮被困对岸，等到深夜",
+        "第 10 月: 事件后 mark 在本地 facebook 群被疯转，单月加 200 赞",
+        "第 13 月: Jen 把 mark 嵌入度假屋官网'抵达指南'",
+        "第 15 月: 成为 New Chums 访客的标准前置查阅"
+      ],
+      "expected_signal_summary": "总赞约 340，总举报约 3",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "潮汐 mark 的稳定性靠商业绑定和真实困境故事；'最美沙滩'的稀缺性让 mark 几乎不可替代",
+      "edge_case_flag": "海岸-潮汐-稀缺景观"
+    },
+    {
+      "id": 728,
+      "title": "West Coast Truman Track 海蚀岩台 — 涨潮阻断观景",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "West Coast Paparoa National Park 内 Truman Track，距停车场 800 米的海岸岩台观景点，涨潮时被淹无法到达悬崖底",
+        "intrinsic_quality": "退潮看悬崖海洞最佳，涨潮浪打到步道末端封路",
+        "user_volume_per_month": 760,
+        "duration_months": 14,
+        "signal": "断续 — Spark 偶尔 1 格",
+        "season_pattern": "全年开放，4-9 月西南涌浪最壮观但也最危险",
+        "human_factors": "Punakaiki 邻近 Pancake Rocks 引流，海外大巴客和摄影师两类"
+      },
+      "events_timeline": [
+        "第 1 月: Greymouth 摄影师 Jack 标记并连接到 MetService 涌浪数据",
+        "第 3 月: 一队 Auckland 摄影团按 mark 时间过来拍到风暴大浪",
+        "第 6 月: 一次涨潮把 4 个游客困在岩台 2 小时，海岸警卫队发警告",
+        "第 9 月: 事件后 mark 加'涨潮位 1.4 米以上严禁下去'警告",
+        "第 11 月: Jack 自动化数据接入让 mark 实时显示窗口",
+        "第 13 月: 成为 West Coast 摄影必查 mark"
+      ],
+      "expected_signal_summary": "总赞约 480，总举报约 4",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "scenic 类 mark 加入危险维度后影响力翻倍，自动化数据 + 摄影师圈子绑定让 mark 越用越准",
+      "edge_case_flag": "海岸观景-自动化数据-摄影圈"
+    },
+    {
+      "id": 729,
+      "title": "Northland Hokianga Harbour 沙丘对岸渡口 — Opononi 渡船",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Far North Hokianga Harbour 北岸大沙丘脚下，从 Opononi 镇坐渡船过来后的下船点",
+        "intrinsic_quality": "渡船每天 4 班，错过等下一班 3 小时，季节性班次还会减",
+        "user_volume_per_month": 150,
+        "duration_months": 18,
+        "signal": "好 — Opononi 满格但对岸沙丘下断",
+        "season_pattern": "12-3 月每天 4 班，4-11 月减为周一三五",
+        "human_factors": "本地毛利向导和家庭，海外游客主要冲'大沙丘滑沙'来"
+      },
+      "events_timeline": [
+        "第 1 月: Hokianga Express Ferry 船长 Hone 标记，附他从父辈继承的运营经验",
+        "第 3 月: 一对德国情侣按 mark 选了第一班船，玩完赶上末班，回去写感谢",
+        "第 6 月: 冬季减班期一队海外学生没看 mark 误以为还有班次，被困对岸到天黑",
+        "第 10 月: Hone 把 mark 嵌入船公司 facebook，数据自动同步",
+        "第 14 月: 一次大风停航 mark 被 Hone 当天更新 5 次",
+        "第 17 月: 成为 Hokianga 自驾必查 mark"
+      ],
+      "expected_signal_summary": "总赞约 195，总举报约 2",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "家族经营的小型商业 mark 维护极稳定——即使量小，'生意要做下去'的动力让信息持续更新",
+      "edge_case_flag": "渡船-家族经营-季节减班"
+    },
+    {
+      "id": 730,
+      "title": "Coromandel Karangahake Gorge 步道 Owharoa 瀑布水潭 — 隐性危险",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Coromandel 内陆 Karangahake Gorge 内 Owharoa Falls 步道，瀑布下方水潭看似平静但有循环回流",
+        "intrinsic_quality": "Instagram 网红打卡地实际有水下回流，2020 年起 2 起淹溺",
+        "user_volume_per_month": 1100,
+        "duration_months": 16,
+        "signal": "弱 — 山谷内 1 格",
+        "season_pattern": "12-3 月旺季每天数百人，冬季仍有人去",
+        "human_factors": "Waikino 本地家庭和年轻游泳爱好者，DOC 警告牌被无视"
+      },
+      "events_timeline": [
+        "第 1 月: Paeroa 救援队志愿者 Mick 标记，附两起事故的官方报告",
+        "第 4 月: 一名 Waikino 高中生淹溺事件后，mark 单月加 250 赞",
+        "第 7 月: 寒假高峰青少年群体仍下水，mark 评论区争论激烈",
+        "第 11 月: DOC 加装多语警告牌但 mark 仍是首要信息源",
+        "第 14 月: Mick 退休但 Paeroa 救援队接班人 Sam 继续维护",
+        "第 16 月: 成为 Karangahake Gorge 必看安全 mark"
+      ],
+      "expected_signal_summary": "总赞约 540，总举报约 8",
+      "expected_outcome": "alive",
+      "expected_status": "healthy",
+      "human_judgment": "瀑布水潭类 mark 的悲剧 + 救援队维护链 + 物理警告牌互证形成稳定结构；少量举报来自 Instagram 网红圈反对",
+      "edge_case_flag": "瀑布水潭-救援队-Instagram反对"
+    }
+  ]
+}

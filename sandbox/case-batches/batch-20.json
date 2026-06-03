@@ -1,0 +1,882 @@
+{
+  "batch": 20,
+  "theme": "边界反直觉",
+  "id_range": [951, 1000],
+  "total": 30,
+  "note": "本批写到第 30 条停下，红线下手写不出更多保质量的反直觉 case。剩余 20 条移交下批。",
+  "cases": [
+    {
+      "id": 951,
+      "title": "Aoraki Mt Cook Mueller Hut 路上瀑布 scenic 作者已搬离",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Aoraki/Mt Cook National Park 内 Mueller Hut Route 在 Sealy Tarns 上方 Stocking Stream 旁一道夏融瀑布，作者标完后下个月就搬去澳洲，没人现场维护",
+        "intrinsic_quality": "瀑布本身 3 月-4 月初确实壮观，但准确位置是作者早期标错的，真瀑布在西边再走 80m",
+        "user_volume_per_month": 540,
+        "duration_months": 11,
+        "signal": "Hermitage 区域信号还可，多数下到 White Horse Hill camping ground 才同步",
+        "season_pattern": "12-3 月旺季每天上百人，瀑布 3 月最盛但偏离位置导致拍照点不对",
+        "human_factors": "登山者从 Hermitage 一路上山，看到 mark 多数顺手点赞表示'到此一游'，并不真的核对位置准不准"
+      },
+      "events_timeline": [
+        "第1月: 作者标完 mark 配上瀑布 IG 风格滤镜照片，当周 24 人下山同步点赞",
+        "第2月: 累计 100 人点赞，多数评论是'壮观'、'值得来'，没人提位置偏",
+        "第3月: 一个 Christchurch 摄影师举报'位置不对，真瀑布偏西 80m'，写了长评论附 GPS 截图",
+        "第4月: 摄影师举报被淹没，又有 35 人继续点赞",
+        "第6月: 第二个本地向导也出山后同步举报，引用了第一个摄影师的话",
+        "第9月: 累计 142 个赞，但举报只有 4 条——因为多数人根本没意识到偏了",
+        "第11月: 信号特征上是健康强 mark，但实质上指向错位置"
+      ],
+      "expected_signal_summary": "总赞约 142，总举报仅 4，但举报内容专业且具体",
+      "expected_outcome": "sunk",
+      "expected_status": "should_sink_but_signal_misleading",
+      "human_judgment": "100+ 赞但应该沉的典型——作者已挪走维护断了，赞全是慕名打卡不看准不准，仅有的几条举报反而是真核对过位置的人。算法若只看赞举比会错判，需要给本地高权重 reporter 的具体位置举报加权",
+      "edge_case_flag": "high_likes_but_should_sink + author_disengaged + wrong_location"
+    },
+    {
+      "id": 952,
+      "title": "Routeburn Track Lake Howden 雪崩警告 dummy 嫌弃",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Routeburn Track Lake Howden Hut 上方 Earland Falls 上方陡坡，DOC 高级雪崩观察员手动标的春季雪崩道警告 mark，仅 9-11 月活跃",
+        "intrinsic_quality": "实打实的 SAR-grade 警告，标在雪崩走廊起点，2019 年这里出过一起死亡事件",
+        "user_volume_per_month": 720,
+        "duration_months": 9,
+        "signal": "Lake Howden 一带 vodafone 偶尔有信号，多数同步等下到 The Divide 出口",
+        "season_pattern": "Great Walk 12-4 月开放期没人感受到雪崩威胁，9-11 月 shoulder season 才是真危险窗口但人少",
+        "human_factors": "夏季 Great Walk hiker 看见红色 danger icon 第一反应是'多此一举'，并不知道脚下这道沟冬末是死亡走廊"
+      },
+      "events_timeline": [
+        "第1月: 11 月 ranger 标 mark，当月 4 个 shoulder season 登山者同步赞",
+        "第2月: 进入 12 月 Great Walk 旺季，第一周就来了 18 个举报'此处毫无危险'",
+        "第3月: 1 月 31 个举报继续涌入，累计 53 个举报对 6 个赞",
+        "第5月: 3 月底有人发长评'这是冬季雪崩区警告，请勿删除'，但被新一批夏徒淹没",
+        "第7月: 5 月信号沉默，零互动",
+        "第8月: 9 月 shoulder 重开第一周一个 ski-tourer 同步赞，附冬季照片显示雪崩痕迹",
+        "第9月: 10-11 月 4 个专业用户连续赞，但累计仍是 70 举报对 14 赞"
+      ],
+      "expected_signal_summary": "总赞约 14，总举报约 70（多为夏季无威胁期误报）",
+      "expected_outcome": "alive",
+      "expected_status": "must_keep_seasonal_lifesaver",
+      "human_judgment": "50+ 举报但应该活的典型，举报全部来自非危险季节的新手嫌弃，少量赞来自真正经历过的专业用户，算法必须能识别 reporter 身份与季节窗口",
+      "edge_case_flag": "high_reports_but_must_keep + seasonal_lifesaver + reporter_quality_mismatch"
+    },
+    {
+      "id": 953,
+      "title": "Old Ghost Road Stern Valley 冬封前 supply 0 互动",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Old Ghost Road 第三天 Stern Valley Hut 前方 4km 一处岩壁下凹陷，Buller 区一名退休煤矿工人 5 月初放的应急保温毯+火柴盒，标完两周山就因暴雪封闭直到 9 月",
+        "intrinsic_quality": "保温毯密封在防潮箱里，对意外迫降的 mountain biker 是关键 supply",
+        "user_volume_per_month": 380,
+        "duration_months": 8,
+        "signal": "Stern Valley 完全无信号，要骑出 Lyell 端口才能同步",
+        "season_pattern": "5-8 月冬季封路无骑行者，9 月重开第一波春季骑手才会经过",
+        "human_factors": "极冷门时机标 mark，新 mark + 0 通过量 = 算法天然倾向冷处理"
+      },
+      "events_timeline": [
+        "第1月: 5 月初退休矿工 Bill 标 mark，附评论'盒在岩缝里，遇险打开'，下山同步后山立刻封",
+        "第2月: 6-8 月零互动，mark 在系统里看起来像被遗弃的废 mark",
+        "第4月: 8 月底有个 DOC 巡线人员看到 mark 但他在下游另一段，没能验证",
+        "第5月: 9 月初春季重开，前两周天气恶劣仍无人通过",
+        "第6月: 9 月底第一批 7 个骑手出山同步，其中 1 人专程绕去看了'盒子还在'点赞",
+        "第7月: 10 月连续 9 个用户点赞确认 supply 真实存在",
+        "第8月: 累计 22 赞 0 举报，slow burn 但 100% 正面"
+      ],
+      "expected_signal_summary": "前 4 个月零互动，第 5-8 月累积 22 赞 0 举报",
+      "expected_outcome": "alive",
+      "expected_status": "must_survive_zero_signal_period",
+      "human_judgment": "0 互动期间应该活的典型，新 mark + 长达 4 个月零互动通常会被沉，但这是因为创建时机正赶上季节性封闭，算法必须能识别 trail 季节属性而不是按通用衰减",
+      "edge_case_flag": "zero_signal_but_must_keep + seasonal_creation_window"
+    },
+    {
+      "id": 954,
+      "title": "Tongariro Crossing 火山口立刻被举报 SAR 救命",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tongariro Alpine Crossing 在 Red Crater 顶 1886m 一处下到 Emerald Lakes 的滑石坡转弯，2024 年 11 月 SAR 队员手动标 mark 警告硫化物毒气浓度异常",
+        "intrinsic_quality": "实时火山活动相关，DOC 已知但官方流程慢，SAR 抢先标 mark",
+        "user_volume_per_month": 6800,
+        "duration_months": 1,
+        "signal": "山顶时段性 Spark 信号，多数游客在 Ketetahi 端出口同步",
+        "season_pattern": "11 月旺季开始日均 200+ 人，几乎全是国际游客",
+        "human_factors": "国际游客对 NZ alpine danger 没概念，看到红 mark 觉得'吓唬人'，第一周举报狂潮像破窗效应"
+      },
+      "events_timeline": [
+        "第1天: SAR 队员 Hemi 当天上午标 mark，下午下山同步附评论'gas levels elevated'",
+        "第3天: 下午一个澳洲团队出山，5 人连续举报'看不到任何危险'",
+        "第5天: 累计 31 个举报，3 个赞，举报包括'垃圾警告'、'吓游客'",
+        "第8天: GeoNet 公开公告确认 Te Maari 火山口活动，新闻引爆",
+        "第12天: 新闻后第一周新游客出山同步赞涌入，累积 67 赞",
+        "第18天: DOC 官方贴出同样警告，原 SAR mark 被验证有效",
+        "第30天: 累计 142 赞 36 举报，但前 7 天像是'破窗 mark 该沉'"
+      ],
+      "expected_signal_summary": "前期 31 举报对 3 赞看似破窗，后期反转为 142 赞 36 举报",
+      "expected_outcome": "alive",
+      "expected_status": "must_survive_early_breakage_window",
+      "human_judgment": "创建立刻被举报但实际是救命 mark，破窗 24 小时内若沉了会出人命，算法对 SAR/DOC tagged reporter 在创建初期必须给极高初始权重不被早期举报压垮",
+      "edge_case_flag": "early_breakage_but_lifesaver + SAR_origin + reporter_authority_critical"
+    },
+    {
+      "id": 955,
+      "title": "Abel Tasman Awaroa 涨潮警告 12 年老 mark 突遇连环举报",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Abel Tasman Coast Track Awaroa Inlet 涨潮渡口警告 mark，2012 年标，12 年来稳定健康，2024 年 8 月 Cyclone Gabrielle 后港口地形变了",
+        "intrinsic_quality": "原 mark 标在旧浅滩位置，地形变后该位置已成深潭，原警告反而误导用户走入危险",
+        "user_volume_per_month": 2400,
+        "duration_months": 144,
+        "signal": "Awaroa 区域 2degrees 偶尔通，多数等到 Marahau 或 Totaranui 出口",
+        "season_pattern": "12-3 月旺季 4000+/月，4-11 月 1000-2000/月，全年都有人走",
+        "human_factors": "12 年老 mark 在用户心中是 trusted source，新举报者敢质疑老 mark 通常是真发现问题"
+      },
+      "events_timeline": [
+        "第140月: 12 年累积 1840 赞 47 举报（举报多为方位描述不清），整体 trusted",
+        "第141月: 8 月 Gabrielle 飓风后第一周一个 Tasman 本地家庭出山举报'mark 位置已是深潭'",
+        "第142月: 第二周 14 个举报涌入，理由具体：'按 mark 走会陷'、'地形已变'",
+        "第142月底: 一个 DOC 巡线员同步评论确认地形变化",
+        "第143月: 累计新增 38 举报，老 mark 整体声誉开始翻转",
+        "第143月底: 原 mark 作者已 5 年未活跃，无人更新位置",
+        "第144月: 总赞 1840 vs 总举报 85，按总比仍健康，但近 2 个月趋势是 38 举报 0 赞"
+      ],
+      "expected_signal_summary": "12 年累积 1840 赞 vs 85 举报，但近 60 天趋势 38 举报 0 赞",
+      "expected_outcome": "sunk",
+      "expected_status": "must_sink_despite_history",
+      "human_judgment": "历史长寿但路况突变必须沉的典型，12 年总分掩盖了过去 60 天的反转信号，算法必须有时间窗口的趋势检测而不是只看累计",
+      "edge_case_flag": "long_term_healthy_but_recent_reversal + terrain_change + cumulative_misleading"
+    },
+    {
+      "id": 956,
+      "title": "Roy's Peak 顶日出 scenic 每年夏热冬死",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Roy's Peak Track 1578m 顶部观景平台 IG 著名机位，Wanaka Lake 全景，2021 年 11 月某摄影师标 mark",
+        "intrinsic_quality": "夏季日出确实是 NZ 最经典之一，但冬季 6-8 月顶上结冰风太大根本无法停留拍照",
+        "user_volume_per_month": 12000,
+        "duration_months": 30,
+        "signal": "顶上 Spark 4G 满格，多数人当场同步发 IG",
+        "season_pattern": "12-2 月每天 400 人爬，6-8 月每天 30 人且基本不上顶",
+        "human_factors": "这是 NZ 最被 IG 化的步道之一，夏季新手游客赞多但毫无判断力，冬季少数人是真专业但举报理由刻薄"
+      },
+      "events_timeline": [
+        "第1月: 11 月夏季初标 mark，当月 380 赞涌入",
+        "第3月: 1 月旺季顶峰 1100 累积赞，举报仅 8",
+        "第7月: 5 月入冬人骤减，仅 22 赞",
+        "第9月: 7 月深冬 18 个举报'风把我吹走了'、'冰滑无法到达'，3 赞",
+        "第11月: 9 月转暖第一周即恢复 80+ 赞涌入",
+        "第15月: 第二年 1 月再次旺季 950 赞",
+        "第19月: 第二年 7 月再次冬季 24 举报",
+        "第23-30月: 第三年完全相同的曲线",
+        "第30月: 累计 4200 赞 78 举报，年内 oscillation 明显"
+      ],
+      "expected_signal_summary": "三年连续相同模式：夏季月均 400+ 赞，冬季月均 20 举报",
+      "expected_outcome": "alive",
+      "expected_status": "must_keep_with_seasonal_awareness",
+      "human_judgment": "季节性循环 mark 必须存活但需季节性可见性调整，算法应识别这是 dec-feb scenic 而非全年 mark，6-8 月可以暂时降权但不能让冬季举报伤害夏季表现",
+      "edge_case_flag": "seasonal_oscillation + iconic_iconic_scenic + winter_reports_misleading"
+    },
+    {
+      "id": 957,
+      "title": "Mt Taranaki Pouakai 冬封后春复活 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mt Taranaki Pouakai Circuit 在 Pouakai Hut 西侧 600m 一处岩缝里 Taranaki Alpine Club 多年放的应急碘片+净水盒，2022 年 4 月一个会员标 mark 后山立刻冬封 5 个月",
+        "intrinsic_quality": "TAC 维护超过 8 年，每春重启时新会员重新补给，是登山者圈内默契",
+        "user_volume_per_month": 220,
+        "duration_months": 26,
+        "signal": "Pouakai 区域基本无信号，下到 Egmont Village 才能同步",
+        "season_pattern": "11-4 月可通行，5-10 月冬封，每年实际活跃只有 6 个月",
+        "human_factors": "TAC 老会员知道这点，新游客发现后会兴奋点赞"
+      },
+      "events_timeline": [
+        "第1月: 4 月底标 mark，下山同步当周 3 赞（都是 TAC 会员）",
+        "第2-6月: 5 月起冬封 5 个月零互动",
+        "第7月: 10 月底重开，第一周 11 个赞涌入，几乎全部是 TAC 群聊互相通知的",
+        "第10月: 第一个夏季累积 38 赞",
+        "第13月: 5 月再封零互动 4 个月",
+        "第19月: 第二个夏季累积 65 赞",
+        "第26月: 累计 142 赞 5 举报，举报均为'盒空'但实为补给周期间隙"
+      ],
+      "expected_signal_summary": "26 个月中实际活跃 14 个月，活跃期累计 142 赞",
+      "expected_outcome": "alive",
+      "expected_status": "must_keep_with_dormancy_tolerance",
+      "human_judgment": "跨季节多次冬眠的小众 supply 必须容忍长期零信号期，TAC 圈内 mark 价值高但传播慢，算法对 community-validated supply 应有更长 dormancy tolerance",
+      "edge_case_flag": "multi_season_dormancy + community_supply + slow_burn_value"
+    },
+    {
+      "id": 958,
+      "title": "Cape Reinga 灯塔下 5 真赞 95 机器人赞 vs 8 真举报",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Cape Reinga 灯塔下方 200m 海角石阶平台，2023 年 3 月一个旅行 KOL 营销账号雇佣 social farm 刷 mark 拉热度",
+        "intrinsic_quality": "实地是个普通海角观景台，比正式灯塔观景台差但被 KOL 包装成秘境",
+        "user_volume_per_month": 1800,
+        "duration_months": 14,
+        "signal": "Cape Reinga 区域 Spark 信号良好，KOL 当场可同步刷",
+        "season_pattern": "全年游客均匀，10-3 月稍多",
+        "human_factors": "KOL 雇 sock farm 主要刷 mark 创建后 30 天，每天 3-4 个机器赞，伪装真实曲线"
+      },
+      "events_timeline": [
+        "第1月: 标后 30 天累积 95 赞，曲线伪装得很真，但其中 90 来自 5 个新建账号集群",
+        "第1月底: 5 个真赞来自跟风游客点赞 KOL 视频后到现场打卡",
+        "第3月: 一个 Northland 本地举报'位置不对，正点在灯塔西侧'",
+        "第5月: 第二个真用户举报'不如官方观景台'",
+        "第8月: 累计 8 个真举报理由都很具体",
+        "第10月: 机器人赞停止（KOL 推广周期结束），新增赞速骤降",
+        "第14月: 总赞 102（其中 95 机器人）vs 8 真举报，按比是健康但全是水"
+      ],
+      "expected_signal_summary": "100 赞看似强，但 95 来自 5 个 sock 账号集群，仅 7 真赞 vs 8 真举报",
+      "expected_outcome": "sunk",
+      "expected_status": "must_detect_sockpuppet_inflation",
+      "human_judgment": "假强信号典型，账号注册新+赞集中爆发+共同 IP/设备指纹是检测线索，算法必须有 reviewer reputation gating 否则会被 KOL 营销刷爆",
+      "edge_case_flag": "fake_strong_likes + sockpuppet_farm + KOL_marketing"
+    },
+    {
+      "id": 959,
+      "title": "Nelson Lakes Travers Sabine 假强举报 sockpuppet 抹黑真 mark",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Nelson Lakes Travers-Sabine Circuit 在 Upper Travers Hut 上方 400m Saddle 一处 ranger 标的悬崖侧脱皮区警告，2023 年 8 月 DOC 标",
+        "intrinsic_quality": "真 hazard，已发生 2 起跌伤；但有一个商业向导公司觉得这 mark 让他们路线难看，雇人刷举报",
+        "user_volume_per_month": 320,
+        "duration_months": 10,
+        "signal": "Travers 中段无信号，多数等到 St Arnaud 同步",
+        "season_pattern": "11-4 月旺季，5-10 月低季",
+        "human_factors": "竞争向导公司用 17 个新建账号集群发举报，刷举报反向操作"
+      },
+      "events_timeline": [
+        "第1月: ranger 标 mark，当月 8 个真用户出山同步赞",
+        "第2月: 累计 22 赞，竞争公司发现这 mark 影响他们品牌，开始操作",
+        "第3月: 17 个新账号集中 4 天发布举报，理由都是'夸大'、'不存在'",
+        "第4月: 一个真用户举报内容更具体，混入 17 sockpuppet 中",
+        "第5月: 真用户继续累积赞，70 累计赞 vs 20 举报",
+        "第7月: 第二个 SAR 案件直接发生在此处，新闻报道",
+        "第8月: 新闻后赞涌入，累计 95 赞",
+        "第10月: 总 95 赞 vs 20 举报（17 sock + 3 真）"
+      ],
+      "expected_signal_summary": "总赞 95 vs 总举报 20，但 20 中 17 是 sock 集群仅 3 真",
+      "expected_outcome": "alive",
+      "expected_status": "must_survive_orchestrated_attack",
+      "human_judgment": "假强举报抹黑真 hazard mark，算法需要 reporter 集群检测（注册时间相近+举报集中爆发+IP 相似），否则真 hazard 可能被竞争对手刷沉",
+      "edge_case_flag": "fake_strong_reports + orchestrated_sockpuppets + commercial_motivation"
+    },
+    {
+      "id": 960,
+      "title": "Fiordland Dusky Track 创建后 24h 内必看的紧急 SAR",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Dusky Track 第 4 天 Loch Maree Hut 前方一处溜索故障警告，2024 年 2 月 SAR 紧急标，溜索断绳头在风中甩，下一波 thru-hiker 当天就要到",
+        "intrinsic_quality": "如果不在 24 小时内警告将有人受伤，SAR 直接电话 DOC 同时标 mark",
+        "user_volume_per_month": 25,
+        "duration_months": 6,
+        "signal": "Dusky 全程无信号，SAR 用 inReach 同步标 mark",
+        "season_pattern": "Dusky 是 NZ 最偏远长程之一，月均仅 25 人通过",
+        "human_factors": "Dusky 上的 hiker 都是顶级专业，看到 mark 会立刻信任 SAR 来源"
+      },
+      "events_timeline": [
+        "第1天上午: SAR 用 inReach 标 mark 附 'broken cable URGENT'",
+        "第1天下午: 当天下午 4 个 hiker 经过，看到 mark 后绕道，事后同步赞",
+        "第2-3天: 又 3 个 hiker 通过，全部点赞",
+        "第7天: DOC 维修队到达更换缆绳，标 mark 为 resolved",
+        "第14天: SAR 自己将 mark 状态改为 historical 但保留",
+        "第30天: 当月累计 11 赞 0 举报",
+        "第180天: 6 个月后总 25 赞 0 举报"
+      ],
+      "expected_signal_summary": "创建后 24 小时即获得真用户验证，6 个月累计 25 赞 0 举报",
+      "expected_outcome": "alive",
+      "expected_status": "time_critical_must_propagate_immediately",
+      "human_judgment": "时间敏感 mark 必须在 24 小时内被看到否则致命，算法对 SAR-tagged 创建者应该跳过冷启动延迟期，立即给予 max visibility",
+      "edge_case_flag": "time_critical + SAR_origin + cold_start_bypass_needed"
+    },
+    {
+      "id": 961,
+      "title": "Whanganui Journey 河道改道 supply 跨季节复活",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Whanganui Journey 第 3 天 Tieke Kainga marae 上游 800m 一处隐藏河滩有当地 iwi 放的紧急 kai 包，2022 年 9 月标 mark 后河道因暴雨改道，整整一个划船季无人能到",
+        "intrinsic_quality": "iwi 文化传承的 manaakitanga 实践，物资真实，但需要特定水位才能登岸",
+        "user_volume_per_month": 180,
+        "duration_months": 18,
+        "signal": "Whanganui 河谷无信号，多数到 Pipiriki 才能同步",
+        "season_pattern": "10-4 月划船季，水位关键",
+        "human_factors": "划船者发现传统文化点会很敬重，但 2022-2023 季水位让登岸不可能"
+      },
+      "events_timeline": [
+        "第1月: 9 月标 mark，10 月初划船季开始第一周 6 赞",
+        "第2月: 11 月暴雨后河道改道，登岸点没了，5 个举报'找不到'",
+        "第3-6月: 整个 22-23 季持续 18 个举报'位置不可达'，只有 8 赞",
+        "第7月: 5 月划船季结束，零互动",
+        "第10月: 8 月初 iwi 自己更新 mark 位置（移到新河滩），但通知慢传",
+        "第12月: 23-24 季开始第一周仍有人按旧位置去，3 个旧位置举报",
+        "第14月: 新位置传开，累积 28 赞",
+        "第18月: 总赞 42 vs 总举报 21，但近 6 个月趋势已反转为 28 赞"
+      ],
+      "expected_signal_summary": "前 6 个月 18 举报对 8 赞，后 6 个月 28 赞 0 举报，跨季节复活",
+      "expected_outcome": "alive",
+      "expected_status": "must_recognize_seasonal_revival",
+      "human_judgment": "跨季节复活的 mark 算法需要时间窗口分析，看似该沉但因物理位置变化而非内容失效，重新激活后趋势是关键判据",
+      "edge_case_flag": "cross_season_revival + iwi_cultural_supply + location_drift"
+    },
+    {
+      "id": 962,
+      "title": "Tararua Range Tarn Ridge 雨雾两面性 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tararua Forest Park Tarn Ridge Hut 西脊一处石板沟，2023 年 1 月 Wellington Tramping Club 标，雨天极滑旱天完全安全",
+        "intrinsic_quality": "下雨时石板像冰，干燥时是普通缓坡，hazard 100% 取决于天气",
+        "user_volume_per_month": 95,
+        "duration_months": 16,
+        "signal": "Tararua 山脊偶有 Spark，多数等下到 Mt Holdsworth 端口同步",
+        "season_pattern": "全年通行但 3-9 月雨多，10-2 月旱多",
+        "human_factors": "Tararua 是 Wellington 训练经典，老手都懂'看天气'，新手只看 mark 静态信息"
+      },
+      "events_timeline": [
+        "第1月: 1 月旱季标 mark，当月 6 个新手举报'此处毫无危险'",
+        "第3月: 3 月雨季第一场暴雨日，2 个 WTC 老手出山赞'今天差点摔下去'",
+        "第5月: 5 月雨季中 11 个赞 4 个举报",
+        "第8月: 8 月雨季高峰 18 赞 1 举报",
+        "第10月: 10 月转旱季 9 个新手举报'明明能走'",
+        "第14月: 第二年雨季 22 赞 3 举报",
+        "第16月: 累计 68 赞 19 举报，但分布与天气强相关"
+      ],
+      "expected_signal_summary": "雨季月均 14 赞，旱季月均 5 举报，hazard 强相关天气",
+      "expected_outcome": "alive",
+      "expected_status": "must_keep_with_weather_context",
+      "human_judgment": "同一物理位置雨天危险旱天安全的 mark，价值由路过者天气决定，算法理想上应支持 weather-conditional visibility",
+      "edge_case_flag": "weather_conditional + dual_state_hazard + reporter_context_dependent"
+    },
+    {
+      "id": 963,
+      "title": "Ball Pass Aoraki 假打卡 100 赞实际不同位置",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Ball Pass Crossing 在 Caroline Hut 上方 Ball Pass 顶部 2120m 名为'Tasman Glacier 全景点'的位置，但作者 GPS 记录在 Pass 东侧 150m 不同山头",
+        "intrinsic_quality": "正确 Pass 顶视野壮阔但作者标错，标错位置看不到 Tasman Glacier 主舌",
+        "user_volume_per_month": 85,
+        "duration_months": 12,
+        "signal": "Ball Pass 顶 Spark 弱信号，多数同步等下到 Mt Cook Village",
+        "season_pattern": "12-3 月才能尝试，alpine 经验要求高",
+        "human_factors": "登山者站在 Pass 顶累得不行，看到 mark 名'Tasman 全景'就近点赞，并不真的核对自己站的是不是 mark 标的具体点"
+      },
+      "events_timeline": [
+        "第1月: 12 月标 mark，当月 14 人到 Pass 顶都点赞",
+        "第3月: 累计 47 赞，全部是'到 Pass 即赞'的疲惫登山者",
+        "第5月: 一个 Christchurch alpinist 写长评'mark 位置在错的山头，真景在主 Pass'",
+        "第7月: 评论被淹，又来 28 个跟风赞",
+        "第9月: 第二个本地向导也指出位置错",
+        "第12月: 总赞 102 vs 举报 4，但 102 都是'打卡赞'仅 2 真核对赞"
+      ],
+      "expected_signal_summary": "100 赞看似强，但仅 2 真核对赞，其余 100 是疲惫打卡未核位置",
+      "expected_outcome": "sunk",
+      "expected_status": "should_sink_despite_volume",
+      "human_judgment": "假打卡赞典型，登山者疲劳状态下不会核对 GPS 仅看 mark 标题就赞，算法需要给附 GPS 截图的具体位置举报极高权重",
+      "edge_case_flag": "checkin_likes_not_verification + tired_climbers + geo_mismatch"
+    },
+    {
+      "id": 964,
+      "title": "Te Araroa Tongariro 段路面腐木 5 救援队私密 mark",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Te Araroa 长程从 Ketetahi 下到 Mangatepopo 段一处旧木栈道完全腐烂的下沉点，LandSAR Tongariro 队员 2024 年 3 月标但希望仅 SAR 圈内可见",
+        "intrinsic_quality": "真 hazard，木栈道踩穿会直接掉进 1.5m 腐殖层；SAR 队员希望避免恐慌不愿公开",
+        "user_volume_per_month": 1200,
+        "duration_months": 8,
+        "signal": "Tongariro 周边信号区域不均，SAR 在 Whakapapa Village 同步",
+        "season_pattern": "10-4 月旺季",
+        "human_factors": "SAR 队员标 visibility 设为 'team-only' 但实际上后台仍参与算法投票"
+      },
+      "events_timeline": [
+        "第1月: SAR 队员标 mark 设私密，仅 6 个 SAR 同事看到点赞",
+        "第2月: SAR 圈内累计 12 赞，公众零曝光",
+        "第3月: 一个私密群组泄露，3 个真用户也找到 mark 点赞",
+        "第4月: 一个公众用户'路过举报为何这里有警告无依据'",
+        "第6月: SAR 内部沟通后将可见性改为'部分公开'",
+        "第7月: 公众加 28 赞，确认 hazard 真实",
+        "第8月: 总累计 46 赞（其中 SAR 18 + 公众 28）vs 1 举报"
+      ],
+      "expected_signal_summary": "SAR 私密期 18 赞 0 举报，公众化后 28 赞 1 举报",
+      "expected_outcome": "alive",
+      "expected_status": "must_respect_visibility_settings",
+      "human_judgment": "救援队私密 mark 应该活但 visibility 受限，算法必须区分 visibility 范围内的信号与全网信号，避免私密 mark 因公众低曝光被算法误沉",
+      "edge_case_flag": "private_visibility + SAR_team_only + algorithmic_blindness_risk"
+    },
+    {
+      "id": 965,
+      "title": "Mt Aspiring Bonar Glacier 登山专家小众高质 mark",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Mt Aspiring/Tititea NW Ridge 路线上 Colin Todd Hut 之上 Bonar Glacier 一处冰桥跨越点，2023 年 11 月一个 NZAC 老向导标，仅 alpine 攀登者用",
+        "intrinsic_quality": "极关键的冰桥安全跨越点参考，但只对会用冰镐绳索的人有意义",
+        "user_volume_per_month": 14,
+        "duration_months": 11,
+        "signal": "Bonar Glacier 全程无信号，alpinist 用 inReach 在 hut 同步",
+        "season_pattern": "11-3 月夏季登山窗口",
+        "human_factors": "用户群极小但全部是顶尖专业，一个 mark 可能一年才被 12 个人看到但每人都是行家"
+      },
+      "events_timeline": [
+        "第1月: 11 月标 mark，当月仅 2 个 NZAC 同事赞",
+        "第3月: 1 月夏季高峰累计 7 赞，全部是 Mt Aspiring 攀登者",
+        "第5月: 3 月底夏季结束累计 11 赞",
+        "第7月: 5-9 月冬季完全零互动",
+        "第11月: 第二个夏季又 9 赞累积",
+        "第11月底: 总 20 赞 0 举报，但用户量极小"
+      ],
+      "expected_signal_summary": "11 个月 20 赞 0 举报，用户量极小但 100% 高质量赞",
+      "expected_outcome": "alive",
+      "expected_status": "must_keep_low_volume_high_expertise",
+      "human_judgment": "高质量但极小众的 mark，按总量看可能被沉但每个赞都来自 NZAC 认证攀登者，算法应支持 reviewer expertise 加权",
+      "edge_case_flag": "low_volume_high_expertise + NZAC_alpinists + niche_value"
+    },
+    {
+      "id": 966,
+      "title": "Lake Waikaremoana 雷击枯木 junction 标错地方",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Lake Waikaremoana Track 在 Marauiti Hut 与 Waiopaoa Hut 之间一处岔路通向 Sandy Bay，2023 年 4 月一个新手用户标 mark 但实际标在了距离真 junction 北侧 110m 的非关键路口",
+        "intrinsic_quality": "真 junction 在 110m 之外，新手标的位置只是步道弯而非真岔路",
+        "user_volume_per_month": 280,
+        "duration_months": 9,
+        "signal": "Waikaremoana 区域 2degrees 偶有信号",
+        "season_pattern": "10-4 月旺季",
+        "human_factors": "Great Walk 走的人多是普通游客，看到 junction 提示就赞，并不知道还有更准确 junction"
+      },
+      "events_timeline": [
+        "第1月: 4 月标 mark，当月 18 人路过都赞，因为这里也有'弯'",
+        "第3月: 一个 Te Urewera iwi 当地向导举报'junction 标错位置'",
+        "第5月: 第二个有经验徒步者举报",
+        "第7月: 累积 62 赞 5 举报，赞全部是'看到弯了赞'非真识别 junction",
+        "第9月: 总 78 赞 7 举报"
+      ],
+      "expected_signal_summary": "78 赞 7 举报看似健康，但本地权威举报指出物理位置错",
+      "expected_outcome": "sunk",
+      "expected_status": "should_sink_geo_error",
+      "human_judgment": "关键岔路 mark 由错误用户标到非关键 junction 是 hazard，新手赞无法验证地理准确性，本地权威用户少量但精准的举报应该有压倒性权重",
+      "edge_case_flag": "wrong_geo_location + local_authority_correction + naive_likes"
+    },
+    {
+      "id": 967,
+      "title": "Stewart Island North West Circuit 极偏远公益 supply",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Stewart Island/Rakiura North West Circuit 在 Long Harry Hut 后方海滩石堆下 Rakiura Heritage Trust 志愿者放的应急燃料瓶 + 火柴，2022 年 12 月标",
+        "intrinsic_quality": "真公益维护，每两年一次补给，对 12 天 NW Circuit 上的迷路者是关键",
+        "user_volume_per_month": 35,
+        "duration_months": 30,
+        "signal": "Stewart Island 内陆完全无信号，要回 Oban 才能同步",
+        "season_pattern": "全年可走但极少人，12-3 月相对多",
+        "human_factors": "Stewart Island NW Circuit 是 NZ 最偏远 circuit 之一，月均 35 人通过且全部专业"
+      },
+      "events_timeline": [
+        "第1月: 12 月志愿者标 mark，当月 4 赞",
+        "第3月: 累积 9 赞，0 举报",
+        "第8月: 一个芬兰 thru-hiker 在 Oban 同步赞并写长评",
+        "第13月: 第一年累计 24 赞，全 Trust 圈内基本知晓",
+        "第18月: 第二次补给周期，Trust 在 mark 上更新评论",
+        "第24月: 第二年累计 46 赞",
+        "第30月: 总 62 赞 0 举报"
+      ],
+      "expected_signal_summary": "30 个月 62 赞 0 举报，平均月增 2 赞稳定",
+      "expected_outcome": "alive",
+      "expected_status": "must_keep_low_volume_charity",
+      "human_judgment": "明显有用但极少人知的慈善 supply，月均 2 赞看似衰减但实质是用户群极小，算法对此类必须有 small_user_pool 检测",
+      "edge_case_flag": "charity_supply + extreme_remote + low_volume_genuine"
+    },
+    {
+      "id": 968,
+      "title": "Hump Ridge Track 商业化 scenic 点击农场",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Hump Ridge Track 新升级为 Great Walk 后在 Okaka Lodge 上方一处 viewing platform，2024 年 1 月运营商雇人刷 mark 当作品牌引流",
+        "intrinsic_quality": "景观真实但运营商动机不纯，刷的是品牌广告非真用户体验",
+        "user_volume_per_month": 380,
+        "duration_months": 5,
+        "signal": "Hump Ridge 多数无信号，下山到 Tuatapere 才同步",
+        "season_pattern": "12-3 月旺季",
+        "human_factors": "运营商账号在 mark 创建后两周内集中操作，真用户尚未到达"
+      },
+      "events_timeline": [
+        "第1月: 运营商账号集群 11 个账号集中赞，看似 28 赞",
+        "第2月: 真用户到达开始进入，5 个真赞混入",
+        "第3月: 一个 Fiordland 向导举报'此点不如下方 platform'",
+        "第4月: 累计 38 赞（28 sock + 10 真）vs 4 举报",
+        "第5月: 总 42 赞 6 举报，sock 占比仍 67%"
+      ],
+      "expected_signal_summary": "42 赞中 28 来自运营商账号集群，仅 14 真",
+      "expected_outcome": "sunk",
+      "expected_status": "must_detect_commercial_inflation",
+      "human_judgment": "商业运营商雇佣 sock 刷自己 trail 上的 mark 形成品牌引流，sock 集群+创建后短期爆发是检测线索，商业 motivation 比 KOL 更隐蔽",
+      "edge_case_flag": "commercial_operator_inflation + great_walk_branding"
+    },
+    {
+      "id": 969,
+      "title": "Mt Pirongia 雨季桥塌 danger 12 小时内连环救命",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mt Pirongia Forest Park Pahautea Hut 下行至 Corcoran Rd 一处溪谷木桥，2024 年 8 月暴雨后桥头冲毁，DOC 当晚标 mark 警告",
+        "intrinsic_quality": "桥头悬空 1.5m 被树叶遮盖，看不见踩上去会塌；下一波周末徒步者 12 小时内即将到",
+        "user_volume_per_month": 240,
+        "duration_months": 4,
+        "signal": "Pirongia 信号不均，DOC 在 Te Pahu 同步",
+        "season_pattern": "全年都有徒步，8 月雨季多",
+        "human_factors": "Waikato 周末徒步者出门前会查 mark，12 小时内推送至关重要"
+      },
+      "events_timeline": [
+        "第1天: 暴雨当晚 DOC 标 mark",
+        "第1天夜: 4 小时内系统应紧急推送给附近用户",
+        "第2天上午: 周六徒步者出发前看到 mark 改道，3 人赞",
+        "第2天下午: 第一批 12 人通过都因 mark 改道，累计 8 赞",
+        "第7天: DOC 维修队到达，临时栈道完成",
+        "第30天: 4 周累计 38 赞 1 举报",
+        "第120天: 4 个月后总 62 赞 2 举报"
+      ],
+      "expected_signal_summary": "12 小时窗口内 8 真用户验证，4 个月累计 62 赞",
+      "expected_outcome": "alive",
+      "expected_status": "time_critical_must_propagate_within_12h",
+      "human_judgment": "创建后 12 小时窗口必须看到，否则下一波徒步者出事，算法对气象事件后 DOC 标记的 mark 应该立即触发地理半径推送",
+      "edge_case_flag": "time_critical_12h + storm_event + DOC_authority"
+    },
+    {
+      "id": 970,
+      "title": "Banks Peninsula Akaroa 老 mark 重新有意义 reactivation",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Banks Peninsula Track Stony Bay 段一处海角 viewing point，2018 年标 mark 后渐冷，2024 年 9 月一群 Hector's dolphin 重回此海湾使 mark 重获意义",
+        "intrinsic_quality": "原 mark 仅是普通海景，但 6 年后稀有海豚回归此处赋予新意义",
+        "user_volume_per_month": 320,
+        "duration_months": 72,
+        "signal": "Akaroa 区域 Spark 信号良好",
+        "season_pattern": "全年都有游客",
+        "human_factors": "原 mark 被新用户群以新理由重新点赞，旧 mark 改命"
+      },
+      "events_timeline": [
+        "第1-12月: 2018 年标 mark，第一年 18 赞稳定",
+        "第13-48月: 第 2-4 年缓慢衰减，每年 8-12 赞",
+        "第49-72月: 第 5-6 年仅累计 24 赞，看起来该沉",
+        "第73月: 9 月 Hector's dolphin 回归海湾的新闻爆发",
+        "第74月: 本月 42 个新赞涌入，全部提到海豚",
+        "第76月: 一个 DOC marine ranger 同步赞确认海豚常驻",
+        "第80月: 累计新增 156 赞，老 mark 完全 reactivated"
+      ],
+      "expected_signal_summary": "前 72 个月衰减仅 86 赞，第 73 月起 8 个月内新增 156 赞",
+      "expected_outcome": "alive",
+      "expected_status": "reactivation_must_recognize",
+      "human_judgment": "老 mark 因外部事件重新有意义，算法不能因前期衰减就永久沉它，需要持续监测重激活信号",
+      "edge_case_flag": "old_mark_reactivation + ecological_event + signal_revival"
+    },
+    {
+      "id": 971,
+      "title": "Coromandel Pinnacles Hut 上方雷击 danger 一次性",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Pinnacles Hut 上方 Pinnacles 顶 759m 一处 2024 年 1 月被雷击的金属梯，DOC 标 mark 警告未修期间不要使用",
+        "intrinsic_quality": "雷击后金属梯结构受损，DOC 标后 11 天工程师就修好了，mark 总有效期短",
+        "user_volume_per_month": 1800,
+        "duration_months": 1,
+        "signal": "Pinnacles 顶 Spark 信号良好",
+        "season_pattern": "12-3 月旺季每天 50+ 人爬",
+        "human_factors": "11 天窗口内必须信号最大化，修好后 mark 应该自动归档不应永久存在"
+      },
+      "events_timeline": [
+        "第1天: DOC 标 mark，当天 8 个用户避开梯子改路赞",
+        "第3天: 累计 22 赞 0 举报",
+        "第7天: 累计 41 赞，DOC 工程师评论'本周内修复'",
+        "第11天: 梯修好 DOC 评论 'resolved'",
+        "第14天: 修好后 3 个用户举报'此处已无危险'",
+        "第30天: DOC 将 mark 改为 historical archive"
+      ],
+      "expected_signal_summary": "11 天活跃期 41 赞 0 举报，修好后 3 举报应触发归档",
+      "expected_outcome": "archived",
+      "expected_status": "must_recognize_resolution_lifecycle",
+      "human_judgment": "短期 hazard 修好后举报反而是正常信号'已无危险'，算法必须区分'mark 错'与'hazard 已解决'，后者应触发 archive 而非 sink",
+      "edge_case_flag": "short_lived_hazard + resolution_signals + archive_not_sink"
+    },
+    {
+      "id": 972,
+      "title": "Catlins Tunnel Hill 隧道塌方 supply 反向社区",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Catlins Tunnel Hill Track 旧火车隧道入口前 Owaka 当地老人 Margaret 放的免费手电筒借用箱，2023 年 7 月标 mark 但被认为破坏野趣",
+        "intrinsic_quality": "真 supply 真维护，但本地保护派觉得手电筒箱破坏 'unspoiled' 体验",
+        "user_volume_per_month": 420,
+        "duration_months": 14,
+        "signal": "Owaka 区域信号良好",
+        "season_pattern": "全年通行",
+        "human_factors": "本地老人 Margaret 是受尊敬人物，但本地野趣保护派同样有发言权"
+      },
+      "events_timeline": [
+        "第1月: 7 月标 mark，当月 14 个游客赞'终于不用自带手电'",
+        "第2月: 5 个本地保护派举报'破坏隧道氛围'",
+        "第4月: 持续争议，每月 30+ 赞 vs 8 举报",
+        "第7月: 当地报纸介入报道 Margaret 故事，赞涌入",
+        "第10月: 累计 220 赞 42 举报",
+        "第14月: 总 320 赞 65 举报"
+      ],
+      "expected_signal_summary": "320 赞 vs 65 举报，但举报全部来自本地保护派非'mark 错'",
+      "expected_outcome": "alive",
+      "expected_status": "philosophical_dispute_must_keep",
+      "human_judgment": "举报理由是哲学分歧而非 mark 错误或 hazard，算法应识别'破坏氛围'类举报为低权重而非'mark 错'类高权重举报",
+      "edge_case_flag": "philosophical_objection + community_supply + reporter_intent_classification"
+    },
+    {
+      "id": 973,
+      "title": "Lake Hawea 私人地通道 junction 法律灰区",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Lake Hawea Conservation Area 北端一处穿过 Hunter Valley Station 私人地的捷径 junction，2022 年 11 月一个本地 musterer 标但法律上是非法穿越",
+        "intrinsic_quality": "确实是真 junction 真捷径，但走需要私人许可，标 mark 等于鼓励非法穿越",
+        "user_volume_per_month": 65,
+        "duration_months": 19,
+        "signal": "Hawea 北端无信号，下山到 Hawea township 才同步",
+        "season_pattern": "10-4 月可走",
+        "human_factors": "本地 musterer 标 mark 是好心，但 station 主人后来举报"
+      },
+      "events_timeline": [
+        "第1月: musterer 标 mark，当月 5 赞",
+        "第3月: Hunter Valley station 主人举报'这是私人地不应公开'",
+        "第6月: Federated Farmers NZ 官方账号举报",
+        "第8月: 8 个真用户赞捷径有用",
+        "第12月: 累计 22 赞 12 举报，争议持续",
+        "第19月: 总 35 赞 22 举报，DOC 介入评论'建议走官方步道'"
+      ],
+      "expected_signal_summary": "35 赞 22 举报但举报来自地权所有者权威方",
+      "expected_outcome": "sunk",
+      "expected_status": "legal_authority_must_prevail",
+      "human_judgment": "法律灰区 mark 即使有用户赞同，地权举报应有最高权重，算法对地主+ Federated Farmers 类权威举报需 special handling",
+      "edge_case_flag": "legal_authority_override + landowner_rights + utility_vs_legality"
+    },
+    {
+      "id": 974,
+      "title": "Egmont National Park 树倒堵路 danger 24h 修复",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Egmont National Park Around-the-Mountain Circuit 第 2 天一棵 Rimu 巨树倒下完全堵塞步道，2024 年 5 月标，DOC 24 小时内清理",
+        "intrinsic_quality": "真 hazard 但寿命极短，DOC 5 月 11 日标 5 月 12 日清理",
+        "user_volume_per_month": 180,
+        "duration_months": 1,
+        "signal": "Egmont 周边 Spark 信号尚可",
+        "season_pattern": "11-4 月旺季已结束但仍有 shoulder 用户",
+        "human_factors": "24 小时窗口太短，需要快速推送给当晚和次日早晨的用户"
+      },
+      "events_timeline": [
+        "第1天上午: DOC ranger 巡线发现并标 mark",
+        "第1天下午: 当天 3 个用户因 mark 改道",
+        "第1天夜: 累计 7 赞",
+        "第2天上午: DOC 链锯队到达清理",
+        "第2天下午: mark 改为 'resolved'",
+        "第3天: 累计 11 赞 0 举报",
+        "第30天: 1 个月后 mark archived 总 11 赞"
+      ],
+      "expected_signal_summary": "24 小时活跃期 7 赞，2 天累计 11 赞",
+      "expected_outcome": "archived",
+      "expected_status": "ultra_short_lifespan_recognition",
+      "human_judgment": "极短寿命 mark 的算法应识别 DOC 'resolved' 状态自动归档，不应继续在地图上活跃",
+      "edge_case_flag": "ultra_short_lifespan + DOC_resolution + auto_archive"
+    },
+    {
+      "id": 975,
+      "title": "Arthur's Pass Avalanche Peak 冬季独有 danger",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Arthur's Pass National Park Avalanche Peak Route 在 Scotts Track 上方 1500m 一处冬季独有的雪檐区，2023 年 6 月一个 alpine guide 标，仅 6-9 月有意义",
+        "intrinsic_quality": "雪檐塌陷区每年冬季形成不同位置但范围一致，guide 标的是范围 mark",
+        "user_volume_per_month": 45,
+        "duration_months": 16,
+        "signal": "Arthur's Pass village Spark 良好",
+        "season_pattern": "6-9 月冬季 alpine 旺季，10-5 月夏季无雪檐",
+        "human_factors": "夏季登山者看到 'avalanche' mark 会困惑'这里没雪啊'"
+      },
+      "events_timeline": [
+        "第1月: 6 月标 mark，冬季当月 8 个 alpine 登山者赞",
+        "第3月: 8 月冬季高峰累计 22 赞",
+        "第5月: 10 月转夏，5 个夏季登山者举报'此处无雪'",
+        "第8月: 1 月夏季高峰 14 个举报'mark 错位'",
+        "第11月: 第二个 6 月冬季再启 8 赞",
+        "第13月: 第二个 8 月又 18 赞",
+        "第16月: 总 65 赞 28 举报，分布严格按季节"
+      ],
+      "expected_signal_summary": "冬季月均 8 赞，夏季月均 4 举报，季节性反向",
+      "expected_outcome": "alive",
+      "expected_status": "seasonal_only_must_keep",
+      "human_judgment": "冬季独有 hazard 需要算法理解 mark 的季节生命周期，夏季举报不应永久压垮冬季有效性",
+      "edge_case_flag": "winter_only_hazard + summer_reports_irrelevant + seasonal_visibility"
+    },
+    {
+      "id": 976,
+      "title": "Queen Charlotte Track 渔船 supply 协议依赖",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Queen Charlotte Track Punga Cove Resort 码头一艘 Pelorus Sound 渔民 Wiremu 每周二投放的免费海鲜补给，2023 年 10 月标 mark",
+        "intrinsic_quality": "完全真实但 100% 依赖 Wiremu 周二在岸时间，其他时间 mark 无效",
+        "user_volume_per_month": 850,
+        "duration_months": 14,
+        "signal": "Punga Cove 信号良好",
+        "season_pattern": "全年但夏旺季多",
+        "human_factors": "周二到的人会赞，其他天到的人会困惑或举报"
+      },
+      "events_timeline": [
+        "第1月: 10 月标 mark，前两个周二 6 赞",
+        "第2月: 周三周四来的 12 人举报'没有任何渔船'",
+        "第4月: 累计 32 赞 28 举报，分布按星期",
+        "第7月: Wiremu 自己更新 mark 备注'仅周二上午'",
+        "第10月: 备注后举报骤降，赞继续累积",
+        "第14月: 总 145 赞 42 举报，举报集中在备注前期"
+      ],
+      "expected_signal_summary": "145 赞 42 举报，备注更新前后趋势完全不同",
+      "expected_outcome": "alive",
+      "expected_status": "time_window_supply_with_metadata_fix",
+      "human_judgment": "时间窗口依赖的 supply 在 metadata 完善前会被错误举报，算法应允许 mark owner 更新 metadata 时降权早期错误举报",
+      "edge_case_flag": "time_window_dependency + metadata_correction + report_decay_after_fix"
+    },
+    {
+      "id": 977,
+      "title": "Mt Holdsworth Powell Hut 楼梯松动 danger 隐性",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tararua Forest Park Powell Hut 后方上行木阶第 18 级松动，2024 年 2 月一个 WTC 老会员标，松动隐性踩上才知道",
+        "intrinsic_quality": "真 hazard 但视觉上看不出，必须踩上才感受到，因此用户多数走过没感觉",
+        "user_volume_per_month": 380,
+        "duration_months": 7,
+        "signal": "Tararua 偶有 Spark",
+        "season_pattern": "全年",
+        "human_factors": "走过的人多数体重轻没感觉松动，重的人会感觉到"
+      },
+      "events_timeline": [
+        "第1月: 2 月标 mark，当月 8 个体重 80kg+ 的人赞",
+        "第2月: 22 个体重轻的人举报'楼梯没问题'",
+        "第3月: 累计 14 赞 28 举报，赞全部来自重体重者",
+        "第4月: 一个 SAR 工程师确认楼梯结构松动",
+        "第6月: 累计 25 赞 42 举报",
+        "第7月: 总 32 赞 51 举报"
+      ],
+      "expected_signal_summary": "32 赞 51 举报但赞全部来自体重 80kg+ reporter",
+      "expected_outcome": "alive",
+      "expected_status": "reporter_property_dependent",
+      "human_judgment": "隐性 hazard 仅对部分用户群可感知，举报多于赞但赞来源具有共同物理特征（体重），算法理想上需识别 reporter 属性差异",
+      "edge_case_flag": "perceiver_dependent_hazard + body_weight_property + minority_correct"
+    },
+    {
+      "id": 978,
+      "title": "Lake Tekapo Mt John scenic 摄影师过誉自标",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Mt John Observatory Track 顶部观星点旁一处 self-promoting 摄影师 2024 年 3 月标的'最佳拍 Mackenzie 星空点'，但其实摄影师只是自我推广",
+        "intrinsic_quality": "Mackenzie Dark Sky Reserve 整片都是好星空点，此特定位置毫无独特性",
+        "user_volume_per_month": 4200,
+        "duration_months": 9,
+        "signal": "Tekapo 区域 Spark 良好",
+        "season_pattern": "全年观星",
+        "human_factors": "夜间观星者多数对位置无判断力，跟着 mark 走就赞"
+      },
+      "events_timeline": [
+        "第1月: 摄影师标 mark 后立即在 IG 推广，当月 180 赞涌入",
+        "第3月: 一个 UC Mt John 天文学家举报'整个山顶都一样'",
+        "第5月: 第二个本地观星向导举报'位置非独特'",
+        "第7月: 累计 720 赞 8 举报",
+        "第9月: 总 1100 赞 14 举报，但举报来自权威"
+      ],
+      "expected_signal_summary": "1100 赞但仅 14 权威举报指出无独特性",
+      "expected_outcome": "alive",
+      "expected_status": "weak_uniqueness_but_not_harmful",
+      "human_judgment": "过誉但无害，没有错误也没有 hazard 仅是过度赞美，算法不必沉但应降权'最佳/独特'类绝对化描述",
+      "edge_case_flag": "self_promotion_no_harm + weak_authority_objection + low_priority_correction"
+    },
+    {
+      "id": 979,
+      "title": "Whirinaki Forest 古木 scenic Treaty 意义被忽视",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Whirinaki Te Pua-a-Tāne Conservation Park 一棵 1200 年 Totara 大树，2023 年 2 月一个 Ngāti Whare iwi 长辈标 mark 强调 Treaty 文化意义",
+        "intrinsic_quality": "古木+ iwi 文化双层意义，但游客多数仅当作 photo spot",
+        "user_volume_per_month": 240,
+        "duration_months": 16,
+        "signal": "Whirinaki 偏远基本无信号",
+        "season_pattern": "全年",
+        "human_factors": "iwi 长辈期望 mark 教育游客，但游客赞理由肤浅"
+      },
+      "events_timeline": [
+        "第1月: 长辈标 mark 附长 te reo Māori 评论",
+        "第2月: 18 个游客赞但全部仅是'big tree'肤浅反应",
+        "第6月: 累计 95 赞，长辈失望但仍维护 mark",
+        "第10月: 一个 DOC iwi liaison 同步赞并扩展评论",
+        "第16月: 总 165 赞 0 举报，但价值传达打折"
+      ],
+      "expected_signal_summary": "165 赞 0 举报，文化意义传达不充分但 mark 本身健康",
+      "expected_outcome": "alive",
+      "expected_status": "cultural_mark_keep_with_education_gap",
+      "human_judgment": "iwi 文化 mark 即使游客理解浅也应保留，算法对 cultural authority 创建者 mark 应该 priority preserve",
+      "edge_case_flag": "iwi_cultural_authority + treaty_significance + shallow_engagement"
+    },
+    {
+      "id": 980,
+      "title": "Rakiura Track Maori Beach 历史 mark 海平面上升威胁",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Rakiura Track Maori Beach 段一处通往 historic sawmill ruins 的岔路 mark，2019 年标，2024 年起海平面上升使岔路定期被淹",
+        "intrinsic_quality": "原 mark 完全有效，但气候变化使物理可达性逐年降低",
+        "user_volume_per_month": 380,
+        "duration_months": 60,
+        "signal": "Stewart Island 内陆无信号",
+        "season_pattern": "全年但 5-8 月大潮期淹得多",
+        "human_factors": "5 年老 mark 累积大量赞，但近 2 年趋势转向举报'路被淹'"
+      },
+      "events_timeline": [
+        "第1-36月: 2019-2022 年 220 赞稳定累积 5 举报",
+        "第48月: 2023 年 6 月起'路淹'举报开始多起来",
+        "第54月: 2023 年 12 月累积 28 个'淹'举报",
+        "第56月: 2024 年 2 月 DOC 宣布步道部分关闭",
+        "第60月: 总 250 赞 42 举报，但近 24 个月趋势 0 赞 42 举报"
+      ],
+      "expected_signal_summary": "5 年累计 250 赞但近 24 个月 42 举报 0 赞，气候反转",
+      "expected_outcome": "sunk",
+      "expected_status": "climate_change_terrain_loss",
+      "human_judgment": "气候变化导致原 mark 物理失效，长期累积赞掩盖近期反转，算法必须有滑动窗口检测，不能让历史掩盖现实",
+      "edge_case_flag": "climate_change_obsolescence + historical_inertia + recent_reversal"
+    }
+  ],
+  "self_check": {
+    "lines_handwritten_unique_locations": true,
+    "all_location_desc_30_plus_chars": true,
+    "all_events_timeline_5_plus_items": true,
+    "all_human_judgment_25_plus_chars": true,
+    "no_template_reuse": true,
+    "real_nz_geo_names_verified": [
+      "Aoraki/Mt Cook", "Mueller Hut", "Sealy Tarns", "Stocking Stream", "Routeburn Track", "Lake Howden",
+      "Earland Falls", "Old Ghost Road", "Stern Valley", "Lyell", "Tongariro Alpine Crossing", "Red Crater",
+      "Emerald Lakes", "Te Maari", "Abel Tasman", "Awaroa Inlet", "Marahau", "Totaranui", "Roy's Peak",
+      "Wanaka", "Mt Taranaki", "Pouakai Hut", "Cape Reinga", "Nelson Lakes", "Travers-Sabine", "Upper Travers Hut",
+      "St Arnaud", "Dusky Track", "Loch Maree Hut", "Whanganui Journey", "Tieke Kainga", "Pipiriki",
+      "Tararua", "Tarn Ridge Hut", "Mt Holdsworth", "Powell Hut", "Ball Pass", "Caroline Hut", "Tasman Glacier",
+      "Te Araroa", "Ketetahi", "Mangatepopo", "Whakapapa Village", "Mt Aspiring", "Bonar Glacier", "Colin Todd Hut",
+      "Lake Waikaremoana", "Marauiti Hut", "Waiopaoa Hut", "Te Urewera", "Stewart Island", "Long Harry Hut",
+      "Oban", "Hump Ridge Track", "Okaka Lodge", "Tuatapere", "Mt Pirongia", "Pahautea Hut", "Te Pahu",
+      "Banks Peninsula", "Stony Bay", "Akaroa", "Pinnacles Hut", "Coromandel", "Catlins", "Tunnel Hill",
+      "Owaka", "Lake Hawea", "Hunter Valley Station", "Egmont", "Around-the-Mountain Circuit", "Arthur's Pass",
+      "Avalanche Peak", "Scotts Track", "Queen Charlotte Track", "Punga Cove", "Pelorus Sound",
+      "Lake Tekapo", "Mt John", "Mackenzie Dark Sky Reserve", "Whirinaki", "Ngāti Whare", "Rakiura",
+      "Maori Beach"
+    ],
+    "boundary_coverage": {
+      "high_likes_should_sink": ["951", "963", "968", "978"],
+      "high_reports_must_keep": ["952", "959", "962", "972", "977"],
+      "zero_signal_must_keep": ["953", "957", "967"],
+      "early_breakage_lifesaver": ["954"],
+      "long_term_recent_reversal": ["955", "980"],
+      "seasonal_oscillation": ["956", "975"],
+      "sockpuppet_detection": ["958", "959", "968"],
+      "time_critical": ["960", "969", "974"],
+      "cross_season_revival": ["961", "970"],
+      "weather_conditional": ["962"],
+      "geo_mismatch": ["963", "966"],
+      "private_visibility": ["964"],
+      "low_volume_high_expertise": ["965", "967"],
+      "resolution_lifecycle": ["971", "974"],
+      "philosophical_objection": ["972", "979"],
+      "legal_authority": ["973"],
+      "metadata_correction": ["976"],
+      "perceiver_dependent": ["977"]
+    },
+    "stopped_at": 30,
+    "remaining_for_next_batch": 20,
+    "stop_reason": "30 条已覆盖用户列出的全部 16 类反直觉边界，继续写到 50 会出现重复主题——按红线宁停勿水，剩余 20 条交下一批补足或重组主题"
+  }
+}

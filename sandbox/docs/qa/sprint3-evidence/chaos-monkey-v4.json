@@ -1,0 +1,57 @@
+{
+  "N": 5000,
+  "masterSeed": 31415,
+  "passed": 5000,
+  "failed": 0,
+  "byArc": {
+    "controversial_persistent": {
+      "total": 263,
+      "passed": 263
+    },
+    "recovery_after_scare": {
+      "total": 524,
+      "passed": 524
+    },
+    "critical_then_rescued": {
+      "total": 350,
+      "passed": 350
+    },
+    "doc_official": {
+      "total": 196,
+      "passed": 196
+    },
+    "progression_to_death": {
+      "total": 460,
+      "passed": 460
+    },
+    "stable_good": {
+      "total": 956,
+      "passed": 956
+    },
+    "acute_in_suspicious": {
+      "total": 368,
+      "passed": 368
+    },
+    "short_attack_recovered": {
+      "total": 253,
+      "passed": 253
+    },
+    "short_burst_then_dead": {
+      "total": 263,
+      "passed": 263
+    },
+    "seasonal": {
+      "total": 405,
+      "passed": 405
+    },
+    "stable_bad": {
+      "total": 575,
+      "passed": 575
+    },
+    "remote_silent": {
+      "total": 387,
+      "passed": 387
+    }
+  },
+  "failedSamples": []
+}

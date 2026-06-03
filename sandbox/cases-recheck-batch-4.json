@@ -1,0 +1,3019 @@
+{
+  "batch": 4,
+  "total": 131,
+  "cases": [
+    {
+      "id": 578,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "8L:1R 救命级 winter danger，无向下急转，type=danger 持续真实价值，续命系数加成",
+      "case_data": {
+        "title": "Welcome Flat Track 雪崩警告救一对夫妻",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-08-11 winter Copland 罕见徒步，patrol 发现 north slope unstable wind slab",
+          "2024-08-11 mark：'north slope wind slab 高风险，绕 valley floor 不要走 high traverse'",
+          "2024-08-19 一对 retiree couple 看到 mark 改道",
+          "2024-08-19 同日另一队不知道 mark 走 high traverse，触发 size 1 avalanche，1 人受伤获救"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 579,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12-1月 flowering 蜂群，强季节性，非季节期 0 view 时钟A正常流失",
+      "case_data": {
+        "title": "Routeburn Lake Mackenzie Hut 上方 alpine flowering 蜂群警告",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 5,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-12-22 hut warden 发现 flowering 季节蜂群异常密集",
+          "2024-12-22 mark：'12月-1月 flowering，蜂群密集，过敏者备 EpiPen+ 长袖'",
+          "2025-01-08 一名澳洲游客被叮，EpiPen 因 mark 提前准备",
+          "2025-01-08 EpiPen 注射后症状缓解，未送医（轻度反应）"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 580,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "8L:1R 救命 bivvy，持续高赞，续命有效",
+      "case_data": {
+        "title": "Tongariro Mangatepopo 风暴中失温者紧急避难岩棚",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-05-28 当地 SAR 队员留 mark 标 hidden bivvy boulder",
+          "2024-05-28 mark：'valley head 10m 大圆石下空腔，可容 3 人挡风躲雨'",
+          "2024-06-19 一名独行者在 -2°C+ 大雨中失温前期",
+          "2024-06-19 他靠 mark 找到 bivvy boulder，过夜后第二天自行下撤"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 581,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "8L:1R 雷暴警告救多人，无急转，处理力度正常",
+      "case_data": {
+        "title": "Mt Cook Mueller Hut 路上闪电频发段警告",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-01-30 一位徒步者在 ridge metal handrail 段被静电打到（非雷击）",
+          "2024-01-30 mark：'雷暴近时 metal handrail 危险，蹲下不接触金属'",
+          "2024-02-11 一队 6 人徒步者看到 mark + 远雷声，立刻蹲下离开 handrail",
+          "2024-02-11 5 分钟后雷击 handrail，无人受伤"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 582,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "8L:1R 桥维修期 ford 救命，时效内高价值 healthy",
+      "case_data": {
+        "title": "Paparoa Track Pororari River 暴涨救一对夫妻 + 狗",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-04-22 桥维修期间，local 留 mark 标安全 ford 点",
+          "2024-04-22 mark：'桥关 6 周，唯一安全 ford 在桥北 600m，水深 < 0.7m'",
+          "2024-04-29 一对夫妻 + 一只 retriever 看到 mark 不再尝试桥下游浅滩",
+          "2024-04-29 同日下游浅滩涨到 1.6m，他们的狗在 mark 推荐 ford 处轻松过"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 583,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "winter/spring 雪檐警告，明确季节性",
+      "case_data": {
+        "title": "Kepler Track Mt Luxmore 雪檐塌陷救独行者",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-09-14 一位 NZAC member 发现 east cornice 出现 crown 裂缝",
+          "2024-09-14 mark：'east cornice 即将塌，summit 走 west spur 安全 30m'",
+          "2024-09-21 独行者 Mike 看到 mark 走 west spur",
+          "2024-09-21 同日另一名独行者从 east cornice 上经过，cornice 在他后面塌但他自己没掉"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 584,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "8L:1R peat sink 永久警告，DOC 加官方牌，续命大",
+      "case_data": {
+        "title": "Rakiura Track 北端深泥沼陷救老人",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-03-09 一位 80 岁徒步者陷入 peat sink 腰深，靠同行救出",
+          "2024-03-09 同行者立刻 mark：'main track 西 4m 大 peat sink 1.4m 深'",
+          "2024-04-15 一对 70 多岁夫妻看到 mark，绕开继续",
+          "2024-04-15 妻子说：'我陷下去出不来'，丈夫表示同意"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 585,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "夏末 ice 反冻警告，季节性 alpine 危险",
+      "case_data": {
+        "title": "Mt Taranaki summit ice 晚期下撤警告救 4 人",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-10-30 一位 alpine guide 发现下午 4 点后 ice 反冻速度比往年快 90 分钟",
+          "2024-10-30 mark：'下午 4 点后 ice 反冻，没冰爪不要继续，回 Tahurangi Lodge'",
+          "2024-11-08 一队 4 人徒步者下午 3:50 看到 mark，立刻 turn around",
+          "2024-11-08 他们事后看天气数据，那天 ice 在 4:30 已经全冻硬"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 586,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "8L:1R CO 中毒警告 + DOC 维修后 history，无急转",
+      "case_data": {
+        "title": "Routeburn Falls Hut 厨房一氧化碳泄漏紧急警告",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-07-19 一位徒步者带 CO 测试器发现 hut 厨房晚饭高峰 CO 高于 50ppm",
+          "2024-07-19 mark + hut 留言：'晚饭高峰开窗，CO > 50ppm 头痛立刻出去'",
+          "2024-08-14 一家 4 人开始头痛，看 mark 立刻撤到 porch",
+          "2024-08-14 后来 warden 测同日 CO 一度到 80ppm（中毒前期）"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 587,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "PLB 死区 critical infrastructure，SAR 公开认可",
+      "case_data": {
+        "title": "Mavora Lakes 远程区域 PLB 信号死区警告",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-02-04 SAR 队员发现 western basin PLB 信号被山形遮蔽",
+          "2024-02-04 mark：'此 basin PLB 信号弱，紧急时往 saddle 上爬 100m 再发'",
+          "2024-03-19 一名 hunter 摔断腿，按 mark 提示爬到 saddle 才发出 PLB",
+          "2024-03-19 SAR 直升机 2 小时到达，hunter 救回"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 588,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "winter shaded ice，明确季节性 hidden ice 警告",
+      "case_data": {
+        "title": "Arthur's Pass Bealey Spur 冬季 hidden 冰段警告",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-07-08 一名徒步者在 north face 阴影段滑倒，撞树仅轻伤",
+          "2024-07-08 mark：'north face shaded 段 hidden ice，建议 microspikes 或绕南坡'",
+          "2024-08-02 一对 couple 看到 mark 改南坡",
+          "2024-08-02 同日另两个徒步者没看到 mark 滑倒，其中一人脑震荡，被直升机送 Christchurch"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 589,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8L:1R 潮汐表 backup，DOC 已修正后历史价值",
+      "case_data": {
+        "title": "Milford Sound 步道入口潮汐时间表救一家人",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-01-12 local guide 发现官方潮汐表过时半年，自己留更新 mark",
+          "2024-01-12 mark：'官方表 6 月起错，正确高潮时间 official+47min'",
+          "2024-02-05 一家 5 人按 mark 时间出发，避开高潮",
+          "2024-02-05 official 时间出发的另一队被困 sandbar 2 小时获救（都活）"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 590,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "PLB clear sky 救命点，永久保持高价值",
+      "case_data": {
+        "title": "Fiordland Dusky Track 极偏远 PLB 测试区救老 tramper",
+        "type": "supply",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-04-18 一位 78 岁 tramper 心律不齐，需要 PLB 求救",
+          "2024-04-18 hut 周围被山遮蔽，他靠以前留的 mark 找到 'PLB clear sky' 点",
+          "2024-04-18 mark：'hut 东 80m 河阶，sky window 可见 GPS 卫星'",
+          "2024-04-18 PLB 信号 4 分钟被接收，直升机 5 小时到达"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 592,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "personal warning 持续验证，scree 段警告无急转",
+      "case_data": {
+        "title": "Tongariro Crossing Soda Springs 父亲留 mark 救后来人",
+        "type": "supply",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2023-12-30 一位父亲的 14 岁女儿在 scree 段坠落骨折，他亲自留 mark",
+          "2023-12-30 mark：'我女儿在此摔断股骨，scree 比看起来陡 + 松，绕 east trail'",
+          "2024-02-22 一队学生看到 mark 全部走 east trail",
+          "2024-02-22 一名独行者忽视 mark，同样位置摔伤，直升机救"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 593,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "user-arbitration",
+      "rationale": "占比好1条不算急转 [user-decided]",
+      "case_data": {
+        "title": "Hooker Valley swing bridge 强风警告救老人摔倒",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-03-15 老 ranger 发现 swing bridge 在 valley 风口最高阵风可达 90km/h",
+          "2024-03-15 mark：'下午 valley 风口阵风 80+km/h，老人 + 孩子等阵风间隙过桥'",
+          "2024-04-18 一位 75 岁老太太按 mark 等阵风间隙才上桥",
+          "2024-04-18 上桥后看到她身后阵风把另一个游客的帽子吹下河，那游客差点失去平衡"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 594,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "8L:1R hidden log 永久水域 hazard，packraft 协会转载",
+      "case_data": {
+        "title": "Greenstone-Caples 河流 hidden snag 救划船者",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-01-22 一位 packrafter 撞 hidden log 翻船，事后留 mark",
+          "2024-01-22 mark：'GR S44.9821 E168.4521 水下大 log，水位 < 0.8m 时贴右岸'",
+          "2024-03-08 一队 3 人 packrafters 看到 mark 全部贴右岸",
+          "2024-03-08 第三人靠近 log 时仍轻微擦到，证实 mark 位置精准"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 595,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "alpine crevasse 标准参考，IFMGA guide 权威",
+      "case_data": {
+        "title": "Aoraki Mt Cook Plateau Hut 周围 hidden 冰裂缝 group 救援",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 5,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-11-30 一名 IFMGA guide 在 north approach 发现 hidden crevasse 群（4 个，每个 > 2m 深）",
+          "2024-11-30 mark：'北 approach 100m 范围 4 个 hidden crevasse，全队结绳并 zigzag west'",
+          "2024-12-15 一队 5 人按 mark 结绳",
+          "2024-12-15 队员 #3 踩穿一个 hidden bridge，被绳队拉住"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 596,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "rapid hidden rock 水位 < 1m 时危险，季节性水位",
+      "case_data": {
+        "title": "Whanganui Journey 河 rapid hidden rock 救 kayaker",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-02-28 一名 kayaker 撞到 hidden rock 翻船，无人受伤但 paddle 丢失",
+          "2024-02-28 mark：'50/50 rapid 中游 hidden rock，水位 < 1m 时贴左岸'",
+          "2024-04-11 一对 canoe 父女按 mark 贴左岸通过",
+          "2024-04-11 后来另一队没看 mark 也撞到，11 岁孩子被冲下游 200m 获救"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 597,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "personal-loss warning 救命，持续高赞",
+      "case_data": {
+        "title": "Lake Waikaremoana Track 远东侧 lone tramper 失温警告",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-06-04 一位独行 tramper Marie 在 exposed ridge 失温前期生还后留 mark",
+          "2024-06-04 mark：'此 ridge 风寒效应极强，独行 + 雨天 = 撤回 hut，我差点死'",
+          "2024-08-22 另一独行者 Hugh 看到 mark 撤回 hut",
+          "2024-08-22 同日另一队 2 人不顾警告继续，1 人轻度失温被同伴扶到 next hut"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 598,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "winter avalanche path 季节性强保",
+      "case_data": {
+        "title": "Mt Cook Hooker Hut 雪崩警告救一队 7 人",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-09-26 NZAC patrol 发现 approach gully 出现 size 2 avalanche path",
+          "2024-09-26 mark：'gully 上方 wind slab 形成中，绕 east lateral moraine'",
+          "2024-10-08 一队 7 人徒步者看到 mark 改 east moraine",
+          "2024-10-08 当晚 size 2 avalanche 真的下来，正好覆盖原 gully 路线"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 599,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12-2月蓝瓶水母季，明确季节性",
+      "case_data": {
+        "title": "Banks Peninsula Akaroa Track 蓝瓶水母警告救过敏儿童",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-12-09 一位 lifeguard 发现东 bay 蓝瓶水母大量上岸",
+          "2024-12-09 mark：'12月-2月蓝瓶水母季，过敏儿童不要下水，醋在 hut 急救箱'",
+          "2025-01-05 一家 4 人，5 岁儿子有海洋生物过敏史，看到 mark 改去西 bay",
+          "2025-01-05 同日东 bay 有另一名 8 岁孩子被蛰，醋被使用，未送医"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 600,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "AED 救命复合点 critical infrastructure",
+      "case_data": {
+        "title": "Westland Welcome Flat hot pool 烫伤急救 + AED 综合点",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-03-22 hut warden + 一位 ICU nurse 共同建立急救 + AED 复合点",
+          "2024-03-22 mark：'pool 边木箱：cold pack + 烫伤纱布 + AED + 1737 卡'",
+          "2024-05-14 一位 60 岁游客滑倒陷 hot pool 1 度烫伤，cold pack 被使用",
+          "2024-07-09 一名中年男子在 hut 突发心脏病，AED 被同伴使用并复苏成功"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 601,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "7L:0R 14月小流量 TA 信息，无急转，已 resolved 但保留",
+      "case_data": {
+        "title": "Te Araroa Richmond Range Rintoul Hut bunk count wrong",
+        "type": "supply",
+        "likes": 7,
+        "reports": 0,
+        "duration_months": 14,
+        "user_volume_per_month": 8,
+        "intrinsic_quality": "Useful for TA thru-hikers planning where to sleep when huts overlap",
+        "events_timeline": [
+          "Month 1: TA SOBO hiker drops mark on exit day at Havelock cafe wifi",
+          "Month 3: NOBO hiker confirms still only 4 mattresses, 2 likes",
+          "Month 5: another SOBO confirms but adds DOC fixed it that week, ambiguity",
+          "Month 8: DOC volunteer leaves comment that mattresses were replaced"
+        ],
+        "edge_case_flag": "ta_thru|delayed_sync|self_resolving_facility"
+      }
+    },
+    {
+      "id": 602,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "黄蜂巢晚夏季节性，winter 0 view 正常流失，spring 复活",
+      "case_data": {
+        "title": "Routeburn-Greenstone-Caples loop McKellar Saddle wasp nest",
+        "type": "danger",
+        "likes": 12,
+        "reports": 0,
+        "duration_months": 9,
+        "user_volume_per_month": 45,
+        "intrinsic_quality": "Anaphylactic risk for wasp-allergic trampers, late-summer NZ wasp season is real",
+        "events_timeline": [
+          "Month 1: tramper stung 4 times posts mark from Te Anau motel after exit",
+          "Month 2: 3 separate parties confirm same nest, 12 likes accumulated",
+          "Month 4: DOC ranger comments will deal with it after season ends",
+          "Month 5: winter, no activity, 0 new reports"
+        ],
+        "edge_case_flag": "seasonal|delayed_sync|anaphylaxis_risk"
+      }
+    },
+    {
+      "id": 603,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "22L:0R 7月 alpine critical 填补官方 gap，DOC 引用",
+      "case_data": {
+        "title": "Rees-Dart Cascade Saddle scree route changed after slip",
+        "type": "junction",
+        "likes": 22,
+        "reports": 0,
+        "duration_months": 7,
+        "user_volume_per_month": 25,
+        "intrinsic_quality": "Critical navigation in alpine terrain where wrong line means cliff bands",
+        "events_timeline": [
+          "Month 1: experienced party posts mark with photos from Glenorchy hostel",
+          "Month 2: NZAC member confirms new line and adds GPX track",
+          "Month 3: DOC route alert published, references the user mark",
+          "Month 4: 22 likes, the GPX downloaded 80 times via mark thread"
+        ],
+        "edge_case_flag": "alpine_critical|user_filled_official_gap|long_lived"
+      }
+    },
+    {
+      "id": 604,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "5L:0R 16月 Dusky 偏远，已 resolved 仍有历史价值，低流量正常流失",
+      "case_data": {
+        "title": "Dusky Track Loch Maree Hut roof leak day 4 of 8",
+        "type": "supply",
+        "likes": 5,
+        "reports": 0,
+        "duration_months": 16,
+        "user_volume_per_month": 6,
+        "intrinsic_quality": "On 8-day track with no exit, knowing which bunks stay dry matters for hypothermia risk",
+        "events_timeline": [
+          "Month 1: tramper posts after 8 days of being soaked, very detailed mark",
+          "Month 4: another Dusky veteran confirms same bunk leaks, adds bunk 5 dry",
+          "Month 8: DOC hut warden volunteer responds will patch next maintenance",
+          "Month 12: maintenance done, user posts updated photo of dry roof"
+        ],
+        "edge_case_flag": "low_volume_high_stakes|long_track|self_resolving"
+      }
+    },
+    {
+      "id": 605,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "4L:0R 22月 ultra-low volume 偏远 NZAC 权威 mark",
+      "case_data": {
+        "title": "Five Passes Route Olivine Ledge biv missing on day 3",
+        "type": "junction",
+        "likes": 4,
+        "reports": 0,
+        "duration_months": 22,
+        "user_volume_per_month": 3,
+        "intrinsic_quality": "Critical for trip planning, bivvy-vs-tent decisions on remote off-track route",
+        "events_timeline": [
+          "Month 1: NZAC member posts mark after returning to Queenstown",
+          "Month 4: another NZAC party confirms biv truly gone, suggests collapsed in 2019 storm",
+          "Month 8: Moir's Guide editor comments thanks for community update",
+          "Month 14: 4 likes, 0 reports, mark referenced in next Moir's edition"
+        ],
+        "edge_case_flag": "ultra_low_volume|expert_only|guidebook_referenced"
+      }
+    },
+    {
+      "id": 606,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "25L:0R 触发 DOC 官方行动，无报告",
+      "case_data": {
+        "title": "St James Walkway Anne Hut bunk bed bedbugs day 2 of 4",
+        "type": "supply",
+        "likes": 25,
+        "reports": 0,
+        "duration_months": 10,
+        "user_volume_per_month": 30,
+        "intrinsic_quality": "Bedbugs spread to home and to other huts via sleeping bag, real cost not just discomfort",
+        "events_timeline": [
+          "Month 1: tramper finds bites, posts after Hanmer hot pools wifi sync",
+          "Month 2: 3 confirmations same week, all east-side bunks, 18 likes",
+          "Month 3: DOC closes hut for fumigation, posts official notice referencing the mark",
+          "Month 4: hut reopened, user verifies no bites in two consecutive trips"
+        ],
+        "edge_case_flag": "triggered_official_action|hygiene|continuity_value"
+      }
+    },
+    {
+      "id": 607,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "80L:4R (20:1) 持续争议但稳定无急转，canonical scenic",
+      "case_data": {
+        "title": "Travers-Sabine Circuit Blue Lake side trip cumulative fatigue judgment",
+        "type": "scenic",
+        "likes": 80,
+        "reports": 4,
+        "duration_months": 18,
+        "user_volume_per_month": 40,
+        "intrinsic_quality": "Iconic scenic mark, world-rated optical clarity, reality varies with weather",
+        "events_timeline": [
+          "Month 1: original poster makes the scenic mark, 50 likes early",
+          "Month 6: day-5 fatigued user reports lake was cloudy, suggests downgrade",
+          "Month 7: 4 follow-up users who happened to visit on bluebird days defend mark",
+          "Month 9: NIWA scientist comments lake clarity varies by inflow turbidity that week"
+        ],
+        "edge_case_flag": "fatigue_bias|weather_variance|canonical_scenic"
+      }
+    },
+    {
+      "id": 608,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "bike season-only，明确 mode 季节性",
+      "case_data": {
+        "title": "Heaphy Track cyclist-only segment hidden bog after rain",
+        "type": "danger",
+        "likes": 12,
+        "reports": 0,
+        "duration_months": 8,
+        "user_volume_per_month": 18,
+        "intrinsic_quality": "Real injury risk for fast-moving cyclists, unique to bike season, tramper season closes",
+        "events_timeline": [
+          "Month 1: cyclist posts with helmet-cam screenshot from Karamea Tavern wifi",
+          "Month 2: 6 confirmations from following weekend's riders",
+          "Month 3: DOC adds wooden boards, half-fix",
+          "Month 4: new riders confirm boards help but bog reopens after rain"
+        ],
+        "edge_case_flag": "mode_specific|seasonal|cyclist_only"
+      }
+    },
+    {
+      "id": 609,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "seasonal-dry advisory 水波动季节性",
+      "case_data": {
+        "title": "Inland Pack Track Ballroom Overhang water stagnant on day 3",
+        "type": "supply",
+        "likes": 9,
+        "reports": 0,
+        "duration_months": 6,
+        "user_volume_per_month": 22,
+        "intrinsic_quality": "Drinking water knowledge for a 3-day track with limited resupply",
+        "events_timeline": [
+          "Month 1: party posts after 36 hours of mild dehydration, very specific mark",
+          "Month 2: 3 confirmations same dry stretch, 9 likes",
+          "Month 3: rain arrives, user reports water now flowing again",
+          "Month 4: post-rain user marks RESOLVED but original poster contests"
+        ],
+        "edge_case_flag": "fluctuating_truth|seasonal|water_safety"
+      }
+    },
+    {
+      "id": 610,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "7L:3R 持续争议非急转，self-edit 后稳定，HEALTHY",
+      "case_data": {
+        "title": "Mavora Walkway South Mavora Lake jet ski noise mark debated by hut group",
+        "type": "danger",
+        "likes": 7,
+        "reports": 3,
+        "duration_months": 11,
+        "user_volume_per_month": 12,
+        "intrinsic_quality": "Subjective experience mark, contested even within single group's discussion",
+        "events_timeline": [
+          "Month 1: original poster marks danger because jet ski almost hit kayaker",
+          "Month 2: hut companion who was on same day-3 contests, jet skis legal there",
+          "Month 3: original poster updates mark text after reflection, downgrades to advisory",
+          "Month 6: 4 more users add nuance, distinguishing actual incidents from noise complaint"
+        ],
+        "edge_case_flag": "self_correction|hut_discussion|opinion_evolution"
+      }
+    },
+    {
+      "id": 611,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "8L:1R 13月 cyclical 老鼠问题，TA 社区持续验证",
+      "case_data": {
+        "title": "Te Araroa Tararuas Waitewaewae Hut mouse infestation on day 2 of 6",
+        "type": "supply",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 13,
+        "user_volume_per_month": 14,
+        "intrinsic_quality": "Practical food-safety knowledge for hut sleepers",
+        "events_timeline": [
+          "Month 1: TA hiker posts photo of chewed peanut butter packet from Otaki",
+          "Month 2: 4 more TA hikers confirm same hut, suggest hanging food",
+          "Month 3: DOC volunteer comments hut warden traps mice quarterly",
+          "Month 6: post-trapping user reports no mice, suggests RESOLVED"
+        ],
+        "edge_case_flag": "cyclical_problem|backcountry_constant|do_not_resolve"
+      }
+    },
+    {
+      "id": 612,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "18L:0R DOC 引用并清理，已 resolved 历史价值",
+      "case_data": {
+        "title": "Greenstone Track Slip Flat new slip blocks track on day 3 of 4",
+        "type": "danger",
+        "likes": 18,
+        "reports": 0,
+        "duration_months": 5,
+        "user_volume_per_month": 35,
+        "intrinsic_quality": "Active route obstruction, navigation safety, route-time impact for groups still in",
+        "events_timeline": [
+          "Month 1: original poster marks danger with photos and GPX of detour",
+          "Month 1: 3 follow-up trampers confirm within 2 weeks, 18 likes accumulated",
+          "Month 2: DOC posts official track alert, references the user mark by ID",
+          "Month 3: DOC clears track with chainsaw crew, official ALL CLEAR"
+        ],
+        "edge_case_flag": "rapid_official_response|gap_filler|resolved_with_history"
+      }
+    },
+    {
+      "id": 613,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12L:0R DOC 初判错最后 user validated，已修复",
+      "case_data": {
+        "title": "Caples Track Mid Caples Hut woodstove broken cumulative cold day 4",
+        "type": "supply",
+        "likes": 12,
+        "reports": 0,
+        "duration_months": 7,
+        "user_volume_per_month": 28,
+        "intrinsic_quality": "Cold-weather hut function, real hypothermia risk in winter shoulder season",
+        "events_timeline": [
+          "Month 1: tramper posts after a cold night, very angry tone",
+          "Month 2: DOC responds woodstove inspected fine in summer, suggests false report",
+          "Month 3: 4 winter trampers confirm flue cracked when stove hot, 12 likes",
+          "Month 4: DOC re-inspects in cold conditions, finds the crack, repairs"
+        ],
+        "edge_case_flag": "official_initially_wrong|temp_dependent|user_validated"
+      }
+    },
+    {
+      "id": 614,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "35L:0R high-volume 快速验证，已 resolved 历史指南",
+      "case_data": {
+        "title": "Routeburn Lake Mackenzie Hut mice but only northeast bunks day 2 of 3",
+        "type": "supply",
+        "likes": 35,
+        "reports": 0,
+        "duration_months": 9,
+        "user_volume_per_month": 60,
+        "intrinsic_quality": "Granular hut info, choose-your-bunk strategy",
+        "events_timeline": [
+          "Month 1: split-group posts comparing bunkrooms with photos",
+          "Month 2: 8 followup confirmations, 28 likes, very fast validation",
+          "Month 3: DOC hut warden adds note in physical hut book referencing the mark",
+          "Month 4: DOC sets traps, mice cleared, mark transitions to RESOLVED"
+        ],
+        "edge_case_flag": "high_volume|spatial_specificity|fast_validation"
+      }
+    },
+    {
+      "id": 615,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "winter avalanche zone TA 季节性",
+      "case_data": {
+        "title": "Te Araroa Tongariro Crossing winter avalanche zone day 5 of section",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 6,
+        "user_volume_per_month": 20,
+        "intrinsic_quality": "Genuine avalanche risk for unprepared TA hikers in winter",
+        "events_timeline": [
+          "Month 1: TA SOBO winter hiker posts danger mark after Whakapapa village sync",
+          "Month 2: NZAC instructor confirms avalanche conditions that week, adds info",
+          "Month 3: DOC alpine alert published referencing user mark",
+          "Month 4: snow melts, summer users start visiting, danger goes dormant"
+        ],
+        "edge_case_flag": "alpine_seasonal|ta_winter|cyclical_danger"
+      }
+    },
+    {
+      "id": 616,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "40L:0R 12月 multi-modal 持续 advisory，trail trust 加 sign",
+      "case_data": {
+        "title": "Old Ghost Road 5-day Ghost Lake Hut mountain bike collision warning",
+        "type": "danger",
+        "likes": 40,
+        "reports": 0,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "Real injury risk at blind-corner shared-use trail",
+        "events_timeline": [
+          "Month 1: hiker hut group posts after near-miss, photos of blind corner",
+          "Month 2: 6 bikers and 4 hikers confirm same corner, 25 likes",
+          "Month 3: trail trust adds physical warning signage",
+          "Month 5: post-signage users confirm signs help but bikers still fast"
+        ],
+        "edge_case_flag": "multi_modal|geometric_hazard|cross_mode_validation"
+      }
+    },
+    {
+      "id": 617,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "45L:0R 持续国际访客 advisory，本地认知偏差不构成急转",
+      "case_data": {
+        "title": "Hump Ridge Track Stag Point sandflies extreme on day 2 of 3",
+        "type": "danger",
+        "likes": 45,
+        "reports": 0,
+        "duration_months": 8,
+        "user_volume_per_month": 40,
+        "intrinsic_quality": "Sandfly density real and impactful, worst in NZ tied with West Coast",
+        "events_timeline": [
+          "Month 1: tourist group posts mark, 50 sandfly bites count, very vivid description",
+          "Month 2: locals comment well-known thing, suggest mark redundant with general knowledge",
+          "Month 3: 12 international visitors thank for warning, 30 likes",
+          "Month 5: track concession adds repellent vending machine at hut"
+        ],
+        "edge_case_flag": "local_vs_visitor_bias|sandfly|known_unknowns"
+      }
+    },
+    {
+      "id": 618,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "50L:0R 行为驱动 scheduling 明确价值",
+      "case_data": {
+        "title": "Kepler Track Iris Burn Hut helicopter resupply noise pattern day 3",
+        "type": "scenic",
+        "likes": 50,
+        "reports": 0,
+        "duration_months": 6,
+        "user_volume_per_month": 80,
+        "intrinsic_quality": "Wilderness experience expectation management",
+        "events_timeline": [
+          "Month 1: original poster makes mark with 7am helicopter video",
+          "Month 2: 8 confirmations of Tuesday pattern, 35 likes",
+          "Month 3: DOC concession confirms scheduled resupply, suggests booking pattern",
+          "Month 4: smart users start booking Wed-Sun avoiding Tue, mark drives behavior"
+        ],
+        "edge_case_flag": "behavior_driving|pattern_based|unique_user_value"
+      }
+    },
+    {
+      "id": 619,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "25L:0R 14月 community-edited 比较，自我修正后稳定",
+      "case_data": {
+        "title": "Abel Tasman inland track 3-day vs coast disagreement post-trip",
+        "type": "scenic",
+        "likes": 25,
+        "reports": 0,
+        "duration_months": 14,
+        "user_volume_per_month": 25,
+        "intrinsic_quality": "Subjective comparison, opinion shifts after seeing both",
+        "events_timeline": [
+          "Month 1: original poster marks inland better, 15 likes",
+          "Month 4: combined-trip user reports inland not better after seeing coast, suggests downgrade",
+          "Month 6: 5 more combined-trip users add nuance, both have value",
+          "Month 9: mark text edited by community to comparative not absolute"
+        ],
+        "edge_case_flag": "comparative_evolution|community_edit|epistemic_weight"
+      }
+    },
+    {
+      "id": 621,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "18L:5R 持续争议 + 自修正，未急转，context-dependent advisory，按v6.6 HEALTHY",
+      "case_data": {
+        "title": "Cape Brett Track day-3 cumulative knee pain mark questionable validity",
+        "type": "danger",
+        "likes": 18,
+        "reports": 5,
+        "duration_months": 10,
+        "user_volume_per_month": 35,
+        "intrinsic_quality": "Real terrain difficulty but exaggerated by fatigue context",
+        "events_timeline": [
+          "Month 1: cumulative-fatigue user posts danger mark, intense tone",
+          "Month 2: fresh dayhikers report descent moderate not treacherous, 5 reports",
+          "Month 4: 10 multi-day users confirm cumulative-fatigue version, 18 likes",
+          "Month 6: physiotherapist comments knee strain plausible after 30km cumulative"
+        ],
+        "edge_case_flag": "fatigue_dependent|context_truth|preserve_for_subset"
+      }
+    },
+    {
+      "id": 622,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "50L:6R (8.3:1) 天气依赖 canonical，无急转",
+      "case_data": {
+        "title": "Pouakai Circuit Mt Taranaki tarn reflection mark cloudy on day 2 of 3",
+        "type": "scenic",
+        "likes": 50,
+        "reports": 6,
+        "duration_months": 11,
+        "user_volume_per_month": 55,
+        "intrinsic_quality": "Real iconic scenery when conditions allow, weather dependent",
+        "events_timeline": [
+          "Month 1: original blue-sky photographer marks the scenic with hero photo",
+          "Month 2: cloudy-day user reports mountain not visible, suggests downgrade",
+          "Month 3: 8 blue-sky users confirm iconic, 30 likes",
+          "Month 5: weather forecaster comments mountain visible 40 percent of summer days"
+        ],
+        "edge_case_flag": "weather_dependent_iconic|statistical_truth|cloud_bias"
+      }
+    },
+    {
+      "id": 623,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "30L:0R 低风险高效用 hut 文化",
+      "case_data": {
+        "title": "Tongariro Northern Circuit Oturere Hut bunkroom snoring symphony day 3",
+        "type": "supply",
+        "likes": 30,
+        "reports": 0,
+        "duration_months": 5,
+        "user_volume_per_month": 45,
+        "intrinsic_quality": "Sleep-quality practical advisory, well-meaning",
+        "events_timeline": [
+          "Month 1: sleep-deprived user posts earplugs advisory",
+          "Month 2: 6 confirmations of similar experiences, 22 likes",
+          "Month 3: DOC posts joke comment that all huts have this problem",
+          "Month 4: 30 likes, no reports, light-hearted but useful"
+        ],
+        "edge_case_flag": "low_stakes_high_utility|practical_wisdom|hut_culture"
+      }
+    },
+    {
+      "id": 624,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "28L:0R 21月 fatal terrain canonical NZAC handbook",
+      "case_data": {
+        "title": "Cascade Saddle Glenorchy track plummet warning team consensus on day 4",
+        "type": "danger",
+        "likes": 28,
+        "reports": 0,
+        "duration_months": 21,
+        "user_volume_per_month": 18,
+        "intrinsic_quality": "Genuine fatal-fall terrain, multiple deaths historically",
+        "events_timeline": [
+          "Month 1: 4-person team posts collective danger mark with deliberation notes",
+          "Month 3: NZAC veteran adds incident history, 15 likes",
+          "Month 6: DOC alpine alerts cite the user mark for current conditions",
+          "Month 12: ongoing advisory, periodic confirmations every season"
+        ],
+        "edge_case_flag": "team_consensus|fatal_terrain|provenance_weighted"
+      }
+    },
+    {
+      "id": 625,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "14L:0R cyclical advisory etiquette",
+      "case_data": {
+        "title": "Wangapeka Track Stone Hut firewood absent on cold day 4 of 5",
+        "type": "supply",
+        "likes": 14,
+        "reports": 0,
+        "duration_months": 8,
+        "user_volume_per_month": 12,
+        "intrinsic_quality": "Cold-night risk, firewood etiquette problem",
+        "events_timeline": [
+          "Month 1: cold group posts firewood-empty mark, polite but pointed",
+          "Month 2: 4 winter trampers confirm pattern of empty pile, 14 likes",
+          "Month 3: DOC volunteer comments hut warden checks monthly, leaves logs",
+          "Month 5: post-restock users confirm logs there, suggests cyclical not chronic"
+        ],
+        "edge_case_flag": "etiquette|cyclical_human_behavior|community_reminder"
+      }
+    },
+    {
+      "id": 626,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "18L:0R 19月 audience mismatch 但被外部引用",
+      "case_data": {
+        "title": "Stewart Island Northwest Circuit mud reality day 6 of 9",
+        "type": "danger",
+        "likes": 18,
+        "reports": 0,
+        "duration_months": 19,
+        "user_volume_per_month": 6,
+        "intrinsic_quality": "Real mud reality, gear-failure risk wet feet for days",
+        "events_timeline": [
+          "Month 1: international visitor posts mud-shock mark from Oban ferry wifi",
+          "Month 4: 3 more international visitors confirm, locals comment well-known",
+          "Month 8: 12 likes mostly international, 2 dismissive local reports",
+          "Month 14: tourism brochure starts citing the user mark"
+        ],
+        "edge_case_flag": "audience_mismatch|locals_vs_visitors|cited_externally"
+      }
+    },
+    {
+      "id": 627,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "30L:3R (10:1) iwi 文化整合，stable canonical",
+      "case_data": {
+        "title": "Lake Waikaremoana Panekire Bluff vista cumulative-magic day 4 of 4",
+        "type": "scenic",
+        "likes": 30,
+        "reports": 3,
+        "duration_months": 12,
+        "user_volume_per_month": 30,
+        "intrinsic_quality": "Real iconic NZ scenery, additional wonder when accessed by foot over days",
+        "events_timeline": [
+          "Month 1: 4-day tramper posts transcendent scenic mark from Wairoa",
+          "Month 3: dayhike-style user reports nice but not transcendent, 2 reports",
+          "Month 5: 10 multi-day completers confirm cumulative wonder, 22 likes",
+          "Month 8: Te Urewera iwi rep adds context about whakapapa connection"
+        ],
+        "edge_case_flag": "cumulative_immersion|iwi_context|access_dependent"
+      }
+    },
+    {
+      "id": 628,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "10L:0R 跨国比较 niche，self-edit 后稳定",
+      "case_data": {
+        "title": "Six Foot Track Australia tramper compares NZ Tararua S-K day 3 mark",
+        "type": "scenic",
+        "likes": 10,
+        "reports": 0,
+        "duration_months": 6,
+        "user_volume_per_month": 16,
+        "intrinsic_quality": "Genuine experience comparison but cross-country reference confusing",
+        "events_timeline": [
+          "Month 1: Aussie-Kiwi tramper posts comparative mark from Otaki",
+          "Month 2: locals comment cross-country comparison off-topic",
+          "Month 3: 4 Australian visitors find the comparison helpful, 8 likes",
+          "Month 4: mark text edited to be NZ-focused with Australian aside"
+        ],
+        "edge_case_flag": "cross_country_audience|self_edit|niche_value"
+      }
+    },
+    {
+      "id": 629,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "18L:0R 13月 driving infrastructure，iwi 协作",
+      "case_data": {
+        "title": "Te Araroa Tongariro to Whanganui section river ford 7-day cumulative",
+        "type": "danger",
+        "likes": 18,
+        "reports": 0,
+        "duration_months": 13,
+        "user_volume_per_month": 10,
+        "intrinsic_quality": "Real river hazard, partner injury context",
+        "events_timeline": [
+          "Month 1: tramper posts after partner ankle injury, very detailed",
+          "Month 3: 4 confirmations same season, 12 likes",
+          "Month 5: iwi authority comments concerns about safety, suggests tape marker",
+          "Month 7: tape marker installed, post-marker users confirm helpful"
+        ],
+        "edge_case_flag": "drove_infrastructure|iwi_engagement|ta_long_view"
+      }
+    },
+    {
+      "id": 630,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "14L:4R 持续争议 + community-edit，context-dependent decision aid，HEALTHY",
+      "case_data": {
+        "title": "Gillespie Pass Circuit Crucible Lake side trip cumulative mark accuracy day 3",
+        "type": "scenic",
+        "likes": 14,
+        "reports": 4,
+        "duration_months": 9,
+        "user_volume_per_month": 22,
+        "intrinsic_quality": "Real choice for tired multi-day users, side-trip cost benefit",
+        "events_timeline": [
+          "Month 1: tired day-3 user posts skip-side-trip-if-tired advisory",
+          "Month 3: rested side-trippers contest, lake worth it always, 4 reports",
+          "Month 5: 8 multi-day completers agree day-3 fatigue real factor, 14 likes",
+          "Month 7: mark text edited to balanced if-you-have-energy"
+        ],
+        "edge_case_flag": "decision_aid|fatigue_dependent|community_evolved"
+      }
+    },
+    {
+      "id": 651,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "460L:25R (18.4:1) 9000/月超高流量，alpine 真危险持续验证",
+      "case_data": {
+        "title": "Tongariro Alpine Crossing Red Crater 强风脊线警告",
+        "type": "danger",
+        "likes": 460,
+        "reports": 25,
+        "duration_months": 14,
+        "user_volume_per_month": 9000,
+        "intrinsic_quality": "脊线 30m 段两侧悬崖，被吹倒即滚落 200m，是 Crossing 全线最危险点之一",
+        "events_timeline": [
+          "Month 1: 一名当地 guide 在 8 月暴风后被吹倒擦伤后写下，附近期 metservice 截图",
+          "Month 2-3: 100 likes，全是冬季穿越者，3 人留言说当天差点被吹下 Red Crater 北坡",
+          "Month 4: 一群澳洲家庭夏季无风晴天经过，5 人陆续 report '夸大 / 这里根本没风'",
+          "Month 5: DOC visitor centre 引用此 mark 在 hut 里贴打印版"
+        ],
+        "edge_case_flag": "alpine_wind|seasonal_dependent|tourist_volume_distortion"
+      }
+    },
+    {
+      "id": 653,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "480L:20R (24:1) 18000/月 family 流量，季节性关闭事件验证",
+      "case_data": {
+        "title": "Hooker Valley Track 第二吊桥强风关闭历史警告",
+        "type": "danger",
+        "likes": 480,
+        "reports": 20,
+        "duration_months": 11,
+        "user_volume_per_month": 18000,
+        "intrinsic_quality": "DOC 在 60km/h 阵风时强制关闭，桥面距河面 18m，曾有游客被吹得抓不住扶手",
+        "events_timeline": [
+          "Month 1: 一位当地 guide 在春季桥被关后写下提醒查看天气",
+          "Month 2: 200 likes 全在春季",
+          "Month 4: 夏季无风期游客 report 8 次称从未遇到关桥",
+          "Month 5: DOC 张贴公告印证 mark 内容"
+        ],
+        "edge_case_flag": "seasonal_closure|family_volume|wind_specific"
+      }
+    },
+    {
+      "id": 654,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "290L:12R 22月持续 river crossing 危险",
+      "case_data": {
+        "title": "Rob Roy Glacier Track 雨后 Matukituki River ford 涨水提醒",
+        "type": "danger",
+        "likes": 290,
+        "reports": 12,
+        "duration_months": 22,
+        "user_volume_per_month": 1200,
+        "intrinsic_quality": "当 ford 不可过时整条 track 当天无法进入，已有游客被困对岸过夜",
+        "events_timeline": [
+          "Month 1: 一位 Wanaka 当地登山者目睹一对夫妇被困，写下警告",
+          "Month 3: 60 likes 缓慢累积",
+          "Month 6: 一队美国游客旱季无问题通过，3 人 report '吓唬人'",
+          "Month 9: 又一次 11 月被困事件，原作者补充照片"
+        ],
+        "edge_case_flag": "river_crossing|weather_dependent|low_volume_high_stakes"
+      }
+    },
+    {
+      "id": 655,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "260L:10R (26:1) 雷暴持续验证 MetService 协作",
+      "case_data": {
+        "title": "Avalanche Peak Scotts Track 山顶下午雷暴提醒",
+        "type": "danger",
+        "likes": 260,
+        "reports": 10,
+        "duration_months": 16,
+        "user_volume_per_month": 700,
+        "intrinsic_quality": "山顶下午雷击概率高于 NZ 多数同高度山峰，DOC 强烈建议早上 11 点前下撤",
+        "events_timeline": [
+          "Month 1: 一名 Canterbury 登山俱乐部成员在亲历雷暴后写下",
+          "Month 2: 山地俱乐部内部分享 likes 涨到 90",
+          "Month 5: 冬季登山者 report 4 次说'冬天根本没雷'",
+          "Month 7: MetService 雷暴预警当天有人下撤靠这条 mark"
+        ],
+        "edge_case_flag": "thunderstorm|seasonal|ridge_exposure"
+      }
+    },
+    {
+      "id": 656,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "270L:8R junction 走错救援事件，DOC 重立牌仍保留",
+      "case_data": {
+        "title": "Mt Robert Pinchgut Track 直上段错走分岔提醒",
+        "type": "junction",
+        "likes": 270,
+        "reports": 8,
+        "duration_months": 13,
+        "user_volume_per_month": 400,
+        "intrinsic_quality": "走错会绕路 2.5 小时甚至下到错误山谷，无信号难自救",
+        "events_timeline": [
+          "Month 1: 一名当地 SAR 志愿者修完标牌后写下提醒",
+          "Month 3: 110 likes，多来自走错过的人",
+          "Month 5: 一个有经验登山团 report '这岔口很明显'",
+          "Month 7: 冬季雪期一人走错下到 St Arnaud 求救，事件后 likes 涨到 180"
+        ],
+        "edge_case_flag": "junction|sign_damage|seasonal_visibility"
+      }
+    },
+    {
+      "id": 657,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "490L:15R (32.7:1) 2500/月湿滑石阶慢性 hazard",
+      "case_data": {
+        "title": "Pinnacles Track Webb Creek 段湿滑石阶警告",
+        "type": "danger",
+        "likes": 490,
+        "reports": 15,
+        "duration_months": 17,
+        "user_volume_per_month": 2500,
+        "intrinsic_quality": "石阶被瀑布水雾常年湿润，登山靴防滑等级不够时极易滑倒",
+        "events_timeline": [
+          "Month 1: Coromandel 当地 guide 在朋友摔断脚踝后写下",
+          "Month 3: 200 likes，多是吃过亏的",
+          "Month 5: 干旱周报告'这里完全不滑'，4 人 report",
+          "Month 8: 冬季摔伤事件，DOC 公告印证"
+        ],
+        "edge_case_flag": "wet_terrain|gear_dependent|chronic_injury_site"
+      }
+    },
+    {
+      "id": 658,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "850L:12R (70.8:1) 海豹咬伤事件验证，超高赞反比",
+      "case_data": {
+        "title": "Kaikoura Peninsula Walkway 海豹崖边距离警示",
+        "type": "danger",
+        "likes": 850,
+        "reports": 12,
+        "duration_months": 12,
+        "user_volume_per_month": 8000,
+        "intrinsic_quality": "海豹会突然冲咬靠近 5m 内的人，一日游客以为温顺，攻击事件每年 5-6 起",
+        "events_timeline": [
+          "Month 1: 当地 DOC 工作人员在邮轮季前写下",
+          "Month 2: 250 likes 涌入，旅游运营商引用",
+          "Month 4: 一对游客 report '夸张 / 海豹只是趴着'",
+          "Month 6: 一名儿童被海豹咬伤事件，新闻报道"
+        ],
+        "edge_case_flag": "wildlife_danger|tourist_volume|seasonal_aggression"
+      }
+    },
+    {
+      "id": 659,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "380L:10R 风口失温警告，旅游公司内置",
+      "case_data": {
+        "title": "Cape Reinga Te Rerenga Wairua 灯塔风口低体温提醒",
+        "type": "danger",
+        "likes": 380,
+        "reports": 10,
+        "duration_months": 9,
+        "user_volume_per_month": 7000,
+        "intrinsic_quality": "夏季穿短袖游客被风吹到失温就医每月 1-2 起",
+        "events_timeline": [
+          "Month 1: 当地 Maori guide 在向导中加入此提醒",
+          "Month 2: 180 likes",
+          "Month 4: 旺季游客 report 6 次称'风很舒服'",
+          "Month 5: 一名长者失温被救援后 likes 涨到 290"
+        ],
+        "edge_case_flag": "wind_exposure|tourist_unprepared|hypothermia_risk"
+      }
+    },
+    {
+      "id": 660,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "720L:15R (48:1) fatality history alpine club 引用",
+      "case_data": {
+        "title": "Mt Taranaki summit 一日往返夏季顶部冰原警告",
+        "type": "danger",
+        "likes": 720,
+        "reports": 15,
+        "duration_months": 20,
+        "user_volume_per_month": 1500,
+        "intrinsic_quality": "夏季火山口边缘融冰滑落事件每年 3-5 起，没冰爪几乎必滑",
+        "events_timeline": [
+          "Month 1: 当地 LandSAR 写下含历史死亡数字",
+          "Month 3: 250 likes 在山地俱乐部传播",
+          "Month 5: 旱季无冰登顶者 report 5 次",
+          "Month 7: 一名游客滑坠死亡新闻当周 likes +200"
+        ],
+        "edge_case_flag": "fatality_history|gear_dependent|tourist_underestimation"
+      }
+    },
+    {
+      "id": 661,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "480L:4R (120:1) 婴儿车 family advisory 妈妈群转发",
+      "case_data": {
+        "title": "Hooker Valley Track 第三吊桥婴儿车通过提示",
+        "type": "supply",
+        "likes": 480,
+        "reports": 4,
+        "duration_months": 10,
+        "user_volume_per_month": 18000,
+        "intrinsic_quality": "标准婴儿车可勉强通过但需要折叠扶手，多数家庭在此被迫返回",
+        "events_timeline": [
+          "Month 1: 一位本地母亲写下亲身经验",
+          "Month 2: 280 likes，妈妈群转发",
+          "Month 4: 个别家庭 report '宽度足够'",
+          "Month 6: 旅游公司 Tasman Valley Tours 引用"
+        ],
+        "edge_case_flag": "accessibility|family_specific|practical_info"
+      }
+    },
+    {
+      "id": 662,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "320L:9R shuttle 时间提醒，运营商打印贴车",
+      "case_data": {
+        "title": "Tongariro Soda Springs 支线一日组团易超时提醒",
+        "type": "junction",
+        "likes": 320,
+        "reports": 9,
+        "duration_months": 11,
+        "user_volume_per_month": 9000,
+        "intrinsic_quality": "走支线导致 Crossing 整体超时错过 Ketetahi shuttle，重新订车 NZD 35",
+        "events_timeline": [
+          "Month 1: shuttle 公司司机写下提醒",
+          "Month 2: 150 likes 多来自被坑过的",
+          "Month 4: 几位老穿越者 report '走得快支线没问题'",
+          "Month 6: shuttle 公司打印此 mark 贴车上"
+        ],
+        "edge_case_flag": "schedule_constraint|skill_dependent|shuttle_logistics"
+      }
+    },
+    {
+      "id": 663,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "510L:10R (51:1) 261阶湿滑慢性事故",
+      "case_data": {
+        "title": "Bridal Veil Falls Pakoka 步道湿滑下行段警告",
+        "type": "danger",
+        "likes": 510,
+        "reports": 10,
+        "duration_months": 14,
+        "user_volume_per_month": 3500,
+        "intrinsic_quality": "下行 261 级阶梯每年滑伤 8-10 起，多数为穿运动鞋家庭",
+        "events_timeline": [
+          "Month 1: 当地 Raglan i-SITE 工作人员写下",
+          "Month 3: 230 likes",
+          "Month 5: 旱季游客 report 3 次",
+          "Month 7: 一名儿童摔下 5 级新闻报导"
+        ],
+        "edge_case_flag": "wet_steps|family_volume|footwear_dependent"
+      }
+    },
+    {
+      "id": 664,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "580L:18R 地热气体 vulnerable population 医疗证据",
+      "case_data": {
+        "title": "Wai-O-Tapu Thermal 步道有毒气体下风口提醒",
+        "type": "danger",
+        "likes": 580,
+        "reports": 18,
+        "duration_months": 12,
+        "user_volume_per_month": 12000,
+        "intrinsic_quality": "哮喘患者和婴儿 5 分钟内可触发症状，已有就医记录",
+        "events_timeline": [
+          "Month 1: 一位在 Rotorua Hospital 工作的护士写下",
+          "Month 3: 320 likes",
+          "Month 5: 部分游客 report '味道大但没事'",
+          "Month 6: 一婴儿就医新闻当周 likes +180"
+        ],
+        "edge_case_flag": "geothermal_gas|vulnerable_population|medical_evidence"
+      }
+    },
+    {
+      "id": 666,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "510L:10R iwi 文化访问规则，DOC 小册子引用",
+      "case_data": {
+        "title": "Tongariro Alpine Crossing 北坡 Ketetahi 私人土地穿越规则",
+        "type": "junction",
+        "likes": 510,
+        "reports": 10,
+        "duration_months": 13,
+        "user_volume_per_month": 9000,
+        "intrinsic_quality": "iwi 投诉游客泡温泉、野餐，触发可能关闭整段步道的危机",
+        "events_timeline": [
+          "Month 1: 一名 Tūwharetoa hapū 长者写下",
+          "Month 3: 280 likes 来自尊重原住民的徒步者",
+          "Month 5: 几名游客 report 称'不知道有这种限制'",
+          "Month 7: DOC 在小册子里加入此 mark 文字"
+        ],
+        "edge_case_flag": "iwi_cultural|access_rule|political_sensitive"
+      }
+    },
+    {
+      "id": 667,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "460L:4R (115:1) 教育型 scenic 现象，visitor centre 教育",
+      "case_data": {
+        "title": "Hooker Valley Track 蓝湖冰山观景台冰崩噪音误以为雷声",
+        "type": "scenic",
+        "likes": 460,
+        "reports": 4,
+        "duration_months": 16,
+        "user_volume_per_month": 18000,
+        "intrinsic_quality": "正面观察冰崩需要安静，新手在此误以为天气变坏掉头",
+        "events_timeline": [
+          "Month 1: 当地 mountain guide 写下解释冰崩声",
+          "Month 3: 200 likes",
+          "Month 5: 极少 report 称'根本听不到'",
+          "Month 7: Aoraki visitor centre 在播放冰崩录音教育游客"
+        ],
+        "edge_case_flag": "education|scenic_phenomenon|rare_misinterpretation"
+      }
+    },
+    {
+      "id": 668,
+      "final_state": "context_dependent",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "winter alpine 冰镐冰爪强季节性，dummer 0 风险",
+      "case_data": {
+        "title": "Avalanche Peak 冬季登顶需冰镐冰爪明示",
+        "type": "danger",
+        "likes": 580,
+        "reports": 14,
+        "duration_months": 19,
+        "user_volume_per_month": 350,
+        "intrinsic_quality": "无冰镐冰爪冬季登顶死亡率历史记录约每 2 年 1 起",
+        "events_timeline": [
+          "Month 1: Canterbury Mountaineering Club 集体撰写",
+          "Month 3: 180 likes",
+          "Month 5: 夏季游客 report 7 次称'根本没雪'",
+          "Month 7: 冬季一起死亡事件后 likes +200"
+        ],
+        "edge_case_flag": "winter_alpine|fatality_recorded|gear_critical"
+      }
+    },
+    {
+      "id": 669,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "320L:6R hut 噪音 advisory，DOC 公告印此",
+      "case_data": {
+        "title": "Pinnacles Hut 周末凌晨 4 点 sunrise rush 噪音抱怨",
+        "type": "supply",
+        "likes": 320,
+        "reports": 6,
+        "duration_months": 15,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "敏感睡眠者建议带耳塞，DOC 已多次发提醒",
+        "events_timeline": [
+          "Month 1: 一位 hut warden 写下",
+          "Month 3: 150 likes",
+          "Month 5: 几个跑团 report 觉得 mark 是抱怨他们",
+          "Month 7: DOC 公告印此提醒带耳塞"
+        ],
+        "edge_case_flag": "hut_etiquette|noise|weekend_rush"
+      }
+    },
+    {
+      "id": 670,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "280L:8R 潮汐被困 SAR 救援验证",
+      "case_data": {
+        "title": "Cape Reinga to Tapotupotu Bay 一日延伸海滩涨潮警告",
+        "type": "danger",
+        "likes": 280,
+        "reports": 8,
+        "duration_months": 11,
+        "user_volume_per_month": 600,
+        "intrinsic_quality": "已有家庭被困潮位中需 SAR 救援",
+        "events_timeline": [
+          "Month 1: Northland LandSAR 成员写下含潮汐表 link",
+          "Month 3: 130 likes",
+          "Month 5: 低潮经过游客 report 4 次",
+          "Month 7: 一家庭被困事件 likes +120"
+        ],
+        "edge_case_flag": "tidal|coastal|sar_recorded"
+      }
+    },
+    {
+      "id": 671,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "320L:12R 时间估计 fitness-dependent，被困事件验证",
+      "case_data": {
+        "title": "Mt Taranaki Pouakai Crossing 一日尝试者超时提醒",
+        "type": "junction",
+        "likes": 320,
+        "reports": 12,
+        "duration_months": 13,
+        "user_volume_per_month": 900,
+        "intrinsic_quality": "DOC 建议 8-10 小时但游客以为 6 小时，黄昏被困事件多",
+        "events_timeline": [
+          "Month 1: New Plymouth 当地登山者写下亲历",
+          "Month 3: 170 likes",
+          "Month 5: 体能强者 report '6 小时够了'",
+          "Month 7: 一对夫妇黄昏被困事件"
+        ],
+        "edge_case_flag": "time_estimate|fitness_dependent|after_dark_risk"
+      }
+    },
+    {
+      "id": 672,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "510L:3R (170:1) 火灾防范，邻近事件验证",
+      "case_data": {
+        "title": "Tongariro Crossing Mangatepopo 端禁烟禁火明示",
+        "type": "supply",
+        "likes": 510,
+        "reports": 3,
+        "duration_months": 14,
+        "user_volume_per_month": 9000,
+        "intrinsic_quality": "一根烟头可能引发整个国家公园火灾",
+        "events_timeline": [
+          "Month 1: DOC ranger 写下含 fire danger 等级链接",
+          "Month 3: 220 likes",
+          "Month 5: 极少 report 称'多余'",
+          "Month 7: 邻近 Ruapehu 一起小火灾后 likes +150"
+        ],
+        "edge_case_flag": "fire_safety|doc_rule|world_heritage"
+      }
+    },
+    {
+      "id": 673,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "360L:7R 摄影师反向走 niche 价值，NZ Geographic 提及",
+      "case_data": {
+        "title": "Hooker Valley Track 反向出发避开旅游团方案",
+        "type": "scenic",
+        "likes": 360,
+        "reports": 7,
+        "duration_months": 10,
+        "user_volume_per_month": 18000,
+        "intrinsic_quality": "反向走可享 30 分钟无人，对摄影师极有价值",
+        "events_timeline": [
+          "Month 1: 一名 Wanaka 摄影师写下",
+          "Month 2: 180 likes 摄影圈传播",
+          "Month 4: 散客 report 称'反着走没意义'",
+          "Month 6: NZ Geographic 杂志提及"
+        ],
+        "edge_case_flag": "niche_advice|photographer|crowd_avoidance"
+      }
+    },
+    {
+      "id": 674,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "360L:8R 4WD 季节性路况，租车公司维护",
+      "case_data": {
+        "title": "Rob Roy Glacier 入口 Aspiring Hut 4WD 路况季节差异",
+        "type": "supply",
+        "likes": 360,
+        "reports": 8,
+        "duration_months": 16,
+        "user_volume_per_month": 1200,
+        "intrinsic_quality": "普通轿车雨季陷车每月 3-5 次",
+        "events_timeline": [
+          "Month 1: Wanaka 租车公司员工写下",
+          "Month 3: 150 likes",
+          "Month 5: 旱季用户 report 4 次",
+          "Month 8: 雨季陷车事件后 likes +100"
+        ],
+        "edge_case_flag": "road_condition|seasonal|rental_car_logistics"
+      }
+    },
+    {
+      "id": 675,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "820L:14R (58.6:1) fatal tidal 持续验证 i-SITE 强制",
+      "case_data": {
+        "title": "Kaikoura Peninsula Walkway 高潮位崖底段不可通过",
+        "type": "danger",
+        "likes": 820,
+        "reports": 14,
+        "duration_months": 18,
+        "user_volume_per_month": 8000,
+        "intrinsic_quality": "高潮硬走会被卷下海，已有死亡记录",
+        "events_timeline": [
+          "Month 1: Kaikoura SAR 写下",
+          "Month 3: 380 likes",
+          "Month 5: 低潮通过游客 report 6 次",
+          "Month 7: 一起死亡事件 likes +280"
+        ],
+        "edge_case_flag": "fatal_tidal|coastal|spring_tide"
+      }
+    },
+    {
+      "id": 676,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "410L:7R 时间敏感 schedule 官方背书",
+      "case_data": {
+        "title": "Wai-O-Tapu Lady Knox Geyser 10:15 表演前 30 分钟到位提醒",
+        "type": "supply",
+        "likes": 410,
+        "reports": 7,
+        "duration_months": 11,
+        "user_volume_per_month": 6000,
+        "intrinsic_quality": "迟到 5 分钟基本看不见，需等下次开放日",
+        "events_timeline": [
+          "Month 1: Rotorua 当地 guide 写下",
+          "Month 2: 220 likes",
+          "Month 4: 几位用户 report '夸张，9:50 到也行'",
+          "Month 6: Wai-O-Tapu 官方在 ticket 上印此提醒"
+        ],
+        "edge_case_flag": "schedule|time_critical|operator_endorsed"
+      }
+    },
+    {
+      "id": 677,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "210L:6R hut booking 提醒，无急转",
+      "case_data": {
+        "title": "Mt Robert Circuit 山顶 hut 周末满床预警",
+        "type": "supply",
+        "likes": 210,
+        "reports": 6,
+        "duration_months": 13,
+        "user_volume_per_month": 400,
+        "intrinsic_quality": "一日往返者占 80% 不需 hut，但留宿者需早订",
+        "events_timeline": [
+          "Month 1: DOC ranger 写下含 booking link",
+          "Month 3: 90 likes",
+          "Month 5: 几位 day-tripper report 称'我又不留宿'",
+          "Month 7: 一对情侣无 booking 被拒事件"
+        ],
+        "edge_case_flag": "booking|hut_capacity|niche_audience"
+      }
+    },
+    {
+      "id": 678,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "480L:12R navigation hazard，NZMSC 案例化",
+      "case_data": {
+        "title": "Avalanche Peak 顶部山脊误走 Crow Valley 下错坡警告",
+        "type": "junction",
+        "likes": 480,
+        "reports": 12,
+        "duration_months": 17,
+        "user_volume_per_month": 700,
+        "intrinsic_quality": "走错需要 2 天才能徒步出 Crow Valley，多次 SAR",
+        "events_timeline": [
+          "Month 1: 一位 Arthur's Pass 当地 guide 写下亲历",
+          "Month 3: 200 likes",
+          "Month 5: 晴天用户 report 称'方向很明显'",
+          "Month 8: 一起 SAR 救援事件 likes +180"
+        ],
+        "edge_case_flag": "navigation|cloud_dependent|sar_history"
+      }
+    },
+    {
+      "id": 679,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "410L:9R 恐高梯子 SAR 事件验证",
+      "case_data": {
+        "title": "Pinnacles Track 山顶 Pinnacles Rock 铁梯恐高警告",
+        "type": "danger",
+        "likes": 410,
+        "reports": 9,
+        "duration_months": 15,
+        "user_volume_per_month": 2500,
+        "intrinsic_quality": "恐高者 30% 半路放弃，狭窄段堵塞风险高",
+        "events_timeline": [
+          "Month 1: 一位 Coromandel 当地 hiker 写下",
+          "Month 2: 180 likes",
+          "Month 4: 体能强者 report 称'小事'",
+          "Month 6: 一恐高者半路下不来需 SAR"
+        ],
+        "edge_case_flag": "vertigo|ladder|family_underestimate"
+      }
+    },
+    {
+      "id": 680,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "460L:5R (92:1) 两层观景体验差异 advisory",
+      "case_data": {
+        "title": "Bridal Veil Falls 顶层观景台与底层不同提醒",
+        "type": "junction",
+        "likes": 460,
+        "reports": 5,
+        "duration_months": 14,
+        "user_volume_per_month": 3500,
+        "intrinsic_quality": "顶层 5 分钟，底层来回 30 分钟体验差异大",
+        "events_timeline": [
+          "Month 1: 一位 Raglan 摄影师写下",
+          "Month 2: 240 likes",
+          "Month 4: 时间紧者 report '那么深没必要'",
+          "Month 6: Hamilton 当地报纸 Waikato Times 提及"
+        ],
+        "edge_case_flag": "experience_uplift|two_tier_view|time_dependent"
+      }
+    },
+    {
+      "id": 701,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "38L:2R 河流暗流向导强化维护，无急转",
+      "case_data": {
+        "title": "Whanganui River Journey 第 35 公里 Mangapurua Landing 上岸点 — 雨季暗流警告",
+        "type": "danger",
+        "likes": 38,
+        "reports": 2,
+        "duration_months": 14,
+        "user_volume_per_month": 90,
+        "intrinsic_quality": "雨后 24 小时内回水变成顺时针漩涡，新手皮划艇会被吸到岸边树根下",
+        "events_timeline": [
+          "第 1 月: 自助租船的 Auckland 大学生 Jamie 翻船后游上岸用 PLB 求救，回到 Pipiriki 当晚标了这个点",
+          "第 2 月: Whanganui Journeys 的导游 Hemi 看到 mark 后专门带新手在这里练 ferry glide，给了赞并补一句'等水位 <2 米再放心'",
+          "第 5 月: 雨季暴涨水位过 4 米，整个回水变直流，mark 暂时'失效'，有人留言说'今天根本看不到漩涡'",
+          "第 9 月: 一队墨尔本来的双人船没看 mark，撞树根破洞，回 Pipiriki 后专门翻 app 找到这条点了赞"
+        ],
+        "edge_case_flag": "河流-峡谷无信号-导游强化"
+      }
+    },
+    {
+      "id": 702,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "220L:4R 18月潮汐渡口高密度旅游 cross-language",
+      "case_data": {
+        "title": "Abel Tasman Coast Track Awaroa 潮汐渡口 — 退潮窗口实时标注",
+        "type": "junction",
+        "likes": 220,
+        "reports": 4,
+        "duration_months": 18,
+        "user_volume_per_month": 1100,
+        "intrinsic_quality": "潮汐表 ±1.5 小时内可徒步过对岸，错过窗口要绕 4 小时林道",
+        "events_timeline": [
+          "第 1 月: Nelson 的退休测量员 Brian 把当天 11:40 退潮的精确秒数标进去，给 mark 加了'潮高 0.4 米可过'的注释",
+          "第 2 月: 一个法国家庭看 mark 看不懂英文 tide 缩写，留言问'什么意思'，本地人补了图",
+          "第 4 月: 春季满月大潮窗口缩到 45 分钟，Wellington 的徒步博主拍视频上传，赞数飙升",
+          "第 7 月: 冬季有 3 周整个 inlet 因暴雨水位异常，mark 被标'本周不准用'"
+        ],
+        "edge_case_flag": "潮汐-高密度旅游-跨语言"
+      }
+    },
+    {
+      "id": 703,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "user-arbitration",
+      "rationale": "占比好潮汐是事实 [user-decided]",
+      "case_data": {
+        "title": "Catlins Cathedral Caves 入口潮汐封路 — 隐藏入口的备用路径",
+        "type": "junction",
+        "likes": 24,
+        "reports": 6,
+        "duration_months": 22,
+        "user_volume_per_month": 35,
+        "intrinsic_quality": "正式入口涨潮关闭后，本地人知道有条沿崖根走的备用通道，但只在中潮以下安全",
+        "events_timeline": [
+          "第 2 月: 摄影师 Greg 第一次标记，备注'仅供熟悉海岸的人'",
+          "第 5 月: 一个 Auckland 游客按 mark 走但不懂判潮，被困两小时，写了举报说'误导'",
+          "第 6 月: 本地 Catlins Coast 协会成员留言反驳，附 Greg 的原警告截图，举报被反向赞淹没",
+          "第 9 月: 冬季正门关闭期间这条 mark 突然成了唯一选项，本地人在 mark 上加注'冬天千万别试'"
+        ],
+        "edge_case_flag": "海岸-社区争议-季节切换"
+      }
+    },
+    {
+      "id": 704,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1800L:5R (360:1) 文化圣地海洋警告，多语言维护",
+      "case_data": {
+        "title": "Cape Reinga 灯塔下方 Spirits Bay 海流交汇点 — 严重海洋警告",
+        "type": "danger",
+        "likes": 1800,
+        "reports": 5,
+        "duration_months": 30,
+        "user_volume_per_month": 4500,
+        "intrinsic_quality": "曾有游客攀下岩石试图拍漩涡近景被卷走，从平台几乎看不出岩石湿滑",
+        "events_timeline": [
+          "第 1 月: Ngāti Kuri iwi 的文化向导 Wiremu 标记并写了三段警告，引用毛利传统'灵魂跳跃之地'",
+          "第 3 月: 一个西班牙背包客无视 mark 翻栏杆下去，被 Search & Rescue 直升机吊上来，全国新闻",
+          "第 4 月: 事件后两周 mark 赞数从 80 跳到 340，海外旅行博主集体引用",
+          "第 8 月: DOC 加装了金属高栏，mark 上多了一句'即使有栏杆也不要靠近'"
+        ],
+        "edge_case_flag": "海岸-文化圣地-跨文化警告"
+      }
+    },
+    {
+      "id": 705,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1400L:8R 温泉潮汐窗口商业捆绑长寿 mark",
+      "case_data": {
+        "title": "Hot Water Beach 温泉沙坑挖掘窗口 — Hahei 退潮 2 小时",
+        "type": "supply",
+        "likes": 1400,
+        "reports": 8,
+        "duration_months": 20,
+        "user_volume_per_month": 3200,
+        "intrinsic_quality": "退潮前后 2 小时可挖出温泉，过早过晚要么没温泉要么被海浪填",
+        "events_timeline": [
+          "第 1 月: Dave 的女儿 Mia 在 app 上首次标记，连接到自家咖啡店当日窗口板",
+          "第 2 月: 一对德国情侣按 mark 来挖坑，回去给五星好评带火 mark",
+          "第 4 月: 一队中国旅游团 30 人按 mark 同时来，沙滩挖成蜂窝，mark 评论区出现'人太多'抱怨",
+          "第 7 月: 冬季 mark 被一位 Tairua 本地维护者标为'冬季更舒服来这'，反季流量上涨"
+        ],
+        "edge_case_flag": "温泉-潮汐窗口-商业捆绑"
+      }
+    },
+    {
+      "id": 706,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "510L:3R 致命瀑布 rāhui 文化整合，DOC 加钢丝网",
+      "case_data": {
+        "title": "Bridal Veil Falls 上方禁跳水点 — 致命隐患",
+        "type": "danger",
+        "likes": 510,
+        "reports": 3,
+        "duration_months": 26,
+        "user_volume_per_month": 280,
+        "intrinsic_quality": "外观平静的水潭实际有水下凹槽和 55 米直落，2010 年起至少 4 起致命事件",
+        "events_timeline": [
+          "第 1 月: Hamilton 救援队志愿者 Pete 标记，附 2018 年事故的官方报告链接",
+          "第 3 月: 一个 19 岁本地少年 Liam 仍跳了，被拉上来后亲自留言加赞 mark 说'真的差点死'",
+          "第 6 月: 寒假青少年集体出现，mark 评论区被'我朋友说没事'刷屏",
+          "第 8 月: 第 5 起致命事故，新闻报道，mark 被全国转发，单月加 200 赞"
+        ],
+        "edge_case_flag": "瀑布-青少年文化-rāhui"
+      }
+    },
+    {
+      "id": 708,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1200L:4R rip current SLSNZ 官方联动",
+      "case_data": {
+        "title": "Karekare Beach 北段 rip current 死亡区 — 救生员管不到的地方",
+        "type": "danger",
+        "likes": 1200,
+        "reports": 4,
+        "duration_months": 28,
+        "user_volume_per_month": 1500,
+        "intrinsic_quality": "肉眼可见的'平静水道'其实是 Auckland 西海岸最强的固定 rip current 之一",
+        "events_timeline": [
+          "第 1 月: Karekare SLSC 现役救生员 Tane 用 mark 标记并附 2019 年的 5 起救援坐标",
+          "第 4 月: 一对加拿大背包客无视红旗游过去，被 Tane 团队救起后亲自加赞",
+          "第 7 月: Surf Life Saving NZ 把 mark 截图嵌入官方安全宣传",
+          "第 11 月: 旺季高峰每周 2-3 起救援，mark 评论区每周更新当周事件"
+        ],
+        "edge_case_flag": "海岸-rip current-机构联动"
+      }
+    },
+    {
+      "id": 709,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "950L:6R 救生员旗 baseline mark，多语言传播",
+      "case_data": {
+        "title": "Piha Beach Lion Rock 南北分界 — 救生员旗内 vs 旗外",
+        "type": "junction",
+        "likes": 950,
+        "reports": 6,
+        "duration_months": 24,
+        "user_volume_per_month": 4500,
+        "intrinsic_quality": "Lion Rock 北侧平静假象但实际有 rip，旗内 50 米外就完全不一样",
+        "events_timeline": [
+          "第 1 月: Piha SLSC 老成员 Brett 把 mark 设为'旗内分界基准点'",
+          "第 3 月: 一个圣诞节家庭把孩子放到岩石北侧'看起来浅'的地方，差点出事，回去加赞",
+          "第 6 月: SLSC 把 mark 截图打印贴在沙滩咖啡店",
+          "第 10 月: 旺季高峰 Brett 每天更新当日旗位（旗会随潮汐微调）"
+        ],
+        "edge_case_flag": "海岸-救生员旗-跨语言"
+      }
+    },
+    {
+      "id": 710,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "95L:1R 雨后水位 30年经验代际传承",
+      "case_data": {
+        "title": "Wairarapa Coast Castle Point 灯塔下渡溪 — 雨后水位",
+        "type": "danger",
+        "likes": 95,
+        "reports": 1,
+        "duration_months": 18,
+        "user_volume_per_month": 60,
+        "intrinsic_quality": "晴天没膝深，雨后 12 小时内会涨到腰部并夹石头",
+        "events_timeline": [
+          "第 1 月: Masterton 退休向导 Bob 用他 30 年经验标了第一版",
+          "第 4 月: 一对 Wellington 来的情侣雨后翻车被冲倒，回去加赞并补图",
+          "第 7 月: 一次 Bob 自己渡溪滑倒擦伤，他笑着把事故照片更新到 mark 评论",
+          "第 11 月: 冬季 4 周连续暴雨期间 mark 被改成'本月禁止尝试'"
+        ],
+        "edge_case_flag": "海岸渡溪-代际传承"
+      }
+    },
+    {
+      "id": 711,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "380L:2R 冰川融水实时向导维护",
+      "case_data": {
+        "title": "Westland Fox Glacier 末端融水溢流 — 突发洪峰预警",
+        "type": "danger",
+        "likes": 380,
+        "reports": 2,
+        "duration_months": 12,
+        "user_volume_per_month": 1800,
+        "intrinsic_quality": "冰川下融水池在午后阳光强时会突然溢流，水位 5 分钟可上涨 1 米",
+        "events_timeline": [
+          "第 1 月: Fox Glacier Guiding 公司向导 Hemi 标记，附气温和水位的关联表",
+          "第 3 月: 一队香港游客自由行没看 mark，午后差点被卷，回酒店加赞",
+          "第 5 月: 一次大溢流冲走步道边缘，Hemi 当场更新 mark 为'本周路线南偏 10 米'",
+          "第 8 月: 冬季水量低 mark 互动减少但向导仍每周更新维持活性"
+        ],
+        "edge_case_flag": "冰川-融水-向导维护"
+      }
+    },
+    {
+      "id": 713,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1900L:5R blowhole 自动化数据 + 人工评论",
+      "case_data": {
+        "title": "Punakaiki Pancake Rocks blowhole 喷水时机 — 涨潮西南风",
+        "type": "scenic",
+        "likes": 1900,
+        "reports": 5,
+        "duration_months": 20,
+        "user_volume_per_month": 6500,
+        "intrinsic_quality": "blowhole 喷水需要涨潮 + 西南风同时满足，每天有效窗口仅 2-4 小时",
+        "events_timeline": [
+          "第 1 月: Punakaiki 旅游中心员工 Hana 用她每天的潮汐风向记录建首版",
+          "第 3 月: 一队美国邮轮游客提前查 mark 选了下午 3 点来，看到 8 米高喷水，集体加赞",
+          "第 6 月: 旅游淡季喷水罕见，mark 评论区有人记录'连续 4 天没看到'",
+          "第 10 月: Hana 把 mark 关联到 MetService 的 Westport 风向 API 自动更新"
+        ],
+        "edge_case_flag": "海岸奇观-自动化数据-旅游业"
+      }
+    },
+    {
+      "id": 714,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "130L:1R 河流岔流商业推广教学案例",
+      "case_data": {
+        "title": "Whanganui River 第 18 公里 John Coull Hut 上游急流入口 — 新手反向",
+        "type": "junction",
+        "likes": 130,
+        "reports": 1,
+        "duration_months": 16,
+        "user_volume_per_month": 75,
+        "intrinsic_quality": "看上去较宽的左岔实际上是急流，正确的是显得窄的右岔",
+        "events_timeline": [
+          "第 1 月: Whanganui Journeys 老板儿子 Sam 自己倒过一次后标记",
+          "第 3 月: 一对挪威双人船按 mark 走对了，回 Pipiriki 留长评感谢",
+          "第 6 月: 一队没看 mark 的 8 人船队反向冲入急流，3 条船翻，靠 PLB 求救",
+          "第 8 月: 事件后 Whanganui Journeys 把 mark 截图打印发给所有自助租船客"
+        ],
+        "edge_case_flag": "河流-岔流-商业推广"
+      }
+    },
+    {
+      "id": 715,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "user-arbitration",
+      "rationale": "195:4 超级正向 [user-decided]",
+      "case_data": {
+        "title": "Tongariro 湖区 Lake Rotopounamu 步道泥泞段 — 雨季陷阱",
+        "type": "danger",
+        "likes": 195,
+        "reports": 4,
+        "duration_months": 14,
+        "user_volume_per_month": 380,
+        "intrinsic_quality": "雨后泥泞深度可达大腿，看起来只是地面湿",
+        "events_timeline": [
+          "第 1 月: Turangi 学校老师 Mere 带学生远足陷一脚后标记",
+          "第 3 月: 一位 Auckland 来的退休夫妇按 mark 提前换 gaiter，写感谢评论",
+          "第 6 月: 干旱夏季 mark 评论区有人质疑'我没看到泥'，Mere 回复'等冬天再来'",
+          "第 9 月: 冬季暴雨周 mark 被多人补充实测照片"
+        ],
+        "edge_case_flag": "湖区-季节性-DOC缺位"
+      }
+    },
+    {
+      "id": 717,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "user-arbitration",
+      "rationale": "155:2 超级正向 [user-decided]",
+      "case_data": {
+        "title": "Banks Peninsula Akaroa Harbour 海豹突袭区 — 划皮艇警告",
+        "type": "danger",
+        "likes": 155,
+        "reports": 2,
+        "duration_months": 18,
+        "user_volume_per_month": 110,
+        "intrinsic_quality": "公海豹会主动撞击靠近的皮划艇，特别是 6-9 月繁殖期",
+        "events_timeline": [
+          "第 1 月: Akaroa Sea Kayaking 老板 Mike 标记，附他 15 年的事件记录",
+          "第 3 月: 一对悉尼游客被海豹撞翻船，无伤但震惊，回去加赞",
+          "第 6 月: 繁殖季高峰 mark 评论区每周新事件",
+          "第 10 月: 一只名叫 'Ranger' 的攻击性公海豹去世，mark 评论区有人标'本月无大事件'"
+        ],
+        "edge_case_flag": "海湾-野生动物-商业向导"
+      }
+    },
+    {
+      "id": 718,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "240L:3R 沙地驾车拖车记录，飓风跟踪更新",
+      "case_data": {
+        "title": "Northland Ninety Mile Beach 沙地驾车陷沙点 — 涨潮时间",
+        "type": "danger",
+        "likes": 240,
+        "reports": 3,
+        "duration_months": 26,
+        "user_volume_per_month": 180,
+        "intrinsic_quality": "退潮 2 小时内可硬路面通行，涨潮硬沙变软会陷车",
+        "events_timeline": [
+          "第 1 月: Kaitaia 拖车公司 Boss Russ 标记，附他过去三年拖出来的 27 辆车记录",
+          "第 4 月: 一辆德国自驾房车陷在 mark 警告区，等了 6 小时退潮，事后给 mark 加 5 星评论",
+          "第 9 月: 一次恶性事故房车被海水淹没，mark 单月加 150 赞",
+          "第 14 月: 大巴公司把 mark 加入司机培训资料"
+        ],
+        "edge_case_flag": "沙地驾车-商业激励-飓风跟踪"
+      }
+    },
+    {
+      "id": 719,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "290L:2R 水上巴士时刻 Beachcomber 嵌入官网",
+      "case_data": {
+        "title": "Marlborough Sounds Queen Charlotte Track Torea Saddle 渡口 — 水上巴士时刻",
+        "type": "supply",
+        "likes": 290,
+        "reports": 2,
+        "duration_months": 18,
+        "user_volume_per_month": 250,
+        "intrinsic_quality": "Beachcomber Cruises 的水上巴士每天 2 班，错过等 24 小时，时刻表受天气影响",
+        "events_timeline": [
+          "第 1 月: Beachcomber 公司船长 Ben 自己标记，附实时班次链接",
+          "第 3 月: 一个 Wellington 周末徒步者错过班次徒步连夜赶 18 公里，回去标 mark 救人无数",
+          "第 6 月: 冬季减班期间一个海外背包客没看 mark 困了一晚，回去加赞写'救命信息'",
+          "第 11 月: 一次大风班次取消 mark 被 Ben 当天更新 7 次"
+        ],
+        "edge_case_flag": "海上巴士-时刻表-多日徒步"
+      }
+    },
+    {
+      "id": 720,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "340L:3R 蚊虫地狱多语言维护通过仪式 mark",
+      "case_data": {
+        "title": "Fiordland Milford Sound 步道 Sandfly Point 渡船等待 — 夏季蚊虫地狱",
+        "type": "supply",
+        "likes": 340,
+        "reports": 3,
+        "duration_months": 24,
+        "user_volume_per_month": 220,
+        "intrinsic_quality": "命名 Sandfly Point 实至名归，等船 1 小时被咬上百口是常事，需要驱虫剂",
+        "events_timeline": [
+          "第 1 月: 一位 Te Anau 当地导游 Kate 标记，附'必带 DEET 80%'警告",
+          "第 4 月: 一对日本徒步者按 mark 提前买驱虫剂，安然过关，写感谢日语长评",
+          "第 8 月: Real Journeys 渡船延迟 90 分钟事件，mark 评论区被'救命驱虫剂用光'刷屏",
+          "第 13 月: Te Anau 户外店 Bivouac 把 mark 截图贴店里推销驱虫剂"
+        ],
+        "edge_case_flag": "峡湾-蚊虫-Great Walk终点"
+      }
+    },
+    {
+      "id": 721,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "580L:4R 海狮区代表性 mark，人格化叙事",
+      "case_data": {
+        "title": "Otago Peninsula Sandfly Bay 海狮区警告 — 看似空旷的沙滩",
+        "type": "danger",
+        "likes": 580,
+        "reports": 4,
+        "duration_months": 20,
+        "user_volume_per_month": 420,
+        "intrinsic_quality": "看起来是块沙包但实际是体重 350 公斤的雄性海狮，突然抬头会扑过来",
+        "events_timeline": [
+          "第 1 月: DOC Otago 志愿者 Pippa 标记，附海狮识别图（与海豹的区别）",
+          "第 3 月: 一对法国情侣靠近自拍，雄性海狮冲上来撞翻三脚架，回去加赞补法语描述",
+          "第 7 月: 一只名叫 'Hercules' 的常驻雄海狮成了 Sandfly Bay 标志，mark 评论区每周报告位置",
+          "第 12 月: Hercules 死亡 mark 评论区集体哀悼，数日上千次浏览"
+        ],
+        "edge_case_flag": "海岸-野生动物-人格化"
+      }
+    },
+    {
+      "id": 722,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "110L:1R 偏远海岸大潮陷阱飞行员维护",
+      "case_data": {
+        "title": "Stewart Island Mason Bay 涉水段 — 大潮陷阱",
+        "type": "junction",
+        "likes": 110,
+        "reports": 1,
+        "duration_months": 20,
+        "user_volume_per_month": 45,
+        "intrinsic_quality": "正常退潮齐膝，大潮 + 风暴时可达腰部并有强流",
+        "events_timeline": [
+          "第 1 月: Rakiura Helicopters 飞行员 Dion 在飞客户进 Mason Bay 时标记",
+          "第 4 月: 一对 Christchurch 大学生大潮日按 mark 提前等了 90 分钟才过，安全",
+          "第 8 月: 一位独自徒步的德国老人没看 mark 强渡被冲倒，靠 PLB 求救",
+          "第 11 月: 事件后 DOC 把 mark 内容嵌入 Rakiura Visitor Centre 的简报"
+        ],
+        "edge_case_flag": "偏远海岸-飞行员维护"
+      }
+    },
+    {
+      "id": 723,
+      "final_state": "healthy",
+      "final_lifespan": "expired",
+      "source": "user-arbitration",
+      "rationale": "140:2 超级正向状态未死 [user-decided]",
+      "case_data": {
+        "title": "Bay of Islands Russell 步道海岸侵蚀点 — 步道边缘悬空",
+        "type": "danger",
+        "likes": 140,
+        "reports": 2,
+        "duration_months": 8,
+        "user_volume_per_month": 320,
+        "intrinsic_quality": "步道看起来还在但下方土层已被掏空 60 厘米，重压会塌",
+        "events_timeline": [
+          "第 1 月: Russell 退休测量员 Ted 用工程经验标记并附测量数据",
+          "第 3 月: 一对意大利邮轮客没看 mark 走过塌了 1 米，无伤但惊魂，加赞",
+          "第 5 月: 暴雨周侵蚀加剧 Ted 当周三次更新 mark",
+          "第 7 月: DOC 暂时关闭这段步道改设临时绕行 mark 自动降权"
+        ],
+        "edge_case_flag": "海岸侵蚀-DOC修复-mark退役"
+      }
+    },
+    {
+      "id": 724,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "480L:3R 海岸礁石钓鱼 SLSNZ 安全地图，iwi rāhui",
+      "case_data": {
+        "title": "Tauranga Mount Maunganui 主峰下方海岸礁石 — 海钓滑落",
+        "type": "danger",
+        "likes": 480,
+        "reports": 3,
+        "duration_months": 24,
+        "user_volume_per_month": 95,
+        "intrinsic_quality": "本地钓鱼者下去的礁石路看似简单实则浪打滑，每年 1-2 起溺水",
+        "events_timeline": [
+          "第 1 月: Mount 钓友会主席 Wiremu 标记，附 5 起事故名单",
+          "第 5 月: 一名 Tauranga 中年钓鱼者按 mark 路线但仍被浪卷，Wiremu 写补充警告",
+          "第 9 月: 一队海外大学生没看 mark 下去自拍滑落，Search & Rescue 出动",
+          "第 14 月: 事件登上 NZ Herald，mark 单月加 350 赞"
+        ],
+        "edge_case_flag": "海岸礁石-钓鱼-iwi rāhui"
+      }
+    },
+    {
+      "id": 725,
+      "final_state": "context_dependent",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "5-9月雄海豹聚集，明确季节循环",
+      "case_data": {
+        "title": "Wellington 南海岸 Red Rocks 海豹观察点 — 冬季公海豹聚集",
+        "type": "scenic",
+        "likes": 720,
+        "reports": 3,
+        "duration_months": 22,
+        "user_volume_per_month": 580,
+        "intrinsic_quality": "5-9 月可看 30-80 只雄海豹晒太阳，距离仅 5 米但有警戒线",
+        "events_timeline": [
+          "第 1 月: Wellington 中学生物老师 Anna 标记并连接到学校 fieldwork 路线",
+          "第 4 月: 冬季高峰 mark 评论区每天有人报告当日海豹数",
+          "第 8 月: 一位 Berlin 来的访问学者拍纪录片用 mark 做导航",
+          "第 11 月: 夏季海豹散去 mark 进入低谷期"
+        ],
+        "edge_case_flag": "海岸野生动物-季节循环"
+      }
+    },
+    {
+      "id": 726,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "175L:2R Great Walk 融雪溪 Ultimate Hikes 双群体维护",
+      "case_data": {
+        "title": "Fiordland Milford Track Mackinnon Pass 上方融雪溪 — Clinton 河源",
+        "type": "danger",
+        "likes": 175,
+        "reports": 2,
+        "duration_months": 18,
+        "user_volume_per_month": 110,
+        "intrinsic_quality": "晴天没膝，雨天 + 上游融雪可在 30 分钟暴涨到腰",
+        "events_timeline": [
+          "第 1 月: Ultimate Hikes 资深向导 Jess 标记，附她从 2017 年开始的 12 次过桥记录",
+          "第 4 月: 一队 DOC 独立徒步者雨天按 mark 提前 1 小时下山，避开洪峰",
+          "第 8 月: 一次极端雨日 Jess 当天三次更新 mark 数据",
+          "第 12 月: DOC 装了简易桥但仍受洪水影响，mark 评论区记录'桥被冲走两次'"
+        ],
+        "edge_case_flag": "Great Walk-融雪-双群体维护"
+      }
+    },
+    {
+      "id": 727,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "340L:3R 退潮通道唯一路径，被困事件验证",
+      "case_data": {
+        "title": "Coromandel New Chums Beach 退潮通道 — 唯一进入路径",
+        "type": "junction",
+        "likes": 340,
+        "reports": 3,
+        "duration_months": 16,
+        "user_volume_per_month": 290,
+        "intrinsic_quality": "退潮 ±2 小时窗口期可徒步过去，错过窗口完全进不去",
+        "events_timeline": [
+          "第 1 月: Whangapoua 度假屋老板娘 Jen 标记，附 30 天的潮汐窗口表",
+          "第 4 月: 一对加州夫妇看 mark 后调整行程，回去加赞写'本来打算第二天去会被困'",
+          "第 7 月: 一个 Tauranga 家庭没看 mark 涨潮被困对岸，等到深夜",
+          "第 10 月: 事件后 mark 在本地 facebook 群被疯转，单月加 200 赞"
+        ],
+        "edge_case_flag": "海岸-潮汐-稀缺景观"
+      }
+    },
+    {
+      "id": 728,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "480L:4R 海蚀岩台涨潮，自动化数据 + 摄影圈",
+      "case_data": {
+        "title": "West Coast Truman Track 海蚀岩台 — 涨潮阻断观景",
+        "type": "scenic",
+        "likes": 480,
+        "reports": 4,
+        "duration_months": 14,
+        "user_volume_per_month": 760,
+        "intrinsic_quality": "退潮看悬崖海洞最佳，涨潮浪打到步道末端封路",
+        "events_timeline": [
+          "第 1 月: Greymouth 摄影师 Jack 标记并连接到 MetService 涌浪数据",
+          "第 3 月: 一队 Auckland 摄影团按 mark 时间过来拍到风暴大浪",
+          "第 6 月: 一次涨潮把 4 个游客困在岩台 2 小时，海岸警卫队发警告",
+          "第 9 月: 事件后 mark 加'涨潮位 1.4 米以上严禁下去'警告"
+        ],
+        "edge_case_flag": "海岸观景-自动化数据-摄影圈"
+      }
+    },
+    {
+      "id": 729,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "195L:2R 渡船家族经营季节减班维护",
+      "case_data": {
+        "title": "Northland Hokianga Harbour 沙丘对岸渡口 — Opononi 渡船",
+        "type": "supply",
+        "likes": 195,
+        "reports": 2,
+        "duration_months": 18,
+        "user_volume_per_month": 150,
+        "intrinsic_quality": "渡船每天 4 班，错过等下一班 3 小时，季节性班次还会减",
+        "events_timeline": [
+          "第 1 月: Hokianga Express Ferry 船长 Hone 标记，附他从父辈继承的运营经验",
+          "第 3 月: 一对德国情侣按 mark 选了第一班船，玩完赶上末班，回去写感谢",
+          "第 6 月: 冬季减班期一队海外学生没看 mark 误以为还有班次，被困对岸到天黑",
+          "第 10 月: Hone 把 mark 嵌入船公司 facebook，数据自动同步"
+        ],
+        "edge_case_flag": "渡船-家族经营-季节减班"
+      }
+    },
+    {
+      "id": 751,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "14L:1R alpine seasonal NZAC 权威，summit logbook 验证",
+      "case_data": {
+        "title": "Aoraki/Mt Cook Linda Glacier route — bergschrund crossing waypoint",
+        "type": "junction",
+        "likes": 14,
+        "reports": 1,
+        "duration_months": 8,
+        "user_volume_per_month": 12,
+        "intrinsic_quality": "Marks the current-season bergschrund crossing — without it parties wander 200m looking for a bridge in the dark",
+        "events_timeline": [
+          "Month 1 (Dec): Alpine Guides instructor drops mark at 2am during summit push, photo of snow bridge with ice screw runner",
+          "Month 2: 4 independent parties confirm bridge held, 8 likes from named NZAC members",
+          "Month 3 (Feb): bridge sags visibly, instructor updates note 'east side only, west collapsed'",
+          "Month 4 (March): bridge gone, original poster archives mark with 'season closed' tag"
+        ],
+        "edge_case_flag": "alpine_seasonal|nzac_authored|skill_gated_audience"
+      }
+    },
+    {
+      "id": 752,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "9L:0R Aspiring Guides 维护低流量高质量",
+      "case_data": {
+        "title": "Mt Tasman Silberhorn Ridge — fixed line anchor station",
+        "type": "supply",
+        "likes": 9,
+        "reports": 0,
+        "duration_months": 14,
+        "user_volume_per_month": 4,
+        "intrinsic_quality": "Three bomber rock anchors with 60m static line left by Aspiring Guides, saves an hour of pitching",
+        "events_timeline": [
+          "Month 1: Aspiring Guides team rebolts old anchors, marks all three with photos and 8mm bolt specs",
+          "Month 3: independent party from Christchurch Alpine Club confirms, adds note about icy approach traverse",
+          "Month 6: NZ Mountain Safety Council shares mark on their winter alpine bulletin",
+          "Month 8: 6 likes from verified summit-day climbers"
+        ],
+        "edge_case_flag": "low_volume_high_skill|guide_maintained|quality_via_obscurity"
+      }
+    },
+    {
+      "id": 753,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "28L:1R lethal serac 验证戏剧性，DOC ranger annual",
+      "case_data": {
+        "title": "Mt Sefton east face — serac fall hazard zone (lethal danger)",
+        "type": "danger",
+        "likes": 28,
+        "reports": 1,
+        "duration_months": 18,
+        "user_volume_per_month": 8,
+        "intrinsic_quality": "Names a no-go zone where standing for 60 seconds risks ice avalanche burial",
+        "events_timeline": [
+          "Month 1: DOC ranger posts after annual hazard review, marks 80m exclusion radius with red polygon",
+          "Month 2: 2019 incident survivor adds testimony, mark gets 12 immediate likes",
+          "Month 5: party traversing in pre-dawn confirms hearing serac groan, adds audio recording",
+          "Month 9: scenic overflight pilot reports debris cone visible from chopper, mark gets 18 likes"
+        ],
+        "edge_case_flag": "lethal_alpine|coronial_record|geometric_invisibility_to_reporter"
+      }
+    },
+    {
+      "id": 754,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "24L:1R alpine 22月，1 report 来自非到场者(无效)",
+      "case_data": {
+        "title": "Mt Aspiring NW Ridge — Quarterdeck Pass crampon-on point",
+        "type": "junction",
+        "likes": 24,
+        "reports": 1,
+        "duration_months": 22,
+        "user_volume_per_month": 18,
+        "intrinsic_quality": "Saves 15 min of fumbling with crampons in wind, marks a flat boulder used as gear platform",
+        "events_timeline": [
+          "Month 1: Wanaka-based IFMGA guide posts during client trip, photo of the gear-up boulder",
+          "Month 4: 8 likes from French Ridge Hut overnight parties",
+          "Month 7: party reports boulder is partly buried by spring snow, guide updates with secondary marker",
+          "Month 11: 16 likes accumulated, no reports"
+        ],
+        "edge_case_flag": "alpine_navigation|reporter_geographic_invalid"
+      }
+    },
+    {
+      "id": 755,
+      "final_state": "context_dependent",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "winter avalanche 季节性，summer reports 都是 temporal mismatch",
+      "case_data": {
+        "title": "Mueller Hut Route — winter avalanche start zone (seasonal danger)",
+        "type": "danger",
+        "likes": 35,
+        "reports": 8,
+        "duration_months": 30,
+        "user_volume_per_month": 20,
+        "intrinsic_quality": "Marks documented avalanche path that took out a guided party in 2017 (no fatalities, two injuries)",
+        "events_timeline": [
+          "Month 1 (June): NZAA posts at start of winter season, links current windslab forecast",
+          "Month 3 (Aug): party of 3 triggers minor slide, self-rescues, confirms mark and adds new crown line photo",
+          "Month 6 (Nov): summer hikers in shorts report 'no danger here, scaremongering' — 4 reports in one week",
+          "Month 8 (Jan): mark gets seasonal-only flag added by ranger"
+        ],
+        "edge_case_flag": "seasonal_alpine_danger|temporal_report_mismatch|nzaa_authored"
+      }
+    },
+    {
+      "id": 757,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "20L:1R memorial mark，1 report 是格式不是准确性",
+      "case_data": {
+        "title": "Ball Pass Route — east face descent gully, fatal fall site memorial",
+        "type": "danger",
+        "likes": 20,
+        "reports": 1,
+        "duration_months": 20,
+        "user_volume_per_month": 6,
+        "intrinsic_quality": "Names the specific gully bend where rockfall concentrates, recommends the alternative line 30m climbers-right",
+        "events_timeline": [
+          "Month 1: SAR posts memorial mark with permission of family, photo of memorial cairn",
+          "Month 3: NZAC bulletin links to mark, 14 likes from senior alpine community",
+          "Month 6: party descends, confirms loose rock, adds 'helmet mandatory' note",
+          "Month 9: tourist photographer reports 'inappropriate to mark a death' — content reviewed, retained"
+        ],
+        "edge_case_flag": "memorial_mark|sar_co_authored|format_complaint_not_accuracy"
+      }
+    },
+    {
+      "id": 758,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "60L:4R 36月 deadliest route，3 起 fatality 验证 coronial 强制",
+      "case_data": {
+        "title": "Cascade Saddle — Pylon descent slip zone (technical danger)",
+        "type": "danger",
+        "likes": 60,
+        "reports": 4,
+        "duration_months": 36,
+        "user_volume_per_month": 35,
+        "intrinsic_quality": "Most dangerous DOC-graded tramping route in NZ — mark identifies the slip-prone wet rock band specifically",
+        "events_timeline": [
+          "Month 1: DOC posts as part of Coroner Court mandate, links inquiry findings",
+          "Month 3: 18 likes from trampers who descended successfully, all confirm wet-rock band scariest",
+          "Month 8: another fatality on same route, mark validated again grimly",
+          "Month 12: 30 likes, 2 reports from people who ascended (didn't see descent hazard)"
+        ],
+        "edge_case_flag": "coronial_mandated|fatality_validated|deadliest_route"
+      }
+    },
+    {
+      "id": 759,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "8L:0R 28月 summit register tiny audience 偏远好 mark",
+      "case_data": {
+        "title": "Mt Earnslaw — east peak summit register location",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 0,
+        "duration_months": 28,
+        "user_volume_per_month": 3,
+        "intrinsic_quality": "Helps climbers find the register in cloud — without it people summit and never sign in",
+        "events_timeline": [
+          "Month 1: NZAC member posts after restocking the register tube",
+          "Month 6: 4 likes from confirmed summit log entries cross-referenced",
+          "Month 12: party in cloud confirms mark led them straight to cairn, 'invaluable'",
+          "Month 18: register tube damaged by lightning strike, mark updated with new tube location"
+        ],
+        "edge_case_flag": "summit_register|tiny_audience|club_maintained"
+      }
+    },
+    {
+      "id": 760,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12L:0R annually refreshed 社区维护 crevasse",
+      "case_data": {
+        "title": "Mt Brewster — Brewster Glacier crevasse field entry waypoint",
+        "type": "junction",
+        "likes": 12,
+        "reports": 0,
+        "duration_months": 24,
+        "user_volume_per_month": 9,
+        "intrinsic_quality": "Marks rope-up location and indicates safe vs unsafe glacier entry corridors",
+        "events_timeline": [
+          "Month 1 (Dec): NZAC Canterbury posts after summer survey, photos of three open crevasses",
+          "Month 4: party uses mark, confirms crevasses match, updates GPS slightly",
+          "Month 8 (winter): different party reports crevasses fully bridged in winter, less critical",
+          "Month 12: annual update — old mark archived, new mark posted by same author with current crevasse layout"
+        ],
+        "edge_case_flag": "annually_refreshed|crevasse_navigation|community_curated"
+      }
+    },
+    {
+      "id": 761,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "9L:0R episodic backup route，太 niche 无 uninformed reporters",
+      "case_data": {
+        "title": "Plateau Hut access — Boys Glacier icefall route (technical approach)",
+        "type": "junction",
+        "likes": 9,
+        "reports": 0,
+        "duration_months": 16,
+        "user_volume_per_month": 2,
+        "intrinsic_quality": "Documents the only viable icefall route through the fall zone, requiring two pitches of WI3",
+        "events_timeline": [
+          "Month 1: NZAC senior climber posts after first traversing the icefall route during 2023 ladder closure",
+          "Month 3: NZ Mountain Guides Association references mark in winter advisory",
+          "Month 6: second party uses route, confirms two-pitch grade, adds screw placement notes",
+          "Month 9: ladders reopen, mark goes dormant but stays alive"
+        ],
+        "edge_case_flag": "episodic_use|backup_route|technical_grade_specified"
+      }
+    },
+    {
+      "id": 762,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "11L:1R warden maintained，1 report 来自直升机(无效视角)",
+      "case_data": {
+        "title": "Pioneer Hut — La Perouse Glacier wand line (whiteout navigation)",
+        "type": "junction",
+        "likes": 11,
+        "reports": 1,
+        "duration_months": 20,
+        "user_volume_per_month": 5,
+        "intrinsic_quality": "Saves climbers in whiteout — without wands the corridor is invisible and either edge is lethal",
+        "events_timeline": [
+          "Month 1: hut warden posts mark with photo of fresh wand line in November",
+          "Month 4: party in whiteout confirms wands are present, 'genuinely lifesaving' note added",
+          "Month 8: storm flattens half the wands, party that arrives next reports gap and replaces",
+          "Month 12: NZAC bulletin shares the mark in winter alpine notes"
+        ],
+        "edge_case_flag": "warden_maintained|whiteout_critical|reporter_invalid_perspective"
+      }
+    },
+    {
+      "id": 763,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "7L:0R cooperative asset 14月 guide 维护",
+      "case_data": {
+        "title": "Centennial Hut — Fox Glacier neve fixed picket (technical supply)",
+        "type": "supply",
+        "likes": 7,
+        "reports": 0,
+        "duration_months": 14,
+        "user_volume_per_month": 3,
+        "intrinsic_quality": "Shared picket eliminates the need for every party to place gear at the same spot, reduces accumulated wear",
+        "events_timeline": [
+          "Month 1: Fox Glacier Guides team installs picket, posts mark with bombproof placement photo",
+          "Month 3: independent party uses picket, confirms it held two falls, adds note about snow stake angle",
+          "Month 6: NZ Mountain Guides Assoc shares in winter bulletin",
+          "Month 9: picket pulled by warming snow, party that finds it loose reposts with 'reset needed'"
+        ],
+        "edge_case_flag": "cooperative_asset|technical_supply|guide_maintained"
+      }
+    },
+    {
+      "id": 764,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "24L:1R activity-specific seasonal refresh，1 dismissive 出 context",
+      "case_data": {
+        "title": "Tasman Glacier upper neve — ski touring transition zone",
+        "type": "junction",
+        "likes": 24,
+        "reports": 1,
+        "duration_months": 24,
+        "user_volume_per_month": 14,
+        "intrinsic_quality": "Marks the no-ski-below-this-line GPS boundary used by NZ ski touring community",
+        "events_timeline": [
+          "Month 1 (July): NZBSA post at start of winter season, GPS polygon for safe zone",
+          "Month 3: ski tourers confirm boundary matches actual crevasse exposure",
+          "Month 6 (Oct): season closing update, 16 likes",
+          "Month 9 (summer): mountaineer not skiing reports 'irrelevant to me' — review keeps mark"
+        ],
+        "edge_case_flag": "activity_specific|ski_touring|seasonal_refresh"
+      }
+    },
+    {
+      "id": 766,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "21L:0R SAR-maintained 操作数据，weather decision critical",
+      "case_data": {
+        "title": "Mt Cook Village — Aoraki summit weather window radio relay",
+        "type": "supply",
+        "likes": 21,
+        "reports": 0,
+        "duration_months": 22,
+        "user_volume_per_month": 16,
+        "intrinsic_quality": "Lets parties at Plateau Hut catch reliable weather updates from MetService aviation forecast via Mt Cook Village base",
+        "events_timeline": [
+          "Month 1: SAR base posts the schedule with frequencies",
+          "Month 3: party uses sched to abort summit ahead of front, credits mark",
+          "Month 6: schedule changes, SAR updates mark with new times",
+          "Month 9: 14 likes from summit logbook climbers"
+        ],
+        "edge_case_flag": "radio_schedule|sar_operational|weather_decision_critical"
+      }
+    },
+    {
+      "id": 767,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "14L:0R ASCA-standard hardware guide rebolted",
+      "case_data": {
+        "title": "Mt Aspiring SW Ridge — ridge gendarme rappel station",
+        "type": "supply",
+        "likes": 14,
+        "reports": 0,
+        "duration_months": 16,
+        "user_volume_per_month": 7,
+        "intrinsic_quality": "30m rappel anchor that saves down-climbing a 5.6 step in mountaineering boots",
+        "events_timeline": [
+          "Month 1: Aspiring Guides team rebolts, posts with hardware specs (12mm glue-in)",
+          "Month 4: independent party uses rappel, confirms anchor, adds note on rope drag",
+          "Month 7: NZAC bulletin includes mark in standard route description",
+          "Month 10: 11 likes from named summit logbook climbers"
+        ],
+        "edge_case_flag": "asca_hardware|rappel_station|guide_rebolted"
+      }
+    },
+    {
+      "id": 768,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "9L:0R emergency bivvy SAR-authored 偏远好 mark",
+      "case_data": {
+        "title": "Mt Sefton — Footstool basin avalanche debris field bivvy site",
+        "type": "supply",
+        "likes": 9,
+        "reports": 0,
+        "duration_months": 18,
+        "user_volume_per_month": 4,
+        "intrinsic_quality": "Marks a survivable bivvy spot if descent is not possible by nightfall, sheltered from west wind",
+        "events_timeline": [
+          "Month 1: SAR posts after debrief of party who used the spot to survive a storm",
+          "Month 4: NZAC mountain skills instructor adds the location to syllabus mark list",
+          "Month 8: 6 likes from instructors and one party who used it preventively",
+          "Month 12: party posts photo confirming the boulder is still there post-winter"
+        ],
+        "edge_case_flag": "emergency_bivvy|sar_authored|rare_high_consequence"
+      }
+    },
+    {
+      "id": 769,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "10L:0R cornice hazard community-curated",
+      "case_data": {
+        "title": "Mt Tasman — Marcel Couloir cornice break detection",
+        "type": "danger",
+        "likes": 10,
+        "reports": 0,
+        "duration_months": 20,
+        "user_volume_per_month": 3,
+        "intrinsic_quality": "Marks the cornice with windward GPS line so climbers know when they are in fall zone",
+        "events_timeline": [
+          "Month 1: NZAC ice climber posts after near-miss, photo of broken cornice debris",
+          "Month 4: second party confirms approximate cornice line",
+          "Month 8: cornice breaks while party watches from below, mark validated visually",
+          "Month 12: 7 likes from named ice climbers"
+        ],
+        "edge_case_flag": "ice_climbing_specific|cornice_hazard|community_curated"
+      }
+    },
+    {
+      "id": 770,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "6L:0R 24月 extreme niche 20人受众，IFMGA 信任",
+      "case_data": {
+        "title": "Aoraki — Anzac Peaks traverse, technical chimney pitch",
+        "type": "junction",
+        "likes": 6,
+        "reports": 0,
+        "duration_months": 24,
+        "user_volume_per_month": 2,
+        "intrinsic_quality": "Without mark, parties spend up to an hour searching for the entry, in a no-stop zone",
+        "events_timeline": [
+          "Month 1: senior IFMGA guide posts after multi-decade familiarity with route",
+          "Month 6: another guide confirms with photo from chimney mouth",
+          "Month 12: 4 likes total, but every like from named summit log climber",
+          "Month 18: NZAC traversers thank guide directly"
+        ],
+        "edge_case_flag": "extreme_niche|ifmga_authored|trust_based_quality"
+      }
+    },
+    {
+      "id": 771,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "6L:0R cooperative cache audit cycle",
+      "case_data": {
+        "title": "Mt Earnslaw — west peak NW ridge variant snow stake bivvy gear cache",
+        "type": "supply",
+        "likes": 6,
+        "reports": 0,
+        "duration_months": 16,
+        "user_volume_per_month": 2,
+        "intrinsic_quality": "Cooperative gear cache maintained by Glenorchy alpine community, reduces solo party risk",
+        "events_timeline": [
+          "Month 1: Glenorchy alpine club posts cache location after annual restock",
+          "Month 4: party uses cache after broken crampon, returns replacement gear",
+          "Month 8: 4 likes, all from confirmed users who left replacement gear",
+          "Month 12: cache audited, all gear present, mark refreshed"
+        ],
+        "edge_case_flag": "cooperative_cache|audit_cycle|low_popularity_high_function"
+      }
+    },
+    {
+      "id": 772,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "14L:0R 雷电 hazard MetService backed，两次击打事件",
+      "case_data": {
+        "title": "Mt Sefton — Footstool ridge lightning rod hazard zone",
+        "type": "danger",
+        "likes": 14,
+        "reports": 0,
+        "duration_months": 14,
+        "user_volume_per_month": 5,
+        "intrinsic_quality": "Names a no-go-during-electrical-activity zone, advises 100m descent if storm approaches",
+        "events_timeline": [
+          "Month 1: NZAC member posts after watching strike during 2024 storm",
+          "Month 3: MetService forecaster confirms electrical exposure of ridge",
+          "Month 6: party retreats correctly, credits mark with avoiding strike",
+          "Month 9: 11 likes, including from MetService alpine team"
+        ],
+        "edge_case_flag": "lightning_hazard|metservice_backed|strike_witnessed"
+      }
+    },
+    {
+      "id": 773,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "22L:1R condition-dependent flat light 限定场景",
+      "case_data": {
+        "title": "Mt Aspiring — Bonar Glacier sastrugi false trail",
+        "type": "junction",
+        "likes": 22,
+        "reports": 1,
+        "duration_months": 20,
+        "user_volume_per_month": 18,
+        "intrinsic_quality": "Anti-mark warning that the false trail is a wind feature, real route is 50m south",
+        "events_timeline": [
+          "Month 1: NZAC instructor posts after course participant followed false trail and roped party caught the slip",
+          "Month 4: party in flat light confirms the trap is real, adds photo of both lines side by side",
+          "Month 8: hut warden refreshes after spring storm",
+          "Month 12: 16 likes, including from instructor consortium"
+        ],
+        "edge_case_flag": "condition_dependent|false_trail|flat_light_only"
+      }
+    },
+    {
+      "id": 774,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "78L:3R warden authored seasonal water bearing-dependent",
+      "case_data": {
+        "title": "Mueller Hut Route — water source midway, tarn behind moraine",
+        "type": "supply",
+        "likes": 78,
+        "reports": 3,
+        "duration_months": 18,
+        "user_volume_per_month": 95,
+        "intrinsic_quality": "Critical in summer when 200+ visitors per day deplete hut water tank by afternoon",
+        "events_timeline": [
+          "Month 1: warden posts during peak season after hut runs dry",
+          "Month 2: 30 likes within 2 weeks from same-week visitors",
+          "Month 5 (winter): tarn frozen, mark gets seasonal-only flag",
+          "Month 8 (summer): mark reactivates, 22 more likes"
+        ],
+        "edge_case_flag": "warden_authored|seasonal_water|bearing_dependent"
+      }
+    },
+    {
+      "id": 775,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "24L:1R seasonal bypass SAR-validated drowning risk reduction",
+      "case_data": {
+        "title": "Ball Pass — Caroline Hut access, river crossing bypass route",
+        "type": "junction",
+        "likes": 24,
+        "reports": 1,
+        "duration_months": 22,
+        "user_volume_per_month": 13,
+        "intrinsic_quality": "Adds 40 minutes but eliminates a non-trivial drowning risk on the standard approach",
+        "events_timeline": [
+          "Month 1 (Dec): warden posts during peak melt season",
+          "Month 4: party that bypassed credits mark, photo of unbypassed river chest-deep",
+          "Month 7 (winter): river frozen, mark less relevant, but stays alive with seasonal note",
+          "Month 11 (next summer): refreshed"
+        ],
+        "edge_case_flag": "seasonal_bypass|sar_validated|drowning_risk_reduction"
+      }
+    },
+    {
+      "id": 776,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "26L:1R last-resort shelter 多场景验证 Cascade Saddle",
+      "case_data": {
+        "title": "Cascade Saddle — emergency shelter rock overhang midway",
+        "type": "supply",
+        "likes": 26,
+        "reports": 1,
+        "duration_months": 20,
+        "user_volume_per_month": 25,
+        "intrinsic_quality": "Only viable shelter on the most exposed section of NZs deadliest tramping route",
+        "events_timeline": [
+          "Month 1: 2018 incident survivor posts mark with photo of the overhang",
+          "Month 3: DOC ranger validates and adds it to safety briefing",
+          "Month 6: party uses overhang during thunderstorm, posts thanks",
+          "Month 10: 19 likes, 0 reports"
+        ],
+        "edge_case_flag": "shelter_of_last_resort|deadliest_route_supplement"
+      }
+    },
+    {
+      "id": 777,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12L:0R 24月 false col navigation trap NZAC",
+      "case_data": {
+        "title": "Mt Cook Range — Sealy Range traverse, false col navigation trap",
+        "type": "junction",
+        "likes": 12,
+        "reports": 0,
+        "duration_months": 24,
+        "user_volume_per_month": 6,
+        "intrinsic_quality": "Marks the misleading col and indicates the true col 100m further along ridge",
+        "events_timeline": [
+          "Month 1: NZAC posts after club trip nearly went off-route",
+          "Month 4: independent solo confirms the trap from below",
+          "Month 9: 8 likes from confirmed traverse completers",
+          "Month 14: another party reports tracks leading to false col, validates persistence of trap"
+        ],
+        "edge_case_flag": "false_col|navigation_trap|club_authored"
+      }
+    },
+    {
+      "id": 778,
+      "final_state": "context_dependent",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "winter avalanche corridor，summer reports temporal mismatch",
+      "case_data": {
+        "title": "Mt Brewster Hut — winter approach avalanche corridor",
+        "type": "danger",
+        "likes": 30,
+        "reports": 5,
+        "duration_months": 28,
+        "user_volume_per_month": 8,
+        "intrinsic_quality": "Reroutes parties up an alternate ridge in winter, adding 90 minutes but eliminating slide exposure",
+        "events_timeline": [
+          "Month 1 (June): NZAA posts at start of winter season",
+          "Month 3: a slide releases naturally during a warming event, captured on camera by hut warden",
+          "Month 6: 14 likes from winter mountaineers",
+          "Month 8 (Nov): summer trampers report 'the standard track was fine' — yes, in summer"
+        ],
+        "edge_case_flag": "winter_only|seasonal_bypass|nzaa_authored"
+      }
+    }
+  ]
+}

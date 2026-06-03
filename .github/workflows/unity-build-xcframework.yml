@@ -1,0 +1,113 @@
+name: Build UnityFramework.xcframework
+
+on:
+  push:
+    paths:
+      - 'UnityARLib/**'
+  workflow_dispatch:
+
+jobs:
+  # ── Job 1: Unity iOS export (Linux + Docker, game-ci) ──────────────────────
+  unity-export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 6000.0.28f1
+          targetPlatform: iOS
+          buildMethod: BuildScript.BuildIOS
+          projectPath: UnityARLib
+          buildsPath: builds
+          allowDirtyBuild: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unity-ios-export
+          path: builds/iOS/
+          retention-days: 1
+
+  # ── Job 2: xcodebuild → xcframework (macOS required) ───────────────────────
+  build-xcframework:
+    runs-on: macos-14
+    needs: unity-export
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: unity-ios-export
+          path: builds/iOS/
+
+      - name: List exported Xcode project
+        run: |
+          echo "=== Exported contents ==="
+          find builds/iOS -maxdepth 3 -type f | head -40
+
+      - name: Build UnityFramework.xcframework
+        run: |
+          set -e
+
+          PROJ="builds/iOS/Unity-iPhone.xcodeproj"
+
+          # Verify the project exists
+          if [ ! -d "$PROJ" ]; then
+            echo "ERROR: Unity-iPhone.xcodeproj not found at $PROJ"
+            echo "Available files:"
+            find builds/iOS -name "*.xcodeproj" -o -name "*.xcworkspace" | head -10
+            exit 1
+          fi
+
+          # List available schemes
+          echo "=== Available schemes ==="
+          xcodebuild -project "$PROJ" -list 2>&1 || true
+
+          # Archive UnityFramework scheme (NOT Unity-iPhone app scheme)
+          xcodebuild archive \
+            -project "$PROJ" \
+            -scheme UnityFramework \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath /tmp/UnityFramework.xcarchive \
+            SKIP_INSTALL=NO \
+            BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            | tail -20
+
+          # Find the compiled framework inside the archive
+          FRAMEWORK_PATH=$(find /tmp/UnityFramework.xcarchive \
+            -name "UnityFramework.framework" -type d | head -1)
+
+          if [ -z "$FRAMEWORK_PATH" ]; then
+            echo "ERROR: UnityFramework.framework not found in archive"
+            find /tmp/UnityFramework.xcarchive -type d | head -20
+            exit 1
+          fi
+
+          echo "Framework found at: $FRAMEWORK_PATH"
+
+          # Create xcframework (device-only for Spike; add simulator slice later if needed)
+          xcodebuild -create-xcframework \
+            -framework "$FRAMEWORK_PATH" \
+            -output UnityFramework.xcframework
+
+          zip -r UnityFramework.xcframework.zip UnityFramework.xcframework
+          echo "=== xcframework size ==="
+          du -sh UnityFramework.xcframework.zip
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: unity-xcframework-latest
+          name: Unity xcframework (latest)
+          files: UnityFramework.xcframework.zip
+          make_latest: true
+          token: ${{ secrets.GITHUB_TOKEN }}

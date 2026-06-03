@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Sandbox Demo A — Minimal</title>
+<style>
+  body { margin: 0; padding: 0; background: #f5f5f5; font-family: -apple-system, sans-serif; height: 100vh; overflow: hidden; display: flex; }
+
+  /* Sidebar — 极简 */
+  #panel { width: 240px; background: #fff; border-right: 1px solid #e0e0e0; padding: 16px; box-sizing: border-box; font-size: 12px; }
+  #panel h1 { font-size: 14px; margin: 0 0 4px; color: #333; font-weight: 600; }
+  #panel .sub { color: #888; font-size: 11px; margin-bottom: 16px; }
+  .section { margin-bottom: 14px; }
+  .section h3 { font-size: 11px; color: #666; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 11px; }
+  .row label { color: #555; }
+  .row .val { color: #000; font-weight: 500; }
+  input[type="range"] { width: 100%; }
+  button { width: 100%; padding: 6px; background: #fff; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; font-size: 11px; color: #333; margin-bottom: 4px; }
+  button:hover { background: #f0f0f0; }
+  button.primary { background: #333; color: #fff; border-color: #333; }
+
+  /* Stage */
+  #stage { flex: 1; position: relative; overflow: hidden; }
+  canvas { display: block; background: #fafafa; }
+
+  /* Status bar */
+  #statusbar { position: absolute; top: 8px; left: 8px; background: rgba(255,255,255,0.9); padding: 6px 10px; border-radius: 3px; font-size: 11px; color: #333; border: 1px solid #e0e0e0; }
+  #statusbar span { margin-right: 12px; }
+
+  /* Marker info card — 极简白 */
+  .marker-card { position: absolute; background: #fff; border: 1px solid #ccc; padding: 6px 8px; border-radius: 3px; font-size: 10px; pointer-events: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+  .marker-card .title { font-weight: 600; color: #000; }
+  .marker-card .stat { color: #555; }
+  .marker-card .stat .num { color: #000; font-weight: 500; }
+  .marker-card .reasons { color: #888; margin-top: 2px; padding-top: 2px; border-top: 1px dashed #eee; }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <h1>Cairn Sandbox</h1>
+  <div class="sub">Demo A — Minimal</div>
+
+  <div class="section">
+    <h3>Population</h3>
+    <div class="row"><label>Walkers</label><span class="val">500</span></div>
+    <input type="range" min="10" max="500" value="500" />
+  </div>
+
+  <div class="section">
+    <h3>Time</h3>
+    <div class="row"><label>Speed</label><span class="val">100×</span></div>
+    <input type="range" min="1" max="10000" value="100" />
+  </div>
+
+  <div class="section">
+    <h3>Persona Mix</h3>
+    <div class="row"><label>Explorer</label><span class="val">30%</span></div>
+    <div class="row"><label>Social</label><span class="val">40%</span></div>
+    <div class="row"><label>Enthusiast</label><span class="val">5%</span></div>
+    <div class="row"><label>Lurker</label><span class="val">20%</span></div>
+    <div class="row"><label>Critic</label><span class="val">4%</span></div>
+    <div class="row"><label>Spammer</label><span class="val">0.5%</span></div>
+    <div class="row"><label>Malicious</label><span class="val">0.5%</span></div>
+  </div>
+
+  <div class="section">
+    <h3>Algorithm</h3>
+    <div class="row"><label>τ supply</label><span class="val">30d</span></div>
+    <div class="row"><label>τ report</label><span class="val">30d</span></div>
+    <div class="row"><label>heartbeat</label><span class="val">20%</span></div>
+  </div>
+
+  <div class="section">
+    <button class="primary">▶ Start</button>
+    <button>⏸ Pause</button>
+    <button>↻ Reset</button>
+    <button>📷 Screenshot</button>
+    <button>💾 Export JSON</button>
+  </div>
+</div>
+
+<div id="stage">
+  <canvas id="canvas"></canvas>
+  <div id="statusbar">
+    <span>Day: <strong>42</strong></span>
+    <span>Markers: <strong>87</strong></span>
+    <span>Healthy: <strong>71</strong></span>
+    <span>Sunk: <strong>14</strong></span>
+    <span>Heartbeat: <strong>2</strong></span>
+  </div>
+  <!-- 示例 marker info card -->
+  <div class="marker-card" style="left: 320px; top: 150px;">
+    <div class="title">⚠ danger #34</div>
+    <div class="stat">❤ <span class="num">23</span> &nbsp; 🚩 <span class="num">7</span></div>
+    <div class="reasons">info: 3 · dislike: 2 · spam: 1 · other: 1</div>
+  </div>
+  <div class="marker-card" style="left: 580px; top: 280px;">
+    <div class="title">💧 supply #12</div>
+    <div class="stat">❤ <span class="num">45</span> &nbsp; 🚩 <span class="num">0</span></div>
+  </div>
+  <div class="marker-card" style="left: 750px; top: 420px;">
+    <div class="title">🪨 cairn #08</div>
+    <div class="stat">❤ <span class="num">12</span> &nbsp; 🚩 <span class="num">2</span></div>
+    <div class="reasons">dislike: 2</div>
+  </div>
+</div>
+
+<script>
+// 仅渲染示例帧, 不跑真算法
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth - 240;
+canvas.height = window.innerHeight;
+
+// 网格背景 — 极淡
+ctx.strokeStyle = '#eee';
+ctx.lineWidth = 1;
+for (let x = 0; x < canvas.width; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+for (let y = 0; y < canvas.height; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
+
+// Persona 颜色 — 柔和
+const personaColors = {
+  explorer: '#4CAF50',
+  social: '#FF9800',
+  enthusiast: '#2196F3',
+  lurker: '#9E9E9E',
+  critic: '#9C27B0',
+  spammer: '#F44336',
+  malicious: '#E91E63'
+};
+
+// 画 200 个圆圈代表虚拟人 (静态示例)
+const types = ['explorer', 'social', 'enthusiast', 'lurker', 'critic', 'spammer'];
+const counts = [60, 80, 10, 40, 8, 2];
+let walkers = [];
+types.forEach((t, i) => {
+  for (let j = 0; j < counts[i]; j++) {
+    walkers.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      type: t
+    });
+  }
+});
+
+walkers.forEach(w => {
+  ctx.fillStyle = personaColors[w.type];
+  ctx.beginPath();
+  ctx.arc(w.x, w.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+});
+
+// 画 30 个旗帜代表 marker
+const markerTypes = ['danger', 'supply', 'junction', 'scenic', 'cairn'];
+const markerColors = {
+  danger: '#D32F2F',
+  supply: '#388E3C',
+  junction: '#F57C00',
+  scenic: '#1976D2',
+  cairn: '#795548'
+};
+for (let i = 0; i < 30; i++) {
+  const t = markerTypes[i % 5];
+  const x = Math.random() * canvas.width;
+  const y = Math.random() * canvas.height;
+  // 旗杆
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - 14);
+  ctx.stroke();
+  // 旗
+  ctx.fillStyle = markerColors[t];
+  ctx.beginPath();
+  ctx.moveTo(x, y - 14);
+  ctx.lineTo(x + 10, y - 11);
+  ctx.lineTo(x, y - 8);
+  ctx.fill();
+}
+
+// 高亮一对结伴的人 (2 个圆圈 + 连接线)
+ctx.strokeStyle = '#FF9800';
+ctx.lineWidth = 1;
+ctx.setLineDash([2, 2]);
+ctx.beginPath();
+ctx.moveTo(380, 220);
+ctx.lineTo(395, 235);
+ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle = '#FF9800';
+ctx.beginPath(); ctx.arc(380, 220, 4, 0, Math.PI * 2); ctx.fill();
+ctx.beginPath(); ctx.arc(395, 235, 4, 0, Math.PI * 2); ctx.fill();
+</script>
+
+</body>
+</html>

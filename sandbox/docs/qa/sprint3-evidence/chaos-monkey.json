@@ -1,0 +1,1913 @@
+{
+  "N": 1000,
+  "masterSeed": 42,
+  "passed": 913,
+  "failed": 87,
+  "errorBreakdown": {
+    "goodSunk": 57,
+    "badAlive": 26,
+    "docSunk": 4
+  },
+  "failedSamples": [
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.84316884,
+        "encountersPerDay": 0.06416611002971244,
+        "type": "scenic",
+        "isDoc": false,
+        "days": 102,
+        "goodnessSensitivity": 0.440018436,
+        "baseLikeRate": 0.2033638028,
+        "baseReportRate": 0.16453689590000004,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 2,
+          "brigadeSize": 0,
+          "brigadeDuration": 2,
+          "fakeLikers": 23,
+          "attackStartDay": 10,
+          "preferredReason": "danger_wrong"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.023041093900000004,
+        "contentDecayPattern": "improve",
+        "decayStartFraction": 0.4084272663,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -13,
+        "views": 6,
+        "likes": 23,
+        "reports": 6
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (23赞/6报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.300751657,
+        "encountersPerDay": 0.05436702411079246,
+        "type": "junction",
+        "isDoc": false,
+        "days": 175,
+        "goodnessSensitivity": 0.6689809340999999,
+        "baseLikeRate": 0.1016514644,
+        "baseReportRate": 0.2609265424,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 14,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 12,
+          "attackStartDay": 103,
+          "preferredReason": "spam"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0890266133,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "official"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -40.2,
+        "views": 5,
+        "likes": 12,
+        "reports": 3
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (12赞/3报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.919737557,
+        "encountersPerDay": 3.5354285903984657,
+        "type": "danger",
+        "isDoc": false,
+        "days": 250,
+        "goodnessSensitivity": 0.7663192766,
+        "baseLikeRate": 0.4343850924,
+        "baseReportRate": 0.35140467420000004,
+        "malicious": {
+          "reporterCount": 2,
+          "priorReports": 30,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 128,
+          "preferredReason": "hate"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0152531691,
+        "contentDecayPattern": "improve",
+        "decayStartFraction": 0.3123810528,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -80.5,
+        "views": 532,
+        "likes": 193,
+        "reports": 37
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (193赞/37报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.720399736,
+        "encountersPerDay": 0.40125024691660227,
+        "type": "scenic",
+        "isDoc": false,
+        "days": 24,
+        "goodnessSensitivity": 0.7227846742999999,
+        "baseLikeRate": 0.44281286920000007,
+        "baseReportRate": 0.27906679075,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 12,
+          "brigadeSize": 0,
+          "brigadeDuration": 13,
+          "fakeLikers": 0,
+          "attackStartDay": 12,
+          "preferredReason": "other"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.07620520720000001,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "weak",
+        "life": 111.1,
+        "views": 8,
+        "likes": 2,
+        "reports": 7
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (2赞/7报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.129929175,
+        "encountersPerDay": 2.176564220142915,
+        "type": "scenic",
+        "isDoc": false,
+        "days": 82,
+        "goodnessSensitivity": 0.8848791929,
+        "baseLikeRate": 0.2430515692,
+        "baseReportRate": 0.25411130355,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 3,
+          "brigadeSize": 0,
+          "brigadeDuration": 2,
+          "fakeLikers": 0,
+          "attackStartDay": 52,
+          "preferredReason": "spam"
+        },
+        "authorRevisitInterval": 8,
+        "noiseDislikeProb": 0.0884288398,
+        "contentDecayPattern": "improve",
+        "decayStartFraction": 0.5112786366,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "weak",
+        "life": 87.7,
+        "views": 58,
+        "likes": 6,
+        "reports": 14
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (6赞/14报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.369793982,
+        "encountersPerDay": 13.182314225575993,
+        "type": "scenic",
+        "isDoc": false,
+        "days": 246,
+        "goodnessSensitivity": 0.487347844,
+        "baseLikeRate": 0.15270088,
+        "baseReportRate": 0.05971839645,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 22,
+          "brigadeSize": 0,
+          "brigadeDuration": 3,
+          "fakeLikers": 0,
+          "attackStartDay": 47,
+          "preferredReason": "other"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0007977914,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -97.1,
+        "views": 2359,
+        "likes": 192,
+        "reports": 79
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (192赞/79报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.236928718,
+        "encountersPerDay": 0.6683836392634916,
+        "type": "cairn",
+        "isDoc": false,
+        "days": 56,
+        "goodnessSensitivity": 0.8593799912,
+        "baseLikeRate": 0.2496688988,
+        "baseReportRate": 0.3750331266,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 5,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 4,
+          "preferredReason": "other"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.06124881460000001,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "weak",
+        "life": 87.9,
+        "views": 37,
+        "likes": 4,
+        "reports": 11
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (4赞/11报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.703140305,
+        "encountersPerDay": 10.573771174480704,
+        "type": "danger",
+        "isDoc": false,
+        "days": 357,
+        "goodnessSensitivity": 0.6238217004,
+        "baseLikeRate": 0.35222269120000005,
+        "baseReportRate": 0.08987812115000002,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 8,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 24,
+          "attackStartDay": 130,
+          "preferredReason": "info_wrong"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.06483842,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -248,
+        "views": 1365,
+        "likes": 364,
+        "reports": 141
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (364赞/141报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.881298385,
+        "encountersPerDay": 0.028512957363587308,
+        "type": "junction",
+        "isDoc": false,
+        "days": 125,
+        "goodnessSensitivity": 0.31535170290000003,
+        "baseLikeRate": 0.3452637284,
+        "baseReportRate": 0.3654479125,
+        "malicious": {
+          "reporterCount": 2,
+          "priorReports": 34,
+          "brigadeSize": 1,
+          "brigadeDuration": 10,
+          "fakeLikers": 5,
+          "attackStartDay": 53,
+          "preferredReason": "hate"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.06310094040000001,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -29.2,
+        "views": 3,
+        "likes": 6,
+        "reports": 3
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (6赞/3报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.502584453,
+        "encountersPerDay": 4.5779470129512525,
+        "type": "danger",
+        "isDoc": false,
+        "days": 247,
+        "goodnessSensitivity": 0.4617663755,
+        "baseLikeRate": 0.4392059924,
+        "baseReportRate": 0.05489842535,
+        "malicious": {
+          "reporterCount": 2,
+          "priorReports": 32,
+          "brigadeSize": 4,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 140,
+          "preferredReason": "dislike"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0497804563,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -99.6,
+        "views": 591,
+        "likes": 161,
+        "reports": 66
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (161赞/66报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.156391301,
+        "encountersPerDay": 13.123556933130757,
+        "type": "danger",
+        "isDoc": false,
+        "days": 27,
+        "goodnessSensitivity": 0.8504326688999999,
+        "baseLikeRate": 0.43169287,
+        "baseReportRate": 0.130169733,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 36,
+          "brigadeSize": 2,
+          "brigadeDuration": 4,
+          "fakeLikers": 0,
+          "attackStartDay": 13,
+          "preferredReason": "cultural"
+        },
+        "authorRevisitInterval": 40,
+        "noiseDislikeProb": 0.0837507059,
+        "contentDecayPattern": "reverse",
+        "decayStartFraction": 0.42848349809999997,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "weak",
+        "life": 17.1,
+        "views": 355,
+        "likes": 27,
+        "reports": 80
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (27赞/80报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.075802101,
+        "encountersPerDay": 0.8392740201345175,
+        "type": "supply",
+        "isDoc": false,
+        "days": 176,
+        "goodnessSensitivity": 0.3813880866,
+        "baseLikeRate": 0.23979499680000002,
+        "baseReportRate": 0.15524756235000003,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 23,
+          "brigadeSize": 0,
+          "brigadeDuration": 3,
+          "fakeLikers": 15,
+          "attackStartDay": 81,
+          "preferredReason": "cultural"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0446497105,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -100,
+        "views": 99,
+        "likes": 25,
+        "reports": 12
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (25赞/12报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.384817957,
+        "encountersPerDay": 0.8518573494640788,
+        "type": "danger",
+        "isDoc": false,
+        "days": 208,
+        "goodnessSensitivity": 0.4316039908,
+        "baseLikeRate": 0.1607231248,
+        "baseReportRate": 0.22879758960000002,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 22,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 23,
+          "attackStartDay": 35,
+          "preferredReason": "danger_wrong"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0188887896,
+        "contentDecayPattern": "improve",
+        "decayStartFraction": 0.4512144366,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -42.5,
+        "views": 69,
+        "likes": 27,
+        "reports": 9
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (27赞/9报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.794182808,
+        "encountersPerDay": 7.33711759360158,
+        "type": "supply",
+        "isDoc": false,
+        "days": 253,
+        "goodnessSensitivity": 0.2886739917,
+        "baseLikeRate": 0.4418555284,
+        "baseReportRate": 0.0539624452,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 0,
+          "brigadeSize": 0,
+          "brigadeDuration": 2,
+          "fakeLikers": 29,
+          "attackStartDay": 158,
+          "preferredReason": "info_wrong"
+        },
+        "authorRevisitInterval": 50,
+        "noiseDislikeProb": 0.022800502700000003,
+        "contentDecayPattern": "degrade",
+        "decayStartFraction": 0.48919006389999997,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -138.7,
+        "views": 983,
+        "likes": 316,
+        "reports": 45
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (316赞/45报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.127438952,
+        "encountersPerDay": 0.30346188673448543,
+        "type": "junction",
+        "isDoc": false,
+        "days": 128,
+        "goodnessSensitivity": 0.4711183202,
+        "baseLikeRate": 0.3279463092,
+        "baseReportRate": 0.29305892380000004,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 0,
+          "brigadeSize": 0,
+          "brigadeDuration": 13,
+          "fakeLikers": 22,
+          "attackStartDay": 10,
+          "preferredReason": "other"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.05602005140000001,
+        "contentDecayPattern": "degrade",
+        "decayStartFraction": 0.5678633683000001,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -36.9,
+        "views": 32,
+        "likes": 24,
+        "reports": 12
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (24赞/12报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.341542794,
+        "encountersPerDay": 0.023996931879125816,
+        "type": "supply",
+        "isDoc": false,
+        "days": 271,
+        "goodnessSensitivity": 0.5285294642,
+        "baseLikeRate": 0.44674701520000004,
+        "baseReportRate": 0.11717924430000001,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 1,
+          "brigadeSize": 0,
+          "brigadeDuration": 11,
+          "fakeLikers": 6,
+          "attackStartDay": 24,
+          "preferredReason": "other"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0983570621,
+        "contentDecayPattern": "degrade",
+        "decayStartFraction": 0.409441765,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -8.6,
+        "views": 8,
+        "likes": 7,
+        "reports": 3
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (7赞/3报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.994192259,
+        "encountersPerDay": 7.4873561331226455,
+        "type": "junction",
+        "isDoc": false,
+        "days": 313,
+        "goodnessSensitivity": 0.4587837714,
+        "baseLikeRate": 0.30531739160000004,
+        "baseReportRate": 0.13537021675,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 14,
+          "brigadeSize": 2,
+          "brigadeDuration": 7,
+          "fakeLikers": 0,
+          "attackStartDay": 92,
+          "preferredReason": "cultural"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0721566213,
+        "contentDecayPattern": "improve",
+        "decayStartFraction": 0.4684276623,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -154.1,
+        "views": 1649,
+        "likes": 439,
+        "reports": 206
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (439赞/206报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.524501116,
+        "encountersPerDay": 11.523078478098483,
+        "type": "danger",
+        "isDoc": false,
+        "days": 364,
+        "goodnessSensitivity": 0.2667900065,
+        "baseLikeRate": 0.4905845636,
+        "baseReportRate": 0.1479166629,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 9,
+          "brigadeSize": 8,
+          "brigadeDuration": 13,
+          "fakeLikers": 0,
+          "attackStartDay": 150,
+          "preferredReason": "hate"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0044896553,
+        "contentDecayPattern": "reverse",
+        "decayStartFraction": 0.3001793001,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -267.8,
+        "views": 1399,
+        "likes": 417,
+        "reports": 119
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (417赞/119报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.433430854,
+        "encountersPerDay": 0.4533326882555673,
+        "type": "junction",
+        "isDoc": false,
+        "days": 51,
+        "goodnessSensitivity": 0.34148555680000003,
+        "baseLikeRate": 0.4659074512,
+        "baseReportRate": 0.26311326785,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 40,
+          "brigadeSize": 9,
+          "brigadeDuration": 13,
+          "fakeLikers": 0,
+          "attackStartDay": 20,
+          "preferredReason": "other"
+        },
+        "authorRevisitInterval": 12,
+        "noiseDislikeProb": 0.017486892400000002,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "official"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "weak",
+        "life": 153.2,
+        "views": 21,
+        "likes": 5,
+        "reports": 13
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (5赞/13报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.961224337,
+        "encountersPerDay": 0.061781830362679716,
+        "type": "danger",
+        "isDoc": false,
+        "days": 326,
+        "goodnessSensitivity": 0.2688919616,
+        "baseLikeRate": 0.4259883052000001,
+        "baseReportRate": 0.20816872750000004,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 22,
+          "brigadeSize": 0,
+          "brigadeDuration": 6,
+          "fakeLikers": 24,
+          "attackStartDay": 33,
+          "preferredReason": "danger_wrong"
+        },
+        "authorRevisitInterval": 13,
+        "noiseDislikeProb": 0.07805119760000001,
+        "contentDecayPattern": "degrade",
+        "decayStartFraction": 0.4488183853,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -90.9,
+        "views": 13,
+        "likes": 27,
+        "reports": 7
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (27赞/7报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.444471278,
+        "encountersPerDay": 0.260309724577825,
+        "type": "cairn",
+        "isDoc": false,
+        "days": 113,
+        "goodnessSensitivity": 0.5645423655999999,
+        "baseLikeRate": 0.21478014,
+        "baseReportRate": 0.1026715644,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 8,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 19,
+          "preferredReason": "cultural"
+        },
+        "authorRevisitInterval": 39,
+        "noiseDislikeProb": 0.0823465277,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "borderline",
+        "life": 249.6,
+        "views": 13,
+        "likes": 2,
+        "reports": 6
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (2赞/6报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.024625086,
+        "encountersPerDay": 10.120695340806503,
+        "type": "danger",
+        "isDoc": false,
+        "days": 170,
+        "goodnessSensitivity": 0.2630327467,
+        "baseLikeRate": 0.1734296036,
+        "baseReportRate": 0.0531885609,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 34,
+          "brigadeSize": 0,
+          "brigadeDuration": 4,
+          "fakeLikers": 0,
+          "attackStartDay": 94,
+          "preferredReason": "spam"
+        },
+        "authorRevisitInterval": 52,
+        "noiseDislikeProb": 0.0063176814000000005,
+        "contentDecayPattern": "degrade",
+        "decayStartFraction": 0.4005341251,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -83.2,
+        "views": 1021,
+        "likes": 98,
+        "reports": 45
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (98赞/45报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.768293252,
+        "encountersPerDay": 2.8186138632795332,
+        "type": "junction",
+        "isDoc": false,
+        "days": 347,
+        "goodnessSensitivity": 0.7245219567000001,
+        "baseLikeRate": 0.4832531352,
+        "baseReportRate": 0.37001575655,
+        "malicious": {
+          "reporterCount": 2,
+          "priorReports": 40,
+          "brigadeSize": 12,
+          "brigadeDuration": 1,
+          "fakeLikers": 16,
+          "attackStartDay": 128,
+          "preferredReason": "dislike"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0186271458,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "commercial_spam"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -67.8,
+        "views": 432,
+        "likes": 175,
+        "reports": 71
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (175赞/71报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.24393163,
+        "encountersPerDay": 0.08880738183881895,
+        "type": "danger",
+        "isDoc": false,
+        "days": 216,
+        "goodnessSensitivity": 0.7903296378,
+        "baseLikeRate": 0.2860629852,
+        "baseReportRate": 0.3347607644,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 22,
+          "brigadeSize": 1,
+          "brigadeDuration": 6,
+          "fakeLikers": 19,
+          "attackStartDay": 111,
+          "preferredReason": "privacy"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0242613736,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -32.7,
+        "views": 13,
+        "likes": 20,
+        "reports": 5
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (20赞/5报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.285563619,
+        "encountersPerDay": 0.06946210604002202,
+        "type": "cairn",
+        "isDoc": false,
+        "days": 173,
+        "goodnessSensitivity": 0.3792425096,
+        "baseLikeRate": 0.3369842416,
+        "baseReportRate": 0.29839721725,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 40,
+          "brigadeSize": 0,
+          "brigadeDuration": 6,
+          "fakeLikers": 12,
+          "attackStartDay": 97,
+          "preferredReason": "spam"
+        },
+        "authorRevisitInterval": 45,
+        "noiseDislikeProb": 0.0377101563,
+        "contentDecayPattern": "improve",
+        "decayStartFraction": 0.5586399348,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -33.2,
+        "views": 8,
+        "likes": 14,
+        "reports": 5
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (14赞/5报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.38454809,
+        "encountersPerDay": 0.2108039283168337,
+        "type": "danger",
+        "isDoc": false,
+        "days": 358,
+        "goodnessSensitivity": 0.5482880779,
+        "baseLikeRate": 0.3297461252,
+        "baseReportRate": 0.24308877350000002,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 45,
+          "brigadeSize": 0,
+          "brigadeDuration": 3,
+          "fakeLikers": 27,
+          "attackStartDay": 68,
+          "preferredReason": "hate"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.014693301200000002,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "official"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -62.4,
+        "views": 32,
+        "likes": 32,
+        "reports": 7
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (32赞/7报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.844352997,
+        "encountersPerDay": 1.0014500571325886,
+        "type": "supply",
+        "isDoc": false,
+        "days": 343,
+        "goodnessSensitivity": 0.262516951,
+        "baseLikeRate": 0.39920789200000006,
+        "baseReportRate": 0.1214329056,
+        "malicious": {
+          "reporterCount": 2,
+          "priorReports": 0,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 3,
+          "preferredReason": "other"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0471886785,
+        "contentDecayPattern": "reverse",
+        "decayStartFraction": 0.4405220475,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -76.9,
+        "views": 225,
+        "likes": 66,
+        "reports": 32
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (66赞/32报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.975196203,
+        "encountersPerDay": 0.026157504738440557,
+        "type": "scenic",
+        "isDoc": true,
+        "days": 183,
+        "goodnessSensitivity": 0.6902438625,
+        "baseLikeRate": 0.4104585368,
+        "baseReportRate": 0.05354092095,
+        "malicious": {
+          "reporterCount": 2,
+          "priorReports": 36,
+          "brigadeSize": 3,
+          "brigadeDuration": 2,
+          "fakeLikers": 10,
+          "attackStartDay": 121,
+          "preferredReason": "cultural"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0833086433,
+        "contentDecayPattern": "reverse",
+        "decayStartFraction": 0.4122327513,
+        "authorRole": "official"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -24.2,
+        "views": 4,
+        "likes": 17,
+        "reports": 5
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (17赞/5报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.402337351,
+        "encountersPerDay": 8.578996401589007,
+        "type": "cairn",
+        "isDoc": false,
+        "days": 277,
+        "goodnessSensitivity": 0.8207563733000001,
+        "baseLikeRate": 0.4063184112,
+        "baseReportRate": 0.15084441080000002,
+        "malicious": {
+          "reporterCount": 2,
+          "priorReports": 13,
+          "brigadeSize": 14,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 95,
+          "preferredReason": "hate"
+        },
+        "authorRevisitInterval": 14,
+        "noiseDislikeProb": 0.00045135300000000004,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -80.3,
+        "views": 1911,
+        "likes": 402,
+        "reports": 196
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (402赞/196报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.98152093,
+        "encountersPerDay": 2.8386631476537065,
+        "type": "danger",
+        "isDoc": false,
+        "days": 315,
+        "goodnessSensitivity": 0.7759664253,
+        "baseLikeRate": 0.44194537440000004,
+        "baseReportRate": 0.17277400310000002,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 12,
+          "brigadeSize": 0,
+          "brigadeDuration": 13,
+          "fakeLikers": 0,
+          "attackStartDay": 81,
+          "preferredReason": "dislike"
+        },
+        "authorRevisitInterval": 29,
+        "noiseDislikeProb": 0.0615759423,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "official"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -45.5,
+        "views": 692,
+        "likes": 294,
+        "reports": 70
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (294赞/70报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.132493412,
+        "encountersPerDay": 1.0935704582294423,
+        "type": "cairn",
+        "isDoc": false,
+        "days": 179,
+        "goodnessSensitivity": 0.7871436437999999,
+        "baseLikeRate": 0.4729446164000001,
+        "baseReportRate": 0.1571540064,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 8,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 52,
+          "preferredReason": "spam"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0684231006,
+        "contentDecayPattern": "degrade",
+        "decayStartFraction": 0.487946467,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "weak",
+        "life": 53,
+        "views": 77,
+        "likes": 5,
+        "reports": 17
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (5赞/17报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.46441754,
+        "encountersPerDay": 6.758914048575488,
+        "type": "junction",
+        "isDoc": false,
+        "days": 323,
+        "goodnessSensitivity": 0.47991958399999995,
+        "baseLikeRate": 0.39849117720000005,
+        "baseReportRate": 0.0673288794,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 3,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 100,
+          "preferredReason": "danger_wrong"
+        },
+        "authorRevisitInterval": 60,
+        "noiseDislikeProb": 0.035900894100000004,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -160.3,
+        "views": 1400,
+        "likes": 319,
+        "reports": 115
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (319赞/115报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.671926987,
+        "encountersPerDay": 0.12896255318747313,
+        "type": "cairn",
+        "isDoc": false,
+        "days": 217,
+        "goodnessSensitivity": 0.7001574956000001,
+        "baseLikeRate": 0.108667152,
+        "baseReportRate": 0.10557721680000001,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 0,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 15,
+          "attackStartDay": 14,
+          "preferredReason": "spam"
+        },
+        "authorRevisitInterval": 28,
+        "noiseDislikeProb": 0.0855431917,
+        "contentDecayPattern": "degrade",
+        "decayStartFraction": 0.512586421,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -52.2,
+        "views": 40,
+        "likes": 18,
+        "reports": 8
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (18赞/8报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.899048183,
+        "encountersPerDay": 0.38499490193734176,
+        "type": "scenic",
+        "isDoc": false,
+        "days": 127,
+        "goodnessSensitivity": 0.2797714722,
+        "baseLikeRate": 0.1436875132,
+        "baseReportRate": 0.34130037545,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 13,
+          "brigadeSize": 7,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 24,
+          "preferredReason": "info_wrong"
+        },
+        "authorRevisitInterval": 82,
+        "noiseDislikeProb": 0.0951954176,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "borderline",
+        "life": 205.1,
+        "views": 21,
+        "likes": 2,
+        "reports": 12
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (2赞/12报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.529110722,
+        "encountersPerDay": 15.437338730067678,
+        "type": "danger",
+        "isDoc": false,
+        "days": 243,
+        "goodnessSensitivity": 0.2982011527,
+        "baseLikeRate": 0.4795951932,
+        "baseReportRate": 0.20153951995000002,
+        "malicious": {
+          "reporterCount": 2,
+          "priorReports": 0,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 10,
+          "preferredReason": "dislike"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.022428961900000002,
+        "contentDecayPattern": "degrade",
+        "decayStartFraction": 0.6634323085,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -161.1,
+        "views": 1695,
+        "likes": 479,
+        "reports": 227
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (479赞/227报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.455976824,
+        "encountersPerDay": 5.35458069222374,
+        "type": "danger",
+        "isDoc": false,
+        "days": 341,
+        "goodnessSensitivity": 0.5789629417,
+        "baseLikeRate": 0.21982948040000003,
+        "baseReportRate": 0.06908727625000001,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 1,
+          "brigadeSize": 10,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 18,
+          "preferredReason": "dislike"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0022771459000000003,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -175.9,
+        "views": 688,
+        "likes": 82,
+        "reports": 29
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (82赞/29报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.50618119,
+        "encountersPerDay": 14.529930422762625,
+        "type": "junction",
+        "isDoc": false,
+        "days": 256,
+        "goodnessSensitivity": 0.5717369690999999,
+        "baseLikeRate": 0.4086973772,
+        "baseReportRate": 0.1325697789,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 38,
+          "brigadeSize": 13,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 107,
+          "preferredReason": "privacy"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0413722973,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -90.7,
+        "views": 2674,
+        "likes": 657,
+        "reports": 315
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (657赞/315报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.199078341,
+        "encountersPerDay": 0.08531181441845874,
+        "type": "danger",
+        "isDoc": false,
+        "days": 227,
+        "goodnessSensitivity": 0.2744104732,
+        "baseLikeRate": 0.3872458524,
+        "baseReportRate": 0.30230902935000004,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 18,
+          "brigadeSize": 1,
+          "brigadeDuration": 1,
+          "fakeLikers": 29,
+          "attackStartDay": 103,
+          "preferredReason": "privacy"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0304245465,
+        "contentDecayPattern": "improve",
+        "decayStartFraction": 0.4114363824,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -10.8,
+        "views": 16,
+        "likes": 32,
+        "reports": 2
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (32赞/2报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.901528542,
+        "encountersPerDay": 0.09406073036948082,
+        "type": "supply",
+        "isDoc": false,
+        "days": 312,
+        "goodnessSensitivity": 0.3465678837,
+        "baseLikeRate": 0.41161900000000007,
+        "baseReportRate": 0.20236526375000002,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 29,
+          "brigadeSize": 0,
+          "brigadeDuration": 5,
+          "fakeLikers": 0,
+          "attackStartDay": 162,
+          "preferredReason": "other"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.051434825399999995,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -20.5,
+        "views": 33,
+        "likes": 14,
+        "reports": 7
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (14赞/7报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.900980511,
+        "encountersPerDay": 2.542293029254251,
+        "type": "scenic",
+        "isDoc": false,
+        "days": 289,
+        "goodnessSensitivity": 0.6983317310999999,
+        "baseLikeRate": 0.22493572080000002,
+        "baseReportRate": 0.18074766810000004,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 22,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 2,
+          "attackStartDay": 52,
+          "preferredReason": "privacy"
+        },
+        "authorRevisitInterval": 51,
+        "noiseDislikeProb": 0.0113077252,
+        "contentDecayPattern": "degrade",
+        "decayStartFraction": 0.4819803499,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -83.5,
+        "views": 659,
+        "likes": 119,
+        "reports": 52
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (119赞/52报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.966239592,
+        "encountersPerDay": 4.52478215152171,
+        "type": "supply",
+        "isDoc": false,
+        "days": 358,
+        "goodnessSensitivity": 0.4062620728,
+        "baseLikeRate": 0.38671389,
+        "baseReportRate": 0.10111669220000001,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 46,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 1,
+          "attackStartDay": 58,
+          "preferredReason": "spam"
+        },
+        "authorRevisitInterval": 18,
+        "noiseDislikeProb": 0.06427922400000001,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -133.9,
+        "views": 543,
+        "likes": 149,
+        "reports": 67
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (149赞/67报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.098443173,
+        "encountersPerDay": 1.1469286585004732,
+        "type": "junction",
+        "isDoc": false,
+        "days": 144,
+        "goodnessSensitivity": 0.3723164821,
+        "baseLikeRate": 0.3897273312,
+        "baseReportRate": 0.28668478715,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 41,
+          "brigadeSize": 10,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 54,
+          "preferredReason": "spam"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0548614304,
+        "contentDecayPattern": "improve",
+        "decayStartFraction": 0.3833240217,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "weak",
+        "life": 27.1,
+        "views": 164,
+        "likes": 26,
+        "reports": 59
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (26赞/59报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.315881534,
+        "encountersPerDay": 3.2308442668777024,
+        "type": "cairn",
+        "isDoc": false,
+        "days": 138,
+        "goodnessSensitivity": 0.7763799958,
+        "baseLikeRate": 0.19528831160000001,
+        "baseReportRate": 0.1550153958,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 23,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 44,
+          "preferredReason": "privacy"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.07562645820000001,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "weak",
+        "life": 49.5,
+        "views": 337,
+        "likes": 26,
+        "reports": 65
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (26赞/65报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.524838929,
+        "encountersPerDay": 0.7615226474765702,
+        "type": "cairn",
+        "isDoc": false,
+        "days": 103,
+        "goodnessSensitivity": 0.48388055919999995,
+        "baseLikeRate": 0.146572064,
+        "baseReportRate": 0.2965816332,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 10,
+          "brigadeSize": 5,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 41,
+          "preferredReason": "privacy"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0014450305,
+        "contentDecayPattern": "degrade",
+        "decayStartFraction": 0.48982863790000003,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "weak",
+        "life": 58,
+        "views": 65,
+        "likes": 7,
+        "reports": 20
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (7赞/20报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.12759176,
+        "encountersPerDay": 0.11873149867313901,
+        "type": "danger",
+        "isDoc": false,
+        "days": 237,
+        "goodnessSensitivity": 0.7655591249,
+        "baseLikeRate": 0.1079262688,
+        "baseReportRate": 0.0626032844,
+        "malicious": {
+          "reporterCount": 1,
+          "priorReports": 27,
+          "brigadeSize": 2,
+          "brigadeDuration": 1,
+          "fakeLikers": 15,
+          "attackStartDay": 44,
+          "preferredReason": "info_wrong"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0656729528,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -55.2,
+        "views": 19,
+        "likes": 16,
+        "reports": 7
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (16赞/7报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.715440469,
+        "encountersPerDay": 10.723324925466688,
+        "type": "supply",
+        "isDoc": false,
+        "days": 229,
+        "goodnessSensitivity": 0.4701259715,
+        "baseLikeRate": 0.4196482508,
+        "baseReportRate": 0.05944786220000001,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 27,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 0,
+          "attackStartDay": 57,
+          "preferredReason": "danger_wrong"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.07786955070000001,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -150.4,
+        "views": 1265,
+        "likes": 378,
+        "reports": 161
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (378赞/161报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.764152376,
+        "encountersPerDay": 10.005308836565126,
+        "type": "supply",
+        "isDoc": false,
+        "days": 336,
+        "goodnessSensitivity": 0.8130747049,
+        "baseLikeRate": 0.3501017756,
+        "baseReportRate": 0.11475626605000001,
+        "malicious": {
+          "reporterCount": 3,
+          "priorReports": 12,
+          "brigadeSize": 0,
+          "brigadeDuration": 12,
+          "fakeLikers": 0,
+          "attackStartDay": 62,
+          "preferredReason": "dislike"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.014628614100000001,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -236.6,
+        "views": 1321,
+        "likes": 391,
+        "reports": 60
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (391赞/60报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.936325953,
+        "encountersPerDay": 6.936505031972904,
+        "type": "scenic",
+        "isDoc": false,
+        "days": 246,
+        "goodnessSensitivity": 0.452514059,
+        "baseLikeRate": 0.32832112960000004,
+        "baseReportRate": 0.09776088065000002,
+        "malicious": {
+          "reporterCount": 2,
+          "priorReports": 10,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 25,
+          "attackStartDay": 71,
+          "preferredReason": "dislike"
+        },
+        "authorRevisitInterval": null,
+        "noiseDislikeProb": 0.0226267531,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -11,
+        "views": 1646,
+        "likes": 476,
+        "reports": 77
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (476赞/77报) 算法却判沉 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.997167321,
+        "encountersPerDay": 0.7424533679648853,
+        "type": "junction",
+        "isDoc": false,
+        "days": 17,
+        "goodnessSensitivity": 0.3495059895,
+        "baseLikeRate": 0.35458367320000006,
+        "baseReportRate": 0.38090577870000003,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 29,
+          "brigadeSize": 6,
+          "brigadeDuration": 7,
+          "fakeLikers": 0,
+          "attackStartDay": 7,
+          "preferredReason": "other"
+        },
+        "authorRevisitInterval": 8,
+        "noiseDislikeProb": 0.026771559,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": true,
+        "status": "weak",
+        "life": 124,
+        "views": 11,
+        "likes": 3,
+        "reports": 8
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 report 信号 (3赞/8报) 算法却判活 ❌"
+      }
+    },
+    {
+      "scenario": {
+        "intrinsicGoodness": 0.377104163,
+        "encountersPerDay": 0.10830000499704029,
+        "type": "supply",
+        "isDoc": false,
+        "days": 302,
+        "goodnessSensitivity": 0.7966584904,
+        "baseLikeRate": 0.42552001279999996,
+        "baseReportRate": 0.0743920908,
+        "malicious": {
+          "reporterCount": 0,
+          "priorReports": 2,
+          "brigadeSize": 0,
+          "brigadeDuration": 1,
+          "fakeLikers": 25,
+          "attackStartDay": 197,
+          "preferredReason": "cultural"
+        },
+        "authorRevisitInterval": 80,
+        "noiseDislikeProb": 0.027183389400000004,
+        "contentDecayPattern": "none",
+        "decayStartFraction": 1,
+        "authorRole": "user"
+      },
+      "result": {
+        "isAlive": false,
+        "status": "sunk",
+        "life": -15.2,
+        "views": 28,
+        "likes": 31,
+        "reports": 4
+      },
+      "judgement": {
+        "pass": false,
+        "reason": "强 like 信号 (31赞/4报) 算法却判沉 ❌"
+      }
+    }
+  ]
+}

@@ -1,0 +1,3019 @@
+{
+  "batch": 2,
+  "total": 131,
+  "cases": [
+    {
+      "id": 138,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8 like vs 1 report,1 条不构成趋势(v6.6 §3 支柱1),严重度不参与入口判定",
+      "case_data": {
+        "title": "Stewart Island North-West Circuit 在 Mason Bay 沙丘上方 forest edge",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Apr 2023 一名 tramper 无 DEET 在此露营，全身 200+ 蛰咬，过敏休克 PLB 求救",
+          "DOC 放 mark 'Autumn peak - mandatory DEET, full coverage clothing'",
+          "Aug 2024 冬季 tramper 通过，sand fly 几乎绝迹",
+          "他 comment 'no sand flies, mark hysteric'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 139,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8:1 单条 report 不构成向下急转,DOC danger 类型 base 寿命较长",
+      "case_data": {
+        "title": "Mt Cook Plateau Hut 周围 5km 半径",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Jul 2014 5 名 climber 被 whiteout 困 hut 4 天，食物耗尽",
+          "Aoraki guides 放 mark 'Winter storms - carry 5 days food + fuel'",
+          "Feb 2024 夏季 climber 同地点遇 stable high pressure",
+          "他 comment 'visibility perfect, mark over-prepared'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 140,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8:1 单条不构成趋势,DOC 火山警告基础正向",
+      "case_data": {
+        "title": "Mt Ngauruhoe 火山锥步道 (官方禁止登顶但仍有人攀)",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "1995 Ngauruhoe last eruption，活动期间多名 climber 被落石伤",
+          "DOC 放 mark 'Closed - volcanic rockfall risk'",
+          "2010-2024 GeoNet level 大部分为 1，无 active eruption",
+          "Mar 2024 一名摄影师 GeoNet level 1 时尝试登顶，路上偶有自然落石"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 141,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8:1 单条 report 不构成趋势,季节性误解",
+      "case_data": {
+        "title": "Lake Pukaki 西岸 Tasman Valley road 在 SH80 之外的 unsealed section",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Nov 2022 一辆 campervan 在 road washout 处被困 6 小时等水退",
+          "DOC 放 mark 'Spring - check road conditions before driving'",
+          "Feb 2024 干燥夏季 tourist driver 通过 road perfect",
+          "她 comment 'road is great, mark scaremongering'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 142,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8:1 单条不构成趋势,DOC 海岸季节性 danger",
+      "case_data": {
+        "title": "Punakaiki Pancake Rocks 海岸 blowhole 区",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Jul 2018 一名 tourist 在 6m swell 期被 blowhole spray 推倒，差点被 next wave 拉下海",
+          "DOC 放 mark 'Winter big swell - viewing platform unsafe'",
+          "Feb 2024 calm summer day tourist 拍照无任何危险",
+          "他 comment 'blowhole is gentle, mark dramatic'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 143,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8:1 单条不构成趋势,Trail Trust 春季冰危警告",
+      "case_data": {
+        "title": "Old Ghost Road 单车道在 Mokihinui Forks 之前的 cliff edge section",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Oct 2021 一名 mountain biker 7am 在薄冰上滑下 cliff edge 5m，幸有树挡",
+          "Trail Trust 放 mark 'Spring dawn - black ice 2-3h after sunrise'",
+          "Feb 2024 干燥夏天 cyclist 通过 perfect grip",
+          "他 comment 'gravel is grippy, mark wrong'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 144,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8:1 单条不构成趋势,UV 季节性警告真实",
+      "case_data": {
+        "title": "Mt Cook Lake Tasman jet boat tour 终点 stop 处",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Feb 2019 多名 tourist 无 sunglasses 在 lake 边停留 1 小时后雪盲，eyepatch 治疗",
+          "Glacier Explorers 放 mark 'Summer - UV 13+, sunglasses mandatory'",
+          "Aug 2024 冬季 overcast 天 tourist 路过，UV 低",
+          "她 comment 'no UV concern, mark unnecessary'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 145,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "8:1 单条不构成趋势,duration_months=168 长寿 mark 历史信誉强",
+      "case_data": {
+        "title": "Tongariro Northern Circuit Mangatepopo Hut 上方 lava flow 横切处",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 168,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Aug 2008 一名 tramper 在此 storm 中失温 30 分钟死亡，inquest 强调'快速 onset'",
+          "DOC 放 mark 'Winter storms - hypothermia in 30 minutes, retreat fast'",
+          "Feb 2024 calm summer afternoon tramper 通过 30 分钟",
+          "他 comment 'easy section, mark over-warning'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 146,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8:1 单条不构成趋势,冰川安全季节性",
+      "case_data": {
+        "title": "Fox Glacier valley walk 终点 viewpoint",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Jan 2009 一对 tourist 在 viewpoint 被飞溅冰块击中遇难，DOC 关闭区域",
+          "DOC 重新设置 viewpoint 距离，放 mark '100m exclusion zone summer'",
+          "Jul 2024 冬季 tourist 接近 ice face 50m 拍照，无任何活动",
+          "他 comment 'glacier is stable, mark wrong'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 147,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8:1 单条不构成趋势,whiteout 季节性警告",
+      "case_data": {
+        "title": "Mt Aspiring National Park Cascade Saddle Pylon 路标",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Sep 2007 多名 tramper 在 whiteout 中错过 pylon，被困 2 天",
+          "DOC 放 mark '冬季 whiteout - GPS waypoint critical, pylon may be buried'",
+          "Feb 2024 夏季 tramper 在晴天看到 pylon 老远",
+          "她 comment 'pylon is obvious, mark unnecessary'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 148,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8:1 单条不构成趋势,storm 季节性 cliff 警告",
+      "case_data": {
+        "title": "Catlins Nugget Point 灯塔下方 cliff edge",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Jul 2017 一名 photographer 在 storm 中被吹倒滑向 edge，被 fence 拦下",
+          "DOC 放 mark 'Winter SW storms - 5m back from edge minimum'",
+          "Feb 2024 calm summer afternoon tourist 在 edge 拍照无危险",
+          "他 comment 'edge is fine, mark melodramatic'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 149,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8:1 单条不构成趋势,雪季 chains 警告真实",
+      "case_data": {
+        "title": "Mt Hutt 滑雪场基地下方 access road 在 km 6 处的 hairpin",
+        "type": "supply",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Jul 2022 一辆 4WD 在 hairpin 滑下路 5m embankment，driver 重伤",
+          "Mt Hutt 与 NZTA 放 mark 'Ski season morning - chains mandatory before 9am'",
+          "Feb 2024 干燥夏季 driver 路过，road 完美 grip",
+          "他 comment 'road is fine, chains pointless'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 150,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "8:1 单条不构成趋势,春季高水位等级警告",
+      "case_data": {
+        "title": "Whanganui River 60km 段从 Whakahoro 到 Pipiriki",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "Sep 2019 一群 canoeist 在 grade III+ 中翻船，1 人 hypothermia 重伤",
+          "DOC + iwi 放 mark '春季高水位 - rapid 升级，仅 grade III paddler'",
+          "Feb 2024 干燥夏季 canoeist 通过 grade II 全程顺利",
+          "他 comment 'rapids are easy, mark over-grading'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 151,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 + DOC ranger 实地复查+地震后落石黑点 intrinsic 强,1 条不构成趋势",
+      "case_data": {
+        "title": "Hooker Valley Track 滑坡警告",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "ROCKFALL ZONE — 2024年6月地震后此段坡面松动，已有三块巴士大小落石。雨后48小时内绝对禁止穿越，请改走河谷低位绕行。",
+        "events_timeline": [
+          "2024-06-15 凌晨地震 M5.2，DOC 巡线员发现新裂缝",
+          "2024-06-18 ranger Hemi 立桩并发布 mark，附 GPS 坐标",
+          "2024-07-02 一名以色列徒步者无视警告通过，落石擦伤手臂",
+          "2024-08 Mountain Safety Council 转发到官方 app"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 152,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:1 wasp nest 真实持续存在,1 条不构成趋势",
+      "case_data": {
+        "title": "Routeburn Falls Hut 蜂群提示",
+        "type": "supply",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 1500,
+        "intrinsic_quality": "WASP NEST — 厕所小径左侧 manuka 丛中黄蜂巢，已有两名 tramper 严重过敏送 Queenstown Lakes Hospital。携带 EpiPen，傍晚最活跃。",
+        "events_timeline": [
+          "2025-01-12 一名英国徒步者被叮后 anaphylaxis，直升机送医",
+          "2025-01-14 Dr. O'Connell 作为志愿医生留 mark 警示",
+          "2025-01-20 hut warden Tane 报告又有两次叮咬事件",
+          "2025-02-03 DOC 派 pest control 团队尝试清除但未根除"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 153,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 警方+i-SITE 多重背书,1 条不构成趋势",
+      "case_data": {
+        "title": "Franz Josef 停车场偷窃警告",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "VEHICLE BREAK-INS — 2025年3-5月此停车场发生11起砸窗盗窃，目标多为租车后备箱行李。请勿留任何贵重物品在车内可见处。",
+        "events_timeline": [
+          "2025-03-08 首起德国游客租车被砸，损失护照和相机",
+          "2025-04 警方监控锁定一辆白色 Hilux，但未抓获",
+          "2025-04-22 Constable Patuwai 主动来旅游中心发布 mark",
+          "2025-05 又有 5 起，i-SITE 也开始口头提醒"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 154,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 historical memorial+DOC 加固+家属心愿,1 条不构成趋势",
+      "case_data": {
+        "title": "Cave Creek 历史事故纪念",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "MEMORIAL — 1995年4月28日观景平台坍塌14人遇难。新平台已建于安全位置，请勿翻越围栏接近原址崖壁，结构基础仍不稳定。",
+        "events_timeline": [
+          "1995-04-28 平台坍塌，造成新西兰史上最严重户外事故之一",
+          "1996 DOC 重建并设永久围栏",
+          "2015-04 二十周年纪念家属要求加强警示",
+          "2020 DOC 与家属共同设计 mark 文本"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 155,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 SAR 7 起致命事故记录+TACR 复查,1 条不构成趋势",
+      "case_data": {
+        "title": "Mt Taranaki 失踪者搜索区域",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 5,
+        "intrinsic_quality": "SAR HISTORY — 此区域 2013年以来 7 起致命跌落，多在冬季冰雪覆盖时。无 alpine 经验和冰镐绝对不要单独通过。",
+        "events_timeline": [
+          "2013-07 一名 Auckland 登山者跌落，搜救三天找到遗体",
+          "2017-08 双人结组其中一人滑坠 200m 死亡",
+          "2021-06 TACR 队长 Lange 累计参与 7 次搜救后立 mark",
+          "2023-09 又一起跌落事故，幸运获救但截肢"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 156,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 Tūhoe rāhui+DOC iwi 双重背书,1 条不构成趋势",
+      "case_data": {
+        "title": "Te Urewera 文化禁地（rāhui）",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "RĀHUI — 此山谷为 Tūhoe wāhi tapu（圣地），2022年起永久禁入。非 iwi 成员请勿进入，违者将被 ranger 劝离并通报。",
+        "events_timeline": [
+          "2014 Te Urewera Act 通过，土地法人地位特殊",
+          "2022-03 Tūhoe te uru taumatua 决定 rāhui",
+          "2022-05 与 DOC 联合声明并立标牌",
+          "2023 一名摄影师无视进入被劝离并罚款"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 157,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 Heli LZ 救援用途真实,1 条不构成趋势",
+      "case_data": {
+        "title": "Mueller Hut 直升机降落点",
+        "type": "supply",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "HELI LZ — 紧急医疗撤离指定降落点。请勿堆放石堆 cairn 或扎帐篷，影响降落视线和安全。已被使用 14 次救援。",
+        "events_timeline": [
+          "2018 Helicopter Line 与 DOC 协商确定此点为标准 LZ",
+          "2020-12 一名扭脚徒步者从此点撤离",
+          "2022 游客在 LZ 中心堆 cairn 拍照，差点延误救援",
+          "2023-01 Captain Burgess 发布 mark 明令禁止"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 158,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 DOC+supervisor flash flood 历史多起致命,1 条不构成趋势",
+      "case_data": {
+        "title": "Heaphy Track 河水暴涨警告",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "FLASH FLOOD ZONE — Kohaihai 河 24小时内可上涨 3m，西海岸雨季尤其危险。出发前查 metservice，水过膝绝不强渡。",
+        "events_timeline": [
+          "2019-12 两名捷克徒步者被冲走获救但失温严重",
+          "2021-05 一名 Nelson 本地人不幸溺亡",
+          "2022 supervisor McLeod 发布 mark 含历史水位数据",
+          "2023-08 mark 加上 metservice 查询二维码"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 159,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 GNS+DOC 火山撤离协议,1 条不构成趋势",
+      "case_data": {
+        "title": "Tongariro Crossing 火山活动撤离点",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 5,
+        "intrinsic_quality": "VOLCANIC ALERT — Te Maari 火山口活动期此点为撤离集合处。听到警报立刻向 Mangatepopo 方向撤退，勿向 Ketetahi 方向（毒气风向）。",
+        "events_timeline": [
+          "2012-08 Te Maari 喷发，Ketetahi Hut 被弹石砸穿",
+          "2013 GNS 与 DOC 制定撤离协议",
+          "2016 GeoNet 警报系统覆盖此区域",
+          "2020 alert level 升至 2，mark 启用更新"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 160,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:1 季节性葡萄牙战舰水母,v6.6 §九季节性 mark 接受为产品状态",
+      "case_data": {
+        "title": "Abel Tasman 海岸毒水母",
+        "type": "supply",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "BLUEBOTTLE SWARM — 2025年1月起东北风后此湾常见葡萄牙战舰水母群。被刺立即热水（45度）浸泡并速送 Motueka 医院。",
+        "events_timeline": [
+          "2025-01-08 三名儿童同时被刺，水上的士紧急运回",
+          "2025-01-15 SLSC 与志愿医生联合勘察后立 mark",
+          "2025-01-22 又有一名澳大利亚游客重度反应",
+          "2025-02 DOC 加入官方 app 推送"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 161,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 memorial+冷锋警告 intrinsic 强,1 条不构成趋势",
+      "case_data": {
+        "title": "Pinnacles 失温事故纪念",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "MEMORIAL & WARNING — 2008年7月一名15岁童军在此失温遇难。冬季此段无遮挡且温度可降至 -5度，请确认装备充足再出发。",
+        "events_timeline": [
+          "2008-07 童军团遇暴风雪一名学生失温死亡",
+          "2009 调查报告发布，归因装备和判断不足",
+          "2010 父母与 DOC 协商立纪念兼警示",
+          "2018 十周年家属要求保留 mark 并更新装备清单"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 162,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 NZAA+NZTA 雪崩走廊 5-15 次/年,1 条不构成趋势",
+      "case_data": {
+        "title": "Milford Sound 雪崩走廊",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "AVALANCHE PATH — 冬季此走廊每年发生雪崩 5-15 次，路过停车拍照禁止。听到山顶轰隆声立即开车驶离，不要回头。",
+        "events_timeline": [
+          "2019-08 一名旅游巴士司机停车被雪崩擦中受伤",
+          "2020 NZ Avalanche Advisory 与 NZTA 发布联合 mark",
+          "2022-07 一次大雪崩封路 18 小时",
+          "2023 NZTA 加雪崩预警闪烁灯"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 163,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 大白鲨袭击区+Niwa 追踪,1 条不构成趋势",
+      "case_data": {
+        "title": "Stewart Island 大白鲨警告",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "WHITE POINTER ZONE — Edwards Island 周边鲨鱼笼潜活动区域，独自游泳/划 SUP 风险高。2014年潜水员遇袭后此区不再推荐独行水上活动。",
+        "events_timeline": [
+          "2014-11 一名潜水员被大白鲨袭击重伤",
+          "2015 商业鲨笼潜公司开始运营但争议大",
+          "2018 DOC marine ranger 与岛民协会发布 mark",
+          "2022 又一次咬船事件后更新文本"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 164,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 NZAC 复盘+Wanaka SAR 多起雪檐事故,1 条不构成趋势",
+      "case_data": {
+        "title": "Mt Aspiring French Ridge 雪檐",
+        "type": "supply",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "CORNICE COLLAPSE — 此山脊东侧雪檐冬末 9-11月最危险，已发生 4 起雪檐断裂坠落。务必沿西侧岩石线行走。",
+        "events_timeline": [
+          "2017-10 一名澳大利亚登山者因雪檐断裂坠亡",
+          "2019-09 双人结组其中一人坠落幸存",
+          "2021 Hugh Barnard 与 Wanaka SAR 合作发布 mark",
+          "2023-10 又一起雪檐事件，三人结组全员幸存"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 165,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 iwi+DOC 多起溺亡记录,1 条不构成趋势",
+      "case_data": {
+        "title": "Whanganui Journey 漂流溺水点",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "DROWNING SPOT — 此处水流回旋，2010年以来 3 名漂流者溺亡。务必穿 PFD 救生衣，从右岸内侧通过，勿在中央停桨。",
+        "events_timeline": [
+          "2010-12 一名英国背包客翻船溺亡",
+          "2015-01 当地 iwi 提议在此立警示",
+          "2017 Te Awa Tupua 法案通过后 iwi 与 DOC 协作",
+          "2019 又一名加拿大游客溺亡"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 166,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:1 NZTA 落石持续真实,1 条不构成趋势",
+      "case_data": {
+        "title": "Arthurs Pass 落石黑点",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "ROCKFALL FROM HIGHWAY — 上方 SH73 高速车辆抛石+自然落石叠加，请勿在步道前 50m 停留。最近一起 2024年12月。",
+        "events_timeline": [
+          "2018 NZTA 加防护网但有缝隙",
+          "2022-03 一名步行者头部被砸送医",
+          "2023 DOC 与 NZTA 联合考察",
+          "2024-04 ranger Thompson 发布 mark 含 GPS 范围"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 167,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 SAR memorial 家属要求保留,1 条不构成趋势",
+      "case_data": {
+        "title": "Hump Ridge 失踪者搜索遗物",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "SAR HISTORICAL — 2016年一名失踪 tramper Sam Hutchinson 此地搜索 12 天未果，请勿移动可疑遗物，发现立刻通话 111。",
+        "events_timeline": [
+          "2016-04 Hutchinson 独行失踪",
+          "2016-04-15 LandSAR 投入 80+ 人 12 天搜索未果",
+          "2018 一名徒步者发现疑似背包碎片",
+          "2020 队长 Cocker 发布 mark 含识别要点"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 168,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 鲸群搁浅地形原因+NIWA 研究+多起记录,1 条不构成趋势",
+      "case_data": {
+        "title": "Coromandel 鲸群搁浅救援点",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "WHALE STRANDING ZONE — 此沙滩地形导致领航鲸频繁搁浅，2017、2021、2024 各一次 50+ 头规模。发现搁浅勿推回水中，立刻通话 0800 DOC HOT。",
+        "events_timeline": [
+          "2017-02 一次 80 头领航鲸搁浅，70 头死亡",
+          "2021-11 另一次 60 头规模，志愿者通宵守护",
+          "2022 Project Jonah 与 DOC 联合发 mark",
+          "2024-03 又一次搁浅，mark 流程引导有效"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 170,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 GNS 酸雾监测+RAL+实际烧伤事件,1 条不构成趋势",
+      "case_data": {
+        "title": "Ruapehu Crater Lake 酸雾区",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "ACID GAS PLUME — 火口湖溢出 SO2 在下风向 200m 内可致呼吸道烧伤。佩戴口罩，停留不超过 10 分钟，咳嗽立刻撤离。",
+        "events_timeline": [
+          "2007 一次 lahar 后火口湖性质改变",
+          "2016 GNS 测量 SO2 浓度大幅上升",
+          "2019 RAL 安全官与 DOC 协调发 mark",
+          "2022 一名登山者吸入烟雾送 Taupo 医院"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 171,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:1 council+DOC 工程封闭真实,1 条不构成趋势",
+      "case_data": {
+        "title": "Karangahake Gorge 矿洞坍塌",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "MINE COLLAPSE RISK — 此分支 2023年 探测显示顶部裂缝，绝对禁入。主步道安全，仅此分支封闭。违者罚款 NZ$300。",
+        "events_timeline": [
+          "1880s 此矿洞历史开采遗迹",
+          "2010 列入 heritage trail",
+          "2023-06 council 工程师探测发现新裂缝",
+          "2023-08 DOC 与 council 联合封闭并立 mark"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 172,
+      "final_state": "healthy",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "12:1 临时桥损,事件中显示 Month 10 维修完成 mark 移除——产品层正常下架",
+      "case_data": {
+        "title": "Greenstone Track 桥梁损坏",
+        "type": "supply",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "BRIDGE OUT — 2025年4月暴雨冲毁桥面木板，绕行下游 500m 河滩浅滩。雨季水深可至腰部，确认水位再渡。",
+        "events_timeline": [
+          "2025-04-15 大雨后桥被冲毁",
+          "2025-04-17 track crew 发现并立即立 mark",
+          "2025-04-22 一组徒步者按指引绕行成功",
+          "2025-05 临时维修计划推迟到夏季"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 173,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 GCH winch 唯一救援点 6 次,1 条不构成趋势",
+      "case_data": {
+        "title": "Goat Pass 直升机绳降区",
+        "type": "supply",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "WINCH POINT — 此点为复杂地形 winch 救援唯一可用点，请勿在此堆 cairn 或扎帐影响绳降。已成功救援 6 次。",
+        "events_timeline": [
+          "2017 GCH 与 DOC 协议确定此点",
+          "2019-12 首次 winch 救援一名骨折 tramper",
+          "2021 一组游客在此堆 cairn 险些干扰救援",
+          "2022 GCH 飞行员发布 mark 含警告"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 174,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:1 海狮繁殖期季节性,v6.6 季节性接受",
+      "case_data": {
+        "title": "Catlins 海狮攻击点",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "NZ SEA LION HOTSPOT — 雄性 NZ 海狮繁殖期攻击性强。保持 20m 距离，被追立刻向沙丘高处或灌木躲避，勿背向逃跑。",
+        "events_timeline": [
+          "2020-01 一名摄影师被追逐摔伤",
+          "2022-12 又一次接近距离咬伤事件",
+          "2023 DOC 与 YEPT 联合发 mark",
+          "2024-11 繁殖期 ranger 加固定标识"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 175,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 春季 UV 雪盲 MSC+Alpine Guides 联合,1 条不构成趋势",
+      "case_data": {
+        "title": "Ball Pass 雪盲警告",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "SNOW BLINDNESS RISK — 春季雪反射 UV 极强，无 cat 4 雪镜 30 分钟即可雪盲。已 2 起紧急救援。",
+        "events_timeline": [
+          "2022-10 一名以色列游客无墨镜雪盲送医",
+          "2023-11 又一起类似事件",
+          "2024 MSC 与 Alpine Guides 发联合 mark",
+          "2024-12 mark 加入 cat 4 镜片说明"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 176,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 DOC+MetService 雷击警告记录,1 条不构成趋势",
+      "case_data": {
+        "title": "Kepler Track 雷击危险点",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "LIGHTNING EXPOSURE — 此 4km 山脊无遮蔽，雷暴预警时立刻向 Luxmore Hut 或 Forest Burn 撤退。已两次雷击事件。",
+        "events_timeline": [
+          "2018-12 一组徒步者被闪电击中边缘草地，无重伤但震惊",
+          "2021-01 又一次雷击导致 GPS 设备损坏",
+          "2022 DOC 与 MetService 联合发 mark",
+          "2023 mark 加入 MetService Thunderstorm Outlook 二维码"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 177,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 7 人遇难纪念家属+DOC 永久保留,1 条不构成趋势",
+      "case_data": {
+        "title": "Wilkin Valley 直升机失事点",
+        "type": "supply",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "ACCIDENT SITE — 2018年8月一架观光直升机在此失事 7 人遇难。残骸已清理，但请勿在此扎营或搭 cairn 出于尊重。",
+        "events_timeline": [
+          "2018-08-06 直升机撞山失事",
+          "2019 TAIC 完成调查报告",
+          "2020 家属与 SAR 共同立纪念 mark",
+          "2022 DOC 同意保留 mark 作为永久标识"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 178,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 SLSNZ 离岸流 3 起溺水,1 条不构成趋势",
+      "case_data": {
+        "title": "Raglan 离岸流冲浪危险",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "RIP CURRENT — 此点退潮时离岸流速 2m/s，已 2017、2021、2024 各一次溺水事故。务必结伴并通知岸上观察员。",
+        "events_timeline": [
+          "2017-02 一名澳大利亚冲浪者溺亡",
+          "2021-12 SLSNZ 救起一名学生",
+          "2022 SLSNZ 与 harbour care 联合发 mark",
+          "2024-01 又一次救援成功"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 179,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 滑雪场雪崩边界 NZAA 复查仍高危,1 条不构成趋势",
+      "case_data": {
+        "title": "Mt Hutt 雪崩观测点",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "OUT OF BOUNDS AVALANCHE — 滑雪场边界外此面冬季雪崩频发，2014年 2 名滑雪者遇难后明令禁止越界。",
+        "events_timeline": [
+          "2014-08 两名滑雪者越界遇雪崩死亡",
+          "2015 ski patrol 与 NZAA 联合勘察",
+          "2016 设永久 mark 与物理边界",
+          "2020 又一名越界者获救但严重受伤"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 180,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 Ngāti Kuri 文化最高敏感 800 岁神树,1 条不构成趋势",
+      "case_data": {
+        "title": "Northland Cape Reinga 文化禁拍",
+        "type": "supply",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "TAPU TREE — 此 800 岁 pohutukawa 为亡灵离开 Aotearoa 的通道，请勿触碰、攀爬或合影。Ngāti Kuri 文化最高敏感地。",
+        "events_timeline": [
+          "2010 Treaty settlement 后 iwi 监管加强",
+          "2015 一名网红爬树拍摄引发抗议",
+          "2018 iwi 与 DOC 联合发 mark",
+          "2022 iwi ranger 培训上岗"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 181,
+      "final_state": "healthy",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "12:1 临时改道,事件中 2025-09 永久工程完工后 mark 调整——time-bound",
+      "case_data": {
+        "title": "Westport 海岸塌方",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "CLIFF EROSION — 2024年风暴后步道悬崖侧塌方 3m，已临时改道。原步道边缘仍不稳定，请勿越栏拍照。",
+        "events_timeline": [
+          "2024-07 风暴 ex-cyclone Lola 残留导致塌方",
+          "2024-07-20 ranger 与 council 联合勘察",
+          "2024-08 临时改道并立 mark",
+          "2024-12 一名游客越栏被警示"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 182,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 留学生 memorial+家属+多语推广,1 条不构成趋势",
+      "case_data": {
+        "title": "Lake Tekapo 寒夜冻死纪念",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "MEMORIAL — 2019年6月一名中国留学生因装备不足夜间下山失温遇难。冬季夜温可至 -10度，单层薄外套绝对不够。",
+        "events_timeline": [
+          "2019-06 留学生 Liu 失温死亡",
+          "2020 父亲访问 NZ 要求设警示",
+          "2021 DOC 与家属合作立 mark",
+          "2022 i-SITE 加中文版本"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 183,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 雷击 5 人事件+Massey 研究,1 条不构成趋势",
+      "case_data": {
+        "title": "Tararua Holdsworth 雷击伤人",
+        "type": "supply",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "LIGHTNING STRUCK — 2023年12月此地一组学生被闪电击中，2人重伤。雷暴时立即蹲低，远离金属和山脊线。",
+        "events_timeline": [
+          "2023-12-15 闪电击中 5 人小组",
+          "2023-12-16 LandSAR 紧急撤离",
+          "2024-01 Massey 调查报告发布",
+          "2024-04 SAR 与 Massey 联合发 mark"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 184,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:1 鲨鱼袭击夏末季节性提示,v6.6 季节性接受",
+      "case_data": {
+        "title": "Bay of Islands 鲨鱼袭击点",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "SHARK INCIDENT — 2024年1月一名浮潜者被 bronze whaler 咬伤大腿。建议夏末避开此点黄昏游泳。",
+        "events_timeline": [
+          "2024-01-22 浮潜者被咬伤",
+          "2024-01-23 直升机送 Whangarei 医院",
+          "2024-02 lifeguard 与 DOC 调查",
+          "2024-03 联合发 mark"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 185,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 GNS 长期断层监测+落石频发,1 条不构成趋势",
+      "case_data": {
+        "title": "Kaikoura 地震断层观察",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "FAULT SCARP & UNSTABLE CLIFF — 2016年地震抬升海床 6m。地形仍在调整，请勿接近悬崖底部，落石频发。",
+        "events_timeline": [
+          "2016-11 7.8 级地震彻底改变此地形",
+          "2017 GNS 长期监测确立",
+          "2019 DOC 与 GNS 联合发 mark",
+          "2021 一次余震后落石量增加"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 186,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:1 DOC 全面封闭至 2026,1 条不构成趋势,time-bound 但 normal 寿命内有效",
+      "case_data": {
+        "title": "Cathedral Cove 落石封闭",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "TRACK CLOSED — 2024年Cyclone Gabrielle 后步道多处塌方。请勿尝试绕行，工程预计 2026 重开。海上小船仍可达。",
+        "events_timeline": [
+          "2023-02 Cyclone Gabrielle 重创步道",
+          "2023-03 DOC 全面封闭",
+          "2024 工程评估完成",
+          "2024-09 mark 更新预计开放时间"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 187,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:1 警方社区联合+实际报案+巡逻,1 条不构成趋势",
+      "case_data": {
+        "title": "Mangawhai 蛇形步道犯罪",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "ROBBERY HOTSPOT — 2025年初春此地3起独行女性被骚扰报案。建议结伴清晨或傍晚行走，遇情况立刻 111。",
+        "events_timeline": [
+          "2025-03 首起骚扰报案",
+          "2025-04 又两起类似事件",
+          "2025-04-15 警察社区官与居民会联合 mark",
+          "2025-05 警方加巡逻频次"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 188,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 NIWA 全球最清+法定保护+罚款,1 条不构成趋势",
+      "case_data": {
+        "title": "Blue Lake 颜色保护禁碰",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "WORLDS CLEAREST WATER — 任何接触会引入微粒。绝对禁止下水、饮用或丢入物品，违者 NZ$5000 罚款。",
+        "events_timeline": [
+          "2011 NIWA 测定为全球最清",
+          "2013 DOC 立法保护",
+          "2016 一名游客洗手被罚",
+          "2019 NIWA 与 DOC 联合更新 mark"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 189,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 4 人冬季失温死亡 SAR 永久 mark,1 条不构成趋势",
+      "case_data": {
+        "title": "Mt Egmont 高海拔失温",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 5,
+        "intrinsic_quality": "HYPOTHERMIA DEATHS — 此山脊裸露多风，2010年以来 4 人冬季失温死亡。无 alpine 装备者 3pm 后绝对不要继续上行。",
+        "events_timeline": [
+          "2010 第一起失温事故",
+          "2017 第三起后 SAR 决定立永久 mark",
+          "2019 LandSAR 加入并更新装备清单",
+          "2022 又一起死亡，mark 加红色警告条"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 190,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:1 Cyclone 残留 NZDF 评估真实,1 条不构成趋势",
+      "case_data": {
+        "title": "Hawke's Bay Cyclone 残留路桥",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "GABRIELLE DEBRIS — 2023年Cyclone Gabrielle 残留扭曲钢筋和泥浆。看似可走但下方掏空，请走新指定步道。",
+        "events_timeline": [
+          "2023-02 Cyclone Gabrielle 重创",
+          "2023-04 NZDF 工程师评估并发 mark",
+          "2024 临时步道开通",
+          "2024-09 一名摄影师下到旧路被警告"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 191,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 桥梁 8 人限制工程检查保留,1 条不构成趋势",
+      "case_data": {
+        "title": "Hokitika Gorge 桥梁过载",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "BRIDGE LOAD LIMIT — 同时通过最多 8 人，违反者承担风险。已两次因游客团队过 20 人导致桥剧烈晃动报警。",
+        "events_timeline": [
+          "2020 桥梁工程检查确立 8 人限制",
+          "2022 一团 25 人无视限制差点出事",
+          "2023 ranger 立永久 mark",
+          "2024-12 一团中国旅行团遵守了限制"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 192,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 失踪猎人 SAR+家属心愿永久,1 条不构成趋势",
+      "case_data": {
+        "title": "Stewart Island 失踪猎人区",
+        "type": "supply",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "MISSING HUNTER 2009 — 一名 deer hunter Steve Stewart 此处失踪从未寻回。地形复杂雾大，无 PLB 不要单独深入。",
+        "events_timeline": [
+          "2009-07 hunter 失踪",
+          "2009-08 SAR 投入大规模搜救 21 天未果",
+          "2014 五周年家属访问",
+          "2016 SAR 与 DOC 立永久 mark"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 193,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 council+GNS 红外监测沸泥真实危险,1 条不构成趋势",
+      "case_data": {
+        "title": "Rotorua 地热烫伤点",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "BOILING MUD — 表面温度 95度可瞬间烧伤。围栏外的'空地'可能是新形成的薄壳热坑。2023年一名儿童跌入获救。",
+        "events_timeline": [
+          "2003 历史上多次地热活动改变",
+          "2023-01 儿童跌入热泥幸亏家长拉出",
+          "2023-02 council 与 GNS 联合发 mark",
+          "2024 又一次新热坑出现，mark 范围扩大"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 194,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:1 邮轮季季节性诈骗警告,v6.6 季节性接受",
+      "case_data": {
+        "title": "Dunedin Port Chalmers 港口偷盗",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "CRUISE SCAM ZONE — 邮轮日有团伙以'代叫的士'为名偷行李。仅使用官方计程车队 Dunedin Taxis 0800 505 010。",
+        "events_timeline": [
+          "2024-11 邮轮季首起报案",
+          "2024-12 三起类似手法",
+          "2025-01 警察与 Cruise NZ 联合 mark",
+          "2025-02 一团人被抓"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 195,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 cold shock 3 起溺亡 Coastguard 联合,1 条不构成趋势",
+      "case_data": {
+        "title": "Lake Wakatipu 寒冷溺水点",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "COLD SHOCK DROWNING — 水温常年 8度，跳入瞬间 cold shock 可致溺水。务必先入水适应再深游。已 3 起。",
+        "events_timeline": [
+          "2018-12 一名游客跳水后心脏骤停溺亡",
+          "2021 又两起 cold shock 救援",
+          "2022 council 与 Coastguard 联合发 mark",
+          "2024 mark 加生理科普"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 196,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 wave trap 3 名游客被冲下 NIWA 联合,1 条不构成趋势",
+      "case_data": {
+        "title": "Punakaiki 海蚀洞危险",
+        "type": "danger",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "WAVE TRAP — 大潮 + 西风时浪可越围栏冲入观景平台。已3名游客被冲下平台救起。10am-2pm 大潮日避开。",
+        "events_timeline": [
+          "2019 一名游客被浪冲下骨折",
+          "2022 又两起类似事件",
+          "2023 DOC 与 NIWA 联合发 mark",
+          "2024 加上潮汐警告灯"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 197,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 Lahar ERLAWS+GNS 24h 监测,1 条不构成趋势",
+      "case_data": {
+        "title": "Mt Ruapehu Lahar 警报系统",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "LAHAR PATH — 2007年此处 lahar 流过冲毁桥梁。听到警报立刻向高处撤离，勿停车拍照。系统全年 24小时监测。",
+        "events_timeline": [
+          "2007-03 大规模 lahar 事件",
+          "2008 ERLAWS 系统启用",
+          "2015 GNS 与 DOC 联合 mark",
+          "2020 系统测试演练全员 mark 引导有效"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 198,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 kauri dieback rāhui+council+iwi 永久,1 条不构成趋势",
+      "case_data": {
+        "title": "Auckland Waitakere kauri dieback 封闭",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "RĀHUI & DIEBACK — 此步道封闭至 kauri 病害解决。强行进入危害 kauri 古树并触犯 iwi rāhui，罚款 NZ$2000。",
+        "events_timeline": [
+          "2017 kauri dieback 严重确认",
+          "2018 Te Kawerau 发 rāhui",
+          "2019 council 与 iwi 联合永久 mark",
+          "2022 一名游客无视进入被罚"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 199,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:1 季节性 6-9 月封闭,v6.6 季节性接受",
+      "case_data": {
+        "title": "Wairarapa Cape Palliser 冬季灯塔关闭",
+        "type": "scenic",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "SEASONAL CLOSURE — 6-9月强风期阶梯结冰已发生 2 起跌落骨折。冬季关闭，平台仅夏季开放。",
+        "events_timeline": [
+          "2019-07 一名游客冰滑骨折",
+          "2021-08 又一起类似事件",
+          "2022 DOC 与 Maritime NZ 联合发季节性 mark",
+          "2023 加上冰滑警告图"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 200,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "12:1 wreck memorial 1986 沉船+保护区+起诉案例,1 条不构成趋势",
+      "case_data": {
+        "title": "Marlborough Sounds 沉船潜水点纪念",
+        "type": "cairn",
+        "likes": 12,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "WRECK MEMORIAL — 1986年此处苏联邮轮沉没 1 人遇难。仅认证 wreck diver 可下潜，禁止移除任何物品。",
+        "events_timeline": [
+          "1986-02 Mikhail Lermontov 触礁沉没",
+          "1990 列入潜水保护区",
+          "2010 一名潜水员违规取物被起诉",
+          "2016 Maritime NZ 与 DOC 联合 mark"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 251,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "31:3 (10.3:1) 持续高赞+council 引用+山火 14 名滞留接收,转化率高续命",
+      "case_data": {
+        "title": "Routeburn Flats Hut 旁 Glenorchy 私营 lodge 老板标自家床位",
+        "type": "supply",
+        "likes": 31,
+        "reports": 3,
+        "duration_months": 14,
+        "user_volume_per_month": 25,
+        "intrinsic_quality": "私营，但确实在 DOC Routeburn Flats Hut 满员季节是 trampers 撤退备选，价格透明 $85/晚含早餐",
+        "events_timeline": [
+          "Month 1: 老板 Dave（kiwi，本地经营 12 年）发 mark，附 lodge 照片和 Routeburn 接驳时刻表",
+          "Month 2: 一队从 Routeburn Falls Hut 提前撤退的德国背包客在 Glenorchy 看到 mark，住下感谢",
+          "Month 3-5: 9 likes，2 条评论说'救命稻草，DOC 满员时唯一选择'",
+          "Month 6: 一名澳洲游客 report '商业广告，应该禁止'"
+        ],
+        "edge_case_flag": "commercial_owner|honest_disclosure|positive_signal"
+      }
+    },
+    {
+      "id": 252,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "47:4 (11.8:1) 持续高赞+i-SITE 推荐+赛事爆发",
+      "case_data": {
+        "title": "Te Anau Lakefront 餐厅 Redcliff Café 标自己'Kepler Track 后第一杯啤酒'",
+        "type": "supply",
+        "likes": 47,
+        "reports": 4,
+        "duration_months": 11,
+        "user_volume_per_month": 60,
+        "intrinsic_quality": "Kepler Track 完赛 trampers 的传统聚集地，餐厅本身在 lonely planet 上有独立条目",
+        "events_timeline": [
+          "Month 1: Ash 发 mark，附店内 Fiordland Brewing 啤酒清单",
+          "Month 2: 一队完成 Kepler 4 天的英国 trampers 到店打卡，8 likes",
+          "Month 4: Kepler Challenge 跑山赛 250 名选手中约 80 人赛后到店，22 likes 集中爆发",
+          "Month 5: 一名 vegan 游客 report '不友好菜单宣传'，Ash 评论回复并加了素菜选项"
+        ],
+        "edge_case_flag": "commercial_restaurant|tradition_anchor|event_driven_likes"
+      }
+    },
+    {
+      "id": 253,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "18:14 (1.3:1) + 多名摄影师集体 report+推广动作,持续 report 累积构成向下趋势",
+      "case_data": {
+        "title": "Bob's Peak Skyline Queenstown 直升机观光公司标'最佳 Remarkables 取景点'",
+        "type": "scenic",
+        "likes": 18,
+        "reports": 14,
+        "duration_months": 8,
+        "user_volume_per_month": 200,
+        "intrinsic_quality": "取景客观真的好，但被直升机公司 Over The Top Helicopters 标记是为了他们悬停拍照路线",
+        "events_timeline": [
+          "Month 1: 公司账号发 mark，配图带细微 watermark，文字提'专业摄影师推荐'",
+          "Month 2: 一队中国游客确实来到这个点拍照，8 likes",
+          "Month 3: 当地摄影师 Lisa report '商业引流伪装成 tip'",
+          "Month 4: 直升机公司在 mark 评论区直接 promote 他们的 flight package，5 reports"
+        ],
+        "edge_case_flag": "commercial_promotion|disguised_ad|cleaner_alternative_exists"
+      }
+    },
+    {
+      "id": 254,
+      "final_state": "dead_sick",
+      "final_lifespan": "expired",
+      "source": "pass1",
+      "rationale": "9:19 (0.47:1) + Otago F&G 协会权威反驳+集体 report,持续向下趋势 → SUSPICIOUS → 高严重度商业误导加速 sick_death",
+      "case_data": {
+        "title": "Skippers Canyon 私营钓鱼向导标'独家 Shotover trout pool'",
+        "type": "scenic",
+        "likes": 9,
+        "reports": 19,
+        "duration_months": 12,
+        "user_volume_per_month": 18,
+        "intrinsic_quality": "确实是 brown trout 多发区，但向导公司宣称'独家'是误导——任何持 Otago Fish & Game 执照的人都可去",
+        "events_timeline": [
+          "Month 1: Skippers Sports 发 mark，文字'我们的 secret pool'",
+          "Month 3: 一名独自来钓鱼的本地 angler John 自驾 4WD 到达，发现路并不难，留言'根本不是独家'",
+          "Month 5: Otago Fish & Game 协会成员 report '误导，任何执照持有者均可访问'",
+          "Month 7: 一队听信 guide 公司付了 $850 的游客发现自驾就能到，1 star review，4 reports"
+        ],
+        "edge_case_flag": "commercial_false_claim|exclusivity_lie|authority_refutation"
+      }
+    },
+    {
+      "id": 255,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "68:5 (13.6:1) 持续高赞+Wine Society 引用,1-2 条偏好 report 不构成趋势",
+      "case_data": {
+        "title": "Wanaka Cardrona Valley 酒庄 Rippon Wines 标自家品酒 deck",
+        "type": "scenic",
+        "likes": 68,
+        "reports": 5,
+        "duration_months": 10,
+        "user_volume_per_month": 90,
+        "intrinsic_quality": "Rippon 是 NZ 最有名的有机酒庄之一，露台景观本身就是 Wanaka 旅游必到点",
+        "events_timeline": [
+          "Month 1: Nick 发 mark，附露台日落实拍，没价格没酒单",
+          "Month 2: 一队来 Wanaka tree 打卡的游客顺路过来，留言说'比 Wanaka tree 还美还安静'，14 likes",
+          "Month 4: Wine Folly 编辑路过点了 like 并转发",
+          "Month 5: 一名 teetotaler report '酒精相关地点不应在徒步 app'"
+        ],
+        "edge_case_flag": "commercial_landmark|restrained_promotion|preference_report"
+      }
+    },
+    {
+      "id": 256,
+      "final_state": "dead_sick",
+      "final_lifespan": "expired",
+      "source": "pass1",
+      "rationale": "6:24 (0.25:1) + DOC ranger 实地反驳+MSC 公共安全风险,大量真实虚假广告 report 高严重度急速 sick_death",
+      "case_data": {
+        "title": "Franz Josef Glacier Guides 公司标'安全冰川入口'（实为引流）",
+        "type": "danger",
+        "likes": 6,
+        "reports": 24,
+        "duration_months": 9,
+        "user_volume_per_month": 40,
+        "intrinsic_quality": "DOC 自 2012 年因冰川后退已永久关闭徒步入冰川，guide 公司说的'安全入口'指的是他们直升机降落点",
+        "events_timeline": [
+          "Month 1: Franz Josef Glacier Guides 账号发 mark",
+          "Month 2: 一对德国夫妇按 mark 走到 Sentinel Rock 后想继续前进，被 DOC ranger 拦下",
+          "Month 3: ranger 在 mark 评论区留言'此处徒步入冰川已自 2012 永久关闭'，正式 flag",
+          "Month 4: West Coast Penguin Trust 同时 report '误导可能害游客冒险'"
+        ],
+        "edge_case_flag": "commercial_safety_lie|authority_refutation|public_danger"
+      }
+    },
+    {
+      "id": 257,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "53:4 (13.3:1) 事实陈述+DOC 区域办公室认可+Cycle Trail 联盟",
+      "case_data": {
+        "title": "Hokitika 户外用品店 Wilderness Lodge 标'最后补给点'（事实陈述）",
+        "type": "supply",
+        "likes": 53,
+        "reports": 4,
+        "duration_months": 16,
+        "user_volume_per_month": 32,
+        "intrinsic_quality": "店铺确实是 Hokitika Gorge / Whitcombe Valley 路线的最后补给点，事实陈述",
+        "events_timeline": [
+          "Month 1: Sarah 发 mark，附店内炉头 gas 罐和应急食品照",
+          "Month 3: 一队从 Hokitika Gorge swing bridge 出来的法国 backpackers 留言'幸亏看到这个 mark'",
+          "Month 5: 一名 Christchurch 游客 report '商业广告应禁止'",
+          "Month 7: West Coast Wilderness Trail cycle 联盟把 mark 标进官方推荐补给点"
+        ],
+        "edge_case_flag": "commercial_factual|authority_endorsement|practical_value"
+      }
+    },
+    {
+      "id": 259,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "31:8 (3.9:1) 持续高赞,8 条偏好 report 占比小,无急转",
+      "case_data": {
+        "title": "Mt Hutt skifield 滑雪学校标'最佳初学者缓坡'",
+        "type": "scenic",
+        "likes": 31,
+        "reports": 8,
+        "duration_months": 6,
+        "user_volume_per_month": 80,
+        "intrinsic_quality": "确实是 ski school 教学区，对真初学者有帮助但 mark 暗示需要报班",
+        "events_timeline": [
+          "Month 1: Snow Sports School 账号发 mark，附坡度和 lesson 价格",
+          "Month 2: 一队 Christchurch 大学滑雪社新手用 mark 找到点，自己练，10 likes",
+          "Month 3: Snow Sports School 评论区追加'first lesson $89'，2 reports",
+          "Month 4: Methven 当地 ski instructor 联盟讨论后认为 mark 信息客观"
+        ],
+        "edge_case_flag": "commercial_disclosed|skill_calibrated|honest_link"
+      }
+    },
+    {
+      "id": 260,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "36:3 (12:1) NZ Cycle Trail 官方背书+集中爆发",
+      "case_data": {
+        "title": "Methven 自行车租赁店 Big Al's Bikes 标 Mt Hutt cycle trail 起点",
+        "type": "supply",
+        "likes": 36,
+        "reports": 3,
+        "duration_months": 10,
+        "user_volume_per_month": 22,
+        "intrinsic_quality": "店铺真实存在，是 Mt Hutt Forest 路线少数租车点之一",
+        "events_timeline": [
+          "Month 1: Al 发 mark，配店面照和 trail 地图",
+          "Month 3: 一对澳洲夫妇租车骑完 Mt Hutt Forest 全程，留言感谢，14 likes",
+          "Month 5: NZ Cycle Trail Methven 段官方账号转发该 mark",
+          "Month 6: 一名 self-supported tourer report '不需要租车信息'"
+        ],
+        "edge_case_flag": "commercial_unique_service|official_endorsement|honest_pricing"
+      }
+    },
+    {
+      "id": 261,
+      "final_state": "dead_sick",
+      "final_lifespan": "expired",
+      "source": "pass1",
+      "rationale": "4:27 (0.15:1) + SAR 反向 danger mark 同坐标+SAR 救援事件+本地导游协会谴责,多重高严重度急转",
+      "case_data": {
+        "title": "Fox Glacier 直升机滑雪运营商标'powder bowl'位置（季节性危险）",
+        "type": "scenic",
+        "likes": 4,
+        "reports": 27,
+        "duration_months": 11,
+        "user_volume_per_month": 8,
+        "intrinsic_quality": "powder 雪况确实顶级但是 avalanche terrain，公司标 mark 有引流且对自由滑雪者构成误导",
+        "events_timeline": [
+          "Month 1: Alpine Adventures 发 mark",
+          "Month 3: NZ Mountain Safety Council 工作人员 report'avalanche zone 不应推荐给自由滑雪者'",
+          "Month 5: 一队尝试自滑的瑞士滑雪者被困 6 小时被 SAR 救出，事件报告引用 mark 为诱因",
+          "Month 7: West Coast Avalanche Forecast service 加入 report"
+        ],
+        "edge_case_flag": "commercial_dangerous_promotion|sar_event|counter_mark_exists"
+      }
+    },
+    {
+      "id": 262,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "11:18 (0.61:1) 集体 report 构成趋势 → 向下急转 SUSPICIOUS,但公司修改后行为改善可能强心剂回退",
+      "case_data": {
+        "title": "Fiordland Te Anau 钓鱼船码头被举报为'商业入侵'",
+        "type": "supply",
+        "likes": 11,
+        "reports": 18,
+        "duration_months": 9,
+        "user_volume_per_month": 35,
+        "intrinsic_quality": "码头本身是 DOC 公共设施，公司标记自己集合点尚可，但 mark 文字暗示码头是其'expedition base'",
+        "events_timeline": [
+          "Month 1: Fiordland Fishing Charters 发 mark 写'our expedition base'",
+          "Month 2: Te Anau Boat Club 主席 Bruce 评论区指出码头是公共设施",
+          "Month 3: 12 名独立 anglers 集体 report '商业占用公共空间表述'",
+          "Month 4: DOC Fiordland 区域 ranger 评论区中性留言'码头属公共设施可自由使用'"
+        ],
+        "edge_case_flag": "commercial_public_space|self_corrected|observation_period"
+      }
+    },
+    {
+      "id": 263,
+      "final_state": "dead_sick",
+      "final_lifespan": "expired",
+      "source": "pass1",
+      "rationale": "5:22 (0.23:1) + LDC 律师函+ranger 反驳+多名集体 report,illegal claim 最高严重度",
+      "case_data": {
+        "title": "Queenstown Bob's Cove 浮潜运营商标'private beach access'（虚假）",
+        "type": "supply",
+        "likes": 5,
+        "reports": 22,
+        "duration_months": 7,
+        "user_volume_per_month": 25,
+        "intrinsic_quality": "Bob's Cove 是 Queenstown Lakes District Council 公共保留地，绝无私人海滩",
+        "events_timeline": [
+          "Month 1: Queenstown Snorkel Tours 发 mark",
+          "Month 2: Queenstown Lakes District Council park ranger 评论区反驳",
+          "Month 3: 4 名当地 paddleboarders 集体 report",
+          "Month 4: NZ Reserves and Parks 网站直接引用 mark 作为'misleading commercial claim'例子"
+        ],
+        "edge_case_flag": "commercial_illegal_claim|legal_action|account_ban_candidate"
+      }
+    },
+    {
+      "id": 264,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "87:5 (17.4:1) 媒体引用+Information Centre 推荐,持续高赞",
+      "case_data": {
+        "title": "Glenorchy 马术 tour 公司标 Paradise 路尽头取景点",
+        "type": "scenic",
+        "likes": 87,
+        "reports": 5,
+        "duration_months": 13,
+        "user_volume_per_month": 110,
+        "intrinsic_quality": "取景地客观存在且公开，公司只是标了一个真实美景但意图引流到自家骑马 tour",
+        "events_timeline": [
+          "Month 1: High Country Horses 发 mark",
+          "Month 3: 多个独立游客自驾到达确认景点真实，22 likes",
+          "Month 5: 一队 LOTR 粉丝来看自己点了 like 并感谢",
+          "Month 7: 一名 anti-commercial 用户 report '所有商业账号 mark 都应禁'"
+        ],
+        "edge_case_flag": "commercial_real_landmark|soft_promotion|media_backed"
+      }
+    },
+    {
+      "id": 265,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "41:1 (41:1) 单条 anti-commercial 不构成趋势",
+      "case_data": {
+        "title": "Wanaka Treble Cone skifield 缆车公司标'家庭友好午餐区'",
+        "type": "supply",
+        "likes": 41,
+        "reports": 1,
+        "duration_months": 5,
+        "user_volume_per_month": 70,
+        "intrinsic_quality": "餐厅露台确实是雪场最舒适的家庭午餐位置",
+        "events_timeline": [
+          "Month 1: 雪场账号发 mark",
+          "Month 2: Wanaka 当地家庭社群 6 人转发并打卡，14 likes",
+          "Month 3: 一对从 Christchurch 来的 4 口之家通过 mark 提前规划午餐位置",
+          "Month 4: 1 条 report 来自'反对所有 commercial 内容'用户"
+        ],
+        "edge_case_flag": "commercial_official|family_practical|negligible_reports"
+      }
+    },
+    {
+      "id": 266,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "18:21 (0.86:1) 多名同行+教会成员 report 构成趋势+cleaner alternative 存在,向下急转",
+      "case_data": {
+        "title": "Tekapo 婚礼摄影公司在 Church of the Good Shepherd 标自己作品集背景",
+        "type": "scenic",
+        "likes": 18,
+        "reports": 21,
+        "duration_months": 9,
+        "user_volume_per_month": 250,
+        "intrinsic_quality": "地标本身是世界级，但摄影公司 Tekapo Wedding Photography 标自己作品集是 mark 平台不该承担的",
+        "events_timeline": [
+          "Month 1: Tekapo Wedding Photography 发 mark",
+          "Month 2: 一对 self-photographer 夫妇按 mark 找到角度，留言'有用'，6 likes",
+          "Month 3: Mackenzie District Council tourism office 自己发了同地点 mark 不带商业，那个 47 likes vs 0 reports",
+          "Month 4: 多名婚礼摄影同行 report '商业自我推广不应在 trail mark 平台'"
+        ],
+        "edge_case_flag": "commercial_self_portfolio|cleaner_alternative|cultural_offense"
+      }
+    },
+    {
+      "id": 267,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "78:4 (19.5:1) DOC 中性确认+TripAdvisor 引用,持续高赞",
+      "case_data": {
+        "title": "Te Anau Lake Manapouri 游船公司标'fjord entrance lookout'（事实但有引流）",
+        "type": "scenic",
+        "likes": 78,
+        "reports": 4,
+        "duration_months": 14,
+        "user_volume_per_month": 45,
+        "intrinsic_quality": "lookout 客观真实存在，且只能通过游船公司船到达——商业是唯一访问途径",
+        "events_timeline": [
+          "Month 1: RealNZ 账号发 mark，附 Doubtful Sound 入口的真实照",
+          "Month 3: 多名搭船游客确认景点存在，30 likes",
+          "Month 5: DOC Fiordland office 在 mark 评论区中性留言'仅可通过游船 access'",
+          "Month 7: 一名独立 kayaker 报告自己 6 天划过去也能到，1 like + 评论"
+        ],
+        "edge_case_flag": "commercial_only_access|factual|doc_acknowledged"
+      }
+    },
+    {
+      "id": 268,
+      "final_state": "dead_sick",
+      "final_lifespan": "expired",
+      "source": "pass1",
+      "rationale": "8:17 (0.47:1) + DOC 实地反驳+集体 report,gatekeeping 公共通道 lie 高严重度急转",
+      "case_data": {
+        "title": "Hokitika Wilderness 私营 jet boat 公司标 Whataroa River 起点（与公共河滩冲突）",
+        "type": "supply",
+        "likes": 8,
+        "reports": 17,
+        "duration_months": 8,
+        "user_volume_per_month": 18,
+        "intrinsic_quality": "公司确实有 jet boat 服务，但 mark 标在紧邻公共河滩处暗示需要从此进入",
+        "events_timeline": [
+          "Month 1: Glacier Country Tours 发 mark 含'main access'字样",
+          "Month 2: West Coast DOC 区域 ranger 评论指出公共河滩可徒步进入",
+          "Month 4: 一队 birders 自己徒步成功到达 viewpoint，3 likes 评论说不需要付费",
+          "Month 6: 8 名独立 birder 集体 report '误导唯一通道'"
+        ],
+        "edge_case_flag": "commercial_gatekeeping|public_access_lie|doc_refutation"
+      }
+    },
+    {
+      "id": 269,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "73:5 (14.6:1) Tourism Bureau 引用+持续高赞,竞品 report 噪音",
+      "case_data": {
+        "title": "Queenstown Arrowtown 葡萄园午餐 tour 标 Kawarau Bridge 蹦极点",
+        "type": "scenic",
+        "likes": 73,
+        "reports": 5,
+        "duration_months": 12,
+        "user_volume_per_month": 180,
+        "intrinsic_quality": "蹦极桥是世界第一蹦极地标，公开，公司只是标自己 tour 包含的合影位置",
+        "events_timeline": [
+          "Month 1: Appellation 账号发 mark",
+          "Month 2: AJ Hackett 官方账号点赞但未转发",
+          "Month 3: 12 名 self-driving 游客确认景点公开可达，20 likes",
+          "Month 5: 一名'同行竞品' Wine tour 公司账号 report '不公平宣传'"
+        ],
+        "edge_case_flag": "commercial_competitor_report|public_landmark|noise_filter"
+      }
+    },
+    {
+      "id": 270,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "14:16 (0.88:1) 农民协会集体 report 构成趋势,但公司已修正可能强心剂",
+      "case_data": {
+        "title": "Wanaka 跳伞公司 Skydive Wanaka 标'最佳着陆区视角'（半误导）",
+        "type": "scenic",
+        "likes": 14,
+        "reports": 16,
+        "duration_months": 10,
+        "user_volume_per_month": 35,
+        "intrinsic_quality": "牧场是私人土地，公司说'public viewing'轻微误导，实际只能从公路边远眺",
+        "events_timeline": [
+          "Month 1: Skydive Wanaka 账号发 mark",
+          "Month 3: 一对游客按 mark 走入牧场被牧主驱赶，report",
+          "Month 4: 牧场主 Bruce 评论区私信抗议，公司未回应",
+          "Month 6: 当地 Wanaka Stations 农民协会 4 人 report '私人土地被标为公共'"
+        ],
+        "edge_case_flag": "commercial_private_land|self_corrected|grace_period"
+      }
+    },
+    {
+      "id": 271,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "142:3 (47.3:1) DOC 同步+论坛 must-see+紧急救援用途",
+      "case_data": {
+        "title": "Glenorchy 私营 Routeburn shuttle 公司标 Routeburn Shelter 接驳点（事实垄断）",
+        "type": "supply",
+        "likes": 142,
+        "reports": 3,
+        "duration_months": 18,
+        "user_volume_per_month": 95,
+        "intrinsic_quality": "DOC trailhead 公共，但 shuttle 是该路线唯一商业接驳——独立交通必须自驾或徒步 22 公里",
+        "events_timeline": [
+          "Month 1: Info & Track 发 mark 含 Glenorchy-Routeburn-Divide shuttle 全表",
+          "Month 3: 一对完成 Routeburn-Greenstone 连穿的游客留言救命级感谢，18 likes",
+          "Month 6: DOC Glenorchy ranger 评论区确认时间表与 hut booking 同步",
+          "Month 9: 1 条 report 来自 anti-commercial"
+        ],
+        "edge_case_flag": "commercial_critical_service|long_history|doc_synced"
+      }
+    },
+    {
+      "id": 272,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "44:2 (22:1) Cycle Trail 全国转发+Cycle Club 加入地图",
+      "case_data": {
+        "title": "Methven Mt Hutt cycle trail 旁咖啡馆 Brown Pub 标自家露台（小镇真小确幸）",
+        "type": "supply",
+        "likes": 44,
+        "reports": 2,
+        "duration_months": 9,
+        "user_volume_per_month": 28,
+        "intrinsic_quality": "镇上唯一对自行车手友好的 pub，有 bike rack 和补水站，本地人都知道",
+        "events_timeline": [
+          "Month 1: Carl 发 mark，bike rack 和露台照",
+          "Month 2: 一队从 Mt Hutt Forest 骑下来的 weekend riders 留言，10 likes",
+          "Month 4: Methven Cycle Club 自发把 mark 加入俱乐部地图",
+          "Month 6: 1 条 report '商业 mark'"
+        ],
+        "edge_case_flag": "commercial_local_owner|community_endorsed|micro_business"
+      }
+    },
+    {
+      "id": 273,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "56:2 (28:1) 唯一镇上选项+council 推荐",
+      "case_data": {
+        "title": "Franz Josef 温泉浴场 Glacier Hot Pools 标'冰川徒步后必去'",
+        "type": "supply",
+        "likes": 56,
+        "reports": 2,
+        "duration_months": 11,
+        "user_volume_per_month": 65,
+        "intrinsic_quality": "真实存在的商业温泉，确实是镇上唯一选择",
+        "events_timeline": [
+          "Month 1: Lina 发 mark",
+          "Month 2: 一队从 Copland Track 4 天出来的 trampers 留言救命级感谢，12 likes",
+          "Month 4: Westland District Council 把 mark 引用为推荐",
+          "Month 6: 1 条 report 来自素食极简主义者'反对所有商业服务'"
+        ],
+        "edge_case_flag": "commercial_unique|sole_option|community_value"
+      }
+    },
+    {
+      "id": 274,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "final-audit-user-arbitration",
+      "rationale": "[终审user仲裁 from healthy] 正常不干预 13条非短时间集中无急转",
+      "case_data": {
+        "title": "Te Anau Hidden Lakes 直升机公司标 Lake Quill 上方'隐藏湖'",
+        "type": "scenic",
+        "likes": 22,
+        "reports": 13,
+        "duration_months": 16,
+        "user_volume_per_month": 12,
+        "intrinsic_quality": "湖确实存在，但只能直升机访问，'hidden'是商业话术——它是 Sutherland Falls 水源众所周知",
+        "events_timeline": [
+          "Month 1: Southern Lakes Helicopters 发 mark",
+          "Month 4: Milford Track 长期向导评论区指出'hidden'不准确，是 Sutherland Falls 水源",
+          "Month 7: 完成 heli tour 的游客留言确认景观真实，14 likes",
+          "Month 10: 当地地理学者发文反驳'hidden'描述"
+        ],
+        "edge_case_flag": "commercial_marketing_language|truth_with_spin|merge_candidate"
+      }
+    },
+    {
+      "id": 275,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "64:3 (21.3:1) DOC permit 公开+NZ Alpine Club 背书",
+      "case_data": {
+        "title": "Mt Cook Aoraki Glentanner 直升机公司标 Tasman Glacier 着陆点",
+        "type": "scenic",
+        "likes": 64,
+        "reports": 3,
+        "duration_months": 13,
+        "user_volume_per_month": 30,
+        "intrinsic_quality": "DOC 批准的合法直升机着陆点，景观真实顶级",
+        "events_timeline": [
+          "Month 1: Glentanner Heli 发 mark 含 DOC permit 号",
+          "Month 3: DOC Aoraki 官方评论区确认 permit 真实",
+          "Month 5: 多名 heli tour 完成者留言确认景观，20 likes",
+          "Month 8: NZ Alpine Club 引用 mark 作为合法商业访问例子"
+        ],
+        "edge_case_flag": "commercial_permit_transparent|legal_access|alpine_club_endorsed"
+      }
+    },
+    {
+      "id": 276,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "88:7 (12.6:1) NZ Heritage 协会确认+持续高赞,内容 volatility report 不构成趋势",
+      "case_data": {
+        "title": "Wanaka Cardrona Hotel 标'NZ 最古老 pub'（事实但 mark 频繁更新菜单）",
+        "type": "supply",
+        "likes": 88,
+        "reports": 7,
+        "duration_months": 10,
+        "user_volume_per_month": 200,
+        "intrinsic_quality": "NZ 第二古 pub，文化遗产，本身值得 mark，但运营者每周更新 mark 文字推菜单",
+        "events_timeline": [
+          "Month 1: Cardrona Hotel 账号发 mark，附 1863 历史照",
+          "Month 2: NZ Heritage 协会评论区确认地标价值",
+          "Month 4: 酒吧把 mark 改成本周菜单广告，3 reports",
+          "Month 5: 改回历史介绍后 reports 停"
+        ],
+        "edge_case_flag": "commercial_landmark|content_volatility|edit_rate_limit"
+      }
+    },
+    {
+      "id": 277,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "67:2 (33.5:1) Arts Trust 背书+festival 爆发",
+      "case_data": {
+        "title": "Hokitika Driftwood Beach 木雕艺术家 Steve 标自己的海滩工作室",
+        "type": "supply",
+        "likes": 67,
+        "reports": 2,
+        "duration_months": 14,
+        "user_volume_per_month": 22,
+        "intrinsic_quality": "Hokitika Driftwood Festival 期间一个有名的本地艺术家工作室，平时也对游客开放",
+        "events_timeline": [
+          "Month 1: Steve 发 mark 配 driftwood 雕塑照",
+          "Month 2: 一对路过 trampers 留言说看了 1 小时没买什么也没被催，10 likes",
+          "Month 4: West Coast Arts Trust 评论区背书",
+          "Month 6: 1 条 report '商业广告'"
+        ],
+        "edge_case_flag": "commercial_artist|low_pressure|community_value"
+      }
+    },
+    {
+      "id": 278,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "71:9 (7.9:1) council+MSC+AA NZ 多权威确认,公共价值主导",
+      "case_data": {
+        "title": "Queenstown Skippers Canyon 4WD tour 公司标'危险路段'（双面意图）",
+        "type": "danger",
+        "likes": 71,
+        "reports": 9,
+        "duration_months": 17,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "路段确实危险，自驾游客死亡过，但公司标记意图既是安全提醒也是引流自家 tour",
+        "events_timeline": [
+          "Month 1: Skippers Canyon Jet 发 mark 写'extreme caution—or let our drivers'",
+          "Month 3: Queenstown Lakes District Council Roads 部门评论区确认路段难度",
+          "Month 5: 自驾通过的 4WD 老手留言'路是难但不至于必须找 tour'",
+          "Month 8: 又一起自驾游客侧滑事故，公司用作宣传素材"
+        ],
+        "edge_case_flag": "commercial_safety_dual|authority_endorsed|public_value_dominant"
+      }
+    },
+    {
+      "id": 279,
+      "final_state": "dead_sick",
+      "final_lifespan": "expired",
+      "source": "pass1",
+      "rationale": "1:14 (0.07:1) + 平台错位+多协会 report,format mismatch 高严重度急转",
+      "case_data": {
+        "title": "Te Anau Fiordland 私人飞行学校标 'best aerial Mitre Peak photo' 拍照位",
+        "type": "scenic",
+        "likes": 1,
+        "reports": 14,
+        "duration_months": 6,
+        "user_volume_per_month": 5,
+        "intrinsic_quality": "空中位置在 trail mark 平台本身就 mismatch——徒步者无法到达",
+        "events_timeline": [
+          "Month 1: Wings & Water 发 mark 在飞行坐标",
+          "Month 2: Cairn 平台用户协会评论'此点徒步无法到达，错位'",
+          "Month 3: 多名独立用户 report 'mark 形式与平台不符'",
+          "Month 4: DOC Fiordland 评论区确认 Mitre Peak 北壁徒步禁止"
+        ],
+        "edge_case_flag": "commercial_platform_misuse|format_mismatch|account_warning"
+      }
+    },
+    {
+      "id": 280,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "18:12 (1.5:1) trampers 集体 report 构成趋势 → 向下急转,但 NZAC+DOC 中性可能强心剂",
+      "case_data": {
+        "title": "Glenorchy 滑翔伞公司标 Mt Larkins 起飞点（合法但被 trampers 反感）",
+        "type": "scenic",
+        "likes": 18,
+        "reports": 12,
+        "duration_months": 11,
+        "user_volume_per_month": 14,
+        "intrinsic_quality": "起飞点合法（NZ Hang Gliding & Paragliding 协会注册），但徒步者经常被滑翔伞低空飞越觉得被打扰",
+        "events_timeline": [
+          "Month 1: Coronet Peak Tandem 发 mark",
+          "Month 3: NZ HGPA 协会评论区确认起飞点合法",
+          "Month 5: 一名 Routeburn-Greenstone 长穿 tramper 抱怨'飞过头顶'，1 report",
+          "Month 7: 6 名 trampers 集体 report '降低 wilderness 体验'"
+        ],
+        "edge_case_flag": "commercial_legal_conflict|user_group_friction|filter_tag"
+      }
+    },
+    {
+      "id": 301,
+      "final_state": "dead_sick",
+      "final_lifespan": "expired",
+      "source": "pass1",
+      "rationale": "47:312 (0.15:1) 严重 like 反占比悬殊,大量集中 report 构成向下急转 → CRITICAL → DEAD",
+      "case_data": {
+        "title": "Roy's Peak Track summit selfie ridge above Lake Wanaka",
+        "type": "scenic",
+        "likes": 47,
+        "reports": 312,
+        "duration_months": 12,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "Instagram 经典自拍点，山脊延伸到镜头里像一把刀切进 Wanaka 湖",
+        "events_timeline": [
+          "06:40 用户从停车场出发，黑暗中头灯一串往上爬",
+          "08:55 到达 selfie point 上面那个真正的 summit，发现没人，全在下面排队拍照",
+          "09:02 mark scenic 在 summit，备注 'the actual top, nobody here'",
+          "09:10 下来路过 selfie 点，二十多人排队，一个韩国姐姐摆了八个 pose"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 302,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "1240:1180 (1.05:1) 接近 50:50 持续争议,v6.6 §7 case R 维持 HEALTHY,UI 自展示",
+      "case_data": {
+        "title": "Roy's Peak Track 那个著名的 selfie 山脊点",
+        "type": "scenic",
+        "likes": 1240,
+        "reports": 1180,
+        "duration_months": 12,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "就是 Instagram 上的那个点，排队 40 分钟才能拍一张",
+        "events_timeline": [
+          "08:30 到达，前面排了 23 个人",
+          "08:35 排队中，前面一对情侣拍了 15 分钟换了 6 套衣服",
+          "09:11 终于轮到，拍了 2 张赶紧让位",
+          "09:13 mark scenic 备注 '排队 40 分钟，景色其实只有 30 秒'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 303,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "890:12 (74:1) 极高赞+婴儿车/轮椅家庭友好持续真实热门",
+      "case_data": {
+        "title": "Hooker Valley Track 第三座吊桥",
+        "type": "scenic",
+        "likes": 890,
+        "reports": 12,
+        "duration_months": 12,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "家庭友好步道终点，背景是 Mount Cook 主峰和 Hooker 冰川湖",
+        "events_timeline": [
+          "10:20 推婴儿车进来，一路平整木栈道",
+          "11:05 到达第三吊桥，桥上挤着五拨人在拍娃",
+          "11:08 桥另一侧冰川湖飘着小冰块，娃伸手要摸",
+          "11:12 mark scenic 备注 '婴儿车能到的最棒冰川视角'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 305,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "680:1450 (0.47:1) 大量 report 占比悬殊向下急转,生态破坏类型严重度高",
+      "case_data": {
+        "title": "#thatwanakatree 那棵柳树",
+        "type": "scenic",
+        "likes": 680,
+        "reports": 1450,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "全世界最有名的一棵树，日落时一百多人围在岸边拍",
+        "events_timeline": [
+          "20:15 到达，岸边架着 60 多个三脚架",
+          "20:25 一个网红姐姐让无人机离树 2 米拍，被本地大爷骂",
+          "20:40 日落，所有人快门齐响",
+          "20:43 mark scenic 备注 '日落 7 分钟值，但全程不能感受自然，只能感受人群'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 307,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1320:95 (13.9:1) 持续高赞潮汐警告真实",
+      "case_data": {
+        "title": "Hot Water Beach 温泉沙滩",
+        "type": "scenic",
+        "likes": 1320,
+        "reports": 95,
+        "duration_months": 12,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "退潮前后两小时挖沙坑出温泉水，挖晚了被海水冲走",
+        "events_timeline": [
+          "15:30 看潮汐表，今天低潮 17:42",
+          "16:00 到沙滩租铲子 5 NZD，已经一百多人在挖",
+          "16:15 自己的坑挖出 60 度滚烫的水，烫得跳起来",
+          "16:20 mark scenic 备注 '低潮前 1.5 小时到最佳，水温能调节，注意脚下别被烫伤'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 311,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1850:920 (2:1) 持续高赞主导,踩花 report 是次要信号未构成向下急转",
+      "case_data": {
+        "title": "Lake Tekapo Church of the Good Shepherd 好牧人教堂前湖岸",
+        "type": "scenic",
+        "likes": 1850,
+        "reports": 920,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "全 NZ 最被拍的小石头教堂，鲁冰花季节挤爆",
+        "events_timeline": [
+          "07:30 日出抵达，已有 80 个三脚架",
+          "07:45 太阳出来，鲁冰花紫粉黄一片",
+          "07:50 教堂门口排队拍'独自一人'机位，每人占 3 分钟",
+          "07:55 mark scenic 备注 '日出值 1 小时但要 6 点到，9 点后变菜市场'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 312,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1180:35 (33.7:1) 极高赞+免费替代+本地认可",
+      "case_data": {
+        "title": "Mount John 天文台往下 Tekapo 镇方向的星空观测点",
+        "type": "scenic",
+        "likes": 1180,
+        "reports": 35,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "国际暗夜保护区，但天文台收费 200 NZD，免费替代点是这里",
+        "events_timeline": [
+          "22:30 开车上 Mount John 半山被拦，付费才能上",
+          "22:40 退回到这个免费观测点，已有十几人架相机",
+          "22:50 银河横亘整个天空",
+          "23:00 mark scenic 备注 '免费替代位，不输天文台，省 200 刀'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 316,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1340:220 (6.1:1) 持续高赞+条件提示真实",
+      "case_data": {
+        "title": "Pancake Rocks Punakaiki 千层岩主步道喷水洞",
+        "type": "scenic",
+        "likes": 1340,
+        "reports": 220,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "石灰岩层叠像煎饼，涨潮+西风时喷水洞像鲸喷",
+        "events_timeline": [
+          "14:00 涨潮前 30 分钟到，西风 30 节",
+          "14:15 第一次喷水，水柱 4 米高，全场惊呼",
+          "14:25 mark scenic 备注 '涨潮+西风缺一不可，i-Site 查潮汐再来'",
+          "14:35 一对夫妇来时退潮没风，骂网上骗人"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 317,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "audit-corrected",
+      "rationale": "[审核修正 from suspicious] rationale自己写明v6.6维持HEALTHY,Case R明确持续争议50:50→HEALTHY,final_state与rationale矛盾",
+      "case_data": {
+        "title": "Franz Josef Glacier 冰川徒步直升机降落点 (heli-hike)",
+        "type": "scenic",
+        "likes": 980,
+        "reports": 1240,
+        "duration_months": 60,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "Instagram 爆款冰川蓝洞，必须坐直升机才能到",
+        "events_timeline": [
+          "09:00 集合付 599 NZD，气象推迟到 11:00",
+          "11:30 直升机起飞，5 分钟到冰川",
+          "11:45 戴冰爪走进蓝色冰洞，导游说今年又退缩 80 米",
+          "11:50 mark scenic 备注 '蓝洞真的蓝得不像话，但 599 刀+全靠天气'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 318,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1660:290 (5.7:1) 持续高赞+条件提示",
+      "case_data": {
+        "title": "Lake Matheson 镜湖 Reflection Island 倒影机位",
+        "type": "scenic",
+        "likes": 1660,
+        "reports": 290,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "Mount Cook 和 Mount Tasman 倒影点，无风清晨才出片",
+        "events_timeline": [
+          "06:15 日出前 20 分钟到，湖面如镜",
+          "06:25 太阳照山顶变金色，倒影完美",
+          "06:30 mark scenic 备注 '只在无风晨/晚出片，10 月概率 30%'",
+          "06:40 突起一阵风，倒影碎了，前面一个韩国大叔崩溃"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 319,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "2400:410 (5.9:1) 极高赞+雨天真 Milford 教育性",
+      "case_data": {
+        "title": "Milford Sound Mitre Peak 教堂峰主码头观景点",
+        "type": "scenic",
+        "likes": 2400,
+        "reports": 410,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "Rudyard Kipling 称'世界第八大奇迹'，雨天反而最美",
+        "events_timeline": [
+          "10:30 倾盆大雨到达，码头瀑布几百条",
+          "10:35 一个意大利游客抱怨花了 8 小时车程冒雨没法拍",
+          "10:40 mark scenic 备注 '雨天才是真 Milford，瀑布上百条只有雨天有'",
+          "10:50 上船 starting cruise，雨里看瀑布从云里掉下来"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 320,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1520:380 (4:1) 持续高赞+硫磺过敏提示",
+      "case_data": {
+        "title": "Wai-O-Tapu Champagne Pool 香槟池主木栈道",
+        "type": "scenic",
+        "likes": 1520,
+        "reports": 380,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "毛利地热区彩虹池，硫磺味浓重，但摄影超出片",
+        "events_timeline": [
+          "10:00 入园 32.5 NZD，戴口罩防硫磺",
+          "10:15 看到 Champagne Pool 橙红边白蓝中心",
+          "10:20 一个日本游客闻味就跑了",
+          "10:25 mark scenic 备注 '硫磺味重，戴口罩，过敏者慎入'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 321,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1180:65 (18.2:1) 持续高赞+预订指引实用",
+      "case_data": {
+        "title": "Hobbiton Movie Set 哈比村绿龙酒馆露台座位",
+        "type": "supply",
+        "likes": 1180,
+        "reports": 65,
+        "duration_months": 12,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "Matamata 哈比村，89 NZD 入场，露台座位需要预订",
+        "events_timeline": [
+          "13:00 团队进村，导游催着走",
+          "14:30 自由活动 30 分钟在绿龙酒馆",
+          "14:35 露台没座位，全被预订了",
+          "14:40 mark supply 备注 '官网提前 2 周订露台位，免费啤酒券要在咖啡馆换'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 322,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "1340:45 (29.8:1) 极高赞+免费定时泄洪",
+      "case_data": {
+        "title": "Huka Falls Track 上游观景台 Aratiatia Rapids 泄洪点",
+        "type": "scenic",
+        "likes": 1340,
+        "reports": 45,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "每天 4 次定时泄洪，10 分钟河谷从干到满，TikTok 爆火",
+        "events_timeline": [
+          "11:55 提前 5 分钟到，已经 60 多人沿步道排开",
+          "12:00 警报响，水闸开启",
+          "12:03 干涸河谷开始有水",
+          "12:07 水位升到顶，激流轰鸣"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 326,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "1240:1380 (0.9:1) 持续争议(价格/价值分歧),v6.6 维持 HEALTHY",
+      "case_data": {
+        "title": "Queenstown Skyline Gondola 顶站观景台",
+        "type": "scenic",
+        "likes": 1240,
+        "reports": 1380,
+        "duration_months": 12,
+        "user_volume_per_month": 1500,
+        "intrinsic_quality": "缆车上山看 Wakatipu 湖，餐厅自助 95 NZD 一晚",
+        "events_timeline": [
+          "16:30 缆车上山往返 55 NZD",
+          "16:45 山顶平台日落前，已 200 多人",
+          "17:30 日落染粉湖面，所有人快门齐响",
+          "17:35 mark scenic 备注 '缆车 55+自助 95 共 150 不便宜，但日落值；步道也能上山免费 1 小时'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 327,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "480:18 (26.7:1) 高赞+本地秘点偏远但价值高",
+      "case_data": {
+        "title": "Glenorchy Lagoon 牧场后小路 Routeburn 入口前 5 公里",
+        "type": "scenic",
+        "likes": 480,
+        "reports": 18,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "无名小路，本地人传，Wakatipu 湖最好倒影点免费",
+        "events_timeline": [
+          "06:30 沿 Glenorchy-Queenstown 路开过头看到牧场后小路",
+          "06:40 走 200 米到湖边，无人",
+          "06:45 山倒影完整，比 Skyline 更纯粹",
+          "06:50 mark scenic 备注 '本地朋友带过来的免费替代点，Wakatipu 倒影一流'"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 328,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "pass1",
+      "rationale": "920:110 (8.4:1) 持续高赞+本地晨练打卡",
+      "case_data": {
+        "title": "Mount Maunganui 主峰 Mauao 步道顶峰观景点",
+        "type": "scenic",
+        "likes": 920,
+        "reports": 110,
+        "duration_months": 12,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "Tauranga 海港地标，30 分钟登顶，本地人晨练打卡圣地",
+        "events_timeline": [
+          "06:00 出发已有几十个本地人在跑",
+          "06:25 到顶看日出从太平洋升起",
+          "06:30 mark scenic 备注 '30 分钟登顶，6 点到看日出，本地人 6 点半下山'",
+          "06:45 中文游客团 50 人涌上来打卡"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 351,
+      "final_state": "dead_sick",
+      "final_lifespan": "expired",
+      "source": "pass1",
+      "rationale": "5:13 (1:2.6) 火灾后视野永远改变,持续递增 report 构成向下急转 → SUSPICIOUS → 中严重度信息不符 → sick_death",
+      "case_data": {
+        "title": "Pigeon Valley Track Tasman view spot — burned in 2019 fire, mark predates",
+        "type": "scenic",
+        "likes": 5,
+        "reports": 13,
+        "duration_months": 38,
+        "user_volume_per_month": 12,
+        "intrinsic_quality": "originally a stunning ridge-top photo spot through native beech",
+        "events_timeline": [
+          "Month 1 (2018): local poster marks scenic ridge view, 4 likes",
+          "Month 8 (Feb 2019): Pigeon Valley fire burns through, 2300ha gone",
+          "Month 10: first post-fire visitor reports 'just black sticks now'",
+          "Month 14: 6 more reports, 'mark is wrong, view is dead'"
+        ],
+        "edge_case_flag": "fire_erased|environmental_change|originally_true"
+      }
+    },
+    {
+      "id": 352,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "18:16 (1.1:1) 地震后地形改变 14 条 report 构成趋势 → 向下急转 SUSPICIOUS",
+      "case_data": {
+        "title": "Kaikoura Coast Track section — 2016 quake raised seabed, route abandoned",
+        "type": "scenic",
+        "likes": 18,
+        "reports": 16,
+        "duration_months": 60,
+        "user_volume_per_month": 25,
+        "intrinsic_quality": "tidal route past seal colony, only passable at low tide",
+        "events_timeline": [
+          "Month 1-12 (pre-quake): mark accurate, 18 likes from coastal walkers",
+          "Month 13 (Nov 2016): Kaikoura earthquake, seabed uplift 2m at Ohau Point",
+          "Month 14-24: SH1 closed, area inaccessible, mark dormant",
+          "Month 25: road reopens, walker reports 'tidal section gone, all dry rocks'"
+        ],
+        "edge_case_flag": "earthquake_change|geological_break|historical_likes"
+      }
+    },
+    {
+      "id": 353,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "9:7 (1.3:1) 桥被冲毁+DOC 关闭+7 条 report 构成趋势,向下急转",
+      "case_data": {
+        "title": "Esk Valley Track river crossing — Cyclone Gabrielle washed bridge away",
+        "type": "junction",
+        "likes": 9,
+        "reports": 7,
+        "duration_months": 30,
+        "user_volume_per_month": 8,
+        "intrinsic_quality": "marked the only safe river crossing for 6km",
+        "events_timeline": [
+          "Month 1-22 (pre-Gabrielle): mark useful, 9 likes from locals",
+          "Month 23 (Feb 2023): Cyclone Gabrielle, swingbridge ripped out, valley ruined",
+          "Month 24: first volunteer cleanup walker reports 'no bridge, river uncrossable'",
+          "Month 26: DOC posts indefinite closure of valley"
+        ],
+        "edge_case_flag": "cyclone_destruction|infrastructure_gone|doc_closed"
+      }
+    },
+    {
+      "id": 354,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "22:13 (1.7:1) 治理变更链接失效 11 条 report 构成趋势,向下急转",
+      "case_data": {
+        "title": "Lake Waikaremoana Hut — Te Urewera reopened, then closed by Tūhoe again",
+        "type": "supply",
+        "likes": 22,
+        "reports": 13,
+        "duration_months": 36,
+        "user_volume_per_month": 40,
+        "intrinsic_quality": "DOC booking link in mark, working in 2019",
+        "events_timeline": [
+          "Month 1 (2019): mark with DOC booking link, 22 likes",
+          "Month 14: Tūhoe announces management transition",
+          "Month 18: DOC booking link breaks, redirects to Tūhoe portal",
+          "Month 24: walker reports 'booking link 404', 4 reports"
+        ],
+        "edge_case_flag": "governance_change|booking_system_shift|iwi_management"
+      }
+    },
+    {
+      "id": 355,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "47:17 (2.8:1) 比例尚可但近期 9 条新 report 集中 (Month 78 后),近期向下急转",
+      "case_data": {
+        "title": "Port Hills Crocodile Rock — 2017 fires plus 2024 closure for slope work",
+        "type": "scenic",
+        "likes": 47,
+        "reports": 17,
+        "duration_months": 84,
+        "user_volume_per_month": 80,
+        "intrinsic_quality": "iconic Banks Peninsula view with rocky outcrop",
+        "events_timeline": [
+          "Month 1 (2017): pre-fire mark, 35 likes",
+          "Month 2: Port Hills fire, gorse-covered slopes burn",
+          "Month 6-24: rock outcrop still visible, slow scrub regrowth",
+          "Month 36: 12 likes from 'view is back, even better'"
+        ],
+        "edge_case_flag": "compound_decay|council_closure|fire_aftermath"
+      }
+    },
+    {
+      "id": 356,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "48:27 (1.8:1) 19 条+8 条 cumulative 持续递增构成向下趋势,SUSPICIOUS",
+      "case_data": {
+        "title": "Marlborough Sounds Queen Charlotte Track — 2021 slips rerouted km 18-22",
+        "type": "junction",
+        "likes": 48,
+        "reports": 27,
+        "duration_months": 42,
+        "user_volume_per_month": 110,
+        "intrinsic_quality": "originally marked old route through pine plantation",
+        "events_timeline": [
+          "Month 1: mark on old route, 48 likes from cyclists and walkers",
+          "Month 12 (Jul 2021): massive rainfall event, slips block 4km section",
+          "Month 14: DOC announces permanent reroute around slip zone",
+          "Month 16: walker reports 'mark is on closed section, follow orange triangles'"
+        ],
+        "edge_case_flag": "weather_event|permanent_reroute|landslide"
+      }
+    },
+    {
+      "id": 357,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "33:11 (3:1) 比例尚可但 Month 31 后 11 条全部新近递增构成近期向下急转",
+      "case_data": {
+        "title": "Coromandel Pinnacles Hut — refurbished 2022, water tank moved",
+        "type": "supply",
+        "likes": 33,
+        "reports": 11,
+        "duration_months": 48,
+        "user_volume_per_month": 90,
+        "intrinsic_quality": "marked location of water tank for refilling bottles",
+        "events_timeline": [
+          "Month 1-30: mark accurate, 33 likes 'tank is on north corner'",
+          "Month 31 (2022): hut renovation, tank relocated to south wall",
+          "Month 32: walker reports 'tank not where mark says'",
+          "Month 36: 6 more reports, all consistent — wrong corner"
+        ],
+        "edge_case_flag": "hut_renovation|small_factual_change|cumulative_reports"
+      }
+    },
+    {
+      "id": 358,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "14:8 (1.75:1) 8 条全部 unanimous 近期 report+商铺永久关闭,向下急转",
+      "case_data": {
+        "title": "Whangarei Heads Bream Head café — Pataua café closed permanently 2023",
+        "type": "supply",
+        "likes": 14,
+        "reports": 8,
+        "duration_months": 26,
+        "user_volume_per_month": 35,
+        "intrinsic_quality": "post-walk coffee/food, marked as 'reliable open weekends'",
+        "events_timeline": [
+          "Month 1-19: mark useful, 14 likes 'great flat white after walk'",
+          "Month 20 (Aug 2023): café closes, sign on door",
+          "Month 21: first walker reports 'closed, sad'",
+          "Month 23: 4 more reports, building unchanged"
+        ],
+        "edge_case_flag": "business_closed|permanent|unanimous_reports"
+      }
+    },
+    {
+      "id": 359,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "22:11 (2:1) 11 条新报 boardwalk 取代 mud,向下急转——警告过时",
+      "case_data": {
+        "title": "Mt Pirongia Tirohanga Track — DOC built boardwalk, mud warning obsolete",
+        "type": "danger",
+        "likes": 22,
+        "reports": 11,
+        "duration_months": 54,
+        "user_volume_per_month": 28,
+        "intrinsic_quality": "warned of waist-deep mud, gaiters required",
+        "events_timeline": [
+          "Month 1-40: mark valid, 22 likes 'glad I had gaiters'",
+          "Month 41 (2023): DOC boardwalk completed",
+          "Month 43: walker reports 'no mud here, boardwalk now'",
+          "Month 46: 5 more reports same pattern"
+        ],
+        "edge_case_flag": "infrastructure_built|warning_obsolete|trust_erosion"
+      }
+    },
+    {
+      "id": 360,
+      "final_state": "dead_natural",
+      "final_lifespan": "expired",
+      "source": "final-audit-user-arbitration",
+      "rationale": "[终审user仲裁 from dead_sick] 6年慢性26:23无急转 自然老死",
+      "case_data": {
+        "title": "Northland Trounson Kauri Park — kauri dieback closure since 2018",
+        "type": "junction",
+        "likes": 26,
+        "reports": 23,
+        "duration_months": 72,
+        "user_volume_per_month": 60,
+        "intrinsic_quality": "marked main loop walk through old-growth kauri",
+        "events_timeline": [
+          "Month 1 (2017): mark celebrates loop, 26 likes",
+          "Month 8 (2018): DOC announces full closure of inner loop",
+          "Month 9: walker reports 'gates locked, redirected'",
+          "Month 18: 14 reports cumulative"
+        ],
+        "edge_case_flag": "long_closure|kauri_dieback|conservation_priority"
+      }
+    },
+    {
+      "id": 361,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "17:11 (1.5:1) 全部 booking 失效新 report,向下急转 SUSPICIOUS",
+      "case_data": {
+        "title": "Nelson Lakes Lake Angelus Hut — booking moved from DOC to private 2021",
+        "type": "supply",
+        "likes": 17,
+        "reports": 11,
+        "duration_months": 40,
+        "user_volume_per_month": 22,
+        "intrinsic_quality": "marked DOC booking process for the Robert Ridge route hut",
+        "events_timeline": [
+          "Month 1: mark with old DOC booking instructions, 17 likes",
+          "Month 14 (2021): DOC booking platform migration",
+          "Month 16: walker reports 'old link doesn't work'",
+          "Month 22: 5 more reports about broken booking flow"
+        ],
+        "edge_case_flag": "system_migration|booking_link|partial_truth"
+      }
+    },
+    {
+      "id": 362,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "11:9 (1.2:1) Cyclone 后河床变化 9 条 unanimous 报 + 安全风险类型,向下急转",
+      "case_data": {
+        "title": "Hawkes Bay Tukituki River — Gabrielle silt deposits made ford treacherous",
+        "type": "danger",
+        "likes": 11,
+        "reports": 9,
+        "duration_months": 36,
+        "user_volume_per_month": 14,
+        "intrinsic_quality": "originally marked 'safe ankle-deep ford summer'",
+        "events_timeline": [
+          "Month 1-22 (pre-Gabrielle): mark accurate, 11 likes",
+          "Month 23 (Feb 2023): Cyclone Gabrielle, river reshaped",
+          "Month 25: walker reports 'unstable silt, sucked my boot off'",
+          "Month 28: another reports 'now thigh-deep, not ankle'"
+        ],
+        "edge_case_flag": "cyclone_silt|riverbed_change|safety_critical"
+      }
+    },
+    {
+      "id": 363,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "28:17 (1.6:1) 政策变更 17 条狗禁 report 构成趋势,向下急转",
+      "case_data": {
+        "title": "Tawharanui Regional Park — Auckland Council restricted dogs 2022, mark says OK",
+        "type": "junction",
+        "likes": 28,
+        "reports": 17,
+        "duration_months": 48,
+        "user_volume_per_month": 75,
+        "intrinsic_quality": "old mark said 'dogs on leash welcome on coastal section'",
+        "events_timeline": [
+          "Month 1 (2020): mark welcomes leashed dogs, 28 likes",
+          "Month 24 (2022): kiwi reintroduction, dog ban announced",
+          "Month 26: dog walker reports 'turned away at gate, mark wrong'",
+          "Month 30: 9 more reports same issue"
+        ],
+        "edge_case_flag": "policy_change|conservation|dogs_banned"
+      }
+    },
+    {
+      "id": 364,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "19:13 (1.46:1) 13 条 boat 链接关闭 report+stranding 风险高严重度,向下急转",
+      "case_data": {
+        "title": "Otago Roxburgh Gorge Trail — section closed 2023 due to private land dispute",
+        "type": "junction",
+        "likes": 19,
+        "reports": 13,
+        "duration_months": 30,
+        "user_volume_per_month": 32,
+        "intrinsic_quality": "marked the boat-link transfer required between sections",
+        "events_timeline": [
+          "Month 1-18: mark useful, 19 likes from cyclists",
+          "Month 19 (2023): landowner dispute, jet boat link suspended",
+          "Month 20: cyclist reports 'no boat available, stuck'",
+          "Month 22: trail trust posts indefinite closure of link"
+        ],
+        "edge_case_flag": "land_access|private_dispute|stranding_risk"
+      }
+    },
+    {
+      "id": 365,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "65:24 (2.7:1) 比例尚可但 Month 31 后 24 条全部新近 unanimous,近期向下急转",
+      "case_data": {
+        "title": "Wellington Mt Victoria summit toilets — removed 2024, mark says open",
+        "type": "supply",
+        "likes": 65,
+        "reports": 24,
+        "duration_months": 36,
+        "user_volume_per_month": 200,
+        "intrinsic_quality": "marked WCC public toilet at summit lookout",
+        "events_timeline": [
+          "Month 1-30: mark accurate, 65 likes",
+          "Month 31 (2024): WCC removes toilet for lookout redesign",
+          "Month 32: tourist reports 'no toilet here, awkward'",
+          "Month 33: 14 more reports"
+        ],
+        "edge_case_flag": "facility_removed|temporary_gap|like_loyalty_trap"
+      }
+    },
+    {
+      "id": 366,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "24:8 (3:1) 比例尚可但 Month 19 后 8 条全部新近 location-wrong,近期向下急转",
+      "case_data": {
+        "title": "Hauraki Rail Trail Paeroa café — moved location 100m, mark unchanged",
+        "type": "supply",
+        "likes": 24,
+        "reports": 8,
+        "duration_months": 24,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "popular cyclist refuel stop with marked exact location",
+        "events_timeline": [
+          "Month 1-18: mark accurate, 24 likes 'great pies'",
+          "Month 19 (2024): café moves to bigger venue 100m east",
+          "Month 20: cyclist reports 'mark points at empty old shop'",
+          "Month 21: 4 more 'café is up the road now'"
+        ],
+        "edge_case_flag": "small_relocation|same_business|coordinate_drift"
+      }
+    },
+    {
+      "id": 367,
+      "final_state": "dead_sick",
+      "final_lifespan": "expired",
+      "source": "pass1",
+      "rationale": "80:38 (2.1:1) 长期累积 38 条 cumulative+shuttle-only 强制+高流量 cost-of-failure,sick_death",
+      "case_data": {
+        "title": "Tongariro Crossing Mangatepopo carpark — shuttle-only since 2017, mark says drive",
+        "type": "junction",
+        "likes": 80,
+        "reports": 38,
+        "duration_months": 80,
+        "user_volume_per_month": 600,
+        "intrinsic_quality": "marked as 'self-drive parking, arrive early'",
+        "events_timeline": [
+          "Month 1 (2017): mark says drive yourself, 80 likes (huge popularity)",
+          "Month 6 (2017): 4-hour limit introduced, mark slowly diverges",
+          "Month 24: 8 reports about ticketing",
+          "Month 60 (2023): full shuttle-only enforcement, no public driving"
+        ],
+        "edge_case_flag": "high_traffic|policy_evolution|cost_of_failure"
+      }
+    },
+    {
+      "id": 368,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "26:12 (2.2:1) Month 23 后 12 条 unanimous slip 报,向下急转",
+      "case_data": {
+        "title": "Wairarapa Putangirua Pinnacles — slip in 2023 closed direct route",
+        "type": "scenic",
+        "likes": 26,
+        "reports": 12,
+        "duration_months": 30,
+        "user_volume_per_month": 45,
+        "intrinsic_quality": "marked the LOTR-famous riverbed walk to pinnacles",
+        "events_timeline": [
+          "Month 1-22: mark accurate, 26 likes 'wow LOTR vibes'",
+          "Month 23 (2023): slip blocks riverbed approach",
+          "Month 24: walker reports 'huge slip, riverbed impassable'",
+          "Month 26: DOC closes direct route, signs ridge alternative"
+        ],
+        "edge_case_flag": "access_change|attraction_intact|route_closure"
+      }
+    },
+    {
+      "id": 369,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "56:14 (4:1) 比例尚可但 Month 19 后 14 条全部新近 closure unanimous,近期向下急转",
+      "case_data": {
+        "title": "West Coast Lake Matheson café — closed for renovation Apr 2024, indefinite",
+        "type": "supply",
+        "likes": 56,
+        "reports": 14,
+        "duration_months": 24,
+        "user_volume_per_month": 180,
+        "intrinsic_quality": "marked iconic post-walk café with mountain reflection view",
+        "events_timeline": [
+          "Month 1-18: mark very useful, 56 likes",
+          "Month 19 (Apr 2024): closure for reno, sign on door 'closed for upgrades'",
+          "Month 20: tourist reports 'closed, no estimate'",
+          "Month 21: 8 more reports same"
+        ],
+        "edge_case_flag": "indefinite_closure|reno|unanimous_recent"
+      }
+    },
+    {
+      "id": 371,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "17:9 (1.9:1) Month 25 后 9 条全 fence-blocked,向下急转",
+      "case_data": {
+        "title": "Banks Peninsula Akaroa Crater Rim — fenced 2023 for ecological restoration",
+        "type": "scenic",
+        "likes": 17,
+        "reports": 9,
+        "duration_months": 32,
+        "user_volume_per_month": 22,
+        "intrinsic_quality": "panoramic crater walk, marked open ridge",
+        "events_timeline": [
+          "Month 1-24: mark accurate, 17 likes",
+          "Month 25 (2023): landowner fences ridge for replanting",
+          "Month 26: walker reports 'new fence, no through-route'",
+          "Month 28: 5 more reports same"
+        ],
+        "edge_case_flag": "private_land_fenced|conservation|access_lost"
+      }
+    },
+    {
+      "id": 372,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass1",
+      "rationale": "78:32 (2.4:1) Month 13 后 32 条全部 closure unanimous+12 月最低关闭,近期向下急转",
+      "case_data": {
+        "title": "Hokitika Gorge swing bridge — closed 2024 for engineering inspection",
+        "type": "junction",
+        "likes": 78,
+        "reports": 32,
+        "duration_months": 18,
+        "user_volume_per_month": 320,
+        "intrinsic_quality": "marked the iconic blue-water bridge crossing",
+        "events_timeline": [
+          "Month 1-12: mark hugely popular, 78 likes 'turquoise water!'",
+          "Month 13 (Mar 2024): DOC closes bridge for engineering",
+          "Month 14: tourist reports 'closed, only platform view'",
+          "Month 15: 18 reports same week"
+        ],
+        "edge_case_flag": "engineering_closure|tourist_hotspot|long_duration"
+      }
+    },
+    {
+      "id": 373,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass1",
+      "rationale": "12:7 (1.7:1) 7 条 FCFS 政策变更 unanimous,向下急转",
+      "case_data": {
+        "title": "Stewart Island Mason Bay hut — DOC moved bookable section 2022",
+        "type": "supply",
+        "likes": 12,
+        "reports": 7,
+        "duration_months": 36,
+        "user_volume_per_month": 8,
+        "intrinsic_quality": "marked DOC bookable bunks vs first-come section",
+        "events_timeline": [
+          "Month 1-18: mark accurate about FCFS section, 12 likes",
+          "Month 19 (2022): DOC removes FCFS section, all bookable",
+          "Month 22: tramper reports 'showed up, no FCFS bunks anymore'",
+          "Month 26: 4 reports same"
+        ],
+        "edge_case_flag": "booking_policy|stewart_island|committing_tramp"
+      }
+    },
+    {
+      "id": 374,
+      "final_state": "dead_sick",
+      "final_lifespan": "expired",
+      "source": "pass1",
+      "rationale": "29:14 (2.1:1) Month 21 后 14 条+5+ 年不重建+forestry harvest 永久消失,sick_death",
+      "case_data": {
+        "title": "Rotorua Whakarewarewa Forest — Crankworx zone closed cycling route 2024",
+        "type": "junction",
+        "likes": 29,
+        "reports": 14,
+        "duration_months": 26,
+        "user_volume_per_month": 55,
+        "intrinsic_quality": "marked one of the original Crankworx-era cycling lines",
+        "events_timeline": [
+          "Month 1-20: mark popular among MTBers, 29 likes",
+          "Month 21 (2024): Timberlands harvest operations begin",
+          "Month 22: rider reports 'trees down, line gone'",
+          "Month 23: forestry posts area closure notices"
+        ],
+        "edge_case_flag": "forestry_harvest|long_term_loss|safety_zone"
+      }
+    }
+  ]
+}

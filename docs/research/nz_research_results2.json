@@ -1,0 +1,1104 @@
+[
+  {
+    "success": true,
+    "query": "DOC New Zealand orange triangle track marker iconic design",
+    "content": "**Anthropic发布实验性AI设计工具Claude Design,由Opus 4.7驱动瞄准非专业用户** (2026-04-19)\n<p>[title-triangle]发布时机与产品定位</p>\n<p>2026年4月17日,Anthropic正式宣布推出实验性AI设计工具Claude Design｡该产品由同日上线的Opus 4.7模型驱动,是Anthropic Labs团队打造的新品｡恰在此前三天,Anthropic首席产品官Mike Krieger于4月14日辞去了设计软件公司Figma的董事会职务｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_22769e4a02d80165\n\n**德古拉之怒** (2024-07-09)\n\"德古拉之怒是Fantasy Flight Games公司于2006年发行的桌面游戏,英文名Fury of Dracula,是以吸血鬼德古拉的传说为背景的游戏｡游戏简介吸血鬼德古拉的传说大家耳熟能详,游戏根据中世纪瓦拉几亚大公弗拉德三世为原型在1897年所创作的同名小说｡游戏在小说结束八年后展开,当年除掉德古拉的英雄们得到德古拉仍然在世的消息;\nSource: https://baike.baidu.com/item/%E5%BE%B7%E5%8F%A4%E6%8B%89%E4%B9%8B%E6%80%92/4457870\n\n**banner图** (2025-09-08)\nfmt=jpg&size=466&h=625&w=2000&ppv=1' data-aigc-mark='0'/></p>\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_04268bea39769752\n\n**FX Maker** (2023-11-03)\n\"FX Maker适用于Unity 3.5.3或更高版本｡包含的资源:300个特效,300个纹理,100个网格,100个曲线动画｡产品说明1.2.FX Maker包含300个特效Prefabs｡3.已经为移动设备进行了优化｡FX Maker是用来产生特效的工具(创建､查看､分析､测试)｡4.支持BuildSprite功能,可以把数百个三角形转化为仅仅2个三角形｡5.\nSource: https://baike.baidu.com/item/FX%20Maker/4237543\n\n**2014格莱美奖** (2024-09-27)\n\"2014格莱美奖,是指2014年度第56届格莱美音乐奖｡格莱美奖(英语:Grammy Awards),是美国录音界与音乐界最重要的奖项之一,由录音学院(Recording Academy)负责颁发｡简介第56届格莱美奖的提名于美国时间2013年12月6日晚新鲜出炉,收获了包括“最佳说唱专辑”在内的九项提名,成为本届格莱美得到提名最多的音乐人,而说唱音乐人Macklemore & \nSource: https://baike.sogou.com/v65688226.htm\n\n**嘉阳爱子** (2024-11-19)\n\"姓名 嘉阳爱子 假名 かよ あいこ 罗马字 Kayo Aiko 身高:154cm 鞋码:22cm 血型:A型 出身地:神奈川 兴趣:音乐鉴赏,唱卡拉OK 想要成为的榜样:浜崎步 喜欢的食物:鸡素烧·煎鸡蛋·草莓·酸奶 喜欢的电影:《在世界的中心呼唤爱》､《蜘蛛侠1､2》､《黑客帝国》 座右铭: Love &amp; Peace 嘉陽愛子(1985年12月11日-), 是一名日本女性歌手｡\nSource: https://baike.sogou.com/v6318398.htm\n\n**ControlCollection.AddBookmark Method (Microsoft.Office.Tools.Word)  Microsoft Learn** (2024-02-26)\n询问 Learn 询问 Learn 焦点模式 语言 csharp vb fsharp cpp 目录 使用英语阅读 添加 添加到计划 编辑 复制 Markdown 打印 注意 访问此页面需要授权｡ 可以尝试登录或 更改目录 ｡ 访问此页面需要授权｡ 可以尝试 更改目录 ｡ Collection. Add Bookmark Method Definition Namespace: \nSource: http://msdn.microsoft.com/zh-cn/library/microsoft.office.tools.word.controlcollection.addbookmark\n\n**banner** (2025-09-03)\n<p>xgf</p><p><img src='http://qqpublic.qpic.cn/qq_public/0/28-1025716382-5780F3FF228815B6215C1F9087E79116/0?fmt=png&size=1669&h=898&w=1920&ppv=1' \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_48668b7d3f191752\n\n**Range.BookmarkID 属性 (Word)** (2016-08-12)\n 编号或书签对应于书签在文档中的位置:1 对应于第一个书签,2 对应于第二个,以此类推｡ VBA Set myRange = ActiveDocument.Content myRange.Collapse Direction:=wdCollapseStart If myRange.BookmarkID = 0 Then ActiveDocument.Bookmarks.Add Name:=\"temp\", Range:=myRange End If 显示: 继承 保护\nSource: http://msdn.microsoft.com/ZH-cn/LIBRARY/ff845646\n\n**ControlCollection.AddBookmark 方法 (Range, String) (Microsoft.Office.Tools.Word)** (2016-10-20)\nControlCollection AddBookmark 方法 程序集:  Microsoft.Office.Tools.Word(Microsoft.Office.Tools.Word.dll 中) Bookmark AddBookmark( Range range, string name) Bookmark^ AddBookmark( Range^ range, String^ name) abstract AddBookmark : range:Range * name:string -> Bookmark Function AddBookmark ( range As Range, name As String ) As Bookmark 参数 range 提供控件的边界的Range｡ name 可用于索引ControlCollection实例中控件的名称｡ 返回值 Type: Exception Condition name 或 range 参数为 null ,或者 name 参数长度为零｡ private void WordAddBookmark(){ this .Paragraphs[1].Range.InsertParagraphBefore(); Microsoft.Office.Tools.Word.Bookmark bookmark1 = this .Controls.AddBookmark( this .Paragraphs[1].Range, \nSource: http://msdn.microsoft.com/zh-cn/k0whkc8x(zh-tw,VS.80).aspx\n",
+    "web_references": [
+      {
+        "content": "<p>[title-triangle]发布时机与产品定位</p>\n<p>2026年4月17日,Anthropic正式宣布推出实验性AI设计工具Claude Design｡该产品由同日上线的Opus 4.7模型驱动,是Anthropic Labs团队打造的新品｡恰在此前三天,Anthropic首席产品官Mike Krieger于4月14日辞去了设计软件公司Figma的董事会职务｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_22769e4a02d80165",
+        "media": "企鹅号",
+        "publish_date": "2026-04-19",
+        "refer": "ref_1",
+        "title": "Anthropic发布实验性AI设计工具Claude Design,由Opus 4.7驱动瞄准非专业用户"
+      },
+      {
+        "content": "\"德古拉之怒是Fantasy Flight Games公司于2006年发行的桌面游戏,英文名Fury of Dracula,是以吸血鬼德古拉的传说为背景的游戏｡游戏简介吸血鬼德古拉的传说大家耳熟能详,游戏根据中世纪瓦拉几亚大公弗拉德三世为原型在1897年所创作的同名小说｡游戏在小说结束八年后展开,当年除掉德古拉的英雄们得到德古拉仍然在世的消息;",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E5%BE%B7%E5%8F%A4%E6%8B%89%E4%B9%8B%E6%80%92/4457870",
+        "media": "百度百科",
+        "publish_date": "2024-07-09",
+        "refer": "ref_2",
+        "title": "德古拉之怒"
+      },
+      {
+        "content": "fmt=jpg&size=466&h=625&w=2000&ppv=1' data-aigc-mark='0'/></p>",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_04268bea39769752",
+        "media": "企鹅号",
+        "publish_date": "2025-09-08",
+        "refer": "ref_3",
+        "title": "banner图"
+      },
+      {
+        "content": "\"FX Maker适用于Unity 3.5.3或更高版本｡包含的资源:300个特效,300个纹理,100个网格,100个曲线动画｡产品说明1.2.FX Maker包含300个特效Prefabs｡3.已经为移动设备进行了优化｡FX Maker是用来产生特效的工具(创建､查看､分析､测试)｡4.支持BuildSprite功能,可以把数百个三角形转化为仅仅2个三角形｡5.",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/FX%20Maker/4237543",
+        "media": "百度百科",
+        "publish_date": "2023-11-03",
+        "refer": "ref_4",
+        "title": "FX Maker"
+      },
+      {
+        "content": "\"2014格莱美奖,是指2014年度第56届格莱美音乐奖｡格莱美奖(英语:Grammy Awards),是美国录音界与音乐界最重要的奖项之一,由录音学院(Recording Academy)负责颁发｡简介第56届格莱美奖的提名于美国时间2013年12月6日晚新鲜出炉,收获了包括“最佳说唱专辑”在内的九项提名,成为本届格莱美得到提名最多的音乐人,而说唱音乐人Macklemore & ",
+        "icon": "",
+        "link": "https://baike.sogou.com/v65688226.htm",
+        "media": "搜狗百科",
+        "publish_date": "2024-09-27",
+        "refer": "ref_5",
+        "title": "2014格莱美奖"
+      },
+      {
+        "content": "\"姓名 嘉阳爱子 假名 かよ あいこ 罗马字 Kayo Aiko 身高:154cm 鞋码:22cm 血型:A型 出身地:神奈川 兴趣:音乐鉴赏,唱卡拉OK 想要成为的榜样:浜崎步 喜欢的食物:鸡素烧·煎鸡蛋·草莓·酸奶 喜欢的电影:《在世界的中心呼唤爱》､《蜘蛛侠1､2》､《黑客帝国》 座右铭: Love &amp; Peace 嘉陽愛子(1985年12月11日-), 是一名日本女性歌手｡",
+        "icon": "",
+        "link": "https://baike.sogou.com/v6318398.htm",
+        "media": "搜狗百科",
+        "publish_date": "2024-11-19",
+        "refer": "ref_6",
+        "title": "嘉阳爱子"
+      },
+      {
+        "content": "询问 Learn 询问 Learn 焦点模式 语言 csharp vb fsharp cpp 目录 使用英语阅读 添加 添加到计划 编辑 复制 Markdown 打印 注意 访问此页面需要授权｡ 可以尝试登录或 更改目录 ｡ 访问此页面需要授权｡ 可以尝试 更改目录 ｡ Collection. Add Bookmark Method Definition Namespace: ",
+        "icon": "",
+        "link": "http://msdn.microsoft.com/zh-cn/library/microsoft.office.tools.word.controlcollection.addbookmark",
+        "media": "",
+        "publish_date": "2024-02-26",
+        "refer": "ref_7",
+        "title": "ControlCollection.AddBookmark Method (Microsoft.Office.Tools.Word)  Microsoft Learn"
+      },
+      {
+        "content": "<p>xgf</p><p><img src='http://qqpublic.qpic.cn/qq_public/0/28-1025716382-5780F3FF228815B6215C1F9087E79116/0?fmt=png&size=1669&h=898&w=1920&ppv=1' ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_48668b7d3f191752",
+        "media": "企鹅号",
+        "publish_date": "2025-09-03",
+        "refer": "ref_8",
+        "title": "banner"
+      },
+      {
+        "content": " 编号或书签对应于书签在文档中的位置:1 对应于第一个书签,2 对应于第二个,以此类推｡ VBA Set myRange = ActiveDocument.Content myRange.Collapse Direction:=wdCollapseStart If myRange.BookmarkID = 0 Then ActiveDocument.Bookmarks.Add Name:=\"temp\", Range:=myRange End If 显示: 继承 保护",
+        "icon": "",
+        "link": "http://msdn.microsoft.com/ZH-cn/LIBRARY/ff845646",
+        "media": "",
+        "publish_date": "2016-08-12",
+        "refer": "ref_9",
+        "title": "Range.BookmarkID 属性 (Word)"
+      },
+      {
+        "content": "ControlCollection AddBookmark 方法 程序集:  Microsoft.Office.Tools.Word(Microsoft.Office.Tools.Word.dll 中) Bookmark AddBookmark( Range range, string name) Bookmark^ AddBookmark( Range^ range, String^ name) abstract AddBookmark : range:Range * name:string -> Bookmark Function AddBookmark ( range As Range, name As String ) As Bookmark 参数 range 提供控件的边界的Range｡ name 可用于索引ControlCollection实例中控件的名称｡ 返回值 Type: Exception Condition name 或 range 参数为 null ,或者 name 参数长度为零｡ private void WordAddBookmark(){ this .Paragraphs[1].Range.InsertParagraphBefore(); Microsoft.Office.Tools.Word.Bookmark bookmark1 = this .Controls.AddBookmark( this .Paragraphs[1].Range, ",
+        "icon": "",
+        "link": "http://msdn.microsoft.com/zh-cn/k0whkc8x(zh-tw,VS.80).aspx",
+        "media": "",
+        "publish_date": "2016-10-20",
+        "refer": "ref_10",
+        "title": "ControlCollection.AddBookmark 方法 (Range, String) (Microsoft.Office.Tools.Word)"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "doc new zealand orange triangle track marker iconic design",
+        "query": "DOC New Zealand orange triangle track marker iconic design"
+      }
+    ],
+    "latency_seconds": 1.67,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "New Zealand outdoor app AllTrails competitors Topo NZ Maps",
+    "content": "**Topo Maps of New Zealand - MapToaster NZ Topographical Maps for your PC and Garmin GPS** (2026-02-03)\nTopographical Maps of New Zealand MapToaster Topo New Zealand is New Zealand's only topographical mapping suite, with options for your computer, GPS and iPhone/iPad, including all the rich detail of the LINZ topo maps - seamless across NZ. Now includes Topo50 and Topo250 map series. 1:50,000 though 1:2 million scale maps on your PC and iPhone/iPad and 1:50,000 on your GPS integrated aerial and satellite imagery with transparent topomap overlays , included as standard on your PC easy-to-use software proven and widely-used technology incredibly friendly and helpful technical support Every day ... MapToaster is helping people plan their \nSource: http://www.maptoaster.com/\n\n**iHikeGPS NZ : LINZ Topo Maps App - App Store** (2025-11-10)\niHikeGPS NZ : LINZ Topo Maps 导航 ¥22.00 分享 年龄 iPhone､iPad Unleash the navigation potential of your iPhone or iPad with iHikeGPS NZ! Turn your device into a high-performance GPS receiver with the official LINZ New Zealand topo maps. These maps have many valuable back country details to keep you informed and safe.Even in remote areas witheen, where you are, and where you’re going. Experience the ultimate hiking companion, offering unparalleled track recording, route navigation, and accurate Estimated Time of Arrival.One Low Price! Everything included. No sign-ups, ads, subscriptions or in-app purchases. Completely respects your privacy.Discover \nSource: https://itunes.apple.com/cn/app/ihikegps-nz-new-zealand-topo/id490570230?mt=8\n\n**NewZealandMapsAPP下载安装_2026最新正版手机免费下载_25PP** (2026-04-14)\n系统工具 | 835KB 安装豌豆荚 下载相似应用 版本 8.3.10.0 要求 Android 4.0.2 以上 查看权限要求 隐私政策 APP 豌豆荚 精品推荐 8422.3万 人下载 1298.8万 人下载 2698.5万 人下载 8344.9万 人下载 应用 介绍 用户点评 相关应用 加速器下载 应用 介绍 New Zealand Maps 应用 简介 This plugin adds \nSource: https://www.25pp.com/xiazai/795659/\n\n**【newzealand】什么意思_英语newzealand的翻译_音标_读音_用法_例句_在线翻译_有道词典** (2026-05-08)\nnewzealand 网络释义 纽西兰 ... NetherlandsAntilles荷属安的列斯群岛 NewZealand纽西兰 Niger尼日尔 ... 基于502个网页-相关网页 新西兰 新西兰｡中文名称:新西兰英文名称:NewZealand简称:新西兰首都:惠灵顿新西兰 纽西兰 本来就是国家 首都lwellington惠灵顿呃,根据货币上写的:新西兰伊丽莎白二世 2006 \nSource: https://dict.youdao.com/w/newzealand/\n\n**New Zealand Offline Map and Travel Trip Guide App - App Store** (2017-09-09)\n100% OFFLINE - Your detailed Map for reach everywhere. Save much money in Roaming cost. Reach every place easily in Navigation mode. Find the best place around you.100% OFFLINE - IT WORKS ANYTIME, ANYWHERE.- No Internet connection required.- No international roaming cost.- Long life of your data plan when you use in your Country.VERY DETAILED MAPS- Vector map that you can zoom at any level. Updated with free continuous updates from OpenStreetMap.- Compass and rotation maps with very high details and beautiful colours.- Street names and Places are displayed both in local language and in default phone language. POWERFUL SEARCH- Powerful Search \nSource: https://itunes.apple.com/cn/app/new-zealand-offline-map-travel/id1177537965?l=en&platform=iphone\n\n**Instagram推出地图功能挑战Snapchat社交版图** (2025-08-08)\n<p>Instagram正在推出全新的\"Instagram地图\"功能,允许用户与他人分享最近的活跃位置并发现基于位置的内容｡这家Meta旗下的社交网络还同时推出了转发功能,并将Reels中的\"好友\"标签页在全球范围内上线｡</p><p>通过这个新的地图功能,Instagram再次复制Snapchat的热门功能,继2016年克隆其核心Stories功能后又一次直接竞争｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_57668955d2621652\n\n**New Zealand Travel and New Zealand Business - The official website for New Zealand** (2026-05-08)\nKia Ora Welcome to New Zealand Our official guides Visit > Explore New Zealand destinations and activities and plan the trip of a lifetime Live and Work > Discover what you need to know about living, working and moving to New Zealand Study > Looking to study or currently studying in New Zealand Business > Grow your business with New Zealand products, services and investment opportunities Business > Learn about: Investment opportunities in New Zealand Discover New Zealand products and services Fernmark The New Zealand FernMark Licence Programme Learn about the FernMark Licence Programme > Building a nation of story tellers 沪ICP备10010729号\nSource: http://www.newzealand.com/\n\n**Recommended apps  100% Pure New Zealand** (2025-10-10)\nDiscover the best of New Zealand, Wellington By Mike Heydon Make the most of your time in New Zealand by downloading some of the best travel planning apps. Whether you are planning your trip or ready to book, use these top apps to find everything you need. Most are even available offline. Trip planning apps MetService Plan ahead with detailed weather, snow and marine forecasts of New Zealand’s towns and cities, also available offline. MetService provides information on hourly, daily and 10 day weather forecasts to help you best prepare. Google Maps Navigate New Zealand with voice-guided maps from Google using real-time GPS, accurate driving times and distances, automatic re-routing and live traffic reports. Download a map to use offline later. Air New Zealand Check out the latest travel deals and book international and domestic flights. You can also book rental cars, accommodation, activities and valet parking. See your Airpoints balance and test your general knowledge with the trivia \nSource: https://www.newzealand.com/us/feature/recommended-apps/\n\n**AllTrails: Hike, Bike & Run App - App Store** (2023-11-12)\nHiking & Biking GPS Trail Maps Free · In-App Purchases Share iPhone, Apple Watch Whether you hike, bike, run, or walk, AllTrails is your companion and guide to the outdoors. Find detailed reviews and inspiration from a community of trailgoers like you. We’ll help you plan, live, and share your outdoor adventures.AllTrails offers more than a running app or fitness activity tracker. It helps you discover dog-friendly, child-friendly, pram-friendly, or wheelchair-friendly trails, and more with turn-by-turn navigation to guide you through it. Discover trails: Search over 500,000 trails around the world by location, interest, skill level, and more. Plan your next adventure: Get les and complications to start and monitor your activities. Find points of interest: Discover waterfalls, historic sites,  photo spots, and more along the trail. Grow your community: Celebrate outdoorend less time figuring out where you want to be, and more time enjoying where you are. With offline maps, wrong-turn a\nSource: https://apps.apple.com/au/app/alltrails-hike-bike-run/id405075943\n\n**New Zealand Traveller Declaration App  NZTD  New Zealand Traveller Declaration** (2026-05-08)\nThe NZTD app is free and includes the following features: You can use it to scan your passport details directly into your declaration. You can also create a profile, so it's easier to use next time. If you’re travelling as a family or group and completing multiple declarations, you can select to copy your travel details into another declaration/s. All submitted declarations will display together in the app. You can use the app in offline mode and save your declaration, which you can then submit at a later time when you are back online. The app is available in multiple languages which can be selected from the menu bar on the app homepage. Answers must be in English. For a full list of languages available, see the support and resources page . Please note: The NZTD app may not be available in some international regions that use app/app-store blocking. Travellers can still complete a digital declaration using the online form . For maritime travellers, the NZTD app is only available to trav\nSource: https://www.travellerdeclaration.govt.nz/nztd-app/\n",
+    "web_references": [
+      {
+        "content": "Topographical Maps of New Zealand MapToaster Topo New Zealand is New Zealand's only topographical mapping suite, with options for your computer, GPS and iPhone/iPad, including all the rich detail of the LINZ topo maps - seamless across NZ. Now includes Topo50 and Topo250 map series. 1:50,000 though 1:2 million scale maps on your PC and iPhone/iPad and 1:50,000 on your GPS integrated aerial and satellite imagery with transparent topomap overlays , included as standard on your PC easy-to-use software proven and widely-used technology incredibly friendly and helpful technical support Every day ... MapToaster is helping people plan their ",
+        "icon": "",
+        "link": "http://www.maptoaster.com/",
+        "media": "",
+        "publish_date": "2026-02-03",
+        "refer": "ref_1",
+        "title": "Topo Maps of New Zealand - MapToaster NZ Topographical Maps for your PC and Garmin GPS"
+      },
+      {
+        "content": "iHikeGPS NZ : LINZ Topo Maps 导航 ¥22.00 分享 年龄 iPhone､iPad Unleash the navigation potential of your iPhone or iPad with iHikeGPS NZ! Turn your device into a high-performance GPS receiver with the official LINZ New Zealand topo maps. These maps have many valuable back country details to keep you informed and safe.Even in remote areas witheen, where you are, and where you’re going. Experience the ultimate hiking companion, offering unparalleled track recording, route navigation, and accurate Estimated Time of Arrival.One Low Price! Everything included. No sign-ups, ads, subscriptions or in-app purchases. Completely respects your privacy.Discover ",
+        "icon": "",
+        "link": "https://itunes.apple.com/cn/app/ihikegps-nz-new-zealand-topo/id490570230?mt=8",
+        "media": "",
+        "publish_date": "2025-11-10",
+        "refer": "ref_2",
+        "title": "iHikeGPS NZ : LINZ Topo Maps App - App Store"
+      },
+      {
+        "content": "系统工具 | 835KB 安装豌豆荚 下载相似应用 版本 8.3.10.0 要求 Android 4.0.2 以上 查看权限要求 隐私政策 APP 豌豆荚 精品推荐 8422.3万 人下载 1298.8万 人下载 2698.5万 人下载 8344.9万 人下载 应用 介绍 用户点评 相关应用 加速器下载 应用 介绍 New Zealand Maps 应用 简介 This plugin adds ",
+        "icon": "",
+        "link": "https://www.25pp.com/xiazai/795659/",
+        "media": "PP助手",
+        "publish_date": "2026-04-14",
+        "refer": "ref_3",
+        "title": "NewZealandMapsAPP下载安装_2026最新正版手机免费下载_25PP"
+      },
+      {
+        "content": "newzealand 网络释义 纽西兰 ... NetherlandsAntilles荷属安的列斯群岛 NewZealand纽西兰 Niger尼日尔 ... 基于502个网页-相关网页 新西兰 新西兰｡中文名称:新西兰英文名称:NewZealand简称:新西兰首都:惠灵顿新西兰 纽西兰 本来就是国家 首都lwellington惠灵顿呃,根据货币上写的:新西兰伊丽莎白二世 2006 ",
+        "icon": "",
+        "link": "https://dict.youdao.com/w/newzealand/",
+        "media": "有道",
+        "publish_date": "2026-05-08",
+        "refer": "ref_4",
+        "title": "【newzealand】什么意思_英语newzealand的翻译_音标_读音_用法_例句_在线翻译_有道词典"
+      },
+      {
+        "content": "100% OFFLINE - Your detailed Map for reach everywhere. Save much money in Roaming cost. Reach every place easily in Navigation mode. Find the best place around you.100% OFFLINE - IT WORKS ANYTIME, ANYWHERE.- No Internet connection required.- No international roaming cost.- Long life of your data plan when you use in your Country.VERY DETAILED MAPS- Vector map that you can zoom at any level. Updated with free continuous updates from OpenStreetMap.- Compass and rotation maps with very high details and beautiful colours.- Street names and Places are displayed both in local language and in default phone language. POWERFUL SEARCH- Powerful Search ",
+        "icon": "",
+        "link": "https://itunes.apple.com/cn/app/new-zealand-offline-map-travel/id1177537965?l=en&platform=iphone",
+        "media": "",
+        "publish_date": "2017-09-09",
+        "refer": "ref_5",
+        "title": "New Zealand Offline Map and Travel Trip Guide App - App Store"
+      },
+      {
+        "content": "<p>Instagram正在推出全新的\"Instagram地图\"功能,允许用户与他人分享最近的活跃位置并发现基于位置的内容｡这家Meta旗下的社交网络还同时推出了转发功能,并将Reels中的\"好友\"标签页在全球范围内上线｡</p><p>通过这个新的地图功能,Instagram再次复制Snapchat的热门功能,继2016年克隆其核心Stories功能后又一次直接竞争｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_57668955d2621652",
+        "media": "企鹅号",
+        "publish_date": "2025-08-08",
+        "refer": "ref_6",
+        "title": "Instagram推出地图功能挑战Snapchat社交版图"
+      },
+      {
+        "content": "Kia Ora Welcome to New Zealand Our official guides Visit > Explore New Zealand destinations and activities and plan the trip of a lifetime Live and Work > Discover what you need to know about living, working and moving to New Zealand Study > Looking to study or currently studying in New Zealand Business > Grow your business with New Zealand products, services and investment opportunities Business > Learn about: Investment opportunities in New Zealand Discover New Zealand products and services Fernmark The New Zealand FernMark Licence Programme Learn about the FernMark Licence Programme > Building a nation of story tellers 沪ICP备10010729号",
+        "icon": "",
+        "link": "http://www.newzealand.com/",
+        "media": "",
+        "publish_date": "2026-05-08",
+        "refer": "ref_7",
+        "title": "New Zealand Travel and New Zealand Business - The official website for New Zealand"
+      },
+      {
+        "content": "Discover the best of New Zealand, Wellington By Mike Heydon Make the most of your time in New Zealand by downloading some of the best travel planning apps. Whether you are planning your trip or ready to book, use these top apps to find everything you need. Most are even available offline. Trip planning apps MetService Plan ahead with detailed weather, snow and marine forecasts of New Zealand’s towns and cities, also available offline. MetService provides information on hourly, daily and 10 day weather forecasts to help you best prepare. Google Maps Navigate New Zealand with voice-guided maps from Google using real-time GPS, accurate driving times and distances, automatic re-routing and live traffic reports. Download a map to use offline later. Air New Zealand Check out the latest travel deals and book international and domestic flights. You can also book rental cars, accommodation, activities and valet parking. See your Airpoints balance and test your general knowledge with the trivia ",
+        "icon": "",
+        "link": "https://www.newzealand.com/us/feature/recommended-apps/",
+        "media": "",
+        "publish_date": "2025-10-10",
+        "refer": "ref_8",
+        "title": "Recommended apps  100% Pure New Zealand"
+      },
+      {
+        "content": "Hiking & Biking GPS Trail Maps Free · In-App Purchases Share iPhone, Apple Watch Whether you hike, bike, run, or walk, AllTrails is your companion and guide to the outdoors. Find detailed reviews and inspiration from a community of trailgoers like you. We’ll help you plan, live, and share your outdoor adventures.AllTrails offers more than a running app or fitness activity tracker. It helps you discover dog-friendly, child-friendly, pram-friendly, or wheelchair-friendly trails, and more with turn-by-turn navigation to guide you through it. Discover trails: Search over 500,000 trails around the world by location, interest, skill level, and more. Plan your next adventure: Get les and complications to start and monitor your activities. Find points of interest: Discover waterfalls, historic sites,  photo spots, and more along the trail. Grow your community: Celebrate outdoorend less time figuring out where you want to be, and more time enjoying where you are. With offline maps, wrong-turn a",
+        "icon": "",
+        "link": "https://apps.apple.com/au/app/alltrails-hike-bike-run/id405075943",
+        "media": "",
+        "publish_date": "2023-11-12",
+        "refer": "ref_9",
+        "title": "AllTrails: Hike, Bike & Run App - App Store"
+      },
+      {
+        "content": "The NZTD app is free and includes the following features: You can use it to scan your passport details directly into your declaration. You can also create a profile, so it's easier to use next time. If you’re travelling as a family or group and completing multiple declarations, you can select to copy your travel details into another declaration/s. All submitted declarations will display together in the app. You can use the app in offline mode and save your declaration, which you can then submit at a later time when you are back online. The app is available in multiple languages which can be selected from the menu bar on the app homepage. Answers must be in English. For a full list of languages available, see the support and resources page . Please note: The NZTD app may not be available in some international regions that use app/app-store blocking. Travellers can still complete a digital declaration using the online form . For maritime travellers, the NZTD app is only available to trav",
+        "icon": "",
+        "link": "https://www.travellerdeclaration.govt.nz/nztd-app/",
+        "media": "",
+        "publish_date": "2026-05-08",
+        "refer": "ref_10",
+        "title": "New Zealand Traveller Declaration App  NZTD  New Zealand Traveller Declaration"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "new zealand app allTrails topo maps",
+        "query": "New Zealand outdoor app AllTrails competitors Topo NZ Maps"
+      }
+    ],
+    "latency_seconds": 1.91,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "kea kiwi tui pukeko native bird colors New Zealand design",
+    "content": "**kiwi是什么意思 kiwi应该是什么意思_伊秀经验** (2021-06-19)\n1､kiwi是什么意思:其实KIWI有3个意思,一个就是新西兰的国鸟,KIWI BIRD,一种没有翅膀咀又尖又长的鸟｡第二个意思就是大家熟悉的奇异果,也叫猕猴桃,这个称之为KIWI FRUIT｡第三种就是纽西兰本地人把他们自己称之为KIWI,他们也喜欢被叫做KIWI,或许是想区别他们的身份跟别人不一样｡ \nSource: https://mip.yxlady.com/jingyan/1014160.shtml\n\n**奇异鸟** (2026-05-18)\n\"奇异鸟(英文名Kiwi)是新西兰的国鸟,也是新西兰国家的标志｡奇异鸟因其尖锐的叫声 “keee-weee”而得名｡ 奇异鸟又被称为几维鸟,因该鸟没有翅膀,因此无法飞行｡形态特征新西兰的国鸟,英文名为Kiwi 怕光,怕吵,喜欢黑暗 是一种非常稀有的鸟类,同样也非常有趣 -只有奇异鸟是世界上在嘴上长了鼻孔的鸟类 -雌鸟拥有世界上最大的蛋 (按身体比例,可能除了蜂鸟) -体型大小与鸡相近 \nSource: https://baike.baidu.com/item/%E5%A5%87%E5%BC%82%E9%B8%9F/4146114\n\n**kiwi是什么意思,kiwi怎么读,kiwi翻译为:[动]鹬鸵,几维鸟, - 听力课堂在线翻译** (2026-05-17)\nkiwi 是什么意思, kiwi 怎么读 语音: 英音 ['ki:wi:] 美音 [ˈkiwi] kiwi 基本解释 n. [动]鹬鸵,几维鸟,新西兰特产,喙长,无翼,不能飞(也是新西兰的国鸟及象征);[植]猕猴桃,奇异果;新西兰人;[植]猕猴桃藤,奇异果藤 adj. 〈非正式〉与新西兰或新西兰人有关的 kiwi 变化形式 复数: kiwis 易混淆的单词: Kiwi 所属分类: TEM8 \nSource: https://fy.tingclass.net/w/kiwi\n\n**新西兰陆均松** (2023-02-09)\n\"新西兰陆均松(学名:Dacrydium cupressinum)是一种大型的常绿树木,是新西兰的特有种｡过去曾广泛称作red pine(中译红松),但这个名字已慢慢由毛利语所起的名字rimu所取代｡形态特征新西兰陆均松是一种生长速度缓慢的树种,目前最高的可达50m,但普遍树种一般只有20至30m高｡虽然在 南岛西岸上有纯林的存在,但它也常突然出现在温带阔叶林内｡\nSource: https://baike.baidu.com/item/%E6%96%B0%E8%A5%BF%E5%85%B0%E9%99%86%E5%9D%87%E6%9D%BE/8321246\n\n**KIWI design在Meta Connect 2024大会上发布\"Made For Meta\"产品配件metakiwiyoutube_网易订阅** (2024-09-26)\n作为高品质XR(扩展现实)配件领域的领先创新者,KIWI design自2023年以来已成功将两款产品纳入\"Made For Meta\"计划｡KIWI design受邀参加Meta Connect 2024大会,并在这场大会上展示了三款新的\"Made For Meta\"产品｡这些创新产品配备了重大升级,旨在提升XR爱好者的沉浸式体验｡根据其官方社交媒体公告,更多产品将在第四季度发布｡Quest \nSource: https://www.163.com/dy/article/JD1PMOBM051494RM.html\n\n**几维鸟:新西兰文化的象征与自然守护者_保护_认同_国家** (2025-02-28)\n在新西兰,当地人常自豪地说:\"我是一只几维鸟(Kiwi)\"｡这句简单的话语不仅传递了新西兰人的身份认同,也象征着几维鸟在他们文化中的特殊地位｡几维鸟,这种小巧可爱的无翼鸟,早已成为新西兰的一张名片,其背后蕴含的深刻意义值得我们细细品味｡ 几维鸟是新西兰特有的物种,学名为鹬鸵,它身材矮小,长长的尖喙和温和的性情使其显得亲切可爱｡由于其叫声似“几维”的缘故,这种鸟得名于此｡\nSource: https://www.sohu.com/a/865099108_121956425\n\n**Kiwi匹配器深度解析:从equal到have的完整使用手册-CSDN博客** (2026-04-17)\nKiwi匹配器深度解析:从equal到have的完整使用手册 【免费下载链接】Kiwi Simple BDD for iOS 项目地址: https://gitcode.com/gh_mirrors/ki/Kiwi Kiwi是iOS开发中功能强大的BDD(行为驱动开发)测试框架,它提供了丰富的匹配器(Matchers)来编写可读性强的测试代码｡\nSource: https://blog.csdn.net/gitblog_00199/article/details/144553845\n\n**Kiwi Cutter切割机设计:BoredEyeDesign... 来自全球工业设计 - 微博** (2024-11-09)\nKiwi Cutter切割机|设计:BoredEyeDesignKiwi Cutter具有双向刀片,可减少因钝而更换刀片的频率｡只需轻轻转动旋钮,即可牢牢锁定刀片,提高切割任务的安全性和效率｡灵感来源于长着喙状刀片的几维鸟｡#仿生设计# \nSource: https://weibo.com/2508371570/OFw7HfIBV\n\n**kiwi的使用安装 - ljbguanli - 博客园** (2017-05-04)\n方案一:能够通过cocoapod来安装kiwi 方案二:通过Kiwi插件地址:http://alcatraz.io出现故障的解决:https://github.com/cikelengfeng/RPAXUwiki 的相关设置链接:https://github.com/kiwi-bdd/Kiwi/wiki/Getting-Started-with-Kiwi-2.0 --- 技能提升 \nSource: https://www.cnblogs.com/ljbguanli/p/6805675.html\n\n**充绒?30个造型15套look,一夸张一实用,11500片“羽毛”演绎愤怒的小鸟Viktor & Rolf 2025秋冬** (2025-12-01)\n<p>2025年7月,巴黎瓦格拉姆大厅的穹顶下,Viktor &amp; Rolf以一场充满矛盾张力的高定秀,再次颠覆了人们对高级定制的固有认知｡这场以《愤怒的小鸟》为名的秋冬系列,既是对童年游戏符号的挪用,亦是对高定本质的哲学叩问——当蓬松的羽毛与极简的剪裁碰撞,当戏谑的命名与经典工艺交织,设计师维科特·霍斯廷(Viktor Horsting)与罗夫·斯诺尔伦(Rolf \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_859692d2da596652\n",
+    "web_references": [
+      {
+        "content": "1､kiwi是什么意思:其实KIWI有3个意思,一个就是新西兰的国鸟,KIWI BIRD,一种没有翅膀咀又尖又长的鸟｡第二个意思就是大家熟悉的奇异果,也叫猕猴桃,这个称之为KIWI FRUIT｡第三种就是纽西兰本地人把他们自己称之为KIWI,他们也喜欢被叫做KIWI,或许是想区别他们的身份跟别人不一样｡ ",
+        "icon": "",
+        "link": "https://mip.yxlady.com/jingyan/1014160.shtml",
+        "media": "",
+        "publish_date": "2021-06-19",
+        "refer": "ref_1",
+        "title": "kiwi是什么意思 kiwi应该是什么意思_伊秀经验"
+      },
+      {
+        "content": "\"奇异鸟(英文名Kiwi)是新西兰的国鸟,也是新西兰国家的标志｡奇异鸟因其尖锐的叫声 “keee-weee”而得名｡ 奇异鸟又被称为几维鸟,因该鸟没有翅膀,因此无法飞行｡形态特征新西兰的国鸟,英文名为Kiwi 怕光,怕吵,喜欢黑暗 是一种非常稀有的鸟类,同样也非常有趣 -只有奇异鸟是世界上在嘴上长了鼻孔的鸟类 -雌鸟拥有世界上最大的蛋 (按身体比例,可能除了蜂鸟) -体型大小与鸡相近 ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E5%A5%87%E5%BC%82%E9%B8%9F/4146114",
+        "media": "百度百科",
+        "publish_date": "2026-05-18",
+        "refer": "ref_2",
+        "title": "奇异鸟"
+      },
+      {
+        "content": "kiwi 是什么意思, kiwi 怎么读 语音: 英音 ['ki:wi:] 美音 [ˈkiwi] kiwi 基本解释 n. [动]鹬鸵,几维鸟,新西兰特产,喙长,无翼,不能飞(也是新西兰的国鸟及象征);[植]猕猴桃,奇异果;新西兰人;[植]猕猴桃藤,奇异果藤 adj. 〈非正式〉与新西兰或新西兰人有关的 kiwi 变化形式 复数: kiwis 易混淆的单词: Kiwi 所属分类: TEM8 ",
+        "icon": "",
+        "link": "https://fy.tingclass.net/w/kiwi",
+        "media": "",
+        "publish_date": "2026-05-17",
+        "refer": "ref_3",
+        "title": "kiwi是什么意思,kiwi怎么读,kiwi翻译为:[动]鹬鸵,几维鸟, - 听力课堂在线翻译"
+      },
+      {
+        "content": "\"新西兰陆均松(学名:Dacrydium cupressinum)是一种大型的常绿树木,是新西兰的特有种｡过去曾广泛称作red pine(中译红松),但这个名字已慢慢由毛利语所起的名字rimu所取代｡形态特征新西兰陆均松是一种生长速度缓慢的树种,目前最高的可达50m,但普遍树种一般只有20至30m高｡虽然在 南岛西岸上有纯林的存在,但它也常突然出现在温带阔叶林内｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E6%96%B0%E8%A5%BF%E5%85%B0%E9%99%86%E5%9D%87%E6%9D%BE/8321246",
+        "media": "百度百科",
+        "publish_date": "2023-02-09",
+        "refer": "ref_4",
+        "title": "新西兰陆均松"
+      },
+      {
+        "content": "作为高品质XR(扩展现实)配件领域的领先创新者,KIWI design自2023年以来已成功将两款产品纳入\"Made For Meta\"计划｡KIWI design受邀参加Meta Connect 2024大会,并在这场大会上展示了三款新的\"Made For Meta\"产品｡这些创新产品配备了重大升级,旨在提升XR爱好者的沉浸式体验｡根据其官方社交媒体公告,更多产品将在第四季度发布｡Quest ",
+        "icon": "",
+        "link": "https://www.163.com/dy/article/JD1PMOBM051494RM.html",
+        "media": "网易",
+        "publish_date": "2024-09-26",
+        "refer": "ref_5",
+        "title": "KIWI design在Meta Connect 2024大会上发布\"Made For Meta\"产品配件metakiwiyoutube_网易订阅"
+      },
+      {
+        "content": "在新西兰,当地人常自豪地说:\"我是一只几维鸟(Kiwi)\"｡这句简单的话语不仅传递了新西兰人的身份认同,也象征着几维鸟在他们文化中的特殊地位｡几维鸟,这种小巧可爱的无翼鸟,早已成为新西兰的一张名片,其背后蕴含的深刻意义值得我们细细品味｡ 几维鸟是新西兰特有的物种,学名为鹬鸵,它身材矮小,长长的尖喙和温和的性情使其显得亲切可爱｡由于其叫声似“几维”的缘故,这种鸟得名于此｡",
+        "icon": "",
+        "link": "https://www.sohu.com/a/865099108_121956425",
+        "media": "搜狐",
+        "publish_date": "2025-02-28",
+        "refer": "ref_6",
+        "title": "几维鸟:新西兰文化的象征与自然守护者_保护_认同_国家"
+      },
+      {
+        "content": "Kiwi匹配器深度解析:从equal到have的完整使用手册 【免费下载链接】Kiwi Simple BDD for iOS 项目地址: https://gitcode.com/gh_mirrors/ki/Kiwi Kiwi是iOS开发中功能强大的BDD(行为驱动开发)测试框架,它提供了丰富的匹配器(Matchers)来编写可读性强的测试代码｡",
+        "icon": "",
+        "link": "https://blog.csdn.net/gitblog_00199/article/details/144553845",
+        "media": "",
+        "publish_date": "2026-04-17",
+        "refer": "ref_7",
+        "title": "Kiwi匹配器深度解析:从equal到have的完整使用手册-CSDN博客"
+      },
+      {
+        "content": "Kiwi Cutter切割机|设计:BoredEyeDesignKiwi Cutter具有双向刀片,可减少因钝而更换刀片的频率｡只需轻轻转动旋钮,即可牢牢锁定刀片,提高切割任务的安全性和效率｡灵感来源于长着喙状刀片的几维鸟｡#仿生设计# ",
+        "icon": "",
+        "link": "https://weibo.com/2508371570/OFw7HfIBV",
+        "media": "微博",
+        "publish_date": "2024-11-09",
+        "refer": "ref_8",
+        "title": "Kiwi Cutter切割机设计:BoredEyeDesign... 来自全球工业设计 - 微博"
+      },
+      {
+        "content": "方案一:能够通过cocoapod来安装kiwi 方案二:通过Kiwi插件地址:http://alcatraz.io出现故障的解决:https://github.com/cikelengfeng/RPAXUwiki 的相关设置链接:https://github.com/kiwi-bdd/Kiwi/wiki/Getting-Started-with-Kiwi-2.0 --- 技能提升 ",
+        "icon": "",
+        "link": "https://www.cnblogs.com/ljbguanli/p/6805675.html",
+        "media": "博客园",
+        "publish_date": "2017-05-04",
+        "refer": "ref_9",
+        "title": "kiwi的使用安装 - ljbguanli - 博客园"
+      },
+      {
+        "content": "<p>2025年7月,巴黎瓦格拉姆大厅的穹顶下,Viktor &amp; Rolf以一场充满矛盾张力的高定秀,再次颠覆了人们对高级定制的固有认知｡这场以《愤怒的小鸟》为名的秋冬系列,既是对童年游戏符号的挪用,亦是对高定本质的哲学叩问——当蓬松的羽毛与极简的剪裁碰撞,当戏谑的命名与经典工艺交织,设计师维科特·霍斯廷(Viktor Horsting)与罗夫·斯诺尔伦(Rolf ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_859692d2da596652",
+        "media": "企鹅号",
+        "publish_date": "2025-12-01",
+        "refer": "ref_10",
+        "title": "充绒?30个造型15套look,一夸张一实用,11500片“羽毛”演绎愤怒的小鸟Viktor & Rolf 2025秋冬"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "kiwi tui pukeko native bird colors new zealand design",
+        "query": "kea kiwi tui pukeko native bird colors New Zealand design"
+      }
+    ],
+    "latency_seconds": 1.87,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "bach gumboots jandals jandal Kiwi slang tiki tour cultural terms",
+    "content": "**Zhengxian Cultural Tourism Week presents tangible and playful ICH feast** (2025-09-18)\nOn September 16th, the 14th Zhengxian Cultural Tourism Week and the 2nd Guangzhou Park (Scenic Area) Culture &amp; Creative Industries Festival officially kicked off in Baiyun Mountain.      \nSource: https://new.qq.com/rain/a/20250918A095QL00\n\n**英国巴斯大学Bath  计算机系统工程学士(荣誉)Computer Systems Engineering BEng (Hons)  课程辅导补习  课程架构全解_知乎** (2023-02-14)\n巴斯 大学(University of Bath),成立于1966年,是一所以科研为导向的英国著名公立 研究型大学 ,学术实力被评定为世界领先｡现为英国GW4联盟成员｡根据英国各媒体公布的 英国大学 排行榜,巴斯大学多次入选英国排行前十的公立研究型大学｡ 下面学姐就带大家详细了解一下 英国巴斯大学计算机系统工程学士(荣誉)Computer Systems Engineering BEng \nSource: https://zhuanlan.zhihu.com/p/606162071\n\n**Traditional dragon boat events spur Guangdong's cultural tourism economy** (2025-06-05)\n<p>During the recent Dragon Boat Festival holiday, Guangdong's tourism market was fueled by a focus on folk cultural experiences. The province saw a surge in tourism driven by dragon boat races and \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_2016841b00e93052\n\n**Baskets pour fille pas chères - Chaussea** (2024-01-03)\nBienvenue sur Chaussea ! FR Francais English Belge Nederlands Bienvenue sur Chaussea ! Ventes Privées Femme Baskets Bottines et boots Bottes Cuissardes Mocassins et bateaux Escarpins et salomés \nSource: https://www.chaussea.com/fr/85-baskets-fille\n\n**“Bad BIOS checksum. Starting BIOS Recovery...”解决方案_知乎** (2019-09-28)\n电脑无法开机,显示“Bad BIOS checksum. Starting BIOS Recovery...”的解决方案 | 电脑刷BIOS教程(超简单) 电脑无法正常开机了?显示“Bad BIOS checksum. Starting BIOS Recovery...”等字样,但是下面的英文和我发的图片不太一样?别急着关浏览器啊!这个图片是修复过程中的,如果你也遇到了提示“Bad BIOS \nSource: https://zhuanlan.zhihu.com/p/78869789\n\n**Beobachtungen über die Schnelligkeit des Geschwulstwachstums  Langenbeck's Archives of Surgery  Springer Nature Link** (2026-05-07)\nArticle Published: March 1927 Volume 200 , pages 524–533, ( 1927 ) 14 Accesses 10 Citations Access this article Subscribe and save Springer+ from €37.37 /Month Starting from 10 chapters or articles \nSource: https://link.springer.com/article/10.1007/bf02806891\n\n**Bimba Franziska Hoyer's lab  Universitätsklinikum Schleswig - Holstein (UKSH)** (2024-08-06)\nObjectivesThe humoral immune response to SARS-CoV-2 vaccination in patients with chronic inflammatory disease (CID) declines more rapidly with TNFα inhibition. Furthermore, the efficacy of current \nSource: https://www.researchgate.net/lab/Bimba-Franziska-Hoyer-Lab\n\n**导游情境英语** (2023-10-07)\n\"《导游情境英语》是2011年厦门大学出版社出版的图书｡考虑导游工作的实际需要,旨在培养高职高专学生实际运用英语的能力,力求在向学生提供英语导游语言知识的同时,兼顾业务知识,突出学生职业技能的训练与培养｡内容简介《导游情境英语》主要内容简介:改革开放以来,随着中国经济的高速稳定发展,中国已成为全世界最大的｡旅游产业的繁荣､国际交流的日益频繁,客观上要求旅游从业人员必须具有高素质的外语交流能力｡\nSource: https://baike.baidu.com/item/%E5%AF%BC%E6%B8%B8%E6%83%85%E5%A2%83%E8%8B%B1%E8%AF%AD/6724825\n\n**G. Bachowski's research works  University of Minnesota Duluth, Duluth (UMD) and other places** (2024-06-11)\nWhat is this page? This page lists the scientific contributions of an author, who either does not have a ResearchGate profile, or has not yet added these contributions to their profile. It was \nSource: https://www.researchgate.net/scientific-contributions/Bachowski-2271552157\n\n**G & S Bauausführungsgesellschaft Mbh Kreditvurdering  Creditsafe** (2026-04-11)\nG & S Bauausführungsgesellschaft Mbh G & S Bauausführungsgesellschaft Mbh G & S Bauausführungsgesellschaft Mbh er aktiv inden for branchen Opførelse af beboelsesejendomme og erhvervsbygninger \nSource: https://www.creditsafe.com/business-index/da-dk/company/g-s-bauausfuhrungsgesellschaft-mbh-de01323808\n",
+    "web_references": [
+      {
+        "content": "On September 16th, the 14th Zhengxian Cultural Tourism Week and the 2nd Guangzhou Park (Scenic Area) Culture &amp; Creative Industries Festival officially kicked off in Baiyun Mountain.      ",
+        "icon": "",
+        "link": "https://new.qq.com/rain/a/20250918A095QL00",
+        "media": "腾讯网",
+        "publish_date": "2025-09-18",
+        "refer": "ref_1",
+        "title": "Zhengxian Cultural Tourism Week presents tangible and playful ICH feast"
+      },
+      {
+        "content": "巴斯 大学(University of Bath),成立于1966年,是一所以科研为导向的英国著名公立 研究型大学 ,学术实力被评定为世界领先｡现为英国GW4联盟成员｡根据英国各媒体公布的 英国大学 排行榜,巴斯大学多次入选英国排行前十的公立研究型大学｡ 下面学姐就带大家详细了解一下 英国巴斯大学计算机系统工程学士(荣誉)Computer Systems Engineering BEng ",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/606162071",
+        "media": "知乎",
+        "publish_date": "2023-02-14",
+        "refer": "ref_2",
+        "title": "英国巴斯大学Bath  计算机系统工程学士(荣誉)Computer Systems Engineering BEng (Hons)  课程辅导补习  课程架构全解_知乎"
+      },
+      {
+        "content": "<p>During the recent Dragon Boat Festival holiday, Guangdong's tourism market was fueled by a focus on folk cultural experiences. The province saw a surge in tourism driven by dragon boat races and ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_2016841b00e93052",
+        "media": "企鹅号",
+        "publish_date": "2025-06-05",
+        "refer": "ref_3",
+        "title": "Traditional dragon boat events spur Guangdong's cultural tourism economy"
+      },
+      {
+        "content": "Bienvenue sur Chaussea ! FR Francais English Belge Nederlands Bienvenue sur Chaussea ! Ventes Privées Femme Baskets Bottines et boots Bottes Cuissardes Mocassins et bateaux Escarpins et salomés ",
+        "icon": "",
+        "link": "https://www.chaussea.com/fr/85-baskets-fille",
+        "media": "",
+        "publish_date": "2024-01-03",
+        "refer": "ref_4",
+        "title": "Baskets pour fille pas chères - Chaussea"
+      },
+      {
+        "content": "电脑无法开机,显示“Bad BIOS checksum. Starting BIOS Recovery...”的解决方案 | 电脑刷BIOS教程(超简单) 电脑无法正常开机了?显示“Bad BIOS checksum. Starting BIOS Recovery...”等字样,但是下面的英文和我发的图片不太一样?别急着关浏览器啊!这个图片是修复过程中的,如果你也遇到了提示“Bad BIOS ",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/78869789",
+        "media": "知乎",
+        "publish_date": "2019-09-28",
+        "refer": "ref_5",
+        "title": "“Bad BIOS checksum. Starting BIOS Recovery...”解决方案_知乎"
+      },
+      {
+        "content": "Article Published: March 1927 Volume 200 , pages 524–533, ( 1927 ) 14 Accesses 10 Citations Access this article Subscribe and save Springer+ from €37.37 /Month Starting from 10 chapters or articles ",
+        "icon": "",
+        "link": "https://link.springer.com/article/10.1007/bf02806891",
+        "media": "",
+        "publish_date": "2026-05-07",
+        "refer": "ref_6",
+        "title": "Beobachtungen über die Schnelligkeit des Geschwulstwachstums  Langenbeck's Archives of Surgery  Springer Nature Link"
+      },
+      {
+        "content": "ObjectivesThe humoral immune response to SARS-CoV-2 vaccination in patients with chronic inflammatory disease (CID) declines more rapidly with TNFα inhibition. Furthermore, the efficacy of current ",
+        "icon": "",
+        "link": "https://www.researchgate.net/lab/Bimba-Franziska-Hoyer-Lab",
+        "media": "",
+        "publish_date": "2024-08-06",
+        "refer": "ref_7",
+        "title": "Bimba Franziska Hoyer's lab  Universitätsklinikum Schleswig - Holstein (UKSH)"
+      },
+      {
+        "content": "\"《导游情境英语》是2011年厦门大学出版社出版的图书｡考虑导游工作的实际需要,旨在培养高职高专学生实际运用英语的能力,力求在向学生提供英语导游语言知识的同时,兼顾业务知识,突出学生职业技能的训练与培养｡内容简介《导游情境英语》主要内容简介:改革开放以来,随着中国经济的高速稳定发展,中国已成为全世界最大的｡旅游产业的繁荣､国际交流的日益频繁,客观上要求旅游从业人员必须具有高素质的外语交流能力｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E5%AF%BC%E6%B8%B8%E6%83%85%E5%A2%83%E8%8B%B1%E8%AF%AD/6724825",
+        "media": "百度百科",
+        "publish_date": "2023-10-07",
+        "refer": "ref_8",
+        "title": "导游情境英语"
+      },
+      {
+        "content": "What is this page? This page lists the scientific contributions of an author, who either does not have a ResearchGate profile, or has not yet added these contributions to their profile. It was ",
+        "icon": "",
+        "link": "https://www.researchgate.net/scientific-contributions/Bachowski-2271552157",
+        "media": "",
+        "publish_date": "2024-06-11",
+        "refer": "ref_9",
+        "title": "G. Bachowski's research works  University of Minnesota Duluth, Duluth (UMD) and other places"
+      },
+      {
+        "content": "G & S Bauausführungsgesellschaft Mbh G & S Bauausführungsgesellschaft Mbh G & S Bauausführungsgesellschaft Mbh er aktiv inden for branchen Opførelse af beboelsesejendomme og erhvervsbygninger ",
+        "icon": "",
+        "link": "https://www.creditsafe.com/business-index/da-dk/company/g-s-bauausfuhrungsgesellschaft-mbh-de01323808",
+        "media": "",
+        "publish_date": "2026-04-11",
+        "refer": "ref_10",
+        "title": "G & S Bauausführungsgesellschaft Mbh Kreditvurdering  Creditsafe"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "bach gumboots kiwi slang tiki tour cultural terms",
+        "query": "bach gumboots jandals jandal Kiwi slang tiki tour cultural terms"
+      }
+    ],
+    "latency_seconds": 2.1,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Hooker Valley Roy's Peak Mt Taranaki Pinnacles popular NZ day walks",
+    "content": "**旧金山City Walk, 20条神仙漫步路线** (2026-04-30)\n<p>要说旧金山的迷人之处,那些风格各异的街区,就藏在几条风景优美的主干道里｡奢侈品店和传奇音乐场馆不过几步之遥,修旧如旧的维多利亚式老建筑里,藏着精致的零售店和令人心动的小餐厅｡无论你是爱走路､爱骑车,还是喜欢开车兜风,下面这些地方,都值得你慢下来,好好看看｡</p><p><strong>九曲花街(Hyde 与 \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_50969f34c4851152\n\n**蚺蛇尖** (2024-09-09)\n蚺蛇尖(Sharp Peak)是中国香港的一座山峰,位于新界西贡半岛,西贡大浪湾以北,海拔468米,为香港著名远足胜地之一｡基本内容蚺蛇尖(Sharp Peak)是香港的一座山峰,位于新界西贡半岛,西贡大浪湾以北,海拔468米,为香港著名远足胜地之一｡\nSource: https://baike.sogou.com/v73748961.htm\n\n**库拉岗日徒步之旅,三天解锁三条经典路线** (2026-01-26)\n<p>错峰在冬天来西藏,少了人群的喧嚣,天地间只剩下纯粹的白与蓝,还有凛冽寒风中愈发清晰的信仰与敬畏｡12月底,我终于踏上了心心念念的库拉岗日徒步之旅,用三天时间解锁了白马林措､介久措､折公三措三条经典线路,从拉萨出发时环绕羊湖的惊艳,到徒步途中直面雪山的震撼,每一段记忆都刻进了骨子里｡</p><p>#库拉岗日</p><p> 是西藏山南地区洛扎县境内的一座著名雪山,被誉为西藏中部地区 \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_1576976eb1121152\n\n**Unit 3 Traditional skills-A -Part 3 Speaking & Writing-【初中必刷题】2024-2025学年八年级下册英语同步课件(沪教牛津版)-学科网** (2025-03-14)\n英 语八年级下册 HN12Module 2 Artsand crafts3Unit 3Traditional skillsA 课时同步训练Part 3 Speaking & Writing4刷基础刷写作5基础Ⅰ用括号内所给单词的适当形式填空1.Before making the card, Mary used a pair of scissor) to cut out some pictures of Chinese lanterns.scissors【解析】 a pair of scissors为固定用法,故填scissors。2.Chinese clay figures are usually cute children and lively character) from fairy tales or historical stories.characters【解析】 分析句子结构可知,cute children和“lively ____”应是并列关系,故填可数名词复数characters。刷基础返回目录6知识拓展characteristic作名词,意为“特征;特色”;作形容词,意为“典型的”。3.Drinking tea becomes popular because it is health).healthy【解析】 此处应用形容词作表语,结合语境,故填healthy。4.Chinese love their luck) bamboo” plants and you will often see them in their homes and offices.lucky【解析】 此处应用形容词lucky来修饰名词bamboo,故填lucky。刷基础返回目录75.【2024广东肇庆期末】The problem isn't as simply) as it seems.simple【解析】 句意为:这个问题并不像看上去那么简单。根据isn't可知空处应填形容词作表语,“as+形容词原级+as”表示“和……一样的……”,为固定用法,故填simple。知识拓展“not as+形容词/副词原级+as”意为“不如……”。刷基础返回目录8Ⅱ根据汉语意思完成句子(每空一词)6.【2024辽宁阜新期末·改编】3D打印机被用来打印既美味又对我们有益的食物。3D printer\nSource: https://www.zxxk.com/soft/50990267.html\n\n**2022-2023学年译林版英语三年级下册Unit-3-Asking-the-way单元测试卷含答案.docx - 人人文库** (2024-04-05)\n预览加载失败,请重新加载试试~ 重新加载 预览加载失败,请重新加载试试~ 重新加载 预览加载失败,请重新加载试试~ 重新加载 预览加载失败,请重新加载试试~ 重新加载 预览加载失败,请重新加载试试~ 重新加载 已阅读5页,还剩6页未读 , 继续免费阅读 版权说明:本文档由用户提供并上传,收益归属内容提供方,若内容存在侵权,请进行举报或认领 文档简介 Unit3测试卷(考试时间:50分钟满分:100分)听力部分(40分)一、听两遍录音,选出你所听到的内容。(5分)()1.A.rulerB.redC.rubber()2.A.cakeB.icecreamC.crayon()3.A.stand.B.sleepC.schoolbag()4.A.Where'smybook?B.MayIcomein?C.CanIhavealook?()5.A.Isthatyourmathsbook?B.IsthatyourChinesebook?C.IsthatyourEnglishbook?二、听两遍录音,用数字给下列图片排序。(5分)三、听两遍录音,选出与所听内容相符的译文。(12分)()1.A.这是我的钢笔。B.这是我的铅笔。()2.A.那是一支蜡笔。B.那是一支蜡笔吗?()3.A.你在哪里?B.我在哪里?()4.A.你的机器人在哪里?B.你的机器人在那里。()5.A.这是一本英语书吗?B.这是我的英语书吗?()6.A.是的,它是。B.不,它不是。四、听两遍录音,选出相应的答句。(10分)()1.A.No,I'mnot.B.Yes,itis.C.Thisisn'tmypen.()2.A.It'soverthere.B.Yes.It'saruler.C.It'sarubber.()3.A.It'smypencil.B.Mypencilisblue.C.It'sbesidethebook.()4.A.It'syellow.B.Yes,itis.C.No,itisn't.()5.A.It'sacake.B.Thankyou.C.I'msorry.五、听两遍录音,填入所缺单词。(8分)1.Mike:Thismy.SuHai:Isyourpencil?Mike:Yes,itis.2.Linda:What'soverthere?Jim:It'smynew.3.Tina:Isityour?Sam:,it\nSource: https://www.renrendoc.com/paper/322700242.html\n\n**Slovak Philharmonic Orchestra - The Private History of a Campaign That Failed:Title Music 歌词  RapZH 中文说唱数据库** (2026-04-18)\nPERRY, W.: Innocents Abroad (The) / Music for Mark Twain Films (Rome Philharmonic, Slovak Philharmonic, Perry) 8 . The Private History of a Campaign That Failed:Girls Along the Road 9 . The Private History of a Campaign That Failed:The Games of War / Lorena\nSource: https://rapzh.com/songs/10331622\n\n**Kings Highway closed as Currowan fire breaks containment lines  The Canberra Times  Canberra, ACT** (2019-12-15)\n/* devanagari */ @font-face { font-family: 'Widget-Poppins'; font-style: italic; font-weight: 100; src: url(https://fonts.gstatic.com/s/poppins/v24/pxiAyp8kv8JHgFVrJJLmE0tDMPKhSkFEkm8.woff2) format('woff2'); unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F0, U+25CC, U+A830-A83 of the Kings Highway again. The Currowan fire broke containment lines near the Kings Highway on Sunday afternoon. Picture: Sitthixay Ditthavong The fire, which has been burning north of Batemans Bay nd motorists around Milton may notice active fire approaching the iconic Pigeon House Mountain, the NSW RFS Shoalhaven division said on Sunday. Picture: NSW RFS Shoalhaven Facebook \"On Monday, we've ge it gets dark. However, there was no threat to properties. The fire has burnt out nearly 90,000 hectares since it began on November 26. The fire is at an advice level, as of 8am Monday. Mr Henderson \nSource: https://www.canberratimes.com.au/story/6543969/kings-highway-closed-to-drivers-as-crews-work-to-contain-south-coast-fire/?cs=14225\n\n**Royal Philharmonic Orchestra - Die Walküre: Ride of the Valkyries 歌词  RapZH 中文说唱数据库** (2026-05-17)\n深入探索 音乐与音频 Music 大提琴 歌词 暂无歌词 歌词翻译服务 专辑信息 1 . The Nutcracker, Op. 71, Act II, Tableau III: XII. Divertissement d. Candy Canes. Russian Dance 2 . The Nutcracker, Op. 71, Act II, Tableau III: XIV. Pas de Deux. Variation II, Dance of the Sugar Plum Fairy 5 . The Nutcracker, Op. 71, Act II, Tableau III: XII. Divertissement e. Dance of the Reed Flutes 6 . Pomp and Circumstance, Op. 39: March No. 1 in D (Land of Hope and Glory) 7 . Variations on an Original Theme for Orchestra, Op. 36, \"Enigma\": IX. \"Nimrod\" 深入探索 乐器 说唱历史书籍 音乐制作软件 20 . Peer Gynt Suite No. 1, Op. 46: IV. In the Hall of the Mountain King 26 . Piano Sonata No. 11 in A Major, K. 331: III. Alla turca. Allegretto 音乐与音频 31 . Le quattro stagioni, Concerto No. 2 in G Minor, Op. 8, RV 315, \"Summer\": III. Presto 37 . Le quattro stagioni, Concerto No. 1 in E Major, Op. 8, RV 269, \"Spring\" : I. Allegro 41 . Le quattro stagioni, Concerto No. 4 in F Minor, Op. 8, RV 297, \"Winter\": II. Largo 46 . Serenade No. 13 in G Major, K. 525, \"Eine klei\nSource: https://rapzh.com/songs/13642632\n\n**Priyesh Kumar to lead sales vertical at Volkswagen India_Quality Bearing Responsibility,innovation driving development-ZHONGZHE HIGH-SPEED RAILWAY** (2026-04-25)\n<p style=\"text-align: center;\"><img title=\"1606369921954229.jpg\" alt=\"8.jpg\" src=\"/ueditor/php/upload/image/20201126/1606369921954229.jpg\"/></p><p>&nbsp;Automaker&nbsp;Volkswagen India&nbsp;on Wednesday said it has appointed&nbsp;Priyesh Kumar&nbsp;as the new head of&nbsp;sales vertical&nbsp;with effect from December 1. Kumar currently heads dealer development function in the company.<br/><br/>The company has also appointed&nbsp;P Ravichandran, currently head of after sales, as the head of dealer development with effect from December 1.<br/><br/>Both Kumar and Ravichandran would report in to Ashish Gupta, Brand Head, Volkswagen Passenger Cars India.</p><p><br/></p><p>&quot;At Volkswagen, we strongly believe in nurturing in-house talent and offering newer learning platforms for personal and professional growth,&quot; Gupta said in a statement.<br/><br/>With Priyesh and Ravichandran leading sales and dealer development function respectively, the company is confident that their expertise \nSource: http://www.zgthqb.com/en/newshyshow.php?titleid=59969&pid=&name=\n\n**牛津苏教六下unit3askingtheway课件之一-wenkub.com** (2025-11-20)\n【正文】 Library Book shop hospital cinema History Museum Shopping centre supermarket Bus station Bank of China Primary school Train station theatre Police station Post office Middle school Park zoo hotel A 9 9 9 7 7 7 5 5 5 广州路北京路长江路上海路中山路500m B C How many stops are there from here to the post office ? 从这儿到邮局有多少站? Only three . and get off at the third stop . 要快点到那里,你可以在图书馆前面上车在第三站下车。 Library Book shop hospital cinema History Museum Shopping centre supermarket Bus station Bank of China Primary school Train station theatre Police station Post office Middle school Park zoo hotel A 9 9 9 7 7 7 5 5 5 广州路北京路长江路上海路中山路500m B C Where is the bus stop ? It’s in front of the library . 在…… 前面 stop in front of 停车站 a bus stop 一个公交车停靠站 Library Book shop hospital cinema History Museum Shopping centre supermarket Bus station Bank of China Primary school Train station theatre Police station Post office Middle school Park zoo hotel A 9 9 9 7 7 7 5 5 5 广\nSource: https://www.wenkub.com/paper/799050.html\n",
+    "web_references": [
+      {
+        "content": "<p>要说旧金山的迷人之处,那些风格各异的街区,就藏在几条风景优美的主干道里｡奢侈品店和传奇音乐场馆不过几步之遥,修旧如旧的维多利亚式老建筑里,藏着精致的零售店和令人心动的小餐厅｡无论你是爱走路､爱骑车,还是喜欢开车兜风,下面这些地方,都值得你慢下来,好好看看｡</p><p><strong>九曲花街(Hyde 与 ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_50969f34c4851152",
+        "media": "企鹅号",
+        "publish_date": "2026-04-30",
+        "refer": "ref_1",
+        "title": "旧金山City Walk, 20条神仙漫步路线"
+      },
+      {
+        "content": "蚺蛇尖(Sharp Peak)是中国香港的一座山峰,位于新界西贡半岛,西贡大浪湾以北,海拔468米,为香港著名远足胜地之一｡基本内容蚺蛇尖(Sharp Peak)是香港的一座山峰,位于新界西贡半岛,西贡大浪湾以北,海拔468米,为香港著名远足胜地之一｡",
+        "icon": "",
+        "link": "https://baike.sogou.com/v73748961.htm",
+        "media": "搜狗百科",
+        "publish_date": "2024-09-09",
+        "refer": "ref_2",
+        "title": "蚺蛇尖"
+      },
+      {
+        "content": "<p>错峰在冬天来西藏,少了人群的喧嚣,天地间只剩下纯粹的白与蓝,还有凛冽寒风中愈发清晰的信仰与敬畏｡12月底,我终于踏上了心心念念的库拉岗日徒步之旅,用三天时间解锁了白马林措､介久措､折公三措三条经典线路,从拉萨出发时环绕羊湖的惊艳,到徒步途中直面雪山的震撼,每一段记忆都刻进了骨子里｡</p><p>#库拉岗日</p><p> 是西藏山南地区洛扎县境内的一座著名雪山,被誉为西藏中部地区 ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_1576976eb1121152",
+        "media": "企鹅号",
+        "publish_date": "2026-01-26",
+        "refer": "ref_3",
+        "title": "库拉岗日徒步之旅,三天解锁三条经典路线"
+      },
+      {
+        "content": "英 语八年级下册 HN12Module 2 Artsand crafts3Unit 3Traditional skillsA 课时同步训练Part 3 Speaking & Writing4刷基础刷写作5基础Ⅰ用括号内所给单词的适当形式填空1.Before making the card, Mary used a pair of scissor) to cut out some pictures of Chinese lanterns.scissors【解析】 a pair of scissors为固定用法,故填scissors。2.Chinese clay figures are usually cute children and lively character) from fairy tales or historical stories.characters【解析】 分析句子结构可知,cute children和“lively ____”应是并列关系,故填可数名词复数characters。刷基础返回目录6知识拓展characteristic作名词,意为“特征;特色”;作形容词,意为“典型的”。3.Drinking tea becomes popular because it is health).healthy【解析】 此处应用形容词作表语,结合语境,故填healthy。4.Chinese love their luck) bamboo” plants and you will often see them in their homes and offices.lucky【解析】 此处应用形容词lucky来修饰名词bamboo,故填lucky。刷基础返回目录75.【2024广东肇庆期末】The problem isn't as simply) as it seems.simple【解析】 句意为:这个问题并不像看上去那么简单。根据isn't可知空处应填形容词作表语,“as+形容词原级+as”表示“和……一样的……”,为固定用法,故填simple。知识拓展“not as+形容词/副词原级+as”意为“不如……”。刷基础返回目录8Ⅱ根据汉语意思完成句子(每空一词)6.【2024辽宁阜新期末·改编】3D打印机被用来打印既美味又对我们有益的食物。3D printer",
+        "icon": "",
+        "link": "https://www.zxxk.com/soft/50990267.html",
+        "media": "学科网",
+        "publish_date": "2025-03-14",
+        "refer": "ref_4",
+        "title": "Unit 3 Traditional skills-A -Part 3 Speaking & Writing-【初中必刷题】2024-2025学年八年级下册英语同步课件(沪教牛津版)-学科网"
+      },
+      {
+        "content": "预览加载失败,请重新加载试试~ 重新加载 预览加载失败,请重新加载试试~ 重新加载 预览加载失败,请重新加载试试~ 重新加载 预览加载失败,请重新加载试试~ 重新加载 预览加载失败,请重新加载试试~ 重新加载 已阅读5页,还剩6页未读 , 继续免费阅读 版权说明:本文档由用户提供并上传,收益归属内容提供方,若内容存在侵权,请进行举报或认领 文档简介 Unit3测试卷(考试时间:50分钟满分:100分)听力部分(40分)一、听两遍录音,选出你所听到的内容。(5分)()1.A.rulerB.redC.rubber()2.A.cakeB.icecreamC.crayon()3.A.stand.B.sleepC.schoolbag()4.A.Where'smybook?B.MayIcomein?C.CanIhavealook?()5.A.Isthatyourmathsbook?B.IsthatyourChinesebook?C.IsthatyourEnglishbook?二、听两遍录音,用数字给下列图片排序。(5分)三、听两遍录音,选出与所听内容相符的译文。(12分)()1.A.这是我的钢笔。B.这是我的铅笔。()2.A.那是一支蜡笔。B.那是一支蜡笔吗?()3.A.你在哪里?B.我在哪里?()4.A.你的机器人在哪里?B.你的机器人在那里。()5.A.这是一本英语书吗?B.这是我的英语书吗?()6.A.是的,它是。B.不,它不是。四、听两遍录音,选出相应的答句。(10分)()1.A.No,I'mnot.B.Yes,itis.C.Thisisn'tmypen.()2.A.It'soverthere.B.Yes.It'saruler.C.It'sarubber.()3.A.It'smypencil.B.Mypencilisblue.C.It'sbesidethebook.()4.A.It'syellow.B.Yes,itis.C.No,itisn't.()5.A.It'sacake.B.Thankyou.C.I'msorry.五、听两遍录音,填入所缺单词。(8分)1.Mike:Thismy.SuHai:Isyourpencil?Mike:Yes,itis.2.Linda:What'soverthere?Jim:It'smynew.3.Tina:Isityour?Sam:,it",
+        "icon": "",
+        "link": "https://www.renrendoc.com/paper/322700242.html",
+        "media": "",
+        "publish_date": "2024-04-05",
+        "refer": "ref_5",
+        "title": "2022-2023学年译林版英语三年级下册Unit-3-Asking-the-way单元测试卷含答案.docx - 人人文库"
+      },
+      {
+        "content": "PERRY, W.: Innocents Abroad (The) / Music for Mark Twain Films (Rome Philharmonic, Slovak Philharmonic, Perry) 8 . The Private History of a Campaign That Failed:Girls Along the Road 9 . The Private History of a Campaign That Failed:The Games of War / Lorena",
+        "icon": "",
+        "link": "https://rapzh.com/songs/10331622",
+        "media": "",
+        "publish_date": "2026-04-18",
+        "refer": "ref_6",
+        "title": "Slovak Philharmonic Orchestra - The Private History of a Campaign That Failed:Title Music 歌词  RapZH 中文说唱数据库"
+      },
+      {
+        "content": "/* devanagari */ @font-face { font-family: 'Widget-Poppins'; font-style: italic; font-weight: 100; src: url(https://fonts.gstatic.com/s/poppins/v24/pxiAyp8kv8JHgFVrJJLmE0tDMPKhSkFEkm8.woff2) format('woff2'); unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F0, U+25CC, U+A830-A83 of the Kings Highway again. The Currowan fire broke containment lines near the Kings Highway on Sunday afternoon. Picture: Sitthixay Ditthavong The fire, which has been burning north of Batemans Bay nd motorists around Milton may notice active fire approaching the iconic Pigeon House Mountain, the NSW RFS Shoalhaven division said on Sunday. Picture: NSW RFS Shoalhaven Facebook \"On Monday, we've ge it gets dark. However, there was no threat to properties. The fire has burnt out nearly 90,000 hectares since it began on November 26. The fire is at an advice level, as of 8am Monday. Mr Henderson ",
+        "icon": "",
+        "link": "https://www.canberratimes.com.au/story/6543969/kings-highway-closed-to-drivers-as-crews-work-to-contain-south-coast-fire/?cs=14225",
+        "media": "",
+        "publish_date": "2019-12-15",
+        "refer": "ref_7",
+        "title": "Kings Highway closed as Currowan fire breaks containment lines  The Canberra Times  Canberra, ACT"
+      },
+      {
+        "content": "深入探索 音乐与音频 Music 大提琴 歌词 暂无歌词 歌词翻译服务 专辑信息 1 . The Nutcracker, Op. 71, Act II, Tableau III: XII. Divertissement d. Candy Canes. Russian Dance 2 . The Nutcracker, Op. 71, Act II, Tableau III: XIV. Pas de Deux. Variation II, Dance of the Sugar Plum Fairy 5 . The Nutcracker, Op. 71, Act II, Tableau III: XII. Divertissement e. Dance of the Reed Flutes 6 . Pomp and Circumstance, Op. 39: March No. 1 in D (Land of Hope and Glory) 7 . Variations on an Original Theme for Orchestra, Op. 36, \"Enigma\": IX. \"Nimrod\" 深入探索 乐器 说唱历史书籍 音乐制作软件 20 . Peer Gynt Suite No. 1, Op. 46: IV. In the Hall of the Mountain King 26 . Piano Sonata No. 11 in A Major, K. 331: III. Alla turca. Allegretto 音乐与音频 31 . Le quattro stagioni, Concerto No. 2 in G Minor, Op. 8, RV 315, \"Summer\": III. Presto 37 . Le quattro stagioni, Concerto No. 1 in E Major, Op. 8, RV 269, \"Spring\" : I. Allegro 41 . Le quattro stagioni, Concerto No. 4 in F Minor, Op. 8, RV 297, \"Winter\": II. Largo 46 . Serenade No. 13 in G Major, K. 525, \"Eine klei",
+        "icon": "",
+        "link": "https://rapzh.com/songs/13642632",
+        "media": "",
+        "publish_date": "2026-05-17",
+        "refer": "ref_8",
+        "title": "Royal Philharmonic Orchestra - Die Walküre: Ride of the Valkyries 歌词  RapZH 中文说唱数据库"
+      },
+      {
+        "content": "<p style=\"text-align: center;\"><img title=\"1606369921954229.jpg\" alt=\"8.jpg\" src=\"/ueditor/php/upload/image/20201126/1606369921954229.jpg\"/></p><p>&nbsp;Automaker&nbsp;Volkswagen India&nbsp;on Wednesday said it has appointed&nbsp;Priyesh Kumar&nbsp;as the new head of&nbsp;sales vertical&nbsp;with effect from December 1. Kumar currently heads dealer development function in the company.<br/><br/>The company has also appointed&nbsp;P Ravichandran, currently head of after sales, as the head of dealer development with effect from December 1.<br/><br/>Both Kumar and Ravichandran would report in to Ashish Gupta, Brand Head, Volkswagen Passenger Cars India.</p><p><br/></p><p>&quot;At Volkswagen, we strongly believe in nurturing in-house talent and offering newer learning platforms for personal and professional growth,&quot; Gupta said in a statement.<br/><br/>With Priyesh and Ravichandran leading sales and dealer development function respectively, the company is confident that their expertise ",
+        "icon": "",
+        "link": "http://www.zgthqb.com/en/newshyshow.php?titleid=59969&pid=&name=",
+        "media": "",
+        "publish_date": "2026-04-25",
+        "refer": "ref_9",
+        "title": "Priyesh Kumar to lead sales vertical at Volkswagen India_Quality Bearing Responsibility,innovation driving development-ZHONGZHE HIGH-SPEED RAILWAY"
+      },
+      {
+        "content": "【正文】 Library Book shop hospital cinema History Museum Shopping centre supermarket Bus station Bank of China Primary school Train station theatre Police station Post office Middle school Park zoo hotel A 9 9 9 7 7 7 5 5 5 广州路北京路长江路上海路中山路500m B C How many stops are there from here to the post office ? 从这儿到邮局有多少站? Only three . and get off at the third stop . 要快点到那里,你可以在图书馆前面上车在第三站下车。 Library Book shop hospital cinema History Museum Shopping centre supermarket Bus station Bank of China Primary school Train station theatre Police station Post office Middle school Park zoo hotel A 9 9 9 7 7 7 5 5 5 广州路北京路长江路上海路中山路500m B C Where is the bus stop ? It’s in front of the library . 在…… 前面 stop in front of 停车站 a bus stop 一个公交车停靠站 Library Book shop hospital cinema History Museum Shopping centre supermarket Bus station Bank of China Primary school Train station theatre Police station Post office Middle school Park zoo hotel A 9 9 9 7 7 7 5 5 5 广",
+        "icon": "",
+        "link": "https://www.wenkub.com/paper/799050.html",
+        "media": "",
+        "publish_date": "2025-11-20",
+        "refer": "ref_10",
+        "title": "牛津苏教六下unit3askingtheway课件之一-wenkub.com"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "hiking valley roy's peak mt taranak pinnacles nsw day walks",
+        "query": "Hooker Valley Roy's Peak Mt Taranaki Pinnacles popular NZ day walks"
+      }
+    ],
+    "latency_seconds": 1.91,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "New Zealand mountain safety council Plan My Walk app",
+    "content": "**开普勒步道  百分百纯净新西兰** (2025-01-17)\nKepler Track, 峡湾 作者: NZ Mountain Safety Council 4 天 60 公里 亮点 高山草原 冰川雕刻的山谷 层叠瀑布 地理位置 难度级别:中级 最佳时间:10月下旬至4月下旬 这条令人惊叹的步道旨在向您展示峡湾国家公园的所有最佳景观——高山､原生森林､瀑布以及冰川雕刻的山谷｡ 了解如何规划您的凯普勒步道之旅,体验新西兰的“十大步道”之一｡ 1. \nSource: https://www.newzealand.com/cn/feature/kepler-track/\n\n**户外爱好者在软件指引下登野线发现地势危险,“谁传的线路?腿吓软了!”新乡当地提醒** (2026-03-22)\n<p>3月21日,有网友发视频,他借助一款“两步路”户外软件抵达河南辉县关山一名为万丈梯的位置,画面中,两侧山势较陡,四周或无护栏等设施,视频发布者曾发声“谁上传的?这有路吗?这哪有路?”并表示“腿都吓软了”｡</p><p>根据该网友之前发布视频显示,他是一位户外爱好者｡视频发布后,在好奇景区环境外,部分网友对线路安全以及如果出事,线路上传者是否会担责等方面提出疑问｡</p><p><img \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_16169bf99e774052\n\n**Home — NZMSC** (2026-05-17)\nGet ready for the outdoors Explore our resources to plan a safe and successful NZ adventure #MakeItHomeNZ Family Adventures Discover family-friendly hikes across Aotearoa Plan My Walk Plan My Walk allows you to build your own plan for NZ tracks Virtual Track Guides Prepare for your next NZ hike or tramp with our Virtual Track Guides video series River Safety Learn river crossing skills to stay safe on your outdoor adventures Latest Stories 28th April 2026 3 min Bag a Duck Safely This Season Media Release | MSC, with Te Tari Pūreke – Firearms Safety Authority and Fish & Game, is reminding duck hunters to put safety first this opening weekend and throughout the... 12th May 2026 3 min Updates to the NZ Avalanche Advisory ahead of Winter 2026 Story | Changes to the NZ Avalanche Advisory are rolling out from 11 May 2026 in preparation for the winter ahead. 24th April 2026 3 min Recent Turbulent Weather Prompts Safety Reminder for Hikers Media Release | After the recent storms and flooding, \nSource: https://www.mountainsafety.org.nz/\n\n**Outdoor safety in New Zealand** (2026-03-09)\nSafety in the outdoors Tongariro Alpine Crossing, Ruapehu By Graeme Murray New Zealand is an incredible place to explore, with untouched terrain that's remote yet easily accessible. The country’s unique environment and conditions mean it’s critical to thoroughly prepare for any outdoor adventure, whether you’re planning a short walk, demanding day hike, an overnight tramp or challenging multi-day trip. To ensure you have a safe and enjoyable outdoor experience, NZ Mountain Safety Council recommends following the New Zealand Land Safety Code. The simple five-point guide provides practical advice and safety tips. More information is available on the Mountain Safety Council's (MSC) website . New Zealand Land Safety Code Choose the right trip for you. Learn about the route and make sure you have the skills for it. Understand the weather – it can change fast. Check the forecast and change your plans if needed. Pack warm clothes and extra food so you’re prepared for bad weather and an unexpe\nSource: https://www.newzealand.com/uk/feature/safety-in-the-outdoors/\n\n**Home — NZMSC** (2026-05-17)\nGet ready for the outdoors Explore our resources to plan a safe and successful NZ adventure #MakeItHomeNZ Family Adventures Discover family-friendly hikes across Aotearoa Plan My Walk Plan My Walk allows you to build your own plan for NZ tracks Virtual Track Guides Prepare for your next NZ hike or tramp with our Virtual Track Guides video series River Safety Learn river crossing skills to stay safe on your outdoor adventures Latest Stories 28th April 2026 3 min Bag a Duck Safely This Season Media Release | MSC, with Te Tari Pūreke – Firearms Safety Authority and Fish & Game, is reminding duck hunters to put safety first this opening weekend and throughout the... 12th May 2026 3 min Updates to the NZ Avalanche Advisory ahead of Winter 2026 Story | Changes to the NZ Avalanche Advisory are rolling out from 11 May 2026 in preparation for the winter ahead. 24th April 2026 3 min Recent Turbulent Weather Prompts Safety Reminder for Hikers Media Release | After the recent storms and flooding, \nSource: http://www.mountainsafety.org.nz/\n\n**Mountain safety  New Zealand** (2022-08-06)\nEnsure you have an unforgettable experience on New Zealand's slopes with these simple mountain safety tips. Cardrona, Wānaka By Martyn Williams Snow boarding, Queenstown By Miles Holden Southern Lakes, Wānaka By Lake Wānaka Tourism The Remarkables, Queenstown By Miles Holden Conditions on the mountains can change rapidly, so it’s important you check the daily snow report. These reports are updated throughout the day and include information on the snow and weather, road conditions and chain requirements, boundary and closure information, informs on which lifts and facilities are open and any other important updates. Etiquette on the slopes Always stay in control and be able to stop or avoid other people or objects. People below you always have the right of way. Check above you before entering a hill. Stop where you can be seen from above and don’t obstruct a trail. Obey all ski area signage. Always look uphill before starting downhill or merging onto a trail; scope jumps first and uses \nSource: https://www.newzealand.com/ca/feature/mountain-safety/\n\n**NewZealandTouringAtlasAPP下载安装_2026最新正版手机免费下载_25PP** (2026-04-14)\n版本 8.3.10.0 要求 Android 2.2.x 以上 查看权限要求 隐私政策 APP 豌豆荚 Tour New Zealand like a Pro! Perfect for motorhome, campervan, car tent and backpacker travellers.If your touring New Zealand - this app will find you places to stay, and activities to make your trip the best holiday ever! Designed for offline usage from the ground up. Wherever you are in New Zealand, your Offline Maps are detailed enough to find your next adventure!Camping LocationsEvery full-service Holiday Park Motor Camp in New Zealand, as well as all the basic and freedom locations offered by the Department of Conservation, and all local council approved sites.Adventures ActivitiesPacked full of adventures activities to enjoy, including lots of 'off the beaten track' hidden gems.ResourcesEvery I-Site location, and Public Dump Station.Location AwareYour devices GPS Integrates with the maps to display your current location. Never get lost again!Photos ReviewsRead reviews, and browse photos uploaded by fellow travellers. Share your \nSource: https://www.25pp.com/xiazai/6924740/\n\n**NewspapersfromNewZealandAPP下载安装_2026最新正版手机免费下载_25PP** (2026-04-14)\n安装豌豆荚 下载相似应用 版本 8.3.10.0 要求 查看权限要求 隐私政策 APP 豌豆荚 精品推荐 2亿 人下载 2.3亿 人下载 6644.6万 人下载 8344.8万 人下载 3963万 人下载 3327.5万 人下载 应用 介绍 用户点评 相关应用 加速器下载 应用 介绍 Newspapers from New Zealand 应用 简介 Newspapers and magazines from New Zealand. All in one application. With this application you have easy access to all press, news and journals from New Zealand. You have access to more than 40 newspapers. The application automatically ranks the newspapers that you read the most. You can easily share news within the various social networks. You can access all newspapers from NZ. Essential to keep up with all the news and headlines related national and local press. 来自新西兰的报纸和杂志。所有在一个应用程序中。 有了这个应用程序,您可以轻松访问所有的新闻,来自新西兰的新闻和期刊。您可以访问到超过40家报纸。应用程序自动排列的报纸,你看过的最。您可以轻松地共享各种社会网络内的消息。您可以访问所有从新西兰报纸。 基本跟上相关的国家和地方媒体的所有新闻和标题。 更多 分类 : 新闻阅读 资讯 Newspapers from New Zealand2026更新内容 Improvements to video playback Newspapers from New Zealand功能介绍 《Newspapers from New Zealand》是一款集合了新西兰报纸和杂志的应用程序。以下是该应用的功能说明:1. 轻松访问:用户可以方便地访问所有来自新西兰的报纸、新闻和期\nSource: https://www.25pp.com/xiazai/7273146/\n\n**NewZealandPublicholidaysAPP下载安装_2026最新正版手机免费下载_25PP** (2026-04-14)\n生活休闲 安装豌豆荚 下载相似应用 版本 8.3.10.0 要求 查看权限要求 隐私政策 APP 豌豆荚 精品推荐 2亿 人下载 2.3亿 人下载 6644.6万 人下载 8344.8万 人下载 3963万 人下载 3327.5万 人下载 应用 介绍 相关应用 加速器下载 应用 介绍 New Zealand Public holidays 应用 简介 New Zealand Public holidays 2013 and 2014V1.0.0- Save date to Google Calendar 分类 : 生活休闲 New Zealand Public holidays2026更新内容 提升了稳定性。 相关应用 最新应用 单纯用网图来当做头像,没有个性化的需求,现在凡是涉及到社交内容,都需要有一款自己专属的头像,那么头像制作免费软件有什么?有一个充满个性的头像,不仅能够提高自己的辨识度,也能张扬自己的个性和风格,根本无需花钱找人去定制,自己通过简单的一些步骤即可生成出独特的专属高清头像。1、《头像制作》轻量化随心情流... 2026-05-06 11:13 随着汽车发展的日新月异,很多传统的机械按键逐渐被淘汰,包括机械钥匙,现在已经成为了稀缺物品,那么免费的手机遥控汽车钥匙app有什么?有时自己挪个车或是关窗户都要跑很远,尤其是车辆停放位置较远时,通过远程操控即可解决很多麻烦事,同时也能对自己的爱车有一个实时的信息把控。1、《风神车联》东风风神旗下的智... 2026-05-06 11:13 通过手机自带的短信功能发送信息都是需要收取费用的,但如果通过平台的话就能免掉这一步,那么免费发短信app都有什么?如果频繁使用短信功能,所产生的费用还是比较大的,如果能用平台的话,除了便捷之外,还有很多的模板可以直接给你套用,省的自己再去网上寻找对应的模板。1、《短信代发》轻量化且便捷的短信代发服务... 2026-05-06 11:13 主流影视平台的会员价格越来越高,甚至手机和电视都要分开不同的价格,那么免费无会员追剧的app有什么?很多人苦苦寻觅了很久无果,要么就是碰到了收费套路,要么就是一些资源少的可怜,还画质非常模糊的盗版平台,有了可免费观看的平台之后,也无需担心再有剧荒的难题了。1、《热播影视大全》平台每天都会在全网中解锁... 2026-05-06 11:\nSource: https://www.25pp.com/xiazai/6984050/\n\n**NewZealandImmigrationNewsAPP下载安装_2026最新正版手机免费下载_25PP** (2026-04-14)\n版本 8.3.10.0 要求 Android 2.1.0 以上 查看权限要求 隐私政策 APP 豌豆荚 This is one of unique mobile apps that provide an updated New Zealand Immigration News . New Zealand Immigration News is a RSS Feed Reader which brings you directly to the latest immigration news without wasting any time messing around with the user interface. It is fast, simple and immediate mobile news feed reader for New Zealand Immigration.Kw: New Zealand, New Zealand news, immigration New Zealand, News, immigration News, latest immigration news.\nSource: https://www.25pp.com/xiazai/7374459/\n",
+    "web_references": [
+      {
+        "content": "Kepler Track, 峡湾 作者: NZ Mountain Safety Council 4 天 60 公里 亮点 高山草原 冰川雕刻的山谷 层叠瀑布 地理位置 难度级别:中级 最佳时间:10月下旬至4月下旬 这条令人惊叹的步道旨在向您展示峡湾国家公园的所有最佳景观——高山､原生森林､瀑布以及冰川雕刻的山谷｡ 了解如何规划您的凯普勒步道之旅,体验新西兰的“十大步道”之一｡ 1. ",
+        "icon": "",
+        "link": "https://www.newzealand.com/cn/feature/kepler-track/",
+        "media": "",
+        "publish_date": "2025-01-17",
+        "refer": "ref_1",
+        "title": "开普勒步道  百分百纯净新西兰"
+      },
+      {
+        "content": "<p>3月21日,有网友发视频,他借助一款“两步路”户外软件抵达河南辉县关山一名为万丈梯的位置,画面中,两侧山势较陡,四周或无护栏等设施,视频发布者曾发声“谁上传的?这有路吗?这哪有路?”并表示“腿都吓软了”｡</p><p>根据该网友之前发布视频显示,他是一位户外爱好者｡视频发布后,在好奇景区环境外,部分网友对线路安全以及如果出事,线路上传者是否会担责等方面提出疑问｡</p><p><img ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_16169bf99e774052",
+        "media": "企鹅号",
+        "publish_date": "2026-03-22",
+        "refer": "ref_2",
+        "title": "户外爱好者在软件指引下登野线发现地势危险,“谁传的线路?腿吓软了!”新乡当地提醒"
+      },
+      {
+        "content": "Get ready for the outdoors Explore our resources to plan a safe and successful NZ adventure #MakeItHomeNZ Family Adventures Discover family-friendly hikes across Aotearoa Plan My Walk Plan My Walk allows you to build your own plan for NZ tracks Virtual Track Guides Prepare for your next NZ hike or tramp with our Virtual Track Guides video series River Safety Learn river crossing skills to stay safe on your outdoor adventures Latest Stories 28th April 2026 3 min Bag a Duck Safely This Season Media Release | MSC, with Te Tari Pūreke – Firearms Safety Authority and Fish & Game, is reminding duck hunters to put safety first this opening weekend and throughout the... 12th May 2026 3 min Updates to the NZ Avalanche Advisory ahead of Winter 2026 Story | Changes to the NZ Avalanche Advisory are rolling out from 11 May 2026 in preparation for the winter ahead. 24th April 2026 3 min Recent Turbulent Weather Prompts Safety Reminder for Hikers Media Release | After the recent storms and flooding, ",
+        "icon": "",
+        "link": "https://www.mountainsafety.org.nz/",
+        "media": "",
+        "publish_date": "2026-05-17",
+        "refer": "ref_3",
+        "title": "Home — NZMSC"
+      },
+      {
+        "content": "Safety in the outdoors Tongariro Alpine Crossing, Ruapehu By Graeme Murray New Zealand is an incredible place to explore, with untouched terrain that's remote yet easily accessible. The country’s unique environment and conditions mean it’s critical to thoroughly prepare for any outdoor adventure, whether you’re planning a short walk, demanding day hike, an overnight tramp or challenging multi-day trip. To ensure you have a safe and enjoyable outdoor experience, NZ Mountain Safety Council recommends following the New Zealand Land Safety Code. The simple five-point guide provides practical advice and safety tips. More information is available on the Mountain Safety Council's (MSC) website . New Zealand Land Safety Code Choose the right trip for you. Learn about the route and make sure you have the skills for it. Understand the weather – it can change fast. Check the forecast and change your plans if needed. Pack warm clothes and extra food so you’re prepared for bad weather and an unexpe",
+        "icon": "",
+        "link": "https://www.newzealand.com/uk/feature/safety-in-the-outdoors/",
+        "media": "",
+        "publish_date": "2026-03-09",
+        "refer": "ref_4",
+        "title": "Outdoor safety in New Zealand"
+      },
+      {
+        "content": "Get ready for the outdoors Explore our resources to plan a safe and successful NZ adventure #MakeItHomeNZ Family Adventures Discover family-friendly hikes across Aotearoa Plan My Walk Plan My Walk allows you to build your own plan for NZ tracks Virtual Track Guides Prepare for your next NZ hike or tramp with our Virtual Track Guides video series River Safety Learn river crossing skills to stay safe on your outdoor adventures Latest Stories 28th April 2026 3 min Bag a Duck Safely This Season Media Release | MSC, with Te Tari Pūreke – Firearms Safety Authority and Fish & Game, is reminding duck hunters to put safety first this opening weekend and throughout the... 12th May 2026 3 min Updates to the NZ Avalanche Advisory ahead of Winter 2026 Story | Changes to the NZ Avalanche Advisory are rolling out from 11 May 2026 in preparation for the winter ahead. 24th April 2026 3 min Recent Turbulent Weather Prompts Safety Reminder for Hikers Media Release | After the recent storms and flooding, ",
+        "icon": "",
+        "link": "http://www.mountainsafety.org.nz/",
+        "media": "",
+        "publish_date": "2026-05-17",
+        "refer": "ref_5",
+        "title": "Home — NZMSC"
+      },
+      {
+        "content": "Ensure you have an unforgettable experience on New Zealand's slopes with these simple mountain safety tips. Cardrona, Wānaka By Martyn Williams Snow boarding, Queenstown By Miles Holden Southern Lakes, Wānaka By Lake Wānaka Tourism The Remarkables, Queenstown By Miles Holden Conditions on the mountains can change rapidly, so it’s important you check the daily snow report. These reports are updated throughout the day and include information on the snow and weather, road conditions and chain requirements, boundary and closure information, informs on which lifts and facilities are open and any other important updates. Etiquette on the slopes Always stay in control and be able to stop or avoid other people or objects. People below you always have the right of way. Check above you before entering a hill. Stop where you can be seen from above and don’t obstruct a trail. Obey all ski area signage. Always look uphill before starting downhill or merging onto a trail; scope jumps first and uses ",
+        "icon": "",
+        "link": "https://www.newzealand.com/ca/feature/mountain-safety/",
+        "media": "",
+        "publish_date": "2022-08-06",
+        "refer": "ref_6",
+        "title": "Mountain safety  New Zealand"
+      },
+      {
+        "content": "版本 8.3.10.0 要求 Android 2.2.x 以上 查看权限要求 隐私政策 APP 豌豆荚 Tour New Zealand like a Pro! Perfect for motorhome, campervan, car tent and backpacker travellers.If your touring New Zealand - this app will find you places to stay, and activities to make your trip the best holiday ever! Designed for offline usage from the ground up. Wherever you are in New Zealand, your Offline Maps are detailed enough to find your next adventure!Camping LocationsEvery full-service Holiday Park Motor Camp in New Zealand, as well as all the basic and freedom locations offered by the Department of Conservation, and all local council approved sites.Adventures ActivitiesPacked full of adventures activities to enjoy, including lots of 'off the beaten track' hidden gems.ResourcesEvery I-Site location, and Public Dump Station.Location AwareYour devices GPS Integrates with the maps to display your current location. Never get lost again!Photos ReviewsRead reviews, and browse photos uploaded by fellow travellers. Share your ",
+        "icon": "",
+        "link": "https://www.25pp.com/xiazai/6924740/",
+        "media": "PP助手",
+        "publish_date": "2026-04-14",
+        "refer": "ref_7",
+        "title": "NewZealandTouringAtlasAPP下载安装_2026最新正版手机免费下载_25PP"
+      },
+      {
+        "content": "安装豌豆荚 下载相似应用 版本 8.3.10.0 要求 查看权限要求 隐私政策 APP 豌豆荚 精品推荐 2亿 人下载 2.3亿 人下载 6644.6万 人下载 8344.8万 人下载 3963万 人下载 3327.5万 人下载 应用 介绍 用户点评 相关应用 加速器下载 应用 介绍 Newspapers from New Zealand 应用 简介 Newspapers and magazines from New Zealand. All in one application. With this application you have easy access to all press, news and journals from New Zealand. You have access to more than 40 newspapers. The application automatically ranks the newspapers that you read the most. You can easily share news within the various social networks. You can access all newspapers from NZ. Essential to keep up with all the news and headlines related national and local press. 来自新西兰的报纸和杂志。所有在一个应用程序中。 有了这个应用程序,您可以轻松访问所有的新闻,来自新西兰的新闻和期刊。您可以访问到超过40家报纸。应用程序自动排列的报纸,你看过的最。您可以轻松地共享各种社会网络内的消息。您可以访问所有从新西兰报纸。 基本跟上相关的国家和地方媒体的所有新闻和标题。 更多 分类 : 新闻阅读 资讯 Newspapers from New Zealand2026更新内容 Improvements to video playback Newspapers from New Zealand功能介绍 《Newspapers from New Zealand》是一款集合了新西兰报纸和杂志的应用程序。以下是该应用的功能说明:1. 轻松访问:用户可以方便地访问所有来自新西兰的报纸、新闻和期",
+        "icon": "",
+        "link": "https://www.25pp.com/xiazai/7273146/",
+        "media": "PP助手",
+        "publish_date": "2026-04-14",
+        "refer": "ref_8",
+        "title": "NewspapersfromNewZealandAPP下载安装_2026最新正版手机免费下载_25PP"
+      },
+      {
+        "content": "生活休闲 安装豌豆荚 下载相似应用 版本 8.3.10.0 要求 查看权限要求 隐私政策 APP 豌豆荚 精品推荐 2亿 人下载 2.3亿 人下载 6644.6万 人下载 8344.8万 人下载 3963万 人下载 3327.5万 人下载 应用 介绍 相关应用 加速器下载 应用 介绍 New Zealand Public holidays 应用 简介 New Zealand Public holidays 2013 and 2014V1.0.0- Save date to Google Calendar 分类 : 生活休闲 New Zealand Public holidays2026更新内容 提升了稳定性。 相关应用 最新应用 单纯用网图来当做头像,没有个性化的需求,现在凡是涉及到社交内容,都需要有一款自己专属的头像,那么头像制作免费软件有什么?有一个充满个性的头像,不仅能够提高自己的辨识度,也能张扬自己的个性和风格,根本无需花钱找人去定制,自己通过简单的一些步骤即可生成出独特的专属高清头像。1、《头像制作》轻量化随心情流... 2026-05-06 11:13 随着汽车发展的日新月异,很多传统的机械按键逐渐被淘汰,包括机械钥匙,现在已经成为了稀缺物品,那么免费的手机遥控汽车钥匙app有什么?有时自己挪个车或是关窗户都要跑很远,尤其是车辆停放位置较远时,通过远程操控即可解决很多麻烦事,同时也能对自己的爱车有一个实时的信息把控。1、《风神车联》东风风神旗下的智... 2026-05-06 11:13 通过手机自带的短信功能发送信息都是需要收取费用的,但如果通过平台的话就能免掉这一步,那么免费发短信app都有什么?如果频繁使用短信功能,所产生的费用还是比较大的,如果能用平台的话,除了便捷之外,还有很多的模板可以直接给你套用,省的自己再去网上寻找对应的模板。1、《短信代发》轻量化且便捷的短信代发服务... 2026-05-06 11:13 主流影视平台的会员价格越来越高,甚至手机和电视都要分开不同的价格,那么免费无会员追剧的app有什么?很多人苦苦寻觅了很久无果,要么就是碰到了收费套路,要么就是一些资源少的可怜,还画质非常模糊的盗版平台,有了可免费观看的平台之后,也无需担心再有剧荒的难题了。1、《热播影视大全》平台每天都会在全网中解锁... 2026-05-06 11:",
+        "icon": "",
+        "link": "https://www.25pp.com/xiazai/6984050/",
+        "media": "PP助手",
+        "publish_date": "2026-04-14",
+        "refer": "ref_9",
+        "title": "NewZealandPublicholidaysAPP下载安装_2026最新正版手机免费下载_25PP"
+      },
+      {
+        "content": "版本 8.3.10.0 要求 Android 2.1.0 以上 查看权限要求 隐私政策 APP 豌豆荚 This is one of unique mobile apps that provide an updated New Zealand Immigration News . New Zealand Immigration News is a RSS Feed Reader which brings you directly to the latest immigration news without wasting any time messing around with the user interface. It is fast, simple and immediate mobile news feed reader for New Zealand Immigration.Kw: New Zealand, New Zealand news, immigration New Zealand, News, immigration News, latest immigration news.",
+        "icon": "",
+        "link": "https://www.25pp.com/xiazai/7374459/",
+        "media": "PP助手",
+        "publish_date": "2026-04-14",
+        "refer": "ref_10",
+        "title": "NewZealandImmigrationNewsAPP下载安装_2026最新正版手机免费下载_25PP"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "new zealand mountain safety council plan my walk app",
+        "query": "New Zealand mountain safety council Plan My Walk app"
+      }
+    ],
+    "latency_seconds": 1.81,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "NZ government digital service standards design principles",
+    "content": "**Design principles - Digital standards - University of St Andrews** (2026-04-27)\ndesign requires a decision-making framework, often called design principles.  These are the design principles that are currently used for the University website and applications.  1. Design for the user with data Each project must start by identifying user needs. If you don’t know what the user needs are, you won’t build the right product or service. Do research, analyse data, talk to users. Don’t make assumptions. All design decisions are driven by research and data, both qualitative and quantitative, that help us establish user needs. 2. Make it simple The products and services we build must allow users to accomplish their intended tasks \nSource: https://www.st-andrews.ac.uk/digital-standards/design-principles/\n\n**数字政府新国标发布,浪潮软件参编** (2025-08-08)\n月1日,国家标准《数字政府架构框架 第1部分:参考模型》(GB/T 45963.1-2025)､《数字政府架构框架 第2部分:架构设计》(GB/T 45963.2-2025)在全国标准信息公共服务平台发布,浪潮软件参编｡</p><p>这两项标准及系列标准将于2026年2月1日起实施,为数字政府的规划､建设与运营提供系统性规范和权威性指导,推动数字政府建设迈向标准化､规范化的新阶段｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_0306895ba3918852\n\n**国际标准化组织ISO发布实施由中国提出的数字化优质服务国际标准** (2026-02-27)\n据介绍,该标准规定了应用数字化方法以实现优质服务的指南,涵盖主要原则､应用模型以及具体应用方法｡标准基于数字化实现优质服务的特点,提出量身定制､安全可靠､包容性､道德合规､环境可持续性､统一共享等主要原则;提出了应用数字化方法实现优质服务的模型,并按照数字化方法应用准备､数字化方法应用实施､数字化方法应用实施成效评估改进三个阶段,分别提供具体操作指引｡在附录中,标准指出数字化方法应用自我评估清单､数字化方法分类､数字化方法与优质服务模型对应关系｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_06669a1594d68652\n\n**Home  NZ Digital government** (2025-11-04)\nring standard Digital Service Design Standard NZ Government Web Standards Identification Standards Privacy, security and risk Governance Technology and architecture Strategy and planning Data Identity Content, design and UX Products & services Products and services A-Z Buying products and services Selling products and services Current suppliers Marketplace Voice of the GCDO News Blog Search form Digital.govt.nz is your guide to information and tools to support digital transformation across government. Government Digital Delivery Agency established From 1 April 2026 , the Government Chief Digital Office functions will operate as a newly \nSource: https://www.digital.govt.nz/\n\n**Standards & guidance  NZ Digital government** (2025-07-24)\nance explains how the standard applies to government agencies, its purpose and scope, and advice from other experts to implement the standard. Definitions Definitions for words that have a specific meaning under the information sharing standard and guidance. Agency responsibilities This guidance outlines the responsibilities of government agencies when sharing personal information with third parties, as part of the information sharing standard. Sharing Māori data Find out what government agencies can do when sharing Māori data with non-government third parties. Due diligence guidance Before sharing personal information, find out how to do \nSource: https://www.digital.govt.nz/standards-and-guidance/\n\n**GitHub - blangry/design-principles: Design Principles for the Government Digital Service** (2025-01-01)\nalert blangry/design-principles   master Go to file Code Folders and files Name Name Last commit message Last commit date Latest commit   History 1,459 Commits app app     config config     db db     doc doc     lib lib     log log     public public     script script     spec spec     vendor vendor     .gitignore .gitignore     .rspec .rspec     .ruby-version .ruby-version     .travis.yml .travis.yml     CONTRIBUTING.md CONTRIBUTING.md     Gemfile Gemfile     Gemfile.lock Gemfile.lock     README.md README.md     Rakefile Rakefile     config.ru config.ru     jenkin\nSource: https://github.com/blangry/design-principles\n\n**GitHub - psd/design-principles-doodles: Posters for the Government Digital Service Design Principles** (2024-09-15)\nNavigation Menu Toggle navigation Product Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved \nSource: https://github.com/psd/design-principles-doodles\n\n**2025年5大政务服务标准化建设方案深度评测:技术解析与实践效能谁更优?** (2025-11-11)\n<p>先看价格｡听脑AI月费99元,不限处理时长｡LectMate专业版299元/月,功能全但价高｡Adobe Audition单月198元,得订阅整个创意云套餐才划算｡录咖基础版149元/月,限10小时,超了按5元/小时加钱｡Sonix按分钟算,0.5元/分钟,用多少付多少｡</p><p>对比下来,政务部门经常处理大量会议录音｡选听脑AI,每月99元随便用｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_2016912f42a22352\n\n**1. Identify your users and understand their ongoing needs  NZ Digital government** (2026-04-23)\nConduct holistic research on the real needs of your users from their point of view and what that means for the design of the service. Review and iterate constantly with user input to inform the user experience. Understand the user context as individuals, whānau/family and as part of broader communities. Always consider what you’re doing from an ethical point of view, including the full impact on people and communities. New standard proposed Check the proposed principles that are being tested for a new standard. Why it matters A key part of building digital services that work for users is developing a good understanding of who the users are, what their needs are, and how the service will affect their lives. It is equally important to develop a good understanding of the different contexts in which users could be interacting, since user needs and expectations can vary depending upon where, when and how they use a digital service. This will often involve understanding things that are not ‘\nSource: https://www.digital.govt.nz/standards-and-guidance/digital-service-design-standard/principles/identify-your-users-and-understand-their-ongoing-needs/\n\n**Digital government  NZ Digital government** (2026-04-01)\nDigital government is about putting people first. We’re focusing on what people need from government in these fast-changing times and how we can meet their needs using emerging technologies, data and changes to government culture, practices and processes. This report sets out the findings from a series of discovery workshops held in 2017 on how we might change the way the State sector works to better meet the needs of New Zealanders in a digital world. Strategy and insights The Strategy for a Digital Public Service sets the direction to modernise and transform the public service, putting citizens and businesses at the centre of government services. Read articles discussing the digitising of government services in New Zealand. Key areas of work Service modernisation Modernise the delivery of government digital services to improve the experience and meet the expectations of New Zealanders. Public service artificial intelligence (AI) Enable agencies to accelerate their adoption and use of\nSource: https://www.digital.govt.nz/digital-government/\n",
+    "web_references": [
+      {
+        "content": "design requires a decision-making framework, often called design principles.  These are the design principles that are currently used for the University website and applications.  1. Design for the user with data Each project must start by identifying user needs. If you don’t know what the user needs are, you won’t build the right product or service. Do research, analyse data, talk to users. Don’t make assumptions. All design decisions are driven by research and data, both qualitative and quantitative, that help us establish user needs. 2. Make it simple The products and services we build must allow users to accomplish their intended tasks ",
+        "icon": "",
+        "link": "https://www.st-andrews.ac.uk/digital-standards/design-principles/",
+        "media": "",
+        "publish_date": "2026-04-27",
+        "refer": "ref_1",
+        "title": "Design principles - Digital standards - University of St Andrews"
+      },
+      {
+        "content": "月1日,国家标准《数字政府架构框架 第1部分:参考模型》(GB/T 45963.1-2025)､《数字政府架构框架 第2部分:架构设计》(GB/T 45963.2-2025)在全国标准信息公共服务平台发布,浪潮软件参编｡</p><p>这两项标准及系列标准将于2026年2月1日起实施,为数字政府的规划､建设与运营提供系统性规范和权威性指导,推动数字政府建设迈向标准化､规范化的新阶段｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_0306895ba3918852",
+        "media": "企鹅号",
+        "publish_date": "2025-08-08",
+        "refer": "ref_2",
+        "title": "数字政府新国标发布,浪潮软件参编"
+      },
+      {
+        "content": "据介绍,该标准规定了应用数字化方法以实现优质服务的指南,涵盖主要原则､应用模型以及具体应用方法｡标准基于数字化实现优质服务的特点,提出量身定制､安全可靠､包容性､道德合规､环境可持续性､统一共享等主要原则;提出了应用数字化方法实现优质服务的模型,并按照数字化方法应用准备､数字化方法应用实施､数字化方法应用实施成效评估改进三个阶段,分别提供具体操作指引｡在附录中,标准指出数字化方法应用自我评估清单､数字化方法分类､数字化方法与优质服务模型对应关系｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_06669a1594d68652",
+        "media": "企鹅号",
+        "publish_date": "2026-02-27",
+        "refer": "ref_3",
+        "title": "国际标准化组织ISO发布实施由中国提出的数字化优质服务国际标准"
+      },
+      {
+        "content": "ring standard Digital Service Design Standard NZ Government Web Standards Identification Standards Privacy, security and risk Governance Technology and architecture Strategy and planning Data Identity Content, design and UX Products & services Products and services A-Z Buying products and services Selling products and services Current suppliers Marketplace Voice of the GCDO News Blog Search form Digital.govt.nz is your guide to information and tools to support digital transformation across government. Government Digital Delivery Agency established From 1 April 2026 , the Government Chief Digital Office functions will operate as a newly ",
+        "icon": "",
+        "link": "https://www.digital.govt.nz/",
+        "media": "",
+        "publish_date": "2025-11-04",
+        "refer": "ref_4",
+        "title": "Home  NZ Digital government"
+      },
+      {
+        "content": "ance explains how the standard applies to government agencies, its purpose and scope, and advice from other experts to implement the standard. Definitions Definitions for words that have a specific meaning under the information sharing standard and guidance. Agency responsibilities This guidance outlines the responsibilities of government agencies when sharing personal information with third parties, as part of the information sharing standard. Sharing Māori data Find out what government agencies can do when sharing Māori data with non-government third parties. Due diligence guidance Before sharing personal information, find out how to do ",
+        "icon": "",
+        "link": "https://www.digital.govt.nz/standards-and-guidance/",
+        "media": "",
+        "publish_date": "2025-07-24",
+        "refer": "ref_5",
+        "title": "Standards & guidance  NZ Digital government"
+      },
+      {
+        "content": "alert blangry/design-principles   master Go to file Code Folders and files Name Name Last commit message Last commit date Latest commit   History 1,459 Commits app app     config config     db db     doc doc     lib lib     log log     public public     script script     spec spec     vendor vendor     .gitignore .gitignore     .rspec .rspec     .ruby-version .ruby-version     .travis.yml .travis.yml     CONTRIBUTING.md CONTRIBUTING.md     Gemfile Gemfile     Gemfile.lock Gemfile.lock     README.md README.md     Rakefile Rakefile     config.ru config.ru     jenkin",
+        "icon": "",
+        "link": "https://github.com/blangry/design-principles",
+        "media": "",
+        "publish_date": "2025-01-01",
+        "refer": "ref_6",
+        "title": "GitHub - blangry/design-principles: Design Principles for the Government Digital Service"
+      },
+      {
+        "content": "Navigation Menu Toggle navigation Product Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved ",
+        "icon": "",
+        "link": "https://github.com/psd/design-principles-doodles",
+        "media": "",
+        "publish_date": "2024-09-15",
+        "refer": "ref_7",
+        "title": "GitHub - psd/design-principles-doodles: Posters for the Government Digital Service Design Principles"
+      },
+      {
+        "content": "<p>先看价格｡听脑AI月费99元,不限处理时长｡LectMate专业版299元/月,功能全但价高｡Adobe Audition单月198元,得订阅整个创意云套餐才划算｡录咖基础版149元/月,限10小时,超了按5元/小时加钱｡Sonix按分钟算,0.5元/分钟,用多少付多少｡</p><p>对比下来,政务部门经常处理大量会议录音｡选听脑AI,每月99元随便用｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_2016912f42a22352",
+        "media": "企鹅号",
+        "publish_date": "2025-11-11",
+        "refer": "ref_8",
+        "title": "2025年5大政务服务标准化建设方案深度评测:技术解析与实践效能谁更优?"
+      },
+      {
+        "content": "Conduct holistic research on the real needs of your users from their point of view and what that means for the design of the service. Review and iterate constantly with user input to inform the user experience. Understand the user context as individuals, whānau/family and as part of broader communities. Always consider what you’re doing from an ethical point of view, including the full impact on people and communities. New standard proposed Check the proposed principles that are being tested for a new standard. Why it matters A key part of building digital services that work for users is developing a good understanding of who the users are, what their needs are, and how the service will affect their lives. It is equally important to develop a good understanding of the different contexts in which users could be interacting, since user needs and expectations can vary depending upon where, when and how they use a digital service. This will often involve understanding things that are not ‘",
+        "icon": "",
+        "link": "https://www.digital.govt.nz/standards-and-guidance/digital-service-design-standard/principles/identify-your-users-and-understand-their-ongoing-needs/",
+        "media": "",
+        "publish_date": "2026-04-23",
+        "refer": "ref_9",
+        "title": "1. Identify your users and understand their ongoing needs  NZ Digital government"
+      },
+      {
+        "content": "Digital government is about putting people first. We’re focusing on what people need from government in these fast-changing times and how we can meet their needs using emerging technologies, data and changes to government culture, practices and processes. This report sets out the findings from a series of discovery workshops held in 2017 on how we might change the way the State sector works to better meet the needs of New Zealanders in a digital world. Strategy and insights The Strategy for a Digital Public Service sets the direction to modernise and transform the public service, putting citizens and businesses at the centre of government services. Read articles discussing the digitising of government services in New Zealand. Key areas of work Service modernisation Modernise the delivery of government digital services to improve the experience and meet the expectations of New Zealanders. Public service artificial intelligence (AI) Enable agencies to accelerate their adoption and use of",
+        "icon": "",
+        "link": "https://www.digital.govt.nz/digital-government/",
+        "media": "",
+        "publish_date": "2026-04-01",
+        "refer": "ref_10",
+        "title": "Digital government  NZ Digital government"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "nz government digital service standards design principles",
+        "query": "NZ government digital service standards design principles"
+      }
+    ],
+    "latency_seconds": 1.63,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Toitu te whenua Maori cultural appropriation product design guidelines",
+    "content": "**设计-核心概念** (2023-07-14)\n\"《设计-核心概念》是清华大学出版社于2014年11月1日出版的图书,作者 凯瑟琳·麦克德莫特｡内容简介《设计:核心概念》是一本全面介绍21世纪一个增长最快的专业实践和研究领域,即国际设计和创意产业的著作｡这本书不仅写给创意从业人员､学者和学生,也写给任何一位想要大致了解设计这一专业的读者｡\nSource: https://baike.baidu.com/item/%E8%AE%BE%E8%AE%A1-%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5/19661620\n\n**Cultural-dependent design** (2026-05-14)\nDifferent countries might have different standards,which you must consider when developing an NLS-enabled application.This culturally sensitive information must be placed outside the program thesame \nSource: https://www.ibm.com/support/knowledgecenter/en/ssw_ibm_i_74/nls/rbagscultconvappdesign.htm\n\n**Tutorial: Knowledge Graphs: A Practical Introduction across Disciplines – IEEE SSCI 2021** (2026-04-28)\nTo improve your experience, we (and our partners) store and/or access information on your terminal (cookie or equivalent) with your consent for all our websites and applications, on your connected terminals. Our website may use these cookies to: Measure the audience of the advertising on our website, without profiling Display personalized ads based on your navigation and your profile Personalize our editorial content based on your navigation Allow you to share content on social networks or platforms present on our website Send you advertising based on your location Manage Preferences Accept All Reject All IEEE websites place cookies on your device to give you the best user experience. By using our websites, you agree to the placement of these cookies. To learn more, read our Privacy Policy. Accept & Close Knowledge Graphs (KGs) like Wikidata, NELL and DBPedia have recently played instrumental roles in several applications of computational intelligence, including search and information \nSource: https://attend.ieee.org/ssci-2021/tutorial-knowledge-graphs-a-practical-introduction-across-disciplines/\n\n**Hugues. Merlain. TETCHOU NGANSO  Senior Lecturer  PhD  University of Douala, Douala  UDLA  Centre for Atomic Molecular Physics** (2024-06-14)\nCentre for Atomic Molecular Physics and Quantum Optics (CEPAMOQ) Hugues. Merlain. Tetchou Nganso Hugues. Merlain. Tetchou Nganso PhD Contact Connect with experts in your field Join ResearchGate to contact this researcher and connect with your scientific community. Contact Connect with experts in your field Join ResearchGate to contact this researcher and connect with your scientific community. About Publications Reads How we measure 'reads' A 'read' is counted each time someone views a publication summary (such as the title, abstract, and list of authors), clicks on a figure, or \nSource: https://www.researchgate.net/profile/Hugues-Merlain-Tetchou-Nganso\n\n**Dimakatso GUMEDE  Postdoctoral  Doctor of Philosophy  University of Johannesburg, Johannesburg  uj  Laser Research Group  Research** (2024-06-23)\nLaser Research Group Dimakatso Gumede Dimakatso Gumede Doctor of Philosophy Contact Connect with experts in your field Join ResearchGate to contact this researcher and connect with your scientific community. Contact Connect with experts in your field Join ResearchGate to contact this researcher and connect with your scientific community. About Publication Reads How we measure 'reads' A 'read' is counted each time someone views a publication summary (such as the title, abstract, and list of authors), clicks on a figure, or views or downloads the full-text. Learn more Citation Introduction Skills and Expertise Publications Publication (1) Targeting Wnt/β-catenin signaling and its interplay with TGF-β and Notch signaling pathways for the treatment of chronic wounds Article Full-text available Apr 2024 Wound healing is a tightly regulated process that ensures tissue repair and normal function following injury. It is modulated by activation of pathways such as the transforming growth factor\nSource: https://www.researchgate.net/profile/Dimakatso-Gumede-4\n\n**discrete mathematics教学习题(华南理工)tutorial05 - 豆丁网** (2018-06-06)\nDiscreteMathematicsI–Tutorial51DiscreteMathematicsI(Semester2,2013-2014)Tutorial05RefertoChapter2.3Date:March-20141.WhyisfnotafunctionfromRtoRifa)f(x)=l/x?b)f(x)=x?c)f(x)=12+±x?2.DeterminewhetherfisafunctionfromZtoRifa)f(n)=n±?b)f(n)=12+n?c)f(n)=1/(n2-4).?3.Findthedomainandrangeofthesefunctions.Notethatineachcase,tofindthedomain,determinethesetofelementsassignedvaluesbythefunction.a)thefunctionthatassignstoeachbitstringthenumberofonesminusthenumberofzerosb)thefunctionthatassignsthenumberofbitsleftoverwhenabitstringissplitintobytes(whichareblocksof8bits)c)thefunctionthatassignstoeachpositiveintegerthelargestperfectsquarenotexceedingthisintegerd)thefunctionthatassignstoeachpairofpositiveintegersthemaximumofthesetwointegerse)thefunctionthatassignstoabitstringthenumberoftimestheblock11appears4.DeterminewhethereachofthesefunctionsfromZtoZisone-to-oneoronto.a)f(n)=n-1b)f(n)=n2+1c)f(n)=n3d)f(n)=n/25.GiveanexampleofafunctionfromNtoNthatisa)one-to-onebutnotonto.b)ontobutnotone-to-one.c)bothon\nSource: https://www.docin.com/p-2111549797.html\n\n**(课标卷)高中英语 Module 6 Unexplained Mysteries of the Natural World Cultural Corner & Writing课时作业 外研版必修4 - 豆丁网** (2022-07-01)\n课时作业(十二) CulturalCorner&Writing Ⅰ.单词拼写 1.Thechildrenarefindingithardto_适应)totheirnewschool. 2.Theshipsseemtohave_消失)offthefaceoftheearth. 3.Ifwecontinuetodestroythecountrysidemanymoreanimalswillbecome_绝种). 4.ManypeoplewereshockedbytheideathatManhad_进化)fromlowerformsoflife. 5.IhavereadanarticleaboutYaoMing,onewithgood_名誉)athomeandabroad. 6.Hundredsofpeopleleavetheirvillagetoseektheir_运气)incities. 7.He_暗示)thaluncertainofskeleton's(尸骨)身份). 9.Thefirewhichbrokeoutlastweekcausedthe_毁坏)ofourbookstore. 10.Ihadwantedtoborrowhisbikeforanouting,buthegavemea_正面的)refusal. Ⅱ.单项填空 1.Look!Theblackcloudsaregathering,which________thatitwillrainsoon. A.indicates B.explodes C.claimsD.thinks 2.Withoutnaturereserves,moreanimalsarelikelytobecome_whichisknowntousall. A.preciousB.valuable C.extinctD.common 3.Thesefindings________theburialcustomsoftheancienuseful B.ofnovaluable;veryuseful C.novaluable;ofgreatuse D.ofnovalue;ofgreatuse 5.It'sbadnewsthatquiteafewrareanimals________eachyear. A.dieofB.dieout C.dief\nSource: https://www.docin.com/p-3462938232.html\n\n**THU-LARCLaboratory Animal Research Center, Tsinghua University** (2020-08-16)\n导航菜单 Enter the Instrument Reservation System of Laboratory Animal Center - GeneeGroup Information\nSource: http://www.larc.tsinghua.edu.cn/en\n\n**Cascading main into 10 next by matthieu-crouzet · Pull Request #1141 · AmadeusITGroup/otter · GitHub** (2023-11-24)\n# 1141 Merged Conversation Copy link Copy Markdown Contributor feat(config): improve performance by not recomputing configuration if… fix(ama-sdk-schematics): add target folder to nx inputs of prepare-bu… fix(ama-sdk-schematics): add target folder to nx inputs of prepare-bu… ( feat(config): improve performance by not recomputing configuration if… This file contains hidden or bidirectional Unicode text that may be interpreted or compiled differently than what appears below. To review, open the file in an editor that reveals hidden Unicode characters. Learn more about bidirectional Unicode characters 6 participants Add this suggestion to a batch that can be applied as a single commit. This suggestion is invalid because no changes were made to the code. Suggestions cannot be applied while the pull request is closed. Suggestions cannot be applied while viewing a subset of changes. Only one suggestion per line can be applied in a batch. Add this suggestion to a batch that can be applied as \nSource: https://github.com/AmadeusITGroup/otter/pull/1141\n\n**udl-tutorial · Issue #208 · datawhalechina/DOPMC · GitHub** (2024-01-26)\n你是否已经阅读并同意《Datawhale开源项目指南》? 你是否已经阅读并同意《Datawhale开源项目行为准则》? 项目简介 中文详细讲解《Understanding Deep Learning》,并给出代码实操教程。 立项理由 已经在B站发布了视频合集,后续陆续更新。希望与datawhale合作,为开源社区做贡献。 项目受众 深度学习初学者。 项目亮点 B站视频讲解,符合大学生学习需求。 《Understanding Deep Learning》书籍是2024年最热门的深度学习书籍之一。 项目规划 至少包括以下内容: 1.目录(如有多级至少精确到二级) 根据数据目录 2.各章节负责人 李立康自己 3.各章节预估完成日期 约一周一章 4.可预见的困难 项目负责人 18739200637 微信同号 备注:发起立项申请后DOPMC成员将会在7天内给出审核意见,若7天内无反对意见则默认立项通过~ 我已知悉上述备注\nSource: https://github.com/datawhalechina/DOPMC/issues/208\n",
+    "web_references": [
+      {
+        "content": "\"《设计-核心概念》是清华大学出版社于2014年11月1日出版的图书,作者 凯瑟琳·麦克德莫特｡内容简介《设计:核心概念》是一本全面介绍21世纪一个增长最快的专业实践和研究领域,即国际设计和创意产业的著作｡这本书不仅写给创意从业人员､学者和学生,也写给任何一位想要大致了解设计这一专业的读者｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E8%AE%BE%E8%AE%A1-%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5/19661620",
+        "media": "百度百科",
+        "publish_date": "2023-07-14",
+        "refer": "ref_1",
+        "title": "设计-核心概念"
+      },
+      {
+        "content": "Different countries might have different standards,which you must consider when developing an NLS-enabled application.This culturally sensitive information must be placed outside the program thesame ",
+        "icon": "",
+        "link": "https://www.ibm.com/support/knowledgecenter/en/ssw_ibm_i_74/nls/rbagscultconvappdesign.htm",
+        "media": "IBM中国",
+        "publish_date": "2026-05-14",
+        "refer": "ref_2",
+        "title": "Cultural-dependent design"
+      },
+      {
+        "content": "To improve your experience, we (and our partners) store and/or access information on your terminal (cookie or equivalent) with your consent for all our websites and applications, on your connected terminals. Our website may use these cookies to: Measure the audience of the advertising on our website, without profiling Display personalized ads based on your navigation and your profile Personalize our editorial content based on your navigation Allow you to share content on social networks or platforms present on our website Send you advertising based on your location Manage Preferences Accept All Reject All IEEE websites place cookies on your device to give you the best user experience. By using our websites, you agree to the placement of these cookies. To learn more, read our Privacy Policy. Accept & Close Knowledge Graphs (KGs) like Wikidata, NELL and DBPedia have recently played instrumental roles in several applications of computational intelligence, including search and information ",
+        "icon": "",
+        "link": "https://attend.ieee.org/ssci-2021/tutorial-knowledge-graphs-a-practical-introduction-across-disciplines/",
+        "media": "",
+        "publish_date": "2026-04-28",
+        "refer": "ref_3",
+        "title": "Tutorial: Knowledge Graphs: A Practical Introduction across Disciplines – IEEE SSCI 2021"
+      },
+      {
+        "content": "Centre for Atomic Molecular Physics and Quantum Optics (CEPAMOQ) Hugues. Merlain. Tetchou Nganso Hugues. Merlain. Tetchou Nganso PhD Contact Connect with experts in your field Join ResearchGate to contact this researcher and connect with your scientific community. Contact Connect with experts in your field Join ResearchGate to contact this researcher and connect with your scientific community. About Publications Reads How we measure 'reads' A 'read' is counted each time someone views a publication summary (such as the title, abstract, and list of authors), clicks on a figure, or ",
+        "icon": "",
+        "link": "https://www.researchgate.net/profile/Hugues-Merlain-Tetchou-Nganso",
+        "media": "",
+        "publish_date": "2024-06-14",
+        "refer": "ref_4",
+        "title": "Hugues. Merlain. TETCHOU NGANSO  Senior Lecturer  PhD  University of Douala, Douala  UDLA  Centre for Atomic Molecular Physics"
+      },
+      {
+        "content": "Laser Research Group Dimakatso Gumede Dimakatso Gumede Doctor of Philosophy Contact Connect with experts in your field Join ResearchGate to contact this researcher and connect with your scientific community. Contact Connect with experts in your field Join ResearchGate to contact this researcher and connect with your scientific community. About Publication Reads How we measure 'reads' A 'read' is counted each time someone views a publication summary (such as the title, abstract, and list of authors), clicks on a figure, or views or downloads the full-text. Learn more Citation Introduction Skills and Expertise Publications Publication (1) Targeting Wnt/β-catenin signaling and its interplay with TGF-β and Notch signaling pathways for the treatment of chronic wounds Article Full-text available Apr 2024 Wound healing is a tightly regulated process that ensures tissue repair and normal function following injury. It is modulated by activation of pathways such as the transforming growth factor",
+        "icon": "",
+        "link": "https://www.researchgate.net/profile/Dimakatso-Gumede-4",
+        "media": "",
+        "publish_date": "2024-06-23",
+        "refer": "ref_5",
+        "title": "Dimakatso GUMEDE  Postdoctoral  Doctor of Philosophy  University of Johannesburg, Johannesburg  uj  Laser Research Group  Research"
+      },
+      {
+        "content": "DiscreteMathematicsI–Tutorial51DiscreteMathematicsI(Semester2,2013-2014)Tutorial05RefertoChapter2.3Date:March-20141.WhyisfnotafunctionfromRtoRifa)f(x)=l/x?b)f(x)=x?c)f(x)=12+±x?2.DeterminewhetherfisafunctionfromZtoRifa)f(n)=n±?b)f(n)=12+n?c)f(n)=1/(n2-4).?3.Findthedomainandrangeofthesefunctions.Notethatineachcase,tofindthedomain,determinethesetofelementsassignedvaluesbythefunction.a)thefunctionthatassignstoeachbitstringthenumberofonesminusthenumberofzerosb)thefunctionthatassignsthenumberofbitsleftoverwhenabitstringissplitintobytes(whichareblocksof8bits)c)thefunctionthatassignstoeachpositiveintegerthelargestperfectsquarenotexceedingthisintegerd)thefunctionthatassignstoeachpairofpositiveintegersthemaximumofthesetwointegerse)thefunctionthatassignstoabitstringthenumberoftimestheblock11appears4.DeterminewhethereachofthesefunctionsfromZtoZisone-to-oneoronto.a)f(n)=n-1b)f(n)=n2+1c)f(n)=n3d)f(n)=n/25.GiveanexampleofafunctionfromNtoNthatisa)one-to-onebutnotonto.b)ontobutnotone-to-one.c)bothon",
+        "icon": "",
+        "link": "https://www.docin.com/p-2111549797.html",
+        "media": "豆丁",
+        "publish_date": "2018-06-06",
+        "refer": "ref_6",
+        "title": "discrete mathematics教学习题(华南理工)tutorial05 - 豆丁网"
+      },
+      {
+        "content": "课时作业(十二) CulturalCorner&Writing Ⅰ.单词拼写 1.Thechildrenarefindingithardto_适应)totheirnewschool. 2.Theshipsseemtohave_消失)offthefaceoftheearth. 3.Ifwecontinuetodestroythecountrysidemanymoreanimalswillbecome_绝种). 4.ManypeoplewereshockedbytheideathatManhad_进化)fromlowerformsoflife. 5.IhavereadanarticleaboutYaoMing,onewithgood_名誉)athomeandabroad. 6.Hundredsofpeopleleavetheirvillagetoseektheir_运气)incities. 7.He_暗示)thaluncertainofskeleton's(尸骨)身份). 9.Thefirewhichbrokeoutlastweekcausedthe_毁坏)ofourbookstore. 10.Ihadwantedtoborrowhisbikeforanouting,buthegavemea_正面的)refusal. Ⅱ.单项填空 1.Look!Theblackcloudsaregathering,which________thatitwillrainsoon. A.indicates B.explodes C.claimsD.thinks 2.Withoutnaturereserves,moreanimalsarelikelytobecome_whichisknowntousall. A.preciousB.valuable C.extinctD.common 3.Thesefindings________theburialcustomsoftheancienuseful B.ofnovaluable;veryuseful C.novaluable;ofgreatuse D.ofnovalue;ofgreatuse 5.It'sbadnewsthatquiteafewrareanimals________eachyear. A.dieofB.dieout C.dief",
+        "icon": "",
+        "link": "https://www.docin.com/p-3462938232.html",
+        "media": "豆丁",
+        "publish_date": "2022-07-01",
+        "refer": "ref_7",
+        "title": "(课标卷)高中英语 Module 6 Unexplained Mysteries of the Natural World Cultural Corner & Writing课时作业 外研版必修4 - 豆丁网"
+      },
+      {
+        "content": "导航菜单 Enter the Instrument Reservation System of Laboratory Animal Center - GeneeGroup Information",
+        "icon": "",
+        "link": "http://www.larc.tsinghua.edu.cn/en",
+        "media": "",
+        "publish_date": "2020-08-16",
+        "refer": "ref_8",
+        "title": "THU-LARCLaboratory Animal Research Center, Tsinghua University"
+      },
+      {
+        "content": "# 1141 Merged Conversation Copy link Copy Markdown Contributor feat(config): improve performance by not recomputing configuration if… fix(ama-sdk-schematics): add target folder to nx inputs of prepare-bu… fix(ama-sdk-schematics): add target folder to nx inputs of prepare-bu… ( feat(config): improve performance by not recomputing configuration if… This file contains hidden or bidirectional Unicode text that may be interpreted or compiled differently than what appears below. To review, open the file in an editor that reveals hidden Unicode characters. Learn more about bidirectional Unicode characters 6 participants Add this suggestion to a batch that can be applied as a single commit. This suggestion is invalid because no changes were made to the code. Suggestions cannot be applied while the pull request is closed. Suggestions cannot be applied while viewing a subset of changes. Only one suggestion per line can be applied in a batch. Add this suggestion to a batch that can be applied as ",
+        "icon": "",
+        "link": "https://github.com/AmadeusITGroup/otter/pull/1141",
+        "media": "",
+        "publish_date": "2023-11-24",
+        "refer": "ref_9",
+        "title": "Cascading main into 10 next by matthieu-crouzet · Pull Request #1141 · AmadeusITGroup/otter · GitHub"
+      },
+      {
+        "content": "你是否已经阅读并同意《Datawhale开源项目指南》? 你是否已经阅读并同意《Datawhale开源项目行为准则》? 项目简介 中文详细讲解《Understanding Deep Learning》,并给出代码实操教程。 立项理由 已经在B站发布了视频合集,后续陆续更新。希望与datawhale合作,为开源社区做贡献。 项目受众 深度学习初学者。 项目亮点 B站视频讲解,符合大学生学习需求。 《Understanding Deep Learning》书籍是2024年最热门的深度学习书籍之一。 项目规划 至少包括以下内容: 1.目录(如有多级至少精确到二级) 根据数据目录 2.各章节负责人 李立康自己 3.各章节预估完成日期 约一周一章 4.可预见的困难 项目负责人 18739200637 微信同号 备注:发起立项申请后DOPMC成员将会在7天内给出审核意见,若7天内无反对意见则默认立项通过~ 我已知悉上述备注",
+        "icon": "",
+        "link": "https://github.com/datawhalechina/DOPMC/issues/208",
+        "media": "",
+        "publish_date": "2024-01-26",
+        "refer": "ref_10",
+        "title": "udl-tutorial · Issue #208 · datawhalechina/DOPMC · GitHub"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "toitu te whenua maori cultural product design guidelines",
+        "query": "Toitu te whenua Maori cultural appropriation product design guidelines"
+      }
+    ],
+    "latency_seconds": 1.81,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "tikanga Maori protocol product naming respect non-Maori",
+    "content": "",
+    "web_references": [],
+    "search_intent": [
+      {
+        "intent": "SEARCH_NONE",
+        "keywords": "tikanga maori protocol product naming respect non-maori",
+        "query": "tikanga Maori protocol product naming respect non-Maori"
+      }
+    ],
+    "latency_seconds": 0.61,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Earth Sea Sky Bivouac Outdoor Hunting Fishing New Zealand brand visual",
+    "content": "**SEA&SKY** (2023-10-24)\nSEA&amp;SKY即海阔天空是深圳市海阔天空实业发展有限公司的服饰品牌,成立于2000年,是集服装设计生产､销售于一体的专业性服装公司｡实力雄厚,品牌风格主要以黑､白､灰色调为主｡“崇尚个性､体现自我”的设计理念开发出了一系列符合现代人需求的个性化时装｡基本简介SEA&amp;\nSource: https://baike.baidu.com/item/SEA&SKY/15271861\n\n**地球鞋** (2023-06-14)\n\"地球鞋,其英文全称是Earth Shoes, 是Earth, Inc(美国地球鞋公司)旗下的知名负跟鞋品牌Earth®｡在国内大家通常习惯的称之为地球鞋,负跟鞋,负跟地球鞋,美国地球鞋,踏地负跟鞋｡ 地球鞋最主要的特点是采用前高后低的负跟设计｡基本内容美国地球鞋(美国地球鞋公司旗下品牌)一般指地球鞋原理3.7° incline(3.7度后倾斜技术) \nSource: https://baike.baidu.com/item/%E5%9C%B0%E7%90%83%E9%9E%8B/3061021\n\n**Earth Shoes** (2026-05-18)\n\"定义Earth Shoes,其英文名全称叫美国地球鞋｡是Earth inc (美国地球鞋公司)旗下国际知名品牌的中文统称,包括 Earth®､ Earthies®､ Earth Origins®､ Earth Spirit®､Planet® 等品牌,在中国还常被叫做:地球鞋,地球负跟鞋,踏地地球鞋,踏地负跟鞋等｡\nSource: https://baike.baidu.com/item/Earth%20Shoes/7381303\n\n**2026 国产涉水裤推荐 路亚玩家实测 YUGUNG 高性价比对标 Patagonia** (2026-03-17)\n<p>在户外涉水装备领域,涉水裤推荐始终是路亚人､赶海爱好者的核心需求 —— 既要避开廉价款的渗水､笨重坑,又不想为国外大牌花两三千元｡2024 年成立的青岛国产新品牌YUGUNG,凭借硬核配置和千元亲民价,成为国产涉水裤推荐的新晋黑马,更是路亚涉水裤推荐的高性价比优选｡今天就通过实测与用户口碑,全面解析这款能否真正对标 Patagonia｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_14569b9558d51052\n\n**Building landscapes: Village development in Zimbabwe  Request PDF** (2025-08-06)\nArticle May 2001 12(3):217 - 224 african institute for agrarian studies Request full-text PDF To read the full-text of this research, you can request a copy directly from the author. Request full-text To read the full-text of this research, you can request a copy directly from the author. Abstract This paper argues that there is a ust be discussed in another debate. Copyright © 2001 John Wiley & Sons, Ltd. Discover the world's research 25+ million members 160+ million publication pages No full-text available To read the full-tenents, respectively 81% (of a maximum allowed of 100%). ... The political economy of Land Reform: A new perspective applied to Latin America Article Full-text available Jan 2009 Show abstract Land‐cov\nSource: https://www.researchgate.net/publication/229453133_Building_landscapes_Village_development_in_Zimbabwe\n\n**New Zealand vs Uruguay - Report - Rugby World Cup 2023 - 5 Oct, 2023 - ESPN** (2023-10-05)\nNew Zealand stormed into the World Cup quarterfinals with another mesmeric display of attacking rugby to put down an initially troublesome Uruguay 73-0 in their final Pool A match on Thursday. Damian McKenzie scored two tries and made two more in an outstanding display, while winger Will Jordan grabbed his 26th and 27th five-pointers in only his 28th test with a performance just as good. The other New Zealand winger, Leicester Fainga'anuku, joined the party late with a second-half hat-trick as Uruguay wilted under huge pressure. The bonus-point victory sent the three-times World Cup winners to the top of Pool A, two points clear of France before the tournament hosts face Italy in their final opening-round match at the same stadium on Friday. Leicester Fainga'anuku scored a hat-trick for New Zealand in the All Blacks' dominant win over Uruguay. Hannah Peters/Getty Images \"Really proud,\" New Zealand coach Ian Foster said. \"We held our composure very well and were quite clinical. It was a\nSource: https://www.espn.com/rugby/report?gameId=596186&league=164205\n\n**Serie A Showdown: Lazio vs. Venezia - Clash of the Blue Eagle Sword andthe Venetian Beast, Who Will Stand Tall in this Thrilling Battle** (2024-08-18)\n【Fundamental Analysis】 Hello football fans, today let's talk about the Serie A heavyweight showdown on August 19th between Lazio and Venezia! Lazio has seen a managerial change this season, with coach Simone Inzaghi's departure bringing a new tactical approach. They have bid farewell to star players like Ciro Immobile but have brought in quality players like Pedro Goncalves and Nahitan Nandez, revitalizing their midfield setup. Venezia, on the other hand, faces tough challenges as a newly promoted team. Despite the experienced head coach Filippo Inzaghi, their squad adjustments have been hasty, and the transfers of players like Arturo Oikonomou seem to have had limited impact. Lazio has had a good record against Venezia in their previous six encounters, but the team structure has changed, and it poses a challenge to quickly adapt to the new system. While Venezia has a stable squad base, they lack a decent protagonist to contend with their opponents. The market view leans towards Lazio,\nSource: https://www.sohu.com/a/801774486_121978385\n\n**地球上最后的天然野境!豆瓣9.7分的《地球脉动3》,谱写非洲生命之歌角马鸵鸟东非马赛马拉_网易订阅** (2024-04-24)\n痴迷 BBC 纪录片的人,一定知道 “自然纪录片之父”大卫·爱登堡 (David Attenborough),作为 BBC 的灵魂人物、王牌解说员,爱登堡带来的作品能称得上是 史诗级巨作 。 因为他,人们发现了 地球是多么美丽 ,动物世界是多么波澜壮阔,千姿百态,虽然有些地方不能抵达,但因为他而打开了广阔的视野。 老爷子的作品有很多,但 《地球脉动》系列 是不得不提的。IDMb 9.5分,豆瓣前两季9.7-9.8分。每一部摄影画面绝美,有着扑面而来的生命气息, 每一帧都可以当做屏保! 2006年 《地球脉动》第一季 上线 ,该片将难以数计的生物以极其绝美的身姿呈现在世人面前, 实属震撼 。跨度也从南极北极,到赤道到寒带,从非洲草原、热带雨林,再到荒凉峰顶、深邃大海。 时隔10年之后,2016年的 《地球脉动》第二季 问世,绝美的画面让观众仿若身临其境,一个个鲜活的生命令人无比感动,同时也感知到人类在广袤的星球面前是 多么渺小 。 又等了7年,《地球脉动》第三季终于于2023年10月上线,这一次,一起跟随着大卫·爱登堡爵士,开启一场 穿越这颗壮美星球的盛大冒险 。 领略万千奇妙生灵,讲述的动人心魄的生命故事,感受生命的延续与轮回。 《地球脉动III》共八集,BBC Studios 自然历史部承制,每集时长60分钟,带领观众继续造访地球上众多令人称奇的栖息地。 第三季围绕海陆之间、波涛之下、广袤之地、滴水之源、林木之中、极端之境、与人共舞和家园卫士 八个不同主题 展开,摄影师的镜头捕捉到无数大自然精妙绝伦的美景。 第三集的镜头来到了广阔的荒野中,这里是 最古老的荒漠之一 ,位于非洲西南部的纳米布沙漠,也是地球上最炎热的区域之一。在这里极端的条件之下,只有最顽强的生命才得以繁衍生息。 即使像林间强者, 花豹 ,动作这样优雅敏捷,为了捕食,在这里依然会堵上自己的性命。因为第一次的树上袭击没有成功。花豹不想放弃,继续跟踪着羚羊。 它选了一个绝佳的角度,在一处离地9米高的树枝上伏击,向下加速度的冲击画面太过震撼。从上到下近乎垂直地扑杀,猎物入口, 大快朵颐 。 在这个世界,生命被推向极限,克服极端天气的 鸵鸟父母 , 在这里组建家庭 。鸵鸟一家停下来孵化蛋,雄鸵鸟留下来保护鸟蛋与孵化;雌鸟外出觅食,待雌鸟回来,一窝蛋还有几个没有孵化。 鲜有捕食者在炎热的白天冒险外出活动,但这样\nSource: https://www.163.com/dy/article/J0HI2VCI0524BG39.html\n\n**Serie A Focus: Lazio vs Venezia - Clash of Eagles and Seafaring Knights_the_Alberto_teams** (2024-08-18)\n【Fundamental Analysis】 Hello football fans! Let's take a look at the Serie A focal point match between Lazio and Venezia on August 19, 2024. Let's analyze both teams from a unique perspective. Lazio, a team that finished seventh last year, welcomed Coach Baronio this summer, and like a battle-ready warship, they have undergone obvious tactical adjustments. The arrival of heavyweight transfers such as Alberto and Immobile seems to inject fresh blood into the team, especially with the addition of midfielder Gonzalez, which could put pressure on the opponent's defense. However, reshaping the formation also takes time to integrate, and the new attacking game plan is worth looking forward to. As for Venezia, this newcomer successfully promoted to Serie A as the third-place team in Serie B. The experience of Coach Di Francesco will be a key factor. Although there have been some personnel changes, such as Quagliarella's departure, the overall structure remains stable. The determination to upg\nSource: https://www.sohu.com/a/801774490_121978385\n\n**Home - Servizio Landscaping** (2026-05-18)\nYour Premier North Shore Landscaping Company Full-Service Commercial & Residential Landscaping since 1995 Residential Maintenance, Design, Construction & Packages Commercial Office Parks, Hospitals, Malls & Condominiums Hardscaping Patios, Walkways and Walls Mulch Hemlock, Premium Mix and Aged Pine Excavation Residential & Commercial Trenching and Grading About Us Learn more about our services Call us at (978) 921-5908 OR CLICK HERE TO CONTACT US Copyright 2013 Servizio Landscaping | Sitemap\nSource: https://www.serviziolandscaping.com/\n",
+    "web_references": [
+      {
+        "content": "SEA&amp;SKY即海阔天空是深圳市海阔天空实业发展有限公司的服饰品牌,成立于2000年,是集服装设计生产､销售于一体的专业性服装公司｡实力雄厚,品牌风格主要以黑､白､灰色调为主｡“崇尚个性､体现自我”的设计理念开发出了一系列符合现代人需求的个性化时装｡基本简介SEA&amp;",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/SEA&SKY/15271861",
+        "media": "百度百科",
+        "publish_date": "2023-10-24",
+        "refer": "ref_1",
+        "title": "SEA&SKY"
+      },
+      {
+        "content": "\"地球鞋,其英文全称是Earth Shoes, 是Earth, Inc(美国地球鞋公司)旗下的知名负跟鞋品牌Earth®｡在国内大家通常习惯的称之为地球鞋,负跟鞋,负跟地球鞋,美国地球鞋,踏地负跟鞋｡ 地球鞋最主要的特点是采用前高后低的负跟设计｡基本内容美国地球鞋(美国地球鞋公司旗下品牌)一般指地球鞋原理3.7° incline(3.7度后倾斜技术) ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E5%9C%B0%E7%90%83%E9%9E%8B/3061021",
+        "media": "百度百科",
+        "publish_date": "2023-06-14",
+        "refer": "ref_2",
+        "title": "地球鞋"
+      },
+      {
+        "content": "\"定义Earth Shoes,其英文名全称叫美国地球鞋｡是Earth inc (美国地球鞋公司)旗下国际知名品牌的中文统称,包括 Earth®､ Earthies®､ Earth Origins®､ Earth Spirit®､Planet® 等品牌,在中国还常被叫做:地球鞋,地球负跟鞋,踏地地球鞋,踏地负跟鞋等｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/Earth%20Shoes/7381303",
+        "media": "百度百科",
+        "publish_date": "2026-05-18",
+        "refer": "ref_3",
+        "title": "Earth Shoes"
+      },
+      {
+        "content": "<p>在户外涉水装备领域,涉水裤推荐始终是路亚人､赶海爱好者的核心需求 —— 既要避开廉价款的渗水､笨重坑,又不想为国外大牌花两三千元｡2024 年成立的青岛国产新品牌YUGUNG,凭借硬核配置和千元亲民价,成为国产涉水裤推荐的新晋黑马,更是路亚涉水裤推荐的高性价比优选｡今天就通过实测与用户口碑,全面解析这款能否真正对标 Patagonia｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_14569b9558d51052",
+        "media": "企鹅号",
+        "publish_date": "2026-03-17",
+        "refer": "ref_4",
+        "title": "2026 国产涉水裤推荐 路亚玩家实测 YUGUNG 高性价比对标 Patagonia"
+      },
+      {
+        "content": "Article May 2001 12(3):217 - 224 african institute for agrarian studies Request full-text PDF To read the full-text of this research, you can request a copy directly from the author. Request full-text To read the full-text of this research, you can request a copy directly from the author. Abstract This paper argues that there is a ust be discussed in another debate. Copyright © 2001 John Wiley & Sons, Ltd. Discover the world's research 25+ million members 160+ million publication pages No full-text available To read the full-tenents, respectively 81% (of a maximum allowed of 100%). ... The political economy of Land Reform: A new perspective applied to Latin America Article Full-text available Jan 2009 Show abstract Land‐cov",
+        "icon": "",
+        "link": "https://www.researchgate.net/publication/229453133_Building_landscapes_Village_development_in_Zimbabwe",
+        "media": "",
+        "publish_date": "2025-08-06",
+        "refer": "ref_5",
+        "title": "Building landscapes: Village development in Zimbabwe  Request PDF"
+      },
+      {
+        "content": "New Zealand stormed into the World Cup quarterfinals with another mesmeric display of attacking rugby to put down an initially troublesome Uruguay 73-0 in their final Pool A match on Thursday. Damian McKenzie scored two tries and made two more in an outstanding display, while winger Will Jordan grabbed his 26th and 27th five-pointers in only his 28th test with a performance just as good. The other New Zealand winger, Leicester Fainga'anuku, joined the party late with a second-half hat-trick as Uruguay wilted under huge pressure. The bonus-point victory sent the three-times World Cup winners to the top of Pool A, two points clear of France before the tournament hosts face Italy in their final opening-round match at the same stadium on Friday. Leicester Fainga'anuku scored a hat-trick for New Zealand in the All Blacks' dominant win over Uruguay. Hannah Peters/Getty Images \"Really proud,\" New Zealand coach Ian Foster said. \"We held our composure very well and were quite clinical. It was a",
+        "icon": "",
+        "link": "https://www.espn.com/rugby/report?gameId=596186&league=164205",
+        "media": "",
+        "publish_date": "2023-10-05",
+        "refer": "ref_6",
+        "title": "New Zealand vs Uruguay - Report - Rugby World Cup 2023 - 5 Oct, 2023 - ESPN"
+      },
+      {
+        "content": "【Fundamental Analysis】 Hello football fans, today let's talk about the Serie A heavyweight showdown on August 19th between Lazio and Venezia! Lazio has seen a managerial change this season, with coach Simone Inzaghi's departure bringing a new tactical approach. They have bid farewell to star players like Ciro Immobile but have brought in quality players like Pedro Goncalves and Nahitan Nandez, revitalizing their midfield setup. Venezia, on the other hand, faces tough challenges as a newly promoted team. Despite the experienced head coach Filippo Inzaghi, their squad adjustments have been hasty, and the transfers of players like Arturo Oikonomou seem to have had limited impact. Lazio has had a good record against Venezia in their previous six encounters, but the team structure has changed, and it poses a challenge to quickly adapt to the new system. While Venezia has a stable squad base, they lack a decent protagonist to contend with their opponents. The market view leans towards Lazio,",
+        "icon": "",
+        "link": "https://www.sohu.com/a/801774486_121978385",
+        "media": "搜狐",
+        "publish_date": "2024-08-18",
+        "refer": "ref_7",
+        "title": "Serie A Showdown: Lazio vs. Venezia - Clash of the Blue Eagle Sword andthe Venetian Beast, Who Will Stand Tall in this Thrilling Battle"
+      },
+      {
+        "content": "痴迷 BBC 纪录片的人,一定知道 “自然纪录片之父”大卫·爱登堡 (David Attenborough),作为 BBC 的灵魂人物、王牌解说员,爱登堡带来的作品能称得上是 史诗级巨作 。 因为他,人们发现了 地球是多么美丽 ,动物世界是多么波澜壮阔,千姿百态,虽然有些地方不能抵达,但因为他而打开了广阔的视野。 老爷子的作品有很多,但 《地球脉动》系列 是不得不提的。IDMb 9.5分,豆瓣前两季9.7-9.8分。每一部摄影画面绝美,有着扑面而来的生命气息, 每一帧都可以当做屏保! 2006年 《地球脉动》第一季 上线 ,该片将难以数计的生物以极其绝美的身姿呈现在世人面前, 实属震撼 。跨度也从南极北极,到赤道到寒带,从非洲草原、热带雨林,再到荒凉峰顶、深邃大海。 时隔10年之后,2016年的 《地球脉动》第二季 问世,绝美的画面让观众仿若身临其境,一个个鲜活的生命令人无比感动,同时也感知到人类在广袤的星球面前是 多么渺小 。 又等了7年,《地球脉动》第三季终于于2023年10月上线,这一次,一起跟随着大卫·爱登堡爵士,开启一场 穿越这颗壮美星球的盛大冒险 。 领略万千奇妙生灵,讲述的动人心魄的生命故事,感受生命的延续与轮回。 《地球脉动III》共八集,BBC Studios 自然历史部承制,每集时长60分钟,带领观众继续造访地球上众多令人称奇的栖息地。 第三季围绕海陆之间、波涛之下、广袤之地、滴水之源、林木之中、极端之境、与人共舞和家园卫士 八个不同主题 展开,摄影师的镜头捕捉到无数大自然精妙绝伦的美景。 第三集的镜头来到了广阔的荒野中,这里是 最古老的荒漠之一 ,位于非洲西南部的纳米布沙漠,也是地球上最炎热的区域之一。在这里极端的条件之下,只有最顽强的生命才得以繁衍生息。 即使像林间强者, 花豹 ,动作这样优雅敏捷,为了捕食,在这里依然会堵上自己的性命。因为第一次的树上袭击没有成功。花豹不想放弃,继续跟踪着羚羊。 它选了一个绝佳的角度,在一处离地9米高的树枝上伏击,向下加速度的冲击画面太过震撼。从上到下近乎垂直地扑杀,猎物入口, 大快朵颐 。 在这个世界,生命被推向极限,克服极端天气的 鸵鸟父母 , 在这里组建家庭 。鸵鸟一家停下来孵化蛋,雄鸵鸟留下来保护鸟蛋与孵化;雌鸟外出觅食,待雌鸟回来,一窝蛋还有几个没有孵化。 鲜有捕食者在炎热的白天冒险外出活动,但这样",
+        "icon": "",
+        "link": "https://www.163.com/dy/article/J0HI2VCI0524BG39.html",
+        "media": "网易",
+        "publish_date": "2024-04-24",
+        "refer": "ref_8",
+        "title": "地球上最后的天然野境!豆瓣9.7分的《地球脉动3》,谱写非洲生命之歌角马鸵鸟东非马赛马拉_网易订阅"
+      },
+      {
+        "content": "【Fundamental Analysis】 Hello football fans! Let's take a look at the Serie A focal point match between Lazio and Venezia on August 19, 2024. Let's analyze both teams from a unique perspective. Lazio, a team that finished seventh last year, welcomed Coach Baronio this summer, and like a battle-ready warship, they have undergone obvious tactical adjustments. The arrival of heavyweight transfers such as Alberto and Immobile seems to inject fresh blood into the team, especially with the addition of midfielder Gonzalez, which could put pressure on the opponent's defense. However, reshaping the formation also takes time to integrate, and the new attacking game plan is worth looking forward to. As for Venezia, this newcomer successfully promoted to Serie A as the third-place team in Serie B. The experience of Coach Di Francesco will be a key factor. Although there have been some personnel changes, such as Quagliarella's departure, the overall structure remains stable. The determination to upg",
+        "icon": "",
+        "link": "https://www.sohu.com/a/801774490_121978385",
+        "media": "搜狐",
+        "publish_date": "2024-08-18",
+        "refer": "ref_9",
+        "title": "Serie A Focus: Lazio vs Venezia - Clash of Eagles and Seafaring Knights_the_Alberto_teams"
+      },
+      {
+        "content": "Your Premier North Shore Landscaping Company Full-Service Commercial & Residential Landscaping since 1995 Residential Maintenance, Design, Construction & Packages Commercial Office Parks, Hospitals, Malls & Condominiums Hardscaping Patios, Walkways and Walls Mulch Hemlock, Premium Mix and Aged Pine Excavation Residential & Commercial Trenching and Grading About Us Learn more about our services Call us at (978) 921-5908 OR CLICK HERE TO CONTACT US Copyright 2013 Servizio Landscaping | Sitemap",
+        "icon": "",
+        "link": "https://www.serviziolandscaping.com/",
+        "media": "",
+        "publish_date": "2026-05-18",
+        "refer": "ref_10",
+        "title": "Home - Servizio Landscaping"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "earth sea sky bivouac 户外 Hunting Fishing new Zealand brand visual",
+        "query": "Earth Sea Sky Bivouac Outdoor Hunting Fishing New Zealand brand visual"
+      }
+    ],
+    "latency_seconds": 1.66,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "New Zealand search and rescue LandSAR culture safety reasons",
+    "content": "",
+    "web_references": [],
+    "search_intent": [
+      {
+        "intent": "SEARCH_NONE",
+        "keywords": "new Zealand landsar culture 安全 reasons",
+        "query": "New Zealand search and rescue LandSAR culture safety reasons"
+      }
+    ],
+    "latency_seconds": 0.71,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "black silver fern New Zealand national identity design overused cliche",
+    "content": "**BeauEver正式斩获新西兰银蕨标志(FernMark)认证,获新西兰政府官方权威背书** (2026-04-07)\n新西兰奥克兰本土企业 Global Empowerment NZ Limited(以 BeauEver 为商业品牌运营)正式宣布,成功获得新西兰<strong>银蕨标志(FernMark)</strong> 官方认证牌照(牌照编号:NZFM101217),成为新西兰政府认证的银蕨标志持牌方｡银蕨标志是 FernMark 在国内市场及官方传播中的通用中文名称,作为新西兰的国家象征与官方原产地认证标识,此次认证标志着 BeauEver 的产品与服务通过新西兰政府层层严苛资质审核,正式跻身新西兰国家品牌背书阵营,成为向全球讲述新西兰故事的官方大使｡fmt=png&size=554&h=699&w=1080&ppv=1' data-aigc-mark='0'/></p><p>银蕨标志(FernMark)认证计划是新西兰贸易与企业局(NZTE)旗下 New Zealand Story Group 全权管理的<strong>新西兰政府官方原产地认证体系</strong>,也是新西兰面向全球的国家级信任标识｡银蕨作为新西兰的国家象征,其叶片元素成为该认证的核心视觉符号,这一标识在全球 34 个司法管辖区完成商标注册,是全球消费者识别新西兰优质产品与服务的核心标志,也被视作新西兰产品的 “国家品质身份证”,为持牌方在全球市场提供政府背书的品牌竞争力｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_05669d3d9ae96952\n\n**诺基亚C6-01** (2024-04-19)\n\"诺基亚C6-01是一款设计紧凑､时尚的智能手机｡3.2英寸AMOLED全触摸显示屏引人注目,应用的诺基亚ClearBlack 技术实现了改进的户外视觉效果｡ 最新的诺基亚C6(C6-01)拥有不锈钢和玻璃设计以及最好的社交网络和手机娱乐服务,可时刻连接电子邮件,通过Ovi音乐获取数百万首歌曲,还可通过Ovi商店下载应用和游戏｡\nSource: https://baike.baidu.com/item/%E8%AF%BA%E5%9F%BA%E4%BA%9AC6-01/7381742\n\n**Security Overview · BlackIceWizard/ULogin-Sylius · GitHub** (2026-01-15)\nNavigation Menu Toggle navigation Appearance settings Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert Security: BlackIceWizard/ULogin-Sylius Security No security policy detected This project has not set up a SECURITY.md file yet. There aren’t any published security advisories Footer © 2026 GitHub, Inc. Footer navigation Manage cookies Do not share my personal information You can’t perform that action at this time.\nSource: https://github.com/BlackIceWizard/ULogin-Sylius/security\n\n**The Black Swan (GOLLANCZ S.F.) de Lackey, Mercedes: Very Good (2002)  WeBuyBooks** (2026-04-07)\nSeleccione sus preferencias de cookies Usamos cookies para que pueda realizar compras, mejorar su experiencia en nuestra pÃ¡gina y proporcionar correctamente nuestros servicios. TambiÃ©n utilizamos cookies para comprender el modo en que los clientes utilizan nuestros servicios (por ejemplo, midiendo las visitas al sitio) y asÃ­ poder realizar mejoras. Si estÃ¡ de acuerdo, tambiÃ©n utilizaremos cookies de terceros para mostrar contenido relevante en los anuncios y medir el rendimiento de los mismos. Elija Rechazar si noestÃ¡ de acuerdo o Personalizar para obtener mÃ¡s informaciÃ³n. Puede cambiar sus opciones en cualquier momento visitando las Preferencias de cookies Para saber mÃ¡s sobre cÃ³mo se utilizan las cookies, visite nuestro Aviso de cookies. Para saber mÃ¡s sobre cÃ³mo usa IberLibro.com su informaciÃ³n personal, visite nuestro Aviso de privacidad. Aceptar Rechazar Personalizar Pasar al contenido principal ISBN 10: 0575072857 / ISBN 13: 9780575072855 Editorial: Gollancz, 2002 Us\nSource: https://www.iberlibro.com/Black-Swan-GOLLANCZ-S.F-Lackey-Mercedes/31787406207/bd\n\n**New Zealand Flag** (2024-11-23)\nNew Zealand Flag Along with the national anthem , the flag of New Zealand is an important symbol of national identity. Except for Kiwis and Australians , many people may mistake the New Zealand flag for that of Australia with which it has some similarities. New Zealand flag (above) & Australian flag (below) History The flag of New Zealand was the Union Jack of the United Kingdom until 1902. Before that from 1834 until 1840, the Flag of the United Tribes of New Zealand was the national flag. The Flag of the United Tribes of New Zealand is still flown on Waitangi Day - the National Day of New Zealand on 6 February. In 2016 New Zealanders voted on whether to change the current flag to another design - the Silver Fern - which had been selected by referendum from five designs a year earlier. Just under 57% of New Zealanders voted in a second referendum to retain the current flag, which was something of a surprise at the time. Flag of the United Tribes of New Zealand Design The design of the\nSource: https://www.newzealand-all-over.com/2021/08/new-zealand-flag.html\n\n**Bye to jandals &amp; hokey pokey - our national identity makeover_Kiwis'** (2019-07-08)\nNew Zealanders' identities are no longer just invested in items like jandals, the Buzzy Bee, or hokey pokey ice-cream. Instead, according to an Auckland University of Technology study, Kiwis' modern identity is changing – and it's Māori culture, wine, oysters, flat whites, and the silver fern that's on the way in. The study found a new generation of Kiwis have developed their own ideas about what represents New Zealanders. \"While many New Zealanders find comfort in the nostalgic view promoted within the 'good old days', a new face reflecting Kiwi identity and materiality is emerging,\" senior lecturer Dr Lindsay Neill said. Traditional forms of Kiwiana and nostalgia still have a place in the hearts of the population, mainly because of the persistent baby boomers , Neill explained. But cool new replacements are at the fore for the younger population . Neill conducted two surveys, commissioned by power company Electric Kiwi and open to respondents over the age of 18 from around the countr\nSource: https://www.sohu.com/a/325710406_757180\n\n**Silver Fern New Zealand Royal Navy VEST Men's size Large  eBay** (2021-08-25)\n| Listed in category: Share Picture 1 of 12 Gallery Silver Fern New Zealand Royal Navy VEST Men's size Large US $19.99 Approximately ILS 74.28 or Best Offer Condition: Pre-owned Pre-owned “ Very good condition! ” Pre-owned An item that has been used or worn previously. See the seller’s listing for full details and description of any imperfections. Oops! Looks like we're having trouble connecting to our server. Refresh your browser window to try again. Refresh Browser Shipping: US $96.57 (approx ILS 358.83) eBay International Shipping . See details for shipping Located in: Estes Park, CO, United States Save on combined shipping Shop multiple items We'll automatically apply shipping discounts if you purchase two or more eligible items from the same seller. Bundle and save To confirm if items are eligible, simply add them to cart and you'll see the combined shipping total at checkout. Authorities may apply duties, fees, and taxes upon delivery You may owe duties and fees upon delivery Cus\nSource: https://www.ebay.com/itm/Silver-Fern-New-Zealand-Royal-Navy-VEST-Mens-size-Large-/202324822163?_ul=IL\n\n**Solved: Re: deleted unwanted sections and details - Autodesk Community** (2021-05-10)\nMessage 2 of 10 mick-CNF Accepted solution Update Details. If this information solves your problem please accept as a solution. Reply Reply 0 Likes Link copied Message 3 of 10 mick-CNF Rather than delete them from the drawing you can do it through DM. If this information solves your problem please accept as a solution. Reply Reply 0 Likes Link copied Message 4 of 10 iwafb You need to delete the view box (green box around the section detail), not the parts contained within. If you have these turned off, then use the delete view command (labels&dimensions tab in ribbon->parametric views->delete view...) Reply Reply 0 Likes Link copied Message 5 of 10 Anonymous Not applicable if the green box is gone how do I get rid of the black boxes? Preview file 72 KB Reply Reply 0 Likes Link copied Message 6 of 10 mick-CNF Have you deleted the green boxes or are they just not visible? They can sometimes disappear and won't come back even if you toggle them on and off, but they come back when you open\nSource: https://forums.autodesk.com/t5/advance-steel-forum/deleted-unwanted-sections-and-details/m-p/10305202/highlight/true\n\n**Solved: Re: deleted unwanted sections and details - Autodesk Community** (2021-05-10)\nMessage 2 of 10 mick-CNF Accepted solution Update Details. If this information solves your problem please accept as a solution. Reply Reply 0 Likes Link copied Message 3 of 10 mick-CNF Rather than delete them from the drawing you can do it through DM. If this information solves your problem please accept as a solution. Reply Reply 0 Likes Link copied Message 4 of 10 iwafb You need to delete the view box (green box around the section detail), not the parts contained within. If you have these turned off, then use the delete view command (labels&dimensions tab in ribbon->parametric views->delete view...) Reply Reply 0 Likes Link copied Message 5 of 10 Anonymous Not applicable if the green box is gone how do I get rid of the black boxes? Preview file 72 KB Reply Reply 0 Likes Link copied Message 6 of 10 mick-CNF Have you deleted the green boxes or are they just not visible? They can sometimes disappear and won't come back even if you toggle them on and off, but they come back when you open\nSource: https://forums.autodesk.com/t5/advance-steel-forum/deleted-unwanted-sections-and-details/m-p/10305202/highlight/true?attachment-id=908075\n\n**Fig. 2: Observed incidence (navy points) with the median forecast for 16 models (black lines) with the equally weighted ensemble model** (2026-02-26)\nfigure Fig. 2: Observed incidence (navy points) with the median forecast for 16 models (black lines) with the equally weighted ensemble model (green band) for Antioquia, Norte de Santander, Cauca, and Amazonas at five points throughout the epidemic. | Nature Communications From: Trade-offs between individual and ensemble forecasts of an emerging infectious disease Plotted departments reflect differences in population, epidemic size, and geographic regions of Colombia and are represented by each column. The vertical pink line indicates the point at which the forecast was made (also labeled on the right axis), with data to the left of the line assimilated into the model fit. Forecasts to the right of the vertical line change as more data are assimilated into the model, while the model that fits the left of the vertical line do not change. The green band reflects the 50% credible interval of the equally weighted ensemble model. Nature Communications ( Nat Commun ) ISSN 2041-1723 (online)\nSource: https://www.nature.com/articles/s41467-021-25695-0/figures/2\n",
+    "web_references": [
+      {
+        "content": "新西兰奥克兰本土企业 Global Empowerment NZ Limited(以 BeauEver 为商业品牌运营)正式宣布,成功获得新西兰<strong>银蕨标志(FernMark)</strong> 官方认证牌照(牌照编号:NZFM101217),成为新西兰政府认证的银蕨标志持牌方｡银蕨标志是 FernMark 在国内市场及官方传播中的通用中文名称,作为新西兰的国家象征与官方原产地认证标识,此次认证标志着 BeauEver 的产品与服务通过新西兰政府层层严苛资质审核,正式跻身新西兰国家品牌背书阵营,成为向全球讲述新西兰故事的官方大使｡fmt=png&size=554&h=699&w=1080&ppv=1' data-aigc-mark='0'/></p><p>银蕨标志(FernMark)认证计划是新西兰贸易与企业局(NZTE)旗下 New Zealand Story Group 全权管理的<strong>新西兰政府官方原产地认证体系</strong>,也是新西兰面向全球的国家级信任标识｡银蕨作为新西兰的国家象征,其叶片元素成为该认证的核心视觉符号,这一标识在全球 34 个司法管辖区完成商标注册,是全球消费者识别新西兰优质产品与服务的核心标志,也被视作新西兰产品的 “国家品质身份证”,为持牌方在全球市场提供政府背书的品牌竞争力｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_05669d3d9ae96952",
+        "media": "企鹅号",
+        "publish_date": "2026-04-07",
+        "refer": "ref_1",
+        "title": "BeauEver正式斩获新西兰银蕨标志(FernMark)认证,获新西兰政府官方权威背书"
+      },
+      {
+        "content": "\"诺基亚C6-01是一款设计紧凑､时尚的智能手机｡3.2英寸AMOLED全触摸显示屏引人注目,应用的诺基亚ClearBlack 技术实现了改进的户外视觉效果｡ 最新的诺基亚C6(C6-01)拥有不锈钢和玻璃设计以及最好的社交网络和手机娱乐服务,可时刻连接电子邮件,通过Ovi音乐获取数百万首歌曲,还可通过Ovi商店下载应用和游戏｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E8%AF%BA%E5%9F%BA%E4%BA%9AC6-01/7381742",
+        "media": "百度百科",
+        "publish_date": "2024-04-19",
+        "refer": "ref_2",
+        "title": "诺基亚C6-01"
+      },
+      {
+        "content": "Navigation Menu Toggle navigation Appearance settings Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert Security: BlackIceWizard/ULogin-Sylius Security No security policy detected This project has not set up a SECURITY.md file yet. There aren’t any published security advisories Footer © 2026 GitHub, Inc. Footer navigation Manage cookies Do not share my personal information You can’t perform that action at this time.",
+        "icon": "",
+        "link": "https://github.com/BlackIceWizard/ULogin-Sylius/security",
+        "media": "",
+        "publish_date": "2026-01-15",
+        "refer": "ref_3",
+        "title": "Security Overview · BlackIceWizard/ULogin-Sylius · GitHub"
+      },
+      {
+        "content": "Seleccione sus preferencias de cookies Usamos cookies para que pueda realizar compras, mejorar su experiencia en nuestra pÃ¡gina y proporcionar correctamente nuestros servicios. TambiÃ©n utilizamos cookies para comprender el modo en que los clientes utilizan nuestros servicios (por ejemplo, midiendo las visitas al sitio) y asÃ­ poder realizar mejoras. Si estÃ¡ de acuerdo, tambiÃ©n utilizaremos cookies de terceros para mostrar contenido relevante en los anuncios y medir el rendimiento de los mismos. Elija Rechazar si noestÃ¡ de acuerdo o Personalizar para obtener mÃ¡s informaciÃ³n. Puede cambiar sus opciones en cualquier momento visitando las Preferencias de cookies Para saber mÃ¡s sobre cÃ³mo se utilizan las cookies, visite nuestro Aviso de cookies. Para saber mÃ¡s sobre cÃ³mo usa IberLibro.com su informaciÃ³n personal, visite nuestro Aviso de privacidad. Aceptar Rechazar Personalizar Pasar al contenido principal ISBN 10: 0575072857 / ISBN 13: 9780575072855 Editorial: Gollancz, 2002 Us",
+        "icon": "",
+        "link": "https://www.iberlibro.com/Black-Swan-GOLLANCZ-S.F-Lackey-Mercedes/31787406207/bd",
+        "media": "",
+        "publish_date": "2026-04-07",
+        "refer": "ref_4",
+        "title": "The Black Swan (GOLLANCZ S.F.) de Lackey, Mercedes: Very Good (2002)  WeBuyBooks"
+      },
+      {
+        "content": "New Zealand Flag Along with the national anthem , the flag of New Zealand is an important symbol of national identity. Except for Kiwis and Australians , many people may mistake the New Zealand flag for that of Australia with which it has some similarities. New Zealand flag (above) & Australian flag (below) History The flag of New Zealand was the Union Jack of the United Kingdom until 1902. Before that from 1834 until 1840, the Flag of the United Tribes of New Zealand was the national flag. The Flag of the United Tribes of New Zealand is still flown on Waitangi Day - the National Day of New Zealand on 6 February. In 2016 New Zealanders voted on whether to change the current flag to another design - the Silver Fern - which had been selected by referendum from five designs a year earlier. Just under 57% of New Zealanders voted in a second referendum to retain the current flag, which was something of a surprise at the time. Flag of the United Tribes of New Zealand Design The design of the",
+        "icon": "",
+        "link": "https://www.newzealand-all-over.com/2021/08/new-zealand-flag.html",
+        "media": "",
+        "publish_date": "2024-11-23",
+        "refer": "ref_5",
+        "title": "New Zealand Flag"
+      },
+      {
+        "content": "New Zealanders' identities are no longer just invested in items like jandals, the Buzzy Bee, or hokey pokey ice-cream. Instead, according to an Auckland University of Technology study, Kiwis' modern identity is changing – and it's Māori culture, wine, oysters, flat whites, and the silver fern that's on the way in. The study found a new generation of Kiwis have developed their own ideas about what represents New Zealanders. \"While many New Zealanders find comfort in the nostalgic view promoted within the 'good old days', a new face reflecting Kiwi identity and materiality is emerging,\" senior lecturer Dr Lindsay Neill said. Traditional forms of Kiwiana and nostalgia still have a place in the hearts of the population, mainly because of the persistent baby boomers , Neill explained. But cool new replacements are at the fore for the younger population . Neill conducted two surveys, commissioned by power company Electric Kiwi and open to respondents over the age of 18 from around the countr",
+        "icon": "",
+        "link": "https://www.sohu.com/a/325710406_757180",
+        "media": "搜狐",
+        "publish_date": "2019-07-08",
+        "refer": "ref_6",
+        "title": "Bye to jandals &amp; hokey pokey - our national identity makeover_Kiwis'"
+      },
+      {
+        "content": "| Listed in category: Share Picture 1 of 12 Gallery Silver Fern New Zealand Royal Navy VEST Men's size Large US $19.99 Approximately ILS 74.28 or Best Offer Condition: Pre-owned Pre-owned “ Very good condition! ” Pre-owned An item that has been used or worn previously. See the seller’s listing for full details and description of any imperfections. Oops! Looks like we're having trouble connecting to our server. Refresh your browser window to try again. Refresh Browser Shipping: US $96.57 (approx ILS 358.83) eBay International Shipping . See details for shipping Located in: Estes Park, CO, United States Save on combined shipping Shop multiple items We'll automatically apply shipping discounts if you purchase two or more eligible items from the same seller. Bundle and save To confirm if items are eligible, simply add them to cart and you'll see the combined shipping total at checkout. Authorities may apply duties, fees, and taxes upon delivery You may owe duties and fees upon delivery Cus",
+        "icon": "",
+        "link": "https://www.ebay.com/itm/Silver-Fern-New-Zealand-Royal-Navy-VEST-Mens-size-Large-/202324822163?_ul=IL",
+        "media": "",
+        "publish_date": "2021-08-25",
+        "refer": "ref_7",
+        "title": "Silver Fern New Zealand Royal Navy VEST Men's size Large  eBay"
+      },
+      {
+        "content": "Message 2 of 10 mick-CNF Accepted solution Update Details. If this information solves your problem please accept as a solution. Reply Reply 0 Likes Link copied Message 3 of 10 mick-CNF Rather than delete them from the drawing you can do it through DM. If this information solves your problem please accept as a solution. Reply Reply 0 Likes Link copied Message 4 of 10 iwafb You need to delete the view box (green box around the section detail), not the parts contained within. If you have these turned off, then use the delete view command (labels&dimensions tab in ribbon->parametric views->delete view...) Reply Reply 0 Likes Link copied Message 5 of 10 Anonymous Not applicable if the green box is gone how do I get rid of the black boxes? Preview file 72 KB Reply Reply 0 Likes Link copied Message 6 of 10 mick-CNF Have you deleted the green boxes or are they just not visible? They can sometimes disappear and won't come back even if you toggle them on and off, but they come back when you open",
+        "icon": "",
+        "link": "https://forums.autodesk.com/t5/advance-steel-forum/deleted-unwanted-sections-and-details/m-p/10305202/highlight/true",
+        "media": "",
+        "publish_date": "2021-05-10",
+        "refer": "ref_8",
+        "title": "Solved: Re: deleted unwanted sections and details - Autodesk Community"
+      },
+      {
+        "content": "Message 2 of 10 mick-CNF Accepted solution Update Details. If this information solves your problem please accept as a solution. Reply Reply 0 Likes Link copied Message 3 of 10 mick-CNF Rather than delete them from the drawing you can do it through DM. If this information solves your problem please accept as a solution. Reply Reply 0 Likes Link copied Message 4 of 10 iwafb You need to delete the view box (green box around the section detail), not the parts contained within. If you have these turned off, then use the delete view command (labels&dimensions tab in ribbon->parametric views->delete view...) Reply Reply 0 Likes Link copied Message 5 of 10 Anonymous Not applicable if the green box is gone how do I get rid of the black boxes? Preview file 72 KB Reply Reply 0 Likes Link copied Message 6 of 10 mick-CNF Have you deleted the green boxes or are they just not visible? They can sometimes disappear and won't come back even if you toggle them on and off, but they come back when you open",
+        "icon": "",
+        "link": "https://forums.autodesk.com/t5/advance-steel-forum/deleted-unwanted-sections-and-details/m-p/10305202/highlight/true?attachment-id=908075",
+        "media": "",
+        "publish_date": "2021-05-10",
+        "refer": "ref_9",
+        "title": "Solved: Re: deleted unwanted sections and details - Autodesk Community"
+      },
+      {
+        "content": "figure Fig. 2: Observed incidence (navy points) with the median forecast for 16 models (black lines) with the equally weighted ensemble model (green band) for Antioquia, Norte de Santander, Cauca, and Amazonas at five points throughout the epidemic. | Nature Communications From: Trade-offs between individual and ensemble forecasts of an emerging infectious disease Plotted departments reflect differences in population, epidemic size, and geographic regions of Colombia and are represented by each column. The vertical pink line indicates the point at which the forecast was made (also labeled on the right axis), with data to the left of the line assimilated into the model fit. Forecasts to the right of the vertical line change as more data are assimilated into the model, while the model that fits the left of the vertical line do not change. The green band reflects the 50% credible interval of the equally weighted ensemble model. Nature Communications ( Nat Commun ) ISSN 2041-1723 (online)",
+        "icon": "",
+        "link": "https://www.nature.com/articles/s41467-021-25695-0/figures/2",
+        "media": "Nature",
+        "publish_date": "2026-02-26",
+        "refer": "ref_10",
+        "title": "Fig. 2: Observed incidence (navy points) with the median forecast for 16 models (black lines) with the equally weighted ensemble model"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "black silver fern new zealand national identity design overused cliche",
+        "query": "black silver fern New Zealand national identity design overused cliche"
+      }
+    ],
+    "latency_seconds": 1.79,
+    "model": "search-pro",
+    "mode": "tools"
+  }
+]

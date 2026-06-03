@@ -1,0 +1,1560 @@
+{
+  "total": 63,
+  "cases": [
+    {
+      "id": 59,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "user-arbitration",
+      "rationale": "趋势向下急转进S后续判D死亡 [user-decided]",
+      "case_data": {
+        "title": "Mt Maunganui 基座步道苔藓滑跌点",
+        "type": "danger",
+        "likes": 7,
+        "reports": 4,
+        "duration_months": 7,
+        "user_volume_per_month": 5500,
+        "intrinsic_quality": "medium",
+        "events_timeline": [
+          "M1 一个本地遛狗的阿姨滑倒后 mark，狗没事她扭了脚踝",
+          "M2 Tauranga community Facebook 群转发后赞数 90",
+          "M3 一个游客实拍 'I slipped here too'",
+          "M4 Council 派人在木栈道贴了防滑条，但 mark 没更新",
+          "M5 部分用户留言 '现在没那么滑了'，开始有 4 条举报说 mark 过时",
+          "M7 赞数稳定但举报每月增加"
+        ],
+        "edge_case_flag": "urban_high_traffic + remediated_hazard"
+      }
+    },
+    {
+      "id": 76,
+      "final_state": "healthy",
+      "final_lifespan": "short",
+      "source": "user-arbitration",
+      "rationale": "不额外处理普普通通过完一生 [user-decided]",
+      "case_data": {
+        "title": "Cape Reinga 灯塔重复 mark 第七个",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 0,
+        "duration_months": 2,
+        "user_volume_per_month": 5200,
+        "intrinsic_quality": "high",
+        "events_timeline": [
+          "M1 这是同一观景台的第 7 个 mark",
+          "M1 已经存在的前 6 个赞数都几百",
+          "M2 这个新 mark 只拿到 8 个赞",
+          "M2 末出现 '不要再开 mark 了' 的举报",
+          "M2 末原作者自己也意识到重复"
+        ],
+        "edge_case_flag": "urban_high_traffic + redundant_late_entry"
+      }
+    },
+    {
+      "id": 81,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "user-arbitration",
+      "rationale": "占比100%负向是急转入口 [user-decided]",
+      "case_data": {
+        "title": "Lake Hayes Loop 婚礼场地引导",
+        "type": "scenic",
+        "likes": 0,
+        "reports": 3,
+        "duration_months": 4,
+        "user_volume_per_month": 1200,
+        "intrinsic_quality": "medium",
+        "events_timeline": [
+          "M1 一个婚礼摄影师 mark '完美拍照点'",
+          "M2 一周内三个婚礼公司 IG 转发",
+          "M3 普通 hiker 抱怨 '走过去发现在拍婚纱'",
+          "M3 举报方向集中在商业占用",
+          "M4 婚礼公司影响力减退后 mark 失去活力"
+        ],
+        "edge_case_flag": "urban_high_traffic + industry_capture"
+      }
+    },
+    {
+      "id": 375,
+      "final_state": "dead_sick",
+      "final_lifespan": "normal",
+      "source": "user-arbitration",
+      "rationale": "急转进S后继续恶化走到D [user-decided]",
+      "case_data": {
+        "title": "Coromandel New Chums Beach — owner restricted access 2023",
+        "type": "scenic",
+        "likes": 42,
+        "reports": 18,
+        "duration_months": 24,
+        "user_volume_per_month": 90,
+        "intrinsic_quality": "famously remote unspoiled beach access mark",
+        "events_timeline": [
+          "Month 1-14: mark accurate, 42 likes 'paradise'",
+          "Month 15 (2023): new owner enforces no-trespass on traditional route",
+          "Month 16: visitor reports 'turned back at gate'",
+          "Month 18: alternative coastal route established",
+          "Month 20: 11 reports about original route blocked",
+          "Month 22: 18 reports cumulative",
+          "Month 24: total 42 likes vs 18 reports"
+        ],
+        "edge_case_flag": "ownership_change|trespass_risk|alternative_exists"
+      }
+    },
+    {
+      "id": 404,
+      "final_state": "healthy",
+      "final_lifespan": "short",
+      "source": "user-arbitration",
+      "rationale": "类型错放产品层问题 [user-decided]",
+      "case_data": {
+        "title": "Mt Taranaki Pouakai Hut 屋顶下补给箱被错标成 scenic",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 5,
+        "user_volume_per_month": 80,
+        "intrinsic_quality": "实际是 supply 关键信息，标错类型导致 supply 搜索的人看不到",
+        "events_timeline": [
+          "第1月: Lena 标的时候点错了下拉菜单，写描述是'emergency supplies under hut roof'但类型选了 scenic",
+          "第1月: 第一个看到的 tramper Mark 在 hut intentionsbook 写'someone marked this as scenic but it's a supply box, FYI'",
+          "第2月: 一个 hut warden 巡逻看到 mark 类型错，没账号无法直接改，向 DOC 反馈被搁置",
+          "第3月: 三个 supply 类型搜索的用户错过了这个 mark 因为搜不到——他们其中一个在 hut 抱怨没找到火柴",
+          "第4月: 一个澳洲 tramper Patrick 看到 scenic 圆点点开发现是补给信息，按赞但没改",
+          "第5月: 一个新 mark 出现在同 hut，正确标 supply，类型对，描述简单：'fire starter under eaves'"
+        ],
+        "edge_case_flag": "重复错放 + 类型选错"
+      }
+    },
+    {
+      "id": 412,
+      "final_state": "healthy",
+      "final_lifespan": "short",
+      "source": "user-arbitration",
+      "rationale": "类型错放产品层问题 [user-decided]",
+      "case_data": {
+        "title": "Lake Waikaremoana Panekire Bluff 一个 supply 被错标成 danger",
+        "type": "danger",
+        "likes": 8,
+        "reports": 2,
+        "duration_months": 7,
+        "user_volume_per_month": 25,
+        "intrinsic_quality": "实际是 supply（避难屋），错标成 danger 让看 danger 池的人误解",
+        "events_timeline": [
+          "第1月: 标 mark 的是一个澳洲 backpacker Jake，他理解 'storm shelter' 是 danger 信号",
+          "第2月: 三个 supply 类型搜索的 tramper 错过这个 mark，其中一个差点没找到避难屋",
+          "第3月: 一个本地 Tūhoe 向导 Hemi 看到 danger 圆点点开发现是避难屋介绍，没改",
+          "第4月: 一个英国 solo tramper 看到 danger 后绕远路怕'山顶有危险'",
+          "第5月: 第二个用户在同位置标了正确的 supply mark，描述简短'shelter'",
+          "第7月: 老 danger mark 收到 8 赞 2 举报但还活着，新 supply mark 收到 18 赞"
+        ],
+        "edge_case_flag": "重复错放 + 类型选错严重"
+      }
+    },
+    {
+      "id": 418,
+      "final_state": "healthy",
+      "final_lifespan": "short",
+      "source": "user-arbitration",
+      "rationale": "1条不算急转 [user-decided]",
+      "case_data": {
+        "title": "Banks Peninsula Akaroa 一个用户在自家厨房标了一个 scenic 测试",
+        "type": "scenic",
+        "likes": 0,
+        "reports": 1,
+        "duration_months": 11,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "完全是测试 mark，私人住宅位置，但描述和类型看起来正常",
+        "events_timeline": [
+          "第1月: 用户 Ben 测试 app 在自家厨房标 mark 然后忘了删",
+          "第3月: 第一个游客打开地图看 Akaroa 周边发现住宅区有 scenic 圆点，没去现场（隐私感）",
+          "第5月: 第二个游客点开看到描述'view of harbour'觉得挺正常没察觉",
+          "第7月: 第三个游客实际尝试导航过去，停在 Ben 家门外觉得不对，按了举报",
+          "第9月: 一个 Akaroa 本地居民认出 Ben 家地址在 fb 发文吐槽",
+          "第11月: mark 收到 0 赞 1 举报，仍在地图上活着但完全孤岛"
+        ],
+        "edge_case_flag": "重复错放 + 测试残留"
+      }
+    },
+    {
+      "id": 419,
+      "final_state": "healthy",
+      "final_lifespan": "short",
+      "source": "user-arbitration",
+      "rationale": "2条不算急转,正常寿命 [user-decided]",
+      "case_data": {
+        "title": "Paparoa Track Pororari River 河边一个 cairn 被洪水冲走但 mark 还在",
+        "type": "cairn",
+        "likes": 0,
+        "reports": 2,
+        "duration_months": 5,
+        "user_volume_per_month": 80,
+        "intrinsic_quality": "现场已无石堆，mark 在 app 上变成幽灵",
+        "events_timeline": [
+          "第1月: 一个本地 Punakaiki 居民 Ngaire 标 cairn，描述'small stack on river boulder'",
+          "第2月: 一场 cyclone 带来 200mm 雨 Pororari 暴涨 4m，石堆冲散",
+          "第3月: 第一个走 Paparoa 的游客找不到石堆但找到 mark 圆点，疑惑'哪里有石堆'",
+          "第3月: 他在 trip report 写'cairn gone, washed away'",
+          "第4月: 三个后来 tramper 看到 trip report 心里有数但仍按 mark 走过那段（地形熟）",
+          "第5月: mark 收到 5 历史赞 2 举报，处于 weak 但还活"
+        ],
+        "edge_case_flag": "重复错放 + 物理环境消失"
+      }
+    },
+    {
+      "id": 426,
+      "final_state": "healthy",
+      "final_lifespan": "short",
+      "source": "user-arbitration",
+      "rationale": "占比好,反复刷交给产品层IP/设备封锁 [user-decided]",
+      "case_data": {
+        "title": "Bay of Islands Cape Brett Track 一个 scenic 被旅游公司账号批量标 5 次",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 4,
+        "user_volume_per_month": 200,
+        "intrinsic_quality": "景是真实的但 5 个 mark 是市场行为不是社区贡献",
+        "events_timeline": [
+          "第1月: 旅游公司 Cape Brett Walks 用 5 个员工账号在两周内标了 5 个 scenic",
+          "第2月: 一个本地 tramper 看到地图上 5 个圆点重叠认出是同一公司账号风格",
+          "第2月: 该 tramper 在 NZ tramping subreddit 发帖吐槽'公司账号刷 mark'",
+          "第3月: 6 个不同用户陆续举报这 5 个 mark",
+          "第3月: 三个 mark 被算法 sink，剩 2 个继续残留",
+          "第4月: 公司账号未被封，两个剩余 mark 仍 alive"
+        ],
+        "edge_case_flag": "重复错放 + 账号刷量"
+      }
+    },
+    {
+      "id": 515,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "user-arbitration",
+      "rationale": "偏远老炮路占比不是问题 [user-decided]",
+      "case_data": {
+        "title": "Five Passes Route Cow Saddle — 老炮专用路无新手",
+        "type": "junction",
+        "likes": 0,
+        "reports": 1,
+        "duration_months": 15,
+        "user_volume_per_month": 1,
+        "intrinsic_quality": "作者警告夏末薄雾时 Cow Saddle 北侧的下行路极易看错，他指出正确下行的指标是一块独立花岗岩",
+        "events_timeline": [
+          "第0月: 作者 Jacqui（Wanaka outdoor guide 30 年经验）打 mark 因为她担心新手会因为 Internet 教程走这条路",
+          "第3月: 一个 Wellington 来的 hardcore tramper 路过，他在论坛上发帖批评'Five Passes 不该被 mark 化破坏氛围'",
+          "第7月: 一支 4 人 NZAC 队伍走 traverse，他们看到 mark 没说话",
+          "第11月: Jacqui 看到论坛批评但坚持留 mark，她说'有人活着比氛围重要'",
+          "第14月: 一个澳洲独行客在那块花岗岩前犹豫了 20 分钟，看了 mark 才走对路下山"
+        ],
+        "edge_case_flag": "零互动-亚文化反对负面信号"
+      }
+    },
+    {
+      "id": 531,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "user-arbitration",
+      "rationale": "0:0 维持健康不干预 [user-decided]",
+      "case_data": {
+        "title": "Routeburn Falls Hut 后山隐蔽厕所 — 极冷僻但救急",
+        "type": "supply",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 7,
+        "user_volume_per_month": 1500,
+        "intrinsic_quality": "作者标了备用厕所位置和路径，主 hut 厕所旺季拥挤时这是救急选项",
+        "events_timeline": [
+          "第0月: 作者 Will（Glenorchy 当地向导）打 mark 因为他见过太多游客厕所拥挤崩溃",
+          "第3月: 流量 4500 但 0 互动因为厕所话题没人愿意公开点赞",
+          "第5月: 一个 Wellington 来的家庭妈妈孩子急了找到备用厕所救急，她回家后想点赞但觉得尴尬没点",
+          "第6月: 一对德国 trampers 类似经历也没点赞",
+          "第7月: 高流量持续 0 互动"
+        ],
+        "edge_case_flag": "零互动-社交禁忌话题"
+      }
+    },
+    {
+      "id": 536,
+      "final_state": "healthy",
+      "final_lifespan": "short",
+      "source": "user-arbitration",
+      "rationale": "1条不算急转 [user-decided]",
+      "case_data": {
+        "title": "Coromandel Pinnacles 山顶上厕所 — 维修期错放 mark",
+        "type": "supply",
+        "likes": 0,
+        "reports": 1,
+        "duration_months": 3,
+        "user_volume_per_month": 900,
+        "intrinsic_quality": "mark 内容指向 hut 西面但临时厕所实际在东面，作者凭印象打的没核对",
+        "events_timeline": [
+          "第0月: 作者 Tama（Thames 当地）维修开始打 mark 凭印象",
+          "第1月: 流量 900 人按 mark 走西面找不到厕所多数转头走东面发现",
+          "第2月: 一个 hut warden 听到几次抱怨但他自己不会用 app",
+          "第3月: 维修结束 mark 失效，Tama 没回去删"
+        ],
+        "edge_case_flag": "零互动-位置错误临时性"
+      }
+    },
+    {
+      "id": 593,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "user-arbitration",
+      "rationale": "占比好1条不算急转 [user-decided]",
+      "case_data": {
+        "title": "Hooker Valley swing bridge 强风警告救老人摔倒",
+        "type": "danger",
+        "likes": 8,
+        "reports": 1,
+        "duration_months": 12,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "",
+        "events_timeline": [
+          "2024-03-15 老 ranger 发现 swing bridge 在 valley 风口最高阵风可达 90km/h",
+          "2024-03-15 mark：'下午 valley 风口阵风 80+km/h，老人 + 孩子等阵风间隙过桥'",
+          "2024-04-18 一位 75 岁老太太按 mark 等阵风间隙才上桥",
+          "2024-04-18 上桥后看到她身后阵风把另一个游客的帽子吹下河，那游客差点失去平衡",
+          "2024-04-19 老太太对孙女说 'mark 救了我'",
+          "2024-至今 mark 季节性维持"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 703,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "user-arbitration",
+      "rationale": "占比好潮汐是事实 [user-decided]",
+      "case_data": {
+        "title": "Catlins Cathedral Caves 入口潮汐封路 — 隐藏入口的备用路径",
+        "type": "junction",
+        "likes": 24,
+        "reports": 6,
+        "duration_months": 22,
+        "user_volume_per_month": 35,
+        "intrinsic_quality": "正式入口涨潮关闭后，本地人知道有条沿崖根走的备用通道，但只在中潮以下安全",
+        "events_timeline": [
+          "第 2 月: 摄影师 Greg 第一次标记，备注'仅供熟悉海岸的人'",
+          "第 5 月: 一个 Auckland 游客按 mark 走但不懂判潮，被困两小时，写了举报说'误导'",
+          "第 6 月: 本地 Catlins Coast 协会成员留言反驳，附 Greg 的原警告截图，举报被反向赞淹没",
+          "第 9 月: 冬季正门关闭期间这条 mark 突然成了唯一选项，本地人在 mark 上加注'冬天千万别试'",
+          "第 13 月: 暴风后崖根路径被冲断 5 米，mark 被一位 Invercargill 大学生标'已不可通行'",
+          "第 18 月: 半年后重新积砂铺平，Greg 本人回来确认，把 mark 重新激活",
+          "第 21 月: DOC 被举报含义后曾联系 Cairn 想删除，但 community vote 通过保留并加强警告"
+        ],
+        "edge_case_flag": "海岸-社区争议-季节切换"
+      }
+    },
+    {
+      "id": 715,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "user-arbitration",
+      "rationale": "195:4 超级正向 [user-decided]",
+      "case_data": {
+        "title": "Tongariro 湖区 Lake Rotopounamu 步道泥泞段 — 雨季陷阱",
+        "type": "danger",
+        "likes": 195,
+        "reports": 4,
+        "duration_months": 14,
+        "user_volume_per_month": 380,
+        "intrinsic_quality": "雨后泥泞深度可达大腿，看起来只是地面湿",
+        "events_timeline": [
+          "第 1 月: Turangi 学校老师 Mere 带学生远足陷一脚后标记",
+          "第 3 月: 一位 Auckland 来的退休夫妇按 mark 提前换 gaiter，写感谢评论",
+          "第 6 月: 干旱夏季 mark 评论区有人质疑'我没看到泥'，Mere 回复'等冬天再来'",
+          "第 9 月: 冬季暴雨周 mark 被多人补充实测照片",
+          "第 12 月: DOC 计划铺木板路但预算延迟，mark 仍是唯一信息源",
+          "第 13 月: Mere 调离学校但本地 tramping club 接手维护"
+        ],
+        "edge_case_flag": "湖区-季节性-DOC缺位"
+      }
+    },
+    {
+      "id": 717,
+      "final_state": "healthy",
+      "final_lifespan": "long",
+      "source": "user-arbitration",
+      "rationale": "155:2 超级正向 [user-decided]",
+      "case_data": {
+        "title": "Banks Peninsula Akaroa Harbour 海豹突袭区 — 划皮艇警告",
+        "type": "danger",
+        "likes": 155,
+        "reports": 2,
+        "duration_months": 18,
+        "user_volume_per_month": 110,
+        "intrinsic_quality": "公海豹会主动撞击靠近的皮划艇，特别是 6-9 月繁殖期",
+        "events_timeline": [
+          "第 1 月: Akaroa Sea Kayaking 老板 Mike 标记，附他 15 年的事件记录",
+          "第 3 月: 一对悉尼游客被海豹撞翻船，无伤但震惊，回去加赞",
+          "第 6 月: 繁殖季高峰 mark 评论区每周新事件",
+          "第 10 月: 一只名叫 'Ranger' 的攻击性公海豹去世，mark 评论区有人标'本月无大事件'",
+          "第 14 月: DOC 装了浮标警告牌但只在英文，mark 多语言版本继续被海外用户依赖",
+          "第 17 月: 商业出租店的入门简介必提 mark"
+        ],
+        "edge_case_flag": "海湾-野生动物-商业向导"
+      }
+    },
+    {
+      "id": 723,
+      "final_state": "healthy",
+      "final_lifespan": "expired",
+      "source": "user-arbitration",
+      "rationale": "140:2 超级正向状态未死 [user-decided]",
+      "case_data": {
+        "title": "Bay of Islands Russell 步道海岸侵蚀点 — 步道边缘悬空",
+        "type": "danger",
+        "likes": 140,
+        "reports": 2,
+        "duration_months": 8,
+        "user_volume_per_month": 320,
+        "intrinsic_quality": "步道看起来还在但下方土层已被掏空 60 厘米，重压会塌",
+        "events_timeline": [
+          "第 1 月: Russell 退休测量员 Ted 用工程经验标记并附测量数据",
+          "第 3 月: 一对意大利邮轮客没看 mark 走过塌了 1 米，无伤但惊魂，加赞",
+          "第 5 月: 暴雨周侵蚀加剧 Ted 当周三次更新 mark",
+          "第 7 月: DOC 暂时关闭这段步道改设临时绕行 mark 自动降权",
+          "第 8 月: 步道改线完成 mark 关闭归档但仍在历史中可查"
+        ],
+        "edge_case_flag": "海岸侵蚀-DOC修复-mark退役"
+      }
+    },
+    {
+      "id": 958,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "user-arbitration",
+      "rationale": "机器人问题产品来判断算法只专注数据 [user-decided]",
+      "case_data": {
+        "title": "Cape Reinga 灯塔下 5 真赞 95 机器人赞 vs 8 真举报",
+        "type": "scenic",
+        "likes": 95,
+        "reports": 0,
+        "duration_months": 14,
+        "user_volume_per_month": 1800,
+        "intrinsic_quality": "实地是个普通海角观景台，比正式灯塔观景台差但被 KOL 包装成秘境",
+        "events_timeline": [
+          "第1月: 标后 30 天累积 95 赞，曲线伪装得很真，但其中 90 来自 5 个新建账号集群",
+          "第1月底: 5 个真赞来自跟风游客点赞 KOL 视频后到现场打卡",
+          "第3月: 一个 Northland 本地举报'位置不对，正点在灯塔西侧'",
+          "第5月: 第二个真用户举报'不如官方观景台'",
+          "第8月: 累计 8 个真举报理由都很具体",
+          "第10月: 机器人赞停止（KOL 推广周期结束），新增赞速骤降",
+          "第14月: 总赞 102（其中 95 机器人）vs 8 真举报，按比是健康但全是水"
+        ],
+        "edge_case_flag": "fake_strong_likes + sockpuppet_farm + KOL_marketing"
+      }
+    },
+    {
+      "id": 968,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "user-arbitration",
+      "rationale": "42:6占比好 [user-decided]",
+      "case_data": {
+        "title": "Hump Ridge Track 商业化 scenic 点击农场",
+        "type": "scenic",
+        "likes": 42,
+        "reports": 6,
+        "duration_months": 5,
+        "user_volume_per_month": 380,
+        "intrinsic_quality": "景观真实但运营商动机不纯，刷的是品牌广告非真用户体验",
+        "events_timeline": [
+          "第1月: 运营商账号集群 11 个账号集中赞，看似 28 赞",
+          "第2月: 真用户到达开始进入，5 个真赞混入",
+          "第3月: 一个 Fiordland 向导举报'此点不如下方 platform'",
+          "第4月: 累计 38 赞（28 sock + 10 真）vs 4 举报",
+          "第5月: 总 42 赞 6 举报，sock 占比仍 67%"
+        ],
+        "edge_case_flag": "commercial_operator_inflation + great_walk_branding"
+      }
+    },
+    {
+      "id": 23,
+      "final_state": "context_dependent",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "88 like 36 report 占比正向,季节性差异稳定无急转",
+      "case_data": {
+        "title": "Tongariro Northern Circuit Waihohonu Hut 后冬季雪崩区 danger",
+        "type": "danger",
+        "likes": 88,
+        "reports": 36,
+        "duration_months": 20,
+        "user_volume_per_month": 280,
+        "intrinsic_quality": "冬季致命真危险，夏季毫无威胁，季节性反差极端的典型案例",
+        "events_timeline": [
+          "第1月: 一个雪崩培训师在 Whakapapa 出山后 mark，专门标注'仅冬季有效'",
+          "第3月: 当年冬季有人触发小型雪崩侥幸无伤，出山后赞并附视频",
+          "第6月: 一个夏季徒步者举报'我刚走过没看到任何危险'",
+          "第8月: 又有 4 个夏季徒步者跟着举报",
+          "第11月: 雪崩培训师重新出来留长评解释季节性",
+          "第14月: 当年冬季又有一起雪崩险情，受害者赞",
+          "第20月: 总赞 88（含 cold season 用户），总举报 36（多为夏季用户）"
+        ],
+        "edge_case_flag": "remote_no_signal + season_specific_danger"
+      }
+    },
+    {
+      "id": 42,
+      "final_state": "context_dependent",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "42 like 26 report 占比稍正向,季节性争议无急转",
+      "case_data": {
+        "title": "St James Walkway 雪季入口封闭 junction 季节性",
+        "type": "junction",
+        "likes": 42,
+        "reports": 26,
+        "duration_months": 24,
+        "user_volume_per_month": 60,
+        "intrinsic_quality": "冬季关键导航信息救命，夏季完全无意义对照",
+        "events_timeline": [
+          "第1月: 一个冬季想走的 NZ 老炮建 mark 标'仅 6-9 月'",
+          "第3月: 第一个冬季成功绕行的徒步者赞",
+          "第8月: 一个夏季用户举报'gate 是开的我看不到任何关闭'",
+          "第14月: 老用户冬季回来再赞",
+          "第20月: 累积赞 35（多为冬季用户长评），举报 22（多为夏季）",
+          "第24月: 总赞 42，总举报 26"
+        ],
+        "edge_case_flag": "remote_no_signal + seasonal_gate_junction"
+      }
+    },
+    {
+      "id": 67,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass2-majority",
+      "rationale": "0 like 5 report 社区两极化,信号混乱并向负向反转",
+      "case_data": {
+        "title": "Khandallah Park 遛狗失控点",
+        "type": "danger",
+        "likes": 0,
+        "reports": 5,
+        "duration_months": 5,
+        "user_volume_per_month": 800,
+        "intrinsic_quality": "low",
+        "events_timeline": [
+          "M1 一个本地养狗的 mark '我家狗在这里被扑过两次'",
+          "M2 评论区分裂严重，部分本地说 '我家狗也在这里被攻击' 部分说 '别污名化'",
+          "M3 出现攻击主对应主小号的互怼",
+          "M4 内容被编辑过 6 次，每次方向不同",
+          "M5 举报数和赞数同步上涨，社区两极化"
+        ],
+        "edge_case_flag": "urban_high_traffic + interpersonal_dispute"
+      }
+    },
+    {
+      "id": 274,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "22:13 (1.69:1) 学者反驳+官方更准 mark 存在,持续 report 构成趋势",
+      "case_data": {
+        "title": "Te Anau Hidden Lakes 直升机公司标 Lake Quill 上方'隐藏湖'",
+        "type": "scenic",
+        "likes": 22,
+        "reports": 13,
+        "duration_months": 16,
+        "user_volume_per_month": 12,
+        "intrinsic_quality": "湖确实存在，但只能直升机访问，'hidden'是商业话术——它是 Sutherland Falls 水源众所周知",
+        "events_timeline": [
+          "Month 1: Southern Lakes Helicopters 发 mark",
+          "Month 4: Milford Track 长期向导评论区指出'hidden'不准确，是 Sutherland Falls 水源",
+          "Month 7: 完成 heli tour 的游客留言确认景观真实，14 likes",
+          "Month 10: 当地地理学者发文反驳'hidden'描述",
+          "Month 13: Fiordland National Park 官方账号发了同点 mark，写'Lake Quill, source of Sutherland Falls'",
+          "Month 16: 累积 22 likes vs 13 reports"
+        ],
+        "edge_case_flag": "commercial_marketing_language|truth_with_spin|merge_candidate"
+      }
+    },
+    {
+      "id": 280,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "18:12 (1.5:1) trampers 集体 report 构成趋势 → 向下急转,但 NZAC+DOC 中性可能强心剂",
+      "case_data": {
+        "title": "Glenorchy 滑翔伞公司标 Mt Larkins 起飞点（合法但被 trampers 反感）",
+        "type": "scenic",
+        "likes": 18,
+        "reports": 12,
+        "duration_months": 11,
+        "user_volume_per_month": 14,
+        "intrinsic_quality": "起飞点合法（NZ Hang Gliding & Paragliding 协会注册），但徒步者经常被滑翔伞低空飞越觉得被打扰",
+        "events_timeline": [
+          "Month 1: Coronet Peak Tandem 发 mark",
+          "Month 3: NZ HGPA 协会评论区确认起飞点合法",
+          "Month 5: 一名 Routeburn-Greenstone 长穿 tramper 抱怨'飞过头顶'，1 report",
+          "Month 7: 6 名 trampers 集体 report '降低 wilderness 体验'",
+          "Month 8: DOC Glenorchy 评论中性'两种活动均合法'",
+          "Month 9: NZ Alpine Club 评论支持'空中活动是合法 alpine 使用'",
+          "Month 11: 累积 18 likes vs 12 reports"
+        ],
+        "edge_case_flag": "commercial_legal_conflict|user_group_friction|filter_tag"
+      }
+    },
+    {
+      "id": 317,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "980:1240 (0.79:1) 接近 50:50 持续争议(价格/天气分歧),v6.6 维持 HEALTHY",
+      "case_data": {
+        "title": "Franz Josef Glacier 冰川徒步直升机降落点 (heli-hike)",
+        "type": "scenic",
+        "likes": 980,
+        "reports": 1240,
+        "duration_months": 60,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "Instagram 爆款冰川蓝洞，必须坐直升机才能到",
+        "events_timeline": [
+          "09:00 集合付 599 NZD，气象推迟到 11:00",
+          "11:30 直升机起飞，5 分钟到冰川",
+          "11:45 戴冰爪走进蓝色冰洞，导游说今年又退缩 80 米",
+          "11:50 mark scenic 备注 '蓝洞真的蓝得不像话，但 599 刀+全靠天气'",
+          "12:30 冰洞顶上水滴下来，导游说 5 年内可能塌",
+          "13:30 回程被告知明天 30% 概率气象取消"
+        ],
+        "edge_case_flag": ""
+      }
+    },
+    {
+      "id": 376,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "51:19 慢性恶化(几个月内分散),无 burst 急转,维持 HEALTHY 让转化率自然处理",
+      "case_data": {
+        "title": "Lake Tekapo Mt John summit road — gate hours changed 2023",
+        "type": "supply",
+        "likes": 51,
+        "reports": 19,
+        "duration_months": 30,
+        "user_volume_per_month": 130,
+        "intrinsic_quality": "marked '24/7 walking access via gate'",
+        "events_timeline": [
+          "Month 1-22: mark accurate, 51 likes",
+          "Month 23 (2023): vandalism prompts night-closure 8pm-6am",
+          "Month 24: night visitor reports 'gate locked at 9pm'",
+          "Month 26: 12 reports about new restriction",
+          "Month 28: 19 reports cumulative",
+          "Month 29: signage updated but mark unchanged",
+          "Month 30: total 51 likes vs 19 reports"
+        ],
+        "edge_case_flag": "hours_change|partial_truth|specific_use_case"
+      }
+    },
+    {
+      "id": 378,
+      "final_state": "suspicious",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "5 年 38:24 长期慢性,无急转,寿命自然走完 dead_natural",
+      "case_data": {
+        "title": "Auckland Hunua Ranges Cosseys Track — kauri dieback closed indefinitely",
+        "type": "junction",
+        "likes": 38,
+        "reports": 24,
+        "duration_months": 60,
+        "user_volume_per_month": 95,
+        "intrinsic_quality": "popular Auckland day-walk loop track",
+        "events_timeline": [
+          "Month 1 (2018): mark accurate, 38 likes",
+          "Month 4 (2018): full Hunua closure for dieback",
+          "Month 12: walker reports 'still closed'",
+          "Month 36: closure continues, 18 reports cumulative",
+          "Month 56 (2023): partial reopening but Cosseys specifically still closed",
+          "Month 58: 6 more reports 'still no Cosseys'",
+          "Month 60: total 38 likes vs 24 reports"
+        ],
+        "edge_case_flag": "long_dieback_closure|partial_reopen|historical_likes"
+      }
+    },
+    {
+      "id": 380,
+      "final_state": "suspicious",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "18:8 偏远低流量,8条分散数月,占比变化温和,慢性退化非入口",
+      "case_data": {
+        "title": "Bay of Islands Cape Brett Track — slip 2023 closed half the route",
+        "type": "junction",
+        "likes": 18,
+        "reports": 8,
+        "duration_months": 22,
+        "user_volume_per_month": 30,
+        "intrinsic_quality": "marked the marine reserve descent track",
+        "events_timeline": [
+          "Month 1-15: mark accurate, 18 likes",
+          "Month 16 (2023): slip blocks descent",
+          "Month 17: tramper reports 'slip face, no safe descent'",
+          "Month 19: DOC posts indefinite closure of Deep Water section",
+          "Month 21: 8 reports cumulative",
+          "Month 22: total 18 likes vs 8 reports"
+        ],
+        "edge_case_flag": "remote_no_signal|committing_walk|slip_closure"
+      }
+    },
+    {
+      "id": 408,
+      "final_state": "healthy",
+      "final_lifespan": "short",
+      "source": "pass2-majority",
+      "rationale": "老 mark 4:3 弱信号,可能 borderline,新 mark healthy",
+      "case_data": {
+        "title": "Mueller Hut 路上 GPS 把 danger mark 飘到了相邻雪坡的安全位置",
+        "type": "danger",
+        "likes": 15,
+        "reports": 0,
+        "duration_months": 5,
+        "user_volume_per_month": 200,
+        "intrinsic_quality": "落石警告是真实的但点错位置，飘过去的位置反而是安全的",
+        "events_timeline": [
+          "第1月: 一个新西兰 Christchurch 来的 35 岁工程师 Owen 标 danger，写'rockfall zone, helmet recommended'",
+          "第2月: 一个澳洲游客在他标的位置（飘过去的安全雪坡）按 app 提示绕了一圈结果走更远的路",
+          "第3月: 一个 DOC ranger 路过看到圆点在错的位置，回办公室提了 ticket 没人理",
+          "第4月: 第二个用户在真实落石区标了一个新 danger，描述简单'rocks'",
+          "第4月: Owen 那条收到 4 个'谢谢'赞和 3 个'位置错了'举报，新 mark 收到 15 赞",
+          "第5月: 老 mark 还活着但被边缘化，新 mark 占据社区注意力"
+        ],
+        "edge_case_flag": "重复错放 + GPS 偏移导致信息错位"
+      }
+    },
+    {
+      "id": 417,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass2-majority",
+      "rationale": "6 likes 5 reports 50:50 边界,可能持续争议保持 HEALTHY 或弱向下",
+      "case_data": {
+        "title": "Tongariro Crossing Soda Springs 一个 scenic 飘到了山顶火山口边缘",
+        "type": "scenic",
+        "likes": 6,
+        "reports": 5,
+        "duration_months": 5,
+        "user_volume_per_month": 1500,
+        "intrinsic_quality": "Soda Springs 真景，但坐标错到火山口让人以为是新的 scenic 点",
+        "events_timeline": [
+          "第1月: 一个法国游客 Léa 在 Soda Springs 标 scenic 但 GPS 信号极差飘到火山口",
+          "第2月: 三个其他游客在火山口附近看到 scenic 圆点疑惑'这是什么'，专门绕过去看",
+          "第3月: 一个 Wellington 来的 tramper 看到 mark 描述写 Soda Springs 但坐标在火山口写了举报",
+          "第4月: Léa 自己看回放发现错了，但她已经回法国懒得删",
+          "第5月: 第二个 mark 在 Soda Springs 真实位置出现（正确坐标），收到正常流量",
+          "第5月: 老 mark 收到 6 赞 5 举报，处于 sink 边缘"
+        ],
+        "edge_case_flag": "重复错放 + 大幅 GPS 偏移"
+      }
+    },
+    {
+      "id": 422,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass2-majority",
+      "rationale": "8 likes 4 reports 比例较负,可能进 SUSPICIOUS,但信号量小",
+      "case_data": {
+        "title": "Lake Tekapo Mt John 一个 scenic mark 标到了天文台围栏内（私人区域）",
+        "type": "scenic",
+        "likes": 8,
+        "reports": 4,
+        "duration_months": 3,
+        "user_volume_per_month": 1000,
+        "intrinsic_quality": "景是好的（暗夜星空保留区）但坐标在围栏内是私人科研区",
+        "events_timeline": [
+          "第1月: 一个中国游客 Wei 标 scenic 描述'best stargazing'但 GPS 飘围栏内",
+          "第1月: 一个天文台职员看到 mark 在自己工作区域困惑了一下，没账号没动",
+          "第2月: 三个游客试图按 mark 导航撞围栏，其中一个翻栏被劝退",
+          "第2月: 该 tramper 举报 mark'private zone'",
+          "第3月: 第二个 mark 在围栏外正确位置出现",
+          "第3月: 老 mark 收到 8 赞 4 举报 borderline"
+        ],
+        "edge_case_flag": "重复错放 + GPS 飘进私人区"
+      }
+    },
+    {
+      "id": 425,
+      "final_state": "suspicious",
+      "final_lifespan": "short",
+      "source": "pass2-majority",
+      "rationale": "2 likes 3 reports 比例偏负,弱信号可能 SUSPICIOUS",
+      "case_data": {
+        "title": "Mt Cook Mueller Hut 旁一个 cairn 标在了 hut 屋顶 GPS",
+        "type": "cairn",
+        "likes": 2,
+        "reports": 3,
+        "duration_months": 6,
+        "user_volume_per_month": 60,
+        "intrinsic_quality": "石堆是真实的但坐标在 hut 屋顶毫无意义",
+        "events_timeline": [
+          "第1月: 标 mark 的 Otago 大学生 James 在 hut 内同步 GPS 抓在屋顶",
+          "第2月: 一个 alpinist 看到 mark 圆点在 hut 上方笑了在 fb 发图",
+          "第3月: 第二个 mark 在 cairn 真实位置出现",
+          "第4月: James 那条收到 2 赞 3 举报",
+          "第5月: 一个新西兰 alpine club 老炮在 trip report 提'app 上 Mueller Hut 屋顶有 cairn 圆点'",
+          "第6月: 老 mark 处于 sink 边缘，新 mark 健康"
+        ],
+        "edge_case_flag": "重复错放 + GPS 高度异常"
+      }
+    },
+    {
+      "id": 502,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "极偏远 1 view/月 18 月 0 互动,danger 类长寿命,持续无负向 healthy",
+      "case_data": {
+        "title": "Mt Owen 喀斯特石灰岩槽 — 落石口 cairn",
+        "type": "danger",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 18,
+        "user_volume_per_month": 1,
+        "intrinsic_quality": "一个 3 米深的裂缝藏在草丛里，从下行方向完全看不见，作者用石头堆了 cairn 加 danger mark",
+        "events_timeline": [
+          "第0月: 作者 Hamish（Nelson alpine 向导）带客户走 Mt Owen，差点踩空，第二天独自上山堆 cairn 打 mark",
+          "第6月: 一对德国情侣 trampers 路过，看到 cairn 拍了照，但他们没装 app",
+          "第11月: 一支 NZAC 训练队 4 人上山，领队认出 cairn 知道含义，提醒队员绕行，但只在他们内部 WhatsApp 群说了",
+          "第17月: Hamish 自己春季再上去，cairn 被一场地震震塌了一半，他重新堆了一遍"
+        ],
+        "edge_case_flag": "零互动-客观危险无信号验证"
+      }
+    },
+    {
+      "id": 504,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "极偏远 15/月 22 月 0 互动,supply 长寿命,极低流量 healthy 持续",
+      "case_data": {
+        "title": "Olivine Ice Plateau 直升机投放点 — 弃置燃料桶",
+        "type": "supply",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 22,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "1990 年代留下的两个空汽油桶可以当应急避风用，作者提示别尝试当燃料，桶身锈穿了",
+        "events_timeline": [
+          "第0月: 作者 Dave（Wanaka 山岳摄影师）heli 进去拍冰川，等天气时无聊在 app 上记录了一下油桶状况",
+          "第14月: 一支 Otago 大学冰川监测队 3 人 heli 进去做钻冰取样，看到 mark 没反应",
+          "第19月: 一个法国独行登山者 Pierre 从 Forgotten River 走 6 天上来，在油桶后面避了一夜风暴，他不讲英文也没装 app",
+          "第22月: Dave 第二年又来，油桶还在 mark 还在"
+        ],
+        "edge_case_flag": "零互动-极偏远直升机访问"
+      }
+    },
+    {
+      "id": 505,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "2 view/月偏远 8 月 0 互动,scenic 长寿命,偏远历史好维持 healthy",
+      "case_data": {
+        "title": "Old Ghost Road Lyell 端 1885 矿坑遗址 — 历史标记",
+        "type": "scenic",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 8,
+        "user_volume_per_month": 2,
+        "intrinsic_quality": "矿坑入口还能看到当年的木支撑结构，作者标了 scenic 提示历史价值并附了 NZ Heritage 编号",
+        "events_timeline": [
+          "第0月: 作者 Margaret（Reefton 当地历史学者）徒步进去打 mark，她不骑车走了 4 小时才到",
+          "第3月: 一对 Christchurch 退休夫妇骑车经过，看 app 注意到 mark 但没去看遗址，怕错过 hut booking 时间",
+          "第5月: 一个独行单车手 stopped 喝水时看到 mark，犹豫了下但腿酸放弃了",
+          "第7月: 一支 4 人骑行队冲过去时根本没看 app",
+          "第8月: Margaret 自己每年清明前后会去那里拜祭一下她曾祖父，mark 还在"
+        ],
+        "edge_case_flag": "零互动-错配受众"
+      }
+    },
+    {
+      "id": 506,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "1 view/月 11 月 0 互动,Stewart Island 极偏远,寿命缓慢流失 healthy",
+      "case_data": {
+        "title": "Stewart Island Mason Bay 北端 — kiwi 夜行观察提示",
+        "type": "scenic",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 11,
+        "user_volume_per_month": 1,
+        "intrinsic_quality": "作者提示 21:30-22:30 安静站在沙丘边大概率能看到 kiwi，禁止用强光手电",
+        "events_timeline": [
+          "第0月: 作者 Riki（Stewart Island 毛利向导）打了 mark，他特意写得低调因为不想吸引人潮",
+          "第2月: 一个独行德国摄影师在 Mason Bay 住 3 晚，每晚去看，第三晚拍到 kiwi，但他没在 app 上分享尊重 Riki 的意图",
+          "第6月: 一对英国夫妇 trampers 看到 mark 但他们 hut 21:00 已经睡了完全错过",
+          "第10月: Riki 带 4 人小团又去那里看，他自己没动 mark",
+          "第11月: 一个 Otago 大学动物学博士生路过，知道这种地点的敏感性，没点赞"
+        ],
+        "edge_case_flag": "零互动-野生动物敏感静默"
+      }
+    },
+    {
+      "id": 509,
+      "final_state": "heartbeat",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "15/月 7 月季节性 0 互动,context_dependent 季节,无负向",
+      "case_data": {
+        "title": "Lake Hauroko 西岸 Dusky Track 入口 — 雪季 6 个月封闭",
+        "type": "danger",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 7,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "作者提示渡船关停期间不要尝试自己划船过湖，湖宽 8 公里风浪极大，已淹死过 2 人",
+        "events_timeline": [
+          "第0月（5 月）: 作者 Sean（Tuatapere 渡船船长）封船前打了 mark",
+          "第2月: 完全无人，湖面被风暴搅了 3 周",
+          "第5月: 一个 Te Anau 来的 weekend kayaker 想测试自己能不能横渡，看到 mark 后放弃了",
+          "第7月（12 月）: 渡船恢复，第一批 trampers 到达，没人看停航期 mark 因为已经过时"
+        ],
+        "edge_case_flag": "零互动-季节封闭期内"
+      }
+    },
+    {
+      "id": 510,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "1/月偏远 12 月 0 互动,极低流量寿命缓慢",
+      "case_data": {
+        "title": "Tasman Wilderness Karamea Bend Hut 西北山脊 — heli 修复后无人验证",
+        "type": "junction",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 12,
+        "user_volume_per_month": 1,
+        "intrinsic_quality": "作者提示新路标比 Topo50 地图位置西移了 80 米更准，按新标走",
+        "events_timeline": [
+          "第0月: 作者 Pete（Nelson DOC 外包向导）heli 修标后回程在 Karamea Bend Hut 打了 mark",
+          "第4月: 一个独行 tramper 走过路口，按新标找到岔路，他后来在 hut book 上写了'感谢谁立的新标'，但没在 app 上",
+          "第8月: 一支 3 人 NZAC 队伍走 Tasman 大穿越，看到 mark 但只是确认了一下没互动",
+          "第12月: Pete 第二年 heli 复查时还看见 mark"
+        ],
+        "edge_case_flag": "零互动-官方修复后无验证"
+      }
+    },
+    {
+      "id": 512,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "5/月专业受众 0 互动,danger 长寿命极低流量",
+      "case_data": {
+        "title": "Mount Aspiring Wilkin Valley Top Forks Hut 上方 — 雪崩季前预警",
+        "type": "danger",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 5,
+        "user_volume_per_month": 5,
+        "intrinsic_quality": "作者基于 NZAC 雪崩报告标注此区每年 6-9 月雪崩风险 considerable 以上，建议绕 South Branch",
+        "events_timeline": [
+          "第0月（4 月底）: 作者 Tom（Wanaka NZAC 雪崩讲师）打 mark 准备雪季",
+          "第3月（7 月）: 一支 2 人雪攀队从 Makarora 进山，他们看了 NZAC 官方报告决定走 South Branch，没看 app 上 mark",
+          "第4月（8 月）: 一个独行雪攀者半路撤退原因是天气，他没到达 mark 位置",
+          "第5月（9 月底）: Tom 自己春季回去查看，mark 还在他没动"
+        ],
+        "edge_case_flag": "零互动-专业受众有更好渠道"
+      }
+    },
+    {
+      "id": 516,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "15/月偏远 13 月 0 互动,supply 长寿命",
+      "case_data": {
+        "title": "Lake Sumner Forest Park Three Mile Stream Hut — NZDA 老 hut 路太破",
+        "type": "supply",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 13,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "作者提示 hut 还有 4 张床和柴火炉子可用，但路径需要爬过 3 棵巨大倒木，多带 1 小时",
+        "events_timeline": [
+          "第0月: 作者 Greg（Christchurch NZDA 长老）跟同伴去打野猪发现路阻打 mark",
+          "第5月: 一个独行猎人 Jim 进山，他爬倒木花了 1.5 小时但没看 app，他靠老地图",
+          "第9月: Greg 自己又去一次，倒木又多了 1 棵，他更新了 mark 内容",
+          "第13月: 一个 Otago 大学生物学博士去做 beetle 调查，他看到 mark 准备了锯子提前清了 1 棵小倒木"
+        ],
+        "edge_case_flag": "零互动-NZDA文化沉默"
+      }
+    },
+    {
+      "id": 517,
+      "final_state": "heartbeat",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "15/月 7 月 0 互动,正常流失",
+      "case_data": {
+        "title": "Westland Whataroa River 上游 — 直升机降落点临时变更",
+        "type": "junction",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 7,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "作者标注新降落点 GPS 坐标提示自走 trampers 别走老 ledge 那条路，过河变得很危险",
+        "events_timeline": [
+          "第0月: 作者 Rachel（Hokitika heli 操作员）打 mark 给 ground trampers",
+          "第3月: 一对独行 alpine 摄影师走进来，他们看到 mark 后改路线避开了老 ledge",
+          "第6月: Rachel 公司的 heli 月度调度提到 mark 还有效",
+          "第7月: 一个独行 tramper 走错老 ledge 差点掉进河里但活着撤回，回家后才看到 app mark 后悔没提前查"
+        ],
+        "edge_case_flag": "零互动-人均价值高极少数受众"
+      }
+    },
+    {
+      "id": 519,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "1500/月高流量但 0 互动,danger 长寿命应急高价值,流量挡不住寿命流失但仍 healthy 期内",
+      "case_data": {
+        "title": "Tongariro Northern Circuit 备用紧急避难处 — 99% 用不到",
+        "type": "supply",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 10,
+        "user_volume_per_month": 1500,
+        "intrinsic_quality": "作者标注雷暴时这块大石头底下 3 平米可避雷电，距 trail 50 米东侧但很难一眼看到",
+        "events_timeline": [
+          "第0月: 作者 Rangi（Whakapapa 毛利向导 20 年经验）打 mark，他亲历过 1998 年那场雷暴",
+          "第3月: 1500+ 人路过没人理 mark 因为天气都好",
+          "第5月（1 月雷暴日）: 一对德国 trampers 被突袭雷暴困住，他们慌乱中没看 app 跑下山被淋透但活着",
+          "第7月: 一支 5 人本地团雷暴中正好在附近，向导知道 mark 直接带队过去躲了 40 分钟，他们事后没在 app 上点赞因为忙着继续行程",
+          "第10月: 1 万 + 总流量 0 赞 0 举报"
+        ],
+        "edge_case_flag": "零互动-应急高价值低频"
+      }
+    },
+    {
+      "id": 521,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "3/月极偏远 11 月 0 互动 junction 长寿命",
+      "case_data": {
+        "title": "Mavora Lakes 北端 South Mavora Hut 后面 — 已倒的指示牌",
+        "type": "junction",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 11,
+        "user_volume_per_month": 3,
+        "intrinsic_quality": "作者标了正确的步行道方向是从倒下木牌那块石头左边走，不是右边的 4WD 车辙",
+        "events_timeline": [
+          "第0月: 作者 Doug（Te Anau 钓鱼向导）每年来 Mavora 钓 brown trout 时打了 mark",
+          "第4月: 一个 Christchurch 来的 LOTR 粉丝走错走了 4WD 车辙 1 公里才发现，他没看 app 是看到湖反方向才折返",
+          "第7月: 一对本地猎人按 mark 走对了，他们觉得这种事不值得点赞",
+          "第10月: Doug 自己第二年钓鱼又去，DOC 还没来修牌他重新强调了 mark 内容",
+          "第11月: 一个独行 tramper 看 app 找对了路"
+        ],
+        "edge_case_flag": "零互动-DOC维护滞后填补"
+      }
+    },
+    {
+      "id": 522,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "50/月 16 月 0 互动 supply 长寿命跨社群",
+      "case_data": {
+        "title": "Marlborough Sounds Tennyson Inlet — 海上 mark 给 sea kayaker",
+        "type": "supply",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 16,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "作者标了在退潮时小溪上游 50 米能取到清澈淡水，涨潮时混入海水不能喝",
+        "events_timeline": [
+          "第0月: 作者 Steve（Picton sea kayak 教练）个人探索时打 mark",
+          "第6月: 一对 Wellington 来的高级 kayaker 进 Tennyson 三天，他们带了足够淡水没用 mark",
+          "第12月: Steve 自己第二次进去，淡水点还在他没动 mark",
+          "第15月: 一个独行 sea kayaker 暴雨后水带不够，看 mark 找到淡水活了下来，他没点赞他在赶下午潮",
+          "第16月: 持续零互动"
+        ],
+        "edge_case_flag": "零互动-跨社群工具不重叠"
+      }
+    },
+    {
+      "id": 524,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "1/月极偏远 12 月 0 互动 scenic 长寿命",
+      "case_data": {
+        "title": "Cobb Valley Sylvester Lakes — 偏远但有渔友圈口耳",
+        "type": "scenic",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 12,
+        "user_volume_per_month": 1,
+        "intrinsic_quality": "作者标了湖东岸有一个隐蔽的 brown trout 鱼群聚集区，但仅在无风傍晚可见",
+        "events_timeline": [
+          "第0月: 作者 Bruce（Nelson 退休渔业管理员）打 mark 后内部圈子里被批评'公开了好点'",
+          "第3月: 一个本地老钓友 Ben 路过看到 mark 在心里骂了 Bruce 一句但没举报",
+          "第7月: 一个不知情的海外 tramper 路过，他不钓鱼对 mark 无感",
+          "第11月: Bruce 接受老圈子压力但不删 mark，他认为'信息应该共享'",
+          "第12月: 持续零互动，但内部圈子私下议论"
+        ],
+        "edge_case_flag": "零互动-钓鱼亚文化封闭"
+      }
+    },
+    {
+      "id": 526,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "50/月雪封季节 6 月 0 互动 context_dependent",
+      "case_data": {
+        "title": "Arthur's Pass Avalanche Peak 后山 Crow Hut — 6 月雪封后没人",
+        "type": "supply",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 6,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "作者打 mark 提示 hut 内的 gas canister 是 2 年前留下的可能不安全",
+        "events_timeline": [
+          "第0月（5 月）: 作者 Mick（Christchurch alpine club）封山前打 mark",
+          "第3月（8 月）: 雪封最深没人到达",
+          "第5月（10 月）: 雪还没全开偶有滑雪登山者经过但他们不进 hut",
+          "第6月（11 月）: 第一批 tramper 终于进入但还没看到 mark"
+        ],
+        "edge_case_flag": "零互动-季节蛰伏待启动"
+      }
+    },
+    {
+      "id": 530,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "15/月极偏远毛利语 14 月 0 互动 junction 长寿命",
+      "case_data": {
+        "title": "Stewart Island Port Adventure 入口 — 99% 用户看不懂",
+        "type": "junction",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 14,
+        "user_volume_per_month": 15,
+        "intrinsic_quality": "作者用毛利地名 'Te Whanga ō Ariari' 标 mark 并写明只在 NW swell <1m 时安全",
+        "events_timeline": [
+          "第0月: 作者 Kahu（Oban 毛利渔民）打 mark 用毛利语",
+          "第6月: 一个 Bluff 来的渔船经过用 VHF 跟 Kahu 打招呼提了 mark 一句，他们不在 app 上互动",
+          "第10月: 一对 Wellington sea kayaker 看到 mark 但读不懂毛利语，他们查了在线词典才明白",
+          "第13月: Kahu 自己出海经过 mark 还在",
+          "第14月: 持续无 app 互动"
+        ],
+        "edge_case_flag": "零互动-毛利语小众语言"
+      }
+    },
+    {
+      "id": 532,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "1/月极偏远 18 月 0 互动 supply 长寿命",
+      "case_data": {
+        "title": "Tararua Range Mid King Biv — 二人床位 hardcore 圈子",
+        "type": "supply",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 18,
+        "user_volume_per_month": 1,
+        "intrinsic_quality": "作者标 biv 内火炉烟囱已经堵塞 2 年使用前必须清，否则中毒风险",
+        "events_timeline": [
+          "第0月: 作者 Margaret（WTC 60 年会员）打 mark 提醒烟囱问题",
+          "第6月: 一支 WTC 3 人队进 biv 过夜，他们看到 mark 自己清了烟囱没在 app 互动",
+          "第11月: 一个独行 tramper 烟囱中毒头晕了出去吐了一地，他事后骂自己没看 app",
+          "第15月: Margaret 第二次去 biv，看到 mark 还在更新了内容",
+          "第18月: WTC 圈子私下都知道 mark 但 0 互动"
+        ],
+        "edge_case_flag": "零互动-club文化在场外"
+      }
+    },
+    {
+      "id": 533,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "2/月偏远 9 月 0 互动 junction 长寿命",
+      "case_data": {
+        "title": "Karangarua Valley 上游 Cassel Flat Hut — 路标被风暴吹走",
+        "type": "junction",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 9,
+        "user_volume_per_month": 2,
+        "intrinsic_quality": "作者标了正确渡河点是大圆石上游 30 米浅滩，下游 100 米看似浅但底下有暗坑",
+        "events_timeline": [
+          "第0月（飓风后）: 作者 Pete（Hokitika DOC 退休巡检）听说路标没了打 mark",
+          "第3月: 一个 Wellington tramper 路过按 mark 安全过河没点赞",
+          "第6月: 一对 alpine traverse 老手过河，他们用经验判断没看 mark",
+          "第8月: 一个海外 tramper 没看 app 走错下游浅滩差点被冲走但活了",
+          "第9月: Pete 自己冬末巡视看 mark 还在 DOC 还没修牌"
+        ],
+        "edge_case_flag": "零互动-灾后DOC修复滞后"
+      }
+    },
+    {
+      "id": 534,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "50/月偏远 8 月 0 互动纪念性,scenic 长寿命",
+      "case_data": {
+        "title": "Bay of Plenty White Island/Whakaari 远眺点 — 2019 喷发后受关注但不可达",
+        "type": "scenic",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 8,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "作者标了远眺角度并写下纪念性文字，但访问 Otarawairere 本身要 1 小时步行且无明显路标",
+        "events_timeline": [
+          "第0月: 作者 Hoani（Whakatāne 当地毛利长老）打 mark 纪念喷发遇难者",
+          "第2月: 一个 Auckland 来的游客路过看到 mark 沉默地看了 5 分钟没点赞",
+          "第4月: 一对本地老夫妇散步看到 mark 默念已故熟人名字",
+          "第6月: 一个海外摄影师路过点了一下 mark 但没分享",
+          "第8月: 月均 50 流量持续但 0 公开互动"
+        ],
+        "edge_case_flag": "零互动-纪念性文化静默"
+      }
+    },
+    {
+      "id": 537,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "50/月偏远 22 月 0 互动 danger 长寿命纪念",
+      "case_data": {
+        "title": "Rakaia Gorge 上游 Manuka Hut — 作者 2023 年去世",
+        "type": "danger",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 22,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "Frank 标了 hut 后面 50 米一个老矿井入口被植被覆盖夜里掉进去会摔死",
+        "events_timeline": [
+          "第0月: Frank 打了 mark",
+          "第14月: Frank 突发心脏病在 Christchurch 过世，他的家人不知道他的 app 账号",
+          "第18月: 一支 NZDA 队伍进 hut 看到 mark 发现是 Frank 的他们沉默了一会然后照常走，没动 mark",
+          "第20月: 另一个老猎人朋友 Bill 路过看到 mark 哭了，他绝对不会动它",
+          "第22月: NZDA 圈子里大家都知道 Frank 那条 mark 还在，没人想动"
+        ],
+        "edge_case_flag": "零互动-已故作者纪念"
+      }
+    },
+    {
+      "id": 541,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "30/月专业 14 月 0 互动 cairn 长寿命",
+      "case_data": {
+        "title": "Tasman Dun Mountain 旧矿区 cairn — 地质学者专用",
+        "type": "cairn",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 14,
+        "user_volume_per_month": 30,
+        "intrinsic_quality": "cairn 标的是地质学价值，对普通 tramper 完全无意义",
+        "events_timeline": [
+          "第0月: 作者 Dr Jiang（Dunedin 地质系）打 mark",
+          "第3月: 一个 mountain biker 路过看到 cairn 完全不知道含义",
+          "第7月: 一个本地 tramper 看到觉得多余",
+          "第10月: Dr Jiang 的研究生田野实习路过看到 mark 知道含义但没在 app 互动他们用 GIS",
+          "第14月: 持续 0 互动"
+        ],
+        "edge_case_flag": "零互动-学术专业小圈"
+      }
+    },
+    {
+      "id": 543,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "5/月专业 13 月 0 互动 danger 长寿命",
+      "case_data": {
+        "title": "Waitomo 黑暗水洞 — 商业 cave 旁的野生提示",
+        "type": "danger",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 13,
+        "user_volume_per_month": 5,
+        "intrinsic_quality": "野洞危险性是真实的但 99% 游客都去商业洞他们看不到这个 mark",
+        "events_timeline": [
+          "第0月: 作者 Ryan（Hamilton 业余 caver）打 mark 出于责任感",
+          "第4月: 一个 NZSS 老成员路过看到 mark 觉得多余但 OK",
+          "第8月: 一个不知情的 backpacker 试图进野洞被前一组 caver 警告退出",
+          "第11月: Ryan 自己第二次去 mark 还在",
+          "第13月: 持续 0 互动"
+        ],
+        "edge_case_flag": "零互动-小专业受众高风险"
+      }
+    },
+    {
+      "id": 544,
+      "final_state": "heartbeat",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "50/月 6 月 0 互动专业受众,danger 长寿命",
+      "case_data": {
+        "title": "Aoraki Mt Cook Mueller Hut 上方 — 雪季雪攀者用",
+        "type": "danger",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 6,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "作者标 cornice 区在 Sealy Range 主脊下风一侧，雪攀者要绕迎风面",
+        "events_timeline": [
+          "第0月: 作者 Andy（Twizel 雪攀向导）打 mark",
+          "第3月: 一支 2 人 NZAC 队上 Sealy Range 没看 app 走对了",
+          "第4月: 一个独行雪攀者走错差点被 cornice 塌方带下山活了下来，回家才看到 mark",
+          "第5月: Andy 自己春季巡检 mark 还在",
+          "第6月: 持续 0 互动"
+        ],
+        "edge_case_flag": "零互动-极高技术门槛场景"
+      }
+    },
+    {
+      "id": 547,
+      "final_state": "heartbeat",
+      "final_lifespan": "long",
+      "source": "pass2-majority",
+      "rationale": "50/月赛事周期 11 月 0 互动 cairn 长寿命",
+      "case_data": {
+        "title": "Otago Goat Pass 老线 cairn — Coast to Coast 比赛专用",
+        "type": "cairn",
+        "likes": 0,
+        "reports": 0,
+        "duration_months": 11,
+        "user_volume_per_month": 50,
+        "intrinsic_quality": "cairn 是比赛传统标记，比赛日大家都知道，非比赛日没人到达",
+        "events_timeline": [
+          "第0月（赛后 1 月）: 作者 Hamish（前选手）打 mark 纪念",
+          "第3月: 完全无人路过",
+          "第8月: 一个独行 multi-day tramper 路过看到 cairn 知道是比赛 marker 没互动",
+          "第11月（下一次比赛前 1 月）: Hamish 自己回去看 cairn 还在",
+          "第12月: 比赛日上千人路过但他们都没开 app"
+        ],
+        "edge_case_flag": "零互动-赛事周期高度集中"
+      }
+    },
+    {
+      "id": 859,
+      "final_state": "dead_natural",
+      "final_lifespan": "expired",
+      "source": "pass2-majority",
+      "rationale": "节日装置撤除,无年度承诺",
+      "case_data": {
+        "title": "Coastal Walk Festival Whangamata 节日活动周 scenic",
+        "type": "scenic",
+        "likes": 400,
+        "reports": 32,
+        "duration_months": 0.25,
+        "user_volume_per_month": 850,
+        "intrinsic_quality": "艺术装置由 Hauraki District Council 委托本地艺术家制作，主题为海洋保育，节后送 Whangamata 学校",
+        "events_timeline": [
+          "活动前 2 天: Council 工作人员安装完毕并标 mark 附装置地图",
+          "活动第 1-2 天: 220 个游客赞并附装置照片",
+          "活动第 4 天: 一个 Stuff 记者撰文报道，引发当周再 180 人涌入和赞",
+          "活动第 7 天: 节日结束 Council 撤装置标记 mark 状态'已结束'",
+          "活动后第 1 天: 装置撤除当天傍晚 5 个游客举报'看不到艺术'",
+          "活动后第 3 天: 累积举报 24",
+          "活动后第 14 天: 装置已安装到 Whangamata Area School 操场",
+          "活动后第 30 天: mark 历史归档但保留作为明年预告锚点"
+        ],
+        "edge_case_flag": "ephemeral_festival + non_recurring_content"
+      }
+    },
+    {
+      "id": 863,
+      "final_state": "dead_natural",
+      "final_lifespan": "expired",
+      "source": "pass2-majority",
+      "rationale": "电影夜活动结束,无明确年度承诺",
+      "case_data": {
+        "title": "Wellington Mt Victoria 露天电影夜临时 mark scenic",
+        "type": "scenic",
+        "likes": 380,
+        "reports": 48,
+        "duration_months": 1,
+        "user_volume_per_month": 1100,
+        "intrinsic_quality": "免费公众活动，日落 21:00 开始放映 NZ 电影经典 (Whale Rider/Boy/Hunt for the Wilderpeople 等)",
+        "events_timeline": [
+          "活动前周: Council 标 mark 附 4 周日程",
+          "第1个周六: 180 人参与，活动后 95 人赞",
+          "第2个周六: 雨天取消，主办方更新 mark 但 25 人没看到上山后扑空举报",
+          "第3个周六: 晴天 220 人参与，赞累积 240",
+          "第4个周六: 最后一场 250 人参与，赞累积 380",
+          "活动后第 1 天: 12 个游客上山举报'银幕拆了'",
+          "活动后第 7 天: 累积举报 35",
+          "活动后第 60 天: mark 进入历史归档"
+        ],
+        "edge_case_flag": "ephemeral_recurring_within_window + multi_session"
+      }
+    },
+    {
+      "id": 868,
+      "final_state": "dead_natural",
+      "final_lifespan": "expired",
+      "source": "pass2-majority",
+      "rationale": "灾害应对绕道,8 月寿命走完后修复",
+      "case_data": {
+        "title": "Westport Charming Creek Walkway 山火封闭临时绕道 danger",
+        "type": "danger",
+        "likes": 145,
+        "reports": 28,
+        "duration_months": 8,
+        "user_volume_per_month": 320,
+        "intrinsic_quality": "绕行路径滑且洪水期淹没，DOC 评估重建至少 8 个月",
+        "events_timeline": [
+          "事件后第 3 天: DOC ranger Pete 标 mark 附绕行 GPS",
+          "第1周: 28 人按 mark 绕行，22 人赞",
+          "第1月: 累积赞 78，举报 4 都是'绕行太累'",
+          "第3月: 西海岸下大雨绕行被淹，DOC 升级 mark 为'仅干燥期可通'",
+          "第5月: 累积赞 145，举报 18 多为雨季抱怨",
+          "第7月: DOC 完成新桥架设，mark 标记'修复中'",
+          "第8月: 新步道开通 mark 标记'已修复'",
+          "第9月: 6 个徒步者迟到举报'mark 还在但步道好了'"
+        ],
+        "edge_case_flag": "ephemeral_disaster_response + repair_window"
+      }
+    },
+    {
+      "id": 870,
+      "final_state": "dead_natural",
+      "final_lifespan": "expired",
+      "source": "pass2-majority",
+      "rationale": "火山警戒短期,可不规则复活",
+      "case_data": {
+        "title": "Mt Taranaki Pouakai Crossing 火山警戒升级临时关闭 danger",
+        "type": "danger",
+        "likes": 220,
+        "reports": 38,
+        "duration_months": 1.5,
+        "user_volume_per_month": 850,
+        "intrinsic_quality": "警戒 1 级表示火山活动异常但未达喷发，DOC 谨慎执行预案",
+        "events_timeline": [
+          "第1天: GeoNet 公告后 DOC 立即标 mark 附 GeoNet 链接",
+          "第3天: 一些徒步者抱怨过度谨慎但仍尊重，48 人赞",
+          "第14天: 累积赞 180，举报 22 多为'火山没事为何关步道'",
+          "第28天: GeoNet 月度评估警戒维持 1 级 DOC 决定继续关闭",
+          "第42天: GeoNet 警戒降回 0 DOC 准备重开",
+          "第45天: 步道重开 mark 标记'已解除'",
+          "第50天: 8 个迟到徒步者举报'步道开了 mark 还在'",
+          "第90天: 累积赞 220，举报 38"
+        ],
+        "edge_case_flag": "ephemeral_geohazard + official_authority"
+      }
+    },
+    {
+      "id": 872,
+      "final_state": "dead_natural",
+      "final_lifespan": "expired",
+      "source": "pass2-majority",
+      "rationale": "纪念性一周活动,无续办",
+      "case_data": {
+        "title": "Christchurch Port Hills 火灾后绿化志愿者一周 supply",
+        "type": "supply",
+        "likes": 520,
+        "reports": 48,
+        "duration_months": 0.25,
+        "user_volume_per_month": 920,
+        "intrinsic_quality": "周一到周日 09:00-15:00 开放，每天志愿者轮换 30 人",
+        "events_timeline": [
+          "活动前 1 周: Council 标 mark 附预约志愿者链接",
+          "第 1 天: 280 人参与种 1200 棵苗，180 人赞",
+          "第 3 天: NZ Herald 报道，引发新一波志愿者涌入",
+          "第 5 天: 累积赞 480",
+          "第 7 天: 活动结束累积志愿者 1800 人种树 8000 棵",
+          "活动后第 1 天: 标记 mark '已结束'",
+          "活动后第 3 天: 25 个游客举报'水站没了'",
+          "活动后第 30 天: 累积赞 520，举报 48"
+        ],
+        "edge_case_flag": "ephemeral_commemoration + non_recurring"
+      }
+    },
+    {
+      "id": 907,
+      "final_state": "healthy",
+      "final_lifespan": "short",
+      "source": "pass2-majority",
+      "rationale": "68:41 急转向下,pile-on 举报 + 作者负声誉",
+      "case_data": {
+        "title": "Catlins Nugget Point 作者声誉差冤枉新 mark 被牵连",
+        "type": "scenic",
+        "likes": 68,
+        "reports": 41,
+        "duration_months": 7,
+        "user_volume_per_month": 950,
+        "intrinsic_quality": "真好点，但作者 Tony 之前 8 个 mark 中有 5 个被举报沉",
+        "events_timeline": [
+          "第1月: Tony 标 mark，系统因其历史差降权曝光，第一周仅 2 个赞",
+          "第2月: 偶然路过的一个海洋生物学家发现并赞，留长评论'真海狮区'",
+          "第3月: 学者评论引流来 14 个赞，但开始有人查作者历史后跟风举报'又是 Tony 又来骗'",
+          "第4月: pile-on 效应：12 个举报集中在一周内涌入，举报理由都没具体内容",
+          "第5月: 一个 Owaka 当地 ranger 出山同步认证'此 mark 真实有用'",
+          "第6月: ranger 认证慢慢扭转风向，但赞速依然受作者历史拖累",
+          "第7月: 总赞 68 总举报 41，被冤枉但底层真实"
+        ],
+        "edge_case_flag": "negative_reputation_transfer_unfair"
+      }
+    },
+    {
+      "id": 924,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "168:124 外部新闻引发 pile-on 举报急转",
+      "case_data": {
+        "title": "Bay of Plenty White Island viewpoint 病毒新闻后举报潮",
+        "type": "danger",
+        "likes": 168,
+        "reports": 124,
+        "duration_months": 14,
+        "user_volume_per_month": 1800,
+        "intrinsic_quality": "看火山真实但不是危险点本身",
+        "events_timeline": [
+          "第1-5月: 累计 80 个赞，作为 scenic 性质无举报",
+          "第6月: 火山喷发新闻爆发，跟风举报'宣传危险景点不当'42 条",
+          "第7月: pile-on 持续，单月 67 举报",
+          "第8月: 一个 Whakatane 当地详细评论'此 mark 是远程观察点不是登岛'",
+          "第10月: 误解逐渐澄清，举报放缓",
+          "第14月: 总赞 168 总举报 124"
+        ],
+        "edge_case_flag": "external_news_pile_on + misunderstood_safe_viewpoint"
+      }
+    },
+    {
+      "id": 959,
+      "final_state": "healthy",
+      "final_lifespan": "normal",
+      "source": "pass2-majority",
+      "rationale": "95:20 但 17 是 sock,产品层应先过滤,算法层若信号进入则趋势构成 SUSPICIOUS 后强心剂回 HEALTHY",
+      "case_data": {
+        "title": "Nelson Lakes Travers Sabine 假强举报 sockpuppet 抹黑真 mark",
+        "type": "danger",
+        "likes": 95,
+        "reports": 20,
+        "duration_months": 10,
+        "user_volume_per_month": 320,
+        "intrinsic_quality": "真 hazard，已发生 2 起跌伤；但有一个商业向导公司觉得这 mark 让他们路线难看，雇人刷举报",
+        "events_timeline": [
+          "第1月: ranger 标 mark，当月 8 个真用户出山同步赞",
+          "第2月: 累计 22 赞，竞争公司发现这 mark 影响他们品牌，开始操作",
+          "第3月: 17 个新账号集中 4 天发布举报，理由都是'夸大'、'不存在'",
+          "第4月: 一个真用户举报内容更具体，混入 17 sockpuppet 中",
+          "第5月: 真用户继续累积赞，70 累计赞 vs 20 举报",
+          "第7月: 第二个 SAR 案件直接发生在此处，新闻报道",
+          "第8月: 新闻后赞涌入，累计 95 赞",
+          "第10月: 总 95 赞 vs 20 举报（17 sock + 3 真）"
+        ],
+        "edge_case_flag": "fake_strong_reports + orchestrated_sockpuppets + commercial_motivation"
+      }
+    }
+  ]
+}

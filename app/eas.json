@@ -1,0 +1,66 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote",
+    "promptToConfigurePushNotifications": false
+  },
+  "build": {
+    "development-simulator": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false"
+      }
+    },
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
+      "ios": {
+        "simulator": false,
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.yiiling.cn",
+        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "ios": {
+        "simulator": false,
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.yiiling.cn",
+        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "ios": {
+        "resourceClass": "m-medium",
+        "image": "macos-sequoia-15.5-xcode-26.0"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.yiiling.cn",
+        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

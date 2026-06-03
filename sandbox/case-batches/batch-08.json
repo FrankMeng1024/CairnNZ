@@ -1,0 +1,840 @@
+{
+  "batch": 8,
+  "theme": "设施/环境变化（曾经对，但已过时）",
+  "id_range": [351, 400],
+  "total": 50,
+  "cases": [
+    {
+      "id": 351,
+      "title": "Pigeon Valley Track Tasman view spot — burned in 2019 fire, mark predates",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Pigeon Valley Track lookout, Tasman district, beech canopy view",
+        "intrinsic_quality": "originally a stunning ridge-top photo spot through native beech",
+        "user_volume_per_month": 12,
+        "duration_months": 38,
+        "signal": "rural Tasman, 3G works at top",
+        "season_pattern": "summer trampers, autumn photographers",
+        "human_factors": "mark from 2018 still alive after Feb 2019 Pigeon Valley fire torched 2300ha"
+      },
+      "events_timeline": [
+        "Month 1 (2018): local poster marks scenic ridge view, 4 likes",
+        "Month 8 (Feb 2019): Pigeon Valley fire burns through, 2300ha gone",
+        "Month 10: first post-fire visitor reports 'just black sticks now'",
+        "Month 14: 6 more reports, 'mark is wrong, view is dead'",
+        "Month 22: regrowth begins but view forever changed",
+        "Month 30: 11 reports cumulative, 5 likes from people who saw pre-fire",
+        "Month 38: total 5 likes vs 13 reports — fire-erased landmark"
+      ],
+      "expected_signal_summary": "5 likes vs 13 reports (1:2.6)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Mark was true in 2018. Pigeon Valley fire physically erased the scenery. No amount of regrowth restores the original mark — the canopy view is gone for 80+ years. Must die.",
+      "edge_case_flag": "fire_erased|environmental_change|originally_true"
+    },
+    {
+      "id": 352,
+      "title": "Kaikoura Coast Track section — 2016 quake raised seabed, route abandoned",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Kaikoura Coast Track tidal rock-hop section near Ohau Point seal colony",
+        "intrinsic_quality": "tidal route past seal colony, only passable at low tide",
+        "user_volume_per_month": 25,
+        "duration_months": 60,
+        "signal": "SH1 corridor, full coverage",
+        "season_pattern": "year-round, tide-dependent",
+        "human_factors": "Nov 2016 magnitude 7.8 raised seabed 2m, original tidal route now dry/blocked"
+      },
+      "events_timeline": [
+        "Month 1-12 (pre-quake): mark accurate, 18 likes from coastal walkers",
+        "Month 13 (Nov 2016): Kaikoura earthquake, seabed uplift 2m at Ohau Point",
+        "Month 14-24: SH1 closed, area inaccessible, mark dormant",
+        "Month 25: road reopens, walker reports 'tidal section gone, all dry rocks'",
+        "Month 36: DOC officially reroutes track inland, mark still says tidal",
+        "Month 48: 14 reports 'this is wrong, follow new route'",
+        "Month 60: total 18 likes vs 16 reports, mark refers to obsolete geography"
+      ],
+      "expected_signal_summary": "18 likes vs 16 reports (1.1:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Earthquake permanently changed the geography. Likes are historical, reports are post-quake reality. Algorithm must weight recent reports heavily and recognize geological time-break.",
+      "edge_case_flag": "earthquake_change|geological_break|historical_likes"
+    },
+    {
+      "id": 353,
+      "title": "Esk Valley Track river crossing — Cyclone Gabrielle washed bridge away",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Esk Valley Track swingbridge, Hawkes Bay, north of Napier",
+        "intrinsic_quality": "marked the only safe river crossing for 6km",
+        "user_volume_per_month": 8,
+        "duration_months": 30,
+        "signal": "HB rural patchy, syncs in Bay View",
+        "season_pattern": "winter floods routinely close it",
+        "human_factors": "Feb 2023 Cyclone Gabrielle obliterated bridge, valley devastated"
+      },
+      "events_timeline": [
+        "Month 1-22 (pre-Gabrielle): mark useful, 9 likes from locals",
+        "Month 23 (Feb 2023): Cyclone Gabrielle, swingbridge ripped out, valley ruined",
+        "Month 24: first volunteer cleanup walker reports 'no bridge, river uncrossable'",
+        "Month 26: DOC posts indefinite closure of valley",
+        "Month 28: 7 reports cumulative confirming bridge gone",
+        "Month 30: total 9 likes vs 7 reports — mark points at vanished structure"
+      ],
+      "expected_signal_summary": "9 likes vs 7 reports (1.3:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Bridge physically gone. DOC closure formal. Even if rebuilt, that will take 3+ years and likely a new location. Mark must die now to avoid sending walkers into Gabrielle-devastated valley.",
+      "edge_case_flag": "cyclone_destruction|infrastructure_gone|doc_closed"
+    },
+    {
+      "id": 354,
+      "title": "Lake Waikaremoana Hut — Te Urewera reopened, then closed by Tūhoe again",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Lake Waikaremoana Great Walk hut, Te Urewera, Tūhoe-managed",
+        "intrinsic_quality": "DOC booking link in mark, working in 2019",
+        "user_volume_per_month": 40,
+        "duration_months": 36,
+        "signal": "no signal in Te Urewera, syncs at Wairoa",
+        "season_pattern": "summer Great Walk season",
+        "human_factors": "Tūhoe took over 2014, DOC reopened, then closed sections 2022, booking systems shifted multiple times"
+      },
+      "events_timeline": [
+        "Month 1 (2019): mark with DOC booking link, 22 likes",
+        "Month 14: Tūhoe announces management transition",
+        "Month 18: DOC booking link breaks, redirects to Tūhoe portal",
+        "Month 24: walker reports 'booking link 404', 4 reports",
+        "Month 28: full track partially closed for slip repair",
+        "Month 32: 11 reports total — 'instructions in mark are wrong'",
+        "Month 36: total 22 likes vs 13 reports — governance shift made mark stale"
+      ],
+      "expected_signal_summary": "22 likes vs 13 reports (1.7:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Likes were valid for the era when DOC ran it. Tūhoe sovereignty shift changed booking systems entirely. Mark with old DOC link actively misleads. Must die — needs replacement, not preservation.",
+      "edge_case_flag": "governance_change|booking_system_shift|iwi_management"
+    },
+    {
+      "id": 355,
+      "title": "Port Hills Crocodile Rock — 2017 fires plus 2024 closure for slope work",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Port Hills Crocodile Rock viewpoint, Christchurch, post-fire scrub",
+        "intrinsic_quality": "iconic Banks Peninsula view with rocky outcrop",
+        "user_volume_per_month": 80,
+        "duration_months": 84,
+        "signal": "Christchurch suburb, full 4G",
+        "season_pattern": "year-round day walks",
+        "human_factors": "Feb 2017 Port Hills fire, then 2024 council closes for slope stabilisation"
+      },
+      "events_timeline": [
+        "Month 1 (2017): pre-fire mark, 35 likes",
+        "Month 2: Port Hills fire, gorse-covered slopes burn",
+        "Month 6-24: rock outcrop still visible, slow scrub regrowth",
+        "Month 36: 12 likes from 'view is back, even better'",
+        "Month 60: 8 mixed reports — fire-changed but accessible",
+        "Month 78: 2024 CCC closes Crocodile Rock track for engineering work",
+        "Month 84: 9 reports 'track closed by orange fence, no access'"
+      ],
+      "expected_signal_summary": "47 likes vs 17 reports (2.8:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Compounded staleness. Fire damaged but didn't kill the mark. The 2024 council closure for slope work is the decisive blow — track physically inaccessible. Likes are historical, recent reports describe locked gate.",
+      "edge_case_flag": "compound_decay|council_closure|fire_aftermath"
+    },
+    {
+      "id": 356,
+      "title": "Marlborough Sounds Queen Charlotte Track — 2021 slips rerouted km 18-22",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Queen Charlotte Track between Camp Bay and Cowshed Bay, Marlborough Sounds",
+        "intrinsic_quality": "originally marked old route through pine plantation",
+        "user_volume_per_month": 110,
+        "duration_months": 42,
+        "signal": "patchy in valleys, syncs at Furneaux",
+        "season_pattern": "Oct-April peak",
+        "human_factors": "July 2021 atmospheric river caused 70+ slips, DOC permanently rerouted"
+      },
+      "events_timeline": [
+        "Month 1: mark on old route, 48 likes from cyclists and walkers",
+        "Month 12 (Jul 2021): massive rainfall event, slips block 4km section",
+        "Month 14: DOC announces permanent reroute around slip zone",
+        "Month 16: walker reports 'mark is on closed section, follow orange triangles'",
+        "Month 24: 19 reports cumulative, route description outdated",
+        "Month 36: new route well-established, 8 more reports",
+        "Month 42: total 48 likes vs 27 reports"
+      ],
+      "expected_signal_summary": "48 likes vs 27 reports (1.8:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Original mark accurate for 12 months, then permanently invalidated by major weather event and DOC reroute. Pre-2021 likes do not vouch for current geography. Algorithm must recognise route changes.",
+      "edge_case_flag": "weather_event|permanent_reroute|landslide"
+    },
+    {
+      "id": 357,
+      "title": "Coromandel Pinnacles Hut — refurbished 2022, water tank moved",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Pinnacles Hut, Kauaeranga Valley, Coromandel Forest Park",
+        "intrinsic_quality": "marked location of water tank for refilling bottles",
+        "user_volume_per_month": 90,
+        "duration_months": 48,
+        "signal": "no signal in valley, syncs at Thames",
+        "season_pattern": "year-round popular weekend walk",
+        "human_factors": "DOC 2022 hut renovation moved tank from north to south side"
+      },
+      "events_timeline": [
+        "Month 1-30: mark accurate, 33 likes 'tank is on north corner'",
+        "Month 31 (2022): hut renovation, tank relocated to south wall",
+        "Month 32: walker reports 'tank not where mark says'",
+        "Month 36: 6 more reports, all consistent — wrong corner",
+        "Month 40: DOC adds new signage but old mark persists",
+        "Month 44: 11 reports total — 'misleading on hot day'",
+        "Month 48: total 33 likes vs 11 reports"
+      ],
+      "expected_signal_summary": "33 likes vs 11 reports (3:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Small fact change (tank moved 8m) but matters: thirsty walkers waste time. Likes pre-renovation are historically accurate, post-renovation reports are objective truth. Mark must be killed and replaced.",
+      "edge_case_flag": "hut_renovation|small_factual_change|cumulative_reports"
+    },
+    {
+      "id": 358,
+      "title": "Whangarei Heads Bream Head café — Pataua café closed permanently 2023",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Pataua South café near Bream Head Track trailhead, Whangarei Heads",
+        "intrinsic_quality": "post-walk coffee/food, marked as 'reliable open weekends'",
+        "user_volume_per_month": 35,
+        "duration_months": 26,
+        "signal": "Pataua good 4G",
+        "season_pattern": "weekend walkers",
+        "human_factors": "owners retired and closed shop Aug 2023, building empty"
+      },
+      "events_timeline": [
+        "Month 1-19: mark useful, 14 likes 'great flat white after walk'",
+        "Month 20 (Aug 2023): café closes, sign on door",
+        "Month 21: first walker reports 'closed, sad'",
+        "Month 23: 4 more reports, building unchanged",
+        "Month 25: rumours of new owner but still shut",
+        "Month 26: 8 reports total, 0 contradicting"
+      ],
+      "expected_signal_summary": "14 likes vs 8 reports (1.75:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Business permanently closed. Reports unanimous and recent. Likes are historical memory of good coffee. Even if reopens with new owner, that will be a new mark. Must die.",
+      "edge_case_flag": "business_closed|permanent|unanimous_reports"
+    },
+    {
+      "id": 359,
+      "title": "Mt Pirongia Tirohanga Track — DOC built boardwalk, mud warning obsolete",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Mt Pirongia Tirohanga Track muddy section, Pirongia Forest Park, Waikato",
+        "intrinsic_quality": "warned of waist-deep mud, gaiters required",
+        "user_volume_per_month": 28,
+        "duration_months": 54,
+        "signal": "no signal, syncs at Te Awamutu",
+        "season_pattern": "winter mud peak",
+        "human_factors": "DOC installed 800m boardwalk in 2023, mud warning now obsolete on that section"
+      },
+      "events_timeline": [
+        "Month 1-40: mark valid, 22 likes 'glad I had gaiters'",
+        "Month 41 (2023): DOC boardwalk completed",
+        "Month 43: walker reports 'no mud here, boardwalk now'",
+        "Month 46: 5 more reports same pattern",
+        "Month 50: 9 reports cumulative",
+        "Month 52: experienced tramper notes 'mud warning misleads, scares newbies'",
+        "Month 54: total 22 likes vs 11 reports"
+      ],
+      "expected_signal_summary": "22 likes vs 11 reports (2:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Helpful warning for years, then DOC infrastructure made it obsolete. Recent reports objective. Even though warnings 'feel safer to keep' a wrong warning erodes trust in all marks. Must die.",
+      "edge_case_flag": "infrastructure_built|warning_obsolete|trust_erosion"
+    },
+    {
+      "id": 360,
+      "title": "Northland Trounson Kauri Park — kauri dieback closure since 2018",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Trounson Kauri Park inner loop track, Northland, kauri dieback zone",
+        "intrinsic_quality": "marked main loop walk through old-growth kauri",
+        "user_volume_per_month": 60,
+        "duration_months": 72,
+        "signal": "Trounson reception patchy",
+        "season_pattern": "year-round tourist visits",
+        "human_factors": "DOC closed inner loop 2018 for dieback containment, mark was from 2017"
+      },
+      "events_timeline": [
+        "Month 1 (2017): mark celebrates loop, 26 likes",
+        "Month 8 (2018): DOC announces full closure of inner loop",
+        "Month 9: walker reports 'gates locked, redirected'",
+        "Month 18: 14 reports cumulative",
+        "Month 36: closure extends, no reopening",
+        "Month 60: 21 reports total over years",
+        "Month 72: total 26 likes vs 23 reports — 6 years of being wrong"
+      ],
+      "expected_signal_summary": "26 likes vs 23 reports (1.13:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Conservation closure unlikely to reverse. 6 years of consistent reports. Likes are pre-closure historical. This is exactly the case where like-count loyalty harms users. Algorithm must respect long-term contradicting reports.",
+      "edge_case_flag": "long_closure|kauri_dieback|conservation_priority"
+    },
+    {
+      "id": 361,
+      "title": "Nelson Lakes Lake Angelus Hut — booking moved from DOC to private 2021",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Lake Angelus Hut, Nelson Lakes National Park, alpine basin",
+        "intrinsic_quality": "marked DOC booking process for the Robert Ridge route hut",
+        "user_volume_per_month": 22,
+        "duration_months": 40,
+        "signal": "alpine, no signal, syncs at St Arnaud",
+        "season_pattern": "Dec-Mar alpine season",
+        "human_factors": "still DOC-run but booking system migrated to new platform 2021"
+      },
+      "events_timeline": [
+        "Month 1: mark with old DOC booking instructions, 17 likes",
+        "Month 14 (2021): DOC booking platform migration",
+        "Month 16: walker reports 'old link doesn't work'",
+        "Month 22: 5 more reports about broken booking flow",
+        "Month 30: 11 reports total, all booking-related",
+        "Month 36: people resort to phoning DOC visitor centre",
+        "Month 40: total 17 likes vs 11 reports"
+      ],
+      "expected_signal_summary": "17 likes vs 11 reports (1.5:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Hut still exists, route still valid, only booking instructions stale. Small change but actionable info wrong. Better to die and have someone post a fresh mark than persist with broken link.",
+      "edge_case_flag": "system_migration|booking_link|partial_truth"
+    },
+    {
+      "id": 362,
+      "title": "Hawkes Bay Tukituki River — Gabrielle silt deposits made ford treacherous",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Tukituki River ford near Tukituki Trails, Hawkes Bay, post-Gabrielle",
+        "intrinsic_quality": "originally marked 'safe ankle-deep ford summer'",
+        "user_volume_per_month": 14,
+        "duration_months": 36,
+        "signal": "rural HB, 3G adequate",
+        "season_pattern": "summer fords",
+        "human_factors": "Cyclone Gabrielle Feb 2023 deposited silt, changed riverbed depth and stability"
+      },
+      "events_timeline": [
+        "Month 1-22 (pre-Gabrielle): mark accurate, 11 likes",
+        "Month 23 (Feb 2023): Cyclone Gabrielle, river reshaped",
+        "Month 25: walker reports 'unstable silt, sucked my boot off'",
+        "Month 28: another reports 'now thigh-deep, not ankle'",
+        "Month 32: 8 reports, all post-cyclone, contradicting old description",
+        "Month 34: local council warns about silt instability",
+        "Month 36: total 11 likes vs 9 reports"
+      ],
+      "expected_signal_summary": "11 likes vs 9 reports (1.2:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Pre-cyclone description literally false now. Continuing to show 'safe ford' could put walkers in danger. Algorithm must recognize geological reset events.",
+      "edge_case_flag": "cyclone_silt|riverbed_change|safety_critical"
+    },
+    {
+      "id": 363,
+      "title": "Tawharanui Regional Park — Auckland Council restricted dogs 2022, mark says OK",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Tawharanui Regional Park coastal track, north of Auckland, predator-free sanctuary",
+        "intrinsic_quality": "old mark said 'dogs on leash welcome on coastal section'",
+        "user_volume_per_month": 75,
+        "duration_months": 48,
+        "signal": "Tawharanui good 4G",
+        "season_pattern": "year-round",
+        "human_factors": "Auckland Council banned dogs entirely 2022 for kiwi reintroduction"
+      },
+      "events_timeline": [
+        "Month 1 (2020): mark welcomes leashed dogs, 28 likes",
+        "Month 24 (2022): kiwi reintroduction, dog ban announced",
+        "Month 26: dog walker reports 'turned away at gate, mark wrong'",
+        "Month 30: 9 more reports same issue",
+        "Month 36: 14 reports cumulative",
+        "Month 42: signage updated everywhere except this mark",
+        "Month 48: total 28 likes vs 17 reports"
+      ],
+      "expected_signal_summary": "28 likes vs 17 reports (1.6:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Conservation policy change reversed permission. Continuing to show 'dogs OK' wastes people's drive time and risks fines. Likes are pre-policy historical. Must die.",
+      "edge_case_flag": "policy_change|conservation|dogs_banned"
+    },
+    {
+      "id": 364,
+      "title": "Otago Roxburgh Gorge Trail — section closed 2023 due to private land dispute",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Roxburgh Gorge Trail section between Doctors Point and jet boat link, Central Otago",
+        "intrinsic_quality": "marked the boat-link transfer required between sections",
+        "user_volume_per_month": 32,
+        "duration_months": 30,
+        "signal": "Clutha valley patchy",
+        "season_pattern": "Oct-April cycling",
+        "human_factors": "private landowner withdrew access agreement 2023"
+      },
+      "events_timeline": [
+        "Month 1-18: mark useful, 19 likes from cyclists",
+        "Month 19 (2023): landowner dispute, jet boat link suspended",
+        "Month 20: cyclist reports 'no boat available, stuck'",
+        "Month 22: trail trust posts indefinite closure of link",
+        "Month 26: 11 reports cumulative",
+        "Month 28: alternative cycle route via Lake Roxburgh emerges",
+        "Month 30: total 19 likes vs 13 reports"
+      ],
+      "expected_signal_summary": "19 likes vs 13 reports (1.46:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Land access withdrawal is binary: mark is wrong now. Cyclist who relies on it strands themselves between trail sections. Conservatism around 'historical accuracy' is dangerous here.",
+      "edge_case_flag": "land_access|private_dispute|stranding_risk"
+    },
+    {
+      "id": 365,
+      "title": "Wellington Mt Victoria summit toilets — removed 2024, mark says open",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mt Victoria summit lookout toilet, Wellington City",
+        "intrinsic_quality": "marked WCC public toilet at summit lookout",
+        "user_volume_per_month": 200,
+        "duration_months": 36,
+        "signal": "Wellington full 4G/5G",
+        "season_pattern": "year-round, peak summer",
+        "human_factors": "Wellington City Council removed toilet block during 2024 lookout upgrade, replacement not yet built"
+      },
+      "events_timeline": [
+        "Month 1-30: mark accurate, 65 likes",
+        "Month 31 (2024): WCC removes toilet for lookout redesign",
+        "Month 32: tourist reports 'no toilet here, awkward'",
+        "Month 33: 14 more reports",
+        "Month 34: WCC announces new toilet 18 months away",
+        "Month 35: 24 reports cumulative",
+        "Month 36: total 65 likes vs 24 reports"
+      ],
+      "expected_signal_summary": "65 likes vs 24 reports (2.7:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Despite high like count, current physical reality is the toilet doesn't exist. Tourists rely on it. Like-loyalty fails users. Mark must die now and rejoin in 18 months when new toilet opens.",
+      "edge_case_flag": "facility_removed|temporary_gap|like_loyalty_trap"
+    },
+    {
+      "id": 366,
+      "title": "Hauraki Rail Trail Paeroa café — moved location 100m, mark unchanged",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Refreshment café on Hauraki Rail Trail at Paeroa, Karangahake-end",
+        "intrinsic_quality": "popular cyclist refuel stop with marked exact location",
+        "user_volume_per_month": 50,
+        "duration_months": 24,
+        "signal": "Paeroa good 4G",
+        "season_pattern": "Oct-April cycling peak",
+        "human_factors": "café moved 100m east into bigger building 2024, old building empty"
+      },
+      "events_timeline": [
+        "Month 1-18: mark accurate, 24 likes 'great pies'",
+        "Month 19 (2024): café moves to bigger venue 100m east",
+        "Month 20: cyclist reports 'mark points at empty old shop'",
+        "Month 21: 4 more 'café is up the road now'",
+        "Month 22: 8 reports cumulative",
+        "Month 23: even though right business, location wrong",
+        "Month 24: total 24 likes vs 8 reports"
+      ],
+      "expected_signal_summary": "24 likes vs 8 reports (3:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Subtle case: same business, same quality, just moved 100m. Mark with wrong coordinates still misleads. Better to kill and have someone post fresh-coords mark than fight to update.",
+      "edge_case_flag": "small_relocation|same_business|coordinate_drift"
+    },
+    {
+      "id": 367,
+      "title": "Tongariro Crossing Mangatepopo carpark — shuttle-only since 2017, mark says drive",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Mangatepopo carpark trailhead, Tongariro Alpine Crossing start, Tongariro NP",
+        "intrinsic_quality": "marked as 'self-drive parking, arrive early'",
+        "user_volume_per_month": 600,
+        "duration_months": 80,
+        "signal": "DOC area patchy",
+        "season_pattern": "Oct-April peak season",
+        "human_factors": "DOC introduced 4-hour parking limit 2017, shuttle-only enforcement 2023"
+      },
+      "events_timeline": [
+        "Month 1 (2017): mark says drive yourself, 80 likes (huge popularity)",
+        "Month 6 (2017): 4-hour limit introduced, mark slowly diverges",
+        "Month 24: 8 reports about ticketing",
+        "Month 60 (2023): full shuttle-only enforcement, no public driving",
+        "Month 64: 22 reports 'mark is wrong, must use shuttle'",
+        "Month 72: 38 reports cumulative",
+        "Month 80: total 80 likes vs 38 reports"
+      ],
+      "expected_signal_summary": "80 likes vs 38 reports (2.1:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Highest-traffic NZ alpine walk. Wrong info costs people their day if they drive in. Even with strong like history, the policy reality dominates. Must die — replacement should explain shuttle.",
+      "edge_case_flag": "high_traffic|policy_evolution|cost_of_failure"
+    },
+    {
+      "id": 368,
+      "title": "Wairarapa Putangirua Pinnacles — slip in 2023 closed direct route",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Putangirua Pinnacles direct riverbed approach, Aorangi Range, Wairarapa",
+        "intrinsic_quality": "marked the LOTR-famous riverbed walk to pinnacles",
+        "user_volume_per_month": 45,
+        "duration_months": 30,
+        "signal": "no signal in valley, syncs at Lake Ferry",
+        "season_pattern": "year-round but treacherous in rain",
+        "human_factors": "major slip 2023 closed riverbed, only ridge route now open"
+      },
+      "events_timeline": [
+        "Month 1-22: mark accurate, 26 likes 'wow LOTR vibes'",
+        "Month 23 (2023): slip blocks riverbed approach",
+        "Month 24: walker reports 'huge slip, riverbed impassable'",
+        "Month 26: DOC closes direct route, signs ridge alternative",
+        "Month 28: 12 reports total",
+        "Month 29: ridge route is steeper, longer, less impressive",
+        "Month 30: total 26 likes vs 12 reports"
+      ],
+      "expected_signal_summary": "26 likes vs 12 reports (2.2:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Famous spot still exists, but the marked route there doesn't. Sending people to closed riverbed is unhelpful. Different from 'attraction gone' — attraction lives, access dies.",
+      "edge_case_flag": "access_change|attraction_intact|route_closure"
+    },
+    {
+      "id": 369,
+      "title": "West Coast Lake Matheson café — closed for renovation Apr 2024, indefinite",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Lake Matheson café, near Fox Glacier, West Coast",
+        "intrinsic_quality": "marked iconic post-walk café with mountain reflection view",
+        "user_volume_per_month": 180,
+        "duration_months": 24,
+        "signal": "Fox Glacier patchy",
+        "season_pattern": "year-round, peak summer/autumn photographers",
+        "human_factors": "owners closed for major reno Apr 2024, no reopen date set"
+      },
+      "events_timeline": [
+        "Month 1-18: mark very useful, 56 likes",
+        "Month 19 (Apr 2024): closure for reno, sign on door 'closed for upgrades'",
+        "Month 20: tourist reports 'closed, no estimate'",
+        "Month 21: 8 more reports same",
+        "Month 22: 14 reports cumulative",
+        "Month 23: still no reopen news",
+        "Month 24: total 56 likes vs 14 reports"
+      ],
+      "expected_signal_summary": "56 likes vs 14 reports (4:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Likes outweigh reports 4:1, but reports are unanimous and recent. Indefinite closure means continuing to show 'open' misleads. Algorithm must weight 'consistent recent reports' over 'historical likes'.",
+      "edge_case_flag": "indefinite_closure|reno|unanimous_recent"
+    },
+    {
+      "id": 370,
+      "title": "Mt Taranaki Pouakai Hut tarn route — 2024 alpine slip rerouted",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Pouakai Tarns reflection viewpoint, Egmont National Park, north flank Mt Taranaki",
+        "intrinsic_quality": "instagram-famous Mt Taranaki reflection in tarn",
+        "user_volume_per_month": 65,
+        "duration_months": 28,
+        "signal": "no signal alpine, syncs at New Plymouth",
+        "season_pattern": "Dec-Apr alpine season",
+        "human_factors": "alpine slip 2024 rerouted approach, viewpoint still exists but trail to it changed"
+      },
+      "events_timeline": [
+        "Month 1-22: mark perfect, 31 likes 'best photo of trip'",
+        "Month 23 (2024): slip damages approach trail",
+        "Month 24: tramper reports 'trail to tarn rerouted, mark wrong direction'",
+        "Month 25: DOC posts new approach via Bells Falls",
+        "Month 26: 8 reports total, all consistent",
+        "Month 27: original mark coordinates now point at slip",
+        "Month 28: total 31 likes vs 8 reports"
+      ],
+      "expected_signal_summary": "31 likes vs 8 reports (3.9:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Tarn still photogenic, but mark's coordinates are now the slip face. Following the mark sends people into hazard. Unlike business-closed cases, this is safety-relevant.",
+      "edge_case_flag": "alpine_slip|reroute_required|safety_signal"
+    },
+    {
+      "id": 371,
+      "title": "Banks Peninsula Akaroa Crater Rim — fenced 2023 for ecological restoration",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "Akaroa Crater Rim summit traverse, Banks Peninsula, near Akaroa",
+        "intrinsic_quality": "panoramic crater walk, marked open ridge",
+        "user_volume_per_month": 22,
+        "duration_months": 32,
+        "signal": "Banks Peninsula patchy",
+        "season_pattern": "summer day walk",
+        "human_factors": "private landowner fenced section in 2023 for native bush regeneration"
+      },
+      "events_timeline": [
+        "Month 1-24: mark accurate, 17 likes",
+        "Month 25 (2023): landowner fences ridge for replanting",
+        "Month 26: walker reports 'new fence, no through-route'",
+        "Month 28: 5 more reports same",
+        "Month 30: 9 reports cumulative",
+        "Month 31: alternative route via Hill Top road exists but different",
+        "Month 32: total 17 likes vs 9 reports"
+      ],
+      "expected_signal_summary": "17 likes vs 9 reports (1.9:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Private land access withdrawn for legitimate conservation. Walkers cannot complete the marked traverse. Even if reopens in 10 years post-regen, that's a different mark.",
+      "edge_case_flag": "private_land_fenced|conservation|access_lost"
+    },
+    {
+      "id": 372,
+      "title": "Hokitika Gorge swing bridge — closed 2024 for engineering inspection",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Hokitika Gorge swingbridge, West Coast, turquoise river crossing",
+        "intrinsic_quality": "marked the iconic blue-water bridge crossing",
+        "user_volume_per_month": 320,
+        "duration_months": 18,
+        "signal": "Hokitika rural patchy",
+        "season_pattern": "year-round tourist hotspot",
+        "human_factors": "DOC closed bridge Mar 2024 for cable inspection, viewing platform alternative"
+      },
+      "events_timeline": [
+        "Month 1-12: mark hugely popular, 78 likes 'turquoise water!'",
+        "Month 13 (Mar 2024): DOC closes bridge for engineering",
+        "Month 14: tourist reports 'closed, only platform view'",
+        "Month 15: 18 reports same week",
+        "Month 16: 32 reports cumulative",
+        "Month 17: DOC announces 12-month closure minimum",
+        "Month 18: total 78 likes vs 32 reports"
+      ],
+      "expected_signal_summary": "78 likes vs 32 reports (2.4:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Iconic spot, high traffic, closure long enough that the experience is materially different. People drove 4 hours for the bridge — wrong info wastes their trip. Must die now, rejoin when open.",
+      "edge_case_flag": "engineering_closure|tourist_hotspot|long_duration"
+    },
+    {
+      "id": 373,
+      "title": "Stewart Island Mason Bay hut — DOC moved bookable section 2022",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mason Bay Hut, Rakiura/Stewart Island, west coast tramping",
+        "intrinsic_quality": "marked DOC bookable bunks vs first-come section",
+        "user_volume_per_month": 8,
+        "duration_months": 36,
+        "signal": "no signal Stewart Island, syncs at Oban",
+        "season_pattern": "summer trampers",
+        "human_factors": "DOC restructured hut booking 2022, all bunks now bookable"
+      },
+      "events_timeline": [
+        "Month 1-18: mark accurate about FCFS section, 12 likes",
+        "Month 19 (2022): DOC removes FCFS section, all bookable",
+        "Month 22: tramper reports 'showed up, no FCFS bunks anymore'",
+        "Month 26: 4 reports same",
+        "Month 30: 7 reports total",
+        "Month 33: experienced tramper notes mark misleads",
+        "Month 36: total 12 likes vs 7 reports"
+      ],
+      "expected_signal_summary": "12 likes vs 7 reports (1.7:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Booking policy change makes mark's specific advice wrong. Stewart Island tramps are committing — wrong info means a no-bunks night. Must die.",
+      "edge_case_flag": "booking_policy|stewart_island|committing_tramp"
+    },
+    {
+      "id": 374,
+      "title": "Rotorua Whakarewarewa Forest — Crankworx zone closed cycling route 2024",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Whakarewarewa Forest Tihi-O-Tonga MTB trail, Rotorua",
+        "intrinsic_quality": "marked one of the original Crankworx-era cycling lines",
+        "user_volume_per_month": 55,
+        "duration_months": 26,
+        "signal": "Rotorua good 4G",
+        "season_pattern": "year-round MTB",
+        "human_factors": "Forestry harvest 2024 closed area, line literally cut down"
+      },
+      "events_timeline": [
+        "Month 1-20: mark popular among MTBers, 29 likes",
+        "Month 21 (2024): Timberlands harvest operations begin",
+        "Month 22: rider reports 'trees down, line gone'",
+        "Month 23: forestry posts area closure notices",
+        "Month 24: 9 reports same",
+        "Month 25: trail won't be rebuilt for 5+ years post-replant",
+        "Month 26: total 29 likes vs 14 reports"
+      ],
+      "expected_signal_summary": "29 likes vs 14 reports (2.1:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Forestry rotation killed the trail for the better part of a decade. New trail will be different. Continuing to show old line wastes riders' time and risks them riding into harvest zone.",
+      "edge_case_flag": "forestry_harvest|long_term_loss|safety_zone"
+    },
+    {
+      "id": 375,
+      "title": "Coromandel New Chums Beach — owner restricted access 2023",
+      "scenario": {
+        "type": "scenic",
+        "location_desc": "New Chums Beach trailhead crossing, Whangapoua, Coromandel",
+        "intrinsic_quality": "famously remote unspoiled beach access mark",
+        "user_volume_per_month": 90,
+        "duration_months": 24,
+        "signal": "Whangapoua patchy",
+        "season_pattern": "summer peak",
+        "human_factors": "private land crossing restricted by new owner 2023, alternative route added"
+      },
+      "events_timeline": [
+        "Month 1-14: mark accurate, 42 likes 'paradise'",
+        "Month 15 (2023): new owner enforces no-trespass on traditional route",
+        "Month 16: visitor reports 'turned back at gate'",
+        "Month 18: alternative coastal route established",
+        "Month 20: 11 reports about original route blocked",
+        "Month 22: 18 reports cumulative",
+        "Month 24: total 42 likes vs 18 reports"
+      ],
+      "expected_signal_summary": "42 likes vs 18 reports (2.3:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Beach intact, alternate access exists, but original mark route now trespass. Sending people to a confrontation with landowner is irresponsible. Mark for old route must die.",
+      "edge_case_flag": "ownership_change|trespass_risk|alternative_exists"
+    },
+    {
+      "id": 376,
+      "title": "Lake Tekapo Mt John summit road — gate hours changed 2023",
+      "scenario": {
+        "type": "supply",
+        "location_desc": "Mt John Observatory access road gate, near Lake Tekapo, Mackenzie",
+        "intrinsic_quality": "marked '24/7 walking access via gate'",
+        "user_volume_per_month": 130,
+        "duration_months": 30,
+        "signal": "Tekapo good 4G",
+        "season_pattern": "year-round, stargazers night",
+        "human_factors": "Canterbury University restricted night access 2023 due to vandalism"
+      },
+      "events_timeline": [
+        "Month 1-22: mark accurate, 51 likes",
+        "Month 23 (2023): vandalism prompts night-closure 8pm-6am",
+        "Month 24: night visitor reports 'gate locked at 9pm'",
+        "Month 26: 12 reports about new restriction",
+        "Month 28: 19 reports cumulative",
+        "Month 29: signage updated but mark unchanged",
+        "Month 30: total 51 likes vs 19 reports"
+      ],
+      "expected_signal_summary": "51 likes vs 19 reports (2.7:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Daytime mark still partially accurate, but '24/7' claim explicitly false. Stargazers driving up at midnight find locked gate. Must die — needs replacement with corrected hours.",
+      "edge_case_flag": "hours_change|partial_truth|specific_use_case"
+    },
+    {
+      "id": 377,
+      "title": "Catlins Nugget Point lighthouse track — boardwalk replaced 2024 path",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Nugget Point lighthouse access track, The Catlins, Otago coast",
+        "intrinsic_quality": "marked old gravel path along clifftop",
+        "user_volume_per_month": 180,
+        "duration_months": 22,
+        "signal": "Catlins very patchy",
+        "season_pattern": "year-round seal/sea-lion viewing",
+        "human_factors": "DOC built fully accessible boardwalk 2024, old path closed for revegetation"
+      },
+      "events_timeline": [
+        "Month 1-18: mark accurate, 47 likes",
+        "Month 19 (2024): DOC opens new boardwalk, closes old path",
+        "Month 20: visitor reports 'boardwalk now, mark info wrong'",
+        "Month 21: 8 reports about path layout change",
+        "Month 22: total 47 likes vs 8 reports"
+      ],
+      "expected_signal_summary": "47 likes vs 8 reports (5.9:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Improvement, not regression — but mark description still wrong. Description of 'gravel narrow' applies to non-existent path. Even positive change makes the historical mark obsolete.",
+      "edge_case_flag": "infrastructure_upgrade|positive_change|description_obsolete"
+    },
+    {
+      "id": 378,
+      "title": "Auckland Hunua Ranges Cosseys Track — kauri dieback closed indefinitely",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Cosseys Track loop, Hunua Ranges, south Auckland",
+        "intrinsic_quality": "popular Auckland day-walk loop track",
+        "user_volume_per_month": 95,
+        "duration_months": 60,
+        "signal": "Hunua patchy",
+        "season_pattern": "year-round",
+        "human_factors": "Auckland Council closed Hunua tracks 2018 for kauri dieback, partial reopen 2023"
+      },
+      "events_timeline": [
+        "Month 1 (2018): mark accurate, 38 likes",
+        "Month 4 (2018): full Hunua closure for dieback",
+        "Month 12: walker reports 'still closed'",
+        "Month 36: closure continues, 18 reports cumulative",
+        "Month 56 (2023): partial reopening but Cosseys specifically still closed",
+        "Month 58: 6 more reports 'still no Cosseys'",
+        "Month 60: total 38 likes vs 24 reports"
+      ],
+      "expected_signal_summary": "38 likes vs 24 reports (1.6:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "5 years of closure with consistent reports. Conservation closures often outlast user memory. Likes are pre-2018 historical. Must die — when Cosseys eventually reopens it gets a new mark.",
+      "edge_case_flag": "long_dieback_closure|partial_reopen|historical_likes"
+    },
+    {
+      "id": 379,
+      "title": "Wanaka Diamond Lake track — fenced off 2024 due to falling rocks",
+      "scenario": {
+        "type": "danger",
+        "location_desc": "Diamond Lake & Rocky Mountain summit track, Wanaka, near Mt Aspiring",
+        "intrinsic_quality": "popular summit track near Wanaka township",
+        "user_volume_per_month": 220,
+        "duration_months": 16,
+        "signal": "Wanaka good 4G",
+        "season_pattern": "year-round but rockfall in spring thaw",
+        "human_factors": "DOC closed upper summit section Mar 2024 after large rockfall event"
+      },
+      "events_timeline": [
+        "Month 1-13: mark popular, 62 likes",
+        "Month 14 (Mar 2024): rockfall event, summit section closed",
+        "Month 15: walker reports 'fence and warnings on summit ridge'",
+        "Month 16: 11 reports same"
+      ],
+      "expected_signal_summary": "62 likes vs 11 reports (5.6:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Despite high likes, recent reports reflect formal DOC closure for safety. Encouraging summit attempt risks rockfall injury. Lower lake portion still open but summit mark is wrong now.",
+      "edge_case_flag": "rockfall_closure|safety_priority|partial_track"
+    },
+    {
+      "id": 380,
+      "title": "Bay of Islands Cape Brett Track — slip 2023 closed half the route",
+      "scenario": {
+        "type": "junction",
+        "location_desc": "Cape Brett Track Deep Water Cove section, Bay of Islands",
+        "intrinsic_quality": "marked the marine reserve descent track",
+        "user_volume_per_month": 30,
+        "duration_months": 22,
+        "signal": "Cape Brett zero signal",
+        "season_pattern": "Oct-April",
+        "human_factors": "major slip 2023 closed Deep Water Cove descent, alternative not feasible"
+      },
+      "events_timeline": [
+        "Month 1-15: mark accurate, 18 likes",
+        "Month 16 (2023): slip blocks descent",
+        "Month 17: tramper reports 'slip face, no safe descent'",
+        "Month 19: DOC posts indefinite closure of Deep Water section",
+        "Month 21: 8 reports cumulative",
+        "Month 22: total 18 likes vs 8 reports"
+      ],
+      "expected_signal_summary": "18 likes vs 8 reports (2.3:1)",
+      "expected_outcome": "killed",
+      "expected_status": "outdated",
+      "human_judgment": "Remote committing tramp, no signal, wrong info means stuck at slip. Conservative kill is the only safe option. Likes from pre-slip era cannot vouch for current conditions.",
+      "edge_case_flag": "remote_no_signal|committing_walk|slip_closure"
+    }
+  ]
+}

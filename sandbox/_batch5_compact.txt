@@ -1,0 +1,137 @@
+total: 129
+states: {
+  healthy: 69,
+  context_dependent: 28,
+  suspicious: 18,
+  dead_sick: 7,
+  dead_natural: 7
+}
+{"id":779,"st":"healthy","ls":"long","r":"28:1 比例长期稳定无急转,1 条不构成趋势","t":"junction","l":28,"rp":1,"m":26,"v":22,"fl":"nzmga_referenced|standardisation_mark|solo_irrelevant_complaint"}
+{"id":780,"st":"healthy","ls":"long","r":"9:0 持续好评,低流量但 100% 正向,转化率续命","t":"junction","l":9,"rp":0,"m":24,"v":4,"fl":"annual_resurvey|glacier_corridor|life_essential"}
+{"id":781,"st":"context_dependent","ls":"long","r":"季节性 hazard:冬启用夏休眠,11:0 高质量","t":"danger","l":11,"rp":0,"m":20,"v":3,"fl":"cornice_break_line|predictable_seasonal|dormancy_is_normal"}
+{"id":782,"st":"healthy","ls":"long","r":"28:0 持续高赞,DOC 维护有续命","t":"supply","l":28,"rp":0,"m":30,"v":14,"fl":"doc_maintained|operational_cache|annual_cycle"}
+{"id":783,"st":"healthy","ls":"long","r":"16:0 长期高质量,导览员维护","t":"supply","l":16,"rp":0,"m":16,"v":9,"fl":"running_belay_anchors|guide_maintained|club_referenced"}
+{"id":784,"st":"healthy","ls":"long","r":"12:0 持续好评,作者持续维护更新位置","t":"danger","l":12,"rp":0,"m":24,"v":4,"fl":"lethal_glacier_hazard|migrating_position|gns_backed"}
+{"id":785,"st":"healthy","ls":"long","r":"7:0 长期好评,club 维护","t":"junction","l":7,"rp":0,"m":18,"v":3,"fl":"abseil_route|annual_tat_replacement|club_maintained"}
+{"id":786,"st":"context_dependent","ls":"long","r":"季节性桥梁,跨季节自然循环 8:0","t":"junction","l":8,"rp":0,"m":14,"v":4,"fl":"seasonal_archive_renew|bergschrund|nzac_ifmga"}
+{"id":787,"st":"healthy","ls":"long","r":"9:0 偏远长期好评,转化率高","t":"junction","l":9,"rp":0,"m":22,"v":3,"fl":"obscure_traverse|cloud_navigation|completer_validated"}
+{"id":788,"st":"healthy","ls":"long","r":"24:1 比例稳定,1 报告不构成趋势","t":"danger","l":24,"rp":1,"m":20,"v":18,"fl":"cross_discipline|serac_validated|tourist_location_invalid"}
+{"id":789,"st":"healthy","ls":"long","r":"13:0 长期持续好评","t":"junction","l":13,"rp":0,"m":18,"v":5,"fl":"hut_to_hut|evolving_gap|sar_referenced"}
+{"id":790,"st":"healthy","ls":"long","r":"17:0 NZMGA 标准点持续验证","t":"junction","l":17,"rp":0,"m":18,"v":11,"fl":"nzmga_standard|rope_discipline_waypoint"}
+{"id":791,"st":"healthy","ls":"long","r":"12:0 长期事件验证","t":"danger","l":12,"rp":0,"m":22,"v":4,"fl":"skills_checkpoint|arrest_practice|incident_validated"}
+{"id":792,"st":"healthy","ls":"long","r":"16:0 持续好评,warden 年度更新","t":"junction","l":16,"rp":0,"m":20,"v":9,"fl":"turn_around_discipline|warden_authored|outcome_validated"}
+{"id":793,"st":"healthy","ls":"long","r":"19:0 决策支持 mark 长期好评","t":"scenic","l":19,"rp":0,"m":16,"v":12,"fl":"decision_support|weather_observation|nzalpine_team"}
+{"id":794,"st":"healthy","ls":"long","r":"14:0 持续观测验证","t":"danger","l":14,"rp":0,"m":18,"v":5,"fl":"time_window_hazard|rockfall|validated_observations"}
+{"id":795,"st":"healthy","ls":"long","r":"12:0 SAR 引用持续好评","t":"junction","l":12,"rp":0,"m":16,"v":4,"fl":"emergency_descent|sar_referenced|use_validated"}
+{"id":796,"st":"healthy","ls":"long","r":"19:0 商运背书持续好评","t":"junction","l":19,"rp":0,"m":24,"v":8,"fl":"heli_pickup_zone|commercial_operator|sar_manual"}
+{"id":797,"st":"healthy","ls":"long","r":"36:0 高频好评 + 续命","t":"junction","l":36,"rp":0,"m":26,"v":16,"fl":"coordination_tradition|warden_authored|nzac_formalised"}
+{"id":798,"st":"healthy","ls":"long","r":"28:2 比例稳定,2 条不构成趋势","t":"danger","l":28,"rp":2,"m":22,"v":30,"fl":"statistical_injury|survivor_bias_reports|doc_authored"}
+{"id":799,"st":"context_dependent","ls":"long","r":"冬季限定 16:1 三季验证","t":"junction","l":16,"rp":1,"m":28,"v":6,"fl":"winter_only|nzaa_bypass|three_season_validation"}
+{"id":800,"st":"healthy","ls":"long","r":"11:0 紧急缓存事件验证","t":"supply","l":11,"rp":0,"m":30,"v":3,"fl":"emergency_cache|twice_validated|sar_referenced"}
+{"id":803,"st":"suspicious","ls":"short","r":"近 12 月 64 举报 vs 17 赞 = 向下急转,环境已变信号反转","t":"danger","l":162,"rp":78,"m":48,"v":95,"fl":"long_tail + environment_changed + signal_reversal + obsolete"}
+{"id":804,"st":"healthy","ls":"long","r":"38000:52 极优比例持续 6 年,转化率续命到渐近上限","t":"scenic","l":38000,"rp":52,"m":72,"v":8500,"fl":"long_tail + evergreen + landmark + high_volume"}
+{"id":805,"st":"healthy","ls":"long","r":"1100:180 比例持续稳定,无急转,争议但流量增长","t":"scenic","l":1100,"rp":180,"m":36,"v":320,"fl":"long_tail + emergent_behavior + controversial + self_reinforcing"}
+{"id":806,"st":"suspicious","ls":"short","r":"近 12 月 80 赞 vs 95 举报刚反转,作者承认过时","t":"danger","l":5800,"rp":220,"m":60,"v":4000,"fl":"long_tail + author_acknowledged_obsolete + infrastructure_replacement"}
+{"id":808,"st":"healthy","ls":"long","r":"130:0 五年零负面,紧急避难永恒价值","t":"supply","l":130,"rp":0,"m":60,"v":35,"fl":"long_tail + emergency_supply + zero_negative + life_saving"}
+{"id":809,"st":"suspicious","ls":"short","r":"近 12 月 30:80 信号反转,自然遮挡,趋势确认","t":"scenic","l":580,"rp":145,"m":72,"v":180,"fl":"long_tail + natural_succession + photo_outdated + slow_decay"}
+{"id":810,"st":"suspicious","ls":"short","r":"近 12 月 25:90 严重反转,生态枯竭","t":"scenic","l":620,"rp":240,"m":60,"v":90,"fl":"long_tail + tragedy_of_commons + author_apologized + ecological_collapse"}
+{"id":811,"st":"healthy","ls":"long","r":"380:4 五年高质量持续,作者季度更新","t":"scenic","l":380,"rp":4,"m":60,"v":60,"fl":"long_tail + wildlife_observation + curated_community + ethical"}
+{"id":812,"st":"context_dependent","ls":"normal","r":"季节性水源,夏旱举报冬季正常,近 6 月 40:50 略反转","t":"supply","l":920,"rp":145,"m":36,"v":800,"fl":"long_tail + climate_change + seasonal_window_shrinking"}
+{"id":813,"st":"healthy","ls":"long","r":"800:12 高质量持续,作者年度更新","t":"scenic","l":800,"rp":12,"m":60,"v":200,"fl":"long_tail + high_barrier_self_selecting + curator_active"}
+{"id":816,"st":"healthy","ls":"long","r":"320:2 文化遗产长尾,作者持续回复","t":"scenic","l":320,"rp":2,"m":60,"v":95,"fl":"long_tail + heritage + niche_audience + appreciating"}
+{"id":817,"st":"healthy","ls":"long","r":"1100:65 外部事件升值,新近向上急转,流量增长","t":"scenic","l":1100,"rp":65,"m":36,"v":280,"fl":"long_tail + external_event + value_jump + context_dependent"}
+{"id":818,"st":"healthy","ls":"long","r":"19000:850 比例稳定,作者主动重新定位为教育","t":"scenic","l":19000,"rp":850,"m":84,"v":3500,"fl":"long_tail + climate_change + author_repurposed + transformation"}
+{"id":819,"st":"suspicious","ls":"short","r":"近 24 月仅加 20 赞 vs 80 举报,被官方平台取代","t":"danger","l":230,"rp":80,"m":60,"v":60,"fl":"long_tail + replaced_by_official + niche_specialty"}
+{"id":820,"st":"healthy","ls":"long","r":"160:0 六年零负面,紧急避难低流量但纯正","t":"supply","l":160,"rp":0,"m":72,"v":25,"fl":"long_tail + ultra_low_traffic + emergency + zero_negative + life_critical"}
+{"id":821,"st":"suspicious","ls":"short","r":"近 12 月 30:80 反转,坐标失效","t":"danger","l":620,"rp":145,"m":48,"v":200,"fl":"long_tail + coastal_erosion + coordinate_drift + risk_persists"}
+{"id":822,"st":"suspicious","ls":"short","r":"近 12 月 40:130 严重反转,海豹群迁移","t":"scenic","l":1300,"rp":220,"m":72,"v":280,"fl":"long_tail + wildlife_migration + position_outdated"}
+{"id":823,"st":"suspicious","ls":"short","r":"近 10 月 5:180 极端反转,物理对象消失","t":"scenic","l":740,"rp":200,"m":60,"v":120,"fl":"long_tail + physical_object_destroyed + complete_obsolescence"}
+{"id":824,"st":"suspicious","ls":"short","r":"近 6 月 90 举报,业主撤回许可,严重急转","t":"supply","l":500,"rp":90,"m":84,"v":45,"fl":"long_tail + private_property + permission_revoked + ethical_obligation"}
+{"id":825,"st":"healthy","ls":"long","r":"250:8 修正后反获价值,科普流量持续","t":"scenic","l":250,"rp":8,"m":60,"v":30,"fl":"long_tail + factual_error_corrected + community_validation"}
+{"id":826,"st":"suspicious","ls":"short","r":"近 6 月 10:70 极端反转,城市开发遮挡","t":"scenic","l":850,"rp":200,"m":60,"v":200,"fl":"long_tail + urban_development + permanent_obstruction"}
+{"id":827,"st":"suspicious","ls":"short","r":"近 24 月 100:320 持续反转,法定不可达","t":"scenic","l":4400,"rp":380,"m":72,"v":800,"fl":"long_tail + conservation_regulation + access_prohibited"}
+{"id":828,"st":"healthy","ls":"long","r":"12000:45 五年稳定增长,城市经典","t":"scenic","l":12000,"rp":45,"m":60,"v":1500,"fl":"long_tail + urban_accessible + high_frequency + maintained"}
+{"id":829,"st":"suspicious","ls":"short","r":"近 18 月 15:130 极反转,监管禁令,作者建议下架","t":"supply","l":400,"rp":195,"m":48,"v":90,"fl":"long_tail + freedom_camping_ban + regulatory_obsolete"}
+{"id":830,"st":"healthy","ls":"normal","r":"1100:65 比例稳定,主卖点弱但 mark 仍有效","t":"scenic","l":1100,"rp":65,"m":60,"v":350,"fl":"long_tail + volcanic_activity_change + partial_value_loss"}
+{"id":851,"st":"dead_sick","ls":"expired","r":"事件后所有访问者举报,向下急转 + 寿命走完","t":"supply","l":215,"rp":52,"m":1,"v":480,"fl":"ephemeral_event + valid_then_invalid"}
+{"id":852,"st":"context_dependent","ls":"expired","r":"官方临时关闭,30 天到期,可能年度复活","t":"danger","l":78,"rp":9,"m":1,"v":220,"fl":"ephemeral_official_closure + recurring_possibility"}
+{"id":853,"st":"context_dependent","ls":"expired","r":"施工窗口结束,寿命走完","t":"danger","l":320,"rp":22,"m":1.5,"v":1800,"fl":"ephemeral_construction + auto_expire_critical"}
+{"id":854,"st":"context_dependent","ls":"long","r":"季节性桥梁两年循环,DOC 重复使用","t":"supply","l":215,"rp":12,"m":6,"v":110,"fl":"seasonal_recurring + biannual_cycle"}
+{"id":855,"st":"context_dependent","ls":"expired","r":"年度文化活动,当日后期举报但保留作年度锚","t":"scenic","l":78,"rp":38,"m":0.25,"v":95,"fl":"ephemeral_cultural_event + annual_anchor"}
+{"id":856,"st":"context_dependent","ls":"expired","r":"迁徙生物季节,3 月返程季可复活","t":"scenic","l":285,"rp":24,"m":1.5,"v":350,"fl":"ephemeral_natural_event + biological_calendar"}
+{"id":857,"st":"dead_sick","ls":"expired","r":"一次性赛事,寿命极短,过后举报","t":"supply","l":131,"rp":5,"m":0.2,"v":280,"fl":"ephemeral_one_off_event + auto_expire_strict"}
+{"id":858,"st":"context_dependent","ls":"expired","r":"年度圣诞旺季,580:18 高比例,12 月可复活","t":"supply","l":580,"rp":18,"m":1.4,"v":1200,"fl":"annual_seasonal_supply + private_recurring"}
+{"id":859,"st":"dead_natural","ls":"expired","r":"节日装置撤除,无年度承诺","t":"scenic","l":400,"rp":32,"m":0.25,"v":850,"fl":"ephemeral_festival + non_recurring_content"}
+{"id":860,"st":"dead_sick","ls":"expired","r":"24h 一次性活动过期","t":"supply","l":188,"rp":7,"m":0.05,"v":180,"fl":"ephemeral_one_off + 24h_window_strict"}
+{"id":861,"st":"context_dependent","ls":"expired","r":"季节性医疗站,年度复活","t":"supply","l":245,"rp":28,"m":1.5,"v":480,"fl":"ephemeral_seasonal_medical + life_critical"}
+{"id":862,"st":"context_dependent","ls":"expired","r":"Matariki 浮动年度活动,可复活","t":"scenic","l":168,"rp":22,"m":0.25,"v":320,"fl":"ephemeral_cultural_recurring + lunar_calendar"}
+{"id":863,"st":"dead_natural","ls":"expired","r":"电影夜活动结束,无明确年度承诺","t":"scenic","l":380,"rp":48,"m":1,"v":1100,"fl":"ephemeral_recurring_within_window + multi_session"}
+{"id":864,"st":"context_dependent","ls":"expired","r":"年度 marathon,主办方决定续办","t":"supply","l":168,"rp":12,"m":0.05,"v":380,"fl":"ephemeral_annual_race + fixed_month"}
+{"id":866,"st":"dead_sick","ls":"expired","r":"一次性滑翔伞节,过后大量举报","t":"danger","l":480,"rp":100,"m":0.4,"v":2400,"fl":"ephemeral_high_volume_event + critical_timely_expire"}
+{"id":867,"st":"dead_sick","ls":"expired","r":"维护窗口结束,临时路径不再","t":"danger","l":285,"rp":28,"m":0.5,"v":1100,"fl":"ephemeral_maintenance + endangered_species_protection"}
+{"id":868,"st":"dead_natural","ls":"expired","r":"灾害应对绕道,8 月寿命走完后修复","t":"danger","l":145,"rp":28,"m":8,"v":320,"fl":"ephemeral_disaster_response + repair_window"}
+{"id":869,"st":"context_dependent","ls":"expired","r":"海豹幼崽季年度循环 980:35","t":"scenic","l":980,"rp":35,"m":3,"v":1800,"fl":"ephemeral_biological_breeding + annual_high_volume"}
+{"id":870,"st":"dead_natural","ls":"expired","r":"火山警戒短期,可不规则复活","t":"danger","l":220,"rp":38,"m":1.5,"v":850,"fl":"ephemeral_geohazard + official_authority"}
+{"id":871,"st":"context_dependent","ls":"expired","r":"King Tide 不规则循环","t":"danger","l":145,"rp":38,"m":0.3,"v":420,"fl":"ephemeral_tidal_event + irregular_recurring"}
+{"id":872,"st":"dead_natural","ls":"expired","r":"纪念性一周活动,无续办","t":"supply","l":520,"rp":48,"m":0.25,"v":920,"fl":"ephemeral_commemoration + non_recurring"}
+{"id":873,"st":"context_dependent","ls":"expired","r":"SAR 演习年度循环 65:12","t":"danger","l":65,"rp":12,"m":0.07,"v":95,"fl":"ephemeral_official_drill + annual_recurring"}
+{"id":874,"st":"context_dependent","ls":"expired","r":"DOC 年度浮动周,跨年累积 280:45","t":"supply","l":280,"rp":45,"m":0.15,"v":280,"fl":"ephemeral_official_program + annual_floating_week"}
+{"id":875,"st":"dead_sick","ls":"expired","r":"免费渡轮一次性活动","t":"supply","l":1980,"rp":145,"m":0.05,"v":3200,"fl":"ephemeral_one_off_civic + high_volume_strict_expire"}
+{"id":876,"st":"context_dependent","ls":"expired","r":"灾后修复 4 个月窗口结束,1250:145 期内健康","t":"danger","l":1250,"rp":145,"m":4,"v":6500,"fl":"ephemeral_disaster_repair + high_traffic_landmark"}
+{"id":877,"st":"context_dependent","ls":"expired","r":"年度跨年烟花,1 小时窗口","t":"scenic","l":980,"rp":22,"m":0.04,"v":4800,"fl":"ephemeral_annual_fireworks + 1hour_window"}
+{"id":878,"st":"context_dependent","ls":"expired","r":"FENZ 火险预警不规则复发","t":"danger","l":320,"rp":38,"m":0.17,"v":1200,"fl":"ephemeral_fire_danger + irregular_seasonal_recurring"}
+{"id":879,"st":"context_dependent","ls":"expired","r":"年度清理活动,主办决定续办","t":"supply","l":95,"rp":18,"m":0.04,"v":380,"fl":"ephemeral_civic_environmental + annual_intent"}
+{"id":880,"st":"context_dependent","ls":"expired","r":"雪崩警告短窗口,不规则复发","t":"danger","l":32,"rp":12,"m":0.4,"v":65,"fl":"ephemeral_avalanche + professional_authority"}
+{"id":903,"st":"dead_sick","ls":"short","r":"12:89 极反转,破窗效应 + 修复后未撤,趋势严重","t":"danger","l":12,"rp":89,"m":8,"v":380,"fl":"broken_window_pile_on + real_issue_already_fixed"}
+{"id":904,"st":"healthy","ls":"normal","r":"25:0 silent majority,转化率低但零负面,正常流失","t":"scenic","l":25,"rp":0,"m":12,"v":4800,"fl":"silent_majority + cruise_tourism_no_sync"}
+{"id":905,"st":"healthy","ls":"long","r":"9:0 摄影师 niche,零负面","t":"scenic","l":9,"rp":0,"m":10,"v":6500,"fl":"rabid_minority + photographer_niche_appeal"}
+{"id":906,"st":"healthy","ls":"long","r":"320:18 比例稳定,无急转,作者声誉迁移","t":"scenic","l":320,"rp":18,"m":6,"v":2400,"fl":"author_reputation_transfer_positive"}
+{"id":907,"st":"healthy","ls":"short","r":"68:41 急转向下,pile-on 举报 + 作者负声誉","t":"scenic","l":68,"rp":41,"m":7,"v":950,"fl":"negative_reputation_transfer_unfair"}
+{"id":908,"st":"healthy","ls":"long","r":"142:17 整体稳定,初期举报已被洗刷无近期急转","t":"supply","l":142,"rp":17,"m":9,"v":320,"fl":"first_comment_anchor_overcome_by_truth"}
+{"id":909,"st":"healthy","ls":"long","r":"178:8 比例好,回声室破裂良性扩散","t":"scenic","l":178,"rp":8,"m":10,"v":280,"fl":"local_club_echo_chamber_eventually_validated"}
+{"id":910,"st":"healthy","ls":"long","r":"38:1 晚出现但纯正,价值高低流量","t":"junction","l":38,"rp":1,"m":14,"v":75,"fl":"bystander_effect_on_marking + late_emerging_value"}
+{"id":912,"st":"suspicious","ls":"short","r":"24:38 比例反转,pile-on 错读","t":"supply","l":24,"rp":38,"m":10,"v":90,"fl":"pile_on_reporting + niche_supply_misread"}
+{"id":913,"st":"healthy","ls":"long","r":"96:11 事件后向上急转,危险被验证","t":"danger","l":96,"rp":11,"m":6,"v":12000,"fl":"bystander_effect_in_urban + danger_validated_post_event"}
+{"id":914,"st":"healthy","ls":"normal","r":"105:81 持续争议无急转,UI 展示比例让用户自判","t":"scenic","l":105,"rp":81,"m":8,"v":850,"fl":"manufactured_early_likes + no_real_value"}
+{"id":916,"st":"healthy","ls":"long","r":"168:2 正向锚定持续","t":"supply","l":168,"rp":2,"m":7,"v":450,"fl":"positive_anchor_quality_comment"}
+{"id":917,"st":"healthy","ls":"long","r":"168:31 后期向上急转,SAR 修正","t":"danger","l":168,"rp":31,"m":9,"v":320,"fl":"local_echo_chamber_corrected_by_SAR"}
+{"id":918,"st":"healthy","ls":"long","r":"48:0 silent majority 零负面","t":"junction","l":48,"rp":0,"m":11,"v":8500,"fl":"cruise_tourism_silence + structural_no_sync"}
+{"id":919,"st":"healthy","ls":"long","r":"142:3 高声誉作者迁移好","t":"scenic","l":142,"rp":3,"m":6,"v":220,"fl":"author_reputation_positive_continued"}
+{"id":920,"st":"healthy","ls":"normal","r":"280:145 比例近 1:2 但持续争议无急转,UI 展示","t":"scenic","l":280,"rp":145,"m":8,"v":6500,"fl":"first_negative_anchor + condition_dependent_scenic"}
+{"id":921,"st":"healthy","ls":"long","r":"320:12 回声室被外部破裂验证","t":"scenic","l":320,"rp":12,"m":9,"v":2400,"fl":"running_club_echo_chamber_validated"}
+{"id":922,"st":"healthy","ls":"long","r":"62:1 文化敬畏低互动但纯正","t":"junction","l":62,"rp":1,"m":13,"v":5400,"fl":"cultural_silence + maori_sacred_site"}
+{"id":923,"st":"context_dependent","ls":"long","r":"158:22 季节性,冬危夏正常","t":"danger","l":158,"rp":22,"m":8,"v":220,"fl":"early_likes_with_real_seasonal_danger"}
+{"id":924,"st":"healthy","ls":"normal","r":"168:124 外部新闻引发 pile-on 举报急转","t":"danger","l":168,"rp":124,"m":14,"v":1800,"fl":"external_news_pile_on + misunderstood_safe_viewpoint"}
+{"id":925,"st":"healthy","ls":"long","r":"38:0 本地习以为常的 silent 但零负面","t":"scenic","l":38,"rp":0,"m":10,"v":1200,"fl":"local_habituation_silence"}
+{"id":926,"st":"suspicious","ls":"short","r":"22:35 负声誉 + pile-on 举报,趋势负","t":"scenic","l":22,"rp":35,"m":7,"v":480,"fl":"negative_reputation + pile_on_combined"}
+{"id":928,"st":"healthy","ls":"long","r":"18:0 极偏远低流量但纯正","t":"junction","l":18,"rp":0,"m":16,"v":65,"fl":"low_traffic_bystander_long_delay"}
+{"id":929,"st":"healthy","ls":"long","r":"88:31 反向锚定后逆转,后期向上急转","t":"supply","l":88,"rp":31,"m":9,"v":110,"fl":"negative_anchor_reversed_by_authority"}
+{"id":930,"st":"healthy","ls":"long","r":"8:1 摄影师 niche,纯正","t":"scenic","l":8,"rp":1,"m":8,"v":3200,"fl":"rabid_minority_photographers + multi_condition_scenic"}
+{"id":952,"st":"context_dependent","ls":"long","r":"14:70 但举报集中在夏季无威胁期,冬季验证有效","t":"danger","l":14,"rp":70,"m":9,"v":720,"fl":"high_reports_but_must_keep + seasonal_lifesaver + reporter_quality_mismatch"}
+{"id":953,"st":"healthy","ls":"long","r":"22:0 跨季节零互动期但活跃后纯正","t":"supply","l":22,"rp":0,"m":8,"v":380,"fl":"zero_signal_but_must_keep + seasonal_creation_window"}
+{"id":954,"st":"healthy","ls":"long","r":"前期破窗 31:3 后期反转 142:36,新闻验证强心剂","t":"danger","l":142,"rp":36,"m":1,"v":6800,"fl":"early_breakage_but_lifesaver + SAR_origin + reporter_authority_critical"}
+{"id":955,"st":"suspicious","ls":"short","r":"12 年 1840:85 历史好,但近 60 天 38:0 急转向下","t":"danger","l":1840,"rp":85,"m":144,"v":2400,"fl":"long_term_healthy_but_recent_reversal + terrain_change + cumulative_misleading"}
+{"id":956,"st":"context_dependent","ls":"long","r":"三年夏热冬死循环 4200:78","t":"scenic","l":4200,"rp":78,"m":30,"v":12000,"fl":"seasonal_oscillation + iconic_iconic_scenic + winter_reports_misleading"}
+{"id":957,"st":"context_dependent","ls":"long","r":"多季休眠 142:5,社区 supply","t":"supply","l":142,"rp":5,"m":26,"v":220,"fl":"multi_season_dormancy + community_supply + slow_burn_value"}
+{"id":958,"st":"healthy","ls":"normal","r":"机器人问题产品来判断算法只专注数据 [user-decided]","t":"scenic","l":95,"rp":0,"m":14,"v":1800,"fl":"fake_strong_likes + sockpuppet_farm + KOL_marketing"}
+{"id":959,"st":"healthy","ls":"normal","r":"95:20 但 17 是 sock,产品层应先过滤,算法层若信号进入则趋势构成 SUSPICIOUS 后强心剂回 HEALTHY","t":"danger","l":95,"rp":20,"m":10,"v":320,"fl":"fake_strong_reports + orchestrated_sockpuppets + commercial_motivation"}
+{"id":960,"st":"healthy","ls":"long","r":"25:0 SAR 起源 24h 内验证","t":"danger","l":25,"rp":0,"m":6,"v":25,"fl":"time_critical + SAR_origin + cold_start_bypass_needed"}
+{"id":961,"st":"healthy","ls":"long","r":"前期 18:8 后期 28:0 向上急转,跨季节复活","t":"supply","l":42,"rp":21,"m":18,"v":180,"fl":"cross_season_revival + iwi_cultural_supply + location_drift"}
+{"id":962,"st":"context_dependent","ls":"long","r":"68:19 雨季危旱季正常,天气强相关","t":"danger","l":68,"rp":19,"m":16,"v":95,"fl":"weather_conditional + dual_state_hazard + reporter_context_dependent"}
+{"id":964,"st":"healthy","ls":"long","r":"46:1 SAR 私密 + 公众化后稳定","t":"danger","l":18,"rp":0,"m":8,"v":1200,"fl":"private_visibility + SAR_team_only + algorithmic_blindness_risk"}
+{"id":965,"st":"healthy","ls":"long","r":"20:0 低流量高专业,转化率续命","t":"junction","l":20,"rp":0,"m":11,"v":14,"fl":"low_volume_high_expertise + NZAC_alpinists + niche_value"}
+{"id":966,"st":"healthy","ls":"normal","r":"62:5 比例好,几条权威举报不构成趋势","t":"junction","l":62,"rp":5,"m":9,"v":280,"fl":"wrong_geo_location + local_authority_correction + naive_likes"}
+{"id":967,"st":"healthy","ls":"long","r":"9:0 极偏远公益,持续累积零负面","t":"supply","l":9,"rp":0,"m":30,"v":35,"fl":"charity_supply + extreme_remote + low_volume_genuine"}
+{"id":968,"st":"healthy","ls":"normal","r":"42:6占比好 [user-decided]","t":"scenic","l":42,"rp":6,"m":5,"v":380,"fl":"commercial_operator_inflation + great_walk_branding"}
+{"id":969,"st":"healthy","ls":"long","r":"38:1 12h 内 SAR 验证,DOC 权威","t":"danger","l":38,"rp":1,"m":4,"v":240,"fl":"time_critical_12h + storm_event + DOC_authority"}
+{"id":970,"st":"healthy","ls":"long","r":"近 8 月 156:0 极强向上急转,生态事件 reactivation","t":"scenic","l":156,"rp":0,"m":72,"v":320,"fl":"old_mark_reactivation + ecological_event + signal_revival"}
+{"id":971,"st":"dead_natural","ls":"expired","r":"短寿命 hazard,11 天活跃 41 赞,修复后 archive","t":"danger","l":22,"rp":0,"m":1,"v":1800,"fl":"short_lived_hazard + resolution_signals + archive_not_sink"}
+{"id":972,"st":"healthy","ls":"long","r":"220:42 持续争议无急转,哲学反对不构成趋势反转","t":"supply","l":220,"rp":42,"m":14,"v":420,"fl":"philosophical_objection + community_supply + reporter_intent_classification"}
+{"id":973,"st":"suspicious","ls":"short","r":"22:12 法律权威举报构成趋势,负向","t":"junction","l":22,"rp":12,"m":19,"v":65,"fl":"legal_authority_override + landowner_rights + utility_vs_legality"}
+{"id":974,"st":"dead_natural","ls":"expired","r":"24h 超短寿命,修复后 archive 11:0","t":"danger","l":11,"rp":0,"m":1,"v":180,"fl":"ultra_short_lifespan + DOC_resolution + auto_archive"}
+{"id":975,"st":"context_dependent","ls":"long","r":"65:28 严格按季节分布,冬危夏争议","t":"danger","l":65,"rp":28,"m":16,"v":45,"fl":"winter_only_hazard + summer_reports_irrelevant + seasonal_visibility"}
+{"id":976,"st":"healthy","ls":"long","r":"32:28 元数据修复后向上急转 145:42 整体","t":"supply","l":32,"rp":28,"m":14,"v":850,"fl":"time_window_dependency + metadata_correction + report_decay_after_fix"}
+{"id":977,"st":"suspicious","ls":"short","r":"14:28 比例反转,条数构成趋势,体重相关 hazard 对算法不可见","t":"danger","l":14,"rp":28,"m":7,"v":380,"fl":"perceiver_dependent_hazard + body_weight_property + minority_correct"}
+{"id":978,"st":"healthy","ls":"long","r":"720:8 比例好,弱权威举报无害化","t":"scenic","l":720,"rp":8,"m":9,"v":4200,"fl":"self_promotion_no_harm + weak_authority_objection + low_priority_correction"}
+{"id":979,"st":"healthy","ls":"long","r":"165:0 文化 mark 零负面,浅互动不影响算法","t":"scenic","l":165,"rp":0,"m":16,"v":240,"fl":"iwi_cultural_authority + treaty_significance + shallow_engagement"}
+{"id":980,"st":"suspicious","ls":"short","r":"近 24 月 0:42 严重反转,气候变化","t":"junction","l":250,"rp":42,"m":60,"v":380,"fl":"climate_change_obsolescence + historical_inertia + recent_reversal"}

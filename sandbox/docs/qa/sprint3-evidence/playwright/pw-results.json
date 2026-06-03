@@ -1,0 +1,103 @@
+{
+  "timestamp": "2026-05-31T04:49:02.608Z",
+  "total": 10,
+  "pass": 10,
+  "fail": 0,
+  "consoleErrors": [
+    "console.error: Failed to load resource: the server responded with a status of 404 (File not found)"
+  ],
+  "results": [
+    {
+      "id": "T01",
+      "name": "demo.html 加载 + 5 marker 渲染",
+      "status": "PASS",
+      "detail": {
+        "cardCount": 5
+      },
+      "ms": 1164
+    },
+    {
+      "id": "T02",
+      "name": "点击 1 次点赞 → likes +1",
+      "status": "PASS",
+      "detail": {
+        "likes": 1
+      },
+      "ms": 535
+    },
+    {
+      "id": "T03",
+      "name": "点击 5 次点赞 → 状态健康",
+      "status": "PASS",
+      "detail": {
+        "likes": 5,
+        "status": "健康"
+      },
+      "ms": 1016
+    },
+    {
+      "id": "T04",
+      "name": "点击 5 次举报 → 状态降级",
+      "status": "PASS",
+      "detail": {
+        "status": "心跳"
+      },
+      "ms": 1016
+    },
+    {
+      "id": "T05",
+      "name": "大量举报 → 进沉底",
+      "status": "PASS",
+      "detail": {
+        "status": "沉底"
+      },
+      "ms": 1250
+    },
+    {
+      "id": "T06",
+      "name": "+30 天 → 旧 likes 衰减",
+      "status": "PASS",
+      "detail": {
+        "initialHeat": 5,
+        "finalHeat": 1.8
+      },
+      "ms": 1214
+    },
+    {
+      "id": "T07",
+      "name": "重置 → likes/reports 清零",
+      "status": "PASS",
+      "detail": {
+        "likes": 0
+      },
+      "ms": 552
+    },
+    {
+      "id": "T08",
+      "name": "危险类 marker +30 天 → 自然 sunk",
+      "status": "PASS",
+      "detail": {
+        "status": "沉底"
+      },
+      "ms": 515
+    },
+    {
+      "id": "T09",
+      "name": "cairn 类 +30 天 → 仍存活",
+      "status": "PASS",
+      "detail": {
+        "status": "边界"
+      },
+      "ms": 516
+    },
+    {
+      "id": "T10",
+      "name": "reset 然后多次 like → 计数累加",
+      "status": "PASS",
+      "detail": {
+        "likes": 3
+      },
+      "ms": 750
+    }
+  ]
+}

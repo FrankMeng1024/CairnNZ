@@ -1,0 +1,329 @@
+{
+  "timestamp": "2026-05-31T04:48:52.494Z",
+  "seedCount": 10,
+  "revivedCount": 10,
+  "overallPass": true,
+  "results": [
+    {
+      "seed": 42,
+      "initialStatus": "heartbeat",
+      "finalStatus": "healthy",
+      "firstHeartbeatDay": 0,
+      "firstRevivalDay": 1,
+      "revived": true
+    },
+    {
+      "seed": 100,
+      "initialStatus": "heartbeat",
+      "finalStatus": "healthy",
+      "firstHeartbeatDay": 0,
+      "firstRevivalDay": 1,
+      "revived": true
+    },
+    {
+      "seed": 7,
+      "initialStatus": "heartbeat",
+      "finalStatus": "healthy",
+      "firstHeartbeatDay": 0,
+      "firstRevivalDay": 1,
+      "revived": true
+    },
+    {
+      "seed": 999,
+      "initialStatus": "heartbeat",
+      "finalStatus": "healthy",
+      "firstHeartbeatDay": 0,
+      "firstRevivalDay": 1,
+      "revived": true
+    },
+    {
+      "seed": 1234,
+      "initialStatus": "heartbeat",
+      "finalStatus": "healthy",
+      "firstHeartbeatDay": 0,
+      "firstRevivalDay": 1,
+      "revived": true
+    },
+    {
+      "seed": 5678,
+      "initialStatus": "heartbeat",
+      "finalStatus": "healthy",
+      "firstHeartbeatDay": 0,
+      "firstRevivalDay": 1,
+      "revived": true
+    },
+    {
+      "seed": 31415,
+      "initialStatus": "heartbeat",
+      "finalStatus": "healthy",
+      "firstHeartbeatDay": 0,
+      "firstRevivalDay": 1,
+      "revived": true
+    },
+    {
+      "seed": 27182,
+      "initialStatus": "heartbeat",
+      "finalStatus": "healthy",
+      "firstHeartbeatDay": 0,
+      "firstRevivalDay": 1,
+      "revived": true
+    },
+    {
+      "seed": 11111,
+      "initialStatus": "heartbeat",
+      "finalStatus": "healthy",
+      "firstHeartbeatDay": 0,
+      "firstRevivalDay": 1,
+      "revived": true
+    },
+    {
+      "seed": 99999,
+      "initialStatus": "heartbeat",
+      "finalStatus": "healthy",
+      "firstHeartbeatDay": 0,
+      "firstRevivalDay": 1,
+      "revived": true
+    }
+  ],
+  "sampleTrace": [
+    {
+      "day": 0,
+      "status": "heartbeat",
+      "likes": 0,
+      "reports": 5,
+      "exposure": 0.05
+    },
+    {
+      "day": 1,
+      "status": "borderline",
+      "exposed": 18,
+      "gainedLikes": 11,
+      "gainedReports": 2,
+      "exposure": 0.5
+    },
+    {
+      "day": 2,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 73,
+      "gainedReports": 4,
+      "exposure": 1
+    },
+    {
+      "day": 3,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 75,
+      "gainedReports": 5,
+      "exposure": 1
+    },
+    {
+      "day": 4,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 72,
+      "gainedReports": 6,
+      "exposure": 1
+    },
+    {
+      "day": 5,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 65,
+      "gainedReports": 7,
+      "exposure": 1
+    },
+    {
+      "day": 6,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 67,
+      "gainedReports": 6,
+      "exposure": 1
+    },
+    {
+      "day": 7,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 73,
+      "gainedReports": 6,
+      "exposure": 1
+    },
+    {
+      "day": 8,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 69,
+      "gainedReports": 2,
+      "exposure": 1
+    },
+    {
+      "day": 9,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 62,
+      "gainedReports": 9,
+      "exposure": 1
+    },
+    {
+      "day": 10,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 67,
+      "gainedReports": 7,
+      "exposure": 1
+    },
+    {
+      "day": 11,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 71,
+      "gainedReports": 5,
+      "exposure": 1
+    },
+    {
+      "day": 12,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 75,
+      "gainedReports": 6,
+      "exposure": 1
+    },
+    {
+      "day": 13,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 77,
+      "gainedReports": 4,
+      "exposure": 1
+    },
+    {
+      "day": 14,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 71,
+      "gainedReports": 7,
+      "exposure": 1
+    },
+    {
+      "day": 15,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 67,
+      "gainedReports": 7,
+      "exposure": 1
+    },
+    {
+      "day": 16,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 62,
+      "gainedReports": 3,
+      "exposure": 1
+    },
+    {
+      "day": 17,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 71,
+      "gainedReports": 4,
+      "exposure": 1
+    },
+    {
+      "day": 18,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 75,
+      "gainedReports": 4,
+      "exposure": 1
+    },
+    {
+      "day": 19,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 64,
+      "gainedReports": 11,
+      "exposure": 1
+    },
+    {
+      "day": 20,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 73,
+      "gainedReports": 4,
+      "exposure": 1
+    },
+    {
+      "day": 21,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 71,
+      "gainedReports": 8,
+      "exposure": 1
+    },
+    {
+      "day": 22,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 69,
+      "gainedReports": 6,
+      "exposure": 1
+    },
+    {
+      "day": 23,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 74,
+      "gainedReports": 5,
+      "exposure": 1
+    },
+    {
+      "day": 24,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 74,
+      "gainedReports": 6,
+      "exposure": 1
+    },
+    {
+      "day": 25,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 70,
+      "gainedReports": 5,
+      "exposure": 1
+    },
+    {
+      "day": 26,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 67,
+      "gainedReports": 4,
+      "exposure": 1
+    },
+    {
+      "day": 27,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 72,
+      "gainedReports": 3,
+      "exposure": 1
+    },
+    {
+      "day": 28,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 73,
+      "gainedReports": 5,
+      "exposure": 1
+    },
+    {
+      "day": 29,
+      "status": "healthy",
+      "exposed": 100,
+      "gainedLikes": 72,
+      "gainedReports": 3,
+      "exposure": 1
+    }
+  ]
+}
