@@ -98,7 +98,8 @@
           "provider": "none"
         }
       ],
-      "./plugins/withViroPodfileFix"
+      "./plugins/withViroPodfileFix",
+      "./plugins/withUnityEmbed"
     ],
     "extra": {
       "eas": {
