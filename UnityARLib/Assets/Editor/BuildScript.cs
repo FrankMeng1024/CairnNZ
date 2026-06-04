@@ -1,81 +1,236 @@
 using UnityEditor;
 using UnityEditor.Build.Reporting;
-using UnityEditor.SceneManagement;
+using UnityEditor.XR.Management;
+using UnityEditor.XR.Management.Metadata;
+using UnityEngine;
+using UnityEngine.XR.Management;
 using System;
 using System.IO;
 
+/// <summary>
+/// CI iOS build entry. Invoked headlessly by game-ci/unity-builder via
+/// -executeMethod BuildScript.BuildIOS.
+///
+/// Behavior:
+///   1. Always re-runs SceneSetup.SetupAndSave() so CI is deterministic
+///      regardless of what was committed (the scene asset itself is
+///      committed but we still rebuild it to handle Unity-version-skew
+///      between local 6000.0.76f1 and CI 6000.0.36f1).
+///   2. Validates required files exist (StrandShader, scene, scripts).
+///   3. Configures iOS player settings.
+///   4. Runs BuildPipeline.BuildPlayer; fails loud if build report
+///      indicates anything other than Succeeded.
+/// </summary>
 public class BuildScript
 {
     public static void BuildIOS()
     {
-        // Ensure at least one scene exists and is in build settings
-        EnsureSpikeSceneExists();
+        Console.WriteLine("[CairnUnity][BuildScript] === BuildIOS START ===");
 
-        BuildPlayerOptions opts = new BuildPlayerOptions
+        // Step 1: Run scene setup (programmatic, deterministic)
+        try
         {
-            scenes = GetScenes(),
-            locationPathName = "builds/iOS",
-            target = BuildTarget.iOS,
-            options = BuildOptions.None
-        };
-
-        PlayerSettings.SetScriptingBackend(
-            BuildTargetGroup.iOS, ScriptingImplementation.IL2CPP);
-        PlayerSettings.iOS.sdkVersion = iOSSdkVersion.DeviceSDK;
-        PlayerSettings.iOS.targetOSVersionString = "14.0";
-
-        BuildReport report = BuildPipeline.BuildPlayer(opts);
-        if (report.summary.result != BuildResult.Succeeded)
+            SceneSetup.SetupAndSave();
+        }
+        catch (Exception e)
         {
-            Console.WriteLine("[BuildScript] Build FAILED: " + report.summary.result);
+            Console.WriteLine($"[CairnUnity][BuildScript][ERROR] SceneSetup failed: {e}");
             EditorApplication.Exit(1);
+            return;
         }
 
-        Console.WriteLine("[BuildScript] Build SUCCEEDED");
+        // Step 1b: Enable ARKit XR Loader for iOS so ARSession.state can
+        // advance to SessionTracking on device. Without this, AR Foundation
+        // initializes but never finds a working subsystem and ARSession
+        // state stays at Unsupported.
+        try
+        {
+            EnableArkitLoader();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"[CairnUnity][BuildScript][ERROR] EnableArkitLoader failed: {e}");
+            EditorApplication.Exit(1);
+            return;
+        }
+
+        // Step 2: Validate prerequisites
+        if (!ValidatePrerequisites())
+        {
+            Console.WriteLine("[CairnUnity][BuildScript][ERROR] Prerequisites missing — abort");
+            EditorApplication.Exit(1);
+            return;
+        }
+
+        // Step 3: Configure iOS settings
+        ConfigureIOSPlayer();
+
+        // Step 4: Build
+        var scenes = GetEnabledScenes();
+        Console.WriteLine($"[CairnUnity][BuildScript] Building with {scenes.Length} scenes: {string.Join(",", scenes)}");
+
+        var opts = new BuildPlayerOptions
+        {
+            scenes           = scenes,
+            locationPathName = "builds/iOS",
+            target           = BuildTarget.iOS,
+            options          = BuildOptions.None,
+        };
+
+        BuildReport report = BuildPipeline.BuildPlayer(opts);
+
+        if (report.summary.result != BuildResult.Succeeded)
+        {
+            Console.WriteLine($"[CairnUnity][BuildScript][ERROR] Build FAILED: {report.summary.result}");
+            Console.WriteLine($"[CairnUnity][BuildScript][ERROR] errors={report.summary.totalErrors} warnings={report.summary.totalWarnings}");
+            EditorApplication.Exit(1);
+            return;
+        }
+
+        Console.WriteLine($"[CairnUnity][BuildScript] === BuildIOS SUCCEEDED size={report.summary.totalSize} bytes ===");
         EditorApplication.Exit(0);
     }
 
-    private static void EnsureSpikeSceneExists()
+    private static bool ValidatePrerequisites()
     {
-        const string scenePath = "Assets/Scenes/SpikeScene.unity";
-
-        // Create empty scene file if missing
-        if (!File.Exists(scenePath))
+        var required = new[]
         {
-            Directory.CreateDirectory("Assets/Scenes");
-            var newScene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
-            EditorSceneManager.SaveScene(newScene, scenePath);
-            Console.WriteLine("[BuildScript] Created spike scene at " + scenePath);
-        }
+            "Assets/Shaders/StrandShader.shader",
+            "Assets/Scripts/CairnBridge.cs",
+            "Assets/Scripts/MultiSpawner.cs",
+            "Assets/Scripts/UnityLogger.cs",
+            "Assets/Scripts/UnityNativeBridge.cs",
+            "Assets/Editor/SceneSetup.cs",
+            "Assets/Scenes/CairnAR.unity",
+        };
 
-        // Ensure the scene is enabled in EditorBuildSettings
-        var existing = EditorBuildSettings.scenes;
-        bool found = false;
-        for (int i = 0; i < existing.Length; i++)
+        bool ok = true;
+        foreach (var path in required)
         {
-            if (existing[i].path == scenePath)
+            if (!File.Exists(path))
             {
-                existing[i] = new EditorBuildSettingsScene(scenePath, true);
-                found = true;
-                break;
+                Console.WriteLine($"[CairnUnity][BuildScript][ERROR] Missing required file: {path}");
+                ok = false;
             }
         }
 
-        if (!found)
+        // Verify shader is loadable
+        var shader = Shader.Find("Cairn/StrandShader");
+        if (shader == null)
         {
-            var list = new System.Collections.Generic.List<EditorBuildSettingsScene>(existing);
-            list.Add(new EditorBuildSettingsScene(scenePath, true));
-            EditorBuildSettings.scenes = list.ToArray();
-            Console.WriteLine("[BuildScript] Added spike scene to EditorBuildSettings");
+            Console.WriteLine("[CairnUnity][BuildScript][ERROR] Cairn/StrandShader cannot be loaded by name.");
+            ok = false;
+        }
+
+        return ok;
+    }
+
+    private static void ConfigureIOSPlayer()
+    {
+        PlayerSettings.SetScriptingBackend(BuildTargetGroup.iOS, ScriptingImplementation.IL2CPP);
+
+        // Target SDK: real device
+        PlayerSettings.iOS.sdkVersion           = iOSSdkVersion.DeviceSDK;
+        PlayerSettings.iOS.targetOSVersionString = "14.0";
+        PlayerSettings.iOS.requiresPersistentWiFi = false;
+
+        // Required for ARKit
+        PlayerSettings.iOS.cameraUsageDescription = "Cairn uses the camera for AR.";
+
+        // Disable bitcode (deprecated in modern Xcode)
+        // (PlayerSettings exposes this as an iOS-specific bool only via SerializedObject in some
+        // versions; we leave it default and let xcodebuild strip if needed.)
+
+        Console.WriteLine("[CairnUnity][BuildScript] iOS player configured: IL2CPP, iOS 14+, camera permission set");
+    }
+
+    private static string[] GetEnabledScenes()
+    {
+        var list = new System.Collections.Generic.List<string>();
+        foreach (var s in EditorBuildSettings.scenes)
+        {
+            if (s.enabled) list.Add(s.path);
+        }
+        return list.ToArray();
+    }
+
+    /// <summary>
+    /// Programmatically enable the ARKit XR Loader for iOS in XR Plug-in
+    /// Management. Without this, ARSession.state stays at Unsupported on
+    /// device and the entire Spike collapses.
+    /// </summary>
+    private static void EnableArkitLoader()
+    {
+        const string ARKitLoaderType = "UnityEngine.XR.ARKit.ARKitLoader";
+
+        // Get-or-create XRGeneralSettings asset for iOS build target group.
+        var settings = XRGeneralSettingsPerBuildTarget.XRGeneralSettingsForBuildTarget(BuildTargetGroup.iOS);
+        if (settings == null)
+        {
+            Console.WriteLine("[CairnUnity][BuildScript] Creating new XRGeneralSettings for iOS");
+            // Create the settings for iOS via XRGeneralSettingsPerBuildTarget
+            XRGeneralSettingsPerBuildTarget perBuildTarget;
+            if (!EditorBuildSettings.TryGetConfigObject(XRGeneralSettings.k_SettingsKey, out perBuildTarget))
+            {
+                perBuildTarget = ScriptableObject.CreateInstance<XRGeneralSettingsPerBuildTarget>();
+                const string assetPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
+                Directory.CreateDirectory(Path.GetDirectoryName(assetPath));
+                AssetDatabase.CreateAsset(perBuildTarget, assetPath);
+                EditorBuildSettings.AddConfigObject(XRGeneralSettings.k_SettingsKey, perBuildTarget, true);
+            }
+            // Create general settings for iOS
+            var general = ScriptableObject.CreateInstance<XRGeneralSettings>();
+            general.Manager = ScriptableObject.CreateInstance<XRManagerSettings>();
+            general.Manager.name = "iOS XR Manager";
+            AssetDatabase.AddObjectToAsset(general,         perBuildTarget);
+            AssetDatabase.AddObjectToAsset(general.Manager, perBuildTarget);
+            perBuildTarget.SetSettingsForBuildTarget(BuildTargetGroup.iOS, general);
+            settings = general;
+        }
+
+        if (settings.Manager == null)
+        {
+            settings.Manager = ScriptableObject.CreateInstance<XRManagerSettings>();
+            Console.WriteLine("[CairnUnity][BuildScript] Created XRManagerSettings for iOS");
+        }
+
+        // Assign the ARKit loader (idempotent — no-op if already assigned)
+        bool ok = XRPackageMetadataStore.AssignLoader(settings.Manager, ARKitLoaderType, BuildTargetGroup.iOS);
+        if (!ok)
+        {
+            // Could be already assigned, or package metadata not yet loaded.
+            // Try waiting for package metadata to populate.
+            Console.WriteLine($"[CairnUnity][BuildScript] AssignLoader returned false (loader may already be assigned)");
+        }
+        else
+        {
+            Console.WriteLine($"[CairnUnity][BuildScript] ARKit loader assigned to iOS");
+        }
+
+        EditorUtility.SetDirty(settings);
+        EditorUtility.SetDirty(settings.Manager);
+        AssetDatabase.SaveAssets();
+
+        // Verify
+        bool present = false;
+        if (settings.Manager.activeLoaders != null)
+        {
+            foreach (var loader in settings.Manager.activeLoaders)
+            {
+                if (loader != null && loader.GetType().FullName == ARKitLoaderType)
+                {
+                    present = true;
+                    break;
+                }
+            }
+        }
+        Console.WriteLine($"[CairnUnity][BuildScript] ARKit loader active in XRManager: {present}");
+
+        if (!present)
+        {
+            Console.WriteLine("[CairnUnity][BuildScript][ERROR] ARKit loader could not be verified active. " +
+                              "Build would produce a non-functional xcframework — failing now.");
+            throw new System.InvalidOperationException("ARKit XR loader not active after assignment");
         }
     }
-
-    private static string[] GetScenes()
-    {
-        var scenes = new System.Collections.Generic.List<string>();
-        foreach (var s in EditorBuildSettings.scenes)
-            if (s.enabled) scenes.Add(s.path);
-        return scenes.ToArray();
-    }
 }
-
