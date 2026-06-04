@@ -42,6 +42,10 @@ post_install do |installer|
   installer.aggregate_targets.each do |aggregate_target|
     user_project = aggregate_target.user_project
     user_project.native_targets.each do |native_target|
+      # Only embed Unity into the main app target — skip test bundles,
+      # extensions, etc., to avoid duplicate-output build errors.
+      next unless native_target.product_type == 'com.apple.product-type.application'
+
       # Find Embed Frameworks build phase (or create one)
       embed_phase = native_target.build_phases.find do |phase|
         phase.respond_to?(:symbol_dst_subfolder_spec) &&

@@ -37,7 +37,8 @@
       "channel": "preview",
       "ios": {
         "simulator": false,
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "image": "macos-sequoia-15.5-xcode-26.0"
       },
       "android": {
         "buildType": "apk"
