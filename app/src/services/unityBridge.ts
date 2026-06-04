@@ -1,0 +1,128 @@
+/**
+ * Cairn RN <-> Unity bridge.
+ *
+ * Wraps @azesmway/react-native-unity's UnityView with a typed message
+ * protocol matching what Unity's CairnBridge expects.
+ *
+ * Wire diagram:
+ *   RN:  unityRef.postMessage('CairnBridge', methodName, payloadJson)
+ *        - Routes to Unity's GameObject named 'CairnBridge' via SendMessage
+ *
+ *   Unity -> RN: Unity calls UnityNativeBridge.Send("Name|jsonOrPayload")
+ *        - Lands in NativeCallProxy.mm sendMessageToMobileApp(...)
+ *        - RNUnityView fires onUnityMessage prop with { nativeEvent: { message } }
+ *
+ *   This file:
+ *     - sendToUnity(unityRef, method, data)  -- typed wrapper
+ *     - parseUnityMessage(raw)               -- discriminated union parser
+ */
+
+import type UnityView from '@azesmway/react-native-unity';
+import { crashLogger } from './crashLogger';
+
+// Unity GameObject name MUST match CairnBridge.GAMEOBJECT_NAME on the Unity side.
+const UNITY_BRIDGE_GO = 'CairnBridge';
+
+const TAG = 'unity-bridge';
+
+type UnityViewRef = React.RefObject<UnityView | null>;
+
+/**
+ * Send a structured message to Unity's CairnBridge.
+ * Method names must match the public methods on Unity's CairnBridge.cs:
+ *   - 'OnSpawnStrand'   (data: SpawnRequest)
+ *   - 'OnClearAll'      (data: anything, ignored)
+ *   - 'OnPing'          (data: token string)
+ */
+export function sendToUnity(
+  unityRef: UnityViewRef,
+  method: 'OnSpawnStrand' | 'OnClearAll' | 'OnPing',
+  data: object | string
+): void {
+  if (!unityRef.current) {
+    crashLogger.breadcrumb(`${TAG}:send:no-ref method=${method}`);
+    return;
+  }
+  const payload = typeof data === 'string' ? data : JSON.stringify(data);
+  try {
+    unityRef.current.postMessage(UNITY_BRIDGE_GO, method, payload);
+    crashLogger.breadcrumb(`${TAG}:send:${method} bytes=${payload.length}`);
+  } catch (e: any) {
+    crashLogger.breadcrumb(
+      `${TAG}:send:fail method=${method} err=${e?.message ?? 'unknown'}`
+    );
+  }
+}
+
+/**
+ * Discriminated union of messages Unity sends to RN.
+ * Format coming over the bridge:
+ *   "Name|jsonPayload"           — most messages
+ *   "UnityLog|level|line"        — log forwarding (3 segments)
+ */
+export type UnityMessage =
+  | { kind: 'ArReady';        unityVersion: string; arSession: string }
+  | { kind: 'ArFrame';        px: number; py: number; pz: number; fx: number; fy: number; fz: number }
+  | { kind: 'PlaneDetected';  x: number; y: number; z: number; area: number }
+  | { kind: 'ArSessionState'; state: string }
+  | { kind: 'Pong';           token: string; unityTime: number }
+  | { kind: 'UnityLog';       level: 'info' | 'warn' | 'error'; line: string }
+  | { kind: 'Unknown';        raw: string };
+
+export function parseUnityMessage(raw: string): UnityMessage {
+  if (!raw || typeof raw !== 'string') {
+    return { kind: 'Unknown', raw: String(raw) };
+  }
+
+  // UnityLog has 3 segments — special-cased so log lines containing '|'
+  // are preserved by joining the tail.
+  if (raw.startsWith('UnityLog|')) {
+    const parts = raw.split('|');
+    const level = (parts[1] === 'warn' || parts[1] === 'error') ? parts[1] : 'info';
+    const line  = parts.slice(2).join('|');
+    return { kind: 'UnityLog', level, line };
+  }
+
+  // Other messages: Name|json (Name has no '|' by convention)
+  const idx = raw.indexOf('|');
+  if (idx < 0) return { kind: 'Unknown', raw };
+
+  const name = raw.slice(0, idx);
+  const json = raw.slice(idx + 1);
+
+  let data: any = {};
+  try {
+    data = json ? JSON.parse(json) : {};
+  } catch {
+    return { kind: 'Unknown', raw };
+  }
+
+  switch (name) {
+    case 'ArReady':
+      return { kind: 'ArReady', unityVersion: data.unityVersion ?? '', arSession: data.arSession ?? '' };
+    case 'ArFrame':
+      return {
+        kind: 'ArFrame',
+        px: typeof data.px === 'number' ? data.px : 0,
+        py: typeof data.py === 'number' ? data.py : 0,
+        pz: typeof data.pz === 'number' ? data.pz : 0,
+        fx: typeof data.fx === 'number' ? data.fx : 0,
+        fy: typeof data.fy === 'number' ? data.fy : 1,
+        fz: typeof data.fz === 'number' ? data.fz : 0,
+      };
+    case 'PlaneDetected':
+      return {
+        kind: 'PlaneDetected',
+        x: data.x ?? 0,
+        y: data.y ?? 0,
+        z: data.z ?? 0,
+        area: data.area ?? 0,
+      };
+    case 'ArSessionState':
+      return { kind: 'ArSessionState', state: String(data.state ?? '') };
+    case 'Pong':
+      return { kind: 'Pong', token: String(data.token ?? ''), unityTime: data.unityTime ?? 0 };
+    default:
+      return { kind: 'Unknown', raw };
+  }
+}

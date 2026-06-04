@@ -29,6 +29,7 @@ import { AR3DCairnOverlay } from '../components/AR3DCairnOverlay';
 // 用户体验受损但 app 不崩, 给我们时间通过 OTA 修.
 import { ViroAROverlay } from '../components/ViroAROverlay';
 import { ViroARRitualOverlay, type ViroARRitualOverlayHandle } from '../components/ViroARRitualOverlay';
+import { UnityAROverlay } from '../components/UnityAROverlay';
 import { CairnEdgeArrows } from '../components/CairnEdgeArrows';
 import { AimShutter } from '../components/AimShutter';
 import { PlantSheet, AimReticle, type PlantType } from '../components/PlantSheet';
@@ -41,6 +42,11 @@ import { GlassPanel, Elevation } from '../components/GlassPanel';
 // 紧急情况下可通过 OTA 改回 false 跳过 Viro 路径 (ViroAROverlay 仍 import,
 // 因为 OTA 不能改 native binary; import 不调用就不触发 native).
 const USE_VIRO = true;
+
+// USE_UNITY_AR: Phase 1 Spike. When true, mount UnityAROverlay instead of
+// Viro. Default false — flip via OTA after first EAS build verified.
+// MUST NOT be true simultaneously with USE_VIRO (ARSession single-tenant).
+const USE_UNITY_AR = false;
 import { useMarkerStore, type Marker } from '../store/useMarkerStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { haversineM, type Coordinate } from '../utils/geo';
@@ -696,7 +702,19 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           />
         }
       >
-        {USE_VIRO && RITUAL_ENABLED && ritualMode ? (
+        {USE_UNITY_AR ? (
+          <UnityAROverlay
+            markers={nearbyMarkers}
+            userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng, alt: lastCoord.alt ?? null } : null}
+            userHeading={userHeading}
+            onStatus={setArStatus}
+            onArFrame={setArFrame}
+            beamingId={beamingId}
+            onCairnPress={(id) => {
+              crashLogger.breadcrumb(`unity:cairn:press id=${id.slice(-6)}`);
+            }}
+          />
+        ) : USE_VIRO && RITUAL_ENABLED && ritualMode ? (
           <ViroARRitualOverlay
             ref={ritualOverlayRef}
             markers={nearbyMarkers}
