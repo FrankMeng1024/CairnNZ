@@ -216,8 +216,13 @@ public class MultiSpawner : MonoBehaviour
         emission.rateOverTime = 20f;
 
         var shape = ps.shape;
-        shape.shapeType = ParticleSystemShapeType.Cylinder;
-        shape.scale     = new Vector3(1.5f, 1.5f, 1.5f); // wider than the pillar
+        // Cone shape pointing up — particles emit upward in a tapered column.
+        // (ParticleSystemShapeType.Cylinder doesn't exist in Unity 6; Cone is
+        // the closest visual analog for a vertical strand of rising particles.)
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle     = 5f;     // narrow cone, almost straight up
+        shape.radius    = 0.4f;   // wider than pillar (0.16 radius)
+        shape.length    = 1f;
         shape.alignToDirection = false;
 
         var velocity = ps.velocityOverLifetime;
