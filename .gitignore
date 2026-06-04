@@ -39,8 +39,8 @@ Thumbs.db
 .expo/
 dist/
 build/
-ios/
-android/
+/app/ios/
+/app/android/
 .eas/
 
 # Cache
