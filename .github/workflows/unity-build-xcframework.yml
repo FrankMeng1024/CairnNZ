@@ -118,6 +118,27 @@ jobs:
           echo "=== xcframework size ==="
           du -sh UnityFramework.xcframework.zip
 
+      - name: Verify sendMessageToMobileApp symbol exported
+        run: |
+          set -e
+          BIN="UnityFramework.xcframework/ios-arm64/UnityFramework.framework/UnityFramework"
+          if [ ! -f "$BIN" ]; then
+            echo "ERROR: Framework binary missing at $BIN"
+            exit 1
+          fi
+          echo "=== Looking for sendMessageToMobileApp in symbol table ==="
+          # nm -gU lists EXTERNAL DEFINED symbols (uppercase = exported)
+          if ! nm -gU "$BIN" 2>&1 | grep -q "_sendMessageToMobileApp"; then
+            echo "ERROR: sendMessageToMobileApp NOT exported from UnityFramework binary"
+            echo "This means Unity -> RN bridge will silently fail at runtime."
+            echo ""
+            echo "All exported C symbols (looking for context):"
+            nm -gU "$BIN" 2>&1 | head -20
+            exit 1
+          fi
+          echo "=== sendMessageToMobileApp IS exported ==="
+          nm -gU "$BIN" 2>&1 | grep "sendMessageToMobileApp"
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
