@@ -15,46 +15,44 @@
  *   multiple post_install blocks. We must inject our embed-handling Ruby
  *   code INSIDE that single block, not as a second top-level block.
  *
- *   Pattern lifted directly from viro's withViroIos.js:127 which does
- *   the same thing for ARCore weak linking. Uses the same insertLines
- *   approach as withViroPodfileFix in this repo.
- *
- * Also patches RNUnityView.mm (via withUnityPatchMM) to:
+ * Also patches RNUnityView.mm to:
  *
  *   CHANGE A — PR #174 fix (Fabric / New Architecture):
- *     Root cause: Fabric only calls updateProps when props actually change.
- *     On first render with no props, updateProps is never dispatched and
+ *     Fabric only calls updateProps when props actually change. On first
+ *     render with no props, updateProps is never dispatched and
  *     initUnityModule is never called → Unity permanently silent.
- *     Original library: initWithFrame: (New Arch branch) does NOT call
- *     initUnityModule — only the Old Arch initWithFrame: does.
  *     Fix: call initUnityModule from initWithFrame: in the
- *     RCT_NEW_ARCH_ENABLED branch, guarded by unityIsInitialized.
- *     This is the correct fix location per PR #174 root-cause analysis —
- *     layoutSubviews would re-enter during runEmbeddedWithArgc: while
- *     appController is not yet set (unityIsInitialized returns false
- *     mid-init), causing double runEmbeddedWithArgc: → crash.
+ *     RCT_NEW_ARCH_ENABLED branch. initWithFrame: fires exactly once
+ *     before any layout pass — the correct guaranteed init point.
+ *     (layoutSubviews would re-enter during runEmbeddedWithArgc: bootstrap
+ *     while appController is not yet set → double init → crash.)
  *
  *   CHANGE B — NSLog diagnostics in UnityFrameworkLoad():
- *     Replaces [bundle load] with [bundle loadAndReturnError:] and logs
- *     the NSError. Returns nil immediately on load failure. Adds
- *     step-by-step NSLog at each nil-risk point (bundlePath, bundle,
- *     principalClass, ufw).
+ *     Replaces [bundle load] with [bundle loadAndReturnError:], returns nil
+ *     immediately on failure. Full CAIRN_LOG at each nil-risk step.
  *
  *   CHANGE C — nil guard in initUnityModule (PR #183 pattern):
- *     Logs entry and early-returns if UnityFrameworkLoad() returns nil,
- *     instead of silently no-oping through all [ufw ...] calls.
+ *     Logs entry; returns early if UnityFrameworkLoad() returns nil.
  *
- *   CHANGE D — exception catch with full stack trace:
- *     Replaces bare NSLog(@"%@", e) with name + reason + callStackSymbols.
+ *   CHANGE D — exception catch with full stack trace.
  *
- *   CHANGE E — remove setWindowScene:nil + makeKeyAndVisible (iOS 26):
- *     On iOS 26 with mandatory UISceneDelegate lifecycle, setting the
- *     Unity window's scene to nil detaches it from any display → Unity
- *     initialises (ufw non-nil, appController non-nil) but renders
- *     nothing. makeKeyAndVisible promotes Unity's window above the RN
- *     window and breaks all touch handling.
- *     Fix: remove both calls; add Unity's rootView directly to self
- *     (the RNUnityView) which is already correctly positioned by RN.
+ *   CHANGE E — remove setWindowScene:nil + makeKeyAndVisible (iOS 26 fix):
+ *     setWindowScene:nil detaches Unity window from display on iOS 26
+ *     mandatory-scene lifecycle → renders nothing. makeKeyAndVisible
+ *     promotes Unity UIWindow above RN window → breaks touch handling.
+ *     Fix: add rootView directly to self (RNUnityView).
+ *
+ *   CHANGE F — NSLog → RN bridge (remote diagnostics):
+ *     Injects a CAIRN_LOG macro at the top of RNUnityView.mm that both
+ *     writes to NSLog (Xcode Console) AND forwards the message to JS via
+ *     sendMessageToMobileApp: as a "NativeLog|INFO|..." string. This lands
+ *     in onUnityMessage → parseUnityMessage (kind:'UnityLog') →
+ *     crashLogger.breadcrumb → uploadDiagnostic → visible on the backend
+ *     without needing Xcode connected.
+ *     Uses a file-scope static pointer (cairnLogBridge) set in initWithFrame:
+ *     so that UnityFrameworkLoad() (a free function, no self) can also send
+ *     logs to JS.
+ *     No Unity build required — sendMessageToMobileApp: is pure ObjC/RN.
  */
 
 const { withDangerousMod } = require('@expo/config-plugins');
@@ -63,9 +61,7 @@ const path = require('path');
 
 const HOOK_MARKER = '# CAIRN_UNITY_EMBED_HOOK_V2';
 
-// Ruby code injected INSIDE the existing `post_install do |installer|` block,
-// immediately after the `post_install do |installer|` anchor line. The block's
-// own `end` is preserved (we don't add our own `end`).
+// Ruby code injected INSIDE the existing `post_install do |installer|` block.
 const HOOK_BODY = `    ${HOOK_MARKER}
     # Embed UnityFramework.framework into the app target's Frameworks build
     # phase with CodeSignOnCopy attribute. azesmway/react-native-unity vendors
@@ -125,10 +121,6 @@ const HOOK_BODY = `    ${HOOK_MARKER}
     end
 `;
 
-/**
- * Insert helper — modeled after viro's insertLinesHelper.
- * Finds the line containing `target` and inserts `insert` after it (offset=1).
- */
 function insertAfterAnchor(insert, target, contents) {
   if (contents.includes(insert)) return contents;
   const lines = contents.split('\n');
@@ -142,47 +134,56 @@ function insertAfterAnchor(insert, target, contents) {
 }
 
 // ---------------------------------------------------------------------------
-// RNUnityView.mm patch — applied at prebuild time
+// RNUnityView.mm patch — six changes, marker-guarded, idempotent
 // ---------------------------------------------------------------------------
-//
-// Five changes in one pass (marker-guarded, idempotent):
-//
-//  CHANGE A — PR #174 fix: call initUnityModule from initWithFrame: (Fabric branch).
-//    Root cause: Fabric's updateProps is only dispatched when props actually change.
-//    On first render with no prop changes, updateProps never fires, initUnityModule
-//    is never called, Unity is permanently silent.
-//    The correct fix location is initWithFrame: in the #ifdef RCT_NEW_ARCH_ENABLED
-//    block, NOT layoutSubviews. layoutSubviews fires repeatedly during layout and
-//    during runEmbeddedWithArgc: bootstrap; at that point unityIsInitialized() is
-//    false (ufw set but appController not yet set), so a layoutSubviews guard would
-//    call initUnityModule again → double runEmbeddedWithArgc: → crash.
-//    initWithFrame: fires exactly once, before any layout pass.
-//
-//  CHANGE B — NSLog diagnostics in UnityFrameworkLoad().
-//    Replaces [bundle load] with [bundle loadAndReturnError:] and logs the
-//    NSError. Returns nil immediately on load failure (previous code fell through
-//    to principalClass lookup). Adds step-by-step NSLog at each nil-risk point.
-//
-//  CHANGE C — nil guard in initUnityModule (PR #183 pattern).
-//    Logs entry; returns early if UnityFrameworkLoad() returns nil instead of
-//    silently no-oping through all subsequent [ufw ...] calls.
-//
-//  CHANGE D — catch block: richer stack trace.
-//
-//  CHANGE E — remove setWindowScene:nil + makeKeyAndVisible (iOS 26 fix).
-//    On iOS 26 with mandatory UISceneDelegate lifecycle, setWindowScene:nil
-//    detaches Unity's window from the active scene → renders nothing.
-//    makeKeyAndVisible promotes Unity's UIWindow above the RN window → breaks
-//    all RN touch handling.
-//    Replacement: add Unity's rootView as a subview of self (the RNUnityView),
-//    which is already correctly positioned by React Native's layout system.
 
-const MM_PATCH_MARKER = '// CAIRN_UNITY_MM_PATCH_V2';
+const MM_PATCH_MARKER = '// CAIRN_UNITY_MM_PATCH_V3';
 
 // ---------------------------------------------------------------------------
-// CHANGE A: initWithFrame: (New Arch branch) — add initUnityModule call.
+// CHANGE F: NSLog → RN bridge.
+//
+// Strategy: inject a CAIRN_LOG(fmt, ...) macro right after the #import block
+// at the top of the file. The macro:
+//   1. Calls NSLog so Xcode Console still shows the line.
+//   2. Calls cairnSendLog(formattedString) which checks a file-scope pointer
+//      cairnLogBridge (set in initWithFrame:) and calls sendMessageToMobileApp:
+//      with format "NativeLog|INFO|<message>". This lands in onUnityMessage
+//      on the JS side → parseUnityMessage → kind:'UnityLog' → breadcrumb.
+//
+// cairnLogBridge is __weak to avoid retain cycles (RNUnityView owns nothing
+// extra; if it deallocates the pointer goes nil automatically).
+//
+// The anchor for injection is the line:  NSString *bundlePathStr = ...
+// We insert the macro block immediately before that line.
 // ---------------------------------------------------------------------------
-// The original New Arch initWithFrame: never calls initUnityModule:
+
+const BUNDLE_PATH_STR_LINE = 'NSString *bundlePathStr = @"/Frameworks/UnityFramework.framework";';
+
+const CAIRN_LOG_MACRO_BLOCK = `// CAIRN CHANGE F: NSLog → RN bridge (remote diagnostics without Xcode).
+// cairnLogBridge holds a weak ref to the RNUnityView instance so that
+// UnityFrameworkLoad() (a free C function, no self) can also forward logs
+// to JS. Set in initWithFrame: before calling initUnityModule.
+static __weak RNUnityView *cairnLogBridge = nil;
+
+static void cairnSendLog(NSString *msg) {
+    RNUnityView *bridge = cairnLogBridge;
+    if (bridge) {
+        NSString *payload = [@"NativeLog|INFO|" stringByAppendingString:msg];
+        [bridge sendMessageToMobileApp:payload];
+    }
+}
+
+#define CAIRN_LOG(fmt, ...) do { \\
+    NSString *_cairnMsg = [NSString stringWithFormat:fmt, ##__VA_ARGS__]; \\
+    NSLog(@"%@", _cairnMsg); \\
+    cairnSendLog(_cairnMsg); \\
+} while(0)
+
+${BUNDLE_PATH_STR_LINE}`;
+
+// ---------------------------------------------------------------------------
+// CHANGE A: initWithFrame: (New Arch branch) — PR #174 fix + set cairnLogBridge.
+// ---------------------------------------------------------------------------
 const INIT_WITH_FRAME_NEW_ARCH_ORIGINAL = `- (instancetype)initWithFrame:(CGRect)frame {
   if (self = [super initWithFrame:frame]) {
     static const auto defaultProps = std::make_shared<const RNUnityViewProps>();
@@ -202,8 +203,6 @@ const INIT_WITH_FRAME_NEW_ARCH_ORIGINAL = `- (instancetype)initWithFrame:(CGRect
   return self;
 }`;
 
-// Patched: calls initUnityModule immediately after super init + props setup.
-// Guard is unityIsInitialized for safety (though at this point it's always false).
 const INIT_WITH_FRAME_NEW_ARCH_PATCHED = `${MM_PATCH_MARKER}
 - (instancetype)initWithFrame:(CGRect)frame {
   if (self = [super initWithFrame:frame]) {
@@ -220,12 +219,16 @@ const INIT_WITH_FRAME_NEW_ARCH_PATCHED = `${MM_PATCH_MARKER}
       }
     };
 
-    // PR #174: Fabric (New Architecture) does not reliably call updateProps
-    // on first render when no props change. Call initUnityModule here —
-    // initWithFrame: fires exactly once, before any layout pass, making it
-    // the correct guaranteed init point. layoutSubviews would re-enter during
-    // runEmbeddedWithArgc: bootstrap and cause a double-init crash.
-    NSLog(@"[CAIRN-UFW] initWithFrame: calling initUnityModule (Fabric PR#174 fix)");
+    // CHANGE F: set bridge pointer before calling initUnityModule so that
+    // UnityFrameworkLoad() can forward NSLogs to JS from the start.
+    cairnLogBridge = self;
+
+    // CHANGE A (PR #174): Fabric does not reliably call updateProps when no
+    // props change on first render. Call initUnityModule here — initWithFrame:
+    // fires exactly once before any layout pass. layoutSubviews would re-enter
+    // during runEmbeddedWithArgc: bootstrap (appController not yet set at that
+    // point, so unityIsInitialized() returns false → double init → crash).
+    CAIRN_LOG(@"[CAIRN-UFW] initWithFrame: calling initUnityModule (Fabric PR#174 fix)");
     if (![self unityIsInitialized]) {
       [self initUnityModule];
     }
@@ -235,7 +238,7 @@ const INIT_WITH_FRAME_NEW_ARCH_PATCHED = `${MM_PATCH_MARKER}
 }`;
 
 // ---------------------------------------------------------------------------
-// CHANGE B: UnityFrameworkLoad() — NSLog diagnostics + return nil on failure.
+// CHANGE B: UnityFrameworkLoad() — full CAIRN_LOG diagnostics + return nil on failure.
 // ---------------------------------------------------------------------------
 const UFW_LOAD_ORIGINAL = `UnityFramework* UnityFrameworkLoad() {
     NSString* bundlePath = nil;
@@ -264,13 +267,13 @@ const UFW_LOAD_PATCHED = `UnityFramework* UnityFrameworkLoad() {
     NSString* bundlePath = nil;
     bundlePath = [[NSBundle mainBundle] bundlePath];
     bundlePath = [bundlePath stringByAppendingString: bundlePathStr];
-    NSLog(@"[CAIRN-UFW] step1 bundlePath=%@", bundlePath ?: @"<nil>");
+    CAIRN_LOG(@"[CAIRN-UFW] step1 bundlePath=%@", bundlePath ?: @"<nil>");
 
     NSBundle* bundle = [NSBundle bundleWithPath: bundlePath];
-    NSLog(@"[CAIRN-UFW] step2 bundle=%@ isLoaded=%d", bundle ? @"non-nil" : @"<nil>", bundle ? (int)[bundle isLoaded] : -1);
+    CAIRN_LOG(@"[CAIRN-UFW] step2 bundle=%@ isLoaded=%d", bundle ? @"non-nil" : @"<nil>", bundle ? (int)[bundle isLoaded] : -1);
 
     if (bundle == nil) {
-        NSLog(@"[CAIRN-UFW] FATAL: [NSBundle bundleWithPath:] returned nil — framework not embedded or path wrong");
+        CAIRN_LOG(@"[CAIRN-UFW] FATAL: [NSBundle bundleWithPath:] returned nil — framework not embedded or path wrong");
         return nil;
     }
 
@@ -278,7 +281,7 @@ const UFW_LOAD_PATCHED = `UnityFramework* UnityFrameworkLoad() {
         NSError* loadErr = nil;
         BOOL ok = [bundle loadAndReturnError:&loadErr];
         if (!ok || loadErr) {
-            NSLog(@"[CAIRN-UFW] step3 LOAD FAILED ok=%d domain=%@ code=%ld desc=%@ reason=%@ underlying=%@",
+            CAIRN_LOG(@"[CAIRN-UFW] step3 LOAD FAILED ok=%d domain=%@ code=%ld desc=%@ reason=%@ underlying=%@",
                   ok,
                   loadErr.domain ?: @"<nil>",
                   (long)loadErr.code,
@@ -287,23 +290,23 @@ const UFW_LOAD_PATCHED = `UnityFramework* UnityFrameworkLoad() {
                   [loadErr.userInfo[NSUnderlyingErrorKey] description] ?: @"<nil>");
             return nil;
         } else {
-            NSLog(@"[CAIRN-UFW] step3 load OK");
+            CAIRN_LOG(@"[CAIRN-UFW] step3 load OK");
         }
     } else {
-        NSLog(@"[CAIRN-UFW] step3 already loaded");
+        CAIRN_LOG(@"[CAIRN-UFW] step3 already loaded");
     }
 
     Class pc = bundle.principalClass;
-    NSLog(@"[CAIRN-UFW] step4 principalClass=%@", pc ? NSStringFromClass(pc) : @"<nil>");
+    CAIRN_LOG(@"[CAIRN-UFW] step4 principalClass=%@", pc ? NSStringFromClass(pc) : @"<nil>");
     if (pc == nil) {
-        NSLog(@"[CAIRN-UFW] FATAL: principalClass nil — NSPrincipalClass missing in Info.plist or class not found");
+        CAIRN_LOG(@"[CAIRN-UFW] FATAL: principalClass nil — NSPrincipalClass missing in Info.plist or class not found");
         return nil;
     }
 
     UnityFramework* ufw = [pc getInstance];
-    NSLog(@"[CAIRN-UFW] step5 ufw=%p appController=%p", ufw, [ufw appController]);
+    CAIRN_LOG(@"[CAIRN-UFW] step5 ufw=%p appController=%p", ufw, [ufw appController]);
     if (ufw == nil) {
-        NSLog(@"[CAIRN-UFW] FATAL: [principalClass getInstance] returned nil");
+        CAIRN_LOG(@"[CAIRN-UFW] FATAL: [principalClass getInstance] returned nil");
         return nil;
     }
 
@@ -317,13 +320,13 @@ const UFW_LOAD_PATCHED = `UnityFramework* UnityFrameworkLoad() {
     }
 
     [ufw setDataBundleId: [bundle.bundleIdentifier cStringUsingEncoding:NSUTF8StringEncoding]];
-    NSLog(@"[CAIRN-UFW] step6 returning ufw=%p bundleId=%@", ufw, [bundle bundleIdentifier] ?: @"<nil>");
+    CAIRN_LOG(@"[CAIRN-UFW] step6 returning ufw=%p bundleId=%@", ufw, [bundle bundleIdentifier] ?: @"<nil>");
 
     return ufw;
 }`;
 
 // ---------------------------------------------------------------------------
-// CHANGE C: initUnityModule entry — nil guard + entry log.
+// CHANGE C: initUnityModule entry — nil guard + CAIRN_LOG.
 // ---------------------------------------------------------------------------
 const INIT_UNITY_ENTRY_ORIGINAL = `- (void)initUnityModule {
     @try {
@@ -334,36 +337,35 @@ const INIT_UNITY_ENTRY_ORIGINAL = `- (void)initUnityModule {
         [self setUfw: UnityFrameworkLoad()];`;
 
 const INIT_UNITY_ENTRY_PATCHED = `- (void)initUnityModule {
-    NSLog(@"[CAIRN-UFW] initUnityModule entered alreadyInit=%d", (int)[self unityIsInitialized]);
+    CAIRN_LOG(@"[CAIRN-UFW] initUnityModule entered alreadyInit=%d", (int)[self unityIsInitialized]);
     @try {
         if([self unityIsInitialized]) {
-            NSLog(@"[CAIRN-UFW] initUnityModule: already initialized, returning");
+            CAIRN_LOG(@"[CAIRN-UFW] initUnityModule: already initialized, returning");
             return;
         }
 
         [self setUfw: UnityFrameworkLoad()];
-        NSLog(@"[CAIRN-UFW] initUnityModule after-load ufw=%p", [self ufw]);
+        CAIRN_LOG(@"[CAIRN-UFW] initUnityModule after-load ufw=%p", [self ufw]);
         if (![self ufw]) {
-            NSLog(@"[CAIRN-UFW] initUnityModule FATAL: UnityFrameworkLoad returned nil, aborting");
+            CAIRN_LOG(@"[CAIRN-UFW] initUnityModule FATAL: UnityFrameworkLoad returned nil, aborting");
             return;
         }`;
 
 // ---------------------------------------------------------------------------
-// CHANGE D: catch block — richer stack trace.
+// CHANGE D: catch block — richer stack trace via CAIRN_LOG.
 // ---------------------------------------------------------------------------
 const CATCH_ORIGINAL = `    @catch (NSException *e) {
         NSLog(@"%@",e);
     }`;
 
 const CATCH_PATCHED = `    @catch (NSException *e) {
-        NSLog(@"[CAIRN-UFW] initUnityModule EXCEPTION name=%@ reason=%@ stack=%@",
+        CAIRN_LOG(@"[CAIRN-UFW] initUnityModule EXCEPTION name=%@ reason=%@ stack=%@",
               e.name, e.reason, [e callStackSymbols]);
     }`;
 
 // ---------------------------------------------------------------------------
 // CHANGE E: remove setWindowScene:nil + makeKeyAndVisible (iOS 26 fix).
 // ---------------------------------------------------------------------------
-// Original block (lines 67-75 of RNUnityView.mm):
 const WINDOW_SCENE_ORIGINAL = `        if (@available(iOS 13.0, *)) {
             [[[[self ufw] appController] window] setWindowScene: nil];
         } else {
@@ -374,18 +376,19 @@ const WINDOW_SCENE_ORIGINAL = `        if (@available(iOS 13.0, *)) {
         [[[[self ufw] appController] window] makeKeyAndVisible];
         [[[[[[self ufw] appController] window] rootViewController] view] setNeedsLayout];`;
 
-// Replacement: add rootView directly to self (the RNUnityView); no window promotion.
-// On iOS 26 (and all iOS 13+), Unity's window must stay attached to its scene.
-// The rootView is the full-screen Unity GL view — adding it to self is sufficient
-// because self fills the screen via StyleSheet.absoluteFill in UnityAROverlay.tsx.
-const WINDOW_SCENE_PATCHED = `        // CAIRN iOS 26 fix: do NOT call setWindowScene:nil (detaches Unity window
-        // from display on iOS 26 mandatory-scene lifecycle → renders nothing) and
-        // do NOT call makeKeyAndVisible (promotes Unity UIWindow above RN window →
-        // breaks all touch handling). Add rootView directly to self instead —
-        // self fills the screen via StyleSheet.absoluteFill in UnityAROverlay.tsx.
-        NSLog(@"[CAIRN-UFW] initUnityModule: attaching rootView to self (iOS 26 safe)");
-        [[[[self ufw] appController] window] addSubview: self.ufw.appController.rootView];
+const WINDOW_SCENE_PATCHED = `        // CHANGE E (iOS 26 fix): do NOT call setWindowScene:nil (detaches Unity
+        // window from active scene on iOS 26 mandatory-scene lifecycle → renders
+        // nothing) and do NOT call makeKeyAndVisible (promotes Unity UIWindow above
+        // RN window → breaks all touch handling).
+        // Add rootView directly to self (RNUnityView) — self fills the screen via
+        // StyleSheet.absoluteFill in UnityAROverlay.tsx.
+        CAIRN_LOG(@"[CAIRN-UFW] initUnityModule: attaching rootView to self (iOS 26 safe)");
+        [self addSubview: self.ufw.appController.rootView];
         [[[[[[self ufw] appController] window] rootViewController] view] setNeedsLayout];`;
+
+// ---------------------------------------------------------------------------
+// Patch function
+// ---------------------------------------------------------------------------
 
 function patchRNUnityViewMM(mmPath) {
   if (!fs.existsSync(mmPath)) {
@@ -394,46 +397,52 @@ function patchRNUnityViewMM(mmPath) {
 
   let src = fs.readFileSync(mmPath, 'utf8');
 
-  // Idempotent check
+  // Idempotent: already patched with V3
   if (src.includes(MM_PATCH_MARKER)) {
-    console.log('[withUnityEmbed] RNUnityView.mm already patched (V2), skipping');
+    console.log('[withUnityEmbed] RNUnityView.mm already patched (V3), skipping');
     return;
   }
 
-  // Remove any V1 patch marker to allow re-patching (clean re-install scenario)
-  const V1_MARKER = '// CAIRN_UNITY_MM_PATCH_V1';
-  if (src.includes(V1_MARKER)) {
-    console.log('[withUnityEmbed] V1 patch marker found — treating as unpatched and applying V2 patch');
-    // V1 patch had different anchors so we can't cleanly strip; abort and surface the issue.
+  // V1 or V2 marker: source was patched in a previous install; the node_modules
+  // copy was not cleaned. Fail loudly so the developer knows to clean.
+  if (src.includes('// CAIRN_UNITY_MM_PATCH_V1') || src.includes('// CAIRN_UNITY_MM_PATCH_V2')) {
     throw new Error(
-      '[withUnityEmbed] RNUnityView.mm has a V1 patch marker but we are applying V2. ' +
-      'Run `npx expo install --fix` or reinstall @azesmway/react-native-unity to get a clean copy, then re-run prebuild.'
+      '[withUnityEmbed] RNUnityView.mm has an older patch marker (V1 or V2) but we are applying V3. ' +
+      'Delete node_modules/@azesmway/react-native-unity and run `npm ci`, then re-run prebuild.'
     );
   }
 
   let patched = src;
   const failures = [];
 
-  // CHANGE A: initWithFrame: (New Arch branch) — PR #174 fix
+  // CHANGE F: inject CAIRN_LOG macro block before bundlePathStr line
+  if (patched.includes(BUNDLE_PATH_STR_LINE)) {
+    patched = patched.replace(BUNDLE_PATH_STR_LINE, CAIRN_LOG_MACRO_BLOCK);
+    console.log('[withUnityEmbed] CHANGE F applied: CAIRN_LOG macro + NSLog→RN bridge injected');
+  } else {
+    failures.push('CHANGE F: bundlePathStr anchor not found');
+  }
+
+  // CHANGE A: initWithFrame: (New Arch branch) — PR #174 fix + cairnLogBridge
   if (patched.includes(INIT_WITH_FRAME_NEW_ARCH_ORIGINAL)) {
     patched = patched.replace(INIT_WITH_FRAME_NEW_ARCH_ORIGINAL, INIT_WITH_FRAME_NEW_ARCH_PATCHED);
-    console.log('[withUnityEmbed] CHANGE A applied: initWithFrame: PR#174 fix (Fabric init)');
+    console.log('[withUnityEmbed] CHANGE A applied: initWithFrame: PR#174 fix + cairnLogBridge set');
   } else {
     failures.push('CHANGE A: initWithFrame: (New Arch) anchor not found');
   }
 
-  // CHANGE B: UnityFrameworkLoad NSLog + loadAndReturnError + return nil
+  // CHANGE B: UnityFrameworkLoad — CAIRN_LOG + loadAndReturnError + return nil
   if (patched.includes(UFW_LOAD_ORIGINAL)) {
     patched = patched.replace(UFW_LOAD_ORIGINAL, UFW_LOAD_PATCHED);
-    console.log('[withUnityEmbed] CHANGE B applied: UnityFrameworkLoad NSLog diagnostics + return nil on failure');
+    console.log('[withUnityEmbed] CHANGE B applied: UnityFrameworkLoad CAIRN_LOG diagnostics');
   } else {
     failures.push('CHANGE B: UnityFrameworkLoad anchor not found');
   }
 
-  // CHANGE C: initUnityModule nil guard + entry log
+  // CHANGE C: initUnityModule nil guard + CAIRN_LOG
   if (patched.includes(INIT_UNITY_ENTRY_ORIGINAL)) {
     patched = patched.replace(INIT_UNITY_ENTRY_ORIGINAL, INIT_UNITY_ENTRY_PATCHED);
-    console.log('[withUnityEmbed] CHANGE C applied: initUnityModule nil guard + entry log');
+    console.log('[withUnityEmbed] CHANGE C applied: initUnityModule nil guard + CAIRN_LOG');
   } else {
     failures.push('CHANGE C: initUnityModule anchor not found');
   }
@@ -441,30 +450,29 @@ function patchRNUnityViewMM(mmPath) {
   // CHANGE D: catch block — richer stack trace
   if (patched.includes(CATCH_ORIGINAL)) {
     patched = patched.replace(CATCH_ORIGINAL, CATCH_PATCHED);
-    console.log('[withUnityEmbed] CHANGE D applied: exception catch stack trace');
+    console.log('[withUnityEmbed] CHANGE D applied: exception catch with callStackSymbols');
   } else {
     failures.push('CHANGE D: catch block anchor not found');
   }
 
-  // CHANGE E: remove setWindowScene:nil + makeKeyAndVisible (iOS 26 fix)
+  // CHANGE E: remove setWindowScene:nil + makeKeyAndVisible
   if (patched.includes(WINDOW_SCENE_ORIGINAL)) {
     patched = patched.replace(WINDOW_SCENE_ORIGINAL, WINDOW_SCENE_PATCHED);
-    console.log('[withUnityEmbed] CHANGE E applied: removed setWindowScene:nil + makeKeyAndVisible (iOS 26 fix)');
+    console.log('[withUnityEmbed] CHANGE E applied: removed setWindowScene:nil + makeKeyAndVisible');
   } else {
     failures.push('CHANGE E: setWindowScene:nil block anchor not found');
   }
 
   if (failures.length > 0) {
-    // Any anchor failure means the library source changed; the patch is unsafe to apply partially.
     throw new Error(
-      `[withUnityEmbed] CRITICAL: ${failures.length} patch anchor(s) failed to match in RNUnityView.mm.\n` +
+      `[withUnityEmbed] CRITICAL: ${failures.length} patch anchor(s) failed in RNUnityView.mm:\n` +
       failures.map(f => `  - ${f}`).join('\n') + '\n' +
-      'The @azesmway/react-native-unity source may have changed. Review and update withUnityEmbed.js.'
+      'The @azesmway/react-native-unity source may have changed. Update withUnityEmbed.js.'
     );
   }
 
   fs.writeFileSync(mmPath, patched, 'utf8');
-  console.log('[withUnityEmbed] RNUnityView.mm patched (5/5 changes applied, V2)');
+  console.log('[withUnityEmbed] RNUnityView.mm patched (6/6 changes applied, V3)');
 }
 
 module.exports = function withUnityEmbed(config) {
@@ -500,13 +508,11 @@ module.exports = function withUnityEmbed(config) {
         return config;
       }
 
-      // Idempotent: skip if already injected
       if (podfile.includes(HOOK_MARKER)) {
         console.log('[withUnityEmbed] Podfile hook already present, skipping');
         return config;
       }
 
-      // Inject INSIDE existing post_install block (after `post_install do |installer|` line)
       const updated = insertAfterAnchor(HOOK_BODY, 'post_install do |installer|', podfile);
 
       if (updated === null) {

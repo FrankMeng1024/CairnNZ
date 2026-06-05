@@ -74,9 +74,12 @@ export function parseUnityMessage(raw: string): UnityMessage {
     return { kind: 'Unknown', raw: String(raw) };
   }
 
-  // UnityLog has 3 segments — special-cased so log lines containing '|'
-  // are preserved by joining the tail.
-  if (raw.startsWith('UnityLog|')) {
+  // UnityLog / NativeLog have 3 segments — special-cased so log lines
+  // containing '|' are preserved by joining the tail.
+  // UnityLog: sent by Unity C# logger (WARN/ERROR only).
+  // NativeLog: sent by CAIRN_LOG macro in RNUnityView.mm (ObjC diagnostics).
+  // Both land as kind:'UnityLog' so UnityAROverlay handles them identically.
+  if (raw.startsWith('UnityLog|') || raw.startsWith('NativeLog|')) {
     const parts = raw.split('|');
     const level = (parts[1] === 'warn' || parts[1] === 'error') ? parts[1] : 'info';
     const line  = parts.slice(2).join('|');
