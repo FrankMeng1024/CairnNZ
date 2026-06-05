@@ -75,6 +75,7 @@ export interface Route {
   sharedBy?: string;       // friend name if received from a friend
   isActive: boolean;       // currently selected for navigation
   mutedMarkerIds: string[]; // markers along route that user chose not to broadcast
+  activityMode?: 'hiking' | 'running'; // inherited from the originating session
   // PRD3 E-019 — hero photography. Optional (v1 ships without UI to upload).
   // Stored as URL so backend can host or CDN-deliver. heroPhotoUrl is the
   // single header image; photoCredit is required when heroPhotoUrl is set

@@ -51,17 +51,16 @@ type Tab = 'routes' | 'activities' | 'flags';
 const FLAG_FILTERS: { id: MarkerType | 'all'; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'danger', label: 'Danger' },
-  { id: 'scenic', label: 'Scenic' },
-  { id: 'supply', label: 'Water' },
+  { id: 'cairn', label: 'Cairn' },
+  { id: 'water', label: 'Water' },
   { id: 'junction', label: 'Junction' },
 ];
 
-// Identical to MapScreen FLAG_TYPES
 const FLAG_TYPES: { id: MarkerType; icon: IconName; label: string; color: string; bg: string }[] = [
-  { id: 'danger',   icon: 'TriangleAlert', label: 'Danger',   color: Colors.danger,   bg: Colors.dangerBg  },
-  { id: 'scenic',   icon: 'Star',          label: 'Scenic',   color: Colors.info,     bg: Colors.infoBg    },
-  { id: 'supply',   icon: 'Droplets',      label: 'Water',    color: Colors.success,  bg: Colors.successBg },
-  { id: 'junction', icon: 'Navigation2',   label: 'Junction', color: Colors.docOrange,  bg: Colors.severityWarningBg },
+  { id: 'danger',   icon: 'TriangleAlert', label: 'Danger',   color: Colors.danger,    bg: Colors.dangerBg  },
+  { id: 'cairn',    icon: 'Mountain',      label: 'Cairn',    color: Colors.trail,     bg: 'rgba(181,130,61,0.10)' },
+  { id: 'water',    icon: 'Droplets',      label: 'Water',    color: Colors.success,   bg: Colors.successBg },
+  { id: 'junction', icon: 'Navigation2',   label: 'Junction', color: Colors.docOrange, bg: Colors.severityWarningBg },
 ];
 
 // ── Segment Control ──────────────────────────────────────────────────────────
@@ -248,6 +247,7 @@ function RouteSheet({
   const snapshot = useRef(route);
   if (route !== null) snapshot.current = route;
   const data = snapshot.current;
+  const isVisible = useRef(false);
 
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -256,12 +256,13 @@ function RouteSheet({
     Animated.parallel([
       Animated.timing(slideAnim, { toValue: 400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(opacityAnim, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-    ]).start(() => { onClose(); then?.(); });
+    ]).start(() => { isVisible.current = false; onClose(); then?.(); });
   };
 
   useEffect(() => {
     if (route !== null) {
       setDeleteConfirm(false);
+      isVisible.current = true;
       slideAnim.setValue(400);
       opacityAnim.setValue(0);
       Animated.parallel([
@@ -271,7 +272,7 @@ function RouteSheet({
     }
   }, [route?.id]);
 
-  if (route === null && opacityAnim.__getValue() === 0) return null;
+  if (route === null && !isVisible.current) return null;
   if (!data) return null;
 
   const handleDelete = () => {
@@ -360,6 +361,7 @@ function ActivitySheet({
   const snapshot = useRef(session);
   if (session !== null) snapshot.current = session;
   const data = snapshot.current;
+  const isVisible = useRef(false);
 
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -368,12 +370,13 @@ function ActivitySheet({
     Animated.parallel([
       Animated.timing(slideAnim, { toValue: 400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(opacityAnim, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-    ]).start(() => { onClose(); then?.(); });
+    ]).start(() => { isVisible.current = false; onClose(); then?.(); });
   };
 
   useEffect(() => {
     if (session !== null) {
       setDeleteConfirm(false);
+      isVisible.current = true;
       slideAnim.setValue(400);
       opacityAnim.setValue(0);
       Animated.parallel([
@@ -383,7 +386,7 @@ function ActivitySheet({
     }
   }, [session?.id]);
 
-  if (session === null && opacityAnim.__getValue() === 0) return null;
+  if (session === null && !isVisible.current) return null;
   if (!data) return null;
 
   const isRun = data.activityMode === 'running';
@@ -661,12 +664,13 @@ function FlagEditSheet({
   const snapshot = useRef(marker);
   if (marker !== null) snapshot.current = marker;
   const data = snapshot.current;
+  const isVisible = useRef(false);
 
   const dismiss = (then?: () => void) => {
     Animated.parallel([
       Animated.timing(slideAnim, { toValue: 400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(opacityAnim, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-    ]).start(() => { onClose(); then?.(); });
+    ]).start(() => { isVisible.current = false; onClose(); then?.(); });
   };
 
   useEffect(() => {
@@ -679,6 +683,7 @@ function FlagEditSheet({
 
   useEffect(() => {
     if (marker !== null) {
+      isVisible.current = true;
       slideAnim.setValue(400);
       opacityAnim.setValue(0);
       Animated.parallel([
@@ -688,7 +693,7 @@ function FlagEditSheet({
     }
   }, [marker?.id]);
 
-  if (marker === null && opacityAnim.__getValue() === 0) return null;
+  if (marker === null && !isVisible.current) return null;
   if (!data) return null;
 
   const permIconNames: Record<MarkerPermission, IconName> = { personal: 'Lock', group: 'Users', public: 'Globe' };

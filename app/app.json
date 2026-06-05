@@ -99,7 +99,8 @@
         }
       ],
       "./plugins/withViroPodfileFix",
-      "./plugins/withUnityEmbed"
+      "./plugins/withUnityEmbed",
+      "expo-localization"
     ],
     "extra": {
       "eas": {

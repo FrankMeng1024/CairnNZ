@@ -40,6 +40,8 @@ import {
   Mic,
   // v119 — hut marker (PlantSheet uses 'House' as the label)
   House,
+  // sort icon used in filter bars
+  ArrowUpDown,
 } from 'lucide-react-native';
 import { IconSize } from './tokens';
 
@@ -64,6 +66,7 @@ const ICON_MAP = {
   Milestone, Calendar,
   Mic,
   House,
+  ArrowUpDown,
 } as const;
 
 export type IconName = keyof typeof ICON_MAP;

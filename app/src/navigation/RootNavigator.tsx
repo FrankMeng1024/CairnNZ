@@ -51,7 +51,6 @@ export function RootNavigator() {
           animationDuration: 320,
           gestureEnabled: true,
           gestureDirection: 'horizontal',
-          customAnimationOnGesture: true,
         }}
       >
         {isLoggedIn ? (
