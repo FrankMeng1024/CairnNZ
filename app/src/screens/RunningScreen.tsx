@@ -331,7 +331,7 @@ export function RunningScreen() {
     const region = getCurrentRegion();
     try {
       const marker = await addMarker({
-        type: 'scenic',
+        type: 'cairn',
         regionCode: region.code,
         lat: lastCoordinate.lat,
         lng: lastCoordinate.lng,

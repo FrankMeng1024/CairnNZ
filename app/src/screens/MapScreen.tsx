@@ -61,8 +61,8 @@ const FLAG_TYPES: {
   bg: string;
 }[] = [
   { id: 'danger',   icon: 'TriangleAlert', label: 'Danger',   color: Colors.danger,   bg: Colors.dangerBg  },
-  { id: 'scenic',   icon: 'Star',          label: 'Scenic',   color: Colors.info,     bg: Colors.infoBg    },
-  { id: 'supply',   icon: 'Droplets',      label: 'Water',    color: Colors.success,  bg: Colors.successBg },
+  { id: 'cairn',    icon: 'Mountain',      label: 'Cairn',    color: Colors.info,     bg: Colors.infoBg    },
+  { id: 'water',    icon: 'Droplets',      label: 'Water',    color: Colors.success,  bg: Colors.successBg },
   { id: 'junction', icon: 'Navigation2',   label: 'Junction', color: Colors.docOrange,  bg: Colors.severityWarningBg },
 ];
 
@@ -596,7 +596,7 @@ function MarkerDetailSheet({
             style={styles.detailDeleteBtn}
             onPress={() => {
               if (marker && onDelete) {
-                Alert.alert('Delete Flag', `Delete "${marker.label}"? This cannot be undone.`, [
+                Alert.alert('Delete Flag', `Delete "${marker.note || MARKER_META[marker.type as keyof typeof MARKER_META]?.label || 'this marker'}"? This cannot be undone.`, [
                   { text: 'Cancel', style: 'cancel' },
                   { text: 'Delete', style: 'destructive', onPress: () => { onDelete(marker.id); handleClose(); } },
                 ]);

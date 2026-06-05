@@ -22,9 +22,11 @@ try {
   // Not available — use fallback
 }
 
+import { MarkerType } from '../config/markerTypes';
+
 export interface PanelMarkerItem {
   id: string;
-  type: 'danger' | 'scenic' | 'supply' | 'junction' | 'free';
+  type: MarkerType;
   title: string;
   distance: string; // e.g. "120m"
   timeAgo: string;  // e.g. "2h ago"

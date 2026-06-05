@@ -108,8 +108,3 @@ export function getMarkerMeta(type: MarkerType | undefined | null): MarkerTypeMe
   if (!type) return null;
   return MARKER_TYPES[type] ?? null;
 }
-
-export function getMarkerMeta(type: MarkerType | undefined | null): MarkerTypeMeta | null {
-  if (!type) return null;
-  return MARKER_TYPES[type] ?? null;
-}

@@ -145,15 +145,6 @@ export function OtaBadge({ inline = false, idleHidden = false }: Props) {
           if (!cancelled) setState('idle');
           return;
         }
-        // Fast path — if a previous launch already downloaded an update
-        // and the user closed the app before tapping Restart, the bundle
-        // is already on disk. Reload immediately on this launch so the
-        // new code is live without making the user wait for another
-        // check + download cycle.
-        if (Updates.isUpdatePending) {
-          await Updates.reloadAsync();
-          return;
-        }
         // v89+1: check phase 错误分类重试. 只对 timeout 重试 1 次.
         const checkOnce = () => withTimeout(Updates.checkForUpdateAsync(), 30000);
         let result;
