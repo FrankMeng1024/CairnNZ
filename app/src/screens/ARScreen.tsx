@@ -41,12 +41,15 @@ import { GlassPanel, Elevation } from '../components/GlassPanel';
 // ErrorBoundary 兜底 → 如崩则自动切到 AR3DCairnOverlay (r3f).
 // 紧急情况下可通过 OTA 改回 false 跳过 Viro 路径 (ViroAROverlay 仍 import,
 // 因为 OTA 不能改 native binary; import 不调用就不触发 native).
-const USE_VIRO = true;
+// USE_VIRO: disabled while Unity AR is under test. Re-enable by setting
+// USE_UNITY_AR=false and USE_VIRO=true (they are mutually exclusive —
+// ARSession is single-tenant).
+const USE_VIRO = false;
 
-// USE_UNITY_AR: Phase 1 Spike. When true, mount UnityAROverlay instead of
-// Viro. Default false — flip via OTA after first EAS build verified.
-// MUST NOT be true simultaneously with USE_VIRO (ARSession single-tenant).
-const USE_UNITY_AR = false;
+// USE_UNITY_AR: enabled for Unity AR Phase 1 testing via OTA.
+// ErrorBoundary fallback intentionally removed — let crashes surface raw
+// so breadcrumb logs + debug snapshots can be analysed.
+const USE_UNITY_AR = true;
 import { useMarkerStore, type Marker } from '../store/useMarkerStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { haversineM, type Coordinate } from '../utils/geo';
@@ -687,34 +690,22 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           r3f fallback: GPS-only projection, drifts with GPS noise but
           still functional. Triggered automatically by ErrorBoundary if
           ViroAROverlay throws (e.g. on devices missing ARKit support). */}
-      <ErrorBoundary
-        key={arRetryKey}
-        tag="ARKitOverlay"
-        fallback={
-          <AR3DCairnOverlay
-            markers={nearbyMarkers}
-            userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng } : null}
-            userHeading={userHeading}
-            onStatus={setArStatus}
-            onCairnPress={(id) => {
-              crashLogger.breadcrumb(`ar3d:cairn:press id=${id.slice(-6)} (viro-fallback)`);
-            }}
-          />
-        }
-      >
-        {USE_UNITY_AR ? (
-          <UnityAROverlay
-            markers={nearbyMarkers}
-            userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng, alt: lastCoord.alt ?? null } : null}
-            userHeading={userHeading}
-            onStatus={setArStatus}
-            onArFrame={setArFrame}
-            beamingId={beamingId}
-            onCairnPress={(id) => {
-              crashLogger.breadcrumb(`unity:cairn:press id=${id.slice(-6)}`);
-            }}
-          />
-        ) : USE_VIRO && RITUAL_ENABLED && ritualMode ? (
+      {/* AR overlay — Unity primary path (USE_UNITY_AR=true).
+          No ErrorBoundary fallback intentionally: crashes surface raw
+          so breadcrumb logs + debug snapshots can be analysed. */}
+      {USE_UNITY_AR ? (
+        <UnityAROverlay
+          markers={nearbyMarkers}
+          userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng, alt: lastCoord.alt ?? null } : null}
+          userHeading={userHeading}
+          onStatus={setArStatus}
+          onArFrame={setArFrame}
+          beamingId={beamingId}
+          onCairnPress={(id) => {
+            crashLogger.breadcrumb(`unity:cairn:press id=${id.slice(-6)}`);
+          }}
+        />
+      ) : USE_VIRO && RITUAL_ENABLED && ritualMode ? (
           <ViroARRitualOverlay
             ref={ritualOverlayRef}
             markers={nearbyMarkers}
@@ -749,7 +740,7 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
             }}
           />
         )}
-      </ErrorBoundary>
+
 
       {/* v24 on-screen diagnostic — GL ready, cairn count, recent breadcrumbs */}
       <ARDebugOverlay
