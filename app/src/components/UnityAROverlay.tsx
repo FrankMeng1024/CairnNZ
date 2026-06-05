@@ -17,10 +17,11 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Platform } from 'react-native';
 import UnityView from '@azesmway/react-native-unity';
 import { sendToUnity, parseUnityMessage } from '../services/unityBridge';
 import { crashLogger } from '../services/crashLogger';
+import { API_BASE_URL } from '../config/api';
 
 const TAG = 'unity-overlay';
 
@@ -71,9 +72,29 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
 
   // Mount lifecycle
   useEffect(() => {
-    crashLogger.breadcrumb(`${TAG}:mount markers=${props.markers.length}`);
+    const mountTs = Date.now();
+    crashLogger.breadcrumb(`${TAG}:mount markers=${props.markers.length} platform=${Platform.OS} osVersion=${Platform.Version}`);
+
+    // Auto-upload diagnostics at 5s if still not ready (Unity silent)
+    const t5 = setTimeout(() => {
+      if (!arReadyRef.current) {
+        crashLogger.breadcrumb(`${TAG}:diag:5s-no-ArReady — uploading`);
+        crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-5s-silent').catch(() => undefined);
+      }
+    }, 5_000);
+
+    // Auto-upload diagnostics at 15s if still not ready
+    const t15 = setTimeout(() => {
+      if (!arReadyRef.current) {
+        crashLogger.breadcrumb(`${TAG}:diag:15s-no-ArReady elapsed=${Date.now() - mountTs}ms`);
+        crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-15s-silent').catch(() => undefined);
+      }
+    }, 15_000);
+
     return () => {
-      crashLogger.breadcrumb(`${TAG}:unmount`);
+      clearTimeout(t5);
+      clearTimeout(t15);
+      crashLogger.breadcrumb(`${TAG}:unmount glReady=${arReadyRef.current}`);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -89,6 +110,27 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
       }
     }, 10_000);
     return () => clearInterval(id);
+  }, []);
+
+  // Ping Unity at 3s to check if message channel is alive.
+  // If Unity is running and the bridge is wired, we'll get a Pong back.
+  // If no Pong arrives, bridge is broken (Unity not started or symbol missing).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const token = `ping-${Date.now()}`;
+      crashLogger.breadcrumb(`${TAG}:diag:sending-ping token=${token}`);
+      if (unityRef.current) {
+        try {
+          unityRef.current.postMessage('CairnBridge', 'OnPing', token);
+          crashLogger.breadcrumb(`${TAG}:diag:ping-sent`);
+        } catch (e: any) {
+          crashLogger.breadcrumb(`${TAG}:diag:ping-error ${String(e?.message ?? e).slice(0, 80)}`);
+        }
+      } else {
+        crashLogger.breadcrumb(`${TAG}:diag:ping-skipped unityRef=null`);
+      }
+    }, 3_000);
+    return () => clearTimeout(t);
   }, []);
 
   // Handle Unity -> RN messages
@@ -109,6 +151,7 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
           crashLogger.breadcrumb(
             `${TAG}:recv:ArReady unityVer=${msg.unityVersion} session=${msg.arSession}`
           );
+          crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-ar-ready').catch(() => undefined);
           props.onStatus?.({ glReady: true, cairnCount: props.markers.length });
           break;
 
@@ -156,7 +199,14 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
   );
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents="none"
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        crashLogger.breadcrumb(`${TAG}:view-layout w=${Math.round(width)} h=${Math.round(height)}`);
+      }}
+    >
       <UnityView
         ref={unityRef}
         style={StyleSheet.absoluteFill}

@@ -32,8 +32,8 @@ export function ARDebugOverlay({ cairnCount, glReady, userPos, userHeading }: Pr
       const recent = crashLogger.getRecent();
       // Filter to AR-related events only and keep last 6
       const filtered = recent
-        .filter((l) => /ar3d:|ar:plant:|errorBoundary:/.test(l))
-        .slice(-6)
+        .filter((l) => /ar3d:|ar:plant:|errorBoundary:|unity-overlay:|unity-native:|unity-debug:/.test(l))
+        .slice(-8)
         .map((l) => {
           // Strip ISO timestamp prefix for compactness
           const m = l.match(/^[\d-]+T[\d:.]+Z\s+(.+)$/);

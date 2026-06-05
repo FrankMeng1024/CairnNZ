@@ -868,8 +868,8 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
             {ritualMode ? '◉ Ritual' : '○ Sphere'}
           </Text>
         </TouchableOpacity>}
-        {/* Debug snapshot button — only shows when ritualMode is on. */}
-        {RITUAL_ENABLED && ritualMode && (
+        {/* Debug snapshot button — shows in ritualMode (Viro) OR Unity AR mode */}
+        {(RITUAL_ENABLED && ritualMode) || USE_UNITY_AR ? (
           <TouchableOpacity
             style={[
               styles.debugSnapBtn,
@@ -882,28 +882,31 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
               setSnapState('busy');
               setSnapMsg('');
               try {
-                const t0 = Date.now();
-                const res = await ritualOverlayRef.current?.takeDebugSnapshot();
-                const dur = Date.now() - t0;
-                // ALWAYS alert with raw result so we can see what's actually
-                // happening regardless of the success path. v139 testing
-                // showed user got '✓ uploaded' instantly even when snapshot
-                // never reached telemetry — the alert here will reveal
-                // whether res.success is mistakenly true or whether the
-                // success branch is somehow being taken with no payload.
-                Alert.alert(
-                  res?.success ? 'Snapshot OK' : 'Snapshot FAIL',
-                  `success=${res?.success}\nerror=${res?.error ?? 'none'}\nelapsed=${dur}ms`,
-                );
-                if (res?.success) {
+                if (USE_UNITY_AR) {
+                  // Unity AR mode: upload full breadcrumb log directly
+                  crashLogger.breadcrumb(`unity-debug:manual-snap glReady=${arStatus.glReady}`);
+                  const sessionId = await crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-manual-snap');
                   setSnapState('done');
-                  setSnapMsg('uploaded');
+                  setSnapMsg(sessionId.slice(-12));
                 } else {
-                  setSnapState('err');
-                  setSnapMsg(res?.error ?? 'unknown');
+                  // Ritual (Viro) mode: take visual snapshot
+                  const t0 = Date.now();
+                  const res = await ritualOverlayRef.current?.takeDebugSnapshot();
+                  const dur = Date.now() - t0;
+                  Alert.alert(
+                    res?.success ? 'Snapshot OK' : 'Snapshot FAIL',
+                    `success=${res?.success}\nerror=${res?.error ?? 'none'}\nelapsed=${dur}ms`,
+                  );
+                  if (res?.success) {
+                    setSnapState('done');
+                    setSnapMsg('uploaded');
+                  } else {
+                    setSnapState('err');
+                    setSnapMsg(res?.error ?? 'unknown');
+                  }
                 }
               } catch (e: any) {
-                Alert.alert('Snapshot CRASH', String(e?.message ?? e));
+                if (!USE_UNITY_AR) Alert.alert('Snapshot CRASH', String(e?.message ?? e));
                 setSnapState('err');
                 setSnapMsg(e?.message ?? 'crash');
               }
@@ -919,7 +922,7 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
               </Text>
             )}
           </TouchableOpacity>
-        )}
+        ) : null}
         {/* Persistent message strip below the buttons so user can read
             success/error without losing focus on AR view */}
         {snapState !== 'idle' && (
