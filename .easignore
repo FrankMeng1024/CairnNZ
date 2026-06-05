@@ -1,0 +1,19 @@
+# Root-level .easignore — excludes files outside app/ that EAS picks up
+# because EAS archives the entire git repo root, not just app/
+
+# Unity build cache (1.7GB) — never needed by EAS
+UnityARLib/Library/
+UnityARLib/Temp/
+UnityARLib/Obj/
+UnityARLib/Build/
+UnityARLib/Builds/
+UnityARLib/Logs/
+UnityARLib/MemoryCaptures/
+UnityARLib/Recordings/
+
+# Other non-app directories
+sandbox/
+research/
+debug-snapshots/
+.playwright-mcp/
+unity_setup/
