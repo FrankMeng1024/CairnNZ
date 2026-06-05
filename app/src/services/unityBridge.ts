@@ -67,6 +67,7 @@ export type UnityMessage =
   | { kind: 'ArSessionState'; state: string }
   | { kind: 'Pong';           token: string; unityTime: number }
   | { kind: 'UnityLog';       level: 'info' | 'warn' | 'error'; line: string }
+  | { kind: 'Checkpoint';     step: string }
   | { kind: 'Unknown';        raw: string };
 
 export function parseUnityMessage(raw: string): UnityMessage {
@@ -125,6 +126,10 @@ export function parseUnityMessage(raw: string): UnityMessage {
       return { kind: 'ArSessionState', state: String(data.state ?? '') };
     case 'Pong':
       return { kind: 'Pong', token: String(data.token ?? ''), unityTime: data.unityTime ?? 0 };
+    case 'Checkpoint':
+      // "Checkpoint|stepName" — sent by cairnCheckpoint() in RNUnityView.mm
+      // step is the second segment (already split above as json, but actually plain text)
+      return { kind: 'Checkpoint', step: json };
     default:
       return { kind: 'Unknown', raw };
   }

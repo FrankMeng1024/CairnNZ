@@ -23,6 +23,9 @@ import { sendToUnity, parseUnityMessage } from '../services/unityBridge';
 import { crashLogger } from '../services/crashLogger';
 import { API_BASE_URL } from '../config/api';
 import * as FileSystem from 'expo-file-system/legacy';
+import { storage } from '../store/storage';
+
+const UNITY_CHECKPOINT_KEY = 'cairn_unity_init_step_js';
 
 const TAG = 'unity-overlay';
 
@@ -75,6 +78,18 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
   useEffect(() => {
     const mountTs = Date.now();
     crashLogger.breadcrumb(`${TAG}:mount markers=${props.markers.length} platform=${Platform.OS} osVersion=${Platform.Version}`);
+
+    // Upload any checkpoint left from a previous crash during Unity init.
+    // cairnCheckpoint() in RNUnityView.mm writes to AsyncStorage (via JS) at
+    // each init step. If runEmbeddedWithArgc caused a C++ crash, the last
+    // written step shows exactly where init died. Cleared after ArReady fires.
+    storage.getItem(UNITY_CHECKPOINT_KEY).then((step) => {
+      if (step) {
+        crashLogger.breadcrumb(`${TAG}:prev-launch-checkpoint=${step} (crash during Unity init?)`);
+        crashLogger.uploadDiagnostic(API_BASE_URL, `unity-prev-checkpoint-${step}`).catch(() => undefined);
+        // Don't clear yet — keep until ArReady confirms this launch succeeded.
+      }
+    }).catch(() => undefined);
 
     // Diagnostic 1: Check if UnityFramework.framework is actually on disk
     // Runs immediately on mount — confirms the IPA embed is accessible at runtime.
@@ -175,8 +190,17 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
           crashLogger.breadcrumb(`unity-native:${msg.level}:${msg.line.slice(0, 200)}`);
           break;
 
+        case 'Checkpoint':
+          // cairnCheckpoint() in RNUnityView.mm fires at each init step.
+          // Persist to AsyncStorage so a C++ crash mid-init is diagnosable on next launch.
+          crashLogger.breadcrumb(`${TAG}:checkpoint:${msg.step}`);
+          storage.setItem(UNITY_CHECKPOINT_KEY, msg.step).catch(() => undefined);
+          break;
+
         case 'ArReady':
           arReadyRef.current = true;
+          // Clear checkpoint — init succeeded, no crash diagnosis needed next launch.
+          storage.removeItem(UNITY_CHECKPOINT_KEY).catch(() => undefined);
           crashLogger.breadcrumb(
             `${TAG}:recv:ArReady unityVer=${msg.unityVersion} session=${msg.arSession}`
           );
