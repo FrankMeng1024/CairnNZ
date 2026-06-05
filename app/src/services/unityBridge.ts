@@ -75,16 +75,24 @@ export function parseUnityMessage(raw: string): UnityMessage {
     return { kind: 'Unknown', raw: String(raw) };
   }
 
-  // UnityLog / NativeLog have 3 segments — special-cased so log lines
-  // containing '|' are preserved by joining the tail.
-  // UnityLog: sent by Unity C# logger (WARN/ERROR only).
-  // NativeLog: sent by CAIRN_LOG macro in RNUnityView.mm (ObjC diagnostics).
-  // Both land as kind:'UnityLog' so UnityAROverlay handles them identically.
+  // UnityLog / NativeLog / Checkpoint use prefix dispatch — handled BEFORE
+  // the generic Name|json parser so their payloads are never passed to JSON.parse.
+  //
+  // UnityLog:   sent by Unity C# logger (WARN/ERROR only).
+  // NativeLog:  sent by CAIRN_LOG macro in RNUnityView.mm (ObjC diagnostics).
+  //             Both emit kind:'UnityLog' so UnityAROverlay handles them identically.
+  // Checkpoint: sent by cairnCheckpoint() in RNUnityView.mm at each init step.
+  //             Payload is plain text (not JSON), e.g. "step8-runEmbeddedWithArgc-START".
   if (raw.startsWith('UnityLog|') || raw.startsWith('NativeLog|')) {
     const parts = raw.split('|');
     const level = (parts[1] === 'warn' || parts[1] === 'error') ? parts[1] : 'info';
     const line  = parts.slice(2).join('|');
     return { kind: 'UnityLog', level, line };
+  }
+
+  if (raw.startsWith('Checkpoint|')) {
+    const step = raw.slice('Checkpoint|'.length);
+    return { kind: 'Checkpoint', step };
   }
 
   // Other messages: Name|json (Name has no '|' by convention)
@@ -126,10 +134,6 @@ export function parseUnityMessage(raw: string): UnityMessage {
       return { kind: 'ArSessionState', state: String(data.state ?? '') };
     case 'Pong':
       return { kind: 'Pong', token: String(data.token ?? ''), unityTime: data.unityTime ?? 0 };
-    case 'Checkpoint':
-      // "Checkpoint|stepName" — sent by cairnCheckpoint() in RNUnityView.mm
-      // step is the second segment (already split above as json, but actually plain text)
-      return { kind: 'Checkpoint', step: json };
     default:
       return { kind: 'Unknown', raw };
   }
