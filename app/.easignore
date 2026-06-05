@@ -46,3 +46,7 @@ npm-debug.log*
 
 # Source maps not needed in build (Expo regenerates)
 *.map
+
+# Unity framework binary — downloaded at build time by eas-build-pre-install hook.
+# Never commit or upload; EAS re-downloads fresh each build from GitHub Release.
+unity/builds/

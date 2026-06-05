@@ -41,3 +41,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Unity framework binary — downloaded at EAS build time, never committed
+unity/builds/
