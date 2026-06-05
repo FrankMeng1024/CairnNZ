@@ -17,11 +17,12 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Platform } from 'react-native';
+import { StyleSheet, View, Platform, UIManager } from 'react-native';
 import UnityView from '@azesmway/react-native-unity';
 import { sendToUnity, parseUnityMessage } from '../services/unityBridge';
 import { crashLogger } from '../services/crashLogger';
 import { API_BASE_URL } from '../config/api';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const TAG = 'unity-overlay';
 
@@ -74,6 +75,34 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
   useEffect(() => {
     const mountTs = Date.now();
     crashLogger.breadcrumb(`${TAG}:mount markers=${props.markers.length} platform=${Platform.OS} osVersion=${Platform.Version}`);
+
+    // Diagnostic 1: Check if UnityFramework.framework is actually on disk
+    // Runs immediately on mount — confirms the IPA embed is accessible at runtime.
+    if (Platform.OS === 'ios' && FileSystem.bundleDirectory) {
+      const fwPath = FileSystem.bundleDirectory + 'Frameworks/UnityFramework.framework';
+      FileSystem.getInfoAsync(fwPath)
+        .then((info) => {
+          crashLogger.breadcrumb(
+            `${TAG}:diag:fwExists=${info.exists} path=${fwPath.slice(-60)}`
+          );
+        })
+        .catch((e: any) => {
+          crashLogger.breadcrumb(`${TAG}:diag:fwCheck-error ${String(e?.message ?? e).slice(0, 80)}`);
+        });
+    } else {
+      crashLogger.breadcrumb(`${TAG}:diag:fwCheck-skip platform=${Platform.OS} bundleDir=${FileSystem.bundleDirectory ?? 'null'}`);
+    }
+
+    // Diagnostic 2: Check if RNUnityView Fabric component descriptor is registered
+    // If getViewManagerConfig returns null, New Arch (Fabric) never registered the component.
+    try {
+      const cfg = (UIManager as any).getViewManagerConfig?.('RNUnityView');
+      crashLogger.breadcrumb(
+        `${TAG}:diag:RNUnityView-registered=${cfg != null} keys=${cfg ? Object.keys(cfg).join(',').slice(0, 80) : 'none'}`
+      );
+    } catch (e: any) {
+      crashLogger.breadcrumb(`${TAG}:diag:RNUnityView-registryError ${String(e?.message ?? e).slice(0, 80)}`);
+    }
 
     // Auto-upload diagnostics at 5s if still not ready (Unity silent)
     const t5 = setTimeout(() => {
