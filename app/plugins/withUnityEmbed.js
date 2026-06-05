@@ -123,7 +123,7 @@ const HOOK_BODY = `    ${HOOK_MARKER}
 function insertAfterAnchor(insert, target, contents) {
   if (contents.includes(insert)) return contents;
   const lines = contents.split('\n');
-  const idx = lines.findIndex(l => l.includes(target));
+  const idx = lines.findIndex(l => l.trim() === target.trim());
   if (idx === -1) return null;
   return [
     ...lines.slice(0, idx + 1),
