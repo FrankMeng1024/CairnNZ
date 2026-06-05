@@ -4,116 +4,140 @@
  *
  * Why this is needed:
  *   - @azesmway/react-native-unity 1.0.11 ships its podspec with
- *     vendored_frameworks = ["ios/UnityFramework.framework"], which
- *     causes CocoaPods to LINK the framework. But on RN 0.81 + Expo 54,
- *     CocoaPods does NOT automatically add it to the app target's
- *     "Embed Frameworks" build phase.
- *   - Without embedding, [NSBundle bundleWithPath:@"/Frameworks/UnityFramework.framework"]
- *     returns nil at runtime (the path the library hardcodes in
- *     RNUnityView.mm:9), and Unity initialization fails silently.
+ *     vendored_frameworks = ["ios/UnityFramework.framework"]. CocoaPods
+ *     LINKS the framework but does NOT auto-embed it on Expo 54 / RN 0.81.
+ *   - Without embedding, [NSBundle bundleWithPath:@"<App.app>/Frameworks/UnityFramework.framework"]
+ *     returns nil at runtime, and Unity init fails silently.
  *
- * What this does:
- *   Injects a Podfile post_install hook that iterates over the app
- *   target's resource_bundles and frameworks, and forces UnityFramework
- *   into the EmbedFrameworks build phase with FRAMEWORK_SEARCH_PATHS
- *   pointing to the pod's vendored framework dir.
+ * How it works:
+ *   The Expo template Podfile has exactly ONE post_install block, INSIDE
+ *   the target 'YourApp' do ... end block. CocoaPods does NOT support
+ *   multiple post_install blocks. We must inject our embed-handling Ruby
+ *   code INSIDE that single block, not as a second top-level block.
+ *
+ *   Pattern lifted directly from viro's withViroIos.js:127 which does
+ *   the same thing for ARCore weak linking. Uses the same insertLines
+ *   approach as withViroPodfileFix in this repo.
  */
 
 const { withDangerousMod } = require('@expo/config-plugins');
 const fs   = require('fs');
 const path = require('path');
 
-const HOOK_MARKER  = '# CAIRN_UNITY_EMBED_HOOK_V1';
-const HOOK_BLOCK   = `
-${HOOK_MARKER}
-# Inject UnityFramework.framework into the app target's Embed Frameworks
-# phase. @azesmway/react-native-unity vendors the framework but doesn't
-# auto-embed it on Expo 54 / RN 0.81. Without this hook, dyld can't load
-# UnityFramework at runtime.
-post_install do |installer|
-  installer.pods_project.targets.each do |target|
-    if target.name == 'react-native-unity'
-      target.build_configurations.each do |config|
-        config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
+const HOOK_MARKER = '# CAIRN_UNITY_EMBED_HOOK_V2';
+
+// Ruby code injected INSIDE the existing `post_install do |installer|` block,
+// immediately after the `post_install do |installer|` anchor line. The block's
+// own `end` is preserved (we don't add our own `end`).
+const HOOK_BODY = `    ${HOOK_MARKER}
+    # Embed UnityFramework.framework into the app target's Frameworks build
+    # phase with CodeSignOnCopy attribute. azesmway/react-native-unity vendors
+    # the framework but Expo 54 + RN 0.81 doesn't auto-embed.
+    installer.pods_project.targets.each do |t|
+      if t.name == 'react-native-unity'
+        t.build_configurations.each do |config|
+          config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
+        end
       end
     end
-  end
 
-  installer.aggregate_targets.each do |aggregate_target|
-    user_project = aggregate_target.user_project
-    user_project.native_targets.each do |native_target|
-      # Only embed Unity into the main app target — skip test bundles,
-      # extensions, etc., to avoid duplicate-output build errors.
-      next unless native_target.product_type == 'com.apple.product-type.application'
+    installer.aggregate_targets.each do |aggregate_target|
+      user_project = aggregate_target.user_project
+      user_project.native_targets.each do |native_target|
+        # Only main app target — skip test bundles, extensions, etc.
+        next unless native_target.product_type == 'com.apple.product-type.application'
 
-      # Find Embed Frameworks build phase (or create one)
-      embed_phase = native_target.build_phases.find do |phase|
-        phase.respond_to?(:symbol_dst_subfolder_spec) &&
-          phase.symbol_dst_subfolder_spec == :frameworks
-      end
+        # Find/create Embed Frameworks build phase
+        embed_phase = native_target.build_phases.find { |phase|
+          phase.respond_to?(:symbol_dst_subfolder_spec) &&
+            phase.symbol_dst_subfolder_spec == :frameworks
+        }
 
-      if embed_phase.nil?
-        embed_phase = user_project.new(Xcodeproj::Project::Object::PBXCopyFilesBuildPhase)
-        embed_phase.name = 'Embed Frameworks'
-        embed_phase.symbol_dst_subfolder_spec = :frameworks
-        native_target.build_phases << embed_phase
-      end
+        if embed_phase.nil?
+          embed_phase = user_project.new(Xcodeproj::Project::Object::PBXCopyFilesBuildPhase)
+          embed_phase.name = 'Embed Frameworks'
+          embed_phase.symbol_dst_subfolder_spec = :frameworks
+          native_target.build_phases << embed_phase
+        end
 
-      already = embed_phase.files.any? { |f|
-        f.display_name && f.display_name.include?('UnityFramework')
-      }
+        already = embed_phase.files.any? { |f|
+          f.display_name && f.display_name == 'UnityFramework.framework'
+        }
 
-      unless already
-        # Locate the vendored UnityFramework.framework reference in the Pods project
-        pods_project = installer.pods_project
-        unity_fw_ref = nil
-        pods_project.files.each do |f|
-          if f.path && f.path.end_with?('UnityFramework.framework')
-            unity_fw_ref = f
-            break
+        unless already
+          unity_fw_ref = nil
+          installer.pods_project.files.each do |f|
+            if f.path && f.path.end_with?('UnityFramework.framework')
+              unity_fw_ref = f
+              break
+            end
           end
-        end
 
-        if unity_fw_ref
-          build_file = embed_phase.add_file_reference(unity_fw_ref)
-          build_file.settings = { 'ATTRIBUTES' => ['CodeSignOnCopy', 'RemoveHeadersOnCopy'] }
-          puts '[CairnUnity] UnityFramework.framework added to Embed Frameworks phase (CodeSignOnCopy)'
+          if unity_fw_ref
+            build_file = embed_phase.add_file_reference(unity_fw_ref)
+            build_file.settings = { 'ATTRIBUTES' => ['CodeSignOnCopy', 'RemoveHeadersOnCopy'] }
+            puts '[CairnUnity] UnityFramework.framework added to Embed Frameworks (CodeSignOnCopy)'
+          else
+            puts '[CairnUnity][WARN] UnityFramework.framework reference NOT FOUND in Pods project'
+          end
         else
-          puts '[CairnUnity][WARN] UnityFramework.framework reference NOT FOUND in Pods project — runtime load will fail'
+          puts '[CairnUnity] UnityFramework.framework already in Embed Frameworks'
         end
-      else
-        puts '[CairnUnity] UnityFramework.framework already in Embed Frameworks phase'
       end
+      user_project.save
     end
-    user_project.save
-  end
-end
 `;
+
+/**
+ * Insert helper — modeled after viro's insertLinesHelper.
+ * Finds the line containing `target` and inserts `insert` after it (offset=1).
+ */
+function insertAfterAnchor(insert, target, contents) {
+  if (contents.includes(insert)) return contents;
+  const lines = contents.split('\n');
+  const idx = lines.findIndex(l => l.includes(target));
+  if (idx === -1) return null;
+  return [
+    ...lines.slice(0, idx + 1),
+    insert,
+    ...lines.slice(idx + 1),
+  ].join('\n');
+}
 
 module.exports = function withUnityEmbed(config) {
   return withDangerousMod(config, [
     'ios',
-    async (config) => {
+    (config) => {
       const podfilePath = path.join(config.modRequest.platformProjectRoot, 'Podfile');
 
-      if (!fs.existsSync(podfilePath)) {
-        console.warn('[withUnityEmbed] Podfile not found at ' + podfilePath);
+      let podfile;
+      try {
+        podfile = fs.readFileSync(podfilePath, 'utf8');
+      } catch (e) {
+        console.warn('[withUnityEmbed] Could not read Podfile:', e.message);
         return config;
       }
 
-      let podfile = fs.readFileSync(podfilePath, 'utf8');
-
+      // Idempotent: skip if already injected
       if (podfile.includes(HOOK_MARKER)) {
-        console.log('[withUnityEmbed] Hook already present — skipping');
+        console.log('[withUnityEmbed] Hook already present, skipping');
         return config;
       }
 
-      // Append at end of file. Multiple post_install blocks are valid in
-      // CocoaPods >= 1.10; they all run sequentially.
-      podfile = podfile.trimEnd() + '\n' + HOOK_BLOCK + '\n';
+      // Inject INSIDE existing post_install block (after `post_install do |installer|` line)
+      // NOT as a new top-level block — CocoaPods doesn't allow multiple post_install hooks.
+      const updated = insertAfterAnchor(HOOK_BODY, 'post_install do |installer|', podfile);
 
-      fs.writeFileSync(podfilePath, podfile, 'utf8');
-      console.log('[withUnityEmbed] Embed Frameworks hook appended to Podfile');
+      if (updated === null) {
+        console.error(
+          '[withUnityEmbed] CRITICAL: Could not find `post_install do |installer|` in Podfile. ' +
+          'UnityFramework will NOT be embedded — runtime load will fail.'
+        );
+        return config;
+      }
+
+      fs.writeFileSync(podfilePath, updated, 'utf8');
+      console.log('[withUnityEmbed] Embed Frameworks logic injected into existing post_install block');
 
       return config;
     },
