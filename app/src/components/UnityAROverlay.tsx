@@ -73,6 +73,12 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
   const groundYRef   = useRef<number | null>(null);
   const arReadyRef   = useRef(false);
   const lastFrameRef = useRef<number>(Date.now());
+  // OTA #181: one-shot breadcrumb on first ArFrame received. After parser
+  // fix, lets us see whether values are real (Unity AR working) or are
+  // the parser's null→default fallbacks (Unity still emitting F3 literals).
+  // Real working AR: px/py/pz vary, fy≈1, etc. Fallback signature:
+  // px=0 py=0 pz=0 fx=0 fy=1.00 fz=0 (parser defaults).
+  const firstFrameRef = useRef(true);
 
   // Mount lifecycle
   useEffect(() => {
@@ -217,6 +223,15 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
 
         case 'ArFrame':
           lastFrameRef.current = Date.now();
+          // OTA #181: one-shot breadcrumb on first ArFrame. Reveals whether
+          // pose is real (AR tracking) or parser's null→default fallback
+          // (parser recovered from F3 corruption but Unity still broken).
+          if (firstFrameRef.current) {
+            firstFrameRef.current = false;
+            crashLogger.breadcrumb(
+              `${TAG}:recv:first-ArFrame px=${msg.px.toFixed(2)} py=${msg.py.toFixed(2)} pz=${msg.pz.toFixed(2)} fx=${msg.fx.toFixed(2)} fy=${msg.fy.toFixed(2)} fz=${msg.fz.toFixed(2)}`
+            );
+          }
           // Don't breadcrumb every ArFrame (10Hz would flood ring buffer).
           if (props.onArFrame) {
             props.onArFrame({

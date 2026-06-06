@@ -303,6 +303,12 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // the full session — buildCairn / populate / first-frame outcomes.
   useEffect(() => {
     crashLogger.breadcrumb(`ar:screen:mount`);
+    // OTA #181: log the camera-gate decision so post-OTA telemetry can
+    // confirm the gate fix is actually in the running bundle. Greppable
+    // for `cameraWillMount=false` to verify the bundle is post-181.
+    crashLogger.breadcrumb(
+      `ar:camera-gate USE_VIRO=${USE_VIRO} USE_UNITY_AR=${USE_UNITY_AR} cameraWillMount=${!USE_VIRO && !USE_UNITY_AR}`
+    );
     return () => {
       crashLogger.breadcrumb(`ar:screen:unmount`);
       crashLogger.uploadDiagnostic(API_BASE_URL, 'unmount').catch(() => undefined);
@@ -661,15 +667,19 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   return (
     <View style={styles.container}>
       {/* Camera background — live rear camera feed at the very bottom
-          of the z-stack. Only used for the r3f path (USE_VIRO=false).
-          When USE_VIRO=true, ViroARSceneNavigator owns the camera feed
-          via ARKit's ARSession — rendering expo-camera's CameraView at
-          the same time would steal AVCaptureSession from ARKit and
-          break the AR view (cairn renders but on black background).
+          of the z-stack. Only used for the r3f path (USE_VIRO=false AND
+          USE_UNITY_AR=false). When USE_VIRO=true OR USE_UNITY_AR=true,
+          the AR backend (Viro's ViroARSceneNavigator or Unity's ARKit
+          ARSession) owns the rear camera feed via AVCaptureSession.
+          Rendering expo-camera's CameraView at the same time would steal
+          AVCaptureSession from the AR backend, breaking the AR view
+          (cairn renders but on black background — exactly the symptom
+          observed in TestFlight where Unity ArFrame fired at 10Hz but
+          ArReady never came and the screen stayed black).
           If expo-camera is unavailable or permission denied,
           the existing dark backdrop shows instead (UI elements have
           their own contrast and read fine against either). */}
-      {!USE_VIRO && CameraView && cameraPerm?.granted && (
+      {!USE_VIRO && !USE_UNITY_AR && CameraView && cameraPerm?.granted && (
         <CameraView
           style={StyleSheet.absoluteFillObject}
           facing="back"

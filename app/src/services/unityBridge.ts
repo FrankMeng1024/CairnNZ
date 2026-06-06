@@ -106,7 +106,49 @@ export function parseUnityMessage(raw: string): UnityMessage {
   try {
     data = json ? JSON.parse(json) : {};
   } catch {
-    return { kind: 'Unknown', raw };
+    // Defensive recovery: Unity's IL2CPP string.Format has a known bug
+    // where the format spec leaks into output as a literal (e.g. "F3",
+    // "NaN", "Inf", "-Inf") whenever a {N:F3}}} placeholder sits
+    // immediately before an escaped }}. Diag from 2026-06-05 confirmed
+    // every ArFrame and Pong arrived with `..."fz":F3}` /
+    // `..."unityTime":F3}` — JSON.parse threw → message dropped to
+    // Unknown → ArReady-style messages with the same trailing pattern
+    // would also be lost. Strategy: replace non-numeric tokens that
+    // appear in number positions with null, then retry. Field-level
+    // typeof checks below already coerce null → default value, so we
+    // recover whatever fields are still well-formed.
+    //
+    // Pattern: ":<TOKEN>[,}]" where TOKEN is not a valid JSON number
+    // and not a quoted string. Limited to common Unity-IL2CPP literals
+    // to avoid corrupting legitimate text content.
+    const repaired = json.replace(
+      /:\s*(F\d+|NaN|-?Inf(?:inity)?)(?=\s*[,}\]])/g,
+      ': null'
+    );
+    if (repaired !== json) {
+      try {
+        data = JSON.parse(repaired);
+        // OTA #181: smoking-gun proof the parser fix is firing. Counts of
+        // parse:recovered vs parse:fail-* tell us exactly how prevalent
+        // the IL2CPP string.Format bug is across all messages.
+        crashLogger.breadcrumb(
+          `unity-bridge:parse:recovered name=${name} bytes=${json.length}`
+        );
+      } catch {
+        crashLogger.breadcrumb(
+          `unity-bridge:parse:fail-after-repair name=${name} raw=${json.slice(0, 80)}`
+        );
+        return { kind: 'Unknown', raw };
+      }
+    } else {
+      // Regex didn't match — corruption pattern is something else
+      // (not the IL2CPP F3/NaN/Inf leak). Worth surfacing so we can
+      // identify a new failure mode.
+      crashLogger.breadcrumb(
+        `unity-bridge:parse:fail-no-repair-needed name=${name} raw=${json.slice(0, 80)}`
+      );
+      return { kind: 'Unknown', raw };
+    }
   }
 
   switch (name) {
@@ -125,15 +167,19 @@ export function parseUnityMessage(raw: string): UnityMessage {
     case 'PlaneDetected':
       return {
         kind: 'PlaneDetected',
-        x: data.x ?? 0,
-        y: data.y ?? 0,
-        z: data.z ?? 0,
-        area: data.area ?? 0,
+        x: typeof data.x === 'number' ? data.x : 0,
+        y: typeof data.y === 'number' ? data.y : 0,
+        z: typeof data.z === 'number' ? data.z : 0,
+        area: typeof data.area === 'number' ? data.area : 0,
       };
     case 'ArSessionState':
       return { kind: 'ArSessionState', state: String(data.state ?? '') };
     case 'Pong':
-      return { kind: 'Pong', token: String(data.token ?? ''), unityTime: data.unityTime ?? 0 };
+      return {
+        kind: 'Pong',
+        token: String(data.token ?? ''),
+        unityTime: typeof data.unityTime === 'number' ? data.unityTime : 0,
+      };
     default:
       return { kind: 'Unknown', raw };
   }

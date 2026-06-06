@@ -46,3 +46,24 @@ build/
 # Cache
 .cache/
 *.tsbuildinfo
+
+# Build artifacts and dev tools
+unity_setup/
+.playwright-mcp/
+debug-snapshots/
+tuanjie_results*.json
+
+# Prototype/design files (root level)
+ar_style*.html
+ar_styles_index.html
+arkit_*.html
+cairn_*.html
+cairn-*.png
+aim_lock*.html
+orb_styles*.html
+icon_*.html
+export_ritual*.html
+pw_*.js
+scan_reminder*.ps1
+*.exe
+*.dmg
