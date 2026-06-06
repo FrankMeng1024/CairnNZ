@@ -10,7 +10,13 @@ __tests__/
 **/__tests__/
 
 # Dev scripts (icon generation, smoke tests, etc.)
-scripts/
+# IMPORTANT: do NOT exclude scripts/ as a whole — eas-build-pre-install hook
+# in package.json runs `node ./scripts/download-unity-framework.js` on the
+# EAS server, so that one file MUST survive the .easignore filter.
+# Exclude only the dev-only scripts (icon/sprite generation, etc.) by name.
+scripts/gen_*.mjs
+scripts/generate-icons.js
+scripts/v156_patch.md
 pw_screenshot.js
 pw_shot.js
 
