@@ -698,20 +698,65 @@ module.exports = function withUnityEmbed(config) {
         return config;
       }
 
-      if (podfile.includes(HOOK_MARKER)) {
-        console.log('[withUnityEmbed] Podfile hook already present, skipping');
+      // Idempotency: skip if our hook (any version) is already present.
+      // Check both the current marker AND any historical version marker
+      // (V1/V2/V3) so a stale Podfile from a partial prior run doesn't
+      // get a second injection that produces malformed Ruby syntax.
+      const ANY_HOOK_MARKER = /# CAIRN_UNITY_EMBED_HOOK_V\d+/;
+      if (podfile.includes(HOOK_MARKER) || ANY_HOOK_MARKER.test(podfile)) {
+        console.log('[withUnityEmbed] Podfile hook (any version) already present, skipping');
+        return config;
+      }
+      // Defensive: detect existing partial HOOK_BODY content (in case the
+      // marker line itself was lost but the body remains). 'CodeSignOnCopy'
+      // appears in our HOOK_BODY but not in standard Expo/RN Podfiles.
+      if (podfile.includes("'CodeSignOnCopy', 'RemoveHeadersOnCopy'")) {
+        console.log('[withUnityEmbed] Podfile already contains our embed-attributes line; skipping');
         return config;
       }
 
-      const updated = insertAfterAnchor(HOOK_BODY, 'post_install do |installer|', podfile);
-      if (updated === null) {
+      // Deterministic injection (Round 6): use regex replace with explicit
+      // newline anchors instead of split('\n')+findIndex+slice/join. This
+      // eliminates the entire "HOOK_BODY landed mid-line" bug class:
+      // String.replace operates on the file as a single string, matches are
+      // bounded by literal \n on both sides, so insertion CANNOT land
+      // mid-line by construction.
+      //
+      // The occurrence-count guard catches any case where the Expo template
+      // ever produces 0 or >1 post_install lines — fail loud, never silently
+      // inject at the wrong location.
+      const POST_INSTALL_RE = /\n([ \t]*)post_install do \|installer\|\n/g;
+      const matches = podfile.match(POST_INSTALL_RE);
+      const occurrences = matches ? matches.length : 0;
+      if (occurrences === 0) {
         throw new Error(
-          '[withUnityEmbed] CRITICAL: Could not find `post_install do |installer|` in Podfile.'
+          '[withUnityEmbed] CRITICAL: No `post_install do |installer|` line found in Podfile. ' +
+          'Expo template may have changed.'
+        );
+      }
+      if (occurrences > 1) {
+        throw new Error(
+          `[withUnityEmbed] CRITICAL: Found ${occurrences} \`post_install do |installer|\` ` +
+          'lines in Podfile. Refusing to inject — would risk landing in wrong block. ' +
+          'Investigate which other plugin or template generated the duplicate.'
+        );
+      }
+      // Single match guaranteed. Use replace with non-global regex to do
+      // exactly one substitution. The captured group preserves whatever
+      // indentation Expo's template uses for the post_install line.
+      const updated = podfile.replace(
+        /\n([ \t]*)post_install do \|installer\|\n/,
+        (match, indent) => `\n${indent}post_install do |installer|\n${HOOK_BODY}\n`
+      );
+      if (updated === podfile) {
+        // Should be unreachable — match count guard already verified.
+        throw new Error(
+          '[withUnityEmbed] CRITICAL: regex matched 1 occurrence but replace produced no change.'
         );
       }
 
       fs.writeFileSync(podfilePath, updated, 'utf8');
-      console.log('[withUnityEmbed] Embed Frameworks logic injected into existing post_install block');
+      console.log('[withUnityEmbed] Embed Frameworks logic injected (deterministic regex injection, V4 marker)');
       return config;
     },
   ]);

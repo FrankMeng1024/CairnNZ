@@ -187,3 +187,28 @@ After 4 rounds of red-team + audit cycles for Unity AR build readiness, the foll
 - [archived: CLAUDE.md] R2: ARStateStall watchdog at 10s with activeLoaders info.
 - [archived: CLAUDE.md] R3-2: OnEnable resets all one-shot flags + _startTime for AR screen remount.
 - [archived: CLAUDE.md] R4-7: _firstFrameLogged also reset in OnEnable for symmetry.
+
+## Sprint 23 — 2026-06-06 (EAS cache invalidation — Solution C deployed)
+
+Solution C deployed: `app/unity-release.json` (xcframework SHA marker) +
+`app/fingerprint.config.js` (extraSources) + Unity workflow auto-commits
+the marker after each xcframework publish.
+
+### Operational rules going forward (must follow)
+
+- [pending] **Race window for `eas build` after Unity changes**: After
+  pushing Unity code, WAIT for the `unity-build-xcframework` GitHub Actions
+  workflow to complete AND its marker commit (`chore(unity): bump
+  xcframework marker to <sha>`) to land on master before running `eas
+  build` locally. Otherwise EAS will hash the OLD `unity-release.json`
+  and use cached native binary. There is no automated gate for this race.
+
+- [pending] **Branch protection on master**: Verify `github-actions[bot]`
+  can push directly. If branch protection requires PRs, the workflow will
+  fail loud on the marker push step. Either grant bot direct-push or
+  switch the marker commit to a PR-based mechanism.
+
+- [pending] **Verify fingerprint.config.js is loaded by EAS first time**:
+  Inspect first build's logs after this change — grep for
+  `[fingerprint.config.js] loaded` (added as console.log). If absent, the
+  config didn't load and the cache-busting silently does nothing.
