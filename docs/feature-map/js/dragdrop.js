@@ -101,9 +101,11 @@ const DragDrop = (() => {
       const { x, y } = pendingMove;
       pendingMove = null;
 
-      // move ghost
-      active.ghost.style.left = (x + 14) + 'px';
-      active.ghost.style.top  = (y - 10) + 'px';
+      // move ghost — anchor at the original grab offset so the cursor stays where the user pressed down
+      const ox = active.ghost._offsetX ?? 0;
+      const oy = active.ghost._offsetY ?? 0;
+      active.ghost.style.left = (x - ox) + 'px';
+      active.ghost.style.top  = (y - oy) + 'px';
 
       // find drop target using cached rects
       updateDropTarget(x, y);
@@ -114,13 +116,23 @@ const DragDrop = (() => {
 
     function startDrag(itemEl, e) {
       const fromContainer = itemEl.closest(containerSelector);
+      const rect = itemEl.getBoundingClientRect();
       itemEl.classList.add('dragging');
 
-      const ghost = document.createElement('div');
-      ghost.className = 'drag-ghost';
-      ghost.textContent = getGhostText(itemEl);
-      ghost.style.left = (e.clientX + 14) + 'px';
-      ghost.style.top  = (e.clientY - 10) + 'px';
+      // Use a true clone of the item as ghost — visually identical, follows cursor under the same offset
+      const ghost = itemEl.cloneNode(true);
+      ghost.classList.remove('dragging');
+      ghost.classList.add('drag-ghost');
+      ghost.style.position = 'fixed';
+      ghost.style.pointerEvents = 'none';
+      ghost.style.zIndex = '9999';
+      ghost.style.width  = rect.width  + 'px';
+      ghost.style.height = rect.height + 'px';
+      ghost.style.left = rect.left + 'px';
+      ghost.style.top  = rect.top  + 'px';
+      // Cache offset so the ghost stays anchored where the user grabbed it
+      ghost._offsetX = e.clientX - rect.left;
+      ghost._offsetY = e.clientY - rect.top;
       document.body.appendChild(ghost);
 
       // Cache container rects once at drag start — avoids repeated getBoundingClientRect on every move

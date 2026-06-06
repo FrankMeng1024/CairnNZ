@@ -663,6 +663,21 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
       requestCameraPerm();
     }
   }, [cameraPerm?.granted]);
+  // OTA #183: log camera permission state once per change. Lets diag
+  // distinguish "ARKit loader not registered" from "camera permission
+  // denied" — both produce a black screen, but only the latter shows
+  // status='denied' or granted=false here. Unity ARKit needs the same
+  // iOS-level AVAuthorizationStatusForMediaType=Video grant that
+  // expo-camera tracks.
+  const lastPermLogRef = useRef<string | null>(null);
+  useEffect(() => {
+    const sig = `${cameraPerm?.status ?? 'null'}/${cameraPerm?.granted ?? 'null'}/${cameraPerm?.canAskAgain ?? 'null'}`;
+    if (sig === lastPermLogRef.current) return;
+    lastPermLogRef.current = sig;
+    crashLogger.breadcrumb(
+      `ar:camera-perm status=${cameraPerm?.status ?? 'null'} granted=${cameraPerm?.granted ?? 'null'} canAskAgain=${cameraPerm?.canAskAgain ?? 'null'} moduleLoaded=${!!useCameraPermissions}`
+    );
+  }, [cameraPerm?.status, cameraPerm?.granted, cameraPerm?.canAskAgain]);
 
   return (
     <View style={styles.container}>

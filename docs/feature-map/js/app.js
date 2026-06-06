@@ -5,7 +5,8 @@
 const App = (() => {
   const VIEWS = {
     'view-overview': () => ViewOverview.render(),
-    'view-story':    () => ViewStory.render()
+    'view-story':    () => ViewStory.render(),
+    'view-planning': () => ViewPlanning.render()
   };
 
   let currentView = 'view-overview';
@@ -221,10 +222,11 @@ const App = (() => {
       icon: '❓', title: '使用帮助', size: 'lg',
       bodyHTML: `
         <div style="font-size:13px;line-height:1.7;color:var(--text2)">
-          <h3 style="font-size:14px;color:var(--text);margin-bottom:6px">🎯 2 个视图</h3>
+          <h3 style="font-size:14px;color:var(--text);margin-bottom:6px">🎯 3 个视图</h3>
           <ul style="padding-left:20px;margin-bottom:14px">
             <li><strong>产品概览</strong>：项目介绍、用户画像、设计原则、进度统计</li>
             <li><strong>故事地图</strong>：用户活动 × 阶段的二维矩阵，看每个活动各阶段都在做什么</li>
+            <li><strong>发布排期</strong>：把故事卡片排进 Release × Sprint 网格，调整每个 Sprint 要做什么</li>
           </ul>
 
           <h3 style="font-size:14px;color:var(--text);margin-bottom:6px">✏️ 编辑</h3>
@@ -238,6 +240,7 @@ const App = (() => {
           <h3 style="font-size:14px;color:var(--text);margin-bottom:6px">🖐 拖拽</h3>
           <ul style="padding-left:20px;margin-bottom:14px">
             <li>故事地图：拖拽卡片到任意活动列 + 阶段（自动改状态）</li>
+            <li>发布排期：拖拽卡片到不同 Sprint 槽 / 调整 Release 整行顺序</li>
             <li>拖拽中按 <kbd>ESC</kbd> 取消</li>
           </ul>
 

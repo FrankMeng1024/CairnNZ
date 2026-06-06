@@ -76,7 +76,7 @@ const ViewStory = (() => {
     root.innerHTML = html;
 
     bindEvents(root);
-    if (_dragDestroy) { _dragDestroy(); _dragDestroy = null; }
+    if (_dragDestroy) { _dragDestroy.destroy?.(); _dragDestroy = null; }
     _dragDestroy = bindDrag(root);
   }
 

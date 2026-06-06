@@ -14,6 +14,7 @@ import { telemetryUploader } from './src/services/telemetryUploader';
 import { networkMonitor } from './src/services/networkMonitor';
 import { isPlaywrightBypass } from './src/utils/devFlags';
 import { crashLogger } from './src/services/crashLogger';
+import { OTA_VERSION } from './src/components/OtaBadge';
 import { API_BASE_URL } from './src/config/api';
 
 // Must run at app entry — handles Google OAuth popup redirect on web
@@ -142,6 +143,25 @@ function AppRoot() {
     try {
       crashLogger.install();
       crashLogger.breadcrumb('app_boot');
+      // OTA #183: log the running OTA bundle id + channel + runtime version
+      // so diag uploads can be correlated to a specific OTA. Without this
+      // the only OTA marker is OTA_VERSION (a hard-coded constant), which
+      // can't prove the bundle was actually delivered. updateId is null on
+      // the embedded bundle (fresh install before first OTA), 'embedded'
+      // here marks that case explicitly. Lazy import: matches the rest of
+      // the codebase pattern; never crash boot if module is unavailable.
+      import('expo-updates')
+        .then((U) => {
+          const updateId = (U as any).updateId ?? 'embedded';
+          const channel = (U as any).channel ?? 'unknown';
+          const runtimeVersion = (U as any).runtimeVersion ?? 'unknown';
+          crashLogger.breadcrumb(
+            `ota:bundle id=${updateId} channel=${channel} runtime=${runtimeVersion} ota_version=${OTA_VERSION}`
+          );
+        })
+        .catch(() => {
+          crashLogger.breadcrumb(`ota:bundle module-unavailable ota_version=${OTA_VERSION}`);
+        });
       // Drain + upload any persisted crash directly to backend telemetry.
       // This bypasses debugLogger sessions (which only flush on tracking end)
       // so a sign-out/login crash actually reaches the server.

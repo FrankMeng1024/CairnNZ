@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 using System.Collections.Generic;
+using System.Globalization;
 
 /// <summary>
 /// RN <-> Unity message hub. GameObject in scene MUST be named
@@ -36,6 +37,7 @@ public class CairnBridge : MonoBehaviour
     private float _startTime        = 0f;
     private bool  _planeFallbackTriggered = false;
     private int   _frameCount       = 0;
+    private ARSessionState _lastLoggedFrameState = ARSessionState.None;
 
     private const float FALLBACK_PLANE_TIMEOUT = 30f; // 30s no plane => synth pillars
     private const int   ARFRAME_DECIMATE      = 6;   // 60fps / 6 = 10Hz
@@ -166,10 +168,24 @@ public class CairnBridge : MonoBehaviour
             spawner.SpawnFourVerificationPillars(fakeGround, fallback: true);
         }
 
-        // Send ArFrame at 10Hz (decimate 60fps by 6)
+        // Send ArFrame at 10Hz (decimate 60fps by 6) — only when AR session
+        // is at least initializing, to avoid streaming junk (0,0,0) poses
+        // before ARKit has actually started.
         if (_frameCount % ARFRAME_DECIMATE == 0 && arCamera != null)
         {
-            SendArFrame();
+            if (ARSession.state < ARSessionState.SessionInitializing)
+            {
+                if (ARSession.state != _lastLoggedFrameState)
+                {
+                    _lastLoggedFrameState = ARSession.state;
+                    UnityLogger.IForward("CairnBridge",
+                        $"SendArFrame skipped: ARSession.state={ARSession.state}");
+                }
+            }
+            else
+            {
+                SendArFrame();
+            }
         }
     }
 
@@ -178,9 +194,19 @@ public class CairnBridge : MonoBehaviour
         var t   = arCamera.transform;
         var p   = t.position;
         var f   = t.forward;
-        var json = string.Format(System.Globalization.CultureInfo.InvariantCulture,
-            "{{\"px\":{0:F3},\"py\":{1:F3},\"pz\":{2:F3},\"fx\":{3:F3},\"fy\":{4:F3},\"fz\":{5:F3}}}",
-            p.x, p.y, p.z, f.x, f.y, f.z);
+        // NOTE: Manual concatenation instead of string.Format to dodge an
+        // IL2CPP bug where a "{N:F3}}}" placeholder immediately preceding
+        // an escaped close-brace gets mis-parsed: the formatter consumes
+        // one '}' as part of the format spec and emits the literal "F3"
+        // instead of the value. Observed in production iOS builds.
+        var inv = CultureInfo.InvariantCulture;
+        var json = "{\"px\":" + p.x.ToString("F3", inv)
+                 + ",\"py\":" + p.y.ToString("F3", inv)
+                 + ",\"pz\":" + p.z.ToString("F3", inv)
+                 + ",\"fx\":" + f.x.ToString("F3", inv)
+                 + ",\"fy\":" + f.y.ToString("F3", inv)
+                 + ",\"fz\":" + f.z.ToString("F3", inv)
+                 + "}";
         SendToRN("ArFrame", json);
     }
 
@@ -193,9 +219,15 @@ public class CairnBridge : MonoBehaviour
             var c = plane.center;
             var s = plane.size;
             var area = s.x * s.y;
-            var json = string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "{{\"x\":{0:F3},\"y\":{1:F3},\"z\":{2:F3},\"area\":{3:F2}}}",
-                c.x, c.y, c.z, area);
+            // Same IL2CPP string.Format bug applies here as in SendArFrame/OnPing:
+            // {N:fmt}}} pattern leaks the format spec ("F3"/"F2") as literal.
+            // Use manual concatenation with InvariantCulture for safety.
+            var inv = CultureInfo.InvariantCulture;
+            var json = "{\"x\":" + c.x.ToString("F3", inv)
+                     + ",\"y\":" + c.y.ToString("F3", inv)
+                     + ",\"z\":" + c.z.ToString("F3", inv)
+                     + ",\"area\":" + area.ToString("F2", inv)
+                     + "}";
             SendToRN("PlaneDetected", json);
             UnityLogger.IForward("CairnBridge",
                 $"Plane detected: pos=({c.x:F2},{c.y:F2},{c.z:F2}) area={area:F2}");
@@ -249,9 +281,11 @@ public class CairnBridge : MonoBehaviour
     public void OnPing(string token)
     {
         UnityLogger.IForward("CairnBridge", $"Ping received: {token}");
-        var json = string.Format(System.Globalization.CultureInfo.InvariantCulture,
-            "{{\"token\":\"{0}\",\"unityTime\":{1:F3}}}",
-            token ?? "", Time.realtimeSinceStartup);
+        // Manual concatenation — same IL2CPP "{N:F3}}}" bug as SendArFrame.
+        var inv = CultureInfo.InvariantCulture;
+        var json = "{\"token\":\"" + (token ?? "")
+                 + "\",\"unityTime\":" + Time.realtimeSinceStartup.ToString("F3", inv)
+                 + "}";
         SendToRN("Pong", json);
     }
 

@@ -25,6 +25,13 @@ const UNITY_BRIDGE_GO = 'CairnBridge';
 
 const TAG = 'unity-bridge';
 
+// OTA #183: throttle parse:recovered breadcrumbs to 1/sec per message name.
+// Without this, a 10Hz ArFrame stream that triggers recovery on every frame
+// floods the 500-entry crashLogger ring buffer in ~50s, overwriting earlier
+// breadcrumbs (mount diagnostics, init steps). parse:fail-* breadcrumbs are
+// NOT throttled — they are rare and signal new corruption patterns.
+const parseRecoveredLastLog: Record<string, number> = {};
+
 type UnityViewRef = React.RefObject<UnityView | null>;
 
 /**
@@ -131,9 +138,17 @@ export function parseUnityMessage(raw: string): UnityMessage {
         // OTA #181: smoking-gun proof the parser fix is firing. Counts of
         // parse:recovered vs parse:fail-* tell us exactly how prevalent
         // the IL2CPP string.Format bug is across all messages.
-        crashLogger.breadcrumb(
-          `unity-bridge:parse:recovered name=${name} bytes=${json.length}`
-        );
+        // OTA #183: throttle to 1/sec per name. ArFrame at 10Hz would
+        // otherwise produce 150 breadcrumbs in 15s and overwrite the
+        // mount/init diagnostics in the ring buffer.
+        const now = Date.now();
+        const last = parseRecoveredLastLog[name] ?? 0;
+        if (now - last >= 1000) {
+          parseRecoveredLastLog[name] = now;
+          crashLogger.breadcrumb(
+            `unity-bridge:parse:recovered name=${name} bytes=${json.length}`
+          );
+        }
       } catch {
         crashLogger.breadcrumb(
           `unity-bridge:parse:fail-after-repair name=${name} raw=${json.slice(0, 80)}`
