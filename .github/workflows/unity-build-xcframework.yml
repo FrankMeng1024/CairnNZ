@@ -149,15 +149,6 @@ jobs:
           echo "=== sendMessageToMobileApp IS exported ==="
           nm -gU "$BIN" 2>&1 | grep "sendMessageToMobileApp"
 
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: unity-xcframework-latest
-          name: Unity xcframework (latest)
-          files: UnityFramework.xcframework.zip
-          make_latest: true
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Update EAS fingerprint marker
         # Commits app/unity-release.json with the SHA-256 of the published
         # xcframework zip. This file is hashed by expo-fingerprint
@@ -165,8 +156,19 @@ jobs:
         # Unity binary forces EAS to do a fresh native build instead of a
         # JS-only "repack". Without this, EAS reuses the cached IPA's old
         # UnityFramework binary even when the GitHub Release has new content.
-        # Uses zip content SHA — re-runs on identical Unity source produce
-        # the same hash so EAS cache is preserved when it should be.
+        #
+        # ORDERING: this step runs BEFORE GitHub Release upload. If marker
+        # commit fails (push rejected, conflict), the workflow fails AND
+        # the new Release is NOT published — preventing the silent-stale
+        # state where Release has new binary but marker is stale, causing
+        # EAS to ship cached old binary unaware. With this ordering,
+        # Release publish is gated on successful marker propagation.
+        #
+        # NOTE: Info-ZIP is non-deterministic (embeds mtimes), so re-running
+        # workflow on identical Unity source produces a new SHA → new
+        # marker commit → cache invalidation. This is acceptable: cache
+        # invalidation is the goal; over-invalidation just wastes CI time
+        # but never causes incorrect behavior.
         run: |
           set -e
           HASH=$(shasum -a 256 UnityFramework.xcframework.zip | awk '{print $1}')
@@ -174,10 +176,7 @@ jobs:
           echo "xcframework SHA-256: $HASH"
 
           # Build JSON with printf (avoids heredoc indentation pitfalls in
-          # YAML run blocks). Only include the SHA — run_id and timestamp
-          # would change every workflow run and defeat the cache-preservation
-          # goal (we want the fingerprint to change ONLY when xcframework
-          # content actually changes).
+          # YAML run blocks).
           printf '{\n  "release_tag": "unity-xcframework-latest",\n  "xcframework_sha256": "%s"\n}\n' "$HASH" > app/unity-release.json
 
           echo "=== marker file content ==="
@@ -187,19 +186,32 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
 
-          # Pull-rebase to handle race with concurrent RN-side commits
-          git pull --rebase origin master || true
+          # Pull-rebase to absorb concurrent RN-side commits. If pull fails
+          # (real conflict, network) we MUST fail loud — silent staleness
+          # is the exact bug we're trying to prevent. No `|| true` here.
+          git pull --rebase origin master
 
           git add app/unity-release.json
           if git diff --cached --quiet; then
-            echo "No marker change (xcframework hash identical) — EAS cache will be reused, which is correct"
+            echo "No marker change — xcframework SHA identical to last push (rare; only with deterministic zip)."
             exit 0
           fi
 
           git commit -m "chore(unity): bump xcframework marker to ${SHORT}"
 
           # Push with one retry (handles race: another commit landed between
-          # our pull and our push). If still failing, fail the workflow loud
-          # — silent loss here would re-introduce the exact bug this
-          # mechanism is meant to prevent.
+          # pull and push). If still failing, fail the workflow loud — the
+          # subsequent Release upload step will NOT run, preventing
+          # marker/release inconsistency.
           git push origin master || (git pull --rebase origin master && git push origin master)
+
+      - name: Upload to GitHub Release
+        # Runs ONLY if marker commit succeeded above (set -e + step ordering).
+        # This guarantees Release content is never newer than marker.
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: unity-xcframework-latest
+          name: Unity xcframework (latest)
+          files: UnityFramework.xcframework.zip
+          make_latest: true
+          token: ${{ secrets.GITHUB_TOKEN }}
