@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'UnityARLib/**'
+      - '.github/workflows/unity-build-xcframework.yml'
   workflow_dispatch:
 
 permissions:
