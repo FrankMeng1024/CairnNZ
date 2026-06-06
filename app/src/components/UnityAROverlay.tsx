@@ -19,7 +19,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Platform, UIManager } from 'react-native';
 import UnityView from '@azesmway/react-native-unity';
-import { sendToUnity, parseUnityMessage } from '../services/unityBridge';
+import { sendToUnity, parseUnityMessage, resetParseRecoveredThrottle } from '../services/unityBridge';
 import { crashLogger } from '../services/crashLogger';
 import { API_BASE_URL } from '../config/api';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -84,6 +84,12 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
   useEffect(() => {
     const mountTs = Date.now();
     crashLogger.breadcrumb(`${TAG}:mount markers=${props.markers.length} platform=${Platform.OS} osVersion=${Platform.Version}`);
+
+    // Reset module-level parse:recovered throttle so a remount (AR screen
+    // exited then re-entered) doesn't silently suppress the first recovery
+    // breadcrumb of the new session due to stale timestamps from the
+    // previous session.
+    resetParseRecoveredThrottle();
 
     // Upload any checkpoint left from a previous crash during Unity init.
     // cairnCheckpoint() in RNUnityView.mm writes to AsyncStorage (via JS) at
@@ -254,6 +260,42 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
 
         case 'Pong':
           crashLogger.breadcrumb(`${TAG}:recv:Pong token=${msg.token}`);
+          break;
+
+        case 'XRDiag':
+          // The smoking-gun signal for "ARKit Loader not registered at
+          // runtime". loaderCount=0 OR managerNull=true means no AR
+          // subsystem is loaded → ARSession will never advance →
+          // screen black + no ArReady. This is a one-shot per launch.
+          crashLogger.breadcrumb(
+            `${TAG}:recv:XRDiag phase=${msg.phase} managerNull=${msg.managerNull ?? '?'} loaderCount=${msg.loaderCount ?? '?'} loaders=${msg.loaders ?? '?'}${msg.error ? ' error=' + msg.error : ''}`
+          );
+          break;
+
+        case 'ARBgDiag':
+          // ARCameraBackground component state. If present=false or
+          // enabled=false, camera feed won't composite → black screen
+          // even when AR session runs. This isolates "AR works but feed
+          // hidden" from "AR doesn't work".
+          // phase=first-update: state at startup
+          // phase=ar-ready: state at SessionTracking — definitive black-feed
+          //   detection (LOG-GAP-1). materialNull=true means the bg
+          //   shader/material wasn't bound → render outputs nothing.
+          crashLogger.breadcrumb(
+            `${TAG}:recv:ARBgDiag phase=${msg.phase} present=${msg.present ?? '?'} enabled=${msg.enabled ?? '?'} customMat=${msg.useCustomMaterial ?? '?'} matNull=${msg.materialNull ?? '?'}${msg.error ? ' error=' + msg.error : ''}`
+          );
+          break;
+
+        case 'ARStateStall':
+          // Watchdog: 10s after Unity Awake, ARSession still hasn't advanced.
+          // Critical signal — XR loader exists (per XRDiag) but ARKit subsystem
+          // is silently failing. activeLoaders count tells us if loader is even
+          // claimed-active at this point.
+          crashLogger.breadcrumb(
+            `${TAG}:recv:ARStateStall state=${msg.state} elapsed=${msg.elapsedSec}s activeLoaders=${msg.activeLoaders}`
+          );
+          // Force-upload: this is the smoking-gun signal we want server-side immediately.
+          crashLogger.uploadDiagnostic(API_BASE_URL, 'ar-state-stall').catch(() => undefined);
           break;
 
         case 'Unknown':

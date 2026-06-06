@@ -14,8 +14,9 @@ using System.IO;
 /// Behavior:
 ///   1. Always re-runs SceneSetup.SetupAndSave() so CI is deterministic
 ///      regardless of what was committed (the scene asset itself is
-///      committed but we still rebuild it to handle Unity-version-skew
-///      between local 6000.0.76f1 and CI 6000.0.36f1).
+///      committed but we still rebuild it to handle minor Unity-version
+///      drift; CI Unity version is now pinned to 6000.0.76f1 to match
+///      ProjectVersion.txt and avoid GUID/serialization skew).
 ///   2. Validates required files exist (StrandShader, scene, scripts).
 ///   3. Configures iOS player settings.
 ///   4. Runs BuildPipeline.BuildPlayer; fails loud if build report

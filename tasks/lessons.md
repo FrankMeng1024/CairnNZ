@@ -155,3 +155,35 @@
 - [resolved: Sprint 21] UX: FAB badge count on Hiking screen lacks label context — fixed with badge hidden at 0 count.
 - [resolved: Sprint 21] Auth flow: Privacy Policy checkbox requires coordinate-clicking the left side of the row — fixed with separate TouchableOpacity.
 - [pending] UX: "+0m elev · 0 flags" shows zero-value noise on run sessions — consider hiding zero-value secondary stats when both are zero.
+
+## Sprint 22 — 2026-06-06 (Unity AR diagnostic round)
+
+After 4 rounds of red-team + audit cycles for Unity AR build readiness, the following issues were identified and **deferred** (not blocking the build):
+
+### OTA-able (defer to next OTA)
+- [pending] LOG-GAP-2: No breadcrumb when OS revokes camera permission mid-session. Add AppState polling in UnityAROverlay to detect permission change; emit `ar:camera-perm:revoked`.
+- [pending] LOG-GAP-4: No RN-side detection of double-mount AR (e.g., ARScreen pushed twice in nav stack). Unity-side singleton guard exists at CairnBridge.cs:84-89. Add module-level mount counter in UnityAROverlay.
+- [pending] F-R4-9: When ArReady received, reset `firstFrameRef.current = true` for symmetry with R3-2 remount fix.
+- [pending] F-R4-11: Parser repair regex misses `+Inf`/`+Infinity` (only handles `-?Inf`). Defensive update if Unity ever produces `+Inf` literal.
+
+### Build-required (defer to next Unity build)
+- [pending] LOG-GAP-1: No breadcrumb for "AR works but rendered pixels are black" (URP misconfig, color-space drift). Sample 1px luminance from RenderTexture in CairnBridge.Update post-AR-ready.
+- [pending] LOG-GAP-3: SpawnPillar doesn't log resulting world transform vs camera distance. Add `PillarPlaced` event with `{name, distFromCamera, angleFromForward}`.
+- [pending] LOG-GAP-5: UnityLogger rate-limit drops `error` level when bursting. Always forward error level; only rate-limit info/warn.
+- [pending] LOG-GAP-6: `OnApplicationPause(true)` not logged. Emit IForward for both pause states.
+- [pending] LOG-GAP-7: Plane-fallback skipped silently if `spawner==null` or `arCamera==null` at 30s. Log gate state.
+
+### Resolved this Sprint
+- [archived: CLAUDE.md] R1: Camera gate `!USE_VIRO && !USE_UNITY_AR` (was just `!USE_VIRO`).
+- [archived: CLAUDE.md] R1: Parser regex repair for IL2CPP `F\d+`/`NaN`/`Inf` literals.
+- [archived: CLAUDE.md] R1: 5 IL2CPP `{N:fmt}}}` bugs in CairnBridge.cs replaced with manual concat.
+- [archived: CLAUDE.md] R1: SendArFrame gated on ARSession.state>=SessionInitializing.
+- [archived: CLAUDE.md] R1: Podfile anchor exact-match (line 126).
+- [archived: CLAUDE.md] R1: CI Unity 6000.0.36f1 → 6000.0.76f1.
+- [archived: CLAUDE.md] R1: EscapeJson helper for catch blocks (handles \, ", \n, \r, \t).
+- [archived: CLAUDE.md] R1: OnApplicationPause(false) re-baselines _startTime.
+- [archived: CLAUDE.md] R1: resetParseRecoveredThrottle on UnityAROverlay mount.
+- [archived: CLAUDE.md] R2-3: XRDiag/ARBgDiag emission deferred from Start() to Update frame 6 (registerAPIforNativeCalls race).
+- [archived: CLAUDE.md] R2: ARStateStall watchdog at 10s with activeLoaders info.
+- [archived: CLAUDE.md] R3-2: OnEnable resets all one-shot flags + _startTime for AR screen remount.
+- [archived: CLAUDE.md] R4-7: _firstFrameLogged also reset in OnEnable for symmetry.

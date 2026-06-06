@@ -60,6 +60,16 @@ public static class UnityLogger
     {
         try
         {
+            // LOG-GAP-5 fix: ERROR level bypasses rate-limit. Errors are rare
+            // and represent the highest-value diagnostic signal — losing them
+            // to rate-limit (e.g. during a tight exception loop) destroys the
+            // ability to root-cause from telemetry. Info/warn still rate-limited.
+            if (level == "error")
+            {
+                CairnBridge.Instance?.SendUnityLog(level, line);
+                return;
+            }
+
             // Rate-limit window of 1 second.
             float now = Time.realtimeSinceStartup;
             if (now - _windowStart > 1f)

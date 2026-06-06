@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
+using UnityEngine.XR.Management;
 using System.Collections.Generic;
 using System.Globalization;
 
@@ -38,9 +39,45 @@ public class CairnBridge : MonoBehaviour
     private bool  _planeFallbackTriggered = false;
     private int   _frameCount       = 0;
     private ARSessionState _lastLoggedFrameState = ARSessionState.None;
+    // Watchdog: if XR loader appears registered (XRDiag loaderCount=1 reported
+    // by EmitStartupDiagnostics) but ARSession.state never advances past
+    // initial within SESSION_STALL_TIMEOUT, emit a one-shot ARStateStall
+    // message. This disambiguates "loader present but subsystem silently
+    // failed" from "loader missing" — both look like 0 ArSessionState
+    // events otherwise.
+    private bool  _stateStallReported = false;
+    private const float SESSION_STALL_TIMEOUT = 10f;
+    // R2-3 fix: XRDiag and ARBgDiag must NOT emit from Start() — Unity's
+    // Start() can fire before withUnityEmbed.js's CHANGE G runs
+    // [fwLibCls registerAPIforNativeCalls:self], because runEmbeddedWithArgc:
+    // is non-blocking and steps 9-11 run AFTER it returns. Messages sent
+    // pre-registration are silently dropped by NativeCallProxy. Defer the
+    // one-shot diagnostic emission to the first Update tick after frame 5
+    // (~83ms at 60fps) — comfortably past the registration race window.
+    private bool  _diagSent          = false;
 
     private const float FALLBACK_PLANE_TIMEOUT = 30f; // 30s no plane => synth pillars
     private const int   ARFRAME_DECIMATE      = 6;   // 60fps / 6 = 10Hz
+
+    /// <summary>
+    /// Escape a string for safe inclusion as a JSON string literal value.
+    /// Handles backslash, double-quote, and common control characters.
+    /// Used for error messages from caught exceptions where the message
+    /// content is not under our control (e.g., file paths with `\`,
+    /// embedded newlines from stack traces).
+    /// </summary>
+    private static string EscapeJson(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        // Order matters: escape backslash FIRST, then double-quote, then
+        // control chars. If we escaped quote first, the \\ produced by
+        // backslash escape would itself look like an escape sequence.
+        return s.Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\n", "\\n")
+                .Replace("\r", "\\r")
+                .Replace("\t", "\\t");
+    }
 
     void Awake()
     {
@@ -86,6 +123,97 @@ public class CairnBridge : MonoBehaviour
 
         UnityLogger.IForward("CairnBridge",
             $"Start — refs: cam={arCamera!=null} session={arSession!=null} planeMgr={planeManager!=null} spawner={spawner!=null}");
+
+        // R2-3 fix: XRDiag and ARBgDiag emission MOVED to EmitStartupDiagnostics(),
+        // invoked from Update() after Time.frameCount > 5 (~83ms at 60fps).
+        // Reason: Unity's Start() can fire before withUnityEmbed.js's CHANGE G
+        // step11 [fwLibCls registerAPIforNativeCalls:self] completes, because
+        // runEmbeddedWithArgc: is non-blocking. Pre-registration messages get
+        // silently dropped by NativeCallProxy (no delegate registered). By
+        // deferring to frame 5+, we guarantee registration has run.
+    }
+
+    /// <summary>
+    /// Emit one-shot startup diagnostics (XRDiag, ARBgDiag). Called once
+    /// from Update() after the registerAPIforNativeCalls race window closes.
+    /// </summary>
+    private void EmitStartupDiagnostics()
+    {
+        // Diagnostic: enumerate active XR loaders. If empty, ARKit subsystem
+        // is NOT loaded at runtime regardless of editor-time configuration —
+        // this is the smoking-gun signal for "loader registered in YAML but
+        // not active". Send via SendToRN so it shows up in production diag,
+        // not just Unity console.
+        try
+        {
+            var settings = XRGeneralSettings.Instance;
+            var manager = settings != null ? settings.Manager : null;
+            if (manager == null)
+            {
+                SendToRN("XRDiag",
+                    "{\"phase\":\"first-update\",\"managerNull\":true,\"loaderCount\":0,\"loaders\":\"\"}");
+            }
+            else
+            {
+                var activeLoaders = manager.activeLoaders;
+                int count = activeLoaders != null ? activeLoaders.Count : 0;
+                var names = new System.Text.StringBuilder();
+                if (activeLoaders != null)
+                {
+                    for (int i = 0; i < activeLoaders.Count; i++)
+                    {
+                        if (i > 0) names.Append(",");
+                        names.Append(activeLoaders[i] != null
+                            ? activeLoaders[i].GetType().Name
+                            : "null");
+                    }
+                }
+                var diagJson = "{\"phase\":\"first-update\",\"managerNull\":false,\"loaderCount\":"
+                             + count.ToString()
+                             + ",\"loaders\":\"" + names.ToString() + "\"}";
+                SendToRN("XRDiag", diagJson);
+                UnityLogger.IForward("CairnBridge",
+                    $"XR active loaders ({count}): {names}");
+            }
+        }
+        catch (System.Exception e)
+        {
+            SendToRN("XRDiag",
+                "{\"phase\":\"first-update\",\"error\":\"" + EscapeJson(e.Message) + "\"}");
+        }
+
+        // Diagnostic: ARCameraBackground state. If disabled or null, the live
+        // camera feed will not composite — screen stays black even when AR
+        // session runs. This was a leading hypothesis from 2026-06-05 diag.
+        try
+        {
+            ARCameraBackground arBg = null;
+            if (arCamera != null)
+            {
+                arBg = arCamera.GetComponent<ARCameraBackground>();
+            }
+            string bgJson;
+            if (arBg == null)
+            {
+                bgJson = "{\"phase\":\"first-update\",\"present\":false}";
+            }
+            else
+            {
+                bgJson = "{\"phase\":\"first-update\",\"present\":true,\"enabled\":"
+                       + (arBg.enabled ? "true" : "false")
+                       + ",\"useCustomMaterial\":"
+                       + (arBg.useCustomMaterial ? "true" : "false") + "}";
+            }
+            SendToRN("ARBgDiag", bgJson);
+            UnityLogger.IForward("CairnBridge",
+                arBg == null ? "ARCameraBackground NOT FOUND on arCamera"
+                             : $"ARCameraBackground enabled={arBg.enabled} useCustomMat={arBg.useCustomMaterial}");
+        }
+        catch (System.Exception e)
+        {
+            SendToRN("ARBgDiag",
+                "{\"phase\":\"first-update\",\"error\":\"" + EscapeJson(e.Message) + "\"}");
+        }
     }
 
     private void AutoFindReferences()
@@ -114,6 +242,28 @@ public class CairnBridge : MonoBehaviour
 
     void OnEnable()
     {
+        // R3-2 fix: reset all one-shot flags on every enable so a remounted
+        // RN UnityAROverlay (after user navigates away from AR screen and
+        // back) sees fresh ArReady / XRDiag / ARBgDiag emissions. Without
+        // this, the RN-side arReadyRef resets to false on remount but
+        // Unity's _arReadySent stays true → RN waits 15s, never gets
+        // ArReady, uploads false-alarm "unity-15s-silent" diagnostic.
+        // We deliberately do NOT reset these in OnApplicationPause(false)
+        // — pause/resume keeps the same Unity session, so re-emitting
+        // would be noise; only OnEnable (re-attach to scene/RN view)
+        // signals a fresh consumer that needs the diagnostics.
+        _arReadySent = false;
+        _diagSent = false;
+        _stateStallReported = false;
+        _planeFallbackTriggered = false;
+        _firstFrameLogged = false;
+        _lastLoggedFrameState = ARSessionState.None;
+        // Re-baseline timing too, so watchdogs measure from this remount,
+        // not from process Awake time. Without this, a 30+min idle remount
+        // would fire ARStateStall and FALLBACK_PLANE_TIMEOUT immediately
+        // even though Unity is fresh-mounted in a healthy state.
+        _startTime = Time.realtimeSinceStartup;
+
         if (planeManager != null)
         {
             planeManager.trackablesChanged.AddListener(OnPlanesChanged);
@@ -130,6 +280,32 @@ public class CairnBridge : MonoBehaviour
         ARSession.stateChanged -= OnArSessionStateChanged;
     }
 
+    /// <summary>
+    /// iOS lifecycle: paused=true when app backgrounded, paused=false on resume.
+    /// Time.realtimeSinceStartup is wall-clock — it advances even while the
+    /// app is backgrounded — so a user who backgrounds at t=2s and returns
+    /// at t=15s would otherwise instantly trigger ARStateStall (10s) and
+    /// FALLBACK_PLANE_TIMEOUT (30s) watchdogs based on time NOT spent in
+    /// foreground. We re-baseline the watchdog start time on resume so
+    /// timeouts measure foreground wall-clock only.
+    /// Note: ARSession itself is paused/resumed by AR Foundation; on
+    /// resume the state will go through Initializing → Tracking again,
+    /// which is normal and expected.
+    /// </summary>
+    void OnApplicationPause(bool paused)
+    {
+        if (!paused)
+        {
+            // Resume: re-baseline watchdog start time. Once-fired one-shots
+            // (_stateStallReported, _planeFallbackTriggered) are deliberately
+            // NOT reset — if we already reported them in this session, no
+            // need to re-fire after a foreground resume.
+            _startTime = Time.realtimeSinceStartup;
+            UnityLogger.IForward("CairnBridge",
+                "OnApplicationPause(false) — watchdog baseline reset to current realtimeSinceStartup");
+        }
+    }
+
     void Update()
     {
         _frameCount++;
@@ -141,13 +317,96 @@ public class CairnBridge : MonoBehaviour
                 $"First Update — fps_target={Application.targetFrameRate} dt={Time.deltaTime:F4}");
         }
 
+        // R2-3 fix: emit one-shot startup diagnostics from Update() AFTER frame
+        // 5 (~83ms at 60fps), well past the registerAPIforNativeCalls race.
+        // Doing this in Start() lost messages on fast cold-starts because the
+        // RN-side delegate (NativeCallProxy.api) wasn't yet registered.
+        if (!_diagSent && _frameCount > 5)
+        {
+            _diagSent = true;
+            EmitStartupDiagnostics();
+        }
+
         // Send ArReady once when ARSession reports tracking
         if (!_arReadySent && ARSession.state == ARSessionState.SessionTracking)
         {
             _arReadySent = true;
-            SendToRN("ArReady",
-                $"{{\"unityVersion\":\"{Application.unityVersion}\",\"arSession\":\"{ARSession.state}\"}}");
+            // Manual concat — same IL2CPP {N:fmt}}} bug as SendArFrame.
+            // Even though this format string has no :Fn placeholders, the
+            // trailing }} escape pattern in IL2CPP-compiled string.Format
+            // / interpolation is the bug trigger. Manual concat sidesteps
+            // the entire risk class.
+            var arReadyJson = "{\"unityVersion\":\"" + Application.unityVersion
+                            + "\",\"arSession\":\"" + ARSession.state
+                            + "\"}";
+            SendToRN("ArReady", arReadyJson);
             UnityLogger.IForward("CairnBridge", "ArReady sent");
+
+            // LOG-GAP-1 fix: re-emit ARBgDiag at ar-ready time to detect
+            // "AR session is tracking but camera feed isn't compositing"
+            // (URP/render misconfig → black screen with healthy state).
+            // The first-update ARBgDiag may show present=true,enabled=true
+            // before the AR session was actually running. By re-reporting
+            // at SessionTracking time, we capture the steady-state render
+            // pipeline state — if `enabled=false` or `useCustomMaterial`
+            // changed from first-update report, we know the feed broke
+            // post-initialization.
+            try
+            {
+                ARCameraBackground arBg = arCamera != null
+                    ? arCamera.GetComponent<ARCameraBackground>()
+                    : null;
+                string bgJson;
+                if (arBg == null)
+                {
+                    bgJson = "{\"phase\":\"ar-ready\",\"present\":false}";
+                }
+                else
+                {
+                    bgJson = "{\"phase\":\"ar-ready\",\"present\":true,\"enabled\":"
+                           + (arBg.enabled ? "true" : "false")
+                           + ",\"useCustomMaterial\":"
+                           + (arBg.useCustomMaterial ? "true" : "false")
+                           + ",\"materialNull\":"
+                           + (arBg.material == null ? "true" : "false") + "}";
+                }
+                SendToRN("ARBgDiag", bgJson);
+            }
+            catch (System.Exception e)
+            {
+                SendToRN("ARBgDiag",
+                    "{\"phase\":\"ar-ready\",\"error\":\"" + EscapeJson(e.Message) + "\"}");
+            }
+        }
+
+        // ARStateStall watchdog: at SESSION_STALL_TIMEOUT seconds after Awake,
+        // if ARSession.state has NOT yet advanced to SessionInitializing or
+        // beyond, emit a one-shot ARStateStall message with the current state
+        // and active-loader info. Tells RN telemetry: "XR loader claims to be
+        // active (per XRDiag at Start), but the ARKit subsystem hasn't moved
+        // the session forward — likely silent native failure."
+        if (!_stateStallReported &&
+            Time.realtimeSinceStartup - _startTime > SESSION_STALL_TIMEOUT &&
+            ARSession.state < ARSessionState.SessionInitializing)
+        {
+            _stateStallReported = true;
+            string activeLoadersInfo = "unknown";
+            try
+            {
+                var settings = XRGeneralSettings.Instance;
+                var manager = settings != null ? settings.Manager : null;
+                if (manager == null) activeLoadersInfo = "manager-null";
+                else if (manager.activeLoaders == null) activeLoadersInfo = "loaders-null";
+                else activeLoadersInfo = manager.activeLoaders.Count.ToString();
+            }
+            catch { activeLoadersInfo = "exception"; }
+            var stallJson = "{\"state\":\"" + ARSession.state
+                          + "\",\"elapsedSec\":\"" + (Time.realtimeSinceStartup - _startTime).ToString("F1", CultureInfo.InvariantCulture)
+                          + "\",\"activeLoaders\":\"" + activeLoadersInfo
+                          + "\"}";
+            SendToRN("ARStateStall", stallJson);
+            UnityLogger.W("CairnBridge",
+                $"ARStateStall — state={ARSession.state} after {SESSION_STALL_TIMEOUT}s, activeLoaders={activeLoadersInfo}");
         }
 
         // No-plane fallback: spawn pillars relative to camera if no plane in 30s
@@ -243,7 +502,9 @@ public class CairnBridge : MonoBehaviour
     private void OnArSessionStateChanged(ARSessionStateChangedEventArgs args)
     {
         UnityLogger.IForward("CairnBridge", $"ARSession state -> {args.state}");
-        SendToRN("ArSessionState", $"{{\"state\":\"{args.state}\"}}");
+        // Manual concat — same IL2CPP {N:fmt}}} bug class as SendArFrame.
+        var stateJson = "{\"state\":\"" + args.state + "\"}";
+        SendToRN("ArSessionState", stateJson);
     }
 
     // ============================================================

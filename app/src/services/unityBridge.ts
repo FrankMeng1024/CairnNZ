@@ -32,6 +32,18 @@ const TAG = 'unity-bridge';
 // NOT throttled — they are rare and signal new corruption patterns.
 const parseRecoveredLastLog: Record<string, number> = {};
 
+/**
+ * Reset the parse:recovered throttle map. Called by UnityAROverlay on mount
+ * so that a remount (e.g., AR screen exited and re-entered) gets a fresh
+ * first-recovery breadcrumb instead of being silently throttled by stale
+ * timestamps from the previous mount session.
+ */
+export function resetParseRecoveredThrottle(): void {
+  for (const k of Object.keys(parseRecoveredLastLog)) {
+    delete parseRecoveredLastLog[k];
+  }
+}
+
 type UnityViewRef = React.RefObject<UnityView | null>;
 
 /**
@@ -75,6 +87,9 @@ export type UnityMessage =
   | { kind: 'Pong';           token: string; unityTime: number }
   | { kind: 'UnityLog';       level: 'info' | 'warn' | 'error'; line: string }
   | { kind: 'Checkpoint';     step: string }
+  | { kind: 'XRDiag';         phase: string; managerNull?: boolean; loaderCount?: number; loaders?: string; error?: string }
+  | { kind: 'ARBgDiag';       phase: string; present?: boolean; enabled?: boolean; useCustomMaterial?: boolean; materialNull?: boolean; error?: string }
+  | { kind: 'ARStateStall';   state: string; elapsedSec: string; activeLoaders: string }
   | { kind: 'Unknown';        raw: string };
 
 export function parseUnityMessage(raw: string): UnityMessage {
@@ -194,6 +209,44 @@ export function parseUnityMessage(raw: string): UnityMessage {
         kind: 'Pong',
         token: String(data.token ?? ''),
         unityTime: typeof data.unityTime === 'number' ? data.unityTime : 0,
+      };
+    case 'XRDiag':
+      // Unity-side enumeration of active XR loaders. Sent once at Start().
+      // If managerNull=true OR loaderCount=0, ARKit subsystem is not active
+      // at runtime regardless of editor-time YAML config — smoking gun for
+      // "loader registered in YAML but not loaded into XRManagerSettings".
+      return {
+        kind: 'XRDiag',
+        phase: String(data.phase ?? ''),
+        managerNull: typeof data.managerNull === 'boolean' ? data.managerNull : undefined,
+        loaderCount: typeof data.loaderCount === 'number' ? data.loaderCount : undefined,
+        loaders: typeof data.loaders === 'string' ? data.loaders : undefined,
+        error: typeof data.error === 'string' ? data.error : undefined,
+      };
+    case 'ARBgDiag':
+      // Unity-side ARCameraBackground component state. Sent once at Start().
+      // present=false means the AR Camera GameObject lacks ARCameraBackground
+      // → camera feed will never composite → screen stays black.
+      // enabled=false means the component exists but is disabled.
+      return {
+        kind: 'ARBgDiag',
+        phase: String(data.phase ?? ''),
+        present: typeof data.present === 'boolean' ? data.present : undefined,
+        enabled: typeof data.enabled === 'boolean' ? data.enabled : undefined,
+        useCustomMaterial: typeof data.useCustomMaterial === 'boolean' ? data.useCustomMaterial : undefined,
+        materialNull: typeof data.materialNull === 'boolean' ? data.materialNull : undefined,
+        error: typeof data.error === 'string' ? data.error : undefined,
+      };
+    case 'ARStateStall':
+      // One-shot watchdog from Unity: at 10s post-Awake, if ARSession.state
+      // hasn't advanced past initial states. Disambiguates "XR loader present
+      // but subsystem silently failed" from "XR loader missing" — without
+      // this, both look like absence of ArSessionState events.
+      return {
+        kind: 'ARStateStall',
+        state: String(data.state ?? ''),
+        elapsedSec: String(data.elapsedSec ?? ''),
+        activeLoaders: String(data.activeLoaders ?? ''),
       };
     default:
       return { kind: 'Unknown', raw };
