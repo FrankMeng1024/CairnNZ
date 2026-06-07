@@ -378,10 +378,25 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           break;
 
         case 'PlaneDetected':
-          groundYRef.current = msg.y;
-          crashLogger.breadcrumb(
-            `${TAG}:recv:PlaneDetected y=${msg.y.toFixed(2)} area=${msg.area.toFixed(1)}`
-          );
+          {
+            // Ground-jump diagnostic: if the new plane is significantly
+            // higher/lower than the previous one (>0.5m), log it. Common
+            // when the user moves from outdoor ground to a tabletop —
+            // ARKit reports the table as a new horizontal plane at
+            // y≈1m. This was the smoking-gun signal in the "phone-flat
+            // cairns drift" bug. We only diagnose, never reject — the
+            // hit-test logic in ARScreen handles correctness.
+            const prev = groundYRef.current;
+            if (prev !== null && Math.abs(msg.y - prev) > 0.5) {
+              crashLogger.breadcrumb(
+                `${TAG}:ground-jump from=${prev.toFixed(2)} to=${msg.y.toFixed(2)} delta=${(msg.y - prev).toFixed(2)}`
+              );
+            }
+            groundYRef.current = msg.y;
+            crashLogger.breadcrumb(
+              `${TAG}:recv:PlaneDetected y=${msg.y.toFixed(2)} area=${msg.area.toFixed(1)}`
+            );
+          }
           break;
 
         case 'ArFrame':

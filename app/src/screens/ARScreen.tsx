@@ -238,29 +238,24 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   const [snapState, setSnapState] = useState<'idle' | 'busy' | 'done' | 'err'>('idle');
   const [snapMsg, setSnapMsg] = useState<string>('');
   // v78 #3: AR init UX. Tracks one of:
-  //   'init'      — first 4 seconds, glReady === false. Show spinner.
-  //   'ready'     — glReady === true. Hide overlay.
-  //   'low-light' — 4s elapsed and still !glReady. Show "Low light or
-  //                 featureless area — AR may not work here" + retry.
+  //   'init'       — first 4 seconds, glReady === false. Show spinner.
+  //   'ready'      — glReady === true AND device held upright. Hide overlay.
+  //   'low-light'  — 4s elapsed and still !glReady. Show "Low light or
+  //                  featureless area — AR may not work here" + retry.
+  //   'phone-flat' — glReady === true BUT user is holding phone roughly
+  //                  horizontal (face down on table or flat in hand).
+  //                  ARKit world tracking degrades to IMU-only in this
+  //                  pose; new plant hit-tests fall onto the table top
+  //                  (y≈1m) instead of the floor, producing visually
+  //                  shifted cairns. Show coaching pill, disable plant.
   // ARKit needs textured features + light to fix world tracking; in
   // metro stations / dim rooms it sits at "limited" forever and the
   // user just sees a black screen. This overlay tells them why.
-  const [arInitState, setArInitState] = useState<'init' | 'ready' | 'low-light'>('init');
-  useEffect(() => {
-    if (arStatus.glReady) {
-      setArInitState('ready');
-      return;
-    }
-    // not ready: schedule low-light degrade after 4s if still not ready
-    setArInitState('init');
-    const t = setTimeout(() => {
-      // re-check after timer — only flip if still not ready (latest
-      // arStatus.glReady from closure may be stale, but setArInitState
-      // is updater-safe and the next glReady=true above wins anyway).
-      setArInitState(prev => prev === 'ready' ? 'ready' : 'low-light');
-    }, 4000);
-    return () => clearTimeout(t);
-  }, [arStatus.glReady]);
+  // (`isPhoneFlat` derived value and the state-transition effect that
+  //  depends on `arFrame` live below the `arFrame` declaration to keep
+  //  init order valid; this state declaration stays here so other early
+  //  refs like retryAr keep their existing line numbers.)
+  const [arInitState, setArInitState] = useState<'init' | 'ready' | 'low-light' | 'phone-flat'>('init');
   // Retry handler: simply re-mount the AR overlay by toggling a key.
   // Using a counter so consecutive retries each force a fresh mount.
   const [arRetryKey, setArRetryKey] = useState(0);
@@ -278,6 +273,54 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     origin: { lat: number; lng: number; alt: number | null } | null;
     groundY: number | null;
   }>({ camera: null, cairns: [], origin: null, groundY: null });
+
+  // Phone-flat detection: arFrame.camera.forward is the camera's look
+  // vector in ARKit world space. y > 0.85 ≈ user holding device roughly
+  // horizontal looking up at ceiling (rare). y < -0.85 ≈ device flat on
+  // table or facing down (common — "I just put my phone down"). Either
+  // extreme means hit-tests will pick wrong planes (ceiling/table) and
+  // tracking quality degrades to IMU-only. Threshold 0.85 ≈ 32° from
+  // vertical; calibrated by inspecting plant logs where ground=1.01
+  // (table top) was hit-tested with fy=-0.52 — already significantly
+  // tilted down. 0.85 leaves comfortable headroom for normal "looking
+  // at the trail in front of me" usage (typical fy ~ -0.3 to -0.5).
+  const isPhoneFlat = (() => {
+    const fy = arFrame.camera?.forward?.[1];
+    if (fy == null) return false;
+    return fy > 0.85 || fy < -0.85;
+  })();
+
+  // Drive arInitState transitions. Two phases:
+  //   1. Pre-glReady: 'init' for 4s, then 'low-light' if still not ready.
+  //   2. Post-glReady: 'ready' OR 'phone-flat' depending on device pose.
+  // Re-runs on glReady AND on isPhoneFlat changes so the user gets live
+  // feedback as they tilt the phone — pick it up and the coaching pill
+  // disappears within one ArFrame (~100ms).
+  useEffect(() => {
+    if (arStatus.glReady) {
+      setArInitState(isPhoneFlat ? 'phone-flat' : 'ready');
+      return;
+    }
+    setArInitState('init');
+    const t = setTimeout(() => {
+      setArInitState(prev => prev === 'ready' ? 'ready' : 'low-light');
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [arStatus.glReady, isPhoneFlat]);
+
+  // Ready haptic — fire ONCE when transitioning to 'ready' so the user
+  // gets a subtle multimodal cue that AR is now interactive. Matches
+  // industry pattern (Apple Measure / IKEA Place fade out coaching +
+  // soft tactile cue). Won't fire on 'phone-flat' since that isn't
+  // actually a "ready to plant" moment for the user.
+  const readyHapticFiredRef = useRef(false);
+  useEffect(() => {
+    if (arInitState === 'ready' && !readyHapticFiredRef.current) {
+      readyHapticFiredRef.current = true;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+      crashLogger.breadcrumb('ar:ready-haptic-fired');
+    }
+  }, [arInitState]);
   // v68: viewport-level lock-on animation. Set true the instant user taps
   // Aim & Plant; AimShutter auto-resets after ~1.3s.
   const [shutterFiring, setShutterFiring] = useState(false);
@@ -819,30 +862,43 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           'low-light' = persistent hint with retry button. Hidden when
           AR has reached glReady. */}
       {arInitState !== 'ready' && (
-        <View style={styles.arInitOverlay} pointerEvents={arInitState === 'low-light' ? 'auto' : 'none'}>
-          <View style={styles.arInitCard}>
-            {arInitState === 'init' ? (
-              <>
-                <ActivityIndicator size="small" color={Colors.primary} />
-                <Text style={styles.arInitTitle}>Initializing AR…</Text>
-                <Text style={styles.arInitBody}>
-                  Move your phone slowly to scan the surroundings.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.arInitTitle}>Low light or featureless area</Text>
-                <Text style={styles.arInitBody}>
-                  AR needs visible texture and light to anchor flags. Try a
-                  brighter spot or point at the ground / a wall with detail.
-                </Text>
-                <TouchableOpacity style={styles.arInitRetry} onPress={retryAr} activeOpacity={0.7}>
-                  <Text style={styles.arInitRetryText}>Retry</Text>
-                </TouchableOpacity>
-              </>
-            )}
+        arInitState === 'phone-flat' ? (
+          // Phone-flat coaching pill — non-blocking, sits at top so the
+          // camera view stays visible. The cairns are still rendering
+          // (Unity is fine), we just want to nudge the user to lift the
+          // phone before they tap plant. Auto-dismisses the moment fy
+          // returns inside the threshold (next ArFrame).
+          <View style={styles.phoneFlatPill} pointerEvents="none">
+            <Text style={styles.phoneFlatPillText}>
+              Hold your phone upright to plant cairns
+            </Text>
           </View>
-        </View>
+        ) : (
+          <View style={styles.arInitOverlay} pointerEvents={arInitState === 'low-light' ? 'auto' : 'none'}>
+            <View style={styles.arInitCard}>
+              {arInitState === 'init' ? (
+                <>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <Text style={styles.arInitTitle}>Initializing AR…</Text>
+                  <Text style={styles.arInitBody}>
+                    Move your phone slowly to scan the surroundings.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.arInitTitle}>Low light or featureless area</Text>
+                  <Text style={styles.arInitBody}>
+                    AR needs visible texture and light to anchor flags. Try a
+                    brighter spot or point at the ground / a wall with detail.
+                  </Text>
+                  <TouchableOpacity style={styles.arInitRetry} onPress={retryAr} activeOpacity={0.7}>
+                    <Text style={styles.arInitRetryText}>Retry</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        )
       )}
 
       {/* v64: ARKit-driven edge arrows + distance labels. Replaces the
@@ -1019,7 +1075,18 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           // Auto-reset slightly after the animation duration (1.3s)
           setTimeout(() => setShutterFiring(false), 1400);
         }}
-        disabled={!lastCoord && trackPoints.length === 0}
+        // Disable plant when:
+        //   1. No GPS at all (existing rule — can't compute lat/lng)
+        //   2. AR not yet ready (would plant before ARKit world tracking
+        //      converged — cairn would land at fallback position)
+        //   3. Phone is flat (would hit-test against table/ceiling
+        //      instead of floor — known visual-shift bug pre-fix)
+        disabled={
+          (!lastCoord && trackPoints.length === 0)
+          || arInitState === 'init'
+          || arInitState === 'low-light'
+          || arInitState === 'phone-flat'
+        }
         reticleScale={reticleScale}
       />
       <AimReticle scale={reticleScale} />
@@ -1077,6 +1144,29 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill ?? 999,
   },
   arInitRetryText: { color: '#fff', fontWeight: '700', fontSize: FontSize.body },
+  // Phone-flat coaching pill — non-blocking banner near the top of the
+  // screen. Translucent dark background so the camera feed stays visible
+  // through it. Styled to match the OtaBadge floating pill aesthetic.
+  // Top offset accounts for status bar; if you want safe-area precise
+  // positioning, wrap in SafeAreaView upstream — kept absolute here so
+  // it doesn't reflow when present/absent.
+  phoneFlatPill: {
+    position: 'absolute', top: 64, alignSelf: 'center',
+    backgroundColor: 'rgba(20,20,28,0.92)',
+    paddingHorizontal: 18, paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.20, shadowRadius: 10, elevation: 4,
+    maxWidth: '85%',
+  },
+  phoneFlatPillText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
   cameraPlaceholder: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#1a1a2e',
