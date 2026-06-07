@@ -41,6 +41,25 @@ jobs:
           buildsPath: builds
           allowDirtyBuild: false
 
+      # v186 diagnostic: capture Unity Editor.log on failure so we can
+      # actually see compile errors / SetupAndSave exceptions / etc.
+      # Without this, a failed Unity build leaves no actionable
+      # diagnostics in the GitHub Actions UI for non-admin viewers.
+      # `if: always()` runs even when the previous step failed.
+      - name: Upload Unity Editor logs (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-editor-logs
+          path: |
+            /home/runner/.config/unity3d/Editor.log
+            /github/home/.config/unity3d/Editor.log
+            UnityARLib/Logs/
+            ~/.config/unity3d/Editor.log
+            ~/Library/Logs/Unity/Editor.log
+          retention-days: 7
+          if-no-files-found: warn
+
       - name: Locate Unity build output
         run: |
           echo "=== Looking for Unity iOS export ==="
