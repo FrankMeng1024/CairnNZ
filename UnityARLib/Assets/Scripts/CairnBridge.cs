@@ -17,8 +17,8 @@ using System.Globalization;
 ///   dropped and a warning is logged once.).
 /// - RN -> Unity: RN side calls UnityView.postMessage(gameObject, method,
 ///   payload), which Unity's native plugin routes to GameObject.SendMessage.
-///   So OnSpawnStrand / OnClearAll / OnPing are public methods on this
-///   MonoBehaviour invoked by name.
+///   So OnSpawnStrand / OnClearAll / OnPing / OnSetGlobal are public
+///   methods on this MonoBehaviour invoked by name.
 /// </summary>
 public class CairnBridge : MonoBehaviour
 {
@@ -36,7 +36,6 @@ public class CairnBridge : MonoBehaviour
     private bool  _arReadySent      = false;
     private bool  _firstFrameLogged = false;
     private float _startTime        = 0f;
-    private bool  _planeFallbackTriggered = false;
     private int   _frameCount       = 0;
     private ARSessionState _lastLoggedFrameState = ARSessionState.None;
     // Watchdog: if XR loader appears registered (XRDiag loaderCount=1 reported
@@ -56,7 +55,9 @@ public class CairnBridge : MonoBehaviour
     // (~83ms at 60fps) — comfortably past the registration race window.
     private bool  _diagSent          = false;
 
-    private const float FALLBACK_PLANE_TIMEOUT = 30f; // 30s no plane => synth pillars
+    // v186: FALLBACK_PLANE_TIMEOUT removed. GroundYResolver Tier C
+    // (camera.y - 1.5m) now ensures cairns always render at a plausible
+    // ground Y, instantly. No more "wait 30s for plane, spawn pillars".
     private const int   ARFRAME_DECIMATE      = 6;   // 60fps / 6 = 10Hz
 
     /// <summary>
@@ -255,7 +256,6 @@ public class CairnBridge : MonoBehaviour
         _arReadySent = false;
         _diagSent = false;
         _stateStallReported = false;
-        _planeFallbackTriggered = false;
         _firstFrameLogged = false;
         _lastLoggedFrameState = ARSessionState.None;
         // Re-baseline timing too, so watchdogs measure from this remount,
@@ -409,23 +409,11 @@ public class CairnBridge : MonoBehaviour
                 $"ARStateStall — state={ARSession.state} after {SESSION_STALL_TIMEOUT}s, activeLoaders={activeLoadersInfo}");
         }
 
-        // No-plane fallback: spawn pillars relative to camera if no plane in 30s
-        if (!_planeFallbackTriggered &&
-            Time.realtimeSinceStartup - _startTime > FALLBACK_PLANE_TIMEOUT &&
-            spawner != null && !spawner.HasSpawned &&
-            arCamera != null)
-        {
-            _planeFallbackTriggered = true;
-            UnityLogger.W("CairnBridge",
-                $"No plane detected after {FALLBACK_PLANE_TIMEOUT}s — fallback to camera-relative spawn");
-            // Synthesize a "ground" position 1.5m below camera, 2m in front.
-            var camPos     = arCamera.transform.position;
-            var camForward = arCamera.transform.forward;
-            var fakeGround = camPos
-                            + camForward * 2.0f
-                            + Vector3.down * 1.5f;
-            spawner.SpawnFourVerificationPillars(fakeGround, fallback: true);
-        }
+        // v186: 30s no-plane fallback REMOVED. The GroundYResolver Tier C
+        // fallback (camera.y - 1.5m) ensures cairns always render at a
+        // plausible ground Y, even when ARKit never detects a plane. Users
+        // see no failure UI, no debug pillars, no black screen — see
+        // research/arkit_silent_fallback_report.md and plan §1.D.
 
         // Send ArFrame at 10Hz (decimate 60fps by 6) — only when AR session
         // is at least initializing, to avoid streaming junk (0,0,0) poses
@@ -491,10 +479,13 @@ public class CairnBridge : MonoBehaviour
             UnityLogger.IForward("CairnBridge",
                 $"Plane detected: pos=({c.x:F2},{c.y:F2},{c.z:F2}) area={area:F2}");
 
-            if (spawner != null && !spawner.HasSpawned)
-            {
-                spawner.SpawnFourVerificationPillars(c, fallback: false);
-            }
+            // v186: SpawnFourVerificationPillars call REMOVED from production
+            // path. Plan §1.D + §7 mandates RN-driven OnSpawnStrand as the
+            // only spawn path. Diagnostic pillars exist in MultiSpawner but
+            // are Editor-only (call SpawnFourVerificationPillars manually
+            // from a test harness if needed). Removing this auto-spawn
+            // means: first plane detection emits PlaneDetected to RN
+            // (above) and that's it — RN drives any subsequent SpawnStrand.
             return; // Only react to first plane in this batch
         }
     }
@@ -550,6 +541,34 @@ public class CairnBridge : MonoBehaviour
         SendToRN("Pong", json);
     }
 
+    /// <summary>
+    /// RN -> Unity: set an OTA-tunable shader global by name.
+    /// Payload JSON: { "name": "BloomScale", "value": 1.2 }.
+    /// Names supported: BloomScale | Alpha | LightEstimate | ScrollMul |
+    ///                  BreathFreq | HaloRadiusMul.
+    /// ThermalScale is internal-only — RN attempts are rejected.
+    /// All values clamped to declared range in CairnGlobals.
+    /// </summary>
+    public void OnSetGlobal(string json)
+    {
+        if (string.IsNullOrEmpty(json)) return;
+        try
+        {
+            var data = JsonUtility.FromJson<SetGlobalRequest>(json);
+            if (data == null || string.IsNullOrEmpty(data.name)) return;
+            if (CairnGlobals.Instance == null)
+            {
+                UnityLogger.W("CairnBridge", "OnSetGlobal: CairnGlobals.Instance null");
+                return;
+            }
+            CairnGlobals.Instance.Set(data.name, data.value);
+        }
+        catch (System.Exception e)
+        {
+            UnityLogger.E("CairnBridge", "OnSetGlobal parse failed", e);
+        }
+    }
+
     // ============================================================
     // Outbound (Unity -> RN) transport
     // ============================================================
@@ -584,9 +603,17 @@ public class CairnBridge : MonoBehaviour
     public class SpawnRequest
     {
         public string id;
+        public string type;          // v186: 'danger' | 'junction' | 'water' | 'hut' | 'cairn'
         public float  x, y, z;
         public float  r, g, b;
         public float  scrollSpeed;
         public float  bloomBoost;
+    }
+
+    [System.Serializable]
+    public class SetGlobalRequest
+    {
+        public string name;
+        public float  value;
     }
 }

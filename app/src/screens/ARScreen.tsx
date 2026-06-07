@@ -20,15 +20,12 @@ import { Colors, Spacing, FontSize, Radius } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { PressBtn } from '../components/PressBtn';
 import { BackButton } from '../components/BackButton';
-import { AR3DCairnOverlay } from '../components/AR3DCairnOverlay';
-// v57 (build #21): ARKit/Viro 重新启用. v50-v55 的崩溃根因已锁定:
-// React 19.2 (viro 2.55) vs RN 0.81.5 的 react-native-renderer 19.1
-// 不匹配. 已降 viro 到 2.53.1 (require react ~19.1.0), 删 npm overrides,
-// 顶层 react 19.1.0 与 viro 内部要求一致. build #21 native 含 ViroReact pods.
-// 如果 ARKit 仍崩 → ErrorBoundary fallback 自动切回 AR3DCairnOverlay (r3f),
-// 用户体验受损但 app 不崩, 给我们时间通过 OTA 修.
-import { ViroAROverlay } from '../components/ViroAROverlay';
-import { ViroARRitualOverlay, type ViroARRitualOverlayHandle } from '../components/ViroARRitualOverlay';
+// v186: Viro / r3f / Ritual / debug-pillar paths fully removed. Unity is
+// the only AR path. The previous USE_VIRO / USE_UNITY_AR / RITUAL_ENABLED
+// feature flags + dead branch components (ViroAROverlay, ViroARRitualOverlay,
+// AR3DCairnOverlay) and @reactvision/react-viro package are gone. If you
+// need historical context for why a particular pattern is here, see the
+// pre-v186 commit history (HEAD~2 and earlier).
 import { UnityAROverlay, type UnityAROverlayHandle } from '../components/UnityAROverlay';
 import { CairnEdgeArrows } from '../components/CairnEdgeArrows';
 import { AimShutter } from '../components/AimShutter';
@@ -37,19 +34,6 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ARDebugOverlay } from '../components/ARDebugOverlay';
 import { GlassPanel, Elevation } from '../components/GlassPanel';
 
-// USE_VIRO=true (build #21+): 走 ViroAROverlay (ARKit) 路径.
-// ErrorBoundary 兜底 → 如崩则自动切到 AR3DCairnOverlay (r3f).
-// 紧急情况下可通过 OTA 改回 false 跳过 Viro 路径 (ViroAROverlay 仍 import,
-// 因为 OTA 不能改 native binary; import 不调用就不触发 native).
-// USE_VIRO: disabled while Unity AR is under test. Re-enable by setting
-// USE_UNITY_AR=false and USE_VIRO=true (they are mutually exclusive —
-// ARSession is single-tenant).
-const USE_VIRO = false;
-
-// USE_UNITY_AR: enabled for Unity AR Phase 1 testing via OTA.
-// ErrorBoundary fallback intentionally removed — let crashes surface raw
-// so breadcrumb logs + debug snapshots can be analysed.
-const USE_UNITY_AR = true;
 import { useMarkerStore, type Marker } from '../store/useMarkerStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { haversineM, type Coordinate } from '../utils/geo';
@@ -214,18 +198,6 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // v24 diagnostic: AR overlay reports its internal state up so the
   // ARDebugOverlay can show GL-ready + cairn count on screen.
   const [arStatus, setArStatus] = useState<{ glReady: boolean; cairnCount: number }>({ glReady: false, cairnCount: 0 });
-  // Experimental: ritual circle visual mode. Toggle in top-right pill
-  // switches between production sphere/icon (ViroAROverlay) and the
-  // DS-style ground ritual circle (ViroARRitualOverlay). Both share GPS
-  // anchoring + ARKit tracking; only the rendered visuals differ.
-  // v155: ritual mode RE-ENABLED. 5 type 5 distinct best-effort strand
-  // techniques, one per type, for user-side A/B comparison.
-  const RITUAL_ENABLED = true;
-  const [ritualMode, setRitualMode] = useState(false);
-  // Debug snapshot ref — ARScreen calls ritualOverlayRef.current?.takeDebugSnapshot()
-  // when user taps the bug button. Snapshot is base64-chunked into telemetry
-  // breadcrumbs so I can pull it via mysql + reassemble locally.
-  const ritualOverlayRef = useRef<ViroARRitualOverlayHandle | null>(null);
   // Phase 2 Unity wire-up: ref to UnityAROverlay so we can imperatively push
   // OnSpawnStrand to Unity right after a successful plant. Going through
   // props would add a render frame of latency between haptic and visual.
@@ -353,10 +325,10 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     crashLogger.breadcrumb(`ar:screen:mount`);
     // OTA #181: log the camera-gate decision so post-OTA telemetry can
     // confirm the gate fix is actually in the running bundle. Greppable
-    // for `cameraWillMount=false` to verify the bundle is post-181.
-    crashLogger.breadcrumb(
-      `ar:camera-gate USE_VIRO=${USE_VIRO} USE_UNITY_AR=${USE_UNITY_AR} cameraWillMount=${!USE_VIRO && !USE_UNITY_AR}`
-    );
+    // v186: camera-gate is permanently false — Unity is the only AR path
+    // and Unity handles its own camera feed via ARCameraBackground inside
+    // UnityFramework. No CameraView mounted from RN.
+    crashLogger.breadcrumb('ar:camera-gate path=unity cameraWillMount=false');
     return () => {
       crashLogger.breadcrumb(`ar:screen:unmount`);
       crashLogger.uploadDiagnostic(API_BASE_URL, 'unmount').catch(() => undefined);
@@ -683,6 +655,7 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         const shader = markerTypeToShaderParams(type);
         unityOverlayRef.current.spawnCairn({
           id: marker.id,
+          type: type,             // v186: forward type so Unity's preset can apply per-type personality
           x: unitySpawnPos.x,
           y: unitySpawnPos.y,
           z: unitySpawnPos.z,
@@ -762,91 +735,26 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
 
   return (
     <View style={styles.container}>
-      {/* Camera background — live rear camera feed at the very bottom
-          of the z-stack. Only used for the r3f path (USE_VIRO=false AND
-          USE_UNITY_AR=false). When USE_VIRO=true OR USE_UNITY_AR=true,
-          the AR backend (Viro's ViroARSceneNavigator or Unity's ARKit
-          ARSession) owns the rear camera feed via AVCaptureSession.
-          Rendering expo-camera's CameraView at the same time would steal
-          AVCaptureSession from the AR backend, breaking the AR view
-          (cairn renders but on black background — exactly the symptom
-          observed in TestFlight where Unity ArFrame fired at 10Hz but
-          ArReady never came and the screen stayed black).
-          If expo-camera is unavailable or permission denied,
-          the existing dark backdrop shows instead (UI elements have
-          their own contrast and read fine against either). */}
-      {!USE_VIRO && !USE_UNITY_AR && CameraView && cameraPerm?.granted && (
-        <CameraView
-          style={StyleSheet.absoluteFillObject}
-          facing="back"
-          onMountError={(e: any) => {
-            crashLogger.breadcrumb(`ar:camera:mount-error ${String(e?.message ?? e).slice(0, 80)}`);
-          }}
-        />
-      )}
+      {/* v186: Unity owns the rear camera feed via ARCameraBackground
+          inside UnityFramework. RN does not mount expo-camera here.
+          (Pre-v186 had branches for Viro / r3f / no-AR that mounted
+          CameraView from RN — all removed.) */}
 
-      {/* AR cairn overlay — ARKit (ViroAROverlay) primary path,
-          r3f (AR3DCairnOverlay) automatic fallback if Viro crashes.
-          Cairns render anchored to absolute GPS coordinates so they
-          stay glued to a real-world place even as the user moves.
-
-          ARKit path (USE_VIRO=true): full VIO + camera tracking,
-          sub-cm precision, "永不飘" core promise.
-
-          r3f fallback: GPS-only projection, drifts with GPS noise but
-          still functional. Triggered automatically by ErrorBoundary if
-          ViroAROverlay throws (e.g. on devices missing ARKit support). */}
-      {/* AR overlay — Unity primary path (USE_UNITY_AR=true).
-          No ErrorBoundary fallback intentionally: crashes surface raw
-          so breadcrumb logs + debug snapshots can be analysed. */}
-      {USE_UNITY_AR ? (
-        <UnityAROverlay
-          ref={unityOverlayRef}
-          markers={nearbyMarkers}
-          userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng, alt: lastCoord.alt ?? null } : null}
-          userHeading={userHeading}
-          onStatus={setArStatus}
-          onArFrame={setArFrame}
-          beamingId={beamingId}
-          onCairnPress={(id) => {
-            crashLogger.breadcrumb(`unity:cairn:press id=${id.slice(-6)}`);
-          }}
-        />
-      ) : USE_VIRO && RITUAL_ENABLED && ritualMode ? (
-          <ViroARRitualOverlay
-            ref={ritualOverlayRef}
-            markers={nearbyMarkers}
-            userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng, alt: lastCoord.alt ?? null } : null}
-            userHeading={userHeading}
-            onStatus={setArStatus}
-            onArFrame={setArFrame}
-            onCairnPress={(id) => {
-              crashLogger.breadcrumb(`ritualAR:cairn:press id=${id.slice(-6)}`);
-            }}
-          />
-        ) : USE_VIRO ? (
-          <ViroAROverlay
-            markers={nearbyMarkers}
-            userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng, alt: lastCoord.alt ?? null } : null}
-            userHeading={userHeading}
-            onStatus={setArStatus}
-            onArFrame={setArFrame}
-            beamingId={beamingId}
-            onCairnPress={(id) => {
-              crashLogger.breadcrumb(`viro:cairn:press id=${id.slice(-6)}`);
-            }}
-          />
-        ) : (
-          <AR3DCairnOverlay
-            markers={nearbyMarkers}
-            userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng } : null}
-            userHeading={userHeading}
-            onStatus={setArStatus}
-            onCairnPress={(id) => {
-              crashLogger.breadcrumb(`ar3d:cairn:press id=${id.slice(-6)}`);
-            }}
-          />
-        )}
+      {/* AR overlay — Unity is the only path. No ErrorBoundary fallback
+          intentionally: crashes surface raw so breadcrumb logs + debug
+          snapshots can be analysed. */}
+      <UnityAROverlay
+        ref={unityOverlayRef}
+        markers={nearbyMarkers}
+        userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng, alt: lastCoord.alt ?? null } : null}
+        userHeading={userHeading}
+        onStatus={setArStatus}
+        onArFrame={setArFrame}
+        beamingId={beamingId}
+        onCairnPress={(id) => {
+          crashLogger.breadcrumb(`unity:cairn:press id=${id.slice(-6)}`);
+        }}
+      />
 
 
       {/* v24 on-screen diagnostic — GL ready, cairn count, recent breadcrumbs */}
@@ -977,72 +885,42 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         >
           <Text style={styles.arResetBtnText}>📍</Text>
         </TouchableOpacity>
-        {/* v153: ritual toggle hidden until 3D baseline re-validated.
-            Set RITUAL_ENABLED = true above to show again. */}
-        {RITUAL_ENABLED && <TouchableOpacity
-          style={[styles.ritualToggle, ritualMode && styles.ritualToggleActive]}
-          onPress={() => setRitualMode(m => !m)}
+        {/* v186: ritual mode toggle removed — Unity is the single AR
+            path so there's no longer an A/B between sphere/ritual. */}
+
+        {/* Debug snapshot button — Unity AR diagnostic upload. */}
+        <TouchableOpacity
+          style={[
+            styles.debugSnapBtn,
+            snapState === 'busy' && styles.debugSnapBtnBusy,
+            snapState === 'done' && styles.debugSnapBtnDone,
+            snapState === 'err'  && styles.debugSnapBtnErr,
+          ]}
+          disabled={snapState !== 'idle'}
+          onPress={async () => {
+            setSnapState('busy');
+            setSnapMsg('');
+            try {
+              crashLogger.breadcrumb(`unity-debug:manual-snap glReady=${arStatus.glReady}`);
+              const sessionId = await crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-manual-snap');
+              setSnapState('done');
+              setSnapMsg(sessionId.slice(-12));
+            } catch (e: any) {
+              setSnapState('err');
+              setSnapMsg(e?.message ?? 'crash');
+            }
+            setTimeout(() => { setSnapState('idle'); setSnapMsg(''); }, 4000);
+          }}
           activeOpacity={0.7}
         >
-          <Text style={styles.ritualToggleText}>
-            {ritualMode ? '◉ Ritual' : '○ Sphere'}
-          </Text>
-        </TouchableOpacity>}
-        {/* Debug snapshot button — shows in ritualMode (Viro) OR Unity AR mode */}
-        {(RITUAL_ENABLED && ritualMode) || USE_UNITY_AR ? (
-          <TouchableOpacity
-            style={[
-              styles.debugSnapBtn,
-              snapState === 'busy' && styles.debugSnapBtnBusy,
-              snapState === 'done' && styles.debugSnapBtnDone,
-              snapState === 'err'  && styles.debugSnapBtnErr,
-            ]}
-            disabled={snapState !== 'idle'}
-            onPress={async () => {
-              setSnapState('busy');
-              setSnapMsg('');
-              try {
-                if (USE_UNITY_AR) {
-                  // Unity AR mode: upload full breadcrumb log directly
-                  crashLogger.breadcrumb(`unity-debug:manual-snap glReady=${arStatus.glReady}`);
-                  const sessionId = await crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-manual-snap');
-                  setSnapState('done');
-                  setSnapMsg(sessionId.slice(-12));
-                } else {
-                  // Ritual (Viro) mode: take visual snapshot
-                  const t0 = Date.now();
-                  const res = await ritualOverlayRef.current?.takeDebugSnapshot();
-                  const dur = Date.now() - t0;
-                  Alert.alert(
-                    res?.success ? 'Snapshot OK' : 'Snapshot FAIL',
-                    `success=${res?.success}\nerror=${res?.error ?? 'none'}\nelapsed=${dur}ms`,
-                  );
-                  if (res?.success) {
-                    setSnapState('done');
-                    setSnapMsg('uploaded');
-                  } else {
-                    setSnapState('err');
-                    setSnapMsg(res?.error ?? 'unknown');
-                  }
-                }
-              } catch (e: any) {
-                if (!USE_UNITY_AR) Alert.alert('Snapshot CRASH', String(e?.message ?? e));
-                setSnapState('err');
-                setSnapMsg(e?.message ?? 'crash');
-              }
-              setTimeout(() => { setSnapState('idle'); setSnapMsg(''); }, 4000);
-            }}
-            activeOpacity={0.7}
-          >
-            {snapState === 'busy' ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.debugSnapBtnText}>
-                {snapState === 'done' ? '✓' : snapState === 'err' ? '✗' : '🐛'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        ) : null}
+          {snapState === 'busy' ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.debugSnapBtnText}>
+              {snapState === 'done' ? '✓' : snapState === 'err' ? '✗' : '🐛'}
+            </Text>
+          )}
+        </TouchableOpacity>
         {/* Persistent message strip below the buttons so user can read
             success/error without losing focus on AR view */}
         {snapState !== 'idle' && (

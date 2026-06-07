@@ -14,28 +14,38 @@ using System.IO;
 /// Programmatic scene + project-settings setup. Replaces manual scene
 /// authoring so CI and local always produce identical output.
 ///
-/// Run from Editor menu:
-///   Cairn > Build CairnAR Scene
-/// Or invoked headlessly by BuildScript.BuildIOS via SetupAndSave().
-///
-/// What it does:
-///   1. Creates Assets/Scenes/CairnAR.unity if missing.
-///   2. Builds the scene graph (ARSession + XROrigin + AR Camera + Plane
-///      Manager + CairnBridge + MultiSpawner + URP Volume with Bloom).
-///   3. Wires references between bridge / spawner / camera / plane manager.
-///   4. Saves the scene.
-///   5. Adds the scene to EditorBuildSettings (enabled).
-///   6. Pre-creates a strand material asset and wires it.
-///   7. Adds Always-Include shaders (URP/Lit, StrandShader) so they aren't
-///      stripped during iOS IL2CPP build.
+/// v186 DS upgrade additions:
+///   - ARRaycastManager component on XR Origin (required for Tier B
+///     ground-Y resolution via .estimatedPlane raycast — see
+///     GroundYResolver.cs)
+///   - Halo + ShadowBlob shaders + materials + textures wired
+///   - CairnGlobals + CairnThermalMonitor MonoBehaviours added to
+///     CairnBridge GameObject
+///   - URP Bloom retuned to v186 values (threshold 1.05 / intensity 0.7
+///     / scatter 0.65) — masks ARCamera feed but blooms strand emissive
+///   - URP HDR enabled assertion (bloom threshold > 1.0 needs HDR or
+///     it's a no-op)
+///   - All new shaders registered in m_AlwaysIncludedShaders so iOS
+///     IL2CPP doesn't strip them as "unused"
 /// </summary>
 public static class SceneSetup
 {
     public const string SCENE_PATH       = "Assets/Scenes/CairnAR.unity";
-    public const string MAT_PATH         = "Assets/Materials/StrandMaterial.mat";
     public const string MAT_DIR          = "Assets/Materials";
+    public const string MAT_PATH         = "Assets/Materials/StrandMaterial.mat";
+    public const string MAT_HALO_PATH    = "Assets/Materials/CairnHalo.mat";
+    public const string MAT_SHADOW_PATH  = "Assets/Materials/CairnShadow.mat";
+    public const string MAT_PARTICLE_PATH = "Assets/Materials/CairnParticle.mat";
+    public const string TEX_DIR          = "Assets/Textures";
+    public const string TEX_FLOW         = "Assets/Textures/strand_flow.png";
+    public const string TEX_RUNE_NOISE   = "Assets/Textures/cairn_rune_noise.png";
+    public const string TEX_SHADOW_BLOB  = "Assets/Textures/cairn_shadow_blob.png";
+    public const string TEX_MOTE         = "Assets/Textures/mote_soft.png";
     public const string STRAND_SHADER    = "Cairn/StrandShader";
+    public const string HALO_SHADER      = "Cairn/HaloShader";
+    public const string SHADOW_SHADER    = "Cairn/ShadowBlobShader";
     public const string URP_LIT          = "Universal Render Pipeline/Lit";
+    public const string URP_PARTICLE_UNLIT = "Universal Render Pipeline/Particles/Unlit";
 
     [MenuItem("Cairn/Build CairnAR Scene")]
     public static void BuildSceneFromMenu()
@@ -48,8 +58,13 @@ public static class SceneSetup
     {
         Debug.Log("[CairnUnity][SceneSetup] === START ===");
 
-        EnsureMaterial();
+        EnsureTextureImportSettings();
+        EnsureStrandMaterial();
+        EnsureHaloMaterial();
+        EnsureShadowMaterial();
+        EnsureParticleMaterial();
         EnsureAlwaysIncludedShaders();
+        EnsureURPHDRAndBloom();
 
         // Open or create scene
         Scene scene;
@@ -125,59 +140,55 @@ public static class SceneSetup
         xrOrigin.Camera = cam;
         Debug.Log("[CairnUnity][SceneSetup] AR Camera built");
 
-        // Plane manager goes on the XR Origin
+        // ARPlaneManager + ARRaycastManager on XR Origin.
+        // ARRaycastManager is REQUIRED for GroundYResolver Tier B raycasts —
+        // without it, .estimatedPlane queries silently return no hits and
+        // every cairn stays at Tier C (knee height). v186 plan amendment A1.
         var planeManager = xrOriginGo.AddComponent<ARPlaneManager>();
         planeManager.requestedDetectionMode = UnityEngine.XR.ARSubsystems.PlaneDetectionMode.Horizontal;
-        Debug.Log("[CairnUnity][SceneSetup] ARPlaneManager added (Horizontal)");
+        var raycastManager = xrOriginGo.AddComponent<ARRaycastManager>();
+        Debug.Log($"[CairnUnity][SceneSetup] ARPlaneManager + ARRaycastManager added (raycastMgr={raycastManager != null})");
 
         // ─── MultiSpawner ───
         var spawnerGo  = new GameObject("MultiSpawner");
         var spawner    = spawnerGo.AddComponent<MultiSpawner>();
 
-        // Wire shader & material references
+        // Wire shader + material references
         var strandMat = AssetDatabase.LoadAssetAtPath<Material>(MAT_PATH);
         if (strandMat != null) spawner.strandMaterialBase = strandMat;
         spawner.urpLitShader = Shader.Find(URP_LIT);
-        Debug.Log($"[CairnUnity][SceneSetup] MultiSpawner wired: strandMat={strandMat!=null} urpLit={spawner.urpLitShader!=null}");
+        spawner.haloMaterial = AssetDatabase.LoadAssetAtPath<Material>(MAT_HALO_PATH);
+        spawner.shadowMaterial = AssetDatabase.LoadAssetAtPath<Material>(MAT_SHADOW_PATH);
+        spawner.particleMaterial = AssetDatabase.LoadAssetAtPath<Material>(MAT_PARTICLE_PATH);
+        Debug.Log($"[CairnUnity][SceneSetup] MultiSpawner wired: strand={strandMat!=null} halo={spawner.haloMaterial!=null} shadow={spawner.shadowMaterial!=null} particle={spawner.particleMaterial!=null}");
 
-        // ─── CairnBridge ───
+        // ─── CairnBridge + CairnGlobals + CairnThermalMonitor ───
         var bridgeGo = new GameObject(CairnBridge.GAMEOBJECT_NAME);
         var bridge   = bridgeGo.AddComponent<CairnBridge>();
         bridge.arCamera     = cam;
         bridge.arSession    = arSession;
         bridge.planeManager = planeManager;
         bridge.spawner      = spawner;
-        Debug.Log("[CairnUnity][SceneSetup] CairnBridge wired");
+        // CairnGlobals owns Shader.SetGlobalFloat for the OTA-tunable knobs.
+        // CairnThermalMonitor drives _CairnGlobalThermalScale based on
+        // iOS thermal state. Both are siblings on the bridge GO.
+        bridgeGo.AddComponent<CairnGlobals>();
+        bridgeGo.AddComponent<CairnThermalMonitor>();
+        // GroundYResolver lives on the spawner GO so its Update runs after
+        // raycasts have populated this frame's data.
+        var resolver = spawnerGo.AddComponent<GroundYResolver>();
+        resolver.arCamera = cam;
+        resolver.raycastManager = raycastManager;
+        resolver.planeManager = planeManager;
+        spawner.groundYResolver = resolver;
+        Debug.Log("[CairnUnity][SceneSetup] CairnBridge + CairnGlobals + CairnThermalMonitor + GroundYResolver wired");
 
         // ─── URP Volume w/ Bloom ───
         var volumeGo = new GameObject("Global Volume (Bloom)");
         var volume   = volumeGo.AddComponent<Volume>();
         volume.isGlobal = true;
-
-        // Try to load existing profile or create one
-        string profilePath = "Assets/Settings/CairnVolumeProfile.asset";
-        var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(profilePath);
-        if (profile == null)
-        {
-            Directory.CreateDirectory("Assets/Settings");
-            profile = ScriptableObject.CreateInstance<VolumeProfile>();
-            AssetDatabase.CreateAsset(profile, profilePath);
-            Debug.Log($"[CairnUnity][SceneSetup] Created Volume profile at {profilePath}");
-        }
-        // Add Bloom if not present
-        UnityEngine.Rendering.Universal.Bloom bloom;
-        if (!profile.TryGet(out bloom))
-        {
-            bloom = profile.Add<UnityEngine.Rendering.Universal.Bloom>(true);
-        }
-        bloom.intensity.overrideState = true; bloom.intensity.value = 1.5f;
-        bloom.threshold.overrideState = true; bloom.threshold.value = 0.7f;
-        bloom.scatter.overrideState   = true; bloom.scatter.value   = 0.7f;
-        EditorUtility.SetDirty(profile);
-        AssetDatabase.SaveAssets();
-
-        volume.sharedProfile = profile;
-        Debug.Log("[CairnUnity][SceneSetup] Volume + Bloom configured");
+        volume.sharedProfile = LoadOrCreateVolumeProfile();
+        Debug.Log("[CairnUnity][SceneSetup] Volume wired");
 
         // ─── Save scene ───
         Directory.CreateDirectory(Path.GetDirectoryName(SCENE_PATH));
@@ -191,20 +202,57 @@ public static class SceneSetup
         Debug.Log("[CairnUnity][SceneSetup] === COMPLETE ===");
     }
 
-    private static void EnsureMaterial()
+    /// <summary>
+    /// Texture import settings: ensure flow + rune noise are clamp/repeat
+    /// appropriately. Strand flow tiles along V (repeat). Rune noise +
+    /// shadow blob + mote use clamp.
+    /// </summary>
+    private static void EnsureTextureImportSettings()
+    {
+        if (!Directory.Exists(TEX_DIR))
+        {
+            Directory.CreateDirectory(TEX_DIR);
+            AssetDatabase.Refresh();
+        }
+        SetTextureImport(TEX_FLOW,        wrap: TextureWrapMode.Repeat, sRGB: false);
+        SetTextureImport(TEX_RUNE_NOISE,  wrap: TextureWrapMode.Repeat, sRGB: false);
+        SetTextureImport(TEX_SHADOW_BLOB, wrap: TextureWrapMode.Clamp,  sRGB: false);
+        SetTextureImport(TEX_MOTE,        wrap: TextureWrapMode.Clamp,  sRGB: false);
+    }
+
+    private static void SetTextureImport(string path, TextureWrapMode wrap, bool sRGB)
+    {
+        var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null)
+        {
+            Debug.LogWarning($"[CairnUnity][SceneSetup] Could not get importer for {path} (file missing?)");
+            return;
+        }
+        bool dirty = false;
+        if (importer.wrapMode != wrap) { importer.wrapMode = wrap; dirty = true; }
+        if (importer.sRGBTexture != sRGB) { importer.sRGBTexture = sRGB; dirty = true; }
+        if (importer.textureCompression != TextureImporterCompression.Uncompressed)
+        {
+            // R8 textures: use uncompressed for predictability across versions
+            importer.textureCompression = TextureImporterCompression.Uncompressed;
+            dirty = true;
+        }
+        if (dirty)
+        {
+            importer.SaveAndReimport();
+            Debug.Log($"[CairnUnity][SceneSetup] Texture import updated: {path}");
+        }
+    }
+
+    private static void EnsureStrandMaterial()
     {
         var sh = Shader.Find(STRAND_SHADER);
         if (sh == null)
         {
-            Debug.LogError($"[CairnUnity][SceneSetup] Shader '{STRAND_SHADER}' not found. " +
-                           "Make sure StrandShader.shader is in Assets/Shaders/");
+            Debug.LogError($"[CairnUnity][SceneSetup] Shader '{STRAND_SHADER}' not found.");
             return;
         }
-
-        if (!Directory.Exists(MAT_DIR))
-        {
-            Directory.CreateDirectory(MAT_DIR);
-        }
+        if (!Directory.Exists(MAT_DIR)) Directory.CreateDirectory(MAT_DIR);
 
         var mat = AssetDatabase.LoadAssetAtPath<Material>(MAT_PATH);
         if (mat == null)
@@ -216,16 +264,147 @@ public static class SceneSetup
         else if (mat.shader != sh)
         {
             mat.shader = sh;
-            EditorUtility.SetDirty(mat);
-            Debug.Log("[CairnUnity][SceneSetup] Updated existing material shader -> StrandShader");
         }
-
+        // Wire flow texture
+        var flowTex = AssetDatabase.LoadAssetAtPath<Texture2D>(TEX_FLOW);
+        if (flowTex != null) mat.SetTexture("_FlowTex", flowTex);
+        EditorUtility.SetDirty(mat);
         AssetDatabase.SaveAssets();
+    }
+
+    private static void EnsureHaloMaterial()
+    {
+        var sh = Shader.Find(HALO_SHADER);
+        if (sh == null) { Debug.LogError($"[CairnUnity][SceneSetup] Shader '{HALO_SHADER}' not found."); return; }
+        if (!Directory.Exists(MAT_DIR)) Directory.CreateDirectory(MAT_DIR);
+
+        var mat = AssetDatabase.LoadAssetAtPath<Material>(MAT_HALO_PATH);
+        if (mat == null) { mat = new Material(sh); AssetDatabase.CreateAsset(mat, MAT_HALO_PATH); }
+        else if (mat.shader != sh) mat.shader = sh;
+
+        var noiseTex = AssetDatabase.LoadAssetAtPath<Texture2D>(TEX_RUNE_NOISE);
+        if (noiseTex != null) mat.SetTexture("_NoiseTex", noiseTex);
+        EditorUtility.SetDirty(mat);
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[CairnUnity][SceneSetup] Halo material ensured at {MAT_HALO_PATH}");
+    }
+
+    private static void EnsureShadowMaterial()
+    {
+        var sh = Shader.Find(SHADOW_SHADER);
+        if (sh == null) { Debug.LogError($"[CairnUnity][SceneSetup] Shader '{SHADOW_SHADER}' not found."); return; }
+        if (!Directory.Exists(MAT_DIR)) Directory.CreateDirectory(MAT_DIR);
+
+        var mat = AssetDatabase.LoadAssetAtPath<Material>(MAT_SHADOW_PATH);
+        if (mat == null) { mat = new Material(sh); AssetDatabase.CreateAsset(mat, MAT_SHADOW_PATH); }
+        else if (mat.shader != sh) mat.shader = sh;
+        EditorUtility.SetDirty(mat);
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[CairnUnity][SceneSetup] Shadow material ensured at {MAT_SHADOW_PATH}");
+    }
+
+    private static void EnsureParticleMaterial()
+    {
+        // URP/Particles/Unlit Additive with mote_soft.png
+        var sh = Shader.Find(URP_PARTICLE_UNLIT);
+        if (sh == null)
+        {
+            // Fall back to URP Lit if particle shader missing (shouldn't happen
+            // with URP installed; warn loudly so we know).
+            Debug.LogWarning($"[CairnUnity][SceneSetup] '{URP_PARTICLE_UNLIT}' not found; particles may not look correct.");
+            sh = Shader.Find(URP_LIT);
+        }
+        if (sh == null) return;
+        if (!Directory.Exists(MAT_DIR)) Directory.CreateDirectory(MAT_DIR);
+
+        var mat = AssetDatabase.LoadAssetAtPath<Material>(MAT_PARTICLE_PATH);
+        if (mat == null) { mat = new Material(sh); AssetDatabase.CreateAsset(mat, MAT_PARTICLE_PATH); }
+        else if (mat.shader != sh) mat.shader = sh;
+
+        var moteTex = AssetDatabase.LoadAssetAtPath<Texture2D>(TEX_MOTE);
+        if (moteTex != null && mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", moteTex);
+        // Set surface to Transparent + Additive blend if URP/Particles/Unlit
+        if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1.0f); // 1=Transparent
+        if (mat.HasProperty("_Blend"))   mat.SetFloat("_Blend",   1.0f); // 1=Additive
+        EditorUtility.SetDirty(mat);
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[CairnUnity][SceneSetup] Particle material ensured at {MAT_PARTICLE_PATH}");
+    }
+
+    private static VolumeProfile LoadOrCreateVolumeProfile()
+    {
+        const string profilePath = "Assets/Settings/CairnVolumeProfile.asset";
+        var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(profilePath);
+        if (profile == null)
+        {
+            Directory.CreateDirectory("Assets/Settings");
+            profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            AssetDatabase.CreateAsset(profile, profilePath);
+            Debug.Log($"[CairnUnity][SceneSetup] Created Volume profile at {profilePath}");
+        }
+        // v186: retuned bloom for AR camera feed.
+        // Threshold 1.05 means ONLY strand-emissive output (which exceeds 1.0
+        // via _BloomBoost) blooms; ARCamera feed clamped 0-1 doesn't.
+        // Without this, bloom blows out the whole camera feed.
+        UnityEngine.Rendering.Universal.Bloom bloom;
+        if (!profile.TryGet(out bloom))
+        {
+            bloom = profile.Add<UnityEngine.Rendering.Universal.Bloom>(true);
+        }
+        bloom.intensity.overrideState = true; bloom.intensity.value = 0.7f;   // was 1.5
+        bloom.threshold.overrideState = true; bloom.threshold.value = 1.05f;  // was 0.7 (HDR-required)
+        bloom.scatter.overrideState   = true; bloom.scatter.value   = 0.65f;  // was 0.7
+        bloom.tint.overrideState      = true; bloom.tint.value      = Color.white;
+        bloom.clamp.overrideState     = true; bloom.clamp.value     = 65472f; // max — don't pre-clip HDR
+        EditorUtility.SetDirty(profile);
+        AssetDatabase.SaveAssets();
+        Debug.Log("[CairnUnity][SceneSetup] Bloom configured (threshold=1.05, intensity=0.7, scatter=0.65)");
+        return profile;
+    }
+
+    /// <summary>
+    /// Bloom threshold > 1.0 only works in HDR — otherwise the buffer
+    /// clamps to 1.0 before the bloom pass samples it, and threshold 1.05
+    /// becomes a silent no-op. Force HDR on the URP asset.
+    /// </summary>
+    private static void EnsureURPHDRAndBloom()
+    {
+        var rp = GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+        if (rp == null)
+        {
+            Debug.LogWarning("[CairnUnity][SceneSetup] currentRenderPipeline is not URP — bloom may not work as expected");
+            return;
+        }
+        if (!rp.supportsHDR)
+        {
+            // HDR support is an internal field; expose via SerializedObject.
+            var so = new SerializedObject(rp);
+            var hdrProp = so.FindProperty("m_SupportsHDR");
+            if (hdrProp != null)
+            {
+                hdrProp.boolValue = true;
+                so.ApplyModifiedProperties();
+                EditorUtility.SetDirty(rp);
+                AssetDatabase.SaveAssets();
+                Debug.Log("[CairnUnity][SceneSetup] URP HDR enabled (was off — bloom threshold>1.0 needs HDR)");
+            }
+            else
+            {
+                Debug.LogWarning("[CairnUnity][SceneSetup] Could not find m_SupportsHDR field on URP asset — verify HDR is enabled manually");
+            }
+        }
+        else
+        {
+            Debug.Log("[CairnUnity][SceneSetup] URP HDR already enabled");
+        }
     }
 
     private static void EnsureAlwaysIncludedShaders()
     {
-        // Load GraphicsSettings asset to manipulate AlwaysIncludedShaders
+        // Load GraphicsSettings asset to manipulate AlwaysIncludedShaders.
+        // Without this, iOS IL2CPP build strips shaders not referenced in
+        // an editor scene asset — and our halo/shadow shaders are referenced
+        // only by runtime materials, which IS lossy.
         const string path = "ProjectSettings/GraphicsSettings.asset";
         var gsObj = AssetDatabase.LoadAllAssetsAtPath(path);
         if (gsObj == null || gsObj.Length == 0)
@@ -243,10 +422,13 @@ public static class SceneSetup
         }
 
         AddShaderIfMissing(arr, STRAND_SHADER);
+        AddShaderIfMissing(arr, HALO_SHADER);
+        AddShaderIfMissing(arr, SHADOW_SHADER);
         AddShaderIfMissing(arr, URP_LIT);
+        AddShaderIfMissing(arr, URP_PARTICLE_UNLIT);
         so.ApplyModifiedProperties();
         AssetDatabase.SaveAssets();
-        Debug.Log("[CairnUnity][SceneSetup] AlwaysIncludedShaders updated");
+        Debug.Log("[CairnUnity][SceneSetup] AlwaysIncludedShaders updated (strand+halo+shadow+lit+particle-unlit)");
     }
 
     private static void AddShaderIfMissing(SerializedProperty arr, string shaderName)
@@ -254,7 +436,7 @@ public static class SceneSetup
         var sh = Shader.Find(shaderName);
         if (sh == null)
         {
-            Debug.LogWarning($"[CairnUnity][SceneSetup] Shader not found: {shaderName}");
+            Debug.LogWarning($"[CairnUnity][SceneSetup] Shader not found: {shaderName} (will be skipped from AlwaysIncluded)");
             return;
         }
 

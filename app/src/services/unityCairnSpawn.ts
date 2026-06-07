@@ -30,43 +30,51 @@ import type { MarkerType } from '../config/markerTypes';
 
 /**
  * Wire-format expected by Unity's CairnBridge.SpawnRequest:
- *   { id, x, y, z, r, g, b, scrollSpeed, bloomBoost }
- * Verified against UnityARLib/Assets/Scripts/CairnBridge.cs:584.
+ *   { id, type, x, y, z, r, g, b, scrollSpeed, bloomBoost }
+ * Verified against UnityARLib/Assets/Scripts/CairnBridge.cs.
+ *
+ * v186: `type` field added. Unity's CairnTypePresets uses the type to
+ * look up the per-type baseline (color, scroll, bloom, fresnel, halo,
+ * particles); RN-supplied fields override individual baselines. Pass
+ * the marker's MarkerType string ('danger' | 'junction' | 'water' |
+ * 'hut' | 'cairn').
  */
 export interface UnitySpawnRequest {
   id: string;
+  type: string;    // v186 — see CairnTypePresets.cs
   x: number;
   y: number;
   z: number;
-  r: number;       // 0..1
-  g: number;       // 0..1
-  b: number;       // 0..1
+  r: number;       // 0..1 — overrides type preset color when > 0
+  g: number;
+  b: number;
   scrollSpeed: number;
   bloomBoost: number;
 }
 
 /**
- * Marker type → strand colour. Hex sourced from src/components/tokens.ts so
- * AR rendering matches map pin colours. Returned as 0..1 floats — the format
- * Unity's MaterialPropertyBlock _BaseColor expects.
+ * Marker type → strand colour. v186 values match Unity's CairnTypePresets
+ * — keep the two in sync. Per-type identity colors are MORE saturated
+ * than the v185 map-pin colors because additive shader output looks
+ * washed-out without high saturation.
  *
- * Hex literals are inlined (rather than imported from tokens.ts) to keep this
- * helper independent of the React component tree — callable from anywhere
- * including non-React contexts (e.g. background tasks). If tokens.ts changes
- * the source-of-truth colours, update both.
+ * Returned as 0..1 floats for Unity's MaterialPropertyBlock _BaseColor.
+ *
+ * Hex literals are inlined (rather than imported from tokens.ts) to keep
+ * this helper independent of the React component tree. RN can still
+ * choose to override per-spawn — Unity's preset is the baseline,
+ * `data.r/g/b > 0` overrides.
  */
 export function markerTypeToColor(type: MarkerType | string): { r: number; g: number; b: number } {
-  // Hex from tokens.ts. Keep in sync if those change.
+  // v186 DS palette — must match CairnTypePresets.cs colors.
   const HEX: Record<string, string> = {
-    danger:   '#c53d2e',  // Colors.danger
-    junction: '#F26522',  // Colors.docOrange
-    water:    '#2e8c3a',  // Colors.success
-    hut:      '#b5823d',  // Colors.trail (sepia)
-    cairn:    '#b5823d',  // Colors.trail (sepia)
+    danger:   '#FF2A1A',
+    junction: '#FFB347',
+    water:    '#5AE6FF',
+    hut:      '#D4A06B',
+    cairn:    '#E8C896',
   };
   const hex = HEX[type] ?? HEX.cairn;
-  // #RRGGBB → floats. parseInt with substring + bitshift is the cheap
-  // path; we only run this once per spawn so legibility wins.
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
@@ -74,23 +82,21 @@ export function markerTypeToColor(type: MarkerType | string): { r: number; g: nu
 }
 
 /**
- * Per-type strand visual personality. Danger glows hot, water flows fast,
- * cairns ambient. Values feed Unity's _ScrollSpeed / _BloomBoost shader
- * uniforms (see MultiSpawner.SpawnStrand reading data.scrollSpeed/bloomBoost).
- *
- * scrollSpeed=0 means "use shader default". bloomBoost=0 means "use default".
+ * Per-type strand shader params. v186 values match CairnTypePresets.cs.
+ * These are the BASELINES Unity uses; sending 0 from RN means "use
+ * Unity's preset", non-zero overrides individual fields.
  */
 export function markerTypeToShaderParams(type: MarkerType | string): {
   scrollSpeed: number;
   bloomBoost: number;
 } {
   switch (type) {
-    case 'danger':   return { scrollSpeed: 1.5, bloomBoost: 1.4 };
-    case 'junction': return { scrollSpeed: 1.2, bloomBoost: 1.2 };
-    case 'water':    return { scrollSpeed: 1.8, bloomBoost: 1.0 };
-    case 'hut':      return { scrollSpeed: 0.5, bloomBoost: 0.9 };
+    case 'danger':   return { scrollSpeed: 1.6, bloomBoost: 3.5 };
+    case 'junction': return { scrollSpeed: 0.7, bloomBoost: 3.0 };
+    case 'water':    return { scrollSpeed: 0.45, bloomBoost: 2.2 };
+    case 'hut':      return { scrollSpeed: 0.35, bloomBoost: 2.0 };
     case 'cairn':
-    default:         return { scrollSpeed: 0.8, bloomBoost: 1.0 };
+    default:         return { scrollSpeed: 0.6, bloomBoost: 2.5 };
   }
 }
 
@@ -118,6 +124,9 @@ export function geoToArkitWorld(
  * Build a SpawnRequest payload for a marker. Returns null if the marker
  * cannot be positioned yet (no AR origin). Caller should retry once
  * ArFrame populates origin.
+ *
+ * v186: includes `type` field — Unity uses it for CairnTypePresets
+ * lookup. RN's r/g/b fields override the preset color when > 0.
  */
 export function buildSpawnRequest(
   marker: { id: string; type: string; lat: number; lng: number },
@@ -130,6 +139,7 @@ export function buildSpawnRequest(
   const shader = markerTypeToShaderParams(marker.type);
   return {
     id: marker.id,
+    type: marker.type,
     x: xz.x,
     y: groundY ?? 0,
     z: xz.z,

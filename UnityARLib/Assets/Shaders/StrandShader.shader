@@ -1,32 +1,63 @@
 Shader "Cairn/StrandShader"
 {
     // ---------------------------------------------------------------
-    // DS-style flowing strand pillar.
-    // Additive blend: brightness adds to whatever is behind. ZWrite off
-    // so it never occludes. Sampled at 60 Hz; uses _Time.y wrapped via
-    // frac() to avoid floating point drift across long sessions.
+    // Cairn DS Strand — Death Stranding chiral light pillar.
+    //
+    // Based on UNITY_MIGRATION_EVALUATION.md §5.3 spec. Adds the
+    // missing pieces from the v185 procedural-stripe shader:
+    //   • Flow texture sampling (replaces single procedural smoothstep
+    //     stripe with multi-band irregular streaks)
+    //   • Vertical envelope (root fade + tip fade) so the strand is
+    //     grounded at base, dispersing at tip — DS silhouette
+    //   • _FresnelIntensity scalar (was hardcoded 0.4)
+    //   • Cull Off (was Cull Back) — visible from inside, doubling
+    //     volumetric density of overlapping back/front faces
+    //   • Premultiplied alpha output: alpha = envelope * stripe so
+    //     additive falloff respects the envelope
+    //   • Breathing pulse — subtle sin(t * _BreathFreq) life-feel
+    //   • Per-instance _InstanceAlpha (MaterialPropertyBlock) for
+    //     distance-fade culling
+    //   • Three OTA globals: _CairnGlobalBloomScale, _CairnGlobalAlpha,
+    //     _CairnGlobalScrollMul — RN→C#→shader without rebuild
+    //
+    // Render state:
+    //   Additive (Blend One One), ZWrite Off, Cull Off,
+    //   Queue=Transparent+10 (renders after ARCameraBackground).
     // ---------------------------------------------------------------
     Properties
     {
-        _BaseColor   ("Base Color",    Color) = (1.0, 0.55, 0.19, 1.0)
-        _ScrollSpeed ("Scroll Speed",  Range(0, 5)) = 0.8
-        _BloomBoost  ("Bloom Boost",   Range(1, 5)) = 2.5
-        _FresnelPow  ("Fresnel Power", Range(0.5, 5)) = 1.5
-        _StripeWidth ("Stripe Width",  Range(0.05, 0.5)) = 0.15
+        _BaseColor        ("Base Color",        Color) = (1.0, 0.55, 0.19, 1.0)
+        _ScrollSpeed      ("Scroll Speed",      Range(0, 5)) = 0.8
+        _BloomBoost       ("Bloom Boost",       Range(0.5, 5)) = 2.5
+        _FresnelPow       ("Fresnel Power",     Range(0.5, 5)) = 1.5
+        _FresnelIntensity ("Fresnel Intensity", Range(0, 3)) = 1.0
+        _RootFadeEnd      ("Root Fade End",     Range(0, 0.5)) = 0.15
+        _TipFadeStart     ("Tip Fade Start",    Range(0.5, 1)) = 0.6
+        _BreathFreq       ("Breath Freq (Hz)",  Range(0, 3)) = 0.7
+        _BreathAmp        ("Breath Amp",        Range(0, 0.3)) = 0.05
+        // Flow texture: 256x1024 R8 vertical streak luminance, tileable
+        // along V. Created procedurally and imported as Texture2D.
+        // Sampled twice at different scroll rates for organic variation.
+        _FlowTex          ("Flow Texture",      2D) = "white" {}
+        _FlowSecondaryMul ("Flow 2nd Scroll Mul", Range(0.3, 2)) = 1.4
+        // Per-instance alpha; written by MaterialPropertyBlock from
+        // MultiSpawner for distance fade. Default 1.0 = fully visible.
+        _InstanceAlpha    ("Instance Alpha",    Range(0, 1)) = 1.0
     }
 
     SubShader
     {
         Tags
         {
-            "RenderType" = "Transparent"
-            "Queue"      = "Transparent+10"
+            "RenderType"     = "Transparent"
+            "Queue"          = "Transparent+10"
             "RenderPipeline" = "UniversalPipeline"
+            "IgnoreProjector" = "True"
         }
 
         Blend One One        // Additive
         ZWrite Off
-        Cull Back
+        Cull Off             // Both sides — doubles volumetric density
 
         Pass
         {
@@ -39,13 +70,36 @@ Shader "Cairn/StrandShader"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
+            // Material constant buffer — SRP Batcher compatible.
+            // ALL Properties that vary per-material instance MUST be in
+            // here. Per-instance MPB-driven values (_InstanceAlpha)
+            // ALSO live here per URP convention.
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
                 float  _ScrollSpeed;
                 float  _BloomBoost;
                 float  _FresnelPow;
-                float  _StripeWidth;
+                float  _FresnelIntensity;
+                float  _RootFadeEnd;
+                float  _TipFadeStart;
+                float  _BreathFreq;
+                float  _BreathAmp;
+                float  _FlowSecondaryMul;
+                float  _InstanceAlpha;
+                float4 _FlowTex_ST;
             CBUFFER_END
+
+            // Globals — set via Shader.SetGlobalFloat from C# (CairnGlobals).
+            // Default values applied in CairnGlobals.Awake so shader never
+            // samples uninitialized globals.
+            float _CairnGlobalBloomScale;   // default 1.0
+            float _CairnGlobalAlpha;        // default 1.0, min-clamped 0.05
+            float _CairnGlobalScrollMul;    // default 1.0
+            float _CairnGlobalBreathFreq;   // default 1.0 — OTA multiplier on per-material _BreathFreq
+            float _CairnGlobalThermalScale; // default 1.0, driven by ThermalMonitor
+
+            TEXTURE2D(_FlowTex);
+            SAMPLER(sampler_FlowTex);
 
             struct Attributes
             {
@@ -67,7 +121,7 @@ Shader "Cairn/StrandShader"
                 Varyings OUT;
                 VertexPositionInputs vpi = GetVertexPositionInputs(IN.positionOS.xyz);
                 OUT.positionCS = vpi.positionCS;
-                OUT.uv         = IN.uv;
+                OUT.uv         = TRANSFORM_TEX(IN.uv, _FlowTex);
                 OUT.normalWS   = TransformObjectToWorldNormal(IN.normalOS);
                 OUT.viewDirWS  = normalize(_WorldSpaceCameraPos - vpi.positionWS);
                 return OUT;
@@ -75,22 +129,58 @@ Shader "Cairn/StrandShader"
 
             float4 frag(Varyings IN) : SV_Target
             {
-                // Wrap-safe time: sample frac(t * speed) so we never accumulate
-                // floating point error over long AR sessions.
-                float scroll = frac(IN.uv.y - frac(_Time.y * _ScrollSpeed));
+                // ---- Vertical envelope (root + tip fade) ----
+                // uv.y = 0 (root) → 1 (tip). Build a 0→1→0 envelope:
+                //   root climb:  smoothstep(0, _RootFadeEnd, v)
+                //   tip fall:    1 - smoothstep(_TipFadeStart, 1, v)
+                // Multiply for combined envelope. Strand is dark at
+                // base, peaks ~30%, fades to 0 at tip.
+                float v = IN.uv.y;
+                float rootFade = smoothstep(0.0, _RootFadeEnd, v);
+                float tipFade  = 1.0 - smoothstep(_TipFadeStart, 1.0, v);
+                float envelope = saturate(rootFade * tipFade);
 
-                // Stripe: bright band centered around scroll value.
-                float halfWidth = _StripeWidth;
-                float stripe =
-                    smoothstep(0.0, halfWidth, scroll) *
-                    smoothstep(halfWidth * 3.0, halfWidth * 2.0, scroll);
+                // ---- Flow texture (dual-scroll) ----
+                // Wrap-safe time: frac() prevents long-session FP drift.
+                // _CairnGlobalScrollMul lets RN pause-flow for screenshots.
+                float scrollT = _Time.y * _ScrollSpeed * _CairnGlobalScrollMul;
+                float t1 = frac(scrollT);
+                float t2 = frac(scrollT * _FlowSecondaryMul);
 
-                // Fresnel: edge glow.
-                float NdotV  = saturate(dot(normalize(IN.normalWS),
-                                            normalize(IN.viewDirWS)));
-                float fres   = pow(1.0 - NdotV, _FresnelPow);
+                // Two flow samples at offset V — combined gives irregular
+                // beat pattern, much more organic than single stripe.
+                float2 uv1 = float2(IN.uv.x, IN.uv.y - t1);
+                float2 uv2 = float2(IN.uv.x, IN.uv.y - t2);
+                float flow1 = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, uv1).r;
+                float flow2 = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, uv2).r;
+                // Multiply blend: bands from both must coincide for hot spot
+                float bandIntensity = flow1 * flow2 * 1.6;
 
-                float3 color = _BaseColor.rgb * (stripe + fres * 0.4) * _BloomBoost;
+                // ---- Fresnel rim ----
+                float NdotV = saturate(dot(normalize(IN.normalWS),
+                                           normalize(IN.viewDirWS)));
+                float fres  = pow(1.0 - NdotV, _FresnelPow) * _FresnelIntensity;
+
+                // ---- Breathing pulse ----
+                // Subtle "alive" feel: ±_BreathAmp around 1.0. Per-material
+                // _BreathFreq sets the per-type baseline (danger fast,
+                // hut slow); _CairnGlobalBreathFreq is an OTA multiplier
+                // letting RN tune resting pulse rate uniformly without
+                // rebuild. Setting global to 0 disables breathing entirely.
+                float effectiveBreathFreq = _BreathFreq * _CairnGlobalBreathFreq;
+                float breath = 1.0 + _BreathAmp * sin(_Time.y * effectiveBreathFreq * 6.2831853);
+
+                // ---- Combine ----
+                // Stripe brightens center, fresnel adds rim, both gated by
+                // envelope. Premultiplied: color *= envelope (additive
+                // blend ignores alpha but we use envelope to shape output).
+                float3 color = _BaseColor.rgb * (bandIntensity + fres);
+                color *= _BloomBoost * _CairnGlobalBloomScale * _CairnGlobalThermalScale;
+                color *= envelope * breath;
+                color *= _InstanceAlpha * _CairnGlobalAlpha;
+
+                // alpha=1 because Blend One One ignores it; output color
+                // is already pre-multiplied by envelope.
                 return float4(color, 1.0);
             }
             ENDHLSL

@@ -1,27 +1,38 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using System.Collections.Generic;
 
 /// <summary>
-/// Spawns 4 verification pillars to differentiate failure modes:
-///   A — White Lit cylinder        (verifies AR Foundation rendering at all)
-///   B — StrandShader bloomBoost=1.5 (verifies HLSL shader compiled correctly)
-///   C — StrandShader bloomBoost=4.0 (verifies URP Bloom post-process is on)
-///   D — StrandShader + ParticleSystem (verifies ParticleSystem in UaaL container)
+/// v186 DS strand spawner. Each cairn = strand cylinder + halo disc +
+/// shadow blob + tip-ascension particle system, all parented under one
+/// container GameObject. Visual identity comes from CairnTypePresets +
+/// per-instance MaterialPropertyBlock (NOT per-call material instances —
+/// avoids material count blow-up over long sessions, see v185 review).
 ///
-/// Each pillar position encodes a different failure axis. After
-/// running we know exactly which subsystem broke:
-///   A invisible           => AR Foundation / camera not rendering
-///   A visible, B invisible => HLSL compile error (check Xcode console)
-///   B visible, C identical => Bloom post-process not configured
-///   D visible, no particles=> ParticleSystem stripped or disabled
+/// Verification pillars (A/B/C/D) preserved as Editor-only diagnostic
+/// (see SpawnFourVerificationPillars below). Production code never
+/// invokes them — the GroundYResolver makes them obsolete by ensuring
+/// cairns always render at a plausible Y, even with no plane.
 /// </summary>
 public class MultiSpawner : MonoBehaviour
 {
-    [Header("Strand material — wired by SceneSetup. If null, will be made at runtime.")]
+    [Header("Strand material — wired by SceneSetup. Shared across all strands; per-cairn parameters via MaterialPropertyBlock.")]
     public Material strandMaterialBase;
 
     [Header("URP Lit shader fallback for A pillar — held to prevent stripping.")]
     public Shader urpLitShader;
+
+    [Header("Halo disc material — shared, color via MaterialPropertyBlock.")]
+    public Material haloMaterial;
+
+    [Header("Shadow blob material — shared, no per-instance variance.")]
+    public Material shadowMaterial;
+
+    [Header("Particle material — shared.")]
+    public Material particleMaterial;
+
+    [Header("Ground-Y resolver — registers each spawned cairn for silent Y refinement.")]
+    public GroundYResolver groundYResolver;
 
     [Header("Particle prefab for D pillar — optional, falls back to runtime ParticleSystem.")]
     public GameObject particlePrefab;
@@ -30,13 +41,22 @@ public class MultiSpawner : MonoBehaviour
     public bool IsFallback { get; private set; } = false;
 
     private readonly List<GameObject> _spawned = new List<GameObject>();
-    private readonly List<Material>   _materials = new List<Material>();
 
-    /// <summary>
-    /// Spawn 4 pillars at the specified ground anchor.
-    /// fallback=true means we couldn't find a real plane and are using a
-    /// camera-relative approximation — log accordingly.
-    /// </summary>
+    // Shared MaterialPropertyBlock instance — reused per-spawn instead of
+    // allocating a new one. Avoids per-spawn GC.
+    private static readonly int _BaseColorID         = Shader.PropertyToID("_BaseColor");
+    private static readonly int _ScrollSpeedID       = Shader.PropertyToID("_ScrollSpeed");
+    private static readonly int _BloomBoostID        = Shader.PropertyToID("_BloomBoost");
+    private static readonly int _FresnelPowID        = Shader.PropertyToID("_FresnelPow");
+    private static readonly int _FresnelIntensityID  = Shader.PropertyToID("_FresnelIntensity");
+    private static readonly int _BreathFreqID        = Shader.PropertyToID("_BreathFreq");
+    private static readonly int _IntensityID         = Shader.PropertyToID("_Intensity");
+    private static readonly int _InstanceAlphaID     = Shader.PropertyToID("_InstanceAlpha");
+
+    // ============================================================
+    // Editor diagnostic — verification pillars (kept for editor
+    // diagnostics only). Production code DOES NOT call this.
+    // ============================================================
     public void SpawnFourVerificationPillars(Vector3 groundAnchor, bool fallback)
     {
         if (HasSpawned)
@@ -48,9 +68,8 @@ public class MultiSpawner : MonoBehaviour
         IsFallback = fallback;
 
         UnityLogger.IForward("MultiSpawner",
-            $"Spawning 4 verification pillars at {groundAnchor} fallback={fallback}");
+            $"[EDITOR-DIAG] Spawning 4 verification pillars at {groundAnchor} fallback={fallback}");
 
-        // Lay out along -Z (in front of camera at start) with x staggered.
         var pillarConfigs = new[]
         {
             new PillarConfig { name = "A_WhiteLit",       offset = new Vector3(-1.5f, 0f, -0.5f),
@@ -65,10 +84,7 @@ public class MultiSpawner : MonoBehaviour
 
         foreach (var cfg in pillarConfigs)
         {
-            try
-            {
-                SpawnPillar(groundAnchor + cfg.offset, cfg);
-            }
+            try { SpawnDiagnosticPillar(groundAnchor + cfg.offset, cfg); }
             catch (System.Exception e)
             {
                 UnityLogger.E("MultiSpawner", $"Failed to spawn {cfg.name}", e);
@@ -76,181 +92,62 @@ public class MultiSpawner : MonoBehaviour
         }
 
         UnityLogger.IForward("MultiSpawner",
-            $"Pillar spawn complete. {_spawned.Count} pillars in scene.");
+            $"[EDITOR-DIAG] Pillar spawn complete. {_spawned.Count} pillars in scene.");
     }
 
-    private void SpawnPillar(Vector3 groundPos, PillarConfig cfg)
+    private void SpawnDiagnosticPillar(Vector3 groundPos, PillarConfig cfg)
     {
-        // Cylinder: 0.16m diameter, 3m tall. Center at groundPos + 1.5m up.
+        // Diagnostic version — uses the OLD per-call material instance
+        // pattern intentionally (different colors for different pillars).
+        // NOT the production path; Editor-only.
         var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         go.name = cfg.name;
         go.transform.SetParent(transform, worldPositionStays: false);
         go.transform.position   = groundPos + Vector3.up * 1.5f;
         go.transform.localScale = new Vector3(0.16f, 1.5f, 0.16f);
-
-        // Strip collider — we don't need physics
         var col = go.GetComponent<Collider>();
         if (col != null) Destroy(col);
 
         var renderer = go.GetComponent<Renderer>();
-        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.shadowCastingMode = ShadowCastingMode.Off;
         renderer.receiveShadows    = false;
 
         switch (cfg.type)
         {
             case PillarType.WhiteLit:
                 {
-                    var sh = urpLitShader != null
-                              ? urpLitShader
-                              : Shader.Find("Universal Render Pipeline/Lit");
-                    if (sh == null)
-                    {
-                        UnityLogger.E("MultiSpawner",
-                            "URP/Lit shader missing — will render magenta. Check Always Included Shaders.");
-                        sh = Shader.Find("Standard");
-                    }
+                    var sh = urpLitShader != null ? urpLitShader : Shader.Find("Universal Render Pipeline/Lit");
+                    if (sh == null) { UnityLogger.E("MultiSpawner", "URP/Lit missing"); return; }
                     var mat = new Material(sh) { color = cfg.color };
                     renderer.material = mat;
-                    _materials.Add(mat);
                 }
                 break;
-
             case PillarType.StrandBasic:
-                {
-                    var mat = MakeStrandInstance();
-                    if (mat != null)
-                    {
-                        mat.SetColor("_BaseColor",   cfg.color);
-                        mat.SetFloat("_BloomBoost",  1.5f);
-                        mat.SetFloat("_ScrollSpeed", 0.8f);
-                        renderer.material = mat;
-                    }
-                }
-                break;
-
             case PillarType.StrandHighBloom:
-                {
-                    var mat = MakeStrandInstance();
-                    if (mat != null)
-                    {
-                        mat.SetColor("_BaseColor",   cfg.color);
-                        mat.SetFloat("_BloomBoost",  4.0f);
-                        mat.SetFloat("_ScrollSpeed", 1.2f);
-                        renderer.material = mat;
-                    }
-                }
-                break;
-
             case PillarType.StrandPlusParticle:
                 {
-                    var mat = MakeStrandInstance();
-                    if (mat != null)
-                    {
-                        mat.SetColor("_BaseColor",   cfg.color);
-                        mat.SetFloat("_BloomBoost",  3.0f);
-                        mat.SetFloat("_ScrollSpeed", 1.0f);
-                        renderer.material = mat;
-                    }
-
-                    AttachSimpleParticles(go, cfg.color);
+                    if (strandMaterialBase == null) { UnityLogger.E("MultiSpawner", "strandMaterialBase null"); return; }
+                    var mat = new Material(strandMaterialBase);
+                    mat.SetColor(_BaseColorID, cfg.color);
+                    mat.SetFloat(_BloomBoostID, cfg.type == PillarType.StrandHighBloom ? 4.0f : 1.5f);
+                    renderer.material = mat;
+                    if (cfg.type == PillarType.StrandPlusParticle) AttachLegacyParticles(go, cfg.color);
                 }
                 break;
         }
 
         _spawned.Add(go);
-        UnityLogger.I("MultiSpawner",
-            $"Spawned {cfg.name} at {go.transform.position} type={cfg.type}");
     }
 
-    private Material MakeStrandInstance()
-    {
-        if (strandMaterialBase == null)
-        {
-            // Try to load shader directly as a last resort
-            var sh = Shader.Find("Cairn/StrandShader");
-            if (sh == null)
-            {
-                UnityLogger.E("MultiSpawner",
-                    "StrandShader not found! Check Always Included Shaders.");
-                return null;
-            }
-            var mat = new Material(sh);
-            _materials.Add(mat);
-            return mat;
-        }
+    // ============================================================
+    // Production spawn — RN-driven via CairnBridge.OnSpawnStrand
+    // ============================================================
 
-        var inst = new Material(strandMaterialBase);
-        _materials.Add(inst);
-        return inst;
-    }
-
-    private void AttachSimpleParticles(GameObject parent, Color baseColor)
-    {
-        if (particlePrefab != null)
-        {
-            var p = Instantiate(particlePrefab, parent.transform.position, Quaternion.identity, parent.transform);
-            p.name = parent.name + "_Particles";
-            UnityLogger.I("MultiSpawner", $"Attached prefab particles to {parent.name}");
-            return;
-        }
-
-        // Runtime fallback — minimal CPU ParticleSystem.
-        var psGo = new GameObject(parent.name + "_Particles");
-        psGo.transform.SetParent(parent.transform, false);
-        psGo.transform.localPosition = Vector3.zero;
-        psGo.transform.localScale    = Vector3.one;
-
-        var ps = psGo.AddComponent<ParticleSystem>();
-        var main = ps.main;
-        main.duration                  = 5f;
-        main.loop                      = true;
-        main.startLifetime             = 3.5f;
-        main.startSpeed                = 0.3f;
-        main.startSize                 = 0.05f;
-        main.startColor                = baseColor;
-        main.maxParticles              = 60;
-        main.simulationSpace           = ParticleSystemSimulationSpace.World;
-        main.scalingMode               = ParticleSystemScalingMode.Local;
-
-        var emission = ps.emission;
-        emission.rateOverTime = 20f;
-
-        var shape = ps.shape;
-        // Cone shape pointing up — particles emit upward in a tapered column.
-        // (ParticleSystemShapeType.Cylinder doesn't exist in Unity 6; Cone is
-        // the closest visual analog for a vertical strand of rising particles.)
-        shape.shapeType = ParticleSystemShapeType.Cone;
-        shape.angle     = 5f;     // narrow cone, almost straight up
-        shape.radius    = 0.4f;   // wider than pillar (0.16 radius)
-        shape.length    = 1f;
-        shape.alignToDirection = false;
-
-        var velocity = ps.velocityOverLifetime;
-        velocity.enabled = true;
-        velocity.y       = new ParticleSystem.MinMaxCurve(0.05f, 0.4f);
-
-        var color = ps.colorOverLifetime;
-        color.enabled = true;
-        var grad = new Gradient();
-        grad.SetKeys(
-            new[]
-            {
-                new GradientColorKey(baseColor, 0.0f),
-                new GradientColorKey(baseColor, 1.0f),
-            },
-            new[]
-            {
-                new GradientAlphaKey(0.0f, 0.0f),
-                new GradientAlphaKey(0.7f, 0.3f),
-                new GradientAlphaKey(0.0f, 1.0f),
-            });
-        color.color = new ParticleSystem.MinMaxGradient(grad);
-
-        UnityLogger.I("MultiSpawner",
-            $"Attached runtime particles to {parent.name} max={main.maxParticles}");
-    }
-
-    /// <summary>RN-driven spawn (Phase 2 — Phase 1 Spike does not call this).</summary>
+    /// <summary>
+    /// RN-driven spawn. Creates strand + halo + shadow + particles as
+    /// children of a container GO, applies per-type preset, registers
+    /// with GroundYResolver for silent Y refinement.
+    /// </summary>
     public void SpawnStrand(CairnBridge.SpawnRequest data)
     {
         if (data == null)
@@ -258,41 +155,240 @@ public class MultiSpawner : MonoBehaviour
             UnityLogger.W("MultiSpawner", "SpawnStrand: null data");
             return;
         }
+
+        // Tier-C readiness gate: if camera transform isn't valid yet, the
+        // resolver returns null for Tier C and we'd spawn at world (x,0,z).
+        // Prefer to defer; but RN already chose to spawn this frame, so
+        // honor it — the resolver will lerp into place once camera valid.
+        float groundY = data.y;
+        if (groundYResolver != null)
+        {
+            var tierC = groundYResolver.GetTierC();
+            if (tierC.HasValue) groundY = tierC.Value;
+        }
+
+        // Look up per-type preset. RN-supplied r/g/b/scrollSpeed/bloomBoost
+        // override individual fields if non-zero (lets RN OTA-tune per cairn
+        // without re-shipping the build).
+        var preset = CairnTypePresets.Get(data.type);
+        Color color = preset.color;
+        if (data.r > 0f || data.g > 0f || data.b > 0f)
+        {
+            color = new Color(data.r, data.g, data.b, 1f);
+        }
+        float scrollSpeed = data.scrollSpeed > 0f ? data.scrollSpeed : preset.scrollSpeed;
+        float bloomBoost  = data.bloomBoost  > 0f ? data.bloomBoost  : preset.bloomBoost;
+
         UnityLogger.I("MultiSpawner",
-            $"SpawnStrand id={data.id} pos=({data.x},{data.y},{data.z})");
+            $"SpawnStrand id={data.id} type={data.type} pos=({data.x:F2},{groundY:F2},{data.z:F2})");
 
-        var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        go.name = $"Strand_{data.id ?? "unknown"}";
-        go.transform.SetParent(transform, false);
-        go.transform.position   = new Vector3(data.x, data.y, data.z) + Vector3.up * 1.5f;
-        go.transform.localScale = new Vector3(0.16f, 1.5f, 0.16f);
-        var col = go.GetComponent<Collider>();
-        if (col != null) Destroy(col);
+        // ─── Container GO ───
+        // Centered at ground point. Strand pivot is at base; halo + shadow
+        // are flat at ground. Setting container at ground means children's
+        // local positions describe their offsets cleanly.
+        var container = new GameObject($"Cairn_{data.id ?? "unknown"}");
+        container.transform.SetParent(transform, false);
+        container.transform.position = new Vector3(data.x, groundY, data.z);
 
-        var mat = MakeStrandInstance();
-        if (mat == null) return;
-        mat.SetColor("_BaseColor", new Color(data.r, data.g, data.b, 1f));
-        if (data.scrollSpeed > 0f) mat.SetFloat("_ScrollSpeed", data.scrollSpeed);
-        if (data.bloomBoost  > 0f) mat.SetFloat("_BloomBoost",  data.bloomBoost);
-        go.GetComponent<Renderer>().material = mat;
+        // ─── Strand cylinder ───
+        var strand = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        strand.name = "Strand";
+        strand.transform.SetParent(container.transform, false);
+        // Cylinder pivot is center; we want base at container origin.
+        // localScale.y = 1.5 → cylinder is 3m tall; localPosition.y = 1.5
+        // puts base exactly at container ground.
+        strand.transform.localPosition = new Vector3(0f, 1.5f, 0f);
+        strand.transform.localScale    = new Vector3(0.16f, 1.5f, 0.16f);
+        var strandCol = strand.GetComponent<Collider>();
+        if (strandCol != null) Destroy(strandCol);
 
-        _spawned.Add(go);
+        var strandRenderer = strand.GetComponent<Renderer>();
+        strandRenderer.shadowCastingMode = ShadowCastingMode.Off;
+        strandRenderer.receiveShadows    = false;
+        if (strandMaterialBase != null)
+        {
+            // Shared material — per-instance params via MPB.
+            strandRenderer.sharedMaterial = strandMaterialBase;
+            var mpb = new MaterialPropertyBlock();
+            mpb.SetColor(_BaseColorID,        color);
+            mpb.SetFloat(_ScrollSpeedID,      scrollSpeed);
+            mpb.SetFloat(_BloomBoostID,       bloomBoost);
+            mpb.SetFloat(_FresnelPowID,       preset.fresnelPow);
+            mpb.SetFloat(_FresnelIntensityID, preset.fresnelIntensity);
+            mpb.SetFloat(_BreathFreqID,       preset.breathFreq);
+            mpb.SetFloat(_InstanceAlphaID,    1.0f); // updated by distance-fade later
+            strandRenderer.SetPropertyBlock(mpb);
+        }
+        else
+        {
+            UnityLogger.E("MultiSpawner", "strandMaterialBase null — strand will render magenta");
+        }
+
+        // ─── Halo disc ───
+        var halo = CreateFlatQuad("Halo", container.transform);
+        halo.transform.localPosition = new Vector3(0f, 0.003f, 0f); // +3mm above ground
+        halo.transform.localScale    = new Vector3(1.6f, 1.6f, 1f); // ~1.6m diameter
+        halo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // lay flat
+        var haloRenderer = halo.GetComponent<Renderer>();
+        if (haloMaterial != null)
+        {
+            haloRenderer.sharedMaterial = haloMaterial;
+            var mpbH = new MaterialPropertyBlock();
+            mpbH.SetColor(_BaseColorID,    preset.haloColor);
+            mpbH.SetFloat(_IntensityID,    preset.haloIntensity);
+            mpbH.SetFloat(_BreathFreqID,   preset.breathFreq); // halo pulse syncs with strand breath
+            mpbH.SetFloat(_InstanceAlphaID, 1.0f);
+            haloRenderer.SetPropertyBlock(mpbH);
+        }
+
+        // ─── Shadow blob ───
+        var shadow = CreateFlatQuad("Shadow", container.transform);
+        shadow.transform.localPosition = new Vector3(0f, 0.001f, 0f); // +1mm (under halo)
+        shadow.transform.localScale    = new Vector3(1.4f, 1.4f, 1f);
+        shadow.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+        var shadowRenderer = shadow.GetComponent<Renderer>();
+        if (shadowMaterial != null)
+        {
+            shadowRenderer.sharedMaterial = shadowMaterial;
+            // Shadow has no per-instance variance currently
+        }
+
+        // ─── Particles ───
+        AttachAscensionParticles(container, color, preset.particleStartColor, preset.particleRate);
+
+        // ─── Register for silent ground-Y refinement ───
+        if (groundYResolver != null)
+        {
+            groundYResolver.RegisterCairn(container.transform);
+        }
+
+        _spawned.Add(container);
     }
 
+    /// <summary>
+    /// Build a 1×1 unit quad (no UV-Z component, just XY) parented under
+    /// the given transform. Used for halo + shadow flat discs.
+    /// </summary>
+    private GameObject CreateFlatQuad(string name, Transform parent)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = name;
+        go.transform.SetParent(parent, false);
+        var col = go.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+        var r = go.GetComponent<Renderer>();
+        r.shadowCastingMode = ShadowCastingMode.Off;
+        r.receiveShadows    = false;
+        return go;
+    }
+
+    /// <summary>
+    /// Attach a tip-ascension particle system to every cairn. Per-type
+    /// emission rate + start color from preset. Single shared
+    /// particleMaterial (the URP/Particles/Unlit-Additive material with
+    /// mote_soft.png).
+    /// </summary>
+    private void AttachAscensionParticles(GameObject container, Color baseColor, Color startColor, float emissionRate)
+    {
+        var psGo = new GameObject("Particles");
+        psGo.transform.SetParent(container.transform, false);
+        psGo.transform.localPosition = new Vector3(0f, 1.5f, 0f); // start mid-strand
+        psGo.transform.localRotation = Quaternion.identity;
+
+        var ps = psGo.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.duration         = 5f;
+        main.loop             = true;
+        main.startLifetime    = 3.0f;
+        main.startSpeed       = new ParticleSystem.MinMaxCurve(0.15f, 0.4f);
+        main.startSize        = new ParticleSystem.MinMaxCurve(0.04f, 0.08f);
+        main.startColor       = startColor;
+        main.maxParticles     = 80;
+        main.simulationSpace  = ParticleSystemSimulationSpace.World;
+        main.scalingMode      = ParticleSystemScalingMode.Local;
+
+        var emission = ps.emission;
+        emission.rateOverTime = emissionRate;
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle     = 8f;
+        shape.radius    = 0.15f; // narrow column rising from strand tip
+        shape.length    = 1f;
+        shape.alignToDirection = false;
+
+        var velocity = ps.velocityOverLifetime;
+        velocity.enabled = true;
+        velocity.y       = new ParticleSystem.MinMaxCurve(0.1f, 0.5f);
+
+        var color = ps.colorOverLifetime;
+        color.enabled = true;
+        var grad = new Gradient();
+        grad.SetKeys(
+            new[] {
+                new GradientColorKey(startColor,                     0.0f),
+                new GradientColorKey(Color.Lerp(startColor, Color.white, 0.4f), 1.0f),
+            },
+            new[] {
+                new GradientAlphaKey(0.0f, 0.0f),
+                new GradientAlphaKey(0.7f, 0.2f),
+                new GradientAlphaKey(0.0f, 1.0f),
+            });
+        color.color = new ParticleSystem.MinMaxGradient(grad);
+
+        // Wire shared particle material if provided. ParticleSystem renderer
+        // has its own Renderer component.
+        var pr = psGo.GetComponent<ParticleSystemRenderer>();
+        if (pr != null && particleMaterial != null)
+        {
+            pr.sharedMaterial = particleMaterial;
+        }
+    }
+
+    /// <summary>
+    /// Diagnostic-pillar particle helper (legacy path — Editor only).
+    /// </summary>
+    private void AttachLegacyParticles(GameObject parent, Color baseColor)
+    {
+        var psGo = new GameObject(parent.name + "_Particles");
+        psGo.transform.SetParent(parent.transform, false);
+        var ps = psGo.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.duration         = 5f;
+        main.loop             = true;
+        main.startLifetime    = 3.5f;
+        main.startSpeed       = 0.3f;
+        main.startSize        = 0.05f;
+        main.startColor       = baseColor;
+        main.maxParticles     = 60;
+        main.simulationSpace  = ParticleSystemSimulationSpace.World;
+        var emission = ps.emission;
+        emission.rateOverTime = 20f;
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle     = 5f;
+        shape.radius    = 0.4f;
+        shape.length    = 1f;
+        var velocity = ps.velocityOverLifetime;
+        velocity.enabled = true;
+        velocity.y       = new ParticleSystem.MinMaxCurve(0.05f, 0.4f);
+    }
+
+    // ============================================================
+    // ClearAll — destroys spawned cairns + unregisters from resolver
+    // ============================================================
     public void ClearAll()
     {
-        UnityLogger.IForward("MultiSpawner",
-            $"ClearAll: destroying {_spawned.Count} pillars and {_materials.Count} materials");
+        UnityLogger.IForward("MultiSpawner", $"ClearAll: destroying {_spawned.Count} cairns");
         foreach (var go in _spawned)
         {
-            if (go != null) Destroy(go);
-        }
-        foreach (var mat in _materials)
-        {
-            if (mat != null) Destroy(mat);
+            if (go != null)
+            {
+                if (groundYResolver != null) groundYResolver.UnregisterCairn(go.transform);
+                Destroy(go);
+            }
         }
         _spawned.Clear();
-        _materials.Clear();
         HasSpawned = false;
         IsFallback = false;
     }

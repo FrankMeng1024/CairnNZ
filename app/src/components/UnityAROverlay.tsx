@@ -107,6 +107,9 @@ export interface UnityAROverlayHandle {
   ): void;
   /** Tell Unity to despawn everything (e.g. AR screen unmount). */
   clearAll(): void;
+  /** v186: set an OTA-tunable shader global. See unityGlobals.ts.
+   *  Silent no-op if Unity not ready. */
+  setGlobal(name: string, value: number): void;
 }
 
 export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayProps>(
@@ -191,6 +194,18 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           crashLogger.breadcrumb(`${TAG}:clearAll dispatched`);
         } catch (e: any) {
           crashLogger.breadcrumb(`${TAG}:clearAll-error ${String(e?.message ?? e).slice(0, 80)}`);
+        }
+      },
+      setGlobal: (name, value) => {
+        if (!unityRef.current) return;
+        if (!Number.isFinite(value)) return;
+        try {
+          unityRef.current.postMessage(
+            'CairnBridge', 'OnSetGlobal',
+            JSON.stringify({ name, value })
+          );
+        } catch (e: any) {
+          crashLogger.breadcrumb(`${TAG}:setGlobal-error ${name} ${String(e?.message ?? e).slice(0, 80)}`);
         }
       },
     }),

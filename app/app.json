@@ -87,18 +87,6 @@
       ],
       "expo-asset",
       "expo-font",
-      [
-        "@reactvision/react-viro",
-        {
-          "ios": {
-            "cameraUsagePermission": "Cairn uses the camera to anchor 3D markers in AR.",
-            "microphoneUsagePermission": "Cairn uses the microphone for AR voice notes.",
-            "locationUsagePermission": "Cairn uses your location to anchor AR markers to real-world places."
-          },
-          "provider": "none"
-        }
-      ],
-      "./plugins/withViroPodfileFix",
       "./plugins/withUnityEmbed",
       "expo-localization"
     ],
