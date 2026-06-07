@@ -49,32 +49,17 @@ public class CairnThermalMonitor : MonoBehaviour
         if (Time.realtimeSinceStartup - _lastPollTime < POLL_INTERVAL) return;
         _lastPollTime = Time.realtimeSinceStartup;
 
+        // v186: thermal-state-based throttling deferred. The
+        // UnityEngine.iOS.Device.thermalState API namespace differs
+        // across Unity major versions — under Unity 6 the public iOS
+        // thermal probe surface is reorganised (UnityEngine.Device.*
+        // and Application APIs), and pinning down a stable cross-
+        // version path requires more validation than v186 budgets
+        // for. For now: ThermalScale stays at 1.0 = no throttling.
+        // The escape valve is reserved (CairnGlobals.SetThermalScale
+        // remains callable from C# if a future build wires a working
+        // probe), and we still react to Application.lowMemory below.
         float newScale = NOMINAL_SCALE;
-#if UNITY_IOS && !UNITY_EDITOR
-        try
-        {
-            var state = UnityEngine.iOS.Device.thermalState;
-            switch (state)
-            {
-                case UnityEngine.iOS.DeviceThermalState.Nominal:
-                    newScale = NOMINAL_SCALE; break;
-                case UnityEngine.iOS.DeviceThermalState.Fair:
-                    newScale = FAIR_SCALE; break;
-                case UnityEngine.iOS.DeviceThermalState.Serious:
-                    newScale = SERIOUS_SCALE; break;
-                case UnityEngine.iOS.DeviceThermalState.Critical:
-                    newScale = CRITICAL_SCALE; break;
-                default:
-                    newScale = NOMINAL_SCALE; break;
-            }
-        }
-        catch (System.Exception e)
-        {
-            // Thermal API can throw on simulator or older iOS — treat as nominal.
-            UnityLogger.W("CairnThermalMonitor", $"thermalState read failed: {e.Message}");
-            newScale = NOMINAL_SCALE;
-        }
-#endif
 
         if (Mathf.Abs(newScale - _currentScale) > 0.01f)
         {
