@@ -60,6 +60,7 @@ Shader "Cairn/ShadowBlobShader"
 
             float _CairnGlobalAlpha;
             float _CairnGlobalThermalScale;
+            float _coalesceS(float v) { return v > 0.0001 ? v : 1.0; }
 
             struct Attributes {
                 float4 positionOS : POSITION;

@@ -70,6 +70,10 @@ Shader "Cairn/HaloShader"
             float _CairnGlobalHaloRadiusMul;
             float _CairnGlobalBreathFreq;
             float _CairnGlobalThermalScale;
+            // Coalesce 0 (uninit) → 1.0 default. Shaders may sample
+            // these before CairnGlobals.Awake runs; without this guard
+            // the halo renders invisible.
+            float _coalesceH(float v) { return v > 0.0001 ? v : 1.0; }
 
             TEXTURE2D(_NoiseTex);
             SAMPLER(sampler_NoiseTex);
@@ -99,7 +103,7 @@ Shader "Cairn/HaloShader"
 
                 // Apply OTA radius multiplier (effectively shrinks/expands
                 // the falloff curve)
-                float outerR = _OuterRadius * _CairnGlobalHaloRadiusMul;
+                float outerR = _OuterRadius * _coalesceH(_CairnGlobalHaloRadiusMul);
 
                 // Animated noise on outer ring — gives the halo organic
                 // "rune-like" appearance, not a perfect disc
@@ -115,12 +119,12 @@ Shader "Cairn/HaloShader"
                 // _PulseFreq sets per-type baseline; _CairnGlobalBreathFreq
                 // is the global OTA multiplier (same one strand uses) so
                 // halo + strand breathe together.
-                float effectivePulseFreq = _PulseFreq * _CairnGlobalBreathFreq;
+                float effectivePulseFreq = _PulseFreq * _coalesceH(_CairnGlobalBreathFreq);
                 float pulse = 1.0 + _PulseAmp * sin(_Time.y * effectivePulseFreq * 6.2831853);
 
                 float3 color = _BaseColor.rgb * _Intensity * falloff * pulse;
-                color *= _CairnGlobalBloomScale * _CairnGlobalThermalScale;
-                color *= _InstanceAlpha * _CairnGlobalAlpha;
+                color *= _coalesceH(_CairnGlobalBloomScale) * _coalesceH(_CairnGlobalThermalScale);
+                color *= _InstanceAlpha * _coalesceH(_CairnGlobalAlpha);
 
                 return float4(color, 1.0);
             }

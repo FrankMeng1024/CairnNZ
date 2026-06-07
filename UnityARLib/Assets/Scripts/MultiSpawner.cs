@@ -284,9 +284,9 @@ public class MultiSpawner : MonoBehaviour
 
     /// <summary>
     /// Attach a tip-ascension particle system to every cairn. Per-type
-    /// emission rate + start color from preset. Single shared
-    /// particleMaterial (the URP/Particles/Unlit-Additive material with
-    /// mote_soft.png).
+    /// emission rate + start color from preset. Uses URP/Particles/Unlit
+    /// shader directly — avoids depending on SceneSetup pre-creating a
+    /// CairnParticle.mat which may have wrong properties on first import.
     /// </summary>
     private void AttachAscensionParticles(GameObject container, Color baseColor, Color startColor, float emissionRate)
     {
@@ -299,7 +299,7 @@ public class MultiSpawner : MonoBehaviour
         var main = ps.main;
         main.duration         = 5f;
         main.loop             = true;
-        main.startLifetime    = 3.0f;
+        main.startLifetime    = new ParticleSystem.MinMaxCurve(3.0f);
         main.startSpeed       = new ParticleSystem.MinMaxCurve(0.15f, 0.4f);
         main.startSize        = new ParticleSystem.MinMaxCurve(0.04f, 0.08f);
         main.startColor       = startColor;
@@ -313,13 +313,18 @@ public class MultiSpawner : MonoBehaviour
         var shape = ps.shape;
         shape.shapeType = ParticleSystemShapeType.Cone;
         shape.angle     = 8f;
-        shape.radius    = 0.15f; // narrow column rising from strand tip
+        shape.radius    = 0.15f;
         shape.length    = 1f;
         shape.alignToDirection = false;
 
+        // velocityOverLifetime: ALL three components (x/y/z) must be in
+        // the same MinMaxCurve mode or Unity warns. We use TwoConstants
+        // for y (rising), and explicitly set x/z to TwoConstants 0/0.
         var velocity = ps.velocityOverLifetime;
         velocity.enabled = true;
-        velocity.y       = new ParticleSystem.MinMaxCurve(0.1f, 0.5f);
+        velocity.x = new ParticleSystem.MinMaxCurve(0f, 0f);
+        velocity.y = new ParticleSystem.MinMaxCurve(0.1f, 0.5f);
+        velocity.z = new ParticleSystem.MinMaxCurve(0f, 0f);
 
         var color = ps.colorOverLifetime;
         color.enabled = true;
@@ -336,12 +341,33 @@ public class MultiSpawner : MonoBehaviour
             });
         color.color = new ParticleSystem.MinMaxGradient(grad);
 
-        // Wire shared particle material if provided. ParticleSystem renderer
-        // has its own Renderer component.
+        // Wire material — prefer SceneSetup-supplied if valid, else build
+        // inline. This avoids the magenta-particle bug when SceneSetup's
+        // CairnParticle.mat hasn't fully wired _BaseMap on first import.
         var pr = psGo.GetComponent<ParticleSystemRenderer>();
-        if (pr != null && particleMaterial != null)
+        if (pr != null)
         {
-            pr.sharedMaterial = particleMaterial;
+            Material mat = particleMaterial;
+            if (mat == null || mat.shader == null || mat.shader.name == "Hidden/InternalErrorShader")
+            {
+                // Build a minimal inline particle material — additive,
+                // unlit, default white texture. Visible regardless of
+                // SceneSetup state.
+                var sh = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+                if (sh == null) sh = Shader.Find("Particles/Standard Unlit");
+                if (sh == null) sh = Shader.Find("Sprites/Default");
+                if (sh != null)
+                {
+                    mat = new Material(sh);
+                    mat.color = startColor;
+                    // Try to set additive blend
+                    if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f); // 1=Transparent
+                    if (mat.HasProperty("_Blend"))   mat.SetFloat("_Blend",   1f); // 1=Additive
+                    if (mat.HasProperty("_SrcBlend")) mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.One);
+                    if (mat.HasProperty("_DstBlend")) mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+                }
+            }
+            if (mat != null) pr.sharedMaterial = mat;
         }
     }
 

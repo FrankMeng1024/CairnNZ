@@ -90,13 +90,24 @@ Shader "Cairn/StrandShader"
             CBUFFER_END
 
             // Globals — set via Shader.SetGlobalFloat from C# (CairnGlobals).
-            // Default values applied in CairnGlobals.Awake so shader never
-            // samples uninitialized globals.
-            float _CairnGlobalBloomScale;   // default 1.0
-            float _CairnGlobalAlpha;        // default 1.0, min-clamped 0.05
-            float _CairnGlobalScrollMul;    // default 1.0
-            float _CairnGlobalBreathFreq;   // default 1.0 — OTA multiplier on per-material _BreathFreq
-            float _CairnGlobalThermalScale; // default 1.0, driven by ThermalMonitor
+            // BUT — if a global is sampled BEFORE CairnGlobals.Awake runs
+            // (Editor first frame, or any race), Unity returns 0, which
+            // would multiply our final color to 0 → invisible cairn.
+            // Solution: read globals through helper that returns sane
+            // defaults when global hasn't been set yet. We use HLSL's
+            // implicit fact: any uninitialized `float` global is 0, so
+            // we treat 0 as "not yet set" and return our default.
+            float _CairnGlobalBloomScale;
+            float _CairnGlobalAlpha;
+            float _CairnGlobalScrollMul;
+            float _CairnGlobalBreathFreq;
+            float _CairnGlobalThermalScale;
+
+            // Coalesce zero (uninit) → 1.0 (sane default for multipliers).
+            // BloomScale/Alpha/ScrollMul/BreathFreq/Thermal all default to
+            // 1.0 in CairnGlobals — but if Awake hasn't run yet, sampling
+            // returns 0, so coalesce.
+            float _coalesce(float v) { return v > 0.0001 ? v : 1.0; }
 
             TEXTURE2D(_FlowTex);
             SAMPLER(sampler_FlowTex);
@@ -143,7 +154,7 @@ Shader "Cairn/StrandShader"
                 // ---- Flow texture (dual-scroll) ----
                 // Wrap-safe time: frac() prevents long-session FP drift.
                 // _CairnGlobalScrollMul lets RN pause-flow for screenshots.
-                float scrollT = _Time.y * _ScrollSpeed * _CairnGlobalScrollMul;
+                float scrollT = _Time.y * _ScrollSpeed * _coalesce(_CairnGlobalScrollMul);
                 float t1 = frac(scrollT);
                 float t2 = frac(scrollT * _FlowSecondaryMul);
 
@@ -167,17 +178,28 @@ Shader "Cairn/StrandShader"
                 // hut slow); _CairnGlobalBreathFreq is an OTA multiplier
                 // letting RN tune resting pulse rate uniformly without
                 // rebuild. Setting global to 0 disables breathing entirely.
-                float effectiveBreathFreq = _BreathFreq * _CairnGlobalBreathFreq;
+                float effectiveBreathFreq = _BreathFreq * _coalesce(_CairnGlobalBreathFreq);
                 float breath = 1.0 + _BreathAmp * sin(_Time.y * effectiveBreathFreq * 6.2831853);
 
                 // ---- Combine ----
                 // Stripe brightens center, fresnel adds rim, both gated by
                 // envelope. Premultiplied: color *= envelope (additive
                 // blend ignores alpha but we use envelope to shape output).
+                //
+                // CRITICAL: keep a minimum brightness floor so we never
+                // multiply down to invisible. Each global uses _coalesce
+                // which returns 1.0 for uninit. We also clamp envelope
+                // to [0.05, 1.0] so the strand never fully fades out
+                // (matches plan's 'never invisible' contract).
                 float3 color = _BaseColor.rgb * (bandIntensity + fres);
-                color *= _BloomBoost * _CairnGlobalBloomScale * _CairnGlobalThermalScale;
-                color *= envelope * breath;
-                color *= _InstanceAlpha * _CairnGlobalAlpha;
+                color *= _BloomBoost * _coalesce(_CairnGlobalBloomScale) * _coalesce(_CairnGlobalThermalScale);
+                color *= max(0.15, envelope) * breath;
+                color *= _InstanceAlpha * _coalesce(_CairnGlobalAlpha);
+
+                // Final safety: ensure we always emit at least a small
+                // amount of color so the strand is visible. additive
+                // blend means even small values accumulate.
+                color = max(color, _BaseColor.rgb * 0.05);
 
                 // alpha=1 because Blend One One ignores it; output color
                 // is already pre-multiplied by envelope.
