@@ -16,7 +16,14 @@
  *   - cairns array is empty (Phase 2 will compute world positions).
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import { StyleSheet, View, Platform, UIManager } from 'react-native';
 import UnityView from '@azesmway/react-native-unity';
 import { sendToUnity, parseUnityMessage, resetParseRecoveredThrottle } from '../services/unityBridge';
@@ -24,6 +31,10 @@ import { crashLogger } from '../services/crashLogger';
 import { API_BASE_URL } from '../config/api';
 import * as FileSystem from 'expo-file-system/legacy';
 import { storage } from '../store/storage';
+import {
+  buildSpawnRequest,
+  type UnitySpawnRequest,
+} from '../services/unityCairnSpawn';
 
 const UNITY_CHECKPOINT_KEY = 'cairn_unity_init_step_js';
 
@@ -68,17 +79,123 @@ export type UnityAROverlayProps = {
   onCairnPress?: (id: string) => void;
 };
 
-export function UnityAROverlay(props: UnityAROverlayProps) {
+/**
+ * Imperative handle exposed to ARScreen so it can push individual cairn spawns
+ * (called immediately on plant) without going through the props/render cycle.
+ *
+ * Why imperative: plant happens *after* the marker is persisted by addMarker,
+ * which causes the markers prop to update on the next render. By then the
+ * user is already wondering "did it work?" — going via prop change adds an
+ * extra render frame of latency. Calling spawnCairn() directly on plant
+ * sends the postMessage in the same tick the user gets the haptic.
+ *
+ * Bulk spawn (spawnAllMarkers) is the "user re-entered AR screen with N
+ * existing cairns" path — UnityAROverlay calls it itself when it receives
+ * ArReady (so we don't depend on ARScreen knowing the lifecycle).
+ */
+export interface UnityAROverlayHandle {
+  /** Spawn one cairn now. Caller is responsible for building the request
+   *  (so the caller can use its already-computed ARKit world coordinates
+   *  from the plant hit-test, instead of round-tripping through GPS). */
+  spawnCairn(req: UnitySpawnRequest): void;
+  /** Convenience: re-spawn all current markers. Used after ArReady when
+   *  origin has just been established. */
+  spawnMarkers(
+    markers: Marker[],
+    origin: { lat: number; lng: number } | null,
+    groundY: number | null,
+  ): void;
+  /** Tell Unity to despawn everything (e.g. AR screen unmount). */
+  clearAll(): void;
+}
+
+export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayProps>(
+  function UnityAROverlay(props, ref) {
   const unityRef     = useRef<UnityView | null>(null);
   const groundYRef   = useRef<number | null>(null);
   const arReadyRef   = useRef(false);
   const lastFrameRef = useRef<number>(Date.now());
+  // Track which marker IDs we've already pushed to Unity this session, so
+  // markers-prop changes (e.g. server sync adding nearby markers) don't
+  // trigger duplicate spawns. Cleared on unmount.
+  const spawnedIdsRef = useRef<Set<string>>(new Set());
   // OTA #181: one-shot breadcrumb on first ArFrame received. After parser
   // fix, lets us see whether values are real (Unity AR working) or are
   // the parser's null→default fallbacks (Unity still emitting F3 literals).
   // Real working AR: px/py/pz vary, fy≈1, etc. Fallback signature:
   // px=0 py=0 pz=0 fx=0 fy=1.00 fz=0 (parser defaults).
   const firstFrameRef = useRef(true);
+
+  // Internal helper: send an OnSpawnStrand to Unity with all the safety
+  // checks (Unity ref live, AR ready, not already spawned). Returns true
+  // if the message was actually dispatched.
+  const dispatchSpawn = useCallback((req: UnitySpawnRequest): boolean => {
+    if (!unityRef.current) {
+      crashLogger.breadcrumb(`${TAG}:spawn-skip:no-unityRef id=${req.id}`);
+      return false;
+    }
+    if (!arReadyRef.current) {
+      // Don't drop — the caller (typically ArReady handler) is expected
+      // to be the gate. If something else races us, log and move on.
+      crashLogger.breadcrumb(`${TAG}:spawn-skip:not-ready id=${req.id}`);
+      return false;
+    }
+    if (spawnedIdsRef.current.has(req.id)) {
+      // Same-id duplicate — ignore. (Future: support update via despawn+respawn.)
+      return false;
+    }
+    try {
+      unityRef.current.postMessage('CairnBridge', 'OnSpawnStrand', JSON.stringify(req));
+      spawnedIdsRef.current.add(req.id);
+      crashLogger.breadcrumb(
+        `${TAG}:spawn id=${req.id} pos=(${req.x.toFixed(2)},${req.y.toFixed(2)},${req.z.toFixed(2)})`
+      );
+      return true;
+    } catch (e: any) {
+      crashLogger.breadcrumb(`${TAG}:spawn-error id=${req.id} ${String(e?.message ?? e).slice(0, 80)}`);
+      return false;
+    }
+  }, []);
+
+  // Imperative API for ARScreen.
+  useImperativeHandle(
+    ref,
+    (): UnityAROverlayHandle => ({
+      spawnCairn: (req) => {
+        dispatchSpawn(req);
+      },
+      spawnMarkers: (markers, origin, groundY) => {
+        if (!origin) {
+          crashLogger.breadcrumb(`${TAG}:spawnMarkers-skip:no-origin n=${markers.length}`);
+          return;
+        }
+        let dispatched = 0;
+        for (const m of markers) {
+          if (spawnedIdsRef.current.has(m.id)) continue;
+          const req = buildSpawnRequest(
+            { id: m.id, type: m.type, lat: m.lat, lng: m.lng },
+            origin,
+            groundY,
+          );
+          if (req && dispatchSpawn(req)) dispatched += 1;
+        }
+        crashLogger.breadcrumb(
+          `${TAG}:spawnMarkers requested=${markers.length} dispatched=${dispatched} alreadySpawned=${spawnedIdsRef.current.size - dispatched}`
+        );
+      },
+      clearAll: () => {
+        if (!unityRef.current) return;
+        try {
+          unityRef.current.postMessage('CairnBridge', 'OnClearAll', '');
+          spawnedIdsRef.current.clear();
+          crashLogger.breadcrumb(`${TAG}:clearAll dispatched`);
+        } catch (e: any) {
+          crashLogger.breadcrumb(`${TAG}:clearAll-error ${String(e?.message ?? e).slice(0, 80)}`);
+        }
+      },
+    }),
+    [dispatchSpawn],
+  );
 
   // Mount lifecycle
   useEffect(() => {
@@ -150,6 +267,15 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
     return () => {
       clearTimeout(t5);
       clearTimeout(t15);
+      // Tell Unity to despawn all strands and reset RN's spawned-set, so
+      // re-entering the AR screen starts from a clean slate. Without this,
+      // @azesmway/react-native-unity's singleton UnityFramework keeps
+      // MultiSpawner._spawned populated across RN remounts → ghost pillars
+      // pile up. (Reviewer-flagged MEDIUM concern, OTA-fix #1.)
+      if (unityRef.current) {
+        try { unityRef.current.postMessage('CairnBridge', 'OnClearAll', ''); } catch {}
+      }
+      spawnedIdsRef.current.clear();
       crashLogger.breadcrumb(`${TAG}:unmount glReady=${arReadyRef.current}`);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -218,6 +344,37 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
           );
           crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-ar-ready').catch(() => undefined);
           props.onStatus?.({ glReady: true, cairnCount: props.markers.length });
+          // Phase 2 wire-up: bulk-spawn any markers we already had at AR
+          // entry. We need an arOrigin to convert lat/lng to Unity world
+          // space — origin lands on the first ArFrame, which is typically
+          // a few hundred ms after ArReady. So defer one tick.
+          //
+          // (We don't do it from the ArFrame handler directly because
+          // that fires at 10Hz and we only want to bulk-spawn once.)
+          {
+            const origin = props.userPos
+              ? { lat: props.userPos.lat, lng: props.userPos.lng }
+              : null;
+            if (origin && props.markers.length > 0) {
+              let dispatched = 0;
+              for (const m of props.markers) {
+                if (spawnedIdsRef.current.has(m.id)) continue;
+                const req = buildSpawnRequest(
+                  { id: m.id, type: m.type, lat: m.lat, lng: m.lng },
+                  origin,
+                  groundYRef.current,
+                );
+                if (req && dispatchSpawn(req)) dispatched += 1;
+              }
+              crashLogger.breadcrumb(
+                `${TAG}:on-ar-ready:bulk-spawn requested=${props.markers.length} dispatched=${dispatched}`
+              );
+            } else {
+              crashLogger.breadcrumb(
+                `${TAG}:on-ar-ready:bulk-spawn-skip origin=${!!origin} markers=${props.markers.length}`
+              );
+            }
+          }
           break;
 
         case 'PlaneDetected':
@@ -325,4 +482,4 @@ export function UnityAROverlay(props: UnityAROverlayProps) {
       />
     </View>
   );
-}
+});

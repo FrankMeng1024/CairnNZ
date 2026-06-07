@@ -29,7 +29,7 @@ import { AR3DCairnOverlay } from '../components/AR3DCairnOverlay';
 // 用户体验受损但 app 不崩, 给我们时间通过 OTA 修.
 import { ViroAROverlay } from '../components/ViroAROverlay';
 import { ViroARRitualOverlay, type ViroARRitualOverlayHandle } from '../components/ViroARRitualOverlay';
-import { UnityAROverlay } from '../components/UnityAROverlay';
+import { UnityAROverlay, type UnityAROverlayHandle } from '../components/UnityAROverlay';
 import { CairnEdgeArrows } from '../components/CairnEdgeArrows';
 import { AimShutter } from '../components/AimShutter';
 import { PlantSheet, AimReticle, type PlantType } from '../components/PlantSheet';
@@ -54,6 +54,7 @@ import { useMarkerStore, type Marker } from '../store/useMarkerStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { haversineM, type Coordinate } from '../utils/geo';
 import { crashLogger } from '../services/crashLogger';
+import { markerTypeToColor, markerTypeToShaderParams } from '../services/unityCairnSpawn';
 import { API_BASE_URL } from '../config/api';
 import { filterContent, type ContentLevel } from '../services/contentFilter';
 import { checkMarkerSpacing } from '../utils/geo';
@@ -225,6 +226,10 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // when user taps the bug button. Snapshot is base64-chunked into telemetry
   // breadcrumbs so I can pull it via mysql + reassemble locally.
   const ritualOverlayRef = useRef<ViroARRitualOverlayHandle | null>(null);
+  // Phase 2 Unity wire-up: ref to UnityAROverlay so we can imperatively push
+  // OnSpawnStrand to Unity right after a successful plant. Going through
+  // props would add a render frame of latency between haptic and visual.
+  const unityOverlayRef = useRef<UnityAROverlayHandle | null>(null);
   // Snapshot UI state machine:
   //   idle  - normal bug emoji
   //   busy  - spinner while takeScreenshot + base64 + telemetry flush
@@ -482,6 +487,11 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     // first second before the camera transform callback fires.
     let cairnLat = anchor.lat;
     let cairnLng = anchor.lng;
+    // ARKit world-space target preserved for Unity OnSpawnStrand below.
+    // null means "no AR origin / fell through to GPS-only path" — we'll
+    // skip Unity spawn (cairn still saves to DB and shows on map; the next
+    // re-entry to AR will pick it up via spawnMarkers on ArReady).
+    let unitySpawnPos: { x: number; y: number; z: number } | null = null;
     if (distanceM > 0) {
       const cam = arFrame.camera;
       const arOrigin = arFrame.origin;
@@ -535,6 +545,10 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         const dN = -targetZ;
         cairnLat = arOrigin.lat + dN / 111000;
         cairnLng = arOrigin.lng + dE / (111000 * Math.cos(arOrigin.lat * Math.PI / 180));
+        // Phase 2: stash the ARKit world position so we can spawn the cairn
+        // in Unity right after addMarker resolves. y = ground if known, else
+        // camera y (so the strand stands roughly upright at user height).
+        unitySpawnPos = { x: targetX, y: ground ?? cy, z: targetZ };
         crashLogger.breadcrumb(`ar:plant:src=hit-test fy=${fy.toFixed(2)} ground=${ground === null ? 'null' : ground.toFixed(2)} hit=${usedHitTest} dist=${hitDistM.toFixed(2)}m`);
         anchor = arOrigin;
       } else {
@@ -616,6 +630,30 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
       crashLogger.breadcrumb(`ar:plant:after-addMarker id=${marker.id}`);
       if (sessionId) linkMarker(marker.id);
       crashLogger.breadcrumb(`ar:plant:saved id=${marker.id}`);
+      // Phase 2 wire-up: tell Unity to spawn the strand at the exact ARKit
+      // world position we hit-tested. We use the directly-computed (x, y, z)
+      // instead of round-tripping through buildSpawnRequest's GPS converter
+      // — same source-of-truth, zero extra error from float drift, and works
+      // even if origin is in a slightly different ArFrame than this hit-test.
+      if (unitySpawnPos && unityOverlayRef.current) {
+        const colour = markerTypeToColor(type);
+        const shader = markerTypeToShaderParams(type);
+        unityOverlayRef.current.spawnCairn({
+          id: marker.id,
+          x: unitySpawnPos.x,
+          y: unitySpawnPos.y,
+          z: unitySpawnPos.z,
+          r: colour.r,
+          g: colour.g,
+          b: colour.b,
+          scrollSpeed: shader.scrollSpeed,
+          bloomBoost: shader.bloomBoost,
+        });
+      } else {
+        crashLogger.breadcrumb(
+          `ar:plant:unity-spawn-skip pos=${!!unitySpawnPos} ref=${!!unityOverlayRef.current}`
+        );
+      }
       // v25 diagnostic: 1.5s after plant, push current breadcrumb buffer
       // to backend telemetry. This captures the buildCairn / populate /
       // first-frame events triggered by the new marker so we can debug
@@ -720,6 +758,7 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           so breadcrumb logs + debug snapshots can be analysed. */}
       {USE_UNITY_AR ? (
         <UnityAROverlay
+          ref={unityOverlayRef}
           markers={nearbyMarkers}
           userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng, alt: lastCoord.alt ?? null } : null}
           userHeading={userHeading}
