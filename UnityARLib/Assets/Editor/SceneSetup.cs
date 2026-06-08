@@ -251,6 +251,16 @@ public static class SceneSetup
         soURP.ApplyModifiedProperties();
         EditorUtility.SetDirty(rpAsset);
 
+        // v187.7.10 — CRITICAL FIX (Subagent A diagnosis): ensure
+        // ARBackgroundRendererFeature is in the renderer's feature list.
+        // Without it, ARCameraBackground component is enabled but no URP
+        // RenderPass blits the iOS camera image to the color buffer →
+        // user sees uninitialized HDR float16 framebuffer memory (yellow/
+        // brown noise amplified by bloom). Was the v187 production yellow-
+        // screen bug. Reference: ARCameraBackground.cs lines 18-34 in
+        // com.unity.xr.arfoundation — explicitly required under URP.
+        EnsureARBackgroundRendererFeature(renderer);
+
         // v187.7.2 — DO NOT set GraphicsSettings.defaultRenderPipeline.
         // Setting it causes Unity to enumerate the FULL URP keyword matrix
         // at build time (294,912 variants, 8+ hour iOS build). The standalone
@@ -273,6 +283,48 @@ public static class SceneSetup
 
         AssetDatabase.SaveAssets();
         Debug.Log("[CairnUnity][SceneSetup] URP RP asset wired to all QualitySettings levels (GraphicsSettings.defaultRenderPipeline intentionally NOT set — see comment).");
+    }
+
+    /// <summary>
+    /// v187.7.10 fix — make sure the URP renderer has ARBackgroundRendererFeature
+    /// in its feature list. ScriptableObject.CreateInstance<UniversalRendererData>()
+    /// creates an empty feature list; AR Foundation 6 + URP requires this
+    /// feature to be present for the camera-feed blit pass to run.
+    ///
+    /// Idempotent: re-runs every scene-setup; if a feature of this type is
+    /// already present, exits without modification. Adds the feature as a
+    /// sub-asset of CairnURPRenderer.asset so it serializes correctly across
+    /// build pipelines.
+    /// </summary>
+    private static void EnsureARBackgroundRendererFeature(
+        UnityEngine.Rendering.Universal.UniversalRendererData renderer)
+    {
+        if (renderer == null) return;
+
+        // Check if already present.
+        bool already = false;
+        foreach (var f in renderer.rendererFeatures)
+        {
+            if (f is UnityEngine.XR.ARFoundation.ARBackgroundRendererFeature)
+            {
+                already = true;
+                break;
+            }
+        }
+        if (already)
+        {
+            Debug.Log("[CairnUnity][SceneSetup] ARBackgroundRendererFeature already in renderer feature list");
+            return;
+        }
+
+        var feature = ScriptableObject.CreateInstance<UnityEngine.XR.ARFoundation.ARBackgroundRendererFeature>();
+        feature.name = "ARBackgroundRendererFeature";
+        // Persist as sub-asset of the renderer so .meta GUIDs survive CI rebuilds.
+        AssetDatabase.AddObjectToAsset(feature, renderer);
+        renderer.rendererFeatures.Add(feature);
+        EditorUtility.SetDirty(renderer);
+        AssetDatabase.SaveAssets();
+        Debug.Log("[CairnUnity][SceneSetup] ARBackgroundRendererFeature added to renderer feature list (was empty — yellow-screen bug fix)");
     }
 
     private static void EnsureTextureImportSettings()

@@ -295,17 +295,11 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   useEffect(() => {
     if (!arStatus.glReady || !unityOverlayRef.current) return;
     const ota = unityOverlayRef.current;
-    // Halo: cut intensity to 30% so it stops dominating the AR feed.
-    ota.setGlobal('HaloIntensity', 0.3);
-    // Portal scale: shrink the whole disc 30% so it doesn't fill the foreground.
-    ota.setGlobal('PortalScale', 0.7);
-    // Wisp height: slightly shorter so the cluster reads more compact.
-    ota.setGlobal('WispHeight', 0.85);
-    // Sigil intensity: slightly lower so glow doesn't blow out on iOS HDR.
-    ota.setGlobal('SigilIntensity', 0.85);
-    // Bubble (rise) speed: slow human-eye comfortable.
-    ota.setGlobal('BubbleSpeed', 0.8);
-    crashLogger.breadcrumb('ar:ota:v187.7.5-defaults applied (halo/scale/wisp/sigil/bubble)');
+    // v187.7.10 — restore reasonable defaults. The actual yellow-screen
+    // root cause (missing ARBackgroundRendererFeature in URP renderer)
+    // is fixed at native build time in SceneSetup.EnsureARBackgroundRendererFeature.
+    // No emergency OTA mitigations needed any more.
+    crashLogger.breadcrumb('ar:ota:v187.7.10 normal-defaults');
   }, [arStatus.glReady]);
 
   // Ready haptic — fire ONCE when transitioning to 'ready' so the user
