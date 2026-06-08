@@ -48,8 +48,11 @@ jobs:
           fi
           # And the m_RendererFeatures list must reference it (not just have
           # it as an orphan sub-asset).
-          if ! grep -A2 '^m_RendererFeatures:' UnityARLib/Assets/Settings/CairnURPRenderer.asset | grep -qE '^\s*-\s*\{fileID:\s*-?[0-9]+\}'; then
-            echo "::error::CairnURPRenderer.asset has empty m_RendererFeatures list. YELLOW-SCREEN BUG WILL RECUR. Aborting build."
+          # Note: m_RendererFeatures is indented 2 spaces inside the
+          # MonoBehaviour block, so we need -E + ^\s* (not anchored ^m_).
+          # Also: fileID must be non-zero (fileID: 0 = orphan stub).
+          if ! grep -A2 -E '^\s*m_RendererFeatures:' UnityARLib/Assets/Settings/CairnURPRenderer.asset | grep -qE '^\s*-\s*\{fileID:\s*-?[1-9][0-9]*\}'; then
+            echo "::error::CairnURPRenderer.asset has empty m_RendererFeatures list (or fileID=0 orphan). YELLOW-SCREEN BUG WILL RECUR. Aborting build."
             exit 1
           fi
           # Project vs CI Unity version — flag mismatch (warning only; image
