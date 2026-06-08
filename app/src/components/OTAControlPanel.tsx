@@ -44,14 +44,18 @@ export const PORTAL_GLOBALS: OTAGlobalDef[] = [
   { name: 'AmbientLux',     label: 'Ambient light',      min: 0.0,  max: 3.0,  def: 1.0, step: 0.1  },
 
   // — Portal ring —
-  { name: 'SigilIntensity', label: 'Sigil glow',         min: 0.0,  max: 3.0,  def: 1.0, step: 0.05 },
+  // v187.7 Round-2 N3: SigilIntensity min 0.05 (not 0) because the shader
+  // _coalesce(0)→1.0 means a literal 0 reverts to baseline, surprising the
+  // user. 0.05 is "barely visible" and consistent.
+  { name: 'SigilIntensity', label: 'Sigil glow',         min: 0.05, max: 3.0,  def: 1.0, step: 0.05 },
   { name: 'PortalSpin',     label: 'Portal spin',        min: 0.0,  max: 4.0,  def: 1.0, step: 0.05 },
   { name: 'PortalScale',    label: 'Portal size',        min: 0.3,  max: 3.0,  def: 1.0, step: 0.05 },
   { name: 'IconScale',      label: 'Icon size',          min: 0.3,  max: 3.0,  def: 1.0, step: 0.05 },
   { name: 'HaloIntensity',  label: 'Ground halo',        min: 0.0,  max: 3.0,  def: 1.0, step: 0.05 },
 
   // — Wisps / strands —
-  { name: 'WispIntensity',  label: 'Wisp brightness',    min: 0.0,  max: 3.0,  def: 1.0, step: 0.05 },
+  // v187.7 Round-2 N3: WispIntensity min 0.05 (same reason as SigilIntensity).
+  { name: 'WispIntensity',  label: 'Wisp brightness',    min: 0.05, max: 3.0,  def: 1.0, step: 0.05 },
   { name: 'WispCountMul',   label: 'Wisp count ×',       min: 0.0,  max: 2.0,  def: 1.0, step: 0.05 },
   { name: 'WispThickness',  label: 'Wisp thickness',     min: 0.3,  max: 3.0,  def: 1.0, step: 0.05 },
   { name: 'WispHeight',     label: 'Wisp height',        min: 0.3,  max: 3.0,  def: 1.0, step: 0.05 },

@@ -115,6 +115,10 @@ public class PortalSpawner : MonoBehaviour
         { "cairn",    "CAIRN" },
     };
 
+    // v187.7 Arch Round-2 N1: cache resolved Font so worst-case fallback
+    // (Font.CreateDynamicFontFromOSFont) doesn't allocate per spawn.
+    private static Font _resolvedFontCache;
+
     /// <summary>
     /// Resolve a Font for runtime TextMesh creation. Tries (1) the
     /// inspector-assigned markFont, (2) Unity's built-in LiberationSans.ttf
@@ -123,19 +127,19 @@ public class PortalSpawner : MonoBehaviour
     /// dynamic-size fallback if both fail (extremely unlikely, but logs
     /// loudly and never returns null so text still renders glyphless boxes
     /// rather than silent empty space).
-    /// Arch Blocker #2 fix.
+    /// Cached statically — only the FIRST call actually does the resolve.
+    /// Arch Blocker #2 fix + Round-2 N1 cache.
     /// </summary>
     private Font ResolveTextFont()
     {
         if (markFont != null) return markFont;
+        if (_resolvedFontCache != null) return _resolvedFontCache;
         var fb = Resources.GetBuiltinResource<Font>("LiberationSans.ttf");
-        if (fb != null) return fb;
+        if (fb != null) { _resolvedFontCache = fb; return fb; }
         UnityLogger.E("PortalSpawner",
             "LiberationSans.ttf builtin missing — text will fallback to OS default");
-        // Last-resort: ask Unity to create a Font from the system default.
-        // This always returns a non-null Font in Unity Editor / Standalone;
-        // on iOS it falls back to "Arial" which the OS provides.
-        return Font.CreateDynamicFontFromOSFont("Arial", 16);
+        _resolvedFontCache = Font.CreateDynamicFontFromOSFont("Arial", 16);
+        return _resolvedFontCache;
     }
 
     /// <summary>
@@ -605,6 +609,11 @@ public class PortalSpawner : MonoBehaviour
             if (_textShadowMat == null)
             {
                 _textShadowMat = new Material(tm.font.material) { name = "TextShadow_Runtime" };
+                // v187.7 Round-2 N2: set m.color explicitly so the cached
+                // material doesn't rely on TextMesh.color vertex-color path
+                // alone. Color passed in may be a dark-tint per-call but the
+                // cached material is shared — bake "near-black" once.
+                _textShadowMat.color = new Color(0f, 0f, 0f, 1f);
             }
             m = _textShadowMat;
         }

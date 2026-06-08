@@ -209,8 +209,11 @@ Shader "Cairn/PortalRingShader"
                 }
                 // p is uv-centered (-0.5..0.5). Icons drawn within r ≤ 0.18.
                 // v187.7 Arch Medium #15 fix: IconScale OTA scales icon
-                // coordinates inversely (smaller scale → icon SDF reads
-                // a larger area → icon draws bigger).
+                // coordinates inversely. iconScaleG = 3.0 → coordinates
+                // shrink (p/3 makes |p| smaller) → icon's drawn region
+                // covers a LARGER area in p space → icon visually BIGGER.
+                // iconScaleG = 0.3 → coordinates expand → icon visually
+                // SMALLER. Sliders 0.3-3.0 = small-to-large.
                 float iconScaleG = max(_coalesce(_CairnGlobalIconScale), 0.1);
                 float2 ip = p / iconScaleG;
                 int typeIdx = (int)(_TypeIndex + 0.5);
