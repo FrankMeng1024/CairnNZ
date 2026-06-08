@@ -225,6 +225,121 @@ public class CairnBridge : MonoBehaviour
             SendToRN("ARBgDiag",
                 "{\"phase\":\"first-update\",\"error\":\"" + EscapeJson(e.Message) + "\"}");
         }
+
+        // v187.7.11 — INSTRUMENTATION block (Subagents A+B design).
+        // Emit URPDiag, CamDiag, VolumeDiag so any future visual AR bug surfaces
+        // its root cause directly in ARDebugOverlay without requiring Xcode.
+
+        // URPDiag — confirms URP is active + ARBackgroundRendererFeature is in
+        // the renderer feature list at runtime (catches CI-baked .asset that
+        // lost the feature reference between editor save and player build).
+        try
+        {
+            var rp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+            var qrp = UnityEngine.QualitySettings.renderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+            string activeName = rp != null ? rp.name : (qrp != null ? qrp.name : "NULL");
+            int featureCount = 0;
+            bool arFeaturePresent = false;
+            bool arFeatureActive = false;
+            var asset = qrp != null ? qrp : rp;
+            if (asset != null)
+            {
+                var rendererProp = asset.GetType().GetProperty("rendererDataList",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                var dataList = rendererProp != null ? rendererProp.GetValue(asset) as System.Collections.IEnumerable : null;
+                if (dataList != null)
+                {
+                    foreach (var data in dataList)
+                    {
+                        var rfProp = data.GetType().GetProperty("rendererFeatures");
+                        var list = rfProp != null ? rfProp.GetValue(data) as System.Collections.IList : null;
+                        if (list != null)
+                        {
+                            featureCount = list.Count;
+                            for (int i = 0; i < list.Count; i++)
+                            {
+                                var f = list[i];
+                                if (f is UnityEngine.XR.ARFoundation.ARBackgroundRendererFeature arf)
+                                {
+                                    arFeaturePresent = true;
+                                    arFeatureActive = arf.isActive;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            string urpJson = "{\"pipeline\":\"" + EscapeJson(activeName) + "\""
+                           + ",\"featureCount\":" + featureCount
+                           + ",\"arFeature\":" + (arFeaturePresent ? "true" : "false")
+                           + ",\"arActive\":" + (arFeatureActive ? "true" : "false") + "}";
+            SendToRN("URPDiag", urpJson);
+            UnityLogger.IForward("CairnBridge",
+                $"URPDiag pipeline={activeName} features={featureCount} arFeature={arFeaturePresent}/{arFeatureActive}");
+        }
+        catch (System.Exception e)
+        {
+            SendToRN("URPDiag", "{\"error\":\"" + EscapeJson(e.Message) + "\"}");
+        }
+
+        // CamDiag — clearFlags + bg color + targetTexture state. Catches
+        // accidental render-to-texture or wrong clearFlags = wrong-color
+        // background.
+        try
+        {
+            if (arCamera == null)
+            {
+                SendToRN("CamDiag", "{\"present\":false}");
+            }
+            else
+            {
+                var c = arCamera;
+                string camJson = "{\"present\":true"
+                               + ",\"clearFlags\":\"" + c.clearFlags + "\""
+                               + ",\"bg\":\"" + c.backgroundColor.r.ToString("F2") + "," + c.backgroundColor.g.ToString("F2") + "," + c.backgroundColor.b.ToString("F2") + "\""
+                               + ",\"isMain\":" + (c == Camera.main ? "true" : "false")
+                               + ",\"hdr\":" + (c.allowHDR ? "true" : "false")
+                               + ",\"rt\":\"" + (c.targetTexture == null ? "backbuffer" : c.targetTexture.name) + "\"}";
+                SendToRN("CamDiag", camJson);
+            }
+        }
+        catch (System.Exception e)
+        {
+            SendToRN("CamDiag", "{\"error\":\"" + EscapeJson(e.Message) + "\"}");
+        }
+
+        // VolumeDiag — confirms Bloom (or other post) is active. If profile is
+        // empty (CairnVolumeProfile.asset on disk has been observed empty),
+        // bloom is silent no-op and we'll know.
+        try
+        {
+            var volumes = UnityEngine.Object.FindObjectsByType<UnityEngine.Rendering.Volume>(UnityEngine.FindObjectsSortMode.None);
+            int gCount = 0;
+            var components = new System.Text.StringBuilder();
+            foreach (var v in volumes)
+            {
+                if (v.isGlobal)
+                {
+                    gCount++;
+                    if (components.Length == 0 && v.sharedProfile != null)
+                    {
+                        foreach (var c in v.sharedProfile.components)
+                        {
+                            if (components.Length > 0) components.Append(",");
+                            components.Append(c == null ? "NULL" : c.GetType().Name);
+                        }
+                    }
+                }
+            }
+            string vJson = "{\"globalVolumes\":" + gCount
+                         + ",\"components\":\"" + EscapeJson(components.ToString()) + "\"}";
+            SendToRN("VolumeDiag", vJson);
+        }
+        catch (System.Exception e)
+        {
+            SendToRN("VolumeDiag", "{\"error\":\"" + EscapeJson(e.Message) + "\"}");
+        }
     }
 
     private void AutoFindReferences()

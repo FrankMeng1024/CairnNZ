@@ -28,6 +28,41 @@ jobs:
         with:
           lfs: false
 
+      # v187.7.11 — Pre-build STATIC GATE.
+      # Subagent A diagnosed empty m_RendererFeatures in CairnURPRenderer.asset
+      # as the v187 yellow-screen root cause. Subagent B identified the residual
+      # 30% risk: CI Unity version (6000.0.36f1) ≠ project version (6000.0.76f1)
+      # could silently corrupt URP renderer-feature serialization between Unity
+      # patches. Defense: grep the .asset YAML before unity-builder runs; fail
+      # the workflow if the feature is missing. Costs ~1 second; saves a 6-min
+      # build + an EAS build cycle when the renderer is broken.
+      - name: Pre-build static gate (assets sanity)
+        run: |
+          set -e
+          echo "==== Pre-build static gate ===="
+          # ARBackgroundRendererFeature MonoBehaviour script GUID is
+          # 0ae4d376c05df421b98c5b39b25b0d29 (constant across Unity 6 patches).
+          if ! grep -q '0ae4d376c05df421b98c5b39b25b0d29' UnityARLib/Assets/Settings/CairnURPRenderer.asset 2>/dev/null; then
+            echo "::error::CairnURPRenderer.asset does not contain ARBackgroundRendererFeature script GUID (0ae4d376...). YELLOW-SCREEN BUG WILL RECUR. Aborting build."
+            exit 1
+          fi
+          # And the m_RendererFeatures list must reference it (not just have
+          # it as an orphan sub-asset).
+          if ! grep -A2 '^m_RendererFeatures:' UnityARLib/Assets/Settings/CairnURPRenderer.asset | grep -qE '^\s*-\s*\{fileID:\s*-?[0-9]+\}'; then
+            echo "::error::CairnURPRenderer.asset has empty m_RendererFeatures list. YELLOW-SCREEN BUG WILL RECUR. Aborting build."
+            exit 1
+          fi
+          # Project vs CI Unity version — flag mismatch (warning only; image
+          # publication lag for 76f1 means we cannot fail on this YET).
+          PROJ_VER=$(grep -E '^m_EditorVersion:' UnityARLib/ProjectSettings/ProjectVersion.txt | awk '{print $2}')
+          CI_VER=$(grep -E 'unityVersion:' .github/workflows/unity-build-xcframework.yml | head -1 | awk '{print $2}')
+          if [ "$PROJ_VER" != "$CI_VER" ]; then
+            echo "::warning::Unity version mismatch: project=$PROJ_VER, CI=$CI_VER. Risk of serialization drift. Static gate above protects against the most-known case (URP renderer features) but other Unity 6 patch differences may leak through."
+          else
+            echo "Unity version: project=$PROJ_VER, CI=$CI_VER (match)."
+          fi
+          echo "==== Pre-build static gate PASS ===="
+
       - uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
