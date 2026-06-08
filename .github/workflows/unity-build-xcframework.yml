@@ -194,21 +194,22 @@ jobs:
           SHORT="${HASH:0:12}"
           echo "xcframework SHA-256: $HASH"
 
+          # Identify as the bot for the commit
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+          # FIX (v187 Sprint): pull-rebase BEFORE writing the marker file.
+          # Previous order was: write file → pull --rebase → fail because
+          # rebase refuses with "You have unstaged changes". Now we pull
+          # first to a clean tree, then write+commit+push.
+          git pull --rebase origin master
+
           # Build JSON with printf (avoids heredoc indentation pitfalls in
           # YAML run blocks).
           printf '{\n  "release_tag": "unity-xcframework-latest",\n  "xcframework_sha256": "%s"\n}\n' "$HASH" > app/unity-release.json
 
           echo "=== marker file content ==="
           cat app/unity-release.json
-
-          # Identify as the bot for the commit
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
-
-          # Pull-rebase to absorb concurrent RN-side commits. If pull fails
-          # (real conflict, network) we MUST fail loud — silent staleness
-          # is the exact bug we're trying to prevent. No `|| true` here.
-          git pull --rebase origin master
 
           git add app/unity-release.json
           if git diff --cached --quiet; then
@@ -219,10 +220,17 @@ jobs:
           git commit -m "chore(unity): bump xcframework marker to ${SHORT}"
 
           # Push with one retry (handles race: another commit landed between
-          # pull and push). If still failing, fail the workflow loud — the
-          # subsequent Release upload step will NOT run, preventing
-          # marker/release inconsistency.
-          git push origin master || (git pull --rebase origin master && git push origin master)
+          # pull and push). On retry, stash the marker, pull, re-apply,
+          # commit again so we don't trip the same dirty-tree error.
+          git push origin master || {
+            git stash push -m "marker-retry-$$" -- app/unity-release.json
+            git pull --rebase origin master
+            git stash pop || true
+            git add app/unity-release.json
+            git commit --amend --no-edit -- app/unity-release.json 2>/dev/null \
+              || git commit -m "chore(unity): bump xcframework marker to ${SHORT} (retry)"
+            git push origin master
+          }
 
       - name: Upload to GitHub Release
         # Runs ONLY if marker commit succeeded above (set -e + step ordering).
