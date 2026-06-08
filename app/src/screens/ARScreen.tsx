@@ -669,6 +669,10 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           b: colour.b,
           scrollSpeed: shader.scrollSpeed,
           bloomBoost: shader.bloomBoost,
+          // v187: forward the user-typed note so PortalSpawner renders the
+          // 3D mark text above the cairn (≤30 codepoints, word-wrapped).
+          // Codepoint-aware clip (handles emoji surrogate pairs).
+          note: [...(marker.note || '')].slice(0, 30).join(''),
         });
       } else {
         crashLogger.breadcrumb(

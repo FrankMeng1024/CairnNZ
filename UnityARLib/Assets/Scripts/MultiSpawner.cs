@@ -14,7 +14,7 @@ using System.Collections.Generic;
 /// invokes them — the GroundYResolver makes them obsolete by ensuring
 /// cairns always render at a plausible Y, even with no plane.
 /// </summary>
-public class MultiSpawner : MonoBehaviour
+public class MultiSpawner : MonoBehaviour, ICairnSpawner
 {
     [Header("Strand material — wired by SceneSetup. Shared across all strands; per-cairn parameters via MaterialPropertyBlock.")]
     public Material strandMaterialBase;

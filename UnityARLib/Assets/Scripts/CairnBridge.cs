@@ -30,7 +30,17 @@ public class CairnBridge : MonoBehaviour
     public Camera          arCamera;
     public ARSession       arSession;
     public ARPlaneManager  planeManager;
-    public MultiSpawner    spawner;
+    // v187.7.4 — was `public MultiSpawner spawner;`. Now an ICairnSpawner
+    // so SceneSetup can wire either MultiSpawner (v186 strand cylinder) or
+    // PortalSpawner (v187 magic-circle portal) without changing this file.
+    // Inspector serialization: ICairnSpawner can't be inspector-assigned
+    // directly; SceneSetup AddComponent + assigns at scene-build time.
+    // Auto-find at Start() searches for ANY ICairnSpawner-implementing
+    // MonoBehaviour in the scene.
+    public MonoBehaviour spawnerBehaviour; // editor-friendly slot; kept for hot-swap diagnostics
+    private ICairnSpawner spawner;
+    /// <summary>Bound at Start() — read-only after that.</summary>
+    public ICairnSpawner SpawnerInterface => spawner;
 
     // Runtime state
     private bool  _arReadySent      = false;
@@ -236,8 +246,29 @@ public class CairnBridge : MonoBehaviour
         }
         if (spawner == null)
         {
-            spawner = FindFirstObjectByType<MultiSpawner>();
-            if (spawner == null) UnityLogger.W("CairnBridge", "MultiSpawner not found in scene");
+            // v187.7.4 — find ANY ICairnSpawner-implementing MonoBehaviour.
+            // SceneSetup wires PortalSpawner (v187); MultiSpawner (v186)
+            // also satisfies the interface as fallback. Prefer the editor-
+            // assigned spawnerBehaviour slot if non-null.
+            if (spawnerBehaviour is ICairnSpawner editorWired)
+            {
+                spawner = editorWired;
+            }
+            else
+            {
+                var all = FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                foreach (var mb in all)
+                {
+                    if (mb is ICairnSpawner cs)
+                    {
+                        spawner = cs;
+                        spawnerBehaviour = mb;
+                        UnityLogger.I("CairnBridge", $"ICairnSpawner bound: {mb.GetType().Name}");
+                        break;
+                    }
+                }
+                if (spawner == null) UnityLogger.W("CairnBridge", "No ICairnSpawner found in scene (need MultiSpawner or PortalSpawner component)");
+            }
         }
     }
 

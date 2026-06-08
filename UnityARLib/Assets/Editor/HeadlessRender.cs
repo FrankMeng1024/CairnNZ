@@ -78,7 +78,7 @@ public static class HeadlessRender
             if (Application.isBatchMode) EditorApplication.Exit(1);
             return;
         }
-        Debug.Log($"[HeadlessRender] CairnBridge wired: arCamera={(bridge.arCamera != null ? "OK" : "NULL")} spawner={(bridge.spawner != null ? "OK" : "NULL")}");
+        Debug.Log($"[HeadlessRender] CairnBridge wired: arCamera={(bridge.arCamera != null ? "OK" : "NULL")} spawner={(bridge.spawnerBehaviour != null ? "OK" : "NULL")}");
 
         // Manually spawn 5 cairns. We bypass StrandTestHarness's Play-mode
         // gate and call OnSpawnStrand directly.

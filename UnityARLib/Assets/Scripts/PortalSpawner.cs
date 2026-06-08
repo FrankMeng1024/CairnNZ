@@ -26,7 +26,7 @@ using System.Collections.Generic;
 ///
 /// Wisp count, height range, particle rate all per-type via CairnTypePresets.
 /// </summary>
-public class PortalSpawner : MonoBehaviour
+public class PortalSpawner : MonoBehaviour, ICairnSpawner
 {
     [Header("Shared materials — created lazily from Cairn shaders.")]
     public Material portalRingMaterial;   // Cairn/PortalRingShader
@@ -40,6 +40,8 @@ public class PortalSpawner : MonoBehaviour
     public GroundYResolver groundYResolver;
 
     public bool HasSpawned { get; private set; } = false;
+    // v187 always uses real AR pipeline; no fallback path to flag.
+    public bool IsFallback => false;
 
     private readonly List<GameObject> _spawned = new List<GameObject>();
 
@@ -787,11 +789,14 @@ public class PortalSpawner : MonoBehaviour
         return go;
     }
 
-    /// <summary>Despawn all currently spawned cairns.</summary>
-    public void Clear()
+    /// <summary>Despawn all currently spawned cairns. ICairnSpawner contract.</summary>
+    public void ClearAll()
     {
         foreach (var go in _spawned) if (go != null) Destroy(go);
         _spawned.Clear();
         HasSpawned = false;
     }
+
+    /// <summary>Alias for older callers. Prefer ClearAll().</summary>
+    public void Clear() => ClearAll();
 }

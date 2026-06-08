@@ -150,18 +150,20 @@ public static class SceneSetup
         var raycastManager = xrOriginGo.AddComponent<ARRaycastManager>();
         Debug.Log($"[CairnUnity][SceneSetup] ARPlaneManager + ARRaycastManager added (raycastMgr={raycastManager != null})");
 
-        // ─── MultiSpawner ───
-        var spawnerGo  = new GameObject("MultiSpawner");
-        var spawner    = spawnerGo.AddComponent<MultiSpawner>();
+        // ─── PortalSpawner (v187 — replaces v186 MultiSpawner) ───
+        // Production AR scene now uses the magic-circle portal cairn:
+        // double ring + center icon + bubble-rise wisps + fireflies +
+        // ground halo + 30-char mark text. CairnBridge talks to it
+        // through the ICairnSpawner interface so the v186 cylinder model
+        // (MultiSpawner) is still on the codebase as fallback if needed.
+        var spawnerGo  = new GameObject("PortalSpawner");
+        var spawner    = spawnerGo.AddComponent<PortalSpawner>();
 
-        // Wire shader + material references
-        var strandMat = AssetDatabase.LoadAssetAtPath<Material>(MAT_PATH);
-        if (strandMat != null) spawner.strandMaterialBase = strandMat;
-        spawner.urpLitShader = Shader.Find(URP_LIT);
-        spawner.haloMaterial = AssetDatabase.LoadAssetAtPath<Material>(MAT_HALO_PATH);
-        spawner.shadowMaterial = AssetDatabase.LoadAssetAtPath<Material>(MAT_SHADOW_PATH);
-        spawner.particleMaterial = AssetDatabase.LoadAssetAtPath<Material>(MAT_PARTICLE_PATH);
-        Debug.Log($"[CairnUnity][SceneSetup] MultiSpawner wired: strand={strandMat!=null} halo={spawner.haloMaterial!=null} shadow={spawner.shadowMaterial!=null} particle={spawner.particleMaterial!=null}");
+        // Particle material left null on purpose — PortalSpawner.EnsureMaterials()
+        // creates a runtime firefly material with a built-in soft-circle
+        // sprite. The v186 CairnParticle.mat is incompatible (had no
+        // sprite assigned, rendered as black squares).
+        Debug.Log($"[CairnUnity][SceneSetup] PortalSpawner wired (v187 magic-circle, replacing v186 MultiSpawner)");
 
         // ─── CairnBridge + CairnGlobals + CairnThermalMonitor ───
         var bridgeGo = new GameObject(CairnBridge.GAMEOBJECT_NAME);
@@ -169,7 +171,7 @@ public static class SceneSetup
         bridge.arCamera     = cam;
         bridge.arSession    = arSession;
         bridge.planeManager = planeManager;
-        bridge.spawner      = spawner;
+        bridge.spawnerBehaviour = spawner;   // ICairnSpawner editor slot — bridge.Awake binds the interface
         // CairnGlobals owns Shader.SetGlobalFloat for the OTA-tunable knobs.
         // CairnThermalMonitor drives _CairnGlobalThermalScale based on
         // iOS thermal state. Both are siblings on the bridge GO.

@@ -46,6 +46,7 @@ type Marker = {
   lat: number;
   lng: number;
   alt?: number | null;
+  note?: string;   // v187 — forwarded to Unity for the 3D mark text above each cairn
 };
 
 type CameraInfo = {
@@ -176,7 +177,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
         for (const m of markers) {
           if (spawnedIdsRef.current.has(m.id)) continue;
           const req = buildSpawnRequest(
-            { id: m.id, type: m.type, lat: m.lat, lng: m.lng },
+            { id: m.id, type: m.type, lat: m.lat, lng: m.lng, note: m.note },
             origin,
             groundY,
           );
@@ -375,7 +376,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
               for (const m of props.markers) {
                 if (spawnedIdsRef.current.has(m.id)) continue;
                 const req = buildSpawnRequest(
-                  { id: m.id, type: m.type, lat: m.lat, lng: m.lng },
+                  { id: m.id, type: m.type, lat: m.lat, lng: m.lng, note: m.note },
                   origin,
                   groundYRef.current,
                 );

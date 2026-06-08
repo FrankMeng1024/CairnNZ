@@ -50,6 +50,7 @@ export interface UnitySpawnRequest {
   b: number;
   scrollSpeed: number;
   bloomBoost: number;
+  note?: string;   // v187 — optional ≤30-char user mark text rendered above the cairn
 }
 
 /**
@@ -129,7 +130,7 @@ export function geoToArkitWorld(
  * lookup. RN's r/g/b fields override the preset color when > 0.
  */
 export function buildSpawnRequest(
-  marker: { id: string; type: string; lat: number; lng: number },
+  marker: { id: string; type: string; lat: number; lng: number; note?: string },
   origin: { lat: number; lng: number } | null,
   groundY: number | null,
 ): UnitySpawnRequest | null {
@@ -137,6 +138,13 @@ export function buildSpawnRequest(
   if (!xz) return null;
   const colour = markerTypeToColor(marker.type);
   const shader = markerTypeToShaderParams(marker.type);
+  // v187 — clip note to 30 codepoints (NOT UTF-16 code units) so an
+  // emoji or non-BMP char at the boundary doesn't get split mid-surrogate.
+  // [...str] yields codepoints (handles surrogate pairs correctly); slice
+  // then take 30; rejoin. Grapheme-cluster splitting (ZWJ flag emoji etc.)
+  // would need Intl.Segmenter — out of scope here, and Unity-side renderer
+  // tolerates malformed graphemes by drawing replacement glyph.
+  const note = [...(marker.note ?? '')].slice(0, 30).join('');
   return {
     id: marker.id,
     type: marker.type,
@@ -148,5 +156,6 @@ export function buildSpawnRequest(
     b: colour.b,
     scrollSpeed: shader.scrollSpeed,
     bloomBoost: shader.bloomBoost,
+    note,
   };
 }
