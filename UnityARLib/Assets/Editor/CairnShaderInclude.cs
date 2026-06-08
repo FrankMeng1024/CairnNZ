@@ -37,14 +37,15 @@ public class CairnShaderInclude : IPreprocessBuildWithReport
         "Cairn/StrandShader",
         "Cairn/HaloShader",
         "Cairn/ShadowBlobShader",
-        // v187.7 fix Arch Critical #6: PortalSpawner runtime calls
-        // Shader.Find("Universal Render Pipeline/Particles/Unlit") for
-        // both firefly material and ground halo material. Sprites/Default
-        // is the secondary fallback. Both must be in AlwaysIncludedShaders
-        // for Shader.Find() to resolve in IL2CPP iOS build, or fireflies +
-        // halo render magenta.
-        "Universal Render Pipeline/Particles/Unlit",
-        "Sprites/Default",
+        // v187.7.3 — DO NOT add "Universal Render Pipeline/*" shaders here.
+        // Doing so forces Unity 6 to compile the full URP keyword matrix
+        // (URP/Lit alone = 294,912 variants → 8h iOS build, root cause of
+        // CI run #26). URP package's own ShaderStrippers correctly keep
+        // only the variants the project actually uses.
+        // Sprites/Default is a Unity built-in (fileID 10753 already in the
+        // legacy include block above), no need to add by GUID.
+        // Net: only the 5 Cairn/* shaders that don't have a URP-side
+        // stripper get appended here.
     };
 
     private static void EnsureCairnShadersIncluded()

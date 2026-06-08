@@ -490,11 +490,19 @@ public static class SceneSetup
         AddShaderIfMissing(arr, STRAND_SHADER);
         AddShaderIfMissing(arr, HALO_SHADER);
         AddShaderIfMissing(arr, SHADOW_SHADER);
-        AddShaderIfMissing(arr, URP_LIT);
-        AddShaderIfMissing(arr, URP_PARTICLE_UNLIT);
+        // v187.7.3 — DO NOT add URP/Lit or URP/Particles/Unlit to
+        // AlwaysIncludedShaders. Adding them forces Unity 6 to compile
+        // the FULL URP keyword matrix (294,912 variants for URP/Lit alone,
+        // 8h iOS build). URP package's own ShaderStrippers correctly keep
+        // the variants we actually use. Confirmed root cause of CI run #26
+        // building 294K variants — the URP/Lit GUID was in the included
+        // list, defeating URP's own stripper.
+        // The Particles/Unlit material we use at runtime is created via
+        // Shader.Find at PortalSpawner.EnsureMaterials(); URP package
+        // shipping ensures it's available to Shader.Find on iOS players.
         so.ApplyModifiedProperties();
         AssetDatabase.SaveAssets();
-        Debug.Log("[CairnUnity][SceneSetup] AlwaysIncludedShaders updated (strand+halo+shadow+lit+particle-unlit)");
+        Debug.Log("[CairnUnity][SceneSetup] AlwaysIncludedShaders updated (strand+halo+shadow only — URP shaders left to URP package)");
     }
 
     private static void AddShaderIfMissing(SerializedProperty arr, string shaderName)
