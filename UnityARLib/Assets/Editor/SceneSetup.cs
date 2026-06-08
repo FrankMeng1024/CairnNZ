@@ -58,6 +58,7 @@ public static class SceneSetup
     {
         Debug.Log("[CairnUnity][SceneSetup] === START ===");
 
+        EnsureURPRenderPipelineAsset();   // v186: ensure RP asset exists + wired
         EnsureTextureImportSettings();
         EnsureStrandMaterial();
         EnsureHaloMaterial();
@@ -207,6 +208,62 @@ public static class SceneSetup
     /// appropriately. Strand flow tiles along V (repeat). Rune noise +
     /// shadow blob + mote use clamp.
     /// </summary>
+    /// <summary>
+    /// Create UniversalRenderPipelineAsset + Renderer Data, save to disk,
+    /// and wire into GraphicsSettings.m_CustomRenderPipeline. Without
+    /// this, GraphicsSettings.currentRenderPipeline is null, all URP
+    /// shaders fall back to magenta in standalone player builds. v186
+    /// fix — diagnosed via testbed exe rendering all-magenta.
+    /// </summary>
+    private static void EnsureURPRenderPipelineAsset()
+    {
+        const string DIR = "Assets/Settings";
+        const string RP_ASSET_PATH       = "Assets/Settings/CairnURP.asset";
+        const string RENDERER_ASSET_PATH = "Assets/Settings/CairnURPRenderer.asset";
+        Directory.CreateDirectory(DIR);
+
+        // Create renderer first; URP asset references it
+        var renderer = AssetDatabase.LoadAssetAtPath<UnityEngine.Rendering.Universal.UniversalRendererData>(RENDERER_ASSET_PATH);
+        if (renderer == null)
+        {
+            renderer = ScriptableObject.CreateInstance<UnityEngine.Rendering.Universal.UniversalRendererData>();
+            AssetDatabase.CreateAsset(renderer, RENDERER_ASSET_PATH);
+            Debug.Log($"[CairnUnity][SceneSetup] Created URP Renderer at {RENDERER_ASSET_PATH}");
+        }
+
+        // Create URP asset
+        var rpAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset>(RP_ASSET_PATH);
+        if (rpAsset == null)
+        {
+            // UniversalRenderPipelineAsset.Create requires renderer; use
+            // reflection-friendly factory if available, else newer API.
+            rpAsset = UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset.Create(renderer);
+            AssetDatabase.CreateAsset(rpAsset, RP_ASSET_PATH);
+            Debug.Log($"[CairnUnity][SceneSetup] Created URP asset at {RP_ASSET_PATH}");
+        }
+
+        // HDR + bloom-friendly settings
+        var soURP = new SerializedObject(rpAsset);
+        var hdrProp = soURP.FindProperty("m_SupportsHDR");
+        if (hdrProp != null) hdrProp.boolValue = true;
+        soURP.ApplyModifiedProperties();
+        EditorUtility.SetDirty(rpAsset);
+
+        // Wire into GraphicsSettings
+        UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline = rpAsset;
+
+        // Also wire into all QualitySettings levels so the player picks
+        // it up regardless of quality level
+        for (int i = 0; i < QualitySettings.names.Length; i++)
+        {
+            QualitySettings.SetQualityLevel(i, false);
+            QualitySettings.renderPipeline = rpAsset;
+        }
+
+        AssetDatabase.SaveAssets();
+        Debug.Log("[CairnUnity][SceneSetup] URP RP asset wired to GraphicsSettings + all QualitySettings levels");
+    }
+
     private static void EnsureTextureImportSettings()
     {
         if (!Directory.Exists(TEX_DIR))

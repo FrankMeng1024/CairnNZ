@@ -12,7 +12,7 @@
  * Sprint 51 — STORY-00173 (E-003: AR插旗)
  */
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Animated, Dimensions, PanResponder, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Animated, Dimensions, PanResponder, ActivityIndicator, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
@@ -32,6 +32,7 @@ import { AimShutter } from '../components/AimShutter';
 import { PlantSheet, AimReticle, type PlantType } from '../components/PlantSheet';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ARDebugOverlay } from '../components/ARDebugOverlay';
+import { OTAControlPanel } from '../components/OTAControlPanel';
 import { GlassPanel, Elevation } from '../components/GlassPanel';
 
 import { useMarkerStore, type Marker } from '../store/useMarkerStore';
@@ -202,6 +203,10 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // OnSpawnStrand to Unity right after a successful plant. Going through
   // props would add a render frame of latency between haptic and visual.
   const unityOverlayRef = useRef<UnityAROverlayHandle | null>(null);
+
+  // v187 — OTA debug panel toggle. 3-finger tap on the AR view opens it.
+  // Closes via panel ✕ button or another 3-finger tap.
+  const [otaPanelOpen, setOtaPanelOpen] = useState(false);
   // Snapshot UI state machine:
   //   idle  - normal bug emoji
   //   busy  - spinner while takeScreenshot + base64 + telemetry flush
@@ -765,6 +770,24 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         userHeading={userHeading}
       />
 
+      {/* v187 — OTA debug button (top-right corner, small + translucent so
+          it doesn't disturb the AR view). Tap to open the FX panel. */}
+      <Pressable
+        style={styles.otaButton}
+        onPress={() => setOtaPanelOpen(o => !o)}
+        hitSlop={12}
+      >
+        <Text style={styles.otaButtonGlyph}>FX</Text>
+      </Pressable>
+
+      {/* v187 — OTA control panel. When open it overlays a translucent
+          right-side drawer; the AR view keeps rendering behind. */}
+      <OTAControlPanel
+        visible={otaPanelOpen}
+        onClose={() => setOtaPanelOpen(false)}
+        setGlobal={(name, value) => unityOverlayRef.current?.setGlobal(name, value)}
+      />
+
       {/* v78 #3: AR init / low-light overlay. Lives above the AR scene
           but below other UI chrome. 'init' = transient spinner;
           'low-light' = persistent hint with retry button. Hidden when
@@ -1196,4 +1219,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
   },
   savedToastText: { fontSize: FontSize.body, fontWeight: '600', color: '#fff' },
+  // v187 — OTA debug button (small + translucent, top-right corner).
+  otaButton: {
+    position: 'absolute',
+    top: 56,
+    right: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(93,211,255,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 50,
+  },
+  otaButtonGlyph: {
+    color: '#5dd3ff',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
 });

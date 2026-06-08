@@ -608,6 +608,7 @@ public class CairnBridge : MonoBehaviour
         public float  r, g, b;
         public float  scrollSpeed;
         public float  bloomBoost;
+        public string note;          // v187: optional user mark text, up to 30 chars, word-wrapped on the cairn
     }
 
     [System.Serializable]

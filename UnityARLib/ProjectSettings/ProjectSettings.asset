@@ -425,7 +425,7 @@ PlayerSettings:
   enableInternalProfiler: 0
   logObjCUncaughtExceptions: 1
   enableCrashReportAPI: 0
-  cameraUsageDescription: 
+  cameraUsageDescription: Cairn uses the camera for AR.
   locationUsageDescription: 
   microphoneUsageDescription: 
   bluetoothUsageDescription: 
@@ -692,6 +692,7 @@ PlayerSettings:
   scriptingBackend:
     Android: 0
     iOS: 1
+    iPhone: 1
   il2cppCompilerConfiguration:
     iOS: 1
   il2cppCodeGeneration: {}

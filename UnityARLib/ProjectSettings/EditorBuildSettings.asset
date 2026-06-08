@@ -4,7 +4,10 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/CairnAR.unity
+    guid: df54f62a55baa164f979aacde8744479
   m_configObjects:
     UnityEditor.XR.ARKit.ARKitSettings: {fileID: 11400000, guid: c6e650408b6d22249b926c3fcfa69acd, type: 2}
     com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: d949af54c24876741a465114fb07a829, type: 2}
