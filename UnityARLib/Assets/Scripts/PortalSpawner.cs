@@ -299,8 +299,55 @@ public class PortalSpawner : MonoBehaviour, ICairnSpawner
 
     /// <summary>
     /// CairnBridge entry point. Spawns one full portal cairn at (data.x, groundY, data.z).
+    /// v187.7.13 — defer until ARSession.state == SessionTracking AND
+    /// camera position has diverged from origin. This fixes the
+    /// "marker too close after re-enter AR" bug: on session recreate
+    /// the world frame resets to camera-at-init-pose, so a cairn that
+    /// RN dispatches immediately would spawn at the user's feet (camera
+    /// origin = world origin). Queue and flush on first tracked frame.
     /// </summary>
     public void SpawnStrand(CairnBridge.SpawnRequest data)
+    {
+        if (data == null) return;
+
+        var arState = UnityEngine.XR.ARFoundation.ARSession.state;
+        bool sessionReady = arState == UnityEngine.XR.ARFoundation.ARSessionState.SessionTracking;
+        bool cameraDiverged = false;
+        if (Camera.main != null)
+        {
+            cameraDiverged = Camera.main.transform.position.sqrMagnitude > 0.01f;
+        }
+        if (!sessionReady || !cameraDiverged)
+        {
+            // Defer — queue and flush on next Update tick after session ready.
+            _pendingSpawns.Add(data);
+            UnityLogger.I("PortalSpawner",
+                $"SpawnStrand DEFER id={data.id} state={arState} camDiv={cameraDiverged} (queue={_pendingSpawns.Count})");
+            return;
+        }
+
+        SpawnStrandInternal(data);
+    }
+
+    private readonly System.Collections.Generic.List<CairnBridge.SpawnRequest> _pendingSpawns =
+        new System.Collections.Generic.List<CairnBridge.SpawnRequest>();
+
+    void Update()
+    {
+        if (_pendingSpawns.Count == 0) return;
+        var arState = UnityEngine.XR.ARFoundation.ARSession.state;
+        bool sessionReady = arState == UnityEngine.XR.ARFoundation.ARSessionState.SessionTracking;
+        bool cameraDiverged = Camera.main != null
+                              && Camera.main.transform.position.sqrMagnitude > 0.01f;
+        if (!sessionReady || !cameraDiverged) return;
+
+        var toFlush = new System.Collections.Generic.List<CairnBridge.SpawnRequest>(_pendingSpawns);
+        _pendingSpawns.Clear();
+        UnityLogger.I("PortalSpawner", $"FLUSH {toFlush.Count} deferred cairns now session ready");
+        foreach (var d in toFlush) SpawnStrandInternal(d);
+    }
+
+    private void SpawnStrandInternal(CairnBridge.SpawnRequest data)
     {
         if (data == null) return;
 

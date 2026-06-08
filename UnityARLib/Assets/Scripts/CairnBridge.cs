@@ -64,6 +64,13 @@ public class CairnBridge : MonoBehaviour
     // one-shot diagnostic emission to the first Update tick after frame 5
     // (~83ms at 60fps) — comfortably past the registration race window.
     private bool  _diagSent          = false;
+    // v187.7.13 — extended diagnostics, emit at distinct phases (not all
+    // at frame-5 because ARCameraManager.subsystem may not be running yet).
+    private bool  _arBgDiag2Sent     = false;     // frame 30
+    private bool  _renderListSent    = false;     // frame 60
+    private bool  _lifecycleDiagSent = false;     // frame 120
+    private int   _stateChangeCount  = 0;
+    private string _stateTrail       = "";
 
     // v186: FALLBACK_PLANE_TIMEOUT removed. GroundYResolver Tier C
     // (camera.y - 1.5m) now ensures cairns always render at a plausible
@@ -473,6 +480,103 @@ public class CairnBridge : MonoBehaviour
             EmitStartupDiagnostics();
         }
 
+        // v187.7.13 — frame-30 ARBgDiag2: confirms AR camera frames are
+        // ACTUALLY arriving (not just that ARCameraBackground is enabled).
+        // ARCameraManager.subsystem.running can be false even after enabled=true
+        // because subsystem startup is async. Wait until frame 30 (~500ms).
+        if (!_arBgDiag2Sent && _frameCount > 30 && arCamera != null)
+        {
+            _arBgDiag2Sent = true;
+            try
+            {
+                var arBg = arCamera.GetComponent<UnityEngine.XR.ARFoundation.ARCameraBackground>();
+                var mgr  = arCamera.GetComponent<UnityEngine.XR.ARFoundation.ARCameraManager>();
+                bool subRunning = false;
+                bool hasFrame   = false;
+                string bgMatShader = "NULL";
+                if (mgr != null && mgr.subsystem != null)
+                {
+                    subRunning = mgr.subsystem.running;
+                    hasFrame = mgr.subsystem.currentConfiguration.HasValue;
+                }
+                if (arBg != null && arBg.material != null && arBg.material.shader != null)
+                {
+                    bgMatShader = arBg.material.shader.name;
+                }
+                string j2 = "{\"phase\":\"frame30\""
+                          + ",\"bgPresent\":" + (arBg != null ? "true" : "false")
+                          + ",\"bgEnabled\":" + (arBg != null && arBg.enabled ? "true" : "false")
+                          + ",\"bgShader\":\"" + EscapeJson(bgMatShader) + "\""
+                          + ",\"camMgr\":" + (mgr != null ? "true" : "false")
+                          + ",\"subRunning\":" + (subRunning ? "true" : "false")
+                          + ",\"hasConfig\":" + (hasFrame ? "true" : "false") + "}";
+                SendToRN("ARBgDiag2", j2);
+            }
+            catch (System.Exception e)
+            {
+                SendToRN("ARBgDiag2", "{\"error\":\"" + EscapeJson(e.Message) + "\"}");
+            }
+        }
+
+        // v187.7.13 — frame-60 RenderListDiag: enumerate active renderers +
+        // their shader names. Catches accidentally-rendered fullscreen quads,
+        // magenta InternalErrorShader, or zero-renderer scenes.
+        if (!_renderListSent && _frameCount > 60)
+        {
+            _renderListSent = true;
+            try
+            {
+                var renderers = UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+                int total = renderers.Length;
+                int active = 0;
+                var names = new System.Text.StringBuilder();
+                for (int i = 0; i < renderers.Length; i++)
+                {
+                    var r = renderers[i];
+                    if (r != null && r.enabled && r.gameObject.activeInHierarchy)
+                    {
+                        active++;
+                        if (active <= 6 && r.sharedMaterial != null && r.sharedMaterial.shader != null)
+                        {
+                            if (names.Length > 0) names.Append(",");
+                            names.Append(r.sharedMaterial.shader.name);
+                        }
+                    }
+                }
+                string rj = "{\"phase\":\"frame60\""
+                          + ",\"total\":" + total
+                          + ",\"active\":" + active
+                          + ",\"shaders\":\"" + EscapeJson(names.ToString()) + "\"}";
+                SendToRN("RenderListDiag", rj);
+            }
+            catch (System.Exception e)
+            {
+                SendToRN("RenderListDiag", "{\"error\":\"" + EscapeJson(e.Message) + "\"}");
+            }
+        }
+
+        // v187.7.13 — frame-120 SessionLifecycleDiag: how many ARSession state
+        // transitions in first 2 seconds. >10 = thrash/teardown race; oscillation
+        // (Sess→Read→Sess→Read) = OnEnable/OnDisable race on RN screen mount.
+        if (!_lifecycleDiagSent && _frameCount > 120)
+        {
+            _lifecycleDiagSent = true;
+            try
+            {
+                Vector3 camPos = arCamera != null ? arCamera.transform.position : Vector3.zero;
+                string lj = "{\"phase\":\"frame120\""
+                          + ",\"changes\":" + _stateChangeCount
+                          + ",\"trail\":\"" + EscapeJson(_stateTrail.Length > 60 ? _stateTrail.Substring(0, 60) : _stateTrail) + "\""
+                          + ",\"current\":\"" + UnityEngine.XR.ARFoundation.ARSession.state + "\""
+                          + ",\"camPos\":\"" + camPos.x.ToString("F2") + "," + camPos.y.ToString("F2") + "," + camPos.z.ToString("F2") + "\"}";
+                SendToRN("SessionLifecycleDiag", lj);
+            }
+            catch (System.Exception e)
+            {
+                SendToRN("SessionLifecycleDiag", "{\"error\":\"" + EscapeJson(e.Message) + "\"}");
+            }
+        }
+
         // Send ArReady once when ARSession reports tracking
         if (!_arReadySent && ARSession.state == ARSessionState.SessionTracking)
         {
@@ -639,6 +743,10 @@ public class CairnBridge : MonoBehaviour
     private void OnArSessionStateChanged(ARSessionStateChangedEventArgs args)
     {
         UnityLogger.IForward("CairnBridge", $"ARSession state -> {args.state}");
+        // v187.7.13 — track for SessionLifecycleDiag.
+        _stateChangeCount++;
+        var sn = args.state.ToString();
+        _stateTrail += (sn.Length > 4 ? sn.Substring(0, 4) : sn) + ",";
         // Manual concat — same IL2CPP {N:fmt}}} bug class as SendArFrame.
         var stateJson = "{\"state\":\"" + args.state + "\"}";
         SendToRN("ArSessionState", stateJson);

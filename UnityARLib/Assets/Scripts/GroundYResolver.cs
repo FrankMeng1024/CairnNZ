@@ -60,10 +60,25 @@ public class GroundYResolver : MonoBehaviour
     /// Tier C is always available IF camera transform is valid. Returns
     /// the best Y we can produce right now, instantly, without blocking.
     /// Returns null if camera not yet usable (frame 1 before tracking).
+    ///
+    /// v187.7.13 fix — also reject when ARSession is not yet in
+    /// SessionTracking state. Without this, on AR re-entry the cairn
+    /// position evaluates BEFORE ARKit has converged on world frame, so
+    /// the camera "position" is the new session's pre-track origin.
+    /// Cairn spawns at user's feet, then on next frame ARSession converges
+    /// and the world frame snaps — making the cairn appear to teleport
+    /// (the "marker too close after re-enter AR" symptom).
     /// </summary>
     public float? GetTierC()
     {
         if (arCamera == null) return null;
+        // Hard gate on session readiness — fixes the "marker too close
+        // after re-enter AR" bug.
+        var sessionState = UnityEngine.XR.ARFoundation.ARSession.state;
+        if (sessionState != UnityEngine.XR.ARFoundation.ARSessionState.SessionTracking)
+        {
+            return null;
+        }
         var p = arCamera.transform.position;
         // Reject the (0,0,0) sentinel that ARKit emits before the first
         // tracked frame. Once tracking starts, position diverges from 0

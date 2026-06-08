@@ -40,7 +40,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         AR feed should display real camera (no more yellow), and
 //         ARDebugOverlay shows URPDiag/CamDiag/VolumeDiag for any future
 //         visual issue.
-export const OTA_VERSION = 192;
+//   193 — v187.7.13: GroundYResolver SessionTracking gate + PortalSpawner
+//         defer queue (fixes "marker too close after re-enter AR") +
+//         3 additional CairnBridge diagnostics (ARBgDiag2, RenderListDiag,
+//         SessionLifecycleDiag) + CairnVolumeProfile regen.
+export const OTA_VERSION = 193;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
