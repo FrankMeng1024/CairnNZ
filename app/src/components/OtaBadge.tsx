@@ -31,7 +31,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //
 // Bump rule: increment by 1 immediately before running `eas update`.
 // Never reuse a number, never decrement.
-export const OTA_VERSION = 186;
+//
+// History:
+//   186 — last v186 OTA before v187 portal cairn native build (#27/EAS).
+//   187 — v187.7.5 OTA hotfix: calmed halo intensity / portal scale on AR
+//         mount so production iPhone doesn't see ground-level yellow wash.
+export const OTA_VERSION = 187;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

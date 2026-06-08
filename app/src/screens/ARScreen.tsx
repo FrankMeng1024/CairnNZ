@@ -285,6 +285,29 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     return () => clearTimeout(t);
   }, [arStatus.glReady, isPhoneFlat]);
 
+  // v187.7.5 — OTA hotfix: production AR halo quad (4m diameter at default
+  // PortalScale=1) covers the iPhone camera feed near the cairn, producing
+  // a "ground-level yellow / red wash" effect. This is a Unity-side bug
+  // (halo too big for AR), but rather than burn another EAS build, push
+  // calmer values via OTA. After the bug is properly fixed in PortalSpawner
+  // (smaller halo + fade with view angle), these defaults can be reset to 1.
+  // This effect happens once per AR session at glReady.
+  useEffect(() => {
+    if (!arStatus.glReady || !unityOverlayRef.current) return;
+    const ota = unityOverlayRef.current;
+    // Halo: cut intensity to 30% so it stops dominating the AR feed.
+    ota.setGlobal('HaloIntensity', 0.3);
+    // Portal scale: shrink the whole disc 30% so it doesn't fill the foreground.
+    ota.setGlobal('PortalScale', 0.7);
+    // Wisp height: slightly shorter so the cluster reads more compact.
+    ota.setGlobal('WispHeight', 0.85);
+    // Sigil intensity: slightly lower so glow doesn't blow out on iOS HDR.
+    ota.setGlobal('SigilIntensity', 0.85);
+    // Bubble (rise) speed: slow human-eye comfortable.
+    ota.setGlobal('BubbleSpeed', 0.8);
+    crashLogger.breadcrumb('ar:ota:v187.7.5-defaults applied (halo/scale/wisp/sigil/bubble)');
+  }, [arStatus.glReady]);
+
   // Ready haptic — fire ONCE when transitioning to 'ready' so the user
   // gets a subtle multimodal cue that AR is now interactive. Matches
   // industry pattern (Apple Measure / IKEA Place fade out coaching +
