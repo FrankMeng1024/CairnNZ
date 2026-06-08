@@ -57,8 +57,11 @@ jobs:
           fi
           # Project vs CI Unity version — flag mismatch (warning only; image
           # publication lag for 76f1 means we cannot fail on this YET).
+          # CI version is the literal string passed to unity-builder below;
+          # avoid grepping this workflow file itself (catches the grep -E
+          # arg line and parses '-E' as the version).
           PROJ_VER=$(grep -E '^m_EditorVersion:' UnityARLib/ProjectSettings/ProjectVersion.txt | awk '{print $2}')
-          CI_VER=$(grep -E 'unityVersion:' .github/workflows/unity-build-xcframework.yml | head -1 | awk '{print $2}')
+          CI_VER="6000.0.36f1"
           if [ "$PROJ_VER" != "$CI_VER" ]; then
             echo "::warning::Unity version mismatch: project=$PROJ_VER, CI=$CI_VER. Risk of serialization drift. Static gate above protects against the most-known case (URP renderer features) but other Unity 6 patch differences may leak through."
           else
@@ -73,7 +76,9 @@ jobs:
       # rendering-critical asset on BOTH sides, compare in pre-EAS gate.
       - name: Emit asset fingerprints (drift monitor)
         run: |
-          chmod +x tools/asset-fingerprint.sh
+          # Note: do NOT chmod +x — that dirties the working tree, and
+          # unity-builder's allowDirtyBuild=false rejects the build.
+          # `bash <script>` doesn't require execute permission.
           bash tools/asset-fingerprint.sh
 
       - uses: game-ci/unity-builder@v4
