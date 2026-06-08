@@ -1,23 +1,30 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Rendering;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// Aggressive shader variant stripper for the ShaderTestbed standalone player.
+/// Aggressive shader variant stripper — STANDALONE BUILDS ONLY.
 ///
-/// Without this, Unity attempts to compile ~294,912 variants for the URP Lit
-/// shader alone (every keyword combo across every quality level). The testbed
-/// scene only needs:
-///   • Cairn/* shaders (Strand, Halo, ShadowBlob, Particle) — keep ALL
-///   • Universal Render Pipeline/Lit — only the bare minimum (1 variant)
-///   • Hidden/Internal-* and Sprites — let URP keep its defaults
+/// CRITICAL safety gate (Arch review v187 Blocker #3):
+///   IPreprocessShaders runs for EVERY build target including iOS. Without
+///   the BuildTarget guard, this stripper would aggressively kill URP/Lit
+///   variants on the iOS production build, breaking ARCameraBackground and
+///   any URP/Lit ground/marker materials → black screen on device.
 ///
-/// This stripper drops ANY variant for URP Lit/Particles/Unlit because the
-/// testbed scene's only URP/Lit usage is a static dark ground plane that
-/// renders fine with the fallback. Net effect: build drops from ~2.5h to
-/// ~30s.
+/// We use EditorUserBuildSettings.activeBuildTarget to detect that the
+/// current build is targeting Windows/Mac standalone — only then do we
+/// strip. iOS / Android / WebGL pass through unchanged so URP keeps its
+/// full keyword matrix for the production AR scene.
+///
+/// On standalone we drop:
+///   • Everything outside Cairn/* and a few Hidden/URP essentials
+///   • All but 1 variant of URP/Lit, URP/Simple Lit, URP/Complex Lit,
+///     URP/Unlit, URP/Particles/*  — since the testbed scene only uses a
+///     dark ground plane, the bare variant is fine
+/// Net standalone build time: 2.5h → ~80s.
 /// </summary>
 public class ShaderVariantStripper : IPreprocessShaders
 {
@@ -27,6 +34,14 @@ public class ShaderVariantStripper : IPreprocessShaders
                                 ShaderSnippetData snippet,
                                 IList<ShaderCompilerData> data)
     {
+        // Hard gate: do nothing on non-standalone (iOS/Android/WebGL).
+        var t = EditorUserBuildSettings.activeBuildTarget;
+        bool isStandalone = t == BuildTarget.StandaloneWindows64
+                         || t == BuildTarget.StandaloneWindows
+                         || t == BuildTarget.StandaloneOSX
+                         || t == BuildTarget.StandaloneLinux64;
+        if (!isStandalone) return;
+
         string name = shader.name;
 
         // Keep all Cairn shader variants — these are what we're testing.
@@ -38,18 +53,15 @@ public class ShaderVariantStripper : IPreprocessShaders
         if (name.StartsWith("Hidden/Core/")) return;
         if (name.StartsWith("Hidden/BlitCopy")) return;
 
-        // For URP Lit and Particles: strip everything. Testbed ground is a
-        // static dark color — it will render with whatever single variant
-        // URP keeps internally. If ground renders magenta, that's fine —
-        // we are looking at the Cairn strands, not the ground.
+        // For URP Lit and Particles: strip everything but 1 variant. Testbed
+        // ground is a static dark color — it will render with whatever single
+        // variant URP keeps internally.
         if (name == "Universal Render Pipeline/Lit" ||
             name == "Universal Render Pipeline/Simple Lit" ||
             name == "Universal Render Pipeline/Complex Lit" ||
             name == "Universal Render Pipeline/Unlit" ||
             name.StartsWith("Universal Render Pipeline/Particles"))
         {
-            // Keep only 1 variant (the first one) so the shader loads at
-            // all but doesn't blow build time.
             while (data.Count > 1) data.RemoveAt(data.Count - 1);
             return;
         }

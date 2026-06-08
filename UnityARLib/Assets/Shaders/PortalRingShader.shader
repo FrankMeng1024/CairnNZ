@@ -79,6 +79,10 @@ Shader "Cairn/PortalRingShader"
             float _CairnGlobalScrollMul;
             float _CairnGlobalBreathFreq;
             float _CairnGlobalThermalScale;
+            // v187.7 Arch Medium #15 fix: wire OTA globals to portal shader.
+            float _CairnGlobalPortalSpin;
+            float _CairnGlobalSigilIntensity;
+            float _CairnGlobalIconScale;
 
             float _coalesce(float v) { return v > 0.0001 ? v : 1.0; }
 
@@ -188,7 +192,8 @@ Shader "Cairn/PortalRingShader"
 
                 // ---- Sigil rotation (kept for icon spin, even if no chorus) ----
                 float spin       = _Time.y * _SigilSpinSpeed
-                                   * _coalesce(_CairnGlobalScrollMul);
+                                   * _coalesce(_CairnGlobalScrollMul)
+                                   * _coalesce(_CairnGlobalPortalSpin);
 
                 // ---- Type-specific icon at center (replaces sigil chorus) ----
                 // v187.4: icon does NOT rotate with sigil spin (would feel wobbly).
@@ -203,15 +208,20 @@ Shader "Cairn/PortalRingShader"
                     ringHighlight  = gauss * outerRing * 1.8;
                 }
                 // p is uv-centered (-0.5..0.5). Icons drawn within r ≤ 0.18.
+                // v187.7 Arch Medium #15 fix: IconScale OTA scales icon
+                // coordinates inversely (smaller scale → icon SDF reads
+                // a larger area → icon draws bigger).
+                float iconScaleG = max(_coalesce(_CairnGlobalIconScale), 0.1);
+                float2 ip = p / iconScaleG;
                 int typeIdx = (int)(_TypeIndex + 0.5);
                 float icon = 0.0;
 
                 if (typeIdx == 0)
                 {
                     // === cairn: 3 stacked ellipses (outline) ===
-                    float s1 = sdfEllipse(p, float2(0.0,  0.07), float2(0.04, 0.025));
-                    float s2 = sdfEllipse(p, float2(0.0,  0.02), float2(0.07, 0.030));
-                    float s3 = sdfEllipse(p, float2(0.0, -0.05), float2(0.10, 0.035));
+                    float s1 = sdfEllipse(ip, float2(0.0,  0.07), float2(0.04, 0.025));
+                    float s2 = sdfEllipse(ip, float2(0.0,  0.02), float2(0.07, 0.030));
+                    float s3 = sdfEllipse(ip, float2(0.0, -0.05), float2(0.10, 0.035));
                     icon = max(max(aaOutline(s1, 0.005), aaOutline(s2, 0.005)),
                                 aaOutline(s3, 0.005));
                 }
@@ -221,12 +231,12 @@ Shader "Cairn/PortalRingShader"
                     float2 vA = float2( 0.000,  0.13);   // top
                     float2 vB = float2(-0.130, -0.065);  // bottom-left
                     float2 vC = float2( 0.130, -0.065);  // bottom-right
-                    float triSDF  = sdfTriangle(p, vA, vB, vC);
+                    float triSDF  = sdfTriangle(ip, vA, vB, vC);
                     float triLine = aaOutline(triSDF, 0.008);
                     // exclamation bar
-                    float bar     = aaFill(sdfRect(p, float2(0.0, 0.005), float2(0.012, 0.035)));
+                    float bar     = aaFill(sdfRect(ip, float2(0.0, 0.005), float2(0.012, 0.035)));
                     // exclamation dot
-                    float dot     = aaFill(sdfCircle(p, float2(0.0, -0.045), 0.014));
+                    float dot     = aaFill(sdfCircle(ip, float2(0.0, -0.045), 0.014));
                     icon = max(max(triLine, bar), dot);
                 }
                 else if (typeIdx == 2)
@@ -236,20 +246,20 @@ Shader "Cairn/PortalRingShader"
                     float2 a = float2( 0.000,  0.135);    // top
                     float2 b = float2(-0.085, -0.115);    // bottom-left
                     float2 c = float2( 0.000, -0.045);    // base center
-                    float left  = aaFill(sdfTriangle(p, a, b, c));
+                    float left  = aaFill(sdfTriangle(ip, a, b, c));
                     float2 d = float2( 0.085, -0.115);    // bottom-right
-                    float right = aaFill(sdfTriangle(p, a, c, d));
+                    float right = aaFill(sdfTriangle(ip, a, c, d));
                     icon = max(left, right * 0.65);   // right slightly dimmer for chirality
                 }
                 else if (typeIdx == 3)
                 {
                     // === water: teardrop (outline) ===
                     // circle for the body + triangle to a sharp point on top.
-                    float circ = sdfCircle(p, float2(0.0, -0.035), 0.085);
+                    float circ = sdfCircle(ip, float2(0.0, -0.035), 0.085);
                     float2 tA = float2( 0.000,  0.135);
                     float2 tB = float2(-0.085, -0.035);
                     float2 tC = float2( 0.085, -0.035);
-                    float tri  = sdfTriangle(p, tA, tB, tC);
+                    float tri  = sdfTriangle(ip, tA, tB, tC);
                     // union of two SDFs is min().
                     float drop = min(circ, tri);
                     icon = aaOutline(drop, 0.008);
@@ -261,21 +271,21 @@ Shader "Cairn/PortalRingShader"
                     float2 rA = float2( 0.000,  0.115);
                     float2 rB = float2(-0.105,  0.000);
                     float2 rC = float2( 0.105,  0.000);
-                    float roofL = aaOutline(sdfTriangle(p, rA, rB, rC), 0.008);
+                    float roofL = aaOutline(sdfTriangle(ip, rA, rB, rC), 0.008);
                     // walls (rect outline)
-                    float wallSDF = sdfRect(p, float2(0.0, -0.05), float2(0.085, 0.05));
+                    float wallSDF = sdfRect(ip, float2(0.0, -0.05), float2(0.085, 0.05));
                     float wallL   = aaOutline(wallSDF, 0.008);
                     // door (rect outline)
-                    float doorSDF = sdfRect(p, float2(0.0, -0.075), float2(0.025, 0.025));
+                    float doorSDF = sdfRect(ip, float2(0.0, -0.075), float2(0.025, 0.025));
                     float doorL   = aaOutline(doorSDF, 0.006);
                     icon = max(max(roofL, wallL), doorL);
                 }
                 else
                 {
                     // Fallback: same as cairn.
-                    float s1 = sdfEllipse(p, float2(0.0,  0.07), float2(0.04, 0.025));
-                    float s2 = sdfEllipse(p, float2(0.0,  0.02), float2(0.07, 0.030));
-                    float s3 = sdfEllipse(p, float2(0.0, -0.05), float2(0.10, 0.035));
+                    float s1 = sdfEllipse(ip, float2(0.0,  0.07), float2(0.04, 0.025));
+                    float s2 = sdfEllipse(ip, float2(0.0,  0.02), float2(0.07, 0.030));
+                    float s3 = sdfEllipse(ip, float2(0.0, -0.05), float2(0.10, 0.035));
                     icon = max(max(aaOutline(s1, 0.005), aaOutline(s2, 0.005)),
                                 aaOutline(s3, 0.005));
                 }
@@ -283,7 +293,8 @@ Shader "Cairn/PortalRingShader"
 
                 // ---- Combine sigil parts (minimalist) ----
                 // Outer ring + thin inner ring + orbiting highlight + the icon.
-                float sigil = max(outerRing + innerRing + ringHighlight, icon * _SigilIntensity);
+                float sigil = max(outerRing + innerRing + ringHighlight,
+                                  icon * _SigilIntensity * _coalesce(_CairnGlobalSigilIntensity));
 
                 // ---- Central under-glow (very gentle) ----
                 // Replaces the brighter core. Just a soft halo behind the icon.

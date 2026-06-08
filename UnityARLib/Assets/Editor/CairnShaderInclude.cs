@@ -37,6 +37,14 @@ public class CairnShaderInclude : IPreprocessBuildWithReport
         "Cairn/StrandShader",
         "Cairn/HaloShader",
         "Cairn/ShadowBlobShader",
+        // v187.7 fix Arch Critical #6: PortalSpawner runtime calls
+        // Shader.Find("Universal Render Pipeline/Particles/Unlit") for
+        // both firefly material and ground halo material. Sprites/Default
+        // is the secondary fallback. Both must be in AlwaysIncludedShaders
+        // for Shader.Find() to resolve in IL2CPP iOS build, or fireflies +
+        // halo render magenta.
+        "Universal Render Pipeline/Particles/Unlit",
+        "Sprites/Default",
     };
 
     private static void EnsureCairnShadersIncluded()

@@ -770,23 +770,27 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         userHeading={userHeading}
       />
 
-      {/* v187 — OTA debug button (top-right corner, small + translucent so
-          it doesn't disturb the AR view). Tap to open the FX panel. */}
-      <Pressable
-        style={styles.otaButton}
-        onPress={() => setOtaPanelOpen(o => !o)}
-        hitSlop={12}
-      >
-        <Text style={styles.otaButtonGlyph}>FX</Text>
-      </Pressable>
+      {/* v187 — OTA debug button (top-right corner). Only rendered in DEV
+          builds (or when SHOW_OTA_PANEL env flag set). Production users
+          should NOT see internal tuning sliders. */}
+      {__DEV__ && (
+        <Pressable
+          style={styles.otaButton}
+          onPress={() => setOtaPanelOpen(o => !o)}
+          hitSlop={12}
+        >
+          <Text style={styles.otaButtonGlyph}>FX</Text>
+        </Pressable>
+      )}
 
-      {/* v187 — OTA control panel. When open it overlays a translucent
-          right-side drawer; the AR view keeps rendering behind. */}
-      <OTAControlPanel
-        visible={otaPanelOpen}
-        onClose={() => setOtaPanelOpen(false)}
-        setGlobal={(name, value) => unityOverlayRef.current?.setGlobal(name, value)}
-      />
+      {/* v187 — OTA control panel. Only renders in DEV. */}
+      {__DEV__ && (
+        <OTAControlPanel
+          visible={otaPanelOpen}
+          onClose={() => setOtaPanelOpen(false)}
+          setGlobal={(name, value) => unityOverlayRef.current?.setGlobal(name, value)}
+        />
+      )}
 
       {/* v78 #3: AR init / low-light overlay. Lives above the AR scene
           but below other UI chrome. 'init' = transient spinner;

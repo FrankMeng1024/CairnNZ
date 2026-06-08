@@ -81,6 +81,7 @@ Shader "Cairn/WispShader"
             float _CairnGlobalThermalScale;
             float _CairnGlobalBubbleSpeed;   // v187.5 — bubble-rise speed multiplier
             float _CairnGlobalBubbleSize;    // v187.5 — bubble-glow concentration
+            float _CairnGlobalWispIntensity; // v187.7 — Arch Medium #14 fix
 
             float _coalesce(float v) { return v > 0.0001 ? v : 1.0; }
 
@@ -189,7 +190,8 @@ Shader "Cairn/WispShader"
                                * (bandTerm + fres);
                 color *= _BloomBoost
                          * _coalesce(_CairnGlobalBloomScale)
-                         * _coalesce(_CairnGlobalThermalScale);
+                         * _coalesce(_CairnGlobalThermalScale)
+                         * _coalesce(_CairnGlobalWispIntensity);  // v187.7 OTA fix
                 color *= distAlpha
                          * _InstanceAlpha
                          * _coalesce(_CairnGlobalAlpha);

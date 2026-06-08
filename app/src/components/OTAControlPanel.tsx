@@ -80,9 +80,31 @@ export function OTAControlPanel({ visible, onClose, setGlobal }: Props) {
     Object.fromEntries(PORTAL_GLOBALS.map(g => [g.name, g.def]))
   );
 
+  // v187.7 fix Arch Medium #6: throttle setGlobal to 30Hz max so dragging
+  // a slider doesn't flood the RN→native bridge during a single gesture.
+  // Each global has its own last-sent timestamp so drags on different
+  // sliders don't starve each other.
+  const lastSentRef = useRef<Record<string, number>>({});
+  const THROTTLE_MS = 33;  // ~30Hz
+
   const update = useCallback(
     (name: string, val: number) => {
       setValues(prev => ({ ...prev, [name]: val }));
+      const now = Date.now();
+      const last = lastSentRef.current[name] ?? 0;
+      if (now - last >= THROTTLE_MS) {
+        lastSentRef.current[name] = now;
+        setGlobal(name, val);
+      }
+    },
+    [setGlobal],
+  );
+
+  // Always send the final value on slider release so the throttled drop
+  // doesn't leave the user's last position out of sync.
+  const commit = useCallback(
+    (name: string, val: number) => {
+      lastSentRef.current[name] = Date.now();
       setGlobal(name, val);
     },
     [setGlobal],
@@ -122,7 +144,8 @@ export function OTAControlPanel({ visible, onClose, setGlobal }: Props) {
               def={g}
               value={values[g.name]}
               onChange={v => update(g.name, v)}
-              onReset={() => update(g.name, g.def)}
+              onCommit={v => commit(g.name, v)}
+              onReset={() => commit(g.name, g.def)}
             />
           ))}
           <View style={{ height: 24 }} />
@@ -136,10 +159,11 @@ interface RowProps {
   def: OTAGlobalDef;
   value: number;
   onChange: (v: number) => void;
+  onCommit: (v: number) => void;
   onReset: () => void;
 }
 
-function Row({ def, value, onChange, onReset }: RowProps) {
+function Row({ def, value, onChange, onCommit, onReset }: RowProps) {
   return (
     <Pressable onLongPress={onReset}>
       <View style={styles.row}>
@@ -153,6 +177,7 @@ function Row({ def, value, onChange, onReset }: RowProps) {
           step={def.step ?? 0.05}
           value={value}
           onChange={onChange}
+          onCommit={onCommit}
         />
       </View>
     </Pressable>
@@ -165,16 +190,19 @@ interface InlineSliderProps {
   step: number;
   value: number;
   onChange: (v: number) => void;
+  onCommit: (v: number) => void;
 }
 
 /**
  * Pure-RN slider built on PanResponder + measured layout — no native dep.
- * Tracks finger across the bar and snaps to step. Visually a thin track
- * with a ~14px thumb.
+ * onChange fires throttled during drag; onCommit fires on release with
+ * the final value (so the throttled drop doesn't leave the user out of
+ * sync). v187.7 fix Arch Medium #6.
  */
-function InlineSlider({ min, max, step, value, onChange }: InlineSliderProps) {
+function InlineSlider({ min, max, step, value, onChange, onCommit }: InlineSliderProps) {
   const [width, setWidth] = useState(0);
   const widthRef = useRef(0);
+  const lastValRef = useRef(value);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -182,25 +210,34 @@ function InlineSlider({ min, max, step, value, onChange }: InlineSliderProps) {
     setWidth(w);
   }, []);
 
-  const apply = useCallback(
-    (locX: number) => {
+  const compute = useCallback(
+    (locX: number): number => {
       const w = widthRef.current;
-      if (w <= 0) return;
+      if (w <= 0) return min;
       const t = Math.max(0, Math.min(1, locX / w));
       let raw = min + t * (max - min);
       if (step > 0) raw = Math.round(raw / step) * step;
-      raw = Math.max(min, Math.min(max, raw));
-      onChange(raw);
+      return Math.max(min, Math.min(max, raw));
     },
-    [min, max, step, onChange],
+    [min, max, step],
   );
 
   const responder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: e => apply(e.nativeEvent.locationX),
-      onPanResponderMove: e => apply(e.nativeEvent.locationX),
+      onPanResponderGrant: e => {
+        const v = compute(e.nativeEvent.locationX);
+        lastValRef.current = v;
+        onChange(v);
+      },
+      onPanResponderMove: e => {
+        const v = compute(e.nativeEvent.locationX);
+        lastValRef.current = v;
+        onChange(v);
+      },
+      onPanResponderRelease: () => onCommit(lastValRef.current),
+      onPanResponderTerminate: () => onCommit(lastValRef.current),
     }),
   ).current;
 

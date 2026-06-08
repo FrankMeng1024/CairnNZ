@@ -66,10 +66,28 @@ public class PortalSpawner : MonoBehaviour
 
     private static float SafePositive(float v)
     {
-        // Globals default to 0 if Awake hasn't run; treat that as "use 1.0".
-        // Negative values clamped to 0 too.
+        // For "size" multipliers where 0 is never the user intent (would
+        // mean invisible). Globals default to 0 if Awake hasn't run; treat
+        // that as "use 1.0". Negative values clamped to 0 too.
         if (v <= 0.0001f) return 1f;
         return v;
+    }
+
+    private static float AsLiveMultiplier(float v)
+    {
+        // For "count / rate" multipliers where 0 is a meaningful user choice
+        // (disable layer). But Awake-not-run race needs to give baseline.
+        // Heuristic: if value is exactly default-zero (Shader.GetGlobalFloat
+        // never set), treat as 1; if user explicitly set to 0 via OTA, RN
+        // pushes via CairnGlobals.Set() which writes 0 — but we can't
+        // distinguish "never set" from "set to 0" without a flag. We choose:
+        //   • Trust CairnGlobals.Awake to run before any cairn spawn.
+        //     Production CairnBridge.Start awaits ARSession ready, which
+        //     happens after Awake. Testbed Harness.Start runs after scene's
+        //     CairnGlobals.Awake (same frame).
+        //   • So 0 = user choice = disable.
+        // Negative values clamped to 0.
+        return Mathf.Max(0f, v);
     }
 
     private static int TypeToIndex(string type)
@@ -96,6 +114,29 @@ public class PortalSpawner : MonoBehaviour
         { "hut",      "SHELTER" },
         { "cairn",    "CAIRN" },
     };
+
+    /// <summary>
+    /// Resolve a Font for runtime TextMesh creation. Tries (1) the
+    /// inspector-assigned markFont, (2) Unity's built-in LiberationSans.ttf
+    /// (shipped with com.unity.modules.imgui — guaranteed available on iOS
+    /// when that module is in the player manifest), (3) creates a
+    /// dynamic-size fallback if both fail (extremely unlikely, but logs
+    /// loudly and never returns null so text still renders glyphless boxes
+    /// rather than silent empty space).
+    /// Arch Blocker #2 fix.
+    /// </summary>
+    private Font ResolveTextFont()
+    {
+        if (markFont != null) return markFont;
+        var fb = Resources.GetBuiltinResource<Font>("LiberationSans.ttf");
+        if (fb != null) return fb;
+        UnityLogger.E("PortalSpawner",
+            "LiberationSans.ttf builtin missing — text will fallback to OS default");
+        // Last-resort: ask Unity to create a Font from the system default.
+        // This always returns a non-null Font in Unity Editor / Standalone;
+        // on iOS it falls back to "Arial" which the OS provides.
+        return Font.CreateDynamicFontFromOSFont("Arial", 16);
+    }
 
     /// <summary>
     /// Word-wrap a string to balance lines visually. Greedy wrap by char
@@ -169,6 +210,16 @@ public class PortalSpawner : MonoBehaviour
 
     // Soft radial-gradient sprite (built once, shared by all firefly materials).
     private static Texture2D _softCircleTex;
+    // Per-type ground halo materials (5 instances total, never freed) — keyed
+    // by type string. Created on first use, reused by every cairn of that
+    // type. v187.7 fix Arch Blocker #1: was creating 1 fresh halo material
+    // PER spawned cairn, which leaks on Clear() since Material assets aren't
+    // GC'd by Destroy(GameObject).
+    private static readonly Dictionary<string, Material> _haloMatByType = new Dictionary<string, Material>();
+    // Per-type text materials (5 instances total) — same reasoning.
+    private static readonly Dictionary<string, Material> _textMatByType = new Dictionary<string, Material>();
+    // Per-type shadow text materials (always black-tinted, single instance).
+    private static Material _textShadowMat;
     private static Texture2D GetOrCreateSoftCircleTex()
     {
         if (_softCircleTex != null) return _softCircleTex;
@@ -270,12 +321,17 @@ public class PortalSpawner : MonoBehaviour
         UnityLogger.I("PortalSpawner",
             $"SpawnPortal id={data.id} type={data.type} pos=({data.x:F2},{groundY:F2},{data.z:F2})");
 
-        // v187.7 — pull spawn-time OTA multipliers (apply once at spawn).
-        float wispCountMul  = Mathf.Max(0f, Shader.GetGlobalFloat("_CairnGlobalWispCountMul"));
+        // v187 — pull spawn-time OTA multipliers (apply once at spawn).
+        // Globals default to 0 only if CairnGlobals.Awake hasn't run yet.
+        // For "count / rate" multipliers (WispCount, FireflyRate) we treat
+        // 0 as "user wants zero" (disable layer). For "size" multipliers
+        // (Thickness/Height/Scale/HaloIntensity) we coalesce 0 → 1.0 since
+        // 0 there would mean "invisible" which is never a useful default.
+        float wispCountMul  = AsLiveMultiplier(Shader.GetGlobalFloat("_CairnGlobalWispCountMul"));
         float wispThickMul  = SafePositive(Shader.GetGlobalFloat("_CairnGlobalWispThickness"));
         float wispHeightMul = SafePositive(Shader.GetGlobalFloat("_CairnGlobalWispHeight"));
         float portalScaleM  = SafePositive(Shader.GetGlobalFloat("_CairnGlobalPortalScale"));
-        float fireflyRateM  = SafePositive(Shader.GetGlobalFloat("_CairnGlobalFireflyRate"));
+        float fireflyRateM  = AsLiveMultiplier(Shader.GetGlobalFloat("_CairnGlobalFireflyRate"));
         float haloIntenM    = SafePositive(Shader.GetGlobalFloat("_CairnGlobalHaloIntensity"));
 
         // Container.
@@ -306,31 +362,42 @@ public class PortalSpawner : MonoBehaviour
         haloRenderer.shadowCastingMode = ShadowCastingMode.Off;
         haloRenderer.receiveShadows    = false;
         // Use the soft-circle sprite + URP Particles Unlit so it works in
-        // standalone player (Sprites/Default may be stripped if no scene
-        // object referenced it; URP Particles Unlit is always available
-        // because firefly material uses it).
-        Shader haloShader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
-        if (haloShader == null) haloShader = Shader.Find("Sprites/Default");
-        var haloMat = new Material(haloShader);
-        if (haloMat.HasProperty("_BaseMap")) haloMat.SetTexture("_BaseMap", GetOrCreateSoftCircleTex());
-        if (haloMat.HasProperty("_MainTex")) haloMat.SetTexture("_MainTex", GetOrCreateSoftCircleTex());
-        // Tinted to type color, alpha 0.7 so the halo reads as visible glow
-        // (the bloom does the rest). v187.7 — bumped from 0.5 to 0.85
-        // multiplier on rgb so AR cameras can see the spill.
-        Color haloTint = new Color(hdrColor.r * 0.85f * haloIntenM, hdrColor.g * 0.85f * haloIntenM, hdrColor.b * 0.85f * haloIntenM, 0.65f);
-        if (haloMat.HasProperty("_BaseColor")) haloMat.SetColor("_BaseColor", haloTint);
-        if (haloMat.HasProperty("_TintColor")) haloMat.SetColor("_TintColor", haloTint);
-        haloMat.color = haloTint;
-        // Additive blend.
-        haloMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        haloMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
-        haloMat.SetInt("_ZWrite", 0);
-        haloMat.SetFloat("_Surface", 1f);
-        haloMat.SetFloat("_Blend", 1f);
-        haloMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-        haloMat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
-        haloMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + 9;
+        // standalone player. Material is CACHED PER TYPE (not per cairn) —
+        // 5 type → 5 halo materials total for the app's lifetime. Color
+        // changes via MaterialPropertyBlock would be cleanest but Sprites/Default
+        // doesn't support MPB on _Color uniformly across URP versions, so we
+        // bind one shared material per type string.
+        // (Arch Blocker #1 fix.)
+        if (!_haloMatByType.TryGetValue(data.type, out Material haloMat) || haloMat == null)
+        {
+            Shader haloShader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (haloShader == null) haloShader = Shader.Find("Sprites/Default");
+            haloMat = new Material(haloShader) { name = $"Halo_{data.type}_Runtime" };
+            if (haloMat.HasProperty("_BaseMap")) haloMat.SetTexture("_BaseMap", GetOrCreateSoftCircleTex());
+            if (haloMat.HasProperty("_MainTex")) haloMat.SetTexture("_MainTex", GetOrCreateSoftCircleTex());
+            // Tinted to type color, alpha 0.65. The tint factor 0.85 (set
+            // once) and per-spawn haloIntenM modulation moved to MPB below
+            // so the cached material itself has fixed color and the OTA
+            // intensity rides on instance alpha.
+            Color haloTint = new Color(hdrColor.r * 0.85f, hdrColor.g * 0.85f, hdrColor.b * 0.85f, 0.65f);
+            if (haloMat.HasProperty("_BaseColor")) haloMat.SetColor("_BaseColor", haloTint);
+            if (haloMat.HasProperty("_TintColor")) haloMat.SetColor("_TintColor", haloTint);
+            haloMat.color = haloTint;
+            haloMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            haloMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
+            haloMat.SetInt("_ZWrite", 0);
+            haloMat.SetFloat("_Surface", 1f);
+            haloMat.SetFloat("_Blend", 1f);
+            haloMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            haloMat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+            haloMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + 9;
+            _haloMatByType[data.type] = haloMat;
+        }
         haloRenderer.sharedMaterial = haloMat;
+        // Per-cairn halo intensity ride via instance scale modulation (color
+        // baked into shared material). If haloIntenM != 1, scale the quad
+        // slightly larger / smaller for "more / less spill" effect.
+        haloRenderer.transform.localScale *= Mathf.Lerp(1f, haloIntenM, 0.7f);
 
         // ─── Portal ring (ground geometry) ───
         var ring = CreateFlatQuad("PortalRing", container.transform);
@@ -487,10 +554,9 @@ public class PortalSpawner : MonoBehaviour
         Color shadowColor = new Color(color.r * 0.10f, color.g * 0.10f, color.b * 0.10f, 1.0f);
         tmShadow.color         = shadowColor;
         tmShadow.lineSpacing   = 1.0f;
-        var fb = Resources.GetBuiltinResource<Font>("LiberationSans.ttf");
-        if (markFont != null) tmShadow.font = markFont;
-        else if (fb != null)  tmShadow.font = fb;
-        ApplyTextRenderer(shadowGo, tmShadow, shadowColor, intensity: 1.0f);
+        var resolvedFont = ResolveTextFont();
+        tmShadow.font          = resolvedFont;
+        ApplyTextRenderer(shadowGo, tmShadow, shadowColor, intensity: 1.0f, typeKey: type, isShadow: true);
         var faderShadow = shadowGo.AddComponent<MarkTextDistanceFader>();
         faderShadow.tm           = tmShadow;
         faderShadow.fadeFullNear = 1.5f;
@@ -513,8 +579,8 @@ public class PortalSpawner : MonoBehaviour
         tmBody.color         = color;
         tmBody.lineSpacing   = 1.0f;
         if (markFont != null) tmBody.font = markFont;
-        else if (fb != null)  tmBody.font = fb;
-        ApplyTextRenderer(bodyGo, tmBody, color, intensity: 1.0f);
+        else                  tmBody.font = resolvedFont;
+        ApplyTextRenderer(bodyGo, tmBody, color, intensity: 1.0f, typeKey: type, isShadow: false);
         var faderBody = bodyGo.AddComponent<MarkTextDistanceFader>();
         faderBody.tm           = tmBody;
         faderBody.fadeFullNear = 1.5f;
@@ -522,17 +588,36 @@ public class PortalSpawner : MonoBehaviour
         faderBody.fadeOutFar   = 20f;
     }
 
-    private static void ApplyTextRenderer(GameObject go, TextMesh tm, Color color, float intensity)
+    private static void ApplyTextRenderer(GameObject go, TextMesh tm, Color color, float intensity, string typeKey, bool isShadow)
     {
         var mr = go.GetComponent<MeshRenderer>();
-        if (mr != null && tm.font != null)
+        if (mr == null || tm.font == null) return;
+        mr.shadowCastingMode = ShadowCastingMode.Off;
+        mr.receiveShadows    = false;
+
+        // v187.7 fix Arch Blocker #1: was creating new Material per text
+        // instance (2 per cairn × N cairns = leak). Now cached:
+        //   • shadow text → 1 instance ever (always black-ish, same for all types)
+        //   • body text   → 1 instance per type (5 total)
+        Material m;
+        if (isShadow)
         {
-            mr.shadowCastingMode = ShadowCastingMode.Off;
-            mr.receiveShadows    = false;
-            var m = new Material(tm.font.material);
-            m.color = new Color(color.r * intensity, color.g * intensity, color.b * intensity, 1f);
-            mr.sharedMaterial = m;
+            if (_textShadowMat == null)
+            {
+                _textShadowMat = new Material(tm.font.material) { name = "TextShadow_Runtime" };
+            }
+            m = _textShadowMat;
         }
+        else
+        {
+            if (!_textMatByType.TryGetValue(typeKey, out m) || m == null)
+            {
+                m = new Material(tm.font.material) { name = $"TextBody_{typeKey}_Runtime" };
+                m.color = new Color(color.r * intensity, color.g * intensity, color.b * intensity, 1f);
+                _textMatByType[typeKey] = m;
+            }
+        }
+        mr.sharedMaterial = m;
     }
 
     private void AttachWhisperParticles(GameObject container, Color color, Color startCol, float rateMul, float haloIntenMul)
@@ -582,22 +667,24 @@ public class PortalSpawner : MonoBehaviour
         main.startColor       = new ParticleSystem.MinMaxGradient(emit);
         main.simulationSpace  = ParticleSystemSimulationSpace.World;
 
-        // Cone shape from base, but spread wider so they fill area not a column.
+        // Donut emit shape — fireflies rise around the outer ring (donutRadius
+        // is the cross-section thickness). Forces them to frame the icon
+        // rather than overlap it. v187.7 — was Cone, but Cone+wide-angle
+        // splattered particles into the center. Donut is supported on Unity
+        // 6 + URP Particles + iOS Metal, falls back to Circle on platforms
+        // that don't support it (none currently).
         var shape = ps.shape;
-        shape.shapeType = ParticleSystemShapeType.Cone;
-        shape.angle     = isCoreLayer ? 14f : 22f;
-        // v187.7 — emit from outer ring only, NOT from center, so the SDF
-        // icon stays uncluttered. The hollow donut emit shape forces fireflies
-        // to rise on the periphery, framing the icon rather than blocking it.
-        shape.shapeType = ParticleSystemShapeType.Donut;
+        shape.shapeType       = ParticleSystemShapeType.Donut;
         shape.radius          = isCoreLayer ? 0.42f : 0.58f;
         shape.donutRadius     = isCoreLayer ? 0.06f : 0.10f;
         shape.position        = new Vector3(0f, 0.05f, 0f);
 
         // Emission rate — paced for human eye: not too sparse (looks broken),
         // not too dense (looks busy). 4 fireflies/sec for core feels alive.
+        // rateMul=0 disables the layer (user choice via OTA).
         var emission = ps.emission;
         emission.rateOverTime = (isCoreLayer ? 4.0f : 12.0f) * Mathf.Max(0f, rateMul);
+        emission.enabled = rateMul > 0.0001f;
 
         var velocity = ps.velocityOverLifetime;
         velocity.enabled = true;

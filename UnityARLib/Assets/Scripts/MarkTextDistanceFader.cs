@@ -38,7 +38,16 @@ public class MarkTextDistanceFader : MonoBehaviour
 
     void LateUpdate()
     {
-        if (_cam == null) { _cam = Camera.main; if (_cam == null) return; }
+        // v187.7 — Unity's overridden == on Object handles destroyed refs,
+        // so checking _cam == null re-resolves Camera.main when the previous
+        // cached reference is dead (e.g. ARSession restart). Without this,
+        // a destroyed reference would throw MissingReferenceException every
+        // frame on resume. Arch Critical #5 fix.
+        if (_cam == null)
+        {
+            _cam = Camera.main;
+            if (_cam == null) return;
+        }
         if (tm == null) return;
 
         // ── OTA: text scale + height ──
