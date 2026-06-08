@@ -249,11 +249,20 @@ public static class SceneSetup
         soURP.ApplyModifiedProperties();
         EditorUtility.SetDirty(rpAsset);
 
-        // Wire into GraphicsSettings
-        UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline = rpAsset;
+        // v187.7.2 — DO NOT set GraphicsSettings.defaultRenderPipeline.
+        // Setting it causes Unity to enumerate the FULL URP keyword matrix
+        // at build time (294,912 variants, 8+ hour iOS build). The standalone
+        // testbed needed it to render — but on iOS we already wire the URP
+        // asset through QualitySettings below, which is the path Unity 6
+        // production AR has used since v186. Avoiding the GraphicsSettings
+        // path keeps iOS variant collection bounded (~6k variants, 5 min build).
+        //
+        // STANDALONE-ONLY override: ShaderTestbedSceneBuilder OR a build-time
+        // hook can set it, but the production scene path leaves it unset.
+        // (This block was previously: GraphicsSettings.defaultRenderPipeline = rpAsset)
 
-        // Also wire into all QualitySettings levels so the player picks
-        // it up regardless of quality level
+        // Wire into all QualitySettings levels so the player picks it up
+        // regardless of quality level. This is the v186-proven path.
         for (int i = 0; i < QualitySettings.names.Length; i++)
         {
             QualitySettings.SetQualityLevel(i, false);
@@ -261,7 +270,7 @@ public static class SceneSetup
         }
 
         AssetDatabase.SaveAssets();
-        Debug.Log("[CairnUnity][SceneSetup] URP RP asset wired to GraphicsSettings + all QualitySettings levels");
+        Debug.Log("[CairnUnity][SceneSetup] URP RP asset wired to all QualitySettings levels (GraphicsSettings.defaultRenderPipeline intentionally NOT set — see comment).");
     }
 
     private static void EnsureTextureImportSettings()

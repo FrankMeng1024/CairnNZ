@@ -45,6 +45,21 @@ public static class ShaderTestbedBuilder
 
         Directory.CreateDirectory(OUTPUT_DIR);
 
+        // v187.7.2 — Testbed needs GraphicsSettings.defaultRenderPipeline
+        // wired so the standalone player's first frame finds URP. iOS
+        // production deliberately leaves it null (avoids 294k URP variant
+        // explosion → 8h build). Save + restore around the standalone
+        // build so we don't dirty the production checkout.
+        var savedDefaultRP = UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline;
+        var rpAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset>("Assets/Settings/CairnURP.asset");
+        if (rpAsset != null)
+        {
+            UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline = rpAsset;
+            Debug.Log("[TestbedBuilder] GraphicsSettings.defaultRenderPipeline → CairnURP (testbed-only)");
+        }
+        try
+        {
+
         // 2. Configure build settings
         var buildOptions = new BuildPlayerOptions
         {
@@ -73,11 +88,24 @@ public static class ShaderTestbedBuilder
         if (summary.result != BuildResult.Succeeded)
         {
             Debug.LogError("[TestbedBuilder] BUILD FAILED");
+            // Restore default RP before exit
+            UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline = savedDefaultRP;
             if (Application.isBatchMode) EditorApplication.Exit(1);
             return;
         }
 
         Debug.Log($"[TestbedBuilder] === SUCCESS — exe at {OUTPUT_DIR}/{EXE_NAME} ===");
+        }
+        finally
+        {
+            // Always restore the production GraphicsSettings.defaultRenderPipeline
+            // (null for iOS) so subsequent iOS builds don't pick up the testbed
+            // setting. v187.7.2 critical: without this, the testbed run would
+            // leave master with the URP wired into GraphicsSettings → next
+            // iOS CI re-introduces the 294k variant explosion.
+            UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline = savedDefaultRP;
+            Debug.Log("[TestbedBuilder] Restored GraphicsSettings.defaultRenderPipeline to pre-testbed state.");
+        }
         if (Application.isBatchMode) EditorApplication.Exit(0);
     }
 }
