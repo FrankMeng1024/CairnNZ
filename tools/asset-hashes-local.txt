@@ -1,0 +1,19 @@
+==== Asset fingerprint v187.7.12 ====
+Repo root: /c/ClaudeCodeProjects/Cairn
+Date: 2026-06-08T13:37:10Z
+Project Unity: 6000.0.76f1
+
+ASSET                                                         SHA-256
+-------------------------------------------------------------- ----------------
+UnityARLib/Assets/Settings/CairnURPRenderer.asset              dd3f3d4d9cd0031a62d90c4cf2da82bae9c188da638068c1dd296812bfea91e9
+UnityARLib/Assets/Settings/CairnURP.asset                      6f0b300aaa183d5fadf542e52a433a3ebdbc601573a486c9ee639f06db41dd14
+UnityARLib/Assets/Settings/CairnVolumeProfile.asset            a20b6f0b5c8f80c9aa5a9215ea8f120f6edcac4ec8afe9a200587a14cf1d7017
+UnityARLib/Assets/Scenes/CairnAR.unity                         c69dc366ea1b4afea1885948f7d02ebeec5ced1230a9bb38b8789ba3d420c007
+UnityARLib/Assets/link.xml                                     105601cd12ded20ce036da13e9cb248110939f0bdc93c4ee77a0996152654f89
+UnityARLib/ProjectSettings/GraphicsSettings.asset              03aad71909bd724cd0ea8f22168375548eb6b04eb7c4ac23c6220aea58ecf5b1
+UnityARLib/ProjectSettings/QualitySettings.asset               818b4f94f311cae2f6099cee9d9a3cc9b2a108c67e46c4a6b159c5228400cc16
+UnityARLib/ProjectSettings/ProjectSettings.asset               afe2105b8ffa941fbce000c1b1821e1c8a9d9841d5a14e1f0ef5276a31aa6d80
+UnityARLib/ProjectSettings/EditorBuildSettings.asset           7a2586eddf6fc982b64776578846ab851ddd3e8294402a3b66c20a472764c3e2
+UnityARLib/ProjectSettings/URPProjectSettings.asset            596d5c8bf4f957b03684c949bebc252ae1918f25415a1147a00684c4b086efda
+
+==== END asset fingerprint ====

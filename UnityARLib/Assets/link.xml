@@ -1,0 +1,45 @@
+<!--
+  link.xml — IL2CPP managed code stripping preserve list.
+
+  Unity's IL2CPP build strips "unused" managed types based on static reachability
+  analysis. ScriptableObject types referenced ONLY by .asset YAML (not by
+  C# code) get stripped — because the analyzer never sees a `new` or
+  typeof() reference. The renderer-feature mechanism is exactly this case:
+  CairnURPRenderer.asset references ARBackgroundRendererFeature only by
+  Mono script GUID, with no C# code path that ever names the type.
+
+  Without this preserve, IL2CPP iOS builds remove the class. URP at runtime
+  loads CairnURPRenderer.asset, sees the m_RendererFeatures fileID points
+  to nothing, and renders WITHOUT AR camera background blit. User sees
+  uninitialized HDR float16 framebuffer = the v187 yellow-screen bug.
+
+  This file MUST live at Assets/link.xml so Unity auto-detects it.
+  Reference: https://docs.unity3d.com/Manual/IL2CPP-BytecodeStripping.html
+
+  Discovered via Subagent A v187.7.10 root-cause analysis. The renderer
+  feature wiring fix (eee8ff3) only put the type into the asset; this
+  file ensures the type itself ships in the binary.
+-->
+<linker>
+  <!-- AR Foundation runtime — preserve all renderer features and the
+       ARCameraBackground/Manager components they bind to. -->
+  <assembly fullname="Unity.XR.ARFoundation" preserve="all"/>
+  <assembly fullname="Unity.XR.ARSubsystems" preserve="all"/>
+  <assembly fullname="Unity.XR.ARKit" preserve="all"/>
+
+  <!-- Cairn assembly — preserve our spawners + bridge so IL2CPP doesn't
+       strip something we wired only via SerializedObject (e.g. PortalSpawner
+       being added via AddComponent in editor, never via `new` in shipped
+       C#). -->
+  <assembly fullname="Assembly-CSharp">
+    <type fullname="ICairnSpawner" preserve="all"/>
+    <type fullname="MultiSpawner" preserve="all"/>
+    <type fullname="PortalSpawner" preserve="all"/>
+    <type fullname="CairnBridge" preserve="all"/>
+    <type fullname="CairnGlobals" preserve="all"/>
+    <type fullname="CairnThermalMonitor" preserve="all"/>
+    <type fullname="GroundYResolver" preserve="all"/>
+    <type fullname="MarkTextDistanceFader" preserve="all"/>
+    <type fullname="CairnTypePresets" preserve="all"/>
+  </assembly>
+</linker>

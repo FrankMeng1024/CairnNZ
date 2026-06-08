@@ -34,9 +34,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //
 // History:
 //   186 — last v186 OTA before v187 portal cairn native build (#27/EAS).
-//   187 — v187.7.5 OTA hotfix: calmed halo intensity / portal scale on AR
-//         mount so production iPhone doesn't see ground-level yellow wash.
-export const OTA_VERSION = 187;
+//   192 — v187.7.12: link.xml IL2CPP preserve + asset fingerprint drift
+//         monitor + AUTOMATION docs. Baked together with v187.7.11 CI
+//         gate + URP/Cam/Volume instrumentation. After next EAS build:
+//         AR feed should display real camera (no more yellow), and
+//         ARDebugOverlay shows URPDiag/CamDiag/VolumeDiag for any future
+//         visual issue.
+export const OTA_VERSION = 192;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

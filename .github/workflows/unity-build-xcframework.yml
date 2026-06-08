@@ -63,6 +63,16 @@ jobs:
           fi
           echo "==== Pre-build static gate PASS ===="
 
+      # v187.7.12 — Strategy B (no version unification). Project is 76f1
+      # locally; CI is 36f1 (game-ci has not published 76f1 image yet).
+      # Risk: cross-patch URP/SerializedObject drift could silently corrupt
+      # asset YAML during scene-build. Mitigation: emit SHA-256 of every
+      # rendering-critical asset on BOTH sides, compare in pre-EAS gate.
+      - name: Emit asset fingerprints (drift monitor)
+        run: |
+          chmod +x tools/asset-fingerprint.sh
+          bash tools/asset-fingerprint.sh
+
       - uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
