@@ -94,12 +94,13 @@ export function RouteEditorScreen() {
   // approximation. For new-route-from-session flow only; existingRoute uses
   // existingRoute.points directly.
   const [sessionTrackPoints, setSessionTrackPoints] = useState<Array<{ lat: number; lng: number }>>([]);
-  // v123 fix #8: when entering with an existing routeId we open in
-  // VIEW mode by default — a read-only display of the cloned trace
-  // with Edit + Delete CTAs. User must tap Edit to enter the editing
-  // surface (waypoint drag, snap-to-road, save). New routes (no
-  // routeId) jump straight into edit mode.
-  const [editMode, setEditMode] = useState<boolean>(!routeId);
+  // v200: ALL entries land in view-mode now — user must tap Edit to
+  // enter the editing surface. Save-as-route used to skip view-mode
+  // (jumped straight to edit) but the v200 spec unifies the two
+  // entries: save-as-route view-mode shows Edit + Cancel, existing-
+  // route view-mode shows Edit + Delete. Tapping Edit in either case
+  // promotes Edit → Save while leaving the other button in place.
+  const [editMode, setEditMode] = useState<boolean>(false);
   // True when snapToRoadAndTrim couldn't align the trace to road data
   // — typical indoors / sparse-OSM areas. We honestly tell the user
   // we're showing raw GPS, which prevents the "why are 7 waypoints
@@ -1574,6 +1575,30 @@ export function RouteEditorScreen() {
               <TouchableOpacity
                 style={[styles.viewBtn, styles.viewDeleteBtn]}
                 onPress={() => {
+                  // v200: in save-as-route view-mode (fromSessionId set,
+                  // no routeId yet) the right button is "Cancel" — it
+                  // discards the unsaved draft and pops back to the
+                  // Activity. In existing-route view-mode (routeId set)
+                  // the right button is "Delete" — it removes the route
+                  // from the store. Both go through a double-confirm
+                  // alert per spec.
+                  if (fromSessionId && !routeId) {
+                    Alert.alert(
+                      'Discard route?',
+                      'This route was not saved. Are you sure you want to discard it?',
+                      [
+                        { text: 'Keep', style: 'cancel' },
+                        {
+                          text: 'Discard',
+                          style: 'destructive',
+                          onPress: () => {
+                            nav.goBack();
+                          },
+                        },
+                      ],
+                    );
+                    return;
+                  }
                   if (!routeId) return;
                   Alert.alert(
                     'Delete route?',
@@ -1593,8 +1618,15 @@ export function RouteEditorScreen() {
                 }}
                 activeOpacity={0.85}
               >
-                <Icon name="Trash2" size={16} color={Colors.danger} strokeWidth={2.5} />
-                <Text style={styles.viewDeleteBtnText}>Delete</Text>
+                <Icon
+                  name={fromSessionId && !routeId ? 'X' : 'Trash2'}
+                  size={16}
+                  color={Colors.danger}
+                  strokeWidth={2.5}
+                />
+                <Text style={styles.viewDeleteBtnText}>
+                  {fromSessionId && !routeId ? 'Cancel' : 'Delete'}
+                </Text>
               </TouchableOpacity>
             </View>
           </>
