@@ -479,8 +479,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // they tapped Stop, even if they only meant to check.
     {
       const pre = get();
-      if (pre.status !== 'idle' && pre.trackPoints.length < 2) {
-        crashLogger.breadcrumb(`session:stop:too-short pts=${pre.trackPoints.length} — preserving session`);
+      // v198 too-short check: refuse if trackPoints<2 OR distanceM<20.
+      // Original v118 design only guarded trackPoints<2, but a hiker who
+      // taps Start, sits in place for a few minutes, and taps Stop will
+      // accumulate dozens of trackPoints from GPS jitter — passing the
+      // length check while distanceM stays ~0. 20m is roughly 2x typical
+      // GPS accuracy (5-10m), so it stably distinguishes "stationary
+      // noise" from "actually walked".
+      const tooShort =
+        pre.status !== 'idle' &&
+        (pre.trackPoints.length < 2 || pre.distanceM < 20);
+      if (tooShort) {
+        crashLogger.breadcrumb(`session:stop:too-short pts=${pre.trackPoints.length} dist=${pre.distanceM.toFixed(1)}m — preserving session`);
         // v121 fix: ALWAYS delete the empty server row so it doesn't
         // appear in Activities as a 0km/0s ghost record. Whether the
         // user picks "Got it" (continue) or "End anyway" (discard),
@@ -570,14 +580,17 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // down at start, or server didn't respond), fall back to the
       // legacy all-in-one POST inside addSession.
       // v115: too-short guard — < 2 points means no drawable path.
+      // v198 extension: also reject distanceM < 20m (stationary GPS jitter
+      // can pass the length check). Same threshold as the pre-check above
+      // so behavior is consistent whether stopTracking runs once or twice.
       // Don't save to local store; also skip legacy POST and finalize PATCH.
       // Clean up the server-side empty row if one was created.
-      if (s.trackPoints.length < 2) {
+      if (s.trackPoints.length < 2 || s.distanceM < 20) {
         const remoteId = s.remoteSessionId;
         if (remoteId) {
           deleteRemoteSession(remoteId).catch(() => {});
         }
-        crashLogger.breadcrumb(`session:stop:too-short pts=${s.trackPoints.length} — discarded`);
+        crashLogger.breadcrumb(`session:stop:too-short pts=${s.trackPoints.length} dist=${s.distanceM.toFixed(1)}m — discarded`);
         stopReason = 'too-short';
         // Fall through to reset() below; do NOT call addSession.
       } else {

@@ -227,13 +227,13 @@ export function RouteEditorScreen() {
   // 0.01° lat (~1.11km), causing tall north-south routes to be
   // over-zoomed. Convert both spans to meters before picking zoom so
   // the heuristic reflects actual geographic extent.
-  const dualEditCameraFit = useMemo(() => {
-    if (!dualEditActive) return null;
-    const wp = editStore.workingPoints;
-    if (wp.length < 2) return null;
+  // v198-fix (bug 3+4): extract bbox->center+zoom into a helper so
+  // view-mode and save-as-route can reuse the same math.
+  const computeBboxFit = (pts: Array<{ lng: number; lat: number }>) => {
+    if (pts.length < 2) return null;
     let minLng = Infinity, maxLng = -Infinity;
     let minLat = Infinity, maxLat = -Infinity;
-    for (const p of wp) {
+    for (const p of pts) {
       if (p.lng < minLng) minLng = p.lng;
       if (p.lng > maxLng) maxLng = p.lng;
       if (p.lat < minLat) minLat = p.lat;
@@ -249,25 +249,42 @@ export function RouteEditorScreen() {
       111000 *
       Math.max(0.01, Math.cos((midLat * Math.PI) / 180));
     const latSpanM = Math.max(0.0001, maxLat - minLat) * 111000;
-    // Use the larger of the two real-world spans. Add a 1.4x padding
-    // factor so handles + UI chrome are not flush against the viewport
-    // edge.
     const spanM = Math.max(lngSpanM, latSpanM) * 1.4;
-    // Zoom heuristic mapped to meters of horizontal extent visible at
-    // typical phone viewport (~360px wide, ~720px tall).
     let zoom = 14;
-    if (spanM > 50000) zoom = 9;        // > 50km
-    else if (spanM > 10000) zoom = 11;  // > 10km
-    else if (spanM > 5000) zoom = 12;   // > 5km
-    else if (spanM > 1500) zoom = 13;   // > 1.5km
-    else if (spanM > 700) zoom = 14;    // > 700m
-    else if (spanM > 300) zoom = 15;    // > 300m
-    else zoom = 16;                      // <= 300m
+    if (spanM > 50000) zoom = 9;
+    else if (spanM > 10000) zoom = 11;
+    else if (spanM > 5000) zoom = 12;
+    else if (spanM > 1500) zoom = 13;
+    else if (spanM > 700) zoom = 14;
+    else if (spanM > 300) zoom = 15;
+    else zoom = 16;
     return { center, zoom };
+  };
+
+  const dualEditCameraFit = useMemo(() => {
+    if (!dualEditActive) return null;
+    return computeBboxFit(editStore.workingPoints);
     // Deps: only recompute when entering/leaving dual-edit OR routeId
     // changes. workingPoints is intentionally NOT a dep — see comment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dualEditActive, routeId]);
+
+  // v198-fix (bug 3+4): camera fit for view-mode (existing route) and
+  // save-as-route (session draft). Memoize on routeId/sessionId so we
+  // don't re-animate on every points hydrate. When points are not yet
+  // loaded the fit is null and the camera falls back to user GPS.
+  const routeCameraFit = useMemo(() => {
+    // View mode: existing route with hydrated points
+    if (routeId && existingRoute && existingRoute.points && existingRoute.points.length >= 2) {
+      return computeBboxFit(existingRoute.points);
+    }
+    // Save-as-route: session trace after snap-to-road
+    if (fromSessionId && sessionTrackPoints.length >= 2) {
+      return computeBboxFit(sessionTrackPoints);
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId, fromSessionId, existingRoute?.points?.length, sessionTrackPoints.length]);
 
   // React to pendingStraightConfirm via Alert. The orchestrator returns
   // a straight-line fallback when neither DOC nor Mapbox can route — the
@@ -873,6 +890,20 @@ export function RouteEditorScreen() {
                     centerCoordinate={dualEditCameraFit.center}
                     zoomLevel={dualEditCameraFit.zoom}
                     animationDuration={300}
+                  />
+                );
+              }
+              // v198-fix (bug 3+4): view-mode (existing route) and
+              // save-as-route (session draft) both center on the route
+              // bbox, not on user GPS. Without this the user lands on
+              // their current location even though the route is
+              // somewhere else, and never sees the polyline.
+              if (routeCameraFit) {
+                return (
+                  <CameraComponent
+                    centerCoordinate={routeCameraFit.center}
+                    zoomLevel={routeCameraFit.zoom}
+                    animationDuration={0}
                   />
                 );
               }

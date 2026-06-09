@@ -91,6 +91,11 @@ function PressRow({
 function NativeTrackMap({ session, markers }: { session: TrackingSession; markers: Marker[] }) {
   const pts = session.trackPoints;
   const color = session.activityMode === 'running' ? Colors.running : Colors.primary;
+  // v198 Bug 5: track whether the user has panned the camera away from
+  // the initial fit. When true, render a small recenter button that
+  // re-fits to the route bbox. Pattern matches HikingScreen's recenter.
+  const [hasPanned, setHasPanned] = useState(false);
+  const cameraRef = useRef<any>(null);
   if (!MapView || pts.length < 2) return null;
 
   // Bounding box of the track for camera fit.
@@ -136,6 +141,7 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
   );
 
   return (
+    <View style={StyleSheet.absoluteFillObject}>
     <MapView
       style={StyleSheet.absoluteFillObject}
       styleURL={getPrimaryMapStyle()}
@@ -143,9 +149,19 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
       attributionEnabled={false}
       scaleBarEnabled={false}
       compassEnabled={false}
+      onRegionDidChange={(e: any) => {
+        // v198 Bug 5: any user-initiated pan/zoom flips hasPanned=true
+        // so the recenter button surfaces. isUserInteraction is true
+        // only for gesture-driven changes — programmatic flyTo does not
+        // trigger it, so the imperative recenter below won't loop.
+        if (e?.properties?.isUserInteraction) {
+          setHasPanned(true);
+        }
+      }}
     >
       {CameraComponent && (
         <CameraComponent
+          ref={cameraRef}
           bounds={{
             ne: [maxLng, maxLat],
             sw: [minLng, minLat],
@@ -268,6 +284,28 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
         </>
       )}
     </MapView>
+    {hasPanned && (
+      <TouchableOpacity
+        onPress={() => {
+          // v198 Bug 5: recenter back to route bbox via imperative
+          // Camera.fitBounds. flyTo doesn't trip onRegionDidChange's
+          // isUserInteraction so hasPanned stays consistent until the
+          // next user gesture.
+          cameraRef.current?.fitBounds(
+            [maxLng, maxLat],
+            [minLng, minLat],
+            [60, 40, 60, 40], // [top, right, bottom, left]
+            500,
+          );
+          setHasPanned(false);
+        }}
+        activeOpacity={0.85}
+        style={trackStyles.recenterBtn}
+      >
+        <Icon name="Target" size={20} color={Colors.primary} strokeWidth={2} />
+      </TouchableOpacity>
+    )}
+    </View>
   );
 }
 
@@ -963,57 +1001,25 @@ export function MapHistoryScreen() {
                 loadedTrackPoints.length < 2 && { opacity: 0.4 },
               ]}
               disabled={loadedTrackPoints.length < 2}
-              onPress={async () => {
-                // Save as Route: directly persist the raw GPS trace as
-                // a free route (no editor dialog). Honours route-rules.md
-                // §1 — "GPS Free is the foundation, Edit is an optional
-                // aid".
+              onPress={() => {
+                // v198 Bug 1+2 fix: open RouteEditorScreen in save-as-route
+                // draft mode (fromSessionId) instead of persisting directly.
+                // The user wants to edit the name + see the route polyline
+                // BEFORE saving — previous direct-addRoute path lost the
+                // name (forced to activity.name) and dropped them into a
+                // view-mode showing stats=0 because waypoints array is
+                // empty (geometry lives in route.points which view-mode
+                // doesn't read for the waypoint counter).
                 //
-                // No `originalPoints` field — backend doesn't accept it
-                // yet (Phase 1 dual-line storage will land server-side
-                // later). Adding it here previously triggered the v16
-                // "Save failed" 500 error users reported.
+                // RouteEditorScreen with fromSessionId:
+                //   - opens in editMode=true (drafting mode, not view-mode)
+                //   - hydrates sessionTrackPoints from snapToRoadAndTrim
+                //   - pre-fills name with `Hike Jun 9` / `Run Jun 9` style
+                //   - camera now fits to the session polyline (v198 bug 3+4)
+                //   - main button is Save (handleSave); user can edit name
                 const ts = selectedSession;
-                crashLogger.breadcrumb(`saveroute:start session=${ts.id} pts=${loadedTrackPoints.length}`);
-                try {
-                  // v120: use loadedTrackPoints (server-hydrated) instead
-                  // of selectedSession.trackPoints (always empty for
-                  // backend sessions).
-                  const points = loadedTrackPoints.map(p => ({ lat: p.lat, lng: p.lng, alt: p.alt ?? null }));
-                  const id = await useRouteStore.getState().addRoute({
-                    name: ts.name || `${ts.activityMode === 'running' ? 'Run' : 'Hike'} — ${new Date(ts.startedAt).toLocaleDateString()}`,
-                    points,
-                    waypoints: [],
-                    distanceM: ts.distanceM,
-                    elevationGainM: ts.elevationGainM,
-                  });
-                  if (id) {
-                    crashLogger.breadcrumb(`saveroute:ok id=${id}`);
-                    // v126 fix #8: reset the nav stack so that:
-                    //   Home → Routes list → RouteEditor (detail)
-                    // Back from RouteEditor lands on the Routes list,
-                    // not the Activity we came from. User reported the
-                    // previous flow returned to Activity which felt
-                    // wrong because the route just got saved.
-                    (nav as any).reset({
-                      index: 2,
-                      routes: [
-                        { name: 'Home' },
-                        { name: 'Routes', params: { initialTab: 'routes' } },
-                        { name: 'RouteEditor', params: { routeId: id } },
-                      ],
-                    });
-                  } else {
-                    crashLogger.breadcrumb(`saveroute:no-id-returned`);
-                    Alert.alert('Save failed', 'Server returned no ID. Check connection and try again.');
-                  }
-                } catch (err: any) {
-                  // Surface the actual error so we can debug from logs
-                  // instead of the generic "Try again" message.
-                  const msg = String(err?.message ?? err).slice(0, 120);
-                  crashLogger.breadcrumb(`saveroute:error ${msg}`);
-                  Alert.alert('Save failed', msg || 'Could not save route. Try again.');
-                }
+                crashLogger.breadcrumb(`saveroute:nav-to-editor session=${ts.id}`);
+                (nav as any).navigate('RouteEditor', { fromSessionId: ts.id });
               }}
             >
               <Icon name="Route" size={IconSize.sm} color={Colors.primary} strokeWidth={2} />
@@ -1449,6 +1455,21 @@ const flagStyles = StyleSheet.create({
 });
 
 const trackStyles = StyleSheet.create({
+  // v198 Bug 5: recenter button shown when user has panned away from
+  // the initial route bbox fit. Bottom-right placement, ~44pt circle,
+  // matches HikingScreen's recenter visual language.
+  recenterBtn: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.elevated,
+  },
   noGpsWrap: {
     position: 'absolute', top: '35%', left: MAP_PADDING, right: MAP_PADDING,
     alignItems: 'center', gap: Spacing.sm,
