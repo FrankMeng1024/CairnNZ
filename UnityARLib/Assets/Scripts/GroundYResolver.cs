@@ -49,6 +49,10 @@ public class GroundYResolver : MonoBehaviour
         public float currentY;
         public float targetY;
         public Tier currentTier;
+        // v199 §C.6 Bug #7 fix: Tier-A lock. Once Tier-A reached AND |delta|
+        // < epsilon for >= stableMs, lock and skip further lerp updates.
+        public bool locked;
+        public float stableSince; // Time.time when lock window started; -1=not started
     }
 
     public enum Tier { C = 0, B = 1, A = 2 }
@@ -180,6 +184,8 @@ public class GroundYResolver : MonoBehaviour
             currentY = cairnTransform.position.y,
             targetY = cairnTransform.position.y,
             currentTier = Tier.C, // assume worst tier at register time
+            locked = false,
+            stableSince = -1f,
         });
     }
 
@@ -204,6 +210,14 @@ public class GroundYResolver : MonoBehaviour
         if (_tracks.Count == 0) return;
         float dt = Time.deltaTime;
 
+        // v199 OTA: lock parameters
+        var globals = CairnGlobals.Instance;
+        bool lockEnabled = globals == null || globals.GetBool("GroundLockEnabled", true);
+        float lockEpsilon = globals != null
+            ? globals.GetForType(null, "GroundLockEpsilon", 0.05f) : 0.05f;
+        float lockStableMs = globals != null
+            ? globals.GetForType(null, "GroundLockStableMs", 1000f) : 1000f;
+
         // Throttle expensive queries: re-query best tier ~5Hz, lerp every frame.
         // _frameCount is just a local counter; we don't need precision.
         bool requeryThisFrame = (Time.frameCount % 12) == 0;
@@ -216,6 +230,9 @@ public class GroundYResolver : MonoBehaviour
                 _tracks.RemoveAt(i);
                 continue;
             }
+
+            // v199 §C.6 Bug #7: skip lerp entirely once locked.
+            if (lockEnabled && t.locked) continue;
 
             if (requeryThisFrame)
             {
@@ -244,6 +261,22 @@ public class GroundYResolver : MonoBehaviour
                 var p = t.go.position;
                 p.y = t.currentY;
                 t.go.position = p;
+                // Y is moving — reset stable window.
+                t.stableSince = -1f;
+            }
+
+            // v199: lock-tier check. Reach Tier-A AND |delta| < epsilon
+            // for >= stableMs.
+            if (lockEnabled && t.currentTier == Tier.A &&
+                Mathf.Abs(t.targetY - t.currentY) < lockEpsilon)
+            {
+                if (t.stableSince < 0f) t.stableSince = Time.time;
+                else if ((Time.time - t.stableSince) * 1000f >= lockStableMs)
+                {
+                    t.locked = true;
+                    UnityLogger.I("GroundYResolver",
+                        $"locked Y={t.currentY:F3} (stable {lockStableMs:F0}ms)");
+                }
             }
         }
     }

@@ -26,7 +26,7 @@ using System.Collections.Generic;
 ///
 /// Wisp count, height range, particle rate all per-type via CairnTypePresets.
 /// </summary>
-public class PortalSpawner : MonoBehaviour, ICairnSpawner
+public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
 {
     [Header("Shared materials — created lazily from Cairn shaders.")]
     public Material portalRingMaterial;   // Cairn/PortalRingShader
@@ -553,6 +553,13 @@ public class PortalSpawner : MonoBehaviour, ICairnSpawner
         AttachWhisperParticles(container, color, preset.particleStartColor, fireflyRateM, haloIntenM);
 
         if (groundYResolver != null) groundYResolver.RegisterCairn(container.transform);
+
+        // ─── v199 cinematic-rebuild superlayer (per cinematic-ar-rebuild
+        // .md §B.1). Adds Pebble/TypeChip/RuneText/HeroRibbons/FarShaft/
+        // ConfidenceRing/LikeBadge as children of `container`, plus async
+        // ARAnchor parenting + summon-from-below animation. All systems
+        // OTA-toggleable; if disabled, layer skipped at spawn (zero cost).
+        AddV199Layers(container, data, groundY, color);
 
         _spawned.Add(container);
     }

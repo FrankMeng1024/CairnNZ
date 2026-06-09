@@ -14,7 +14,7 @@ using UnityEngine;
 ///
 /// Per plan §1.C and amendment A3.
 /// </summary>
-public class CairnGlobals : MonoBehaviour
+public partial class CairnGlobals : MonoBehaviour
 {
     public static CairnGlobals Instance { get; private set; }
 
@@ -192,7 +192,10 @@ public class CairnGlobals : MonoBehaviour
                 UnityLogger.W("CairnGlobals", "ThermalScale is internal — ignoring RN set");
                 break;
             default:
-                UnityLogger.W("CairnGlobals", $"Unknown global '{name}' — ignored");
+                // v199: fallback to extension registry (110+ new globals
+                // registered in CairnGlobalsExt). If still unknown,
+                // SetGeneric warns + ignores.
+                SetGeneric(name, value);
                 break;
         }
     }

@@ -177,6 +177,36 @@ public static class SceneSetup
         // iOS thermal state. Both are siblings on the bridge GO.
         bridgeGo.AddComponent<CairnGlobals>();
         bridgeGo.AddComponent<CairnThermalMonitor>();
+        // v199 cinematic-rebuild — siblings on the bridge GO. These
+        // MonoBehaviours self-subscribe to CairnBridge static events
+        // in OnEnable; without instantiation the static events have no
+        // listener and RN postMessages are no-ops (Phase 7 review B1).
+        bridgeGo.AddComponent<CairnVolumeOverrides>();
+        // SpiritHandshake requires LineRenderer — own GameObject so it
+        // can hold its own renderer without conflicting with bridge GO.
+        var handshakeGo = new GameObject("CairnSpiritHandshake");
+        handshakeGo.transform.SetParent(bridgeGo.transform, false);
+        handshakeGo.AddComponent<LineRenderer>();
+        handshakeGo.AddComponent<SpiritHandshake>();
+        // GlobalScanGridController needs a child quad with the scan grid
+        // shader — own GO so the renderer transform is independent of
+        // the bridge GO transform (the controller positions it relative
+        // to the AR camera each frame).
+        var scanGridGo = new GameObject("CairnScanGrid");
+        scanGridGo.transform.SetParent(bridgeGo.transform, false);
+        var scanGridQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        scanGridQuad.name = "ScanGridQuad";
+        UnityEngine.Object.DestroyImmediate(scanGridQuad.GetComponent<Collider>());
+        scanGridQuad.transform.SetParent(scanGridGo.transform, false);
+        scanGridQuad.transform.localScale = new Vector3(1.5f, 1.5f, 1f);
+        var scanGridShader = Shader.Find("Cairn/ScanningGridShader");
+        if (scanGridShader != null)
+        {
+            scanGridQuad.GetComponent<MeshRenderer>().sharedMaterial = new Material(scanGridShader);
+        }
+        var scanGridCtl = scanGridGo.AddComponent<GlobalScanGridController>();
+        scanGridCtl.arCamera = cam;
+        scanGridCtl.gridRenderer = scanGridQuad.GetComponent<MeshRenderer>();
         // GroundYResolver lives on the spawner GO so its Update runs after
         // raycasts have populated this frame's data.
         var resolver = spawnerGo.AddComponent<GroundYResolver>();

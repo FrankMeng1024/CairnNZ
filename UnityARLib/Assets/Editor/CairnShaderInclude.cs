@@ -37,6 +37,17 @@ public class CairnShaderInclude : IPreprocessBuildWithReport
         "Cairn/StrandShader",
         "Cairn/HaloShader",
         "Cairn/ShadowBlobShader",
+        // v199 cinematic-rebuild Phase 2 shaders. Same reasoning: Unity
+        // strips these without a scene-loaded material reference unless
+        // we explicitly add them to AlwaysIncludedShaders.
+        "Cairn/PebbleShader",
+        "Cairn/TypeChipShader",
+        "Cairn/StoneBackplateShader",
+        "Cairn/RibbonStrandShader",
+        "Cairn/LightShaftShader",
+        "Cairn/ScanningGridShader",
+        "Cairn/ConfidenceRingShader",
+        "Cairn/HandshakeBeamShader",
         // v187.7.3 — DO NOT add "Universal Render Pipeline/*" shaders here.
         // Doing so forces Unity 6 to compile the full URP keyword matrix
         // (URP/Lit alone = 294,912 variants → 8h iOS build, root cause of
@@ -44,8 +55,6 @@ public class CairnShaderInclude : IPreprocessBuildWithReport
         // only the variants the project actually uses.
         // Sprites/Default is a Unity built-in (fileID 10753 already in the
         // legacy include block above), no need to add by GUID.
-        // Net: only the 5 Cairn/* shaders that don't have a URP-side
-        // stripper get appended here.
     };
 
     private static void EnsureCairnShadersIncluded()

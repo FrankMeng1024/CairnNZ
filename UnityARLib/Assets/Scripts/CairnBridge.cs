@@ -824,6 +824,163 @@ public class CairnBridge : MonoBehaviour
     }
 
     // ============================================================
+    // v199 cinematic-rebuild postMessage handlers
+    // ============================================================
+
+    /// <summary>
+    /// Per-type float override. Payload: { "type", "name", "value" }.
+    /// Per cinematic-ar-rebuild.md §G.4.
+    /// </summary>
+    public void OnSetGlobalForType(string json)
+    {
+        if (string.IsNullOrEmpty(json)) return;
+        try
+        {
+            var data = JsonUtility.FromJson<SetGlobalForTypeRequest>(json);
+            if (data == null) return;
+            if (CairnGlobals.Instance == null) return;
+            CairnGlobals.Instance.SetForType(data.type, data.name, data.value);
+        }
+        catch (System.Exception e)
+        {
+            UnityLogger.E("CairnBridge", "OnSetGlobalForType parse failed", e);
+        }
+    }
+
+    /// <summary>
+    /// Color global. Payload: { "name", "r", "g", "b", "a" } each 0..1.
+    /// </summary>
+    public void OnSetGlobalColor(string json)
+    {
+        if (string.IsNullOrEmpty(json)) return;
+        try
+        {
+            var data = JsonUtility.FromJson<SetGlobalColorRequest>(json);
+            if (data == null || string.IsNullOrEmpty(data.name)) return;
+            if (CairnGlobals.Instance == null) return;
+            if (string.IsNullOrEmpty(data.type))
+            {
+                CairnGlobals.Instance.SetColor(data.name, data.r, data.g, data.b, data.a);
+            }
+            else
+            {
+                CairnGlobals.Instance.SetColorForType(data.type, data.name,
+                    data.r, data.g, data.b, data.a);
+            }
+        }
+        catch (System.Exception e)
+        {
+            UnityLogger.E("CairnBridge", "OnSetGlobalColor parse failed", e);
+        }
+    }
+
+    /// <summary>
+    /// Per-session GPS offset (V2.B5 + §E.3). Payload: { "ox", "oz" }
+    /// — meters in ARKit world space (+E -N convention). Sent BEFORE
+    /// bulk-spawn after first ArFrame with both userPos and arOrigin.
+    /// </summary>
+    public void OnSetSessionOffset(string json)
+    {
+        if (string.IsNullOrEmpty(json)) return;
+        try
+        {
+            var data = JsonUtility.FromJson<SetSessionOffsetRequest>(json);
+            if (data == null) return;
+            // Stash on a static for any consumer to read (PortalSpawner if
+            // we add a Unity-side bulk-spawn pathway later; today RN
+            // applies offset client-side before sending OnSpawnStrand).
+            _sessionOffsetX = data.ox;
+            _sessionOffsetZ = data.oz;
+            UnityLogger.I("CairnBridge",
+                $"SessionOffset received ox={data.ox:F2} oz={data.oz:F2}");
+        }
+        catch (System.Exception e)
+        {
+            UnityLogger.E("CairnBridge", "OnSetSessionOffset parse failed", e);
+        }
+    }
+
+    /// <summary>
+    /// Update per-cairn community state (likes/reports/status). Payload:
+    /// { "id", "helpful_count", "report_count", "status" }.
+    /// Per §F.5. PortalSpawner subscribes to apply LikeBadge updates
+    /// (or queues if cairn not yet spawned per V2.C9 belt-and-suspenders).
+    /// </summary>
+    public static System.Action<CommunityStateUpdate> OnCommunityStateUpdate;
+    public void OnSetCommunityState(string json)
+    {
+        if (string.IsNullOrEmpty(json)) return;
+        try
+        {
+            var data = JsonUtility.FromJson<CommunityStateUpdate>(json);
+            if (data == null || string.IsNullOrEmpty(data.id)) return;
+            OnCommunityStateUpdate?.Invoke(data);
+        }
+        catch (System.Exception e)
+        {
+            UnityLogger.E("CairnBridge", "OnSetCommunityState parse failed", e);
+        }
+    }
+
+    /// <summary>
+    /// Trigger seed-ascension kill-shot. Payload: { "id" }.
+    /// </summary>
+    public static System.Action<string> OnSeedAscendRequested;
+    public void OnSeedAscend(string json)
+    {
+        var data = TryParseId(json);
+        if (data != null) OnSeedAscendRequested?.Invoke(data);
+    }
+
+    /// <summary>
+    /// First-spawn star-mote convergence. Payload: { "id" }.
+    /// </summary>
+    public static System.Action<string> OnFirstSpawnRequested;
+    public void OnFirstSpawn(string json)
+    {
+        var data = TryParseId(json);
+        if (data != null) OnFirstSpawnRequested?.Invoke(data);
+    }
+
+    /// <summary>
+    /// Pandora ground ripple. Payload: { "id" }.
+    /// </summary>
+    public static System.Action<string> OnGroundRippleRequested;
+    public void OnGroundRipple(string json)
+    {
+        var data = TryParseId(json);
+        if (data != null) OnGroundRippleRequested?.Invoke(data);
+    }
+
+    /// <summary>Spirit handshake beam show/hide. Payload: { "id" } or "".</summary>
+    public static System.Action<string> OnHandshakeBeamShowRequested;
+    public static System.Action OnHandshakeBeamHideRequested;
+    public void OnHandshakeBeamShow(string json)
+    {
+        var data = TryParseId(json);
+        if (data != null) OnHandshakeBeamShowRequested?.Invoke(data);
+    }
+    public void OnHandshakeBeamHide(string _ignored)
+    {
+        OnHandshakeBeamHideRequested?.Invoke();
+    }
+
+    private static string TryParseId(string json)
+    {
+        if (string.IsNullOrEmpty(json)) return null;
+        try
+        {
+            var data = JsonUtility.FromJson<IdRequest>(json);
+            return data?.id;
+        }
+        catch { return null; }
+    }
+
+    // Static session-offset cache (V2.B5).
+    public static float _sessionOffsetX;
+    public static float _sessionOffsetZ;
+
+    // ============================================================
     // Outbound (Unity -> RN) transport
     // ============================================================
 
@@ -870,5 +1027,43 @@ public class CairnBridge : MonoBehaviour
     {
         public string name;
         public float  value;
+    }
+
+    [System.Serializable]
+    public class SetGlobalForTypeRequest
+    {
+        public string type;
+        public string name;
+        public float  value;
+    }
+
+    [System.Serializable]
+    public class SetGlobalColorRequest
+    {
+        public string type;   // empty for global; non-empty for per-type override
+        public string name;
+        public float r, g, b, a;
+    }
+
+    [System.Serializable]
+    public class SetSessionOffsetRequest
+    {
+        public float ox;
+        public float oz;
+    }
+
+    [System.Serializable]
+    public class CommunityStateUpdate
+    {
+        public string id;
+        public int helpful_count;
+        public int report_count;
+        public string status; // healthy | suspicious | hidden
+    }
+
+    [System.Serializable]
+    public class IdRequest
+    {
+        public string id;
     }
 }

@@ -30,6 +30,9 @@ import { UnityAROverlay, type UnityAROverlayHandle } from '../components/UnityAR
 import { CairnEdgeArrows } from '../components/CairnEdgeArrows';
 import { AimShutter } from '../components/AimShutter';
 import { PlantSheet, AimReticle, type PlantType } from '../components/PlantSheet';
+import { LikeReportSheet } from '../components/LikeReportSheet';
+import { useAimedMarker } from '../hooks/useAimedMarker';
+import Constants from 'expo-constants';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ARDebugOverlay } from '../components/ARDebugOverlay';
 import { OTA_VERSION } from '../components/OtaBadge';
@@ -263,6 +266,29 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     origin: { lat: number; lng: number; alt: number | null } | null;
     groundY: number | null;
   }>({ camera: null, cairns: [], origin: null, groundY: null });
+
+  // v199 §F.1 + V2.C1: 3D cone aim detection. Returns ARUiState
+  // (idle | aim-pending | aim-locked) + lockedMarkerId after 600ms hold.
+  // Version-gated per V2.C8: only enable on binary >= 0.2.1 so v0.2.0
+  // (v198) binaries running OTA bundles don't show LikeReportSheet without
+  // the corresponding Unity LikeBadge handler.
+  const _appVersion = (Constants.expoConfig?.version ?? '0.0.0');
+  const _likeReportSupported = (() => {
+    const parts = _appVersion.split('.').map(n => parseInt(n, 10));
+    if (parts.length < 3 || parts.some(isNaN)) return false;
+    const [maj, min, patch] = parts;
+    if (maj > 0) return true;
+    if (maj === 0 && min > 2) return true;
+    if (maj === 0 && min === 2 && patch >= 1) return true;
+    return false;
+  })();
+  const aimHook = useAimedMarker(arFrame, {
+    coneRad: 0.087,           // ~5° — OTA AimConeRad in v200+
+    holdMs: 600,
+    maxRangeM: 30,
+    enabled: _likeReportSupported,
+  });
+  const [reportPickerOpen, setReportPickerOpen] = useState(false);
 
   // Phone-flat detection: arFrame.camera.forward is the camera's look
   // vector in ARKit world space. fy is the y-component (vertical, gravity
@@ -596,6 +622,9 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
                 lat: pos.coords.latitude,
                 lng: pos.coords.longitude,
                 alt: pos.coords.altitude ?? null,
+                // v199 §F.3 server-side gate uses accuracy ≤100m. Forward
+                // it so /vote receives a non-null accuracy field.
+                accuracy: pos.coords.accuracy ?? null,
               },
               lastCoordinateTime: pos.timestamp ?? Date.now(),
             } as any);
@@ -1202,6 +1231,10 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           (!lastCoord && trackPoints.length === 0)
           || arInitState === 'init'
           || arInitState === 'low-light'
+          // v199 §F.2 + V2.C10: PlantSheet hidden / disabled when aim
+          // hook is locked on an existing cairn (planting + reporting
+          // are different intents — mutual exclusion).
+          || aimHook.uiState === 'aim-locked'
         }
         reticleScale={reticleScale}
       />
@@ -1210,6 +1243,54 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           + flash when the user taps Aim & Plant — synced with PlantSheet's
           reticle squeeze. */}
       <AimShutter firing={shutterFiring} />
+
+      {/* v199 §F.2 + V2.C10: LikeReportSheet — mounts when aim hook
+          locks on a marker (camera held steady on cairn for 600ms,
+          within 30m). Replaces PlantSheet's bottom slot. Version-gated
+          on app.version >= 0.2.1 per V2.C8 so v0.2.0 binaries running
+          v203+ OTA bundles don't show this UI without the corresponding
+          Unity LikeBadge handler. */}
+      {_likeReportSupported && aimHook.uiState === 'aim-locked' && aimHook.lockedMarkerId && (() => {
+        const m = markers.find(mk => mk.id === aimHook.lockedMarkerId);
+        if (!m) return null;
+        return (
+          <LikeReportSheet
+            markerId={String(m.id)}
+            markerType={m.type ?? 'unknown'}
+            markerNote={m.note ?? ''}
+            distanceM={aimHook.candidateDistM}
+            userPos={lastCoord ? {
+              lat: lastCoord.lat,
+              lng: lastCoord.lng,
+              accuracy: lastCoord.accuracy ?? null,
+            } : null}
+            arInteractRangeM={30}
+            getAuthToken={async () => {
+              try {
+                const m = await import('../services/tokenStore');
+                return await m.getToken();
+              } catch {
+                return null;
+              }
+            }}
+            onDismiss={() => {
+              // No reset hook — useAimedMarker re-evaluates next frame
+              // based on camera position. User points away → state goes
+              // back to idle naturally.
+            }}
+          />
+        );
+      })()}
+
+      {/* v199 aim-pending hint pill — only on aim-pending (between idle
+          and aim-locked). Disappears the moment lock fires. */}
+      {_likeReportSupported && aimHook.uiState === 'aim-pending' && (
+        <View pointerEvents="none" style={[styles.phoneFlatPill, { top: 110 }]}>
+          <Text style={styles.phoneFlatPillText}>
+            Hold to lock target… {Math.round(aimHook.holdProgress * 100)}%
+          </Text>
+        </View>
+      )}
 
       {/* Degraded GPS toast */}
       {degradedToast && (
