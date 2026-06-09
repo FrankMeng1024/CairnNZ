@@ -112,7 +112,36 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         changes — guarantees the view moves even if the prop update
 //         path missed. Bbox padded ±10% (min 0.0005°) so the polyline
 //         has breathing room. OTA-only.
-export const OTA_VERSION = 199;
+//   200 — v200 route edit redesign: replace the 3-fixed-handle
+//         (trim-start/trim-end/midpoint) interaction with a node-tap
+//         model. Both entries (save-as-route from Activity, view-route
+//         from Routes) now land in view-only mode; user taps Edit to
+//         enter edit-mode. The right button toggles between Cancel
+//         (save-as-route draft) and Delete (existing route). In edit
+//         mode the route's snap-to-road junction nodes (degree>=3 in
+//         the corridor TrailGraph) appear as small grey circles, plus
+//         the two endpoints as colored handles. Tap a node → its 1km-
+//         reachable, corridor-validated candidates light up. Tap a
+//         candidate → commit the replacement (midpoint nodes call
+//         commitMidpointDrag; endpoints route through trimStart/Stop or
+//         the new restoreStart/restoreEnd actions for trim-restore).
+//         Pre-validation filters out candidates whose post-replacement
+//         segments leave the original 1km corridor — user only sees
+//         working candidates. Background tap deselects.
+//         Foundation: routeNodeAnchors helper (anchor extraction +
+//         endpoint-exclusion + degree filter), candidateNodes helper
+//         (Dijkstra + corridor pre-check + nearest-snap utility),
+//         EditableNodeLayer component (Mapbox PointAnnotation rendering
+//         with idle/selected/candidate state colors).
+//         restoreStart/restoreEnd are pure-prepend/append (no orchestrator
+//         re-routing) — they reuse originalPoints geometry so the
+//         operation is reversible to the GPS truth. Coverage invariant
+//         enforced. Persistence chain unchanged.
+//         Trim handle drag (long-press + drag) is replaced by tap-to-
+//         tap. The Phase 5 spec drag-with-magnet pass is deferred —
+//         tap-to-tap covers the common case smoothly without gesture
+//         conflict. OTA-only.
+export const OTA_VERSION = 200;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

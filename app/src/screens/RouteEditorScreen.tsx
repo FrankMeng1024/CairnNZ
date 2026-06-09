@@ -694,11 +694,14 @@ export function RouteEditorScreen() {
           setSelectedAnchorId(null);
           return;
         }
-        if (target.kind === 'trim-restore-start') {
-          // Restore — extend back. v1: not implemented in store yet;
-          // surface a friendly message and skip.
-          store.setLastError('Trim restore is coming soon — for now use Reset.');
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        if (target.kind === 'trim-restore-start' && target.originalPointIdx !== undefined) {
+          // v200: restore — extend back toward originalPoints[0].
+          const r = store.restoreStart(target.originalPointIdx);
+          if (!r.ok) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          } else {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
           setSelectedAnchorId(null);
           return;
         }
@@ -714,9 +717,13 @@ export function RouteEditorScreen() {
           setSelectedAnchorId(null);
           return;
         }
-        if (target.kind === 'trim-restore-end') {
-          store.setLastError('Trim restore is coming soon — for now use Reset.');
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        if (target.kind === 'trim-restore-end' && target.originalPointIdx !== undefined) {
+          const r = store.restoreEnd(target.originalPointIdx);
+          if (!r.ok) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          } else {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
           setSelectedAnchorId(null);
           return;
         }

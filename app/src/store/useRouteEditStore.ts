@@ -178,6 +178,17 @@ interface EditState {
   trimStart(newEndpointIdx: number): TrimResult;
   trimEnd(newEndpointIdx: number): TrimResult;
 
+  // v200: restore a previously-trimmed prefix or suffix from
+  // originalPoints. originalPointIdx must be a position in originalPoints
+  // strictly outside the current workingPoints slice — for restoreStart
+  // it must be < the position where workingPoints[0] lives in
+  // originalPoints; restoreEnd is symmetric. Result: workingPoints
+  // gets prepended/appended with the originalPoints[originalPointIdx..k]
+  // run, segments updated to mark that prefix/suffix as 'original'
+  // confident.
+  restoreStart(originalPointIdx: number): TrimResult;
+  restoreEnd(originalPointIdx: number): TrimResult;
+
   resetToOriginal(): void;
 
   // v32-fix (architectural Blocker B2 / Medium M4): public action so
@@ -1142,6 +1153,206 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       }
     }
     return result;
+  },
+
+  // v200: restore a trimmed-off prefix from originalPoints. The user
+  // tapped the start endpoint and chose a trim-restore-start anchor at
+  // originalPointIdx. We rebuild workingPoints by prepending
+  // originalPoints[originalPointIdx..currentStartIdxInOriginal-1] to
+  // the existing workingPoints. The segments array is updated so the
+  // newly prepended range is tagged 'original' / confident, and all
+  // existing segments shift their indices forward by the prepend length.
+  //
+  // Idempotent + invariant-preserving: same fences as trimStart.
+  restoreStart(originalPointIdx) {
+    const state = get();
+    if (state.isSaving) {
+      set({ lastError: 'Save in progress — please wait.' });
+      return { ok: false, newPoints: state.workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
+    }
+    if (state.pendingDrag || state.pendingStraightConfirm) {
+      logMidpointDragCompleted({ distanceFromOriginalM: 0, withinCorridor: false });
+      set(s => ({ editOpSeq: s.editOpSeq + 1, pendingDrag: null, pendingStraightConfirm: null }));
+    }
+    const originalPoints = state.originalPoints;
+    const workingPoints = state.workingPoints;
+    if (workingPoints.length < 2 || originalPoints.length < 2) {
+      set({ lastError: 'Cannot restore — route geometry unavailable.' });
+      return { ok: false, newPoints: workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
+    }
+    // Locate where the current first workingPoint lives in originalPoints.
+    let currentStartInOriginal = -1;
+    const TOL = 1e-6;
+    for (let i = 0; i < originalPoints.length; i++) {
+      if (
+        Math.abs(originalPoints[i].lng - workingPoints[0].lng) < TOL &&
+        Math.abs(originalPoints[i].lat - workingPoints[0].lat) < TOL
+      ) {
+        currentStartInOriginal = i;
+        break;
+      }
+    }
+    if (currentStartInOriginal < 0) {
+      set({ lastError: 'Cannot restore — route was edited beyond pure trim.' });
+      return { ok: false, newPoints: workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
+    }
+    if (originalPointIdx < 0 || originalPointIdx >= currentStartInOriginal) {
+      set({ lastError: 'Restore target must be outside the current route.' });
+      return { ok: false, newPoints: workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
+    }
+    const prepend = originalPoints.slice(originalPointIdx, currentStartInOriginal);
+    if (prepend.length === 0) {
+      return { ok: true, newPoints: workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
+    }
+    const newPoints = [...prepend, ...workingPoints];
+    const shift = prepend.length;
+    // New segments: prepend an 'original' segment for the restored prefix,
+    // then shift every existing segment's start/end by `shift`.
+    const newSegments: EditSegment[] = [
+      {
+        startIdx: 0,
+        endIdx: shift - 1,
+        source: 'original',
+        isEdited: false,
+        confidence: 'confident',
+      },
+      ...state.segments.map(s => ({
+        ...s,
+        startIdx: s.startIdx + shift,
+        endIdx: s.endIdx + shift,
+      })),
+    ];
+    if (!segmentsCoverInvariant(newSegments, newPoints.length)) {
+      set(s => ({
+        editOpSeq: s.editOpSeq + 1,
+        lastError: 'Restore produced inconsistent segments — please retry.',
+      }));
+      return { ok: false, newPoints, newSegments, trimmedDistanceM: 0 };
+    }
+    set(s => ({
+      editOpSeq: s.editOpSeq + 1,
+      workingPoints: newPoints,
+      segments: newSegments,
+      pendingDrag: null,
+      pendingStraightConfirm: null,
+      editCount: s.editCount + 1,
+      lastError: null,
+    }));
+    // Persist (best-effort) — same chain pattern as trim.
+    {
+      const live = get();
+      if (
+        state.routeId &&
+        state.sessionId &&
+        live.sessionId === state.sessionId &&
+        live.routeId === state.routeId
+      ) {
+        chainSessionWrite(() =>
+          saveSession({
+            sessionId: state.sessionId!,
+            routeId: state.routeId!,
+            enteredAt: state.enteredAtTs ?? Date.now(),
+            workingPoints: newPoints,
+            segments: newSegments,
+            flagsSnapshot: state.flagsSnapshot ?? { editCorridorRadiusMeters: getFlagsSync().editCorridorRadiusMeters, midpointDragEnabled: getFlagsSync().midpointDragEnabled },
+          }),
+        ).catch(() => {});
+      }
+    }
+    return { ok: true, newPoints, newSegments, trimmedDistanceM: 0 };
+  },
+
+  // v200: symmetric to restoreStart — append originalPoints[lastIdx+1..k]
+  // (where lastIdx = position of current last workingPoint in
+  // originalPoints) to the end of workingPoints.
+  restoreEnd(originalPointIdx) {
+    const state = get();
+    if (state.isSaving) {
+      set({ lastError: 'Save in progress — please wait.' });
+      return { ok: false, newPoints: state.workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
+    }
+    if (state.pendingDrag || state.pendingStraightConfirm) {
+      logMidpointDragCompleted({ distanceFromOriginalM: 0, withinCorridor: false });
+      set(s => ({ editOpSeq: s.editOpSeq + 1, pendingDrag: null, pendingStraightConfirm: null }));
+    }
+    const originalPoints = state.originalPoints;
+    const workingPoints = state.workingPoints;
+    if (workingPoints.length < 2 || originalPoints.length < 2) {
+      set({ lastError: 'Cannot restore — route geometry unavailable.' });
+      return { ok: false, newPoints: workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
+    }
+    let currentLastInOriginal = -1;
+    const TOL = 1e-6;
+    for (let i = originalPoints.length - 1; i >= 0; i--) {
+      if (
+        Math.abs(originalPoints[i].lng - workingPoints[workingPoints.length - 1].lng) < TOL &&
+        Math.abs(originalPoints[i].lat - workingPoints[workingPoints.length - 1].lat) < TOL
+      ) {
+        currentLastInOriginal = i;
+        break;
+      }
+    }
+    if (currentLastInOriginal < 0) {
+      set({ lastError: 'Cannot restore — route was edited beyond pure trim.' });
+      return { ok: false, newPoints: workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
+    }
+    if (originalPointIdx <= currentLastInOriginal || originalPointIdx >= originalPoints.length) {
+      set({ lastError: 'Restore target must be outside the current route.' });
+      return { ok: false, newPoints: workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
+    }
+    const append = originalPoints.slice(currentLastInOriginal + 1, originalPointIdx + 1);
+    if (append.length === 0) {
+      return { ok: true, newPoints: workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
+    }
+    const newPoints = [...workingPoints, ...append];
+    const startIdxOfAppend = workingPoints.length;
+    const newSegments: EditSegment[] = [
+      ...state.segments,
+      {
+        startIdx: startIdxOfAppend,
+        endIdx: newPoints.length - 1,
+        source: 'original',
+        isEdited: false,
+        confidence: 'confident',
+      },
+    ];
+    if (!segmentsCoverInvariant(newSegments, newPoints.length)) {
+      set(s => ({
+        editOpSeq: s.editOpSeq + 1,
+        lastError: 'Restore produced inconsistent segments — please retry.',
+      }));
+      return { ok: false, newPoints, newSegments, trimmedDistanceM: 0 };
+    }
+    set(s => ({
+      editOpSeq: s.editOpSeq + 1,
+      workingPoints: newPoints,
+      segments: newSegments,
+      pendingDrag: null,
+      pendingStraightConfirm: null,
+      editCount: s.editCount + 1,
+      lastError: null,
+    }));
+    {
+      const live = get();
+      if (
+        state.routeId &&
+        state.sessionId &&
+        live.sessionId === state.sessionId &&
+        live.routeId === state.routeId
+      ) {
+        chainSessionWrite(() =>
+          saveSession({
+            sessionId: state.sessionId!,
+            routeId: state.routeId!,
+            enteredAt: state.enteredAtTs ?? Date.now(),
+            workingPoints: newPoints,
+            segments: newSegments,
+            flagsSnapshot: state.flagsSnapshot ?? { editCorridorRadiusMeters: getFlagsSync().editCorridorRadiusMeters, midpointDragEnabled: getFlagsSync().midpointDragEnabled },
+          }),
+        ).catch(() => {});
+      }
+    }
+    return { ok: true, newPoints, newSegments, trimmedDistanceM: 0 };
   },
 
   resetToOriginal() {
