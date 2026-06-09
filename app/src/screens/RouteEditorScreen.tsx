@@ -601,7 +601,16 @@ export function RouteEditorScreen() {
             // v200 fix B1: once Save resolves OK, the route is committed —
             // clear the cleanup-on-cancel marker so accidental future
             // cancellations don't delete the user's saved work.
+            // v204 fix C-NEW-1: ALSO clear the ref synchronously here.
+            // setFreshlyCreatedRouteId(null) only schedules a state
+            // update; the ref-sync useEffect commits AFTER React's
+            // commit phase, but nav.goBack() below runs synchronously
+            // and may unmount the screen before that effect runs. The
+            // unmount cleanup reads the ref — if still stale, it would
+            // delete the just-saved route. Imperative ref clear closes
+            // the race.
             setFreshlyCreatedRouteId(null);
+            freshlyCreatedRouteIdRef.current = null;
             if (result.sessionReplaced) {
               // v30-fix (Medium — Scenario 23): the save persisted but a
               // new session is now active — give the user explicit
@@ -650,7 +659,10 @@ export function RouteEditorScreen() {
         // render against.
         if (freshlyCreatedRouteId) {
           deleteRoute(freshlyCreatedRouteId).catch(() => {});
+          // v204 fix C-NEW-1: imperative ref clear before nav.goBack so
+          // unmount cleanup doesn't fire a second deleteRoute.
           setFreshlyCreatedRouteId(null);
+          freshlyCreatedRouteIdRef.current = null;
           nav.goBack();
         }
         // For non-save-as-route cancel: just return to view-mode (no nav).
@@ -1852,9 +1864,12 @@ export function RouteEditorScreen() {
                           onPress: () => {
                             // Cleanup: if we created a backend route as
                             // part of the Edit flow, delete it now.
+                            // v204 fix C-NEW-1: clear ref synchronously
+                            // so unmount cleanup doesn't double-delete.
                             if (isFreshlyCreated && freshlyCreatedRouteId) {
                               deleteRoute(freshlyCreatedRouteId).catch(() => {});
                               setFreshlyCreatedRouteId(null);
+                              freshlyCreatedRouteIdRef.current = null;
                             }
                             nav.goBack();
                           },
