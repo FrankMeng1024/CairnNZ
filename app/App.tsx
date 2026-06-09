@@ -4,6 +4,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { useFonts } from 'expo-font';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { EditResumePrompt } from './EditResumePrompt';
+import { MigratorRetryPrompt } from './MigratorRetryPrompt';
+import { getFlags } from './src/config/featureFlags';
 import { useAppStore } from './src/store/useAppStore';
 import { useSettingsStore } from './src/store/useSettingsStore';
 import { useTrackingStore } from './src/store/useTrackingStore';
@@ -126,6 +129,11 @@ function AppRoot() {
   const hydrated = useAppStore(s => s.hydrated);
   const hydrateSettings = useSettingsStore(s => s.hydrate);
   const lastAppState = useRef<string>(AppState.currentState);
+  // Post-merge audit (ARCH-020): track when feature flags are loaded from
+  // AsyncStorage so that EditResumePrompt / MigratorRetryPrompt — which
+  // call getFlagsSync() — see overrides on first paint, not just after
+  // the eventual async resolution.
+  const [flagsPrimed, setFlagsPrimed] = useState(false);
 
   // PRD3 E-012: load Inter font family. fontsLoaded === true once all weights
   // are ready. If loading fails (no network on first run, etc), fontError is
@@ -183,9 +191,12 @@ function AppRoot() {
       // eslint-disable-next-line no-console
       console.warn('[hydrateSettings failed]', err);
     }
-    try { hydrate(); } catch (err) {
-      // eslint-disable-next-line no-console
+    try { hydrate().catch((err: unknown) => {
+      // v9-audit (BUG-V8-007): hydrate() is async; synchronous try/catch
+      // doesn't catch promise rejection. Convert to .catch.
       console.warn('[hydrate failed]', err);
+    }); } catch (err) {
+      console.warn('[hydrate failed sync]', err);
     }
 
     // Configure debug logger device info + start network monitor
@@ -247,6 +258,134 @@ function AppRoot() {
       console.warn('[offlineQueue init failed]', err);
     }
 
+    // Sprint 66 Fix-15 (C-NEW-4): prime feature flags from AsyncStorage at boot.
+    // Without this, dev/QA AsyncStorage overrides (set via dev menu) silently
+    // revert on each app restart because getFlagsSync() falls back to DEFAULT_FLAGS
+    // until the first async getFlags() call. Best-effort: ignore failures —
+    // production users have all defaults so they're unaffected by miss.
+    //
+    // Post-merge audit (ARCH-020): also gate the dependent root mounts on
+    // flag readiness — see flagsPrimed state below. The fire-and-forget
+    // catch here remains for safety; the await sequence runs in parallel.
+    getFlags()
+      .catch(() => {})
+      .finally(() => setFlagsPrimed(true));
+
+    // v5-audit (ARCH-001) + v8-audit (ARCH-V7-002): drain pending
+    // route-cleanup IDs left over from a crashed deleteRoute cascade.
+    // v8 switched from a single shared array key (race-prone) to
+    // per-id keys (race-free): each pending route has its own
+    // AsyncStorage entry @cairn:pending_route_cleanup:v2:{id}.
+    // Concurrent deleteRoute writes a distinct key — no
+    // read-modify-write conflict possible.
+    //
+    // v6-audit (FUNC-001): also wire reconcileOrphans so orphaned extras
+    // for routes deleted on other devices (no pending mark) are pruned.
+    (async () => {
+      try {
+        const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+        const PENDING_PREFIX_V2 = '@cairn:pending_route_cleanup:v2:';
+        const PENDING_KEY_V1 = '@cairn:pending_route_cleanup:v1';
+        const allKeys = await AsyncStorage.getAllKeys();
+        // v8: per-id keys
+        const pendingV2Keys = allKeys.filter(k => k.startsWith(PENDING_PREFIX_V2));
+        const pendingIdsV2 = pendingV2Keys.map(k => k.slice(PENDING_PREFIX_V2.length));
+        // Legacy v1 list — drain once on first boot after upgrade
+        let pendingIdsV1: string[] = [];
+        try {
+          const v1Raw = await AsyncStorage.getItem(PENDING_KEY_V1);
+          if (v1Raw) {
+            const arr = JSON.parse(v1Raw);
+            if (Array.isArray(arr)) pendingIdsV1 = arr;
+          }
+        } catch {
+          // ignore
+        }
+        const pendingIds = Array.from(new Set([...pendingIdsV2, ...pendingIdsV1]));
+        if (pendingIds.length > 0) {
+          const { deleteExtras } = await import('./src/services/LocalRouteExtras');
+          const { loadSession, clearSession } = await import('./src/services/EditSessionPersistence');
+          // v9-audit (BUG-V8-002): track per-id success so the v1
+          // legacy list is cleared ONLY for ids that actually
+          // succeeded; failed v1 ids are migrated to v2 per-id keys
+          // for next-boot retry instead of being silently lost.
+          // v9-audit (BUG-V8-002 perf): hoist loadSession outside the
+          // loop — it always reads the same single key.
+          const session = await loadSession();
+          const succeededIds = new Set<string>();
+          for (const id of pendingIds) {
+            try {
+              await deleteExtras(id);
+              if (session && session.routeId === id) await clearSession();
+              await AsyncStorage.removeItem(PENDING_PREFIX_V2 + id);
+              succeededIds.add(id);
+            } catch {
+              // Failure path — leave the v2 per-id key for retry.
+              // For v1-only ids, persist a v2 key so retry has a slot.
+              if (pendingIdsV1.includes(id) && !pendingIdsV2.includes(id)) {
+                try {
+                  await AsyncStorage.setItem(PENDING_PREFIX_V2 + id, String(Date.now()));
+                } catch {
+                  // best-effort
+                }
+              }
+            }
+          }
+          // Drain the legacy v1 list, but only if EVERY v1 id succeeded.
+          // Otherwise we'd permanently lose v1-only ids that failed.
+          const allV1Succeeded = pendingIdsV1.every(id => succeededIds.has(id));
+          if (allV1Succeeded) {
+            try {
+              await AsyncStorage.removeItem(PENDING_KEY_V1);
+            } catch {
+              // ignore
+            }
+          }
+          crashLogger.breadcrumb(`route:pending-drain count=${pendingIds.length} succeeded=${succeededIds.size}`);
+        }
+        // v6-audit (FUNC-001) + v8-audit (V7-BUG-006): wire reconcileOrphans.
+        // Wait for routesLoadCompleted (not just routes.length>0) so a
+        // partial fetch / paginated response can't trigger orphan
+        // deletion of routes the backend still owns.
+        const { reconcileOrphans } = await import('./src/services/LocalRouteExtras');
+        const { useRouteStore } = await import('./src/store/useRouteStore');
+        const deadline = Date.now() + 5000;
+        while (!useRouteStore.getState().routesLoadCompleted && Date.now() < deadline) {
+          await new Promise(r => setTimeout(r, 200));
+        }
+        if (useRouteStore.getState().routesLoadCompleted) {
+          const activeRouteIds = new Set(useRouteStore.getState().routes.map(r => r.id));
+          // v10-audit (BUG-BC-1): sanity check — if backend returned
+          // 0 routes BUT local AsyncStorage has any extras keys, this
+          // is suspicious (server bug / partial deploy / auth state).
+          // Skip reconcile rather than wipe everything.
+          if (activeRouteIds.size === 0) {
+            try {
+              const allKeys = await AsyncStorage.getAllKeys();
+              const hasExtras = allKeys.some(k => k.startsWith('@cairn:route_extras:v1:'));
+              if (hasExtras) {
+                crashLogger.breadcrumb('route:reconcile-skipped suspicious-empty-load');
+              } else {
+                // No extras and no routes — nothing to reconcile.
+                crashLogger.breadcrumb('route:reconcile-skipped no-extras');
+              }
+            } catch {
+              crashLogger.breadcrumb('route:reconcile-skipped sanity-check-failed');
+            }
+          } else {
+            const removed = await reconcileOrphans(activeRouteIds, { force: true });
+            if (removed > 0) {
+              crashLogger.breadcrumb(`route:reconcile-orphans removed=${removed}`);
+            }
+          }
+        } else {
+          crashLogger.breadcrumb('route:reconcile-skipped routes-not-loaded');
+        }
+      } catch (err) {
+        crashLogger.breadcrumb(`route:pending-drain-error ${String(err).slice(0, 80)}`);
+      }
+    })();
+
     // App state change listener for debug logger
     const sub = AppState.addEventListener('change', (next) => {
       const prev = lastAppState.current;
@@ -295,7 +434,13 @@ function AppRoot() {
     (RNText as any)._cairnFontPatched = true;
   }
 
-  return <RootNavigator />;
+  return (
+    <>
+      <RootNavigator />
+      {flagsPrimed && <EditResumePrompt />}
+      {flagsPrimed && <MigratorRetryPrompt />}
+    </>
+  );
 }
 
 export default function App() {

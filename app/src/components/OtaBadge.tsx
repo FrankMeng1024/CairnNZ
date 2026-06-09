@@ -54,7 +54,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         reused as-is. Drops __DEV__ gate so panel is reachable in
 //         production builds (temporary tuning tool — will be hidden again
 //         after visual issues resolved).
-export const OTA_VERSION = 194;
+//   195 — Sprint 66: dual-source route edit ships. Existing routes get an
+//         "Edit on map" surface with trim handles + 1km-corridor midpoint
+//         drag, dual-line UI showing original GPS vs working line, save
+//         preserves original trace. Routing decisions auto-pick DOC trails
+//         (NZ official) for mountain routes, Mapbox roads for urban,
+//         straight-line fallback only with explicit user confirmation.
+//         App-kill / soft-unmount recovery via EditResumePrompt. OTA-only
+//         (no native deps added — kdbush + expo-file-system pre-existing).
+export const OTA_VERSION = 195;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

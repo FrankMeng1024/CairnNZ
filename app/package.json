@@ -17,7 +17,7 @@
       "@testing-library/jest-native/extend-expect"
     ],
     "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?expo(nent)?|@expo(nent)?/.*|expo-location|expo-speech|react-native|@react-native(/.*)?|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg))"
+      "node_modules/(?!((jest-)?expo(nent)?|@expo(nent)?/.*|expo-location|expo-speech|react-native|@react-native(/.*)?|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|kdbush))"
     ],
     "moduleNameMapper": {
       "^expo-location$": "<rootDir>/__mocks__/expo-location.ts",

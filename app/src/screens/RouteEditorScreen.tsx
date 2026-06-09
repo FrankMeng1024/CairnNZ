@@ -9,15 +9,16 @@
  * - Clear / Undo actions
  * - Calculates total distance from waypoints
  */
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, FlatList, KeyboardAvoidingView,
+  View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, FlatList, KeyboardAvoidingView, ActivityIndicator, BackHandler,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useRouteStore } from '../store/useRouteStore';
+import { useRouteEditStore } from '../store/useRouteEditStore';
 import { useSessionStore, loadTrackPoints } from '../store/useSessionStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { snapToRoadAndTrim } from '../services/routeMatcher';
@@ -26,6 +27,12 @@ import { getCurrentRegion } from '../config/regions';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
+import { DualLineLayer } from '../components/map/DualLineLayer';
+import { DraggableHandle } from '../components/map/DraggableHandle';
+import { EditCoachmark, ApproximateWarningBar } from '../components/map/EditCoachmark';
+import { getFlagsSync } from '../config/featureFlags';
+import { buildEditContext } from '../services/routing/editContext';
+import type { LngLat as RoutingLngLat } from '../services/routing/corridor/PolylineSampler';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
 
@@ -76,6 +83,11 @@ export function RouteEditorScreen() {
   const session = useSessionStore(s => fromSessionId ? s.sessions.find(x => x.id === fromSessionId) : null);
   const [name, setName] = useState('');
   const [waypoints, setWaypoints] = useState<WaypointDraft[]>([]);
+  // Sprint 66 Card 1 fix: store the session's loaded trackPoints (after
+  // snap-to-road) so we can render the actual polyline curve, not a sampled
+  // approximation. For new-route-from-session flow only; existingRoute uses
+  // existingRoute.points directly.
+  const [sessionTrackPoints, setSessionTrackPoints] = useState<Array<{ lat: number; lng: number }>>([]);
   // v123 fix #8: when entering with an existing routeId we open in
   // VIEW mode by default — a read-only display of the cloned trace
   // with Edit + Delete CTAs. User must tap Edit to enter the editing
@@ -94,6 +106,411 @@ export function RouteEditorScreen() {
   // cancel a stale request before its results overwrite a newer one
   // (race condition: "shang" results landing after "shanghai" results).
   const searchAbortRef = useRef<AbortController | null>(null);
+
+  // ── Sprint 66 dual-source edit mode wiring ─────────────────────────────
+  // When the editModeEnabled feature flag is on AND we're editing an
+  // existing route AND the user taps "Edit on map", we enter the
+  // dual-source edit surface: DualLineLayer renders original (faded) +
+  // working (colored), DraggableHandles allow trim + midpoint drag, and
+  // useRouteEditStore manages the session.
+  const editStore = useRouteEditStore();
+  const [dualEditLoading, setDualEditLoading] = useState(false);
+  const [dualEditError, setDualEditError] = useState<string | null>(null);
+  const dualEditActive = editStore.isOpen && editStore.routeId === routeId;
+  // Track which midpoint anchor index is being shown (defaults to middle).
+  const [midpointAnchorIdx, setMidpointAnchorIdx] = useState<number>(0);
+  // Recompute anchor idx whenever workingPoints length changes.
+  useEffect(() => {
+    if (!dualEditActive) return;
+    const n = editStore.workingPoints.length;
+    if (n < 3) {
+      setMidpointAnchorIdx(0);
+      return;
+    }
+    setMidpointAnchorIdx(Math.floor(n / 2));
+  }, [dualEditActive, editStore.workingPoints.length]);
+
+  // v31-architectural-fix (Critical C3) + v33-fix (Critical C-NEW-1):
+  // on unmount during dualEdit, call detachUI (NOT cancelEdit). detachUI
+  // flips isOpen=false so EditResumePrompt can offer Resume/Discard on
+  // next AppState 'active', WITHOUT clearing the session record. The
+  // user's edits stay safe in AsyncStorage; only the in-memory UI hook
+  // is released.
+  //
+  // v22-25's design preserved sessions across unmount but relied on
+  // app-kill to clear in-memory state. v32 review C-NEW-1 found that
+  // soft-unmounts (tab switch, navigation.replace, deep link, OOM
+  // without kill) leave isOpen=true forever, suppressing
+  // EditResumePrompt's `if (isOpen) return` guard. detachUI fixes that
+  // gap — explicit user discard still goes through Cancel/back +
+  // Discard alert + cancelEdit.
+  const dualEditActiveRef = useRef(dualEditActive);
+  useEffect(() => {
+    dualEditActiveRef.current = dualEditActive;
+  }, [dualEditActive]);
+  useEffect(() => {
+    return () => {
+      if (dualEditActiveRef.current) {
+        try {
+          useRouteEditStore.getState().detachUI();
+        } catch {
+          // best-effort
+        }
+      }
+    };
+  }, []);
+
+  // v30-fix (functional Blocker — Scenario 27): hardware back on Android
+  // bypasses the in-app Cancel/Discard confirmation. Register a
+  // BackHandler while dualEditActive that fires the same Discard alert
+  // as the top-bar Cancel button. Returning true prevents the default
+  // back navigation; the user must explicitly discard.
+  // v31-fix (Medium Scenario 8): guard with discardAlertActiveRef so
+  // a second back press while the alert is open doesn't stack a
+  // duplicate Alert.
+  const discardAlertActiveRef = useRef(false);
+  useEffect(() => {
+    if (!dualEditActive) return;
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (discardAlertActiveRef.current) {
+        // Alert already showing — swallow the back press without
+        // stacking a duplicate dialog.
+        return true;
+      }
+      discardAlertActiveRef.current = true;
+      Alert.alert(
+        'Discard edits?',
+        'Your changes will be lost.',
+        [
+          {
+            text: 'Keep editing',
+            style: 'cancel',
+            onPress: () => {
+              discardAlertActiveRef.current = false;
+            },
+          },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => {
+              discardAlertActiveRef.current = false;
+              useRouteEditStore.getState().cancelEdit();
+            },
+          },
+        ],
+        {
+          cancelable: false,
+          onDismiss: () => {
+            discardAlertActiveRef.current = false;
+          },
+        },
+      );
+      return true; // swallow the back press
+    });
+    return () => {
+      sub.remove();
+      // Reset on dual-edit exit so a future re-entry starts clean.
+      discardAlertActiveRef.current = false;
+    };
+  }, [dualEditActive]);
+
+  // v31-fix (Medium Scenario 17): memoize the dual-edit camera fit so
+  // the camera doesn't re-animate on every workingPoints mutation
+  // (midpoint commit, trim, reset). Once the user enters dual-edit
+  // mode the camera fits to the route bbox ONCE; thereafter the user
+  // pans freely. We re-fit only when the routeId changes (entering
+  // a different route) or when dual-edit is re-entered.
+  // v32-fix (architectural Critical C2): correct the bbox math to
+  // account for cosine(lat) longitude scaling. Raw degree max(lng,lat)
+  // span at 45°S (typical NZ) treats 0.01° lng (~0.79km) the same as
+  // 0.01° lat (~1.11km), causing tall north-south routes to be
+  // over-zoomed. Convert both spans to meters before picking zoom so
+  // the heuristic reflects actual geographic extent.
+  const dualEditCameraFit = useMemo(() => {
+    if (!dualEditActive) return null;
+    const wp = editStore.workingPoints;
+    if (wp.length < 2) return null;
+    let minLng = Infinity, maxLng = -Infinity;
+    let minLat = Infinity, maxLat = -Infinity;
+    for (const p of wp) {
+      if (p.lng < minLng) minLng = p.lng;
+      if (p.lng > maxLng) maxLng = p.lng;
+      if (p.lat < minLat) minLat = p.lat;
+      if (p.lat > maxLat) maxLat = p.lat;
+    }
+    const center: [number, number] = [
+      (minLng + maxLng) / 2,
+      (minLat + maxLat) / 2,
+    ];
+    const midLat = (minLat + maxLat) / 2;
+    const lngSpanM =
+      Math.max(0.0001, maxLng - minLng) *
+      111000 *
+      Math.max(0.01, Math.cos((midLat * Math.PI) / 180));
+    const latSpanM = Math.max(0.0001, maxLat - minLat) * 111000;
+    // Use the larger of the two real-world spans. Add a 1.4x padding
+    // factor so handles + UI chrome are not flush against the viewport
+    // edge.
+    const spanM = Math.max(lngSpanM, latSpanM) * 1.4;
+    // Zoom heuristic mapped to meters of horizontal extent visible at
+    // typical phone viewport (~360px wide, ~720px tall).
+    let zoom = 14;
+    if (spanM > 50000) zoom = 9;        // > 50km
+    else if (spanM > 10000) zoom = 11;  // > 10km
+    else if (spanM > 5000) zoom = 12;   // > 5km
+    else if (spanM > 1500) zoom = 13;   // > 1.5km
+    else if (spanM > 700) zoom = 14;    // > 700m
+    else if (spanM > 300) zoom = 15;    // > 300m
+    else zoom = 16;                      // <= 300m
+    return { center, zoom };
+    // Deps: only recompute when entering/leaving dual-edit OR routeId
+    // changes. workingPoints is intentionally NOT a dep — see comment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dualEditActive, routeId]);
+
+  // React to pendingStraightConfirm via Alert. The orchestrator returns
+  // a straight-line fallback when neither DOC nor Mapbox can route — the
+  // user must explicitly accept (no creative routing without consent).
+  useEffect(() => {
+    if (!dualEditActive) return;
+    if (!editStore.pendingStraightConfirm) return;
+    const detail = editStore.pendingStraightConfirm.detail;
+    Alert.alert(
+      'No trail data here',
+      detail || 'Save anyway?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => useRouteEditStore.getState().dismissStraightConfirm(),
+        },
+        {
+          text: 'Save anyway',
+          onPress: () => useRouteEditStore.getState().confirmStraight(),
+        },
+      ],
+      { cancelable: false },
+    );
+  }, [dualEditActive, editStore.pendingStraightConfirm?.fromPointIdx]);
+
+  const enterDualEdit = useCallback(async () => {
+    if (!routeId || !existingRoute) return;
+    if (!getFlagsSync().editModeEnabled) {
+      setDualEditError('Edit mode is currently disabled.');
+      return;
+    }
+    // v30-fix (functional Blocker — Scenario 25) + v31-fix (Medium
+    // Scenario 16): if existingRoute.points hasn't hydrated yet, kick
+    // off hydration AND wait inline (with a 5s timeout) so the user
+    // sees the spinner on the Edit button instead of a confusing
+    // bounce-back-with-error UX. Without inline await, beginEdit would
+    // get routePoints:[] and migration would fail on empty input.
+    // v31-fix (Critical X1): set dualEditLoading=true BEFORE the await
+    // so the Edit button shows the spinner during hydration.
+    if (dualEditLoading) return;
+    if (!existingRoute.points || existingRoute.points.length < 2) {
+      setDualEditLoading(true);
+      setDualEditError(null);
+      try {
+        await loadRouteDetail(routeId);
+        // Wait up to 5s for the store to reflect the hydrated points.
+        const deadline = Date.now() + 5000;
+        while (Date.now() < deadline) {
+          const live = useRouteStore.getState().routes.find(r => r.id === routeId);
+          if (live && live.points && live.points.length >= 2) break;
+          await new Promise(r => setTimeout(r, 100));
+        }
+        const live = useRouteStore.getState().routes.find(r => r.id === routeId);
+        if (!live || !live.points || live.points.length < 2) {
+          setDualEditError(
+            'Could not load route data — please check your connection and try again.',
+          );
+          return;
+        }
+        // Hydration complete — fall through to enter dual-edit using
+        // the freshly-hydrated points (read directly from useRouteStore
+        // since the closure's existingRoute reference is stale).
+        // This is a deliberate continuation: we don't bail, we just
+        // continue with the re-read points below.
+      } catch (e: any) {
+        setDualEditError(e?.message || 'Failed to load route data.');
+        return;
+      } finally {
+        setDualEditLoading(false);
+      }
+    }
+    // Re-read existingRoute from the store in case it was hydrated
+    // above; the closure's reference is stale after the await.
+    const liveRoute = useRouteStore.getState().routes.find(r => r.id === routeId);
+    if (!liveRoute || !liveRoute.points || liveRoute.points.length < 2) {
+      setDualEditError('Route data unavailable.');
+      return;
+    }
+    setDualEditLoading(true);
+    setDualEditError(null);
+    try {
+      const legacyPoints: RoutingLngLat[] = liveRoute.points.map(p => ({
+        lng: p.lng,
+        lat: p.lat,
+      }));
+      // v31-fix (functional Blocker regression): delegate migration to
+      // beginEdit. beginEdit owns the pendingBeginArgs / migratorRetry
+      // capture that drives MigratorRetryPrompt's Retry/Skip/Report UI.
+      // We call it twice in the legacy-route path:
+      //   1. First call (no walkedIndex): triggers migration. If it
+      //      fails with retry:true, beginEdit writes migratorRetry +
+      //      pendingBeginArgs and the prompt fires. If it succeeds,
+      //      a session is open BUT walkedIndex is null (no corridor
+      //      enforcement yet).
+      //   2. Build editContext now that extras exists, then inject
+      //      walkedIndex/trailGraph via setState.
+      // For non-legacy routes (extras already exists), we build context
+      // first then call beginEdit once.
+      const { loadExtras: loadExtrasFn } = await import(
+        '../services/LocalRouteExtras'
+      );
+      const preExtras = await loadExtrasFn(routeId);
+      let ctx;
+      if (preExtras && preExtras.originalPoints && preExtras.originalPoints.length >= 2) {
+        // Non-legacy path: build context first.
+        ctx = await buildEditContext(routeId);
+        if (!ctx) {
+          setDualEditError(
+            'Cannot edit this route — original GPS data is missing. Try recording it again.',
+          );
+          return;
+        }
+        await useRouteEditStore.getState().beginEdit({
+          routeId,
+          routePoints: legacyPoints,
+          // v33-fix (Critical C-NEW-3): pass route.updatedAt so the
+          // store can compare freshness against extras.updatedAt and
+          // avoid silently discarding a fresher dual-edit save.
+          routeUpdatedAt: liveRoute.updatedAt,
+          trailGraph: ctx.trailGraph,
+          walkedIndex: ctx.walkedIndex,
+        });
+      } else {
+        // Legacy path: beginEdit migrates first (and writes pendingBeginArgs
+        // on retry-failure for the MigratorRetryPrompt UX).
+        await useRouteEditStore.getState().beginEdit({
+          routeId,
+          routePoints: legacyPoints,
+          routeUpdatedAt: liveRoute.updatedAt,
+          trailGraph: null,
+          walkedIndex: null,
+        });
+        const postBegin = useRouteEditStore.getState();
+        if (!postBegin.isOpen) {
+          // Migration failed. If retry:true, MigratorRetryPrompt will
+          // show the Retry/Skip/Report alert. Otherwise we surface the
+          // error here.
+          if (!postBegin.migratorRetry) {
+            setDualEditError(postBegin.lastError || 'Could not start edit.');
+          }
+          return;
+        }
+        // Migration succeeded — extras now exists. Build context and
+        // inject walkedIndex/trailGraph so corridor enforcement is live.
+        ctx = await buildEditContext(routeId);
+        if (ctx) {
+          useRouteEditStore.setState({
+            walkedIndex: ctx.walkedIndex,
+            trailGraph: ctx.trailGraph,
+          });
+        }
+      }
+      // beginEdit may have set lastError if migration failed or
+      // editModeEnabled flipped off — surface that to the user.
+      const post = useRouteEditStore.getState();
+      if (!post.isOpen && !post.migratorRetry) {
+        setDualEditError(post.lastError || 'Could not start edit.');
+      }
+    } catch (e: any) {
+      setDualEditError(e?.message || 'Failed to start edit.');
+    } finally {
+      setDualEditLoading(false);
+    }
+  }, [routeId, existingRoute, dualEditLoading, loadRouteDetail]);
+
+  const exitDualEdit = useCallback(
+    (mode: 'save' | 'cancel') => {
+      if (!dualEditActive) return;
+      if (mode === 'save') {
+        // v30-fix (Medium M2 — fragile coupling): capture workingPoints
+        // BEFORE saveAndExit teardown so we don't depend on the store
+        // implementation detail that workingPoints isn't cleared in the
+        // success branch.
+        const pointsForRouteStore = useRouteEditStore
+          .getState()
+          .workingPoints.map(p => ({ lat: p.lat, lng: p.lng }));
+        useRouteEditStore
+          .getState()
+          .saveAndExit()
+          .then(result => {
+            if (!result.ok) {
+              setDualEditError(result.error || 'Save failed.');
+              return;
+            }
+            if (result.sessionReplaced) {
+              // v30-fix (Medium — Scenario 23): the save persisted but a
+              // new session is now active — give the user explicit
+              // feedback so they don't think nothing happened.
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              setDualEditError('Saved — a new edit session is now active.');
+              return;
+            }
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            // Successful save — also refresh useRouteStore so the route
+            // list shows the latest geometry.
+            // v31-fix (Critical Scenario 6): updateRoute may be sync (void)
+            // or async. If it's async and rejects, we MUST hold navigation
+            // until the user has acknowledged the error — otherwise
+            // nav.goBack unmounts the screen before the error renders.
+            const updateResult = updateRoute(routeId!, { points: pointsForRouteStore });
+            if (updateResult && typeof (updateResult as any).then === 'function') {
+              (updateResult as Promise<any>)
+                .then(() => {
+                  nav.goBack();
+                })
+                .catch((e: any) => {
+                  // Hold navigation; surface error via Alert so it can't
+                  // be missed. User taps OK, then we navigate.
+                  Alert.alert(
+                    'Saved with warning',
+                    `Edits were saved locally, but the route list could not be refreshed: ${e?.message ?? 'unknown error'}. Pull to refresh on the routes screen.`,
+                    [{ text: 'OK', onPress: () => nav.goBack() }],
+                    { cancelable: false },
+                  );
+                });
+            } else {
+              // Sync updateRoute (no Promise) — navigate immediately.
+              nav.goBack();
+            }
+          })
+          .catch(e => setDualEditError(e?.message || 'Save failed.'));
+      } else {
+        useRouteEditStore.getState().cancelEdit();
+        // Don't navigate — return to the view-mode editor screen so the
+        // user can re-enter or discard the route.
+      }
+    },
+    [dualEditActive, routeId, nav, updateRoute],
+  );
+
+  // Memoise edit handles' coordinates so PointAnnotation re-renders only
+  // when the underlying workingPoints actually change.
+  const editHandles = useMemo(() => {
+    if (!dualEditActive) return null;
+    const wp = editStore.workingPoints;
+    if (wp.length < 2) return null;
+    const first = wp[0];
+    const last = wp[wp.length - 1];
+    const midIdx = Math.min(Math.max(midpointAnchorIdx, 1), wp.length - 2);
+    const mid = wp[midIdx] ?? first;
+    return { first, last, mid, midIdx };
+  }, [dualEditActive, editStore.workingPoints, midpointAnchorIdx]);
 
   // Pre-fetch a one-shot GPS fix on enter so the editor opens centred
   // on the user's actual location and the geocoding bias / country
@@ -165,13 +582,13 @@ export function RouteEditorScreen() {
         setWaypoints(existingRoute.waypoints.map(wp => ({
           id: wp.id, lat: wp.lat, lng: wp.lng, label: wp.label,
         })));
-      } else if (existingRoute.points.length > 0) {
-        const points = existingRoute.points;
-        const step = Math.max(1, Math.floor(points.length / 20));
-        const sampled = points.filter((_, i) => i % step === 0);
-        setWaypoints(sampled.map((p, i) => ({
-          id: `wp-imported-${i}`, lat: p.lat, lng: p.lng, label: `Point ${i + 1}`,
-        })));
+      } else {
+        // Sprint 66 Card 1 fix: leave waypoints empty by default. The
+        // polyline now renders from existingRoute.points directly via the
+        // LineLayer above. Waypoints are reserved for user-added markers
+        // (TTS/announce points), not geometry handles. This kills the
+        // "20 ugly dots" bug from feature-map.
+        setWaypoints([]);
       }
     } else if (session) {
       // Pre-fill name from activity, then snap track to road network +
@@ -188,20 +605,12 @@ export function RouteEditorScreen() {
           tp.map(p => ({ lat: p.lat, lng: p.lng })),
           profile,
         );
-        // Surface a banner when snapping fell back to raw GPS (indoors,
-        // no nearby OSM road, or matcher confidence below threshold).
-        // Otherwise the user sees raw clustered points on the map and
-        // assumes the editor is broken.
         setSnapWarning(!matched.isSnapped);
-        // Sample whichever polyline we have (snapped or fallback) down
-        // to ~20 waypoints so the editor's draggable pins stay
-        // manageable.
-        const source = matched.points;
-        const step = Math.max(1, Math.floor(source.length / 20));
-        const sampled = source.filter((_, i) => i % step === 0);
-        setWaypoints(sampled.map((p, i) => ({
-          id: `wp-session-${i}`, lat: p.lat, lng: p.lng, label: `Point ${i + 1}`,
-        })));
+        // Sprint 66 Card 1 fix: store the matched (or raw) polyline so the
+        // map LineLayer renders the actual recorded curve. Waypoints stays
+        // empty (reserved for user-added markers).
+        setSessionTrackPoints(matched.points);
+        setWaypoints([]);
       });
     }
   }, [existingRoute?.id, session?.id]);
@@ -241,14 +650,41 @@ export function RouteEditorScreen() {
       showError('Please enter a route name');
       return;
     }
-    if (waypoints.length < 2) {
-      showError('Add at least 2 waypoints to create a route');
+    // Sprint 66 Fix-13 (B-NEW-1): determine the geometry source for the
+    // saved route. After Card 1 fix, waypoints stays empty for activity→route
+    // and view-mode flows (waypoints is now reserved for user-added markers).
+    // The actual route geometry lives in:
+    //   - existingRoute.points (view/edit existing route)
+    //   - sessionTrackPoints (activity → save as route)
+    //   - waypoints (legacy: user manually placed pins)
+    // Validation + persistence must read from whichever has data.
+    const geometryPoints: Array<{ lat: number; lng: number }> =
+      existingRoute && existingRoute.points && existingRoute.points.length >= 2
+        ? existingRoute.points.map(p => ({ lat: p.lat, lng: p.lng }))
+        : sessionTrackPoints.length >= 2
+          ? sessionTrackPoints
+          : waypoints.map(wp => ({ lat: wp.lat, lng: wp.lng }));
+
+    if (geometryPoints.length < 2) {
+      showError('Need at least 2 points to create a route');
       return;
     }
 
+    // Compute distance from the actual geometry, not from waypoints.
+    const computedDistanceM = (() => {
+      let d = 0;
+      for (let i = 1; i < geometryPoints.length; i++) {
+        d += haversineM(
+          { lat: geometryPoints[i - 1].lat, lng: geometryPoints[i - 1].lng },
+          { lat: geometryPoints[i].lat, lng: geometryPoints[i].lng },
+        );
+      }
+      return d;
+    })();
+
     const routeData = {
       name: name.trim(),
-      points: waypoints.map(wp => ({ lat: wp.lat, lng: wp.lng })),
+      points: geometryPoints,
       waypoints: waypoints.map(wp => ({
         id: wp.id,
         lat: wp.lat,
@@ -257,7 +693,7 @@ export function RouteEditorScreen() {
         announceOnArrival: true,
         radiusM: 30,
       })),
-      distanceM: totalDistanceM,
+      distanceM: computedDistanceM,
       elevationGainM: existingRoute?.elevationGainM ?? session?.elevationGainM ?? 0,
     };
 
@@ -413,6 +849,10 @@ export function RouteEditorScreen() {
             scaleBarEnabled={false}
             compassEnabled={false}
             onPress={(e: any) => {
+              // Sprint 66: when dual-edit is active, map taps belong to
+              // the edit overlay (drag handles + line), not to the
+              // create-route waypoint flow. Suppress the tap-to-add.
+              if (dualEditActive) return;
               const coords = e?.geometry?.coordinates;
               if (Array.isArray(coords) && coords.length >= 2) {
                 handleAddWaypoint(coords[1], coords[0]);
@@ -421,6 +861,21 @@ export function RouteEditorScreen() {
           >
             {CameraComponent && (() => {
               const region = getCurrentRegion();
+              // v30-fix (architectural Critical C1): when dualEditActive,
+              // centre the camera on the route being edited, not on the
+              // user's current GPS. Otherwise editing a route recorded
+              // far from the user lands the user looking at empty map.
+              // v31-fix (Medium Scenario 17): use memoized fit so the
+              // camera doesn't re-animate on every commit/trim.
+              if (dualEditActive && dualEditCameraFit) {
+                return (
+                  <CameraComponent
+                    centerCoordinate={dualEditCameraFit.center}
+                    zoomLevel={dualEditCameraFit.zoom}
+                    animationDuration={300}
+                  />
+                );
+              }
               const last = waypoints[waypoints.length - 1];
               // Camera centring priority:
               //  1. Last waypoint placed (zoom 13) — keeps the editor
@@ -456,30 +911,165 @@ export function RouteEditorScreen() {
                 />
               );
             })()}
-            {/* Connect waypoints with a line */}
-            {ShapeSource && LineLayer && waypoints.length >= 2 && (
-              <ShapeSource
-                id="route-line"
-                shape={{
-                  type: 'Feature',
-                  geometry: {
-                    type: 'LineString',
-                    coordinates: waypoints.map(wp => [wp.lng, wp.lat]),
-                  },
-                  properties: {},
-                }}
-              >
-                <LineLayer
-                  id="route-line-layer"
-                  style={{
-                    lineColor: Colors.primary,
-                    lineWidth: 4,
-                    lineOpacity: 0.85,
-                    lineCap: 'round',
-                    lineJoin: 'round',
+            {/* Sprint 66 Card 1 fix: render polyline from route.points (or
+                session trackPoints), NOT from sampled waypoints. This shows
+                the actual recorded curve instead of straight lines between
+                fake sample points. Waypoints array is now reserved for
+                user-added markers (TTS/announce points), default empty. */}
+            {ShapeSource && LineLayer && (() => {
+              // v123 Sprint 66 wiring: when dual-source edit is active,
+              // hide the simple LineLayer — DualLineLayer below renders
+              // original (faded) + working (colored by source/confidence).
+              if (dualEditActive) return null;
+              // Priority: existingRoute.points (full geometry from backend hydrate)
+              //  → sessionTrackPoints (loaded async after snap-to-road)
+              //  → waypoints (legacy fallback for purely-drawn routes)
+              const polylineCoords: Array<[number, number]> =
+                existingRoute && existingRoute.points && existingRoute.points.length >= 2
+                  ? existingRoute.points.map(p => [p.lng, p.lat] as [number, number])
+                  : sessionTrackPoints.length >= 2
+                    ? sessionTrackPoints.map(p => [p.lng, p.lat] as [number, number])
+                    : waypoints.length >= 2
+                      ? waypoints.map(wp => [wp.lng, wp.lat] as [number, number])
+                      : [];
+              if (polylineCoords.length < 2) return null;
+              return (
+                <ShapeSource
+                  id="route-line"
+                  shape={{
+                    type: 'Feature',
+                    geometry: {
+                      type: 'LineString',
+                      coordinates: polylineCoords,
+                    },
+                    properties: {},
+                  }}
+                >
+                  <LineLayer
+                    id="route-line-layer"
+                    style={{
+                      lineColor: Colors.primary,
+                      lineWidth: 4,
+                      lineOpacity: 0.85,
+                      lineCap: 'round',
+                      lineJoin: 'round',
+                    }}
+                  />
+                </ShapeSource>
+              );
+            })()}
+            {/* Sprint 66 dual-source edit overlay: original (faded) +
+                working (colored by source/confidence) + draggable
+                trim/midpoint handles. Mounts only when the user has
+                explicitly entered dual-edit mode for this route. */}
+            {dualEditActive && (
+              <DualLineLayer
+                originalPoints={editStore.originalPoints}
+                workingPoints={editStore.workingPoints}
+                segments={editStore.segments}
+                showOriginal
+              />
+            )}
+            {dualEditActive && editHandles && (
+              <>
+                <DraggableHandle
+                  id="edit-handle-trim-start"
+                  coordinate={editHandles.first}
+                  kind="trim-start"
+                  onDragEnd={newCoord => {
+                    // Map drag-end coord back to the closest point index
+                    // on workingPoints; trim everything before that index.
+                    // We use haversine distance to find nearest.
+                    const wp = useRouteEditStore.getState().workingPoints;
+                    let bestIdx = 0;
+                    let bestD = Infinity;
+                    for (let i = 0; i < wp.length; i++) {
+                      const d = haversineM(
+                        { lat: newCoord.lat, lng: newCoord.lng },
+                        { lat: wp[i].lat, lng: wp[i].lng },
+                      );
+                      if (d < bestD) {
+                        bestD = d;
+                        bestIdx = i;
+                      }
+                    }
+                    // v30-fix (Critical Scenario 5 + Medium Scenario 4):
+                    // surface user feedback for out-of-range drags.
+                    // v32-fix (B2/M4): route through setLastError so the
+                    // editOpSeq invariant is preserved.
+                    if (bestIdx <= 0 || bestIdx >= wp.length - 1) {
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                      useRouteEditStore
+                        .getState()
+                        .setLastError('Cannot trim past the route endpoints.');
+                      return;
+                    }
+                    const r = useRouteEditStore.getState().trimStart(bestIdx);
+                    if (!r.ok) {
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    } else {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }
                   }}
                 />
-              </ShapeSource>
+                <DraggableHandle
+                  id="edit-handle-trim-end"
+                  coordinate={editHandles.last}
+                  kind="trim-end"
+                  onDragEnd={newCoord => {
+                    const wp = useRouteEditStore.getState().workingPoints;
+                    let bestIdx = wp.length - 1;
+                    let bestD = Infinity;
+                    for (let i = 0; i < wp.length; i++) {
+                      const d = haversineM(
+                        { lat: newCoord.lat, lng: newCoord.lng },
+                        { lat: wp[i].lat, lng: wp[i].lng },
+                      );
+                      if (d < bestD) {
+                        bestD = d;
+                        bestIdx = i;
+                      }
+                    }
+                    if (bestIdx <= 0 || bestIdx >= wp.length - 1) {
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                      useRouteEditStore
+                        .getState()
+                        .setLastError('Cannot trim past the route endpoints.');
+                      return;
+                    }
+                    const r = useRouteEditStore.getState().trimEnd(bestIdx);
+                    if (!r.ok) {
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    } else {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }
+                  }}
+                />
+                {editStore.workingPoints.length >= 3 && (
+                  <DraggableHandle
+                    id="edit-handle-midpoint"
+                    coordinate={editHandles.mid}
+                    kind="midpoint"
+                    onDragEnd={async newCoord => {
+                      const idx = editHandles.midIdx;
+                      useRouteEditStore.getState().proposeMidpointDrag(idx, {
+                        lng: newCoord.lng,
+                        lat: newCoord.lat,
+                      });
+                      const r = await useRouteEditStore
+                        .getState()
+                        .commitMidpointDrag();
+                      if (!r.ok) {
+                        Haptics.notificationAsync(
+                          Haptics.NotificationFeedbackType.Warning,
+                        );
+                      } else {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }
+                    }}
+                  />
+                )}
+              </>
             )}
             {/* Current user location — blue dot with white ring + soft
                 glow. Visually distinct from waypoint pins so the user
@@ -578,8 +1168,129 @@ export function RouteEditorScreen() {
               </TouchableOpacity>
             </View>
           )}
+          {/* Sprint 66 dual-source edit toolbar: shown when the user is
+              in dual-edit mode. Cancel discards the pending session;
+              Save commits via useRouteEditStore.saveAndExit. */}
+          {dualEditActive && (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={[styles.saveTopBtn, { backgroundColor: '#6B7280' }]}
+                onPress={() => {
+                  Alert.alert(
+                    'Discard edits?',
+                    'Your changes will be lost.',
+                    [
+                      { text: 'Keep editing', style: 'cancel' },
+                      {
+                        text: 'Discard',
+                        style: 'destructive',
+                        onPress: () => exitDualEdit('cancel'),
+                      },
+                    ],
+                  );
+                }}
+              >
+                <Icon name="X" size={16} color="#fff" strokeWidth={2.5} />
+                <Text style={styles.saveTopBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              {/* v31-fix (Medium Scenario 12): Reset button gives the
+                  user a recovery path when extreme trim collapses the
+                  route to <2 points or zero length. Without this, save
+                  is refused and there's no way out except Cancel→Discard
+                  (which loses ALL edits, not just the bad trim). */}
+              <TouchableOpacity
+                style={[styles.saveTopBtn, { backgroundColor: '#9CA3AF' }]}
+                onPress={() => {
+                  Alert.alert(
+                    'Reset to original?',
+                    'All your edits in this session will be undone, but the session stays open. You can keep editing or save.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Reset',
+                        style: 'destructive',
+                        onPress: () => {
+                          useRouteEditStore.getState().resetToOriginal();
+                        },
+                      },
+                    ],
+                  );
+                }}
+                disabled={editStore.isSaving}
+              >
+                <Icon name="RotateCcw" size={16} color="#fff" strokeWidth={2.5} />
+                <Text style={styles.saveTopBtnText}>Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveTopBtn}
+                onPress={() => exitDualEdit('save')}
+                disabled={editStore.isSaving}
+              >
+                {editStore.isSaving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Icon name="Check" size={16} color="#fff" strokeWidth={2.5} />
+                )}
+                <Text style={styles.saveTopBtnText}>
+                  {editStore.isSaving ? 'Saving…' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
+
+      {/* Sprint 66 dual-edit overlays: first-run coachmark + transient
+          confidence/warning banner. EditCoachmark gates itself via
+          AsyncStorage so it shows once per device. ApproximateWarningBar
+          surfaces lastWarning when the orchestrator returned an
+          approximate-confidence segment OR when persistence is failing.
+          v30-fix (functional Blocker — Scenario 21): show editStore.lastError
+          alongside dualEditError so messages set by the store actions
+          (trim refused, drag rejected, save in progress, etc.) reach the
+          user instead of being silently lost. */}
+      {dualEditActive && (
+        <>
+          <EditCoachmark />
+          <ApproximateWarningBar
+            visible={!!editStore.lastWarning}
+            message={editStore.lastWarning ?? undefined}
+          />
+          {(dualEditError || editStore.lastError) && (
+            <View style={styles.dualEditErrorBar}>
+              <Text style={styles.dualEditErrorText}>
+                {dualEditError || editStore.lastError}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setDualEditError(null);
+                  // Clear the store's lastError too so the bar fully dismisses.
+                  // v32-fix (B2): use setLastError so the editOpSeq
+                  // invariant is preserved (in-flight async ops detect
+                  // this dismiss as a state change).
+                  if (editStore.lastError) {
+                    useRouteEditStore.getState().setLastError(null);
+                  }
+                }}
+                style={styles.dualEditErrorDismiss}
+              >
+                <Icon name="X" size={14} color="#fff" strokeWidth={2.5} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
+      )}
+      {!dualEditActive && dualEditError && (
+        <View style={styles.dualEditErrorBar}>
+          <Text style={styles.dualEditErrorText}>{dualEditError}</Text>
+          <TouchableOpacity
+            onPress={() => setDualEditError(null)}
+            style={styles.dualEditErrorDismiss}
+          >
+            <Icon name="X" size={14} color="#fff" strokeWidth={2.5} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Bottom panel — wrapped in KeyboardAvoidingView so the route
           name input + tool buttons rise above the keyboard instead of
@@ -631,11 +1342,32 @@ export function RouteEditorScreen() {
             <View style={styles.viewActions}>
               <TouchableOpacity
                 style={[styles.viewBtn, styles.viewEditBtn]}
-                onPress={() => setEditMode(true)}
+                onPress={() => {
+                  // Sprint 66: when editModeEnabled flag is on AND we have
+                  // an existing route, the "Edit" CTA enters the dual-source
+                  // edit surface (DualLineLayer + handles). When off, fall
+                  // back to the legacy waypoint editor (setEditMode(true)).
+                  if (
+                    routeId &&
+                    existingRoute &&
+                    getFlagsSync().editModeEnabled
+                  ) {
+                    enterDualEdit();
+                  } else {
+                    setEditMode(true);
+                  }
+                }}
                 activeOpacity={0.85}
+                disabled={dualEditLoading}
               >
-                <Icon name="Pencil" size={16} color="#fff" strokeWidth={2.5} />
-                <Text style={styles.viewEditBtnText}>Edit</Text>
+                {dualEditLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Icon name="Pencil" size={16} color="#fff" strokeWidth={2.5} />
+                )}
+                <Text style={styles.viewEditBtnText}>
+                  {dualEditLoading ? 'Loading…' : 'Edit'}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.viewBtn, styles.viewDeleteBtn]}
@@ -780,6 +1512,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md, paddingVertical: 8,
   },
   saveTopBtnText: { fontSize: FontSize.small, fontWeight: '700', color: '#fff' },
+  dualEditErrorBar: {
+    position: 'absolute',
+    top: 100,
+    left: 16,
+    right: 16,
+    backgroundColor: Colors.danger,
+    borderRadius: Radius.card,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    ...Shadow.elevated,
+  },
+  dualEditErrorText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: FontSize.small,
+    fontWeight: '600',
+  },
+  dualEditErrorDismiss: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
   // v122 fix #8: delete button on the route editor top bar (only
   // shown when editing an existing route).
   deleteTopBtn: {

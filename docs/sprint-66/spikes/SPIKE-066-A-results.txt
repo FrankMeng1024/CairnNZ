@@ -1,0 +1,6 @@
+Wellington-CubaSt | 174.770,-41.300,174.790,-41.280 | "type":"name","properties":{"name":"EPSG:4326"}},"features":[]}|200|1.661066|98 | trails=0
+Tongariro-Crossing | 175.55,-39.20,175.75,-39.10 | ctName":"Tama Lakes Track","ObjectType":"Track Visitor"}}]}|200|2.585688|327909 | trails=11
+Kepler-Track | 167.60,-45.45,167.70,-45.35 |  Brod Bay To Luxmoore Hut","ObjectType":"Track Visitor"}}]}|200|1.909398|189391 | trails=7
+Mt-Vic | 174.78,-41.30,174.79,-41.29 | "type":"name","properties":{"name":"EPSG:4326"}},"features":[]}|200|0.741731|98 | trails=0
+Auckland-CBD | 174.755,-36.860,174.770,-36.840 | "type":"name","properties":{"name":"EPSG:4326"}},"features":[]}|200|1.287553|98 | trails=0
+DOC-gap-MtTaranaki | 174.05,-39.30,174.10,-39.25 | bjectName":"Kaiauai Track","ObjectType":"Track Visitor"}}]}|200|1.598552|101654 | trails=17

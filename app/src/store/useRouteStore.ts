@@ -87,6 +87,12 @@ export interface Route {
 export interface RouteStore {
   routes: Route[];
   activeRouteId: string | null;
+  /**
+   * v8-audit (V7-BUG-006): true only after a successful fetchRoutes
+   * resolution. Boot reconcileOrphans gates on this so a partial /
+   * pre-load empty array isn't mistaken for "user has 0 routes".
+   */
+  routesLoadCompleted: boolean;
 
   // Load from backend
   loadRoutes: () => Promise<void>;
@@ -122,10 +128,21 @@ export interface RouteStore {
 export const useRouteStore = create<RouteStore>((set, get) => ({
   routes: [],
   activeRouteId: null,
+  routesLoadCompleted: false,
 
   loadRoutes: async () => {
-    const routes = await fetchRoutes();
-    set({ routes });
+    // v8-audit (V7-BUG-006): set routesLoadCompleted=true only after
+    // a successful fetchRoutes resolution. Boot reconcile gates on
+    // this flag so a partial/paginated load doesn't silently
+    // delete extras for routes the backend still returns later.
+    set({ routesLoadCompleted: false });
+    try {
+      const routes = await fetchRoutes();
+      set({ routes, routesLoadCompleted: true });
+    } catch (err) {
+      // Don't flag completion on error — orphan reconcile must wait.
+      throw err;
+    }
   },
 
   loadRouteDetail: async (id) => {
@@ -157,6 +174,10 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
   },
 
   updateRoute: async (id, updates) => {
+    // v10-audit (BUG-EH-1): snapshot pre-update state so we can roll
+    // back optimistic mutation if backend rejects. Prior code left the
+    // store with unsynced data on failure.
+    const prevRoute = get().routes.find(r => r.id === id);
     // Optimistic local update
     set((s) => ({
       routes: s.routes.map(r =>
@@ -166,36 +187,119 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     // Sync to backend
     const route = get().routes.find(r => r.id === id);
     if (route) {
-      await apiUpdateRoute(id, {
-        name: route.name,
-        description: route.description,
-        points: route.points,
-        waypoints: route.waypoints,
-        distance_m: route.distanceM,
-        elevation_gain_m: route.elevationGainM,
-        ...Object.fromEntries(
-          Object.entries(updates).map(([k, v]) => {
-            if (k === 'distanceM') return ['distance_m', v];
-            if (k === 'elevationGainM') return ['elevation_gain_m', v];
-            return [k, v];
-          })
-        ),
-      });
+      try {
+        await apiUpdateRoute(id, {
+          name: route.name,
+          description: route.description,
+          points: route.points,
+          waypoints: route.waypoints,
+          distance_m: route.distanceM,
+          elevation_gain_m: route.elevationGainM,
+          ...Object.fromEntries(
+            Object.entries(updates).map(([k, v]) => {
+              if (k === 'distanceM') return ['distance_m', v];
+              if (k === 'elevationGainM') return ['elevation_gain_m', v];
+              return [k, v];
+            })
+          ),
+        });
+      } catch (err) {
+        // v10-audit (BUG-EH-1): roll back optimistic update.
+        if (prevRoute) {
+          set((s) => ({
+            routes: s.routes.map(r => r.id === id ? prevRoute : r),
+          }));
+        }
+        throw err;
+      }
     }
   },
 
   deleteRoute: async (id) => {
     crashLogger.breadcrumb(`route:delete:start id=${id}`);
+    // v8-audit (ARCH-V7-002): use per-id pending keys instead of one
+    // shared array. Boot drain reads all keys with the prefix and
+    // removes them individually; concurrent deleteRoute writes a
+    // distinct key so there's no read-modify-write race.
+    const PENDING_PREFIX = '@cairn:pending_route_cleanup:v2:';
+    try {
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      await AsyncStorage.setItem(PENDING_PREFIX + id, String(Date.now()));
+    } catch (err) {
+      crashLogger.breadcrumb(`route:delete:pending-mark-error ${String(err).slice(0, 80)}`);
+    }
+    const before = get().routes.find(r => r.id === id);
+    let backendOk = false;
+    try {
+      await apiDeleteRoute(id);
+      backendOk = true;
+      crashLogger.breadcrumb(`route:delete:remote-ok id=${id}`);
+    } catch (err) {
+      crashLogger.breadcrumb(`route:delete:remote-error ${String(err).slice(0, 80)}`);
+    }
+    if (!backendOk) {
+      // Drop the pending mark since backend delete didn't happen.
+      try {
+        const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+        await AsyncStorage.removeItem(PENDING_PREFIX + id);
+      } catch {
+        // ignore
+      }
+      return;
+    }
     set((s) => ({
       routes: s.routes.filter(r => r.id !== id),
       activeRouteId: s.activeRouteId === id ? null : s.activeRouteId,
     }));
     try {
-      await apiDeleteRoute(id);
-      crashLogger.breadcrumb(`route:delete:remote-ok id=${id}`);
+      const { deleteExtras } = await import('../services/LocalRouteExtras');
+      await deleteExtras(id);
+      crashLogger.breadcrumb(`route:delete:extras-ok id=${id}`);
     } catch (err) {
-      crashLogger.breadcrumb(`route:delete:remote-error ${String(err).slice(0, 80)}`);
+      crashLogger.breadcrumb(`route:delete:extras-error ${String(err).slice(0, 80)}`);
     }
+    // v16-audit (BUG-V16-01): cancel any active edit FIRST so its
+    // sessionWriteChain enqueues a clearSession at the chain's tail
+    // (after any pending writes from in-flight commit/trim). Then we
+    // can route OUR clearSession through the chain too — this keeps
+    // the documented "chain enforces FIFO so the last logical mutation
+    // wins" invariant intact. The previous bypass (direct clearSession)
+    // could let a queued saveSession resurrect a session record for the
+    // just-deleted route.
+    try {
+      const { useRouteEditStore } = await import('./useRouteEditStore');
+      const editState = useRouteEditStore.getState();
+      if (editState.routeId === id) {
+        editState.cancelEdit();
+        crashLogger.breadcrumb(`route:delete:edit-cancelled id=${id}`);
+      }
+    } catch (err) {
+      crashLogger.breadcrumb(`route:delete:edit-cancel-error ${String(err).slice(0, 80)}`);
+    }
+    try {
+      const { loadSession, clearSession } = await import('../services/EditSessionPersistence');
+      const { chainSessionWrite } = await import('./useRouteEditStore');
+      const session = await loadSession();
+      if (session && session.routeId === id) {
+        // v16-audit (BUG-V16-01): route through sessionWriteChain so we
+        // don't bypass the FIFO ordering. After the cancelEdit above,
+        // any in-flight in-store writes have been enqueued; this lands
+        // last so the final state is "cleared".
+        await chainSessionWrite(() => clearSession());
+        crashLogger.breadcrumb(`route:delete:session-cleared id=${id}`);
+      }
+    } catch (err) {
+      crashLogger.breadcrumb(`route:delete:session-error ${String(err).slice(0, 80)}`);
+    }
+    // Clear pending mark after successful cascade.
+    try {
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      await AsyncStorage.removeItem(PENDING_PREFIX + id);
+    } catch {
+      // ignore
+    }
+    void before;
+    return;
   },
 
   addWaypoint: (routeId, waypointData) => {
