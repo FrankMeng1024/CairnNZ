@@ -75,6 +75,12 @@ export function RouteEditorScreen() {
   const route = useRoute<any>();
   const routeId = route.params?.routeId as string | undefined;
   const fromSessionId = route.params?.fromSessionId as string | undefined;
+  // v198 fix-2: caller (MapHistoryScreen) passes server-hydrated track
+  // points to avoid the unreliable local-AsyncStorage loadTrackPoints
+  // path. When set, this overrides the legacy session-load useEffect.
+  const fromSessionTrackPoints = route.params?.fromSessionTrackPoints as
+    | Array<{ lat: number; lng: number; alt?: number | null; t?: number }>
+    | undefined;
   const addRoute = useRouteStore(s => s.addRoute);
   const updateRoute = useRouteStore(s => s.updateRoute);
   const deleteRoute = useRouteStore(s => s.deleteRoute);
@@ -615,13 +621,18 @@ export function RouteEditorScreen() {
       // routeMatcher service for the algorithm.
       const date = new Date(session.startedAt).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
       setName(`${session.activityMode === 'running' ? 'Run' : 'Hike'} ${date}`);
-      loadTrackPoints(session.id).then(async tp => {
+      // v198 fix-2: prefer caller-provided trackPoints (server-hydrated
+      // by MapHistoryScreen). Fall back to local AsyncStorage only if
+      // the caller didn't pass them. This closes the silent-fail path
+      // where loadTrackPoints returns [] for any server-synced session.
+      const sourceTrackPointsP: Promise<Array<{ lat: number; lng: number }>> =
+        fromSessionTrackPoints && fromSessionTrackPoints.length >= 2
+          ? Promise.resolve(fromSessionTrackPoints.map(p => ({ lat: p.lat, lng: p.lng })))
+          : loadTrackPoints(session.id).then(tp => tp.map(p => ({ lat: p.lat, lng: p.lng })));
+      sourceTrackPointsP.then(async tp => {
         if (tp.length < 2) return;
         const profile = session.activityMode === 'running' ? 'walking' : 'walking';
-        const matched = await snapToRoadAndTrim(
-          tp.map(p => ({ lat: p.lat, lng: p.lng })),
-          profile,
-        );
+        const matched = await snapToRoadAndTrim(tp, profile);
         setSnapWarning(!matched.isSnapped);
         // Sprint 66 Card 1 fix: store the matched (or raw) polyline so the
         // map LineLayer renders the actual recorded curve. Waypoints stays
@@ -640,6 +651,42 @@ export function RouteEditorScreen() {
       { lat: wp.lat, lng: wp.lng },
     );
   }, 0);
+
+  // v198 fix-4: stats row must reflect the actual route geometry, not
+  // the waypoints array (which Sprint 66 Card 1 reserved for user-placed
+  // markers, leaving it [] for activity-derived saves and read-only
+  // routes). Read the geometry source priority chain: existingRoute.points
+  // (view-mode) → sessionTrackPoints (save-as-route draft) → waypoints
+  // (legacy hand-drawn). Distance prefers persisted distanceM when in
+  // view-mode (server is the truth) and falls back to a haversine sum
+  // otherwise.
+  const displayedStats = useMemo(() => {
+    const haversineSum = (pts: Array<{ lat: number; lng: number }>) => {
+      let d = 0;
+      for (let i = 1; i < pts.length; i++) {
+        d += haversineM(
+          { lat: pts[i - 1].lat, lng: pts[i - 1].lng },
+          { lat: pts[i].lat, lng: pts[i].lng },
+        );
+      }
+      return d;
+    };
+    if (existingRoute && existingRoute.points && existingRoute.points.length >= 2) {
+      const distM =
+        typeof existingRoute.distanceM === 'number' && existingRoute.distanceM > 0
+          ? existingRoute.distanceM
+          : haversineSum(existingRoute.points);
+      return { pointCount: existingRoute.points.length, distanceM: distM };
+    }
+    if (sessionTrackPoints.length >= 2) {
+      return {
+        pointCount: sessionTrackPoints.length,
+        distanceM: haversineSum(sessionTrackPoints),
+      };
+    }
+    return { pointCount: waypoints.length, distanceM: totalDistanceM };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingRoute?.points?.length, existingRoute?.distanceM, sessionTrackPoints.length, waypoints.length, totalDistanceM]);
 
   const handleAddWaypoint = (lat: number, lng: number) => {
     const id = `wp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -662,7 +709,13 @@ export function RouteEditorScreen() {
     setWaypoints([]);
   };
 
-  const handleSave = () => {
+  // v198 fix-1: handleSave is now async. addRoute / updateRoute return
+  // Promises (server round-trip) and the OLD code fired nav.goBack()
+  // before persistence completed — failure was silent (Promise rejected
+  // after goBack unmounted the catch). Now we await, capture the id,
+  // and nav.reset (save-as-route → Routes tab) or goBack (existing-route
+  // edit save). Errors surface as inline showError + haptic.
+  const handleSave = async () => {
     if (!name.trim()) {
       showError('Please enter a route name');
       return;
@@ -716,16 +769,33 @@ export function RouteEditorScreen() {
 
     try {
       if (routeId && existingRoute) {
-        updateRoute(routeId, routeData);
+        await updateRoute(routeId, routeData);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        // Existing-route edit: pop back to Routes / wherever we came from.
+        nav.goBack();
       } else {
-        addRoute(routeData);
+        const newId = await addRoute(routeData);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        // v198 fix-3: save-as-route from Activity → land on Routes list +
+        // the new route's detail. nav.goBack would dump the user back on
+        // the Activity detail, hiding the just-saved route. This matches
+        // HikingScreen.tsx:1764 stop-then-save flow for cross-screen
+        // consistency.
+        if (fromSessionId && newId) {
+          (nav as any).reset({
+            index: 2,
+            routes: [
+              { name: 'Home' },
+              { name: 'Routes', params: { initialTab: 'routes' } },
+              { name: 'RouteEditor', params: { routeId: newId } },
+            ],
+          });
+        } else {
+          nav.goBack();
+        }
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // Pop back to whatever pushed us here (Routes or MapHistory).
-      // Using goBack() instead of navigate('Routes') prevents stack leak —
-      // navigate() would push a new Routes instance, leaving RouteEditor on the stack.
-      nav.goBack();
     } catch (e: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       showError(e?.message || 'Failed to save route');
     }
   };
@@ -870,6 +940,11 @@ export function RouteEditorScreen() {
               // the edit overlay (drag handles + line), not to the
               // create-route waypoint flow. Suppress the tap-to-add.
               if (dualEditActive) return;
+              // v198 fix-6: in save-as-route draft mode the map shows a
+              // pre-recorded activity polyline. Map taps must NOT add
+              // user pins on top — those would persist into the route's
+              // waypoints array on Save and corrupt the saved record.
+              if (fromSessionId) return;
               const coords = e?.geometry?.coordinates;
               if (Array.isArray(coords) && coords.length >= 2) {
                 handleAddWaypoint(coords[1], coords[0]);
@@ -906,6 +981,24 @@ export function RouteEditorScreen() {
                     animationDuration={0}
                   />
                 );
+              }
+              // v198 fix-5: while waiting for an existing route's points
+              // to hydrate (view-mode entry, list endpoint stripped points),
+              // do NOT mount a Camera with user-GPS coords — that would
+              // briefly flash the user's location before snapping to the
+              // route. Render no Camera until either routeCameraFit is
+              // ready (above branch) or it's clear no route geometry
+              // applies (waypoint-drawing or save-as-route waiting on
+              // sessionTrackPoints). For waypoint-drawing the user-GPS
+              // fallback is correct; the gate is "view-mode w/ pending
+              // hydration" or "save-as-route w/ pending snap".
+              const isWaitingForRouteHydration =
+                routeId && existingRoute &&
+                (!existingRoute.points || existingRoute.points.length < 2);
+              const isWaitingForSessionSnap =
+                fromSessionId && sessionTrackPoints.length < 2;
+              if (isWaitingForRouteHydration || isWaitingForSessionSnap) {
+                return null;
               }
               const last = waypoints[waypoints.length - 1];
               // Camera centring priority:
@@ -1362,9 +1455,9 @@ export function RouteEditorScreen() {
                 {existingRoute?.name ?? name ?? 'Route'}
               </Text>
               <View style={styles.viewStatsInline}>
-                <Text style={styles.viewStatText}>{waypoints.length} waypoints</Text>
+                <Text style={styles.viewStatText}>{displayedStats.pointCount} points</Text>
                 <Text style={styles.viewStatDot}>·</Text>
-                <Text style={styles.viewStatText}>{formatDistance(totalDistanceM, 'km', 1)} km</Text>
+                <Text style={styles.viewStatText}>{formatDistance(displayedStats.distanceM, 'km', 1)} km</Text>
               </View>
             </View>
             {/* v124 fix #8: Edit + Delete moved into the bottom panel.
@@ -1440,8 +1533,8 @@ export function RouteEditorScreen() {
 
         {/* Stats row */}
         <View style={styles.statsRow}>
-          <Text style={styles.statText}>{waypoints.length} waypoints</Text>
-          <Text style={styles.statText}>{formatDistance(totalDistanceM, 'km', 1)} km</Text>
+          <Text style={styles.statText}>{displayedStats.pointCount} points</Text>
+          <Text style={styles.statText}>{formatDistance(displayedStats.distanceM, 'km', 1)} km</Text>
         </View>
 
         {/* Search toggle */}
@@ -1482,21 +1575,27 @@ export function RouteEditorScreen() {
           />
         )}
 
-        {/* Tool buttons */}
-        <View style={styles.toolRow}>
-          <TouchableOpacity style={styles.toolBtn} onPress={() => setShowSearch(!showSearch)}>
-            <Icon name="Search" size={18} color={Colors.primary} strokeWidth={2} />
-            <Text style={styles.toolBtnText}>Search</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolBtn} onPress={handleUndo} disabled={waypoints.length === 0}>
-            <Icon name="Undo2" size={18} color={waypoints.length > 0 ? Colors.primary : Colors.textMuted} strokeWidth={2} />
-            <Text style={[styles.toolBtnText, waypoints.length === 0 && { color: Colors.textMuted }]}>Undo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolBtn} onPress={handleClear} disabled={waypoints.length === 0}>
-            <Icon name="Trash2" size={18} color={waypoints.length > 0 ? Colors.danger : Colors.textMuted} strokeWidth={2} />
-            <Text style={[styles.toolBtnText, { color: waypoints.length > 0 ? Colors.danger : Colors.textMuted }]}>Clear</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Tool buttons — hidden in save-as-route draft mode (v198 fix-6).
+            Search/Undo/Clear apply to user-placed waypoints; for an
+            activity-derived draft the polyline is fixed (no edits to
+            undo/clear) and search would let the user accidentally
+            navigate away from the recorded route. */}
+        {!fromSessionId && (
+          <View style={styles.toolRow}>
+            <TouchableOpacity style={styles.toolBtn} onPress={() => setShowSearch(!showSearch)}>
+              <Icon name="Search" size={18} color={Colors.primary} strokeWidth={2} />
+              <Text style={styles.toolBtnText}>Search</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.toolBtn} onPress={handleUndo} disabled={waypoints.length === 0}>
+              <Icon name="Undo2" size={18} color={waypoints.length > 0 ? Colors.primary : Colors.textMuted} strokeWidth={2} />
+              <Text style={[styles.toolBtnText, waypoints.length === 0 && { color: Colors.textMuted }]}>Undo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.toolBtn} onPress={handleClear} disabled={waypoints.length === 0}>
+              <Icon name="Trash2" size={18} color={waypoints.length > 0 ? Colors.danger : Colors.textMuted} strokeWidth={2} />
+              <Text style={[styles.toolBtnText, { color: waypoints.length > 0 ? Colors.danger : Colors.textMuted }]}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         </>
         )}
       </View>

@@ -1019,7 +1019,22 @@ export function MapHistoryScreen() {
                 //   - main button is Save (handleSave); user can edit name
                 const ts = selectedSession;
                 crashLogger.breadcrumb(`saveroute:nav-to-editor session=${ts.id}`);
-                (nav as any).navigate('RouteEditor', { fromSessionId: ts.id });
+                (nav as any).navigate('RouteEditor', {
+                  fromSessionId: ts.id,
+                  // v198 fix-2: pass already-server-hydrated trackPoints
+                  // so RouteEditor doesn't fall back to the unreliable
+                  // local-AsyncStorage loadTrackPoints (which returns []
+                  // for any server-synced session — fresh OTA installs
+                  // and multi-device users would be unable to save).
+                  // MapHistoryScreen has the authoritative server-fetched
+                  // trace already loaded for the polyline render.
+                  fromSessionTrackPoints: loadedTrackPoints.map(p => ({
+                    lat: p.lat,
+                    lng: p.lng,
+                    alt: p.alt ?? null,
+                    t: p.t,
+                  })),
+                });
               }}
             >
               <Icon name="Route" size={IconSize.sm} color={Colors.primary} strokeWidth={2} />
