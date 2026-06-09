@@ -68,6 +68,14 @@ type CairnWorldPos = {
 export type UnityAROverlayProps = {
   markers: Marker[];
   userPos: { lat: number; lng: number; alt: number | null } | null;
+  /**
+   * v196.1: optional persistent AR origin from useMarkerStore. When set,
+   * bulk-spawn at ArReady uses this anchor instead of live userPos —
+   * keeps marker positions stable across re-entries that would otherwise
+   * accumulate GPS noise. If null/undefined, falls back to userPos
+   * (legacy behavior).
+   */
+  arOrigin?: { lat: number; lng: number; alt: number | null } | null;
   userHeading: number | null;
   onStatus?: (s: { glReady: boolean; cairnCount: number }) => void;
   onArFrame?: (info: {
@@ -367,6 +375,14 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           //
           // (We don't do it from the ArFrame handler directly because
           // that fires at 10Hz and we only want to bulk-spawn once.)
+          //
+          // v196.1 (revised): use live userPos. The persisted v118 origin
+          // can't be used as projection origin because ARKit's per-session
+          // world (0,0,0) is wherever the device anchored THIS session,
+          // not where the persisted GPS was first captured. Mixing the
+          // two introduces an offset equal to (live GPS - persisted GPS).
+          // Until we add per-session anchor-offset compensation this has
+          // to stay at live origin (subagent review feedback).
           {
             const origin = props.userPos
               ? { lat: props.userPos.lat, lng: props.userPos.lng }

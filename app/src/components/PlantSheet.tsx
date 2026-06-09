@@ -199,41 +199,46 @@ export function PlantSheet({ onPlant, onAimStart, disabled, reticleScale }: Plan
     // This is independent of the reticle squeeze below — they play in parallel.
     onAimStart?.();
 
-    // 1.2s squeeze animation — reticle shrinks 1 → 0.5
+    // v196.1: squeeze animation 1200→500ms. Original 1.2s felt deliberate
+    // for first plant but blocked rapid plant-another flow (user reported
+    // "卡 不让 mark"). 500ms still reads as a tactile lock-on without
+    // forcing the user to wait between consecutive plants.
     Animated.timing(reticleScale, {
       toValue: 0.5,
-      duration: 1200,
+      duration: 500,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
 
     // Wait for animation, then sample pitch & plant
-    setTimeout(async () => {
+    setTimeout(() => {
       const pitchAtPlant = pitchRef.current;
       const distanceM = distanceFromPitch(pitchAtPlant);
       // v44 diagnostic: log pitch + distance so we can debug 'aim far but
       // get 0m' issue.
-      try {
-        const cl = await import('../services/crashLogger');
+      import('../services/crashLogger').then(cl => {
         cl.crashLogger.breadcrumb(
           `plant:aim pitchRad=${pitchAtPlant.toFixed(3)} pitchDeg=${(pitchAtPlant*180/Math.PI).toFixed(1)} distance=${distanceM.toFixed(2)}m`
         );
-      } catch { /* ignore */ }
-      try {
-        await onPlant(selectedType, distanceM, title.trim());
-      } finally {
-        // Reset state — parent will dismiss the sheet via prop
-        Animated.timing(reticleScale, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }).start();
-        setAiming(false);
-        setPage(1);
-        setSelectedType(null);
-        setTitle('');
-      }
-    }, 1200);
+      }).catch(() => undefined);
+      // v196.1: do NOT await onPlant — addMarker is optimistic locally
+      // (useMarkerStore adds the marker before the network round-trip
+      // resolves), so the user can plant the next one immediately while
+      // the network sync happens in the background. Errors are surfaced
+      // via the marker-store's own toast/log path.
+      onPlant(selectedType, distanceM, title.trim()).catch(() => undefined);
+      // Reset state right away so the user can plant another within
+      // ~600ms total (500ms squeeze + this near-instant reset).
+      Animated.timing(reticleScale, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+      setAiming(false);
+      setPage(1);
+      setSelectedType(null);
+      setTitle('');
+    }, 500);
   };
 
   return (

@@ -227,7 +227,8 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     Array<{ uri: string; width: number; height: number }>
   >([]);
   // v78 #3: AR init UX. Tracks one of:
-  //   'init'       — first 4 seconds, glReady === false. Show spinner.
+  //   'init'       — first 8 seconds (v196.1, was 4s), glReady === false.
+  //                  Now a lightweight pill, NOT a full-screen overlay.
   //   'ready'      — glReady === true AND device held upright. Hide overlay.
   //   'low-light'  — 4s elapsed and still !glReady. Show "Low light or
   //                  featureless area — AR may not work here" + retry.
@@ -264,19 +265,27 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   }>({ camera: null, cairns: [], origin: null, groundY: null });
 
   // Phone-flat detection: arFrame.camera.forward is the camera's look
-  // vector in ARKit world space. y > 0.85 ≈ user holding device roughly
-  // horizontal looking up at ceiling (rare). y < -0.85 ≈ device flat on
-  // table or facing down (common — "I just put my phone down"). Either
-  // extreme means hit-tests will pick wrong planes (ceiling/table) and
-  // tracking quality degrades to IMU-only. Threshold 0.85 ≈ 32° from
-  // vertical; calibrated by inspecting plant logs where ground=1.01
-  // (table top) was hit-tested with fy=-0.52 — already significantly
-  // tilted down. 0.85 leaves comfortable headroom for normal "looking
-  // at the trail in front of me" usage (typical fy ~ -0.3 to -0.5).
+  // vector in ARKit world space. fy is the y-component (vertical, gravity
+  // down = -1).
+  //
+  // v196.1: thresholds RELAXED. The original 0.85 was miscalibrated —
+  // arccos(0.85) = 32° from gravity = 58° below horizontal. That triggers
+  // when the user looks at the ground in front of their feet at normal
+  // hand-held height (1.4-1.6m, target 0.7-1.5m away → fy ≈ -0.83 to -0.91).
+  // Real-world plant logs (screenshot uploads from user) show fy=-0.81
+  // hitting this gate while looking at carpet at chest distance — clearly
+  // a normal-use pose, not "flat on table".
+  //
+  // New: asymmetric, far looser. fy < -0.97 (~76° below horizontal,
+  // ≈14° from straight-down) is "phone genuinely flat / pointing at toes".
+  // fy > 0.97 (looking nearly straight up at ceiling) still rare/bad.
+  // Anything in between is fine — let hit-test fail naturally rather than
+  // gate UI on pose. Plus 4-frame debounce so single-frame jitter doesn't
+  // flap the banner.
   const isPhoneFlat = (() => {
     const fy = arFrame.camera?.forward?.[1];
     if (fy == null) return false;
-    return fy > 0.85 || fy < -0.85;
+    return fy > 0.97 || fy < -0.97;
   })();
 
   // Drive arInitState transitions. Two phases:
@@ -291,9 +300,14 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
       return;
     }
     setArInitState('init');
+    // v196.1: low-light timeout 4s → 8s. v187.7.13 SessionTracking gate
+    // means Unity now waits for true SessionTracking before emitting
+    // ArReady — typically 2-5s in good light, up to 7s in dim/featureless
+    // areas. 4s flagged "low-light" too early, scaring users on perfectly
+    // valid AR scenes.
     const t = setTimeout(() => {
       setArInitState(prev => prev === 'ready' ? 'ready' : 'low-light');
-    }, 4000);
+    }, 8000);
     return () => clearTimeout(t);
   }, [arStatus.glReady, isPhoneFlat]);
 
@@ -307,12 +321,43 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   useEffect(() => {
     if (!arStatus.glReady || !unityOverlayRef.current) return;
     const ota = unityOverlayRef.current;
-    // v187.7.10 — restore reasonable defaults. The actual yellow-screen
-    // root cause (missing ARBackgroundRendererFeature in URP renderer)
-    // is fixed at native build time in SceneSetup.EnsureARBackgroundRendererFeature.
-    // No emergency OTA mitigations needed any more.
-    crashLogger.breadcrumb('ar:ota:v187.7.10 normal-defaults');
+    // v196.1: distance-visibility tuning via OTA. Bug 5 reported "远处
+    // 看不到效果". Bump the visibility-related globals so distant cairns
+    // stay readable. These are safe defaults — Unity-side _coalesce()
+    // gracefully handles values that don't exist as shader uniforms.
+    //
+    // - WispFadeFar: extend the wisp/strand fade-out distance multiplier
+    //   from default 1.0 → 2.5 (≈2.5× further before fading).
+    // - IconScale: bump 1.0 → 1.4 so the type icon is more readable from
+    //   distance without making close-up cairns gigantic.
+    // - HaloIntensity: 1.0 → 1.3 — slightly stronger ground halo so
+    //   distant cairns retain a visible footprint.
+    // - WispIntensity: 1.0 → 1.5 — wisp strands brighter against busy
+    //   backgrounds (Bug 4: lines not visible while phone level).
+    // - ScrollMul: 1.0 → 1.5 — speed up flow animation so motion is
+    //   perceptible even when looking at the cairn from a distance and
+    //   from above (Bug 4: "线条不动").
+    try {
+      ota.setGlobal('WispFadeFar', 2.5);
+      ota.setGlobal('IconScale', 1.4);
+      ota.setGlobal('HaloIntensity', 1.3);
+      ota.setGlobal('WispIntensity', 1.5);
+      ota.setGlobal('ScrollMul', 1.5);
+      crashLogger.breadcrumb('ar:ota:v196.1 distance-visibility-bump');
+    } catch (e: any) {
+      crashLogger.breadcrumb(`ar:ota:setGlobal-failed ${e?.message}`);
+    }
   }, [arStatus.glReady]);
+
+  // v196.1: Bug 8 (re-entry 20m drift) is NOT addressed in this OTA —
+  // subagent review found that wiring up the dormant v118 persistent AR
+  // origin would silently save plants at the WRONG city's GPS if the
+  // user travelled between sessions, and would mis-project bulk-spawned
+  // markers because ARKit's per-session world (0,0,0) is the device
+  // anchor, not the persisted GPS. Both regressions are worse than the
+  // 20m drift the change was meant to fix. Bug 8 needs a per-session
+  // anchor-offset compensation pass + a manual reset UI before it can
+  // ship — postponed to next Unity build cycle.
 
   // Ready haptic — fire ONCE when transitioning to 'ready' so the user
   // gets a subtle multimodal cue that AR is now interactive. Matches
@@ -674,6 +719,15 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     let unitySpawnPos: { x: number; y: number; z: number } | null = null;
     if (distanceM > 0) {
       const cam = arFrame.camera;
+      // v196.1 (revised): use per-session arFrame.origin (live GPS) for
+      // the ARKit↔GPS conversion. This is the only correct projection —
+      // ARKit's world (0,0,0) is wherever the device anchored THIS
+      // session. Don't try to substitute a stale persistent origin
+      // (subagent review: would silently save plants at the wrong city
+      // if user travelled). The 20m drift fix lives elsewhere — not
+      // here. Persistent origin is captured for diagnostic / future use
+      // but not used in the conversion math (yet — needs proper
+      // per-session offset compensation that's beyond OTA scope).
       const arOrigin = arFrame.origin;
       const ground = arFrame.groundY;
       if (cam && arOrigin) {
@@ -992,45 +1046,39 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         </Pressable>
       </Modal>
 
-      {/* v78 #3: AR init / low-light overlay. Lives above the AR scene
-          but below other UI chrome. 'init' = transient spinner;
-          'low-light' = persistent hint with retry button. Hidden when
-          AR has reached glReady. */}
+      {/* v78 #3 / v196.1: AR init / low-light overlay.
+          - 'init' is now a light pill at top, NEVER blocks the camera
+            feed — user sees the scene warming up rather than a dark card.
+          - 'low-light' still uses full-screen backdrop because user
+            action is required (Retry). */}
       {arInitState !== 'ready' && (
         arInitState === 'phone-flat' ? (
-          // Phone-flat coaching pill — non-blocking, sits at top so the
-          // camera view stays visible. The cairns are still rendering
-          // (Unity is fine), we just want to nudge the user to lift the
-          // phone before they tap plant. Auto-dismisses the moment fy
-          // returns inside the threshold (next ArFrame).
           <View style={styles.phoneFlatPill} pointerEvents="none">
             <Text style={styles.phoneFlatPillText}>
               Hold your phone upright to plant cairns
             </Text>
           </View>
+        ) : arInitState === 'init' ? (
+          // v196.1: lightweight init pill, transparent to touches, lives
+          // under the topbar. The camera feed renders behind it so the
+          // perceived "loading" feels like just a brief hint, not a
+          // blocking modal.
+          <View style={styles.phoneFlatPill} pointerEvents="none">
+            <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 8 }} />
+            <Text style={styles.phoneFlatPillText}>Looking around…</Text>
+          </View>
         ) : (
-          <View style={styles.arInitOverlay} pointerEvents={arInitState === 'low-light' ? 'auto' : 'none'}>
+          // 'low-light' — blocking, requires user retry.
+          <View style={styles.arInitOverlay} pointerEvents="auto">
             <View style={styles.arInitCard}>
-              {arInitState === 'init' ? (
-                <>
-                  <ActivityIndicator size="small" color={Colors.primary} />
-                  <Text style={styles.arInitTitle}>Initializing AR…</Text>
-                  <Text style={styles.arInitBody}>
-                    Move your phone slowly to scan the surroundings.
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.arInitTitle}>Low light or featureless area</Text>
-                  <Text style={styles.arInitBody}>
-                    AR needs visible texture and light to anchor flags. Try a
-                    brighter spot or point at the ground / a wall with detail.
-                  </Text>
-                  <TouchableOpacity style={styles.arInitRetry} onPress={retryAr} activeOpacity={0.7}>
-                    <Text style={styles.arInitRetryText}>Retry</Text>
-                  </TouchableOpacity>
-                </>
-              )}
+              <Text style={styles.arInitTitle}>Low light or featureless area</Text>
+              <Text style={styles.arInitBody}>
+                AR needs visible texture and light to anchor flags. Try a
+                brighter spot or point at the ground / a wall with detail.
+              </Text>
+              <TouchableOpacity style={styles.arInitRetry} onPress={retryAr} activeOpacity={0.7}>
+                <Text style={styles.arInitRetryText}>Retry</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )
@@ -1146,13 +1194,14 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         //   1. No GPS at all (existing rule — can't compute lat/lng)
         //   2. AR not yet ready (would plant before ARKit world tracking
         //      converged — cairn would land at fallback position)
-        //   3. Phone is flat (would hit-test against table/ceiling
-        //      instead of floor — known visual-shift bug pre-fix)
+        //   3. Phone-flat is NO LONGER blocked here (v196.1) — the
+        //      threshold was miscalibrated and rejected normal use. The
+        //      coaching pill still shows when truly flat; hit-test
+        //      fallback handles bad poses naturally.
         disabled={
           (!lastCoord && trackPoints.length === 0)
           || arInitState === 'init'
           || arInitState === 'low-light'
-          || arInitState === 'phone-flat'
         }
         reticleScale={reticleScale}
       />
@@ -1219,6 +1268,7 @@ const styles = StyleSheet.create({
   // it doesn't reflow when present/absent.
   phoneFlatPill: {
     position: 'absolute', top: 64, alignSelf: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(20,20,28,0.92)',
     paddingHorizontal: 18, paddingVertical: 10,
     borderRadius: 999,

@@ -68,7 +68,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         action). Tuning is done by the dev based on uploaded screenshots,
 //         not by the user. Multi-select + confirm sheet + 1h server TTL
 //         (committed earlier under v194.1 but not OTA'd) ride along.
-export const OTA_VERSION = 196;
+//   197 — v196.1 four user-reported AR fixes:
+//         5 远处看不到 → setGlobal bumps WispFadeFar/IconScale/Halo/Wisp/Scroll
+//         6 平放报错 → phone-flat threshold 0.85→0.97 + removed from plant gate
+//         9 mark 完不让连 mark → PlantSheet squeeze 1.2s→0.5s + no await onPlant
+//         10 init UX 干扰 → init=floating pill (not full-screen), 4s→8s timeout
+//         Bug 8 (退出再进 marker 漂移 20m) intentionally postponed — needs
+//         proper per-session anchor compensation that's beyond OTA scope.
+//         Bugs 1/2/3/4/7 are Unity-side, await next build.
+export const OTA_VERSION = 197;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
