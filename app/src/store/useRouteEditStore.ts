@@ -22,6 +22,7 @@
 import { create } from 'zustand';
 import type { LngLat } from '../services/routing/corridor/PolylineSampler';
 import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
+import { haversineM } from '../utils/geo';
 import type { EditSegment } from '../services/LocalRouteExtras';
 import type { TrailGraph } from '../services/routing/graph/TrailGraph';
 import type { PointCloudIndex } from '../services/routing/corridor/PointCloudIndex';
@@ -1180,17 +1181,30 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       set({ lastError: 'Cannot restore — route geometry unavailable.' });
       return { ok: false, newPoints: workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
     }
-    // Locate where the current first workingPoint lives in originalPoints.
+    // v204+ fix C1: tolerance must match routeNodeAnchors.findIndexNear's
+    // 5m tolerance — otherwise visible trim-restore anchors get rejected
+    // here when working endpoints differ from originals by >0.1m but
+    // <5m (the regime produced after route differs-from-extras fallback
+    // selects route.points which are snap-to-road geometry, not extras
+    // originalPoints). Without this match, user taps a visible orange
+    // restore dot and sees an error banner.
+    // Locate where the current first workingPoint lives in originalPoints,
+    // by nearest-distance with a 5m tolerance.
     let currentStartInOriginal = -1;
-    const TOL = 1e-6;
-    for (let i = 0; i < originalPoints.length; i++) {
-      if (
-        Math.abs(originalPoints[i].lng - workingPoints[0].lng) < TOL &&
-        Math.abs(originalPoints[i].lat - workingPoints[0].lat) < TOL
-      ) {
-        currentStartInOriginal = i;
-        break;
+    {
+      const TOL_M = 5;
+      let bestDist = Infinity;
+      for (let i = 0; i < originalPoints.length; i++) {
+        const d = haversineM(
+          { lat: originalPoints[i].lat, lng: originalPoints[i].lng },
+          { lat: workingPoints[0].lat, lng: workingPoints[0].lng },
+        );
+        if (d < bestDist) {
+          bestDist = d;
+          currentStartInOriginal = i;
+        }
       }
+      if (bestDist > TOL_M) currentStartInOriginal = -1;
     }
     if (currentStartInOriginal < 0) {
       set({ lastError: 'Cannot restore — route was edited beyond pure trim.' });
@@ -1281,16 +1295,25 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       set({ lastError: 'Cannot restore — route geometry unavailable.' });
       return { ok: false, newPoints: workingPoints, newSegments: state.segments, trimmedDistanceM: 0 };
     }
+    // v204+ fix C1: 5m tolerance — see restoreStart for rationale.
     let currentLastInOriginal = -1;
-    const TOL = 1e-6;
-    for (let i = originalPoints.length - 1; i >= 0; i--) {
-      if (
-        Math.abs(originalPoints[i].lng - workingPoints[workingPoints.length - 1].lng) < TOL &&
-        Math.abs(originalPoints[i].lat - workingPoints[workingPoints.length - 1].lat) < TOL
-      ) {
-        currentLastInOriginal = i;
-        break;
+    {
+      const TOL_M = 5;
+      let bestDist = Infinity;
+      for (let i = 0; i < originalPoints.length; i++) {
+        const d = haversineM(
+          { lat: originalPoints[i].lat, lng: originalPoints[i].lng },
+          {
+            lat: workingPoints[workingPoints.length - 1].lat,
+            lng: workingPoints[workingPoints.length - 1].lng,
+          },
+        );
+        if (d < bestDist) {
+          bestDist = d;
+          currentLastInOriginal = i;
+        }
       }
+      if (bestDist > TOL_M) currentLastInOriginal = -1;
     }
     if (currentLastInOriginal < 0) {
       set({ lastError: 'Cannot restore — route was edited beyond pure trim.' });

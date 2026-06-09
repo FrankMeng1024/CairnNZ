@@ -192,6 +192,12 @@ export function RouteEditorScreen() {
   // a second back press while the alert is open doesn't stack a
   // duplicate Alert.
   const discardAlertActiveRef = useRef(false);
+  // v204+ fix C3: timestamp of the last anchor onSelected callback.
+  // MapView onPress (background tap = deselect) consults this and
+  // skips deselect if onSelected fired within the last 200ms — closes
+  // the Android dispatch-order race where onPress can land after
+  // onSelected, instantly clearing the selection.
+  const anchorSelectAtRef = useRef<number>(0);
   useEffect(() => {
     if (!dualEditActive) return;
     if (Platform.OS !== 'android') return;
@@ -782,6 +788,9 @@ export function RouteEditorScreen() {
   // - Tap a different anchor that's NOT a candidate: switch source.
   const handleAnchorTap = useCallback(
     async (anchor: RouteNodeAnchor) => {
+      // v204+ fix C3: bump on EVERY tap so the MapView onPress race
+      // guard correctly suppresses the post-select deselect on Android.
+      anchorSelectAtRef.current = Date.now();
       if (anchor.id === selectedAnchorId) {
         setSelectedAnchorId(null);
         return;
@@ -808,16 +817,50 @@ export function RouteEditorScreen() {
       const store = useRouteEditStore.getState();
 
       // Endpoint trim cases.
+      // v204+ fix C2: trim that removes >50% of the route fires a
+      // confirm dialog so a single mis-tap doesn't silently shred 95%
+      // of the polyline. trimStart slices [newEndpointIdx .. last];
+      // trimEnd slices [0 .. newEndpointIdx]. Lost fraction is
+      // newEndpointIdx/total or (total-1-newEndpointIdx)/total
+      // respectively.
+      const trimAfterConfirm = (
+        message: string,
+        op: () => void,
+      ) => {
+        Alert.alert(
+          'Trim route?',
+          message,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Trim',
+              style: 'destructive',
+              onPress: op,
+            },
+          ],
+        );
+      };
       if (source.kind === 'endpoint-start') {
         if (target.kind === 'intersection' && target.workingPointIdx !== undefined) {
-          // Trim — slice off everything before target's workingPointIdx.
-          const r = store.trimStart(target.workingPointIdx);
-          if (!r.ok) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          } else {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          const totalLen = store.workingPoints.length;
+          const lostFraction = target.workingPointIdx / Math.max(1, totalLen - 1);
+          const doTrim = () => {
+            const r = store.trimStart(target.workingPointIdx!);
+            if (!r.ok) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            } else {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }
+            setSelectedAnchorId(null);
+          };
+          if (lostFraction > 0.5) {
+            trimAfterConfirm(
+              `This will remove the first ${Math.round(lostFraction * 100)}% of the route. Continue?`,
+              doTrim,
+            );
+            return;
           }
-          setSelectedAnchorId(null);
+          doTrim();
           return;
         }
         if (target.kind === 'trim-restore-start' && target.originalPointIdx !== undefined) {
@@ -834,13 +877,26 @@ export function RouteEditorScreen() {
       }
       if (source.kind === 'endpoint-end') {
         if (target.kind === 'intersection' && target.workingPointIdx !== undefined) {
-          const r = store.trimEnd(target.workingPointIdx);
-          if (!r.ok) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          } else {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          const totalLen = store.workingPoints.length;
+          const lostFraction =
+            (totalLen - 1 - target.workingPointIdx) / Math.max(1, totalLen - 1);
+          const doTrim = () => {
+            const r = store.trimEnd(target.workingPointIdx!);
+            if (!r.ok) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            } else {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }
+            setSelectedAnchorId(null);
+          };
+          if (lostFraction > 0.5) {
+            trimAfterConfirm(
+              `This will remove the last ${Math.round(lostFraction * 100)}% of the route. Continue?`,
+              doTrim,
+            );
+            return;
           }
-          setSelectedAnchorId(null);
+          doTrim();
           return;
         }
         if (target.kind === 'trim-restore-end' && target.originalPointIdx !== undefined) {
@@ -1341,7 +1397,16 @@ export function RouteEditorScreen() {
               // to "no source selected" state). Anchor taps are handled
               // by EditableNodeLayer's PointAnnotation.onSelected which
               // does not bubble to the MapView onPress.
+              // v204+ fix C3: on Android, onPress can fire AFTER onSelected
+              // when the tap lands near the edge of the PointAnnotation
+              // hit-target. Without this guard, the post-select onPress
+              // would clear the just-set selection. anchorSelectAtRef
+              // is bumped on every successful onSelected; we ignore
+              // background-tap deselect within 200ms.
               if (dualEditActive) {
+                if (Date.now() - anchorSelectAtRef.current < 200) {
+                  return;
+                }
                 if (selectedAnchorId) {
                   setSelectedAnchorId(null);
                 }
