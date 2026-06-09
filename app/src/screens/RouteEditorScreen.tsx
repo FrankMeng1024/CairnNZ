@@ -29,9 +29,12 @@ import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { DualLineLayer } from '../components/map/DualLineLayer';
 import { DraggableHandle } from '../components/map/DraggableHandle';
+import { EditableNodeLayer } from '../components/map/EditableNodeLayer';
 import { EditCoachmark, ApproximateWarningBar } from '../components/map/EditCoachmark';
 import { getFlagsSync } from '../config/featureFlags';
 import { buildEditContext } from '../services/routing/editContext';
+import { computeRouteNodeAnchors, type RouteNodeAnchor } from '../services/routing/routeNodeAnchors';
+import { computeCandidates, findNearestCandidate } from '../services/routing/candidateNodes';
 import type { LngLat as RoutingLngLat } from '../services/routing/corridor/PolylineSampler';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
@@ -587,6 +590,161 @@ export function RouteEditorScreen() {
     return { first, last, mid, midIdx };
   }, [dualEditActive, editStore.workingPoints, midpointAnchorIdx]);
 
+  // v200: routeNodeAnchors are the dots the user can tap. Endpoints
+  // always present + intersection junctions on the route + trim-restore
+  // points outside the current workingPoints slice. Recomputes whenever
+  // workingPoints or trailGraph changes (which happens after every
+  // commit).
+  const routeNodeAnchors = useMemo(() => {
+    if (!dualEditActive) return [];
+    return computeRouteNodeAnchors({
+      workingPoints: editStore.workingPoints,
+      originalPoints: editStore.originalPoints,
+      trailGraph: editStore.trailGraph,
+    });
+  }, [
+    dualEditActive,
+    editStore.workingPoints,
+    editStore.originalPoints,
+    editStore.trailGraph,
+  ]);
+
+  // v200: selection state is component-local — never persists. Tapping
+  // an anchor selects it; tapping it again or tapping background clears.
+  const [selectedAnchorId, setSelectedAnchorId] = useState<string | null>(null);
+
+  // v200: candidate set for the selected anchor. Computed via Dijkstra
+  // (intersection nodes) or simple list filter (endpoints).
+  const candidateAnchors = useMemo(() => {
+    if (!selectedAnchorId) return [];
+    const selected = routeNodeAnchors.find(a => a.id === selectedAnchorId);
+    if (!selected) return [];
+    return computeCandidates({
+      selected,
+      allAnchors: routeNodeAnchors,
+      workingPoints: editStore.workingPoints,
+      trailGraph: editStore.trailGraph,
+      walkedIndex: editStore.walkedIndex,
+      corridorRadiusM:
+        editStore.flagsSnapshot?.editCorridorRadiusMeters ?? 1000,
+    });
+  }, [
+    selectedAnchorId,
+    routeNodeAnchors,
+    editStore.workingPoints,
+    editStore.trailGraph,
+    editStore.walkedIndex,
+    editStore.flagsSnapshot?.editCorridorRadiusMeters,
+  ]);
+
+  const candidateAnchorIds = useMemo(
+    () => new Set(candidateAnchors.map(a => a.id)),
+    [candidateAnchors],
+  );
+
+  // Clear selection when leaving dual-edit (so re-entry starts fresh).
+  useEffect(() => {
+    if (!dualEditActive) {
+      setSelectedAnchorId(null);
+    }
+  }, [dualEditActive]);
+
+  // v200: tap handler for an anchor.
+  // - Tap the same anchor again: deselect.
+  // - Tap a different anchor that's a CANDIDATE for the current source:
+  //     commit the replacement (fast path so user doesn't need to drag).
+  // - Tap a different anchor that's NOT a candidate: switch source.
+  const handleAnchorTap = useCallback(
+    async (anchor: RouteNodeAnchor) => {
+      if (anchor.id === selectedAnchorId) {
+        setSelectedAnchorId(null);
+        return;
+      }
+      // If we have a current source and the tap is on one of its
+      // candidates, commit immediately (tap-to-replace shortcut).
+      if (selectedAnchorId && candidateAnchorIds.has(anchor.id)) {
+        await commitAnchorReplacement(selectedAnchorId, anchor);
+        return;
+      }
+      // Otherwise: select the new anchor.
+      Haptics.selectionAsync().catch(() => {});
+      setSelectedAnchorId(anchor.id);
+    },
+    [selectedAnchorId, candidateAnchorIds, candidateAnchors, routeNodeAnchors],
+  );
+
+  // v200: commit a node replacement. Source is identified by id (must be
+  // the currently selected anchor), target is the candidate anchor.
+  const commitAnchorReplacement = useCallback(
+    async (sourceId: string, target: RouteNodeAnchor) => {
+      const source = routeNodeAnchors.find(a => a.id === sourceId);
+      if (!source) return;
+      const store = useRouteEditStore.getState();
+
+      // Endpoint trim cases.
+      if (source.kind === 'endpoint-start') {
+        if (target.kind === 'intersection' && target.workingPointIdx !== undefined) {
+          // Trim — slice off everything before target's workingPointIdx.
+          const r = store.trimStart(target.workingPointIdx);
+          if (!r.ok) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          } else {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          setSelectedAnchorId(null);
+          return;
+        }
+        if (target.kind === 'trim-restore-start') {
+          // Restore — extend back. v1: not implemented in store yet;
+          // surface a friendly message and skip.
+          store.setLastError('Trim restore is coming soon — for now use Reset.');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          setSelectedAnchorId(null);
+          return;
+        }
+      }
+      if (source.kind === 'endpoint-end') {
+        if (target.kind === 'intersection' && target.workingPointIdx !== undefined) {
+          const r = store.trimEnd(target.workingPointIdx);
+          if (!r.ok) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          } else {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          setSelectedAnchorId(null);
+          return;
+        }
+        if (target.kind === 'trim-restore-end') {
+          store.setLastError('Trim restore is coming soon — for now use Reset.');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          setSelectedAnchorId(null);
+          return;
+        }
+      }
+
+      // Midpoint replacement.
+      if (
+        source.kind === 'intersection' &&
+        source.workingPointIdx !== undefined &&
+        target.kind === 'intersection'
+      ) {
+        store.proposeMidpointDrag(source.workingPointIdx, {
+          lng: target.lng,
+          lat: target.lat,
+        });
+        const r = await store.commitMidpointDrag();
+        if (!r.ok) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        } else {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        setSelectedAnchorId(null);
+        return;
+      }
+    },
+    [routeNodeAnchors],
+  );
+
   // Pre-fetch a one-shot GPS fix on enter so the editor opens centred
   // on the user's actual location and the geocoding bias / country
   // detection have a real coordinate to work from. Without this the
@@ -997,10 +1155,17 @@ export function RouteEditorScreen() {
             scaleBarEnabled={false}
             compassEnabled={false}
             onPress={(e: any) => {
-              // Sprint 66: when dual-edit is active, map taps belong to
-              // the edit overlay (drag handles + line), not to the
-              // create-route waypoint flow. Suppress the tap-to-add.
-              if (dualEditActive) return;
+              // v200: when dual-edit is active, map background tap
+              // deselects any selected node anchor (returns the editor
+              // to "no source selected" state). Anchor taps are handled
+              // by EditableNodeLayer's PointAnnotation.onSelected which
+              // does not bubble to the MapView onPress.
+              if (dualEditActive) {
+                if (selectedAnchorId) {
+                  setSelectedAnchorId(null);
+                }
+                return;
+              }
               // v198 fix-6: in save-as-route draft mode the map shows a
               // pre-recorded activity polyline. Map taps must NOT add
               // user pins on top — those would persist into the route's
@@ -1173,106 +1338,13 @@ export function RouteEditorScreen() {
                 showOriginal
               />
             )}
-            {dualEditActive && editHandles && (
-              <>
-                <DraggableHandle
-                  id="edit-handle-trim-start"
-                  coordinate={editHandles.first}
-                  kind="trim-start"
-                  onDragEnd={newCoord => {
-                    // Map drag-end coord back to the closest point index
-                    // on workingPoints; trim everything before that index.
-                    // We use haversine distance to find nearest.
-                    const wp = useRouteEditStore.getState().workingPoints;
-                    let bestIdx = 0;
-                    let bestD = Infinity;
-                    for (let i = 0; i < wp.length; i++) {
-                      const d = haversineM(
-                        { lat: newCoord.lat, lng: newCoord.lng },
-                        { lat: wp[i].lat, lng: wp[i].lng },
-                      );
-                      if (d < bestD) {
-                        bestD = d;
-                        bestIdx = i;
-                      }
-                    }
-                    // v30-fix (Critical Scenario 5 + Medium Scenario 4):
-                    // surface user feedback for out-of-range drags.
-                    // v32-fix (B2/M4): route through setLastError so the
-                    // editOpSeq invariant is preserved.
-                    if (bestIdx <= 0 || bestIdx >= wp.length - 1) {
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                      useRouteEditStore
-                        .getState()
-                        .setLastError('Cannot trim past the route endpoints.');
-                      return;
-                    }
-                    const r = useRouteEditStore.getState().trimStart(bestIdx);
-                    if (!r.ok) {
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                    } else {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }
-                  }}
-                />
-                <DraggableHandle
-                  id="edit-handle-trim-end"
-                  coordinate={editHandles.last}
-                  kind="trim-end"
-                  onDragEnd={newCoord => {
-                    const wp = useRouteEditStore.getState().workingPoints;
-                    let bestIdx = wp.length - 1;
-                    let bestD = Infinity;
-                    for (let i = 0; i < wp.length; i++) {
-                      const d = haversineM(
-                        { lat: newCoord.lat, lng: newCoord.lng },
-                        { lat: wp[i].lat, lng: wp[i].lng },
-                      );
-                      if (d < bestD) {
-                        bestD = d;
-                        bestIdx = i;
-                      }
-                    }
-                    if (bestIdx <= 0 || bestIdx >= wp.length - 1) {
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                      useRouteEditStore
-                        .getState()
-                        .setLastError('Cannot trim past the route endpoints.');
-                      return;
-                    }
-                    const r = useRouteEditStore.getState().trimEnd(bestIdx);
-                    if (!r.ok) {
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                    } else {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }
-                  }}
-                />
-                {editStore.workingPoints.length >= 3 && (
-                  <DraggableHandle
-                    id="edit-handle-midpoint"
-                    coordinate={editHandles.mid}
-                    kind="midpoint"
-                    onDragEnd={async newCoord => {
-                      const idx = editHandles.midIdx;
-                      useRouteEditStore.getState().proposeMidpointDrag(idx, {
-                        lng: newCoord.lng,
-                        lat: newCoord.lat,
-                      });
-                      const r = await useRouteEditStore
-                        .getState()
-                        .commitMidpointDrag();
-                      if (!r.ok) {
-                        Haptics.notificationAsync(
-                          Haptics.NotificationFeedbackType.Warning,
-                        );
-                      } else {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      }
-                    }}
-                  />
-                )}
-              </>
+            {dualEditActive && (
+              <EditableNodeLayer
+                anchors={routeNodeAnchors}
+                selectedAnchorId={selectedAnchorId}
+                candidateAnchorIds={candidateAnchorIds}
+                onAnchorTap={handleAnchorTap}
+              />
             )}
             {/* Current user location — blue dot with white ring + soft
                 glow. Visually distinct from waypoint pins so the user
