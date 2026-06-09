@@ -86,13 +86,20 @@ export function EditableNodeLayer({
         // sit hidden — too many original-trace points would clutter
         // the map.
         if (isTrimRestore && !isCandidate) return null;
-        // v200 Phase 6: hide intersection anchors at low zoom (endpoints
-        // stay visible — those are trim handles and must always be
-        // reachable). Trim-restore anchors are only ever rendered as
-        // candidates, which only happens when their endpoint is selected
-        // (user has actively zoomed/positioned to engage), so they don't
-        // need the zoom gate.
-        if (hideIntersections && anchor.kind === 'intersection') return null;
+        // v200 Phase 6 + fix C1: hide intersection anchors at low zoom,
+        // BUT keep them visible if they're currently lit candidates
+        // (otherwise tapping an endpoint at low zoom would compute
+        // candidates that the user can't see, leaving the screen
+        // unresponsive). Endpoints stay visible regardless of zoom —
+        // those are the trim handles and must always be reachable.
+        if (
+          hideIntersections &&
+          anchor.kind === 'intersection' &&
+          !isSelected &&
+          !isCandidate
+        ) {
+          return null;
+        }
 
         const visualState: 'idle' | 'selected' | 'candidate-midpoint' | 'candidate-trim' =
           isSelected

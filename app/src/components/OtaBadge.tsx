@@ -141,7 +141,84 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         tap. The Phase 5 spec drag-with-magnet pass is deferred —
 //         tap-to-tap covers the common case smoothly without gesture
 //         conflict. OTA-only.
-export const OTA_VERSION = 200;
+//   201 — v199 cinematic AR rebuild ships (the Phase 4-7 EAS build).
+//         Single build replaces v187 cairn visual stack with Pounamu
+//         greenstone NZ-aesthetic Avatar-grade system: ARAnchor parenting
+//         (fixes #1/#7 floating + drift), per-session GPS offset
+//         compensation (fixes #8 re-entry 20m), TMP SDF rune text on
+//         stone backplate (fixes #2 字重叠), 3D oblate-spheroid pebble
+//         cairn icon matching logo + billboard type chips for other
+//         types (fixes #3 icon angles), real ascending strand particle
+//         lifecycle Trails Module PerParticle + 5 hero mesh ribbons +
+//         far-distance light shaft (fixes #4 flowing + #5 distance),
+//         permanent floating-pill init UX with Avatar-style scanning
+//         grid (locks #10), Tier-A Y-lock to eliminate post-plant
+//         micro-drift, brand-new like/report aim-detection UX with
+//         on-cairn realtime count badge. Backend canon-correct single
+//         /vote endpoint with HMAC nonce + rate-limit + impossible-
+//         travel + GPS gate (canon §一-4 mutex + 永久1票 enforced).
+//         ~135 OTA-tunable globals (vs ~25 in v187). app.json version
+//         0.2.0 → 0.2.1 to gate LikeReportSheet on binaries with the
+//         new Unity LikeBadge handler (V2.C8).
+//   202 — v200 follow-up: review subagent found 2 Blockers + 4 Critical
+//         in the v200 first-ship attempt; this commit addresses them.
+//         B1 (orphan persisted route on Cancel): freshlyCreatedRouteId
+//         tracked across the save-as-route → Edit flow; cancel/discard
+//         deletes the backend route. Unmount cleanup catches the case
+//         where the user exits via hardware back / BackButton without
+//         hitting Cancel. The view-mode Cancel button now branches on
+//         (fromSessionId && !routeId) OR (freshlyCreatedRouteId === routeId)
+//         so post-addRoute view-mode still treats Cancel as "discard".
+//         B2 (two-tap Edit UX with no feedback): single-tap Edit now
+//         calls addRoute then continues straight into the existing-route
+//         dualEdit init using effectiveRouteId/effectiveExistingRoute
+//         locals. No re-tap needed.
+//         C3 (top-bar + bottom-row both render Save/Cancel): top-bar in
+//         dualEditActive now keeps ONLY Reset. Save + Cancel are bottom-
+//         row only.
+//         C1, C2, C4 deferred to v203 (zoom-gate-with-active-selection
+//         edge case + drag snap-radius scale-by-zoom + drag gesture
+//         long-press conflict are bounded by tap-to-tap fallback being
+//         primary).
+//         OTA-only.
+//   203 — v199 cinematic AR rebuild ships in the next EAS build (binary
+//         version 0.2.1, see V2.C8 gate). Same scope as documented at
+//         line 145-162 above; bumped because v202 occupied 201. After
+//         this OTA, the new aim-detection LikeReportSheet UI mounts only
+//         on binaries >= 0.2.1; older v0.2.0 binaries running v203 OTA
+//         see no LikeReportSheet, no Unity LikeBadge, no broken UX.
+//   204 — v200 follow-up: review subagent found 2 Blockers + 4 Critical
+//         in the v200 first-ship attempt; this commit addresses them.
+//         (Originally bumped 200→202 in an earlier draft; master-side
+//         AR work landed v203 in parallel, hence final 204.)
+//         B1 (orphan persisted route on Cancel): freshlyCreatedRouteId
+//         tracked across the save-as-route → Edit flow; cancel/discard
+//         deletes the backend route. Unmount cleanup catches the case
+//         where the user exits via hardware back / BackButton without
+//         hitting Cancel. The view-mode Cancel button now branches on
+//         (fromSessionId && !routeId) OR (freshlyCreatedRouteId === routeId)
+//         so post-addRoute view-mode still treats Cancel as "discard".
+//         B2 (two-tap Edit UX with no feedback): single-tap Edit now
+//         calls addRoute then continues straight into the existing-
+//         route dualEdit init using effectiveRouteId/effectiveExistingRoute
+//         locals. No re-tap needed.
+//         C1 (zoom < 14 hides candidate dots): hideIntersections check
+//         now exempts isSelected + isCandidate, so endpoint-tap at low
+//         zoom still surfaces visible candidates.
+//         C2 (snap radius too generous at low zoom): SNAP_RADIUS_M now
+//         scales by current zoom (~50px screen-equivalent), capped
+//         [20m, 200m]. handleAnchorDragEnd useCallback deps include
+//         currentZoom.
+//         C3 (top-bar + bottom-row both render Save/Cancel): top-bar
+//         in dualEditActive keeps ONLY Reset. Save + Cancel are bottom-
+//         row only.
+//         C4 (long-press drag gesture conflict on iOS PointAnnotation):
+//         documented trade-off — tap-to-tap is the primary discovered
+//         path; drag-with-magnet is a power-user alternative requiring
+//         long-press by Mapbox native default. Replacing this with a
+//         custom screen-coord overlay is a v205 candidate.
+//         OTA-only.
+export const OTA_VERSION = 204;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

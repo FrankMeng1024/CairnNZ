@@ -126,6 +126,11 @@ export function RouteEditorScreen() {
   const editStore = useRouteEditStore();
   const [dualEditLoading, setDualEditLoading] = useState(false);
   const [dualEditError, setDualEditError] = useState<string | null>(null);
+  // v200 fix B1: when save-as-route → Edit creates a backend route to
+  // get a routeId, we record the new id here. If the user then cancels
+  // (without ever saving real edits), we delete the freshly-created
+  // backend route so it doesn't persist as an unintended save.
+  const [freshlyCreatedRouteId, setFreshlyCreatedRouteId] = useState<string | null>(null);
   const dualEditActive = editStore.isOpen && editStore.routeId === routeId;
   // Track which midpoint anchor index is being shown (defaults to middle).
   const [midpointAnchorIdx, setMidpointAnchorIdx] = useState<number>(0);
@@ -378,8 +383,10 @@ export function RouteEditorScreen() {
     // Save-as-route: no routeId yet but fromSessionId + sessionTrackPoints
     // populated. We persist the draft as a new route first (so editStore
     // has a routeId to anchor extras + persistence chain), then enter
-    // edit-mode. If user taps Cancel, the freshly-created route is
-    // deleted to undo the persistence side-effect.
+    // edit-mode. v200 fix B1+B2: addRoute is awaited, freshlyCreatedRouteId
+    // is recorded for cleanup-on-cancel, and execution continues
+    // straight into the existing-route branch — single Edit tap, no
+    // double-tap UX needed.
     if (!routeId && !fromSessionId) return;
     if (!getFlagsSync().editModeEnabled) {
       setDualEditError('Edit mode is currently disabled.');
@@ -387,8 +394,13 @@ export function RouteEditorScreen() {
     }
     if (dualEditLoading) return;
 
-    // Save-as-route path: addRoute first to mint a routeId, then
-    // recurse into the existing-route flow.
+    // Save-as-route path: addRoute first to mint a routeId. Once
+    // addRoute resolves, the local store has the route, but
+    // existingRoute (derived from useRouteStore selector) won't reflect
+    // it until the next React render. So we proceed using the new id
+    // directly and patch params for downstream renders.
+    let effectiveRouteId = routeId;
+    let effectiveExistingRoute = existingRoute;
     if (!routeId && fromSessionId) {
       if (sessionTrackPoints.length < 2) {
         setDualEditError('Loading route data — please try again in a moment.');
@@ -396,6 +408,7 @@ export function RouteEditorScreen() {
       }
       setDualEditLoading(true);
       setDualEditError(null);
+      let newId: string | null = null;
       try {
         const safeName = name.trim() ||
           (session
@@ -408,7 +421,7 @@ export function RouteEditorScreen() {
             { lat: sessionTrackPoints[i].lat, lng: sessionTrackPoints[i].lng },
           );
         }
-        const newId = await addRoute({
+        newId = await addRoute({
           name: safeName,
           points: sessionTrackPoints,
           waypoints: [],
@@ -417,39 +430,43 @@ export function RouteEditorScreen() {
         });
         if (!newId) {
           setDualEditError('Could not save route — please check your connection.');
+          setDualEditLoading(false);
           return;
         }
-        // Replace the screen's params so subsequent renders treat this
-        // as an existing-route flow. Keep fromSessionId in case the
-        // user cancels and we need to delete the just-created route.
+        // Record for cleanup-on-cancel + replace nav params so re-renders
+        // see the new route as existing.
+        setFreshlyCreatedRouteId(newId);
         (nav as any).setParams({ routeId: newId });
-      } finally {
+      } catch (e: any) {
+        setDualEditError(e?.message || 'Failed to start edit.');
         setDualEditLoading(false);
+        return;
       }
-      // Wait for the next render to reflect routeId. The user's tap
-      // already consumed; they'll need to tap Edit again. Surface a
-      // hint via the loading state we just released, but UX is cleaner
-      // if we just continue here. setParams is sync though — by the
-      // next event-loop tick, route.params.routeId is the new id.
-      // Bail — return; the user re-taps Edit and the existing-route
-      // branch below runs.
-      return;
+      // Continue into the existing-route flow below using effectiveRouteId.
+      effectiveRouteId = newId;
+      // existingRoute selector won't include the new route until next
+      // render. Read directly from the store.
+      effectiveExistingRoute = useRouteStore.getState().routes.find(r => r.id === newId);
+      // Fall through — DO NOT return.
     }
 
-    if (!routeId || !existingRoute) return;
-    if (!existingRoute.points || existingRoute.points.length < 2) {
+    if (!effectiveRouteId || !effectiveExistingRoute) {
+      setDualEditLoading(false);
+      return;
+    }
+    if (!effectiveExistingRoute.points || effectiveExistingRoute.points.length < 2) {
       setDualEditLoading(true);
       setDualEditError(null);
       try {
-        await loadRouteDetail(routeId);
+        await loadRouteDetail(effectiveRouteId);
         // Wait up to 5s for the store to reflect the hydrated points.
         const deadline = Date.now() + 5000;
         while (Date.now() < deadline) {
-          const live = useRouteStore.getState().routes.find(r => r.id === routeId);
+          const live = useRouteStore.getState().routes.find(r => r.id === effectiveRouteId);
           if (live && live.points && live.points.length >= 2) break;
           await new Promise(r => setTimeout(r, 100));
         }
-        const live = useRouteStore.getState().routes.find(r => r.id === routeId);
+        const live = useRouteStore.getState().routes.find(r => r.id === effectiveRouteId);
         if (!live || !live.points || live.points.length < 2) {
           setDualEditError(
             'Could not load route data — please check your connection and try again.',
@@ -470,7 +487,7 @@ export function RouteEditorScreen() {
     }
     // Re-read existingRoute from the store in case it was hydrated
     // above; the closure's reference is stale after the await.
-    const liveRoute = useRouteStore.getState().routes.find(r => r.id === routeId);
+    const liveRoute = useRouteStore.getState().routes.find(r => r.id === effectiveRouteId);
     if (!liveRoute || !liveRoute.points || liveRoute.points.length < 2) {
       setDualEditError('Route data unavailable.');
       return;
@@ -498,11 +515,11 @@ export function RouteEditorScreen() {
       const { loadExtras: loadExtrasFn } = await import(
         '../services/LocalRouteExtras'
       );
-      const preExtras = await loadExtrasFn(routeId);
+      const preExtras = await loadExtrasFn(effectiveRouteId);
       let ctx;
       if (preExtras && preExtras.originalPoints && preExtras.originalPoints.length >= 2) {
         // Non-legacy path: build context first.
-        ctx = await buildEditContext(routeId);
+        ctx = await buildEditContext(effectiveRouteId);
         if (!ctx) {
           setDualEditError(
             'Cannot edit this route — original GPS data is missing. Try recording it again.',
@@ -510,7 +527,7 @@ export function RouteEditorScreen() {
           return;
         }
         await useRouteEditStore.getState().beginEdit({
-          routeId,
+          routeId: effectiveRouteId,
           routePoints: legacyPoints,
           // v33-fix (Critical C-NEW-3): pass route.updatedAt so the
           // store can compare freshness against extras.updatedAt and
@@ -523,7 +540,7 @@ export function RouteEditorScreen() {
         // Legacy path: beginEdit migrates first (and writes pendingBeginArgs
         // on retry-failure for the MigratorRetryPrompt UX).
         await useRouteEditStore.getState().beginEdit({
-          routeId,
+          routeId: effectiveRouteId,
           routePoints: legacyPoints,
           routeUpdatedAt: liveRoute.updatedAt,
           trailGraph: null,
@@ -541,7 +558,7 @@ export function RouteEditorScreen() {
         }
         // Migration succeeded — extras now exists. Build context and
         // inject walkedIndex/trailGraph so corridor enforcement is live.
-        ctx = await buildEditContext(routeId);
+        ctx = await buildEditContext(effectiveRouteId);
         if (ctx) {
           useRouteEditStore.setState({
             walkedIndex: ctx.walkedIndex,
@@ -581,6 +598,10 @@ export function RouteEditorScreen() {
               setDualEditError(result.error || 'Save failed.');
               return;
             }
+            // v200 fix B1: once Save resolves OK, the route is committed —
+            // clear the cleanup-on-cancel marker so accidental future
+            // cancellations don't delete the user's saved work.
+            setFreshlyCreatedRouteId(null);
             if (result.sessionReplaced) {
               // v30-fix (Medium — Scenario 23): the save persisted but a
               // new session is now active — give the user explicit
@@ -620,11 +641,22 @@ export function RouteEditorScreen() {
           .catch(e => setDualEditError(e?.message || 'Save failed.'));
       } else {
         useRouteEditStore.getState().cancelEdit();
-        // Don't navigate — return to the view-mode editor screen so the
-        // user can re-enter or discard the route.
+        // v200 fix B1: if we created a backend route via the save-as-route
+        // → Edit flow and the user is now cancelling, delete that route
+        // so it doesn't persist as an unintended save. The route was a
+        // means-to-an-end (we needed a routeId to anchor edit state),
+        // not a user-confirmed save. Once deleted, also pop back to the
+        // Activity since the screen no longer has a valid routeId to
+        // render against.
+        if (freshlyCreatedRouteId) {
+          deleteRoute(freshlyCreatedRouteId).catch(() => {});
+          setFreshlyCreatedRouteId(null);
+          nav.goBack();
+        }
+        // For non-save-as-route cancel: just return to view-mode (no nav).
       }
     },
-    [dualEditActive, routeId, nav, updateRoute],
+    [dualEditActive, routeId, nav, updateRoute, freshlyCreatedRouteId, deleteRoute],
   );
 
   // Memoise edit handles' coordinates so PointAnnotation re-renders only
@@ -669,6 +701,31 @@ export function RouteEditorScreen() {
   // any onCameraChanged fires) does NOT spuriously suppress the dots
   // when the camera fit zoom is already big enough.
   const [currentZoom, setCurrentZoom] = useState<number>(14);
+
+  // v200 fix B1: when save-as-route → Edit creates a backend route to
+  // get a routeId, we record the new id here. If the user then cancels
+  // (without ever saving real edits), we delete the freshly-created
+  // backend route so it doesn't persist as an unintended save.
+  // Cleared on the first successful save — by that point the user has
+  // accepted the route as real.
+
+  // v200 fix B1 cleanup: if the user exits the screen via hardware back
+  // or BackButton WITHOUT going through Cancel/Save, the freshly-created
+  // backend route would persist as an unintended save. This unmount-time
+  // cleanup deletes it. Read state via ref so the closure isn't stale.
+  const freshlyCreatedRouteIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    freshlyCreatedRouteIdRef.current = freshlyCreatedRouteId;
+  }, [freshlyCreatedRouteId]);
+  useEffect(() => {
+    return () => {
+      const id = freshlyCreatedRouteIdRef.current;
+      if (id) {
+        // Best-effort delete — fire-and-forget; the screen is unmounting.
+        deleteRoute(id).catch(() => {});
+      }
+    };
+  }, [deleteRoute]);
 
   // v200: candidate set for the selected anchor. Computed via Dijkstra
   // (intersection nodes) or simple list filter (endpoints).
@@ -822,7 +879,14 @@ export function RouteEditorScreen() {
       releaseLat: number,
     ) => {
       if (sourceAnchor.id !== selectedAnchorId) return;
-      const SNAP_RADIUS_M = 100;
+      // v200 fix C2: scale snap radius by current zoom so the magnet
+      // window is roughly constant in screen pixels (~50px). At zoom 14
+      // 1 screen pixel ≈ 9.5m at the equator; at zoom 16 ≈ 2.4m. Formula:
+      // baseM_at_z14 / 2^(zoom - 14). Cap at 200m to handle very low
+      // zoom without making the world the magnet target.
+      const baseM = 50 * 9.5; // ~475m visible-pixels at zoom 14
+      const scaledRadius = baseM / Math.pow(2, Math.max(0, currentZoom - 14));
+      const SNAP_RADIUS_M = Math.min(200, Math.max(20, scaledRadius));
       const nearest = findNearestCandidate(
         candidateAnchors,
         releaseLng,
@@ -838,7 +902,7 @@ export function RouteEditorScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       await commitAnchorReplacement(sourceAnchor.id, nearest);
     },
-    [selectedAnchorId, candidateAnchors, commitAnchorReplacement],
+    [selectedAnchorId, candidateAnchors, commitAnchorReplacement, currentZoom],
   );
 
   // Pre-fetch a one-shot GPS fix on enter so the editor opens centred
@@ -1553,33 +1617,14 @@ export function RouteEditorScreen() {
           {/* Sprint 66 dual-source edit toolbar: shown when the user is
               in dual-edit mode. Cancel discards the pending session;
               Save commits via useRouteEditStore.saveAndExit. */}
+          {/* v200 fix C3: top-bar in dual-edit mode keeps ONLY Reset.
+              Save + Cancel moved to the bottom row (matches view-mode
+              layout per spec point 2). Two parallel Save+Cancel pairs
+              would compete with double-confirm flows.
+              Reset stays at top so the user always has a one-tap "undo
+              everything in this session" without scrolling to bottom. */}
           {dualEditActive && (
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity
-                style={[styles.saveTopBtn, { backgroundColor: '#6B7280' }]}
-                onPress={() => {
-                  Alert.alert(
-                    'Discard edits?',
-                    'Your changes will be lost.',
-                    [
-                      { text: 'Keep editing', style: 'cancel' },
-                      {
-                        text: 'Discard',
-                        style: 'destructive',
-                        onPress: () => exitDualEdit('cancel'),
-                      },
-                    ],
-                  );
-                }}
-              >
-                <Icon name="X" size={16} color="#fff" strokeWidth={2.5} />
-                <Text style={styles.saveTopBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              {/* v31-fix (Medium Scenario 12): Reset button gives the
-                  user a recovery path when extreme trim collapses the
-                  route to <2 points or zero length. Without this, save
-                  is refused and there's no way out except Cancel→Discard
-                  (which loses ALL edits, not just the bad trim). */}
               <TouchableOpacity
                 style={[styles.saveTopBtn, { backgroundColor: '#9CA3AF' }]}
                 onPress={() => {
@@ -1602,20 +1647,6 @@ export function RouteEditorScreen() {
               >
                 <Icon name="RotateCcw" size={16} color="#fff" strokeWidth={2.5} />
                 <Text style={styles.saveTopBtnText}>Reset</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.saveTopBtn}
-                onPress={() => exitDualEdit('save')}
-                disabled={editStore.isSaving}
-              >
-                {editStore.isSaving ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Icon name="Check" size={16} color="#fff" strokeWidth={2.5} />
-                )}
-                <Text style={styles.saveTopBtnText}>
-                  {editStore.isSaving ? 'Saving…' : 'Save'}
-                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1802,8 +1833,14 @@ export function RouteEditorScreen() {
                     return;
                   }
                   // v200 view-mode save-as-route: Cancel = discard the
-                  // unsaved draft, pop back to Activity.
-                  if (fromSessionId && !routeId) {
+                  // unsaved draft, pop back to Activity. Two sub-cases:
+                  //   (a) routeId not yet minted (user never tapped Edit)
+                  //   (b) routeId is the just-created backend route from
+                  //       enterDualEdit (Edit→Save was never confirmed)
+                  // Both = unconfirmed save, both = delete + goBack.
+                  const isFreshlyCreated =
+                    !!freshlyCreatedRouteId && routeId === freshlyCreatedRouteId;
+                  if ((fromSessionId && !routeId) || isFreshlyCreated) {
                     Alert.alert(
                       'Discard route?',
                       'This route was not saved. Are you sure you want to discard it?',
@@ -1813,6 +1850,12 @@ export function RouteEditorScreen() {
                           text: 'Discard',
                           style: 'destructive',
                           onPress: () => {
+                            // Cleanup: if we created a backend route as
+                            // part of the Edit flow, delete it now.
+                            if (isFreshlyCreated && freshlyCreatedRouteId) {
+                              deleteRoute(freshlyCreatedRouteId).catch(() => {});
+                              setFreshlyCreatedRouteId(null);
+                            }
                             nav.goBack();
                           },
                         },
@@ -1843,7 +1886,8 @@ export function RouteEditorScreen() {
                   name={
                     dualEditActive
                       ? 'X'
-                      : fromSessionId && !routeId
+                      : (fromSessionId && !routeId) ||
+                        (!!freshlyCreatedRouteId && routeId === freshlyCreatedRouteId)
                         ? 'X'
                         : 'Trash2'
                   }
@@ -1854,7 +1898,8 @@ export function RouteEditorScreen() {
                 <Text style={styles.viewDeleteBtnText}>
                   {dualEditActive
                     ? 'Cancel'
-                    : fromSessionId && !routeId
+                    : (fromSessionId && !routeId) ||
+                      (!!freshlyCreatedRouteId && routeId === freshlyCreatedRouteId)
                       ? 'Cancel'
                       : 'Delete'}
                 </Text>
