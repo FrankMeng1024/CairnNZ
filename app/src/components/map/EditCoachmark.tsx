@@ -30,22 +30,22 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const STORAGE_KEY = '@cairn:edit_coachmark_seen_v1';
+const STORAGE_KEY = '@cairn:edit_coachmark_seen_v2';
 
 const STEPS = [
   {
-    title: 'Trim your route',
-    body: 'Drag the green or red dot at the start or end to shorten your route.',
+    title: 'Tap any dot to start',
+    body: 'Each circle on the route is an editable point. Green/red ones are the start and end. Grey ones are road junctions where you can change direction.',
   },
   {
-    title: 'Adjust the middle',
+    title: 'Pick a new place',
     body:
-      'Tap any point on the route to drag it. Stays within 1 km of where you actually walked — no creative routing.',
+      'After tapping, nearby reachable points light up. Tap one to swap your route through there. Stays within 1 km of your walked path — no creative routing.',
   },
   {
     title: 'Save when done',
     body:
-      'Your original walked path is preserved as a faded line. Edits show as blue. Tap Save to keep changes.',
+      'Your original walked path is preserved as a faded line. Tap Save to keep changes, Cancel to discard.',
   },
 ];
 

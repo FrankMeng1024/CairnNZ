@@ -373,20 +373,70 @@ export function RouteEditorScreen() {
   }, [dualEditActive, editStore.pendingStraightConfirm?.fromPointIdx]);
 
   const enterDualEdit = useCallback(async () => {
-    if (!routeId || !existingRoute) return;
+    // v200: support BOTH entries (existing route + save-as-route draft).
+    // Existing route: routeId set, edit operates on it directly.
+    // Save-as-route: no routeId yet but fromSessionId + sessionTrackPoints
+    // populated. We persist the draft as a new route first (so editStore
+    // has a routeId to anchor extras + persistence chain), then enter
+    // edit-mode. If user taps Cancel, the freshly-created route is
+    // deleted to undo the persistence side-effect.
+    if (!routeId && !fromSessionId) return;
     if (!getFlagsSync().editModeEnabled) {
       setDualEditError('Edit mode is currently disabled.');
       return;
     }
-    // v30-fix (functional Blocker — Scenario 25) + v31-fix (Medium
-    // Scenario 16): if existingRoute.points hasn't hydrated yet, kick
-    // off hydration AND wait inline (with a 5s timeout) so the user
-    // sees the spinner on the Edit button instead of a confusing
-    // bounce-back-with-error UX. Without inline await, beginEdit would
-    // get routePoints:[] and migration would fail on empty input.
-    // v31-fix (Critical X1): set dualEditLoading=true BEFORE the await
-    // so the Edit button shows the spinner during hydration.
     if (dualEditLoading) return;
+
+    // Save-as-route path: addRoute first to mint a routeId, then
+    // recurse into the existing-route flow.
+    if (!routeId && fromSessionId) {
+      if (sessionTrackPoints.length < 2) {
+        setDualEditError('Loading route data — please try again in a moment.');
+        return;
+      }
+      setDualEditLoading(true);
+      setDualEditError(null);
+      try {
+        const safeName = name.trim() ||
+          (session
+            ? `${session.activityMode === 'running' ? 'Run' : 'Hike'} ${new Date(session.startedAt).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}`
+            : 'Untitled route');
+        let computedDistance = 0;
+        for (let i = 1; i < sessionTrackPoints.length; i++) {
+          computedDistance += haversineM(
+            { lat: sessionTrackPoints[i - 1].lat, lng: sessionTrackPoints[i - 1].lng },
+            { lat: sessionTrackPoints[i].lat, lng: sessionTrackPoints[i].lng },
+          );
+        }
+        const newId = await addRoute({
+          name: safeName,
+          points: sessionTrackPoints,
+          waypoints: [],
+          distanceM: computedDistance,
+          elevationGainM: session?.elevationGainM ?? 0,
+        });
+        if (!newId) {
+          setDualEditError('Could not save route — please check your connection.');
+          return;
+        }
+        // Replace the screen's params so subsequent renders treat this
+        // as an existing-route flow. Keep fromSessionId in case the
+        // user cancels and we need to delete the just-created route.
+        (nav as any).setParams({ routeId: newId });
+      } finally {
+        setDualEditLoading(false);
+      }
+      // Wait for the next render to reflect routeId. The user's tap
+      // already consumed; they'll need to tap Edit again. Surface a
+      // hint via the loading state we just released, but UX is cleaner
+      // if we just continue here. setParams is sync though — by the
+      // next event-loop tick, route.params.routeId is the new id.
+      // Bail — return; the user re-taps Edit and the existing-route
+      // branch below runs.
+      return;
+    }
+
+    if (!routeId || !existingRoute) return;
     if (!existingRoute.points || existingRoute.points.length < 2) {
       setDualEditLoading(true);
       setDualEditError(null);
@@ -510,7 +560,7 @@ export function RouteEditorScreen() {
     } finally {
       setDualEditLoading(false);
     }
-  }, [routeId, existingRoute, dualEditLoading, loadRouteDetail]);
+  }, [routeId, existingRoute, dualEditLoading, loadRouteDetail, fromSessionId, sessionTrackPoints, name, session, addRoute, nav]);
 
   const exitDualEdit = useCallback(
     (mode: 'save' | 'cancel') => {
@@ -612,6 +662,13 @@ export function RouteEditorScreen() {
   // v200: selection state is component-local — never persists. Tapping
   // an anchor selects it; tapping it again or tapping background clears.
   const [selectedAnchorId, setSelectedAnchorId] = useState<string | null>(null);
+
+  // v200 Phase 6: track current map zoom so EditableNodeLayer can
+  // hide all anchor circles below MIN_NODE_DISPLAY_ZOOM. Initialised
+  // to a high value so first paint after entering edit-mode (before
+  // any onCameraChanged fires) does NOT spuriously suppress the dots
+  // when the camera fit zoom is already big enough.
+  const [currentZoom, setCurrentZoom] = useState<number>(14);
 
   // v200: candidate set for the selected anchor. Computed via Dijkstra
   // (intersection nodes) or simple list filter (endpoints).
@@ -750,6 +807,38 @@ export function RouteEditorScreen() {
       }
     },
     [routeNodeAnchors],
+  );
+
+  // v200 Phase 5: drag-with-magnet. User long-presses (Mapbox default
+  // for draggable PointAnnotation) the SELECTED source anchor and
+  // drags. On release, find the nearest candidate within 100m of the
+  // release point. If found, commit the replacement. Otherwise no-op
+  // (snap back). The selection-only filter on draggable=true means
+  // idle dots are not draggable — accidental drags suppressed.
+  const handleAnchorDragEnd = useCallback(
+    async (
+      sourceAnchor: RouteNodeAnchor,
+      releaseLng: number,
+      releaseLat: number,
+    ) => {
+      if (sourceAnchor.id !== selectedAnchorId) return;
+      const SNAP_RADIUS_M = 100;
+      const nearest = findNearestCandidate(
+        candidateAnchors,
+        releaseLng,
+        releaseLat,
+        SNAP_RADIUS_M,
+      );
+      if (!nearest) {
+        // Drag-release on empty space: no-op, but provide a small
+        // haptic so user knows the drag was registered.
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        return;
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      await commitAnchorReplacement(sourceAnchor.id, nearest);
+    },
+    [selectedAnchorId, candidateAnchors, commitAnchorReplacement],
   );
 
   // Pre-fetch a one-shot GPS fix on enter so the editor opens centred
@@ -1161,6 +1250,15 @@ export function RouteEditorScreen() {
             attributionEnabled={false}
             scaleBarEnabled={false}
             compassEnabled={false}
+            onCameraChanged={(state: any) => {
+              // v200 Phase 6: track current zoom so EditableNodeLayer
+              // can hide all node circles below MIN_NODE_DISPLAY_ZOOM
+              // (otherwise dense junctions become unreadable dots).
+              const z = state?.properties?.zoom;
+              if (typeof z === 'number') {
+                setCurrentZoom(z);
+              }
+            }}
             onPress={(e: any) => {
               // v200: when dual-edit is active, map background tap
               // deselects any selected node anchor (returns the editor
@@ -1351,6 +1449,8 @@ export function RouteEditorScreen() {
                 selectedAnchorId={selectedAnchorId}
                 candidateAnchorIds={candidateAnchorIds}
                 onAnchorTap={handleAnchorTap}
+                onAnchorDragEnd={handleAnchorDragEnd}
+                currentZoom={currentZoom}
               />
             )}
             {/* Current user location — blue dot with white ring + soft
@@ -1534,6 +1634,17 @@ export function RouteEditorScreen() {
       {dualEditActive && (
         <>
           <EditCoachmark />
+          {/* v200 Phase 6: zoom hint when too far out to see node dots.
+              Surfaces only in edit-mode and only when currentZoom < 14
+              and no anchor is currently selected (selection state would
+              be the user's primary focus, the hint shouldn't fight it). */}
+          {currentZoom < 14 && !selectedAnchorId && (
+            <View style={styles.zoomHint}>
+              <Text style={styles.zoomHintText}>
+                Zoom in to see editable points
+              </Text>
+            </View>
+          )}
           <ApproximateWarningBar
             visible={!!editStore.lastWarning}
             message={editStore.lastWarning ?? undefined}
@@ -1618,49 +1729,80 @@ export function RouteEditorScreen() {
                 <Text style={styles.viewStatText}>{formatDistance(displayedStats.distanceM, 'km', 1)} km</Text>
               </View>
             </View>
-            {/* v124 fix #8: Edit + Delete moved into the bottom panel.
-                Matches Activity detail's [Save as Route, Delete] row
-                (Edit-on-left, Delete-on-right consistency rule). */}
+            {/* v200: bottom action row.
+                - View-mode (dualEditActive=false):
+                    save-as-route (fromSessionId, no routeId) → Edit + Cancel
+                    existing route (routeId) → Edit + Delete
+                - Edit-mode (dualEditActive=true):
+                    → Save + Cancel(discard edits, double-confirm)
+            */}
             <View style={styles.viewActions}>
-              <TouchableOpacity
-                style={[styles.viewBtn, styles.viewEditBtn]}
-                onPress={() => {
-                  // Sprint 66: when editModeEnabled flag is on AND we have
-                  // an existing route, the "Edit" CTA enters the dual-source
-                  // edit surface (DualLineLayer + handles). When off, fall
-                  // back to the legacy waypoint editor (setEditMode(true)).
-                  if (
-                    routeId &&
-                    existingRoute &&
-                    getFlagsSync().editModeEnabled
-                  ) {
-                    enterDualEdit();
-                  } else {
-                    setEditMode(true);
-                  }
-                }}
-                activeOpacity={0.85}
-                disabled={dualEditLoading}
-              >
-                {dualEditLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Icon name="Pencil" size={16} color="#fff" strokeWidth={2.5} />
-                )}
-                <Text style={styles.viewEditBtnText}>
-                  {dualEditLoading ? 'Loading…' : 'Edit'}
-                </Text>
-              </TouchableOpacity>
+              {dualEditActive ? (
+                <TouchableOpacity
+                  style={[styles.viewBtn, styles.viewEditBtn]}
+                  onPress={() => exitDualEdit('save')}
+                  activeOpacity={0.85}
+                  disabled={editStore.isSaving}
+                >
+                  {editStore.isSaving ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Icon name="Check" size={16} color="#fff" strokeWidth={2.5} />
+                  )}
+                  <Text style={styles.viewEditBtnText}>
+                    {editStore.isSaving ? 'Saving…' : 'Save'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.viewBtn, styles.viewEditBtn]}
+                  onPress={() => {
+                    if (
+                      (routeId || fromSessionId) &&
+                      getFlagsSync().editModeEnabled
+                    ) {
+                      enterDualEdit();
+                    } else {
+                      setEditMode(true);
+                    }
+                  }}
+                  activeOpacity={0.85}
+                  disabled={dualEditLoading}
+                >
+                  {dualEditLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Icon name="Pencil" size={16} color="#fff" strokeWidth={2.5} />
+                  )}
+                  <Text style={styles.viewEditBtnText}>
+                    {dualEditLoading ? 'Loading…' : 'Edit'}
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[styles.viewBtn, styles.viewDeleteBtn]}
                 onPress={() => {
-                  // v200: in save-as-route view-mode (fromSessionId set,
-                  // no routeId yet) the right button is "Cancel" — it
-                  // discards the unsaved draft and pops back to the
-                  // Activity. In existing-route view-mode (routeId set)
-                  // the right button is "Delete" — it removes the route
-                  // from the store. Both go through a double-confirm
-                  // alert per spec.
+                  // v200 edit-mode: Cancel = discard edits with
+                  // double-confirm, return to view-mode (route still
+                  // there). Mirrors the in-edit Cancel button that
+                  // existed on the dual-edit top toolbar.
+                  if (dualEditActive) {
+                    Alert.alert(
+                      'Discard edits?',
+                      'Your changes will be lost.',
+                      [
+                        { text: 'Keep editing', style: 'cancel' },
+                        {
+                          text: 'Discard',
+                          style: 'destructive',
+                          onPress: () => exitDualEdit('cancel'),
+                        },
+                      ],
+                    );
+                    return;
+                  }
+                  // v200 view-mode save-as-route: Cancel = discard the
+                  // unsaved draft, pop back to Activity.
                   if (fromSessionId && !routeId) {
                     Alert.alert(
                       'Discard route?',
@@ -1698,13 +1840,23 @@ export function RouteEditorScreen() {
                 activeOpacity={0.85}
               >
                 <Icon
-                  name={fromSessionId && !routeId ? 'X' : 'Trash2'}
+                  name={
+                    dualEditActive
+                      ? 'X'
+                      : fromSessionId && !routeId
+                        ? 'X'
+                        : 'Trash2'
+                  }
                   size={16}
                   color={Colors.danger}
                   strokeWidth={2.5}
                 />
                 <Text style={styles.viewDeleteBtnText}>
-                  {fromSessionId && !routeId ? 'Cancel' : 'Delete'}
+                  {dualEditActive
+                    ? 'Cancel'
+                    : fromSessionId && !routeId
+                      ? 'Cancel'
+                      : 'Delete'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1831,6 +1983,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md, paddingVertical: 8,
   },
   saveTopBtnText: { fontSize: FontSize.small, fontWeight: '700', color: '#fff' },
+  // v200 Phase 6: zoom hint pill — small dark chip in the top-center
+  // of the map, only visible while the user is too zoomed out to see
+  // editable node dots. Non-interactive; auto-hides on zoom-in.
+  zoomHint: {
+    position: 'absolute',
+    top: 100,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+  },
+  zoomHintText: {
+    color: '#FFFFFF',
+    fontSize: FontSize.small,
+    fontWeight: '600',
+  },
   dualEditErrorBar: {
     position: 'absolute',
     top: 100,

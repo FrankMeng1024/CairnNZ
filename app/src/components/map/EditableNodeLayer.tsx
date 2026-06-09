@@ -36,16 +36,40 @@ export interface EditableNodeLayerProps {
   selectedAnchorId: string | null;
   candidateAnchorIds: Set<string>;
   onAnchorTap: (anchor: RouteNodeAnchor) => void;
+  /**
+   * v200 Phase 5: drag-with-magnet. When the user drags the SELECTED
+   * source anchor (Mapbox PointAnnotation draggable), find the nearest
+   * candidate within snapRadiusM and commit replacement. Drag-release
+   * on empty space = no-op. This complements tap-to-tap — power users
+   * can drag for the more direct gesture; new users discover tap.
+   */
+  onAnchorDragEnd?: (
+    sourceAnchor: RouteNodeAnchor,
+    releaseLng: number,
+    releaseLat: number,
+  ) => void;
+  /** Current map zoom — anchors hidden below MIN_NODE_DISPLAY_ZOOM. */
+  currentZoom?: number;
 }
+
+const MIN_NODE_DISPLAY_ZOOM = 14;
 
 export function EditableNodeLayer({
   anchors,
   selectedAnchorId,
   candidateAnchorIds,
   onAnchorTap,
+  onAnchorDragEnd,
+  currentZoom,
 }: EditableNodeLayerProps): React.JSX.Element | null {
   if (!PointAnnotation) return null;
   if (anchors.length === 0) return null;
+  // v200 Phase 6: hide all anchor circles when zoomed out too far.
+  // Endpoints stay visible because they're the trim handles — losing
+  // them would leave the user with no edit surface at all on long
+  // routes. Intersection nodes + trim-restore anchors hide.
+  const hideIntersections =
+    typeof currentZoom === 'number' && currentZoom < MIN_NODE_DISPLAY_ZOOM;
 
   return (
     <>
@@ -54,15 +78,21 @@ export function EditableNodeLayer({
         const isCandidate = candidateAnchorIds.has(anchor.id);
         const isTrimRestore =
           anchor.kind === 'trim-restore-start' || anchor.kind === 'trim-restore-end';
+        const isEndpoint =
+          anchor.kind === 'endpoint-start' || anchor.kind === 'endpoint-end';
 
         // Trim-restore anchors only visible when their endpoint is the
         // selected source (i.e. they're a candidate). Otherwise they
         // sit hidden — too many original-trace points would clutter
         // the map.
         if (isTrimRestore && !isCandidate) return null;
-
-        const isEndpoint =
-          anchor.kind === 'endpoint-start' || anchor.kind === 'endpoint-end';
+        // v200 Phase 6: hide intersection anchors at low zoom (endpoints
+        // stay visible — those are trim handles and must always be
+        // reachable). Trim-restore anchors are only ever rendered as
+        // candidates, which only happens when their endpoint is selected
+        // (user has actively zoomed/positioned to engage), so they don't
+        // need the zoom gate.
+        if (hideIntersections && anchor.kind === 'intersection') return null;
 
         const visualState: 'idle' | 'selected' | 'candidate-midpoint' | 'candidate-trim' =
           isSelected
@@ -78,6 +108,19 @@ export function EditableNodeLayer({
             key={anchor.id}
             id={`anchor-${anchor.id}`}
             coordinate={[anchor.lng, anchor.lat]}
+            // Selected source supports drag-with-magnet (Phase 5). Idle
+            // anchors don't — only tap. This avoids accidental drags on
+            // every dot. Mapbox draggable engages after long-press
+            // (~500ms hold) which is acceptable for a deliberate
+            // power-user gesture; primary discovery is still tap.
+            draggable={isSelected}
+            onDragEnd={(e: any) => {
+              if (!onAnchorDragEnd) return;
+              const c = e?.geometry?.coordinates;
+              if (Array.isArray(c) && c.length >= 2) {
+                onAnchorDragEnd(anchor, c[0], c[1]);
+              }
+            }}
             onSelected={() => onAnchorTap(anchor)}
           >
             <View style={styles.hitTarget}>
