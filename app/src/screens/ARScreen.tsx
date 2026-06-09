@@ -32,7 +32,6 @@ import { AimShutter } from '../components/AimShutter';
 import { PlantSheet, AimReticle, type PlantType } from '../components/PlantSheet';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ARDebugOverlay } from '../components/ARDebugOverlay';
-import { OTAControlPanel } from '../components/OTAControlPanel';
 import { OTA_VERSION } from '../components/OtaBadge';
 import { GlassPanel, Elevation } from '../components/GlassPanel';
 // v194 OTA: photo upload from Photos library (no native build needed —
@@ -211,9 +210,9 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // props would add a render frame of latency between haptic and visual.
   const unityOverlayRef = useRef<UnityAROverlayHandle | null>(null);
 
-  // v187 — OTA debug panel toggle. 3-finger tap on the AR view opens it.
-  // Closes via panel ✕ button or another 3-finger tap.
-  const [otaPanelOpen, setOtaPanelOpen] = useState(false);
+  // v195.1: OTA params panel removed — tuning is done by the dev based on
+  // uploaded screenshots, not by the user. The 🐞-menu and FX trigger that
+  // previously opened OTAControlPanel are gone. Snapshot pill state below.
   // Snapshot UI state machine:
   //   idle  - normal bug emoji
   //   busy  - spinner while takeScreenshot + base64 + telemetry flush
@@ -221,11 +220,7 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   //   err   - red X with error code for 4s, then auto-revert
   const [snapState, setSnapState] = useState<'idle' | 'busy' | 'done' | 'err'>('idle');
   const [snapMsg, setSnapMsg] = useState<string>('');
-  // v194 OTA: debug action sheet (3 options — open params panel / upload
-  // text diagnostic / upload photo from Photos library). Triggered from
-  // the topbar 🐞 button (replaces the deprecated 📍 reset-location button).
-  const [debugMenuOpen, setDebugMenuOpen] = useState(false);
-  // v194.1: photos picked from library awaiting user confirmation. Picker
+  // v195.1: photos picked from library awaiting user confirmation. Picker
   // returns → we stage the assets here and show a confirm sheet (thumbnails
   // + "Upload N" / "Cancel"). Upload only begins on explicit confirm.
   const [pendingPhotos, setPendingPhotos] = useState<
@@ -939,85 +934,7 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         userHeading={userHeading}
       />
 
-      {/* v194 — OTA control panel. Trigger lives in the topbar 🐞 debug
-          menu (replaced the deprecated FX button). Production-visible
-          for now (temporary tuning tool — will be hidden again after
-          visual issues resolved). */}
-      <OTAControlPanel
-        visible={otaPanelOpen}
-        onClose={() => setOtaPanelOpen(false)}
-        setGlobal={(name, value) => unityOverlayRef.current?.setGlobal(name, value)}
-      />
-
-      {/* v194 — Debug action sheet. Triggered from topbar 🐞 button.
-          Three actions: open params panel / upload text diagnostic /
-          upload screenshot picked from Photos library. */}
-      <Modal
-        visible={debugMenuOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDebugMenuOpen(false)}
-      >
-        <Pressable
-          style={styles.debugMenuBackdrop}
-          onPress={() => setDebugMenuOpen(false)}
-        >
-          <Pressable
-            style={styles.debugMenuCard}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={styles.debugMenuTitle}>Debug</Text>
-
-            <TouchableOpacity
-              style={styles.debugMenuRow}
-              onPress={() => { setDebugMenuOpen(false); setOtaPanelOpen(true); }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.debugMenuRowText}>🎛   Open params panel</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.debugMenuRow}
-              onPress={async () => {
-                setDebugMenuOpen(false);
-                setSnapState('busy');
-                setSnapMsg('');
-                try {
-                  crashLogger.breadcrumb(`unity-debug:manual-snap glReady=${arStatus.glReady}`);
-                  const sessionId = await crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-manual-snap');
-                  setSnapState('done');
-                  setSnapMsg(sessionId.slice(-12));
-                } catch (e: any) {
-                  setSnapState('err');
-                  setSnapMsg(e?.message ?? 'crash');
-                }
-                setTimeout(() => { setSnapState('idle'); setSnapMsg(''); }, 4000);
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.debugMenuRowText}>📝   Upload text diagnostic</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.debugMenuRow}
-              onPress={() => { setDebugMenuOpen(false); pickScreenshots(); }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.debugMenuRowText}>📸   Upload screenshot</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.debugMenuClose}
-              onPress={() => setDebugMenuOpen(false)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.debugMenuCloseText}>Cancel</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* v194.1 — Photo confirm sheet. After multi-select picker returns,
+      {/* v195.1 — Photo confirm sheet. After multi-select picker returns,
           show thumbnails + "Upload N" before actually uploading. Lets the
           user back out if they accidentally picked the wrong photo. */}
       <Modal
@@ -1172,25 +1089,27 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           regular nav screen, not a modal. */}
       <View style={[styles.topBar, { top: insets.top + 2 }]}>
         <BackButton variant="pill" onPress={() => onClose ? onClose() : nav.goBack()} />
-        {/* v194 — Debug menu trigger. Replaces the deprecated 📍 reset-
-            location button (AR origin works correctly now, manual reset
-            no longer needed). Tapping opens an action sheet exposing:
-            OTA params panel / text diagnostic upload / screenshot upload.
-            Will be removed once visual tuning is complete. */}
+        {/* v195.1 — Photo upload trigger. Replaces the deprecated 📍 reset-
+            location button (AR origin works correctly, manual reset no
+            longer needed). Tapping opens the iOS multi-select photo picker
+            directly. The OTA-params menu and text-diagnostic upload were
+            removed in v195.1: tuning is done by the dev based on uploaded
+            screenshots, not by the user. Single-action button keeps the
+            UX trivial. Will be removed once visual issues are fully
+            resolved. */}
         <TouchableOpacity
           style={styles.arResetBtn}
-          onPress={() => setDebugMenuOpen(true)}
+          onPress={pickScreenshots}
           activeOpacity={0.7}
         >
-          <Text style={styles.arResetBtnText}>🐞</Text>
+          <Text style={styles.arResetBtnText}>📸</Text>
         </TouchableOpacity>
         {/* v186: ritual mode toggle removed — Unity is the single AR
             path so there's no longer an A/B between sphere/ritual. */}
 
-        {/* v194: debug snapshot button removed — its function (text
-            diagnostic upload) is now reachable from the 🐞 menu above
-            alongside the new screenshot upload. The snapState pill below
-            is kept as a unified status indicator for both upload paths. */}
+        {/* v195.1: simplified to a single status pill — no more menu, no
+            more text-log upload. Pill shows "picking…" → "1/3…" →
+            "3 uploaded" / "✗ <err>" lifecycle for the photo upload. */}
         {/* Persistent message strip below the buttons so user can read
             success/error without losing focus on AR view */}
         {snapState !== 'idle' && (
@@ -1412,56 +1331,14 @@ const styles = StyleSheet.create({
   debugSnapMsgText: {
     color: '#fff', fontSize: 11, fontWeight: '500',
   },
-  // v194 — debug action sheet (modal). Center card with 3 action rows
-  // + Cancel. Backdrop dismisses on tap.
+  // v195.1 — confirm-sheet backdrop (full-screen translucent). Used only
+  // by the photo confirm modal now (debug action sheet was removed).
   debugMenuBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-  },
-  debugMenuCard: {
-    width: '100%',
-    maxWidth: 320,
-    backgroundColor: '#1a1c24',
-    borderRadius: 16,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  debugMenuTitle: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    textAlign: 'center',
-    paddingTop: 12,
-    paddingBottom: 8,
-    textTransform: 'uppercase',
-  },
-  debugMenuRow: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-  },
-  debugMenuRowText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  debugMenuClose: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-  },
-  debugMenuCloseText: {
-    color: '#ff6b6b',
-    fontSize: 15,
-    fontWeight: '600',
   },
   // v194.1 — confirm sheet for multi-select photo upload
   confirmCard: {

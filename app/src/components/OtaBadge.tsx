@@ -62,7 +62,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         straight-line fallback only with explicit user confirmation.
 //         App-kill / soft-unmount recovery via EditResumePrompt. OTA-only
 //         (no native deps added — kdbush + expo-file-system pre-existing).
-export const OTA_VERSION = 195;
+//   196 — v195.1 debug-button simplification: OTA params panel UI and
+//         text-log upload are removed from ARScreen. The right-top button
+//         now opens the iOS multi-select photo picker directly (single
+//         action). Tuning is done by the dev based on uploaded screenshots,
+//         not by the user. Multi-select + confirm sheet + 1h server TTL
+//         (committed earlier under v194.1 but not OTA'd) ride along.
+export const OTA_VERSION = 196;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
