@@ -375,7 +375,44 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     }
   }, [arStatus.glReady]);
 
-  // v196.1: Bug 8 (re-entry 20m drift) is NOT addressed in this OTA —
+  // v199 review B3 — lock the persistent AR origin on first reasonable
+  // GPS sample. This is the v118 design that finally ships in v199 (was
+  // stub/dead-code before). UnityAROverlay reads useMarkerStore.arOrigin
+  // and computes per-session offset = (live - persisted) on first
+  // ArFrame, then sends OnSetSessionOffset to Unity BEFORE bulk-spawn.
+  //
+  // Once-lock policy: never overwrites unless user explicitly resets via
+  // long-press 📸 → clearArOrigin (defensive UI). Auto-clear if user has
+  // travelled > 1km since lock (staleness gate per V2.B5 review).
+  useEffect(() => {
+    if (!arStatus.glReady) return;
+    if (!lastCoord) return;
+    if (lastCoord.accuracy != null && lastCoord.accuracy > 15) return;
+    const cur = useMarkerStore.getState().arOrigin;
+    if (cur) {
+      // Staleness gate: if user has moved >1km from persisted, clear it
+      // (probably a different region). Next plant re-locks.
+      const cosLat = Math.cos((cur.lat * Math.PI) / 180);
+      const dN = (lastCoord.lat - cur.lat) * 111000;
+      const dE = (lastCoord.lng - cur.lng) * 111000 * cosLat;
+      const distM = Math.hypot(dN, dE);
+      if (distM > 1000) {
+        useMarkerStore.getState().clearArOrigin();
+        crashLogger.breadcrumb(`ar:origin:stale-clear distM=${distM.toFixed(0)}`);
+      } else {
+        return;
+      }
+    }
+    useMarkerStore.getState().setArOriginIfMissing({
+      lat: lastCoord.lat,
+      lng: lastCoord.lng,
+      alt: lastCoord.alt ?? null,
+    });
+    crashLogger.breadcrumb(
+      `ar:origin:locked lat=${lastCoord.lat.toFixed(6)} lng=${lastCoord.lng.toFixed(6)} acc=${lastCoord.accuracy ?? 'null'}`
+    );
+  }, [arStatus.glReady, lastCoord]);
+
   // subagent review found that wiring up the dormant v118 persistent AR
   // origin would silently save plants at the WRONG city's GPS if the
   // user travelled between sessions, and would mis-project bulk-spawned
@@ -999,6 +1036,7 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         ref={unityOverlayRef}
         markers={nearbyMarkers}
         userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng, alt: lastCoord.alt ?? null } : null}
+        arOrigin={useMarkerStore.getState().arOrigin}
         userHeading={userHeading}
         onStatus={setArStatus}
         onArFrame={setArFrame}

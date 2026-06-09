@@ -59,7 +59,10 @@ public partial class PortalSpawner
         = new Dictionary<string, CairnBridge.CommunityStateUpdate>();
 
     // ── Static event subscriptions ──
-    private static bool _v199EventsHooked;
+    // Per-instance flag (review C1 fix) — was static; static-flag-vs-
+    // instance-handler caused subscription to fail on second instance
+    // and leaked delegates on destroy.
+    private bool _v199EventsHooked;
 
     void OnEnable()
     {
@@ -95,6 +98,7 @@ public partial class PortalSpawner
                               float groundY, Color baseColor)
     {
         if (container == null || data == null) return;
+        UnityLogger.IForward("V199", $"add-begin id={data.id} type={data.type} y={groundY:F2}");
         var globals = CairnGlobals.Instance;
 
         // V199Layer parent — single GO so we can disable all v199 systems
@@ -159,17 +163,28 @@ public partial class PortalSpawner
             AttachLikeBadge(v199, data.id);
         }
 
-        // ── Summon-from-below animation (§C.1 fix) ──
+        // ── Summon-from-below animation (§C.1 fix) + anchor parenting.
+        // Review C2: serialise — run summon FIRST in container's spawner-
+        // local space, then attempt ARAnchor parenting after summon
+        // completes. Avoids race where async TryAddAnchorAsync reparents
+        // mid-rise causing ~1-5cm anchor-refinement jitter.
         if (globals == null || globals.GetBool("SummonEnabled", true))
         {
             float rise = globals != null ? globals.GetForType(null, "SummonRiseDistance", 0.6f) : 0.6f;
             float dur  = globals != null ? globals.GetForType(null, "SummonDuration", 0.4f) : 0.4f;
-            StartCoroutine(SummonAnimation(container, rise, dur));
+            StartCoroutine(SummonThenAnchor(container, rise, dur));
         }
-
-        // ── Async ARAnchor parenting (V2.B1 + §E.1) ──
-        // Run in parallel — does not block other layers.
-        StartCoroutine(TryParentToAnchor(container, groundY));
+        else
+        {
+            // No summon — anchor immediately.
+            StartCoroutine(TryParentToAnchor(container, groundY));
+        }
+        UnityLogger.IForward("V199",
+            $"add-done id={data.id} pebble={(pebbleMaterial!=null && data.type=="cairn")} " +
+            $"chip={(typeChipMaterial!=null && data.type!="cairn")} " +
+            $"runeText={runeFontAsset!=null} ribbons={ribbonStrandMaterial!=null} " +
+            $"farShaft={lightShaftMaterial!=null} confidenceRing={confidenceRingMaterial!=null} " +
+            $"contactShadow={contactShadowMaterial!=null} likeBadge={runeFontAsset!=null}");
     }
 
     // ============================================================
@@ -457,6 +472,8 @@ public partial class PortalSpawner
         Vector3 finalPos = container.transform.position;
         Vector3 startPos = finalPos - new Vector3(0, rise, 0);
         container.transform.position = startPos;
+        UnityLogger.IForward("V199",
+            $"summon-begin rise={rise:F2} dur={dur:F2} finalY={finalPos.y:F3}");
         float t = 0f;
         while (t < dur && container != null)
         {
@@ -468,6 +485,20 @@ public partial class PortalSpawner
             yield return null;
         }
         if (container != null) container.transform.position = finalPos;
+        UnityLogger.IForward("V199", "summon-end");
+    }
+
+    /// <summary>
+    /// Sequentially: run summon animation, THEN try anchor parenting.
+    /// Avoids the C2 race where mid-summon SetParent re-bases the
+    /// transform and ARKit's anchor-refinement jitter shows during the
+    /// rise.
+    /// </summary>
+    private IEnumerator SummonThenAnchor(GameObject container, float rise, float dur)
+    {
+        yield return SummonAnimation(container, rise, dur);
+        if (container == null) yield break;
+        yield return TryParentToAnchor(container, container.transform.position.y);
     }
 
     private IEnumerator TryParentToAnchor(GameObject container, float groundY)
@@ -495,8 +526,12 @@ public partial class PortalSpawner
                         if (a != null)
                         {
                             container.transform.SetParent(a.transform, worldPositionStays: true);
-                            UnityLogger.I("V199", $"Anchor: attached to plane {plane.trackableId}");
+                            UnityLogger.IForward("V199", $"anchor-attached planeId={plane.trackableId}");
                             yield break;
+                        }
+                        else
+                        {
+                            UnityLogger.W("V199", $"AttachAnchor returned null planeId={plane.trackableId}");
                         }
                     }
                 }
@@ -515,11 +550,11 @@ public partial class PortalSpawner
         if (ok && anchorOut != null)
         {
             container.transform.SetParent(anchorOut.transform, worldPositionStays: true);
-            UnityLogger.I("V199", "Anchor: TryAddAnchorAsync OK (no plane)");
+            UnityLogger.IForward("V199", "anchor-async-OK (no plane)");
         }
         else
         {
-            UnityLogger.I("V199", "Anchor: TryAddAnchorAsync failed");
+            UnityLogger.W("V199", "anchor-async-FAIL — cairn unattached, may drift");
         }
     }
 
@@ -557,12 +592,20 @@ public partial class PortalSpawner
         {
             // Cairn not yet spawned — queue (V2.C9 belt-and-suspenders).
             _pendingCommunityState[u.id] = u;
-            // Bound queue size
+            // Bound queue size — review C4 fix: use stable list-then-remove
+            // pattern (modifying dict during enumeration on Mono iOS can
+            // throw or silently corrupt). Snapshot keys, remove the
+            // oldest one (insertion order).
             if (_pendingCommunityState.Count > 256)
             {
-                var enumerator = _pendingCommunityState.GetEnumerator();
-                if (enumerator.MoveNext())
-                    _pendingCommunityState.Remove(enumerator.Current.Key);
+                string evictKey = null;
+                foreach (var k in _pendingCommunityState.Keys) { evictKey = k; break; }
+                if (evictKey != null)
+                {
+                    _pendingCommunityState.Remove(evictKey);
+                    UnityLogger.W("V199",
+                        $"pending-state evict id={evictKey} queueDepth=256");
+                }
             }
         }
     }

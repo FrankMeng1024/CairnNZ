@@ -131,6 +131,11 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
   // markers-prop changes (e.g. server sync adding nearby markers) don't
   // trigger duplicate spawns. Cleared on unmount.
   const spawnedIdsRef = useRef<Set<string>>(new Set());
+  // v199 review B3 fix — per-session GPS offset gates one-shot.
+  // offsetSentRef: have we sent OnSetSessionOffset to Unity this session?
+  // bulkSpawnedRef: has the post-offset bulk-spawn fired?
+  const offsetSentRef = useRef<boolean>(false);
+  const bulkSpawnedRef = useRef<boolean>(false);
   // OTA #181: one-shot breadcrumb on first ArFrame received. After parser
   // fix, lets us see whether values are real (Unity AR working) or are
   // the parser's null→default fallbacks (Unity still emitting F3 literals).
@@ -200,6 +205,9 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
         try {
           unityRef.current.postMessage('CairnBridge', 'OnClearAll', '');
           spawnedIdsRef.current.clear();
+      // v199 — reset offset/bulk-spawn one-shots so next mount can re-fire.
+      offsetSentRef.current = false;
+      bulkSpawnedRef.current = false;
           crashLogger.breadcrumb(`${TAG}:clearAll dispatched`);
         } catch (e: any) {
           crashLogger.breadcrumb(`${TAG}:clearAll-error ${String(e?.message ?? e).slice(0, 80)}`);
@@ -300,6 +308,9 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
         try { unityRef.current.postMessage('CairnBridge', 'OnClearAll', ''); } catch {}
       }
       spawnedIdsRef.current.clear();
+      // v199 — reset offset/bulk-spawn one-shots so next mount can re-fire.
+      offsetSentRef.current = false;
+      bulkSpawnedRef.current = false;
       crashLogger.breadcrumb(`${TAG}:unmount glReady=${arReadyRef.current}`);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -368,45 +379,11 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           );
           crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-ar-ready').catch(() => undefined);
           props.onStatus?.({ glReady: true, cairnCount: props.markers.length });
-          // Phase 2 wire-up: bulk-spawn any markers we already had at AR
-          // entry. We need an arOrigin to convert lat/lng to Unity world
-          // space — origin lands on the first ArFrame, which is typically
-          // a few hundred ms after ArReady. So defer one tick.
-          //
-          // (We don't do it from the ArFrame handler directly because
-          // that fires at 10Hz and we only want to bulk-spawn once.)
-          //
-          // v196.1 (revised): use live userPos. The persisted v118 origin
-          // can't be used as projection origin because ARKit's per-session
-          // world (0,0,0) is wherever the device anchored THIS session,
-          // not where the persisted GPS was first captured. Mixing the
-          // two introduces an offset equal to (live GPS - persisted GPS).
-          // Until we add per-session anchor-offset compensation this has
-          // to stay at live origin (subagent review feedback).
-          {
-            const origin = props.userPos
-              ? { lat: props.userPos.lat, lng: props.userPos.lng }
-              : null;
-            if (origin && props.markers.length > 0) {
-              let dispatched = 0;
-              for (const m of props.markers) {
-                if (spawnedIdsRef.current.has(m.id)) continue;
-                const req = buildSpawnRequest(
-                  { id: m.id, type: m.type, lat: m.lat, lng: m.lng, note: m.note },
-                  origin,
-                  groundYRef.current,
-                );
-                if (req && dispatchSpawn(req)) dispatched += 1;
-              }
-              crashLogger.breadcrumb(
-                `${TAG}:on-ar-ready:bulk-spawn requested=${props.markers.length} dispatched=${dispatched}`
-              );
-            } else {
-              crashLogger.breadcrumb(
-                `${TAG}:on-ar-ready:bulk-spawn-skip origin=${!!origin} markers=${props.markers.length}`
-              );
-            }
-          }
+          // v199 review B3 fix: per-session GPS offset compensation.
+          // ArReady ONLY flips the ref now — bulk-spawn deferred until
+          // first ArFrame produces a usable userPos AND arOrigin, then
+          // OnSetSessionOffset is sent BEFORE bulk-spawn so Unity has
+          // the offset before any cairn renders. Avoids races V2.B5.
           break;
 
         case 'PlaneDetected':
@@ -441,6 +418,70 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             crashLogger.breadcrumb(
               `${TAG}:recv:first-ArFrame px=${msg.px.toFixed(2)} py=${msg.py.toFixed(2)} pz=${msg.pz.toFixed(2)} fx=${msg.fx.toFixed(2)} fy=${msg.fy.toFixed(2)} fz=${msg.fz.toFixed(2)}`
             );
+          }
+          // v199 review B3 — per-session GPS offset compensation. Once
+          // we have userPos AND arOrigin (from props), compute the offset
+          // and send OnSetSessionOffset to Unity BEFORE bulk-spawn. Then
+          // run bulk-spawn using arOrigin (persisted) as projection origin
+          // so cairns land at correct world positions even after walking
+          // 100m and re-entering AR.
+          if (
+            arReadyRef.current &&
+            !bulkSpawnedRef.current &&
+            props.userPos &&
+            unityRef.current
+          ) {
+            // Choose projection origin: prefer persisted arOrigin (V118),
+            // fall back to live userPos for new users with no anchor yet.
+            const persisted = props.arOrigin
+              ? { lat: props.arOrigin.lat, lng: props.arOrigin.lng }
+              : null;
+            const live = { lat: props.userPos.lat, lng: props.userPos.lng };
+            const projOrigin = persisted ?? live;
+            // Compute offset (live - persisted). When persisted is null,
+            // offset is 0 (live IS the projection origin). When persisted
+            // exists, offset = how far user has moved since lock.
+            let offsetN = 0;
+            let offsetE = 0;
+            if (persisted) {
+              const cosLat = Math.cos((persisted.lat * Math.PI) / 180);
+              offsetN = (live.lat - persisted.lat) * 111000;
+              offsetE = (live.lng - persisted.lng) * 111000 * cosLat;
+            }
+            // ARKit GravityAndHeading: +X=East, +Y=Up, -Z=North.
+            // sessionOffset Vector3 = (offsetE, 0, -offsetN).
+            if (!offsetSentRef.current) {
+              try {
+                unityRef.current.postMessage(
+                  'CairnBridge',
+                  'OnSetSessionOffset',
+                  JSON.stringify({ ox: offsetE, oz: -offsetN }),
+                );
+                offsetSentRef.current = true;
+                crashLogger.breadcrumb(
+                  `${TAG}:OnSetSessionOffset ox=${offsetE.toFixed(2)} oz=${(-offsetN).toFixed(2)} mode=${persisted ? 'persisted' : 'live'}`
+                );
+              } catch (e) {
+                crashLogger.breadcrumb(`${TAG}:OnSetSessionOffset:fail ${String(e).slice(0, 80)}`);
+              }
+            }
+            // Then bulk-spawn (one-shot) using persisted origin.
+            if (props.markers.length > 0) {
+              let dispatched = 0;
+              for (const m of props.markers) {
+                if (spawnedIdsRef.current.has(m.id)) continue;
+                const req = buildSpawnRequest(
+                  { id: m.id, type: m.type, lat: m.lat, lng: m.lng, note: m.note },
+                  projOrigin,
+                  groundYRef.current,
+                );
+                if (req && dispatchSpawn(req)) dispatched += 1;
+              }
+              crashLogger.breadcrumb(
+                `${TAG}:bulk-spawn requested=${props.markers.length} dispatched=${dispatched} origin=${persisted ? 'persisted' : 'live'}`
+              );
+            }
+            bulkSpawnedRef.current = true;
           }
           // Don't breadcrumb every ArFrame (10Hz would flood ring buffer).
           if (props.onArFrame) {

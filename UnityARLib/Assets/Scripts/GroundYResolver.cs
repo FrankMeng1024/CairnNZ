@@ -274,8 +274,8 @@ public class GroundYResolver : MonoBehaviour
                 else if ((Time.time - t.stableSince) * 1000f >= lockStableMs)
                 {
                     t.locked = true;
-                    UnityLogger.I("GroundYResolver",
-                        $"locked Y={t.currentY:F3} (stable {lockStableMs:F0}ms)");
+                    UnityLogger.IForward("GroundYResolver",
+                        $"locked Y={t.currentY:F3} tier={t.currentTier} stable={lockStableMs:F0}ms");
                 }
             }
         }

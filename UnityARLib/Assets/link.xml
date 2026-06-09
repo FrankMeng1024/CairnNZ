@@ -27,6 +27,21 @@
   <assembly fullname="Unity.XR.ARSubsystems" preserve="all"/>
   <assembly fullname="Unity.XR.ARKit" preserve="all"/>
 
+  <!-- v199 review C4 fix — preserve URP Volume + Bloom + Vignette +
+       ColorAdjustments classes. Volume profiles reference these via
+       SerializedObject (.asset YAML, no C# new()), same IL2CPP-strip
+       class as the v187 yellow-screen ARBackgroundRendererFeature bug.
+       Without this, CairnVolumeOverrides.OnEnable profile.TryGet()
+       returns false at runtime even though the Volume asset has the
+       overrides — bloom/vignette/colorAdj OTA paths go inert. -->
+  <assembly fullname="Unity.RenderPipelines.Universal.Runtime" preserve="all"/>
+  <assembly fullname="Unity.RenderPipelines.Core.Runtime" preserve="all"/>
+
+  <!-- v199 — TextMeshPro for LikeBadge + RuneText. TMP_FontAsset is
+       loaded by AssetDatabase path at runtime; without this preserve
+       the TMP shader / asset infrastructure may strip on iOS IL2CPP. -->
+  <assembly fullname="Unity.TextMeshPro" preserve="all"/>
+
   <!-- Cairn assembly — preserve our spawners + bridge so IL2CPP doesn't
        strip something we wired only via SerializedObject (e.g. PortalSpawner
        being added via AddComponent in editor, never via `new` in shipped

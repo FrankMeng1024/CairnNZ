@@ -44,6 +44,18 @@ public class GlobalScanGridController : MonoBehaviour
 
         if (gridRenderer != null) gridRenderer.enabled = show;
         Shader.SetGlobalFloat("_CairnGlobalScanGridActive", show ? 1f : 0f);
+        // Forward OTA pulse Hz + hex size to shader globals. CairnGlobalsExt
+        // registry binds ScanGridPulseHzUni → _CairnGlobalScanGridPulseHz
+        // and ScanGridHexSizeUni → _CairnGlobalScanGridHexSize, so SetGeneric
+        // does Shader.SetGlobalFloat for them on OTA — but only if RN has
+        // sent a value. Push defaults from registry on every poll for safety.
+        if (CairnGlobals.Instance != null)
+        {
+            float hz = CairnGlobals.Instance.GetForType(null, "ScanGridPulseHzUni", 0.8f);
+            float hex = CairnGlobals.Instance.GetForType(null, "ScanGridHexSizeUni", 0.10f);
+            Shader.SetGlobalFloat("_CairnGlobalScanGridPulseHz", hz);
+            Shader.SetGlobalFloat("_CairnGlobalScanGridHexSize", hex);
+        }
 
         // Position the grid quad in front of the camera so it's always
         // in view during init (camera-attached behavior without parenting

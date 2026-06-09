@@ -204,6 +204,18 @@ public partial class CairnGlobals
         F("RingInnerPulseHz",     null, 0.1f, 4,    1.0f);
         F("RingEdgeSoftness",     null, 0.001f, 0.1f, 0.01f);
 
+        // Confidence ring + ScanGrid float uniforms (review: shader reads
+        // _CairnGlobalConfidenceRingAlpha / _CairnGlobalScanGridPulseHz /
+        // _CairnGlobalScanGridHexSize / _CairnGlobalScanGridActive — without
+        // ShaderUniform binding, OTA setting these silently fails).
+        F("ConfidenceRingAlphaUni", "_CairnGlobalConfidenceRingAlpha", 0, 1, 0.6f);
+        F("ScanGridPulseHzUni",   "_CairnGlobalScanGridPulseHz", 0.1f, 4, 0.8f);
+        F("ScanGridHexSizeUni",   "_CairnGlobalScanGridHexSize", 0.05f, 1, 0.10f);
+        F("ScanGridActiveUni",    "_CairnGlobalScanGridActive", 0, 1, 0f);
+        // _CairnGlobalArConfidence — written by CairnBridge ARSession poll,
+        // not by RN OTA. Registered for completeness (default 1 = full).
+        F("ArConfidenceUni",      "_CairnGlobalArConfidence", 0, 1, 1.0f);
+
         // Halo per-type extras
         F("HaloPulseAmp",         null, 0,    1,    0.2f);
         F("HaloPulseHz",          null, 0.1f, 4,    1.2f);
@@ -216,6 +228,16 @@ public partial class CairnGlobals
         F("TypeChipScale",        null, 0.3f, 3,    1.0f);
         F("TypeChipFloatHeight",  null, 0,    2,    1.4f);
         F("TypeChipGlow",         null, 0,    3,    1.0f, perType: true);
+
+        // v199 review: master kill-switches — required so OTA can disable
+        // any v199 system if it misbehaves on real device, falling back to
+        // v187 baseline visual without a rebuild.
+        B("V199LayerEnabled", true);
+        B("RuneTextEnabled", true);
+        B("PebbleStackEnabled", true);
+        B("TypeChipEnabledOTA", true);
+        B("AnchorAttachEnabled", true);
+        B("VerboseLogForward", false);
 
         return r;
     }

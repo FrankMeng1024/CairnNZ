@@ -547,7 +547,17 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         }
 
         // ─── Mark text (TextMesh at 1.3m): two lines = type title + body ───
-        AttachMarkText(container, data.type, color, data.note);
+        // v199 review C3 fix: legacy TextMesh layer skipped when v199
+        // RuneText (TMP SDF on stone backplate) is active — prevents
+        // z-fight at the same 1.3m height. Driven by OTA RuneTextEnabled
+        // (default true on v199 binary). When OTA flips RuneTextEnabled=
+        // false, legacy TextMesh re-takes the slot for fallback.
+        bool useV199RuneText = CairnGlobals.Instance == null
+            || CairnGlobals.Instance.GetBool("RuneTextEnabled", true);
+        if (!useV199RuneText)
+        {
+            AttachMarkText(container, data.type, color, data.note);
+        }
 
         // ─── Sparse rising particles ───
         AttachWhisperParticles(container, color, preset.particleStartColor, fireflyRateM, haloIntenM);

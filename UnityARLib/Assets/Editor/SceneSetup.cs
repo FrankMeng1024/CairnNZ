@@ -36,6 +36,27 @@ public static class SceneSetup
     public const string MAT_HALO_PATH    = "Assets/Materials/CairnHalo.mat";
     public const string MAT_SHADOW_PATH  = "Assets/Materials/CairnShadow.mat";
     public const string MAT_PARTICLE_PATH = "Assets/Materials/CairnParticle.mat";
+
+    // v199 — runtime-build shared materials from named shaders. Caches
+    // by shader name so multiple PortalSpawner fields can share one
+    // material instance per shader (matching SRP Batcher expectations).
+    private static readonly System.Collections.Generic.Dictionary<string, Material> _v199MatCache
+        = new System.Collections.Generic.Dictionary<string, Material>();
+
+    private static Material MaterialFromShader(string shaderName)
+    {
+        if (_v199MatCache.TryGetValue(shaderName, out var cached) && cached != null) return cached;
+        var sh = Shader.Find(shaderName);
+        if (sh == null)
+        {
+            Debug.LogWarning($"[SceneSetup] Shader '{shaderName}' not found — v199 layer will be skipped at runtime");
+            return null;
+        }
+        var m = new Material(sh) { name = shaderName.Replace('/', '_') };
+        _v199MatCache[shaderName] = m;
+        return m;
+    }
+
     public const string TEX_DIR          = "Assets/Textures";
     public const string TEX_FLOW         = "Assets/Textures/strand_flow.png";
     public const string TEX_RUNE_NOISE   = "Assets/Textures/cairn_rune_noise.png";
@@ -141,29 +162,51 @@ public static class SceneSetup
         xrOrigin.Camera = cam;
         Debug.Log("[CairnUnity][SceneSetup] AR Camera built");
 
-        // ARPlaneManager + ARRaycastManager on XR Origin.
-        // ARRaycastManager is REQUIRED for GroundYResolver Tier B raycasts —
-        // without it, .estimatedPlane queries silently return no hits and
-        // every cairn stays at Tier C (knee height). v186 plan amendment A1.
+        // ARPlaneManager + ARRaycastManager + ARAnchorManager on XR Origin.
+        // ARRaycastManager is REQUIRED for GroundYResolver Tier B raycasts.
+        // ARAnchorManager added in v199 (review B2 fix) — without it,
+        // PortalSpawnerV199.TryAddAnchorAsync silently no-ops and cairns
+        // never anchor to real-world planes (drift with camera).
         var planeManager = xrOriginGo.AddComponent<ARPlaneManager>();
         planeManager.requestedDetectionMode = UnityEngine.XR.ARSubsystems.PlaneDetectionMode.Horizontal;
         var raycastManager = xrOriginGo.AddComponent<ARRaycastManager>();
-        Debug.Log($"[CairnUnity][SceneSetup] ARPlaneManager + ARRaycastManager added (raycastMgr={raycastManager != null})");
+        var anchorManager  = xrOriginGo.AddComponent<ARAnchorManager>();
+        Debug.Log($"[CairnUnity][SceneSetup] ARPlaneManager + ARRaycastManager + ARAnchorManager added");
 
-        // ─── PortalSpawner (v187 — replaces v186 MultiSpawner) ───
-        // Production AR scene now uses the magic-circle portal cairn:
-        // double ring + center icon + bubble-rise wisps + fireflies +
-        // ground halo + 30-char mark text. CairnBridge talks to it
-        // through the ICairnSpawner interface so the v186 cylinder model
-        // (MultiSpawner) is still on the codebase as fallback if needed.
+        // ─── PortalSpawner (v187 base + v199 superlayer) ───
         var spawnerGo  = new GameObject("PortalSpawner");
         var spawner    = spawnerGo.AddComponent<PortalSpawner>();
 
-        // Particle material left null on purpose — PortalSpawner.EnsureMaterials()
-        // creates a runtime firefly material with a built-in soft-circle
-        // sprite. The v186 CairnParticle.mat is incompatible (had no
-        // sprite assigned, rendered as black squares).
-        Debug.Log($"[CairnUnity][SceneSetup] PortalSpawner wired (v187 magic-circle, replacing v186 MultiSpawner)");
+        // v199 inspector fields wiring (review B1 fix). Without these,
+        // PortalSpawnerV199.AddV199Layers null-checks fall through and
+        // every cinematic layer (pebble/typeChip/runeText/heroRibbons/
+        // farShaft/contactShadow/confidenceRing/likeBadge) is skipped at
+        // runtime — cairn renders as v187 magic-circle only.
+        spawner.arRaycastManagerRef = raycastManager;
+        spawner.arAnchorManagerRef  = anchorManager;
+        spawner.arPlaneManagerRef   = planeManager;
+        spawner.arCameraRef         = cam;
+        spawner.pebbleSmallMesh         = AssetDatabase.LoadAssetAtPath<Mesh>("Assets/Meshes/Pebble_S.asset");
+        spawner.pebbleMediumMesh        = AssetDatabase.LoadAssetAtPath<Mesh>("Assets/Meshes/Pebble_M.asset");
+        spawner.pebbleLargeMesh         = AssetDatabase.LoadAssetAtPath<Mesh>("Assets/Meshes/Pebble_L.asset");
+        spawner.pebbleMaterial          = MaterialFromShader("Cairn/PebbleShader");
+        spawner.typeChipMaterial        = MaterialFromShader("Cairn/TypeChipShader");
+        spawner.stoneBackplateMaterial  = MaterialFromShader("Cairn/StoneBackplateShader");
+        spawner.ribbonStrandMaterial    = MaterialFromShader("Cairn/RibbonStrandShader");
+        spawner.lightShaftMaterial      = MaterialFromShader("Cairn/LightShaftShader");
+        spawner.confidenceRingMaterial  = MaterialFromShader("Cairn/ConfidenceRingShader");
+        spawner.contactShadowMaterial   = MaterialFromShader("Cairn/ShadowBlobShader");
+        // TMP SDF font asset — bundled with TextMeshPro Essentials at first import.
+        // Fallback to runtime null-check warn in PortalSpawnerV199 if missing.
+        var runeFont = AssetDatabase.LoadAssetAtPath<TMPro.TMP_FontAsset>(
+            "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset");
+        if (runeFont == null) runeFont = AssetDatabase.LoadAssetAtPath<TMPro.TMP_FontAsset>(
+            "Assets/Resources/Fonts/LiberationSans SDF.asset");
+        spawner.runeFontAsset = runeFont;
+        Debug.Log($"[CairnUnity][SceneSetup] PortalSpawner v199 wired " +
+                  $"(pebble={spawner.pebbleMaterial!=null} typeChip={spawner.typeChipMaterial!=null} " +
+                  $"runeFont={spawner.runeFontAsset!=null} ribbon={spawner.ribbonStrandMaterial!=null} " +
+                  $"anchor={spawner.arAnchorManagerRef!=null})");
 
         // ─── CairnBridge + CairnGlobals + CairnThermalMonitor ───
         var bridgeGo = new GameObject(CairnBridge.GAMEOBJECT_NAME);
@@ -506,9 +549,31 @@ public static class SceneSetup
         bloom.scatter.overrideState   = true; bloom.scatter.value   = 0.65f;  // was 0.7
         bloom.tint.overrideState      = true; bloom.tint.value      = Color.white;
         bloom.clamp.overrideState     = true; bloom.clamp.value     = 65472f; // max — don't pre-clip HDR
+
+        // v199 review C5 fix: add Vignette + ColorAdjustments overrides
+        // so CairnVolumeOverrides.OnEnable can profile.TryGet them.
+        // Without these, OTA Vignette/ColorAdj toggles are inert at runtime.
+        UnityEngine.Rendering.Universal.Vignette vignette;
+        if (!profile.TryGet(out vignette))
+        {
+            vignette = profile.Add<UnityEngine.Rendering.Universal.Vignette>(true);
+        }
+        vignette.intensity.overrideState  = true; vignette.intensity.value  = 0.18f;
+        vignette.smoothness.overrideState = true; vignette.smoothness.value = 0.45f;
+        vignette.color.overrideState      = true; vignette.color.value      = Color.black;
+
+        UnityEngine.Rendering.Universal.ColorAdjustments colorAdj;
+        if (!profile.TryGet(out colorAdj))
+        {
+            colorAdj = profile.Add<UnityEngine.Rendering.Universal.ColorAdjustments>(true);
+        }
+        colorAdj.contrast.overrideState     = true; colorAdj.contrast.value     = 8f;
+        colorAdj.saturation.overrideState   = true; colorAdj.saturation.value   = 12f;
+        colorAdj.postExposure.overrideState = true; colorAdj.postExposure.value = 0f;
+
         EditorUtility.SetDirty(profile);
         AssetDatabase.SaveAssets();
-        Debug.Log("[CairnUnity][SceneSetup] Bloom configured (threshold=1.05, intensity=0.7, scatter=0.65)");
+        Debug.Log("[CairnUnity][SceneSetup] Volume configured (Bloom + Vignette + ColorAdjustments)");
         return profile;
     }
 

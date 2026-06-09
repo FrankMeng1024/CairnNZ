@@ -61,6 +61,19 @@ export function useLikeReport(markerId: string | null, options: Options): UseLik
 
   const cancelLikeRef = useRef<(() => void) | null>(null);
   const pollHandleRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // v199 review C6/C7 — keep stable refs to options-bound callables so
+  // useEffect/useCallback deps don't re-fire every parent render. Parent
+  // typically passes inline { getAuthToken, pollMs } object → new identity
+  // every render. Without this, the 8s poll restarts on every render
+  // (10Hz when ArFrame triggers parent re-render) → server hammered.
+  const getAuthTokenRef = useRef(options.getAuthToken);
+  getAuthTokenRef.current = options.getAuthToken;
+  // v199 review C6 — abort controller for in-flight fetches; cancel on
+  // unmount or markerId change to prevent stale setState after unmount.
+  const abortRef = useRef<AbortController | null>(null);
+  // v199 review M11 — track unmount so undo timer's deferred postVote
+  // can self-cancel.
+  const mountedRef = useRef<boolean>(true);
 
   const fetchState = useCallback(async (): Promise<void> => {
     if (!markerId) {
@@ -68,11 +81,16 @@ export function useLikeReport(markerId: string | null, options: Options): UseLik
       return;
     }
     try {
+      // Cancel any prior in-flight fetch.
+      abortRef.current?.abort();
+      abortRef.current = new AbortController();
       setLoading(true);
-      const tok = await Promise.resolve(options.getAuthToken());
+      const tok = await Promise.resolve(getAuthTokenRef.current());
       const r = await fetch(`${apiBase}/api/markers/${markerId}/community-state`, {
         headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+        signal: abortRef.current.signal,
       });
+      if (!mountedRef.current) return;
       if (!r.ok) {
         if (r.status === 404) {
           setState(null);
@@ -82,17 +100,21 @@ export function useLikeReport(markerId: string | null, options: Options): UseLik
         throw new Error(`HTTP ${r.status}`);
       }
       const j = (await r.json()) as CommunityState;
+      if (!mountedRef.current) return;
       setState(j);
       setError(null);
     } catch (e: any) {
+      if (e?.name === 'AbortError') return;
+      if (!mountedRef.current) return;
       setError(e?.message ?? 'fetch failed');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
-  }, [markerId, apiBase, options]);
+  }, [markerId, apiBase]);
 
   // Poll while markerId is non-null.
   useEffect(() => {
+    mountedRef.current = true;
     if (!markerId) {
       if (pollHandleRef.current) clearInterval(pollHandleRef.current);
       pollHandleRef.current = null;
@@ -101,15 +123,22 @@ export function useLikeReport(markerId: string | null, options: Options): UseLik
     fetchState();
     pollHandleRef.current = setInterval(fetchState, pollMs);
     return () => {
+      mountedRef.current = false;
+      // v199 review C6 — cancel any pending undo timer on unmount;
+      // prevents committing a like the user navigated away from.
+      if (cancelLikeRef.current) cancelLikeRef.current();
+      cancelLikeRef.current = null;
       if (pollHandleRef.current) clearInterval(pollHandleRef.current);
       pollHandleRef.current = null;
+      abortRef.current?.abort();
+      abortRef.current = null;
     };
   }, [markerId, pollMs, fetchState]);
 
   const issueNonce = useCallback(async (): Promise<string | null> => {
     if (!markerId) return null;
     try {
-      const tok = await Promise.resolve(options.getAuthToken());
+      const tok = await Promise.resolve(getAuthTokenRef.current());
       const r = await fetch(`${apiBase}/api/markers/${markerId}/interact-nonce`, {
         headers: tok ? { Authorization: `Bearer ${tok}` } : {},
       });
@@ -119,7 +148,7 @@ export function useLikeReport(markerId: string | null, options: Options): UseLik
     } catch {
       return null;
     }
-  }, [markerId, apiBase, options]);
+  }, [markerId, apiBase]);
 
   const postVote = useCallback(
     async (
@@ -130,11 +159,11 @@ export function useLikeReport(markerId: string | null, options: Options): UseLik
       if (!markerId) return null;
       const nonce = await issueNonce();
       if (!nonce) {
-        setError('nonce fetch failed');
+        if (mountedRef.current) setError('nonce fetch failed');
         return null;
       }
       try {
-        const tok = await Promise.resolve(options.getAuthToken());
+        const tok = await Promise.resolve(getAuthTokenRef.current());
         const body = {
           type,
           reason: reason ?? undefined,
@@ -154,6 +183,22 @@ export function useLikeReport(markerId: string | null, options: Options): UseLik
           body: JSON.stringify(body),
         });
         const j = await r.json();
+        // v199 review C6 (judge feedback) — guard ALL setState/setError
+        // calls in postVote against unmount race. Vote response can land
+        // after user dismissed the sheet; without guard, React 18 warns.
+        if (!mountedRef.current) {
+          // Still return a value so caller can act on it (e.g. server
+          // committed the vote — user just left the sheet).
+          if (r.ok) {
+            return {
+              helpful_count: j.helpful_count,
+              report_count: j.report_count,
+              status: j.status,
+              user_vote: { type, reason },
+            };
+          }
+          return null;
+        }
         if (r.ok) {
           // 200/201 — fresh vote
           setState(prev => ({
@@ -183,11 +228,11 @@ export function useLikeReport(markerId: string | null, options: Options): UseLik
         setError(j?.error ?? `HTTP ${r.status}`);
         return null;
       } catch (e: any) {
-        setError(e?.message ?? 'post failed');
+        if (mountedRef.current) setError(e?.message ?? 'post failed');
         return null;
       }
     },
-    [markerId, apiBase, options, issueNonce],
+    [markerId, apiBase, issueNonce],
   );
 
   const scheduleLike = useCallback(

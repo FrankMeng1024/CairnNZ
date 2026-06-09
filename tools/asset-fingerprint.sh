@@ -31,6 +31,22 @@ ASSETS=(
   "UnityARLib/ProjectSettings/ProjectSettings.asset"
   "UnityARLib/ProjectSettings/EditorBuildSettings.asset"
   "UnityARLib/ProjectSettings/URPProjectSettings.asset"
+  # v199 cinematic-rebuild — 8 new shaders + 3 pebble meshes + V199
+  # superlayer script. Cross-Unity-version drift on these (CI 36f1 vs
+  # local 76f1) would silently regress visual without this coverage.
+  "UnityARLib/Assets/Shaders/PebbleShader.shader"
+  "UnityARLib/Assets/Shaders/TypeChipShader.shader"
+  "UnityARLib/Assets/Shaders/StoneBackplateShader.shader"
+  "UnityARLib/Assets/Shaders/RibbonStrandShader.shader"
+  "UnityARLib/Assets/Shaders/LightShaftShader.shader"
+  "UnityARLib/Assets/Shaders/ScanningGridShader.shader"
+  "UnityARLib/Assets/Shaders/ConfidenceRingShader.shader"
+  "UnityARLib/Assets/Shaders/HandshakeBeamShader.shader"
+  "UnityARLib/Assets/Meshes/Pebble_S.asset"
+  "UnityARLib/Assets/Meshes/Pebble_M.asset"
+  "UnityARLib/Assets/Meshes/Pebble_L.asset"
+  "UnityARLib/Assets/Scripts/PortalSpawnerV199.cs"
+  "UnityARLib/Assets/Scripts/CairnGlobalsExt.cs"
 )
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
