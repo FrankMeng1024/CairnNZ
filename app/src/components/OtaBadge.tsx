@@ -44,7 +44,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         defer queue (fixes "marker too close after re-enter AR") +
 //         3 additional CairnBridge diagnostics (ARBgDiag2, RenderListDiag,
 //         SessionLifecycleDiag) + CairnVolumeProfile regen.
-export const OTA_VERSION = 193;
+//   194 — v187.7.13 OTA: re-expose OTA param panel + photo upload from
+//         Photos library. Replaces the 📍 reset-location button (no longer
+//         needed — AR origin works correctly) with a 🐞 debug-menu button
+//         that opens an action sheet → either OTAControlPanel (21 sliders)
+//         or photo upload to /api/debug-snapshot. No native build required;
+//         uses expo-image-picker + expo-file-system already in package.json.
+//         Backend route debug-snapshot.js exists from earlier iteration,
+//         reused as-is. Drops __DEV__ gate so panel is reachable in
+//         production builds (temporary tuning tool — will be hidden again
+//         after visual issues resolved).
+export const OTA_VERSION = 194;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

@@ -12,7 +12,7 @@
  * Sprint 51 — STORY-00173 (E-003: AR插旗)
  */
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Animated, Dimensions, PanResponder, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Animated, Dimensions, PanResponder, ActivityIndicator, Pressable, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
@@ -33,7 +33,14 @@ import { PlantSheet, AimReticle, type PlantType } from '../components/PlantSheet
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ARDebugOverlay } from '../components/ARDebugOverlay';
 import { OTAControlPanel } from '../components/OTAControlPanel';
+import { OTA_VERSION } from '../components/OtaBadge';
 import { GlassPanel, Elevation } from '../components/GlassPanel';
+// v194 OTA: photo upload from Photos library (no native build needed —
+// expo-image-picker + expo-file-system are already in package.json).
+import * as ImagePicker from 'expo-image-picker';
+// expo-file-system/legacy still ships readAsStringAsync in SDK 54; the
+// new namespace removed it. Pin to /legacy to avoid breakage.
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { useMarkerStore, type Marker } from '../store/useMarkerStore';
 import { useTrackingStore } from '../store/useTrackingStore';
@@ -214,6 +221,10 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   //   err   - red X with error code for 4s, then auto-revert
   const [snapState, setSnapState] = useState<'idle' | 'busy' | 'done' | 'err'>('idle');
   const [snapMsg, setSnapMsg] = useState<string>('');
+  // v194 OTA: debug action sheet (3 options — open params panel / upload
+  // text diagnostic / upload photo from Photos library). Triggered from
+  // the topbar 🐞 button (replaces the deprecated 📍 reset-location button).
+  const [debugMenuOpen, setDebugMenuOpen] = useState(false);
   // v78 #3: AR init UX. Tracks one of:
   //   'init'       — first 4 seconds, glReady === false. Show spinner.
   //   'ready'      — glReady === true AND device held upright. Hide overlay.
@@ -339,6 +350,95 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
       }
       return next;
     });
+  }, []);
+
+  // v194 OTA: upload a user-picked screenshot from the iOS Photos library
+  // to /api/debug-snapshot. User flow:
+  //   1. take iOS screenshot of the AR view (Vol Up + Side button)
+  //   2. tap 🐞 → "Upload screenshot"
+  //   3. iOS photo picker opens → user picks the screenshot
+  //   4. upload runs, button shows "✓ <id> (<KB>KB)" then auto-resets
+  //
+  // Using pick-from-library (NOT in-app capture via react-native-view-shot)
+  // because that would force a native rebuild. The iOS system screenshot
+  // captures the AR camera feed perfectly which is exactly what's needed
+  // for remote debugging.
+  //
+  // Implementation note: uses FileSystem.uploadAsync (native binary upload,
+  // off the JS thread) instead of fetch({ body: Uint8Array }). RN 0.81's
+  // networking layer doesn't reliably forward TypedArrays as raw bytes —
+  // they get coerced and fail the backend's PNG-magic check. uploadAsync
+  // streams the file bytes directly from disk via the native HTTP stack,
+  // which is the only way an OTA can reliably ship binary uploads on RN.
+  const uploadScreenshot = useCallback(async () => {
+    setSnapState('busy');
+    setSnapMsg('picking…');
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        setSnapState('err');
+        setSnapMsg('photo perm denied');
+        setTimeout(() => { setSnapState('idle'); setSnapMsg(''); }, 4000);
+        return;
+      }
+      const pick = await ImagePicker.launchImageLibraryAsync({
+        // SDK 54: MediaTypeOptions deprecated → string array. 'images' is
+        // the canonical literal accepted by both old and new SDK contracts.
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 1,
+      });
+      if (pick.canceled || !pick.assets?.length) {
+        setSnapState('idle');
+        setSnapMsg('');
+        return;
+      }
+      const asset = pick.assets[0];
+      setSnapMsg('uploading…');
+      const id = `manual-${Date.now()}`;
+      // btoa is provided by RN's base64 polyfill — meta is small (<200 chars)
+      // so the polyfill cost is negligible here (vs the multi-MB image bytes).
+      const meta = btoa(JSON.stringify({
+        ota_v: OTA_VERSION,
+        screen_w: asset.width,
+        screen_h: asset.height,
+        ts: Date.now(),
+      }));
+      const url = `${API_BASE_URL}/api/debug-snapshot?id=${id}&meta=${encodeURIComponent(meta)}`;
+      // FileSystem.uploadAsync streams bytes from disk via native HTTP —
+      // never touches the JS thread, never reads the file into memory in
+      // JS, never roundtrips through atob/Uint8Array. The body on the wire
+      // is the raw file contents, which is exactly what express.raw expects.
+      const uploadResult = await FileSystem.uploadAsync(url, asset.uri, {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          'Content-Type': 'image/png',
+          'X-Cairn-Device-Os': 'ios',
+          'X-Cairn-App-Version': '0.2.0',
+          'X-Cairn-Ar-Mode': 'unity',
+        },
+      });
+      if (uploadResult.status < 200 || uploadResult.status >= 300) {
+        // Backend returns JSON for 4xx/5xx (e.g. PNG-magic mismatch when
+        // user picked a HEIC instead of a PNG screenshot).
+        let errText = `HTTP ${uploadResult.status}`;
+        try {
+          const j = JSON.parse(uploadResult.body || '{}');
+          if (j?.error) errText = j.error;
+        } catch { /* body wasn't json — keep HTTP code */ }
+        throw new Error(errText);
+      }
+      const json = JSON.parse(uploadResult.body || '{}');
+      setSnapState('done');
+      setSnapMsg(`${json.id ?? id} (${((json.bytes ?? 0) / 1024).toFixed(0)}KB)`);
+      crashLogger.breadcrumb(`debug-snapshot uploaded: ${json.id ?? id} ${json.bytes}b`);
+    } catch (e: any) {
+      setSnapState('err');
+      setSnapMsg(e?.message ?? 'upload failed');
+      crashLogger.breadcrumb(`debug-snapshot upload failed: ${e?.message}`);
+    }
+    setTimeout(() => { setSnapState('idle'); setSnapMsg(''); }, 5000);
   }, []);
 
   // v25: upload diagnostic breadcrumb when AR screen unmounts so we capture
@@ -791,27 +891,83 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         userHeading={userHeading}
       />
 
-      {/* v187 — OTA debug button (top-right corner). Only rendered in DEV
-          builds (or when SHOW_OTA_PANEL env flag set). Production users
-          should NOT see internal tuning sliders. */}
-      {__DEV__ && (
-        <Pressable
-          style={styles.otaButton}
-          onPress={() => setOtaPanelOpen(o => !o)}
-          hitSlop={12}
-        >
-          <Text style={styles.otaButtonGlyph}>FX</Text>
-        </Pressable>
-      )}
+      {/* v194 — OTA control panel. Trigger lives in the topbar 🐞 debug
+          menu (replaced the deprecated FX button). Production-visible
+          for now (temporary tuning tool — will be hidden again after
+          visual issues resolved). */}
+      <OTAControlPanel
+        visible={otaPanelOpen}
+        onClose={() => setOtaPanelOpen(false)}
+        setGlobal={(name, value) => unityOverlayRef.current?.setGlobal(name, value)}
+      />
 
-      {/* v187 — OTA control panel. Only renders in DEV. */}
-      {__DEV__ && (
-        <OTAControlPanel
-          visible={otaPanelOpen}
-          onClose={() => setOtaPanelOpen(false)}
-          setGlobal={(name, value) => unityOverlayRef.current?.setGlobal(name, value)}
-        />
-      )}
+      {/* v194 — Debug action sheet. Triggered from topbar 🐞 button.
+          Three actions: open params panel / upload text diagnostic /
+          upload screenshot picked from Photos library. */}
+      <Modal
+        visible={debugMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDebugMenuOpen(false)}
+      >
+        <Pressable
+          style={styles.debugMenuBackdrop}
+          onPress={() => setDebugMenuOpen(false)}
+        >
+          <Pressable
+            style={styles.debugMenuCard}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={styles.debugMenuTitle}>Debug</Text>
+
+            <TouchableOpacity
+              style={styles.debugMenuRow}
+              onPress={() => { setDebugMenuOpen(false); setOtaPanelOpen(true); }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.debugMenuRowText}>🎛   Open params panel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.debugMenuRow}
+              onPress={async () => {
+                setDebugMenuOpen(false);
+                setSnapState('busy');
+                setSnapMsg('');
+                try {
+                  crashLogger.breadcrumb(`unity-debug:manual-snap glReady=${arStatus.glReady}`);
+                  const sessionId = await crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-manual-snap');
+                  setSnapState('done');
+                  setSnapMsg(sessionId.slice(-12));
+                } catch (e: any) {
+                  setSnapState('err');
+                  setSnapMsg(e?.message ?? 'crash');
+                }
+                setTimeout(() => { setSnapState('idle'); setSnapMsg(''); }, 4000);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.debugMenuRowText}>📝   Upload text diagnostic</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.debugMenuRow}
+              onPress={() => { setDebugMenuOpen(false); uploadScreenshot(); }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.debugMenuRowText}>📸   Upload screenshot</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.debugMenuClose}
+              onPress={() => setDebugMenuOpen(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.debugMenuCloseText}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* v78 #3: AR init / low-light overlay. Lives above the AR scene
           but below other UI chrome. 'init' = transient spinner;
@@ -910,71 +1066,31 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           regular nav screen, not a modal. */}
       <View style={[styles.topBar, { top: insets.top + 2 }]}>
         <BackButton variant="pill" onPress={() => onClose ? onClose() : nav.goBack()} />
-        {/* v153.1: Manual AR-origin reset.
-            arOrigin is persisted in MMKV across sessions (v118 design — keeps
-            markers from drifting between app launches at the same location).
-            But when user changes location (home → office), the persisted home
-            origin is still used to convert ARKit world → GPS, putting all
-            new plants ~15km away from the user.
-            We deliberately don't auto-detect this (user wanted no hardcode /
-            no auto-judgement). Instead: user taps the 📍 button to explicitly
-            clear AR origin, then plant the next marker — that re-locks the
-            origin at the current GPS. One-tap fix, user-controlled. */}
+        {/* v194 — Debug menu trigger. Replaces the deprecated 📍 reset-
+            location button (AR origin works correctly now, manual reset
+            no longer needed). Tapping opens an action sheet exposing:
+            OTA params panel / text diagnostic upload / screenshot upload.
+            Will be removed once visual tuning is complete. */}
         <TouchableOpacity
           style={styles.arResetBtn}
-          onPress={() => {
-            useMarkerStore.getState().clearArOrigin();
-            Alert.alert(
-              'AR origin reset',
-              'Your AR world is now anchored to your current location. Plant a marker to lock it.',
-            );
-          }}
+          onPress={() => setDebugMenuOpen(true)}
           activeOpacity={0.7}
         >
-          <Text style={styles.arResetBtnText}>📍</Text>
+          <Text style={styles.arResetBtnText}>🐞</Text>
         </TouchableOpacity>
         {/* v186: ritual mode toggle removed — Unity is the single AR
             path so there's no longer an A/B between sphere/ritual. */}
 
-        {/* Debug snapshot button — Unity AR diagnostic upload. */}
-        <TouchableOpacity
-          style={[
-            styles.debugSnapBtn,
-            snapState === 'busy' && styles.debugSnapBtnBusy,
-            snapState === 'done' && styles.debugSnapBtnDone,
-            snapState === 'err'  && styles.debugSnapBtnErr,
-          ]}
-          disabled={snapState !== 'idle'}
-          onPress={async () => {
-            setSnapState('busy');
-            setSnapMsg('');
-            try {
-              crashLogger.breadcrumb(`unity-debug:manual-snap glReady=${arStatus.glReady}`);
-              const sessionId = await crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-manual-snap');
-              setSnapState('done');
-              setSnapMsg(sessionId.slice(-12));
-            } catch (e: any) {
-              setSnapState('err');
-              setSnapMsg(e?.message ?? 'crash');
-            }
-            setTimeout(() => { setSnapState('idle'); setSnapMsg(''); }, 4000);
-          }}
-          activeOpacity={0.7}
-        >
-          {snapState === 'busy' ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.debugSnapBtnText}>
-              {snapState === 'done' ? '✓' : snapState === 'err' ? '✗' : '🐛'}
-            </Text>
-          )}
-        </TouchableOpacity>
+        {/* v194: debug snapshot button removed — its function (text
+            diagnostic upload) is now reachable from the 🐞 menu above
+            alongside the new screenshot upload. The snapState pill below
+            is kept as a unified status indicator for both upload paths. */}
         {/* Persistent message strip below the buttons so user can read
             success/error without losing focus on AR view */}
         {snapState !== 'idle' && (
           <View style={styles.debugSnapMsg}>
             <Text style={styles.debugSnapMsgText}>
-              {snapState === 'busy' ? 'capturing...' :
+              {snapState === 'busy' ? (snapMsg || 'capturing...') :
                snapState === 'done' ? `✓ ${snapMsg}` :
                `✗ ${snapMsg}`}
             </Text>
@@ -1189,6 +1305,57 @@ const styles = StyleSheet.create({
   },
   debugSnapMsgText: {
     color: '#fff', fontSize: 11, fontWeight: '500',
+  },
+  // v194 — debug action sheet (modal). Center card with 3 action rows
+  // + Cancel. Backdrop dismisses on tap.
+  debugMenuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  debugMenuCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#1a1c24',
+    borderRadius: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  debugMenuTitle: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textAlign: 'center',
+    paddingTop: 12,
+    paddingBottom: 8,
+    textTransform: 'uppercase',
+  },
+  debugMenuRow: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  debugMenuRowText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  debugMenuClose: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+  debugMenuCloseText: {
+    color: '#ff6b6b',
+    fontSize: 15,
+    fontWeight: '600',
   },
   placeFab: {
     position: 'absolute', bottom: 30, alignSelf: 'center',
