@@ -76,7 +76,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         Bug 8 (退出再进 marker 漂移 20m) intentionally postponed — needs
 //         proper per-session anchor compensation that's beyond OTA scope.
 //         Bugs 1/2/3/4/7 are Unity-side, await next build.
-export const OTA_VERSION = 197;
+//   198 — Sprint 66 routes follow-up: 6 user-reported bugs from real-device
+//         test batch + dual-review cleanup of regressions in the first pass.
+//         User-visible changes:
+//           1+2 Save as Route from Activity now opens RouteEditor in
+//               draft mode with an editable name input (defaults to
+//               'Hike Jun 9'/'Run Jun 9'), shows the activity's polyline
+//               on the map, and lands on the Routes tab after save (not
+//               the Activity detail).
+//           3+4 View Route + Save-as-route draft both fit the camera to
+//               the route bbox (cosine(lat) corrected, 1.4x padding).
+//               No more user-GPS flash before snap.
+//           5   Activity detail map gets a recenter button after the
+//               user pans away.
+//           6   too-short hike rejection now also checks distanceM<20m
+//               (not just trackPoints<2) so 0-movement sessions with GPS
+//               jitter no longer slip through.
+//         Internal: handleSave is now async (awaits addRoute/updateRoute);
+//         server-only sessions no longer break save (MapHistoryScreen
+//         passes server-hydrated trackpoints via nav param);
+//         displayedStats reads from geometry source priority instead
+//         of empty waypoints[]; addRoute null result now throws into
+//         catch instead of silent goBack. OTA-only.
+export const OTA_VERSION = 198;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

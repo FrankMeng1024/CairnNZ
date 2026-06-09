@@ -775,13 +775,22 @@ export function RouteEditorScreen() {
         nav.goBack();
       } else {
         const newId = await addRoute(routeData);
+        // v199 fix (CRIT-1): addRoute returns null on server failure
+        // (createRoute swallows network errors and returns null without
+        // throwing — see routeService.ts:75-87). Without this null
+        // check, handleSave would fire success haptic + nav.goBack and
+        // the user would believe the route saved. Treat null as failure
+        // and route into the same catch block as a thrown error.
+        if (!newId) {
+          throw new Error('Failed to save route — please check your connection and try again.');
+        }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         // v198 fix-3: save-as-route from Activity → land on Routes list +
         // the new route's detail. nav.goBack would dump the user back on
         // the Activity detail, hiding the just-saved route. This matches
         // HikingScreen.tsx:1764 stop-then-save flow for cross-screen
         // consistency.
-        if (fromSessionId && newId) {
+        if (fromSessionId) {
           (nav as any).reset({
             index: 2,
             routes: [
