@@ -151,6 +151,14 @@ export function RouteEditorScreen() {
   // gap — explicit user discard still goes through Cancel/back +
   // Discard alert + cancelEdit.
   const dualEditActiveRef = useRef(dualEditActive);
+  // v200 fix: imperative cameraRef + effect to forcibly fitBounds when
+  // routeCameraFit changes after mount. The prop-driven Camera (bounds
+  // prop) is mostly fine on first mount, but when sessionTrackPoints
+  // arrives async after Camera has already mounted with a fallback
+  // center, Mapbox iOS sometimes does not respect the prop update.
+  // Calling cameraRef.current.fitBounds imperatively guarantees the
+  // view moves.
+  const cameraRef = useRef<any>(null);
   useEffect(() => {
     dualEditActiveRef.current = dualEditActive;
   }, [dualEditActive]);
@@ -235,6 +243,15 @@ export function RouteEditorScreen() {
   // the heuristic reflects actual geographic extent.
   // v198-fix (bug 3+4): extract bbox->center+zoom into a helper so
   // view-mode and save-as-route can reuse the same math.
+  // v200 fix: routeCameraFit now exposes the bbox bounds directly so
+  // Camera can use the `bounds` prop instead of centerCoordinate+zoom.
+  // bounds is what Mapbox uses for fitBounds internally and is more
+  // reliable when sessionTrackPoints arrives async — the v199 approach
+  // returned a null Camera while waiting then mounted with center+zoom,
+  // but on iOS the "no Camera" gap let MapView fall back to the global
+  // default view (showed Corsica for users in Asia) and the late-mounting
+  // Camera with prop center+zoom did not always pull the view back.
+  // Using bounds + a stable Camera mount avoids that race.
   const computeBboxFit = (pts: Array<{ lng: number; lat: number }>) => {
     if (pts.length < 2) return null;
     let minLng = Infinity, maxLng = -Infinity;
@@ -264,7 +281,18 @@ export function RouteEditorScreen() {
     else if (spanM > 700) zoom = 14;
     else if (spanM > 300) zoom = 15;
     else zoom = 16;
-    return { center, zoom };
+    // v200: also expose padded bounds so callers can use Camera's bounds
+    // prop (more reliable on iOS for late-arriving data).
+    const lngSpan = Math.max(maxLng - minLng, 0.0005);
+    const latSpan = Math.max(maxLat - minLat, 0.0005);
+    const lngPad = Math.max(lngSpan * 0.1, 0.0005);
+    const latPad = Math.max(latSpan * 0.1, 0.0005);
+    return {
+      center,
+      zoom,
+      ne: [maxLng + lngPad, maxLat + latPad] as [number, number],
+      sw: [minLng - lngPad, minLat - latPad] as [number, number],
+    };
   };
 
   const dualEditCameraFit = useMemo(() => {
@@ -291,6 +319,29 @@ export function RouteEditorScreen() {
     return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeId, fromSessionId, existingRoute?.points?.length, sessionTrackPoints.length]);
+
+  // v200 fix: force imperative fitBounds when routeCameraFit becomes
+  // available or changes. The prop-driven bounds is normally sufficient
+  // on first mount, but when sessionTrackPoints fills in async (after
+  // snap-to-road completes), the bounds prop update was not always
+  // respected by Mapbox iOS — leaving the camera stuck on the initial
+  // wait-state center. Calling cameraRef.fitBounds explicitly guarantees
+  // the view moves to the route. Safe under dual-edit (separate camera
+  // path) and view-mode (existingRoute hydration).
+  useEffect(() => {
+    if (!routeCameraFit) return;
+    if (!cameraRef.current) return;
+    try {
+      cameraRef.current.fitBounds(
+        routeCameraFit.ne,
+        routeCameraFit.sw,
+        [60, 40, 60, 40], // [top, right, bottom, left]
+        300,
+      );
+    } catch {
+      // best-effort; ref may be stale during unmount
+    }
+  }, [routeCameraFit]);
 
   // React to pendingStraightConfirm via Alert. The orchestrator returns
   // a straight-line fallback when neither DOC nor Mapbox can route — the
@@ -977,37 +1028,55 @@ export function RouteEditorScreen() {
                   />
                 );
               }
-              // v198-fix (bug 3+4): view-mode (existing route) and
-              // save-as-route (session draft) both center on the route
-              // bbox, not on user GPS. Without this the user lands on
-              // their current location even though the route is
-              // somewhere else, and never sees the polyline.
+              // v198-fix (bug 3+4) + v200-fix (camera-stuck-on-default):
+              // view-mode (existing route) and save-as-route (session
+              // draft) both center on the route bbox. Use Camera's
+              // `bounds` prop (not center+zoom) because bounds is more
+              // reliable on iOS when the data arrives async — the
+              // late-mount center+zoom path occasionally left the
+              // camera stuck on Mapbox's default view (Corsica for
+              // Asian users). Padding 60/40/60/40 matches the existing
+              // NativeTrackMap pattern.
               if (routeCameraFit) {
                 return (
                   <CameraComponent
-                    centerCoordinate={routeCameraFit.center}
-                    zoomLevel={routeCameraFit.zoom}
+                    ref={cameraRef}
+                    bounds={{
+                      ne: routeCameraFit.ne,
+                      sw: routeCameraFit.sw,
+                      paddingTop: 60,
+                      paddingBottom: 60,
+                      paddingLeft: 40,
+                      paddingRight: 40,
+                    }}
                     animationDuration={0}
                   />
                 );
               }
-              // v198 fix-5: while waiting for an existing route's points
-              // to hydrate (view-mode entry, list endpoint stripped points),
-              // do NOT mount a Camera with user-GPS coords — that would
-              // briefly flash the user's location before snapping to the
-              // route. Render no Camera until either routeCameraFit is
-              // ready (above branch) or it's clear no route geometry
-              // applies (waypoint-drawing or save-as-route waiting on
-              // sessionTrackPoints). For waypoint-drawing the user-GPS
-              // fallback is correct; the gate is "view-mode w/ pending
-              // hydration" or "save-as-route w/ pending snap".
+              // v200-fix: while waiting for hydration, mount a Camera
+              // anyway — pointed at the user's GPS / region centre —
+              // so MapView never falls back to the global default
+              // (that was the Corsica bug). Once routeCameraFit is
+              // ready, the branch above takes over and bounds-fits
+              // to the route. Brief flash of user location is the
+              // lesser evil vs. seeing a foreign continent.
               const isWaitingForRouteHydration =
                 routeId && existingRoute &&
                 (!existingRoute.points || existingRoute.points.length < 2);
               const isWaitingForSessionSnap =
                 fromSessionId && sessionTrackPoints.length < 2;
               if (isWaitingForRouteHydration || isWaitingForSessionSnap) {
-                return null;
+                const waitCenter: [number, number] = userCoord
+                  ? [userCoord.lng, userCoord.lat]
+                  : [region.centerLng, region.centerLat];
+                const waitZoom = userCoord ? 13 : region.defaultZoom;
+                return (
+                  <CameraComponent
+                    centerCoordinate={waitCenter}
+                    zoomLevel={waitZoom}
+                    animationDuration={0}
+                  />
+                );
               }
               const last = waypoints[waypoints.length - 1];
               // Camera centring priority:

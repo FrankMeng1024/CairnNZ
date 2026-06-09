@@ -98,7 +98,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         displayedStats reads from geometry source priority instead
 //         of empty waypoints[]; addRoute null result now throws into
 //         catch instead of silent goBack. OTA-only.
-export const OTA_VERSION = 198;
+//   199 — v198 follow-up: real-device test of save-as-route showed the
+//         camera stuck on Mapbox's global default view (Corsica from
+//         Asia) instead of the route. Root cause: the v198 "render no
+//         Camera while waiting for hydration" path let MapView fall
+//         back to the global default, and the late-mounting Camera
+//         with center+zoom prop did not always pull the view back on
+//         iOS. Fix: (a) Camera now uses the bounds prop (more reliable
+//         than center+zoom for late-arriving data), (b) wait-state
+//         Camera mounts at userCoord/region-center (never null), so
+//         MapView never falls back to global default, (c) imperative
+//         cameraRef.fitBounds() runs in a useEffect when routeCameraFit
+//         changes — guarantees the view moves even if the prop update
+//         path missed. Bbox padded ±10% (min 0.0005°) so the polyline
+//         has breathing room. OTA-only.
+export const OTA_VERSION = 199;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
