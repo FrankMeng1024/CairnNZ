@@ -34,8 +34,38 @@ const uploadLimiter = rateLimit({
   message: { error: 'Too many snapshots. Try again later.' },
 });
 
+// ── Background TTL cleanup ────────────────────────────────────────────
+// Keep snapshots for 1 hour only — server space is tight and these are
+// transient debug artifacts. We don't run a separate cron; instead the
+// POST handler triggers cleanup opportunistically on each upload.
+// Worst case: a quiet period leaves stale rows until the next POST.
+const TTL_HOURS = 1;
+let _lastCleanupAt = 0;
+const CLEANUP_MIN_INTERVAL_MS = 60 * 1000; // at most once per minute
+
+async function maybeCleanup() {
+  const now = Date.now();
+  if (now - _lastCleanupAt < CLEANUP_MIN_INTERVAL_MS) return;
+  _lastCleanupAt = now;
+  try {
+    const [r] = await pool.execute(
+      `DELETE FROM debug_snapshots
+       WHERE uploaded_at < (NOW() - INTERVAL ? HOUR)`,
+      [TTL_HOURS],
+    );
+    if (r.affectedRows > 0) {
+      console.log(`[debug-snapshot] TTL cleanup: deleted ${r.affectedRows} rows older than ${TTL_HOURS}h`);
+    }
+  } catch (err) {
+    // Cleanup failure must not block uploads — just log.
+    console.warn('[debug-snapshot] TTL cleanup failed:', err.message);
+  }
+}
+
 // ── POST /api/debug-snapshot ───────────────────────────────────────────
 router.post('/', uploadLimiter, rawBody, async (req, res) => {
+  // Opportunistic TTL purge before each upload (no separate cron).
+  maybeCleanup().catch(() => undefined);
   const id = (req.query.id || `snap-${Date.now()}`).toString().slice(0, 64);
   let meta = null;
   if (req.query.meta) {

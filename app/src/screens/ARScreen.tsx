@@ -12,7 +12,7 @@
  * Sprint 51 — STORY-00173 (E-003: AR插旗)
  */
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Animated, Dimensions, PanResponder, ActivityIndicator, Pressable, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Animated, Dimensions, PanResponder, ActivityIndicator, Pressable, Modal, Image, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
@@ -225,6 +225,12 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // text diagnostic / upload photo from Photos library). Triggered from
   // the topbar 🐞 button (replaces the deprecated 📍 reset-location button).
   const [debugMenuOpen, setDebugMenuOpen] = useState(false);
+  // v194.1: photos picked from library awaiting user confirmation. Picker
+  // returns → we stage the assets here and show a confirm sheet (thumbnails
+  // + "Upload N" / "Cancel"). Upload only begins on explicit confirm.
+  const [pendingPhotos, setPendingPhotos] = useState<
+    Array<{ uri: string; width: number; height: number }>
+  >([]);
   // v78 #3: AR init UX. Tracks one of:
   //   'init'       — first 4 seconds, glReady === false. Show spinner.
   //   'ready'      — glReady === true AND device held upright. Hide overlay.
@@ -352,12 +358,16 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     });
   }, []);
 
-  // v194 OTA: upload a user-picked screenshot from the iOS Photos library
+  // v194 OTA: upload user-picked screenshot(s) from the iOS Photos library
   // to /api/debug-snapshot. User flow:
-  //   1. take iOS screenshot of the AR view (Vol Up + Side button)
+  //   1. take iOS screenshot(s) of the AR view (Vol Up + Side button)
   //   2. tap 🐞 → "Upload screenshot"
-  //   3. iOS photo picker opens → user picks the screenshot
-  //   4. upload runs, button shows "✓ <id> (<KB>KB)" then auto-resets
+  //   3. iOS multi-select picker opens → user picks 1-5 screenshots
+  //   4. confirm sheet shows thumbnails → tap "Upload N"
+  //   5. uploads run sequentially, pill shows progress + final ✓ count
+  //
+  // Two-step (pick + confirm) so user sees what they're about to send and
+  // can back out — important because once uploaded, image is on the server.
   //
   // Using pick-from-library (NOT in-app capture via react-native-view-shot)
   // because that would force a native rebuild. The iOS system screenshot
@@ -370,7 +380,9 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // they get coerced and fail the backend's PNG-magic check. uploadAsync
   // streams the file bytes directly from disk via the native HTTP stack,
   // which is the only way an OTA can reliably ship binary uploads on RN.
-  const uploadScreenshot = useCallback(async () => {
+
+  // Step 1: open multi-select picker, stage results to pendingPhotos.
+  const pickScreenshots = useCallback(async () => {
     setSnapState('busy');
     setSnapMsg('picking…');
     try {
@@ -382,10 +394,11 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         return;
       }
       const pick = await ImagePicker.launchImageLibraryAsync({
-        // SDK 54: MediaTypeOptions deprecated → string array. 'images' is
-        // the canonical literal accepted by both old and new SDK contracts.
+        // SDK 54: 'images' string array literal is the forward-compat form.
         mediaTypes: ['images'],
         allowsEditing: false,
+        allowsMultipleSelection: true,
+        selectionLimit: 5,
         quality: 1,
       });
       if (pick.canceled || !pick.assets?.length) {
@@ -393,52 +406,87 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         setSnapMsg('');
         return;
       }
-      const asset = pick.assets[0];
-      setSnapMsg('uploading…');
-      const id = `manual-${Date.now()}`;
-      // btoa is provided by RN's base64 polyfill — meta is small (<200 chars)
-      // so the polyfill cost is negligible here (vs the multi-MB image bytes).
-      const meta = btoa(JSON.stringify({
-        ota_v: OTA_VERSION,
-        screen_w: asset.width,
-        screen_h: asset.height,
-        ts: Date.now(),
-      }));
-      const url = `${API_BASE_URL}/api/debug-snapshot?id=${id}&meta=${encodeURIComponent(meta)}`;
-      // FileSystem.uploadAsync streams bytes from disk via native HTTP —
-      // never touches the JS thread, never reads the file into memory in
-      // JS, never roundtrips through atob/Uint8Array. The body on the wire
-      // is the raw file contents, which is exactly what express.raw expects.
-      const uploadResult = await FileSystem.uploadAsync(url, asset.uri, {
-        httpMethod: 'POST',
-        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-        headers: {
-          'Content-Type': 'image/png',
-          'X-Cairn-Device-Os': 'ios',
-          'X-Cairn-App-Version': '0.2.0',
-          'X-Cairn-Ar-Mode': 'unity',
-        },
-      });
-      if (uploadResult.status < 200 || uploadResult.status >= 300) {
-        // Backend returns JSON for 4xx/5xx (e.g. PNG-magic mismatch when
-        // user picked a HEIC instead of a PNG screenshot).
-        let errText = `HTTP ${uploadResult.status}`;
-        try {
-          const j = JSON.parse(uploadResult.body || '{}');
-          if (j?.error) errText = j.error;
-        } catch { /* body wasn't json — keep HTTP code */ }
-        throw new Error(errText);
-      }
-      const json = JSON.parse(uploadResult.body || '{}');
-      setSnapState('done');
-      setSnapMsg(`${json.id ?? id} (${((json.bytes ?? 0) / 1024).toFixed(0)}KB)`);
-      crashLogger.breadcrumb(`debug-snapshot uploaded: ${json.id ?? id} ${json.bytes}b`);
+      // Stage for confirmation. Don't upload yet.
+      setPendingPhotos(pick.assets.map(a => ({
+        uri: a.uri,
+        width: a.width ?? 0,
+        height: a.height ?? 0,
+      })));
+      setSnapState('idle');
+      setSnapMsg('');
     } catch (e: any) {
       setSnapState('err');
-      setSnapMsg(e?.message ?? 'upload failed');
-      crashLogger.breadcrumb(`debug-snapshot upload failed: ${e?.message}`);
+      setSnapMsg(e?.message ?? 'pick failed');
+      setTimeout(() => { setSnapState('idle'); setSnapMsg(''); }, 4000);
+    }
+  }, []);
+
+  // Step 2: user confirmed — upload all staged photos sequentially.
+  const confirmUploadScreenshots = useCallback(async () => {
+    const photos = pendingPhotos;
+    if (!photos.length) return;
+    setPendingPhotos([]);
+    setSnapState('busy');
+    setSnapMsg(`0/${photos.length}…`);
+    let okCount = 0;
+    let lastErr: string | null = null;
+    for (let i = 0; i < photos.length; i++) {
+      const asset = photos[i];
+      setSnapMsg(`${i + 1}/${photos.length}…`);
+      try {
+        const id = `manual-${Date.now()}-${i}`;
+        const meta = btoa(JSON.stringify({
+          ota_v: OTA_VERSION,
+          screen_w: asset.width,
+          screen_h: asset.height,
+          ts: Date.now(),
+          batch_idx: i,
+          batch_total: photos.length,
+        }));
+        const url = `${API_BASE_URL}/api/debug-snapshot?id=${id}&meta=${encodeURIComponent(meta)}`;
+        const uploadResult = await FileSystem.uploadAsync(url, asset.uri, {
+          httpMethod: 'POST',
+          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          headers: {
+            'Content-Type': 'image/png',
+            'X-Cairn-Device-Os': 'ios',
+            'X-Cairn-App-Version': '0.2.0',
+            'X-Cairn-Ar-Mode': 'unity',
+          },
+        });
+        if (uploadResult.status < 200 || uploadResult.status >= 300) {
+          let errText = `HTTP ${uploadResult.status}`;
+          try {
+            const j = JSON.parse(uploadResult.body || '{}');
+            if (j?.error) errText = j.error;
+          } catch { /* keep code */ }
+          throw new Error(errText);
+        }
+        okCount++;
+        crashLogger.breadcrumb(`debug-snapshot uploaded ${i + 1}/${photos.length}: ${id}`);
+      } catch (e: any) {
+        lastErr = e?.message ?? 'upload failed';
+        crashLogger.breadcrumb(`debug-snapshot upload failed ${i + 1}/${photos.length}: ${lastErr}`);
+        // continue trying remaining photos rather than aborting batch
+      }
+    }
+    if (okCount === photos.length) {
+      setSnapState('done');
+      setSnapMsg(`${okCount} uploaded`);
+    } else if (okCount === 0) {
+      setSnapState('err');
+      setSnapMsg(lastErr ?? 'all failed');
+    } else {
+      setSnapState('err');
+      setSnapMsg(`${okCount}/${photos.length} ok · ${lastErr ?? ''}`);
     }
     setTimeout(() => { setSnapState('idle'); setSnapMsg(''); }, 5000);
+  }, [pendingPhotos]);
+
+  const cancelPendingPhotos = useCallback(() => {
+    setPendingPhotos([]);
+    setSnapState('idle');
+    setSnapMsg('');
   }, []);
 
   // v25: upload diagnostic breadcrumb when AR screen unmounts so we capture
@@ -952,7 +1000,7 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
 
             <TouchableOpacity
               style={styles.debugMenuRow}
-              onPress={() => { setDebugMenuOpen(false); uploadScreenshot(); }}
+              onPress={() => { setDebugMenuOpen(false); pickScreenshots(); }}
               activeOpacity={0.7}
             >
               <Text style={styles.debugMenuRowText}>📸   Upload screenshot</Text>
@@ -965,6 +1013,64 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
             >
               <Text style={styles.debugMenuCloseText}>Cancel</Text>
             </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* v194.1 — Photo confirm sheet. After multi-select picker returns,
+          show thumbnails + "Upload N" before actually uploading. Lets the
+          user back out if they accidentally picked the wrong photo. */}
+      <Modal
+        visible={pendingPhotos.length > 0}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelPendingPhotos}
+      >
+        <Pressable
+          style={styles.debugMenuBackdrop}
+          onPress={cancelPendingPhotos}
+        >
+          <Pressable
+            style={styles.confirmCard}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={styles.confirmTitle}>
+              {pendingPhotos.length === 1
+                ? 'Upload 1 screenshot?'
+                : `Upload ${pendingPhotos.length} screenshots?`}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.confirmThumbs}
+            >
+              {pendingPhotos.map((p, i) => (
+                <Image
+                  key={`${p.uri}-${i}`}
+                  source={{ uri: p.uri }}
+                  style={styles.confirmThumb}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmBtnSecondary}
+                onPress={cancelPendingPhotos}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmBtnSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmBtnPrimary}
+                onPress={confirmUploadScreenshots}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmBtnPrimaryText}>
+                  Upload {pendingPhotos.length}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1356,6 +1462,62 @@ const styles = StyleSheet.create({
     color: '#ff6b6b',
     fontSize: 15,
     fontWeight: '600',
+  },
+  // v194.1 — confirm sheet for multi-select photo upload
+  confirmCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#1a1c24',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  confirmTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  confirmThumbs: {
+    gap: 8,
+    paddingBottom: 4,
+    paddingRight: 4,
+  },
+  confirmThumb: {
+    width: 70,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 14,
+  },
+  confirmBtnSecondary: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  confirmBtnSecondaryText: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  confirmBtnPrimary: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  confirmBtnPrimaryText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   placeFab: {
     position: 'absolute', bottom: 30, alignSelf: 'center',
