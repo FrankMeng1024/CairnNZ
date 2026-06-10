@@ -131,9 +131,12 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
   // got groundY=0.30 from a 0.3-area outlier instead of larger nearby
   // planes). Buffer last 5s of plane events with area>=0.5; pick largest.
   const recentPlanesRef = useRef<Array<{ y: number; area: number; t: number }>>([]);
-  // v206 B1 — once Unity emits "[GroundYResolver] locked Y=... tier=A",
-  // that authoritative value supersedes raw plane events. Cleared on mount.
-  const groundLockedRef = useRef<boolean>(false);
+  // v208 — REMOVED groundLockedRef (and the v206 B1 lock-Y sniff in UnityLog
+  // case). Unity emits "[GroundYResolver] locked Y=..." per-CAIRN, not
+  // per-session — accepting any single lock as session-wide ground caused
+  // tabletop/ceiling locks to overwrite floor lock → "几次后飞天". Now RN
+  // uses area-weighted PlaneDetected buffer only; Unity owns per-cairn
+  // refinement.
   const arReadyRef   = useRef(false);
   const lastFrameRef = useRef<number>(Date.now());
   // Track which marker IDs we've already pushed to Unity this session, so
@@ -232,7 +235,6 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
       bulkSpawnedRef.current = false;
       emptyMarkerFrameCountRef.current = 0;
       recentPlanesRef.current = [];
-      groundLockedRef.current = false;
           crashLogger.breadcrumb(`${TAG}:clearAll dispatched`);
         } catch (e: any) {
           crashLogger.breadcrumb(`${TAG}:clearAll-error ${String(e?.message ?? e).slice(0, 80)}`);
@@ -340,7 +342,6 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
       bulkSpawnedRef.current = false;
       emptyMarkerFrameCountRef.current = 0;
       recentPlanesRef.current = [];
-      groundLockedRef.current = false;
       crashLogger.breadcrumb(`${TAG}:unmount glReady=${arReadyRef.current}`);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -391,24 +392,16 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           // Unity logger forwards WARN/ERROR by default (not INFO).
           // crashLogger ring buffer is 500 — guard against flood by tag prefix.
           crashLogger.breadcrumb(`unity-native:${msg.level}:${msg.line.slice(0, 200)}`);
-          // v206 B1 — sniff Unity's authoritative ground lock from the
-          // forwarded log. Format: "[GroundYResolver] locked Y=-0.315
-          // tier=A stable=1000ms". When tier=A or tier=B (real planes,
-          // not Tier-C heuristic), trust it as ground-truth and stop
-          // updating groundYRef from raw PlaneDetected events.
-          {
-            const m = /\[GroundYResolver\]\s+locked\s+Y=(-?\d+\.\d+)\s+tier=([ABC])/.exec(msg.line);
-            if (m && (m[2] === 'A' || m[2] === 'B')) {
-              const y = parseFloat(m[1]);
-              if (!Number.isNaN(y)) {
-                groundYRef.current = y;
-                groundLockedRef.current = true;
-                crashLogger.breadcrumb(
-                  `${TAG}:ground-locked-from-unity y=${y.toFixed(3)} tier=${m[2]}`
-                );
-              }
-            }
-          }
+          // v208 — DELETED v206 B1's lock-Y sniffer. The premise was wrong:
+          // Unity GroundYResolver emits "locked Y=..." once PER CAIRN, not
+          // per session. Indoor users plant cairns at floor + tabletop +
+          // shelf — each gets its own lock at a different Y. v207 RN code
+          // accepted every lock, last write wins → next spawn used tabletop
+          // or ceiling Y as ground → "几次后飞天" with cairns at +2.77m.
+          // Unity's per-cairn lerp+lock loop is the correct refinement path;
+          // RN was second-guessing it. Now RN only uses area-weighted
+          // PlaneDetected buffer for spawn-time ground hint, and Unity
+          // settles each cairn to its own correct plane via QueryGroundY.
           break;
 
         case 'Checkpoint':
@@ -455,10 +448,10 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             crashLogger.breadcrumb(
               `${TAG}:recv:PlaneDetected y=${msg.y.toFixed(2)} area=${msg.area.toFixed(1)}`
             );
-            if (groundLockedRef.current) {
-              // Unity is authoritative — ignore this raw plane.
-              break;
-            }
+            // v208 — removed `if (groundLockedRef.current) break` gate.
+            // RN no longer trusts Unity's per-cairn lock as session-wide
+            // authority (see UnityLog case for rationale). Area-weighted
+            // PlaneDetected buffer is now the sole RN-side ground signal.
             const MIN_AREA = 0.5;
             const STALE_MS = 5000;
             const now = Date.now();
