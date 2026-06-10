@@ -286,7 +286,8 @@ public class GroundYResolver : MonoBehaviour
             //   |delta| > 0.05m         → FAST lerp (≤50ms transit, sub-perceptual)
             //   |delta| ≤ 0.05m         → SLOW lerp (cosmetic settle)
             // OTA: GroundLerpSnapThreshold, GroundLerpFastSpeed, GroundLerpSlowSpeed.
-            var globals = CairnGlobals.Instance;
+            // Note: re-uses outer-scope `globals` declared at line 243 (was a
+            // duplicate `var globals` here — CS0136 conflict caught by CI).
             float snapThreshold = globals != null
                 ? globals.GetForType(null, "GroundLerpSnapThreshold", DEFAULT_LERP_SNAP_THRESHOLD)
                 : DEFAULT_LERP_SNAP_THRESHOLD;
