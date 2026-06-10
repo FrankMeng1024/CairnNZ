@@ -168,6 +168,11 @@ export function RouteEditorScreen() {
   // Calling cameraRef.current.fitBounds imperatively guarantees the
   // view moves.
   const cameraRef = useRef<any>(null);
+  // Mapbox-Migration: MapView ref is needed by buildEditContext so the
+  // junction extractor can call querySourceFeatures on the loaded vector
+  // tiles. Sibling to cameraRef — the Camera and MapView refs serve
+  // distinct APIs.
+  const mapViewRef = useRef<any>(null);
   useEffect(() => {
     dualEditActiveRef.current = dualEditActive;
   }, [dualEditActive]);
@@ -523,9 +528,35 @@ export function RouteEditorScreen() {
       );
       const preExtras = await loadExtrasFn(effectiveRouteId);
       let ctx;
+      // Mapbox-Migration: before buildEditContext, force the camera to
+      // fit the route bbox at zoom >= 14. The Mapbox vector tile junction
+      // extractor reads features from already-loaded tiles; below zoom 14
+      // the geometry is too simplified to expose junctions. The 600 ms
+      // wait empirically matches Spike B Q3 timing for tile load.
+      const fitBboxForExtract = computeBboxFit(legacyPoints);
+      if (cameraRef.current && fitBboxForExtract) {
+        try {
+          cameraRef.current.fitBounds(
+            fitBboxForExtract.ne,
+            fitBboxForExtract.sw,
+            [60, 40, 60, 40],
+            0,
+          );
+          // If the bbox-fit picked a zoom < 14, override.
+          if ((fitBboxForExtract.zoom ?? 0) < 14) {
+            cameraRef.current.setCamera({
+              zoomLevel: 14,
+              animationDuration: 0,
+            });
+          }
+        } catch {
+          // best-effort
+        }
+        await new Promise(r => setTimeout(r, 600));
+      }
       if (preExtras && preExtras.originalPoints && preExtras.originalPoints.length >= 2) {
         // Non-legacy path: build context first.
-        ctx = await buildEditContext(effectiveRouteId);
+        ctx = await buildEditContext(effectiveRouteId, mapViewRef);
         if (!ctx) {
           setDualEditError(
             'Cannot edit this route — original GPS data is missing. Try recording it again.',
@@ -564,7 +595,7 @@ export function RouteEditorScreen() {
         }
         // Migration succeeded — extras now exists. Build context and
         // inject walkedIndex/trailGraph so corridor enforcement is live.
-        ctx = await buildEditContext(effectiveRouteId);
+        ctx = await buildEditContext(effectiveRouteId, mapViewRef);
         if (ctx) {
           useRouteEditStore.setState({
             walkedIndex: ctx.walkedIndex,
@@ -1376,6 +1407,7 @@ export function RouteEditorScreen() {
       <View style={styles.mapArea}>
         {MapView ? (
           <MapView
+            ref={mapViewRef}
             style={StyleSheet.absoluteFillObject}
             styleURL="mapbox://styles/mapbox/outdoors-v12"
             logoEnabled={false}
