@@ -342,7 +342,14 @@ export function RouteEditorScreen() {
 
   const dualEditCameraFit = useMemo(() => {
     if (!dualEditActive) return null;
-    return computeBboxFit(editStore.workingPoints);
+    const fit = computeBboxFit(editStore.workingPoints);
+    if (!fit) return null;
+    // v208 fix B1: clamp zoom to >= 14 so the Mapbox vector-tile junction
+    // extractor has the geometry detail it needs. This replaces the
+    // imperative cameraRef.fitBounds + setCamera({zoom:14}) double-jump
+    // that lived in enterDualEdit — now the natural Camera mount fits
+    // the route AND guarantees zoom>=14 in a single animation.
+    return { ...fit, zoom: Math.max(14, fit.zoom) };
     // Deps: only recompute when entering/leaving dual-edit OR routeId
     // changes. workingPoints is intentionally NOT a dep — see comment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -557,36 +564,18 @@ export function RouteEditorScreen() {
       );
       const preExtras = await loadExtrasFn(effectiveRouteId);
       let ctx;
-      // Mapbox-Migration: before buildEditContext, force the camera to
-      // fit the route bbox at zoom >= 14. The Mapbox vector tile junction
-      // extractor reads features from already-loaded tiles; below zoom 14
-      // the geometry is too simplified to expose junctions. v208 fix C1:
-      // replaced the fixed 600ms setTimeout with an event-driven wait
-      // that listens to the map's onDidFinishRenderingMapFully /
-      // onMapIdle signal (with a 3s hard timeout for CN weak-network).
-      const fitBboxForExtract = computeBboxFit(legacyPoints);
-      if (cameraRef.current && fitBboxForExtract) {
-        try {
-          cameraRef.current.fitBounds(
-            fitBboxForExtract.ne,
-            fitBboxForExtract.sw,
-            [60, 40, 60, 40],
-            0,
-          );
-          // If the bbox-fit picked a zoom < 14, override.
-          if ((fitBboxForExtract.zoom ?? 0) < 14) {
-            cameraRef.current.setCamera({
-              zoomLevel: 14,
-              animationDuration: 0,
-            });
-          }
-        } catch {
-          // best-effort
-        }
-        await waitForTilesOrTimeout();
-      }
+      // v208 fix B1+C2: previously this block imperatively called
+      // cameraRef.fitBounds + setCamera({zoomLevel:14}) here, then later
+      // dualEditActive flipped and dualEditCameraFit re-fit the camera —
+      // a visible double-jump. Now dualEditCameraFit clamps zoom>=14
+      // itself (see useMemo above), so the natural Camera mount handles
+      // both fit + zoom in a single animation. We still wait for tiles
+      // to settle before extractJunctions runs (see waitForTilesOrTimeout
+      // below). Legacy path inserts the same wait AFTER beginEdit
+      // completes (post-migration) but BEFORE buildEditContext.
       if (preExtras && preExtras.originalPoints && preExtras.originalPoints.length >= 2) {
-        // Non-legacy path: build context first.
+        // Non-legacy path: wait for tiles, then build context.
+        await waitForTilesOrTimeout();
         ctx = await buildEditContext(effectiveRouteId, mapViewRef);
         if (!ctx) {
           setDualEditError(
@@ -624,8 +613,13 @@ export function RouteEditorScreen() {
           }
           return;
         }
-        // Migration succeeded — extras now exists. Build context and
-        // inject walkedIndex/trailGraph so corridor enforcement is live.
+        // Migration succeeded — extras now exists. Wait for tiles to
+        // settle (v208 fix C2: same wait the non-legacy branch performs;
+        // legacy must wait AFTER migration completes so the camera has
+        // already animated to the dualEditCameraFit viewport), then
+        // build context and inject walkedIndex/trailGraph so corridor
+        // enforcement is live.
+        await waitForTilesOrTimeout();
         ctx = await buildEditContext(effectiveRouteId, mapViewRef);
         if (ctx) {
           useRouteEditStore.setState({
@@ -1512,6 +1506,7 @@ export function RouteEditorScreen() {
               if (dualEditActive && dualEditCameraFit) {
                 return (
                   <CameraComponent
+                    ref={cameraRef}
                     centerCoordinate={dualEditCameraFit.center}
                     zoomLevel={dualEditCameraFit.zoom}
                     animationDuration={300}
