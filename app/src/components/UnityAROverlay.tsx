@@ -466,8 +466,14 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
               }
             }
             // Then bulk-spawn (one-shot) using persisted origin.
+            // v199 review BULK-ONESHOT-1 — only burn the one-shot if
+            // we actually dispatched at least one spawn (or there were
+            // no markers to dispatch in the first place). Without this
+            // guard, a transient unityRef-null mid-loop or a per-marker
+            // build failure would consume the one-shot and leave the
+            // user with no cairns rendered until remount.
+            let dispatched = 0;
             if (props.markers.length > 0) {
-              let dispatched = 0;
               for (const m of props.markers) {
                 if (spawnedIdsRef.current.has(m.id)) continue;
                 const req = buildSpawnRequest(
@@ -481,7 +487,15 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 `${TAG}:bulk-spawn requested=${props.markers.length} dispatched=${dispatched} origin=${persisted ? 'persisted' : 'live'}`
               );
             }
-            bulkSpawnedRef.current = true;
+            // If markers existed but nothing dispatched (transient race),
+            // leave the one-shot unburned so the next ArFrame retries.
+            // Already-spawned markers count toward "covered" via
+            // spawnedIdsRef, so a no-op markers list (all already spawned)
+            // is treated as success — burn the one-shot.
+            const allCovered = props.markers.every(m => spawnedIdsRef.current.has(m.id));
+            if (props.markers.length === 0 || dispatched > 0 || allCovered) {
+              bulkSpawnedRef.current = true;
+            }
           }
           // Don't breadcrumb every ArFrame (10Hz would flood ring buffer).
           if (props.onArFrame) {

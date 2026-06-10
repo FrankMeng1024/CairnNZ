@@ -64,5 +64,14 @@
     <type fullname="CairnVolumeOverrides" preserve="all"/>
     <type fullname="GlobalScanGridController" preserve="all"/>
     <type fullname="LikeBadge" preserve="all"/>
+    <!-- v199 review M-FADER-2 — TMPDistanceFader is AddComponent'd at
+         runtime by PortalSpawnerV199.AttachRuneText. Same belt-and-
+         suspenders policy as MarkTextDistanceFader (line 57) and every
+         other v199 MonoBehaviour AddComponent'd at runtime. Without
+         this preserve, iOS IL2CPP could strip the type → AddComponent
+         returns null → rune-text distance fade silently dies. Same
+         failure class as the v187 yellow-screen ARBackgroundRendererFeature
+         bug this file was created to prevent. -->
+    <type fullname="TMPDistanceFader" preserve="all"/>
   </assembly>
 </linker>

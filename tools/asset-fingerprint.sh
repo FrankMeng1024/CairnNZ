@@ -47,6 +47,12 @@ ASSETS=(
   "UnityARLib/Assets/Meshes/Pebble_L.asset"
   "UnityARLib/Assets/Scripts/PortalSpawnerV199.cs"
   "UnityARLib/Assets/Scripts/CairnGlobalsExt.cs"
+  # M-FADER-2 follow-up — TMPDistanceFader is AddComponent'd at runtime
+  # by PortalSpawnerV199.AttachRuneText and now in link.xml preserve list.
+  # Cross-Unity-version drift on this file would silently regress the
+  # rune-text distance fade pipeline (same failure class as the other
+  # v199 MonoBehaviours already monitored).
+  "UnityARLib/Assets/Scripts/TMPDistanceFader.cs"
 )
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

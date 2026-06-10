@@ -358,13 +358,15 @@ public partial class PortalSpawner
         var trr = textGO.GetComponent<MeshRenderer>();
         if (trr != null) trr.shadowCastingMode = ShadowCastingMode.Off;
 
-        // Distance fader (existing component) — re-use if it still works.
-        var fader = textGO.AddComponent<MarkTextDistanceFader>();
-        // MarkTextDistanceFader was originally written for legacy TextMesh.
-        // It calls LookAt + alpha tweens via Renderer.material.color. With
-        // TMP it falls through gracefully — color tween hits TMP renderer's
-        // shared material; not ideal but non-fatal. Will be replaced by
-        // a TMP-aware fader if needed in a follow-up OTA.
+        // Distance fader — TMP-aware port of MarkTextDistanceFader.
+        // The legacy fader does GetComponent<TextMesh>() which returns null
+        // on a TMP_Text GameObject, so attaching it here was a no-op
+        // (subagent3 M-FADER-1). TMPDistanceFader uses a TMP_Text reference
+        // and writes alpha through TMP_Text.color (property-block path)
+        // instead of Renderer.material so it doesn't mutate the shared TMP
+        // atlas material across other rune labels in the scene.
+        var fader = textGO.AddComponent<TMPDistanceFader>();
+        fader.tmp = tmp;
         _ = fader;
     }
 
