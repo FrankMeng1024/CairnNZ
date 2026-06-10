@@ -574,7 +574,26 @@ export function RouteEditorScreen() {
       // below). Legacy path inserts the same wait AFTER beginEdit
       // completes (post-migration) but BEFORE buildEditContext.
       if (preExtras && preExtras.originalPoints && preExtras.originalPoints.length >= 2) {
-        // Non-legacy path: wait for tiles, then build context.
+        // Non-legacy path: v208 fix-Critical-1 — beginEdit FIRST so
+        // dualEditActive flips and dualEditCameraFit Camera mounts +
+        // animates to zoom>=14. Then wait for tiles to settle on the
+        // new viewport, then build context. Mirror's the legacy branch
+        // pattern below — previously this branch waited+built BEFORE
+        // beginEdit, but at that point dualEditActive=false →
+        // dualEditCameraFit=null → camera was still on routeCameraFit
+        // (low zoom for long routes), causing the extractor to return
+        // zoom-too-low or sparse features. Trail graph + walked index
+        // are injected via setState after the build (same as legacy).
+        await useRouteEditStore.getState().beginEdit({
+          routeId: effectiveRouteId,
+          routePoints: legacyPoints,
+          // v33-fix (Critical C-NEW-3): pass route.updatedAt so the
+          // store can compare freshness against extras.updatedAt and
+          // avoid silently discarding a fresher dual-edit save.
+          routeUpdatedAt: liveRoute.updatedAt,
+          trailGraph: null,
+          walkedIndex: null,
+        });
         await waitForTilesOrTimeout();
         ctx = await buildEditContext(effectiveRouteId, mapViewRef);
         if (!ctx) {
@@ -583,15 +602,9 @@ export function RouteEditorScreen() {
           );
           return;
         }
-        await useRouteEditStore.getState().beginEdit({
-          routeId: effectiveRouteId,
-          routePoints: legacyPoints,
-          // v33-fix (Critical C-NEW-3): pass route.updatedAt so the
-          // store can compare freshness against extras.updatedAt and
-          // avoid silently discarding a fresher dual-edit save.
-          routeUpdatedAt: liveRoute.updatedAt,
-          trailGraph: ctx.trailGraph,
+        useRouteEditStore.setState({
           walkedIndex: ctx.walkedIndex,
+          trailGraph: ctx.trailGraph,
         });
       } else {
         // Legacy path: beginEdit migrates first (and writes pendingBeginArgs

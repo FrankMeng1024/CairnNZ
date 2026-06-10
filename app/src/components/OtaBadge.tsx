@@ -303,7 +303,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         B1 (double camera jump), B2 (endpoint POI occlusion),
 //         C1 (onDidFinishRenderingMapFully), C2 (legacy path timing),
 //         C3 (Android source fallback), C4 (walkedIndex dedup).
-export const OTA_VERSION = 208;
+//   209 — v208 follow-up: fix non-legacy branch buildEditContext
+//         time-ordering — was running extractJunctions BEFORE beginEdit
+//         (dualEditActive=false → camera still on routeCameraFit, often
+//         zoom<14 for long routes → extractor early-exit zoom-too-low).
+//         Now mirrors legacy branch pattern: beginEdit → wait tiles →
+//         buildEditContext → setState inject.
+export const OTA_VERSION = 209;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
