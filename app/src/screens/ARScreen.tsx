@@ -852,17 +852,25 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           }
           hitDistM = FALLBACK_M;
         }
-        // ARKit world (X,Z) → GPS delta (using arkitOrigin's GPS)
-        // GravityAndHeading: +X=East, -Z=North
+        // ARKit world (X,Z) → GPS delta (using virtualOrigin per v210).
+        // GravityAndHeading: +X=East, -Z=North.
+        // v210 — must use the SAME projection origin that UnityAROverlay
+        // bulk-spawn uses, otherwise plant lat/lng won't match the spawn
+        // projection on reopen. Derive virtualOrigin from this very
+        // ArFrame: camera at (cx, cy, cz) is at user's GPS lat/lng.
+        // So ARKit-world (0,0,0) = user GPS - (cz/111000 north, cx/cosLat/111000 east).
+        const cosLat = Math.cos((arOrigin.lat * Math.PI) / 180);
+        const virtualOriginLat = arOrigin.lat + cz / 111000;
+        const virtualOriginLng = arOrigin.lng - cx / (cosLat * 111000);
         const dE = targetX;
         const dN = -targetZ;
-        cairnLat = arOrigin.lat + dN / 111000;
-        cairnLng = arOrigin.lng + dE / (111000 * Math.cos(arOrigin.lat * Math.PI / 180));
+        cairnLat = virtualOriginLat + dN / 111000;
+        cairnLng = virtualOriginLng + dE / (cosLat * 111000);
         // Phase 2: stash the ARKit world position so we can spawn the cairn
         // in Unity right after addMarker resolves. y = ground if known, else
         // camera y (so the strand stands roughly upright at user height).
         unitySpawnPos = { x: targetX, y: ground ?? cy, z: targetZ };
-        crashLogger.breadcrumb(`ar:plant:src=hit-test fy=${fy.toFixed(2)} ground=${ground === null ? 'null' : ground.toFixed(2)} hit=${usedHitTest} dist=${hitDistM.toFixed(2)}m`);
+        crashLogger.breadcrumb(`ar:plant:src=hit-test fy=${fy.toFixed(2)} ground=${ground === null ? 'null' : ground.toFixed(2)} hit=${usedHitTest} dist=${hitDistM.toFixed(2)}m vOrigin=${virtualOriginLat.toFixed(6)},${virtualOriginLng.toFixed(6)}`);
         anchor = arOrigin;
       } else {
         // FALLBACK — no ARKit frame yet. Use GPS anchor + ARKit/magnetic heading.

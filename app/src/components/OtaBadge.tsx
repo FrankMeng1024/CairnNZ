@@ -309,7 +309,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         zoom<14 for long routes → extractor early-exit zoom-too-low).
 //         Now mirrors legacy branch pattern: beginEdit → wait tiles →
 //         buildEditContext → setState inject.
-export const OTA_VERSION = 209;
+//   210 — virtualOrigin per session. Telemetry 715 confirmed ARKit world
+//         coords reset every reopen (camera.px/pz jumps 6m+ across 7 reopens).
+//         RN was projecting cairn (lat,lng) into meters relative to a
+//         persisted arOrigin, but those meters were handed to ARKit as if
+//         its world origin == arOrigin. ARKit's world origin = wherever
+//         camera was at first SessionTracking — never == arOrigin. So
+//         cairn landed at (1.62, 0, 1.11) every reopen, but visually at
+//         random direction relative to user (camera moved between sessions).
+//         Fix (Option C from design subagent): at first ArFrame, derive
+//         virtualOrigin from camera.px/pz + user GPS:
+//           virtualOrigin.lat = user.lat + camera.pz / 111000
+//           virtualOrigin.lng = user.lng - camera.px / (cosLat × 111000)
+//         Cairn projected via virtualOrigin lands at (camera.px, *,
+//         camera.pz) for cairns at user GPS, +1m east → (camera.px+1, *,
+//         camera.pz). Stable user-relative position regardless of how
+//         ARKit oriented its world this session. Plant flow same change:
+//         lat/lng derived via virtualOrigin so plant↔spawn projection
+//         consistent. _sessionOffsetX/Z stays 0 (offset baked into
+//         virtualOrigin). arOrigin in MMKV becomes informational only.
+export const OTA_VERSION = 210;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

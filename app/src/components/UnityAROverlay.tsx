@@ -514,26 +514,51 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             props.userPos &&
             unityRef.current
           ) {
-            // Choose projection origin: prefer persisted arOrigin (V118),
-            // fall back to live userPos for new users with no anchor yet.
-            const persisted = props.arOrigin
-              ? { lat: props.arOrigin.lat, lng: props.arOrigin.lng }
-              : null;
+            // v210 — per-session virtualOrigin (Option C from design subagent).
+            //
+            // Root cause discovered in telemetry 715: ARKit reset its world
+            // origin every reopen of AR (camera.px/pz jumped 0→2.57→6.61
+            // across 7 reopens). RN was projecting cairn (lat,lng) into
+            // meters relative to a persisted arOrigin, but those meters
+            // were then handed to ARKit as if its world origin == arOrigin.
+            // It never is. So cairn landed at (1.62, 0, 1.11) world coords
+            // every reopen — visually random direction relative to user.
+            //
+            // FIX: at first ArFrame, derive virtualOrigin from observed
+            // reality:
+            //   - camera is at position (camera.px, *, camera.pz) in ARKit
+            //     world frame
+            //   - camera is also at user.lat / user.lng in GPS frame
+            //   - therefore ARKit-world (0,0,0) corresponds to GPS lat/lng:
+            //       virtualOrigin.lat = user.lat + camera.pz / 111000
+            //       virtualOrigin.lng = user.lng - camera.px / (cosLat * 111000)
+            //     (ARKit GravityAndHeading: +X=East, -Z=North. Camera at
+            //      +pz means user is north of origin → origin is south of
+            //      user by camera.pz meters.)
+            //
+            // Now buildSpawnRequest uses virtualOrigin: a cairn at user's
+            // GPS lands at (camera.px, *, camera.pz). A cairn 1m east of
+            // user lands at (camera.px+1, *, camera.pz). Stable in user's
+            // reference frame regardless of how ARKit oriented its world.
+            //
+            // _sessionOffsetX/Z stays 0 (offset is baked into virtualOrigin).
+            // arOrigin in MMKV becomes informational only, not projection
+            // basis. Eliminates the conceptual mismatch between persisted
+            // GPS anchor and per-session ARKit world frame.
             const live = { lat: props.userPos.lat, lng: props.userPos.lng };
-            const projOrigin = persisted ?? live;
-            // Compute offset (live - persisted). When persisted is null,
-            // offset is 0 (live IS the projection origin). When persisted
-            // exists, offset = how far user has moved since lock.
-            let offsetN = 0;
-            let offsetE = 0;
-            if (persisted) {
-              const cosLat = Math.cos((persisted.lat * Math.PI) / 180);
-              offsetN = (live.lat - persisted.lat) * 111000;
-              offsetE = (live.lng - persisted.lng) * 111000 * cosLat;
-            }
-            // ARKit GravityAndHeading: +X=East, +Y=Up, -Z=North.
-            // sessionOffset Vector3 = (offsetE, 0, -offsetN).
-            // v206 A2 — re-send when projOrigin changes (lat/lng equality).
+            const cosLat = Math.cos((live.lat * Math.PI) / 180);
+            // Use the most recently observed camera ArFrame position (the
+            // current msg). At first ArFrame this IS the per-session
+            // ARKit-world starting point.
+            const camPx = msg.px;
+            const camPz = msg.pz;
+            const virtualOrigin = {
+              lat: live.lat + camPz / 111000,
+              lng: live.lng - camPx / (cosLat * 111000),
+            };
+            const projOrigin = virtualOrigin;
+            // OnSetSessionOffset stays at 0 — virtualOrigin already encodes
+            // the GPS-to-ARKit-world alignment per session.
             const sent = lastSentOriginRef.current;
             const originChanged =
               !sent ||
@@ -544,17 +569,17 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 unityRef.current.postMessage(
                   'CairnBridge',
                   'OnSetSessionOffset',
-                  JSON.stringify({ ox: offsetE, oz: -offsetN }),
+                  JSON.stringify({ ox: 0, oz: 0 }),
                 );
                 lastSentOriginRef.current = { lat: projOrigin.lat, lng: projOrigin.lng };
                 crashLogger.breadcrumb(
-                  `${TAG}:OnSetSessionOffset ox=${offsetE.toFixed(2)} oz=${(-offsetN).toFixed(2)} mode=${persisted ? 'persisted' : 'live'}`
+                  `${TAG}:virtualOrigin lat=${virtualOrigin.lat.toFixed(7)} lng=${virtualOrigin.lng.toFixed(7)} camPx=${camPx.toFixed(2)} camPz=${camPz.toFixed(2)}`
                 );
               } catch (e) {
                 crashLogger.breadcrumb(`${TAG}:OnSetSessionOffset:fail ${String(e).slice(0, 80)}`);
               }
             }
-            // Then bulk-spawn (one-shot) using projOrigin.
+            // Then bulk-spawn (one-shot) using virtualOrigin.
             let dispatched = 0;
             if (props.markers.length > 0) {
               for (const m of props.markers) {
@@ -567,7 +592,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 if (req && dispatchSpawn(req)) dispatched += 1;
               }
               crashLogger.breadcrumb(
-                `${TAG}:bulk-spawn requested=${props.markers.length} dispatched=${dispatched} origin=${persisted ? 'persisted' : 'live'}`
+                `${TAG}:bulk-spawn requested=${props.markers.length} dispatched=${dispatched} origin=virtualOrigin`
               );
             }
             // v206 A1 — only burn the one-shot when we actually
