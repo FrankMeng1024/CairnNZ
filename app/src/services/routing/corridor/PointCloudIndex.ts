@@ -10,6 +10,15 @@ import KDBush from 'kdbush';
 import type { LngLat } from './PolylineSampler';
 import { haversineMeters } from './PolylineSampler';
 
+/**
+ * PointSource — provenance tag for a corridor anchor point.
+ *
+ * 'doc' historically meant DOC ArcGIS trail vertices. Since the
+ * Mapbox-Migration Sprint, it ALSO covers Mapbox vector tile road/trail
+ * vertices — both are treated identically by corridor enforcement
+ * (only lng/lat matters). Kept as 'doc' to avoid churn in IndexedPoint
+ * consumers; rename to 'walkable' the next time we touch this enum.
+ */
 export type PointSource = 'original' | 'activity' | 'doc' | 'shared';
 
 export interface IndexedPoint {

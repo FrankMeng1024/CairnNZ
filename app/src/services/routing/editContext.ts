@@ -6,11 +6,17 @@
  *
  * Sprint 66 Wave 7 integration glue.
  */
+import type { RefObject } from 'react';
 import { loadExtras } from '../LocalRouteExtras';
 import { PointCloudIndex, IndexedPoint } from './corridor/PointCloudIndex';
-import { densify } from './corridor/PolylineSampler';
+// densify retained — re-imported only if a future Sprint re-enables a
+// pre-densify path. Mapbox extractor already returns 10m-densified ways.
 import { TrailGraph } from './graph/TrailGraph';
-import { getCachedOrFetch } from './doctrails/DOCTrailsCache';
+import { extractJunctions } from './mapbox/MapboxJunctionExtractor';
+import { buildTrailGraphFromMapbox } from './mapbox/buildTrailGraphFromMapbox';
+// getCachedOrFetch import removed — DOC ArcGIS pipeline retained in tree
+// (doctrails/) but no longer wired in. NZ-region merge deferred to a later
+// Sprint. Re-introduce this import + getCachedOrFetch call if reverting.
 import type { BBox } from './doctrails/DOCTrailsTypes';
 import type { LngLat } from './corridor/PolylineSampler';
 
@@ -67,7 +73,10 @@ function padBboxKm(points: LngLat[], padKm: number): BBox {
  * beginEdit first (which migrates and surfaces retry UI) and only
  * then call buildEditContext.
  */
-export async function buildEditContext(routeId: string): Promise<EditContext | null> {
+export async function buildEditContext(
+  routeId: string,
+  mapRef?: RefObject<any> | { current: any } | null,
+): Promise<EditContext | null> {
   const extras = await loadExtras(routeId);
   if (!extras || !extras.originalPoints || extras.originalPoints.length < 2) {
     return null;
@@ -88,51 +97,46 @@ export async function buildEditContext(routeId: string): Promise<EditContext | n
     refId: `${routeId}:original:${i}`,
   }));
 
-  // Try to enrich with DOC trails in the route's neighborhood. This is
-  // best-effort — failure (no coverage / network down / quota) yields a
-  // null trailGraph, and the orchestrator falls back to Mapbox or straight.
+  // Try to enrich with Mapbox vector tile road/trail features in the route's
+  // neighborhood. This is best-effort — failure (no map ref / zoom too low /
+  // sparse OSM coverage) yields a null trailGraph, and the editor falls back
+  // to endpoint-only mode. The Mapbox extractor reads from tiles already
+  // loaded by the running MapView for rendering — no network call.
   let trailGraph: TrailGraph | null = null;
-  try {
-    const bbox = padBboxKm(originalPoints, 5);
-    const { trails } = await getCachedOrFetch(bbox);
-    if (trails && trails.length > 0) {
-      trailGraph = TrailGraph.fromTrails(trails);
-      // Densify trails into the corridor index too — the corridor enforcement
-      // wants any "actually walkable surface" as a corridor anchor, not just
-      // the user's trace.
-      for (let ti = 0; ti < trails.length; ti++) {
-        const trail = trails[ti];
-        // DOCTrailFeature.geometry.coordinates is typed as number[][] |
-        // number[][][] (LineString vs MultiLineString). Normalise to
-        // number[][][] (an array of parts) so the inner loop is uniform.
-        const coords = trail.geometry.coordinates;
-        const partsRaw: number[][][] =
-          trail.geometry.type === 'MultiLineString'
-            ? (coords as number[][][])
-            : [coords as number[][]];
-        for (let pi = 0; pi < partsRaw.length; pi++) {
-          const part = partsRaw[pi];
-          if (!part || part.length < 2) continue;
-          const partLngLat: LngLat[] = part
-            .filter(c => Array.isArray(c) && c.length >= 2)
-            .map(c => ({ lng: c[0], lat: c[1] }));
-          if (partLngLat.length < 2) continue;
-          const dense = densify(partLngLat, 10);
-          for (let i = 0; i < dense.length; i++) {
+  if (mapRef && mapRef.current) {
+    try {
+      const bbox = padBboxKm(originalPoints, 5);
+      const result = await extractJunctions(mapRef, bbox, {
+        minDegree: 3,
+        densifyIntervalM: 10,
+      });
+      if (result.ok && result.ways.length > 0) {
+        trailGraph = buildTrailGraphFromMapbox(result);
+        // Densify ways into the corridor index too — same role DOC played.
+        // PointSource 'doc' is reused for Mapbox-sourced points; consumers
+        // (corridor enforcement) only care about lng/lat. See PointCloudIndex.
+        for (const w of result.ways) {
+          for (let i = 0; i < w.coords.length; i++) {
             indexedPoints.push({
-              lng: dense[i].lng,
-              lat: dense[i].lat,
+              lng: w.coords[i].lng,
+              lat: w.coords[i].lat,
               source: 'doc' as const,
-              refId: `${trail.trackId}:${pi}:${i}`,
+              refId: `mb:${w.id}:${i}`,
             });
           }
         }
       }
+      // result.ok === false: trailGraph stays null. Editor opens with
+      // endpoint-only anchors (trim still works). No throw, no banner here —
+      // upstream UI surfaces the limited-edit state.
+    } catch {
+      // Mapbox extraction threw unexpectedly — proceed with original-only corridor.
+      trailGraph = null;
     }
-  } catch {
-    // DOC fetch / parse failed — proceed with original-only corridor.
-    trailGraph = null;
   }
+  // mapRef absent (legacy callers / tests without a MapView): trailGraph
+  // stays null, edit mode runs with endpoints only. This is the same fallback
+  // pre-Mapbox-migration callers experienced when DOC returned 0 trails.
 
   const walkedIndex = new PointCloudIndex(indexedPoints);
   return { walkedIndex, trailGraph, originalPoints };
