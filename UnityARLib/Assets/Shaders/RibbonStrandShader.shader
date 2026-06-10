@@ -80,6 +80,13 @@ Shader "Cairn/RibbonStrandShader"
             float  _CairnGlobalScrollMul;
             float  _CairnGlobalThermalScale;
             float  _CairnGlobalWispIntensity;
+            // v206 D2 — global curl strength multiplier wired to OTA
+            // WispCurlStrength. Default 0.5 (registry); 0 = no curl
+            // displacement (ribbon stays vertical), 1+ = exaggerated wave.
+            // At 0.5 with _CurlAmp=0.20, effective amp = 0.10m = visible
+            // 10cm wave at 1m viewing. _coalesceR returns 1 when unset
+            // so old materials without OTA push behave per their design.
+            float  _CairnGlobalCurlStrength;
             float4 _CairnGlobalWispBirthColor;
             float4 _CairnGlobalWispMidColor;
             float4 _CairnGlobalWispEndColor;
@@ -124,8 +131,8 @@ Shader "Cairn/RibbonStrandShader"
                 float scrollMul = _coalesceR(_CairnGlobalScrollMul);
                 float t = (_TimeParameters.y) * scrollMul + _PhaseOffset;
                 float2 c = curl2(IN.uv.y * 4.0 + t, _PhaseOffset);
-                pos.x += c.x * _CurlAmp * _CairnGlobalWispIntensity;
-                pos.z += c.y * _CurlAmp * _CairnGlobalWispIntensity;
+                pos.x += c.x * _CurlAmp * _CairnGlobalWispIntensity * _coalesceR(_CairnGlobalCurlStrength);
+                pos.z += c.y * _CurlAmp * _CairnGlobalWispIntensity * _coalesceR(_CairnGlobalCurlStrength);
                 // Ribbon height extension on uv.y — mesh ribbon authored
                 // with verts at y=0; we extrude up here. For particle
                 // trails Unity provides world positions and uv.y comes

@@ -27,6 +27,11 @@ public class MeshRibbonStrand : MonoBehaviour
     public float phaseOffset;       // 0..2π — per-strand desync
     public float strandHeight = 1.5f;
     public float lifecycleSeconds = 4f;
+    // v206 D2 — per-strand curl amp multiplier wired to OTA HeroRibbonCurl.
+    // Old code read HeroRibbonCurl in PortalSpawnerV199.AttachHeroRibbons but
+    // discarded the value. Now passed through to shader via MPB so per-cairn
+    // OTA tuning of ribbon wave amplitude actually works.
+    public float curlAmp = 0.20f;
 
     private MeshFilter _mf;
     private MeshRenderer _mr;
@@ -71,6 +76,8 @@ public class MeshRibbonStrand : MonoBehaviour
         _mpb.SetFloat("_LifecycleSec", lifecycleSeconds);
         _mpb.SetFloat("_PhaseOffset", phaseOffset);
         _mpb.SetFloat("_RibbonHeight", strandHeight);
+        // v206 D2 — push per-strand curl amp to shader.
+        _mpb.SetFloat("_CurlAmp", curlAmp);
         _mr.SetPropertyBlock(_mpb);
     }
 

@@ -98,8 +98,15 @@ public partial class PortalSpawner
                               float groundY, Color baseColor)
     {
         if (container == null || data == null) return;
-        UnityLogger.IForward("V199", $"add-begin id={data.id} type={data.type} y={groundY:F2}");
         var globals = CairnGlobals.Instance;
+        // v206 D2 — V199LayerEnabled kill-switch. OTA flag was registered
+        // but never consulted in v205 — flipping it had no effect. Now wired.
+        if (globals != null && !globals.GetBool("V199LayerEnabled", true))
+        {
+            UnityLogger.IForward("V199", $"add-begin id={data.id} SKIPPED (V199LayerEnabled=false)");
+            return;
+        }
+        UnityLogger.IForward("V199", $"add-begin id={data.id} type={data.type} y={groundY:F2}");
 
         // V199Layer parent — single GO so we can disable all v199 systems
         // at once if OTA flag flipped.
@@ -127,17 +134,27 @@ public partial class PortalSpawner
         }
 
         // ── Pebble stack (cairn type only) OR TypeChip (others) ──
+        // v206 D2 — wire the 3 kill-switches that were orphans in v205.
         if (data.type == "cairn")
         {
-            AttachPebbleStack(v199, data.type);
+            if (globals == null || globals.GetBool("PebbleStackEnabled", true))
+            {
+                AttachPebbleStack(v199, data.type);
+            }
         }
         else
         {
-            AttachTypeChip(v199, data.type);
+            if (globals == null || globals.GetBool("TypeChipEnabledOTA", true))
+            {
+                AttachTypeChip(v199, data.type);
+            }
         }
 
         // ── TMP RuneText + StoneBackplate ──
-        AttachRuneText(v199, data.type, data.note, baseColor);
+        if (globals == null || globals.GetBool("RuneTextEnabled", true))
+        {
+            AttachRuneText(v199, data.type, data.note, baseColor);
+        }
 
         // ── Hero ribbons (mid-distance silhouette) ──
         if (globals == null || globals.GetBool("HeroRibbonEnabled", true))
@@ -237,10 +254,19 @@ public partial class PortalSpawner
         stack.transform.SetParent(parent.transform, worldPositionStays: false);
         stack.transform.localPosition = Vector3.zero;
 
-        // Y-stack: bottom big, mid, top small
-        BuildPebble(stack.transform, "Pebble_L", pebbleLargeMesh, 0.11f, pebbleCol, rimCol, emissive);
+        // Y-stack: bottom big, mid, top small. Pebble meshes are CENTER-pivot
+        // (PebbleMeshBuilder generates verts symmetric around 0). halfHeights:
+        //   Pebble_L = 0.11m (full 0.22m), Pebble_M = 0.08m (full 0.16m),
+        //   Pebble_S = 0.05m (full 0.10m).
+        // Each pebble's center-Y = sum of stack-bottom-half-heights so its
+        // bottom touches the previous pebble's top.
+        //   L center = 0.11             (bottom at 0)
+        //   M center = 2*0.11 + 0.08    = 0.30  (bottom at 0.22 = top of L)
+        //   S center = 2*0.11 + 2*0.08 + 0.05 = 0.43  (bottom at 0.38 = top of M)
+        // v206 D1 fix — Pebble_S Y was 0.45 (2cm gap above M). Now 0.43.
+        BuildPebble(stack.transform, "Pebble_L", pebbleLargeMesh,  0.11f, pebbleCol, rimCol, emissive);
         BuildPebble(stack.transform, "Pebble_M", pebbleMediumMesh, 0.30f, pebbleCol, rimCol, emissive);
-        BuildPebble(stack.transform, "Pebble_S", pebbleSmallMesh,  0.45f, pebbleCol, rimCol, emissive);
+        BuildPebble(stack.transform, "Pebble_S", pebbleSmallMesh,  0.43f, pebbleCol, rimCol, emissive);
     }
 
     private void BuildPebble(Transform parent, string name, Mesh mesh, float y,
@@ -403,6 +429,10 @@ public partial class PortalSpawner
             ribbon.phaseOffset = (i / (float)count) * Mathf.PI * 2f;
             ribbon.strandHeight = height;
             ribbon.lifecycleSeconds = lifecycle;
+            // v206 D2 — wire HeroRibbonCurl OTA into the strand. Was read
+            // (line 411 above into local `curl`) then discarded; now passes
+            // through to MeshRibbonStrand.curlAmp → shader _CurlAmp via MPB.
+            ribbon.curlAmp = curl;
         }
     }
 
@@ -422,6 +452,11 @@ public partial class PortalSpawner
         var mpb = new MaterialPropertyBlock();
         mpb.SetColor("_BaseColor", baseColor);
         r.SetPropertyBlock(mpb);
+        // v206 C — runtime distance gate. Hides the additive shaft when
+        // user is within FarShaftMinDist (default 6m). Was unconditionally
+        // visible at all distances, oversaturating close-range view.
+        var gate = go.AddComponent<FarShaftDistanceGate>();
+        gate.shaftRenderer = r;
     }
 
     private void AttachConfidenceRing(GameObject parent)

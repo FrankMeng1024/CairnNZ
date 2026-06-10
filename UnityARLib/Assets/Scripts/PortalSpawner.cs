@@ -353,11 +353,57 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
 
         EnsureMaterials();
 
+        // v206 B3-policy — old code unconditionally overrode RN's hit-test
+        // ground (data.y) with TierC heuristic (camera.y - ASSUMED_HOLD_HEIGHT).
+        // Baseline Q2 evidence: this systematically over-deepened spawn Y by
+        // ~0.4m, the dominant cause of "cairn floats above ground" (#7) and
+        // "重开 AR 标记飞天" (#A).
+        //
+        // New policy:
+        //   1. If GroundYResolver returns Tier-A real plane Y at this XZ →
+        //      use it (always wins — true ground truth).
+        //   2. Else if data.y is grossly invalid (>3m from camera.y) →
+        //      use TierC fallback.
+        //   3. Else trust data.y from RN's hit-test ray.
         float groundY = data.y;
         if (groundYResolver != null)
         {
-            var tierC = groundYResolver.GetTierC();
-            if (tierC.HasValue) groundY = tierC.Value;
+            float candidateY;
+            GroundYResolver.Tier tier;
+            if (groundYResolver.QueryGroundY(new Vector3(data.x, 0f, data.z),
+                                             out candidateY, out tier))
+            {
+                if (tier == GroundYResolver.Tier.A)
+                {
+                    // Tier-A real plane wins.
+                    groundY = candidateY;
+                }
+                else
+                {
+                    // Tier-B/C — only use if data.y looks unreasonable.
+                    Camera cam = groundYResolver.arCamera != null
+                        ? groundYResolver.arCamera : Camera.main;
+                    float camY = cam != null ? cam.transform.position.y : 0f;
+                    float dataYBelowCam = camY - data.y;
+                    // v206 B3-policy review fix — TWO conditions invalidate
+                    // data.y, both push to TierC fallback:
+                    //   (1) data.y is grossly off (>3m from camera) — old check
+                    //   (2) data.y is too close to camera height (<0.3m below)
+                    //       — happens when ARScreen hit-test fails and falls
+                    //       back to camera.y; cairn would spawn at face level.
+                    if (Mathf.Abs(data.y - camY) > 3f || dataYBelowCam < 0.3f)
+                    {
+                        groundY = candidateY;
+                    }
+                    // else: trust data.y from RN hit-test
+                }
+            }
+            else
+            {
+                // No tier available — last-resort TierC fallback.
+                var tierC = groundYResolver.GetTierC();
+                if (tierC.HasValue) groundY = tierC.Value;
+            }
         }
 
         var preset = CairnTypePresets.Get(data.type);

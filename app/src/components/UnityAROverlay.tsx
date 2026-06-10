@@ -125,6 +125,15 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
   function UnityAROverlay(props, ref) {
   const unityRef     = useRef<UnityView | null>(null);
   const groundYRef   = useRef<number | null>(null);
+  // v206 B1 — area-weighted ground tracking. Old code did "last plane wins"
+  // regardless of plane area, so a tiny outlier plane (area=0.3) could
+  // contaminate a perfectly good 1.9m² stable plane (baseline plant 5
+  // got groundY=0.30 from a 0.3-area outlier instead of larger nearby
+  // planes). Buffer last 5s of plane events with area>=0.5; pick largest.
+  const recentPlanesRef = useRef<Array<{ y: number; area: number; t: number }>>([]);
+  // v206 B1 — once Unity emits "[GroundYResolver] locked Y=... tier=A",
+  // that authoritative value supersedes raw plane events. Cleared on mount.
+  const groundLockedRef = useRef<boolean>(false);
   const arReadyRef   = useRef(false);
   const lastFrameRef = useRef<number>(Date.now());
   // Track which marker IDs we've already pushed to Unity this session, so
@@ -132,10 +141,20 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
   // trigger duplicate spawns. Cleared on unmount.
   const spawnedIdsRef = useRef<Set<string>>(new Set());
   // v199 review B3 fix — per-session GPS offset gates one-shot.
-  // offsetSentRef: have we sent OnSetSessionOffset to Unity this session?
   // bulkSpawnedRef: has the post-offset bulk-spawn fired?
-  const offsetSentRef = useRef<boolean>(false);
   const bulkSpawnedRef = useRef<boolean>(false);
+  // v206 A2 fix — track last sent origin so we can re-send OnSetSessionOffset
+  // when arOrigin transitions null→persisted mid-session (or persisted
+  // changes after staleness clear+relock). Replaces the earlier offsetSentRef
+  // one-shot which burned on first ArFrame even if arOrigin was still null
+  // (which then meant Unity NEVER received a real persisted offset for the
+  // entire session — see baseline Q "OnSetSessionOffset cadence").
+  const lastSentOriginRef = useRef<{ lat: number; lng: number } | null>(null);
+  // v206 A1 fix — count ArFrames received while waiting for markers to
+  // populate (lastCoord race or store hydration delay). Logs at frame 30
+  // (~3s) and 100 (~10s) to make "AR mounted but markers stayed empty"
+  // visible in telemetry. Resets on unmount.
+  const emptyMarkerFrameCountRef = useRef(0);
   // OTA #181: one-shot breadcrumb on first ArFrame received. After parser
   // fix, lets us see whether values are real (Unity AR working) or are
   // the parser's null→default fallbacks (Unity still emitting F3 literals).
@@ -206,8 +225,14 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           unityRef.current.postMessage('CairnBridge', 'OnClearAll', '');
           spawnedIdsRef.current.clear();
       // v199 — reset offset/bulk-spawn one-shots so next mount can re-fire.
-      offsetSentRef.current = false;
+      // v206 A2 — lastSentOriginRef replaces offsetSentRef.
+      // v206 B1 — drop the ground-lock + plane buffer so the next session
+      // starts fresh (ARKit world frame may have changed).
+      lastSentOriginRef.current = null;
       bulkSpawnedRef.current = false;
+      emptyMarkerFrameCountRef.current = 0;
+      recentPlanesRef.current = [];
+      groundLockedRef.current = false;
           crashLogger.breadcrumb(`${TAG}:clearAll dispatched`);
         } catch (e: any) {
           crashLogger.breadcrumb(`${TAG}:clearAll-error ${String(e?.message ?? e).slice(0, 80)}`);
@@ -309,8 +334,13 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
       }
       spawnedIdsRef.current.clear();
       // v199 — reset offset/bulk-spawn one-shots so next mount can re-fire.
-      offsetSentRef.current = false;
+      // v206 A2 — lastSentOriginRef replaces offsetSentRef
+      // v206 B1 — clear plane buffer + ground-lock for next session
+      lastSentOriginRef.current = null;
       bulkSpawnedRef.current = false;
+      emptyMarkerFrameCountRef.current = 0;
+      recentPlanesRef.current = [];
+      groundLockedRef.current = false;
       crashLogger.breadcrumb(`${TAG}:unmount glReady=${arReadyRef.current}`);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -361,6 +391,24 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           // Unity logger forwards WARN/ERROR by default (not INFO).
           // crashLogger ring buffer is 500 — guard against flood by tag prefix.
           crashLogger.breadcrumb(`unity-native:${msg.level}:${msg.line.slice(0, 200)}`);
+          // v206 B1 — sniff Unity's authoritative ground lock from the
+          // forwarded log. Format: "[GroundYResolver] locked Y=-0.315
+          // tier=A stable=1000ms". When tier=A or tier=B (real planes,
+          // not Tier-C heuristic), trust it as ground-truth and stop
+          // updating groundYRef from raw PlaneDetected events.
+          {
+            const m = /\[GroundYResolver\]\s+locked\s+Y=(-?\d+\.\d+)\s+tier=([ABC])/.exec(msg.line);
+            if (m && (m[2] === 'A' || m[2] === 'B')) {
+              const y = parseFloat(m[1]);
+              if (!Number.isNaN(y)) {
+                groundYRef.current = y;
+                groundLockedRef.current = true;
+                crashLogger.breadcrumb(
+                  `${TAG}:ground-locked-from-unity y=${y.toFixed(3)} tier=${m[2]}`
+                );
+              }
+            }
+          }
           break;
 
         case 'Checkpoint':
@@ -388,23 +436,51 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
 
         case 'PlaneDetected':
           {
-            // Ground-jump diagnostic: if the new plane is significantly
-            // higher/lower than the previous one (>0.5m), log it. Common
-            // when the user moves from outdoor ground to a tabletop —
-            // ARKit reports the table as a new horizontal plane at
-            // y≈1m. This was the smoking-gun signal in the "phone-flat
-            // cairns drift" bug. We only diagnose, never reject — the
-            // hit-test logic in ARScreen handles correctness.
+            // v206 B1 — old code was "last plane wins regardless of area",
+            // so a 0.3-m² outlier could overwrite a 1.9-m² stable plane
+            // (baseline plant 5 evidence). New policy:
+            //   1. If Unity has already broadcast a tier=A/B lock via
+            //      UnityLog, ignore PlaneDetected (Unity owns ground now).
+            //   2. Otherwise drop tiny planes (area<0.5).
+            //   3. Buffer last 5s of valid planes; pick the largest area
+            //      as authoritative groundY. Ties → most recent.
+            //   4. Keep the >0.5m diagnostic so cross-plane jumps are
+            //      still visible in telemetry.
             const prev = groundYRef.current;
             if (prev !== null && Math.abs(msg.y - prev) > 0.5) {
               crashLogger.breadcrumb(
                 `${TAG}:ground-jump from=${prev.toFixed(2)} to=${msg.y.toFixed(2)} delta=${(msg.y - prev).toFixed(2)}`
               );
             }
-            groundYRef.current = msg.y;
             crashLogger.breadcrumb(
               `${TAG}:recv:PlaneDetected y=${msg.y.toFixed(2)} area=${msg.area.toFixed(1)}`
             );
+            if (groundLockedRef.current) {
+              // Unity is authoritative — ignore this raw plane.
+              break;
+            }
+            const MIN_AREA = 0.5;
+            const STALE_MS = 5000;
+            const now = Date.now();
+            // Drop stale entries.
+            recentPlanesRef.current = recentPlanesRef.current.filter(
+              p => now - p.t < STALE_MS
+            );
+            if (msg.area >= MIN_AREA) {
+              recentPlanesRef.current.push({ y: msg.y, area: msg.area, t: now });
+              // Pick the largest-area plane in the rolling buffer.
+              let best = recentPlanesRef.current[0];
+              for (const p of recentPlanesRef.current) {
+                if (p.area > best.area) best = p;
+              }
+              groundYRef.current = best.y;
+            } else if (groundYRef.current === null) {
+              // Cold start — no prior plane and this one is too small.
+              // Use it temporarily; the next ≥0.5m plane will replace it.
+              groundYRef.current = msg.y;
+            }
+            // else: small plane arrived after a larger one was buffered →
+            // ignore (do not overwrite a stronger signal).
           }
           break;
 
@@ -425,6 +501,20 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           // run bulk-spawn using arOrigin (persisted) as projection origin
           // so cairns land at correct world positions even after walking
           // 100m and re-entering AR.
+          //
+          // v206 A1+A2 — two changes from v205:
+          //   (A1) bulk-spawn one-shot is NO LONGER burned when markers list
+          //        is empty. Empty markers means GPS lastCoord race or store
+          //        hydration delay — next ArFrame at 10Hz retries until
+          //        markers populate. Burning prematurely was the root cause
+          //        of "close+reopen AR → all markers gone" (baseline Run B).
+          //   (A2) OnSetSessionOffset re-sends when projOrigin transitions
+          //        null→persisted or persisted→different (post-staleness
+          //        relock). Old offsetSentRef one-shot burned at first frame
+          //        with mode=live ox=0 oz=0 even when arOrigin was about to
+          //        lock 1s later — so Unity NEVER received a real persisted
+          //        offset (baseline Run A: 5/5 OnSetSessionOffset events all
+          //        ox=0/oz=0/mode=live).
           if (
             arReadyRef.current &&
             !bulkSpawnedRef.current &&
@@ -450,14 +540,20 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             }
             // ARKit GravityAndHeading: +X=East, +Y=Up, -Z=North.
             // sessionOffset Vector3 = (offsetE, 0, -offsetN).
-            if (!offsetSentRef.current) {
+            // v206 A2 — re-send when projOrigin changes (lat/lng equality).
+            const sent = lastSentOriginRef.current;
+            const originChanged =
+              !sent ||
+              sent.lat !== projOrigin.lat ||
+              sent.lng !== projOrigin.lng;
+            if (originChanged) {
               try {
                 unityRef.current.postMessage(
                   'CairnBridge',
                   'OnSetSessionOffset',
                   JSON.stringify({ ox: offsetE, oz: -offsetN }),
                 );
-                offsetSentRef.current = true;
+                lastSentOriginRef.current = { lat: projOrigin.lat, lng: projOrigin.lng };
                 crashLogger.breadcrumb(
                   `${TAG}:OnSetSessionOffset ox=${offsetE.toFixed(2)} oz=${(-offsetN).toFixed(2)} mode=${persisted ? 'persisted' : 'live'}`
                 );
@@ -465,13 +561,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 crashLogger.breadcrumb(`${TAG}:OnSetSessionOffset:fail ${String(e).slice(0, 80)}`);
               }
             }
-            // Then bulk-spawn (one-shot) using persisted origin.
-            // v199 review BULK-ONESHOT-1 — only burn the one-shot if
-            // we actually dispatched at least one spawn (or there were
-            // no markers to dispatch in the first place). Without this
-            // guard, a transient unityRef-null mid-loop or a per-marker
-            // build failure would consume the one-shot and leave the
-            // user with no cairns rendered until remount.
+            // Then bulk-spawn (one-shot) using projOrigin.
             let dispatched = 0;
             if (props.markers.length > 0) {
               for (const m of props.markers) {
@@ -487,14 +577,28 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 `${TAG}:bulk-spawn requested=${props.markers.length} dispatched=${dispatched} origin=${persisted ? 'persisted' : 'live'}`
               );
             }
-            // If markers existed but nothing dispatched (transient race),
-            // leave the one-shot unburned so the next ArFrame retries.
-            // Already-spawned markers count toward "covered" via
-            // spawnedIdsRef, so a no-op markers list (all already spawned)
-            // is treated as success — burn the one-shot.
-            const allCovered = props.markers.every(m => spawnedIdsRef.current.has(m.id));
-            if (props.markers.length === 0 || dispatched > 0 || allCovered) {
+            // v206 A1 — only burn the one-shot when we actually
+            // accomplished something. Empty marker list does NOT count
+            // (markers may be hydrating from MMKV or lastCoord filter
+            // may not yet have nearby matches — next ArFrame retries).
+            const hasMarkers = props.markers.length > 0;
+            const allCovered = hasMarkers && props.markers.every(m => spawnedIdsRef.current.has(m.id));
+            if (dispatched > 0 || allCovered) {
               bulkSpawnedRef.current = true;
+            } else if (!hasMarkers) {
+              // Telemetry: track how long markers stay empty post-ArReady.
+              // Logs at frame 30 (~3s) and 100 (~10s) — bounded so it does
+              // not spam. If it ever logs frames=100 with markers=0 +
+              // userPos=true, the marker-store hydration likely failed.
+              emptyMarkerFrameCountRef.current += 1;
+              if (
+                emptyMarkerFrameCountRef.current === 30 ||
+                emptyMarkerFrameCountRef.current === 100
+              ) {
+                crashLogger.breadcrumb(
+                  `${TAG}:bulk-spawn:waiting-markers frames=${emptyMarkerFrameCountRef.current} userPos=${!!props.userPos} arOrigin=${!!props.arOrigin}`
+                );
+              }
             }
           }
           // Don't breadcrumb every ArFrame (10Hz would flood ring buffer).

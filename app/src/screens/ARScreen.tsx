@@ -194,6 +194,15 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   const insets = useSafeAreaInsets();
   const markers = useMarkerStore(s => s.markers);
   const addMarker = useMarkerStore(s => s.addMarker);
+  // v206 A2 — subscribe reactively to arOrigin so the prop passed into
+  // UnityAROverlay updates when MMKV hydrate or setArOriginIfMissing
+  // mutates the store. Old code did `useMarkerStore.getState().arOrigin`
+  // inline at the JSX site (non-reactive read at component-render time);
+  // ARScreen would re-render only when OTHER state changed, so the
+  // arOrigin prop could stay null until something else triggered re-render.
+  // See baseline Run A: 5/5 OnSetSessionOffset events all sent ox=0/oz=0
+  // mode=live — persisted arOrigin was never used.
+  const arOriginReactive = useMarkerStore(s => s.arOrigin);
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
   const lastCoordTime = useTrackingStore(s => s.lastCoordinateTime);
   const trackPoints = useTrackingStore(s => s.trackPoints);
@@ -1036,7 +1045,7 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         ref={unityOverlayRef}
         markers={nearbyMarkers}
         userPos={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng, alt: lastCoord.alt ?? null } : null}
-        arOrigin={useMarkerStore.getState().arOrigin}
+        arOrigin={arOriginReactive}
         userHeading={userHeading}
         onStatus={setArStatus}
         onArFrame={setArFrame}

@@ -89,7 +89,12 @@ public partial class CairnGlobals
         F("RingEmitRate",          null, 2,  60,   14);
         F("WispLifetime",          null, 1,  10,   3.5f);
         F("WispRiseSpeed",         null, 0.2f, 4,  1.2f);
-        F("WispCurlStrength",      null, 0,  1,    0.15f);
+        // v206 D2 — was orphan (null shader uniform). Now binds to
+        // _CairnGlobalCurlStrength which RibbonStrandShader vert function
+        // multiplies into _CurlAmp displacement. Default raised 0.15→0.5
+        // because user reported #2 "周围线条不动 只是内部流转" — at 0.15
+        // displacement is ~3-5mm, perceptually invisible at 1m+ viewing.
+        F("WispCurlStrength",      "_CairnGlobalCurlStrength", 0,  3,    0.5f);
         F("WispTrailWidth",        null, 0.01f, 0.3f, 0.08f);
         F("WispTrailLifetime",     null, 0.3f, 6,  2.0f);
         C("WispBirthColor", "_CairnGlobalWispBirthColor", perType: true);
@@ -101,7 +106,7 @@ public partial class CairnGlobals
         F("HeroRibbonCount",       null, 0,  12,   6);
         F("HeroRibbonHeight",      null, 0.5f, 3,  1.5f);
         F("HeroRibbonCurl",        null, 0,  1,    0.20f);
-        F("FarShaftMinDist",       null, 5,  80,   12);
+        F("FarShaftMinDist",       null, 5,  80,   6);   // v206 C: 12→6 default
         F("FarShaftPixelHeight",   null, 20, 300,  80);
         B("WispEnabled", true);
         B("HeroRibbonEnabled", true);
@@ -122,6 +127,13 @@ public partial class CairnGlobals
         B("GroundLockEnabled", true);
         F("GroundLockStableMs",   null, 100,  10000, 1000);
         F("GroundLockEpsilon",    null, 0.005f, 0.5f, 0.05f);
+        // v206 B3 — phone hold-height for TierC heuristic. 1.5m used to be
+        // hardcoded; 1.3m is empirically correct for chest-height phone hold.
+        F("AssumedHoldHeight",    null, 0.5f,  2.5f,  1.3f);
+        // v206 B2 — adaptive Y lerp thresholds.
+        F("GroundLerpSnapThreshold", null, 0.05f, 0.5f, 0.15f);
+        F("GroundLerpFastSpeed",     null, 0.5f, 5.0f, 2.5f);
+        F("GroundLerpSlowSpeed",     null, 0.1f, 3.0f, 1.0f);
         F("ArOriginAccuracyMaxM", null, 1,    100,  15);
         F("ArOriginStalenessKm",  null, 0.1f, 50,   1.0f);
         B("ArOriginCompensationEnabled", true);

@@ -31,14 +31,43 @@ public class GroundYResolver : MonoBehaviour
     public ARRaycastManager raycastManager;
     public ARPlaneManager planeManager;
 
-    // Standard "phone held at chest height" assumption — see industry
-    // survey. Apple Measure / Pokémon GO use ~1.5m. Reset value documented
-    // for OTA-tuning if telemetry shows users hold differently.
-    public const float ASSUMED_HOLD_HEIGHT = 1.5f;
+    // v206 B3 — phone hold-height assumption, OTA-tunable. Old code was
+    // a hardcoded 1.5m (face-level / Pokémon-GO style). Real users hold
+    // the phone at chest height when planting AR content (~1.3m). The
+    // 0.2m over-estimate at every spawn was the dominant contributor to
+    // user-reported "cairn floats above ground" — see baseline Q2 (mean
+    // delta Unity-y - RN-fy = +0.4m).
+    //
+    // OTA: CairnGlobals.GetForType(null, "AssumedHoldHeight", 1.3f).
+    // Default lowered from 1.5 → 1.3.
+    private const float DEFAULT_HOLD_HEIGHT = 1.3f;
+    public float AssumedHoldHeight
+    {
+        get
+        {
+            var g = CairnGlobals.Instance;
+            return g != null ? g.GetForType(null, "AssumedHoldHeight", DEFAULT_HOLD_HEIGHT) : DEFAULT_HOLD_HEIGHT;
+        }
+    }
+    // Kept as deprecated const for any external callers that still
+    // reference it. New code MUST use AssumedHoldHeight property.
+    [System.Obsolete("Use AssumedHoldHeight property — supports OTA tuning")]
+    public const float ASSUMED_HOLD_HEIGHT = 1.3f;
 
-    // Lerp speed cap when promoting tier — prevents jarring jumps when
-    // a real plane is found 50cm off our Tier C estimate. 1m/s = 1m
-    // correction takes 1s, reads as natural settling.
+    // v206 B2 — adaptive lerp thresholds, OTA-tunable. Old code had a
+    // single MAX_LERP_SPEED=1m/s, which meant a 10cm correction took 100ms
+    // (sub-frame visible) but a 25cm correction took 250ms (clearly visible
+    // 'slide'). New policy:
+    //   |delta| > GroundLerpSnapThreshold → instant snap (1 frame, no lerp)
+    //   |delta| > 0.05m → FAST lerp at GroundLerpFastSpeed
+    //   |delta| ≤ 0.05m → SLOW lerp at GroundLerpSlowSpeed
+    // Defaults chosen so 5-15cm corrections complete in ≤50ms (sub-perceptual).
+    private const float DEFAULT_LERP_SNAP_THRESHOLD = 0.15f;
+    private const float DEFAULT_LERP_FAST_SPEED = 2.5f;
+    private const float DEFAULT_LERP_SLOW_SPEED = 1.0f;
+
+    // Kept for backwards compat (some legacy callers may reference it).
+    [System.Obsolete("Use adaptive lerp via Update — see GroundLerp* OTA")]
     public const float MAX_LERP_SPEED = 1.0f;
 
     // Per-cairn state. We track current Y, current tier, and target Y
@@ -88,7 +117,7 @@ public class GroundYResolver : MonoBehaviour
         // tracked frame. Once tracking starts, position diverges from 0
         // even if user is at the original anchor.
         if (p.sqrMagnitude < 0.0001f) return null;
-        return p.y - ASSUMED_HOLD_HEIGHT;
+        return p.y - AssumedHoldHeight;
     }
 
     /// <summary>
@@ -251,13 +280,39 @@ public class GroundYResolver : MonoBehaviour
                 }
             }
 
-            // Lerp current Y toward target at capped speed (so big jumps
-            // don't snap visibly — they settle smoothly).
-            float maxStep = MAX_LERP_SPEED * dt;
+            // v206 B2 — adaptive lerp.
+            //   |delta| > snapThreshold → instant snap (no visible slide,
+            //                              prevents 'flash twice' artifact)
+            //   |delta| > 0.05m         → FAST lerp (≤50ms transit, sub-perceptual)
+            //   |delta| ≤ 0.05m         → SLOW lerp (cosmetic settle)
+            // OTA: GroundLerpSnapThreshold, GroundLerpFastSpeed, GroundLerpSlowSpeed.
+            var globals = CairnGlobals.Instance;
+            float snapThreshold = globals != null
+                ? globals.GetForType(null, "GroundLerpSnapThreshold", DEFAULT_LERP_SNAP_THRESHOLD)
+                : DEFAULT_LERP_SNAP_THRESHOLD;
+            float fastSpeed = globals != null
+                ? globals.GetForType(null, "GroundLerpFastSpeed", DEFAULT_LERP_FAST_SPEED)
+                : DEFAULT_LERP_FAST_SPEED;
+            float slowSpeed = globals != null
+                ? globals.GetForType(null, "GroundLerpSlowSpeed", DEFAULT_LERP_SLOW_SPEED)
+                : DEFAULT_LERP_SLOW_SPEED;
+
             float delta = t.targetY - t.currentY;
-            if (Mathf.Abs(delta) > 0.001f)
+            float absDelta = Mathf.Abs(delta);
+            if (absDelta > 0.001f)
             {
-                t.currentY += Mathf.Clamp(delta, -maxStep, maxStep);
+                if (absDelta > snapThreshold)
+                {
+                    // Big delta — snap. Avoids the visible slide that the
+                    // user perceived as 'flash twice'.
+                    t.currentY = t.targetY;
+                }
+                else
+                {
+                    float speed = absDelta > 0.05f ? fastSpeed : slowSpeed;
+                    float maxStep = speed * dt;
+                    t.currentY += Mathf.Clamp(delta, -maxStep, maxStep);
+                }
                 var p = t.go.position;
                 p.y = t.currentY;
                 t.go.position = p;

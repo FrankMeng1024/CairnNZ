@@ -73,5 +73,12 @@
          failure class as the v187 yellow-screen ARBackgroundRendererFeature
          bug this file was created to prevent. -->
     <type fullname="TMPDistanceFader" preserve="all"/>
+    <!-- v206 C — FarShaftDistanceGate is AddComponent'd at runtime by
+         PortalSpawnerV199.AttachFarShaft. Same belt-and-suspenders policy
+         as every other v199 MonoBehaviour. Without preserve, IL2CPP iOS
+         Release could strip → AddComponent returns null → distance gate
+         silently dies → close-range cairns regenerate the white-shaft
+         oversaturation that this fix exists to eliminate. -->
+    <type fullname="FarShaftDistanceGate" preserve="all"/>
   </assembly>
 </linker>
