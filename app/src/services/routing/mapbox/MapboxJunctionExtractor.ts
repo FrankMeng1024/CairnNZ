@@ -225,7 +225,13 @@ export async function extractJunctions(
     // class-broadening intent. 60000 keeps the safety net but lets dense
     // urban viewports through. UI-responsiveness is preserved by the
     // existing yield-every-1000-vertices loop.
-    maxVertexCount: options?.maxVertexCount ?? 60000,
+    // v217 fix: telemetry id=2 confirmed Shanghai 0.7km route at 1.5km
+    // bbox emitted 60296 raw vertices — just barely tripping the 60k
+    // cap → endpoint-only fallback regression. Real density in central
+    // Shanghai is ~50km road/km² (vs. reviewer's 20km/km² estimate),
+    // and `service` + `footway` + `pedestrian` classes pile on. Bump
+    // to 200000; UI yield-every-1000 still protects responsiveness.
+    maxVertexCount: options?.maxVertexCount ?? 200000,
     yieldEveryVertices: options?.yieldEveryVertices ?? 1000,
   };
 

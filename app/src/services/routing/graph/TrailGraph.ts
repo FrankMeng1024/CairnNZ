@@ -21,7 +21,7 @@ import type { DOCTrailFeature } from '../doctrails/DOCTrailsTypes';
 
 const DENSIFY_INTERVAL_M = 10;
 const JUNCTION_THRESHOLD_M = 30;
-const MAX_GRAPH_NODES = 500; // Plan v3.1 §18 NOT VIABLE fallback cap
+const MAX_GRAPH_NODES = 3000; // v217: bumped from 500 — Shanghai 0.7km bbox at 200k vertex cap routinely yields 1500-2500 distinct nodes after 30m union-find merge. 500 forced 80% overflow into the truncated bucket. Dijkstra cost on 3000 nodes is still <50ms.
 
 export interface TrailNodeMeta {
   id: string;

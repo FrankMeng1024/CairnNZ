@@ -411,7 +411,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         extract / graph / anchors. Backend stores 24h with TTL,
 //         readable via GET /api/edit-diag and /api/edit-diag/:id.
 //         Fire-and-forget; failures swallowed; never blocks edit flow.
-export const OTA_VERSION = 216;
+//   217 — telemetry-driven cap bumps. v216 diag id=2 confirmed Shanghai
+//         0.7km route emitted 60296 raw vertices, just barely tripping
+//         the 60k cap → endpoint-only fallback (the same regression
+//         v213/v215 tried to fix). Bumps:
+//           - maxVertexCount  60000 → 200000  (covers central Shanghai
+//             at 1.5km bbox padding ~50km road/km² density)
+//           - MAX_GRAPH_NODES   500 → 3000   (Shanghai 200k vertex graph
+//             after 30m union-find ~1500-2500 nodes; 500 forced 80%
+//             into the truncated bucket making junctions unreachable)
+//         Dijkstra cost on 3000 nodes still <50ms.
+export const OTA_VERSION = 217;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

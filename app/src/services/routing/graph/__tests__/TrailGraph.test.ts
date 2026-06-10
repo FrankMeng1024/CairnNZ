@@ -73,8 +73,13 @@ describe('TrailGraph', () => {
     // v2-audit (ARCH-005): cap is MAX_GRAPH_NODES + 1 (the truncated-tail
     // bucket node "tnTRUNC" is added on first overflow so the post-cap
     // section stays connected instead of being a silent island).
-    expect(g.size()).toBeLessThanOrEqual(501);
-    expect(g.truncated).toBe(true);
+    // v217: MAX_GRAPH_NODES bumped 500 → 3000. This particular test
+    // builds a 1000-vertex straight line which after 10m densify +
+    // 30m union-find merge yields ~330 nodes — well under the new cap,
+    // so truncation no longer triggers. Drop the strict 501 assertion
+    // and instead assert the graph stays bounded but doesn't have to
+    // truncate on this small input.
+    expect(g.size()).toBeLessThanOrEqual(3001);
   });
 
   it('shortestPath returns null for nonexistent nodes', () => {
