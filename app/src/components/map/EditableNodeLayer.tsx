@@ -18,14 +18,20 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import type { RouteNodeAnchor } from '../../services/routing/routeNodeAnchors';
 
 let PointAnnotation: any = null;
+let MarkerView: any = null;
 if (Platform.OS !== 'web') {
   try {
     const Mapbox = require('@rnmapbox/maps');
     PointAnnotation = Mapbox.PointAnnotation;
+    // v208 fix B2: MarkerView renders endpoint anchors as native view
+    // annotations (always-on-top by design — bypasses the POI symbol
+    // layer z-order issue where outdoors-v12 restaurant icons were
+    // covering the endpoint dots on iOS).
+    MarkerView = Mapbox.MarkerView;
   } catch {
     // unavailable
   }
@@ -109,6 +115,36 @@ export function EditableNodeLayer({
                   ? (selectedIsEndpoint(selectedAnchorId, anchors) ? 'candidate-trim' : 'candidate-midpoint')
                   : 'candidate-midpoint')
               : 'idle';
+
+        // v208 fix B2: endpoints (start/end) render via MarkerView so
+        // they sit above the Mapbox POI symbol layer (outdoors-v12 POI
+        // restaurant/business icons were covering the endpoint dots on
+        // iOS). MarkerView is a native view-annotation — guaranteed
+        // top z-order. PointAnnotation in @rnmapbox/maps 10.3.1 on iOS
+        // is implemented via SymbolLayer and is therefore subject to
+        // layer ordering. Trade-off: MarkerView has no onSelected /
+        // draggable — tap is wired via TouchableOpacity child; drag-
+        // with-magnet on endpoints is dropped (rare path; tap-to-tap
+        // still works). All non-endpoint anchors continue to use
+        // PointAnnotation (drag retained where applicable).
+        if (isEndpoint && MarkerView) {
+          return (
+            <MarkerView
+              key={anchor.id}
+              coordinate={[anchor.lng, anchor.lat]}
+              anchor={{ x: 0.5, y: 0.5 }}
+              allowOverlap={true}
+            >
+              <TouchableOpacity
+                style={styles.hitTarget}
+                onPress={() => onAnchorTap(anchor)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.dot, dotStyleFor(visualState, anchor.kind)]} />
+              </TouchableOpacity>
+            </MarkerView>
+          );
+        }
 
         return (
           <PointAnnotation
