@@ -406,7 +406,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         Also: HM5 latent fix — querySourceFeatures now passes
 //         undefined instead of [] for filter (some Mapbox iOS SDK
 //         builds reject all features when given empty-array filter).
-export const OTA_VERSION = 215;
+//   216 — auto-upload edit diagnostics to /api/edit-diag (no screenshots
+//         needed). Three streams emitted on every enterDualEdit:
+//         extract / graph / anchors. Backend stores 24h with TTL,
+//         readable via GET /api/edit-diag and /api/edit-diag/:id.
+//         Fire-and-forget; failures swallowed; never blocks edit flow.
+export const OTA_VERSION = 216;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

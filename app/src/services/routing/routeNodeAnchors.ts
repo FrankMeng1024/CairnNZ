@@ -31,6 +31,7 @@
 import type { LngLat } from './corridor/PolylineSampler';
 import type { TrailGraph } from './graph/TrailGraph';
 import { haversineM } from '../../utils/geo';
+import { uploadEditDiag } from './editDiagUploader';
 
 const ROUTE_PROXIMITY_TOLERANCE_M = 30;
 const ENDPOINT_EXCLUSION_M = 50;
@@ -135,15 +136,19 @@ export function computeRouteNodeAnchors(args: {
   // production why so few intersections show up. Only emit when a graph
   // exists — without a graph the diagnostics are vacuous and would just
   // spam the unit-test console.
-  if (trailGraph && typeof console !== 'undefined' && console.log) {
-    console.log('[edit-diag-anchors]', {
+  if (trailGraph) {
+    const diagPayload = {
       workingPoints: workingPoints.length,
       originalPoints: originalPoints.length,
       graphNodes: trailGraph.nodes.size,
       graphTruncated: trailGraph.truncated,
       junctionStats: stats,
       finalAnchorCount: anchors.length,
-    });
+    };
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[edit-diag-anchors]', diagPayload);
+    }
+    uploadEditDiag('anchors', diagPayload);
   }
 
   // Trim-restore anchors.

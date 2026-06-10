@@ -14,6 +14,7 @@ import { PointCloudIndex, IndexedPoint } from './corridor/PointCloudIndex';
 import { TrailGraph } from './graph/TrailGraph';
 import { extractJunctions } from './mapbox/MapboxJunctionExtractor';
 import { buildTrailGraphFromMapbox } from './mapbox/buildTrailGraphFromMapbox';
+import { uploadEditDiag } from './editDiagUploader';
 // getCachedOrFetch import removed — DOC ArcGIS pipeline retained in tree
 // (doctrails/) but no longer wired in. NZ-region merge deferred to a later
 // Sprint. Re-introduce this import + getCachedOrFetch call if reverting.
@@ -124,26 +125,34 @@ export async function buildEditContext(
       // failures are upstream (Mapbox returned 0 features), midstream
       // (no junctions detected), or downstream (graph built but
       // routeNodeAnchors couldn't find matches).
+      // v216: also fire-and-forget upload to /api/edit-diag.
+      const extractDiag = {
+        ok: result.ok,
+        error: result.ok ? null : result.error,
+        ways: result.ok ? result.ways.length : 0,
+        junctions: result.ok ? result.junctions.length : 0,
+        rawFeatureCount: result.ok
+          ? result.diagnostics.rawFeatureCount
+          : result.diagnostics?.rawFeatureCount,
+        rawVertexCount: result.ok
+          ? result.diagnostics.rawVertexCount
+          : result.diagnostics?.rawVertexCount,
+        extractMs: result.ok
+          ? result.diagnostics.extractMs
+          : result.diagnostics?.extractMs,
+        bboxArea: result.ok
+          ? result.diagnostics.bboxArea
+          : result.diagnostics?.bboxArea,
+        routeId,
+        bboxWest: bbox.west,
+        bboxSouth: bbox.south,
+        bboxEast: bbox.east,
+        bboxNorth: bbox.north,
+      };
       if (typeof console !== 'undefined' && console.log) {
-        console.log('[edit-diag-extract]', {
-          ok: result.ok,
-          error: result.ok ? null : result.error,
-          ways: result.ok ? result.ways.length : 0,
-          junctions: result.ok ? result.junctions.length : 0,
-          rawFeatureCount: result.ok
-            ? result.diagnostics.rawFeatureCount
-            : result.diagnostics?.rawFeatureCount,
-          rawVertexCount: result.ok
-            ? result.diagnostics.rawVertexCount
-            : result.diagnostics?.rawVertexCount,
-          extractMs: result.ok
-            ? result.diagnostics.extractMs
-            : result.diagnostics?.extractMs,
-          bboxArea: result.ok
-            ? result.diagnostics.bboxArea
-            : result.diagnostics?.bboxArea,
-        });
+        console.log('[edit-diag-extract]', extractDiag);
       }
+      uploadEditDiag('extract', extractDiag);
       if (result.ok && result.ways.length > 0) {
         trailGraph = buildTrailGraphFromMapbox(result);
         // v215 diagnostic log: graph node count + degree histogram so
@@ -156,6 +165,12 @@ export async function buildEditContext(
             degHist[d] = (degHist[d] ?? 0) + 1;
           }
           console.log('[edit-diag-graph]', {
+            nodeCount: trailGraph.nodes.size,
+            truncated: trailGraph.truncated,
+            degHist,
+          });
+          uploadEditDiag('graph', {
+            routeId,
             nodeCount: trailGraph.nodes.size,
             truncated: trailGraph.truncated,
             degHist,
