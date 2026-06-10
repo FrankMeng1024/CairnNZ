@@ -361,7 +361,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         plugin in next EAS build to set worldAlignment properly. v210's
 //         virtualOrigin attempted to compensate this but compounded the
 //         error instead. Direction-bug acknowledged, distance-bug fixed.
-export const OTA_VERSION = 212;
+//   213 — v211 follow-up: the broaden-class-filter commit alone does not
+//         fix the Shanghai bug because editContext was padding bbox by
+//         5km on each axis (a 0.7km route → 100km² query area). With
+//         dense urban OSM coverage that routinely emits 50k-200k
+//         vertices, tripping the 20k vertex cap and aborting the entire
+//         extract → trailGraph=null → endpoint-only mode (the exact
+//         regression v211 was meant to fix). Two changes:
+//           a) editContext padBboxKm 5 → 1.5 (corridor radius is 1km,
+//              so 1.5km gives 0.5km safety; bbox area cut by ~10× for
+//              short routes). Long routes still fit naturally.
+//           b) maxVertexCount 20000 → 60000 to absorb dense viewports
+//              (Manhattan, Tokyo) without aborting. UI responsiveness
+//              still protected by yield-every-1000-vertices.
+export const OTA_VERSION = 213;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

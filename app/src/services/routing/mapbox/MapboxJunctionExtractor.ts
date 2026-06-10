@@ -217,7 +217,15 @@ export async function extractJunctions(
     // contribute junctions globally.
     allowedClasses: options?.allowedClasses, // undefined = use blacklist
     excludedClasses: options?.excludedClasses ?? DEFAULT_EXCLUDED_CLASSES,
-    maxVertexCount: options?.maxVertexCount ?? 20000,
+    // v213 fix: 20000 was too tight after broadening the class blacklist
+    // in v211 — a 0.7km city route padded by editContext to ~3km × 3km
+    // bbox in dense urban areas (Shanghai, Manhattan, Tokyo) routinely
+    // emits 30-80k vertices. Hitting the cap aborts the entire extract
+    // and falls back to endpoint-only edit, completely defeating the
+    // class-broadening intent. 60000 keeps the safety net but lets dense
+    // urban viewports through. UI-responsiveness is preserved by the
+    // existing yield-every-1000-vertices loop.
+    maxVertexCount: options?.maxVertexCount ?? 60000,
     yieldEveryVertices: options?.yieldEveryVertices ?? 1000,
   };
 

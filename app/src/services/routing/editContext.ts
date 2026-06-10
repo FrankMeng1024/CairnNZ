@@ -105,7 +105,16 @@ export async function buildEditContext(
   let trailGraph: TrailGraph | null = null;
   if (mapRef && mapRef.current) {
     try {
-      const bbox = padBboxKm(originalPoints, 5);
+      // v213 fix: bbox padding was 5km on each axis ⇒ 100km² for a short
+      // 0.7km city route ⇒ 50k-200k vertex in dense urban areas ⇒ trips
+      // maxVertexCount=20000 ⇒ trailGraph=null ⇒ endpoint-only mode (the
+      // exact regression the v211 broaden-class commit was meant to fix).
+      // Corridor enforcement uses 1km radius (editCorridorRadiusMeters),
+      // so 1.5km padding = 1km corridor + 0.5km safety is the smallest
+      // safe size. Cuts bbox area by ~10× for short routes; long routes
+      // still fit comfortably (a 10km route needs 10km × 10km min,
+      // 1.5km pad gives 13km × 13km).
+      const bbox = padBboxKm(originalPoints, 1.5);
       const result = await extractJunctions(mapRef, bbox, {
         minDegree: 3,
         densifyIntervalM: 10,
