@@ -28,6 +28,37 @@ public class BuildScript
     {
         Console.WriteLine("[CairnUnity][BuildScript] === BuildIOS START ===");
 
+        // Step 0: Ensure TMP Essential Resources are imported. CI fresh
+        // checkout has the TMP package but NOT the project-side
+        // "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans
+        // SDF.asset" — that asset is generated when essentials are imported.
+        // Without it SceneSetup's font lookup returns null and PortalSpawnerV199
+        // silently skips RuneText + LikeBadge text rendering (fail-soft null
+        // check). Idempotent — imports are silent and re-imports are a no-op
+        // when the asset already exists.
+        try
+        {
+            const string tmpProbe = "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset";
+            if (!File.Exists(tmpProbe))
+            {
+                Console.WriteLine("[CairnUnity][BuildScript] TMP Essentials not present — importing silently");
+                TMPro.TMP_PackageResourceImporter.ImportResources(
+                    importEssentials: true, importExamples: false, interactive: false);
+                AssetDatabase.Refresh();
+                Console.WriteLine($"[CairnUnity][BuildScript] TMP Essentials import done; probe exists: {File.Exists(tmpProbe)}");
+            }
+            else
+            {
+                Console.WriteLine("[CairnUnity][BuildScript] TMP Essentials already present — skipping import");
+            }
+        }
+        catch (Exception e)
+        {
+            // Non-fatal: SceneSetup will null-check and PortalSpawnerV199
+            // already fail-soft skips. Log loud so CI Editor.log shows it.
+            Console.WriteLine($"[CairnUnity][BuildScript][WARN] TMP Essentials import failed (non-fatal): {e}");
+        }
+
         // Step 1: Run scene setup (programmatic, deterministic)
         try
         {

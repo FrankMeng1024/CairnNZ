@@ -218,7 +218,38 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         long-press by Mapbox native default. Replacing this with a
 //         custom screen-coord overlay is a v205 candidate.
 //         OTA-only.
-export const OTA_VERSION = 204;
+//   205 — v199 cinematic AR rebuild SHIPS. Pairs with the EAS build that
+//         consumes UnityFramework.xcframework SHA ddcee027… (CI run
+//         27221206395 on commit 692022f, master-merged as b7e8bd1). The
+//         RN bundle delivered by this OTA contains:
+//           • LikeReportSheet aim-cone activation (3D dot-product, V2.C1)
+//             — only mounts on binaries >= 0.2.1 (v203 V2.C8 gate retained)
+//           • useLikeReport hook hardened: mountedRef + abortRef + stable
+//             getAuthTokenRef so 8s poll no longer restarts on every
+//             ArFrame (10Hz parent re-render → server hammered) and post-
+//             unmount setState/setError calls are guarded
+//           • UnityAROverlay per-session GPS offset compensation (B3 fix
+//             for "exit-and-reenter cairn drifts ~20m"): one-shot
+//             OnSetSessionOffset before bulk-spawn, projOrigin = persisted
+//             arOrigin else live userPos, offsetN/E from cosine-corrected
+//             delta
+//         Native side (binary 0.2.1, EAS build pending):
+//           • PortalSpawnerV199 cinematic stack (8 shaders, 3 pebble
+//             meshes, ribbon strands, scan grid, confidence ring,
+//             handshake beam, type chip, light shaft)
+//           • CairnGlobalsExt 110 OTA globals (5 missing ShaderUniform
+//             bindings + 6 kill-switches added)
+//           • SummonThenAnchor coroutine (C2: serialise summon → anchor)
+//           • link.xml IL2CPP preserve covers URP/Core/TextMeshPro
+//           • BuildScript silent-imports TMP Essentials before SceneSetup
+//             so LiberationSans SDF is present on CI fresh checkout —
+//             without this RuneText + LikeBadge silently fail-soft skip
+//         Asset fingerprint extended: 8 v199 shaders + 3 pebble meshes +
+//         PortalSpawnerV199 + CairnGlobalsExt monitored for cross-Unity-
+//         version drift (76f1 local vs 36f1 CI). Spike 2 thermal
+//         validation deferred to post-ship telemetry per Sprint 0
+//         scope decision.
+export const OTA_VERSION = 205;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
