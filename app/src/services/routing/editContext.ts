@@ -115,11 +115,23 @@ export async function buildEditContext(
         // Densify ways into the corridor index too — same role DOC played.
         // PointSource 'doc' is reused for Mapbox-sourced points; consumers
         // (corridor enforcement) only care about lng/lat. See PointCloudIndex.
+        // v208 fix C4: dedupe by 5-decimal-place fingerprint (~1.1m)
+        // before pushing into indexedPoints. Mapbox ways share vertices
+        // at junctions — without dedupe, a 5km city bbox can produce
+        // 10000+ duplicates which makes kdbush construction (~300ms)
+        // visibly block the UI on first edit. Original GPS points
+        // (above) are NOT deduped since they're real samples and
+        // unlikely to share fingerprints.
+        const seenFp = new Set<string>();
         for (const w of result.ways) {
           for (let i = 0; i < w.coords.length; i++) {
+            const c = w.coords[i];
+            const fp = `${c.lng.toFixed(5)}_${c.lat.toFixed(5)}`;
+            if (seenFp.has(fp)) continue;
+            seenFp.add(fp);
             indexedPoints.push({
-              lng: w.coords[i].lng,
-              lat: w.coords[i].lat,
+              lng: c.lng,
+              lat: c.lat,
               source: 'doc' as const,
               refId: `mb:${w.id}:${i}`,
             });
