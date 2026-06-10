@@ -271,9 +271,14 @@ export async function extractJunctions(
   let usedSourceName: string = opts.sourceName;
   for (const src of sourceCandidates) {
     try {
+      // v215 fix HM5: pass `undefined` instead of `[]` for the filter.
+      // Empty-array filter is interpreted by some Mapbox iOS SDK builds
+      // as an empty expression that rejects everything; `undefined`
+      // routes through the default no-filter path. We do JS-side class
+      // filtering below anyway, so the filter argument adds no value.
       const result = await mapInst.querySourceFeatures(
         src,
-        [], // no native filter — we filter `class` in JS for full control
+        undefined,
         [opts.sourceLayer],
       );
       if (result && Array.isArray(result.features) && result.features.length > 0) {

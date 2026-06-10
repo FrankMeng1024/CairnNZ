@@ -386,7 +386,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         plant.cairnLat/Lng → spawn.x/z is mathematically consistent.
 //         Compass-direction bug still requires native GravityAndHeading
 //         plugin (next EAS build).
-export const OTA_VERSION = 214;
+//   215 — junction emission HM6 root-cause fix. v207-214 still showed
+//         only 1 intersection anchor on the user's Shanghai 0.7km route
+//         despite class-broaden + bbox + cap fixes. Root cause: the
+//         old algorithm iterated workingPoints (GPS samples on
+//         sidewalk) and snapped them to graph nodes (road centerlines
+//         10-15m away on wide streets). With GPS noise + sidewalk
+//         offset, snap distance often exceeded SNAP_TOLERANCE_M=30,
+//         and even when it didn't, the closest node was usually a
+//         degree-2 densified vertex, not the actual junction.
+//         New algorithm: iterate trailGraph nodes (degree>=3 only) and
+//         project each onto the route polyline; emit anchor if
+//         perpendicular distance < ROUTE_PROXIMITY_TOLERANCE_M=30. The
+//         distance metric is now polyline-to-junction (independent of
+//         GPS sample density), and the anchor's coordinate is the
+//         actual junction (centerline crossing point), not a sidewalk
+//         GPS sample. Adds [edit-diag-extract], [edit-diag-graph],
+//         [edit-diag-anchors] console logs for further telemetry.
+//         Also: HM5 latent fix — querySourceFeatures now passes
+//         undefined instead of [] for filter (some Mapbox iOS SDK
+//         builds reject all features when given empty-array filter).
+export const OTA_VERSION = 215;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

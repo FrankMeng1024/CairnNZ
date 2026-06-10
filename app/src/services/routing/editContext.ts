@@ -119,8 +119,48 @@ export async function buildEditContext(
         minDegree: 3,
         densifyIntervalM: 10,
       });
+      // v215 diagnostic log: surface extractor outcome to console so
+      // we can see in production telemetry whether junction emission
+      // failures are upstream (Mapbox returned 0 features), midstream
+      // (no junctions detected), or downstream (graph built but
+      // routeNodeAnchors couldn't find matches).
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[edit-diag-extract]', {
+          ok: result.ok,
+          error: result.ok ? null : result.error,
+          ways: result.ok ? result.ways.length : 0,
+          junctions: result.ok ? result.junctions.length : 0,
+          rawFeatureCount: result.ok
+            ? result.diagnostics.rawFeatureCount
+            : result.diagnostics?.rawFeatureCount,
+          rawVertexCount: result.ok
+            ? result.diagnostics.rawVertexCount
+            : result.diagnostics?.rawVertexCount,
+          extractMs: result.ok
+            ? result.diagnostics.extractMs
+            : result.diagnostics?.extractMs,
+          bboxArea: result.ok
+            ? result.diagnostics.bboxArea
+            : result.diagnostics?.bboxArea,
+        });
+      }
       if (result.ok && result.ways.length > 0) {
         trailGraph = buildTrailGraphFromMapbox(result);
+        // v215 diagnostic log: graph node count + degree histogram so
+        // we can see whether degree-3 junctions actually exist (vs.
+        // OSM data being so sparse that everything is degree-1/2).
+        if (typeof console !== 'undefined' && console.log) {
+          const degHist: Record<number, number> = {};
+          for (const n of trailGraph.nodes.values()) {
+            const d = n.edges.length;
+            degHist[d] = (degHist[d] ?? 0) + 1;
+          }
+          console.log('[edit-diag-graph]', {
+            nodeCount: trailGraph.nodes.size,
+            truncated: trailGraph.truncated,
+            degHist,
+          });
+        }
         // Densify ways into the corridor index too — same role DOC played.
         // PointSource 'doc' is reused for Mapbox-sourced points; consumers
         // (corridor enforcement) only care about lng/lat. See PointCloudIndex.
