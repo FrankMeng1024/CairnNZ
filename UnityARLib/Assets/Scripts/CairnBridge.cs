@@ -592,6 +592,60 @@ public class CairnBridge : MonoBehaviour
             SendToRN("ArReady", arReadyJson);
             UnityLogger.IForward("CairnBridge", "ArReady sent");
 
+            // v22-DIAG-SESSION — emit ONCE at ArReady. Captures all v207-214
+            // fix flag fingerprints. RN-side telemetry reader greps for
+            // [v22-DIAG-SESSION] to confirm which fixes shipped in this
+            // binary. If user reports a bug after v0.2.2 ship, this diag
+            // line tells us which fix is/isn't active.
+            try
+            {
+                var globals22 = CairnGlobals.Instance;
+                float assumedHold22 = globals22 != null
+                    ? globals22.GetForType(null, "AssumedHoldHeight", 1.3f) : 1.3f;
+                bool anchorKill22 = globals22 == null || globals22.GetBool("AnchorAttachEnabled", true);
+                bool farShaftGateAvail22 = System.Reflection.Assembly.GetExecutingAssembly()
+                    .GetType("FarShaftDistanceGate") != null;
+                // Read worldAlignment via reflection — keeps this diag
+                // platform-agnostic (compiles on Editor without #if UNITY_IOS).
+                string worldAlignReq = "unknown";
+                string worldAlignActual = "unknown";
+                try
+                {
+                    var subsys = ARSession.state >= ARSessionState.Ready
+                        ? UnityEngine.XR.Management.XRGeneralSettings.Instance?.Manager?.activeLoader
+                            ?.GetLoadedSubsystem<UnityEngine.XR.ARSubsystems.XRSessionSubsystem>()
+                        : null;
+                    if (subsys != null)
+                    {
+                        var subType = subsys.GetType();
+                        var reqProp = subType.GetProperty("requestedWorldAlignment");
+                        var curProp = subType.GetProperty("currentWorldAlignment");
+                        if (reqProp != null)
+                            worldAlignReq = reqProp.GetValue(subsys)?.ToString() ?? "null";
+                        if (curProp != null)
+                            worldAlignActual = curProp.GetValue(subsys)?.ToString() ?? "null";
+                    }
+                }
+                catch { /* readback best-effort */ }
+                bool worldAlignMatch = worldAlignReq == worldAlignActual
+                    && worldAlignReq == "GravityAndHeading";
+
+                UnityLogger.IForward("v22-DIAG-SESSION",
+                    $"binVer={Application.version} buildGuid={Application.buildGUID} " +
+                    $"unityVer={Application.unityVersion} " +
+                    $"worldAlignReq={worldAlignReq} worldAlignActual={worldAlignActual} " +
+                    $"worldAlignMatch={worldAlignMatch} " +
+                    $"sessionOffsetWired=true groundPolicyB3=true adaptiveLerp=true " +
+                    $"assumedHoldDefault={assumedHold22:F2} " +
+                    $"farShaftGateAvail={farShaftGateAvail22} " +
+                    $"anchorKillswitch={anchorKill22} " +
+                    $"pebbleY_L=0.11 pebbleY_M=0.30 pebbleY_S=0.43");
+            }
+            catch (System.Exception e)
+            {
+                UnityLogger.IForward("v22-DIAG-SESSION", $"error={e.Message}");
+            }
+
             // LOG-GAP-1 fix: re-emit ARBgDiag at ar-ready time to detect
             // "AR session is tracking but camera feed isn't compositing"
             // (URP/render misconfig → black screen with healthy state).

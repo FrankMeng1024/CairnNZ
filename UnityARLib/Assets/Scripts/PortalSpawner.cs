@@ -365,6 +365,10 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         //   2. Else if data.y is grossly invalid (>3m from camera.y) →
         //      use TierC fallback.
         //   3. Else trust data.y from RN's hit-test ray.
+        // v22-DIAG-SPAWN — track ground source for per-cairn diagnostic.
+        string diagGroundSrc = "RN";
+        bool diagTierAFound = false;
+
         float groundY = data.y;
         if (groundYResolver != null)
         {
@@ -377,6 +381,8 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
                 {
                     // Tier-A real plane wins.
                     groundY = candidateY;
+                    diagGroundSrc = "TierA";
+                    diagTierAFound = true;
                 }
                 else
                 {
@@ -394,6 +400,7 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
                     if (Mathf.Abs(data.y - camY) > 3f || dataYBelowCam < 0.3f)
                     {
                         groundY = candidateY;
+                        diagGroundSrc = (tier == GroundYResolver.Tier.B) ? "TierB" : "TierC";
                     }
                     // else: trust data.y from RN hit-test
                 }
@@ -402,7 +409,11 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             {
                 // No tier available — last-resort TierC fallback.
                 var tierC = groundYResolver.GetTierC();
-                if (tierC.HasValue) groundY = tierC.Value;
+                if (tierC.HasValue)
+                {
+                    groundY = tierC.Value;
+                    diagGroundSrc = "TierC";
+                }
             }
         }
 
@@ -419,6 +430,34 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
 
         UnityLogger.I("PortalSpawner",
             $"SpawnPortal id={data.id} type={data.type} pos=({data.x:F2},{groundY:F2},{data.z:F2})");
+
+        // v22-DIAG-SPAWN — per-cairn fingerprint for diagnosing spawn-time
+        // bugs. Captures RN-given coords, session offset values applied,
+        // chosen ground source, and Tier-A availability. If user reports
+        // any cairn position bug, grep telemetry for [v22-DIAG-SPAWN].
+        try
+        {
+            float spawnX_diag = data.x + CairnBridge._sessionOffsetX;
+            float spawnZ_diag = data.z + CairnBridge._sessionOffsetZ;
+            float camY_diag = Camera.main != null ? Camera.main.transform.position.y : 0f;
+            float assumedH_diag = CairnGlobals.Instance != null
+                ? CairnGlobals.Instance.GetForType(null, "AssumedHoldHeight", 1.3f)
+                : 1.3f;
+            // Use simple key=value format (one line) — easier to parse on RN
+            // side than JsonUtility-formatted JSON which embeds quotes inside
+            // the breadcrumb message that already wraps the line in [tag].
+            UnityLogger.IForward("v22-DIAG-SPAWN",
+                $"id={data.id} type={data.type} " +
+                $"rnX={data.x:F3} rnY={data.y:F3} rnZ={data.z:F3} " +
+                $"ox={CairnBridge._sessionOffsetX:F3} oz={CairnBridge._sessionOffsetZ:F3} " +
+                $"finalX={spawnX_diag:F3} finalY={groundY:F3} finalZ={spawnZ_diag:F3} " +
+                $"groundSrc={diagGroundSrc} tierAFound={diagTierAFound} " +
+                $"camY={camY_diag:F3} assumedH={assumedH_diag:F3}");
+        }
+        catch (System.Exception e)
+        {
+            UnityLogger.IForward("v22-DIAG-SPAWN", $"id={data.id} error={e.Message}");
+        }
 
         // v187 — pull spawn-time OTA multipliers (apply once at spawn).
         // Globals default to 0 only if CairnGlobals.Awake hasn't run yet.

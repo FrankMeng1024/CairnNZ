@@ -202,6 +202,59 @@ public partial class PortalSpawner
             $"runeText={runeFontAsset!=null} ribbons={ribbonStrandMaterial!=null} " +
             $"farShaft={lightShaftMaterial!=null} confidenceRing={confidenceRingMaterial!=null} " +
             $"contactShadow={contactShadowMaterial!=null} likeBadge={runeFontAsset!=null}");
+
+        // v22-DIAG-CAIRN — structured per-cairn fingerprint capturing every
+        // OTA killswitch state + every layer's actual attach result. If user
+        // reports any visual bug after v0.2.2 ship, grep telemetry for
+        // [v22-DIAG-CAIRN] to see exactly which v199 layer activated/skipped.
+        try
+        {
+            bool pebbleEnabled = data.type == "cairn" && pebbleMaterial != null
+                && (globals == null || globals.GetBool("PebbleStackEnabled", true));
+            bool chipEnabled = data.type != "cairn" && typeChipMaterial != null
+                && (globals == null || globals.GetBool("TypeChipEnabledOTA", true));
+            bool runeEnabled = runeFontAsset != null
+                && (globals == null || globals.GetBool("RuneTextEnabled", true));
+            bool ribbonsEnabled = ribbonStrandMaterial != null
+                && (globals == null || globals.GetBool("HeroRibbonEnabled", true));
+            int ribbonCount = ribbonsEnabled
+                ? Mathf.Clamp(globals != null
+                    ? Mathf.RoundToInt(globals.GetForType(null, "HeroRibbonCount", 6))
+                    : 6, 0, 12) : 0;
+            float ribbonCurl = globals != null
+                ? globals.GetForType(null, "HeroRibbonCurl", 0.20f) : 0.20f;
+            bool farShaftEnabled = lightShaftMaterial != null
+                && (globals == null || globals.GetBool("FarShaftEnabled", true));
+            bool farShaftGateAttached = false;
+            if (v199 != null)
+            {
+                var gates = v199.GetComponentsInChildren<FarShaftDistanceGate>(true);
+                farShaftGateAttached = gates != null && gates.Length > 0;
+            }
+            bool confRingEnabled = confidenceRingMaterial != null
+                && (globals == null || globals.GetBool("ConfidenceRingEnabled", true));
+            bool contactShadowEnabled = contactShadowMaterial != null
+                && (globals == null || globals.GetBool("ContactShadowEnabled", true));
+            bool likeBadgeEnabled = runeFontAsset != null
+                && (globals == null || globals.GetBool("LikeBadgeEnabled", true));
+            bool summonEnabled = globals == null || globals.GetBool("SummonEnabled", true);
+            bool anchorEnabled = globals == null || globals.GetBool("AnchorAttachEnabled", true);
+            string fontFromAsset = runeFontAsset != null ? runeFontAsset.name : "null";
+
+            UnityLogger.IForward("v22-DIAG-CAIRN",
+                $"id={data.id} type={data.type} v199={v199!=null} " +
+                $"pebble={pebbleEnabled} chip={chipEnabled} " +
+                $"runeText={runeEnabled} fontFromAsset={fontFromAsset} " +
+                $"ribbons={ribbonCount} ribbonCurl={ribbonCurl:F2} " +
+                $"farShaft={farShaftEnabled} farShaftGate={farShaftGateAttached} " +
+                $"confRing={confRingEnabled} contactShadow={contactShadowEnabled} " +
+                $"likeBadge={likeBadgeEnabled} summon={summonEnabled} " +
+                $"anchorEnabled={anchorEnabled}");
+        }
+        catch (System.Exception e)
+        {
+            UnityLogger.IForward("v22-DIAG-CAIRN", $"id={data.id} error={e.Message}");
+        }
     }
 
     // ============================================================
@@ -541,7 +594,25 @@ public partial class PortalSpawner
     private IEnumerator TryParentToAnchor(GameObject container, float groundY)
     {
         if (container == null) yield break;
-        if (arAnchorManagerRef == null) yield break;
+        // v22-ANCHOR — wire AnchorAttachEnabled OTA killswitch (was orphan
+        // in v206-v214: registered in CairnGlobalsExt:251 but never read).
+        // When false, cairn stays parented to spawner GameObject and ARKit
+        // SLAM keeps it visually stable within session — no ARAnchor
+        // overhead, no async failures. Useful kill-switch if anchor system
+        // misbehaves on a specific user's device.
+        var globalsAnchor = CairnGlobals.Instance;
+        if (globalsAnchor != null && !globalsAnchor.GetBool("AnchorAttachEnabled", true))
+        {
+            UnityLogger.IForward("v22-ANCHOR",
+                $"id={container.name} skipped reason=ota-disabled finalParent={container.transform.parent?.name}");
+            yield break;
+        }
+        if (arAnchorManagerRef == null)
+        {
+            UnityLogger.IForward("v22-ANCHOR",
+                $"id={container.name} skipped reason=no-anchor-manager");
+            yield break;
+        }
 
         // Try plane-attached anchor first via ARRaycastManager.
         if (arRaycastManagerRef != null && arCameraRef != null && arPlaneManagerRef != null)

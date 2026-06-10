@@ -80,5 +80,13 @@
          silently dies → close-range cairns regenerate the white-shaft
          oversaturation that this fix exists to eliminate. -->
     <type fullname="FarShaftDistanceGate" preserve="all"/>
+    <!-- v22-WORLDALIGN — ARKitSessionInit is AddComponent'd at runtime by
+         SceneSetup. Same IL2CPP belt-and-suspenders as every other
+         AddComponent'd MonoBehaviour. Without preserve, iOS IL2CPP Release
+         could strip → AddComponent returns null → worldAlignment stays at
+         default Gravity → +X axis no longer points East → cairn world
+         orientation drifts session-to-session (the same root-cause fix
+         as Viro's worldAlignment="GravityAndHeading" prop). -->
+    <type fullname="ARKitSessionInit" preserve="all"/>
   </assembly>
 </linker>

@@ -113,7 +113,18 @@ public static class SceneSetup
         var sessionGo = new GameObject("ARSession");
         var arSession = sessionGo.AddComponent<ARSession>();
         sessionGo.AddComponent<ARInputManager>();
-        Debug.Log("[CairnUnity][SceneSetup] ARSession + ARInputManager added");
+        // v22-WORLDALIGN — force ARKit worldAlignment=GravityAndHeading at
+        // session start so +X=True East, -Z=True North (Apple ARKit right-
+        // handed convention, matching Cairn's gpsToArkitWorld projection).
+        // Without this Unity ARFoundation runs ARKit at default Gravity
+        // mode where +X = whatever direction phone faces at session start
+        // → cairn rotates randomly per reopen (root cause of "标记每次位
+        // 置不一样"). Same alignment Viro used by default (declarative
+        // JSX prop). Lifecycle gated by ARSession.stateChanged event
+        // subscription in ARKitSessionInit.OnEnable — works regardless of
+        // component-execution-order quirks (ARSession's k_Session=int.MinValue).
+        sessionGo.AddComponent<ARKitSessionInit>();
+        Debug.Log("[CairnUnity][SceneSetup] ARSession + ARInputManager + ARKitSessionInit (worldAlignment=GravityAndHeading) added");
 
         // ─── XR Origin (AR) ───
         var xrOriginGo = new GameObject("XR Origin (AR)");
@@ -198,14 +209,33 @@ public static class SceneSetup
         spawner.contactShadowMaterial   = MaterialFromShader("Cairn/ShadowBlobShader");
         // TMP SDF font asset — bundled with TextMeshPro Essentials at first import.
         // Fallback to runtime null-check warn in PortalSpawnerV199 if missing.
+        // v22-FONT — 3-step lookup chain so CI fresh checkout has best chance
+        // of finding the font: (1) standard TMP convention path (populated
+        // by BuildScript Step 0 import); (2) committed-fallback path under
+        // Resources/Fonts (survives stash/branch cycles); (3) Resources.Load
+        // runtime fallback (works without AssetDatabase, even on device).
+        // Log which path resolved for v22 telemetry.
         var runeFont = AssetDatabase.LoadAssetAtPath<TMPro.TMP_FontAsset>(
             "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset");
-        if (runeFont == null) runeFont = AssetDatabase.LoadAssetAtPath<TMPro.TMP_FontAsset>(
-            "Assets/Resources/Fonts/LiberationSans SDF.asset");
+        string fontResolvedFrom = runeFont != null ? "TMP-Resources" : "null";
+        if (runeFont == null)
+        {
+            runeFont = AssetDatabase.LoadAssetAtPath<TMPro.TMP_FontAsset>(
+                "Assets/Resources/Fonts/LiberationSans SDF.asset");
+            if (runeFont != null) fontResolvedFrom = "Resources-Fonts";
+        }
+        if (runeFont == null)
+        {
+            // Last-resort: runtime Resources.Load — works without AssetDatabase,
+            // and works on device runtime if the asset is in a Resources folder.
+            runeFont = Resources.Load<TMPro.TMP_FontAsset>("Fonts/LiberationSans SDF");
+            if (runeFont != null) fontResolvedFrom = "Resources.Load";
+        }
         spawner.runeFontAsset = runeFont;
         Debug.Log($"[CairnUnity][SceneSetup] PortalSpawner v199 wired " +
                   $"(pebble={spawner.pebbleMaterial!=null} typeChip={spawner.typeChipMaterial!=null} " +
-                  $"runeFont={spawner.runeFontAsset!=null} ribbon={spawner.ribbonStrandMaterial!=null} " +
+                  $"runeFont={spawner.runeFontAsset!=null} runeFontFrom={fontResolvedFrom} " +
+                  $"ribbon={spawner.ribbonStrandMaterial!=null} " +
                   $"anchor={spawner.arAnchorManagerRef!=null})");
 
         // ─── CairnBridge + CairnGlobals + CairnThermalMonitor ───
