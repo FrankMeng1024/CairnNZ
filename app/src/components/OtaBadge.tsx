@@ -249,7 +249,57 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         version drift (76f1 local vs 36f1 CI). Spike 2 thermal
 //         validation deferred to post-ship telemetry per Sprint 0
 //         scope decision.
-export const OTA_VERSION = 205;
+//   206 — v199 production-test bug-fix wave. User reported 6 issues on
+//         binary 0.2.0 + OTA v205: cairn 不贴地、ribbon 不动、上方白色遮挡、
+//         关 AR 重开标记不见、闪烁飞天、远端飘走. Telemetry baseline
+//         (docs/v206-runtime-baseline.md) extracted from aliyun
+//         telemetry_sessions confirmed root causes. RN-side fixes
+//         deliverable as OTA, Unity-side rides next EAS build (v207).
+//
+//         RN fixes shipped THIS OTA (works on 0.2.0 + 0.2.1 binaries):
+//           A1 BULK-EMPTY-BURN: UnityAROverlay.tsx one-shot burned when
+//              nearbyMarkers temporarily empty (lastCoord race after
+//              MMKV hydrate) → reopen AR with no cairns rendered.
+//              Fix: drop length===0 burn clause; add 30/100-frame
+//              waiting-markers diagnostic breadcrumb so empty state
+//              is visible in telemetry.
+//           A2 AROrigin-NONREACTIVE: ARScreen.tsx:1039 read arOrigin via
+//              getState() non-reactively → baseline showed 5/5
+//              OnSetSessionOffset events all ox=0/oz=0/mode=live,
+//              persisted arOrigin NEVER used. Fix: useMarkerStore(s=>s.arOrigin)
+//              selector subscription + replace offsetSentRef one-shot
+//              with lastSentOriginRef equality check that RE-sends
+//              OnSetSessionOffset when projOrigin transitions
+//              null→persisted mid-session.
+//           B1 RN GROUND-Y POLICY: groundYRef was "last plane wins
+//              regardless of area" — plant 5 in baseline got groundY
+//              from 0.3m² outlier overwriting 1.9m² stable plane.
+//              Fix: drop area<0.5; 5s rolling buffer; pick largest
+//              area; AND listen for Unity "[GroundYResolver] locked
+//              Y=... tier=A" log line so Unity's authoritative value
+//              supersedes raw plane events once locked.
+//
+//         Native fixes pending EAS v207 build (binary 0.2.2):
+//           B2 adaptive lerp (snap >15cm, fast 2.5m/s 5-15cm, slow
+//              <5cm); B3 ASSUMED_HOLD_HEIGHT 1.5→1.3m default + OTA
+//              tunable + TierC override only when Tier-A unavailable
+//              AND data.y unreasonable; C FarShaftDistanceGate runtime
+//              MonoBehaviour hides shaft <6m (FarShaftMinDist); D1
+//              Pebble_S Y 0.45→0.43 stack alignment; D2 5 kill-switches
+//              wired in code (V199LayerEnabled, RuneTextEnabled,
+//              PebbleStackEnabled, TypeChipEnabledOTA, AnchorAttachEnabled
+//              were previously registered in CairnGlobalsExt but never
+//              consulted in PortalSpawnerV199 — flipping them did
+//              nothing in v205).
+//
+//   207 — Sprint Mapbox-Migration: replace NZ-only DOC ArcGIS pipeline
+//         with global Mapbox vector tile junction extraction. Edit mode
+//         now works in any city/region where Mapbox has road/trail data
+//         (which is global). Files: new mapbox/MapboxJunctionExtractor +
+//         buildTrailGraphFromMapbox; editContext.ts wired through;
+//         RouteEditorScreen forces zoom>=14 + 600ms wait before extract.
+//         DOC code retained in tree for future NZ-region merge.
+export const OTA_VERSION = 207;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
