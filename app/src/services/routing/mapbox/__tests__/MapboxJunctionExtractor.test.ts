@@ -76,10 +76,9 @@ describe('extractJunctions — happy paths', () => {
     expect(res.junctions).toHaveLength(0);
   });
 
-  it('densifies long segments to ~10m intervals', async () => {
-    // 100m segment with intervalM=10 → 11 points (start + 10 steps).
-    // Use a north-only delta so haversine is straightforward.
-    // 0.0009° lat ≈ 100m.
+  it('passes through 2-vertex feature without subsampling (length <= subsample limit)', async () => {
+    // v218: extractor no longer densifies — it subsamples long parts and
+    // passes short ones through untouched. A 2-vertex line stays 2 vertices.
     const features = [
       lineFeature([[174.79, -41.3], [174.79, -41.2991]], 'path', 'a'),
     ];
@@ -89,9 +88,27 @@ describe('extractJunctions — happy paths', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.ways).toHaveLength(1);
-    // 100m / 10m ≈ 10 segments → 11 points.
-    expect(res.ways[0].coords.length).toBeGreaterThanOrEqual(10);
-    expect(res.ways[0].coords.length).toBeLessThanOrEqual(12);
+    expect(res.ways[0].coords.length).toBe(2);
+  });
+
+  it('subsamples long parts to <=51 vertices', async () => {
+    // 200-vertex part should subsample to ~50 + tail = at most 51.
+    const longCoords: number[][] = [];
+    for (let i = 0; i < 200; i++) {
+      longCoords.push([174.79 + i * 0.00001, -41.3]);
+    }
+    const features = [lineFeature(longCoords, 'path', 'big')];
+    const res = await extractJunctions(makeMapRef(features), BBOX);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.ways).toHaveLength(1);
+    expect(res.ways[0].coords.length).toBeLessThanOrEqual(51);
+    // first + last preserved
+    expect(res.ways[0].coords[0]).toEqual({ lng: 174.79, lat: -41.3 });
+    const lastIn = longCoords[longCoords.length - 1];
+    const lastOut = res.ways[0].coords[res.ways[0].coords.length - 1];
+    expect(lastOut.lng).toBeCloseTo(lastIn[0], 6);
+    expect(lastOut.lat).toBeCloseTo(lastIn[1], 6);
   });
 
   it('fingerprint is stable across small float perturbation in 7th decimal', async () => {
@@ -312,20 +329,21 @@ describe('extractJunctions — failure modes', () => {
   });
 
   it('returns vertex-cap-exceeded when raw vertex count exceeds maxVertexCount', async () => {
-    // One huge feature = many vertices after densify.
-    // 0.1 deg ≈ 11km → 1100 segments at 10m → 1101 vertices.
-    const features = [
-      lineFeature(
-        [
-          [174.79, -41.3],
-          [174.79, -41.2],
-        ],
-        'path',
-        'big',
-      ),
-    ];
+    // v218: extractor no longer densifies; it subsamples each part to
+    // ~50 vertices. So a single feature can no longer trip the cap on
+    // its own (subsample bounds it). To trigger the cap, feed many
+    // features whose summed subsampled-vertex count exceeds the cap.
+    // With maxVertexCount=100 and per-feature subsample limit ~50, we
+    // need at least 3 features.
+    const features = [];
+    for (let f = 0; f < 5; f++) {
+      const longCoords: number[][] = [];
+      for (let i = 0; i < 200; i++) {
+        longCoords.push([174.79 + i * 0.00001, -41.3 + f * 0.0001]);
+      }
+      features.push(lineFeature(longCoords, 'path', `big-${f}`));
+    }
     const res = await extractJunctions(makeMapRef(features), BBOX, {
-      densifyIntervalM: 10,
       maxVertexCount: 100,
     });
     expect(res.ok).toBe(false);

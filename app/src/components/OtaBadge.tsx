@@ -421,7 +421,90 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             after 30m union-find ~1500-2500 nodes; 500 forced 80%
 //             into the truncated bucket making junctions unreachable)
 //         Dijkstra cost on 3000 nodes still <50ms.
-export const OTA_VERSION = 217;
+//   218 — v0.2.2 binary ship — Cairn AR root cause fix wave. Companion
+//         OTA bumped 217→218 alongside binary 0.2.1→0.2.2 EAS build.
+//
+//         **The actual root cause** of "标记每次位置不一样 / 跟我走 /
+//         偏到奶奶家" found this cycle: Unity ARFoundation NEVER sets
+//         ARKit's worldAlignment=GravityAndHeading. ARKit defaults to
+//         ARWorldAlignmentGravity → +X axis = phone-facing-direction at
+//         session start (NOT true east). Every "+X=East, -Z=North"
+//         comment in this codebase has been aspirational, not actual.
+//         Cairn projection math (gpsToArkitWorld) assumed GravityAndHeading
+//         semantics; under default Gravity it landed cairns at the
+//         correct distance but at random compass rotation each session.
+//         This was the SAME alignment Viro used by default (declarative
+//         worldAlignment="GravityAndHeading" prop on ViroARSceneNavigator).
+//         Migration to Unity ARFoundation silently dropped the config →
+//         every visible-AR symptom from v199-v214 traces back here.
+//
+//         v0.2.2 NEW MonoBehaviour ARKitSessionInit ([DefaultExecutionOrder
+//         (-100)]) sets ARKitSessionSubsystem.requestedWorldAlignment =
+//         GravityAndHeading at session-Ready, verifies via readback +
+//         retries via ARSession.Reset() once on mismatch. SceneSetup wires
+//         it onto ARSession GameObject. link.xml preserves type. Pure C#
+//         — no native Obj-C plugin needed (ARFoundation 6.0.5 exposes the
+//         API publicly per docs/research and Library/PackageCache source).
+//
+//         v0.2.2 ALSO ships everything that was source-fixed but never
+//         binary-shipped (v206-v214 source mods only got into RN OTA,
+//         not native binary):
+//           - PortalSpawner: data.x+_sessionOffsetX, _sessionOffsetZ+data.z
+//             at spawn (v209 fix, was dead in 0.2.1 binary)
+//           - PortalSpawner: B3-policy (Tier-A wins, data.y trusted unless
+//             unreasonable >3m or <0.3m below camera)
+//           - GroundYResolver: AssumedHoldHeight 1.5→1.3 + OTA-tunable
+//             via CairnGlobals; adaptive lerp (snap >0.15m, fast 2.5m/s,
+//             slow 1m/s)
+//           - PortalSpawnerV199: Pebble_S Y 0.45→0.43 stack alignment
+//           - WispCurlStrength shader binding to _CairnGlobalCurlStrength
+//             + RibbonStrandShader vert reads it + MeshRibbonStrand pushes
+//             curlAmp via MPB → ribbons actually wave per OTA value
+//           - 4 kill-switches wired (V199LayerEnabled, RuneTextEnabled,
+//             PebbleStackEnabled, TypeChipEnabledOTA)
+//           - FarShaftDistanceGate MonoBehaviour (5Hz hide when <6m)
+//           - TMPDistanceFader for v199 cinematic rune text fade (was
+//             attaching legacy MarkTextDistanceFader which silently no-op'd
+//             on TMP_Text)
+//
+//         v0.2.2 NEW IN THIS BUILD (not just shipping v206-v214 source):
+//           - AnchorAttachEnabled OTA killswitch wired into TryParentToAnchor
+//             (was orphan: registered in CairnGlobalsExt but never read).
+//             Set false to keep cairn parented to spawner GO via SLAM only,
+//             skip ARAnchor attempt if it misbehaves on user's device.
+//           - 3-step font lookup chain in SceneSetup: TMP/Resources →
+//             Resources/Fonts → Resources.Load runtime fallback. Logs
+//             which path resolved.
+//           - [v22-DIAG-SESSION] one-shot at ArReady: binVer + buildGuid +
+//             worldAlignment readback + all v207-218 fix flags fingerprint
+//           - [v22-DIAG-SPAWN] per-cairn from PortalSpawner: rnX/Y/Z, ox/oz,
+//             finalX/Y/Z, groundSrc (RN|TierA|TierB|TierC), tierAFound,
+//             camY, assumedH
+//           - [v22-DIAG-CAIRN] per-cairn from PortalSpawnerV199: every
+//             OTA killswitch state + every layer attach result
+//           - [v22-WORLDALIGN] from ARKitSessionInit: requested vs actual
+//             alignment, verified bool, retry count
+//           - [v22-ANCHOR] from TryParentToAnchor: skip reason or attach
+//             result with parent name
+//
+//         If ANY bug appears post-v0.2.2, RN telemetry breadcrumbs greppable
+//         by [v22-*] tag will identify exactly which fix code path didn't
+//         take. No more guessing.
+//   219 — extractor subsample replaces densify. Telemetry id=3 (v217)
+//         showed Shanghai 1.5km bbox raw vertex count exceeded 200000
+//         even after lifting cap from 60k. Root cause: Mapbox z14
+//         vector tile preserves OSM 1-3m vertex spacing (already so
+//         dense densify(part, 10) is a no-op). 382 features × ~520
+//         raw vertices each = 200k+. Density was fine; the algorithm
+//         was double-paying for already-dense data.
+//         Fix: drop densify, replace with cap-50-vertices-per-part
+//         subsample (preserve first + last so junction endpoint
+//         sharing across ways still produces matching fingerprints).
+//         Per-way coords now <=51 vertices, 382 ways × 51 ≈ 19k
+//         total — well under maxVertexCount (rolled back to 30k).
+//         Junction topology preserved at way endpoints; corridor
+//         density still adequate for kdbush proximity queries.
+export const OTA_VERSION = 219;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

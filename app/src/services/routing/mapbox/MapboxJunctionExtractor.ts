@@ -217,21 +217,15 @@ export async function extractJunctions(
     // contribute junctions globally.
     allowedClasses: options?.allowedClasses, // undefined = use blacklist
     excludedClasses: options?.excludedClasses ?? DEFAULT_EXCLUDED_CLASSES,
-    // v213 fix: 20000 was too tight after broadening the class blacklist
-    // in v211 — a 0.7km city route padded by editContext to ~3km × 3km
-    // bbox in dense urban areas (Shanghai, Manhattan, Tokyo) routinely
-    // emits 30-80k vertices. Hitting the cap aborts the entire extract
-    // and falls back to endpoint-only edit, completely defeating the
-    // class-broadening intent. 60000 keeps the safety net but lets dense
-    // urban viewports through. UI-responsiveness is preserved by the
-    // existing yield-every-1000-vertices loop.
-    // v217 fix: telemetry id=2 confirmed Shanghai 0.7km route at 1.5km
-    // bbox emitted 60296 raw vertices — just barely tripping the 60k
-    // cap → endpoint-only fallback regression. Real density in central
-    // Shanghai is ~50km road/km² (vs. reviewer's 20km/km² estimate),
-    // and `service` + `footway` + `pedestrian` classes pile on. Bump
-    // to 200000; UI yield-every-1000 still protects responsiveness.
-    maxVertexCount: options?.maxVertexCount ?? 200000,
+    // v218 fix: telemetry id=3 (200k cap) shows raw OSM vertex count
+    // exceeded 200000 in central Shanghai 1.5km bbox — Mapbox z14
+    // vector tile preserves OSM 1-3m vertex spacing without
+    // simplifying enough. densify is a no-op against this data.
+    // Subsample to ~50 vertices per part instead (junction endpoints
+    // preserved). Final cap 30k is now a true safety net, not a
+    // routine trip wire — if exceeded it indicates >600 ways in bbox
+    // which is genuine pathological density worth aborting.
+    maxVertexCount: options?.maxVertexCount ?? 30000,
     yieldEveryVertices: options?.yieldEveryVertices ?? 1000,
   };
 
@@ -367,14 +361,37 @@ export async function extractJunctions(
     for (let pi = 0; pi < parts.length; pi++) {
       const part = parts[pi];
       if (part.length < 2) continue;
-      const dense = densify(part, opts.densifyIntervalM);
-      if (dense.length < 2) continue;
+      // v218 fix: skip densify — Mapbox vector tile at zoom 14 already
+      // ships 1-3m vertex spacing in dense urban areas. densify(part, 10)
+      // doesn't add points (its loop only inserts when segment > intervalM)
+      // but adds zero value AND wastes the per-vertex work in the
+      // fingerprint loop downstream. More importantly the raw vertex
+      // count itself was hitting the cap (Shanghai 0.7km bbox = 200k+
+      // raw vertices). Subsample instead: keep every Nth vertex where
+      // N = ceil(part.length / SUBSAMPLE_LIMIT_PER_PART). Junctions
+      // sit at way endpoints (always preserved) so subsampling
+      // mid-way vertices loses zero topology.
+      const SUBSAMPLE_LIMIT_PER_PART = 50;
+      let processed: typeof part;
+      if (part.length <= SUBSAMPLE_LIMIT_PER_PART) {
+        processed = part;
+      } else {
+        const step = Math.ceil(part.length / SUBSAMPLE_LIMIT_PER_PART);
+        processed = [];
+        for (let i = 0; i < part.length; i += step) processed.push(part[i]);
+        // always preserve last vertex so endpoint sharing at junctions
+        // still produces matching fingerprints across way features
+        if (processed[processed.length - 1] !== part[part.length - 1]) {
+          processed.push(part[part.length - 1]);
+        }
+      }
+      if (processed.length < 2) continue;
       ways.push({
         id: parts.length > 1 ? `${baseId}_p${pi}` : baseId,
         klass,
-        coords: dense,
+        coords: processed,
       });
-      rawVertexCount += dense.length;
+      rawVertexCount += processed.length;
       if (rawVertexCount > opts.maxVertexCount) {
         return {
           ok: false,
