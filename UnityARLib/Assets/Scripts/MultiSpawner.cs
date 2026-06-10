@@ -188,7 +188,12 @@ public class MultiSpawner : MonoBehaviour, ICairnSpawner
         // local positions describe their offsets cleanly.
         var container = new GameObject($"Cairn_{data.id ?? "unknown"}");
         container.transform.SetParent(transform, false);
-        container.transform.position = new Vector3(data.x, groundY, data.z);
+        // v209 — same fix as PortalSpawner: apply sessionOffset so cairn
+        // world position is shifted by GPS-drift compensation between
+        // persisted arOrigin and current live position.
+        float mxSpawnX = data.x + CairnBridge._sessionOffsetX;
+        float mxSpawnZ = data.z + CairnBridge._sessionOffsetZ;
+        container.transform.position = new Vector3(mxSpawnX, groundY, mxSpawnZ);
 
         // ─── Strand cylinder ───
         var strand = GameObject.CreatePrimitive(PrimitiveType.Cylinder);

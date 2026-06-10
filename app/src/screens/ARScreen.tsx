@@ -393,21 +393,25 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // Once-lock policy: never overwrites unless user explicitly resets via
   // long-press 📸 → clearArOrigin (defensive UI). Auto-clear if user has
   // travelled > 1km since lock (staleness gate per V2.B5 review).
+  // v209 — staleness lowered 1000m → 100m. Old 1km gate caused user-reported
+  // "标记跟你走" + "飞天到远端" symptom: if user plant cairn at site A then
+  // walks 500m to site B (sub-1km), arOrigin stays at A, new cairns at B are
+  // projected to (x,z)≈(0,0) relative to A but viewed from B's ARKit world =
+  // appearing 500m away from camera = sky cairns. 100m gate forces re-lock
+  // for any meaningful walk, keeping projections in sane range.
   useEffect(() => {
     if (!arStatus.glReady) return;
     if (!lastCoord) return;
     if (lastCoord.accuracy != null && lastCoord.accuracy > 15) return;
     const cur = useMarkerStore.getState().arOrigin;
     if (cur) {
-      // Staleness gate: if user has moved >1km from persisted, clear it
-      // (probably a different region). Next plant re-locks.
       const cosLat = Math.cos((cur.lat * Math.PI) / 180);
       const dN = (lastCoord.lat - cur.lat) * 111000;
       const dE = (lastCoord.lng - cur.lng) * 111000 * cosLat;
       const distM = Math.hypot(dN, dE);
-      if (distM > 1000) {
+      if (distM > 100) {
         useMarkerStore.getState().clearArOrigin();
-        crashLogger.breadcrumb(`ar:origin:stale-clear distM=${distM.toFixed(0)}`);
+        crashLogger.breadcrumb(`ar:origin:stale-clear distM=${distM.toFixed(0)} (>100m)`);
       } else {
         return;
       }

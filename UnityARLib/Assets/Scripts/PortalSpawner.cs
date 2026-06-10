@@ -436,7 +436,19 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         // Container.
         var container = new GameObject($"Portal_{data.id ?? "unknown"}");
         container.transform.SetParent(transform, false);
-        container.transform.position = new Vector3(data.x, groundY, data.z);
+        // v209 CRITICAL — apply per-session GPS offset that RN sent via
+        // OnSetSessionOffset. Old code (v199 → v208) dropped sessionOffset
+        // entirely: the static fields _sessionOffsetX/Z were stored but
+        // never consumed by any spawner. Result: every AR session reset
+        // ARKit world origin to camera, but cairn world coords were the
+        // RN-projected position relative to OLD persisted arOrigin → cairn
+        // appears at the same RELATIVE position to the new origin every
+        // time, i.e. "cairn follows camera" (user-reported critical bug).
+        // Fix: shift spawn XZ by sessionOffset so persisted-world coords
+        // resolve correctly in the current ARKit session frame.
+        float spawnX = data.x + CairnBridge._sessionOffsetX;
+        float spawnZ = data.z + CairnBridge._sessionOffsetZ;
+        container.transform.position = new Vector3(spawnX, groundY, spawnZ);
         HasSpawned = true;
 
         // Per-type config.
