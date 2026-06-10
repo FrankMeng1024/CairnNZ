@@ -514,51 +514,42 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             props.userPos &&
             unityRef.current
           ) {
-            // v210 — per-session virtualOrigin (Option C from design subagent).
+            // v211 — REVERT v210 virtualOrigin. v210 was wrong:
+            // it computed origin = userPos shifted by camera.pz/111000 each
+            // session, treating camera position as if it represented user's
+            // GPS displacement. Two compounding errors caused 'cairn 偏到
+            // 奶奶家':
+            //   1. Unity ARFoundation does NOT set worldAlignment=
+            //      GravityAndHeading. ARKit defaults to ARWorldAlignmentGravity
+            //      where +X axis = phone-facing direction at session start
+            //      (NOT true east). Every "+X=East, -Z=North" comment in
+            //      this codebase is aspirational. Cairn directions have
+            //      always been wrong; v210 didn't introduce that.
+            //   2. v210 baked camera.px/pz into projOrigin EVERY frame,
+            //      so ARKit's normal 6m+ camera drift across reopens
+            //      shifted virtualOrigin 6m+, then re-projected cairns
+            //      to be 6m further off, then walked another step and
+            //      compounded. Unbounded error.
             //
-            // Root cause discovered in telemetry 715: ARKit reset its world
-            // origin every reopen of AR (camera.px/pz jumped 0→2.57→6.61
-            // across 7 reopens). RN was projecting cairn (lat,lng) into
-            // meters relative to a persisted arOrigin, but those meters
-            // were then handed to ARKit as if its world origin == arOrigin.
-            // It never is. So cairn landed at (1.62, 0, 1.11) world coords
-            // every reopen — visually random direction relative to user.
+            // Viro's working pattern (pre-d3f9e26): lock arOrigin once at
+            // first userPos of session, projOrigin = arOrigin always,
+            // ARKit SLAM keeps cairn visually stable within a session.
+            // GPS only used to establish the anchor at first plant. Cairn
+            // lat/lng + GPS-flat-projection → ARKit world coord, no
+            // per-frame virtualOrigin recomputation.
             //
-            // FIX: at first ArFrame, derive virtualOrigin from observed
-            // reality:
-            //   - camera is at position (camera.px, *, camera.pz) in ARKit
-            //     world frame
-            //   - camera is also at user.lat / user.lng in GPS frame
-            //   - therefore ARKit-world (0,0,0) corresponds to GPS lat/lng:
-            //       virtualOrigin.lat = user.lat + camera.pz / 111000
-            //       virtualOrigin.lng = user.lng - camera.px / (cosLat * 111000)
-            //     (ARKit GravityAndHeading: +X=East, -Z=North. Camera at
-            //      +pz means user is north of origin → origin is south of
-            //      user by camera.pz meters.)
-            //
-            // Now buildSpawnRequest uses virtualOrigin: a cairn at user's
-            // GPS lands at (camera.px, *, camera.pz). A cairn 1m east of
-            // user lands at (camera.px+1, *, camera.pz). Stable in user's
-            // reference frame regardless of how ARKit oriented its world.
-            //
-            // _sessionOffsetX/Z stays 0 (offset is baked into virtualOrigin).
-            // arOrigin in MMKV becomes informational only, not projection
-            // basis. Eliminates the conceptual mismatch between persisted
-            // GPS anchor and per-session ARKit world frame.
+            // Compass-direction bug (Error 1) still present after this
+            // revert — needs EAS build with native iOS plugin to set
+            // worldAlignment=GravityAndHeading. Tracked separately.
+            const persisted = props.arOrigin
+              ? { lat: props.arOrigin.lat, lng: props.arOrigin.lng }
+              : null;
             const live = { lat: props.userPos.lat, lng: props.userPos.lng };
-            const cosLat = Math.cos((live.lat * Math.PI) / 180);
-            // Use the most recently observed camera ArFrame position (the
-            // current msg). At first ArFrame this IS the per-session
-            // ARKit-world starting point.
-            const camPx = msg.px;
-            const camPz = msg.pz;
-            const virtualOrigin = {
-              lat: live.lat + camPz / 111000,
-              lng: live.lng - camPx / (cosLat * 111000),
-            };
-            const projOrigin = virtualOrigin;
-            // OnSetSessionOffset stays at 0 — virtualOrigin already encodes
-            // the GPS-to-ARKit-world alignment per session.
+            const projOrigin = persisted ?? live;
+            // OnSetSessionOffset stays 0 — projOrigin IS ARKit world (0,0,0)
+            // by Viro's contract (worked when worldAlignment was GravityAndHeading;
+            // current Unity build still misaligns compass but at least position
+            // is bounded by GPS noise, not camera drift).
             const sent = lastSentOriginRef.current;
             const originChanged =
               !sent ||
@@ -573,7 +564,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 );
                 lastSentOriginRef.current = { lat: projOrigin.lat, lng: projOrigin.lng };
                 crashLogger.breadcrumb(
-                  `${TAG}:virtualOrigin lat=${virtualOrigin.lat.toFixed(7)} lng=${virtualOrigin.lng.toFixed(7)} camPx=${camPx.toFixed(2)} camPz=${camPz.toFixed(2)}`
+                  `${TAG}:projOrigin lat=${projOrigin.lat.toFixed(7)} lng=${projOrigin.lng.toFixed(7)} mode=${persisted ? 'persisted' : 'live'}`
                 );
               } catch (e) {
                 crashLogger.breadcrumb(`${TAG}:OnSetSessionOffset:fail ${String(e).slice(0, 80)}`);
@@ -592,7 +583,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 if (req && dispatchSpawn(req)) dispatched += 1;
               }
               crashLogger.breadcrumb(
-                `${TAG}:bulk-spawn requested=${props.markers.length} dispatched=${dispatched} origin=virtualOrigin`
+                `${TAG}:bulk-spawn requested=${props.markers.length} dispatched=${dispatched} origin=${persisted ? 'persisted' : 'live'}`
               );
             }
             // v206 A1 — only burn the one-shot when we actually

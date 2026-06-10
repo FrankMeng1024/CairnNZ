@@ -340,7 +340,28 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         road class globally + forward-compat for new Mapbox class values.
 //         Allowlist mode preserved as opt-in for callers needing strict
 //         filtering. Coverage: 95/95 routing tests pass.
-export const OTA_VERSION = 211;
+//   212 — REVERT v210 virtualOrigin. v210 was wrong path: it used camera.px/pz
+//         in a frame ARKit doesn't actually align (Unity ARFoundation never
+//         configures worldAlignment=GravityAndHeading; ARKit defaults to
+//         ARWorldAlignmentGravity where +X=phone-facing-at-start, NOT east).
+//         Recomputing projOrigin every frame from camera + GPS amplified
+//         camera SLAM drift (telemetry 715: camera.pz drifted 0→6.87 across
+//         reopens) → cairn shifted up to 6m+ per session compounding into
+//         "偏到奶奶家" overshoot. Restored Viro's working pattern: lock
+//         arOrigin = user GPS once, persist to MMKV (drop only on >100m
+//         travel), spawn directly with arOrigin as projection basis,
+//         ARKit SLAM keeps cairn visually stable within session. ARKit
+//         camera position used ONLY for hit-test ray (where user pointed),
+//         NOT for re-deriving projection origin.
+//
+//         Known LIMITATION (compass direction wrong): without
+//         worldAlignment=GravityAndHeading, ARKit world axes orient to
+//         phone-facing direction at AR mount, not true north. Cairn
+//         distance is correct, direction is rotated. Needs native iOS
+//         plugin in next EAS build to set worldAlignment properly. v210's
+//         virtualOrigin attempted to compensate this but compounded the
+//         error instead. Direction-bug acknowledged, distance-bug fixed.
+export const OTA_VERSION = 212;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
