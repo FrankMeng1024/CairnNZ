@@ -143,12 +143,120 @@ describe('extractJunctions — class filter', () => {
     expect(res.error).toBe('no-features');
   });
 
-  it('keeps configured allowed classes', async () => {
+  it('drops trunk / motorway_link / ferry / golf / *_rail / construction by default', async () => {
+    const blocked = [
+      'motorway',
+      'motorway_link',
+      'trunk',
+      'trunk_link',
+      'ferry',
+      'golf',
+      'aerialway',
+      'major_rail',
+      'minor_rail',
+      'service_rail',
+      'construction',
+    ];
+    for (const klass of blocked) {
+      const features = [
+        lineFeature([[174.78, -41.3], [174.8, -41.3]], klass, `${klass}-1`),
+      ];
+      const res = await extractJunctions(makeMapRef(features), BBOX);
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.error).toBe('no-features');
+    }
+  });
+
+  it('keeps primary / secondary / tertiary / street / pedestrian / path / track / footway / cycleway / service / *_link by default', async () => {
+    const kept = [
+      'primary',
+      'primary_link',
+      'secondary',
+      'secondary_link',
+      'tertiary',
+      'tertiary_link',
+      'street',
+      'street_limited',
+      'service',
+      'pedestrian',
+      'path',
+      'track',
+      'footway',
+      'cycleway',
+      'unclassified', // not in our blacklist → kept
+      'residential',
+      'living_street',
+    ];
+    for (const klass of kept) {
+      const features = [
+        lineFeature([[174.78, -41.3], [174.8, -41.3]], klass, `${klass}-1`),
+      ];
+      const res = await extractJunctions(makeMapRef(features), BBOX, {
+        densifyIntervalM: 1000,
+      });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+      expect(res.ways).toHaveLength(1);
+      expect(res.ways[0].klass).toBe(klass);
+    }
+  });
+
+  it('keeps configured allowed classes (allowlist mode overrides blacklist)', async () => {
     const features = [
       lineFeature([[174.78, -41.3], [174.8, -41.3]], 'major', 'x'),
     ];
     const res = await extractJunctions(makeMapRef(features), BBOX, {
       allowedClasses: ['major'],
+      densifyIntervalM: 1000,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.ways).toHaveLength(1);
+  });
+
+  it('allowlist mode drops everything not in the list (even if not in default blacklist)', async () => {
+    // 'primary' would be kept under default blacklist, but allowlist=['path']
+    // limits to path only.
+    const features = [
+      lineFeature([[174.78, -41.3], [174.79, -41.3]], 'primary', 'a'),
+      lineFeature([[174.79, -41.3], [174.8, -41.3]], 'path', 'b'),
+    ];
+    const res = await extractJunctions(makeMapRef(features), BBOX, {
+      allowedClasses: ['path'],
+      densifyIntervalM: 1000,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.ways).toHaveLength(1);
+    expect(res.ways[0].klass).toBe('path');
+  });
+
+  it('detects junctions across mixed road classes (city scenario)', async () => {
+    // Real urban scenario: a primary road meets a residential street meets
+    // a footway at the same junction — should produce degree=3 anchor.
+    const j: [number, number] = [174.79, -41.3];
+    const features = [
+      lineFeature([[174.78, -41.3], j], 'primary', 'p1'),
+      lineFeature([j, [174.8, -41.3]], 'residential', 'r1'),
+      lineFeature([j, [174.79, -41.29]], 'footway', 'f1'),
+    ];
+    const res = await extractJunctions(makeMapRef(features), BBOX, {
+      densifyIntervalM: 1000,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.junctions).toHaveLength(1);
+    expect(res.junctions[0].degree).toBe(3);
+  });
+
+  it('keeps unknown future classes (forward-compat with new Mapbox class values)', async () => {
+    // Future class Mapbox might add — should be kept (forward-compat
+    // guarantee of the blacklist approach).
+    const features = [
+      lineFeature([[174.78, -41.3], [174.8, -41.3]], 'unknown_future_class', 'x'),
+    ];
+    const res = await extractJunctions(makeMapRef(features), BBOX, {
       densifyIntervalM: 1000,
     });
     expect(res.ok).toBe(true);

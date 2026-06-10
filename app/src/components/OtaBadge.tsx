@@ -328,7 +328,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         lat/lng derived via virtualOrigin so plant↔spawn projection
 //         consistent. _sessionOffsetX/Z stays 0 (offset baked into
 //         virtualOrigin). arOrigin in MMKV becomes informational only.
-export const OTA_VERSION = 210;
+//   211 — Mapbox junction extractor: replace narrow whitelist with blacklist.
+//         v207-209 default allowedClasses was [path,track,footway,pedestrian,
+//         cycleway,street,service,tertiary] — too restrictive globally.
+//         City main roads (primary/secondary) and residential were silently
+//         dropped, so urban routes outside NZ saw very few intersection
+//         anchors (Shanghai 0.7km route showed only 1 idle anchor in
+//         user telemetry id=73). Switch to blacklist excluding only
+//         high-speed / non-walkable infra (motorway*, trunk*, ferry, golf,
+//         aerialway, *_rail, construction). Now keeps every walkable
+//         road class globally + forward-compat for new Mapbox class values.
+//         Allowlist mode preserved as opt-in for callers needing strict
+//         filtering. Coverage: 95/95 routing tests pass.
+export const OTA_VERSION = 211;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

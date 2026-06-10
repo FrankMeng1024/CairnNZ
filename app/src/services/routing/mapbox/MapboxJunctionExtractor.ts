@@ -94,11 +94,24 @@ export interface ExtractOptions {
   /** Source name in the Mapbox style. Default 'composite'. */
   sourceName?: string;
   /**
-   * Allowed `class` values from the road source-layer. Default keeps the
-   * trail-relevant ones plus minor city streets (parks/towns where path tags
-   * are inconsistent). Excludes motorway/trunk/etc to control vertex count.
+   * Allowed `class` values from the road source-layer. By default we use a
+   * blacklist (see `excludedClasses`) so all walkable / drivable street
+   * classes are included globally. Pass an explicit allowlist here only if
+   * you need stricter filtering (e.g. hiking-only mode that excludes urban
+   * streets entirely). When set, this allowlist takes precedence over the
+   * default blacklist.
    */
   allowedClasses?: string[];
+  /**
+   * Class values to exclude when no `allowedClasses` allowlist is provided.
+   * Default excludes high-speed and non-walkable infrastructure
+   * (motorway / motorway_link / trunk / trunk_link / ferry / golf /
+   * aerialway / *_rail / construction). Everything else is kept — primary,
+   * secondary, tertiary, street, street_limited, service, pedestrian,
+   * track, path, footway, cycleway etc. — so junction extraction works
+   * globally on any road network type a hiker / runner might walk through.
+   */
+  excludedClasses?: string[];
   /** Hard cap on raw vertex count before we abort. Default 20000. */
   maxVertexCount?: number;
   /**
@@ -108,15 +121,40 @@ export interface ExtractOptions {
   yieldEveryVertices?: number;
 }
 
-const DEFAULT_ALLOWED_CLASSES = [
-  'path',
-  'track',
-  'footway',
-  'pedestrian',
-  'cycleway',
-  'street',
-  'service',
-  'tertiary',
+/**
+ * Mapbox `road` source-layer `class` values to exclude by default.
+ *
+ * Reference: Mapbox Streets v8 / Traffic v1 schema.
+ *   https://docs.mapbox.com/data/tilesets/reference/mapbox-streets-v8/
+ *
+ * We keep:
+ *   primary, secondary, tertiary, street, street_limited, service,
+ *   pedestrian, track, path, footway, cycleway, link, *_link
+ *   (and any future class Mapbox adds — blacklist gives forward-compat).
+ *
+ * We exclude:
+ *   motorway / trunk and their _link ramps    (un-walkable highways)
+ *   ferry                                     (water crossings, not walkable)
+ *   golf                                      (golf course paths, ambiguous)
+ *   aerialway                                 (gondolas, lifts)
+ *   major_rail / minor_rail / service_rail    (train tracks)
+ *   construction                              (closed off, not walkable)
+ *
+ * If a future Sprint adds bicycle-only or driving modes, the caller can pass
+ * an explicit allowedClasses to override this blacklist.
+ */
+const DEFAULT_EXCLUDED_CLASSES = [
+  'motorway',
+  'motorway_link',
+  'trunk',
+  'trunk_link',
+  'ferry',
+  'golf',
+  'aerialway',
+  'major_rail',
+  'minor_rail',
+  'service_rail',
+  'construction',
 ];
 
 /** Round a number to `precision` decimal places. */
@@ -172,7 +210,13 @@ export async function extractJunctions(
     minZoom: options?.minZoom ?? 14,
     sourceLayer: options?.sourceLayer ?? 'road',
     sourceName: options?.sourceName ?? 'composite',
-    allowedClasses: options?.allowedClasses ?? DEFAULT_ALLOWED_CLASSES,
+    // Whitelist mode (caller-provided) vs blacklist mode (default): the
+    // default keeps EVERY road class except the explicitly excluded ones,
+    // so primary / secondary / tertiary / residential / pedestrian /
+    // path / footway / cycleway / track / service / *_link etc. all
+    // contribute junctions globally.
+    allowedClasses: options?.allowedClasses, // undefined = use blacklist
+    excludedClasses: options?.excludedClasses ?? DEFAULT_EXCLUDED_CLASSES,
     maxVertexCount: options?.maxVertexCount ?? 20000,
     yieldEveryVertices: options?.yieldEveryVertices ?? 1000,
   };
@@ -259,7 +303,15 @@ export async function extractJunctions(
   // Quiet hint for diagnostics — no behaviour change.
   void usedSourceName;
 
-  const allowedClassSet = new Set(opts.allowedClasses);
+  // Build the class filter once. Two modes:
+  //   - allowlist (caller-provided): only classes in the set pass.
+  //   - blacklist (default): every class passes EXCEPT those in the
+  //     excluded set. Empty class strings always pass — some Mapbox
+  //     features have no `class` property at all (rare, but defensive).
+  const useAllowlist =
+    Array.isArray(opts.allowedClasses) && opts.allowedClasses.length > 0;
+  const allowedClassSet = useAllowlist ? new Set(opts.allowedClasses) : null;
+  const excludedClassSet = new Set(opts.excludedClasses);
 
   // Defer the (potentially heavy) processing past the current interaction.
   await awaitNextInteraction();
@@ -272,7 +324,11 @@ export async function extractJunctions(
     const f = fc.features[fi];
     if (!f || !f.geometry) continue;
     const klass: string = String(f.properties?.class ?? '');
-    if (!allowedClassSet.has(klass)) continue;
+    if (allowedClassSet) {
+      if (!allowedClassSet.has(klass)) continue;
+    } else if (excludedClassSet.has(klass)) {
+      continue;
+    }
     if (
       f.geometry.type !== 'LineString' &&
       f.geometry.type !== 'MultiLineString'
