@@ -299,7 +299,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         buildTrailGraphFromMapbox; editContext.ts wired through;
 //         RouteEditorScreen forces zoom>=14 + 600ms wait before extract.
 //         DOC code retained in tree for future NZ-region merge.
-export const OTA_VERSION = 207;
+//   208 — Sprint Mapbox-Migration v207 follow-up review fixes:
+//         B1 (double camera jump), B2 (endpoint POI occlusion),
+//         C1 (onDidFinishRenderingMapFully), C2 (legacy path timing),
+//         C3 (Android source fallback), C4 (walkedIndex dedup).
+export const OTA_VERSION = 208;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
