@@ -200,25 +200,54 @@ export async function extractJunctions(
   }
 
   const t0 = Date.now();
-  let fc: any;
-  try {
-    fc = await mapInst.querySourceFeatures(
-      opts.sourceName,
-      [], // no native filter — we filter `class` in JS for full control
-      [opts.sourceLayer],
-    );
-  } catch (e: any) {
-    return {
-      ok: false,
-      error: 'query-failed',
-      detail: e?.message ?? String(e),
-    };
+  // v208 fix C3: Android Mapbox SDK variants don't always expose road
+  // features under the 'composite' source — some bundle them under
+  // 'mapbox-streets' or 'streets' instead. Try the configured source
+  // first, then fall back. We treat both throw-from-querySourceFeatures
+  // and zero-features-returned as "this source doesn't have it"
+  // signals and continue down the chain. If every candidate fails or
+  // returns empty, surface the most informative error (the original
+  // throw if any, otherwise no-features).
+  const sourceCandidates = [
+    opts.sourceName,
+    'mapbox-streets',
+    'streets',
+  ].filter((s, i, arr) => s && arr.indexOf(s) === i); // dedupe + truthy
+
+  let fc: any = null;
+  let lastQueryError: string | null = null;
+  let usedSourceName: string = opts.sourceName;
+  for (const src of sourceCandidates) {
+    try {
+      const result = await mapInst.querySourceFeatures(
+        src,
+        [], // no native filter — we filter `class` in JS for full control
+        [opts.sourceLayer],
+      );
+      if (result && Array.isArray(result.features) && result.features.length > 0) {
+        fc = result;
+        usedSourceName = src;
+        break;
+      }
+      // empty result — try next candidate
+    } catch (e: any) {
+      lastQueryError = e?.message ?? String(e);
+      // try next candidate
+    }
   }
 
-  if (!fc || !Array.isArray(fc.features) || fc.features.length === 0) {
+  if (!fc) {
+    if (lastQueryError) {
+      return {
+        ok: false,
+        error: 'query-failed',
+        detail: `${lastQueryError} (tried sources: ${sourceCandidates.join(', ')})`,
+      };
+    }
     return {
       ok: false,
       error: 'no-features',
+      detail: `no features in any source candidate: ${sourceCandidates.join(', ')}`,
       diagnostics: {
         rawFeatureCount: 0,
         rawVertexCount: 0,
@@ -227,6 +256,8 @@ export async function extractJunctions(
       },
     };
   }
+  // Quiet hint for diagnostics — no behaviour change.
+  void usedSourceName;
 
   const allowedClassSet = new Set(opts.allowedClasses);
 
