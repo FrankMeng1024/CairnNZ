@@ -374,7 +374,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //           b) maxVertexCount 20000 → 60000 to absorb dense viewports
 //              (Manhattan, Tokyo) without aborting. UI responsiveness
 //              still protected by yield-every-1000-vertices.
-export const OTA_VERSION = 213;
+//   214 — plant↔spawn origin consistency. v212 reverted v210 virtualOrigin
+//         so spawn uses persisted arOrigin, but PLANT was still using
+//         arFrame.origin (= live userPos at plant time). Telemetry 749
+//         confirmed: plant origin=31.230326,121.435167 but spawn
+//         projOrigin=31.2303506,121.4353929 — 21m apart. GPS noise
+//         between live and persisted made round-trip inconsistent →
+//         cairn visible offset between plant and reopen.
+//         Fix: plant reads persisted arOrigin from store directly,
+//         falls back to arFrame.origin only if not yet locked. Now
+//         plant.cairnLat/Lng → spawn.x/z is mathematically consistent.
+//         Compass-direction bug still requires native GravityAndHeading
+//         plugin (next EAS build).
+export const OTA_VERSION = 214;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

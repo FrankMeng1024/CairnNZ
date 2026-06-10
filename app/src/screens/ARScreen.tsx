@@ -807,7 +807,18 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
       // here. Persistent origin is captured for diagnostic / future use
       // but not used in the conversion math (yet — needs proper
       // per-session offset compensation that's beyond OTA scope).
-      const arOrigin = arFrame.origin;
+      //
+      // v213 — plant must use the SAME projection origin that
+      // UnityAROverlay bulk-spawn uses, otherwise plant's lat/lng won't
+      // round-trip back to the same ARKit world position on reopen.
+      // Old code used arFrame.origin (= props.userPos, the LIVE GPS at
+      // the moment of plant), but UnityAROverlay spawn uses persisted
+      // arOrigin from MMKV. GPS noise/drift between live and persisted
+      // shifts cairn ~10-30m visible offset between plant time and
+      // reopen. Fix: read persisted arOrigin from store directly,
+      // fallback to arFrame.origin only if not yet locked.
+      const persistedOrigin = useMarkerStore.getState().arOrigin;
+      const arOrigin = persistedOrigin ?? arFrame.origin;
       const ground = arFrame.groundY;
       if (cam && arOrigin) {
         // v72: ARKit hit-test plant. Distance is no longer fixed at 10m —
