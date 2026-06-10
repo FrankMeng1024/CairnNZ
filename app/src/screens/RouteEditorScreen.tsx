@@ -173,6 +173,31 @@ export function RouteEditorScreen() {
   // tiles. Sibling to cameraRef — the Camera and MapView refs serve
   // distinct APIs.
   const mapViewRef = useRef<any>(null);
+  // v208 fix C1: replace fixed 600ms setTimeout with an event-driven
+  // wait on Mapbox's onDidFinishRenderingMapFully (with onMapIdle as a
+  // fallback signal — both indicate "rendering settled"). The flag is
+  // reset on enter/exit of edit mode so each edit session waits for a
+  // fresh tile-load cycle. Kept as a ref (not state) to avoid extra
+  // re-renders during map interaction.
+  const mapTilesReadyRef = useRef<boolean>(false);
+  // Helper: wait until the map signals it has finished rendering, with
+  // a hard timeout (default 3s — covers CN weak-network tile loads,
+  // ~5x the original 600ms budget). If the timeout fires before the
+  // event, extractJunctions runs anyway — the worst case is the same
+  // failure mode the previous fixed-wait code already had.
+  const waitForTilesOrTimeout = useCallback(
+    async (timeoutMs: number = 3000, pollMs: number = 100) => {
+      const start = Date.now();
+      while (
+        !mapTilesReadyRef.current &&
+        Date.now() - start < timeoutMs
+      ) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise(r => setTimeout(r, pollMs));
+      }
+    },
+    [],
+  );
   useEffect(() => {
     dualEditActiveRef.current = dualEditActive;
   }, [dualEditActive]);
@@ -405,6 +430,10 @@ export function RouteEditorScreen() {
     }
     if (dualEditLoading) return;
 
+    // v208 fix C1: reset the tile-ready flag so waitForTilesOrTimeout
+    // waits for the current camera fit's tile load — not a stale
+    // signal from a previous edit session or the initial map mount.
+    mapTilesReadyRef.current = false;
     // Save-as-route path: addRoute first to mint a routeId. Once
     // addRoute resolves, the local store has the route, but
     // existingRoute (derived from useRouteStore selector) won't reflect
@@ -531,8 +560,10 @@ export function RouteEditorScreen() {
       // Mapbox-Migration: before buildEditContext, force the camera to
       // fit the route bbox at zoom >= 14. The Mapbox vector tile junction
       // extractor reads features from already-loaded tiles; below zoom 14
-      // the geometry is too simplified to expose junctions. The 600 ms
-      // wait empirically matches Spike B Q3 timing for tile load.
+      // the geometry is too simplified to expose junctions. v208 fix C1:
+      // replaced the fixed 600ms setTimeout with an event-driven wait
+      // that listens to the map's onDidFinishRenderingMapFully /
+      // onMapIdle signal (with a 3s hard timeout for CN weak-network).
       const fitBboxForExtract = computeBboxFit(legacyPoints);
       if (cameraRef.current && fitBboxForExtract) {
         try {
@@ -552,7 +583,7 @@ export function RouteEditorScreen() {
         } catch {
           // best-effort
         }
-        await new Promise(r => setTimeout(r, 600));
+        await waitForTilesOrTimeout();
       }
       if (preExtras && preExtras.originalPoints && preExtras.originalPoints.length >= 2) {
         // Non-legacy path: build context first.
@@ -1414,6 +1445,21 @@ export function RouteEditorScreen() {
             attributionEnabled={false}
             scaleBarEnabled={false}
             compassEnabled={false}
+            onDidFinishRenderingMapFully={() => {
+              // v208 fix C1: this event fires when Mapbox has finished
+              // rendering all visible tiles for the current camera —
+              // the canonical signal that querySourceFeatures will
+              // return the full set of road features. Replaces the
+              // fixed 600ms setTimeout in enterDualEdit.
+              mapTilesReadyRef.current = true;
+            }}
+            onMapIdle={() => {
+              // Fallback signal — fires when the camera and rendering
+              // have both settled. Some platforms emit this more
+              // reliably than onDidFinishRenderingMapFully on first
+              // mount, so we treat either as ready.
+              mapTilesReadyRef.current = true;
+            }}
             onCameraChanged={(state: any) => {
               // v200 Phase 6: track current zoom so EditableNodeLayer
               // can hide all node circles below MIN_NODE_DISPLAY_ZOOM
