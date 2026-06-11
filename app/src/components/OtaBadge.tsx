@@ -633,7 +633,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         All clamped server-side via CairnGlobals.SafeClamp; values are
 //         pure visual tuning so a bad payload only changes feel, never
 //         disappears cairns.
-export const OTA_VERSION = 226;
+//   227 — disable summon-rise animation. v226 telemetry id=791-792 + user
+//         confirmation: cairn DOES rise from finalY-0.30 UP to finalY over
+//         0.4s (ease-out cubic, intentional v199 §C.1 design). Subagent
+//         verified at PortalSpawnerV199.cs:563 startPos = finalPos -
+//         (0, rise, 0). User report "出现的时候是升上来的 → 浮空感" is the
+//         animation, not a Y bug.
+//         Fix: push SummonEnabled=0 + SummonRiseDistance=0 via OTA.
+//         CairnGlobals reads SummonEnabled at PortalSpawnerV199.cs:188-191;
+//         when false the entire summon coroutine is skipped — cairn settles
+//         at finalPos on first frame, instant appear, no rise.
+//         Note: separate Tier-A floor-selection bug (finalY=-0.37 instead
+//         of true floor) still requires Unity rebuild — see GroundYResolver
+//         v3 in pending Phase 1.
+export const OTA_VERSION = 227;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

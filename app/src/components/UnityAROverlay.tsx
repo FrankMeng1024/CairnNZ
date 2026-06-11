@@ -474,7 +474,16 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
               ['LikeBadgeFloatHeight', 1.0], // 1.6 → 1.0 — heart badge at chest
               ['ContactShadowAlpha', 0.85],  // 0.55 → 0.85 — strong dark shadow #1 grounding cue
               ['ContactShadowRadiusMul', 1.4], // 1.0 → 1.4 — wider shadow base
-              ['SummonRiseDistance', 0.3],   // 0.6 → 0.3 — half rise distance
+              // v227 — DISABLE summon animation. v226 telemetry id=791-792
+              // confirmed cairn rises from finalY-0.30 UP to finalY (ease-out
+              // cubic, 0.4s). User's report "出现的时候是升上来的 → 感觉浮空"
+              // is the animation itself, not a Y bug. SummonEnabled=0 makes
+              // the cairn appear instantly at finalY — no rise, no descend.
+              // PortalSpawnerV199.cs reads this OTA flag at line 188-191;
+              // when false the entire summon coroutine is skipped (cairn
+              // settles at finalPos on first frame).
+              ['SummonEnabled', 0],          // true → false — no rise animation
+              ['SummonRiseDistance', 0.0],   // safety: also zero the magnitude
             ];
             try {
               for (const [name, value] of groundedDefaults) {
