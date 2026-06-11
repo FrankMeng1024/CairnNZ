@@ -727,7 +727,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         • dot sizes raised ~1.7× (idle 10→18, candidate 14→22,
 //           selected 18→28) with thicker white borders. v232 dots
 //           were too small to see/tap on a busy map.
-export const OTA_VERSION = 234;
+//   235 — Bypass union-find merging in editEnvelopeAdapter. v234
+//         still fed envelope.ways through buildTrailGraphFromMapbox
+//         which densified + 30m union-find — destroying the
+//         server-side junction precision (anchors offset from road
+//         centerline by 5-30m). Now adapter directly constructs a
+//         TrailGraph node per env.junctions[i] with the exact
+//         server coord, edges inferred from shared wayIds. No
+//         densify, no merge, no truncation cap. Anchor coords now
+//         match the real intersection lng/lat.
+export const OTA_VERSION = 235;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
