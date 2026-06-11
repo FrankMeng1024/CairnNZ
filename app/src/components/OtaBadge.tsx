@@ -736,7 +736,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         server coord, edges inferred from shared wayIds. No
 //         densify, no merge, no truncation cap. Anchor coords now
 //         match the real intersection lng/lat.
-export const OTA_VERSION = 235;
+//   236 — v0.2.3 Stage 2 H8: replace v228 single-threshold sessionOffset
+//         clamp (|offset|>5m → 0) with three-band boundary check:
+//         <1m=NOISE→0, 1-50m=REAL_WALK→apply, >50m=TELEPORT→0+warn.
+//         New telemetry tag [v22-SESSION-OFFSET] decision/mag.
+//         Fixes v228-pending root-cause: small real walks (3-5m) were
+//         being zero'd by 5m clamp, breaking Q5 跨session GPS-follow.
+//         Stage 4 will later wire TELEPORT → INVALIDATED_BY_DISTANCE.
+export const OTA_VERSION = 236;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

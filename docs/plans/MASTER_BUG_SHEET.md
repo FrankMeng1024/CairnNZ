@@ -230,8 +230,75 @@ These flags default `true` (new system on). Pushing them `false` via `eas update
 - Explicit deletion list: LightEstimate, AmbientLux, WispFadeNear, WispFadeFar, QualityTier, StatusTintHealthy, StatusTintSuspicious, StatusTintHidden, SeedColor, SeedScaleMul, SeedEnabled, RippleEnabled, RippleStrength, StarMoteEnabled, LanternEnabled, LODSwapDistance, HaloPulseAmp, HaloPulseHz, PebbleRimPower, PebbleSubsurface, HandshakeBeamDuration, HandshakeBeamPulseHz, AimConeRad, AimHoldMs, RingThickness, RingDashCount, RingDashSpeed, RingInnerPulseHz, RingEdgeSoftness, HeroRibbonHeight, HeroRibbonCount, HeroRibbonCurl, WispCurlStrength
 - Time: 3-5h
 
-### STAGE 2 — H8 boundary check
-- Time: 1.5-2h
+### STAGE 2 — H8 sessionOffset boundary check (defined 2026-06-11)
+
+**Origin**: v228 EMERGENCY hotfix (commit ebb4d82) shipped a `|offset| > 5m → force 0` clamp
+to stop the 21m-blowout that hid all cairns. v228 commit message explicitly listed as Pending:
+"Smarter sessionOffset: only apply when arOrigin staleness clears AND magnitude is between 1m
+and 50m (real walk)". H8 is that pending fix.
+
+**File**: `app/src/components/UnityAROverlay.tsx` (around line 725-754, the `offsetN/offsetE`
+computation block followed by the SANITY CLAMP).
+
+**Bug (current behavior)**:
+- Single threshold `5m`. Below: apply raw offset. Above: force 0.
+- Real outdoor walk of 8m → forced to 0 → Q5 invariant fails (cairn does not follow user).
+- GPS noise of 30m → forced to 0 (correct), but no telemetry distinguishes from real walk.
+- No upper bound — a true GPS teleport (50m+ jump from cellular handoff) would silently force 0
+  with no signal that a marker re-spawn is needed.
+
+**Fix (H8 spec, locked)**:
+Replace the single-threshold clamp with three-branch boundary logic:
+
+1. `|offset| < 1.0m` (NOISE band) → set offsetN=offsetE=0. Telemetry tag
+   `[v22-SESSION-OFFSET] decision=noise mag=<m>`.
+2. `1.0m ≤ |offset| ≤ 50.0m` (REAL_WALK band) → apply offset as-is. Telemetry tag
+   `[v22-SESSION-OFFSET] decision=apply mag=<m>`.
+3. `|offset| > 50.0m` (TELEPORT band) → set offsetN=offsetE=0 AND emit a one-time
+   `[v22-SESSION-OFFSET] decision=teleport mag=<m>` warning breadcrumb. Stage 4 (A4-merged)
+   will later wire this to INVALIDATED_BY_DISTANCE; for Stage 2 it just logs and zero-clamps
+   (matches v228 behavior at the upper end, no regression).
+
+**Constants (recorded for Stage 4 reuse)**:
+```
+SESSION_OFFSET_NOISE_M = 1.0
+SESSION_OFFSET_TELEPORT_M = 50.0
+```
+
+**Why this is the right Stage 2 work** (vs Stage 3 GroundYResolver):
+- Stage 3 PlayMode/Editor tests will spawn cairns repeatedly. With the current 5m blanket
+  clamp, indoor static GPS noise (which is exactly the testbed condition) randomly produces
+  3-8m drift; spans on either side of 5m flip cairns between "shifted" and "not shifted",
+  producing intermittent visual chaos that masks Stage 3's actual bugs.
+- H8 makes XZ behavior deterministic (noise-zone always 0, walk-zone always applied) BEFORE
+  Stage 3 starts working on Y. Two axes, two stages, sequential.
+
+**Acceptance Criteria**:
+- [ ] AC-1: Code change limited to `UnityAROverlay.tsx`. No other file touched.
+- [ ] AC-2: Unit logic test (manual or jest, whichever the file already has fixtures for):
+  - input mag=0.3 → output (0,0), tag=noise
+  - input mag=8.0 → output (offsetE, -offsetN) raw, tag=apply
+  - input mag=75.0 → output (0,0), tag=teleport
+- [ ] AC-3: grep `SESSION_OFFSET_CLAMP_M` returns 0 results in active code (replaced).
+- [ ] AC-4: Telemetry tag `[v22-SESSION-OFFSET]` appears in any new device session after OTA push.
+- [ ] AC-5: Existing `crashLogger.breadcrumb(...sessionOffset-clamp...)` line replaced with
+  the new three-branch breadcrumbs (no orphan log lines).
+
+**Time**: 1.5-2h
+- 30min: code edit
+- 30min: read full sessionOffset call chain to confirm no other callers expect 5m boundary
+- 30min: telemetry tag wiring + breadcrumb format
+- 30min: local verification (test inputs in Editor or RN dev menu) + commit
+
+**Out of scope for H8** (do NOT do here):
+- Marker re-spawn on TELEPORT (Stage 4 A4 INVALIDATED_BY_DISTANCE will own this)
+- Replacing Math.hypot with arOrigin.staleness check (Stage 4 owns staleness gating)
+- Anything in PortalSpawnerV199.cs (Stage 8)
+- Anything in GroundYResolver (Stage 3)
+
+**Risk**:
+- Low. Pure scalar logic change in a hot file. Existing v228 clamp already in production
+  flow; this is the v228 commit's own self-documented next step.
 
 ### STAGE 3 — A1 GroundYResolver (without A2; A2 moved to Stage 8)
 - Time: 16-26h
