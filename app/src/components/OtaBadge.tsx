@@ -692,7 +692,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         console.error THEN resolve(null). Now failures show up in
 //         backend logs while still letting the app fall through to
 //         legacy MVT path (no user-visible regression).
-export const OTA_VERSION = 231;
+//   232 — v231 re-review C1+C2 race fixes:
+//         C1 — dedup key was just routeId. PUT with new points within
+//         the build window joined the OLDER inflight build, which
+//         then upserted an envelope based on the OLD points (silently
+//         discarding the new ones). Now dedup key = routeId + points
+//         fingerprint (length + first/mid/last lng/lat at 5dp).
+//         Same content → join; different content → fresh build.
+//         C2 — PUT enqueued unconditionally if `points` was in the
+//         body. Many clients PUT the full route on name-only edits.
+//         Each such PUT wasted Mapbox tile fetches AND raced against
+//         in-flight builds. Now PUT loads pre-update points, compares
+//         length + sample 3 vertices at 5dp; skips enqueue if equal.
+export const OTA_VERSION = 232;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

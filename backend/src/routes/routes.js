@@ -101,6 +101,15 @@ router.put('/:id', async (req, res) => {
   const { name, description, points, waypoints, distance_m, elevation_gain_m } = req.body;
 
   try {
+    // v231 fix C2: load the route's current points BEFORE update so we
+    // can compare and skip envelope rebuild when points haven't actually
+    // changed. Without this, every name-only edit triggers a Mapbox tile
+    // fetch — wasted quota + races against any in-flight build.
+    let prePoints = null;
+    if (Array.isArray(points)) {
+      const pre = await Route.findByIdAndUser(id, req.user.userId);
+      prePoints = pre ? pre.points : null;
+    }
     const affected = await Route.update(id, req.user.userId, {
       name,
       description,
@@ -113,11 +122,31 @@ router.put('/:id', async (req, res) => {
 
     const route = await Route.findByIdAndUser(id, req.user.userId);
     // v224: regenerate envelope when points change.
+    // v231 fix C2: only enqueue if points actually differ from pre-update
+    // version. Many client patterns PUT the full route object (name +
+    // description + same points). Each such PUT used to trigger a fresh
+    // Mapbox tile fetch (paid quota waste) and race against any in-flight
+    // build. Compare length + sample first/mid/last lng/lat at 5dp; if
+    // identical, skip enqueue.
+    function pointsLookEqual(a, b) {
+      if (!Array.isArray(a) || !Array.isArray(b)) return false;
+      if (a.length !== b.length || a.length === 0) return false;
+      const idxs = [0, Math.floor(a.length / 2), a.length - 1];
+      for (const i of idxs) {
+        const aa = a[i];
+        const bb = b[i];
+        if (!aa || !bb) return false;
+        if (Math.abs(aa.lng - bb.lng) > 1e-5) return false;
+        if (Math.abs(aa.lat - bb.lat) > 1e-5) return false;
+      }
+      return true;
+    }
     if (
       Array.isArray(points) &&
       route &&
       Array.isArray(route.points) &&
-      route.points.length >= 2
+      route.points.length >= 2 &&
+      !pointsLookEqual(prePoints, route.points)
     ) {
       try {
         editEnvelopeRouter.enqueueBuild(id, route.points);

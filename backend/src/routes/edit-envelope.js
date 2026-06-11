@@ -21,10 +21,38 @@ const { buildEnvelope } = require('../services/mvtEnvelopeBuilder');
 // backend OOM under bursty saves. Each build holds 5-10MB of MVT
 // buffers + decoded GeoJSON in flight. 100 concurrent users saving
 // would push backend past 600MB+. Cap at 5 — pending builds queue.
-const inflight = new Map(); // routeId(string) → Promise
-const queue = [];           // [{ routeId, points, resolve, reject }]
+//
+// v231 fix C1: dedup key now includes a points fingerprint, not just
+// routeId. Otherwise a PUT with new points within the build window
+// joins the older inflight build and the DB ends up with an envelope
+// for the OLDER points. New content → always a new build, with a
+// follow-on after the in-flight one finishes.
+const inflight = new Map(); // dedupKey → Promise
+const queue = [];           // [{ routeId, points, resolve }]
 let runningCount = 0;
 const MAX_CONCURRENT_BUILDS = 5;
+
+/**
+ * Cheap per-content fingerprint for dedup. Doesn't need to be
+ * cryptographically robust — just stable for identical inputs and
+ * different for different point lists. Sample first/last/length to
+ * avoid hashing thousands of coords.
+ */
+function pointsFingerprint(points) {
+  if (!Array.isArray(points) || points.length === 0) return 'empty';
+  const f = points[0];
+  const l = points[points.length - 1];
+  const m = points[Math.floor(points.length / 2)];
+  return [
+    points.length,
+    f && f.lng != null ? f.lng.toFixed(5) : '_',
+    f && f.lat != null ? f.lat.toFixed(5) : '_',
+    m && m.lng != null ? m.lng.toFixed(5) : '_',
+    m && m.lat != null ? m.lat.toFixed(5) : '_',
+    l && l.lng != null ? l.lng.toFixed(5) : '_',
+    l && l.lat != null ? l.lat.toFixed(5) : '_',
+  ].join(':');
+}
 
 async function actualRun(routeId, points) {
   const env = await buildEnvelope({ routeId, routePoints: points });
@@ -52,30 +80,29 @@ function tryDrain() {
       })
       .finally(() => {
         runningCount--;
-        inflight.delete(String(job.routeId));
+        inflight.delete(job.dedupKey);
         tryDrain();
       });
   }
 }
 
-async function runBuild(routeId, points) {
-  return new Promise((resolve, reject) => {
-    queue.push({ routeId, points, resolve, reject });
+function runBuild(routeId, points, dedupKey) {
+  return new Promise(resolve => {
+    queue.push({ routeId, points, resolve, dedupKey });
     tryDrain();
   });
 }
 
 /**
- * Schedule (or join) a build for a route. Returns the in-flight promise.
+ * Schedule (or join) a build for a route. Same routeId + same points
+ * dedupes; same routeId + different points triggers a fresh build.
  */
 function enqueueBuild(routeId, points) {
-  const key = String(routeId);
-  if (inflight.has(key)) return inflight.get(key);
-  const p = runBuild(routeId, points).catch(err => {
-    console.error(`[edit-envelope:${routeId}] build error`, err && err.message);
-    return null;
-  });
-  inflight.set(key, p);
+  const fp = pointsFingerprint(points);
+  const dedupKey = `${routeId}:${fp}`;
+  if (inflight.has(dedupKey)) return inflight.get(dedupKey);
+  const p = runBuild(routeId, points, dedupKey);
+  inflight.set(dedupKey, p);
   return p;
 }
 
