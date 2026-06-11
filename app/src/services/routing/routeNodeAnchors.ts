@@ -91,6 +91,13 @@ export function computeRouteNodeAnchors(args: {
 
     // Iterate every graph node; keep only degree>=3 (true junctions).
     for (const [nodeId, node] of trailGraph.nodes) {
+      // v220 fix: skip the truncated-overflow bucket. When a graph hits
+      // MAX_GRAPH_NODES, all overflow vertices fold into a single
+      // 'tnTRUNC' node whose coordinates are the first overflow
+      // vertex's lng/lat (arbitrary) and whose edge count balloons to
+      // hundreds. Treating that as a real junction puts an anchor at a
+      // garbage coord and bloats degree statistics.
+      if (nodeId === 'tnTRUNC') continue;
       if (node.edges.length < MIN_INTERSECTION_DEGREE) continue;
       stats.degOk += 1;
 

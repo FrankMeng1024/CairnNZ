@@ -79,7 +79,7 @@ describe('TrailGraph', () => {
     // so truncation no longer triggers. Drop the strict 501 assertion
     // and instead assert the graph stays bounded but doesn't have to
     // truncate on this small input.
-    expect(g.size()).toBeLessThanOrEqual(3001);
+    expect(g.size()).toBeLessThanOrEqual(10001);
   });
 
   it('shortestPath returns null for nonexistent nodes', () => {

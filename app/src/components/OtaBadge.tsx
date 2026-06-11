@@ -521,7 +521,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         Next telemetry roundtrip will tell us whether 5843 ways are
 //         choking TrailGraph (need to cap ways pre-graph) or the graph
 //         builds fine but routeNodeAnchors is wrong.
-export const OTA_VERSION = 220;
+//   221 — local E2E pipeline smoke test reproduced the 0-anchor symptom
+//         WITHOUT a real device. Synthesized 50×50 city grid (5700 ways)
+//         + 0.7km route on row 25. Found two real bugs:
+//           a) MAX_GRAPH_NODES=3000 truncated row 16+ entirely; route on
+//              row 25 had ZERO graph nodes within 1100m. Bumped to 10000.
+//           b) routeNodeAnchors did not skip the 'tnTRUNC' overflow
+//              bucket → it tried to project a fake junction at the
+//              first overflow vertex's coord (degree 768) onto the
+//              polyline, useless garbage. Now skipped explicitly.
+//         After both fixes, smoke test produces 6 intersection anchors
+//         (8 grid junctions on route minus 2 endpoint-exclusion).
+//         Smoke moved to src/services/routing/__smoke__ to keep jest
+//         from auto-running the standalone script.
+export const OTA_VERSION = 221;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
