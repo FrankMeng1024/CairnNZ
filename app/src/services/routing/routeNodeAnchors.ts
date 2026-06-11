@@ -175,8 +175,34 @@ export function computeRouteNodeAnchors(args: {
   const firstWorkingIdxInOriginal = findIndexNear(originalPoints, workingPoints[0]);
   const lastWorkingIdxInOriginal = findIndexNear(originalPoints, workingPoints[lastIdx]);
 
+  // v233 fix: trim-restore anchors used to emit ONE anchor per
+  // originalPoints vertex — for a 0.7km route with 1Hz GPS = 100
+  // anchors stacked on top of each other. The user couldn't even
+  // see them, let alone tap them. Sample every TRIM_RESTORE_SPACING_M
+  // along the trimmed segment instead. The first/last/middle of the
+  // available trim region are always preserved so the user can
+  // restore to any meaningful point.
+  const TRIM_RESTORE_SPACING_M = 100;
+  function trimSampleIndices(start: number, end: number): number[] {
+    if (start >= end) return [];
+    const indices = new Set<number>();
+    indices.add(start);
+    indices.add(end - 1);
+    let acc = 0;
+    for (let k = start + 1; k < end; k++) {
+      const a = originalPoints[k - 1];
+      const b = originalPoints[k];
+      acc += haversineM(a, b);
+      if (acc >= TRIM_RESTORE_SPACING_M) {
+        indices.add(k);
+        acc = 0;
+      }
+    }
+    return Array.from(indices).sort((x, y) => x - y);
+  }
+
   if (firstWorkingIdxInOriginal !== null && firstWorkingIdxInOriginal > 0) {
-    for (let k = 0; k < firstWorkingIdxInOriginal; k++) {
+    for (const k of trimSampleIndices(0, firstWorkingIdxInOriginal)) {
       const op = originalPoints[k];
       anchors.push({
         kind: 'trim-restore-start',
@@ -191,7 +217,10 @@ export function computeRouteNodeAnchors(args: {
     lastWorkingIdxInOriginal !== null &&
     lastWorkingIdxInOriginal < originalPoints.length - 1
   ) {
-    for (let k = lastWorkingIdxInOriginal + 1; k < originalPoints.length; k++) {
+    for (const k of trimSampleIndices(
+      lastWorkingIdxInOriginal + 1,
+      originalPoints.length,
+    )) {
       const op = originalPoints[k];
       anchors.push({
         kind: 'trim-restore-end',

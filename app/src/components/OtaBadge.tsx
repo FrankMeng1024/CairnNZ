@@ -704,7 +704,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         Each such PUT wasted Mapbox tile fetches AND raced against
 //         in-flight builds. Now PUT loads pre-update points, compares
 //         length + sample 3 vertices at 5dp; skips enqueue if equal.
-export const OTA_VERSION = 232;
+//   233 — Edit UX fixes after first real-device test of v232:
+//         User reported: (1) far too many fake "junctions" (157 in
+//         Shanghai 0.7km route — Mapbox doesn't have a real junction
+//         API, the previous code fingerprinted every densified vertex
+//         which inflated counts 50×); (2) trim-restore showed N gps
+//         dots stacked when tapping endpoint (1 anchor per original
+//         GPS point); (3) drag was unreliable (iOS long-press +
+//         scrolling map).
+//         Fixes:
+//           • backend mvtEnvelopeBuilder: fingerprint only way
+//             ENDPOINTS (OSM splits ways at junctions, so junctions
+//             ARE endpoints — mid-vertex matches are noise) + 50m
+//             proximity dedup. Spike validated: Shanghai 157 → ~3-5.
+//           • routeNodeAnchors: trim-restore samples every 100m along
+//             the trimmed segment instead of every GPS vertex.
+//           • EditableNodeLayer: drag disabled — tap-to-tap only.
+export const OTA_VERSION = 233;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

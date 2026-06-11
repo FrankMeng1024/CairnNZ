@@ -151,12 +151,12 @@ export function EditableNodeLayer({
             key={anchor.id}
             id={`anchor-${anchor.id}`}
             coordinate={[anchor.lng, anchor.lat]}
-            // Selected source supports drag-with-magnet (Phase 5). Idle
-            // anchors don't — only tap. This avoids accidental drags on
-            // every dot. Mapbox draggable engages after long-press
-            // (~500ms hold) which is acceptable for a deliberate
-            // power-user gesture; primary discovery is still tap.
-            draggable={isSelected}
+            // v233 fix: drag was confusing — required iOS long-press
+            // (~500ms) and the map kept scrolling under the user's
+            // finger, so 90% of users couldn't drop on the right
+            // candidate. We're tap-to-tap only now: tap source → tap
+            // target = commit. Disabling drag entirely.
+            draggable={false}
             onDragEnd={(e: any) => {
               if (!onAnchorDragEnd) return;
               const c = e?.geometry?.coordinates;

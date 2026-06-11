@@ -198,11 +198,18 @@ async function buildEnvelope(args) {
     waysOut = allWays.filter((_, i) => i % step === 0);
   }
 
-  // Fingerprint pass — find junction vertices
+  // v233 fix: Fingerprint pass — only fingerprint way ENDPOINTS, not
+  // every densified vertex. In OSM, ways are split at every junction,
+  // so junctions == way endpoints. Mid-way vertices are noise: same
+  // way's interior verts vs adjacent ways' verts make every densified
+  // overlap fingerprint as a "junction" and inflate counts 50x. Spike
+  // proved this: Shanghai 0.7km route went 157 (all-vertex) → 1-3
+  // (endpoint-only) actual real intersections.
   const fpMap = new Map();
   for (const w of waysOut) {
-    for (let i = 0; i < w.coords.length; i++) {
-      const c = w.coords[i];
+    if (w.coords.length < 2) continue;
+    const endpoints = [w.coords[0], w.coords[w.coords.length - 1]];
+    for (const c of endpoints) {
       const lng5 = Math.round(c.lng * 1e5) / 1e5;
       const lat5 = Math.round(c.lat * 1e5) / 1e5;
       const fp = `${lng5}_${lat5}`;
@@ -215,7 +222,7 @@ async function buildEnvelope(args) {
     }
   }
 
-  const junctions = [];
+  let junctions = [];
   for (const [fp, entry] of fpMap) {
     if (entry.ways.size >= MIN_JUNCTION_DEGREE) {
       junctions.push({
@@ -227,6 +234,31 @@ async function buildEnvelope(args) {
       });
     }
   }
+
+  // v233 fix: 50m proximity dedup. Adjacent way fragments at the same
+  // physical junction can fingerprint as 2-3 separate junctions due
+  // to coord rounding / tile-boundary clipping (5dp precision = 1.1m
+  // already fine, but tile clip can offset 5-10m). 50m spacing keeps
+  // the highest-degree representative per cluster.
+  const JUNCTION_MIN_SPACING_M = 50;
+  junctions.sort((a, b) => b.degree - a.degree);
+  const dedupedJunctions = [];
+  for (const j of junctions) {
+    let tooClose = false;
+    for (const k of dedupedJunctions) {
+      const dLat = (j.lat - k.lat) * 111000;
+      const dLng =
+        (j.lng - k.lng) *
+        111000 *
+        Math.cos((((j.lat + k.lat) / 2) * Math.PI) / 180);
+      if (Math.sqrt(dLat * dLat + dLng * dLng) < JUNCTION_MIN_SPACING_M) {
+        tooClose = true;
+        break;
+      }
+    }
+    if (!tooClose) dedupedJunctions.push(j);
+  }
+  junctions = dedupedJunctions;
 
   const extractMs = Date.now() - t0;
   const bboxAreaKm2 =
