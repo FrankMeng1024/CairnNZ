@@ -154,12 +154,36 @@ export async function buildEditContext(
       }
       uploadEditDiag('extract', extractDiag);
       if (result.ok && result.ways.length > 0) {
+        // v223: log entry into graph build branch — diag id<34 showed
+        // extract OK but no graph/anchors uploads, meaning either the
+        // try/catch swallowed silently OR buildTrailGraphFromMapbox
+        // didn't return. Cap ways count BEFORE feeding TrailGraph:
+        // 5843 ways × ~51 vertex = ~300k vertex feeding kdbush
+        // union-find — likely OOM/RangeError on RN Hermes. Cap to
+        // 1500 ways (sample evenly, preserve junction-relevant ones).
+        const MAX_WAYS_FOR_GRAPH = 1500;
+        let waysForGraph = result.ways;
+        let waysSubsampled = false;
+        if (result.ways.length > MAX_WAYS_FOR_GRAPH) {
+          waysSubsampled = true;
+          const step = Math.ceil(result.ways.length / MAX_WAYS_FOR_GRAPH);
+          waysForGraph = result.ways.filter((_, i) => i % step === 0);
+        }
+        uploadEditDiag('graph-enter', {
+          routeId,
+          waysIn: result.ways.length,
+          waysForGraph: waysForGraph.length,
+          waysSubsampled,
+        });
         try {
-          trailGraph = buildTrailGraphFromMapbox(result);
+          trailGraph = buildTrailGraphFromMapbox({
+            ...result,
+            ways: waysForGraph,
+          });
         } catch (e: any) {
           uploadEditDiag('graph-error', {
             routeId,
-            ways: result.ways.length,
+            ways: waysForGraph.length,
             message: e?.message ?? String(e),
             name: e?.name ?? 'unknown',
           });

@@ -546,7 +546,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             reports currentZoom + hideIntersections + counts. If
 //             currentZoom < 14 the EditableNodeLayer hides intersections
 //             — we'll know if zoom-state is stuck.
-export const OTA_VERSION = 222;
+//   223 — telemetry showed routeId=20 ran extract OK (5843 ways) but
+//         NO graph/anchors uploaded — buildTrailGraphFromMapbox is
+//         silently dying on 5843 × ~51 = ~300k vertices. Cap ways to
+//         1500 (even-sample) before feeding the graph builder. Add
+//         'graph-enter' diag to confirm we entered the branch (the
+//         existing graph-error catch may have lost its upload too).
+export const OTA_VERSION = 223;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
