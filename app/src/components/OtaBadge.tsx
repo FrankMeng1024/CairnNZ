@@ -552,7 +552,44 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         1500 (even-sample) before feeding the graph builder. Add
 //         'graph-enter' diag to confirm we entered the branch (the
 //         existing graph-error catch may have lost its upload too).
-export const OTA_VERSION = 223;
+//   224 — AR observability + telemetry trust round. v0.2.2 production cycle
+//         shipped F1 (real sessionOffset) + F4 anti-tabletop, but user
+//         report "全部错误" + adversarial subagent review (5 rounds, 16
+//         failure scenarios) revealed:
+//           a) F4 camY-0.5 threshold too lenient — let plane y=-0.07 through
+//              with camY=+0.4 (wardrobe top accepted as floor).
+//           b) telemetry app_version reports '0.2.0' on v0.2.2 IPAs because
+//              5 sites hardcode '0.2.0' literal (crashLogger.ts × 3,
+//              ARScreen.tsx × 2 — one of which uses Constants.expoConfig
+//              .version which is JS-bundle-time, not native-binary-time).
+//              Backend cannot trust app_version filtering until this lands.
+//           c) Real Unity-side root cause for 飞天 is GroundYResolver
+//              Tier-A unconditionally accepting any horizontal plane (no
+//              area gate, no classification, no HorizontalDown rejection)
+//              + 1s lock making bad picks permanent. That fix needs an
+//              EAS rebuild — NOT this OTA.
+//         This OTA delivers the RN-side improvements that DO NOT need a
+//         binary rebuild:
+//           1) F4 tightened: threshold camY-0.5 → camY-0.8 (chest-height
+//              hold = floor ≥0.8m below cam, tabletops ~0.7m below caught)
+//              + bottom-third heuristic (plane must be in lowest 1/3 of
+//              observed Y range over 5s window — defense for rooms where
+//              multiple tabletops appear before any floor is detected).
+//              F4 protects bulk-spawn's shared seed value (groundYRef →
+//              data.y for ALL N markers → Unity Tier-A 'closest-to-tap-y'
+//              tiebreaker).
+//           2) app_version telemetry trust: 5 sites switched to
+//              Application.nativeApplicationVersion (expo-application).
+//              v0.2.2 IPA reports '0.2.2', v0.2.3 IPA reports '0.2.3',
+//              regardless of which OTA bundle is loaded. Backend can now
+//              filter by IPA version reliably.
+//         Pending for next EAS build (NOT in this OTA):
+//           - GroundYResolver v3: ARPlane.classifications.Floor primary,
+//             dataY-anchor disambiguation, no Tier-C camY heuristic
+//           - UnityLogger rate-limit bypass for [v22-*] tags
+//           - TMP font BuildScript hard-fail + Resources/Fonts commit
+//           - debug-snapshot enriched meta (state snapshot RPC)
+export const OTA_VERSION = 224;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

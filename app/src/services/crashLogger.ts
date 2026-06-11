@@ -19,7 +19,16 @@
  * during boot (App.tsx useEffect).
  */
 import { Platform } from 'react-native';
+import * as Application from 'expo-application';
 import { storage } from '../store/storage';
+
+// v224 — single source of truth for the IPA's native binary version.
+// expo-application reads CFBundleShortVersionString (iOS) at IPA-build time
+// and is IMMUTABLE across OTA bundles. Do NOT use Constants.expoConfig.version
+// here — that value is JS-bundle-time, so a v0.2.2 IPA running an OTA bundle
+// built when app.json said 0.2.0 would report "0.2.0" (which is exactly the
+// v0.2.2 telemetry symptom we're fixing).
+const APP_VERSION_HEADER = Application.nativeApplicationVersion ?? 'unknown';
 
 const CRASH_KEY = 'cairn_last_crash';
 
@@ -190,7 +199,7 @@ export const crashLogger = {
         headers: {
           'Content-Type': 'application/x-ndjson',
           'X-Cairn-Device-Os': 'ios',
-          'X-Cairn-App-Version': '0.2.0',
+          'X-Cairn-App-Version': APP_VERSION_HEADER,
           'X-Cairn-Activity-Mode': 'v163-checkpoint',
           'X-Cairn-Started-At': String(ts),
           'X-Cairn-Ended-At': String(ts),
@@ -220,7 +229,7 @@ export const crashLogger = {
         headers: {
           'Content-Type': 'application/x-ndjson',
           'X-Cairn-Device-Os': 'ios',
-          'X-Cairn-App-Version': '0.2.0',
+          'X-Cairn-App-Version': APP_VERSION_HEADER,
           'X-Cairn-Activity-Mode': 'crash',
           'X-Cairn-Started-At': String(report.ts),
           'X-Cairn-Ended-At': String(report.ts),
@@ -281,7 +290,7 @@ export const crashLogger = {
         headers: {
           'Content-Type': 'application/x-ndjson',
           'X-Cairn-Device-Os': 'ios',
-          'X-Cairn-App-Version': '0.2.0',
+          'X-Cairn-App-Version': APP_VERSION_HEADER,
           'X-Cairn-Activity-Mode': 'diagnostic',
           'X-Cairn-Started-At': String(ts),
           'X-Cairn-Ended-At': String(ts),

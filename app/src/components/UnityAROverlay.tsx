@@ -131,8 +131,18 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
   // got groundY=0.30 from a 0.3-area outlier instead of larger nearby
   // planes). Buffer last 5s of plane events with area>=0.5; pick largest.
   const recentPlanesRef = useRef<Array<{ y: number; area: number; t: number }>>([]);
-  // v220 F4 — track last camera Y from ArFrame so PlaneDetected can reject
-  // tabletops/shelves (planes higher than camY - 0.5m are likely not floor).
+  // v224 — observed planes ring (separate from accepted planes) for F4
+  // bottom-third heuristic. Tracks ALL Y values seen in last 5s, not just
+  // accepted ones, so we can pick "is this plane in the bottom 1/3 of
+  // observed range" — robust against rooms where multiple tabletops appear
+  // before the floor is detected. See subagent#5-D analysis.
+  const observedPlaneYsRef = useRef<Array<{ y: number; t: number }>>([]);
+  // v220 F4 → v224 F4-tightened — track last camera Y from ArFrame so
+  // PlaneDetected can reject tabletops/shelves. v220 used camY-0.5 which
+  // failed in production v0.2.2 (let plane y=-0.07 through with camY≈+0.4,
+  // i.e. wardrobe top at chest height). v224 tightens to camY-0.8 (camera
+  // at chest ≈1.4m → floor ≥1.2m below cam; tabletops ~0.7m below cam get
+  // caught). Adds bottom-third heuristic as belt-and-suspenders.
   const lastCameraYRef = useRef<number | null>(null);
   // v208 — REMOVED groundLockedRef (and the v206 B1 lock-Y sniff in UnityLog
   // case). Unity emits "[GroundYResolver] locked Y=..." per-CAIRN, not
@@ -238,6 +248,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
       bulkSpawnedRef.current = false;
       emptyMarkerFrameCountRef.current = 0;
       recentPlanesRef.current = [];
+      observedPlaneYsRef.current = [];
       lastCameraYRef.current = null;
           crashLogger.breadcrumb(`${TAG}:clearAll dispatched`);
         } catch (e: any) {
@@ -346,6 +357,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
       bulkSpawnedRef.current = false;
       emptyMarkerFrameCountRef.current = 0;
       recentPlanesRef.current = [];
+      observedPlaneYsRef.current = [];
       lastCameraYRef.current = null;
       crashLogger.breadcrumb(`${TAG}:unmount glReady=${arReadyRef.current}`);
     };
@@ -464,21 +476,56 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             recentPlanesRef.current = recentPlanesRef.current.filter(
               p => now - p.t < STALE_MS
             );
-            // v220 — F4: REJECT planes that are too high (likely tabletop /
-            // shelf / countertop, not floor). v0.2.2 telemetry showed
-            // ground-jump 79cm because area-weighted policy accepted a
-            // 1.2m² plane at y=+0.24 (tabletop) over a 3.0m² plane at
-            // y=-0.55 (floor). Anti-tabletop rule: any plane whose y is
-            // higher than (last camera Y - 0.5m) is rejected as not-floor.
-            // Camera held at chest height ~1.0m, so floor should be ≥1m
-            // below camera; tabletops at ~0.7m below → rejected.
+            observedPlaneYsRef.current = observedPlaneYsRef.current.filter(
+              p => now - p.t < STALE_MS
+            );
+            // Always record the observation (even if rejected later) so
+            // bottom-third heuristic has a full Y range.
+            observedPlaneYsRef.current.push({ y: msg.y, t: now });
+            // v224 F4-tightened — REJECT planes that are too high (likely
+            // tabletop / shelf / bed top, not floor). TWO criteria:
+            //
+            //   (a) camY-relative: plane.y > camY - 0.8m → reject
+            //       v220 used camY-0.5 which empirically failed (let
+            //       plane y=-0.07 through with camY≈+0.4 = wardrobe top).
+            //       camY-0.8: phone at chest height ≈1.4m AGL → floor at
+            //       -1.4 (≥0.8 below cam); tabletops ~0.7m below cam are
+            //       caught. Industry-standard hold-height assumption.
+            //
+            //   (b) bottom-third heuristic: plane must be in bottom 1/3 of
+            //       observed Y range over last 5s. Defense for rooms where
+            //       multiple tabletops appear before any floor — a tabletop
+            //       at y=-0.4 might pass criterion (a) if user crouched
+            //       (camY=+0.5 → threshold=-0.3, plane -0.4<-0.3 passes),
+            //       but fails (b) because the entire observed range is
+            //       still upper-floor.
+            //
+            // Both must pass. F4 protects bulk-spawn's shared seed value
+            // (groundYRef → data.y for ALL N markers in bulk-spawn → Unity
+            // Tier-A uses it as 'closest-to-tap-y' tiebreaker). Single-
+            // point plant path is cosmetic on RN side (Unity overrides),
+            // but bulk path is load-bearing. See subagent#5-D analysis.
             const lastCamY = lastCameraYRef.current;
-            const aboveFloorThreshold = lastCamY != null ? lastCamY - 0.5 : null;
-            const isLikelyTabletop =
+            const aboveFloorThreshold = lastCamY != null ? lastCamY - 0.8 : null;
+            const isAboveCamThreshold =
               aboveFloorThreshold != null && msg.y > aboveFloorThreshold;
+            // Bottom-third: only meaningful with at least 3 observations.
+            let isInBottomThird = true;
+            if (observedPlaneYsRef.current.length >= 3) {
+              const ys = observedPlaneYsRef.current.map(p => p.y);
+              const minY = Math.min(...ys);
+              const maxY = Math.max(...ys);
+              const range = maxY - minY;
+              if (range > 0.1) {
+                // Plane must be within the lower 33% of the observed range.
+                const cutoff = minY + range * 0.34;
+                isInBottomThird = msg.y <= cutoff;
+              }
+            }
+            const isLikelyTabletop = isAboveCamThreshold || !isInBottomThird;
             if (isLikelyTabletop) {
               crashLogger.breadcrumb(
-                `${TAG}:ground-reject-tabletop y=${msg.y.toFixed(2)} camY=${lastCamY!.toFixed(2)} threshold=${aboveFloorThreshold!.toFixed(2)} area=${msg.area.toFixed(1)}`
+                `${TAG}:ground-reject-tabletop y=${msg.y.toFixed(2)} camY=${lastCamY != null ? lastCamY.toFixed(2) : 'null'} threshold=${aboveFloorThreshold != null ? aboveFloorThreshold.toFixed(2) : 'null'} area=${msg.area.toFixed(1)} aboveCam=${isAboveCamThreshold} bot3=${isInBottomThird}`
               );
               break;
             }

@@ -33,6 +33,7 @@ import { PlantSheet, AimReticle, type PlantType } from '../components/PlantSheet
 import { LikeReportSheet } from '../components/LikeReportSheet';
 import { useAimedMarker } from '../hooks/useAimedMarker';
 import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ARDebugOverlay } from '../components/ARDebugOverlay';
 import { OTA_VERSION } from '../components/OtaBadge';
@@ -281,7 +282,12 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // Version-gated per V2.C8: only enable on binary >= 0.2.1 so v0.2.0
   // (v198) binaries running OTA bundles don't show LikeReportSheet without
   // the corresponding Unity LikeBadge handler.
-  const _appVersion = (Constants.expoConfig?.version ?? '0.0.0');
+  // v224 — read NATIVE binary version (Application.nativeApplicationVersion)
+  // not Constants.expoConfig.version. The latter is JS-bundle-time and would
+  // make a v0.2.2 IPA running an old OTA bundle (built when app.json said
+  // 0.2.0) report '0.2.0' → falsely DISABLE LikeReport on a v0.2.2 IPA that
+  // actually has the Unity handler. We need IPA identity, not bundle identity.
+  const _appVersion = (Application.nativeApplicationVersion ?? '0.0.0');
   const _likeReportSupported = (() => {
     const parts = _appVersion.split('.').map(n => parseInt(n, 10));
     if (parts.length < 3 || parts.some(isNaN)) return false;
@@ -566,7 +572,7 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           headers: {
             'Content-Type': 'image/png',
             'X-Cairn-Device-Os': 'ios',
-            'X-Cairn-App-Version': '0.2.0',
+            'X-Cairn-App-Version': Application.nativeApplicationVersion ?? 'unknown',
             'X-Cairn-Ar-Mode': 'unity',
           },
         });
