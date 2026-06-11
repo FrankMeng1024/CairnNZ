@@ -24,13 +24,15 @@ import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform,
   KeyboardAvoidingView, ActivityIndicator, BackHandler,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useRouteStore } from '../store/useRouteStore';
 import { useRouteEditStore } from '../store/useRouteEditStore';
 import { useSessionStore, loadTrackPoints } from '../store/useSessionStore';
+import { useTrackingStore } from '../store/useTrackingStore';
 import { snapToRoadAndTrim } from '../services/routeMatcher';
 import { formatDistance } from '../utils/geo';
+import { getCurrentRegion } from '../config/regions';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
@@ -94,6 +96,11 @@ export function RouteEditorScreen() {
   const editTrimEndFrac = useRouteEditStore(s => s.trimEndFrac);
   const dualEditActive = editIsOpen && editRouteId === (routeId ?? freshlyCreatedRouteId);
   const [selectedViaId, setSelectedViaId] = useState<string | null>(null);
+
+  // Subscribe to user GPS — used as the camera fallback when route data
+  // hasn't hydrated yet, so MapView never falls back to Mapbox's global
+  // default view (the "Ajaccio / Corsica" bug for Asian/NZ users).
+  const userCoord = useTrackingStore(s => s.lastCoordinate);
 
   const cameraRef = useRef<any>(null);
   const mapViewRef = useRef<any>(null);
@@ -442,20 +449,41 @@ export function RouteEditorScreen() {
             compassEnabled={false}
             onLongPress={onMapLongPress}
           >
-            {CameraComponent && cameraBounds && (
-              <CameraComponent
-                ref={cameraRef}
-                bounds={{
-                  ne: cameraBounds.ne,
-                  sw: cameraBounds.sw,
-                  paddingTop: 80,
-                  paddingBottom: 200,
-                  paddingLeft: 40,
-                  paddingRight: 40,
-                }}
-                animationDuration={300}
-              />
-            )}
+            {CameraComponent && (() => {
+              // Camera mount priority — never fall back to Mapbox global default.
+              //  1. Route bounds → fitBounds (best framing of edited geometry)
+              //  2. User GPS at zoom 14 (we know where they are)
+              //  3. Region centre at default zoom (cold start, no GPS)
+              if (cameraBounds) {
+                return (
+                  <CameraComponent
+                    ref={cameraRef}
+                    bounds={{
+                      ne: cameraBounds.ne,
+                      sw: cameraBounds.sw,
+                      paddingTop: 80,
+                      paddingBottom: 220,
+                      paddingLeft: 40,
+                      paddingRight: 40,
+                    }}
+                    animationDuration={isEditing ? 300 : 0}
+                  />
+                );
+              }
+              const region = getCurrentRegion();
+              const fallbackCenter: [number, number] = userCoord
+                ? [userCoord.lng, userCoord.lat]
+                : [region.centerLng, region.centerLat];
+              const fallbackZoom = userCoord ? 14 : region.defaultZoom;
+              return (
+                <CameraComponent
+                  ref={cameraRef}
+                  centerCoordinate={fallbackCenter}
+                  zoomLevel={fallbackZoom}
+                  animationDuration={0}
+                />
+              );
+            })()}
 
             {/* Non-edit mode: simple line */}
             {!isEditing && renderPoints.length >= 2 && ShapeSource && LineLayer && (
@@ -526,72 +554,90 @@ export function RouteEditorScreen() {
       {isEditing ? (
         <EditOverlayV236 onCancel={handleCancelEdit} onSave={handleSave} />
       ) : (
-        <SafeAreaView edges={['top', 'bottom']} style={styles.viewModeOverlay} pointerEvents="box-none">
-          <View style={styles.viewTopBar} pointerEvents="auto">
-            <BackButton onPress={() => nav.goBack()} />
-            <View style={styles.viewTopCenter}>
-              <TextInput
-                style={styles.nameInput}
-                value={name}
-                onChangeText={setName}
-                placeholder="Route name"
-                placeholderTextColor={Colors.textMuted}
-                editable={!fromSessionId ? !!routeId : true}
-              />
-              {renderPoints.length >= 2 && (
-                <Text style={styles.distanceText}>
-                  {formatDistance(polylineLengthM(renderPoints))}
-                </Text>
-              )}
+        <>
+          {/* Top floating bar — pill BackButton, no background, sits over the map */}
+          <View style={[styles.topOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+            <View style={styles.topRow} pointerEvents="box-none">
+              <BackButton variant="pill" />
+              <View style={{ flex: 1 }} />
             </View>
-            <View style={{ width: 36 }} />
           </View>
 
+          {/* Bottom panel — rounded white card overlay (v235 visual) */}
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.viewBottomBar}
-            pointerEvents="auto"
+            style={styles.bottomPanelWrap}
+            keyboardVerticalOffset={0}
+            pointerEvents="box-none"
           >
-            {enterEditError && (
-              <TouchableOpacity
-                style={styles.errorBanner}
-                onPress={() => setEnterEditError(null)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.errorBannerText}>{enterEditError}</Text>
-              </TouchableOpacity>
-            )}
-            <View style={styles.viewActions}>
-              {routeId && (
-                <TouchableOpacity onPress={handleDelete} style={[styles.actionBtn, styles.deleteBtn]}>
-                  <Icon name="Trash2" size={18} />
-                  <Text style={styles.deleteBtnText}>Delete</Text>
+            <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + Spacing.md }]} pointerEvents="auto">
+              {enterEditError && (
+                <TouchableOpacity
+                  style={styles.errorBanner}
+                  onPress={() => setEnterEditError(null)}
+                  activeOpacity={0.85}
+                >
+                  <Icon name="TriangleAlert" size={14} color={Colors.danger} strokeWidth={2} />
+                  <Text style={styles.errorBannerText} numberOfLines={2}>{enterEditError}</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity
-                onPress={enterEdit}
-                disabled={enterEditLoading}
-                style={[styles.actionBtn, styles.editBtn]}
-              >
-                {enterEditLoading ? (
-                  <ActivityIndicator size="small" color={Colors.surface} />
-                ) : (
-                  <>
-                    <Icon name="Edit3" size={18} color={Colors.surface} />
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </>
+
+              {/* Read-only summary card with name + stats — sage primaryBg tint */}
+              <View style={styles.viewSummary}>
+                <TextInput
+                  style={styles.viewSummaryName}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Route name (required)"
+                  placeholderTextColor={Colors.textMuted}
+                />
+                {renderPoints.length >= 2 && (
+                  <View style={styles.viewStatsInline}>
+                    <Text style={styles.viewStatText}>{renderPoints.length} points</Text>
+                    <Text style={styles.viewStatDot}>·</Text>
+                    <Text style={styles.viewStatText}>{formatDistance(polylineLengthM(renderPoints), 'km', 1)} km</Text>
+                  </View>
                 )}
-              </TouchableOpacity>
+              </View>
+
+              {/* Action row: Delete (existing) / Cancel (save-as-route draft) + Edit */}
+              <View style={styles.viewActions}>
+                {(routeId || freshlyCreatedRouteId) && (
+                  <TouchableOpacity
+                    onPress={handleDelete}
+                    style={[styles.viewBtn, styles.viewDeleteBtn]}
+                    activeOpacity={0.85}
+                  >
+                    <Icon name="Trash2" size={16} color={Colors.danger} strokeWidth={2.5} />
+                    <Text style={styles.viewDeleteBtnText}>Delete</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  onPress={enterEdit}
+                  disabled={enterEditLoading}
+                  style={[styles.viewBtn, styles.viewEditBtn]}
+                  activeOpacity={0.85}
+                >
+                  {enterEditLoading ? (
+                    <ActivityIndicator size="small" color={Colors.surface} />
+                  ) : (
+                    <>
+                      <Icon name="Edit3" size={16} color={Colors.surface} strokeWidth={2.5} />
+                      <Text style={styles.viewEditBtnText}>Edit</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </KeyboardAvoidingView>
-        </SafeAreaView>
+        </>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  container: { flex: 1, backgroundColor: Colors.primaryBg },
   mapArea: { flex: 1 },
   fallback: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface },
   fallbackText: { color: Colors.textSecondary, fontSize: FontSize.body },
@@ -602,61 +648,113 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.sm,
     borderRadius: Radius.pill,
+    ...Shadow.card,
   },
-  warningText: { color: Colors.surface, fontSize: FontSize.caption, fontWeight: '500' },
-  viewModeOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
-  viewTopBar: {
+  warningText: { color: Colors.surface, fontSize: FontSize.caption, fontWeight: '600' },
+
+  // Top: floating BackButton over the map (no full-width bar)
+  topOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+  },
+  topRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  viewTopCenter: { flex: 1, paddingHorizontal: Spacing.md },
-  nameInput: {
-    fontSize: FontSize.h3,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    paddingVertical: Spacing.xs,
-  },
-  distanceText: { fontSize: FontSize.caption, color: Colors.textSecondary },
-  viewBottomBar: {
     paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
+  },
+
+  // Bottom: rounded white card panel
+  bottomPanelWrap: {
+    position: 'absolute',
+    bottom: 0, left: 0, right: 0,
+  },
+  bottomPanel: {
     backgroundColor: Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopLeftRadius: Radius.sheet,
+    borderTopRightRadius: Radius.sheet,
+    padding: Spacing.base,
+    paddingTop: Spacing.md,
+    ...Shadow.elevated,
   },
   errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
     backgroundColor: Colors.dangerBg,
-    padding: Spacing.md,
     borderRadius: Radius.button,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.danger,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: FontSize.small,
+    color: Colors.danger,
+    fontWeight: '600',
+  },
+
+  // Summary card (sage tint) — name + stats
+  viewSummary: {
+    backgroundColor: Colors.primaryBg,
+    padding: Spacing.md,
+    borderRadius: Radius.card,
+    gap: 4,
     marginBottom: Spacing.sm,
   },
-  errorBannerText: { color: Colors.textPrimary, fontSize: FontSize.caption },
+  viewSummaryName: {
+    fontSize: FontSize.h3,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    paddingVertical: 2,
+  },
+  viewStatsInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  viewStatText: {
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
+  },
+  viewStatDot: {
+    fontSize: FontSize.small,
+    color: Colors.textMuted,
+  },
+
+  // Two equal-width action buttons (Delete + Edit)
   viewActions: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
-  actionBtn: {
+  viewBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
     paddingVertical: Spacing.md,
     borderRadius: Radius.button,
-    gap: Spacing.sm,
   },
-  deleteBtn: {
-    backgroundColor: Colors.dangerBg,
+  viewEditBtn: {
+    backgroundColor: Colors.primary,
+  },
+  viewEditBtnText: {
+    color: Colors.surface,
+    fontSize: FontSize.body,
+    fontWeight: '700',
+  },
+  viewDeleteBtn: {
+    backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.danger,
   },
-  deleteBtnText: { color: Colors.danger, fontWeight: '600', fontSize: FontSize.body },
-  editBtn: {
-    backgroundColor: Colors.primary,
+  viewDeleteBtnText: {
+    color: Colors.danger,
+    fontSize: FontSize.body,
+    fontWeight: '700',
   },
-  editBtnText: { color: Colors.surface, fontWeight: '600', fontSize: FontSize.body },
 });
