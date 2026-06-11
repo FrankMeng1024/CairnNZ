@@ -1,16 +1,22 @@
 /**
  * TrimSlider — double-handled slider for trimming a route's head and tail.
  *
- * Sprint 67 v236. Pure client-side: each handle controls a fraction in
+ * Sprint 67 v241. Pure client-side: each handle controls a fraction in
  * [0..1] of the matched polyline's arc length. No API calls.
  *
- * Touch model uses absolute pageX (minus the track's measured pageX origin)
- * so the handle tracks the user's finger, not its initial offset.
+ * v241 gesture model: PanResponder is bound to the WHOLE track row, not
+ * the small handle Views. On grant, we figure out which handle is closer
+ * to the touch point (start vs end) and drive that one. On move, we use
+ * the absolute x relative to the track (not gestureState.dx) so the
+ * handle tracks the finger directly. This fixes:
+ *   - "slider only goes left" (Mapbox MapView underneath was stealing
+ *     touches that strayed off the small 28×28 handle)
+ *   - The ambiguous "which handle is being dragged?" feel
  */
 
 import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, PanResponder, LayoutChangeEvent } from 'react-native';
-import { Colors, Spacing, FontSize } from '../tokens';
+import { View, StyleSheet, PanResponder, LayoutChangeEvent, GestureResponderEvent, PanResponderGestureState } from 'react-native';
+import { Colors } from '../tokens';
 
 const TRIM_MIN_FRACTION = 0.05;
 
@@ -24,17 +30,15 @@ export interface TrimSliderProps {
 
 const HANDLE_W = 28;
 const TRACK_H = 44;
+const HIT_SLOP = 16; // each handle's effective grab zone (extra px)
 
 export function TrimSlider({
   trimStartFrac,
   trimEndFrac,
   onTrimStartChange,
   onTrimEndChange,
-  totalLengthM,
 }: TrimSliderProps): React.JSX.Element {
   const [trackW, setTrackW] = useState(0);
-  const trackRef = useRef<View | null>(null);
-  const trackPageXRef = useRef<number>(0);
   const [localStart, setLocalStart] = useState(trimStartFrac);
   const [localEnd, setLocalEnd] = useState(trimEndFrac);
   const draggingHandleRef = useRef<'start' | 'end' | null>(null);
@@ -46,84 +50,67 @@ export function TrimSlider({
     }
   }, [trimStartFrac, trimEndFrac]);
 
-  const measureTrack = () => {
-    if (!trackRef.current) return;
-    (trackRef.current as any).measureInWindow((x: number, _y: number, w: number) => {
-      trackPageXRef.current = x;
-      if (w > 0 && w !== trackW) setTrackW(w);
-    });
-  };
-  const onTrackLayout = (e: LayoutChangeEvent) => {
-    setTrackW(e.nativeEvent.layout.width);
-    measureTrack();
-  };
-
-  const fracFromPageX = (pageX: number): number => {
-    if (trackW <= 0) return 0;
-    const usable = trackW - HANDLE_W;
-    if (usable <= 0) return 0;
-    const localX = pageX - trackPageXRef.current;
-    return Math.max(0, Math.min(1, (localX - HANDLE_W / 2) / usable));
-  };
-
   const localStartRef = useRef(localStart);
   const localEndRef = useRef(localEnd);
   React.useEffect(() => { localStartRef.current = localStart; }, [localStart]);
   React.useEffect(() => { localEndRef.current = localEnd; }, [localEnd]);
 
-  // Track which fraction the handle started at when the gesture began —
-  // we apply gestureState.dx (delta in screen pixels) on top, which is
-  // RN's most reliable gesture metric (works on iOS + Android, doesn't
-  // depend on nativeEvent.pageX which is driver-specific).
-  const grantStartFracRef = useRef(0);
-  const grantEndFracRef = useRef(0);
+  const onTrackLayout = (e: LayoutChangeEvent) => {
+    setTrackW(e.nativeEvent.layout.width);
+  };
 
-  const startResponder = useRef(
+  // Convert a touch's locationX (relative to the trackRow View) into a
+  // fraction in [0..1]. The usable portion of the track is trackW - HANDLE_W
+  // (because handle Views are HANDLE_W wide and centered on their `left`).
+  const fracFromLocalX = (localX: number): number => {
+    const usable = Math.max(1, trackW - HANDLE_W);
+    const f = (localX - HANDLE_W / 2) / usable;
+    return Math.max(0, Math.min(1, f));
+  };
+
+  const responder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        draggingHandleRef.current = 'start';
-        grantStartFracRef.current = localStartRef.current;
-      },
-      onPanResponderMove: (_e, gestureState) => {
+      onPanResponderTerminationRequest: () => false, // don't yield to MapView
+      onPanResponderGrant: (e: GestureResponderEvent) => {
         const usable = Math.max(1, trackW - HANDLE_W);
-        const deltaFrac = gestureState.dx / usable;
-        const f = Math.max(0, Math.min(1, grantStartFracRef.current + deltaFrac));
-        setLocalStart(Math.min(f, localEndRef.current - TRIM_MIN_FRACTION));
+        const localX = e.nativeEvent.locationX;
+        const startPx = localStartRef.current * usable + HANDLE_W / 2;
+        const endPx = localEndRef.current * usable + HANDLE_W / 2;
+        const distToStart = Math.abs(localX - startPx);
+        const distToEnd = Math.abs(localX - endPx);
+        // Pick whichever handle is closer (within HIT_SLOP). If both are
+        // far, prefer the one whose direction the touch is heading toward
+        // — but for grant we only have the start point, so closer wins.
+        draggingHandleRef.current = distToStart <= distToEnd ? 'start' : 'end';
+      },
+      onPanResponderMove: (e: GestureResponderEvent, _g: PanResponderGestureState) => {
+        const localX = e.nativeEvent.locationX;
+        const f = fracFromLocalX(localX);
+        if (draggingHandleRef.current === 'start') {
+          setLocalStart(Math.min(f, localEndRef.current - TRIM_MIN_FRACTION));
+        } else if (draggingHandleRef.current === 'end') {
+          setLocalEnd(Math.max(f, localStartRef.current + TRIM_MIN_FRACTION));
+        }
       },
       onPanResponderRelease: () => {
+        const which = draggingHandleRef.current;
         draggingHandleRef.current = null;
-        onTrimStartChange(localStartRef.current);
+        if (which === 'start') {
+          onTrimStartChange(localStartRef.current);
+        } else if (which === 'end') {
+          onTrimEndChange(localEndRef.current);
+        }
       },
       onPanResponderTerminate: () => {
+        const which = draggingHandleRef.current;
         draggingHandleRef.current = null;
-        onTrimStartChange(localStartRef.current);
-      },
-    }),
-  ).current;
-
-  const endResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        draggingHandleRef.current = 'end';
-        grantEndFracRef.current = localEndRef.current;
-      },
-      onPanResponderMove: (_e, gestureState) => {
-        const usable = Math.max(1, trackW - HANDLE_W);
-        const deltaFrac = gestureState.dx / usable;
-        const f = Math.max(0, Math.min(1, grantEndFracRef.current + deltaFrac));
-        setLocalEnd(Math.max(f, localStartRef.current + TRIM_MIN_FRACTION));
-      },
-      onPanResponderRelease: () => {
-        draggingHandleRef.current = null;
-        onTrimEndChange(localEndRef.current);
-      },
-      onPanResponderTerminate: () => {
-        draggingHandleRef.current = null;
-        onTrimEndChange(localEndRef.current);
+        if (which === 'start') {
+          onTrimStartChange(localStartRef.current);
+        } else if (which === 'end') {
+          onTrimEndChange(localEndRef.current);
+        }
       },
     }),
   ).current;
@@ -134,7 +121,11 @@ export function TrimSlider({
 
   return (
     <View style={styles.container}>
-      <View ref={trackRef} style={styles.trackRow} onLayout={onTrackLayout}>
+      <View
+        style={styles.trackRow}
+        onLayout={onTrackLayout}
+        {...responder.panHandlers}
+      >
         <View style={styles.trackBg} />
         <View
           style={[
@@ -144,11 +135,11 @@ export function TrimSlider({
         />
         <View
           style={[styles.handle, styles.handleStart, { left: startX }]}
-          {...startResponder.panHandlers}
+          pointerEvents="none"
         />
         <View
           style={[styles.handle, styles.handleEnd, { left: endX }]}
-          {...endResponder.panHandlers}
+          pointerEvents="none"
         />
       </View>
     </View>
@@ -160,20 +151,25 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   trackRow: {
-    height: TRACK_H,
+    height: TRACK_H + HIT_SLOP * 2,
     justifyContent: 'center',
     position: 'relative',
+    marginVertical: -HIT_SLOP,
   },
   trackBg: {
     position: 'absolute',
     left: HANDLE_W / 2,
     right: HANDLE_W / 2,
+    top: '50%',
+    marginTop: -3,
     height: 6,
     borderRadius: 3,
     backgroundColor: Colors.border,
   },
   trackFill: {
     position: 'absolute',
+    top: '50%',
+    marginTop: -3,
     height: 6,
     borderRadius: 3,
     backgroundColor: Colors.primary,
@@ -185,7 +181,8 @@ const styles = StyleSheet.create({
     borderRadius: HANDLE_W / 2,
     borderWidth: 3,
     borderColor: Colors.surface,
-    top: (TRACK_H - HANDLE_W) / 2,
+    top: '50%',
+    marginTop: -HANDLE_W / 2,
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 3,

@@ -39,6 +39,7 @@ import { BackButton } from '../components/BackButton';
 import { DualLineLayer } from '../components/map/DualLineLayer';
 import { ViaPointLayer } from '../components/map/ViaPointLayer';
 import { EditOverlayV236 } from '../components/map/EditOverlayV236';
+import { CorridorBoundaryLayer } from '../components/map/CorridorBoundaryLayer';
 import { getFlagsSync } from '../config/featureFlags';
 import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
 import { debugLogger } from '../services/debugLogger';
@@ -93,6 +94,7 @@ export function RouteEditorScreen() {
   const editRouteId = useRouteEditStore(s => s.routeId);
   const editWorkingPoints = useRouteEditStore(s => s.workingPoints);
   const editMatchedPoints = useRouteEditStore(s => s.matchedPoints);
+  const editOriginalPoints = useRouteEditStore(s => s.originalPoints);
   const editViaPoints = useRouteEditStore(s => s.viaPoints);
   const editTrimStartFrac = useRouteEditStore(s => s.trimStartFrac);
   const editTrimEndFrac = useRouteEditStore(s => s.trimEndFrac);
@@ -124,12 +126,13 @@ export function RouteEditorScreen() {
     }
   }, [routeId]);
 
-  // ── Load session track points (save-as-route flow). Always snap to road
-  // — even if caller passed pre-loaded raw track points, the user expects
-  // to see the cleaned version that will actually be saved as the route.
+  // ── Load session track points (save-as-route flow).
+  // v241: do NOT snap-to-road. The activity trace is already the cleaned
+  // GPS data (Kalman + dedup applied during recording). Save-as-route
+  // shows the activity AS-IS — no extra processing, no extra Mapbox call,
+  // no "first jumps to a city, then to the route" double camera fit.
   useEffect(() => {
     if (!fromSessionId) return;
-    const profile: 'walking' = 'walking';
     const sourcePromise: Promise<Array<{ lat: number; lng: number }>> =
       fromSessionTrackPoints && fromSessionTrackPoints.length >= 2
         ? Promise.resolve(fromSessionTrackPoints.map(p => ({ lat: p.lat, lng: p.lng })))
@@ -138,25 +141,13 @@ export function RouteEditorScreen() {
               .map(p => ({ lat: p.lat, lng: p.lng })),
           );
     sourcePromise
-      .then(async tp => {
+      .then((tp) => {
         if (tp.length < 2) {
           setSessionTrackPoints([]);
           setSnapWarning(true);
           return;
         }
-        try {
-          const matched = await snapToRoadAndTrim(tp, profile);
-          if (matched && matched.points && matched.points.length >= 2) {
-            setSessionTrackPoints(matched.points);
-            setSnapWarning(!matched.isSnapped);
-          } else {
-            setSessionTrackPoints(tp);
-            setSnapWarning(true);
-          }
-        } catch {
-          setSessionTrackPoints(tp);
-          setSnapWarning(true);
-        }
+        setSessionTrackPoints(tp);
       })
       .catch(() => {
         setSessionTrackPoints([]);
@@ -461,8 +452,13 @@ export function RouteEditorScreen() {
   const renderPoints: Array<{ lat: number; lng: number }> = isEditing
     ? editWorkingPoints
     : (existingRoute?.points ?? sessionTrackPoints);
+  // v241 fix: original (faded) line shows the user's REAL recorded GPS
+  // trace, not the matched polyline. Prior code passed matchedPoints
+  // here, which made the original line "disappear" when a via was added
+  // (matchedPoints became the new edited route, leaving nothing dim
+  // behind it).
   const renderOriginal: Array<{ lat: number; lng: number }> = isEditing
-    ? editMatchedPoints
+    ? editOriginalPoints
     : [];
 
   return (
@@ -543,6 +539,13 @@ export function RouteEditorScreen() {
             {/* Edit mode: dual line + via dots */}
             {isEditing && (
               <>
+                {/* 1km corridor halo — translucent sage fill so user sees the
+                    legal area for detour points. Renders BEFORE the lines so
+                    it sits underneath them. */}
+                <CorridorBoundaryLayer
+                  originalPoints={editOriginalPoints}
+                  radiusM={1000}
+                />
                 <DualLineLayer
                   originalPoints={renderOriginal}
                   workingPoints={renderPoints}

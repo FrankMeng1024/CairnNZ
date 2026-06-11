@@ -4,7 +4,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { useFonts } from 'expo-font';
 import { RootNavigator } from './src/navigation/RootNavigator';
-import { EditResumePrompt } from './EditResumePrompt';
+// v241: EditResumePrompt removed — PO requested no resume modal.
+// Source kept on disk for reference but not imported.
 import { MigratorRetryPrompt } from './MigratorRetryPrompt';
 import { getFlags } from './src/config/featureFlags';
 import { useAppStore } from './src/store/useAppStore';
@@ -437,7 +438,9 @@ function AppRoot() {
   return (
     <>
       <RootNavigator />
-      {flagsPrimed && <EditResumePrompt />}
+      {/* v241: EditResumePrompt removed — PO requested no resume modal.
+          Exit means exit. detachUI clears the AsyncStorage session, so
+          there's nothing to resume. */}
       {flagsPrimed && <MigratorRetryPrompt />}
     </>
   );

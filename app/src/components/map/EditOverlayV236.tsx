@@ -129,13 +129,10 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
             totalLengthM={totalLengthM}
           />
 
-          {/* Length readout */}
-          {totalLengthM > 0 && (
+          {/* Length readout — only when user has actually trimmed */}
+          {totalLengthM > 0 && (trimStartFrac > 0 || trimEndFrac < 1) && (
             <Text style={styles.lengthReadout}>
-              {(editedLengthM / 1000).toFixed(2)} km
-              {trimStartFrac > 0 || trimEndFrac < 1
-                ? ` of ${(totalLengthM / 1000).toFixed(2)} km`
-                : ''}
+              Trimmed: {(editedLengthM / 1000).toFixed(2)} km / {(totalLengthM / 1000).toFixed(2)} km
             </Text>
           )}
 
@@ -286,6 +283,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     borderRadius: Radius.button,
   },
+  // Cancel — same shape as view-mode Delete (white surface + border + colored text)
   cancelBtn: {
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -296,6 +294,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.body,
     fontWeight: '700',
   },
+  // Save — same shape as view-mode Edit (sage primary + white text)
   saveBtn: {
     backgroundColor: Colors.primary,
   },
