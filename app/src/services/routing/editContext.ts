@@ -88,6 +88,38 @@ export async function buildEditContext(
     lat: p.lat,
   }));
 
+  // v224: try the server-precomputed EditEnvelope first. If it returns
+  // ok, we skip the on-device MVT extractor entirely (fast + reliable).
+  // Fall back to the legacy on-device path on miss/error so this is a
+  // safe drop-in.
+  try {
+    const { fetchEditEnvelope } = await import('./editEnvelopeClient');
+    const { adaptEnvelope } = await import('./editEnvelopeAdapter');
+    const envRes = await fetchEditEnvelope(routeId);
+    uploadEditDiag('envelope-fetch', {
+      routeId,
+      ok: envRes.ok,
+      source: envRes.source,
+      status: envRes.status,
+      ways: envRes.envelope?.ways.length ?? 0,
+      junctions: envRes.envelope?.junctions.length ?? 0,
+    });
+    if (envRes.ok && envRes.envelope) {
+      const { trailGraph, walkedIndex } = adaptEnvelope(
+        envRes.envelope,
+        originalPoints,
+        routeId,
+      );
+      return { walkedIndex, trailGraph, originalPoints };
+    }
+  } catch (e: any) {
+    uploadEditDiag('envelope-fetch-error', {
+      routeId,
+      message: e?.message ?? String(e),
+    });
+    // fall through to legacy path
+  }
+
   // Collect all corridor anchor points first — kdbush is finalized at
   // construction time (no add() method post-construction). Start with the
   // user's original GPS trace.

@@ -12,8 +12,12 @@ const express = require('express');
 const router = express.Router();
 const Route = require('../models/Route');
 const authenticate = require('../middleware/authenticate');
+const editEnvelopeRouter = require('./edit-envelope');
 
 router.use(authenticate);
+
+// Mount edit-envelope subroutes (already authenticated via its own router.use)
+router.use('/', editEnvelopeRouter);
 
 // ── POST /api/routes ────────────────────────────────────────────────────────
 router.post('/', async (req, res) => {
@@ -46,6 +50,16 @@ router.post('/', async (req, res) => {
       elevationGainM: elevation_gain_m ?? 0,
     });
     const route = await Route.findByIdAndUser(id, req.user.userId);
+    // v224: async edit-envelope build (Mapbox MVT junction extraction).
+    // Fire-and-forget; client polls GET /:id/edit-envelope which 202s
+    // until ready.
+    if (route && Array.isArray(route.points) && route.points.length >= 2) {
+      try {
+        editEnvelopeRouter.enqueueBuild(id, route.points);
+      } catch (e) {
+        console.warn('[routes/create] envelope enqueue failed:', e.message);
+      }
+    }
     return res.status(201).json({ route });
   } catch (err) {
     console.error('[routes/create]', err);
@@ -98,6 +112,19 @@ router.put('/:id', async (req, res) => {
     if (affected === 0) return res.status(404).json({ error: 'Route not found.' });
 
     const route = await Route.findByIdAndUser(id, req.user.userId);
+    // v224: regenerate envelope when points change.
+    if (
+      Array.isArray(points) &&
+      route &&
+      Array.isArray(route.points) &&
+      route.points.length >= 2
+    ) {
+      try {
+        editEnvelopeRouter.enqueueBuild(id, route.points);
+      } catch (e) {
+        console.warn('[routes/update] envelope enqueue failed:', e.message);
+      }
+    }
     return res.json({ route });
   } catch (err) {
     console.error('[routes/update]', err.message);

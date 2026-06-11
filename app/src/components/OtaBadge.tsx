@@ -660,7 +660,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         track (in which case re-spawn is needed anyway), OR it's GPS
 //         noise (in which case we must NOT translate cairns).
 //         This restores cairn visibility for users on v220-v227.
-export const OTA_VERSION = 228;
+//   229 — Sprint MVT-Envelope. Move junction extraction off device entirely.
+//         Backend (Node.js) now decodes Mapbox Vector Tiles at route save
+//         time, builds an EditEnvelope (ways + junctions within 1.5km
+//         corridor) and persists to MySQL `route_edit_envelopes`.
+//         App's `buildEditContext` first tries `fetchEditEnvelope` →
+//         `adaptEnvelope` → existing TrailGraph pipeline. On miss it falls
+//         back to the legacy on-device MVT path (kept intact for
+//         compatibility). Spike validated 5 cities; Shanghai 5km bbox
+//         9 tiles ≈ 1.5s, 783 ways, 43 junctions. Eliminates 4 OOM
+//         failures on Hermes by moving compute to Node.
+export const OTA_VERSION = 229;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
