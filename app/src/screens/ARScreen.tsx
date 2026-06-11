@@ -47,6 +47,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { useMarkerStore, type Marker } from '../store/useMarkerStore';
 import { useTrackingStore } from '../store/useTrackingStore';
+import { useArOriginStore } from '../store/useArOriginStore';
 import { haversineM, type Coordinate } from '../utils/geo';
 import { crashLogger } from '../services/crashLogger';
 import { markerTypeToColor, markerTypeToShaderParams } from '../services/unityCairnSpawn';
@@ -204,6 +205,35 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // See baseline Run A: 5/5 OnSetSessionOffset events all sent ox=0/oz=0
   // mode=live — persisted arOrigin was never used.
   const arOriginReactive = useMarkerStore(s => s.arOrigin);
+  // v0.2.3 Stage 4 — subscribe to A4 FSM raw fields. Plant button gate is
+  // derived inline (re-computed on every render incl. timer tick below).
+  const a4State = useArOriginStore(s => s.state);
+  const a1State = useArOriginStore(s => s.a1State);
+  const lastA1TransitionAt = useArOriginStore(s => s.lastA1TransitionAt);
+  // Tick every 200ms so the 500ms anti-thrash window naturally clears
+  // even if no other state changes. Cheap; only mounted when AR open.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => (t + 1) % 1000), 200);
+    return () => clearInterval(id);
+  }, []);
+  const a4PlantEnabled = useMemo(() => {
+    void tick; // referenced to keep effect-free re-eval each tick
+    const arOriginLocked = a4State === 'PERSISTED' || a4State === 'GPS_LOCKED';
+    if (!arOriginLocked) return false;
+    if (a1State !== 'LOCKED') return false;
+    if (Date.now() - lastA1TransitionAt < 500) return false;
+    return true;
+  }, [a4State, a1State, lastA1TransitionAt, tick]);
+  // v0.2.3 Stage 6 (A9) — user-visible reason when Plant is disabled
+  // for an A4/A1 reason. Tells the user what to wait for instead of
+  // staring at a grey button.
+  const a4DisabledReason = useMemo<string | null>(() => {
+    if (a4State === 'COLD_INIT') return 'Setting up — give it a second…';
+    if (a4State === 'INVALIDATED_BY_DISTANCE') return 'You\'ve walked far — re-anchoring AR…';
+    if (a1State !== 'LOCKED') return 'Scanning the ground — point at the floor';
+    return null;
+  }, [a4State, a1State]);
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
   const lastCoordTime = useTrackingStore(s => s.lastCoordinateTime);
   const trackPoints = useTrackingStore(s => s.trackPoints);
@@ -1308,7 +1338,13 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           // hook is locked on an existing cairn (planting + reporting
           // are different intents — mutual exclusion).
           || aimHook.uiState === 'aim-locked'
+          // v0.2.3 Stage 4 — A4 FSM gate: button only enabled when
+          // arOriginLocked AND A1=LOCKED AND 0.5s anti-thrash. User
+          // product decision 2026-06-11 (overrides V2-CONFLICT-3):
+          // Pokemon-GO style — AR must be stable before plant.
+          || !a4PlantEnabled
         }
+        disabledReason={a4DisabledReason}
         reticleScale={reticleScale}
       />
       <AimReticle scale={reticleScale} />

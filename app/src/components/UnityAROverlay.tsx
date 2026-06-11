@@ -31,6 +31,7 @@ import { crashLogger } from '../services/crashLogger';
 import { API_BASE_URL } from '../config/api';
 import * as FileSystem from 'expo-file-system/legacy';
 import { storage } from '../store/storage';
+import { useArOriginStore, type A1State as A4_A1State } from '../store/useArOriginStore';
 import {
   buildSpawnRequest,
   type UnitySpawnRequest,
@@ -376,6 +377,15 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
     }, 10_000);
     return () => clearInterval(id);
   }, []);
+
+  // v0.2.3 Stage 4 — feed GPS to A4 (useArOriginStore) for distance
+  // invalidation (Plan v4 §A1 ⇄ A4 FSM CONTRACT MATRIX, R22). The
+  // store handles the haversine + threshold internally; we just push
+  // every userPos change. Throttled by upstream geolocation cadence.
+  useEffect(() => {
+    if (!props.userPos) return;
+    useArOriginStore.getState().onGpsFix(props.userPos.lat, props.userPos.lng);
+  }, [props.userPos]);
 
   // Ping Unity at 3s to check if message channel is alive.
   // If Unity is running and the bridge is wired, we'll get a Pong back.
@@ -843,6 +853,25 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
         case 'ArSessionState':
           crashLogger.breadcrumb(`${TAG}:recv:ArSessionState ${msg.state}`);
           break;
+
+        case 'A1State': {
+          // v0.2.3 Stage 4 — Unity GroundYResolver A1 FSM transition
+          // (UNLOCKED/ARMED/LOCKED/FROZEN). Plumbed into useArOriginStore
+          // (A4) so the Plant button enable rule (Plan v4 line 135) can
+          // be computed in RN: arOriginLocked && a1State==LOCKED &&
+          // (now - lastA1TransitionAt) > 500ms.
+          const next = (msg.state as A4_A1State | undefined);
+          if (next === 'UNLOCKED' || next === 'ARMED' ||
+              next === 'LOCKED' || next === 'FROZEN') {
+            crashLogger.breadcrumb(
+              `${TAG}:recv:A1State next=${next} prev=${msg.prev ?? '?'} a11=${msg.a11 ?? '?'}`
+            );
+            useArOriginStore.getState().onA1State(next);
+          } else {
+            crashLogger.breadcrumb(`${TAG}:recv:A1State invalid=${String(msg.state)}`);
+          }
+          break;
+        }
 
         case 'Pong':
           crashLogger.breadcrumb(`${TAG}:recv:Pong token=${msg.token}`);

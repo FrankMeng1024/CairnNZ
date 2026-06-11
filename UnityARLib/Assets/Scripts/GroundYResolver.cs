@@ -4,25 +4,47 @@ using UnityEngine.XR.ARSubsystems;
 using System.Collections.Generic;
 
 /// <summary>
-/// Three-tier silent ground-Y resolver. The user must NEVER perceive
-/// "ARKit failed to find a plane" — instead, cairns spawn instantly at
-/// a plausible ground Y and silently lerp upward as ARKit refines.
+/// v0.2.3 Stage 3 (A1) — Ground-Y resolver with explicit FSM.
 ///
-/// Tiers (highest confidence wins):
-///   A — real ARPlaneAnchor whose XZ contains the cairn (best)
-///   B — ARRaycastQuery(.estimatedPlane) hit (good — within ~1s in
-///       textured environments)
-///   C — camera.position.y - 1.5m (always available, never blocks)
+/// FSM (Plan v4 §A1 ⇄ A4 FSM CONTRACT MATRIX):
+///   UNLOCKED → ARMED → LOCKED → FROZEN → UNLOCKED ...
 ///
-/// The 1.5m hold-height matches Pokémon GO AR+ and Apple Measure
-/// heuristics for an upright user. See docs/plans/DS_STRAND_V186_PLAN.md
-/// §1.D and research/arkit_silent_fallback_report.md for full analysis.
+///   UNLOCKED  Initial / re-search. No usable Tier-A plane.
+///             Cairn updates use Tier-B/C until promoted.
+///   ARMED     A Tier-A plane has been seen at least once. Confidence
+///             building. Plant button on RN side: NOT yet enabled.
+///   LOCKED    Stable Tier-A reached AND |delta| < epsilon for stableMs.
+///             Plant button enabled (combined with A4 arOriginLocked).
+///   FROZEN    User has finished a session (e.g. ceremony complete) — Y
+///             pinned permanently. No further updates until UnregisterAll
+///             or session restart drops back to UNLOCKED.
 ///
-/// API (called by MultiSpawner / CairnBridge):
-///   - GetTierC()                — instant fallback Y for spawn
+/// Anti-thrash: A1 emits at most one state change per 0.5s. Rapid ARKit
+/// plane churn does not cause the RN Plant button to flicker.
+///
+/// Cross-FSM contract: this class emits `[v22-A1-FSM] state=<X>` on every
+/// transition + sends `SendToRN("A1State", "{ \"state\": \"<X>\" }")` so
+/// useTrackingStore (A4) can compute Plant button enable per
+/// docs/plans/MASTER_BUG_SHEET.md §A1↔A4 16-cell matrix.
+///
+/// A11 fallback (Plan v4 BLOCKER-9 + R25): A11-class devices
+/// (iPhone 8/8+/X / iPad 6/7) have known ARKit plane-detection lag at low
+/// light. If detected, A1 stays in ARMED forever (does not advance to
+/// LOCKED) and emits `[v22-A11-FALLBACK-ENGAGED]` once. This ships with
+/// telemetry monitoring; a hotfix path is reserved for Sprint week 1.
+///
+/// External API (preserved for Stage 3 — Stage 8 may rewire):
+///   - GetTierC()                — instant fallback Y for spawn (deprecated
+///                                  inside, signature retained for compat)
 ///   - QueryGroundY(world XZ)    — best-tier Y at a given XZ position
-///   - RegisterCairn(go, target) — subscribe a cairn to silent updates
+///   - RegisterCairn(go)         — subscribe a cairn to silent updates
 ///   - UnregisterCairn(go)       — stop tracking
+///   - UnregisterAll()           — drop all subscriptions, FSM → UNLOCKED
+///   - State                     — current FSM state (read-only)
+///
+/// Removed in Stage 3:
+///   - PlaneAlignment.HorizontalDown acceptance (was line 136 — accepted
+///     CEILINGS as ground; user-visible Q2 不贴地 root cause).
 /// </summary>
 public class GroundYResolver : MonoBehaviour
 {
@@ -31,15 +53,30 @@ public class GroundYResolver : MonoBehaviour
     public ARRaycastManager raycastManager;
     public ARPlaneManager planeManager;
 
-    // v206 B3 — phone hold-height assumption, OTA-tunable. Old code was
-    // a hardcoded 1.5m (face-level / Pokémon-GO style). Real users hold
-    // the phone at chest height when planting AR content (~1.3m). The
-    // 0.2m over-estimate at every spawn was the dominant contributor to
-    // user-reported "cairn floats above ground" — see baseline Q2 (mean
-    // delta Unity-y - RN-fy = +0.4m).
-    //
-    // OTA: CairnGlobals.GetForType(null, "AssumedHoldHeight", 1.3f).
-    // Default lowered from 1.5 → 1.3.
+    // ---- Tier enum (preserved for PortalSpawner / MultiSpawner) ----
+    public enum Tier { C = 0, B = 1, A = 2 }
+
+    // ---- A1 FSM ----
+    public enum A1State { UNLOCKED, ARMED, LOCKED, FROZEN }
+    private A1State _state = A1State.UNLOCKED;
+    public A1State State => _state;
+
+    // Anti-thrash: minimum 0.5s between state changes for downstream
+    // (RN Plant UI). Plan v4 line 137.
+    private const float ANTI_THRASH_DEBOUNCE_S = 0.5f;
+    private float _lastTransitionTime = -100f;
+    // If a transition is suppressed by the debounce, we remember the
+    // intended state and re-attempt next frame.
+    private A1State? _pendingState = null;
+
+    // A11 fallback flag (set once at Awake; emits FAIL_LOUD telemetry).
+    private bool _a11Fallback = false;
+    private bool _a11FallbackEmitted = false;
+
+    // v0.2.3 Stage 3 — assumed hold height retained for compat (Stage 8
+    // PortalSpawner still reads it). Internally, A1 no longer uses this
+    // for promotion decisions; only returned by GetTierC() which Stage 8
+    // will eliminate. Plan Pre-EAS step 17 grep target = 0 (after Stage 8).
     private const float DEFAULT_HOLD_HEIGHT = 1.3f;
     public float AssumedHoldHeight
     {
@@ -49,96 +86,92 @@ public class GroundYResolver : MonoBehaviour
             return g != null ? g.GetForType(null, "AssumedHoldHeight", DEFAULT_HOLD_HEIGHT) : DEFAULT_HOLD_HEIGHT;
         }
     }
-    // Kept as deprecated const for any external callers that still
-    // reference it. New code MUST use AssumedHoldHeight property.
-    [System.Obsolete("Use AssumedHoldHeight property — supports OTA tuning")]
+    [System.Obsolete("Stage 3 A1 — internal FSM does not consume this. Stage 8 will remove all callers (Pre-EAS step 17).")]
     public const float ASSUMED_HOLD_HEIGHT = 1.3f;
 
-    // v206 B2 — adaptive lerp thresholds, OTA-tunable. Old code had a
-    // single MAX_LERP_SPEED=1m/s, which meant a 10cm correction took 100ms
-    // (sub-frame visible) but a 25cm correction took 250ms (clearly visible
-    // 'slide'). New policy:
-    //   |delta| > GroundLerpSnapThreshold → instant snap (1 frame, no lerp)
-    //   |delta| > 0.05m → FAST lerp at GroundLerpFastSpeed
-    //   |delta| ≤ 0.05m → SLOW lerp at GroundLerpSlowSpeed
-    // Defaults chosen so 5-15cm corrections complete in ≤50ms (sub-perceptual).
+    // Lerp parameters (preserved from v206 B2; still used inside Update
+    // to slide tracked cairns toward best-tier Y).
     private const float DEFAULT_LERP_SNAP_THRESHOLD = 0.15f;
     private const float DEFAULT_LERP_FAST_SPEED = 2.5f;
     private const float DEFAULT_LERP_SLOW_SPEED = 1.0f;
-
-    // Kept for backwards compat (some legacy callers may reference it).
     [System.Obsolete("Use adaptive lerp via Update — see GroundLerp* OTA")]
     public const float MAX_LERP_SPEED = 1.0f;
 
-    // Per-cairn state. We track current Y, current tier, and target Y
-    // for in-progress lerps.
+    // ---- Per-cairn track ----
     private class CairnTrack
     {
         public Transform go;
         public float currentY;
         public float targetY;
         public Tier currentTier;
-        // v199 §C.6 Bug #7 fix: Tier-A lock. Once Tier-A reached AND |delta|
-        // < epsilon for >= stableMs, lock and skip further lerp updates.
-        public bool locked;
-        public float stableSince; // Time.time when lock window started; -1=not started
+        public bool locked;       // per-cairn pin (separate from FSM lock — set when this cairn's Y has stabilised, FSM may still be ARMED if no global plane confidence yet)
+        public float stableSince; // -1 = no stable window started
     }
-
-    public enum Tier { C = 0, B = 1, A = 2 }
 
     private readonly List<CairnTrack> _tracks = new List<CairnTrack>();
     private readonly List<ARRaycastHit> _raycastHits = new List<ARRaycastHit>();
+    private bool _hasSeenAnyTierA = false;     // ARMED gate
+    private float _firstTierATime = -1f;       // for ARMED→LOCKED stable window
+    private CairnBridge _bridge;               // cached on first use for SendToRN
+
+    // ----------------------------------------------------------------
+    // Lifecycle
+    // ----------------------------------------------------------------
+
+    void Awake()
+    {
+        // A11 fallback detection. iPhone 8/8+/X = iPhone10,*; iPad 6 = iPad7,5/6;
+        // iPad 7 = iPad7,11/12. These ship with A11 chip (no A12 LiDAR / scene
+        // depth). ARKit plane detection on these devices is measurably slower
+        // and noisier per Plan BLOCKER-9.
+        var model = SystemInfo.deviceModel ?? string.Empty;
+        if (model.StartsWith("iPhone10,") ||  // iPhone 8 / 8 Plus / X
+            model == "iPad7,5" || model == "iPad7,6" ||  // iPad 6
+            model == "iPad7,11" || model == "iPad7,12")  // iPad 7
+        {
+            _a11Fallback = true;
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // External API (preserved signatures)
+    // ----------------------------------------------------------------
 
     /// <summary>
-    /// Tier C is always available IF camera transform is valid. Returns
-    /// the best Y we can produce right now, instantly, without blocking.
-    /// Returns null if camera not yet usable (frame 1 before tracking).
-    ///
-    /// v187.7.13 fix — also reject when ARSession is not yet in
-    /// SessionTracking state. Without this, on AR re-entry the cairn
-    /// position evaluates BEFORE ARKit has converged on world frame, so
-    /// the camera "position" is the new session's pre-track origin.
-    /// Cairn spawns at user's feet, then on next frame ARSession converges
-    /// and the world frame snaps — making the cairn appear to teleport
-    /// (the "marker too close after re-enter AR" symptom).
+    /// Tier C — instant, never blocks. Returns null if the camera/session
+    /// is not yet usable. Stage 3 retains this for PortalSpawner; Stage 8
+    /// will remove all callers per Plan Pre-EAS step 17.
     /// </summary>
     public float? GetTierC()
     {
         if (arCamera == null) return null;
-        // Hard gate on session readiness — fixes the "marker too close
-        // after re-enter AR" bug.
-        var sessionState = UnityEngine.XR.ARFoundation.ARSession.state;
-        if (sessionState != UnityEngine.XR.ARFoundation.ARSessionState.SessionTracking)
-        {
-            return null;
-        }
+        var sessionState = ARSession.state;
+        if (sessionState != ARSessionState.SessionTracking) return null;
         var p = arCamera.transform.position;
-        // Reject the (0,0,0) sentinel that ARKit emits before the first
-        // tracked frame. Once tracking starts, position diverges from 0
-        // even if user is at the original anchor.
         if (p.sqrMagnitude < 0.0001f) return null;
         return p.y - AssumedHoldHeight;
     }
 
     /// <summary>
-    /// Best ground Y at the given world XZ. Tries Tier A (real plane)
-    /// first, then Tier B (estimated plane raycast), then Tier C.
-    /// Returns the chosen Y and the tier that produced it.
+    /// Best ground Y at the given world XZ. Tries Tier A → B → C.
+    ///
+    /// v0.2.3 Stage 3:
+    ///   - Tier-A NOW only accepts PlaneAlignment.HorizontalUp. Old code
+    ///     also accepted HorizontalDown (ceilings); user-visible Q2 不贴地
+    ///     root cause. Plan Pre-EAS step 16 grep `HorizontalDown` = 0.
+    ///   - On Tier-A success, attempts FSM transition (UNLOCKED → ARMED,
+    ///     ARMED → LOCKED if stability window met).
     /// </summary>
     public bool QueryGroundY(Vector3 worldXZ, out float y, out Tier tier)
     {
-        // Tier A: scan known plane anchors for one whose XZ contains worldXZ
+        // Tier A — only HorizontalUp planes. CEILINGS REJECTED (Stage 3 fix).
         if (planeManager != null)
         {
             foreach (var plane in planeManager.trackables)
             {
-                if (plane.alignment != PlaneAlignment.HorizontalUp &&
-                    plane.alignment != PlaneAlignment.HorizontalDown) continue;
-                // Crude AABB containment check on plane's bounds in XZ.
-                // ARPlane.center is world space; size is in plane-local XY
-                // (which for horizontal planes is XZ in world).
+                if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
                 var c = plane.center;
-                var s = plane.size; // X = width, Y = depth (in plane local)
+                var s = plane.size;
                 float halfX = s.x * 0.5f;
                 float halfZ = s.y * 0.5f;
                 if (Mathf.Abs(worldXZ.x - c.x) <= halfX &&
@@ -146,17 +179,15 @@ public class GroundYResolver : MonoBehaviour
                 {
                     y = c.y;
                     tier = Tier.A;
+                    OnTierAObserved();
                     return true;
                 }
             }
         }
 
-        // Tier B: raycast from above worldXZ down, against estimated plane
+        // Tier B — raycast estimated plane.
         if (raycastManager != null && arCamera != null)
         {
-            // We need a screen-space query for ARRaycastManager. Project
-            // worldXZ-from-above to screen. If off-screen, skip Tier B
-            // for this position (estimatedPlane is screen-derived anyway).
             var probeWorld = new Vector3(worldXZ.x, arCamera.transform.position.y + 1f, worldXZ.z);
             var screenPt = arCamera.WorldToScreenPoint(probeWorld);
             if (screenPt.z > 0 &&
@@ -178,7 +209,7 @@ public class GroundYResolver : MonoBehaviour
             }
         }
 
-        // Tier C: always available if camera valid
+        // Tier C — fallback.
         var tierC = GetTierC();
         if (tierC.HasValue)
         {
@@ -189,20 +220,12 @@ public class GroundYResolver : MonoBehaviour
 
         y = 0f;
         tier = Tier.C;
-        return false; // Not even Tier C — caller should defer spawn
+        return false;
     }
 
-    /// <summary>
-    /// Register a cairn for ongoing silent ground-Y refinement. The
-    /// resolver tracks its world XZ (we re-query each frame), and will
-    /// silently lerp the cairn's transform.position.y toward the
-    /// best-available Y. Caller passes the cairn's GameObject (we'll
-    /// move its transform.position.y).
-    /// </summary>
     public void RegisterCairn(Transform cairnTransform)
     {
         if (cairnTransform == null) return;
-        // Don't double-register
         for (int i = 0; i < _tracks.Count; i++)
         {
             if (_tracks[i].go == cairnTransform) return;
@@ -212,7 +235,7 @@ public class GroundYResolver : MonoBehaviour
             go = cairnTransform,
             currentY = cairnTransform.position.y,
             targetY = cairnTransform.position.y,
-            currentTier = Tier.C, // assume worst tier at register time
+            currentTier = Tier.C,
             locked = false,
             stableSince = -1f,
         });
@@ -232,14 +255,221 @@ public class GroundYResolver : MonoBehaviour
     public void UnregisterAll()
     {
         _tracks.Clear();
+        // Drop FSM back to UNLOCKED (e.g. session restart).
+        _hasSeenAnyTierA = false;
+        _firstTierATime = -1f;
+        // Stage 3 review fix F3: clear any deferred pending transition so
+        // it doesn't fire after a reset and put us back into stale state.
+        _pendingState = null;
+        TryTransition(A1State.UNLOCKED, "unregister-all");
     }
+
+    /// <summary>
+    /// Stage 3 hook for ceremony / 长期 锁定. Once the user has placed a
+    /// cairn and the ceremony has finished, the caller (PortalSpawner /
+    /// CairnBridge — wired in Stage 8) invokes Freeze() to pin the FSM to
+    /// FROZEN. After Freeze() no further Y updates apply to existing
+    /// tracks.
+    ///
+    /// Stage 3 review fix F2: clears _pendingState before emitting FROZEN
+    /// so that a still-buffered ARMED/LOCKED transition cannot flush
+    /// AFTER the freeze and silently re-arm the FSM.
+    /// </summary>
+    public void Freeze()
+    {
+        _pendingState = null;
+        TryTransition(A1State.FROZEN, "ceremony-complete");
+    }
+
+    /// <summary>
+    /// Stage 3 review fix F1: explicit FROZEN→UNLOCKED escape. Without
+    /// this, the only path out of FROZEN was UnregisterAll() which also
+    /// destroys every cairn track. A4 (RN useTrackingStore) needs to
+    /// invalidate the FSM on long-distance walk (>100m INVALIDATED state)
+    /// without dropping cairns. Wired from CairnBridge in Stage 4.
+    /// </summary>
+    public void Unfreeze()
+    {
+        _pendingState = null;
+        // Reset Tier-A history so we re-arm cleanly from new observations.
+        _hasSeenAnyTierA = false;
+        _firstTierATime = -1f;
+        TryTransition(A1State.UNLOCKED, "external-unfreeze");
+    }
+
+    // ----------------------------------------------------------------
+    // FSM transitions
+    // ----------------------------------------------------------------
+
+    /// <summary>
+    /// Called whenever a Tier-A plane is observed. Drives UNLOCKED→ARMED
+    /// and ARMED→LOCKED transitions.
+    /// </summary>
+    private void OnTierAObserved()
+    {
+        if (_state == A1State.FROZEN) return;
+        if (!_hasSeenAnyTierA)
+        {
+            _hasSeenAnyTierA = true;
+            _firstTierATime = Time.time;
+        }
+        // A11 devices stay in ARMED forever (BLOCKER-9 mitigation).
+        if (_a11Fallback)
+        {
+            EmitA11FallbackOnce();
+            TryTransition(A1State.ARMED, "tier-a-armed-a11");
+            return;
+        }
+        if (_state == A1State.UNLOCKED)
+        {
+            TryTransition(A1State.ARMED, "tier-a-first-seen");
+        }
+        else if (_state == A1State.ARMED)
+        {
+            // Promote to LOCKED only after stability window met. Window is
+            // managed in Update() per cairn-track; here we just require >= 1s
+            // since first Tier-A as a cheap global gate.
+            if (_firstTierATime > 0f &&
+                (Time.time - _firstTierATime) >= 1.0f)
+            {
+                TryTransition(A1State.LOCKED, "stability-window-met");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Apply a state change subject to the 0.5s anti-thrash debounce.
+    ///
+    /// Stage 3 review fix NEW-1 (defensive): if currently FROZEN, only
+    /// the explicit UNLOCKED escape (Unfreeze) is allowed. This protects
+    /// the FROZEN-absorbs-events invariant against future code paths that
+    /// might call TryTransition without the OnTierAObserved early-return
+    /// guard.
+    /// </summary>
+    private void TryTransition(A1State target, string reason)
+    {
+        if (_state == target) { _pendingState = null; return; }
+        // Defensive FROZEN guard. Only Unfreeze() (target=UNLOCKED) and
+        // UnregisterAll() (also target=UNLOCKED) may exit FROZEN. Any
+        // other transition request is silently dropped.
+        if (_state == A1State.FROZEN && target != A1State.UNLOCKED)
+        {
+            _pendingState = null;
+            return;
+        }
+        float since = Time.time - _lastTransitionTime;
+        if (since < ANTI_THRASH_DEBOUNCE_S)
+        {
+            _pendingState = target;
+            return;
+        }
+        var prev = _state;
+        _state = target;
+        _lastTransitionTime = Time.time;
+        _pendingState = null;
+        EmitStateChange(prev, target, reason);
+    }
+
+    private void EmitStateChange(A1State prev, A1State next, string reason)
+    {
+        UnityLogger.IForward("v22-A1-FSM",
+            $"prev={prev} next={next} reason={reason} a11={_a11Fallback}");
+        // Push to RN so useTrackingStore (A4) can compute Plant enable.
+        var b = GetBridge();
+        string json = $"{{\"state\":\"{next}\",\"prev\":\"{prev}\",\"a11\":{(_a11Fallback ? "true" : "false")}}}";
+        if (b != null)
+        {
+            b.SendToRN("A1State", json);
+        }
+#if UNITY_EDITOR
+        // Stage 3 review MT-1: snapshot last emit so test harness can
+        // verify SendToRN payload + invocation count without mocking
+        // CairnBridge.
+        __TEST_LastEmitName = "A1State";
+        __TEST_LastEmitPayload = json;
+        __TEST_EmitCount++;
+        __TEST_LastEmitHadBridge = (b != null);
+#endif
+    }
+
+    private void EmitA11FallbackOnce()
+    {
+        if (_a11FallbackEmitted) return;
+        _a11FallbackEmitted = true;
+        UnityLogger.IForward("v22-A11-FALLBACK-ENGAGED",
+            $"deviceModel={SystemInfo.deviceModel} state={_state}");
+    }
+
+    private CairnBridge GetBridge()
+    {
+        if (_bridge != null) return _bridge;
+        _bridge = Object.FindFirstObjectByType<CairnBridge>();
+        return _bridge;
+    }
+
+    /// <summary>
+    /// Service the deferred pending-state transition. Extracted so the
+    /// Editor harness can exercise the real production code path
+    /// (Stage 3 review MT-2). Originally inlined in Update().
+    ///
+    /// Stage 3 review fix F2: if we have entered FROZEN since the
+    /// pending was queued, drop it on the floor — FROZEN absorbs all
+    /// events per Plan §A1 ⇄ A4 FSM CONTRACT MATRIX.
+    /// </summary>
+    private void ServicePendingTransition()
+    {
+        if (!_pendingState.HasValue) return;
+        if (_state == A1State.FROZEN)
+        {
+            _pendingState = null;
+            return;
+        }
+        if ((Time.time - _lastTransitionTime) >= ANTI_THRASH_DEBOUNCE_S)
+        {
+            TryTransition(_pendingState.Value, "debounce-flush");
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // Update — lerp tracked cairns + service pending FSM transition
+    // ----------------------------------------------------------------
 
     void Update()
     {
+        // Stage 3 review MT-2: real Update flush path. Test harness
+        // exercises the same method via __TEST_RunPendingServicer so
+        // regressions in this branch are caught.
+        ServicePendingTransition();
+
         if (_tracks.Count == 0) return;
         float dt = Time.deltaTime;
 
-        // v199 OTA: lock parameters
+        // v0.2.3 Stage 7 (A7) — phone-flat protection. When the device
+        // is flat (camera looking nearly straight down), ARKit plane
+        // detection runs on a degenerate viewing angle and produces
+        // wildly variable Tier-A planes — visible to the user as cairn
+        // sliding around even after they have stopped moving. Skip the
+        // requery+lerp loop while flat. Q7 invariant: 平放不漂移.
+        // Heuristic: camera.forward.y < -0.85 (~32° from straight down).
+        // A4 INVALIDATED state still drives respawn elsewhere; A7 only
+        // suppresses per-frame Y refinement.
+        bool phoneFlat = false;
+        if (arCamera != null)
+        {
+            float fy = arCamera.transform.forward.y;
+            phoneFlat = fy < -0.85f;
+        }
+        // Stage 8 D2 will set this around the plant ceremony so the 1s
+        // ritual does not get its Y scrambled by lerp.
+        bool ceremonyActive = false;
+        var ps = Object.FindFirstObjectByType<PortalSpawner>();
+        if (ps != null) ceremonyActive = ps.isCeremonyActive;
+        if (phoneFlat || ceremonyActive)
+        {
+            // Frozen for this frame. Tracks keep their current Y.
+            return;
+        }
+
         var globals = CairnGlobals.Instance;
         bool lockEnabled = globals == null || globals.GetBool("GroundLockEnabled", true);
         float lockEpsilon = globals != null
@@ -247,8 +477,6 @@ public class GroundYResolver : MonoBehaviour
         float lockStableMs = globals != null
             ? globals.GetForType(null, "GroundLockStableMs", 1000f) : 1000f;
 
-        // Throttle expensive queries: re-query best tier ~5Hz, lerp every frame.
-        // _frameCount is just a local counter; we don't need precision.
         bool requeryThisFrame = (Time.frameCount % 12) == 0;
 
         for (int i = _tracks.Count - 1; i >= 0; i--)
@@ -259,16 +487,15 @@ public class GroundYResolver : MonoBehaviour
                 _tracks.RemoveAt(i);
                 continue;
             }
-
-            // v199 §C.6 Bug #7: skip lerp entirely once locked.
+            // FROZEN — no further Y updates anywhere.
+            if (_state == A1State.FROZEN) continue;
+            // Per-cairn pin still respected when reached (independent of FSM).
             if (lockEnabled && t.locked) continue;
 
             if (requeryThisFrame)
             {
                 if (QueryGroundY(t.go.position, out float bestY, out Tier bestTier))
                 {
-                    // Never demote (e.g., A → B). Only update target if same
-                    // or higher tier, OR if same tier but Y has drifted >5cm.
                     bool higher = (int)bestTier > (int)t.currentTier;
                     bool same   = bestTier == t.currentTier &&
                                   Mathf.Abs(bestY - t.targetY) > 0.05f;
@@ -280,14 +507,6 @@ public class GroundYResolver : MonoBehaviour
                 }
             }
 
-            // v206 B2 — adaptive lerp.
-            //   |delta| > snapThreshold → instant snap (no visible slide,
-            //                              prevents 'flash twice' artifact)
-            //   |delta| > 0.05m         → FAST lerp (≤50ms transit, sub-perceptual)
-            //   |delta| ≤ 0.05m         → SLOW lerp (cosmetic settle)
-            // OTA: GroundLerpSnapThreshold, GroundLerpFastSpeed, GroundLerpSlowSpeed.
-            // Note: re-uses outer-scope `globals` declared at line 243 (was a
-            // duplicate `var globals` here — CS0136 conflict caught by CI).
             float snapThreshold = globals != null
                 ? globals.GetForType(null, "GroundLerpSnapThreshold", DEFAULT_LERP_SNAP_THRESHOLD)
                 : DEFAULT_LERP_SNAP_THRESHOLD;
@@ -304,8 +523,6 @@ public class GroundYResolver : MonoBehaviour
             {
                 if (absDelta > snapThreshold)
                 {
-                    // Big delta — snap. Avoids the visible slide that the
-                    // user perceived as 'flash twice'.
                     t.currentY = t.targetY;
                 }
                 else
@@ -317,12 +534,10 @@ public class GroundYResolver : MonoBehaviour
                 var p = t.go.position;
                 p.y = t.currentY;
                 t.go.position = p;
-                // Y is moving — reset stable window.
                 t.stableSince = -1f;
             }
 
-            // v199: lock-tier check. Reach Tier-A AND |delta| < epsilon
-            // for >= stableMs.
+            // Per-cairn lock when stabilised on Tier-A.
             if (lockEnabled && t.currentTier == Tier.A &&
                 Mathf.Abs(t.targetY - t.currentY) < lockEpsilon)
             {
@@ -332,8 +547,157 @@ public class GroundYResolver : MonoBehaviour
                     t.locked = true;
                     UnityLogger.IForward("GroundYResolver",
                         $"locked Y={t.currentY:F3} tier={t.currentTier} stable={lockStableMs:F0}ms");
+                    // Promote FSM if every track is locked & A1 still ARMED.
+                    if (_state == A1State.ARMED && AllTracksLocked())
+                    {
+                        TryTransition(A1State.LOCKED, "all-tracks-stable");
+                    }
                 }
             }
         }
     }
+
+    private bool AllTracksLocked()
+    {
+        if (_tracks.Count == 0) return false;
+        for (int i = 0; i < _tracks.Count; i++)
+        {
+            if (!_tracks[i].locked) return false;
+        }
+        return true;
+    }
+
+    // ----------------------------------------------------------------
+    // Editor / test hooks (Plan Pre-EAS step 3 — PlayMode FSM tests)
+    // ----------------------------------------------------------------
+
+#if UNITY_EDITOR
+    // Stage 3 review MT-1 — emit observation hooks for test harness.
+    internal string __TEST_LastEmitName;
+    internal string __TEST_LastEmitPayload;
+    internal int __TEST_EmitCount;
+    internal bool __TEST_LastEmitHadBridge;
+    internal void __TEST_ResetEmitCounters()
+    {
+        __TEST_LastEmitName = null;
+        __TEST_LastEmitPayload = null;
+        __TEST_EmitCount = 0;
+        __TEST_LastEmitHadBridge = false;
+    }
+
+    /// <summary>
+    /// Force a state for FSM unit tests. Editor-only. Bypasses debounce.
+    /// Sets _lastTransitionTime to a value FAR in the past so the next
+    /// real TryTransition will not be inadvertently debounced (this is
+    /// what previously caused the test harness to fail T1/T6/T7 — review
+    /// fix F4/F6).
+    /// </summary>
+    internal void __TEST_ForceState(A1State s)
+    {
+        var prev = _state;
+        _state = s;
+        // Set a synthetic past time so the next real transition is not
+        // suppressed by the 0.5s debounce — tests that intend to verify
+        // debounce explicitly use __TEST_PressDebounceWindow().
+        _lastTransitionTime = -100f;
+        _pendingState = null;
+        EmitStateChange(prev, s, "TEST_ForceState");
+    }
+
+    /// <summary>
+    /// Pin _lastTransitionTime to NOW so the next real TryTransition is
+    /// guaranteed to land within the debounce window. Use this only when
+    /// a test specifically wants to verify "second transition deferred".
+    /// </summary>
+    internal void __TEST_PressDebounceWindow()
+    {
+        _lastTransitionTime = Time.time;
+    }
+
+    internal A1State? __TEST_PendingState() => _pendingState;
+
+    /// <summary>
+    /// Stage 3 review T13b fix: directly invoke TryTransition without
+    /// going through ServicePendingTransition. Lets tests verify the
+    /// TryTransition FROZEN guard genuinely lives — otherwise that guard
+    /// is dead code under the current call graph (every production caller
+    /// pre-filters FROZEN before reaching TryTransition).
+    /// </summary>
+    internal void __TEST_TryTransitionDirect(A1State target, string reason)
+    {
+        TryTransition(target, reason);
+    }
+
+    /// <summary>
+    /// Stage 3 review T13 fix: directly inject a pending state without
+    /// going through TryTransition. Lets tests verify the FROZEN-drops-
+    /// pending logic in ServicePendingTransition and the TryTransition
+    /// FROZEN guard (NEW-1) — both of which are otherwise vacuously
+    /// passed because __TEST_ForceState clears pending.
+    /// </summary>
+    internal void __TEST_InjectPendingState(A1State target)
+    {
+        _pendingState = target;
+    }
+
+    /// <summary>
+    /// Manually advance the FSM's pending-state servicer. Used by the
+    /// Editor harness to verify deferred transitions fire after the
+    /// debounce window without having to actually wait wall-clock time.
+    /// Stage 3 review MT-2: this calls the SAME ServicePendingTransition
+    /// the production Update() calls — not a parallel implementation.
+    /// </summary>
+    internal void __TEST_FlushPending()
+    {
+        if (_pendingState.HasValue)
+        {
+            // Pretend the debounce window has elapsed.
+            _lastTransitionTime = -100f;
+            ServicePendingTransition();
+        }
+    }
+
+    /// <summary>
+    /// Stage 3 review MT-2: directly run the production pending servicer
+    /// without modifying _lastTransitionTime. Lets tests verify both
+    /// branches: (a) within debounce → pending kept, (b) past debounce
+    /// → pending lands.
+    /// </summary>
+    internal void __TEST_RunPendingServicer()
+    {
+        ServicePendingTransition();
+    }
+
+    /// <summary>
+    /// Inject a Tier-A observation. Editor-only.
+    /// </summary>
+    internal void __TEST_PushTierA()
+    {
+        OnTierAObserved();
+    }
+
+    /// <summary>
+    /// Set the Tier-A first-seen time directly so the ARMED→LOCKED
+    /// stability window can be verified without waiting wall-clock 1s.
+    /// </summary>
+    internal void __TEST_SeedTierAFirstSeen(float secondsAgo)
+    {
+        _hasSeenAnyTierA = true;
+        _firstTierATime = Time.time - secondsAgo;
+    }
+
+    /// <summary>
+    /// Toggle A11 fallback. Editor-only.
+    /// </summary>
+    internal void __TEST_SetA11Fallback(bool on)
+    {
+        _a11Fallback = on;
+        _a11FallbackEmitted = false;
+    }
+
+    internal float __TEST_TimeSinceLastTransition()
+    {
+        return Time.time - _lastTransitionTime;
+    }
+#endif
 }

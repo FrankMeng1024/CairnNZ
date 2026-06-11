@@ -135,12 +135,15 @@ interface PlantSheetProps {
   onAimStart?: () => void;
   /** True when GPS unavailable — disables the plant flow. */
   disabled?: boolean;
+  /** v0.2.3 Stage 6 (A9) — when disabled, optionally explain WHY so the
+   *  user understands the wait instead of staring at a grey button. */
+  disabledReason?: string | null;
   /** Reticle scale Animated.Value — owned by parent so the squeeze
    *  animation can be driven from this sheet. */
   reticleScale: Animated.Value;
 }
 
-export function PlantSheet({ onPlant, onAimStart, disabled, reticleScale }: PlantSheetProps) {
+export function PlantSheet({ onPlant, onAimStart, disabled, disabledReason, reticleScale }: PlantSheetProps) {
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState<1 | 2>(1);
   const [selectedType, setSelectedType] = useState<PlantType | null>(null);
@@ -250,6 +253,9 @@ export function PlantSheet({ onPlant, onAimStart, disabled, reticleScale }: Plan
         {page === 1 ? (
           <View style={styles.page1}>
             <Text style={styles.heading}>What did you see?</Text>
+            {disabled && disabledReason ? (
+              <Text style={styles.disabledHint}>{disabledReason}</Text>
+            ) : null}
             <View style={styles.chipRow}>
               {TYPES.map((t) => {
                 const active = selectedType === t.id;
@@ -343,6 +349,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: Spacing.xs,
     textAlign: 'center',
+  },
+  disabledHint: {
+    color: 'rgba(255,200,80,0.85)',
+    fontSize: FontSize.caption,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: Spacing.xs,
   },
   page1: {},
   chipRow: {

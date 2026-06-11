@@ -53,6 +53,12 @@ public partial class PortalSpawner
     // ── Constants ──
     private const string V199_LAYER_NAME = "V199Layer";
 
+    // v0.2.3 Stage 7 (A7) — phone-flat protection state. Stage 8 D2
+    // will toggle this around the plant ceremony so A7 (Update gate
+    // below) suppresses Y-corrections during the 1s ritual. Forward-
+    // compat stub: declared in Stage 7, written in Stage 8.
+    [System.NonSerialized] public bool isCeremonyActive = false;
+
     // ── Per-cairn data tracking (for V2.C9 community state queue) ──
     private readonly Dictionary<string, GameObject> _v199ContainerById = new Dictionary<string, GameObject>();
     private readonly Dictionary<string, CairnBridge.CommunityStateUpdate> _pendingCommunityState
