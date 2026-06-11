@@ -71,16 +71,25 @@ export function TrimSlider({
   React.useEffect(() => { localStartRef.current = localStart; }, [localStart]);
   React.useEffect(() => { localEndRef.current = localEnd; }, [localEnd]);
 
+  // Track which fraction the handle started at when the gesture began —
+  // we apply gestureState.dx (delta in screen pixels) on top, which is
+  // RN's most reliable gesture metric (works on iOS + Android, doesn't
+  // depend on nativeEvent.pageX which is driver-specific).
+  const grantStartFracRef = useRef(0);
+  const grantEndFracRef = useRef(0);
+
   const startResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         draggingHandleRef.current = 'start';
-        measureTrack();
+        grantStartFracRef.current = localStartRef.current;
       },
-      onPanResponderMove: (e) => {
-        const f = fracFromPageX(e.nativeEvent.pageX);
+      onPanResponderMove: (_e, gestureState) => {
+        const usable = Math.max(1, trackW - HANDLE_W);
+        const deltaFrac = gestureState.dx / usable;
+        const f = Math.max(0, Math.min(1, grantStartFracRef.current + deltaFrac));
         setLocalStart(Math.min(f, localEndRef.current - TRIM_MIN_FRACTION));
       },
       onPanResponderRelease: () => {
@@ -100,10 +109,12 @@ export function TrimSlider({
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         draggingHandleRef.current = 'end';
-        measureTrack();
+        grantEndFracRef.current = localEndRef.current;
       },
-      onPanResponderMove: (e) => {
-        const f = fracFromPageX(e.nativeEvent.pageX);
+      onPanResponderMove: (_e, gestureState) => {
+        const usable = Math.max(1, trackW - HANDLE_W);
+        const deltaFrac = gestureState.dx / usable;
+        const f = Math.max(0, Math.min(1, grantEndFracRef.current + deltaFrac));
         setLocalEnd(Math.max(f, localStartRef.current + TRIM_MIN_FRACTION));
       },
       onPanResponderRelease: () => {
@@ -121,17 +132,8 @@ export function TrimSlider({
   const startX = localStart * usable;
   const endX = localEnd * usable;
 
-  const lengthLabel =
-    typeof totalLengthM === 'number'
-      ? `${(totalLengthM * (localEnd - localStart) / 1000).toFixed(2)} km`
-      : '';
-
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.headerText}>Trim</Text>
-        {lengthLabel ? <Text style={styles.lengthLabel}>{lengthLabel}</Text> : null}
-      </View>
       <View ref={trackRef} style={styles.trackRow} onLayout={onTrackLayout}>
         <View style={styles.trackBg} />
         <View
@@ -149,36 +151,13 @@ export function TrimSlider({
           {...endResponder.panHandlers}
         />
       </View>
-      <View style={styles.legendRow}>
-        <Text style={styles.legendText}>Start</Text>
-        <Text style={styles.legendText}>End</Text>
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.sm + 2,
-    backgroundColor: Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  headerText: {
-    fontSize: FontSize.body,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  lengthLabel: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
+    paddingVertical: 4,
   },
   trackRow: {
     height: TRACK_H,
@@ -218,15 +197,5 @@ const styles = StyleSheet.create({
   },
   handleEnd: {
     backgroundColor: Colors.danger,
-  },
-  legendRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: HANDLE_W / 2,
-    marginTop: Spacing.xs,
-  },
-  legendText: {
-    fontSize: FontSize.small,
-    color: Colors.textMuted,
   },
 });

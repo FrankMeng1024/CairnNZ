@@ -190,6 +190,15 @@ export interface UserAnnotationEvent extends BaseEvent {
 }
 
 // ── Union ───────────────────────────────────────────────────────────────────
+// ── L4: User annotation ────────────────────────────────────────────────────
+export interface BreadcrumbEvent extends BaseEvent {
+  event: 'breadcrumb';
+  /** Free-form tag, e.g. 'route_editor_open' / 'via_added' / 'trim_changed' */
+  tag: string;
+  /** Optional structured payload — kept small to stay within 100kb buffer cap. */
+  payload?: Record<string, string | number | boolean | null>;
+}
+
 export type LogEvent =
   | GpsFixEvent
   | KalmanOutputEvent
@@ -205,6 +214,7 @@ export type LogEvent =
   | SosTriggeredEvent
   | ErrorEvent
   | MinuteSnapshotEvent
+  | BreadcrumbEvent
   | UserAnnotationEvent;
 
 // ── Session metadata ────────────────────────────────────────────────────────

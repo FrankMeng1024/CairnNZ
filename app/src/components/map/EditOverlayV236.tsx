@@ -1,20 +1,23 @@
 /**
  * EditOverlayV236 — the entire route-edit interaction surface.
  *
- * Mounted by RouteEditorScreen when `dualEditActive` is true. Replaces the
- * v229–v235 EditableNodeLayer + DraggableHandle stack with the via-point +
- * trim-slider model.
+ * v240 layout overhaul: top stays minimal (just the back button is rendered
+ * by the parent screen — we don't paint the top bar). All edit controls
+ * (Cancel / status pill / Save / TrimSlider / Reset) live in a rounded
+ * white card at the bottom, matching Activity detail + save-as-route
+ * visual standard.
  *
- * Sprint 67 v237 — UI tokens + EN-only copy pass.
+ * Sprint 67 v240.
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrimSlider } from './TrimSlider';
 import { useRouteEditStore } from '../../store/useRouteEditStore';
 import { polylineLengthM } from '../../services/routing/corridor/PolylineSampler';
-import { Colors, Spacing, Radius, FontSize } from '../tokens';
+import { Colors, Spacing, Radius, FontSize, Shadow } from '../tokens';
+import { Icon } from '../Icon';
 
 interface EditOverlayV236Props {
   onCancel: () => void;
@@ -36,83 +39,131 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
   const resetEdits = useRouteEditStore(s => s.resetEdits);
 
   const totalLengthM = polylineLengthM(matchedPoints);
+  const editedLengthM = totalLengthM * (trimEndFrac - trimStartFrac);
 
   return (
     <View pointerEvents="box-none" style={styles.container}>
-      <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm + 2 }]} pointerEvents="auto">
-        <TouchableOpacity onPress={onCancel} style={styles.topBtn}>
-          <Text style={styles.topBtnText}>Cancel</Text>
-        </TouchableOpacity>
-        <View style={styles.topCenter}>
-          {isComputing ? (
-            <View style={styles.computingRow}>
-              <ActivityIndicator size="small" color={Colors.primary} />
-              <Text style={styles.computingText}>Computing…</Text>
-            </View>
-          ) : (
-            <Text style={styles.statusText}>
-              {viaCount}/5 detour points · long-press map to add
-            </Text>
-          )}
-        </View>
-        <TouchableOpacity
-          onPress={() => {
-            if (isComputing) return;
-            onSave();
-          }}
-          disabled={isComputing}
-          style={[styles.topBtn, styles.saveBtn, isComputing && styles.saveBtnDisabled]}
-        >
-          <Text style={[styles.topBtnText, styles.saveBtnText]}>Save</Text>
-        </TouchableOpacity>
-      </View>
-
+      {/* Banner zone — hovers above the bottom card so it doesn't push it. */}
       {(lastError || lastWarning) && (
-        <View style={styles.bannerContainer} pointerEvents="auto">
+        <View
+          style={[styles.bannerContainer, { top: insets.top + 64 }]}
+          pointerEvents="auto"
+        >
           {lastError && (
             <TouchableOpacity
               style={[styles.banner, styles.errorBanner]}
               onPress={() => setLastError(null)}
               activeOpacity={0.85}
             >
-              <Text style={styles.bannerText}>{lastError}</Text>
+              <Icon name="TriangleAlert" size={14} color={Colors.danger} strokeWidth={2} />
+              <Text style={styles.bannerText} numberOfLines={2}>{lastError}</Text>
               <Text style={styles.bannerDismiss}>×</Text>
             </TouchableOpacity>
           )}
           {lastWarning && !lastError && (
             <View style={[styles.banner, styles.warningBanner]}>
-              <Text style={styles.bannerText}>{lastWarning}</Text>
+              <Icon name="TriangleAlert" size={14} color={Colors.severityCaution} strokeWidth={2} />
+              <Text style={styles.bannerText} numberOfLines={2}>{lastWarning}</Text>
             </View>
           )}
         </View>
       )}
 
-      <View style={styles.bottomZone} pointerEvents="auto">
-        <View style={styles.bottomActions}>
-          <TouchableOpacity
-            onPress={() => {
-              Alert.alert(
-                'Reset edits?',
-                'All detour points and trim adjustments will be cleared.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Reset', style: 'destructive', onPress: () => resetEdits() },
-                ],
-              );
-            }}
-            style={styles.resetBtn}
-          >
-            <Text style={styles.resetBtnText}>Reset</Text>
-          </TouchableOpacity>
+      {/* Bottom card — rounded white panel, matches view-mode bottomPanel */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.bottomWrap}
+        pointerEvents="box-none"
+      >
+        <View
+          style={[styles.bottomPanel, { paddingBottom: insets.bottom + Spacing.md }]}
+          pointerEvents="auto"
+        >
+          {/* Status pill — N/5 detour points + computing indicator */}
+          <View style={styles.statusRow}>
+            {isComputing ? (
+              <View style={styles.statusPill}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.statusText}>Computing…</Text>
+              </View>
+            ) : (
+              <View style={styles.statusPill}>
+                <Icon name="MapPin" size={14} color={Colors.flag} strokeWidth={2} />
+                <Text style={styles.statusText}>
+                  {viaCount}/5 detour points
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert(
+                  'Reset edits?',
+                  'All detour points and trim adjustments will be cleared.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Reset', style: 'destructive', onPress: () => resetEdits() },
+                  ],
+                );
+              }}
+              style={styles.resetBtn}
+              activeOpacity={0.85}
+            >
+              <Icon name="RotateCcw" size={14} color={Colors.textSecondary} strokeWidth={2} />
+              <Text style={styles.resetBtnText}>Reset</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Hint text — only when no detour yet */}
+          {viaCount === 0 && !isComputing && (
+            <Text style={styles.hintText}>
+              Long-press the map to add a detour point, or drag the slider to trim.
+            </Text>
+          )}
+
+          {/* Trim slider */}
+          <TrimSlider
+            trimStartFrac={trimStartFrac}
+            trimEndFrac={trimEndFrac}
+            onTrimStartChange={setTrimStart}
+            onTrimEndChange={setTrimEnd}
+            totalLengthM={totalLengthM}
+          />
+
+          {/* Length readout */}
+          {totalLengthM > 0 && (
+            <Text style={styles.lengthReadout}>
+              {(editedLengthM / 1000).toFixed(2)} km
+              {trimStartFrac > 0 || trimEndFrac < 1
+                ? ` of ${(totalLengthM / 1000).toFixed(2)} km`
+                : ''}
+            </Text>
+          )}
+
+          {/* Action row — Cancel + Save (Activity-detail-style) */}
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              onPress={onCancel}
+              style={[styles.actionBtn, styles.cancelBtn]}
+              activeOpacity={0.85}
+            >
+              <Icon name="X" size={16} color={Colors.textPrimary} strokeWidth={2.5} />
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                if (isComputing) return;
+                onSave();
+              }}
+              disabled={isComputing}
+              style={[styles.actionBtn, styles.saveBtn, isComputing && styles.saveBtnDisabled]}
+              activeOpacity={0.85}
+            >
+              <Icon name="Check" size={16} color={Colors.surface} strokeWidth={2.5} />
+              <Text style={styles.saveBtnText}>Save</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <TrimSlider
-          trimStartFrac={trimStartFrac}
-          trimEndFrac={trimEndFrac}
-          onTrimStartChange={setTrimStart}
-          onTrimEndChange={setTrimEnd}
-          totalLengthM={totalLengthM}
-        />
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -120,28 +171,130 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between',
   },
-  topBar: {
+  bannerContainer: {
+    position: 'absolute',
+    left: Spacing.md,
+    right: Spacing.md,
+  },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: Radius.button,
+    marginBottom: Spacing.xs + 2,
+    ...Shadow.card,
+  },
+  errorBanner: {
+    backgroundColor: Colors.dangerBg,
+    borderWidth: 1,
+    borderColor: Colors.danger,
+  },
+  warningBanner: {
+    backgroundColor: Colors.severityCautionBg,
+    borderWidth: 1,
+    borderColor: Colors.severityCaution,
+  },
+  bannerText: {
+    flex: 1,
+    fontSize: FontSize.small,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+  },
+  bannerDismiss: {
+    fontSize: FontSize.h3,
+    color: Colors.textSecondary,
+    paddingLeft: Spacing.sm,
+  },
+
+  bottomWrap: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: 0,
+  },
+  bottomPanel: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.sheet,
+    borderTopRightRadius: Radius.sheet,
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.md,
+    ...Shadow.elevated,
+  },
+
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.sm + 2,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.primaryBg,
   },
-  topBtn: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.base,
-    borderRadius: Radius.button,
-    backgroundColor: Colors.bg,
-  },
-  topBtnText: {
-    fontSize: FontSize.body,
+  statusText: {
+    fontSize: FontSize.small,
+    fontWeight: '600',
     color: Colors.textPrimary,
-    fontWeight: '500',
+  },
+  resetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  resetBtnText: {
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  hintText: {
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+  },
+  lengthReadout: {
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+
+  actionRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.button,
+  },
+  cancelBtn: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  cancelBtnText: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.body,
+    fontWeight: '700',
   },
   saveBtn: {
     backgroundColor: Colors.primary,
@@ -151,76 +304,7 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     color: Colors.surface,
-    fontWeight: '600',
-  },
-  topCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  computingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  computingText: {
-    marginLeft: Spacing.sm,
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-  },
-  statusText: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-  },
-  bannerContainer: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-  },
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: Spacing.md,
-    borderRadius: Radius.button,
-    marginBottom: Spacing.xs + 2,
-  },
-  errorBanner: {
-    backgroundColor: Colors.dangerBg,
-    borderWidth: 1,
-    borderColor: Colors.danger,
-  },
-  warningBanner: {
-    backgroundColor: Colors.warningBg,
-    borderWidth: 1,
-    borderColor: Colors.warning,
-  },
-  bannerText: {
-    flex: 1,
-    fontSize: FontSize.caption,
-    color: Colors.textPrimary,
-  },
-  bannerDismiss: {
-    fontSize: FontSize.h3,
-    color: Colors.textSecondary,
-    paddingLeft: Spacing.sm,
-  },
-  bottomZone: {
-    backgroundColor: 'transparent',
-  },
-  bottomActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.xs + 2,
-  },
-  resetBtn: {
-    paddingVertical: Spacing.xs + 2,
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.button - 4,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  resetBtnText: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
+    fontSize: FontSize.body,
+    fontWeight: '700',
   },
 });

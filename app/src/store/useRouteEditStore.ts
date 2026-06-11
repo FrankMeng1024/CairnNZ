@@ -718,11 +718,27 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const state = get();
     if (!state.isOpen) return;
     if (state.isSaving) return;
+    // v240 — user explicitly does NOT want resume-on-relaunch. Treat
+    // unmount-without-explicit-save as a discard: clear the AsyncStorage
+    // session so EditResumePrompt never fires for this work. Old design
+    // (preserve session for resume) caused users to see a "Discard?"
+    // alert every time the OS reclaimed memory.
+    const cancelledId = state.sessionId;
     set(s => ({
       isOpen: false,
       isComputing: false,
+      sessionId: null,
       editOpSeq: s.editOpSeq + 1,
     }));
+    if (cancelledId) {
+      recentlyCancelledSessions.add(cancelledId);
+      setTimeout(() => recentlyCancelledSessions.delete(cancelledId), 30_000);
+      chainSessionWrite(() => clearSession())
+        .catch(() => {})
+        .finally(() => recentlyCancelledSessions.delete(cancelledId));
+    } else {
+      chainSessionWrite(() => clearSession()).catch(() => {});
+    }
   },
 
   async saveAndExit() {

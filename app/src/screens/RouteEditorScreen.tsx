@@ -41,6 +41,8 @@ import { ViaPointLayer } from '../components/map/ViaPointLayer';
 import { EditOverlayV236 } from '../components/map/EditOverlayV236';
 import { getFlagsSync } from '../config/featureFlags';
 import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
+import { debugLogger } from '../services/debugLogger';
+import { telemetryUploader } from '../services/telemetryUploader';
 
 // Conditional Mapbox import — same pattern as RoutesScreen.
 let MapView: any = null;
@@ -170,6 +172,34 @@ export function RouteEditorScreen() {
       if (dualEditActiveRef.current) {
         try { useRouteEditStore.getState().detachUI(); } catch {}
       }
+    };
+  }, []);
+
+  // ── Debug logger session for the editor (v240).
+  // Capture all edit operations to a debugLogger session so logs can be
+  // uploaded to the server when the user exits the editor — same pattern
+  // as tracking sessions, but with activity_mode=null (free / non-tracking).
+  // Skips if a tracking session is already active (don't disturb it).
+  useEffect(() => {
+    if (debugLogger.getCurrentSessionId()) {
+      // A tracking session is active — leave it alone, our logs will
+      // co-mingle into that session and upload with it.
+      return;
+    }
+    try {
+      debugLogger.setEnabled(true);
+      debugLogger.startSession({ activity_mode: 'free' });
+      debugLogger.log({ ts: Date.now(), event: 'breadcrumb', tag: 'route_editor_open' });
+    } catch { /* swallow */ }
+    return () => {
+      try {
+        debugLogger.log({ ts: Date.now(), event: 'breadcrumb', tag: 'route_editor_close' });
+        debugLogger.endSession().then((endedId) => {
+          if (endedId) {
+            telemetryUploader.upload(endedId).catch(() => {});
+          }
+        }).catch(() => {});
+      } catch { /* swallow */ }
     };
   }, []);
 
@@ -550,20 +580,21 @@ export function RouteEditorScreen() {
         )}
       </View>
 
-      {/* Edit overlay (above map, captures top + bottom) */}
+      {/* Top floating BackButton — same in view-mode and edit-mode for
+          consistency with the rest of the app. */}
+      <View style={[styles.topOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+        <View style={styles.topRow} pointerEvents="box-none">
+          <BackButton variant="pill" />
+          <View style={{ flex: 1 }} />
+        </View>
+      </View>
+
+      {/* Edit overlay (above map, captures bottom only) */}
       {isEditing ? (
         <EditOverlayV236 onCancel={handleCancelEdit} onSave={handleSave} />
       ) : (
         <>
-          {/* Top floating bar — pill BackButton, no background, sits over the map */}
-          <View style={[styles.topOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-            <View style={styles.topRow} pointerEvents="box-none">
-              <BackButton variant="pill" />
-              <View style={{ flex: 1 }} />
-            </View>
-          </View>
-
-          {/* Bottom panel — rounded white card overlay (v235 visual) */}
+          {/* Bottom panel — rounded white card overlay (matches Activity detail) */}
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.bottomPanelWrap}
