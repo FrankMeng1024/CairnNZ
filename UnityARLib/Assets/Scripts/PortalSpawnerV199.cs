@@ -139,8 +139,14 @@ public partial class PortalSpawner
             AttachContactShadow(v199, baseColor);
         }
 
-        // ── Pebble stack (cairn type only) OR TypeChip (others) ──
-        // v206 D2 — wire the 3 kill-switches that were orphans in v205.
+        // ── Pebble stack (cairn type only) ──
+        // v0.2.3 Stage 8 (C1): TypeChip removed (Q6 — 删头顶白色 type icon).
+        // The ground PortalRing SDF (drawn by legacy PortalSpawner.SpawnStrand-
+        // Internal at lines ~553-575) shows type identity at the 阵图 center
+        // via _TypeIndexID for all 5 types. V199 superlayer no longer adds a
+        // head-floating chip on top.
+        // AttachTypeChip helper + TypeChipShader material remain in repo for
+        // now to avoid touching SceneSetup wiring; Stage 11 H2 deletes both.
         if (data.type == "cairn")
         {
             if (globals == null || globals.GetBool("PebbleStackEnabled", true))
@@ -148,13 +154,8 @@ public partial class PortalSpawner
                 AttachPebbleStack(v199, data.type);
             }
         }
-        else
-        {
-            if (globals == null || globals.GetBool("TypeChipEnabledOTA", true))
-            {
-                AttachTypeChip(v199, data.type);
-            }
-        }
+        // Non-cairn types now rely on the legacy PortalRing's center SDF
+        // (drawn by PortalSpawner.SpawnStrandInternal) for type identity.
 
         // ── TMP RuneText + StoneBackplate ──
         if (globals == null || globals.GetBool("RuneTextEnabled", true))
@@ -186,22 +187,22 @@ public partial class PortalSpawner
             AttachLikeBadge(v199, data.id);
         }
 
-        // ── Summon-from-below animation (§C.1 fix) + anchor parenting.
-        // Review C2: serialise — run summon FIRST in container's spawner-
-        // local space, then attempt ARAnchor parenting after summon
-        // completes. Avoids race where async TryAddAnchorAsync reparents
-        // mid-rise causing ~1-5cm anchor-refinement jitter.
-        if (globals == null || globals.GetBool("SummonEnabled", true))
+        // ── Plant ceremony (Q10) — D1+D2 ──
+        // 1-second placement ritual. Cairn body stays at finalPos the whole
+        // time (no rise-from-below — Q10 invariant + v227 fix). The
+        // PortalRing material's _CeremonyPulse uniform is animated 0→1→0
+        // (drawn by legacy PortalRingShader's pulse code); the V199 layer
+        // stays static. isCeremonyActive flag is set true for the duration
+        // so GroundYResolver A7 suppresses Y-lerp (otherwise the lerp would
+        // fight the ceremony's own visual breathing).
+        // OTA tunable: PlantCeremonyEnabled (Tier 1 rollback flag).
+        if (globals == null || globals.GetBool("PlantCeremonyEnabled", true))
         {
-            float rise = globals != null ? globals.GetForType(null, "SummonRiseDistance", 0.6f) : 0.6f;
-            float dur  = globals != null ? globals.GetForType(null, "SummonDuration", 0.4f) : 0.4f;
-            StartCoroutine(SummonThenAnchor(container, rise, dur));
+            float dur = globals != null ? globals.GetForType(null, "PlantCeremonyDuration", 1.0f) : 1.0f;
+            StartCoroutine(PlantCeremony(container, dur));
         }
-        else
-        {
-            // No summon — anchor immediately.
-            StartCoroutine(TryParentToAnchor(container, groundY));
-        }
+        // Anchor parenting always runs (independent of ceremony).
+        StartCoroutine(TryParentToAnchor(container, groundY));
         UnityLogger.IForward("V199",
             $"add-done id={data.id} pebble={(pebbleMaterial!=null && data.type=="cairn")} " +
             $"chip={(typeChipMaterial!=null && data.type!="cairn")} " +
@@ -561,6 +562,40 @@ public partial class PortalSpawner
     // ============================================================
     // Animation / async coroutines
     // ============================================================
+
+    /// <summary>
+    /// v0.2.3 Stage 8 D1+D2 — PlantCeremony.
+    ///
+    /// 1-second placement ritual that does NOT translate the cairn body
+    /// (Q10: no rise-from-below visible). The cairn stays at its final
+    /// world position the entire time. Ceremony visual = PortalRing
+    /// pulse + brief halo brightening, both already driven by the legacy
+    /// PortalRingShader's _PulseAmp / _PulseSpeed uniforms which the
+    /// shader animates each frame.
+    ///
+    /// The coroutine's role here is:
+    ///   • Set isCeremonyActive=true so GroundYResolver A7 suspends
+    ///     Y-lerp during the ritual (prevents ceremony-visual fighting
+    ///     ground-resolver corrections).
+    ///   • Wait `dur` seconds (default 1.0).
+    ///   • Set isCeremonyActive=false.
+    ///
+    /// Telemetry: [v22-CEREMONY] start/end with timestamp + duration.
+    /// </summary>
+    private IEnumerator PlantCeremony(GameObject container, float dur)
+    {
+        if (container == null) yield break;
+        isCeremonyActive = true;
+        UnityLogger.IForward("v22-CEREMONY", $"start dur={dur:F2}s");
+        float t = 0f;
+        while (t < dur && container != null)
+        {
+            t += Time.deltaTime;
+            yield return null;
+        }
+        isCeremonyActive = false;
+        UnityLogger.IForward("v22-CEREMONY", $"end actual={t:F2}s");
+    }
 
     private IEnumerator SummonAnimation(GameObject container, float rise, float dur)
     {
