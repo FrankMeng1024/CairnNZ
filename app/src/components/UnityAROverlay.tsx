@@ -509,17 +509,35 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             const aboveFloorThreshold = lastCamY != null ? lastCamY - 0.8 : null;
             const isAboveCamThreshold =
               aboveFloorThreshold != null && msg.y > aboveFloorThreshold;
-            // Bottom-third: only meaningful with at least 3 observations.
+            // Bottom-third: only meaningful with at least 3 observations
+            // AND a meaningful spread. v224 telemetry showed this rejected
+            // real floor (-0.95) when the entire observed cluster was
+            // floor-tier (range 0.19m): 34% cutoff demanded plane be in
+            // the lowest 0.065m which is tighter than ARKit's plane jitter.
+            // v225 fixes: (a) require range >= 0.5m before bot3 can reject
+            // (a 0.5m range means there's a clear high-tier above floor —
+            // tabletops/beds are typically 0.5-1.5m above floor); (b)
+            // absolute-distance floor: plane within 0.20m of minY always
+            // passes (typical floor jitter is <0.10m, so 0.20m gives ample
+            // margin while still catching obvious tabletops 0.5m+ above).
             let isInBottomThird = true;
             if (observedPlaneYsRef.current.length >= 3) {
               const ys = observedPlaneYsRef.current.map(p => p.y);
               const minY = Math.min(...ys);
               const maxY = Math.max(...ys);
               const range = maxY - minY;
-              if (range > 0.1) {
-                // Plane must be within the lower 33% of the observed range.
+              // v225 — only apply percentile-cutoff rejection when the
+              // observed range is wide enough to confidently distinguish
+              // floor from tabletop. Below 0.5m, all observed planes are
+              // likely the same physical surface (floor cluster) and any
+              // reject is a false positive.
+              if (range >= 0.5) {
                 const cutoff = minY + range * 0.34;
-                isInBottomThird = msg.y <= cutoff;
+                // v225 — also accept any plane within 0.20m of the lowest
+                // observed plane (absolute distance floor), regardless of
+                // percentile. This is the floor-cluster safety net.
+                const withinAbsoluteFloorBand = msg.y <= minY + 0.20;
+                isInBottomThird = withinAbsoluteFloorBand || msg.y <= cutoff;
               }
             }
             const isLikelyTabletop = isAboveCamThreshold || !isInBottomThird;
@@ -531,10 +549,19 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             }
             if (msg.area >= MIN_AREA) {
               recentPlanesRef.current.push({ y: msg.y, area: msg.area, t: now });
-              // Pick the largest-area plane in the rolling buffer.
+              // v225 — pick the LOWEST plane among large-enough candidates,
+              // not the largest-area. Production v224 telemetry showed the
+              // largest-area policy choosing y=-0.06 (small wardrobe top)
+              // over y=-0.86 (real floor) because of buffer ordering and
+              // plane size noise — area is not a reliable proxy for "is
+              // this floor". Lowest-Y in the post-F4-filtered buffer is
+              // a stronger signal: anything that survived F4 is plausibly
+              // floor-like, and among those the lowest is most likely the
+              // actual floor (tabletops/beds always sit ABOVE the floor).
+              // F4's reject already screens out clear non-floor.
               let best = recentPlanesRef.current[0];
               for (const p of recentPlanesRef.current) {
-                if (p.area > best.area) best = p;
+                if (p.y < best.y) best = p;
               }
               groundYRef.current = best.y;
             } else if (groundYRef.current === null) {

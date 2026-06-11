@@ -589,7 +589,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //           - UnityLogger rate-limit bypass for [v22-*] tags
 //           - TMP font BuildScript hard-fail + Resources/Fonts commit
 //           - debug-snapshot enriched meta (state snapshot RPC)
-export const OTA_VERSION = 224;
+//   225 — F4 hotfix from v224 telemetry id=783 measured behavior. Two
+//         bugs surfaced:
+//           a) bot3 false-positive: real floor at y=-0.95 was rejected
+//              with bot3=false because the entire observed cluster was
+//              floor-tier (range 0.19m), so 34% cutoff demanded plane
+//              be in lowest 0.065m — tighter than ARKit's per-frame
+//              plane jitter. Fix: require range >= 0.5m before bot3
+//              can reject (below that, all observed planes are likely
+//              the same physical floor cluster); add absolute-distance
+//              safety net (any plane within 0.20m of minY always passes
+//              regardless of percentile).
+//           b) max-area picked wrong plane: telemetry showed groundYRef
+//              jumping to y=-0.06 (small wardrobe top) over y=-0.86
+//              (real floor 1.6m²) because area is not a reliable proxy
+//              for "is this floor". v225 changes selection to LOWEST-Y
+//              among F4-survivors. Anything that survived F4 is
+//              plausibly floor-like; among those the lowest is most
+//              likely the actual floor (tabletops/beds always ABOVE
+//              floor in the AR world frame).
+export const OTA_VERSION = 225;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
