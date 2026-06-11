@@ -24,7 +24,9 @@ import {
   validateEnvelope,
 } from './editEnvelopeTypes';
 
-const CACHE_PREFIX = '@cairn:edit_envelope:v1:';
+// v233 fix: bump cache prefix v1 → v2 to force-invalidate v232 envelopes
+// (which were the noisy 157-junction bad data). Old keys never read again.
+const CACHE_PREFIX = '@cairn:edit_envelope:v2:';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const POLL_MAX_TRIES = 4;
 const POLL_DELAY_MS = 1500;

@@ -720,7 +720,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //           • routeNodeAnchors: trim-restore samples every 100m along
 //             the trimmed segment instead of every GPS vertex.
 //           • EditableNodeLayer: drag disabled — tap-to-tap only.
-export const OTA_VERSION = 233;
+//   234 — v233 follow-up after first device test:
+//         • app cache prefix v1 → v2 to force-invalidate v232's bad
+//           157-junction envelopes (the cache hid the v233 backend
+//           filter improvement on existing routes).
+//         • dot sizes raised ~1.7× (idle 10→18, candidate 14→22,
+//           selected 18→28) with thicker white borders. v232 dots
+//           were too small to see/tap on a busy map.
+export const OTA_VERSION = 234;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

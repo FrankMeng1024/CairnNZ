@@ -194,33 +194,36 @@ function dotStyleFor(
   const isEndpoint = kind === 'endpoint-start' || kind === 'endpoint-end';
   const isStart = kind === 'endpoint-start';
 
+  // v233 fix: dots were too small to see/tap reliably on a busy map.
+  // Sizes raised ~1.7x. idle now 18 (was 10), candidates 22 (was 14),
+  // selected 28 (was 18). Borders thicker for contrast against road.
   if (state === 'selected') {
     return {
       backgroundColor: isEndpoint ? (isStart ? '#10B981' : '#EF4444') : '#3B82F6',
-      width: 18,
-      height: 18,
-      borderRadius: 9,
-      borderWidth: 4,
-      borderColor: 'rgba(59,130,246,0.35)',
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 5,
+      borderColor: 'rgba(59,130,246,0.45)',
     };
   }
   if (state === 'candidate-trim') {
     return {
       backgroundColor: '#F59E0B', // orange — trim semantics
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      borderWidth: 2,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 3,
       borderColor: '#FFFFFF',
     };
   }
   if (state === 'candidate-midpoint') {
     return {
       backgroundColor: '#10B981', // green — midpoint replace
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      borderWidth: 2,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 3,
       borderColor: '#FFFFFF',
     };
   }
@@ -228,19 +231,19 @@ function dotStyleFor(
   if (isEndpoint) {
     return {
       backgroundColor: isStart ? '#10B981' : '#EF4444',
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      borderWidth: 2,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 3,
       borderColor: '#FFFFFF',
     };
   }
   return {
-    backgroundColor: '#94A3B8', // slate — quiet idle
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
+    backgroundColor: '#64748B', // slate-500 — darker than v232's 400 for contrast
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2.5,
     borderColor: '#FFFFFF',
   };
 }
