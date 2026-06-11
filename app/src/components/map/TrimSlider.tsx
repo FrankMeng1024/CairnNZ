@@ -1,21 +1,24 @@
 /**
  * TrimSlider — double-handled slider for trimming a route's head and tail.
  *
- * Sprint 67 v241. Pure client-side: each handle controls a fraction in
+ * Sprint 67 v242. Pure client-side: each handle controls a fraction in
  * [0..1] of the matched polyline's arc length. No API calls.
  *
- * v241 gesture model: PanResponder is bound to the WHOLE track row, not
- * the small handle Views. On grant, we figure out which handle is closer
- * to the touch point (start vs end) and drive that one. On move, we use
- * the absolute x relative to the track (not gestureState.dx) so the
- * handle tracks the finger directly. This fixes:
- *   - "slider only goes left" (Mapbox MapView underneath was stealing
- *     touches that strayed off the small 28×28 handle)
- *   - The ambiguous "which handle is being dragged?" feel
+ * v242 gesture model — uses react-native-gesture-handler's Gesture.Pan()
+ * which runs on the native UI thread and CANNOT be stolen by the Mapbox
+ * MapView underneath (Mapbox uses native gesture handlers too, but
+ * gesture-handler's discrete handlers + simultaneousWithExternalGesture
+ * negotiation works correctly across both).
+ *
+ * The earlier 3 attempts using PanResponder (RN's JS-thread gesture
+ * system) all lost touches to MapView. gesture-handler is the canonical
+ * fix.
  */
 
-import React, { useRef, useState } from 'react';
-import { View, StyleSheet, PanResponder, LayoutChangeEvent, GestureResponderEvent, PanResponderGestureState } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, LayoutChangeEvent } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { Colors } from '../tokens';
 
 const TRIM_MIN_FRACTION = 0.05;
@@ -30,7 +33,11 @@ export interface TrimSliderProps {
 
 const HANDLE_W = 28;
 const TRACK_H = 44;
-const HIT_SLOP = 16; // each handle's effective grab zone (extra px)
+const HIT_SLOP = 16;
+
+function clamp(x: number, lo: number, hi: number): number {
+  return x < lo ? lo : x > hi ? hi : x;
+}
 
 export function TrimSlider({
   trimStartFrac,
@@ -39,109 +46,113 @@ export function TrimSlider({
   onTrimEndChange,
 }: TrimSliderProps): React.JSX.Element {
   const [trackW, setTrackW] = useState(0);
+  // Local fractions during drag (so visual updates 60fps without going
+  // through the store on every frame). Released → onChange.
   const [localStart, setLocalStart] = useState(trimStartFrac);
   const [localEnd, setLocalEnd] = useState(trimEndFrac);
-  const draggingHandleRef = useRef<'start' | 'end' | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
+  // Sync from props when not actively dragging.
   React.useEffect(() => {
-    if (draggingHandleRef.current === null) {
+    if (!isDragging) {
       setLocalStart(trimStartFrac);
       setLocalEnd(trimEndFrac);
     }
-  }, [trimStartFrac, trimEndFrac]);
-
-  const localStartRef = useRef(localStart);
-  const localEndRef = useRef(localEnd);
-  React.useEffect(() => { localStartRef.current = localStart; }, [localStart]);
-  React.useEffect(() => { localEndRef.current = localEnd; }, [localEnd]);
+  }, [trimStartFrac, trimEndFrac, isDragging]);
 
   const onTrackLayout = (e: LayoutChangeEvent) => {
     setTrackW(e.nativeEvent.layout.width);
   };
 
-  // Convert a touch's locationX (relative to the trackRow View) into a
-  // fraction in [0..1]. The usable portion of the track is trackW - HANDLE_W
-  // (because handle Views are HANDLE_W wide and centered on their `left`).
-  const fracFromLocalX = (localX: number): number => {
-    const usable = Math.max(1, trackW - HANDLE_W);
-    const f = (localX - HANDLE_W / 2) / usable;
-    return Math.max(0, Math.min(1, f));
-  };
+  // Build the gesture once per (trackW, localStart, localEnd) closure
+  // — useMemo / useEffect re-creating it each frame would lose state.
+  // We use refs for the latest fractions inside the gesture worklets.
+  const startRef = React.useRef(localStart);
+  const endRef = React.useRef(localEnd);
+  const draggingHandleRef = React.useRef<'start' | 'end' | null>(null);
+  const grantXRef = React.useRef(0);
+  React.useEffect(() => { startRef.current = localStart; }, [localStart]);
+  React.useEffect(() => { endRef.current = localEnd; }, [localEnd]);
 
-  const responder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderTerminationRequest: () => false, // don't yield to MapView
-      onPanResponderGrant: (e: GestureResponderEvent) => {
-        const usable = Math.max(1, trackW - HANDLE_W);
-        const localX = e.nativeEvent.locationX;
-        const startPx = localStartRef.current * usable + HANDLE_W / 2;
-        const endPx = localEndRef.current * usable + HANDLE_W / 2;
-        const distToStart = Math.abs(localX - startPx);
-        const distToEnd = Math.abs(localX - endPx);
-        // Pick whichever handle is closer (within HIT_SLOP). If both are
-        // far, prefer the one whose direction the touch is heading toward
-        // — but for grant we only have the start point, so closer wins.
-        draggingHandleRef.current = distToStart <= distToEnd ? 'start' : 'end';
-      },
-      onPanResponderMove: (e: GestureResponderEvent, _g: PanResponderGestureState) => {
-        const localX = e.nativeEvent.locationX;
-        const f = fracFromLocalX(localX);
-        if (draggingHandleRef.current === 'start') {
-          setLocalStart(Math.min(f, localEndRef.current - TRIM_MIN_FRACTION));
-        } else if (draggingHandleRef.current === 'end') {
-          setLocalEnd(Math.max(f, localStartRef.current + TRIM_MIN_FRACTION));
-        }
-      },
-      onPanResponderRelease: () => {
-        const which = draggingHandleRef.current;
-        draggingHandleRef.current = null;
-        if (which === 'start') {
-          onTrimStartChange(localStartRef.current);
-        } else if (which === 'end') {
-          onTrimEndChange(localEndRef.current);
-        }
-      },
-      onPanResponderTerminate: () => {
-        const which = draggingHandleRef.current;
-        draggingHandleRef.current = null;
-        if (which === 'start') {
-          onTrimStartChange(localStartRef.current);
-        } else if (which === 'end') {
-          onTrimEndChange(localEndRef.current);
-        }
-      },
-    }),
-  ).current;
+  const usable = Math.max(1, trackW - HANDLE_W);
 
-  const usable = Math.max(0, trackW - HANDLE_W);
+  function fracFromTrackX(x: number): number {
+    return clamp((x - HANDLE_W / 2) / usable, 0, 1);
+  }
+
+  function handleBegin(touchX: number) {
+    grantXRef.current = touchX;
+    const startPx = startRef.current * usable + HANDLE_W / 2;
+    const endPx = endRef.current * usable + HANDLE_W / 2;
+    const distToStart = Math.abs(touchX - startPx);
+    const distToEnd = Math.abs(touchX - endPx);
+    draggingHandleRef.current = distToStart <= distToEnd ? 'start' : 'end';
+    setIsDragging(true);
+  }
+
+  function handleUpdate(touchX: number) {
+    const f = fracFromTrackX(touchX);
+    if (draggingHandleRef.current === 'start') {
+      const next = Math.min(f, endRef.current - TRIM_MIN_FRACTION);
+      setLocalStart(next);
+    } else if (draggingHandleRef.current === 'end') {
+      const next = Math.max(f, startRef.current + TRIM_MIN_FRACTION);
+      setLocalEnd(next);
+    }
+  }
+
+  function handleEnd() {
+    const which = draggingHandleRef.current;
+    draggingHandleRef.current = null;
+    setIsDragging(false);
+    if (which === 'start') onTrimStartChange(startRef.current);
+    else if (which === 'end') onTrimEndChange(endRef.current);
+  }
+
+  const pan = Gesture.Pan()
+    .minDistance(0)
+    .activateAfterLongPress(0)
+    .onBegin((e) => {
+      'worklet';
+      runOnJS(handleBegin)(e.x);
+    })
+    .onUpdate((e) => {
+      'worklet';
+      runOnJS(handleUpdate)(e.x);
+    })
+    .onEnd(() => {
+      'worklet';
+      runOnJS(handleEnd)();
+    })
+    .onFinalize(() => {
+      'worklet';
+      runOnJS(handleEnd)();
+    });
+
   const startX = localStart * usable;
   const endX = localEnd * usable;
 
   return (
     <View style={styles.container}>
-      <View
-        style={styles.trackRow}
-        onLayout={onTrackLayout}
-        {...responder.panHandlers}
-      >
-        <View style={styles.trackBg} />
-        <View
-          style={[
-            styles.trackFill,
-            { left: startX + HANDLE_W / 2, width: Math.max(0, endX - startX) },
-          ]}
-        />
-        <View
-          style={[styles.handle, styles.handleStart, { left: startX }]}
-          pointerEvents="none"
-        />
-        <View
-          style={[styles.handle, styles.handleEnd, { left: endX }]}
-          pointerEvents="none"
-        />
-      </View>
+      <GestureDetector gesture={pan}>
+        <View style={styles.trackRow} onLayout={onTrackLayout} collapsable={false}>
+          <View style={styles.trackBg} />
+          <View
+            style={[
+              styles.trackFill,
+              { left: startX + HANDLE_W / 2, width: Math.max(0, endX - startX) },
+            ]}
+          />
+          <View
+            style={[styles.handle, styles.handleStart, { left: startX }]}
+            pointerEvents="none"
+          />
+          <View
+            style={[styles.handle, styles.handleEnd, { left: endX }]}
+            pointerEvents="none"
+          />
+        </View>
+      </GestureDetector>
     </View>
   );
 }

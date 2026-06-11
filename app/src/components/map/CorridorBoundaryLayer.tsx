@@ -35,8 +35,8 @@ interface Props {
   radiusM?: number;
 }
 
-const SAMPLES_PER_TRACE = 50;
-const CIRCLE_SEGMENTS = 24;
+const SAMPLES_PER_TRACE = 12;
+const CIRCLE_SEGMENTS = 32;
 
 function buildCorridorGeoJSON(
   originalPoints: Array<{ lat: number; lng: number }>,
@@ -94,7 +94,7 @@ export function CorridorBoundaryLayer({ originalPoints, radiusM = 1000 }: Props)
         id="corridor-boundary-fill"
         style={{
           fillColor: Colors.primary,
-          fillOpacity: 0.10,
+          fillOpacity: 0.04,
         }}
       />
       {LineLayer && (
@@ -103,7 +103,7 @@ export function CorridorBoundaryLayer({ originalPoints, radiusM = 1000 }: Props)
           style={{
             lineColor: Colors.primary,
             lineWidth: 1.5,
-            lineOpacity: 0.35,
+            lineOpacity: 0.45,
             lineDasharray: [3, 3],
           }}
         />

@@ -49,8 +49,12 @@ export function RootNavigator() {
           headerShown: false,
           animation: 'ios_from_right',
           animationDuration: 320,
-          gestureEnabled: true,
-          gestureDirection: 'horizontal',
+          // v242: disable swipe-back globally per PO. The left-edge swipe
+          // was conflicting with in-screen drag gestures (trim slider's
+          // green handle, scrollable cards). Users could trigger an
+          // accidental back navigation by drag-starting too close to the
+          // screen edge. Use the explicit BackButton instead.
+          gestureEnabled: false,
         }}
       >
         {isLoggedIn ? (

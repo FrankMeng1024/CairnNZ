@@ -136,16 +136,9 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
             </Text>
           )}
 
-          {/* Action row — Cancel + Save (Activity-detail-style) */}
+          {/* Action row — Save (left, primary) + Cancel (right, secondary).
+              No icons per PO request — text-only buttons match Cairn pattern. */}
           <View style={styles.actionRow}>
-            <TouchableOpacity
-              onPress={onCancel}
-              style={[styles.actionBtn, styles.cancelBtn]}
-              activeOpacity={0.85}
-            >
-              <Icon name="X" size={16} color={Colors.textPrimary} strokeWidth={2.5} />
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
                 if (isComputing) return;
@@ -155,8 +148,14 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
               style={[styles.actionBtn, styles.saveBtn, isComputing && styles.saveBtnDisabled]}
               activeOpacity={0.85}
             >
-              <Icon name="Check" size={16} color={Colors.surface} strokeWidth={2.5} />
               <Text style={styles.saveBtnText}>Save</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onCancel}
+              style={[styles.actionBtn, styles.cancelBtn]}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
