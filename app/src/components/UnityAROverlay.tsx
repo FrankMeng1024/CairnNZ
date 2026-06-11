@@ -131,6 +131,9 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
   // got groundY=0.30 from a 0.3-area outlier instead of larger nearby
   // planes). Buffer last 5s of plane events with area>=0.5; pick largest.
   const recentPlanesRef = useRef<Array<{ y: number; area: number; t: number }>>([]);
+  // v220 F4 — track last camera Y from ArFrame so PlaneDetected can reject
+  // tabletops/shelves (planes higher than camY - 0.5m are likely not floor).
+  const lastCameraYRef = useRef<number | null>(null);
   // v208 — REMOVED groundLockedRef (and the v206 B1 lock-Y sniff in UnityLog
   // case). Unity emits "[GroundYResolver] locked Y=..." per-CAIRN, not
   // per-session — accepting any single lock as session-wide ground caused
@@ -235,6 +238,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
       bulkSpawnedRef.current = false;
       emptyMarkerFrameCountRef.current = 0;
       recentPlanesRef.current = [];
+      lastCameraYRef.current = null;
           crashLogger.breadcrumb(`${TAG}:clearAll dispatched`);
         } catch (e: any) {
           crashLogger.breadcrumb(`${TAG}:clearAll-error ${String(e?.message ?? e).slice(0, 80)}`);
@@ -342,6 +346,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
       bulkSpawnedRef.current = false;
       emptyMarkerFrameCountRef.current = 0;
       recentPlanesRef.current = [];
+      lastCameraYRef.current = null;
       crashLogger.breadcrumb(`${TAG}:unmount glReady=${arReadyRef.current}`);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -459,6 +464,24 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             recentPlanesRef.current = recentPlanesRef.current.filter(
               p => now - p.t < STALE_MS
             );
+            // v220 — F4: REJECT planes that are too high (likely tabletop /
+            // shelf / countertop, not floor). v0.2.2 telemetry showed
+            // ground-jump 79cm because area-weighted policy accepted a
+            // 1.2m² plane at y=+0.24 (tabletop) over a 3.0m² plane at
+            // y=-0.55 (floor). Anti-tabletop rule: any plane whose y is
+            // higher than (last camera Y - 0.5m) is rejected as not-floor.
+            // Camera held at chest height ~1.0m, so floor should be ≥1m
+            // below camera; tabletops at ~0.7m below → rejected.
+            const lastCamY = lastCameraYRef.current;
+            const aboveFloorThreshold = lastCamY != null ? lastCamY - 0.5 : null;
+            const isLikelyTabletop =
+              aboveFloorThreshold != null && msg.y > aboveFloorThreshold;
+            if (isLikelyTabletop) {
+              crashLogger.breadcrumb(
+                `${TAG}:ground-reject-tabletop y=${msg.y.toFixed(2)} camY=${lastCamY!.toFixed(2)} threshold=${aboveFloorThreshold!.toFixed(2)} area=${msg.area.toFixed(1)}`
+              );
+              break;
+            }
             if (msg.area >= MIN_AREA) {
               recentPlanesRef.current.push({ y: msg.y, area: msg.area, t: now });
               // Pick the largest-area plane in the rolling buffer.
@@ -479,6 +502,8 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
 
         case 'ArFrame':
           lastFrameRef.current = Date.now();
+          // v220 F4 — track latest camera Y for PlaneDetected anti-tabletop rule.
+          lastCameraYRef.current = msg.py;
           // OTA #181: one-shot breadcrumb on first ArFrame. Reveals whether
           // pose is real (AR tracking) or parser's null→default fallback
           // (parser recovered from F3 corruption but Unity still broken).
@@ -546,10 +571,26 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
               : null;
             const live = { lat: props.userPos.lat, lng: props.userPos.lng };
             const projOrigin = persisted ?? live;
-            // OnSetSessionOffset stays 0 — projOrigin IS ARKit world (0,0,0)
-            // by Viro's contract (worked when worldAlignment was GravityAndHeading;
-            // current Unity build still misaligns compass but at least position
-            // is bounded by GPS noise, not camera drift).
+            // v220 — RE-ENABLE real GPS offset compensation. v212 hardcoded
+            // ox=oz=0 assuming arOrigin == ARKit world (0,0,0), but ARKit
+            // origin = device pose at session start (drifts each reopen).
+            // v0.2.2 telemetry confirmed: camera.px varies 0→5.05→1.83
+            // across 3 reopens at same physical spot → cairn appears at
+            // different visual positions. Worldalignment=GravityAndHeading
+            // fixed AXES but origin drift was unhandled. Now: when persisted
+            // exists and live differs, send real (live - persisted) meters
+            // offset to Unity so PortalSpawner.SpawnStrandInternal applies
+            // it via _sessionOffsetX/Z (v209 fix), compensating for both
+            // user GPS movement AND ARKit origin drift.
+            let offsetN = 0;
+            let offsetE = 0;
+            if (persisted) {
+              const cosLat = Math.cos((persisted.lat * Math.PI) / 180);
+              offsetN = (live.lat - persisted.lat) * 111000;
+              offsetE = (live.lng - persisted.lng) * 111000 * cosLat;
+            }
+            // ARKit GravityAndHeading: +X=East, -Z=North (Apple right-handed
+            // convention). sessionOffset Vector3 = (offsetE, 0, -offsetN).
             const sent = lastSentOriginRef.current;
             const originChanged =
               !sent ||
@@ -560,11 +601,11 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 unityRef.current.postMessage(
                   'CairnBridge',
                   'OnSetSessionOffset',
-                  JSON.stringify({ ox: 0, oz: 0 }),
+                  JSON.stringify({ ox: offsetE, oz: -offsetN }),
                 );
                 lastSentOriginRef.current = { lat: projOrigin.lat, lng: projOrigin.lng };
                 crashLogger.breadcrumb(
-                  `${TAG}:projOrigin lat=${projOrigin.lat.toFixed(7)} lng=${projOrigin.lng.toFixed(7)} mode=${persisted ? 'persisted' : 'live'}`
+                  `${TAG}:OnSetSessionOffset ox=${offsetE.toFixed(2)} oz=${(-offsetN).toFixed(2)} mode=${persisted ? 'persisted' : 'live'}`
                 );
               } catch (e) {
                 crashLogger.breadcrumb(`${TAG}:OnSetSessionOffset:fail ${String(e).slice(0, 80)}`);
