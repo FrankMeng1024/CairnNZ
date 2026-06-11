@@ -181,27 +181,12 @@ export function EditResumePrompt(): null {
                 await useRouteEditStore.getState().beginEdit({
                   routeId: route.id,
                   routePoints: route.points.map(p => ({ lng: p.lng, lat: p.lat, alt: p.alt ?? null } as any)),
-                  trailGraph: null,
-                  walkedIndex: resumeWalkedIndex,
                   resumeFrom: {
                     workingPoints: result.session.workingPoints,
-                    segments: result.session.segments,
+                    viaPoints: (result.session as any).viaPoints ?? [],
+                    trimStartFrac: (result.session as any).trimStartFrac ?? 0,
+                    trimEndFrac: (result.session as any).trimEndFrac ?? 1,
                     enteredAt: result.session.enteredAt,
-                    // v8-audit: backfill midpointDragEnabled=true on
-                    // older sessions that don't have it persisted
-                    // (otherwise resume would error on TS narrowing).
-                    flagsSnapshot: result.session.flagsSnapshot
-                      ? {
-                          editCorridorRadiusMeters: result.session.flagsSnapshot.editCorridorRadiusMeters,
-                          // v10-audit (BUG-TC-1): backfill from current
-                          // flag (not hardcoded true) so a Sprint 65
-                          // session resumed in production with the
-                          // kill-switch off doesn't silently bypass.
-                          midpointDragEnabled:
-                            result.session.flagsSnapshot.midpointDragEnabled ??
-                            (await getFlags()).midpointDragEnabled,
-                        }
-                      : undefined,
                   },
                 });
                 // v20-audit (F-NEW-10): if beginEdit failed (migration

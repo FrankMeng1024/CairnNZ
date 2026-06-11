@@ -86,7 +86,6 @@ app.use('/api/friends', require('./routes/friends'));
 app.use('/api/markers', require('./routes/markers'));
 app.use('/api/telemetry', require('./routes/telemetry'));
 app.use('/api/debug-snapshot', require('./routes/debug-snapshot'));
-app.use('/api/edit-diag', require('./routes/edit-diag'));
 
 // 404 fallback
 app.use((req, res) => {

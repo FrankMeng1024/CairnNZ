@@ -34,6 +34,17 @@ export interface EditSegment {
   confidence?: 'confident' | 'approximate';
 }
 
+/**
+ * Sprint 67 v236: persist via-point edit intent so re-opening the editor
+ * resumes user's vias instead of starting blank. Additive — pre-v236
+ * records simply lack these fields, treated as "no vias, full route".
+ */
+export interface PersistedVia {
+  id: string;
+  lng: number;
+  lat: number;
+}
+
 export interface RouteExtras {
   routeId: string;
   schemaVersion: 1;
@@ -47,6 +58,11 @@ export interface RouteExtras {
    */
   workingPoints?: Array<{ lat: number; lng: number; alt?: number | null }>;
   segments: EditSegment[];
+  /** Sprint 67 v236: latest user-placed via points. Empty/absent => no vias. */
+  viaPoints?: PersistedVia[];
+  /** Sprint 67 v236: trim slider positions in [0..1]. */
+  trimStartFrac?: number;
+  trimEndFrac?: number;
   createdAt: number;
   updatedAt: number;
 }

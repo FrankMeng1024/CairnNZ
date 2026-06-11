@@ -29,6 +29,12 @@ const TTL_MS = 24 * 60 * 60 * 1000; // 24h
 // the session future-dated and clearing it.
 const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
 
+export interface PersistedViaPoint {
+  id: string;
+  lng: number;
+  lat: number;
+}
+
 export interface EditSessionSnapshot {
   sessionId: string;
   routeId: string;
@@ -50,6 +56,14 @@ export interface EditSessionSnapshot {
     editCorridorRadiusMeters: number;
     midpointDragEnabled?: boolean;
   };
+  /**
+   * Sprint 67 v236: via-point + trim edit intent persisted across kill.
+   * Optional for forward compatibility — sessions written before v236
+   * simply lack these fields.
+   */
+  viaPoints?: PersistedViaPoint[];
+  trimStartFrac?: number;
+  trimEndFrac?: number;
 }
 
 // v8-audit (ARCH-REVIEW-V7-012): track consecutive saveSession
