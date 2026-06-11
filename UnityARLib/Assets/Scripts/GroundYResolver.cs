@@ -593,11 +593,11 @@ public class GroundYResolver : MonoBehaviour
 
 #if UNITY_EDITOR
     // Stage 3 review MT-1 — emit observation hooks for test harness.
-    internal string __TEST_LastEmitName;
-    internal string __TEST_LastEmitPayload;
-    internal int __TEST_EmitCount;
-    internal bool __TEST_LastEmitHadBridge;
-    internal void __TEST_ResetEmitCounters()
+    public string __TEST_LastEmitName;
+    public string __TEST_LastEmitPayload;
+    public int __TEST_EmitCount;
+    public bool __TEST_LastEmitHadBridge;
+    public void __TEST_ResetEmitCounters()
     {
         __TEST_LastEmitName = null;
         __TEST_LastEmitPayload = null;
@@ -612,7 +612,7 @@ public class GroundYResolver : MonoBehaviour
     /// what previously caused the test harness to fail T1/T6/T7 — review
     /// fix F4/F6).
     /// </summary>
-    internal void __TEST_ForceState(A1State s)
+    public void __TEST_ForceState(A1State s)
     {
         var prev = _state;
         _state = s;
@@ -629,12 +629,12 @@ public class GroundYResolver : MonoBehaviour
     /// guaranteed to land within the debounce window. Use this only when
     /// a test specifically wants to verify "second transition deferred".
     /// </summary>
-    internal void __TEST_PressDebounceWindow()
+    public void __TEST_PressDebounceWindow()
     {
         _lastTransitionTime = Time.time;
     }
 
-    internal A1State? __TEST_PendingState() => _pendingState;
+    public A1State? __TEST_PendingState() => _pendingState;
 
     /// <summary>
     /// Stage 3 review T13b fix: directly invoke TryTransition without
@@ -643,7 +643,7 @@ public class GroundYResolver : MonoBehaviour
     /// is dead code under the current call graph (every production caller
     /// pre-filters FROZEN before reaching TryTransition).
     /// </summary>
-    internal void __TEST_TryTransitionDirect(A1State target, string reason)
+    public void __TEST_TryTransitionDirect(A1State target, string reason)
     {
         TryTransition(target, reason);
     }
@@ -655,7 +655,7 @@ public class GroundYResolver : MonoBehaviour
     /// FROZEN guard (NEW-1) — both of which are otherwise vacuously
     /// passed because __TEST_ForceState clears pending.
     /// </summary>
-    internal void __TEST_InjectPendingState(A1State target)
+    public void __TEST_InjectPendingState(A1State target)
     {
         _pendingState = target;
     }
@@ -667,7 +667,7 @@ public class GroundYResolver : MonoBehaviour
     /// Stage 3 review MT-2: this calls the SAME ServicePendingTransition
     /// the production Update() calls — not a parallel implementation.
     /// </summary>
-    internal void __TEST_FlushPending()
+    public void __TEST_FlushPending()
     {
         if (_pendingState.HasValue)
         {
@@ -683,7 +683,7 @@ public class GroundYResolver : MonoBehaviour
     /// branches: (a) within debounce → pending kept, (b) past debounce
     /// → pending lands.
     /// </summary>
-    internal void __TEST_RunPendingServicer()
+    public void __TEST_RunPendingServicer()
     {
         ServicePendingTransition();
     }
@@ -691,7 +691,7 @@ public class GroundYResolver : MonoBehaviour
     /// <summary>
     /// Inject a Tier-A observation. Editor-only.
     /// </summary>
-    internal void __TEST_PushTierA()
+    public void __TEST_PushTierA()
     {
         OnTierAObserved();
     }
@@ -700,7 +700,7 @@ public class GroundYResolver : MonoBehaviour
     /// Set the Tier-A first-seen time directly so the ARMED→LOCKED
     /// stability window can be verified without waiting wall-clock 1s.
     /// </summary>
-    internal void __TEST_SeedTierAFirstSeen(float secondsAgo)
+    public void __TEST_SeedTierAFirstSeen(float secondsAgo)
     {
         _hasSeenAnyTierA = true;
         _firstTierATime = Time.time - secondsAgo;
@@ -709,13 +709,13 @@ public class GroundYResolver : MonoBehaviour
     /// <summary>
     /// Toggle A11 fallback. Editor-only.
     /// </summary>
-    internal void __TEST_SetA11Fallback(bool on)
+    public void __TEST_SetA11Fallback(bool on)
     {
         _a11Fallback = on;
         _a11FallbackEmitted = false;
     }
 
-    internal float __TEST_TimeSinceLastTransition()
+    public float __TEST_TimeSinceLastTransition()
     {
         return Time.time - _lastTransitionTime;
     }

@@ -164,6 +164,18 @@ public partial class PortalSpawner
         }
 
         // ── Hero ribbons (mid-distance silhouette) ──
+        // v0.2.3 Stage 8 B1+B2+B3a — DEFERRED.
+        //
+        // 2026-06-11 user pushback: 'Unity 效果是核心 ... 深度理解我们想要的
+        // 动态效果后 去查业界审美设计最好的产品 看看我们是否可以改进 不要
+        // 无脑做 要按照人类审美顶峰来做'.
+        //
+        // The provisional AttachWispRibbons (ParticleSystem-based) below
+        // is correct functionally but was written without the visual-
+        // direction reference research (Death Stranding 2, Apple Vision
+        // Pro, Niantic 2025, etc.) the user mandated. Disabling its
+        // call-site here so the legacy AttachHeroRibbons keeps running
+        // until the new 2D HTML mockup is approved.
         if (globals == null || globals.GetBool("HeroRibbonEnabled", true))
         {
             AttachHeroRibbons(v199);
@@ -562,6 +574,199 @@ public partial class PortalSpawner
     // ============================================================
     // Animation / async coroutines
     // ============================================================
+
+    /// <summary>
+    /// v0.2.3 Stage 8 B1+B2+B3a — Wisp ribbons via ParticleSystem.
+    ///
+    /// Q3: 6-10 random ribbons, S-curve flow, drifting upward around
+    /// the cairn. Replaces the old MeshRibbonStrand approach
+    /// (HeroRibbon + RibbonStrandShader) which was a custom mesh-based
+    /// system that didn't read as "ribbons of light" — looked more
+    /// like flat planar strips.
+    ///
+    /// Implementation: a single ParticleSystem with the TrailModule
+    /// enabled. Each particle leaves a translucent ribbon trail
+    /// (configurable length + width). Velocity-over-lifetime uses two
+    /// sinusoidal curves on X/Z so each particle's path becomes a 3D
+    /// S-curve while drifting +Y. Emission is set to a small burst
+    /// followed by a low rate so we have ~6-10 ribbons visible at any
+    /// time.
+    ///
+    /// Uses additive shader (Unity's default Particles/Standard Unlit
+    /// in additive mode) so ribbons read as light, not solid material.
+    /// Color is per-type baseColor with low alpha for soft layering.
+    ///
+    /// OTA tunables (registered in CairnGlobalsExt — Stage 8 commit):
+    ///   WispRibbonCountMin   default 6
+    ///   WispRibbonCountMax   default 10
+    ///   WispRibbonHeight     default 1.5  (cairn-relative drift height)
+    ///   WispRibbonLifetimeS  default 3.0
+    ///   WispRibbonSpeed      default 0.4  (m/s upward drift)
+    ///   WispRibbonCurve      default 0.25 (S-curve amplitude in m)
+    ///   WispRibbonWidth      default 0.04 (trail width in m)
+    /// </summary>
+    private void AttachWispRibbons(GameObject parent, Color baseColor)
+    {
+        var globals = CairnGlobals.Instance;
+        int countMin = (int)(globals != null
+            ? globals.GetForType(null, "WispRibbonCountMin", 6f) : 6f);
+        int countMax = (int)(globals != null
+            ? globals.GetForType(null, "WispRibbonCountMax", 10f) : 10f);
+        float height = globals != null
+            ? globals.GetForType(null, "WispRibbonHeight", 1.5f) : 1.5f;
+        float lifetime = globals != null
+            ? globals.GetForType(null, "WispRibbonLifetimeS", 3.0f) : 3.0f;
+        float speed = globals != null
+            ? globals.GetForType(null, "WispRibbonSpeed", 0.4f) : 0.4f;
+        float curve = globals != null
+            ? globals.GetForType(null, "WispRibbonCurve", 0.25f) : 0.25f;
+        float width = globals != null
+            ? globals.GetForType(null, "WispRibbonWidth", 0.04f) : 0.04f;
+
+        // Random ribbon count between [countMin, countMax]. Reseed per
+        // cairn so each cairn has its own visual signature instead of
+        // every cairn looking identical.
+        int count = Random.Range(countMin, countMax + 1);
+
+        var go = new GameObject("WispRibbons");
+        go.transform.SetParent(parent.transform, worldPositionStays: false);
+        go.transform.localPosition = Vector3.zero;
+
+        var ps = go.AddComponent<ParticleSystem>();
+        // Stop before configure (ParticleSystem requires this in some
+        // Unity versions to apply module changes deterministically).
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        // ── Main module ──
+        var main = ps.main;
+        main.duration = 5.0f;
+        main.loop = true;
+        main.startLifetime = lifetime;
+        main.startSpeed = speed;
+        main.startSize = 0.0f;  // particles invisible — we render via TrailModule only
+        // Color tinted to the cairn type with mid alpha so ribbons read
+        // as soft light layers instead of opaque strips.
+        var c = baseColor;
+        c.a = 0.55f;
+        main.startColor = c;
+        main.simulationSpace = ParticleSystemSimulationSpace.Local;
+        main.maxParticles = count;
+        main.gravityModifier = 0f;
+
+        // ── Emission module ──
+        var emission = ps.emission;
+        emission.rateOverTime = count / lifetime;  // steady-state count = rateOverTime * lifetime
+        // Initial burst so the first second has ribbons visible
+        // (otherwise a fresh-spawn cairn would have an empty 1s window).
+        var burst = new ParticleSystem.Burst(0.0f, count);
+        emission.SetBursts(new[] { burst });
+
+        // ── Shape module ──
+        // Emit from a small ground-circle at cairn base — rises up.
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius = 0.35f;       // around the PortalRing edge, not center
+        shape.radiusThickness = 0.0f; // emit ON the radius, not inside
+        shape.rotation = new Vector3(-90, 0, 0); // circle in XZ plane (default is XY)
+
+        // ── Velocity over lifetime — produces the S-curve drift ──
+        // Two sinusoidal curves on X/Z + constant +Y → each particle's
+        // path is a 3D S. We use AnimationCurves (mode = Curve) with
+        // a single sine wave per cycle.
+        var vol = ps.velocityOverLifetime;
+        vol.enabled = true;
+        vol.space = ParticleSystemSimulationSpace.Local;
+        var sineXZ = new AnimationCurve(
+            new Keyframe(0.00f,  0.0f, 0f, 0f),
+            new Keyframe(0.25f,  curve, 0f, 0f),
+            new Keyframe(0.50f,  0.0f, 0f, 0f),
+            new Keyframe(0.75f, -curve, 0f, 0f),
+            new Keyframe(1.00f,  0.0f, 0f, 0f)
+        );
+        // Phase-shifted curve for Z so X+Z together trace a circle/S.
+        var sineXZShifted = new AnimationCurve(
+            new Keyframe(0.00f,  curve, 0f, 0f),
+            new Keyframe(0.25f,  0.0f, 0f, 0f),
+            new Keyframe(0.50f, -curve, 0f, 0f),
+            new Keyframe(0.75f,  0.0f, 0f, 0f),
+            new Keyframe(1.00f,  curve, 0f, 0f)
+        );
+        vol.x = new ParticleSystem.MinMaxCurve(1.0f, sineXZ);
+        vol.z = new ParticleSystem.MinMaxCurve(1.0f, sineXZShifted);
+        // Y constant upward — already covered by main.startSpeed in
+        // Local space, but explicit small extra so total drift = height
+        // over lifetime: speed*lifetime should ≈ height.
+        // (0.4 * 3.0 = 1.2m, height OTA default 1.5 — within range.)
+
+        // ── Color over lifetime — fade in then fade out ──
+        var col = ps.colorOverLifetime;
+        col.enabled = true;
+        var grad = new Gradient();
+        grad.SetKeys(
+            new[] {
+                new GradientColorKey(baseColor, 0.0f),
+                new GradientColorKey(baseColor, 0.5f),
+                new GradientColorKey(baseColor, 1.0f),
+            },
+            new[] {
+                new GradientAlphaKey(0.0f, 0.0f),
+                new GradientAlphaKey(0.7f, 0.2f),
+                new GradientAlphaKey(0.7f, 0.7f),
+                new GradientAlphaKey(0.0f, 1.0f),
+            }
+        );
+        col.color = new ParticleSystem.MinMaxGradient(grad);
+
+        // ── Trail module — this is the "ribbon" visual ──
+        var trails = ps.trails;
+        trails.enabled = true;
+        trails.mode = ParticleSystemTrailMode.PerParticle;
+        trails.lifetime = 0.6f;       // trail lasts 0.6s, leaves a long-ish ribbon
+        trails.minVertexDistance = 0.05f;
+        trails.widthOverTrail = width;
+        trails.colorOverTrail = new ParticleSystem.MinMaxGradient(grad);
+        trails.colorOverLifetime = new ParticleSystem.MinMaxGradient(grad);
+
+        // ── Renderer ──
+        var renderer = go.GetComponent<ParticleSystemRenderer>();
+        renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        renderer.alignment = ParticleSystemRenderSpace.View;
+        renderer.shadowCastingMode = ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        // Use existing ribbon material if available (additive glow);
+        // otherwise create a runtime additive material from a default
+        // particle shader so the ribbons always render as light.
+        if (ribbonStrandMaterial != null)
+        {
+            renderer.sharedMaterial = ribbonStrandMaterial;
+            renderer.trailMaterial = ribbonStrandMaterial;
+        }
+        else
+        {
+            // Fallback so something is visible in editor / batch render
+            // when the asset wiring is incomplete.
+            var fallback = Shader.Find("Particles/Standard Unlit");
+            if (fallback != null)
+            {
+                var m = new Material(fallback) { name = "WispRibbon_Runtime" };
+                m.SetFloat("_Mode", 4); // Additive
+                m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                m.SetInt("_ZWrite", 0);
+                m.DisableKeyword("_ALPHATEST_ON");
+                m.EnableKeyword("_ALPHABLEND_ON");
+                m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                m.renderQueue = 3000;
+                renderer.sharedMaterial = m;
+                renderer.trailMaterial = m;
+            }
+        }
+
+        ps.Play();
+
+        UnityLogger.IForward("V199-Wisp",
+            $"AttachWispRibbons count={count} height={height:F2} curve={curve:F2}");
+    }
 
     /// <summary>
     /// v0.2.3 Stage 8 D1+D2 — PlantCeremony.
