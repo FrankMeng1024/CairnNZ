@@ -154,59 +154,79 @@ export async function buildEditContext(
       }
       uploadEditDiag('extract', extractDiag);
       if (result.ok && result.ways.length > 0) {
-        trailGraph = buildTrailGraphFromMapbox(result);
-        // v215 diagnostic log: graph node count + degree histogram so
-        // we can see whether degree-3 junctions actually exist (vs.
-        // OSM data being so sparse that everything is degree-1/2).
-        if (typeof console !== 'undefined' && console.log) {
+        try {
+          trailGraph = buildTrailGraphFromMapbox(result);
+        } catch (e: any) {
+          uploadEditDiag('graph-error', {
+            routeId,
+            ways: result.ways.length,
+            message: e?.message ?? String(e),
+            name: e?.name ?? 'unknown',
+          });
+          trailGraph = null;
+        }
+        if (trailGraph) {
+          // v220 fix: pull diag log out of console.log gate so the
+          // upload always fires. v219 had it nested under
+          // `if (typeof console !== 'undefined' && console.log)` — in
+          // RN production the babel transform may strip the entire
+          // block, including the upload. The console line stays gated
+          // (cheap dev signal); the upload is unconditional.
           const degHist: Record<number, number> = {};
           for (const n of trailGraph.nodes.values()) {
             const d = n.edges.length;
             degHist[d] = (degHist[d] ?? 0) + 1;
           }
-          console.log('[edit-diag-graph]', {
-            nodeCount: trailGraph.nodes.size,
-            truncated: trailGraph.truncated,
-            degHist,
-          });
+          if (typeof console !== 'undefined' && console.log) {
+            console.log('[edit-diag-graph]', {
+              nodeCount: trailGraph.nodes.size,
+              truncated: trailGraph.truncated,
+              degHist,
+            });
+          }
           uploadEditDiag('graph', {
             routeId,
             nodeCount: trailGraph.nodes.size,
             truncated: trailGraph.truncated,
             degHist,
           });
-        }
-        // Densify ways into the corridor index too — same role DOC played.
-        // PointSource 'doc' is reused for Mapbox-sourced points; consumers
-        // (corridor enforcement) only care about lng/lat. See PointCloudIndex.
-        // v208 fix C4: dedupe by 5-decimal-place fingerprint (~1.1m)
-        // before pushing into indexedPoints. Mapbox ways share vertices
-        // at junctions — without dedupe, a 5km city bbox can produce
-        // 10000+ duplicates which makes kdbush construction (~300ms)
-        // visibly block the UI on first edit. Original GPS points
-        // (above) are NOT deduped since they're real samples and
-        // unlikely to share fingerprints.
-        const seenFp = new Set<string>();
-        for (const w of result.ways) {
-          for (let i = 0; i < w.coords.length; i++) {
-            const c = w.coords[i];
-            const fp = `${c.lng.toFixed(5)}_${c.lat.toFixed(5)}`;
-            if (seenFp.has(fp)) continue;
-            seenFp.add(fp);
-            indexedPoints.push({
-              lng: c.lng,
-              lat: c.lat,
-              source: 'doc' as const,
-              refId: `mb:${w.id}:${i}`,
-            });
+          // Densify ways into the corridor index too — same role DOC played.
+          // PointSource 'doc' is reused for Mapbox-sourced points; consumers
+          // (corridor enforcement) only care about lng/lat. See PointCloudIndex.
+          // v208 fix C4: dedupe by 5-decimal-place fingerprint (~1.1m)
+          // before pushing into indexedPoints. Mapbox ways share vertices
+          // at junctions — without dedupe, a 5km city bbox can produce
+          // 10000+ duplicates which makes kdbush construction (~300ms)
+          // visibly block the UI on first edit. Original GPS points
+          // (above) are NOT deduped since they're real samples and
+          // unlikely to share fingerprints.
+          const seenFp = new Set<string>();
+          for (const w of result.ways) {
+            for (let i = 0; i < w.coords.length; i++) {
+              const c = w.coords[i];
+              const fp = `${c.lng.toFixed(5)}_${c.lat.toFixed(5)}`;
+              if (seenFp.has(fp)) continue;
+              seenFp.add(fp);
+              indexedPoints.push({
+                lng: c.lng,
+                lat: c.lat,
+                source: 'doc' as const,
+                refId: `mb:${w.id}:${i}`,
+              });
+            }
           }
         }
       }
       // result.ok === false: trailGraph stays null. Editor opens with
       // endpoint-only anchors (trim still works). No throw, no banner here —
       // upstream UI surfaces the limited-edit state.
-    } catch {
+    } catch (e: any) {
       // Mapbox extraction threw unexpectedly — proceed with original-only corridor.
+      uploadEditDiag('extract-error', {
+        routeId,
+        message: e?.message ?? String(e),
+        name: e?.name ?? 'unknown',
+      });
       trailGraph = null;
     }
   }

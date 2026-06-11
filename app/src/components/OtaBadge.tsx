@@ -504,7 +504,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         total — well under maxVertexCount (rolled back to 30k).
 //         Junction topology preserved at way endpoints; corridor
 //         density still adequate for kdbush proximity queries.
-export const OTA_VERSION = 219;
+//   220 — diag plumbing fix. v219 telemetry id=4 showed extract OK
+//         (5843 ways, 742 junctions, 15724 vertices) but anchors and
+//         graph diag never uploaded — meaning the downstream pipeline
+//         either threw silently OR the upload was eaten by the
+//         console.log gate. Two fixes:
+//           a) buildTrailGraphFromMapbox wrapped in try/catch with
+//              uploadEditDiag('graph-error') so kdbush OOM /
+//              union-find RangeError surfaces instead of silent null.
+//           b) graph diag upload moved out of the
+//              `if (typeof console !== 'undefined' && console.log)`
+//              gate — RN production may strip the entire block. The
+//              console line stays gated; the upload runs unconditionally.
+//           c) outer try/catch around extractJunctions also uploads
+//              `extract-error` with message + name when it throws.
+//         Next telemetry roundtrip will tell us whether 5843 ways are
+//         choking TrailGraph (need to cap ways pre-graph) or the graph
+//         builds fine but routeNodeAnchors is wrong.
+export const OTA_VERSION = 220;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
