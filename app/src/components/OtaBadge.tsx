@@ -684,7 +684,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //                editContext, fall through to legacy path. Empty
 //                envelope is WORSE than legacy (legacy still gives
 //                endpoint-only with a proper corridor index).
-export const OTA_VERSION = 230;
+//   231 — v230 re-review fix N1: `job.resolve(null) && console.error(...)`
+//         short-circuited because resolve returns undefined → all
+//         build failures were silently swallowed in production. Ops
+//         had ZERO visibility into Mapbox token misconfig / fetch
+//         errors / decoder crashes. Replaced with explicit
+//         console.error THEN resolve(null). Now failures show up in
+//         backend logs while still letting the app fall through to
+//         legacy MVT path (no user-visible regression).
+export const OTA_VERSION = 231;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

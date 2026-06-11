@@ -38,7 +38,18 @@ function tryDrain() {
     runningCount++;
     actualRun(job.routeId, job.points)
       .then(env => job.resolve(env))
-      .catch(err => job.resolve(null) && console.error(`[edit-envelope:${job.routeId}] build failed`, err.message))
+      .catch(err => {
+        // v230 fix N1: previously `job.resolve(null) && console.error(...)`
+        // short-circuited because resolve returns undefined → all build
+        // failures were silently swallowed (zero ops visibility into
+        // Mapbox token misconfig, fetch errors, decoder crashes).
+        // Always log first, then resolve.
+        console.error(
+          `[edit-envelope:${job.routeId}] build failed:`,
+          err && err.message ? err.message : err,
+        );
+        job.resolve(null);
+      })
       .finally(() => {
         runningCount--;
         inflight.delete(String(job.routeId));
