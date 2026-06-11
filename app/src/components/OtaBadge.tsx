@@ -775,7 +775,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         distM helper, INVALIDATE_DISTANCE_M constant, INVALIDATED
 //         recovery path in onA1State. A4State enum keeps the value
 //         for backwards compat but no code path enters it.
-export const OTA_VERSION = 242;
+export const OTA_VERSION = 243;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

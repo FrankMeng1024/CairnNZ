@@ -33,7 +33,7 @@ import {
 } from '../services/routing/editAnalytics';
 
 const MAX_VIAS = 5;
-const CORRIDOR_RADIUS_M = 1000;
+const CORRIDOR_RADIUS_M = 500;
 const TRIM_MIN_FRACTION = 0.05;
 
 interface EditState {
@@ -56,6 +56,15 @@ interface EditState {
   viaPoints: ViaPoint[];
   trimStartFrac: number;
   trimEndFrac: number;
+
+  // v243: undo history. Each entry is a snapshot of (viaPoints, trim
+  // fractions, matchedPoints) BEFORE a mutating action. Cap = 20.
+  undoStack: Array<{
+    viaPoints: ViaPoint[];
+    trimStartFrac: number;
+    trimEndFrac: number;
+    matchedPoints: LngLat[];
+  }>;
 
   // Computed-from-original spatial index for corridor checks.
   walkedIndex: PointCloudIndex | null;
@@ -90,6 +99,11 @@ interface EditState {
   setTrimEnd(frac: number): void;
   /** Clear all vias + reset trim to full route. */
   resetEdits(): void;
+
+  /** Undo last edit (via add/move/remove or trim). No-op if stack empty. */
+  undo(): void;
+  /** True when there is at least one undoable action. */
+  canUndo(): boolean;
 
   /** Public setter for lastError (UI dismiss). */
   setLastError(error: string | null): void;
@@ -407,6 +421,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   viaPoints: [],
   trimStartFrac: 0,
   trimEndFrac: 1,
+  undoStack: [],
   walkedIndex: null,
   isComputing: false,
   lastError: null,
@@ -503,6 +518,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       viaPoints: initialVias,
       trimStartFrac: initialTrimStart,
       trimEndFrac: initialTrimEnd,
+      undoStack: [],
       walkedIndex,
       isComputing: false,
       lastError: null,
@@ -570,11 +586,18 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     }
     const inCorridor = isPointInCorridor(coord.lng, coord.lat, state.walkedIndex, CORRIDOR_RADIUS_M);
     if (!inCorridor.inCorridor) {
-      set({ lastError: 'Outside the 1km adjust radius' });
+      set({ lastError: 'Outside the 500m adjust radius' });
       return { ok: false, reason: 'out-of-corridor' };
     }
     const newVia: ViaPoint = { id: genViaId(), lng: coord.lng, lat: coord.lat };
     set(s => ({
+      // v243: push current snapshot onto undo stack BEFORE mutating
+      undoStack: [...s.undoStack, {
+        viaPoints: s.viaPoints,
+        trimStartFrac: s.trimStartFrac,
+        trimEndFrac: s.trimEndFrac,
+        matchedPoints: s.matchedPoints,
+      }].slice(-20),
       viaPoints: [...s.viaPoints, newVia],
       editOpSeq: s.editOpSeq + 1,
       isComputing: true,
@@ -601,7 +624,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     if (!state.walkedIndex) return { ok: false, reason: 'no-index' };
     const inCorridor = isPointInCorridor(coord.lng, coord.lat, state.walkedIndex, CORRIDOR_RADIUS_M);
     if (!inCorridor.inCorridor) {
-      set({ lastError: 'Outside the 1km adjust radius' });
+      set({ lastError: 'Outside the 500m adjust radius' });
       return { ok: false, reason: 'out-of-corridor' };
     }
     const idx = state.viaPoints.findIndex(v => v.id === viaId);
@@ -609,6 +632,12 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const newVias = [...state.viaPoints];
     newVias[idx] = { ...newVias[idx], lng: coord.lng, lat: coord.lat };
     set(s => ({
+      undoStack: [...s.undoStack, {
+        viaPoints: s.viaPoints,
+        trimStartFrac: s.trimStartFrac,
+        trimEndFrac: s.trimEndFrac,
+        matchedPoints: s.matchedPoints,
+      }].slice(-20),
       viaPoints: newVias,
       editOpSeq: s.editOpSeq + 1,
       isComputing: true,
@@ -632,6 +661,12 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const newVias = state.viaPoints.filter(v => v.id !== viaId);
     if (newVias.length === state.viaPoints.length) return;
     set(s => ({
+      undoStack: [...s.undoStack, {
+        viaPoints: s.viaPoints,
+        trimStartFrac: s.trimStartFrac,
+        trimEndFrac: s.trimEndFrac,
+        matchedPoints: s.matchedPoints,
+      }].slice(-20),
       viaPoints: newVias,
       editOpSeq: s.editOpSeq + 1,
       isComputing: true,
@@ -697,6 +732,12 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     }
     if (state.isComputing) return;
     set(s => ({
+      undoStack: [...s.undoStack, {
+        viaPoints: s.viaPoints,
+        trimStartFrac: s.trimStartFrac,
+        trimEndFrac: s.trimEndFrac,
+        matchedPoints: s.matchedPoints,
+      }].slice(-20),
       viaPoints: [],
       trimStartFrac: 0,
       trimEndFrac: 1,
@@ -708,6 +749,39 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const startSeq = get().editOpSeq;
     const startSid = get().sessionId ?? undefined;
     runAndApplyMatching(set, get, startSid ?? null, startSeq).then(() => persistSession(get(), startSid));
+  },
+
+  canUndo() {
+    return get().undoStack.length > 0;
+  },
+
+  undo() {
+    const state = get();
+    if (state.isSaving) {
+      set({ lastError: 'Save in progress — please wait.' });
+      return;
+    }
+    if (state.isComputing) {
+      set({ lastError: 'Computing — please wait' });
+      return;
+    }
+    const stack = state.undoStack;
+    if (stack.length === 0) return;
+    const last = stack[stack.length - 1];
+    const newStack = stack.slice(0, -1);
+    set(s => ({
+      undoStack: newStack,
+      viaPoints: last.viaPoints,
+      trimStartFrac: last.trimStartFrac,
+      trimEndFrac: last.trimEndFrac,
+      matchedPoints: last.matchedPoints,
+      workingPoints: deriveWorking(last.matchedPoints, last.trimStartFrac, last.trimEndFrac),
+      editOpSeq: s.editOpSeq + 1,
+      editCount: s.editCount + 1,
+      lastError: null,
+    }));
+    const startSid = get().sessionId ?? undefined;
+    persistSession(get(), startSid);
   },
 
   setLastError(error) {
@@ -893,6 +967,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       viaPoints: [],
       trimStartFrac: 0,
       trimEndFrac: 1,
+      undoStack: [],
       walkedIndex: null,
       isComputing: false,
       lastError: null,

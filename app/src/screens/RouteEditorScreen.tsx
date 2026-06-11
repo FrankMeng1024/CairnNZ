@@ -32,6 +32,7 @@ import { useSessionStore, loadTrackPoints } from '../store/useSessionStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { snapToRoadAndTrim } from '../services/routeMatcher';
 import { formatDistance } from '../utils/geo';
+import { smoothTrackPoints } from '../utils/smoothTrackPoints';
 import { getCurrentRegion } from '../config/regions';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
@@ -39,7 +40,6 @@ import { BackButton } from '../components/BackButton';
 import { DualLineLayer } from '../components/map/DualLineLayer';
 import { ViaPointLayer } from '../components/map/ViaPointLayer';
 import { EditOverlayV236 } from '../components/map/EditOverlayV236';
-import { CorridorBoundaryLayer } from '../components/map/CorridorBoundaryLayer';
 import { getFlagsSync } from '../config/featureFlags';
 import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
 import { debugLogger } from '../services/debugLogger';
@@ -127,18 +127,20 @@ export function RouteEditorScreen() {
   }, [routeId]);
 
   // ── Load session track points (save-as-route flow).
-  // v241: do NOT snap-to-road. The activity trace is already the cleaned
-  // GPS data (Kalman + dedup applied during recording). Save-as-route
-  // shows the activity AS-IS — no extra processing, no extra Mapbox call,
-  // no "first jumps to a city, then to the route" double camera fit.
+  // v243: apply the SAME Kalman + filter smoothing the activity detail
+  // screen uses for its polyline. Without this, save-as-route shows raw
+  // GPS while the activity page showed smoothed — visual mismatch.
   useEffect(() => {
     if (!fromSessionId) return;
-    const sourcePromise: Promise<Array<{ lat: number; lng: number }>> =
+    const sourcePromise: Promise<Array<{ lat: number; lng: number; accuracy?: number; t?: number }>> =
       fromSessionTrackPoints && fromSessionTrackPoints.length >= 2
-        ? Promise.resolve(fromSessionTrackPoints.map(p => ({ lat: p.lat, lng: p.lng })))
+        ? Promise.resolve(fromSessionTrackPoints.map((p: any) => ({
+            lat: p.lat, lng: p.lng,
+            accuracy: p.accuracy, t: p.t,
+          })))
         : loadTrackPoints(fromSessionId).then(pts =>
             (pts ?? []).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng))
-              .map(p => ({ lat: p.lat, lng: p.lng })),
+              .map(p => ({ lat: p.lat, lng: p.lng, accuracy: (p as any).accuracy, t: (p as any).t })),
           );
     sourcePromise
       .then((tp) => {
@@ -147,7 +149,13 @@ export function RouteEditorScreen() {
           setSnapWarning(true);
           return;
         }
-        setSessionTrackPoints(tp);
+        const smoothed = smoothTrackPoints(tp);
+        if (smoothed.length >= 2) {
+          setSessionTrackPoints(smoothed.map(p => ({ lat: p.lat, lng: p.lng })));
+        } else {
+          setSessionTrackPoints(tp.map(p => ({ lat: p.lat, lng: p.lng })));
+          setSnapWarning(true);
+        }
       })
       .catch(() => {
         setSessionTrackPoints([]);
@@ -539,13 +547,6 @@ export function RouteEditorScreen() {
             {/* Edit mode: dual line + via dots */}
             {isEditing && (
               <>
-                {/* 1km corridor halo — translucent sage fill so user sees the
-                    legal area for detour points. Renders BEFORE the lines so
-                    it sits underneath them. */}
-                <CorridorBoundaryLayer
-                  originalPoints={editOriginalPoints}
-                  radiusM={1000}
-                />
                 <DualLineLayer
                   originalPoints={renderOriginal}
                   workingPoints={renderPoints}

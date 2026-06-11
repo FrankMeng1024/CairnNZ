@@ -1033,6 +1033,7 @@ export function MapHistoryScreen() {
                     lng: p.lng,
                     alt: p.alt ?? null,
                     t: p.t,
+                    accuracy: (p as any).accuracy ?? null,
                   })),
                 });
               }}

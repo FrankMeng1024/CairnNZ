@@ -23,9 +23,13 @@ import { haversineMeters } from '../corridor/PolylineSampler';
 import type { MatchRequestBuild, MatchSegment, ViaPoint } from './types';
 
 const MAPBOX_MAX_COORDS = 100;
-const VIA_RADIUS_M = 25;
+const VIA_RADIUS_M = 15;
 const ANCHOR_RADIUS_M = 50;
-const ANCHOR_HALF_WINDOW_M = 150;
+// v243: shrink anchor window so the via has more freedom to pull
+// the matched line onto a parallel street. With 150m windows, original
+// GPS anchors near the via dominated and Mapbox snapped back to the
+// original road; 50m gives Mapbox enough headroom to honor the via.
+const ANCHOR_HALF_WINDOW_M = 50;
 
 /** Default per-call budget (leave 4 slots of headroom). */
 const DEFAULT_MAX_COORDS_PER_CALL = MAPBOX_MAX_COORDS - 4;

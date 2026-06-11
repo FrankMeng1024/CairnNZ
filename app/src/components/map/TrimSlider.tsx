@@ -95,9 +95,13 @@ export function TrimSlider({
     if (draggingHandleRef.current === 'start') {
       const next = Math.min(f, endRef.current - TRIM_MIN_FRACTION);
       setLocalStart(next);
+      // v243: real-time update — push to store every frame so the
+      // route line redraws while the user is still dragging. PO request.
+      onTrimStartChange(next);
     } else if (draggingHandleRef.current === 'end') {
       const next = Math.max(f, startRef.current + TRIM_MIN_FRACTION);
       setLocalEnd(next);
+      onTrimEndChange(next);
     }
   }
 
@@ -105,6 +109,8 @@ export function TrimSlider({
     const which = draggingHandleRef.current;
     draggingHandleRef.current = null;
     setIsDragging(false);
+    // v243: onChange already fired during drag (handleUpdate). Final
+    // call ensures store has the exact release value.
     if (which === 'start') onTrimStartChange(startRef.current);
     else if (which === 'end') onTrimEndChange(endRef.current);
   }

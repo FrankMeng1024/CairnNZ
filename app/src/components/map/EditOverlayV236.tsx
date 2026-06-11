@@ -37,6 +37,9 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
   const setTrimStart = useRouteEditStore(s => s.setTrimStart);
   const setTrimEnd = useRouteEditStore(s => s.setTrimEnd);
   const resetEdits = useRouteEditStore(s => s.resetEdits);
+  const undo = useRouteEditStore(s => s.undo);
+  const undoStackLen = useRouteEditStore(s => s.undoStack.length);
+  const canUndo = undoStackLen > 0;
 
   const totalLengthM = polylineLengthM(matchedPoints);
   const editedLengthM = totalLengthM * (trimEndFrac - trimStartFrac);
@@ -94,23 +97,34 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
                 </Text>
               </View>
             )}
-            <TouchableOpacity
-              onPress={() => {
-                Alert.alert(
-                  'Reset edits?',
-                  'All detour points and trim adjustments will be cleared.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Reset', style: 'destructive', onPress: () => resetEdits() },
-                  ],
-                );
-              }}
-              style={styles.resetBtn}
-              activeOpacity={0.85}
-            >
-              <Icon name="RotateCcw" size={14} color={Colors.textSecondary} strokeWidth={2} />
-              <Text style={styles.resetBtnText}>Reset</Text>
-            </TouchableOpacity>
+            <View style={styles.statusActions}>
+              <TouchableOpacity
+                onPress={() => undo()}
+                disabled={!canUndo}
+                style={[styles.iconBtn, !canUndo && styles.iconBtnDisabled]}
+                activeOpacity={0.85}
+              >
+                <Icon name="Undo2" size={14} color={canUndo ? Colors.textSecondary : Colors.textMuted} strokeWidth={2} />
+                <Text style={[styles.iconBtnText, !canUndo && styles.iconBtnTextDisabled]}>Undo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  Alert.alert(
+                    'Reset edits?',
+                    'All detour points and trim adjustments will be cleared.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Reset', style: 'destructive', onPress: () => resetEdits() },
+                    ],
+                  );
+                }}
+                style={styles.iconBtn}
+                activeOpacity={0.85}
+              >
+                <Icon name="RotateCcw" size={14} color={Colors.textSecondary} strokeWidth={2} />
+                <Text style={styles.iconBtnText}>Reset</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Hint text — only when no detour yet */}
@@ -252,6 +266,32 @@ const styles = StyleSheet.create({
     fontSize: FontSize.small,
     color: Colors.textSecondary,
     fontWeight: '600',
+  },
+  statusActions: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+  },
+  iconBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  iconBtnDisabled: {
+    opacity: 0.4,
+  },
+  iconBtnText: {
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  iconBtnTextDisabled: {
+    color: Colors.textMuted,
   },
   hintText: {
     fontSize: FontSize.caption,

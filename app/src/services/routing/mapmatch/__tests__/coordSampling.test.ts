@@ -62,7 +62,7 @@ describe('buildMatchSequence', () => {
     const r = buildMatchSequence({ originalPoints: orig, viaPoints: vias });
     const seg = r.segments[0];
     const viaIdx = seg.viaIndicesInCoords[0];
-    expect(seg.radiuses[viaIdx]).toBe(25);
+    expect(seg.radiuses[viaIdx]).toBe(15);
   });
 
   it('emits multiple segments for a route too dense to fit in 96 coords', () => {
