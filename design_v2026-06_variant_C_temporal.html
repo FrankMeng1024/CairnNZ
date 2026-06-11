@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<title>Cairn AR v0.2.3 — Variant C · 时间锚 (Temporal Anchor / DS Strand)</title>
+<style>
+  body { margin:0; background:#02030a; color:#cbd2dc; font-family:-apple-system,"PingFang SC",sans-serif; overflow:hidden; }
+  #info { position:absolute; top:14px; left:14px; z-index:10; background:rgba(0,0,0,0.78); padding:14px 18px; border-radius:10px; max-width:380px; line-height:1.55; font-size:12.5px; backdrop-filter:blur(10px); }
+  #info h1 { margin:0 0 6px; font-size:15px; font-weight:600; color:#fff; }
+  #info p { margin:5px 0; color:#94a0b0; }
+  #info .tag { display:inline-block; padding:2px 7px; background:rgba(110,170,220,0.18); color:#a8cce8; border-radius:3px; font-size:11px; margin-right:4px; }
+  #controls { position:absolute; top:14px; right:14px; z-index:10; background:rgba(0,0,0,0.7); padding:10px 14px; border-radius:10px; backdrop-filter:blur(10px); }
+  #controls button { display:block; width:100%; margin:3px 0; padding:6px 14px; background:#0a1218; color:#cbd2dc; border:1px solid #18222e; border-radius:5px; font-size:12px; cursor:pointer; }
+  #controls button:hover { background:#0e1820; }
+  #controls button.active { background:#162538; border-color:#5a8ab0; color:#fff; }
+  #controls .sep { height:1px; background:#0a1218; margin:8px -8px; }
+  #controls h3 { margin:0 0 4px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#6c7586; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h1>Variant C · 时间锚 (DS Strand)</h1>
+  <p><span class="tag">DS 灵魂亲属</span><span class="tag">细节层次</span><span class="tag">异步社交温度</span></p>
+  <p><b>设计语言</b>: 直接致敬 Death Stranding 的"陌生人在 5 天前留下的 sign"美学。Cairn 不只是位置标记，是**时间胶囊** — 显示"X 时间前由谁留下"。光带表达**时间的延续**而非装饰。</p>
+  <p><b>组成</b>: 阵图 = 双层 (内圈静态 SDF + 外圈缓慢旋转刻度)；光带 = **垂直丝缕**像 DS 化学发光丝 (6条左右、笔直向上、轻微扰动 + 顶端 fade)；3D 文字 = 平视卡片 + 时间戳 + 留言者头像 (匿名马赛克)。</p>
+  <p><b>种植仪式 (1s)</b>: 阵图缓慢绘制描边 (clockwise stroke 0.5s) → 中心 SDF 浮现 (0.2s) → 丝缕从底部一根一根点亮 (0.3s, 串联式)。</p>
+  <p><b>哲学</b>: "你不是看到一个 marker，你看到的是另一个人 5 天前来过这里、留下的话。"  时间的厚度 = Cairn 的护城河。</p>
+</div>
+
+<div id="controls">
+  <h3>Type</h3>
+  <button data-type="cairn" class="active">⛰ Cairn</button>
+  <button data-type="danger">⚠ Danger</button>
+  <button data-type="water">💧 Water</button>
+  <button data-type="hut">🏠 Hut</button>
+  <button data-type="junction">⤨ Junction</button>
+  <div class="sep"></div>
+  <button id="replay">▶ Replay 仪式</button>
+</div>
+
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = innerWidth, H = canvas.height = innerHeight;
+window.addEventListener('resize', () => { W=canvas.width=innerWidth; H=canvas.height=innerHeight; });
+
+const TYPES = {
+  cairn:    { color:'#7fb8d8', label:'Cairn',    rune:'cairn',    note:'路过留念。视野很好。', author:'Henare', daysAgo: 5 },
+  danger:   { color:'#ff7866', label:'Danger',   rune:'triangle', note:'湿滑。小心。',           author:'Sarah',  daysAgo: 12 },
+  water:    { color:'#4f9cd0', label:'Water',    rune:'drop',     note:'清澈溪水。可饮。',       author:'Te Aroha', daysAgo: 3 },
+  hut:      { color:'#b8a560', label:'Hut',      rune:'house',    note:'紧急避难所 200m 西北。', author:'DOC',    daysAgo: 18 },
+  junction: { color:'#a4d889', label:'Junction', rune:'fork',     note:'分叉路。北 → 山顶。',    author:'Manaia', daysAgo: 7 },
+};
+
+let currentType = 'cairn';
+let ceremonyT = 0;
+let lastTs = performance.now();
+
+document.querySelectorAll('#controls button[data-type]').forEach(btn => {
+  btn.onclick = () => {
+    currentType = btn.dataset.type;
+    document.querySelectorAll('#controls button[data-type]').forEach(b=>b.classList.toggle('active', b===btn));
+    ceremonyT = 0;
+  };
+});
+document.getElementById('replay').onclick = () => { ceremonyT = 0; };
+
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+function drawSDFRune(cx, cy, r, type, color, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = color;
+  if (type === 'cairn') {
+    for (let i = 0; i < 3; i++) {
+      const yy = cy + (i - 1) * r * 0.32;
+      const ww = r * (0.32 - i * 0.06);
+      ctx.beginPath(); ctx.ellipse(cx, yy, ww, ww * 0.55, 0, 0, Math.PI*2); ctx.stroke();
+    }
+  } else if (type === 'triangle') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r*0.42);
+    ctx.lineTo(cx + r*0.40, cy + r*0.30);
+    ctx.lineTo(cx - r*0.40, cy + r*0.30);
+    ctx.closePath(); ctx.stroke();
+  } else if (type === 'drop') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r*0.45);
+    ctx.bezierCurveTo(cx + r*0.42, cy - r*0.10, cx + r*0.30, cy + r*0.40, cx, cy + r*0.40);
+    ctx.bezierCurveTo(cx - r*0.30, cy + r*0.40, cx - r*0.42, cy - r*0.10, cx, cy - r*0.45);
+    ctx.stroke();
+  } else if (type === 'house') {
+    ctx.beginPath();
+    ctx.moveTo(cx - r*0.36, cy);
+    ctx.lineTo(cx, cy - r*0.42);
+    ctx.lineTo(cx + r*0.36, cy);
+    ctx.lineTo(cx + r*0.36, cy + r*0.36);
+    ctx.lineTo(cx - r*0.36, cy + r*0.36);
+    ctx.closePath(); ctx.stroke();
+  } else if (type === 'fork') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + r*0.4); ctx.lineTo(cx, cy);
+    ctx.moveTo(cx, cy); ctx.lineTo(cx - r*0.32, cy - r*0.36);
+    ctx.moveTo(cx, cy); ctx.lineTo(cx + r*0.32, cy - r*0.36);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawGroundCircle(cx, cy, baseR, color, ceremonyT) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, 0.36);
+  const t = performance.now() * 0.001;
+
+  // 0-0.5s: 描边动画 (clockwise sweep)
+  const strokeT = Math.min(ceremonyT / 0.5, 1);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.shadowBlur = 8;
+  ctx.shadowColor = color;
+  ctx.globalAlpha = 0.95;
+  ctx.beginPath();
+  ctx.arc(0, 0, baseR, -Math.PI/2, -Math.PI/2 + strokeT * Math.PI*2);
+  ctx.stroke();
+
+  if (strokeT >= 1) {
+    // 内圈静态
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.arc(0, 0, baseR * 0.66, 0, Math.PI*2); ctx.stroke();
+
+    // 外圈刻度 (旋转的, 像 DS sign)
+    ctx.globalAlpha = 0.65;
+    ctx.lineWidth = 1.4;
+    const rotPhase = t * 0.18;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI*2 + rotPhase;
+      const r1 = baseR * 1.04, r2 = baseR * (i % 3 === 0 ? 1.18 : 1.10);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a)*r1, Math.sin(a)*r1);
+      ctx.lineTo(Math.cos(a)*r2, Math.sin(a)*r2);
+      ctx.stroke();
+    }
+
+    // 微小的呼吸辉光
+    const breath = 0.5 + 0.5 * Math.sin(t * 1.4);
+    ctx.globalAlpha = 0.13 * breath;
+    ctx.lineWidth = 12;
+    ctx.beginPath(); ctx.arc(0, 0, baseR * 0.85, 0, Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawDsStrands(cx, cy, baseR, color, ceremonyT) {
+  // 0.7-1.0: 一根一根点亮
+  const strandT = Math.max(0, (ceremonyT - 0.7) / 0.3);
+  if (strandT <= 0) return;
+
+  const count = 6;
+  const t = performance.now() * 0.001;
+
+  for (let i = 0; i < count; i++) {
+    // 串联式: 每根的可见时间 i/count..(i+1)/count
+    const myT = Math.max(0, Math.min(1, strandT * count - i));
+    if (myT <= 0) continue;
+
+    const a = (i / count) * Math.PI * 2;
+    const x0 = cx + Math.cos(a) * baseR * 0.85;
+    const y0 = cy + Math.sin(a) * baseR * 0.30;  // 地面投影
+    const x1 = x0 + Math.sin(t * 0.5 + i*1.2) * 4; // 顶端微微扰动
+    const heightMax = 220;
+    const heightT = easeOutCubic(myT);
+    const totalH = heightMax * heightT;
+    const yTop = y0 - totalH;
+
+    // 化学发光段绘制 — 多段, 每段亮度不同 (像 DS 的 chiral seal 跳动)
+    const segs = 12;
+    for (let s = 0; s < segs; s++) {
+      const sT0 = s / segs, sT1 = (s+1) / segs;
+      const yA = y0 + (yTop - y0) * sT0;
+      const yB = y0 + (yTop - y0) * sT1;
+      const xA = x0 + (x1 - x0) * sT0;
+      const xB = x0 + (x1 - x0) * sT1;
+
+      // 亮度: 顶端 fade + 流动光带 (sin wave)
+      const flow = 0.5 + 0.5 * Math.sin(sT0 * 6 - t * 1.8 + i * 1.7);
+      const baseAlpha = (1 - sT0 * 0.85) * myT;
+      const alpha = baseAlpha * (0.4 + 0.6 * flow);
+
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = 1.2 + flow * 0.8;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = color;
+      ctx.beginPath();
+      ctx.moveTo(xA, yA); ctx.lineTo(xB, yB); ctx.stroke();
+    }
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+}
+
+function drawCairnBody(cx, cy) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.beginPath(); ctx.ellipse(0, 12, 36, 12, 0, 0, Math.PI*2); ctx.fill();
+  const stones = [
+    { y: 0,   w: 32, h: 22, c: '#1a2128' },
+    { y:-22, w: 26, h: 18, c: '#1f2730' },
+    { y:-40, w: 18, h: 14, c: '#252e3a' },
+  ];
+  for (const s of stones) {
+    ctx.fillStyle = s.c;
+    ctx.beginPath(); ctx.ellipse(0, s.y, s.w, s.h, 0, 0, Math.PI*2); ctx.fill();
+    const grad = ctx.createLinearGradient(0, s.y - s.h, 0, s.y);
+    grad.addColorStop(0, 'rgba(180,210,230,0.18)');
+    grad.addColorStop(1, 'rgba(180,210,230,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(0, s.y, s.w, s.h, 0, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawLabel(cx, cy, color, label, note, author, daysAgo, ceremonyT) {
+  const labelT = Math.max(0, (ceremonyT - 0.85) / 0.15);
+  if (labelT <= 0) return;
+  const ly = cy - 280;
+  ctx.save();
+  ctx.globalAlpha = labelT;
+
+  ctx.font = '600 13px -apple-system,"PingFang SC",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // 测量文本宽度
+  const w1 = ctx.measureText(note).width;
+  ctx.font = '11px -apple-system,sans-serif';
+  const w2 = ctx.measureText(`${author} · ${daysAgo}d ago`).width;
+  const w = Math.max(w1, w2, 100) + 36;
+  const h = 56;
+
+  // 背景卡片 (DS-style 朴素方框)
+  ctx.fillStyle = 'rgba(8,12,18,0.92)';
+  roundRect(ctx, cx - w/2, ly - h/2, w, h, 4); ctx.fill();
+  ctx.strokeStyle = color + 'aa';
+  ctx.lineWidth = 1;
+  roundRect(ctx, cx - w/2, ly - h/2, w, h, 4); ctx.stroke();
+
+  // 顶部小角标 (type label)
+  ctx.fillStyle = color + '33';
+  ctx.fillRect(cx - w/2, ly - h/2, w, 16);
+  ctx.fillStyle = color;
+  ctx.font = '600 9.5px -apple-system,sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(label.toUpperCase(), cx - w/2 + 8, ly - h/2 + 8);
+  // 时间戳右上
+  ctx.textAlign = 'right';
+  ctx.fillStyle = color + '99';
+  ctx.fillText(`${daysAgo}D`, cx + w/2 - 8, ly - h/2 + 8);
+
+  // note 主文
+  ctx.font = '500 13px -apple-system,"PingFang SC",sans-serif';
+  ctx.fillStyle = '#dde3ec';
+  ctx.textAlign = 'center';
+  ctx.fillText(note, cx, ly - 1);
+  // author
+  ctx.font = '400 10.5px -apple-system,sans-serif';
+  ctx.fillStyle = '#7c8696';
+  ctx.fillText(`— ${author}, ${daysAgo} days ago`, cx, ly + 17);
+
+  // 引导线
+  ctx.strokeStyle = color + '44';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 4]);
+  ctx.beginPath();
+  ctx.moveTo(cx, ly + h/2);
+  ctx.lineTo(cx, cy - 80);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+
+function frame(now) {
+  const dt = (now - lastTs) / 1000;
+  lastTs = now;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  ctx.setLineDash([]);
+  if (ceremonyT < 1) ceremonyT = Math.min(1, ceremonyT + dt);
+
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#02030a');
+  grad.addColorStop(0.5, '#03050d');
+  grad.addColorStop(1, '#01020a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // 远处的雾 (DS 标志性灰雾)
+  ctx.fillStyle = 'rgba(80,100,130,0.05)';
+  ctx.fillRect(0, H*0.55, W, H*0.10);
+
+  // 微小的 chiral 颗粒 (DS 标志)
+  const t = performance.now() * 0.0007;
+  for (let i = 0; i < 40; i++) {
+    const x = ((i * 137.5) % W);
+    const y = (((i * 91.3) % (H*0.4)) + Math.sin(t + i*0.5) * 18 + H*0.3);
+    const a = 0.10 + 0.10 * Math.sin(t * 3 + i*0.7);
+    ctx.fillStyle = `rgba(160,200,230,${a})`;
+    ctx.beginPath(); ctx.arc(x, y, 0.7, 0, Math.PI*2); ctx.fill();
+  }
+
+  const cx = W/2, cy = H*0.7;
+  const t2 = TYPES[currentType];
+  const baseR = 110;
+
+  drawGroundCircle(cx, cy, baseR, t2.color, ceremonyT);
+  const runeAlpha = Math.max(0, Math.min(1, (ceremonyT - 0.5) / 0.2));
+  drawSDFRune(cx, cy * 1.02, baseR * 0.5, t2.rune, t2.color, runeAlpha * 0.95);
+  drawDsStrands(cx, cy, baseR, t2.color, ceremonyT);
+  drawCairnBody(cx, cy);
+  drawLabel(cx, cy, t2.color, t2.label, t2.note, t2.author, t2.daysAgo, ceremonyT);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

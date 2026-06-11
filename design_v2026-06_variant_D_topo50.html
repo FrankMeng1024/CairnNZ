@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<title>Cairn AR v0.2.3 — Variant D · Topo50 圣物 (NZ Cartographic Sigil)</title>
+<style>
+  body { margin:0; background:#0a0d10; color:#cbd2dc; font-family:-apple-system,"PingFang SC",sans-serif; overflow:hidden; }
+  #info { position:absolute; top:14px; left:14px; z-index:10; background:rgba(0,0,0,0.78); padding:14px 18px; border-radius:10px; max-width:380px; line-height:1.55; font-size:12.5px; backdrop-filter:blur(10px); }
+  #info h1 { margin:0 0 6px; font-size:15px; font-weight:600; color:#fff; }
+  #info p { margin:5px 0; color:#94a0b0; }
+  #info .tag { display:inline-block; padding:2px 7px; background:rgba(225,170,90,0.18); color:#e8c894; border-radius:3px; font-size:11px; margin-right:4px; }
+  #controls { position:absolute; top:14px; right:14px; z-index:10; background:rgba(0,0,0,0.7); padding:10px 14px; border-radius:10px; backdrop-filter:blur(10px); }
+  #controls button { display:block; width:100%; margin:3px 0; padding:6px 14px; background:#0e1418; color:#cbd2dc; border:1px solid #1c2630; border-radius:5px; font-size:12px; cursor:pointer; }
+  #controls button:hover { background:#15202a; }
+  #controls button.active { background:#2c2014; border-color:#b5823d; color:#fff; }
+  #controls .sep { height:1px; background:#0e1418; margin:8px -8px; }
+  #controls h3 { margin:0 0 4px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#6c7586; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h1>Variant D · Topo50 圣物</h1>
+  <p><span class="tag">NZ 本土</span><span class="tag">地图美学</span><span class="tag">Topo50 sepia</span></p>
+  <p><b>设计语言</b>: NZ 国家测绘局 Topo50 地图美学 (cream 底 + sepia 等高线 + #b5823d trail color) 投射到 AR — Cairn 是从地图上"长出来"的，不是凭空出现的 sigil。</p>
+  <p><b>组成</b>: 阵图 = **同心等高线** (像 topo 地图上山顶等高线) 在地面上 + 中心 sepia 印章；光带 = 4 条**测绘风格虚线** (像地图上路径符号) 缓慢上升 + 顶端化为颗粒；3D 文字 = sepia 卡片 + 经纬度 + 海拔。</p>
+  <p><b>种植仪式 (1s)</b>: 等高线从中心一圈一圈扩散 (0.4s, 像同心圆涟漪) → 中心印章砸下 (0.15s, 微抖动) → 测绘虚线从地面边缘升起 (0.45s, dashed pattern animate)。</p>
+  <p><b>哲学</b>: NZ 用户一眼识别 — "这是 NZ 制造，致敬 LINZ Topo50。"  PRD3 E-013 离线 Topo50 + E-016 DOC 橙的视觉延续。其他竞品做不到的本土真实感。</p>
+</div>
+
+<div id="controls">
+  <h3>Type</h3>
+  <button data-type="cairn" class="active">⛰ Cairn</button>
+  <button data-type="danger">⚠ Danger</button>
+  <button data-type="water">💧 Water</button>
+  <button data-type="hut">🏠 Hut</button>
+  <button data-type="junction">⤨ Junction</button>
+  <div class="sep"></div>
+  <button id="replay">▶ Replay 仪式</button>
+</div>
+
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = innerWidth, H = canvas.height = innerHeight;
+window.addEventListener('resize', () => { W=canvas.width=innerWidth; H=canvas.height=innerHeight; });
+
+// 配色: NZ Topo50 sepia 系
+const TYPES = {
+  cairn:    { color:'#b5823d', deep:'#8a5e26', label:'Cairn',    rune:'cairn',    note:'Lookout point.', coord:'-41.286, 174.776 · 412m' },
+  danger:   { color:'#F26522', deep:'#a8421a', label:'Danger',   rune:'triangle', note:'Slippery rock.', coord:'-41.287, 174.778 · 408m' },
+  water:    { color:'#5b8aa8', deep:'#3a6685', label:'Water',    rune:'drop',     note:'Drinkable stream.', coord:'-41.290, 174.770 · 380m' },
+  hut:      { color:'#a85820', deep:'#7a3e10', label:'Hut',      rune:'house',    note:'Emergency shelter.', coord:'-41.288, 174.774 · 425m' },
+  junction: { color:'#7a8a5a', deep:'#525a38', label:'Junction', rune:'fork',     note:'North → summit.', coord:'-41.285, 174.772 · 398m' },
+};
+
+let currentType = 'cairn';
+let ceremonyT = 0;
+let lastTs = performance.now();
+
+document.querySelectorAll('#controls button[data-type]').forEach(btn => {
+  btn.onclick = () => {
+    currentType = btn.dataset.type;
+    document.querySelectorAll('#controls button[data-type]').forEach(b=>b.classList.toggle('active', b===btn));
+    ceremonyT = 0;
+  };
+});
+document.getElementById('replay').onclick = () => { ceremonyT = 0; };
+
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function easeOutBack(t) { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t-1, 3) + c1 * Math.pow(t-1, 2); }
+
+function drawSepiaRune(cx, cy, r, type, color, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2.4;
+  ctx.lineCap = 'square';
+  ctx.lineJoin = 'miter';
+  // 印章式: 实心 + 朴素几何
+
+  if (type === 'cairn') {
+    // Topo50 风格的"+"号 + 三圆叠 (官方 cairn 符号变体)
+    for (let i = 0; i < 3; i++) {
+      const yy = cy + (i - 1) * r * 0.30;
+      const ww = r * (0.30 - i * 0.05);
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.ellipse(cx, yy, ww, ww * 0.55, 0, 0, Math.PI*2); ctx.fill();
+    }
+  } else if (type === 'triangle') {
+    // 实心三角 (DOC danger sign)
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r*0.45);
+    ctx.lineTo(cx + r*0.42, cy + r*0.30);
+    ctx.lineTo(cx - r*0.42, cy + r*0.30);
+    ctx.closePath(); ctx.fill();
+    // 中心白色感叹号
+    ctx.fillStyle = '#0a0d10';
+    ctx.font = `bold ${r*0.42}px -apple-system,sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', cx, cy + r*0.06);
+  } else if (type === 'drop') {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r*0.46);
+    ctx.bezierCurveTo(cx + r*0.42, cy - r*0.10, cx + r*0.30, cy + r*0.40, cx, cy + r*0.40);
+    ctx.bezierCurveTo(cx - r*0.30, cy + r*0.40, cx - r*0.42, cy - r*0.10, cx, cy - r*0.46);
+    ctx.fill();
+  } else if (type === 'house') {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx - r*0.36, cy);
+    ctx.lineTo(cx, cy - r*0.42);
+    ctx.lineTo(cx + r*0.36, cy);
+    ctx.lineTo(cx + r*0.36, cy + r*0.36);
+    ctx.lineTo(cx - r*0.36, cy + r*0.36);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#0a0d10';
+    ctx.fillRect(cx - r*0.10, cy + r*0.10, r*0.20, r*0.26);
+  } else if (type === 'fork') {
+    ctx.lineWidth = r * 0.18;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + r*0.40); ctx.lineTo(cx, cy);
+    ctx.moveTo(cx, cy); ctx.lineTo(cx - r*0.32, cy - r*0.36);
+    ctx.moveTo(cx, cy); ctx.lineTo(cx + r*0.32, cy - r*0.36);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawTopoContours(cx, cy, baseR, color, deep, ceremonyT) {
+  // 同心等高线 — 模拟 topo 地图上"山头"
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, 0.36);
+
+  const t = performance.now() * 0.0008;
+
+  // 0-0.4s: 一圈一圈扩散
+  const ringCount = 5;
+  for (let i = 0; i < ringCount; i++) {
+    const ringDelay = (i / ringCount) * 0.4;
+    const ringT = Math.max(0, Math.min(1, (ceremonyT - ringDelay) / 0.15));
+    if (ringT <= 0) continue;
+    const r = baseR * (0.32 + i * 0.16) * easeOutCubic(ringT);
+    // 等高线: sepia, 1px, 不闭合的弧 (模拟 topo 上未闭合等高线)
+    ctx.strokeStyle = i % 2 === 0 ? color : deep;
+    ctx.lineWidth = i === 2 ? 1.4 : 0.9;   // 中间一圈"主等高线"加粗 (topo 惯例)
+    ctx.globalAlpha = (0.3 + i * 0.1) * ringT;
+    ctx.shadowBlur = 0;
+    // 全圆等高线，但在某个角度有微小 break (topo 上"等高线穿过山脊"的视觉效果)
+    const breakA = i * 1.7;
+    const breakSize = 0.28;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, breakA + breakSize, breakA + Math.PI*2 - breakSize);
+    ctx.stroke();
+  }
+
+  // 仪式后: 主圈 (最内圈) 微微呼吸
+  if (ceremonyT >= 0.45) {
+    const pulse = 0.5 + 0.5 * Math.sin(t * 1.2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.55 * pulse;
+    ctx.beginPath(); ctx.arc(0, 0, baseR * 0.32, 0, Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSurveyDashStrands(cx, cy, baseR, color, deep, ceremonyT) {
+  // 0.55s 之后开始上升
+  const strandT = Math.max(0, (ceremonyT - 0.55) / 0.45);
+  if (strandT <= 0) return;
+
+  const count = 4;
+  const t = performance.now() * 0.001;
+
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + Math.PI/4;
+    const x0 = cx + Math.cos(a) * baseR * 0.65;
+    const y0 = cy + Math.sin(a) * baseR * 0.24;
+    const heightMax = 200;
+    const totalH = heightMax * easeOutCubic(strandT);
+    const yTop = y0 - totalH;
+    const xTop = x0 + Math.sin(t * 0.4 + i*1.7) * 10;
+
+    // dashed pattern, animated (像地图上 trail dash 在游动)
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'butt';
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = color;
+    const dashOffset = -t * 30;
+    ctx.setLineDash([6, 4]);
+    ctx.lineDashOffset = dashOffset;
+    ctx.globalAlpha = strandT * 0.85;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    // S曲线
+    const cx1 = x0 + (xTop - x0) * 0.3 + Math.sin(t + i) * 8;
+    const cy1 = y0 + (yTop - y0) * 0.4;
+    const cx2 = x0 + (xTop - x0) * 0.7 - Math.sin(t + i) * 8;
+    const cy2 = y0 + (yTop - y0) * 0.7;
+    ctx.bezierCurveTo(cx1, cy1, cx2, cy2, xTop, yTop);
+    ctx.stroke();
+    ctx.restore();
+
+    // 顶端粒子 (像化为雾)
+    const particleAlpha = strandT * 0.7;
+    ctx.fillStyle = color;
+    for (let p = 0; p < 4; p++) {
+      const pa = particleAlpha * (1 - p * 0.2);
+      const px = xTop + Math.sin(t * 0.8 + i*2 + p*0.5) * (8 + p*4);
+      const py = yTop - p * 8 - Math.cos(t * 0.6 + i + p) * 4;
+      ctx.globalAlpha = pa;
+      ctx.beginPath(); ctx.arc(px, py, 1.5 - p*0.2, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
+
+function drawCairnBody(cx, cy, ceremonyT) {
+  // 0.4-0.55s: 印章 "砸下" 的轻微抖动
+  let shakeY = 0;
+  if (ceremonyT >= 0.4 && ceremonyT < 0.55) {
+    const sT = (ceremonyT - 0.4) / 0.15;
+    shakeY = Math.sin(sT * Math.PI*4) * (1 - sT) * 4;
+  }
+  ctx.save();
+  ctx.translate(cx, cy + shakeY);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath(); ctx.ellipse(0, 12, 36, 12, 0, 0, Math.PI*2); ctx.fill();
+  const stones = [
+    { y: 0,   w: 32, h: 22, c: '#3e3a30' },
+    { y:-22, w: 26, h: 18, c: '#48433a' },
+    { y:-40, w: 18, h: 14, c: '#524d40' },
+  ];
+  for (const s of stones) {
+    ctx.fillStyle = s.c;
+    ctx.beginPath(); ctx.ellipse(0, s.y, s.w, s.h, 0, 0, Math.PI*2); ctx.fill();
+    const grad = ctx.createLinearGradient(0, s.y - s.h, 0, s.y);
+    grad.addColorStop(0, 'rgba(232,200,148,0.20)');
+    grad.addColorStop(1, 'rgba(232,200,148,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(0, s.y, s.w, s.h, 0, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawSepiaCard(cx, cy, color, deep, label, note, coord, ceremonyT) {
+  const labelT = Math.max(0, (ceremonyT - 0.85) / 0.15);
+  if (labelT <= 0) return;
+  const ly = cy - 280;
+  ctx.save();
+  ctx.globalAlpha = labelT;
+
+  // Topo50 cream 底色卡片
+  ctx.font = '600 13px "Optima","Songti SC",serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const w = Math.max(ctx.measureText(note).width, ctx.measureText(coord).width, 110) + 36;
+  const h = 56;
+
+  // 背景: cream 底 + 边
+  ctx.fillStyle = '#f7f2e5';
+  roundRect(ctx, cx - w/2, ly - h/2, w, h, 2); ctx.fill();
+  ctx.strokeStyle = deep;
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, cx - w/2, ly - h/2, w, h, 2); ctx.stroke();
+  // 内边框双线 (LINZ 测绘卡片惯例)
+  ctx.strokeStyle = deep + '66';
+  ctx.lineWidth = 0.6;
+  roundRect(ctx, cx - w/2 + 4, ly - h/2 + 4, w - 8, h - 8, 1); ctx.stroke();
+
+  // type label (顶部小标签条)
+  ctx.fillStyle = color;
+  ctx.font = '700 9px -apple-system,sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(label.toUpperCase(), cx - w/2 + 9, ly - h/2 + 11);
+
+  // 主文 note (sepia 黑)
+  ctx.font = '500 13.5px "Optima","Songti SC",serif';
+  ctx.fillStyle = '#3a2c14';
+  ctx.textAlign = 'center';
+  ctx.fillText(note, cx, ly - 1);
+  // coord
+  ctx.font = '400 10px "Menlo",monospace';
+  ctx.fillStyle = '#7a5c2a';
+  ctx.fillText(coord, cx, ly + 17);
+
+  // 引导线
+  ctx.strokeStyle = deep + '99';
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(cx, ly + h/2);
+  ctx.lineTo(cx, cy - 80);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+
+function frame(now) {
+  const dt = (now - lastTs) / 1000;
+  lastTs = now;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  ctx.setLineDash([]);
+  if (ceremonyT < 1) ceremonyT = Math.min(1, ceremonyT + dt);
+
+  // 背景: NZ 高山日间风 (淡灰天 + 云雾, 不再夜色)
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#1a2230');
+  grad.addColorStop(0.55, '#1f2530');
+  grad.addColorStop(1, '#0e1218');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // 远山轮廓 (NZ 高山典型剪影)
+  ctx.fillStyle = 'rgba(60,68,82,0.40)';
+  ctx.beginPath();
+  ctx.moveTo(0, H*0.62);
+  ctx.lineTo(W*0.18, H*0.45);
+  ctx.lineTo(W*0.32, H*0.55);
+  ctx.lineTo(W*0.50, H*0.40);
+  ctx.lineTo(W*0.68, H*0.50);
+  ctx.lineTo(W*0.82, H*0.42);
+  ctx.lineTo(W, H*0.55);
+  ctx.lineTo(W, H);
+  ctx.lineTo(0, H);
+  ctx.closePath(); ctx.fill();
+
+  const cx = W/2, cy = H*0.7;
+  const t2 = TYPES[currentType];
+  const baseR = 110;
+
+  drawTopoContours(cx, cy, baseR, t2.color, t2.deep, ceremonyT);
+  // 中心印章
+  const runeAlpha = Math.max(0, Math.min(1, (ceremonyT - 0.40) / 0.15));
+  drawSepiaRune(cx, cy * 1.02, baseR * 0.46, t2.rune, t2.color, runeAlpha * easeOutBack(runeAlpha) * 0.92);
+  drawSurveyDashStrands(cx, cy, baseR, t2.color, t2.deep, ceremonyT);
+  drawCairnBody(cx, cy, ceremonyT);
+  drawSepiaCard(cx, cy, t2.color, t2.deep, t2.label, t2.note, t2.coord, ceremonyT);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

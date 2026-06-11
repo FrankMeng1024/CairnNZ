@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<title>Cairn AR v0.2.3 — Variant A · 静默路标 (Stoic Wayfinding)</title>
+<style>
+  body { margin:0; background:#0a0d13; color:#cbd2dc; font-family:-apple-system,"PingFang SC",sans-serif; overflow:hidden; }
+  #info { position:absolute; top:14px; left:14px; z-index:10; background:rgba(0,0,0,0.7); padding:14px 18px; border-radius:10px; max-width:380px; line-height:1.55; font-size:12.5px; backdrop-filter:blur(10px); }
+  #info h1 { margin:0 0 6px; font-size:15px; font-weight:600; color:#fff; letter-spacing:0.02em; }
+  #info p { margin:5px 0; color:#94a0b0; }
+  #info .tag { display:inline-block; padding:2px 7px; background:rgba(180,140,80,0.18); color:#d6c193; border-radius:3px; font-size:11px; margin-right:4px; }
+  #controls { position:absolute; top:14px; right:14px; z-index:10; background:rgba(0,0,0,0.7); padding:10px 14px; border-radius:10px; backdrop-filter:blur(10px); }
+  #controls button { display:block; width:100%; margin:3px 0; padding:6px 14px; background:#1c2230; color:#cbd2dc; border:1px solid #2a3340; border-radius:5px; font-size:12px; cursor:pointer; }
+  #controls button:hover { background:#252d3d; border-color:#3a4554; }
+  #controls button.active { background:#2a3a4d; border-color:#5a7090; color:#fff; }
+  #controls .sep { height:1px; background:#1c2230; margin:8px -8px; }
+  #controls h3 { margin:0 0 4px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#6c7586; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h1>Variant A · 静默路标</h1>
+  <p><span class="tag">朴素</span><span class="tag">克制</span><span class="tag">DS · Apple Find My</span></p>
+  <p><b>设计语言</b>: Death Stranding 路标 + Apple Find My placemark 的克制美学。Cairn 在自然环境里应该像一块**真的石头标记** — 朴素、可信、不抢戏。</p>
+  <p><b>组成</b>: 地面阵图 = 简洁圆环 + 中心 type icon SDF；光带 = 4-6 条**静态发光绳索** (不飘不舞，只缓慢呼吸)；3D 文字 = 平视小标签条。</p>
+  <p><b>种植仪式 (1s)</b>: 阵图从 0.3→1 缩放展开 (0.3s) → 中心 icon 浮现 (0.2s) → 光带从地面边缘点亮 (0.5s) → 标签淡入 (后续)。</p>
+  <p><b>哲学</b>: "我在这里看到了 X，留给下一个人。"  视觉密度低，户外光下仍可见。</p>
+</div>
+
+<div id="controls">
+  <h3>Type</h3>
+  <button data-type="cairn" class="active">⛰ Cairn</button>
+  <button data-type="danger">⚠ Danger</button>
+  <button data-type="water">💧 Water</button>
+  <button data-type="hut">🏠 Hut</button>
+  <button data-type="junction">⤨ Junction</button>
+  <div class="sep"></div>
+  <h3>Action</h3>
+  <button id="replay">▶ Replay 种植仪式</button>
+</div>
+
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = innerWidth, H = canvas.height = innerHeight;
+window.addEventListener('resize', () => { W=canvas.width=innerWidth; H=canvas.height=innerHeight; });
+
+const TYPES = {
+  cairn:    { color:'#b89968', label:'Cairn',    icon:'cairn',    note:'路过留念。视野很好。' },
+  danger:   { color:'#d35a45', label:'Danger',   icon:'triangle', note:'湿滑。小心。' },
+  water:    { color:'#5b8aa8', label:'Water',    icon:'drop',     note:'清澈溪水。可饮。' },
+  hut:      { color:'#8b9966', label:'Hut',      icon:'house',    note:'紧急避难所 200m 西北。' },
+  junction: { color:'#b8a560', label:'Junction', icon:'fork',     note:'分叉路。北 → 山顶。' },
+};
+
+let currentType = 'cairn';
+let ceremonyT = 0;     // 0..1, 仪式动画进度 (1.0 = 仪式完成)
+let lastTs = performance.now();
+
+document.querySelectorAll('#controls button[data-type]').forEach(btn => {
+  btn.onclick = () => {
+    currentType = btn.dataset.type;
+    document.querySelectorAll('#controls button[data-type]').forEach(b=>b.classList.toggle('active', b===btn));
+    ceremonyT = 0;  // 切换 type 时重新触发仪式
+  };
+});
+document.getElementById('replay').onclick = () => { ceremonyT = 0; };
+
+function drawCenterIcon(cx, cy, r, iconType, color, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (iconType === 'cairn') {
+    // 三块石头堆叠
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + r*0.28, r*0.42, r*0.18, 0, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, r*0.34, r*0.16, 0, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - r*0.24, r*0.22, r*0.13, 0, 0, Math.PI*2); ctx.stroke();
+  } else if (iconType === 'triangle') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r*0.45);
+    ctx.lineTo(cx + r*0.42, cy + r*0.30);
+    ctx.lineTo(cx - r*0.42, cy + r*0.30);
+    ctx.closePath(); ctx.stroke();
+    // 中心感叹号
+    ctx.beginPath(); ctx.moveTo(cx, cy - r*0.10); ctx.lineTo(cx, cy + r*0.10); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy + r*0.20, 1.5, 0, Math.PI*2); ctx.fillStyle = color; ctx.fill();
+  } else if (iconType === 'drop') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r*0.45);
+    ctx.bezierCurveTo(cx + r*0.42, cy - r*0.10, cx + r*0.30, cy + r*0.40, cx, cy + r*0.40);
+    ctx.bezierCurveTo(cx - r*0.30, cy + r*0.40, cx - r*0.42, cy - r*0.10, cx, cy - r*0.45);
+    ctx.stroke();
+  } else if (iconType === 'house') {
+    ctx.beginPath();
+    ctx.moveTo(cx - r*0.38, cy - r*0.05);
+    ctx.lineTo(cx, cy - r*0.42);
+    ctx.lineTo(cx + r*0.38, cy - r*0.05);
+    ctx.lineTo(cx + r*0.38, cy + r*0.36);
+    ctx.lineTo(cx - r*0.38, cy + r*0.36);
+    ctx.closePath(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - r*0.10, cy + r*0.36);
+    ctx.lineTo(cx - r*0.10, cy + r*0.10);
+    ctx.lineTo(cx + r*0.10, cy + r*0.10);
+    ctx.lineTo(cx + r*0.10, cy + r*0.36);
+    ctx.stroke();
+  } else if (iconType === 'fork') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + r*0.40); ctx.lineTo(cx, cy);
+    ctx.moveTo(cx, cy); ctx.lineTo(cx - r*0.32, cy - r*0.36);
+    ctx.moveTo(cx, cy); ctx.lineTo(cx + r*0.32, cy - r*0.36);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawGroundCircle(cx, cy, baseR, color, ceremonyT) {
+  // 仪式 0.0-0.3s: 圆环从 0.3 缩放到 1.0
+  const scaleT = Math.min(ceremonyT / 0.3, 1);
+  const scale = 0.3 + 0.7 * easeOutCubic(scaleT);
+  const r = baseR * scale;
+
+  // 阵图本体 = 双圆 (外圈 + 内圈)，地面投影模拟
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, 0.34);  // 透视压扁
+
+  // 外圈 (主)
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.9 * scale;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.stroke();
+
+  // 内圈 (装饰)
+  ctx.globalAlpha = 0.35 * scale;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, Math.PI*2); ctx.stroke();
+
+  // 微小的方位刻度 (8 个短线，朴素 wayfinding 感)
+  ctx.globalAlpha = 0.6 * scale;
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const r1 = r * 0.92, r2 = r * 1.05;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a)*r1, Math.sin(a)*r1);
+    ctx.lineTo(Math.cos(a)*r2, Math.sin(a)*r2);
+    ctx.stroke();
+  }
+
+  // 呼吸光晕 (持续动画，仪式后)
+  if (ceremonyT >= 0.3) {
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.0018);
+    ctx.globalAlpha = 0.18 * pulse;
+    ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawWisps(cx, cy, baseR, color, ceremonyT) {
+  // 仪式 0.5s 之后光带开始可见
+  const wispT = Math.max(0, (ceremonyT - 0.5) / 0.5);
+  if (wispT <= 0) return;
+
+  // 4-6 条静态光带，绳索状，从地面边缘 lazy 升起 ~1.4m
+  // (产品哲学: "不舞不飘"，只缓慢呼吸)
+  const count = 5;
+  const t = performance.now() * 0.001;
+  const baseY = cy;            // 地面 (圆环位置)
+  const topY = cy - 220;       // 顶端 (~1.4m above ground)
+
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + 0.3;
+    const x0 = cx + Math.cos(a) * baseR * 0.95;
+    const x1 = cx + Math.cos(a) * baseR * 0.4;       // 顶端微微向中心收
+    const y1 = topY + Math.sin(t * 0.7 + i) * 8;    // 仅 8px 微微 sway
+    const yMid = (baseY + y1) / 2;
+    const xMid = (x0 + x1) / 2 + Math.sin(t * 0.5 + i*2) * 6;
+
+    // 渐变 (底部亮 → 顶端 fade)
+    const grad = ctx.createLinearGradient(x0, baseY, x1, y1);
+    grad.addColorStop(0, color + 'cc');
+    grad.addColorStop(0.6, color + '55');
+    grad.addColorStop(1, color + '00');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 1.5 * wispT;
+    ctx.globalAlpha = wispT * (0.8 + 0.2 * Math.sin(t * 1.2 + i));
+    ctx.beginPath();
+    ctx.moveTo(x0, baseY);
+    ctx.quadraticCurveTo(xMid, yMid, x1, y1);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawLabel(cx, cy, baseR, color, label, note, ceremonyT) {
+  const labelT = Math.max(0, (ceremonyT - 0.7) / 0.3);
+  if (labelT <= 0) return;
+
+  // 平视标签条 (像 Apple Find My placemark)，浮在 cairn 上方
+  const ly = cy - 260;
+  ctx.save();
+  ctx.globalAlpha = labelT;
+
+  // 主标签
+  ctx.font = '600 14px -apple-system, "PingFang SC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const w = Math.max(ctx.measureText(label).width, ctx.measureText(note).width) + 28;
+  const h = 40;
+
+  // 卡片背景
+  ctx.fillStyle = 'rgba(15,18,24,0.85)';
+  roundRect(ctx, cx - w/2, ly - h/2, w, h, 7); ctx.fill();
+  ctx.strokeStyle = color + '88';
+  ctx.lineWidth = 1;
+  roundRect(ctx, cx - w/2, ly - h/2, w, h, 7); ctx.stroke();
+
+  // 标题 + 副文
+  ctx.fillStyle = color;
+  ctx.fillText(label, cx, ly - 8);
+  ctx.fillStyle = '#a4adb9';
+  ctx.font = '11.5px -apple-system, "PingFang SC", sans-serif';
+  ctx.fillText(note, cx, ly + 9);
+
+  // 引导线 (从标签底到 cairn 顶)
+  ctx.strokeStyle = color + '55';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath();
+  ctx.moveTo(cx, ly + h/2);
+  ctx.lineTo(cx, cy - 80);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawCairnBody(cx, cy, t) {
+  // 仪式 0.0 时 cairn 已经在地上 (不从下面升起 — 产品决策)
+  // 我们画一个简化的"石堆 silhouette" 在地面上方
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  // 阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(0, 12, 36, 12, 0, 0, Math.PI*2); ctx.fill();
+
+  // 三块石头 (大-中-小 堆叠)
+  const stones = [
+    { y: 0,   w: 32, h: 22, c: '#3a4250' },
+    { y:-22, w: 26, h: 18, c: '#454e5e' },
+    { y:-40, w: 18, h: 14, c: '#525c6c' },
+  ];
+  for (const s of stones) {
+    ctx.fillStyle = s.c;
+    ctx.beginPath();
+    ctx.ellipse(0, s.y, s.w, s.h, 0, 0, Math.PI*2); ctx.fill();
+    // 高光 (上侧)
+    const grad = ctx.createLinearGradient(0, s.y - s.h, 0, s.y);
+    grad.addColorStop(0, 'rgba(255,255,255,0.18)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(0, s.y, s.w, s.h, 0, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+
+function frame(now) {
+  const dt = (now - lastTs) / 1000;
+  lastTs = now;
+
+  // Reset canvas state every frame so leaked transforms / alpha don't
+  // poison the next iteration (was producing IndexSizeError on arc).
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  ctx.setLineDash([]);
+
+  // 1秒种植仪式
+  if (ceremonyT < 1) ceremonyT = Math.min(1, ceremonyT + dt);
+
+  // 背景 (模拟 NZ 步道夜色, 营造户外可信度)
+  ctx.fillStyle = '#0a0d13';
+  ctx.fillRect(0, 0, W, H);
+  // 远山轮廓
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0a0d13');
+  grad.addColorStop(0.65, '#0f1320');
+  grad.addColorStop(1, '#080a10');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  // 模拟地面 horizon line
+  ctx.strokeStyle = 'rgba(120,140,170,0.06)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H*0.62); ctx.lineTo(W, H*0.62); ctx.stroke();
+
+  const cx = W/2, cy = H*0.7;
+  const t = TYPES[currentType];
+  const baseR = 110;
+
+  drawGroundCircle(cx, cy, baseR, t.color, ceremonyT);
+  // icon SDF center
+  const iconAlpha = Math.max(0, Math.min(1, (ceremonyT - 0.18) / 0.22));
+  drawCenterIcon(cx, cy * 1.03, baseR * 0.5, t.icon, t.color, iconAlpha * 0.85);
+  drawWisps(cx, cy, baseR, t.color, ceremonyT);
+  drawCairnBody(cx, cy, ceremonyT);
+  drawLabel(cx, cy, baseR, t.color, t.label, t.note, ceremonyT);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

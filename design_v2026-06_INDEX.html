@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<title>Cairn AR v0.2.3 — 4 Design Variants Comparison</title>
+<style>
+  body { margin:0; background:#0a0d13; color:#cbd2dc; font-family:-apple-system,"PingFang SC",sans-serif; line-height:1.55; }
+  header { padding:32px 32px 18px; border-bottom:1px solid #1c2230; }
+  header h1 { margin:0 0 8px; font-size:22px; font-weight:600; color:#fff; }
+  header p { margin:5px 0; color:#94a0b0; max-width:760px; font-size:13px; }
+  .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:18px; padding:18px 32px; }
+  .card { border:1px solid #1c2230; border-radius:10px; overflow:hidden; background:#0e1218; }
+  .card iframe { width:100%; height:580px; border:0; display:block; background:#000; }
+  .card-foot { padding:14px 18px; border-top:1px solid #1c2230; }
+  .card-foot h2 { margin:0 0 6px; font-size:15px; color:#fff; }
+  .card-foot .summary { color:#94a0b0; font-size:12.5px; }
+  .card-foot .pros { color:#7fcfb3; font-size:12px; margin-top:6px; }
+  .card-foot .cons { color:#ff9985; font-size:12px; margin-top:3px; }
+  .card-foot a { color:#a8cce8; text-decoration:none; font-size:12px; margin-right:14px; }
+  .card-foot a:hover { text-decoration:underline; }
+  .pick-prompt { padding:24px 32px; background:#0e1418; border-top:1px solid #1c2230; }
+  .pick-prompt h2 { margin:0 0 10px; color:#fff; font-size:16px; }
+  .pick-prompt p { margin:6px 0; color:#94a0b0; font-size:13px; max-width:760px; }
+  .pick-prompt code { background:#1c2230; padding:2px 6px; border-radius:3px; color:#cbd2dc; font-size:12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Cairn AR v0.2.3 — 4 Design Variants 对比</h1>
+  <p>每个变体都是 1 个完整的 2D 动态设想图：5 type 切换 + 1 秒种植仪式 + 阵图 + 光带 + 3D 文字标签。点击变体内的"Replay 仪式"按钮可重播。</p>
+  <p>这 4 个变体是按"产品哲学"差异化设计的，不是简单的色彩变化——它们代表 4 种**完全不同的视觉性格**。请挑一个 (或两个组合) 作为 Stage 8 的 3D 实施基线。</p>
+</header>
+
+<div class="grid">
+  <div class="card">
+    <iframe src="design_v2026-06_variant_A_stoic.html"></iframe>
+    <div class="card-foot">
+      <h2>A · 静默路标 (Stoic Wayfinding)</h2>
+      <div class="summary">朴素圆环 + 静态光带 + 平视卡片。Death Stranding 路标 + Apple Find My placemark。</div>
+      <div class="pros">✓ 户外日光下最可读 ✓ 视觉密度低不抢戏 ✓ 实施成本最低</div>
+      <div class="cons">✗ 缺少"魔法时刻"</div>
+      <a href="design_v2026-06_variant_A_stoic.html" target="_blank">独立打开 ↗</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <iframe src="design_v2026-06_variant_B_bioluminescent.html"></iframe>
+    <div class="card-foot">
+      <h2>B · 生灵呼吸 (Bioluminescent Breath)</h2>
+      <div class="summary">柔软发光圆盘 + 8 条生物丝缕 + 萤火虫粒子。Avatar 潘多拉 + 宫崎骏 kodama。</div>
+      <div class="pros">✓ 夜晚 / 林间最美 ✓ 神秘氛围浓 ✓ 视觉差异化最强</div>
+      <div class="cons">✗ 户外强光下可见度受影响 ✗ 实施成本最高 (8 条 ParticleSystem + shader)</div>
+      <a href="design_v2026-06_variant_B_bioluminescent.html" target="_blank">独立打开 ↗</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <iframe src="design_v2026-06_variant_C_temporal.html"></iframe>
+    <div class="card-foot">
+      <h2>C · 时间锚 (Temporal Anchor / DS Strand)</h2>
+      <div class="summary">双层旋转阵图 + 6 条 DS 化学发光丝 + 时间戳卡片 (X 天前由 Y 留下)。直接致敬 DS。</div>
+      <div class="pros">✓ 异步社交温度最强 ✓ 时间戳是 Cairn 真正的护城河 ✓ DS-meta 灵魂亲属</div>
+      <div class="cons">✗ 需要后端真实"留言者+时间戳" (PRD3 已有 marker.created_at, 可用) ✗ 标签信息密度高</div>
+      <a href="design_v2026-06_variant_C_temporal.html" target="_blank">独立打开 ↗</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <iframe src="design_v2026-06_variant_D_topo50.html"></iframe>
+    <div class="card-foot">
+      <h2>D · Topo50 圣物 (NZ Cartographic)</h2>
+      <div class="summary">同心等高线 + sepia 印章 + 测绘虚线 + cream 底卡片 + 经纬度+海拔。LINZ Topo50 致敬。</div>
+      <div class="pros">✓ NZ 用户一眼识别本土 ✓ 与 PRD3 E-013 离线 Topo50 + E-016 DOC 橙完全协调 ✓ 竞品做不到的本土真实感</div>
+      <div class="cons">✗ 海外用户可能"看不懂"为何这种风格 ✗ sepia 在 AR 真实场景下与背景融合度需要测试</div>
+      <a href="design_v2026-06_variant_D_topo50.html" target="_blank">独立打开 ↗</a>
+    </div>
+  </div>
+</div>
+
+<div class="pick-prompt">
+  <h2>下一步</h2>
+  <p>请挑一个变体（或告诉我"A 的卡片 + B 的光带 + D 的颜色"这种组合方向），我会按选定的 2D 设计去做 Unity 3D 实施 (Stage 8 B1+B2+B3a + C2)。</p>
+  <p>也可以告诉我哪些细节要改：颜色、密度、节奏、信息层级、字体。改 2D 比改 3D 快 100 倍。</p>
+  <p>个人 (技术视角) 推荐组合: <code>D 的 Topo50 视觉骨架 + C 的时间戳卡片 + B 的微生物呼吸节奏</code> — 但你是产品决策人。</p>
+</div>
+
+</body>
+</html>

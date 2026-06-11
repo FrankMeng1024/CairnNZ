@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<title>Cairn AR v0.2.3 — Variant B · 生灵呼吸 (Bioluminescent Breath)</title>
+<style>
+  body { margin:0; background:#04060a; color:#cbd2dc; font-family:-apple-system,"PingFang SC",sans-serif; overflow:hidden; }
+  #info { position:absolute; top:14px; left:14px; z-index:10; background:rgba(0,0,0,0.75); padding:14px 18px; border-radius:10px; max-width:380px; line-height:1.55; font-size:12.5px; backdrop-filter:blur(10px); }
+  #info h1 { margin:0 0 6px; font-size:15px; font-weight:600; color:#fff; }
+  #info p { margin:5px 0; color:#94a0b0; }
+  #info .tag { display:inline-block; padding:2px 7px; background:rgba(80,180,150,0.18); color:#9fdbc4; border-radius:3px; font-size:11px; margin-right:4px; }
+  #controls { position:absolute; top:14px; right:14px; z-index:10; background:rgba(0,0,0,0.7); padding:10px 14px; border-radius:10px; backdrop-filter:blur(10px); }
+  #controls button { display:block; width:100%; margin:3px 0; padding:6px 14px; background:#0c1820; color:#cbd2dc; border:1px solid #1a2a36; border-radius:5px; font-size:12px; cursor:pointer; }
+  #controls button:hover { background:#152230; }
+  #controls button.active { background:#1a2f3d; border-color:#5b8aa8; color:#fff; }
+  #controls .sep { height:1px; background:#0c1820; margin:8px -8px; }
+  #controls h3 { margin:0 0 4px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#6c7586; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h1>Variant B · 生灵呼吸</h1>
+  <p><span class="tag">活的</span><span class="tag">柔软</span><span class="tag">Avatar · Princess Mononoke kodama</span></p>
+  <p><b>设计语言</b>: Avatar 潘多拉夜晚的生物发光 + 宫崎骏 kodama 的"小灵在那里看着你"。Cairn 是一个**有呼吸的小灵**，不是 UI 元素。</p>
+  <p><b>组成</b>: 阵图 = 柔软发光圆盘 (像水面涟漪) + 中心 type rune；光带 = 7-9 条**有机生物丝缕**, 像水草在水里轻轻摇 (S 曲线缓慢漂动)；3D 文字 = 半透明手写体，像水印。</p>
+  <p><b>种植仪式 (1s)</b>: 地面光圈从中心扩散涟漪 (0.4s) → 中心 rune 开花 (0.2s) → 丝缕从地下"生长"出来 (0.4s)。</p>
+  <p><b>哲学</b>: "陌生人在这里留下的信息，像森林里的小精灵在看着你。"  适合夜晚、林间、神秘 NZ 步道氛围。</p>
+</div>
+
+<div id="controls">
+  <h3>Type</h3>
+  <button data-type="cairn" class="active">⛰ Cairn</button>
+  <button data-type="danger">⚠ Danger</button>
+  <button data-type="water">💧 Water</button>
+  <button data-type="hut">🏠 Hut</button>
+  <button data-type="junction">⤨ Junction</button>
+  <div class="sep"></div>
+  <button id="replay">▶ Replay 仪式</button>
+</div>
+
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = innerWidth, H = canvas.height = innerHeight;
+window.addEventListener('resize', () => { W=canvas.width=innerWidth; H=canvas.height=innerHeight; });
+
+const TYPES = {
+  cairn:    { color:'#7fcfb3', cool:'#a8e0d0', label:'Cairn',    rune:'cairn',    note:'路过留念。视野很好。' },
+  danger:   { color:'#ff8b7a', cool:'#ffaba0', label:'Danger',   rune:'triangle', note:'湿滑。小心。' },
+  water:    { color:'#5fa8d8', cool:'#9fc8e8', label:'Water',    rune:'drop',     note:'清澈溪水。可饮。' },
+  hut:      { color:'#d9c47a', cool:'#f0e0a4', label:'Hut',      rune:'house',    note:'紧急避难所 200m 西北。' },
+  junction: { color:'#c194e0', cool:'#dbb8eb', label:'Junction', rune:'fork',     note:'分叉路。北 → 山顶。' },
+};
+
+let currentType = 'cairn';
+let ceremonyT = 0;
+let lastTs = performance.now();
+
+document.querySelectorAll('#controls button[data-type]').forEach(btn => {
+  btn.onclick = () => {
+    currentType = btn.dataset.type;
+    document.querySelectorAll('#controls button[data-type]').forEach(b=>b.classList.toggle('active', b===btn));
+    ceremonyT = 0;
+  };
+});
+document.getElementById('replay').onclick = () => { ceremonyT = 0; };
+
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function easeOutElastic(t) {
+  const c4 = (2 * Math.PI) / 3;
+  return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10*t) * Math.sin((t*10 - 0.75) * c4) + 1;
+}
+
+function drawRune(cx, cy, r, type, color, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  // 加发光
+  ctx.shadowBlur = 14;
+  ctx.shadowColor = color;
+  if (type === 'cairn') {
+    // 朴素三圆
+    for (let i = 0; i < 3; i++) {
+      const yy = cy + (i - 1) * r * 0.32;
+      const ww = r * (0.32 - i * 0.06);
+      ctx.beginPath(); ctx.ellipse(cx, yy, ww, ww * 0.55, 0, 0, Math.PI*2); ctx.stroke();
+    }
+  } else if (type === 'triangle') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r*0.42);
+    ctx.lineTo(cx + r*0.40, cy + r*0.30);
+    ctx.lineTo(cx - r*0.40, cy + r*0.30);
+    ctx.closePath(); ctx.stroke();
+  } else if (type === 'drop') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r*0.45);
+    ctx.bezierCurveTo(cx + r*0.42, cy - r*0.10, cx + r*0.30, cy + r*0.40, cx, cy + r*0.40);
+    ctx.bezierCurveTo(cx - r*0.30, cy + r*0.40, cx - r*0.42, cy - r*0.10, cx, cy - r*0.45);
+    ctx.stroke();
+  } else if (type === 'house') {
+    ctx.beginPath();
+    ctx.moveTo(cx - r*0.36, cy);
+    ctx.lineTo(cx, cy - r*0.42);
+    ctx.lineTo(cx + r*0.36, cy);
+    ctx.lineTo(cx + r*0.36, cy + r*0.36);
+    ctx.lineTo(cx - r*0.36, cy + r*0.36);
+    ctx.closePath(); ctx.stroke();
+  } else if (type === 'fork') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + r*0.4); ctx.lineTo(cx, cy);
+    ctx.moveTo(cx, cy); ctx.lineTo(cx - r*0.32, cy - r*0.36);
+    ctx.moveTo(cx, cy); ctx.lineTo(cx + r*0.32, cy - r*0.36);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawGroundRipple(cx, cy, baseR, color, cool, ceremonyT) {
+  // 仪式 0-0.4s: 涟漪从中心扩散
+  // 仪式后: 缓慢呼吸光圈
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, 0.35);
+
+  // 0-0.4 涟漪扩散
+  if (ceremonyT < 0.4) {
+    const t = ceremonyT / 0.4;
+    const rippleR = easeOutCubic(t) * baseR * 1.3;
+    ctx.globalAlpha = (1 - t) * 0.7;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(0, 0, rippleR, 0, Math.PI*2); ctx.stroke();
+  }
+
+  // 主光圈 (从 0.2s 开始可见，之后保持 + 呼吸)
+  if (ceremonyT > 0.2) {
+    const visT = Math.min(1, (ceremonyT - 0.2) / 0.3);
+    const r = baseR * easeOutElastic(visT);
+    const breath = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(performance.now() * 0.0014));
+
+    // 内核 (柔软填充)
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    grad.addColorStop(0, color + '55');
+    grad.addColorStop(0.6, color + '20');
+    grad.addColorStop(1, color + '00');
+    ctx.fillStyle = grad;
+    ctx.globalAlpha = 0.85 * breath;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill();
+
+    // 边缘光环
+    ctx.globalAlpha = 0.7 * breath;
+    ctx.strokeStyle = cool;
+    ctx.lineWidth = 1.8;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = color;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawWispStrands(cx, cy, baseR, color, cool, ceremonyT) {
+  // 0.6s 之后开始生长
+  const wispT = Math.max(0, (ceremonyT - 0.6) / 0.4);
+  if (wispT <= 0) return;
+
+  const count = 8;
+  const t = performance.now() * 0.001;
+  for (let i = 0; i < count; i++) {
+    const a0 = (i / count) * Math.PI * 2 + Math.sin(i * 7.13) * 0.4;
+    const r0 = baseR * (0.7 + Math.sin(i * 3.7) * 0.15);
+    const x0 = cx + Math.cos(a0) * r0;
+    const y0 = cy + Math.sin(a0) * r0 * 0.35;
+
+    const heightT = easeOutCubic(wispT);
+    const heightMax = 200 + Math.sin(i * 5.1) * 40;     // 1.4-1.6m 等价
+    const totalH = heightMax * heightT;
+
+    // S 曲线 — 多段 quadratic 串联，每段相位偏移
+    const segs = 14;
+    const phase = t * 0.5 + i * 1.3;
+    let prevX = x0, prevY = y0;
+
+    // 渐变颜色
+    for (let s = 1; s <= segs; s++) {
+      const segT = s / segs;
+      // 基线: x0 → cx (顶端微微向中心收), y0 → y0 - totalH
+      const baseX = x0 + (cx + Math.cos(a0) * baseR * 0.2 - x0) * segT;
+      const baseY = y0 - totalH * segT;
+      // S 摆动 (横向)
+      const sway = Math.sin(segT * 4.5 + phase) * 14 * (1 - segT*0.3);
+      const swayDir = -Math.sin(a0); // 切向
+      const px = baseX + swayDir * sway;
+      const py = baseY + Math.cos(a0) * sway * 0.2;
+      // 透明度 (顶端 fade)
+      const alpha = (1 - segT*0.85) * wispT;
+      const col = (segT < 0.5 ? color : cool);
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = alpha * 0.85;
+      ctx.lineWidth = 2 - segT * 1.0;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = color;
+      ctx.beginPath();
+      ctx.moveTo(prevX, prevY); ctx.lineTo(px, py); ctx.stroke();
+      prevX = px; prevY = py;
+    }
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+}
+
+function drawCairnBody(cx, cy) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  // 阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath(); ctx.ellipse(0, 12, 36, 12, 0, 0, Math.PI*2); ctx.fill();
+  const stones = [
+    { y: 0,   w: 32, h: 22, c: '#1d2530' },
+    { y:-22, w: 26, h: 18, c: '#252e3d' },
+    { y:-40, w: 18, h: 14, c: '#2d3848' },
+  ];
+  for (const s of stones) {
+    ctx.fillStyle = s.c;
+    ctx.beginPath(); ctx.ellipse(0, s.y, s.w, s.h, 0, 0, Math.PI*2); ctx.fill();
+    const grad = ctx.createLinearGradient(0, s.y - s.h, 0, s.y);
+    grad.addColorStop(0, 'rgba(180,210,200,0.20)');
+    grad.addColorStop(1, 'rgba(180,210,200,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(0, s.y, s.w, s.h, 0, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawLabel(cx, cy, color, label, note, ceremonyT) {
+  const labelT = Math.max(0, (ceremonyT - 0.8) / 0.2);
+  if (labelT <= 0) return;
+  const ly = cy - 270;
+  ctx.save();
+  ctx.globalAlpha = labelT * 0.92;
+  ctx.font = '300 italic 18px "Optima","Songti SC",serif';
+  ctx.textAlign = 'center';
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = color;
+  ctx.fillStyle = color;
+  ctx.fillText(label, cx, ly);
+  ctx.font = '300 12px -apple-system,"PingFang SC",sans-serif';
+  ctx.fillStyle = 'rgba(220,232,240,0.7)';
+  ctx.shadowBlur = 0;
+  ctx.fillText(note, cx, ly + 18);
+  ctx.restore();
+}
+
+function frame(now) {
+  const dt = (now - lastTs) / 1000;
+  lastTs = now;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  ctx.setLineDash([]);
+  if (ceremonyT < 1) ceremonyT = Math.min(1, ceremonyT + dt);
+
+  // 背景 — 深森林夜
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#04080d');
+  grad.addColorStop(0.5, '#070b14');
+  grad.addColorStop(1, '#020306');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // 背景 — 微小漂浮粒子 (像萤火虫在远处)
+  const t = performance.now() * 0.0006;
+  for (let i = 0; i < 32; i++) {
+    const x = ((i * 71.3) % W + Math.sin(t + i*0.7) * 30 + W) % W;
+    const y = ((i * 43.7) % H + Math.cos(t * 0.6 + i*1.1) * 20) % H;
+    const a = 0.18 + 0.18 * Math.sin(t * 2 + i);
+    ctx.fillStyle = `rgba(160,210,200,${a})`;
+    ctx.beginPath(); ctx.arc(x, y * 0.6, 1.0, 0, Math.PI*2); ctx.fill();
+  }
+
+  const cx = W/2, cy = H*0.7;
+  const t2 = TYPES[currentType];
+  const baseR = 110;
+
+  drawGroundRipple(cx, cy, baseR, t2.color, t2.cool, ceremonyT);
+  const runeAlpha = Math.max(0, Math.min(1, (ceremonyT - 0.45) / 0.2));
+  drawRune(cx, cy * 1.02, baseR * 0.5, t2.rune, t2.cool, runeAlpha * 0.92);
+  drawWispStrands(cx, cy, baseR, t2.color, t2.cool, ceremonyT);
+  drawCairnBody(cx, cy);
+  drawLabel(cx, cy, t2.color, t2.label, t2.note, ceremonyT);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
