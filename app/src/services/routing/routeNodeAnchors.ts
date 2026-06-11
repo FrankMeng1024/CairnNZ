@@ -144,6 +144,13 @@ export function computeRouteNodeAnchors(args: {
   // exists — without a graph the diagnostics are vacuous and would just
   // spam the unit-test console.
   if (trailGraph) {
+    // v222: also upload the actual anchor coords + workingPoints[0/last]
+    // so we can verify endpoint anchor coord == polyline endpoint coord
+    // (user reports endpoint marker drifts off line tip in screenshots).
+    const intersectionAnchors = anchors
+      .filter(a => a.kind === 'intersection')
+      .slice(0, 10)
+      .map(a => ({ id: a.id, lng: a.lng, lat: a.lat }));
     const diagPayload = {
       workingPoints: workingPoints.length,
       originalPoints: originalPoints.length,
@@ -151,6 +158,12 @@ export function computeRouteNodeAnchors(args: {
       graphTruncated: trailGraph.truncated,
       junctionStats: stats,
       finalAnchorCount: anchors.length,
+      // Provenance verification:
+      polylineStart: { lng: workingPoints[0].lng, lat: workingPoints[0].lat },
+      polylineEnd: { lng: workingPoints[lastIdx].lng, lat: workingPoints[lastIdx].lat },
+      endpointStartAnchor: { lng: anchors[0]?.lng, lat: anchors[0]?.lat },
+      endpointEndAnchor: { lng: anchors[1]?.lng, lat: anchors[1]?.lat },
+      intersectionAnchors,
     };
     if (typeof console !== 'undefined' && console.log) {
       console.log('[edit-diag-anchors]', diagPayload);

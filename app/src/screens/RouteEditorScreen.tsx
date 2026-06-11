@@ -35,6 +35,7 @@ import { getFlagsSync } from '../config/featureFlags';
 import { buildEditContext } from '../services/routing/editContext';
 import { computeRouteNodeAnchors, type RouteNodeAnchor } from '../services/routing/routeNodeAnchors';
 import { computeCandidates, findNearestCandidate } from '../services/routing/candidateNodes';
+import { uploadEditDiag } from '../services/routing/editDiagUploader';
 import type { LngLat as RoutingLngLat } from '../services/routing/corridor/PolylineSampler';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
@@ -788,6 +789,21 @@ export function RouteEditorScreen() {
   // any onCameraChanged fires) does NOT spuriously suppress the dots
   // when the camera fit zoom is already big enough.
   const [currentZoom, setCurrentZoom] = useState<number>(14);
+
+  // v222: emit render-side diag every time anchor list or zoom changes
+  // so we can see whether RN UI is hiding anchors (zoom < 14 →
+  // hideIntersections) or anchors aren't reaching the layer at all.
+  useEffect(() => {
+    if (!dualEditActive) return;
+    uploadEditDiag('render', {
+      currentZoom,
+      hideIntersections: currentZoom < 14,
+      anchorCount: routeNodeAnchors.length,
+      endpointCount: routeNodeAnchors.filter(a => a.kind.startsWith('endpoint')).length,
+      intersectionCount: routeNodeAnchors.filter(a => a.kind === 'intersection').length,
+      trimRestoreCount: routeNodeAnchors.filter(a => a.kind.startsWith('trim-restore')).length,
+    });
+  }, [dualEditActive, currentZoom, routeNodeAnchors]);
 
   // v200 fix B1: when save-as-route → Edit creates a backend route to
   // get a routeId, we record the new id here. If the user then cancels

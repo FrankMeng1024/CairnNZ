@@ -534,7 +534,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         (8 grid junctions on route minus 2 endpoint-exclusion).
 //         Smoke moved to src/services/routing/__smoke__ to keep jest
 //         from auto-running the standalone script.
-export const OTA_VERSION = 221;
+//   222 — diag for render side. v221 telemetry id=11 confirmed anchors
+//         pipeline produces 8 anchors (2 endpoint + 6 intersection)
+//         but user still sees only endpoints in screenshots, AND
+//         endpoint marker drifts off the line tip. Two new diag streams:
+//           - 'anchors': now also uploads endpoint anchor coords +
+//             polylineStart/End coords + first 10 intersection coords
+//             so we can verify endpoint-coord==polyline-coord and check
+//             whether intersection coords are visually onroute.
+//           - 'render': fired on every (currentZoom, anchorCount) change,
+//             reports currentZoom + hideIntersections + counts. If
+//             currentZoom < 14 the EditableNodeLayer hides intersections
+//             — we'll know if zoom-state is stuck.
+export const OTA_VERSION = 222;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
