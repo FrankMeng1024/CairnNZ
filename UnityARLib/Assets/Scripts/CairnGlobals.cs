@@ -22,7 +22,7 @@ public partial class CairnGlobals : MonoBehaviour
     // baseline is stable even if RN never sends a global update.
     public const float DEF_BLOOM_SCALE     = 1.0f;
     public const float DEF_ALPHA           = 1.0f;
-    public const float DEF_LIGHT_ESTIMATE  = 1.0f;
+    // v0.2.3 Stage 1 removed: DEF_LIGHT_ESTIMATE (orphan)
     public const float DEF_SCROLL_MUL      = 1.0f;
     public const float DEF_BREATH_FREQ     = 1.0f;  // multiplier on per-material _BreathFreq
     public const float DEF_THERMAL_SCALE   = 1.0f;
@@ -34,11 +34,9 @@ public partial class CairnGlobals : MonoBehaviour
     public const float DEF_PORTAL_SPIN          = 1.0f;  // _CairnGlobalPortalSpin    — multiplies sigil spin speed
     public const float DEF_PORTAL_SIGIL_INT     = 1.0f;  // _CairnGlobalSigilIntensity — multiplies sigil brightness
     public const float DEF_WISP_INTENSITY       = 1.0f;  // _CairnGlobalWispIntensity — multiplies wisp bloom
-    public const float DEF_WISP_FADE_NEAR       = 1.0f;  // _CairnGlobalWispFadeNear  — multiplies _CamFadeNear
-    public const float DEF_WISP_FADE_FAR        = 1.0f;  // _CairnGlobalWispFadeFar   — multiplies _CamFadeFar
+    // v0.2.3 Stage 1 removed: DEF_WISP_FADE_NEAR / DEF_WISP_FADE_FAR (orphan)
     public const float DEF_TEXT_ALPHA           = 1.0f;  // _CairnGlobalTextAlpha     — multiplier on mark text alpha (RN can hide all text)
-    public const float DEF_QUALITY_TIER         = 2.0f;  // 0=low (mobile thermal), 1=mid, 2=high — controls particle/wisp counts at spawn time
-    public const float DEF_AMBIENT_LUX          = 1.0f;  // 0..2, RN sends camera light estimation; 0=dark night, 1=indoor, 2=bright sun
+    // v0.2.3 Stage 1 removed: DEF_QUALITY_TIER / DEF_AMBIENT_LUX (orphan)
     public const float DEF_BUBBLE_SPEED         = 1.0f;  // _CairnGlobalBubbleSpeed — multiplies bubble period; 0.5=slow, 2=fast
     public const float DEF_BUBBLE_SIZE          = 1.0f;  // _CairnGlobalBubbleSize  — bubble glow concentration; <1 sharper, >1 softer
     // v187.7 — full OTA cover: text, wisp, portal layout
@@ -57,8 +55,7 @@ public partial class CairnGlobals : MonoBehaviour
     public const float MAX_ALPHA           = 1.0f;
     public const float MIN_BLOOM_SCALE     = 0.3f;
     public const float MAX_BLOOM_SCALE     = 2.0f;
-    public const float MIN_LIGHT_ESTIMATE  = 0.3f;
-    public const float MAX_LIGHT_ESTIMATE  = 2.0f;
+    // v0.2.3 Stage 1 removed: MIN/MAX_LIGHT_ESTIMATE (orphan)
     public const float MIN_SCROLL_MUL      = 0.0f;
     public const float MAX_SCROLL_MUL      = 2.0f;
     public const float MIN_BREATH_FREQ     = 0.0f;
@@ -74,14 +71,10 @@ public partial class CairnGlobals : MonoBehaviour
     public const float MAX_PORTAL_SIGIL_INT = 3.0f;
     public const float MIN_WISP_INTENSITY   = 0.0f;
     public const float MAX_WISP_INTENSITY   = 3.0f;
-    public const float MIN_WISP_FADE        = 0.1f;
-    public const float MAX_WISP_FADE        = 5.0f;
+    // v0.2.3 Stage 1 removed: MIN/MAX_WISP_FADE (orphan)
     public const float MIN_TEXT_ALPHA       = 0.0f;
     public const float MAX_TEXT_ALPHA       = 1.0f;
-    public const float MIN_QUALITY_TIER     = 0.0f;
-    public const float MAX_QUALITY_TIER     = 2.0f;
-    public const float MIN_AMBIENT_LUX      = 0.0f;
-    public const float MAX_AMBIENT_LUX      = 3.0f;
+    // v0.2.3 Stage 1 removed: MIN/MAX_QUALITY_TIER, MIN/MAX_AMBIENT_LUX (orphan)
     public const float MIN_BUBBLE_SPEED     = 0.1f;
     public const float MAX_BUBBLE_SPEED     = 4.0f;
     public const float MIN_BUBBLE_SIZE      = 0.3f;
@@ -119,7 +112,7 @@ public partial class CairnGlobals : MonoBehaviour
         // get sane values, not 0.
         Shader.SetGlobalFloat("_CairnGlobalBloomScale",   DEF_BLOOM_SCALE);
         Shader.SetGlobalFloat("_CairnGlobalAlpha",        DEF_ALPHA);
-        Shader.SetGlobalFloat("_CairnGlobalLightEstimate", DEF_LIGHT_ESTIMATE);
+        // v0.2.3 Stage 1 removed: _CairnGlobalLightEstimate (orphan)
         Shader.SetGlobalFloat("_CairnGlobalScrollMul",    DEF_SCROLL_MUL);
         Shader.SetGlobalFloat("_CairnGlobalBreathFreq",   DEF_BREATH_FREQ);
         Shader.SetGlobalFloat("_CairnGlobalThermalScale", DEF_THERMAL_SCALE);
@@ -131,11 +124,9 @@ public partial class CairnGlobals : MonoBehaviour
         Shader.SetGlobalFloat("_CairnGlobalPortalSpin",     DEF_PORTAL_SPIN);
         Shader.SetGlobalFloat("_CairnGlobalSigilIntensity", DEF_PORTAL_SIGIL_INT);
         Shader.SetGlobalFloat("_CairnGlobalWispIntensity",  DEF_WISP_INTENSITY);
-        Shader.SetGlobalFloat("_CairnGlobalWispFadeNear",   DEF_WISP_FADE_NEAR);
-        Shader.SetGlobalFloat("_CairnGlobalWispFadeFar",    DEF_WISP_FADE_FAR);
+        // v0.2.3 Stage 1 removed: _CairnGlobalWispFadeNear/Far (orphan)
         Shader.SetGlobalFloat("_CairnGlobalTextAlpha",      DEF_TEXT_ALPHA);
-        Shader.SetGlobalFloat("_CairnGlobalQualityTier",    DEF_QUALITY_TIER);
-        Shader.SetGlobalFloat("_CairnGlobalAmbientLux",     DEF_AMBIENT_LUX);
+        // v0.2.3 Stage 1 removed: _CairnGlobalQualityTier/AmbientLux (orphan)
         Shader.SetGlobalFloat("_CairnGlobalBubbleSpeed",    DEF_BUBBLE_SPEED);
         Shader.SetGlobalFloat("_CairnGlobalBubbleSize",     DEF_BUBBLE_SIZE);
         Shader.SetGlobalFloat("_CairnGlobalTextScale",      DEF_TEXT_SCALE);
@@ -162,7 +153,7 @@ public partial class CairnGlobals : MonoBehaviour
         {
             case "BloomScale":     SetBloomScale(value);    break;
             case "Alpha":          SetAlpha(value);          break;
-            case "LightEstimate":  SetLightEstimate(value);  break;
+            // v0.2.3 Stage 1 removed: LightEstimate (no shader consumer)
             case "ScrollMul":      SetScrollMul(value);      break;
             case "BreathFreq":     SetBreathFreq(value);     break;
             case "HaloRadiusMul":     SetHaloRadiusMul(value);     break;
@@ -170,11 +161,9 @@ public partial class CairnGlobals : MonoBehaviour
             case "PortalSpin":        SetPortalSpin(value);        break;
             case "SigilIntensity":    SetSigilIntensity(value);    break;
             case "WispIntensity":     SetWispIntensity(value);     break;
-            case "WispFadeNear":      SetWispFadeNear(value);      break;
-            case "WispFadeFar":       SetWispFadeFar(value);       break;
+            // v0.2.3 Stage 1 removed: WispFadeNear/WispFadeFar (orphan, never consumed by WispShader)
             case "TextAlpha":         SetTextAlpha(value);         break;
-            case "QualityTier":       SetQualityTier(value);       break;
-            case "AmbientLux":        SetAmbientLux(value);        break;
+            // v0.2.3 Stage 1 removed: QualityTier/AmbientLux (no shader consumer)
             case "BubbleSpeed":       SetBubbleSpeed(value);       break;
             case "BubbleSize":        SetBubbleSize(value);        break;
             case "TextScale":         SetTextScale(value);         break;
@@ -212,11 +201,7 @@ public partial class CairnGlobals : MonoBehaviour
         Shader.SetGlobalFloat("_CairnGlobalAlpha", v);
     }
 
-    public void SetLightEstimate(float v)
-    {
-        v = SafeClamp(v, MIN_LIGHT_ESTIMATE, MAX_LIGHT_ESTIMATE, "LightEstimate");
-        Shader.SetGlobalFloat("_CairnGlobalLightEstimate", v);
-    }
+    // v0.2.3 Stage 1 removed: SetLightEstimate (orphan, no shader consumer).
 
     public void SetScrollMul(float v)
     {
@@ -252,31 +237,13 @@ public partial class CairnGlobals : MonoBehaviour
         v = SafeClamp(v, MIN_WISP_INTENSITY, MAX_WISP_INTENSITY, "WispIntensity");
         Shader.SetGlobalFloat("_CairnGlobalWispIntensity", v);
     }
-    public void SetWispFadeNear(float v)
-    {
-        v = SafeClamp(v, MIN_WISP_FADE, MAX_WISP_FADE, "WispFadeNear");
-        Shader.SetGlobalFloat("_CairnGlobalWispFadeNear", v);
-    }
-    public void SetWispFadeFar(float v)
-    {
-        v = SafeClamp(v, MIN_WISP_FADE, MAX_WISP_FADE, "WispFadeFar");
-        Shader.SetGlobalFloat("_CairnGlobalWispFadeFar", v);
-    }
+    // v0.2.3 Stage 1 removed: SetWispFadeNear/SetWispFadeFar (orphan, WispShader uses per-material _CamFadeNear/_CamFadeFar; OTA never reached shader).
     public void SetTextAlpha(float v)
     {
         v = SafeClamp(v, MIN_TEXT_ALPHA, MAX_TEXT_ALPHA, "TextAlpha");
         Shader.SetGlobalFloat("_CairnGlobalTextAlpha", v);
     }
-    public void SetQualityTier(float v)
-    {
-        v = SafeClamp(v, MIN_QUALITY_TIER, MAX_QUALITY_TIER, "QualityTier");
-        Shader.SetGlobalFloat("_CairnGlobalQualityTier", v);
-    }
-    public void SetAmbientLux(float v)
-    {
-        v = SafeClamp(v, MIN_AMBIENT_LUX, MAX_AMBIENT_LUX, "AmbientLux");
-        Shader.SetGlobalFloat("_CairnGlobalAmbientLux", v);
-    }
+    // v0.2.3 Stage 1 removed: SetQualityTier/SetAmbientLux (orphan, no shader consumer).
     public void SetBubbleSpeed(float v)
     {
         v = SafeClamp(v, MIN_BUBBLE_SPEED, MAX_BUBBLE_SPEED, "BubbleSpeed");

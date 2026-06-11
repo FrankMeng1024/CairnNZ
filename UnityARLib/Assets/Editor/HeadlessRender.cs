@@ -56,12 +56,12 @@ public static class HeadlessRender
         // initialize globals so shaders sample sane defaults.
         Shader.SetGlobalFloat("_CairnGlobalBloomScale",   1.0f);
         Shader.SetGlobalFloat("_CairnGlobalAlpha",        1.0f);
-        Shader.SetGlobalFloat("_CairnGlobalLightEstimate", 1.0f);
+        // v0.2.3 Stage 1: removed _CairnGlobalLightEstimate (orphan)
         Shader.SetGlobalFloat("_CairnGlobalScrollMul",    1.0f);
         Shader.SetGlobalFloat("_CairnGlobalBreathFreq",   1.0f);
         Shader.SetGlobalFloat("_CairnGlobalThermalScale", 1.0f);
         Shader.SetGlobalFloat("_CairnGlobalHaloRadiusMul", 1.0f);
-        Debug.Log("[HeadlessRender] Forced 7 globals to default 1.0 (Edit mode workaround)");
+        Debug.Log("[HeadlessRender] Forced 6 globals to default 1.0 (Edit mode workaround)");
 
         // Force re-import all our custom shaders (in case Unity has stale
         // cached compile from before today's edits)

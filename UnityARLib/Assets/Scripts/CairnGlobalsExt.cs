@@ -85,16 +85,12 @@ public partial class CairnGlobals
             };
         }
 
-        // §G.1a Strand visual (18)
+        // §G.1a Strand visual (15 — v0.2.3 Stage 1: removed WispCurlStrength,
+        // HeroRibbonCount/Height/Curl since Stage 8 deletes RibbonStrandShader
+        // + HeroRibbon mesh system entirely, replacing with ParticleSystem.)
         F("RingEmitRate",          null, 2,  60,   14);
         F("WispLifetime",          null, 1,  10,   3.5f);
         F("WispRiseSpeed",         null, 0.2f, 4,  1.2f);
-        // v206 D2 — was orphan (null shader uniform). Now binds to
-        // _CairnGlobalCurlStrength which RibbonStrandShader vert function
-        // multiplies into _CurlAmp displacement. Default raised 0.15→0.5
-        // because user reported #2 "周围线条不动 只是内部流转" — at 0.15
-        // displacement is ~3-5mm, perceptually invisible at 1m+ viewing.
-        F("WispCurlStrength",      "_CairnGlobalCurlStrength", 0,  3,    0.5f);
         F("WispTrailWidth",        null, 0.01f, 0.3f, 0.08f);
         F("WispTrailLifetime",     null, 0.3f, 6,  2.0f);
         C("WispBirthColor", "_CairnGlobalWispBirthColor", perType: true);
@@ -103,13 +99,9 @@ public partial class CairnGlobals
         F("WispBirthIntensity",    null, 0,  4,    1.0f);
         F("WispMidIntensity",      null, 0,  4,    1.5f);
         F("WispEndIntensity",      null, 0,  4,    0.7f);
-        F("HeroRibbonCount",       null, 0,  12,   6);
-        F("HeroRibbonHeight",      null, 0.5f, 3,  1.5f);
-        F("HeroRibbonCurl",        null, 0,  1,    0.20f);
         F("FarShaftMinDist",       null, 5,  80,   6);   // v206 C: 12→6 default
         F("FarShaftPixelHeight",   null, 20, 300,  80);
         B("WispEnabled", true);
-        B("HeroRibbonEnabled", true);
         B("FarShaftEnabled", true);
 
         // §G.1b Per-type colors (5×8 = 40)
@@ -150,27 +142,13 @@ public partial class CairnGlobals
         C("TextBackplateRimColor","_CairnGlobalTextBackplateRim");
         C("TextFaceColor",        "_CairnGlobalTextFaceColor");
 
-        // §G.1e Kill-shots (~25)
-        F("SeedCount",            null, 0,    20,   7);
-        F("SeedRiseSpeed",        null, 0.1f, 3,    0.5f);
-        C("SeedColor",            "_CairnGlobalSeedColor");
-        F("SeedScaleMul",         null, 0.3f, 3,    1.0f);
-        B("SeedEnabled", true);
-        F("StarMoteCount",        null, 0,    600,  300);
-        F("StarMoteDuration",     null, 0.5f, 6,    2.5f);
-        F("StarMoteRadius",       null, 1,    10,   4.0f);
-        B("StarMoteEnabled", true);
-        F("LODSwapDistance",      null, 10,   200,  40);
-        B("LanternEnabled", true);
+        // §G.1e Kill-shots — v0.2.3 Stage 1: removed unused orphans
+        // (Seed/StarMote/Lantern/LODSwap/HandshakeBeam{Duration,PulseHz}/Ripple
+        // never consumed by any shader/script). Kept: ScanGrid (used), Contact
+        // shadow (used), Handshake basics (color/width/Enabled used by SpiritHandshake).
         C("HandshakeBeamColor",   "_CairnGlobalHandshakeColor");
         F("HandshakeBeamWidth",   null, 0.005f, 0.2f, 0.04f);
-        F("HandshakeBeamDuration",null, 0.2f, 3,    1.0f);
-        F("HandshakeBeamPulseHz", null, 0.1f, 4,    1.0f);
         B("HandshakeBeamEnabled", true);
-        C("RippleColor",          "_CairnGlobalRippleColor");
-        F("RippleRadiusM",        null, 0.5f, 6,    3.0f);
-        F("RippleDurationMs",     null, 200,  4000, 1500);
-        B("RippleEnabled", true);
         C("ScanGridColor",        "_CairnGlobalScanGridColor");
         F("ScanGridPulseHz",      null, 0.1f, 4,    0.8f);
         F("ScanGridHexSize",      null, 0.05f, 1,   0.25f);
@@ -179,9 +157,9 @@ public partial class CairnGlobals
         F("ContactShadowRadiusMul", null, 0.3f, 3,  1.0f);
         B("ContactShadowEnabled", true);
 
-        // §G.1f Like/report (10)
-        F("AimConeRad",           null, 0.05f, 1.5f, 0.087f);
-        F("AimHoldMs",            null, 100,  3000, 600);
+        // §G.1f Like/report — v0.2.3 Stage 1: removed AimConeRad/AimHoldMs
+        // (orphan, RN side hardcodes 0.087/600). Q9 跳过 like/report this
+        // sprint anyway. Kept other Like* keys for future Q9 work.
         F("ArInteractRangeM",     null, 5,    100,  30);
         B("LikeReportEnabled", true);
         F("LikeReportPollMs",     null, 1000, 60000, 8000);
@@ -190,7 +168,7 @@ public partial class CairnGlobals
         C("LikeBadgeColor",       "_CairnGlobalLikeBadgeColor");
         F("LikeBadgeFloatHeight", null, 0,    3,    1.6f);
         B("LikeBadgeEnabled", true);
-        // Status-tint colors (3 RGBAs)
+        // Status-tint colors (3 RGBAs) — kept for future Q9 community state UI
         C("StatusTintHealthy",    "_CairnGlobalStatusHealthy");
         C("StatusTintSuspicious", "_CairnGlobalStatusSuspicious");
         C("StatusTintHidden",     "_CairnGlobalStatusHidden");
@@ -209,12 +187,10 @@ public partial class CairnGlobals
         B("VignetteEnabled", true);
         B("ColorAdjEnabled", true);
 
-        // §G.1c continued — Ring details (refit)
-        F("RingThickness",        null, 0.005f, 0.05f, 0.02f);
-        F("RingDashCount",        null, 0,    24,   12);
-        F("RingDashSpeed",        null, -2,   2,    0.5f);
-        F("RingInnerPulseHz",     null, 0.1f, 4,    1.0f);
-        F("RingEdgeSoftness",     null, 0.001f, 0.1f, 0.01f);
+        // §G.1c continued — Ring details: v0.2.3 Stage 1 removed RingThickness/
+        // RingDashCount/RingDashSpeed/RingInnerPulseHz/RingEdgeSoftness orphans
+        // (no shader uniform binding, never consumed). New PortalRing in
+        // Stage 8 (A0) registers PortalRingRadiusM/PortalSpinSpeed instead.
 
         // Confidence ring + ScanGrid float uniforms (review: shader reads
         // _CairnGlobalConfidenceRingAlpha / _CairnGlobalScanGridPulseHz /
@@ -228,13 +204,11 @@ public partial class CairnGlobals
         // not by RN OTA. Registered for completeness (default 1 = full).
         F("ArConfidenceUni",      "_CairnGlobalArConfidence", 0, 1, 1.0f);
 
-        // Halo per-type extras
-        F("HaloPulseAmp",         null, 0,    1,    0.2f);
-        F("HaloPulseHz",          null, 0.1f, 4,    1.2f);
-
-        // Pebble shader extras
-        F("PebbleRimPower",       null, 1,    8,    3);
-        F("PebbleSubsurfaceStrength", null, 0, 1,   0.3f);
+        // v0.2.3 Stage 1 removed: HaloPulseAmp/HaloPulseHz orphans (HaloShader
+        // uses per-material _PulseAmp/_PulseFreq; OTA cannot reach them).
+        // PebbleRimPower/PebbleSubsurfaceStrength orphans (Pebble shader uses
+        // material constants only). Address in Stage 11 if Pebble shader
+        // animation is added.
 
         // Pebble + TypeChip layout
         F("TypeChipScale",        null, 0.3f, 3,    1.0f);
