@@ -230,7 +230,8 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // staring at a grey button.
   const a4DisabledReason = useMemo<string | null>(() => {
     if (a4State === 'COLD_INIT') return 'Setting up — give it a second…';
-    if (a4State === 'INVALIDATED_BY_DISTANCE') return 'You\'ve walked far — re-anchoring AR…';
+    // INVALIDATED_BY_DISTANCE removed 2026-06-11 (no longer reachable;
+    // cairns are absolute world coords).
     if (a1State !== 'LOCKED') return 'Scanning the ground — point at the floor';
     return null;
   }, [a4State, a1State]);

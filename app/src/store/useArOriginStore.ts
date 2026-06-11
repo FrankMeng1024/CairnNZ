@@ -53,7 +53,8 @@ import { crashLogger } from '../services/crashLogger';
 
 const SCHEMA_VERSION_KEY_PREFIX = 'cairn_ar_schema_version';
 const REQUIRED_SCHEMA_VERSION = 2;
-const INVALIDATE_DISTANCE_M = 100; // Plan V2-CONFLICT-3
+// INVALIDATE_DISTANCE_M removed 2026-06-11 — cairns are absolute world
+// coords, never invalidate by user distance.
 const ANTI_THRASH_MS = 500;        // mirror A1 anti-thrash (Plan line 137)
 
 export type A4State = 'COLD_INIT' | 'PERSISTED' | 'GPS_LOCKED' | 'INVALIDATED_BY_DISTANCE';
@@ -108,17 +109,7 @@ function nowMs(): number {
   return Date.now();
 }
 
-/** Haversine distance in meters. */
-function distM(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 +
-            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-            Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
-}
+// distM removed 2026-06-11 — distance invalidation deleted, no longer needed.
 
 function schemaVersionKey(userId: string): string {
   return `${SCHEMA_VERSION_KEY_PREFIX}_${userId}`;
@@ -179,44 +170,36 @@ export const useArOriginStore = create<A4Store>((set, get) => ({
 
   onGpsFix: (lat: number, lng: number) => {
     const g = get();
-    const arOrigin = useMarkerStore.getState().arOrigin;
+    // v0.2.3 — distance invalidation REMOVED.
+    //
+    // Product semantics (locked 2026-06-11 by user):
+    //   每个 cairn 插下去那一刻 = 永久世界坐标固定。不管用户走多远，
+    //   cairn 就在原地。用户走 100m / 5km / 任何距离都不会让 cairn
+    //   "invalidate" — cairn 没变，是用户离它远了。
+    //
+    // Previous (wrong) implementation: when dist(currentGps, arOrigin)
+    // > 100m, transition to INVALIDATED_BY_DISTANCE and trigger marker
+    // re-spawn. That model was based on the wrong assumption that
+    // cairns are tied to user proximity. They aren't.
+    //
+    // What this method still does: PERSISTED → GPS_LOCKED on first
+    // valid fix this session (so the Plant button stops waiting on
+    // "we don't have GPS yet" and starts waiting on "ARKit not stable
+    // yet" instead — A4 just becomes more confident, never invalidates).
 
-    // Distance invalidation check (any state with a persisted arOrigin).
-    if (arOrigin) {
-      const d = distM(lat, lng, arOrigin.lat, arOrigin.lng);
-      if (d > INVALIDATE_DISTANCE_M && g.state !== 'INVALIDATED_BY_DISTANCE') {
-        crashLogger.breadcrumb(
-          `[v22-A4-FSM] gps→INVALIDATED dist=${d.toFixed(1)}m > ${INVALIDATE_DISTANCE_M}m`
-        );
-        transitionTo(set, get, 'INVALIDATED_BY_DISTANCE', 'gps-distance');
-        return;
-      }
-    }
-
-    // PERSISTED → GPS_LOCKED on first valid fix this session.
     if (g.state === 'PERSISTED') {
       crashLogger.breadcrumb('[v22-A4-FSM] gps→GPS_LOCKED');
       transitionTo(set, get, 'GPS_LOCKED', 'first-gps-fix');
     }
-    // INVALIDATED waits for A1 LOCKED + new arOrigin (handled in onA1State).
+    // INVALIDATED state removed 2026-06-11 — cairns are absolute world
+    // coords, do not invalidate by user distance.
     // COLD_INIT stays COLD_INIT (no arOrigin to lock against yet).
   },
 
   onA1State: (next: A1State) => {
     set({ a1State: next, lastA1TransitionAt: nowMs() });
     crashLogger.breadcrumb(`[v22-A4-FSM] a1State=${next}`);
-
-    // Stage 4 distance-invalidation recovery: when INVALIDATED + A1 LOCKED
-    // AND markerStore now has a fresh arOrigin (set by Stage 8 on respawn),
-    // transition back to GPS_LOCKED. The actual respawn wiring is Stage 8.
-    const g = get();
-    if (g.state === 'INVALIDATED_BY_DISTANCE' && next === 'LOCKED') {
-      const arOrigin = useMarkerStore.getState().arOrigin;
-      if (arOrigin) {
-        crashLogger.breadcrumb('[v22-A4-FSM] invalidated-recovery: A1 LOCKED + new arOrigin → GPS_LOCKED');
-        transitionTo(set, get, 'GPS_LOCKED', 'invalidated-recovery');
-      }
-    }
+    // No state-machine recovery wiring — INVALIDATED removed.
   },
 
   __TEST_setState: (s: A4State) => {

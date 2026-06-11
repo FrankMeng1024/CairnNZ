@@ -721,56 +721,36 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
               : null;
             const live = { lat: props.userPos.lat, lng: props.userPos.lng };
             const projOrigin = persisted ?? live;
-            // v220 — RE-ENABLE real GPS offset compensation. v212 hardcoded
-            // ox=oz=0 assuming arOrigin == ARKit world (0,0,0), but ARKit
-            // origin = device pose at session start (drifts each reopen).
-            // v0.2.2 telemetry confirmed: camera.px varies 0→5.05→1.83
-            // across 3 reopens at same physical spot → cairn appears at
-            // different visual positions. Worldalignment=GravityAndHeading
-            // fixed AXES but origin drift was unhandled. Now: when persisted
-            // exists and live differs, send real (live - persisted) meters
-            // offset to Unity so PortalSpawner.SpawnStrandInternal applies
-            // it via _sessionOffsetX/Z (v209 fix), compensating for both
-            // user GPS movement AND ARKit origin drift.
-            let offsetN = 0;
-            let offsetE = 0;
-            if (persisted) {
-              const cosLat = Math.cos((persisted.lat * Math.PI) / 180);
-              offsetN = (live.lat - persisted.lat) * 111000;
-              offsetE = (live.lng - persisted.lng) * 111000 * cosLat;
-            }
-            // v0.2.3 Stage 2 H8 — sessionOffset boundary check (三分支).
-            // Replaces v228 single-threshold clamp (|offset| > 5m → 0).
-            // v228 commit message itself listed as Pending: "Smarter
-            // sessionOffset: only apply when arOrigin staleness clears AND
-            // magnitude is between 1m and 50m (real walk)". This is that fix.
+            // v0.2.3 — sessionOffset PERMANENTLY HARDCODED TO 0.
             //
-            // Three bands (per docs/plans/MASTER_BUG_SHEET.md Stage 2):
-            //   |offset| < 1m   → NOISE     → force 0 (GPS jitter, indoor static)
-            //   1m..50m         → REAL_WALK → apply offset (user actually moved)
-            //   |offset| > 50m  → TELEPORT  → force 0 + warning (cellular handoff
-            //                                  / GPS glitch / arOrigin invalid)
-            // Stage 4 (A4-merged) will later wire TELEPORT → INVALIDATED_BY_DISTANCE
-            // to trigger marker re-spawn. Stage 2 only logs + zero-clamps so v228
-            // upper-end behaviour is preserved (no regression).
-            const offsetMagnitude = Math.hypot(offsetN, offsetE);
-            const SESSION_OFFSET_NOISE_M = 1.0;
-            const SESSION_OFFSET_TELEPORT_M = 50.0;
-            let offsetDecision: 'noise' | 'apply' | 'teleport';
-            if (offsetMagnitude < SESSION_OFFSET_NOISE_M) {
-              offsetDecision = 'noise';
-              offsetN = 0;
-              offsetE = 0;
-            } else if (offsetMagnitude > SESSION_OFFSET_TELEPORT_M) {
-              offsetDecision = 'teleport';
-              offsetN = 0;
-              offsetE = 0;
-            } else {
-              offsetDecision = 'apply';
-              // offsetN/E left as computed
-            }
+            // Product semantics (correct, locked 2026-06-11 by user):
+            //   每个 cairn 插下去那一刻 = 永久世界坐标固定 (lat,lng + ARKit
+            //   world anchor)。不管用户如何打开 AR / 走多远 / GPS 怎么抖，
+            //   cairn 不会移动。最多 GPS 抖几下小范围 (<1-2m) 看起来不动。
+            //
+            // History — every prior implementation was WRONG:
+            //   v210: virtualOrigin per-frame from camera → unbounded drift
+            //   v220: (live-persisted)*111000 → cairn pushed to wherever
+            //         user walked, breaking absolute world-coord invariant
+            //   v228: clamp |offset|>5m → 0 (band-aid on v220's wrong model)
+            //   v0.2.3 Stage 2 (this file's prior version): 1-50m three-band
+            //         → still pushed cairns at user, just within "reasonable"
+            //         distance. ALSO WRONG.
+            //
+            // The correct invariant: cairn's ARKit world position is set
+            // ONCE at spawn from (cairn.lat, cairn.lng, projOrigin.lat,
+            // projOrigin.lng) → meters via cosLat projection inside
+            // buildSpawnRequest. After spawn, ARKit SLAM keeps cairn
+            // visually stable. sessionOffset must NOT translate cairns
+            // post-spawn — that was the bug.
+            //
+            // We still send ox=0 oz=0 ONCE per (projOrigin lat,lng) change
+            // so Unity's static _sessionOffsetX/Z is reset cleanly when
+            // arOrigin hydrates from MMKV.
+            const offsetN = 0;
+            const offsetE = 0;
             crashLogger.breadcrumb(
-              `[v22-SESSION-OFFSET] decision=${offsetDecision} mag=${offsetMagnitude.toFixed(2)}m noise<${SESSION_OFFSET_NOISE_M} teleport>${SESSION_OFFSET_TELEPORT_M}`
+              `[v22-SESSION-OFFSET] decision=zero-locked mode=${persisted ? 'persisted' : 'live'}`
             );
             // ARKit GravityAndHeading: +X=East, -Z=North (Apple right-handed
             // convention). sessionOffset Vector3 = (offsetE, 0, -offsetN).

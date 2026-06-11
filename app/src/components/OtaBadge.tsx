@@ -756,7 +756,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         engaged the WRONG case for Q7 平放).
 //         Hotfix: cached PortalSpawner ref (60Hz scene scan was an
 //         A11 perf cost) + [v22-A7] engage/disengage telemetry.
-export const OTA_VERSION = 237;
+//   238 — v0.2.3 root-cause sessionOffset reversal (urgent).
+//         User-confirmed product semantics (2026-06-11):
+//           cairn 插下去那一刻 = 永久世界坐标固定。无论用户走多远，
+//           cairn 不动。GPS 抖动只在 1-2m 内，但 cairn 仍不会"跟着"
+//           用户。
+//         Every prior implementation of sessionOffset was wrong:
+//           v210 per-frame virtualOrigin → unbounded drift
+//           v220 (live-persisted)*111000 → cairn pushed at user
+//           v228 5m clamp → bandaid on v220's wrong model
+//           v0.2.3 Stage 2 1-50m three-band → still wrong
+//         Fix: ox=0 oz=0 PERMANENTLY. cairn position is computed from
+//         absolute (lat,lng,arOrigin) inside buildSpawnRequest; ARKit
+//         SLAM holds it stable post-spawn. sessionOffset adds no value;
+//         every "real walk" application was double-translating.
+//         Also removed: A4 INVALIDATED_BY_DISTANCE (100m threshold) —
+//         cairns don't invalidate by user distance, ever. Removed
+//         distM helper, INVALIDATE_DISTANCE_M constant, INVALIDATED
+//         recovery path in onA1State. A4State enum keeps the value
+//         for backwards compat but no code path enters it.
+export const OTA_VERSION = 238;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
