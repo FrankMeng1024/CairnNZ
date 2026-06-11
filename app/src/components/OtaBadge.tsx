@@ -608,7 +608,32 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //              plausibly floor-like; among those the lowest is most
 //              likely the actual floor (tabletops/beds always ABOVE
 //              floor in the AR world frame).
-export const OTA_VERSION = 225;
+//   226 — "grounded visual defaults" auto-push at ArReady. v225 telemetry
+//         + 4 user snaps confirmed the Y coordinate has been correct since
+//         v199: Tier-A locks reliably to floor (-0.04m) across 4 camera
+//         postures (camY 0.5/1.1/1.3/1.5). User reports "全部浮空" are
+//         caused by upper-structure dominance, NOT Y bugs:
+//           - LikeBadge floats at y=1.6m (face level for camY 1.4)
+//           - FarShaft top reaches y=2.5m
+//           - RuneText at y=1.3m
+//         At close hit-test distance (0.3-1m) these ornaments fill the
+//         user's gaze axis while the actual pebble base on the floor sits
+//         below the lower edge of the screen → looks "floating".
+//         Adversarial subagent verified pivot is at BASE (PebbleStack
+//         offsets each pebble by halfHeight; bottom of L touches container
+//         y=0 = groundY). No model bug.
+//         Fix (OTA-only, no EAS rebuild): auto-push 9 OTA globals at
+//         ArReady to drop ornaments below face level + strengthen the
+//         contact shadow (the #1 perceptual cue that an object is on
+//         the ground):
+//           PortalScale 1.0→0.6, HeroRibbonHeight 1.5→0.8, count 6→3,
+//           WispHeight 1.0→0.7, TextHeight 1.0→0.7, LikeBadgeFloatHeight
+//           1.6→1.0, ContactShadowAlpha 0.55→0.85, ContactShadowRadiusMul
+//           1.0→1.4, SummonRiseDistance 0.6→0.3.
+//         All clamped server-side via CairnGlobals.SafeClamp; values are
+//         pure visual tuning so a bad payload only changes feel, never
+//         disappears cairns.
+export const OTA_VERSION = 226;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

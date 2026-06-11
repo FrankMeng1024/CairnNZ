@@ -437,6 +437,63 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           );
           crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-ar-ready').catch(() => undefined);
           props.onStatus?.({ glReady: true, cairnCount: props.markers.length });
+          // v226 — auto-push "ground-anchored visual defaults" per
+          // adversarial subagent diagnosis of v225 telemetry id=783-788
+          // user complaint "全部浮空".
+          //
+          // Diagnosis (verified across 4 user snaps, 4 camY postures):
+          //   - Y coordinate is CORRECT (Tier-A locks at -0.04 across
+          //     camY 0.5/1.1/1.3/1.5 = consistent floor). Pivot is at
+          //     base (PortalSpawnerV199.cs:320 confirmed).
+          //   - "浮空" is NOT a Y bug. It's upper-structure dominance:
+          //     LikeBadge at 1.6m, FarShaft top at 2.5m, RuneText at
+          //     1.3m all sit at face level when user holds phone at
+          //     chest height (camY 1.4) and hit-test is close (0.3-1m).
+          //     User's gaze axis hits the upper ornaments, not the
+          //     pebble base on the floor → reads as floating.
+          //
+          // OTA mitigation (no EAS rebuild needed):
+          //   - Shrink upper ornaments to drop below face level
+          //   - Strengthen contact shadow (#1 perceptual cue for
+          //     "object on ground")
+          //   - All keys go through CairnGlobals.SafeClamp; bad values
+          //     are clamped, never invisible
+          //
+          // Each setGlobal posts to CairnBridge.OnSetGlobal at runtime.
+          // CairnGlobals applies clamp + caches; subsequent spawn-time
+          // reads see the new values. Cairns spawned BEFORE these
+          // dispatches keep their built-time values; the bulk-spawn at
+          // first ArFrame happens AFTER ArReady so it picks up these.
+          {
+            const groundedDefaults: Array<[string, number]> = [
+              ['PortalScale', 0.6],          // 1.0 → 0.6 — 40% smaller halo at close range
+              ['HeroRibbonHeight', 0.8],     // 1.5 → 0.8 — ribbons at chest, not face
+              ['HeroRibbonCount', 3],        // 6 → 3 — less visual mass
+              ['WispHeight', 0.7],           // 1.0 → 0.7 — wisps below face
+              ['TextHeight', 0.7],           // 1.0 → 0.7 — runes at 0.91m not 1.3m
+              ['LikeBadgeFloatHeight', 1.0], // 1.6 → 1.0 — heart badge at chest
+              ['ContactShadowAlpha', 0.85],  // 0.55 → 0.85 — strong dark shadow #1 grounding cue
+              ['ContactShadowRadiusMul', 1.4], // 1.0 → 1.4 — wider shadow base
+              ['SummonRiseDistance', 0.3],   // 0.6 → 0.3 — half rise distance
+            ];
+            try {
+              for (const [name, value] of groundedDefaults) {
+                if (unityRef.current) {
+                  unityRef.current.postMessage(
+                    'CairnBridge', 'OnSetGlobal',
+                    JSON.stringify({ name, value })
+                  );
+                }
+              }
+              crashLogger.breadcrumb(
+                `${TAG}:v226-grounded-defaults pushed=${groundedDefaults.length}`
+              );
+            } catch (e: any) {
+              crashLogger.breadcrumb(
+                `${TAG}:v226-grounded-defaults-error ${String(e?.message ?? e).slice(0, 80)}`
+              );
+            }
+          }
           // v199 review B3 fix: per-session GPS offset compensation.
           // ArReady ONLY flips the ref now — bulk-spawn deferred until
           // first ArFrame produces a usable userPos AND arOrigin, then
