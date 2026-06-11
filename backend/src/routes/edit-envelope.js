@@ -16,12 +16,42 @@ const { buildEnvelope } = require('../services/mvtEnvelopeBuilder');
 
 // In-process build queue. v1 — simple keyed promises. Restart-tolerant
 // because saves are idempotent and the GET path can re-trigger.
+//
+// v229 fix C2: cap concurrency to MAX_CONCURRENT_BUILDS to prevent
+// backend OOM under bursty saves. Each build holds 5-10MB of MVT
+// buffers + decoded GeoJSON in flight. 100 concurrent users saving
+// would push backend past 600MB+. Cap at 5 — pending builds queue.
 const inflight = new Map(); // routeId(string) → Promise
+const queue = [];           // [{ routeId, points, resolve, reject }]
+let runningCount = 0;
+const MAX_CONCURRENT_BUILDS = 5;
 
-async function runBuild(routeId, points) {
+async function actualRun(routeId, points) {
   const env = await buildEnvelope({ routeId, routePoints: points });
   await EditEnvelope.upsert(routeId, env);
   return env;
+}
+
+function tryDrain() {
+  while (runningCount < MAX_CONCURRENT_BUILDS && queue.length > 0) {
+    const job = queue.shift();
+    runningCount++;
+    actualRun(job.routeId, job.points)
+      .then(env => job.resolve(env))
+      .catch(err => job.resolve(null) && console.error(`[edit-envelope:${job.routeId}] build failed`, err.message))
+      .finally(() => {
+        runningCount--;
+        inflight.delete(String(job.routeId));
+        tryDrain();
+      });
+  }
+}
+
+async function runBuild(routeId, points) {
+  return new Promise((resolve, reject) => {
+    queue.push({ routeId, points, resolve, reject });
+    tryDrain();
+  });
 }
 
 /**
@@ -30,14 +60,10 @@ async function runBuild(routeId, points) {
 function enqueueBuild(routeId, points) {
   const key = String(routeId);
   if (inflight.has(key)) return inflight.get(key);
-  const p = runBuild(routeId, points)
-    .catch(err => {
-      console.error(`[edit-envelope:${routeId}] build failed`, err.message);
-      return null;
-    })
-    .finally(() => {
-      inflight.delete(key);
-    });
+  const p = runBuild(routeId, points).catch(err => {
+    console.error(`[edit-envelope:${routeId}] build error`, err && err.message);
+    return null;
+  });
   inflight.set(key, p);
   return p;
 }

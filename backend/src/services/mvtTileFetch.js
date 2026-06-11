@@ -11,7 +11,11 @@
  *
  * @module mvtTileFetch
  */
-const TOKEN = process.env.MAPBOX_SERVER_TOKEN || process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+// v229 fix B2: only read MAPBOX_SERVER_TOKEN. Do NOT fall back to
+// EXPO_PUBLIC_MAPBOX_TOKEN — that's the app-bundle var name, not
+// readable from the backend process. The fallback just hides the
+// "token not configured" error until the next Mapbox call fails.
+const TOKEN = process.env.MAPBOX_SERVER_TOKEN;
 const TILESET = 'mapbox.mapbox-streets-v8';
 const TILE_FETCH_TIMEOUT_MS = 8000;
 

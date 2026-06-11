@@ -670,7 +670,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         compatibility). Spike validated 5 cities; Shanghai 5km bbox
 //         9 tiles ≈ 1.5s, 783 ways, 43 junctions. Eliminates 4 OOM
 //         failures on Hermes by moving compute to Node.
-export const OTA_VERSION = 229;
+//   230 — v229 review fixes (pre-deploy):
+//           B1 — pin pbf@^3 + @mapbox/vector-tile@^1 (CJS, Node 20 OK).
+//                v5/v3 are ESM-only and would crash the production
+//                Dockerfile (node:20-bullseye-slim) on require().
+//           B2 — drop EXPO_PUBLIC_MAPBOX_TOKEN fallback in mvtTileFetch
+//                (app-bundle-only var, backend can't read). Add
+//                MAPBOX_SERVER_TOKEN to .env.example with deploy notes.
+//           C2 — concurrency cap MAX_CONCURRENT_BUILDS=5 to prevent
+//                backend OOM on bursty saves (each build holds ~5MB
+//                MVT buffers + decoded GeoJSON in flight).
+//           C4 — reject empty envelopes (ways<10 or junctions===0) in
+//                editContext, fall through to legacy path. Empty
+//                envelope is WORSE than legacy (legacy still gives
+//                endpoint-only with a proper corridor index).
+export const OTA_VERSION = 230;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

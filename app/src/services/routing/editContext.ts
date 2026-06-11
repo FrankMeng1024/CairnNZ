@@ -105,12 +105,29 @@ export async function buildEditContext(
       junctions: envRes.envelope?.junctions.length ?? 0,
     });
     if (envRes.ok && envRes.envelope) {
-      const { trailGraph, walkedIndex } = adaptEnvelope(
-        envRes.envelope,
-        originalPoints,
+      // v229 fix C4: reject empty envelopes. Feeding 0-way / 0-junction
+      // envelope into adaptEnvelope produces an empty trailGraph →
+      // anchors = endpoints only, but with the original-points corridor
+      // missing the user's GPS density. WORSE than falling through to
+      // the legacy MVT path (which still emits endpoint-only with a
+      // proper corridor index). 10/0 threshold catches truly-empty
+      // envelopes (NZ alpine sparse tiles) without rejecting normal
+      // small rural routes.
+      const ways = envRes.envelope.ways.length;
+      const junctions = envRes.envelope.junctions.length;
+      if (ways >= 10 && junctions > 0) {
+        const { trailGraph, walkedIndex } = adaptEnvelope(
+          envRes.envelope,
+          originalPoints,
+          routeId,
+        );
+        return { walkedIndex, trailGraph, originalPoints };
+      }
+      uploadEditDiag('envelope-empty-fallback', {
         routeId,
-      );
-      return { walkedIndex, trailGraph, originalPoints };
+        ways,
+        junctions,
+      });
     }
   } catch (e: any) {
     uploadEditDiag('envelope-fetch-error', {

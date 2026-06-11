@@ -19,7 +19,7 @@
  * @module mvtEnvelopeBuilder
  */
 const { VectorTile } = require('@mapbox/vector-tile');
-const { PbfReader } = require('pbf');
+const Pbf = require('pbf');
 const {
   fetchTile,
   bboxToTiles,
@@ -110,7 +110,7 @@ function pointToPolylineDistM(p, polyline) {
  */
 function decodeTileRoadFeatures(buf, z, x, y) {
   if (!buf || buf.length === 0) return [];
-  const tile = new VectorTile(new PbfReader(buf));
+  const tile = new VectorTile(new Pbf(buf));
   const layer = tile.layers.road;
   if (!layer) return [];
   const bbox = tileToBbox(z, x, y);
