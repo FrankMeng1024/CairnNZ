@@ -729,6 +729,29 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
               offsetN = (live.lat - persisted.lat) * 111000;
               offsetE = (live.lng - persisted.lng) * 111000 * cosLat;
             }
+            // v228 — SANITY CLAMP. v227 production telemetry id=797 caught
+            // sessionOffset ox=-21.4m oz=+2.7m being pushed to Unity (lat
+            // drift 0.0002° ≈ 22m). PortalSpawner.SpawnStrandInternal then
+            // shifted EVERY cairn by 21m → all spawns landed at finalX≈
+            // -21m, finalZ≈+1-5m → off-screen. User saw zero cairns.
+            // Root cause: indoor/static GPS noise produces 10-30m random
+            // walks even when the user has not moved. F1 (v220) trusted
+            // every GPS sample as user-movement and pushed it to Unity,
+            // breaking the entire session.
+            // Fix: if |offset| > 5m the user has either (a) actually walked
+            // far enough to need a fresh AR session re-anchor (handled by
+            // marker spacing logic), or (b) GPS noise. In neither case is
+            // the right answer to translate cairns by that distance —
+            // forcing 0 keeps cairns on-screen at their persisted XZ.
+            const offsetMagnitude = Math.hypot(offsetN, offsetE);
+            const SESSION_OFFSET_CLAMP_M = 5.0;
+            if (offsetMagnitude > SESSION_OFFSET_CLAMP_M) {
+              crashLogger.breadcrumb(
+                `${TAG}:sessionOffset-clamp magnitude=${offsetMagnitude.toFixed(1)}m exceeds=${SESSION_OFFSET_CLAMP_M}m — forcing ox=0 oz=0 (likely GPS noise or relocate-needed)`
+              );
+              offsetN = 0;
+              offsetE = 0;
+            }
             // ARKit GravityAndHeading: +X=East, -Z=North (Apple right-handed
             // convention). sessionOffset Vector3 = (offsetE, 0, -offsetN).
             const sent = lastSentOriginRef.current;

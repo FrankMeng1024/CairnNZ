@@ -646,7 +646,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         Note: separate Tier-A floor-selection bug (finalY=-0.37 instead
 //         of true floor) still requires Unity rebuild — see GroundYResolver
 //         v3 in pending Phase 1.
-export const OTA_VERSION = 227;
+//   228 — EMERGENCY HOTFIX for v220-v227 sessionOffset blowout. v227
+//         production telemetry id=797 caught: ox=-21.4m oz=+2.7m
+//         (live lat-lng drifted 0.0002°×3 = 22m × √2 from persisted in
+//         under 1 minute). PortalSpawner.SpawnStrandInternal shifted
+//         EVERY cairn by 21m → all spawns landed at finalX≈-21m → off-
+//         screen. User reported "mark不渲染。看不到任何".
+//         Root cause: F1 (v220) trusted EVERY GPS sample as user-movement.
+//         Indoor/stationary phones produce 10-30m random GPS walks per
+//         minute. Pushing that as sessionOffset breaks the entire session.
+//         Fix: clamp |offset| to ≤5m. Beyond that, force ox=0 oz=0 —
+//         either user actually walked too far for the AR session to
+//         track (in which case re-spawn is needed anyway), OR it's GPS
+//         noise (in which case we must NOT translate cairns).
+//         This restores cairn visibility for users on v220-v227.
+export const OTA_VERSION = 228;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
