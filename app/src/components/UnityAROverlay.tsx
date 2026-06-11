@@ -860,16 +860,11 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           // (A4) so the Plant button enable rule (Plan v4 line 135) can
           // be computed in RN: arOriginLocked && a1State==LOCKED &&
           // (now - lastA1TransitionAt) > 500ms.
-          const next = (msg.state as A4_A1State | undefined);
-          if (next === 'UNLOCKED' || next === 'ARMED' ||
-              next === 'LOCKED' || next === 'FROZEN') {
-            crashLogger.breadcrumb(
-              `${TAG}:recv:A1State next=${next} prev=${msg.prev ?? '?'} a11=${msg.a11 ?? '?'}`
-            );
-            useArOriginStore.getState().onA1State(next);
-          } else {
-            crashLogger.breadcrumb(`${TAG}:recv:A1State invalid=${String(msg.state)}`);
-          }
+          // unityBridge already narrowed msg.state to the 4-value union.
+          crashLogger.breadcrumb(
+            `${TAG}:recv:A1State next=${msg.state} prev=${msg.prev ?? '?'} a11=${msg.a11 ?? '?'}`
+          );
+          useArOriginStore.getState().onA1State(msg.state as A4_A1State);
           break;
         }
 

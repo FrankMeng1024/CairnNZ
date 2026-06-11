@@ -743,7 +743,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         Fixes v228-pending root-cause: small real walks (3-5m) were
 //         being zero'd by 5m clamp, breaking Q5 跨session GPS-follow.
 //         Stage 4 will later wire TELEPORT → INVALIDATED_BY_DISTANCE.
-export const OTA_VERSION = 236;
+//   237 — v0.2.3 Stage 3-7 + review hotfix:
+//         Stage 3 (A1 GroundYResolver FSM rewrite + 14 PlayMode tests),
+//         Stage 4 (A4-merged useArOriginStore), Stage 5 (A8 schema
+//         migration + 6 jest fixture tests), Stage 6 (A9 PlantSheet
+//         disabled hint), Stage 7 (A7 phone-flat protection — abs(fy)
+//         > 0.85 catches both screen-up flat AND looking-down).
+//         Hotfix: unityBridge.ts A1State arm — Stage 4 was DOA before
+//         hotfix because parser dropped A1State as Unknown → onA1State
+//         never called → Plant button perma-grey.
+//         Hotfix: A7 threshold direction (review caught fy<-0.85
+//         engaged the WRONG case for Q7 平放).
+//         Hotfix: cached PortalSpawner ref (60Hz scene scan was an
+//         A11 perf cost) + [v22-A7] engage/disengage telemetry.
+export const OTA_VERSION = 237;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

@@ -113,6 +113,10 @@ public class GroundYResolver : MonoBehaviour
     private bool _hasSeenAnyTierA = false;     // ARMED gate
     private float _firstTierATime = -1f;       // for ARMED→LOCKED stable window
     private CairnBridge _bridge;               // cached on first use for SendToRN
+    // v0.2.3 Stage 7 (A7) — cached PortalSpawner ref + edge-emit state.
+    // FindFirstObjectByType is O(scene); caching matters at 60Hz.
+    private PortalSpawner _cachedPortalSpawner;
+    private bool _a7EngagedLastFrame = false;
 
     // ----------------------------------------------------------------
     // Lifecycle
@@ -444,27 +448,43 @@ public class GroundYResolver : MonoBehaviour
         if (_tracks.Count == 0) return;
         float dt = Time.deltaTime;
 
-        // v0.2.3 Stage 7 (A7) — phone-flat protection. When the device
-        // is flat (camera looking nearly straight down), ARKit plane
-        // detection runs on a degenerate viewing angle and produces
-        // wildly variable Tier-A planes — visible to the user as cairn
-        // sliding around even after they have stopped moving. Skip the
-        // requery+lerp loop while flat. Q7 invariant: 平放不漂移.
-        // Heuristic: camera.forward.y < -0.85 (~32° from straight down).
-        // A4 INVALIDATED state still drives respawn elsewhere; A7 only
-        // suppresses per-frame Y refinement.
+        // v0.2.3 Stage 7 (A7) — phone-flat protection (review-corrected).
+        // Q7 invariant: 平放不漂移. Two degenerate camera orientations
+        // produce unstable ARKit Tier-A planes:
+        //   • Phone screen-up flat on table → camera.forward.y ≈ +1
+        //     (lens points up, sees ceiling)
+        //   • Phone aimed straight down at floor → forward.y ≈ -1
+        //     (degenerate viewing angle for floor plane detection)
+        // We use Abs(fy) > 0.85 to catch BOTH (~32° from horizontal in
+        // either direction). Original review caught: previous threshold
+        // `fy < -0.85` only caught the second case, missing Q7's literal
+        // "phone flat on table" scenario.
         bool phoneFlat = false;
         if (arCamera != null)
         {
             float fy = arCamera.transform.forward.y;
-            phoneFlat = fy < -0.85f;
+            phoneFlat = Mathf.Abs(fy) > 0.85f;
         }
         // Stage 8 D2 will set this around the plant ceremony so the 1s
-        // ritual does not get its Y scrambled by lerp.
+        // ritual does not get its Y scrambled by lerp. Cached lookup
+        // (60Hz scene scans were a measurable A11 perf cost).
         bool ceremonyActive = false;
-        var ps = Object.FindFirstObjectByType<PortalSpawner>();
-        if (ps != null) ceremonyActive = ps.isCeremonyActive;
-        if (phoneFlat || ceremonyActive)
+        if (_cachedPortalSpawner == null)
+        {
+            _cachedPortalSpawner = Object.FindFirstObjectByType<PortalSpawner>();
+        }
+        if (_cachedPortalSpawner != null) ceremonyActive = _cachedPortalSpawner.isCeremonyActive;
+        bool a7Engaged = phoneFlat || ceremonyActive;
+        // Edge-emit telemetry once per engage/disengage (mirrors
+        // _a11FallbackEmitted once-per-process pattern but bidirectional
+        // so a session can be reconstructed from start/end events).
+        if (a7Engaged != _a7EngagedLastFrame)
+        {
+            UnityLogger.IForward("v22-A7",
+                $"engaged={a7Engaged} reason={(phoneFlat ? "flat" : (ceremonyActive ? "ceremony" : "n/a"))} fy={(arCamera != null ? arCamera.transform.forward.y : 0f):F2}");
+            _a7EngagedLastFrame = a7Engaged;
+        }
+        if (a7Engaged)
         {
             // Frozen for this frame. Tracks keep their current Y.
             return;

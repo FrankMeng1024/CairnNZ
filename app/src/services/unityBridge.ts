@@ -90,6 +90,7 @@ export type UnityMessage =
   | { kind: 'XRDiag';         phase: string; managerNull?: boolean; loaderCount?: number; loaders?: string; error?: string }
   | { kind: 'ARBgDiag';       phase: string; present?: boolean; enabled?: boolean; useCustomMaterial?: boolean; materialNull?: boolean; error?: string }
   | { kind: 'ARStateStall';   state: string; elapsedSec: string; activeLoaders: string }
+  | { kind: 'A1State';        state: 'UNLOCKED' | 'ARMED' | 'LOCKED' | 'FROZEN'; prev?: string; a11?: boolean }
   | { kind: 'Unknown';        raw: string };
 
 export function parseUnityMessage(raw: string): UnityMessage {
@@ -248,6 +249,20 @@ export function parseUnityMessage(raw: string): UnityMessage {
         elapsedSec: String(data.elapsedSec ?? ''),
         activeLoaders: String(data.activeLoaders ?? ''),
       };
+    case 'A1State': {
+      // v0.2.3 Stage 4 — GroundYResolver A1 FSM transition
+      // (UNLOCKED/ARMED/LOCKED/FROZEN). Routed into useArOriginStore so
+      // the Plant button enable rule can react. Validate enum here so
+      // downstream consumers get a narrow union, not just `string`.
+      const s = String(data.state ?? '');
+      const valid = (s === 'UNLOCKED' || s === 'ARMED' || s === 'LOCKED' || s === 'FROZEN') ? s : 'UNLOCKED';
+      return {
+        kind: 'A1State',
+        state: valid as 'UNLOCKED' | 'ARMED' | 'LOCKED' | 'FROZEN',
+        prev: typeof data.prev === 'string' ? data.prev : undefined,
+        a11: typeof data.a11 === 'boolean' ? data.a11 : undefined,
+      };
+    }
     default:
       return { kind: 'Unknown', raw };
   }
