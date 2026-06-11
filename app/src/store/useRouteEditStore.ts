@@ -301,24 +301,24 @@ async function runAndApplyMatching(
     let kind: 'matching' | null = 'matching';
     switch (result.reason) {
       case 'no-match':
-        userMsg = '此处无法贴合道路';
+        userMsg = "Couldn't snap to a road here";
         break;
       case 'timeout':
       case 'network':
-        userMsg = '网络较慢,请重试';
+        userMsg = 'Slow network — please retry';
         break;
       case 'auth':
-        userMsg = '地图服务认证失败 — 仅支持裁剪';
+        userMsg = 'Map service auth failed — trim only';
         break;
       case 'rate-limit':
-        userMsg = '操作过于频繁,请稍后再试';
+        userMsg = 'Too many edits — please wait a moment';
         break;
       case 'too-long':
-        userMsg = '路线过长,仅支持裁剪';
+        userMsg = 'Route too long — trim only';
         break;
       case 'invalid-input':
       default:
-        userMsg = '路线数据无效';
+        userMsg = 'Invalid route data';
     }
     set(s => ({
       isComputing: false,
@@ -337,7 +337,7 @@ async function runAndApplyMatching(
     if (drift > SHAPE_SANITY_M) {
       set(s => ({
         isComputing: false,
-        lastWarning: `贴合道路偏离过大 (${Math.round(drift)}m),保持原始轨迹`,
+        lastWarning: "Couldn't improve this stretch — keeping your original trace",
         lastWarningKind: 'matching',
         editOpSeq: s.editOpSeq + 1,
       }));
@@ -558,11 +558,11 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       return { ok: false, reason: 'busy' };
     }
     if (state.isComputing) {
-      set({ lastError: '正在计算上一次操作,稍候再试' });
+      set({ lastError: 'Computing previous edit — please wait' });
       return { ok: false, reason: 'computing' };
     }
     if (state.viaPoints.length >= MAX_VIAS) {
-      set({ lastError: `最多 ${MAX_VIAS} 个微调点` });
+      set({ lastError: `Max ${MAX_VIAS} detour points reached` });
       return { ok: false, reason: 'max-vias' };
     }
     if (!state.walkedIndex) {
@@ -570,7 +570,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     }
     const inCorridor = isPointInCorridor(coord.lng, coord.lat, state.walkedIndex, CORRIDOR_RADIUS_M);
     if (!inCorridor.inCorridor) {
-      set({ lastError: '超出微调范围 (1km)' });
+      set({ lastError: 'Outside the 1km adjust radius' });
       return { ok: false, reason: 'out-of-corridor' };
     }
     const newVia: ViaPoint = { id: genViaId(), lng: coord.lng, lat: coord.lat };
@@ -595,13 +595,13 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       return { ok: false, reason: 'busy' };
     }
     if (state.isComputing) {
-      set({ lastError: '正在计算上一次操作,稍候再试' });
+      set({ lastError: 'Computing previous edit — please wait' });
       return { ok: false, reason: 'computing' };
     }
     if (!state.walkedIndex) return { ok: false, reason: 'no-index' };
     const inCorridor = isPointInCorridor(coord.lng, coord.lat, state.walkedIndex, CORRIDOR_RADIUS_M);
     if (!inCorridor.inCorridor) {
-      set({ lastError: '超出微调范围 (1km)' });
+      set({ lastError: 'Outside the 1km adjust radius' });
       return { ok: false, reason: 'out-of-corridor' };
     }
     const idx = state.viaPoints.findIndex(v => v.id === viaId);

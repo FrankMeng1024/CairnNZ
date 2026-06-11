@@ -5,23 +5,16 @@
  * v229–v235 EditableNodeLayer + DraggableHandle stack with the via-point +
  * trim-slider model.
  *
- * Sprint 67 v236.
- *
- * Renders in two zones:
- *   - Inside the MapView: ViaPointLayer (blue dots) — must be a child of
- *     MapView so PointAnnotation works. Caller mounts that piece directly.
- *   - Outside (overlay): the bottom TrimSlider, top status banner, and any
- *     loading/error UI.
- *
- * The map's onLongPress fires `onMapLongPress(coord)` — caller wires this to
- * `useRouteEditStore.getState().addVia(coord)`.
+ * Sprint 67 v237 — UI tokens + EN-only copy pass.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrimSlider } from './TrimSlider';
 import { useRouteEditStore } from '../../store/useRouteEditStore';
 import { polylineLengthM } from '../../services/routing/corridor/PolylineSampler';
+import { Colors, Spacing, Radius, FontSize } from '../tokens';
 
 interface EditOverlayV236Props {
   onCancel: () => void;
@@ -29,6 +22,7 @@ interface EditOverlayV236Props {
 }
 
 export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): React.JSX.Element {
+  const insets = useSafeAreaInsets();
   const isComputing = useRouteEditStore(s => s.isComputing);
   const lastError = useRouteEditStore(s => s.lastError);
   const lastWarning = useRouteEditStore(s => s.lastWarning);
@@ -45,20 +39,19 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
 
   return (
     <View pointerEvents="box-none" style={styles.container}>
-      {/* Top: status + cancel/save */}
-      <View style={styles.topBar} pointerEvents="auto">
+      <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm + 2 }]} pointerEvents="auto">
         <TouchableOpacity onPress={onCancel} style={styles.topBtn}>
-          <Text style={styles.topBtnText}>取消</Text>
+          <Text style={styles.topBtnText}>Cancel</Text>
         </TouchableOpacity>
         <View style={styles.topCenter}>
           {isComputing ? (
             <View style={styles.computingRow}>
-              <ActivityIndicator size="small" color="#3B82F6" />
-              <Text style={styles.computingText}>计算中…</Text>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.computingText}>Computing…</Text>
             </View>
           ) : (
             <Text style={styles.statusText}>
-              微调 {viaCount}/5 · 长按地图加点
+              {viaCount}/5 detour points · long-press map to add
             </Text>
           )}
         </View>
@@ -67,13 +60,13 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
             if (isComputing) return;
             onSave();
           }}
-          style={[styles.topBtn, styles.saveBtn]}
+          disabled={isComputing}
+          style={[styles.topBtn, styles.saveBtn, isComputing && styles.saveBtnDisabled]}
         >
-          <Text style={[styles.topBtnText, styles.saveBtnText]}>保存</Text>
+          <Text style={[styles.topBtnText, styles.saveBtnText]}>Save</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Banners */}
       {(lastError || lastWarning) && (
         <View style={styles.bannerContainer} pointerEvents="auto">
           {lastError && (
@@ -99,17 +92,17 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
           <TouchableOpacity
             onPress={() => {
               Alert.alert(
-                '重置编辑?',
-                '会清除所有微调点和裁剪。',
+                'Reset edits?',
+                'All detour points and trim adjustments will be cleared.',
                 [
-                  { text: '取消', style: 'cancel' },
-                  { text: '重置', style: 'destructive', onPress: () => resetEdits() },
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Reset', style: 'destructive', onPress: () => resetEdits() },
                 ],
               );
             }}
             style={styles.resetBtn}
           >
-            <Text style={styles.resetBtnText}>重置</Text>
+            <Text style={styles.resetBtnText}>Reset</Text>
           </TouchableOpacity>
         </View>
         <TrimSlider
@@ -133,29 +126,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 50,
-    paddingBottom: 10,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm + 2,
+    backgroundColor: Colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: Colors.border,
   },
   topBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.base,
+    borderRadius: Radius.button,
+    backgroundColor: Colors.bg,
   },
   topBtnText: {
-    fontSize: 15,
-    color: '#374151',
+    fontSize: FontSize.body,
+    color: Colors.textPrimary,
     fontWeight: '500',
   },
   saveBtn: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: Colors.primary,
+  },
+  saveBtnDisabled: {
+    opacity: 0.5,
   },
   saveBtnText: {
-    color: '#FFFFFF',
+    color: Colors.surface,
     fontWeight: '600',
   },
   topCenter: {
@@ -167,45 +162,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   computingText: {
-    marginLeft: 8,
-    fontSize: 13,
-    color: '#6B7280',
+    marginLeft: Spacing.sm,
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
   },
   statusText: {
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
   },
   bannerContainer: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
   },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 6,
+    padding: Spacing.md,
+    borderRadius: Radius.button,
+    marginBottom: Spacing.xs + 2,
   },
   errorBanner: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: Colors.dangerBg,
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: Colors.danger,
   },
   warningBanner: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: Colors.warningBg,
     borderWidth: 1,
-    borderColor: '#FCD34D',
+    borderColor: Colors.warning,
   },
   bannerText: {
     flex: 1,
-    fontSize: 13,
-    color: '#1F2937',
+    fontSize: FontSize.caption,
+    color: Colors.textPrimary,
   },
   bannerDismiss: {
-    fontSize: 18,
-    color: '#6B7280',
-    paddingLeft: 8,
+    fontSize: FontSize.h3,
+    color: Colors.textSecondary,
+    paddingLeft: Spacing.sm,
   },
   bottomZone: {
     backgroundColor: 'transparent',
@@ -213,19 +208,19 @@ const styles = StyleSheet.create({
   bottomActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: 12,
-    paddingBottom: 6,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.xs + 2,
   },
   resetBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingVertical: Spacing.xs + 2,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.button - 4,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
   },
   resetBtnText: {
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
   },
 });

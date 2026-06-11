@@ -10,6 +10,7 @@
 
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, PanResponder, LayoutChangeEvent } from 'react-native';
+import { Colors, Spacing, FontSize } from '../tokens';
 
 const TRIM_MIN_FRACTION = 0.05;
 
@@ -128,7 +129,7 @@ export function TrimSlider({
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.headerText}>裁剪</Text>
+        <Text style={styles.headerText}>Trim</Text>
         {lengthLabel ? <Text style={styles.lengthLabel}>{lengthLabel}</Text> : null}
       </View>
       <View ref={trackRef} style={styles.trackRow} onLayout={onTrackLayout}>
@@ -140,17 +141,17 @@ export function TrimSlider({
           ]}
         />
         <View
-          style={[styles.handle, { left: startX, backgroundColor: '#10B981' }]}
+          style={[styles.handle, styles.handleStart, { left: startX }]}
           {...startResponder.panHandlers}
         />
         <View
-          style={[styles.handle, { left: endX, backgroundColor: '#EF4444' }]}
+          style={[styles.handle, styles.handleEnd, { left: endX }]}
           {...endResponder.panHandlers}
         />
       </View>
       <View style={styles.legendRow}>
-        <Text style={styles.legendText}>头</Text>
-        <Text style={styles.legendText}>尾</Text>
+        <Text style={styles.legendText}>Start</Text>
+        <Text style={styles.legendText}>End</Text>
       </View>
     </View>
   );
@@ -158,26 +159,26 @@ export function TrimSlider({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm + 2,
+    backgroundColor: Colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: Colors.border,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   headerText: {
-    fontSize: 14,
+    fontSize: FontSize.body,
     fontWeight: '600',
-    color: '#374151',
+    color: Colors.textPrimary,
   },
   lengthLabel: {
-    fontSize: 12,
-    color: '#6B7280',
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
   },
   trackRow: {
     height: TRACK_H,
@@ -190,13 +191,13 @@ const styles = StyleSheet.create({
     right: HANDLE_W / 2,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: Colors.border,
   },
   trackFill: {
     position: 'absolute',
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#3B82F6',
+    backgroundColor: Colors.primary,
   },
   handle: {
     position: 'absolute',
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
     height: HANDLE_W,
     borderRadius: HANDLE_W / 2,
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: Colors.surface,
     top: (TRACK_H - HANDLE_W) / 2,
     shadowColor: '#000',
     shadowOpacity: 0.25,
@@ -212,14 +213,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 4,
   },
+  handleStart: {
+    backgroundColor: Colors.success,
+  },
+  handleEnd: {
+    backgroundColor: Colors.danger,
+  },
   legendRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: HANDLE_W / 2,
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
   legendText: {
-    fontSize: 11,
-    color: '#9CA3AF',
+    fontSize: FontSize.small,
+    color: Colors.textMuted,
   },
 });

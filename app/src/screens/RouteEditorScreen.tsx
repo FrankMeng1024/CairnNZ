@@ -103,7 +103,8 @@ export function RouteEditorScreen() {
     if (existingRoute) {
       setName(existingRoute.name);
     } else if (session && !name) {
-      setName(`Activity ${new Date(session.startedAt).toLocaleDateString()}`);
+      const date = new Date(session.startedAt).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+      setName(`${session.activityMode === 'running' ? 'Run' : 'Hike'} ${date}`);
     }
   }, [existingRoute, session]);
 
@@ -114,30 +115,45 @@ export function RouteEditorScreen() {
     }
   }, [routeId]);
 
-  // ── Load session track points (save-as-route flow)
+  // ── Load session track points (save-as-route flow). Always snap to road
+  // — even if caller passed pre-loaded raw track points, the user expects
+  // to see the cleaned version that will actually be saved as the route.
   useEffect(() => {
     if (!fromSessionId) return;
-    if (fromSessionTrackPoints && fromSessionTrackPoints.length > 0) {
-      setSessionTrackPoints(fromSessionTrackPoints);
-      return;
-    }
-    loadTrackPoints(fromSessionId).then(pts => {
-      const filtered = (pts ?? []).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
-      // Snap to road; if it fails, fall back to raw GPS with a banner.
-      snapToRoadAndTrim(filtered).then(matched => {
-        if (matched && matched.points && matched.points.length >= 2) {
-          setSessionTrackPoints(matched.points);
-          if (!matched.isSnapped) setSnapWarning(true);
-        } else {
-          setSessionTrackPoints(filtered);
+    const profile: 'walking' = 'walking';
+    const sourcePromise: Promise<Array<{ lat: number; lng: number }>> =
+      fromSessionTrackPoints && fromSessionTrackPoints.length >= 2
+        ? Promise.resolve(fromSessionTrackPoints.map(p => ({ lat: p.lat, lng: p.lng })))
+        : loadTrackPoints(fromSessionId).then(pts =>
+            (pts ?? []).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+              .map(p => ({ lat: p.lat, lng: p.lng })),
+          );
+    sourcePromise
+      .then(async tp => {
+        if (tp.length < 2) {
+          setSessionTrackPoints([]);
+          setSnapWarning(true);
+          return;
+        }
+        try {
+          const matched = await snapToRoadAndTrim(tp, profile);
+          if (matched && matched.points && matched.points.length >= 2) {
+            setSessionTrackPoints(matched.points);
+            setSnapWarning(!matched.isSnapped);
+          } else {
+            setSessionTrackPoints(tp);
+            setSnapWarning(true);
+          }
+        } catch {
+          setSessionTrackPoints(tp);
           setSnapWarning(true);
         }
-      }).catch(() => {
-        setSessionTrackPoints(filtered);
+      })
+      .catch(() => {
+        setSessionTrackPoints([]);
         setSnapWarning(true);
       });
-    }).catch(() => {});
-  }, [fromSessionId]);
+  }, [fromSessionId, fromSessionTrackPoints]);
 
   // ── Detach edit on unmount (preserve session for resume)
   const dualEditActiveRef = useRef(dualEditActive);
@@ -159,11 +175,11 @@ export function RouteEditorScreen() {
       if (discardAlertActiveRef.current) return true;
       discardAlertActiveRef.current = true;
       Alert.alert(
-        '丢弃编辑?',
-        '所有修改将丢失。',
+        'Discard edits?',
+        'Your changes will be lost.',
         [
-          { text: '继续编辑', style: 'cancel', onPress: () => { discardAlertActiveRef.current = false; } },
-          { text: '丢弃', style: 'destructive', onPress: () => {
+          { text: 'Keep editing', style: 'cancel', onPress: () => { discardAlertActiveRef.current = false; } },
+          { text: 'Discard', style: 'destructive', onPress: () => {
             discardAlertActiveRef.current = false;
             useRouteEditStore.getState().cancelEdit();
             handlePostCancel();
@@ -202,7 +218,7 @@ export function RouteEditorScreen() {
     if (enterEditLoading) return;
     const flags = getFlagsSync();
     if (!flags[SAVE_FRACTION_FLAG]) {
-      setEnterEditError('编辑模式当前未启用');
+      setEnterEditError('Edit mode is currently disabled.');
       return;
     }
     setEnterEditError(null);
@@ -214,17 +230,32 @@ export function RouteEditorScreen() {
       // Save-as-route: must persist a backend route first to get an id.
       if (!effectiveRouteId) {
         if (!fromSessionId || sessionTrackPoints.length < 2) {
-          setEnterEditError('无法编辑:数据不足');
+          setEnterEditError('Loading route data — please try again in a moment.');
           return;
         }
+        // Compute distance for the new route record.
+        const { haversineM } = await import('../utils/geo');
+        let computedDistance = 0;
+        for (let i = 1; i < sessionTrackPoints.length; i++) {
+          computedDistance += haversineM(
+            { lat: sessionTrackPoints[i - 1].lat, lng: sessionTrackPoints[i - 1].lng },
+            { lat: sessionTrackPoints[i].lat, lng: sessionTrackPoints[i].lng },
+          );
+        }
+        const safeName = name.trim() ||
+          (session
+            ? `${session.activityMode === 'running' ? 'Run' : 'Hike'} ${new Date(session.startedAt).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}`
+            : 'Untitled route');
         const createdId = await addRoute({
-          name: name.trim() || 'Untitled',
-          description: null,
+          name: safeName,
+          description: undefined,
           points: sessionTrackPoints,
           waypoints: [],
-        } as any);
+          distanceM: computedDistance,
+          elevationGainM: session?.elevationGainM ?? 0,
+        });
         if (!createdId) {
-          setEnterEditError('创建路线失败');
+          setEnterEditError('Could not save route — please check your connection.');
           return;
         }
         effectiveRouteId = createdId;
@@ -236,7 +267,7 @@ export function RouteEditorScreen() {
         }
         const live = useRouteStore.getState().routes.find(r => r.id === effectiveRouteId);
         if (!live || !Array.isArray(live.points) || live.points.length < 2) {
-          setEnterEditError('路线数据不足,无法编辑');
+          setEnterEditError('Route data unavailable — cannot edit.');
           return;
         }
         basePoints = live.points;
@@ -250,16 +281,16 @@ export function RouteEditorScreen() {
 
       const post = useRouteEditStore.getState();
       if (!post.isOpen) {
-        setEnterEditError(post.lastError ?? '无法进入编辑');
+        setEnterEditError(post.lastError ?? 'Could not enter edit mode.');
       } else {
         setEditMode(true);
       }
     } catch (e: any) {
-      setEnterEditError(e?.message ?? '进入编辑失败');
+      setEnterEditError(e?.message ?? 'Failed to start edit.');
     } finally {
       setEnterEditLoading(false);
     }
-  }, [routeId, fromSessionId, sessionTrackPoints, existingRoute, name, addRoute, loadRouteDetail, enterEditLoading]);
+  }, [routeId, fromSessionId, sessionTrackPoints, existingRoute, name, addRoute, loadRouteDetail, enterEditLoading, session]);
 
   // ── Save / cancel handlers
   const handlePostCancel = useCallback(() => {
@@ -275,11 +306,11 @@ export function RouteEditorScreen() {
 
   const handleCancelEdit = useCallback(() => {
     Alert.alert(
-      '丢弃编辑?',
-      '所有修改将丢失。',
+      'Discard edits?',
+      'Your changes will be lost.',
       [
-        { text: '继续编辑', style: 'cancel' },
-        { text: '丢弃', style: 'destructive', onPress: () => {
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: () => {
           useRouteEditStore.getState().cancelEdit();
           handlePostCancel();
         } },
@@ -293,20 +324,31 @@ export function RouteEditorScreen() {
     try {
       const result = await useRouteEditStore.getState().saveAndExit();
       if (!result.ok) {
-        Alert.alert('保存失败', result.error ?? '未知错误');
+        Alert.alert('Save failed', result.error ?? 'Unknown error');
         return;
       }
-      // Push the new geometry into useRouteStore (route.points).
+      // Push the new geometry into useRouteStore (route.points). Also
+      // refresh distanceM so the route card reflects the trimmed/edited
+      // length — without this, the list shows the original distance even
+      // after the user trimmed half the route off.
       const editedWorking = useRouteEditStore.getState().workingPoints;
       const targetId = routeId ?? freshlyCreatedRouteId;
       if (targetId && editedWorking.length >= 2) {
-        await updateRoute(targetId, { points: editedWorking } as any).catch(() => {});
+        const { haversineM } = await import('../utils/geo');
+        let dist = 0;
+        for (let i = 1; i < editedWorking.length; i++) {
+          dist += haversineM(
+            { lat: editedWorking[i - 1].lat, lng: editedWorking[i - 1].lng },
+            { lat: editedWorking[i].lat, lng: editedWorking[i].lng },
+          );
+        }
+        await updateRoute(targetId, { points: editedWorking, distanceM: dist }).catch(() => {});
       }
       setSelectedViaId(null);
       setEditMode(false);
       nav.goBack();
     } catch (e: any) {
-      Alert.alert('保存失败', e?.message ?? '未知错误');
+      Alert.alert('Save failed', e?.message ?? 'Unknown error');
     } finally {
       setSaving(false);
     }
@@ -315,11 +357,11 @@ export function RouteEditorScreen() {
   const handleDelete = useCallback(() => {
     if (!routeId) return;
     Alert.alert(
-      '删除路线?',
-      '此操作不可撤销。',
+      'Delete route?',
+      'This action cannot be undone.',
       [
-        { text: '取消', style: 'cancel' },
-        { text: '删除', style: 'destructive', onPress: async () => {
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
           await deleteRoute(routeId);
           nav.goBack();
         } },
@@ -361,11 +403,11 @@ export function RouteEditorScreen() {
       if (prev === viaId) {
         // Second tap on already-selected → confirm delete
         Alert.alert(
-          '删除微调点?',
-          '路线会重新计算。',
+          'Remove detour point?',
+          'The route will be recomputed.',
           [
-            { text: '取消', style: 'cancel' },
-            { text: '删除', style: 'destructive', onPress: () => {
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Remove', style: 'destructive', onPress: () => {
               useRouteEditStore.getState().removeVia(viaId);
               setSelectedViaId(null);
             } },
@@ -431,7 +473,7 @@ export function RouteEditorScreen() {
                 <LineLayer
                   id="route-line-stroke"
                   style={{
-                    lineColor: '#3B82F6',
+                    lineColor: Colors.primary,
                     lineWidth: 5,
                     lineCap: 'round',
                     lineJoin: 'round',
@@ -469,13 +511,13 @@ export function RouteEditorScreen() {
           </MapView>
         ) : (
           <View style={styles.fallback}>
-            <Text style={styles.fallbackText}>地图不可用</Text>
+            <Text style={styles.fallbackText}>Map unavailable</Text>
           </View>
         )}
 
         {snapWarning && !isEditing && (
           <View style={[styles.warningBanner, { top: insets.top + 8 }]}>
-            <Text style={styles.warningText}>显示原始 GPS 轨迹</Text>
+            <Text style={styles.warningText}>Showing raw GPS trace</Text>
           </View>
         )}
       </View>
@@ -492,8 +534,8 @@ export function RouteEditorScreen() {
                 style={styles.nameInput}
                 value={name}
                 onChangeText={setName}
-                placeholder="路线名称"
-                placeholderTextColor="#9CA3AF"
+                placeholder="Route name"
+                placeholderTextColor={Colors.textMuted}
                 editable={!fromSessionId ? !!routeId : true}
               />
               {renderPoints.length >= 2 && (
@@ -523,7 +565,7 @@ export function RouteEditorScreen() {
               {routeId && (
                 <TouchableOpacity onPress={handleDelete} style={[styles.actionBtn, styles.deleteBtn]}>
                   <Icon name="Trash2" size={18} />
-                  <Text style={styles.deleteBtnText}>删除</Text>
+                  <Text style={styles.deleteBtnText}>Delete</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -532,11 +574,11 @@ export function RouteEditorScreen() {
                 style={[styles.actionBtn, styles.editBtn]}
               >
                 {enterEditLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={Colors.surface} />
                 ) : (
                   <>
-                    <Icon name="Edit3" size={18} color="#FFFFFF" />
-                    <Text style={styles.editBtnText}>编辑</Text>
+                    <Icon name="Edit3" size={18} color={Colors.surface} />
+                    <Text style={styles.editBtnText}>Edit</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -549,72 +591,72 @@ export function RouteEditorScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: Colors.bg },
   mapArea: { flex: 1 },
-  fallback: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1F2937' },
-  fallbackText: { color: '#FFFFFF' },
+  fallback: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface },
+  fallbackText: { color: Colors.textSecondary, fontSize: FontSize.body },
   warningBanner: {
     position: 'absolute',
     alignSelf: 'center',
-    backgroundColor: 'rgba(245,158,11,0.95)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
+    backgroundColor: Colors.warning,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.pill,
   },
-  warningText: { color: '#FFFFFF', fontSize: 13 },
+  warningText: { color: Colors.surface, fontSize: FontSize.caption, fontWeight: '500' },
   viewModeOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
   viewTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    backgroundColor: Colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: Colors.border,
   },
-  viewTopCenter: { flex: 1, paddingHorizontal: 12 },
+  viewTopCenter: { flex: 1, paddingHorizontal: Spacing.md },
   nameInput: {
-    fontSize: 17,
+    fontSize: FontSize.h3,
     fontWeight: '600',
-    color: '#1F2937',
-    paddingVertical: 4,
+    color: Colors.textPrimary,
+    paddingVertical: Spacing.xs,
   },
-  distanceText: { fontSize: 12, color: '#6B7280' },
+  distanceText: { fontSize: FontSize.caption, color: Colors.textSecondary },
   viewBottomBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: Colors.border,
   },
   errorBanner: {
-    backgroundColor: '#FEE2E2',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 8,
+    backgroundColor: Colors.dangerBg,
+    padding: Spacing.md,
+    borderRadius: Radius.button,
+    marginBottom: Spacing.sm,
   },
-  errorBannerText: { color: '#1F2937', fontSize: 13 },
+  errorBannerText: { color: Colors.textPrimary, fontSize: FontSize.caption },
   viewActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: Spacing.md,
   },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
-    gap: 8,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.button,
+    gap: Spacing.sm,
   },
   deleteBtn: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: Colors.dangerBg,
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: Colors.danger,
   },
-  deleteBtnText: { color: '#B91C1C', fontWeight: '600' },
+  deleteBtnText: { color: Colors.danger, fontWeight: '600', fontSize: FontSize.body },
   editBtn: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: Colors.primary,
   },
-  editBtnText: { color: '#FFFFFF', fontWeight: '600' },
+  editBtnText: { color: Colors.surface, fontWeight: '600', fontSize: FontSize.body },
 });

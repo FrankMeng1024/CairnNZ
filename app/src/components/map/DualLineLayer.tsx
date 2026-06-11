@@ -1,19 +1,22 @@
 /**
  * DualLineLayer — Render route geometry on a Mapbox map with edit-mode
  * dual-line semantics:
- *   - originalPoints: dimmed dashed (gray, 0.6 opacity)
- *   - workingPoints: solid colored by source/edit state
+ *   - originalPoints: dimmed dashed (Cairn text-secondary, 0.6 opacity)
+ *   - workingPoints: solid colored by source/edit state — sage primary
+ *     for confident, severityCaution for approximate, severityDanger for
+ *     a forced straight-line stretch.
  *   - corridor buffer: optional translucent fill
  *
  * Designed to drop into a `<MapboxGL.MapView>`.
  *
- * Sprint 66 Wave 6.
+ * Sprint 67 v237 — color tokens pass.
  */
 
 import React from 'react';
 import { Platform } from 'react-native';
 import type { LngLat } from '../../services/routing/corridor/PolylineSampler';
 import type { EditSegment } from '../../services/LocalRouteExtras';
+import { Colors } from '../tokens';
 
 // Lazy-load @rnmapbox/maps so this file is web-safe.
 let ShapeSource: any = null;
@@ -40,10 +43,10 @@ interface DualLineLayerProps {
   showOriginal?: boolean;
 }
 
-const COLOR_ORIGINAL = '#9CA3AF';   // gray
-const COLOR_CONFIDENT = '#3B82F6';  // blue
-const COLOR_APPROXIMATE = '#F59E0B'; // amber
-const COLOR_STRAIGHT = '#EF4444';   // red
+const COLOR_ORIGINAL = Colors.textSecondary;       // Cairn warm grey for the dimmed original
+const COLOR_CONFIDENT = Colors.primary;            // sage green primary
+const COLOR_APPROXIMATE = Colors.severityCaution;  // MetService yellow caution
+const COLOR_STRAIGHT = Colors.severityDanger;      // MetService red severe
 
 function pointsToLineString(points: LngLat[]) {
   return {
@@ -71,7 +74,7 @@ function segmentsToFeatureCollections(workingPoints: LngLat[], segments: EditSeg
     // (conservative). Old code defaulted to 'confident' (solid blue),
     // overstating quality on legacy records that predate the field.
     const confidence = s.confidence ?? 'approximate';
-    let color = COLOR_CONFIDENT;
+    let color: string = COLOR_CONFIDENT;
     let dashed = false;
     if (confidence === 'approximate') {
       color = COLOR_APPROXIMATE;

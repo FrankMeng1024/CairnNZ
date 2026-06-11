@@ -62,12 +62,13 @@ function buildUrl(segment: MatchSegment): string {
   const coordsStr = segment.coords
     .map(c => `${c.lng.toFixed(6)},${c.lat.toFixed(6)}`)
     .join(';');
-  // radiuses: per-coord max snap radius. Mapbox accepts numeric or
-  // 'unlimited'. Build manually so the literal `;` separators are NOT
-  // URL-encoded (URLSearchParams percent-encodes `;`, which Mapbox parses
-  // as part of a single token rather than as a delimiter).
+  // Mapbox radiuses constraint: each value must be 0 < r <= 50 meters
+  // (verified via live API — 'unlimited' is rejected with InvalidInput).
+  // null means "use the default" → we send 50m (the upper bound) so
+  // Mapbox has the most freedom while still being a valid value.
+  const DEFAULT_RADIUS_M = 50;
   const radiusesStr = segment.radiuses
-    .map(r => (r === null ? 'unlimited' : String(r)))
+    .map(r => (r === null ? String(DEFAULT_RADIUS_M) : String(Math.min(50, Math.max(1, r)))))
     .join(';');
   // overview=full, geometries=geojson, tidy=true.
   const params = new URLSearchParams({

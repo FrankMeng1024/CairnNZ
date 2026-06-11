@@ -1,14 +1,14 @@
 /**
- * ViaPointLayer — render via points (blue dots, draggable, tap-to-select) on
- * the Mapbox map.
+ * ViaPointLayer — render via points (Cairn flag-orange dots, draggable,
+ * tap-to-select) on the Mapbox map.
  *
- * Sprint 67 v236 — second pass after Arch review.
+ * Sprint 67 v237 — UI tokens pass.
  *
  * Gesture model (avoids the iOS PointAnnotation drag vs TouchableOpacity
  * long-press conflict the first pass had):
  *   - Tap a dot → select it (visual ring). The PARENT (RouteEditorScreen)
  *     decides what tapping a selected dot does: a second tap on a selected
- *     dot triggers `onTapSelectedAgain(viaId)` which prompts delete.
+ *     dot triggers `onTapVia` again which prompts delete.
  *   - Drag (PointAnnotation onDragEnd) → debounced refit by parent.
  *   - There is NO long-press on the dot. Long-press is reserved for the
  *     map background (add via).
@@ -17,6 +17,7 @@
 import React from 'react';
 import { View, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import type { ViaPoint } from '../../services/routing/mapmatch/types';
+import { Colors } from '../tokens';
 
 let PointAnnotation: any = null;
 if (Platform.OS !== 'web') {
@@ -72,7 +73,7 @@ export function ViaPointLayer({
                 <View style={styles.dotInner} />
                 {isComputing && (
                   <View style={styles.spinnerOverlay}>
-                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <ActivityIndicator size="small" color={Colors.surface} />
                   </View>
                 )}
               </View>
@@ -97,16 +98,16 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 3,
-    borderColor: '#3B82F6',
-    backgroundColor: 'rgba(59,130,246,0.15)',
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryDim,
   },
   dotOuter: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#3B82F6',
+    backgroundColor: Colors.flag,
     borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -119,7 +120,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
   },
   spinnerOverlay: {
     position: 'absolute',
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(59,130,246,0.6)',
+    backgroundColor: 'rgba(200,121,65,0.6)',
     borderRadius: 13,
   },
 });
