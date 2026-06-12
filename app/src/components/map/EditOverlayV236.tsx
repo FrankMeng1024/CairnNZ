@@ -255,7 +255,7 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
               activeOpacity={0.85}
             >
               <Text style={styles.saveBtnText}>
-                {needsPreview ? 'Preview first' : 'Save'}
+                {needsPreview ? 'Preview first' : 'Done'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity

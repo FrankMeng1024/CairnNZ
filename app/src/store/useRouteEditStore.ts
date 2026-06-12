@@ -87,6 +87,22 @@ interface EditState {
   previewMatchedPoints: LngLat[] | null;
   previewIsCurrent: boolean;
 
+  /**
+   * v249: Committed draft — what edit-mode "Save" produces. Holds the
+   * edited geometry between leaving edit mode and the user pressing the
+   * outer view-mode "Save" (which actually persists to backend). When
+   * this is non-null, view-mode renders this geometry, and re-entering
+   * Edit resumes from it.
+   */
+  committedDraft: {
+    matchedPoints: LngLat[];
+    workingPoints: LngLat[];
+    brushStrokes: BrushStroke[];
+    trimStartFrac: number;
+    trimEndFrac: number;
+    routeId: string;
+  } | null;
+
   undoStack: UndoEntry[];
 
   walkedIndex: PointCloudIndex | null;
@@ -143,7 +159,24 @@ interface EditState {
   detachUI(): void;
 
   saveAndExit(): Promise<{ ok: boolean; error?: string; sessionReplaced?: boolean }>;
-  cancelEdit(): void;
+  /**
+   * v249: Edit mode "Save" handler. Captures current preview geometry as
+   * committedDraft and closes edit UI WITHOUT touching backend. The
+   * outer view-mode "Save" button is what writes to the backend. This
+   * lets PO see the edited line + name it before final commit.
+   */
+  commitEditDraft(): { ok: boolean; error?: string };
+  /** v249: clear committedDraft (e.g. after view-mode Save persists). */
+  clearCommittedDraft(): void;
+  /**
+   * v249: When called from the edit-mode Cancel button, the user only
+   * wants to discard their IN-PROGRESS edit (current strokes/trim) and
+   * fall back to the last committedDraft (or original if none). Pass
+   * `keepDraft: true` for that case. Default behavior (no opts) discards
+   * everything including any committedDraft — used when the user fully
+   * abandons the route (e.g. view-mode back/discard).
+   */
+  cancelEdit(opts?: { keepDraft?: boolean }): void;
 }
 
 interface BeginEditArgs {
@@ -541,40 +574,205 @@ export function validateStrokes(
 
 /**
  * Splice snapped polyline back into originalPoints over [arcStart, arcEnd].
+ *
+ * v249: smooth-join rewrite. Previously this used vertex-snapped arcStart
+ * and concatenated raw segments, leaving a 5-20m kink at each splice
+ * boundary because Mapbox snap output and original GPS samples don't
+ * align. Now we:
+ *   1. Project each stroke endpoint onto the nearest segment of the
+ *      original polyline (sub-vertex precision).
+ *   2. Replace snapped[0] / snapped[last] with the projected anchor —
+ *      pulls the Mapbox polyline's head/tail onto the original line.
+ *   3. Synthesize a vertex at the exact arcStart / arcEnd on the original
+ *      so the cut is at the projected point, not at the next/prev vertex.
+ *   4. Concatenate originalUpToStart + snapped + originalAfterEnd.
  */
+function projectStrokeEndsOntoOriginal(
+  stroke: BrushStroke,
+  originalPoints: LngLat[],
+): { startPt: LngLat; endPt: LngLat; arcStart: number; arcEnd: number } | null {
+  if (stroke.points.length < 1 || originalPoints.length < 2) return null;
+  // Find which original segment the projection falls on; record cumulative
+  // arc to that segment + the t fraction along the segment.
+  function projectAndArc(coord: LngLat): { pt: LngLat; arc: number } {
+    let bestArc = 0;
+    let bestPt: LngLat = originalPoints[0];
+    let bestD = Infinity;
+    let acc = 0;
+    for (let i = 1; i < originalPoints.length; i++) {
+      const a = originalPoints[i - 1];
+      const b = originalPoints[i];
+      const segLen = haversineMetersLocal(a, b);
+      const midLat = ((a.lat + b.lat) / 2) * (Math.PI / 180);
+      const cosLat = Math.cos(midLat);
+      const M_PER_DEG = 111000;
+      const ax = a.lng * cosLat * M_PER_DEG;
+      const ay = a.lat * M_PER_DEG;
+      const bx = b.lng * cosLat * M_PER_DEG;
+      const by = b.lat * M_PER_DEG;
+      const px = coord.lng * cosLat * M_PER_DEG;
+      const py = coord.lat * M_PER_DEG;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const lenSq = dx * dx + dy * dy;
+      let t = lenSq < 1e-9 ? 0 : ((px - ax) * dx + (py - ay) * dy) / lenSq;
+      if (t < 0) t = 0;
+      if (t > 1) t = 1;
+      const fx = ax + t * dx;
+      const fy = ay + t * dy;
+      const d = Math.hypot(px - fx, py - fy);
+      if (d < bestD) {
+        bestD = d;
+        bestPt = { lng: fx / (cosLat * M_PER_DEG), lat: fy / M_PER_DEG };
+        bestArc = acc + t * segLen;
+      }
+      acc += segLen;
+    }
+    return { pt: bestPt, arc: bestArc };
+  }
+  const a = projectAndArc(stroke.points[0]);
+  const b = projectAndArc(stroke.points[stroke.points.length - 1]);
+  const arcStart = Math.min(a.arc, b.arc);
+  const arcEnd = Math.max(a.arc, b.arc);
+  // startPt corresponds to whichever projection is at the smaller arc.
+  const startPt = a.arc <= b.arc ? a.pt : b.pt;
+  const endPt = a.arc <= b.arc ? b.pt : a.pt;
+  return { startPt, endPt, arcStart, arcEnd };
+}
+
+/** v249: clip originalPoints up to (but not past) targetArc, ending with
+ *  a synthesized vertex exactly at targetArc. */
+function originalUpTo(originalPoints: LngLat[], targetArc: number): LngLat[] {
+  if (originalPoints.length < 2) return [];
+  if (targetArc <= 0) return [];
+  const out: LngLat[] = [];
+  let acc = 0;
+  for (let i = 1; i < originalPoints.length; i++) {
+    const a = originalPoints[i - 1];
+    const b = originalPoints[i];
+    const segLen = haversineMetersLocal(a, b);
+    const segEnd = acc + segLen;
+    if (i === 1) out.push(a);
+    if (segEnd >= targetArc) {
+      const t = segLen > 0 ? (targetArc - acc) / segLen : 0;
+      out.push(lerpLocal(a, b, t));
+      return out;
+    }
+    out.push(b);
+    acc = segEnd;
+  }
+  return out;
+}
+
+/** v249: clip originalPoints starting from targetArc onward, beginning
+ *  with a synthesized vertex exactly at targetArc. */
+function originalFrom(originalPoints: LngLat[], targetArc: number): LngLat[] {
+  if (originalPoints.length < 2) return [];
+  const out: LngLat[] = [];
+  let acc = 0;
+  let started = false;
+  for (let i = 1; i < originalPoints.length; i++) {
+    const a = originalPoints[i - 1];
+    const b = originalPoints[i];
+    const segLen = haversineMetersLocal(a, b);
+    const segEnd = acc + segLen;
+    if (!started) {
+      if (segEnd >= targetArc) {
+        const t = segLen > 0 ? (targetArc - acc) / segLen : 0;
+        out.push(lerpLocal(a, b, t));
+        if (segEnd > targetArc + 1e-6) out.push(b);
+        started = true;
+      }
+    } else {
+      out.push(b);
+    }
+    acc = segEnd;
+  }
+  return out;
+}
+
 function spliceMatched(
   originalPoints: LngLat[],
   validated: ValidatedStroke[],
   snappedPerStroke: LngLat[][],
 ): LngLat[] {
   if (validated.length === 0) return [...originalPoints];
-  const arc = cumulativeArc(originalPoints);
-  const sorted = validated
-    .map((v, i) => ({ v, snapped: snappedPerStroke[i] }))
-    .sort((a, b) => a.v.arcStart - b.v.arcStart);
+
+  // v249: project each stroke's endpoints onto the original polyline at
+  // sub-vertex precision, then sort by projected arcStart.
+  type Item = { arcStart: number; arcEnd: number; startPt: LngLat; endPt: LngLat; snapped: LngLat[] };
+  const items: Item[] = [];
+  for (let i = 0; i < validated.length; i++) {
+    const v = validated[i];
+    const proj = projectStrokeEndsOntoOriginal(v.stroke, originalPoints);
+    if (!proj) {
+      // Degenerate fallback: use vertex-arc range (old behavior).
+      items.push({
+        arcStart: v.arcStart,
+        arcEnd: v.arcEnd,
+        startPt: v.stroke.points[0],
+        endPt: v.stroke.points[v.stroke.points.length - 1],
+        snapped: snappedPerStroke[i],
+      });
+      continue;
+    }
+    items.push({
+      arcStart: proj.arcStart,
+      arcEnd: proj.arcEnd,
+      startPt: proj.startPt,
+      endPt: proj.endPt,
+      snapped: snappedPerStroke[i],
+    });
+  }
+  items.sort((a, b) => a.arcStart - b.arcStart);
 
   const out: LngLat[] = [];
-  let cursor = 0;
-  let i = 0;
-  while (i < sorted.length) {
-    const { v, snapped } = sorted[i];
-    // Push originalPoints from cursor up to (but not including) arcStart.
-    while (cursor < originalPoints.length && arc[cursor] < v.arcStart) {
-      out.push(originalPoints[cursor]);
-      cursor++;
+  let lastTailArc = 0;
+  for (let k = 0; k < items.length; k++) {
+    const it = items[k];
+    // Append originalPoints from lastTailArc up to it.arcStart, with
+    // synthesized vertex exactly at arcStart.
+    if (k === 0) {
+      const head = originalUpTo(originalPoints, it.arcStart);
+      for (const p of head) out.push(p);
+    } else {
+      // Mid-section between previous splice's arcEnd and this arcStart.
+      // Walk originalPoints in [lastTailArc, it.arcStart].
+      const mid = originalFrom(originalPoints, lastTailArc);
+      // mid starts with a synthesized vertex at lastTailArc (we already
+      // pushed something at lastTailArc as the tail of the previous
+      // snapped, so skip the first vertex of mid to avoid duplicate).
+      let midClipped: LngLat[] = [];
+      let acc = 0;
+      for (let i = 0; i < mid.length; i++) {
+        if (i === 0) continue; // skip duplicate of previous tail
+        const a = mid[i - 1];
+        const b = mid[i];
+        const segLen = haversineMetersLocal(a, b);
+        const segEndArcFromMid = acc + segLen;
+        const segEndArcAbsolute = lastTailArc + segEndArcFromMid;
+        if (segEndArcAbsolute >= it.arcStart) {
+          const t = segLen > 0 ? (it.arcStart - lastTailArc - acc) / segLen : 0;
+          midClipped.push(lerpLocal(a, b, t));
+          break;
+        }
+        midClipped.push(b);
+        acc = segEndArcFromMid;
+      }
+      for (const p of midClipped) out.push(p);
     }
-    // Append snapped polyline.
-    for (const p of snapped) out.push(p);
-    // Skip originalPoints inside the window.
-    while (cursor < originalPoints.length && arc[cursor] <= v.arcEnd) {
-      cursor++;
-    }
-    i++;
+    // Push the snapped polyline with head/tail anchors replaced.
+    const snappedAnchored: LngLat[] = it.snapped.length >= 2
+      ? [it.startPt, ...it.snapped.slice(1, -1), it.endPt]
+      : [it.startPt, it.endPt];
+    for (const p of snappedAnchored) out.push(p);
+    lastTailArc = it.arcEnd;
   }
-  // Tail.
-  while (cursor < originalPoints.length) {
-    out.push(originalPoints[cursor]);
-    cursor++;
+  // Tail: append originalPoints from lastTailArc onward.
+  const tail = originalFrom(originalPoints, lastTailArc);
+  for (let i = 0; i < tail.length; i++) {
+    if (i === 0) continue; // skip duplicate of last splice's endPt
+    out.push(tail[i]);
   }
   return out;
 }
@@ -593,6 +791,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   activeTool: 'pan',
   previewMatchedPoints: null,
   previewIsCurrent: false,
+  committedDraft: null,
   undoStack: [],
   walkedIndex: null,
   isComputing: false,
@@ -785,7 +984,12 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       const updated = { ...stroke, points: [...stroke.points, point] };
       const newStrokes = [...s.brushStrokes];
       newStrokes[idx] = updated;
-      return { ...s, brushStrokes: newStrokes, previewIsCurrent: false, editOpSeq: s.editOpSeq + 1 };
+      // v249: do NOT bump editOpSeq here. Per-frame bump caused the entire
+      // RouteEditorScreen subtree to re-render on every 5m gesture move,
+      // which compounded as a second stroke grew alongside a finalized
+      // first stroke (BrushStrokeLayer rebuilt every stroke's features
+      // every frame). beginStroke / endStroke still bump it.
+      return { ...s, brushStrokes: newStrokes, previewIsCurrent: false };
     });
   },
 
@@ -1267,7 +1471,49 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     return { ok: true };
   },
 
-  cancelEdit() {
+  commitEditDraft() {
+    // v249: Edit-mode "Save" handler. Captures current preview geometry
+    // as committedDraft, closes the edit UI without writing to the
+    // backend, and keeps the session alive so the user can re-enter Edit
+    // and resume from the draft. Final persistence happens when the
+    // user presses the outer view-mode "Save" button.
+    const state = get();
+    if (state.isSaving) return { ok: false, error: 'busy' };
+    if (state.brushStrokes.length > 0 && !state.previewIsCurrent) {
+      set({ lastError: 'Preview your edits first.' });
+      return { ok: false, error: 'preview-required' };
+    }
+    if (!state.routeId) return { ok: false, error: 'no-route-id' };
+
+    const finalMatched = state.previewMatchedPoints ?? state.matchedPoints;
+    const newWorking = deriveWorking(finalMatched, state.trimStartFrac, state.trimEndFrac);
+    if (newWorking.length < 2 || polylineLengthM(newWorking) < 1) {
+      set({ lastError: 'Route is too short to commit.' });
+      return { ok: false, error: 'too-short' };
+    }
+
+    set(s => ({
+      committedDraft: {
+        matchedPoints: finalMatched,
+        workingPoints: newWorking,
+        brushStrokes: state.brushStrokes,
+        trimStartFrac: state.trimStartFrac,
+        trimEndFrac: state.trimEndFrac,
+        routeId: state.routeId!,
+      },
+      isOpen: false,
+      activeTool: 'pan',
+      lastError: null,
+      editOpSeq: s.editOpSeq + 1,
+    }));
+    return { ok: true };
+  },
+
+  clearCommittedDraft() {
+    set({ committedDraft: null });
+  },
+
+  cancelEdit(opts?: { keepDraft?: boolean }) {
     const state = get();
     if (state.isSaving) {
       set({ lastError: 'Save in progress — please wait before cancelling.' });
@@ -1293,6 +1539,43 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       });
     }
 
+    // v249: Two cancel modes.
+    // - keepDraft=true (called from edit-mode Cancel button): only the
+    //   IN-PROGRESS edit (current strokes/trim/working) is cleared. The
+    //   previously committed draft survives so the user can press Edit
+    //   again and resume from it.
+    // - default (no opts, called from view-mode discard / unmount):
+    //   nuke everything including any committedDraft.
+    if (opts?.keepDraft) {
+      set({
+        isOpen: false,
+        // Keep routeId so Edit can resume; keep committedDraft.
+        // Clear in-progress edit state only:
+        brushStrokes: [],
+        trimStartFrac: state.committedDraft?.trimStartFrac ?? 0,
+        trimEndFrac: state.committedDraft?.trimEndFrac ?? 1,
+        activeTool: 'pan',
+        previewMatchedPoints: null,
+        previewIsCurrent: false,
+        undoStack: [],
+        walkedIndex: null,
+        isComputing: false,
+        lastError: null,
+        lastWarning: null,
+        validationErrors: [],
+        enteredAtTs: null,
+        editCount: 0,
+        lastSaveAttemptFailed: false,
+        isSaving: false,
+        pendingBeginArgs: null,
+        migratorRetry: null,
+        // matchedPoints / workingPoints / originalPoints retained so a
+        // subsequent re-enter can fast-path; beginEdit will reset them
+        // anyway based on resumeFrom.
+      });
+      return;
+    }
+
     set({
       isOpen: false,
       routeId: null,
@@ -1305,6 +1588,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       activeTool: 'pan',
       previewMatchedPoints: null,
       previewIsCurrent: false,
+      committedDraft: null,
       undoStack: [],
       walkedIndex: null,
       isComputing: false,

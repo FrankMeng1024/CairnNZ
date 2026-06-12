@@ -88,7 +88,6 @@ export function RouteEditorScreen() {
   const [editMode, setEditMode] = useState(false);
   const [enterEditLoading, setEnterEditLoading] = useState(false);
   const [enterEditError, setEnterEditError] = useState<string | null>(null);
-  const [freshlyCreatedRouteId, setFreshlyCreatedRouteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const editIsOpen = useRouteEditStore(s => s.isOpen);
@@ -102,7 +101,21 @@ export function RouteEditorScreen() {
   const editActiveTool = useRouteEditStore(s => s.activeTool);
   const editWalkedIndex = useRouteEditStore(s => s.walkedIndex);
   const editPreviewIsCurrent = useRouteEditStore(s => s.previewIsCurrent);
-  const dualEditActive = editIsOpen && editRouteId === (routeId ?? freshlyCreatedRouteId);
+  // v249: committedDraft drives the post-edit view-mode preview. When
+  // present, view-mode renders this geometry; entering Edit again resumes
+  // from this draft; the outer Save button persists it.
+  const committedDraft = useRouteEditStore(s => s.committedDraft);
+  // Effective id this screen is editing. Prefer the explicit routeId param,
+  // else the transient draft id derived from fromSessionId. We do NOT
+  // fall back to committedDraft.routeId here — a stale draft from a
+  // previous session must not preempt the current screen's id, which
+  // would cause editRouteId !== expectedId and break edit mode entry.
+  const effectiveEditId = routeId ?? (fromSessionId ? `draft_${fromSessionId}` : null);
+  const dualEditActive = editIsOpen && editRouteId === effectiveEditId;
+  // Show committedDraft in view-mode ONLY when it belongs to this screen.
+  const draftForThisScreen = committedDraft && effectiveEditId && committedDraft.routeId === effectiveEditId
+    ? committedDraft
+    : null;
 
   // Subscribe to user GPS — used as the camera fallback when route data
   // hasn't hydrated yet, so MapView never falls back to Mapbox's global
@@ -113,9 +126,13 @@ export function RouteEditorScreen() {
   const mapViewRef = useRef<any>(null);
 
   // Distance helper for BrushStrokeLayer color classification.
+  // v249: bound kdbush.within search to 600m (corridor 500m + buffer)
+  // instead of default 10km — every appendStrokePoint frame called this
+  // for both endpoints of every segment, scanning a 10km candidate set
+  // each time = main culprit of the "second stroke janky" bug.
   const distanceFromOriginal = useCallback((coord: { lng: number; lat: number }) => {
     if (!editWalkedIndex) return Infinity;
-    const nearest = editWalkedIndex.nearest(coord.lng, coord.lat, 1);
+    const nearest = editWalkedIndex.nearest(coord.lng, coord.lat, 1, 600);
     if (nearest.length === 0) return Infinity;
     const np = editWalkedIndex.get(nearest[0]);
     if (!np) return Infinity;
@@ -131,15 +148,14 @@ export function RouteEditorScreen() {
     return 2 * R * Math.asin(Math.sqrt(x));
   }, [editWalkedIndex]);
 
-  // ── Init: fill name from existing route or session
+  // ── Init: fill name ONLY for an existing route. v249: save-as-route
+  // flow no longer pre-fills with "Hike Jun 9" / "Run Jun 9" — PO wants
+  // the user to think about the name and confirm before Save unlocks.
   useEffect(() => {
     if (existingRoute) {
       setName(existingRoute.name);
-    } else if (session && !name) {
-      const date = new Date(session.startedAt).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
-      setName(`${session.activityMode === 'running' ? 'Run' : 'Hike'} ${date}`);
     }
-  }, [existingRoute, session]);
+  }, [existingRoute]);
 
   // ── Load route detail on mount
   useEffect(() => {
@@ -185,7 +201,11 @@ export function RouteEditorScreen() {
       });
   }, [fromSessionId, fromSessionTrackPoints]);
 
-  // ── Detach edit on unmount (preserve session for resume)
+  // ── Detach edit on unmount (preserve session for resume).
+  // v249: also clear committedDraft so it doesn't leak across screens —
+  // any unrelated route opened next would otherwise pick up this draft's
+  // geometry. handleViewSave already clears it before nav.goBack(); this
+  // covers all other exit paths (back button, hardware back, navigate away).
   const dualEditActiveRef = useRef(dualEditActive);
   useEffect(() => { dualEditActiveRef.current = dualEditActive; }, [dualEditActive]);
   useEffect(() => {
@@ -193,6 +213,7 @@ export function RouteEditorScreen() {
       if (dualEditActiveRef.current) {
         try { useRouteEditStore.getState().detachUI(); } catch {}
       }
+      try { useRouteEditStore.getState().clearCommittedDraft(); } catch {}
     };
   }, []);
 
@@ -239,8 +260,10 @@ export function RouteEditorScreen() {
           { text: 'Keep editing', style: 'cancel', onPress: () => { discardAlertActiveRef.current = false; } },
           { text: 'Discard', style: 'destructive', onPress: () => {
             discardAlertActiveRef.current = false;
-            useRouteEditStore.getState().cancelEdit();
-            handlePostCancel();
+            // v249: same semantics as the in-screen Cancel — keep any
+            // previously committed draft, only discard the in-progress.
+            useRouteEditStore.getState().cancelEdit({ keepDraft: true });
+            setEditMode(false);
           } },
         ],
         { cancelable: false, onDismiss: () => { discardAlertActiveRef.current = false; } },
@@ -285,39 +308,17 @@ export function RouteEditorScreen() {
       let effectiveRouteId: string | undefined = routeId;
       let basePoints: Array<{ lat: number; lng: number }> = [];
 
-      // Save-as-route: must persist a backend route first to get an id.
+      // v249: Save-as-route flow — use a TRANSIENT id (no backend write).
+      // The backend route is created lazily by view-mode Save once the
+      // user has confirmed name + reviewed edit result. This removes the
+      // v248 hack where Cancel had to deleteRoute the freshly-created
+      // empty record.
       if (!effectiveRouteId) {
         if (!fromSessionId || sessionTrackPoints.length < 2) {
           setEnterEditError('Loading route data — please try again in a moment.');
           return;
         }
-        // Compute distance for the new route record.
-        const { haversineM } = await import('../utils/geo');
-        let computedDistance = 0;
-        for (let i = 1; i < sessionTrackPoints.length; i++) {
-          computedDistance += haversineM(
-            { lat: sessionTrackPoints[i - 1].lat, lng: sessionTrackPoints[i - 1].lng },
-            { lat: sessionTrackPoints[i].lat, lng: sessionTrackPoints[i].lng },
-          );
-        }
-        const safeName = name.trim() ||
-          (session
-            ? `${session.activityMode === 'running' ? 'Run' : 'Hike'} ${new Date(session.startedAt).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}`
-            : 'Untitled route');
-        const createdId = await addRoute({
-          name: safeName,
-          description: undefined,
-          points: sessionTrackPoints,
-          waypoints: [],
-          distanceM: computedDistance,
-          elevationGainM: session?.elevationGainM ?? 0,
-        });
-        if (!createdId) {
-          setEnterEditError('Could not save route — please check your connection.');
-          return;
-        }
-        effectiveRouteId = createdId;
-        setFreshlyCreatedRouteId(createdId);
+        effectiveRouteId = `draft_${fromSessionId}`;
         basePoints = sessionTrackPoints;
       } else {
         if (!existingRoute) {
@@ -331,10 +332,26 @@ export function RouteEditorScreen() {
         basePoints = live.points;
       }
 
+      // v249: if committedDraft exists for this route, resume from it so
+      // the user re-enters Edit and sees their previous strokes/trim.
+      // We re-read from the store here (instead of using draftForThisScreen
+      // closure) because the store could have changed since the screen rendered.
+      const draft = useRouteEditStore.getState().committedDraft;
+      const resumeFrom = (draft && draft.routeId === effectiveRouteId)
+        ? {
+            workingPoints: draft.workingPoints,
+            brushStrokes: draft.brushStrokes,
+            trimStartFrac: draft.trimStartFrac,
+            trimEndFrac: draft.trimEndFrac,
+            enteredAt: Date.now(),
+          }
+        : undefined;
+
       await useRouteEditStore.getState().beginEdit({
         routeId: effectiveRouteId,
         routePoints: basePoints,
         routeUpdatedAt: existingRoute?.updatedAt,
+        resumeFrom,
       });
 
       const post = useRouteEditStore.getState();
@@ -351,16 +368,8 @@ export function RouteEditorScreen() {
   }, [routeId, fromSessionId, sessionTrackPoints, existingRoute, name, addRoute, loadRouteDetail, enterEditLoading, session]);
 
   // ── Save / cancel handlers
-  const handlePostCancel = useCallback(() => {
-    // If we created a route just to enable edit and user cancelled without saving,
-    // clean up the freshly-created backend route.
-    if (freshlyCreatedRouteId && !routeId) {
-      deleteRoute(freshlyCreatedRouteId).catch(() => {});
-      setFreshlyCreatedRouteId(null);
-    }
-    setEditMode(false);
-    nav.goBack();
-  }, [freshlyCreatedRouteId, routeId, deleteRoute, nav]);
+  // v249: handlePostCancel removed — Cancel now stays in view-mode rather
+  // than navigating back; the user can re-edit, change name, then Save.
 
   const handlePreview = useCallback(async () => {
     const r = await useRouteEditStore.getState().runPreview();
@@ -376,47 +385,92 @@ export function RouteEditorScreen() {
       [
         { text: 'Keep editing', style: 'cancel' },
         { text: 'Discard', style: 'destructive', onPress: () => {
-          useRouteEditStore.getState().cancelEdit();
-          handlePostCancel();
+          // v249: edit-mode Cancel only discards the IN-PROGRESS edit;
+          // any previously committed draft survives so the user can
+          // re-enter Edit from view-mode and resume.
+          useRouteEditStore.getState().cancelEdit({ keepDraft: true });
+          setEditMode(false);
         } },
       ],
     );
-  }, [handlePostCancel]);
+  }, []);
 
+  // v249: Edit-mode "Save" — commits to in-memory draft, returns to
+  // view-mode. Does NOT touch backend; the user must press the outer
+  // Save button (with a non-empty name) to actually persist.
   const handleSave = useCallback(async () => {
     if (saving) return;
+    const result = useRouteEditStore.getState().commitEditDraft();
+    if (!result.ok) {
+      Alert.alert('Cannot save', result.error ?? 'Unknown error');
+      return;
+    }
+    setEditMode(false);
+  }, [saving]);
+
+  // v249: View-mode "Save" — persists the route to backend. Required
+  // pre-condition: name.trim() !== ''. Uses committedDraft.workingPoints
+  // if user has edited; otherwise falls back to sessionTrackPoints
+  // (save-as-route untouched) or existingRoute.points (existing route).
+  const handleViewSave = useCallback(async () => {
+    if (saving) return;
+    const trimmed = name.trim();
+    if (trimmed.length === 0) {
+      Alert.alert('Name required', 'Please name this route before saving.');
+      return;
+    }
     setSaving(true);
     try {
-      const result = await useRouteEditStore.getState().saveAndExit();
-      if (!result.ok) {
-        Alert.alert('Save failed', result.error ?? 'Unknown error');
+      const draft = useRouteEditStore.getState().committedDraft;
+      const targetId = routeId; // existing route id; null for save-as-route
+      // Decide which polyline to persist.
+      const finalPoints: Array<{ lat: number; lng: number }> =
+        draft && draft.workingPoints.length >= 2
+          ? draft.workingPoints
+          : (existingRoute?.points ?? sessionTrackPoints);
+      if (finalPoints.length < 2) {
+        Alert.alert('No route', 'Route has no geometry to save.');
         return;
       }
-      // Push the new geometry into useRouteStore (route.points). Also
-      // refresh distanceM so the route card reflects the trimmed/edited
-      // length — without this, the list shows the original distance even
-      // after the user trimmed half the route off.
-      const editedWorking = useRouteEditStore.getState().workingPoints;
-      const targetId = routeId ?? freshlyCreatedRouteId;
-      if (targetId && editedWorking.length >= 2) {
-        const { haversineM } = await import('../utils/geo');
-        let dist = 0;
-        for (let i = 1; i < editedWorking.length; i++) {
-          dist += haversineM(
-            { lat: editedWorking[i - 1].lat, lng: editedWorking[i - 1].lng },
-            { lat: editedWorking[i].lat, lng: editedWorking[i].lng },
-          );
-        }
-        await updateRoute(targetId, { points: editedWorking, distanceM: dist }).catch(() => {});
+      const { haversineM } = await import('../utils/geo');
+      let dist = 0;
+      for (let i = 1; i < finalPoints.length; i++) {
+        dist += haversineM(
+          { lat: finalPoints[i - 1].lat, lng: finalPoints[i - 1].lng },
+          { lat: finalPoints[i].lat, lng: finalPoints[i].lng },
+        );
       }
-      setEditMode(false);
+
+      if (targetId) {
+        await updateRoute(targetId, { name: trimmed, points: finalPoints, distanceM: dist }).catch((e: any) => {
+          throw e;
+        });
+      } else {
+        const createdId = await addRoute({
+          name: trimmed,
+          description: undefined,
+          points: finalPoints,
+          waypoints: [],
+          distanceM: dist,
+          elevationGainM: session?.elevationGainM ?? 0,
+        });
+        if (!createdId) {
+          Alert.alert('Save failed', 'Could not save route — check your connection.');
+          return;
+        }
+      }
+
+      // Clear the in-memory draft and any open edit session.
+      try { useRouteEditStore.getState().clearCommittedDraft(); } catch {}
+      try { useRouteEditStore.getState().cancelEdit(); } catch {}
+
       nav.goBack();
     } catch (e: any) {
       Alert.alert('Save failed', e?.message ?? 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [routeId, freshlyCreatedRouteId, updateRoute, nav, saving]);
+  }, [saving, name, routeId, existingRoute, sessionTrackPoints, session, addRoute, updateRoute, nav]);
 
   const handleDelete = useCallback(() => {
     if (!routeId) return;
@@ -439,9 +493,13 @@ export function RouteEditorScreen() {
 
   // ── Render
   const isEditing = editMode && dualEditActive;
+  // v249: when user has committed an edit draft (edit-mode Save) FOR THIS
+  // SCREEN, view-mode shows that geometry. draftForThisScreen is null for
+  // a different route's draft, so unrelated routes render their own data.
+  const draftPoints = draftForThisScreen?.workingPoints;
   const renderPoints: Array<{ lat: number; lng: number }> = isEditing
     ? editWorkingPoints
-    : (existingRoute?.points ?? sessionTrackPoints);
+    : (draftPoints ?? existingRoute?.points ?? sessionTrackPoints);
   // v241 fix: original (faded) line shows the user's REAL recorded GPS
   // trace, not the matched polyline. Prior code passed matchedPoints
   // here, which made the original line "disappear" when a via was added
@@ -450,6 +508,9 @@ export function RouteEditorScreen() {
   const renderOriginal: Array<{ lat: number; lng: number }> = isEditing
     ? editOriginalPoints
     : [];
+  const nameValid = name.trim().length > 0;
+  const hasGeometryToSave = renderPoints.length >= 2;
+  const canSaveView = nameValid && hasGeometryToSave && !saving;
 
   return (
     <View style={styles.container}>
@@ -631,9 +692,11 @@ export function RouteEditorScreen() {
                 )}
               </View>
 
-              {/* Action row: Delete (existing) / Cancel (save-as-route draft) + Edit */}
+              {/* Action row: Delete (existing only) + Edit + Save.
+                  v249: PO requires both Edit and Save in the same view.
+                  Save is disabled until the user types a name. */}
               <View style={styles.viewActions}>
-                {(routeId || freshlyCreatedRouteId) && (
+                {routeId && (
                   <TouchableOpacity
                     onPress={handleDelete}
                     style={[styles.viewBtn, styles.viewDeleteBtn]}
@@ -650,11 +713,26 @@ export function RouteEditorScreen() {
                   activeOpacity={0.85}
                 >
                   {enterEditLoading ? (
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                  ) : (
+                    <>
+                      <Icon name="Edit3" size={16} color={Colors.primary} strokeWidth={2.5} />
+                      <Text style={styles.viewEditBtnText}>Edit</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleViewSave}
+                  disabled={!canSaveView}
+                  style={[styles.viewBtn, styles.viewSaveBtn, !canSaveView && styles.viewSaveBtnDisabled]}
+                  activeOpacity={0.85}
+                >
+                  {saving ? (
                     <ActivityIndicator size="small" color={Colors.surface} />
                   ) : (
                     <>
-                      <Icon name="Edit3" size={16} color={Colors.surface} strokeWidth={2.5} />
-                      <Text style={styles.viewEditBtnText}>Edit</Text>
+                      <Icon name="Check" size={16} color={Colors.surface} strokeWidth={2.5} />
+                      <Text style={styles.viewSaveBtnText}>Save</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -771,9 +849,22 @@ const styles = StyleSheet.create({
     borderRadius: Radius.button,
   },
   viewEditBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.primary,
   },
   viewEditBtnText: {
+    color: Colors.primary,
+    fontSize: FontSize.body,
+    fontWeight: '700',
+  },
+  viewSaveBtn: {
+    backgroundColor: Colors.primary,
+  },
+  viewSaveBtnDisabled: {
+    opacity: 0.4,
+  },
+  viewSaveBtnText: {
     color: Colors.surface,
     fontSize: FontSize.body,
     fontWeight: '700',
