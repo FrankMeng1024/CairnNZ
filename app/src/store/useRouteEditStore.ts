@@ -40,10 +40,11 @@ import {
 } from '../services/routing/editAnalytics';
 
 const MAX_STROKES = 8;
-// v252: PO request — "现在 500m 太远 300m 范围把". corridor 内的笔接受;
-// 超出归类为 red(out-of-corridor),Preview 时拒收。amber(警示)区
-// 也按比例收紧到 240m 让用户更早看到 "快越界" 的视觉反馈。
-const CORRIDOR_RADIUS_M = 300;
+// v253: PO confirmed product principle: "走过的路才是路, 但允许 200m 内
+// 微调到熟悉的旁路". corridor 收紧到 200m, warn 160m. 严格门: snap
+// 不上 100% 确认就 fallback 原 GPS (不接受 "部分 snap 部分 fallback"
+// 的拼接, 避免接缝折角).
+const CORRIDOR_RADIUS_M = 200;
 const ENDPOINT_SNAP_M = 50;
 const TRIM_MIN_FRACTION = 0.05;
 
@@ -455,6 +456,74 @@ function projectOntoOriginalSegment(
     }
   }
   return { point: bestPt, distM: bestD };
+}
+
+/**
+ * v253: Catmull-Rom spline smoothing for fallback case (when Mapbox
+ * snap is rejected and we must use the raw user brush). Reduces hand-
+ * jitter without distorting the curve. Each adjacent pair (p_{i-1},
+ * p_i, p_{i+1}, p_{i+2}) generates 4 interpolated points along a CR
+ * spline with tension τ=0.5. Keeps endpoints exact (anchored).
+ */
+function smoothCatmullRom(points: LngLat[], subdivisions: number = 3): LngLat[] {
+  if (points.length < 3) return points.slice();
+  const out: LngLat[] = [];
+  out.push(points[0]);
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = i === 0 ? points[0] : points[i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = i + 2 < points.length ? points[i + 2] : points[i + 1];
+    for (let s = 1; s <= subdivisions; s++) {
+      const t = s / (subdivisions + 1);
+      const t2 = t * t;
+      const t3 = t2 * t;
+      // Catmull-Rom basis (uniform, τ=0.5 implied by 1/2 factor)
+      const lng = 0.5 * (
+        (2 * p1.lng) +
+        (-p0.lng + p2.lng) * t +
+        (2 * p0.lng - 5 * p1.lng + 4 * p2.lng - p3.lng) * t2 +
+        (-p0.lng + 3 * p1.lng - 3 * p2.lng + p3.lng) * t3
+      );
+      const lat = 0.5 * (
+        (2 * p1.lat) +
+        (-p0.lat + p2.lat) * t +
+        (2 * p0.lat - 5 * p1.lat + 4 * p2.lat - p3.lat) * t2 +
+        (-p0.lat + 3 * p1.lat - 3 * p2.lat + p3.lat) * t3
+      );
+      out.push({ lng, lat });
+    }
+    out.push(p2);
+  }
+  return out;
+}
+
+/**
+ * v253: Snap quality gate. For each snapped point, find nearest point
+ * on the user's original brush. If displacement > thresholdM, the snap
+ * has wandered (Mapbox latched onto a far parallel road or a non-
+ * existent shortcut). Returns the fraction of snapped points that
+ * exceed the threshold — caller decides whether to accept.
+ */
+function snapDisplacementFraction(
+  snapped: LngLat[],
+  originalBrush: LngLat[],
+  thresholdM: number,
+): number {
+  if (snapped.length === 0 || originalBrush.length === 0) return 1;
+  let bad = 0;
+  for (const s of snapped) {
+    let bestD = Infinity;
+    for (const o of originalBrush) {
+      const d = haversineMetersLocal(s, o);
+      if (d < bestD) {
+        bestD = d;
+        if (bestD <= thresholdM) break;
+      }
+    }
+    if (bestD > thresholdM) bad++;
+  }
+  return bad / snapped.length;
 }
 
 /**
@@ -1461,13 +1530,26 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       try {
         const r = await matchSegment(seg);
         if (!r.ok) {
-          snapped = pts.slice();
+          // v253: NoMatch / network / auth → fallback Catmull-Rom on raw brush.
+          snapped = smoothCatmullRom(pts);
           anySnapFallback = true;
         } else {
-          snapped = r.matchedPoints;
+          // v253: snap quality gate. Mapbox /driving sometimes still picks
+          // a parallel road or a longer detour. Compare each snapped point
+          // to nearest user-brush point. >30m drift is the "wrong road"
+          // signal. >20% drifty points → reject snap as a whole and
+          // fallback to raw brush + smoothing. Whole-stroke fallback (not
+          // partial) avoids stitched-seam artifacts.
+          const driftFrac = snapDisplacementFraction(r.matchedPoints, pts, 30);
+          if (driftFrac > 0.2) {
+            snapped = smoothCatmullRom(pts);
+            anySnapFallback = true;
+          } else {
+            snapped = r.matchedPoints;
+          }
         }
       } catch {
-        snapped = pts.slice();
+        snapped = smoothCatmullRom(pts);
         anySnapFallback = true;
       }
       strokeSnapCache.set(fp, snapped);
@@ -1519,7 +1601,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       walkedIndex: newWalkedIndex,
       isComputing: false,
       lastWarning: anySnapFallback
-        ? 'Network issue — committed without road-snap. Undo to retry.'
+        ? 'Some strokes kept your raw drawing — no clear road match.'
         : s.lastWarning,
       editOpSeq: s.editOpSeq + 1,
     }));
@@ -1809,5 +1891,5 @@ export function distanceFromOriginalM(coord: LngLat, walkedIndex: PointCloudInde
 export const BRUSH_RADII = {
   CORRIDOR_RADIUS_M,
   ENDPOINT_SNAP_M,
-  WARN_RADIUS_M: 240,
+  WARN_RADIUS_M: 160,
 };

@@ -25,7 +25,17 @@ import type { LngLat } from '../corridor/PolylineSampler';
 import type { MatchResult, MatchSegment } from './types';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
-const ENDPOINT_BASE = 'https://api.mapbox.com/matching/v5/mapbox/walking';
+// v253: profile changed from /walking to /driving. Per PO product
+// principle "走过的路才是路", Mapbox snap should ONLY assist when there
+// is an obvious public road within the corridor. /walking matches to
+// pedestrian footways including hospital interiors, mall passages,
+// building paths — invisible to the user, produces "穿楼" artifacts.
+// /driving sticks strictly to motor-vehicle roads, so:
+//   - city: snaps to streets the user can see and likely meant ✓
+//   - park / pedestrian-only: NoMatch → caller falls back to raw GPS
+//   - mountain trail: NoMatch → caller falls back to raw GPS
+// This implements "200m 内允许微调到熟悉旁路, 不 100% 确认就回归原 GPS".
+const ENDPOINT_BASE = 'https://api.mapbox.com/matching/v5/mapbox/driving';
 const TIMEOUT_MS = 8_000;
 const MAX_RETRIES = 1;
 
