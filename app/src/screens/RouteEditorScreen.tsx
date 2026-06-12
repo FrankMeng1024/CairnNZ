@@ -560,7 +560,11 @@ export function RouteEditorScreen() {
                       confidence: 'confident',
                     },
                   ]}
-                  showOriginal={true}
+                  showOriginal={
+                    editViaPoints.length > 0 ||
+                    editTrimStartFrac > 0 ||
+                    editTrimEndFrac < 1
+                  }
                 />
                 <ViaPointLayer
                   vias={editViaPoints}

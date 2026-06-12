@@ -17,7 +17,7 @@ import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
 import { PointCloudIndex } from '../services/routing/corridor/PointCloudIndex';
 import { isPointInCorridor } from '../services/routing/corridor/CorridorQuery';
 import type { ViaPoint } from '../services/routing/mapmatch/types';
-import { runMapMatching, RunMatchResult } from '../services/routing/mapmatch/runMapMatching';
+import { runMapMatching, RunMatchResult, clearMatchCache } from '../services/routing/mapmatch/runMapMatching';
 import { saveExtras, loadExtras, EditSegment } from '../services/LocalRouteExtras';
 import { migrateRouteIfNeeded, MigrationResult } from '../services/LegacyRouteMigrator';
 import { saveSession, clearSession, onSaveSessionFailure } from '../services/EditSessionPersistence';
@@ -97,6 +97,8 @@ interface EditState {
   /** Set trim start fraction in [0..1]. Pure client-side. */
   setTrimStart(frac: number): void;
   setTrimEnd(frac: number): void;
+  /** v244: push current trim state onto undo stack BEFORE a drag begins. */
+  beginTrimDrag(): void;
   /** Clear all vias + reset trim to full route. */
   resetEdits(): void;
 
@@ -497,6 +499,10 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const sessionId = genSessionId();
     const enteredAtTs = resumeFrom?.enteredAt ?? t0;
 
+    // v244: clear the Map Matching cache so a fresh edit session doesn't
+    // get a stale match from a prior session.
+    clearMatchCache();
+
     // Step 3: derive initial state.
     const originalPoints: LngLat[] = extras.originalPoints;
     const initialVias: ViaPoint[] = resumeFrom
@@ -532,13 +538,10 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       pendingBeginArgs: null,
     }));
 
-    // Step 4: warm-up Map Matching call so the user sees a snapped polyline
-    // immediately. User explicitly chose "wait 1-2s see cleaner version".
-    set({ isComputing: true });
-    const startSeq = get().editOpSeq;
-    await runAndApplyMatching(set, get, sessionId, startSeq);
-
-    // Step 5: persist the warm-up matched state (fenced — bail if cancelled).
+    // v244: NO warm-up Map Matching. Entry shows the user the EXACT same
+    // polyline they saw on the activity detail screen — no road snapping,
+    // no jaggedness change, no virtual "original" dashed backdrop. Map
+    // Matching runs only when the user adds a via point.
     persistSession(get(), sessionId);
 
     logEditEntered({
@@ -677,6 +680,19 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const startSid = get().sessionId;
     await runAndApplyMatching(set, get, startSid, startSeq);
     persistSession(get(), startSid ?? undefined);
+  },
+
+  beginTrimDrag() {
+    const state = get();
+    if (state.isSaving || state.isComputing) return;
+    set(s => ({
+      undoStack: [...s.undoStack, {
+        viaPoints: s.viaPoints,
+        trimStartFrac: s.trimStartFrac,
+        trimEndFrac: s.trimEndFrac,
+        matchedPoints: s.matchedPoints,
+      }].slice(-20),
+    }));
   },
 
   setTrimStart(frac) {

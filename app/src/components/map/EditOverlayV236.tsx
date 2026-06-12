@@ -36,6 +36,7 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
   const setLastError = useRouteEditStore(s => s.setLastError);
   const setTrimStart = useRouteEditStore(s => s.setTrimStart);
   const setTrimEnd = useRouteEditStore(s => s.setTrimEnd);
+  const beginTrimDrag = useRouteEditStore(s => s.beginTrimDrag);
   const resetEdits = useRouteEditStore(s => s.resetEdits);
   const undo = useRouteEditStore(s => s.undo);
   const undoStackLen = useRouteEditStore(s => s.undoStack.length);
@@ -140,6 +141,7 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
             trimEndFrac={trimEndFrac}
             onTrimStartChange={setTrimStart}
             onTrimEndChange={setTrimEnd}
+            onTrimDragBegin={beginTrimDrag}
             totalLengthM={totalLengthM}
           />
 

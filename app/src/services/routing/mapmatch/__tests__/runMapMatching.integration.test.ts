@@ -45,26 +45,15 @@ function haversine(a: { lat: number; lng: number }, b: { lat: number; lng: numbe
 describeIfToken('runMapMatching — integration with live Mapbox API', () => {
   const orig = shanghaiTestRoute();
 
-  it('snaps a no-via route close to the input shape', async () => {
+  it('passes through originalPoints unchanged when no via is placed (no API call)', async () => {
+    // v244: no-via case is a pure passthrough — Map Matching is only
+    // invoked when the user adds a via. The matched line equals the
+    // original GPS, segmentCount=0, and no Mapbox API was called.
     const r = await runMapMatching({ originalPoints: orig, viaPoints: [] });
-    if (!r.ok) {
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG no-via failure]', JSON.stringify(r));
-    }
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.matchedPoints.length).toBeGreaterThanOrEqual(2);
-    expect(r.segmentCount).toBe(1);
-    // Each matched point should land within ~50m of some original point.
-    for (const p of r.matchedPoints) {
-      let best = Infinity;
-      for (const q of orig) {
-        const d = haversine(p, q);
-        if (d < best) best = d;
-      }
-      expect(best).toBeLessThan(80);
-    }
-    expect(r.worstConfidence).toBeGreaterThan(0);
+    expect(r.matchedPoints).toEqual(orig);
+    expect(r.segmentCount).toBe(0);
   }, 25_000);
 
   it('routes through a placed via point within snap radius', async () => {
@@ -90,18 +79,18 @@ describeIfToken('runMapMatching — integration with live Mapbox API', () => {
     expect(bestNear).toBeLessThan(250);
   }, 30_000);
 
-  it('returns no-match cleanly for a coord far out at sea', async () => {
-    // Point in the middle of the Pacific — no road network.
+  it('returns no-match cleanly for a via in an area with no roads', async () => {
+    // v244: with no via, runMapMatching is a passthrough — no API. To
+    // verify failure handling we need a via the Mapbox snap can't honor.
     const pacific = [
       { lng: -150, lat: 0 },
       { lng: -150.001, lat: 0 },
       { lng: -150.002, lat: 0 },
     ];
-    const r = await runMapMatching({ originalPoints: pacific, viaPoints: [] });
+    const via: ViaPoint = { id: 'v1', lng: -150.0015, lat: 0.0005 };
+    const r = await runMapMatching({ originalPoints: pacific, viaPoints: [via] });
     expect(r.ok).toBe(false);
     if (r.ok) return;
-    // 'no-match' or 'invalid-input' both acceptable depending on Mapbox's
-    // exact response code. What MUST NOT happen: ok=true with garbage.
     expect(['no-match', 'invalid-input']).toContain(r.reason);
   }, 25_000);
 });

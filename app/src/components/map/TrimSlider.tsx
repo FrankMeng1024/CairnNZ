@@ -28,6 +28,8 @@ export interface TrimSliderProps {
   trimEndFrac: number;
   onTrimStartChange: (frac: number) => void;
   onTrimEndChange: (frac: number) => void;
+  /** v244: called once when the user starts a drag — store pushes undo. */
+  onTrimDragBegin?: () => void;
   totalLengthM?: number;
 }
 
@@ -44,6 +46,7 @@ export function TrimSlider({
   trimEndFrac,
   onTrimStartChange,
   onTrimEndChange,
+  onTrimDragBegin,
 }: TrimSliderProps): React.JSX.Element {
   const [trackW, setTrackW] = useState(0);
   // Local fractions during drag (so visual updates 60fps without going
@@ -88,6 +91,8 @@ export function TrimSlider({
     const distToEnd = Math.abs(touchX - endPx);
     draggingHandleRef.current = distToStart <= distToEnd ? 'start' : 'end';
     setIsDragging(true);
+    // v244: push undo snapshot once at drag start (not every frame).
+    onTrimDragBegin?.();
   }
 
   function handleUpdate(touchX: number) {
