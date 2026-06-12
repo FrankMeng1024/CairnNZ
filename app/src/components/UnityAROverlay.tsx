@@ -888,6 +888,27 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           crashLogger.uploadDiagnostic(API_BASE_URL, 'ar-state-stall').catch(() => undefined);
           break;
 
+        case 'SpawnRejected':
+          // v0.2.3 Branch B — Unity refused to spawn (no Floor plane / anchor
+          // attach failed). Remove from spawnedIdsRef so next ArFrame retry
+          // attempt fires. Surface a non-blocking toast via global hook so
+          // user gets feedback.
+          spawnedIdsRef.current.delete(msg.id);
+          crashLogger.breadcrumb(
+            `${TAG}:spawn-rejected id=${msg.id} reason=${msg.reason} — will retry next ArFrame`
+          );
+          // Reset bulk-spawn one-shot so retries flow through bulk-spawn loop.
+          bulkSpawnedRef.current = false;
+          if (typeof (globalThis as any).__cairnPlantRejected === 'function') {
+            const userMessage = msg.reason === 'no-floor'
+              ? '指向地面再 plant'
+              : msg.reason === 'anchor-failed'
+              ? 'AR 锚定失败，重试'
+              : '种植失败，重试';
+            (globalThis as any).__cairnPlantRejected(userMessage);
+          }
+          break;
+
         case 'Unknown':
           crashLogger.breadcrumb(
             `${TAG}:recv:unknown raw=${msg.raw.slice(0, 80)}`

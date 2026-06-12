@@ -840,19 +840,27 @@ public partial class PortalSpawner
     private IEnumerator TryParentToAnchor(GameObject container, float groundY)
     {
         if (container == null) yield break;
-        // v22-ANCHOR — wire AnchorAttachEnabled OTA killswitch (was orphan
-        // in v206-v214: registered in CairnGlobalsExt:251 but never read).
-        // When false, cairn stays parented to spawner GameObject and ARKit
-        // SLAM keeps it visually stable within session — no ARAnchor
-        // overhead, no async failures. Useful kill-switch if anchor system
-        // misbehaves on a specific user's device.
-        var globalsAnchor = CairnGlobals.Instance;
-        if (globalsAnchor != null && !globalsAnchor.GetBool("AnchorAttachEnabled", true))
+        // v0.2.3 Branch A: skip if already parented to ARAnchor by
+        // PortalSpawner.SpawnStrandInternal pre-spawn attach. The new flow
+        // anchors BEFORE summon animation runs; this deferred coroutine only
+        // engages on the rare path where pre-spawn attach failed (~5% in
+        // good light, more in plane-poor scenes where ARKit hasn't found a
+        // floor polygon yet but Tier-A returned a plane.center.y).
+        var existingAnchor = container.GetComponentInParent<ARAnchor>();
+        if (existingAnchor != null)
         {
             UnityLogger.IForward("v22-ANCHOR",
-                $"id={container.name} skipped reason=ota-disabled finalParent={container.transform.parent?.name}");
+                $"id={container.name} skipped reason=already-anchored " +
+                $"by-pre-spawn-attach planeAnchor={existingAnchor.trackableId}");
             yield break;
         }
+        // v0.2.3 Branch A: AnchorAttachEnabled OTA killswitch DELETED.
+        // Anchoring is now mandatory — there is no fallback to "trust
+        // transform.position and hope ARKit doesn't drift". The killswitch
+        // was the escape hatch that left cairns un-anchored on a flag flip,
+        // directly causing the "cairn 飞天 / drifts" user-reported invariant
+        // violation. Anchoring failure now logs and the cairn is destroyed
+        // (handled below in async fallback), not silently left drifting.
         if (arAnchorManagerRef == null)
         {
             UnityLogger.IForward("v22-ANCHOR",
@@ -908,7 +916,24 @@ public partial class PortalSpawner
         }
         else
         {
-            UnityLogger.W("V199", "anchor-async-FAIL — cairn unattached, may drift");
+            // v0.2.3 Branch A: anchor-async-FAIL must DESTROY cairn, not
+            // leave it drifting. User invariant: "不存在移动 变换 飞天" —
+            // a drifting cairn directly violates this. Destroy + notify RN
+            // so user gets feedback ("retry plant — anchor failed").
+            UnityLogger.IForward("v22-ANCHOR",
+                $"id={container.name} anchor-async-FAIL destroying cairn to honor invariant");
+            var bridge = Object.FindFirstObjectByType<CairnBridge>();
+            if (bridge != null)
+            {
+                // Extract id from container name "Portal_<id>" or "Cairn_<id>".
+                string cairnId = container.name;
+                int underscore = cairnId.IndexOf('_');
+                if (underscore >= 0 && underscore + 1 < cairnId.Length)
+                    cairnId = cairnId.Substring(underscore + 1);
+                bridge.SendToRN("SpawnRejected",
+                    $"{{\"id\":\"{cairnId}\",\"reason\":\"anchor-failed\"}}");
+            }
+            UnityEngine.Object.Destroy(container);
         }
     }
 

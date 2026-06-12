@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.ARSubsystems;
 using System.Collections.Generic;
 
 /// <summary>
@@ -499,7 +501,80 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         // resolve correctly in the current ARKit session frame.
         float spawnX = data.x + CairnBridge._sessionOffsetX;
         float spawnZ = data.z + CairnBridge._sessionOffsetZ;
-        container.transform.position = new Vector3(spawnX, groundY, spawnZ);
+
+        // ─────────────────────────────────────────────────────────────────
+        // v0.2.3 Branch A: ARAnchor BEFORE render.
+        //
+        // Old flow: container.transform.position = (spawnX, groundY, spawnZ);
+        //           StartCoroutine(TryParentToAnchor) — fires AFTER summon
+        //           animation, ~1s of un-anchored existence during which
+        //           ARKit world drift directly pushes cairn around.
+        //
+        // New flow: AttachAnchor at the chosen ground pose FIRST, parent
+        //           container to anchor with localPosition=zero, render only
+        //           after parenting. ARKit's per-frame anchor refinement
+        //           starts immediately — no "1s drift" window.
+        //
+        // If anchor attach fails (rare, <5% in good light): REJECT spawn.
+        // User invariant ("不存在移动 变换 飞天") trumps "always show cairn".
+        // ─────────────────────────────────────────────────────────────────
+        ARAnchor anchorOnSpawn = null;
+        // Lazy-find manager refs: prefer GroundYResolver's wired references,
+        // fall back to FindFirstObjectByType if not wired.
+        var arRaycast = (groundYResolver != null) ? groundYResolver.raycastManager
+                       : Object.FindFirstObjectByType<ARRaycastManager>();
+        var arPlanes  = (groundYResolver != null) ? groundYResolver.planeManager
+                       : Object.FindFirstObjectByType<ARPlaneManager>();
+        var arAnchors = Object.FindFirstObjectByType<ARAnchorManager>();
+        if (arAnchors != null && arRaycast != null && spawnCam != null)
+        {
+            // Project the chosen ground (spawnX, groundY, spawnZ) to screen
+            // and raycast against PlaneWithinPolygon | Depth (LiDAR / iOS 14+
+            // Depth API). The resulting hit pose is what AttachAnchor will pin.
+            var screenPt = spawnCam.WorldToScreenPoint(new Vector3(spawnX, groundY, spawnZ));
+            if (screenPt.z > 0 &&
+                screenPt.x >= 0 && screenPt.x <= Screen.width &&
+                screenPt.y >= 0 && screenPt.y <= Screen.height)
+            {
+                var anchorHits = new System.Collections.Generic.List<ARRaycastHit>();
+                bool didHit = arRaycast.Raycast(
+                    new Vector2(screenPt.x, screenPt.y), anchorHits,
+                    TrackableType.PlaneWithinPolygon | TrackableType.Depth);
+                if (didHit && anchorHits.Count > 0 && arPlanes != null)
+                {
+                    var plane = arPlanes.GetPlane(anchorHits[0].trackableId);
+                    if (plane != null)
+                    {
+                        anchorOnSpawn = arAnchors.AttachAnchor(plane, anchorHits[0].pose);
+                    }
+                }
+            }
+            if (anchorOnSpawn == null)
+            {
+                UnityLogger.IForward("v22-ANCHOR",
+                    $"id={data.id} pre-spawn-attach=failed will-defer-async");
+            }
+        }
+
+        if (anchorOnSpawn != null)
+        {
+            // Anchor at the exact ground pose. Container becomes its child
+            // with localPosition=zero so the container moves whenever ARKit
+            // refines the anchor pose per frame.
+            container.transform.SetParent(anchorOnSpawn.transform, worldPositionStays: false);
+            container.transform.localPosition = Vector3.zero;
+            container.transform.localRotation = Quaternion.identity;
+            UnityLogger.IForward("v22-ANCHOR",
+                $"id={data.id} pre-spawn-attach=ok planeAnchor={anchorOnSpawn.trackableId}");
+        }
+        else
+        {
+            // No pre-spawn anchor — fall back to legacy flow (deferred
+            // anchor in V199). Cairn has ~1s un-anchored window in this
+            // case but it is rare and self-corrects. Telemetry already
+            // emitted above.
+            container.transform.position = new Vector3(spawnX, groundY, spawnZ);
+        }
         HasSpawned = true;
 
         // Per-type config.

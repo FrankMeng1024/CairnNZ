@@ -91,6 +91,7 @@ export type UnityMessage =
   | { kind: 'ARBgDiag';       phase: string; present?: boolean; enabled?: boolean; useCustomMaterial?: boolean; materialNull?: boolean; error?: string }
   | { kind: 'ARStateStall';   state: string; elapsedSec: string; activeLoaders: string }
   | { kind: 'A1State';        state: 'UNLOCKED' | 'ARMED' | 'LOCKED' | 'FROZEN'; prev?: string; a11?: boolean }
+  | { kind: 'SpawnRejected';  id: string; reason: string }
   | { kind: 'Unknown';        raw: string };
 
 export function parseUnityMessage(raw: string): UnityMessage {
@@ -262,6 +263,14 @@ export function parseUnityMessage(raw: string): UnityMessage {
         prev: typeof data.prev === 'string' ? data.prev : undefined,
         a11: typeof data.a11 === 'boolean' ? data.a11 : undefined,
       };
+    }
+    case 'SpawnRejected': {
+      // v0.2.3 Branch B — PortalSpawner / MultiSpawner could not find a
+      // valid Floor plane (or anchor attach failed). Caller (UnityAROverlay)
+      // removes id from spawnedIdsRef so next ArFrame can retry.
+      const id = String(data.id ?? '');
+      const reason = String(data.reason ?? 'unknown');
+      return { kind: 'SpawnRejected', id, reason };
     }
     default:
       return { kind: 'Unknown', raw };
