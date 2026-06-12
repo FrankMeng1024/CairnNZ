@@ -514,18 +514,22 @@ public partial class PortalSpawner
         // v3.2 review-fix: 2 strands instead of 4 (subagent: 4 cones at 0.25m
         // radius read as a solid wall; 2 with bigger height stagger reads
         // like DS chiral silhouette pair).
+        // v3.5k: increase strand count 2→5 with per-strand height variation
+        // for DS2/Sky-CotL filament density. Per-strand width reduced 0.85→0.55
+        // so total visual mass stays manageable. Each strand now has truly
+        // independent angular jitter (i*17.31 hashing wraps every 5 strands).
         int count = globals != null
-            ? Mathf.Max(1, Mathf.RoundToInt(globals.GetForType(null, "ConeStrandCount", 2f)))
-            : 2;
-        float radius = globals != null ? globals.GetForType(null, "ConeStrandRingRadius", 0.20f) : 0.20f;
+            ? Mathf.Max(1, Mathf.RoundToInt(globals.GetForType(null, "ConeStrandCount", 5f)))
+            : 5;
+        float radius = globals != null ? globals.GetForType(null, "ConeStrandRingRadius", 0.18f) : 0.18f;
 
         var root = new GameObject("ConeStrands");
         root.transform.SetParent(parent.transform, worldPositionStays: false);
 
-        // v3.2: bigger height stagger so each strand is distinguishable.
-        // 2 strands at heights 1.4m / 2.0m (Δ=60cm vs old 13cm).
-        float[] heights = new float[] { 1.4f, 2.0f };
-        float baseLift = 0.12f;
+        // v3.5k: 5 strands at staggered heights (1.2m to 2.1m, Δ=22cm avg).
+        // Mix tall and short — tall ones overshoot, short ones cluster low.
+        float[] heights = new float[] { 1.2f, 1.85f, 1.45f, 2.10f, 1.65f };
+        float baseLift = 0.10f;
 
         for (int i = 0; i < count; i++)
         {
@@ -559,19 +563,17 @@ public partial class PortalSpawner
             strandGo.transform.localScale = new Vector3(1f, scaleY, 1f);
 
             // ── Inner core (thin bright trail) ──
-            // v3.5i: inner is taller (1.6m vs outer scaled to coneHeight)
-            // and slightly offset on x — when paired with outer's lean,
-            // inner rises like a "rising spirit thread" peeking ABOVE the
-            // halo. References: DS chiral fingers extending past the wave;
-            // Sky CotL light pillars where the bright thread overshoots.
+            // v3.5k: with 5 strands per cluster, each individual strand needs
+            // to be thinner (was too fat at 2-strand density). Per-strand
+            // width 0.55× outer, inner 0.40×. Inner overshoots outer by 1.35×
+            // so the bright thread genuinely pierces above the halo (Sky CotL
+            // spirit-thread pattern).
             var innerGo = new GameObject("Inner");
             innerGo.transform.SetParent(strandGo.transform, worldPositionStays: false);
-            // Inner sits 5cm above the outer base + slight lateral wiggle.
-            float innerXOff = Mathf.Sin(i * 7.7f) * 0.015f;  // ±1.5cm
-            innerGo.transform.localPosition = new Vector3(innerXOff, 0.05f, 0);
-            // Inner authored at 1.4m → scale to 1.15× so it overshoots outer tip.
-            float innerScale = 1.15f;
-            innerGo.transform.localScale = new Vector3(0.85f, innerScale, 0.85f);  // narrower body, taller
+            float innerXOff = Mathf.Sin(i * 7.7f) * 0.012f;  // ±1.2cm wiggle
+            innerGo.transform.localPosition = new Vector3(innerXOff, 0.04f, 0);
+            float innerScale = 1.35f;     // overshoot outer
+            innerGo.transform.localScale = new Vector3(0.40f, innerScale, 0.40f);
             var innerMf = innerGo.AddComponent<MeshFilter>();
             innerMf.sharedMesh = meshInner;
             var innerMr = innerGo.AddComponent<MeshRenderer>();
@@ -591,7 +593,10 @@ public partial class PortalSpawner
             // ── Outer halo (volumetric shell with rim fresnel) ──
             var outerGo = new GameObject("Outer");
             outerGo.transform.SetParent(strandGo.transform, worldPositionStays: false);
+            // v3.5k: outer narrowed 1.0→0.55× so 5-strand cluster doesn't
+            // become a solid wall. Outer tip shrunk to 0.92× so inner pierces.
             outerGo.transform.localPosition = Vector3.zero;
+            outerGo.transform.localScale = new Vector3(0.55f, 0.92f, 0.55f);
             var outerMf = outerGo.AddComponent<MeshFilter>();
             outerMf.sharedMesh = meshOuter;
             var outerMr = outerGo.AddComponent<MeshRenderer>();

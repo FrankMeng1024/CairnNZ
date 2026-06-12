@@ -99,9 +99,9 @@ namespace Cairn.AR.Editor
             coreInnerMat.SetFloat("_RimSharpness", 1.5f);
             coreInnerMat.SetFloat("_FlowStrength", 0.95f);
             coreInnerMat.SetFloat("_BloomBoost", 0.20f);
-            coreInnerMat.SetFloat("_NightMul", 0.45f);     // v3.5f: only 1 cairn now (overlap fixed)
-            coreInnerMat.SetFloat("_DayMul", 0.30f);
-            coreInnerMat.SetFloat("_MaxLuma", 0.85f);      // v3.5f restored from over-dim 0.20
+            coreInnerMat.SetFloat("_NightMul", 0.30f);     // v3.5k: 5 strands now (was 2) — dimmer per strand
+            coreInnerMat.SetFloat("_DayMul", 0.22f);
+            coreInnerMat.SetFloat("_MaxLuma", 0.55f);      // v3.5k
             coreInnerMat.SetFloat("_CoreTintMix", 1.00f);  // v3.5c: inner = pure type color (no white mix)
             string coreInnerPath = "Assets/Resources/Materials/CairnConeCoreInner.mat";
             AssetDatabase.CreateAsset(coreInnerMat, coreInnerPath);
@@ -111,9 +111,9 @@ namespace Cairn.AR.Editor
             coreOuterMat.SetFloat("_RimSharpness", 2.8f);   // v3.5g was 4.5 — softer gaussian-like falloff
             coreOuterMat.SetFloat("_FlowStrength", 0.95f);
             coreOuterMat.SetFloat("_BloomBoost", 0.35f);
-            coreOuterMat.SetFloat("_NightMul", 0.55f);     // v3.5f: only 1 cairn now
-            coreOuterMat.SetFloat("_DayMul", 0.30f);
-            coreOuterMat.SetFloat("_MaxLuma", 0.90f);      // v3.5f restored
+            coreOuterMat.SetFloat("_NightMul", 0.32f);     // v3.5k: 5 strands now
+            coreOuterMat.SetFloat("_DayMul", 0.20f);
+            coreOuterMat.SetFloat("_MaxLuma", 0.55f);      // v3.5k
             coreOuterMat.SetFloat("_CoreTintMix", 0.65f);  // v3.5c was 0.45 — even stronger type body
             string coreOuterPath = "Assets/Resources/Materials/CairnConeCoreOuter.mat";
             AssetDatabase.CreateAsset(coreOuterMat, coreOuterPath);
