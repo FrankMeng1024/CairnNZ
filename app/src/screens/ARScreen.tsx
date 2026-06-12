@@ -792,11 +792,25 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   const handlePlantCairn = useCallback(async (type: string, distanceM: number) => {
     crashLogger.breadcrumb(`ar:plant:start type=${type} distance=${distanceM}`);
 
-    // Branch 1: Never had GPS
-    if (!lastCoord && trackPoints.length === 0) {
+    // v0.2.4 Branch B: plant 不再强制需要 GPS。如果有 GPS 用 GPS,没 GPS 用
+    // ARKit 世界坐标(arFrame.camera.position + forward * distance)。
+    // 用户原话:"AR 世界坐标永远不变 5 年后回来你的标记都还在"
+    // → AR 是真实存储坐标系,GPS 是辅助让箭头找方向。
+    //
+    // 之前 v0.2.3 强制 require GPS 是错的:
+    //   - 没 GPS = 用户进了林子/隧道/室内 → 完全无法 plant
+    //   - 但 ARKit 世界坐标在这些环境下仍然有效
+    //   - Alert 体验破坏沉浸感
+    //
+    // 新行为:
+    //   - 有 GPS 且 fresh (<3s) → 走 GPS+ARKit 双源(高精度)
+    //   - 有 GPS 但 stale (>30s) → degraded 模式但仍能 plant
+    //   - 无 GPS → 纯 ARKit 世界坐标 plant,标记 lat/lng=null,只有 ARKit 同 session 有效
+    //              下次冷启动这个 cairn 不会出现(没 GPS 找不到位置)— 用户接受
+    if (!lastCoord && trackPoints.length === 0 && !arFrame.camera) {
       Alert.alert(
-        'No GPS Available',
-        'GPS has not yet acquired a position. Move to an open area and wait for a GPS fix.',
+        'AR 还没准备好',
+        '请等待相机校准完成,或移动到光线更好的环境。',
       );
       return;
     }
