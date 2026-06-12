@@ -293,6 +293,14 @@ namespace Cairn.AR
                 _lastGuideLevel = level;
                 OnGuidance?.Invoke(_markerId, level, t);
                 Debug.Log($"[v22-ACQUIRE-GUIDE] id={_markerId} level={level} t={t:F1}");
+
+                // v0.2.4: emit to RN AcquireGuidance.tsx
+                var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                if (bridge != null)
+                {
+                    string json = $"{{\"markerId\":\"{_markerId}\",\"level\":{level},\"elapsed\":{t:F2}}}";
+                    bridge.SendToRN("guidance", json);
+                }
             }
         }
 
