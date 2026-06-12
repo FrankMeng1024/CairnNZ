@@ -83,10 +83,16 @@ public static class ConeStrandPlayCapture
 
         // === Group A: Lighting × camera angle for one cairn (cairn type) ===
         SpawnCairn(spawner, "main_cairn", "cairn", new Vector3(0f, 0f, 0f));
-        // v3.2 review-fix: destroy RuneText/MarkText/pink-shader quads after
-        // spawn (TMP shader doesn't load in Editor batchmode → magenta debug
-        // texture dominates composition). Production unaffected.
+        DumpRenderers();   // v3.4: identify pink source BEFORE destroy
         HideRuneTextQuads();
+        // v3.4 emergency debug: hide ALL renderers except ConeStrand* + Pebble*
+        // — find pink source by elimination.
+        if (System.Environment.GetEnvironmentVariable("CAIRN_HIDE_ALL_BUT_CONE") == "1")
+        {
+            HideAllExceptCone();
+        }
+        Debug.Log("[CSPC] === POST-HIDE DUMP ===");
+        DumpRenderers();
         var lightings = new (string label, float dnT, Color bg)[] {
             ("night",     0.0f, new Color(0.02f, 0.03f, 0.10f)),
             ("dusk",      0.5f, new Color(0.45f, 0.30f, 0.18f)),
@@ -112,9 +118,12 @@ public static class ConeStrandPlayCapture
             }
         }
 
-        // === Group B: type variants under noon lighting + eye angle ===
-        Shader.SetGlobalFloat("_CairnGlobalDayNightT", 1.0f);
-        cam.backgroundColor = new Color(0.91f, 0.86f, 0.77f);
+        // === Group B: type variants under NIGHT lighting + eye angle ===
+        // v3.5: switched from noon to night so type tint is visible against
+        // a dark background. Daytime tint discrimination requires the
+        // outline pass which is disabled in Editor batch capture.
+        Shader.SetGlobalFloat("_CairnGlobalDayNightT", 0.0f);
+        cam.backgroundColor = new Color(0.02f, 0.03f, 0.10f);
         cam.transform.position = new Vector3(0f, 1.6f, -2.5f);
         cam.transform.LookAt(new Vector3(0f, 0.7f, 0f));
         DespawnAll(spawner);
@@ -124,6 +133,8 @@ public static class ConeStrandPlayCapture
             DespawnAll(spawner);
             SpawnCairn(spawner, $"type_{t}", t, new Vector3(0f, 0f, 0f));
             HideRuneTextQuads();
+            Debug.Log($"[CSPC] === DUMP for type={t} ===");
+            DumpRenderers();
             CaptureCameraToPng(cam, $"Logs/v3-capture/type-{t}.png");
         }
 
@@ -153,6 +164,33 @@ public static class ConeStrandPlayCapture
     {
         try { sp.ClearAll(); }
         catch (System.Exception e) { Debug.LogWarning($"[CSPC] ClearAll threw: {e}"); }
+        // v3.5: ClearAll doesn't clean up legacy Portal_* root GameObjects
+        // (or their child PebbleStack/Fireflies/CairnSpiritHandshake). Force
+        // delete every "Portal_*" root so each type capture starts fresh.
+        for (int sIdx = 0; sIdx < UnityEngine.SceneManagement.SceneManager.sceneCount; sIdx++)
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(sIdx);
+            if (!scene.isLoaded) continue;
+            var roots = scene.GetRootGameObjects();
+            foreach (var root in roots)
+            {
+                // Walk all children recursively, find any GameObject named Portal_*
+                CollectPortalDescendants(root.transform);
+            }
+        }
+        // Drain
+        foreach (var go in _portalDrain) { if (go != null) UnityEngine.Object.DestroyImmediate(go); }
+        _portalDrain.Clear();
+    }
+
+    private static System.Collections.Generic.List<GameObject> _portalDrain
+        = new System.Collections.Generic.List<GameObject>();
+
+    private static void CollectPortalDescendants(Transform t)
+    {
+        if (t == null) return;
+        if (t.name.StartsWith("Portal_")) { _portalDrain.Add(t.gameObject); return; }
+        for (int i = 0; i < t.childCount; i++) CollectPortalDescendants(t.GetChild(i));
     }
 
     /// <summary>
@@ -160,11 +198,57 @@ public static class ConeStrandPlayCapture
     /// in Editor batchmode → backplate quads show as raw magenta).
     /// Production unaffected.
     /// </summary>
+    private static void DumpRenderers()
+    {
+        // v3.5: dump ALL Renderer subclasses (Mesh/SkinnedMesh/Particle/Trail/Line/Sprite),
+        // plus ALL material slots, to track down magenta InternalError fallback sources.
+        var allRenderers = UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+        foreach (var r in allRenderers)
+        {
+            if (r == null) continue;
+            string parentName = r.transform.parent != null ? r.transform.parent.name : "root";
+            string typeName = r.GetType().Name;
+            var mats = r.sharedMaterials;
+            if (mats == null || mats.Length == 0)
+            {
+                Debug.Log($"[CSPC-DUMP] {r.gameObject.name} ({typeName}, parent={parentName}) NO_MATS");
+                continue;
+            }
+            for (int i = 0; i < mats.Length; i++)
+            {
+                var m = mats[i];
+                string sn = (m != null && m.shader != null) ? m.shader.name : "NULL_MAT";
+                Debug.Log($"[CSPC-DUMP] {r.gameObject.name} ({typeName}, parent={parentName}) slot{i}={sn}");
+            }
+        }
+    }
+
+    private static void HideAllExceptCone()
+    {
+        var allRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+        foreach (var r in allRenderers)
+        {
+            if (r == null) continue;
+            string n = r.gameObject.name.ToLower();
+            string p = (r.transform.parent != null) ? r.transform.parent.name.ToLower() : "";
+            bool isConeOrPebble = n.Contains("inner") || n.Contains("outer") ||
+                                   p.Contains("conestrand") || n.Contains("pebble");
+            if (!isConeOrPebble)
+            {
+                r.enabled = false;
+            }
+        }
+    }
+
     private static void HideRuneTextQuads()
     {
-        // Walk every loaded scene's root GOs and recurse. This catches all
-        // children including spawned-via-AddComponent GOs which
-        // FindObjectsByType<GameObject> can miss in Edit mode.
+        // v3.4: also destroy CairnScanGrid / ScanGridQuad / FarShaft /
+        // ConfidenceRing — these decorative layers render as magenta in
+        // Editor batchmode (their custom Cairn shaders don't fully load
+        // outside Play mode). Production unaffected.
+        // v3.5: also disable Fireflies_* (ParticleSystemRenderer) and
+        // CairnSpiritHandshake (LineRenderer) — these were not visible to
+        // the MeshRenderer-only dump and are the actual magenta source.
         int destroyed = 0;
         var toDestroy = new System.Collections.Generic.List<GameObject>();
         for (int sIdx = 0; sIdx < UnityEngine.SceneManagement.SceneManager.sceneCount; sIdx++)
@@ -180,18 +264,55 @@ public static class ConeStrandPlayCapture
         {
             if (go != null) { UnityEngine.Object.DestroyImmediate(go); destroyed++; }
         }
-        Debug.Log($"[CSPC] HideRuneTextQuads destroyed={destroyed}");
+
+        // v3.5: disable LineRenderer/ParticleSystemRenderer with NULL or
+        // missing materials — they fallback to InternalError magenta in
+        // Editor batchmode.
+        int disabledExtra = 0;
+        var allRenderers = UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+        foreach (var r in allRenderers)
+        {
+            if (r == null) continue;
+            if (r is MeshRenderer) continue; // handled above
+            string nm = r.gameObject.name.ToLower();
+            // Disable known decorative non-mesh renderers
+            if (nm.Contains("firefl") || nm.Contains("spirithandshake") ||
+                nm.Contains("handshake") || nm.Contains("wisp"))
+            {
+                r.enabled = false;
+                disabledExtra++;
+                continue;
+            }
+            // Disable any renderer with missing/null material (will magenta-fallback)
+            var mats = r.sharedMaterials;
+            bool anyNull = mats == null || mats.Length == 0;
+            if (!anyNull)
+            {
+                foreach (var m in mats) { if (m == null || m.shader == null) { anyNull = true; break; } }
+            }
+            if (anyNull)
+            {
+                r.enabled = false;
+                disabledExtra++;
+            }
+        }
+
+        Debug.Log($"[CSPC] HideRuneTextQuads destroyed={destroyed} disabledExtra={disabledExtra}");
     }
 
     private static void CollectMatchingForDestroy(Transform t, System.Collections.Generic.List<GameObject> bag)
     {
         if (t == null) return;
         string n = t.name.ToLower();
+        // v3.4 expanded: scangrid, farshaft, confidencering — all batch artifacts
         if (n.Contains("runetext") || n.Contains("marktext") ||
-            n.Contains("backplate") || n.Contains("stoneback"))
+            n.Contains("backplate") || n.Contains("stoneback") ||
+            n.Contains("scangrid") || n.Contains("farshaft") ||
+            n.Contains("confidencering") || n.Contains("portalring") ||
+            n.Contains("groundhalo") || n.Contains("contactshadow"))
         {
             bag.Add(t.gameObject);
-            return; // don't recurse — children will be destroyed with parent
+            return;
         }
         var mr = t.GetComponent<MeshRenderer>();
         if (mr != null && mr.sharedMaterial != null && mr.sharedMaterial.shader != null)

@@ -128,10 +128,10 @@ Shader "Cairn/CairnConeCore"
                 float rimAlpha = pow(fres, _RimSharpness);
 
                 // ---- COLOUR ----
-                // v3.3 review-fix: lower white floor so it's not a saturated
-                // emitter competing with type-tinted rim. Pure-bleach white was
-                // washing out type identity (water/danger/cairn looked same).
-                float3 white = float3(0.85, 0.82, 0.78);
+                // v3.5: drop white floor further to (0.35,0.33,0.32). Even
+                // (0.55,0.52,0.50) was bleaching to ivory under additive
+                // overlap. Type tint must dominate the perceived color.
+                float3 white = float3(0.35, 0.33, 0.32);
                 float3 coreCol = lerp(white, _TypeRimTint.rgb, _CoreTintMix);
                 float3 rimCol  = _TypeRimTint.rgb;
                 // Rim wins at silhouette, core peeks through where rim alpha is low.
@@ -148,8 +148,10 @@ Shader "Cairn/CairnConeCore"
                 // ---- ALPHA ----
                 // Hollow look: alpha is rim × envelope × flow.
                 float alpha = rimAlpha * vertEnv * flowGate;
-                // Subtle fill so the very centre isn't invisible — but heavily reduced.
-                alpha += vertEnv * flowGate * 0.15;
+                // v3.5c: removed centre fill (was vertEnv * flowGate * 0.15).
+                // Across 4 stacked layers (2 strands × inner+outer) the fill
+                // saturated the centre to white and bleached the type tint.
+                // Pure hollow look — the rim does all the visible work.
 
                 // Final RGB. Clamp to MaxLuma so HDR doesn't saturate to white,
                 // preserving rim and flow signal.

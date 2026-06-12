@@ -90,18 +90,19 @@ namespace Cairn.AR.Editor
             string outlineMatPath = "Assets/Resources/Materials/CairnConeOutline.mat";
             AssetDatabase.CreateAsset(outlineMat, outlineMatPath);
 
-            // v3.4: Inner = thin tinted thread (carries type identity at the
-            // visible bright thread). Outer = halo with strong type rim.
+            // v3.5b: 4 layers stack additively (2 strands × inner+outer).
+            // Each layer must output ~0.2 max luma so stacked total is
+            // ~0.8 — bright but not clipped to white. Tint must dominate.
             //
             // Inner-core material — thin TINTED thread.
             var coreInnerMat = new Material(coreShader) { name = "CairnConeCoreInner" };
             coreInnerMat.SetFloat("_RimSharpness", 1.5f);
             coreInnerMat.SetFloat("_FlowStrength", 0.95f);
-            coreInnerMat.SetFloat("_BloomBoost", 0.30f);
-            coreInnerMat.SetFloat("_NightMul", 0.55f);     // dimmer (was overpowering)
-            coreInnerMat.SetFloat("_DayMul", 0.18f);
-            coreInnerMat.SetFloat("_MaxLuma", 0.95f);      // strict clamp
-            coreInnerMat.SetFloat("_CoreTintMix", 0.55f);  // inner CARRIES type tint
+            coreInnerMat.SetFloat("_BloomBoost", 0.20f);
+            coreInnerMat.SetFloat("_NightMul", 0.45f);     // v3.5f: only 1 cairn now (overlap fixed)
+            coreInnerMat.SetFloat("_DayMul", 0.30f);
+            coreInnerMat.SetFloat("_MaxLuma", 0.85f);      // v3.5f restored from over-dim 0.20
+            coreInnerMat.SetFloat("_CoreTintMix", 1.00f);  // v3.5c: inner = pure type color (no white mix)
             string coreInnerPath = "Assets/Resources/Materials/CairnConeCoreInner.mat";
             AssetDatabase.CreateAsset(coreInnerMat, coreInnerPath);
 
@@ -109,11 +110,11 @@ namespace Cairn.AR.Editor
             var coreOuterMat = new Material(coreShader) { name = "CairnConeCoreOuter" };
             coreOuterMat.SetFloat("_RimSharpness", 4.5f);
             coreOuterMat.SetFloat("_FlowStrength", 0.95f);
-            coreOuterMat.SetFloat("_BloomBoost", 0.7f);
-            coreOuterMat.SetFloat("_NightMul", 1.2f);
-            coreOuterMat.SetFloat("_DayMul", 0.22f);
-            coreOuterMat.SetFloat("_MaxLuma", 1.0f);
-            coreOuterMat.SetFloat("_CoreTintMix", 0.0f);   // outer = white center, tinted rim
+            coreOuterMat.SetFloat("_BloomBoost", 0.35f);
+            coreOuterMat.SetFloat("_NightMul", 0.55f);     // v3.5f: only 1 cairn now
+            coreOuterMat.SetFloat("_DayMul", 0.30f);
+            coreOuterMat.SetFloat("_MaxLuma", 0.90f);      // v3.5f restored
+            coreOuterMat.SetFloat("_CoreTintMix", 0.65f);  // v3.5c was 0.45 — even stronger type body
             string coreOuterPath = "Assets/Resources/Materials/CairnConeCoreOuter.mat";
             AssetDatabase.CreateAsset(coreOuterMat, coreOuterPath);
 

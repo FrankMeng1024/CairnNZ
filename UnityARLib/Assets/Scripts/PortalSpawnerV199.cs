@@ -565,11 +565,14 @@ public partial class PortalSpawner
             var innerMf = innerGo.AddComponent<MeshFilter>();
             innerMf.sharedMesh = meshInner;
             var innerMr = innerGo.AddComponent<MeshRenderer>();
-            innerMr.sharedMaterial = matInner;
+            // v3.4 capture-fix: mesh has subMeshCount=2 (for outline pass).
+            // Single material → submesh 1 falls back to InternalErrorShader
+            // (magenta). Assign matInner to both slots.
+            innerMr.sharedMaterials = new Material[] { matInner, matInner };
             innerMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             innerMr.receiveShadows = false;
             var innerMpb = new MaterialPropertyBlock();
-            innerMpb.SetFloat("_PhaseOffset", (i / (float)count) * Mathf.PI * 2f);
+            innerMpb.SetFloat("_PhaseOffset", i * Mathf.PI);   // v3.4 C3: π between paired
             innerMpb.SetFloat("_Height", 1.4f);
             innerMpb.SetColor("_TypeRimTint", baseColor);
             innerMr.SetPropertyBlock(innerMpb);
@@ -582,13 +585,20 @@ public partial class PortalSpawner
             var outerMf = outerGo.AddComponent<MeshFilter>();
             outerMf.sharedMesh = meshOuter;
             var outerMr = outerGo.AddComponent<MeshRenderer>();
-            outerMr.sharedMaterials = (outMat != null)
+            // v3.4 capture-fix: skip outline submesh in Editor batch mode —
+            // CairnConeOutline shader doesn't fully load and renders as
+            // magenta. Production runtime is unaffected.
+            bool useOutline = outMat != null;
+#if UNITY_EDITOR
+            if (!Application.isPlaying) useOutline = false;
+#endif
+            outerMr.sharedMaterials = useOutline
                 ? new Material[] { matOuter, outMat }
-                : new Material[] { matOuter };
+                : new Material[] { matOuter, matOuter };
             outerMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             outerMr.receiveShadows = false;
             var outerMpb = new MaterialPropertyBlock();
-            outerMpb.SetFloat("_PhaseOffset", (i / (float)count) * Mathf.PI * 2f + Mathf.PI * 0.5f);
+            outerMpb.SetFloat("_PhaseOffset", i * Mathf.PI + Mathf.PI * 0.5f);  // v3.4 C3
             outerMpb.SetFloat("_Height", 1.7f);
             outerMpb.SetColor("_TypeRimTint", baseColor);
             // v3.4 review-fix: outline uses DEEPER type-tinted dark, not flat
