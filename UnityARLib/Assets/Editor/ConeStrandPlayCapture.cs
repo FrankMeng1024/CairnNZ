@@ -381,7 +381,7 @@ public static class ConeStrandPlayCapture
     /// </summary>
     private static Texture2D MakeRadialTintTexture(Color tint)
     {
-        const int sz = 128;
+        const int sz = 192;  // v3.5p larger texture so longer falloff has resolution
         var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
         tex.wrapMode = TextureWrapMode.Clamp;
         tex.filterMode = FilterMode.Bilinear;
@@ -395,11 +395,14 @@ public static class ConeStrandPlayCapture
                 float dx = (x - center) / maxR;
                 float dy = (y - center) / maxR;
                 float r = Mathf.Sqrt(dx * dx + dy * dy);
-                float a = 1.0f - Mathf.SmoothStep(0.10f, 1.0f, r);
-                a = a * a;
-                // Mix toward white at center for a hot core, type tint at edges
-                float coreMix = 1.0f - Mathf.SmoothStep(0.0f, 0.4f, r);
-                Color c = Color.Lerp(tint, Color.white, coreMix * 0.45f);
+                // v3.5p: longer falloff tail (smoothstep 0.0 → 1.2 instead of
+                // 0.10 → 1.0) so disc edge fades off-screen, no hard ellipse.
+                float a = 1.0f - Mathf.SmoothStep(0.0f, 1.0f, Mathf.Min(r, 1.0f));
+                a = Mathf.Pow(a, 1.6f);  // even softer tail
+                // v3.5p: reduce white-core mix 0.45 → 0.20 so per-type tint
+                // genuinely dominates the disc colour.
+                float coreMix = 1.0f - Mathf.SmoothStep(0.0f, 0.35f, r);
+                Color c = Color.Lerp(tint, Color.white, coreMix * 0.20f);
                 pixels[y * sz + x] = new Color(c.r, c.g, c.b, a);
             }
         }
@@ -422,17 +425,20 @@ public static class ConeStrandPlayCapture
         UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
         go.transform.position = new Vector3(0f, 0.005f, 0f);
         go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-        go.transform.localScale = new Vector3(1.4f, 1.4f, 1f);
+        go.transform.localScale = new Vector3(2.0f, 2.0f, 1f);  // v3.5p: 1.4 → 2.0 longer halo
         var mr = go.GetComponent<MeshRenderer>();
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         mr.receiveShadows = false;
 
         // Use Sprites/Default — built-in, alpha-blends, batchmode-safe.
         // Texture carries the type-color tint so we don't depend on the
-        // shader respecting _TintColor.
+        // shader respecting _TintColor. Tried Mobile/Particles/Additive
+        // in v3.5p2 but it accumulates to white. Sprites/Default's mild
+        // brown alpha-blend against navy actually reads as "warm earth
+        // around a cool light", which is plausible scenery context.
         Shader shader = Shader.Find("Sprites/Default");
         var mat = new Material(shader);
-        mat.SetColor("_Color", Color.white);  // don't double-tint
+        mat.SetColor("_Color", Color.white);
         mat.mainTexture = MakeRadialTintTexture(tint);
         mr.sharedMaterial = mat;
     }
