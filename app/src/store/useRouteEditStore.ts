@@ -774,7 +774,21 @@ function spliceMatched(
     if (i === 0) continue; // skip duplicate of last splice's endPt
     out.push(tail[i]);
   }
-  return out;
+  // v250: Dedupe consecutive points within 0.5m of each other. The
+  // boundary stitching above produces ~3 sub-meter duplicates per
+  // stroke (head synth + startPt projection use different math; tail
+  // synth + endPt projection same). PO test2 had 5 such duplicates.
+  // They show up as zero-length segments + occasional render artifacts
+  // and contribute to the "preview 不对" perception.
+  if (out.length < 2) return out;
+  const deduped: LngLat[] = [out[0]];
+  for (let i = 1; i < out.length; i++) {
+    const prev = deduped[deduped.length - 1];
+    if (haversineMetersLocal(prev, out[i]) > 0.5) {
+      deduped.push(out[i]);
+    }
+  }
+  return deduped;
 }
 
 export const useRouteEditStore = create<EditState>((set, get) => ({

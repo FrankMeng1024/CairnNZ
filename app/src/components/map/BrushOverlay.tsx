@@ -44,6 +44,17 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
   const currentStrokeIdRef = useRef<string | null>(null);
   // v247: prevent double endStroke when both onEnd and onFinalize fire.
   const endedRef = useRef(false);
+  // v250: in-flight guard for handleUpdate. runOnJS(handleUpdate) fires
+  // for every gesture frame (~60Hz). unproject is async (await on
+  // getCoordinateFromView native bridge call). Without this guard, the
+  // JS thread queues 60 promises/sec and falls behind as the queue
+  // grows — visible as second-stroke jank that cumulates with stroke
+  // count. We drop frames whose unproject would queue behind an
+  // in-flight call. The dropped pixel-position is acceptable because
+  // appendStrokePoint already 5m-downsamples — losing a frame here
+  // either means the next frame will have moved >5m (and is sampled)
+  // or <5m (and would have been dropped anyway).
+  const updateInFlightRef = useRef(false);
 
   if (activeTool === 'pan') return null;
   if (Platform.OS === 'web') return null;
@@ -70,6 +81,7 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
 
   async function handleBegin(x: number, y: number) {
     endedRef.current = false;
+    updateInFlightRef.current = false; // v250: reset for new stroke
     const coord = await unproject(x, y);
     if (!coord) return;
     if (activeTool === 'brush') {
@@ -81,14 +93,22 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
   }
 
   async function handleUpdate(x: number, y: number) {
-    const coord = await unproject(x, y);
-    if (!coord) return;
-    if (activeTool === 'brush') {
-      const id = currentStrokeIdRef.current;
-      if (!id) return;
-      appendStrokePoint(id, coord);
-    } else if (activeTool === 'eraser') {
-      eraseAt(coord, 25);
+    // v250: skip if a previous handleUpdate is still awaiting unproject.
+    // Drops frames rather than queuing — keeps gesture responsive.
+    if (updateInFlightRef.current) return;
+    updateInFlightRef.current = true;
+    try {
+      const coord = await unproject(x, y);
+      if (!coord) return;
+      if (activeTool === 'brush') {
+        const id = currentStrokeIdRef.current;
+        if (!id) return;
+        appendStrokePoint(id, coord);
+      } else if (activeTool === 'eraser') {
+        eraseAt(coord, 25);
+      }
+    } finally {
+      updateInFlightRef.current = false;
     }
   }
 

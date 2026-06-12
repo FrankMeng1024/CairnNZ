@@ -441,6 +441,7 @@ export function RouteEditorScreen() {
         );
       }
 
+      let savedRouteId: string | undefined = targetId;
       if (targetId) {
         await updateRoute(targetId, { name: trimmed, points: finalPoints, distanceM: dist }).catch((e: any) => {
           throw e;
@@ -458,13 +459,24 @@ export function RouteEditorScreen() {
           Alert.alert('Save failed', 'Could not save route — check your connection.');
           return;
         }
+        savedRouteId = createdId;
       }
 
       // Clear the in-memory draft and any open edit session.
       try { useRouteEditStore.getState().clearCommittedDraft(); } catch {}
       try { useRouteEditStore.getState().cancelEdit(); } catch {}
 
-      nav.goBack();
+      // v250: After Save, go to the saved route's detail page (RouteEditor
+      // in view mode for the persisted routeId), NOT back to the activity
+      // detail. PO request: "save了要回到routes detail 不是activity detail".
+      // For save-as-route flow we use replace() so back doesn't return to
+      // the unsaved draft. For existing-route updates, goBack() already
+      // returns to the route detail since we entered RouteEditor from there.
+      if (!targetId && savedRouteId) {
+        (nav as any).replace('RouteEditor', { routeId: savedRouteId });
+      } else {
+        nav.goBack();
+      }
     } catch (e: any) {
       Alert.alert('Save failed', e?.message ?? 'Unknown error');
     } finally {
