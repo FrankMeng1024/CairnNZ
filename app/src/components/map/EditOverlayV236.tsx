@@ -34,6 +34,8 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
   const trimStartFrac = useRouteEditStore(s => s.trimStartFrac);
   const trimEndFrac = useRouteEditStore(s => s.trimEndFrac);
   const brushStrokes = useRouteEditStore(s => s.brushStrokes);
+  const activeTool = useRouteEditStore(s => s.activeTool);
+  const setActiveTool = useRouteEditStore(s => s.setActiveTool);
   const validationErrors = useRouteEditStore(s => s.validationErrors);
   const previewIsCurrent = useRouteEditStore(s => s.previewIsCurrent);
   const setLastError = useRouteEditStore(s => s.setLastError);
@@ -55,29 +57,20 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
 
   return (
     <View pointerEvents="box-none" style={styles.container}>
-      {/* Banner zone — hovers above the bottom card so it doesn't push it. */}
-      {(lastError || lastWarning) && (
+      {/* v248: lastError no longer shown here. BrushOverlay renders the
+          live "Brush must start on the route" / "Outside corridor" hints
+          near the top of the map (pointerEvents=none, can't block draw).
+          Showing the same error twice was confusing + the dismissible
+          X let users get rid of context they should keep seeing. */}
+      {lastWarning && !lastError && (
         <View
           style={[styles.bannerContainer, { top: insets.top + 64 }]}
-          pointerEvents="auto"
+          pointerEvents="none"
         >
-          {lastError && (
-            <TouchableOpacity
-              style={[styles.banner, styles.errorBanner]}
-              onPress={() => setLastError(null)}
-              activeOpacity={0.85}
-            >
-              <Icon name="TriangleAlert" size={14} color={Colors.danger} strokeWidth={2} />
-              <Text style={styles.bannerText} numberOfLines={2}>{lastError}</Text>
-              <Text style={styles.bannerDismiss}>×</Text>
-            </TouchableOpacity>
-          )}
-          {lastWarning && !lastError && (
-            <View style={[styles.banner, styles.warningBanner]}>
-              <Icon name="TriangleAlert" size={14} color={Colors.severityCaution} strokeWidth={2} />
-              <Text style={styles.bannerText} numberOfLines={2}>{lastWarning}</Text>
-            </View>
-          )}
+          <View style={[styles.banner, styles.warningBanner]}>
+            <Icon name="TriangleAlert" size={14} color={Colors.severityCaution} strokeWidth={2} />
+            <Text style={styles.bannerText} numberOfLines={2}>{lastWarning}</Text>
+          </View>
         </View>
       )}
 
@@ -91,7 +84,51 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
           style={[styles.bottomPanel, { paddingBottom: insets.bottom + Spacing.md }]}
           pointerEvents="auto"
         >
-          {/* Status pill — N/5 detour points + computing indicator */}
+          {/* v248: tool strip moved from floating right toolbar into the
+              bottom card (PO request — toolbar should not be on the right). */}
+          <View style={styles.toolStrip}>
+            <TouchableOpacity
+              onPress={() => setActiveTool('pan')}
+              style={[styles.toolBtn, activeTool === 'pan' && styles.toolBtnActive]}
+              activeOpacity={0.85}
+            >
+              <Icon
+                name="Navigation2"
+                size={18}
+                color={activeTool === 'pan' ? Colors.surface : Colors.textPrimary}
+                strokeWidth={2.5}
+              />
+              <Text style={[styles.toolBtnText, activeTool === 'pan' && styles.toolBtnTextActive]}>Pan</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setActiveTool('brush')}
+              style={[styles.toolBtn, activeTool === 'brush' && styles.toolBtnActive]}
+              activeOpacity={0.85}
+            >
+              <Icon
+                name="Pencil"
+                size={18}
+                color={activeTool === 'brush' ? Colors.surface : Colors.textPrimary}
+                strokeWidth={2.5}
+              />
+              <Text style={[styles.toolBtnText, activeTool === 'brush' && styles.toolBtnTextActive]}>Brush</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setActiveTool('eraser')}
+              style={[styles.toolBtn, activeTool === 'eraser' && styles.toolBtnActive]}
+              activeOpacity={0.85}
+            >
+              <Icon
+                name="Trash2"
+                size={18}
+                color={activeTool === 'eraser' ? Colors.surface : Colors.textPrimary}
+                strokeWidth={2.5}
+              />
+              <Text style={[styles.toolBtnText, activeTool === 'eraser' && styles.toolBtnTextActive]}>Erase</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Status pill — N/8 brush strokes + computing indicator */}
           <View style={styles.statusRow}>
             {isComputing ? (
               <View style={styles.statusPill}>
@@ -425,5 +462,34 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: FontSize.body,
     fontWeight: '700',
+  },
+  toolStrip: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  toolBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: Radius.button,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  toolBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  toolBtnText: {
+    fontSize: FontSize.small,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  toolBtnTextActive: {
+    color: Colors.surface,
   },
 });

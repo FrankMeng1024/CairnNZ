@@ -48,12 +48,11 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
   if (activeTool === 'pan') return null;
   if (Platform.OS === 'web') return null;
 
-  // v247: gesture capture region excludes the floating top toolbar (~120px
-  // from screen top) and the bottom card (~240px from screen bottom).
-  // This keeps PanGesture from misfiring beginStroke when the user taps
-  // a UI element. The center map area is still fully captured.
-  const gestureTopInset = insets.top + 100;
-  const gestureBottomInset = 240;
+  // v248: gesture capture region must avoid both the back-button area
+  // at the top (~insets.top + 50) AND the entire bottom card which now
+  // hosts tool strip + status + slider + preview + save (~360px).
+  const gestureTopInset = insets.top + 50;
+  const gestureBottomInset = 360;
 
   // Convert screen point to map lng/lat via Mapbox API. Async; we keep it
   // off the worklet thread by calling on JS thread inside runOnJS handlers.
@@ -110,11 +109,19 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
     .activateAfterLongPress(0)
     .onBegin((e) => {
       'worklet';
-      runOnJS(handleBegin)(e.x, e.y);
+      // v248: Gesture.Pan e.x/e.y are RELATIVE to the GestureDetector
+      // inner view, which is inset from screen top by gestureTopInset.
+      // Mapbox getCoordinateFromView expects coords relative to MapView,
+      // which is absoluteFill (top:0). Use absoluteX/absoluteY (screen
+      // coords) instead — MapView is at screen top:0 too, so absolute
+      // = MapView-relative. Without this fix, every brush press was
+      // unprojected ~100+insets.top pixels above the actual finger,
+      // landing far off the route → "Brush must start on the route".
+      runOnJS(handleBegin)(e.absoluteX, e.absoluteY);
     })
     .onUpdate((e) => {
       'worklet';
-      runOnJS(handleUpdate)(e.x, e.y);
+      runOnJS(handleUpdate)(e.absoluteX, e.absoluteY);
     })
     .onEnd(() => {
       'worklet';

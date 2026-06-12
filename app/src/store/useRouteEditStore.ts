@@ -735,13 +735,27 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const state = get();
     if (state.isSaving) return null;
     if (state.brushStrokes.length >= MAX_STROKES) {
-      set({ lastError: `Max ${MAX_STROKES} brush strokes reached` });
+      const msg = `Max ${MAX_STROKES} brush strokes reached`;
+      set({ lastError: msg });
+      setTimeout(() => {
+        const live = get();
+        if (live.lastError === msg) set({ lastError: null });
+      }, 2500);
       return null;
     }
     // Endpoint check at start of stroke — must be within 50m of original.
     const d = distanceToOriginalM(firstPoint, state.walkedIndex);
     if (d > ENDPOINT_SNAP_M) {
       set({ lastError: 'Brush must start on the route' });
+      // v248: auto-dismiss after 2.5s — PO requested no manual X button,
+      // and a stale "must start on route" message stays visible blocking
+      // user attention even after they correct.
+      setTimeout(() => {
+        const live = get();
+        if (live.lastError === 'Brush must start on the route') {
+          set({ lastError: null });
+        }
+      }, 2500);
       return null;
     }
     const id = genStrokeId();

@@ -40,7 +40,6 @@ import { BackButton } from '../components/BackButton';
 import { DualLineLayer } from '../components/map/DualLineLayer';
 import { BrushOverlay } from '../components/map/BrushOverlay';
 import { BrushStrokeLayer } from '../components/map/BrushStrokeLayer';
-import { EditTopToolbar } from '../components/map/EditTopToolbar';
 import { EditOverlayV236 } from '../components/map/EditOverlayV236';
 import { getFlagsSync } from '../config/featureFlags';
 import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
@@ -103,7 +102,6 @@ export function RouteEditorScreen() {
   const editActiveTool = useRouteEditStore(s => s.activeTool);
   const editWalkedIndex = useRouteEditStore(s => s.walkedIndex);
   const editPreviewIsCurrent = useRouteEditStore(s => s.previewIsCurrent);
-  const setEditActiveTool = useRouteEditStore(s => s.setActiveTool);
   const dualEditActive = editIsOpen && editRouteId === (routeId ?? freshlyCreatedRouteId);
 
   // Subscribe to user GPS — used as the camera fallback when route data
@@ -591,9 +589,7 @@ export function RouteEditorScreen() {
         <>
           {/* Brush gesture capture — only intercepts when brush/eraser tool active */}
           <BrushOverlay mapViewRef={mapViewRef} />
-          {/* Top-right tool selector */}
-          <EditTopToolbar activeTool={editActiveTool} onToolChange={setEditActiveTool} />
-          {/* Bottom card */}
+          {/* Bottom card — tool strip is now inside this card */}
           <EditOverlayV236 onCancel={handleCancelEdit} onSave={handleSave} onPreview={handlePreview} />
         </>
       ) : (
