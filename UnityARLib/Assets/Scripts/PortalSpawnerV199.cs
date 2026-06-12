@@ -638,6 +638,43 @@ public partial class PortalSpawner
             outerMr.SetPropertyBlock(outerMpb);
         }
 
+        // v3.5m: background depth tier — 3 dimmer "ghost" strands at 0.55×
+        // scale, 0.4× luma, behind the front cluster. Adds parallax/depth
+        // read so the cluster doesn't look like 5 flat triangles glued to
+        // the same plane. Random radius offset puts them at varied depth.
+        int bgCount = 3;
+        for (int i = 0; i < bgCount; i++)
+        {
+            float bgAngle = (i / (float)bgCount) * Mathf.PI * 2f
+                            + Mathf.Sin(i * 23.7f) * 0.6f;
+            // Larger radius (0.28-0.35m) so they sit BEHIND the front cluster
+            float bgRadius = 0.28f + Mathf.Abs(Mathf.Cos(i * 11.3f)) * 0.07f;
+            float bgHeight = 1.0f + Mathf.Abs(Mathf.Sin(i * 5.1f)) * 0.6f;  // 1.0-1.6m
+
+            var bgGo = new GameObject($"BgStrand_{i}");
+            bgGo.transform.SetParent(root.transform, worldPositionStays: false);
+            bgGo.transform.localPosition = new Vector3(
+                Mathf.Cos(bgAngle) * bgRadius, baseLift,
+                Mathf.Sin(bgAngle) * bgRadius);
+            bgGo.transform.localRotation = Quaternion.Euler(
+                Mathf.Cos(i * 7.7f) * 6f, 0, Mathf.Sin(i * 5.3f) * 6f);
+            bgGo.transform.localScale = new Vector3(0.55f, bgHeight / 1.7f, 0.55f);
+
+            var bgMf = bgGo.AddComponent<MeshFilter>();
+            bgMf.sharedMesh = meshOuter;
+            var bgMr = bgGo.AddComponent<MeshRenderer>();
+            bgMr.sharedMaterials = new Material[] { matOuter, matOuter };
+            bgMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            bgMr.receiveShadows = false;
+            var bgMpb = new MaterialPropertyBlock();
+            bgMpb.SetFloat("_PhaseOffset", i * 1.7f + 3.3f);  // out of phase from front
+            bgMpb.SetFloat("_Height", 1.7f);
+            // Background tier: dimmer + slightly desaturated tint
+            Color bgTint = Color.Lerp(baseColor, Color.black, 0.35f);
+            bgMpb.SetColor("_TypeRimTint", bgTint);
+            bgMr.SetPropertyBlock(bgMpb);
+        }
+
         UnityLogger.IForward("V199",
             $"AttachConeStrands v3.2 nested count={count} radius={radius:F2}");
         return true;
