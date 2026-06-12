@@ -32,7 +32,8 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
   const matchedPoints = useRouteEditStore(s => s.matchedPoints);
   const trimStartFrac = useRouteEditStore(s => s.trimStartFrac);
   const trimEndFrac = useRouteEditStore(s => s.trimEndFrac);
-  const viaCount = useRouteEditStore(s => s.viaPoints.length);
+  const brushStrokes = useRouteEditStore(s => s.brushStrokes);
+  const validationErrors = useRouteEditStore(s => s.validationErrors);
   const setLastError = useRouteEditStore(s => s.setLastError);
   const setTrimStart = useRouteEditStore(s => s.setTrimStart);
   const setTrimEnd = useRouteEditStore(s => s.setTrimEnd);
@@ -44,6 +45,8 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
 
   const totalLengthM = polylineLengthM(matchedPoints);
   const editedLengthM = totalLengthM * (trimEndFrac - trimStartFrac);
+  const strokeCount = brushStrokes.length;
+  const liveValidationMsg = validationErrors[0] ?? null;
 
   return (
     <View pointerEvents="box-none" style={styles.container}>
@@ -92,9 +95,20 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
               </View>
             ) : (
               <View style={styles.statusPill}>
-                <Icon name="MapPin" size={14} color={Colors.flag} strokeWidth={2} />
-                <Text style={styles.statusText}>
-                  {viaCount}/5 detour points
+                <Icon
+                  name={liveValidationMsg ? 'TriangleAlert' : 'Pencil'}
+                  size={14}
+                  color={liveValidationMsg ? Colors.severityDanger : Colors.primary}
+                  strokeWidth={2}
+                />
+                <Text
+                  style={[
+                    styles.statusText,
+                    liveValidationMsg && { color: Colors.severityDanger },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {liveValidationMsg ?? `${strokeCount}/8 brush strokes`}
                 </Text>
               </View>
             )}
@@ -129,9 +143,9 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
           </View>
 
           {/* Hint text — only when no detour yet */}
-          {viaCount === 0 && !isComputing && (
+          {strokeCount === 0 && !isComputing && (
             <Text style={styles.hintText}>
-              Long-press the map to add a detour point, or drag the slider to trim.
+              Tap the pencil and draw a detour. Start and end on the route. Drag the slider to trim.
             </Text>
           )}
 

@@ -38,7 +38,9 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens'
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { DualLineLayer } from '../components/map/DualLineLayer';
-import { ViaPointLayer } from '../components/map/ViaPointLayer';
+import { BrushOverlay } from '../components/map/BrushOverlay';
+import { BrushStrokeLayer } from '../components/map/BrushStrokeLayer';
+import { EditTopToolbar } from '../components/map/EditTopToolbar';
 import { EditOverlayV236 } from '../components/map/EditOverlayV236';
 import { getFlagsSync } from '../config/featureFlags';
 import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
@@ -95,11 +97,13 @@ export function RouteEditorScreen() {
   const editWorkingPoints = useRouteEditStore(s => s.workingPoints);
   const editMatchedPoints = useRouteEditStore(s => s.matchedPoints);
   const editOriginalPoints = useRouteEditStore(s => s.originalPoints);
-  const editViaPoints = useRouteEditStore(s => s.viaPoints);
+  const editBrushStrokes = useRouteEditStore(s => s.brushStrokes);
   const editTrimStartFrac = useRouteEditStore(s => s.trimStartFrac);
   const editTrimEndFrac = useRouteEditStore(s => s.trimEndFrac);
+  const editActiveTool = useRouteEditStore(s => s.activeTool);
+  const editWalkedIndex = useRouteEditStore(s => s.walkedIndex);
+  const setEditActiveTool = useRouteEditStore(s => s.setActiveTool);
   const dualEditActive = editIsOpen && editRouteId === (routeId ?? freshlyCreatedRouteId);
-  const [selectedViaId, setSelectedViaId] = useState<string | null>(null);
 
   // Subscribe to user GPS — used as the camera fallback when route data
   // hasn't hydrated yet, so MapView never falls back to Mapbox's global
@@ -108,6 +112,25 @@ export function RouteEditorScreen() {
 
   const cameraRef = useRef<any>(null);
   const mapViewRef = useRef<any>(null);
+
+  // Distance helper for BrushStrokeLayer color classification.
+  const distanceFromOriginal = useCallback((coord: { lng: number; lat: number }) => {
+    if (!editWalkedIndex) return Infinity;
+    const nearest = editWalkedIndex.nearest(coord.lng, coord.lat, 1);
+    if (nearest.length === 0) return Infinity;
+    const np = editWalkedIndex.get(nearest[0]);
+    if (!np) return Infinity;
+    const R = 6_371_000;
+    const toRad = (x: number) => (x * Math.PI) / 180;
+    const dLat = toRad(np.lat - coord.lat);
+    const dLng = toRad(np.lng - coord.lng);
+    const lat1 = toRad(coord.lat);
+    const lat2 = toRad(np.lat);
+    const x =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+  }, [editWalkedIndex]);
 
   // ── Init: fill name from existing route or session
   useEffect(() => {
@@ -380,7 +403,6 @@ export function RouteEditorScreen() {
         }
         await updateRoute(targetId, { points: editedWorking, distanceM: dist }).catch(() => {});
       }
-      setSelectedViaId(null);
       setEditMode(false);
       nav.goBack();
     } catch (e: any) {
@@ -405,55 +427,9 @@ export function RouteEditorScreen() {
     );
   }, [routeId, deleteRoute, nav]);
 
-  // ── Map handlers
-  const onMapLongPress = useCallback(async (e: any) => {
-    if (!dualEditActive) return;
-    const c = e?.geometry?.coordinates;
-    if (!Array.isArray(c) || c.length < 2) return;
-    const lng = c[0];
-    const lat = c[1];
-    setSelectedViaId(null);
-    await useRouteEditStore.getState().addVia({ lng, lat });
-  }, [dualEditActive]);
-
-  // Debounced via drag re-fit. Cleanup on unmount to avoid timer leak.
-  const dragDebounceRef = useRef<{ [viaId: string]: any }>({});
-  useEffect(() => {
-    return () => {
-      for (const k of Object.keys(dragDebounceRef.current)) {
-        clearTimeout(dragDebounceRef.current[k]);
-      }
-      dragDebounceRef.current = {};
-    };
-  }, []);
-  const onViaDragEnd = useCallback((viaId: string, lng: number, lat: number) => {
-    if (dragDebounceRef.current[viaId]) clearTimeout(dragDebounceRef.current[viaId]);
-    dragDebounceRef.current[viaId] = setTimeout(() => {
-      useRouteEditStore.getState().moveVia(viaId, { lng, lat });
-      delete dragDebounceRef.current[viaId];
-    }, 400);
-  }, []);
-
-  const onTapVia = useCallback((viaId: string) => {
-    setSelectedViaId(prev => {
-      if (prev === viaId) {
-        // Second tap on already-selected → confirm delete
-        Alert.alert(
-          'Remove detour point?',
-          'The route will be recomputed.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Remove', style: 'destructive', onPress: () => {
-              useRouteEditStore.getState().removeVia(viaId);
-              setSelectedViaId(null);
-            } },
-          ],
-        );
-        return prev;
-      }
-      return viaId;
-    });
-  }, []);
+  // v245: detour-point system removed. All edit gestures go through the
+  // BrushOverlay (gesture-handler PanGesture) when activeTool ∈ {brush,
+  // eraser}. Long-press on the map is a no-op.
 
   // ── Render
   const isEditing = editMode && dualEditActive;
@@ -481,7 +457,10 @@ export function RouteEditorScreen() {
             attributionEnabled={false}
             scaleBarEnabled={false}
             compassEnabled={false}
-            onLongPress={onMapLongPress}
+            scrollEnabled={!isEditing || editActiveTool === 'pan'}
+            zoomEnabled={!isEditing || editActiveTool === 'pan'}
+            pitchEnabled={!isEditing || editActiveTool === 'pan'}
+            rotateEnabled={!isEditing || editActiveTool === 'pan'}
           >
             {CameraComponent && (() => {
               // Camera mount priority — never fall back to Mapbox global default.
@@ -544,7 +523,7 @@ export function RouteEditorScreen() {
               </ShapeSource>
             )}
 
-            {/* Edit mode: dual line + via dots */}
+            {/* Edit mode: dual line + brush strokes */}
             {isEditing && (
               <>
                 <DualLineLayer
@@ -554,23 +533,21 @@ export function RouteEditorScreen() {
                     {
                       startIdx: 0,
                       endIdx: Math.max(0, renderPoints.length - 1),
-                      source: editViaPoints.length > 0 ? 'mapbox' : 'original',
-                      isEdited: editViaPoints.length > 0
+                      source: editBrushStrokes.length > 0 ? 'mapbox' : 'original',
+                      isEdited: editBrushStrokes.length > 0
                         || editTrimStartFrac > 0 || editTrimEndFrac < 1,
                       confidence: 'confident',
                     },
                   ]}
                   showOriginal={
-                    editViaPoints.length > 0 ||
+                    editBrushStrokes.length > 0 ||
                     editTrimStartFrac > 0 ||
                     editTrimEndFrac < 1
                   }
                 />
-                <ViaPointLayer
-                  vias={editViaPoints}
-                  selectedViaId={selectedViaId}
-                  onTapVia={onTapVia}
-                  onDragEnd={onViaDragEnd}
+                <BrushStrokeLayer
+                  strokes={editBrushStrokes}
+                  distanceFromOriginalM={distanceFromOriginal}
                 />
               </>
             )}
@@ -599,7 +576,14 @@ export function RouteEditorScreen() {
 
       {/* Edit overlay (above map, captures bottom only) */}
       {isEditing ? (
-        <EditOverlayV236 onCancel={handleCancelEdit} onSave={handleSave} />
+        <>
+          {/* Brush gesture capture — only intercepts when brush/eraser tool active */}
+          <BrushOverlay mapViewRef={mapViewRef} />
+          {/* Top-right tool selector */}
+          <EditTopToolbar activeTool={editActiveTool} onToolChange={setEditActiveTool} />
+          {/* Bottom card */}
+          <EditOverlayV236 onCancel={handleCancelEdit} onSave={handleSave} />
+        </>
       ) : (
         <>
           {/* Bottom panel — rounded white card overlay (matches Activity detail) */}

@@ -1,14 +1,20 @@
 /**
- * useRouteEditStore — Sprint 67 v236 rewrite.
+ * useRouteEditStore — Sprint 67 v245 brush+eraser model.
  *
- * "走过的路才是路 + 范围内可微调" — implemented via:
- *   - Trim head/tail: pure client-side fraction-based slicing.
- *   - Microadjust: user drops via points (max 5); system runs Mapbox Map
- *     Matching to snap (originalPoints + vias) onto road centerlines.
- *   - 1km corridor: vias outside 1km of original GPS trace are rejected
- *     synchronously (no API spend).
+ * Edit semantics:
+ *   - Trim head/tail: pure client-side fraction-based slicing (kept).
+ *   - Brush mode: user draws polylines on the map. Each stroke must
+ *     start AND end within 50m of the original GPS trace. Strokes are
+ *     stored as raw lat/lng polylines, painted client-side, color by
+ *     point's distance to original (< 400 sage, 400-500 amber, >= 500
+ *     red). Eraser tool can clip points off any stroke.
+ *   - Save validates: every stroke endpoints on original, no red points,
+ *     no stroke-arc overlaps. On pass: send each stroke to Mapbox Map
+ *     Matching, splice snapped output into the original at the stroke's
+ *     [arcStart, arcEnd] range.
+ *   - Undo: every stroke create / erase / trim drag pushes a snapshot.
  *
- * Replaces the v229–v235 envelope/junction-dot architecture.
+ * Replaces the v229–v244 envelope/junction-dot + detour-point models.
  */
 
 import { create } from 'zustand';
@@ -16,8 +22,9 @@ import type { LngLat } from '../services/routing/corridor/PolylineSampler';
 import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
 import { PointCloudIndex } from '../services/routing/corridor/PointCloudIndex';
 import { isPointInCorridor } from '../services/routing/corridor/CorridorQuery';
-import type { ViaPoint } from '../services/routing/mapmatch/types';
-import { runMapMatching, RunMatchResult, clearMatchCache } from '../services/routing/mapmatch/runMapMatching';
+import { runMapMatching, clearMatchCache } from '../services/routing/mapmatch/runMapMatching';
+import type { MatchSegment } from '../services/routing/mapmatch/types';
+import { matchSegment } from '../services/routing/mapmatch/MapMatchingClient';
 import { saveExtras, loadExtras, EditSegment } from '../services/LocalRouteExtras';
 import { migrateRouteIfNeeded, MigrationResult } from '../services/LegacyRouteMigrator';
 import { saveSession, clearSession, onSaveSessionFailure } from '../services/EditSessionPersistence';
@@ -32,48 +39,54 @@ import {
   logMigratorFailure,
 } from '../services/routing/editAnalytics';
 
-const MAX_VIAS = 5;
+const MAX_STROKES = 8;
 const CORRIDOR_RADIUS_M = 500;
+const ENDPOINT_SNAP_M = 50;
 const TRIM_MIN_FRACTION = 0.05;
+
+export type EditTool = 'pan' | 'brush' | 'eraser';
+
+export interface BrushStroke {
+  id: string;
+  points: LngLat[];
+}
+
+interface UndoEntry {
+  brushStrokes: BrushStroke[];
+  trimStartFrac: number;
+  trimEndFrac: number;
+  matchedPoints: LngLat[];
+}
 
 interface EditState {
   // Identity
   sessionId: string | null;
   routeId: string | null;
   isOpen: boolean;
-  /** Monotonic counter — bumped by every state mutation. */
   editOpSeq: number;
 
   // Geometry
-  /** Immutable original GPS trace. */
   originalPoints: LngLat[];
-  /** Latest Map Matching result over (originalPoints, viaPoints). */
+  /** Latest computed matched polyline (= originalPoints when no edits committed). */
   matchedPoints: LngLat[];
-  /** Working = matchedPoints sliced by [trimStartFrac, trimEndFrac]. */
+  /** Working = matchedPoints sliced by trim. */
   workingPoints: LngLat[];
 
   // Edit intent
-  viaPoints: ViaPoint[];
+  brushStrokes: BrushStroke[];
   trimStartFrac: number;
   trimEndFrac: number;
+  activeTool: EditTool;
 
-  // v243: undo history. Each entry is a snapshot of (viaPoints, trim
-  // fractions, matchedPoints) BEFORE a mutating action. Cap = 20.
-  undoStack: Array<{
-    viaPoints: ViaPoint[];
-    trimStartFrac: number;
-    trimEndFrac: number;
-    matchedPoints: LngLat[];
-  }>;
+  undoStack: UndoEntry[];
 
-  // Computed-from-original spatial index for corridor checks.
   walkedIndex: PointCloudIndex | null;
 
-  // UI feedback
+  // UI
   isComputing: boolean;
   lastError: string | null;
   lastWarning: string | null;
-  lastWarningKind: 'persistence' | 'matching' | null;
+  validationErrors: string[];
 
   enteredAtTs: number | null;
   editCount: number;
@@ -87,29 +100,32 @@ interface EditState {
   retryMigration(): Promise<void>;
   skipMigration(): void;
 
-  /** Add a via at this map coordinate. Rejects if outside 1km corridor or cap reached. */
-  addVia(coord: LngLat): Promise<{ ok: boolean; reason?: string }>;
-  /** Move an existing via to a new coordinate. Same corridor check. */
-  moveVia(viaId: string, coord: LngLat): Promise<{ ok: boolean; reason?: string }>;
-  /** Remove a via by id. */
-  removeVia(viaId: string): Promise<void>;
+  setActiveTool(tool: EditTool): void;
 
-  /** Set trim start fraction in [0..1]. Pure client-side. */
+  /** Begin a new stroke (call on gesture begin). Returns id, or null if disallowed. */
+  beginStroke(firstPoint: LngLat): string | null;
+  /** Append a point to the in-progress stroke. */
+  appendStrokePoint(strokeId: string, point: LngLat): void;
+  /** Finish stroke (call on gesture end). */
+  endStroke(strokeId: string): void;
+
+  /** Erase any stroke point within radius of `coord`. */
+  eraseAt(coord: LngLat, radiusM?: number): void;
+
+  /** Discard a whole stroke. */
+  removeStroke(strokeId: string): void;
+
+  /** Trim slider actions. */
   setTrimStart(frac: number): void;
   setTrimEnd(frac: number): void;
-  /** v244: push current trim state onto undo stack BEFORE a drag begins. */
   beginTrimDrag(): void;
-  /** Clear all vias + reset trim to full route. */
+
   resetEdits(): void;
 
-  /** Undo last edit (via add/move/remove or trim). No-op if stack empty. */
   undo(): void;
-  /** True when there is at least one undoable action. */
   canUndo(): boolean;
 
-  /** Public setter for lastError (UI dismiss). */
   setLastError(error: string | null): void;
-  /** UI-detach without cancel — preserves AsyncStorage session for resume. */
   detachUI(): void;
 
   saveAndExit(): Promise<{ ok: boolean; error?: string; sessionReplaced?: boolean }>;
@@ -122,7 +138,7 @@ interface BeginEditArgs {
   routeUpdatedAt?: number;
   resumeFrom?: {
     workingPoints: LngLat[];
-    viaPoints: ViaPoint[];
+    brushStrokes?: BrushStroke[];
     trimStartFrac: number;
     trimEndFrac: number;
     enteredAt: number;
@@ -133,82 +149,8 @@ function genSessionId(): string {
   return `es_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function genViaId(): string {
-  return `via_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-}
-
-/**
- * Slice a polyline by arc-length fractions. trimStartFrac=0 trimEndFrac=1
- * returns the original polyline. Otherwise it interpolates the boundary
- * points so endpoints land exactly at the requested fractions.
- */
-export function applyTrimFraction(
-  poly: LngLat[],
-  startFrac: number,
-  endFrac: number,
-): LngLat[] {
-  if (poly.length < 2) return [...poly];
-  const sf = Math.max(0, Math.min(1, startFrac));
-  const ef = Math.max(0, Math.min(1, endFrac));
-  if (sf >= ef) return [poly[0], poly[0]]; // degenerate but safe
-
-  const totalLen = polylineLengthM(poly);
-  if (totalLen < 1e-6) return [...poly];
-
-  const targetStart = sf * totalLen;
-  const targetEnd = ef * totalLen;
-
-  // Walk arc lengths
-  let acc = 0;
-  const out: LngLat[] = [];
-  let started = false;
-  let stopped = false;
-
-  for (let i = 1; i < poly.length; i++) {
-    if (stopped) break;
-    const a = poly[i - 1];
-    const b = poly[i];
-    const segLen = haversineMetersLocal(a, b);
-    const segStartArc = acc;
-    const segEndArc = acc + segLen;
-
-    // Have we passed the start cut?
-    if (!started) {
-      if (segEndArc >= targetStart) {
-        // Interpolate start point on this segment.
-        const t = segLen > 0 ? (targetStart - segStartArc) / segLen : 0;
-        out.push(lerpLocal(a, b, t));
-        started = true;
-        // If end is also in this same segment, push end and stop.
-        if (segEndArc >= targetEnd) {
-          const tEnd = segLen > 0 ? (targetEnd - segStartArc) / segLen : 0;
-          out.push(lerpLocal(a, b, tEnd));
-          stopped = true;
-          break;
-        }
-        // else fall through to push b at end of this loop iteration.
-      } else {
-        acc = segEndArc;
-        continue;
-      }
-    }
-
-    // Started — push b, possibly clipped at target end.
-    if (segEndArc >= targetEnd) {
-      const t = segLen > 0 ? (targetEnd - segStartArc) / segLen : 0;
-      out.push(lerpLocal(a, b, t));
-      stopped = true;
-      break;
-    } else {
-      out.push(b);
-    }
-    acc = segEndArc;
-  }
-  if (out.length < 2) {
-    // Defensive — should not happen unless polyline is degenerate.
-    return [poly[0], poly[poly.length - 1]];
-  }
-  return out;
+function genStrokeId(): string {
+  return `st_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
 function haversineMetersLocal(a: LngLat, b: LngLat): number {
@@ -229,7 +171,62 @@ function lerpLocal(a: LngLat, b: LngLat, t: number): LngLat {
   return { lng: a.lng + (b.lng - a.lng) * tt, lat: a.lat + (b.lat - a.lat) * tt };
 }
 
-/** Module-level FIFO chain for EditSessionPersistence writes. */
+/** Slice polyline by arc-length fractions in [0..1]. */
+export function applyTrimFraction(
+  poly: LngLat[],
+  startFrac: number,
+  endFrac: number,
+): LngLat[] {
+  if (poly.length < 2) return [...poly];
+  const sf = Math.max(0, Math.min(1, startFrac));
+  const ef = Math.max(0, Math.min(1, endFrac));
+  if (sf >= ef) return [poly[0], poly[0]];
+  const totalLen = polylineLengthM(poly);
+  if (totalLen < 1e-6) return [...poly];
+  const targetStart = sf * totalLen;
+  const targetEnd = ef * totalLen;
+
+  let acc = 0;
+  const out: LngLat[] = [];
+  let started = false;
+  let stopped = false;
+  for (let i = 1; i < poly.length; i++) {
+    if (stopped) break;
+    const a = poly[i - 1];
+    const b = poly[i];
+    const segLen = haversineMetersLocal(a, b);
+    const segStartArc = acc;
+    const segEndArc = acc + segLen;
+    if (!started) {
+      if (segEndArc >= targetStart) {
+        const t = segLen > 0 ? (targetStart - segStartArc) / segLen : 0;
+        out.push(lerpLocal(a, b, t));
+        started = true;
+        if (segEndArc >= targetEnd) {
+          const tEnd = segLen > 0 ? (targetEnd - segStartArc) / segLen : 0;
+          out.push(lerpLocal(a, b, tEnd));
+          stopped = true;
+          break;
+        }
+      } else {
+        acc = segEndArc;
+        continue;
+      }
+    }
+    if (segEndArc >= targetEnd) {
+      const t = segLen > 0 ? (targetEnd - segStartArc) / segLen : 0;
+      out.push(lerpLocal(a, b, t));
+      stopped = true;
+      break;
+    } else {
+      out.push(b);
+    }
+    acc = segEndArc;
+  }
+  if (out.length < 2) return [poly[0], poly[poly.length - 1]];
+  return out;
+}
+
 let sessionWriteChain: Promise<void> = Promise.resolve();
 export function chainSessionWrite(fn: () => Promise<void>): Promise<void> {
   const next = sessionWriteChain.then(() => fn().catch(() => {}));
@@ -242,148 +239,29 @@ export function isSessionRecentlyCancelled(sessionId: string): boolean {
   return recentlyCancelledSessions.has(sessionId);
 }
 
-/** Build the working slice from latest matched + trim fractions. */
 function deriveWorking(matched: LngLat[], startFrac: number, endFrac: number): LngLat[] {
   if (matched.length < 2) return matched;
   return applyTrimFraction(matched, startFrac, endFrac);
 }
 
-/** Build the corridor index from immutable original GPS trace. */
 function buildWalkedIndex(originalPoints: LngLat[]): PointCloudIndex {
-  const indexedPoints = originalPoints.map((p, i) => ({
-    lng: p.lng,
-    lat: p.lat,
-    source: 'original' as const,
-    refId: `original:${i}`,
-  }));
-  return new PointCloudIndex(indexedPoints);
+  return new PointCloudIndex(
+    originalPoints.map((p, i) => ({
+      lng: p.lng,
+      lat: p.lat,
+      source: 'original' as const,
+      refId: `original:${i}`,
+    })),
+  );
 }
 
-/**
- * Run Map Matching with the latest (originalPoints, viaPoints) and update
- * matchedPoints + workingPoints. Returns {ok} indicating whether matched
- * was updated (matchedPoints stays at prior value on failure).
- *
- * Caller should set isComputing=true before; this fn unsets it.
- *
- * Shape sanity check: when there are NO vias, the matched output should
- * stay close to originalPoints (Map Matching is a snap-to-roads, not a
- * re-route). If max-distance from any matched point to its nearest
- * original point exceeds SHAPE_SANITY_M, we reject the match — Mapbox
- * has snapped to a "wrong" road. This enforces "走过的路才是路" as a
- * client-side guarantee, not pure trust in Mapbox confidence.
- *
- * When the user has placed vias, we don't enforce this — they're
- * explicitly asking for a re-route.
- */
-const SHAPE_SANITY_M = 200;
-
-function maxNearestDistanceM(matched: LngLat[], original: LngLat[]): number {
-  if (matched.length === 0 || original.length === 0) return 0;
-  let worst = 0;
-  for (const p of matched) {
-    let best = Infinity;
-    for (const q of original) {
-      const d = haversineMetersLocal(p, q);
-      if (d < best) best = d;
-      if (best === 0) break;
-    }
-    if (best > worst) worst = best;
-  }
-  return worst;
-}
-
-async function runAndApplyMatching(
-  set: (partial: Partial<EditState> | ((s: EditState) => Partial<EditState>)) => void,
-  get: () => EditState,
-  startSessionId: string | null,
-  startOpSeq: number,
-): Promise<{ ok: boolean; result: RunMatchResult }> {
-  const state = get();
-  const result = await runMapMatching({
-    originalPoints: state.originalPoints,
-    viaPoints: state.viaPoints,
-  });
-
-  // Fence: did anything mutate during await?
-  const live = get();
-  if (live.sessionId !== startSessionId || live.editOpSeq !== startOpSeq) {
-    set({ isComputing: false });
-    return { ok: false, result };
-  }
-
-  if (!result.ok) {
-    let userMsg: string | null = null;
-    let kind: 'matching' | null = 'matching';
-    switch (result.reason) {
-      case 'no-match':
-        userMsg = "Couldn't snap to a road here";
-        break;
-      case 'timeout':
-      case 'network':
-        userMsg = 'Slow network — please retry';
-        break;
-      case 'auth':
-        userMsg = 'Map service auth failed — trim only';
-        break;
-      case 'rate-limit':
-        userMsg = 'Too many edits — please wait a moment';
-        break;
-      case 'too-long':
-        userMsg = 'Route too long — trim only';
-        break;
-      case 'invalid-input':
-      default:
-        userMsg = 'Invalid route data';
-    }
-    set(s => ({
-      isComputing: false,
-      lastWarning: userMsg,
-      lastWarningKind: kind,
-      editOpSeq: s.editOpSeq + 1,
-    }));
-    return { ok: false, result };
-  }
-
-  // Shape-similarity gate (only when there are no vias — vias signal an
-  // explicit re-route intent, so divergence is expected there).
-  const newMatched = result.matchedPoints;
-  if (live.viaPoints.length === 0) {
-    const drift = maxNearestDistanceM(newMatched, live.originalPoints);
-    if (drift > SHAPE_SANITY_M) {
-      set(s => ({
-        isComputing: false,
-        lastWarning: "Couldn't improve this stretch — keeping your original trace",
-        lastWarningKind: 'matching',
-        editOpSeq: s.editOpSeq + 1,
-      }));
-      return { ok: false, result };
-    }
-  }
-
-  set(s => ({
-    matchedPoints: newMatched,
-    workingPoints: deriveWorking(newMatched, s.trimStartFrac, s.trimEndFrac),
-    isComputing: false,
-    lastWarning:
-      s.lastWarningKind === 'persistence' ? s.lastWarning : null,
-    lastWarningKind: s.lastWarningKind === 'persistence' ? 'persistence' : null,
-    editOpSeq: s.editOpSeq + 1,
-  }));
-  return { ok: true, result };
-}
-
-/** Persist the current edit state into the session record. */
 function persistSession(state: EditState, expectedSessionId?: string): void {
   if (!state.routeId || !state.sessionId) return;
-  // Fence: caller may pass a session id captured before an await; bail
-  // if the live session has changed (avoid resurrecting a stale record).
   if (expectedSessionId && state.sessionId !== expectedSessionId) return;
   const sid = state.sessionId;
   const rid = state.routeId;
   const enteredAt = state.enteredAtTs ?? Date.now();
   const working = state.workingPoints;
-  const vias = state.viaPoints;
   const ts = state.trimStartFrac;
   const te = state.trimEndFrac;
   chainSessionWrite(() =>
@@ -396,8 +274,8 @@ function persistSession(state: EditState, expectedSessionId?: string): void {
         {
           startIdx: 0,
           endIdx: Math.max(0, working.length - 1),
-          source: 'mixed',
-          isEdited: vias.length > 0 || ts > 0 || te < 1,
+          source: state.brushStrokes.length > 0 ? 'mapbox' : 'original',
+          isEdited: state.brushStrokes.length > 0 || ts > 0 || te < 1,
           confidence: 'confident',
         },
       ],
@@ -405,11 +283,158 @@ function persistSession(state: EditState, expectedSessionId?: string): void {
         editCorridorRadiusMeters: CORRIDOR_RADIUS_M,
         midpointDragEnabled: false,
       },
-      viaPoints: vias.map(v => ({ id: v.id, lng: v.lng, lat: v.lat })),
       trimStartFrac: ts,
       trimEndFrac: te,
     }),
   ).catch(() => {});
+}
+
+/** For a coord, return distance to nearest originalPoints sample. */
+function distanceToOriginalM(
+  coord: LngLat,
+  walkedIndex: PointCloudIndex | null,
+): number {
+  if (!walkedIndex) return Infinity;
+  const nearest = walkedIndex.nearest(coord.lng, coord.lat, 1);
+  if (nearest.length === 0) return Infinity;
+  const np = walkedIndex.get(nearest[0]);
+  if (!np) return Infinity;
+  return haversineMetersLocal(coord, { lng: np.lng, lat: np.lat });
+}
+
+/** For a coord, find the originalPoints index whose point is closest. */
+function nearestOriginalIdx(
+  coord: LngLat,
+  originalPoints: LngLat[],
+): { idx: number; distM: number } {
+  let best = -1;
+  let bestD = Infinity;
+  for (let i = 0; i < originalPoints.length; i++) {
+    const d = haversineMetersLocal(coord, originalPoints[i]);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return { idx: best, distM: bestD };
+}
+
+/** Cumulative arc-length on originalPoints. */
+function cumulativeArc(coords: LngLat[]): number[] {
+  const arc = new Array(coords.length).fill(0);
+  for (let i = 1; i < coords.length; i++) {
+    arc[i] = arc[i - 1] + haversineMetersLocal(coords[i - 1], coords[i]);
+  }
+  return arc;
+}
+
+/**
+ * Validate brush strokes:
+ *   - each stroke endpoints within ENDPOINT_SNAP_M of originalPoints
+ *   - no stroke point >= CORRIDOR_RADIUS_M (i.e. red segments)
+ *   - stroke arc-ranges on originalPoints don't overlap
+ * Returns array of error strings (empty when valid).
+ */
+export interface ValidatedStroke {
+  stroke: BrushStroke;
+  arcStart: number;
+  arcEnd: number;
+}
+export function validateStrokes(
+  strokes: BrushStroke[],
+  originalPoints: LngLat[],
+  walkedIndex: PointCloudIndex | null,
+): { ok: boolean; errors: string[]; validated: ValidatedStroke[] } {
+  const errors: string[] = [];
+  const validated: ValidatedStroke[] = [];
+  if (originalPoints.length < 2 || !walkedIndex) {
+    return { ok: false, errors: ['Original route data missing.'], validated: [] };
+  }
+  const arc = cumulativeArc(originalPoints);
+  let strokeNum = 0;
+  for (const s of strokes) {
+    strokeNum++;
+    if (s.points.length < 2) continue; // skip empty stroke silently
+
+    // Endpoint check.
+    const startD = distanceToOriginalM(s.points[0], walkedIndex);
+    const endD = distanceToOriginalM(s.points[s.points.length - 1], walkedIndex);
+    if (startD > ENDPOINT_SNAP_M) {
+      errors.push(`Brush ${strokeNum}: start is not on the route — connect or erase.`);
+      continue;
+    }
+    if (endD > ENDPOINT_SNAP_M) {
+      errors.push(`Brush ${strokeNum}: end is not on the route — connect or erase.`);
+      continue;
+    }
+
+    // Red point check.
+    let hasRed = false;
+    for (const p of s.points) {
+      const d = distanceToOriginalM(p, walkedIndex);
+      if (d >= CORRIDOR_RADIUS_M) { hasRed = true; break; }
+    }
+    if (hasRed) {
+      errors.push(`Brush ${strokeNum}: parts are beyond 500m — erase the red sections.`);
+      continue;
+    }
+
+    // arc-range on original.
+    const a = nearestOriginalIdx(s.points[0], originalPoints);
+    const b = nearestOriginalIdx(s.points[s.points.length - 1], originalPoints);
+    const arcA = Math.min(arc[a.idx], arc[b.idx]);
+    const arcB = Math.max(arc[a.idx], arc[b.idx]);
+    validated.push({ stroke: s, arcStart: arcA, arcEnd: arcB });
+  }
+  // Overlap check.
+  validated.sort((a, b) => a.arcStart - b.arcStart);
+  for (let i = 1; i < validated.length; i++) {
+    if (validated[i].arcStart < validated[i - 1].arcEnd) {
+      errors.push('Two brush strokes overlap on the route — erase one.');
+      break;
+    }
+  }
+  return { ok: errors.length === 0, errors, validated };
+}
+
+/**
+ * Splice snapped polyline back into originalPoints over [arcStart, arcEnd].
+ */
+function spliceMatched(
+  originalPoints: LngLat[],
+  validated: ValidatedStroke[],
+  snappedPerStroke: LngLat[][],
+): LngLat[] {
+  if (validated.length === 0) return [...originalPoints];
+  const arc = cumulativeArc(originalPoints);
+  const sorted = validated
+    .map((v, i) => ({ v, snapped: snappedPerStroke[i] }))
+    .sort((a, b) => a.v.arcStart - b.v.arcStart);
+
+  const out: LngLat[] = [];
+  let cursor = 0;
+  let i = 0;
+  while (i < sorted.length) {
+    const { v, snapped } = sorted[i];
+    // Push originalPoints from cursor up to (but not including) arcStart.
+    while (cursor < originalPoints.length && arc[cursor] < v.arcStart) {
+      out.push(originalPoints[cursor]);
+      cursor++;
+    }
+    // Append snapped polyline.
+    for (const p of snapped) out.push(p);
+    // Skip originalPoints inside the window.
+    while (cursor < originalPoints.length && arc[cursor] <= v.arcEnd) {
+      cursor++;
+    }
+    i++;
+  }
+  // Tail.
+  while (cursor < originalPoints.length) {
+    out.push(originalPoints[cursor]);
+    cursor++;
+  }
+  return out;
 }
 
 export const useRouteEditStore = create<EditState>((set, get) => ({
@@ -420,15 +445,16 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   originalPoints: [],
   matchedPoints: [],
   workingPoints: [],
-  viaPoints: [],
+  brushStrokes: [],
   trimStartFrac: 0,
   trimEndFrac: 1,
+  activeTool: 'pan',
   undoStack: [],
   walkedIndex: null,
   isComputing: false,
   lastError: null,
   lastWarning: null,
-  lastWarningKind: null,
+  validationErrors: [],
   enteredAtTs: null,
   editCount: 0,
   lastSaveAttemptFailed: false,
@@ -443,16 +469,10 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       set({ lastError: 'Edit mode is disabled' });
       return;
     }
-
     const { routeId, routePoints, routeUpdatedAt, resumeFrom } = args;
-
-    // Fence: capture editOpSeq before any await. If state mutates during
-    // the migration / load awaits, abort cleanly without resurrecting a
-    // stale editor session.
     const initialOpSeq = get().editOpSeq;
     const fenceCheck = () => get().editOpSeq !== initialOpSeq;
 
-    // Step 1: load extras (or migrate legacy).
     let extras = await loadExtras(routeId);
     if (fenceCheck()) return;
     let isLegacy = false;
@@ -483,8 +503,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       return;
     }
 
-    // Step 2: pick base geometry. Prefer extras.workingPoints when fresher;
-    // otherwise routePoints (legacy edits via useRouteStore).
     const fresherFromExtras =
       typeof routeUpdatedAt === 'number' &&
       typeof extras.updatedAt === 'number' &&
@@ -498,19 +516,12 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
 
     const sessionId = genSessionId();
     const enteredAtTs = resumeFrom?.enteredAt ?? t0;
-
-    // v244: clear the Map Matching cache so a fresh edit session doesn't
-    // get a stale match from a prior session.
     clearMatchCache();
 
-    // Step 3: derive initial state.
     const originalPoints: LngLat[] = extras.originalPoints;
-    const initialVias: ViaPoint[] = resumeFrom
-      ? resumeFrom.viaPoints
-      : (extras.viaPoints ?? []).map(v => ({ id: v.id, lng: v.lng, lat: v.lat }));
+    const initialStrokes: BrushStroke[] = resumeFrom?.brushStrokes ?? [];
     const initialTrimStart = resumeFrom?.trimStartFrac ?? extras.trimStartFrac ?? 0;
     const initialTrimEnd = resumeFrom?.trimEndFrac ?? extras.trimEndFrac ?? 1;
-
     const walkedIndex = buildWalkedIndex(originalPoints);
 
     set(s => ({
@@ -521,15 +532,16 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       originalPoints,
       matchedPoints: [...baseGeometry],
       workingPoints: deriveWorking([...baseGeometry], initialTrimStart, initialTrimEnd),
-      viaPoints: initialVias,
+      brushStrokes: initialStrokes,
       trimStartFrac: initialTrimStart,
       trimEndFrac: initialTrimEnd,
+      activeTool: 'pan',
       undoStack: [],
       walkedIndex,
       isComputing: false,
       lastError: null,
       lastWarning: null,
-      lastWarningKind: null,
+      validationErrors: [],
       enteredAtTs,
       editCount: 0,
       lastSaveAttemptFailed: false,
@@ -538,10 +550,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       pendingBeginArgs: null,
     }));
 
-    // v244: NO warm-up Map Matching. Entry shows the user the EXACT same
-    // polyline they saw on the activity detail screen — no road snapping,
-    // no jaggedness change, no virtual "original" dashed backdrop. Map
-    // Matching runs only when the user adds a via point.
     persistSession(get(), sessionId);
 
     logEditEntered({
@@ -570,116 +578,133 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     chainSessionWrite(() => clearSession()).catch(() => {});
   },
 
-  async addVia(coord) {
-    const state = get();
-    if (state.isSaving) {
-      set({ lastError: 'Save in progress — please wait.' });
-      return { ok: false, reason: 'busy' };
-    }
-    if (state.isComputing) {
-      set({ lastError: 'Computing previous edit — please wait' });
-      return { ok: false, reason: 'computing' };
-    }
-    if (state.viaPoints.length >= MAX_VIAS) {
-      set({ lastError: `Max ${MAX_VIAS} detour points reached` });
-      return { ok: false, reason: 'max-vias' };
-    }
-    if (!state.walkedIndex) {
-      return { ok: false, reason: 'no-index' };
-    }
-    const inCorridor = isPointInCorridor(coord.lng, coord.lat, state.walkedIndex, CORRIDOR_RADIUS_M);
-    if (!inCorridor.inCorridor) {
-      set({ lastError: 'Outside the 500m adjust radius' });
-      return { ok: false, reason: 'out-of-corridor' };
-    }
-    const newVia: ViaPoint = { id: genViaId(), lng: coord.lng, lat: coord.lat };
-    set(s => ({
-      // v243: push current snapshot onto undo stack BEFORE mutating
-      undoStack: [...s.undoStack, {
-        viaPoints: s.viaPoints,
-        trimStartFrac: s.trimStartFrac,
-        trimEndFrac: s.trimEndFrac,
-        matchedPoints: s.matchedPoints,
-      }].slice(-20),
-      viaPoints: [...s.viaPoints, newVia],
-      editOpSeq: s.editOpSeq + 1,
-      isComputing: true,
-      lastError: null,
-      editCount: s.editCount + 1,
-    }));
-    const startSeq = get().editOpSeq;
-    const startSid = get().sessionId;
-    const r = await runAndApplyMatching(set, get, startSid, startSeq);
-    persistSession(get(), startSid ?? undefined);
-    return { ok: r.ok };
+  setActiveTool(tool) {
+    set(s => ({ activeTool: tool, editOpSeq: s.editOpSeq + 1 }));
   },
 
-  async moveVia(viaId, coord) {
+  beginStroke(firstPoint) {
     const state = get();
-    if (state.isSaving) {
-      set({ lastError: 'Save in progress — please wait.' });
-      return { ok: false, reason: 'busy' };
+    if (state.isSaving) return null;
+    if (state.brushStrokes.length >= MAX_STROKES) {
+      set({ lastError: `Max ${MAX_STROKES} brush strokes reached` });
+      return null;
     }
-    if (state.isComputing) {
-      set({ lastError: 'Computing previous edit — please wait' });
-      return { ok: false, reason: 'computing' };
+    // Endpoint check at start of stroke — must be within 50m of original.
+    const d = distanceToOriginalM(firstPoint, state.walkedIndex);
+    if (d > ENDPOINT_SNAP_M) {
+      set({ lastError: 'Brush must start on the route' });
+      return null;
     }
-    if (!state.walkedIndex) return { ok: false, reason: 'no-index' };
-    const inCorridor = isPointInCorridor(coord.lng, coord.lat, state.walkedIndex, CORRIDOR_RADIUS_M);
-    if (!inCorridor.inCorridor) {
-      set({ lastError: 'Outside the 500m adjust radius' });
-      return { ok: false, reason: 'out-of-corridor' };
-    }
-    const idx = state.viaPoints.findIndex(v => v.id === viaId);
-    if (idx < 0) return { ok: false, reason: 'not-found' };
-    const newVias = [...state.viaPoints];
-    newVias[idx] = { ...newVias[idx], lng: coord.lng, lat: coord.lat };
+    const id = genStrokeId();
     set(s => ({
       undoStack: [...s.undoStack, {
-        viaPoints: s.viaPoints,
+        brushStrokes: s.brushStrokes,
         trimStartFrac: s.trimStartFrac,
         trimEndFrac: s.trimEndFrac,
         matchedPoints: s.matchedPoints,
       }].slice(-20),
-      viaPoints: newVias,
+      brushStrokes: [...s.brushStrokes, { id, points: [firstPoint] }],
       editOpSeq: s.editOpSeq + 1,
-      isComputing: true,
       lastError: null,
-      editCount: s.editCount + 1,
     }));
-    const startSeq = get().editOpSeq;
-    const startSid = get().sessionId;
-    const r = await runAndApplyMatching(set, get, startSid, startSeq);
-    persistSession(get(), startSid ?? undefined);
-    return { ok: r.ok };
+    return id;
   },
 
-  async removeVia(viaId) {
+  appendStrokePoint(strokeId, point) {
+    set(s => {
+      const idx = s.brushStrokes.findIndex(st => st.id === strokeId);
+      if (idx < 0) return s;
+      const stroke = s.brushStrokes[idx];
+      const last = stroke.points[stroke.points.length - 1];
+      // Skip points too close to the last (downsample to ~5m).
+      if (last && haversineMetersLocal(last, point) < 5) return s;
+      const updated = { ...stroke, points: [...stroke.points, point] };
+      const newStrokes = [...s.brushStrokes];
+      newStrokes[idx] = updated;
+      return { ...s, brushStrokes: newStrokes, editOpSeq: s.editOpSeq + 1 };
+    });
+  },
+
+  endStroke(strokeId) {
+    // Re-validate end point. If end is off-route, the stroke is kept
+    // but will surface a validation error on Save.
+    set(s => ({ ...s, editCount: s.editCount + 1, editOpSeq: s.editOpSeq + 1 }));
+    persistSession(get(), get().sessionId ?? undefined);
+  },
+
+  eraseAt(coord, radiusM = 25) {
     const state = get();
-    if (state.isSaving) {
-      set({ lastError: 'Save in progress — please wait.' });
-      return;
+    if (state.isSaving) return;
+    let mutated = false;
+    // v245-blocker-fix: when erase removes a middle point, split the
+    // stroke into multiple sub-strokes (each contiguous run of kept
+    // points becomes its own stroke). Without this, a U-shaped stroke
+    // whose bottom is erased becomes one polyline with a teleport gap.
+    const newStrokes: BrushStroke[] = [];
+    for (const s of state.brushStrokes) {
+      // Walk points; build runs where each point passes the radius gate.
+      const runs: LngLat[][] = [];
+      let current: LngLat[] = [];
+      for (const p of s.points) {
+        const d = haversineMetersLocal(coord, p);
+        if (d > radiusM) {
+          current.push(p);
+        } else {
+          mutated = true;
+          if (current.length > 0) {
+            runs.push(current);
+            current = [];
+          }
+        }
+      }
+      if (current.length > 0) runs.push(current);
+
+      if (runs.length === 1 && runs[0].length === s.points.length) {
+        // No erase touched this stroke — keep id stable.
+        newStrokes.push(s);
+        continue;
+      }
+      // Emit each run >= 2 points as its own stroke; drop runs < 2.
+      for (const run of runs) {
+        if (run.length >= 2) {
+          newStrokes.push({ id: genStrokeId(), points: run });
+        } else if (run.length === 1) {
+          mutated = true;
+        }
+      }
     }
-    if (state.isComputing) return;
-    const newVias = state.viaPoints.filter(v => v.id !== viaId);
-    if (newVias.length === state.viaPoints.length) return;
-    set(s => ({
-      undoStack: [...s.undoStack, {
-        viaPoints: s.viaPoints,
-        trimStartFrac: s.trimStartFrac,
-        trimEndFrac: s.trimEndFrac,
-        matchedPoints: s.matchedPoints,
+    if (!mutated) return;
+    set(prev => ({
+      undoStack: [...prev.undoStack, {
+        brushStrokes: prev.brushStrokes,
+        trimStartFrac: prev.trimStartFrac,
+        trimEndFrac: prev.trimEndFrac,
+        matchedPoints: prev.matchedPoints,
       }].slice(-20),
-      viaPoints: newVias,
-      editOpSeq: s.editOpSeq + 1,
-      isComputing: true,
-      lastError: null,
-      editCount: s.editCount + 1,
+      brushStrokes: newStrokes,
+      editOpSeq: prev.editOpSeq + 1,
+      editCount: prev.editCount + 1,
     }));
-    const startSeq = get().editOpSeq;
-    const startSid = get().sessionId;
-    await runAndApplyMatching(set, get, startSid, startSeq);
-    persistSession(get(), startSid ?? undefined);
+    persistSession(get(), get().sessionId ?? undefined);
+  },
+
+  removeStroke(strokeId) {
+    const state = get();
+    if (state.isSaving) return;
+    const exists = state.brushStrokes.some(s => s.id === strokeId);
+    if (!exists) return;
+    set(prev => ({
+      undoStack: [...prev.undoStack, {
+        brushStrokes: prev.brushStrokes,
+        trimStartFrac: prev.trimStartFrac,
+        trimEndFrac: prev.trimEndFrac,
+        matchedPoints: prev.matchedPoints,
+      }].slice(-20),
+      brushStrokes: prev.brushStrokes.filter(s => s.id !== strokeId),
+      editOpSeq: prev.editOpSeq + 1,
+      editCount: prev.editCount + 1,
+    }));
+    persistSession(get(), get().sessionId ?? undefined);
   },
 
   beginTrimDrag() {
@@ -687,7 +712,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     if (state.isSaving || state.isComputing) return;
     set(s => ({
       undoStack: [...s.undoStack, {
-        viaPoints: s.viaPoints,
+        brushStrokes: s.brushStrokes,
         trimStartFrac: s.trimStartFrac,
         trimEndFrac: s.trimEndFrac,
         matchedPoints: s.matchedPoints,
@@ -703,7 +728,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     }
     const startSid = state.sessionId ?? undefined;
     let nf = Math.max(0, Math.min(1, frac));
-    // Enforce minimum 5% remaining route.
     if (state.trimEndFrac - nf < TRIM_MIN_FRACTION) {
       nf = Math.max(0, state.trimEndFrac - TRIM_MIN_FRACTION);
     }
@@ -749,22 +773,22 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     if (state.isComputing) return;
     set(s => ({
       undoStack: [...s.undoStack, {
-        viaPoints: s.viaPoints,
+        brushStrokes: s.brushStrokes,
         trimStartFrac: s.trimStartFrac,
         trimEndFrac: s.trimEndFrac,
         matchedPoints: s.matchedPoints,
       }].slice(-20),
-      viaPoints: [],
+      brushStrokes: [],
       trimStartFrac: 0,
       trimEndFrac: 1,
-      isComputing: true,
+      matchedPoints: [...s.originalPoints],
+      workingPoints: [...s.originalPoints],
+      validationErrors: [],
       editOpSeq: s.editOpSeq + 1,
       editCount: s.editCount + 1,
       lastError: null,
     }));
-    const startSeq = get().editOpSeq;
-    const startSid = get().sessionId ?? undefined;
-    runAndApplyMatching(set, get, startSid ?? null, startSeq).then(() => persistSession(get(), startSid));
+    persistSession(get(), get().sessionId ?? undefined);
   },
 
   canUndo() {
@@ -787,17 +811,17 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const newStack = stack.slice(0, -1);
     set(s => ({
       undoStack: newStack,
-      viaPoints: last.viaPoints,
+      brushStrokes: last.brushStrokes,
       trimStartFrac: last.trimStartFrac,
       trimEndFrac: last.trimEndFrac,
       matchedPoints: last.matchedPoints,
       workingPoints: deriveWorking(last.matchedPoints, last.trimStartFrac, last.trimEndFrac),
+      validationErrors: [],
       editOpSeq: s.editOpSeq + 1,
       editCount: s.editCount + 1,
       lastError: null,
     }));
-    const startSid = get().sessionId ?? undefined;
-    persistSession(get(), startSid);
+    persistSession(get(), get().sessionId ?? undefined);
   },
 
   setLastError(error) {
@@ -808,11 +832,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const state = get();
     if (!state.isOpen) return;
     if (state.isSaving) return;
-    // v240 — user explicitly does NOT want resume-on-relaunch. Treat
-    // unmount-without-explicit-save as a discard: clear the AsyncStorage
-    // session so EditResumePrompt never fires for this work. Old design
-    // (preserve session for resume) caused users to see a "Discard?"
-    // alert every time the OS reclaimed memory.
     const cancelledId = state.sessionId;
     set(s => ({
       isOpen: false,
@@ -835,38 +854,81 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const state = get();
     if (!state.routeId) return { ok: false, error: 'no-route-id' };
     if (state.isSaving) return { ok: false, error: 'busy — save already in progress' };
-    if (state.isComputing) return { ok: false, error: 'busy — matching in progress, retry shortly' };
-    if (state.workingPoints.length < 2) {
-      return { ok: false, error: 'Route is too short — at least 2 points required.' };
-    }
-    if (polylineLengthM(state.workingPoints) < 1) {
-      return { ok: false, error: 'Route is too short — please trim less or reset.' };
-    }
 
+    // Validate brush strokes.
+    const v = validateStrokes(state.brushStrokes, state.originalPoints, state.walkedIndex);
+    if (!v.ok) {
+      set({ validationErrors: v.errors, lastError: v.errors[0] ?? 'Invalid brush strokes.' });
+      return { ok: false, error: v.errors[0] ?? 'invalid-brushes' };
+    }
+    set({ validationErrors: [] });
+
+    // Run Mapbox snap on each stroke.
     const writeRouteId = state.routeId;
     const writeSessionId = state.sessionId;
     const writeOriginal = state.originalPoints;
-    const writeWorking = state.workingPoints;
-    const writeVias = state.viaPoints;
     const writeTs = state.trimStartFrac;
     const writeTe = state.trimEndFrac;
-    set({ lastSaveAttemptFailed: false, isSaving: true });
+    set({ isSaving: true, isComputing: true, lastSaveAttemptFailed: false });
+
+    let snappedPerStroke: LngLat[][] = [];
+    for (const vs of v.validated) {
+      const pts = vs.stroke.points;
+      const target = 96;
+      const sampled: LngLat[] = [];
+      if (pts.length <= target) {
+        sampled.push(...pts);
+      } else {
+        for (let k = 0; k < target; k++) {
+          const idx = Math.round((k * (pts.length - 1)) / (target - 1));
+          sampled.push(pts[idx]);
+        }
+      }
+      const radiuses: (number | null)[] = sampled.map(() => 25);
+      const seg: MatchSegment = { coords: sampled, radiuses, viaIndicesInCoords: [] };
+      // v245-critical-fix: per-stroke try/catch so one network throw
+      // doesn't kill remaining strokes. Fallback to raw drawing.
+      try {
+        const r = await matchSegment(seg);
+        if (!r.ok) {
+          snappedPerStroke.push(pts.slice());
+        } else {
+          snappedPerStroke.push(r.matchedPoints);
+        }
+      } catch {
+        snappedPerStroke.push(pts.slice());
+      }
+    }
+
+    const newMatched = spliceMatched(writeOriginal, v.validated, snappedPerStroke);
+    const newWorking = deriveWorking(newMatched, writeTs, writeTe);
+
+    if (newWorking.length < 2 || polylineLengthM(newWorking) < 1) {
+      set({ isSaving: false, isComputing: false, lastError: 'Route is too short to save.' });
+      return { ok: false, error: 'too-short' };
+    }
+
+    set(s => ({
+      matchedPoints: newMatched,
+      workingPoints: newWorking,
+      isComputing: false,
+      editOpSeq: s.editOpSeq + 1,
+    }));
 
     let result;
     try {
       result = await saveExtras({
         routeId: writeRouteId,
         originalPoints: writeOriginal,
-        workingPoints: writeWorking,
-        viaPoints: writeVias.map(v => ({ id: v.id, lng: v.lng, lat: v.lat })),
+        workingPoints: newWorking,
         trimStartFrac: writeTs,
         trimEndFrac: writeTe,
         segments: [
           {
             startIdx: 0,
-            endIdx: Math.max(0, writeWorking.length - 1),
-            source: writeVias.length > 0 ? 'mapbox' : 'original',
-            isEdited: writeVias.length > 0 || writeTs > 0 || writeTe < 1,
+            endIdx: Math.max(0, newWorking.length - 1),
+            source: state.brushStrokes.length > 0 ? 'mapbox' : 'original',
+            isEdited: state.brushStrokes.length > 0 || writeTs > 0 || writeTe < 1,
             confidence: 'confident',
           },
         ],
@@ -890,13 +952,12 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       return { ok: false, error: result.error };
     }
 
-    // Session-replaced bailout.
     {
       const liveAfter = get();
       if (liveAfter.sessionId !== writeSessionId) {
         logEditSave({
           totalEdits: state.editCount,
-          finalLengthM: polylineLengthM(writeWorking),
+          finalLengthM: polylineLengthM(newWorking),
           originalLengthM: polylineLengthM(writeOriginal),
           segmentCount: 1,
         });
@@ -914,7 +975,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
 
     logEditSave({
       totalEdits: state.editCount,
-      finalLengthM: polylineLengthM(writeWorking),
+      finalLengthM: polylineLengthM(newWorking),
       originalLengthM: polylineLengthM(writeOriginal),
       segmentCount: 1,
     });
@@ -953,14 +1014,9 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     if (state.sessionId) {
       const cancelledId = state.sessionId;
       recentlyCancelledSessions.add(cancelledId);
-      // 30s leak guard — even if the chained promise never resolves
-      // (AsyncStorage hang), drop the entry so the Set doesn't grow.
-      setTimeout(() => recentlyCancelledSessions.delete(cancelledId), 30_000);
       chainSessionWrite(() => clearSession())
         .catch(() => {})
-        .finally(() => {
-          recentlyCancelledSessions.delete(cancelledId);
-        });
+        .finally(() => recentlyCancelledSessions.delete(cancelledId));
     } else {
       chainSessionWrite(() => clearSession()).catch(() => {});
     }
@@ -980,15 +1036,16 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       originalPoints: [],
       matchedPoints: [],
       workingPoints: [],
-      viaPoints: [],
+      brushStrokes: [],
       trimStartFrac: 0,
       trimEndFrac: 1,
+      activeTool: 'pan',
       undoStack: [],
       walkedIndex: null,
       isComputing: false,
       lastError: null,
       lastWarning: null,
-      lastWarningKind: null,
+      validationErrors: [],
       enteredAtTs: null,
       editCount: 0,
       lastSaveAttemptFailed: false,
@@ -999,7 +1056,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   },
 }));
 
-// Subscribe to persistence failure → surface as warning banner.
+// Persistence-failure subscription.
 declare const globalThis: { __cairnSaveFailureSubscribed?: boolean } & typeof global;
 if (!globalThis.__cairnSaveFailureSubscribed) {
   globalThis.__cairnSaveFailureSubscribed = true;
@@ -1010,12 +1067,22 @@ if (!globalThis.__cairnSaveFailureSubscribed) {
       useRouteEditStore.setState({
         lastWarning:
           'Unable to save edit progress in the background. Please save your edits soon to avoid losing them.',
-        lastWarningKind: 'persistence',
       });
     } else if (count === 0) {
-      if (state.lastWarningKind === 'persistence') {
-        useRouteEditStore.setState({ lastWarning: null, lastWarningKind: null });
+      const live = useRouteEditStore.getState();
+      if (live.lastWarning?.startsWith('Unable to save')) {
+        useRouteEditStore.setState({ lastWarning: null });
       }
     }
   });
 }
+
+/** Helper exported for color-by-distance rendering. */
+export function distanceFromOriginalM(coord: LngLat, walkedIndex: PointCloudIndex | null): number {
+  return distanceToOriginalM(coord, walkedIndex);
+}
+export const BRUSH_RADII = {
+  CORRIDOR_RADIUS_M,
+  ENDPOINT_SNAP_M,
+  WARN_RADIUS_M: 400,
+};
