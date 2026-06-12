@@ -40,11 +40,9 @@ import {
 } from '../services/routing/editAnalytics';
 
 const MAX_STROKES = 8;
-// v253: PO confirmed product principle: "走过的路才是路, 但允许 200m 内
-// 微调到熟悉的旁路". corridor 收紧到 200m, warn 160m. 严格门: snap
-// 不上 100% 确认就 fallback 原 GPS (不接受 "部分 snap 部分 fallback"
-// 的拼接, 避免接缝折角).
-const CORRIDOR_RADIUS_M = 200;
+// v255: PO direction "范围改 250m". corridor expanded slightly from 200
+// to give legitimate parallel-road detours more room. WARN scales with it.
+const CORRIDOR_RADIUS_M = 250;
 const ENDPOINT_SNAP_M = 50;
 const TRIM_MIN_FRACTION = 0.05;
 
@@ -395,6 +393,43 @@ function isPointAcceptableEndpoint(
   return false;
 }
 
+/**
+ * v255: Strict baseline anchor check.
+ * Returns true iff `coord` is within ENDPOINT_SNAP_M of the original
+ * matched/walked line (NOT counting other strokes).
+ *
+ * Used to break the "stroke chain drift" loophole found in v254:
+ * isPointAcceptableEndpoint accepted a point near ANY existing stroke,
+ * so two strokes drawn 100m off the route could mutually validate each
+ * other and form a 267m straight diagonal across buildings (PO route
+ * "1" / snap121). Rule: every stroke must have at LEAST ONE endpoint
+ * anchored to the baseline. The other endpoint may attach to another
+ * stroke (so eraser-split + chained continuation still works), but
+ * the chain cannot fully detach from the original line.
+ */
+function isPointOnBaseline(
+  coord: LngLat,
+  walkedIndex: PointCloudIndex | null,
+): boolean {
+  return distanceToOriginalM(coord, walkedIndex) <= ENDPOINT_SNAP_M;
+}
+
+/**
+ * v255: Stroke must anchor to baseline at one end. Returns true iff
+ * EITHER endpoint of `stroke` lies within ENDPOINT_SNAP_M of the
+ * baseline (walkedIndex). The other endpoint can be anywhere
+ * acceptable (baseline OR another stroke).
+ */
+function strokeAnchorsToBaseline(
+  stroke: BrushStroke,
+  walkedIndex: PointCloudIndex | null,
+): boolean {
+  if (stroke.points.length < 2) return false;
+  const first = stroke.points[0];
+  const last = stroke.points[stroke.points.length - 1];
+  return isPointOnBaseline(first, walkedIndex) || isPointOnBaseline(last, walkedIndex);
+}
+
 /** For a coord, find the originalPoints index whose point is closest. */
 function nearestOriginalIdx(
   coord: LngLat,
@@ -674,6 +709,13 @@ export function validateStrokes(
     }
     if (!endOk) {
       errors.push(`Brush ${strokeNum}: end is not on the route or an existing stroke — connect or erase.`);
+      continue;
+    }
+    // v255: anti chain-drift. At least ONE endpoint must be on the
+    // baseline directly (not via another stroke). Prevents the multi-
+    // stroke drift loophole that produced PO route "1"'s 267m diagonal.
+    if (!strokeAnchorsToBaseline(s, walkedIndex)) {
+      errors.push(`Brush ${strokeNum}: one end must be on the route — too far from baseline.`);
       continue;
     }
 
@@ -1151,6 +1193,9 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       previewIsCurrent: false,
       editOpSeq: s.editOpSeq + 1,
       lastError: null,
+      // v255: clear sticky warning from a prior Preview so a fresh
+      // stroke doesn't appear to have triggered an old toast.
+      lastWarning: null,
     }));
     return id;
   },
@@ -1211,6 +1256,33 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       setTimeout(() => {
         const live = get();
         if (live.lastError === 'End on the route or an existing brush stroke') {
+          set({ lastError: null });
+        }
+      }, 2500);
+      persistSession(get(), get().sessionId ?? undefined);
+      return;
+    }
+
+    // v255: anti chain-drift. Stroke must anchor to baseline at LEAST
+    // one end. Without this, two strokes drawn 100m off-route mutually
+    // validate each other and form a long diagonal across buildings
+    // (PO route "1" 267m straight line). The check uses the strict
+    // baseline distance — `isPointAcceptableEndpoint` is too permissive
+    // for this purpose because it accepts other-stroke proximity.
+    const firstPt = stroke.points[0];
+    const anchorsToBaseline = isPointOnBaseline(firstPt, state.walkedIndex)
+      || isPointOnBaseline(lastPt, state.walkedIndex);
+    if (!anchorsToBaseline) {
+      set(s => ({
+        ...s,
+        brushStrokes: otherStrokes,
+        activeStrokeId: null,
+        editOpSeq: s.editOpSeq + 1,
+        lastError: 'One end must be on the route — chain drifted too far',
+      }));
+      setTimeout(() => {
+        const live = get();
+        if (live.lastError === 'One end must be on the route — chain drifted too far') {
           set({ lastError: null });
         }
       }, 2500);
@@ -1384,6 +1456,25 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       return;
     }
     if (state.isComputing) return;
+    // v255 fix: previously resetEdits only reset matchedPoints/working/
+    // strokes/trim but LEFT walkedIndex pointing at the previously-
+    // committed (post-edit) line, AND left hasCommittedEdit/strokeSnapCache/
+    // lastWarning untouched. Result: after Reset, isPointAcceptableEndpoint
+    // still accepted points near the old committed (e.g. building-cutting)
+    // line because walkedIndex hadn't been rebuilt from originalPoints.
+    // PO snap122: "我 reset 了 随便画了一条 开头没在线上 他也认可了
+    // 我估计 reset 的只是界面 底层没 reset". Confirmed.
+    const newWalkedIndex = state.originalPoints.length >= 2
+      ? new PointCloudIndex(
+          state.originalPoints.map((p, i) => ({
+            lng: p.lng,
+            lat: p.lat,
+            source: 'original' as const,
+            refId: `original:${i}`,
+          })),
+        )
+      : state.walkedIndex;
+    clearStrokeSnapCache();
     set(s => ({
       undoStack: [...s.undoStack, {
         brushStrokes: s.brushStrokes,
@@ -1399,6 +1490,10 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       previewMatchedPoints: null,
       previewIsCurrent: true,
       validationErrors: [],
+      walkedIndex: newWalkedIndex,
+      hasCommittedEdit: false,
+      activeStrokeId: null,
+      lastWarning: null,
       editOpSeq: s.editOpSeq + 1,
       editCount: s.editCount + 1,
       lastError: null,
@@ -1508,13 +1603,10 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const startSeq = get().editOpSeq;
 
     const snappedPerStroke: LngLat[][] = [];
-    let anySnapFallback = false; // v251: track Mapbox failures
-    let anyStrokeRejected = false; // v253.1: track fully-rejected strokes
-    const acceptedValidated: ValidatedStroke[] = []; // strokes whose snap is trusted
+    let anyLowConfidence = false; // v255: warn-only, not reject
+    const acceptedValidated: ValidatedStroke[] = [];
     for (const vs of v.validated) {
       const pts = vs.stroke.points;
-      // v247: per-stroke content-hash cache. If this stroke's fingerprint
-      // hit the cache, reuse the prior snap result — no Mapbox call.
       const fp = strokeFingerprint(vs.stroke);
       const cached = strokeSnapCache.get(fp);
       if (cached) {
@@ -1522,11 +1614,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         acceptedValidated.push(vs);
         continue;
       }
-      // v247: RDP simplify (epsilon 3m) preserves curve shape better
-      // than uniform-stride downsample, and reduces sample noise.
       let simplified = rdpSimplify(pts, 3);
-      // Mapbox cap = 100; we leave headroom by capping to 96 via
-      // uniform-stride after RDP if still too long.
       const target = 96;
       const sampled: LngLat[] = [];
       if (simplified.length <= target) {
@@ -1537,53 +1625,56 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           sampled.push(simplified[idx]);
         }
       }
-      // v252: tighten Mapbox match radius from 25m to 12m. PO real-device
-      // observed: a "drifty" stroke had its middle snap to a parallel
-      // road 8-15m away (the "凸出来的点 / 岔路" artifact). Mapbox map-
-      // matching picks the *most likely* road within radius, so a wider
-      // radius lets it choose any road within that ring. 12m keeps the
-      // snap on the road the user actually meant. Endpoints (first/last
-      // sampled point) get a tighter 6m so the join with original GPS
-      // doesn't drift onto a side street.
+      // v252: tight radius — middle 12m, endpoints 6m. Keeps Mapbox
+      // from drifting to parallel roads.
       const radiuses: (number | null)[] = sampled.map((_, k) =>
         (k === 0 || k === sampled.length - 1) ? 6 : 12,
       );
       const seg: MatchSegment = { coords: sampled, radiuses, viaIndicesInCoords: [] };
-      // v253.1 重要决策: 如果 Mapbox NoMatch 或质量门拒收 → 这一笔
-      // 完整 REJECT (不进 commit, baseline 那段不变). 之前 fallback
-      // 用 Catmull-Rom 平滑原笔, 但原笔可能本身就穿建筑 — 那对应
-      // 用户画了一条"不合理"的笔, 我们应该忽略它. 用户原话:"沿用
-      // GPS 点 这样 2 个重合在一个路线里" — 沿用 = 用原 route 的
-      // 那段 originalPoints, NOT 用户当前的笔. 拒收 = baseline 不变.
+      // v255 PO direction: 尊重用户画的路, Mapbox 不可信只警告不拒绝.
+      // - Mapbox NoMatch / network error → use Catmull-Rom-smoothed raw
+      //   brush as the snap (user's drawing is the source of truth).
+      // - Mapbox returns but quality drifts (snap doesn't follow brush)
+      //   → use raw brush smoothed; warn.
+      // - Mapbox returns clean → use snap.
+      // The key change vs v254: we ALWAYS produce a snap (raw or mapbox),
+      // never reject the stroke at this stage. The chain-drift / red-zone
+      // checks earlier in validateStrokes are the only hard gates left.
+      let snapped: LngLat[];
+      let lowConfidence = false;
       try {
         const r = await matchSegment(seg);
         if (!r.ok) {
-          // NoMatch / network: 这笔完全 reject.
-          anyStrokeRejected = true;
-          anySnapFallback = true;
-          continue; // 不 push 到 snappedPerStroke / acceptedValidated
+          snapped = smoothCatmullRom(pts);
+          lowConfidence = true;
+        } else {
+          const stats = snapDisplacementStats(r.matchedPoints, pts, 20);
+          if (stats.fracBad > 0.1 || stats.maxDispM > 40) {
+            // Mapbox said it matched, but it drifted — trust user's
+            // brush over Mapbox's road guess. Warn the user.
+            snapped = smoothCatmullRom(pts);
+            lowConfidence = true;
+          } else if ((r.confidence ?? 1) < 0.5) {
+            // Mapbox returned a snap but at low self-reported confidence.
+            // Keep the snap (it might be a tiny offset alley) but warn.
+            snapped = r.matchedPoints;
+            lowConfidence = true;
+          } else {
+            snapped = r.matchedPoints;
+          }
         }
-        // 质量门
-        const stats = snapDisplacementStats(r.matchedPoints, pts, 20);
-        if (stats.fracBad > 0.1 || stats.maxDispM > 40) {
-          // snap 漂得太远 (穿建筑/平行路) → reject.
-          anyStrokeRejected = true;
-          anySnapFallback = true;
-          continue;
-        }
-        const snapped = r.matchedPoints;
-        strokeSnapCache.set(fp, snapped);
-        if (strokeSnapCache.size > 100) {
-          const firstKey = strokeSnapCache.keys().next().value;
-          if (firstKey) strokeSnapCache.delete(firstKey);
-        }
-        snappedPerStroke.push(snapped);
-        acceptedValidated.push(vs);
       } catch {
-        anyStrokeRejected = true;
-        anySnapFallback = true;
-        continue;
+        snapped = smoothCatmullRom(pts);
+        lowConfidence = true;
       }
+      if (lowConfidence) anyLowConfidence = true;
+      strokeSnapCache.set(fp, snapped);
+      if (strokeSnapCache.size > 100) {
+        const firstKey = strokeSnapCache.keys().next().value;
+        if (firstKey) strokeSnapCache.delete(firstKey);
+      }
+      snappedPerStroke.push(snapped);
+      acceptedValidated.push(vs);
     }
 
     // Fence: bail if state was mutated during await.
@@ -1616,10 +1707,9 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     set(s => ({
       // v251: COMMIT — drop strokes, preview-buffer.
       brushStrokes: [],
-      // v251: only clear undoStack on a clean snap. If any stroke fell
-      // back to raw points (Mapbox flake), preserve undo so the user
-      // can recover. Push a warning so they know it's not road-snapped.
-      undoStack: anySnapFallback ? s.undoStack : [],
+      // v255: any low-confidence stroke kept its raw drawing instead of
+      // a clean Mapbox snap — preserve undo so user can revert.
+      undoStack: anyLowConfidence ? s.undoStack : [],
       activeStrokeId: null,
       hasCommittedEdit: true,
       previewMatchedPoints: null,
@@ -1628,9 +1718,9 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       workingPoints: deriveWorking(newMatched, s.trimStartFrac, s.trimEndFrac),
       walkedIndex: newWalkedIndex,
       isComputing: false,
-      lastWarning: anyStrokeRejected
-        ? 'Some strokes were ignored — no clear road match. The original route is kept for those sections.'
-        : s.lastWarning,
+      lastWarning: anyLowConfidence
+        ? 'Some strokes had low road confidence — your drawing was kept. Review and undo if needed.'
+        : null,
       editOpSeq: s.editOpSeq + 1,
     }));
     return { ok: true };
@@ -1919,5 +2009,5 @@ export function distanceFromOriginalM(coord: LngLat, walkedIndex: PointCloudInde
 export const BRUSH_RADII = {
   CORRIDOR_RADIUS_M,
   ENDPOINT_SNAP_M,
-  WARN_RADIUS_M: 160,
+  WARN_RADIUS_M: 200,
 };

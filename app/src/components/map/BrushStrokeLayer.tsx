@@ -313,8 +313,8 @@ export function BrushStrokeLayer({
   strokes,
   distanceFromOriginalM,
   endpointSnapM = 50,
-  warnRadiusM = 160,
-  corridorRadiusM = 200,
+  warnRadiusM = 200,
+  corridorRadiusM = 250,
   hidden = false,
 }: Props): React.JSX.Element | null {
   const built = useMemo(

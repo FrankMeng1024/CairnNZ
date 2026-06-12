@@ -530,7 +530,16 @@ export function RouteEditorScreen() {
     : [];
   const nameValid = name.trim().length > 0;
   const hasGeometryToSave = renderPoints.length >= 2;
-  const canSaveView = nameValid && hasGeometryToSave && !saving;
+  // v255: PO direction "进入 routes detail 没改不要让 save 灰掉".
+  // Save is enabled whenever name is non-empty (PO option a — renaming
+  // alone is a valid save reason). We do NOT gate on hasGeometryToSave
+  // here because existingRoute.points may be lazy-loaded at mount time
+  // (RouteStore lists return points=[], loadRouteDetail fills it
+  // async). If the user taps Save before geometry arrives, handleViewSave
+  // surfaces an alert. Disabled state only reflects "name empty" or
+  // "save in flight", matching PO's expectation that Save should not
+  // appear locked when nothing seems wrong.
+  const canSaveView = nameValid && !saving;
 
   // v251: stable segments + showOriginal so DualLineLayer (now memoed)
   // doesn't re-render on every appendStrokePoint frame. Deps avoid the

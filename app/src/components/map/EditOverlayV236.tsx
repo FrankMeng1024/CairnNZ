@@ -60,17 +60,9 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
           near the top of the map (pointerEvents=none, can't block draw).
           Showing the same error twice was confusing + the dismissible
           X let users get rid of context they should keep seeing. */}
-      {lastWarning && !lastError && (
-        <View
-          style={[styles.bannerContainer, { top: insets.top + 64 }]}
-          pointerEvents="none"
-        >
-          <View style={[styles.banner, styles.warningBanner]}>
-            <Icon name="TriangleAlert" size={14} color={Colors.severityCaution} strokeWidth={2} />
-            <Text style={styles.bannerText} numberOfLines={2}>{lastWarning}</Text>
-          </View>
-        </View>
-      )}
+      {/* v255: top warning banner removed. All error/warning text now
+          appears in the bottom statusRow as a single coloured pill,
+          per PO request "下面有提示的地方 那么所有报错在下方". */}
 
       {/* Bottom card — rounded white panel, matches view-mode bottomPanel */}
       <KeyboardAvoidingView
@@ -126,15 +118,32 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
             </TouchableOpacity>
           </View>
 
-          {/* Status pill — N/8 brush strokes + computing indicator.
-              v253 fix: do NOT echo validation errors here — they are
-              already shown by BrushOverlay's top pill, and rendering
-              them in this row squeezes the Undo/Reset icon buttons. */}
+          {/* v255: status pill is now a 4-state slot:
+              - isComputing → spinner + "Computing…"
+              - lastError → red bg, white text (validation errors here,
+                NOT in a top banner)
+              - lastWarning → yellow bg, dark text (Mapbox snap kept raw)
+              - default → sage bg + "N/8 brush strokes"
+              All routed to one place per PO: "所有报错在下方 用红字即可". */}
           <View style={styles.statusRow}>
             {isComputing ? (
               <View style={styles.statusPill}>
                 <ActivityIndicator size="small" color={Colors.primary} />
                 <Text style={styles.statusText}>Computing…</Text>
+              </View>
+            ) : lastError ? (
+              <View style={[styles.statusPill, styles.statusPillError]}>
+                <Icon name="TriangleAlert" size={14} color={Colors.surface} strokeWidth={2} />
+                <Text style={[styles.statusText, styles.statusTextError]} numberOfLines={2}>
+                  {lastError}
+                </Text>
+              </View>
+            ) : lastWarning ? (
+              <View style={[styles.statusPill, styles.statusPillWarning]}>
+                <Icon name="TriangleAlert" size={14} color={Colors.textPrimary} strokeWidth={2} />
+                <Text style={[styles.statusText, styles.statusTextWarning]} numberOfLines={2}>
+                  {lastWarning}
+                </Text>
               </View>
             ) : (
               <View style={styles.statusPill}>
@@ -233,8 +242,17 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
             </TouchableOpacity>
           )}
 
-          {/* Action row — Save (left, primary) + Cancel (right, secondary). */}
+          {/* Action row — v255 PO global rule: Cancel (left, destructive)
+              + Save (right, positive). Prevents tap mistakes after a
+              navigation transition. */}
           <View style={styles.actionRow}>
+            <TouchableOpacity
+              onPress={onCancel}
+              style={[styles.actionBtn, styles.cancelBtn]}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
                 if (!canSave) return;
@@ -247,13 +265,6 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
               <Text style={styles.saveBtnText}>
                 {needsPreview ? 'Preview first' : 'Done'}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={onCancel}
-              style={[styles.actionBtn, styles.cancelBtn]}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -320,8 +331,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Spacing.sm,
+    gap: Spacing.sm,
   },
   statusPill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -329,6 +342,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: Radius.pill,
     backgroundColor: Colors.primaryBg,
+  },
+  // v255: error pill (red, white text) for validation errors.
+  statusPillError: {
+    backgroundColor: Colors.danger,
+  },
+  statusTextError: {
+    color: Colors.surface,
+  },
+  // v255: warning pill (caution yellow, dark text) for low-confidence
+  // Mapbox snaps. User's drawing is kept; the warning advises review.
+  statusPillWarning: {
+    backgroundColor: Colors.severityCautionBg,
+    borderWidth: 1,
+    borderColor: Colors.severityCaution,
+  },
+  statusTextWarning: {
+    color: Colors.textPrimary,
   },
   statusText: {
     fontSize: FontSize.small,

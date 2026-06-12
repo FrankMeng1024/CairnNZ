@@ -39,7 +39,6 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
   const appendStrokePoint = useRouteEditStore(s => s.appendStrokePoint);
   const endStroke = useRouteEditStore(s => s.endStroke);
   const eraseAt = useRouteEditStore(s => s.eraseAt);
-  const lastError = useRouteEditStore(s => s.lastError);
 
   const currentStrokeIdRef = useRef<string | null>(null);
   // v247: prevent double endStroke when both onEnd and onFinalize fire.
@@ -176,11 +175,8 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
           {activeTool === 'brush' ? 'Drawing — start on the route' : 'Eraser — drag over a stroke to remove'}
         </Text>
       </View>
-      {lastError && (
-        <View pointerEvents="none" style={[styles.errorHint, { top: insets.top + 96 }]}>
-          <Text style={styles.errorHintText}>{lastError}</Text>
-        </View>
-      )}
+      {/* v255: lastError pill removed from top. PO request — all error
+          / warning text now consolidated to the bottom statusRow. */}
     </View>
   );
 }
@@ -199,21 +195,6 @@ const styles = StyleSheet.create({
   modeHintText: {
     fontSize: FontSize.small,
     color: Colors.primary,
-    fontWeight: '700',
-  },
-  errorHint: {
-    position: 'absolute',
-    alignSelf: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: Colors.dangerBg,
-    borderWidth: 1,
-    borderColor: Colors.danger,
-  },
-  errorHintText: {
-    fontSize: FontSize.small,
-    color: Colors.danger,
     fontWeight: '700',
   },
 });

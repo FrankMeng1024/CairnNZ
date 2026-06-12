@@ -25,17 +25,15 @@ import type { LngLat } from '../corridor/PolylineSampler';
 import type { MatchResult, MatchSegment } from './types';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
-// v253: profile changed from /walking to /driving. Per PO product
-// principle "走过的路才是路", Mapbox snap should ONLY assist when there
-// is an obvious public road within the corridor. /walking matches to
-// pedestrian footways including hospital interiors, mall passages,
-// building paths — invisible to the user, produces "穿楼" artifacts.
-// /driving sticks strictly to motor-vehicle roads, so:
-//   - city: snaps to streets the user can see and likely meant ✓
-//   - park / pedestrian-only: NoMatch → caller falls back to raw GPS
-//   - mountain trail: NoMatch → caller falls back to raw GPS
-// This implements "200m 内允许微调到熟悉旁路, 不 100% 确认就回归原 GPS".
-const ENDPOINT_BASE = 'https://api.mapbox.com/matching/v5/mapbox/driving';
+// v255: profile reverted /driving → /walking. Cairn is a hike + run app
+// — small/visible foot trails MUST be snappable. /driving excluded
+// footway/path/pedestrian and PO reported "我按照小路画了一个地图上可
+// 以看到的 以前是可以的 现在报错" — driving NoMatch'd the obvious
+// trail. PO direction: snap to walking; if Mapbox confidence is low,
+// WARN the user but still accept the stroke. The user is the source of
+// truth ("走过的路才是路"); Mapbox is advisory. Building/hospital-corridor
+// false-snap is mitigated by the warning + user's own visual review.
+const ENDPOINT_BASE = 'https://api.mapbox.com/matching/v5/mapbox/walking';
 const TIMEOUT_MS = 8_000;
 const MAX_RETRIES = 1;
 
