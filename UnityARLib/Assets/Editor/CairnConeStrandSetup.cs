@@ -40,7 +40,10 @@ namespace Cairn.AR.Editor
             // Matches DS chiral pattern.
             var meshInner = BuildConeMesh(
                 baseRadius: 0.04f,    // very thin core trail
-                tipRadius: 0.0f,
+                tipRadius: 0.008f,    // v3.5l: leave a tiny tip cap so the
+                                      //         envelope falloff has area to
+                                      //         feather instead of collapsing
+                                      //         to a single 1-2px line.
                 height: 1.4f,
                 radialSegments: 12,
                 heightSegments: 6);
@@ -49,7 +52,7 @@ namespace Cairn.AR.Editor
 
             var meshOuter = BuildConeMesh(
                 baseRadius: 0.18f,    // outer halo
-                tipRadius: 0.0f,
+                tipRadius: 0.022f,    // v3.5l: tiny cap for tip feathering
                 height: 1.7f,
                 radialSegments: 16,
                 heightSegments: 8);

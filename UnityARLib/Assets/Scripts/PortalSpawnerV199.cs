@@ -189,7 +189,7 @@ public partial class PortalSpawner
         bool useConeStrand = globals == null || globals.GetBool("ConeStrandEnabled", true);
         if (useConeStrand)
         {
-            AttachConeStrands(v199, baseColor);
+            AttachConeStrands(v199, baseColor, data.type);
         }
         // No HeroRibbons fallback — would violate user invariant #3.
 
@@ -486,7 +486,7 @@ public partial class PortalSpawner
     /// Returns true if cone strand was successfully attached, false if assets
     /// missing or any failure (caller falls back to AttachHeroRibbons).
     /// </summary>
-    private bool AttachConeStrands(GameObject parent, Color baseColor)
+    private bool AttachConeStrands(GameObject parent, Color baseColor, string typeName = "cairn")
     {
         var globals = CairnGlobals.Instance;
         // v3.2: Nested cones — inner solid trail + outer hollow halo (Plan C).
@@ -514,21 +514,33 @@ public partial class PortalSpawner
         // v3.2 review-fix: 2 strands instead of 4 (subagent: 4 cones at 0.25m
         // radius read as a solid wall; 2 with bigger height stagger reads
         // like DS chiral silhouette pair).
-        // v3.5k: increase strand count 2→5 with per-strand height variation
-        // for DS2/Sky-CotL filament density. Per-strand width reduced 0.85→0.55
-        // so total visual mass stays manageable. Each strand now has truly
-        // independent angular jitter (i*17.31 hashing wraps every 5 strands).
+        // v3.5l: per-type strand count for shape-level type discrimination.
+        // Color alone is not enough; silhouette must also signal type.
+        //   danger   = 7 (jagged firestorm)
+        //   junction = 5 (radiant brush, balanced)
+        //   cairn    = 5 (default)
+        //   water    = 4 (calm spray)
+        //   hut      = 3 (relaxed cluster)
+        int defaultCount = 5;
+        switch ((typeName ?? "cairn").ToLowerInvariant())
+        {
+            case "danger":   defaultCount = 7; break;
+            case "junction": defaultCount = 5; break;
+            case "cairn":    defaultCount = 5; break;
+            case "water":    defaultCount = 4; break;
+            case "hut":      defaultCount = 3; break;
+        }
         int count = globals != null
-            ? Mathf.Max(1, Mathf.RoundToInt(globals.GetForType(null, "ConeStrandCount", 5f)))
-            : 5;
+            ? Mathf.Max(1, Mathf.RoundToInt(globals.GetForType(null, "ConeStrandCount", (float)defaultCount)))
+            : defaultCount;
         float radius = globals != null ? globals.GetForType(null, "ConeStrandRingRadius", 0.18f) : 0.18f;
 
         var root = new GameObject("ConeStrands");
         root.transform.SetParent(parent.transform, worldPositionStays: false);
 
-        // v3.5k: 5 strands at staggered heights (1.2m to 2.1m, Δ=22cm avg).
-        // Mix tall and short — tall ones overshoot, short ones cluster low.
-        float[] heights = new float[] { 1.2f, 1.85f, 1.45f, 2.10f, 1.65f };
+        // v3.5k/l: heights 1.2-2.10m. Loop heights[i % heights.Length] —
+        // works for any count.
+        float[] heights = new float[] { 1.2f, 1.85f, 1.45f, 2.10f, 1.65f, 1.55f, 1.95f };
         float baseLift = 0.10f;
 
         for (int i = 0; i < count; i++)
