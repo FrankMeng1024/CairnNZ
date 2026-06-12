@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.ARSubsystems;
 using System.Collections.Generic;
 
 /// <summary>
@@ -212,7 +214,60 @@ public class MultiSpawner : MonoBehaviour, ICairnSpawner
         // persisted arOrigin and current live position.
         float mxSpawnX = data.x + CairnBridge._sessionOffsetX;
         float mxSpawnZ = data.z + CairnBridge._sessionOffsetZ;
-        container.transform.position = new Vector3(mxSpawnX, groundY, mxSpawnZ);
+
+        // v0.2.3 Branch A v3-review-fix: pre-spawn ARAnchor parity with
+        // PortalSpawner. Same-session invariant: cairn must be anchor-parented
+        // before render, not deferred. Without this, MultiSpawner-spawned
+        // cairns drift within session.
+        ARAnchor mxAnchor = null;
+        var mxRaycast = (groundYResolver != null) ? groundYResolver.raycastManager
+                       : Object.FindFirstObjectByType<ARRaycastManager>();
+        var mxPlanes  = (groundYResolver != null) ? groundYResolver.planeManager
+                       : Object.FindFirstObjectByType<ARPlaneManager>();
+        var mxAnchors = Object.FindFirstObjectByType<ARAnchorManager>();
+        var mxCam = (groundYResolver != null && groundYResolver.arCamera != null)
+                   ? groundYResolver.arCamera : Camera.main;
+        if (mxAnchors != null && mxRaycast != null && mxCam != null)
+        {
+            var screenPt = mxCam.WorldToScreenPoint(new Vector3(mxSpawnX, groundY, mxSpawnZ));
+            if (screenPt.z > 0 && screenPt.x >= 0 && screenPt.x <= Screen.width &&
+                screenPt.y >= 0 && screenPt.y <= Screen.height)
+            {
+                var hits = new System.Collections.Generic.List<ARRaycastHit>();
+                bool didHit = mxRaycast.Raycast(new Vector2(screenPt.x, screenPt.y), hits,
+                    TrackableType.PlaneWithinPolygon | TrackableType.Depth);
+                if (didHit && hits.Count > 0)
+                {
+                    var hit = hits[0];
+                    bool isPlane = (hit.hitType & TrackableType.PlaneWithinPolygon) != 0;
+                    if (isPlane && mxPlanes != null)
+                    {
+                        var p = mxPlanes.GetPlane(hit.trackableId);
+                        if (p != null) mxAnchor = mxAnchors.AttachAnchor(p, hit.pose);
+                    }
+                    if (mxAnchor == null)
+                    {
+                        var go = new GameObject($"DepthAnchor_{data.id ?? "x"}");
+                        go.transform.position = hit.pose.position;
+                        go.transform.rotation = hit.pose.rotation;
+                        mxAnchor = go.AddComponent<ARAnchor>();
+                    }
+                }
+            }
+        }
+        if (mxAnchor != null)
+        {
+            container.transform.SetParent(mxAnchor.transform, worldPositionStays: false);
+            container.transform.localPosition = Vector3.zero;
+            UnityLogger.IForward("v22-ANCHOR",
+                $"id={data.id} multispawner-pre-attach=ok");
+        }
+        else
+        {
+            container.transform.position = new Vector3(mxSpawnX, groundY, mxSpawnZ);
+            UnityLogger.IForward("v22-ANCHOR",
+                $"id={data.id} multispawner-pre-attach=failed");
+        }
 
         // ─── Strand cylinder ───
         var strand = GameObject.CreatePrimitive(PrimitiveType.Cylinder);

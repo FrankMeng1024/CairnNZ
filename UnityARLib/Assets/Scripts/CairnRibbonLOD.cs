@@ -40,6 +40,17 @@ namespace Cairn.AR
         private static readonly int CamDistID  = Shader.PropertyToID("_CairnGlobalCamDist");
         private static readonly int LODBandID  = Shader.PropertyToID("_CairnGlobalLODBand");
 
+        // v3-review-fix: auto-instantiate at first scene load so distance
+        // LOD works on every device build without editor menu prerequisite.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void AutoBootstrap()
+        {
+            if (Object.FindFirstObjectByType<CairnRibbonLOD>() != null) return;
+            var go = new GameObject("CairnRibbonLOD (auto)");
+            go.AddComponent<CairnRibbonLOD>();
+            Object.DontDestroyOnLoad(go);
+        }
+
         private float _lastUpdate = -1f;
         private float _lastDist = -1f;
         private int _lastBand = -1;

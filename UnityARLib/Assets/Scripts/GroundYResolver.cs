@@ -197,8 +197,19 @@ public class GroundYResolver : MonoBehaviour
         // refuse the query rather than return a fictional value.
         if (arCamera == null) { y = 0f; tier = Tier.C; return false; }
         float camY = arCamera.transform.position.y;
-        const float HEIGHT_OFFSET_MIN = 0.8f;          // plane must be ≥ 0.8m below camera
-        const float MIN_FLOOR_AREA_M2 = 1.5f;           // when classification is unknown
+
+        // v3-review-fix: adaptive height gate. Standing user (camY ~1.4m)
+        // needs 0.8m gate to reject tabletops. Crouching user (camY ~0.7m)
+        // would have all real-floor planes rejected by 0.8m gate. Solution:
+        // scale gate with camera height — never reject more than 60% of the
+        // distance camera-to-ground that the user actually has available.
+        // Floor: gate = min(0.8m, camY * 0.6m).
+        //   Standing (camY=1.4m): gate=0.8m (rejects tables ~0.4m below cam)
+        //   Crouching (camY=0.7m): gate=0.42m (still rejects 0.3m-below tables)
+        //   Phone-flat-on-table (camY≈table+0.1m): gate=tiny → no gate effect
+        //     but A7 phone-flat protection in Update() prevents spawn anyway.
+        float HEIGHT_OFFSET_MIN = Mathf.Min(0.8f, Mathf.Max(0.2f, camY * 0.6f));
+        const float MIN_FLOOR_AREA_M2 = 1.5f;
 
         // Tier A — PlaneClassification.Floor preferred, height + area gates.
         if (planeManager != null)

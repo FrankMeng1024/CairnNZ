@@ -540,12 +540,31 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
                 bool didHit = arRaycast.Raycast(
                     new Vector2(screenPt.x, screenPt.y), anchorHits,
                     TrackableType.PlaneWithinPolygon | TrackableType.Depth);
-                if (didHit && anchorHits.Count > 0 && arPlanes != null)
+                if (didHit && anchorHits.Count > 0)
                 {
-                    var plane = arPlanes.GetPlane(anchorHits[0].trackableId);
-                    if (plane != null)
+                    var hit = anchorHits[0];
+                    // v3-review-fix: Depth hits (LiDAR / iOS 14+ Depth API)
+                    // are NOT plane-backed — arPlanes.GetPlane(hit.trackableId)
+                    // returns null. Use AddAnchor(pose) directly for those.
+                    bool isPlaneBacked = (hit.hitType & TrackableType.PlaneWithinPolygon) != 0;
+                    if (isPlaneBacked && arPlanes != null)
                     {
-                        anchorOnSpawn = arAnchors.AttachAnchor(plane, anchorHits[0].pose);
+                        var plane = arPlanes.GetPlane(hit.trackableId);
+                        if (plane != null)
+                        {
+                            anchorOnSpawn = arAnchors.AttachAnchor(plane, hit.pose);
+                        }
+                    }
+                    if (anchorOnSpawn == null)
+                    {
+                        // Free-floating anchor at hit pose (Depth hit / no plane).
+                        // ARFoundation 6: synchronous AddAnchor exists via
+                        // GameObject + ARAnchor component as fallback when
+                        // plane-attached path doesn't apply.
+                        var anchorGo = new GameObject($"DepthAnchor_{data.id ?? "x"}");
+                        anchorGo.transform.position = hit.pose.position;
+                        anchorGo.transform.rotation = hit.pose.rotation;
+                        anchorOnSpawn = anchorGo.AddComponent<ARAnchor>();
                     }
                 }
             }

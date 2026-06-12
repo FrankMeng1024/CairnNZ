@@ -185,12 +185,15 @@ public partial class PortalSpawner
         // Gated by OTA `ConeStrandEnabled` (default true). Legacy
         // AttachHeroRibbons retained as opt-out fallback for emergency
         // rollback (set ConeStrandEnabled=false via OTA).
+        // v3-review-fix: if cone strand assets missing (Setup menu not run
+        // yet), fall through to HeroRibbons rather than rendering nothing.
         bool useConeStrand = globals == null || globals.GetBool("ConeStrandEnabled", true);
+        bool coneStrandAttached = false;
         if (useConeStrand)
         {
-            AttachConeStrands(v199, baseColor);
+            coneStrandAttached = AttachConeStrands(v199, baseColor);
         }
-        else if (globals == null || globals.GetBool("HeroRibbonEnabled", true))
+        if (!coneStrandAttached && (globals == null || globals.GetBool("HeroRibbonEnabled", true)))
         {
             AttachHeroRibbons(v199);
         }
@@ -485,35 +488,31 @@ public partial class PortalSpawner
     /// <summary>
     /// v0.2.3 Branch C — cone-strand attachment (Plan E-prime).
     ///
-    /// Spawns N cone meshes (default 4) arranged in a tight ring around the
-    /// cairn pebble stack. Each cone uses CairnConeCore shader (additive
-    /// emissive); when daylight is detected by CairnDayNightAdapter, an
-    /// outline pass (CairnConeOutline alpha-blend dark rim) makes them
-    /// readable on bright NZ sky / morning haze background.
-    ///
-    /// Per-cone phase offset (uPhase) prevents synchronised flicker; sum of
-    /// 4-5 thin strands creates the "DNA helix" Genshin-style braid effect.
+    /// Returns true if cone strand was successfully attached, false if assets
+    /// missing or any failure (caller falls back to AttachHeroRibbons).
     /// </summary>
-    private void AttachConeStrands(GameObject parent, Color baseColor)
+    private bool AttachConeStrands(GameObject parent, Color baseColor)
     {
         var globals = CairnGlobals.Instance;
-        // Lazy-load shared mesh + materials (created by CairnConeStrandSetup).
-        // If not yet authored, log once and bail — caller (parent code) will
-        // fall through to legacy AttachHeroRibbons via OTA flag flip if user
-        // chooses to roll back.
-        var coneMesh = Resources.Load<Mesh>("Meshes/cairn_cone_strand")
-                     ?? UnityEditor_LoadAssetSafe<Mesh>("Assets/Meshes/cairn_cone_strand.asset");
-        var coreMat  = Resources.Load<Material>("Materials/CairnConeCore")
-                     ?? UnityEditor_LoadAssetSafe<Material>("Assets/Materials/CairnConeCore.mat");
-        var outMat   = Resources.Load<Material>("Materials/CairnConeOutline")
-                     ?? UnityEditor_LoadAssetSafe<Material>("Assets/Materials/CairnConeOutline.mat");
+        // Lazy-load shared mesh + materials (created by CairnConeStrandSetup
+        // and stored under Assets/Resources/ for runtime device load).
+        var coneMesh = Resources.Load<Mesh>("Meshes/cairn_cone_strand");
+        var coreMat  = Resources.Load<Material>("Materials/CairnConeCore");
+        var outMat   = Resources.Load<Material>("Materials/CairnConeOutline");
+#if UNITY_EDITOR
+        // Editor-only fallback: if menu hasn't been run yet, try direct path.
+        if (coneMesh == null) coneMesh = UnityEditor_LoadAssetSafe<Mesh>("Assets/Resources/Meshes/cairn_cone_strand.asset");
+        if (coreMat == null)  coreMat  = UnityEditor_LoadAssetSafe<Material>("Assets/Resources/Materials/CairnConeCore.mat");
+        if (outMat == null)   outMat   = UnityEditor_LoadAssetSafe<Material>("Assets/Resources/Materials/CairnConeOutline.mat");
+#endif
 
         if (coneMesh == null || coreMat == null)
         {
             UnityLogger.W("V199",
                 "AttachConeStrands: cone-strand assets missing — run menu " +
-                "'Cairn → Branch C → Setup Cone Strand Assets' in Unity Editor.");
-            return;
+                "'Cairn → Branch C → Setup Cone Strand Assets' in Unity Editor. " +
+                "Falling back to HeroRibbons.");
+            return false;
         }
 
         int count = globals != null
@@ -563,6 +562,7 @@ public partial class PortalSpawner
 
         UnityLogger.IForward("V199",
             $"AttachConeStrands count={count} radius={radius:F2}");
+        return true;
     }
 
     /// <summary>Editor-time asset load helper that no-ops at runtime.</summary>

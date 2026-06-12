@@ -242,6 +242,12 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   const linkMarker = useTrackingStore(s => s.linkMarker);
 
   const [degradedToast, setDegradedToast] = useState<string | null>(null);
+  // Branch B v3-review-fix: plant rejection toast. Wired to global
+  // __cairnPlantRejected which is called from UnityAROverlay's
+  // SpawnRejected handler AND from the ARScreen plant flow when ground
+  // hit-test fails (Branch B floor-only invariant).
+  const [plantRejectedToast, setPlantRejectedToast] = useState<string | null>(null);
+  const plantRejectedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Shared reticle scale for the v22 PlantSheet aim animation. Owned here
   // so both the reticle (visible at all times) and the sheet (drives the
   // squeeze) reference the same Animated.Value.
@@ -736,6 +742,31 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     return () => {
       if (savedToastTimerRef.current) clearTimeout(savedToastTimerRef.current);
       if (degradedToastTimerRef.current) clearTimeout(degradedToastTimerRef.current);
+      if (plantRejectedTimerRef.current) clearTimeout(plantRejectedTimerRef.current);
+    };
+  }, []);
+
+  // Branch B v3-review-fix: install global plant-rejection toast hook.
+  // Called by:
+  //   1. ARScreen plant flow when ARRaycast misses ground (line 893 area)
+  //   2. UnityAROverlay SpawnRejected handler when Unity refuses spawn
+  // De-duplicate so multiple rapid rejections only show one toast.
+  useEffect(() => {
+    (globalThis as any).__cairnPlantRejected = (message: string) => {
+      // Coalesce: if a toast is already up with the same message, just reset timer.
+      setPlantRejectedToast(message);
+      if (plantRejectedTimerRef.current) clearTimeout(plantRejectedTimerRef.current);
+      plantRejectedTimerRef.current = setTimeout(() => {
+        setPlantRejectedToast(null);
+      }, 2200);
+    };
+    return () => {
+      // Don't unset on unmount — other ARScreen mounts may need it. But guard
+      // the setter so it no-ops if component is gone.
+      const fn = (globalThis as any).__cairnPlantRejected;
+      if (fn) {
+        (globalThis as any).__cairnPlantRejected = (_: string) => {};
+      }
     };
   }, []);
 
@@ -1413,6 +1444,14 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         <View style={styles.degradedBanner}>
           <Icon name="Info" size={14} color="#f59e0b" />
           <Text style={styles.degradedText}>{degradedToast}</Text>
+        </View>
+      )}
+
+      {/* Branch B v3-review-fix: plant-rejected toast (no floor / anchor failed) */}
+      {plantRejectedToast && (
+        <View style={styles.degradedBanner}>
+          <Icon name="Info" size={14} color="#ff7866" />
+          <Text style={styles.degradedText}>{plantRejectedToast}</Text>
         </View>
       )}
 

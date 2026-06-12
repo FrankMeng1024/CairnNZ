@@ -31,13 +31,17 @@ Shader "Cairn/CairnConeCore"
         _TipFadeStart   ("Tip Fade Start (worldY/height)",  Range(0.5,1.0)) = 0.65
         _Height         ("Strand Height (m)", Range(0.5, 5.0)) = 1.6
         _BloomBoost     ("Bloom Boost (HDR multiplier)", Range(0.5, 4.0)) = 1.5
+        _PhaseOffset    ("Phase Offset (rad, per-instance)", Range(0, 6.283)) = 0
     }
     SubShader
     {
         Tags { "Queue" = "Transparent" "RenderType" = "Transparent" "IgnoreProjector"="True" "RenderPipeline"="UniversalPipeline" }
         LOD 100
         ZWrite Off
-        Cull Back
+        // v3-review-fix: Cull Off so cone is visible from inside (close range).
+        // Cone radius up to 0.43m total — user walking close ends up "inside"
+        // the cluster; Cull Back would make it invisible at close range.
+        Cull Off
         Blend One One                  // additive
         BlendOp Add
 
@@ -53,6 +57,7 @@ Shader "Cairn/CairnConeCore"
             float4 _CoreColorNight, _RimColorNight, _CoreColorDay, _RimColorDay;
             TEXTURE2D(_FlowTex); SAMPLER(sampler_FlowTex);
             float _FlowSpeed, _FlowStrength, _BaseFadeStart, _TipFadeStart, _Height, _BloomBoost;
+            float _PhaseOffset;     // per-instance MPB — desync flow per cone
 
             // Globals (set by CairnDayNightAdapter / CairnRibbonLOD)
             float _CairnGlobalDayNightT;     // 0..1 — 0 night, 1 day
@@ -95,7 +100,9 @@ Shader "Cairn/CairnConeCore"
                 float vertEnv = baseEnv * tipEnv;
 
                 // Flow noise (world space scroll upward along Y)
-                float t = _Time.y;
+                // Per-instance phase offset (_PhaseOffset) desyncs the
+                // 4 cones around a cairn so they don't pulse in lockstep.
+                float t = _Time.y + _PhaseOffset;
                 float2 flowUV = IN.worldPos.xz * 0.6 + float2(0, IN.worldPos.y * 0.8 - t * _FlowSpeed);
                 float n = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, flowUV).r;
                 // Gentle remap: keep most of the cone visible but punch internal contrast

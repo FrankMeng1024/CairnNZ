@@ -30,7 +30,12 @@ Shader "Cairn/CairnConeOutline"
         Tags { "Queue" = "Transparent-1" "RenderType" = "Transparent" "IgnoreProjector"="True" "RenderPipeline"="UniversalPipeline" }
         LOD 100
         ZWrite Off
-        Cull Back
+        // v3-review-fix: Cull Front so the inflated outline mesh draws its
+        // back faces (the side facing AWAY from the camera). With Cull Back
+        // the outline draws the same front faces as the core and OCCLUDES
+        // the core silhouette pixels — produces a dark cone, not a halo.
+        // Doctor Strange / Pokémon GO daylight outline pattern.
+        Cull Front
         // Premultiplied alpha — outputting (rgb*a, a) so a dark rim genuinely
         // darkens the framebuffer at silhouette pixels.
         Blend One OneMinusSrcAlpha

@@ -27,17 +27,20 @@ namespace Cairn.AR.Editor
         [MenuItem("Cairn/Branch C/Setup Cone Strand Assets")]
         public static void RunSetup()
         {
-            EnsureFolder("Assets/Meshes");
-            EnsureFolder("Assets/Materials");
+            // Branch C v3 review-fix: assets MUST live under Assets/Resources
+            // so Resources.Load works on device builds (not just Editor).
+            EnsureFolder("Assets/Resources");
+            EnsureFolder("Assets/Resources/Meshes");
+            EnsureFolder("Assets/Resources/Materials");
 
-            // 1. Cone mesh
+            // 1. Cone mesh — 2 submeshes (one per material slot: core + outline)
             var mesh = BuildConeMesh(
                 baseRadius: 0.18f,
                 tipRadius: 0.05f,
                 height: 1.6f,
                 radialSegments: 16,
                 heightSegments: 8);
-            string meshPath = "Assets/Meshes/cairn_cone_strand.asset";
+            string meshPath = "Assets/Resources/Meshes/cairn_cone_strand.asset";
             AssetDatabase.CreateAsset(mesh, meshPath);
             AssetDatabase.SaveAssets();
 
@@ -49,7 +52,7 @@ namespace Cairn.AR.Editor
                 return;
             }
             var coreMat = new Material(coreShader) { name = "CairnConeCore" };
-            string coreMatPath = "Assets/Materials/CairnConeCore.mat";
+            string coreMatPath = "Assets/Resources/Materials/CairnConeCore.mat";
             AssetDatabase.CreateAsset(coreMat, coreMatPath);
 
             // 3. Outline material
@@ -60,7 +63,7 @@ namespace Cairn.AR.Editor
                 return;
             }
             var outlineMat = new Material(outlineShader) { name = "CairnConeOutline" };
-            string outlineMatPath = "Assets/Materials/CairnConeOutline.mat";
+            string outlineMatPath = "Assets/Resources/Materials/CairnConeOutline.mat";
             AssetDatabase.CreateAsset(outlineMat, outlineMatPath);
 
             AssetDatabase.SaveAssets();
@@ -132,6 +135,11 @@ namespace Cairn.AR.Editor
             }
 
             // Triangles — quad strips between successive rings.
+            // Branch C v3 review-fix: TWO submeshes, one per material slot
+            // (core + outline). Both submeshes use the SAME triangles —
+            // MeshRenderer with sharedMaterials=[core, outline] then renders
+            // both passes against the same geometry. Without this, only the
+            // core material draws and the outline pass is silently dead.
             int triCount = heightSegments * radialSegments * 2;
             var triangles = new int[triCount * 3];
             int t = 0;
@@ -143,11 +151,9 @@ namespace Cairn.AR.Editor
                     int b = a + 1;
                     int c = a + verticesPerRing;
                     int d = c + 1;
-                    // tri 1: a, c, b
                     triangles[t++] = a;
                     triangles[t++] = c;
                     triangles[t++] = b;
-                    // tri 2: b, c, d
                     triangles[t++] = b;
                     triangles[t++] = c;
                     triangles[t++] = d;
@@ -157,7 +163,10 @@ namespace Cairn.AR.Editor
             mesh.vertices = vertices;
             mesh.normals = normals;
             mesh.uv = uvs;
-            mesh.triangles = triangles;
+            // Two submeshes — both reference the same triangle buffer.
+            mesh.subMeshCount = 2;
+            mesh.SetTriangles(triangles, 0);
+            mesh.SetTriangles(triangles, 1);
             mesh.RecalculateBounds();
             return mesh;
         }

@@ -54,6 +54,20 @@ namespace Cairn.AR
         private static readonly int DayNightID    = Shader.PropertyToID("_CairnGlobalDayNightT");
         private static readonly int AmbientLumaID = Shader.PropertyToID("_CairnGlobalAmbientLuma");
 
+        // v3-review-fix: auto-instantiate at first scene load so day/night
+        // works on every device build without requiring the editor menu.
+        // RuntimeInitializeLoadType.AfterSceneLoad ensures we run after the
+        // scene's GameObjects are wired (so SceneSetup-attached singletons
+        // already exist; we only create the adapter if it's missing).
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void AutoBootstrap()
+        {
+            if (Object.FindFirstObjectByType<CairnDayNightAdapter>() != null) return;
+            var go = new GameObject("CairnDayNightAdapter (auto)");
+            go.AddComponent<CairnDayNightAdapter>();
+            Object.DontDestroyOnLoad(go);
+        }
+
         private float _clockT = 0.5f;          // last clock-derived day/night value
         private float _lumaT  = -1f;           // last luma sample (-1 = unavailable)
         private float _lastClockUpdate = -100f;

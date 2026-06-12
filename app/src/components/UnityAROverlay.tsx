@@ -157,6 +157,11 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
   // markers-prop changes (e.g. server sync adding nearby markers) don't
   // trigger duplicate spawns. Cleared on unmount.
   const spawnedIdsRef = useRef<Set<string>>(new Set());
+  // Branch B v3-review-fix: throttle SpawnRejected retries. Per marker:
+  // {nextEarliestRetryAt: ms, attemptCount: int}. Without this, a
+  // wall/ceiling-classified location pumps 60Hz spawn↔reject pairs that
+  // brick the bridge and burn battery.
+  const rejectionTrackerRef = useRef<Map<string, { nextRetryAt: number; attempts: number }>>(new Map());
   // v199 review B3 fix — per-session GPS offset gates one-shot.
   // bulkSpawnedRef: has the post-offset bulk-spawn fired?
   const bulkSpawnedRef = useRef<boolean>(false);
@@ -776,9 +781,18 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             }
             // Then bulk-spawn (one-shot) using virtualOrigin.
             let dispatched = 0;
+            const nowTs = Date.now();
             if (props.markers.length > 0) {
               for (const m of props.markers) {
                 if (spawnedIdsRef.current.has(m.id)) continue;
+                // Branch B v3-review-fix: respect throttled rejection backoff.
+                // If this marker was recently rejected and its next-retry-at is
+                // in the future, skip — try next ArFrame iteration.
+                const tracker = rejectionTrackerRef.current.get(m.id);
+                if (tracker) {
+                  if (tracker.attempts > 6) continue;             // blacklisted
+                  if (nowTs < tracker.nextRetryAt) continue;       // backoff
+                }
                 const req = buildSpawnRequest(
                   { id: m.id, type: m.type, lat: m.lat, lng: m.lng, note: m.note },
                   projOrigin,
@@ -794,9 +808,16 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             // accomplished something. Empty marker list does NOT count
             // (markers may be hydrating from MMKV or lastCoord filter
             // may not yet have nearby matches — next ArFrame retries).
+            // Branch B v3-review-fix: also keep one-shot OFF when any
+            // marker has a pending throttled retry — the bulk-spawn loop
+            // needs to fire again at backoff time, not stay locked.
             const hasMarkers = props.markers.length > 0;
             const allCovered = hasMarkers && props.markers.every(m => spawnedIdsRef.current.has(m.id));
-            if (dispatched > 0 || allCovered) {
+            const hasPendingRetry = hasMarkers && props.markers.some(m => {
+              const tr = rejectionTrackerRef.current.get(m.id);
+              return tr != null && tr.attempts <= 6 && !spawnedIdsRef.current.has(m.id);
+            });
+            if ((dispatched > 0 || allCovered) && !hasPendingRetry) {
               bulkSpawnedRef.current = true;
             } else if (!hasMarkers) {
               // Telemetry: track how long markers stay empty post-ArReady.
@@ -888,17 +909,33 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           crashLogger.uploadDiagnostic(API_BASE_URL, 'ar-state-stall').catch(() => undefined);
           break;
 
-        case 'SpawnRejected':
-          // v0.2.3 Branch B — Unity refused to spawn (no Floor plane / anchor
-          // attach failed). Remove from spawnedIdsRef so next ArFrame retry
-          // attempt fires. Surface a non-blocking toast via global hook so
-          // user gets feedback.
+        case 'SpawnRejected': {
+          // v0.2.3 Branch B v3-review-fix — throttled retry.
+          // Without throttle, wall/ceiling locations create 60Hz retry storm.
+          // Strategy: exponential backoff per marker id. Attempt 1 = 0.5s,
+          // 2 = 1s, 3 = 2s, 4 = 4s, then capped at 4s. After 6 attempts the
+          // marker is blacklisted for the rest of this session (user must
+          // reopen AR to retry).
           spawnedIdsRef.current.delete(msg.id);
-          crashLogger.breadcrumb(
-            `${TAG}:spawn-rejected id=${msg.id} reason=${msg.reason} — will retry next ArFrame`
-          );
-          // Reset bulk-spawn one-shot so retries flow through bulk-spawn loop.
-          bulkSpawnedRef.current = false;
+          const now = Date.now();
+          const tracker = rejectionTrackerRef.current.get(msg.id) ?? { nextRetryAt: 0, attempts: 0 };
+          tracker.attempts += 1;
+          const backoffMs = Math.min(4000, 500 * Math.pow(2, tracker.attempts - 1));
+          tracker.nextRetryAt = now + backoffMs;
+          rejectionTrackerRef.current.set(msg.id, tracker);
+          if (tracker.attempts <= 6) {
+            // Within budget — schedule a single retry attempt at backoff time.
+            // bulkSpawnedRef stays true; we manage retry per-id, not via the
+            // global bulk-spawn one-shot (avoids 60Hz pump).
+            crashLogger.breadcrumb(
+              `${TAG}:spawn-rejected id=${msg.id} reason=${msg.reason} attempt=${tracker.attempts} retryIn=${backoffMs}ms`
+            );
+          } else {
+            // Blacklist this id for the rest of the session.
+            crashLogger.breadcrumb(
+              `${TAG}:spawn-rejected id=${msg.id} reason=${msg.reason} BLACKLISTED-after-6-attempts`
+            );
+          }
           if (typeof (globalThis as any).__cairnPlantRejected === 'function') {
             const userMessage = msg.reason === 'no-floor'
               ? '指向地面再 plant'
@@ -908,6 +945,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             (globalThis as any).__cairnPlantRejected(userMessage);
           }
           break;
+        }
 
         case 'Unknown':
           crashLogger.breadcrumb(
