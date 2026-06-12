@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <title>Cairn AR v0.2.3 — Variant C 3D Demo (Three.js)</title>
 <style>
-  body { margin:0; background:#02030a; color:#cbd2dc; font-family:-apple-system,"PingFang SC",sans-serif; overflow:hidden; }
+  body { margin:0; background:#E8DCC4; color:#3a2c14; font-family:-apple-system,"PingFang SC",sans-serif; overflow:hidden; }
   #info { position:absolute; top:14px; left:14px; z-index:10; background:rgba(0,0,0,0.78); padding:14px 18px; border-radius:10px; max-width:420px; line-height:1.6; font-size:12.5px; backdrop-filter:blur(10px); }
   #info h1 { margin:0 0 6px; font-size:15px; font-weight:600; color:#fff; }
   #info p { margin:5px 0; color:#94a0b0; }
@@ -18,7 +18,7 @@
   #controls .sep { height:1px; background:#0a1218; margin:8px -8px; }
   #controls h3 { margin:0 0 4px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#6c7586; }
   #label3d { position:absolute; pointer-events:none; z-index:5; transform:translate(-50%, -100%); display:none; }
-  #label3d .card { background:rgba(8,12,18,0.92); border:1px solid #5a8ab0aa; border-radius:4px; padding:0; min-width:200px; font-size:13px; color:#dde3ec; text-align:center; backdrop-filter:blur(8px); }
+  #label3d .card { background:rgba(8,12,18,0.92); border:1px solid #5a8ab0aa; border-radius:4px; padding:0; min-width:220px; font-size:13px; color:#dde3ec; text-align:center; backdrop-filter:blur(8px); }
   #label3d .header { background:#5a8ab033; color:#7fb8d8; font-size:10px; font-weight:600; padding:5px 8px; display:flex; justify-content:space-between; }
   #label3d .header .t { letter-spacing:0.1em; }
   #label3d .body { padding:10px 14px 4px; font-weight:500; }
@@ -29,12 +29,14 @@
 <body>
 
 <div id="info">
-  <h1>Variant C · 3D Demo (Three.js)</h1>
-  <p><span class="tag">3D 真实空间感</span><span class="tag">Three.js</span><span class="tag">基于 C v2</span></p>
-  <p><b>这是 3D 版</b> — 用真实透视相机 + 地面 plane + 圆柱形光带几何 + AR-correct billboard 标签. 操作:</p>
-  <p>· <kbd>左拖</kbd> 旋转视角 · <kbd>滚轮</kbd> 缩放 · <kbd>右拖</kbd> 平移 · 看 cairn 从不同角度的样子</p>
-  <p><b>对比 2D 版 (variant_C_v2)</b>: 这里你可以**绕到 cairn 后面**, 从**斜上方**看, 从**眼睛高度** 1.6m 看 — 体验真实 AR 中你会看到的角度. 光带的"飘上去断开"在 3D 里更明显.</p>
-  <p><b>注意</b>: 这只是视觉感受版本. Unity 实现会用 ARFoundation + ParticleSystem (TrailModule) 直接达到同等效果, 性能更好.</p>
+  <h1>Variant C · 3D (v3 · 反馈整合)</h1>
+  <p><span class="tag">type 专属粒子</span><span class="tag">圆环自转</span><span class="tag">大 SDF</span></p>
+  <p><b>v3 改动 (2026-06-11)</b>:</p>
+  <p>· 删外圈刻度短线 (旧版很丑) — 现在是<b>圆环本身在转</b> (亮弧 60° + 反向小弧 30°)</p>
+  <p>· type icon 放大 (R*1.7), 中心一目了然</p>
+  <p>· <b>每个 type 专属粒子特效</b>: cairn=碎石蹦起 · water=水珠 · danger=火星 · hut=暖光 · junction=旋转箭头</p>
+  <p>· 光带改为<b>真丝带</b> (ribbon mesh, 宽度变化, 不是硬细管)</p>
+  <p><kbd>左拖</kbd>旋转 <kbd>滚轮</kbd>缩放 <kbd>右拖</kbd>平移 — 切 type 看不同粒子</p>
 </div>
 
 <div id="controls">
@@ -47,6 +49,8 @@
   <div class="sep"></div>
   <h3>Camera</h3>
   <button id="cam-eye">👁 眼睛高度 (1.6m)</button>
+  <button id="cam-far">🏔 远观 (8m)</button>
+  <button id="cam-far30">🌌 极远 (30m)</button>
   <button id="cam-overhead">🛸 俯视</button>
   <button id="cam-orbit">🔄 自动环绕</button>
   <div class="sep"></div>
@@ -74,199 +78,173 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const TYPES = {
-  cairn:    { color:0x7fb8d8, label:'Cairn',    rune:'cairn',    note:'路过留念。视野很好。', author:'Henare',   daysAgo: 5  },
+  cairn:    { color:0xb89968, label:'Cairn',    rune:'cairn',    note:'路过留念。视野很好。', author:'Henare',   daysAgo: 5  },
   danger:   { color:0xff7866, label:'Danger',   rune:'triangle', note:'湿滑。小心。',          author:'Sarah',    daysAgo: 12 },
-  water:    { color:0x4f9cd0, label:'Water',    rune:'drop',     note:'清澈溪水。可饮。',      author:'Te Aroha', daysAgo: 3  },
-  hut:      { color:0xb8a560, label:'Hut',      rune:'house',    note:'紧急避难所 200m 西北。', author:'DOC',      daysAgo: 18 },
+  water:    { color:0x5fa8d8, label:'Water',    rune:'drop',     note:'清澈溪水。可饮。',      author:'Te Aroha', daysAgo: 3  },
+  hut:      { color:0xe8c47a, label:'Hut',      rune:'house',    note:'紧急避难所 200m 西北。', author:'DOC',      daysAgo: 18 },
   junction: { color:0xa4d889, label:'Junction', rune:'fork',     note:'分叉路。北 → 山顶。',    author:'Manaia',   daysAgo: 7  },
 };
 let currentType = 'cairn';
 
-// ── Scene ────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x02030a, 0.04);
-
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
-camera.position.set(2.5, 1.6, 2.5);
-camera.lookAt(0, 0.5, 0);
-
+scene.background = new THREE.Color(0xE8DCC4);   // NZ 晨曦 warm linen
+scene.fog = new THREE.FogExp2(0xE8DCC4, 0.012); // 同色 fog, 远处淡入背景
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 200);  // far 200 让 30m 极远视角能看到
+camera.position.set(3.2, 2.0, 3.2);  // 后退 + 抬高 — 能看到丝带飘到 2.5m+ 高处
+camera.lookAt(0, 1.0, 0);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
-renderer.setClearColor(0x02030a, 1);
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.2;
 document.body.appendChild(renderer.domElement);
-
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.target.set(0, 0.4, 0);
-controls.minDistance = 1.2;
-controls.maxDistance = 12;
-controls.maxPolarAngle = Math.PI * 0.49;  // 不能从地下看
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.target.set(0, 1.25, 0);  // target 抬到 1.25m (2.5m strand 中段)
+controls.minDistance = 1.0; controls.maxDistance = 60;
+controls.maxPolarAngle = Math.PI * 0.49;
+addEventListener('resize', () => { camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+// 晨曦光照 — 强 ambient 让 ground 真实显示
+scene.add(new THREE.AmbientLight(0xD8C8A4, 1.0));
+const sunlight = new THREE.DirectionalLight(0xFFE9C0, 0.7);
+sunlight.position.set(3, 6, 2);
+scene.add(sunlight);
 
-// ── Lights ───────────────────────────────────────────────────────
-scene.add(new THREE.AmbientLight(0x1a2030, 0.6));
-const moonlight = new THREE.DirectionalLight(0x9faecc, 0.5);
-moonlight.position.set(3, 6, 2);
-scene.add(moonlight);
-
-// ── Ground ───────────────────────────────────────────────────────
-const groundMat = new THREE.MeshStandardMaterial({
-  color: 0x080a12,
-  roughness: 0.95,
-  metalness: 0.0,
-});
-const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 96), groundMat);
+// 地面 - 晨曦色 (比背景略暗一点点表示"地", 远处随 fog 融入背景)
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(40, 96),
+  new THREE.MeshStandardMaterial({ color: 0xD8C8A4, roughness: 0.95, metalness: 0.0 })
+);
 ground.rotation.x = -Math.PI/2;
-ground.position.y = 0;
 scene.add(ground);
 
-// 远处雾环 — 模拟 DS 的 chiral fog
-for (let i = 0; i < 50; i++) {
-  const size = 0.04 + Math.random() * 0.06;
+// 远雾 — v8 极简: 减少到 12 个 (之前 50)
+for (let i = 0; i < 12; i++) {
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    color: 0x9fc8e8,
-    transparent: true,
-    opacity: 0.18 + Math.random() * 0.15,
-    blending: THREE.AdditiveBlending,
+    color: 0x9fc8e8, transparent: true,
+    opacity: 0.10 + Math.random() * 0.10,
+    blending: THREE.AdditiveBlending, depthWrite: false,
   }));
   const angle = Math.random() * Math.PI * 2;
   const dist = 2.5 + Math.random() * 8;
   sprite.position.set(Math.cos(angle) * dist, 0.3 + Math.random() * 1.5, Math.sin(angle) * dist);
+  const size = 0.04 + Math.random() * 0.06;
   sprite.scale.set(size, size, size);
   sprite.userData.bobOffset = Math.random() * Math.PI * 2;
   sprite.userData.bobBase = sprite.position.y;
   scene.add(sprite);
 }
 
-// ── Cairn group ──────────────────────────────────────────────────
+// ── Cairn group ─────────────────────────────────────────
 const cairnGroup = new THREE.Group();
 scene.add(cairnGroup);
+const RING_RADIUS = 0.55;
+let activeColor = new THREE.Color(0xb89968);
 
-const RING_RADIUS = 0.55;  // 0.55m ground ring (real cairn AR scale)
-const STRAND_HEIGHT_MAX = 1.0;  // 1m drift height (用户要求的"1米")
-let activeColor = new THREE.Color(0x7fb8d8);
-
-// ── Outer ring (ground sigil) ────────────────────────────────────
-const ringGeo = new THREE.RingGeometry(RING_RADIUS - 0.012, RING_RADIUS, 96);
+// 主圆环 — 白底友好 (NormalBlending + 暗 amber)
+const ringGeo = new THREE.RingGeometry(RING_RADIUS - 0.013, RING_RADIUS, 96);
 const ringMat = new THREE.MeshBasicMaterial({
-  color: activeColor,
-  transparent: true,
-  opacity: 0.95,
-  side: THREE.DoubleSide,
-  blending: THREE.AdditiveBlending,
-  depthWrite: false,
+  color: 0x6b4a1f, transparent: true, opacity: 0.85,
+  side: THREE.DoubleSide, blending: THREE.NormalBlending, depthWrite: false,
 });
 const ring = new THREE.Mesh(ringGeo, ringMat);
-ring.rotation.x = -Math.PI/2;
-ring.position.y = 0.001;
+ring.rotation.x = -Math.PI/2; ring.position.y = 0.001;
 cairnGroup.add(ring);
 
-// ── Inner ring (decorative) ──────────────────────────────────────
-const innerRingGeo = new THREE.RingGeometry(RING_RADIUS * 0.65, RING_RADIUS * 0.66, 64);
+// 旋转弧已删除 (用户多次反馈: 眼睛高度透视下亮弧像悬浮在阵图上方的横线 artifact)
+
+// 内圆环 (静态装饰) — 白底友好
+const innerRingGeo = new THREE.RingGeometry(RING_RADIUS * 0.65, RING_RADIUS * 0.665, 64);
 const innerRingMat = new THREE.MeshBasicMaterial({
-  color: activeColor,
-  transparent: true,
-  opacity: 0.5,
-  side: THREE.DoubleSide,
-  blending: THREE.AdditiveBlending,
-  depthWrite: false,
+  color: 0x6b4a1f, transparent: true, opacity: 0.7,
+  side: THREE.DoubleSide, blending: THREE.NormalBlending, depthWrite: false,
 });
 const innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
-innerRing.rotation.x = -Math.PI/2;
-innerRing.position.y = 0.0008;
+innerRing.rotation.x = -Math.PI/2; innerRing.position.y = 0.0008;
 cairnGroup.add(innerRing);
 
-// ── Outer rotating ticks ─────────────────────────────────────────
-const tickGroup = new THREE.Group();
-tickGroup.rotation.x = -Math.PI/2;
-tickGroup.position.y = 0.0006;
-cairnGroup.add(tickGroup);
-for (let i = 0; i < 12; i++) {
-  const a = (i / 12) * Math.PI * 2;
-  const inner = RING_RADIUS * 1.04;
-  const outer = RING_RADIUS * (i % 3 === 0 ? 1.18 : 1.10);
-  const points = [
-    new THREE.Vector3(Math.cos(a) * inner, Math.sin(a) * inner, 0),
-    new THREE.Vector3(Math.cos(a) * outer, Math.sin(a) * outer, 0),
-  ];
-  const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-  const lineMat = new THREE.LineBasicMaterial({
-    color: activeColor,
-    transparent: true,
-    opacity: 0.65,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
+// ── 召唤仪式: 4 道光束斜下汇聚 (光能使者风格) ─────────
+// 4 道 cylinder geometry, 顶端固定在空中 (高 y=3m, 不同方位), 底端从空中下落到中心 (0,0,0)
+const summonBeams = [];
+const SUMMON_BEAM_COUNT = 4;
+for (let i = 0; i < SUMMON_BEAM_COUNT; i++) {
+  const a = (i / SUMMON_BEAM_COUNT) * Math.PI * 2 + Math.PI / 4;  // 错开 45° 不与 cardinal 对齐
+  const skyX = Math.cos(a) * 1.5;
+  const skyZ = Math.sin(a) * 1.5;
+  const skyY = 3.0;
+  // cylinder 默认沿 Y 轴, 长度 1, 中心在原点 — 我们之后用 lookAt + scale 控制
+  const geo = new THREE.CylinderGeometry(0.020, 0.005, 1.0, 8, 1, true);  // 顶端粗 (天上), 底端细 (地面接触点)
+  const mat = new THREE.MeshBasicMaterial({
+    color: activeColor, transparent: true, opacity: 0.0,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
   });
-  tickGroup.add(new THREE.Line(lineGeo, lineMat));
+  const beam = new THREE.Mesh(geo, mat);
+  beam.userData.skyPos = new THREE.Vector3(skyX, skyY, skyZ);
+  cairnGroup.add(beam);
+  summonBeams.push(beam);
 }
 
-// ── Center SDF rune (canvas texture, faces up flat on ground) ────
+// Flash (中心爆点) — sprite billboard
+const flashMat = new THREE.SpriteMaterial({
+  color: 0xffffff, transparent: true, opacity: 0.0,
+  blending: THREE.AdditiveBlending, depthWrite: false,
+});
+const flashSprite = new THREE.Sprite(flashMat);
+flashSprite.position.set(0, 0.05, 0);
+flashSprite.scale.set(0.6, 0.6, 0.6);
+cairnGroup.add(flashSprite);
+
+// Ground shock ring — 从中心扩散的水平圆环
+const shockGeo = new THREE.RingGeometry(0.001, 0.04, 64);
+const shockMat = new THREE.MeshBasicMaterial({
+  color: activeColor, transparent: true, opacity: 0.0,
+  side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false,
+});
+const shockRing = new THREE.Mesh(shockGeo, shockMat);
+shockRing.rotation.x = -Math.PI/2;
+shockRing.position.y = 0.003;
+cairnGroup.add(shockRing);
+
+// ── 中心 SDF (大 — R*1.7) ────────────────────────────
 function makeRuneTexture(type, color) {
   const cv = document.createElement('canvas');
-  cv.width = cv.height = 256;
+  cv.width = cv.height = 512;
   const cx = cv.getContext('2d');
-  cx.clearRect(0, 0, 256, 256);
-  cx.translate(128, 128);
-  // 这里复用 v2 中的 SDF 画法
-  cx.shadowBlur = 28;
-  cx.shadowColor = '#' + color.getHexString();
-  cx.fillStyle = '#' + color.getHexString();
-  cx.strokeStyle = '#' + color.getHexString();
-  cx.lineWidth = 6;
-  cx.lineCap = 'round';
-  cx.lineJoin = 'round';
-  const r = 80;
+  cx.translate(256, 256);
+  // 白底: rune 用 type 色 lerp 到 dark amber
+  const darkRune = color.clone().lerp(new THREE.Color(0x2B1810), 0.55);
+  const darkHex = '#' + darkRune.getHexString();
+  cx.shadowBlur = 0;
+  cx.fillStyle = darkHex;
+  cx.strokeStyle = darkHex;
+  cx.lineWidth = 14; cx.lineCap = 'round'; cx.lineJoin = 'round';
+  const r = 180;
   if (type === 'cairn') {
     for (let i = 0; i < 3; i++) {
       const yy = (i - 1) * r * 0.36;
       const ww = r * (0.36 - i * 0.07);
-      cx.beginPath();
-      cx.ellipse(0, yy, ww, ww * 0.65, 0, 0, Math.PI*2);
-      cx.fill();
+      cx.beginPath(); cx.ellipse(0, yy, ww, ww * 0.65, 0, 0, Math.PI*2); cx.fill();
     }
   } else if (type === 'triangle') {
-    cx.beginPath();
-    cx.moveTo(0, -r * 0.50);
-    cx.lineTo(r * 0.45, r * 0.32);
-    cx.lineTo(-r * 0.45, r * 0.32);
-    cx.closePath();
-    cx.fill();
-    cx.shadowBlur = 0;
-    cx.fillStyle = '#02030a';
+    cx.beginPath(); cx.moveTo(0, -r * 0.50); cx.lineTo(r * 0.45, r * 0.32); cx.lineTo(-r * 0.45, r * 0.32); cx.closePath(); cx.fill();
+    cx.shadowBlur = 0; cx.fillStyle = '#02030a';
     cx.font = `bold ${r*0.55}px -apple-system,sans-serif`;
     cx.textAlign = 'center'; cx.textBaseline = 'middle';
     cx.fillText('!', 0, r * 0.05);
   } else if (type === 'drop') {
-    cx.beginPath();
-    cx.moveTo(0, -r * 0.50);
+    cx.beginPath(); cx.moveTo(0, -r * 0.50);
     cx.bezierCurveTo(r * 0.46, -r * 0.10, r * 0.34, r * 0.40, 0, r * 0.42);
     cx.bezierCurveTo(-r * 0.34, r * 0.40, -r * 0.46, -r * 0.10, 0, -r * 0.50);
     cx.fill();
   } else if (type === 'house') {
-    cx.beginPath();
-    cx.moveTo(-r * 0.40, 0);
-    cx.lineTo(0, -r * 0.46);
-    cx.lineTo(r * 0.40, 0);
-    cx.lineTo(r * 0.40, r * 0.40);
-    cx.lineTo(-r * 0.40, r * 0.40);
-    cx.closePath();
-    cx.fill();
-    cx.shadowBlur = 0;
-    cx.fillStyle = '#02030a';
+    cx.beginPath(); cx.moveTo(-r * 0.40, 0); cx.lineTo(0, -r * 0.46);
+    cx.lineTo(r * 0.40, 0); cx.lineTo(r * 0.40, r * 0.40); cx.lineTo(-r * 0.40, r * 0.40); cx.closePath(); cx.fill();
+    cx.shadowBlur = 0; cx.fillStyle = '#02030a';
     cx.fillRect(-r * 0.10, r * 0.10, r * 0.20, r * 0.30);
   } else if (type === 'fork') {
     cx.lineWidth = r * 0.22;
-    cx.beginPath();
-    cx.moveTo(0, r * 0.40); cx.lineTo(0, 0);
+    cx.beginPath(); cx.moveTo(0, r * 0.40); cx.lineTo(0, 0);
     cx.moveTo(0, 0); cx.lineTo(-r * 0.36, -r * 0.40);
     cx.moveTo(0, 0); cx.lineTo(r * 0.36, -r * 0.40);
     cx.stroke();
@@ -278,140 +256,319 @@ function makeRuneTexture(type, color) {
 
 const runeMat = new THREE.MeshBasicMaterial({
   map: makeRuneTexture('cairn', activeColor),
-  transparent: true,
-  blending: THREE.AdditiveBlending,
-  depthWrite: false,
-  side: THREE.DoubleSide,
+  transparent: true, blending: THREE.NormalBlending,
+  depthWrite: false, side: THREE.DoubleSide,
 });
 const runeMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(RING_RADIUS * 1.0, RING_RADIUS * 1.0),
+  new THREE.PlaneGeometry(RING_RADIUS * 1.7, RING_RADIUS * 1.7),  // R*1.7 (之前 R*1.0 太小)
   runeMat
 );
 runeMesh.rotation.x = -Math.PI/2;
 runeMesh.position.y = 0.002;
 cairnGroup.add(runeMesh);
 
-// ── Drifting strands (cylinder geometry, animated) ───────────────
-// 每根 strand 是一个 TubeGeometry, 沿 spline 走
-// 共 6 根, 错开生命阶段
-const STRAND_COUNT = 6;
-const strands = [];
-
-class Strand {
-  constructor(birthOffset = 0) {
-    this.life = birthOffset;
-    this.respawn();
-    this.life = birthOffset;  // respawn 重置了 life, 这里再设回 offset 用于初始错开
-
-    // Geometry & mesh placeholder (会在 update() 重建)
+// ── 丝带 (Silk Ribbon) — 极简版 v17 ─────────────────────────
+// Arch review 后的最简方案:
+//   1. 匀速 (constant velocity) — 无 ease, 无分阶段, 无速度突变
+//   2. 越往上越淡 (alpha = 1 - worldY/LIFE_HEIGHT) — 像烟雾消散
+//   3. 宽度方向 = camera-facing billboard (perpendicular to camera-to-point + world-up)
+//      → 彻底消除"横线 artifact" (旧版 tx/tz 固定水平方向是根因)
+//   4. 删除所有 detach 风格 / segCut / topAlphaCurve / energyBand / twistY / bubble / stream 死代码
+class SilkRibbon {
+  constructor(angle, phaseOffset = 0) {
+    this.startA = angle;
+    this.seed = Math.random() * 1000;
+    this.maxWidth = 0.10 + Math.random() * 0.05;   // 加粗 ×2 保留 (用户要求粗一点)
+    this.lifeDuration = 4.0 + Math.random() * 2.0; // 匀速 4-6s
+    this.life = phaseOffset * this.lifeDuration;
+    // v15 还原: AdditiveBlending (即使白底会偏 wash, 这是 v15 原貌)
     this.material = new THREE.MeshBasicMaterial({
-      color: activeColor,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
+      transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, side: THREE.DoubleSide, vertexColors: true,
     });
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.material);
     cairnGroup.add(this.mesh);
   }
-  respawn() {
-    this.life = 0;
-    this.startA = Math.random() * Math.PI * 2;
-    this.driftPhase = Math.random() * Math.PI * 2;
-    this.driftDir = Math.random() < 0.5 ? -1 : 1;
-    this.seed = Math.random() * 1000;
-  }
   update(dt) {
-    const STRAND_LIFE = 3.2;  // 3.2s lifecycle
-    this.life += dt / STRAND_LIFE;
-    if (this.life >= 1) this.respawn();
-    this.rebuildGeometry();
-  }
-  rebuildGeometry() {
-    const life = this.life;
-
-    // 各阶段进度 (与 2D v2 同步)
-    let strandLength;     // 0..1
-    let topRise;          // 顶端高度 (m, 相对 ground edge)
-    let bottomDetach;     // 0=连接, 1=完全脱离
-    let alpha;
-
-    if (life < 0.18) {
-      const t0 = life / 0.18;
-      strandLength = t0;
-      topRise = STRAND_HEIGHT_MAX * t0 * 0.3;
-      bottomDetach = 0;
-      alpha = t0;
-    } else if (life < 0.70) {
-      const t0 = (life - 0.18) / 0.52;
-      strandLength = 1.0;
-      topRise = STRAND_HEIGHT_MAX * (0.3 + 0.7 * (1 - (1-t0)*(1-t0)));
-      bottomDetach = 0;
-      alpha = 1.0;
-    } else if (life < 0.85) {
-      const t0 = (life - 0.70) / 0.15;
-      strandLength = 1.0;
-      topRise = STRAND_HEIGHT_MAX * (1.0 + t0 * 0.20);
-      bottomDetach = t0;
-      alpha = 1.0;
-    } else {
-      const t0 = (life - 0.85) / 0.15;
-      strandLength = 1.0 - t0 * 0.3;
-      topRise = STRAND_HEIGHT_MAX * (1.20 + t0 * 0.30);
-      bottomDetach = 1.0;
-      alpha = 1.0 - t0;
+    this.life += dt;
+    if (this.life >= this.lifeDuration) {
+      this.life = 0;
+      this.lifeDuration = 4.0 + Math.random() * 2.0;
+      this.startA += (Math.random() - 0.5) * 0.2;
+      this.seed = Math.random() * 1000;
     }
+    this.rebuild();
+  }
+  rebuild() {
+    // 匀速 lifecycle (v15 风格)
+    const BODY = 1.0;
+    const LIFE_HEIGHT = 3.0;
+    const lifeT = this.life / this.lifeDuration;
+    const topY = LIFE_HEIGHT * lifeT;
+    const bottomY = Math.max(0, topY - BODY);
+    const actualLen = topY - bottomY;
+    if (actualLen < 0.05) {
+      this.mesh.visible = false; return;
+    }
+    this.mesh.visible = true;
+
+    // 全局 alpha 包络 — 出生淡入 + 退场淡出
+    let globalFade = 1.0;
+    if (lifeT < 0.15) globalFade = lifeT / 0.15;
+    else if (lifeT > 0.85) globalFade = (1 - lifeT) / 0.15;
 
     const a = this.startA;
     const baseX = Math.cos(a) * RING_RADIUS * 1.05;
     const baseZ = Math.sin(a) * RING_RADIUS * 1.05;
-    const detachLift = bottomDetach * STRAND_HEIGHT_MAX * 0.18;
+    const SEGS = 24;
+    const positions = [], colors = [], indices = [];
 
-    // 沿 spline 取 24 个采样点构造 CatmullRom curve, 再用 TubeGeometry
-    const tNow = performance.now() * 0.001;
-    const swayAmp = 0.10;  // 0.1m 横向飘
-    const swayPhase = this.driftPhase + tNow * 0.4;
+    // 柔软 sway (v15 风格)
+    const SWAY_AMP = 0.05;
+    const swayPhase = performance.now() * 0.0004 + this.seed;
+    const swayTanX = -Math.sin(a);
+    const swayTanZ = Math.cos(a);
 
-    const points = [];
-    const SEGS = 22;
+    const camPos = camera.position;
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    const tmp = new THREE.Vector3();
+    const widthDir = new THREE.Vector3();
+
+    // v15 双层 ribbon: 5 顶点
+    //   leftHalo (alpha 0) - leftCore (0.45) - center (1.0) - rightCore (0.45) - rightHalo (0)
+    //   center 用白热色 (activeColor lerp 到白), halo 用 activeColor 品牌金
+    const coreR = Math.min(1, activeColor.r * 1.4 + 0.15);
+    const coreG = Math.min(1, activeColor.g * 1.4 + 0.15);
+    const coreB = Math.min(1, activeColor.b * 1.4 + 0.20);
+
     for (let s = 0; s <= SEGS; s++) {
       const sT = s / SEGS;
-      if (sT > strandLength) break;
+      const y = bottomY + actualLen * sT;
 
-      const heightT = sT;
-      const y = detachLift + topRise * heightT;
-      // 横向 sway, 越靠顶端越大
-      const swayMag = swayAmp * heightT * heightT * this.driftDir;
-      const swayX = swayMag * Math.sin(heightT * 3.5 + swayPhase);
-      // 切向方向 (与半径垂直)
-      const tx = -Math.sin(a), tz = Math.cos(a);
-      const x = baseX + tx * swayX;
-      const z = baseZ + tz * swayX;
-      points.push(new THREE.Vector3(x, y, z));
+      // sway
+      const swayMag = SWAY_AMP * sT * sT;
+      const swayOff = swayMag * Math.sin(sT * 2.5 + swayPhase);
+      const cx = baseX + swayTanX * swayOff;
+      const cz = baseZ + swayTanZ * swayOff;
+
+      // billboard width direction
+      tmp.set(camPos.x - cx, camPos.y - y, camPos.z - cz).normalize();
+      widthDir.crossVectors(tmp, worldUp);
+      if (widthDir.lengthSq() < 1e-4) {
+        widthDir.set(swayTanX, 0, swayTanZ);
+      } else {
+        widthDir.normalize();
+      }
+
+      // 烟柱形宽度: 底窄 → 中粗 → 顶端散开
+      const spindleShape = 0.4 + 0.6 * Math.sin(sT * Math.PI) + 0.5 * Math.pow(sT, 0.7);
+      const noiseL = 0.85 + 0.30 * Math.sin(sT * 7.3 + this.seed);
+      const noiseR = 0.85 + 0.30 * Math.sin(sT * 6.1 - this.seed * 1.7);
+      const wHaloL = this.maxWidth * spindleShape * noiseL;
+      const wHaloR = this.maxWidth * spindleShape * noiseR;
+      const wCoreL = wHaloL * 0.35;
+      const wCoreR = wHaloR * 0.35;
+
+      // 5 顶点
+      positions.push(cx - widthDir.x * wHaloL, y, cz - widthDir.z * wHaloL);
+      positions.push(cx - widthDir.x * wCoreL, y, cz - widthDir.z * wCoreL);
+      positions.push(cx,                       y, cz);
+      positions.push(cx + widthDir.x * wCoreR, y, cz + widthDir.z * wCoreR);
+      positions.push(cx + widthDir.x * wHaloR, y, cz + widthDir.z * wHaloR);
+
+      // alpha — 越上越淡 (Sky Children 曲线: 底厚, 顶端 ~15% 急消)
+      const worldT = y / LIFE_HEIGHT;
+      const heightAlpha = Math.pow(Math.max(0, 1 - worldT), 1.6) * globalFade;
+      const aHaloEdge = 0;
+      const aHaloIn   = heightAlpha * 0.45;
+      const aCenter   = heightAlpha * 1.0;
+
+      // colors (v15 双色)
+      colors.push(activeColor.r, activeColor.g, activeColor.b, aHaloEdge);
+      colors.push(activeColor.r, activeColor.g, activeColor.b, aHaloIn);
+      colors.push(coreR, coreG, coreB, aCenter);
+      colors.push(activeColor.r, activeColor.g, activeColor.b, aHaloIn);
+      colors.push(activeColor.r, activeColor.g, activeColor.b, aHaloEdge);
     }
 
-    if (points.length < 2) {
-      this.mesh.visible = false;
-      return;
+    // 索引: 每段 4 quad strip
+    for (let i = 0; i < SEGS; i++) {
+      const b = i * 5;
+      const n = (i+1) * 5;
+      indices.push(b+0, b+1, n+0,  n+0, b+1, n+1);
+      indices.push(b+1, b+2, n+1,  n+1, b+2, n+2);
+      indices.push(b+2, b+3, n+2,  n+2, b+3, n+3);
+      indices.push(b+3, b+4, n+3,  n+3, b+4, n+4);
     }
-    this.mesh.visible = true;
-
-    const curve = new THREE.CatmullRomCurve3(points);
-    const radius = 0.006;  // 6mm thickness
-    const tubeGeo = new THREE.TubeGeometry(curve, points.length * 2, radius, 6, false);
-    this.mesh.geometry.dispose();
-    this.mesh.geometry = tubeGeo;
-
-    // 材质 alpha
-    this.material.opacity = alpha * 0.85;
-    this.material.color.copy(activeColor);
+    const g = this.mesh.geometry;
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4));
+    g.setIndex(indices);
   }
 }
 
-for (let i = 0; i < STRAND_COUNT; i++) {
-  strands.push(new Strand(i / STRAND_COUNT));
+const ribbons = [];
+const RIBBON_COUNT = 8;
+for (let i = 0; i < RIBBON_COUNT; i++) {
+  // 角度也加扰动: 不再均匀分布在圆周, 让位置感觉自然
+  const angleBase = (i / RIBBON_COUNT) * Math.PI * 2;
+  const angleJitter = (Math.random() - 0.5) * (Math.PI * 2 / RIBBON_COUNT) * 0.6;
+  const a = angleBase + angleJitter;
+  // phase 真随机 (0..1), 不再 i/N 均匀错开 → 解决"排队脱离"
+  ribbons.push(new SilkRibbon(a, Math.random()));
 }
 
-// ── HTML label (DS card) — billboard via screen-space projection ─
+// ── TYPE 专属粒子 — 每 type 一个灵魂 ──────────────────
+class TypeParticles {
+  constructor() {
+    this.points = [];
+    this.spawnAccum = 0;
+    this.group = new THREE.Group();
+    cairnGroup.add(this.group);
+  }
+  clear() {
+    for (const p of this.points) { this.group.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); }
+    this.points = [];
+  }
+  spawnOne(type, color) {
+    let mesh, vy, vx, vz, x0, z0, y0, maxLife;
+    const a = Math.random() * Math.PI * 2;
+    const r = RING_RADIUS * (0.85 + Math.random() * 0.30);
+    x0 = Math.cos(a) * r; z0 = Math.sin(a) * r;
+
+    if (type === 'cairn') {
+      // 小碎石 — 棕色立方体, 蹦起后落下 (重力)
+      const sz = 0.018 + Math.random() * 0.014;
+      mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(sz, sz, sz),
+        new THREE.MeshStandardMaterial({ color: 0x6e5a3a, roughness: 0.9, emissive: 0x1a1208, emissiveIntensity: 0.4 })
+      );
+      y0 = 0.005;
+      vy = 0.45 + Math.random() * 0.30;
+      vx = (Math.random() - 0.5) * 0.10;
+      vz = (Math.random() - 0.5) * 0.10;
+      maxLife = 1.6;
+      mesh.userData.kind = 'stone';
+    } else if (type === 'water') {
+      // 水珠 — 蓝色发光球
+      const sz = 0.014 + Math.random() * 0.010;
+      mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(sz, 10, 8),
+        new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending })
+      );
+      y0 = 0.005;
+      vy = 0.55 + Math.random() * 0.25;
+      vx = Math.cos(a + Math.PI) * (0.04 + Math.random() * 0.06);
+      vz = Math.sin(a + Math.PI) * (0.04 + Math.random() * 0.06);
+      maxLife = 1.8;
+      mesh.userData.kind = 'drop';
+    } else if (type === 'danger') {
+      // 火星 — 橙红小光点, 上升 + 闪烁
+      const sz = 0.009 + Math.random() * 0.008;
+      mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(sz, 6, 4),
+        new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending })
+      );
+      y0 = 0.005;
+      vy = 0.30 + Math.random() * 0.20;
+      vx = (Math.random() - 0.5) * 0.04;
+      vz = (Math.random() - 0.5) * 0.04;
+      maxLife = 2.5;
+      mesh.userData.kind = 'spark';
+    } else if (type === 'hut') {
+      // 暖光点 — 黄白发光球, 缓慢上升
+      const sz = 0.012 + Math.random() * 0.012;
+      mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(sz, 8, 6),
+        new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending })
+      );
+      y0 = 0.01;
+      vy = 0.10 + Math.random() * 0.10;
+      vx = (Math.random() - 0.5) * 0.05;
+      vz = (Math.random() - 0.5) * 0.05;
+      maxLife = 4.0;
+      mesh.userData.kind = 'ember';
+    } else if (type === 'junction') {
+      // 浮空小箭头 — 绿色 cone, 绕阵图旋转
+      mesh = new THREE.Mesh(
+        new THREE.ConeGeometry(0.020, 0.055, 4),
+        new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending })
+      );
+      mesh.userData.kind = 'arrow';
+      mesh.userData.orbitR = RING_RADIUS * (1.10 + Math.random() * 0.18);
+      mesh.userData.orbitPhase = a;
+      mesh.userData.orbitSpeed = 0.35 + Math.random() * 0.25;
+      mesh.userData.orbitY = 0.18 + Math.random() * 0.20;
+      y0 = mesh.userData.orbitY;
+      vy = 0; vx = 0; vz = 0;
+      maxLife = 999;  // 不死
+    }
+    mesh.position.set(x0, y0, z0);
+    this.group.add(mesh);
+    this.points.push({ mesh, vy, vx, vz, life: 0, maxLife, type });
+  }
+  update(dt, type, color) {
+    const rates = { cairn: 6, water: 14, danger: 16, hut: 4, junction: 0 };
+    const rate = rates[type] || 6;
+    this.spawnAccum += dt * rate;
+    while (this.spawnAccum >= 1) { this.spawnAccum -= 1; this.spawnOne(type, color); }
+    // junction 维持 6 个箭头
+    if (type === 'junction') {
+      const arrows = this.points.filter(p => p.mesh.userData.kind === 'arrow').length;
+      for (let i = arrows; i < 6; i++) this.spawnOne('junction', color);
+    }
+    const tNow = performance.now() * 0.001;
+    for (let i = this.points.length - 1; i >= 0; i--) {
+      const p = this.points[i];
+      p.life += dt;
+      const m = p.mesh;
+      const k = m.userData.kind;
+      if (k === 'arrow') {
+        m.userData.orbitPhase += dt * m.userData.orbitSpeed;
+        m.position.x = Math.cos(m.userData.orbitPhase) * m.userData.orbitR;
+        m.position.z = Math.sin(m.userData.orbitPhase) * m.userData.orbitR;
+        m.position.y = m.userData.orbitY + Math.sin(tNow * 1.5 + i) * 0.025;
+        // 箭头朝飞行方向 — cone 默认 +Y, 旋转 90° 让它平指
+        m.rotation.set(0, -m.userData.orbitPhase + Math.PI/2, Math.PI/2);
+      } else {
+        // 物理粒子
+        p.vy -= 1.4 * dt;  // 重力
+        m.position.x += p.vx * dt;
+        m.position.y += p.vy * dt;
+        m.position.z += p.vz * dt;
+        if (k === 'stone') {
+          m.rotation.x += dt * 3.5;
+          m.rotation.z += dt * 2.0;
+          if (m.position.y < 0.012 && p.vy < 0) {
+            m.position.y = 0.012;
+            p.vy = -p.vy * 0.4;
+            p.vx *= 0.6; p.vz *= 0.6;
+          }
+        } else if (k === 'spark') {
+          p.vy += 1.2 * dt;  // 抵消重力, 上升
+          m.material.opacity = (0.5 + 0.5 * Math.sin(p.life * 14)) * Math.max(0, 1 - p.life / p.maxLife);
+        } else if (k === 'ember') {
+          p.vy += 1.1 * dt;
+          p.vx += Math.sin(tNow * 1.2 + i * 0.7) * 0.025 * dt;
+          p.vz += Math.cos(tNow * 0.9 + i * 0.7) * 0.025 * dt;
+          m.material.opacity = 0.7 * Math.max(0, 1 - p.life / p.maxLife);
+        } else if (k === 'drop') {
+          m.material.opacity = 0.85 * Math.max(0, 1 - p.life / p.maxLife);
+        }
+      }
+      // 死亡
+      if (p.life >= p.maxLife || (k !== 'arrow' && m.position.y < -0.3)) {
+        this.group.remove(m);
+        m.geometry.dispose();
+        if (m.material.dispose) m.material.dispose();
+        this.points.splice(i, 1);
+      }
+    }
+  }
+}
+const typeParts = new TypeParticles();
+
+// ── 标签 ───────────────────────────────────────────
 const label3d = document.getElementById('label3d');
 const lblType = document.getElementById('lblType');
 const lblDay = document.getElementById('lblDay');
@@ -422,83 +579,112 @@ function setActiveType(t) {
   currentType = t;
   const T = TYPES[t];
   activeColor.setHex(T.color);
-  ringMat.color.copy(activeColor);
-  innerRingMat.color.copy(activeColor);
-  tickGroup.children.forEach(line => line.material.color.copy(activeColor));
+  // 白底: ring 用 type 色 lerp 到 dark amber 让在白底能读
+  const darkRingColor = activeColor.clone().lerp(new THREE.Color(0x2B1810), 0.55);
+  ringMat.color.copy(darkRingColor);
+  innerRingMat.color.copy(darkRingColor);
   runeMat.map.dispose();
   runeMat.map = makeRuneTexture(T.rune, activeColor);
   runeMat.needsUpdate = true;
-  // strands' color updates each frame in rebuildGeometry()
+  // 清掉 type 粒子让新 type 重启
+  typeParts.clear();
 
-  // Label
   lblType.textContent = T.label.toUpperCase();
   lblDay.textContent = T.daysAgo + 'D';
   lblNote.textContent = T.note;
   lblAuthor.textContent = `— ${T.author}, ${T.daysAgo} days ago`;
-  // CSS card border color via inline style
   const hex = '#' + activeColor.getHexString();
   label3d.querySelector('.card').style.borderColor = hex + 'aa';
   label3d.querySelector('.header').style.background = hex + '33';
   label3d.querySelector('.t').style.color = hex;
   label3d.querySelector('#lblDay').style.color = hex + '99';
-
-  ceremonyT = 0;  // restart ceremony
+  resetCeremony();
 }
 
 document.querySelectorAll('#controls button[data-type]').forEach(btn => {
   btn.onclick = () => {
-    document.querySelectorAll('#controls button[data-type]').forEach(b=>b.classList.toggle('active', b===btn));
+    document.querySelectorAll('#controls button[data-type]').forEach(b => b.classList.toggle('active', b === btn));
     setActiveType(btn.dataset.type);
   };
 });
-document.getElementById('replay').onclick = () => { ceremonyT = 0; };
-
-document.getElementById('cam-eye').onclick = () => {
-  cameraMode = 'eye';
-  // 平滑过渡到眼睛高度
-  cameraTarget.set(2.2, 1.6, 2.2);
-};
-document.getElementById('cam-overhead').onclick = () => {
-  cameraMode = 'overhead';
-  cameraTarget.set(0.5, 4.5, 1.5);
-};
-document.getElementById('cam-orbit').onclick = () => {
-  cameraMode = 'orbit';
-};
+document.getElementById('replay').onclick = () => { resetCeremony(); };
 
 let cameraMode = 'manual';
 const cameraTarget = new THREE.Vector3();
+document.getElementById('cam-eye').onclick = () => { cameraMode='eye'; cameraTarget.set(2.8, 1.6, 2.8); };
+document.getElementById('cam-far').onclick = () => { cameraMode='far'; cameraTarget.set(7.5, 2.5, 7.5); };
+document.getElementById('cam-far30').onclick = () => { cameraMode='far30'; cameraTarget.set(22, 8, 22); };
+document.getElementById('cam-overhead').onclick = () => { cameraMode='overhead'; cameraTarget.set(0.5, 5.5, 1.5); };
+document.getElementById('cam-orbit').onclick = () => { cameraMode='orbit'; };
 
-// ── Ceremony ─────────────────────────────────────────────────────
+// ── 仪式 ───────────────────────────────────────────
+// v6 极简版 (用户反馈: "仪式太浮夸 我只是希望圆形从一个点慢慢画出来"):
+//   0.00 - 0.50  圆环从 12 点钟开始 clockwise 描边出整圈
+//   0.50 - 0.85  中心 rune 浮现 + 微缩放
+//   0.85 - 1.00  烟柱开始升起
+// 删除: 4 道光束 / flash / shock ring (太浮夸)
+let ceremonyStartMs = performance.now();
 let ceremonyT = 0;
-
+function resetCeremony() { ceremonyStartMs = performance.now(); }
 function updateCeremonyVisuals(dt) {
-  if (ceremonyT < 1) ceremonyT = Math.min(1, ceremonyT + dt);
+  const elapsedS = (performance.now() - ceremonyStartMs) / 1000;
+  const CEREMONY_DURATION = 1.0;
+  ceremonyT = Math.min(1, elapsedS / CEREMONY_DURATION);
+  const t = ceremonyT;
 
-  // 阵图 strokeT 0..1 → 用 opacity 替代描边动画 (Three.js Ring 不支持局部 stroke, 用渐入)
-  const strokeT = Math.min(ceremonyT / 0.5, 1);
-  ringMat.opacity = 0.95 * strokeT;
-  innerRingMat.opacity = 0.5 * strokeT;
-  tickGroup.children.forEach(l => l.material.opacity = 0.65 * strokeT);
+  // 旧浮夸元素全部 hidden
+  for (const beam of summonBeams) beam.visible = false;
+  flashMat.opacity = 0;
+  shockMat.opacity = 0;
 
-  const runeT = Math.max(0, Math.min(1, (ceremonyT - 0.5) / 0.2));
+  // ── 圆环 clockwise 描边 (0.00 - 0.50) ── 外圈 + 内圈都描边
+  const drawT = Math.min(t / 0.50, 1);
+  const sweep = drawT * Math.PI * 2;
+  if (drawT > 0.01) {
+    ring.geometry.dispose();
+    ring.geometry = new THREE.RingGeometry(
+      RING_RADIUS - 0.013, RING_RADIUS, 96, 1,
+      -Math.PI / 2, sweep
+    );
+    ringMat.opacity = 0.55;
+    // 内圈也跟着描边 (用户反馈: 内圈不要一开始就是圈, 也要画出来)
+    innerRing.geometry.dispose();
+    innerRing.geometry = new THREE.RingGeometry(
+      RING_RADIUS * 0.65, RING_RADIUS * 0.665, 64, 1,
+      -Math.PI / 2, sweep
+    );
+    innerRingMat.opacity = 0.5;
+  } else {
+    ringMat.opacity = 0;
+    innerRingMat.opacity = 0;
+  }
+
+  // ── SDF rune 浮现 (0.50 - 0.85) ──
+  const runeT = Math.max(0, Math.min((t - 0.50) / 0.35, 1));
   runeMat.opacity = runeT * 0.95;
+  runeMesh.scale.setScalar(0.7 + runeT * 0.3);
 }
 
-// 自动旋转刻度
 function update(dt) {
-  tickGroup.rotation.z += dt * 0.18;
+  // (旋转弧已删除)
 
-  // strands
-  for (const s of strands) {
-    if (ceremonyT >= 0.7) {
-      s.update(dt);
+  // ribbon
+  // 丝带 — 永远 update (无生命周期), 仪式前 invisible
+  // 烟柱在 0.85s 后才开始 (光能使者序列: 光束→闪光→阵图→rune→烟柱)
+  for (const rb of ribbons) {
+    if (ceremonyT >= 0.85) {
+      rb.mesh.visible = true;
+      rb.update(dt);
     } else {
-      s.mesh.visible = false;
+      rb.mesh.visible = false;
     }
   }
 
-  // chiral fog 漂动
+  // type 专属粒子
+  // type 专属粒子: 碎石/水珠/火星/暖光/箭头 — type 的灵魂
+  if (ceremonyT >= 0.5) typeParts.update(dt, currentType, activeColor);
+
+  // 远雾
   scene.children.forEach(child => {
     if (child instanceof THREE.Sprite && child.userData.bobBase != null) {
       const t = performance.now() * 0.0006;
@@ -506,48 +692,35 @@ function update(dt) {
     }
   });
 
-  // 相机模式
+  // 相机
   if (cameraMode === 'orbit') {
     const t = performance.now() * 0.0003;
-    camera.position.x = Math.cos(t) * 3.0;
-    camera.position.z = Math.sin(t) * 3.0;
-    camera.position.y = 1.4;
-    camera.lookAt(0, 0.5, 0);
-    controls.target.set(0, 0.5, 0);
+    camera.position.set(Math.cos(t) * 3.8, 1.8, Math.sin(t) * 3.8);
+    camera.lookAt(0, 1.0, 0);
+    controls.target.set(0, 1.0, 0);
   } else if (cameraMode !== 'manual') {
-    // smooth transition then back to manual
     camera.position.lerp(cameraTarget, 0.06);
     if (camera.position.distanceTo(cameraTarget) < 0.05) cameraMode = 'manual';
   }
-
   controls.update();
 }
 
-// ── Project label position to screen ─────────────────────────────
 function updateLabelScreen() {
-  if (ceremonyT < 0.85) {
-    label3d.style.display = 'none';
-    return;
-  }
-  // 标签 anchor 在 cairn 上方 1.4m
-  const anchor = new THREE.Vector3(0, 1.4, 0);
+  if (ceremonyT < 0.85) { label3d.style.display = 'none'; return; }
+  // 标签悬浮在丝带顶端附近 (~2.8m), 不挤在底部
+  const anchor = new THREE.Vector3(0, 2.8, 0);
   const proj = anchor.clone().project(camera);
-  if (proj.z > 1) {
-    label3d.style.display = 'none';
-    return;
-  }
-  const x = (proj.x * 0.5 + 0.5) * window.innerWidth;
-  const y = (-proj.y * 0.5 + 0.5) * window.innerHeight;
+  if (proj.z > 1) { label3d.style.display = 'none'; return; }
+  const x = (proj.x * 0.5 + 0.5) * innerWidth;
+  const y = (-proj.y * 0.5 + 0.5) * innerHeight;
   label3d.style.display = 'block';
   label3d.style.left = x + 'px';
   label3d.style.top = y + 'px';
   label3d.style.opacity = Math.min(1, (ceremonyT - 0.85) / 0.15);
 }
 
-// 初始 type 设置
 setActiveType('cairn');
 
-// ── Loop ─────────────────────────────────────────────────────────
 let lastTs = performance.now();
 function animate(now) {
   const dt = Math.min(0.05, (now - lastTs) / 1000);
