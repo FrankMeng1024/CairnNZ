@@ -100,8 +100,8 @@ public static class ConeStrandPlayCapture
             ("daybright", 1.0f, new Color(0.95f, 0.93f, 0.85f)),
         };
         var angles = new (string label, Vector3 pos, Vector3 lookAt)[] {
-            ("eye",      new Vector3(0f, 1.6f, -2.5f), new Vector3(0f, 0.7f, 0f)),
-            ("overview", new Vector3(2.5f, 2.2f, -2.5f), new Vector3(0f, 0.4f, 0f)),
+            ("eye",      new Vector3(0f, 1.4f, -2.8f), new Vector3(0f, 0.85f, 0f)),  // v3.5h: balanced framing
+            ("overview", new Vector3(2.2f, 2.0f, -2.6f), new Vector3(0f, 0.6f, 0f)),
             ("overhead", new Vector3(0.0f, 4.0f, -1.0f), new Vector3(0f, 0.0f, 0f)),
         };
         foreach (var l in lightings)
@@ -124,8 +124,8 @@ public static class ConeStrandPlayCapture
         // outline pass which is disabled in Editor batch capture.
         Shader.SetGlobalFloat("_CairnGlobalDayNightT", 0.0f);
         cam.backgroundColor = new Color(0.02f, 0.03f, 0.10f);
-        cam.transform.position = new Vector3(0f, 1.6f, -2.5f);
-        cam.transform.LookAt(new Vector3(0f, 0.7f, 0f));
+        cam.transform.position = new Vector3(0f, 1.4f, -2.8f);
+        cam.transform.LookAt(new Vector3(0f, 0.85f, 0f));
         DespawnAll(spawner);
         var types = new[] { "cairn", "danger", "water", "hut", "junction" };
         foreach (var t in types)

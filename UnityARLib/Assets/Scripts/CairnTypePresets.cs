@@ -64,16 +64,16 @@ public static class CairnTypePresets
         },
         ["junction"] = new Preset
         {
-            color              = FromHex("#FFB347"),
+            color              = FromHex("#C4E847"),  // v3.5g: green-gold (was #FFB347 amber, too close to hut)
             scrollSpeed        = 0.7f,
             bloomBoost         = 3.0f,
             fresnelPow         = 1.8f,
             fresnelIntensity   = 0.9f,
             breathFreq         = 0.6f,
-            haloColor          = FromHex("#5C3A12"),
+            haloColor          = FromHex("#3A4F12"),
             haloIntensity      = 2.0f,
             particleRate       = 25f,
-            particleStartColor = FromHex("#FFCC66"),
+            particleStartColor = FromHex("#DDFA8A"),
         },
         ["water"] = new Preset
         {

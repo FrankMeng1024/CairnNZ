@@ -529,7 +529,13 @@ public partial class PortalSpawner
 
         for (int i = 0; i < count; i++)
         {
-            float angle = (i / (float)count) * Mathf.PI * 2f + Mathf.PI * 0.25f;
+            // v3.5h: organic asymmetry. Each strand gets a unique angle on
+            // the ring (not 180° apart) and a per-strand random tilt+yaw
+            // jitter so the pair reads as "two living strands" not "two
+            // mirrored spotlights". Hash by strand index to keep stable
+            // across frames.
+            float angle = (i / (float)count) * Mathf.PI * 2f + Mathf.PI * 0.25f
+                          + Mathf.Sin(i * 17.31f) * 0.4f;  // ±23° angular jitter
             float coneHeight = heights[i % heights.Length];
             float scaleY = coneHeight / 1.7f;     // outer mesh authored at 1.7m
 
@@ -539,29 +545,33 @@ public partial class PortalSpawner
             strandGo.transform.localPosition = new Vector3(
                 Mathf.Cos(angle) * radius, baseLift,
                 Mathf.Sin(angle) * radius);
-            // v3.3 review-fix: 4° inward tilt (top points converge slightly,
-            // bases stay at radius 0.20m) + 5° counter-yaw per strand so the
-            // pair reads as "two living strands" not "two parallel spotlights".
-            // Direction conventions: tilt around an axis perpendicular to the
-            // radial direction → rotates the cone so its top leans inward.
+            // v3.5h: stronger lean (was 4° → 7°) + asymmetric per-strand
+            // tilt jitter so the two strands aren't mirror images.
             float tiltDir = -1f;  // negative = lean inward
             float yawDir = (i % 2 == 0) ? 1f : -1f;  // alternate counter-yaw
-            // Compute the radial outward direction in xz, then rotate around
-            // its 90° rotated axis (i.e. tangent) to tilt the strand inward.
+            float tiltJitter = Mathf.Cos(i * 13.7f) * 2.5f;   // ±2.5° per-strand
+            float yawJitter  = Mathf.Sin(i * 9.3f) * 3.0f;    // ±3° per-strand
             float tangentAngle = angle + Mathf.PI * 0.5f;
             Vector3 tiltAxis = new Vector3(Mathf.Cos(tangentAngle), 0, Mathf.Sin(tangentAngle));
-            Quaternion tilt = Quaternion.AngleAxis(4f * tiltDir, tiltAxis);
-            Quaternion yaw  = Quaternion.AngleAxis(5f * yawDir, Vector3.up);
+            Quaternion tilt = Quaternion.AngleAxis((7f + tiltJitter) * tiltDir, tiltAxis);
+            Quaternion yaw  = Quaternion.AngleAxis((6f + yawJitter) * yawDir, Vector3.up);
             strandGo.transform.localRotation = tilt * yaw;
             strandGo.transform.localScale = new Vector3(1f, scaleY, 1f);
 
             // ── Inner core (thin bright trail) ──
+            // v3.5i: inner is taller (1.6m vs outer scaled to coneHeight)
+            // and slightly offset on x — when paired with outer's lean,
+            // inner rises like a "rising spirit thread" peeking ABOVE the
+            // halo. References: DS chiral fingers extending past the wave;
+            // Sky CotL light pillars where the bright thread overshoots.
             var innerGo = new GameObject("Inner");
             innerGo.transform.SetParent(strandGo.transform, worldPositionStays: false);
-            // Inner sits 5cm above the outer base so the bright trail starts above the halo skirt.
-            innerGo.transform.localPosition = new Vector3(0, 0.05f, 0);
-            // Inner mesh is 1.4m authored — scale relative to it.
-            innerGo.transform.localScale = new Vector3(1f, 1f, 1f);
+            // Inner sits 5cm above the outer base + slight lateral wiggle.
+            float innerXOff = Mathf.Sin(i * 7.7f) * 0.015f;  // ±1.5cm
+            innerGo.transform.localPosition = new Vector3(innerXOff, 0.05f, 0);
+            // Inner authored at 1.4m → scale to 1.15× so it overshoots outer tip.
+            float innerScale = 1.15f;
+            innerGo.transform.localScale = new Vector3(0.85f, innerScale, 0.85f);  // narrower body, taller
             var innerMf = innerGo.AddComponent<MeshFilter>();
             innerMf.sharedMesh = meshInner;
             var innerMr = innerGo.AddComponent<MeshRenderer>();

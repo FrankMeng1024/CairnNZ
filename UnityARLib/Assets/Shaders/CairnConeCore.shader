@@ -32,8 +32,8 @@ Shader "Cairn/CairnConeCore"
         _FlowStrength   ("Flow Strength", Range(0.0, 1.0)) = 0.65
         _RimSharpness   ("Rim Sharpness (silhouette focus)", Range(1.0, 6.0)) = 3.2
         _BaseFadeStart  ("Base Fade Start", Range(0.0, 0.4)) = 0.18
-        _TipFadeStart   ("Tip Fade Start",  Range(0.4, 1.0)) = 0.45
-        _TipPower       ("Tip Power Curve (gamma)", Range(1.0, 4.0)) = 2.2
+        _TipFadeStart   ("Tip Fade Start",  Range(0.4, 1.0)) = 0.30
+        _TipPower       ("Tip Power Curve (gamma)", Range(1.0, 4.0)) = 3.5
         _Height         ("Strand Height (m)", Range(0.5, 5.0)) = 1.6
         _BloomBoost     ("Bloom Boost (HDR multiplier)", Range(0.5, 2.0)) = 0.8
         _MaxLuma        ("HDR Max Luma Clamp", Range(1.0, 3.0)) = 1.6
@@ -104,11 +104,14 @@ Shader "Cairn/CairnConeCore"
 
                 // ---- TWO-LAYER FLOW NOISE (turbulence inside volume) ----
                 float t = _Time.y + _PhaseOffset;
-                // Low-freq layer
-                float2 uvA = IN.worldPos.xz * 0.6 + float2(0, IN.worldPos.y * 0.8 - t * _FlowSpeed);
+                // v3.5g: increase UV frequency so turbulence forms visible
+                // wisps instead of broad gradients. Vertical scroll dominates
+                // — the eye reads "rising smoke" not "drifting fog".
+                // Low-freq layer (broader rising bands)
+                float2 uvA = IN.worldPos.xz * 1.4 + float2(0, IN.worldPos.y * 1.6 - t * _FlowSpeed);
                 float nA = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, uvA).r;
-                // High-freq counter layer
-                float2 uvB = IN.worldPos.xz * 1.6 + float2(t * 0.3, IN.worldPos.y * 1.5 - t * _FlowSpeed2);
+                // High-freq counter layer (fine sub-strand detail)
+                float2 uvB = IN.worldPos.xz * 3.2 + float2(t * 0.5, IN.worldPos.y * 3.0 - t * _FlowSpeed2);
                 float nB = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, uvB).r;
                 // Composite: layered noise visible as wisps inside the volume.
                 // v3.3 review-fix: widen flow gate range so turbulence is

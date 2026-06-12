@@ -108,7 +108,7 @@ namespace Cairn.AR.Editor
 
             // Outer halo — DOMINANT volumetric halo with rim tint.
             var coreOuterMat = new Material(coreShader) { name = "CairnConeCoreOuter" };
-            coreOuterMat.SetFloat("_RimSharpness", 4.5f);
+            coreOuterMat.SetFloat("_RimSharpness", 2.8f);   // v3.5g was 4.5 — softer gaussian-like falloff
             coreOuterMat.SetFloat("_FlowStrength", 0.95f);
             coreOuterMat.SetFloat("_BloomBoost", 0.35f);
             coreOuterMat.SetFloat("_NightMul", 0.55f);     // v3.5f: only 1 cairn now
