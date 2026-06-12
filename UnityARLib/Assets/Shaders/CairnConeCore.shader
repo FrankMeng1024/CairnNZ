@@ -1,36 +1,42 @@
-// v0.2.3 Branch C — CairnConeCore (additive emissive core for ribbon strand)
+// v0.2.3 Branch C v3.1 — CairnConeCore (HOLLOW-core volumetric strand)
 //
-// Architecture (Plan E-prime, subagent-validated):
-//   • Mesh = vertical cone (radius 0.18m base → 0.05m tip, height ~1.6-2.2m).
-//   • Blend One One (additive) — punches through dark background.
-//   • Day-vs-night colour ramp via _CairnGlobalDayNightT (0=night, 1=day):
-//       night: cool spectrum (cyan core → violet edge)
-//       day:   warm spectrum (peach core → amber edge)
-//   • Internal flow: scrolling 1D gradient (Y world coord) + sample of
-//     strand_flow noise texture in world space for "substance" (Returnal/
-//     Death-Stranding style — turbulence inside the volume, silhouette
-//     mostly stable).
-//   • Tip fade + base fade vertical envelope (smoothstep).
-//   • Distance-aware brightness boost via _CairnGlobalCamDist
-//     (farther = brighter, like WispShader v207 inverse-distance pattern).
+// v3.0 was scored 3.0/10 by VFX subagent: cones looked like "ice-cream
+// cones" — solid white candles, no internal life, no type identity.
 //
-// Designed for mobile budget (single pass, no GrabPass, no compute, ~30 ALU/frag).
+// v3.1 inverts the substance balance per Sky Children / Death Stranding
+// chiral pattern: HOLLOW core + bright RIM. The eye reads it as "volume
+// of light" instead of "painted strip" or "solid cone".
+//
+//   Architecture:
+//   • Mesh = vertical cone (radius 0.18m base → 0.0m tip = true apex).
+//   • Blend One One additive.
+//   • alpha = (radial silhouette factor) × (height envelope) × (flow noise gate)
+//     where radial = high at silhouette (fresnel ^ sharpness), low at axis.
+//   • TWO noise samples at different frequency, additive overlay → visible
+//     turbulence inside the volume.
+//   • Per-type _TypeRimTint replaces the old fixed Day/Night colour pair.
+//     Core stays near white (with 25% type tint mix); rim is full type colour.
+//   • HDR clamp ≤ 1.6 so flow + fresnel signal isn't lost to display clipping.
 
 Shader "Cairn/CairnConeCore"
 {
     Properties
     {
-        _CoreColorNight ("Core Color (Night)", Color) = (1.0, 0.98, 0.85, 1)
-        _RimColorNight  ("Rim Color (Night)",  Color) = (0.4, 0.85, 1.0, 1)
-        _CoreColorDay   ("Core Color (Day)",   Color) = (1.0, 0.95, 0.78, 1)
-        _RimColorDay    ("Rim Color (Day)",    Color) = (0.78, 0.58, 0.30, 1)
-        _FlowTex        ("Flow Noise (RGB scrolls)", 2D) = "white" {}
+        _TypeRimTint    ("Type Rim Tint", Color) = (1.0, 0.85, 0.55, 1)
+        _CoreTintMix    ("Core Tint Mix (0=white, 1=fully tinted)", Range(0,1)) = 0.25
+        _NightMul       ("Night Brightness", Range(0.5, 3.0)) = 1.6
+        _DayMul         ("Day Brightness",   Range(0.2, 1.5)) = 0.55
+        _FlowTex        ("Flow Noise (R)", 2D) = "white" {}
         _FlowSpeed      ("Flow Speed (m/s upward)", Range(0.1, 2.0)) = 0.45
-        _FlowStrength   ("Flow Strength (alpha mod)", Range(0.0, 1.0)) = 0.55
-        _BaseFadeStart  ("Base Fade Start (worldY/height)", Range(0,0.3)) = 0.05
-        _TipFadeStart   ("Tip Fade Start (worldY/height)",  Range(0.5,1.0)) = 0.65
+        _FlowSpeed2     ("Flow Speed 2 (counter)", Range(0.1, 3.0)) = 1.30
+        _FlowStrength   ("Flow Strength", Range(0.0, 1.0)) = 0.65
+        _RimSharpness   ("Rim Sharpness (silhouette focus)", Range(1.0, 6.0)) = 3.2
+        _BaseFadeStart  ("Base Fade Start", Range(0.0, 0.4)) = 0.18
+        _TipFadeStart   ("Tip Fade Start",  Range(0.4, 1.0)) = 0.45
+        _TipPower       ("Tip Power Curve (gamma)", Range(1.0, 4.0)) = 2.2
         _Height         ("Strand Height (m)", Range(0.5, 5.0)) = 1.6
-        _BloomBoost     ("Bloom Boost (HDR multiplier)", Range(0.5, 4.0)) = 1.5
+        _BloomBoost     ("Bloom Boost (HDR multiplier)", Range(0.5, 2.0)) = 0.8
+        _MaxLuma        ("HDR Max Luma Clamp", Range(1.0, 3.0)) = 1.6
         _PhaseOffset    ("Phase Offset (rad, per-instance)", Range(0, 6.283)) = 0
     }
     SubShader
@@ -38,10 +44,7 @@ Shader "Cairn/CairnConeCore"
         Tags { "Queue" = "Transparent" "RenderType" = "Transparent" "IgnoreProjector"="True" "RenderPipeline"="UniversalPipeline" }
         LOD 100
         ZWrite Off
-        // v3-review-fix: Cull Off so cone is visible from inside (close range).
-        // Cone radius up to 0.43m total — user walking close ends up "inside"
-        // the cluster; Cull Back would make it invisible at close range.
-        Cull Off
+        Cull Off                       // visible from inside cluster too
         Blend One One                  // additive
         BlendOp Add
 
@@ -53,16 +56,15 @@ Shader "Cairn/CairnConeCore"
             #pragma target 3.0
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            // Per-material
-            float4 _CoreColorNight, _RimColorNight, _CoreColorDay, _RimColorDay;
+            float4 _TypeRimTint;
+            float _CoreTintMix, _NightMul, _DayMul;
             TEXTURE2D(_FlowTex); SAMPLER(sampler_FlowTex);
-            float _FlowSpeed, _FlowStrength, _BaseFadeStart, _TipFadeStart, _Height, _BloomBoost;
-            float _PhaseOffset;     // per-instance MPB — desync flow per cone
+            float _FlowSpeed, _FlowSpeed2, _FlowStrength;
+            float _RimSharpness, _BaseFadeStart, _TipFadeStart, _TipPower;
+            float _Height, _BloomBoost, _MaxLuma, _PhaseOffset;
 
-            // Globals (set by CairnDayNightAdapter / CairnRibbonLOD)
-            float _CairnGlobalDayNightT;     // 0..1 — 0 night, 1 day
-            float _CairnGlobalCamDist;       // metres
-            float _CairnGlobalAmbientLuma;   // 0..1 reserved (live AR camera adapt)
+            float _CairnGlobalDayNightT;
+            float _CairnGlobalCamDist;
 
             struct Attributes
             {
@@ -76,7 +78,7 @@ Shader "Cairn/CairnConeCore"
                 float3 worldPos   : TEXCOORD0;
                 float3 normalWS   : TEXCOORD1;
                 float2 uv         : TEXCOORD2;
-                float  heightT    : TEXCOORD3; // 0=base, 1=tip (object space height)
+                float  heightT    : TEXCOORD3;
             };
 
             Varyings vert (Attributes IN)
@@ -87,57 +89,78 @@ Shader "Cairn/CairnConeCore"
                 OUT.worldPos = worldPos;
                 OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS);
                 OUT.uv = IN.uv;
-                // Cone mesh authored with Y from 0 to _Height; pass normalized 0..1
                 OUT.heightT = saturate(IN.positionOS.y / max(0.0001, _Height));
                 return OUT;
             }
 
             half4 frag (Varyings IN) : SV_Target
             {
-                // Vertical envelope: smoothstep base + 1-smoothstep tip
+                // Vertical envelope — base lift-off + power-curve tip dissolve.
                 float baseEnv = smoothstep(0.0, max(0.001, _BaseFadeStart), IN.heightT);
-                float tipEnv  = 1.0 - smoothstep(_TipFadeStart, 1.0, IN.heightT);
+                // Power curve top fade: slow exponential dissolve into sky.
+                float tipFalloff = 1.0 - smoothstep(_TipFadeStart, 1.0, IN.heightT);
+                float tipEnv = pow(tipFalloff, _TipPower);
                 float vertEnv = baseEnv * tipEnv;
 
-                // Flow noise (world space scroll upward along Y)
-                // Per-instance phase offset (_PhaseOffset) desyncs the
-                // 4 cones around a cairn so they don't pulse in lockstep.
+                // ---- TWO-LAYER FLOW NOISE (turbulence inside volume) ----
                 float t = _Time.y + _PhaseOffset;
-                float2 flowUV = IN.worldPos.xz * 0.6 + float2(0, IN.worldPos.y * 0.8 - t * _FlowSpeed);
-                float n = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, flowUV).r;
-                // Gentle remap: keep most of the cone visible but punch internal contrast
-                float flowMod = lerp(1.0, 0.55 + 0.9 * n, _FlowStrength);
+                // Low-freq layer
+                float2 uvA = IN.worldPos.xz * 0.6 + float2(0, IN.worldPos.y * 0.8 - t * _FlowSpeed);
+                float nA = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, uvA).r;
+                // High-freq counter layer
+                float2 uvB = IN.worldPos.xz * 1.6 + float2(t * 0.3, IN.worldPos.y * 1.5 - t * _FlowSpeed2);
+                float nB = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, uvB).r;
+                // Composite: layered noise visible as wisps inside the volume.
+                // v3.3 review-fix: widen flow gate range so turbulence is
+                // actually visible. Was lerp(1.0, 0.4+1.2*flow, S) → ~[0.7,1.0].
+                // Now lerp(1.0, 0.15+1.7*flow, S) → ~[0.15,1.85] = visible wisps.
+                float flow = (nA * 0.6 + nB * 0.4);
+                float flowGate = lerp(1.0, 0.15 + 1.7 * flow, _FlowStrength);
 
-                // Day/night colour blend (core + rim)
-                float3 coreCol = lerp(_CoreColorNight.rgb, _CoreColorDay.rgb,  _CairnGlobalDayNightT);
-                float3 rimCol  = lerp(_RimColorNight.rgb,  _RimColorDay.rgb,   _CairnGlobalDayNightT);
-
-                // Fresnel-ish radial: cone normals point radially outward (mesh
-                // authored that way). dot with view = strong at silhouette.
+                // ---- HOLLOW VOLUME via fresnel rim ----
+                // Cone normals are radial (set up by mesh builder). dot with view
+                // is 0 at silhouette, 1 facing camera. We INVERT:
+                //   fres ≈ 1 at silhouette (where light wraps the volume)
+                //   fres ≈ 0 facing camera (where eye looks through hollow center)
                 float3 viewDir = normalize(_WorldSpaceCameraPos - IN.worldPos);
-                float fres = 1.0 - saturate(dot(normalize(IN.normalWS), viewDir));
-                fres = pow(fres, 1.6); // sharpen rim
+                float NdotV = saturate(dot(normalize(IN.normalWS), viewDir));
+                float fres = 1.0 - NdotV;
+                float rimAlpha = pow(fres, _RimSharpness);
 
-                // Mix core <-> rim by fres: facing camera = core (warm white),
-                // silhouette = rim (saturated tint). This is the Sky Children
-                // 'has body, has glow' effect.
-                float3 col = lerp(coreCol, rimCol, fres);
+                // ---- COLOUR ----
+                // v3.3 review-fix: lower white floor so it's not a saturated
+                // emitter competing with type-tinted rim. Pure-bleach white was
+                // washing out type identity (water/danger/cairn looked same).
+                float3 white = float3(0.85, 0.82, 0.78);
+                float3 coreCol = lerp(white, _TypeRimTint.rgb, _CoreTintMix);
+                float3 rimCol  = _TypeRimTint.rgb;
+                // Rim wins at silhouette, core peeks through where rim alpha is low.
+                float3 col = lerp(coreCol, rimCol, rimAlpha);
 
-                // Distance-aware brightness boost (WispShader v207 pattern).
-                // Closer cairns are dimmer; far cairns punch through.
-                float distFactor = saturate(_CairnGlobalCamDist / 18.0); // 0 at <1m, 1 at >=18m
-                float boost = lerp(1.0, _BloomBoost, distFactor);
+                // ---- INTENSITY ----
+                // Day vs night brightness multiplier. Day is dimmer — outline does the silhouette work.
+                float dayMul = lerp(_NightMul, _DayMul, _CairnGlobalDayNightT);
 
-                // Final luminance — additive expects HDR > 1 ok.
-                float a = vertEnv * flowMod;
-                float3 finalRGB = col * a * boost;
+                // Distance brightness boost (far cairns visible).
+                float distFactor = saturate(_CairnGlobalCamDist / 18.0);
+                float distBoost = lerp(1.0, _BloomBoost, distFactor);
 
-                // Day mode adjustment: in additive, daytime sky #E8DCC4 is
-                // already very bright; reduce alpha contribution to keep
-                // silhouette readable rather than blown out.
-                finalRGB *= lerp(1.0, 0.55, _CairnGlobalDayNightT);
+                // ---- ALPHA ----
+                // Hollow look: alpha is rim × envelope × flow.
+                float alpha = rimAlpha * vertEnv * flowGate;
+                // Subtle fill so the very centre isn't invisible — but heavily reduced.
+                alpha += vertEnv * flowGate * 0.15;
 
-                return half4(finalRGB, a);
+                // Final RGB. Clamp to MaxLuma so HDR doesn't saturate to white,
+                // preserving rim and flow signal.
+                float3 finalRGB = col * alpha * dayMul * distBoost;
+                float maxC = max(finalRGB.r, max(finalRGB.g, finalRGB.b));
+                if (maxC > _MaxLuma)
+                {
+                    finalRGB *= _MaxLuma / maxC;
+                }
+
+                return half4(finalRGB, alpha);
             }
             ENDHLSL
         }

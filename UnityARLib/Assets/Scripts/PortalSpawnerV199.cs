@@ -489,74 +489,120 @@ public partial class PortalSpawner
     private bool AttachConeStrands(GameObject parent, Color baseColor)
     {
         var globals = CairnGlobals.Instance;
-        // Lazy-load shared mesh + materials (created by CairnConeStrandSetup
-        // and stored under Assets/Resources/ for runtime device load).
-        var coneMesh = Resources.Load<Mesh>("Meshes/cairn_cone_strand");
-        var coreMat  = Resources.Load<Material>("Materials/CairnConeCore");
-        var outMat   = Resources.Load<Material>("Materials/CairnConeOutline");
+        // v3.2: Nested cones — inner solid trail + outer hollow halo (Plan C).
+        var meshInner = Resources.Load<Mesh>("Meshes/cairn_cone_inner");
+        var meshOuter = Resources.Load<Mesh>("Meshes/cairn_cone_outer");
+        var matInner  = Resources.Load<Material>("Materials/CairnConeCoreInner");
+        var matOuter  = Resources.Load<Material>("Materials/CairnConeCoreOuter");
+        var outMat    = Resources.Load<Material>("Materials/CairnConeOutline");
 #if UNITY_EDITOR
-        // Editor-only fallback: if menu hasn't been run yet, try direct path.
-        if (coneMesh == null) coneMesh = UnityEditor_LoadAssetSafe<Mesh>("Assets/Resources/Meshes/cairn_cone_strand.asset");
-        if (coreMat == null)  coreMat  = UnityEditor_LoadAssetSafe<Material>("Assets/Resources/Materials/CairnConeCore.mat");
-        if (outMat == null)   outMat   = UnityEditor_LoadAssetSafe<Material>("Assets/Resources/Materials/CairnConeOutline.mat");
+        if (meshInner == null) meshInner = UnityEditor_LoadAssetSafe<Mesh>("Assets/Resources/Meshes/cairn_cone_inner.asset");
+        if (meshOuter == null) meshOuter = UnityEditor_LoadAssetSafe<Mesh>("Assets/Resources/Meshes/cairn_cone_outer.asset");
+        if (matInner  == null) matInner  = UnityEditor_LoadAssetSafe<Material>("Assets/Resources/Materials/CairnConeCoreInner.mat");
+        if (matOuter  == null) matOuter  = UnityEditor_LoadAssetSafe<Material>("Assets/Resources/Materials/CairnConeCoreOuter.mat");
+        if (outMat    == null) outMat    = UnityEditor_LoadAssetSafe<Material>("Assets/Resources/Materials/CairnConeOutline.mat");
 #endif
 
-        if (coneMesh == null || coreMat == null)
+        if (meshInner == null || meshOuter == null || matInner == null || matOuter == null)
         {
             UnityLogger.W("V199",
-                "AttachConeStrands: cone-strand assets missing — run menu " +
-                "'Cairn → Branch C → Setup Cone Strand Assets' in Unity Editor. " +
-                "Falling back to HeroRibbons.");
+                "AttachConeStrands v3.2: nested cone assets missing — run menu " +
+                "'Cairn → Branch C → Setup Cone Strand Assets' in Unity Editor.");
             return false;
         }
 
+        // v3.2 review-fix: 2 strands instead of 4 (subagent: 4 cones at 0.25m
+        // radius read as a solid wall; 2 with bigger height stagger reads
+        // like DS chiral silhouette pair).
         int count = globals != null
-            ? Mathf.Max(1, Mathf.RoundToInt(globals.GetForType(null, "ConeStrandCount", 4f)))
-            : 4;
-        float radius = globals != null ? globals.GetForType(null, "ConeStrandRingRadius", 0.25f) : 0.25f;
+            ? Mathf.Max(1, Mathf.RoundToInt(globals.GetForType(null, "ConeStrandCount", 2f)))
+            : 2;
+        float radius = globals != null ? globals.GetForType(null, "ConeStrandRingRadius", 0.20f) : 0.20f;
 
         var root = new GameObject("ConeStrands");
         root.transform.SetParent(parent.transform, worldPositionStays: false);
 
+        // v3.2: bigger height stagger so each strand is distinguishable.
+        // 2 strands at heights 1.4m / 2.0m (Δ=60cm vs old 13cm).
+        float[] heights = new float[] { 1.4f, 2.0f };
+        float baseLift = 0.12f;
+
         for (int i = 0; i < count; i++)
         {
-            float angle = (i / (float)count) * Mathf.PI * 2f;
-            var go = new GameObject($"ConeStrand_{i}");
-            go.transform.SetParent(root.transform, worldPositionStays: false);
-            go.transform.localPosition = new Vector3(
-                Mathf.Cos(angle) * radius, 0,
+            float angle = (i / (float)count) * Mathf.PI * 2f + Mathf.PI * 0.25f;
+            float coneHeight = heights[i % heights.Length];
+            float scaleY = coneHeight / 1.7f;     // outer mesh authored at 1.7m
+
+            // ── Strand container ──
+            var strandGo = new GameObject($"ConeStrand_{i}");
+            strandGo.transform.SetParent(root.transform, worldPositionStays: false);
+            strandGo.transform.localPosition = new Vector3(
+                Mathf.Cos(angle) * radius, baseLift,
                 Mathf.Sin(angle) * radius);
+            // v3.3 review-fix: 4° inward tilt (top points converge slightly,
+            // bases stay at radius 0.20m) + 5° counter-yaw per strand so the
+            // pair reads as "two living strands" not "two parallel spotlights".
+            // Direction conventions: tilt around an axis perpendicular to the
+            // radial direction → rotates the cone so its top leans inward.
+            float tiltDir = -1f;  // negative = lean inward
+            float yawDir = (i % 2 == 0) ? 1f : -1f;  // alternate counter-yaw
+            // Compute the radial outward direction in xz, then rotate around
+            // its 90° rotated axis (i.e. tangent) to tilt the strand inward.
+            float tangentAngle = angle + Mathf.PI * 0.5f;
+            Vector3 tiltAxis = new Vector3(Mathf.Cos(tangentAngle), 0, Mathf.Sin(tangentAngle));
+            Quaternion tilt = Quaternion.AngleAxis(4f * tiltDir, tiltAxis);
+            Quaternion yaw  = Quaternion.AngleAxis(5f * yawDir, Vector3.up);
+            strandGo.transform.localRotation = tilt * yaw;
+            strandGo.transform.localScale = new Vector3(1f, scaleY, 1f);
 
-            var mf = go.AddComponent<MeshFilter>();
-            mf.sharedMesh = coneMesh;
-            var mr = go.AddComponent<MeshRenderer>();
-            // Two-material assignment (URP forward — both passes render).
-            mr.sharedMaterials = (outMat != null)
-                ? new Material[] { coreMat, outMat }
-                : new Material[] { coreMat };
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
+            // ── Inner core (thin bright trail) ──
+            var innerGo = new GameObject("Inner");
+            innerGo.transform.SetParent(strandGo.transform, worldPositionStays: false);
+            // Inner sits 5cm above the outer base so the bright trail starts above the halo skirt.
+            innerGo.transform.localPosition = new Vector3(0, 0.05f, 0);
+            // Inner mesh is 1.4m authored — scale relative to it.
+            innerGo.transform.localScale = new Vector3(1f, 1f, 1f);
+            var innerMf = innerGo.AddComponent<MeshFilter>();
+            innerMf.sharedMesh = meshInner;
+            var innerMr = innerGo.AddComponent<MeshRenderer>();
+            innerMr.sharedMaterial = matInner;
+            innerMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            innerMr.receiveShadows = false;
+            var innerMpb = new MaterialPropertyBlock();
+            innerMpb.SetFloat("_PhaseOffset", (i / (float)count) * Mathf.PI * 2f);
+            innerMpb.SetFloat("_Height", 1.4f);
+            innerMpb.SetColor("_TypeRimTint", baseColor);
+            innerMr.SetPropertyBlock(innerMpb);
+            UnityLogger.IForward("V199", $"ConeInner_{i} _TypeRimTint=({baseColor.r:F2},{baseColor.g:F2},{baseColor.b:F2})");
 
-            // Per-cone MaterialPropertyBlock — phase + slight scale variance.
-            var mpb = new MaterialPropertyBlock();
-            mpb.SetFloat("_PhaseOffset", (i / (float)count) * Mathf.PI * 2f);
-            // Color tint from per-type baseColor — let shader's day/night
-            // global override only if material default is white-ish.
-            mpb.SetColor("_CoreColorNight", new Color(
-                Mathf.Min(1f, baseColor.r * 1.4f + 0.15f),
-                Mathf.Min(1f, baseColor.g * 1.4f + 0.15f),
-                Mathf.Min(1f, baseColor.b * 1.4f + 0.20f),
-                1f));
-            mpb.SetColor("_RimColorNight", baseColor);
-            mr.SetPropertyBlock(mpb);
-
-            // Wire LOD adapter so this strand's distance is tracked
-            // (multiple strands per cairn — they all share the cairn root's
-            // distance; the LOD component reads camera position, not target).
+            // ── Outer halo (volumetric shell with rim fresnel) ──
+            var outerGo = new GameObject("Outer");
+            outerGo.transform.SetParent(strandGo.transform, worldPositionStays: false);
+            outerGo.transform.localPosition = Vector3.zero;
+            var outerMf = outerGo.AddComponent<MeshFilter>();
+            outerMf.sharedMesh = meshOuter;
+            var outerMr = outerGo.AddComponent<MeshRenderer>();
+            outerMr.sharedMaterials = (outMat != null)
+                ? new Material[] { matOuter, outMat }
+                : new Material[] { matOuter };
+            outerMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            outerMr.receiveShadows = false;
+            var outerMpb = new MaterialPropertyBlock();
+            outerMpb.SetFloat("_PhaseOffset", (i / (float)count) * Mathf.PI * 2f + Mathf.PI * 0.5f);
+            outerMpb.SetFloat("_Height", 1.7f);
+            outerMpb.SetColor("_TypeRimTint", baseColor);
+            // v3.4 review-fix: outline uses DEEPER type-tinted dark, not flat
+            // brown. Water → deep teal (#0D3340), danger → deep crimson, etc.
+            // This lets type identity actually read on white-bg (additive
+            // bleaches type tint; outline is the only carrier on day mode).
+            // Formula: lerp(baseColor, black, 0.65) → keep hue, drop value 65%.
+            Color deepTint = new Color(baseColor.r * 0.35f, baseColor.g * 0.35f, baseColor.b * 0.35f, 1f);
+            outerMpb.SetColor("_OutlineColor", deepTint);
+            outerMr.SetPropertyBlock(outerMpb);
         }
 
         UnityLogger.IForward("V199",
-            $"AttachConeStrands count={count} radius={radius:F2}");
+            $"AttachConeStrands v3.2 nested count={count} radius={radius:F2}");
         return true;
     }
 

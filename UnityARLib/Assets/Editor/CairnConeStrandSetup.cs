@@ -33,15 +33,39 @@ namespace Cairn.AR.Editor
             EnsureFolder("Assets/Resources/Meshes");
             EnsureFolder("Assets/Resources/Materials");
 
-            // 1. Cone mesh — 2 submeshes (one per material slot: core + outline)
-            var mesh = BuildConeMesh(
+            // 1. v3.2: Two cone meshes — inner (solid trail) + outer (hollow halo).
+            // Subagent Plan C nested cones: small inner solid (the bright core line)
+            // nested fully inside larger outer hollow shell (the volumetric halo).
+            // Eye sees: through outer rim → dimmer interior → bright thin core trail.
+            // Matches DS chiral pattern.
+            var meshInner = BuildConeMesh(
+                baseRadius: 0.04f,    // very thin core trail
+                tipRadius: 0.0f,
+                height: 1.4f,
+                radialSegments: 12,
+                heightSegments: 6);
+            string innerPath = "Assets/Resources/Meshes/cairn_cone_inner.asset";
+            AssetDatabase.CreateAsset(meshInner, innerPath);
+
+            var meshOuter = BuildConeMesh(
+                baseRadius: 0.18f,    // outer halo
+                tipRadius: 0.0f,
+                height: 1.7f,
+                radialSegments: 16,
+                heightSegments: 8);
+            string outerPath = "Assets/Resources/Meshes/cairn_cone_outer.asset";
+            AssetDatabase.CreateAsset(meshOuter, outerPath);
+
+            // Keep the legacy single-mesh asset for compatibility (some debug
+            // paths reference it).
+            var meshLegacy = BuildConeMesh(
                 baseRadius: 0.18f,
-                tipRadius: 0.05f,
+                tipRadius: 0.0f,
                 height: 1.6f,
                 radialSegments: 16,
                 heightSegments: 8);
-            string meshPath = "Assets/Resources/Meshes/cairn_cone_strand.asset";
-            AssetDatabase.CreateAsset(mesh, meshPath);
+            string legacyPath = "Assets/Resources/Meshes/cairn_cone_strand.asset";
+            AssetDatabase.CreateAsset(meshLegacy, legacyPath);
             AssetDatabase.SaveAssets();
 
             // 2. Core material
@@ -66,6 +90,33 @@ namespace Cairn.AR.Editor
             string outlineMatPath = "Assets/Resources/Materials/CairnConeOutline.mat";
             AssetDatabase.CreateAsset(outlineMat, outlineMatPath);
 
+            // v3.4: Inner = thin tinted thread (carries type identity at the
+            // visible bright thread). Outer = halo with strong type rim.
+            //
+            // Inner-core material — thin TINTED thread.
+            var coreInnerMat = new Material(coreShader) { name = "CairnConeCoreInner" };
+            coreInnerMat.SetFloat("_RimSharpness", 1.5f);
+            coreInnerMat.SetFloat("_FlowStrength", 0.95f);
+            coreInnerMat.SetFloat("_BloomBoost", 0.30f);
+            coreInnerMat.SetFloat("_NightMul", 0.55f);     // dimmer (was overpowering)
+            coreInnerMat.SetFloat("_DayMul", 0.18f);
+            coreInnerMat.SetFloat("_MaxLuma", 0.95f);      // strict clamp
+            coreInnerMat.SetFloat("_CoreTintMix", 0.55f);  // inner CARRIES type tint
+            string coreInnerPath = "Assets/Resources/Materials/CairnConeCoreInner.mat";
+            AssetDatabase.CreateAsset(coreInnerMat, coreInnerPath);
+
+            // Outer halo — DOMINANT volumetric halo with rim tint.
+            var coreOuterMat = new Material(coreShader) { name = "CairnConeCoreOuter" };
+            coreOuterMat.SetFloat("_RimSharpness", 4.5f);
+            coreOuterMat.SetFloat("_FlowStrength", 0.95f);
+            coreOuterMat.SetFloat("_BloomBoost", 0.7f);
+            coreOuterMat.SetFloat("_NightMul", 1.2f);
+            coreOuterMat.SetFloat("_DayMul", 0.22f);
+            coreOuterMat.SetFloat("_MaxLuma", 1.0f);
+            coreOuterMat.SetFloat("_CoreTintMix", 0.0f);   // outer = white center, tinted rim
+            string coreOuterPath = "Assets/Resources/Materials/CairnConeCoreOuter.mat";
+            AssetDatabase.CreateAsset(coreOuterMat, coreOuterPath);
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
@@ -85,7 +136,7 @@ namespace Cairn.AR.Editor
                 Debug.Log("[CairnConeStrandSetup] Added CairnDayNightAdapter to scene.");
             }
 
-            Debug.Log($"[CairnConeStrandSetup] Done. Mesh: {meshPath}, Materials: {coreMatPath}, {outlineMatPath}");
+            Debug.Log($"[CairnConeStrandSetup] Done. Meshes: inner+outer+legacy, Materials: core/inner/outer/outline");
         }
 
         private static void EnsureFolder(string path)

@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: CairnConeCore
+  m_Name: CairnConeCoreInner
   m_Shader: {fileID: 4800000, guid: b85cc73fecd41574cb1006cbde90ad38, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -30,17 +30,17 @@ Material:
     m_Ints: []
     m_Floats:
     - _BaseFadeStart: 0.18
-    - _BloomBoost: 0.8
-    - _CoreTintMix: 0.25
-    - _DayMul: 0.55
+    - _BloomBoost: 0.3
+    - _CoreTintMix: 0.55
+    - _DayMul: 0.18
     - _FlowSpeed: 0.45
     - _FlowSpeed2: 1.3
-    - _FlowStrength: 0.65
+    - _FlowStrength: 0.95
     - _Height: 1.6
-    - _MaxLuma: 1.6
-    - _NightMul: 1.6
+    - _MaxLuma: 0.95
+    - _NightMul: 0.55
     - _PhaseOffset: 0
-    - _RimSharpness: 3.2
+    - _RimSharpness: 1.5
     - _TipFadeStart: 0.45
     - _TipPower: 2.2
     m_Colors:

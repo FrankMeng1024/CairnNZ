@@ -19,11 +19,11 @@ Shader "Cairn/CairnConeOutline"
     {
         _OutlineColor ("Outline Color (Dark Rim)", Color) = (0.169, 0.094, 0.063, 1)
         _OutlineWidth ("Outline Width (radial inflate)", Range(0.0, 0.05)) = 0.012
-        _RimSharpness ("Rim Sharpness (fresnel power)", Range(1.0, 8.0)) = 3.0
-        _MaxAlpha     ("Max Alpha (day mode)", Range(0.0, 1.0)) = 0.55
+        _RimSharpness ("Rim Sharpness (fresnel power)", Range(1.0, 8.0)) = 4.0
+        _MaxAlpha     ("Max Alpha (day mode)", Range(0.0, 0.8)) = 0.50
         _Height       ("Strand Height (m)", Range(0.5, 5.0)) = 1.6
-        _BaseFadeStart ("Base Fade Start (worldY/height)", Range(0,0.3)) = 0.05
-        _TipFadeStart  ("Tip Fade Start (worldY/height)",  Range(0.5,1.0)) = 0.7
+        _BaseFadeStart ("Base Fade Start (worldY/height)", Range(0,0.3)) = 0.18
+        _TipFadeStart  ("Tip Fade Start (worldY/height)",  Range(0.5,1.0)) = 0.55
     }
     SubShader
     {
