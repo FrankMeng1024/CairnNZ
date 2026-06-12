@@ -142,70 +142,132 @@ public class GroundYResolver : MonoBehaviour
     // ----------------------------------------------------------------
 
     /// <summary>
-    /// Tier C — instant, never blocks. Returns null if the camera/session
-    /// is not yet usable. Stage 3 retains this for PortalSpawner; Stage 8
-    /// will remove all callers per Plan Pre-EAS step 17.
+    /// Tier C — DEPRECATED v0.2.3 Stage B (Branch B). Returns null always.
+    ///
+    /// Background: industry consensus (Apple Measure, Pokémon GO, IKEA Place,
+    /// Snapchat, Niantic 8th Wall) abandoned camera-Y - hold-height heuristics
+    /// 2018-2019. They are wrong on slopes, when user crouches, holds phone
+    /// overhead, or is on uneven NZ trail terrain — exactly the conditions
+    /// Cairn ships into. The field AssumedHoldHeight is retained for legacy
+    /// CairnGlobals OTA compat but is no longer consumed.
+    ///
+    /// User invariant for Branch B: "只要最终落在地面 我就接受" —
+    /// the only way to honour this is to never return a fictional Y.
+    /// If no plane / mesh / depth hit is available, the cairn must remain
+    /// hidden (PortalSpawner gates spawn-render on QueryGroundY success).
     /// </summary>
     public float? GetTierC()
     {
-        if (arCamera == null) return null;
-        var sessionState = ARSession.state;
-        if (sessionState != ARSessionState.SessionTracking) return null;
-        var p = arCamera.transform.position;
-        if (p.sqrMagnitude < 0.0001f) return null;
-        return p.y - AssumedHoldHeight;
+        return null;
     }
 
     /// <summary>
-    /// Best ground Y at the given world XZ. Tries Tier A → B → C.
+    /// Best ground Y at the given world XZ. Tries Tier A → B. Tier-C deleted.
     ///
-    /// v0.2.3 Stage 3:
-    ///   - Tier-A NOW only accepts PlaneAlignment.HorizontalUp. Old code
-    ///     also accepted HorizontalDown (ceilings); user-visible Q2 不贴地
-    ///     root cause. Plan Pre-EAS step 16 grep `HorizontalDown` = 0.
-    ///   - On Tier-A success, attempts FSM transition (UNLOCKED → ARMED,
-    ///     ARMED → LOCKED if stability window met).
+    /// Branch B (Floor-only invariant per user "只要最终落在地面 我就接受"):
+    ///   Tier-A acceptance rules (must satisfy ALL):
+    ///     1. PlaneAlignment.HorizontalUp (CEILINGS rejected — Stage 3 fix preserved)
+    ///     2. plane.center.y < arCamera.y - HEIGHT_OFFSET_MIN (0.8m) — rejects
+    ///        tabletops/desks/seats. NZ trail user holds phone 1.3-1.5m, real
+    ///        floor is camera.y - 1.3m below. Tables are camera.y - 0.4m below
+    ///        and fail this gate. Even "全画面是桌面" user-edge-case is rejected
+    ///        because user holds phone at most ~50cm above the table surface.
+    ///     3. PlaneClassification.Floor → instant accept (highest confidence)
+    ///        OR
+    ///        PlaneClassification.None/Unknown → require area >= 1.5m²
+    ///        (rejects small rocks/picnic-table-tops/log-tops)
+    ///        OR
+    ///        PlaneClassification.Table/Seat/Ceiling/Wall/Window/Door → REJECT
+    ///     4. AABB containment of worldXZ within plane.center ± plane.size*0.5
+    ///        (preserved — boundary polygon test happens at Tier-B raycast)
+    ///
+    ///   Tier-B raycast: PlaneWithinPolygon | Depth (Apple LiDAR + iOS 14+
+    ///     monocular Depth API on A12+) — true plane boundary, true geometry.
+    ///     Replaces old PlaneEstimated which accepts cairns outside actual
+    ///     plane polygon. A11 devices fall through to PlaneEstimated as last
+    ///     real-data tier (no Depth API).
+    ///
+    ///   No Tier-C. If Tier-A and Tier-B both fail, returns false. Caller
+    ///   (PortalSpawner) hides cairn until ground arrives.
     /// </summary>
     public bool QueryGroundY(Vector3 worldXZ, out float y, out Tier tier)
     {
-        // Tier A — only HorizontalUp planes. CEILINGS REJECTED (Stage 3 fix).
+        // Camera height — used for height-offset gate.
+        // Without a camera reference there is no way to validate plane Y;
+        // refuse the query rather than return a fictional value.
+        if (arCamera == null) { y = 0f; tier = Tier.C; return false; }
+        float camY = arCamera.transform.position.y;
+        const float HEIGHT_OFFSET_MIN = 0.8f;          // plane must be ≥ 0.8m below camera
+        const float MIN_FLOOR_AREA_M2 = 1.5f;           // when classification is unknown
+
+        // Tier A — PlaneClassification.Floor preferred, height + area gates.
         if (planeManager != null)
         {
+            // Pass 1: Floor-classified planes win immediately.
             foreach (var plane in planeManager.trackables)
             {
                 if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
-                var c = plane.center;
-                var s = plane.size;
-                float halfX = s.x * 0.5f;
-                float halfZ = s.y * 0.5f;
-                if (Mathf.Abs(worldXZ.x - c.x) <= halfX &&
-                    Mathf.Abs(worldXZ.z - c.z) <= halfZ)
-                {
-                    y = c.y;
-                    tier = Tier.A;
-                    OnTierAObserved();
-                    return true;
-                }
+                if (!IsAcceptableFloorPlane(plane, camY, HEIGHT_OFFSET_MIN, MIN_FLOOR_AREA_M2,
+                                             requireFloorClassification: true)) continue;
+                if (!ContainsXZ(plane, worldXZ)) continue;
+                y = plane.center.y;
+                tier = Tier.A;
+                OnTierAObserved();
+                return true;
+            }
+            // Pass 2: unclassified-but-large planes (NZ trail grass/gravel often
+            // unclassifiable — accept as floor if big enough and low enough).
+            foreach (var plane in planeManager.trackables)
+            {
+                if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
+                if (!IsAcceptableFloorPlane(plane, camY, HEIGHT_OFFSET_MIN, MIN_FLOOR_AREA_M2,
+                                             requireFloorClassification: false)) continue;
+                if (!ContainsXZ(plane, worldXZ)) continue;
+                y = plane.center.y;
+                tier = Tier.A;
+                OnTierAObserved();
+                return true;
             }
         }
 
-        // Tier B — raycast estimated plane.
-        if (raycastManager != null && arCamera != null)
+        // Tier B — PlaneWithinPolygon + Depth raycast.
+        // Cast from worldXZ DOWNWARD: project a probe point 1m above target onto
+        // screen, raycast against true plane polygon (not AABB) and depth map.
+        if (raycastManager != null)
         {
-            var probeWorld = new Vector3(worldXZ.x, arCamera.transform.position.y + 1f, worldXZ.z);
+            var probeWorld = new Vector3(worldXZ.x, camY + 1f, worldXZ.z);
             var screenPt = arCamera.WorldToScreenPoint(probeWorld);
             if (screenPt.z > 0 &&
                 screenPt.x >= 0 && screenPt.x <= Screen.width &&
                 screenPt.y >= 0 && screenPt.y <= Screen.height)
             {
+                // Layered raycast: PlaneWithinPolygon (precise boundary) +
+                // Depth (LiDAR mesh / iOS 14 monocular depth) for non-classified
+                // surfaces (uneven terrain). Falls through to PlaneEstimated as
+                // last data tier on A11 (no depth subsystem).
                 _raycastHits.Clear();
-                if (raycastManager.Raycast(new Vector2(screenPt.x, screenPt.y),
-                                           _raycastHits,
-                                           TrackableType.PlaneEstimated))
+                bool hit = raycastManager.Raycast(
+                    new Vector2(screenPt.x, screenPt.y),
+                    _raycastHits,
+                    TrackableType.PlaneWithinPolygon | TrackableType.Depth);
+                if (!hit)
                 {
-                    if (_raycastHits.Count > 0)
+                    // A11 fallback path: PlaneEstimated only when no precise hit.
+                    _raycastHits.Clear();
+                    hit = raycastManager.Raycast(
+                        new Vector2(screenPt.x, screenPt.y),
+                        _raycastHits,
+                        TrackableType.PlaneEstimated);
+                }
+                if (hit && _raycastHits.Count > 0)
+                {
+                    float hitY = _raycastHits[0].pose.position.y;
+                    // Same height-offset gate as Tier-A: refuse if hit is closer
+                    // to camera than HEIGHT_OFFSET_MIN. Stops "cairn placed on
+                    // table because raycast hit table polygon" failure mode.
+                    if (camY - hitY >= HEIGHT_OFFSET_MIN)
                     {
-                        y = _raycastHits[0].pose.position.y;
+                        y = hitY;
                         tier = Tier.B;
                         return true;
                     }
@@ -213,18 +275,76 @@ public class GroundYResolver : MonoBehaviour
             }
         }
 
-        // Tier C — fallback.
-        var tierC = GetTierC();
-        if (tierC.HasValue)
-        {
-            y = tierC.Value;
-            tier = Tier.C;
-            return true;
-        }
-
+        // No Tier-C. User invariant: never return fictional Y.
         y = 0f;
         tier = Tier.C;
         return false;
+    }
+
+    // ----------------------------------------------------------------
+    // Branch B helpers
+    // ----------------------------------------------------------------
+
+    /// <summary>
+    /// Apply height offset, area, and classification filters to decide if a
+    /// HorizontalUp plane is acceptable as ground.
+    ///
+    /// Branch B uses ARF 6.0+ PlaneClassifications (Flags). Single-value
+    /// PlaneClassification was deprecated in ARF 6.0. We read .classifications
+    /// (the Flags property), not .classification (deprecated). On A11/older
+    /// XR providers that don't support classification at all, value will be
+    /// PlaneClassifications.None — caller falls through to area-only gate.
+    /// </summary>
+    private static bool IsAcceptableFloorPlane(
+        ARPlane plane, float camY, float heightOffsetMin, float minAreaM2,
+        bool requireFloorClassification)
+    {
+        // Height gate: plane must be at least heightOffsetMin below camera.
+        if (camY - plane.center.y < heightOffsetMin) return false;
+
+        // ARF 6.0+ Flags enum. Multiple classifications can coexist (rare but
+        // possible per Apple/ARCore providers).
+        var c = plane.classifications;
+
+        // Reject obvious non-floor classifications. Use HasFlag (or bitwise
+        // AND for perf) — if ANY of these flags are set, the plane is unsafe.
+        const PlaneClassifications nonFloorMask =
+            PlaneClassifications.Table |
+            PlaneClassifications.Seat |
+            PlaneClassifications.Couch |
+            PlaneClassifications.Ceiling |
+            PlaneClassifications.WallFace |
+            PlaneClassifications.WallArt |
+            PlaneClassifications.WindowFrame |
+            PlaneClassifications.DoorFrame |
+            PlaneClassifications.InvisibleWallFace;
+        if ((c & nonFloorMask) != 0) return false;
+
+        if (requireFloorClassification)
+        {
+            // Pass 1 — only accept explicitly classified Floor.
+            return (c & PlaneClassifications.Floor) != 0;
+        }
+        // Pass 2 — accept None/Other if plane is large enough.
+        // plane.size is in metres (ARFoundation convention).
+        float areaM2 = plane.size.x * plane.size.y;
+        return areaM2 >= minAreaM2;
+    }
+
+    /// <summary>
+    /// AABB containment in plane local axes. Used as fast cheap pre-filter for
+    /// Tier-A; precise polygon containment is achieved at Tier-B via
+    /// PlaneWithinPolygon raycast. (Most plane-manager planes have rectangular
+    /// extents that approximate boundary closely enough for Y-readout.)
+    /// </summary>
+    private static bool ContainsXZ(ARPlane plane, Vector3 worldXZ)
+    {
+        var c = plane.center;
+        var s = plane.size;
+        float halfX = s.x * 0.5f;
+        float halfZ = s.y * 0.5f;
+        return Mathf.Abs(worldXZ.x - c.x) <= halfX &&
+               Mathf.Abs(worldXZ.z - c.z) <= halfZ;
     }
 
     public void RegisterCairn(Transform cairnTransform)
@@ -291,6 +411,11 @@ public class GroundYResolver : MonoBehaviour
     /// destroys every cairn track. A4 (RN useTrackingStore) needs to
     /// invalidate the FSM on long-distance walk (>100m INVALIDATED state)
     /// without dropping cairns. Wired from CairnBridge in Stage 4.
+    ///
+    /// Branch B fix: also unlock per-track .locked flags so cairns whose
+    /// Y was wrongly locked at FROZEN time can be re-corrected. Without
+    /// this, Unfreeze() flipped the FSM but per-cairn pins stayed → cairns
+    /// stuck at wrong Y forever (Subagent-found bug, GroundYResolver.cs:519).
     /// </summary>
     public void Unfreeze()
     {
@@ -298,6 +423,12 @@ public class GroundYResolver : MonoBehaviour
         // Reset Tier-A history so we re-arm cleanly from new observations.
         _hasSeenAnyTierA = false;
         _firstTierATime = -1f;
+        // Branch B: unlock every cairn track so Update() resumes Y refinement.
+        for (int i = 0; i < _tracks.Count; i++)
+        {
+            _tracks[i].locked = false;
+            _tracks[i].stableSince = -1f;
+        }
         TryTransition(A1State.UNLOCKED, "external-unfreeze");
     }
 

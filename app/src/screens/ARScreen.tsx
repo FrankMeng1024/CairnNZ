@@ -890,15 +890,22 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
             usedHitTest = true;
           }
         }
+        // v0.2.3 Branch B (Floor-only invariant): if ground hit-test failed,
+        // REJECT the plant. User invariant: "只要最终落在地面 我就接受".
+        // Spawning at camera.y (the old fallback) caused the "cairn 浮空"
+        // / "飞天" bug — cairn would render at chest height, then lerp down.
+        //
+        // Industry consensus: Apple Measure / Pokémon GO / IKEA Place / Snap
+        // all gate placement on a real ground hit; if none, show reticle
+        // prompt "point at ground". Cairn now matches.
         if (!usedHitTest) {
-          // Fallback: 1m forward at the user's feet ("plant where I stand").
-          const horizMag = Math.hypot(fx, fz);
-          const FALLBACK_M = 1.0;
-          if (horizMag > 0.001) {
-            targetX = cx + (fx / horizMag) * FALLBACK_M;
-            targetZ = cz + (fz / horizMag) * FALLBACK_M;
+          crashLogger.breadcrumb(`ar:plant:rejected reason=no-ground fy=${fy.toFixed(2)} groundBufferKnown=${ground === null ? 'no' : 'yes-but-fy-too-flat'}`);
+          // Surface a non-blocking toast so user knows what happened.
+          // This keeps UX continuous: user just re-aims downward at trail.
+          if (typeof (globalThis as any).__cairnPlantRejected === 'function') {
+            (globalThis as any).__cairnPlantRejected('指向地面再 plant');
           }
-          hitDistM = FALLBACK_M;
+          return;
         }
         // v211 — REVERT v210 virtualOrigin in plant flow. Use arOrigin
         // (= user GPS at first ArFrame) as projection origin, matching
@@ -911,11 +918,10 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         const dN = -targetZ;
         cairnLat = arOrigin.lat + dN / 111000;
         cairnLng = arOrigin.lng + dE / (cosLat * 111000);
-        // Phase 2: stash the ARKit world position so we can spawn the cairn
-        // in Unity right after addMarker resolves. y = ground if known, else
-        // camera y (so the strand stands roughly upright at user height).
-        unitySpawnPos = { x: targetX, y: ground ?? cy, z: targetZ };
-        crashLogger.breadcrumb(`ar:plant:src=hit-test fy=${fy.toFixed(2)} ground=${ground === null ? 'null' : ground.toFixed(2)} hit=${usedHitTest} dist=${hitDistM.toFixed(2)}m origin=${arOrigin.lat.toFixed(6)},${arOrigin.lng.toFixed(6)}`);
+        // Branch B: ground is non-null because !usedHitTest above already
+        // returned. Always pass the real ground Y to Unity.
+        unitySpawnPos = { x: targetX, y: ground!, z: targetZ };
+        crashLogger.breadcrumb(`ar:plant:src=hit-test fy=${fy.toFixed(2)} ground=${ground!.toFixed(2)} hit=${usedHitTest} dist=${hitDistM.toFixed(2)}m origin=${arOrigin.lat.toFixed(6)},${arOrigin.lng.toFixed(6)}`);
         anchor = arOrigin;
       } else {
         // FALLBACK — no ARKit frame yet. Use GPS anchor + ARKit/magnetic heading.

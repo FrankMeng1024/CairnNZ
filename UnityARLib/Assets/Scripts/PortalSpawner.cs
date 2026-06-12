@@ -357,19 +357,39 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         // ground (data.y) with TierC heuristic (camera.y - ASSUMED_HOLD_HEIGHT).
         // Baseline Q2 evidence: this systematically over-deepened spawn Y by
         // ~0.4m, the dominant cause of "cairn floats above ground" (#7) and
-        // "重开 AR 标记飞天" (#A).
+        // ─────────────────────────────────────────────────────────────────
+        // v0.2.3 Branch B: Floor-only ground policy ("只要最终落在地面 我就接受")
         //
-        // New policy:
+        // Old policy (PRE-Branch-B):
         //   1. If GroundYResolver returns Tier-A real plane Y at this XZ →
         //      use it (always wins — true ground truth).
         //   2. Else if data.y is grossly invalid (>3m from camera.y) →
-        //      use TierC fallback.
+        //      use TierC fallback (camera.y - 1.3m).
         //   3. Else trust data.y from RN's hit-test ray.
-        // v22-DIAG-SPAWN — track ground source for per-cairn diagnostic.
+        //
+        // Old policy bug: TierC fallback returns camera.y - 1.3m which is
+        // wrong on slopes / when user crouches / on uneven NZ trail terrain.
+        // Industry consensus (Apple Measure / Pokémon GO / IKEA Place / Snap)
+        // abandoned hold-height heuristics in 2018-2019.
+        //
+        // New policy (Branch B):
+        //   1. GroundYResolver.QueryGroundY returns Tier-A or Tier-B → use it.
+        //      Both tiers now apply Floor-only filter (PlaneClassifications.Floor
+        //      preferred, height >0.8m below camera, area ≥1.5m² for unclassified).
+        //   2. data.y from RN is accepted ONLY if it's within 0.2m of the
+        //      Tier-A/B value (i.e. RN and Unity agree the ground is here).
+        //   3. ALL tiers fail → DO NOT SPAWN. Caller (CairnBridge / RN) must
+        //      handle "ground not detected, retry plant". User invariant:
+        //      "只要最终落在地面 我就接受" — never spawn at fictional Y.
+        // ─────────────────────────────────────────────────────────────────
         string diagGroundSrc = "RN";
         bool diagTierAFound = false;
+        bool groundDetected = false;
+        float groundY = 0f;
+        Camera spawnCam = (groundYResolver != null && groundYResolver.arCamera != null)
+            ? groundYResolver.arCamera : Camera.main;
+        float spawnCamY = spawnCam != null ? spawnCam.transform.position.y : 0f;
 
-        float groundY = data.y;
         if (groundYResolver != null)
         {
             float candidateY;
@@ -377,44 +397,36 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             if (groundYResolver.QueryGroundY(new Vector3(data.x, 0f, data.z),
                                              out candidateY, out tier))
             {
-                if (tier == GroundYResolver.Tier.A)
-                {
-                    // Tier-A real plane wins.
-                    groundY = candidateY;
-                    diagGroundSrc = "TierA";
-                    diagTierAFound = true;
-                }
-                else
-                {
-                    // Tier-B/C — only use if data.y looks unreasonable.
-                    Camera cam = groundYResolver.arCamera != null
-                        ? groundYResolver.arCamera : Camera.main;
-                    float camY = cam != null ? cam.transform.position.y : 0f;
-                    float dataYBelowCam = camY - data.y;
-                    // v206 B3-policy review fix — TWO conditions invalidate
-                    // data.y, both push to TierC fallback:
-                    //   (1) data.y is grossly off (>3m from camera) — old check
-                    //   (2) data.y is too close to camera height (<0.3m below)
-                    //       — happens when ARScreen hit-test fails and falls
-                    //       back to camera.y; cairn would spawn at face level.
-                    if (Mathf.Abs(data.y - camY) > 3f || dataYBelowCam < 0.3f)
-                    {
-                        groundY = candidateY;
-                        diagGroundSrc = (tier == GroundYResolver.Tier.B) ? "TierB" : "TierC";
-                    }
-                    // else: trust data.y from RN hit-test
-                }
+                // Tier-A or Tier-B both went through Floor-only filters.
+                // Accept either as authoritative ground.
+                groundY = candidateY;
+                groundDetected = true;
+                diagGroundSrc = (tier == GroundYResolver.Tier.A) ? "TierA" : "TierB";
+                diagTierAFound = (tier == GroundYResolver.Tier.A);
             }
-            else
+        }
+
+        if (!groundDetected)
+        {
+            // No ground available. Reject the spawn. Branch B invariant:
+            // never place a cairn at a fictional Y.
+            //
+            // Telemetry tag: [v22-SPAWN-REJECTED] — RN side will retry once
+            // ARKit reports a new HorizontalUp plane at this XZ. PortalSpawner
+            // returning early means the cairn ID is not registered with
+            // GroundYResolver and not added to scene graph; subsequent retries
+            // are clean.
+            UnityLogger.IForward("v22-SPAWN-REJECTED",
+                $"id={data.id} type={data.type} reason=no-floor-tier " +
+                $"rnX={data.x:F3} rnY={data.y:F3} rnZ={data.z:F3} camY={spawnCamY:F3}");
+            // Notify RN so user gets feedback (reticle red, "point at ground").
+            var bridge = Object.FindFirstObjectByType<CairnBridge>();
+            if (bridge != null)
             {
-                // No tier available — last-resort TierC fallback.
-                var tierC = groundYResolver.GetTierC();
-                if (tierC.HasValue)
-                {
-                    groundY = tierC.Value;
-                    diagGroundSrc = "TierC";
-                }
+                bridge.SendToRN("SpawnRejected",
+                    $"{{\"id\":\"{data.id}\",\"reason\":\"no-floor\"}}");
             }
+            return;
         }
 
         var preset = CairnTypePresets.Get(data.type);

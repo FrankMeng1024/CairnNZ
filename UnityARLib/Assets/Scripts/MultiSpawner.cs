@@ -156,15 +156,34 @@ public class MultiSpawner : MonoBehaviour, ICairnSpawner
             return;
         }
 
-        // Tier-C readiness gate: if camera transform isn't valid yet, the
-        // resolver returns null for Tier C and we'd spawn at world (x,0,z).
-        // Prefer to defer; but RN already chose to spawn this frame, so
-        // honor it — the resolver will lerp into place once camera valid.
-        float groundY = data.y;
+        // ─────────────────────────────────────────────────────────────────
+        // v0.2.3 Branch B: Floor-only ground policy.
+        // No tier → reject spawn (do not place at fictional Y).
+        // ─────────────────────────────────────────────────────────────────
+        bool groundDetected = false;
+        float groundY = 0f;
         if (groundYResolver != null)
         {
-            var tierC = groundYResolver.GetTierC();
-            if (tierC.HasValue) groundY = tierC.Value;
+            float candidateY;
+            GroundYResolver.Tier tier;
+            if (groundYResolver.QueryGroundY(new Vector3(data.x, 0f, data.z),
+                                             out candidateY, out tier))
+            {
+                groundY = candidateY;
+                groundDetected = true;
+            }
+        }
+        if (!groundDetected)
+        {
+            UnityLogger.IForward("v22-SPAWN-REJECTED",
+                $"id={data.id} type={data.type} src=MultiSpawner reason=no-floor-tier");
+            var bridge = Object.FindFirstObjectByType<CairnBridge>();
+            if (bridge != null)
+            {
+                bridge.SendToRN("SpawnRejected",
+                    $"{{\"id\":\"{data.id}\",\"reason\":\"no-floor\"}}");
+            }
+            return;
         }
 
         // Look up per-type preset. RN-supplied r/g/b/scrollSpeed/bloomBoost
