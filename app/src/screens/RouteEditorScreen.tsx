@@ -25,7 +25,7 @@ import {
   KeyboardAvoidingView, ActivityIndicator, BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, StackActions } from '@react-navigation/native';
 import { useRouteStore } from '../store/useRouteStore';
 import { useRouteEditStore } from '../store/useRouteEditStore';
 import { useSessionStore, loadTrackPoints } from '../store/useSessionStore';
@@ -470,14 +470,15 @@ export function RouteEditorScreen() {
       try { useRouteEditStore.getState().clearCommittedDraft(); } catch {}
       try { useRouteEditStore.getState().cancelEdit(); } catch {}
 
-      // v250: After Save, go to the saved route's detail page (RouteEditor
-      // in view mode for the persisted routeId), NOT back to the activity
-      // detail. PO request: "save了要回到routes detail 不是activity detail".
-      // For save-as-route flow we use replace() so back doesn't return to
-      // the unsaved draft. For existing-route updates, goBack() already
-      // returns to the route detail since we entered RouteEditor from there.
+      // v250/v252: After Save, go to the saved route's detail page.
+      // Use StackActions.replace via dispatch instead of (nav as any).replace
+      // because useNavigation()'s typed prop may not expose .replace and
+      // calling a non-existent method silently no-ops, leaving the user
+      // on the still-mounted RouteEditor screen — which is what
+      // "save→activity detail" boils down to (they were never moved).
+      // dispatch is universally available and works on native-stack.
       if (!targetId && savedRouteId) {
-        (nav as any).replace('RouteEditor', { routeId: savedRouteId });
+        nav.dispatch(StackActions.replace('RouteEditor', { routeId: savedRouteId }));
       } else {
         nav.goBack();
       }

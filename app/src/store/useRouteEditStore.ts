@@ -40,7 +40,10 @@ import {
 } from '../services/routing/editAnalytics';
 
 const MAX_STROKES = 8;
-const CORRIDOR_RADIUS_M = 500;
+// v252: PO request — "现在 500m 太远 300m 范围把". corridor 内的笔接受;
+// 超出归类为 red(out-of-corridor),Preview 时拒收。amber(警示)区
+// 也按比例收紧到 240m 让用户更早看到 "快越界" 的视觉反馈。
+const CORRIDOR_RADIUS_M = 300;
 const ENDPOINT_SNAP_M = 50;
 const TRIM_MIN_FRACTION = 0.05;
 
@@ -830,7 +833,29 @@ function spliceMatched(
       deduped.push(out[i]);
     }
   }
-  return deduped;
+  // v252: spike de-spike pass. PO real-device showed a 17m "凸出来的点
+  // / 尾巴" at a stroke-to-stroke splice boundary in t5: index 106 and
+  // 108 were exact-equal points 8.6m apart from index 107. Pattern:
+  // a → b → c with hav(a, c) < 1m AND hav(a, b) > 4m AND hav(b, c) > 4m
+  // = b is a spurious there-and-back tip (mapbox snap or splice
+  // artifact). Drop b.
+  if (deduped.length < 3) return deduped;
+  const despik: LngLat[] = [deduped[0], deduped[1]];
+  for (let i = 2; i < deduped.length; i++) {
+    const a = despik[despik.length - 2];
+    const b = despik[despik.length - 1];
+    const c = deduped[i];
+    const ac = haversineMetersLocal(a, c);
+    const ab = haversineMetersLocal(a, b);
+    const bc = haversineMetersLocal(b, c);
+    if (ac < 1 && ab > 4 && bc > 4) {
+      // Replace b with c — drop the spike tip.
+      despik[despik.length - 1] = c;
+    } else {
+      despik.push(c);
+    }
+  }
+  return despik;
 }
 
 export const useRouteEditStore = create<EditState>((set, get) => ({
@@ -1420,7 +1445,17 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           sampled.push(simplified[idx]);
         }
       }
-      const radiuses: (number | null)[] = sampled.map(() => 25);
+      // v252: tighten Mapbox match radius from 25m to 12m. PO real-device
+      // observed: a "drifty" stroke had its middle snap to a parallel
+      // road 8-15m away (the "凸出来的点 / 岔路" artifact). Mapbox map-
+      // matching picks the *most likely* road within radius, so a wider
+      // radius lets it choose any road within that ring. 12m keeps the
+      // snap on the road the user actually meant. Endpoints (first/last
+      // sampled point) get a tighter 6m so the join with original GPS
+      // doesn't drift onto a side street.
+      const radiuses: (number | null)[] = sampled.map((_, k) =>
+        (k === 0 || k === sampled.length - 1) ? 6 : 12,
+      );
       const seg: MatchSegment = { coords: sampled, radiuses, viaIndicesInCoords: [] };
       let snapped: LngLat[];
       try {
@@ -1774,5 +1809,5 @@ export function distanceFromOriginalM(coord: LngLat, walkedIndex: PointCloudInde
 export const BRUSH_RADII = {
   CORRIDOR_RADIUS_M,
   ENDPOINT_SNAP_M,
-  WARN_RADIUS_M: 400,
+  WARN_RADIUS_M: 240,
 };
