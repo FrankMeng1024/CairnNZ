@@ -78,6 +78,15 @@ interface EditState {
   trimEndFrac: number;
   activeTool: EditTool;
 
+  // v246: Preview state. Lets user see Mapbox snap result before saving.
+  // - previewMatchedPoints: if non-null, the snapped polyline. Set by
+  //   runPreview() and used as the new matched line in the working slice.
+  // - previewIsCurrent: true when previewMatchedPoints reflects the
+  //   current brushStrokes/trim. Reset to false on any stroke/trim
+  //   mutation. Save is disabled while !previewIsCurrent.
+  previewMatchedPoints: LngLat[] | null;
+  previewIsCurrent: boolean;
+
   undoStack: UndoEntry[];
 
   walkedIndex: PointCloudIndex | null;
@@ -121,6 +130,11 @@ interface EditState {
   beginTrimDrag(): void;
 
   resetEdits(): void;
+
+  /** v246: validate + run Mapbox snap for all strokes. Sets
+   * previewMatchedPoints + previewIsCurrent=true on success. Does NOT
+   * persist to the route record — that's saveAndExit's job. */
+  runPreview(): Promise<{ ok: boolean; error?: string }>;
 
   undo(): void;
   canUndo(): boolean;
@@ -449,6 +463,8 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   trimStartFrac: 0,
   trimEndFrac: 1,
   activeTool: 'pan',
+  previewMatchedPoints: null,
+  previewIsCurrent: false,
   undoStack: [],
   walkedIndex: null,
   isComputing: false,
@@ -536,6 +552,10 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       trimStartFrac: initialTrimStart,
       trimEndFrac: initialTrimEnd,
       activeTool: 'pan',
+      previewMatchedPoints: null,
+      // If no strokes on entry, preview is trivially "current" (original
+      // route IS the preview), so Save is enabled immediately.
+      previewIsCurrent: initialStrokes.length === 0,
       undoStack: [],
       walkedIndex,
       isComputing: false,
@@ -604,6 +624,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         matchedPoints: s.matchedPoints,
       }].slice(-20),
       brushStrokes: [...s.brushStrokes, { id, points: [firstPoint] }],
+      previewIsCurrent: false,
       editOpSeq: s.editOpSeq + 1,
       lastError: null,
     }));
@@ -621,7 +642,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       const updated = { ...stroke, points: [...stroke.points, point] };
       const newStrokes = [...s.brushStrokes];
       newStrokes[idx] = updated;
-      return { ...s, brushStrokes: newStrokes, editOpSeq: s.editOpSeq + 1 };
+      return { ...s, brushStrokes: newStrokes, previewIsCurrent: false, editOpSeq: s.editOpSeq + 1 };
     });
   },
 
@@ -682,6 +703,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         matchedPoints: prev.matchedPoints,
       }].slice(-20),
       brushStrokes: newStrokes,
+      previewIsCurrent: false,
       editOpSeq: prev.editOpSeq + 1,
       editCount: prev.editCount + 1,
     }));
@@ -701,6 +723,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         matchedPoints: prev.matchedPoints,
       }].slice(-20),
       brushStrokes: prev.brushStrokes.filter(s => s.id !== strokeId),
+      previewIsCurrent: false,
       editOpSeq: prev.editOpSeq + 1,
       editCount: prev.editCount + 1,
     }));
@@ -783,6 +806,8 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       trimEndFrac: 1,
       matchedPoints: [...s.originalPoints],
       workingPoints: [...s.originalPoints],
+      previewMatchedPoints: null,
+      previewIsCurrent: true,
       validationErrors: [],
       editOpSeq: s.editOpSeq + 1,
       editCount: s.editCount + 1,
@@ -809,6 +834,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     if (stack.length === 0) return;
     const last = stack[stack.length - 1];
     const newStack = stack.slice(0, -1);
+    const noBrushAfter = last.brushStrokes.length === 0;
     set(s => ({
       undoStack: newStack,
       brushStrokes: last.brushStrokes,
@@ -816,6 +842,9 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       trimEndFrac: last.trimEndFrac,
       matchedPoints: last.matchedPoints,
       workingPoints: deriveWorking(last.matchedPoints, last.trimStartFrac, last.trimEndFrac),
+      previewMatchedPoints: null,
+      // No brushes => nothing to preview => save can proceed.
+      previewIsCurrent: noBrushAfter,
       validationErrors: [],
       editOpSeq: s.editOpSeq + 1,
       editCount: s.editCount + 1,
@@ -850,28 +879,35 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     }
   },
 
-  async saveAndExit() {
+  async runPreview() {
     const state = get();
-    if (!state.routeId) return { ok: false, error: 'no-route-id' };
-    if (state.isSaving) return { ok: false, error: 'busy — save already in progress' };
+    if (state.isSaving) return { ok: false, error: 'Save in progress' };
+    if (state.isComputing) return { ok: false, error: 'Already computing' };
 
-    // Validate brush strokes.
+    // No brushes → preview = originalPoints. Trim is applied client-side.
+    if (state.brushStrokes.length === 0) {
+      set(s => ({
+        previewMatchedPoints: null,
+        previewIsCurrent: true,
+        matchedPoints: [...s.originalPoints],
+        workingPoints: deriveWorking([...s.originalPoints], s.trimStartFrac, s.trimEndFrac),
+        validationErrors: [],
+        editOpSeq: s.editOpSeq + 1,
+      }));
+      return { ok: true };
+    }
+
     const v = validateStrokes(state.brushStrokes, state.originalPoints, state.walkedIndex);
     if (!v.ok) {
       set({ validationErrors: v.errors, lastError: v.errors[0] ?? 'Invalid brush strokes.' });
       return { ok: false, error: v.errors[0] ?? 'invalid-brushes' };
     }
-    set({ validationErrors: [] });
+    set({ validationErrors: [], isComputing: true, lastError: null });
 
-    // Run Mapbox snap on each stroke.
-    const writeRouteId = state.routeId;
-    const writeSessionId = state.sessionId;
-    const writeOriginal = state.originalPoints;
-    const writeTs = state.trimStartFrac;
-    const writeTe = state.trimEndFrac;
-    set({ isSaving: true, isComputing: true, lastSaveAttemptFailed: false });
+    const startSid = state.sessionId;
+    const startSeq = get().editOpSeq;
 
-    let snappedPerStroke: LngLat[][] = [];
+    const snappedPerStroke: LngLat[][] = [];
     for (const vs of v.validated) {
       const pts = vs.stroke.points;
       const target = 96;
@@ -886,8 +922,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       }
       const radiuses: (number | null)[] = sampled.map(() => 25);
       const seg: MatchSegment = { coords: sampled, radiuses, viaIndicesInCoords: [] };
-      // v245-critical-fix: per-stroke try/catch so one network throw
-      // doesn't kill remaining strokes. Fallback to raw drawing.
       try {
         const r = await matchSegment(seg);
         if (!r.ok) {
@@ -900,20 +934,55 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       }
     }
 
-    const newMatched = spliceMatched(writeOriginal, v.validated, snappedPerStroke);
-    const newWorking = deriveWorking(newMatched, writeTs, writeTe);
-
-    if (newWorking.length < 2 || polylineLengthM(newWorking) < 1) {
-      set({ isSaving: false, isComputing: false, lastError: 'Route is too short to save.' });
-      return { ok: false, error: 'too-short' };
+    // Fence: bail if state was mutated during await.
+    {
+      const live = get();
+      if (live.sessionId !== startSid || live.editOpSeq !== startSeq) {
+        set({ isComputing: false });
+        return { ok: false, error: 'state-changed' };
+      }
     }
 
+    const newMatched = spliceMatched(state.originalPoints, v.validated, snappedPerStroke);
     set(s => ({
+      previewMatchedPoints: newMatched,
+      previewIsCurrent: true,
       matchedPoints: newMatched,
-      workingPoints: newWorking,
+      workingPoints: deriveWorking(newMatched, s.trimStartFrac, s.trimEndFrac),
       isComputing: false,
       editOpSeq: s.editOpSeq + 1,
     }));
+    return { ok: true };
+  },
+
+  async saveAndExit() {
+    const state = get();
+    if (!state.routeId) return { ok: false, error: 'no-route-id' };
+    if (state.isSaving) return { ok: false, error: 'busy — save already in progress' };
+
+    // v246: require Preview before Save when there are brush strokes.
+    // For pure trim or no-edit case (no strokes), the original is the
+    // preview and we can save directly.
+    if (state.brushStrokes.length > 0 && !state.previewIsCurrent) {
+      set({ lastError: 'Preview your edits first.' });
+      return { ok: false, error: 'preview-required' };
+    }
+
+    const writeRouteId = state.routeId;
+    const writeSessionId = state.sessionId;
+    const writeOriginal = state.originalPoints;
+    const writeTs = state.trimStartFrac;
+    const writeTe = state.trimEndFrac;
+    // Use the preview-cached matched polyline; if no brushes, use original.
+    const finalMatched = state.previewMatchedPoints ?? state.matchedPoints;
+    const newWorking = deriveWorking(finalMatched, writeTs, writeTe);
+
+    if (newWorking.length < 2 || polylineLengthM(newWorking) < 1) {
+      set({ lastError: 'Route is too short to save.' });
+      return { ok: false, error: 'too-short' };
+    }
+
+    set({ isSaving: true, lastSaveAttemptFailed: false });
 
     let result;
     try {
@@ -1040,6 +1109,8 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       trimStartFrac: 0,
       trimEndFrac: 1,
       activeTool: 'pan',
+      previewMatchedPoints: null,
+      previewIsCurrent: false,
       undoStack: [],
       walkedIndex: null,
       isComputing: false,

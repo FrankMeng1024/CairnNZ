@@ -22,9 +22,10 @@ import { Icon } from '../Icon';
 interface EditOverlayV236Props {
   onCancel: () => void;
   onSave: () => Promise<void> | void;
+  onPreview: () => Promise<void> | void;
 }
 
-export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): React.JSX.Element {
+export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236Props): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const isComputing = useRouteEditStore(s => s.isComputing);
   const lastError = useRouteEditStore(s => s.lastError);
@@ -34,6 +35,7 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
   const trimEndFrac = useRouteEditStore(s => s.trimEndFrac);
   const brushStrokes = useRouteEditStore(s => s.brushStrokes);
   const validationErrors = useRouteEditStore(s => s.validationErrors);
+  const previewIsCurrent = useRouteEditStore(s => s.previewIsCurrent);
   const setLastError = useRouteEditStore(s => s.setLastError);
   const setTrimStart = useRouteEditStore(s => s.setTrimStart);
   const setTrimEnd = useRouteEditStore(s => s.setTrimEnd);
@@ -47,6 +49,9 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
   const editedLengthM = totalLengthM * (trimEndFrac - trimStartFrac);
   const strokeCount = brushStrokes.length;
   const liveValidationMsg = validationErrors[0] ?? null;
+  const needsPreview = strokeCount > 0 && !previewIsCurrent;
+  const canSave = !isComputing && !needsPreview;
+  const canPreview = !isComputing && strokeCount > 0 && !previewIsCurrent;
 
   return (
     <View pointerEvents="box-none" style={styles.container}>
@@ -166,19 +171,55 @@ export function EditOverlayV236({ onCancel, onSave }: EditOverlayV236Props): Rea
             </Text>
           )}
 
-          {/* Action row — Save (left, primary) + Cancel (right, secondary).
-              No icons per PO request — text-only buttons match Cairn pattern. */}
+          {/* Preview row — shown when there are brush strokes. Lets user
+              see Mapbox snap result before committing. Save is disabled
+              until preview reflects the latest strokes. */}
+          {strokeCount > 0 && (
+            <TouchableOpacity
+              onPress={() => {
+                if (!canPreview) return;
+                onPreview();
+              }}
+              disabled={!canPreview}
+              style={[
+                styles.previewBtn,
+                !canPreview && styles.previewBtnDisabled,
+                previewIsCurrent && styles.previewBtnCurrent,
+              ]}
+              activeOpacity={0.85}
+            >
+              {isComputing ? (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              ) : (
+                <>
+                  <Icon
+                    name={previewIsCurrent ? 'Check' : 'Eye'}
+                    size={16}
+                    color={previewIsCurrent ? Colors.primary : Colors.primary}
+                    strokeWidth={2.5}
+                  />
+                  <Text style={styles.previewBtnText}>
+                    {previewIsCurrent ? 'Preview ready — tap Save to keep' : 'Preview snap'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {/* Action row — Save (left, primary) + Cancel (right, secondary). */}
           <View style={styles.actionRow}>
             <TouchableOpacity
               onPress={() => {
-                if (isComputing) return;
+                if (!canSave) return;
                 onSave();
               }}
-              disabled={isComputing}
-              style={[styles.actionBtn, styles.saveBtn, isComputing && styles.saveBtnDisabled]}
+              disabled={!canSave}
+              style={[styles.actionBtn, styles.saveBtn, !canSave && styles.saveBtnDisabled]}
               activeOpacity={0.85}
             >
-              <Text style={styles.saveBtnText}>Save</Text>
+              <Text style={styles.saveBtnText}>
+                {needsPreview ? 'Preview first' : 'Save'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={onCancel}
@@ -358,6 +399,30 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     color: Colors.surface,
+    fontSize: FontSize.body,
+    fontWeight: '700',
+  },
+  previewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: Radius.button,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryBg,
+    marginTop: Spacing.sm,
+  },
+  previewBtnCurrent: {
+    backgroundColor: Colors.successBg,
+    borderColor: Colors.success,
+  },
+  previewBtnDisabled: {
+    opacity: 0.5,
+  },
+  previewBtnText: {
+    color: Colors.primary,
     fontSize: FontSize.body,
     fontWeight: '700',
   },

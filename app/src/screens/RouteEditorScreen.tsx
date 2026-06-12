@@ -102,6 +102,7 @@ export function RouteEditorScreen() {
   const editTrimEndFrac = useRouteEditStore(s => s.trimEndFrac);
   const editActiveTool = useRouteEditStore(s => s.activeTool);
   const editWalkedIndex = useRouteEditStore(s => s.walkedIndex);
+  const editPreviewIsCurrent = useRouteEditStore(s => s.previewIsCurrent);
   const setEditActiveTool = useRouteEditStore(s => s.setActiveTool);
   const dualEditActive = editIsOpen && editRouteId === (routeId ?? freshlyCreatedRouteId);
 
@@ -363,6 +364,13 @@ export function RouteEditorScreen() {
     nav.goBack();
   }, [freshlyCreatedRouteId, routeId, deleteRoute, nav]);
 
+  const handlePreview = useCallback(async () => {
+    const r = await useRouteEditStore.getState().runPreview();
+    if (!r.ok && r.error) {
+      // Validation error already in store.lastError; nothing more to do.
+    }
+  }, []);
+
   const handleCancelEdit = useCallback(() => {
     Alert.alert(
       'Discard edits?',
@@ -545,10 +553,15 @@ export function RouteEditorScreen() {
                     editTrimEndFrac < 1
                   }
                 />
-                <BrushStrokeLayer
-                  strokes={editBrushStrokes}
-                  distanceFromOriginalM={distanceFromOriginal}
-                />
+                {/* Brush strokes only visible while drafting (preview not
+                    current). Once preview is shown, hide raw strokes so
+                    the user sees the snapped polyline cleanly. */}
+                {!editPreviewIsCurrent && (
+                  <BrushStrokeLayer
+                    strokes={editBrushStrokes}
+                    distanceFromOriginalM={distanceFromOriginal}
+                  />
+                )}
               </>
             )}
           </MapView>
@@ -582,7 +595,7 @@ export function RouteEditorScreen() {
           {/* Top-right tool selector */}
           <EditTopToolbar activeTool={editActiveTool} onToolChange={setEditActiveTool} />
           {/* Bottom card */}
-          <EditOverlayV236 onCancel={handleCancelEdit} onSave={handleSave} />
+          <EditOverlayV236 onCancel={handleCancelEdit} onSave={handleSave} onPreview={handlePreview} />
         </>
       ) : (
         <>
