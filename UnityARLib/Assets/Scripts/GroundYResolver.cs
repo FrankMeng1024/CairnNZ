@@ -658,6 +658,14 @@ public class GroundYResolver : MonoBehaviour
                 _tracks.RemoveAt(i);
                 continue;
             }
+            // v0.2.4 铁律 #1 (不能飘): cairn 一旦 attach 到 ARAnchor,anchor 是
+            // 唯一真理。Resolver 不再覆盖它的 Y。Apple plane 估计抖到 +2m 时
+            // 不会再把 cairn 拉飞。
+            // 详见 _review/v0.2.4/PLAN.md §4.1。
+            if (t.go.GetComponentInParent<UnityEngine.XR.ARFoundation.ARAnchor>() != null)
+            {
+                continue;
+            }
             // FROZEN — no further Y updates anywhere.
             if (_state == A1State.FROZEN) continue;
             // Per-cairn pin still respected when reached (independent of FSM).
