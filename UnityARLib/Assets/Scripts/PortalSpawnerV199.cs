@@ -584,8 +584,12 @@ public partial class PortalSpawner
             innerGo.transform.SetParent(strandGo.transform, worldPositionStays: false);
             float innerXOff = Mathf.Sin(i * 7.7f) * 0.012f;  // ±1.2cm wiggle
             innerGo.transform.localPosition = new Vector3(innerXOff, 0.04f, 0);
-            float innerScale = 1.35f;     // overshoot outer
-            innerGo.transform.localScale = new Vector3(0.40f, innerScale, 0.40f);
+            // v3.5n: per-strand jitter so strands aren't clones.
+            float jWidth = 0.85f + Mathf.Abs(Mathf.Sin(i * 11.1f)) * 0.30f;   // 0.85-1.15
+            float jHeight = 0.90f + Mathf.Abs(Mathf.Cos(i * 7.3f)) * 0.20f;   // 0.90-1.10
+            float jLuma = 0.80f + Mathf.Abs(Mathf.Sin(i * 13.9f)) * 0.40f;    // 0.80-1.20
+            float innerScale = 1.35f * jHeight;     // overshoot outer × jitter
+            innerGo.transform.localScale = new Vector3(0.40f * jWidth, innerScale, 0.40f * jWidth);
             var innerMf = innerGo.AddComponent<MeshFilter>();
             innerMf.sharedMesh = meshInner;
             var innerMr = innerGo.AddComponent<MeshRenderer>();
@@ -598,7 +602,10 @@ public partial class PortalSpawner
             var innerMpb = new MaterialPropertyBlock();
             innerMpb.SetFloat("_PhaseOffset", i * Mathf.PI);   // v3.4 C3: π between paired
             innerMpb.SetFloat("_Height", 1.4f);
-            innerMpb.SetColor("_TypeRimTint", baseColor);
+            // v3.5n: per-strand luma jitter via tint scaling.
+            Color innerTint = new Color(baseColor.r * jLuma, baseColor.g * jLuma,
+                                        baseColor.b * jLuma, baseColor.a);
+            innerMpb.SetColor("_TypeRimTint", innerTint);
             innerMr.SetPropertyBlock(innerMpb);
             UnityLogger.IForward("V199", $"ConeInner_{i} _TypeRimTint=({baseColor.r:F2},{baseColor.g:F2},{baseColor.b:F2})");
 
@@ -607,8 +614,11 @@ public partial class PortalSpawner
             outerGo.transform.SetParent(strandGo.transform, worldPositionStays: false);
             // v3.5k: outer narrowed 1.0→0.55× so 5-strand cluster doesn't
             // become a solid wall. Outer tip shrunk to 0.92× so inner pierces.
+            // v3.5n: outer also gets per-strand jitter (slightly less than inner).
             outerGo.transform.localPosition = Vector3.zero;
-            outerGo.transform.localScale = new Vector3(0.55f, 0.92f, 0.55f);
+            float outerWJit = 0.88f + Mathf.Abs(Mathf.Cos(i * 9.7f)) * 0.24f; // 0.88-1.12
+            float outerHJit = 0.94f + Mathf.Abs(Mathf.Sin(i * 4.3f)) * 0.12f; // 0.94-1.06
+            outerGo.transform.localScale = new Vector3(0.55f * outerWJit, 0.92f * outerHJit, 0.55f * outerWJit);
             var outerMf = outerGo.AddComponent<MeshFilter>();
             outerMf.sharedMesh = meshOuter;
             var outerMr = outerGo.AddComponent<MeshRenderer>();
@@ -627,7 +637,10 @@ public partial class PortalSpawner
             var outerMpb = new MaterialPropertyBlock();
             outerMpb.SetFloat("_PhaseOffset", i * Mathf.PI + Mathf.PI * 0.5f);  // v3.4 C3
             outerMpb.SetFloat("_Height", 1.7f);
-            outerMpb.SetColor("_TypeRimTint", baseColor);
+            // v3.5n: outer luma jitter (uses same jLuma as inner for consistency)
+            Color outerTint = new Color(baseColor.r * jLuma, baseColor.g * jLuma,
+                                        baseColor.b * jLuma, baseColor.a);
+            outerMpb.SetColor("_TypeRimTint", outerTint);
             // v3.4 review-fix: outline uses DEEPER type-tinted dark, not flat
             // brown. Water → deep teal (#0D3340), danger → deep crimson, etc.
             // This lets type identity actually read on white-bg (additive

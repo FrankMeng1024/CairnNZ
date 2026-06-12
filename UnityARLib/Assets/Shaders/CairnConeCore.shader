@@ -96,7 +96,13 @@ Shader "Cairn/CairnConeCore"
             half4 frag (Varyings IN) : SV_Target
             {
                 // Vertical envelope — base lift-off + power-curve tip dissolve.
+                // v3.5n: stronger smoothstep at base so strand emerges from
+                // ground softly (kills the "hard luminance pop" critique).
                 float baseEnv = smoothstep(0.0, max(0.001, _BaseFadeStart), IN.heightT);
+                // Extra base softener: bottom 8% of strand fades alpha to zero
+                // so feet visibly dissolve into ground rather than abrupt stop.
+                float baseSoften = smoothstep(0.0, 0.08, IN.heightT);
+                baseEnv *= baseSoften;
                 // Power curve top fade: slow exponential dissolve into sky.
                 float tipFalloff = 1.0 - smoothstep(_TipFadeStart, 1.0, IN.heightT);
                 float tipEnv = pow(tipFalloff, _TipPower);
