@@ -561,10 +561,14 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
                         // ARFoundation 6: synchronous AddAnchor exists via
                         // GameObject + ARAnchor component as fallback when
                         // plane-attached path doesn't apply.
-                        var anchorGo = new GameObject($"DepthAnchor_{data.id ?? "x"}");
+                        var anchorGo = new GameObject($"DepthAnchor_{data.id ?? "unknown"}");
                         anchorGo.transform.position = hit.pose.position;
                         anchorGo.transform.rotation = hit.pose.rotation;
                         anchorOnSpawn = anchorGo.AddComponent<ARAnchor>();
+                        // R2 fix: track for ClearAll so DepthAnchor GO doesn't
+                        // leak across session resets. Container will be parented
+                        // to anchorGo; destroying anchorGo will cascade.
+                        _spawned.Add(anchorGo);
                     }
                 }
             }

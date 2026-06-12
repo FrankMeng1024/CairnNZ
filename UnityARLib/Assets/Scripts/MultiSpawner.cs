@@ -247,10 +247,12 @@ public class MultiSpawner : MonoBehaviour, ICairnSpawner
                     }
                     if (mxAnchor == null)
                     {
-                        var go = new GameObject($"DepthAnchor_{data.id ?? "x"}");
+                        var go = new GameObject($"DepthAnchor_{data.id ?? "unknown"}");
                         go.transform.position = hit.pose.position;
                         go.transform.rotation = hit.pose.rotation;
                         mxAnchor = go.AddComponent<ARAnchor>();
+                        // R2 fix: track for ClearAll cleanup.
+                        _spawned.Add(go);
                     }
                 }
             }

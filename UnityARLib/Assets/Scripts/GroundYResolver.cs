@@ -198,41 +198,47 @@ public class GroundYResolver : MonoBehaviour
         if (arCamera == null) { y = 0f; tier = Tier.C; return false; }
         float camY = arCamera.transform.position.y;
 
-        // v3-review-fix: adaptive height gate. Standing user (camY ~1.4m)
-        // needs 0.8m gate to reject tabletops. Crouching user (camY ~0.7m)
-        // would have all real-floor planes rejected by 0.8m gate. Solution:
-        // scale gate with camera height — never reject more than 60% of the
-        // distance camera-to-ground that the user actually has available.
-        // Floor: gate = min(0.8m, camY * 0.6m).
-        //   Standing (camY=1.4m): gate=0.8m (rejects tables ~0.4m below cam)
-        //   Crouching (camY=0.7m): gate=0.42m (still rejects 0.3m-below tables)
-        //   Phone-flat-on-table (camY≈table+0.1m): gate=tiny → no gate effect
-        //     but A7 phone-flat protection in Update() prevents spawn anyway.
-        float HEIGHT_OFFSET_MIN = Mathf.Min(0.8f, Mathf.Max(0.2f, camY * 0.6f));
-        const float MIN_FLOOR_AREA_M2 = 1.5f;
+        // v3-review-fix R2: adaptive height gate, hip-hold safe.
+        // Round 1 fix used camY*0.6 which let tabletops pass at hip-hold
+        // (camY=0.9m → gate=0.54m, table-drop ~0.75m → accepted, BAD).
+        // R2: tighten to camY*0.55 + ALSO require larger plane area when
+        // gate would be marginal (gate < 0.65m).
+        //   Standing (camY=1.4m): gate=0.77m → tables (0.4m below) rejected
+        //   Hip-hold (camY=0.9m): gate=0.50m + area>=2.0m² required for marginal heights
+        //                       → typical 0.6×1.0m table (0.6m²) rejected on area
+        //                       → typical 4×4m floor (16m²) accepted
+        //   Crouching (camY=0.7m): gate=0.39m + area>=2.0m² → still
+        //                         rejects 0.5m bed/sofa, accepts real floor
+        //   Phone-flat: A7 protection in Update() prevents spawn anyway
+        float HEIGHT_OFFSET_MIN = Mathf.Min(0.8f, Mathf.Max(0.2f, camY * 0.55f));
+        bool requireLargerArea = HEIGHT_OFFSET_MIN < 0.65f;
+        float MIN_FLOOR_AREA_M2 = requireLargerArea ? 2.0f : 1.5f;
 
         // Tier A — PlaneClassification.Floor preferred, height + area gates.
         if (planeManager != null)
         {
-            // Pass 1: Floor-classified planes win immediately.
+            // Pass 1: Floor-classified planes win immediately (with area gate
+            // when at marginal height, R2 fix: prevents floor-misclassified
+            // tabletops at hip-hold from passing).
             foreach (var plane in planeManager.trackables)
             {
                 if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
                 if (!IsAcceptableFloorPlane(plane, camY, HEIGHT_OFFSET_MIN, MIN_FLOOR_AREA_M2,
-                                             requireFloorClassification: true)) continue;
+                                             requireFloorClassification: true,
+                                             requireAreaEvenIfFloor: requireLargerArea)) continue;
                 if (!ContainsXZ(plane, worldXZ)) continue;
                 y = plane.center.y;
                 tier = Tier.A;
                 OnTierAObserved();
                 return true;
             }
-            // Pass 2: unclassified-but-large planes (NZ trail grass/gravel often
-            // unclassifiable — accept as floor if big enough and low enough).
+            // Pass 2: unclassified-but-large planes
             foreach (var plane in planeManager.trackables)
             {
                 if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
                 if (!IsAcceptableFloorPlane(plane, camY, HEIGHT_OFFSET_MIN, MIN_FLOOR_AREA_M2,
-                                             requireFloorClassification: false)) continue;
+                                             requireFloorClassification: false,
+                                             requireAreaEvenIfFloor: false)) continue;
                 if (!ContainsXZ(plane, worldXZ)) continue;
                 y = plane.center.y;
                 tier = Tier.A;
@@ -308,7 +314,7 @@ public class GroundYResolver : MonoBehaviour
     /// </summary>
     private static bool IsAcceptableFloorPlane(
         ARPlane plane, float camY, float heightOffsetMin, float minAreaM2,
-        bool requireFloorClassification)
+        bool requireFloorClassification, bool requireAreaEvenIfFloor = false)
     {
         // Height gate: plane must be at least heightOffsetMin below camera.
         if (camY - plane.center.y < heightOffsetMin) return false;
@@ -331,14 +337,17 @@ public class GroundYResolver : MonoBehaviour
             PlaneClassifications.InvisibleWallFace;
         if ((c & nonFloorMask) != 0) return false;
 
+        float areaM2 = plane.size.x * plane.size.y;
         if (requireFloorClassification)
         {
             // Pass 1 — only accept explicitly classified Floor.
-            return (c & PlaneClassifications.Floor) != 0;
+            // R2 fix: also enforce area gate at marginal heights (hip-hold)
+            // because ARKit occasionally misclassifies large tabletops as Floor.
+            if ((c & PlaneClassifications.Floor) == 0) return false;
+            if (requireAreaEvenIfFloor && areaM2 < minAreaM2) return false;
+            return true;
         }
         // Pass 2 — accept None/Other if plane is large enough.
-        // plane.size is in metres (ARFoundation convention).
-        float areaM2 = plane.size.x * plane.size.y;
         return areaM2 >= minAreaM2;
     }
 

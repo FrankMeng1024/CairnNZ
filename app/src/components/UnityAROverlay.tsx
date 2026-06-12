@@ -250,7 +250,9 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
       // v206 A2 — lastSentOriginRef replaces offsetSentRef.
       // v206 B1 — drop the ground-lock + plane buffer so the next session
       // starts fresh (ARKit world frame may have changed).
+      // R2 fix: also clear rejection blacklist.
       lastSentOriginRef.current = null;
+      rejectionTrackerRef.current.clear();
       bulkSpawnedRef.current = false;
       emptyMarkerFrameCountRef.current = 0;
       recentPlanesRef.current = [];
@@ -359,9 +361,13 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
       // v199 — reset offset/bulk-spawn one-shots so next mount can re-fire.
       // v206 A2 — lastSentOriginRef replaces offsetSentRef
       // v206 B1 — clear plane buffer + ground-lock for next session
+      // R2 fix: clear rejection blacklist too — fresh AR session = fresh
+      // chance for previously-failed surfaces. Without this, blacklisted
+      // markers stayed broken for app lifetime.
       lastSentOriginRef.current = null;
       bulkSpawnedRef.current = false;
       emptyMarkerFrameCountRef.current = 0;
+      rejectionTrackerRef.current.clear();
       recentPlanesRef.current = [];
       observedPlaneYsRef.current = [];
       lastCameraYRef.current = null;
@@ -804,15 +810,15 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 `${TAG}:bulk-spawn requested=${props.markers.length} dispatched=${dispatched} origin=${persisted ? 'persisted' : 'live'}`
               );
             }
-            // v206 A1 — only burn the one-shot when we actually
-            // accomplished something. Empty marker list does NOT count
-            // (markers may be hydrating from MMKV or lastCoord filter
-            // may not yet have nearby matches — next ArFrame retries).
-            // Branch B v3-review-fix: also keep one-shot OFF when any
-            // marker has a pending throttled retry — the bulk-spawn loop
-            // needs to fire again at backoff time, not stay locked.
+            // R2 fix: idle-loop fix — also count blacklisted as "covered"
+            // so a mixed scenario (some spawned, some blacklisted) doesn't
+            // re-fire the bulk-spawn loop forever.
             const hasMarkers = props.markers.length > 0;
-            const allCovered = hasMarkers && props.markers.every(m => spawnedIdsRef.current.has(m.id));
+            const allCovered = hasMarkers && props.markers.every(m => {
+              if (spawnedIdsRef.current.has(m.id)) return true;
+              const tr = rejectionTrackerRef.current.get(m.id);
+              return tr != null && tr.attempts > 6;   // blacklisted = effectively covered
+            });
             const hasPendingRetry = hasMarkers && props.markers.some(m => {
               const tr = rejectionTrackerRef.current.get(m.id);
               return tr != null && tr.attempts <= 6 && !spawnedIdsRef.current.has(m.id);

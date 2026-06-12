@@ -747,13 +747,12 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   }, []);
 
   // Branch B v3-review-fix: install global plant-rejection toast hook.
-  // Called by:
-  //   1. ARScreen plant flow when ARRaycast misses ground (line 893 area)
-  //   2. UnityAROverlay SpawnRejected handler when Unity refuses spawn
-  // De-duplicate so multiple rapid rejections only show one toast.
+  // R2 fix: capture and restore the previous handler instead of overwriting
+  // with a no-op on unmount, so cross-mount transitions don't silently
+  // disable the toast for the next instance.
   useEffect(() => {
+    const previousHandler = (globalThis as any).__cairnPlantRejected;
     (globalThis as any).__cairnPlantRejected = (message: string) => {
-      // Coalesce: if a toast is already up with the same message, just reset timer.
       setPlantRejectedToast(message);
       if (plantRejectedTimerRef.current) clearTimeout(plantRejectedTimerRef.current);
       plantRejectedTimerRef.current = setTimeout(() => {
@@ -761,12 +760,9 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
       }, 2200);
     };
     return () => {
-      // Don't unset on unmount — other ARScreen mounts may need it. But guard
-      // the setter so it no-ops if component is gone.
-      const fn = (globalThis as any).__cairnPlantRejected;
-      if (fn) {
-        (globalThis as any).__cairnPlantRejected = (_: string) => {};
-      }
+      // Restore prior handler (or undefined). Avoids replacing live handlers
+      // installed by a still-mounted ARScreen during navigation transitions.
+      (globalThis as any).__cairnPlantRejected = previousHandler;
     };
   }, []);
 

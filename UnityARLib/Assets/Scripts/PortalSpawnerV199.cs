@@ -177,26 +177,21 @@ public partial class PortalSpawner
         // call-site here so the legacy AttachHeroRibbons keeps running
         // until the new 2D HTML mockup is approved.
         // v0.2.3 Branch C — Cone-strand visual (Plan E-prime).
-        //   • Cone mesh + CairnConeCore additive shader
-        //   • Optional CairnConeOutline alpha-blend pass for daylight
-        //   • Replaces flat-strip RibbonStrand DNA per subagent diagnosis:
-        //     "every ribbon-mesh approach is a flat strip with width
-        //     falloff; eyes read it as paper, never light."
-        // Gated by OTA `ConeStrandEnabled` (default true). Legacy
-        // AttachHeroRibbons retained as opt-out fallback for emergency
-        // rollback (set ConeStrandEnabled=false via OTA).
-        // v3-review-fix: if cone strand assets missing (Setup menu not run
-        // yet), fall through to HeroRibbons rather than rendering nothing.
+        // Replaces flat-strip RibbonStrand DNA per subagent: "every
+        // ribbon-mesh approach is a flat strip with width falloff".
+        // Gated by OTA `ConeStrandEnabled` (default true).
+        //
+        // R2 fix: legacy AttachHeroRibbons fallback REMOVED — it renders
+        // exactly the flat-strip visual user invariant #3 explicitly rejects.
+        // If cone-strand assets missing (Setup menu not run), spawn cairn
+        // WITHOUT ribbons (PortalRing + SDF + pebbles still render);
+        // emits telemetry so dev knows to run the menu.
         bool useConeStrand = globals == null || globals.GetBool("ConeStrandEnabled", true);
-        bool coneStrandAttached = false;
         if (useConeStrand)
         {
-            coneStrandAttached = AttachConeStrands(v199, baseColor);
+            AttachConeStrands(v199, baseColor);
         }
-        if (!coneStrandAttached && (globals == null || globals.GetBool("HeroRibbonEnabled", true)))
-        {
-            AttachHeroRibbons(v199);
-        }
+        // No HeroRibbons fallback — would violate user invariant #3.
 
         // ── FarShaft billboard (distance LOD) ──
         if (globals == null || globals.GetBool("FarShaftEnabled", true))
@@ -909,40 +904,12 @@ public partial class PortalSpawner
         UnityLogger.IForward("v22-CEREMONY", $"end actual={t:F2}s");
     }
 
-    private IEnumerator SummonAnimation(GameObject container, float rise, float dur)
-    {
-        if (container == null) yield break;
-        Vector3 finalPos = container.transform.position;
-        Vector3 startPos = finalPos - new Vector3(0, rise, 0);
-        container.transform.position = startPos;
-        UnityLogger.IForward("V199",
-            $"summon-begin rise={rise:F2} dur={dur:F2} finalY={finalPos.y:F3}");
-        float t = 0f;
-        while (t < dur && container != null)
-        {
-            t += Time.deltaTime;
-            float e = Mathf.Clamp01(t / dur);
-            // Ease-out cubic
-            float k = 1f - Mathf.Pow(1f - e, 3f);
-            container.transform.position = Vector3.Lerp(startPos, finalPos, k);
-            yield return null;
-        }
-        if (container != null) container.transform.position = finalPos;
-        UnityLogger.IForward("V199", "summon-end");
-    }
-
-    /// <summary>
-    /// Sequentially: run summon animation, THEN try anchor parenting.
-    /// Avoids the C2 race where mid-summon SetParent re-bases the
-    /// transform and ARKit's anchor-refinement jitter shows during the
-    /// rise.
-    /// </summary>
-    private IEnumerator SummonThenAnchor(GameObject container, float rise, float dur)
-    {
-        yield return SummonAnimation(container, rise, dur);
-        if (container == null) yield break;
-        yield return TryParentToAnchor(container, container.transform.position.y);
-    }
+    // R2 fix: removed dead code SummonAnimation + SummonThenAnchor.
+    // Verified zero callers via repo-wide grep. Branch A pre-spawn anchor
+    // flow (PortalSpawner.SpawnStrandInternal) made these obsolete.
+    // Reviewers (and the previous adversarial subagent) reasoned about
+    // these flows when they don't actually execute — deleting prevents
+    // future confusion.
 
     private IEnumerator TryParentToAnchor(GameObject container, float groundY)
     {
