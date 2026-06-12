@@ -50,6 +50,12 @@ interface Props {
   warnRadiusM?: number;
   /** Threshold for "red" out-of-range (default 500m). */
   corridorRadiusM?: number;
+  /**
+   * v247: when true, hide the brush stroke render via opacity rather than
+   * unmount. Keeps Mapbox ShapeSource alive so the next show doesn't
+   * trigger a full remount + re-paint flicker.
+   */
+  hidden?: boolean;
 }
 
 type Severity = 'sage' | 'amber' | 'red';
@@ -166,6 +172,7 @@ export function BrushStrokeLayer({
   endpointSnapM = 50,
   warnRadiusM = 400,
   corridorRadiusM = 500,
+  hidden = false,
 }: Props): React.JSX.Element | null {
   const built = useMemo(
     () => buildFeatures(strokes, distanceFromOriginalM, warnRadiusM, corridorRadiusM, endpointSnapM),
@@ -173,6 +180,11 @@ export function BrushStrokeLayer({
   );
   if (!ShapeSource || !LineLayer) return null;
   if (strokes.length === 0) return null;
+  // v247: instead of unmounting when hidden, render at opacity 0 so the
+  // Mapbox ShapeSource stays alive — prevents the "first stroke redraws"
+  // flicker when the user re-enters drawing after a Preview.
+  const lineOpacity = hidden ? 0 : 0.92;
+  const endpointOpacity = hidden ? 0 : 1;
   return (
     <>
       {built.sage.features.length > 0 && (
@@ -182,7 +194,7 @@ export function BrushStrokeLayer({
             style={{
               lineColor: Colors.primary,
               lineWidth: 6,
-              lineOpacity: 0.92,
+              lineOpacity,
               lineCap: 'round',
               lineJoin: 'round',
             }}
@@ -196,7 +208,7 @@ export function BrushStrokeLayer({
             style={{
               lineColor: Colors.severityCaution,
               lineWidth: 6,
-              lineOpacity: 0.92,
+              lineOpacity,
               lineCap: 'round',
               lineJoin: 'round',
             }}
@@ -210,7 +222,7 @@ export function BrushStrokeLayer({
             style={{
               lineColor: Colors.severityDanger,
               lineWidth: 6,
-              lineOpacity: 0.92,
+              lineOpacity,
               lineCap: 'round',
               lineJoin: 'round',
             }}
@@ -225,8 +237,10 @@ export function BrushStrokeLayer({
             style={{
               circleRadius: 6,
               circleColor: Colors.primary,
+              circleOpacity: endpointOpacity,
               circleStrokeWidth: 2,
               circleStrokeColor: Colors.surface,
+              circleStrokeOpacity: endpointOpacity,
             }}
           />
           <CircleLayer
@@ -235,8 +249,10 @@ export function BrushStrokeLayer({
             style={{
               circleRadius: 7,
               circleColor: Colors.surface,
+              circleOpacity: endpointOpacity,
               circleStrokeWidth: 3,
               circleStrokeColor: Colors.severityDanger,
+              circleStrokeOpacity: endpointOpacity,
             }}
           />
         </ShapeSource>

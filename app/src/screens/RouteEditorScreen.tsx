@@ -553,15 +553,14 @@ export function RouteEditorScreen() {
                     editTrimEndFrac < 1
                   }
                 />
-                {/* Brush strokes only visible while drafting (preview not
-                    current). Once preview is shown, hide raw strokes so
-                    the user sees the snapped polyline cleanly. */}
-                {!editPreviewIsCurrent && (
-                  <BrushStrokeLayer
-                    strokes={editBrushStrokes}
-                    distanceFromOriginalM={distanceFromOriginal}
-                  />
-                )}
+                {/* v247: BrushStrokeLayer always mounted; hidden via opacity
+                    when preview is showing. Mount/unmount caused a Mapbox
+                    ShapeSource remount that flickered on next stroke begin. */}
+                <BrushStrokeLayer
+                  strokes={editBrushStrokes}
+                  distanceFromOriginalM={distanceFromOriginal}
+                  hidden={editPreviewIsCurrent && editBrushStrokes.length > 0}
+                />
               </>
             )}
           </MapView>

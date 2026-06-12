@@ -333,6 +333,134 @@ function nearestOriginalIdx(
   return { idx: best, distM: bestD };
 }
 
+/**
+ * v247: project a point onto the nearest SEGMENT (not vertex) of
+ * originalPoints. Returns the projected lng/lat AND the perpendicular
+ * distance in meters. Used by endStroke endpoint magnetism so a stroke
+ * that ends 4m perpendicular to a 5m-spaced original sample lands on
+ * the road centerline, not on a 4m-shifted vertex.
+ */
+function projectOntoOriginalSegment(
+  coord: LngLat,
+  originalPoints: LngLat[],
+): { point: LngLat; distM: number } {
+  if (originalPoints.length < 2) return { point: coord, distM: Infinity };
+  let bestPt: LngLat = originalPoints[0];
+  let bestD = Infinity;
+  for (let i = 1; i < originalPoints.length; i++) {
+    const a = originalPoints[i - 1];
+    const b = originalPoints[i];
+    const midLat = ((a.lat + b.lat) / 2) * (Math.PI / 180);
+    const cosLat = Math.cos(midLat);
+    const M_PER_DEG = 111000;
+    const ax = a.lng * cosLat * M_PER_DEG;
+    const ay = a.lat * M_PER_DEG;
+    const bx = b.lng * cosLat * M_PER_DEG;
+    const by = b.lat * M_PER_DEG;
+    const px = coord.lng * cosLat * M_PER_DEG;
+    const py = coord.lat * M_PER_DEG;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    let t = lenSq < 1e-9 ? 0 : ((px - ax) * dx + (py - ay) * dy) / lenSq;
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
+    const fx = ax + t * dx;
+    const fy = ay + t * dy;
+    const ex = px - fx;
+    const ey = py - fy;
+    const d = Math.sqrt(ex * ex + ey * ey);
+    if (d < bestD) {
+      bestD = d;
+      // Convert back to lng/lat at the midLat used for projection.
+      bestPt = { lng: fx / (cosLat * M_PER_DEG), lat: fy / M_PER_DEG };
+    }
+  }
+  return { point: bestPt, distM: bestD };
+}
+
+/**
+ * v247: Douglas-Peucker simplification to reduce stroke point count
+ * before sending to Mapbox. Keeps curve information better than uniform-
+ * stride downsample, and reduces noise that confuses Map Matching.
+ *
+ * epsilon in meters; ~3m is a good default for ~5m-sampled strokes.
+ */
+function rdpSimplify(points: LngLat[], epsilonM: number): LngLat[] {
+  if (points.length <= 2) return points.slice();
+  // Perpendicular distance in meters from p to segment a-b.
+  function perpDistM(p: LngLat, a: LngLat, b: LngLat): number {
+    const midLat = ((a.lat + b.lat) / 2) * (Math.PI / 180);
+    const cosLat = Math.cos(midLat);
+    const M_PER_DEG = 111000;
+    const ax = a.lng * cosLat * M_PER_DEG;
+    const ay = a.lat * M_PER_DEG;
+    const bx = b.lng * cosLat * M_PER_DEG;
+    const by = b.lat * M_PER_DEG;
+    const px = p.lng * cosLat * M_PER_DEG;
+    const py = p.lat * M_PER_DEG;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 1e-9) return Math.hypot(px - ax, py - ay);
+    let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
+    const fx = ax + t * dx;
+    const fy = ay + t * dy;
+    return Math.hypot(px - fx, py - fy);
+  }
+  // Iterative DP using stack to avoid recursion stack blowup.
+  const keep = new Array(points.length).fill(false);
+  keep[0] = true;
+  keep[points.length - 1] = true;
+  const stack: Array<[number, number]> = [[0, points.length - 1]];
+  while (stack.length > 0) {
+    const [lo, hi] = stack.pop()!;
+    if (hi - lo < 2) continue;
+    let maxD = -1;
+    let maxIdx = -1;
+    for (let i = lo + 1; i < hi; i++) {
+      const d = perpDistM(points[i], points[lo], points[hi]);
+      if (d > maxD) {
+        maxD = d;
+        maxIdx = i;
+      }
+    }
+    if (maxD > epsilonM && maxIdx > 0) {
+      keep[maxIdx] = true;
+      stack.push([lo, maxIdx]);
+      stack.push([maxIdx, hi]);
+    }
+  }
+  const out: LngLat[] = [];
+  for (let i = 0; i < points.length; i++) if (keep[i]) out.push(points[i]);
+  return out;
+}
+
+/** Cheap content hash for a stroke (id excluded — points only). */
+function strokeFingerprint(stroke: BrushStroke): string {
+  const pts = stroke.points;
+  if (pts.length === 0) return 'empty';
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  // Sample 5 evenly spaced indices for fingerprint stability across
+  // erase-split or appendStrokePoint events.
+  let mid = '';
+  if (pts.length >= 5) {
+    for (let k = 1; k < 4; k++) {
+      const idx = Math.floor((k * pts.length) / 4);
+      const p = pts[idx];
+      mid += `_${p.lng.toFixed(5)},${p.lat.toFixed(5)}`;
+    }
+  }
+  return `${pts.length}_${first.lng.toFixed(5)},${first.lat.toFixed(5)}_${last.lng.toFixed(5)},${last.lat.toFixed(5)}${mid}`;
+}
+
+/** v247: per-stroke session cache keyed by fingerprint. */
+const strokeSnapCache = new Map<string, LngLat[]>();
+function clearStrokeSnapCache(): void { strokeSnapCache.clear(); }
+
 /** Cumulative arc-length on originalPoints. */
 function cumulativeArc(coords: LngLat[]): number[] {
   const arc = new Array(coords.length).fill(0);
@@ -533,6 +661,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const sessionId = genSessionId();
     const enteredAtTs = resumeFrom?.enteredAt ?? t0;
     clearMatchCache();
+    clearStrokeSnapCache();
 
     const originalPoints: LngLat[] = extras.originalPoints;
     const initialStrokes: BrushStroke[] = resumeFrom?.brushStrokes ?? [];
@@ -647,9 +776,39 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   },
 
   endStroke(strokeId) {
-    // Re-validate end point. If end is off-route, the stroke is kept
-    // but will surface a validation error on Save.
-    set(s => ({ ...s, editCount: s.editCount + 1, editOpSeq: s.editOpSeq + 1 }));
+    // v247: endpoint magnetism — when stroke ends, snap first and last
+    // point onto the nearest segment of originalPoints (within 50m).
+    // This eliminates the "Mapbox routes via a side street near the
+    // imprecise endpoint" hook artifact PO reported.
+    const state = get();
+    const idx = state.brushStrokes.findIndex(s => s.id === strokeId);
+    if (idx < 0) {
+      set(s => ({ ...s, editCount: s.editCount + 1, editOpSeq: s.editOpSeq + 1 }));
+      persistSession(get(), get().sessionId ?? undefined);
+      return;
+    }
+    const stroke = state.brushStrokes[idx];
+    if (stroke.points.length >= 3 && state.originalPoints.length >= 2) {
+      const first = projectOntoOriginalSegment(stroke.points[0], state.originalPoints);
+      const last = projectOntoOriginalSegment(
+        stroke.points[stroke.points.length - 1],
+        state.originalPoints,
+      );
+      const newPoints = [...stroke.points];
+      if (first.distM <= ENDPOINT_SNAP_M) newPoints[0] = first.point;
+      if (last.distM <= ENDPOINT_SNAP_M) newPoints[newPoints.length - 1] = last.point;
+      const newStrokes = [...state.brushStrokes];
+      newStrokes[idx] = { ...stroke, points: newPoints };
+      set(s => ({
+        ...s,
+        brushStrokes: newStrokes,
+        previewIsCurrent: false,
+        editCount: s.editCount + 1,
+        editOpSeq: s.editOpSeq + 1,
+      }));
+    } else {
+      set(s => ({ ...s, editCount: s.editCount + 1, editOpSeq: s.editOpSeq + 1 }));
+    }
     persistSession(get(), get().sessionId ?? undefined);
   },
 
@@ -910,28 +1069,49 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const snappedPerStroke: LngLat[][] = [];
     for (const vs of v.validated) {
       const pts = vs.stroke.points;
+      // v247: per-stroke content-hash cache. If this stroke's fingerprint
+      // hit the cache, reuse the prior snap result — no Mapbox call.
+      const fp = strokeFingerprint(vs.stroke);
+      const cached = strokeSnapCache.get(fp);
+      if (cached) {
+        snappedPerStroke.push(cached);
+        continue;
+      }
+      // v247: RDP simplify (epsilon 3m) preserves curve shape better
+      // than uniform-stride downsample, and reduces sample noise.
+      let simplified = rdpSimplify(pts, 3);
+      // Mapbox cap = 100; we leave headroom by capping to 96 via
+      // uniform-stride after RDP if still too long.
       const target = 96;
       const sampled: LngLat[] = [];
-      if (pts.length <= target) {
-        sampled.push(...pts);
+      if (simplified.length <= target) {
+        sampled.push(...simplified);
       } else {
         for (let k = 0; k < target; k++) {
-          const idx = Math.round((k * (pts.length - 1)) / (target - 1));
-          sampled.push(pts[idx]);
+          const idx = Math.round((k * (simplified.length - 1)) / (target - 1));
+          sampled.push(simplified[idx]);
         }
       }
       const radiuses: (number | null)[] = sampled.map(() => 25);
       const seg: MatchSegment = { coords: sampled, radiuses, viaIndicesInCoords: [] };
+      let snapped: LngLat[];
       try {
         const r = await matchSegment(seg);
         if (!r.ok) {
-          snappedPerStroke.push(pts.slice());
+          snapped = pts.slice();
         } else {
-          snappedPerStroke.push(r.matchedPoints);
+          snapped = r.matchedPoints;
         }
       } catch {
-        snappedPerStroke.push(pts.slice());
+        snapped = pts.slice();
       }
+      strokeSnapCache.set(fp, snapped);
+      // Cap cache size.
+      if (strokeSnapCache.size > 100) {
+        const firstKey = strokeSnapCache.keys().next().value;
+        if (firstKey) strokeSnapCache.delete(firstKey);
+      }
+      snappedPerStroke.push(snapped);
     }
 
     // Fence: bail if state was mutated during await.
