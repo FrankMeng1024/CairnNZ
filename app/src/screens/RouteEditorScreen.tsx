@@ -130,7 +130,10 @@ export function RouteEditorScreen() {
   const mapViewRef = useRef<any>(null);
 
   // Distance helper for BrushStrokeLayer color classification.
-  // v249: bound kdbush.within search to 600m (corridor 500m + buffer)
+  // v249: bound kdbush.within search to 600m (corridor was 500m, v253
+  // tightened to 200m, so 600m is now corridor + 400m buffer — generous
+  // enough that any in-range point hits a candidate, while skipping
+  // 10km-default scans that crushed perf during gesture).
   // instead of default 10km — every appendStrokePoint frame called this
   // for both endpoints of every segment, scanning a 10km candidate set
   // each time = main culprit of the "second stroke janky" bug.

@@ -64,17 +64,19 @@ describe('validateStrokes', () => {
     expect(r.errors[0]).toMatch(/end is not on the route/);
   });
 
-  it('rejects stroke containing a point ≥ 500 m away (red zone)', () => {
+  it('rejects stroke containing a point beyond corridor (red zone)', () => {
     const { pts, index } = makeOriginal();
     // start + end on route, middle point ~1 km north of route
     const middle: LngLat = { lng: 174.7050, lat: -41.2810 }; // ~1 km north
     const s = stroke('s1', [pts[10], middle, pts[60]]);
     const r = validateStrokes([s], pts, index);
     expect(r.ok).toBe(false);
-    expect(r.errors[0]).toMatch(/beyond 500m/);
+    // v253: corridor radius is now CORRIDOR_RADIUS_M (200m as of v253);
+    // message reports it dynamically. Match the prefix that always holds.
+    expect(r.errors[0]).toMatch(/parts are beyond \d+m/);
   });
 
-  it('accepts stroke that stays within 500 m and endpoints on route', () => {
+  it('accepts stroke that stays inside corridor and endpoints on route', () => {
     const { pts, index } = makeOriginal();
     // gentle bump: ~100 m north
     const middle: LngLat = { lng: 174.7050, lat: -41.2891 }; // ~100 m

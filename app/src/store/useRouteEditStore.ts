@@ -500,30 +500,43 @@ function smoothCatmullRom(points: LngLat[], subdivisions: number = 3): LngLat[] 
 
 /**
  * v253: Snap quality gate. For each snapped point, find nearest point
- * on the user's original brush. If displacement > thresholdM, the snap
- * has wandered (Mapbox latched onto a far parallel road or a non-
- * existent shortcut). Returns the fraction of snapped points that
- * exceed the threshold — caller decides whether to accept.
+ * on the user's original brush. Returns the fraction of snapped points
+ * that exceed `thresholdM` AND the maximum displacement (Hausdorff-ish:
+ * one-sided, snap → brush). Caller rejects if EITHER:
+ *   - frac of bad points > fracLimit  (lots of mid-segment drift), OR
+ *   - max displacement > maxAbsM       (any single huge spike)
+ * v253.1: maxAbsM catches "snap took a 50m+ detour through a building"
+ * even when overall fraction is small.
  */
+function snapDisplacementStats(
+  snapped: LngLat[],
+  originalBrush: LngLat[],
+  thresholdM: number,
+): { fracBad: number; maxDispM: number } {
+  if (snapped.length === 0 || originalBrush.length === 0) {
+    return { fracBad: 1, maxDispM: Infinity };
+  }
+  let bad = 0;
+  let maxD = 0;
+  for (const s of snapped) {
+    let bestD = Infinity;
+    for (const o of originalBrush) {
+      const d = haversineMetersLocal(s, o);
+      if (d < bestD) bestD = d;
+    }
+    if (bestD > thresholdM) bad++;
+    if (bestD > maxD) maxD = bestD;
+  }
+  return { fracBad: bad / snapped.length, maxDispM: maxD };
+}
+
+// Backward-compatible wrapper (used by older call sites if any).
 function snapDisplacementFraction(
   snapped: LngLat[],
   originalBrush: LngLat[],
   thresholdM: number,
 ): number {
-  if (snapped.length === 0 || originalBrush.length === 0) return 1;
-  let bad = 0;
-  for (const s of snapped) {
-    let bestD = Infinity;
-    for (const o of originalBrush) {
-      const d = haversineMetersLocal(s, o);
-      if (d < bestD) {
-        bestD = d;
-        if (bestD <= thresholdM) break;
-      }
-    }
-    if (bestD > thresholdM) bad++;
-  }
-  return bad / snapped.length;
+  return snapDisplacementStats(snapped, originalBrush, thresholdM).fracBad;
 }
 
 /**
@@ -645,15 +658,22 @@ export function validateStrokes(
     strokeNum++;
     if (s.points.length < 2) continue; // skip empty stroke silently
 
-    // Endpoint check.
-    const startD = distanceToOriginalM(s.points[0], walkedIndex);
-    const endD = distanceToOriginalM(s.points[s.points.length - 1], walkedIndex);
-    if (startD > ENDPOINT_SNAP_M) {
-      errors.push(`Brush ${strokeNum}: start is not on the route — connect or erase.`);
+    // v253 fix: Endpoint check matches the runtime check used by
+    // beginStroke/endStroke — accepts a point that is within
+    // ENDPOINT_SNAP_M of the matched line OR of any OTHER stroke's
+    // points. Previously this used walkedIndex only, which rejected
+    // a stroke whose end attached to a previous stroke (eraser-split
+    // case PO reported). otherStrokes excludes the stroke being
+    // validated so its own points can't trivially satisfy the check.
+    const otherStrokes = strokes.filter(o => o.id !== s.id);
+    const startOk = isPointAcceptableEndpoint(s.points[0], walkedIndex, otherStrokes);
+    const endOk = isPointAcceptableEndpoint(s.points[s.points.length - 1], walkedIndex, otherStrokes);
+    if (!startOk) {
+      errors.push(`Brush ${strokeNum}: start is not on the route or an existing stroke — connect or erase.`);
       continue;
     }
-    if (endD > ENDPOINT_SNAP_M) {
-      errors.push(`Brush ${strokeNum}: end is not on the route — connect or erase.`);
+    if (!endOk) {
+      errors.push(`Brush ${strokeNum}: end is not on the route or an existing stroke — connect or erase.`);
       continue;
     }
 
@@ -664,7 +684,7 @@ export function validateStrokes(
       if (d >= CORRIDOR_RADIUS_M) { hasRed = true; break; }
     }
     if (hasRed) {
-      errors.push(`Brush ${strokeNum}: parts are beyond 500m — erase the red sections.`);
+      errors.push(`Brush ${strokeNum}: parts are beyond ${CORRIDOR_RADIUS_M}m — erase the red sections.`);
       continue;
     }
 
@@ -1488,7 +1508,9 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const startSeq = get().editOpSeq;
 
     const snappedPerStroke: LngLat[][] = [];
-    let anySnapFallback = false; // v251: track Mapbox failures to preserve undo
+    let anySnapFallback = false; // v251: track Mapbox failures
+    let anyStrokeRejected = false; // v253.1: track fully-rejected strokes
+    const acceptedValidated: ValidatedStroke[] = []; // strokes whose snap is trusted
     for (const vs of v.validated) {
       const pts = vs.stroke.points;
       // v247: per-stroke content-hash cache. If this stroke's fingerprint
@@ -1497,6 +1519,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       const cached = strokeSnapCache.get(fp);
       if (cached) {
         snappedPerStroke.push(cached);
+        acceptedValidated.push(vs);
         continue;
       }
       // v247: RDP simplify (epsilon 3m) preserves curve shape better
@@ -1526,39 +1549,41 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         (k === 0 || k === sampled.length - 1) ? 6 : 12,
       );
       const seg: MatchSegment = { coords: sampled, radiuses, viaIndicesInCoords: [] };
-      let snapped: LngLat[];
+      // v253.1 重要决策: 如果 Mapbox NoMatch 或质量门拒收 → 这一笔
+      // 完整 REJECT (不进 commit, baseline 那段不变). 之前 fallback
+      // 用 Catmull-Rom 平滑原笔, 但原笔可能本身就穿建筑 — 那对应
+      // 用户画了一条"不合理"的笔, 我们应该忽略它. 用户原话:"沿用
+      // GPS 点 这样 2 个重合在一个路线里" — 沿用 = 用原 route 的
+      // 那段 originalPoints, NOT 用户当前的笔. 拒收 = baseline 不变.
       try {
         const r = await matchSegment(seg);
         if (!r.ok) {
-          // v253: NoMatch / network / auth → fallback Catmull-Rom on raw brush.
-          snapped = smoothCatmullRom(pts);
+          // NoMatch / network: 这笔完全 reject.
+          anyStrokeRejected = true;
           anySnapFallback = true;
-        } else {
-          // v253: snap quality gate. Mapbox /driving sometimes still picks
-          // a parallel road or a longer detour. Compare each snapped point
-          // to nearest user-brush point. >30m drift is the "wrong road"
-          // signal. >20% drifty points → reject snap as a whole and
-          // fallback to raw brush + smoothing. Whole-stroke fallback (not
-          // partial) avoids stitched-seam artifacts.
-          const driftFrac = snapDisplacementFraction(r.matchedPoints, pts, 30);
-          if (driftFrac > 0.2) {
-            snapped = smoothCatmullRom(pts);
-            anySnapFallback = true;
-          } else {
-            snapped = r.matchedPoints;
-          }
+          continue; // 不 push 到 snappedPerStroke / acceptedValidated
         }
+        // 质量门
+        const stats = snapDisplacementStats(r.matchedPoints, pts, 20);
+        if (stats.fracBad > 0.1 || stats.maxDispM > 40) {
+          // snap 漂得太远 (穿建筑/平行路) → reject.
+          anyStrokeRejected = true;
+          anySnapFallback = true;
+          continue;
+        }
+        const snapped = r.matchedPoints;
+        strokeSnapCache.set(fp, snapped);
+        if (strokeSnapCache.size > 100) {
+          const firstKey = strokeSnapCache.keys().next().value;
+          if (firstKey) strokeSnapCache.delete(firstKey);
+        }
+        snappedPerStroke.push(snapped);
+        acceptedValidated.push(vs);
       } catch {
-        snapped = smoothCatmullRom(pts);
+        anyStrokeRejected = true;
         anySnapFallback = true;
+        continue;
       }
-      strokeSnapCache.set(fp, snapped);
-      // Cap cache size.
-      if (strokeSnapCache.size > 100) {
-        const firstKey = strokeSnapCache.keys().next().value;
-        if (firstKey) strokeSnapCache.delete(firstKey);
-      }
-      snappedPerStroke.push(snapped);
     }
 
     // Fence: bail if state was mutated during await.
@@ -1573,7 +1598,10 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     // v251: splice against the CURRENT matched line, not the immutable
     // originalPoints. This makes Preview a true commit point — the
     // resulting newMatched is what the next stroke will edit on top of.
-    const newMatched = spliceMatched(baseLine, v.validated, snappedPerStroke);
+    // v253.1: pass ONLY accepted strokes to spliceMatched. Rejected
+    // strokes (NoMatch / quality-gate fail) leave that segment of the
+    // baseline untouched — "沿用原 GPS 点".
+    const newMatched = spliceMatched(baseLine, acceptedValidated, snappedPerStroke);
     // v251: rebuild walkedIndex so subsequent endpoint-snap and
     // distance-to-base lookups operate against the new matched line,
     // not the immutable original.
@@ -1600,8 +1628,8 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       workingPoints: deriveWorking(newMatched, s.trimStartFrac, s.trimEndFrac),
       walkedIndex: newWalkedIndex,
       isComputing: false,
-      lastWarning: anySnapFallback
-        ? 'Some strokes kept your raw drawing — no clear road match.'
+      lastWarning: anyStrokeRejected
+        ? 'Some strokes were ignored — no clear road match. The original route is kept for those sections.'
         : s.lastWarning,
       editOpSeq: s.editOpSeq + 1,
     }));

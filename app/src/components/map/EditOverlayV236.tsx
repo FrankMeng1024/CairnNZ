@@ -36,7 +36,6 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
   const brushStrokes = useRouteEditStore(s => s.brushStrokes);
   const activeTool = useRouteEditStore(s => s.activeTool);
   const setActiveTool = useRouteEditStore(s => s.setActiveTool);
-  const validationErrors = useRouteEditStore(s => s.validationErrors);
   const previewIsCurrent = useRouteEditStore(s => s.previewIsCurrent);
   const setLastError = useRouteEditStore(s => s.setLastError);
   const setTrimStart = useRouteEditStore(s => s.setTrimStart);
@@ -50,7 +49,6 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
   const totalLengthM = polylineLengthM(matchedPoints);
   const editedLengthM = totalLengthM * (trimEndFrac - trimStartFrac);
   const strokeCount = brushStrokes.length;
-  const liveValidationMsg = validationErrors[0] ?? null;
   const needsPreview = strokeCount > 0 && !previewIsCurrent;
   const canSave = !isComputing && !needsPreview;
   const canPreview = !isComputing && strokeCount > 0 && !previewIsCurrent;
@@ -128,7 +126,10 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
             </TouchableOpacity>
           </View>
 
-          {/* Status pill — N/8 brush strokes + computing indicator */}
+          {/* Status pill — N/8 brush strokes + computing indicator.
+              v253 fix: do NOT echo validation errors here — they are
+              already shown by BrushOverlay's top pill, and rendering
+              them in this row squeezes the Undo/Reset icon buttons. */}
           <View style={styles.statusRow}>
             {isComputing ? (
               <View style={styles.statusPill}>
@@ -137,20 +138,9 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
               </View>
             ) : (
               <View style={styles.statusPill}>
-                <Icon
-                  name={liveValidationMsg ? 'TriangleAlert' : 'Pencil'}
-                  size={14}
-                  color={liveValidationMsg ? Colors.severityDanger : Colors.primary}
-                  strokeWidth={2}
-                />
-                <Text
-                  style={[
-                    styles.statusText,
-                    liveValidationMsg && { color: Colors.severityDanger },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {liveValidationMsg ?? `${strokeCount}/8 brush strokes`}
+                <Icon name="Pencil" size={14} color={Colors.primary} strokeWidth={2} />
+                <Text style={styles.statusText} numberOfLines={1}>
+                  {`${strokeCount}/8 brush strokes`}
                 </Text>
               </View>
             )}

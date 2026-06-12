@@ -8,9 +8,10 @@
  * Rendering approach (Option A from plan review):
  *   For each stroke, walk adjacent point pairs. For each segment compute
  *   max(distToOriginal of A, distToOriginal of B) and classify:
- *     - max < 400m → 'sage'
- *     - 400 ≤ max < 500m → 'amber'
- *     - max ≥ 500m → 'red'
+ *     - max < warnRadiusM → 'sage'
+ *     - warnRadiusM ≤ max < corridorRadiusM → 'amber'
+ *     - max ≥ corridorRadiusM → 'red'
+ *   (defaults v253: warn=160m, corridor=200m)
  *   Group all segments across all strokes into 3 FeatureCollections,
  *   render each as its own LineLayer with the matching color.
  *
@@ -46,9 +47,9 @@ interface Props {
   distanceFromOriginalM: (coord: LngLat) => number;
   /** Threshold for endpoint validity (default 50m). */
   endpointSnapM?: number;
-  /** Threshold for "amber" warning (default 400m). */
+  /** Threshold for "amber" warning (default 160m, v253). */
   warnRadiusM?: number;
-  /** Threshold for "red" out-of-range (default 500m). */
+  /** Threshold for "red" out-of-range (default 200m, v253). */
   corridorRadiusM?: number;
   /**
    * v247: when true, hide the brush stroke render via opacity rather than
@@ -373,27 +374,20 @@ export function BrushStrokeLayer({
       )}
       {CircleLayer && built.endpoints.features.length > 0 && (
         <ShapeSource id="brush-endpoints-src" shape={built.endpoints}>
+          {/* v253 fix: endpoint markers are now always sage-filled.
+              The "invalid endpoint" red ring used distFn against the
+              base line ONLY (didn't know about other strokes), so it
+              spuriously marked stroke-to-stroke join points as red
+              even when validation accepts them. The error is surfaced
+              by the BrushOverlay top pill / Preview lastError instead. */}
           <CircleLayer
             id="brush-endpoint-valid"
-            filter={['==', ['get', 'valid'], 1]}
             style={{
               circleRadius: 6,
               circleColor: Colors.primary,
               circleOpacity: endpointOpacity,
               circleStrokeWidth: 2,
               circleStrokeColor: Colors.surface,
-              circleStrokeOpacity: endpointOpacity,
-            }}
-          />
-          <CircleLayer
-            id="brush-endpoint-invalid"
-            filter={['==', ['get', 'valid'], 0]}
-            style={{
-              circleRadius: 7,
-              circleColor: Colors.surface,
-              circleOpacity: endpointOpacity,
-              circleStrokeWidth: 3,
-              circleStrokeColor: Colors.severityDanger,
               circleStrokeOpacity: endpointOpacity,
             }}
           />
