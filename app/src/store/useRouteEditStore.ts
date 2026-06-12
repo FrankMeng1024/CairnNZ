@@ -78,6 +78,25 @@ interface EditState {
   trimEndFrac: number;
   activeTool: EditTool;
 
+  /**
+   * v251: id of the stroke currently being drawn (between beginStroke
+   * and endStroke). null while not drawing. BrushStrokeLayer reads this
+   * via the existing brushStrokes selector path; the field is also a
+   * useful signal for selectors that want to short-circuit while a
+   * gesture is in flight.
+   */
+  activeStrokeId: string | null;
+
+  /**
+   * v251: true once the user has had at least one successful Preview
+   * commit in this edit session. Used by view-mode UI to keep the
+   * dashed original-GPS backdrop visible after Preview empties the
+   * brushStrokes array — without this flag, brushStrokes.length=0 +
+   * trim untouched would hide the backdrop precisely when the matched
+   * line has deviated from the original GPS.
+   */
+  hasCommittedEdit: boolean;
+
   // v246: Preview state. Lets user see Mapbox snap result before saving.
   // - previewMatchedPoints: if non-null, the snapped polyline. Set by
   //   runPreview() and used as the new matched line in the working slice.
@@ -347,6 +366,29 @@ function distanceToOriginalM(
   const np = walkedIndex.get(nearest[0]);
   if (!np) return Infinity;
   return haversineMetersLocal(coord, { lng: np.lng, lat: np.lat });
+}
+
+/**
+ * v251: Acceptable endpoint check.
+ *   - Within ENDPOINT_SNAP_M of the current matched line (walkedIndex).
+ *   - OR within ENDPOINT_SNAP_M of any point in any existing stroke.
+ *
+ * Used by beginStroke (start point) and endStroke (end point). Lets the
+ * user start a new stroke from where their previous stroke ended,
+ * before Preview commits — PO request: "我可以从我画的上面下笔".
+ */
+function isPointAcceptableEndpoint(
+  coord: LngLat,
+  walkedIndex: PointCloudIndex | null,
+  brushStrokes: BrushStroke[],
+): boolean {
+  if (distanceToOriginalM(coord, walkedIndex) <= ENDPOINT_SNAP_M) return true;
+  for (const s of brushStrokes) {
+    for (const p of s.points) {
+      if (haversineMetersLocal(coord, p) <= ENDPOINT_SNAP_M) return true;
+    }
+  }
+  return false;
 }
 
 /** For a coord, find the originalPoints index whose point is closest. */
@@ -803,6 +845,8 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   trimStartFrac: 0,
   trimEndFrac: 1,
   activeTool: 'pan',
+  activeStrokeId: null,
+  hasCommittedEdit: false,
   previewMatchedPoints: null,
   previewIsCurrent: false,
   committedDraft: null,
@@ -880,7 +924,13 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const initialStrokes: BrushStroke[] = resumeFrom?.brushStrokes ?? [];
     const initialTrimStart = resumeFrom?.trimStartFrac ?? extras.trimStartFrac ?? 0;
     const initialTrimEnd = resumeFrom?.trimEndFrac ?? extras.trimEndFrac ?? 1;
-    const walkedIndex = buildWalkedIndex(originalPoints);
+    // v251: walkedIndex is the "current editable base" — used by endpoint
+    // checks and brush color classification. When resuming from a draft
+    // (or pre-Preview-committed extras with edited workingPoints),
+    // baseGeometry differs from originalPoints, and the walkedIndex must
+    // mirror baseGeometry so subsequent strokes can start on the
+    // already-edited line, not only the original GPS.
+    const walkedIndex = buildWalkedIndex(baseGeometry);
 
     set(s => ({
       sessionId,
@@ -894,6 +944,11 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       trimStartFrac: initialTrimStart,
       trimEndFrac: initialTrimEnd,
       activeTool: 'pan',
+      activeStrokeId: null,
+      // v251: hasCommittedEdit reflects whether user has run a successful
+      // Preview in THIS session. resumeFrom (= committedDraft re-entry) means
+      // a prior session already committed — preserve true.
+      hasCommittedEdit: !!resumeFrom,
       previewMatchedPoints: null,
       // If no strokes on entry, preview is trivially "current" (original
       // route IS the preview), so Save is enabled immediately.
@@ -956,16 +1011,14 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       }, 2500);
       return null;
     }
-    // Endpoint check at start of stroke — must be within 50m of original.
-    const d = distanceToOriginalM(firstPoint, state.walkedIndex);
-    if (d > ENDPOINT_SNAP_M) {
-      set({ lastError: 'Brush must start on the route' });
-      // v248: auto-dismiss after 2.5s — PO requested no manual X button,
-      // and a stale "must start on route" message stays visible blocking
-      // user attention even after they correct.
+    // v251: endpoint check — must be within 50m of current matched line
+    // OR any existing brush stroke. Lets the user continue from a
+    // previous stroke's end without going back to the original line.
+    if (!isPointAcceptableEndpoint(firstPoint, state.walkedIndex, state.brushStrokes)) {
+      set({ lastError: 'Brush must start on the route or an existing stroke' });
       setTimeout(() => {
         const live = get();
-        if (live.lastError === 'Brush must start on the route') {
+        if (live.lastError === 'Brush must start on the route or an existing stroke') {
           set({ lastError: null });
         }
       }, 2500);
@@ -980,6 +1033,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         matchedPoints: s.matchedPoints,
       }].slice(-20),
       brushStrokes: [...s.brushStrokes, { id, points: [firstPoint] }],
+      activeStrokeId: id,
       previewIsCurrent: false,
       editOpSeq: s.editOpSeq + 1,
       lastError: null,
@@ -1009,22 +1063,52 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
 
   endStroke(strokeId) {
     // v247: endpoint magnetism — when stroke ends, snap first and last
-    // point onto the nearest segment of originalPoints (within 50m).
+    // point onto the nearest segment of the base line (within 50m).
     // This eliminates the "Mapbox routes via a side street near the
     // imprecise endpoint" hook artifact PO reported.
+    // v251: validate end point is acceptable; if not, DISCARD the stroke.
+    // Use the current matched line as the magnetism + validation target —
+    // after a Preview commit, the matched line IS the editable base.
     const state = get();
     const idx = state.brushStrokes.findIndex(s => s.id === strokeId);
     if (idx < 0) {
-      set(s => ({ ...s, editCount: s.editCount + 1, editOpSeq: s.editOpSeq + 1 }));
+      set(s => ({ ...s, editCount: s.editCount + 1, editOpSeq: s.editOpSeq + 1, activeStrokeId: null }));
       persistSession(get(), get().sessionId ?? undefined);
       return;
     }
     const stroke = state.brushStrokes[idx];
-    if (stroke.points.length >= 3 && state.originalPoints.length >= 2) {
-      const first = projectOntoOriginalSegment(stroke.points[0], state.originalPoints);
+    const baseLine = state.matchedPoints.length >= 2 ? state.matchedPoints : state.originalPoints;
+    // Build the brushStrokes list MINUS the stroke being ended (so the
+    // endpoint check doesn't trivially pass via the stroke's own points).
+    const otherStrokes = state.brushStrokes.filter((_, i) => i !== idx);
+    const lastPt = stroke.points[stroke.points.length - 1];
+
+    // Endpoint check on END only (start was already validated by beginStroke).
+    if (stroke.points.length < 2 ||
+        !isPointAcceptableEndpoint(lastPt, state.walkedIndex, otherStrokes)) {
+      // Discard this stroke entirely. Toast + auto-dismiss.
+      set(s => ({
+        ...s,
+        brushStrokes: otherStrokes,
+        activeStrokeId: null,
+        editOpSeq: s.editOpSeq + 1,
+        lastError: 'End on the route or an existing brush stroke',
+      }));
+      setTimeout(() => {
+        const live = get();
+        if (live.lastError === 'End on the route or an existing brush stroke') {
+          set({ lastError: null });
+        }
+      }, 2500);
+      persistSession(get(), get().sessionId ?? undefined);
+      return;
+    }
+
+    if (stroke.points.length >= 3 && baseLine.length >= 2) {
+      const first = projectOntoOriginalSegment(stroke.points[0], baseLine);
       const last = projectOntoOriginalSegment(
         stroke.points[stroke.points.length - 1],
-        state.originalPoints,
+        baseLine,
       );
       const newPoints = [...stroke.points];
       if (first.distM <= ENDPOINT_SNAP_M) newPoints[0] = first.point;
@@ -1034,12 +1118,13 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       set(s => ({
         ...s,
         brushStrokes: newStrokes,
+        activeStrokeId: null,
         previewIsCurrent: false,
         editCount: s.editCount + 1,
         editOpSeq: s.editOpSeq + 1,
       }));
     } else {
-      set(s => ({ ...s, editCount: s.editCount + 1, editOpSeq: s.editOpSeq + 1 }));
+      set(s => ({ ...s, activeStrokeId: null, editCount: s.editCount + 1, editOpSeq: s.editOpSeq + 1 }));
     }
     persistSession(get(), get().sessionId ?? undefined);
   },
@@ -1275,20 +1360,30 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     if (state.isSaving) return { ok: false, error: 'Save in progress' };
     if (state.isComputing) return { ok: false, error: 'Already computing' };
 
-    // No brushes → preview = originalPoints. Trim is applied client-side.
+    // No brushes → preview = current matched (or original if pristine).
+    // Trim is applied client-side. v251: previewIsCurrent only matters
+    // for the "Preview first" gating; with brushStrokes=[] we are
+    // already in committed state.
     if (state.brushStrokes.length === 0) {
+      const base = state.matchedPoints.length >= 2 ? state.matchedPoints : state.originalPoints;
       set(s => ({
         previewMatchedPoints: null,
         previewIsCurrent: true,
-        matchedPoints: [...s.originalPoints],
-        workingPoints: deriveWorking([...s.originalPoints], s.trimStartFrac, s.trimEndFrac),
+        matchedPoints: [...base],
+        workingPoints: deriveWorking([...base], s.trimStartFrac, s.trimEndFrac),
         validationErrors: [],
         editOpSeq: s.editOpSeq + 1,
       }));
       return { ok: true };
     }
 
-    const v = validateStrokes(state.brushStrokes, state.originalPoints, state.walkedIndex);
+    // v251: validate against the CURRENT matched line (the user's editable
+    // base), not the immutable originalPoints. After a previous Preview
+    // commit, walkedIndex was rebuilt around matchedPoints — so validateStrokes
+    // (which calls walkedIndex.nearest) implicitly already operates on the
+    // correct base. We just pass matchedPoints as the geometry argument.
+    const baseLine = state.matchedPoints.length >= 2 ? state.matchedPoints : state.originalPoints;
+    const v = validateStrokes(state.brushStrokes, baseLine, state.walkedIndex);
     if (!v.ok) {
       set({ validationErrors: v.errors, lastError: v.errors[0] ?? 'Invalid brush strokes.' });
       return { ok: false, error: v.errors[0] ?? 'invalid-brushes' };
@@ -1299,6 +1394,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const startSeq = get().editOpSeq;
 
     const snappedPerStroke: LngLat[][] = [];
+    let anySnapFallback = false; // v251: track Mapbox failures to preserve undo
     for (const vs of v.validated) {
       const pts = vs.stroke.points;
       // v247: per-stroke content-hash cache. If this stroke's fingerprint
@@ -1331,11 +1427,13 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const r = await matchSegment(seg);
         if (!r.ok) {
           snapped = pts.slice();
+          anySnapFallback = true;
         } else {
           snapped = r.matchedPoints;
         }
       } catch {
         snapped = pts.slice();
+        anySnapFallback = true;
       }
       strokeSnapCache.set(fp, snapped);
       // Cap cache size.
@@ -1355,13 +1453,39 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       }
     }
 
-    const newMatched = spliceMatched(state.originalPoints, v.validated, snappedPerStroke);
+    // v251: splice against the CURRENT matched line, not the immutable
+    // originalPoints. This makes Preview a true commit point — the
+    // resulting newMatched is what the next stroke will edit on top of.
+    const newMatched = spliceMatched(baseLine, v.validated, snappedPerStroke);
+    // v251: rebuild walkedIndex so subsequent endpoint-snap and
+    // distance-to-base lookups operate against the new matched line,
+    // not the immutable original.
+    const newWalkedIndex = new PointCloudIndex(
+      newMatched.map((p, i) => ({
+        lng: p.lng,
+        lat: p.lat,
+        source: 'original' as const,
+        refId: `matched:${i}`,
+      })),
+    );
     set(s => ({
-      previewMatchedPoints: newMatched,
+      // v251: COMMIT — drop strokes, preview-buffer.
+      brushStrokes: [],
+      // v251: only clear undoStack on a clean snap. If any stroke fell
+      // back to raw points (Mapbox flake), preserve undo so the user
+      // can recover. Push a warning so they know it's not road-snapped.
+      undoStack: anySnapFallback ? s.undoStack : [],
+      activeStrokeId: null,
+      hasCommittedEdit: true,
+      previewMatchedPoints: null,
       previewIsCurrent: true,
       matchedPoints: newMatched,
       workingPoints: deriveWorking(newMatched, s.trimStartFrac, s.trimEndFrac),
+      walkedIndex: newWalkedIndex,
       isComputing: false,
+      lastWarning: anySnapFallback
+        ? 'Network issue — committed without road-snap. Undo to retry.'
+        : s.lastWarning,
       editOpSeq: s.editOpSeq + 1,
     }));
     return { ok: true };
@@ -1517,6 +1641,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       },
       isOpen: false,
       activeTool: 'pan',
+      activeStrokeId: null,
       lastError: null,
       editOpSeq: s.editOpSeq + 1,
     }));
@@ -1600,6 +1725,8 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       trimStartFrac: 0,
       trimEndFrac: 1,
       activeTool: 'pan',
+      activeStrokeId: null,
+      hasCommittedEdit: false,
       previewMatchedPoints: null,
       previewIsCurrent: false,
       committedDraft: null,

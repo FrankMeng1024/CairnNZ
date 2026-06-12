@@ -101,6 +101,10 @@ export function RouteEditorScreen() {
   const editActiveTool = useRouteEditStore(s => s.activeTool);
   const editWalkedIndex = useRouteEditStore(s => s.walkedIndex);
   const editPreviewIsCurrent = useRouteEditStore(s => s.previewIsCurrent);
+  // v251: hasCommittedEdit stays true once user has Previewed at least
+  // once. Used so the dashed original-GPS backdrop remains visible after
+  // Preview empties brushStrokes (Preview = commit).
+  const editHasCommittedEdit = useRouteEditStore(s => s.hasCommittedEdit);
   // v249: committedDraft drives the post-edit view-mode preview. When
   // present, view-mode renders this geometry; entering Edit again resumes
   // from this draft; the outer Save button persists it.
@@ -524,6 +528,23 @@ export function RouteEditorScreen() {
   const hasGeometryToSave = renderPoints.length >= 2;
   const canSaveView = nameValid && hasGeometryToSave && !saving;
 
+  // v251: stable segments + showOriginal so DualLineLayer (now memoed)
+  // doesn't re-render on every appendStrokePoint frame. Deps avoid the
+  // brushStrokes array reference itself — only the COUNT matters for
+  // the source/isEdited/showOriginal flags below.
+  // editHasCommittedEdit is included so the dashed-original backdrop
+  // stays visible after Preview empties brushStrokes (PO request).
+  const editIsModified = editHasCommittedEdit
+    || editBrushStrokes.length > 0
+    || editTrimStartFrac > 0 || editTrimEndFrac < 1;
+  const editSegments = useMemo(() => [{
+    startIdx: 0,
+    endIdx: Math.max(0, renderPoints.length - 1),
+    source: (editBrushStrokes.length > 0 || editHasCommittedEdit) ? ('mapbox' as const) : ('original' as const),
+    isEdited: editIsModified,
+    confidence: 'confident' as const,
+  }], [renderPoints.length, editBrushStrokes.length, editHasCommittedEdit, editIsModified]);
+
   return (
     <View style={styles.container}>
       <View style={styles.mapArea}>
@@ -608,29 +629,15 @@ export function RouteEditorScreen() {
                 <DualLineLayer
                   originalPoints={renderOriginal}
                   workingPoints={renderPoints}
-                  segments={[
-                    {
-                      startIdx: 0,
-                      endIdx: Math.max(0, renderPoints.length - 1),
-                      source: editBrushStrokes.length > 0 ? 'mapbox' : 'original',
-                      isEdited: editBrushStrokes.length > 0
-                        || editTrimStartFrac > 0 || editTrimEndFrac < 1,
-                      confidence: 'confident',
-                    },
-                  ]}
-                  showOriginal={
-                    editBrushStrokes.length > 0 ||
-                    editTrimStartFrac > 0 ||
-                    editTrimEndFrac < 1
-                  }
+                  segments={editSegments}
+                  showOriginal={editIsModified}
                 />
-                {/* v247: BrushStrokeLayer always mounted; hidden via opacity
-                    when preview is showing. Mount/unmount caused a Mapbox
-                    ShapeSource remount that flickered on next stroke begin. */}
+                {/* v251: brushStrokes are commited to matched on Preview, so
+                    BrushStrokeLayer naturally renders nothing afterward.
+                    No need for the v247 opacity-hide trick. */}
                 <BrushStrokeLayer
                   strokes={editBrushStrokes}
                   distanceFromOriginalM={distanceFromOriginal}
-                  hidden={editPreviewIsCurrent && editBrushStrokes.length > 0}
                 />
               </>
             )}

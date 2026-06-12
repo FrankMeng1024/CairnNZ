@@ -85,93 +85,174 @@ interface OneStrokeBuilt {
 }
 
 /**
- * v249: per-stroke feature cache. Keyed by `${strokeId}:${pointCount}` so
- * appending a point invalidates entry for that stroke only; finalized
- * strokes (length unchanged) reuse cached features. Eliminates the O(N)
- * per-frame rebuild that compounded with multiple strokes.
+ * v251: incremental per-stroke builder. The PRIMARY cause of "longer
+ * stroke = laggier draw" in v249/v250 was that the cache key
+ * `${id}:${pointCount}` made the active stroke ALWAYS miss cache —
+ * every appendStrokePoint frame walked all N points + 2N kdbush
+ * lookups. Cumulative cost: O(N²) over a 60s stroke.
+ *
+ * Fix: cache by stroke id only. Per stroke we keep the in-progress
+ * feature accumulators + the last-built point count + the trailing
+ * "open" run state (where a severity-coloured polyline is still
+ * accepting more points). On each frame we:
+ *   - reuse the cached features (sage / amber / red lists)
+ *   - process ONLY new segments [lastBuilt-1 .. N-1]
+ *   - extend the trailing run, or close it and open a new one when
+ *     severity flips
+ *   - rewrite the endpoint markers (only 2 points; cheap)
+ *
+ * Per-frame cost is O(new_points_this_frame), which is 0-1 segment
+ * ~12Hz → essentially constant.
  */
-const strokeBuildCache = new Map<string, OneStrokeBuilt>();
-function strokeCacheKey(s: BrushStroke): string {
-  return `${s.id}:${s.points.length}`;
+interface IncrementalStrokeBuilder {
+  lastBuiltPointCount: number;
+  sageFeatures: any[];
+  amberFeatures: any[];
+  redFeatures: any[];
+  endpointFeatures: any[];
+  /** index in s.points where the trailing-open severity run started */
+  runStart: number;
+  /** severity of the trailing-open run */
+  runSeverity: Severity;
+  /** has runStart/runSeverity been initialised? false until first segment */
+  runComputed: boolean;
+  /** the trailing run's feature object — we mutate its coordinates as
+   *  more points arrive, so we never need to rebuild it. */
+  runFeature: any | null;
 }
 
-function buildOneStrokeFeatures(
+const strokeBuildCache = new Map<string, IncrementalStrokeBuilder>();
+
+function newBuilder(): IncrementalStrokeBuilder {
+  return {
+    lastBuiltPointCount: 0,
+    sageFeatures: [],
+    amberFeatures: [],
+    redFeatures: [],
+    endpointFeatures: [],
+    runStart: 0,
+    runSeverity: 'sage',
+    runComputed: false,
+    runFeature: null,
+  };
+}
+
+function pushFeatureToBucket(
+  builder: IncrementalStrokeBuilder,
+  severity: Severity,
+  feature: any,
+): void {
+  if (severity === 'sage') builder.sageFeatures.push(feature);
+  else if (severity === 'amber') builder.amberFeatures.push(feature);
+  else builder.redFeatures.push(feature);
+}
+
+/**
+ * Build endpoint marker features (2 features at most). Cheap; rewritten
+ * each render. Returns a fresh array.
+ */
+function buildEndpointFeatures(
   s: BrushStroke,
+  distFn: (c: LngLat) => number,
+  endpointSnapM: number,
+): any[] {
+  const out: any[] = [];
+  if (s.points.length < 1) return out;
+  if (s.points.length < 2) {
+    const p = s.points[0];
+    const valid = distFn(p) <= endpointSnapM;
+    out.push({
+      type: 'Feature',
+      properties: { valid: valid ? 1 : 0 },
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+    });
+    return out;
+  }
+  const start = s.points[0];
+  const end = s.points[s.points.length - 1];
+  out.push({
+    type: 'Feature',
+    properties: { valid: distFn(start) <= endpointSnapM ? 1 : 0 },
+    geometry: { type: 'Point', coordinates: [start.lng, start.lat] },
+  });
+  out.push({
+    type: 'Feature',
+    properties: { valid: distFn(end) <= endpointSnapM ? 1 : 0 },
+    geometry: { type: 'Point', coordinates: [end.lng, end.lat] },
+  });
+  return out;
+}
+
+/**
+ * Incrementally bring a stroke's builder up to date. Mutates `builder`.
+ * Walks only segments [builder.lastBuiltPointCount-1 .. s.points.length-1].
+ * Returns the same builder for convenience.
+ */
+function buildStrokeIncremental(
+  s: BrushStroke,
+  builder: IncrementalStrokeBuilder,
   distFn: (c: LngLat) => number,
   warnRadiusM: number,
   corridorRadiusM: number,
   endpointSnapM: number,
-): OneStrokeBuilt {
-  const sageFeatures: any[] = [];
-  const amberFeatures: any[] = [];
-  const redFeatures: any[] = [];
-  const endpointFeatures: any[] = [];
+): IncrementalStrokeBuilder {
+  const N = s.points.length;
+  // Endpoint markers — always rebuilt (2 features, cheap)
+  builder.endpointFeatures = buildEndpointFeatures(s, distFn, endpointSnapM);
 
-  if (s.points.length < 2) {
-    const p = s.points[0];
-    if (p) {
-      const valid = distFn(p) <= endpointSnapM;
-      endpointFeatures.push({
-        type: 'Feature',
-        properties: { valid: valid ? 1 : 0 },
-        geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-      });
-    }
-    return { sageFeatures, amberFeatures, redFeatures, endpointFeatures };
+  if (N < 2) {
+    builder.lastBuiltPointCount = N;
+    return builder;
   }
 
-  let runStart = 0;
-  let runSeverity: Severity = 'sage';
-  let runComputed = false;
-  const flushRun = (endIdx: number) => {
-    if (endIdx <= runStart) return;
-    const slice = s.points.slice(runStart, endIdx + 1);
-    const feature = {
-      type: 'Feature',
-      properties: { strokeId: s.id },
-      geometry: {
-        type: 'LineString',
-        coordinates: slice.map(p => [p.lng, p.lat]),
-      },
-    };
-    if (runSeverity === 'sage') sageFeatures.push(feature);
-    else if (runSeverity === 'amber') amberFeatures.push(feature);
-    else redFeatures.push(feature);
-  };
-  for (let i = 1; i < s.points.length; i++) {
+  // Process segments [startSeg .. N-1] where startSeg is the index of
+  // the first point of the first un-processed segment.
+  // Already processed segments end at point index `lastBuiltPointCount - 1`.
+  // First unprocessed segment is [lastBuiltPointCount-1, lastBuiltPointCount].
+  let startSeg = Math.max(1, builder.lastBuiltPointCount);
+
+  for (let i = startSeg; i < N; i++) {
     const a = s.points[i - 1];
     const b = s.points[i];
     const da = distFn(a);
     const db = distFn(b);
     const sev = classify(Math.max(da, db), warnRadiusM, corridorRadiusM);
-    if (!runComputed) {
-      runSeverity = sev;
-      runComputed = true;
-      runStart = i - 1;
-    } else if (sev !== runSeverity) {
-      flushRun(i - 1);
-      runStart = i - 1;
-      runSeverity = sev;
+
+    if (!builder.runComputed) {
+      // Open the very first run.
+      builder.runComputed = true;
+      builder.runSeverity = sev;
+      builder.runStart = i - 1;
+      builder.runFeature = {
+        type: 'Feature',
+        properties: { strokeId: s.id },
+        geometry: {
+          type: 'LineString',
+          coordinates: [[a.lng, a.lat], [b.lng, b.lat]],
+        },
+      };
+      pushFeatureToBucket(builder, sev, builder.runFeature);
+    } else if (sev === builder.runSeverity) {
+      // Same severity → just append b's coord to the open run's geometry.
+      builder.runFeature.geometry.coordinates.push([b.lng, b.lat]);
+    } else {
+      // Severity flip → close the prior run; open a new one starting at
+      // a (which is the shared vertex).
+      builder.runStart = i - 1;
+      builder.runSeverity = sev;
+      builder.runFeature = {
+        type: 'Feature',
+        properties: { strokeId: s.id },
+        geometry: {
+          type: 'LineString',
+          coordinates: [[a.lng, a.lat], [b.lng, b.lat]],
+        },
+      };
+      pushFeatureToBucket(builder, sev, builder.runFeature);
     }
   }
-  flushRun(s.points.length - 1);
-
-  const start = s.points[0];
-  const end = s.points[s.points.length - 1];
-  const startValid = distFn(start) <= endpointSnapM;
-  const endValid = distFn(end) <= endpointSnapM;
-  endpointFeatures.push({
-    type: 'Feature',
-    properties: { valid: startValid ? 1 : 0 },
-    geometry: { type: 'Point', coordinates: [start.lng, start.lat] },
-  });
-  endpointFeatures.push({
-    type: 'Feature',
-    properties: { valid: endValid ? 1 : 0 },
-    geometry: { type: 'Point', coordinates: [end.lng, end.lat] },
-  });
-
-  return { sageFeatures, amberFeatures, redFeatures, endpointFeatures };
+  builder.lastBuiltPointCount = N;
+  return builder;
 }
 
 function buildFeatures(
@@ -186,24 +267,29 @@ function buildFeatures(
   const red: any[] = [];
   const endpoints: any[] = [];
 
-  // v249: walk strokes, reuse cached features for unchanged strokes.
-  // Track which keys are still live so we can prune stale entries.
   const liveKeys = new Set<string>();
   for (const s of strokes) {
-    const key = strokeCacheKey(s);
-    liveKeys.add(key);
-    let one = strokeBuildCache.get(key);
-    if (!one) {
-      one = buildOneStrokeFeatures(s, distFn, warnRadiusM, corridorRadiusM, endpointSnapM);
-      strokeBuildCache.set(key, one);
+    liveKeys.add(s.id);
+    let builder = strokeBuildCache.get(s.id);
+    if (!builder || builder.lastBuiltPointCount > s.points.length) {
+      // Cache miss OR stroke shrank (erase-split / undo): rebuild fresh.
+      builder = newBuilder();
+      strokeBuildCache.set(s.id, builder);
     }
-    if (one.sageFeatures.length) sage.push(...one.sageFeatures);
-    if (one.amberFeatures.length) amber.push(...one.amberFeatures);
-    if (one.redFeatures.length) red.push(...one.redFeatures);
-    if (one.endpointFeatures.length) endpoints.push(...one.endpointFeatures);
+    if (builder.lastBuiltPointCount < s.points.length || s.points.length < 2) {
+      buildStrokeIncremental(s, builder, distFn, warnRadiusM, corridorRadiusM, endpointSnapM);
+    } else {
+      // length unchanged — just refresh endpoints (cheap, 2 features).
+      builder.endpointFeatures = buildEndpointFeatures(s, distFn, endpointSnapM);
+    }
+
+    if (builder.sageFeatures.length) sage.push(...builder.sageFeatures);
+    if (builder.amberFeatures.length) amber.push(...builder.amberFeatures);
+    if (builder.redFeatures.length) red.push(...builder.redFeatures);
+    if (builder.endpointFeatures.length) endpoints.push(...builder.endpointFeatures);
   }
-  // Prune dead entries (erased strokes, post-split with new ids, etc).
-  if (strokeBuildCache.size > liveKeys.size + 50) {
+  // Prune cache entries for strokes no longer present (erased / preview-committed).
+  if (strokeBuildCache.size > liveKeys.size + 8) {
     for (const k of strokeBuildCache.keys()) {
       if (!liveKeys.has(k)) strokeBuildCache.delete(k);
     }
@@ -215,6 +301,11 @@ function buildFeatures(
     red: { type: 'FeatureCollection', features: red },
     endpoints: { type: 'FeatureCollection', features: endpoints },
   };
+}
+
+/** v251: exported for test/debug only — clears the module cache. */
+export function _clearBrushBuildCache(): void {
+  strokeBuildCache.clear();
 }
 
 export function BrushStrokeLayer({

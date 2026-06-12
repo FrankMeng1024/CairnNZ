@@ -101,7 +101,7 @@ function segmentsToFeatureCollections(workingPoints: LngLat[], segments: EditSeg
   };
 }
 
-export function DualLineLayer({
+function DualLineLayerImpl({
   originalPoints,
   workingPoints,
   segments,
@@ -109,7 +109,14 @@ export function DualLineLayer({
 }: DualLineLayerProps): React.JSX.Element | null {
   if (!ShapeSource || !LineLayer) return null;
 
-  const collections = segmentsToFeatureCollections(workingPoints, segments);
+  // v251: memoize the FeatureCollection build so we don't re-walk
+  // workingPoints + map every render. With React.memo wrapping this
+  // component, parent re-renders during a brush gesture no longer
+  // reach here (props refs unchanged). useMemo is a belt-and-braces.
+  const collections = React.useMemo(
+    () => segmentsToFeatureCollections(workingPoints, segments),
+    [workingPoints, segments],
+  );
 
   return (
     <>
@@ -158,6 +165,15 @@ export function DualLineLayer({
     </>
   );
 }
+
+export const DualLineLayer = React.memo(
+  DualLineLayerImpl,
+  (prev, next) =>
+    prev.originalPoints === next.originalPoints &&
+    prev.workingPoints === next.workingPoints &&
+    prev.segments === next.segments &&
+    prev.showOriginal === next.showOriginal,
+);
 
 export const DualLineColors = {
   original: COLOR_ORIGINAL,
