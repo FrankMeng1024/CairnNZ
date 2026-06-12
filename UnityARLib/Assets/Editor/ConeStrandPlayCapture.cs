@@ -151,12 +151,42 @@ public static class ConeStrandPlayCapture
             CaptureCameraToPng(cam, $"Logs/v3-capture/type-{t}.png");
         }
 
-        // === Group C: animation frames (advance _Time via Shader.SetGlobalFloat) ===
-        // Note: _Time is set by Unity each frame; we can override via setting _CustomTime
-        // but the cone shader reads _Time.y. Best approximation: render multiple times,
-        // each time advancing a global the shader reads. We use _CairnGlobalCamDist
-        // ranging to simulate motion-aware rendering, and _PhaseOffset on per-instance
-        // can't be re-set here. Skipping animation capture for now — needs PlayMode.
+        // === Group C: animation flipbook (cairn type, eye angle) ===
+        // v3.5q3: Editor batchmode async ARAnchor coroutine destroys the
+        // cairn after ~1 frame. Spawn fresh each frame so destroy doesn't
+        // catch us. Animate via per-frame yaw/scale on cluster root.
+        cam.backgroundColor = new Color(0.02f, 0.03f, 0.10f);
+        cam.transform.position = new Vector3(0f, 1.4f, -2.8f);
+        cam.transform.LookAt(new Vector3(0f, 0.85f, 0f));
+        Directory.CreateDirectory("Logs/v3-capture/anim");
+
+        const int frameCount = 24;
+        for (int f = 0; f < frameCount; f++)
+        {
+            DespawnAll(spawner);
+            SpawnCairn(spawner, "anim_cairn", "cairn", new Vector3(0f, 0f, 0f));
+            HideRuneTextQuads();
+            AttachGroundFootprintCapture("anim_cairn", typeColors["cairn"]);
+
+            // Find cluster root and apply per-frame transform
+            var portalRoot = GameObject.Find("Portal_anim_cairn");
+            Transform clusterT = null;
+            if (portalRoot != null)
+            {
+                clusterT = portalRoot.transform.Find("V199Layer/ConeStrands");
+                if (clusterT == null) clusterT = portalRoot.transform.Find("ConeStrands");
+            }
+            if (clusterT != null)
+            {
+                float phase = f / (float)frameCount;
+                float angleRad = phase * Mathf.PI * 2f;
+                float breath = 1.0f + Mathf.Sin(angleRad) * 0.06f;
+                float yaw = Mathf.Sin(angleRad * 1.5f) * 6.0f;
+                clusterT.localScale = new Vector3(breath, breath, breath);
+                clusterT.localRotation = Quaternion.AngleAxis(yaw, Vector3.up);
+            }
+            CaptureCameraToPng(cam, $"Logs/v3-capture/anim/frame-{f:D2}.png");
+        }
 
         Debug.Log("[ConeStrandCapture] === DONE ===");
         if (Application.isBatchMode) EditorApplication.Exit(0);
@@ -381,7 +411,7 @@ public static class ConeStrandPlayCapture
     /// </summary>
     private static Texture2D MakeRadialTintTexture(Color tint)
     {
-        const int sz = 192;  // v3.5p larger texture so longer falloff has resolution
+        const int sz = 192;
         var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
         tex.wrapMode = TextureWrapMode.Clamp;
         tex.filterMode = FilterMode.Bilinear;
@@ -395,14 +425,23 @@ public static class ConeStrandPlayCapture
                 float dx = (x - center) / maxR;
                 float dy = (y - center) / maxR;
                 float r = Mathf.Sqrt(dx * dx + dy * dy);
-                // v3.5p: longer falloff tail (smoothstep 0.0 → 1.2 instead of
-                // 0.10 → 1.0) so disc edge fades off-screen, no hard ellipse.
+                // v3.5q: outer falloff with longer tail
                 float a = 1.0f - Mathf.SmoothStep(0.0f, 1.0f, Mathf.Min(r, 1.0f));
-                a = Mathf.Pow(a, 1.6f);  // even softer tail
-                // v3.5p: reduce white-core mix 0.45 → 0.20 so per-type tint
-                // genuinely dominates the disc colour.
-                float coreMix = 1.0f - Mathf.SmoothStep(0.0f, 0.35f, r);
-                Color c = Color.Lerp(tint, Color.white, coreMix * 0.20f);
+                a = Mathf.Pow(a, 1.6f);
+
+                // v3.5q: faint inner ring at r≈0.42 — Niantic Wayspot pattern.
+                // Boost alpha slightly in a narrow band so the disc has 2-tier
+                // structure (inner bright core + ring + outer halo) rather
+                // than one monotone gradient.
+                float ringDist = Mathf.Abs(r - 0.42f);
+                float ring = Mathf.Exp(-ringDist * ringDist * 80.0f) * 0.35f;
+                a = Mathf.Min(1.0f, a + ring);
+
+                // v3.5q: inner core is FULL type tint (no white mix). Only
+                // the very-outer 5% has a hint of warm fog so the very-edge
+                // doesn't go pure black.
+                float coreMix = 1.0f - Mathf.SmoothStep(0.0f, 0.30f, r);
+                Color c = Color.Lerp(tint, Color.white, coreMix * 0.10f);
                 pixels[y * sz + x] = new Color(c.r, c.g, c.b, a);
             }
         }
@@ -417,25 +456,26 @@ public static class ConeStrandPlayCapture
     /// </summary>
     private static void AttachGroundFootprintCapture(string id, Color tint)
     {
-        var existing = GameObject.Find($"GroundFootprintCapture_{id}");
-        if (existing != null) UnityEngine.Object.DestroyImmediate(existing);
+        // v3.5q4: destroy ALL existing GroundFootprintCapture_* discs (not
+        // just the same id) — each type variant capture was leaving its
+        // disc behind, so anim frames inherited (e.g.) junction's green
+        // disc on top of cairn's gold one.
+        var allRoots = UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects();
+        foreach (var go in allRoots)
+        {
+            if (go != null && go.name.StartsWith("GroundFootprintCapture_"))
+                UnityEngine.Object.DestroyImmediate(go);
+        }
 
-        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        go.name = $"GroundFootprintCapture_{id}";
-        UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
-        go.transform.position = new Vector3(0f, 0.005f, 0f);
-        go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-        go.transform.localScale = new Vector3(2.0f, 2.0f, 1f);  // v3.5p: 1.4 → 2.0 longer halo
-        var mr = go.GetComponent<MeshRenderer>();
+        var newGo = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        newGo.name = $"GroundFootprintCapture_{id}";
+        UnityEngine.Object.DestroyImmediate(newGo.GetComponent<Collider>());
+        newGo.transform.position = new Vector3(0f, 0.005f, 0f);
+        newGo.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+        newGo.transform.localScale = new Vector3(2.0f, 2.0f, 1f);
+        var mr = newGo.GetComponent<MeshRenderer>();
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         mr.receiveShadows = false;
-
-        // Use Sprites/Default — built-in, alpha-blends, batchmode-safe.
-        // Texture carries the type-color tint so we don't depend on the
-        // shader respecting _TintColor. Tried Mobile/Particles/Additive
-        // in v3.5p2 but it accumulates to white. Sprites/Default's mild
-        // brown alpha-blend against navy actually reads as "warm earth
-        // around a cool light", which is plausible scenery context.
         Shader shader = Shader.Find("Sprites/Default");
         var mat = new Material(shader);
         mat.SetColor("_Color", Color.white);

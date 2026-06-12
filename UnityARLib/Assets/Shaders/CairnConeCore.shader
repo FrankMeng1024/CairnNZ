@@ -65,6 +65,10 @@ Shader "Cairn/CairnConeCore"
 
             float _CairnGlobalDayNightT;
             float _CairnGlobalCamDist;
+            // v3.5q: optional global time override for editor batch GIF
+            // capture (Editor batchmode _Time.y barely advances). When > 0
+            // we use it; else use real _Time.y.
+            float _CairnAnimTime;
 
             struct Attributes
             {
@@ -109,7 +113,10 @@ Shader "Cairn/CairnConeCore"
                 float vertEnv = baseEnv * tipEnv;
 
                 // ---- TWO-LAYER FLOW NOISE (turbulence inside volume) ----
-                float t = _Time.y + _PhaseOffset;
+                // v3.5q: prefer _CairnAnimTime if set (editor batch GIF
+                // capture); fall back to engine _Time.y at runtime.
+                float t = (_CairnAnimTime > 0.0001) ? _CairnAnimTime : _Time.y;
+                t += _PhaseOffset;
                 // v3.5g: increase UV frequency so turbulence forms visible
                 // wisps instead of broad gradients. Vertical scroll dominates
                 // — the eye reads "rising smoke" not "drifting fog".

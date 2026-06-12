@@ -528,7 +528,7 @@ public partial class PortalSpawner
             case "junction": defaultCount = 5; break;
             case "cairn":    defaultCount = 5; break;
             case "water":    defaultCount = 4; break;
-            case "hut":      defaultCount = 3; break;
+            case "hut":      defaultCount = 4; break;  // v3.5q: 3 → 4 (was too sparse vs others)
         }
         int count = globals != null
             ? Mathf.Max(1, Mathf.RoundToInt(globals.GetForType(null, "ConeStrandCount", (float)defaultCount)))
