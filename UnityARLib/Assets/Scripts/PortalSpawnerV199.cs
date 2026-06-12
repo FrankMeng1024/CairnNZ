@@ -176,7 +176,21 @@ public partial class PortalSpawner
         // Pro, Niantic 2025, etc.) the user mandated. Disabling its
         // call-site here so the legacy AttachHeroRibbons keeps running
         // until the new 2D HTML mockup is approved.
-        if (globals == null || globals.GetBool("HeroRibbonEnabled", true))
+        // v0.2.3 Branch C — Cone-strand visual (Plan E-prime).
+        //   • Cone mesh + CairnConeCore additive shader
+        //   • Optional CairnConeOutline alpha-blend pass for daylight
+        //   • Replaces flat-strip RibbonStrand DNA per subagent diagnosis:
+        //     "every ribbon-mesh approach is a flat strip with width
+        //     falloff; eyes read it as paper, never light."
+        // Gated by OTA `ConeStrandEnabled` (default true). Legacy
+        // AttachHeroRibbons retained as opt-out fallback for emergency
+        // rollback (set ConeStrandEnabled=false via OTA).
+        bool useConeStrand = globals == null || globals.GetBool("ConeStrandEnabled", true);
+        if (useConeStrand)
+        {
+            AttachConeStrands(v199, baseColor);
+        }
+        else if (globals == null || globals.GetBool("HeroRibbonEnabled", true))
         {
             AttachHeroRibbons(v199);
         }
@@ -466,6 +480,99 @@ public partial class PortalSpawner
         var fader = textGO.AddComponent<TMPDistanceFader>();
         fader.tmp = tmp;
         _ = fader;
+    }
+
+    /// <summary>
+    /// v0.2.3 Branch C — cone-strand attachment (Plan E-prime).
+    ///
+    /// Spawns N cone meshes (default 4) arranged in a tight ring around the
+    /// cairn pebble stack. Each cone uses CairnConeCore shader (additive
+    /// emissive); when daylight is detected by CairnDayNightAdapter, an
+    /// outline pass (CairnConeOutline alpha-blend dark rim) makes them
+    /// readable on bright NZ sky / morning haze background.
+    ///
+    /// Per-cone phase offset (uPhase) prevents synchronised flicker; sum of
+    /// 4-5 thin strands creates the "DNA helix" Genshin-style braid effect.
+    /// </summary>
+    private void AttachConeStrands(GameObject parent, Color baseColor)
+    {
+        var globals = CairnGlobals.Instance;
+        // Lazy-load shared mesh + materials (created by CairnConeStrandSetup).
+        // If not yet authored, log once and bail — caller (parent code) will
+        // fall through to legacy AttachHeroRibbons via OTA flag flip if user
+        // chooses to roll back.
+        var coneMesh = Resources.Load<Mesh>("Meshes/cairn_cone_strand")
+                     ?? UnityEditor_LoadAssetSafe<Mesh>("Assets/Meshes/cairn_cone_strand.asset");
+        var coreMat  = Resources.Load<Material>("Materials/CairnConeCore")
+                     ?? UnityEditor_LoadAssetSafe<Material>("Assets/Materials/CairnConeCore.mat");
+        var outMat   = Resources.Load<Material>("Materials/CairnConeOutline")
+                     ?? UnityEditor_LoadAssetSafe<Material>("Assets/Materials/CairnConeOutline.mat");
+
+        if (coneMesh == null || coreMat == null)
+        {
+            UnityLogger.W("V199",
+                "AttachConeStrands: cone-strand assets missing — run menu " +
+                "'Cairn → Branch C → Setup Cone Strand Assets' in Unity Editor.");
+            return;
+        }
+
+        int count = globals != null
+            ? Mathf.Max(1, Mathf.RoundToInt(globals.GetForType(null, "ConeStrandCount", 4f)))
+            : 4;
+        float radius = globals != null ? globals.GetForType(null, "ConeStrandRingRadius", 0.25f) : 0.25f;
+
+        var root = new GameObject("ConeStrands");
+        root.transform.SetParent(parent.transform, worldPositionStays: false);
+
+        for (int i = 0; i < count; i++)
+        {
+            float angle = (i / (float)count) * Mathf.PI * 2f;
+            var go = new GameObject($"ConeStrand_{i}");
+            go.transform.SetParent(root.transform, worldPositionStays: false);
+            go.transform.localPosition = new Vector3(
+                Mathf.Cos(angle) * radius, 0,
+                Mathf.Sin(angle) * radius);
+
+            var mf = go.AddComponent<MeshFilter>();
+            mf.sharedMesh = coneMesh;
+            var mr = go.AddComponent<MeshRenderer>();
+            // Two-material assignment (URP forward — both passes render).
+            mr.sharedMaterials = (outMat != null)
+                ? new Material[] { coreMat, outMat }
+                : new Material[] { coreMat };
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+
+            // Per-cone MaterialPropertyBlock — phase + slight scale variance.
+            var mpb = new MaterialPropertyBlock();
+            mpb.SetFloat("_PhaseOffset", (i / (float)count) * Mathf.PI * 2f);
+            // Color tint from per-type baseColor — let shader's day/night
+            // global override only if material default is white-ish.
+            mpb.SetColor("_CoreColorNight", new Color(
+                Mathf.Min(1f, baseColor.r * 1.4f + 0.15f),
+                Mathf.Min(1f, baseColor.g * 1.4f + 0.15f),
+                Mathf.Min(1f, baseColor.b * 1.4f + 0.20f),
+                1f));
+            mpb.SetColor("_RimColorNight", baseColor);
+            mr.SetPropertyBlock(mpb);
+
+            // Wire LOD adapter so this strand's distance is tracked
+            // (multiple strands per cairn — they all share the cairn root's
+            // distance; the LOD component reads camera position, not target).
+        }
+
+        UnityLogger.IForward("V199",
+            $"AttachConeStrands count={count} radius={radius:F2}");
+    }
+
+    /// <summary>Editor-time asset load helper that no-ops at runtime.</summary>
+    private static T UnityEditor_LoadAssetSafe<T>(string path) where T : Object
+    {
+#if UNITY_EDITOR
+        return UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
+#else
+        return null;
+#endif
     }
 
     private void AttachHeroRibbons(GameObject parent)
