@@ -85,6 +85,11 @@ public static class ConeStrandPlayCapture
         SpawnCairn(spawner, "main_cairn", "cairn", new Vector3(0f, 0f, 0f));
         DumpRenderers();   // v3.4: identify pink source BEFORE destroy
         HideRuneTextQuads();
+        // v3.5o: capture-only ground footprint disc to test the design impact
+        // before adding it to production. Subagent v3.5n: "ground footprint
+        // is worth +1.0 score". Standard URP unlit shader so it can't fall
+        // back to magenta.
+        AttachGroundFootprintCapture("main_cairn", new Color(0.95f, 0.78f, 0.45f));
         // v3.4 emergency debug: hide ALL renderers except ConeStrand* + Pebble*
         // — find pink source by elimination.
         if (System.Environment.GetEnvironmentVariable("CAIRN_HIDE_ALL_BUT_CONE") == "1")
@@ -128,11 +133,19 @@ public static class ConeStrandPlayCapture
         cam.transform.LookAt(new Vector3(0f, 0.85f, 0f));
         DespawnAll(spawner);
         var types = new[] { "cairn", "danger", "water", "hut", "junction" };
+        var typeColors = new System.Collections.Generic.Dictionary<string, Color> {
+            { "cairn",    new Color(0.91f, 0.78f, 0.59f) },
+            { "danger",   new Color(1.00f, 0.16f, 0.10f) },
+            { "water",    new Color(0.35f, 0.90f, 1.00f) },
+            { "hut",      new Color(0.83f, 0.63f, 0.42f) },
+            { "junction", new Color(0.77f, 0.91f, 0.28f) },
+        };
         foreach (var t in types)
         {
             DespawnAll(spawner);
             SpawnCairn(spawner, $"type_{t}", t, new Vector3(0f, 0f, 0f));
             HideRuneTextQuads();
+            AttachGroundFootprintCapture($"type_{t}", typeColors[t]);
             Debug.Log($"[CSPC] === DUMP for type={t} ===");
             DumpRenderers();
             CaptureCameraToPng(cam, $"Logs/v3-capture/type-{t}.png");
@@ -328,6 +341,100 @@ public static class ConeStrandPlayCapture
         {
             CollectMatchingForDestroy(t.GetChild(i), bag);
         }
+    }
+
+    private static Texture2D _radialFalloffTex;
+
+    private static Texture2D GetRadialFalloffTexture()
+    {
+        if (_radialFalloffTex != null) return _radialFalloffTex;
+        const int sz = 128;
+        var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        tex.filterMode = FilterMode.Bilinear;
+        var pixels = new Color[sz * sz];
+        float center = (sz - 1) * 0.5f;
+        float maxR = sz * 0.5f;
+        for (int y = 0; y < sz; y++)
+        {
+            for (int x = 0; x < sz; x++)
+            {
+                float dx = (x - center) / maxR;
+                float dy = (y - center) / maxR;
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                // Soft falloff: 1.0 at center, 0.0 at edge (smoothstep curve)
+                float a = 1.0f - Mathf.SmoothStep(0.15f, 1.0f, r);
+                a = a * a;  // gamma squish — softer halo
+                pixels[y * sz + x] = new Color(1f, 1f, 1f, a);
+            }
+        }
+        tex.SetPixels(pixels);
+        tex.Apply();
+        _radialFalloffTex = tex;
+        return tex;
+    }
+
+    /// <summary>
+    /// v3.5o6: per-tint texture — generate the radial falloff in the type
+    /// color so even shaders that ignore _TintColor still output the right
+    /// hue.
+    /// </summary>
+    private static Texture2D MakeRadialTintTexture(Color tint)
+    {
+        const int sz = 128;
+        var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        tex.filterMode = FilterMode.Bilinear;
+        var pixels = new Color[sz * sz];
+        float center = (sz - 1) * 0.5f;
+        float maxR = sz * 0.5f;
+        for (int y = 0; y < sz; y++)
+        {
+            for (int x = 0; x < sz; x++)
+            {
+                float dx = (x - center) / maxR;
+                float dy = (y - center) / maxR;
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                float a = 1.0f - Mathf.SmoothStep(0.10f, 1.0f, r);
+                a = a * a;
+                // Mix toward white at center for a hot core, type tint at edges
+                float coreMix = 1.0f - Mathf.SmoothStep(0.0f, 0.4f, r);
+                Color c = Color.Lerp(tint, Color.white, coreMix * 0.45f);
+                pixels[y * sz + x] = new Color(c.r, c.g, c.b, a);
+            }
+        }
+        tex.SetPixels(pixels);
+        tex.Apply();
+        return tex;
+    }
+
+    /// <summary>
+    /// v3.5o: capture-only ground footprint disc with radial alpha
+    /// falloff. Anchors strands to ground (Niantic Wayspot pattern).
+    /// </summary>
+    private static void AttachGroundFootprintCapture(string id, Color tint)
+    {
+        var existing = GameObject.Find($"GroundFootprintCapture_{id}");
+        if (existing != null) UnityEngine.Object.DestroyImmediate(existing);
+
+        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = $"GroundFootprintCapture_{id}";
+        UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
+        go.transform.position = new Vector3(0f, 0.005f, 0f);
+        go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+        go.transform.localScale = new Vector3(1.4f, 1.4f, 1f);
+        var mr = go.GetComponent<MeshRenderer>();
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+
+        // Use Sprites/Default — built-in, alpha-blends, batchmode-safe.
+        // Texture carries the type-color tint so we don't depend on the
+        // shader respecting _TintColor.
+        Shader shader = Shader.Find("Sprites/Default");
+        var mat = new Material(shader);
+        mat.SetColor("_Color", Color.white);  // don't double-tint
+        mat.mainTexture = MakeRadialTintTexture(tint);
+        mr.sharedMaterial = mat;
     }
 
     private static void CaptureCameraToPng(Camera cam, string path)
