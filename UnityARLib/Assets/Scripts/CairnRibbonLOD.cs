@@ -45,10 +45,10 @@ namespace Cairn.AR
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoBootstrap()
         {
-            if (Object.FindFirstObjectByType<CairnRibbonLOD>() != null) return;
+            if (UnityEngine.Object.FindFirstObjectByType<CairnRibbonLOD>() != null) return;
             var go = new GameObject("CairnRibbonLOD (auto)");
             go.AddComponent<CairnRibbonLOD>();
-            Object.DontDestroyOnLoad(go);
+            UnityEngine.Object.DontDestroyOnLoad(go);
         }
 
         private float _lastUpdate = -1f;

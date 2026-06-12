@@ -312,6 +312,17 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
     {
         if (data == null) return;
 
+#if UNITY_EDITOR
+        // Editor batchmode visual capture: bypass session/camera readiness gate.
+        // ARSession is never SessionTracking in Edit mode → would defer forever
+        // and capture tests get empty scenes.
+        if (!Application.isPlaying)
+        {
+            SpawnStrandInternal(data);
+            return;
+        }
+#endif
+
         var arState = UnityEngine.XR.ARFoundation.ARSession.state;
         bool sessionReady = arState == UnityEngine.XR.ARFoundation.ARSessionState.SessionTracking;
         bool cameraDiverged = false;
@@ -408,6 +419,22 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             }
         }
 
+        if (!groundDetected)
+        {
+#if UNITY_EDITOR
+            // Editor batch mode (HeadlessRender / ConeStrandPlayCapture):
+            // ARPlaneManager has no trackables → QueryGroundY always fails.
+            // Bypass with data.y so visual capture tests can run.
+            if (!Application.isPlaying)
+            {
+                groundDetected = true;
+                groundY = data.y;
+                diagGroundSrc = "EditorBypass";
+                UnityLogger.IForward("v22-SPAWN",
+                    $"id={data.id} editor-bypass-floor-gate y={groundY:F2}");
+            }
+#endif
+        }
         if (!groundDetected)
         {
             // No ground available. Reject the spawn. Branch B invariant:

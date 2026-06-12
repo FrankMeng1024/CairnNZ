@@ -1,25 +1,28 @@
 #if UNITY_EDITOR
 using UnityEngine;
 using UnityEditor;
-using System.Collections;
 using System.IO;
-using UnityEditor.SceneManagement;
 
 /// <summary>
-/// v0.2.3 Branch C — PlayMode visual capture for cone strand review.
+/// v0.2.3 Branch C — EDIT MODE visual capture for cone strand review.
+///
+/// Why Edit mode (not PlayMode): Unity batchmode does NOT actually enter
+/// Play mode (EnterPlaymode is a no-op when -batchmode -quit chain is used).
+/// HeadlessRender.cs already proves this pattern works for the v186/v199 path.
 ///
 /// Auto-runs:
-///   1. CairnConeStrandSetup.RunSetup() — generates mesh + materials + scene wiring
-///   2. SceneSetup.SetupAndSave() — wires AR managers
-///   3. EnterPlayMode → spawns 1 cairn at origin → captures 6 frames
-///      across 4 day/night T values to verify visual under different lighting
+///   1. CairnConeStrandSetup.RunSetup → mesh + materials + scene wiring
+///   2. SceneSetup.SetupAndSave → AR managers
+///   3. Open scene, force shader globals defaults
+///   4. Spawn 1 cairn at origin via CairnBridge.OnSpawnStrand
+///   5. For each lighting condition (night/dusk/noon/day-bright):
+///      set _CairnGlobalDayNightT + camera background → render PNG
 ///
-/// Output: Logs/cone-frame-{day|night|noon|dusk}-NN.png
+/// Output: Logs/cone-frame-{condition}.png
 ///
-/// Usage (batch):
-///   Unity.exe -batchmode -projectPath UnityARLib \
-///     -executeMethod ConeStrandPlayCapture.RunCapture \
-///     -logFile - -quit
+/// Usage (batchmode):
+///   Unity.exe -batchmode -projectPath UnityARLib \\
+///     -executeMethod ConeStrandPlayCapture.RunCapture -logFile - -quit
 /// </summary>
 public static class ConeStrandPlayCapture
 {
@@ -28,13 +31,17 @@ public static class ConeStrandPlayCapture
     {
         Debug.Log("[ConeStrandCapture] === START ===");
 
-        // 1. Generate cone-strand assets if missing.
-        try { Cairn.AR.Editor.CairnConeStrandSetup.RunSetup(); }
-        catch (System.Exception e)
+        // 1. Generate cone-strand assets (idempotent). Skip if env CAIRN_SKIP_SETUP=1.
+        if (System.Environment.GetEnvironmentVariable("CAIRN_SKIP_SETUP") != "1")
         {
-            Debug.LogError($"[ConeStrandCapture] CairnConeStrandSetup threw: {e}");
-            if (Application.isBatchMode) EditorApplication.Exit(1);
-            return;
+            try { Cairn.AR.Editor.CairnConeStrandSetup.RunSetup(); }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[ConeStrandCapture] CairnConeStrandSetup threw: {e}");
+                if (Application.isBatchMode) EditorApplication.Exit(1);
+                return;
+            }
+            Debug.Log("[ConeStrandCapture] CairnConeStrandSetup OK");
         }
 
         // 2. Setup AR scene.
@@ -45,39 +52,45 @@ public static class ConeStrandPlayCapture
             if (Application.isBatchMode) EditorApplication.Exit(1);
             return;
         }
+        Debug.Log("[ConeStrandCapture] SceneSetup OK");
 
-        EditorSceneManager.OpenScene(SceneSetup.SCENE_PATH, OpenSceneMode.Single);
+        var scene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(
+            SceneSetup.SCENE_PATH,
+            UnityEditor.SceneManagement.OpenSceneMode.Single);
+        Debug.Log($"[ConeStrandCapture] Scene opened: {scene.path}");
 
-        EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
-        EditorApplication.EnterPlaymode();
-    }
+        // 3. Force shader globals defaults (Edit mode skips MonoBehaviour Awake).
+        Shader.SetGlobalFloat("_CairnGlobalBloomScale",   1.0f);
+        Shader.SetGlobalFloat("_CairnGlobalAlpha",        1.0f);
+        Shader.SetGlobalFloat("_CairnGlobalScrollMul",    1.0f);
+        Shader.SetGlobalFloat("_CairnGlobalBreathFreq",   1.0f);
+        Shader.SetGlobalFloat("_CairnGlobalThermalScale", 1.0f);
+        Shader.SetGlobalFloat("_CairnGlobalHaloRadiusMul", 1.0f);
 
-    private static void OnPlayModeStateChanged(PlayModeStateChange change)
-    {
-        if (change == PlayModeStateChange.EnteredPlayMode)
+        // 4. Reimport our 2 new shaders + cone mesh in case Editor cached old.
+        AssetDatabase.ImportAsset("Assets/Shaders/CairnConeCore.shader",     ImportAssetOptions.ForceUpdate);
+        AssetDatabase.ImportAsset("Assets/Shaders/CairnConeOutline.shader",  ImportAssetOptions.ForceUpdate);
+        AssetDatabase.ImportAsset("Assets/Resources/Meshes/cairn_cone_strand.asset", ImportAssetOptions.ForceUpdate);
+        AssetDatabase.Refresh();
+        Debug.Log("[ConeStrandCapture] Reimported cone shaders + mesh");
+
+        // 5. Find bridge + camera.
+        var bridge = UnityEngine.Object.FindFirstObjectByType<CairnBridge>();
+        if (bridge == null)
         {
-            Debug.Log("[ConeStrandCapture] EnteredPlayMode");
-            var go = new GameObject("__ConeCaptureRunner");
-            Object.DontDestroyOnLoad(go);
-            var runner = go.AddComponent<ConeCaptureRunner>();
-            runner.StartCoroutine(runner.Run());
+            Debug.LogError("[ConeStrandCapture] CairnBridge not found");
+            if (Application.isBatchMode) EditorApplication.Exit(1);
+            return;
         }
-    }
-}
-
-internal class ConeCaptureRunner : MonoBehaviour
-{
-    public IEnumerator Run()
-    {
-        yield return null;
-        yield return null;
-
-        var bridge = Object.FindFirstObjectByType<CairnBridge>();
-        if (bridge == null) { Debug.LogError("[ConeStrandCapture] no CairnBridge"); ExitPlay(1); yield break; }
         var cam = bridge.arCamera != null ? bridge.arCamera : Camera.main;
-        if (cam == null) { Debug.LogError("[ConeStrandCapture] no camera"); ExitPlay(1); yield break; }
+        if (cam == null)
+        {
+            Debug.LogError("[ConeStrandCapture] No camera!");
+            if (Application.isBatchMode) EditorApplication.Exit(1);
+            return;
+        }
 
-        // Frame the cairn from eye height (1.6m), looking at base center.
+        // Frame the cairn from eye height.
         cam.transform.position = new Vector3(0f, 1.6f, -2.5f);
         cam.transform.LookAt(new Vector3(0f, 0.7f, 0f));
         cam.clearFlags = CameraClearFlags.SolidColor;
@@ -88,49 +101,69 @@ internal class ConeCaptureRunner : MonoBehaviour
         var arCam = cam.GetComponent<UnityEngine.XR.ARFoundation.ARCameraManager>();
         if (arCam != null) arCam.enabled = false;
 
-        Directory.CreateDirectory("Logs");
-
-        // Spawn 1 cairn at origin.
+        // 6. Spawn 1 cairn at origin DIRECTLY via PortalSpawner.
+        // CairnBridge.OnSpawnStrand routes to spawnerBehaviour but in Edit mode
+        // Awake hasn't run so the dynamic resolution may fail. Direct call is
+        // more reliable for visual capture.
+        var spawner = UnityEngine.Object.FindFirstObjectByType<PortalSpawner>();
+        if (spawner == null)
+        {
+            Debug.LogError("[ConeStrandCapture] PortalSpawner not found in scene");
+            if (Application.isBatchMode) EditorApplication.Exit(1);
+            return;
+        }
         var req = new CairnBridge.SpawnRequest
         {
             id = "cone_capture_cairn",
             type = "cairn",
             x = 0f, y = 0f, z = 0f,
         };
-        try { bridge.OnSpawnStrand(JsonUtility.ToJson(req)); }
+        try
+        {
+            spawner.SpawnStrand(req);
+            Debug.Log("[ConeStrandCapture] PortalSpawner.SpawnStrand called");
+        }
         catch (System.Exception e)
         {
-            Debug.LogError($"[ConeStrandCapture] OnSpawnStrand threw: {e}");
-            ExitPlay(1); yield break;
+            Debug.LogError($"[ConeStrandCapture] SpawnStrand threw: {e}");
+            if (Application.isBatchMode) EditorApplication.Exit(1);
+            return;
         }
-        // Allow spawn to materialize.
-        yield return new WaitForSeconds(0.5f);
 
-        // Capture under 4 lighting conditions: night / dusk / noon / day-haze.
-        var conditions = new[] {
+        // Verify cone strand was attached.
+        var coneStrandsRoot = GameObject.Find("ConeStrands");
+        if (coneStrandsRoot == null)
+        {
+            Debug.LogWarning("[ConeStrandCapture] ConeStrands GameObject not found — cone strand visual may not be present");
+        }
+        else
+        {
+            Debug.Log($"[ConeStrandCapture] ConeStrands root has {coneStrandsRoot.transform.childCount} cones");
+        }
+
+        Directory.CreateDirectory("Logs");
+
+        // 7. Capture under 4 lighting conditions.
+        var conditions = new (string label, float dnT, Color bg)[] {
             ("night",     0.0f, new Color(0.02f, 0.03f, 0.10f)),
             ("dusk",      0.5f, new Color(0.45f, 0.30f, 0.18f)),
-            ("noon",      1.0f, new Color(0.91f, 0.86f, 0.77f)),  // NZ晨曦
+            ("noon",      1.0f, new Color(0.91f, 0.86f, 0.77f)),  // NZ晨曦 #E8DCC4
             ("daybright", 1.0f, new Color(0.95f, 0.93f, 0.85f)),
         };
 
-        foreach (var (label, dnT, bg) in conditions)
+        foreach (var c in conditions)
         {
-            Shader.SetGlobalFloat(Shader.PropertyToID("_CairnGlobalDayNightT"), dnT);
-            Shader.SetGlobalFloat(Shader.PropertyToID("_CairnGlobalCamDist"), 2.5f);
-            cam.backgroundColor = bg;
-            // 2 frames per condition (let flow noise advance between frames).
-            for (int i = 0; i < 2; i++)
-            {
-                yield return new WaitForSeconds(0.3f);
-                string path = $"Logs/cone-frame-{label}-{i:D2}.png";
-                CaptureCameraToPng(cam, path);
-                Debug.Log($"[ConeStrandCapture] saved {path}");
-            }
+            Shader.SetGlobalFloat("_CairnGlobalDayNightT", c.dnT);
+            Shader.SetGlobalFloat("_CairnGlobalCamDist", 2.5f);
+            cam.backgroundColor = c.bg;
+
+            string path = $"Logs/cone-frame-{c.label}.png";
+            CaptureCameraToPng(cam, path);
+            Debug.Log($"[ConeStrandCapture] saved {path}");
         }
 
-        Debug.Log("[ConeStrandCapture] ALL FRAMES CAPTURED");
-        ExitPlay(0);
+        Debug.Log("[ConeStrandCapture] === DONE ===");
+        if (Application.isBatchMode) EditorApplication.Exit(0);
     }
 
     private static void CaptureCameraToPng(Camera cam, string path)
@@ -145,18 +178,9 @@ internal class ConeCaptureRunner : MonoBehaviour
         tex.Apply();
         cam.targetTexture = null;
         RenderTexture.active = null;
-        Object.DestroyImmediate(rt);
+        UnityEngine.Object.DestroyImmediate(rt);
         File.WriteAllBytes(path, tex.EncodeToPNG());
-        Object.DestroyImmediate(tex);
-    }
-
-    private static void ExitPlay(int code)
-    {
-        EditorApplication.isPlaying = false;
-        if (Application.isBatchMode)
-        {
-            EditorApplication.delayCall += () => EditorApplication.Exit(code);
-        }
+        UnityEngine.Object.DestroyImmediate(tex);
     }
 }
 #endif

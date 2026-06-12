@@ -177,6 +177,18 @@ public class MultiSpawner : MonoBehaviour, ICairnSpawner
         }
         if (!groundDetected)
         {
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                groundDetected = true;
+                groundY = data.y;
+                UnityLogger.IForward("v22-SPAWN",
+                    $"id={data.id} multispawner-editor-bypass y={groundY:F2}");
+            }
+#endif
+        }
+        if (!groundDetected)
+        {
             UnityLogger.IForward("v22-SPAWN-REJECTED",
                 $"id={data.id} type={data.type} src=MultiSpawner reason=no-floor-tier");
             var bridge = Object.FindFirstObjectByType<CairnBridge>();

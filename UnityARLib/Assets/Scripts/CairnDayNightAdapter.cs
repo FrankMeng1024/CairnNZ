@@ -62,10 +62,10 @@ namespace Cairn.AR
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoBootstrap()
         {
-            if (Object.FindFirstObjectByType<CairnDayNightAdapter>() != null) return;
+            if (UnityEngine.Object.FindFirstObjectByType<CairnDayNightAdapter>() != null) return;
             var go = new GameObject("CairnDayNightAdapter (auto)");
             go.AddComponent<CairnDayNightAdapter>();
-            Object.DontDestroyOnLoad(go);
+            UnityEngine.Object.DontDestroyOnLoad(go);
         }
 
         private float _clockT = 0.5f;          // last clock-derived day/night value
@@ -81,7 +81,7 @@ namespace Cairn.AR
 
         void OnEnable()
         {
-            if (arCameraManager == null) arCameraManager = Object.FindFirstObjectByType<ARCameraManager>();
+            if (arCameraManager == null) arCameraManager = UnityEngine.Object.FindFirstObjectByType<ARCameraManager>();
             // Initialize globals so first frame is sane.
             UpdateClockT();
             PushGlobals();
