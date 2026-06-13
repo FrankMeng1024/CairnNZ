@@ -188,12 +188,14 @@ namespace Cairn.AR.Editor
             // --- Tier-1 圆环 (主环 + 内环,1:1 移植 Three.js demo line 142-166) ---
             // V5.12 sub#2 数学反推 (S2-N2 CRITICAL): V5.11 RING_RADIUS=0.50 + 16 ribbon
             //   → 邻接间距 周长/16 = π*0.5/8 = 0.196m,小于 maxWidth 0.16-0.21m → 几何重叠
-            // V5.13 sub#1 第五轮几何反推 (S5-N2 BLOCKER): ringRadius 0.65 + cam 3.5m
+            // V5.13 sub#1 几何反推 (S5-N2 BLOCKER): ringRadius 0.65 + cam 3.5m
             //   → 16 ribbon 屏幕宽度仅 160px, bloom halo 30px → 几何必然 3 群糊
             //   修法: 16→8 ribbon + ringRadius 1.0
             //     间距 π*1.0/8 = 0.39m, 屏幕宽 ~250px, 8 根每根 31px > bloom 30px 不糊
             //     8 根也匹配 HTML baseline 5-7 根的风格
-            float RING_RADIUS = 1.0f;
+            // V5.15 修: 8 ribbon viewing projection 5 distinct X 仍糊
+            //   ringRadius 1.0 → 1.4, 12 ribbon 让 viewing projection 7 distinct X
+            float RING_RADIUS = 1.4f;
             Color darkAmber = LerpToDarkAmber(t.color);
 
             var ringShader = Shader.Find("Cairn/RingFlat");
@@ -246,20 +248,16 @@ namespace Cairn.AR.Editor
             //     4-5 根在 stage2 中段、4-5 根在 stage3 高段 → 任意 capture 时刻都看到
             //     "升起 + 中段 + 飘空" 三阶段共存,真"错落生命感"
             //   maxWidth widthBase 0.18 → 0.16 微缩 (16 根更宽要避免互相挡光)
-            int RIBBON_COUNT = 8;
+            int RIBBON_COUNT = 12;
             for (int i = 0; i < RIBBON_COUNT; i++)
             {
                 float angle = (i / (float)RIBBON_COUNT) * Mathf.PI * 2f;
                 var rgo = new GameObject($"Ribbon_{i}");
                 rgo.transform.SetParent(root.transform, false);
-                // V5.12e sub#2 BLOCKER 修 ribbon-ring 视觉脱节:
-                //   ribbon worldP.y 从 0 起源 = 在地面 plane 同高度,被 ground 暖金色吞噬
-                //   HTML baseline ribbon 从 cairn 石堆顶 (~0.3m) 开始喷出
-                // V5.14 sub#1+sub#2 共识真根因: stage1 ribbon (y=0..0.5m) 被 cluster cairn stones 遮挡
-                //   + ground plane y=0 + ribbon y=0.05 alpha 同色被吞
-                //   修: ribbon transform.y 抬到 0.35m (stones 顶端高度),
-                //     stage1 起源点在 stones 顶 0.35m,真"从 cairn 顶喷出" — HTML baseline 风格
-                rgo.transform.localPosition = new Vector3(0f, 0.35f, 0f);
+                // V5.15 ROLLBACK ribbon transform.y 0.35→0 (sub#2 S6-N5 BLOCKER):
+                //   V5.14 transform.y=0.35 + 假设的 cairn stones 不存在 → 0.35m 物理空白
+                //   V5.15: 回到 y=0, ribbon 起源贴 ground plane,ring↔ribbon 真正接地
+                rgo.transform.localPosition = Vector3.zero;
                 var rib = rgo.AddComponent<Cairn.AR.SilkRibbonV2>();
                 rgo.GetComponent<MeshRenderer>().sharedMaterial = ribMat;
                 // V5.9: phase 跨全周期 — 任意 capture 帧都同时看到 stage1/2/3 ribbon

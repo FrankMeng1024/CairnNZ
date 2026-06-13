@@ -26,7 +26,7 @@ namespace Cairn.AR
         [SerializeField] float _ringRadius = 0.55f;
         [SerializeField] float _angleRad = 0f;       // base angle on ring
         [SerializeField] float _phaseOffset = 0f;    // 0..1 lifecycle stagger
-        [SerializeField] float _lifeHeight = 1.5f;   // V5.14c: 3.0 → 1.5m 让 ribbon 不飘到天上 cam 视野外, ring 与 ribbon 间空白带消失
+        [SerializeField] float _lifeHeight = 2.5f;   // V5.15 sub 共识: 必须 > bodyLength*2=2.0 让 stage3 bottomY 真升,V5.14 1.5 数学反向 bug
         [SerializeField] float _bodyLength = 1.0f;   // m visible portion at any t
         [SerializeField] float _maxWidth = 0.10f;
         [SerializeField] int   _segs = 24;
@@ -192,31 +192,22 @@ namespace Cairn.AR
             //                          globalFade 在 lifeT>0.85 才开始衰减(line 195)
             float topY, bottomY;
             const float STAGE1_END = 0.30f;
-            // V5.14d sub 共识真根因: stage3 (lifeT 0.65..1) 让 ribbon bottomY 升到 0.5m+
-            //   导致 ribbon 群整体浮空,与 ring 之间出现 200px 空白
-            //   修: STAGE2_END 0.65→0.95 让 ribbon 大部分时间都在 stage2 (bottomY 缓慢从 0 到 bodyLength)
-            //     stage3 几乎不存在,ribbon 永远贴地或半飘空,不脱离 ring
-            const float STAGE2_END = 0.95f;
+            // V5.15 ROLLBACK V5.14d: STAGE2_END 0.95→0.55 恢复 stage3 飘空设计
+            //   sub#1+sub#2 共识 V5.14 STAGE2_END 0.95 + globalFade>0.85 衰减让 stage3 死,
+            //   抹掉用户原话核心"脱离阵法→飘空"
+            //   V5.15: STAGE2_END 0.55 让 stage3 占 45% 时间真"飘空",ring↔ribbon 视觉脱节用别的方法修
+            const float STAGE2_END = 0.55f;
             if (lifeT < STAGE1_END)
             {
                 // 阶段 1: 贴地升起
-                // V5.14 sub#2 真根因: stage1 ribbon 短(0..0.5m)被 cluster cairn stones 遮挡
-                //   stages 数学正确但视觉上 stage1 ribbon 太矮被吞,用户看不到"接地升起"
-                //   修: stage1 内 t1=0.5 已让 topY 达 bodyLength=1m, t1>0.5 再扩 bottomY
-                //     让 stage1 ribbon 真有 1m 长度可见
+                // V5.15 ROLLBACK V5.14 piecewise (sub#1 S6-N3 BLOCKER: t1=0.5 velocity cliff)
+                //   V5.14 piecewise 在 t1=0.5 让 dtopY/dt 从 2 → 0, dbottomY/dt 0 → 0.8 双向断裂
+                //   且 stage1 末 → stage2 起 bottomY 从 0.4 pop 回 0
+                //   V5.15: 单段 topY = bodyLength * t1 线性升,bottomY = 0 始终
+                //     与 stage2 起边界 (bottomY=0, topY=bodyLength) 完美连续
                 float t1 = lifeT / STAGE1_END;
-                if (t1 < 0.5f)
-                {
-                    // 前半段 0..0.5: topY 从 0 到 bodyLength,bottomY=0
-                    topY = _bodyLength * (t1 * 2f);
-                    bottomY = 0f;
-                }
-                else
-                {
-                    // 后半段 0.5..1.0: topY 已满 bodyLength, bottomY 从 0 抬到 bodyLength*0.4
-                    topY = _bodyLength;
-                    bottomY = _bodyLength * 0.4f * ((t1 - 0.5f) * 2f);
-                }
+                topY = _bodyLength * t1;
+                bottomY = 0f;
             }
             else if (lifeT < STAGE2_END)
             {
