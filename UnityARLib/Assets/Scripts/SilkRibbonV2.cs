@@ -30,7 +30,7 @@ namespace Cairn.AR
         [SerializeField] float _bodyLength = 1.0f;   // m visible portion at any t
         [SerializeField] float _maxWidth = 0.10f;
         [SerializeField] int   _segs = 24;
-        [SerializeField] float _swayAmp = 0.05f;
+        [SerializeField] float _swayAmp = 0.02f;   // V5.23 sub#2 抑火焰: 0.05→0.02 减弱 sway 让 ribbon 不扭曲成火焰
         [SerializeField] Color _baseTint = new Color(1.0f, 0.85f, 0.55f, 1f);
         [SerializeField] Color _tipTint  = new Color(0.95f, 0.97f, 1.00f, 1f);
 
@@ -313,9 +313,12 @@ namespace Cairn.AR
                     widthDir.Normalize();
 
                 // Spindle width: narrow at base, fat at mid, fan at tip
-                float spindleShape = 0.4f + 0.6f * Mathf.Sin(sT * Mathf.PI) + 0.5f * Mathf.Pow(sT, 0.7f);
-                float noiseL = 0.85f + 0.30f * Mathf.Sin(sT * 7.3f + _seed);
-                float noiseR = 0.85f + 0.30f * Mathf.Sin(sT * 6.1f - _seed * 1.7f);
+                // V5.23 sub#2 sharp edge: spindleShape 振幅减半, noise 减弱让 ribbon 边缘不羽化
+                //   旧: 0.4 + 0.6*sin + 0.5*sT^0.7 (峰值 ~1.5,变化大)
+                //   修: 0.6 + 0.4*sin + 0.2*sT^0.7 (峰值 ~1.2,变化小,silk 真稳定)
+                float spindleShape = 0.6f + 0.4f * Mathf.Sin(sT * Mathf.PI) + 0.2f * Mathf.Pow(sT, 0.7f);
+                float noiseL = 0.92f + 0.16f * Mathf.Sin(sT * 7.3f + _seed);  // V5.23 0.85+0.30 → 0.92+0.16 减幅
+                float noiseR = 0.92f + 0.16f * Mathf.Sin(sT * 6.1f - _seed * 1.7f);
                 float wHaloL = _maxWidth * spindleShape * noiseL;
                 float wHaloR = _maxWidth * spindleShape * noiseR;
                 float wCoreL = wHaloL * 0.35f;
