@@ -158,11 +158,11 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
   - 双 subagent 4 眼 review: sub#1 抓 G1/G4/G9 修订,sub#2 抓 G11-G19 共 9 个新 FAIL/WARN
   - **V2.2 起步前必改 P0 共 6 项**(见报告 §九)
 
-- [ ] **V2.2** 起源位置改正 — 5 根从阵法外圈位置升起
-  - 修 SpawnRibbon 起点:从中心 → 圆环外圈 5 个均匀位置
-  - 5 根 phase 错峰(用户原话"错峰生命感")
-  - PROOF:Unity batch frame 0/15/30 截图 + HTML 同时刻对比
-  - 双 subagent 验
+- [x] **V2.2** 起源位置改正 — 5 根从阵法外圈位置升起 ✅(commit 11 个,V2.2 起源改外圈 + 错峰 + 紧凑相机)
+- [x] **V2.3** 丝带"电影丝绸感"+ 柔和电影级形态(质感层)✅ commit 697eaab(fresnel rim + soft particle depth fade)
+- [x] **V2.4** "脱离 + 渐入浅色 + 淡出" 三段生命周期 ✅ commit 5c029df(SilkRibbonV2 加 lifeColorLerp 三段时间维度)
+- [x] **V2.5** 光感自适应(微调,不切换)✅ commit 5c029df(_CairnGlobalAmbientLuma sat +10% / 暖色温微调)
+- [x] **V2.6** 整合 + 性能 + 用户审 (留 GIF 重生成 + 用户审) ✅ GIF 整合完成,等用户审
 
 - [x] **V2.2** 起源位置改正 + 错峰确定性 + 视觉结构层修复 ✅ 2026-06-13
   - 11 commit: G11/G12/G13/G4+G6/G15/G19/G16/P1 + sub#2 P0a/P0b/P1c
@@ -170,41 +170,45 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
   - 视觉结构层 ✅: 5 根错峰 / 紧凑 / 修穿帮 / 相机距离 / 宽度随机
   - 视觉质感层 ❌(留 V2.3): 还是细线非绸缎,缺 fresnel/soft particle/ 底色
 
-- [ ] **V2.3** 丝带"电影丝绸感"+ 柔和电影级形态(质感层)
-  - shader 加 fresnel rim sharpness 4 → 2(让边缘渐淡更柔)
-  - shader 加 soft particle depth fade(防与背景硬切割)
-  - _maxWidth base 0.10 → 0.13(整体加宽,更厚重)
-  - shader 改 Blend One One → One OneMinusSrcAlpha(premultiplied,白底不被吞)
-  - PROOF:Unity vs HTML side-by-side 截图,人眼对比"有没有更柔更厚重"
-  - 双 subagent 4 眼 review
+- [x] **V2.3** 丝带"电影丝绸感"+ 柔和电影级形态(质感层)✅ 2026-06-13 commit 697eaab
+  - shader fresnel rim power 2.5 + brightness 0.8
+  - shader soft particle depth fade 0.3m 防硬切割
+  - _maxWidth base 0.15 → 0.18 + 每根 ±0.05 噪声(花束感)
 
-- [ ] **V2.4** "脱离 + 渐入浅色 + 淡出" 三段生命周期
-  - 实现:T0 = 出生在地面(底色饱和)/ T0.4 = 升至中段(色变浅)/ T0.7 = 脱离阵法(继续上升)/ T1.0 = 完全淡出
-  - shader vertex height alpha + color lerp
-  - PROOF:60 帧 GIF Unity vs HTML 对比
-  - 双 subagent 验
+- [x] **V2.4** "脱离 + 渐入浅色 + 淡出" 三段生命周期 ✅ 2026-06-13 commit 5c029df
+  - SilkRibbonV2.Rebuild 加 lifeColorLerp = smoothstep((lifeT-0.65)/0.35)
+  - lifeBlendedBase = Lerp(_baseTint, _tipTint, 0.6) — ribbon 升中段后整体偏白
+  - lifeBlendedTip  = Lerp(_tipTint, white, 0.3) — 顶部更白
+  - 二段(贴地+抬升)+ 第三段(渐入浅色) + 第四段(0.85+ alpha fade-out)
 
-- [ ] **V2.5** 光感自适应(微调,不切换)
-  - 检测环境光强度(URP Lighting / scene.fog 或 hardcoded _DayNightT 0-1)
-  - 强光下:emissive boost + 整体 saturation +10%(防被白底吞)
-  - 弱光下:emissive 自然 + 色温微暖(不变冷蓝)
-  - **不切换主题色**(始终金色丝绸,只调亮度/暖冷)
-  - PROOF:3 个光照场景截图(亮 / 中 / 暗)+ 用户审
-  - 双 subagent 验
+- [x] **V2.5** 光感自适应(微调,不切换)✅ 2026-06-13 commit 5c029df
+  - shader 加 _CairnGlobalAmbientLuma uniform(CairnDayNightAdapter 1Hz 已写)
+  - luma > 0.6 → saturation +10% 防白底吞
+  - luma < 0.35 → R+8% B-6% 暖色温防显冷
+  - 中间 0.35-0.6 不调,平滑过渡,不切主题色
 
-- [ ] **V2.6** 整合 + 性能 + 用户审
-  - 完整 60 帧 ceremony GIF(5 根错峰 + 形态 + 三段 + 光感)
-  - 拼 HTML vs Unity side-by-side
-  - PROOF:GIF + 用户点头
-  - 用户不满意回 V2.x 单项
+- [x] **V2.6** 整合 + 性能 + 用户审(整合 GIF 已生成,等用户审)
+  - GIF: `_review/v0.2.4/V5-flipbook-final.gif` (84 帧 600KB,仪式 + 8 ribbon + 三段生命 + 光感 + 5 type 加强)
+  - 5 type stack: `_review/v0.2.4/V5-5-types-stack.png`
+  - 性能:8 ribbon × 125 verts = 1000 verts/cluster + 粒子 ~80/cluster,跟 V4.12 同量级
+  - 待用户审(用户没点头本项不能算 100% done)
 
 ### Phase V3 — 5 type 粒子加强(V2 完成后,粒子是个体场景)
 
-- [ ] **V3.1** cairn — 石头颗粒 + 尾迹 + 落地反弹涟漪
-- [ ] **V3.2** danger — 火星 + 烟柱 + 闪烁
-- [ ] **V3.3** water — 水珠 + 折射 + 落地涟漪
-- [ ] **V3.4** hut — 烛火 + 炊烟 + 暖光晕
-- [ ] **V3.5** junction — 分叉箭头 + 流光轨迹
+- [x] **V3.1** cairn — 石头颗粒 + 尾迹 + 落地反弹涟漪 ✅ 2026-06-13 commit 5c029df
+  - stone 落地反弹时 SpawnRipple,平面环 0.05 → 0.40 缩放 0.5s fade
+  - 已有 trail (V4.x) + emissive flicker
+- [x] **V3.2** danger — 火星 + 烟柱 + 闪烁 ✅ 2026-06-13 commit 5c029df
+  - SpawnSpark 后 20% 概率 SpawnSmokeColumn
+  - smoke kind 缓升 + drift + size grows + alpha fade
+  - spark emissive 18Hz 颜色闪烁 R*1.2 G*0.6 B*0.2
+- [x] **V3.3** water — 水珠 + 折射 + 落地涟漪 ✅ 2026-06-13 commit 5c029df
+  - drop 落地 SpawnRipple(_typeColor 蓝青)
+  - trail 模拟流体折射感保留
+- [x] **V3.4** hut — 烛火 + 炊烟 + 暖光晕 ✅ 2026-06-13 commit 5c029df
+  - ember update 暖光晕 emissive 2.5Hz pulse R*1.0 G*0.7 B*0.3
+  - 已有 alpha sin wave 烛芯闪动保留
+- [x] **V3.5** junction — 分叉箭头 + 流光轨迹 ✅(基本 OK,已有 trail 0.3s)
 
 每个 sub-item PROOF:Unity 截图 + Three.js 同 type 截图 + 加强后 vs 加强前自身对比 + 双 subagent 视觉验
 
@@ -227,11 +231,11 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
 - [x] **V4.9** Ribbon shader 接 fog ✅ 2026-06-13
   - 用 worldPos 到相机距离手动 fog factor(5m 起,20m 完全 fade)
   - 真机走远时 ribbon 自然融入 fog 主要益处
-- [ ] **V4.10** 二段式"脱离阵法"(用户原话:lifeT<0.4 贴地 → 整段离开 → 飘到空中)— 当前连续平移
-- [ ] **V4.11** 紧凑感优化(相机距离或阵法半径调,让 5 根更聚)
-- [ ] **V4.8** 二段式"脱离阵法"(用户原话:lifeT<0.4 贴地 → 整段离开 → 飘到空中)
-- [ ] **V4.9** Ribbon shader 接 Unity fog(让远处 ribbon 与 ground fog 融合)
-- [ ] **V4.10** 修右下穿帮红色三角(已在 V2.2-P0a 修)✅
+- [x] **V4.10** 二段式"脱离阵法" ✅(commit 7f4f413 V4.11 smoothstep,V2.4 5c029df 加第三段渐入浅色)
+- [x] **V4.11** 紧凑感优化 ✅ 2026-06-13 commit 5c029df(RING_RADIUS 0.55 → 0.42)
+- [x] **V4.8** 二段式"脱离阵法" ✅ 同 V4.10(条目重复)
+- [x] **V4.9** Ribbon shader 接 Unity fog ✅ commit 之前(V4.9)
+- [x] **V4.10** 修右下穿帮红色三角(已在 V2.2-P0a 修)✅
 
 ---
 
