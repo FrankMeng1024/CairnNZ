@@ -272,9 +272,10 @@ namespace Cairn.AR
                         p.vel.y += 0.6f * dt;  // counteract gravity
                         p.vel.x += Mathf.Sin(tNow * 0.6f + i * 0.5f) * 0.04f * dt;
                         // size grows over life
+                        // V5.35 sub#17 P3: 圆环刻度方块 0.04 → 0.02 缩小匹配 HTML baseline 几乎不可见
                         float gs = 1f + p.life * 0.6f;
-                        p.tr.localScale = new Vector3(0.04f * gs, 0.04f * gs, 0.04f * gs);
-                        SetOpacity(p.mat, 0.4f * Mathf.Max(0f, 1f - p.life / p.maxLife));
+                        p.tr.localScale = new Vector3(0.02f * gs, 0.02f * gs, 0.02f * gs);
+                        SetOpacity(p.mat, 0.3f * Mathf.Max(0f, 1f - p.life / p.maxLife));
                     }
                     else if (p.kind == "ripple")
                     {
