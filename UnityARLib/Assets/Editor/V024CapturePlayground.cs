@@ -172,8 +172,13 @@ namespace Cairn.AR.Editor
             ribMat.SetColor("_TipTint",       new Color(1.0f, 1.0f, 0.95f, 1f));
             // V4.3 fix: _NightMul/_DayMul 同步 V4.2 shader default,不再用旧 1.6/0.55(2.9 倍切换)
             // V4.5 fix: _DayMul 1.5 → 2.5 让丝带白底下足够亮(_MaxLuma=1.6 clamp 后仍保白金高光)
+            // V5.19 sub#2 S10-N3 BLOCKER 修: _DayMul=2.5 + _MaxLuma=1.6 clamp 让 cairn (0.92,0.85,0.70)
+            //   * 2.5 = (2.30, 2.13, 1.75) clamp 1.6 → (1.6, 1.6, 1.6) 三通道全饱和成纯白,失色相
+            //   修: _DayMul 2.5 → 1.4, _MaxLuma 1.6 → 2.5(实质关 clamp)
+            //     cairn * 1.4 = (1.29, 1.19, 0.98) 不被 clamp,真米色保留
             ribMat.SetFloat("_NightMul",      1.10f);
-            ribMat.SetFloat("_DayMul",        2.50f);
+            ribMat.SetFloat("_DayMul",        1.40f);
+            ribMat.SetFloat("_MaxLuma",       2.50f);  // V5.19: 1.6 → 2.5 实质关 clamp 让 source 色相不被烧白
             // V4.3 fix: _FlowStrength 同步 V2.3 default 0.30(原 0.55 让 white texture 变 1.47 增亮)
             ribMat.SetFloat("_FlowStrength",  0.30f);
             ribMat.SetFloat("_BandFreq",      4.0f);
@@ -290,7 +295,9 @@ namespace Cairn.AR.Editor
                 // V5.18 sub#2 F1 BLOCKER 修: angle noise-driven 不再均匀
                 //   均匀 i/N angle 让 viewing projection 对称 → 必合并成 3 光柱
                 //   noise: angle = i/N + sin(i*1.3)*0.08 让 ribbon 角度不对称,屏幕投影 distinct
-                float angleNoise = Mathf.Sin(i * 1.3f) * 0.08f;
+                // V5.19 sub#2 S10-N1 BLOCKER 修: 0.08 rad ≈ 4.6° 不足以打破对称
+                //   改 0.08 → 0.20 (~11.5°) + Halton-like jitter 让分布更不规律
+                float angleNoise = (Mathf.Sin(i * 1.3f) + Mathf.Cos(i * 2.7f) * 0.5f) * 0.20f;
                 float angle = ((i / (float)RIBBON_COUNT) + angleNoise) * Mathf.PI * 2f;
                 var rgo = new GameObject($"Ribbon_{i}");
                 rgo.transform.SetParent(root.transform, false);
@@ -305,7 +312,11 @@ namespace Cairn.AR.Editor
                 //   → 改用纯 i/N 均匀分布: 16 根 → phase = 0, 0.0625, ... 0.9375
                 //   → stage1 (0..0.30) 有 5 根升起、stage2 (0.30..0.65) 有 6 根中段、stage3 (0.65..1) 有 5 根高空
                 //   → 任意 frame 都看到 5 根接地、6 根升空、5 根飘空,真"从阵法升起"
-                float phaseOffset = (float)i / RIBBON_COUNT;
+                // V5.19 sub#2 S10-N4 修 'flipbook 静态' 用户原话'生命错落感':
+                //   phase [0,1] 全周期 → 任意时刻看到稳态混合,失去"升起"动态
+                //   修: phase [0, 0.4] 集中起步,所有 ribbon 同步升起,
+                //     在 anim 60 帧 (2s) 内能看到 stage1→stage2 真升起进度
+                float phaseOffset = ((float)i / RIBBON_COUNT) * 0.4f;
                 float widthBase = 0.14f;
                 float widthVar  = 0.04f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
                 float maxWidth  = widthBase + Mathf.Abs(widthVar);
