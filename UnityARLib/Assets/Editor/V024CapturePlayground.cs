@@ -304,7 +304,9 @@ namespace Cairn.AR.Editor
             // V5.20 sub#2 P0 几何根治: 12→6 ribbon + ringRadius 1.4→1.7
             //   sub#2 stall 第十一轮: 数量不解决合并问题, 几何间距才解决
             //   6 ribbon @ ringRadius 1.7 → 间距 π*1.7/3 = 1.78m, 屏幕宽 ~480px / 6 = 80px > bloom 30px 大幅
-            int RIBBON_COUNT = 6;
+            // V5.28 sub 第十七轮推荐: 6→3 真粗丝带 (HTML baseline 风格)
+            //   3 ribbon @ ringRadius 1.7 → 间距 π*1.7/1.5 = 3.56m 屏幕宽 ~480px/3=160px,绝不糊
+            int RIBBON_COUNT = 3;
             for (int i = 0; i < RIBBON_COUNT; i++)
             {
                 // V5.18 sub#2 F1 BLOCKER 修: angle noise-driven 不再均匀
@@ -315,9 +317,9 @@ namespace Cairn.AR.Editor
                 // V5.27 真根因: 6 ribbon 360° 让前后排叠加 cluster,改前 270° 分布
                 //   让 ribbon 主要在前半,后半 90° 留空,前面 4-5 根真主导视觉
                 //   覆盖 -135° 到 +135° (270° 弧) 而非整圆
+                // V5.28: 3 ribbon 回 360° 均匀 (3 根足够分散,不会糊)
                 float angleNoise = (Mathf.Sin(i * 1.3f) + Mathf.Cos(i * 2.7f) * 0.5f) * 0.20f;
-                float angle = ((i / (float)RIBBON_COUNT) * 0.75f + 0.125f + angleNoise) * Mathf.PI * 2f;
-                // 0.75 = 270°/360°, 0.125 = 偏移让中心对准相机 (cam 在 -Z 方向)
+                float angle = ((i / (float)RIBBON_COUNT) + angleNoise) * Mathf.PI * 2f;
                 var rgo = new GameObject($"Ribbon_{i}");
                 rgo.transform.SetParent(root.transform, false);
                 // V5.15 ROLLBACK ribbon transform.y 0.35→0 (sub#2 S6-N5 BLOCKER):
@@ -336,7 +338,8 @@ namespace Cairn.AR.Editor
                 //   V5.20: 回 [0, 1] 全周期跨度让 anim 60帧能看到任意时刻 stage1/2/3 共存
                 float phaseOffset = (float)i / RIBBON_COUNT;
                 // V5.22 mesh aspect 修 silk 不像火柱: width 0.14→0.18 让 ribbon 真宽
-                float widthBase = 0.18f;
+                // V5.28: 3 ribbon 真粗丝带,width 0.18→0.30 让 silk 看起来像 HTML baseline 粗丝
+                float widthBase = 0.30f;
                 float widthVar  = 0.05f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
                 float maxWidth  = widthBase + Mathf.Abs(widthVar);
                 rib.Configure(RING_RADIUS, angle, phaseOffset, t.color, new Color(0.95f, 0.97f, 1.0f, 1f), maxWidth);
