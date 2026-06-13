@@ -25,10 +25,10 @@ Shader "Cairn/RibbonSilkV2"
     Properties
     {
         _FlowTex            ("Flow Noise (R)", 2D) = "gray" {}
-        _BaseTint           ("Base Tint (type color)", Color) = (1.0, 0.85, 0.55, 1)
-        _TipTint            ("Tip Tint (sky/white)", Color) = (0.95, 0.97, 1.0, 1)
-        _CoreToTipMixStart  ("Color lerp start (uv.y)", Range(0, 1)) = 0.40
-        _CoreToTipMixEnd    ("Color lerp end (uv.y)",   Range(0, 1)) = 0.95
+        _BaseTint           ("Base Tint (type color)", Color) = (1.0, 0.92, 0.75, 1)
+        _TipTint            ("Tip Tint (sky/white)", Color) = (1.0, 1.0, 0.95, 1)
+        _CoreToTipMixStart  ("Color lerp start (uv.y)", Range(0, 1)) = 0.20
+        _CoreToTipMixEnd    ("Color lerp end (uv.y)",   Range(0, 1)) = 0.70
         _RimSharpness       ("Rim sharpness across width", Range(1, 6)) = 2.0
         _FlowSpeedSlow      ("Slow flow speed (m/s up)",   Range(0.1, 2)) = 0.45
         _FlowSpeedFast      ("Counter flow speed",         Range(0.1, 3)) = 1.30
@@ -37,8 +37,8 @@ Shader "Cairn/RibbonSilkV2"
         _BandSpeed          ("Energy band travel speed",   Range(0, 2))   = 0.6
         _BandIntensity      ("Energy band brightness",     Range(0, 1))   = 0.0
         _HeightAlphaPower   ("Tip falloff curve",          Range(0.5, 4)) = 2.2
-        _BaseSoftness       ("Base soften (0..1, low fades)", Range(0, 0.3)) = 0.15
-        _DayMul             ("Day multiplier",  Range(0.05, 1.5)) = 0.95
+        _BaseSoftness       ("Base soften (0..1, low fades)", Range(0, 0.3)) = 0.05
+        _DayMul             ("Day multiplier",  Range(0.05, 3.0)) = 1.5
         _NightMul           ("Night multiplier", Range(0.5, 3.0)) = 1.10
         _PhaseOffset        ("Phase offset (rad)", Range(0, 6.283)) = 0
         _MaxLuma            ("HDR max luma clamp", Range(0.5, 3.0)) = 1.6
@@ -55,7 +55,12 @@ Shader "Cairn/RibbonSilkV2"
         LOD 100
         ZWrite Off
         Cull Off
-        Blend One One                  // Additive (night). Day mode handled by _DayMul → low.
+        // V4.2 v3 fix: 回到 Additive (One One)
+        // 原因: HTML Three.js NormalBlending + ACES ToneMapping + Bloom 让丝带在白底也呈"高光"
+        // Unity 没 ACES + 没 Bloom 时,SrcAlpha 让丝带消失,Premultiplied 让丝带变暗
+        // Additive + 整体提亮 _BaseTint + _DayMul = 让丝带变白光"超亮"叠加白底,不被吞
+        // (用户 HTML 视觉就是接近白光的高光金色绸缎,不是 saturated 暖金线)
+        Blend One One
         BlendOp Add
 
         Pass
@@ -170,8 +175,9 @@ Shader "Cairn/RibbonSilkV2"
                             * _CairnGlobalAlpha
                             * _CairnGlobalThermalScale;
 
-                // HDR clamp so bright + flow doesn't saturate to white
+                // V4.2 v3 fix: 回到 Additive,要 finalRGB = col * alpha (premultiplied 输出 + One One)
                 float3 finalRGB = col * alpha;
+                // HDR clamp so bright + flow doesn't saturate to white
                 float maxC = max(finalRGB.r, max(finalRGB.g, finalRGB.b));
                 if (maxC > _MaxLuma) finalRGB *= (_MaxLuma / maxC);
 

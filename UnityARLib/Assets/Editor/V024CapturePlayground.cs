@@ -51,15 +51,36 @@ namespace Cairn.AR.Editor
             var camGo = new GameObject("V024Camera");
             var cam = camGo.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
-            // Three.js demo bg = #E8DCC4 NZ 晨曦白麻布(line 90)
-            // 但我们 capture 时仍用深蓝便于 ribbon additive 看清;ring 因为是
-            // NormalBlending dark amber,深蓝底也能看清。
-            // 增加白底 capture 可在 RunCapture 里二次跑。
-            cam.backgroundColor = new Color(0.02f, 0.03f, 0.10f, 1f);
+            // V4.1 fix: NZ 晨曦暖白 #E8DCC4 = (0.91, 0.86, 0.77) 对照 HTML demo line 90
+            // 之前用深蓝 (0.02, 0.03, 0.10) 是 batch 测试便利,但用户基准是 HTML 暖白
+            cam.backgroundColor = new Color(0.91f, 0.86f, 0.77f, 1f);
             cam.fieldOfView = 60f;
             cam.transform.position = new Vector3(0f, 1.4f, -2.8f);
             cam.transform.LookAt(new Vector3(0f, 0.85f, 0f));
             camGo.tag = "MainCamera";
+
+            // V4.1 fix: 加暖金地面 plane(对照 HTML demo line 89-91 ground + same-color fog)
+            // HTML CircleGeometry Ø40m + roughness=0.95 + 同色 fog FogExp2 0.012
+            // Unity batch capture 用大 quad + 暖金 unlit material 即可(不需 PBR)
+            var groundGo = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            groundGo.name = "V024Ground";
+            UnityEngine.Object.DestroyImmediate(groundGo.GetComponent<Collider>());
+            groundGo.transform.position = Vector3.zero;
+            groundGo.transform.localScale = new Vector3(20f, 1f, 20f);  // 200m × 200m 远到雾里
+            var groundMr = groundGo.GetComponent<MeshRenderer>();
+            groundMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            groundMr.receiveShadows = false;
+            var groundMat = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color"));
+            // HTML 地面色 #C8AC75(暖金)估计 ≈ (0.78, 0.67, 0.46)
+            if (groundMat.HasProperty("_BaseColor")) groundMat.SetColor("_BaseColor", new Color(0.78f, 0.67f, 0.46f, 1f));
+            if (groundMat.HasProperty("_Color")) groundMat.SetColor("_Color", new Color(0.78f, 0.67f, 0.46f, 1f));
+            groundMr.sharedMaterial = groundMat;
+
+            // V4.1 fix: 同色 fog 远处淡入背景(模拟 HTML FogExp2)
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogColor = new Color(0.91f, 0.86f, 0.77f, 1f);  // 同 NZ 暖白
+            RenderSettings.fogDensity = 0.012f;
 
             // Set day/night global once at scene load via a manager component
             var mgrGo = new GameObject("V024GlobalsManager");
