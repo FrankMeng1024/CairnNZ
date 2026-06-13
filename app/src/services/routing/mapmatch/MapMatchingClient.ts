@@ -47,20 +47,59 @@ interface MapboxMatchingResponse {
   message?: string;
 }
 
-function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+function fetchWithTimeout(
+  url: string,
+  ms: number,
+  externalSignal?: AbortSignal,
+): Promise<Response> {
   return new Promise((resolve, reject) => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       controller.abort();
       reject(new Error('timeout'));
     }, ms);
+    // v6.3 plan §1.2 / R3 C3: caller may pass an AbortSignal so hardware-back
+    // / app-background can immediately cancel an in-flight Mapbox request
+    // (saves quota + lets fence trigger return cleanly on the same tick).
+    // R6 C3: { once: true } makes the listener self-detach the first time
+    // it fires, so we never leak a listener even if removeEventListener
+    // is unsupported on the target's polyfill.
+    let externalListener: (() => void) | null = null;
+    let cleanupExternal: (() => void) | null = null;
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        clearTimeout(timer);
+        reject(new Error('aborted'));
+        return;
+      }
+      externalListener = () => {
+        controller.abort();
+        clearTimeout(timer);
+        reject(new Error('aborted'));
+      };
+      try {
+        externalSignal.addEventListener('abort', externalListener, { once: true });
+        cleanupExternal = () => {
+          try {
+            externalSignal.removeEventListener('abort', externalListener!);
+          } catch {
+            /* polyfill missing removeEventListener — once:true already detached */
+          }
+        };
+      } catch {
+        /* no addEventListener at all — best-effort fallback: skip */
+        externalListener = null;
+      }
+    }
     fetch(url, { method: 'GET', signal: controller.signal })
       .then(r => {
         clearTimeout(timer);
+        if (cleanupExternal) cleanupExternal();
         resolve(r);
       })
       .catch(e => {
         clearTimeout(timer);
+        if (cleanupExternal) cleanupExternal();
         reject(e);
       });
   });
@@ -72,9 +111,12 @@ function buildUrl(segment: MatchSegment): string {
     .join(';');
   // Mapbox radiuses constraint: each value must be 0 < r <= 50 meters
   // (verified via live API — 'unlimited' is rejected with InvalidInput).
-  // null means "use the default" → we send 50m (the upper bound) so
-  // Mapbox has the most freedom while still being a valid value.
-  const DEFAULT_RADIUS_M = 50;
+  // v6.3 (plan §1.2): default radius is 25m. Empirically (spike-fresh-v63-summary.md)
+  // r ∈ {15, 25, 40} all produce identical match output on the 250-case corpus,
+  // so 25 is chosen as a balanced midpoint. r=50 (the legacy default) was looser
+  // than needed; r=8 (pre-v252) was too tight and produced spurious NoMatch on
+  // long strokes (spike-corridor-100v-results.md, J1-036 800m → only 60m snapped).
+  const DEFAULT_RADIUS_M = 25;
   const radiusesStr = segment.radiuses
     .map(r => (r === null ? String(DEFAULT_RADIUS_M) : String(Math.min(50, Math.max(1, r)))))
     .join(';');
@@ -103,7 +145,10 @@ function parseResponse(body: MapboxMatchingResponse): {
  * Match a single segment. Single HTTP call. Caller responsible for
  * stitching multi-segment results.
  */
-export async function matchSegment(segment: MatchSegment): Promise<MatchResult> {
+export async function matchSegment(
+  segment: MatchSegment,
+  options?: { signal?: AbortSignal },
+): Promise<MatchResult> {
   const t0 = Date.now();
   if (!MAPBOX_TOKEN) {
     return {
@@ -134,7 +179,7 @@ export async function matchSegment(segment: MatchSegment): Promise<MatchResult> 
   let lastErr: any = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const res = await fetchWithTimeout(url, TIMEOUT_MS);
+      const res = await fetchWithTimeout(url, TIMEOUT_MS, options?.signal);
       if (res.status === 429) {
         return { ok: false, reason: 'rate-limit', durationMs: Date.now() - t0 };
       }
@@ -191,6 +236,11 @@ export async function matchSegment(segment: MatchSegment): Promise<MatchResult> 
       if (e?.message === 'timeout') {
         if (attempt < MAX_RETRIES) continue;
         return { ok: false, reason: 'timeout', durationMs: Date.now() - t0 };
+      }
+      // v6.3 R3 C3: external AbortSignal cancellation. Distinct from timeout
+      // (which retries) — caller-cancel must NOT retry: the user backed out.
+      if (e?.message === 'aborted') {
+        return { ok: false, reason: 'invalid-input', detail: 'aborted', durationMs: Date.now() - t0 };
       }
       if (attempt < MAX_RETRIES) continue;
       return {

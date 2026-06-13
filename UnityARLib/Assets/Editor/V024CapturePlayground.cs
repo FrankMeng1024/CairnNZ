@@ -260,9 +260,12 @@ namespace Cairn.AR.Editor
                 UnityEngine.Object.DestroyImmediate(stone.GetComponent<Collider>());
                 stone.transform.SetParent(root.transform, false);
                 // 3 stones: 底大顶小 — radius 0.30/0.22/0.15, height 0.20/0.16/0.13
-                float[] stoneR = { 0.30f, 0.22f, 0.15f };
-                float[] stoneH = { 0.20f, 0.16f, 0.13f };
-                float[] stoneY = { 0.10f, 0.28f, 0.44f };  // 累积 y centroid
+                // V5.25 sub#2 S12-N3 修 stones 太小不显眼:
+                //   旧 R 0.30/0.22/0.15 占 ring (1.7m) 仅 18% 太小
+                //   修 R 0.50/0.38/0.26 + H 0.30/0.24/0.20 让 stones 真"cairn 石堆"主视觉
+                float[] stoneR = { 0.50f, 0.38f, 0.26f };
+                float[] stoneH = { 0.30f, 0.24f, 0.20f };
+                float[] stoneY = { 0.15f, 0.42f, 0.66f };  // 累积 y centroid 抬高匹配新 H
                 stone.transform.localPosition = new Vector3(0f, stoneY[s], 0f);
                 // V5.17 sub#2 S8-N1 BLOCKER 修: Unity Cylinder primitive 默认 height=2m
                 //   旧 scale.y = stoneH*0.5 让实际 height = stoneH*1m 仍偏矮
@@ -273,7 +276,10 @@ namespace Cairn.AR.Editor
                 stoneMr.receiveShadows = false;
                 var stoneMat = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color"));
                 // 暖灰色 (0.55, 0.48, 0.40),与 cluster ground 区分但融入暖色调
-                Color stoneColor = new Color(0.55f, 0.48f, 0.40f, 1f);
+                // V5.25 sub#2 修 stones 颜色与 ground 融合:
+                //   旧 (0.55,0.48,0.40) vs ground (0.78,0.67,0.46) 对比度 30% 太低
+                //   修 (0.30,0.25,0.20) 真深石头 contrast 60%
+                Color stoneColor = new Color(0.30f, 0.25f, 0.20f, 1f);
                 if (stoneMat.HasProperty("_BaseColor")) stoneMat.SetColor("_BaseColor", stoneColor);
                 if (stoneMat.HasProperty("_Color")) stoneMat.SetColor("_Color", stoneColor);
                 stoneMr.sharedMaterial = stoneMat;

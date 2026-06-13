@@ -29,7 +29,9 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
   const insets = useSafeAreaInsets();
   const isComputing = useRouteEditStore(s => s.isComputing);
   const lastError = useRouteEditStore(s => s.lastError);
-  const lastWarning = useRouteEditStore(s => s.lastWarning);
+  // v6.3 plan §4.1: lastWarning state removed from UX. runPreview never
+  // emits warnings now — every Preview is clean accept (sage) or clean
+  // reject (red).
   const matchedPoints = useRouteEditStore(s => s.matchedPoints);
   const trimStartFrac = useRouteEditStore(s => s.trimStartFrac);
   const trimEndFrac = useRouteEditStore(s => s.trimEndFrac);
@@ -118,13 +120,13 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
             </TouchableOpacity>
           </View>
 
-          {/* v255: status pill is now a 4-state slot:
+          {/* v6.3 plan §4.1: status pill is a 2-state slot.
               - isComputing → spinner + "Computing…"
-              - lastError → red bg, white text (validation errors here,
-                NOT in a top banner)
-              - lastWarning → yellow bg, dark text (Mapbox snap kept raw)
+              - lastError → red bg, white text (auto-clears 2.5s in store)
               - default → sage bg + "N/8 brush strokes"
-              All routed to one place per PO: "所有报错在下方 用红字即可". */}
+              v6.3 dropped the lastWarning state because runPreview no
+              longer falls back to Catmull-Rom — every Preview either
+              cleanly accepts (sage) or cleanly rejects (red). */}
           <View style={styles.statusRow}>
             {isComputing ? (
               <View style={styles.statusPill}>
@@ -136,13 +138,6 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
                 <Icon name="TriangleAlert" size={14} color={Colors.surface} strokeWidth={2} />
                 <Text style={[styles.statusText, styles.statusTextError]} numberOfLines={2}>
                   {lastError}
-                </Text>
-              </View>
-            ) : lastWarning ? (
-              <View style={[styles.statusPill, styles.statusPillWarning]}>
-                <Icon name="TriangleAlert" size={14} color={Colors.textPrimary} strokeWidth={2} />
-                <Text style={[styles.statusText, styles.statusTextWarning]} numberOfLines={2}>
-                  {lastWarning}
                 </Text>
               </View>
             ) : (
@@ -183,8 +178,9 @@ export function EditOverlayV236({ onCancel, onSave, onPreview }: EditOverlayV236
             </View>
           </View>
 
-          {/* Hint text — only when no detour yet */}
-          {strokeCount === 0 && !isComputing && (
+          {/* Hint text — only when no detour yet AND no error to show
+              (plan §4.3: hide hint while lastError is on screen). */}
+          {strokeCount === 0 && !isComputing && !lastError && (
             <Text style={styles.hintText}>
               Tap the pencil and draw a detour. Start and end on the route. Drag the slider to trim.
             </Text>
@@ -349,16 +345,6 @@ const styles = StyleSheet.create({
   },
   statusTextError: {
     color: Colors.surface,
-  },
-  // v255: warning pill (caution yellow, dark text) for low-confidence
-  // Mapbox snaps. User's drawing is kept; the warning advises review.
-  statusPillWarning: {
-    backgroundColor: Colors.severityCautionBg,
-    borderWidth: 1,
-    borderColor: Colors.severityCaution,
-  },
-  statusTextWarning: {
-    color: Colors.textPrimary,
   },
   statusText: {
     fontSize: FontSize.small,

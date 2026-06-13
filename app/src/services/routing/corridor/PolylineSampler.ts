@@ -10,6 +10,17 @@
 export interface LngLat {
   lng: number;
   lat: number;
+  /**
+   * Optional altitude in meters above sea level. Added v6.3 for brush-edit
+   * elevation preservation (plan §2.1). Existing call sites continue to work
+   * — `alt` is optional, and most geometry functions ignore it (only `lng`/`lat`
+   * affect distance / bearing / interpolation calculations).
+   *
+   * Producers: GPS fixes, MapView.queryTerrainElevation (Mapbox DEM tiles),
+   * legacy stored routes (may be null or undefined).
+   * Consumers: elevation gain calc, route detail elevation chart, save-as-route.
+   */
+  alt?: number | null;
 }
 
 const EARTH_RADIUS_M = 6_371_000;
@@ -30,9 +41,23 @@ export function haversineMeters(a: LngLat, b: LngLat): number {
 /**
  * Linear interpolate between a and b at fraction t in [0, 1].
  * Uses simple lng/lat lerp — accurate enough for ~10m intervals.
+ *
+ * v6.3 (plan §2.2): preserves `alt` if both endpoints have it. If either
+ * side is missing alt, output alt is null (cannot interpolate against
+ * unknown). This rule keeps elevation continuity through densification
+ * without inventing data.
  */
 function lerp(a: LngLat, b: LngLat, t: number): LngLat {
-  return { lng: a.lng + (b.lng - a.lng) * t, lat: a.lat + (b.lat - a.lat) * t };
+  const out: LngLat = {
+    lng: a.lng + (b.lng - a.lng) * t,
+    lat: a.lat + (b.lat - a.lat) * t,
+  };
+  if (a.alt != null && b.alt != null) {
+    out.alt = a.alt + (b.alt - a.alt) * t;
+  } else if (a.alt != null || b.alt != null) {
+    out.alt = null; // partial knowledge → record as unknown
+  }
+  return out;
 }
 
 /**
@@ -65,22 +90,33 @@ export function densify(coords: LngLat[], intervalM: number = 10): LngLat[] {
 /**
  * Flatten a LineString OR MultiLineString geometry into LngLat[].
  *
- * GeoJSON coordinates are [lng, lat] (lng first).
+ * GeoJSON coordinates are [lng, lat] (lng first), optionally with a 3rd
+ * element for altitude in meters. v6.3 (plan §2.2): if a 3rd element is
+ * present and is a finite number, it's preserved as `alt`; otherwise
+ * `alt` is omitted.
  *
  * For MultiLineString, parts are concatenated in order. Caller may want to
  * track segment boundaries separately (this fn does not).
  */
+function readCoord(c: number[]): LngLat {
+  const [lng, lat, maybeAlt] = c;
+  if (typeof maybeAlt === 'number' && Number.isFinite(maybeAlt)) {
+    return { lng, lat, alt: maybeAlt };
+  }
+  return { lng, lat };
+}
+
 export function flattenGeometry(
   geom: { type: string; coordinates: any },
 ): LngLat[] {
   if (geom.type === 'LineString') {
-    return (geom.coordinates as number[][]).map(([lng, lat]) => ({ lng, lat }));
+    return (geom.coordinates as number[][]).map(readCoord);
   }
   if (geom.type === 'MultiLineString') {
     const out: LngLat[] = [];
     for (const part of geom.coordinates as number[][][]) {
-      for (const [lng, lat] of part) {
-        out.push({ lng, lat });
+      for (const c of part) {
+        out.push(readCoord(c));
       }
     }
     return out;
@@ -104,12 +140,10 @@ export function flattenGeometryToParts(
   geom: { type: string; coordinates: any },
 ): LngLat[][] {
   if (geom.type === 'LineString') {
-    return [(geom.coordinates as number[][]).map(([lng, lat]) => ({ lng, lat }))];
+    return [(geom.coordinates as number[][]).map(readCoord)];
   }
   if (geom.type === 'MultiLineString') {
-    return (geom.coordinates as number[][][]).map(part =>
-      part.map(([lng, lat]) => ({ lng, lat })),
-    );
+    return (geom.coordinates as number[][][]).map(part => part.map(readCoord));
   }
   return [];
 }

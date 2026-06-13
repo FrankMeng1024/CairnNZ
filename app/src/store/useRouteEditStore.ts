@@ -25,6 +25,9 @@ import { isPointInCorridor } from '../services/routing/corridor/CorridorQuery';
 import { runMapMatching, clearMatchCache } from '../services/routing/mapmatch/runMapMatching';
 import type { MatchSegment } from '../services/routing/mapmatch/types';
 import { matchSegment } from '../services/routing/mapmatch/MapMatchingClient';
+import { simplifyStroke } from '../utils/strokeSimplify';
+import { checkG0, checkG0PostSimplify, checkG0_5, checkG3 } from '../utils/strokeGate';
+import { sendEditDiag } from '../services/editDiagSender';
 import { saveExtras, loadExtras, EditSegment } from '../services/LocalRouteExtras';
 import { migrateRouteIfNeeded, MigrationResult } from '../services/LegacyRouteMigrator';
 import { saveSession, clearSession, onSaveSessionFailure } from '../services/EditSessionPersistence';
@@ -40,6 +43,8 @@ import {
 } from '../services/routing/editAnalytics';
 
 const MAX_STROKES = 8;
+// v6.3 plan §4.1: lastError UI auto-clears after this many ms.
+const LAST_ERROR_AUTO_CLEAR_MS = 2500;
 // v255: PO direction "范围改 250m". corridor expanded slightly from 200
 // to give legitimate parallel-road detours more room. WARN scales with it.
 const CORRIDOR_RADIUS_M = 250;
@@ -181,6 +186,13 @@ interface EditState {
 
   saveAndExit(): Promise<{ ok: boolean; error?: string; sessionReplaced?: boolean }>;
   /**
+   * v6.3 plan §2.3: replace null `alt` entries in `matchedPoints` with
+   * altitudes resolved by the screen-level Terrain DEM lookup. Caller
+   * passes a parallel array of resolved alt values (null = still unknown,
+   * tile not loaded). No-op if matchedPoints length doesn't match.
+   */
+  applyMatchedAltitudes(altitudes: Array<number | null>): void;
+  /**
    * v249: Edit mode "Save" handler. Captures current preview geometry as
    * committedDraft and closes edit UI WITHOUT touching backend. The
    * outer view-mode "Save" button is what writes to the backend. This
@@ -236,7 +248,18 @@ function haversineMetersLocal(a: LngLat, b: LngLat): number {
 
 function lerpLocal(a: LngLat, b: LngLat, t: number): LngLat {
   const tt = Math.max(0, Math.min(1, t));
-  return { lng: a.lng + (b.lng - a.lng) * tt, lat: a.lat + (b.lat - a.lat) * tt };
+  const out: LngLat = {
+    lng: a.lng + (b.lng - a.lng) * tt,
+    lat: a.lat + (b.lat - a.lat) * tt,
+  };
+  // v6.3 plan §2.2: preserve alt through interpolation when both endpoints
+  // have it. Partial knowledge → null (record as unknown rather than fake 0).
+  if (a.alt != null && b.alt != null) {
+    out.alt = a.alt + (b.alt - a.alt) * tt;
+  } else if (a.alt != null || b.alt != null) {
+    out.alt = null;
+  }
+  return out;
 }
 
 /** Slice polyline by arc-length fractions in [0..1]. */
@@ -491,146 +514,6 @@ function projectOntoOriginalSegment(
     }
   }
   return { point: bestPt, distM: bestD };
-}
-
-/**
- * v253: Catmull-Rom spline smoothing for fallback case (when Mapbox
- * snap is rejected and we must use the raw user brush). Reduces hand-
- * jitter without distorting the curve. Each adjacent pair (p_{i-1},
- * p_i, p_{i+1}, p_{i+2}) generates 4 interpolated points along a CR
- * spline with tension τ=0.5. Keeps endpoints exact (anchored).
- */
-function smoothCatmullRom(points: LngLat[], subdivisions: number = 3): LngLat[] {
-  if (points.length < 3) return points.slice();
-  const out: LngLat[] = [];
-  out.push(points[0]);
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = i === 0 ? points[0] : points[i - 1];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = i + 2 < points.length ? points[i + 2] : points[i + 1];
-    for (let s = 1; s <= subdivisions; s++) {
-      const t = s / (subdivisions + 1);
-      const t2 = t * t;
-      const t3 = t2 * t;
-      // Catmull-Rom basis (uniform, τ=0.5 implied by 1/2 factor)
-      const lng = 0.5 * (
-        (2 * p1.lng) +
-        (-p0.lng + p2.lng) * t +
-        (2 * p0.lng - 5 * p1.lng + 4 * p2.lng - p3.lng) * t2 +
-        (-p0.lng + 3 * p1.lng - 3 * p2.lng + p3.lng) * t3
-      );
-      const lat = 0.5 * (
-        (2 * p1.lat) +
-        (-p0.lat + p2.lat) * t +
-        (2 * p0.lat - 5 * p1.lat + 4 * p2.lat - p3.lat) * t2 +
-        (-p0.lat + 3 * p1.lat - 3 * p2.lat + p3.lat) * t3
-      );
-      out.push({ lng, lat });
-    }
-    out.push(p2);
-  }
-  return out;
-}
-
-/**
- * v253: Snap quality gate. For each snapped point, find nearest point
- * on the user's original brush. Returns the fraction of snapped points
- * that exceed `thresholdM` AND the maximum displacement (Hausdorff-ish:
- * one-sided, snap → brush). Caller rejects if EITHER:
- *   - frac of bad points > fracLimit  (lots of mid-segment drift), OR
- *   - max displacement > maxAbsM       (any single huge spike)
- * v253.1: maxAbsM catches "snap took a 50m+ detour through a building"
- * even when overall fraction is small.
- */
-function snapDisplacementStats(
-  snapped: LngLat[],
-  originalBrush: LngLat[],
-  thresholdM: number,
-): { fracBad: number; maxDispM: number } {
-  if (snapped.length === 0 || originalBrush.length === 0) {
-    return { fracBad: 1, maxDispM: Infinity };
-  }
-  let bad = 0;
-  let maxD = 0;
-  for (const s of snapped) {
-    let bestD = Infinity;
-    for (const o of originalBrush) {
-      const d = haversineMetersLocal(s, o);
-      if (d < bestD) bestD = d;
-    }
-    if (bestD > thresholdM) bad++;
-    if (bestD > maxD) maxD = bestD;
-  }
-  return { fracBad: bad / snapped.length, maxDispM: maxD };
-}
-
-// Backward-compatible wrapper (used by older call sites if any).
-function snapDisplacementFraction(
-  snapped: LngLat[],
-  originalBrush: LngLat[],
-  thresholdM: number,
-): number {
-  return snapDisplacementStats(snapped, originalBrush, thresholdM).fracBad;
-}
-
-/**
- * v247: Douglas-Peucker simplification to reduce stroke point count
- * before sending to Mapbox. Keeps curve information better than uniform-
- * stride downsample, and reduces noise that confuses Map Matching.
- *
- * epsilon in meters; ~3m is a good default for ~5m-sampled strokes.
- */
-function rdpSimplify(points: LngLat[], epsilonM: number): LngLat[] {
-  if (points.length <= 2) return points.slice();
-  // Perpendicular distance in meters from p to segment a-b.
-  function perpDistM(p: LngLat, a: LngLat, b: LngLat): number {
-    const midLat = ((a.lat + b.lat) / 2) * (Math.PI / 180);
-    const cosLat = Math.cos(midLat);
-    const M_PER_DEG = 111000;
-    const ax = a.lng * cosLat * M_PER_DEG;
-    const ay = a.lat * M_PER_DEG;
-    const bx = b.lng * cosLat * M_PER_DEG;
-    const by = b.lat * M_PER_DEG;
-    const px = p.lng * cosLat * M_PER_DEG;
-    const py = p.lat * M_PER_DEG;
-    const dx = bx - ax;
-    const dy = by - ay;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq < 1e-9) return Math.hypot(px - ax, py - ay);
-    let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
-    if (t < 0) t = 0;
-    if (t > 1) t = 1;
-    const fx = ax + t * dx;
-    const fy = ay + t * dy;
-    return Math.hypot(px - fx, py - fy);
-  }
-  // Iterative DP using stack to avoid recursion stack blowup.
-  const keep = new Array(points.length).fill(false);
-  keep[0] = true;
-  keep[points.length - 1] = true;
-  const stack: Array<[number, number]> = [[0, points.length - 1]];
-  while (stack.length > 0) {
-    const [lo, hi] = stack.pop()!;
-    if (hi - lo < 2) continue;
-    let maxD = -1;
-    let maxIdx = -1;
-    for (let i = lo + 1; i < hi; i++) {
-      const d = perpDistM(points[i], points[lo], points[hi]);
-      if (d > maxD) {
-        maxD = d;
-        maxIdx = i;
-      }
-    }
-    if (maxD > epsilonM && maxIdx > 0) {
-      keep[maxIdx] = true;
-      stack.push([lo, maxIdx]);
-      stack.push([maxIdx, hi]);
-    }
-  }
-  const out: LngLat[] = [];
-  for (let i = 0; i < points.length; i++) if (keep[i]) out.push(points[i]);
-  return out;
 }
 
 /** Cheap content hash for a stroke (id excluded — points only). */
@@ -956,12 +839,22 @@ function spliceMatched(
   // synth + endPt projection same). PO test2 had 5 such duplicates.
   // They show up as zero-length segments + occasional render artifacts
   // and contribute to the "preview 不对" perception.
+  // v6.3 plan §2.2: when dedupe drops a point, copy its `alt` onto the
+  // surviving neighbor if the survivor lacks alt. Prevents systematic
+  // alt loss at stitch boundaries (Mapbox snap segments have null alt
+  // until queryTerrainElevation backfills, while original GPS points
+  // keep their alt — naive dedupe would prefer the alt-less Mapbox point).
   if (out.length < 2) return out;
   const deduped: LngLat[] = [out[0]];
   for (let i = 1; i < out.length; i++) {
     const prev = deduped[deduped.length - 1];
     if (haversineMetersLocal(prev, out[i]) > 0.5) {
       deduped.push(out[i]);
+    } else if (prev.alt == null && out[i].alt != null) {
+      // Same location, but `out[i]` carries alt the survivor is missing —
+      // upgrade the survivor in place (mutating `deduped` is safe; we own
+      // the array).
+      deduped[deduped.length - 1] = { ...prev, alt: out[i].alt };
     }
   }
   // v252: spike de-spike pass. PO real-device showed a 17m "凸出来的点
@@ -1164,7 +1057,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       setTimeout(() => {
         const live = get();
         if (live.lastError === msg) set({ lastError: null });
-      }, 2500);
+      }, LAST_ERROR_AUTO_CLEAR_MS);
       return null;
     }
     // v251: endpoint check — must be within 50m of current matched line
@@ -1177,7 +1070,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         if (live.lastError === 'Brush must start on the route or an existing stroke') {
           set({ lastError: null });
         }
-      }, 2500);
+      }, LAST_ERROR_AUTO_CLEAR_MS);
       return null;
     }
     const id = genStrokeId();
@@ -1258,7 +1151,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         if (live.lastError === 'End on the route or an existing brush stroke') {
           set({ lastError: null });
         }
-      }, 2500);
+      }, LAST_ERROR_AUTO_CLEAR_MS);
       persistSession(get(), get().sessionId ?? undefined);
       return;
     }
@@ -1285,7 +1178,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         if (live.lastError === 'One end must be on the route — chain drifted too far') {
           set({ lastError: null });
         }
-      }, 2500);
+      }, LAST_ERROR_AUTO_CLEAR_MS);
       persistSession(get(), get().sessionId ?? undefined);
       return;
     }
@@ -1520,6 +1413,22 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const last = stack[stack.length - 1];
     const newStack = stack.slice(0, -1);
     const noBrushAfter = last.brushStrokes.length === 0;
+    // v6.3 plan §3 bug #1: rebuild walkedIndex around the restored matched
+    // line. Pre-v6.3 undo left walkedIndex pointing at the post-edit line,
+    // so endpoint-snap and corridor checks ran against stale geometry. The
+    // PO snap122 incident ("reset 了…开头没在线上他也认可了") was the same
+    // class of bug; we fix it for undo here.
+    const restoredMatched = last.matchedPoints;
+    const restoredWalkedIndex = restoredMatched.length >= 2
+      ? new PointCloudIndex(
+          restoredMatched.map((p, i) => ({
+            lng: p.lng,
+            lat: p.lat,
+            source: 'original' as const,
+            refId: `matched:${i}`,
+          })),
+        )
+      : state.walkedIndex;
     set(s => ({
       undoStack: newStack,
       brushStrokes: last.brushStrokes,
@@ -1527,6 +1436,11 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       trimEndFrac: last.trimEndFrac,
       matchedPoints: last.matchedPoints,
       workingPoints: deriveWorking(last.matchedPoints, last.trimStartFrac, last.trimEndFrac),
+      walkedIndex: restoredWalkedIndex,
+      // Plan §3 bug #5: clear sticky lastWarning + activeStrokeId on undo so
+      // the Edit overlay doesn't carry residue from the undone op.
+      lastWarning: null,
+      activeStrokeId: null,
       previewMatchedPoints: null,
       // No brushes => nothing to preview => save can proceed.
       previewIsCurrent: noBrushAfter,
@@ -1535,6 +1449,9 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       editCount: s.editCount + 1,
       lastError: null,
     }));
+    sendEditDiag('brush_undo', {
+      undo_stack_depth: newStack.length,
+    });
     persistSession(get(), get().sessionId ?? undefined);
   },
 
@@ -1564,6 +1481,37 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     }
   },
 
+  applyMatchedAltitudes(altitudes) {
+    const state = get();
+    const mp = state.matchedPoints;
+    if (mp.length === 0 || mp.length !== altitudes.length) return;
+    let nullCount = 0;
+    let totalCount = 0;
+    const next: LngLat[] = mp.map((p, i) => {
+      totalCount += 1;
+      const resolved = altitudes[i];
+      // Only OVERWRITE when the existing alt is null/undefined and we got a
+      // real number. Real GPS-sourced altitudes (positive numbers from the
+      // original track) are preserved untouched.
+      if (resolved == null) {
+        if (p.alt == null) nullCount += 1;
+        return p;
+      }
+      if (p.alt != null) return p; // keep authoritative value
+      return { ...p, alt: resolved };
+    });
+    set(s => ({
+      matchedPoints: next,
+      workingPoints: deriveWorking(next, s.trimStartFrac, s.trimEndFrac),
+    }));
+    if (nullCount > 0) {
+      sendEditDiag('brush_alt_dem_null', {
+        points_with_null_alt: nullCount,
+        total_points: totalCount,
+      });
+    }
+  },
+
   async runPreview() {
     const state = get();
     if (state.isSaving) return { ok: false, error: 'Save in progress' };
@@ -1586,11 +1534,10 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       return { ok: true };
     }
 
-    // v251: validate against the CURRENT matched line (the user's editable
-    // base), not the immutable originalPoints. After a previous Preview
-    // commit, walkedIndex was rebuilt around matchedPoints — so validateStrokes
-    // (which calls walkedIndex.nearest) implicitly already operates on the
-    // correct base. We just pass matchedPoints as the geometry argument.
+    // v6.3: pre-flight strokes via the new G-gate pipeline. validateStrokes
+    // remains as the authoritative pre-Mapbox anchor / corridor / chain check
+    // (it covers G1 and several geometric sanity checks); the new gates
+    // (G0 / G0_post_simplify / G0.5 / G3 corridor) are applied per-stroke.
     const baseLine = state.matchedPoints.length >= 2 ? state.matchedPoints : state.originalPoints;
     const v = validateStrokes(state.brushStrokes, baseLine, state.walkedIndex);
     if (!v.ok) {
@@ -1601,129 +1548,322 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
 
     const startSid = state.sessionId;
     const startSeq = get().editOpSeq;
+    const previewT0 = Date.now();
+    sendEditDiag('brush_preview_started', {
+      stroke_count: state.brushStrokes.length,
+    });
 
-    const snappedPerStroke: LngLat[][] = [];
-    let anyLowConfidence = false; // v255: warn-only, not reject
-    const acceptedValidated: ValidatedStroke[] = [];
-    for (const vs of v.validated) {
-      const pts = vs.stroke.points;
-      const fp = strokeFingerprint(vs.stroke);
-      const cached = strokeSnapCache.get(fp);
-      if (cached) {
-        snappedPerStroke.push(cached);
-        acceptedValidated.push(vs);
-        continue;
-      }
-      let simplified = rdpSimplify(pts, 3);
-      const target = 96;
-      const sampled: LngLat[] = [];
-      if (simplified.length <= target) {
-        sampled.push(...simplified);
-      } else {
-        for (let k = 0; k < target; k++) {
-          const idx = Math.round((k * (simplified.length - 1)) / (target - 1));
-          sampled.push(simplified[idx]);
-        }
-      }
-      // v252: tight radius — middle 12m, endpoints 6m. Keeps Mapbox
-      // from drifting to parallel roads.
-      const radiuses: (number | null)[] = sampled.map((_, k) =>
-        (k === 0 || k === sampled.length - 1) ? 6 : 12,
-      );
-      const seg: MatchSegment = { coords: sampled, radiuses, viaIndicesInCoords: [] };
-      // v255 PO direction: 尊重用户画的路, Mapbox 不可信只警告不拒绝.
-      // - Mapbox NoMatch / network error → use Catmull-Rom-smoothed raw
-      //   brush as the snap (user's drawing is the source of truth).
-      // - Mapbox returns but quality drifts (snap doesn't follow brush)
-      //   → use raw brush smoothed; warn.
-      // - Mapbox returns clean → use snap.
-      // The key change vs v254: we ALWAYS produce a snap (raw or mapbox),
-      // never reject the stroke at this stage. The chain-drift / red-zone
-      // checks earlier in validateStrokes are the only hard gates left.
-      let snapped: LngLat[];
-      let lowConfidence = false;
-      try {
-        const r = await matchSegment(seg);
-        if (!r.ok) {
-          snapped = smoothCatmullRom(pts);
-          lowConfidence = true;
-        } else {
-          const stats = snapDisplacementStats(r.matchedPoints, pts, 20);
-          if (stats.fracBad > 0.1 || stats.maxDispM > 40) {
-            // Mapbox said it matched, but it drifted — trust user's
-            // brush over Mapbox's road guess. Warn the user.
-            snapped = smoothCatmullRom(pts);
-            lowConfidence = true;
-          } else if ((r.confidence ?? 1) < 0.5) {
-            // Mapbox returned a snap but at low self-reported confidence.
-            // Keep the snap (it might be a tiny offset alley) but warn.
-            snapped = r.matchedPoints;
-            lowConfidence = true;
-          } else {
-            snapped = r.matchedPoints;
-          }
-        }
-      } catch {
-        snapped = smoothCatmullRom(pts);
-        lowConfidence = true;
-      }
-      if (lowConfidence) anyLowConfidence = true;
-      strokeSnapCache.set(fp, snapped);
-      if (strokeSnapCache.size > 100) {
-        const firstKey = strokeSnapCache.keys().next().value;
-        if (firstKey) strokeSnapCache.delete(firstKey);
-      }
-      snappedPerStroke.push(snapped);
-      acceptedValidated.push(vs);
-    }
+    // v6.3 plan §1.2 / R3 C3: external AbortController fed to matchSegment
+    // so hardware-back / app-background can immediately cancel an in-flight
+    // Mapbox HTTP request. Aborting wakes the awaiter with reason 'aborted',
+    // saves Mapbox quota, and lets the fence check return cleanly.
+    const previewAbort = new AbortController();
 
-    // Fence: bail if state was mutated during await.
-    {
+    // v6.3 plan §1.2 / §1.6 / R1v3: capture fence + finally contract for
+    // multi-stroke serial calls. Any abort path must clear isComputing.
+    const fenceTriggered = (): boolean => {
       const live = get();
-      if (live.sessionId !== startSid || live.editOpSeq !== startSeq) {
-        set({ isComputing: false });
-        return { ok: false, error: 'state-changed' };
+      const tripped = live.sessionId !== startSid || live.editOpSeq !== startSeq;
+      if (tripped && !previewAbort.signal.aborted) {
+        // R3 C3: fence trip → also abort the in-flight HTTP so we don't
+        // burn quota on an answer the user already navigated away from.
+        previewAbort.abort();
       }
-    }
+      return tripped;
+    };
 
-    // v251: splice against the CURRENT matched line, not the immutable
-    // originalPoints. This makes Preview a true commit point — the
-    // resulting newMatched is what the next stroke will edit on top of.
-    // v253.1: pass ONLY accepted strokes to spliceMatched. Rejected
-    // strokes (NoMatch / quality-gate fail) leave that segment of the
-    // baseline untouched — "沿用原 GPS 点".
-    const newMatched = spliceMatched(baseLine, acceptedValidated, snappedPerStroke);
-    // v251: rebuild walkedIndex so subsequent endpoint-snap and
-    // distance-to-base lookups operate against the new matched line,
-    // not the immutable original.
-    const newWalkedIndex = new PointCloudIndex(
-      newMatched.map((p, i) => ({
-        lng: p.lng,
-        lat: p.lat,
-        source: 'original' as const,
-        refId: `matched:${i}`,
-      })),
-    );
-    set(s => ({
-      // v251: COMMIT — drop strokes, preview-buffer.
-      brushStrokes: [],
-      // v255: any low-confidence stroke kept its raw drawing instead of
-      // a clean Mapbox snap — preserve undo so user can revert.
-      undoStack: anyLowConfidence ? s.undoStack : [],
-      activeStrokeId: null,
-      hasCommittedEdit: true,
-      previewMatchedPoints: null,
-      previewIsCurrent: true,
-      matchedPoints: newMatched,
-      workingPoints: deriveWorking(newMatched, s.trimStartFrac, s.trimEndFrac),
-      walkedIndex: newWalkedIndex,
-      isComputing: false,
-      lastWarning: anyLowConfidence
-        ? 'Some strokes had low road confidence — your drawing was kept. Review and undo if needed.'
-        : null,
-      editOpSeq: s.editOpSeq + 1,
-    }));
-    return { ok: true };
+    try {
+      const snappedPerStroke: LngLat[][] = [];
+      const acceptedValidated: ValidatedStroke[] = [];
+      const rejectedStrokeIds: string[] = [];
+      let firstRejectReason: string | null = null;
+
+      for (let strokeIdx = 0; strokeIdx < v.validated.length; strokeIdx++) {
+        const vs = v.validated[strokeIdx];
+        // Fence check before each stroke (multi-stroke can take seconds total).
+        if (fenceTriggered()) return { ok: false, error: 'state-changed' };
+
+        const pts = vs.stroke.points;
+        const fp = strokeFingerprint(vs.stroke);
+        const cached = strokeSnapCache.get(fp);
+        if (cached) {
+          snappedPerStroke.push(cached);
+          acceptedValidated.push(vs);
+          continue;
+        }
+
+        // G0 — preflight (rejects 1-vertex tap, > MAX_STROKE_VERTICES_INPUT).
+        const g0 = checkG0(pts);
+        if (!g0.ok) {
+          rejectedStrokeIds.push(vs.stroke.id);
+          // Plan §4.5: short, product-friendly Chinese reject copy.
+          firstRejectReason ??= '画笔太短或太长';
+          sendEditDiag('brush_gate_failure', {
+            gate: g0.gate,
+            reason: g0.reason,
+            stroke_idx: strokeIdx,
+            stroke_vertex_count: pts.length,
+            metric_value: g0.metric_value,
+            threshold: g0.threshold,
+          });
+          continue;
+        }
+
+        // Pre-call simplify (Douglas-Peucker ladder + uniform fallback).
+        // Replaces v252's hand-rolled rdpSimplify + fixed 96-cap pipeline.
+        const simRes = simplifyStroke(pts);
+        if (simRes.reason === 'rejected_too_long') {
+          rejectedStrokeIds.push(vs.stroke.id);
+          firstRejectReason ??= '画笔太长';
+          sendEditDiag('brush_gate_failure', {
+            gate: 'G0',
+            reason: 'too_long',
+            stroke_idx: strokeIdx,
+            stroke_vertex_count: pts.length,
+            metric_value: pts.length,
+            threshold: null,
+          });
+          continue;
+        }
+
+        // G0_post_simplify — DP at high ε can collapse to 1 point on tight strokes.
+        const g0p = checkG0PostSimplify(simRes.points);
+        if (!g0p.ok) {
+          rejectedStrokeIds.push(vs.stroke.id);
+          firstRejectReason ??= '画笔形状无效';
+          sendEditDiag('brush_gate_failure', {
+            gate: g0p.gate,
+            reason: g0p.reason,
+            stroke_idx: strokeIdx,
+            stroke_vertex_count: pts.length,
+            metric_value: g0p.metric_value,
+            threshold: g0p.threshold,
+          });
+          continue;
+        }
+
+        // v6.3 plan §1.2: per-coord radius defaults to null → MapMatchingClient
+        // sends DEFAULT_RADIUS_M=25 to Mapbox. Empirically (spike-fresh-v63)
+        // r ∈ {15,25,40} produce identical match output; 25 is the chosen
+        // midpoint. Replaces v252's tight 6/12 mix that caused J1-036-style
+        // partial snaps on long strokes.
+        const radiuses: (number | null)[] = simRes.points.map(() => null);
+        const seg: MatchSegment = {
+          coords: simRes.points,
+          radiuses,
+          viaIndicesInCoords: [],
+        };
+
+        let r;
+        const mapboxT0 = Date.now();
+        sendEditDiag('brush_mapbox_attempt', {
+          stroke_idx: strokeIdx,
+          vertex_count: simRes.points.length,
+        });
+        try {
+          r = await matchSegment(seg, { signal: previewAbort.signal });
+        } catch (e: any) {
+          // Defensive: matchSegment swallows almost every error itself.
+          // Reaching here means an unhandled throw — treat as G2 fail.
+          if (fenceTriggered()) return { ok: false, error: 'state-changed' };
+          rejectedStrokeIds.push(vs.stroke.id);
+          firstRejectReason ??= '未识别到这条路';
+          sendEditDiag('brush_mapbox_error', {
+            reason: 'throw',
+            ms_to_error: Date.now() - mapboxT0,
+          });
+          continue;
+        }
+
+        // Fence after every Mapbox await — silent abort if user backed out.
+        if (fenceTriggered()) return { ok: false, error: 'state-changed' };
+
+        // G2 — Mapbox code === 'Ok'. NoMatch / network / 5xx / timeout all reject.
+        if (!r.ok) {
+          rejectedStrokeIds.push(vs.stroke.id);
+          sendEditDiag('brush_mapbox_error', {
+            reason: r.reason,
+            ms_to_error: Date.now() - mapboxT0,
+          });
+          if (firstRejectReason === null) {
+            switch (r.reason) {
+              case 'no-match':
+                firstRejectReason = '未识别到这条路';
+                break;
+              case 'timeout':
+                firstRejectReason = '网络慢,请重试';
+                break;
+              case 'network':
+              case 'rate-limit':
+              case 'auth':
+                firstRejectReason = '网络问题,请重试';
+                break;
+              case 'invalid-input':
+                firstRejectReason = '画笔不符合要求';
+                break;
+              default:
+                firstRejectReason = '未识别到这条路';
+            }
+          }
+          continue;
+        }
+
+        // G0.5 — Mapbox returned Ok but geometry has < 2 points. Rare.
+        const g05 = checkG0_5(r.matchedPoints);
+        if (!g05.ok) {
+          rejectedStrokeIds.push(vs.stroke.id);
+          firstRejectReason ??= '未识别到这条路';
+          sendEditDiag('brush_gate_failure', {
+            gate: g05.gate,
+            reason: g05.reason,
+            stroke_idx: strokeIdx,
+            stroke_vertex_count: pts.length,
+            metric_value: g05.metric_value,
+            threshold: g05.threshold,
+          });
+          continue;
+        }
+
+        // G3 — corridor: every snap point must be within 250m of the stroke.
+        // Defends against the rare Mapbox-snaps-to-far-arterial case
+        // (~0.5% urban per spike-corridor-100v).
+        const g3 = checkG3({ stroke: pts, snap: r.matchedPoints });
+        if (!g3.ok) {
+          rejectedStrokeIds.push(vs.stroke.id);
+          firstRejectReason ??= '画的太远了,试着贴近原路线';
+          sendEditDiag('brush_gate_failure', {
+            gate: g3.gate,
+            reason: g3.reason,
+            stroke_idx: strokeIdx,
+            stroke_vertex_count: pts.length,
+            metric_value: g3.metric_value,
+            threshold: g3.threshold,
+          });
+          continue;
+        }
+
+        const snapped = r.matchedPoints;
+        strokeSnapCache.set(fp, snapped);
+        if (strokeSnapCache.size > 100) {
+          const firstKey = strokeSnapCache.keys().next().value;
+          if (firstKey) strokeSnapCache.delete(firstKey);
+        }
+        snappedPerStroke.push(snapped);
+        acceptedValidated.push(vs);
+      }
+
+      // Fence: bail if state was mutated during await.
+      if (fenceTriggered()) return { ok: false, error: 'state-changed' };
+
+      // v6.3 plan §3.1: multi-stroke partial-failure semantics.
+      // Per-stroke commit, NO atomic rollback. If 0 strokes accepted, surface
+      // the first failure reason; the user keeps draw + undo control.
+      if (acceptedValidated.length === 0) {
+        sendEditDiag('brush_preview_completed', {
+          stroke_count: state.brushStrokes.length,
+          accepted: 0,
+          rejected: rejectedStrokeIds.length,
+          ms_taken: Date.now() - previewT0,
+        });
+        const errMsg = firstRejectReason ?? '未识别到这条路';
+        set({
+          lastError: errMsg,
+          // Drop the rejected strokes from the canvas (plan §4.3).
+          brushStrokes: get().brushStrokes.filter(
+            s => !rejectedStrokeIds.includes(s.id),
+          ),
+        });
+        // Plan §4.1: lastError auto-clears after 2.5s.
+        setTimeout(() => {
+          const live = get();
+          if (live.lastError === errMsg) set({ lastError: null });
+        }, LAST_ERROR_AUTO_CLEAR_MS);
+        return { ok: false, error: firstRejectReason ?? 'rejected' };
+      }
+
+      // Splice accepted strokes into the baseline.
+      const newMatched = spliceMatched(baseLine, acceptedValidated, snappedPerStroke);
+
+      // Plan §3 bug fix #2: undo of Preview must rebuild walkedIndex around the
+      // *new* matched line so subsequent endpoint-snap is correct.
+      const newWalkedIndex = new PointCloudIndex(
+        newMatched.map((p, i) => ({
+          lng: p.lng,
+          lat: p.lat,
+          source: 'original' as const,
+          refId: `matched:${i}`,
+        })),
+      );
+
+      const partialRejectMsg = rejectedStrokeIds.length > 0 ? firstRejectReason ?? null : null;
+      set(s => ({
+        // Plan §6.4: rejected strokes vanish from the canvas. Accepted ones
+        // are committed into matchedPoints, so the in-progress array clears.
+        brushStrokes: [],
+        // v6.3: clean Mapbox-only path. No Catmull-Rom fallback. No
+        // low-confidence warning (we either accepted clean or rejected).
+        undoStack: [],
+        activeStrokeId: null,
+        hasCommittedEdit: true,
+        previewMatchedPoints: null,
+        previewIsCurrent: true,
+        matchedPoints: newMatched,
+        workingPoints: deriveWorking(newMatched, s.trimStartFrac, s.trimEndFrac),
+        walkedIndex: newWalkedIndex,
+        // Surface partial-failure to the user as lastError; the accepted
+        // strokes still committed.
+        lastError: partialRejectMsg,
+        lastWarning: null,
+        editOpSeq: s.editOpSeq + 1,
+      }));
+      if (partialRejectMsg) {
+        // Plan §4.1: auto-clear after 2.5s.
+        // R6 C4: capture editOpSeq AFTER set so a subsequent successful
+        // Preview (which bumps editOpSeq) won't have its same-text lastError
+        // wiped by THIS timer firing late.
+        const seqAtSet = get().editOpSeq;
+        setTimeout(() => {
+          const live = get();
+          if (live.lastError === partialRejectMsg && live.editOpSeq === seqAtSet) {
+            set({ lastError: null });
+          }
+        }, LAST_ERROR_AUTO_CLEAR_MS);
+      }
+      sendEditDiag('brush_preview_completed', {
+        stroke_count: state.brushStrokes.length,
+        accepted: acceptedValidated.length,
+        rejected: rejectedStrokeIds.length,
+        ms_taken: Date.now() - previewT0,
+      });
+      return { ok: true };
+    } catch (e: any) {
+      // v6.3 plan §1.2 + R3 C1: top-level catch defends against
+      // unhandled throws from POST-await code (spliceMatched, PointCloudIndex
+      // build, set listeners). Without this, the promise rejects and surfaces
+      // as a yellow box / release crash. Fence is checked first so a
+      // mid-call hardware-back doesn't get mis-classified as a network error.
+      const fenceTrip = (() => {
+        const live = get();
+        return live.sessionId !== startSid || live.editOpSeq !== startSeq;
+      })();
+      if (fenceTrip) return { ok: false, error: 'state-changed' };
+      const errMsg = e?.name === 'AbortError' ? '网络慢,请重试' : '未识别到这条路';
+      set({ lastError: errMsg });
+      setTimeout(() => {
+        const live = get();
+        if (live.lastError === errMsg) set({ lastError: null });
+      }, LAST_ERROR_AUTO_CLEAR_MS);
+      sendEditDiag('brush_mapbox_error', {
+        reason: 'unhandled_throw',
+        ms_to_error: Date.now() - previewT0,
+      });
+      return { ok: false, error: errMsg };
+    } finally {
+      // v6.3 plan §1.2 + R1v3: finally MUST clear isComputing on every path
+      // — success, abort, fence, throw. Without this, a thrown error
+      // mid-await leaves the Preview button permanently disabled.
+      set({ isComputing: false });
+    }
   },
 
   async saveAndExit() {
@@ -1818,6 +1958,11 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       finalLengthM: polylineLengthM(newWorking),
       originalLengthM: polylineLengthM(writeOriginal),
       segmentCount: 1,
+    });
+    sendEditDiag('brush_save_committed', {
+      stroke_count: 0, // strokes were drained at Preview commit
+      distance_m: polylineLengthM(newWorking),
+      has_alt: newWorking.some(p => p.alt != null),
     });
     if (state.enteredAtTs) {
       logEditExited({

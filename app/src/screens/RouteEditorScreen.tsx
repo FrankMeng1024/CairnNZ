@@ -51,6 +51,10 @@ let MapView: any = null;
 let CameraComponent: any = null;
 let LineLayer: any = null;
 let ShapeSource: any = null;
+// v6.3 plan §2.3: optional Terrain DEM components. Older @rnmapbox/maps
+// builds may not export them — guarded `?? null` keeps the screen working.
+let RasterDemSource: any = null;
+let TerrainComponent: any = null;
 if (Platform.OS !== 'web') {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -59,6 +63,8 @@ if (Platform.OS !== 'web') {
     CameraComponent = Mapbox.Camera;
     LineLayer = Mapbox.LineLayer;
     ShapeSource = Mapbox.ShapeSource;
+    RasterDemSource = Mapbox.RasterDemSource ?? null;
+    TerrainComponent = Mapbox.Terrain ?? null;
   } catch {
     // Not available — fallback panel renders.
   }
@@ -84,7 +90,9 @@ export function RouteEditorScreen() {
 
   const [name, setName] = useState('');
   const [snapWarning, setSnapWarning] = useState(false);
-  const [sessionTrackPoints, setSessionTrackPoints] = useState<Array<{ lat: number; lng: number }>>([]);
+  const [sessionTrackPoints, setSessionTrackPoints] = useState<
+    Array<{ lat: number; lng: number; alt?: number | null }>
+  >([]);
   const [editMode, setEditMode] = useState(false);
   const [enterEditLoading, setEnterEditLoading] = useState(false);
   const [enterEditError, setEnterEditError] = useState<string | null>(null);
@@ -175,17 +183,26 @@ export function RouteEditorScreen() {
   // v243: apply the SAME Kalman + filter smoothing the activity detail
   // screen uses for its polyline. Without this, save-as-route shows raw
   // GPS while the activity page showed smoothed — visual mismatch.
+  // v6.3 plan §2.2: preserve `alt` through every strip step. GPS produces
+  // altitude per fix; without it, save-as-route loses elevation profile.
   useEffect(() => {
     if (!fromSessionId) return;
-    const sourcePromise: Promise<Array<{ lat: number; lng: number; accuracy?: number; t?: number }>> =
+    const sourcePromise: Promise<
+      Array<{ lat: number; lng: number; alt?: number | null; accuracy?: number; t?: number }>
+    > =
       fromSessionTrackPoints && fromSessionTrackPoints.length >= 2
         ? Promise.resolve(fromSessionTrackPoints.map((p: any) => ({
             lat: p.lat, lng: p.lng,
+            alt: p.alt ?? null,
             accuracy: p.accuracy, t: p.t,
           })))
         : loadTrackPoints(fromSessionId).then(pts =>
             (pts ?? []).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng))
-              .map(p => ({ lat: p.lat, lng: p.lng, accuracy: (p as any).accuracy, t: (p as any).t })),
+              .map(p => ({
+                lat: p.lat, lng: p.lng,
+                alt: (p as any).alt ?? null,
+                accuracy: (p as any).accuracy, t: (p as any).t,
+              })),
           );
     sourcePromise
       .then((tp) => {
@@ -196,9 +213,13 @@ export function RouteEditorScreen() {
         }
         const smoothed = smoothTrackPoints(tp);
         if (smoothed.length >= 2) {
-          setSessionTrackPoints(smoothed.map(p => ({ lat: p.lat, lng: p.lng })));
+          setSessionTrackPoints(smoothed.map((p, i) => ({
+            lat: p.lat, lng: p.lng,
+            // smoothTrackPoints does not propagate alt — re-attach by index.
+            alt: tp[i]?.alt ?? null,
+          })));
         } else {
-          setSessionTrackPoints(tp.map(p => ({ lat: p.lat, lng: p.lng })));
+          setSessionTrackPoints(tp.map(p => ({ lat: p.lat, lng: p.lng, alt: p.alt ?? null })));
           setSnapWarning(true);
         }
       })
@@ -300,6 +321,62 @@ export function RouteEditorScreen() {
       sw: [minLng, minLat] as [number, number],
     };
   }, [existingRoute, sessionTrackPoints]);
+
+  // v6.3 plan §2.3: backfill DEM altitudes onto matchedPoints whose `alt`
+  // is null/undefined (Mapbox snap segments, partial-knowledge stitches).
+  // Original GPS-sourced alt values are kept (the action protects them).
+  // Retry policy: 200ms × 3 — DEM tiles may not be loaded immediately
+  // after the camera moves. graceful: still-null → leave as null.
+  useEffect(() => {
+    if (!editIsOpen) return;
+    if (!RasterDemSource || !TerrainComponent) return; // SDK lacks Terrain
+    if (!editMatchedPoints || editMatchedPoints.length < 2) return;
+    const targetIdxs: number[] = [];
+    for (let i = 0; i < editMatchedPoints.length; i++) {
+      if (editMatchedPoints[i].alt == null) targetIdxs.push(i);
+    }
+    if (targetIdxs.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const view = mapViewRef.current;
+      if (!view || typeof view.queryTerrainElevation !== 'function') return;
+      const altitudes: Array<number | null> = editMatchedPoints.map(p =>
+        typeof p.alt === 'number' ? p.alt : null,
+      );
+      // Up to 3 attempts, 200ms apart, only re-querying still-null indices.
+      for (let attempt = 0; attempt < 3 && !cancelled; attempt++) {
+        let stillNull = 0;
+        for (const i of targetIdxs) {
+          if (altitudes[i] != null) continue;
+          try {
+            const r = await view.queryTerrainElevation([
+              editMatchedPoints[i].lng,
+              editMatchedPoints[i].lat,
+            ]);
+            if (typeof r === 'number' && Number.isFinite(r)) {
+              altitudes[i] = r;
+            } else {
+              stillNull += 1;
+            }
+          } catch {
+            stillNull += 1;
+          }
+          if (cancelled) return;
+        }
+        if (stillNull === 0) break;
+        if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      if (cancelled) return;
+      try {
+        useRouteEditStore.getState().applyMatchedAltitudes(altitudes);
+      } catch {
+        /* applyMatchedAltitudes is best-effort; never throw to UI */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editIsOpen, editMatchedPoints]);
 
   // ── Enter edit mode
   const enterEdit = useCallback(async () => {
@@ -431,7 +508,10 @@ export function RouteEditorScreen() {
       const draft = useRouteEditStore.getState().committedDraft;
       const targetId = routeId; // existing route id; null for save-as-route
       // Decide which polyline to persist.
-      const finalPoints: Array<{ lat: number; lng: number }> =
+      // v6.3 plan §2.2: alt is preserved end-to-end. draft.workingPoints carry
+      // alt from the original GPS / DEM-backfilled Mapbox snap; falling back
+      // to existingRoute or sessionTrackPoints, both of which now also carry alt.
+      const finalPoints: Array<{ lat: number; lng: number; alt?: number | null }> =
         draft && draft.workingPoints.length >= 2
           ? draft.workingPoints
           : (existingRoute?.points ?? sessionTrackPoints);
@@ -447,10 +527,28 @@ export function RouteEditorScreen() {
           { lat: finalPoints[i].lat, lng: finalPoints[i].lng },
         );
       }
+      // v6.3 plan §2.5: recompute elevationGain from the final alt sequence.
+      // Each consecutive positive delta contributes to gain; null/undefined
+      // alt segments are skipped (cannot infer elevation across unknown gaps).
+      let elevationGainM = 0;
+      for (let i = 1; i < finalPoints.length; i++) {
+        const a = finalPoints[i - 1].alt;
+        const b = finalPoints[i].alt;
+        if (typeof a === 'number' && typeof b === 'number' && Number.isFinite(a) && Number.isFinite(b)) {
+          const d = b - a;
+          if (d > 0) elevationGainM += d;
+        }
+      }
 
       let savedRouteId: string | undefined = targetId;
       if (targetId) {
-        await updateRoute(targetId, { name: trimmed, points: finalPoints, distanceM: dist }).catch((e: any) => {
+        await updateRoute(targetId, {
+          name: trimmed,
+          points: finalPoints,
+          distanceM: dist,
+          // v6.3 plan §2.5: also persist recomputed elevation gain.
+          elevationGainM,
+        }).catch((e: any) => {
           throw e;
         });
       } else {
@@ -460,7 +558,9 @@ export function RouteEditorScreen() {
           points: finalPoints,
           waypoints: [],
           distanceM: dist,
-          elevationGainM: session?.elevationGainM ?? 0,
+          // v6.3 plan §2.5: prefer the recomputed gain (reflects post-edit
+          // geometry) over the raw session aggregate.
+          elevationGainM: elevationGainM > 0 ? elevationGainM : (session?.elevationGainM ?? 0),
         });
         if (!createdId) {
           Alert.alert('Save failed', 'Could not save route — check your connection.');
@@ -575,6 +675,20 @@ export function RouteEditorScreen() {
             pitchEnabled={!isEditing || editActiveTool === 'pan'}
             rotateEnabled={!isEditing || editActiveTool === 'pan'}
           >
+            {/* v6.3 plan §2.3: enable Terrain DEM so queryTerrainElevation()
+                returns real altitudes for Mapbox-snap polylines. Optional —
+                falls through if the SDK build doesn't export RasterDemSource. */}
+            {RasterDemSource && TerrainComponent && (
+              <>
+                <RasterDemSource
+                  id="mapbox-dem"
+                  url="mapbox://mapbox.mapbox-terrain-dem-v1"
+                  tileSize={514}
+                  maxZoomLevel={14}
+                />
+                <TerrainComponent sourceID="mapbox-dem" exaggeration={1} />
+              </>
+            )}
             {CameraComponent && (() => {
               // Camera mount priority — never fall back to Mapbox global default.
               //  1. Route bounds → fitBounds (best framing of edited geometry)

@@ -22,7 +22,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { EditSegment } from './LocalRouteExtras';
 
-const STORAGE_KEY = '@cairn:edit_session_active';
+// v6.3 plan §1.6 / R3 C2: dedicated v6.3 storage key isolates the in-flight
+// edit-session shape from anything v249-v255 may have left in AsyncStorage.
+// Pre-v6.3 sessions were stored under the legacy key below; we never read
+// from it (those drafts can use Mapbox snap fields v6.3 won't honor) and
+// the loadSession schemaVersion gate also rejects any unversioned blob.
+const STORAGE_KEY = '@cairn:edit_session_active_v6_3';
+const LEGACY_STORAGE_KEY = '@cairn:edit_session_active';
+/**
+ * Schema version of the persisted snapshot. Bump on any breaking change to
+ * `EditSessionSnapshot`. loadSession() rejects (and clears) any stored blob
+ * whose schemaVersion does not match — protects forward / backward callers
+ * from reading data they cannot interpret.
+ */
+export const EDIT_SESSION_SCHEMA_VERSION = 1;
+
 const TTL_MS = 24 * 60 * 60 * 1000; // 24h
 // v4-audit (ARCH-016): allow up to 5min reverse clock skew (NTP
 // correction, DST not-using-UTC, sub-second jitter) before declaring
@@ -36,6 +50,13 @@ export interface PersistedViaPoint {
 }
 
 export interface EditSessionSnapshot {
+  /**
+   * v6.3: persisted blob's schema version. Required. Must equal
+   * EDIT_SESSION_SCHEMA_VERSION at load — mismatched / missing blobs are
+   * cleared. Older v249-v255 sessions wrote no schemaVersion and were
+   * stored under a different key, so they cannot reach this loader.
+   */
+  schemaVersion: typeof EDIT_SESSION_SCHEMA_VERSION;
   sessionId: string;
   routeId: string;
   enteredAt: number;
@@ -95,7 +116,11 @@ function notifyFailureListeners(count: number): void {
   }
 }
 
-export async function saveSession(snapshot: Omit<EditSessionSnapshot, 'lastEditAt'>): Promise<void> {
+export async function saveSession(
+  // schemaVersion + lastEditAt are stamped by saveSession itself; callers
+  // never set them.
+  snapshot: Omit<EditSessionSnapshot, 'lastEditAt' | 'schemaVersion'>,
+): Promise<void> {
   // v8-audit (V7-BUG-003): symmetric validation with loadSession.
   const r = snapshot.flagsSnapshot?.editCorridorRadiusMeters;
   if (typeof r !== 'number' || !Number.isFinite(r) || r <= 0) {
@@ -139,6 +164,8 @@ export async function saveSession(snapshot: Omit<EditSessionSnapshot, 'lastEditA
   try {
     const payload: EditSessionSnapshot = {
       ...snapshot,
+      // v6.3: stamp schema version so loadSession can verify on read.
+      schemaVersion: EDIT_SESSION_SCHEMA_VERSION,
       lastEditAt: Date.now(),
     };
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -178,10 +205,33 @@ export async function saveSession(snapshot: Omit<EditSessionSnapshot, 'lastEditA
 }
 
 export async function loadSession(): Promise<EditSessionSnapshot | null> {
+  // v6.3 plan §1.6 / R3 C2 / R6 C1: legacy v249-v255 blob cleanup MUST run
+  // unconditionally on every load — including the path where v6.3 has its
+  // own valid blob, otherwise downgrade→reinstall leaves a permanent
+  // orphan under the legacy key.
+  try {
+    await AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    /* ignore — best-effort */
+  }
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as EditSessionSnapshot;
+    // v6.3 plan §1.6 / R3 C2: schemaVersion gate. Any blob written by an
+    // older build (no schemaVersion) or a future build (different version)
+    // is rejected and cleared — never silently load incompatible state.
+    if (parsed.schemaVersion !== EDIT_SESSION_SCHEMA_VERSION) {
+      // R6 C1: also clear the legacy key here in case future schema bumps
+      // create a similar lingering-orphan situation.
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      try {
+        await AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+      return null;
+    }
     // v6-audit (FUNC-006): require flagsSnapshot. v3-format sessions
     // without it cannot be safely resumed because we'd silently apply
     // the current corridor radius (which may differ from what the user
@@ -263,6 +313,13 @@ export async function loadSession(): Promise<EditSessionSnapshot | null> {
 export async function clearSession(): Promise<void> {
   try {
     await AsyncStorage.removeItem(STORAGE_KEY);
+    // v6.3 R3 C2 cleanup: also clear the legacy v249-v255 key on every
+    // explicit clear. Best-effort — never throws.
+    try {
+      await AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
   } catch {
     // ignore
   }
