@@ -452,7 +452,14 @@ namespace Cairn.AR
             if (_sphereMesh != null) return _sphereMesh;
             var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             _sphereMesh = go.GetComponent<MeshFilter>().sharedMesh;
+            // v0.2.4 batch fix: Destroy is deferred to next frame, in batch
+            // mode that means the GO lingers in the scene and gets captured.
+            // DestroyImmediate kills it here and now.
+#if UNITY_EDITOR
+            UnityEngine.Object.DestroyImmediate(go);
+#else
             Destroy(go);
+#endif
             return _sphereMesh;
         }
         static Mesh GetCubeMesh()
@@ -460,7 +467,11 @@ namespace Cairn.AR
             if (_cubeMesh != null) return _cubeMesh;
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             _cubeMesh = go.GetComponent<MeshFilter>().sharedMesh;
+#if UNITY_EDITOR
+            UnityEngine.Object.DestroyImmediate(go);
+#else
             Destroy(go);
+#endif
             return _cubeMesh;
         }
         static Mesh GetConeMesh()
