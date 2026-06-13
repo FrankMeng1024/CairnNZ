@@ -172,11 +172,9 @@ namespace Cairn.AR.Editor
             // V4.5 fix: 0 → 0.10 弱化保留(关全没让丝带整体亮度降低,在白底下不可见)
             ribMat.SetFloat("_BandIntensity", 0.10f);
             // V5.5 fix(回归测):全部 V5.4/V2.5 临时关掉验证 ribbon 是否能渲染
-            // FresnelStrength=0 → 不影响 alpha
-            // SoftParticleFade=0 → kill switch off 跳过 depth sample
-            ribMat.SetFloat("_FresnelPower",     2.5f);
-            ribMat.SetFloat("_FresnelStrength",  0.0f);
-            ribMat.SetFloat("_SoftParticleFade", 0.0f);
+            // V5.8 删(sub#1 BLOCKER): shader V5.5 已回退,_FresnelPower/_FresnelStrength/_SoftParticleFade
+            //   property 不存在 → SetFloat silent no-op,误导 reader 以为 shader 在做 fresnel
+            //   V2.3 fresnel 现在在 SilkRibbonV2.cs C# 路径(line ~331,viewPitch alpha)
 
             int typeId = TypeIdToInt(t.id);
             var runeMat = new Material(runeShader) { name = "RuneSDF_" + t.id };
@@ -313,8 +311,10 @@ namespace Cairn.AR.Editor
 
             // Set globals
             Shader.SetGlobalFloat("_CairnGlobalDayNightT", 0.0f);
-            // V2.5: 默认 ambient luma 0.7(白底亮天),让 saturation +10% 生效
-            Shader.SetGlobalFloat("_CairnGlobalAmbientLuma", 0.70f);
+            // V5.8 删 dead code(sub#1+sub#2 发现):
+            //   _CairnGlobalAmbientLuma — shader 端从未声明也无人读取,纯 orphan
+            //   _FresnelPower / _FresnelStrength / _SoftParticleFade — V5.5 shader 已回退,property 不存在,SetFloat silent no-op
+            // V5.8 V2.5 光感自适应改在 SilkRibbonV2.cs C# 路径(读 RenderSettings.ambientLight,line 242)
             Shader.SetGlobalFloat("_CairnGlobalCamDist",   2.5f);
             Shader.SetGlobalFloat("_CairnGlobalAlpha",        1.0f);
             Shader.SetGlobalFloat("_CairnGlobalThermalScale", 1.0f);
@@ -629,8 +629,10 @@ namespace Cairn.AR.Editor
         void Awake()
         {
             Shader.SetGlobalFloat("_CairnGlobalDayNightT", 0.0f);
-            // V2.5: 默认 ambient luma 0.7(白底亮天),让 saturation +10% 生效
-            Shader.SetGlobalFloat("_CairnGlobalAmbientLuma", 0.70f);
+            // V5.8 删 dead code(sub#1+sub#2 发现):
+            //   _CairnGlobalAmbientLuma — shader 端从未声明也无人读取,纯 orphan
+            //   _FresnelPower / _FresnelStrength / _SoftParticleFade — V5.5 shader 已回退,property 不存在,SetFloat silent no-op
+            // V5.8 V2.5 光感自适应改在 SilkRibbonV2.cs C# 路径(读 RenderSettings.ambientLight,line 242)
             Shader.SetGlobalFloat("_CairnGlobalCamDist",   2.5f);
             Shader.SetGlobalFloat("_CairnGlobalAlpha",        1.0f);
             Shader.SetGlobalFloat("_CairnGlobalThermalScale", 1.0f);
