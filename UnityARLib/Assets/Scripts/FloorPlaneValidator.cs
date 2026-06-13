@@ -43,7 +43,8 @@ namespace Cairn.AR
             float maxNormalAngle = 20f,
             float minAreaM2 = 0.5f,
             float maxHeightBelowCam = 1.0f,
-            float minExtentStableSec = 1.5f)
+            float minExtentStableSec = 1.5f,
+            float maxFloorDistanceBelowCam = 5.0f)
         {
             var result = new Result { isValid = false };
 
@@ -97,6 +98,13 @@ namespace Cairn.AR
             if (belowCam < maxHeightBelowCam)
             {
                 result.rejectReason = "hit_too_high_above_ground";
+                return result;
+            }
+            // V4.13 G2.4 新增 upper bound:plane Y 离 camera 太低 = 错层 / 楼下地面 / 悬崖
+            // 用户铁律 #2 "mark 必须在真实地面" → 5m 以下肯定不是用户站的地面
+            if (belowCam > maxFloorDistanceBelowCam)
+            {
+                result.rejectReason = "hit_too_far_below_camera";
                 return result;
             }
 

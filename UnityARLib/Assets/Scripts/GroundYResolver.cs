@@ -230,6 +230,9 @@ public class GroundYResolver : MonoBehaviour
                 y = plane.center.y;
                 tier = Tier.A;
                 OnTierAObserved();
+                // V4.13 G2.5 埋点 — ground Y 来源 tier 真机对账
+                UnityLogger.IForward("v22-GROUND-Y-SOURCE",
+                    $"tier=A-floor-classified y={y:F2} camY={camY:F2} delta={(camY - y):F2} planeArea={(plane.size.x * plane.size.y):F2}");
                 return true;
             }
             // Pass 2: unclassified-but-large planes
@@ -243,6 +246,8 @@ public class GroundYResolver : MonoBehaviour
                 y = plane.center.y;
                 tier = Tier.A;
                 OnTierAObserved();
+                UnityLogger.IForward("v22-GROUND-Y-SOURCE",
+                    $"tier=A-large-unclassified y={y:F2} camY={camY:F2} delta={(camY - y):F2} planeArea={(plane.size.x * plane.size.y):F2}");
                 return true;
             }
         }
@@ -286,6 +291,8 @@ public class GroundYResolver : MonoBehaviour
                     {
                         y = hitY;
                         tier = Tier.B;
+                        UnityLogger.IForward("v22-GROUND-Y-SOURCE",
+                            $"tier=B-raycast-hit y={y:F2} camY={camY:F2} delta={(camY - y):F2}");
                         return true;
                     }
                 }
@@ -293,6 +300,8 @@ public class GroundYResolver : MonoBehaviour
         }
 
         // No Tier-C. User invariant: never return fictional Y.
+        UnityLogger.IForward("v22-GROUND-Y-SOURCE",
+            $"tier=C-rejected reason=no-floor-plane-or-raycast camY={camY:F2}");
         y = 0f;
         tier = Tier.C;
         return false;

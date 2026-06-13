@@ -598,7 +598,13 @@ namespace Cairn.AR
             }
 
             Vector3 targetPos = GetTargetWorldPos();
-            float fallbackY = _cam.transform.position.y - 1.5f;
+            // V4.13 G2.1 (G1.1 Root Cause #2 修):raycast 优先,1.5m 持机高度仅最后兜底
+            // 旧逻辑:fallbackY = camera.y - 1.5 然后 Min(...,hit.y-0.05) → 没 raycast hit 时
+            // 直接用持机高度,斜坡/蹲下/举高时错 0.2-0.8m,用户原话"离地一段距离"根因
+            // 新逻辑:raycast hit + FloorPlaneValidator pass → 用 hit.y(权威)
+            //         没 hit/没 pass → 才回退 camera.y - 1.5(并埋点 tier=heuristic)
+            float fallbackY = float.NaN;
+            string fallbackTier = "heuristic-camera-minus-1.5";
 
             // A7: observedMinFloor — top-down raycast, 但**必须经过 FloorPlaneValidator**
             // (铁律 #1 修订:L2 仅放距离不放 plane)
@@ -614,12 +620,30 @@ namespace Cairn.AR
                         var v = FloorPlaneValidator.Validate(plane, hits[0].pose.position, _cam.transform.position.y, _lidarAvailable);
                         if (v.isValid)
                         {
-                            // 只有通过 FloorPlaneValidator 才用其 Y(防 L2 锚到桌子/车顶)
-                            fallbackY = Mathf.Min(fallbackY, hits[0].pose.position.y - 0.05f);
+                            // 通过 FloorPlaneValidator 的 raycast hit = Tier-A 权威 ground Y
+                            fallbackY = hits[0].pose.position.y;
+                            fallbackTier = "raycast-hit-floor-validated";
                         }
+                    }
+                    else if (_planeMgr == null)
+                    {
+                        // Depth-only hit (LiDAR / iOS Depth API) — 无 plane 但 hit 真
+                        // pose,信任度高于 camera-1.5 启发
+                        fallbackY = hits[0].pose.position.y;
+                        fallbackTier = "raycast-hit-depth";
                     }
                 }
             }
+
+            // Tier-C 最后兜底:raycast 完全失败才用持机高度启发
+            if (float.IsNaN(fallbackY))
+            {
+                fallbackY = _cam.transform.position.y - 1.5f;
+                fallbackTier = "heuristic-camera-minus-1.5";
+            }
+            // V4.13 G2.5 埋点:ground Y 来源 tier 真机对账
+            UnityLogger.IForward("v22-GROUND-Y-SOURCE",
+                $"id={_markerId} tier={fallbackTier} y={fallbackY:F2} camY={_cam.transform.position.y:F2} delta={(_cam.transform.position.y - fallbackY):F2}");
 
             _fallbackTargetPos = new Vector3(targetPos.x, fallbackY, targetPos.z);
 
