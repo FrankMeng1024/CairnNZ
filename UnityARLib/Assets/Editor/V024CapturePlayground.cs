@@ -312,8 +312,12 @@ namespace Cairn.AR.Editor
                 //   noise: angle = i/N + sin(i*1.3)*0.08 让 ribbon 角度不对称,屏幕投影 distinct
                 // V5.19 sub#2 S10-N1 BLOCKER 修: 0.08 rad ≈ 4.6° 不足以打破对称
                 //   改 0.08 → 0.20 (~11.5°) + Halton-like jitter 让分布更不规律
+                // V5.27 真根因: 6 ribbon 360° 让前后排叠加 cluster,改前 270° 分布
+                //   让 ribbon 主要在前半,后半 90° 留空,前面 4-5 根真主导视觉
+                //   覆盖 -135° 到 +135° (270° 弧) 而非整圆
                 float angleNoise = (Mathf.Sin(i * 1.3f) + Mathf.Cos(i * 2.7f) * 0.5f) * 0.20f;
-                float angle = ((i / (float)RIBBON_COUNT) + angleNoise) * Mathf.PI * 2f;
+                float angle = ((i / (float)RIBBON_COUNT) * 0.75f + 0.125f + angleNoise) * Mathf.PI * 2f;
+                // 0.75 = 270°/360°, 0.125 = 偏移让中心对准相机 (cam 在 -Z 方向)
                 var rgo = new GameObject($"Ribbon_{i}");
                 rgo.transform.SetParent(root.transform, false);
                 // V5.15 ROLLBACK ribbon transform.y 0.35→0 (sub#2 S6-N5 BLOCKER):
