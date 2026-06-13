@@ -209,8 +209,46 @@ namespace Cairn.AR.Editor
             // Ceremony flipbook (use cairn cluster, animate camera/material params per frame)
             CaptureCeremony(cam);
 
+            // 60-frame cairn animation flipbook: ribbons rising + particles emitting + flow noise
+            CaptureAnimationFlipbook(cam);
+
             Debug.Log("[v024-CAP] === DONE ===");
             if (Application.isBatchMode) EditorApplication.Exit(0);
+        }
+
+        /// <summary>
+        /// 60 frames @ 30fps → 2 second animation. Each frame:
+        ///   * Advance _CairnAnimTime so shader flow noise scrolls
+        ///   * Tick all SilkRibbonV2 + TypeParticleController forward
+        ///   * Render + save
+        /// </summary>
+        static void CaptureAnimationFlipbook(Camera cam)
+        {
+            string animDir = $"{OUT_DIR}/anim";
+            Directory.CreateDirectory(animDir);
+
+            var t = TYPES[0];  // cairn
+            Vector3 clusterPos = new Vector3((0 - 2) * 3f, 0f, 0f);
+            cam.transform.position = clusterPos + new Vector3(0f, 1.4f, -2.8f);
+            cam.transform.LookAt(clusterPos + new Vector3(0f, 0.85f, 0f));
+
+            var clusterRoot = GameObject.Find($"Cluster_{t.id}");
+            if (clusterRoot == null) return;
+
+            var ribbons = clusterRoot.GetComponentsInChildren<Cairn.AR.SilkRibbonV2>();
+            var parts   = clusterRoot.GetComponentsInChildren<Cairn.AR.TypeParticleController>();
+
+            const int FRAMES = 60;
+            const float DT = 1f / 30f;  // 30fps
+
+            for (int f = 0; f < FRAMES; f++)
+            {
+                Shader.SetGlobalFloat("_CairnAnimTime", f * DT + 0.5f);
+                foreach (var rb in ribbons) rb.EditorManualTick(DT);
+                foreach (var pc in parts)   pc.EditorManualTick(DT);
+                for (int sub = 0; sub < 2; sub++) cam.Render();
+                CaptureCameraToPng(cam, $"{animDir}/frame-{f:D2}.png");
+            }
         }
 
         static void CaptureCeremony(Camera cam)
