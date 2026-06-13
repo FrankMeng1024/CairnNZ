@@ -1,0 +1,12 @@
+site:developer.apple.com ARWorldMap relocalization
+ARKit ARWorldMap longevity months years iOS update
+"ARWorldMap" "relocalization" success rate experiment
+"ARCore Geospatial" VPS accuracy meters horizontal heading
+ARCore Geospatial API documentation accuracy claim
+"sub-meter" OR "1 meter" ARCore Geospatial outdoor accuracy
+iPhone GNSS L5 dual frequency accuracy test 2024
+"GPSTest" L1 L5 dual frequency Pixel iPhone outdoor meters
+Pokemon GO GPS drift complaint lost gym pokestop
+8th Wall shutdown VPS sunset 2025 timeline
+Niantic VPS coverage New Zealand list cities
+ARCore Geospatial supported countries list 2024 2025

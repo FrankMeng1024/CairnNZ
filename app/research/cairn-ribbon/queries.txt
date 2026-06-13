@@ -1,0 +1,12 @@
+Death Stranding chiral cloud BB pod visual effect shader Decima engine ribbon
+Sky Children of the Light spirit beacon light pillar VFX shader thatgamecompany
+Genshin Impact elemental aura particle ribbon shader miHoYo
+Pokemon GO PokeStop spinning column AR pillar Niantic visual effect
+Pikmin Bloom flower beacon pillar AR Niantic visual effect
+Doctor Strange rune trail VFX Houdini ribbon spell circle
+Returnal Hades soul rising particle column Unreal Engine VFX
+Niantic 8th Wall AR ribbon column visual effect tutorial
+Unity VFX Graph stretched billboard ribbon light shader URP
+Unity ParticleSystem stretched billboard light shaft URP shader graph
+Unity URP additive transparent shader daylight visibility AR
+Unity AR Foundation 6 visual effects mobile performance 30fps

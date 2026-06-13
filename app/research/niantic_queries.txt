@@ -1,0 +1,12 @@
+Pokemon GO ARKit worldAlignment GravityAndHeading Unity implementation
+Pokemon GO AR+ mode ARKit ARWorldMap persistence
+Niantic Lightship VPS Visual Positioning System how it works
+Niantic Lightship ARDK developer API public availability
+Pokemon GO spawn pokemon GPS bearing distance heading compass
+ARFoundation worldAlignment GravityAndHeading vs Gravity difference
+Viro React ViroARSceneNavigator worldAlignment default value
+Unity ARFoundation ARKit ARSession worldAlignment configuration
+8th Wall AR location-based persistence GPS anchor
+Snapchat Lens Studio location AR landmarker world effect
+ARWorldMap save load cross-session iOS limitations
+Unity AR Foundation 6 ARKit world alignment heading default

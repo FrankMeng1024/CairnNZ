@@ -1,0 +1,13 @@
+SuperPoint SuperGlue mobile inference iPhone benchmark performance 2025
+LoFTR detector-free image matching mobile CoreML TFLite export
+DUSt3R MASt3R 3D reconstruction outdoor visual localization 2025
+visual place recognition NetVLAD mobile inference ONNX iPhone Android
+hloc hierarchical localization pipeline open source self hosted
+COLMAP self-hosted visual localization server outdoor accuracy
+image feature matching outdoor lighting variation seasonal benchmark
+visual localization 7-Scenes Aachen Day-Night benchmark accuracy meters
+mobile feature extraction ONNX export CoreML TFLite cross-platform
+mast3r-sfm reconstruction speed accuracy small dataset outdoor
+WiLDLOC outdoor visual localization benchmark hiking forest accuracy
+ARKit ARCore camera pose intrinsics extraction for visual localization
+self-hosted visual positioning system open source github 2025

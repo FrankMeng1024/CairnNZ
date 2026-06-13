@@ -25,12 +25,12 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _BaseFadeStart: 0.05
+    - _BaseFadeStart: 0.18
     - _Height: 1.6
-    - _MaxAlpha: 0.55
+    - _MaxAlpha: 0.5
     - _OutlineWidth: 0.012
-    - _RimSharpness: 3
-    - _TipFadeStart: 0.7
+    - _RimSharpness: 4
+    - _TipFadeStart: 0.55
     m_Colors:
     - _OutlineColor: {r: 0.16899997, g: 0.09399996, b: 0.06299998, a: 1}
   m_BuildTextureStacks: []

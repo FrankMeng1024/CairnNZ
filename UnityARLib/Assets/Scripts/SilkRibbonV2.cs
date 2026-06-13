@@ -227,19 +227,9 @@ namespace Cairn.AR
             _mr.enabled = true;
 
             // Global fade (lift-off + retreat)
-            // V2.4 三段生命周期(用户原话:"渐入浅色 + 淡出"):
-            //   阶段A 0.00-0.15: 出生 fade-in
-            //   阶段B 0.15-0.65: 稳定饱和(baseTint 主导)
-            //   阶段C 0.65-0.85: 渐入浅色(色调 lerp 到 tipTint,体现"越往上越淡")
-            //   阶段D 0.85-1.00: 整体 alpha fade-out
             float globalFade = 1f;
             if (lifeT < 0.15f) globalFade = lifeT / 0.15f;
             else if (lifeT > 0.85f) globalFade = (1f - lifeT) / 0.15f;
-            // V2.4: time-based 颜色淡化 — 0.65 之前全 baseTint,0.65→1.0 lerp 60% 到 tipTint
-            // 视觉:ribbon 升到中段后整体偏白(电影丝绸感的"渐入浅色")
-            float lifeColorLerp = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((lifeT - 0.65f) / 0.35f));
-            Color lifeBlendedBase = Color.Lerp(_baseTint, _tipTint, lifeColorLerp * 0.6f);
-            Color lifeBlendedTip  = Color.Lerp(_tipTint,  Color.white, lifeColorLerp * 0.3f);
 
             float baseX = Mathf.Cos(_angleRad) * _ringRadius * 1.05f;
             float baseZ = Mathf.Sin(_angleRad) * _ringRadius * 1.05f;
@@ -321,17 +311,15 @@ namespace Cairn.AR
                 float aCenter   = heightAlpha * 1.0f;
 
                 // Color: base tint (halo + edges), brighter core (slight white)
-                // V2.4 用 lifeBlendedBase / lifeBlendedTip 替代 _baseTint / _tipTint
-                // (lifeT > 0.65 时颜色 lerp 向白色,体现"渐入浅色"第三段)
-                float coreR = Mathf.Min(1f, lifeBlendedBase.r * 1.4f + 0.15f);
-                float coreG = Mathf.Min(1f, lifeBlendedBase.g * 1.4f + 0.15f);
-                float coreB = Mathf.Min(1f, lifeBlendedBase.b * 1.4f + 0.20f);
+                float coreR = Mathf.Min(1f, _baseTint.r * 1.4f + 0.15f);
+                float coreG = Mathf.Min(1f, _baseTint.g * 1.4f + 0.15f);
+                float coreB = Mathf.Min(1f, _baseTint.b * 1.4f + 0.20f);
 
-                _colors[idx + 0] = new Color(lifeBlendedBase.r, lifeBlendedBase.g, lifeBlendedBase.b, aHaloEdge);
-                _colors[idx + 1] = new Color(lifeBlendedBase.r, lifeBlendedBase.g, lifeBlendedBase.b, aHaloIn);
+                _colors[idx + 0] = new Color(_baseTint.r, _baseTint.g, _baseTint.b, aHaloEdge);
+                _colors[idx + 1] = new Color(_baseTint.r, _baseTint.g, _baseTint.b, aHaloIn);
                 _colors[idx + 2] = new Color(coreR, coreG, coreB, aCenter);
-                _colors[idx + 3] = new Color(lifeBlendedBase.r, lifeBlendedBase.g, lifeBlendedBase.b, aHaloIn);
-                _colors[idx + 4] = new Color(lifeBlendedBase.r, lifeBlendedBase.g, lifeBlendedBase.b, aHaloEdge);
+                _colors[idx + 3] = new Color(_baseTint.r, _baseTint.g, _baseTint.b, aHaloIn);
+                _colors[idx + 4] = new Color(_baseTint.r, _baseTint.g, _baseTint.b, aHaloEdge);
             }
 
             _mesh.Clear();

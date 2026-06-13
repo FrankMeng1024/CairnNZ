@@ -41,8 +41,8 @@ Material:
     - _NightMul: 1.6
     - _PhaseOffset: 0
     - _RimSharpness: 3.2
-    - _TipFadeStart: 0.45
-    - _TipPower: 2.2
+    - _TipFadeStart: 0.3
+    - _TipPower: 3.5
     m_Colors:
     - _TypeRimTint: {r: 1, g: 0.85, b: 0.54999995, a: 1}
   m_BuildTextureStacks: []

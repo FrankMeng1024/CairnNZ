@@ -1,0 +1,12 @@
+Pokemon Go AR mode camera spawn position relative to player heading
+Pokemon Go uses ARKit world tracking or just GPS overlay
+Niantic Lightship ARDK gravity heading world alignment
+ARKit ARWorldAlignmentGravityAndHeading magnetic compass true north
+Pokemon Go AR+ mode uses ARKit raycast plane detection
+Viro React Native ARSceneNavigator worldAlignment Gravity GravityAndHeading
+react-native-viro ViroARScene worldAlignment property documentation
+Why Pokemon Go pokemon stay in same place relative to player AR
+ARKit GravityAndHeading compass drift accuracy outdoor
+Niantic Refined GPS Pokemon Go AR placement mechanism
+Mapbox Unity AR location based content placement
+Adventure AR location anchored content GPS heading bearing

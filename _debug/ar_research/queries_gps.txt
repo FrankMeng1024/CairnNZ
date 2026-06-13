@@ -1,0 +1,11 @@
+iPhone 14 15 Pro GPS accuracy meters outdoor benchmark 2024 2025
+iPhone GNSS L1 L5 dual frequency accuracy real world test
+Pixel 8 Android GPS accuracy outdoor benchmark hiking
+iPhone IMU magnetometer barometer fusion indoor outdoor positioning accuracy
+GPS HDOP New Zealand outdoor mountain valley accuracy
+iPhone CMHeadingTrueNorth magnetic declination accuracy hiking
+RTK GNSS smartphone consumer 2025 sub-meter accuracy
+ARKit world tracking GPS fusion CoreLocation accuracy
+GPS bearing yaw recovery from IMU smartphone outdoor
+smartphone barometric altitude relative accuracy meters
+geomagnetic anomaly New Zealand magnetic declination 2025

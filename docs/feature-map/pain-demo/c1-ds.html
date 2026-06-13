@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>C1 · Jamie 雨夜走错岔 — DS Glass</title>
+<style>
+  :root{
+    --bg:#0a0c14;
+    --bg2:#11141d;
+    --glass:rgba(255,255,255,.04);
+    --glass-stroke:rgba(255,255,255,.08);
+    --ink:#e6e9f0;
+    --ink-soft:#9aa4b8;
+    --ink-faint:#5a6478;
+    --chiral:#7fdacd;
+    --chiral-glow:rgba(127,218,205,.35);
+    --warm:#f5b97a;
+    --gap:#e87878;
+    --moss:#a4d28a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:radial-gradient(1200px 800px at 50% 20%, #141826, var(--bg) 60%);
+    color:var(--ink);
+    font-family:"Inter","PingFang SC",sans-serif;
+    min-height:100vh;
+    display:flex;align-items:center;justify-content:center;
+    padding:48px 24px;
+  }
+  .stage{width:min(960px,100%)}
+  .meta{
+    display:flex;gap:12px;align-items:center;
+    color:var(--ink-faint);font-size:11px;letter-spacing:.18em;
+    margin-bottom:14px;text-transform:uppercase;
+  }
+  .meta b{color:var(--chiral);letter-spacing:.22em}
+
+  .card{
+    position:relative;
+    background:var(--glass);
+    backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px);
+    border:1px solid var(--glass-stroke);
+    border-radius:14px;
+    padding:34px 38px 28px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,.06) inset,
+      0 30px 80px -30px rgba(0,0,0,.7);
+    overflow:hidden;
+    transition:padding .35s ease;
+  }
+  .card::before{
+    content:"";position:absolute;inset:-1px;border-radius:14px;
+    background:linear-gradient(160deg, rgba(127,218,205,.12), transparent 35%, rgba(245,185,122,.08));
+    pointer-events:none;mix-blend-mode:screen;
+  }
+
+  .head{display:flex;justify-content:space-between;gap:24px;align-items:flex-start}
+  .head h1{
+    margin:0;font-size:28px;font-weight:500;letter-spacing:-.01em;
+    line-height:1.3;color:var(--ink);
+  }
+  .head h1 small{
+    display:block;color:var(--ink-soft);font-weight:400;font-size:13px;
+    letter-spacing:.04em;margin-top:8px;
+  }
+  .badge{
+    display:inline-flex;align-items:center;gap:7px;
+    padding:5px 11px;border:1px solid var(--glass-stroke);border-radius:99px;
+    font-size:10px;letter-spacing:.18em;color:var(--chiral);
+    background:rgba(127,218,205,.06);text-transform:uppercase;
+  }
+  .badge .dot{
+    width:6px;height:6px;border-radius:99px;background:var(--chiral);
+    box-shadow:0 0 8px var(--chiral-glow);
+  }
+
+  .summary{
+    margin-top:24px;padding-top:24px;border-top:1px solid var(--glass-stroke);
+    display:grid;grid-template-columns:1fr auto 1fr;gap:28px;align-items:center;
+    font-size:14px;line-height:1.65;color:var(--ink-soft);
+  }
+  .summary .col h3{
+    margin:0 0 6px;font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-faint);font-weight:500;
+  }
+  .summary .col p{margin:0;color:var(--ink)}
+  .summary .arrow{
+    width:38px;height:1px;background:var(--ink-faint);position:relative;opacity:.5
+  }
+  .summary .arrow::after{
+    content:"";position:absolute;right:-1px;top:-3px;
+    width:7px;height:7px;border-right:1px solid var(--ink-faint);border-top:1px solid var(--ink-faint);
+    transform:rotate(45deg);
+  }
+
+  .scores{
+    margin-top:22px;display:flex;gap:22px;flex-wrap:wrap;
+    font-size:12px;color:var(--ink-soft);
+  }
+  .score{display:flex;align-items:center;gap:8px}
+  .score b{color:var(--ink);font-weight:500}
+  .bar{position:relative;width:90px;height:4px;background:rgba(255,255,255,.05);border-radius:99px;overflow:hidden}
+  .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--warm);border-radius:99px;
+    box-shadow:0 0 8px rgba(245,185,122,.4)}
+  .bar.target i{background:var(--chiral);box-shadow:0 0 10px var(--chiral-glow)}
+  .hint{color:var(--ink-faint);font-size:11px;letter-spacing:.08em}
+
+  .detail{
+    max-height:0;opacity:0;overflow:hidden;
+    transition:max-height .55s ease,opacity .35s ease,margin-top .35s ease;
+    margin-top:0;
+  }
+  .card:hover .detail,.card:focus-within .detail{
+    max-height:1400px;opacity:1;margin-top:30px;
+  }
+  .card:hover{padding-bottom:36px}
+
+  .detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .scene{
+    position:relative;
+    background:rgba(255,255,255,.025);
+    border:1px solid var(--glass-stroke);border-radius:10px;
+    padding:18px 18px 16px;min-height:240px;
+    display:flex;flex-direction:column;
+  }
+  .scene .num{font-size:10px;letter-spacing:.22em;color:var(--ink-faint);text-transform:uppercase}
+  .scene h4{margin:8px 0 10px;font-size:15px;font-weight:500;color:var(--ink)}
+  .scene p{margin:0;font-size:13px;line-height:1.6;color:var(--ink-soft)}
+
+  .art{margin-top:14px;flex:1;display:flex;align-items:flex-end;justify-content:center}
+  .art svg{width:100%;height:120px;overflow:visible}
+
+  /* DS-flavored visuals */
+  .ridge{fill:none;stroke:var(--ink-faint);stroke-width:1.2}
+  .fork-wrong{stroke:var(--gap);stroke-dasharray:2 4;stroke-width:1.2;fill:none;opacity:.7}
+  .figure{fill:var(--ink)}
+
+  .rain line{stroke:rgba(127,218,205,.35);stroke-width:1;stroke-linecap:round;
+    animation:rainfall 1.4s linear infinite;filter:drop-shadow(0 0 3px var(--chiral-glow))}
+  .rain line:nth-child(2){animation-delay:.25s}
+  .rain line:nth-child(3){animation-delay:.5s}
+  .rain line:nth-child(4){animation-delay:.75s}
+  .rain line:nth-child(5){animation-delay:1s}
+  @keyframes rainfall{
+    0%{transform:translateY(-12px);opacity:0}
+    20%{opacity:1}
+    100%{transform:translateY(40px);opacity:0}
+  }
+
+  /* chiral cairn */
+  .cairn-stones circle{fill:var(--chiral);
+    transform-origin:center;transform-box:fill-box;
+    opacity:0;animation:appear 2.6s ease-out infinite;
+    filter:drop-shadow(0 0 6px var(--chiral-glow))}
+  .cairn-stones circle:nth-child(1){animation-delay:0s}
+  .cairn-stones circle:nth-child(2){animation-delay:.6s}
+  .cairn-stones circle:nth-child(3){animation-delay:1.2s}
+  @keyframes appear{
+    0%,8%{opacity:0;transform:translateY(8px) scale(.6)}
+    35%,75%{opacity:1;transform:translateY(0) scale(1)}
+    100%{opacity:0;transform:translateY(-3px) scale(.95)}
+  }
+  .cairn-glow{fill:var(--chiral);filter:blur(10px);opacity:.25;
+    animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{
+    0%,100%{opacity:.1}
+    50%{opacity:.4}
+  }
+  .text-bubble{fill:rgba(127,218,205,.06);stroke:var(--glass-stroke);stroke-width:1}
+
+  /* heartbeat */
+  .heart{fill:var(--chiral);transform-origin:center;transform-box:fill-box;
+    animation:beat 1.4s ease-in-out infinite;
+    filter:drop-shadow(0 0 6px var(--chiral-glow))}
+  @keyframes beat{
+    0%,100%{transform:scale(1)}
+    20%{transform:scale(1.22)}
+    40%{transform:scale(1)}
+  }
+  .signal-ring{fill:none;stroke:var(--chiral);stroke-width:1.2;
+    transform-origin:center;transform-box:fill-box;
+    animation:ring 2.4s ease-out infinite;opacity:0;
+    filter:drop-shadow(0 0 4px var(--chiral-glow))}
+  .signal-ring:nth-child(2){animation-delay:.8s}
+  @keyframes ring{
+    0%{transform:scale(.4);opacity:.7}
+    80%{transform:scale(1.7);opacity:0}
+    100%{transform:scale(1.7);opacity:0}
+  }
+
+  .coverage{
+    margin-top:24px;padding-top:18px;border-top:1px dashed var(--glass-stroke);
+    display:grid;grid-template-columns:1fr 1fr;gap:18px;
+    font-size:12px;color:var(--ink-soft);
+  }
+  .coverage .row{display:flex;align-items:center;gap:8px;margin:4px 0}
+  .coverage .row b{color:var(--ink);min-width:140px;font-weight:400;font-size:13px}
+  .pill{
+    padding:2px 8px;border-radius:99px;font-size:10px;letter-spacing:.12em;
+    text-transform:uppercase;border:1px solid var(--glass-stroke);
+  }
+  .pill.now{color:var(--gap)}
+  .pill.target{color:var(--chiral);background:rgba(127,218,205,.05)}
+
+  .footer{
+    margin-top:22px;padding-top:14px;border-top:1px solid var(--glass-stroke);
+    color:var(--ink-faint);font-size:12px;font-style:italic;line-height:1.7;
+  }
+  .footer span{color:var(--chiral)}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="meta">
+      <span>Pain <b>C1</b></span>
+      <span>·</span>
+      <span>Solo's Paradox</span>
+      <span>·</span>
+      <span>Style B · DS Glass</span>
+    </div>
+
+    <article class="card" tabindex="0">
+      <div class="head">
+        <h1>
+          一个人走 想要孤独 也想要被知道还活着。
+          <small>Jamie · Tararua 山脊 · 周六傍晚 · 雨</small>
+        </h1>
+        <span class="badge"><span class="dot"></span>Core · Cairn 不可替代</span>
+      </div>
+
+      <div class="summary">
+        <div class="col">
+          <h3>痛点</h3>
+          <p>他不想加好友 不想刷动态 但也不想消失在山里。</p>
+        </div>
+        <div class="arrow"></div>
+        <div class="col">
+          <h3>Cairn 接住</h3>
+          <p>路上前人留下的痕迹 + 家里有人知道你还在路上。</p>
+        </div>
+      </div>
+
+      <div class="scores">
+        <div class="score">
+          <span>痛点强度</span>
+          <div class="bar"><i style="width:90%"></i></div>
+          <b>9 / 10</b>
+        </div>
+        <div class="score">
+          <span>当前覆盖</span>
+          <div class="bar"><i style="width:30%"></i></div>
+          <b>3 / 10</b>
+        </div>
+        <div class="score">
+          <span>应该做到</span>
+          <div class="bar target"><i style="width:100%"></i></div>
+          <b>10 / 10</b>
+        </div>
+        <span class="hint">↓ hover 展开故事</span>
+      </div>
+
+      <div class="detail">
+        <div class="detail-grid">
+          <div class="scene">
+            <div class="num">01 — 那一刻</div>
+            <h4>雨夜 山脊 走错的岔。</h4>
+            <p>下午四点雨开始下。地图被风吹得卷起边。前面两条路看着都对。一个人 没人可问。</p>
+            <div class="art">
+              <svg viewBox="0 0 240 120" preserveAspectRatio="xMidYMax meet">
+                <path class="ridge" d="M0 92 Q40 78 70 84 T130 82 T200 90 L240 95"/>
+                <path class="fork-wrong" d="M120 85 L160 60"/>
+                <path class="ridge" d="M120 85 L155 100" stroke-width="1.6" stroke="#9aa4b8"/>
+                <g class="rain">
+                  <line x1="40" y1="0" x2="36" y2="20"/>
+                  <line x1="80" y1="0" x2="76" y2="20"/>
+                  <line x1="120" y1="0" x2="116" y2="20"/>
+                  <line x1="170" y1="0" x2="166" y2="20"/>
+                  <line x1="210" y1="0" x2="206" y2="20"/>
+                </g>
+                <circle class="figure" cx="120" cy="78" r="3"/>
+                <rect class="figure" x="118.5" y="80" width="3" height="9" rx="1"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="scene">
+            <div class="num">02 — Cairn 的事</div>
+            <h4>有人来过 留下一个石堆。</h4>
+            <p>"右边那条 雨天会涨水 走左边。" 不知道是谁 也永远不会认识 但那一刻知道 路上不只他一个。</p>
+            <div class="art">
+              <svg viewBox="0 0 240 120" preserveAspectRatio="xMidYMax meet">
+                <ellipse class="cairn-glow" cx="120" cy="80" rx="44" ry="16"/>
+                <g class="cairn-stones">
+                  <circle cx="120" cy="86" r="9"/>
+                  <circle cx="120" cy="76" r="7"/>
+                  <circle cx="120" cy="68" r="5"/>
+                </g>
+                <g transform="translate(150 40)">
+                  <rect class="text-bubble" x="0" y="0" width="74" height="26" rx="4"/>
+                  <text x="6" y="11" font-size="7" fill="#9aa4b8" font-family="Inter">右边雨天涨水</text>
+                  <text x="6" y="20" font-size="7" fill="#5a6478" font-family="Inter">— 路上某人</text>
+                </g>
+                <path d="M148 53 L130 68" stroke="#5a6478" stroke-width="0.8" fill="none" stroke-dasharray="2 2"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="scene">
+            <div class="num">03 — 同一时刻 家里</div>
+            <h4>Tell Someone 自动签到。</h4>
+            <p>出发前他设了"19:00 还没下山就联系太太"。20 分钟前他到达 hut 的位置自动登记。家里手机收到："Jamie 已到 Powell Hut。"</p>
+            <div class="art">
+              <svg viewBox="0 0 240 120" preserveAspectRatio="xMidYMax meet">
+                <circle class="signal-ring" cx="120" cy="70" r="22"/>
+                <circle class="signal-ring" cx="120" cy="70" r="22"/>
+                <rect x="100" y="50" width="40" height="60" rx="6" fill="rgba(255,255,255,.03)" stroke="#5a6478" stroke-width="1"/>
+                <rect x="105" y="60" width="30" height="14" rx="2" fill="rgba(127,218,205,.1)"/>
+                <text x="108" y="69" font-size="6" fill="#7fdacd" font-family="Inter">Jamie · Powell Hut</text>
+                <text x="108" y="86" font-size="5" fill="#5a6478" font-family="Inter">17:42 · 已到达</text>
+                <path class="heart" d="M120 96 l-4 -4 a2.4 2.4 0 0 1 4 -2 a2.4 2.4 0 0 1 4 2 z"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="coverage">
+          <div>
+            <div class="row"><b>陌生人 mark</b><span class="pill now">现状 6 类型 wip</span></div>
+            <div class="row"><b>留语音 mark</b><span class="pill now">现状 0 没做</span></div>
+            <div class="row"><b>投票 / 时效</b><span class="pill now">现状 3 后端有 UI 缺</span></div>
+          </div>
+          <div>
+            <div class="row"><b>Tell Someone</b><span class="pill now">现状 0 软提示 p4</span></div>
+            <div class="row"><b>预计回程兜底</b><span class="pill now">现状 0 planned</span></div>
+            <div class="row"><b>SOS 挂载到主页</b><span class="pill now">现状 4 已建未挂载</span></div>
+          </div>
+        </div>
+
+        <div class="footer">
+          C1 是 Cairn 不可替代的位置。<span>"路上有人来过 + 家里有人知道"</span> 这两条线 都还没真正接通。
+          所有别的 app 都在让你 <span>表演</span> 你的户外 Cairn 在让你 <span>不被看见 但不孤独</span>。
+        </div>
+      </div>
+    </article>
+  </div>
+</body>
+</html>

@@ -1,0 +1,10 @@
+ARCore Geospatial API accuracy meters New Zealand coverage
+ARCore Geospatial Streetscape Geometry New Zealand Auckland Wellington coverage map
+ARCore Geospatial accuracy benchmark third party github reddit real world
+ARCore Geospatial pricing free tier 2025 2026 quota
+Google ARCore Cloud Anchors v1 deprecated history vendor lock-in
+iPhone 14 15 Pro dual frequency GPS L1 L5 accuracy real world meters
+iPhone 12 single frequency GPS accuracy outdoor benchmark
+GPS accuracy forest canopy canyon mountainous trail meters
+Pixel 6 7 Samsung S22 GPS accuracy benchmark outdoor
+GPS IMU barometer fusion trail accuracy meters research paper

@@ -1,0 +1,10 @@
+ARKit 6 horizontal plane detection time outdoor benchmark iOS 17
+ARKit plane detection failure rate outdoor grass snow sand low texture
+ARKit LiDAR vs non-LiDAR plane detection accuracy comparison benchmark
+ARKit 6 outdoor performance convergence time research paper 2024
+ARWorldMap relocalization success rate same device days weeks longevity
+ARWorldMap iOS update compatibility break Apple documentation
+ARWorldMap outdoor environment relocalization failure rate
+ARWorldMap reddit experience long term storage years
+ARKit ARAnchor background suspended app 5 minutes session lost
+ARFoundation multiple anchor performance limit 10 20 anchors stability

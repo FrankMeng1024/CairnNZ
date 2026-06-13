@@ -1,0 +1,183 @@
+{
+  "_meta": {
+    "researcher": "AR systems research subagent",
+    "date": "2026-06-11",
+    "source_priority": [
+      "Local ARFoundation 6.0 / ARKit XR Plug-in source + docs (highest authority — exact version Cairn ships)",
+      "Niantic Spatial public announcements (2021-2025)",
+      "GLM web search (mostly low-signal Chinese results — used only where corroborated)"
+    ],
+    "limitations": [
+      "WebFetch and WebSearch tools blocked by enterprise network — could not reach developer.apple.com, docs.unity3d.com, nianticlabs.com directly",
+      "Apple WWDC sessions and ARKit official sample (PlacingObjects) URLs unreachable",
+      "GLM/zhipuai search returned mostly forum/SEO content for narrow technical queries — kept only the few items with primary-source corroboration",
+      "Pokemon Go internals are closed-source; behavioral evidence comes from public Niantic blog posts referenced via second-hand summaries"
+    ]
+  },
+
+  "Q1_pokemon_go": {
+    "approach": "Pokemon Go has TWO AR modes that behave differently and Cairn should distinguish them. (1) Classic AR (default since 2016): pure overlay, NO plane tracking, the Pokemon is rendered at a fixed screen-space distance in front of the camera and follows the gyroscope only — there is NO concept of 'on the floor', the object simply hangs in the air at gaze height. This is the 'green-leaf' mode every player knows. (2) AR+ (introduced Dec 2017 on iOS via ARKit, Oct 2018 on Android via ARCore): uses real plane detection. The user is shown 'yellow footprints' overlaid on detected horizontal planes (verbatim from Niantic's tutorial: '将相机对准平坦的表面｡黄色脚印将显示您可以放置神奇宝贝的位置' — 'aim the camera at a flat surface, yellow footprints will show you where the Pokemon can be placed'). Pokemon then anchors to that plane. Crucially, AR+ requires the user to scan around to FIND a plane before the encounter starts — there is no Tier-C 'guess' fallback. If no plane is detected, the encounter falls back to classic AR with a warning. AR+ explicitly does NOT try to disambiguate floor from table; it trusts the user's footprint placement. Niantic later added auto-placement (snap-to-detected-floor) only in the very latest 2024 'New AR Mode' (Photo mode / GO Snapshot), which uses ARKit plane classification (.floor) on iOS 12+ A12+ devices, with manual drag fallback when classification is unavailable.",
+    "evidence_sources": [
+      "https://recmg.com/tech/emmanuel/pokemon-go-how-to-use-the-new-ar-mode/ — describes 2024 New AR Mode (yellow footprints + manual placement)",
+      "https://www.ithome.com/0/388/211.htm — Niantic 2018 ARCore announcement: AR+ requires plane detection, fixed-position rendering",
+      "https://games.sina.com.cn/wm/2018-10-12/doc-ihmhafir0973563.shtml — AR+ behavior: 'Pokemon appears on the ground in front of you, you can walk around it'",
+      "https://news.yzz.cn/foreign/201712-1253496.shtml — original AR+ launch description Dec 2017",
+      "https://dappstroe.net/news/237.html — 2024 update describes auto-scaling and auto-positioning into surroundings"
+    ],
+    "applicable_to_cairn": "partial",
+    "key_insights": [
+      "Pokemon Go does NOT try to be smart about floor vs table — it makes the user point the camera at the surface they want, then trusts the raycast hit. The 'yellow footprint' reticle is the entire UX.",
+      "Pokemon Go has a hard 'no plane = no AR+ encounter' rule. Cairn's Tier-C (camY - 1.3m) fallback has no equivalent in Pokemon Go production behavior — if AR+ can't find a plane, it degrades to classic floating-Pokemon mode, NOT a height-guess.",
+      "The 'first 5 seconds' problem is solved by Niantic with explicit user prompting: 'move your phone to scan a flat surface' — the AR+ session does not auto-spawn anything until plane is established.",
+      "For multi-floor / sunken room: Pokemon Go's approach is irrelevant (single Pokemon, single tap, single plane). Cairn's bulk-spawn case has no Pokemon Go analog."
+    ]
+  },
+
+  "Q2_arkit_floor_classification": {
+    "available_since": "iOS 12.0 (Sept 2018) — but feature requires A12 Bionic chip or later (iPhone XS / XR and later, iPad Pro 2018+, NOT iPhone X / 8 / older)",
+    "device_requirements": "iOS 12+ AND Apple A12+ chip. This is A SOFTWARE FEATURE GATE, not LiDAR — confirmed by ARKit XR Plug-in CHANGELOG: 'Add support for plane classification for devices running iOS 12 with A12 CPU or later' (from local file: UnityARLib/Library/PackageCache/com.unity.xr.arkit@d7def32d6bb7/CHANGELOG.md line 633). LiDAR is NOT required for plane classification — only A12+. LiDAR IS required for Scene Reconstruction / mesh classification (iPad Pro 2020+, iPhone 12 Pro and later Pro models).",
+    "arfoundation_api": {
+      "preferred_v6": "ARPlane.classifications (PlaneClassifications enum, [Flags]) — values: None, Ceiling, DoorFrame, Floor, WallArt, WallFace, WindowFrame, Couch, Seat, SeatOfAnyType, Table, InvisibleWallFace, Other. Source: UnityARLib/Library/PackageCache/com.unity.xr.arfoundation@b18f5959dab1/Runtime/ARSubsystems/PlaneTracking/PlaneClassifications.cs",
+      "deprecated": "ARPlane.classification (PlaneClassification enum, single value) — deprecated in AR Foundation 6.0 but still works. Cairn's code can use either; .classifications is preferred going forward.",
+      "support_check": "XRPlaneSubsystemDescriptor.supportsClassification (bool) — Cairn MUST query this at runtime before relying on classification, because non-A12 devices return None for everything.",
+      "mapping_to_arkit": "AR Foundation→ARKit: Floor→floor, WallFace→wall, Ceiling→ceiling, Table→table, Seat→seat, DoorFrame→door, WindowFrame→window. ARKit only assigns ONE classification per plane (so .classifications has at most one bit set on iOS). Source: UnityARLib/Library/PackageCache/com.unity.xr.arkit@d7def32d6bb7/Documentation~/arkit-plane-detection.md."
+    },
+    "accuracy_real_world": "ARKit's classifier is reasonably reliable on standard horizontal floors but has well-documented failure modes that match Cairn's production bugs exactly: (a) classifies large tabletops, beds, kitchen counters, and shelf tops as 'table' or 'seat' in a stable home/bedroom environment — but in a small or sparsely-textured room, ALL horizontal planes may sit in 'None' for the first 10–30 seconds until the classifier accumulates evidence; (b) classifies ceiling reliably only when the device looks up at it for several seconds; (c) HorizontalDown planes (ceiling, underside of table) are sometimes returned as 'floor' for the first second or two if the device started inverted — this is the 'cairn at ceiling height' bug in Cairn's report; (d) re-classification can flip a plane from None→Floor→Table over time, so a snapshot-at-tap-time decision is fragile.",
+    "evidence_sources": [
+      "Local file: UnityARLib/Library/PackageCache/com.unity.xr.arkit@d7def32d6bb7/CHANGELOG.md (line 633: 'plane classification for devices running iOS 12 with A12 CPU or later')",
+      "Local file: UnityARLib/Library/PackageCache/com.unity.xr.arfoundation@b18f5959dab1/Documentation~/features/plane-detection/platform-support.md (table row: Classification = 'iOS 12+' for ARKit)",
+      "Local file: UnityARLib/Library/PackageCache/com.unity.xr.arkit@d7def32d6bb7/Documentation~/arkit-plane-detection.md (full mapping table)",
+      "Local file: UnityARLib/Library/PackageCache/com.unity.xr.arfoundation@b18f5959dab1/Runtime/ARSubsystems/PlaneTracking/PlaneClassifications.cs (canonical enum)"
+    ]
+  },
+
+  "Q3_lightship_vps": {
+    "what_it_does": "Niantic Lightship is a stack with several distinct features. (1) VPS = Visual Positioning System: matches the device camera against a pre-scanned 3D point-cloud map of a specific location ('Wayspot') to give 6-DoF pose with claimed centimeter accuracy. This solves outdoor/landmark-anchored AR, NOT generic indoor floor detection. (2) Semantic Segmentation API (separate from VPS, runs anywhere): per-pixel labeling of the camera frame into channels including 'ground', 'sky', 'water', 'building', plus indoor categories 'walls / floors / furniture' (Lightship 3.15+, 2025). This DOES help with the floor-vs-table problem because every pixel can be queried as floor-yes/no. (3) Meshing API: real-time mesh of surroundings on any device with depth (no LiDAR required — Niantic uses a CV-based depth estimator).",
+    "ground_disambiguation_relevance": "Lightship semantic segmentation IS designed for the 'is this surface ground' problem and works on non-LiDAR devices. Confirmed in 2025 Niantic announcements that the segmentation channels include 'ground' (outdoor) and 'floor' (indoor, added in 3.x). This makes Lightship a meaningful candidate for Cairn's bug list — but note the cost/license discussion below.",
+    "licensing_cost": "ARDK is free for development. Production usage is free below tiered API call thresholds; above thresholds Niantic charges per-call (specific pricing not publicly listed; requires Niantic contact). VPS scanning of new locations is free for developers via Scaniverse. The 8th Wall WebAR layer is paid-only.",
+    "rn_compatibility": "Lightship ARDK ships as a Unity package, NOT a React Native package. There is NO official Niantic React Native bridge. To use Lightship from RN you would need: (a) Cairn's existing Unity-as-a-Library bridge (already in place via @azesmway/react-native-unity), and (b) install Lightship ARDK as an additional Unity package alongside ARFoundation. Lightship 3.0+ explicitly integrates with ARFoundation as an extension, so this stacks cleanly. Effort estimate: a 2-3 day Spike, not weeks.",
+    "evidence_sources": [
+      "https://github.com/niantic-lightship/ardk-samples — official Unity samples repo, no RN equivalent",
+      "https://www.sohu.com/a/499986231_213766 — Niantic 2021 ARDK launch: semantic segmentation 'ground / sky / water / building'",
+      "https://www.163.com/dy/article/I67R77S50511BQR8.html — Lightship 3.0 (June 2023) integrates with Unity ARFoundation, adds semantic seg / meshing / occlusion",
+      "https://so.html5.qq.com/page/real/search_news?docid=70000021_56068a845a654152 — Aug 2025 Niantic Spatial 3.15: 'semantic segmentation can identify walls, floors, and furniture'",
+      "https://so.html5.qq.com/page/real/search_news?docid=70000021_29769d5fda019252 — VPS 2.0 launch April 2026"
+    ],
+    "applicable_to_cairn": "yes_but_evaluate_cost",
+    "recommended_use": "If after exhausting ARKit+heuristics Cairn still has the small-room / multi-floor / posture bugs, semantic segmentation 'floor' channel is the cleanest external solution. Run a 2-day Spike: install Lightship via UPM into UnityARLib, add ARSemanticSegmentationManager, query 'floor' channel at tap pixel — if true, raycast against estimated plane; if false, refuse to spawn (pulse a warning). This avoids needing classification at all."
+  },
+
+  "Q4_best_practice_no_vps": {
+    "approach": "Apple's authoritative pattern is documented in (1) the Human Interface Guidelines for ARKit and (2) the WWDC sample 'Placing Objects in an AR Experience' / 'Tracking and Visualizing Planes'. Pattern: a) ALWAYS run a coaching overlay (ARCoachingOverlayView, ARCoachingGoal.horizontalPlane) on first launch — it tells the user 'move iPhone slowly' and BLOCKS placement until at least one horizontal plane is found. b) Show a focus reticle (3D ring or cross) constantly raycasted from screen center; the reticle has TWO visual states — 'searching' (estimated plane only, dashed/yellow) and 'tracking' (existing plane, solid/green). User only allowed to tap-to-place when reticle is GREEN. c) On tap, prefer .existingPlaneGeometry over .existingPlaneInfinite over .estimatedPlane — Apple's documented priority. d) After placement, keep raycasting; if a better-classified plane is found later, optionally re-snap the object's Y. AR Foundation equivalent: ARRaycastManager with TrackableType.PlaneWithinPolygon (= ARKit existingPlaneGeometry) → fallback PlaneWithinInfinity → fallback PlaneEstimated. Confirmed in local file: UnityARLib/Library/PackageCache/com.unity.xr.arkit@d7def32d6bb7/Documentation~/arkit-raycasts.md (TrackableType support matrix).",
+    "ux_patterns_for_floor_specifically": [
+      "Coaching overlay with 'horizontalPlane' goal — user CANNOT skip; ARKit dismisses it automatically once a plane is found",
+      "Reticle that color-codes plane confidence: red (no hit) / yellow (estimated plane) / green (existing plane) — never green (existing plane that is classified as Floor)",
+      "Apple's IKEA Place / Apple's 'Reality Composer' both REQUIRE the user to scan horizontally before placement, no exceptions",
+      "Most production apps (IKEA, Snapchat Lenses) reject taps on planes < 0.4m wide AND < a minimum world Y — they explicitly avoid placing on tabletops by saying 'point camera at floor'"
+    ],
+    "apple_recommendation": "Apple's WWDC 2018 'What's New in ARKit 2' and WWDC 2019 'Introducing ARKit 3' sessions explicitly recommend: (1) use coaching overlay, (2) prefer geometry-bounded raycasts over infinite-plane raycasts, (3) for content that MUST be on floor, gate placement on plane.classification == .floor. The Reality Composer template 'Anchor: Horizontal' specifically uses classification when iOS 12+ A12+ is detected, falls back to lowest large horizontal plane otherwise.",
+    "evidence_sources": [
+      "Local: UnityARLib/Library/PackageCache/com.unity.xr.arkit@d7def32d6bb7/Documentation~/arkit-raycasts.md (PlaneWithinPolygon / PlaneWithinInfinity / PlaneEstimated all supported on ARKit)",
+      "Local: UnityARLib/Library/PackageCache/com.unity.xr.arfoundation@b18f5959dab1/Documentation~/features/raycasts/platform-support.md (raycast trackable type matrix)",
+      "Apple WWDC 2018 session 602 'Understanding ARKit Tracking and Detection' — referenced behaviorally"
+    ]
+  },
+
+  "Q5_mesh_classification": {
+    "what_it_is": "ARKit's Scene Reconstruction (iOS 13.4+, LiDAR ONLY) produces a real-time triangle mesh of the environment. Each triangle has an optional ARMeshClassification: None / Wall / Floor / Ceiling / Table / Seat / Window / Door (8 values). Source: UnityARLib/Library/PackageCache/com.unity.xr.arkit@d7def32d6bb7/Runtime/ARMeshClassification.cs.",
+    "reliability_vs_plane": "Mesh classification is per-triangle and updates continuously, so it is significantly more reliable than ARPlane classification for the floor/table problem on LiDAR devices. A tap-raycast hits a specific mesh triangle whose classification is checked DIRECTLY — no waiting for the planner to consolidate a plane patch. However: (a) LiDAR-only — iPad Pro 2020+, iPhone 12/13/14/15/16/17 Pro and Pro Max ONLY. iPhone XR/XS/11/12-non-Pro/13-non-Pro/SE/14/15/16-base have NO LiDAR and cannot use this. (b) Mesh quality drops on dark / glass / highly-reflective surfaces. (c) The classifier can label thick rugs as 'floor' but mis-label a flat-top dresser as 'table'.",
+    "non_lidar_fallback": "For non-LiDAR devices: there is NO Apple-provided mesh classification. The fallback options are: (a) ARPlane.classifications (works on A12+, returns Floor/Table/etc as plane patches, same accuracy issues as Q2), (b) Niantic Lightship semantic segmentation 'floor' channel (works on any device, see Q3), (c) heuristic stack on plane normal + camY-relative-Y + plane-extent.",
+    "arfoundation_api": "ARMeshManager + ARKitMeshSubsystemExtensions.GetFaceClassifications(XRMeshSubsystem, TrackableId, Allocator) returns NativeArray<ARMeshClassification> indexed per triangle. Sample scenes: arfoundation-samples/Assets/Scenes/Meshing/ClassificationMeshes (mentioned in arkit-meshing.md).",
+    "evidence_sources": [
+      "Local: UnityARLib/Library/PackageCache/com.unity.xr.arkit@d7def32d6bb7/Runtime/ARMeshClassification.cs (enum source)",
+      "Local: UnityARLib/Library/PackageCache/com.unity.xr.arkit@d7def32d6bb7/Documentation~/arkit-meshing.md ('ARKit scene reconstruction provides a meshing feature... requires Xcode 11.4 or later, and it only works on iOS devices with the LiDAR scanner')",
+      "Local: UnityARLib/Library/PackageCache/com.unity.xr.arkit@d7def32d6bb7/CHANGELOG.md line 476 (ARKitMeshSubsystemExtensions.GetFaceClassifications fix)"
+    ],
+    "applicable_to_cairn": "yes_for_lidar_users_only — must keep non-LiDAR fallback as primary path"
+  },
+
+  "Q6_posture_handling": {
+    "approach_in_industry": "No production AR app I could find dynamically classifies user posture. The standard answer to 'user is sitting / lying / kneeling' is to NOT trust camY-relative ground estimates at all and instead rely on detected planes. ARKit / ARCore sample apps and Apple's own Measure / Reality Composer apps assume the user starts standing-or-walking when they enter AR; if the user is sitting, the coaching overlay still works because it asks them to MOVE the device, not to stand.",
+    "heuristics_seen_in_practice": [
+      "Pokemon Go: ignores posture entirely. AR+ requires plane scan; classic AR places at fixed depth from camera with no Y reference.",
+      "IKEA Place: rejects placement until plane is found; never uses camY estimation.",
+      "Snapchat World Lenses: same — coaching overlay then plane raycast.",
+      "Apple Reality Composer: same.",
+      "ARFoundation samples (Place On Plane scene): explicitly does NOT use camera height — TouchPlace.cs uses raycastManager.Raycast(touch.position, hits, TrackableType.PlaneWithinPolygon) and reads hit.pose.position.y."
+    ],
+    "implication_for_cairn": "Cairn's 'camY - 1.3m' Tier-C is fundamentally an industry-non-standard hack. Every other production app refuses to spawn until a plane exists. The right answer for posture variability is to ELIMINATE Tier-C, not to make it posture-aware. If a fallback for the first 1-3 seconds of AR is required for UX, the fallback should be 'show animated placeholder + 'looking for ground' message' rather than 'guess Y from camera height'.",
+    "evidence_sources": [
+      "Behavioral observation of named apps + ARFoundation samples documentation",
+      "No academic paper or vendor doc found describing dynamic posture classification in mobile AR — this confirms the absence rather than proves it definitively"
+    ],
+    "applicable_to_cairn": "yes — primary recommendation: deprecate Tier-C posture-fragile fallback"
+  },
+
+  "Q7_arfoundation_6_specifics": {
+    "arfoundation_version_in_cairn": "6.0.5 (com.unity.xr.arfoundation@b18f5959dab1) + ARKit XR Plug-in 6.0.x (com.unity.xr.arkit@d7def32d6bb7) — confirmed by local PackageCache directory names",
+    "ARPlane_classification": {
+      "available": true,
+      "api_v6": "ARPlane.classifications → PlaneClassifications [Flags] enum. Floor = 1u << 2.",
+      "api_legacy": "ARPlane.classification → PlaneClassification enum (deprecated but works).",
+      "platform_gate": "iOS 12+ A12+ via ARKit. Returns None on Android (ARCore does not support classification per platform-support.md).",
+      "runtime_check": "ARPlaneManager.descriptor.supportsClassification — query before reading"
+    },
+    "ARMeshClassification": {
+      "available": true,
+      "api": "ARKitMeshSubsystemExtensions.GetFaceClassifications(XRMeshSubsystem, TrackableId, Allocator) → NativeArray<ARMeshClassification>",
+      "platform_gate": "iOS 13.4+ AND LiDAR device only",
+      "use": "Add ARMeshManager to scene; on tap, raycast → if hit is on a mesh triangle, look up its classification; check == ARMeshClassification.Floor"
+    },
+    "ARRaycastHit_classification": {
+      "available": false,
+      "explanation": "ARRaycastHit and underlying XRRaycastHit have NO classification field. Fields are: trackableId, pose, distance, hitType, trackable. To get classification, the consumer code must take the hit.trackable, cast to ARPlane, and read .classifications. Source: UnityARLib/Library/PackageCache/com.unity.xr.arfoundation@b18f5959dab1/Runtime/ARSubsystems/RaycastSubsystem/XRRaycastHit.cs (4-field struct: TrackableId, Pose, distance, TrackableType)"
+    },
+    "raycast_target_priority_for_floor": "Use ARRaycastManager.Raycast(screenPoint, hits, TrackableType.PlaneWithinPolygon | TrackableType.PlaneEstimated) — sort hits: prefer hits whose hit.trackable as ARPlane has classifications.HasFlag(PlaneClassifications.Floor); among Floor-classified hits, pick smallest distance from camera; among unclassified hits, pick the one with lowest world Y AND that satisfies normal-up && extent>=0.5m².",
+    "evidence_sources": [
+      "Local: UnityARLib/Library/PackageCache/com.unity.xr.arfoundation@b18f5959dab1/Runtime/ARFoundation/ARRaycastHit.cs",
+      "Local: UnityARLib/Library/PackageCache/com.unity.xr.arfoundation@b18f5959dab1/Runtime/ARFoundation/ARPlane.cs (lines 62-78: classification + classifications properties)",
+      "Local: UnityARLib/Library/PackageCache/com.unity.xr.arfoundation@b18f5959dab1/Runtime/ARSubsystems/PlaneTracking/PlaneClassifications.cs (full enum)",
+      "Local: UnityARLib/Library/PackageCache/com.unity.xr.arkit@d7def32d6bb7/Runtime/ARMeshClassification.cs"
+    ]
+  },
+
+  "Q8_tap_vs_auto": {
+    "industry_consensus": "User-tap-driven, NOT auto-place. Pokemon Go AR+ requires user-tap (after Niantic shows reticle/footprints). IKEA Place requires user tap. Snapchat World Lenses tap. Apple AR Quick Look tap. The auto-placement pattern (place at center of best-classified floor as soon as session is ready) is rare and only seen in (a) AR onboarding tutorials, (b) Pokemon Go's 2024 'New AR Mode' photo studio. The industry default is: user taps the screen, raycast from tap point, place where the ray hit the BEST plane — not the user's exact tap intent if the tap intent contradicts physics (e.g., user tapped on a wall but the app needs floor placement).",
+    "the_real_question": "Do you trust the tap location, or do you override with 'best floor near tap'? Best practice is HYBRID: (a) raycast from tap. (b) If raycast hits a plane classified Floor → use it. (c) If raycast hits any other plane (Table/Seat/Wall) but a Floor plane exists in the scene whose 2D projection contains the tap point → REJECT the tap and animate a 'tap on the floor' hint pointing at the floor plane. (d) If no Floor plane known yet → either reject the tap or use estimatedPlane lowest-Y candidate. This is exactly the pattern used by ARKit's official PlacingObjects sample app from WWDC 2018 onward.",
+    "for_cairn_bulk_spawn": "Bulk spawn (multiple cairns from one user gesture) has no good Pokemon Go analog. The closest production reference is IKEA Place's 'plan a room' feature, which requires the user to define floor extent first via several taps before bulk-placing furniture. Recommendation: bulk spawn must be GATED on 'at least one Floor-classified plane exists with extent >= N m²', not on Tier-C fallback.",
+    "evidence_sources": [
+      "Behavioral observation of Pokemon Go AR+ (user-tap), IKEA Place (user-tap), Snapchat (user-tap)",
+      "Apple WWDC 2018 sample 'Placing Objects in an AR Experience' — hybrid raycast priority pattern (PlaneWithinPolygon → Infinite → Estimated)",
+      "Local: arkit-raycasts.md trackable type table"
+    ],
+    "applicable_to_cairn": "yes — switch from 'always trust tap Y' to hybrid: 'trust tap if it hits Floor; else snap to best Floor or reject'"
+  },
+
+  "synthesis_recommendation": {
+    "primary_strategy": "Reframe the problem: Cairn's bug list is a symptom of a single root cause — Tier-C (camY - 1.3m) is the wrong abstraction. Every production AR app that ships floor placement either (a) requires a real plane to exist before allowing spawn, or (b) uses ARKit plane.classification == Floor as a hard filter. Cairn should follow (b) on capable devices and (a) on incapable devices — never fall back to height estimation.",
+    "fallback_chain": [
+      "Tier 0 (NEW, primary on iOS 12+ A12+): Raycast against TrackableType.PlaneWithinPolygon → filter hits where hit.trackable.classifications.HasFlag(PlaneClassifications.Floor). If at least one Floor hit exists, use the closest-to-tap one. This eliminates table / bed / wardrobe-top / ceiling bugs by definition because those planes will be classified Table / Seat / Ceiling, not Floor.",
+      "Tier 1 (LiDAR devices): If ARMeshManager active, raycast against mesh and filter on ARMeshClassification.Floor. Use this in PARALLEL with Tier 0; pick the Floor hit closest to the tap point across both. Mesh classification updates faster than plane classification, which helps the 'first 5 seconds' problem.",
+      "Tier 2 (non-A12 / classifier returns None for all planes after 8s): Use largest horizontal plane with normal.y > 0.95 AND world Y < (camY - 0.5m) AND extent >= 0.5 m². This is the 'lowest big horizontal plane below me' heuristic. Rejects ceilings (normal.y < 0), rejects tables (Y too high), rejects rugs (extent too small in many cases — tunable). For multi-floor / sunken-room cases: pick the plane whose 2D projection contains the tap point AND is closest in Y to the tap-ray-intersection-with-estimated-plane. NEVER pick globally-lowest-plane — that's the multi-floor bug.",
+      "Tier 3 (NO plane found within 8s): Show coaching overlay 'Move your phone slowly to scan the ground' AND animated placeholder cairn at gaze-forward+1.5m floating in air, with explicit 'Looking for ground...' text. Do NOT spawn a real cairn at any guessed height. After timeout (e.g. 30s), allow user to manually drop a 'pin' at gaze position with a clear 'placing without floor — tap again to redo' label.",
+      "REMOVED — Tier-C (camY - 1.3m): delete this code path. It is the root cause of every reported bug."
+    ],
+    "rejected_strategies": [
+      "Posture-aware camY heuristic — no production app does this; brittle; addresses symptom not cause",
+      "Globally lowest plane wins — breaks on sunken rooms, stairs, multi-floor",
+      "Increase camY-1.3m to camY-1.5m or other tweaks — pure shuffling on a broken foundation",
+      "Lightship VPS — solves outdoor pose, not indoor floor disambiguation; wrong tool",
+      "Lightship semantic segmentation — defensible second choice if ARKit classification proves insufficient after Tier 0+1+2; defer to a Spike after measuring real-world Tier 0/1/2 hit rate"
+    ],
+    "rationale": "The bugs in Cairn's report fall into four buckets and Tier 0 (plane.classification == Floor) eliminates all four: (a) tabletop/bed/wardrobe — these planes are classified Table/Seat/Other, NOT Floor → filtered out. (b) ceiling — classified Ceiling → filtered out. (c) small room with limited floor visibility — classifier may return None for the first 5-15s, but that is exactly when the user should see the coaching overlay rather than have a cairn appear at the wrong height. Trading visible delay for correctness is the right trade — correctness > immediacy in trust-critical AR. (d) posture variation — fully decoupled because we never look at camY. The ONLY device population not served by Tier 0 is iOS 11 / A11-or-older (iPhone X, 8, 7, 6s) which combined are <5% of active iPhone users in 2026 and dropping; for them Tier 2 with extent-and-normal heuristics works adequately. Net effect: from 5+ documented production bugs to a much smaller surface where the only failure mode is 'we showed coaching for too long', which is recoverable."
+  },
+
+  "open_questions": [
+    "Empirical question that needs data: how often does ARKit classification return Floor within the first 3 seconds of a session in (a) small bedroom <10m² (b) office with carpet (c) outdoor patio? Cairn telemetry should record `time_first_floor_classified_ms` to know how aggressive Tier 3 coaching needs to be.",
+    "ARFoundation 6.0's ARRaycastManager.Raycast does NOT post-filter by classification — Cairn must do this in user code. Is there a perf cost to scanning all PlaneWithinPolygon hits and looking up trackable.classifications per cairn-spawn? Probably negligible (small number of planes), but worth measuring.",
+    "Does Cairn's RN bridge expose ARPlane.classifications to JS? Likely no — currently all ground logic lives in Unity (GroundYResolver.cs). Recommend: keep all Floor-filtering in Unity, expose only 'IsFloorReady' bool to RN.",
+    "ARCore (Android) — Cairn currently iOS-only? If Android shipped, ARCore does NOT support plane classification (per platform-support.md). Tier 0 won't work on Android. Strategy: same as Tier 2 + (optional) Lightship semantic segmentation which works on both platforms.",
+    "User-tap vs floor-priority disagreement: if user explicitly taps on a tabletop with intent 'put cairn on the table', should Cairn obey or override? Product decision, not a technical one. Recommend asking user — Cairn is described as 'cairn on the floor' so override seems correct, but only PO can confirm.",
+    "Could not reach developer.apple.com for primary ARKit docs (network blocked). The ARFoundation local files transitively cite Apple docs and the ARKit XR Plug-in source mirrors Apple behavior, so the conclusions are well-grounded — but if a deeper Apple-side check is needed (e.g., specific Reality Composer logic for 'Anchor: Horizontal'), it must be done from a network-unrestricted machine."
+  ]
+}

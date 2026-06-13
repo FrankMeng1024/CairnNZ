@@ -1,0 +1,13 @@
+ARKit ARRaycastQuery estimatedPlane target works before ARPlaneAnchor detected feature points
+ARKit estimatedPlane raycast accuracy session start first second
+ARCoachingOverlayView goal horizontalPlane behavior when plane never found timeout
+Pokemon GO AR+ plus mode plane detection failure fallback behavior featureless ground
+IKEA Place app AR plane detection low texture room behavior
+Apple Measure app ARKit plane detection user experience before plane found
+Snapchat AR Lens world tracking ground effect no plane fallback
+Apple Reality Composer AR scene placement plane not found
+Adobe Aero AR plane detection fallback behavior
+ARKit ARWorldTrackingConfiguration gravityAndHeading worldAlignment Y axis without plane
+average phone holding height eye level AR application 1.5m heuristic
+ARKit ARAnchor smooth transition relocalize plane detected after object placed
+ARKit best practice spawn object before plane detected camera relative position

@@ -103,7 +103,13 @@ namespace Cairn.AR.Editor
 
             // Camera 启用 post-processing(URP)
             var camData = cam.GetUniversalAdditionalCameraData();
-            if (camData != null) camData.renderPostProcessing = true;
+            if (camData != null)
+            {
+                camData.renderPostProcessing = true;
+                // V5.5 fix: 启用 depth texture 给 RibbonSilkV2.shader soft particle 用
+                // batch capture 默认不开 → SampleSceneDepth 返回 0 → softFade=0 → ribbon 全消失
+                camData.requiresDepthTexture = true;
+            }
 
             // Set day/night global once at scene load via a manager component
             var mgrGo = new GameObject("V024GlobalsManager");
@@ -165,10 +171,12 @@ namespace Cairn.AR.Editor
             // V4.3 fix: _BandIntensity 同步 V2.3 关闭 step bands(用户要柔和,Pokemon GO raid 横条不柔)
             // V4.5 fix: 0 → 0.10 弱化保留(关全没让丝带整体亮度降低,在白底下不可见)
             ribMat.SetFloat("_BandIntensity", 0.10f);
-            // V5.4 电影丝绸感参数(用户 40/100 review 后)
+            // V5.5 fix(回归测):全部 V5.4/V2.5 临时关掉验证 ribbon 是否能渲染
+            // FresnelStrength=0 → 不影响 alpha
+            // SoftParticleFade=0 → kill switch off 跳过 depth sample
             ribMat.SetFloat("_FresnelPower",     2.5f);
-            ribMat.SetFloat("_FresnelStrength",  0.8f);
-            ribMat.SetFloat("_SoftParticleFade", 0.30f);
+            ribMat.SetFloat("_FresnelStrength",  0.0f);
+            ribMat.SetFloat("_SoftParticleFade", 0.0f);
 
             int typeId = TypeIdToInt(t.id);
             var runeMat = new Material(runeShader) { name = "RuneSDF_" + t.id };
@@ -177,7 +185,7 @@ namespace Cairn.AR.Editor
             runeMat.SetFloat("_Reveal",    1.0f);
 
             // --- Tier-1 圆环 (主环 + 内环,1:1 移植 Three.js demo line 142-166) ---
-            float RING_RADIUS = 0.42f;  // V4.11: 0.55 → 0.42 紧凑感(用户原话"5 根更聚")
+            float RING_RADIUS = 0.50f;  // V4.11+V5.5: 0.55 → 0.42 太紧 ribbon 被 cairn 遮 → 折中 0.50
             Color darkAmber = LerpToDarkAmber(t.color);
 
             var ringShader = Shader.Find("Cairn/RingFlat");
@@ -217,12 +225,11 @@ namespace Cairn.AR.Editor
             // --- 8 ribbons in a ring (V5.3: 5→8 加密) ---
             // 用户原话(40/100 review): "所有的丝线都是同时飘起 没有那种随机生成的错落
             //  而且很稀疏 所以看着很单薄"
-            // 修法:
-            //   1. 5 根 → 8 根(密度 +60%)解决"稀疏单薄"
-            //   2. phaseOffset 不再用 i/N 均匀(0/0.2/0.4/0.6/0.8 看起来是 5 个相位组),
-            //      改用 (i * 5 % 8) / 8 黄金质数错落,8 根 phase 分布
-            //      = 0, 5/8, 2/8, 7/8, 4/8, 1/8, 6/8, 3/8 → 视觉无对称无组,
-            //      生命周期完全错开,任一时刻 8 根处于 8 个不同 stage
+            // V5.5 fix: phase 公式改 — 旧 (i*5)%8/8 让 i=3 phase=0.875 ribbon 起步就在 fade-out 区
+            //   (SilkRibbonV2.cs:232 lifeT > 0.85 → globalFade 衰减)
+            //   capture 2s 内 4 根 ribbon 几乎不可见 → 用户视觉只看到底座
+            //   新公式:i*0.087 (1/RIBBON_COUNT * 0.7) 让全部 phase 在 0~0.61 起步可见区
+            //   仍保持 8 根错落分布(0/0.087/0.174/...0.609)
             int RIBBON_COUNT = 8;
             for (int i = 0; i < RIBBON_COUNT; i++)
             {
@@ -232,11 +239,10 @@ namespace Cairn.AR.Editor
                 rgo.transform.localPosition = Vector3.zero;
                 var rib = rgo.AddComponent<Cairn.AR.SilkRibbonV2>();
                 rgo.GetComponent<MeshRenderer>().sharedMaterial = ribMat;
-                // V5.3: 黄金质数错落,8 根 phase 在 (0, 1) 区间无对称分布
-                float phaseOffset = ((i * 5) % RIBBON_COUNT) / (float)RIBBON_COUNT;
-                // V5.3 加宽 + per-ribbon 噪声:base 0.15 → 0.18(+20%),每根 ±0.05 让"花束感"
+                // V5.5: phase 0~0.61 让 capture 2s 内 8 根全在升起 / 中段强光
+                float phaseOffset = (i / (float)RIBBON_COUNT) * 0.7f;
                 float widthBase = 0.18f;
-                float widthVar  = 0.05f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);  // 8 根独立扰动
+                float widthVar  = 0.05f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
                 float maxWidth  = widthBase + Mathf.Abs(widthVar);
                 rib.Configure(RING_RADIUS, angle, phaseOffset, t.color, new Color(0.95f, 0.97f, 1.0f, 1f), maxWidth);
             }
@@ -443,6 +449,8 @@ namespace Cairn.AR.Editor
 
             var ribbons = clusterRoot.GetComponentsInChildren<Cairn.AR.SilkRibbonV2>();
             var parts   = clusterRoot.GetComponentsInChildren<Cairn.AR.TypeParticleController>();
+            // V5.5 diag: 验证 ribbons 真存在 + 真 tick
+            Debug.Log($"[v024-CAP-ANIM-DIAG] clusterRoot={clusterRoot.name} active={clusterRoot.activeSelf} ribbons={ribbons.Length} parts={parts.Length}");
 
             const int FRAMES = 60;
             const float DT = 1f / 30f;  // 30fps

@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>C1 · Jamie 雨夜走错岔 — Mono Line</title>
+<style>
+  :root{
+    --bg:#fafaf7;
+    --paper:#ffffff;
+    --ink:#111;
+    --ink-soft:#555;
+    --ink-faint:#9a9a9a;
+    --rule:#1a1a1a;
+    --rule-soft:#dcdcdc;
+    --hi:#111;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Inter","PingFang SC",sans-serif;
+    min-height:100vh;
+    display:flex;align-items:center;justify-content:center;
+    padding:48px 24px;
+  }
+  .stage{width:min(960px,100%)}
+  .meta{
+    display:flex;gap:14px;align-items:center;
+    color:var(--ink-faint);font-size:11px;letter-spacing:.22em;
+    margin-bottom:14px;text-transform:uppercase;font-weight:500;
+  }
+  .meta b{color:var(--ink);letter-spacing:.26em;font-weight:600}
+
+  .card{
+    position:relative;
+    background:var(--paper);
+    border:1.5px solid var(--rule);
+    border-radius:0;
+    padding:34px 40px 28px;
+    overflow:hidden;
+    transition:padding .35s ease;
+  }
+
+  .head{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;
+    border-bottom:1.5px solid var(--rule);padding-bottom:20px}
+  .head h1{
+    margin:0;font-size:28px;font-weight:600;letter-spacing:-.015em;
+    line-height:1.25;color:var(--ink);
+  }
+  .head h1 small{
+    display:block;color:var(--ink-soft);font-weight:400;font-size:13px;
+    letter-spacing:.04em;margin-top:8px;font-family:"Courier New",monospace;
+  }
+  .badge{
+    display:inline-flex;align-items:center;gap:7px;
+    padding:5px 11px;border:1.2px solid var(--rule);border-radius:0;
+    font-size:10px;letter-spacing:.18em;color:var(--ink);
+    background:var(--paper);text-transform:uppercase;font-weight:600;
+    white-space:nowrap;
+  }
+  .badge .dot{width:6px;height:6px;background:var(--ink)}
+
+  .summary{
+    margin-top:22px;
+    display:grid;grid-template-columns:1fr auto 1fr;gap:28px;align-items:center;
+    font-size:14px;line-height:1.65;color:var(--ink-soft);
+  }
+  .summary .col h3{
+    margin:0 0 6px;font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-faint);font-weight:600;
+  }
+  .summary .col p{margin:0;color:var(--ink)}
+  .summary .arrow{
+    font-family:"Courier New",monospace;color:var(--ink-faint);font-size:18px;
+  }
+
+  .scores{
+    margin-top:24px;padding-top:18px;border-top:1px solid var(--rule-soft);
+    display:flex;gap:24px;flex-wrap:wrap;
+    font-size:12px;color:var(--ink-soft);
+  }
+  .score{display:flex;align-items:center;gap:8px}
+  .score b{color:var(--ink);font-weight:600;font-family:"Courier New",monospace}
+  .bar{position:relative;width:90px;height:8px;background:var(--paper);border:1px solid var(--rule);border-radius:0}
+  .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink);
+    background-image:repeating-linear-gradient(45deg,#111 0 2px,transparent 2px 4px)}
+  .bar.target i{background:var(--ink)}
+  .hint{color:var(--ink-faint);font-size:11px;letter-spacing:.08em;font-style:italic}
+
+  .detail{
+    max-height:0;opacity:0;overflow:hidden;
+    transition:max-height .55s ease,opacity .35s ease,margin-top .35s ease;
+    margin-top:0;
+  }
+  .card:hover .detail,.card:focus-within .detail{
+    max-height:1400px;opacity:1;margin-top:28px;
+  }
+  .card:hover{padding-bottom:36px}
+
+  .detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0;
+    border:1px solid var(--rule)}
+  .scene{
+    position:relative;
+    background:var(--paper);
+    border-right:1px solid var(--rule);
+    padding:18px 18px 16px;min-height:240px;
+    display:flex;flex-direction:column;
+  }
+  .scene:last-child{border-right:none}
+  .scene .num{font-size:10px;letter-spacing:.22em;color:var(--ink-faint);text-transform:uppercase;font-weight:600;
+    font-family:"Courier New",monospace;}
+  .scene h4{margin:8px 0 10px;font-size:15px;font-weight:600;color:var(--ink);line-height:1.35}
+  .scene p{margin:0;font-size:13px;line-height:1.6;color:var(--ink-soft)}
+
+  .art{margin-top:14px;flex:1;display:flex;align-items:flex-end;justify-content:center}
+  .art svg{width:100%;height:120px;overflow:visible}
+
+  /* Mono line drawings */
+  .ln{fill:none;stroke:var(--ink);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+  .ln-soft{fill:none;stroke:var(--ink);stroke-width:1;stroke-linecap:round;opacity:.55}
+  .ln-dash{stroke:var(--ink);stroke-width:1;stroke-dasharray:3 3;fill:none;opacity:.5}
+  .figure-fill{fill:var(--ink)}
+
+  .rain line{stroke:var(--ink);stroke-width:1;stroke-linecap:round;
+    animation:rainfall 1.4s linear infinite;opacity:.5}
+  .rain line:nth-child(2){animation-delay:.25s}
+  .rain line:nth-child(3){animation-delay:.5s}
+  .rain line:nth-child(4){animation-delay:.75s}
+  .rain line:nth-child(5){animation-delay:1s}
+  @keyframes rainfall{
+    0%{transform:translateY(-12px);opacity:0}
+    20%{opacity:.6}
+    100%{transform:translateY(40px);opacity:0}
+  }
+
+  /* cairn stones — line drawn */
+  .cairn-stones path{
+    fill:var(--paper);stroke:var(--ink);stroke-width:1.4;
+    transform-origin:center;transform-box:fill-box;
+    opacity:0;animation:appear 2.6s ease-out infinite;
+  }
+  .cairn-stones path:nth-child(1){animation-delay:0s}
+  .cairn-stones path:nth-child(2){animation-delay:.6s}
+  .cairn-stones path:nth-child(3){animation-delay:1.2s}
+  @keyframes appear{
+    0%,8%{opacity:0;transform:translateY(8px)}
+    35%,75%{opacity:1;transform:translateY(0)}
+    100%{opacity:0;transform:translateY(-3px)}
+  }
+
+  /* heartbeat — outlined */
+  .heart{fill:var(--paper);stroke:var(--ink);stroke-width:1.4;
+    transform-origin:center;transform-box:fill-box;
+    animation:beat 1.4s ease-in-out infinite;}
+  @keyframes beat{
+    0%,100%{transform:scale(1)}
+    20%{transform:scale(1.22)}
+    40%{transform:scale(1)}
+  }
+  .signal-ring{fill:none;stroke:var(--ink);stroke-width:1;
+    transform-origin:center;transform-box:fill-box;
+    animation:ring 2.4s ease-out infinite;opacity:0;}
+  .signal-ring:nth-child(2){animation-delay:.8s}
+  @keyframes ring{
+    0%{transform:scale(.4);opacity:.7}
+    80%{transform:scale(1.7);opacity:0}
+    100%{transform:scale(1.7);opacity:0}
+  }
+
+  .coverage{
+    margin-top:24px;padding-top:18px;border-top:1px solid var(--rule);
+    display:grid;grid-template-columns:1fr 1fr;gap:18px;
+    font-size:12px;color:var(--ink-soft);
+  }
+  .coverage .row{display:flex;align-items:center;gap:8px;margin:5px 0}
+  .coverage .row b{color:var(--ink);min-width:140px;font-weight:500;font-size:13px}
+  .pill{
+    padding:2px 8px;border-radius:0;font-size:10px;letter-spacing:.12em;
+    text-transform:uppercase;border:1px solid var(--rule);
+    font-family:"Courier New",monospace;font-weight:600;
+  }
+
+  .footer{
+    margin-top:22px;padding-top:14px;border-top:1px solid var(--rule);
+    color:var(--ink-faint);font-size:12px;font-style:italic;line-height:1.7;
+  }
+  .footer span{color:var(--ink);font-style:normal;border-bottom:1px solid var(--ink);padding-bottom:1px}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="meta">
+      <span>痛点 <b>C1</b></span>
+      <span>·</span>
+      <span>独行的悖论</span>
+      <span>·</span>
+      <span>Style C · Mono Line</span>
+    </div>
+
+    <article class="card" tabindex="0">
+      <div class="head">
+        <h1>
+          一个人走 想要孤独 也想要被知道还活着。
+          <small>Jamie · Tararua 山脊 · 周六傍晚 · 雨</small>
+        </h1>
+        <span class="badge"><span class="dot"></span>命门 · 不可替代</span>
+      </div>
+
+      <div class="summary">
+        <div class="col">
+          <h3>痛点</h3>
+          <p>他不想加好友 不想刷动态 但也不想消失在山里。</p>
+        </div>
+        <div class="arrow">→</div>
+        <div class="col">
+          <h3>Cairn 接住</h3>
+          <p>路上前人留下的痕迹 + 家里有人知道你还在路上。</p>
+        </div>
+      </div>
+
+      <div class="scores">
+        <div class="score">
+          <span>痛点强度</span>
+          <div class="bar"><i style="width:90%"></i></div>
+          <b>9 / 10</b>
+        </div>
+        <div class="score">
+          <span>当前覆盖</span>
+          <div class="bar"><i style="width:30%"></i></div>
+          <b>3 / 10</b>
+        </div>
+        <div class="score">
+          <span>应该做到</span>
+          <div class="bar target"><i style="width:100%"></i></div>
+          <b>10 / 10</b>
+        </div>
+        <span class="hint">↓ hover 展开故事</span>
+      </div>
+
+      <div class="detail">
+        <div class="detail-grid">
+          <div class="scene">
+            <div class="num">01 / 那一刻</div>
+            <h4>雨夜 山脊 走错的岔。</h4>
+            <p>下午四点雨开始下。地图被风吹得卷起边。前面两条路看着都对。一个人 没人可问。</p>
+            <div class="art">
+              <svg viewBox="0 0 240 120" preserveAspectRatio="xMidYMax meet">
+                <path class="ln" d="M0 92 Q40 78 70 84 T130 82 T200 90 L240 95"/>
+                <path class="ln-dash" d="M120 85 L160 60"/>
+                <path class="ln-soft" d="M120 85 L155 100"/>
+                <g class="rain">
+                  <line x1="40" y1="0" x2="36" y2="20"/>
+                  <line x1="80" y1="0" x2="76" y2="20"/>
+                  <line x1="120" y1="0" x2="116" y2="20"/>
+                  <line x1="170" y1="0" x2="166" y2="20"/>
+                  <line x1="210" y1="0" x2="206" y2="20"/>
+                </g>
+                <circle class="figure-fill" cx="120" cy="78" r="2.6"/>
+                <rect class="figure-fill" x="118.7" y="80" width="2.6" height="9" rx="1"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="scene">
+            <div class="num">02 / Cairn 的事</div>
+            <h4>有人来过 留下一个石堆。</h4>
+            <p>"右边那条 雨天会涨水 走左边。" 不知道是谁 也永远不会认识 但那一刻知道 路上不只他一个。</p>
+            <div class="art">
+              <svg viewBox="0 0 240 120" preserveAspectRatio="xMidYMax meet">
+                <g class="cairn-stones">
+                  <path d="M111 92 Q120 86 129 92 Q120 98 111 92 Z"/>
+                  <path d="M113 80 Q120 74 127 80 Q120 86 113 80 Z"/>
+                  <path d="M115 70 Q120 65 125 70 Q120 75 115 70 Z"/>
+                </g>
+                <g transform="translate(150 40)">
+                  <rect x="0" y="0" width="74" height="26" rx="0" fill="#fff" stroke="#111" stroke-width="1.2"/>
+                  <text x="6" y="11" font-size="7" fill="#111" font-family="Inter">右边雨天涨水</text>
+                  <text x="6" y="20" font-size="7" fill="#9a9a9a" font-family="Inter">— 路上某人</text>
+                </g>
+                <path class="ln-dash" d="M148 53 L130 68"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="scene">
+            <div class="num">03 / 同一时刻 家里</div>
+            <h4>Tell Someone 自动签到。</h4>
+            <p>出发前他设了"19:00 还没下山就联系太太"。20 分钟前他到达 hut 的位置自动登记。家里手机收到："Jamie 已到 Powell Hut。"</p>
+            <div class="art">
+              <svg viewBox="0 0 240 120" preserveAspectRatio="xMidYMax meet">
+                <circle class="signal-ring" cx="120" cy="70" r="22"/>
+                <circle class="signal-ring" cx="120" cy="70" r="22"/>
+                <rect x="100" y="50" width="40" height="60" rx="3" fill="#fff" stroke="#111" stroke-width="1.4"/>
+                <rect x="105" y="60" width="30" height="14" rx="0" fill="#fff" stroke="#111" stroke-width="1"/>
+                <text x="108" y="69" font-size="6" fill="#111" font-family="Inter">Jamie · Powell Hut</text>
+                <text x="108" y="86" font-size="5" fill="#9a9a9a" font-family="Inter">17:42 · 已到达</text>
+                <path class="heart" d="M120 96 l-4 -4 a2.4 2.4 0 0 1 4 -2 a2.4 2.4 0 0 1 4 2 z"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="coverage">
+          <div>
+            <div class="row"><b>陌生人 mark</b><span class="pill">现状 6 类型 wip</span></div>
+            <div class="row"><b>留语音 mark</b><span class="pill">现状 0 没做</span></div>
+            <div class="row"><b>投票 / 时效</b><span class="pill">现状 3 后端有 UI 缺</span></div>
+          </div>
+          <div>
+            <div class="row"><b>Tell Someone</b><span class="pill">现状 0 软提示 p4</span></div>
+            <div class="row"><b>预计回程兜底</b><span class="pill">现状 0 planned</span></div>
+            <div class="row"><b>SOS 挂载到主页</b><span class="pill">现状 4 已建未挂载</span></div>
+          </div>
+        </div>
+
+        <div class="footer">
+          C1 是 Cairn 不可替代的位置。<span>"路上有人来过 + 家里有人知道"</span> 这两条线 都还没真正接通。
+          所有别的 app 都在让你 <span>表演</span> 你的户外 Cairn 在让你 <span>不被看见 但不孤独</span>。
+        </div>
+      </div>
+    </article>
+  </div>
+</body>
+</html>

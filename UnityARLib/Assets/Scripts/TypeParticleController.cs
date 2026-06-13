@@ -279,9 +279,10 @@ namespace Cairn.AR
                     else if (p.kind == "ripple")
                     {
                         // V3.1+V3.3: ripple 平面扩张
+                        // V5.5 fix: y scale 必须 0.001 平面!旧 1f 导致 cube 高 1m 全白挡 ribbon
                         float t = p.life / p.maxLife;
                         float scale = Mathf.Lerp(0.05f, 0.4f, t);
-                        p.tr.localScale = new Vector3(scale, 1f, scale);
+                        p.tr.localScale = new Vector3(scale, 0.001f, scale);
                         SetOpacity(p.mat, 0.7f * (1f - t));
                     }
 
