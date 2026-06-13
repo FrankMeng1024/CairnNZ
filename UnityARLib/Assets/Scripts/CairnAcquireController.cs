@@ -181,6 +181,23 @@ namespace Cairn.AR
             return g != null ? g.GetBool(name, fallback) : fallback;
         }
 
+        // 第三轮 review HIGH #4 修复:CairnBridge 缓存
+        // 8 个 emit 点都调 FindFirstObjectByType 太浪费,改为 lazy-cached
+        // null 时记一次 warning 让运维知道 emit 通道断了
+        CairnBridge _cachedBridge;
+        bool _bridgeWarnLogged;
+        CairnBridge Bridge()
+        {
+            if (_cachedBridge != null) return _cachedBridge;
+            _cachedBridge = Object.FindFirstObjectByType<CairnBridge>();
+            if (_cachedBridge == null && !_bridgeWarnLogged)
+            {
+                _bridgeWarnLogged = true;
+                Debug.LogWarning("[CairnAcquireController] CairnBridge not found — telemetry emits will be Debug.Log only");
+            }
+            return _cachedBridge;
+        }
+
         void Update()
         {
             if (_state == State.IMMORTAL)
@@ -257,7 +274,7 @@ namespace Cairn.AR
             {
                 float dist = (_cam != null) ? Vector3.Distance(_cam.transform.position, GetTargetWorldPos()) : -1f;
                 Debug.Log($"[v22-ACQUIRE-STATE] id={_markerId} from={prev} to={next} dist={dist:F2}");
-                var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                var bridge = Bridge();
                 if (bridge != null)
                 {
                     string json = $"{{\"markerId\":\"{_markerId}\",\"from\":\"{prev}\",\"to\":\"{next}\",\"dist\":{dist:F2},\"tInAcquire\":{_timeInAcquire:F2}}}";
@@ -323,7 +340,7 @@ namespace Cairn.AR
                     if (CfgBool("AcquireTelemetryEnabled", true))
                     {
                         Debug.Log($"[v22-ACQUIRE-LATCH-PROGRESS] id={_markerId} rayHitMarkXZ={rayHitMarkXZ:F2} facingDot={facingDot:F2} planeArea={bestPlaneArea:F2} dist={dist:F2}");
-                        var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                        var bridge = Bridge();
                         if (bridge != null)
                         {
                             string j = $"{{\"markerId\":\"{_markerId}\",\"rayHitMarkXZ\":{rayHitMarkXZ:F2},\"facingDot\":{facingDot:F2},\"planeArea\":{bestPlaneArea:F2},\"dist\":{dist:F2}}}";
@@ -338,7 +355,7 @@ namespace Cairn.AR
                     if (CfgBool("AcquireTelemetryEnabled", true))
                     {
                         Debug.Log($"[v22-ACQUIRE-TRIGGER] id={_markerId} channel={channel} rayHitMarkXZ={rayHitMarkXZ:F2} planeArea={bestPlaneArea:F2} facingDot={facingDot:F2} dist={dist:F2} t={_timeInAcquire:F2}");
-                        var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                        var bridge = Bridge();
                         if (bridge != null)
                         {
                             string j = $"{{\"markerId\":\"{_markerId}\",\"channel\":\"{channel}\",\"rayHitMarkXZ\":{rayHitMarkXZ:F2},\"planeArea\":{bestPlaneArea:F2},\"facingDot\":{facingDot:F2},\"dist\":{dist:F2},\"tFromAcquireEntry\":{_timeInAcquire:F2}}}";
@@ -366,7 +383,7 @@ namespace Cairn.AR
                 if (CfgBool("AcquireTelemetryEnabled", true))
                 {
                     Debug.Log($"[v22-ACQUIRE-LINGER] id={_markerId} dist={dist:F2} elapsed={_timeInAcquire:F2}");
-                    var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                    var bridge = Bridge();
                     if (bridge != null)
                     {
                         string j = $"{{\"markerId\":\"{_markerId}\",\"dist\":{dist:F2},\"elapsed\":{_timeInAcquire:F2}}}";
@@ -475,7 +492,7 @@ namespace Cairn.AR
                 Debug.Log($"[v22-ACQUIRE-GUIDE] id={_markerId} level={level} t={t:F1}");
 
                 // v0.2.4: emit to RN AcquireGuidance.tsx
-                var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                var bridge = Bridge();
                 if (bridge != null)
                 {
                     string json = $"{{\"markerId\":\"{_markerId}\",\"level\":{level},\"elapsed\":{t:F2}}}";
@@ -530,7 +547,7 @@ namespace Cairn.AR
             if (CfgBool("AcquireTelemetryEnabled", true))
             {
                 Debug.Log($"[v22-ACQUIRE-ANCHOR] id={_markerId} ok={anchorOk} latencyMs={anchorLatencyMs:F1} reason={anchorReason}");
-                var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                var bridge = Bridge();
                 if (bridge != null)
                 {
                     string j = $"{{\"markerId\":\"{_markerId}\",\"ok\":{(anchorOk?"true":"false")},\"latencyMs\":{anchorLatencyMs:F1},\"reason\":\"{anchorReason}\"}}";
@@ -559,7 +576,7 @@ namespace Cairn.AR
             {
                 Vector3 p = transform.position;
                 Debug.Log($"[v22-CEREMONY-DONE] id={_markerId} pos=({p.x:F2},{p.y:F2},{p.z:F2}) fromFallback={fromFallback}");
-                var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                var bridge = Bridge();
                 if (bridge != null)
                 {
                     string j = $"{{\"markerId\":\"{_markerId}\",\"atPos\":[{p.x:F2},{p.y:F2},{p.z:F2}],\"fromFallback\":{(fromFallback?"true":"false")}}}";
@@ -611,7 +628,7 @@ namespace Cairn.AR
             {
                 bool gyroActive = IsUserActivelyScanning();
                 Debug.LogWarning($"[v22-ACQUIRE-L2] id={_markerId} elapsed={_timeInAcquire:F2} userActivelyScanning={gyroActive} tiltDeg={pitchDeg:F1} fallbackY={fallbackY:F2}");
-                var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                var bridge = Bridge();
                 if (bridge != null)
                 {
                     string j = $"{{\"markerId\":\"{_markerId}\",\"elapsed\":{_timeInAcquire:F2},\"userActivelyScanning\":{(gyroActive?"true":"false")},\"tiltDeg\":{pitchDeg:F1},\"fallbackY\":{fallbackY:F2}}}";

@@ -232,19 +232,36 @@ public partial class PortalSpawner
         // 让 cairn 一旦 spawn 就由 5铁律 状态机驱动:
         //   FAR → APPROACH → ACQUIRE → IMMORTAL,触发 CeremonyController.Play()
         // 之前 MORNING_REPORT 记录"未自动挂"是 v0.2.4 build 的最大差距,本次修复。
+        //
+        // 第三轮 review BLOCKER #1 修复:
+        //   arRaycastManagerRef/arPlaneManagerRef/arAnchorManagerRef/arCameraRef 是
+        //   public field,Inspector 拖拽配置。如果 SceneSetup 没跑或 prefab 配错,
+        //   它们会是 null → CairnAcquireController 静默失败(planeReady 永远 false)。
+        //   防御:这里主动 FindFirstObjectByType 回填 null 引用。
         if (globals == null || globals.GetBool("AcquireControllerEnabled", true))
         {
             var ceremony = container.GetComponentInChildren<Cairn.AR.CeremonyController>(true);
-            // existingAnchor 此刻可能 null(TryParentToAnchor 是 coroutine 异步)
-            // CairnAcquireController.GetTargetWorldPos() 已 fallback 到 transform.position
             var existingAnchor = container.GetComponentInParent<ARAnchor>();
-            // LiDAR 检测:ARFoundation 6 通过 ARSession + meshing subsystem 判定
-            // 简单策略:_planeMgr 在且 ARSession 跑起来即可,实际 LiDAR 判定下沉到
-            // FloorPlaneValidator 内部(它已有 _lidarAvailable 入参驱动的不同验证规则)
-            bool lidar = false;  // 保守 default,FloorPlaneValidator 仍可用 polygon 路径
-            var ctl = container.AddComponent<Cairn.AR.CairnAcquireController>();
-            ctl.Init(data.id, existingAnchor, arRaycastManagerRef, arPlaneManagerRef,
-                     arAnchorManagerRef, arCameraRef, ceremony, lidar);
+
+            // 防御 null:Inspector 没配置时主动找
+            var rcMgr = arRaycastManagerRef != null ? arRaycastManagerRef : Object.FindFirstObjectByType<ARRaycastManager>();
+            var pmMgr = arPlaneManagerRef   != null ? arPlaneManagerRef   : Object.FindFirstObjectByType<ARPlaneManager>();
+            var amMgr = arAnchorManagerRef  != null ? arAnchorManagerRef  : Object.FindFirstObjectByType<ARAnchorManager>();
+            var cam   = arCameraRef         != null ? arCameraRef         : Camera.main;
+            // 任意一个仍 null = 严重配置错误,记 warn 但仍 ship cairn(不强制 attach controller)
+            if (rcMgr == null || pmMgr == null || amMgr == null || cam == null)
+            {
+                UnityLogger.W("V199",
+                    $"AcquireController not attached id={data.id} — null refs: " +
+                    $"rc={(rcMgr==null?"null":"ok")} pm={(pmMgr==null?"null":"ok")} " +
+                    $"am={(amMgr==null?"null":"ok")} cam={(cam==null?"null":"ok")}");
+            }
+            else
+            {
+                bool lidar = false;  // 保守 default,FloorPlaneValidator 仍可用 polygon 路径
+                var ctl = container.AddComponent<Cairn.AR.CairnAcquireController>();
+                ctl.Init(data.id, existingAnchor, rcMgr, pmMgr, amMgr, cam, ceremony, lidar);
+            }
         }
         UnityLogger.IForward("V199",
             $"add-done id={data.id} pebble={(pebbleMaterial!=null && data.type=="cairn")} " +

@@ -28,20 +28,30 @@ namespace Cairn.AR
     public class CrossSessionGroundSnap : MonoBehaviour
     {
         static CrossSessionGroundSnap _instance;
-        bool _ranThisSession = false;
+        bool _coroutineRunning = false;
+
+        // 第三轮 review BLOCKER #2 修复:
+        //   原设计 _ranThisSession 永远 true → 第二个 ARSession (用户后台返回触发新 session)
+        //   EnsureRunning 直接 short-circuit return → 跨 session snap 永不再跑
+        //   修复策略:每次 EnsureRunning 调用都视为 "新 ARSession 启动事件",重启 snap 流程
+        //   (CairnBridge 在 ArReady emit 时调用,所以一次 ArReady → 一次 snap 协程)
+        //   _coroutineRunning 防同一 session 内重复 ArReady 重叠 coroutine
 
         public static void EnsureRunning()
         {
-            if (_instance != null) return;
-            var go = new GameObject("CrossSessionGroundSnap");
-            DontDestroyOnLoad(go);
-            _instance = go.AddComponent<CrossSessionGroundSnap>();
+            if (_instance == null)
+            {
+                var go = new GameObject("CrossSessionGroundSnap");
+                DontDestroyOnLoad(go);
+                _instance = go.AddComponent<CrossSessionGroundSnap>();
+            }
+            // 每次都尝试启动 — 如果 coroutine 还在跑就跳过,否则重启
+            _instance.TryStartSnap();
         }
 
-        void OnEnable()
+        void TryStartSnap()
         {
-            if (_ranThisSession) return;
-            _ranThisSession = true;
+            if (_coroutineRunning) return;  // 同一 session ArReady 重叠保护
 
             var globals = CairnGlobals.Instance;
             if (globals != null && !globals.GetBool("CrossSessionSnapEnabled", true))
@@ -52,6 +62,7 @@ namespace Cairn.AR
             float delaySec = globals != null
                 ? globals.GetForType(null, "CrossSessionSnapDelaySec", 5f)
                 : 5f;
+            _coroutineRunning = true;
             StartCoroutine(SnapAfterDelay(delaySec));
         }
 
@@ -59,6 +70,8 @@ namespace Cairn.AR
         {
             yield return new WaitForSeconds(delay);
 
+            // 第三轮 BLOCKER #2 修复:每条退出路径都 reset _coroutineRunning,
+            // 让下次 ArReady 能再次启动 snap 流程(用户后台返回触发新 ARSession)
             var globals = CairnGlobals.Instance;
             float maxDist  = globals != null ? globals.GetForType(null, "CrossSessionSnapMaxDistM",  8f)    : 8f;
             float minDelta = globals != null ? globals.GetForType(null, "CrossSessionSnapMinDeltaY", 0.10f) : 0.10f;
@@ -68,6 +81,7 @@ namespace Cairn.AR
             if (planeMgr == null || cam == null)
             {
                 Debug.LogWarning("[v22-CROSS-SESSION-SNAP] aborted: planeMgr or camera null");
+                _coroutineRunning = false;
                 yield break;
             }
 
@@ -90,6 +104,7 @@ namespace Cairn.AR
             if (bestPlane == null)
             {
                 Debug.Log("[v22-CROSS-SESSION-SNAP] no valid floor plane found within " + maxDist + "m");
+                _coroutineRunning = false;
                 yield break;
             }
 
@@ -143,6 +158,7 @@ namespace Cairn.AR
                 }
             }
             Debug.Log("[v22-CROSS-SESSION-SNAP] complete: " + snapCount + "/" + cairns.Length + " snapped, planeY=" + planeY.ToString("F3"));
+            _coroutineRunning = false;
         }
 
         static string GetMarkerId(CairnAcquireController c)

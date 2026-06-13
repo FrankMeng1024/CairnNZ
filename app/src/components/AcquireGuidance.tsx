@@ -50,20 +50,19 @@ export function AcquireGuidance({ acquiringMarkerId }: Props) {
   // NativeEventEmitter('CairnBridge')。UnityAROverlay 的 case 'AcquireGuidance'
   // 路由 → globalThis.__cairnGuidance(payload) → 此 handler。
   //
-  // deps=[] 仅 mount 一次,handler 内通过 closure 读 acquiringMarkerId(从 useRef
-  // 间接访问最新值,避免 marker 切换时反复 cleanup/restore handler)。
-  const acquiringRef = React.useRef(acquiringMarkerId);
-  React.useEffect(() => { acquiringRef.current = acquiringMarkerId; }, [acquiringMarkerId]);
+  // 第三轮 review HIGH #3 修复:回退第二次 polish 的 useRef + deps=[] 反模式
+  // 原因:ESLint exhaustive-deps 警告;closure 风险大于"避免 cleanup/restore"的收益
+  // 当前用 deps=[acquiringMarkerId]:每次 marker 切换 cleanup→重新 setup handler,
+  // 在 React 18 dev mode 下逻辑稳定,且符合标准模式。性能开销微乎其微(O(N) 全局赋值)
   useEffect(() => {
     const prev = (globalThis as any).__cairnGuidance;
     (globalThis as any).__cairnGuidance = (data: { markerId: string; level: number; elapsed: number }) => {
-      const cur = acquiringRef.current;
-      if (cur && data.markerId !== cur) return;
+      if (acquiringMarkerId && data.markerId !== acquiringMarkerId) return;
       setActiveId(data.markerId);
       setLevel(data.level);
     };
     return () => { (globalThis as any).__cairnGuidance = prev; };
-  }, []);
+  }, [acquiringMarkerId]);
 
   // Hide when no active marker
   useEffect(() => {
