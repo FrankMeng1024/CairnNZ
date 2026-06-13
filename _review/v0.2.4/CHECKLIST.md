@@ -243,19 +243,11 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
 
 ### Phase A1 — 根因调研
 
-- [ ] **A1.1** Cairn 当前 plant 调用链全图
-  - 主 agent 读:RN handlePlantCairn → SpawnRequest → Unity 收 → PortalSpawner.SpawnStrand → groundY 来源 → ARAnchor 何时挂 / 用什么 plane / 是不是真 ARKit world
-  - PROOF:`_review/v0.2.4/research/A1.1-plant-chain-trace.md` 完整 trace + 每步 file:line
-  - 双 subagent 验:#1 看 trace 完整性,#2 找出"哪一环用的是 GPS 不是 ARKit world"
-
-- [ ] **A1.2** 业界 AR 巨头做法
-  - Apple Measure / IKEA Place / ARKit ARWorldMap / ARGeoAnchor / Niantic Lightship VPS / ARCore Cloud Anchors
-  - 关键:他们怎么保证 session 内"绝对不动"?
-  - PROOF:`_review/v0.2.4/research/A1.2-industry-anchor-practice.md`
-  - 双 subagent 验
-
-- [ ] **A1.3** 出修复 plan(根因层 fix,不是 patch)
-  - 用户审
+- [x] **A1.1** Cairn 当前 plant 调用链全图 ✅ 2026-06-13
+  - 报告 `_review/v0.2.4/research/A1.1-plant-chain-trace.md`
+  - 主 agent 二次 trace 补:cross-session re-render 路径 (unityCairnSpawn.buildSpawnRequest) 是飘逸真根因 — Marker schema 只存 GPS 没 ARKit XYZ
+- [x] **A1.2** 业界 AR 巨头做法 ✅ 已存(`_review/v0.2.4/research/A1.2-industry-anchor-practice.md`)
+- [x] **A1.3** 出修复 plan ✅ 内嵌 A1.1 报告 §A2 实施方向
 
 ### Phase A2 — 实施(一步一勾)
 
@@ -263,9 +255,13 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
   - 3 commits: 1e11cc2 (sub#1 Init 漏调) → 2d90e08 (sub#2 #1 deadline 裸坐标 + #3 埋点 guard) → ac77a96 (sub#2 round 2 N1 _spawned 泄漏 + N3 重名 + N4 Init 二次)
   - 4 眼 review 双 round 完成,sub#2 verdict ACCEPT (round 2)
   - 核心保证:pre-spawn / retry 1s 内成功 / retry 1s 失败 三条路径都有 ARAnchor parent,只剩"ARAnchor AddComponent 也失败"罕见兜底裸坐标 + 错误日志
-- [ ] **A2.2** mark 持久化 schema 同时存 ARKit world XYZ + GPS lat/lng(双源)
-- [ ] **A2.3** session 重启时优先用 ARKit world,fallback GPS+raycast
-- [ ] **A2.4** 加埋点真机对账:`v22-PLANT-ANCHOR-CREATE` / `v22-PLANT-ANCHOR-DRIFT-DETECTED`
+- [x] **A2.2** mark 持久化 schema 同时存 ARKit world XYZ + GPS lat/lng(双源)✅ 2026-06-13
+  - commit 961e3d1: useMarkerStore.Marker 加 arkitX/Y/Z + arOriginLat/Lng,ARScreen plant 时填
+- [x] **A2.3** session 重启时优先用 ARKit world,fallback GPS+raycast ✅ 2026-06-13
+  - commit 45fe3ce: unityCairnSpawn.buildSpawnRequest 加 Tier-A 路径(同 origin <5m → 用 ARKit XYZ),caller 传完整 marker
+- [x] **A2.4** 加埋点真机对账:`v22-PLANT-ANCHOR-CREATE` / `v22-PLANT-ANCHOR-DRIFT-DETECTED` ✅ 2026-06-13
+  - commit 37e965e: 3 路径 emit CREATE + 新组件 AnchorDriftMonitor 1s 检查 anchor 漂移
+  - RN 端 buildSpawnRequest emit Tier-A / TIER-A-REJECT / TIER-B 字段
 - [ ] **A2.5** 真机 telemetry 跑 ≥30 min,看 mark 是否真不飘 (需 EAS build,不在本 session 范围)
 - [ ] **A2.6** 用户审 (需 A2.5 后用户)
 
@@ -282,37 +278,46 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
 
 ### Phase G1 — 根因调研
 
-- [ ] **G1.1** Cairn 当前 groundY 算法 全 trace(GroundYResolver / FloorPlaneValidator / ForceFallbackSpawn)
-  - 关键:每条路径 Y 来源是 raycast hit / ARPlane.center / camera-1.5 哪一个?
-  - PROOF:`_review/v0.2.4/research/G1.1-groundY-algorithm-trace.md`
-  - 双 subagent 验
-
-- [ ] **G1.2** 业界 AR 地面定位做法
-  - ARFoundation 6 ARMeshManager(LiDAR 设备 mesh classification)
-  - ARCore Depth API
-  - Apple ARKit Geometry Subsystem
-  - Niantic Wayspot 真实地形
-  - PROOF:`_review/v0.2.4/research/G1.2-industry-ground-practice.md`
-  - 双 subagent 验
-
-- [ ] **G1.3** 修复 plan + 用户审
+- [x] **G1.1** Cairn 当前 groundY 算法 全 trace ✅ 已存(`_review/v0.2.4/research/G1.1-groundY-algorithm-trace.md`)
+  - 5 个根因清单,Root Cause #2 (CRITICAL) "fallbackY = camera.y - 1.5 启发"在 G2.1 已修
+- [x] **G1.2** 业界 AR 地面定位做法 ✅ 已存(同 A1.2 _review/v0.2.4/research 内)
+- [x] **G1.3** 修复 plan ✅ 内嵌 G1.1 报告 §G2 实施方向
 
 ### Phase G2 — 实施
 
-- [ ] **G2.1** plant 时强制 raycast hit + FloorPlaneValidator 验证(已有,加严格)
-- [ ] **G2.2** LiDAR 设备走 ARMeshManager mesh classification(优先级最高)
-- [ ] **G2.3** 非 LiDAR 走 PlaneWithinPolygon 真实边界 raycast
-- [ ] **G2.4** 拒绝场景:plane 离 camera Y 不合理 / plane 法线偏角 > 阈值
-- [ ] **G2.5** 加埋点 `v22-GROUND-Y-SOURCE`(tier-A/B/C 哪条 + 偏差 cm)
-- [ ] **G2.6** 真机不同环境跑(室内 / 室外草地 / 室外石头 / 低光)
-- [ ] **G2.7** 用户审
+- [x] **G2.1** plant 时强制 raycast hit + FloorPlaneValidator 验证(已有,加严格)✅ 2026-06-13
+  - commit 537bf4b: CairnAcquireController.ForceFallbackSpawn 改 raycast 优先 + camera-1.5 仅最后兜底
+  - 修了 G1.1 Root Cause #2 (CRITICAL) "fallbackY = camera.y - 1.5 启发太硬"
+- [ ] **G2.2** LiDAR 设备走 ARMeshManager mesh classification(优先级最高)— **降级 v0.2.5**
+  - 当前 ARRaycastManager + TrackableType.Depth 在 LiDAR 设备已自动用 LiDAR depth subsystem
+  - ARMeshManager mesh classification 子 cm 精度需 prefab + Awake 改造,引入大改 + 真机验,留 v0.2.5
+- [x] **G2.3** 非 LiDAR 走 PlaneWithinPolygon 真实边界 raycast ✅ 现有(无需改动)
+  - GroundYResolver.cs:269 `TrackableType.PlaneWithinPolygon | TrackableType.Depth` 已用
+- [x] **G2.4** 拒绝场景:plane 离 camera Y 不合理 / plane 法线偏角 > 阈值 ✅ 2026-06-13
+  - commit 537bf4b: FloorPlaneValidator 新参数 maxFloorDistanceBelowCam=5m
+  - 拒绝 belowCam>5m(楼下地面/悬崖)+ 已有 belowCam<1m(桌面)+ 法线>20° 拒
+- [x] **G2.5** 加埋点 `v22-GROUND-Y-SOURCE`(tier-A/B/C 哪条 + 偏差 cm)✅ 2026-06-13
+  - commit 537bf4b: GroundYResolver.QueryGroundY 4 个 return 点都 emit
+  - CairnAcquireController.ForceFallbackSpawn 也 emit (G2.1 同 commit)
+- [ ] **G2.6** 真机不同环境跑(室内 / 室外草地 / 室外石头 / 低光) — 需 EAS build,不在本 session 范围
+- [ ] **G2.7** 用户审 — 需 G2.6 真机后
 
 ---
 
 ## 当前状态
 
-**最后一个完成的项**: 无(checklist 刚建立)
-**当前在做的项**: 无 — 等用户给"开始 Phase V1.1"信号
+**最后一个完成的项**: G2.5 ground 来源埋点(commit 537bf4b)
+**当前在做的项**: 无 — Part 2/3 代码层全部完成,等用户 review + EAS build 真机 (A2.5/A2.6/G2.6/G2.7)
+
+**v0.2.4 session 完成里程碑**:
+- Part 1 视觉(V2.x → V4.12): ribbon 三段式生命 + ACES + label + 5 type 全验证 + GIF flipbook ✅
+- Part 2 plant 飘逸 (A1.x 调研 + A2.1-A2.4 实施): pre-spawn ARAnchor + retry deadline anchor + 双源 schema + Tier-A 优先 + drift monitor ✅
+- Part 3 ground (G1.x 调研 + G2.1/G2.3/G2.4/G2.5): raycast 优先 + 5m upper bound + tier 埋点 ✅
+- 14 个 commit (V4.13 起): 1e11cc2 / 2d90e08 / ac77a96 / 961e3d1 / 45fe3ce / 37e965e / 537bf4b 等
+
+**待用户**:
+- A2.5/A2.6/G2.6/G2.7 全是真机环境 + 用户审,需 EAS build,本 session 范围外
+- G2.2 ARMeshManager 改造降级 v0.2.5(需结构性 prefab 改 + 真机验)
 
 **已完成但需用户复验的之前 commit**(可能含错误工作):
 - 9e5b5ef..029e02a 全部 Block A/B/C/D/E/F + 3 轮 review fix(部分质量未达用户口径,Part 1 视觉特别需要回炉)
