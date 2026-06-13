@@ -220,7 +220,10 @@ namespace Cairn.AR
                         p.vel.y += 1.1f * dt;
                         p.vel.x += Mathf.Sin(tNow * 1.2f + i * 0.7f) * 0.025f * dt;
                         p.vel.z += Mathf.Cos(tNow * 0.9f + i * 0.7f) * 0.025f * dt;
-                        SetOpacity(p.mat, 0.7f * Mathf.Max(0f, 1f - p.life / p.maxLife));
+                        // v0.2.4 D2-4: 烛光摇曳 — opacity sin wave 替代单调 fade
+                        // 0.7 + 0.25 * sin(t * 2.5 + phase) 模拟烛芯闪动
+                        float flameMod = 0.7f + 0.25f * Mathf.Sin(p.life * 2.5f + i * 1.3f);
+                        SetOpacity(p.mat, flameMod * Mathf.Max(0f, 1f - p.life / p.maxLife));
                     }
                     else if (p.kind == "drop")
                     {
@@ -311,6 +314,9 @@ namespace Cairn.AR
             go.transform.localPosition = new Vector3(Mathf.Cos(a) * r, 0.005f, Mathf.Sin(a) * r);
             go.transform.localScale = Vector3.one * sz;
 
+            // v0.2.4 D2-1: 碎石尾迹(Reviewer B 加强)
+            var trail = AttachTrail(go, 0.4f, 0.005f, new Color(0.55f, 0.42f, 0.20f, 0.7f), Color.clear);
+
             _points.Add(new Particle
             {
                 tr = go.transform,
@@ -320,6 +326,7 @@ namespace Cairn.AR
                 life = 0f,
                 maxLife = 1.6f,
                 kind = "stone",
+                trail = trail,
             });
         }
 
@@ -340,6 +347,11 @@ namespace Cairn.AR
             go.transform.localPosition = new Vector3(Mathf.Cos(a) * r, 0.005f, Mathf.Sin(a) * r);
             go.transform.localScale = Vector3.one * sz;
 
+            // v0.2.4 D2-2: 水珠 motion trail(Reviewer B 加强 — 折射用 fresnel 替代,trail 模拟流体感)
+            var trail = AttachTrail(go, 0.5f, 0.008f,
+                new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.6f),
+                new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0f));
+
             // Inward velocity (toward center)
             float speed = 0.04f + Random.value * 0.06f;
             _points.Add(new Particle
@@ -351,6 +363,7 @@ namespace Cairn.AR
                 life = 0f,
                 maxLife = 1.8f,
                 kind = "drop",
+                trail = trail,
             });
         }
 
@@ -427,6 +440,11 @@ namespace Cairn.AR
             // Cone size: 0.020 base radius, 0.055 height; we use a unit cone mesh and scale.
             go.transform.localScale = new Vector3(0.04f, 0.055f, 0.04f);
 
+            // v0.2.4 D2-5: 箭头分叉 trail(Reviewer B 加强 — junction 留下 0.3s 轨迹)
+            var trail = AttachTrail(go, 0.3f, 0.012f,
+                new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.55f),
+                new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0f));
+
             _points.Add(new Particle
             {
                 tr = go.transform,
@@ -440,6 +458,7 @@ namespace Cairn.AR
                 orbitPhase = a,
                 orbitSpeed = 0.35f + Random.value * 0.25f,
                 orbitY = 0.18f + Random.value * 0.20f,
+                trail = trail,
             });
         }
 
@@ -529,6 +548,36 @@ namespace Cairn.AR
             if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);  // Transparent
             if (mat.HasProperty("_Blend")) mat.SetFloat("_Blend", 1f);      // Additive
             return mat;
+        }
+
+        // v0.2.4 D2: TrailRenderer helper — Reviewer B 5 条加强里 cairn / water / junction 用
+        static TrailRenderer AttachTrail(GameObject go, float lifeSec, float startWidth, Color startColor, Color endColor)
+        {
+            var tr = go.AddComponent<TrailRenderer>();
+            tr.time = lifeSec;
+            tr.startWidth = startWidth;
+            tr.endWidth = 0f;
+            tr.minVertexDistance = 0.005f;
+            tr.numCapVertices = 2;
+            tr.numCornerVertices = 2;
+            tr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            tr.receiveShadows = false;
+            // Use additive material for trail
+            tr.material = MakeAdditiveMat();
+            // Color gradient
+            var grad = new Gradient();
+            grad.SetKeys(
+                new GradientColorKey[] {
+                    new GradientColorKey(new Color(startColor.r, startColor.g, startColor.b), 0f),
+                    new GradientColorKey(new Color(endColor.r,   endColor.g,   endColor.b),   1f),
+                },
+                new GradientAlphaKey[] {
+                    new GradientAlphaKey(startColor.a, 0f),
+                    new GradientAlphaKey(endColor.a,   1f),
+                });
+            tr.colorGradient = grad;
+            tr.emitting = true;
+            return tr;
         }
     }
 }
