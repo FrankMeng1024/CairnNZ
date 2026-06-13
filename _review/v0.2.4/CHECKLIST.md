@@ -220,6 +220,15 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
   - scripts/build_v024_labels.py PIL 烘焙 5 个 type 的 black 圆角 + 标签头 PNG
   - V024CapturePlayground spawn quad(180°Y rot 让 mesh 法线朝相机)+ Sprites/Default
   - SIDE-BY-SIDE-V4.7.png 视觉对齐 ~90%
+- [x] **V4.8** 5 type 全 capture + 修 Find inactive bug ✅ 2026-06-13
+  - GameObject.Find 不找 inactive,改用 Clusters parent.transform.Find 路径查找
+  - 5 type 全部正确渲染(cairn/danger/water/junction/hut),独有 rune SDF + label color + particle
+  - V4.8-5-types-stack.png 跨 type 视觉一致
+- [x] **V4.9** Ribbon shader 接 fog ✅ 2026-06-13
+  - 用 worldPos 到相机距离手动 fog factor(5m 起,20m 完全 fade)
+  - 真机走远时 ribbon 自然融入 fog 主要益处
+- [ ] **V4.10** 二段式"脱离阵法"(用户原话:lifeT<0.4 贴地 → 整段离开 → 飘到空中)— 当前连续平移
+- [ ] **V4.11** 紧凑感优化(相机距离或阵法半径调,让 5 根更聚)
 - [ ] **V4.8** 二段式"脱离阵法"(用户原话:lifeT<0.4 贴地 → 整段离开 → 飘到空中)
 - [ ] **V4.9** Ribbon shader 接 Unity fog(让远处 ribbon 与 ground fog 融合)
 - [ ] **V4.10** 修右下穿帮红色三角(已在 V2.2-P0a 修)✅
