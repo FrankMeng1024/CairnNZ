@@ -271,6 +271,9 @@ namespace Cairn.AR
             //   修: 0.95 让 ribbon 起源在 ring 内侧 5%, 与 ring 视觉真接合
             float baseX = Mathf.Cos(_angleRad) * _ringRadius * 0.95f;
             float baseZ = Mathf.Sin(_angleRad) * _ringRadius * 0.95f;
+            // V5.29 sub#2 推荐顶部向中心收束 (HTML baseline: 三股顶端汇聚成锥):
+            //   ribbon 顶部 sT=1 时往中心 (0, topY, 0) 拉,sT 越大越内收
+            //   公式: cx = baseX * (1 - sT^2 * 0.7)  让顶 30% 朝中心收
 
             // Sway (gentle wobble)
             // V2.2 G16 fix: batch mode Time.time=0,改用 Shader.GetGlobalFloat("_CairnAnimTime")
@@ -299,8 +302,10 @@ namespace Cairn.AR
                 // Sway grows toward tip
                 float swayMag = _swayAmp * sT * sT;
                 float swayOff = swayMag * Mathf.Sin(sT * 2.5f + swayPhase);
-                float cx = baseX + swayTanX * swayOff;
-                float cz = baseZ + swayTanZ * swayOff;
+                // V5.29: 顶部向中心收束 (HTML 三股汇聚)
+                float convergeFactor = 1f - sT * sT * 0.7f;  // sT=0 → 1.0, sT=1 → 0.30
+                float cx = baseX * convergeFactor + swayTanX * swayOff;
+                float cz = baseZ * convergeFactor + swayTanZ * swayOff;
 
                 Vector3 worldP = originWorld + new Vector3(cx, y, cz);
 
