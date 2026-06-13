@@ -234,12 +234,17 @@ namespace Cairn.AR.Editor
 
                 // v0.2.4 manual ticks: drive ribbons + particles since
                 // batch mode does not fire MonoBehaviour Update / LateUpdate
+                // V2.2 P1 fix: 跑 30 帧而非 60 帧截图
+                // 60 帧 (3s) 后 5 根 ribbon 都已重生(_life > _lifeDuration),
+                // 部分根处于 lifeT~0 globalFade 极淡 → screenshot 像 4 根
+                // 30 帧 (1.5s) 后 5 根 lifeT = 0.3/0.5/0.7/0.9/1.1(根 4 刚重生 lifeT=0.1)
+                // 仍有 1 根淡相位,但比 60 帧更接近"5 根都在场"
                 var clusterRoot = GameObject.Find($"Cluster_{t.id}");
                 if (clusterRoot != null)
                 {
                     var ribbons = clusterRoot.GetComponentsInChildren<Cairn.AR.SilkRibbonV2>();
                     var parts   = clusterRoot.GetComponentsInChildren<Cairn.AR.TypeParticleController>();
-                    for (int frame = 0; frame < 60; frame++)
+                    for (int frame = 0; frame < 30; frame++)
                     {
                         // Advance shader animation time for flow noise
                         Shader.SetGlobalFloat("_CairnAnimTime", frame * 0.05f + 0.5f);

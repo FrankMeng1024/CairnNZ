@@ -116,8 +116,9 @@ namespace Cairn.AR
             {
                 _life = 0f;
                 _lifeDuration = 4.0f + Random.value * 2.0f;
-                _angleRad += (Random.value - 0.5f) * 0.2f;
-                _seed = Random.value * 1000f;
+                // V2.2 P1+G19 fix: 重生时 _seed/_angleRad 不再 randomize
+                // 保持初始 Configure 值,让 5 根 ribbon 错峰确定性贯穿整个 capture/runtime
+                // 用户原话"5 根错峰生命感",不需要每周期重洗位置
             }
             Rebuild();
         }
@@ -137,8 +138,8 @@ namespace Cairn.AR
             {
                 _life = 0f;
                 _lifeDuration = 4.0f + Random.value * 2.0f;
-                _angleRad += (Random.value - 0.5f) * 0.2f;
-                _seed = Random.value * 1000f;
+                // V2.2 P1+G19 fix: 同 LateUpdate,_seed/_angleRad 不重 random
+                // 保持 Configure 时的确定性值,让 sway/位置贯穿整个 capture
             }
             Rebuild();
         }
