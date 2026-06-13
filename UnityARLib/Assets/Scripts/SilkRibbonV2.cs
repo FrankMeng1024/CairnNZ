@@ -78,6 +78,11 @@ namespace Cairn.AR
             _baseTint    = baseTint;
             _tipTint     = tipTint;
             _life        = _phaseOffset * _lifeDuration;
+            // V2.2 G19 fix: _seed 用 phaseOffset 衍生(确定性),让 sway 也错峰
+            // V2.1 sub#1+sub#2 抓出:Awake 时 _seed = Random.value*1000 一次性生成,Configure 不重置
+            // → swayPhase = Time.time*0.4 + _seed,5 根 _seed 各自独立随机方差小,sway 错峰只 4% 周期
+            // 改用 phaseOffset 驱动 _seed: 5 根 _seed = 0/200/400/600/800,周期 15.7s 错峰 25% 强
+            _seed = phaseOffset * 1000f;
         }
 
         void BuildIndexBuffer()
