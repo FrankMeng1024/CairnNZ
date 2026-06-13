@@ -26,8 +26,8 @@ namespace Cairn.AR
         [SerializeField] float _ringRadius = 0.55f;
         [SerializeField] float _angleRad = 0f;       // base angle on ring
         [SerializeField] float _phaseOffset = 0f;    // 0..1 lifecycle stagger
-        [SerializeField] float _lifeHeight = 2.5f;   // V5.15 sub 共识: 必须 > bodyLength*2=2.0 让 stage3 bottomY 真升,V5.14 1.5 数学反向 bug
-        [SerializeField] float _bodyLength = 1.5f;   // V5.30 sub 推荐 height ×3: 1.0→1.5 让 ribbon 修长不胖锥
+        [SerializeField] float _lifeHeight = 3.5f;   // V5.34 sub#19 长宽比 8:1: 2.5 → 3.5 让 ribbon 更修长
+        [SerializeField] float _bodyLength = 2.0f;   // V5.34 sub#19 长宽比 8:1: 1.5→2.0, width 0.30 → 长宽比 6.7:1
         [SerializeField] float _maxWidth = 0.10f;
         [SerializeField] int   _segs = 24;
         [SerializeField] float _swayAmp = 0.02f;   // V5.23 sub#2 抑火焰: 0.05→0.02 减弱 sway 让 ribbon 不扭曲成火焰
