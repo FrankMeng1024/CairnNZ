@@ -286,8 +286,8 @@ public partial class PortalSpawner
                 && (globals == null || globals.GetBool("HeroRibbonEnabled", true));
             int ribbonCount = ribbonsEnabled
                 ? Mathf.Clamp(globals != null
-                    ? Mathf.RoundToInt(globals.GetForType(null, "HeroRibbonCount", 6))
-                    : 6, 0, 12) : 0;
+                    ? Mathf.RoundToInt(globals.GetForType(null, "HeroRibbonCount", 8))
+                    : 8, 0, 12) : 0;
             float ribbonCurl = globals != null
                 ? globals.GetForType(null, "HeroRibbonCurl", 0.20f) : 0.20f;
             bool farShaftEnabled = lightShaftMaterial != null

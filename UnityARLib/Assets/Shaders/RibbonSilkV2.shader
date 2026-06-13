@@ -43,6 +43,10 @@ Shader "Cairn/RibbonSilkV2"
         _PhaseOffset        ("Phase offset (rad)", Range(0, 6.283)) = 0
         _MaxLuma            ("HDR max luma clamp", Range(0.5, 3.0)) = 1.6
         _BloomBoost         ("Distance bloom boost", Range(0.5, 2.0)) = 0.8
+        // V5.4 电影丝绸感参数
+        _FresnelPower       ("Fresnel rim power",          Range(1, 8)) = 2.5
+        _FresnelStrength    ("Fresnel rim brightness",     Range(0, 2)) = 0.8
+        _SoftParticleFade   ("Soft particle depth fade m", Range(0.05, 1.5)) = 0.30
         // OTA globals (read-only):
         //   _CairnGlobalDayNightT (0=day, 1=night)
         //   _CairnGlobalAlpha
@@ -73,6 +77,7 @@ Shader "Cairn/RibbonSilkV2"
             // V2.1 sub#2 抓出:variant 编译但 CairnRibbonLOD.cs 没 SetKeyword 调用 → 死代码
             // 用户原话'远近不要做 LOD,世界坐标扎根跟真实效果走' → LOD 系统整体不需要
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
             TEXTURE2D(_FlowTex); SAMPLER(sampler_FlowTex);
             float4 _BaseTint, _TipTint;
@@ -82,6 +87,10 @@ Shader "Cairn/RibbonSilkV2"
             float  _BandFreq, _BandSpeed, _BandIntensity;
             float  _HeightAlphaPower, _BaseSoftness;
             float  _DayMul, _NightMul, _PhaseOffset, _MaxLuma, _BloomBoost;
+            // V5.4 电影丝绸感新参数
+            float  _FresnelPower;       // V5.4 fresnel rim power (default 2.5)
+            float  _FresnelStrength;    // V5.4 fresnel rim 贡献强度 (default 0.8)
+            float  _SoftParticleFade;   // V5.4 soft particle depth fade 距离米 (default 0.3)
 
             float _CairnGlobalDayNightT;
             float _CairnGlobalAlpha;
@@ -102,6 +111,8 @@ Shader "Cairn/RibbonSilkV2"
                 float3 worldPos   : TEXCOORD1;
                 // V4.9 fix: fogCoord 用于让远处 ribbon 融入 Unity fog,不再"飘在 fog 上"
                 float  fogCoord   : TEXCOORD2;
+                // V5.4 screen pos 给 soft particle depth fade
+                float4 screenPos  : TEXCOORD3;
             };
 
             Varyings vert(Attributes IN)
@@ -113,6 +124,7 @@ Shader "Cairn/RibbonSilkV2"
                 OUT.worldPos   = worldPos;
                 OUT.color      = IN.color;
                 OUT.uv         = IN.uv;
+                OUT.screenPos  = ComputeScreenPos(OUT.positionCS);
                 return OUT;
             }
 
@@ -178,8 +190,16 @@ Shader "Cairn/RibbonSilkV2"
                             * _CairnGlobalAlpha
                             * _CairnGlobalThermalScale;
 
+                // V5.4 fresnel rim — 边缘视角变薄变亮(电影丝绸感)
+                // 当 ribbon 法线接近 view 方向时(billboard 几乎正面)alpha 不变
+                // 接近边缘(几乎侧视)时 alpha 衰减并 brightness +
+                // billboard 没真正法线,用 widthRim^FresnelPower 模拟
+                float fresnel = pow(saturate(widthRim), _FresnelPower);
+                float fresnelBoost = lerp(1.0, 1.0 + _FresnelStrength, fresnel);
+                alpha *= lerp(0.7, 1.0, fresnel);  // 边缘 alpha 略低 = 透感
+
                 // V4.9 v3 fix: 回到 Additive,要 finalRGB = col * alpha (premultiplied 输出 + One One)
-                float3 finalRGB = col * alpha;
+                float3 finalRGB = col * alpha * fresnelBoost;
                 // HDR clamp so bright + flow doesn't saturate to white
                 float maxC = max(finalRGB.r, max(finalRGB.g, finalRGB.b));
                 if (maxC > _MaxLuma) finalRGB *= (_MaxLuma / maxC);
@@ -190,6 +210,20 @@ Shader "Cairn/RibbonSilkV2"
                 float camDist = distance(_WorldSpaceCameraPos.xyz, IN.worldPos);
                 float fogFactor = saturate(1.0 - (camDist - 5.0) * 0.05);  // 5m 起 fog,20m 完全 fade
                 finalRGB *= fogFactor;
+
+                // V5.4 soft particle depth fade — 防 ribbon 与背景几何硬切割
+                // 采样 _CameraDepthTexture,如果 ribbon 像素距背景几何 < _SoftParticleFade
+                // alpha 渐淡(避免 z-test 失败带来的硬边)
+                #if !defined(SHADER_API_GLES)
+                float2 screenUV = IN.screenPos.xy / IN.screenPos.w;
+                float sceneDepthRaw = SampleSceneDepth(screenUV);
+                float sceneDepthEye = LinearEyeDepth(sceneDepthRaw, _ZBufferParams);
+                float ribbonDepthEye = IN.screenPos.w;  // perspective 下 = view space z
+                float depthDiff = sceneDepthEye - ribbonDepthEye;
+                float softFade = saturate(depthDiff / max(0.001, _SoftParticleFade));
+                finalRGB *= softFade;
+                alpha *= softFade;
+                #endif
 
                 return half4(finalRGB, alpha);
             }

@@ -165,6 +165,10 @@ namespace Cairn.AR.Editor
             // V4.3 fix: _BandIntensity 同步 V2.3 关闭 step bands(用户要柔和,Pokemon GO raid 横条不柔)
             // V4.5 fix: 0 → 0.10 弱化保留(关全没让丝带整体亮度降低,在白底下不可见)
             ribMat.SetFloat("_BandIntensity", 0.10f);
+            // V5.4 电影丝绸感参数(用户 40/100 review 后)
+            ribMat.SetFloat("_FresnelPower",     2.5f);
+            ribMat.SetFloat("_FresnelStrength",  0.8f);
+            ribMat.SetFloat("_SoftParticleFade", 0.30f);
 
             int typeId = TypeIdToInt(t.id);
             var runeMat = new Material(runeShader) { name = "RuneSDF_" + t.id };
@@ -210,27 +214,29 @@ namespace Cairn.AR.Editor
                 innerMr.sharedMaterial = innerRingMat;
             }
 
-            // --- 5 ribbons in a ring ---
-            int RIBBON_COUNT = 5;
-            // RING_RADIUS already declared above (in Tier-1 ring block)
+            // --- 8 ribbons in a ring (V5.3: 5→8 加密) ---
+            // 用户原话(40/100 review): "所有的丝线都是同时飘起 没有那种随机生成的错落
+            //  而且很稀疏 所以看着很单薄"
+            // 修法:
+            //   1. 5 根 → 8 根(密度 +60%)解决"稀疏单薄"
+            //   2. phaseOffset 不再用 i/N 均匀(0/0.2/0.4/0.6/0.8 看起来是 5 个相位组),
+            //      改用 (i * 5 % 8) / 8 黄金质数错落,8 根 phase 分布
+            //      = 0, 5/8, 2/8, 7/8, 4/8, 1/8, 6/8, 3/8 → 视觉无对称无组,
+            //      生命周期完全错开,任一时刻 8 根处于 8 个不同 stage
+            int RIBBON_COUNT = 8;
             for (int i = 0; i < RIBBON_COUNT; i++)
             {
-                // V2.2 G12 fix: 删 + Random.value * 0.3f 扰动
-                // V2.1 sub#2 抓出:扰动让 5 根可能重合(±0.15 rad ≈ 8.6°),圆周 72° 间距下高概率 2 根挤近
-                // → 视觉看 4 根 (而非 5 根)
                 float angle = (i / (float)RIBBON_COUNT) * Mathf.PI * 2f;
                 var rgo = new GameObject($"Ribbon_{i}");
                 rgo.transform.SetParent(root.transform, false);
                 rgo.transform.localPosition = Vector3.zero;
                 var rib = rgo.AddComponent<Cairn.AR.SilkRibbonV2>();
                 rgo.GetComponent<MeshRenderer>().sharedMaterial = ribMat;
-                // V2.2 G11 fix: phaseOffset 改均匀分配 0/0.2/0.4/0.6/0.8(原 Random.value 让错峰失效)
-                // V2.1 sub#2 抓出:5 根 phaseOffset 是 Random.value 完全独立随机 → 高概率 2-3 根同步
-                float phaseOffset = i / (float)RIBBON_COUNT;
-                // V2.2 P1c fix: maxWidth 每根用 phaseOffset 衍生(确定性,但 5 根 0.10/0.115/0.13/0.115/0.10 略变化)
-                // V2.3-B 加宽: base 0.10 → 0.15(+50%),让丝带更厚重像绸缎不像细金线
-                float widthBase = 0.15f;
-                float widthVar  = 0.05f * Mathf.Sin(phaseOffset * Mathf.PI);  // 0/0.029/0.048/0.029/0
+                // V5.3: 黄金质数错落,8 根 phase 在 (0, 1) 区间无对称分布
+                float phaseOffset = ((i * 5) % RIBBON_COUNT) / (float)RIBBON_COUNT;
+                // V5.3 加宽 + per-ribbon 噪声:base 0.15 → 0.18(+20%),每根 ±0.05 让"花束感"
+                float widthBase = 0.18f;
+                float widthVar  = 0.05f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);  // 8 根独立扰动
                 float maxWidth  = widthBase + Mathf.Abs(widthVar);
                 rib.Configure(RING_RADIUS, angle, phaseOffset, t.color, new Color(0.95f, 0.97f, 1.0f, 1f), maxWidth);
             }
