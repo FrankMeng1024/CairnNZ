@@ -232,6 +232,33 @@ namespace Cairn.AR.Editor
                 innerMr.sharedMaterial = innerRingMat;
             }
 
+            // V5.16 sub#2 S7-N1 BLOCKER 修 ring↔ribbon 视觉脱节 (250px 空白):
+            //   sub#2 推荐: 加 cairn stones GameObject 真物理填充 ring → ribbon 之间空白
+            //   3 个堆叠 cone (lower/middle/upper) 在 cluster 中心,高 y=0..0.5m
+            //   匹配 HTML baseline cairn 石堆视觉
+            for (int s = 0; s < 3; s++)
+            {
+                var stone = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                stone.name = $"CairnStone_{s}";
+                UnityEngine.Object.DestroyImmediate(stone.GetComponent<Collider>());
+                stone.transform.SetParent(root.transform, false);
+                // 3 stones: 底大顶小 — radius 0.30/0.22/0.15, height 0.20/0.16/0.13
+                float[] stoneR = { 0.30f, 0.22f, 0.15f };
+                float[] stoneH = { 0.20f, 0.16f, 0.13f };
+                float[] stoneY = { 0.10f, 0.28f, 0.44f };  // 累积 y centroid
+                stone.transform.localPosition = new Vector3(0f, stoneY[s], 0f);
+                stone.transform.localScale = new Vector3(stoneR[s] * 2f, stoneH[s] * 0.5f, stoneR[s] * 2f);
+                var stoneMr = stone.GetComponent<MeshRenderer>();
+                stoneMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                stoneMr.receiveShadows = false;
+                var stoneMat = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color"));
+                // 暖灰色 (0.55, 0.48, 0.40),与 cluster ground 区分但融入暖色调
+                Color stoneColor = new Color(0.55f, 0.48f, 0.40f, 1f);
+                if (stoneMat.HasProperty("_BaseColor")) stoneMat.SetColor("_BaseColor", stoneColor);
+                if (stoneMat.HasProperty("_Color")) stoneMat.SetColor("_Color", stoneColor);
+                stoneMr.sharedMaterial = stoneMat;
+            }
+
             // --- 8 ribbons in a ring (V5.3: 5→8 加密) ---
             // 用户原话(40/100 review): "所有的丝线都是同时飘起 没有那种随机生成的错落
             //  而且很稀疏 所以看着很单薄"

@@ -200,13 +200,11 @@ namespace Cairn.AR
             if (lifeT < STAGE1_END)
             {
                 // 阶段 1: 贴地升起
-                // V5.15 ROLLBACK V5.14 piecewise (sub#1 S6-N3 BLOCKER: t1=0.5 velocity cliff)
-                //   V5.14 piecewise 在 t1=0.5 让 dtopY/dt 从 2 → 0, dbottomY/dt 0 → 0.8 双向断裂
-                //   且 stage1 末 → stage2 起 bottomY 从 0.4 pop 回 0
-                //   V5.15: 单段 topY = bodyLength * t1 线性升,bottomY = 0 始终
-                //     与 stage2 起边界 (bottomY=0, topY=bodyLength) 完美连续
+                // V5.16 sub#1 S7-N2 BLOCKER 修: V5.15 单段线性 dtopY/dlifeT=3.33,stage2 起=0 速度断崖 pop
+                //   改用 SmoothStep ease-out: stage1 末导数 0 = stage2 起导数 0 真连续
                 float t1 = lifeT / STAGE1_END;
-                topY = _bodyLength * t1;
+                float t1Smooth = Mathf.SmoothStep(0f, 1f, t1);
+                topY = _bodyLength * t1Smooth;
                 bottomY = 0f;
             }
             else if (lifeT < STAGE2_END)
@@ -374,9 +372,14 @@ namespace Cairn.AR
 
                 // Color: base tint (halo + edges), brighter core (slight white)
                 // V5.6: 用 lifeBlendedBase 替代 _baseTint(已含 V2.4 时间渐入浅色 + V2.5 光感)
-                float coreR = Mathf.Min(1f, lifeBlendedBase.r * 1.4f + 0.15f);
-                float coreG = Mathf.Min(1f, lifeBlendedBase.g * 1.4f + 0.15f);
-                float coreB = Mathf.Min(1f, lifeBlendedBase.b * 1.4f + 0.20f);
+                // V5.16 sub#2 S7-N4 BLOCKER 修 type 颜色塌缩到白:
+                //   旧 coreR/G/B = base*1.4 + 0.15/0.20 → 5 type 都被推向 (~1.0, ~1.0, ~0.97)
+                //   水蓝 (0.3,0.7,1.0) → core (0.57, 1.0, 1.0) 偏白
+                //   危险红 (1.0,0.4,0.3) → core (1.0, 0.71, 0.62) 偏粉白
+                //   sub#2 推荐: 改 baseTint*1.15 不向白塌缩,让 type 颜色保留
+                float coreR = Mathf.Min(1f, lifeBlendedBase.r * 1.15f);
+                float coreG = Mathf.Min(1f, lifeBlendedBase.g * 1.15f);
+                float coreB = Mathf.Min(1f, lifeBlendedBase.b * 1.15f);
 
                 _colors[idx + 0] = new Color(lifeBlendedBase.r, lifeBlendedBase.g, lifeBlendedBase.b, aHaloEdge);
                 _colors[idx + 1] = new Color(lifeBlendedBase.r, lifeBlendedBase.g, lifeBlendedBase.b, aHaloIn);
