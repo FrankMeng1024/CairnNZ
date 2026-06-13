@@ -48,6 +48,12 @@ type Marker = {
   lng: number;
   alt?: number | null;
   note?: string;   // v187 — forwarded to Unity for the 3D mark text above each cairn
+  // v0.2.4 Part 2 A2.3 — marker schema 双源字段(buildSpawnRequest Tier-A 用)
+  arkitX?: number;
+  arkitY?: number;
+  arkitZ?: number;
+  arOriginLat?: number;
+  arOriginLng?: number;
 };
 
 type CameraInfo = {
@@ -231,7 +237,14 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
         for (const m of markers) {
           if (spawnedIdsRef.current.has(m.id)) continue;
           const req = buildSpawnRequest(
-            { id: m.id, type: m.type, lat: m.lat, lng: m.lng, note: m.note },
+            // v0.2.4 Part 2 A2.3: 传完整 marker(含 arkitX/Y/Z + arOriginLat/Lng)
+            // 让 buildSpawnRequest 能走 Tier-A ARKit XYZ 路径(若 plant-time origin
+            // 跟当前 origin 偏差 < 5m),否则 fallback Tier-B GPS+geoToArkitWorld
+            {
+              id: m.id, type: m.type, lat: m.lat, lng: m.lng, note: m.note,
+              arkitX: m.arkitX, arkitY: m.arkitY, arkitZ: m.arkitZ,
+              arOriginLat: m.arOriginLat, arOriginLng: m.arOriginLng,
+            },
             origin,
             groundY,
           );
@@ -800,7 +813,12 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                   if (nowTs < tracker.nextRetryAt) continue;       // backoff
                 }
                 const req = buildSpawnRequest(
-                  { id: m.id, type: m.type, lat: m.lat, lng: m.lng, note: m.note },
+                  // v0.2.4 Part 2 A2.3: 传完整 marker 走 Tier-A ARKit XYZ
+                  {
+                    id: m.id, type: m.type, lat: m.lat, lng: m.lng, note: m.note,
+                    arkitX: m.arkitX, arkitY: m.arkitY, arkitZ: m.arkitZ,
+                    arOriginLat: m.arOriginLat, arOriginLng: m.arOriginLng,
+                  },
                   projOrigin,
                   groundYRef.current,
                 );

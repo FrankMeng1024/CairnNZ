@@ -129,22 +129,76 @@ export function geoToArkitWorld(
  * v186: includes `type` field — Unity uses it for CairnTypePresets
  * lookup. RN's r/g/b fields override the preset color when > 0.
  */
+/**
+ * Build a SpawnRequest payload for a marker. Returns null if the marker
+ * cannot be positioned yet (no AR origin). Caller should retry once
+ * ArFrame populates origin.
+ *
+ * v186: includes `type` field — Unity uses it for CairnTypePresets
+ * lookup. RN's r/g/b fields override the preset color when > 0.
+ *
+ * v0.2.4 Part 2 A2.3: Tier-A 优先 ARKit XYZ
+ * - 用户原话:"AR plant 的 mark 没用 arkit 的世界坐标 用的是 GPS 所以每次打开都飘逸"
+ * - 若 marker 有 arkitX/Y/Z + arOriginLat/Lng,且当前 origin 跟 plant-time origin
+ *   偏差 < ARKIT_XYZ_TIER_A_MAX_DELTA_M(默认 5m),直接用持久化 ARKit XYZ
+ * - 否则 fallback geoToArkitWorld GPS 路径(行为同旧 v0.2.3)
+ * - 5m 阈值理由:典型 ARKit world frame cross-session drift ≤ 2-3m,5m 给余量。
+ *   超过 5m 表示用户重新 GPS lock 或 ARSession 重启,持久化的 ARKit XYZ 不再可信。
+ */
+const ARKIT_XYZ_TIER_A_MAX_DELTA_M = 5.0;
+
 export function buildSpawnRequest(
-  marker: { id: string; type: string; lat: number; lng: number; note?: string },
+  marker: {
+    id: string;
+    type: string;
+    lat: number;
+    lng: number;
+    note?: string;
+    arkitX?: number;
+    arkitY?: number;
+    arkitZ?: number;
+    arOriginLat?: number;
+    arOriginLng?: number;
+  },
   origin: { lat: number; lng: number } | null,
   groundY: number | null,
 ): UnitySpawnRequest | null {
-  const xz = geoToArkitWorld(marker.lat, marker.lng, origin);
-  if (!xz) return null;
   const colour = markerTypeToColor(marker.type);
   const shader = markerTypeToShaderParams(marker.type);
-  // v187 — clip note to 30 codepoints (NOT UTF-16 code units) so an
-  // emoji or non-BMP char at the boundary doesn't get split mid-surrogate.
-  // [...str] yields codepoints (handles surrogate pairs correctly); slice
-  // then take 30; rejoin. Grapheme-cluster splitting (ZWJ flag emoji etc.)
-  // would need Intl.Segmenter — out of scope here, and Unity-side renderer
-  // tolerates malformed graphemes by drawing replacement glyph.
   const note = [...(marker.note ?? '')].slice(0, 30).join('');
+
+  // v0.2.4 Part 2 A2.3 Tier-A: ARKit XYZ 直接用(同 origin)
+  if (
+    origin != null &&
+    marker.arkitX != null && marker.arkitY != null && marker.arkitZ != null &&
+    marker.arOriginLat != null && marker.arOriginLng != null
+  ) {
+    // 计算两个 origin 间的 XZ 距离(米),用 cosLat 近似
+    const cosLat = Math.cos((origin.lat * Math.PI) / 180);
+    const dN = (origin.lat - marker.arOriginLat) * 111_000;
+    const dE = (origin.lng - marker.arOriginLng) * 111_000 * cosLat;
+    const originDeltaM = Math.hypot(dN, dE);
+    if (originDeltaM <= ARKIT_XYZ_TIER_A_MAX_DELTA_M) {
+      return {
+        id: marker.id,
+        type: marker.type,
+        x: marker.arkitX,
+        y: marker.arkitY,
+        z: marker.arkitZ,
+        r: colour.r,
+        g: colour.g,
+        b: colour.b,
+        scrollSpeed: shader.scrollSpeed,
+        bloomBoost: shader.bloomBoost,
+        note,
+      };
+    }
+    // origin delta 太大 → 持久化 ARKit XYZ 不再可信,fallback GPS
+  }
+
+  // Tier-B: GPS+geoToArkitWorld(原 v0.2.3 路径)
+  const xz = geoToArkitWorld(marker.lat, marker.lng, origin);
+  if (!xz) return null;
   return {
     id: marker.id,
     type: marker.type,
