@@ -28,6 +28,9 @@ import { BackButton } from '../components/BackButton';
 // pre-v186 commit history (HEAD~2 and earlier).
 import { UnityAROverlay, type UnityAROverlayHandle } from '../components/UnityAROverlay';
 import { CairnEdgeArrows } from '../components/CairnEdgeArrows';
+import { DistantMarkerArrow } from '../components/DistantMarkerArrow';
+import { AcquireGuidance } from '../components/AcquireGuidance';
+import { NativeEventEmitter, NativeModules } from 'react-native';
 import { AimShutter } from '../components/AimShutter';
 import { PlantSheet, AimReticle, type PlantType } from '../components/PlantSheet';
 import { LikeReportSheet } from '../components/LikeReportSheet';
@@ -668,6 +671,27 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // null until first heading update or if heading unavailable.
   const [userHeading, setUserHeading] = useState<number | null>(null);
 
+  // v0.2.4 Block E2: 当前正在 ACQUIRE 的 marker id(从 Unity v22-ACQUIRE-STATE
+  // 事件订阅)。用来:(1) DistantMarkerArrow 锁定显示当前目标;(2) AcquireGuidance
+  // 知道是否要 render guidance 文案。null=不在 ACQUIRE 状态。
+  const [acquiringMarkerId, setAcquiringMarkerId] = useState<string | null>(null);
+
+  // 订阅 Unity emit 的 v22-ACQUIRE-STATE 事件
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    let sub: any = null;
+    try {
+      const emitter = new NativeEventEmitter((NativeModules as any).CairnBridge);
+      sub = emitter.addListener('v22-ACQUIRE-STATE', (data: { markerId: string; from: string; to: string; dist: number; tInAcquire: number }) => {
+        if (data.to === 'ACQUIRE') setAcquiringMarkerId(data.markerId);
+        else if (data.to === 'IMMORTAL' || data.to === 'FAR') setAcquiringMarkerId(null);
+      });
+    } catch (e) {
+      // bridge 不可用(Editor / dev)— 静默 fallback
+    }
+    return () => { if (sub) sub.remove(); };
+  }, []);
+
   // Subscribe to magnetic heading on mount; expo-location is already a dep.
   // Requests permission first — without it, watchHeadingAsync silently
   // returns no events on iOS. Falls back gracefully if denied or unavailable.
@@ -772,6 +796,25 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     const dist = haversineM({ lat: lastCoord.lat, lng: lastCoord.lng }, { lat: m.lat, lng: m.lng });
     return dist <= AR_MAX_RANGE_M;
   });
+
+  // v0.2.4 Block E2: DistantMarkerArrow 用最近的一个 marker 当指引目标。
+  // 如有 acquiringMarkerId 则锁定到它(用户已开始 acquire 那个 mark);
+  // 否则取最近的 mark。
+  const nearestMarker = (() => {
+    if (!lastCoord || nearbyMarkers.length === 0) return null;
+    if (acquiringMarkerId) {
+      const locked = nearbyMarkers.find(m => m.id === acquiringMarkerId);
+      if (locked) return locked;
+    }
+    let best = nearbyMarkers[0];
+    let bestDist = haversineM({ lat: lastCoord.lat, lng: lastCoord.lng }, { lat: best.lat, lng: best.lng });
+    for (let i = 1; i < nearbyMarkers.length; i++) {
+      const m = nearbyMarkers[i];
+      const d = haversineM({ lat: lastCoord.lat, lng: lastCoord.lng }, { lat: m.lat, lng: m.lng });
+      if (d < bestDist) { best = m; bestDist = d; }
+    }
+    return best;
+  })();
 
   // Plant a cairn at the user's GPS, projected forward by `distanceM`
   // along their current heading. Distance values: 5/10/20/30 — 30 is
@@ -1158,6 +1201,15 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           crashLogger.breadcrumb(`unity:cairn:press id=${id.slice(-6)}`);
         }}
       />
+
+      {/* v0.2.4 Block E2: 远场箭头 + 5 级引导文案。
+          DistantMarkerArrow > 15m 显示 GPS heading 指向最近 mark + 距离脉动。
+          AcquireGuidance 只在 acquiringMarkerId 非 null 时 render(Unity v22-ACQUIRE-STATE 订阅)。 */}
+      <DistantMarkerArrow
+        marker={nearestMarker ? { id: nearestMarker.id, lat: nearestMarker.lat, lng: nearestMarker.lng, type: nearestMarker.type } : null}
+        user={lastCoord ? { lat: lastCoord.lat, lng: lastCoord.lng, heading: userHeading ?? undefined } : null}
+      />
+      <AcquireGuidance acquiringMarkerId={acquiringMarkerId} />
 
 
       {/* v24 on-screen diagnostic — GL ready, cairn count, recent breadcrumbs */}
