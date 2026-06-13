@@ -197,7 +197,12 @@ namespace Cairn.AR
             float baseZ = Mathf.Sin(_angleRad) * _ringRadius * 1.05f;
 
             // Sway (gentle wobble)
-            float swayPhase = Time.time * 0.4f + _seed;
+            // V2.2 G16 fix: batch mode Time.time=0,改用 Shader.GetGlobalFloat("_CairnAnimTime")
+            // V024CapturePlayground 在每帧 capture 前 SetGlobalFloat _CairnAnimTime = frame * dt + 0.5
+            // runtime 仍可读 Time.time,但 batch 截图下不再冻结
+            float animTime = Shader.GetGlobalFloat("_CairnAnimTime");
+            if (animTime < 0.001f) animTime = Time.time;  // _CairnAnimTime 没设(runtime / Editor Play)就回退到 Time.time
+            float swayPhase = animTime * 0.4f + _seed;
             float swayTanX = -Mathf.Sin(_angleRad);
             float swayTanZ =  Mathf.Cos(_angleRad);
 
