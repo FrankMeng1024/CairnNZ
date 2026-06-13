@@ -335,16 +335,15 @@ namespace Cairn.AR
                 // Per-vertex alpha (height envelope * width profile * global fade)
                 float worldT = y / _lifeHeight;
                 float heightAlpha = Mathf.Pow(Mathf.Max(0f, 1f - worldT), 1.6f) * globalFade;
-                // V5.9 V2.3 rim 替代方案 (sub#2 CRITICAL 第二轮发现 V5.8 viewPitch 等价无效):
-                // V5.8 用 |view.y|, 但相机近平视 view.y≈0.03 → pitchAlpha=0.9964 卡死无效
-                // V5.9 改用 sT-driven 中段 highlight:ribbon 中段 0.3-0.7 alpha 1.0 全亮,
-                //   边缘 0..0.2 / 0.85..1 微衰减,模拟绸缎"中段反光强"的物理特性
-                // 这是 view 无关的几何 — 不依赖相机角度永远有效
-                float midHighlight = sT < 0.2f
-                    ? Mathf.Lerp(0.85f, 1.0f, sT / 0.2f)
-                    : sT > 0.85f
-                        ? Mathf.Lerp(1.0f, 0.85f, (sT - 0.85f) / 0.15f)
-                        : 1.0f;
+                // V5.11 V2.3 rim 学 HTML baseline (sub#1+sub#2 共识 V5.10 midHighlight 反向):
+                //   V5.10 让 sT 0.2-0.85 全 alpha=1 → "白热钢管"不是绸缎
+                //   HTML baseline silk 物理: 底部暗 (anchor)、上半段亮 (光线穿透)、tip 渐入天空
+                //   V5.11 公式: sT<0.3 alpha 0.65 → 0.95 (底暗渐入)
+                //              sT 0.3..0.85 alpha 0.95-1.0 (主体亮带)
+                //              sT 0.85+ → softTipFade 渐入天空
+                float midHighlight = sT < 0.3f
+                    ? Mathf.Lerp(0.65f, 0.95f, sT / 0.3f)
+                    : Mathf.Lerp(0.95f, 1.0f, Mathf.Clamp01((sT - 0.3f) / 0.4f));
                 heightAlpha *= midHighlight;
                 // V5.8 softTipFade 修复 (sub#2 BLOCKER 发现):
                 // V5.7 写 SmoothStep(1f, 0.7f, sT),Unity SmoothStep(from=1,to=0.7,t=sT) 当 sT≥0.7 返回 0

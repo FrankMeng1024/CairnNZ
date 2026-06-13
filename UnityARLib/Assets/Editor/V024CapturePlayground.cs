@@ -94,9 +94,12 @@ namespace Cairn.AR.Editor
             tonemap.mode.Override(TonemappingMode.ACES);
             tonemap.mode.overrideState = true;
             // Bloom
+            // V5.11 sub#1+sub#2 共识修: intensity 0.5 + threshold 0.9 让 16 ribbon 糊成 3 光柱
+            //   intensity 0.5 → 0.30 减弱 halo radius 让 ribbon 间距 0.196m 不互相吞并
+            //   threshold 0.9 → 1.10 只让真正高亮 (core+brightTint) 部分 trigger,halo 不参与 bloom
             var bloom = profile.Add<Bloom>(true);
-            bloom.intensity.Override(0.5f);
-            bloom.threshold.Override(0.9f);
+            bloom.intensity.Override(0.30f);
+            bloom.threshold.Override(1.10f);
             bloom.intensity.overrideState = true;
             bloom.threshold.overrideState = true;
             volume.sharedProfile = profile;
@@ -580,7 +583,10 @@ namespace Cairn.AR.Editor
 
                 // V5.1: ribbon 在 ceremony 后段开始动画(0.7+ 起 tick)
                 // 让 24 帧 ceremony 末尾 ribbon 已经升起来,用户能看到"仪式 → ribbon 升起"过渡
-                if (ceremonyT > 0.7f)
+                // V5.11 sub#1 第三轮抓出 真根因: ceremonyT>0.7 让前 17 帧 ribbon 静止
+                //   → 用户"ceremony invisible"投诉的核心 — 前 70% ceremony ribbon 完全冻结
+                //   → 改 ceremonyT > 0.0 让 ribbon 全程跟随 ceremony 升起,真"仪式中升起"
+                if (ceremonyT > 0.0f)
                 {
                     Shader.SetGlobalFloat("_CairnAnimTime", ceremonyT * 1.5f + 0.5f);
                     foreach (var rb in ribbons) rb.EditorManualTick(CEREMONY_DT);
