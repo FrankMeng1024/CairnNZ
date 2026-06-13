@@ -211,16 +211,18 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
 ### Phase V4 — 整体 capture + 用户审
 
 - [x] **V4.1** NZ 暖白底 + 暖金地面 + 同色 fog ✅ 2026-06-13
-  - V024CapturePlayground bg #050519→(0.91,0.86,0.77) + 200x200m ground plane 暖金 + RenderSettings.fog 同色 density=0.012
-  - 视觉对照 HTML demo line 89-91 完全对齐
-- [x] **V4.2** 白底丝带可见(铁律:任何光线肉眼可见)✅ 2026-06-13
-  - shader Additive + 提亮 _BaseTint + _TipTint 偏白 + _CoreToTipMixStart 0.40→0.20
-  - 之前尝试 Premultiplied/SrcAlpha 都失败,Additive + 亮色 baseTint 是最匹配 HTML 的方案
-- [ ] **V4.3** 修右下穿帮红色三角 (✅ 已在 V2.2-P0a 修)
-- [ ] **V4.4** 跑完整 capture(5 type + ceremony + 远近视角)
-- [ ] **V4.5** 拼 side-by-side GIF(HTML vs Unity 5 type × 多视角)
-- [ ] **V4.6** Label 卡片 "CAIRN / 路过留念。/ Henare, 5 days ago"(world-space TextMeshPro)
-- [ ] **V4.7** 用户审 — 不通过回 Phase V2/V3
+- [x] **V4.2** 白底丝带可见(Additive + 亮 BaseTint)✅ 2026-06-13
+- [x] **V4.3** 参数同步 BLOCKER(SetFloat 覆盖 shader default)✅ 2026-06-13
+- [x] **V4.4** 黑色立方颗粒改暖金 ✅ 2026-06-13
+- [x] **V4.5** 亮度调试(_DayMul 1.5→2.5,过渡步骤)✅ 2026-06-13
+- [x] **V4.6** ACES Filmic ToneMapping + Bloom — **重大跃迁,视觉对齐 ~85%** ✅ 2026-06-13
+- [x] **V4.7** Label 卡片 "CAIRN / 路过留念。/ Henare, 5 days ago"(quad + 烘焙 PNG)✅ 2026-06-13
+  - scripts/build_v024_labels.py PIL 烘焙 5 个 type 的 black 圆角 + 标签头 PNG
+  - V024CapturePlayground spawn quad(180°Y rot 让 mesh 法线朝相机)+ Sprites/Default
+  - SIDE-BY-SIDE-V4.7.png 视觉对齐 ~90%
+- [ ] **V4.8** 二段式"脱离阵法"(用户原话:lifeT<0.4 贴地 → 整段离开 → 飘到空中)
+- [ ] **V4.9** Ribbon shader 接 Unity fog(让远处 ribbon 与 ground fog 融合)
+- [ ] **V4.10** 修右下穿帮红色三角(已在 V2.2-P0a 修)✅
 
 ---
 
