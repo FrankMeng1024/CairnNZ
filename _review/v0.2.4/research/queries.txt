@@ -1,0 +1,20 @@
+"ARAnchorManager" "AddAnchor" "AttachAnchor" 区别 ARFoundation
+ARFoundation ARAnchorManager 添加锚点 平面附着 教程 知乎
+"AR Foundation" 锚点 漂移 防止 设备 移动 物体
+ARFoundation 6.0 升级 锚点 API 变化 中文
+Apple Measure 测距 原理 ARKit 平面 检测 锚点 实现
+苹果测距应用 Measure 工作原理 锚点 ARKit
+ARKit 测距 demo 锚点 raycast hit-test 实现
+ARFoundation TrackingState Tracking 状态 等待 实例化 创建
+ARFoundation 锚点 创建 时机 平面 检测 后 raycast hit
+"plane stickiness" "anchor" ARKit drift planes large flat
+ARKit 平面跟踪 锚点 防漂移 ARFoundation 教程
+"ARFoundation 6" 中文 教程 锚点 ARAnchor 附着
+ARFoundation 锚点 SetParent 子对象 跟随
+ARKit "scene reconstruction" "mesh anchor" 区别 平面 锚点
+ARKit "image anchor" "object anchor" 稳定 户外
+"ARRaycastManager" "TrackableType.PlaneWithinPolygon" "AddAnchorToPlane"
+ARFoundation 不漂移 物体 静止 教程 解决方案
+"GPS" "ARKit" "convert" "world coordinate" 漂移
+ARFoundation 户外 大场景 锚点 100米 漂移
+"ARSessionOrigin" 移动 anchor 不动 教程

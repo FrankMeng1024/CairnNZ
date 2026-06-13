@@ -1,0 +1,981 @@
+[
+  {
+    "success": true,
+    "query": "catlikecoding flow texture distortion two-layer time blend technique",
+    "content": "",
+    "web_references": [],
+    "search_intent": [
+      {
+        "intent": "SEARCH_NONE",
+        "keywords": "catlikecoding flow texture distortion two-layer time blend technique",
+        "query": "catlikecoding flow texture distortion two-layer time blend technique"
+      }
+    ],
+    "latency_seconds": 0.87,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "ronja shadertutorial vertex displacement world position fade",
+    "content": "**【译】Ronja的Unity Shader教程(十)_知乎** (2019-12-27)\n struct v2f { float4 position : SV_POSITION ; float3 worldPos : TEXCOORD0 ; }; v2f vert ( appdata v ){ v2f o ; //calculate the position in clip space to render the object o . position = UnityObjectToClipPos ( v . vertex ); //calculate world position of vertex float4 worldPos = mul ( unity_ObjectToWorld , v . vertex ); o . worldPos = worldPos . xyz ; return o ; } 我们使用TRANSFORM_TEX来应用纹理的tiling和offset,就像我们之前那样｡在我的shader中,我使用XY和ZY,所以世界的up轴被映射到两个纹理的y轴上,而不是相对于彼此旋转它们,但是你可以试试其他的值的方式(上面的UV映射的方式是任意的)｡ fixed4 frag ( v2f i ) : SV_TARGET { //calculate UV coordinates for three projections float2 uv_front = TRANSFORM_TEX ( i . worldPos . xy , _MainTex ); \nSource: https://zhuanlan.zhihu.com/p/99731640\n\n**Controversial posts made by janjandeto  Opera forums** (2026-05-01)\nDo more on the web, with a fast and secure browser! Download Opera browser with: built-in ad blocker battery saver Controversial Controversial posts made by janjandeto This user does not have any downvoted posts yet. Download Opera © Opera Software 1995-\nSource: https://forums.opera.com/user/janjandeto/controversial\n\n**GitHub - jdjdmd/The-Legion-Proxy: A website designed to stop censorship at work or school.** (2025-09-12)\nNavigation Menu Toggle navigation Appearance settings Platform Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert jdjdmd/The-Legion-Proxy   master Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit   History 484 Commits Bookmark List Bookmark List     CSS CSS     Games 3 Games 3     Games Games     Games2 Games2     Images Images     Movie Links Movie Links     Proxies Proxies     Random Tools Random Tools     Subdomains Subdomains     Update List Update List     README.md README.md     index.html index.html     View all files Repository fi\nSource: https://github.com/jdjdmd/The-Legion-Proxy\n\n**GitHub - roshansridhar/end-to-end-Data-Visualization: A project to create an end-to-end data visualization platform.** (2025-04-22)\nNavigation Menu Toggle navigation Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert roshansridhar/end-to-end-Data-Visualization   master Go to file Code Folders and files Name Name Last commit message Last commit date Latest commit   History 4 Commits HW3.py HW3.py     README.md README.md     flask_app.py flask_app.py     index.html index.html     nyc_restaurants_by_cuisine.json nyc_restaurants_by_cuisine.json     screenshot-rs5788.pythonanywhere.com-2018.05.02-17-19-34.png screenshot-rs5788.pythonanywhere.com-2018.05.02-17-19-34.png     screenshot-rs5788.pythonanywhere.com-2018.05.02-17-20-35.png screenshot-rs5788.pythonanywhere.com-2018.0\nSource: https://github.com/roshansridhar/end-to-end-Data-Visualization\n\n**后处理基础 - 小孔明的专栏 - CSDN博客** (2018-12-19)\n原文网址:https://www.ronja-tutorials.com/2018/06/23/postprocessing-basics.html 项目地址:https://github.com/ronja-tutorials/ShaderTutorials 然后我们来还原下学习的过程。 在学习后处理之前,首先准备一个普通的给物体加一个贴图的shader。 shader代码如下: Shader \"Unlit/PostProcessBasicPre\" { Properties { _MainTex (\"Texture\", 2D) = \"white\" {} } SubShader { Pass { CGPROGRAM #pragma vertex vert #pragma fragment frag #include \"UnityCG.cginc\" struct appdata { float4 vertex : POSITION; float2 uv : TEXCOORD0; }; struct v2f { float2 uv : TEXCOORD0; float4 vertex : SV_POSITION; }; sampler2D _MainTex; v2f vert (appdata v) { v2f o; o.vertex = UnityObjectToClipPos(v.vertex); o.uv = v.uv; return o; } fixed4 frag (v2f i) : SV_Target { fixed4 color = tex2D(_MainTex, i.uv); return color; } ENDCG } } } 上面的代码,就是给模型赋一张贴图而已,效果如下: 此时立方体使用的材质和shader是: 下面要对这个实现后处理效果,这里简单的对颜色取反。 我们的shader如下: Shader \"Unlit/PostProcessBasic\" { Properties { _MainTex (\"Texture\", 2D) = \"white\" {} } SubShader { Pass { CGPROGRAM #pragma vertex vert #pragma fragment frag #include \"UnityCG.cginc\"\nSource: https://blog.csdn.net/wodownload2/article/details/85091987?locationNum=6&fps=1\n\n**GitHub - roshanadh/GCESITExpoVotingSystem: Voting System for Project Exhibition event in the 8th GCES IT Expo using Java** (2025-07-21)\nNavigation Menu Toggle navigation Appearance settings Product Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert roshanadh/GCESITExpoVotingSystem   master Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit   History 38 Commits out out     src src     .gitignore .gitignore     README.md README.md     View all files Repository files navigation 8th GCES IT Expo Voting System The system comprises two GUI applications: one for voter registration and the other for vote submission. Build Applications built using Java Swing and AWT classes Uses a r\nSource: https://github.com/roshanadh/GCESITExpoVotingSystem\n\n**[译]Unity3D Shader教程(八)Planar Mapping_unity shader panoramic-CSDN博客** (2021-10-17)\n原文链接:Shader Tutorials by Ronja 1. Summary 概要。 有时候我们的网格数据中并没有UV坐标,或者我们想让多个模型的纹理对齐,或者还有其他什么原因,我们需要动态生成UV坐标。那么接下来的教程,我们将以最简单的方法,二维平面映射,来生成我们的UV坐标。 本教程是在上一个图片着色器的基础上实现的。但是你也可以在任何表面着色器上使用这种方法。 2.Basics 首先我们将输入结构体中的uv变量删除掉,因为我们打算通过脚本生成。 struct appdata{ float vertex : POSITION; }; 123因为片段着色器中的输入参数是由顶点着色器中的输出参数插值而得到的,因此我们选择在顶点着色器中计算新的uv值。首先我们将其顶点UV设置为顶点在模型坐标系下的x和z的值。这样足以让纹理出现在模型表面了,并且其效果看起来就好像是图片从上往下投影到模型表面一样。 v2f vert(appdata v){ v2f o; o.position = UnityObjectToClipPos(v.vertex); o.uv = v.vertex.xz; return o; } 1234563.Adjustable Tiling 前面并没有考虑图片的缩放,或者我们可能希望图片显示不跟随模型一起旋转。 图片缩放的问题可以通过TRANSFORM_TEX宏来执行UV变换,这样最终用于纹理采样的UV可以跟随纹理缩放而相应改变。 v2f vert(appdata v){ v2f o; o.position = UnityObjectToClipPos(v.vertex); o.uv = TRANSFORM_TEX(v.vertex.xz, _MainTex); return o; } 123456 4.Texture Coordinates based on World Position 为了消除模型位置、和旋转对UV坐标的影响,我们需要将顶点坐标转换到世界坐标系,前面的例子是使用模型坐标系中的顶点坐标来生成UV坐标的。计算世界坐标的方法很简单,只需要将顶点坐标乘以模型空间矩阵。在我们得到世界坐标后,使用其世界坐标来生成UV坐标。 v2f vert(appdata v){ v2f o; //calculate the position in cli\nSource: https://blog.csdn.net/sinat_25415095/article/details/120808080\n\n**javaFX 可控制自动关闭时间的弹出提示窗口 - 王洪伟的专栏 - CSDN博客** (2016-10-24)\n版权声明:本文为博主原创文章,未经博主允许不得转载。 https://blog.csdn.net/teamlet/article/details/52914301 public static void showTimedDialog(long time, String message) { Stage popup = new Stage(); popup.setAlwaysOnTop(true); popup.initModality(Modality.APPLICATION_MODAL); Button closeBtn = new Button(\"知道了\"); closeBtn.setOnAction(e -> { popup.close(); }); VBox root = new VBox(); root.setPadding(new Insets(20)); root.setAlignment(Pos.BASELINE_CENTER); root.setSpacing(20); root.getChildren().addAll(new Label(message), closeBtn); Scene scene = new Scene(root); popup.setScene(scene); popup.setTitle(\"提示信息\"); popup.show(); Thread thread = new Thread(try { Thread.sleep(time); if (popup.isShowing()) { Platform.runLater(() -> popup.close(catch (Exception exp) { exp.printStackTrace(thread.setDaemon(true); thread.start(); }\nSource: https://blog.csdn.net/teamlet/article/details/52914301?locationNum=4&fps=1\n\n**利用JavaFx开发RIA桌面应用-Stage窗口半透明设计 - loongshawn的博客 - CSDN博客** (2016-11-07)\n版权声明:本文为博主原创文章,未经博主允许不得转载。 https://blog.csdn.net/loongshawn/article/details/53074119 转载请注明来源-作者@loongshawn:http://blog.csdn.net/loongshawn/article/details/53074119 1.回顾 上一篇文章《利用JavaFx开发RIA桌面应用-加载等待界面设计》讲了如何设计等待界面,不过此时界面为透明效果,本文在这篇文章基础上开展说明如何设计半透明界面。 首先看看效果,加载等待界面半透明效果: 2.说明 设计半透明界面需要设置以下几点: 设置stage透明,dialogStage.initStyle(StageStyle.TRANSPARENT); 设置布局背景,-fx-background-color: rgba(255,255,255,0.5); 设置scene的Fill属性为空, scene.setFill(null); 整体布局采用BorderPane,对其背景设置如下: BorderPane borderPaneLayout = new BorderPane(); borderPaneLayout.setStyle( \"-fx-background-color: rgba(255,255,255,0.5);\" ); 其余代码几乎与上一篇文章中一致,主要涉及界面调整代码: public ShadowProgressPage(Task<?> task) { MyStyleButton myStyleButton = MyStyleButton.getInstance(); WindowsPositionObject windowsPosition = WindowsPositionObject.getInstance(); dialogStage = new Stage(); progressIndicator = new ProgressIndicator(); dialogStage.initStyle(StageStyle.UNDECORATED); dialogStage.initStyle(StageStyle.TRANSPARENT); dialogStage.initModality(Modality.AP\nSource: https://blog.csdn.net/loongshawn/article/details/53074119?locationNum=5&fps=1\n\n**[论文阅读] (08) NDSS2020 UNICORN: Runtime Provenance-Based Detector for Advanced Persistent Threats-CSDN博客** (2021-07-20)\n《娜璋带你读论文》系列主要是督促自己阅读优秀论文及听取学术讲座,并分享给大家,希望您喜欢。由于作者的英文水平和学术能力不高,需要不断提升,所以还请大家批评指正,非常欢迎大家给我留言评论,学术路上期待与您前行,加油。 前一篇文章分享了RAID 2020上的论文《Cyber Threat Intelligence Modeling Based on Heterogeneous Graph ConvolAPT检测器。希望这篇文章对您有所帮助,这些大佬是真的值得我们去学习,献上小弟的膝盖~fighting! 原文作者:Xueyuan Han, Thomas Pasquier, Adam Bates, James Mickens and Margo Seltzer原文标题:UNICORN: Runtime Provenance-Based Detector for Advanced Persiste新直方图的计数结果。通过迭代的探索大规模图的近邻关系,发现了在上下文环境中系统实体的因果关系。该工作是UNICORN的第一步,具体来说,直方图中每个元素描述了图中唯一的一个子结构,同时考虑了子结构中的顶点与边上的异构标签,以及这些边的时间顺序。APT攻击缓慢的渗透攻击目标系统,希望基于的异常检测方法最终忘记这一行为,把其当成正常的系统行为,但是APT攻击并不能破坏攻击成功的相关信息流依赖关系。③ \nSource: https://blog.csdn.net/eastmount/article/details/118913235\n",
+    "web_references": [
+      {
+        "content": " struct v2f { float4 position : SV_POSITION ; float3 worldPos : TEXCOORD0 ; }; v2f vert ( appdata v ){ v2f o ; //calculate the position in clip space to render the object o . position = UnityObjectToClipPos ( v . vertex ); //calculate world position of vertex float4 worldPos = mul ( unity_ObjectToWorld , v . vertex ); o . worldPos = worldPos . xyz ; return o ; } 我们使用TRANSFORM_TEX来应用纹理的tiling和offset,就像我们之前那样｡在我的shader中,我使用XY和ZY,所以世界的up轴被映射到两个纹理的y轴上,而不是相对于彼此旋转它们,但是你可以试试其他的值的方式(上面的UV映射的方式是任意的)｡ fixed4 frag ( v2f i ) : SV_TARGET { //calculate UV coordinates for three projections float2 uv_front = TRANSFORM_TEX ( i . worldPos . xy , _MainTex ); ",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/99731640",
+        "media": "知乎",
+        "publish_date": "2019-12-27",
+        "refer": "ref_1",
+        "title": "【译】Ronja的Unity Shader教程(十)_知乎"
+      },
+      {
+        "content": "Do more on the web, with a fast and secure browser! Download Opera browser with: built-in ad blocker battery saver Controversial Controversial posts made by janjandeto This user does not have any downvoted posts yet. Download Opera © Opera Software 1995-",
+        "icon": "",
+        "link": "https://forums.opera.com/user/janjandeto/controversial",
+        "media": "",
+        "publish_date": "2026-05-01",
+        "refer": "ref_2",
+        "title": "Controversial posts made by janjandeto  Opera forums"
+      },
+      {
+        "content": "Navigation Menu Toggle navigation Appearance settings Platform Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert jdjdmd/The-Legion-Proxy   master Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit   History 484 Commits Bookmark List Bookmark List     CSS CSS     Games 3 Games 3     Games Games     Games2 Games2     Images Images     Movie Links Movie Links     Proxies Proxies     Random Tools Random Tools     Subdomains Subdomains     Update List Update List     README.md README.md     index.html index.html     View all files Repository fi",
+        "icon": "",
+        "link": "https://github.com/jdjdmd/The-Legion-Proxy",
+        "media": "",
+        "publish_date": "2025-09-12",
+        "refer": "ref_3",
+        "title": "GitHub - jdjdmd/The-Legion-Proxy: A website designed to stop censorship at work or school."
+      },
+      {
+        "content": "Navigation Menu Toggle navigation Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert roshansridhar/end-to-end-Data-Visualization   master Go to file Code Folders and files Name Name Last commit message Last commit date Latest commit   History 4 Commits HW3.py HW3.py     README.md README.md     flask_app.py flask_app.py     index.html index.html     nyc_restaurants_by_cuisine.json nyc_restaurants_by_cuisine.json     screenshot-rs5788.pythonanywhere.com-2018.05.02-17-19-34.png screenshot-rs5788.pythonanywhere.com-2018.05.02-17-19-34.png     screenshot-rs5788.pythonanywhere.com-2018.05.02-17-20-35.png screenshot-rs5788.pythonanywhere.com-2018.0",
+        "icon": "",
+        "link": "https://github.com/roshansridhar/end-to-end-Data-Visualization",
+        "media": "",
+        "publish_date": "2025-04-22",
+        "refer": "ref_4",
+        "title": "GitHub - roshansridhar/end-to-end-Data-Visualization: A project to create an end-to-end data visualization platform."
+      },
+      {
+        "content": "原文网址:https://www.ronja-tutorials.com/2018/06/23/postprocessing-basics.html 项目地址:https://github.com/ronja-tutorials/ShaderTutorials 然后我们来还原下学习的过程。 在学习后处理之前,首先准备一个普通的给物体加一个贴图的shader。 shader代码如下: Shader \"Unlit/PostProcessBasicPre\" { Properties { _MainTex (\"Texture\", 2D) = \"white\" {} } SubShader { Pass { CGPROGRAM #pragma vertex vert #pragma fragment frag #include \"UnityCG.cginc\" struct appdata { float4 vertex : POSITION; float2 uv : TEXCOORD0; }; struct v2f { float2 uv : TEXCOORD0; float4 vertex : SV_POSITION; }; sampler2D _MainTex; v2f vert (appdata v) { v2f o; o.vertex = UnityObjectToClipPos(v.vertex); o.uv = v.uv; return o; } fixed4 frag (v2f i) : SV_Target { fixed4 color = tex2D(_MainTex, i.uv); return color; } ENDCG } } } 上面的代码,就是给模型赋一张贴图而已,效果如下: 此时立方体使用的材质和shader是: 下面要对这个实现后处理效果,这里简单的对颜色取反。 我们的shader如下: Shader \"Unlit/PostProcessBasic\" { Properties { _MainTex (\"Texture\", 2D) = \"white\" {} } SubShader { Pass { CGPROGRAM #pragma vertex vert #pragma fragment frag #include \"UnityCG.cginc\"",
+        "icon": "",
+        "link": "https://blog.csdn.net/wodownload2/article/details/85091987?locationNum=6&fps=1",
+        "media": "",
+        "publish_date": "2018-12-19",
+        "refer": "ref_5",
+        "title": "后处理基础 - 小孔明的专栏 - CSDN博客"
+      },
+      {
+        "content": "Navigation Menu Toggle navigation Appearance settings Product Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert roshanadh/GCESITExpoVotingSystem   master Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit   History 38 Commits out out     src src     .gitignore .gitignore     README.md README.md     View all files Repository files navigation 8th GCES IT Expo Voting System The system comprises two GUI applications: one for voter registration and the other for vote submission. Build Applications built using Java Swing and AWT classes Uses a r",
+        "icon": "",
+        "link": "https://github.com/roshanadh/GCESITExpoVotingSystem",
+        "media": "",
+        "publish_date": "2025-07-21",
+        "refer": "ref_6",
+        "title": "GitHub - roshanadh/GCESITExpoVotingSystem: Voting System for Project Exhibition event in the 8th GCES IT Expo using Java"
+      },
+      {
+        "content": "原文链接:Shader Tutorials by Ronja 1. Summary 概要。 有时候我们的网格数据中并没有UV坐标,或者我们想让多个模型的纹理对齐,或者还有其他什么原因,我们需要动态生成UV坐标。那么接下来的教程,我们将以最简单的方法,二维平面映射,来生成我们的UV坐标。 本教程是在上一个图片着色器的基础上实现的。但是你也可以在任何表面着色器上使用这种方法。 2.Basics 首先我们将输入结构体中的uv变量删除掉,因为我们打算通过脚本生成。 struct appdata{ float vertex : POSITION; }; 123因为片段着色器中的输入参数是由顶点着色器中的输出参数插值而得到的,因此我们选择在顶点着色器中计算新的uv值。首先我们将其顶点UV设置为顶点在模型坐标系下的x和z的值。这样足以让纹理出现在模型表面了,并且其效果看起来就好像是图片从上往下投影到模型表面一样。 v2f vert(appdata v){ v2f o; o.position = UnityObjectToClipPos(v.vertex); o.uv = v.vertex.xz; return o; } 1234563.Adjustable Tiling 前面并没有考虑图片的缩放,或者我们可能希望图片显示不跟随模型一起旋转。 图片缩放的问题可以通过TRANSFORM_TEX宏来执行UV变换,这样最终用于纹理采样的UV可以跟随纹理缩放而相应改变。 v2f vert(appdata v){ v2f o; o.position = UnityObjectToClipPos(v.vertex); o.uv = TRANSFORM_TEX(v.vertex.xz, _MainTex); return o; } 123456 4.Texture Coordinates based on World Position 为了消除模型位置、和旋转对UV坐标的影响,我们需要将顶点坐标转换到世界坐标系,前面的例子是使用模型坐标系中的顶点坐标来生成UV坐标的。计算世界坐标的方法很简单,只需要将顶点坐标乘以模型空间矩阵。在我们得到世界坐标后,使用其世界坐标来生成UV坐标。 v2f vert(appdata v){ v2f o; //calculate the position in cli",
+        "icon": "",
+        "link": "https://blog.csdn.net/sinat_25415095/article/details/120808080",
+        "media": "",
+        "publish_date": "2021-10-17",
+        "refer": "ref_7",
+        "title": "[译]Unity3D Shader教程(八)Planar Mapping_unity shader panoramic-CSDN博客"
+      },
+      {
+        "content": "版权声明:本文为博主原创文章,未经博主允许不得转载。 https://blog.csdn.net/teamlet/article/details/52914301 public static void showTimedDialog(long time, String message) { Stage popup = new Stage(); popup.setAlwaysOnTop(true); popup.initModality(Modality.APPLICATION_MODAL); Button closeBtn = new Button(\"知道了\"); closeBtn.setOnAction(e -> { popup.close(); }); VBox root = new VBox(); root.setPadding(new Insets(20)); root.setAlignment(Pos.BASELINE_CENTER); root.setSpacing(20); root.getChildren().addAll(new Label(message), closeBtn); Scene scene = new Scene(root); popup.setScene(scene); popup.setTitle(\"提示信息\"); popup.show(); Thread thread = new Thread(try { Thread.sleep(time); if (popup.isShowing()) { Platform.runLater(() -> popup.close(catch (Exception exp) { exp.printStackTrace(thread.setDaemon(true); thread.start(); }",
+        "icon": "",
+        "link": "https://blog.csdn.net/teamlet/article/details/52914301?locationNum=4&fps=1",
+        "media": "",
+        "publish_date": "2016-10-24",
+        "refer": "ref_8",
+        "title": "javaFX 可控制自动关闭时间的弹出提示窗口 - 王洪伟的专栏 - CSDN博客"
+      },
+      {
+        "content": "版权声明:本文为博主原创文章,未经博主允许不得转载。 https://blog.csdn.net/loongshawn/article/details/53074119 转载请注明来源-作者@loongshawn:http://blog.csdn.net/loongshawn/article/details/53074119 1.回顾 上一篇文章《利用JavaFx开发RIA桌面应用-加载等待界面设计》讲了如何设计等待界面,不过此时界面为透明效果,本文在这篇文章基础上开展说明如何设计半透明界面。 首先看看效果,加载等待界面半透明效果: 2.说明 设计半透明界面需要设置以下几点: 设置stage透明,dialogStage.initStyle(StageStyle.TRANSPARENT); 设置布局背景,-fx-background-color: rgba(255,255,255,0.5); 设置scene的Fill属性为空, scene.setFill(null); 整体布局采用BorderPane,对其背景设置如下: BorderPane borderPaneLayout = new BorderPane(); borderPaneLayout.setStyle( \"-fx-background-color: rgba(255,255,255,0.5);\" ); 其余代码几乎与上一篇文章中一致,主要涉及界面调整代码: public ShadowProgressPage(Task<?> task) { MyStyleButton myStyleButton = MyStyleButton.getInstance(); WindowsPositionObject windowsPosition = WindowsPositionObject.getInstance(); dialogStage = new Stage(); progressIndicator = new ProgressIndicator(); dialogStage.initStyle(StageStyle.UNDECORATED); dialogStage.initStyle(StageStyle.TRANSPARENT); dialogStage.initModality(Modality.AP",
+        "icon": "",
+        "link": "https://blog.csdn.net/loongshawn/article/details/53074119?locationNum=5&fps=1",
+        "media": "",
+        "publish_date": "2016-11-07",
+        "refer": "ref_9",
+        "title": "利用JavaFx开发RIA桌面应用-Stage窗口半透明设计 - loongshawn的博客 - CSDN博客"
+      },
+      {
+        "content": "《娜璋带你读论文》系列主要是督促自己阅读优秀论文及听取学术讲座,并分享给大家,希望您喜欢。由于作者的英文水平和学术能力不高,需要不断提升,所以还请大家批评指正,非常欢迎大家给我留言评论,学术路上期待与您前行,加油。 前一篇文章分享了RAID 2020上的论文《Cyber Threat Intelligence Modeling Based on Heterogeneous Graph ConvolAPT检测器。希望这篇文章对您有所帮助,这些大佬是真的值得我们去学习,献上小弟的膝盖~fighting! 原文作者:Xueyuan Han, Thomas Pasquier, Adam Bates, James Mickens and Margo Seltzer原文标题:UNICORN: Runtime Provenance-Based Detector for Advanced Persiste新直方图的计数结果。通过迭代的探索大规模图的近邻关系,发现了在上下文环境中系统实体的因果关系。该工作是UNICORN的第一步,具体来说,直方图中每个元素描述了图中唯一的一个子结构,同时考虑了子结构中的顶点与边上的异构标签,以及这些边的时间顺序。APT攻击缓慢的渗透攻击目标系统,希望基于的异常检测方法最终忘记这一行为,把其当成正常的系统行为,但是APT攻击并不能破坏攻击成功的相关信息流依赖关系。③ ",
+        "icon": "",
+        "link": "https://blog.csdn.net/eastmount/article/details/118913235",
+        "media": "",
+        "publish_date": "2021-07-20",
+        "refer": "ref_10",
+        "title": "[论文阅读] (08) NDSS2020 UNICORN: Runtime Provenance-Based Detector for Advanced Persistent Threats-CSDN博客"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "ronja shader tutorial vertex displace world position fade",
+        "query": "ronja shadertutorial vertex displacement world position fade"
+      }
+    ],
+    "latency_seconds": 1.7,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Sky Children of the Light spirit visual flame candle shader",
+    "content": "**光遇PC端正式上线 加入我们吧!令人陶醉的天空之国(Sky: Children of the Light)在Steam上庆祝期待已久的发行! PC玩家和Steam Deck用户将有机会体...** (2024-04-12)\n令人陶醉的天空之国(Sky: Children of the Light)在Steam上庆祝期待已久的发行! PC玩家和Steam Deck用户将有机会体验到Sky这款突破性的...\nSource: https://www.douyin.com/video/7356786496336071973\n\n**「光遇」Sky- Children of the Light CG动画_SKY光遇** (2021-07-05)\n00:15 / 02:32 自动 1080P 高码率 大会员 1080P 高清 登录即享 720P 准高清 登录即享 480P 标清 登录即享 360P 流畅 自动(360P 流畅) 倍速 2.0x 1.5x 1.25x 1.0x 0.75x 0.5x 镜像画面 单集循环 自动开播 更多播放设置 播放方式 自动切集 播完暂停 视频比例 自动 4:3 16:9 其他设置 隐藏黑边 关灯模式 1. \nSource: https://www.bilibili.com/video/BV1e64y1Q7kB/\n\n**sky光遇国际服完整版安装包-sky光遇国际服下载iosv0.33.5(390271)国际版下载苹果-k73游戏之家** (2021-10-18)\n《sky光遇(Sky: Children of the Light)》画质物品和建模都做的十分不错,万圣节即将到来了,鹿角也来了,超多活动都将要开启了,与心爱的人携手共同进步,开启一场暖心的社交冒险的游戏,开启翱翔的游戏旅程,邂逅携手共进,惊喜的社交的旅程｡ sky光遇国际服完整版安装包点评 陈汉星的新作备受期待的游戏 开启独特的社交游戏冒险性 惊喜社交旅途传播光明的故事 \nSource: http://www.k73.com/down/ios/607687.html\n\n**[搬运/光遇]Sky : Children Of The Light as Vines // Christmas Special_哔哩哔哩_bilibili** (2023-08-21)\n自动连播 35.3万播放 简介 订阅合集 Encanto react to Mirabel + villain Mirabel song I Gacha React I Full Video 08:31 [魔法满屋反应视频]Encanto react to villain Mirabel song - GRV 03:00 [魔法满屋反应视频]Madrigals react to Villain \nSource: https://www.bilibili.com/video/BV1xz4y1u7DQ/\n\n**天空光之子下载-天空光之子游戏下载v0.33.5(390271)光遇国际服-k73游戏之家** (2019-12-04)\n《天空光之子(Sky Children of the Light)》这是一款很温馨的游戏,一款制作了《风之旅人》的开发者全新推出的一款作品了｡能够在这里遇到更多的美好,遇到更多的温暖,还有自由的探索世界玩法提供给大家｡ xapk安装器 v3.1.6 下载 类型: 软件 大小: 7.65 MB 平台: Android 语言: 官方中文版 立即下载 天空光之子点评 超梦幻的主题场景 带给你超多感动 \nSource: http://www.k73.com/down/android/496259.html\n\n**Switch-Sky: Children of the Light加速器免费版下载推荐_Sky 光遇联机闪退掉线怎么解决_豌豆荚** (2026-05-29)\n【大师归来时隔多年佳作再临】著名华人游戏设计师陈星汉在《Journey》后时隔多年再度带来的游戏佳作,开启一场难忘的社交冒险体验,在晴空与云海之中与翱翔的追梦者相遇｡【旷世云海天地之大随心翱翔】见证一个宏大而不断变化的天空王国,在如梦似幻的云海之中,随心所欲地翱翔;与云同行,与爱共鸣,在广阔的天地之间自由地追寻“飞翔”的梦想,以心为涯｡\nSource: https://www.wandoujia.com/biubiu/448343/\n\n**英雄的天空** (2025-11-16)\n<p>刘玉堤,28岁;李汉,27岁;王海,26岁;张积慧,24岁;赵宝桐,23岁;韩德彩,19岁……这是他们飞向抗美援朝战场时的年龄｡江山不负英雄胆,且将利剑破长空｡年轻的志愿军空军飞行员,靠着敢于“空中拼刺刀”的澎湃血性,打出了一片英雄的天空｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_75669196ffd77152\n\n**Sky光·遇PC版下载安装_Sky光·遇(Sky: Children of the Light)游戏官网中文版-OurPlay** (2024-04-11)\nSky光·遇PC版配置要求 最低配置 推荐配置 操作系统 处理器 内存 图形 存储空间 游戏介绍 欢迎来到光·遇!你是一名光之子｡我知道你什么都不记得了,但请举目眺望地平线——这里有一个美丽的世界,正等着你和挚爱之人一起探索!当你在这些领域里展翅翱翔的时候,别忘了时不时停下脚步,欣赏身边旷野的壮丽景色｡并且留意先祖的灵魂!一些先灵被困在这里——他们需要你的帮助｡\nSource: https://m.ourplay.net/rank/detail/300722\n\n**国际原创青少年音乐剧《LUMINA星光童梦》全球启航:打造顶尖艺术平台** (2026-05-21)\n<p>在全球文化交流日益密切的今天,艺术,尤其是舞台艺术,正成为连接不同文明､启迪年轻心灵的重要桥梁｡在此背景下,一项旨在为全球青少年提供顶尖艺术教育与国际展示平台的重量级项目正式亮相｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_1166a0e575b03352\n\n**Light Up The Sky** (2024-01-07)\n\"《Light Up The Sky》是美国福音摇滚乐队The Afters演唱的一首歌曲｡乐队简介The Afters是一支来自美国德州的基督摇滚乐队｡他们的音乐风格温暖､积极,充满希望和向上的力量｡如今,The Afters已经成为美国福音摇滚的代表乐队之一｡歌词Light Up the Sky——The Afters When I&#x27;m feeling all alone With \nSource: https://baike.baidu.com/item/Light%20Up%20The%20Sky/8455638\n",
+    "web_references": [
+      {
+        "content": "令人陶醉的天空之国(Sky: Children of the Light)在Steam上庆祝期待已久的发行! PC玩家和Steam Deck用户将有机会体验到Sky这款突破性的...",
+        "icon": "",
+        "link": "https://www.douyin.com/video/7356786496336071973",
+        "media": "抖音",
+        "publish_date": "2024-04-12",
+        "refer": "ref_1",
+        "title": "光遇PC端正式上线 加入我们吧!令人陶醉的天空之国(Sky: Children of the Light)在Steam上庆祝期待已久的发行! PC玩家和Steam Deck用户将有机会体..."
+      },
+      {
+        "content": "00:15 / 02:32 自动 1080P 高码率 大会员 1080P 高清 登录即享 720P 准高清 登录即享 480P 标清 登录即享 360P 流畅 自动(360P 流畅) 倍速 2.0x 1.5x 1.25x 1.0x 0.75x 0.5x 镜像画面 单集循环 自动开播 更多播放设置 播放方式 自动切集 播完暂停 视频比例 自动 4:3 16:9 其他设置 隐藏黑边 关灯模式 1. ",
+        "icon": "",
+        "link": "https://www.bilibili.com/video/BV1e64y1Q7kB/",
+        "media": "哔哩哔哩",
+        "publish_date": "2021-07-05",
+        "refer": "ref_2",
+        "title": "「光遇」Sky- Children of the Light CG动画_SKY光遇"
+      },
+      {
+        "content": "《sky光遇(Sky: Children of the Light)》画质物品和建模都做的十分不错,万圣节即将到来了,鹿角也来了,超多活动都将要开启了,与心爱的人携手共同进步,开启一场暖心的社交冒险的游戏,开启翱翔的游戏旅程,邂逅携手共进,惊喜的社交的旅程｡ sky光遇国际服完整版安装包点评 陈汉星的新作备受期待的游戏 开启独特的社交游戏冒险性 惊喜社交旅途传播光明的故事 ",
+        "icon": "",
+        "link": "http://www.k73.com/down/ios/607687.html",
+        "media": "",
+        "publish_date": "2021-10-18",
+        "refer": "ref_3",
+        "title": "sky光遇国际服完整版安装包-sky光遇国际服下载iosv0.33.5(390271)国际版下载苹果-k73游戏之家"
+      },
+      {
+        "content": "自动连播 35.3万播放 简介 订阅合集 Encanto react to Mirabel + villain Mirabel song I Gacha React I Full Video 08:31 [魔法满屋反应视频]Encanto react to villain Mirabel song - GRV 03:00 [魔法满屋反应视频]Madrigals react to Villain ",
+        "icon": "",
+        "link": "https://www.bilibili.com/video/BV1xz4y1u7DQ/",
+        "media": "哔哩哔哩",
+        "publish_date": "2023-08-21",
+        "refer": "ref_4",
+        "title": "[搬运/光遇]Sky : Children Of The Light as Vines // Christmas Special_哔哩哔哩_bilibili"
+      },
+      {
+        "content": "《天空光之子(Sky Children of the Light)》这是一款很温馨的游戏,一款制作了《风之旅人》的开发者全新推出的一款作品了｡能够在这里遇到更多的美好,遇到更多的温暖,还有自由的探索世界玩法提供给大家｡ xapk安装器 v3.1.6 下载 类型: 软件 大小: 7.65 MB 平台: Android 语言: 官方中文版 立即下载 天空光之子点评 超梦幻的主题场景 带给你超多感动 ",
+        "icon": "",
+        "link": "http://www.k73.com/down/android/496259.html",
+        "media": "",
+        "publish_date": "2019-12-04",
+        "refer": "ref_5",
+        "title": "天空光之子下载-天空光之子游戏下载v0.33.5(390271)光遇国际服-k73游戏之家"
+      },
+      {
+        "content": "【大师归来时隔多年佳作再临】著名华人游戏设计师陈星汉在《Journey》后时隔多年再度带来的游戏佳作,开启一场难忘的社交冒险体验,在晴空与云海之中与翱翔的追梦者相遇｡【旷世云海天地之大随心翱翔】见证一个宏大而不断变化的天空王国,在如梦似幻的云海之中,随心所欲地翱翔;与云同行,与爱共鸣,在广阔的天地之间自由地追寻“飞翔”的梦想,以心为涯｡",
+        "icon": "",
+        "link": "https://www.wandoujia.com/biubiu/448343/",
+        "media": "豌豆荚",
+        "publish_date": "2026-05-29",
+        "refer": "ref_6",
+        "title": "Switch-Sky: Children of the Light加速器免费版下载推荐_Sky 光遇联机闪退掉线怎么解决_豌豆荚"
+      },
+      {
+        "content": "<p>刘玉堤,28岁;李汉,27岁;王海,26岁;张积慧,24岁;赵宝桐,23岁;韩德彩,19岁……这是他们飞向抗美援朝战场时的年龄｡江山不负英雄胆,且将利剑破长空｡年轻的志愿军空军飞行员,靠着敢于“空中拼刺刀”的澎湃血性,打出了一片英雄的天空｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_75669196ffd77152",
+        "media": "企鹅号",
+        "publish_date": "2025-11-16",
+        "refer": "ref_7",
+        "title": "英雄的天空"
+      },
+      {
+        "content": "Sky光·遇PC版配置要求 最低配置 推荐配置 操作系统 处理器 内存 图形 存储空间 游戏介绍 欢迎来到光·遇!你是一名光之子｡我知道你什么都不记得了,但请举目眺望地平线——这里有一个美丽的世界,正等着你和挚爱之人一起探索!当你在这些领域里展翅翱翔的时候,别忘了时不时停下脚步,欣赏身边旷野的壮丽景色｡并且留意先祖的灵魂!一些先灵被困在这里——他们需要你的帮助｡",
+        "icon": "",
+        "link": "https://m.ourplay.net/rank/detail/300722",
+        "media": "ourplay",
+        "publish_date": "2024-04-11",
+        "refer": "ref_8",
+        "title": "Sky光·遇PC版下载安装_Sky光·遇(Sky: Children of the Light)游戏官网中文版-OurPlay"
+      },
+      {
+        "content": "<p>在全球文化交流日益密切的今天,艺术,尤其是舞台艺术,正成为连接不同文明､启迪年轻心灵的重要桥梁｡在此背景下,一项旨在为全球青少年提供顶尖艺术教育与国际展示平台的重量级项目正式亮相｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_1166a0e575b03352",
+        "media": "企鹅号",
+        "publish_date": "2026-05-21",
+        "refer": "ref_9",
+        "title": "国际原创青少年音乐剧《LUMINA星光童梦》全球启航:打造顶尖艺术平台"
+      },
+      {
+        "content": "\"《Light Up The Sky》是美国福音摇滚乐队The Afters演唱的一首歌曲｡乐队简介The Afters是一支来自美国德州的基督摇滚乐队｡他们的音乐风格温暖､积极,充满希望和向上的力量｡如今,The Afters已经成为美国福音摇滚的代表乐队之一｡歌词Light Up the Sky——The Afters When I&#x27;m feeling all alone With ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/Light%20Up%20The%20Sky/8455638",
+        "media": "百度百科",
+        "publish_date": "2024-01-07",
+        "refer": "ref_10",
+        "title": "Light Up The Sky"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "sky children of the light spirit visual flame candle shader",
+        "query": "Sky Children of the Light spirit visual flame candle shader"
+      }
+    ],
+    "latency_seconds": 2.38,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "原神 元素 能量 流光 ribbon shader 特效 解析",
+    "content": "**【原神攻略】元素能量、元素充能效率全面解析（带你彻底了解）-原神社区-米游社** ()\n元素爆发，也就是我们大招的使用的话，需要满足两个条件。一个是CD，也就是技能冷却时间；另一个就是技能的充能要满，即是充能要达到技能要求所需要的元素能量才行。（这个可以在角色大招的详细属性里，看到每一个角色大招所需要的元素能量）所以不同角色的大招充能到饱和所需要的元素能量是不一样的，像迪卢克的大招只需要40点元素能量，甘雨、班尼特需要60点，行秋则是需要80点元素能量。\n我们先从元素能量的获取方式开始，一步一步深入讲下去吧！\n1.元素战技命中敌人\n一般来说，元素战技只要命中敌人（不一定要造成伤害，打到护盾上也可以），就一定会产生若干数量的元素微粒，对于同一个角色，一般都会有两种可能的数值。比如班尼特的点按E技能，就会有2-3个火元素微粒产生。砂糖的E则是有3-4个风元素微粒产生。一般来说，角色元素爆发所需要的元素能量越多，元素战技所能产生的元素微粒数量就越多。吸收这些元素微粒，队伍里的所有角色都能获得一定量的元素能量。转换关系，我后面细说。\n当然元素战技也不是百分之百能获得微粒，比如未攻击到敌人时，就无法获得元素微粒。芭芭拉的E技能，也是不能产生元素微粒的，不过作为弥补，芭芭拉的1命和4命效果里都有增加自身元素能量的方式。另外一些特殊的：女仆的E，开盾时是有伤害的，但不会获得元素微粒；钟离的长按E时也不会立即获得元素微粒，但柱子的共鸣每次命中敌人后，有概率产生一颗岩元素微粒。\n2.削减怪物生命值\n怪物的血量一般是分为3-4档，每当血量下降到相应阈值的时候，就会掉落元素微粒或者元素晶球。元素晶球要比元素微粒大很多，球状形态，里面含有的元素能量是对应元素微\nSource: https://www.miyoushe.com/ys/article/5982348\n\n**原神元素能量、元素充能效率全面解析** ()\n打开西瓜视频，看完整高清内容\n是水寒啊\n1万粉丝188视频\n关注\n原创1488次播放2021-01-30发布\n原神机制分解第3期。制作不易，觉得有帮助的朋友可以点赞或是关注，支持一下我。\n原神机制分解\n4/\n原神机制分解—元素反应（从入门到精通，一定有你所不知道的）\n【超硬核】原神伤害精确计算公式、原神各大乘区详细讲解\n原神伤害计算补充视频（攻击稀释、减抗减防、如何打出高额伤害）\n播放中\n原神元素能量、元素充能效率全面解析\n原神破盾知识和破盾技巧全面解析\n【原神机制分解4.5】破盾必备小技巧（学会游戏里横着走）\n【原神机制分解5】角色的护盾和治疗（上）（关于角色护盾）\n【原神机制分解5】角色的护盾和治疗（下）（关于治疗）\n原神武器的全面分析，轻松解决武器挑选的问题\n【精简版】原神伤害的精确计算、各大乘区详细讲解\n什么样的圣遗物是好的呢？带你全面了解圣遗物。\n【元素反应进阶教学】深入理解元素附着，解决99%的元素反应问题\n【原神机制分解8】关于角色培养的一些建议。分清重点，少走弯路\n【原神阵容配队攻略】轻轻松松学会自己配队\n原神实战知识和实战技巧（卡肉、附魔、取消后摇、debuff去除等）\n原神护盾角色的护盾吸收量的精确计算公式的实例验证\n相关推荐\n高热短剧\n评论 7\n推荐作者\n迷你世界\n西瓜视频创作者\n1143万\n去看看\n靓声\n知名音乐媒体人 歌手 优质音乐领域创作者\n856万\n去看看\n钢铁西游\n优质动漫领域创作者\n478万\n去看看\n结婚狂1\n西瓜视频创作者\n220万\n去看看\n世界最TOP\n西瓜视频创作者\n37万\n去看看\n馥芮白(辣妈版)\n西瓜视频创作者\n115万\n去看看\n顾七解说\n西瓜视频创作者\n94万\n去看看\n用户83269314879\n西瓜视频创\nSource: https://m.ixigua.com/video/6923220387215966734\n\n**【原神冒险团】怪物元素微粒/晶球掉落机制全解** ()\n目前游戏中元素能量主要来源 1. 角色普攻/重击怪物(元素能量) 2. 角色元素充能效率(提高微粒、晶球转化能量效果) 3. 角色元素战技(元素微粒) 4. 部分角色命座天赋等(元素能量) 5. 怪物掉落(本篇主要介绍)(元素微粒、元素晶球) 6. 西风系列等武器特效(元素微粒) 7. 部分圣遗物套装效果(元素能量) 8. 其他~ 本文表格主要是第5部分怪物掉落元素能量的相关数据，之前也有人测试过相关内容，但是并不详细。我们测试了全怪物的掉落档位区间和对应掉落的能量。具体见下表。\n注：此表仅针对一般情况下怪物掉落情况，角色试用关卡等特殊活动存在额外加成~ 1、怪物掉落根据生命值分为4个档位(第四个档位为生命值0也就是击杀时)，各类怪物存在的档位各有不同。 2、击杀掉落一般说来掉落比生命值削减更丰厚，个别除外如：遗迹守卫。 3、表中微粒/晶球掉落初始数量均为1。 4、怪物掉落的元素微粒充能效果并不完全一致，存在2/3倍效果的微粒，具体见图。 5、周本boss不掉落微粒/晶球。 6、大世界小型怪按百分比血量掉落后未击杀，再重新传送回去，不会再掉落百分比血量微粒，大型怪无此限制。 7、不同种类怪产生的微粒分为多个档次，目前有1/2/3倍三个档次效果，不排除未来有更多种可能性。 在二人/三人/四人阵容中，后台角色充能系数分别为0.8/0.7/0.6。 以4人队伍为例，对应的能量充能为\n元素能量 微粒/晶球对应能量 数量 充能效率直接回复元素能量方式不受充能效率影响 我们可以应用此表对特定角色阵容的元素充能进行详尽的计算，在魈攻略中就有部分应用。 文章\nSource: https://game.xiaomi.com/viewpoint/1328564773_1612687569777_13\n\n**原神能量球机制 原神能量球机制深度解析-京华手游资讯频道（发布时间：2025-04-04 21:39:17）** (2025-04-04)\n在《原神》这款备受欢迎的开放世界冒险游戏中，能量球机制是战斗系统中不可或缺的一环，它不仅关乎角色的技能释放频率，还直接影响到玩家的战斗策略与体验，以下是对几个关键相关词的详细分析：\n元素微粒与元素晶球\n元素微粒与元素晶球是游戏中两种主要的能量补给来源，当角色使用元素战技攻击敌人并造成元素反应时，会掉落元素微粒或元素晶球，这些能量球会自动飞向队伍中对应元素属性的角色，为其充能，元素微粒提供较少的能量，而元素晶球则能提供更多，值得注意的是，不同元素属性的角色在吸收同属性元素球时，会获得额外的能量加成。\n元素爆发充能\n元素爆发，即角色的大招，是《原神》中极具威力的技能，能量球的主要作用就是为角色的元素爆发充能，当角色吸收足够数量的元素微粒或元素晶球后，其元素爆发条会逐渐填满，一旦充满，玩家即可释放元素爆发，对敌人造成大量伤害或提供强大的辅助效果。\n战斗策略与能量管理\n在战斗中，合理利用能量球机制，进行能量管理，是提升战斗效率的关键，玩家需要根据敌人的属性和战斗环境，灵活切换角色，利用元素反应产生更多的能量球，同时确保关键角色能够及时释放元素爆发，队伍搭配也至关重要，不同角色之间的元素属性互补，可以更有效地收集和利用能量球，形成强大的战斗循环。\n《原神》中的能量球机制不仅丰富了游戏的战斗系统，也为玩家提供了更多的策略选择与挑战乐趣。\nSource: https://news.jinghua.cn/20250404/f349261.shtml\n\n**原神元素球机制揭秘，一场关于能量与魔法的探索-京华手游资讯频道（发布时间：2025-07-14 19:36:29）** (2025-07-14)\n在《原神》这款广受好评的游戏里，玩家通过各种方式获取和使用元素球（Elemental Orb），这是游戏内最核心的战斗元素之一，本篇将深入解析原神元素球的机制，从其诞生、使用到升级，带你全面了解这个系统如何塑造了游戏的独特魅力。\n元素球的起源与设计\n在《原神》的世界观中，元素球最初是由古老的先民创造的，它们是他们与自然力量交流的重要工具，这些球体能够吸收、储存和释放不同的元素之力，包括火、水、风、土四种基本元素以及光、雷两种特殊元素，每一个元素球都拥有独特的属性和技能，使它们成为玩家对抗敌人时不可或缺的武器。\n元素球的基本操作\n要正确地操控元素球,玩家需要掌握一系列基本的操作技巧：\n根据敌人的类型和位置,合理分配元素球的力量，最大化你的攻击力。\n元素球的升级与强化\n为了提升元素球的能力,玩家可以通过以下途径进行升级和强化：\n元素球的策略应用\n在游戏中,合理运用元素球不仅能提高个人战斗力，还能为团队作战提供重要支持，以下是几种常见的元素球组合策略：\n元素球不仅是《原神》的核心战斗机制，更是玩家展现个人能力和策略的重要手段，通过不断学习和实践，你将能更好地驾驭这一强大而灵活的元素，享受这场关于能量与魔法的探索之旅。\n希望这篇详细的解析能够帮助你深入了解《原神》中的元素球机制，并在游戏中取得更好的成绩！\nSource: https://news.jinghua.cn/20250714/f369192.shtml\n\n**据信,原神-纳西妲被×出白色液体的幕后故事网友热议其背后故事（发布时间：2025-06-11 07:43:56）** (2025-06-11)\n作为《原神》智慧之神的具象化存在，草神纳西妲的技能特效中独特的\"白色流光\"效果自实装以来便引发玩家热议。本文将深入解析3.2版本「尘世七执政」角色特效制作流程，揭秘元素战技中神秘光效的创作理念与技术实现。\n元素战技视觉语言解析\n在纳西妲元素战技「所闻遍计」的实机演示中，当发动「蕴种印」标记敌人时，角色周身会迸发白色粒子束。这种流动光效本质上是由Houdini软件制作的volumetric lighting（体积光）效果，开发团队采用次表面散射技术，通过控制半透明材质的折射率（IOR值1.33）与散射强度（density参数0.7），最终呈现出类似植物汁液在光照下的透光质感。\n特效团队设计思路访谈\n美术总监在接受《Game Developer》采访时透露，纳西妲的视觉系统包含三大设计要素：智慧（白色）、生机（绿色）、童真（星形元素）。其中白色流光需同时满足两项需求：既要体现「虚空终端」的数据流概念，又要避免与雷元素的紫色产生混淆。最终方案是在Unity引擎中采用分层渲染技术，底层使用HSV（ 12,85%,100%）的草元素主色，表面叠加透明度75%的珍珠白辉光。\n特效团队自主研发的「动态贝塞尔曲线系统」功不可没。该系统能根据敌人位置实时生成12-18条独立运算的粒子轨迹，每条轨迹包含300-500个动态粒子单元。测试数据显示，当同时标记8名敌人时，场景中将生成超过3万组动态粒子，这对移动端优化提出巨大挑战。最终通过LOD（细节分级）技术，将中远距离的粒子数量压缩至原始数据的30%，成功将帧率稳定在60fps。\n玩家社区的二创热潮\nNGA论坛数据显示，纳\nSource: https://www.cecia.cn/index.php?id=lyzatv-390199\n\n**流光特效好 🦄 的手游（videostar流光特效）-湃游网** ()\n原神：以开放世界探索为特色，拥有华 丽的流光特效和 引人入胜的视觉效果。\n幻塔：科幻主题的 开放世界 MMORPG，以其令 人印象深刻的流光特效和流畅的战斗系统而闻名。\n崩坏 3rd：动作驱动的角 色扮演游戏，以其高频的流光特效和独特的画面风格而著称。\n命运冠位指定：回合制角色扮演游戏，拥有令人惊叹的宝具流光特 效和精美的角色设计。\n明日方舟：塔防策略游戏，以其风格化的流光特效和多样化的角色设计而受 到欢迎。\n射击\nApex Legends Mobile：热门大逃杀游戏的 移动版本，以其流畅的枪战和炫目的流光特效而闻名。\n使命召唤手游：快节奏的射击游戏，拥有逼真的流光特 效和令人着迷的多人游戏模式。\nPUBG MOBILE：另一 款广受欢迎的大逃杀游戏 ，以其逼真的枪战和次世代的流光特效而著称。\n穿越火线手游：经典游 FPS 戏的移动版本，以其多样化的模式和流畅 的流光特效而闻名。\n量子特攻：科幻主题的射击游 戏，以其创新的战备系统和令人惊叹的流光特 效而受到称赞。\n其他\n王者荣耀：MOBA 游戏，以其令 人惊 叹的英 雄技能流光特效和快节奏的团队战斗而闻名。\n阴阳师：回合制角色扮 演游戏 ，以其精美的流光特效和丰富的日本民 间传说而著称。\n原神：开放世界冒险游戏，以其令人惊叹 的流光特效和引人入胜的故事情节而受到欢迎。\n战双帕弥什 ：动作 RPG 游戏，以 其流畅的战斗系统 和华丽的流光特效而闻名。\n崩坏：星：穹铁道即将推出的科幻 RPG 游戏，以 其史诗般的流光特效和身临其 境的故事而备受期待。\n2、videostar流光特 效\n使用 VideoStar 创作流光特 效\nSource: http://www.paiyouwang.com/462367.html\n\n**原神：充能机制全解析，搞懂充能萌新秒变大佬** ()\n原神角色开启大招前，需要先为大招进行充能，玩家的主要充能手段有3种：玩家自充、怪物掉落、其他手段。本期，为大家带来新手入门攻略之，为大家详细梳理这两种充能手段，看完之后萌新也能秒变大佬！当我们与敌人作战时，经常会看到有光球向角色方向飞来，玩家吃到光球后，大招能量槽会不断被填充，直到被能量充满点亮大招，这个过程就是充能”！充能过程中产生的小光球即为元素微粒”，大光球称之为元素晶球”。1颗元素微粒是2点能量，同属性角色获取元素微粒有150%效果，不同属性角色获取元素微粒时仅有50%效果。举个例子：火属性角色吃到火元素微粒充能3点，水属性角色吃到火元素微粒充能1点。1颗元素晶球的能量是1颗元素微粒的3倍。角色，数量与命中敌人的数量无关。比如：点按班尼特的元素战技，无论命中多少敌人都只产生2-3颗火元素微粒，概率比为3：1。不同角色的元素战技产球数量都不相同，比如：芭芭拉的元素战技因为不对敌人造成伤害所以不会产生元素微粒。需要注意的是，角色处于后台时充能效果会发生衰减，4人小队后台充能效果仅为前台的60%。由于部分角色耗能高且充能困难，实际游戏中可以尽量让其在前台吃元素微粒，比如：班尼特点按元素战技后，切香菱出场吃元素微粒。，并且掉落元素微粒的属性与敌人自身属性相同，例如：火属性的史莱姆掉落火属性的元素微粒。不同怪物的设定血量比例不同，掉落的元素微粒/晶球也不同，比如：无相之雷/岩/冰会在血量降低至75%、50%、25%、0%时各产生一次元素晶球，但同为无相系列的无相之冰只在血量降低至66%、33%时才会产生元素晶球。角色在前台普攻时，，但由于能\nSource: http://mp.weixin.qq.com/s?__biz=Mzg5ODUyMzEyMQ==&mid=2247509299&idx=1&sn=65a945a26b1e7b36513beddf9ff3eb34\n\n**原神：万叶设计的小细节，谁说收刀会割手？有元素能量护着你（发布时间：2021-05-06 16:47:26）** (2021-05-06)\n万叶这个角色真的是特效十足，尤其是大招开启后的领域特效特别炫酷，我想每个看完万叶演示的玩家都会这样认为。而万叶的立绘也是十分的用心，各种细节方面做得都非常好。其实更惊人的细节，还是隐藏在万叶的动作以及技能上。\n元素能量保护的收刀动作！万叶的动作设计很有意思，估计看演示的小伙伴也都发现了。万叶不论是普攻还是放技能，释放之后都有一个收刀的动作，也不管这把武器到底有没有刀鞘。而且如果是重击之后不去动万叶的话，万叶还会慢慢地把刀收起来。很多玩家就疑惑，这样收刀不会割到手吗？其实玩家可以注意看，万叶收刀时手上会有金色的能量。尤其是缓慢收刀时最为明显，可以看到是这能量护着万叶的手。让万叶可以在没有刀鞘的情况下，完成用手收刀的动作，这点设计就非常的细节了。\n展开剩余\n飘落消失的枫叶！万叶的技能中都带着枫叶特效，这些枫叶特效也做得十分细致。万叶释放技能之后，腾空时会被枫叶与风元素能量围绕，让万叶可以用出一次下落攻击。如果万叶回到地面上，就无法再使用这个特殊效果了，周围的效果自然就消失了。而围绕着万叶的枫叶，并不是像特效一样直接消失。而是真的会像树叶一样，飘落到地面上之后才会消失。这一点细节的体现，即使没有玩家也不会有意见，甚至不少玩家都没发现这个细节。然而制作组还是做出了这个效果，真的是非常的惊人。\n风穴的吸附互动效果！接着上面万叶释放技能的特殊效果来说，万叶如果使用了特殊攻击，会造成范围风元素伤害。同时这个伤害过后会在原地留下一个风穴，持续牵引吸附敌人。这个风穴本身的特效就非常的不错，浅黑色的风穴还有枫叶被吸入风穴当中。而玩家如果在草地上，或者周围有植物的时候\nSource: https://www.sohu.com/a/464877436_120167104/\n\n**探究原神元素精通的效果 解析原神中元素精通的意义与技巧（发布时间：2025-09-18 15:15:33）** (2025-09-18)\n原神\n元素精通的奥秘\n在原神这款游戏中，元素精通是非常重要的一项属性。它能够影响角色对各种元素伤害的加成，同时也会影响角色的元素技能冷却时间和能量回复速度。掌握元素精通对于游戏玩家来说是非常重要的。\n什么是元素精通？\n元素精通指的是角色在使用元素技能时所造成的伤害值，也是角色拥有更快的元素技能冷却时间和更高的元素能量回复速度。每个角色都有自己的元素精通值，该值可以通过培养和提升来增强角色的元素属性。\n元素精通对于游戏的重要性\n在原神中，元素精通是决定角色输出能力的重要因素之一。如果一个角色具备更高的元素精通属性，那么他使用相应元素技能时所造成的伤害值也会更高，这就意味着他具备更强的输出能力。\n元素精通的影响因素\n影响元素精通属性的因素有很多，其中包括角色等级、武器属性、装备属性和人物升级。在游戏中，玩家需要通过不断的培养和提升来增强角色的元素精通属性。\n如何提升元素精通？\n提升元素精通需要不断地练习和培养。玩家可以通过完成任务、挑战BOSS、开宝箱和打怪来获取经验值，从而提升角色的等级和元素精通属性。玩家还可以使用装备来增加角色的元素属性。\n不同角色的元素精通属性\n不同角色在元素精通属性上有着不同的表现。一些角色具备更高的元素精通属性，例如风神瞳和迪奥娜，他们的元素技能伤害值较高，冷却时间较短，而其他角色则相对较弱。\n不同武器对元素精通的影响\n不同武器属性对于元素精通也有影响。例如弓箭和法器类武器对于元素精通的影响较大，而剑和枪则相对较少。在游戏中，玩家需要根据角色和武器的特点来选择相应的装备。\n如何计算元素伤害值？\n计算元素技能伤害值需要考虑多种因素，例如角色等级、武\nSource: https://www.9game.cn/yuanshen/11399078.html\n",
+    "web_references": [
+      {
+        "content": "元素爆发，也就是我们大招的使用的话，需要满足两个条件。一个是CD，也就是技能冷却时间；另一个就是技能的充能要满，即是充能要达到技能要求所需要的元素能量才行。（这个可以在角色大招的详细属性里，看到每一个角色大招所需要的元素能量）所以不同角色的大招充能到饱和所需要的元素能量是不一样的，像迪卢克的大招只需要40点元素能量，甘雨、班尼特需要60点，行秋则是需要80点元素能量。\n我们先从元素能量的获取方式开始，一步一步深入讲下去吧！\n1.元素战技命中敌人\n一般来说，元素战技只要命中敌人（不一定要造成伤害，打到护盾上也可以），就一定会产生若干数量的元素微粒，对于同一个角色，一般都会有两种可能的数值。比如班尼特的点按E技能，就会有2-3个火元素微粒产生。砂糖的E则是有3-4个风元素微粒产生。一般来说，角色元素爆发所需要的元素能量越多，元素战技所能产生的元素微粒数量就越多。吸收这些元素微粒，队伍里的所有角色都能获得一定量的元素能量。转换关系，我后面细说。\n当然元素战技也不是百分之百能获得微粒，比如未攻击到敌人时，就无法获得元素微粒。芭芭拉的E技能，也是不能产生元素微粒的，不过作为弥补，芭芭拉的1命和4命效果里都有增加自身元素能量的方式。另外一些特殊的：女仆的E，开盾时是有伤害的，但不会获得元素微粒；钟离的长按E时也不会立即获得元素微粒，但柱子的共鸣每次命中敌人后，有概率产生一颗岩元素微粒。\n2.削减怪物生命值\n怪物的血量一般是分为3-4档，每当血量下降到相应阈值的时候，就会掉落元素微粒或者元素晶球。元素晶球要比元素微粒大很多，球状形态，里面含有的元素能量是对应元素微",
+        "icon": "",
+        "link": "https://www.miyoushe.com/ys/article/5982348",
+        "media": "",
+        "publish_date": "",
+        "refer": "ref_1",
+        "title": "【原神攻略】元素能量、元素充能效率全面解析（带你彻底了解）-原神社区-米游社"
+      },
+      {
+        "content": "打开西瓜视频，看完整高清内容\n是水寒啊\n1万粉丝188视频\n关注\n原创1488次播放2021-01-30发布\n原神机制分解第3期。制作不易，觉得有帮助的朋友可以点赞或是关注，支持一下我。\n原神机制分解\n4/\n原神机制分解—元素反应（从入门到精通，一定有你所不知道的）\n【超硬核】原神伤害精确计算公式、原神各大乘区详细讲解\n原神伤害计算补充视频（攻击稀释、减抗减防、如何打出高额伤害）\n播放中\n原神元素能量、元素充能效率全面解析\n原神破盾知识和破盾技巧全面解析\n【原神机制分解4.5】破盾必备小技巧（学会游戏里横着走）\n【原神机制分解5】角色的护盾和治疗（上）（关于角色护盾）\n【原神机制分解5】角色的护盾和治疗（下）（关于治疗）\n原神武器的全面分析，轻松解决武器挑选的问题\n【精简版】原神伤害的精确计算、各大乘区详细讲解\n什么样的圣遗物是好的呢？带你全面了解圣遗物。\n【元素反应进阶教学】深入理解元素附着，解决99%的元素反应问题\n【原神机制分解8】关于角色培养的一些建议。分清重点，少走弯路\n【原神阵容配队攻略】轻轻松松学会自己配队\n原神实战知识和实战技巧（卡肉、附魔、取消后摇、debuff去除等）\n原神护盾角色的护盾吸收量的精确计算公式的实例验证\n相关推荐\n高热短剧\n评论 7\n推荐作者\n迷你世界\n西瓜视频创作者\n1143万\n去看看\n靓声\n知名音乐媒体人 歌手 优质音乐领域创作者\n856万\n去看看\n钢铁西游\n优质动漫领域创作者\n478万\n去看看\n结婚狂1\n西瓜视频创作者\n220万\n去看看\n世界最TOP\n西瓜视频创作者\n37万\n去看看\n馥芮白(辣妈版)\n西瓜视频创作者\n115万\n去看看\n顾七解说\n西瓜视频创作者\n94万\n去看看\n用户83269314879\n西瓜视频创",
+        "icon": "https://sfile.chatglm.cn/searchImage/m_ixigua_com_icon_new.jpg",
+        "link": "https://m.ixigua.com/video/6923220387215966734",
+        "media": "西瓜视频",
+        "publish_date": "",
+        "refer": "ref_2",
+        "title": "原神元素能量、元素充能效率全面解析"
+      },
+      {
+        "content": "目前游戏中元素能量主要来源 1. 角色普攻/重击怪物(元素能量) 2. 角色元素充能效率(提高微粒、晶球转化能量效果) 3. 角色元素战技(元素微粒) 4. 部分角色命座天赋等(元素能量) 5. 怪物掉落(本篇主要介绍)(元素微粒、元素晶球) 6. 西风系列等武器特效(元素微粒) 7. 部分圣遗物套装效果(元素能量) 8. 其他~ 本文表格主要是第5部分怪物掉落元素能量的相关数据，之前也有人测试过相关内容，但是并不详细。我们测试了全怪物的掉落档位区间和对应掉落的能量。具体见下表。\n注：此表仅针对一般情况下怪物掉落情况，角色试用关卡等特殊活动存在额外加成~ 1、怪物掉落根据生命值分为4个档位(第四个档位为生命值0也就是击杀时)，各类怪物存在的档位各有不同。 2、击杀掉落一般说来掉落比生命值削减更丰厚，个别除外如：遗迹守卫。 3、表中微粒/晶球掉落初始数量均为1。 4、怪物掉落的元素微粒充能效果并不完全一致，存在2/3倍效果的微粒，具体见图。 5、周本boss不掉落微粒/晶球。 6、大世界小型怪按百分比血量掉落后未击杀，再重新传送回去，不会再掉落百分比血量微粒，大型怪无此限制。 7、不同种类怪产生的微粒分为多个档次，目前有1/2/3倍三个档次效果，不排除未来有更多种可能性。 在二人/三人/四人阵容中，后台角色充能系数分别为0.8/0.7/0.6。 以4人队伍为例，对应的能量充能为\n元素能量 微粒/晶球对应能量 数量 充能效率直接回复元素能量方式不受充能效率影响 我们可以应用此表对特定角色阵容的元素充能进行详尽的计算，在魈攻略中就有部分应用。 文章",
+        "icon": "https://sfile.chatglm.cn/searchImage/game_xiaomi_com_icon_new.jpg",
+        "link": "https://game.xiaomi.com/viewpoint/1328564773_1612687569777_13",
+        "media": "小米游戏中心",
+        "publish_date": "",
+        "refer": "ref_3",
+        "title": "【原神冒险团】怪物元素微粒/晶球掉落机制全解"
+      },
+      {
+        "content": "在《原神》这款备受欢迎的开放世界冒险游戏中，能量球机制是战斗系统中不可或缺的一环，它不仅关乎角色的技能释放频率，还直接影响到玩家的战斗策略与体验，以下是对几个关键相关词的详细分析：\n元素微粒与元素晶球\n元素微粒与元素晶球是游戏中两种主要的能量补给来源，当角色使用元素战技攻击敌人并造成元素反应时，会掉落元素微粒或元素晶球，这些能量球会自动飞向队伍中对应元素属性的角色，为其充能，元素微粒提供较少的能量，而元素晶球则能提供更多，值得注意的是，不同元素属性的角色在吸收同属性元素球时，会获得额外的能量加成。\n元素爆发充能\n元素爆发，即角色的大招，是《原神》中极具威力的技能，能量球的主要作用就是为角色的元素爆发充能，当角色吸收足够数量的元素微粒或元素晶球后，其元素爆发条会逐渐填满，一旦充满，玩家即可释放元素爆发，对敌人造成大量伤害或提供强大的辅助效果。\n战斗策略与能量管理\n在战斗中，合理利用能量球机制，进行能量管理，是提升战斗效率的关键，玩家需要根据敌人的属性和战斗环境，灵活切换角色，利用元素反应产生更多的能量球，同时确保关键角色能够及时释放元素爆发，队伍搭配也至关重要，不同角色之间的元素属性互补，可以更有效地收集和利用能量球，形成强大的战斗循环。\n《原神》中的能量球机制不仅丰富了游戏的战斗系统，也为玩家提供了更多的策略选择与挑战乐趣。",
+        "icon": "",
+        "link": "https://news.jinghua.cn/20250404/f349261.shtml",
+        "media": "",
+        "publish_date": "2025-04-04",
+        "refer": "ref_4",
+        "title": "原神能量球机制 原神能量球机制深度解析-京华手游资讯频道（发布时间：2025-04-04 21:39:17）"
+      },
+      {
+        "content": "在《原神》这款广受好评的游戏里，玩家通过各种方式获取和使用元素球（Elemental Orb），这是游戏内最核心的战斗元素之一，本篇将深入解析原神元素球的机制，从其诞生、使用到升级，带你全面了解这个系统如何塑造了游戏的独特魅力。\n元素球的起源与设计\n在《原神》的世界观中，元素球最初是由古老的先民创造的，它们是他们与自然力量交流的重要工具，这些球体能够吸收、储存和释放不同的元素之力，包括火、水、风、土四种基本元素以及光、雷两种特殊元素，每一个元素球都拥有独特的属性和技能，使它们成为玩家对抗敌人时不可或缺的武器。\n元素球的基本操作\n要正确地操控元素球,玩家需要掌握一系列基本的操作技巧：\n根据敌人的类型和位置,合理分配元素球的力量，最大化你的攻击力。\n元素球的升级与强化\n为了提升元素球的能力,玩家可以通过以下途径进行升级和强化：\n元素球的策略应用\n在游戏中,合理运用元素球不仅能提高个人战斗力，还能为团队作战提供重要支持，以下是几种常见的元素球组合策略：\n元素球不仅是《原神》的核心战斗机制，更是玩家展现个人能力和策略的重要手段，通过不断学习和实践，你将能更好地驾驭这一强大而灵活的元素，享受这场关于能量与魔法的探索之旅。\n希望这篇详细的解析能够帮助你深入了解《原神》中的元素球机制，并在游戏中取得更好的成绩！",
+        "icon": "",
+        "link": "https://news.jinghua.cn/20250714/f369192.shtml",
+        "media": "",
+        "publish_date": "2025-07-14",
+        "refer": "ref_5",
+        "title": "原神元素球机制揭秘，一场关于能量与魔法的探索-京华手游资讯频道（发布时间：2025-07-14 19:36:29）"
+      },
+      {
+        "content": "作为《原神》智慧之神的具象化存在，草神纳西妲的技能特效中独特的\"白色流光\"效果自实装以来便引发玩家热议。本文将深入解析3.2版本「尘世七执政」角色特效制作流程，揭秘元素战技中神秘光效的创作理念与技术实现。\n元素战技视觉语言解析\n在纳西妲元素战技「所闻遍计」的实机演示中，当发动「蕴种印」标记敌人时，角色周身会迸发白色粒子束。这种流动光效本质上是由Houdini软件制作的volumetric lighting（体积光）效果，开发团队采用次表面散射技术，通过控制半透明材质的折射率（IOR值1.33）与散射强度（density参数0.7），最终呈现出类似植物汁液在光照下的透光质感。\n特效团队设计思路访谈\n美术总监在接受《Game Developer》采访时透露，纳西妲的视觉系统包含三大设计要素：智慧（白色）、生机（绿色）、童真（星形元素）。其中白色流光需同时满足两项需求：既要体现「虚空终端」的数据流概念，又要避免与雷元素的紫色产生混淆。最终方案是在Unity引擎中采用分层渲染技术，底层使用HSV（ 12,85%,100%）的草元素主色，表面叠加透明度75%的珍珠白辉光。\n特效团队自主研发的「动态贝塞尔曲线系统」功不可没。该系统能根据敌人位置实时生成12-18条独立运算的粒子轨迹，每条轨迹包含300-500个动态粒子单元。测试数据显示，当同时标记8名敌人时，场景中将生成超过3万组动态粒子，这对移动端优化提出巨大挑战。最终通过LOD（细节分级）技术，将中远距离的粒子数量压缩至原始数据的30%，成功将帧率稳定在60fps。\n玩家社区的二创热潮\nNGA论坛数据显示，纳",
+        "icon": "",
+        "link": "https://www.cecia.cn/index.php?id=lyzatv-390199",
+        "media": "",
+        "publish_date": "2025-06-11",
+        "refer": "ref_6",
+        "title": "据信,原神-纳西妲被×出白色液体的幕后故事网友热议其背后故事（发布时间：2025-06-11 07:43:56）"
+      },
+      {
+        "content": "原神：以开放世界探索为特色，拥有华 丽的流光特效和 引人入胜的视觉效果。\n幻塔：科幻主题的 开放世界 MMORPG，以其令 人印象深刻的流光特效和流畅的战斗系统而闻名。\n崩坏 3rd：动作驱动的角 色扮演游戏，以其高频的流光特效和独特的画面风格而著称。\n命运冠位指定：回合制角色扮演游戏，拥有令人惊叹的宝具流光特 效和精美的角色设计。\n明日方舟：塔防策略游戏，以其风格化的流光特效和多样化的角色设计而受 到欢迎。\n射击\nApex Legends Mobile：热门大逃杀游戏的 移动版本，以其流畅的枪战和炫目的流光特效而闻名。\n使命召唤手游：快节奏的射击游戏，拥有逼真的流光特 效和令人着迷的多人游戏模式。\nPUBG MOBILE：另一 款广受欢迎的大逃杀游戏 ，以其逼真的枪战和次世代的流光特效而著称。\n穿越火线手游：经典游 FPS 戏的移动版本，以其多样化的模式和流畅 的流光特效而闻名。\n量子特攻：科幻主题的射击游 戏，以其创新的战备系统和令人惊叹的流光特 效而受到称赞。\n其他\n王者荣耀：MOBA 游戏，以其令 人惊 叹的英 雄技能流光特效和快节奏的团队战斗而闻名。\n阴阳师：回合制角色扮 演游戏 ，以其精美的流光特效和丰富的日本民 间传说而著称。\n原神：开放世界冒险游戏，以其令人惊叹 的流光特效和引人入胜的故事情节而受到欢迎。\n战双帕弥什 ：动作 RPG 游戏，以 其流畅的战斗系统 和华丽的流光特效而闻名。\n崩坏：星：穹铁道即将推出的科幻 RPG 游戏，以 其史诗般的流光特效和身临其 境的故事而备受期待。\n2、videostar流光特 效\n使用 VideoStar 创作流光特 效",
+        "icon": "",
+        "link": "http://www.paiyouwang.com/462367.html",
+        "media": "",
+        "publish_date": "",
+        "refer": "ref_7",
+        "title": "流光特效好 🦄 的手游（videostar流光特效）-湃游网"
+      },
+      {
+        "content": "原神角色开启大招前，需要先为大招进行充能，玩家的主要充能手段有3种：玩家自充、怪物掉落、其他手段。本期，为大家带来新手入门攻略之，为大家详细梳理这两种充能手段，看完之后萌新也能秒变大佬！当我们与敌人作战时，经常会看到有光球向角色方向飞来，玩家吃到光球后，大招能量槽会不断被填充，直到被能量充满点亮大招，这个过程就是充能”！充能过程中产生的小光球即为元素微粒”，大光球称之为元素晶球”。1颗元素微粒是2点能量，同属性角色获取元素微粒有150%效果，不同属性角色获取元素微粒时仅有50%效果。举个例子：火属性角色吃到火元素微粒充能3点，水属性角色吃到火元素微粒充能1点。1颗元素晶球的能量是1颗元素微粒的3倍。角色，数量与命中敌人的数量无关。比如：点按班尼特的元素战技，无论命中多少敌人都只产生2-3颗火元素微粒，概率比为3：1。不同角色的元素战技产球数量都不相同，比如：芭芭拉的元素战技因为不对敌人造成伤害所以不会产生元素微粒。需要注意的是，角色处于后台时充能效果会发生衰减，4人小队后台充能效果仅为前台的60%。由于部分角色耗能高且充能困难，实际游戏中可以尽量让其在前台吃元素微粒，比如：班尼特点按元素战技后，切香菱出场吃元素微粒。，并且掉落元素微粒的属性与敌人自身属性相同，例如：火属性的史莱姆掉落火属性的元素微粒。不同怪物的设定血量比例不同，掉落的元素微粒/晶球也不同，比如：无相之雷/岩/冰会在血量降低至75%、50%、25%、0%时各产生一次元素晶球，但同为无相系列的无相之冰只在血量降低至66%、33%时才会产生元素晶球。角色在前台普攻时，，但由于能",
+        "icon": "https://sfile.chatglm.cn/searchImage/mp_weixin_qq_com_icon_new.jpg",
+        "link": "http://mp.weixin.qq.com/s?__biz=Mzg5ODUyMzEyMQ==&mid=2247509299&idx=1&sn=65a945a26b1e7b36513beddf9ff3eb34",
+        "media": "微信公众平台",
+        "publish_date": "",
+        "refer": "ref_8",
+        "title": "原神：充能机制全解析，搞懂充能萌新秒变大佬"
+      },
+      {
+        "content": "万叶这个角色真的是特效十足，尤其是大招开启后的领域特效特别炫酷，我想每个看完万叶演示的玩家都会这样认为。而万叶的立绘也是十分的用心，各种细节方面做得都非常好。其实更惊人的细节，还是隐藏在万叶的动作以及技能上。\n元素能量保护的收刀动作！万叶的动作设计很有意思，估计看演示的小伙伴也都发现了。万叶不论是普攻还是放技能，释放之后都有一个收刀的动作，也不管这把武器到底有没有刀鞘。而且如果是重击之后不去动万叶的话，万叶还会慢慢地把刀收起来。很多玩家就疑惑，这样收刀不会割到手吗？其实玩家可以注意看，万叶收刀时手上会有金色的能量。尤其是缓慢收刀时最为明显，可以看到是这能量护着万叶的手。让万叶可以在没有刀鞘的情况下，完成用手收刀的动作，这点设计就非常的细节了。\n展开剩余\n飘落消失的枫叶！万叶的技能中都带着枫叶特效，这些枫叶特效也做得十分细致。万叶释放技能之后，腾空时会被枫叶与风元素能量围绕，让万叶可以用出一次下落攻击。如果万叶回到地面上，就无法再使用这个特殊效果了，周围的效果自然就消失了。而围绕着万叶的枫叶，并不是像特效一样直接消失。而是真的会像树叶一样，飘落到地面上之后才会消失。这一点细节的体现，即使没有玩家也不会有意见，甚至不少玩家都没发现这个细节。然而制作组还是做出了这个效果，真的是非常的惊人。\n风穴的吸附互动效果！接着上面万叶释放技能的特殊效果来说，万叶如果使用了特殊攻击，会造成范围风元素伤害。同时这个伤害过后会在原地留下一个风穴，持续牵引吸附敌人。这个风穴本身的特效就非常的不错，浅黑色的风穴还有枫叶被吸入风穴当中。而玩家如果在草地上，或者周围有植物的时候",
+        "icon": "https://sfile.chatglm.cn/searchImage/www_sohu_com_icon_new.jpg",
+        "link": "https://www.sohu.com/a/464877436_120167104/",
+        "media": "搜狐",
+        "publish_date": "2021-05-06",
+        "refer": "ref_9",
+        "title": "原神：万叶设计的小细节，谁说收刀会割手？有元素能量护着你（发布时间：2021-05-06 16:47:26）"
+      },
+      {
+        "content": "原神\n元素精通的奥秘\n在原神这款游戏中，元素精通是非常重要的一项属性。它能够影响角色对各种元素伤害的加成，同时也会影响角色的元素技能冷却时间和能量回复速度。掌握元素精通对于游戏玩家来说是非常重要的。\n什么是元素精通？\n元素精通指的是角色在使用元素技能时所造成的伤害值，也是角色拥有更快的元素技能冷却时间和更高的元素能量回复速度。每个角色都有自己的元素精通值，该值可以通过培养和提升来增强角色的元素属性。\n元素精通对于游戏的重要性\n在原神中，元素精通是决定角色输出能力的重要因素之一。如果一个角色具备更高的元素精通属性，那么他使用相应元素技能时所造成的伤害值也会更高，这就意味着他具备更强的输出能力。\n元素精通的影响因素\n影响元素精通属性的因素有很多，其中包括角色等级、武器属性、装备属性和人物升级。在游戏中，玩家需要通过不断的培养和提升来增强角色的元素精通属性。\n如何提升元素精通？\n提升元素精通需要不断地练习和培养。玩家可以通过完成任务、挑战BOSS、开宝箱和打怪来获取经验值，从而提升角色的等级和元素精通属性。玩家还可以使用装备来增加角色的元素属性。\n不同角色的元素精通属性\n不同角色在元素精通属性上有着不同的表现。一些角色具备更高的元素精通属性，例如风神瞳和迪奥娜，他们的元素技能伤害值较高，冷却时间较短，而其他角色则相对较弱。\n不同武器对元素精通的影响\n不同武器属性对于元素精通也有影响。例如弓箭和法器类武器对于元素精通的影响较大，而剑和枪则相对较少。在游戏中，玩家需要根据角色和武器的特点来选择相应的装备。\n如何计算元素伤害值？\n计算元素技能伤害值需要考虑多种因素，例如角色等级、武",
+        "icon": "https://sfile.chatglm.cn/searchImage/www_9game_cn_icon_new.jpg",
+        "link": "https://www.9game.cn/yuanshen/11399078.html",
+        "media": "九游",
+        "publish_date": "2025-09-18",
+        "refer": "ref_10",
+        "title": "探究原神元素精通的效果 解析原神中元素精通的意义与技巧（发布时间：2025-09-18 15:15:33）"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "原神 元素 能量 流光 ribbon shader 特效 解析",
+        "query": "原神 元素 能量 流光 ribbon shader 特效 解析"
+      }
+    ],
+    "latency_seconds": 1.15,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "塞尔达 神庙 光柱 上升 shader 解析",
+    "content": "**塞尔达传说王国之泪摩罗恩克神庙怎么过-摩罗恩克神庙玩法解析-土鳖小屋手游（发布时间：2023-05-13 09:24:58）** (2023-05-13)\n塞尔达传说王国之泪摩罗恩克神庙怎么过?塞尔达传说王国之泪里面的话有些玩家是在通这个摩罗恩克神庙呢，这个摩罗恩克神庙的通关难度还是可以的。这次我给大家带来的是塞尔达传说王国之泪摩罗恩克神庙玩法解析，如果你有兴趣，请看一看，我们期待着帮助你们，我们希望你们能一起集思广益，讨论和分享。\n塞尔达传说王国之泪摩罗恩克神庙玩法解析：\n1、我们可以先站在伸缩石柱上，然后上升我们可以直接跳上去。\n2、然后需要敲一下下面的建筑，然后就可以直接弹上去，然后上面一层不变。\n3、然后把弹簧移到这边，再把球敲一下，然后就可以顺利的到对面去弹了。\n4、去到对面后，看到对面的门打开了，然后找到弹簧内外的连接处。\n5、最后爬上去打的话就可以弹到关卡的尽头，然后我们就可以顺利过关了。\n塞尔达传说王国之泪摩罗恩克神庙玩法解析就是我们要告诉你的全部! 赶紧参照上面介绍的方法加入游戏试试吧! 更多精彩游戏和大量原创攻略，还请收藏本站游戏网。\n汀空套装位置指导\n四英杰灵魂召唤\n王国之泪苹果获取\n房屋扩建思路\n王国之泪翼使用教程\n精灵套获取步骤\n神兽兵装鲁达利亚位置\n吻合之型神庙攻略\n三头龙打法思路\nSource: https://www.tubie5.cn/youxi/tubienews/54731.html\n\n**塞尔达传说王国之泪摩罗恩克神庙怎么通关-摩罗恩克神庙玩法解析-游戏资讯-句子手游号（发布时间：2023-10-17 16:05:31）** (2023-10-17)\n塞尔达传说王国之泪摩罗恩克神庙怎么过?塞尔达传说王国之泪里面的话有些玩家是在通这个摩罗恩克神庙呢，这个摩罗恩克神庙的通关难度还是可以的。这次我给大家带来的是塞尔达传说王国之泪摩罗恩克神庙玩法解析，如果你有兴趣，请看一看，我们期待着帮助你们，我们希望你们能一起集思广益，讨论和分享。\n塞尔达传说王国之泪摩罗恩克神庙玩法解析：\n1、我们可以先站在伸缩石柱上，然后上升我们可以直接跳上去。\n2、然后需要敲一下下面的建筑，然后就可以直接弹上去，然后上面一层不变。\n3、然后把弹簧移到这边，再把球敲一下，然后就可以顺利的到对面去弹了。\n4、去到对面后，看到对面的门打开了，然后找到弹簧内外的连接处。\n5、最后爬上去打的话就可以弹到关卡的尽头，然后我们就可以顺利过关了。\n塞尔达传说王国之泪摩罗恩克神庙玩法解析就是我们要告诉你的全部! 赶紧参照上面介绍的方法加入游戏试试吧! 更多精彩游戏和大量原创攻略，还请收藏本站游戏网。\n塞尔达传说王国之泪有耐久吗\n旷野之息》的续作很有可能会沿用武器的耐久度属性」（不过任天堂官方并没有确定这一点）消息一出，便一石激起千层浪，引发了玩家间的热烈讨论。有人说好，有人说坏，还有人表示这是「会给人类带来悲惨灾难的黑暗力量」。\n前几天，我在内部聊天群引出了「《旷野之息》武器耐久度」这一话题之后，就偷偷潜水，开始看我的同事们唇枪舌战。待事态渐渐平息，我才站出来，建议他们「有礼貌」地列出《旷野之息》中武器耐久度能带来的好处，并把它们一一记录，列在了本文最后。当然如果各位读者对武器耐久度有或好或坏的看法也可以在评论里好好说明一下。\n武器耐久度是「聪明的设计」，但\nSource: https://www.marendehua.net/yxzx/22634.html\n\n**塞尔达荒野之息 武器图标旁边黄色圆圈是什么意思？ 塞尔达 地图上的黄色光柱** ()\n塞尔达神庙里面的训练者已经没人了，但是显示未通关，上面是黄色，下面是蓝色的。可以传送 上面是黄色的那就是没有通关。建议你找一下是哪一座神庙没有通关，然后看一下通关的条件，如果过不了的话，可以看一下攻略，强烈推荐美国玩家大斯”的攻略。\n塞尔达传说荒野之息 晚上远处出现的黄色光柱是什么 经常看到 但是没机会去探究 是流星，流星落下来就会有光柱以及去光柱那里会有流星碎片流星碎片是个素材建议用希卡石板给光柱那里打个标记，然后去收集一下素材每天晚上都会有流星掉落，晚上的时候把。\n塞尔达的呀哈哈都在哪里触发 小石头掀开bai，一圈石头差一个du的补齐，水里zhi有一圈河叶的跳到中间去dao，河版里有一圈小石头权的往里面扔个石头，抓住四处游走的小闪光的东西，有个石头坑的附近必有大原石把园石推进石头坑，碰到就变色的花有一朵，二朵三朵四朵五朵的俺1到5依次触碰，爬到一个单独的高杆或者房屋或者山上时，有小石头就举起，闪光就按a，石头神像面前的有贡品的补齐贡品，。非常多，共有999个肯定不可能找全，但是这就是乐趣不是吗？\n#塞尔达 地图上的黄色光柱\nSource: https://www.zkxblog.com/lab/read-7079044.html\n\n**《塞尔达传说 王国之泪》萨喜罗瓦神庙解谜攻略（发布时间：2024-09-14 06:36:52）** (2024-09-14)\n《塞尔达传说：王国之泪》萨喜罗瓦神庙解谜攻略推荐给大家，小编看到很多玩家都对这块内容产生了困扰，都在抱怨没有找到准确的解析，这样游戏体验就很差了，为了防止这种情况的出现，小编带来了相关的攻略心得，有需要的不要错过了哦！\n(h3) 《塞尔达传说：王国之泪》萨喜罗瓦神庙解谜攻略\n该神庙位置如下图所示。\n在雪山的山顶可以找到该神庙。\n进入神庙后第一道红色激光可以直接跳过。\n第二组激光阵跳过激光后蹲着走即可穿过。\n站在台子上跳起后使用滑翔伞即可穿过并排的三道激光。\n使用通天术穿过移动平台来到上层。\n先向右走蹲下穿过激光来到放有石块的区域。\n将石块搬运至激光前挡住激光，下图中圈出的地板会打开，小心不要掉下去了。\n小心地板突然打开的洞。\n身后的大门会打开，进入房间拿到宝箱。\n之后继续前进来到下图所示的走廊中，在躲避激光的过程中不断前进。\n第一道激光直接跳过。\n第二道激光蹲下即可躲过。\n最后一道激光网来到我们面前时使用通天术移动至上层即可躲过，来到最前方就可以完成该神庙。\n除了《塞尔达传说：王国之泪》萨喜罗瓦神庙解谜攻略本篇攻略之外，如果玩家还有什么不懂的，可以点击下方的塞尔达传说：王国之泪游戏专题前往游戏专区，找到更多的攻略来解决问题。\n【Win10系统之家www.ghost580.net文章，转载请注明出处！】\nSource: https://www.ghost580.net/gamearticle/5715.html\n\n**《塞尔达传说 王国之泪》诺乌达神庙解谜攻略（发布时间：2023-05-12 18:45:26）** (2023-05-12)\n塞尔达传说：王国之泪这款游戏很多网友都在玩，在游玩的时候也产生了很多问题，比如《塞尔达传说：王国之泪》诺乌达神庙解谜攻略内容不太了解，那么哪里有关于这块内容的解析呢？不妨来看看九游小编下面带来的攻略内容吧，希望对大家有所帮助。\n《塞尔达传说：王国之泪》诺乌达神庙解谜攻略\n在《塞尔达传说：王国之泪》中，塔邦挞大雪原-诺乌达神庙是玩家要探索并通关的神庙之一。\n首先来到下图所示位置。\n在山坳中我们可以找到【柯库皮雪原的洞窟】。\n进入洞窟后我们可以引诱冰雪莱克喷吐冰雾攻击，冰雾落在水面会形成一个个的正方形冰板。\n随后将冰板运至旁边的水池中组成桥梁到达对岸。\n在水池对岸可以找到该神庙。\n该神庙为禁止使用自带武器装备和道具的孑然一身战，在神庙入口左侧可以拿到武器。\n在武器架旁的墙壁后边使用弓箭消灭右前方高台上的敌人。\n蹲伏着来到高台上拿到一些火焰果。\n随后跳回地面利用高台作为掩体可以不被上方的敌人发现，向远处的敌人发射附带火焰果的箭矢，瞄准敌人头部射击可以点燃地面上的树叶将敌人烧死。\n从左侧绕到刚刚烧死的敌人处拿到电流果，随后在柱子下使用连续使用两次通天术到达最上层。\n偷袭消灭上方的两名弓箭手敌人。\n使用附带电流果的箭矢射击下方使用刺铁球锤子的敌人头部可以直接将其消灭。\n拿到刺铁球锤子后偷袭消灭精英敌人。\n最后击杀下方的坡道入口处的敌人即可完成该神庙。\n在神庙终点前可以打开一个宝箱。\n最后，关于《塞尔达传说：王国之泪》诺乌达神庙解谜攻略的内容分享就到这里了，大家产生相关困扰的时候可以根据这篇文章进行处理解决，希望对大家有所帮助，如果还有其他问题可以在站内进行查找了解更多内容哦。\n王国之泪\nSource: https://www.9game.cn/sedcswgzl/8071068.html\n\n**塞尔达伊奥.索奥神庙-百度贴吧** ()\n相关贴推荐\n塞尔达传说：荒野之息伊奥·索奥神庙怎么过？\n伊奥·索奥神庙 进入神庙后，我们往下走，转身就可以看到这个了，这个激光是可以拿起来的 我们把他先拿起来，放到一边，拿宝箱，然后再拿着激光到这个台子上，把他放好对准那个光柱，让他跟着平台移动可以扫到光柱 然后我们再次来到上面，滑翔过去，拿第二个宝箱 然后再下来，等激光扫光柱，扫一次，这个平台升降一次 上来之后击掌通关\n来自闲来没事玩游戏吧\n塞尔达传说：荒野之息伊奥·索奥神庙怎么过？\n塞尔达传说荒野之息伊奥索奥神庙应该怎么解锁呢？塞尔达传说荒野之息伊奥索奥神庙怎么进去呢？那么接下来就一起来看看塞尔达传说荒野之息伊奥索奥神庙解锁方法，喜欢的小伙伴们快来看看吧，希望对大家有所帮助。 塞尔达传说荒野之息伊奥索奥神庙解锁方法 首先我们来到了这个神庙的内部。 我们网左边走会有一个斜坡。 斜坡走到一半我们就跳起来飞起来。 然后我们落到一根蓝线的旁边，这边是有一个石块，石块是可以拿起来的。然后我们\n来自手机网游吧\n塞尔达传说：荒野之息伊奥·索奥神庙怎么过？\n1.首先玩家们先到伊奥索奥神庙入口。 2.笔笔直往前走，往下跳会获得一个宝箱。 3.之后玩家们可以看到一个激光柱，玩家们可以拾取右边的激光柱。 4.把激光柱放到前面的移动板上，激光对准橙色的互动柱。 5.之后玩家们需要跑到移动板对面的高墙上。 6.往移动板方向飞就能够拿到上面的宝箱。 7.之后玩家们就可以去拐角处上去就能过关了。 塞尔达传说荒野之息神庙大全 塞尔达传说荒野之息伊奥索奥神庙解锁方法\n来自游戏空间吧\n塞尔达传说：荒野之息伊奥·索奥神庙怎么过？\n伊奥·索奥神庙\nSource: https://tieba.baidu.com/hottopic/browse/hottopic?topic_id=6158301\n\n**塞尔达传说王国之泪艾修世神庙解析(塞尔达传说 国王)-游家吧（发布时间：2023-06-15 16:44:58）** (2023-06-15)\n塞尔达传说王国之泪艾修世神庙解析\n塞尔达传说王国之泪艾修世神庙解析(塞尔达传说 国王)玩家在该神庙可以学到新的战斗技巧，算是教学关卡了，塞尔达传说老国王的墓碑玩家需要需要学会完美防御，小编为大家整理好了这个神庙的详细过法，这里还有更多内容可以看看下面的介绍。\n-----塞尔达传说王国之泪神庙探究攻略大全-----\n塞尔达传说王国之泪艾修世神庙解析\n1、艾修世神庙的具体位置如下图。\n2、该神庙是一个战斗技(ji)巧(qiao)关卡，玩(wan)家需(xu)要在神庙中学会(hui)弹返。\n3、玩(wan)家在关卡中需(xu)要配合(he)敌人(ren)发动的攻击(ji)，用盾将其攻击(ji)反弹回去。\n4、具体的操作方(fang)法(fa)参考下图。\n5、通过弹返击败(bai)敌人(ren)即(ji)可(ke)获得奖励。\n《王国之泪》冒险的指引 攻略大全鸟望台位置神庙探究 驿站位置 料理配方 武器合成(hecheng) 金手指(shouzhi) 服装(fuzhuang)升级(upgrade) 龙之泪\n以上就是小编整理的塞尔达传说王国之泪艾修世神庙解析 塞尔达传说 国王相关内容大全，更多文章相关内容，请关注小编以获取第一时间的资讯更新信息。\n塞尔达传说王国之泪艾修世神庙解析内容及配图由入驻作者撰写或者入驻合作网站授权转载。文章观点仅代表作者本人，不代表本站立场。塞尔达传说王国之泪艾修世神庙解析文章及其配图仅供学习分享之用，如有内容图片侵权或者其他问题，请联系本站作侵删。\nSource: http://www.yujpa.com/gonglue/94004.html\n\n**《塞尔达传说 王国之泪》马亚希阿拉神庙解谜攻略（发布时间：2023-06-15 11:34:28）** (2023-06-15)\n《塞尔达传说：王国之泪》马亚希阿拉神庙解谜攻略推荐给大家，九游小编看到很多玩家都对这块内容产生了困扰，都在抱怨没有找到准确的解析，这样游戏体验就很差了，为了防止这种情况的出现，九游小编带来了相关的攻略心得，有需要的不要错过了哦！\n《塞尔达传说：王国之泪》马亚希阿拉神庙解谜攻略\n在《塞尔达传说：王国之泪》中，格鲁德高地上空-马亚希阿拉神庙是玩家要探索并通关的神庙之一。\n该神庙位置如下图所示。\n进入星见之岛的内部。\n来到内部后先转动中间的平台，使平台中间的镜子对准下图位置左上角的机关，同时让平台发出的光照到右前方平台上的镜子。\n随后跟随光线的折射转动镜头，前往光线终点前的最后一个平台上。\n转动镜子使其对准前方平台上的镜子使光线继续折射。\n同理在前方的平台上第二次调整镜子反射方向。\n直到最终通过中间平台上的镜子照亮机关使神庙现形。\n打开宝箱完成神庙。\n《塞尔达传说：王国之泪》马亚希阿拉神庙解谜攻略问题虽然难，但是小编也是及时的给大家提供了解决的办法，相信大家能通关这个解决办法解决这个《塞尔达传说：王国之泪》马亚希阿拉神庙解谜攻略问题。\n王国之泪\n类型:休闲 平台:安卓 状态:运营\n安卓版下载\n苹果版暂无下载\nSource: https://www.9game.cn/sedcswgzl/8238577.html\n\n**塞尔达传说王国之泪提马瓦卡神庙解析(塞尔达传说 国王)-游家吧（发布时间：2023-06-16 13:23:41）** (2023-06-16)\n塞尔达传说王国之泪提马瓦卡神庙解析\n塞尔达传说王国之泪提马瓦卡神庙解析(塞尔达传说 国王):专业人士说神庙内充满着岩浆，玩家需要动用自己的智慧，利用神庙中的道具，渡过岩浆，收集最终奖励，塞尔达传说国王的坟墓小编为大家整理出了这个神庙的详细过关方法，大家可以参考一下塞尔达传说王国之泪提马瓦卡神庙解析的内容。\n-----塞尔达传说王国之泪神庙探索攻略大全-----\n塞尔达传说王国之泪提马瓦卡神庙解析\n1、进入神庙会看到岩浆，玩(wan)家借助岩浆上的石块即(ji)可(ke)跳过。\n2、到达(da)对岸后，借助时间(time)倒流，往右边走到底(di)可以閞晵一个宝箱，中间的石球是过关道具(props)，也需(xu)要带回来。\n3、将石球放在(zai)圆形坑洞中即(ji)可(ke)打开(kai)前方的石门。\n4、到达(da)下一个房间后使用(shiyong)风扇和滑翔翼上到上一层。\n5、借助上面的水龙头，在岩浆中製造一块石板。\n6、将两个风扇装配在石板后面，然后驱动石板前进到达(da)对岸，完成神庙挑战。\n《王国之泪》冒险的指引 攻略大全鸟望台位置神庙探索 驿站位置 料理配方 武器合成 金手指 服装升级(upgrade) 龙之泪\n以上就是小编整理的塞尔达传说王国之泪提马瓦卡神庙解析 塞尔达传说 国王最新资讯，有不清楚的或是想了解塞尔达传说王国之泪提马瓦卡神庙解析更多相关的小伙伴，持续关注本站，希望对大家有所帮助。\n塞尔达传说王国之泪提马瓦卡神庙解析内容及配图由入驻作者撰写或者入驻合作网站授权转载。文章观点仅代表作者本人，不代表本站立场。塞尔达传说王国之泪提马瓦卡神庙解\nSource: http://www.yujpa.com/gonglue/94222.html\n\n**塞尔达传说王国之泪奇马亚塔神庙解析(塞尔达王国的白马)-游家吧（发布时间：2023-06-18 11:25:51）** (2023-06-18)\n塞尔达传说王国之泪奇马亚塔神庙解析\n塞尔达传说王国之泪奇马亚塔神庙解析(塞尔达王国的白马)进入神庙中不可使用自己的装备和防具，玩家使用神庙中的武器击败所有魔像即可过关，该神庙比较考验玩家的作战技巧，往下看看更多的介绍吧。\n-----塞尔达传说王国之泪神庙探索攻(gong)略(lue)大全-----\n塞尔达传说王国之泪奇马亚塔神庙解析\n第一步：奇马亚塔神庙是一个(one)孑然一身的激战神庙，神庙中玩家不可以使用自己的装备(bei)道具。\n第二步：进入(ru)神庙后拾取神庙中(zhong)的(de)武器。\n第三步：击败神庙中(zhong)的(de)所有(suoyou)魔像就可以过(guo)关(guan)。\n第四步：击败魔像会有(there will be)道具掉落，玩家可以使用究极手将道具和武器组合起来(stand up)，增加(jia)威力(power)。\n《王国之泪》冒险的指引 攻(gong)略(lue)大全鸟望台位置(Location)神庙探索 驿站位置(Location) 料理配方 武器合成(hecheng) 金手指 服装升级(upgrade) 龙之泪\n以上就是小编整理的塞尔达传说王国之泪奇马亚塔神庙解析 塞尔达王国的白马相关内容大全，有不清楚的或是想了解塞尔达传说王国之泪奇马亚塔神庙解析更多情况的小伙伴，请关注本站以获取第一手更新内容。\n塞尔达传说王国之泪奇马亚塔神庙解析内容及配图由入驻作者撰写或者入驻合作网站授权转载。文章观点仅代表作者本人，不代表本站立场。塞尔达传说王国之泪奇马亚塔神庙解析文章及其配图仅供学习分享之用，如有内容图片侵权或者其他问题，\nSource: http://www.yujpa.com/gonglue/94451.html\n",
+    "web_references": [
+      {
+        "content": "塞尔达传说王国之泪摩罗恩克神庙怎么过?塞尔达传说王国之泪里面的话有些玩家是在通这个摩罗恩克神庙呢，这个摩罗恩克神庙的通关难度还是可以的。这次我给大家带来的是塞尔达传说王国之泪摩罗恩克神庙玩法解析，如果你有兴趣，请看一看，我们期待着帮助你们，我们希望你们能一起集思广益，讨论和分享。\n塞尔达传说王国之泪摩罗恩克神庙玩法解析：\n1、我们可以先站在伸缩石柱上，然后上升我们可以直接跳上去。\n2、然后需要敲一下下面的建筑，然后就可以直接弹上去，然后上面一层不变。\n3、然后把弹簧移到这边，再把球敲一下，然后就可以顺利的到对面去弹了。\n4、去到对面后，看到对面的门打开了，然后找到弹簧内外的连接处。\n5、最后爬上去打的话就可以弹到关卡的尽头，然后我们就可以顺利过关了。\n塞尔达传说王国之泪摩罗恩克神庙玩法解析就是我们要告诉你的全部! 赶紧参照上面介绍的方法加入游戏试试吧! 更多精彩游戏和大量原创攻略，还请收藏本站游戏网。\n汀空套装位置指导\n四英杰灵魂召唤\n王国之泪苹果获取\n房屋扩建思路\n王国之泪翼使用教程\n精灵套获取步骤\n神兽兵装鲁达利亚位置\n吻合之型神庙攻略\n三头龙打法思路",
+        "icon": "",
+        "link": "https://www.tubie5.cn/youxi/tubienews/54731.html",
+        "media": "",
+        "publish_date": "2023-05-13",
+        "refer": "ref_1",
+        "title": "塞尔达传说王国之泪摩罗恩克神庙怎么过-摩罗恩克神庙玩法解析-土鳖小屋手游（发布时间：2023-05-13 09:24:58）"
+      },
+      {
+        "content": "塞尔达传说王国之泪摩罗恩克神庙怎么过?塞尔达传说王国之泪里面的话有些玩家是在通这个摩罗恩克神庙呢，这个摩罗恩克神庙的通关难度还是可以的。这次我给大家带来的是塞尔达传说王国之泪摩罗恩克神庙玩法解析，如果你有兴趣，请看一看，我们期待着帮助你们，我们希望你们能一起集思广益，讨论和分享。\n塞尔达传说王国之泪摩罗恩克神庙玩法解析：\n1、我们可以先站在伸缩石柱上，然后上升我们可以直接跳上去。\n2、然后需要敲一下下面的建筑，然后就可以直接弹上去，然后上面一层不变。\n3、然后把弹簧移到这边，再把球敲一下，然后就可以顺利的到对面去弹了。\n4、去到对面后，看到对面的门打开了，然后找到弹簧内外的连接处。\n5、最后爬上去打的话就可以弹到关卡的尽头，然后我们就可以顺利过关了。\n塞尔达传说王国之泪摩罗恩克神庙玩法解析就是我们要告诉你的全部! 赶紧参照上面介绍的方法加入游戏试试吧! 更多精彩游戏和大量原创攻略，还请收藏本站游戏网。\n塞尔达传说王国之泪有耐久吗\n旷野之息》的续作很有可能会沿用武器的耐久度属性」（不过任天堂官方并没有确定这一点）消息一出，便一石激起千层浪，引发了玩家间的热烈讨论。有人说好，有人说坏，还有人表示这是「会给人类带来悲惨灾难的黑暗力量」。\n前几天，我在内部聊天群引出了「《旷野之息》武器耐久度」这一话题之后，就偷偷潜水，开始看我的同事们唇枪舌战。待事态渐渐平息，我才站出来，建议他们「有礼貌」地列出《旷野之息》中武器耐久度能带来的好处，并把它们一一记录，列在了本文最后。当然如果各位读者对武器耐久度有或好或坏的看法也可以在评论里好好说明一下。\n武器耐久度是「聪明的设计」，但",
+        "icon": "",
+        "link": "https://www.marendehua.net/yxzx/22634.html",
+        "media": "",
+        "publish_date": "2023-10-17",
+        "refer": "ref_2",
+        "title": "塞尔达传说王国之泪摩罗恩克神庙怎么通关-摩罗恩克神庙玩法解析-游戏资讯-句子手游号（发布时间：2023-10-17 16:05:31）"
+      },
+      {
+        "content": "塞尔达神庙里面的训练者已经没人了，但是显示未通关，上面是黄色，下面是蓝色的。可以传送 上面是黄色的那就是没有通关。建议你找一下是哪一座神庙没有通关，然后看一下通关的条件，如果过不了的话，可以看一下攻略，强烈推荐美国玩家大斯”的攻略。\n塞尔达传说荒野之息 晚上远处出现的黄色光柱是什么 经常看到 但是没机会去探究 是流星，流星落下来就会有光柱以及去光柱那里会有流星碎片流星碎片是个素材建议用希卡石板给光柱那里打个标记，然后去收集一下素材每天晚上都会有流星掉落，晚上的时候把。\n塞尔达的呀哈哈都在哪里触发 小石头掀开bai，一圈石头差一个du的补齐，水里zhi有一圈河叶的跳到中间去dao，河版里有一圈小石头权的往里面扔个石头，抓住四处游走的小闪光的东西，有个石头坑的附近必有大原石把园石推进石头坑，碰到就变色的花有一朵，二朵三朵四朵五朵的俺1到5依次触碰，爬到一个单独的高杆或者房屋或者山上时，有小石头就举起，闪光就按a，石头神像面前的有贡品的补齐贡品，。非常多，共有999个肯定不可能找全，但是这就是乐趣不是吗？\n#塞尔达 地图上的黄色光柱",
+        "icon": "https://sfile.chatglm.cn/searchImage/www_zkxblog_com_icon_new.jpg",
+        "link": "https://www.zkxblog.com/lab/read-7079044.html",
+        "media": "ZKX's BLOG",
+        "publish_date": "",
+        "refer": "ref_3",
+        "title": "塞尔达荒野之息 武器图标旁边黄色圆圈是什么意思？ 塞尔达 地图上的黄色光柱"
+      },
+      {
+        "content": "《塞尔达传说：王国之泪》萨喜罗瓦神庙解谜攻略推荐给大家，小编看到很多玩家都对这块内容产生了困扰，都在抱怨没有找到准确的解析，这样游戏体验就很差了，为了防止这种情况的出现，小编带来了相关的攻略心得，有需要的不要错过了哦！\n(h3) 《塞尔达传说：王国之泪》萨喜罗瓦神庙解谜攻略\n该神庙位置如下图所示。\n在雪山的山顶可以找到该神庙。\n进入神庙后第一道红色激光可以直接跳过。\n第二组激光阵跳过激光后蹲着走即可穿过。\n站在台子上跳起后使用滑翔伞即可穿过并排的三道激光。\n使用通天术穿过移动平台来到上层。\n先向右走蹲下穿过激光来到放有石块的区域。\n将石块搬运至激光前挡住激光，下图中圈出的地板会打开，小心不要掉下去了。\n小心地板突然打开的洞。\n身后的大门会打开，进入房间拿到宝箱。\n之后继续前进来到下图所示的走廊中，在躲避激光的过程中不断前进。\n第一道激光直接跳过。\n第二道激光蹲下即可躲过。\n最后一道激光网来到我们面前时使用通天术移动至上层即可躲过，来到最前方就可以完成该神庙。\n除了《塞尔达传说：王国之泪》萨喜罗瓦神庙解谜攻略本篇攻略之外，如果玩家还有什么不懂的，可以点击下方的塞尔达传说：王国之泪游戏专题前往游戏专区，找到更多的攻略来解决问题。\n【Win10系统之家www.ghost580.net文章，转载请注明出处！】",
+        "icon": "https://sfile.chatglm.cn/searchImage/www_ghost580_net_icon_new.jpg",
+        "link": "https://www.ghost580.net/gamearticle/5715.html",
+        "media": "Win10系统之家",
+        "publish_date": "2024-09-14",
+        "refer": "ref_4",
+        "title": "《塞尔达传说 王国之泪》萨喜罗瓦神庙解谜攻略（发布时间：2024-09-14 06:36:52）"
+      },
+      {
+        "content": "塞尔达传说：王国之泪这款游戏很多网友都在玩，在游玩的时候也产生了很多问题，比如《塞尔达传说：王国之泪》诺乌达神庙解谜攻略内容不太了解，那么哪里有关于这块内容的解析呢？不妨来看看九游小编下面带来的攻略内容吧，希望对大家有所帮助。\n《塞尔达传说：王国之泪》诺乌达神庙解谜攻略\n在《塞尔达传说：王国之泪》中，塔邦挞大雪原-诺乌达神庙是玩家要探索并通关的神庙之一。\n首先来到下图所示位置。\n在山坳中我们可以找到【柯库皮雪原的洞窟】。\n进入洞窟后我们可以引诱冰雪莱克喷吐冰雾攻击，冰雾落在水面会形成一个个的正方形冰板。\n随后将冰板运至旁边的水池中组成桥梁到达对岸。\n在水池对岸可以找到该神庙。\n该神庙为禁止使用自带武器装备和道具的孑然一身战，在神庙入口左侧可以拿到武器。\n在武器架旁的墙壁后边使用弓箭消灭右前方高台上的敌人。\n蹲伏着来到高台上拿到一些火焰果。\n随后跳回地面利用高台作为掩体可以不被上方的敌人发现，向远处的敌人发射附带火焰果的箭矢，瞄准敌人头部射击可以点燃地面上的树叶将敌人烧死。\n从左侧绕到刚刚烧死的敌人处拿到电流果，随后在柱子下使用连续使用两次通天术到达最上层。\n偷袭消灭上方的两名弓箭手敌人。\n使用附带电流果的箭矢射击下方使用刺铁球锤子的敌人头部可以直接将其消灭。\n拿到刺铁球锤子后偷袭消灭精英敌人。\n最后击杀下方的坡道入口处的敌人即可完成该神庙。\n在神庙终点前可以打开一个宝箱。\n最后，关于《塞尔达传说：王国之泪》诺乌达神庙解谜攻略的内容分享就到这里了，大家产生相关困扰的时候可以根据这篇文章进行处理解决，希望对大家有所帮助，如果还有其他问题可以在站内进行查找了解更多内容哦。\n王国之泪",
+        "icon": "https://sfile.chatglm.cn/searchImage/www_9game_cn_icon_new.jpg",
+        "link": "https://www.9game.cn/sedcswgzl/8071068.html",
+        "media": "九游",
+        "publish_date": "2023-05-12",
+        "refer": "ref_5",
+        "title": "《塞尔达传说 王国之泪》诺乌达神庙解谜攻略（发布时间：2023-05-12 18:45:26）"
+      },
+      {
+        "content": "相关贴推荐\n塞尔达传说：荒野之息伊奥·索奥神庙怎么过？\n伊奥·索奥神庙 进入神庙后，我们往下走，转身就可以看到这个了，这个激光是可以拿起来的 我们把他先拿起来，放到一边，拿宝箱，然后再拿着激光到这个台子上，把他放好对准那个光柱，让他跟着平台移动可以扫到光柱 然后我们再次来到上面，滑翔过去，拿第二个宝箱 然后再下来，等激光扫光柱，扫一次，这个平台升降一次 上来之后击掌通关\n来自闲来没事玩游戏吧\n塞尔达传说：荒野之息伊奥·索奥神庙怎么过？\n塞尔达传说荒野之息伊奥索奥神庙应该怎么解锁呢？塞尔达传说荒野之息伊奥索奥神庙怎么进去呢？那么接下来就一起来看看塞尔达传说荒野之息伊奥索奥神庙解锁方法，喜欢的小伙伴们快来看看吧，希望对大家有所帮助。 塞尔达传说荒野之息伊奥索奥神庙解锁方法 首先我们来到了这个神庙的内部。 我们网左边走会有一个斜坡。 斜坡走到一半我们就跳起来飞起来。 然后我们落到一根蓝线的旁边，这边是有一个石块，石块是可以拿起来的。然后我们\n来自手机网游吧\n塞尔达传说：荒野之息伊奥·索奥神庙怎么过？\n1.首先玩家们先到伊奥索奥神庙入口。 2.笔笔直往前走，往下跳会获得一个宝箱。 3.之后玩家们可以看到一个激光柱，玩家们可以拾取右边的激光柱。 4.把激光柱放到前面的移动板上，激光对准橙色的互动柱。 5.之后玩家们需要跑到移动板对面的高墙上。 6.往移动板方向飞就能够拿到上面的宝箱。 7.之后玩家们就可以去拐角处上去就能过关了。 塞尔达传说荒野之息神庙大全 塞尔达传说荒野之息伊奥索奥神庙解锁方法\n来自游戏空间吧\n塞尔达传说：荒野之息伊奥·索奥神庙怎么过？\n伊奥·索奥神庙",
+        "icon": "https://sfile.chatglm.cn/searchImage/tieba_baidu_com_icon_new.jpg",
+        "link": "https://tieba.baidu.com/hottopic/browse/hottopic?topic_id=6158301",
+        "media": "百度贴吧",
+        "publish_date": "",
+        "refer": "ref_6",
+        "title": "塞尔达伊奥.索奥神庙-百度贴吧"
+      },
+      {
+        "content": "塞尔达传说王国之泪艾修世神庙解析\n塞尔达传说王国之泪艾修世神庙解析(塞尔达传说 国王)玩家在该神庙可以学到新的战斗技巧，算是教学关卡了，塞尔达传说老国王的墓碑玩家需要需要学会完美防御，小编为大家整理好了这个神庙的详细过法，这里还有更多内容可以看看下面的介绍。\n-----塞尔达传说王国之泪神庙探究攻略大全-----\n塞尔达传说王国之泪艾修世神庙解析\n1、艾修世神庙的具体位置如下图。\n2、该神庙是一个战斗技(ji)巧(qiao)关卡，玩(wan)家需(xu)要在神庙中学会(hui)弹返。\n3、玩(wan)家在关卡中需(xu)要配合(he)敌人(ren)发动的攻击(ji)，用盾将其攻击(ji)反弹回去。\n4、具体的操作方(fang)法(fa)参考下图。\n5、通过弹返击败(bai)敌人(ren)即(ji)可(ke)获得奖励。\n《王国之泪》冒险的指引 攻略大全鸟望台位置神庙探究 驿站位置 料理配方 武器合成(hecheng) 金手指(shouzhi) 服装(fuzhuang)升级(upgrade) 龙之泪\n以上就是小编整理的塞尔达传说王国之泪艾修世神庙解析 塞尔达传说 国王相关内容大全，更多文章相关内容，请关注小编以获取第一时间的资讯更新信息。\n塞尔达传说王国之泪艾修世神庙解析内容及配图由入驻作者撰写或者入驻合作网站授权转载。文章观点仅代表作者本人，不代表本站立场。塞尔达传说王国之泪艾修世神庙解析文章及其配图仅供学习分享之用，如有内容图片侵权或者其他问题，请联系本站作侵删。",
+        "icon": "",
+        "link": "http://www.yujpa.com/gonglue/94004.html",
+        "media": "",
+        "publish_date": "2023-06-15",
+        "refer": "ref_7",
+        "title": "塞尔达传说王国之泪艾修世神庙解析(塞尔达传说 国王)-游家吧（发布时间：2023-06-15 16:44:58）"
+      },
+      {
+        "content": "《塞尔达传说：王国之泪》马亚希阿拉神庙解谜攻略推荐给大家，九游小编看到很多玩家都对这块内容产生了困扰，都在抱怨没有找到准确的解析，这样游戏体验就很差了，为了防止这种情况的出现，九游小编带来了相关的攻略心得，有需要的不要错过了哦！\n《塞尔达传说：王国之泪》马亚希阿拉神庙解谜攻略\n在《塞尔达传说：王国之泪》中，格鲁德高地上空-马亚希阿拉神庙是玩家要探索并通关的神庙之一。\n该神庙位置如下图所示。\n进入星见之岛的内部。\n来到内部后先转动中间的平台，使平台中间的镜子对准下图位置左上角的机关，同时让平台发出的光照到右前方平台上的镜子。\n随后跟随光线的折射转动镜头，前往光线终点前的最后一个平台上。\n转动镜子使其对准前方平台上的镜子使光线继续折射。\n同理在前方的平台上第二次调整镜子反射方向。\n直到最终通过中间平台上的镜子照亮机关使神庙现形。\n打开宝箱完成神庙。\n《塞尔达传说：王国之泪》马亚希阿拉神庙解谜攻略问题虽然难，但是小编也是及时的给大家提供了解决的办法，相信大家能通关这个解决办法解决这个《塞尔达传说：王国之泪》马亚希阿拉神庙解谜攻略问题。\n王国之泪\n类型:休闲 平台:安卓 状态:运营\n安卓版下载\n苹果版暂无下载",
+        "icon": "https://sfile.chatglm.cn/searchImage/www_9game_cn_icon_new.jpg",
+        "link": "https://www.9game.cn/sedcswgzl/8238577.html",
+        "media": "九游",
+        "publish_date": "2023-06-15",
+        "refer": "ref_8",
+        "title": "《塞尔达传说 王国之泪》马亚希阿拉神庙解谜攻略（发布时间：2023-06-15 11:34:28）"
+      },
+      {
+        "content": "塞尔达传说王国之泪提马瓦卡神庙解析\n塞尔达传说王国之泪提马瓦卡神庙解析(塞尔达传说 国王):专业人士说神庙内充满着岩浆，玩家需要动用自己的智慧，利用神庙中的道具，渡过岩浆，收集最终奖励，塞尔达传说国王的坟墓小编为大家整理出了这个神庙的详细过关方法，大家可以参考一下塞尔达传说王国之泪提马瓦卡神庙解析的内容。\n-----塞尔达传说王国之泪神庙探索攻略大全-----\n塞尔达传说王国之泪提马瓦卡神庙解析\n1、进入神庙会看到岩浆，玩(wan)家借助岩浆上的石块即(ji)可(ke)跳过。\n2、到达(da)对岸后，借助时间(time)倒流，往右边走到底(di)可以閞晵一个宝箱，中间的石球是过关道具(props)，也需(xu)要带回来。\n3、将石球放在(zai)圆形坑洞中即(ji)可(ke)打开(kai)前方的石门。\n4、到达(da)下一个房间后使用(shiyong)风扇和滑翔翼上到上一层。\n5、借助上面的水龙头，在岩浆中製造一块石板。\n6、将两个风扇装配在石板后面，然后驱动石板前进到达(da)对岸，完成神庙挑战。\n《王国之泪》冒险的指引 攻略大全鸟望台位置神庙探索 驿站位置 料理配方 武器合成 金手指 服装升级(upgrade) 龙之泪\n以上就是小编整理的塞尔达传说王国之泪提马瓦卡神庙解析 塞尔达传说 国王最新资讯，有不清楚的或是想了解塞尔达传说王国之泪提马瓦卡神庙解析更多相关的小伙伴，持续关注本站，希望对大家有所帮助。\n塞尔达传说王国之泪提马瓦卡神庙解析内容及配图由入驻作者撰写或者入驻合作网站授权转载。文章观点仅代表作者本人，不代表本站立场。塞尔达传说王国之泪提马瓦卡神庙解",
+        "icon": "",
+        "link": "http://www.yujpa.com/gonglue/94222.html",
+        "media": "",
+        "publish_date": "2023-06-16",
+        "refer": "ref_9",
+        "title": "塞尔达传说王国之泪提马瓦卡神庙解析(塞尔达传说 国王)-游家吧（发布时间：2023-06-16 13:23:41）"
+      },
+      {
+        "content": "塞尔达传说王国之泪奇马亚塔神庙解析\n塞尔达传说王国之泪奇马亚塔神庙解析(塞尔达王国的白马)进入神庙中不可使用自己的装备和防具，玩家使用神庙中的武器击败所有魔像即可过关，该神庙比较考验玩家的作战技巧，往下看看更多的介绍吧。\n-----塞尔达传说王国之泪神庙探索攻(gong)略(lue)大全-----\n塞尔达传说王国之泪奇马亚塔神庙解析\n第一步：奇马亚塔神庙是一个(one)孑然一身的激战神庙，神庙中玩家不可以使用自己的装备(bei)道具。\n第二步：进入(ru)神庙后拾取神庙中(zhong)的(de)武器。\n第三步：击败神庙中(zhong)的(de)所有(suoyou)魔像就可以过(guo)关(guan)。\n第四步：击败魔像会有(there will be)道具掉落，玩家可以使用究极手将道具和武器组合起来(stand up)，增加(jia)威力(power)。\n《王国之泪》冒险的指引 攻(gong)略(lue)大全鸟望台位置(Location)神庙探索 驿站位置(Location) 料理配方 武器合成(hecheng) 金手指 服装升级(upgrade) 龙之泪\n以上就是小编整理的塞尔达传说王国之泪奇马亚塔神庙解析 塞尔达王国的白马相关内容大全，有不清楚的或是想了解塞尔达传说王国之泪奇马亚塔神庙解析更多情况的小伙伴，请关注本站以获取第一手更新内容。\n塞尔达传说王国之泪奇马亚塔神庙解析内容及配图由入驻作者撰写或者入驻合作网站授权转载。文章观点仅代表作者本人，不代表本站立场。塞尔达传说王国之泪奇马亚塔神庙解析文章及其配图仅供学习分享之用，如有内容图片侵权或者其他问题，",
+        "icon": "",
+        "link": "http://www.yujpa.com/gonglue/94451.html",
+        "media": "",
+        "publish_date": "2023-06-18",
+        "refer": "ref_10",
+        "title": "塞尔达传说王国之泪奇马亚塔神庙解析(塞尔达王国的白马)-游家吧（发布时间：2023-06-18 11:25:51）"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "塞尔达 神庙 光柱 上升 shader 解析",
+        "query": "塞尔达 神庙 光柱 上升 shader 解析"
+      }
+    ],
+    "latency_seconds": 1.03,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Death Stranding 虚拟现实 chiral 路标 灯柱 视觉",
+    "content": "**虚幻引擎 & 死亡搁浅场景创作渲染短片Death Stranding_33ru-站酷ZCOOL** (2021-11-25)\n虚幻引擎 & 死亡搁浅场景创作渲染短片Death Stranding 重庆 / 设计爱好者 / 4年前 / 13454 浏览 版权 私信 关注 小岛秀夫的死亡搁浅是我一直由衷喜欢的作品｡这些场景参考了一些其中的场景及氛围进行制作｡使用虚幻引擎渲染｡ 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 举报 | \nSource: https://www.zcool.com.cn/work/ZNTY1Nzc2NjA=.html\n\n**探析视频游戏的电影化制作趋势——以《Death Stranding》 (死亡搁浅)为例-《传媒论坛》2021年02期-中国知网** (2026-05-04)\n随着我国经济发展,大众媒介技术的不断进步而造成媒介接触成本降低,我国电子游戏产业随移动互联网发展得到长足进步,视频游戏文化最终被当作一种大众文化议题进入学者和公众的视野｡2019年,美国TGA(The Game Awards,被誉为游戏界奥斯卡... (共3页) \nSource: https://mall.cnki.net/magazine/Article/CMLT202102027.htm\n\n**小岛秀夫重回Guerrilla演示《死亡搁浅》:效果惊艳令人印象深刻_Hulst** (2019-01-16)\n小岛秀夫的《死亡搁浅(Death Stranding)》与《地平线:黎明时分》工作室Guerrilla Games有着密切的联系,因为这两款游戏共用了Guerrilla Games的Decima引擎｡ 而现在他回到了Guerrilla Games并演示了利用其引擎制作的《死亡搁浅》,据透露,看起来效果还是很棒的｡ \nSource: https://www.sohu.com/a/289354734_119620\n\n**数字化设计艺术** (2023-06-28)\n\"《数字化设计艺术》是武汉理工大学出版社出版的图书,作者是方兴｡内容简介数字化设计艺术的未来等中心议题,对数字化设计艺术的设计与创意进行分析､研究､力求使这门崭新的学科逐步走向成熟｡目录1 概述 1.1 数字化设计艺术 1.2 数字化设计艺术的定位 1.3 数字化设计艺术传入我国及其发展 1.4 世界著名的数字化设计艺术竞赛介绍 2 数字化设计艺术的设计环境 2.1 知识经济与数字化设计艺术 2.\nSource: https://baike.baidu.com/item/%E6%95%B0%E5%AD%97%E5%8C%96%E8%AE%BE%E8%AE%A1%E8%89%BA%E6%9C%AF/5814799\n\n**现代创意景观灯柱_路灯_精神堡垒_户外灯_高杆灯SU模型下载 ID:1107629855_【知末网】** (2026-05-15)\n3D模型 SU模型 全球案例 灵感图库 上传 创作中心 VIP 签到 登录 | 注册有礼 \nSource: https://www.znzmo.com/suseo1107629855.html\n\n**爆款游戏携手城市地标,打破虚拟与现实边界** (2026-04-28)\n<p><iframe class=\"video_iframe\" data-cover=\"http://qqpublic.qpic.cn/qq_public/0/28-2112269185-9C0C076EE9B116BA88CCB65F7B76DA18/0?fmt=jpg&size=17&h=280&w=496&ppv=1\" height=\"375\" width=\"500\" \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_28169f0bc3914852\n\n**SIGGRAPH 2025Large Avatar Model:单图秒级打造超写实3D交互数字人,跨平台超实时驱动渲染** (2025-06-20)\n<p>论文作者来自阿里巴巴通义实验室的 3D 团队｡第一作者何益升,本科毕业于武汉大学,博士毕业于香港科技大学;通讯作者原玮浩,本科毕业于浙江大学,博士毕业于香港科技大学;团队 Leader 董子龙,本科博士均毕业于浙江大学｡</p><p>三维数字头像的建模､驱动和渲染是计算机图形学与计算机视觉的重要课题之一,在虚拟会议､影视制作､游戏开发等领域有广泛应用｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_52168553cf200952\n\n**虚拟现实技术与艺术** (2024-10-18)\n\"《虚拟现实技术与艺术》是2007年武汉工业大学出版社的图书,作者是李勋祥｡基本内容本书属于科学与艺术､技术与美学相结合的虚拟艺术研究范畴｡针对虚拟艺术设计研究的重要领域——虚拟现实的技术与艺术理念,以及相关的虚拟艺术设计实践进行论述｡ 笔者以虚拟现实技术领域作为虚拟艺术设计的重点研究方向,尝试在二者之间建立一种关联:以虚拟现实技术为依托,以虚拟艺术设计为导向,共同构建或丰富虚拟艺术设计的内涵｡\nSource: https://baike.baidu.com/item/%E8%99%9A%E6%8B%9F%E7%8E%B0%E5%AE%9E%E6%8A%80%E6%9C%AF%E4%B8%8E%E8%89%BA%E6%9C%AF/6928702\n\n**虚拟现实(VR):打破现实边界,解锁全新体验** (2026-04-16)\n提到虚拟现实(VR),很多人都会觉得它是一种高端的科技产品,离我们的生活很远｡其实,VR技术已经慢慢走进我们的生活,通过模拟虚拟环境,让我们仿佛身临其境,打破了现实的边界,为我们解锁了全新的体验,广泛应用于娱乐､教育､医疗､旅游等多个领域,悄悄改变着我们的生活､工作和学习方式｡ VR技术,让娱乐更沉浸式､更有趣｡\nSource: https://www.sohu.com/a/1010492343_121766445\n\n**今年最期待主机游戏:死亡搁浅Death Stranding 最新玩法体验视频_哔哩哔哩_bilibili** (2019-05-31)\n《死亡搁浅》是一个开放世界类动作互动游戏,登陆于PlayStation 4平台,是著名游戏制作人小岛秀夫以及旗下工作室小岛制作(Kojima Productions)从科乐美(Konami)独立之后发表的首款作品,在2016年E3展的索尼展前发表会上公开了首部预告视频,请到了电影导演吉尔莫·德尔·托罗参与｡\nSource: https://www.bilibili.com/video/BV1B4411H7B9/\n",
+    "web_references": [
+      {
+        "content": "虚幻引擎 & 死亡搁浅场景创作渲染短片Death Stranding 重庆 / 设计爱好者 / 4年前 / 13454 浏览 版权 私信 关注 小岛秀夫的死亡搁浅是我一直由衷喜欢的作品｡这些场景参考了一些其中的场景及氛围进行制作｡使用虚幻引擎渲染｡ 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 收藏 举报 | ",
+        "icon": "",
+        "link": "https://www.zcool.com.cn/work/ZNTY1Nzc2NjA=.html",
+        "media": "站酷",
+        "publish_date": "2021-11-25",
+        "refer": "ref_1",
+        "title": "虚幻引擎 & 死亡搁浅场景创作渲染短片Death Stranding_33ru-站酷ZCOOL"
+      },
+      {
+        "content": "随着我国经济发展,大众媒介技术的不断进步而造成媒介接触成本降低,我国电子游戏产业随移动互联网发展得到长足进步,视频游戏文化最终被当作一种大众文化议题进入学者和公众的视野｡2019年,美国TGA(The Game Awards,被誉为游戏界奥斯卡... (共3页) ",
+        "icon": "",
+        "link": "https://mall.cnki.net/magazine/Article/CMLT202102027.htm",
+        "media": "中国知网",
+        "publish_date": "2026-05-04",
+        "refer": "ref_2",
+        "title": "探析视频游戏的电影化制作趋势——以《Death Stranding》 (死亡搁浅)为例-《传媒论坛》2021年02期-中国知网"
+      },
+      {
+        "content": "小岛秀夫的《死亡搁浅(Death Stranding)》与《地平线:黎明时分》工作室Guerrilla Games有着密切的联系,因为这两款游戏共用了Guerrilla Games的Decima引擎｡ 而现在他回到了Guerrilla Games并演示了利用其引擎制作的《死亡搁浅》,据透露,看起来效果还是很棒的｡ ",
+        "icon": "",
+        "link": "https://www.sohu.com/a/289354734_119620",
+        "media": "搜狐",
+        "publish_date": "2019-01-16",
+        "refer": "ref_3",
+        "title": "小岛秀夫重回Guerrilla演示《死亡搁浅》:效果惊艳令人印象深刻_Hulst"
+      },
+      {
+        "content": "\"《数字化设计艺术》是武汉理工大学出版社出版的图书,作者是方兴｡内容简介数字化设计艺术的未来等中心议题,对数字化设计艺术的设计与创意进行分析､研究､力求使这门崭新的学科逐步走向成熟｡目录1 概述 1.1 数字化设计艺术 1.2 数字化设计艺术的定位 1.3 数字化设计艺术传入我国及其发展 1.4 世界著名的数字化设计艺术竞赛介绍 2 数字化设计艺术的设计环境 2.1 知识经济与数字化设计艺术 2.",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E6%95%B0%E5%AD%97%E5%8C%96%E8%AE%BE%E8%AE%A1%E8%89%BA%E6%9C%AF/5814799",
+        "media": "百度百科",
+        "publish_date": "2023-06-28",
+        "refer": "ref_4",
+        "title": "数字化设计艺术"
+      },
+      {
+        "content": "3D模型 SU模型 全球案例 灵感图库 上传 创作中心 VIP 签到 登录 | 注册有礼 ",
+        "icon": "",
+        "link": "https://www.znzmo.com/suseo1107629855.html",
+        "media": "",
+        "publish_date": "2026-05-15",
+        "refer": "ref_5",
+        "title": "现代创意景观灯柱_路灯_精神堡垒_户外灯_高杆灯SU模型下载 ID:1107629855_【知末网】"
+      },
+      {
+        "content": "<p><iframe class=\"video_iframe\" data-cover=\"http://qqpublic.qpic.cn/qq_public/0/28-2112269185-9C0C076EE9B116BA88CCB65F7B76DA18/0?fmt=jpg&size=17&h=280&w=496&ppv=1\" height=\"375\" width=\"500\" ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_28169f0bc3914852",
+        "media": "企鹅号",
+        "publish_date": "2026-04-28",
+        "refer": "ref_6",
+        "title": "爆款游戏携手城市地标,打破虚拟与现实边界"
+      },
+      {
+        "content": "<p>论文作者来自阿里巴巴通义实验室的 3D 团队｡第一作者何益升,本科毕业于武汉大学,博士毕业于香港科技大学;通讯作者原玮浩,本科毕业于浙江大学,博士毕业于香港科技大学;团队 Leader 董子龙,本科博士均毕业于浙江大学｡</p><p>三维数字头像的建模､驱动和渲染是计算机图形学与计算机视觉的重要课题之一,在虚拟会议､影视制作､游戏开发等领域有广泛应用｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_52168553cf200952",
+        "media": "企鹅号",
+        "publish_date": "2025-06-20",
+        "refer": "ref_7",
+        "title": "SIGGRAPH 2025Large Avatar Model:单图秒级打造超写实3D交互数字人,跨平台超实时驱动渲染"
+      },
+      {
+        "content": "\"《虚拟现实技术与艺术》是2007年武汉工业大学出版社的图书,作者是李勋祥｡基本内容本书属于科学与艺术､技术与美学相结合的虚拟艺术研究范畴｡针对虚拟艺术设计研究的重要领域——虚拟现实的技术与艺术理念,以及相关的虚拟艺术设计实践进行论述｡ 笔者以虚拟现实技术领域作为虚拟艺术设计的重点研究方向,尝试在二者之间建立一种关联:以虚拟现实技术为依托,以虚拟艺术设计为导向,共同构建或丰富虚拟艺术设计的内涵｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E8%99%9A%E6%8B%9F%E7%8E%B0%E5%AE%9E%E6%8A%80%E6%9C%AF%E4%B8%8E%E8%89%BA%E6%9C%AF/6928702",
+        "media": "百度百科",
+        "publish_date": "2024-10-18",
+        "refer": "ref_8",
+        "title": "虚拟现实技术与艺术"
+      },
+      {
+        "content": "提到虚拟现实(VR),很多人都会觉得它是一种高端的科技产品,离我们的生活很远｡其实,VR技术已经慢慢走进我们的生活,通过模拟虚拟环境,让我们仿佛身临其境,打破了现实的边界,为我们解锁了全新的体验,广泛应用于娱乐､教育､医疗､旅游等多个领域,悄悄改变着我们的生活､工作和学习方式｡ VR技术,让娱乐更沉浸式､更有趣｡",
+        "icon": "",
+        "link": "https://www.sohu.com/a/1010492343_121766445",
+        "media": "搜狐",
+        "publish_date": "2026-04-16",
+        "refer": "ref_9",
+        "title": "虚拟现实(VR):打破现实边界,解锁全新体验"
+      },
+      {
+        "content": "《死亡搁浅》是一个开放世界类动作互动游戏,登陆于PlayStation 4平台,是著名游戏制作人小岛秀夫以及旗下工作室小岛制作(Kojima Productions)从科乐美(Konami)独立之后发表的首款作品,在2016年E3展的索尼展前发表会上公开了首部预告视频,请到了电影导演吉尔莫·德尔·托罗参与｡",
+        "icon": "",
+        "link": "https://www.bilibili.com/video/BV1B4411H7B9/",
+        "media": "哔哩哔哩",
+        "publish_date": "2019-05-31",
+        "refer": "ref_10",
+        "title": "今年最期待主机游戏:死亡搁浅Death Stranding 最新玩法体验视频_哔哩哔哩_bilibili"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "deathstranding 虚拟现实 chiral 路标 灯柱 视觉 艺术",
+        "query": "Death Stranding 虚拟现实 chiral 路标 灯柱 视觉"
+      }
+    ],
+    "latency_seconds": 2.27,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Pokemon GO 道馆 团战 光柱 视觉 设计",
+    "content": "**80套炫酷传奇光柱特效素材 PNG透明底序列帧动画手游游戏素材 - 元素素材 背景边框 免费下载 - 爱给网** (2026-05-17)\n爱给网提供海量的元素合辑资源素材免费下载, 本次作品为80套炫酷传奇光柱特效素材 PNG透明底序列帧动画手游游戏素材, 本站编号101526922, 该元素合辑素材大小为137m, 该素材已被下载:30次, 更多精彩元素合辑素材,尽在爱给网｡ \nSource: https://m.aigei.com/item/80_tao_xuan_ku.html\n\n**pokemmo第四个道馆草系怎么打-今日头条** (2026-03-31)\n搜索 资讯 口袋妖怪go道馆战怎么打 野外遇敌介绍 口袋妖怪go道馆战怎么打?游戏中玩友们可以向敌对阵营的道馆发起道馆战,击败敌对阵营道馆会大幅降低该道馆的声望值,约有当前道馆等级的一半的声望值,很多小伙伴对于道馆战详细玩法还不了解吧,下面小编就将口袋妖怪go道馆战为大家做了详解,下面就随小编来看看吧。 安趣网 pokemongo道馆怎么挑战 口袋妖怪go道馆挑战玩法解析 pokemongo道馆怎么挑战?本文为大家带来口袋妖怪GO道馆挑战玩法解析,感兴趣的玩家不要错过。 3DM pokemon go道馆怎么联合攻击?道馆挑战联合攻击攻略 答:pokemon go道馆怎么联合攻击?联合攻击就是别人在打的时候你也去打就可以了。成功你能看见对方站在那,在你的视角他是不会帮你的,不同队伍的可以一起踢别人。但是bug超多,不建议用。 安锋网 精灵宝可梦go道馆怎么防守 道馆防守心得 攻击者可以在进入战斗前选择他/她的宠物小精灵的顺序。这是因为卫冕口袋妖怪AI是不是“聪明”,在低血量的情形下不会有效地使用更高的DPS的技能组合。 搞趣网 pokemon GO中草属性的那些萌物们,你最喜欢哪一个 植物文化 精灵宝可梦go道馆怎么战斗 道馆人数限制介绍 精灵宝可梦go玩家可以在道馆中进行战斗,道馆就是玩家战斗的场所,玩家等级达到5级才能开启进入道馆,在道馆中战斗。那么怎么在道馆战斗呢?道馆人数限制是多少呢?下面就跟小编一起来看看吧。 安锋网 《Pokemo Go》道馆玩法与PK技巧解析攻略 小编之前发出的《不看后悔《精灵宝可梦 GO》新手最强攻略》引起了许多玩家的关注,在攻略的结尾处,小编也提到了会继续介绍道馆玩法以及分析 PK 技巧,今天这篇攻略也就是这个目的。我们废话不多话,直接进入攻略! 威锋网 Pokemon Go道馆进攻防守全攻略 道馆如何进攻和防守 道馆(日文ジム,英文Gym)是精灵trainers可以锻炼他们的精灵的地方。Pokemon go里的道馆,是现实地图上的塔。按照正统原作的设定,PMgo中的Gym都应该是格斗类道馆。不掉落徽章,没有固定属性(不排除以后可以和道馆训练师如小刚或者四天王战斗。 安趣网 pokemongo精灵宝可梦go妙蛙花最佳技能搭配推荐 妙蛙花:快速技能:藤鞭(排名10)蓄力技能:sludge bomb(排名11)藤鞭是动画中的经典技能,在此\nSource: https://www.toutiao.com/topic/7481451069302786083/\n\n**【高清图片】揭秘任天堂《口袋妖怪GO》的超增强现实-ZOL极客酷玩** (2026-05-09)\n上一张 下一张 查看原图 1 / 16 隐藏 显示 任天堂要出手游了,这个昔日的游戏巨头在如今这个金钱物欲横流的社会,终于放下了矜持扑向了手游这个“洪水猛兽”。不过,曾经的霸主对于这个陌生的市场可没有惧怕,在不久前发布的《口袋妖怪GO》预告片很好的诠释了这点,而在片中出现的野生皮卡丘,着实让口袋迷感到惊艳。也许有很多玩家会对此产生疑问——这到底是怎么做到的?不能因为你是任天堂,你这手游就充满了未来感吧。其实答案就在于AR原理,就让我们一起来了解下这究竟是怎么回事吧!(图片取自网易) (作者:郑毅刚 2015-09-30) 收起\nSource: http://geek.zol.com.cn/slide/544/5440140_1.html\n\n**pokemongo口袋妖怪go湖南各地道馆补给点分布图_3DM单机** (2016-07-25)\n 全国各地道馆补给点分布图  江苏 广东 上海 北京 辽宁 新疆 湖北 宁夏 香港 河南 浙江 广西 贵州 重庆 海南 江西 四川 湖南 天津 吉林 福建 山西 山东 黑 龍 江 云南 内蒙古 陕西 安徽 河北 怀化 郴州 永州 本文内容来源于互联网,如有侵权请联系删除。\nSource: https://www.3dmgame.com/gl/3579661.html\n\n**光影梦幻—大唐不夜城多媒体艺术景观柱展示_腾讯视频** (2013-08-22)\n看过 在追 订阅 同步多端观看记录 参与互动讨论 观看更个性化内容 领取专属游戏礼包 立即登录 光影梦幻—大唐不夜城多媒体艺术景观柱展示 14:15 光影梦幻—大唐不夜城多媒体艺术景观柱展示\nSource: https://v.qq.com/x/page/n011662vez8.html\n\n**《宝可梦GO》大陆闪现!道馆涌现上海无锡,玩家狂喜背后的意义_游戏_现实** (2024-07-10)\n在7月7日,一个看似平凡的夏日夜晚,却因Reddit论坛TheSilphRoad上的一则爆炸性消息而变得不凡。《宝可梦GO》——这款全球现象级AR游戏,悄然间短暂打破了其在中国大陆的地理限制壁垒,北京、上海、无锡等地的玩家惊喜发现,熟悉的道馆、补给站如同幻影般显现于街头巷尾,甚至可以寄送礼物,一时间,社交媒体上欢腾一片。 游戏概述:虚拟与现实的梦幻交响 《宝可梦GO》自2016年问世以来,以其独特的AR技术融合经典IP,让玩家走出家门,探索现实世界的同时捕捉心爱的宝可梦。游戏由Niantic Labs开发,任天堂、宝可梦公司联合发行,以其创新的玩法迅速风靡全球,成为现象级手游的代表作之一。 市场反响:短暂解禁的涟漪效应 这次大陆地区短暂的解锁,不仅让当地玩家兴奋不已,更在游戏社区乃至整个业界引发了强烈反响。对于长期受限于地理位置的大陆玩家来说,这短暂的体验仿佛打开了通往另一个世界的窗口,让无数玩家得以一窥《宝可梦GO》的魅力所在,同时也激发了外界对于该游戏正式进入中国市场的无限遐想。 机制与体验:探索与社交并重 《宝可梦GO》的魅力在于其结合现实世界的探索机制,玩家通过行走于真实环境中发现并捕捉宝可梦,同时在特定地点设立的道馆和补给站促进了玩家间的互动与竞争,构建了一个既虚拟又真实的社交平台。短暂的解禁期间,这一机制在中国大陆得到了验证,证明了即使在未正式运营的区域,其核心玩法依然具有强大的吸引力。 技术与艺术的双重盛宴 从技术层面讲,《宝可梦GO》的AR技术和地图数据应用展现了Niantic在增强现实领域的深厚功底。而其视觉与音效设计,忠实地还原了宝可梦系列的奇幻氛围,为玩家带来了沉浸式的体验。此次解禁,让中国大陆的玩家也得以体验到这种独特的游戏享受。 结语:未来的可能性 尽管这次解锁如同流星划过夜空,短暂而绚烂,但它无疑点燃了无数玩家心中的希望之火。《宝可梦GO》在中国大陆的未来仍充满未知,但这次事件已充分展示了其潜在的巨大市场与文化影响力。无论是对于游戏开发者还是玩家群体,都是一次深刻的启示:《宝可梦GO》不仅是一款游戏,更是连接虚拟与现实,跨越文化和地域界限的桥梁。对于那些追求户外冒险、喜爱宝可梦文化的玩家而言,它无疑是值得期待的佳作。\nSource: https://www.sohu.com/a/792304825_121956424\n\n**世界上最惊险的Pokemon Go道馆之一 - 今日头条** (2016-08-18)\n神矶の鸟居堪称世界上最危险道馆之一! 《精灵宝可梦GO》(Pokemon Go)开放以来在全球引发热潮,大街小巷全是抓宝人潮,游戏强调走到户外体验真实世界,还能争夺道馆(Gym)展现实力。不过道馆设置地点千奇百怪,就有日本网友分享一处堪称世上最凶险的道馆所在地,训练师或许还来不及拿出宝贝球,就会被大自然给吞噬。 日本网友スミ松(nao_halfway)日前在推特分享了一处道馆地点:神矶の鸟居,玩家想挑战可得有冒着生命危险的觉悟。该道馆位于日本茨城县大洗町海边,是座立于礁岩上的鸟居(神社建筑),和岸边有段距离,一路上虽然有礁岩可走,但旁边浪潮汹涌,每当大浪打起就可能把人吞没。 日本网友14日前往当地考察。 更困难的是,想抵达神矶の鸟居还得把握时间,因为只有在海水退潮时道路才会出现,这是较安全的时段,涨潮时道路就会淹没在海水里。スミ松最后得出的建议是,一般的玩家还是不要轻易尝试挑战这座道馆才好;至于那些成功占领道馆的玩家,有人认为是克服重重障碍才冒险成功,也有人觉得只是利用修改GPS定位轻松攻占。 海水退潮时,是比较安全的时段可以前往神社。\nSource: https://www.toutiao.com/article/6320090452208910850/\n\n**神圣的光柱效果怎么画! #板绘 #绘画 #画画 #零基础学画画 #效果 - 今日头条** (2024-12-20)\n转发到头条 复制链接 微信 新浪微博 QQ空间 不感兴趣 举报 扫码下载今日头条APP 看最新、最热资讯内容 推荐视频 正在获取更多内容 评论 1 请先 登录 后发表评论~ 赞 画得好细腻👏 回复 ·\nSource: https://www.toutiao.com/video/7450393327372995876/\n\n**pokemon go道馆挑战心得-k73游戏之家** (2016-07-11)\n《口袋妖怪go(pokemon go)》达成一定等级就可以开启道馆挑战了,不过大家目前大多数都在找精灵抓,对道馆的一些技巧不是很清楚,这里分享一下pokemon go道馆挑战心得。 《口袋妖怪go(pokemon go)》达成一定等级就可以开启道馆挑战了,不过大家目前大多数都在找精灵抓,对道馆的一些技巧不是很清楚,这里分享一下pokemon go道馆挑战心得。 1. 道馆防御方:lv2 可以站2个人,lv3 站3个,类推。 2. 同阵营没满人的道馆你可以直接扔一怪上去防守(或者卖萌),防御成功的收益全队都能拿到。萌新谁都打不过可以看准有空位置的上去蹭。 3.同阵营满人的道馆,只要打掉任何一只就会有经验提升(当然全部打掉非常多)。经验条满了就升级,升级了就有空位辣! 4. 不同阵营的道馆,同样,挑战获胜后就会扣经验,扣到零道馆就清场了,你就可以占了它了。 5. bug:多人同时挑战同一个道馆,会卡住无法获胜。 6. 道馆防御奖励上限是100G/21小时cd,奖励在商城界面右上角领,cd到了随时可以领当前所占道馆数*10的奖励。 类型: 角色扮演 大小: 208.42 MB 平台: Android, iOS 语言: 暂无汉化\nSource: http://www.k73.com/glzq/164799.html\n\n**pokemon go道馆战打法心得 pokemon go道馆位置-视游pokemon go专区** (2024-09-22)\npokemon go 道馆战打法心得,pokemon go道馆分布位置由视游网提供,主要帮助大家更好的驰聘战场,下面一起随小编来看看详细的攻略介绍吧! 道馆位置 道馆打法心得 1. 都说闪避打法厉害,那么闪避的最好时机是什么? 当然是黄光闪过之后的那一瞬了。但是不是每次闪避都要看黄光的指引呢? 实际上并非是这样的。 一来有些招式是自带闪光特效的,这会让黄光变得不那么显眼,如果一直盯着找黄光反而会分散自己的精力。 二是你的操作是有惯性的,有些时候眼睛看到了,手未必能够及时跟上。就算手速够快了,招式本身也是有CD时间的,未必能反应得过来。 其实比起黄光,更应该信赖的是节奏感。经历与各种不同招式的大量对战,我们会找到自己的节奏:在什么样的情况下,使用何种招式,应该A几下再闪避然后再A几下。这样即操作起来轻松,效果又更加稳定。 那么黄光是不是完全没有作用呢?绝对不是。黄光起到的是一种定位的作用。也就是在你的节奏未起步或者是被打乱的时候,帮助你定位初始闪避点或是重置闪避点。另外,守馆精灵的前三次攻击速度会非常快,这时候看黄光闪避就非常重要了。 2. 为什么明明显示了dodge,仍然会被扣血? 可能性有两种。 一是闪避不完全。每种招式都有特定的闪避时间段,如果不能贯穿这一时间段来回晃动自己的精灵,就会被扣除部分血量。 二是因为BUG。很多情况下,即使完全闪避也会被扣血。不过这部分血量会在战斗结束之后反还给你。 3. 暴风雪是必中技能,那么是不是意味着如果我们的快龙遇上乘龙只能硬抗呢? 并不是。硬抗一定会GG的,防御方血量是加倍的,拼血也是拼不赢的。 这时候我们就需要善用调换精灵的功能了。在伤害处理前,及时换上水精灵等替快龙挡下伤害就可以了。另外,暴风雪的伤害处理是有延迟的,所以在换怪之前别忘了多A几下。 不过同色道馆是不能换怪的,因为你能够使用的精灵只有一只,这时候多半就真GG了。因此防守精灵的技能选择是不推荐暴风雪的。用一个词来形容就是亲者痛,仇者快。 今天小编给大家带来的攻略内容就介绍到这里了,后续小编还会分享更多pokemon go资讯信息,感兴趣的玩家可以关注视游网哦! 《pokemon go》攻略心得()\nSource: https://www.shiyouhome.com/pokemongo/jldq/18302.html\n",
+    "web_references": [
+      {
+        "content": "爱给网提供海量的元素合辑资源素材免费下载, 本次作品为80套炫酷传奇光柱特效素材 PNG透明底序列帧动画手游游戏素材, 本站编号101526922, 该元素合辑素材大小为137m, 该素材已被下载:30次, 更多精彩元素合辑素材,尽在爱给网｡ ",
+        "icon": "",
+        "link": "https://m.aigei.com/item/80_tao_xuan_ku.html",
+        "media": "爱给网",
+        "publish_date": "2026-05-17",
+        "refer": "ref_1",
+        "title": "80套炫酷传奇光柱特效素材 PNG透明底序列帧动画手游游戏素材 - 元素素材 背景边框 免费下载 - 爱给网"
+      },
+      {
+        "content": "搜索 资讯 口袋妖怪go道馆战怎么打 野外遇敌介绍 口袋妖怪go道馆战怎么打?游戏中玩友们可以向敌对阵营的道馆发起道馆战,击败敌对阵营道馆会大幅降低该道馆的声望值,约有当前道馆等级的一半的声望值,很多小伙伴对于道馆战详细玩法还不了解吧,下面小编就将口袋妖怪go道馆战为大家做了详解,下面就随小编来看看吧。 安趣网 pokemongo道馆怎么挑战 口袋妖怪go道馆挑战玩法解析 pokemongo道馆怎么挑战?本文为大家带来口袋妖怪GO道馆挑战玩法解析,感兴趣的玩家不要错过。 3DM pokemon go道馆怎么联合攻击?道馆挑战联合攻击攻略 答:pokemon go道馆怎么联合攻击?联合攻击就是别人在打的时候你也去打就可以了。成功你能看见对方站在那,在你的视角他是不会帮你的,不同队伍的可以一起踢别人。但是bug超多,不建议用。 安锋网 精灵宝可梦go道馆怎么防守 道馆防守心得 攻击者可以在进入战斗前选择他/她的宠物小精灵的顺序。这是因为卫冕口袋妖怪AI是不是“聪明”,在低血量的情形下不会有效地使用更高的DPS的技能组合。 搞趣网 pokemon GO中草属性的那些萌物们,你最喜欢哪一个 植物文化 精灵宝可梦go道馆怎么战斗 道馆人数限制介绍 精灵宝可梦go玩家可以在道馆中进行战斗,道馆就是玩家战斗的场所,玩家等级达到5级才能开启进入道馆,在道馆中战斗。那么怎么在道馆战斗呢?道馆人数限制是多少呢?下面就跟小编一起来看看吧。 安锋网 《Pokemo Go》道馆玩法与PK技巧解析攻略 小编之前发出的《不看后悔《精灵宝可梦 GO》新手最强攻略》引起了许多玩家的关注,在攻略的结尾处,小编也提到了会继续介绍道馆玩法以及分析 PK 技巧,今天这篇攻略也就是这个目的。我们废话不多话,直接进入攻略! 威锋网 Pokemon Go道馆进攻防守全攻略 道馆如何进攻和防守 道馆(日文ジム,英文Gym)是精灵trainers可以锻炼他们的精灵的地方。Pokemon go里的道馆,是现实地图上的塔。按照正统原作的设定,PMgo中的Gym都应该是格斗类道馆。不掉落徽章,没有固定属性(不排除以后可以和道馆训练师如小刚或者四天王战斗。 安趣网 pokemongo精灵宝可梦go妙蛙花最佳技能搭配推荐 妙蛙花:快速技能:藤鞭(排名10)蓄力技能:sludge bomb(排名11)藤鞭是动画中的经典技能,在此",
+        "icon": "",
+        "link": "https://www.toutiao.com/topic/7481451069302786083/",
+        "media": "今日头条",
+        "publish_date": "2026-03-31",
+        "refer": "ref_2",
+        "title": "pokemmo第四个道馆草系怎么打-今日头条"
+      },
+      {
+        "content": "上一张 下一张 查看原图 1 / 16 隐藏 显示 任天堂要出手游了,这个昔日的游戏巨头在如今这个金钱物欲横流的社会,终于放下了矜持扑向了手游这个“洪水猛兽”。不过,曾经的霸主对于这个陌生的市场可没有惧怕,在不久前发布的《口袋妖怪GO》预告片很好的诠释了这点,而在片中出现的野生皮卡丘,着实让口袋迷感到惊艳。也许有很多玩家会对此产生疑问——这到底是怎么做到的?不能因为你是任天堂,你这手游就充满了未来感吧。其实答案就在于AR原理,就让我们一起来了解下这究竟是怎么回事吧!(图片取自网易) (作者:郑毅刚 2015-09-30) 收起",
+        "icon": "",
+        "link": "http://geek.zol.com.cn/slide/544/5440140_1.html",
+        "media": "中关村在线",
+        "publish_date": "2026-05-09",
+        "refer": "ref_3",
+        "title": "【高清图片】揭秘任天堂《口袋妖怪GO》的超增强现实-ZOL极客酷玩"
+      },
+      {
+        "content": " 全国各地道馆补给点分布图  江苏 广东 上海 北京 辽宁 新疆 湖北 宁夏 香港 河南 浙江 广西 贵州 重庆 海南 江西 四川 湖南 天津 吉林 福建 山西 山东 黑 龍 江 云南 内蒙古 陕西 安徽 河北 怀化 郴州 永州 本文内容来源于互联网,如有侵权请联系删除。",
+        "icon": "",
+        "link": "https://www.3dmgame.com/gl/3579661.html",
+        "media": "3DM游戏网",
+        "publish_date": "2016-07-25",
+        "refer": "ref_4",
+        "title": "pokemongo口袋妖怪go湖南各地道馆补给点分布图_3DM单机"
+      },
+      {
+        "content": "看过 在追 订阅 同步多端观看记录 参与互动讨论 观看更个性化内容 领取专属游戏礼包 立即登录 光影梦幻—大唐不夜城多媒体艺术景观柱展示 14:15 光影梦幻—大唐不夜城多媒体艺术景观柱展示",
+        "icon": "",
+        "link": "https://v.qq.com/x/page/n011662vez8.html",
+        "media": "腾讯视频",
+        "publish_date": "2013-08-22",
+        "refer": "ref_5",
+        "title": "光影梦幻—大唐不夜城多媒体艺术景观柱展示_腾讯视频"
+      },
+      {
+        "content": "在7月7日,一个看似平凡的夏日夜晚,却因Reddit论坛TheSilphRoad上的一则爆炸性消息而变得不凡。《宝可梦GO》——这款全球现象级AR游戏,悄然间短暂打破了其在中国大陆的地理限制壁垒,北京、上海、无锡等地的玩家惊喜发现,熟悉的道馆、补给站如同幻影般显现于街头巷尾,甚至可以寄送礼物,一时间,社交媒体上欢腾一片。 游戏概述:虚拟与现实的梦幻交响 《宝可梦GO》自2016年问世以来,以其独特的AR技术融合经典IP,让玩家走出家门,探索现实世界的同时捕捉心爱的宝可梦。游戏由Niantic Labs开发,任天堂、宝可梦公司联合发行,以其创新的玩法迅速风靡全球,成为现象级手游的代表作之一。 市场反响:短暂解禁的涟漪效应 这次大陆地区短暂的解锁,不仅让当地玩家兴奋不已,更在游戏社区乃至整个业界引发了强烈反响。对于长期受限于地理位置的大陆玩家来说,这短暂的体验仿佛打开了通往另一个世界的窗口,让无数玩家得以一窥《宝可梦GO》的魅力所在,同时也激发了外界对于该游戏正式进入中国市场的无限遐想。 机制与体验:探索与社交并重 《宝可梦GO》的魅力在于其结合现实世界的探索机制,玩家通过行走于真实环境中发现并捕捉宝可梦,同时在特定地点设立的道馆和补给站促进了玩家间的互动与竞争,构建了一个既虚拟又真实的社交平台。短暂的解禁期间,这一机制在中国大陆得到了验证,证明了即使在未正式运营的区域,其核心玩法依然具有强大的吸引力。 技术与艺术的双重盛宴 从技术层面讲,《宝可梦GO》的AR技术和地图数据应用展现了Niantic在增强现实领域的深厚功底。而其视觉与音效设计,忠实地还原了宝可梦系列的奇幻氛围,为玩家带来了沉浸式的体验。此次解禁,让中国大陆的玩家也得以体验到这种独特的游戏享受。 结语:未来的可能性 尽管这次解锁如同流星划过夜空,短暂而绚烂,但它无疑点燃了无数玩家心中的希望之火。《宝可梦GO》在中国大陆的未来仍充满未知,但这次事件已充分展示了其潜在的巨大市场与文化影响力。无论是对于游戏开发者还是玩家群体,都是一次深刻的启示:《宝可梦GO》不仅是一款游戏,更是连接虚拟与现实,跨越文化和地域界限的桥梁。对于那些追求户外冒险、喜爱宝可梦文化的玩家而言,它无疑是值得期待的佳作。",
+        "icon": "",
+        "link": "https://www.sohu.com/a/792304825_121956424",
+        "media": "搜狐",
+        "publish_date": "2024-07-10",
+        "refer": "ref_6",
+        "title": "《宝可梦GO》大陆闪现!道馆涌现上海无锡,玩家狂喜背后的意义_游戏_现实"
+      },
+      {
+        "content": "神矶の鸟居堪称世界上最危险道馆之一! 《精灵宝可梦GO》(Pokemon Go)开放以来在全球引发热潮,大街小巷全是抓宝人潮,游戏强调走到户外体验真实世界,还能争夺道馆(Gym)展现实力。不过道馆设置地点千奇百怪,就有日本网友分享一处堪称世上最凶险的道馆所在地,训练师或许还来不及拿出宝贝球,就会被大自然给吞噬。 日本网友スミ松(nao_halfway)日前在推特分享了一处道馆地点:神矶の鸟居,玩家想挑战可得有冒着生命危险的觉悟。该道馆位于日本茨城县大洗町海边,是座立于礁岩上的鸟居(神社建筑),和岸边有段距离,一路上虽然有礁岩可走,但旁边浪潮汹涌,每当大浪打起就可能把人吞没。 日本网友14日前往当地考察。 更困难的是,想抵达神矶の鸟居还得把握时间,因为只有在海水退潮时道路才会出现,这是较安全的时段,涨潮时道路就会淹没在海水里。スミ松最后得出的建议是,一般的玩家还是不要轻易尝试挑战这座道馆才好;至于那些成功占领道馆的玩家,有人认为是克服重重障碍才冒险成功,也有人觉得只是利用修改GPS定位轻松攻占。 海水退潮时,是比较安全的时段可以前往神社。",
+        "icon": "",
+        "link": "https://www.toutiao.com/article/6320090452208910850/",
+        "media": "今日头条",
+        "publish_date": "2016-08-18",
+        "refer": "ref_7",
+        "title": "世界上最惊险的Pokemon Go道馆之一 - 今日头条"
+      },
+      {
+        "content": "转发到头条 复制链接 微信 新浪微博 QQ空间 不感兴趣 举报 扫码下载今日头条APP 看最新、最热资讯内容 推荐视频 正在获取更多内容 评论 1 请先 登录 后发表评论~ 赞 画得好细腻👏 回复 ·",
+        "icon": "",
+        "link": "https://www.toutiao.com/video/7450393327372995876/",
+        "media": "今日头条",
+        "publish_date": "2024-12-20",
+        "refer": "ref_8",
+        "title": "神圣的光柱效果怎么画! #板绘 #绘画 #画画 #零基础学画画 #效果 - 今日头条"
+      },
+      {
+        "content": "《口袋妖怪go(pokemon go)》达成一定等级就可以开启道馆挑战了,不过大家目前大多数都在找精灵抓,对道馆的一些技巧不是很清楚,这里分享一下pokemon go道馆挑战心得。 《口袋妖怪go(pokemon go)》达成一定等级就可以开启道馆挑战了,不过大家目前大多数都在找精灵抓,对道馆的一些技巧不是很清楚,这里分享一下pokemon go道馆挑战心得。 1. 道馆防御方:lv2 可以站2个人,lv3 站3个,类推。 2. 同阵营没满人的道馆你可以直接扔一怪上去防守(或者卖萌),防御成功的收益全队都能拿到。萌新谁都打不过可以看准有空位置的上去蹭。 3.同阵营满人的道馆,只要打掉任何一只就会有经验提升(当然全部打掉非常多)。经验条满了就升级,升级了就有空位辣! 4. 不同阵营的道馆,同样,挑战获胜后就会扣经验,扣到零道馆就清场了,你就可以占了它了。 5. bug:多人同时挑战同一个道馆,会卡住无法获胜。 6. 道馆防御奖励上限是100G/21小时cd,奖励在商城界面右上角领,cd到了随时可以领当前所占道馆数*10的奖励。 类型: 角色扮演 大小: 208.42 MB 平台: Android, iOS 语言: 暂无汉化",
+        "icon": "",
+        "link": "http://www.k73.com/glzq/164799.html",
+        "media": "",
+        "publish_date": "2016-07-11",
+        "refer": "ref_9",
+        "title": "pokemon go道馆挑战心得-k73游戏之家"
+      },
+      {
+        "content": "pokemon go 道馆战打法心得,pokemon go道馆分布位置由视游网提供,主要帮助大家更好的驰聘战场,下面一起随小编来看看详细的攻略介绍吧! 道馆位置 道馆打法心得 1. 都说闪避打法厉害,那么闪避的最好时机是什么? 当然是黄光闪过之后的那一瞬了。但是不是每次闪避都要看黄光的指引呢? 实际上并非是这样的。 一来有些招式是自带闪光特效的,这会让黄光变得不那么显眼,如果一直盯着找黄光反而会分散自己的精力。 二是你的操作是有惯性的,有些时候眼睛看到了,手未必能够及时跟上。就算手速够快了,招式本身也是有CD时间的,未必能反应得过来。 其实比起黄光,更应该信赖的是节奏感。经历与各种不同招式的大量对战,我们会找到自己的节奏:在什么样的情况下,使用何种招式,应该A几下再闪避然后再A几下。这样即操作起来轻松,效果又更加稳定。 那么黄光是不是完全没有作用呢?绝对不是。黄光起到的是一种定位的作用。也就是在你的节奏未起步或者是被打乱的时候,帮助你定位初始闪避点或是重置闪避点。另外,守馆精灵的前三次攻击速度会非常快,这时候看黄光闪避就非常重要了。 2. 为什么明明显示了dodge,仍然会被扣血? 可能性有两种。 一是闪避不完全。每种招式都有特定的闪避时间段,如果不能贯穿这一时间段来回晃动自己的精灵,就会被扣除部分血量。 二是因为BUG。很多情况下,即使完全闪避也会被扣血。不过这部分血量会在战斗结束之后反还给你。 3. 暴风雪是必中技能,那么是不是意味着如果我们的快龙遇上乘龙只能硬抗呢? 并不是。硬抗一定会GG的,防御方血量是加倍的,拼血也是拼不赢的。 这时候我们就需要善用调换精灵的功能了。在伤害处理前,及时换上水精灵等替快龙挡下伤害就可以了。另外,暴风雪的伤害处理是有延迟的,所以在换怪之前别忘了多A几下。 不过同色道馆是不能换怪的,因为你能够使用的精灵只有一只,这时候多半就真GG了。因此防守精灵的技能选择是不推荐暴风雪的。用一个词来形容就是亲者痛,仇者快。 今天小编给大家带来的攻略内容就介绍到这里了,后续小编还会分享更多pokemon go资讯信息,感兴趣的玩家可以关注视游网哦! 《pokemon go》攻略心得()",
+        "icon": "",
+        "link": "https://www.shiyouhome.com/pokemongo/jldq/18302.html",
+        "media": "",
+        "publish_date": "2024-09-22",
+        "refer": "ref_10",
+        "title": "pokemon go道馆战打法心得 pokemon go道馆位置-视游pokemon go专区"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "pokemon go 道馆 团战 光柱 视觉 设计",
+        "query": "Pokemon GO 道馆 团战 光柱 视觉 设计"
+      }
+    ],
+    "latency_seconds": 2.4,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Apex 信号枪 复活 信标 光柱 视觉特效",
+    "content": "**apex 19赛季幻象复活信标 - 抖音** (2023-11-29)\n他复活人的时候是隐身的!!看不到他看不到啊!!#apex #apex女玩家 #游戏中的瞬间 #游戏中的名场面 00:00 / 00:00 连播 清屏 智能 倍速 点赞 1391 别圤罗 幻象在幻象三连就跟在老家一样#apex英雄 #steam游戏 #游戏日常 #派派 #又菜又爱玩系列 #毫无技术含量的操作 #每一帧都是热爱 00:00 / 00:00 连播 清屏 智能 倍速 点赞 31 \nSource: https://www.douyin.com/zhuanti/7306583020528551974\n\n**apex复活信标能造吗 - 抖音** (2025-06-25)\n00:00 / 00:00 连播 清屏 智能 倍速 点赞 3546 00:00 / 00:00 连播 清屏 智能 倍速 点赞 74 00:00 / 00:00 连播 清屏 智能 倍速 点赞 1.6万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 2.2万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 83 诗寒(apex英雄/三角洲行动) 【Apex资讯】自选传家宝确定 制造队友旗帜 希尔狗子大削弱 新英雄选择界面#steam游戏 #游戏日常 #apex英雄 #apex #apex传家宝 00:00 / 00:00 连播 清屏 智能 倍速 点赞 117 00:00 / 00:00 连播 清屏 智能 倍速 点赞 21 凹凸曼Ghost 【APEX英雄】16赛季预告片解读:队友信标能制作?150传家宝碎片!6V6团队死斗即将上线,新武器复仇女神!#apex英雄 #16赛季 #复仇女神 #传家宝 #信标制作 #职业重做 00:00 / 00:00 连播 清屏 智能 倍速 点赞 375 00:00 / 00:00 连播 清屏 智能 倍速 点赞 32 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5659 00:00 / 00:00 连播 清屏 智能 倍速 点赞 59 00:00 / 00:00 连播 清屏 智能 倍速 点赞 453 00:00 / 00:00 连播 清屏 智能 倍速 点赞 26 00:00 / 00:00 连播 清屏 智能 倍速 点赞 59 00:00 / 00:00 连播 清屏 智能 倍速 点赞 320 00:00 / 00:00 连播 清屏 智能 倍速 点赞 3799 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5687 00:00 / 00:00 连播 清屏 智能 倍速 点赞 932 00:00 / 00:00 连播 清屏 智能 倍速 点赞 7 00:00 / 00:00 连播 清屏 智能 倍速 点赞 1.7万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 175 00:00 / 00:00 连播 清屏 智能 倍速 点赞 511 00:00 / 00:00 连播 清屏 智能 倍速 点赞 77 00:00 / 00:00 连播 清屏 智能 倍速 点赞 14 00:00 / 00:00 连播 清\nSource: https://www.douyin.com/zhuanti/7227627941407000632\n\n**apex重生信标为什么复活队友没枪-抖音** (2025-09-25)\n一局游戏碰到三次bug,莫名其妙卡死,重进后观战复活的自己,重生信标放不出来#apex #apex顶尖猎杀者 感觉还是挺中肯的 要我说直接抓起来@补一刀电竞(娱乐 技术) #apex ...\nSource: https://www.douyin.com/shipin/7327343113721219108\n\n**apex移动重生信标怎么用-抖音** (2025-11-17)\n移动重生信标的正确用法:物尽其用版O.o #apex #apex英雄 #apex英雄 #steam游戏 #apex 关于我想掏出隔热板 却拿起了重生信标的信号枪 #战地5 #游戏 重生信标使用小技巧 学会了...\nSource: https://www.douyin.com/shipin/7283779854850492428\n\n**【APEX】警惕决赛圈复活信标仙人_哔哩哔哩bilibili** (2022-09-26)\n您当前的浏览器不支持 HTML5 播放器 请更换浏览器再试试哦~ AI小助手 测试版 记笔记 接下来播放 自动连播 01:01 00:50 1.8万 4 13:19 7.7万 175 01:44 37.4万 617 01:41 登录后你可以: 免费看高清视频 多端同步播放记录 发表弹幕/评论 热门番剧影视看不停 立即登录 首次使用? 点我注册\nSource: https://www.bilibili.com/video/BV1ue4y1r72b/\n\n**玩家建议《APEX英雄》添加可视重生信标_队友** (2021-05-25)\n近日,玩家建议重生工作室为《APEX英雄》添加可视重生信标。 Reddit用户hesido表示,当被击倒的队友的死亡盒中有移动重生信号塔时,可向队友发出警报或者在拾取队友信标时可一键带走移动重生信号塔。因为很多玩家在战斗后为了救助队友通常会忽视盒子中的信号塔,这对于拥有信号塔的玩家来说将浪费大量的游戏时间。\nSource: https://www.sohu.com/a/468414345_268907\n\n**apexhommie9重生信标 - 抖音** (2024-08-01)\n00:00 / 00:00 连播 清屏 智能 倍速 点赞 20 00:00 / 00:00 连播 清屏 智能 倍速 点赞 210 00:00 / 00:00 连播 清屏 智能 倍速 点赞 11 00:00 / 00:00 连播 清屏 智能 倍速 点赞 12 00:00 / 00:00 连播 清屏 智能 倍速 点赞 4159 00:00 / 00:00 连播 清屏 智能 倍速 点赞 515 00:00 / 00:00 连播 清屏 智能 倍速 点赞 1.2万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5 00:00 / 00:00 连播 清屏 智能 倍速 点赞 6 00:00 / 00:00 连播 清屏 智能 倍速 点赞 2.1万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 699 00:00 / 00:00 连播 清屏 智能 倍速 点赞 19 00:00 / 00:00 连播 清屏 智能 倍速 点赞 145 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5.5万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 203 00:00 / 00:00 连播 清屏 智能 倍速 点赞 1048 班班不要再吃啦 Shot on iPhone14 “海柱=猴子”@喵乐电竞 #apex #apex英雄 #高能英雄 #fps游戏 #shotoniphone 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5461 00:00 / 00:00 连播 清屏 智能 倍速 点赞 39 00:00 / 00:00 连播 清屏 智能 倍速 点赞 11 00:00 / 00:01 连播 清屏 智能 倍速 点赞 6684 00:00 / 00:00 连播 清屏 智能 倍速 点赞 53 00:00 / 00:00 连播 清屏 智能 倍速 点赞 33 00:00 / 00:00 连播 清屏 智能 倍速 点赞 32 00:00 / 00:00 连播 清屏 智能 倍速 点赞 71 00:00 / 00:00 连播 清屏 智能 倍速 点赞 3 00:00 / 00:00 连播 清屏 智能 倍速 点赞 12 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5689 00:00 / 00:00 连播 清屏 智能 倍速 点赞 16 00:00 /\nSource: https://www.douyin.com/zhuanti/7398061317401249807\n\n**【apex】移动重生信标还可以这么用?_哔哩哔哩_bilibili** (2021-02-11)\n接下来播放 自动连播 展开\nSource: https://m.bilibili.com/video/av246730351\n\n**apex奶妈可以造复活信标-抖音** (2025-01-03)\nfaide战神楼与遇猎杀,看决赛圈在两队之间如何拉扯周旋 #apex #apex英雄 #faide #玩家阿远\nSource: https://www.douyin.com/shipin/7355822338904131593\n\n**Apex英雄信标有什么用_Apex英雄信标具体作用介绍 - 心愿游戏** (2019-02-19)\n在APEX英雄游戏中,有很多可以交互的地方,虽然这些在训练中没有教程,但是细心的玩家还是发现了很多交互的地方,信标就是其中之一,下面 心愿下载小编 为大家带来信标作用介绍。 APEX英雄信标作用介绍 信标: 信标是《Apex英雄》中的独特系统。玩家可以捡起阵亡队友的旗帜在信标处将队友复活。 要激活一个信标,只需按住交互键,几秒钟后队友将从信标处的飞机跳下。 值得注意的是使用一个信标之后,信标不能被立刻重新使用 。 所以在玩家需要复活两个队友时,需要在信标处等待片刻,或者移动至另一信标。 以上就是心愿下载小编为大家带来的APEX英雄信标作用介绍了。\nSource: https://www.wishdown.com/article/12850.html\n",
+    "web_references": [
+      {
+        "content": "他复活人的时候是隐身的!!看不到他看不到啊!!#apex #apex女玩家 #游戏中的瞬间 #游戏中的名场面 00:00 / 00:00 连播 清屏 智能 倍速 点赞 1391 别圤罗 幻象在幻象三连就跟在老家一样#apex英雄 #steam游戏 #游戏日常 #派派 #又菜又爱玩系列 #毫无技术含量的操作 #每一帧都是热爱 00:00 / 00:00 连播 清屏 智能 倍速 点赞 31 ",
+        "icon": "",
+        "link": "https://www.douyin.com/zhuanti/7306583020528551974",
+        "media": "抖音",
+        "publish_date": "2023-11-29",
+        "refer": "ref_1",
+        "title": "apex 19赛季幻象复活信标 - 抖音"
+      },
+      {
+        "content": "00:00 / 00:00 连播 清屏 智能 倍速 点赞 3546 00:00 / 00:00 连播 清屏 智能 倍速 点赞 74 00:00 / 00:00 连播 清屏 智能 倍速 点赞 1.6万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 2.2万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 83 诗寒(apex英雄/三角洲行动) 【Apex资讯】自选传家宝确定 制造队友旗帜 希尔狗子大削弱 新英雄选择界面#steam游戏 #游戏日常 #apex英雄 #apex #apex传家宝 00:00 / 00:00 连播 清屏 智能 倍速 点赞 117 00:00 / 00:00 连播 清屏 智能 倍速 点赞 21 凹凸曼Ghost 【APEX英雄】16赛季预告片解读:队友信标能制作?150传家宝碎片!6V6团队死斗即将上线,新武器复仇女神!#apex英雄 #16赛季 #复仇女神 #传家宝 #信标制作 #职业重做 00:00 / 00:00 连播 清屏 智能 倍速 点赞 375 00:00 / 00:00 连播 清屏 智能 倍速 点赞 32 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5659 00:00 / 00:00 连播 清屏 智能 倍速 点赞 59 00:00 / 00:00 连播 清屏 智能 倍速 点赞 453 00:00 / 00:00 连播 清屏 智能 倍速 点赞 26 00:00 / 00:00 连播 清屏 智能 倍速 点赞 59 00:00 / 00:00 连播 清屏 智能 倍速 点赞 320 00:00 / 00:00 连播 清屏 智能 倍速 点赞 3799 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5687 00:00 / 00:00 连播 清屏 智能 倍速 点赞 932 00:00 / 00:00 连播 清屏 智能 倍速 点赞 7 00:00 / 00:00 连播 清屏 智能 倍速 点赞 1.7万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 175 00:00 / 00:00 连播 清屏 智能 倍速 点赞 511 00:00 / 00:00 连播 清屏 智能 倍速 点赞 77 00:00 / 00:00 连播 清屏 智能 倍速 点赞 14 00:00 / 00:00 连播 清",
+        "icon": "",
+        "link": "https://www.douyin.com/zhuanti/7227627941407000632",
+        "media": "抖音",
+        "publish_date": "2025-06-25",
+        "refer": "ref_2",
+        "title": "apex复活信标能造吗 - 抖音"
+      },
+      {
+        "content": "一局游戏碰到三次bug,莫名其妙卡死,重进后观战复活的自己,重生信标放不出来#apex #apex顶尖猎杀者 感觉还是挺中肯的 要我说直接抓起来@补一刀电竞(娱乐 技术) #apex ...",
+        "icon": "",
+        "link": "https://www.douyin.com/shipin/7327343113721219108",
+        "media": "抖音",
+        "publish_date": "2025-09-25",
+        "refer": "ref_3",
+        "title": "apex重生信标为什么复活队友没枪-抖音"
+      },
+      {
+        "content": "移动重生信标的正确用法:物尽其用版O.o #apex #apex英雄 #apex英雄 #steam游戏 #apex 关于我想掏出隔热板 却拿起了重生信标的信号枪 #战地5 #游戏 重生信标使用小技巧 学会了...",
+        "icon": "",
+        "link": "https://www.douyin.com/shipin/7283779854850492428",
+        "media": "抖音",
+        "publish_date": "2025-11-17",
+        "refer": "ref_4",
+        "title": "apex移动重生信标怎么用-抖音"
+      },
+      {
+        "content": "您当前的浏览器不支持 HTML5 播放器 请更换浏览器再试试哦~ AI小助手 测试版 记笔记 接下来播放 自动连播 01:01 00:50 1.8万 4 13:19 7.7万 175 01:44 37.4万 617 01:41 登录后你可以: 免费看高清视频 多端同步播放记录 发表弹幕/评论 热门番剧影视看不停 立即登录 首次使用? 点我注册",
+        "icon": "",
+        "link": "https://www.bilibili.com/video/BV1ue4y1r72b/",
+        "media": "哔哩哔哩",
+        "publish_date": "2022-09-26",
+        "refer": "ref_5",
+        "title": "【APEX】警惕决赛圈复活信标仙人_哔哩哔哩bilibili"
+      },
+      {
+        "content": "近日,玩家建议重生工作室为《APEX英雄》添加可视重生信标。 Reddit用户hesido表示,当被击倒的队友的死亡盒中有移动重生信号塔时,可向队友发出警报或者在拾取队友信标时可一键带走移动重生信号塔。因为很多玩家在战斗后为了救助队友通常会忽视盒子中的信号塔,这对于拥有信号塔的玩家来说将浪费大量的游戏时间。",
+        "icon": "",
+        "link": "https://www.sohu.com/a/468414345_268907",
+        "media": "搜狐",
+        "publish_date": "2021-05-25",
+        "refer": "ref_6",
+        "title": "玩家建议《APEX英雄》添加可视重生信标_队友"
+      },
+      {
+        "content": "00:00 / 00:00 连播 清屏 智能 倍速 点赞 20 00:00 / 00:00 连播 清屏 智能 倍速 点赞 210 00:00 / 00:00 连播 清屏 智能 倍速 点赞 11 00:00 / 00:00 连播 清屏 智能 倍速 点赞 12 00:00 / 00:00 连播 清屏 智能 倍速 点赞 4159 00:00 / 00:00 连播 清屏 智能 倍速 点赞 515 00:00 / 00:00 连播 清屏 智能 倍速 点赞 1.2万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5 00:00 / 00:00 连播 清屏 智能 倍速 点赞 6 00:00 / 00:00 连播 清屏 智能 倍速 点赞 2.1万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 699 00:00 / 00:00 连播 清屏 智能 倍速 点赞 19 00:00 / 00:00 连播 清屏 智能 倍速 点赞 145 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5.5万 00:00 / 00:00 连播 清屏 智能 倍速 点赞 203 00:00 / 00:00 连播 清屏 智能 倍速 点赞 1048 班班不要再吃啦 Shot on iPhone14 “海柱=猴子”@喵乐电竞 #apex #apex英雄 #高能英雄 #fps游戏 #shotoniphone 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5461 00:00 / 00:00 连播 清屏 智能 倍速 点赞 39 00:00 / 00:00 连播 清屏 智能 倍速 点赞 11 00:00 / 00:01 连播 清屏 智能 倍速 点赞 6684 00:00 / 00:00 连播 清屏 智能 倍速 点赞 53 00:00 / 00:00 连播 清屏 智能 倍速 点赞 33 00:00 / 00:00 连播 清屏 智能 倍速 点赞 32 00:00 / 00:00 连播 清屏 智能 倍速 点赞 71 00:00 / 00:00 连播 清屏 智能 倍速 点赞 3 00:00 / 00:00 连播 清屏 智能 倍速 点赞 12 00:00 / 00:00 连播 清屏 智能 倍速 点赞 5689 00:00 / 00:00 连播 清屏 智能 倍速 点赞 16 00:00 /",
+        "icon": "",
+        "link": "https://www.douyin.com/zhuanti/7398061317401249807",
+        "media": "抖音",
+        "publish_date": "2024-08-01",
+        "refer": "ref_7",
+        "title": "apexhommie9重生信标 - 抖音"
+      },
+      {
+        "content": "接下来播放 自动连播 展开",
+        "icon": "",
+        "link": "https://m.bilibili.com/video/av246730351",
+        "media": "哔哩哔哩",
+        "publish_date": "2021-02-11",
+        "refer": "ref_8",
+        "title": "【apex】移动重生信标还可以这么用?_哔哩哔哩_bilibili"
+      },
+      {
+        "content": "faide战神楼与遇猎杀,看决赛圈在两队之间如何拉扯周旋 #apex #apex英雄 #faide #玩家阿远",
+        "icon": "",
+        "link": "https://www.douyin.com/shipin/7355822338904131593",
+        "media": "抖音",
+        "publish_date": "2025-01-03",
+        "refer": "ref_9",
+        "title": "apex奶妈可以造复活信标-抖音"
+      },
+      {
+        "content": "在APEX英雄游戏中,有很多可以交互的地方,虽然这些在训练中没有教程,但是细心的玩家还是发现了很多交互的地方,信标就是其中之一,下面 心愿下载小编 为大家带来信标作用介绍。 APEX英雄信标作用介绍 信标: 信标是《Apex英雄》中的独特系统。玩家可以捡起阵亡队友的旗帜在信标处将队友复活。 要激活一个信标,只需按住交互键,几秒钟后队友将从信标处的飞机跳下。 值得注意的是使用一个信标之后,信标不能被立刻重新使用 。 所以在玩家需要复活两个队友时,需要在信标处等待片刻,或者移动至另一信标。 以上就是心愿下载小编为大家带来的APEX英雄信标作用介绍了。",
+        "icon": "",
+        "link": "https://www.wishdown.com/article/12850.html",
+        "media": "",
+        "publish_date": "2019-02-19",
+        "refer": "ref_10",
+        "title": "Apex英雄信标有什么用_Apex英雄信标具体作用介绍 - 心愿游戏"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "apex 信号枪 复活 信标 光柱 视觉特效",
+        "query": "Apex 信号枪 复活 信标 光柱 视觉特效"
+      }
+    ],
+    "latency_seconds": 1.77,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "unity 立体 光柱 上升 渐变 shader 教程",
+    "content": "**unity shader效果教程附详细代码（发布时间：2025-04-18 11:25:12）** (2025-04-18)\n这个系列来源于书籍冯乐乐老师的《unity shader 入门精要》， 参考的代码库https://github.com/candycat1992/UnityShadersBook” 我自己跟着写了一遍代码，并在代码块里给shader代码加上了比较详细的注释 更为仔细的解释和unity shader原理和知识书里都有，本blog不做详细解释，推荐买书来看。 本项目的所有代码在\nhttps://github.com/takashiwangbh/Unity-shader-effect-reproduction/tree/main\n介绍\n在游戏或者动画作品中，有时候会用到一些非真实感的渲染方法来渲染游戏画面，使得场景有一种特殊的风格，这里会使用一个模型来做两种风格（卡通风格和素描风格），shader挂在材质上，然后将材质使用在模型的材质上就可以了，shader代码的解释会写在代码中。这些风格需要使用一些纹理。例如素描风格，就需要几张不同的铅笔的画痕来模仿素描中的感觉，shader只是能够渲染，但是想要实现想要的风格，纹理也是很重要的一部分。\n卡通风格渲染shader code\n/\n这个 Shader 实现了卡通渲染（Toon Shading）效果，结合边缘描边与简化的光照模型，为模型提供一种独特的卡通风格。\n主要功能：\n1. 描边效果：\n- 利用顶点偏移的方式实现模型的边缘描边。\n- 支持自定义描边颜色和宽度。\n2. 卡通光照：\n- 使用 Ramp 纹理控制光照的渐变，实现分段的卡通风格光照。\n- 包含环境光、漫反射光、以及简单的高光处理。\n3. 参数可控：\n- 支持通过\nSource: https://blog.csdn.net/HZBCc/article/details/147324291\n\n**Unity UGUI流光特效Shader实战教程（发布时间：2024-10-25 11:39:43）** (2024-10-25)\n本文还有配套的精品资源，点击获取\n简介：Unity UGUI是Unity引擎的内置UI系统，用于创建2D和3D用户界面。流光特效在游戏开发中用来增强视觉体验。本资源包含流光特效Shader源码，教授开发者如何实现自定义UI元素的动态效果。源码基于GLSL的Surface Shader编写，开发者可学习如何运用时间变量、颜色渐变和UV坐标操作来实现流动效果，并能通过调整Shader参数来定制特效。源码学习涵盖了Unity基础、Shader基础、UGUI系统、Shader Graph以及Material与Shader的关联。掌握流光特效Shader，对于提升游戏界面视觉品质和玩家沉浸感有着重要作用。\n1. Unity UGUI介绍与应用\n1.1 UGUI概述\nUnity UGUI（Unified Graphics Interface）是Unity游戏引擎中的用户界面系统。它的出现将游戏UI开发推向了更加高效、直观和强大的层面。UGUI通过使用Canvas作为UI组件的容器，配合基础的UI元素如Image、Text、Button和Panel等，构建出功能丰富、响应式的用户界面。\n1.2 UGUI的应用场景\nUGUI广泛应用于游戏界面构建、HUD（Head-Up Display）设计、菜单系统、弹窗提示等交互元素。与传统的Immediate Mode GUI相比，UGUI通过保留屏幕空间（Screen Space）或世界空间（World Space）的属性，使得UI元素的布局和交互更为灵活。\n1.3 UGUI的设计原则\n在设计UGUI时，开发者需要考虑如何合理组\nSource: https://blog.csdn.net/weixin_42527589/article/details/143259964\n\n**《unity shader入门精要》学习笔记** ()\n渐变纹理可用来控制漫反射光照效果。\n// Upgrade NOTE: replaced 'Object2World' with 'unityObjectToWorld'\n光照模式注意要设置为Forward(菜单Edit->Project Settings->Player->OtherSettings->Rending Path->Forward) Shader \"LT/RampTexture\"\nColor(\"Color Tint\",Color) (1,1,1,1) RampTex(\"Ramp Tex\",2D) \"white\" //渐变纹理 Specular(\"Specular\",Color) (1,1,1,1) Gloss(\"Gloss\",Range(8.0,256)) 20 SubShader\nTags \"LightMode\"\"ForwardBase\" //定义该Pass在光照流水线中的角色光照模式注意要设置为Forward CGPROGRAM #pragma vertex vert #pragma fragment frag #include \"UnityCG.cginc\" #include \"Lighting.cginc\" fixed4 Color; sampler2D RampTex; fixed4 Specular; float4 RampTexST; float Gloss; struct appdata\nfloat4 vertex : POSITION; float2 uv : TEXCOORD0; float3 normal : N\nSource: https://blog.csdn.net/u013354943/article/details/52788010\n\n**Unity Shader入门精要笔记（十四）：渐变纹理（发布时间：2017-09-03 22:46:20）** (2017-09-03)\n本系列文章由AimarJohnny编写，欢迎转载，转载请标明出处，谢谢。\nhttp://blog.csdn.net/lzhq1982/article/details/77659332\n从上一篇我们看到纹理不只是为了定义颜色，还可以存储很多表面属性，这一篇说的渐变纹理就是其中一种，比如用渐变纹理控制漫反射效果。前面光照篇里我们介绍过漫反射，是用法线和光照方向的点积与材质的反射率相乘得到。这里我们可以用渐变纹理更加灵活的控制光照。\n下面是本篇的效果图：\n可以看出，用不同的渐变纹理可以自由控制物体漫反射效果，左边是用一张从紫色到浅黄色的渐变纹理的效果；中间比较通用，是和《军团要塞2》类似，从黑色向浅灰色渐变，中间分界线微微发红。右侧常用于卡通风格的渲染，这种色调通常是突变的，模拟卡通的阴影色块。\n先上代码：\nShader \"CustomShader/Texture/RampShader\"\nProperties\nRampTex (\"Texture\", 2D) \"white\"\nColor (\"Color Tint\", Color) (1, 1, 1, 1)\nSpecular (\"Specular\", Color) (1, 1, 1, 1)\nGloss (\"Gloss\", Range(8.0, 256)) 20\nSubShader\nPass\nTags \"LightMode\" \"ForwardBase\"\nCGPROGRAM\n#pragma vertex vert\n#pragma fragment frag\n#include \"Lighting.cginc\"\nsampler2D RampTe\nSource: https://blog.csdn.net/lzhq1982/article/details/77659332\n\n**Unity Shader 学习（一）：初识ShaderLab（发布时间：2023-12-14 21:04:08）** (2023-12-14)\nUnity Shader 学习（一）：初识ShaderLab -- 以Unlit Shader”模板为例 01\n前言\n一、创建Shader\n二、数据类型\n1. 属性数据类型\n2. 着色器数据类型（Cg/HLSL）\n三、语义\n1. 语义的作用以及需要语义的时机\n1. 顶点着色器输入\n2. 片元着色器输入\n3. 片元着色器输出\n四、CGInclude文件、预处理指令与宏\n前言\n阅读本文前需要对渲染流程有简单了解，并且要知道Unity ShaderLab、Cg/HLSL大概是什么，它们并不是一回事。 然后，看什么教程都不如直接看官方文档：\nShaderLab - Unity手册\nHLSL参考\n一、创建Shader\n首先创建一个 Unlit Shader 模板（Project 窗口，右键 Create Shader Unlit Shader） 直接上代码：\nShader \"Unlit/UnlitShader\"\nProperties\nMainTex (\"Texture\", 2D) \"white\"\nSubShader\nTags\n\"RenderType\"\"Opaque\"\nLOD 100\nPass\nCGPROGRAM\n#pragma vertex vert\n#pragma fragment frag\n// make fog work\n#pragma multicompilefog\n#include \"UnityCG.cginc\"\nstruct appdata\nfloat4 vertex : POSITION;\nfloat2 uv : TEXCOORD0;\n;\nstruct v2f\nfloat2 uv : TEXCOORD0;\nU\nSource: https://blog.csdn.net/qq_44195770/article/details/134654561\n\n**Unity 图片做shader unity shader 教程（发布时间：2024-08-13 11:53:22）** (2024-08-13)\n前言：\n上篇文章中我们大致解释了什么是Shader，以及使用哪些语言可以进行Shader程序的编写等，那我接下来要做的就是开始在Unity引擎的环境下，编写一些Shader并查看是否达到预想的效果。\n在Unity中定义了ShaderLab来组织Shader的内容，针对不同平台进行编译。\n一、第一个Shader：\nShader \"Custom/FirstShader\" Properties Color(\"Main Color\", Color) (0, 0, 0, 1) SubShader Pass Color[Color] FallBack \"Diffuse\"\n1.在当前场景中创建一个Plane面片，用于展示Shader着色后的效果：\n2.绑上我们新创建的Shader文件，但先不设置Color属性的值，使用默认缺省值进行着色，结果如下：\n3.通过点击颜色选择框选中某个颜色值，得到新的着色结果为：\n二、代码解析：\n以上是一个Shader程序，以及其应用于Plane上进行着色的效果，我们可以从中看出Shader编程的一些特征：\n1、在Unity中Shader程序文件以.shader为后缀：\n2、Shader程序都是以关键字Shader”开始的，后面紧接着的是Shader的命名（引用名），可以像目录一样，但是Shader的文件名和引用名不必一样。我们可以尝试在需要绑定Shader的组件上找到刚才创建的Shader，不难发现Shader的索引目录与命名对应：\n3、Properties：\nProperties中用来声明一些可用于可视化配置的属性，一般声明的格式为：\nname(\"\nSource: https://blog.51cto.com/u_16213595/11731336\n\n**UnityShader——简单案例（发布时间：2024-11-25 10:11:05）** (2024-11-25)\n一、文章简介\n在看完关于Unity Shader的书还有听课之后，发现学习了很多理论知识。但是对于自己写还差点距离，感觉没有很多的思路，此文章写一些简单的案例，方便刚入门的去理解。可以直接上手，写Shader。\n二、案例\n1、渐变材质\n首先看一下效果：\n很明显，我们的第一个效果就是渐变，这是挂载到一个球体上的，接下来我们就看代码。\nShader \"Custom/Colorful\"\nSubShader\npass\nCGPROGRAM\n#pragma vertex vert\n#pragma fragment frag\n#include\"UnityCG.cginc\"\nstruct v2f\nfloat4 vertex : POSITION;\nfloat3 normal : NORMAL;\n;\nv2f vert(v2f v)\nv.vertex UnityObjectToClipPos(v.vertex);\nreturn v;\nfixed4 frag(v2f o) : SVTarget\nfloat3 n o.normal / 2 float3(0.5,0.5,0.5);\nreturn float4(n,1);\nENDCG\n我们都知道，每个顶点都有一条法线，对于球体来说，法线就会很奇妙，每个顶点的法线都不同，而且会以一个渐变的方式偏移。\n我们会发现，球体上法线的偏移，相邻的顶点法线偏移很小，那么我们这个渐变就是基于法线的变换的。所以上边代码中，在顶点函数（Vertex）中，我们进行顶点坐标的转换。在片元函数（Fragment）中，我们定义了一个变量n，进行接收对法线的操作数据。那么就会有一个疑惑点了，那\nSource: https://blog.csdn.net/Leh1ng/article/details/144018792\n\n**The Ultimate 2D&amp;3D Shader Graph VFX Unity** ()\n学习Unity的Shader Graph的基础知识，并从初级到中级水平自信前进。理解内置渲染管线、URP和HDRP渲染管线理解着色器和Shader Graph在Unity中创建2D Shader Graph在Unity中创建3D Shader Graph学习实时视觉效果（Real-Time VFX）Unity：基础知识。Blender：基础知识。Photoshop：基础知识。大家好，我是Ramez Al Tabbaa，是Steam上AvoCuddle游戏的开发者，也是Binary Lunar YouTube频道的联合创始人，拥有超过1万名快乐订阅者，并提供70多个免费教程；我在Shader Graph方面拥有三年的经验，并将我的专业知识整合到了这个为时6小时的课程中。如果你想节省时间、精力和金钱，这门课程绝对适合你。进入Shader Graph的世界，让你的游戏视觉效果栩栩如生；这门课程将带领你从初级到中级水平的Shader Graph和VFX，步伐稳健。以下是你可以从这门课程中期待的内容概述；你将学习Unity引擎中着色器和渲染管线背后的核心概念，并通过以下主题涵盖了Shader Graph中最常用的节点，这些主题的复杂性会随着课程的进行而增加：2D火球投射物Shader Graph2D风吹植被Shader Graph2D溶解Shader Graph2D像素艺术Shader Graph标准3D光照Shader Graph3D风格化水体Shader3D半色调Shader Graph次表面散射（SSS）Shader Graph三轴投影Sha\nSource: http://mp.weixin.qq.com/s?__biz=MzI0NjI1OTE0Nw==&mid=2247486951&idx=1&sn=86aedcf142b852d22e0e936df3d73a1d\n\n**eangulee/UnityShaderBeginner: unity shader 入门精要 随书源码** ()\n读《Unity Shader 入门精要》\n基础篇\n第 1 章 欢迎来到 Shader 的世界\n第 2 章 渲染流水线\n第 3 章 Unity Shader 基础\n第 4 章 学习 Shader 所需的数学基础\n初级篇\n第 5 章 开始 Unity Shader 学习之旅\n用假颜色对Unity Shader进行调试，并且使用颜色拾取器来查看调试信息\nChapter5-FalseColor.shader ColorPicker.cs\n第 6 章 Unity 中的基础光照\n逐顶点漫反射光照、逐像素漫反射光照、半兰伯特光照的对比效果\nChapter6-DiffuseVertexLevel.shader Chapter6-DiffusePixelLevel.shader Chapter6-HalfLambert.shader\n逐顶点的高光反射光照、逐像素的高光反射光照（Phong光照模型）和Blinn-Phong高光反射光照的对比结果\nChapter6-SpecularVertexLevel.shader Chapter6-SpecularPixelLevel.shader Chapter6-BlinnPhong.shader Chapter6-BlinnPhongUseBuildInFunction.shader（与上面的相同效果）\n第 7 章 基础纹理\n7.1 单张纹理\n用一张纹理来替代物体的漫反射颜色，使用 Blinn-Phong光照模型计算光照。\nChapter7-SingleTexture.shader Scene71.unity\n纹理的属性：Tilling & Offset\nSource: https://github.com/eangulee/UnityShaderBeginner/\n\n**unity 2020 怎么写shader使其接受光照?（发布时间：2020-11-20 07:18:42）** (2020-11-20)\nHello . 大家好\n我是手残的麦田，为什么手残，周五守望炸鱼反被炸了\n今天给大家带来一篇乱入\n太惨了，写了一半电脑关机忘了保存了，只好夜里又肝了一遍。\n再来一次。\n这次带来了一份Shader教程，面向有意了解Shader模块的美术端的同学，基于ASE，不包含程序优化，所以本文不会涉及很多程序内容，只介绍一些简单的Shader编写基础。\n首先，我准备了模型和贴图，网上下载的，链接在最下面。\n我们将模型贴图文件导入Unity，取消材质动画摄像机等导入勾选。并且在Scene内搭建一个实时平行光源和一个点光照暗面。\n光照强度为1.25\n新建一个Amplify Shader(基于表面着色器)和一个材质球，然后双击Shader弹出ASE编辑器。\n左侧设置如下图，\nShader Name设置你的名称和路径，斜杠代表子目录，(脚本内原理相同)\nLight model选择自定义灯光模型\n剔除背部\n前向渲染\nShader LOD 200\nRender type/Queue为不透明的几何体\n以上就是我们的Tags标签设置，我们来看一下代码\n代码内引用了一些带有\n.cginc\n的内置文件，如果您想看这些文件，可在Unity官网下载源码包，找到这些文件。看看在辅助代码中到做了啥。\n除此以外，我还勾选了Outline描边，同样的，我们来看看Tags\n外描边剔除了正面(即摄像机正对的面)，并且定义了一堆不要的东西。\n好，正文开始\n我们首先新建一个World normal(世界空间法线)和World Space Light Dir(世界空间光)节点，再新建一个Texture sample节点，引入我们的法线贴图(\nSource: https://blog.csdn.net/weixin_39531780/article/details/111165554\n",
+    "web_references": [
+      {
+        "content": "这个系列来源于书籍冯乐乐老师的《unity shader 入门精要》， 参考的代码库https://github.com/candycat1992/UnityShadersBook” 我自己跟着写了一遍代码，并在代码块里给shader代码加上了比较详细的注释 更为仔细的解释和unity shader原理和知识书里都有，本blog不做详细解释，推荐买书来看。 本项目的所有代码在\nhttps://github.com/takashiwangbh/Unity-shader-effect-reproduction/tree/main\n介绍\n在游戏或者动画作品中，有时候会用到一些非真实感的渲染方法来渲染游戏画面，使得场景有一种特殊的风格，这里会使用一个模型来做两种风格（卡通风格和素描风格），shader挂在材质上，然后将材质使用在模型的材质上就可以了，shader代码的解释会写在代码中。这些风格需要使用一些纹理。例如素描风格，就需要几张不同的铅笔的画痕来模仿素描中的感觉，shader只是能够渲染，但是想要实现想要的风格，纹理也是很重要的一部分。\n卡通风格渲染shader code\n/\n这个 Shader 实现了卡通渲染（Toon Shading）效果，结合边缘描边与简化的光照模型，为模型提供一种独特的卡通风格。\n主要功能：\n1. 描边效果：\n- 利用顶点偏移的方式实现模型的边缘描边。\n- 支持自定义描边颜色和宽度。\n2. 卡通光照：\n- 使用 Ramp 纹理控制光照的渐变，实现分段的卡通风格光照。\n- 包含环境光、漫反射光、以及简单的高光处理。\n3. 参数可控：\n- 支持通过",
+        "icon": "https://sfile.chatglm.cn/searchImage/blog_csdn_net_icon_new.jpg",
+        "link": "https://blog.csdn.net/HZBCc/article/details/147324291",
+        "media": "CSDN博客",
+        "publish_date": "2025-04-18",
+        "refer": "ref_1",
+        "title": "unity shader效果教程附详细代码（发布时间：2025-04-18 11:25:12）"
+      },
+      {
+        "content": "本文还有配套的精品资源，点击获取\n简介：Unity UGUI是Unity引擎的内置UI系统，用于创建2D和3D用户界面。流光特效在游戏开发中用来增强视觉体验。本资源包含流光特效Shader源码，教授开发者如何实现自定义UI元素的动态效果。源码基于GLSL的Surface Shader编写，开发者可学习如何运用时间变量、颜色渐变和UV坐标操作来实现流动效果，并能通过调整Shader参数来定制特效。源码学习涵盖了Unity基础、Shader基础、UGUI系统、Shader Graph以及Material与Shader的关联。掌握流光特效Shader，对于提升游戏界面视觉品质和玩家沉浸感有着重要作用。\n1. Unity UGUI介绍与应用\n1.1 UGUI概述\nUnity UGUI（Unified Graphics Interface）是Unity游戏引擎中的用户界面系统。它的出现将游戏UI开发推向了更加高效、直观和强大的层面。UGUI通过使用Canvas作为UI组件的容器，配合基础的UI元素如Image、Text、Button和Panel等，构建出功能丰富、响应式的用户界面。\n1.2 UGUI的应用场景\nUGUI广泛应用于游戏界面构建、HUD（Head-Up Display）设计、菜单系统、弹窗提示等交互元素。与传统的Immediate Mode GUI相比，UGUI通过保留屏幕空间（Screen Space）或世界空间（World Space）的属性，使得UI元素的布局和交互更为灵活。\n1.3 UGUI的设计原则\n在设计UGUI时，开发者需要考虑如何合理组",
+        "icon": "https://sfile.chatglm.cn/searchImage/blog_csdn_net_icon_new.jpg",
+        "link": "https://blog.csdn.net/weixin_42527589/article/details/143259964",
+        "media": "CSDN博客",
+        "publish_date": "2024-10-25",
+        "refer": "ref_2",
+        "title": "Unity UGUI流光特效Shader实战教程（发布时间：2024-10-25 11:39:43）"
+      },
+      {
+        "content": "渐变纹理可用来控制漫反射光照效果。\n// Upgrade NOTE: replaced 'Object2World' with 'unityObjectToWorld'\n光照模式注意要设置为Forward(菜单Edit->Project Settings->Player->OtherSettings->Rending Path->Forward) Shader \"LT/RampTexture\"\nColor(\"Color Tint\",Color) (1,1,1,1) RampTex(\"Ramp Tex\",2D) \"white\" //渐变纹理 Specular(\"Specular\",Color) (1,1,1,1) Gloss(\"Gloss\",Range(8.0,256)) 20 SubShader\nTags \"LightMode\"\"ForwardBase\" //定义该Pass在光照流水线中的角色光照模式注意要设置为Forward CGPROGRAM #pragma vertex vert #pragma fragment frag #include \"UnityCG.cginc\" #include \"Lighting.cginc\" fixed4 Color; sampler2D RampTex; fixed4 Specular; float4 RampTexST; float Gloss; struct appdata\nfloat4 vertex : POSITION; float2 uv : TEXCOORD0; float3 normal : N",
+        "icon": "https://sfile.chatglm.cn/searchImage/blog_csdn_net_icon_new.jpg",
+        "link": "https://blog.csdn.net/u013354943/article/details/52788010",
+        "media": "CSDN博客",
+        "publish_date": "",
+        "refer": "ref_3",
+        "title": "《unity shader入门精要》学习笔记"
+      },
+      {
+        "content": "本系列文章由AimarJohnny编写，欢迎转载，转载请标明出处，谢谢。\nhttp://blog.csdn.net/lzhq1982/article/details/77659332\n从上一篇我们看到纹理不只是为了定义颜色，还可以存储很多表面属性，这一篇说的渐变纹理就是其中一种，比如用渐变纹理控制漫反射效果。前面光照篇里我们介绍过漫反射，是用法线和光照方向的点积与材质的反射率相乘得到。这里我们可以用渐变纹理更加灵活的控制光照。\n下面是本篇的效果图：\n可以看出，用不同的渐变纹理可以自由控制物体漫反射效果，左边是用一张从紫色到浅黄色的渐变纹理的效果；中间比较通用，是和《军团要塞2》类似，从黑色向浅灰色渐变，中间分界线微微发红。右侧常用于卡通风格的渲染，这种色调通常是突变的，模拟卡通的阴影色块。\n先上代码：\nShader \"CustomShader/Texture/RampShader\"\nProperties\nRampTex (\"Texture\", 2D) \"white\"\nColor (\"Color Tint\", Color) (1, 1, 1, 1)\nSpecular (\"Specular\", Color) (1, 1, 1, 1)\nGloss (\"Gloss\", Range(8.0, 256)) 20\nSubShader\nPass\nTags \"LightMode\" \"ForwardBase\"\nCGPROGRAM\n#pragma vertex vert\n#pragma fragment frag\n#include \"Lighting.cginc\"\nsampler2D RampTe",
+        "icon": "https://sfile.chatglm.cn/searchImage/blog_csdn_net_icon_new.jpg",
+        "link": "https://blog.csdn.net/lzhq1982/article/details/77659332",
+        "media": "CSDN博客",
+        "publish_date": "2017-09-03",
+        "refer": "ref_4",
+        "title": "Unity Shader入门精要笔记（十四）：渐变纹理（发布时间：2017-09-03 22:46:20）"
+      },
+      {
+        "content": "Unity Shader 学习（一）：初识ShaderLab -- 以Unlit Shader”模板为例 01\n前言\n一、创建Shader\n二、数据类型\n1. 属性数据类型\n2. 着色器数据类型（Cg/HLSL）\n三、语义\n1. 语义的作用以及需要语义的时机\n1. 顶点着色器输入\n2. 片元着色器输入\n3. 片元着色器输出\n四、CGInclude文件、预处理指令与宏\n前言\n阅读本文前需要对渲染流程有简单了解，并且要知道Unity ShaderLab、Cg/HLSL大概是什么，它们并不是一回事。 然后，看什么教程都不如直接看官方文档：\nShaderLab - Unity手册\nHLSL参考\n一、创建Shader\n首先创建一个 Unlit Shader 模板（Project 窗口，右键 Create Shader Unlit Shader） 直接上代码：\nShader \"Unlit/UnlitShader\"\nProperties\nMainTex (\"Texture\", 2D) \"white\"\nSubShader\nTags\n\"RenderType\"\"Opaque\"\nLOD 100\nPass\nCGPROGRAM\n#pragma vertex vert\n#pragma fragment frag\n// make fog work\n#pragma multicompilefog\n#include \"UnityCG.cginc\"\nstruct appdata\nfloat4 vertex : POSITION;\nfloat2 uv : TEXCOORD0;\n;\nstruct v2f\nfloat2 uv : TEXCOORD0;\nU",
+        "icon": "https://sfile.chatglm.cn/searchImage/blog_csdn_net_icon_new.jpg",
+        "link": "https://blog.csdn.net/qq_44195770/article/details/134654561",
+        "media": "CSDN博客",
+        "publish_date": "2023-12-14",
+        "refer": "ref_5",
+        "title": "Unity Shader 学习（一）：初识ShaderLab（发布时间：2023-12-14 21:04:08）"
+      },
+      {
+        "content": "前言：\n上篇文章中我们大致解释了什么是Shader，以及使用哪些语言可以进行Shader程序的编写等，那我接下来要做的就是开始在Unity引擎的环境下，编写一些Shader并查看是否达到预想的效果。\n在Unity中定义了ShaderLab来组织Shader的内容，针对不同平台进行编译。\n一、第一个Shader：\nShader \"Custom/FirstShader\" Properties Color(\"Main Color\", Color) (0, 0, 0, 1) SubShader Pass Color[Color] FallBack \"Diffuse\"\n1.在当前场景中创建一个Plane面片，用于展示Shader着色后的效果：\n2.绑上我们新创建的Shader文件，但先不设置Color属性的值，使用默认缺省值进行着色，结果如下：\n3.通过点击颜色选择框选中某个颜色值，得到新的着色结果为：\n二、代码解析：\n以上是一个Shader程序，以及其应用于Plane上进行着色的效果，我们可以从中看出Shader编程的一些特征：\n1、在Unity中Shader程序文件以.shader为后缀：\n2、Shader程序都是以关键字Shader”开始的，后面紧接着的是Shader的命名（引用名），可以像目录一样，但是Shader的文件名和引用名不必一样。我们可以尝试在需要绑定Shader的组件上找到刚才创建的Shader，不难发现Shader的索引目录与命名对应：\n3、Properties：\nProperties中用来声明一些可用于可视化配置的属性，一般声明的格式为：\nname(\"",
+        "icon": "",
+        "link": "https://blog.51cto.com/u_16213595/11731336",
+        "media": "",
+        "publish_date": "2024-08-13",
+        "refer": "ref_6",
+        "title": "Unity 图片做shader unity shader 教程（发布时间：2024-08-13 11:53:22）"
+      },
+      {
+        "content": "一、文章简介\n在看完关于Unity Shader的书还有听课之后，发现学习了很多理论知识。但是对于自己写还差点距离，感觉没有很多的思路，此文章写一些简单的案例，方便刚入门的去理解。可以直接上手，写Shader。\n二、案例\n1、渐变材质\n首先看一下效果：\n很明显，我们的第一个效果就是渐变，这是挂载到一个球体上的，接下来我们就看代码。\nShader \"Custom/Colorful\"\nSubShader\npass\nCGPROGRAM\n#pragma vertex vert\n#pragma fragment frag\n#include\"UnityCG.cginc\"\nstruct v2f\nfloat4 vertex : POSITION;\nfloat3 normal : NORMAL;\n;\nv2f vert(v2f v)\nv.vertex UnityObjectToClipPos(v.vertex);\nreturn v;\nfixed4 frag(v2f o) : SVTarget\nfloat3 n o.normal / 2 float3(0.5,0.5,0.5);\nreturn float4(n,1);\nENDCG\n我们都知道，每个顶点都有一条法线，对于球体来说，法线就会很奇妙，每个顶点的法线都不同，而且会以一个渐变的方式偏移。\n我们会发现，球体上法线的偏移，相邻的顶点法线偏移很小，那么我们这个渐变就是基于法线的变换的。所以上边代码中，在顶点函数（Vertex）中，我们进行顶点坐标的转换。在片元函数（Fragment）中，我们定义了一个变量n，进行接收对法线的操作数据。那么就会有一个疑惑点了，那",
+        "icon": "https://sfile.chatglm.cn/searchImage/blog_csdn_net_icon_new.jpg",
+        "link": "https://blog.csdn.net/Leh1ng/article/details/144018792",
+        "media": "CSDN博客",
+        "publish_date": "2024-11-25",
+        "refer": "ref_7",
+        "title": "UnityShader——简单案例（发布时间：2024-11-25 10:11:05）"
+      },
+      {
+        "content": "学习Unity的Shader Graph的基础知识，并从初级到中级水平自信前进。理解内置渲染管线、URP和HDRP渲染管线理解着色器和Shader Graph在Unity中创建2D Shader Graph在Unity中创建3D Shader Graph学习实时视觉效果（Real-Time VFX）Unity：基础知识。Blender：基础知识。Photoshop：基础知识。大家好，我是Ramez Al Tabbaa，是Steam上AvoCuddle游戏的开发者，也是Binary Lunar YouTube频道的联合创始人，拥有超过1万名快乐订阅者，并提供70多个免费教程；我在Shader Graph方面拥有三年的经验，并将我的专业知识整合到了这个为时6小时的课程中。如果你想节省时间、精力和金钱，这门课程绝对适合你。进入Shader Graph的世界，让你的游戏视觉效果栩栩如生；这门课程将带领你从初级到中级水平的Shader Graph和VFX，步伐稳健。以下是你可以从这门课程中期待的内容概述；你将学习Unity引擎中着色器和渲染管线背后的核心概念，并通过以下主题涵盖了Shader Graph中最常用的节点，这些主题的复杂性会随着课程的进行而增加：2D火球投射物Shader Graph2D风吹植被Shader Graph2D溶解Shader Graph2D像素艺术Shader Graph标准3D光照Shader Graph3D风格化水体Shader3D半色调Shader Graph次表面散射（SSS）Shader Graph三轴投影Sha",
+        "icon": "https://sfile.chatglm.cn/searchImage/mp_weixin_qq_com_icon_new.jpg",
+        "link": "http://mp.weixin.qq.com/s?__biz=MzI0NjI1OTE0Nw==&mid=2247486951&idx=1&sn=86aedcf142b852d22e0e936df3d73a1d",
+        "media": "微信公众平台",
+        "publish_date": "",
+        "refer": "ref_8",
+        "title": "The Ultimate 2D&amp;3D Shader Graph VFX Unity"
+      },
+      {
+        "content": "读《Unity Shader 入门精要》\n基础篇\n第 1 章 欢迎来到 Shader 的世界\n第 2 章 渲染流水线\n第 3 章 Unity Shader 基础\n第 4 章 学习 Shader 所需的数学基础\n初级篇\n第 5 章 开始 Unity Shader 学习之旅\n用假颜色对Unity Shader进行调试，并且使用颜色拾取器来查看调试信息\nChapter5-FalseColor.shader ColorPicker.cs\n第 6 章 Unity 中的基础光照\n逐顶点漫反射光照、逐像素漫反射光照、半兰伯特光照的对比效果\nChapter6-DiffuseVertexLevel.shader Chapter6-DiffusePixelLevel.shader Chapter6-HalfLambert.shader\n逐顶点的高光反射光照、逐像素的高光反射光照（Phong光照模型）和Blinn-Phong高光反射光照的对比结果\nChapter6-SpecularVertexLevel.shader Chapter6-SpecularPixelLevel.shader Chapter6-BlinnPhong.shader Chapter6-BlinnPhongUseBuildInFunction.shader（与上面的相同效果）\n第 7 章 基础纹理\n7.1 单张纹理\n用一张纹理来替代物体的漫反射颜色，使用 Blinn-Phong光照模型计算光照。\nChapter7-SingleTexture.shader Scene71.unity\n纹理的属性：Tilling & Offset",
+        "icon": "https://sfile.chatglm.cn/searchImage/github_com_icon_new.jpg",
+        "link": "https://github.com/eangulee/UnityShaderBeginner/",
+        "media": "Github",
+        "publish_date": "",
+        "refer": "ref_9",
+        "title": "eangulee/UnityShaderBeginner: unity shader 入门精要 随书源码"
+      },
+      {
+        "content": "Hello . 大家好\n我是手残的麦田，为什么手残，周五守望炸鱼反被炸了\n今天给大家带来一篇乱入\n太惨了，写了一半电脑关机忘了保存了，只好夜里又肝了一遍。\n再来一次。\n这次带来了一份Shader教程，面向有意了解Shader模块的美术端的同学，基于ASE，不包含程序优化，所以本文不会涉及很多程序内容，只介绍一些简单的Shader编写基础。\n首先，我准备了模型和贴图，网上下载的，链接在最下面。\n我们将模型贴图文件导入Unity，取消材质动画摄像机等导入勾选。并且在Scene内搭建一个实时平行光源和一个点光照暗面。\n光照强度为1.25\n新建一个Amplify Shader(基于表面着色器)和一个材质球，然后双击Shader弹出ASE编辑器。\n左侧设置如下图，\nShader Name设置你的名称和路径，斜杠代表子目录，(脚本内原理相同)\nLight model选择自定义灯光模型\n剔除背部\n前向渲染\nShader LOD 200\nRender type/Queue为不透明的几何体\n以上就是我们的Tags标签设置，我们来看一下代码\n代码内引用了一些带有\n.cginc\n的内置文件，如果您想看这些文件，可在Unity官网下载源码包，找到这些文件。看看在辅助代码中到做了啥。\n除此以外，我还勾选了Outline描边，同样的，我们来看看Tags\n外描边剔除了正面(即摄像机正对的面)，并且定义了一堆不要的东西。\n好，正文开始\n我们首先新建一个World normal(世界空间法线)和World Space Light Dir(世界空间光)节点，再新建一个Texture sample节点，引入我们的法线贴图(",
+        "icon": "https://sfile.chatglm.cn/searchImage/blog_csdn_net_icon_new.jpg",
+        "link": "https://blog.csdn.net/weixin_39531780/article/details/111165554",
+        "media": "CSDN博客",
+        "publish_date": "2020-11-20",
+        "refer": "ref_10",
+        "title": "unity 2020 怎么写shader使其接受光照?（发布时间：2020-11-20 07:18:42）"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "unity 立体光柱 上升 渐变 shader 教程",
+        "query": "unity 立体 光柱 上升 渐变 shader 教程"
+      }
+    ],
+    "latency_seconds": 1.38,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "HDRP volumetric light shaft cylinder mesh additive cheap",
+    "content": "**1/10成本、Opus 4.7级表现,Cursor甩出了性价比之王Composer 2.5** (2026-05-19)\n<p><img src='http://qqpublic.qpic.cn/qq_public/0/28-2394196012-852D69D6B4C6388AD910EA9FE0694493/0?fmt=png&size=4&h=100&w=2340&ppv=1' data-aigc-mark='0'/></p><p>机器之心编辑部</p><p>｢以 1/10 的成本,性能几乎追平 Claude \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_6716a0bb8b492152\n\n**无标题** (2026-06-03)\n$ 4 . 11 $44.28 -90% 3.8 Neon LED Rope Lights, LED Lights For Bedroom Flexible LED Light Strip With Remote And APP Control RGB Lighting Strip $ 40 . 81 $154.48 -73% 4.7 100 ft Music Sync RGB LED \nSource: https://ar.aliexpress.com/promotion/promotion_led-kolorowy-na-pilota-promotion.html\n\n**秦皇岛新远船舶机械设备有限公司** (2022-02-11)\n\"秦皇岛新远船舶机械设备有限公司是一家致力于为船舶行业提供系统和一站式服务的公司｡基本简介秦皇岛新远船舶机械设备有限公司坐落于世界第一大煤炭输出港--秦皇岛, 成立于1995年,2007年公司强势入驻秦皇岛市经济技术开发区,占地面积20亩, 拥有自己的办公大楼及三个总面积达8,000平米的备件仓库,公司现有员工68人, \nSource: https://baike.baidu.com/item/%E7%A7%A6%E7%9A%87%E5%B2%9B%E6%96%B0%E8%BF%9C%E8%88%B9%E8%88%B6%E6%9C%BA%E6%A2%B0%E8%AE%BE%E5%A4%87%E6%9C%89%E9%99%90%E5%85%AC%E5%8F%B8/8131050\n\n**Braided Ultra HD 8K 4K DisplayPort Cable DP 1.4 8K@60Hz 4K@144Hz HDCP HDR 3D AU  eBay** (2023-07-06)\n第1张/共10 张 Braided Ultra HD 8K 4K DisplayPort Cable DP 1.4 8K@60Hz 4K@144Hz HDCP HDR 3D AU AU $13.00 约 61.03元 物品状况: 全新 全新 Plug Style 数量: 剩余数量有限 / 已售 12 件 Oops! Looks like we're having trouble \nSource: https://www.ebay.com/itm/294122304466?_ul=CN\n\n**密封术语** (2021-09-10)\n\"密封行业专用术语｡有的是全名,有的是简称,这样既简单方便,在密封行业里大家又都能理解｡基本内容密封件行业专用术语 中文名外文名(English) 垫片gasket 泄漏 leakage 泄漏率leakage seal 静密封static seal 密封力sealing force 密封比压sealing specific pressure 自紧效应self seal effect \nSource: https://baike.baidu.com/item/%E5%AF%86%E5%B0%81%E6%9C%AF%E8%AF%AD/19955524\n\n**L1HZ-4090200000000采购价格-Lumileds(亮锐)其它显示器件元器件L1HZ-4090200000000规格参数-百能云芯** (2026-04-20)\n全球现货 · 正品保障 · 闪电发货 登录查看会员价格,新人再送888元 数据手册 阶梯 美金 含税 关税 优惠券 起订量: 20000 倍数: 4000 品牌: Lumileds(亮锐) 分类: 其它显示器件 封装: 0909 描述: High Flux Density LED 展开 最小包装量: 4000 商品L1HZ-4090200000000规格参数 商品型号 : \nSource: https://www.icdeal.com/product/116968619347574.html\n\n**Ledger国内授权商(靖匠界)介绍:靖匠界正式获得Ledger SAS官方授权** (2026-06-01)\n<p>近日,靖匠界科技有限公司正式获得Ledger SAS官方授权,成为Ledger SAS国内授权商的核心主体｡这一授权标志着Ledger在中国市场的服务体系进一步规范与落地,靖匠界作为授权主体,将以专业能力全面承接销售､推广与售后支持,为中国用户提供更清晰､更可靠的正品保障通道｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_9626a1cf1a102452\n\n**孙作宇** (2023-01-04)\n\"孙作宇,男,博士,北京交通大学机械与电子控制工程学院动力与能源工程系副教授｡个人经历2008年-2013年,北京理工大学,机械与车辆学院,动力机械及工程专业,博士; 2006年-2008年,北京理工大学,机械与车辆学院,热能工程专业,     硕士; 2002年-2006年,北京理工大学,机械与车辆学院,热能与动力工程专业,学士｡ \nSource: https://baike.baidu.com/item/%E5%AD%99%E4%BD%9C%E5%AE%87/49748057\n\n**Braided 1M HDMI v2.1 Cable 8K@60Hz(4:4:4, Dolby Vision, HDR10, E-ARC, HDCP 2.3)  eBay** (2024-11-07)\n第1张/共5张 图片库 Braided 1M HDMI v2.1 Cable 8K@60Hz(4:4:4, Dolby Vision, HDR10, E-ARC, HDCP 2.3) AU $24.99 约 113.53元 物品状况: 全新 全新 全新 A brand-new, unused, unopened, undamaged item in its original packaging \nSource: https://www.ebay.com/itm/114780948749?hash=item1ab97a490d:g:uBoAAOSweYxghSFQ\n\n**Ledger 中国销售渠道说明:广州馨潇贸易有限公司官方直营渠道公示** (2026-05-11)\n<p>随着数字资产用户数量不断增长,硬件钱包已经成为越来越多用户进行资产自主管理的重要工具｡Ledger 作为全球知名硬件钱包品牌,凭借安全芯片､离线私钥管理､多币种支持等优势,受到众多数字资产用户的关注｡</p><p>为了让中国大陆用户能够更加便捷､放心地购买 Ledger 系列硬件钱包产品,广州馨潇贸易有限公司现就 Ledger \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_7356a01490d52152\n",
+    "web_references": [
+      {
+        "content": "<p><img src='http://qqpublic.qpic.cn/qq_public/0/28-2394196012-852D69D6B4C6388AD910EA9FE0694493/0?fmt=png&size=4&h=100&w=2340&ppv=1' data-aigc-mark='0'/></p><p>机器之心编辑部</p><p>｢以 1/10 的成本,性能几乎追平 Claude ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_6716a0bb8b492152",
+        "media": "企鹅号",
+        "publish_date": "2026-05-19",
+        "refer": "ref_1",
+        "title": "1/10成本、Opus 4.7级表现,Cursor甩出了性价比之王Composer 2.5"
+      },
+      {
+        "content": "$ 4 . 11 $44.28 -90% 3.8 Neon LED Rope Lights, LED Lights For Bedroom Flexible LED Light Strip With Remote And APP Control RGB Lighting Strip $ 40 . 81 $154.48 -73% 4.7 100 ft Music Sync RGB LED ",
+        "icon": "",
+        "link": "https://ar.aliexpress.com/promotion/promotion_led-kolorowy-na-pilota-promotion.html",
+        "media": "",
+        "publish_date": "2026-06-03",
+        "refer": "ref_2",
+        "title": "无标题"
+      },
+      {
+        "content": "\"秦皇岛新远船舶机械设备有限公司是一家致力于为船舶行业提供系统和一站式服务的公司｡基本简介秦皇岛新远船舶机械设备有限公司坐落于世界第一大煤炭输出港--秦皇岛, 成立于1995年,2007年公司强势入驻秦皇岛市经济技术开发区,占地面积20亩, 拥有自己的办公大楼及三个总面积达8,000平米的备件仓库,公司现有员工68人, ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E7%A7%A6%E7%9A%87%E5%B2%9B%E6%96%B0%E8%BF%9C%E8%88%B9%E8%88%B6%E6%9C%BA%E6%A2%B0%E8%AE%BE%E5%A4%87%E6%9C%89%E9%99%90%E5%85%AC%E5%8F%B8/8131050",
+        "media": "百度百科",
+        "publish_date": "2022-02-11",
+        "refer": "ref_3",
+        "title": "秦皇岛新远船舶机械设备有限公司"
+      },
+      {
+        "content": "第1张/共10 张 Braided Ultra HD 8K 4K DisplayPort Cable DP 1.4 8K@60Hz 4K@144Hz HDCP HDR 3D AU AU $13.00 约 61.03元 物品状况: 全新 全新 Plug Style 数量: 剩余数量有限 / 已售 12 件 Oops! Looks like we're having trouble ",
+        "icon": "",
+        "link": "https://www.ebay.com/itm/294122304466?_ul=CN",
+        "media": "",
+        "publish_date": "2023-07-06",
+        "refer": "ref_4",
+        "title": "Braided Ultra HD 8K 4K DisplayPort Cable DP 1.4 8K@60Hz 4K@144Hz HDCP HDR 3D AU  eBay"
+      },
+      {
+        "content": "\"密封行业专用术语｡有的是全名,有的是简称,这样既简单方便,在密封行业里大家又都能理解｡基本内容密封件行业专用术语 中文名外文名(English) 垫片gasket 泄漏 leakage 泄漏率leakage seal 静密封static seal 密封力sealing force 密封比压sealing specific pressure 自紧效应self seal effect ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E5%AF%86%E5%B0%81%E6%9C%AF%E8%AF%AD/19955524",
+        "media": "百度百科",
+        "publish_date": "2021-09-10",
+        "refer": "ref_5",
+        "title": "密封术语"
+      },
+      {
+        "content": "全球现货 · 正品保障 · 闪电发货 登录查看会员价格,新人再送888元 数据手册 阶梯 美金 含税 关税 优惠券 起订量: 20000 倍数: 4000 品牌: Lumileds(亮锐) 分类: 其它显示器件 封装: 0909 描述: High Flux Density LED 展开 最小包装量: 4000 商品L1HZ-4090200000000规格参数 商品型号 : ",
+        "icon": "",
+        "link": "https://www.icdeal.com/product/116968619347574.html",
+        "media": "百能云芯",
+        "publish_date": "2026-04-20",
+        "refer": "ref_6",
+        "title": "L1HZ-4090200000000采购价格-Lumileds(亮锐)其它显示器件元器件L1HZ-4090200000000规格参数-百能云芯"
+      },
+      {
+        "content": "<p>近日,靖匠界科技有限公司正式获得Ledger SAS官方授权,成为Ledger SAS国内授权商的核心主体｡这一授权标志着Ledger在中国市场的服务体系进一步规范与落地,靖匠界作为授权主体,将以专业能力全面承接销售､推广与售后支持,为中国用户提供更清晰､更可靠的正品保障通道｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_9626a1cf1a102452",
+        "media": "企鹅号",
+        "publish_date": "2026-06-01",
+        "refer": "ref_7",
+        "title": "Ledger国内授权商(靖匠界)介绍:靖匠界正式获得Ledger SAS官方授权"
+      },
+      {
+        "content": "\"孙作宇,男,博士,北京交通大学机械与电子控制工程学院动力与能源工程系副教授｡个人经历2008年-2013年,北京理工大学,机械与车辆学院,动力机械及工程专业,博士; 2006年-2008年,北京理工大学,机械与车辆学院,热能工程专业,     硕士; 2002年-2006年,北京理工大学,机械与车辆学院,热能与动力工程专业,学士｡ ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E5%AD%99%E4%BD%9C%E5%AE%87/49748057",
+        "media": "百度百科",
+        "publish_date": "2023-01-04",
+        "refer": "ref_8",
+        "title": "孙作宇"
+      },
+      {
+        "content": "第1张/共5张 图片库 Braided 1M HDMI v2.1 Cable 8K@60Hz(4:4:4, Dolby Vision, HDR10, E-ARC, HDCP 2.3) AU $24.99 约 113.53元 物品状况: 全新 全新 全新 A brand-new, unused, unopened, undamaged item in its original packaging ",
+        "icon": "",
+        "link": "https://www.ebay.com/itm/114780948749?hash=item1ab97a490d:g:uBoAAOSweYxghSFQ",
+        "media": "",
+        "publish_date": "2024-11-07",
+        "refer": "ref_9",
+        "title": "Braided 1M HDMI v2.1 Cable 8K@60Hz(4:4:4, Dolby Vision, HDR10, E-ARC, HDCP 2.3)  eBay"
+      },
+      {
+        "content": "<p>随着数字资产用户数量不断增长,硬件钱包已经成为越来越多用户进行资产自主管理的重要工具｡Ledger 作为全球知名硬件钱包品牌,凭借安全芯片､离线私钥管理､多币种支持等优势,受到众多数字资产用户的关注｡</p><p>为了让中国大陆用户能够更加便捷､放心地购买 Ledger 系列硬件钱包产品,广州馨潇贸易有限公司现就 Ledger ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_7356a01490d52152",
+        "media": "企鹅号",
+        "publish_date": "2026-05-11",
+        "refer": "ref_10",
+        "title": "Ledger 中国销售渠道说明:广州馨潇贸易有限公司官方直营渠道公示"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "hdrp volumetric light shaft cylinder mesh additive 价格",
+        "query": "HDRP volumetric light shaft cylinder mesh additive cheap"
+      }
+    ],
+    "latency_seconds": 2.04,
+    "model": "search-pro",
+    "mode": "tools"
+  }
+]

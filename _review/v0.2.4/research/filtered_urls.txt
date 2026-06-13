@@ -1,0 +1,103 @@
+Genshin Impact elemental energy ribbon trail shader vertex h	第一天 - TrailRenderer属性 复习_trailrender forcenomotion_Monster Shen的博客-CSDN博客	https://blog.csdn.net/weixin_41706657/article/details/90599548
+Hollow Knight soul trail spirit ribbon particle effect Unity	【Unity UGUI】粒子特效插件:Particle Effect For UGUI_particleeffectforugui-CSDN博客	https://blog.csdn.net/UnityBoy/article/details/140795902
+Unity URP volumetric light shaft beam shader vertex displace	UnityShader : 极光星空效果案例_unity怎么制作星空-CSDN博客	https://blog.csdn.net/saitoDeng/article/details/131705773
+Unity URP volumetric light shaft beam shader vertex displace	【Unity URP】源码梳理(七):RenderFeature的使用与Pass所需要的流程 - 知乎	https://zhuanlan.zhihu.com/p/715185773
+Unity URP volumetric light shaft beam shader vertex displace	LightProbeUsage - Unity 脚本 API	https://docs.unity.cn/cn/2018.1/ScriptReference/Rendering.LightProbeUsage.html
+Unity URP volumetric light shaft beam shader vertex displace	unity hlsl 8 多光源urp管线实现_知乎	https://zhuanlan.zhihu.com/p/523729184
+Unity URP volumetric light shaft beam shader vertex displace	在Unity URP中实现Real-Time Volumetric Clouds(Part 1) - 知乎	https://zhuanlan.zhihu.com/p/442683738
+Unity URP volumetric light shaft beam shader vertex displace	Unity Shader基础光照详解(含推导) - 知乎	https://zhuanlan.zhihu.com/p/440581400
+Unity URP volumetric light shaft beam shader vertex displace	UnityShader 高光反射效果_unity彩色反光-CSDN博客	https://blog.csdn.net/fanstasic/article/details/112293869
+Unity URP volumetric light shaft beam shader vertex displace	Unity URP Shader 与 HLSL 自学笔记二 Lambert光照_知乎	https://zhuanlan.zhihu.com/p/357856010
+Unity URP volumetric light shaft beam shader vertex displace	Unity Shader 实现 X光效果-CSDN博客	https://blog.csdn.net/u012871784/article/details/49475049
+Unreal Niagara ribbon emitter advanced energy beam tutorial	Unreal Niagara粒子入门1_虚幻niagara-CSDN博客	https://blog.csdn.net/grayrail/article/details/130805658
+Unreal Niagara ribbon emitter advanced energy beam tutorial	Unreal Niagara制作沿样条运动的粒子_ue 粒子系统沿spline移动-CSDN博客	https://blog.csdn.net/grayrail/article/details/147089171
+Unreal Niagara ribbon emitter advanced energy beam tutorial	【UE Niagara 条带粒子系列】02-StaticBeam_niagara条带-CSDN博客	https://blog.csdn.net/ChaoChao66666/article/details/135632172
+Unreal Niagara ribbon emitter advanced energy beam tutorial	Unreal粒子Niagara_暮志未晚NAN的博客-CSDN博客	https://blog.csdn.net/qq_30100043/category_12915434.html
+Unreal Niagara ribbon emitter advanced energy beam tutorial	Unreal Niagara粒子入门2_蓝图修改niagarage-CSDN博客	https://blog.csdn.net/grayrail/article/details/130846152
+Unreal Niagara ribbon emitter advanced energy beam tutorial	随笔档案「2021年11月29日」:Unreal常用性能调试辅助工具-state commands ... - SiNanhong - 博客园	https://www.cnblogs.com/hhs1998/p/archive/2021/11/29
+Unreal Niagara ribbon emitter advanced energy beam tutorial	UnrealEngine:粒子系统与特效制作_2024-07-13_00-15-07.Tex_unreal 3d粒子引擎-CSDN博客	https://blog.csdn.net/chenjj4003/article/details/146407145
+Tilt Brush Gravity Sketch ribbon brush stroke 3D mesh genera	VRお絵描きソフト『Tilt Brush』、3DCG作品をSketchfabに共有可能に - Mogura VR News	https://www.moguravr.com/tilt-brush-sketchfab/
+Unity HDRP volumetric fog god ray light shaft AR mobile perf	Unity HDRP Volume 组件解析 (1)_知乎	https://zhuanlan.zhihu.com/p/72615352
+Unity HDRP volumetric fog god ray light shaft AR mobile perf	Unity Shader学习:体积光(Volumetric Light)_知乎	https://zhuanlan.zhihu.com/p/425495211
+Unity HDRP volumetric fog god ray light shaft AR mobile perf	Device.SystemInfo-hdrDisplaySupportFlags - Unity 脚本 API	https://docs.unity3d.com/cn/2023.2/ScriptReference/Device.SystemInfo-hdrDisplaySupportFlags.html
+Unity HDRP volumetric fog god ray light shaft AR mobile perf	【UnityShader】Volumetric Light 体积光(8) - 知乎	https://zhuanlan.zhihu.com/p/573203289
+Unity HDRP volumetric fog god ray light shaft AR mobile perf	解读Unity中的CG编写Shader系列8——多光源漫反射_cgprogram cannot contain #pragma surface as well a-CSDN博客	https://blog.csdn.net/zay109327402/article/details/39499993
+Unity HDRP volumetric fog god ray light shaft AR mobile perf	Unity透明边缘发光Shader实现-CSDN博客	https://blog.csdn.net/batman1208/article/details/130507492
+Unity HDRP volumetric fog god ray light shaft AR mobile perf	Unity透明视频播放 所需的Shader脚本 - Scarlett的博客	https://blog.csdn.net/chuan403082010/article/details/76723894?locationNum=2&fps=1
+Genshin Impact Anemo Electro vortex ribbon NPR shader breakd	Genshin Impact	https://www.cnblogs.com/DenZi/articles/15484026.html
+Genshin Impact Anemo Electro vortex ribbon NPR shader breakd	genshin-impact-reference-sheet资源-CSDN下载	https://download.csdn.net/download/weixin_42116734/16006672
+ribbon particle LOD distance fade mesh segments mobile AR op	Ribbon核心原理与架构详解_ribbon 自动剔除-CSDN博客	https://blog.csdn.net/weixin_39956506/article/details/149888162
+ribbon particle LOD distance fade mesh segments mobile AR op	SpringCloud的Ribbon详细解析_ribbonclients 注解-CSDN博客	https://blog.csdn.net/m0_64355285/article/details/131722549
+ribbon particle LOD distance fade mesh segments mobile AR op	SpringCloud入门(二): Ribbon简介与使用 - 愚蠢的猴子 - 博客园	https://www.cnblogs.com/jiangyaxiong1990/p/12373525.html
+ronja shadertutorial dissolve fade vertex shader	【译】Ronja的Unity Shader教程(十二) - 知乎	https://zhuanlan.zhihu.com/p/99991773
+ronja shadertutorial dissolve fade vertex shader	ShaderTutorials/Assets/041_HSV_Colorspace/HueCycle.shader at master · ronja-tutorials/ShaderTutorials · GitHub	https://github.com/ronja-tutorials/ShaderTutorials/blob/master/Assets/041_HSV_Colorspace/HueCycle.shader
+ronja shadertutorial dissolve fade vertex shader	[译]Unity3D Shader教程(六)Basic Transparency_unity3d 电话绳 shader-CSDN博客	https://blog.csdn.net/sinat_25415095/article/details/119698617
+ronja shadertutorial dissolve fade vertex shader	[译]Unity3D Shader教程(三)变量_unity shader 变量-CSDN博客	https://blog.csdn.net/sinat_25415095/article/details/118068449
+Unity ribbon shader vertex height world space gradient alpha	unity Shader 的漫反射逐顶点的光照模型_浪里独行的博客-CSDN博客	https://blog.csdn.net/qq_16603297/article/details/53144552
+Unity ribbon shader vertex height world space gradient alpha	【Unity Shader学习笔记】Unity光照基础-半兰伯特光照 - IDEA_W - 博客园	https://www.cnblogs.com/Wu-765279087/p/16172789.html
+Unity ribbon shader vertex height world space gradient alpha	一篇搞定Unity Shader入门精要 (更新中) - 知乎	https://zhuanlan.zhihu.com/p/569862136
+Unity ribbon shader vertex height world space gradient alpha	UnityShader 基础(27)-法线贴图-世界空间与切线空间法线计算_知乎	https://zhuanlan.zhihu.com/p/413508668
+Unity ribbon shader vertex height world space gradient alpha	图形处理之Unity3DShader(一)Vertex and Fragment Shader - 酷酷宝哥的博客 - CSDN博客	https://blog.csdn.net/hjbatzz/article/details/77434925?locationNum=7&fps=1
+Unity URP TrailRenderer custom shader UV scroll	Unity 使用TrailRenderer制作拖尾效果_trail renderer-CSDN博客	https://blog.csdn.net/mr_five55/article/details/137202016
+Unity URP TrailRenderer custom shader UV scroll	深入了解Unity中LineRenderer与TrailRenderer - AndrewFan - 博客园	https://www.cnblogs.com/driftingclouds/p/6442847.html
+Unity URP TrailRenderer custom shader UV scroll	Unity TrailRenderer的基本了解_unitytrailrender-CSDN博客	https://blog.csdn.net/mr_five55/article/details/137201931
+Unity URP TrailRenderer custom shader UV scroll	【Unity】URP中的UGUIShader实现 - BDFFZI - 博客园	https://www.cnblogs.com/BDFFZI/p/18732774
+Unity URP TrailRenderer custom shader UV scroll	Unity:使用TrailRenderer 逐步生成路线。_trailrender生成位置-CSDN博客	https://blog.csdn.net/weixin_42224118/article/details/105249751
+Unity URP TrailRenderer custom shader UV scroll	【Unity3D】拖尾TrailRenderer_trail renderer-CSDN博客	https://blog.csdn.net/m0_37602827/article/details/126515099
+Unity URP TrailRenderer custom shader UV scroll	Unity 拖尾(Trail Renderer)效果的实现_unity拖尾效果怎么做-CSDN博客	https://blog.csdn.net/zouxin_88/article/details/83028644
+Unity URP TrailRenderer custom shader UV scroll	Unity TrailRenderer 画出轮胎压痕_unity urp下实现轮胎痕迹-CSDN博客	https://blog.csdn.net/qq_33205561/article/details/89714005
+Unity URP TrailRenderer custom shader UV scroll	Unity URP Shader 与 HLSL 自学笔记一 URP风格的Unlit Shader_知乎	https://zhuanlan.zhihu.com/p/357449445
+Unity URP TrailRenderer custom shader UV scroll	【Unity】URP源码分析(Shader篇)_知乎	https://zhuanlan.zhihu.com/p/557804454
+Unity Shader Graph noise vertex displacement smoke wisp	[Unity] ShaderGraph实现伪室内效果,性能大解放_unity假室内效果-CSDN博客	https://blog.csdn.net/Katrina419/article/details/135715210
+Unity Shader Graph noise vertex displacement smoke wisp	Unity 之ShaderGraph入门使用详解_unity shader graph-CSDN博客	https://czhenya.blog.csdn.net/article/details/118378214
+Unity Shader Graph noise vertex displacement smoke wisp	Unity使用Shader Graph实现遮挡剔除_unity uishader范围遮罩剔除-CSDN博客	https://blog.csdn.net/weixin_52415334/article/details/119326540
+Unity Shader Graph noise vertex displacement smoke wisp	Unity Shader Graph实现全息瞄准器_全息眼镜csdn-CSDN博客	https://blog.csdn.net/gzroy/article/details/155916940
+Unity Shader Graph noise vertex displacement smoke wisp	Unity Shader Graph 基础学习_知乎	https://zhuanlan.zhihu.com/p/398368713
+Unity Shader Graph noise vertex displacement smoke wisp	【基础】UnityShader Graph 的编辑器介绍 - SmalBox - 博客园	https://www.cnblogs.com/SmalBox/p/19320143
+Unity Shader Graph noise vertex displacement smoke wisp	【unity】ShaderGraph学习笔记_lit shader graph-CSDN博客	https://blog.csdn.net/dxs1990/article/details/131935969
+Unity Shader Graph noise vertex displacement smoke wisp	Unity Shader Graph 使用与特效实现 - 随笔分类 - SmalBox - 博客园	https://www.cnblogs.com/SmalBox/category/2486743.html?page=1
+Unity Shader Graph noise vertex displacement smoke wisp	Unity 之ShaderGraph Artistic节点解析汇总_shadergraph 过滤颜色_unityshadergraph-CSDN博客	https://blog.csdn.net/2401_84301352/article/details/139834605
+Unity light shaft beam soft additive blend mobile	UnityShader学习教程之语法规范以及光照模型_#pragma surface surf standard-CSDN博客	https://blog.csdn.net/xiongwen_li/article/details/72655688
+Unity light shaft beam soft additive blend mobile	LightShadows - Unity 脚本 API	https://docs.unity.cn/cn/2017.1/ScriptReference/LightShadows.html
+Unity light shaft beam soft additive blend mobile	安装unity后创建项目出现的问题与解决记录_unity fatal error-CSDN博客	https://blog.csdn.net/littlec7833_cn/article/details/131870453
+Unity light shaft beam soft additive blend mobile	Unity - 手册: 编辑器故障排除	https://docs.unity3d.com/cn/current/Manual/TroubleShootingEditor.html
+Unity light shaft beam soft additive blend mobile	Unity MMD blendshape missing问题_知乎	https://zhuanlan.zhihu.com/p/687557196
+Unity light shaft beam soft additive blend mobile	**Unity中莫名其妙得小问题-灯光和天空盒_lighting has been disabled-CSDN博客	https://blog.csdn.net/weixin_36832513/article/details/125426216
+Unity light shaft beam soft additive blend mobile	Unity- 慎优额外光 -记一次踩坑记录_知乎	https://zhuanlan.zhihu.com/p/438020212
+Unity light shaft beam soft additive blend mobile	Unity错误提示大全(遇到问题就更新) - SmallOverFllow - 博客园	https://www.cnblogs.com/fzxiaoyi/p/8446158.html
+unity light beam shader god ray fake volumetric	UN156unity3d插件VolumetricLightBeamKit体积光灯光效果游戏特效1资源-CSDN下载	https://download.csdn.net/download/u012129783/10322376
+unity light beam shader god ray fake volumetric	VolumetricLightBeam1.94.unitypackage.zip资源-CSDN下载	https://download.csdn.net/download/weixin_42526110/19713730
+unity light beam shader god ray fake volumetric	Unity Shader-GodRay,体积光(BillBoard,Volume Shadow,Raidal Blur,Ray-Marching)-CSDN博客	https://blog.csdn.net/puppet_master/article/details/79859678
+unity light beam shader god ray fake volumetric	unity3d体积光插件Volumetric_Light_Beam_Kit_1.0资源-CSDN下载	https://download.csdn.net/download/xinwenhui88/7252545
+Unity day night cycle shader uniform parameter LUT	【Unity 天空和昼夜循环系统插件】Procedural Sky Shader & Day Night Cycle - Jupiter 旨在为游戏项目提供动态、真实的天际效果和昼夜变化_unity procedural	https://blog.csdn.net/2403_88403568/article/details/145333006
+Unity day night cycle shader uniform parameter LUT	【Unity 动态时间、天气和云层效果插件】HDRP Time Of Day - Lighting, Weather & Clouds 轻松为其项目添加日夜循环、天气变化、云层渲染等高级视觉效果...	https://blog.csdn.net/2403_88403568/article/details/145269271
+Unity day night cycle shader uniform parameter LUT	unity3d白天夜晚切换插件Day_Night_Cycle.unitypackage_unity白天黑夜切换,unity昼夜交替插件资源-CSDN下载	https://download.csdn.net/download/qq_42814198/12196283
+Unity day night cycle shader uniform parameter LUT	unity3d白天夜晚切换插件Day_Night_Cycle.unitypackage资源-CSDN下载	https://download.csdn.net/download/slslslsl8928/6944571
+Unity day night cycle shader uniform parameter LUT	类Minecraft方块游戏unity开发笔记5-天气系统(昼夜交替、天气) - AdamWu's Blog - CSDN博客	https://blog.csdn.net/adamwu1988/article/details/55252674?locationNum=3&fps=1
+Unity day night cycle shader uniform parameter LUT	【Unity5】实现24小时日出日落的效果 24小时天幕系统 - 王严C# U3D开发 - CSDN博客	https://blog.csdn.net/YunPro/article/details/44567805?locationNum=3&fps=1
+Unity day night cycle shader uniform parameter LUT	Unity Shader杂项 - 0x9801 - 博客园	https://www.cnblogs.com/veobachter/p/3467088.html
+Unity day night cycle shader uniform parameter LUT	unityshader自己学习笔记--vertex shader--uniform_unityshader uniform-CSDN博客	https://blog.csdn.net/m0_69722751/article/details/130220848
+Tilt Brush brush shader open source GitHub	GitHub - manuelpezzera/open-brush: Open Source Fork of Tilt Brush	https://github.com/manuelpezzera/open-brush
+Tilt Brush brush shader open source GitHub	GitHub - icosa-foundation/open-brush: Open Brush is the open source, community led evolution of Tilt Brush! Forked from 	https://github.com/icosa-foundation/open-brush
+Tilt Brush brush shader open source GitHub	GitHub - IxxyXR/open-brush: Open Source Fork of Tilt Brush	https://github.com/IxxyXR/open-brush/tree/main
+Tilt Brush brush shader open source GitHub	GitHub - Daniel-Fan/open-brush: Open Source Fork of Tilt Brush	https://github.com/Daniel-Fan/open-brush
+Tilt Brush brush shader open source GitHub	GitHub - JoshHula/tilt-brush	https://github.com/JoshHula/tilt-brush/tree/master
+Tilt Brush brush shader open source GitHub	tilt-brush/README.md at master · JoshHula/tilt-brush · GitHub	https://github.com/JoshHula/tilt-brush/blob/master/README.md
+Tilt Brush brush shader open source GitHub	tilt brush_Linux,Tilt Brush Toolkit和更多开放游戏新闻发布了新的Minecraft启动器-CSDN博客	https://blog.csdn.net/cumj63710/article/details/107393860
+Tilt Brush brush shader open source GitHub	GitHub - JohnOrionYoung/tilt-brush · GitHub	https://github.com/JohnOrionYoung/tilt-brush
+Niantic 8th Wall Lightship VPS visual portal effect	Niantic开放AR地图视觉定位系统VPS,推出AR地图社交网络Campfire_知乎	https://zhuanlan.zhihu.com/p/521111477
+Niantic 8th Wall Lightship VPS visual portal effect	靠众包创建AR地图和VPS,恐怕只有Niantic在行_知乎	https://zhuanlan.zhihu.com/p/519884545
+Unreal Niagara ribbon scroll noise distortion energy beam	Niagara内容示例 2.2 Dynamic Beam_虚幻 dynamic beam static beam-CSDN博客	https://blog.csdn.net/xcinkey/article/details/117133990
+ronja shadertutorial vertex displacement world position fade	【译】Ronja的Unity Shader教程(十)_知乎	https://zhuanlan.zhihu.com/p/99731640
+ronja shadertutorial vertex displacement world position fade	后处理基础 - 小孔明的专栏 - CSDN博客	https://blog.csdn.net/wodownload2/article/details/85091987?locationNum=6&fps=1
+ronja shadertutorial vertex displacement world position fade	[译]Unity3D Shader教程(八)Planar Mapping_unity shader panoramic-CSDN博客	https://blog.csdn.net/sinat_25415095/article/details/120808080
+ronja shadertutorial vertex displacement world position fade	javaFX 可控制自动关闭时间的弹出提示窗口 - 王洪伟的专栏 - CSDN博客	https://blog.csdn.net/teamlet/article/details/52914301?locationNum=4&fps=1
+ronja shadertutorial vertex displacement world position fade	利用JavaFx开发RIA桌面应用-Stage窗口半透明设计 - loongshawn的博客 - CSDN博客	https://blog.csdn.net/loongshawn/article/details/53074119?locationNum=5&fps=1
+ronja shadertutorial vertex displacement world position fade	[论文阅读] (08) NDSS2020 UNICORN: Runtime Provenance-Based Detector for Advanced Persistent Threats-CSDN博客	https://blog.csdn.net/eastmount/article/details/118913235
+unity 立体 光柱 上升 渐变 shader 教程	unity shader效果教程附详细代码（发布时间：2025-04-18 11:25:12）	https://blog.csdn.net/HZBCc/article/details/147324291
+unity 立体 光柱 上升 渐变 shader 教程	Unity UGUI流光特效Shader实战教程（发布时间：2024-10-25 11:39:43）	https://blog.csdn.net/weixin_42527589/article/details/143259964
+unity 立体 光柱 上升 渐变 shader 教程	《unity shader入门精要》学习笔记	https://blog.csdn.net/u013354943/article/details/52788010
+unity 立体 光柱 上升 渐变 shader 教程	Unity Shader入门精要笔记（十四）：渐变纹理（发布时间：2017-09-03 22:46:20）	https://blog.csdn.net/lzhq1982/article/details/77659332
+unity 立体 光柱 上升 渐变 shader 教程	Unity Shader 学习（一）：初识ShaderLab（发布时间：2023-12-14 21:04:08）	https://blog.csdn.net/qq_44195770/article/details/134654561
+unity 立体 光柱 上升 渐变 shader 教程	UnityShader——简单案例（发布时间：2024-11-25 10:11:05）	https://blog.csdn.net/Leh1ng/article/details/144018792
+unity 立体 光柱 上升 渐变 shader 教程	unity 2020 怎么写shader使其接受光照?（发布时间：2020-11-20 07:18:42）	https://blog.csdn.net/weixin_39531780/article/details/111165554

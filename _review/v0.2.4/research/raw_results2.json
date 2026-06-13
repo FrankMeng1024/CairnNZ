@@ -1,0 +1,1425 @@
+[
+  {
+    "success": true,
+    "query": "catlikecoding Unity flow noise shader tutorial",
+    "content": "",
+    "web_references": [],
+    "search_intent": [
+      {
+        "intent": "SEARCH_NONE",
+        "keywords": "catlikecoding unity flow noise shader tutorial",
+        "query": "catlikecoding Unity flow noise shader tutorial"
+      }
+    ],
+    "latency_seconds": 0.95,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "ronja shadertutorial dissolve fade vertex shader",
+    "content": "**【译】Ronja的Unity Shader教程(十二) - 知乎** (2019-12-29)\n{ float2 uv_MainTex ; //input struct which is automatically filled by unity structply the fresnel value to the emission o . Emission = _Emission + fresnelColor ; } // ... 菲涅尔效应 也可以用来fade纹理或其他效果,以后我们可能会\nSource: https://zhuanlan.zhihu.com/p/99991773\n\n**ShaderTutorials/Assets/041_HSV_Colorspace/HueCycle.shader at master · ronja-tutorials/ShaderTutorials · GitHub** (2026-05-30)\nNavigation Menu Toggle navigation Appearance settings Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert Files Expand file tree   master Breadcrumbs HueCycle.shader Copy path More file actions More file actions Latest commit History 62 lines (51 loc) · 1.43 KB   master Breadcrumbs HueCycle.shader Top File metadata and controls Code Blame 62 lines (51 loc) · 1.43 KB Copy raw file Download raw file Open symbols panel Edit and raw actions ﻿Shader \"Tutorial/041_HSV/HueCycle\"{ //show values to edit in inspector Properties{ _CycleSpeed (\"Hue Cycle Speed\", Range(0, 1)) = 0 _MainTex (\"Texture\", 2D) = \"white\" {} } SubShader{ //the mat\nSource: https://github.com/ronja-tutorials/ShaderTutorials/blob/master/Assets/041_HSV_Colorspace/HueCycle.shader\n\n**Add official discv5 test vectors · ruvex/trinity@a116d06 · GitHub** (2026-06-02)\nAdd official discv5 test vectors Source: https://github.com/ethereum/devp2p/blob/master/discv5/discv5-wire-test-vectors.md 1 parent bd71629 commit a116d06 Copy full SHA for a116d06 5 file s changed + 413 - 1 Lines changed: 413 additions & 1 deletion File tree Expand file tree Collapse file tree Open diff view settings Filter options tests/p2p/discv5 Expand file tree Collapse file tree Open diff view settings Collapse file Original file line number Diff line number Diff line change @@ -6,6 +6,7 @@ 6 6 ) 7 7 8 8 from eth_utils import ( 9 + decode_hex , 9 10 ValidationError , 10 11 ) 11 12 @@ -82,3 +83,18 @@ def test_roundtrip(key, nonce, plain_text, aad): 82 83 cipher_text = aesgcm_encrypt ( key , nonce , plain_text , aad ) 83 84 plain_text_recovered = aesgcm_decrypt ( key , nonce , cipher_text , aad ) 84 85 assert plain_text_recovered == plain_text 86 + 87 + 88 + @ pytest . mark . parametrize ([ \"key\" , \"nonce\" , \"plain_text\" , \"aad\" , \"cipher_text\" ], [ 89 + [ 90 + decode_hex ( \"0x9f2d\nSource: https://github.com/ruvex/trinity/commit/a116d06f4c6655fb1fa212f23d77d98cb2f47f26\n\n**GitHub - rafabull/dio-santander-dev-2023: Java RESTful API criada no final do bootcamp** (2025-01-24)\nSolutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert rafabull/dio-santander-dev-2023   master Go to file Code Folders and files Name Name Last commit message Last commit date Latest commit   History 8 Commits gradle/ wrapper gradle/ wrapper     src src     .gitignore .gitignore     Procfile Procfile     README.md README.md     build.gradle build.gradle     gradlew gradlew     gradlew.bat gradlew.bat     settings.gradle settings.gradle     View all files Repository files navigation Santander Dev Week 2023 Java RESTful API criada para a Santander Dev Week. Principais Tecnologias Java 17 : Utilizaremos a versão LTS mais recente do Java para tirar\nSource: https://github.com/rafabull/dio-santander-dev-2023\n\n**[译]Unity3D Shader教程(六)Basic Transparency_unity3d 电话绳 shader-CSDN博客** (2021-08-14)\n原文链接:Shader Tutorials by Ronja 除了只是在屏幕上绘制颜色之外,我们还可以保留一些以前在屏幕上的颜色,使物体看起来透明。 我将解释我们如何在没有照明的基本着色器中实现这种效果。要了解如何实现透明度,我建议您了解编写着色器的基础知识,如果没有这方面的知识建议先看之前的教程。 本篇的Shader是在《[译]Unity3D Shader教程(四)Basic Shader》中Shader的基础上修改的。 为了使透明物体正确渲染,我们必须告诉 unity 此物体是透明的。 我们通过更改渲染类型和渲染队列来达到此目的。 通过更改队列,我们可以保证透明材质的渲染时间晚于不透明材质。 如果透明物体和不透明材质同时渲染的话,透明物体后面的不透明物体将不得不覆盖透明物体,完全覆盖它。 更改为透明材质的渲染队列代码如下: Tags{ \"RenderType\"=\"Transparent\" \"Queue\"=\"Transparent\"} 接下来我们定义“Blend Mode 混合模式”,它定义了现有颜色和新颜色如何相互混合。 混合模式由 2 个关键字定义,第一个定义与新颜色相乘的值,第二个定义与旧颜色相乘的值。 将颜色相乘后,将它们相加并绘制结果。 渲染不透明材质时,混合模式为 1 0(Blend 1 0),因为我们采用所有新值而没有旧值。 在透明材质中,我们希望基于 alpha 值(颜色rgba中的第 4 个数字a)进行混合。 所以我们将第一个混合值设置为源透明度(source alpha),在这种情况下,源透明度是此着色器的输出。 第二个值是 1 - 源透明度。 混合模式可以在SubShader或Pass中定义,但必须在 hlsl 区域之外。 Blend SrcAlpha OneMinusSrcAlpha 您可以在Unity官方文档查找不同的混合因子(以及我将要介绍的其他一些混合属性)。 接下来我们将举两个例子来说明。 当我们的片段着色器返回 0.5 的alpha 值时,混合将采用新颜色的一半和旧颜色的 1 - 0.5 (0.5),将它们平均混合(在黑色上绘制白色时,它将是中灰色)。 当我们的片段着色器返回 0.9 的alpha 值时,混合将使用 90% 的新颜色并添加 10% 的旧颜色,使旧颜色几乎不可见。 通过这些更改,我们的着色器已经可以用于透明材质。 因\nSource: https://blog.csdn.net/sinat_25415095/article/details/119698617\n\n**[译]Unity3D Shader教程(三)变量_unity shader 变量-CSDN博客** (2021-06-20)\n目录 1 Summary2 Object Data3 Interpolators4 Output color5 Uniform data6 Spaces?7 Sources 原文链接:Shader Tutorials by Ronja 1 Summary 概要。 在明确了着色器部分是如何组合在一起的,以及在实际着色器代码之外的 shaderlab 的粗略轮廓之后,我们来看看我们的着色器需要哪些变量来运行,以及如何将这些变量添加到我们的代码中。这些变量包括我们为每个材质设置的变量、网格数据变量的一部分以及从顶点传递到片段的数据。 2 Object Data 模型数据。 我们在解释着色器流程时所说的模型数据和上面的网格数据其实不是同一种东西。在底层的程序上,模型数据被定义为将要被渲染的内容的数据流,但我们将其想象为网格会更容易思考。在大多数情况下,模型数据必须包括顶点位置和顶点之间构成的三角形。除此之外,模型数据还包括顶点法线、uv 坐标和顶点颜色。每个顶点的数据(所以除了三角形之外的所有数据)在渲染流水线中的顶点阶段处理。位置和方向都在模型空间(或者说局部空间)中,所以无论对象如何缩放或移动,我们都可以使用相同的顶点数据而无需额外处理。 在Unity着色器中,模型数据通常以名为 appdata(如果你知道为什么,请告诉我,我很好奇) 的结构传递给顶点着色器。数据名可以为任何名称,但必须添加标识符来告诉 unity 哪个变量应该填充哪些数据,例如像这样: struct appdata{ float4 vertex : POSITION; float2 uv : TEXCOORD0; }; (上面这个结构的意思解释如下: 上面:后的POSITION和TEXTURE官方的名字是语义,这是由语法规定好的。每个语义表示不同的模型数据。 比如POSITION就表示模型数据的顶点位置(模型空间),TEXCOORD0就表示该顶点的uv0坐标。 所以上面的结构体就表示,将模型数据的顶点位置(模型空间)填充到vertex这个变量中,将uv0坐标填充到uv这个变量中。 也就是说,变量: 语义 其实是一个固定的语法)常用的顶点数据的语义可以见官方的文档。 3 Interpolators 插值。 在顶点阶段修改数据后,光栅化器使用修改后的数据来绘制像素。 为此,我们必须在本地位置中设置它在屏幕\nSource: https://blog.csdn.net/sinat_25415095/article/details/118068449\n\n**DOD contractor suffers ransomware infection  ZDNET** (2020-01-29)\nElectronic Warfare Associates (EWA), a 40-year-old electronics company and a well-known US government contractor, has suffered a ransomware infection, ZDNet has learned. The infection hit the company last week. Among the systems that had data encrypted during the incident were the company's web servers. Signs of the incident are still visible online. Encrypted files and ransom notes are still cached in Google search results, even a week after the company took down the impacted web servers. Image: ZDNet Security researchers who reviewed the cached files told ZDNet the encrypted files and ransom note are, without a doubt, a sign of an infection with the Ryuk ransomware. The security researcher who first discovered these files told ZDNet that several EWA websites appear to have been impacted, such as the sites for: Get up-to-the-minute tech news, security alerts, and more Sign up for ZDNET's daily News Alerts Email Sign Me Up EWA Government Systems Inc. -- an EWA subsidiary that provides \nSource: https://www.zdnet.com/article/dod-contractor-suffers-ransomware-infection/\n\n**Benutzerprofil von rodrolex – Add-ons für Firefox (de)** (2013-03-29)\nUm diese Add-ons zu verwenden, müssen Sie Firefox herunterladen. Theme-Künstler Anzahl von Add-ons Erweiterungen von rodrolex Themes von rodrolex\nSource: https://addons.mozilla.org/de/firefox/user/9170094/\n\n**VertexShader.Device  Microsoft Learn** (2006-06-30)\nThis browser is no longer supported. Upgrade to Microsoft Edge to take advantage of the latest features, security updates, and technical support. Table of contents Exit focus mode Ask Learn Ask Learn Language csharp jscript c++ vb Print Note Access to this page requires authorization. You can try signing in or changing directories . Access to this page requires authorization. You can try changing directories . VertexShader.Device Property (Microsoft.DirectX.Direct3D) Article In this article Retrieves the Microsoft Direct3D device associated with a vertex shader object. Definition Visual Basic Public ReadOnly Property Device As Device C# public Device Device { get; } C++ public: property Device ^ Device { Device ^ get(); } JScript public function get Device () : Device Property Value A Device reference that represents the Direct3D device object associated with the vertex shader object. This property is read-only. Additional resources Additional resources In this article Theme Light Dark\nSource: http://msdn.microsoft.com/zh-tw/ms863053\n\n**CreateVertexShaderDecl routine (Windows Drivers)** (2013-07-25)\nThe CreateVertexShaderDecl function converts the vertex shader declaration into a hardware-specific format and associates the declaration with a shader handle. Syntax C++ PFND3DDDI_CREATEVERTEXSHADERDECL CreateVertexShaderDecl;__checkReturn HRESULT APIENTRY CreateVertexShaderDecl( _In_     HANDLE hDevice, _Inout_  D3DDDIARG_CREATEVERTEXSHADERDECL *pData, _In_      const D3DDDIVERTEXELEMENT *pVertexElements) Parameters hDevice [in] A handle to the display device (graphics context). pData [in, out] A pointer to a D3DDDIARG_CREATEVERTEXSHADERDECL structure that retrieves the shader handle that is associated with the vertex shader declaration that is specified by pVertexElements . pVertexElements [in] Return value CreateVertexShaderDecl returns S_OK or an appropriate error result if the vertex shader declaration object is not successfully created. Remarks The array of D3DDDIVERTEXELEMENT structures specified by pVertexElements defines vertex data into the pipeline. Requirements Version Ava\nSource: http://msdn.microsoft.com/ZH-cn/LIBRARY/ff540714(d=printer).ASPX\n",
+    "web_references": [
+      {
+        "content": "{ float2 uv_MainTex ; //input struct which is automatically filled by unity structply the fresnel value to the emission o . Emission = _Emission + fresnelColor ; } // ... 菲涅尔效应 也可以用来fade纹理或其他效果,以后我们可能会",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/99991773",
+        "media": "知乎",
+        "publish_date": "2019-12-29",
+        "refer": "ref_1",
+        "title": "【译】Ronja的Unity Shader教程(十二) - 知乎"
+      },
+      {
+        "content": "Navigation Menu Toggle navigation Appearance settings Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert Files Expand file tree   master Breadcrumbs HueCycle.shader Copy path More file actions More file actions Latest commit History 62 lines (51 loc) · 1.43 KB   master Breadcrumbs HueCycle.shader Top File metadata and controls Code Blame 62 lines (51 loc) · 1.43 KB Copy raw file Download raw file Open symbols panel Edit and raw actions ﻿Shader \"Tutorial/041_HSV/HueCycle\"{ //show values to edit in inspector Properties{ _CycleSpeed (\"Hue Cycle Speed\", Range(0, 1)) = 0 _MainTex (\"Texture\", 2D) = \"white\" {} } SubShader{ //the mat",
+        "icon": "",
+        "link": "https://github.com/ronja-tutorials/ShaderTutorials/blob/master/Assets/041_HSV_Colorspace/HueCycle.shader",
+        "media": "",
+        "publish_date": "2026-05-30",
+        "refer": "ref_2",
+        "title": "ShaderTutorials/Assets/041_HSV_Colorspace/HueCycle.shader at master · ronja-tutorials/ShaderTutorials · GitHub"
+      },
+      {
+        "content": "Add official discv5 test vectors Source: https://github.com/ethereum/devp2p/blob/master/discv5/discv5-wire-test-vectors.md 1 parent bd71629 commit a116d06 Copy full SHA for a116d06 5 file s changed + 413 - 1 Lines changed: 413 additions & 1 deletion File tree Expand file tree Collapse file tree Open diff view settings Filter options tests/p2p/discv5 Expand file tree Collapse file tree Open diff view settings Collapse file Original file line number Diff line number Diff line change @@ -6,6 +6,7 @@ 6 6 ) 7 7 8 8 from eth_utils import ( 9 + decode_hex , 9 10 ValidationError , 10 11 ) 11 12 @@ -82,3 +83,18 @@ def test_roundtrip(key, nonce, plain_text, aad): 82 83 cipher_text = aesgcm_encrypt ( key , nonce , plain_text , aad ) 83 84 plain_text_recovered = aesgcm_decrypt ( key , nonce , cipher_text , aad ) 84 85 assert plain_text_recovered == plain_text 86 + 87 + 88 + @ pytest . mark . parametrize ([ \"key\" , \"nonce\" , \"plain_text\" , \"aad\" , \"cipher_text\" ], [ 89 + [ 90 + decode_hex ( \"0x9f2d",
+        "icon": "",
+        "link": "https://github.com/ruvex/trinity/commit/a116d06f4c6655fb1fa212f23d77d98cb2f47f26",
+        "media": "",
+        "publish_date": "2026-06-02",
+        "refer": "ref_3",
+        "title": "Add official discv5 test vectors · ruvex/trinity@a116d06 · GitHub"
+      },
+      {
+        "content": "Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert rafabull/dio-santander-dev-2023   master Go to file Code Folders and files Name Name Last commit message Last commit date Latest commit   History 8 Commits gradle/ wrapper gradle/ wrapper     src src     .gitignore .gitignore     Procfile Procfile     README.md README.md     build.gradle build.gradle     gradlew gradlew     gradlew.bat gradlew.bat     settings.gradle settings.gradle     View all files Repository files navigation Santander Dev Week 2023 Java RESTful API criada para a Santander Dev Week. Principais Tecnologias Java 17 : Utilizaremos a versão LTS mais recente do Java para tirar",
+        "icon": "",
+        "link": "https://github.com/rafabull/dio-santander-dev-2023",
+        "media": "",
+        "publish_date": "2025-01-24",
+        "refer": "ref_4",
+        "title": "GitHub - rafabull/dio-santander-dev-2023: Java RESTful API criada no final do bootcamp"
+      },
+      {
+        "content": "原文链接:Shader Tutorials by Ronja 除了只是在屏幕上绘制颜色之外,我们还可以保留一些以前在屏幕上的颜色,使物体看起来透明。 我将解释我们如何在没有照明的基本着色器中实现这种效果。要了解如何实现透明度,我建议您了解编写着色器的基础知识,如果没有这方面的知识建议先看之前的教程。 本篇的Shader是在《[译]Unity3D Shader教程(四)Basic Shader》中Shader的基础上修改的。 为了使透明物体正确渲染,我们必须告诉 unity 此物体是透明的。 我们通过更改渲染类型和渲染队列来达到此目的。 通过更改队列,我们可以保证透明材质的渲染时间晚于不透明材质。 如果透明物体和不透明材质同时渲染的话,透明物体后面的不透明物体将不得不覆盖透明物体,完全覆盖它。 更改为透明材质的渲染队列代码如下: Tags{ \"RenderType\"=\"Transparent\" \"Queue\"=\"Transparent\"} 接下来我们定义“Blend Mode 混合模式”,它定义了现有颜色和新颜色如何相互混合。 混合模式由 2 个关键字定义,第一个定义与新颜色相乘的值,第二个定义与旧颜色相乘的值。 将颜色相乘后,将它们相加并绘制结果。 渲染不透明材质时,混合模式为 1 0(Blend 1 0),因为我们采用所有新值而没有旧值。 在透明材质中,我们希望基于 alpha 值(颜色rgba中的第 4 个数字a)进行混合。 所以我们将第一个混合值设置为源透明度(source alpha),在这种情况下,源透明度是此着色器的输出。 第二个值是 1 - 源透明度。 混合模式可以在SubShader或Pass中定义,但必须在 hlsl 区域之外。 Blend SrcAlpha OneMinusSrcAlpha 您可以在Unity官方文档查找不同的混合因子(以及我将要介绍的其他一些混合属性)。 接下来我们将举两个例子来说明。 当我们的片段着色器返回 0.5 的alpha 值时,混合将采用新颜色的一半和旧颜色的 1 - 0.5 (0.5),将它们平均混合(在黑色上绘制白色时,它将是中灰色)。 当我们的片段着色器返回 0.9 的alpha 值时,混合将使用 90% 的新颜色并添加 10% 的旧颜色,使旧颜色几乎不可见。 通过这些更改,我们的着色器已经可以用于透明材质。 因",
+        "icon": "",
+        "link": "https://blog.csdn.net/sinat_25415095/article/details/119698617",
+        "media": "",
+        "publish_date": "2021-08-14",
+        "refer": "ref_5",
+        "title": "[译]Unity3D Shader教程(六)Basic Transparency_unity3d 电话绳 shader-CSDN博客"
+      },
+      {
+        "content": "目录 1 Summary2 Object Data3 Interpolators4 Output color5 Uniform data6 Spaces?7 Sources 原文链接:Shader Tutorials by Ronja 1 Summary 概要。 在明确了着色器部分是如何组合在一起的,以及在实际着色器代码之外的 shaderlab 的粗略轮廓之后,我们来看看我们的着色器需要哪些变量来运行,以及如何将这些变量添加到我们的代码中。这些变量包括我们为每个材质设置的变量、网格数据变量的一部分以及从顶点传递到片段的数据。 2 Object Data 模型数据。 我们在解释着色器流程时所说的模型数据和上面的网格数据其实不是同一种东西。在底层的程序上,模型数据被定义为将要被渲染的内容的数据流,但我们将其想象为网格会更容易思考。在大多数情况下,模型数据必须包括顶点位置和顶点之间构成的三角形。除此之外,模型数据还包括顶点法线、uv 坐标和顶点颜色。每个顶点的数据(所以除了三角形之外的所有数据)在渲染流水线中的顶点阶段处理。位置和方向都在模型空间(或者说局部空间)中,所以无论对象如何缩放或移动,我们都可以使用相同的顶点数据而无需额外处理。 在Unity着色器中,模型数据通常以名为 appdata(如果你知道为什么,请告诉我,我很好奇) 的结构传递给顶点着色器。数据名可以为任何名称,但必须添加标识符来告诉 unity 哪个变量应该填充哪些数据,例如像这样: struct appdata{ float4 vertex : POSITION; float2 uv : TEXCOORD0; }; (上面这个结构的意思解释如下: 上面:后的POSITION和TEXTURE官方的名字是语义,这是由语法规定好的。每个语义表示不同的模型数据。 比如POSITION就表示模型数据的顶点位置(模型空间),TEXCOORD0就表示该顶点的uv0坐标。 所以上面的结构体就表示,将模型数据的顶点位置(模型空间)填充到vertex这个变量中,将uv0坐标填充到uv这个变量中。 也就是说,变量: 语义 其实是一个固定的语法)常用的顶点数据的语义可以见官方的文档。 3 Interpolators 插值。 在顶点阶段修改数据后,光栅化器使用修改后的数据来绘制像素。 为此,我们必须在本地位置中设置它在屏幕",
+        "icon": "",
+        "link": "https://blog.csdn.net/sinat_25415095/article/details/118068449",
+        "media": "",
+        "publish_date": "2021-06-20",
+        "refer": "ref_6",
+        "title": "[译]Unity3D Shader教程(三)变量_unity shader 变量-CSDN博客"
+      },
+      {
+        "content": "Electronic Warfare Associates (EWA), a 40-year-old electronics company and a well-known US government contractor, has suffered a ransomware infection, ZDNet has learned. The infection hit the company last week. Among the systems that had data encrypted during the incident were the company's web servers. Signs of the incident are still visible online. Encrypted files and ransom notes are still cached in Google search results, even a week after the company took down the impacted web servers. Image: ZDNet Security researchers who reviewed the cached files told ZDNet the encrypted files and ransom note are, without a doubt, a sign of an infection with the Ryuk ransomware. The security researcher who first discovered these files told ZDNet that several EWA websites appear to have been impacted, such as the sites for: Get up-to-the-minute tech news, security alerts, and more Sign up for ZDNET's daily News Alerts Email Sign Me Up EWA Government Systems Inc. -- an EWA subsidiary that provides ",
+        "icon": "",
+        "link": "https://www.zdnet.com/article/dod-contractor-suffers-ransomware-infection/",
+        "media": "",
+        "publish_date": "2020-01-29",
+        "refer": "ref_7",
+        "title": "DOD contractor suffers ransomware infection  ZDNET"
+      },
+      {
+        "content": "Um diese Add-ons zu verwenden, müssen Sie Firefox herunterladen. Theme-Künstler Anzahl von Add-ons Erweiterungen von rodrolex Themes von rodrolex",
+        "icon": "",
+        "link": "https://addons.mozilla.org/de/firefox/user/9170094/",
+        "media": "",
+        "publish_date": "2013-03-29",
+        "refer": "ref_8",
+        "title": "Benutzerprofil von rodrolex – Add-ons für Firefox (de)"
+      },
+      {
+        "content": "This browser is no longer supported. Upgrade to Microsoft Edge to take advantage of the latest features, security updates, and technical support. Table of contents Exit focus mode Ask Learn Ask Learn Language csharp jscript c++ vb Print Note Access to this page requires authorization. You can try signing in or changing directories . Access to this page requires authorization. You can try changing directories . VertexShader.Device Property (Microsoft.DirectX.Direct3D) Article In this article Retrieves the Microsoft Direct3D device associated with a vertex shader object. Definition Visual Basic Public ReadOnly Property Device As Device C# public Device Device { get; } C++ public: property Device ^ Device { Device ^ get(); } JScript public function get Device () : Device Property Value A Device reference that represents the Direct3D device object associated with the vertex shader object. This property is read-only. Additional resources Additional resources In this article Theme Light Dark",
+        "icon": "",
+        "link": "http://msdn.microsoft.com/zh-tw/ms863053",
+        "media": "",
+        "publish_date": "2006-06-30",
+        "refer": "ref_9",
+        "title": "VertexShader.Device  Microsoft Learn"
+      },
+      {
+        "content": "The CreateVertexShaderDecl function converts the vertex shader declaration into a hardware-specific format and associates the declaration with a shader handle. Syntax C++ PFND3DDDI_CREATEVERTEXSHADERDECL CreateVertexShaderDecl;__checkReturn HRESULT APIENTRY CreateVertexShaderDecl( _In_     HANDLE hDevice, _Inout_  D3DDDIARG_CREATEVERTEXSHADERDECL *pData, _In_      const D3DDDIVERTEXELEMENT *pVertexElements) Parameters hDevice [in] A handle to the display device (graphics context). pData [in, out] A pointer to a D3DDDIARG_CREATEVERTEXSHADERDECL structure that retrieves the shader handle that is associated with the vertex shader declaration that is specified by pVertexElements . pVertexElements [in] Return value CreateVertexShaderDecl returns S_OK or an appropriate error result if the vertex shader declaration object is not successfully created. Remarks The array of D3DDDIVERTEXELEMENT structures specified by pVertexElements defines vertex data into the pipeline. Requirements Version Ava",
+        "icon": "",
+        "link": "http://msdn.microsoft.com/ZH-cn/LIBRARY/ff540714(d=printer).ASPX",
+        "media": "",
+        "publish_date": "2013-07-25",
+        "refer": "ref_10",
+        "title": "CreateVertexShaderDecl routine (Windows Drivers)"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "ronja shader tutorial dissolve fade vertex",
+        "query": "ronja shadertutorial dissolve fade vertex shader"
+      }
+    ],
+    "latency_seconds": 2.82,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Unity ribbon shader vertex height world space gradient alpha",
+    "content": "**Unity——基于ShaderLab实现光照系统** (2026-06-13)\n{\n        _MainColor(\"MainColor\",Color) = (1,1,1,1)\n    }\n\n        SubShader\n    {\n        Tags { \"RenderType\" = \"Opaque\" }\n\n        Pass\n        {\n            CGPROGRAM\n            #pragma vertex vert\n            #pragma fragment frag\n\n            float4 _MainColor;\n\n            float4 vert(float4 v:POSITION) :SV_POSITION\n            {\n                return UnityObjectToClipPos(v);\nSource: https://cloud.tencent.com/developer/article/1928508\n\n**unity Shader 的漫反射逐顶点的光照模型_浪里独行的博客-CSDN博客** (2016-11-12)\nPass { Tags { \"LightMode\"=\"ForwardBase\" } CGPROGRAM #pragma vertex vert #pragma fragment frag #include \"Lighting.cginc\" fixed4 _Diffuse; struct a2v { float4 vertex : POSITION;//模型空间的定点位置 float3 normal : NORMAL;//模型顶点的法线 }; struct v2f { float4 pos : SV_POSITION;//裁剪空间的顶点位置 fixed3 color : COLOR;//用于传递顶点空间得到的着色器颜色 }; v2f vert(a2v v) { v2f o; // Transform the vertex from object space to projection space o.pos = mul(UNITY_MATRIX_MVP, v.vertex); // Get ambient term fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz; // Transform the normal fram object space to world space fixed3 worldNormal = normalize(mul(v.normal, (float3x3)_World2Object)); // Get \nSource: https://blog.csdn.net/qq_16603297/article/details/53144552\n\n**【Unity Shader学习笔记】Unity光照基础-半兰伯特光照 - IDEA_W - 博客园** (2022-04-21)\nShader \"Unity Shaders Book/Chapter 6/HalfLambert\" { Properties{ _Diffuse(\"Diffuse\", Color) = (1, 1, 1, 1) } SubShader{ Pass { Tags {\"LightMode\" = \"ForwardBase\"} CGPROGRAM #pragma vertex vert #pragma fragment frag #include \"Lighting.cginc\" fixed4 _Diffuse; struct a2v { float4 vertex : POSITION; float3 normal : NORMAL; }; struct v2f { float4 pos : SV_POSITION; float3 worldNormal : TEXCOORD0; }; //逐顶点漫反射光照 v2f vert(a2v v) { v2f o; //Transfrom the vertex from object space to projection space o.pos = UnityObjectToClipPos(v.vertex); //Transform thhe normal from object space to world space o.worldNormal = mul(v.normal, (float3x\nSource: https://www.cnblogs.com/Wu-765279087/p/16172789.html\n\n**Unity中国发布AI OS 3D空间智能座舱** (2026-04-24)\n<p>钛媒体App 4月24日消息,Unity中国在2026(第十九届)北京国际汽车展览会上正式发布AI OS 3D空间智能座舱｡AI OS 3D空间智能座舱旨在解决AI时代原子化内容与多模态数据的展示难题,以统一的空间化体验层融合承接AI的多模态输出,为整车厂商提供向空间感知+AI智能体交互转型的技术解决方案,推动智能座舱从3D HMI迈入空间智能体操作系统的新阶段｡在架构设计上,3D AI \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_20469eb0bf861652\n\n**Unity全新AI OS 3D空间座舱引领智能交互变革** (2026-04-27)\n<p>2026 年 4 月 24 日,第十九届北京国际汽车展览会正式启幕,全球 3D 实时引擎技术领军企业 Unity 中国携重磅成果亮相,以七大核心技术展区打造沉浸式体验场景,全面展现团结引擎从 HMI 开发工具向 AI 时代智能交互底座的战略升级,解锁智能座舱与车载交互领域的全新可能｡</p><p><img src='http://qqpublic.qpic.\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_61969eee21350852\n\n**一篇搞定Unity Shader入门精要 (更新中) - 知乎** (2022-10-01)\n1.顶点着色器(Vertex Shader) 可以完全编程｡ 是GPU流水线的第一个过程,输入来自于CPU｡处理单位是顶点｡ 顶点着色器不能判断各个顶点间的关系,也不能创建和销毁顶点｡因为这样的独立性,GPU可以利用本身的特性并行化处理每一个顶点,这一阶段处理速度很快｡ 这个阶段主要完成的任务是: 坐标变换 逐顶点光照 : 坐标变换 : 可以对顶点坐标进行变换,改变顶点的位置｡可以通过改变顶点位置来模拟水面和布料｡ 顶点着色器最基本的工作 : 将顶点坐标从模型空间转换为齐次裁剪空间｡ NDC :归一化的设备坐标 2.裁切(Clipping) 这一步不可以编程｡\nSource: https://zhuanlan.zhihu.com/p/569862136\n\n**利用 Unity 引擎实现智能座舱 3D HMI 应用以下九条具体功能_开发_工具_Shader** (2024-09-12)\n首先,Unity 是一款 跨平台 引擎,覆盖广泛的市场｡ 以下九条具体功能,是基于用户需求,利用 Unity 引擎实现的｡ 可编程渲染管线: 团结引擎通过其强大的可编程渲染管线支持全平台的通用渲染管线(URP)和PC､Mac､Linux､Xbox 及Playstation 的高画质渲染管线(HDRP),并包含后处理和按需渲染功能｡目前,HDRP 主要用于游戏开发中｡我们也在将 HDRP \nSource: https://www.sohu.com/a/808205815_121984121\n\n**Unity: Develop, Deploy, and Grow  The World's Leading Game Engine** (2026-06-01)\nUnity AI Beta is here: Trained on Unity. Designed for game development. Unity AI Beta Now Live for Unity 6 Build great Unity® is the world’s leading game engine, supported by the most successful game \nSource: http://create.unity3d.com/\n\n**UnityShader 基础(27)-法线贴图-世界空间与切线空间法线计算_知乎** (2021-09-30)\n //世界切线 float3 worldTangent = UnityObjectToWorldDir(v.tangent.xyz); //世界副切线 float3 worldBinormal = cross(worldNormal,worldTangent)*v.tangent.w; 注意: 不同的数据类型需要用不同的命令转换空间 //世界空间顶点 float3 worldPos = \nSource: https://zhuanlan.zhihu.com/p/413508668\n\n**图形处理之Unity3DShader(一)Vertex and Fragment Shader - 酷酷宝哥的博客 - CSDN博客** (2017-08-20)\n一､Properties _MyColor (\"Some Color\", Color) = (1,1,1,1) _MyVector (\"Some Vector\", Vector) = (0,0,0,0) _MyFloat (\"My fld; no lighting is applied. ForwardBase: Used in Forward rendering, ambient, main \nSource: https://blog.csdn.net/hjbatzz/article/details/77434925?locationNum=7&fps=1\n",
+    "web_references": [
+      {
+        "content": "{\n        _MainColor(\"MainColor\",Color) = (1,1,1,1)\n    }\n\n        SubShader\n    {\n        Tags { \"RenderType\" = \"Opaque\" }\n\n        Pass\n        {\n            CGPROGRAM\n            #pragma vertex vert\n            #pragma fragment frag\n\n            float4 _MainColor;\n\n            float4 vert(float4 v:POSITION) :SV_POSITION\n            {\n                return UnityObjectToClipPos(v);",
+        "icon": "",
+        "link": "https://cloud.tencent.com/developer/article/1928508",
+        "media": "腾讯云",
+        "publish_date": "2026-06-13",
+        "refer": "ref_1",
+        "title": "Unity——基于ShaderLab实现光照系统"
+      },
+      {
+        "content": "Pass { Tags { \"LightMode\"=\"ForwardBase\" } CGPROGRAM #pragma vertex vert #pragma fragment frag #include \"Lighting.cginc\" fixed4 _Diffuse; struct a2v { float4 vertex : POSITION;//模型空间的定点位置 float3 normal : NORMAL;//模型顶点的法线 }; struct v2f { float4 pos : SV_POSITION;//裁剪空间的顶点位置 fixed3 color : COLOR;//用于传递顶点空间得到的着色器颜色 }; v2f vert(a2v v) { v2f o; // Transform the vertex from object space to projection space o.pos = mul(UNITY_MATRIX_MVP, v.vertex); // Get ambient term fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz; // Transform the normal fram object space to world space fixed3 worldNormal = normalize(mul(v.normal, (float3x3)_World2Object)); // Get ",
+        "icon": "",
+        "link": "https://blog.csdn.net/qq_16603297/article/details/53144552",
+        "media": "",
+        "publish_date": "2016-11-12",
+        "refer": "ref_2",
+        "title": "unity Shader 的漫反射逐顶点的光照模型_浪里独行的博客-CSDN博客"
+      },
+      {
+        "content": "Shader \"Unity Shaders Book/Chapter 6/HalfLambert\" { Properties{ _Diffuse(\"Diffuse\", Color) = (1, 1, 1, 1) } SubShader{ Pass { Tags {\"LightMode\" = \"ForwardBase\"} CGPROGRAM #pragma vertex vert #pragma fragment frag #include \"Lighting.cginc\" fixed4 _Diffuse; struct a2v { float4 vertex : POSITION; float3 normal : NORMAL; }; struct v2f { float4 pos : SV_POSITION; float3 worldNormal : TEXCOORD0; }; //逐顶点漫反射光照 v2f vert(a2v v) { v2f o; //Transfrom the vertex from object space to projection space o.pos = UnityObjectToClipPos(v.vertex); //Transform thhe normal from object space to world space o.worldNormal = mul(v.normal, (float3x",
+        "icon": "",
+        "link": "https://www.cnblogs.com/Wu-765279087/p/16172789.html",
+        "media": "博客园",
+        "publish_date": "2022-04-21",
+        "refer": "ref_3",
+        "title": "【Unity Shader学习笔记】Unity光照基础-半兰伯特光照 - IDEA_W - 博客园"
+      },
+      {
+        "content": "<p>钛媒体App 4月24日消息,Unity中国在2026(第十九届)北京国际汽车展览会上正式发布AI OS 3D空间智能座舱｡AI OS 3D空间智能座舱旨在解决AI时代原子化内容与多模态数据的展示难题,以统一的空间化体验层融合承接AI的多模态输出,为整车厂商提供向空间感知+AI智能体交互转型的技术解决方案,推动智能座舱从3D HMI迈入空间智能体操作系统的新阶段｡在架构设计上,3D AI ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_20469eb0bf861652",
+        "media": "企鹅号",
+        "publish_date": "2026-04-24",
+        "refer": "ref_4",
+        "title": "Unity中国发布AI OS 3D空间智能座舱"
+      },
+      {
+        "content": "<p>2026 年 4 月 24 日,第十九届北京国际汽车展览会正式启幕,全球 3D 实时引擎技术领军企业 Unity 中国携重磅成果亮相,以七大核心技术展区打造沉浸式体验场景,全面展现团结引擎从 HMI 开发工具向 AI 时代智能交互底座的战略升级,解锁智能座舱与车载交互领域的全新可能｡</p><p><img src='http://qqpublic.qpic.",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_61969eee21350852",
+        "media": "企鹅号",
+        "publish_date": "2026-04-27",
+        "refer": "ref_5",
+        "title": "Unity全新AI OS 3D空间座舱引领智能交互变革"
+      },
+      {
+        "content": "1.顶点着色器(Vertex Shader) 可以完全编程｡ 是GPU流水线的第一个过程,输入来自于CPU｡处理单位是顶点｡ 顶点着色器不能判断各个顶点间的关系,也不能创建和销毁顶点｡因为这样的独立性,GPU可以利用本身的特性并行化处理每一个顶点,这一阶段处理速度很快｡ 这个阶段主要完成的任务是: 坐标变换 逐顶点光照 : 坐标变换 : 可以对顶点坐标进行变换,改变顶点的位置｡可以通过改变顶点位置来模拟水面和布料｡ 顶点着色器最基本的工作 : 将顶点坐标从模型空间转换为齐次裁剪空间｡ NDC :归一化的设备坐标 2.裁切(Clipping) 这一步不可以编程｡",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/569862136",
+        "media": "知乎",
+        "publish_date": "2022-10-01",
+        "refer": "ref_6",
+        "title": "一篇搞定Unity Shader入门精要 (更新中) - 知乎"
+      },
+      {
+        "content": "首先,Unity 是一款 跨平台 引擎,覆盖广泛的市场｡ 以下九条具体功能,是基于用户需求,利用 Unity 引擎实现的｡ 可编程渲染管线: 团结引擎通过其强大的可编程渲染管线支持全平台的通用渲染管线(URP)和PC､Mac､Linux､Xbox 及Playstation 的高画质渲染管线(HDRP),并包含后处理和按需渲染功能｡目前,HDRP 主要用于游戏开发中｡我们也在将 HDRP ",
+        "icon": "",
+        "link": "https://www.sohu.com/a/808205815_121984121",
+        "media": "搜狐",
+        "publish_date": "2024-09-12",
+        "refer": "ref_7",
+        "title": "利用 Unity 引擎实现智能座舱 3D HMI 应用以下九条具体功能_开发_工具_Shader"
+      },
+      {
+        "content": "Unity AI Beta is here: Trained on Unity. Designed for game development. Unity AI Beta Now Live for Unity 6 Build great Unity® is the world’s leading game engine, supported by the most successful game ",
+        "icon": "",
+        "link": "http://create.unity3d.com/",
+        "media": "",
+        "publish_date": "2026-06-01",
+        "refer": "ref_8",
+        "title": "Unity: Develop, Deploy, and Grow  The World's Leading Game Engine"
+      },
+      {
+        "content": " //世界切线 float3 worldTangent = UnityObjectToWorldDir(v.tangent.xyz); //世界副切线 float3 worldBinormal = cross(worldNormal,worldTangent)*v.tangent.w; 注意: 不同的数据类型需要用不同的命令转换空间 //世界空间顶点 float3 worldPos = ",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/413508668",
+        "media": "知乎",
+        "publish_date": "2021-09-30",
+        "refer": "ref_9",
+        "title": "UnityShader 基础(27)-法线贴图-世界空间与切线空间法线计算_知乎"
+      },
+      {
+        "content": "一､Properties _MyColor (\"Some Color\", Color) = (1,1,1,1) _MyVector (\"Some Vector\", Vector) = (0,0,0,0) _MyFloat (\"My fld; no lighting is applied. ForwardBase: Used in Forward rendering, ambient, main ",
+        "icon": "",
+        "link": "https://blog.csdn.net/hjbatzz/article/details/77434925?locationNum=7&fps=1",
+        "media": "",
+        "publish_date": "2017-08-20",
+        "refer": "ref_10",
+        "title": "图形处理之Unity3DShader(一)Vertex and Fragment Shader - 酷酷宝哥的博客 - CSDN博客"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "unity ribbon shader vertex height world space gradient alpha",
+        "query": "Unity ribbon shader vertex height world space gradient alpha"
+      }
+    ],
+    "latency_seconds": 2.12,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Unity URP TrailRenderer custom shader UV scroll",
+    "content": "**Unity 使用TrailRenderer制作拖尾效果_trail renderer-CSDN博客** (2024-03-31)\n使用TrailRenderer实现拖尾效果,具体操作步骤如下: 1､创建一个空对象 在Unity场景中创建一个空对象 2､添加TrailRenderer组件 选择步骤1创建的空对象,然后在Inspector面板中点击“Add Component”按钮,搜索并添加TrailRenderer组件 3､创建一个材质 网上找一张贴图,以作材质的贴图 新建一个材质球并把贴图附加给材质球(其中Shader选择Particles/Standard Unlit) 4､设置TrailRenderer的持续时间,并把上面创建的材质拖到TrailRenderer材质属性里,如下图: 5､编写脚本,此处写一个跟随鼠标移动的拖尾效果｡ using System.Collections; using System.Collections.Generic; using UnityEngine; public class TrailFollowMouse : MonoBehaviour { // Start is called before the first frame update void Start(Update is called once per frame void Update() { // 获取鼠标当前位置 Vector3 mousePos = Input.mousePosition; mousePos.z = 10; // 设置距离摄像机的距离,确保在摄像机视野内 // \nSource: https://blog.csdn.net/mr_five55/article/details/137202016\n\n**深入了解Unity中LineRenderer与TrailRenderer - AndrewFan - 博客园** (2017-02-25)\n 首先我们需要建立了一个GameObject,然后添加LineRenderer组件,然后填入一下参数: LineRenderer参数 其实就是一个沿着X方向延展的一组顶点｡然后新建一个材质,并把它拖入Materials｡ 开始写Shader 属性部分,就是一张贴图就可以了｡ Properties { _MainTex ( \" Base (RGB) \" , 2D) = \" white \" {} } Tags部分,我们需要设定处, half atten) { float4 c ; c.rgb = s.Albedo; c.a = s.Alpha; return c; } 接下来是顶点着色器代码,我们只要将系统传递过来顶点颜色和UV坐标存储下来,以便于输入到表面着色器就可｡ sampler2D _MainTex; fixed4 _SelfCol; struct Input { float2 uv_MainTex; float4 vertColor; }; void vert(inout appdata_full v, out Input o) { o.vertColor = v.color; o.uv_MainTex = v.texcoord;\nSource: https://www.cnblogs.com/driftingclouds/p/6442847.html\n\n**Unity TrailRenderer的基本了解_unitytrailrender-CSDN博客** (2024-03-31)\n 1､创建 法1:通过代码创建 using UnityEngine; public class TrailRendererCreator : MonoBehaviour { private TrailRenderer trailRenderer; // TrailRenderer组件 void Start() { // 创建一个新的GameObject并将TrailRenderer组件添加到其中 GameObject trailObject = new GameObject(\"Trail\"); trailRenderer = trailObject.AddComponent<TrailRenderer>(); // 设置TrailRenderer的属性 trailRenderer.time = 1.0f; // 轨迹持续时间 trailRenderer.startWidth = 0.5f; // 起始宽度 trailRenderer.endWidth = 0.1f; // 结束宽度 trailRenderer.startColor = Color.red; // 起始颜色 trailRenderer.endColor = Color.yellow; // 结束颜色 // 设置其他属性,如材质､纹理等 trailRenderer.material = new Material(Shader.Find(\"Sprites/Default\")); trailRenderer.\nSource: https://blog.csdn.net/mr_five55/article/details/137201931\n\n**【Unity】URP中的UGUIShader实现 - BDFFZI - 博客园** (2025-02-23)\n【Unity】URP 中的 UGUIShader 实现 参考官方 Shader 代码实现: https://github.com/TwoTailsGames/Unity-Built-in-Shaders/blob/master/DefaultResourcesExtra/UI/UI-Default.shader Shader \"UI/Template\"{ Properties { // PerRendererData 表明纹理由每个渲染器提供,似乎是起某种优化作用。 [PerRendererData] _MainTex (\"Sprite Texture\", 2D) = \"white\" {} _Color (\"Tint\", Color) = (1,1,1,1) _StencilComp (\"Stencil Comparison\", Float) = 8 _Stencil (\"Stencil ID\", Float) = 0 _StencilOp (\"Stencil Operation\", Float) = 0 _StencilWriteMask (\"Stencil Write Mask\", Float) = 255 _StencilReadMask (\"Stencil Read Mask\", Float) = 255 _ColorMask (\"Color Mask\", Float) = 15 // 启用Clip功能,Clip掉的像素将不会参与模板测试等。 [Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip (\"Use Alpha Clip\", Float) = 0 } SubShader { LOD 100 //内置无光照系列Shader的LOD一般为100 Tags { \"Queue\"=\"Transparent\" // 渲染顺序为透明队列 \"PreviewType\"=\"Plane\" // 材质预览效果为平面 \"RenderType\"=\"Transparent\" // 渲染类型为透明 \"CanUseSpriteAtlas\"=\"True\" // 表明兼容 LegacySpritePacker 图集功能。 \"IgnoreProjector\"=\"True\" // 表明不受内置管线中投影器功能的影响。 } //UI利用模板功能实现遮罩效果 \nSource: https://www.cnblogs.com/BDFFZI/p/18732774\n\n**Unity:使用TrailRenderer 逐步生成路线。_trailrender生成位置-CSDN博客** (2020-04-01)\nTrailRenderer 在Unity中是一种拖尾画线,我们可以利用它画出路线并显示画线过程(动画)。 代码比较简单,如下: public List<GameObject> gameObjects = new List<GameObject>();//坐标 public TrailRenderer trailRenderer; public Transform tagret;//移动的物体 public float speed=20;//画线速度 public float timespeed = 0.01f; //时间间隔 void Start() { trailRenderer.autodestruct = false;//取消TrailRenderer的自动销毁 StartCoroutine(MoveToway1(tagret, gameObjects, 0, speed, timespeed)); } public IEnumerator MoveToway1(Transform obj, List<GameObject> ways, int index1, float speed, float time) { while (index1 <= ways.Count - 1) { obj.localPosition = Vector3.MoveTowards(obj.localPosition, ways[index1].transform.position, speed * Time.deltaTime); yield return new WaitForSeconds(time); if (Vector3.Distance(ways[index1].transform.position, obj.localPosition) < 0.00001f) { indAI写代码1234567891011121314151617181920212223242526\nSource: https://blog.csdn.net/weixin_42224118/article/details/105249751\n\n**【Unity3D】拖尾TrailRenderer_trail renderer-CSDN博客** (2022-08-26)\n1 TrailRenderer 简介 TrailRenderer 组件用于实现拖尾效果,可以调整拖尾颜色、时长、宽度等属性,其属性面板如下: Materials:拖尾材质,最好设置为 Default-Line;Time:拖尾时长;Width:拖尾宽度,可以是不等宽的;Color:拖尾颜色,可以是渐变的。 在Hierarchy 窗口右键,依次选择【Effects→Trail】,可以创建一个挂载了 TrailRenderer 组件的游戏对象。 2 TrailRenderer 应用 1)游戏界面 2)添加拖尾组件 给球体添加 TrailRenderer 组件。 3)设置拖尾材质 将Materials 属性设置为 Default-Line。 4)调整拖尾宽度 调整拖尾宽度曲线,如下: 5)调整拖尾颜色 点击色条,进入颜色编辑页面。 在色条下面单击,可以添加新的色卡,实现彩色色条,如下: 6)添加脚本组件 TrailController.cs using UnityEngine; public class TrailController : MonoBehaviour { private float speedRate = 4f; private void Update () { float hor = Input.GetAxis(\"Horizontal\"); float ver = Input.GetAxis(\"Vertical\"); Vector3 speed = new Vector3(hor, 0, ver) * speedRate; transform.position += speed * Time.deltaTime; }}一键获取完整项目代码cs运行 说明:TrailController 脚本组件挂在球体上。 7)运行效果\nSource: https://blog.csdn.net/m0_37602827/article/details/126515099\n\n**Unity 拖尾(Trail Renderer)效果的实现_unity拖尾效果怎么做-CSDN博客** (2022-11-11)\n1、新建场景,创建一个球,在球上添加组件Trail Renderer。 2、在Trail Renderer组件设置Time为0.5,Materials材质。 3.Width下点击右键“Add key”添加控制点,起始宽度为1.0,结束宽度为0.0。在Scene场景中拖动球,就可以看到拖尾效果了。\nSource: https://blog.csdn.net/zouxin_88/article/details/83028644\n\n**Unity TrailRenderer 画出轮胎压痕_unity urp下实现轮胎痕迹-CSDN博客** (2019-04-30)\n需求: 在车拐弯的时候出现轮胎压痕。 压痕出现条件: ①.轮胎触碰到地板 ②.轮胎角度有偏移 ③.轮胎在转动 胎痕是断续的,所以每一段胎痕是单独的一个TrailRenderer 轮胎的转动跟角度可以通过wheelCollider来判断 轮胎触碰地板可以通过WheelCollider或者用射线的方式进行判断 压痕组件: public class TireIndentation : MonoBehaviour { Vehicles car; WheelCollider wheel; int index; public TrailRenderer render; } AI写代码1234567通过射线检测轮胎是否着地 bool IsDrawIndentation(out Vector3 indentationPos) { if (wheel == null) { indentationPos = Vector3.zero; return false; } Vector3 pos = wheel.transform.position; Ray ray = new Ray(pos, Vector3.down); RaycastHit hit; bool isHit = Physics.Raycast(ray, out hit, wheel.radius + 0.1f, GlobalValue.GroundLayer); if (isHit) { Debug.DrawLine(hit.point, pos); indentationPos = hit.point; //indentationPos } else indentationPos = Vector3.zero; return isHit; } AI写代码1234567891011121314151617181920通过移动TrailRenderer来绘制压痕 public void OnDrawIndentation() { Vector3 pos; bool isDraw = IsDrawIndentation(out pos); if (isDraw) render.transform.position = pos; else { OnBreakIndentation(); } } AI写代码12345678910\nSource: https://blog.csdn.net/qq_33205561/article/details/89714005\n\n**Unity URP Shader 与 HLSL 自学笔记一 URP风格的Unlit Shader_知乎** (2021-04-01)\n网上很多的shader教程和模板都是基于传统的Built-in渲染管线写成的,在新版Unity的URP中使用会遇到许许多多的问题。 对于一个简单的Unlit Shader,传统的Built-in shader和URP shader的主要区别有: URP shader 使用HLSL代码块而非CG代码块 使用Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl代替cginc 支持C Buffer(常量缓冲区)以兼容SRP Batcher来降低CPU负载 使用DX11风格的新采样方法TEXTURE2D()与SAMPLER() 可以通过GetVertexPositionInputs等方法快速获取相应坐标 URP的shader要在Tags中注明渲染管线是UniversalPipeline 目标效果: 代码如下,因为知乎不支持Shader Lab代码高亮,暂且先用着C风格。 Shader \"Learn/UnlitShader\" { Properties { _BaseMap ( \"MainTex\" , 2 D ) = \"White\" { } _BaseColor ( \"BaseColor\" , Color ) = ( 1.0 , 1.0 , 1.0 , 1.0 ) } SubShader { // URP的shader要在Tags中注明渲染管线是UniversalPipeline Tags { \"RanderPipline\" = \"UniversalPipeline\" \"RanderType\" = \"Opaque\" } HLSLINCLUDE // 引入Core.hlsl头文件,替换UnityCG中的cginc #include \"Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl\" // 将不占空间的材质相关变量放在CBUFFER中,为了兼容SRP Batcher CBUFFER_START ( UnityPerMaterial ) float4 _BaseMap_ST ; half4 _BaseColor ; CBUFFER_END // 材质单独声明,使用DX11风格的新采样方法 TEXTURE2D \nSource: https://zhuanlan.zhihu.com/p/357449445\n\n**【Unity】URP源码分析(Shader篇)_知乎** (2022-08-25)\n着色器 (Shader) 光照模式 (LightMode) UniversalForward (前向 Pass) ShadowCaster (阴影 Pass) DepthOnly (深度 Pass) DepthNormals (深度+法线 Pass) Meta (烘焙 Pass) UniversalGBuffer (GBuffer Pass) 输入 (Input) UnityInput.hlsl _Time、_SinTime、_CosTime、unity_DeltaTime (时间相关) _WorldSpaceCameraPos、_ProjectionParams、_ScreenParams、_GlobalMipBias、_ZBufferParams、unity_OrthoParams (相机参数相关) unity_RenderingLayer (渲染层) unity_LightData、unity_LightIndices(光源数据相关, 光源总数、光源偏移量、光源索引) unity_SpecCube0、unity_SpecCube1 (反射探针相关) unity_Lightmap、unity_LightmapST (光照贴图缩放、偏移量) unity_ShadowMask (阴影遮罩相关) unity_SHAr、unity_SHAg、unity_SHAb、unity_SHBr、unity_SHBg、unity_SHBb、unity_SHC (球谐系数) Input.hlsl InputData (输入数据结构体, positionWS、positionCS、normalWS、viewDirectionWS、shadowCoord、fogCoord、vertexLighting、bakedGI、normalizedScreenSpaceUV、shadowMask、tangentToWorld) _GlossyEnvironmentColor、_GlossyEnvironmentCubeMap (环境光、间接高光) _MainLigh数据结构体) DirectBRDFSpecular (直接光镜面反射计算) Lighting.hlsl DECLARE_LIGHTMAP_OR_SH (LIGHTMAP_ON开启则定义lightmapUV, 否则定义vertexSH) \nSource: https://zhuanlan.zhihu.com/p/557804454\n",
+    "web_references": [
+      {
+        "content": "使用TrailRenderer实现拖尾效果,具体操作步骤如下: 1､创建一个空对象 在Unity场景中创建一个空对象 2､添加TrailRenderer组件 选择步骤1创建的空对象,然后在Inspector面板中点击“Add Component”按钮,搜索并添加TrailRenderer组件 3､创建一个材质 网上找一张贴图,以作材质的贴图 新建一个材质球并把贴图附加给材质球(其中Shader选择Particles/Standard Unlit) 4､设置TrailRenderer的持续时间,并把上面创建的材质拖到TrailRenderer材质属性里,如下图: 5､编写脚本,此处写一个跟随鼠标移动的拖尾效果｡ using System.Collections; using System.Collections.Generic; using UnityEngine; public class TrailFollowMouse : MonoBehaviour { // Start is called before the first frame update void Start(Update is called once per frame void Update() { // 获取鼠标当前位置 Vector3 mousePos = Input.mousePosition; mousePos.z = 10; // 设置距离摄像机的距离,确保在摄像机视野内 // ",
+        "icon": "",
+        "link": "https://blog.csdn.net/mr_five55/article/details/137202016",
+        "media": "",
+        "publish_date": "2024-03-31",
+        "refer": "ref_1",
+        "title": "Unity 使用TrailRenderer制作拖尾效果_trail renderer-CSDN博客"
+      },
+      {
+        "content": " 首先我们需要建立了一个GameObject,然后添加LineRenderer组件,然后填入一下参数: LineRenderer参数 其实就是一个沿着X方向延展的一组顶点｡然后新建一个材质,并把它拖入Materials｡ 开始写Shader 属性部分,就是一张贴图就可以了｡ Properties { _MainTex ( \" Base (RGB) \" , 2D) = \" white \" {} } Tags部分,我们需要设定处, half atten) { float4 c ; c.rgb = s.Albedo; c.a = s.Alpha; return c; } 接下来是顶点着色器代码,我们只要将系统传递过来顶点颜色和UV坐标存储下来,以便于输入到表面着色器就可｡ sampler2D _MainTex; fixed4 _SelfCol; struct Input { float2 uv_MainTex; float4 vertColor; }; void vert(inout appdata_full v, out Input o) { o.vertColor = v.color; o.uv_MainTex = v.texcoord;",
+        "icon": "",
+        "link": "https://www.cnblogs.com/driftingclouds/p/6442847.html",
+        "media": "博客园",
+        "publish_date": "2017-02-25",
+        "refer": "ref_2",
+        "title": "深入了解Unity中LineRenderer与TrailRenderer - AndrewFan - 博客园"
+      },
+      {
+        "content": " 1､创建 法1:通过代码创建 using UnityEngine; public class TrailRendererCreator : MonoBehaviour { private TrailRenderer trailRenderer; // TrailRenderer组件 void Start() { // 创建一个新的GameObject并将TrailRenderer组件添加到其中 GameObject trailObject = new GameObject(\"Trail\"); trailRenderer = trailObject.AddComponent<TrailRenderer>(); // 设置TrailRenderer的属性 trailRenderer.time = 1.0f; // 轨迹持续时间 trailRenderer.startWidth = 0.5f; // 起始宽度 trailRenderer.endWidth = 0.1f; // 结束宽度 trailRenderer.startColor = Color.red; // 起始颜色 trailRenderer.endColor = Color.yellow; // 结束颜色 // 设置其他属性,如材质､纹理等 trailRenderer.material = new Material(Shader.Find(\"Sprites/Default\")); trailRenderer.",
+        "icon": "",
+        "link": "https://blog.csdn.net/mr_five55/article/details/137201931",
+        "media": "",
+        "publish_date": "2024-03-31",
+        "refer": "ref_3",
+        "title": "Unity TrailRenderer的基本了解_unitytrailrender-CSDN博客"
+      },
+      {
+        "content": "【Unity】URP 中的 UGUIShader 实现 参考官方 Shader 代码实现: https://github.com/TwoTailsGames/Unity-Built-in-Shaders/blob/master/DefaultResourcesExtra/UI/UI-Default.shader Shader \"UI/Template\"{ Properties { // PerRendererData 表明纹理由每个渲染器提供,似乎是起某种优化作用。 [PerRendererData] _MainTex (\"Sprite Texture\", 2D) = \"white\" {} _Color (\"Tint\", Color) = (1,1,1,1) _StencilComp (\"Stencil Comparison\", Float) = 8 _Stencil (\"Stencil ID\", Float) = 0 _StencilOp (\"Stencil Operation\", Float) = 0 _StencilWriteMask (\"Stencil Write Mask\", Float) = 255 _StencilReadMask (\"Stencil Read Mask\", Float) = 255 _ColorMask (\"Color Mask\", Float) = 15 // 启用Clip功能,Clip掉的像素将不会参与模板测试等。 [Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip (\"Use Alpha Clip\", Float) = 0 } SubShader { LOD 100 //内置无光照系列Shader的LOD一般为100 Tags { \"Queue\"=\"Transparent\" // 渲染顺序为透明队列 \"PreviewType\"=\"Plane\" // 材质预览效果为平面 \"RenderType\"=\"Transparent\" // 渲染类型为透明 \"CanUseSpriteAtlas\"=\"True\" // 表明兼容 LegacySpritePacker 图集功能。 \"IgnoreProjector\"=\"True\" // 表明不受内置管线中投影器功能的影响。 } //UI利用模板功能实现遮罩效果 ",
+        "icon": "",
+        "link": "https://www.cnblogs.com/BDFFZI/p/18732774",
+        "media": "博客园",
+        "publish_date": "2025-02-23",
+        "refer": "ref_4",
+        "title": "【Unity】URP中的UGUIShader实现 - BDFFZI - 博客园"
+      },
+      {
+        "content": "TrailRenderer 在Unity中是一种拖尾画线,我们可以利用它画出路线并显示画线过程(动画)。 代码比较简单,如下: public List<GameObject> gameObjects = new List<GameObject>();//坐标 public TrailRenderer trailRenderer; public Transform tagret;//移动的物体 public float speed=20;//画线速度 public float timespeed = 0.01f; //时间间隔 void Start() { trailRenderer.autodestruct = false;//取消TrailRenderer的自动销毁 StartCoroutine(MoveToway1(tagret, gameObjects, 0, speed, timespeed)); } public IEnumerator MoveToway1(Transform obj, List<GameObject> ways, int index1, float speed, float time) { while (index1 <= ways.Count - 1) { obj.localPosition = Vector3.MoveTowards(obj.localPosition, ways[index1].transform.position, speed * Time.deltaTime); yield return new WaitForSeconds(time); if (Vector3.Distance(ways[index1].transform.position, obj.localPosition) < 0.00001f) { indAI写代码1234567891011121314151617181920212223242526",
+        "icon": "",
+        "link": "https://blog.csdn.net/weixin_42224118/article/details/105249751",
+        "media": "",
+        "publish_date": "2020-04-01",
+        "refer": "ref_5",
+        "title": "Unity:使用TrailRenderer 逐步生成路线。_trailrender生成位置-CSDN博客"
+      },
+      {
+        "content": "1 TrailRenderer 简介 TrailRenderer 组件用于实现拖尾效果,可以调整拖尾颜色、时长、宽度等属性,其属性面板如下: Materials:拖尾材质,最好设置为 Default-Line;Time:拖尾时长;Width:拖尾宽度,可以是不等宽的;Color:拖尾颜色,可以是渐变的。 在Hierarchy 窗口右键,依次选择【Effects→Trail】,可以创建一个挂载了 TrailRenderer 组件的游戏对象。 2 TrailRenderer 应用 1)游戏界面 2)添加拖尾组件 给球体添加 TrailRenderer 组件。 3)设置拖尾材质 将Materials 属性设置为 Default-Line。 4)调整拖尾宽度 调整拖尾宽度曲线,如下: 5)调整拖尾颜色 点击色条,进入颜色编辑页面。 在色条下面单击,可以添加新的色卡,实现彩色色条,如下: 6)添加脚本组件 TrailController.cs using UnityEngine; public class TrailController : MonoBehaviour { private float speedRate = 4f; private void Update () { float hor = Input.GetAxis(\"Horizontal\"); float ver = Input.GetAxis(\"Vertical\"); Vector3 speed = new Vector3(hor, 0, ver) * speedRate; transform.position += speed * Time.deltaTime; }}一键获取完整项目代码cs运行 说明:TrailController 脚本组件挂在球体上。 7)运行效果",
+        "icon": "",
+        "link": "https://blog.csdn.net/m0_37602827/article/details/126515099",
+        "media": "",
+        "publish_date": "2022-08-26",
+        "refer": "ref_6",
+        "title": "【Unity3D】拖尾TrailRenderer_trail renderer-CSDN博客"
+      },
+      {
+        "content": "1、新建场景,创建一个球,在球上添加组件Trail Renderer。 2、在Trail Renderer组件设置Time为0.5,Materials材质。 3.Width下点击右键“Add key”添加控制点,起始宽度为1.0,结束宽度为0.0。在Scene场景中拖动球,就可以看到拖尾效果了。",
+        "icon": "",
+        "link": "https://blog.csdn.net/zouxin_88/article/details/83028644",
+        "media": "",
+        "publish_date": "2022-11-11",
+        "refer": "ref_7",
+        "title": "Unity 拖尾(Trail Renderer)效果的实现_unity拖尾效果怎么做-CSDN博客"
+      },
+      {
+        "content": "需求: 在车拐弯的时候出现轮胎压痕。 压痕出现条件: ①.轮胎触碰到地板 ②.轮胎角度有偏移 ③.轮胎在转动 胎痕是断续的,所以每一段胎痕是单独的一个TrailRenderer 轮胎的转动跟角度可以通过wheelCollider来判断 轮胎触碰地板可以通过WheelCollider或者用射线的方式进行判断 压痕组件: public class TireIndentation : MonoBehaviour { Vehicles car; WheelCollider wheel; int index; public TrailRenderer render; } AI写代码1234567通过射线检测轮胎是否着地 bool IsDrawIndentation(out Vector3 indentationPos) { if (wheel == null) { indentationPos = Vector3.zero; return false; } Vector3 pos = wheel.transform.position; Ray ray = new Ray(pos, Vector3.down); RaycastHit hit; bool isHit = Physics.Raycast(ray, out hit, wheel.radius + 0.1f, GlobalValue.GroundLayer); if (isHit) { Debug.DrawLine(hit.point, pos); indentationPos = hit.point; //indentationPos } else indentationPos = Vector3.zero; return isHit; } AI写代码1234567891011121314151617181920通过移动TrailRenderer来绘制压痕 public void OnDrawIndentation() { Vector3 pos; bool isDraw = IsDrawIndentation(out pos); if (isDraw) render.transform.position = pos; else { OnBreakIndentation(); } } AI写代码12345678910",
+        "icon": "",
+        "link": "https://blog.csdn.net/qq_33205561/article/details/89714005",
+        "media": "",
+        "publish_date": "2019-04-30",
+        "refer": "ref_8",
+        "title": "Unity TrailRenderer 画出轮胎压痕_unity urp下实现轮胎痕迹-CSDN博客"
+      },
+      {
+        "content": "网上很多的shader教程和模板都是基于传统的Built-in渲染管线写成的,在新版Unity的URP中使用会遇到许许多多的问题。 对于一个简单的Unlit Shader,传统的Built-in shader和URP shader的主要区别有: URP shader 使用HLSL代码块而非CG代码块 使用Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl代替cginc 支持C Buffer(常量缓冲区)以兼容SRP Batcher来降低CPU负载 使用DX11风格的新采样方法TEXTURE2D()与SAMPLER() 可以通过GetVertexPositionInputs等方法快速获取相应坐标 URP的shader要在Tags中注明渲染管线是UniversalPipeline 目标效果: 代码如下,因为知乎不支持Shader Lab代码高亮,暂且先用着C风格。 Shader \"Learn/UnlitShader\" { Properties { _BaseMap ( \"MainTex\" , 2 D ) = \"White\" { } _BaseColor ( \"BaseColor\" , Color ) = ( 1.0 , 1.0 , 1.0 , 1.0 ) } SubShader { // URP的shader要在Tags中注明渲染管线是UniversalPipeline Tags { \"RanderPipline\" = \"UniversalPipeline\" \"RanderType\" = \"Opaque\" } HLSLINCLUDE // 引入Core.hlsl头文件,替换UnityCG中的cginc #include \"Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl\" // 将不占空间的材质相关变量放在CBUFFER中,为了兼容SRP Batcher CBUFFER_START ( UnityPerMaterial ) float4 _BaseMap_ST ; half4 _BaseColor ; CBUFFER_END // 材质单独声明,使用DX11风格的新采样方法 TEXTURE2D ",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/357449445",
+        "media": "知乎",
+        "publish_date": "2021-04-01",
+        "refer": "ref_9",
+        "title": "Unity URP Shader 与 HLSL 自学笔记一 URP风格的Unlit Shader_知乎"
+      },
+      {
+        "content": "着色器 (Shader) 光照模式 (LightMode) UniversalForward (前向 Pass) ShadowCaster (阴影 Pass) DepthOnly (深度 Pass) DepthNormals (深度+法线 Pass) Meta (烘焙 Pass) UniversalGBuffer (GBuffer Pass) 输入 (Input) UnityInput.hlsl _Time、_SinTime、_CosTime、unity_DeltaTime (时间相关) _WorldSpaceCameraPos、_ProjectionParams、_ScreenParams、_GlobalMipBias、_ZBufferParams、unity_OrthoParams (相机参数相关) unity_RenderingLayer (渲染层) unity_LightData、unity_LightIndices(光源数据相关, 光源总数、光源偏移量、光源索引) unity_SpecCube0、unity_SpecCube1 (反射探针相关) unity_Lightmap、unity_LightmapST (光照贴图缩放、偏移量) unity_ShadowMask (阴影遮罩相关) unity_SHAr、unity_SHAg、unity_SHAb、unity_SHBr、unity_SHBg、unity_SHBb、unity_SHC (球谐系数) Input.hlsl InputData (输入数据结构体, positionWS、positionCS、normalWS、viewDirectionWS、shadowCoord、fogCoord、vertexLighting、bakedGI、normalizedScreenSpaceUV、shadowMask、tangentToWorld) _GlossyEnvironmentColor、_GlossyEnvironmentCubeMap (环境光、间接高光) _MainLigh数据结构体) DirectBRDFSpecular (直接光镜面反射计算) Lighting.hlsl DECLARE_LIGHTMAP_OR_SH (LIGHTMAP_ON开启则定义lightmapUV, 否则定义vertexSH) ",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/557804454",
+        "media": "知乎",
+        "publish_date": "2022-08-25",
+        "refer": "ref_10",
+        "title": "【Unity】URP源码分析(Shader篇)_知乎"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "unity urp trailrenderer uv scroll shader",
+        "query": "Unity URP TrailRenderer custom shader UV scroll"
+      }
+    ],
+    "latency_seconds": 1.84,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Unity Shader Graph noise vertex displacement smoke wisp",
+    "content": "**[Unity] ShaderGraph实现伪室内效果,性能大解放_unity假室内效果-CSDN博客** (2024-07-24)\n使用版本为:2023.1.19f1 更详细的实现逻辑及步骤参考Mert Kirimgeri的视频: UNITY SHADER GRAPH with Fake Interiors Shader (youtube.com) OS:这简直是个降低性能的天才技术!!! 目录 一､构建虚拟立方体 二､切线空间与视角射线 三､赋予贴图 四､天空盒环境反射 五､两侧空间与插值混合 七､最终效果 八､文件下载 \nSource: https://blog.csdn.net/Katrina419/article/details/135715210\n\n**Unity 之ShaderGraph入门使用详解_unity shader graph-CSDN博客** (2022-04-22)\nCC 4.0 BY-SA版权 未经作者同意,禁止转载 16 篇文章 订阅专栏 本文介绍了Unity ShaderGraph的基本概念及其使用方法｡包括ShaderGraph的导入､配置､面板操作及示例创建流程｡适合初学者快速掌握ShaderGraph的使用｡ Unity 之ShaderGraph入门使用详解 2.1 现有工程导入 2.2 导入指定版本 2.3 新工程导入 3.1 基本设置 3.2 \nSource: https://czhenya.blog.csdn.net/article/details/118378214\n\n**Unity使用Shader Graph实现遮挡剔除_unity uishader范围遮罩剔除-CSDN博客** (2021-08-02)\n遮挡剔除 生成材质: Shader Graph Project里面右键-->Create-->Shader-->Universal Render Pipeline-->Unlit Shader Graph 选中创建出来的Shader Graph右键新建一个材质Material,双击Shader Graph打开 背景板上右键-->Create Node-->搜索Fresnel Effect 在左侧的blackboard里新建一个Color,命名color (旧版本可以在blackboard中直接调整参数,新版本要选中变量后在右侧的graph inspector的note settings中去调整参数) 在node settings中调整到你想要显示的轮廓的颜色 将color拖拽出来,从Fresnel Effect右侧的Out拖拽出一个Multiply,然后把color给到B值,color则有一个可视化的效果｡ 将输出的值(Out)连接到Base Color上,这个时候可以在预览窗口中看到它的样子｡ 如果想添加一点噪点让现实更真实,可以添加一个Dither,修改X值可以调整它的填充效果｡ 创建一个Float值,拖拽出来连上X,可以在note settings中给它一个初始值,将这个值输出到Alpha上｡ 用一个阈值来控制Alpha:创建一个Float变量,拖出来给到Alpha Clip Threshold｡ 选择右上角的Save \nSource: https://blog.csdn.net/weixin_52415334/article/details/119326540\n\n**Unity Shader Graph实现全息瞄准器_全息眼镜csdn-CSDN博客** (2025-12-14)\n在Unity项目中,选择Create->Shader Graph->URP->Unlit Shader Graph,新建一个名为HoloSight的Shader Graph,然后进入编辑界面｡ 在Shader Graph的输入面板设置中,单击+号,新增一个类型为Texture2D的名为MainTex的输入变量,新增一个类型为Color的名为Color的变量,以及两个类型为Float的名为AlphaClip和Size的变量｡单击Fragment节点,在Graph Settings设置面板中,单击Alpha Clipping选项,开启透明度裁剪功能,使得物体的某些部分透明｡(即只叠加全息投影器的分划板,其他部分透明)｡ 把Color和AlphaClip变量拖动到编辑界面,连接Fragment节点的Base Color和Alpha Clip Threshold输入｡Color用于定义全息投影的主色调(例如发光的红色),AlphaClip是设置一个全局阈值,低于阈值的像素被完全丢弃(镂空),高于或等于的像素被保留,从而创造出尖锐的数字化边缘｡ 把MainTex变量拖动到编辑界面,通过Sampler Texture 2D节点进行采样,Sampler Texture 2D节点的A端口输出连接到Fragment节点的Alpha端口,控制表面镂空效果,如下图｡\nSource: https://blog.csdn.net/gzroy/article/details/155916940\n\n**Unity Shader Graph 基础学习_知乎** (2021-08-10)\nsiki学院ShaderGraph教程学习记录: 二､使用ShaderGraph的两种方式: 第一种:使用unity自带的模板; 第二种:手动创建修改工程､配置环境: 1.安装ShaderGraph;在PackageManager里面搜索Shade人Graph点击安装; 2.安装HDRP高清渲染管线;\nSource: https://zhuanlan.zhihu.com/p/398368713\n\n**Unity团结引擎发布三大战略,极速提升渲染效能** (2025-10-24)\n<p>中国,上海 — Unity中国今日在北外滩Unite 2025开发者大会上正式发布团结引擎1.7.3版本,推出Unity生态首个完整的全局动态实时光照解决方案TuanjieGI,实现无需预烘焙即可呈现端游级光影效果的技术突破｡新版本在核心渲染能力､跨端部署能力､AI集成能力三大战略方向全面升级,并与腾讯游戏深度合作,基于腾讯混元大模型能力推出AI Graph智能创作平台｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_92568faf50a89652\n\n**【基础】UnityShader Graph 的编辑器介绍 - SmalBox - 博客园** (2025-12-08)\n在Unity游戏开发中,着色器(Shader)是定义物体表面视觉表现的核心组件,直接影响游戏画面的最终品质｡Shader Graph作为Unity推出的可视化着色器编辑工具,通过节点化的工作流程显著降低了复杂着色器的开发门槛｡本文将系统阐述URP(Universal Render Pipeline)环境下Shader Graph的完整知识体系,深入剖析着色器网格(Shader \nSource: https://www.cnblogs.com/SmalBox/p/19320143\n\n**【unity】ShaderGraph学习笔记_lit shader graph-CSDN博客** (2023-08-11)\n【unity】ShaderGraph学习笔记 创建ShaderGraph 创建URP的shaderGraph文件 在Project 面板 里Create￫ShaderGraph￫URP￫这里主要有几个选项 Lit Shader Graph:有光照三维着色器 Unlit Shader Graph:无光照三维着色器 Sprite Custom Lit Shader Graph:自定义光照图片着色器 \nSource: https://blog.csdn.net/dxs1990/article/details/131935969\n\n**Unity Shader Graph 使用与特效实现 - 随笔分类 - SmalBox - 博客园** (2026-06-08)\n其核心价值在于通过阅读全文posted @ 2026-06-07 15:03 SmalBox 阅读(9) 评论(0) 推荐(0) 【节点】[DynamicNoise节点]原理解析与实际应用 摘要: Dynamic Noise 节点是 Unity URP Shader Graph 中一个功能强大的噪声生成工具,它基于输入的 UV 坐标生成动态变化的噪声图案｡与静态噪声不同,Dynamic \nSource: https://www.cnblogs.com/SmalBox/category/2486743.html?page=1\n\n**Unity 之ShaderGraph Artistic节点解析汇总_shadergraph 过滤颜色_unityshadergraph-CSDN博客** (2024-06-20)\n若你的工程还没有进行基础配置,请查看我的博文Unity 之ShaderGraph入门使用详解,按照步骤操作完成配置即可,还能顺便学习一下基础操作流程哦~ 一,Adjustment 调整节点 1.1 Channel Mixer 通道混合节点:控制输入In 的每个通道对输出Out 的每个通道的比例｡节点上的滑块参数控制每个输入通道的贡献｡切换按钮参数控制当前正在编辑哪个输出通道｡用于编辑 -2 \nSource: https://blog.csdn.net/2401_84301352/article/details/139834605\n",
+    "web_references": [
+      {
+        "content": "使用版本为:2023.1.19f1 更详细的实现逻辑及步骤参考Mert Kirimgeri的视频: UNITY SHADER GRAPH with Fake Interiors Shader (youtube.com) OS:这简直是个降低性能的天才技术!!! 目录 一､构建虚拟立方体 二､切线空间与视角射线 三､赋予贴图 四､天空盒环境反射 五､两侧空间与插值混合 七､最终效果 八､文件下载 ",
+        "icon": "",
+        "link": "https://blog.csdn.net/Katrina419/article/details/135715210",
+        "media": "",
+        "publish_date": "2024-07-24",
+        "refer": "ref_1",
+        "title": "[Unity] ShaderGraph实现伪室内效果,性能大解放_unity假室内效果-CSDN博客"
+      },
+      {
+        "content": "CC 4.0 BY-SA版权 未经作者同意,禁止转载 16 篇文章 订阅专栏 本文介绍了Unity ShaderGraph的基本概念及其使用方法｡包括ShaderGraph的导入､配置､面板操作及示例创建流程｡适合初学者快速掌握ShaderGraph的使用｡ Unity 之ShaderGraph入门使用详解 2.1 现有工程导入 2.2 导入指定版本 2.3 新工程导入 3.1 基本设置 3.2 ",
+        "icon": "",
+        "link": "https://czhenya.blog.csdn.net/article/details/118378214",
+        "media": "",
+        "publish_date": "2022-04-22",
+        "refer": "ref_2",
+        "title": "Unity 之ShaderGraph入门使用详解_unity shader graph-CSDN博客"
+      },
+      {
+        "content": "遮挡剔除 生成材质: Shader Graph Project里面右键-->Create-->Shader-->Universal Render Pipeline-->Unlit Shader Graph 选中创建出来的Shader Graph右键新建一个材质Material,双击Shader Graph打开 背景板上右键-->Create Node-->搜索Fresnel Effect 在左侧的blackboard里新建一个Color,命名color (旧版本可以在blackboard中直接调整参数,新版本要选中变量后在右侧的graph inspector的note settings中去调整参数) 在node settings中调整到你想要显示的轮廓的颜色 将color拖拽出来,从Fresnel Effect右侧的Out拖拽出一个Multiply,然后把color给到B值,color则有一个可视化的效果｡ 将输出的值(Out)连接到Base Color上,这个时候可以在预览窗口中看到它的样子｡ 如果想添加一点噪点让现实更真实,可以添加一个Dither,修改X值可以调整它的填充效果｡ 创建一个Float值,拖拽出来连上X,可以在note settings中给它一个初始值,将这个值输出到Alpha上｡ 用一个阈值来控制Alpha:创建一个Float变量,拖出来给到Alpha Clip Threshold｡ 选择右上角的Save ",
+        "icon": "",
+        "link": "https://blog.csdn.net/weixin_52415334/article/details/119326540",
+        "media": "",
+        "publish_date": "2021-08-02",
+        "refer": "ref_3",
+        "title": "Unity使用Shader Graph实现遮挡剔除_unity uishader范围遮罩剔除-CSDN博客"
+      },
+      {
+        "content": "在Unity项目中,选择Create->Shader Graph->URP->Unlit Shader Graph,新建一个名为HoloSight的Shader Graph,然后进入编辑界面｡ 在Shader Graph的输入面板设置中,单击+号,新增一个类型为Texture2D的名为MainTex的输入变量,新增一个类型为Color的名为Color的变量,以及两个类型为Float的名为AlphaClip和Size的变量｡单击Fragment节点,在Graph Settings设置面板中,单击Alpha Clipping选项,开启透明度裁剪功能,使得物体的某些部分透明｡(即只叠加全息投影器的分划板,其他部分透明)｡ 把Color和AlphaClip变量拖动到编辑界面,连接Fragment节点的Base Color和Alpha Clip Threshold输入｡Color用于定义全息投影的主色调(例如发光的红色),AlphaClip是设置一个全局阈值,低于阈值的像素被完全丢弃(镂空),高于或等于的像素被保留,从而创造出尖锐的数字化边缘｡ 把MainTex变量拖动到编辑界面,通过Sampler Texture 2D节点进行采样,Sampler Texture 2D节点的A端口输出连接到Fragment节点的Alpha端口,控制表面镂空效果,如下图｡",
+        "icon": "",
+        "link": "https://blog.csdn.net/gzroy/article/details/155916940",
+        "media": "",
+        "publish_date": "2025-12-14",
+        "refer": "ref_4",
+        "title": "Unity Shader Graph实现全息瞄准器_全息眼镜csdn-CSDN博客"
+      },
+      {
+        "content": "siki学院ShaderGraph教程学习记录: 二､使用ShaderGraph的两种方式: 第一种:使用unity自带的模板; 第二种:手动创建修改工程､配置环境: 1.安装ShaderGraph;在PackageManager里面搜索Shade人Graph点击安装; 2.安装HDRP高清渲染管线;",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/398368713",
+        "media": "知乎",
+        "publish_date": "2021-08-10",
+        "refer": "ref_5",
+        "title": "Unity Shader Graph 基础学习_知乎"
+      },
+      {
+        "content": "<p>中国,上海 — Unity中国今日在北外滩Unite 2025开发者大会上正式发布团结引擎1.7.3版本,推出Unity生态首个完整的全局动态实时光照解决方案TuanjieGI,实现无需预烘焙即可呈现端游级光影效果的技术突破｡新版本在核心渲染能力､跨端部署能力､AI集成能力三大战略方向全面升级,并与腾讯游戏深度合作,基于腾讯混元大模型能力推出AI Graph智能创作平台｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_92568faf50a89652",
+        "media": "企鹅号",
+        "publish_date": "2025-10-24",
+        "refer": "ref_6",
+        "title": "Unity团结引擎发布三大战略,极速提升渲染效能"
+      },
+      {
+        "content": "在Unity游戏开发中,着色器(Shader)是定义物体表面视觉表现的核心组件,直接影响游戏画面的最终品质｡Shader Graph作为Unity推出的可视化着色器编辑工具,通过节点化的工作流程显著降低了复杂着色器的开发门槛｡本文将系统阐述URP(Universal Render Pipeline)环境下Shader Graph的完整知识体系,深入剖析着色器网格(Shader ",
+        "icon": "",
+        "link": "https://www.cnblogs.com/SmalBox/p/19320143",
+        "media": "博客园",
+        "publish_date": "2025-12-08",
+        "refer": "ref_7",
+        "title": "【基础】UnityShader Graph 的编辑器介绍 - SmalBox - 博客园"
+      },
+      {
+        "content": "【unity】ShaderGraph学习笔记 创建ShaderGraph 创建URP的shaderGraph文件 在Project 面板 里Create￫ShaderGraph￫URP￫这里主要有几个选项 Lit Shader Graph:有光照三维着色器 Unlit Shader Graph:无光照三维着色器 Sprite Custom Lit Shader Graph:自定义光照图片着色器 ",
+        "icon": "",
+        "link": "https://blog.csdn.net/dxs1990/article/details/131935969",
+        "media": "",
+        "publish_date": "2023-08-11",
+        "refer": "ref_8",
+        "title": "【unity】ShaderGraph学习笔记_lit shader graph-CSDN博客"
+      },
+      {
+        "content": "其核心价值在于通过阅读全文posted @ 2026-06-07 15:03 SmalBox 阅读(9) 评论(0) 推荐(0) 【节点】[DynamicNoise节点]原理解析与实际应用 摘要: Dynamic Noise 节点是 Unity URP Shader Graph 中一个功能强大的噪声生成工具,它基于输入的 UV 坐标生成动态变化的噪声图案｡与静态噪声不同,Dynamic ",
+        "icon": "",
+        "link": "https://www.cnblogs.com/SmalBox/category/2486743.html?page=1",
+        "media": "博客园",
+        "publish_date": "2026-06-08",
+        "refer": "ref_9",
+        "title": "Unity Shader Graph 使用与特效实现 - 随笔分类 - SmalBox - 博客园"
+      },
+      {
+        "content": "若你的工程还没有进行基础配置,请查看我的博文Unity 之ShaderGraph入门使用详解,按照步骤操作完成配置即可,还能顺便学习一下基础操作流程哦~ 一,Adjustment 调整节点 1.1 Channel Mixer 通道混合节点:控制输入In 的每个通道对输出Out 的每个通道的比例｡节点上的滑块参数控制每个输入通道的贡献｡切换按钮参数控制当前正在编辑哪个输出通道｡用于编辑 -2 ",
+        "icon": "",
+        "link": "https://blog.csdn.net/2401_84301352/article/details/139834605",
+        "media": "",
+        "publish_date": "2024-06-20",
+        "refer": "ref_10",
+        "title": "Unity 之ShaderGraph Artistic节点解析汇总_shadergraph 过滤颜色_unityshadergraph-CSDN博客"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "unity shade graph noise vertex displace smoke wisp",
+        "query": "Unity Shader Graph noise vertex displacement smoke wisp"
+      }
+    ],
+    "latency_seconds": 2.04,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Unity light shaft beam soft additive blend mobile",
+    "content": "**UnityShader学习教程之语法规范以及光照模型_#pragma surface surf standard-CSDN博客** (2017-05-23)\nUnity的内建Diffuse着色器的设定值)｡这个数值决定了我们能用什么样的Shader｡ VertexLit及其系列 = 100 Decal, Reflective VertexLit = 150体的像素深度会被记录(默认记录) Off,通常用于半透明物体｡AlphaTest(Less,Greater,LEqual,GEqual,Equal,NotEqual,Always) 开启alpha测试Blend SourceB./endMode DestB/endMode 设置alpha混合模式｡(以下为相关属性说明)One 值为1,使用此设置来让源或是目标颜色完全的通过｡Zero 值为0 ,使用此设置来删除源或目标值｡SroColor 此阶段的值是乘以源颜色的值｡SrcAlpha ha)OneMinusDstColor 此阶段的值是乘以(1-destination color)OneMinusDstAlpha 此阶段的值是乘以(1-destination alpha) 例如: Blend SrcAlpha OneMinusSrcAlpha //Alpha blending Blend O\nSource: https://blog.csdn.net/xiongwen_li/article/details/72655688\n\n**LightShadows - Unity 脚本 API** (2026-04-22)\nenumeration 描述Light的阴影投射选项｡ 变量 None 不投射阴影(默认值)｡ Hard 投射“硬”阴影(无阴影过滤)｡ Soft 投射“柔和”阴影(具有 4x PCF 过滤)｡ Copyright © 2023 Unity Technologies \"Unity\"､Unity 徽标及其他 Unity 商标是 Unity Technologies \nSource: https://docs.unity.cn/cn/2017.1/ScriptReference/LightShadows.html\n\n**安装unity后创建项目出现的问题与解决记录_unity fatal error-CSDN博客** (2023-07-22)\nunity打开项目时报Fatal error!显示无权访问d3dcompiler_47.dll 从HUB中找到d3dcompiler_47.dll,拷贝到安装目录\\Unity\\Editor\\2020.3.3f1c1\\Editor\\Data\\Tools\\下。 重新启动,就可以打开了。\nSource: https://blog.csdn.net/littlec7833_cn/article/details/131870453\n\n**Unity - 手册: 编辑器故障排除** (2025-12-15)\n下面的各个部分将介绍如何在不同情况下排除 Unity 编辑器的故障以及预防问题。通常情况,应确保计算机满足所有系统要求,处于最新状态,并且您在系统中具有所需的用户权限。还要定期备份以确保项目的安全。 版本 可以在不同的文件夹中安装不同版本的编辑器。但是,请务必备份项目,因为这些项目可能会被较新的版本升级,而无法在较旧版本的 Unity 中打开它们。请参阅安装 Unity以了解更多信息。 附加组件的许可证仅对具有相同主要版本号(例如 3.x 和4.x)的Unity 版本有效。如果升级到 Unity 的次要版本,例如 4.0 升级到 4.1,则将保留附加组件。 激活 Unity Hub 是所有许可证管理操作的主要方法。有关所有许可证激活方法的信息,请参阅许可证激活方法。 如果在激活许可证时遇到问题,请参阅许可证故障排除。 如果在激活许可证或登录用户帐户时仍遇到问题,请联系Unity Support。 无法启动 如果 Unity 在启动时崩溃,请首先要确保计算机符合最低系统要求。此外,还需要更新到最新的图形驱动程序和音频驱动程序。 如果出现磁盘写入错误,请检查用户帐户限制。在MacOS 中时,请注意我们不建议使用“root 用户”,因为 Unity 尚未在此模式下进行测试。Unity 必须对其文件夹具有写入权限,但如果选择手动授予这些权限,请检查以下文件夹: Windows: Unity 的安装文件夹 %AllUsersProfile%\\Unity (通常为 C:\\ProgramData\\Unity) C:\\Documents and Settings\\<user>\\Local Settings\\Application Data\\Unity C:\\Users\\<user>\\AppData\\Local\\Unity macOS: Unity.app 包内容 /Library/Application Support/Unity ~/Library/Logs/Unity 使用以非本机分区方法格式化的硬盘以及使用某些软件在存储设备之间转移数据时,一些用户遇到过问题。 字体 损坏的字体可能会导致 Unity 崩溃,可以按照以下步骤查找损坏的文件: Windows: 打开计算机上的“Windows”文件夹中的 fonts 文件夹。 从视图 (View) 菜单中选择详细信息 (Detai\nSource: https://docs.unity3d.com/cn/current/Manual/TroubleShootingEditor.html\n\n**Unity MMD blendshape missing问题_知乎** (2024-03-18)\n在Unity制作mmd的时候遇到了一个逆天的问题,在使用GitHub - ShiinaManatsu/MMD4UnityTools: Tools for unity HDRP helps make mmd easy这个插件将vmd中的表情文件转化成Unity可用的anim格式时,遇到了明明Blendshape名字一样,但是却显示Missing的问题 但是如果我直接k帧,显示在上面的是: 这俩明明就一样吧?一样吧?一样吧? 这可给我急坏了,首先是怀疑这个插件的源码,看了下他解析用了这句话 var registerName = blendShapeNames . Where(x => x . Split('.') . Last() == name) . First(); 看起来没什么问题,用“.\"进行Split,并且这个Split语法支持没有\".\"的情况。 那还能是什么问题? 由于我要支持一些渲染的feature,需要对模型进行一些更改(如顶点色,拆分模型,合并材质等),所以用的是pmx导入blender后修改的模型,那我现在直接用pmx原生模型在unity里转换成fbx试一下: 原生模型就是好的,为什么?为什么? 最后,终于发现了原因: 我的模型结构是: 对Missing的动画进行重命名,显示的是: 这是对Debug最具有迷惑性的,路径是对的但显示Missing,就会引导你怀疑其他问题(例如FBX的格式,blender导出的时候是否勾选应用修改器,是否导出了形态键,blender导出的格式是否和插件解析的格式匹配等等) 但最后令人吐血的原因是: 只要给模型的根节点下面加一个空GameObject,名字任起(例如test) 结构会变成这样,然后在Ctrl+6中: 改成这样(只需要这个形态键物体的第一个父物体的目录就可以了,不需要再添加诸如VepleySSR01_RX_Clean/U_Char/xxxx这样多一级目录,就修好了\nSource: https://zhuanlan.zhihu.com/p/687557196\n\n****Unity中莫名其妙得小问题-灯光和天空盒_lighting has been disabled-CSDN博客** (2022-06-23)\nUnity中莫名其妙得小问题 1、出现Lighting has been disabled in at least one Scene view.Any changes applied to lights inthe Scene will not be updated in these views until Lighting has been enabled again. 在至少一个场景视图中已禁用照明。在重新启用照明之前,将不会在这些视图中更新 应用 于场景中的灯光的任何更改。 突然场景出现这个问题 新建一个场景还是如此,然后也搜不到是啥原因。然后,原来是灯 光 图标没有点,笑死了 点完可能没有立即消失,在返回点击下灯光就好了。 2、场景中天空盒不显示,但是摄像机里有天空盒 这个没有勾选。\nSource: https://blog.csdn.net/weixin_36832513/article/details/125426216\n\n**unity 2022.3.20f1打开工程报错 - 技术问答 - Unity官方开发者社区** (2022-03-20)\n问题描述 unity 2022.3.20f1打开工程报 Invalid version provided - release type(a|b|f|p|x) or end of string expected, got t Unity版本 错误日志 Invalid version provided - release type(a|b|f|p|x) or end of string expected, got t UnityEditor.WindowLayout:LoadDefaultWindowPreferences () 1579 次浏览 评论 0 写回答 关注问题 1个回答 本回答由团结MuseChat(Beta)生成,请酌情参考。 根据您提供的错误日志,看起来是由于版本号格式不正确导致的问题。请确保在打开工程时正确输入了Unity版本号。Unity版本号的格式应该是\"a.b.cfx\",其中a、b、c是数字,f是版本类型(a代表Alpha,b代表Beta,f代表正式版,p代表补丁版,x代表预览版)。请检查您输入的版本号是否符合这个格式,并尝试重新打开工程。如果问题仍然存在,请尝试重新安装Unity并确保使用正确的版本号。如果问题仍然无法解决,请联系Unity官方支持团队以获取进一步的帮助。 团结MuseChat(Beta) , 2 年前回答 评论 1\nSource: https://developer.unity.cn/ask/question/65f29295edbc2a2d757ccc1d\n\n**Unity- 慎优额外光 -记一次踩坑记录_知乎** (2021-11-26)\n因为项目中新增了从单光源到多光源的需求,因此对AddiationalLight走了区别于DirectLight的ALU优化。当游戏运行时将美术调好的场景Scene与人物Scene以AdditiveMode加载出来后,效果炸了。以此为引,我又发现了一些Unity中对于多光源的其他注意事项...... 一些背景知识(直到那天,人们又想起了被光源坑点支配的恐惧): 背景:因为特殊效果风格的需要,美术时常会要通过不同的LayerMask灯光去区分打亮建筑场景中的实时物体与角色场景中的实时角色。专注于角色的美术会在角色Scene中进行调光,专注于场景的美术会在场景Scene中进行调光。最后游戏加载的时候再同时加载出建筑Scene与角色Scene。测试工程采用Unity2020 新增BakedLight灯光时,若场景 未进行 烘培更新,BakedLight将对所有场景物体进行Realtime照射;若场景 点击了 烘培更新,则BakedLight对所有场景物体都不进行照射。所以场景中新增BakedLight模式的灯光后,一定要再点一次GenerateLighting,防止出现不可预知很难排查的Bug。 Realtime灯光,会对Baked物体进行照射,因此常需要设置LayerMask Lighting面板的SunSource 未被指定时 ,将选取Important的光中Luminance最大的灯光作为主光。所谓Luminance,即灯光Color的亮度*LightIntensity。例如,一盏蓝色光与一盏红色光,在相同Intensity为1的情况下,红光将成为默认主光。 Luminance Approx = 0.3 * Col.x + 0.6 * Col.y +0 .1 * Col.z; Lighting面板的SunSource 被指定后 ,若被指定的灯光A处于 Enable 状态,则A将同时作为主光+天空球太阳方向;若A处于 Disable 状态,A将不再作为主光,但是仍将作为天空球太阳方向。 此时的主光的考虑规则,将忽略Important的设置,直接在所有灯光中找到Luminance最大的灯光作为主光!(坑点) 由于场景中只能存在一盏主光,而主光可以有自己的LayerMask,若主光Cull掉了角色,那么角色将痛失亲光,直接光的贡献变为黑色。(事故发生常见于加载多Scene时\nSource: https://zhuanlan.zhihu.com/p/438020212\n\n**如何修复某些Unity Build编译器错误-腾讯云开发者社区-腾讯云** (2020-08-06)\n嗨!我正在使用unity游戏引擎制作一个3d游戏,并尝试导出项目(pc)。当我尝试为windows平台构建游戏时,出现此错误。在错误中,它说错误与远程传送脚本中的“策略”有关。它会出现以下编译器错误。我已经附上了下面的错误屏幕的图像。如果我需要详细说明错误,请告诉我。\nSource: https://cloud.tencent.com/developer/ask/sof/1280892\n\n**Unity错误提示大全(遇到问题就更新) - SmallOverFllow - 博客园** (2018-02-13)\n记录下使用Unity中遇到的所有错误提示 1.Unhandled Exception: System.Reflection.ReflectionTypeLoadException: The classes in the module cannot be loaded. at (wrapper managed-to-native) System.Reflection.Assembly:GetTypes (bool) at System.Reflection.Assembly.GetTypes () [0x00000] in <filename unknown>:0 问题描述 : 添加 dll 后 unity 立马报错 问题根源: dll 的类库项目使用的是 .NET 4.5 , 而 unity 只支持 .NET 2.0 解决方案: 修改 dll 的类库项目属性 -> 应用程序 -> 目标框架 为 .NET 2.0 2.NullReferenceException: Object reference not set to an instance of an object 问题根源: 未将对象引用设置到对象的实例 定义了个 TweenPosition 变量 tween ,忘记赋值,后面直接调用 tween.playforward 方法 解决方案: Awake 里获取组件的引用,对变量 tween 进行赋值 tween = GetComponent<TweenPosition>(); 分类: Unity 标签: Unity\nSource: https://www.cnblogs.com/fzxiaoyi/p/8446158.html\n",
+    "web_references": [
+      {
+        "content": "Unity的内建Diffuse着色器的设定值)｡这个数值决定了我们能用什么样的Shader｡ VertexLit及其系列 = 100 Decal, Reflective VertexLit = 150体的像素深度会被记录(默认记录) Off,通常用于半透明物体｡AlphaTest(Less,Greater,LEqual,GEqual,Equal,NotEqual,Always) 开启alpha测试Blend SourceB./endMode DestB/endMode 设置alpha混合模式｡(以下为相关属性说明)One 值为1,使用此设置来让源或是目标颜色完全的通过｡Zero 值为0 ,使用此设置来删除源或目标值｡SroColor 此阶段的值是乘以源颜色的值｡SrcAlpha ha)OneMinusDstColor 此阶段的值是乘以(1-destination color)OneMinusDstAlpha 此阶段的值是乘以(1-destination alpha) 例如: Blend SrcAlpha OneMinusSrcAlpha //Alpha blending Blend O",
+        "icon": "",
+        "link": "https://blog.csdn.net/xiongwen_li/article/details/72655688",
+        "media": "",
+        "publish_date": "2017-05-23",
+        "refer": "ref_1",
+        "title": "UnityShader学习教程之语法规范以及光照模型_#pragma surface surf standard-CSDN博客"
+      },
+      {
+        "content": "enumeration 描述Light的阴影投射选项｡ 变量 None 不投射阴影(默认值)｡ Hard 投射“硬”阴影(无阴影过滤)｡ Soft 投射“柔和”阴影(具有 4x PCF 过滤)｡ Copyright © 2023 Unity Technologies \"Unity\"､Unity 徽标及其他 Unity 商标是 Unity Technologies ",
+        "icon": "",
+        "link": "https://docs.unity.cn/cn/2017.1/ScriptReference/LightShadows.html",
+        "media": "",
+        "publish_date": "2026-04-22",
+        "refer": "ref_2",
+        "title": "LightShadows - Unity 脚本 API"
+      },
+      {
+        "content": "unity打开项目时报Fatal error!显示无权访问d3dcompiler_47.dll 从HUB中找到d3dcompiler_47.dll,拷贝到安装目录\\Unity\\Editor\\2020.3.3f1c1\\Editor\\Data\\Tools\\下。 重新启动,就可以打开了。",
+        "icon": "",
+        "link": "https://blog.csdn.net/littlec7833_cn/article/details/131870453",
+        "media": "",
+        "publish_date": "2023-07-22",
+        "refer": "ref_3",
+        "title": "安装unity后创建项目出现的问题与解决记录_unity fatal error-CSDN博客"
+      },
+      {
+        "content": "下面的各个部分将介绍如何在不同情况下排除 Unity 编辑器的故障以及预防问题。通常情况,应确保计算机满足所有系统要求,处于最新状态,并且您在系统中具有所需的用户权限。还要定期备份以确保项目的安全。 版本 可以在不同的文件夹中安装不同版本的编辑器。但是,请务必备份项目,因为这些项目可能会被较新的版本升级,而无法在较旧版本的 Unity 中打开它们。请参阅安装 Unity以了解更多信息。 附加组件的许可证仅对具有相同主要版本号(例如 3.x 和4.x)的Unity 版本有效。如果升级到 Unity 的次要版本,例如 4.0 升级到 4.1,则将保留附加组件。 激活 Unity Hub 是所有许可证管理操作的主要方法。有关所有许可证激活方法的信息,请参阅许可证激活方法。 如果在激活许可证时遇到问题,请参阅许可证故障排除。 如果在激活许可证或登录用户帐户时仍遇到问题,请联系Unity Support。 无法启动 如果 Unity 在启动时崩溃,请首先要确保计算机符合最低系统要求。此外,还需要更新到最新的图形驱动程序和音频驱动程序。 如果出现磁盘写入错误,请检查用户帐户限制。在MacOS 中时,请注意我们不建议使用“root 用户”,因为 Unity 尚未在此模式下进行测试。Unity 必须对其文件夹具有写入权限,但如果选择手动授予这些权限,请检查以下文件夹: Windows: Unity 的安装文件夹 %AllUsersProfile%\\Unity (通常为 C:\\ProgramData\\Unity) C:\\Documents and Settings\\<user>\\Local Settings\\Application Data\\Unity C:\\Users\\<user>\\AppData\\Local\\Unity macOS: Unity.app 包内容 /Library/Application Support/Unity ~/Library/Logs/Unity 使用以非本机分区方法格式化的硬盘以及使用某些软件在存储设备之间转移数据时,一些用户遇到过问题。 字体 损坏的字体可能会导致 Unity 崩溃,可以按照以下步骤查找损坏的文件: Windows: 打开计算机上的“Windows”文件夹中的 fonts 文件夹。 从视图 (View) 菜单中选择详细信息 (Detai",
+        "icon": "",
+        "link": "https://docs.unity3d.com/cn/current/Manual/TroubleShootingEditor.html",
+        "media": "",
+        "publish_date": "2025-12-15",
+        "refer": "ref_4",
+        "title": "Unity - 手册: 编辑器故障排除"
+      },
+      {
+        "content": "在Unity制作mmd的时候遇到了一个逆天的问题,在使用GitHub - ShiinaManatsu/MMD4UnityTools: Tools for unity HDRP helps make mmd easy这个插件将vmd中的表情文件转化成Unity可用的anim格式时,遇到了明明Blendshape名字一样,但是却显示Missing的问题 但是如果我直接k帧,显示在上面的是: 这俩明明就一样吧?一样吧?一样吧? 这可给我急坏了,首先是怀疑这个插件的源码,看了下他解析用了这句话 var registerName = blendShapeNames . Where(x => x . Split('.') . Last() == name) . First(); 看起来没什么问题,用“.\"进行Split,并且这个Split语法支持没有\".\"的情况。 那还能是什么问题? 由于我要支持一些渲染的feature,需要对模型进行一些更改(如顶点色,拆分模型,合并材质等),所以用的是pmx导入blender后修改的模型,那我现在直接用pmx原生模型在unity里转换成fbx试一下: 原生模型就是好的,为什么?为什么? 最后,终于发现了原因: 我的模型结构是: 对Missing的动画进行重命名,显示的是: 这是对Debug最具有迷惑性的,路径是对的但显示Missing,就会引导你怀疑其他问题(例如FBX的格式,blender导出的时候是否勾选应用修改器,是否导出了形态键,blender导出的格式是否和插件解析的格式匹配等等) 但最后令人吐血的原因是: 只要给模型的根节点下面加一个空GameObject,名字任起(例如test) 结构会变成这样,然后在Ctrl+6中: 改成这样(只需要这个形态键物体的第一个父物体的目录就可以了,不需要再添加诸如VepleySSR01_RX_Clean/U_Char/xxxx这样多一级目录,就修好了",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/687557196",
+        "media": "知乎",
+        "publish_date": "2024-03-18",
+        "refer": "ref_5",
+        "title": "Unity MMD blendshape missing问题_知乎"
+      },
+      {
+        "content": "Unity中莫名其妙得小问题 1、出现Lighting has been disabled in at least one Scene view.Any changes applied to lights inthe Scene will not be updated in these views until Lighting has been enabled again. 在至少一个场景视图中已禁用照明。在重新启用照明之前,将不会在这些视图中更新 应用 于场景中的灯光的任何更改。 突然场景出现这个问题 新建一个场景还是如此,然后也搜不到是啥原因。然后,原来是灯 光 图标没有点,笑死了 点完可能没有立即消失,在返回点击下灯光就好了。 2、场景中天空盒不显示,但是摄像机里有天空盒 这个没有勾选。",
+        "icon": "",
+        "link": "https://blog.csdn.net/weixin_36832513/article/details/125426216",
+        "media": "",
+        "publish_date": "2022-06-23",
+        "refer": "ref_6",
+        "title": "**Unity中莫名其妙得小问题-灯光和天空盒_lighting has been disabled-CSDN博客"
+      },
+      {
+        "content": "问题描述 unity 2022.3.20f1打开工程报 Invalid version provided - release type(a|b|f|p|x) or end of string expected, got t Unity版本 错误日志 Invalid version provided - release type(a|b|f|p|x) or end of string expected, got t UnityEditor.WindowLayout:LoadDefaultWindowPreferences () 1579 次浏览 评论 0 写回答 关注问题 1个回答 本回答由团结MuseChat(Beta)生成,请酌情参考。 根据您提供的错误日志,看起来是由于版本号格式不正确导致的问题。请确保在打开工程时正确输入了Unity版本号。Unity版本号的格式应该是\"a.b.cfx\",其中a、b、c是数字,f是版本类型(a代表Alpha,b代表Beta,f代表正式版,p代表补丁版,x代表预览版)。请检查您输入的版本号是否符合这个格式,并尝试重新打开工程。如果问题仍然存在,请尝试重新安装Unity并确保使用正确的版本号。如果问题仍然无法解决,请联系Unity官方支持团队以获取进一步的帮助。 团结MuseChat(Beta) , 2 年前回答 评论 1",
+        "icon": "",
+        "link": "https://developer.unity.cn/ask/question/65f29295edbc2a2d757ccc1d",
+        "media": "",
+        "publish_date": "2022-03-20",
+        "refer": "ref_7",
+        "title": "unity 2022.3.20f1打开工程报错 - 技术问答 - Unity官方开发者社区"
+      },
+      {
+        "content": "因为项目中新增了从单光源到多光源的需求,因此对AddiationalLight走了区别于DirectLight的ALU优化。当游戏运行时将美术调好的场景Scene与人物Scene以AdditiveMode加载出来后,效果炸了。以此为引,我又发现了一些Unity中对于多光源的其他注意事项...... 一些背景知识(直到那天,人们又想起了被光源坑点支配的恐惧): 背景:因为特殊效果风格的需要,美术时常会要通过不同的LayerMask灯光去区分打亮建筑场景中的实时物体与角色场景中的实时角色。专注于角色的美术会在角色Scene中进行调光,专注于场景的美术会在场景Scene中进行调光。最后游戏加载的时候再同时加载出建筑Scene与角色Scene。测试工程采用Unity2020 新增BakedLight灯光时,若场景 未进行 烘培更新,BakedLight将对所有场景物体进行Realtime照射;若场景 点击了 烘培更新,则BakedLight对所有场景物体都不进行照射。所以场景中新增BakedLight模式的灯光后,一定要再点一次GenerateLighting,防止出现不可预知很难排查的Bug。 Realtime灯光,会对Baked物体进行照射,因此常需要设置LayerMask Lighting面板的SunSource 未被指定时 ,将选取Important的光中Luminance最大的灯光作为主光。所谓Luminance,即灯光Color的亮度*LightIntensity。例如,一盏蓝色光与一盏红色光,在相同Intensity为1的情况下,红光将成为默认主光。 Luminance Approx = 0.3 * Col.x + 0.6 * Col.y +0 .1 * Col.z; Lighting面板的SunSource 被指定后 ,若被指定的灯光A处于 Enable 状态,则A将同时作为主光+天空球太阳方向;若A处于 Disable 状态,A将不再作为主光,但是仍将作为天空球太阳方向。 此时的主光的考虑规则,将忽略Important的设置,直接在所有灯光中找到Luminance最大的灯光作为主光!(坑点) 由于场景中只能存在一盏主光,而主光可以有自己的LayerMask,若主光Cull掉了角色,那么角色将痛失亲光,直接光的贡献变为黑色。(事故发生常见于加载多Scene时",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/438020212",
+        "media": "知乎",
+        "publish_date": "2021-11-26",
+        "refer": "ref_8",
+        "title": "Unity- 慎优额外光 -记一次踩坑记录_知乎"
+      },
+      {
+        "content": "嗨!我正在使用unity游戏引擎制作一个3d游戏,并尝试导出项目(pc)。当我尝试为windows平台构建游戏时,出现此错误。在错误中,它说错误与远程传送脚本中的“策略”有关。它会出现以下编译器错误。我已经附上了下面的错误屏幕的图像。如果我需要详细说明错误,请告诉我。",
+        "icon": "",
+        "link": "https://cloud.tencent.com/developer/ask/sof/1280892",
+        "media": "腾讯云",
+        "publish_date": "2020-08-06",
+        "refer": "ref_9",
+        "title": "如何修复某些Unity Build编译器错误-腾讯云开发者社区-腾讯云"
+      },
+      {
+        "content": "记录下使用Unity中遇到的所有错误提示 1.Unhandled Exception: System.Reflection.ReflectionTypeLoadException: The classes in the module cannot be loaded. at (wrapper managed-to-native) System.Reflection.Assembly:GetTypes (bool) at System.Reflection.Assembly.GetTypes () [0x00000] in <filename unknown>:0 问题描述 : 添加 dll 后 unity 立马报错 问题根源: dll 的类库项目使用的是 .NET 4.5 , 而 unity 只支持 .NET 2.0 解决方案: 修改 dll 的类库项目属性 -> 应用程序 -> 目标框架 为 .NET 2.0 2.NullReferenceException: Object reference not set to an instance of an object 问题根源: 未将对象引用设置到对象的实例 定义了个 TweenPosition 变量 tween ,忘记赋值,后面直接调用 tween.playforward 方法 解决方案: Awake 里获取组件的引用,对变量 tween 进行赋值 tween = GetComponent<TweenPosition>(); 分类: Unity 标签: Unity",
+        "icon": "",
+        "link": "https://www.cnblogs.com/fzxiaoyi/p/8446158.html",
+        "media": "博客园",
+        "publish_date": "2018-02-13",
+        "refer": "ref_10",
+        "title": "Unity错误提示大全(遇到问题就更新) - SmallOverFllow - 博客园"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "unity light shaft beam soft additive blend",
+        "query": "Unity light shaft beam soft additive blend mobile"
+      }
+    ],
+    "latency_seconds": 1.81,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "unity light beam shader god ray fake volumetric",
+    "content": "**Unity Shader学习:体积光(Volumetric Light) - 知乎** (2022-05-23)\n积光(Volumetric Light)是一种很吸引眼球､很能表现氛围､看起来很高级的效果,也被称为天光(GodRay)｡ Blend SrcAlpha OneMinusSrcAlpha Cull Off ZWrite Off vertex : float3 dir = ObjSpaceLightDir ( v . vertex ); float dotV = dot ( dir , v . normal ); float extrude = sign ( dotV ) * 0.5 + 0.5 ; v . vertex . xyz -= dir * extrude * _ExtendDistance ; o . pos = UnityObjectToClipPos ( v . vertex ); fragment : fixed4 mainColor = tex2D ( _MainTex , i . uv ); floaos )); fixed4 finalColor = pow ( min ( 1 , mainColor * _Color * atten * _Intensity ), _PowFactor );其中的sign(dotV)*0.5+0.5计算,保留了背光面的顶点,将这些顶点沿着光方向延伸_ExtendDistance距离｡如果需要,可以让顶点沿着法线外扩一点,让体积光范围更大一些｡\nSource: https://zhuanlan.zhihu.com/p/425495211\n\n**unity3d插件Volumetric Light Beam Kit 体积光 灯光效果游戏特效  游戏资源  Unity3D资源  游戏开发  微元素 - Unity,插件,U3D,Unity3D插件** (2021-09-29)\n引擎插件类型 软件版本要求: 2019.3.3亲测,没问题 引擎插件类型: 材质|Shader 动画|特效 您需要 登录 才可以下载或查看,没有账号? 元素币支付 微金支付 余额支付 提醒 使用【余额支付】需要: ¥5 余额 本帖最后由 挚爱丿蓉儿 于2021-9-29 14:54 编辑 动态的光束,动态的体积光, Volumetric Light Beam.unitypackage是一款高性能的用于模拟游戏内体积光的插件,可制作超强体积光特效,可以在游戏内大量使用｡\nSource: https://www.element3ds.com/thread-375719-1-1.html\n\n**UN156unity3d插件VolumetricLightBeamKit体积光灯光效果游戏特效1资源-CSDN下载** (2018-04-02)\n该 插件 生成真正的建筑的程序 光 束来大幅改善场景的照明,模拟聚 光 灯和手电筒的密度､深度和音量的完美､简单而便宜的方法｡>> 渲染管线兼容性 <<该 插件 的所有版本都支持内置渲染管道(BiRP)､通用渲染管道(URP)和高清渲染管道(HDRP)｡更多信息｡持续更新的资产:对每个新的 Unity 版本进行测试,在过去 5 年中进行了 60 多次更新,增加了新功能和优化｡模拟聚 光 \nSource: https://download.csdn.net/download/u012129783/10322376\n\n**VolumetricLightBeam1.94.unitypackage.zip资源-CSDN下载** (2021-06-18)\n共1个文件 unitypackage:1个 展开 资源推荐 资源详情 资源评论 格式:unitypackage 资源大小:689.6KB 该插件生成真正的建筑的程序光束来大幅改善场景的照明,模拟聚光灯和手电筒的密度､深度和音量的完美､简单而便宜的方法｡>> 渲染管线兼容性 <<该插件的所有版本都支持内置渲染管道(BiRP)､通用渲染管道(URP)和高清渲染管道(HDRP)｡更多信息｡\nSource: https://download.csdn.net/download/weixin_42526110/19713730\n\n**Unity3D包更新Volumetric Light Beam 2.0.1 体积光照明特效插件_光束_不支持_Oculus** (2023-02-20)\n文件大小1.3 MB 最新版本2.0.1 简单而高效的体积照明解决方案,兼容所有平台:Windows PC､Mac OS X､Linux､WebGL､iOS､Android､VR､Oculus Quest､AR､控制台､内置/传统渲染管道､SRP(URP和HDRP)! 这是一种完美､简单和廉价的方式,可以模拟聚光灯和手电筒的密度､深度和体积,即使在移动设备上也是如此! 它通过自动高效地生成真实体积的程序光束来渲染高质量的光轴效果,大大改善了场景的照明效果｡ 两种不同的体积光束实现,每种都针对特定的使用情况进行了优化: -SD光束(传统光束)速度极快,功能有限(没有真正的体积阴影,也不支持cookie):它们经过优化,可在移动和独立VR(Oculus Quest)上运行｡ -HD Beams提供了更高级的功能(真正的体积阴影和cookie),但性能更重:它们只能在高端平台(PC和控制台)上使用｡\nSource: https://news.sohu.com/a/643764182_121654042\n\n**Unity Shader-GodRay,体积光(BillBoard,Volume Shadow,Raidal Blur,Ray-Marching)-CSDN博客** (2018-05-12)\n下几种实现方式,BillBoard特效贴片,Volume Shadow沿光方向挤出顶点,Raidal Blur Postprocessing基于后处理的实现,Ray-Marching基于光线追踪的实现｡几种方式殊途同归,都是尽可能用最省的消耗来近似模拟这一酷炫的现象｡ BillBoard特效贴片 最简单的方法,直接在需要有GodRay的地方,放一个特效片,模拟一个光效,就完成啦! \nSource: https://blog.csdn.net/puppet_master/article/details/79859678\n\n**unity3d体积光插件Volumetric_Light_Beam_Kit_1.0资源-CSDN下载** (2014-04-25)\n件 都支持内置渲染管道(BiRP)､通用渲染管道(URP)和高清渲染管道(HDRP)｡它通过自动有效地生成真正的 体积 程序 光 束来渲染高质量的 光 轴效果,极大地改善了场景的照 格式:rar 资源大小:192.5MB 格式:7z 资源大小:3.7MB 格式:zip 资源大小:1.3MB 1.这个 插件 允许您通过生成真正容积的程序 光 束来大大改善场景的照明｡这是模拟聚 光 灯和手电筒的密度,深度和音量的完美,简单而便宜的方法｡\nSource: https://download.csdn.net/download/xinwenhui88/7252545\n\n**unity3d体积光插件Volumetric_Light_Beam_Kit_1.0 - 其他资源 - Powered by Discuz!** (2025-06-14)\n加载中... 我要下载 8年前 · 394楼 相当不错哎! 8年前 · 393楼 看 8年前 · 392楼 想下载用用、 8年前 · 391楼 学习一下 8年前 · 390楼 多少度 8年前 · 389楼 正在找这个,非常感谢. 8年前 · 388楼 看看 8年前 · 387楼 看起来还不错 8年前 · 386楼 感谢分享 8年前 · 385楼 广播电视节目制作: (沪)字第03589号 增值电信业务:沪B-22090722 您当前使用的浏览器IE内核版本过低会导致网站显示错误 请使用高速内核浏览器或其他浏览器 欢迎登录 在CGJOY,让每一帧都闪耀,让每一秒都快乐! 86 中国 852 中国香港 853 中国澳门 886 中国台湾 65 新加坡 60 马来西亚 84 越南 66 泰国 81 日本 82 韩国 001 美国 001 加拿大 7 俄罗斯联邦 33 法国 39 意大利 44 英国 49 德国 61 澳大利亚 20 埃及 27 南非 211 南苏丹共和国 212 摩洛哥 213 阿尔及利亚 216 突尼斯 218 利比亚 220 冈比亚 221 塞内加尔 222 毛里塔尼亚 223 马里 224 几内亚 225 科特迪瓦 226 布基纳法索 227 尼日尔 228 多哥 229 贝宁 230 毛里求斯 231 利比里亚 232 塞拉利昂 233 加纳 234 尼日利亚 235 乍得 236 中非共和国 237 喀麦隆 238 佛得角 239 圣多美和普林西比 240 赤道几内亚 241 加蓬 242 刚果 243 刚果民主共和国 244 安哥拉 245 几内亚比绍 246 英属印度洋领地 248 塞舌尔 249 苏丹 250 卢旺达 251 埃塞俄比亚 252 索马里 253 吉布提 254 肯尼亚 255 坦桑尼亚 256 乌干达 257 布隆迪 258 莫桑比克 260 赞比亚 261 马达加斯加 262 马约特 262 留尼汪岛 263 津巴布韦 264 那米比亚 265 马拉维 266 莱索托 267 博茨瓦纳 268 斯威士兰 269 科摩罗 291 厄立特里亚国 297 阿鲁巴 298 法罗群岛 30 希腊 31 荷兰 32 比利时 34 西班牙 36 匈牙利 39 梵蒂冈 350 直布罗陀 351 葡萄牙 352 卢森堡 353 爱尔兰 35\nSource: https://www.cgjoy.com/thread-74943-9-1.html\n\n**UN156 unity3d插件Volumetric Light Beam Kit 体积光 灯光效果游戏特效 - 其他资源 - Powered by Discuz!** (2026-05-28)\n加载中... 13067 27 0 6 10年前 点赞 评论 添加到收藏夹 马上注册,加入CGJOY,让你轻松玩转CGJOY。 您需要 登录 才可以下载或查看,没有帐号? 立即注册 × UN156 unity3d插件Volumetric Light Beam Kit 体积光 灯光效果游戏特效 游客,本付费内容需要支付 3张CG券 才能下载 支付 点赞 打赏 添加到收藏夹 一次扣10个券 希望CGJOY越办越好。 6年前 · 28楼 回复 强大 6年前 · 27楼 回复 厉害 7年前 · 26楼 回复 十分感谢,正需要这些 7年前 · 25楼 回复 谢谢分享! 8年前 · 24楼 回复 感谢分享~~~学习学习 8年前 · 23楼 回复 可以,很需要这个插件 8年前 · 22楼 回复 谢谢楼主分享~ 8年前 · 21楼 回复 qq 8年前 · 20楼 回复\nSource: https://www.cgjoy.com/thread-171387-1-1.html\n\n**在unity中烘焙光照贴图时出现奇怪的瑕疵 - 腾讯云开发者社区 - 腾讯云** (2024-05-21)\n登录/注册 学习 活动 专区 圈层 工具 文章/答案/技术大牛 搜索 搜索 关闭 发布 关联问题 换一批\nSource: https://cloud.tencent.com/developer/information/%25E5%259C%25A8unity%25E4%25B8%25AD%25E7%2583%2598%25E7%2584%2599%25E5%2585%2589%25E7%2585%25A7%25E8%25B4%25B4%25E5%259B%25BE%25E6%2597%25B6%25E5%2587%25BA%25E7%258E%25B0%25E5%25A5%2587%25E6%2580%25AA%25E7%259A%2584%25E7%2591%2595%25E7%2596%25B5\n",
+    "web_references": [
+      {
+        "content": "积光(Volumetric Light)是一种很吸引眼球､很能表现氛围､看起来很高级的效果,也被称为天光(GodRay)｡ Blend SrcAlpha OneMinusSrcAlpha Cull Off ZWrite Off vertex : float3 dir = ObjSpaceLightDir ( v . vertex ); float dotV = dot ( dir , v . normal ); float extrude = sign ( dotV ) * 0.5 + 0.5 ; v . vertex . xyz -= dir * extrude * _ExtendDistance ; o . pos = UnityObjectToClipPos ( v . vertex ); fragment : fixed4 mainColor = tex2D ( _MainTex , i . uv ); floaos )); fixed4 finalColor = pow ( min ( 1 , mainColor * _Color * atten * _Intensity ), _PowFactor );其中的sign(dotV)*0.5+0.5计算,保留了背光面的顶点,将这些顶点沿着光方向延伸_ExtendDistance距离｡如果需要,可以让顶点沿着法线外扩一点,让体积光范围更大一些｡",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/425495211",
+        "media": "知乎",
+        "publish_date": "2022-05-23",
+        "refer": "ref_1",
+        "title": "Unity Shader学习:体积光(Volumetric Light) - 知乎"
+      },
+      {
+        "content": "引擎插件类型 软件版本要求: 2019.3.3亲测,没问题 引擎插件类型: 材质|Shader 动画|特效 您需要 登录 才可以下载或查看,没有账号? 元素币支付 微金支付 余额支付 提醒 使用【余额支付】需要: ¥5 余额 本帖最后由 挚爱丿蓉儿 于2021-9-29 14:54 编辑 动态的光束,动态的体积光, Volumetric Light Beam.unitypackage是一款高性能的用于模拟游戏内体积光的插件,可制作超强体积光特效,可以在游戏内大量使用｡",
+        "icon": "",
+        "link": "https://www.element3ds.com/thread-375719-1-1.html",
+        "media": "",
+        "publish_date": "2021-09-29",
+        "refer": "ref_2",
+        "title": "unity3d插件Volumetric Light Beam Kit 体积光 灯光效果游戏特效  游戏资源  Unity3D资源  游戏开发  微元素 - Unity,插件,U3D,Unity3D插件"
+      },
+      {
+        "content": "该 插件 生成真正的建筑的程序 光 束来大幅改善场景的照明,模拟聚 光 灯和手电筒的密度､深度和音量的完美､简单而便宜的方法｡>> 渲染管线兼容性 <<该 插件 的所有版本都支持内置渲染管道(BiRP)､通用渲染管道(URP)和高清渲染管道(HDRP)｡更多信息｡持续更新的资产:对每个新的 Unity 版本进行测试,在过去 5 年中进行了 60 多次更新,增加了新功能和优化｡模拟聚 光 ",
+        "icon": "",
+        "link": "https://download.csdn.net/download/u012129783/10322376",
+        "media": "",
+        "publish_date": "2018-04-02",
+        "refer": "ref_3",
+        "title": "UN156unity3d插件VolumetricLightBeamKit体积光灯光效果游戏特效1资源-CSDN下载"
+      },
+      {
+        "content": "共1个文件 unitypackage:1个 展开 资源推荐 资源详情 资源评论 格式:unitypackage 资源大小:689.6KB 该插件生成真正的建筑的程序光束来大幅改善场景的照明,模拟聚光灯和手电筒的密度､深度和音量的完美､简单而便宜的方法｡>> 渲染管线兼容性 <<该插件的所有版本都支持内置渲染管道(BiRP)､通用渲染管道(URP)和高清渲染管道(HDRP)｡更多信息｡",
+        "icon": "",
+        "link": "https://download.csdn.net/download/weixin_42526110/19713730",
+        "media": "",
+        "publish_date": "2021-06-18",
+        "refer": "ref_4",
+        "title": "VolumetricLightBeam1.94.unitypackage.zip资源-CSDN下载"
+      },
+      {
+        "content": "文件大小1.3 MB 最新版本2.0.1 简单而高效的体积照明解决方案,兼容所有平台:Windows PC､Mac OS X､Linux､WebGL､iOS､Android､VR､Oculus Quest､AR､控制台､内置/传统渲染管道､SRP(URP和HDRP)! 这是一种完美､简单和廉价的方式,可以模拟聚光灯和手电筒的密度､深度和体积,即使在移动设备上也是如此! 它通过自动高效地生成真实体积的程序光束来渲染高质量的光轴效果,大大改善了场景的照明效果｡ 两种不同的体积光束实现,每种都针对特定的使用情况进行了优化: -SD光束(传统光束)速度极快,功能有限(没有真正的体积阴影,也不支持cookie):它们经过优化,可在移动和独立VR(Oculus Quest)上运行｡ -HD Beams提供了更高级的功能(真正的体积阴影和cookie),但性能更重:它们只能在高端平台(PC和控制台)上使用｡",
+        "icon": "",
+        "link": "https://news.sohu.com/a/643764182_121654042",
+        "media": "搜狐",
+        "publish_date": "2023-02-20",
+        "refer": "ref_5",
+        "title": "Unity3D包更新Volumetric Light Beam 2.0.1 体积光照明特效插件_光束_不支持_Oculus"
+      },
+      {
+        "content": "下几种实现方式,BillBoard特效贴片,Volume Shadow沿光方向挤出顶点,Raidal Blur Postprocessing基于后处理的实现,Ray-Marching基于光线追踪的实现｡几种方式殊途同归,都是尽可能用最省的消耗来近似模拟这一酷炫的现象｡ BillBoard特效贴片 最简单的方法,直接在需要有GodRay的地方,放一个特效片,模拟一个光效,就完成啦! ",
+        "icon": "",
+        "link": "https://blog.csdn.net/puppet_master/article/details/79859678",
+        "media": "",
+        "publish_date": "2018-05-12",
+        "refer": "ref_6",
+        "title": "Unity Shader-GodRay,体积光(BillBoard,Volume Shadow,Raidal Blur,Ray-Marching)-CSDN博客"
+      },
+      {
+        "content": "件 都支持内置渲染管道(BiRP)､通用渲染管道(URP)和高清渲染管道(HDRP)｡它通过自动有效地生成真正的 体积 程序 光 束来渲染高质量的 光 轴效果,极大地改善了场景的照 格式:rar 资源大小:192.5MB 格式:7z 资源大小:3.7MB 格式:zip 资源大小:1.3MB 1.这个 插件 允许您通过生成真正容积的程序 光 束来大大改善场景的照明｡这是模拟聚 光 灯和手电筒的密度,深度和音量的完美,简单而便宜的方法｡",
+        "icon": "",
+        "link": "https://download.csdn.net/download/xinwenhui88/7252545",
+        "media": "",
+        "publish_date": "2014-04-25",
+        "refer": "ref_7",
+        "title": "unity3d体积光插件Volumetric_Light_Beam_Kit_1.0资源-CSDN下载"
+      },
+      {
+        "content": "加载中... 我要下载 8年前 · 394楼 相当不错哎! 8年前 · 393楼 看 8年前 · 392楼 想下载用用、 8年前 · 391楼 学习一下 8年前 · 390楼 多少度 8年前 · 389楼 正在找这个,非常感谢. 8年前 · 388楼 看看 8年前 · 387楼 看起来还不错 8年前 · 386楼 感谢分享 8年前 · 385楼 广播电视节目制作: (沪)字第03589号 增值电信业务:沪B-22090722 您当前使用的浏览器IE内核版本过低会导致网站显示错误 请使用高速内核浏览器或其他浏览器 欢迎登录 在CGJOY,让每一帧都闪耀,让每一秒都快乐! 86 中国 852 中国香港 853 中国澳门 886 中国台湾 65 新加坡 60 马来西亚 84 越南 66 泰国 81 日本 82 韩国 001 美国 001 加拿大 7 俄罗斯联邦 33 法国 39 意大利 44 英国 49 德国 61 澳大利亚 20 埃及 27 南非 211 南苏丹共和国 212 摩洛哥 213 阿尔及利亚 216 突尼斯 218 利比亚 220 冈比亚 221 塞内加尔 222 毛里塔尼亚 223 马里 224 几内亚 225 科特迪瓦 226 布基纳法索 227 尼日尔 228 多哥 229 贝宁 230 毛里求斯 231 利比里亚 232 塞拉利昂 233 加纳 234 尼日利亚 235 乍得 236 中非共和国 237 喀麦隆 238 佛得角 239 圣多美和普林西比 240 赤道几内亚 241 加蓬 242 刚果 243 刚果民主共和国 244 安哥拉 245 几内亚比绍 246 英属印度洋领地 248 塞舌尔 249 苏丹 250 卢旺达 251 埃塞俄比亚 252 索马里 253 吉布提 254 肯尼亚 255 坦桑尼亚 256 乌干达 257 布隆迪 258 莫桑比克 260 赞比亚 261 马达加斯加 262 马约特 262 留尼汪岛 263 津巴布韦 264 那米比亚 265 马拉维 266 莱索托 267 博茨瓦纳 268 斯威士兰 269 科摩罗 291 厄立特里亚国 297 阿鲁巴 298 法罗群岛 30 希腊 31 荷兰 32 比利时 34 西班牙 36 匈牙利 39 梵蒂冈 350 直布罗陀 351 葡萄牙 352 卢森堡 353 爱尔兰 35",
+        "icon": "",
+        "link": "https://www.cgjoy.com/thread-74943-9-1.html",
+        "media": "",
+        "publish_date": "2025-06-14",
+        "refer": "ref_8",
+        "title": "unity3d体积光插件Volumetric_Light_Beam_Kit_1.0 - 其他资源 - Powered by Discuz!"
+      },
+      {
+        "content": "加载中... 13067 27 0 6 10年前 点赞 评论 添加到收藏夹 马上注册,加入CGJOY,让你轻松玩转CGJOY。 您需要 登录 才可以下载或查看,没有帐号? 立即注册 × UN156 unity3d插件Volumetric Light Beam Kit 体积光 灯光效果游戏特效 游客,本付费内容需要支付 3张CG券 才能下载 支付 点赞 打赏 添加到收藏夹 一次扣10个券 希望CGJOY越办越好。 6年前 · 28楼 回复 强大 6年前 · 27楼 回复 厉害 7年前 · 26楼 回复 十分感谢,正需要这些 7年前 · 25楼 回复 谢谢分享! 8年前 · 24楼 回复 感谢分享~~~学习学习 8年前 · 23楼 回复 可以,很需要这个插件 8年前 · 22楼 回复 谢谢楼主分享~ 8年前 · 21楼 回复 qq 8年前 · 20楼 回复",
+        "icon": "",
+        "link": "https://www.cgjoy.com/thread-171387-1-1.html",
+        "media": "",
+        "publish_date": "2026-05-28",
+        "refer": "ref_9",
+        "title": "UN156 unity3d插件Volumetric Light Beam Kit 体积光 灯光效果游戏特效 - 其他资源 - Powered by Discuz!"
+      },
+      {
+        "content": "登录/注册 学习 活动 专区 圈层 工具 文章/答案/技术大牛 搜索 搜索 关闭 发布 关联问题 换一批",
+        "icon": "",
+        "link": "https://cloud.tencent.com/developer/information/%25E5%259C%25A8unity%25E4%25B8%25AD%25E7%2583%2598%25E7%2584%2599%25E5%2585%2589%25E7%2585%25A7%25E8%25B4%25B4%25E5%259B%25BE%25E6%2597%25B6%25E5%2587%25BA%25E7%258E%25B0%25E5%25A5%2587%25E6%2580%25AA%25E7%259A%2584%25E7%2591%2595%25E7%2596%25B5",
+        "media": "腾讯云",
+        "publish_date": "2024-05-21",
+        "refer": "ref_10",
+        "title": "在unity中烘焙光照贴图时出现奇怪的瑕疵 - 腾讯云开发者社区 - 腾讯云"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "unity light beam shader god ray fake volumetric",
+        "query": "unity light beam shader god ray fake volumetric"
+      }
+    ],
+    "latency_seconds": 2.24,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Unity day night cycle shader uniform parameter LUT",
+    "content": "**【Unity 天空和昼夜循环系统插件】Procedural Sky Shader & Day Night Cycle - Jupiter 旨在为游戏项目提供动态、真实的天际效果和昼夜变化_unity procedural** (2025-01-24)\nProcedural Sky Shader & Day Night Cycle - Jupiter 是一款专为 Unity 开发的 程序 化天空和昼夜循环系统插件,旨在为游戏项目提供动态､真实的天际效果和昼夜变化｡该插件使用程序生成的方式实时模拟天空的变化,提供了多种自定义选项,帮助开发者创建美丽且自然的环境光照和大气效果,适用于各种游戏类型,包括开放世界､冒险､角色扮演等｡ 核心功能 \nSource: https://blog.csdn.net/2403_88403568/article/details/145333006\n\n**unity3d 白天夜晚切换插件 Day_Night_Cycle.unitypackage - 开发实例、源码下载 - 好例子网** (2020-11-05)\n【实例简介】 unity3d 白天夜晚切换插件,可以渐变改变天空盒,代码可以更改,很方便使用｡ 【实例截图】 \nSource: https://www.haolizi.net/example/view_146344.html\n\n**【Unity 动态时间、天气和云层效果插件】HDRP Time Of Day - Lighting, Weather & Clouds 轻松为其项目添加日夜循环、天气变化、云层渲染等高级视觉效果...** (2025-01-21)\nHDRP Time Of Day - Lighting, Weather & Clouds 是一款专为 Unity HDRP(高清渲染管线)设计的插件,旨在帮助开发者在游戏中实现动态时间､天气和云层效果｡这个插件允许开发者轻松地为其项目添加日夜循环､天气变化､云层渲染等高级视觉效果,从而提升游戏的沉浸感和真实感｡适用于需要表现自然光照和大气变化的游戏,尤其是对环境氛围要求较高的游戏类型｡ \nSource: https://blog.csdn.net/2403_88403568/article/details/145269271\n\n**【unity小技巧】unity3d环境带雾的昼夜系统变化-阿里云开发者社区** (2024-06-28)\n版权 举报 简介: 【unity小技巧】unity3d环境带雾的昼夜系统变化 眩光素材 提取码:veww 眩光配置 眩光其实可以简单的理解为太阳或月亮 全局灯光配置 想要相机显示眩光,需要在相机添加Flare Layer组件 天空盒资产 配置天空盒,开启雾 代码控制天空盒 环境 雾 灯光昼夜交替变化 public class DayAndNight : MonoBehaviour { [Header(\"雾的颜色渐变\")] [SerializeField] private Gradient fogGradient; [Header(\"环境光颜色渐变\")] [SerializeField] private Gradient ambientGradient;  [Header(\"太阳光颜色渐变\")] [SerializeField] private Gradient directionLightGradient; [Header(\"天空盒色调渐变\")] [SerializeField] private Gradient skyboxTintGradient;  [Header(\"方向光源\")] [SerializeField] private Light directionalLight; [Header(\"天空盒材质\")] [SerializeField] private Material skyboxMaterial; [Header(\"白天持续时间(秒)\")] [SerializeField] private float dayDurationInSeconds = 60f;  [Header(\"天空盒旋转速度\")] [SerializeField] private float rotationSpeed = 1f; private float currentTime = 0; // 当前时间(0-1) private void Update() { UpdateTime(); UpdateDayNightCycle(); RotateSkybox(); } // 更新当前时间 private void UpdateTime() { currentTime += Time.deltaTime / dayDurationInSeconds; currentTime =\nSource: https://developer.aliyun.com/article/1553125\n\n**unity3d白天夜晚切换插件Day_Night_Cycle.unitypackage_unity白天黑夜切换,unity昼夜交替插件资源-CSDN下载** (2020-02-27)\nunity3d 白天夜晚切换插件 Day_Night_Cycle.unitypackage 共1个文件 展开 资源推荐 资源详情 资源评论 格式:rar 资源大小:10.3MB 格式:rar 资源大小:143.8MB 格式:rar 资源大小:1.1MB 格式:rar 资源大小:3.4MB 格式:zip 资源大小:121.7MB 格式:rar 资源大小:290.8MB 格式:zip 资源大小:3.4MB 格式:rar 资源大小:33.0MB 格式:zip 资源大小:162.7MB 标题中的\"eq_data_30_ day _m1.rar\"是一个压缩文件,通常用于存储多个相关文件或数据集。根据描述,这个文件与《Python:从入门到实践》这本书的第16章有关,这意味着它可能包含了一个与Python编程、数据分析或者可视化... 格式:rar 资源大小:426.7KB 格式:json 资源大小:4.3MB 格式:rar 资源大小:586.0B 格式:pdf 资源大小:4.7MB 页数:49 格式:zip 资源大小:98.8MB 格式:rar 资源大小:51.6MB 格式:zip 资源大小:12.5MB 格式:docx 资源大小:93.8KB 页数:3 格式:rar 资源大小:1.4MB 超强的天气系统 插件 ,目前的顶级 Unity 天气系统 插件 之一!效果逼真,同时支持2D动态云3D动态云,支持时间和季节的定义,另外支持自定义天气区域的功能!经测试,运行完美,发布编译不翻车!仅用于学习交流,若用于商业用途,请自觉购买! 格式:zip 资源大小:192.1MB 格式:zip 资源大小:169.1MB 格式:zip 资源大小:12.5MB 格式:unitypackage 资源大小:46.1MB 格式:bin 资源大小:13.5MB 格式:pdb 资源大小:2.3MB 标题中的\"RP_LAST_ DAY _OF_MONTHS.doc\"似乎是一个文档文件名,通常用于记录或说明某个特定的函数、过程或在IT环境中使用的脚本。在这个情况下,\"RP_LAST_ DAY _OF_MONTHS\"很可能是一个函数或者宏,它的主要功能是计算或... 格式:doc 资源大小:20.0KB 页数:1 Cisco Wireless LAN Small Scale Virtual Controlle\nSource: https://download.csdn.net/download/qq_42814198/12196283\n\n**unity3d白天夜晚切换插件Day_Night_Cycle.unitypackage资源-CSDN下载** (2014-02-21)\n展开 格式:rar 资源大小:10.3MB 格式:rar 资源大小:143.8MB 格式:txt 资源大小:49.0B 页数:1 标题中的\"eq_data_30_ day _m1.rar\"是一个压缩文件,通常用于存储多个相关文件或数据集。根据描述,这个文件与《Python:从入门到实践》这本书的第16章有关,这意味着它可能包含了一个与Python编程、数据分析或者可视化... 格式:rar 资源大小:426.7KB 格式:json 资源大小:4.3MB 格式:rar 资源大小:586.0B 格式:pdf 资源大小:4.7MB 页数:49 格式:rar 资源大小:3.4MB 格式:rar 资源大小:64.1MB 格式:zip 资源大小:98.8MB 格式:rar 资源大小:51.6MB 格式:unitypackage 资源大小:2.1MB xCloudOS_y1_Build20161229_v3.2.1.3500_sign.bin 浏览:179 xCloudOS_y1_Build20161229_v3.2.1.3500_sign.bin 格式:bin 资源大小:13.5MB 格式:pdb 资源大小:2.3MB 超强的天气系统 插件 ,目前的顶级 Unity 天气系统 插件 之一!效果逼真,同时支持2D动态云3D动态云,支持时间和季节的定义,另外支持自定义天气区域的功能!经测试,运行完美,发布编译不翻车!仅用于学习交流,若用于... 格式:zip 资源大小:192.1MB 标题中的\"RP_LAST_ DAY _OF_MONTHS.doc\"似乎是一个文档文件名,通常用于记录或说明某个特定的函数、过程或在IT环境中使用的脚本。在这个情况下,\"RP_LAST_ DAY _OF_MONTHS\"很可能是一个函数或者宏,它的主要功能是计算或... 格式:doc 资源大小:20.0KB 页数:1 Cisco Wireless LAN Small Scale Virtual Controller Installation with 60 day evaluation license (KVM) v8.10.151.0 MD5 Checksum : a71251d32654f029ad82f13f5fcf4291 格式:iso 资源大小:617.7MB 格式:pdf 资源大小:9.5MB\nSource: https://download.csdn.net/download/slslslsl8928/6944571\n\n**类Minecraft方块游戏unity开发笔记5-天气系统(昼夜交替、天气) - AdamWu's Blog - CSDN博客** (2017-02-16)\n版权声明:本文为博主原创文章,遵循 CC 4.0 BY-SA 版权协议,转载请附上原文出处链接和本声明。 本文链接:https://blog.csdn.net/u011704730/article/details/55252674 昼夜交替 实现白天、黑夜的交替,太阳、月亮的移动,主要通过skybox的旋转,skybox的交替。或者采用unistorm等插件实现。 天气系统(雨雪) 由于需要遮挡关系(树下淋不到雨),所以采用一种动态面片生成算法。 主要根据玩家所处的block,设定一个范围(xz)和高度(16),范围内的block根据heightmap判断最顶面开始玩上生成一个面片。 每个面片是一个贴图uv动画,方向朝向玩家,如图所示。 uv动画 每个block一个面片,一个单独uv动画,玩家移动到不同block,需重新计算所有面片。 每个block需单独记录其当前的uv起点,以便在玩家移动(包括上下)时,保持每个block的uv动画和之前的一致(没有突变)。此步骤注意根据高度计算uv值。 面片朝向 采用固定值朝向,加快刷新速度。根据俯视图可以开出每个面片的朝向,只有两种:一种中间垂直,一种对角线。采用这样的简单的方式,可以快速计算面片顶点坐标。\nSource: https://blog.csdn.net/adamwu1988/article/details/55252674?locationNum=3&fps=1\n\n**【Unity5】实现24小时日出日落的效果 24小时天幕系统 - 王严C# U3D开发 - CSDN博客** (2015-03-23)\n版权声明:本文为博主原创文章,遵循 CC 4.0 BY-SA 版权协议,转载请附上原文出处链接和本声明。 本文链接:https://blog.csdn.net/YunPro/article/details/44567805 【本文为囧希博客个人原创文章,转载请注明出处!http://blog.csdn.net/yunpro】 很多高大上的游戏都有24小时天幕系统,在游戏制作中可以看到日出,日落,以及漫长的黑夜,是非常让玩家有带入感的 下面我们就用Unity5来实现这种效果 直接把上面的脚本绑定在光照上就可以了。 然后点运行游戏就可以看到效果。 本人热衷游戏程序制作,欢迎和我进行探讨与各种交流! 咱邮箱:wy66666666@qq.com\nSource: https://blog.csdn.net/YunPro/article/details/44567805?locationNum=3&fps=1\n\n**Unity Shader杂项 - 0x9801 - 博客园** (2013-12-10)\n法线强度 float3 normalMap = UnpackNormal(tex2D(_NormalTex, IN.uv_MainTex));NormalMap = float3(normalMap.x * _NormalIntensity, NormalMap.y * _NormalIntensity, normalMap.z ) 免责声明:本内容来自平台创作者,博客园系信息发布平台,仅提供信息存储空间服务。\nSource: https://www.cnblogs.com/veobachter/p/3467088.html\n\n**unityshader自己学习笔记--vertex shader--uniform_unityshader uniform-CSDN博客** (2023-04-18)\n文章浏览阅读109次。该文章展示了如何在Unity3D中创建自定义的表面着色器(Shader),并通过脚本设置变量来改变渲染颜色。具体步骤包括定义Shader属性,编写顶点和片段着...\nSource: https://blog.csdn.net/m0_69722751/article/details/130220848\n",
+    "web_references": [
+      {
+        "content": "Procedural Sky Shader & Day Night Cycle - Jupiter 是一款专为 Unity 开发的 程序 化天空和昼夜循环系统插件,旨在为游戏项目提供动态､真实的天际效果和昼夜变化｡该插件使用程序生成的方式实时模拟天空的变化,提供了多种自定义选项,帮助开发者创建美丽且自然的环境光照和大气效果,适用于各种游戏类型,包括开放世界､冒险､角色扮演等｡ 核心功能 ",
+        "icon": "",
+        "link": "https://blog.csdn.net/2403_88403568/article/details/145333006",
+        "media": "",
+        "publish_date": "2025-01-24",
+        "refer": "ref_1",
+        "title": "【Unity 天空和昼夜循环系统插件】Procedural Sky Shader & Day Night Cycle - Jupiter 旨在为游戏项目提供动态、真实的天际效果和昼夜变化_unity procedural"
+      },
+      {
+        "content": "【实例简介】 unity3d 白天夜晚切换插件,可以渐变改变天空盒,代码可以更改,很方便使用｡ 【实例截图】 ",
+        "icon": "",
+        "link": "https://www.haolizi.net/example/view_146344.html",
+        "media": "",
+        "publish_date": "2020-11-05",
+        "refer": "ref_2",
+        "title": "unity3d 白天夜晚切换插件 Day_Night_Cycle.unitypackage - 开发实例、源码下载 - 好例子网"
+      },
+      {
+        "content": "HDRP Time Of Day - Lighting, Weather & Clouds 是一款专为 Unity HDRP(高清渲染管线)设计的插件,旨在帮助开发者在游戏中实现动态时间､天气和云层效果｡这个插件允许开发者轻松地为其项目添加日夜循环､天气变化､云层渲染等高级视觉效果,从而提升游戏的沉浸感和真实感｡适用于需要表现自然光照和大气变化的游戏,尤其是对环境氛围要求较高的游戏类型｡ ",
+        "icon": "",
+        "link": "https://blog.csdn.net/2403_88403568/article/details/145269271",
+        "media": "",
+        "publish_date": "2025-01-21",
+        "refer": "ref_3",
+        "title": "【Unity 动态时间、天气和云层效果插件】HDRP Time Of Day - Lighting, Weather & Clouds 轻松为其项目添加日夜循环、天气变化、云层渲染等高级视觉效果..."
+      },
+      {
+        "content": "版权 举报 简介: 【unity小技巧】unity3d环境带雾的昼夜系统变化 眩光素材 提取码:veww 眩光配置 眩光其实可以简单的理解为太阳或月亮 全局灯光配置 想要相机显示眩光,需要在相机添加Flare Layer组件 天空盒资产 配置天空盒,开启雾 代码控制天空盒 环境 雾 灯光昼夜交替变化 public class DayAndNight : MonoBehaviour { [Header(\"雾的颜色渐变\")] [SerializeField] private Gradient fogGradient; [Header(\"环境光颜色渐变\")] [SerializeField] private Gradient ambientGradient;  [Header(\"太阳光颜色渐变\")] [SerializeField] private Gradient directionLightGradient; [Header(\"天空盒色调渐变\")] [SerializeField] private Gradient skyboxTintGradient;  [Header(\"方向光源\")] [SerializeField] private Light directionalLight; [Header(\"天空盒材质\")] [SerializeField] private Material skyboxMaterial; [Header(\"白天持续时间(秒)\")] [SerializeField] private float dayDurationInSeconds = 60f;  [Header(\"天空盒旋转速度\")] [SerializeField] private float rotationSpeed = 1f; private float currentTime = 0; // 当前时间(0-1) private void Update() { UpdateTime(); UpdateDayNightCycle(); RotateSkybox(); } // 更新当前时间 private void UpdateTime() { currentTime += Time.deltaTime / dayDurationInSeconds; currentTime =",
+        "icon": "",
+        "link": "https://developer.aliyun.com/article/1553125",
+        "media": "阿里云开发者社区",
+        "publish_date": "2024-06-28",
+        "refer": "ref_4",
+        "title": "【unity小技巧】unity3d环境带雾的昼夜系统变化-阿里云开发者社区"
+      },
+      {
+        "content": "unity3d 白天夜晚切换插件 Day_Night_Cycle.unitypackage 共1个文件 展开 资源推荐 资源详情 资源评论 格式:rar 资源大小:10.3MB 格式:rar 资源大小:143.8MB 格式:rar 资源大小:1.1MB 格式:rar 资源大小:3.4MB 格式:zip 资源大小:121.7MB 格式:rar 资源大小:290.8MB 格式:zip 资源大小:3.4MB 格式:rar 资源大小:33.0MB 格式:zip 资源大小:162.7MB 标题中的\"eq_data_30_ day _m1.rar\"是一个压缩文件,通常用于存储多个相关文件或数据集。根据描述,这个文件与《Python:从入门到实践》这本书的第16章有关,这意味着它可能包含了一个与Python编程、数据分析或者可视化... 格式:rar 资源大小:426.7KB 格式:json 资源大小:4.3MB 格式:rar 资源大小:586.0B 格式:pdf 资源大小:4.7MB 页数:49 格式:zip 资源大小:98.8MB 格式:rar 资源大小:51.6MB 格式:zip 资源大小:12.5MB 格式:docx 资源大小:93.8KB 页数:3 格式:rar 资源大小:1.4MB 超强的天气系统 插件 ,目前的顶级 Unity 天气系统 插件 之一!效果逼真,同时支持2D动态云3D动态云,支持时间和季节的定义,另外支持自定义天气区域的功能!经测试,运行完美,发布编译不翻车!仅用于学习交流,若用于商业用途,请自觉购买! 格式:zip 资源大小:192.1MB 格式:zip 资源大小:169.1MB 格式:zip 资源大小:12.5MB 格式:unitypackage 资源大小:46.1MB 格式:bin 资源大小:13.5MB 格式:pdb 资源大小:2.3MB 标题中的\"RP_LAST_ DAY _OF_MONTHS.doc\"似乎是一个文档文件名,通常用于记录或说明某个特定的函数、过程或在IT环境中使用的脚本。在这个情况下,\"RP_LAST_ DAY _OF_MONTHS\"很可能是一个函数或者宏,它的主要功能是计算或... 格式:doc 资源大小:20.0KB 页数:1 Cisco Wireless LAN Small Scale Virtual Controlle",
+        "icon": "",
+        "link": "https://download.csdn.net/download/qq_42814198/12196283",
+        "media": "",
+        "publish_date": "2020-02-27",
+        "refer": "ref_5",
+        "title": "unity3d白天夜晚切换插件Day_Night_Cycle.unitypackage_unity白天黑夜切换,unity昼夜交替插件资源-CSDN下载"
+      },
+      {
+        "content": "展开 格式:rar 资源大小:10.3MB 格式:rar 资源大小:143.8MB 格式:txt 资源大小:49.0B 页数:1 标题中的\"eq_data_30_ day _m1.rar\"是一个压缩文件,通常用于存储多个相关文件或数据集。根据描述,这个文件与《Python:从入门到实践》这本书的第16章有关,这意味着它可能包含了一个与Python编程、数据分析或者可视化... 格式:rar 资源大小:426.7KB 格式:json 资源大小:4.3MB 格式:rar 资源大小:586.0B 格式:pdf 资源大小:4.7MB 页数:49 格式:rar 资源大小:3.4MB 格式:rar 资源大小:64.1MB 格式:zip 资源大小:98.8MB 格式:rar 资源大小:51.6MB 格式:unitypackage 资源大小:2.1MB xCloudOS_y1_Build20161229_v3.2.1.3500_sign.bin 浏览:179 xCloudOS_y1_Build20161229_v3.2.1.3500_sign.bin 格式:bin 资源大小:13.5MB 格式:pdb 资源大小:2.3MB 超强的天气系统 插件 ,目前的顶级 Unity 天气系统 插件 之一!效果逼真,同时支持2D动态云3D动态云,支持时间和季节的定义,另外支持自定义天气区域的功能!经测试,运行完美,发布编译不翻车!仅用于学习交流,若用于... 格式:zip 资源大小:192.1MB 标题中的\"RP_LAST_ DAY _OF_MONTHS.doc\"似乎是一个文档文件名,通常用于记录或说明某个特定的函数、过程或在IT环境中使用的脚本。在这个情况下,\"RP_LAST_ DAY _OF_MONTHS\"很可能是一个函数或者宏,它的主要功能是计算或... 格式:doc 资源大小:20.0KB 页数:1 Cisco Wireless LAN Small Scale Virtual Controller Installation with 60 day evaluation license (KVM) v8.10.151.0 MD5 Checksum : a71251d32654f029ad82f13f5fcf4291 格式:iso 资源大小:617.7MB 格式:pdf 资源大小:9.5MB",
+        "icon": "",
+        "link": "https://download.csdn.net/download/slslslsl8928/6944571",
+        "media": "",
+        "publish_date": "2014-02-21",
+        "refer": "ref_6",
+        "title": "unity3d白天夜晚切换插件Day_Night_Cycle.unitypackage资源-CSDN下载"
+      },
+      {
+        "content": "版权声明:本文为博主原创文章,遵循 CC 4.0 BY-SA 版权协议,转载请附上原文出处链接和本声明。 本文链接:https://blog.csdn.net/u011704730/article/details/55252674 昼夜交替 实现白天、黑夜的交替,太阳、月亮的移动,主要通过skybox的旋转,skybox的交替。或者采用unistorm等插件实现。 天气系统(雨雪) 由于需要遮挡关系(树下淋不到雨),所以采用一种动态面片生成算法。 主要根据玩家所处的block,设定一个范围(xz)和高度(16),范围内的block根据heightmap判断最顶面开始玩上生成一个面片。 每个面片是一个贴图uv动画,方向朝向玩家,如图所示。 uv动画 每个block一个面片,一个单独uv动画,玩家移动到不同block,需重新计算所有面片。 每个block需单独记录其当前的uv起点,以便在玩家移动(包括上下)时,保持每个block的uv动画和之前的一致(没有突变)。此步骤注意根据高度计算uv值。 面片朝向 采用固定值朝向,加快刷新速度。根据俯视图可以开出每个面片的朝向,只有两种:一种中间垂直,一种对角线。采用这样的简单的方式,可以快速计算面片顶点坐标。",
+        "icon": "",
+        "link": "https://blog.csdn.net/adamwu1988/article/details/55252674?locationNum=3&fps=1",
+        "media": "",
+        "publish_date": "2017-02-16",
+        "refer": "ref_7",
+        "title": "类Minecraft方块游戏unity开发笔记5-天气系统(昼夜交替、天气) - AdamWu's Blog - CSDN博客"
+      },
+      {
+        "content": "版权声明:本文为博主原创文章,遵循 CC 4.0 BY-SA 版权协议,转载请附上原文出处链接和本声明。 本文链接:https://blog.csdn.net/YunPro/article/details/44567805 【本文为囧希博客个人原创文章,转载请注明出处!http://blog.csdn.net/yunpro】 很多高大上的游戏都有24小时天幕系统,在游戏制作中可以看到日出,日落,以及漫长的黑夜,是非常让玩家有带入感的 下面我们就用Unity5来实现这种效果 直接把上面的脚本绑定在光照上就可以了。 然后点运行游戏就可以看到效果。 本人热衷游戏程序制作,欢迎和我进行探讨与各种交流! 咱邮箱:wy66666666@qq.com",
+        "icon": "",
+        "link": "https://blog.csdn.net/YunPro/article/details/44567805?locationNum=3&fps=1",
+        "media": "",
+        "publish_date": "2015-03-23",
+        "refer": "ref_8",
+        "title": "【Unity5】实现24小时日出日落的效果 24小时天幕系统 - 王严C# U3D开发 - CSDN博客"
+      },
+      {
+        "content": "法线强度 float3 normalMap = UnpackNormal(tex2D(_NormalTex, IN.uv_MainTex));NormalMap = float3(normalMap.x * _NormalIntensity, NormalMap.y * _NormalIntensity, normalMap.z ) 免责声明:本内容来自平台创作者,博客园系信息发布平台,仅提供信息存储空间服务。",
+        "icon": "",
+        "link": "https://www.cnblogs.com/veobachter/p/3467088.html",
+        "media": "博客园",
+        "publish_date": "2013-12-10",
+        "refer": "ref_9",
+        "title": "Unity Shader杂项 - 0x9801 - 博客园"
+      },
+      {
+        "content": "文章浏览阅读109次。该文章展示了如何在Unity3D中创建自定义的表面着色器(Shader),并通过脚本设置变量来改变渲染颜色。具体步骤包括定义Shader属性,编写顶点和片段着...",
+        "icon": "",
+        "link": "https://blog.csdn.net/m0_69722751/article/details/130220848",
+        "media": "",
+        "publish_date": "2023-04-18",
+        "refer": "ref_10",
+        "title": "unityshader自己学习笔记--vertex shader--uniform_unityshader uniform-CSDN博客"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "unity day night cycle shader uniform parameter lut",
+        "query": "Unity day night cycle shader uniform parameter LUT"
+      }
+    ],
+    "latency_seconds": 2.15,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Pokemon GO PokeStop spinner gym beam visual effect breakdown",
+    "content": "**精灵宝可梦go中文版手游下载-精灵宝可梦go(Pokemon Go)官方正版下载v0.243.0 安卓版-雨林木风系统** (2025-04-19)\n类型: 休闲益智 版本:v0.243.0 大小:169.93 MB 更新:2025-04-19 语言:简体中文 游戏介绍 相关版本 相关文章 同类推荐 关于我在现实世界里面抓宝可梦这件事,还是蛮好玩的,就是精灵宝可梦go(Pokemon Go)官方正版下载 走路的话太累了,懒得动｡ 软件简介 精灵宝可梦go(Pokemon Go)官方正版下载 \nSource: http://www.ylmfwin8.com/games/20034.html\n\n**pokemon go下载最新版中文版-pokemon go官方版下载 v0.413.2-当快软件园** (2026-06-10)\n发现好应用､好游戏,做有态度的应用市场 发现世界各地的神奇宝贝 版本: v0.413.2 大小: 220.13 MB 语言: 简体中文 类型: 角色扮演 环境: android､iOS 隐私: 查看 权限: 查看 MD5: 4F0E30DCD341CA8CE9F10B7AD81E32D2 包名: com.nianticlabs.pokemongo 厂商: Niantic, Inc. 需要网络 \nSource: https://www.downkuai.com/android/164584.html\n\n**宝可梦go手游下载-pokemon go宝可梦go国际服v0.313.1 - 趣趣手游网** (2026-05-06)\n宝可梦GO英文名叫Pokémon GO,玩法非常的休闲,在游戏中有着大家最熟悉不过的神器宝贝角色,你需要不断的去解锁它们,每一个角色都有不同的属性与玩法,你可以选择自己喜欢的进行游戏,带领着它们在这个世界中展开冒险挑战,在游戏中还有各种不同势力的联盟,你可以选择加入他们抱团取暖,达到一定的水平后也可以自己创建属于自己的神奇宝贝联盟｡ 游戏特色 1.\nSource: https://www.ququyou.com/azgame/3426.html\n\n**精灵宝可梦go游戏下载_精灵宝可梦go手游最新版下载v3.3.0 iPhone/iPad版安卓版 - 手机游戏 - 教程之家** (2021-09-02)\n类型: 角色扮演 版本:v3.3.0 iPhone/iPad版 大小:54.5M 更新:2021-09-02 语言:简体中文 等级: 精灵宝可梦 go是一款好玩的宠物养成类手游,玩家只需打开手机摄像头,就可以看见并且自由捕捉现实世界中的口袋妖怪啦,现在小编给大家带来这款游戏下载,让你也体验下这款超人气游戏,喜欢这款游戏的玩家快来下载体验吧｡ 精灵宝可梦go游戏特色 \nSource: https://www.jiaochengzhijia.com/down/41763.html\n\n**宝可梦go下载2022-宝可梦go最新版(Pokemon GO)下载0.237安卓版-多特手游** (2022-06-26)\n类型:模拟经营 版本:0.237.0 平台:安卓 语言:中文 大小:242.01M 厂商:Niantic, Inc. PokemonGO游戏介绍 宝可梦Go是一款以宝可梦为题材的LBS休闲模拟游戏,游戏实用ar相机实拍的模式,让玩家通过手机的相机在生活中寻找宠物小精灵,让用户真实体验到宝可梦捕捉带来的乐趣,同时还能训练你的宝可梦让他们变强｡ 游戏特色 \nSource: https://www.duotegame.com/android/44842.html\n\n**Pokemon-Showdown/LICENSE at master · jpf/Pokemon-Showdown · GitHub** (2025-06-17)\nAppearance settings Product Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert Footer © 2025 GitHub, Inc. Footer navigation Manage cookies Do not share my personal information You can’t perform that action at this time.\nSource: https://github.com/jpf/Pokemon-Showdown/blob/master/LICENSE\n\n**《宝可梦GO》玩家拍下300亿张实景照片,如今用来训练机器人送披萨** (2026-03-27)\n<p><img src='http://qqpublic.qpic.cn/qq_public/0/28-857750670-0C8181CDF542C5C4455322842045EB60/0?fmt=jpg&size=422&h=600&w=1000&ppv=1' data-aigc-mark='0'/></p><p>《宝可梦GO》玩家拍摄现实世界的照片,构建了迄今为止最详细的地图｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_79769c643c491152\n\n**Pokemon Go Wiki** (2026-03-16)\nRetrieved from \" https://pkmngotrading.com/mediawiki/index.php?title=Pokemon_Go_Wiki&oldid=156813 \nSource: https://pkmngotrading.com/\n\n**Pokémon Go十年后再立功:玩家数据帮配送机器人精准导航** (2026-03-20)\nC9584/0?fmt=jpg&size=84&h=659&w=1200&ppv=1' data-aigc-mark='0'/></p><p>本周,《精灵宝可梦Go》开发团队旗下的Niantic Spatial宣布与Coco Robotics达成合作——后者专注于食品和杂货的短途配送机器人研发｡很快,Coco的配送机器人将搭载Niantic \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_12569bd209512752\n\n**pokemongo下载最新版_pokemongo手游安卓最新版免费下载7张暴漫 安卓版 - 手机游戏 - 教程之家手机版** (2021-10-25)\n版本:7张暴漫 大小:58KB 类别:角色扮演 pokemon go下载最新版是一款精彩有趣的战斗手游,以经典的宝可梦为主题,通过自己的努力,玩家可以解锁更多不同类型的可爱小精灵,通过自己的努力去完成各种考验来感受精彩,游戏中为玩家设计了大量不同风格的地图场景,给玩家带来更刺激的体验,轻松完成各种挑战｡ pokemon go下载最新版特色 \nSource: https://m.jiaochengzhijia.com/down/52546.html\n",
+    "web_references": [
+      {
+        "content": "类型: 休闲益智 版本:v0.243.0 大小:169.93 MB 更新:2025-04-19 语言:简体中文 游戏介绍 相关版本 相关文章 同类推荐 关于我在现实世界里面抓宝可梦这件事,还是蛮好玩的,就是精灵宝可梦go(Pokemon Go)官方正版下载 走路的话太累了,懒得动｡ 软件简介 精灵宝可梦go(Pokemon Go)官方正版下载 ",
+        "icon": "",
+        "link": "http://www.ylmfwin8.com/games/20034.html",
+        "media": "",
+        "publish_date": "2025-04-19",
+        "refer": "ref_1",
+        "title": "精灵宝可梦go中文版手游下载-精灵宝可梦go(Pokemon Go)官方正版下载v0.243.0 安卓版-雨林木风系统"
+      },
+      {
+        "content": "发现好应用､好游戏,做有态度的应用市场 发现世界各地的神奇宝贝 版本: v0.413.2 大小: 220.13 MB 语言: 简体中文 类型: 角色扮演 环境: android､iOS 隐私: 查看 权限: 查看 MD5: 4F0E30DCD341CA8CE9F10B7AD81E32D2 包名: com.nianticlabs.pokemongo 厂商: Niantic, Inc. 需要网络 ",
+        "icon": "",
+        "link": "https://www.downkuai.com/android/164584.html",
+        "media": "",
+        "publish_date": "2026-06-10",
+        "refer": "ref_2",
+        "title": "pokemon go下载最新版中文版-pokemon go官方版下载 v0.413.2-当快软件园"
+      },
+      {
+        "content": "宝可梦GO英文名叫Pokémon GO,玩法非常的休闲,在游戏中有着大家最熟悉不过的神器宝贝角色,你需要不断的去解锁它们,每一个角色都有不同的属性与玩法,你可以选择自己喜欢的进行游戏,带领着它们在这个世界中展开冒险挑战,在游戏中还有各种不同势力的联盟,你可以选择加入他们抱团取暖,达到一定的水平后也可以自己创建属于自己的神奇宝贝联盟｡ 游戏特色 1.",
+        "icon": "",
+        "link": "https://www.ququyou.com/azgame/3426.html",
+        "media": "",
+        "publish_date": "2026-05-06",
+        "refer": "ref_3",
+        "title": "宝可梦go手游下载-pokemon go宝可梦go国际服v0.313.1 - 趣趣手游网"
+      },
+      {
+        "content": "类型: 角色扮演 版本:v3.3.0 iPhone/iPad版 大小:54.5M 更新:2021-09-02 语言:简体中文 等级: 精灵宝可梦 go是一款好玩的宠物养成类手游,玩家只需打开手机摄像头,就可以看见并且自由捕捉现实世界中的口袋妖怪啦,现在小编给大家带来这款游戏下载,让你也体验下这款超人气游戏,喜欢这款游戏的玩家快来下载体验吧｡ 精灵宝可梦go游戏特色 ",
+        "icon": "",
+        "link": "https://www.jiaochengzhijia.com/down/41763.html",
+        "media": "",
+        "publish_date": "2021-09-02",
+        "refer": "ref_4",
+        "title": "精灵宝可梦go游戏下载_精灵宝可梦go手游最新版下载v3.3.0 iPhone/iPad版安卓版 - 手机游戏 - 教程之家"
+      },
+      {
+        "content": "类型:模拟经营 版本:0.237.0 平台:安卓 语言:中文 大小:242.01M 厂商:Niantic, Inc. PokemonGO游戏介绍 宝可梦Go是一款以宝可梦为题材的LBS休闲模拟游戏,游戏实用ar相机实拍的模式,让玩家通过手机的相机在生活中寻找宠物小精灵,让用户真实体验到宝可梦捕捉带来的乐趣,同时还能训练你的宝可梦让他们变强｡ 游戏特色 ",
+        "icon": "",
+        "link": "https://www.duotegame.com/android/44842.html",
+        "media": "",
+        "publish_date": "2022-06-26",
+        "refer": "ref_5",
+        "title": "宝可梦go下载2022-宝可梦go最新版(Pokemon GO)下载0.237安卓版-多特手游"
+      },
+      {
+        "content": "Appearance settings Product Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert Footer © 2025 GitHub, Inc. Footer navigation Manage cookies Do not share my personal information You can’t perform that action at this time.",
+        "icon": "",
+        "link": "https://github.com/jpf/Pokemon-Showdown/blob/master/LICENSE",
+        "media": "",
+        "publish_date": "2025-06-17",
+        "refer": "ref_6",
+        "title": "Pokemon-Showdown/LICENSE at master · jpf/Pokemon-Showdown · GitHub"
+      },
+      {
+        "content": "<p><img src='http://qqpublic.qpic.cn/qq_public/0/28-857750670-0C8181CDF542C5C4455322842045EB60/0?fmt=jpg&size=422&h=600&w=1000&ppv=1' data-aigc-mark='0'/></p><p>《宝可梦GO》玩家拍摄现实世界的照片,构建了迄今为止最详细的地图｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_79769c643c491152",
+        "media": "企鹅号",
+        "publish_date": "2026-03-27",
+        "refer": "ref_7",
+        "title": "《宝可梦GO》玩家拍下300亿张实景照片,如今用来训练机器人送披萨"
+      },
+      {
+        "content": "Retrieved from \" https://pkmngotrading.com/mediawiki/index.php?title=Pokemon_Go_Wiki&oldid=156813 ",
+        "icon": "",
+        "link": "https://pkmngotrading.com/",
+        "media": "",
+        "publish_date": "2026-03-16",
+        "refer": "ref_8",
+        "title": "Pokemon Go Wiki"
+      },
+      {
+        "content": "C9584/0?fmt=jpg&size=84&h=659&w=1200&ppv=1' data-aigc-mark='0'/></p><p>本周,《精灵宝可梦Go》开发团队旗下的Niantic Spatial宣布与Coco Robotics达成合作——后者专注于食品和杂货的短途配送机器人研发｡很快,Coco的配送机器人将搭载Niantic ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_12569bd209512752",
+        "media": "企鹅号",
+        "publish_date": "2026-03-20",
+        "refer": "ref_9",
+        "title": "Pokémon Go十年后再立功:玩家数据帮配送机器人精准导航"
+      },
+      {
+        "content": "版本:7张暴漫 大小:58KB 类别:角色扮演 pokemon go下载最新版是一款精彩有趣的战斗手游,以经典的宝可梦为主题,通过自己的努力,玩家可以解锁更多不同类型的可爱小精灵,通过自己的努力去完成各种考验来感受精彩,游戏中为玩家设计了大量不同风格的地图场景,给玩家带来更刺激的体验,轻松完成各种挑战｡ pokemon go下载最新版特色 ",
+        "icon": "",
+        "link": "https://m.jiaochengzhijia.com/down/52546.html",
+        "media": "",
+        "publish_date": "2021-10-25",
+        "refer": "ref_10",
+        "title": "pokemongo下载最新版_pokemongo手游安卓最新版免费下载7张暴漫 安卓版 - 手机游戏 - 教程之家手机版"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "pokemon go spinner gym beam visual effect breakdown",
+        "query": "Pokemon GO PokeStop spinner gym beam visual effect breakdown"
+      }
+    ],
+    "latency_seconds": 1.88,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Tilt Brush brush shader open source GitHub",
+    "content": "**GitHub - manuelpezzera/open-brush: Open Source Fork of Tilt Brush** (2019-04-25)\nName Name Last commit message Last commit date Latest commit   History 144 Commits .github .github     Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImages Refersteam_appid.txt steam_appid.txt     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Repository files navigation Open Brush - A Tilt Brush fork Current Version: Pre-release Version: Open brush is a fork of Tilt Brush, a room-scale 3D-painting virtual-reality application available from Google, originally develog work!\nSource: https://github.com/manuelpezzera/open-brush\n\n**GitHub - icosa-foundation/open-brush: Open Brush is the open source, community led evolution of Tilt Brush! Forked from https://github** (2026-04-24)\nName Name Last commit message Last commit date Latest commit   History 888 Commits 888 Commits .github .github     Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImagCENSE LICENSE     README.md README.md     RuntimeActionBindings.json RuntimeActionBindings.json     TILT_BRUSH_BRAND_GUIDELINES.md TILT_BRUSH_BRAND_GUIDELINES.md     open-brush.png open-brush.png     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Repository files navigation Open Brush - Art From All Angles Open Brush is a free fork of Tilt Brush, a room-scale 3D-painting virtual-reality application available from Google, originally develodgements Thank you to the Tilt Brush developers for your amazing work and for finding a way to open source the app! VR Rosie for promotional artwork, banners, and videos. Bleeding Edge Releases Instead of waiting for a formal release, you can download a ZIP from Github containing an \nSource: https://github.com/icosa-foundation/open-brush\n\n**Branches · Edu0x01 / Hack Tools · GitLab** (2024-02-29)\nProject that brings together several pentest tools\nSource: https://gitlab.com/Edu0x01/hack-tools/-/branches/stale\n\n**Branches · Anselm Eberhardt / stashcat-api-client · GitLab** (2024-05-12)\nRead-Only mirror of https://codeberg.org/aeberhardt/stashcat-api-client\nSource: https://gitlab.com/aeberhardt/stashcat-api-client/-/branches/stale\n\n**GitHub - IxxyXR/open-brush: Open Source Fork of Tilt Brush** (2021-03-09)\nName Name Last commit message Last commit date Latest commit   History 365 Commits .github .github     Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImages ReferAUTHORS AUTHORS     CONTRIBUTING.md CONTRIBUTING.md     LICENSE LICENSE     README.md README.md     TILT_BRUSH_BRAND_GUIDELINES.md TILT_BRUSH_BRAND_GUIDELINES.md     open-brush.png open-brush.png     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Repository files navigation Open Brush - Tilt Brush Evolved Open Brush is a free fork of Tilt Brush, a room-scale 3D-painting virtual-reality application available from Google, originally develodgements Thank you to the Tilt Brush developers for your amazing work and for finding a way to open source the app! VR Rosie for promotional artwork, banners, and videos. Bleeding Edge Releases Instead of waiting for a formal release, you can download a ZIP from Github containing an autom\nSource: https://github.com/IxxyXR/open-brush/tree/main\n\n**GitHub - Daniel-Fan/open-brush: Open Source Fork of Tilt Brush** (2019-04-18)\nName Name Last commit message Last commit date Latest commit   History 114 Commits .github .github     Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImages Refersteam_appid.txt steam_appid.txt     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Open Brush - A Tilt Brush fork Current Version: 0.3.0 We hope to help maintain Tilt Brush. As the original repo is archived we cannot submit PRs, so feel free to submit them here! Currently we are: Getting Open Brush to work with the Poly replacement, Icosa . Looking at modding support (custom brushes!) See our Trello board for more information. Acknowledgements Thank you to the Tilt Brush developers for your amazing work! Bleeding Edge Releases Instead of waiting for a formal release, you can download a ZIP from Github containing an automatically built release for either Windows (SteamVR) or Oculus Quest / Ques prior to the official relea\nSource: https://github.com/Daniel-Fan/open-brush\n\n**GitHub - JoshHula/tilt-brush** (2018-04-11)\nName Name Last commit message Last commit date Latest commit   History 3 Commits Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImages ReferenceImages     Supportsteam_appid.txt steam_appid.txt     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Repository files navigation Tilt Brush README Tilt Brush is licensed under Apache 2.0. It is not an officially supportedGoogle product. See the LICENSE file for more details. Trademarks The Tilt Brush trademark and logo (“Tilt Brush Trademarks”) are trademarks ofGoogle, and are treated separately from the copyright or patent license grantscontained in the Apache-licensed Tilt Brush repositories on GitHub. Any use ofthe Tilt Brush Trademarks other than those permitted in these guidelines must beapproved in advance. Building the application Get the Tilt Brush open-source application running on your own devices. Prerequisites Python 2.7.0 (Op\nSource: https://github.com/JoshHula/tilt-brush/tree/master\n\n**tilt-brush/README.md at master · JoshHula/tilt-brush · GitHub** (2018-04-11)\n404 lines (295 loc) · 16.2 KB   master Breadcrumbs README.md Top File metadata and controls Preview Code Blame 404 lines (295 loc) · 16.2 KB Tilt Brush README Tilt Brush is licensed under Apache 2.0. It is not an officially supportedGoogle product. See the LICENSE file for more details. Trademarks The Tilt Brush trademark and logo (“Tilt Brush Trademarks”) are trademarks ofGoogle, and are treated separately from the copyright or patent license grantscontained in the Apache-licensed Tilt Brush repositories on GitHub. Any use ofthe Tilt Brush Trademarks other than those permitted in these guidelines must beapproved in advance. Building the application Get the Tilt Brush open-source application running on your own devices. Prerequisites Python 2.7.0 (Optional —needed only ifditor Follow these steps when running the application for the first time: Start Unity. Go to File > Open Scene . \\ Select /Assets/Scenes/Main.unity . Unity should automatically prompt you toimport Tex Import TMP Essent\nSource: https://github.com/JoshHula/tilt-brush/blob/master/README.md\n\n**tilt brush_Linux,Tilt Brush Toolkit和更多开放游戏新闻发布了新的Minecraft启动器-CSDN博客** (2020-06-23)\ntilt brush 在这个为期两周的开放游戏综述中,我们介绍了新的Minecraft启动器,Google的Tilt Brush Toolkit,关于将游戏移植到Linux的linux.conf.au讨论。 2017年1月15日至28日的开放游戏综述 Minecraft的新启动器可在Linux上使用 Minecraft的新启动器将在Linux上可用。 Linux上的游戏提供了新启动器的屏幕截图,看起来很棒。 如果您有兴趣试用一下,开发人员会要求您帮助在Reddit上测试启动器。 这个新启动器的最大好处是它不再依赖Java,并且将通过适当的安装程序加载依赖项。 开源工具包将Tilt Brush变成了游戏开发工具 谷歌已经发布了Tilt Brush Toolkit ,该工具可让所有背景和风格的创作者将其作为开源软件在虚拟现实中进行创作。 Gamasutra.com的Alissa McAloon 写道 :“ [该工具包旨在帮助开发人员轻松地将 Tilt Brush的三维VR画布中创建的资产和艺术品导入Unity。如果有的话,该实用程序展示了一种有趣的游戏开发和虚拟方式。随着技术的发展,现实可能会重叠。” 倾斜画笔工具包可在GitHub上获得,并包括Python脚本和Unity SDK。 视频:将游戏移植到Linux 游戏在Linux贡献者Cheeseness,谁参加linux.conf.au ,畅谈游戏移植到Linux在这部影片。 在其他新闻中 微软发布开源DirectX Shader编译器 Wine 2.0现在正式可用 SteamOS更新了一些主要的新驱动程序,并更新了Debian基础 从源头构建Mesa,指南 Linux上的新游戏 竞走 在Steam上的Steam抢先体验中可以使用Avorion。 确保阅读开发人员的抢先体验声明,以便了解他们为您准备的内容。 程序合作空间沙盒,玩家可以利用动态可扩展块构建自己的太空船。 进行史诗般的太空战,探索,开采,交易,发动战争,并建立自己的帝国,以保护您的银河系免受未知敌人的破坏。 重大失败 Linux上的游戏对Steaming for Linux刚刚发布的游戏Monumental Failure给予了积极而热情的评价 。 纪念性破坏是一个基于历史的(不准确的)基于物理的纪念性建筑模拟器。 该游戏使您能够使用令人难以置信且难以置\nSource: https://blog.csdn.net/cumj63710/article/details/107393860\n\n**GitHub - JohnOrionYoung/tilt-brush · GitHub** (2018-04-11)\nName Name Last commit message Last commit date Latest commit   History 3 Commits 3 Commits Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImages ReferenceImages  steam_appid.txt steam_appid.txt     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Repository files navigation Tilt Brush README Tilt Brush is licensed under Apache 2.0. It is not an officially supportedGoogle product. See the LICENSE file for more details. Trademarks The Tilt Brush trademark and logo (“Tilt Brush Trademarks”) are trademarks ofGoogle, and are treated separately from the copyright or patent license grantscontained in the Apache-licensed Tilt Brush repositories on GitHub. Any use ofthe Tilt Brush Trademarks other than those permitted in these guidelines must beapproved in advance. Building the application Get the Tilt Brush open-source application running on your own devices. Prerequisites Python 2.7.0 (Op\nSource: https://github.com/JohnOrionYoung/tilt-brush\n",
+    "web_references": [
+      {
+        "content": "Name Name Last commit message Last commit date Latest commit   History 144 Commits .github .github     Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImages Refersteam_appid.txt steam_appid.txt     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Repository files navigation Open Brush - A Tilt Brush fork Current Version: Pre-release Version: Open brush is a fork of Tilt Brush, a room-scale 3D-painting virtual-reality application available from Google, originally develog work!",
+        "icon": "",
+        "link": "https://github.com/manuelpezzera/open-brush",
+        "media": "",
+        "publish_date": "2019-04-25",
+        "refer": "ref_1",
+        "title": "GitHub - manuelpezzera/open-brush: Open Source Fork of Tilt Brush"
+      },
+      {
+        "content": "Name Name Last commit message Last commit date Latest commit   History 888 Commits 888 Commits .github .github     Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImagCENSE LICENSE     README.md README.md     RuntimeActionBindings.json RuntimeActionBindings.json     TILT_BRUSH_BRAND_GUIDELINES.md TILT_BRUSH_BRAND_GUIDELINES.md     open-brush.png open-brush.png     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Repository files navigation Open Brush - Art From All Angles Open Brush is a free fork of Tilt Brush, a room-scale 3D-painting virtual-reality application available from Google, originally develodgements Thank you to the Tilt Brush developers for your amazing work and for finding a way to open source the app! VR Rosie for promotional artwork, banners, and videos. Bleeding Edge Releases Instead of waiting for a formal release, you can download a ZIP from Github containing an ",
+        "icon": "",
+        "link": "https://github.com/icosa-foundation/open-brush",
+        "media": "",
+        "publish_date": "2026-04-24",
+        "refer": "ref_2",
+        "title": "GitHub - icosa-foundation/open-brush: Open Brush is the open source, community led evolution of Tilt Brush! Forked from https://github"
+      },
+      {
+        "content": "Project that brings together several pentest tools",
+        "icon": "",
+        "link": "https://gitlab.com/Edu0x01/hack-tools/-/branches/stale",
+        "media": "",
+        "publish_date": "2024-02-29",
+        "refer": "ref_3",
+        "title": "Branches · Edu0x01 / Hack Tools · GitLab"
+      },
+      {
+        "content": "Read-Only mirror of https://codeberg.org/aeberhardt/stashcat-api-client",
+        "icon": "",
+        "link": "https://gitlab.com/aeberhardt/stashcat-api-client/-/branches/stale",
+        "media": "",
+        "publish_date": "2024-05-12",
+        "refer": "ref_4",
+        "title": "Branches · Anselm Eberhardt / stashcat-api-client · GitLab"
+      },
+      {
+        "content": "Name Name Last commit message Last commit date Latest commit   History 365 Commits .github .github     Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImages ReferAUTHORS AUTHORS     CONTRIBUTING.md CONTRIBUTING.md     LICENSE LICENSE     README.md README.md     TILT_BRUSH_BRAND_GUIDELINES.md TILT_BRUSH_BRAND_GUIDELINES.md     open-brush.png open-brush.png     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Repository files navigation Open Brush - Tilt Brush Evolved Open Brush is a free fork of Tilt Brush, a room-scale 3D-painting virtual-reality application available from Google, originally develodgements Thank you to the Tilt Brush developers for your amazing work and for finding a way to open source the app! VR Rosie for promotional artwork, banners, and videos. Bleeding Edge Releases Instead of waiting for a formal release, you can download a ZIP from Github containing an autom",
+        "icon": "",
+        "link": "https://github.com/IxxyXR/open-brush/tree/main",
+        "media": "",
+        "publish_date": "2021-03-09",
+        "refer": "ref_5",
+        "title": "GitHub - IxxyXR/open-brush: Open Source Fork of Tilt Brush"
+      },
+      {
+        "content": "Name Name Last commit message Last commit date Latest commit   History 114 Commits .github .github     Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImages Refersteam_appid.txt steam_appid.txt     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Open Brush - A Tilt Brush fork Current Version: 0.3.0 We hope to help maintain Tilt Brush. As the original repo is archived we cannot submit PRs, so feel free to submit them here! Currently we are: Getting Open Brush to work with the Poly replacement, Icosa . Looking at modding support (custom brushes!) See our Trello board for more information. Acknowledgements Thank you to the Tilt Brush developers for your amazing work! Bleeding Edge Releases Instead of waiting for a formal release, you can download a ZIP from Github containing an automatically built release for either Windows (SteamVR) or Oculus Quest / Ques prior to the official relea",
+        "icon": "",
+        "link": "https://github.com/Daniel-Fan/open-brush",
+        "media": "",
+        "publish_date": "2019-04-18",
+        "refer": "ref_6",
+        "title": "GitHub - Daniel-Fan/open-brush: Open Source Fork of Tilt Brush"
+      },
+      {
+        "content": "Name Name Last commit message Last commit date Latest commit   History 3 Commits Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImages ReferenceImages     Supportsteam_appid.txt steam_appid.txt     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Repository files navigation Tilt Brush README Tilt Brush is licensed under Apache 2.0. It is not an officially supportedGoogle product. See the LICENSE file for more details. Trademarks The Tilt Brush trademark and logo (“Tilt Brush Trademarks”) are trademarks ofGoogle, and are treated separately from the copyright or patent license grantscontained in the Apache-licensed Tilt Brush repositories on GitHub. Any use ofthe Tilt Brush Trademarks other than those permitted in these guidelines must beapproved in advance. Building the application Get the Tilt Brush open-source application running on your own devices. Prerequisites Python 2.7.0 (Op",
+        "icon": "",
+        "link": "https://github.com/JoshHula/tilt-brush/tree/master",
+        "media": "",
+        "publish_date": "2018-04-11",
+        "refer": "ref_7",
+        "title": "GitHub - JoshHula/tilt-brush"
+      },
+      {
+        "content": "404 lines (295 loc) · 16.2 KB   master Breadcrumbs README.md Top File metadata and controls Preview Code Blame 404 lines (295 loc) · 16.2 KB Tilt Brush README Tilt Brush is licensed under Apache 2.0. It is not an officially supportedGoogle product. See the LICENSE file for more details. Trademarks The Tilt Brush trademark and logo (“Tilt Brush Trademarks”) are trademarks ofGoogle, and are treated separately from the copyright or patent license grantscontained in the Apache-licensed Tilt Brush repositories on GitHub. Any use ofthe Tilt Brush Trademarks other than those permitted in these guidelines must beapproved in advance. Building the application Get the Tilt Brush open-source application running on your own devices. Prerequisites Python 2.7.0 (Optional —needed only ifditor Follow these steps when running the application for the first time: Start Unity. Go to File > Open Scene . \\ Select /Assets/Scenes/Main.unity . Unity should automatically prompt you toimport Tex Import TMP Essent",
+        "icon": "",
+        "link": "https://github.com/JoshHula/tilt-brush/blob/master/README.md",
+        "media": "",
+        "publish_date": "2018-04-11",
+        "refer": "ref_8",
+        "title": "tilt-brush/README.md at master · JoshHula/tilt-brush · GitHub"
+      },
+      {
+        "content": "tilt brush 在这个为期两周的开放游戏综述中,我们介绍了新的Minecraft启动器,Google的Tilt Brush Toolkit,关于将游戏移植到Linux的linux.conf.au讨论。 2017年1月15日至28日的开放游戏综述 Minecraft的新启动器可在Linux上使用 Minecraft的新启动器将在Linux上可用。 Linux上的游戏提供了新启动器的屏幕截图,看起来很棒。 如果您有兴趣试用一下,开发人员会要求您帮助在Reddit上测试启动器。 这个新启动器的最大好处是它不再依赖Java,并且将通过适当的安装程序加载依赖项。 开源工具包将Tilt Brush变成了游戏开发工具 谷歌已经发布了Tilt Brush Toolkit ,该工具可让所有背景和风格的创作者将其作为开源软件在虚拟现实中进行创作。 Gamasutra.com的Alissa McAloon 写道 :“ [该工具包旨在帮助开发人员轻松地将 Tilt Brush的三维VR画布中创建的资产和艺术品导入Unity。如果有的话,该实用程序展示了一种有趣的游戏开发和虚拟方式。随着技术的发展,现实可能会重叠。” 倾斜画笔工具包可在GitHub上获得,并包括Python脚本和Unity SDK。 视频:将游戏移植到Linux 游戏在Linux贡献者Cheeseness,谁参加linux.conf.au ,畅谈游戏移植到Linux在这部影片。 在其他新闻中 微软发布开源DirectX Shader编译器 Wine 2.0现在正式可用 SteamOS更新了一些主要的新驱动程序,并更新了Debian基础 从源头构建Mesa,指南 Linux上的新游戏 竞走 在Steam上的Steam抢先体验中可以使用Avorion。 确保阅读开发人员的抢先体验声明,以便了解他们为您准备的内容。 程序合作空间沙盒,玩家可以利用动态可扩展块构建自己的太空船。 进行史诗般的太空战,探索,开采,交易,发动战争,并建立自己的帝国,以保护您的银河系免受未知敌人的破坏。 重大失败 Linux上的游戏对Steaming for Linux刚刚发布的游戏Monumental Failure给予了积极而热情的评价 。 纪念性破坏是一个基于历史的(不准确的)基于物理的纪念性建筑模拟器。 该游戏使您能够使用令人难以置信且难以置",
+        "icon": "",
+        "link": "https://blog.csdn.net/cumj63710/article/details/107393860",
+        "media": "",
+        "publish_date": "2020-06-23",
+        "refer": "ref_9",
+        "title": "tilt brush_Linux,Tilt Brush Toolkit和更多开放游戏新闻发布了新的Minecraft启动器-CSDN博客"
+      },
+      {
+        "content": "Name Name Last commit message Last commit date Latest commit   History 3 Commits 3 Commits Assets Assets     Packages Packages     ProjectSettings ProjectSettings     ReferenceImages ReferenceImages  steam_appid.txt steam_appid.txt     steam_controller_bindings.vdf steam_controller_bindings.vdf     tiltasaurus.json tiltasaurus.json     View all files Repository files navigation Tilt Brush README Tilt Brush is licensed under Apache 2.0. It is not an officially supportedGoogle product. See the LICENSE file for more details. Trademarks The Tilt Brush trademark and logo (“Tilt Brush Trademarks”) are trademarks ofGoogle, and are treated separately from the copyright or patent license grantscontained in the Apache-licensed Tilt Brush repositories on GitHub. Any use ofthe Tilt Brush Trademarks other than those permitted in these guidelines must beapproved in advance. Building the application Get the Tilt Brush open-source application running on your own devices. Prerequisites Python 2.7.0 (Op",
+        "icon": "",
+        "link": "https://github.com/JohnOrionYoung/tilt-brush",
+        "media": "",
+        "publish_date": "2018-04-11",
+        "refer": "ref_10",
+        "title": "GitHub - JohnOrionYoung/tilt-brush · GitHub"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "tilt brush shader open source github shader",
+        "query": "Tilt Brush brush shader open source GitHub"
+      }
+    ],
+    "latency_seconds": 1.85,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Niantic 8th Wall Lightship VPS visual portal effect",
+    "content": "**Niantic宣布8th Wall开始在WebXR端支持VPS视觉定位系统应用程序浏览器arniantic_网易订阅** (2022-09-23)\nNiantic旗下的WebAR开发商8th Wall日前宣布,正式带来Lightship VPS for Web,从而将Niantic Lightship Visual Positioning System(VPS)视觉定位系统带到Web端｡团队表示,这项技术可以以前所未有的精度将WebAR内容锚定到各个位置,把日常地点转变为体验式目的地并解锁其数字孪生,使得基于位置的增强现实体验更加个性化､更有意义和更加真实,并为用户探索周围世界提供了新的理由｡ 1. 将WebAR内容锚定到真实位置 如今,开发者希望构建基于位置的AR内容｡要做到这一点,他们必须首先知道用户的精确位置,以及他们注视的对象｡利用Lightship VPS,开发者现在能够以厘米级精度(以秒为单位)确定用户的位置和方向｡通过将这个强大的系统引入8th wall平台,开发者现在可以创建支持VPS的Web AR体验,并直接支持移动浏览器,无需下载任何应用程序｡ 最新的8th Wall Engine现在可以识别VPS位置(Wayspot)何时被扫描､找到或丢失,并将向开发者提供必要的事件,以触发和追踪VPS激活的AR内容｡为了提供最佳用户体验,团队同时提供了Lightship VPS Coaching Overlay模块,从而引导用户快速浏览并帮助他们在真实世界中本地化AR内容｡\nSource: https://www.163.com/dy/article/HHUIL73P05118AQ5.html\n\n**子栖客人的微博_微博** (2022-09-26)\nNiantic新近推出了Lightship VPS for Web,为其视觉定位系统Lightship VPS提供了Web支持｡现在,开发人员可将其引入到8th Wall中使用｡ 通过Lightship VPS,开发者可以将他们创建的AR 体验锚定到现实世界的特定位置,从而将现实世界与数字世界叠合,这将使AR体验更个性化､更有意义､更真实,并赋予用 ...展开全文c 『暗天街螺旋想記』目前提供到第3集,每月更新!\nSource: https://weibo.com/u/2629143712\n\n**Niantic视觉定位平台Lightship VPS将登陆更多日本城市arnianticlightship_网易订阅** (2022-06-27)\n近期,Niantic宣布其视觉定位平台Lightship VPS将在日本京都､大阪和名古屋上线,这意味着日本开发者可以在这些城市推出基于Lightship打造的LBS AR应用｡此外,Niantic还宣布Lightship VPS将支持自家WebAR平台8th Wall,允许开发者创作基于网页端的LBS AR｡据青亭网了解,Niantic此前推出的LBS AR应用通常基于谷歌Geospatial \nSource: https://www.163.com/dy/article/HASBE37K0511BQR8.html\n\n**Niantic为Apple Vision Pro提供WebXR支持,助开发者轻松构建跨设备体验 - 映维网资讯** (2026-06-04)\nNiantic将通过8th Wall Metaversal Deployment支持Apple Vision Pro\nSource: https://news.nweon.com/119610\n\n**NianticVPS_ARDK_VPS_Hack/.gitignore at main · ParisNikGDev/NianticVPS_ARDK_VPS_Hack · GitHub** (2026-06-11)\nNavigation Menu Toggle navigation Appearance settings Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert Files Expand file tree   main Breadcrumbs .gitignore Copy path More file actions More file actions Latest commit History 74 lines (60 loc) · 1.41 KB   main Breadcrumbs .gitignore Top File metadata and controls Code Blame 74 lines (60 loc) · 1.41 KB Copy raw file Download raw file Open symbols panel Edit and raw actions # This .gitignore file should be placed at the root of your Unity project directory # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore /[Ll]ibrary/ /[Tt]emp/ /[Oo]bj/ /[Bb]uild/ \nSource: https://github.com/ParisNikGDev/NianticVPS_ARDK_VPS_Hack/blob/main/.gitignore\n\n**Use ModifyVpcFirewallCenSwitchStatus to change the status of a VPC firewall for CEN - Cloud Firewall - Alibaba Cloud** (2025-12-09)\nModifies the status of a VPC firewall that protects traffic between network instances in a Cloud Enterprise Network (CEN) and a specified VPC. Operation description This operation modifies the status of a VPC firewall. The firewall protects traffic between network instances in a Cloud Enterprise Network (CEN) and a specified Virtual Private Cloud (VPC). The network instances include VPCs, Virtual Border Routers (VBRs), and Cloud Connect Network (CCN) instances. If the firewall is enabled, it protects traffic between the network instances in the CEN and the specified VPC. If the firewall is disabled, it no longer protects this traffic. Before you call this operation, you must create a VPC firewall by calling the CreateVpcFirewallCenConfigure operation. Limits This operation is limited to 10 queries per second (QPS) per user. If you exceed this limit, API calls are throttled. Throttling may affect your business. Plan your calls accordingly. Try it now Try this API in OpenAPI Explorer, no\nSource: https://www.alibabacloud.com/help/en/cloud-firewall/api-modifyvpcfirewallcenswitchstatus\n\n**Niantic开放AR地图视觉定位系统VPS,推出AR地图社交网络Campfire_知乎** (2022-05-28)\n查看引用/信息源请点击: 映维网Nweon 首届Lightship Summit开发者大会 (映维网Nweon2022年05月25日 )Niantic日前在美国旧金山举办了首届Lightship Summit开发者大会。在这个面向全球AR开发者社区的活动中,团队正式开放了Lightship Visual Positioning System(VPS),包括30000多个VPS激活公共位置立即可用。他们同时为开发者提供了一个用于快速将自身位置添加到NianticAR动态世界地图中的全新应用。下面是Lightship Summit的主要内容: 1. Lightship Visual Positioning System:实现AR的关键 如今,大多数AR设备都能够在任意环境中进行自我定位。例如,AR头显可以扫描周围的房间,并利用相关信息确定头显本身是如何在空间中移动。 但如果要令多台设备在一个共享空间中进行交互,它们不仅要将自身定位到环境中,而且需要相互定位。基本上,你需要两台设备共享同一张地图,以便两名用户都能看到现实世界中同一个地方所发生的相同事情。 这正就是Lightship Visual Positioning System视觉定位系统的目标。团队表示,所述系统将允许AR设备接入共享的数字地图,并以“厘米精度”确定其在真实世界的位置,从而允许在多人和持久内容之间同步内容。 有了Lightship VPS,开发者现在有能力确定用户的位置和方向,并以厘米级的精度锚定AR内容。 “本地化”和“持久化”是真实世界沉浸式AR的关键。今天的开发者希望通过锚定到周围世界的内容来提升AR体验的沉浸感。但要做到这一点,他们首先必须准确地知晓用户的位置和方向。 Lightship VPS不仅能够确定用户的世界定位,而且可以确定用户在开始体验时以及在体验过程中的定位。 1.1 Lightship VPS的工作原理 在VPS能够本地化用户之前,我们首先必须构建一种新的映射:专门为AR构建的地图。 为了构建这张地图,团队收集了Niantic开发者、测量员和玩家对真实世界位置的扫描,然后处理数据来构建相关的AR地图。一旦一个位置进行了充分扫描,团队就可以在Lightship VPS进行激活,并允许开发者用它来构建AR体验。 然后,用户可以前往所述的VPS激活位置,快速定位设备,并与持久化AR\nSource: https://zhuanlan.zhihu.com/p/521111477\n\n**靠众包创建AR地图和VPS,恐怕只有Niantic在行aringress谷歌niantic_网易订阅** (2022-05-25)\n半个月前,谷歌发布ARCore重磅级功能Geospatial API,被开发者予以众望的原因在于,它融合强大的谷歌街景数据,提供厘米级精度锚定AR内容。相关阅读:《谷歌重磅AR功能来袭,融合街景海量数据,目标打造世界级AR体验》。 今天,Niantic宣布自家VPS视觉定位平台:Lightship Visual Positioning System(即:Lightship VPS)。不夸张地说,这两个头部AR平台的VPS系统的发布,可能意味着LBS AR迎来新的篇章。 实际上,在Niantic Summit活动上还有不少新消息,今天我们就来看看“新生代Niantic”的成长记。 1,Lightship VPS诞生 此前Niantic已经预热推出VPS方案,本以为会基于谷歌Geospatial API二次开发,没想到这套Lightship VPS是自己搭建的。 目前Lightship VPS首批上线六个主要城市,包括:旧金山、洛杉矶、纽约、西雅图、伦敦、东京,累计共有30000个VPS扫描/定位点。预计今年年底将扩展至100座城市。 青亭网了解到,VPS定位点的场景包括:公园、地标建筑,当地知名企业等等公共区域,每个定位点代表着一个10×10米的游戏空间,通过多次且充分的扫描后这个地点就可以被激活,开发者就能在定位点创作AR应用。 Lightship VPS支持地区 Niantic表示,Lightship VPS可以做到厘米级精度,玩家进入到VPS场景中,只需要一帧的图像即可实现精准的6DoF定位。 2,数据来自玩家、测量员 构建这些定位点,也就意味着将开发一套面向AR场景的地图,而这就需要大量的数据。这一点和谷歌有所不同,谷歌Geospatial API来自于现有街景数据的下放。 Lightship VPS视觉数据来自于:Niantic旗下《Pokémon GO》、《Ingress》等的LBS AR游戏中玩家、开发者,及专业的“地图测量员”。 没错,这也是Niantic强大的一点。 Niantic在旗下游戏上线扫描(PokéStop Scanning)功能,鼓励玩家对周围的环境和地标建筑等进行扫描(数据主要以扫描的视频片段为主)。仅通过《Ingress》和《Pokémon GO》两款游戏,玩家们共扫描了约1700万个兴趣点(Wayspots),和数百万张照片和Way\nSource: https://www.163.com/dy/article/H880ISI10511BQR8.html\n\n**靠众包创建AR地图和VPS,恐怕只有Niantic在行_知乎** (2022-05-25)\n半个月前,谷歌发布ARCore重磅级功能Geospatial API,被开发者予以众望的原因在于,它融合强大的谷歌街景数据,提供厘米级精度锚定AR内容。相关阅读:《谷歌重磅AR功能来袭,融合街景海量数据,目标打造世界级AR体验》。 今天,Niantic宣布自家VPS视觉定位平台:Lightship Visual Positioning System(即:Lightship VPS)。不夸张地说,这两个头部AR平台的VPS系统的发布,可能意味着LBS AR迎来新的篇章。 实际上,在Niantic Summit活动上还有不少新消息,今天我们就来看看“新生代Niantic”的成长记。 1,Lightship VPS诞生 此前Niantic已经预热推出VPS方案,本以为会基于谷歌Geospatial API二次开发,没想到这套Lightship VPS是自己搭建的。 目前Lightship VPS首批上线六个主要城市,包括:旧金山、洛杉矶、纽约、西雅图、伦敦、东京,累计共有30000个VPS扫描/定位点。预计今年年底将扩展至100座城市。 青亭网了解到,VPS定位点的场景包括:公园、地标建筑,当地知名企业等等公共区域,每个定位点代表着一个10×10米的游戏空间,通过多次且充分的扫描后这个地点就可以被激活,开发者就能在定位点创作AR应用。 Lightship VPS支持地区 Niantic表示,Lightship VPS可以做到厘米级精度,玩家进入到VPS场景中,只需要一帧的图像即可实现精准的6DoF定位。 2,数据来自玩家、测量员 构建这些定位点,也就意味着将开发一套面向AR场景的地图,而这就需要大量的数据。这一点和谷歌有所不同,谷歌Geospatial API来自于现有街景数据的下放。 Lightship VPS视觉数据来自于:Niantic旗下《Pokémon GO》、《Ingress》等的LBS AR游戏中玩家、开发者,及专业的“地图测量员”。 没错,这也是Niantic强大的一点。 Niantic在旗下游戏上线扫描(PokéStop Scanning)功能,鼓励玩家对周围的环境和地标建筑等进行扫描(数据主要以扫描的视频片段为主)。仅通过《Ingress》和《Pokémon GO》两款游戏,玩家们共扫描了约1700万个兴趣点(Wayspots),和数百万张照片和Way\nSource: https://zhuanlan.zhihu.com/p/519884545\n\n**Niantic 宣布对其 Lightship 和8th Wall 开发者平台带来重大更新_VR陀螺** (2023-06-02)\n编译/VR陀螺 AR技术供应商及《精灵宝可梦GO》开发商Niantic在近日举办的AWE USA 2023上宣布,将为其Lightship ARDK和8th Wall平台带来一系列重大更新。 通过Lightship ARDK 3.0,Unity开发者现在可以将Niantic的AR功能与Unity的AR Foundation和XR子系统进行无缝混合和匹配。这意味着自Lightship ARDK推出以来,开发者初次可以将Niantic的功能与现有的AR Foundation库结合起来使用。 图源:Niantic 此外,这种新的整合将使开发人员更容易覆盖或扩展XR设置,以便他们能够轻松地将高级AR功能添加到基本AR概念中。据Niantic称,这将使开发人员能够混合和匹配他们想要的语义分割、遮挡、网格划分、映射和共享AR的AR功能。 Lightship ARDK 3.0还为与可穿戴头显的兼容奠定了基础,这将从今年晚些时候由Snapdragon Spaces驱动的设备开始。在AWE上,该公司与高通公司合作宣布,第一批10家AR公司将有机会使用Lightship VPS与Snapdragon Spaces,将Niantic精准、持久的3D世界地图服务引入XR头显开发。 用于Unity的Lightship地图 除了ARDK 3.0,Lightship Maps for Unity将允许开发者把Niantic的技术用于其AR游戏的相同基础地图。更新后的Lightship Maps SDK将允许开发者将他们现有的和新的游戏及应用程序与现实世界连接起来,并提供利用该公司世界地图的任务和游戏机制。 8th Wall扩展到XR头显 对于WebAR开发者来说,8th Wall平台的Metaversal部署可以一次构建,随处部署,现在该平台还开始支持混合现实头显,首先将从Meta Quest Pro和Meta Quest 2开始。 8th Wall的Metaversal部署解决方案是为新的响应式Web而设计的,在这种情况下,沉浸式网站需要适应现在包括平板电脑和可穿戴式头显在内的设备生态系统。据该公司称,Metaversal部署的主要好处之一是,它允许用户在任何设备上访问相同的AR网站,并获得有意义的体验,如在电脑上的3D、在移动设备上的AR,以及在具有Passthrough能力的设备上的MR体\nSource: https://www.vrtuoluo.cn/536581.html\n",
+    "web_references": [
+      {
+        "content": "Niantic旗下的WebAR开发商8th Wall日前宣布,正式带来Lightship VPS for Web,从而将Niantic Lightship Visual Positioning System(VPS)视觉定位系统带到Web端｡团队表示,这项技术可以以前所未有的精度将WebAR内容锚定到各个位置,把日常地点转变为体验式目的地并解锁其数字孪生,使得基于位置的增强现实体验更加个性化､更有意义和更加真实,并为用户探索周围世界提供了新的理由｡ 1. 将WebAR内容锚定到真实位置 如今,开发者希望构建基于位置的AR内容｡要做到这一点,他们必须首先知道用户的精确位置,以及他们注视的对象｡利用Lightship VPS,开发者现在能够以厘米级精度(以秒为单位)确定用户的位置和方向｡通过将这个强大的系统引入8th wall平台,开发者现在可以创建支持VPS的Web AR体验,并直接支持移动浏览器,无需下载任何应用程序｡ 最新的8th Wall Engine现在可以识别VPS位置(Wayspot)何时被扫描､找到或丢失,并将向开发者提供必要的事件,以触发和追踪VPS激活的AR内容｡为了提供最佳用户体验,团队同时提供了Lightship VPS Coaching Overlay模块,从而引导用户快速浏览并帮助他们在真实世界中本地化AR内容｡",
+        "icon": "",
+        "link": "https://www.163.com/dy/article/HHUIL73P05118AQ5.html",
+        "media": "网易",
+        "publish_date": "2022-09-23",
+        "refer": "ref_1",
+        "title": "Niantic宣布8th Wall开始在WebXR端支持VPS视觉定位系统应用程序浏览器arniantic_网易订阅"
+      },
+      {
+        "content": "Niantic新近推出了Lightship VPS for Web,为其视觉定位系统Lightship VPS提供了Web支持｡现在,开发人员可将其引入到8th Wall中使用｡ 通过Lightship VPS,开发者可以将他们创建的AR 体验锚定到现实世界的特定位置,从而将现实世界与数字世界叠合,这将使AR体验更个性化､更有意义､更真实,并赋予用 ...展开全文c 『暗天街螺旋想記』目前提供到第3集,每月更新!",
+        "icon": "",
+        "link": "https://weibo.com/u/2629143712",
+        "media": "微博",
+        "publish_date": "2022-09-26",
+        "refer": "ref_2",
+        "title": "子栖客人的微博_微博"
+      },
+      {
+        "content": "近期,Niantic宣布其视觉定位平台Lightship VPS将在日本京都､大阪和名古屋上线,这意味着日本开发者可以在这些城市推出基于Lightship打造的LBS AR应用｡此外,Niantic还宣布Lightship VPS将支持自家WebAR平台8th Wall,允许开发者创作基于网页端的LBS AR｡据青亭网了解,Niantic此前推出的LBS AR应用通常基于谷歌Geospatial ",
+        "icon": "",
+        "link": "https://www.163.com/dy/article/HASBE37K0511BQR8.html",
+        "media": "网易",
+        "publish_date": "2022-06-27",
+        "refer": "ref_3",
+        "title": "Niantic视觉定位平台Lightship VPS将登陆更多日本城市arnianticlightship_网易订阅"
+      },
+      {
+        "content": "Niantic将通过8th Wall Metaversal Deployment支持Apple Vision Pro",
+        "icon": "",
+        "link": "https://news.nweon.com/119610",
+        "media": "",
+        "publish_date": "2026-06-04",
+        "refer": "ref_4",
+        "title": "Niantic为Apple Vision Pro提供WebXR支持,助开发者轻松构建跨设备体验 - 映维网资讯"
+      },
+      {
+        "content": "Navigation Menu Toggle navigation Appearance settings Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert Files Expand file tree   main Breadcrumbs .gitignore Copy path More file actions More file actions Latest commit History 74 lines (60 loc) · 1.41 KB   main Breadcrumbs .gitignore Top File metadata and controls Code Blame 74 lines (60 loc) · 1.41 KB Copy raw file Download raw file Open symbols panel Edit and raw actions # This .gitignore file should be placed at the root of your Unity project directory # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore /[Ll]ibrary/ /[Tt]emp/ /[Oo]bj/ /[Bb]uild/ ",
+        "icon": "",
+        "link": "https://github.com/ParisNikGDev/NianticVPS_ARDK_VPS_Hack/blob/main/.gitignore",
+        "media": "",
+        "publish_date": "2026-06-11",
+        "refer": "ref_5",
+        "title": "NianticVPS_ARDK_VPS_Hack/.gitignore at main · ParisNikGDev/NianticVPS_ARDK_VPS_Hack · GitHub"
+      },
+      {
+        "content": "Modifies the status of a VPC firewall that protects traffic between network instances in a Cloud Enterprise Network (CEN) and a specified VPC. Operation description This operation modifies the status of a VPC firewall. The firewall protects traffic between network instances in a Cloud Enterprise Network (CEN) and a specified Virtual Private Cloud (VPC). The network instances include VPCs, Virtual Border Routers (VBRs), and Cloud Connect Network (CCN) instances. If the firewall is enabled, it protects traffic between the network instances in the CEN and the specified VPC. If the firewall is disabled, it no longer protects this traffic. Before you call this operation, you must create a VPC firewall by calling the CreateVpcFirewallCenConfigure operation. Limits This operation is limited to 10 queries per second (QPS) per user. If you exceed this limit, API calls are throttled. Throttling may affect your business. Plan your calls accordingly. Try it now Try this API in OpenAPI Explorer, no",
+        "icon": "",
+        "link": "https://www.alibabacloud.com/help/en/cloud-firewall/api-modifyvpcfirewallcenswitchstatus",
+        "media": "",
+        "publish_date": "2025-12-09",
+        "refer": "ref_6",
+        "title": "Use ModifyVpcFirewallCenSwitchStatus to change the status of a VPC firewall for CEN - Cloud Firewall - Alibaba Cloud"
+      },
+      {
+        "content": "查看引用/信息源请点击: 映维网Nweon 首届Lightship Summit开发者大会 (映维网Nweon2022年05月25日 )Niantic日前在美国旧金山举办了首届Lightship Summit开发者大会。在这个面向全球AR开发者社区的活动中,团队正式开放了Lightship Visual Positioning System(VPS),包括30000多个VPS激活公共位置立即可用。他们同时为开发者提供了一个用于快速将自身位置添加到NianticAR动态世界地图中的全新应用。下面是Lightship Summit的主要内容: 1. Lightship Visual Positioning System:实现AR的关键 如今,大多数AR设备都能够在任意环境中进行自我定位。例如,AR头显可以扫描周围的房间,并利用相关信息确定头显本身是如何在空间中移动。 但如果要令多台设备在一个共享空间中进行交互,它们不仅要将自身定位到环境中,而且需要相互定位。基本上,你需要两台设备共享同一张地图,以便两名用户都能看到现实世界中同一个地方所发生的相同事情。 这正就是Lightship Visual Positioning System视觉定位系统的目标。团队表示,所述系统将允许AR设备接入共享的数字地图,并以“厘米精度”确定其在真实世界的位置,从而允许在多人和持久内容之间同步内容。 有了Lightship VPS,开发者现在有能力确定用户的位置和方向,并以厘米级的精度锚定AR内容。 “本地化”和“持久化”是真实世界沉浸式AR的关键。今天的开发者希望通过锚定到周围世界的内容来提升AR体验的沉浸感。但要做到这一点,他们首先必须准确地知晓用户的位置和方向。 Lightship VPS不仅能够确定用户的世界定位,而且可以确定用户在开始体验时以及在体验过程中的定位。 1.1 Lightship VPS的工作原理 在VPS能够本地化用户之前,我们首先必须构建一种新的映射:专门为AR构建的地图。 为了构建这张地图,团队收集了Niantic开发者、测量员和玩家对真实世界位置的扫描,然后处理数据来构建相关的AR地图。一旦一个位置进行了充分扫描,团队就可以在Lightship VPS进行激活,并允许开发者用它来构建AR体验。 然后,用户可以前往所述的VPS激活位置,快速定位设备,并与持久化AR",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/521111477",
+        "media": "知乎",
+        "publish_date": "2022-05-28",
+        "refer": "ref_7",
+        "title": "Niantic开放AR地图视觉定位系统VPS,推出AR地图社交网络Campfire_知乎"
+      },
+      {
+        "content": "半个月前,谷歌发布ARCore重磅级功能Geospatial API,被开发者予以众望的原因在于,它融合强大的谷歌街景数据,提供厘米级精度锚定AR内容。相关阅读:《谷歌重磅AR功能来袭,融合街景海量数据,目标打造世界级AR体验》。 今天,Niantic宣布自家VPS视觉定位平台:Lightship Visual Positioning System(即:Lightship VPS)。不夸张地说,这两个头部AR平台的VPS系统的发布,可能意味着LBS AR迎来新的篇章。 实际上,在Niantic Summit活动上还有不少新消息,今天我们就来看看“新生代Niantic”的成长记。 1,Lightship VPS诞生 此前Niantic已经预热推出VPS方案,本以为会基于谷歌Geospatial API二次开发,没想到这套Lightship VPS是自己搭建的。 目前Lightship VPS首批上线六个主要城市,包括:旧金山、洛杉矶、纽约、西雅图、伦敦、东京,累计共有30000个VPS扫描/定位点。预计今年年底将扩展至100座城市。 青亭网了解到,VPS定位点的场景包括:公园、地标建筑,当地知名企业等等公共区域,每个定位点代表着一个10×10米的游戏空间,通过多次且充分的扫描后这个地点就可以被激活,开发者就能在定位点创作AR应用。 Lightship VPS支持地区 Niantic表示,Lightship VPS可以做到厘米级精度,玩家进入到VPS场景中,只需要一帧的图像即可实现精准的6DoF定位。 2,数据来自玩家、测量员 构建这些定位点,也就意味着将开发一套面向AR场景的地图,而这就需要大量的数据。这一点和谷歌有所不同,谷歌Geospatial API来自于现有街景数据的下放。 Lightship VPS视觉数据来自于:Niantic旗下《Pokémon GO》、《Ingress》等的LBS AR游戏中玩家、开发者,及专业的“地图测量员”。 没错,这也是Niantic强大的一点。 Niantic在旗下游戏上线扫描(PokéStop Scanning)功能,鼓励玩家对周围的环境和地标建筑等进行扫描(数据主要以扫描的视频片段为主)。仅通过《Ingress》和《Pokémon GO》两款游戏,玩家们共扫描了约1700万个兴趣点(Wayspots),和数百万张照片和Way",
+        "icon": "",
+        "link": "https://www.163.com/dy/article/H880ISI10511BQR8.html",
+        "media": "网易",
+        "publish_date": "2022-05-25",
+        "refer": "ref_8",
+        "title": "靠众包创建AR地图和VPS,恐怕只有Niantic在行aringress谷歌niantic_网易订阅"
+      },
+      {
+        "content": "半个月前,谷歌发布ARCore重磅级功能Geospatial API,被开发者予以众望的原因在于,它融合强大的谷歌街景数据,提供厘米级精度锚定AR内容。相关阅读:《谷歌重磅AR功能来袭,融合街景海量数据,目标打造世界级AR体验》。 今天,Niantic宣布自家VPS视觉定位平台:Lightship Visual Positioning System(即:Lightship VPS)。不夸张地说,这两个头部AR平台的VPS系统的发布,可能意味着LBS AR迎来新的篇章。 实际上,在Niantic Summit活动上还有不少新消息,今天我们就来看看“新生代Niantic”的成长记。 1,Lightship VPS诞生 此前Niantic已经预热推出VPS方案,本以为会基于谷歌Geospatial API二次开发,没想到这套Lightship VPS是自己搭建的。 目前Lightship VPS首批上线六个主要城市,包括:旧金山、洛杉矶、纽约、西雅图、伦敦、东京,累计共有30000个VPS扫描/定位点。预计今年年底将扩展至100座城市。 青亭网了解到,VPS定位点的场景包括:公园、地标建筑,当地知名企业等等公共区域,每个定位点代表着一个10×10米的游戏空间,通过多次且充分的扫描后这个地点就可以被激活,开发者就能在定位点创作AR应用。 Lightship VPS支持地区 Niantic表示,Lightship VPS可以做到厘米级精度,玩家进入到VPS场景中,只需要一帧的图像即可实现精准的6DoF定位。 2,数据来自玩家、测量员 构建这些定位点,也就意味着将开发一套面向AR场景的地图,而这就需要大量的数据。这一点和谷歌有所不同,谷歌Geospatial API来自于现有街景数据的下放。 Lightship VPS视觉数据来自于:Niantic旗下《Pokémon GO》、《Ingress》等的LBS AR游戏中玩家、开发者,及专业的“地图测量员”。 没错,这也是Niantic强大的一点。 Niantic在旗下游戏上线扫描(PokéStop Scanning)功能,鼓励玩家对周围的环境和地标建筑等进行扫描(数据主要以扫描的视频片段为主)。仅通过《Ingress》和《Pokémon GO》两款游戏,玩家们共扫描了约1700万个兴趣点(Wayspots),和数百万张照片和Way",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/519884545",
+        "media": "知乎",
+        "publish_date": "2022-05-25",
+        "refer": "ref_9",
+        "title": "靠众包创建AR地图和VPS,恐怕只有Niantic在行_知乎"
+      },
+      {
+        "content": "编译/VR陀螺 AR技术供应商及《精灵宝可梦GO》开发商Niantic在近日举办的AWE USA 2023上宣布,将为其Lightship ARDK和8th Wall平台带来一系列重大更新。 通过Lightship ARDK 3.0,Unity开发者现在可以将Niantic的AR功能与Unity的AR Foundation和XR子系统进行无缝混合和匹配。这意味着自Lightship ARDK推出以来,开发者初次可以将Niantic的功能与现有的AR Foundation库结合起来使用。 图源:Niantic 此外,这种新的整合将使开发人员更容易覆盖或扩展XR设置,以便他们能够轻松地将高级AR功能添加到基本AR概念中。据Niantic称,这将使开发人员能够混合和匹配他们想要的语义分割、遮挡、网格划分、映射和共享AR的AR功能。 Lightship ARDK 3.0还为与可穿戴头显的兼容奠定了基础,这将从今年晚些时候由Snapdragon Spaces驱动的设备开始。在AWE上,该公司与高通公司合作宣布,第一批10家AR公司将有机会使用Lightship VPS与Snapdragon Spaces,将Niantic精准、持久的3D世界地图服务引入XR头显开发。 用于Unity的Lightship地图 除了ARDK 3.0,Lightship Maps for Unity将允许开发者把Niantic的技术用于其AR游戏的相同基础地图。更新后的Lightship Maps SDK将允许开发者将他们现有的和新的游戏及应用程序与现实世界连接起来,并提供利用该公司世界地图的任务和游戏机制。 8th Wall扩展到XR头显 对于WebAR开发者来说,8th Wall平台的Metaversal部署可以一次构建,随处部署,现在该平台还开始支持混合现实头显,首先将从Meta Quest Pro和Meta Quest 2开始。 8th Wall的Metaversal部署解决方案是为新的响应式Web而设计的,在这种情况下,沉浸式网站需要适应现在包括平板电脑和可穿戴式头显在内的设备生态系统。据该公司称,Metaversal部署的主要好处之一是,它允许用户在任何设备上访问相同的AR网站,并获得有意义的体验,如在电脑上的3D、在移动设备上的AR,以及在具有Passthrough能力的设备上的MR体",
+        "icon": "",
+        "link": "https://www.vrtuoluo.cn/536581.html",
+        "media": "",
+        "publish_date": "2023-06-02",
+        "refer": "ref_10",
+        "title": "Niantic 宣布对其 Lightship 和8th Wall 开发者平台带来重大更新_VR陀螺"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "niantic 8th wall lightship vps visual portal effect",
+        "query": "Niantic 8th Wall Lightship VPS visual portal effect"
+      }
+    ],
+    "latency_seconds": 1.96,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Sky Children of the Light spirit beam light pillar art style",
+    "content": "**【SKY:CHILDREN OF LIGHT/光遇oc】剧情向Past Life meme_哔哩哔哩_bilibili** (2021-03-07)\n您当前的浏览器不支持 HTML5 播放器 请更换浏览器再试试哦~ 稿件举报 记笔记 参考:https://youtu.be/2Zgn3PBuG2EOriginal : Rope로페 Song: Ploby & Hall - No Time To Lose (ft. Steven Chase)陆陆续续做了差不多一个月 中间还放弃了一次 所以前后画风变化比较大 \nSource: https://www.bilibili.com/video/BV1Zb4y1X75h/\n\n**#光遇 音乐商店来了看我拉着先祖。强迫他们做事。Sky:Children of the Light - 抖音** (2022-06-11)\n#光遇 音乐商店来了看我拉着先祖｡强迫他们做事｡Sky:Children of the \nSource: https://www.douyin.com/video/7107858200971463968\n\n**「光遇」Sky- Children of the Light CG动画_SKY光遇** (2021-07-05)\n00:15 / 02:32 自动 1080P 高码率 大会员 1080P 高清 登录即享 720P 准高清 登录即享 480P 标清 登录即享 360P 流畅 自动(360P 流畅) 倍速 2.0x 1.5x 1.25x 1.0x 0.75x 0.5x 镜像画面 单集循环 自动开播 更多播放设置 播放方式 自动切集 播完暂停 视频比例 自动 4:3 16:9 其他设置 隐藏黑边 关灯模式 1. \nSource: https://www.bilibili.com/video/BV1e64y1Q7kB/\n\n**【动画短片】Sky:Children of the Light(2022)/天空:光之子 - AcFun弹幕视频网 - 认真你就输啦 (?ω?)ノ- ( - )つロ** (2022-04-16)\n天空有我见过的最健康､最可爱的人｡这是一封写给社区和创作者的情书,感谢他们给了我们如此愉快的时光^ \nSource: https://www.acfun.cn/v/ac34454729\n\n**筠瑶-光遇-Sky-Children-of-the-Light-直播-精彩-高光-集锦-搞笑-虎牙视频** (2026-04-05)\n清空记录 登录 | 注册 创作中心 \nSource: https://v.huya.com/u/1279525037498\n\n**追光季Sky: Children of the Light I S... 来自会冒烟的爩 - 微博** (2022-03-16)\n【追光季】Sky: Children of the Light I Season of Lightseekers L会冒烟的爩的微博视频\nSource: https://weibo.com/6411377799/Lk0Fg55cK?from=page_1005056411377799_profile&wvr=6&mod=weibotime\n\n**Zuhair Murad 2025秋冬高定,奢侈未来主义,星空浪漫的优雅** (2025-11-16)\n<p>Zuhair Murad 2025秋冬高定,在星空元素和轻薄材质､天鹅绒等设计中,在珠光亮片等元素中也多了一些星空元素的浪漫优雅｡</p><p>以青金石蓝､日晷金､血月红等颜色,在天文学元素等设计和星空刺绣､婚纱､斗篷等设计也更多了一些未来主义的奢侈高级感｡fmt=jpg&size=281&h=1536&w=2048&ppv=1' data-aigc-mark='0'/></p><p>*墨绿色的颜色在裙装之上,稳重中还有绿色系颜色的活力高级感,在裙装中,结合V字衣领､斗篷元素的袖子､开叉的裙摆等设计,为深色的裙装增加了一些细节亮点的装饰｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_8826919bf5868252\n\n**小朋友仍怀揣魔法梦想:咖啡店打卡,韩系穿搭,inmyfeelings,insanitycrew风潮** (2026-04-12)\n<p>童趣未泯,魔法豆梦</p><p><img src='http://qqpublic.qpic.cn/qq_public/0/28-749252356-BFE6C1EF8F6151B06618EB73DD0FA319/0?fmt=jpg&size=562&h=1692&w=1440&ppv=1' data-aigc-mark='0'/></p><p><img \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_48769db6df197552\n\n**Sky光遇 (Sky: Children of the Light) - 遊戲狂** (2022-02-04)\n這是一場擁抱自由和溫暖的雲端之旅｡與你心愛的人們攜手,在這座曠世的天空王國中翱翔,愛的力量將支持你一路前行｡見證一個宏大而不斷變化的天空王國,在如夢似幻的雲海之中,隨心所欲地翱翔;與雲同行,與愛共鳴,在廣闊的天地之間自由地追尋 “飛翔” 的夢想,以心為涯｡\nSource: https://gamemad.com/game/1298\n\n**Light Up The Sky** (2022-06-14)\n\"《Light Up The Sky》是美国福音摇滚乐队The Afters演唱的一首歌曲｡乐队简介The Afters是一支来自美国德州的基督摇滚乐队｡他们的音乐风格温暖､积极,充满希望和向上的力量｡如今,The Afters已经成为美国福音摇滚的代表乐队之一｡歌词Light Up the Sky——The Afters When I'm feeling all aloneWith so \nSource: https://baike.sogou.com/v70517605.htm\n",
+    "web_references": [
+      {
+        "content": "您当前的浏览器不支持 HTML5 播放器 请更换浏览器再试试哦~ 稿件举报 记笔记 参考:https://youtu.be/2Zgn3PBuG2EOriginal : Rope로페 Song: Ploby & Hall - No Time To Lose (ft. Steven Chase)陆陆续续做了差不多一个月 中间还放弃了一次 所以前后画风变化比较大 ",
+        "icon": "",
+        "link": "https://www.bilibili.com/video/BV1Zb4y1X75h/",
+        "media": "哔哩哔哩",
+        "publish_date": "2021-03-07",
+        "refer": "ref_1",
+        "title": "【SKY:CHILDREN OF LIGHT/光遇oc】剧情向Past Life meme_哔哩哔哩_bilibili"
+      },
+      {
+        "content": "#光遇 音乐商店来了看我拉着先祖｡强迫他们做事｡Sky:Children of the ",
+        "icon": "",
+        "link": "https://www.douyin.com/video/7107858200971463968",
+        "media": "抖音",
+        "publish_date": "2022-06-11",
+        "refer": "ref_2",
+        "title": "#光遇 音乐商店来了看我拉着先祖。强迫他们做事。Sky:Children of the Light - 抖音"
+      },
+      {
+        "content": "00:15 / 02:32 自动 1080P 高码率 大会员 1080P 高清 登录即享 720P 准高清 登录即享 480P 标清 登录即享 360P 流畅 自动(360P 流畅) 倍速 2.0x 1.5x 1.25x 1.0x 0.75x 0.5x 镜像画面 单集循环 自动开播 更多播放设置 播放方式 自动切集 播完暂停 视频比例 自动 4:3 16:9 其他设置 隐藏黑边 关灯模式 1. ",
+        "icon": "",
+        "link": "https://www.bilibili.com/video/BV1e64y1Q7kB/",
+        "media": "哔哩哔哩",
+        "publish_date": "2021-07-05",
+        "refer": "ref_3",
+        "title": "「光遇」Sky- Children of the Light CG动画_SKY光遇"
+      },
+      {
+        "content": "天空有我见过的最健康､最可爱的人｡这是一封写给社区和创作者的情书,感谢他们给了我们如此愉快的时光^ ",
+        "icon": "",
+        "link": "https://www.acfun.cn/v/ac34454729",
+        "media": "AcFun弹幕视频网",
+        "publish_date": "2022-04-16",
+        "refer": "ref_4",
+        "title": "【动画短片】Sky:Children of the Light(2022)/天空:光之子 - AcFun弹幕视频网 - 认真你就输啦 (?ω?)ノ- ( - )つロ"
+      },
+      {
+        "content": "清空记录 登录 | 注册 创作中心 ",
+        "icon": "",
+        "link": "https://v.huya.com/u/1279525037498",
+        "media": "虎牙视频",
+        "publish_date": "2026-04-05",
+        "refer": "ref_5",
+        "title": "筠瑶-光遇-Sky-Children-of-the-Light-直播-精彩-高光-集锦-搞笑-虎牙视频"
+      },
+      {
+        "content": "【追光季】Sky: Children of the Light I Season of Lightseekers L会冒烟的爩的微博视频",
+        "icon": "",
+        "link": "https://weibo.com/6411377799/Lk0Fg55cK?from=page_1005056411377799_profile&wvr=6&mod=weibotime",
+        "media": "微博",
+        "publish_date": "2022-03-16",
+        "refer": "ref_6",
+        "title": "追光季Sky: Children of the Light I S... 来自会冒烟的爩 - 微博"
+      },
+      {
+        "content": "<p>Zuhair Murad 2025秋冬高定,在星空元素和轻薄材质､天鹅绒等设计中,在珠光亮片等元素中也多了一些星空元素的浪漫优雅｡</p><p>以青金石蓝､日晷金､血月红等颜色,在天文学元素等设计和星空刺绣､婚纱､斗篷等设计也更多了一些未来主义的奢侈高级感｡fmt=jpg&size=281&h=1536&w=2048&ppv=1' data-aigc-mark='0'/></p><p>*墨绿色的颜色在裙装之上,稳重中还有绿色系颜色的活力高级感,在裙装中,结合V字衣领､斗篷元素的袖子､开叉的裙摆等设计,为深色的裙装增加了一些细节亮点的装饰｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_8826919bf5868252",
+        "media": "企鹅号",
+        "publish_date": "2025-11-16",
+        "refer": "ref_7",
+        "title": "Zuhair Murad 2025秋冬高定,奢侈未来主义,星空浪漫的优雅"
+      },
+      {
+        "content": "<p>童趣未泯,魔法豆梦</p><p><img src='http://qqpublic.qpic.cn/qq_public/0/28-749252356-BFE6C1EF8F6151B06618EB73DD0FA319/0?fmt=jpg&size=562&h=1692&w=1440&ppv=1' data-aigc-mark='0'/></p><p><img ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_48769db6df197552",
+        "media": "企鹅号",
+        "publish_date": "2026-04-12",
+        "refer": "ref_8",
+        "title": "小朋友仍怀揣魔法梦想:咖啡店打卡,韩系穿搭,inmyfeelings,insanitycrew风潮"
+      },
+      {
+        "content": "這是一場擁抱自由和溫暖的雲端之旅｡與你心愛的人們攜手,在這座曠世的天空王國中翱翔,愛的力量將支持你一路前行｡見證一個宏大而不斷變化的天空王國,在如夢似幻的雲海之中,隨心所欲地翱翔;與雲同行,與愛共鳴,在廣闊的天地之間自由地追尋 “飛翔” 的夢想,以心為涯｡",
+        "icon": "",
+        "link": "https://gamemad.com/game/1298",
+        "media": "",
+        "publish_date": "2022-02-04",
+        "refer": "ref_9",
+        "title": "Sky光遇 (Sky: Children of the Light) - 遊戲狂"
+      },
+      {
+        "content": "\"《Light Up The Sky》是美国福音摇滚乐队The Afters演唱的一首歌曲｡乐队简介The Afters是一支来自美国德州的基督摇滚乐队｡他们的音乐风格温暖､积极,充满希望和向上的力量｡如今,The Afters已经成为美国福音摇滚的代表乐队之一｡歌词Light Up the Sky——The Afters When I'm feeling all aloneWith so ",
+        "icon": "",
+        "link": "https://baike.sogou.com/v70517605.htm",
+        "media": "搜狗百科",
+        "publish_date": "2022-06-14",
+        "refer": "ref_10",
+        "title": "Light Up The Sky"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "sky children of the light spirit beam light pillar art style",
+        "query": "Sky Children of the Light spirit beam light pillar art style"
+      }
+    ],
+    "latency_seconds": 1.88,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Journey thatgamecompany ribbon scarf cloth shader",
+    "content": "",
+    "web_references": [],
+    "search_intent": [
+      {
+        "intent": "SEARCH_NONE",
+        "keywords": "journey thatgamecompany ribbon scarf cloth shader",
+        "query": "Journey thatgamecompany ribbon scarf cloth shader"
+      }
+    ],
+    "latency_seconds": 1.36,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Hytale stardew valley energy beam pillar pixel",
+    "content": "**Everholm - A Charming Pixel-art RPG like Stardew Valley** (2026-05-29)\nEverholm Welcome to Everholm Everholm is a charming pixel-art RPG that combines farming simulation with mysterious adventure elements. Players take on the role of Lilly, who must build a new life on \nSource: https://everholm.com/\n\n**Stardew Valley Wiki - Español** (2026-06-09)\n¡Stardew Valley es un RPG de vida en el campo! Hereda la vieja granja de tu abuelo en Stardew Valley. Armado con herramientas de segunda mano y algo de dinero, te dispones a empezar tu nueva vida. \nSource: https://es.stardewvalleywiki.com/\n\n**Stardew Valley 中文维基** (2026-06-07)\nStardew Valley Wiki 来自Stardew Valley Wiki 跳到导航 跳到搜索 欢迎来到星露谷物语官方维基 星露谷物语由ConcernedApe开发,本站已有1,996 篇与其相关的条目｡ 官方网站 官方论坛 GOG 商店 Humble 商店 Steam 商店 WeGame 商店               PC版本: 1.6.15(2024年12月20日更新) \nSource: https://zh.stardewvalleywiki.com/\n\n**Stardew Valley** (2025-12-27)\nStardew Valley ConcernedApe LLC PS4 Average rating 4.75 stars out of five stars from 33K ratings 4.75 33K ratings $14.99 Add to Cart Add to Cart PS Plus required for online play Supports up to 4 \nSource: https://store.playstation.com/en-us/product/UP2456-CUSA06840_00-STARDEW00000SIEA\n\n**Hydrogen Energy Map Tracker  Pillsbury Law** (2026-06-13)\nThe Hydrogen Map A regularly updated compendium of global low-carbon hydrogen projects and their status. To flag additional Hydrogen projects for inclusion, please email details to \nSource: https://www.thehydrogenmap.com/\n\n**Poly- (hydroxypropyl, ethanediami -DL-Aspartamide hydrogels As enzyme delivery carrier-期刊网** (2026-06-04)\nPoly- (hydroxypropyl, ethanediami -DL-Aspartamide hydrogels As enzyme delivery carrier \nSource: https://www.qikanchina.com/thesis/view/53839\n\n**唐春安** (2024-09-28)\n\"唐春安(1958年3月-),籍贯湖南省黔阳县,博士研究生,毕业于东北大学,大连理工大学土木工程学院岩土工程学科教授､东北大学资源与土木工程学院教授､博士生导师｡ 唐春安,主要从事岩石破裂过程失稳的基础和应用基础性理论研究,研究领域涉及地下工程和边坡稳定性､岩层移动､岩爆､地震机制等｡分别于1994年和1995年获得国家教委 \nSource: https://baike.sogou.com/v7731564.htm\n\n**谷歌斥巨资力图在人工智能能源竞赛中占据领先地位** (2026-02-03)\n谷歌计划斥资 47.5 亿美元,以解决人工智能竞赛中一个棘手的难题,为规模日益庞大的数据中心舰队找到足够的电力供应｡</p><p>该公司即将完成对风电和太阳能开发商Intersect的收购,此举将使其成为唯一一家拥有电力公司的科技巨头｡这可能使其在竞争对手中占据显著优势,因为电力管理部门更青睐那些准备自建发电设施的科技公司,而特朗普政府也正施压要求他们避免将电力成本转嫁给消费者｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_3106981aa7089852\n\n**谷歌 Pixel 10 系列手机能效标签曝光:IP68 防水、7 年更新** (2025-08-14)\n在能效方面,Pixel 10 和 Pixel 10 Pro XL 均获得 EPREL“B”级评级,而 Pixel 10 Pro 表现更优,达到“A”级｡三款机型均通过严苛的自由跌落可靠性测试,获得 A 级别,实现 270 次跌落无故障｡      在电池方面,三款机型在 1000 次完整充电循环后,依然能符合欧盟的电池健康标准｡IT之家附上三款机型的电池容量和续航数据如下:      Pixel \nSource: https://new.qq.com/rain/a/20250814A01WJE00\n\n**Tert-butyl (E)-2-benzylidene-1-(2-bromobenzyl)hydrazine-1-carboxylate  2268038-59-9** (2026-05-30)\nTert-butyl (E)-2-benzylidene-1-(2-bromobenzyl)hydrazine-1-carboxylate Englisch Name: Tert-butyl (E)-2-benzylidene-1-(2-bromobenzyl)hydrazine-1-carboxylate Synonyma: Tert-butyl \nSource: https://www.chemicalbook.com/ChemicalProductProperty_DE_CB613958358.htm\n",
+    "web_references": [
+      {
+        "content": "Everholm Welcome to Everholm Everholm is a charming pixel-art RPG that combines farming simulation with mysterious adventure elements. Players take on the role of Lilly, who must build a new life on ",
+        "icon": "",
+        "link": "https://everholm.com/",
+        "media": "",
+        "publish_date": "2026-05-29",
+        "refer": "ref_1",
+        "title": "Everholm - A Charming Pixel-art RPG like Stardew Valley"
+      },
+      {
+        "content": "¡Stardew Valley es un RPG de vida en el campo! Hereda la vieja granja de tu abuelo en Stardew Valley. Armado con herramientas de segunda mano y algo de dinero, te dispones a empezar tu nueva vida. ",
+        "icon": "",
+        "link": "https://es.stardewvalleywiki.com/",
+        "media": "",
+        "publish_date": "2026-06-09",
+        "refer": "ref_2",
+        "title": "Stardew Valley Wiki - Español"
+      },
+      {
+        "content": "Stardew Valley Wiki 来自Stardew Valley Wiki 跳到导航 跳到搜索 欢迎来到星露谷物语官方维基 星露谷物语由ConcernedApe开发,本站已有1,996 篇与其相关的条目｡ 官方网站 官方论坛 GOG 商店 Humble 商店 Steam 商店 WeGame 商店               PC版本: 1.6.15(2024年12月20日更新) ",
+        "icon": "",
+        "link": "https://zh.stardewvalleywiki.com/",
+        "media": "",
+        "publish_date": "2026-06-07",
+        "refer": "ref_3",
+        "title": "Stardew Valley 中文维基"
+      },
+      {
+        "content": "Stardew Valley ConcernedApe LLC PS4 Average rating 4.75 stars out of five stars from 33K ratings 4.75 33K ratings $14.99 Add to Cart Add to Cart PS Plus required for online play Supports up to 4 ",
+        "icon": "",
+        "link": "https://store.playstation.com/en-us/product/UP2456-CUSA06840_00-STARDEW00000SIEA",
+        "media": "",
+        "publish_date": "2025-12-27",
+        "refer": "ref_4",
+        "title": "Stardew Valley"
+      },
+      {
+        "content": "The Hydrogen Map A regularly updated compendium of global low-carbon hydrogen projects and their status. To flag additional Hydrogen projects for inclusion, please email details to ",
+        "icon": "",
+        "link": "https://www.thehydrogenmap.com/",
+        "media": "",
+        "publish_date": "2026-06-13",
+        "refer": "ref_5",
+        "title": "Hydrogen Energy Map Tracker  Pillsbury Law"
+      },
+      {
+        "content": "Poly- (hydroxypropyl, ethanediami -DL-Aspartamide hydrogels As enzyme delivery carrier ",
+        "icon": "",
+        "link": "https://www.qikanchina.com/thesis/view/53839",
+        "media": "",
+        "publish_date": "2026-06-04",
+        "refer": "ref_6",
+        "title": "Poly- (hydroxypropyl, ethanediami -DL-Aspartamide hydrogels As enzyme delivery carrier-期刊网"
+      },
+      {
+        "content": "\"唐春安(1958年3月-),籍贯湖南省黔阳县,博士研究生,毕业于东北大学,大连理工大学土木工程学院岩土工程学科教授､东北大学资源与土木工程学院教授､博士生导师｡ 唐春安,主要从事岩石破裂过程失稳的基础和应用基础性理论研究,研究领域涉及地下工程和边坡稳定性､岩层移动､岩爆､地震机制等｡分别于1994年和1995年获得国家教委 ",
+        "icon": "",
+        "link": "https://baike.sogou.com/v7731564.htm",
+        "media": "搜狗百科",
+        "publish_date": "2024-09-28",
+        "refer": "ref_7",
+        "title": "唐春安"
+      },
+      {
+        "content": "谷歌计划斥资 47.5 亿美元,以解决人工智能竞赛中一个棘手的难题,为规模日益庞大的数据中心舰队找到足够的电力供应｡</p><p>该公司即将完成对风电和太阳能开发商Intersect的收购,此举将使其成为唯一一家拥有电力公司的科技巨头｡这可能使其在竞争对手中占据显著优势,因为电力管理部门更青睐那些准备自建发电设施的科技公司,而特朗普政府也正施压要求他们避免将电力成本转嫁给消费者｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_3106981aa7089852",
+        "media": "企鹅号",
+        "publish_date": "2026-02-03",
+        "refer": "ref_8",
+        "title": "谷歌斥巨资力图在人工智能能源竞赛中占据领先地位"
+      },
+      {
+        "content": "在能效方面,Pixel 10 和 Pixel 10 Pro XL 均获得 EPREL“B”级评级,而 Pixel 10 Pro 表现更优,达到“A”级｡三款机型均通过严苛的自由跌落可靠性测试,获得 A 级别,实现 270 次跌落无故障｡      在电池方面,三款机型在 1000 次完整充电循环后,依然能符合欧盟的电池健康标准｡IT之家附上三款机型的电池容量和续航数据如下:      Pixel ",
+        "icon": "",
+        "link": "https://new.qq.com/rain/a/20250814A01WJE00",
+        "media": "腾讯网",
+        "publish_date": "2025-08-14",
+        "refer": "ref_9",
+        "title": "谷歌 Pixel 10 系列手机能效标签曝光:IP68 防水、7 年更新"
+      },
+      {
+        "content": "Tert-butyl (E)-2-benzylidene-1-(2-bromobenzyl)hydrazine-1-carboxylate Englisch Name: Tert-butyl (E)-2-benzylidene-1-(2-bromobenzyl)hydrazine-1-carboxylate Synonyma: Tert-butyl ",
+        "icon": "",
+        "link": "https://www.chemicalbook.com/ChemicalProductProperty_DE_CB613958358.htm",
+        "media": "",
+        "publish_date": "2026-05-30",
+        "refer": "ref_10",
+        "title": "Tert-butyl (E)-2-benzylidene-1-(2-bromobenzyl)hydrazine-1-carboxylate  2268038-59-9"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "hytale stardew valley energy beam pillar pixel",
+        "query": "Hytale stardew valley energy beam pillar pixel"
+      }
+    ],
+    "latency_seconds": 2.39,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Unreal Niagara ribbon scroll noise distortion energy beam",
+    "content": "**Niagara粒子 UE5 闪电特效教程 Ribbon-Beam基础参数_哔哩哔哩_bilibili** (2023-12-06)\n在接下来的几期视频中我讲带你完成这个闪电案例｡并通过这个案例了解->粒子朝向,自定义参数,beam渲染,更精确的控制随机数等新内容｡同时咱们还要进一步认识用户参数和蓝图的配合｡\nSource: https://www.bilibili.com/video/BV1WN411j73b/\n\n**【UE Niagara 条带粒子系列】02-StaticBeam_niagara条带-CSDN博客** (2024-01-16)\n目录 步骤 效果 一、创建StaticBeam 二、设置粒子长度 三、设置粒子宽度 四、设置粒子颜色 五、设置条带渲染材质 步骤 效果 一、创建StaticBeam 新建一个Niagara系统 模板选择“Static Beam” 这里命名为“NS_StaticBeam” 二、设置粒子长度 打开“NS_StaticBeam”,选中“Beam Emitter Setup”模块,可以通过设置参数“Beam End”的值来控制条带粒子的长度 三、设置粒子宽度 在“Beam Width”模块中我们可以设置条带粒子的宽度 四、设置粒子颜色 在“Color”模块中我们可以设置粒子颜色 此时效果如下 五、设置条带渲染材质 在“条带渲染器”模块中可以看到材质是默认的材质,我们可以通过改变这个材质来实现更好的效果 在虚幻商城中添加“无尽之剑:效果”资产到工程,我们主要是想使用该资产中的纹理和网格体 我们所需要的就是“FX_Textures”文件夹中的纹理和“FX_Meshes”文件夹中的纹理 将这两个文件夹分别复制到我们的文件夹中 关闭虚幻编辑器删除“InfinityBladeEffects”文件夹 新建一个材质,这里命名为“M_PanDistort_Master_Additive” 打开材质“M_PanDistort_Master_Additive”,设置混合模式为“Additive”,着色模型为“无光照” 先编辑失真部分逻辑如下 找到纹理“T_FireTrail_Desat”,移入材质图表 继续添加如下节点 此时可以看到预览窗口效果如下: 可以看到我们的失真程度太大了,我们需要添加变量来控制失真程度 此时效果如下: 对材质“M_PanDistort_Master_Additive”创建材质实例,这里命名为“M_Ribbon_Additive_Inst” 打开Niagara系统“NS_StaticBeam” 在“条带渲染器”中设置材质为材质实例“M_Ribbon_Additive_Inst” 此时粒子效果如下: 可以发现此时条带粒子又失去了颜色,我们需要回到材质中进行设置。将之前输出的结果输出到一个命名节点 再通过如下方式来控制Niagara粒子颜色 回到Niagara中,可以看到我们的粒子此时恢复了颜色 接下来我们需要为粒子添加透明度。回到材质中,先获取Alpha通道的输出 再添加\nSource: https://blog.csdn.net/ChaoChao66666/article/details/135632172\n\n**Unreal 5 Niagara – Advanced Niagara-0DayDown** (2023-12-22)\nPublished 12/2023 MP4 | Video: h264, 1920×1080 | Audio: AAC, 44.1 KHz Language: English | Size: 9.45 GB | Duration: 7h 13m Your complete course for expaning Niagara in Unreal Engine 5 What you’ll learn Learn Advanced Techniques for working with Niagara Particles Setup Data Interfaces to read from Collisions, RVTs, Render Targets, SDFs, Mesh Dilowmaps and Collisions Avoidance Learn to build our own modules using Scratch Pad to further extend Niagara’s abilities Requirements A good understanding of Niagara and Unreal (ideally finished the Introduction to Niagara Course) Description Welcome back to part 2 of this Unreal Engine 5 Niagara Course – Advanced Niagara. In this course we expand upon the topics we covered in Part 1 and start to utilise Data Int\nSource: https://www.0daydown.com/12/2303885.html\n\n**Unreal Niagara粒子入门1_虚幻niagara-CSDN博客** (2024-04-06)\n记录下学习Niagara粒子的过程,这次调的是比较简单的一个效果: 使用了随粒子生命的缩放、打开速率解算、基本的发射器和Niagara容器。 1.创建Niagara Niagara中,发射器和NiagaraSystem文件是可以分开创建的: 通常直接点Niagara System,创建的是内置发射器的特效系统。打开特效界面后,不同区域功能如下: 发射器和特效系统界面,选择发射器、发射器参数等粒子系统内参数界面时间轴界面,时间轴元素为自动创建,但调试时可以进行暂停、控制播放等人为操作暴露参数,可以暴露参数供蓝图使用2.发射器模块 有些是发射器基础模块,必须要添加,如下: Emitter Update Emitter State 初始化发射器状态Particle Spawn Initialize Particle 粒子初始化的颜色、生命长度等基础属性Particle Update Particle State 用于更新粒子随生命周期相关模块,以及处理销毁逻辑Solve Forces and Velocity 用于更新速率与力相关模块Render Sprite Renderer 用于渲染粒子以上模块需自行检查是否都已经创建,因为会影响到其他模块的性能。但如用案例创建Niagara则不需要关注这些。 3.简易效果创建 接下来创建一些简易效果,首先添加如下模块: Spawn Rate,用于每次按粒子个数发射Add Velocity,添加速率,以便粒子是保持运动的Shape Location,根据形状发射粒子检查下方Timeline是否勾选播放,这样才可以看见预览动态效果: 这时看见的粒子如下: 接下来制作随生命淡入淡出的效果,以便消失不那么生硬。 在Particle Update中增加模块Scale Color,将Scale Alpha的类型改成Float from Curve: 然后按下鼠标中键添加关键帧,编辑成淡入淡出曲线,并全选按下数字键1,切换为Ease曲线类型: 这样即完成一个基础Niagara效果的制作。\nSource: https://blog.csdn.net/grayrail/article/details/130805658\n\n**GitHub - UnrealSharp/UnrealSharp: UnrealSharp is a plugin to Unreal Engine 5, which enables developers to create games using C# (.NET10** (2026-06-08)\nmain Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit History 1,912 Commits 1,912 Commits Build/ Scripts Build/ Scripts Config Config Managed Managed Resources Resources Source Source Templates Templates .gitattributes .gitattributes .gitignore .gitignore Directory.Packages.props Directory.Packages.props LICENSE LICENSE README.md README.md UnrealSharp.AOT.props UnrealSharp.AOT.props UnrealSharp.Automation.props UnrealSharp.Automation.props UnrealSharp.GeneratedFiles.props UnrealSharp.GeneratedFiles.props UnrealSharp.Shared.props UnrealSharp.Shared.props UnrealSharp.sln UnrealSharp.sln UnrealSharp.uplugin UnrealSharp.uplugin View all files Repository files navigation UnrealSharp UnrealSharp is a free, open-source plugin for writing Unreal Engine 5 games in C# on top of .NET 10. Features Unreal Engine API in C# : Derive from any UClass. Implement Actors, ActorComponents, and more in C# with access to the Unreal Engine A\nSource: https://github.com/UnrealSharp/UnrealSharp/wiki/Home/_history\n\n**Niagara内容示例 2.2 Dynamic Beam_虚幻 dynamic beam static beam-CSDN博客** (2021-05-21)\n粒子效果 从向着一个方向生成条带,条带沿着某个轴在旋转,类似于舞蹈演员表演的条带舞。 Niagara蓝图部分 蓝图中文字介绍少了很多…不过起码说清了一件事,就是Ribbon Renderer条带渲染器不支持GPU,只能在CPU粒子的情况下运行。从结构上来看,和之前的Static Beam也没有太大差别(实际上是有的,主要体现在Update Beam,后面会分析到),可见“动态”二字更多的是反映到了参数的获取和传递上。 效果实现分析 首先来看看Beam Emitter Setup。之前没有细看,遗漏了一个重要的布尔值——Absolute Beam Start,字面上好像啥都看不出来,让我们去看看代码里是什么。双击模块进入Niagara Module Script。 这里截取我们要讨论的那部分。可见布尔值为true时,直接使用我们之前定的Beam Start位置,否则的话会进行一个本地空间到Simulation空间(可以简单理解为世界空间)的转换。 上面Beam End位置的值那么大是因为本次模拟使用的不是本地空间。 随后就是Beam Start Tangent和End Tangent,都是定义为x轴(Niagara System)(图中红色轴),然后用一个float量来调控其曲率。 终于到了Particle Spawn阶段,注意到这里使用了Initialize Ribbon来做初始化,其效果等同于Initialize Particle + Beam Width,即既定义Lifetime又定义了Ribbon的宽度。 Particle Update里,首当其冲的就是Update Beam。有了它,我们每帧可以去读BeamStart、BeamEnd等一系列参数的数据,并实时调整到条带上。否则话,当我们实时修改这些数据时,是相当于立马重新生成一条条带,而不是在已有条带上进行调整。 实时调整粒子位置——Rotate Around Point。主要作用就是读粒子的位置,然后再写入。 Rotation Phase来调控旋转的量,Rotation Rate则是旋转的方向和速率。在Setup里,可以进一步配置旋转的属性(Radius旋转半径,Rotation Center旋转中心,X Axis和Y Axis定义旋转所在的那个平面等等),其中Radius内部现在填写的不是一个不同的参数,\nSource: https://blog.csdn.net/xcinkey/article/details/117133990\n\n**Download Unreal Engine - Unreal Engine** (2026-06-08)\nDownload Unreal Engine STEP 1 Download the launcher Before you can install and run Unreal Editor, you’ll need to download and install the Epic Games launcher. Download Launcher STEP 2 Install Epic Games launcher Once downloaded and installed, open the launcher and create or log in to your Epic Games account. Get support , or restart your Epic Games launcher download in Step 1. STEP 3 Install Unreal Engine Once logged in, navigate to the Unreal Engine tab and click the Install button to download the most recent version. Download from source code Steps for connecting to the source code repository and downloading the latest build of Unreal Engine. System Requirements Minimum and recommended hardware specifications and necessary software for developing with Unreal Engine. View full requirements Windows Windows 10 64-bit, quad-core Intel or AMD, 2.5 GHz or faster, 8 GB RAM, DirectX 11 or 12 compatible graphics card Linux Linux Ubuntu 18.04, quad-core Intel or AMD, 2.5 GHz or faster, 32 GB R\nSource: https://www.unrealengine.com/download\n\n**Unreal-Engine-Style-Guide/README.md at main · sapaczb/Unreal-Engine-Style-Guide · GitHub** (2026-05-30)\nTable of contents Important Terminology Identifiers Cases 00. Globally Enforced Opinions 00.1 Forbidden Characters 1. Asset Naming Conventions 1.1 Base Asset Name - Prefix_BaseAssetName_Variant_SuffixTo The Grid Cleanly 4.4 All Meshes Must Have Collision 4.5 All Meshes Should Be Scaled Correctly 5. Niagara 5.1 No Spaces, Ever 6. Levels / Maps 6.1 No Errors Or Warnings 6.2 Lighting Should Be Built ains no spaces and is located somewhere such as D:\\Project instead of C:\\Users\\My Name\\My Documents\\Unreal Projects . 2.1.3 Never Use Unicode Characters And Other Symbols If one of your game characterd be stored here as well within folders that designate their intended purpose. For example, generic noise textures should be located in MaterialLibrary/Utility . Any testing or debug materials should \nSource: https://github.com/sapaczb/Unreal-Engine-Style-Guide/blob/main/README.md\n\n**GitHub - rm-NoobInCoding/UnrealReZen: UnrealReZen is a modding tool for packing utoc and ucas files (Unreal Engine IoStore archive files** (2024-09-14)\nmaster Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit History 126 Commits 126 Commits .github .github UnrealReZen UnrealReZen external external .gitattributes .gitattributes .gitignore .gitignore .gitmodules .gitmodules LICENSE LICENSE README.md README.md UnrealReZen.sln UnrealReZen.sln View all files Repository files navigation UnrealReZen A tool for creating and packing Unreal Engine .Utoc and .Ucas files. Note This tool is only for ZenLoader archive files. The files inside the archive (like *.uasset) are not within the scope of this tool. Please do not create an issue for these files! How it works First, it is better to know how ZenLoader files workZenLoader consists of two parts .utoc, which stands for Unreal table of contents, contains the information of the assets, such as ID, offset, size, etc. .ucas, which contains the content of Assets in compressed or raw form The important point of this structure is that \nSource: https://github.com/rm-NoobInCoding/UnrealReZen\n\n**GitHub - polygonvariable/unreal-gas-editor: Unreal Engine plugin that allows to create attribute sets directly from editor. · GitHub** (2026-01-02)\n  main Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit   History 10 Commits 10 Commits Config Config     Content Content     Documentation/ Image Documentation/ Image     Plugins/ GASPlugin Plugins/ GASPlugin     Source Source     .gitattributes .gitattributes     .gitignore .gitignore     .vsconfig .vsconfig     GASProject.uproject GASProject.uproject     LICENSE LICENSE     README.md README.md     View all files Repository files navigation README MIT license GAS Editor 🪂 GAS Editor allows to quicky create attribute set and attributes directly from Unreal Engine editor. Index How to use ? 1. Enable Gameplay Ability System Plugin In the Plugins window, enable the Gameplay Ability System plugin and restart the editor. 2. Enable C++ Support For the plugin to work, you need to create a base attribute class. This step is necessary to include the required attribute set header files. This is a one-time process. Go to Tool\nSource: https://github.com/polygonvariable/unreal-gas-editor\n",
+    "web_references": [
+      {
+        "content": "在接下来的几期视频中我讲带你完成这个闪电案例｡并通过这个案例了解->粒子朝向,自定义参数,beam渲染,更精确的控制随机数等新内容｡同时咱们还要进一步认识用户参数和蓝图的配合｡",
+        "icon": "",
+        "link": "https://www.bilibili.com/video/BV1WN411j73b/",
+        "media": "哔哩哔哩",
+        "publish_date": "2023-12-06",
+        "refer": "ref_1",
+        "title": "Niagara粒子 UE5 闪电特效教程 Ribbon-Beam基础参数_哔哩哔哩_bilibili"
+      },
+      {
+        "content": "目录 步骤 效果 一、创建StaticBeam 二、设置粒子长度 三、设置粒子宽度 四、设置粒子颜色 五、设置条带渲染材质 步骤 效果 一、创建StaticBeam 新建一个Niagara系统 模板选择“Static Beam” 这里命名为“NS_StaticBeam” 二、设置粒子长度 打开“NS_StaticBeam”,选中“Beam Emitter Setup”模块,可以通过设置参数“Beam End”的值来控制条带粒子的长度 三、设置粒子宽度 在“Beam Width”模块中我们可以设置条带粒子的宽度 四、设置粒子颜色 在“Color”模块中我们可以设置粒子颜色 此时效果如下 五、设置条带渲染材质 在“条带渲染器”模块中可以看到材质是默认的材质,我们可以通过改变这个材质来实现更好的效果 在虚幻商城中添加“无尽之剑:效果”资产到工程,我们主要是想使用该资产中的纹理和网格体 我们所需要的就是“FX_Textures”文件夹中的纹理和“FX_Meshes”文件夹中的纹理 将这两个文件夹分别复制到我们的文件夹中 关闭虚幻编辑器删除“InfinityBladeEffects”文件夹 新建一个材质,这里命名为“M_PanDistort_Master_Additive” 打开材质“M_PanDistort_Master_Additive”,设置混合模式为“Additive”,着色模型为“无光照” 先编辑失真部分逻辑如下 找到纹理“T_FireTrail_Desat”,移入材质图表 继续添加如下节点 此时可以看到预览窗口效果如下: 可以看到我们的失真程度太大了,我们需要添加变量来控制失真程度 此时效果如下: 对材质“M_PanDistort_Master_Additive”创建材质实例,这里命名为“M_Ribbon_Additive_Inst” 打开Niagara系统“NS_StaticBeam” 在“条带渲染器”中设置材质为材质实例“M_Ribbon_Additive_Inst” 此时粒子效果如下: 可以发现此时条带粒子又失去了颜色,我们需要回到材质中进行设置。将之前输出的结果输出到一个命名节点 再通过如下方式来控制Niagara粒子颜色 回到Niagara中,可以看到我们的粒子此时恢复了颜色 接下来我们需要为粒子添加透明度。回到材质中,先获取Alpha通道的输出 再添加",
+        "icon": "",
+        "link": "https://blog.csdn.net/ChaoChao66666/article/details/135632172",
+        "media": "",
+        "publish_date": "2024-01-16",
+        "refer": "ref_2",
+        "title": "【UE Niagara 条带粒子系列】02-StaticBeam_niagara条带-CSDN博客"
+      },
+      {
+        "content": "Published 12/2023 MP4 | Video: h264, 1920×1080 | Audio: AAC, 44.1 KHz Language: English | Size: 9.45 GB | Duration: 7h 13m Your complete course for expaning Niagara in Unreal Engine 5 What you’ll learn Learn Advanced Techniques for working with Niagara Particles Setup Data Interfaces to read from Collisions, RVTs, Render Targets, SDFs, Mesh Dilowmaps and Collisions Avoidance Learn to build our own modules using Scratch Pad to further extend Niagara’s abilities Requirements A good understanding of Niagara and Unreal (ideally finished the Introduction to Niagara Course) Description Welcome back to part 2 of this Unreal Engine 5 Niagara Course – Advanced Niagara. In this course we expand upon the topics we covered in Part 1 and start to utilise Data Int",
+        "icon": "",
+        "link": "https://www.0daydown.com/12/2303885.html",
+        "media": "",
+        "publish_date": "2023-12-22",
+        "refer": "ref_3",
+        "title": "Unreal 5 Niagara – Advanced Niagara-0DayDown"
+      },
+      {
+        "content": "记录下学习Niagara粒子的过程,这次调的是比较简单的一个效果: 使用了随粒子生命的缩放、打开速率解算、基本的发射器和Niagara容器。 1.创建Niagara Niagara中,发射器和NiagaraSystem文件是可以分开创建的: 通常直接点Niagara System,创建的是内置发射器的特效系统。打开特效界面后,不同区域功能如下: 发射器和特效系统界面,选择发射器、发射器参数等粒子系统内参数界面时间轴界面,时间轴元素为自动创建,但调试时可以进行暂停、控制播放等人为操作暴露参数,可以暴露参数供蓝图使用2.发射器模块 有些是发射器基础模块,必须要添加,如下: Emitter Update Emitter State 初始化发射器状态Particle Spawn Initialize Particle 粒子初始化的颜色、生命长度等基础属性Particle Update Particle State 用于更新粒子随生命周期相关模块,以及处理销毁逻辑Solve Forces and Velocity 用于更新速率与力相关模块Render Sprite Renderer 用于渲染粒子以上模块需自行检查是否都已经创建,因为会影响到其他模块的性能。但如用案例创建Niagara则不需要关注这些。 3.简易效果创建 接下来创建一些简易效果,首先添加如下模块: Spawn Rate,用于每次按粒子个数发射Add Velocity,添加速率,以便粒子是保持运动的Shape Location,根据形状发射粒子检查下方Timeline是否勾选播放,这样才可以看见预览动态效果: 这时看见的粒子如下: 接下来制作随生命淡入淡出的效果,以便消失不那么生硬。 在Particle Update中增加模块Scale Color,将Scale Alpha的类型改成Float from Curve: 然后按下鼠标中键添加关键帧,编辑成淡入淡出曲线,并全选按下数字键1,切换为Ease曲线类型: 这样即完成一个基础Niagara效果的制作。",
+        "icon": "",
+        "link": "https://blog.csdn.net/grayrail/article/details/130805658",
+        "media": "",
+        "publish_date": "2024-04-06",
+        "refer": "ref_4",
+        "title": "Unreal Niagara粒子入门1_虚幻niagara-CSDN博客"
+      },
+      {
+        "content": "main Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit History 1,912 Commits 1,912 Commits Build/ Scripts Build/ Scripts Config Config Managed Managed Resources Resources Source Source Templates Templates .gitattributes .gitattributes .gitignore .gitignore Directory.Packages.props Directory.Packages.props LICENSE LICENSE README.md README.md UnrealSharp.AOT.props UnrealSharp.AOT.props UnrealSharp.Automation.props UnrealSharp.Automation.props UnrealSharp.GeneratedFiles.props UnrealSharp.GeneratedFiles.props UnrealSharp.Shared.props UnrealSharp.Shared.props UnrealSharp.sln UnrealSharp.sln UnrealSharp.uplugin UnrealSharp.uplugin View all files Repository files navigation UnrealSharp UnrealSharp is a free, open-source plugin for writing Unreal Engine 5 games in C# on top of .NET 10. Features Unreal Engine API in C# : Derive from any UClass. Implement Actors, ActorComponents, and more in C# with access to the Unreal Engine A",
+        "icon": "",
+        "link": "https://github.com/UnrealSharp/UnrealSharp/wiki/Home/_history",
+        "media": "",
+        "publish_date": "2026-06-08",
+        "refer": "ref_5",
+        "title": "GitHub - UnrealSharp/UnrealSharp: UnrealSharp is a plugin to Unreal Engine 5, which enables developers to create games using C# (.NET10"
+      },
+      {
+        "content": "粒子效果 从向着一个方向生成条带,条带沿着某个轴在旋转,类似于舞蹈演员表演的条带舞。 Niagara蓝图部分 蓝图中文字介绍少了很多…不过起码说清了一件事,就是Ribbon Renderer条带渲染器不支持GPU,只能在CPU粒子的情况下运行。从结构上来看,和之前的Static Beam也没有太大差别(实际上是有的,主要体现在Update Beam,后面会分析到),可见“动态”二字更多的是反映到了参数的获取和传递上。 效果实现分析 首先来看看Beam Emitter Setup。之前没有细看,遗漏了一个重要的布尔值——Absolute Beam Start,字面上好像啥都看不出来,让我们去看看代码里是什么。双击模块进入Niagara Module Script。 这里截取我们要讨论的那部分。可见布尔值为true时,直接使用我们之前定的Beam Start位置,否则的话会进行一个本地空间到Simulation空间(可以简单理解为世界空间)的转换。 上面Beam End位置的值那么大是因为本次模拟使用的不是本地空间。 随后就是Beam Start Tangent和End Tangent,都是定义为x轴(Niagara System)(图中红色轴),然后用一个float量来调控其曲率。 终于到了Particle Spawn阶段,注意到这里使用了Initialize Ribbon来做初始化,其效果等同于Initialize Particle + Beam Width,即既定义Lifetime又定义了Ribbon的宽度。 Particle Update里,首当其冲的就是Update Beam。有了它,我们每帧可以去读BeamStart、BeamEnd等一系列参数的数据,并实时调整到条带上。否则话,当我们实时修改这些数据时,是相当于立马重新生成一条条带,而不是在已有条带上进行调整。 实时调整粒子位置——Rotate Around Point。主要作用就是读粒子的位置,然后再写入。 Rotation Phase来调控旋转的量,Rotation Rate则是旋转的方向和速率。在Setup里,可以进一步配置旋转的属性(Radius旋转半径,Rotation Center旋转中心,X Axis和Y Axis定义旋转所在的那个平面等等),其中Radius内部现在填写的不是一个不同的参数,",
+        "icon": "",
+        "link": "https://blog.csdn.net/xcinkey/article/details/117133990",
+        "media": "",
+        "publish_date": "2021-05-21",
+        "refer": "ref_6",
+        "title": "Niagara内容示例 2.2 Dynamic Beam_虚幻 dynamic beam static beam-CSDN博客"
+      },
+      {
+        "content": "Download Unreal Engine STEP 1 Download the launcher Before you can install and run Unreal Editor, you’ll need to download and install the Epic Games launcher. Download Launcher STEP 2 Install Epic Games launcher Once downloaded and installed, open the launcher and create or log in to your Epic Games account. Get support , or restart your Epic Games launcher download in Step 1. STEP 3 Install Unreal Engine Once logged in, navigate to the Unreal Engine tab and click the Install button to download the most recent version. Download from source code Steps for connecting to the source code repository and downloading the latest build of Unreal Engine. System Requirements Minimum and recommended hardware specifications and necessary software for developing with Unreal Engine. View full requirements Windows Windows 10 64-bit, quad-core Intel or AMD, 2.5 GHz or faster, 8 GB RAM, DirectX 11 or 12 compatible graphics card Linux Linux Ubuntu 18.04, quad-core Intel or AMD, 2.5 GHz or faster, 32 GB R",
+        "icon": "",
+        "link": "https://www.unrealengine.com/download",
+        "media": "",
+        "publish_date": "2026-06-08",
+        "refer": "ref_7",
+        "title": "Download Unreal Engine - Unreal Engine"
+      },
+      {
+        "content": "Table of contents Important Terminology Identifiers Cases 00. Globally Enforced Opinions 00.1 Forbidden Characters 1. Asset Naming Conventions 1.1 Base Asset Name - Prefix_BaseAssetName_Variant_SuffixTo The Grid Cleanly 4.4 All Meshes Must Have Collision 4.5 All Meshes Should Be Scaled Correctly 5. Niagara 5.1 No Spaces, Ever 6. Levels / Maps 6.1 No Errors Or Warnings 6.2 Lighting Should Be Built ains no spaces and is located somewhere such as D:\\Project instead of C:\\Users\\My Name\\My Documents\\Unreal Projects . 2.1.3 Never Use Unicode Characters And Other Symbols If one of your game characterd be stored here as well within folders that designate their intended purpose. For example, generic noise textures should be located in MaterialLibrary/Utility . Any testing or debug materials should ",
+        "icon": "",
+        "link": "https://github.com/sapaczb/Unreal-Engine-Style-Guide/blob/main/README.md",
+        "media": "",
+        "publish_date": "2026-05-30",
+        "refer": "ref_8",
+        "title": "Unreal-Engine-Style-Guide/README.md at main · sapaczb/Unreal-Engine-Style-Guide · GitHub"
+      },
+      {
+        "content": "master Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit History 126 Commits 126 Commits .github .github UnrealReZen UnrealReZen external external .gitattributes .gitattributes .gitignore .gitignore .gitmodules .gitmodules LICENSE LICENSE README.md README.md UnrealReZen.sln UnrealReZen.sln View all files Repository files navigation UnrealReZen A tool for creating and packing Unreal Engine .Utoc and .Ucas files. Note This tool is only for ZenLoader archive files. The files inside the archive (like *.uasset) are not within the scope of this tool. Please do not create an issue for these files! How it works First, it is better to know how ZenLoader files workZenLoader consists of two parts .utoc, which stands for Unreal table of contents, contains the information of the assets, such as ID, offset, size, etc. .ucas, which contains the content of Assets in compressed or raw form The important point of this structure is that ",
+        "icon": "",
+        "link": "https://github.com/rm-NoobInCoding/UnrealReZen",
+        "media": "",
+        "publish_date": "2024-09-14",
+        "refer": "ref_9",
+        "title": "GitHub - rm-NoobInCoding/UnrealReZen: UnrealReZen is a modding tool for packing utoc and ucas files (Unreal Engine IoStore archive files"
+      },
+      {
+        "content": "  main Go to file Code Open more actions menu Folders and files Name Name Last commit message Last commit date Latest commit   History 10 Commits 10 Commits Config Config     Content Content     Documentation/ Image Documentation/ Image     Plugins/ GASPlugin Plugins/ GASPlugin     Source Source     .gitattributes .gitattributes     .gitignore .gitignore     .vsconfig .vsconfig     GASProject.uproject GASProject.uproject     LICENSE LICENSE     README.md README.md     View all files Repository files navigation README MIT license GAS Editor 🪂 GAS Editor allows to quicky create attribute set and attributes directly from Unreal Engine editor. Index How to use ? 1. Enable Gameplay Ability System Plugin In the Plugins window, enable the Gameplay Ability System plugin and restart the editor. 2. Enable C++ Support For the plugin to work, you need to create a base attribute class. This step is necessary to include the required attribute set header files. This is a one-time process. Go to Tool",
+        "icon": "",
+        "link": "https://github.com/polygonvariable/unreal-gas-editor",
+        "media": "",
+        "publish_date": "2026-01-02",
+        "refer": "ref_10",
+        "title": "GitHub - polygonvariable/unreal-gas-editor: Unreal Engine plugin that allows to create attribute sets directly from editor. · GitHub"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "unreal niagara ribbon scroll noise distortion energy beam",
+        "query": "Unreal Niagara ribbon scroll noise distortion energy beam"
+      }
+    ],
+    "latency_seconds": 3.46,
+    "model": "search-pro",
+    "mode": "tools"
+  }
+]
