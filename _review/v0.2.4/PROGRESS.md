@@ -38,11 +38,14 @@
 - [x] Phase 1.2 Block B 23 OTA 化
 - [x] Phase 1.3 Block C 7/8 埋点
 - [x] Phase 1.4 Block E1 PortalSpawner 自动挂
-- [ ] Phase 1.5 Block A 自动化截图验证 (V024TriggerTest harness)
-- [ ] Phase 2 Block E2/E3 RN render + 路由
-- [ ] Phase 3 Block D 视觉收尾(D1 sweep + D2 5 type 加强 + D3 同步)
-- [ ] Phase 4 Block F 跨 session re-snap + C8 埋点
-- [ ] Phase 5 EXECUTION_REPORT.md 收尾
+- [x] Phase 1.5 Block A 自动化截图验证 (V024TriggerTest harness 3/3 PASS)
+- [x] Phase 1.6 A8 bug fix (subagent review 发现)
+- [x] Phase 2 Block E2/E3 RN render + 路由
+- [x] Phase 3 Block D 视觉收尾(D1 sweep + D2 5 type 加强 + D3 同步)
+- [x] Phase 4 Block F 跨 session re-snap + C8 埋点
+- [x] Phase 5 EXECUTION_REPORT.md + 最终 subagent review (9/9 PASS)
+
+**全部完成**。等用户回来 review,准备 macOS 端 EAS build + 真机验证。
 
 ---
 
