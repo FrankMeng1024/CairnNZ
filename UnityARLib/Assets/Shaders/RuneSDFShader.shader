@@ -73,24 +73,25 @@ Shader "Cairn/RuneSDF"
             // ---- SDF helpers (centered at uv = 0.5) ----
             float sdEllipse(float2 p, float2 r)
             {
-                // Approximation good enough for runes (not exact ellipse SDF).
                 float k = length(p / r);
                 return (k - 1.0) * min(r.x, r.y);
             }
-            float sdTriangle(float2 p, float h)
+            // Filled triangle pointing up. Returns negative inside, positive outside.
+            // p in NDC space (-1..1), h = vertical extent.
+            float sdEqTriangle(float2 p, float h)
             {
-                // Equilateral down-pointing not needed; here filled triangle,
-                // SDF approx via point-in-triangle test plus distance.
-                // Triangle: top (0, +h), bottom-left (-h*0.866, -h*0.5),
-                //           bottom-right (h*0.866, -h*0.5).
-                const float k = sqrt(3.0);
+                // Equilateral pointing up: top (0, h*0.6), bottom-left (-h*0.55, -h*0.4),
+                // bottom-right (h*0.55, -h*0.4)
                 p.x = abs(p.x);
-                p.y = -p.y;  // flip so triangle points up
-                p -= float2(0.0, h * 0.5);
-                if (p.x + k * p.y > 0.0)
-                    p = float2(p.x - k * p.y, -k * p.x - p.y) / 2.0;
-                p.x -= clamp(p.x, -2.0 * h, 0.0);
-                return -length(p) * sign(p.y);
+                // Distance to nearest edge from inside point
+                // Top edge: line from (0, h*0.6) to (h*0.55, -h*0.4). Normal points right.
+                float2 e1 = float2(0.55, -1.0);  // edge direction unit-ish
+                float lenE1 = length(e1);
+                float2 n1 = float2(e1.y, -e1.x) / lenE1;  // perpendicular, pointing outward
+                float d1 = dot(p - float2(0, h * 0.6), n1);
+                // Bottom edge: y = -h*0.4 (downward)
+                float d2 = -h * 0.4 - p.y;  // positive = below baseline = outside
+                return max(d1, d2);
             }
             float sdRoundedBox(float2 p, float2 b, float r)
             {
@@ -104,15 +105,21 @@ Shader "Cairn/RuneSDF"
                 float h = saturate(dot(pa, ba) / dot(ba, ba));
                 return length(pa - ba * h) - r;
             }
-            // Teardrop: ellipse with pulled-up tip
+            // Teardrop: ellipse merged with a tapered tip pointing up.
+            // Bottom is rounded (large), top is pointed (small).
             float sdTeardrop(float2 p, float r)
             {
-                // Ellipse + tip pulled up
-                float2 ep = p; ep.y = p.y * 0.85;
-                float d1 = length(ep) - r * 0.85;
-                // Tip: line from (0, r) to ellipse top
-                float d2 = length(p - float2(0, r * 0.55)) - r * 0.18;
-                return min(d1, d2);
+                // Body: ellipse at center (0, -0.05) with radii (r*0.5, r*0.55)
+                float dBody = sdEllipse(p - float2(0, -0.05), float2(r * 0.5, r * 0.55));
+                // Tip: triangle from top of body to (0, r*0.7), narrowing
+                // Use a capsule from (0, r*0.3) to (0, r*0.7) with radius r*0.18 then tapered
+                float tipY = p.y - 0.3;
+                float tipMask = saturate(tipY / (r * 0.4));  // 0 at body top, 1 at tip
+                float tipR = r * 0.30 * (1.0 - tipMask);
+                float dTip = abs(p.x) - tipR;
+                // Tip only valid in y range [0.3, 0.7]
+                if (p.y < r * 0.30 || p.y > r * 0.70) dTip = 1.0;
+                return min(dBody, dTip);
             }
 
             // ---- Rune SDF dispatch ----
@@ -137,7 +144,7 @@ Shader "Cairn/RuneSDF"
                 // triangle — filled warning
                 if (typeId < 1.5)
                 {
-                    d = sdTriangle(p, 0.55);
+                    d = sdEqTriangle(p, 0.55);
                     // Plus exclamation: vertical bar + dot
                     d = min(d, max(sdRoundedBox(p - float2(0, 0.05), float2(0.05, 0.20), 0.04), 0.5 - sdEllipse(p - float2(0, -0.30), float2(0.06, 0.06)) * -1.0));
                     return d;
@@ -153,7 +160,7 @@ Shader "Cairn/RuneSDF"
                     // Square base
                     float dBox = sdRoundedBox(p - float2(0, -0.10), float2(0.40, 0.30), 0.02);
                     // Roof triangle (top)
-                    float dRoof = sdTriangle(p - float2(0, 0.25), 0.35);
+                    float dRoof = sdEqTriangle(p - float2(0, 0.25), 0.35);
                     // Door cutout (inverted)
                     float dDoor = sdRoundedBox(p - float2(0, -0.20), float2(0.10, 0.20), 0.0);
                     d = min(dBox, dRoof);
