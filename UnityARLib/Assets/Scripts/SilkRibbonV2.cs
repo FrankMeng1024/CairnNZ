@@ -313,12 +313,13 @@ namespace Cairn.AR
                     widthDir.Normalize();
 
                 // Spindle width: narrow at base, fat at mid, fan at tip
-                // V5.23 sub#2 sharp edge: spindleShape 振幅减半, noise 减弱让 ribbon 边缘不羽化
-                //   旧: 0.4 + 0.6*sin + 0.5*sT^0.7 (峰值 ~1.5,变化大)
-                //   修: 0.6 + 0.4*sin + 0.2*sT^0.7 (峰值 ~1.2,变化小,silk 真稳定)
-                float spindleShape = 0.6f + 0.4f * Mathf.Sin(sT * Mathf.PI) + 0.2f * Mathf.Pow(sT, 0.7f);
-                float noiseL = 0.92f + 0.16f * Mathf.Sin(sT * 7.3f + _seed);  // V5.23 0.85+0.30 → 0.92+0.16 减幅
-                float noiseR = 0.92f + 0.16f * Mathf.Sin(sT * 6.1f - _seed * 1.7f);
+                // V5.24 sub#1 final 修 silk 形态收束:
+                //   sub#1 V5.23 仍说"顶部发散底部消散无宽度收束"
+                //   修 spindleShape: silk 真物理:底窄(挂点) + 中段最宽(摆幅) + 顶尖收(漂出)
+                //   公式: 0.3 + 0.7 * sin(π*sT) — sT=0 0.3, sT=0.5 1.0, sT=1 0.3 — 真 spindle
+                float spindleShape = 0.3f + 0.7f * Mathf.Sin(sT * Mathf.PI);
+                float noiseL = 0.95f + 0.10f * Mathf.Sin(sT * 7.3f + _seed);  // V5.24 噪声更弱让 silk 主轴明显
+                float noiseR = 0.95f + 0.10f * Mathf.Sin(sT * 6.1f - _seed * 1.7f);
                 float wHaloL = _maxWidth * spindleShape * noiseL;
                 float wHaloR = _maxWidth * spindleShape * noiseR;
                 float wCoreL = wHaloL * 0.35f;
