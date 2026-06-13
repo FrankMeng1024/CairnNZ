@@ -105,9 +105,12 @@ namespace Cairn.AR.Editor
             // V5.20 sub#2 P0 修 (S11-N5): bloom 仍把 ribbon mid 段也合并白化
             //   intensity 0.30 → 0.15 (再减半 halo radius)
             //   threshold 1.10 → 1.6 只让 ribbon highlight band 进 bloom 保 silhouette
+            // V5.21 sub#2 第二次 stall (S12-N2): bloom intensity 0.15 实际 halo > 80px (非注释估算 30px)
+            //   仍让 6 ribbon 合并 3 光柱
+            //   修: intensity 0.05 + threshold 1.8 让 bloom 几乎不生效, ribbon silk silhouette 真出来
             var bloom = profile.Add<Bloom>(true);
-            bloom.intensity.Override(0.15f);
-            bloom.threshold.Override(1.6f);
+            bloom.intensity.Override(0.05f);
+            bloom.threshold.Override(1.8f);
             bloom.intensity.overrideState = true;
             bloom.threshold.overrideState = true;
             volume.sharedProfile = profile;
@@ -354,7 +357,7 @@ namespace Cairn.AR.Editor
             labelGo.transform.SetParent(root.transform, false);
             // V5.2: 用户 40/100 review "中间的图标太大了" → 高度 1.45 → 1.6,scale 0.7x0.21 → 0.5x0.15
             // 同时 PNG 改成 500x150 (旧 700x210),包含 type icon (cairn=3stones, danger=triangle, etc.)
-            labelGo.transform.localPosition = new Vector3(0f, 1.60f, 0f);
+            labelGo.transform.localPosition = new Vector3(0f, 2.50f, 0f);  // V5.21 sub#2 S12-N4 修 label 切画面: 1.60→2.50 让 label 在 ribbon 顶之上不切
             labelGo.transform.localScale = new Vector3(0.5f, 0.15f, 1f);
             // V4.7 v5 fix: Unity Quad 默认 mesh 法线朝 -Z(背对 +Z),相机在 -Z 方向
             // 所以 Quad 法线 -Z 与相机视线方向 +Z 同向 = 背对相机被 backface culling 剔除
@@ -431,8 +434,12 @@ namespace Cairn.AR.Editor
                 //   - cam 距离 3.5m 视野够大,ribbon 全程 0..3m 在画面内
                 //   - lookAt y=1.0m 让 ribbon 中段 (stage2 bottomY=0..1m) 在画面中部
                 //   - 圆环 y=0 在画面下 1/3,接近 ribbon stage1 起源,真"从阵法升起"
+                // V5.21 sub#2 S12-N1 BLOCKER 修屏幕投影脱节:
+                //   cam (0,1.6,-3.5) lookAt (0,1.0,0) 让 ring (y=0) 投影在画面下半,
+                //   ribbon 升 3m 投影在上半,中间 250px 空白
+                //   修: lookAt y 1.0→0.4 让 ring + ribbon 同框
                 cam.transform.position = clusterPos + new Vector3(0f, 1.6f, -3.5f);
-                cam.transform.LookAt(clusterPos + new Vector3(0f, 1.0f, 0f));
+                cam.transform.LookAt(clusterPos + new Vector3(0f, 0.4f, 0f));
 
                 // V2.2 P0a fix: 隐藏其他 cluster,避免相机视锥内出现穿帮(右下红色 danger 三角)
                 // 5 cluster 摆在 (-6/-3/0/3/6) X 轴,相机俯拍当前 cluster 时其他 cluster 仍在视场内
