@@ -145,6 +145,23 @@ namespace Cairn.AR
             transform.position = p;
         }
 
+        /// <summary>
+        /// Block A 三条件 allOk 算法(纯函数,无 Unity 上下文依赖)。
+        /// production code 调,test harness 也调 — 消除 BLOCKER 2 测试自欺。
+        /// </summary>
+        public static bool ComputeAllOk(
+            float dist, bool facingNow, bool planeReady, float rayHitMarkXZ,
+            float acquireEnter, float rayHitTriggerRad, float rayHitMaxDist, bool rayHitOn,
+            out bool nearByCamera, out bool nearByRayHit)
+        {
+            nearByCamera = dist <= acquireEnter;
+            nearByRayHit = rayHitOn
+                        && planeReady
+                        && rayHitMarkXZ <= rayHitTriggerRad
+                        && dist <= rayHitMaxDist;
+            return (nearByCamera || nearByRayHit) && facingNow && planeReady;
+        }
+
         Vector3 GetTargetWorldPos()
         {
             if (_permAnchor != null) return _permAnchor.transform.position;
@@ -289,12 +306,12 @@ namespace Cairn.AR
             float rayHitMaxDist     = Cfg("AcquireRayHitMaxDistance",     _rayHitMaxDistance);
             bool  rayHitOn          = CfgBool("AcquireRayHitTriggerEnabled", _rayHitTriggerEnabled);
 
-            bool nearByCamera = dist <= acquireEnter;
-            bool nearByRayHit = rayHitOn
-                             && planeReady
-                             && rayHitMarkXZ <= rayHitTriggerRad
-                             && dist <= rayHitMaxDist;
-            bool allOk = (nearByCamera || nearByRayHit) && facingNow && planeReady;
+            // BLOCKER 2 fix: 抽到 public static 方法,production + test 用同一份算法
+            bool nearByCamera, nearByRayHit;
+            bool allOk = ComputeAllOk(
+                dist, facingNow, planeReady, rayHitMarkXZ,
+                acquireEnter, rayHitTriggerRad, rayHitMaxDist, rayHitOn,
+                out nearByCamera, out nearByRayHit);
 
             float allHoldDur = Cfg("AcquireAllCondHoldDur", _allConditionsHoldDur);
             if (allOk)

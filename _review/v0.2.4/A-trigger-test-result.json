@@ -1,6 +1,6 @@
 {
   "test": "v0.2.4 Block A — ray-hit trigger channel",
-  "timestamp": "2026-06-13T08:21:28.8178969Z",
+  "timestamp": "2026-06-13T09:00:47.4505071Z",
   "cases": [
     {
       "name": "case1-15m-ray-hit",
@@ -34,7 +34,29 @@
       "rayHitMarkXZ": 0.00,
       "facingDot": 1.00,
       "verdict": "PASS"
+    },
+    {
+      "name": "case4-26m-beyond-max",
+      "expectTrigger": false,
+      "expectChannel": "(none)",
+      "actualTriggered": false,
+      "actualChannel": "(none)",
+      "dist": 26.04,
+      "rayHitMarkXZ": 0.14,
+      "facingDot": 1.00,
+      "verdict": "PASS"
+    },
+    {
+      "name": "case5-hit-too-far-from-mark",
+      "expectTrigger": false,
+      "expectChannel": "(none)",
+      "actualTriggered": false,
+      "actualChannel": "(none)",
+      "dist": 15.07,
+      "rayHitMarkXZ": 3.00,
+      "facingDot": 1.00,
+      "verdict": "PASS"
     }
   ],
-  "summary": "3/3 pass"
+  "summary": "5/5 pass"
 }

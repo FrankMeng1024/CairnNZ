@@ -73,6 +73,26 @@ namespace Cairn.AR.Editor
                     expectTrigger = true,
                     expectChannel = "byCamera",
                 },
+                // BLOCKER 2 fix: case 4 验证 rayHitOn 阈值边界 — 26m 超 _rayHitMaxDistance(25m)即使 ray 命中也不触发
+                new TestCase {
+                    name = "case4-26m-beyond-max",
+                    cameraPos    = new Vector3(0f, 1.5f, -26f),
+                    markGpsPos   = new Vector3(0f, 0f,    0f),
+                    cameraLookAt = new Vector3(0f, 0f,    0f),
+                    simHitPos    = new Vector3(0.1f, 0f,  0.1f),
+                    expectTrigger = false,
+                    expectChannel = "(none)",
+                },
+                // BLOCKER 2 fix: case 5 验证 hit-locality guard — 15m + ray 命中地面但离 mark 3m(超 1.5m) 不触发
+                new TestCase {
+                    name = "case5-hit-too-far-from-mark",
+                    cameraPos    = new Vector3(0f, 1.5f, -15f),
+                    markGpsPos   = new Vector3(0f, 0f,    0f),
+                    cameraLookAt = new Vector3(0f, 0f,    0f),
+                    simHitPos    = new Vector3(3f, 0f,    0f),  // hit 距 mark 3m,超 1.5m 阈值
+                    expectTrigger = false,
+                    expectChannel = "(none)",
+                },
             };
 
             var results = new System.Text.StringBuilder();
@@ -127,7 +147,8 @@ namespace Cairn.AR.Editor
             public float facingDot;
         }
 
-        // 直接复刻 Block A 算法逻辑(不启动 ARSession;手动喂入数值验证 allOk 取值)
+        // BLOCKER 2 fix: 调 production CairnAcquireController.ComputeAllOk(),
+        // 不再 reimplement 算法。如果 production 算法改了 test 立刻反映。
         static EvalResult EvaluateCase(TestCase c)
         {
             var r = new EvalResult();
@@ -145,19 +166,20 @@ namespace Cairn.AR.Editor
             Vector2 markXZ = new Vector2(c.markGpsPos.x, c.markGpsPos.z);
             r.rayHitMarkXZ = Vector2.Distance(hitXZ, markXZ);
 
-            // 4. 三条件 allOk(用 default 值)
-            float acquireEnter = 10f;
-            float facingEnter  = 0.70f;
-            float rayHitRad    = 1.5f;
-            float rayHitMaxD   = 25f;
-
+            // 4. 用 default OTA 阈值 + facing test
+            float facingEnter = 0.70f;
             bool facingNow    = r.facingDot > facingEnter;
-            bool planeReady   = true;  // 测试假设 plane 永远 ready(测的是 ray-hit 通道)
-            bool nearByCamera = r.dist <= acquireEnter;
-            bool nearByRayHit = planeReady
-                             && r.rayHitMarkXZ <= rayHitRad
-                             && r.dist <= rayHitMaxD;
-            bool allOk = (nearByCamera || nearByRayHit) && facingNow && planeReady;
+            bool planeReady   = true;  // 测试假设 plane ready,因为 ARFoundation Editor 无 trackable
+
+            // BLOCKER 2 fix: 调 production 真函数
+            bool nearByCamera, nearByRayHit;
+            bool allOk = Cairn.AR.CairnAcquireController.ComputeAllOk(
+                r.dist, facingNow, planeReady, r.rayHitMarkXZ,
+                /*acquireEnter*/    10f,
+                /*rayHitTriggerRad*/ 1.5f,
+                /*rayHitMaxDist*/   25f,
+                /*rayHitOn*/        true,
+                out nearByCamera, out nearByRayHit);
 
             r.triggered = allOk;
             if (!allOk) r.channel = "(none)";
