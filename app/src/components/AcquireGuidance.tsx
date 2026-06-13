@@ -49,15 +49,21 @@ export function AcquireGuidance({ acquiringMarkerId }: Props) {
   // BLOCKER 1 修复 — 用 globalThis.__cairnGuidance 替代不存在的
   // NativeEventEmitter('CairnBridge')。UnityAROverlay 的 case 'AcquireGuidance'
   // 路由 → globalThis.__cairnGuidance(payload) → 此 handler。
+  //
+  // deps=[] 仅 mount 一次,handler 内通过 closure 读 acquiringMarkerId(从 useRef
+  // 间接访问最新值,避免 marker 切换时反复 cleanup/restore handler)。
+  const acquiringRef = React.useRef(acquiringMarkerId);
+  React.useEffect(() => { acquiringRef.current = acquiringMarkerId; }, [acquiringMarkerId]);
   useEffect(() => {
     const prev = (globalThis as any).__cairnGuidance;
     (globalThis as any).__cairnGuidance = (data: { markerId: string; level: number; elapsed: number }) => {
-      if (acquiringMarkerId && data.markerId !== acquiringMarkerId) return;
+      const cur = acquiringRef.current;
+      if (cur && data.markerId !== cur) return;
       setActiveId(data.markerId);
       setLevel(data.level);
     };
     return () => { (globalThis as any).__cairnGuidance = prev; };
-  }, [acquiringMarkerId]);
+  }, []);
 
   // Hide when no active marker
   useEffect(() => {
