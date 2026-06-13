@@ -75,7 +75,7 @@ namespace Cairn.AR
             // For all devices: explicitly reject Table / Seat / Wall / Ceiling / Window / Door
             if ((plane.classifications & PlaneClassifications.Table) != 0
                 || (plane.classifications & PlaneClassifications.Seat) != 0
-                || (plane.classifications & PlaneClassifications.Wall) != 0
+                || (plane.classifications & PlaneClassifications.WallFace) != 0
                 || (plane.classifications & PlaneClassifications.Ceiling) != 0)
             {
                 result.rejectReason = "rejected_classification";
