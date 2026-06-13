@@ -342,9 +342,11 @@ namespace Cairn.AR
                 // V5.12e BLOCKER: stage1 ribbon (y<0.5m) alpha 太低被暖底色吞 → ribbon 视觉脱地
                 //   修: stage1 (lifeT<0.30) 时 heightAlpha 额外乘 1.8 (但 clamp 1.0) 让接地段更亮
                 //     stage2/3 维持原值
-                float heightAlphaBase = Mathf.Pow(Mathf.Max(0f, 1f - worldT), 0.6f) * globalFade;
-                float stage1Boost = lifeT < 0.30f ? 1.8f : 1.0f;
-                float heightAlpha = Mathf.Min(1.0f, heightAlphaBase * stage1Boost);
+                // V5.13 sub#1 S5-N1 BLOCKER 修: V5.12 stage1Boost 被 clamp(1.0) 截断, 净增益 1.05x 无效
+                //   也是 sub#2 S5-N3 CRITICAL: lifeT=0.299→0.301 hard cliff 引入 pop-in
+                //   弃 stage1Boost 路径, 真根因是 stage1 ribbon 被 cluster cairn stones 遮挡 + 太短
+                //   V5.13 直接弃 stage 分段不平衡 boost
+                float heightAlpha = Mathf.Pow(Mathf.Max(0f, 1f - worldT), 0.6f) * globalFade;
                 // V5.11 V2.3 rim 学 HTML baseline (sub#1+sub#2 共识 V5.10 midHighlight 反向):
                 //   V5.10 让 sT 0.2-0.85 全 alpha=1 → "白热钢管"不是绸缎
                 //   HTML baseline silk 物理: 底部暗 (anchor)、上半段亮 (光线穿透)、tip 渐入天空

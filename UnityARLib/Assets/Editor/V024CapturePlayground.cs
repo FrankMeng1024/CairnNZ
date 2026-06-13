@@ -188,10 +188,12 @@ namespace Cairn.AR.Editor
             // --- Tier-1 圆环 (主环 + 内环,1:1 移植 Three.js demo line 142-166) ---
             // V5.12 sub#2 数学反推 (S2-N2 CRITICAL): V5.11 RING_RADIUS=0.50 + 16 ribbon
             //   → 邻接间距 周长/16 = π*0.5/8 = 0.196m,小于 maxWidth 0.16-0.21m → 几何重叠
-            // V5.12b 修法平衡: RING_RADIUS 0.65 + maxWidth 0.13 (从 0.16-0.21 缩到 0.10-0.13)
-            //   间距 π*0.65/8 = 0.255m, maxWidth 0.13 留 50% 间隙不重叠
-            //   且 ringRadius 0.65 不至于太分散让 ribbon 远到 cam 看不全
-            float RING_RADIUS = 0.65f;
+            // V5.13 sub#1 第五轮几何反推 (S5-N2 BLOCKER): ringRadius 0.65 + cam 3.5m
+            //   → 16 ribbon 屏幕宽度仅 160px, bloom halo 30px → 几何必然 3 群糊
+            //   修法: 16→8 ribbon + ringRadius 1.0
+            //     间距 π*1.0/8 = 0.39m, 屏幕宽 ~250px, 8 根每根 31px > bloom 30px 不糊
+            //     8 根也匹配 HTML baseline 5-7 根的风格
+            float RING_RADIUS = 1.0f;
             Color darkAmber = LerpToDarkAmber(t.color);
 
             var ringShader = Shader.Find("Cairn/RingFlat");
@@ -244,7 +246,7 @@ namespace Cairn.AR.Editor
             //     4-5 根在 stage2 中段、4-5 根在 stage3 高段 → 任意 capture 时刻都看到
             //     "升起 + 中段 + 飘空" 三阶段共存,真"错落生命感"
             //   maxWidth widthBase 0.18 → 0.16 微缩 (16 根更宽要避免互相挡光)
-            int RIBBON_COUNT = 16;
+            int RIBBON_COUNT = 8;
             for (int i = 0; i < RIBBON_COUNT; i++)
             {
                 float angle = (i / (float)RIBBON_COUNT) * Mathf.PI * 2f;
@@ -264,8 +266,8 @@ namespace Cairn.AR.Editor
                 //   → stage1 (0..0.30) 有 5 根升起、stage2 (0.30..0.65) 有 6 根中段、stage3 (0.65..1) 有 5 根高空
                 //   → 任意 frame 都看到 5 根接地、6 根升空、5 根飘空,真"从阵法升起"
                 float phaseOffset = (float)i / RIBBON_COUNT;
-                float widthBase = 0.10f;
-                float widthVar  = 0.03f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
+                float widthBase = 0.14f;
+                float widthVar  = 0.04f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
                 float maxWidth  = widthBase + Mathf.Abs(widthVar);
                 rib.Configure(RING_RADIUS, angle, phaseOffset, t.color, new Color(0.95f, 0.97f, 1.0f, 1f), maxWidth);
             }
