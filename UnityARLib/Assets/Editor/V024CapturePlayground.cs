@@ -24,11 +24,16 @@ namespace Cairn.AR.Editor
         struct TypeDef { public string id; public Color color; public string title; public string note; public string author; public string daysAgo; }
         static readonly TypeDef[] TYPES = new[]
         {
-            new TypeDef { id = "cairn",    color = new Color(0.91f, 0.78f, 0.59f, 1f), title = "CAIRN",    note = "路过留念。视野很好。",   author = "Henare",   daysAgo = "5D"  },
+            new TypeDef { id = "cairn",    color = new Color(0.92f, 0.85f, 0.70f, 1f), title = "CAIRN",    note = "路过留念。视野很好。",   author = "Henare",   daysAgo = "5D"  },
             new TypeDef { id = "danger",   color = new Color(1.00f, 0.16f, 0.10f, 1f), title = "DANGER",   note = "湿滑。小心。",            author = "Sarah",    daysAgo = "12D" },
             new TypeDef { id = "water",    color = new Color(0.35f, 0.90f, 1.00f, 1f), title = "WATER",    note = "清澈溪水。可饮。",        author = "Te Aroha", daysAgo = "3D"  },
-            new TypeDef { id = "junction", color = new Color(0.77f, 0.91f, 0.28f, 1f), title = "JUNCTION", note = "分叉路。北 → 山顶。",     author = "Manaia",   daysAgo = "7D"  },
-            new TypeDef { id = "hut",      color = new Color(0.83f, 0.63f, 0.42f, 1f), title = "HUT",      note = "紧急避难所 200m 西北。",   author = "DOC",      daysAgo = "18D" },
+            new TypeDef { id = "junction", color = new Color(0.40f, 0.85f, 0.55f, 1f), title = "JUNCTION", note = "分叉路。北 → 山顶。",     author = "Manaia",   daysAgo = "7D"  },
+            new TypeDef { id = "hut",      color = new Color(0.95f, 0.55f, 0.30f, 1f), title = "HUT",      note = "紧急避难所 200m 西北。",   author = "DOC",      daysAgo = "18D" },
+            // V5.18 sub#2 F2 BLOCKER 撞色修:
+            //   旧 cairn (0.91,0.78,0.59) 暖金 vs hut (0.83,0.63,0.42) 暖棕橙撞色
+            //   修: cairn → (0.92, 0.85, 0.70) 偏白米色 (中性象征),hut → (0.95, 0.55, 0.30) 暖橙 (真"避难所暖光")
+            //   junction → (0.40, 0.85, 0.55) 翠绿 (真"分叉路自然") 不再黄绿撞 cairn
+            //   水蓝/危险红保持. 5 hue 在色相轮 ≥ 60° 分开
         };
 
         const string OUT_DIR = "Logs/v024-capture";
@@ -282,7 +287,11 @@ namespace Cairn.AR.Editor
             int RIBBON_COUNT = 12;
             for (int i = 0; i < RIBBON_COUNT; i++)
             {
-                float angle = (i / (float)RIBBON_COUNT) * Mathf.PI * 2f;
+                // V5.18 sub#2 F1 BLOCKER 修: angle noise-driven 不再均匀
+                //   均匀 i/N angle 让 viewing projection 对称 → 必合并成 3 光柱
+                //   noise: angle = i/N + sin(i*1.3)*0.08 让 ribbon 角度不对称,屏幕投影 distinct
+                float angleNoise = Mathf.Sin(i * 1.3f) * 0.08f;
+                float angle = ((i / (float)RIBBON_COUNT) + angleNoise) * Mathf.PI * 2f;
                 var rgo = new GameObject($"Ribbon_{i}");
                 rgo.transform.SetParent(root.transform, false);
                 // V5.15 ROLLBACK ribbon transform.y 0.35→0 (sub#2 S6-N5 BLOCKER):
