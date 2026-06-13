@@ -126,13 +126,22 @@ namespace Cairn.AR.Editor
             // --- Materials (saved as instances per-cluster, persistent in scene) ---
             var ribMat = new Material(ribbonShader) { name = "RibbonV2_" + t.id };
             ribMat.SetTexture("_FlowTex",     flowTex);
-            ribMat.SetColor("_BaseTint",      t.color);
-            ribMat.SetColor("_TipTint",       new Color(0.95f, 0.97f, 1.0f, 1f));
-            ribMat.SetFloat("_NightMul",      1.6f);
-            ribMat.SetFloat("_DayMul",        0.55f);
-            ribMat.SetFloat("_FlowStrength",  0.55f);
+            // V4.3 fix: BaseTint 用提亮版本 (1.0, 0.92, 0.75) 不再用饱和 t.color
+            // 原代码用 t.color 让 cairn=(0.91,0.78,0.59) 在白底上不够亮,V4.2 shader 改 default 1.0/0.92/0.75 但 SetColor 覆盖了
+            // 现在主动 lerp t.color 与白光 (1.0,1.0,0.95) 0.4 比例,得到亮版 type color
+            Color brightTint = Color.Lerp(t.color, new Color(1.0f, 1.0f, 0.95f, 1f), 0.4f);
+            ribMat.SetColor("_BaseTint",      brightTint);
+            ribMat.SetColor("_TipTint",       new Color(1.0f, 1.0f, 0.95f, 1f));
+            // V4.3 fix: _NightMul/_DayMul 同步 V4.2 shader default,不再用旧 1.6/0.55(2.9 倍切换)
+            // V4.5 fix: _DayMul 1.5 → 2.5 让丝带白底下足够亮(_MaxLuma=1.6 clamp 后仍保白金高光)
+            ribMat.SetFloat("_NightMul",      1.10f);
+            ribMat.SetFloat("_DayMul",        2.50f);
+            // V4.3 fix: _FlowStrength 同步 V2.3 default 0.30(原 0.55 让 white texture 变 1.47 增亮)
+            ribMat.SetFloat("_FlowStrength",  0.30f);
             ribMat.SetFloat("_BandFreq",      4.0f);
-            ribMat.SetFloat("_BandIntensity", 0.4f);
+            // V4.3 fix: _BandIntensity 同步 V2.3 关闭 step bands(用户要柔和,Pokemon GO raid 横条不柔)
+            // V4.5 fix: 0 → 0.10 弱化保留(关全没让丝带整体亮度降低,在白底下不可见)
+            ribMat.SetFloat("_BandIntensity", 0.10f);
 
             int typeId = TypeIdToInt(t.id);
             var runeMat = new Material(runeShader) { name = "RuneSDF_" + t.id };

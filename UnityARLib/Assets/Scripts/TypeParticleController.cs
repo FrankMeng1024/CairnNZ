@@ -330,9 +330,14 @@ namespace Cairn.AR
             mr.receiveShadows = false;
             // Use Standard URP Lit (or fall back to Unlit) — stone should respond to light
             var mat = MakeMat("Universal Render Pipeline/Lit", "Universal Render Pipeline/Unlit");
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(0.43f, 0.35f, 0.23f, 1f));
-            if (mat.HasProperty("_Color")) mat.SetColor("_Color", new Color(0.43f, 0.35f, 0.23f, 1f));
-            if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", new Color(0.10f, 0.07f, 0.03f, 1f));
+            // V4.4 fix: SpawnStone 颜色改暖金接近 type color,不再硬编码深棕 (0.43,0.35,0.23)
+            // 旧色 (0.43,0.35,0.23) 在 NZ 暖白底色 #E8DCC4 上视觉极突兀(高对比黑点)
+            // HTML demo 颗粒接近 ground 暖金 (0.78,0.67,0.46),低对比融入场景
+            // 用 type color (cairn=0.91,0.78,0.59 暖金) 与 ground 色 lerp 0.6,得到融入感
+            Color stoneCol = Color.Lerp(_typeColor, new Color(0.78f, 0.67f, 0.46f, 1f), 0.6f);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", stoneCol);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", stoneCol);
+            if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", new Color(_typeColor.r * 0.15f, _typeColor.g * 0.12f, _typeColor.b * 0.08f, 1f));
             if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
             if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.1f);
             mr.sharedMaterial = mat;

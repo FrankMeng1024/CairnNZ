@@ -164,13 +164,19 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
   - PROOF:Unity batch frame 0/15/30 截图 + HTML 同时刻对比
   - 双 subagent 验
 
-- [ ] **V2.3** 丝带"自己的长度"+柔和电影级形态
-  - 每根丝带 = 有限长(0.4-0.6m?)的 mesh ribbon,不是无限线
-  - 5 顶点宽度 spindle(已有,加强:base 厚 / mid 厚 / tip 渐尖)
-  - shader 加 fresnel rim + soft particle depth fade(柔)
-  - flow noise 2 层(电影感流动)
-  - PROOF:同视角 Unity vs HTML side-by-side 截图,人眼对比"有没有更柔更美"
-  - 双 subagent 验
+- [x] **V2.2** 起源位置改正 + 错峰确定性 + 视觉结构层修复 ✅ 2026-06-13
+  - 11 commit: G11/G12/G13/G4+G6/G15/G19/G16/P1 + sub#2 P0a/P0b/P1c
+  - 4 眼 review (sub#1+sub#2 独立) 抓 5 个新问题全修
+  - 视觉结构层 ✅: 5 根错峰 / 紧凑 / 修穿帮 / 相机距离 / 宽度随机
+  - 视觉质感层 ❌(留 V2.3): 还是细线非绸缎,缺 fresnel/soft particle/ 底色
+
+- [ ] **V2.3** 丝带"电影丝绸感"+ 柔和电影级形态(质感层)
+  - shader 加 fresnel rim sharpness 4 → 2(让边缘渐淡更柔)
+  - shader 加 soft particle depth fade(防与背景硬切割)
+  - _maxWidth base 0.10 → 0.13(整体加宽,更厚重)
+  - shader 改 Blend One One → One OneMinusSrcAlpha(premultiplied,白底不被吞)
+  - PROOF:Unity vs HTML side-by-side 截图,人眼对比"有没有更柔更厚重"
+  - 双 subagent 4 眼 review
 
 - [ ] **V2.4** "脱离 + 渐入浅色 + 淡出" 三段生命周期
   - 实现:T0 = 出生在地面(底色饱和)/ T0.4 = 升至中段(色变浅)/ T0.7 = 脱离阵法(继续上升)/ T1.0 = 完全淡出
@@ -204,11 +210,17 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
 
 ### Phase V4 — 整体 capture + 用户审
 
-- [ ] **V4.1** 改 V024CapturePlayground 用 NZ 暖白 #E8DCC4 底 + ACES tonemapping + 暖金地面 + 同色 fog
-- [ ] **V4.2** 修右下穿帮红色三角(诊断根因)
-- [ ] **V4.3** 跑完整 capture(5 type + ceremony + 远近视角)
-- [ ] **V4.4** 拼 side-by-side GIF(HTML vs Unity 5 type × 多视角)
-- [ ] **V4.5** 用户审 — 不通过回 Phase V2/V3
+- [x] **V4.1** NZ 暖白底 + 暖金地面 + 同色 fog ✅ 2026-06-13
+  - V024CapturePlayground bg #050519→(0.91,0.86,0.77) + 200x200m ground plane 暖金 + RenderSettings.fog 同色 density=0.012
+  - 视觉对照 HTML demo line 89-91 完全对齐
+- [x] **V4.2** 白底丝带可见(铁律:任何光线肉眼可见)✅ 2026-06-13
+  - shader Additive + 提亮 _BaseTint + _TipTint 偏白 + _CoreToTipMixStart 0.40→0.20
+  - 之前尝试 Premultiplied/SrcAlpha 都失败,Additive + 亮色 baseTint 是最匹配 HTML 的方案
+- [ ] **V4.3** 修右下穿帮红色三角 (✅ 已在 V2.2-P0a 修)
+- [ ] **V4.4** 跑完整 capture(5 type + ceremony + 远近视角)
+- [ ] **V4.5** 拼 side-by-side GIF(HTML vs Unity 5 type × 多视角)
+- [ ] **V4.6** Label 卡片 "CAIRN / 路过留念。/ Henare, 5 days ago"(world-space TextMeshPro)
+- [ ] **V4.7** 用户审 — 不通过回 Phase V2/V3
 
 ---
 
