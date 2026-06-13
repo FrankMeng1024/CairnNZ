@@ -38,6 +38,11 @@ namespace Cairn.AR
         public void Init(string markerId, Vector3 intendedXZ, float intendedY, float deadlineSec,
                          ARRaycastManager raycast, ARAnchorManager anchorMgr, ARPlaneManager planeMgr, Camera cam)
         {
+            // V4.13 sub#2 N4 fix: Init 二次调用守护
+            // 旧实现:_started 防协程重启,但其他字段无条件覆盖 → 旧协程用新坐标继续跑,
+            // _hiddenRenderers 状态不一致。早 return 让二次 Init 成 no-op。
+            if (_started) return;
+
             _markerId = markerId;
             _intendedXZ = intendedXZ;
             _intendedY = intendedY;
@@ -52,11 +57,8 @@ namespace Cairn.AR
             foreach (var r in _hiddenRenderers)
                 r.enabled = false;
 
-            if (!_started)
-            {
-                _started = true;
-                StartCoroutine(RetryCoroutine());
-            }
+            _started = true;
+            StartCoroutine(RetryCoroutine());
         }
 
         IEnumerator RetryCoroutine()
@@ -126,7 +128,8 @@ namespace Cairn.AR
             //   SetParent worldPositionStays:false → ARKit world frame 锁定 cairn
             // 即使没 plane 命中,ARKit 也会 pin 住 anchor 不让 cairn 飘
             Vector3 estimatedPose = new Vector3(_intendedXZ.x, _intendedY, _intendedXZ.z);
-            var anchorGo = new GameObject($"DegradedAnchor_{_markerId}");
+            // V4.13 sub#2 N3 fix: name 加 frameCount 后缀避免重名 markerId 二次失败时 Find 拿错
+            var anchorGo = new GameObject($"DegradedAnchor_{_markerId}_{Time.frameCount}");
             anchorGo.transform.position = estimatedPose;
             anchorGo.transform.rotation = Quaternion.identity;
             var degradedAnchor = anchorGo.AddComponent<ARAnchor>();
@@ -134,6 +137,11 @@ namespace Cairn.AR
             {
                 transform.SetParent(anchorGo.transform, worldPositionStays: false);
                 transform.localPosition = Vector3.zero;
+                // V4.13 sub#2 N1 fix: 注册到 PortalSpawner._spawned,ClearAll 时一起 Destroy
+                // 否则 free-floating ARAnchor 残留在 scene root → ARKit tracking budget 累积泄漏
+                // (镜像 PortalSpawner.cs:598 R2 fix DepthAnchor 路径同种 pattern)
+                var spawner = Object.FindFirstObjectByType<PortalSpawner>();
+                if (spawner != null) spawner.RegisterAuxiliaryAnchor(anchorGo);
                 Debug.LogWarning($"[v22-RETRY-DEADLINE-ANCHORED] id={_markerId} estimated_ground y={_intendedY:F2} pinned to free-floating ARAnchor");
             }
             else

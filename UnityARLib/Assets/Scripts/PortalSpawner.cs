@@ -1130,6 +1130,17 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         HasSpawned = false;
     }
 
+    /// <summary>
+    /// V4.13 sub#2 N1 fix: 让 PendingAnchorRetry 把 DegradedAnchor GameObject 注册进 _spawned
+    /// 否则 ClearAll 时 free-floating ARAnchor 残留 → ARKit tracking budget 累积泄漏
+    /// 镜像 line 598 R2 fix 同种 pattern。
+    /// </summary>
+    public void RegisterAuxiliaryAnchor(GameObject anchorGo)
+    {
+        if (anchorGo != null && !_spawned.Contains(anchorGo))
+            _spawned.Add(anchorGo);
+    }
+
     /// <summary>Alias for older callers. Prefer ClearAll().</summary>
     public void Clear() => ClearAll();
 }
