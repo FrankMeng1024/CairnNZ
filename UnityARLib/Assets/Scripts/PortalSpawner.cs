@@ -623,7 +623,33 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             // anchor in V199). Cairn has ~1s un-anchored window in this
             // case but it is rare and self-corrects. Telemetry already
             // emitted above.
+            //
+            // Part 2 A2.1 fix(基于 A1.1 调研 + A1.2 业界共识):
+            // 用户最核心 bug:"AR plant 没用 arkit 世界坐标 用的是 GPS 飘逸 飞天"
+            // 根因:这里 transform.position = 裸坐标(无 ARAnchor parent)
+            // → ARKit world frame drift / re-localization 时 cairn 跟着飘
+            // 修复:容器进入"PendingAnchor"状态,Update() 持续 raycast 找 plane
+            //       一旦 plane 出现就 AttachAnchor 并 SetParent
+            //       同时 emit v22-PLANT-PENDING-ANCHOR 埋点真机对账
             container.transform.position = new Vector3(spawnX, groundY, spawnZ);
+            // PendingAnchorRetry 是 v0.2.4 已有组件,Init() 后才会启动 0.1s retry coroutine
+            // (无 Init 调用 = _started=false = 死组件,4-eye sub#1 catch)
+            var pendingRetry = container.GetComponent<Cairn.AR.PendingAnchorRetry>();
+            if (pendingRetry == null) pendingRetry = container.AddComponent<Cairn.AR.PendingAnchorRetry>();
+            if (arRaycast != null && arAnchors != null && arPlanes != null && spawnCam != null)
+            {
+                pendingRetry.Init(
+                    markerId: data.id ?? "unknown",
+                    intendedXZ: new Vector3(spawnX, 0f, spawnZ),
+                    intendedY: groundY,
+                    deadlineSec: 1.0f,
+                    raycast: arRaycast,
+                    anchorMgr: arAnchors,
+                    planeMgr: arPlanes,
+                    cam: spawnCam);
+            }
+            UnityLogger.IForward("v22-PLANT-PENDING-ANCHOR",
+                $"id={data.id} pos=({spawnX:F2},{groundY:F2},{spawnZ:F2}) reason=no-pre-spawn-anchor");
         }
         HasSpawned = true;
 
