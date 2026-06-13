@@ -17,6 +17,13 @@
 //   * 兜底 spawn 后 30s 监听窗口,cairn 不在视野时 snap(R-A5)
 //   * 进入条件:dot(camFwd, -worldUp) > 0.7 持续 0.4s(注:cos(0.7)=45° 俯角,clear)
 //
+// v0.2.4 Block A 新约束(用户原话):
+//   * "用户站在 mark 10m 开外,但是手机的角度射线朝向 mark 所在地面 → 应该展示 mark"
+//   * 旧逻辑:dist(camera, mark.GPS) <= 10m 才触发,不满足该需求
+//   * 新逻辑:三条件 allOk = (nearByCamera || nearByRayHit) && facingNow && planeReady
+//     - nearByRayHit = (rayHitToMarkXZ <= 1.5m) && (dist <= 25m)  // 水平距离防退化
+//     - 状态机 entry/exit 也加 ray-hit 通道,否则永远进不到 ACQUIRE
+//
 // 本类挂在每个 cairn 的 root 上(per-cairn instance)。
 // 数据来源:
 //   - ARFoundation 的 ARRaycastManager / ARPlaneManager / ARAnchorManager
@@ -46,6 +53,11 @@ namespace Cairn.AR
         [SerializeField] float _acquireEnter  = 10f;  // APPROACH → ACQUIRE
         [SerializeField] float _acquireExit   = 12f;  // ACQUIRE → APPROACH
 
+        [Header("Block A: ray-hit trigger channel (用户 10m 外但 ray 朝下命中地面)")]
+        [SerializeField] bool  _rayHitTriggerEnabled = true;
+        [SerializeField] float _rayHitTriggerRadius  = 1.5f;   // hit→mark XZ tolerance (m)
+        [SerializeField] float _rayHitMaxDistance    = 25f;    // safety: 防 50m 外指自己脚下也触发
+
         [Header("Facing hysteresis (R-B3)")]
         [SerializeField] float _facingEnterCos = 0.70f;  // dot(camFwd, dirToMark) >= 0.70
         [SerializeField] float _facingExitCos  = 0.30f;
@@ -66,6 +78,9 @@ namespace Cairn.AR
         [SerializeField] float _guideT2 = 5f;
         [SerializeField] float _guideT3 = 10f;
         [SerializeField] float _guideT4 = 15f;
+        // A6 顺手:L3 提示提前 — ≤3m 停留 3s 触发"扫描周围地面"提示
+        [SerializeField] float _guideLingerDist = 3f;
+        [SerializeField] float _guideLingerSec  = 3f;
 
         [Header("Wired refs")]
         [SerializeField] ARRaycastManager _raycastMgr;
@@ -93,6 +108,12 @@ namespace Cairn.AR
         float _fallbackTriggerTime = -1f;     // when force fallback ran
         Vector3 _fallbackTargetPos;
 
+        // A6: linger 提示 emit 一次 per ACQUIRE entry
+        bool _lingerEmitted = false;
+
+        // A8: pitch fallback for IsUserActivelyScanning(陀螺仪不可用时)
+        float _lastCamEulerX = float.NaN;
+
         // Guidance event(observers, e.g. RN bridge)
         public delegate void GuidanceEventHandler(string markerId, int level, float elapsedSec);
         public static event GuidanceEventHandler OnGuidance;
@@ -116,6 +137,14 @@ namespace Cairn.AR
             _state = State.FAR;
         }
 
+        // Block F: 跨 session re-snap 公开接口 — CrossSessionGroundSnap 调用
+        public void SnapToFloorY(float newY)
+        {
+            Vector3 p = transform.position;
+            p.y = newY;
+            transform.position = p;
+        }
+
         Vector3 GetTargetWorldPos()
         {
             if (_permAnchor != null) return _permAnchor.transform.position;
@@ -123,12 +152,24 @@ namespace Cairn.AR
             return transform.position;
         }
 
+        // Block B: OTA 助手 — 运行时读 CairnGlobals,fallback 到 SerializeField 默认
+        float Cfg(string name, float fallback)
+        {
+            var g = CairnGlobals.Instance;
+            return g != null ? g.GetForType(null, name, fallback) : fallback;
+        }
+        bool CfgBool(string name, bool fallback)
+        {
+            var g = CairnGlobals.Instance;
+            return g != null ? g.GetBool(name, fallback) : fallback;
+        }
+
         void Update()
         {
             if (_state == State.IMMORTAL)
             {
                 // Post-IMMORTAL: monitor fallback snap window if applicable.
-                if (_fallbackTriggerTime > 0f && Time.time - _fallbackTriggerTime < _fallbackPostSnapWindowSec)
+                if (_fallbackTriggerTime > 0f && Time.time - _fallbackTriggerTime < Cfg("AcquireFallbackPostSnapWindowSec", _fallbackPostSnapWindowSec))
                 {
                     TryPostFallbackSnap();
                 }
@@ -140,18 +181,39 @@ namespace Cairn.AR
             Vector3 targetPos = GetTargetWorldPos();
             float dist = Vector3.Distance(_cam.transform.position, targetPos);
 
+            float approachEnter = Cfg("AcquireApproachEnter", _approachEnter);
+            float approachExit  = Cfg("AcquireApproachExit",  _approachExit);
+            float acquireEnter  = Cfg("AcquireEnter",         _acquireEnter);
+            float acquireExit   = Cfg("AcquireExit",          _acquireExit);
+            float rayHitMaxDist = Cfg("AcquireRayHitMaxDistance", _rayHitMaxDistance);
+            bool  rayHitOn      = CfgBool("AcquireRayHitTriggerEnabled", _rayHitTriggerEnabled);
+
             // ---- State transitions with hysteresis ----
             switch (_state)
             {
                 case State.FAR:
-                    if (dist <= _approachEnter) TransitionTo(State.APPROACH);
+                    if (dist <= approachEnter) TransitionTo(State.APPROACH);
                     break;
                 case State.APPROACH:
-                    if (dist > _approachExit) TransitionTo(State.FAR);
-                    else if (dist <= _acquireEnter) TransitionTo(State.ACQUIRE);
+                    if (dist > approachExit) TransitionTo(State.FAR);
+                    else if (dist <= acquireEnter) TransitionTo(State.ACQUIRE);
+                    else if (rayHitOn && dist <= rayHitMaxDist)
+                    {
+                        // Block A: 用户 10-25m 时若已经朝向 mark,让 ACQUIRE 接管
+                        // 重的 plane raycast 在 ACQUIRE 内做(每帧),这里只用 dot 做轻量预检
+                        Vector3 dir = (targetPos - _cam.transform.position).normalized;
+                        float facingEnterCos = Cfg("AcquireFacingEnterCos", _facingEnterCos);
+                        if (Vector3.Dot(_cam.transform.forward, dir) > facingEnterCos)
+                            TransitionTo(State.ACQUIRE);
+                    }
                     break;
                 case State.ACQUIRE:
-                    if (dist > _acquireExit) { TransitionTo(State.APPROACH); break; }
+                    // ray-hit 通道开启时,放宽退出条件(不能因为 dist > 12m 就立刻退出,否则永远触发不了)
+                    if (dist > acquireExit && (!rayHitOn || dist > rayHitMaxDist))
+                    {
+                        TransitionTo(State.APPROACH);
+                        break;
+                    }
                     UpdateAcquireLogic(dist);
                     break;
             }
@@ -160,6 +222,7 @@ namespace Cairn.AR
         void TransitionTo(State next)
         {
             if (next == _state) return;
+            State prev = _state;
             _state = next;
             if (next == State.ACQUIRE)
             {
@@ -168,6 +231,21 @@ namespace Cairn.AR
                 _allCondHoldStart = -1f;
                 _facingHoldEnter = 0f;
                 _facingHoldExit = 0f;
+                _lingerEmitted = false;
+                if (_cam != null) _lastCamEulerX = _cam.transform.eulerAngles.x;
+            }
+
+            // Block C: emit v22-ACQUIRE-STATE
+            if (CfgBool("AcquireTelemetryEnabled", true))
+            {
+                float dist = (_cam != null) ? Vector3.Distance(_cam.transform.position, GetTargetWorldPos()) : -1f;
+                Debug.Log($"[v22-ACQUIRE-STATE] id={_markerId} from={prev} to={next} dist={dist:F2}");
+                var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                if (bridge != null)
+                {
+                    string json = $"{{\"markerId\":\"{_markerId}\",\"from\":\"{prev}\",\"to\":\"{next}\",\"dist\":{dist:F2},\"tInAcquire\":{_timeInAcquire:F2}}}";
+                    bridge.SendToRN("v22-ACQUIRE-STATE", json);
+                }
             }
         }
 
@@ -181,32 +259,75 @@ namespace Cairn.AR
             Vector3 camFwd = _cam.transform.forward;
             float facingDot = Vector3.Dot(camFwd, dirToMark);
 
+            float facingEnterCos = Cfg("AcquireFacingEnterCos", _facingEnterCos);
+            float facingExitCos  = Cfg("AcquireFacingExitCos",  _facingExitCos);
+            float facingEnterDur = Cfg("AcquireFacingEnterDur", _facingEnterDur);
+            float facingExitDur  = Cfg("AcquireFacingExitDur",  _facingExitDur);
+
             // Facing hysteresis
             bool facingNow;
             if (_facingHoldEnter > 0f)
             {
-                if (facingDot < _facingExitCos) _facingHoldExit += dt;
+                if (facingDot < facingExitCos) _facingHoldExit += dt;
                 else _facingHoldExit = 0f;
-                facingNow = _facingHoldExit < _facingExitDur;
+                facingNow = _facingHoldExit < facingExitDur;
                 if (!facingNow) _facingHoldEnter = 0f;
             }
             else
             {
-                if (facingDot > _facingEnterCos) _facingHoldEnter += dt;
+                if (facingDot > facingEnterCos) _facingHoldEnter += dt;
                 else _facingHoldEnter = 0f;
-                facingNow = _facingHoldEnter >= _facingEnterDur;
+                facingNow = _facingHoldEnter >= facingEnterDur;
             }
 
             // Floor plane near target
-            bool planeReady = TryFindFloorPlaneAt(targetPos, out var bestHit, out var bestPlane);
+            bool planeReady = TryFindFloorPlaneAt(targetPos, out var bestHit, out var bestPlane, out float rayHitMarkXZ, out float bestPlaneArea);
 
-            // All three conditions
-            bool allOk = (dist <= _acquireEnter) && facingNow && planeReady;
+            // Block A: 三条件 — nearByCamera || nearByRayHit
+            float acquireEnter      = Cfg("AcquireEnter",                 _acquireEnter);
+            float rayHitTriggerRad  = Cfg("AcquireRayHitTriggerRadius",   _rayHitTriggerRadius);
+            float rayHitMaxDist     = Cfg("AcquireRayHitMaxDistance",     _rayHitMaxDistance);
+            bool  rayHitOn          = CfgBool("AcquireRayHitTriggerEnabled", _rayHitTriggerEnabled);
+
+            bool nearByCamera = dist <= acquireEnter;
+            bool nearByRayHit = rayHitOn
+                             && planeReady
+                             && rayHitMarkXZ <= rayHitTriggerRad
+                             && dist <= rayHitMaxDist;
+            bool allOk = (nearByCamera || nearByRayHit) && facingNow && planeReady;
+
+            float allHoldDur = Cfg("AcquireAllCondHoldDur", _allConditionsHoldDur);
             if (allOk)
             {
-                if (_allCondHoldStart < 0f) _allCondHoldStart = Time.time;
-                if (Time.time - _allCondHoldStart >= _allConditionsHoldDur)
+                if (_allCondHoldStart < 0f)
                 {
+                    _allCondHoldStart = Time.time;
+                    // Block C: emit v22-ACQUIRE-LATCH-PROGRESS(三条件齐时刻)
+                    if (CfgBool("AcquireTelemetryEnabled", true))
+                    {
+                        Debug.Log($"[v22-ACQUIRE-LATCH-PROGRESS] id={_markerId} rayHitMarkXZ={rayHitMarkXZ:F2} facingDot={facingDot:F2} planeArea={bestPlaneArea:F2} dist={dist:F2}");
+                        var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                        if (bridge != null)
+                        {
+                            string j = $"{{\"markerId\":\"{_markerId}\",\"rayHitMarkXZ\":{rayHitMarkXZ:F2},\"facingDot\":{facingDot:F2},\"planeArea\":{bestPlaneArea:F2},\"dist\":{dist:F2}}}";
+                            bridge.SendToRN("v22-ACQUIRE-LATCH-PROGRESS", j);
+                        }
+                    }
+                }
+                if (Time.time - _allCondHoldStart >= allHoldDur)
+                {
+                    // Block C: emit v22-ACQUIRE-TRIGGER 在 AnchorAndCeremony 之前
+                    string channel = nearByCamera ? "byCamera" : "byRayHit";
+                    if (CfgBool("AcquireTelemetryEnabled", true))
+                    {
+                        Debug.Log($"[v22-ACQUIRE-TRIGGER] id={_markerId} channel={channel} rayHitMarkXZ={rayHitMarkXZ:F2} planeArea={bestPlaneArea:F2} facingDot={facingDot:F2} dist={dist:F2} t={_timeInAcquire:F2}");
+                        var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                        if (bridge != null)
+                        {
+                            string j = $"{{\"markerId\":\"{_markerId}\",\"channel\":\"{channel}\",\"rayHitMarkXZ\":{rayHitMarkXZ:F2},\"planeArea\":{bestPlaneArea:F2},\"facingDot\":{facingDot:F2},\"dist\":{dist:F2},\"tFromAcquireEntry\":{_timeInAcquire:F2}}}";
+                            bridge.SendToRN("v22-ACQUIRE-TRIGGER", j);
+                        }
+                    }
                     AnchorAndCeremony(bestHit, bestPlane, fromFallback: false);
                     return;
                 }
@@ -219,38 +340,73 @@ namespace Cairn.AR
             // Guidance updates
             UpdateGuidance(_timeInAcquire);
 
+            // A6: linger 提示 — ≤3m 停留 3s emit 一次
+            float lingerDist = Cfg("AcquireGuideLingerDist", _guideLingerDist);
+            float lingerSec  = Cfg("AcquireGuideLingerSec",  _guideLingerSec);
+            if (!_lingerEmitted && dist <= lingerDist && _timeInAcquire >= lingerSec)
+            {
+                _lingerEmitted = true;
+                if (CfgBool("AcquireTelemetryEnabled", true))
+                {
+                    Debug.Log($"[v22-ACQUIRE-LINGER] id={_markerId} dist={dist:F2} elapsed={_timeInAcquire:F2}");
+                    var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                    if (bridge != null)
+                    {
+                        string j = $"{{\"markerId\":\"{_markerId}\",\"dist\":{dist:F2},\"elapsed\":{_timeInAcquire:F2}}}";
+                        bridge.SendToRN("v22-ACQUIRE-LINGER", j);
+                    }
+                }
+            }
+
             // Force fallback (R-A4: only if user 忽略引导 and not actively scanning)
-            if (dist <= _fallbackDistance && _timeInAcquire >= _fallbackDuration)
+            float fallbackDist = Cfg("AcquireFallbackDistance", _fallbackDistance);
+            float fallbackDur  = Cfg("AcquireFallbackDuration", _fallbackDuration);
+            if (dist <= fallbackDist && _timeInAcquire >= fallbackDur)
             {
                 if (IsUserActivelyScanning())
                 {
-                    // User 正在扫,继续引导,不强制
                     return;
                 }
-                // Otherwise force.
                 ForceFallbackSpawn();
             }
         }
 
+        // A8: 完成 pitch fallback — 陀螺仪不可用时用相机 eulerX 变化率检测
         bool IsUserActivelyScanning()
         {
             // Phone tilt change rate > threshold = active scanning
-            // Simple heuristic: if facing has changed > 5° in last second, user is active
-            // Use Input.gyro if available, else IMU through camera transform.
             if (Input.gyro.enabled)
             {
                 float angularSpeed = Input.gyro.rotationRate.magnitude;  // rad/sec
                 if (angularSpeed > 0.2f) return true;  // ~11°/sec
             }
-            // Camera pitch change as fallback
-            // (We track via private buffer of camera.eulerAngles last frame)
+
+            // A8 fallback: 相机 pitch (eulerX) 变化率 > 5°/s 视为 active scanning
+            if (_cam != null && Time.deltaTime > 0f)
+            {
+                float currentEulerX = _cam.transform.eulerAngles.x;
+                if (!float.IsNaN(_lastCamEulerX))
+                {
+                    float pitchDelta = Mathf.DeltaAngle(_lastCamEulerX, currentEulerX);
+                    _lastCamEulerX = currentEulerX;
+                    if (Mathf.Abs(pitchDelta) > 5f * Time.deltaTime)
+                        return true;
+                }
+                else
+                {
+                    _lastCamEulerX = currentEulerX;
+                }
+            }
             return false;
         }
 
-        bool TryFindFloorPlaneAt(Vector3 worldPos, out ARRaycastHit bestHit, out ARPlane bestPlane)
+        // Block A: 签名加 hitToMarkXZ + bestPlaneArea 输出
+        bool TryFindFloorPlaneAt(Vector3 worldPos, out ARRaycastHit bestHit, out ARPlane bestPlane, out float hitToMarkXZ, out float bestPlaneArea)
         {
             bestHit = default;
             bestPlane = null;
+            hitToMarkXZ = float.MaxValue;
+            bestPlaneArea = 0f;
             if (_raycastMgr == null || _planeMgr == null || _cam == null) return false;
 
             // Project worldPos to screen
@@ -276,6 +432,11 @@ namespace Cairn.AR
                     bestHit = h;
                     bestPlane = plane;
                     bestArea = v.planeArea;
+                    bestPlaneArea = v.planeArea;
+                    // Block A: 计算 hit→mark XZ 水平距离
+                    Vector2 hitXZ  = new Vector2(h.pose.position.x, h.pose.position.z);
+                    Vector2 markXZ = new Vector2(worldPos.x, worldPos.z);
+                    hitToMarkXZ = Vector2.Distance(hitXZ, markXZ);
                 }
             }
             return bestPlane != null;
@@ -284,10 +445,10 @@ namespace Cairn.AR
         void UpdateGuidance(float t)
         {
             int level = 0;
-            if (t >= _guideT1) level = 1;
-            if (t >= _guideT2) level = 2;
-            if (t >= _guideT3) level = 3;
-            if (t >= _guideT4) level = 4;
+            if (t >= Cfg("AcquireGuideT1", _guideT1)) level = 1;
+            if (t >= Cfg("AcquireGuideT2", _guideT2)) level = 2;
+            if (t >= Cfg("AcquireGuideT3", _guideT3)) level = 3;
+            if (t >= Cfg("AcquireGuideT4", _guideT4)) level = 4;
             if (level != _lastGuideLevel)
             {
                 _lastGuideLevel = level;
@@ -309,10 +470,14 @@ namespace Cairn.AR
             // Detach old target anchor (provisional)
             if (_targetAnchor != null)
             {
-                // Don't destroy the targetAnchor itself if shared; just unparent.
                 if (transform.parent == _targetAnchor.transform)
                     transform.SetParent(null, worldPositionStays: true);
             }
+
+            // Block C: 测量 anchor 创建延迟 + 失败原因
+            float anchorStartMs = Time.realtimeSinceStartup * 1000f;
+            string anchorReason = "ok";
+            bool anchorOk = false;
 
             // Create permanent anchor
             if (_anchorMgr != null && plane != null && !fromFallback)
@@ -322,17 +487,36 @@ namespace Cairn.AR
                 {
                     transform.SetParent(_permAnchor.transform, worldPositionStays: false);
                     transform.localPosition = Vector3.zero;
+                    anchorOk = true;
                 }
                 else
                 {
-                    // AttachAnchor failed — try free-floating async
+                    // AttachAnchor failed — fallback to free-floating
                     transform.position = hit.pose.position;
+                    anchorReason = "attach-returned-null";
                 }
             }
             else if (fromFallback)
             {
                 transform.position = _fallbackTargetPos;
                 _fallbackTriggerTime = Time.time;
+                anchorReason = "fallback-no-plane";
+            }
+            else
+            {
+                anchorReason = (plane == null) ? "no-plane" : "no-anchor-mgr";
+            }
+
+            float anchorLatencyMs = Time.realtimeSinceStartup * 1000f - anchorStartMs;
+            if (CfgBool("AcquireTelemetryEnabled", true))
+            {
+                Debug.Log($"[v22-ACQUIRE-ANCHOR] id={_markerId} ok={anchorOk} latencyMs={anchorLatencyMs:F1} reason={anchorReason}");
+                var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                if (bridge != null)
+                {
+                    string j = $"{{\"markerId\":\"{_markerId}\",\"ok\":{(anchorOk?"true":"false")},\"latencyMs\":{anchorLatencyMs:F1},\"reason\":\"{anchorReason}\"}}";
+                    bridge.SendToRN("v22-ACQUIRE-ANCHOR", j);
+                }
             }
 
             // Trigger ceremony animation
@@ -340,6 +524,7 @@ namespace Cairn.AR
             {
                 _ceremony.Reset();
                 _ceremony.Play();
+                StartCoroutine(EmitCeremonyDoneAfter(_ceremony.TotalDuration, fromFallback));
             }
 
             _state = State.IMMORTAL;
@@ -347,14 +532,31 @@ namespace Cairn.AR
             Debug.Log($"[v22-ACQUIRE-CEREMONY] id={_markerId} fromFallback={fromFallback} pos={transform.position}");
         }
 
+        // Block C: ceremony 播放完成埋点
+        System.Collections.IEnumerator EmitCeremonyDoneAfter(float seconds, bool fromFallback)
+        {
+            yield return new WaitForSeconds(seconds);
+            if (CfgBool("AcquireTelemetryEnabled", true))
+            {
+                Vector3 p = transform.position;
+                Debug.Log($"[v22-CEREMONY-DONE] id={_markerId} pos=({p.x:F2},{p.y:F2},{p.z:F2}) fromFallback={fromFallback}");
+                var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                if (bridge != null)
+                {
+                    string j = $"{{\"markerId\":\"{_markerId}\",\"atPos\":[{p.x:F2},{p.y:F2},{p.z:F2}],\"fromFallback\":{(fromFallback?"true":"false")}}}";
+                    bridge.SendToRN("v22-CEREMONY-DONE", j);
+                }
+            }
+        }
+
         void ForceFallbackSpawn()
         {
             // R-A4: fallback Y = max(camera.y - 1.5, observedMinFloor - 0.05)
             // R-A4: tilt > 5° → don't fallback
+            float fallbackTiltMax = Cfg("AcquireFallbackTiltMaxDeg", _fallbackTiltMaxDeg);
             float pitchDeg = Vector3.Angle(_cam.transform.forward, Vector3.down) - 90f;
-            if (Mathf.Abs(pitchDeg) > 90f - _fallbackTiltMaxDeg)
+            if (Mathf.Abs(pitchDeg) > 90f - fallbackTiltMax)
             {
-                // 用户拿手机看远处招牌(pitch +30°)— 不允许 fallback
                 Debug.LogWarning($"[v22-FALLBACK-REJECTED] id={_markerId} tilt too high");
                 return;
             }
@@ -362,18 +564,42 @@ namespace Cairn.AR
             Vector3 targetPos = GetTargetWorldPos();
             float fallbackY = _cam.transform.position.y - 1.5f;
 
-            // observedMinFloor — try a top-down raycast first
+            // A7: observedMinFloor — top-down raycast, 但**必须经过 FloorPlaneValidator**
+            // (铁律 #1 修订:L2 仅放距离不放 plane)
             var hits = new List<ARRaycastHit>();
             if (_raycastMgr != null
                 && _raycastMgr.Raycast(new Ray(_cam.transform.position, Vector3.down), hits, TrackableType.PlaneWithinPolygon | TrackableType.Depth))
             {
                 if (hits.Count > 0)
                 {
-                    fallbackY = Mathf.Min(fallbackY, hits[0].pose.position.y - 0.05f);
+                    var plane = _planeMgr != null ? _planeMgr.GetPlane(hits[0].trackableId) : null;
+                    if (plane != null)
+                    {
+                        var v = FloorPlaneValidator.Validate(plane, hits[0].pose.position, _cam.transform.position.y, _lidarAvailable);
+                        if (v.isValid)
+                        {
+                            // 只有通过 FloorPlaneValidator 才用其 Y(防 L2 锚到桌子/车顶)
+                            fallbackY = Mathf.Min(fallbackY, hits[0].pose.position.y - 0.05f);
+                        }
+                    }
                 }
             }
 
             _fallbackTargetPos = new Vector3(targetPos.x, fallbackY, targetPos.z);
+
+            // Block C: emit v22-ACQUIRE-L2 (兜底触发埋点)
+            if (CfgBool("AcquireTelemetryEnabled", true))
+            {
+                bool gyroActive = IsUserActivelyScanning();
+                Debug.LogWarning($"[v22-ACQUIRE-L2] id={_markerId} elapsed={_timeInAcquire:F2} userActivelyScanning={gyroActive} tiltDeg={pitchDeg:F1} fallbackY={fallbackY:F2}");
+                var bridge = Object.FindFirstObjectByType<CairnBridge>();
+                if (bridge != null)
+                {
+                    string j = $"{{\"markerId\":\"{_markerId}\",\"elapsed\":{_timeInAcquire:F2},\"userActivelyScanning\":{(gyroActive?"true":"false")},\"tiltDeg\":{pitchDeg:F1},\"fallbackY\":{fallbackY:F2}}}";
+                    bridge.SendToRN("v22-ACQUIRE-L2", j);
+                }
+            }
+
             AnchorAndCeremony(default, null, fromFallback: true);
             Debug.LogWarning($"[v22-ACQUIRE-FORCE-FALLBACK] id={_markerId} y={fallbackY:F2}");
         }
@@ -407,7 +633,6 @@ namespace Cairn.AR
                     var v = FloorPlaneValidator.Validate(plane, h.pose.position, _cam.transform.position.y, _lidarAvailable);
                     if (v.isValid)
                     {
-                        // Silent snap: detach, attach to plane, reparent
                         if (_anchorMgr != null)
                         {
                             var newAnchor = _anchorMgr.AttachAnchor(plane, h.pose);
@@ -416,7 +641,7 @@ namespace Cairn.AR
                                 _permAnchor = newAnchor;
                                 transform.SetParent(newAnchor.transform, worldPositionStays: false);
                                 transform.localPosition = Vector3.zero;
-                                _fallbackTriggerTime = -1f;  // done
+                                _fallbackTriggerTime = -1f;
                                 Debug.Log($"[v22-FALLBACK-SNAP-OK] id={_markerId} silent re-anchor to floor");
                             }
                         }

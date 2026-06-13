@@ -48,6 +48,8 @@ namespace Cairn.AR
 
         public bool IsPlaying => _t >= 0f && _t < 1f;
         public bool IsComplete => _t >= 1f;
+        // Block C: 给 CairnAcquireController 算 ceremony 完成 emit 用
+        public float TotalDuration => _totalDuration;
 
         // Per-frame property block reuse
         MaterialPropertyBlock _mpb;

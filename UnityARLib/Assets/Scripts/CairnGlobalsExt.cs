@@ -225,6 +225,41 @@ public partial class CairnGlobals
         B("AnchorAttachEnabled", true);
         B("VerboseLogForward", false);
 
+        // §G.2 v0.2.4 Block A/B/F — CairnAcquireController OTA 阈值(23 个)
+        // 用户铁律:任何参数 OTA 调,不依赖 EAS rebuild
+        F("AcquireApproachEnter",        null, 5,  80,  30);
+        F("AcquireApproachExit",         null, 5,  80,  32);
+        F("AcquireEnter",                null, 1,  30,  10);
+        F("AcquireExit",                 null, 1,  30,  12);
+        F("AcquireFacingEnterCos",       null, 0,  1,   0.70f);
+        F("AcquireFacingExitCos",        null, 0,  1,   0.30f);
+        F("AcquireFacingEnterDur",       null, 0,  5,   0.4f);
+        F("AcquireFacingExitDur",        null, 0,  5,   0.6f);
+        F("AcquireAllCondHoldDur",       null, 0,  5,   0.3f);
+        F("AcquireFallbackDistance",     null, 1,  20,  5);
+        F("AcquireFallbackDuration",     null, 1,  60,  15);
+        F("AcquireFallbackTiltMaxDeg",   null, 0,  90,  5);
+        F("AcquireFallbackPostSnapWindowSec", null, 0, 120, 30);
+        F("AcquireGuideT1",              null, 0,  30,  3);
+        F("AcquireGuideT2",              null, 0,  30,  5);
+        F("AcquireGuideT3",              null, 0,  30,  10);
+        F("AcquireGuideT4",              null, 0,  60,  15);
+        // Block A 新增(ray-hit 触发通道)
+        B("AcquireRayHitTriggerEnabled", true);
+        F("AcquireRayHitTriggerRadius",  null, 0.2f, 5,   1.5f);
+        F("AcquireRayHitMaxDistance",    null, 5,    100, 25);
+        // A6 顺手:linger 提示
+        F("AcquireGuideLingerDist",      null, 0.5f, 10,  3);
+        F("AcquireGuideLingerSec",       null, 0,    30,  3);
+        // Wire-up + 埋点 kill-switch
+        B("AcquireControllerEnabled",    true);
+        B("AcquireTelemetryEnabled",     true);
+        // Block F: 跨 session re-snap
+        B("CrossSessionSnapEnabled",     true);
+        F("CrossSessionSnapDelaySec",    null, 1,    30,  5);
+        F("CrossSessionSnapMaxDistM",    null, 2,    30,  8);
+        F("CrossSessionSnapMinDeltaY",   null, 0.02f, 0.5f, 0.10f);
+
         return r;
     }
 
