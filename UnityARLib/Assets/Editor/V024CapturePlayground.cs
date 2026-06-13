@@ -325,7 +325,10 @@ namespace Cairn.AR.Editor
                 // V5.15 ROLLBACK ribbon transform.y 0.35→0 (sub#2 S6-N5 BLOCKER):
                 //   V5.14 transform.y=0.35 + 假设的 cairn stones 不存在 → 0.35m 物理空白
                 //   V5.15: 回到 y=0, ribbon 起源贴 ground plane,ring↔ribbon 真正接地
-                rgo.transform.localPosition = Vector3.zero;
+                // V5.31 sub#19 修 ribbon 与 cairn 50px gap:
+                //   V5.25 cairn stones 顶 y=0.76m, ribbon 起源 y=0 让 ribbon 看起来从地下升起
+                //   修: ribbon transform.y = 0.5 让 ribbon 根部锚到 cairn 中段, 真"从 cairn 升起"
+                rgo.transform.localPosition = new Vector3(0f, 0.5f, 0f);
                 var rib = rgo.AddComponent<Cairn.AR.SilkRibbonV2>();
                 rgo.GetComponent<MeshRenderer>().sharedMaterial = ribMat;
                 // V5.9: phase 跨全周期 — 任意 capture 帧都同时看到 stage1/2/3 ribbon
