@@ -181,36 +181,45 @@ namespace Cairn.AR
         {
             float lifeT = _life / _lifeDuration;
             // V4.10 fix: 真二段式"脱离阵法"(用户原话核心)
-            //   阶段 1 (0 - 0.35): 贴地升起,bottomY=0,丝带从地面长出 0→0.6m
-            //   阶段 2 (0.35 - 0.70): 脱离阵法,bottomY 跟随 topY 抬升,整段离开地面飘
-            //   阶段 3 (0.70 - 1.0): 高空飘 + 越来越淡,bottomY 也升到 ~2m
-            //   原代码 bottomY = max(0, topY - bodyLength) 是连续平移没有"脱离感"
+            // V4.11 fix(双 subagent 发现 3 个 FAIL):
+            //   1. Stage 1→2 边界 bottomY 速度从 0 突跳到 2.86 → 用 smoothstep easing
+            //   2. Stage 1 actualLen<0.05m 前 30ms ribbon 隐藏 → 阈值降到 0.01
+            //   3. Stage 3 fade 太激进 → 阶段 3 起步晚到 0.80(留更多飘空中可见时间)
+            //
+            //   阶段 1 (0 - 0.30): 贴地升起 — bottomY=0, topY 从 0 升到 bodyLength
+            //   阶段 2 (0.30 - 0.65): 脱离阵法 — bottomY smoothstep 抬升,整段平移
+            //   阶段 3 (0.65 - 1.0): 高空飘 — bottomY 继续升到 lifeHeight - bodyLength
+            //                          globalFade 在 lifeT>0.85 才开始衰减(line 195)
             float topY, bottomY;
-            const float STAGE1_END = 0.35f;
-            const float STAGE2_END = 0.70f;
+            const float STAGE1_END = 0.30f;
+            const float STAGE2_END = 0.65f;
             if (lifeT < STAGE1_END)
             {
-                // 阶段 1: 贴地升起 — bottomY=0, topY 从 0 升到 stage1End*lifeHeight*ratio
-                float t1 = lifeT / STAGE1_END;  // 0..1
-                topY = _bodyLength * t1;  // 0..bodyLength,丝带顶端从 0 升到 1m
+                // 阶段 1: 贴地升起
+                float t1 = lifeT / STAGE1_END;
+                // smoothstep ease-out 让 ribbon 从 0 长到 bodyLength,慢起快达
+                float t1Smooth = Mathf.SmoothStep(0f, 1f, t1);
+                topY = _bodyLength * t1Smooth;
                 bottomY = 0f;
             }
             else if (lifeT < STAGE2_END)
             {
-                // 阶段 2: 脱离阵法 — bottomY 开始抬升,整段平移上升
-                float t2 = (lifeT - STAGE1_END) / (STAGE2_END - STAGE1_END);  // 0..1
-                bottomY = t2 * _bodyLength;  // 0..bodyLength
-                topY = bottomY + _bodyLength;  // 维持丝带长度
+                // 阶段 2: 脱离阵法 — bottomY smoothstep ease-in 让"开始离地"过渡平滑
+                float t2 = (lifeT - STAGE1_END) / (STAGE2_END - STAGE1_END);
+                float t2Smooth = Mathf.SmoothStep(0f, 1f, t2);  // ease-in-out
+                bottomY = t2Smooth * _bodyLength;
+                topY = bottomY + _bodyLength;
             }
             else
             {
                 // 阶段 3: 高空飘 — 继续抬升到顶
                 float t3 = (lifeT - STAGE2_END) / (1f - STAGE2_END);
-                bottomY = _bodyLength + t3 * (_lifeHeight - _bodyLength * 2f);  // 1m → lifeHeight - bodyLength
+                bottomY = _bodyLength + t3 * (_lifeHeight - _bodyLength * 2f);
                 topY = bottomY + _bodyLength;
             }
             float actualLen = topY - bottomY;
-            if (actualLen < 0.05f)
+            // V4.11 fix #2: actualLen 阈值 0.05 → 0.01 让 ribbon 在 lifeT 极小值就开始可见
+            if (actualLen < 0.01f)
             {
                 _mr.enabled = false;
                 return;
