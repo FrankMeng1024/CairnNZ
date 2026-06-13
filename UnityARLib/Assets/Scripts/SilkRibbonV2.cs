@@ -317,7 +317,19 @@ namespace Cairn.AR
                 //   sub#1 V5.23 仍说"顶部发散底部消散无宽度收束"
                 //   修 spindleShape: silk 真物理:底窄(挂点) + 中段最宽(摆幅) + 顶尖收(漂出)
                 //   公式: 0.3 + 0.7 * sin(π*sT) — sT=0 0.3, sT=0.5 1.0, sT=1 0.3 — 真 spindle
-                float spindleShape = 0.3f + 0.7f * Mathf.Sin(sT * Mathf.PI);
+                // V5.26 debug + 强化: spindle 振幅大 + 底端真贴近 0
+                //   sT=0 → 0.15 (真窄底), sT=0.5 → 1.0, sT=1 → 0.15 (真窄顶)
+                float spindleShape = 0.15f + 0.85f * Mathf.Sin(sT * Mathf.PI);
+                #if UNITY_EDITOR
+                if (Application.isBatchMode && s == 0 && _life > 1.0f && _life < 1.05f)
+                {
+                    Debug.Log($"[v024-RIBBON-SPINDLE] s=0 sT=0 spindle={spindleShape:F3} maxWidth={_maxWidth:F3} expected_w=0.027 (=0.18*0.15)");
+                }
+                if (Application.isBatchMode && s == _segs/2 && _life > 1.0f && _life < 1.05f)
+                {
+                    Debug.Log($"[v024-RIBBON-SPINDLE] s={_segs/2} sT=0.5 spindle={spindleShape:F3} expected_w=0.18 (=0.18*1.0)");
+                }
+                #endif
                 float noiseL = 0.95f + 0.10f * Mathf.Sin(sT * 7.3f + _seed);  // V5.24 噪声更弱让 silk 主轴明显
                 float noiseR = 0.95f + 0.10f * Mathf.Sin(sT * 6.1f - _seed * 1.7f);
                 float wHaloL = _maxWidth * spindleShape * noiseL;
