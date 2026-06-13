@@ -24,7 +24,7 @@ Shader "Cairn/RibbonSilkV2"
 {
     Properties
     {
-        _FlowTex            ("Flow Noise (R)", 2D) = "white" {}
+        _FlowTex            ("Flow Noise (R)", 2D) = "gray" {}
         _BaseTint           ("Base Tint (type color)", Color) = (1.0, 0.85, 0.55, 1)
         _TipTint            ("Tip Tint (sky/white)", Color) = (0.95, 0.97, 1.0, 1)
         _CoreToTipMixStart  ("Color lerp start (uv.y)", Range(0, 1)) = 0.40
@@ -32,7 +32,7 @@ Shader "Cairn/RibbonSilkV2"
         _RimSharpness       ("Rim sharpness across width", Range(1, 6)) = 3.2
         _FlowSpeedSlow      ("Slow flow speed (m/s up)",   Range(0.1, 2)) = 0.45
         _FlowSpeedFast      ("Counter flow speed",         Range(0.1, 3)) = 1.30
-        _FlowStrength       ("Flow contribution",          Range(0, 1))   = 0.55
+        _FlowStrength       ("Flow contribution",          Range(0, 1))   = 0.30
         _BandFreq           ("Energy band freq",           Range(0, 8))   = 4.0
         _BandSpeed          ("Energy band travel speed",   Range(0, 2))   = 0.6
         _BandIntensity      ("Energy band brightness",     Range(0, 1))   = 0.4
