@@ -92,6 +92,9 @@ export type UnityMessage =
   | { kind: 'ARStateStall';   state: string; elapsedSec: string; activeLoaders: string }
   | { kind: 'A1State';        state: 'UNLOCKED' | 'ARMED' | 'LOCKED' | 'FROZEN'; prev?: string; a11?: boolean }
   | { kind: 'SpawnRejected';  id: string; reason: string }
+  // v0.2.4 Block A/C — acquire 状态 + 引导事件(让 ARScreen / AcquireGuidance 真接到)
+  | { kind: 'AcquireState';     markerId: string; from: string; to: string; dist: number; tInAcquire: number }
+  | { kind: 'AcquireGuidance';  markerId: string; level: number; elapsed: number }
   | { kind: 'Unknown';        raw: string };
 
 export function parseUnityMessage(raw: string): UnityMessage {
@@ -272,6 +275,24 @@ export function parseUnityMessage(raw: string): UnityMessage {
       const reason = String(data.reason ?? 'unknown');
       return { kind: 'SpawnRejected', id, reason };
     }
+    // v0.2.4 Block A: ray-hit 触发后状态机转换事件
+    case 'v22-ACQUIRE-STATE':
+      return {
+        kind: 'AcquireState',
+        markerId: String(data.markerId ?? ''),
+        from: String(data.from ?? ''),
+        to: String(data.to ?? ''),
+        dist: typeof data.dist === 'number' ? data.dist : -1,
+        tInAcquire: typeof data.tInAcquire === 'number' ? data.tInAcquire : 0,
+      };
+    // v0.2.4 Block C: 引导文案级别(给 AcquireGuidance.tsx)
+    case 'guidance':
+      return {
+        kind: 'AcquireGuidance',
+        markerId: String(data.markerId ?? ''),
+        level: typeof data.level === 'number' ? data.level : 0,
+        elapsed: typeof data.elapsed === 'number' ? data.elapsed : 0,
+      };
     default:
       return { kind: 'Unknown', raw };
   }

@@ -30,7 +30,6 @@ import { UnityAROverlay, type UnityAROverlayHandle } from '../components/UnityAR
 import { CairnEdgeArrows } from '../components/CairnEdgeArrows';
 import { DistantMarkerArrow } from '../components/DistantMarkerArrow';
 import { AcquireGuidance } from '../components/AcquireGuidance';
-import { NativeEventEmitter, NativeModules } from 'react-native';
 import { AimShutter } from '../components/AimShutter';
 import { PlantSheet, AimReticle, type PlantType } from '../components/PlantSheet';
 import { LikeReportSheet } from '../components/LikeReportSheet';
@@ -674,22 +673,23 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // v0.2.4 Block E2: 当前正在 ACQUIRE 的 marker id(从 Unity v22-ACQUIRE-STATE
   // 事件订阅)。用来:(1) DistantMarkerArrow 锁定显示当前目标;(2) AcquireGuidance
   // 知道是否要 render guidance 文案。null=不在 ACQUIRE 状态。
+  //
+  // 路由架构(BLOCKER 1 修复):
+  //   Unity SendToRN("v22-ACQUIRE-STATE", json)
+  //   → native bridge → onUnityMessage prop
+  //   → parseUnityMessage → kind:'AcquireState'
+  //   → UnityAROverlay switch case → globalThis.__cairnAcquireState(...)
+  //   → 此处 useEffect 注册的 handler 设 state
+  // 不用 NativeEventEmitter('CairnBridge') — Cairn 没暴露那个 native module。
   const [acquiringMarkerId, setAcquiringMarkerId] = useState<string | null>(null);
 
-  // 订阅 Unity emit 的 v22-ACQUIRE-STATE 事件
   useEffect(() => {
-    if (Platform.OS === 'web') return;
-    let sub: any = null;
-    try {
-      const emitter = new NativeEventEmitter((NativeModules as any).CairnBridge);
-      sub = emitter.addListener('v22-ACQUIRE-STATE', (data: { markerId: string; from: string; to: string; dist: number; tInAcquire: number }) => {
-        if (data.to === 'ACQUIRE') setAcquiringMarkerId(data.markerId);
-        else if (data.to === 'IMMORTAL' || data.to === 'FAR') setAcquiringMarkerId(null);
-      });
-    } catch (e) {
-      // bridge 不可用(Editor / dev)— 静默 fallback
-    }
-    return () => { if (sub) sub.remove(); };
+    const prev = (globalThis as any).__cairnAcquireState;
+    (globalThis as any).__cairnAcquireState = (data: { markerId: string; from: string; to: string; dist: number; tInAcquire: number }) => {
+      if (data.to === 'ACQUIRE') setAcquiringMarkerId(data.markerId);
+      else if (data.to === 'IMMORTAL' || data.to === 'FAR') setAcquiringMarkerId(null);
+    };
+    return () => { (globalThis as any).__cairnAcquireState = prev; };
   }, []);
 
   // Subscribe to magnetic heading on mount; expo-location is already a dep.

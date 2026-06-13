@@ -958,6 +958,23 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             `${TAG}:recv:unknown raw=${msg.raw.slice(0, 80)}`
           );
           break;
+
+        // v0.2.4 Block A/C: acquire 状态 + 引导文案 → 路由到 ARScreen / AcquireGuidance
+        case 'AcquireState':
+          if (typeof (globalThis as any).__cairnAcquireState === 'function') {
+            (globalThis as any).__cairnAcquireState({
+              markerId: msg.markerId, from: msg.from, to: msg.to,
+              dist: msg.dist, tInAcquire: msg.tInAcquire,
+            });
+          }
+          break;
+        case 'AcquireGuidance':
+          if (typeof (globalThis as any).__cairnGuidance === 'function') {
+            (globalThis as any).__cairnGuidance({
+              markerId: msg.markerId, level: msg.level, elapsed: msg.elapsed,
+            });
+          }
+          break;
       }
     },
     [props]

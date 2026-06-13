@@ -26,7 +26,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
-import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 
 // ---- Copy (Reviewer R-B6 情感化重写) ----
 const GUIDANCE_COPY: Record<number, string> = {
@@ -47,23 +46,17 @@ export function AcquireGuidance({ acquiringMarkerId }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [fadeAnim] = useState(new Animated.Value(0));
 
-  // Subscribe to native guidance events
+  // BLOCKER 1 修复 — 用 globalThis.__cairnGuidance 替代不存在的
+  // NativeEventEmitter('CairnBridge')。UnityAROverlay 的 case 'AcquireGuidance'
+  // 路由 → globalThis.__cairnGuidance(payload) → 此 handler。
   useEffect(() => {
-    if (Platform.OS === 'web') return; // RN web no native bridge
-    let sub: any = null;
-    try {
-      const emitter = new NativeEventEmitter((NativeModules as any).CairnBridge);
-      sub = emitter.addListener('guidance', (data: { markerId: string; level: number; elapsed: number }) => {
-        if (acquiringMarkerId && data.markerId !== acquiringMarkerId) return;
-        setActiveId(data.markerId);
-        setLevel(data.level);
-      });
-    } catch (e) {
-      // Bridge not available (Editor / dev) — silent
-    }
-    return () => {
-      if (sub) sub.remove();
+    const prev = (globalThis as any).__cairnGuidance;
+    (globalThis as any).__cairnGuidance = (data: { markerId: string; level: number; elapsed: number }) => {
+      if (acquiringMarkerId && data.markerId !== acquiringMarkerId) return;
+      setActiveId(data.markerId);
+      setLevel(data.level);
     };
+    return () => { (globalThis as any).__cairnGuidance = prev; };
   }, [acquiringMarkerId]);
 
   // Hide when no active marker
