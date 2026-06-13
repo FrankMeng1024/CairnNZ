@@ -218,8 +218,11 @@ namespace Cairn.AR
             else
             {
                 // 阶段 3: 高空飘 — 继续抬升到顶
+                // V5.17 sub#2 S8-N2 BLOCKER 修: 旧 t3 线性让 stage3 起速度=0.5 vs stage2 末=0 速度断崖
+                //   改 SmoothStep ease-in-out: 起末导数都为 0, 与 stage2 SmoothStep 末连续
                 float t3 = (lifeT - STAGE2_END) / (1f - STAGE2_END);
-                bottomY = _bodyLength + t3 * (_lifeHeight - _bodyLength * 2f);
+                float t3Smooth = Mathf.SmoothStep(0f, 1f, t3);
+                bottomY = _bodyLength + t3Smooth * (_lifeHeight - _bodyLength * 2f);
                 topY = bottomY + _bodyLength;
             }
             float actualLen = topY - bottomY;
@@ -263,8 +266,11 @@ namespace Cairn.AR
             lifeBlendedBase.r *= 1.0f + warmBoost * 0.04f;
             lifeBlendedBase.b *= 1.0f - warmBoost * 0.03f;
 
-            float baseX = Mathf.Cos(_angleRad) * _ringRadius * 1.05f;
-            float baseZ = Mathf.Sin(_angleRad) * _ringRadius * 1.05f;
+            // V5.17 sub#2 S8-N5 BLOCKER 修: ring↔ribbon 视觉脱节真位置在 ring 外缘到 ribbon 起源
+            //   旧 1.05 让 ribbon 起源在 ring 外侧 5%, 与 ring 边缘有 gap
+            //   修: 0.95 让 ribbon 起源在 ring 内侧 5%, 与 ring 视觉真接合
+            float baseX = Mathf.Cos(_angleRad) * _ringRadius * 0.95f;
+            float baseZ = Mathf.Sin(_angleRad) * _ringRadius * 0.95f;
 
             // Sway (gentle wobble)
             // V2.2 G16 fix: batch mode Time.time=0,改用 Shader.GetGlobalFloat("_CairnAnimTime")

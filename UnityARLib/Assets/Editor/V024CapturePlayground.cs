@@ -159,10 +159,11 @@ namespace Cairn.AR.Editor
             var ribMat = new Material(ribbonShader) { name = "RibbonV2_" + t.id };
             ribMat.SetTexture("_FlowTex",     flowTex);
             // V4.3 fix: BaseTint 用提亮版本 (1.0, 0.92, 0.75) 不再用饱和 t.color
-            // 原代码用 t.color 让 cairn=(0.91,0.78,0.59) 在白底上不够亮,V4.2 shader 改 default 1.0/0.92/0.75 但 SetColor 覆盖了
-            // 现在主动 lerp t.color 与白光 (1.0,1.0,0.95) 0.4 比例,得到亮版 type color
-            Color brightTint = Color.Lerp(t.color, new Color(1.0f, 1.0f, 0.95f, 1f), 0.4f);
-            ribMat.SetColor("_BaseTint",      brightTint);
+            // V5.17 sub#2 S8-N4 BLOCKER 修: brightTint Lerp(t.color, white, 0.4) 在 material 创建时
+            //   就稀释 type color → 5 type 在屏幕上几乎无法区分 (water 失 60% 蓝, danger 变粉 等)
+            //   V5.17: 删 brightTint, 直接用 t.color, 让 V5.16 SilkRibbonV2.cs:380 base*1.15 真起作用
+            //   亮度由 shader _DayMul + bloom 处理, 不在 source 端稀释
+            ribMat.SetColor("_BaseTint",      t.color);
             ribMat.SetColor("_TipTint",       new Color(1.0f, 1.0f, 0.95f, 1f));
             // V4.3 fix: _NightMul/_DayMul 同步 V4.2 shader default,不再用旧 1.6/0.55(2.9 倍切换)
             // V4.5 fix: _DayMul 1.5 → 2.5 让丝带白底下足够亮(_MaxLuma=1.6 clamp 后仍保白金高光)
@@ -247,7 +248,10 @@ namespace Cairn.AR.Editor
                 float[] stoneH = { 0.20f, 0.16f, 0.13f };
                 float[] stoneY = { 0.10f, 0.28f, 0.44f };  // 累积 y centroid
                 stone.transform.localPosition = new Vector3(0f, stoneY[s], 0f);
-                stone.transform.localScale = new Vector3(stoneR[s] * 2f, stoneH[s] * 0.5f, stoneR[s] * 2f);
+                // V5.17 sub#2 S8-N1 BLOCKER 修: Unity Cylinder primitive 默认 height=2m
+                //   旧 scale.y = stoneH*0.5 让实际 height = stoneH*1m 仍偏矮
+                //   修: scale.y = stoneH (让 Cylinder height = stoneH*2 倍 = 0.4/0.32/0.26m 真高)
+                stone.transform.localScale = new Vector3(stoneR[s] * 2f, stoneH[s], stoneR[s] * 2f);
                 var stoneMr = stone.GetComponent<MeshRenderer>();
                 stoneMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 stoneMr.receiveShadows = false;
