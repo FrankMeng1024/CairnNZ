@@ -118,7 +118,21 @@ namespace Cairn.AR
         {
             float dt = Time.deltaTime;
             if (dt <= 0f || dt > 0.5f) return;  // skip pause / first frame
+            UpdateInternal(dt);
+        }
 
+        /// <summary>
+        /// v0.2.4: manual tick for Editor batch capture.
+        /// Calls UpdateInternal directly with provided dt, bypassing
+        /// MonoBehaviour Update which doesn't fire in batch mode.
+        /// </summary>
+        public void EditorManualTick(float dt)
+        {
+            UpdateInternal(dt);
+        }
+
+        void UpdateInternal(float dt)
+        {
             // Spawn pacing
             if (_spawnEnabled)
             {

@@ -117,7 +117,60 @@ namespace Cairn.AR
             Rebuild();
         }
 
-        void Rebuild()
+        /// <summary>
+        /// v0.2.4: Manual tick for Editor batch capture.
+        /// Drives _life forward by dt and triggers Rebuild() — bypassing
+        /// MonoBehaviour LateUpdate which doesn't fire in batch mode.
+        /// </summary>
+        public void EditorManualTick(float dt)
+        {
+            if (dt <= 0f || dt > 0.5f) return;
+            // Lazy init in case Awake didn't fire (batch mode loading scene)
+            if (_mesh == null) EnsureInitialized();
+            _life += dt;
+            if (_life >= _lifeDuration)
+            {
+                _life = 0f;
+                _lifeDuration = 4.0f + Random.value * 2.0f;
+                _angleRad += (Random.value - 0.5f) * 0.2f;
+                _seed = Random.value * 1000f;
+            }
+            Rebuild();
+        }
+
+        void EnsureInitialized()
+        {
+            if (_mesh != null) return;
+            _mf = GetComponent<MeshFilter>();
+            _mr = GetComponent<MeshRenderer>();
+            if (_mr != null)
+            {
+                _mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                _mr.receiveShadows = false;
+            }
+            _mesh = new Mesh();
+            _mesh.name = "SilkRibbonV2";
+            _mesh.MarkDynamic();
+            if (_mf != null) _mf.sharedMesh = _mesh;
+
+            int vertsPerRing = 5;
+            int totalVerts = (_segs + 1) * vertsPerRing;
+            int totalTris  = _segs * 4 * 6;
+            if (_verts == null || _verts.Length != totalVerts)
+            {
+                _verts  = new Vector3[totalVerts];
+                _colors = new Color[totalVerts];
+                _uvs    = new Vector2[totalVerts];
+                _tris   = new int[totalTris];
+                BuildIndexBuffer();
+            }
+            if (_seed == 0) _seed = Random.value * 1000f;
+        }
+
+        public float LifeT => _lifeDuration > 0f ? _life / _lifeDuration : 0f;
+        public void SetLife(float lifeT) { _life = Mathf.Clamp01(lifeT) * _lifeDuration; }
+
+        public void Rebuild()  // v0.2.4: was private, made public for batch capture
         {
             float lifeT = _life / _lifeDuration;
             float topY = _lifeHeight * lifeT;

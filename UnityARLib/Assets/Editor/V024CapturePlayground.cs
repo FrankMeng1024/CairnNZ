@@ -184,8 +184,24 @@ namespace Cairn.AR.Editor
                 cam.transform.position = clusterPos + new Vector3(0f, 1.4f, -2.8f);
                 cam.transform.LookAt(clusterPos + new Vector3(0f, 0.85f, 0f));
 
-                // Render multiple times to let SilkRibbonV2.LateUpdate tick
-                for (int sub = 0; sub < 30; sub++) cam.Render();
+                // v0.2.4 manual ticks: drive ribbons + particles since
+                // batch mode does not fire MonoBehaviour Update / LateUpdate
+                var clusterRoot = GameObject.Find($"Cluster_{t.id}");
+                if (clusterRoot != null)
+                {
+                    var ribbons = clusterRoot.GetComponentsInChildren<Cairn.AR.SilkRibbonV2>();
+                    var parts   = clusterRoot.GetComponentsInChildren<Cairn.AR.TypeParticleController>();
+                    for (int frame = 0; frame < 60; frame++)
+                    {
+                        // Advance shader animation time for flow noise
+                        Shader.SetGlobalFloat("_CairnAnimTime", frame * 0.05f + 0.5f);
+                        foreach (var rb in ribbons) rb.EditorManualTick(0.05f);
+                        foreach (var pc in parts)   pc.EditorManualTick(0.05f);
+                    }
+                }
+
+                // Render multiple times to flush GPU
+                for (int sub = 0; sub < 5; sub++) cam.Render();
 
                 CaptureCameraToPng(cam, $"{OUT_DIR}/type-{t.id}.png");
             }
