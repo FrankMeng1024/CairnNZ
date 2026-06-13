@@ -51,6 +51,10 @@ namespace Cairn.AR.Editor
             var camGo = new GameObject("V024Camera");
             var cam = camGo.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
+            // Three.js demo bg = #E8DCC4 NZ 晨曦白麻布(line 90)
+            // 但我们 capture 时仍用深蓝便于 ribbon additive 看清;ring 因为是
+            // NormalBlending dark amber,深蓝底也能看清。
+            // 增加白底 capture 可在 RunCapture 里二次跑。
             cam.backgroundColor = new Color(0.02f, 0.03f, 0.10f, 1f);
             cam.fieldOfView = 60f;
             cam.transform.position = new Vector3(0f, 1.4f, -2.8f);
@@ -115,9 +119,47 @@ namespace Cairn.AR.Editor
             runeMat.SetColor("_TypeColor", t.color);
             runeMat.SetFloat("_Reveal",    1.0f);
 
+            // --- Tier-1 圆环 (主环 + 内环,1:1 移植 Three.js demo line 142-166) ---
+            float RING_RADIUS = 0.55f;
+            Color darkAmber = LerpToDarkAmber(t.color);
+
+            var ringShader = Shader.Find("Cairn/RingFlat");
+            if (ringShader != null)
+            {
+                // 主环 — RingGeometry(R - 0.013, R, 96) at y=0.001
+                var outerRing = new GameObject("OuterRing");
+                outerRing.transform.SetParent(root.transform, false);
+                outerRing.transform.localPosition = new Vector3(0f, 0.001f, 0f);
+                var outerMf = outerRing.AddComponent<MeshFilter>();
+                outerMf.sharedMesh = Cairn.AR.RingMeshBuilder.Build(RING_RADIUS, RING_RADIUS - 0.013f, 96);
+                var outerMr = outerRing.AddComponent<MeshRenderer>();
+                outerMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                outerMr.receiveShadows = false;
+                var outerRingMat = new Material(ringShader) { name = "OuterRing_" + t.id };
+                outerRingMat.SetColor("_RingColor",   darkAmber);
+                outerRingMat.SetFloat("_RingOpacity", 0.85f);
+                outerRingMat.SetFloat("_SweepProgress", 1.0f);  // static = full
+                outerMr.sharedMaterial = outerRingMat;
+
+                // 内环 — RingGeometry(R*0.65, R*0.665, 64) at y=0.0008
+                var innerRing = new GameObject("InnerRing");
+                innerRing.transform.SetParent(root.transform, false);
+                innerRing.transform.localPosition = new Vector3(0f, 0.0008f, 0f);
+                var innerMf = innerRing.AddComponent<MeshFilter>();
+                innerMf.sharedMesh = Cairn.AR.RingMeshBuilder.Build(RING_RADIUS * 0.665f, RING_RADIUS * 0.65f, 64);
+                var innerMr = innerRing.AddComponent<MeshRenderer>();
+                innerMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                innerMr.receiveShadows = false;
+                var innerRingMat = new Material(ringShader) { name = "InnerRing_" + t.id };
+                innerRingMat.SetColor("_RingColor",   darkAmber);
+                innerRingMat.SetFloat("_RingOpacity", 0.70f);
+                innerRingMat.SetFloat("_SweepProgress", 1.0f);
+                innerMr.sharedMaterial = innerRingMat;
+            }
+
             // --- 5 ribbons in a ring ---
             int RIBBON_COUNT = 5;
-            float RING_RADIUS = 0.55f;
+            // RING_RADIUS already declared above (in Tier-1 ring block)
             for (int i = 0; i < RIBBON_COUNT; i++)
             {
                 float angle = (i / (float)RIBBON_COUNT) * Mathf.PI * 2f + Random.value * 0.3f;
@@ -126,7 +168,10 @@ namespace Cairn.AR.Editor
                 rgo.transform.localPosition = Vector3.zero;
                 var rib = rgo.AddComponent<Cairn.AR.SilkRibbonV2>();
                 rgo.GetComponent<MeshRenderer>().sharedMaterial = ribMat;
-                rib.Configure(RING_RADIUS, angle, Random.value, t.color, new Color(0.95f, 0.97f, 1.0f, 1f));
+                // V2.2 G11 fix: phaseOffset 改均匀分配 0/0.2/0.4/0.6/0.8(原 Random.value 让错峰失效)
+                // V2.1 sub#2 抓出:5 根 phaseOffset 是 Random.value 完全独立随机 → 高概率 2-3 根同步
+                float phaseOffset = i / (float)RIBBON_COUNT;
+                rib.Configure(RING_RADIUS, angle, phaseOffset, t.color, new Color(0.95f, 0.97f, 1.0f, 1f));
             }
 
             // --- Rune SDF quad lying flat on ground ---
@@ -255,19 +300,43 @@ namespace Cairn.AR.Editor
         {
             // For ceremony, we'll point camera at cairn cluster (index 0) and
             // procedurally animate ring sweep + rune reveal across 24 frames.
+            // Three.js demo timeline (line 629-666):
+            //   0.00 - 0.50: ring + inner ring clockwise sweep stencil
+            //   0.50 - 0.85: rune fades in + scale 0.7 → 1.0
+            //   0.85 - 1.00: ribbons activate
             var t = TYPES[0];  // cairn
             Vector3 clusterPos = new Vector3((0 - 2) * 3f, 0f, 0f);
             cam.transform.position = clusterPos + new Vector3(0f, 1.4f, -2.8f);
             cam.transform.LookAt(clusterPos + new Vector3(0f, 0.85f, 0f));
 
-            // Find the rune material and animate _Reveal
-            var rune = GameObject.Find("Cluster_cairn/Rune");
-            Material runeMat = rune != null ? rune.GetComponent<MeshRenderer>().sharedMaterial : null;
+            // Find materials (rune + outer ring + inner ring)
+            var clusterRoot = GameObject.Find($"Cluster_{t.id}");
+            Material runeMat = null, outerRingMat = null, innerRingMat = null;
+            if (clusterRoot != null)
+            {
+                var rune = clusterRoot.transform.Find("Rune");
+                if (rune != null) runeMat = rune.GetComponent<MeshRenderer>().sharedMaterial;
+                var outerRing = clusterRoot.transform.Find("OuterRing");
+                if (outerRing != null) outerRingMat = outerRing.GetComponent<MeshRenderer>().sharedMaterial;
+                var innerRing = clusterRoot.transform.Find("InnerRing");
+                if (innerRing != null) innerRingMat = innerRing.GetComponent<MeshRenderer>().sharedMaterial;
+            }
 
             const int FRAMES = 24;
             for (int f = 0; f < FRAMES; f++)
             {
                 float ceremonyT = f / (float)(FRAMES - 1);
+
+                // Ring sweep 0..0.5 of ceremony → 0..1 progress
+                float sweepProgress = Mathf.Clamp01(ceremonyT / 0.5f);
+                if (outerRingMat != null) outerRingMat.SetFloat("_SweepProgress", sweepProgress);
+                if (innerRingMat != null) innerRingMat.SetFloat("_SweepProgress", sweepProgress);
+                // Slight opacity boost during sweep (less prominent while drawing)
+                float sweepOpacity = Mathf.Lerp(0.55f, 0.85f, sweepProgress);
+                if (outerRingMat != null) outerRingMat.SetFloat("_RingOpacity", sweepOpacity);
+                if (innerRingMat != null) innerRingMat.SetFloat("_RingOpacity", sweepOpacity * (0.70f / 0.85f));
+
+                // Rune fade in 0.5..0.85
                 float runeT = Mathf.Clamp01((ceremonyT - 0.5f) / 0.35f);
                 if (runeMat != null) runeMat.SetFloat("_Reveal", runeT);
 
@@ -275,8 +344,10 @@ namespace Cairn.AR.Editor
                 CaptureCameraToPng(cam, $"{OUT_DIR}/ceremony-{f:D2}.png");
             }
 
-            // Reset reveal
+            // Reset to static state
             if (runeMat != null) runeMat.SetFloat("_Reveal", 1f);
+            if (outerRingMat != null) { outerRingMat.SetFloat("_SweepProgress", 1f); outerRingMat.SetFloat("_RingOpacity", 0.85f); }
+            if (innerRingMat != null) { innerRingMat.SetFloat("_SweepProgress", 1f); innerRingMat.SetFloat("_RingOpacity", 0.70f); }
         }
 
         static int TypeIdToInt(string id)
@@ -290,6 +361,16 @@ namespace Cairn.AR.Editor
                 case "junction": return 4;
                 default:         return 0;
             }
+        }
+
+        /// <summary>
+        /// Demo line 583-585: ringMat.color = lerp(typeColor, dark amber 0x2B1810, 0.55)
+        /// 白底友好 dark color for ring + rune.
+        /// </summary>
+        static Color LerpToDarkAmber(Color typeColor)
+        {
+            Color darkAmber = new Color(0x2B / 255f, 0x18 / 255f, 0x10 / 255f, 1f);
+            return Color.Lerp(typeColor, darkAmber, 0.55f);
         }
 
         static void CaptureCameraToPng(Camera cam, string path)
