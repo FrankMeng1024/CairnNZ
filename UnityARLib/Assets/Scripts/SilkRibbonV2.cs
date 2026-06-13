@@ -180,8 +180,35 @@ namespace Cairn.AR
         public void Rebuild()  // v0.2.4: was private, made public for batch capture
         {
             float lifeT = _life / _lifeDuration;
-            float topY = _lifeHeight * lifeT;
-            float bottomY = Mathf.Max(0f, topY - _bodyLength);
+            // V4.10 fix: 真二段式"脱离阵法"(用户原话核心)
+            //   阶段 1 (0 - 0.35): 贴地升起,bottomY=0,丝带从地面长出 0→0.6m
+            //   阶段 2 (0.35 - 0.70): 脱离阵法,bottomY 跟随 topY 抬升,整段离开地面飘
+            //   阶段 3 (0.70 - 1.0): 高空飘 + 越来越淡,bottomY 也升到 ~2m
+            //   原代码 bottomY = max(0, topY - bodyLength) 是连续平移没有"脱离感"
+            float topY, bottomY;
+            const float STAGE1_END = 0.35f;
+            const float STAGE2_END = 0.70f;
+            if (lifeT < STAGE1_END)
+            {
+                // 阶段 1: 贴地升起 — bottomY=0, topY 从 0 升到 stage1End*lifeHeight*ratio
+                float t1 = lifeT / STAGE1_END;  // 0..1
+                topY = _bodyLength * t1;  // 0..bodyLength,丝带顶端从 0 升到 1m
+                bottomY = 0f;
+            }
+            else if (lifeT < STAGE2_END)
+            {
+                // 阶段 2: 脱离阵法 — bottomY 开始抬升,整段平移上升
+                float t2 = (lifeT - STAGE1_END) / (STAGE2_END - STAGE1_END);  // 0..1
+                bottomY = t2 * _bodyLength;  // 0..bodyLength
+                topY = bottomY + _bodyLength;  // 维持丝带长度
+            }
+            else
+            {
+                // 阶段 3: 高空飘 — 继续抬升到顶
+                float t3 = (lifeT - STAGE2_END) / (1f - STAGE2_END);
+                bottomY = _bodyLength + t3 * (_lifeHeight - _bodyLength * 2f);  // 1m → lifeHeight - bodyLength
+                topY = bottomY + _bodyLength;
+            }
             float actualLen = topY - bottomY;
             if (actualLen < 0.05f)
             {
