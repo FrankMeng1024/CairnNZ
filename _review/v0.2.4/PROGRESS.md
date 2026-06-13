@@ -20,21 +20,29 @@
 
 ---
 
+## v0.2.4 续作 — 自主全程(2026-06-13 下午起)
+
+用户拍板:Plan 100% 可行,所有 defer 项本次必做。中途用户不参与。
+
+| T+ | Sub-phase | Commit | 验证 |
+|---|---|---|---|
+| 续 0:00 | Block A 触发根因 + B OTA 23 + C 7埋点 + 顺手 4 项 | 9e5b5ef | Unity batch SetupScene 0 错误 |
+| 续 0:30 | Block E1 PortalSpawnerV199 自动挂 CairnAcquireController | 5c50c8c | Unity batch SetupScene 0 错误,scene saved |
+
+---
+
 ## 当前在做 🔄
 
-策略调整:严格按 Reviewer C 9 项 MVP 执行。Branch C 视觉新建文件已超范围,保留不删。
-
-下一步(按 Reviewer C 优先级):
-- [ ] MVP #4: 距离判定改 anchor 距离(在 CairnAcquireController 内实现)
-- [ ] MVP #5: CairnAcquireController 状态机(FAR/APPROACH/ACQUIRE/IMMORTAL + 单向锁存 + 三条件)
-- [ ] MVP #7: ForceFallbackSpawn 15s 兜底(含 reviewer 修订: 陀螺仪 active 时不触发,fallback Y 取 min(camera.y-1.5, observedMinTierAY-0.05))
-- [ ] commit Branch A+B
-- [ ] MVP #1: Backend migration 013 + 6 telemetry event names
-- [ ] commit Backend
-- [ ] MVP #8: RN handlePlantCairn 删 GPS alert
-- [ ] MVP #9: DistantMarkerArrow.tsx
-- [ ] commit RN
-- [ ] morning report
+按 plan Phase 顺序:
+- [x] Phase 1.1 Block A 触发修复
+- [x] Phase 1.2 Block B 23 OTA 化
+- [x] Phase 1.3 Block C 7/8 埋点
+- [x] Phase 1.4 Block E1 PortalSpawner 自动挂
+- [ ] Phase 1.5 Block A 自动化截图验证 (V024TriggerTest harness)
+- [ ] Phase 2 Block E2/E3 RN render + 路由
+- [ ] Phase 3 Block D 视觉收尾(D1 sweep + D2 5 type 加强 + D3 同步)
+- [ ] Phase 4 Block F 跨 session re-snap + C8 埋点
+- [ ] Phase 5 EXECUTION_REPORT.md 收尾
 
 ---
 

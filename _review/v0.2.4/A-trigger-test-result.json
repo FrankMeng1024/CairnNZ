@@ -1,0 +1,40 @@
+{
+  "test": "v0.2.4 Block A — ray-hit trigger channel",
+  "timestamp": "2026-06-13T08:21:28.8178969Z",
+  "cases": [
+    {
+      "name": "case1-15m-ray-hit",
+      "expectTrigger": true,
+      "expectChannel": "byRayHit",
+      "actualTriggered": true,
+      "actualChannel": "byRayHit",
+      "dist": 15.07,
+      "rayHitMarkXZ": 0.22,
+      "facingDot": 1.00,
+      "verdict": "PASS"
+    },
+    {
+      "name": "case2-50m-degenerate",
+      "expectTrigger": false,
+      "expectChannel": "(none)",
+      "actualTriggered": false,
+      "actualChannel": "(none)",
+      "dist": 50.02,
+      "rayHitMarkXZ": 50.00,
+      "facingDot": -0.29,
+      "verdict": "PASS"
+    },
+    {
+      "name": "case3-8m-original",
+      "expectTrigger": true,
+      "expectChannel": "byCamera",
+      "actualTriggered": true,
+      "actualChannel": "byCamera",
+      "dist": 8.14,
+      "rayHitMarkXZ": 0.00,
+      "facingDot": 1.00,
+      "verdict": "PASS"
+    }
+  ],
+  "summary": "3/3 pass"
+}
