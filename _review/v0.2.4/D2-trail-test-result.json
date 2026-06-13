@@ -1,0 +1,9 @@
+{
+  "test": "v0.2.4 BLOCKER 3 — Trail rendering visual verify",
+  "timestamp": "2026-06-13T09:06:18.7777371Z",
+  "trailRenderer_vertexCount_at_frame30": 31,
+  "lineRenderer_vertexCount_at_frame30": 31,
+  "verdict_LineRenderer_works_in_batch": true,
+  "verdict_TrailRenderer_known_limit_in_batch": false,
+  "conclusion": "LineRenderer 程序化 trail 真渲染了 batch 模式 — D2 视觉加强真生效"
+}

@@ -50,7 +50,14 @@ namespace Cairn.AR
             public float orbitPhase;
             public float orbitSpeed;
             public float orbitY;
-            public TrailRenderer trail; // optional
+            public TrailRenderer trail; // optional Unity built-in
+            // BLOCKER 3 fix: 程序化 trail —— TrailRenderer 在 batch mode 不更新历史,
+            // 用 LineRenderer + 自己维护 history buffer,EditorManualTick / runtime 都生效
+            public LineRenderer manualTrail;
+            public Vector3[] trailHistory;     // ring buffer 历史位置
+            public int trailHistoryCount;      // 已写入数(< trailHistory.Length 时不绕)
+            public int trailHistoryNext;       // 下一个写入索引
+            public float trailWidthStart;
         }
 
         readonly List<Particle> _points = new List<Particle>();
@@ -96,6 +103,7 @@ namespace Cairn.AR
             for (int i = 0; i < _points.Count; i++)
             {
                 var p = _points[i];
+                if (p.manualTrail != null) Destroy(p.manualTrail.gameObject);
                 if (p.tr != null) Destroy(p.tr.gameObject);
             }
             _points.Clear();
@@ -234,6 +242,24 @@ namespace Cairn.AR
                     p.tr.localPosition = pos;
                 }
 
+                // BLOCKER 3 fix: 程序化 trail — 每帧 push 当前 world position 到 history
+                // batch mode 下 TrailRenderer 不更新轨迹,manualTrail (LineRenderer) 弥补
+                if (p.manualTrail != null && p.trailHistory != null)
+                {
+                    Vector3 worldPos = p.tr.position;
+                    p.trailHistory[p.trailHistoryNext] = worldPos;
+                    p.trailHistoryNext = (p.trailHistoryNext + 1) % p.trailHistory.Length;
+                    if (p.trailHistoryCount < p.trailHistory.Length) p.trailHistoryCount++;
+                    // 写到 LineRenderer:从最旧到最新
+                    int n = p.trailHistoryCount;
+                    p.manualTrail.positionCount = n;
+                    for (int k = 0; k < n; k++)
+                    {
+                        int idx = (p.trailHistoryNext - n + k + p.trailHistory.Length) % p.trailHistory.Length;
+                        p.manualTrail.SetPosition(k, p.trailHistory[idx]);
+                    }
+                }
+
                 _points[i] = p;
 
                 // Death
@@ -241,6 +267,7 @@ namespace Cairn.AR
                 if (p.kind != "arrow" && p.tr.localPosition.y < -0.3f) dead = true;
                 if (dead)
                 {
+                    if (p.manualTrail != null) Destroy(p.manualTrail.gameObject);
                     Destroy(p.tr.gameObject);
                     _points.RemoveAt(i);
                 }
@@ -315,7 +342,7 @@ namespace Cairn.AR
             go.transform.localScale = Vector3.one * sz;
 
             // v0.2.4 D2-1: 碎石尾迹(Reviewer B 加强)
-            var trail = AttachTrail(go, 0.4f, 0.005f, new Color(0.55f, 0.42f, 0.20f, 0.7f), Color.clear);
+            var trailRet = AttachTrail(go, 0.4f, 0.005f, new Color(0.55f, 0.42f, 0.20f, 0.7f), Color.clear);
 
             _points.Add(new Particle
             {
@@ -326,7 +353,10 @@ namespace Cairn.AR
                 life = 0f,
                 maxLife = 1.6f,
                 kind = "stone",
-                trail = trail,
+                trail = trailRet.trail,
+                manualTrail = trailRet.manual,
+                trailHistory = trailRet.history,
+                trailWidthStart = 0.005f,
             });
         }
 
@@ -348,7 +378,7 @@ namespace Cairn.AR
             go.transform.localScale = Vector3.one * sz;
 
             // v0.2.4 D2-2: 水珠 motion trail(Reviewer B 加强 — 折射用 fresnel 替代,trail 模拟流体感)
-            var trail = AttachTrail(go, 0.5f, 0.008f,
+            var trailRet = AttachTrail(go, 0.5f, 0.008f,
                 new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.6f),
                 new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0f));
 
@@ -363,7 +393,10 @@ namespace Cairn.AR
                 life = 0f,
                 maxLife = 1.8f,
                 kind = "drop",
-                trail = trail,
+                trail = trailRet.trail,
+                manualTrail = trailRet.manual,
+                trailHistory = trailRet.history,
+                trailWidthStart = 0.008f,
             });
         }
 
@@ -441,7 +474,7 @@ namespace Cairn.AR
             go.transform.localScale = new Vector3(0.04f, 0.055f, 0.04f);
 
             // v0.2.4 D2-5: 箭头分叉 trail(Reviewer B 加强 — junction 留下 0.3s 轨迹)
-            var trail = AttachTrail(go, 0.3f, 0.012f,
+            var trailRet = AttachTrail(go, 0.3f, 0.012f,
                 new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.55f),
                 new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0f));
 
@@ -458,7 +491,10 @@ namespace Cairn.AR
                 orbitPhase = a,
                 orbitSpeed = 0.35f + Random.value * 0.25f,
                 orbitY = 0.18f + Random.value * 0.20f,
-                trail = trail,
+                trail = trailRet.trail,
+                manualTrail = trailRet.manual,
+                trailHistory = trailRet.history,
+                trailWidthStart = 0.012f,
             });
         }
 
@@ -551,8 +587,11 @@ namespace Cairn.AR
         }
 
         // v0.2.4 D2: TrailRenderer helper — Reviewer B 5 条加强里 cairn / water / junction 用
-        static TrailRenderer AttachTrail(GameObject go, float lifeSec, float startWidth, Color startColor, Color endColor)
+        // BLOCKER 3 fix: 同时挂 LineRenderer (manualTrail) — batch mode + runtime 都生效
+        static (TrailRenderer trail, LineRenderer manual, Vector3[] history) AttachTrail(
+            GameObject go, float lifeSec, float startWidth, Color startColor, Color endColor)
         {
+            // 1. Unity built-in TrailRenderer(运行时 device 上有 native trail accumulation)
             var tr = go.AddComponent<TrailRenderer>();
             tr.time = lifeSec;
             tr.startWidth = startWidth;
@@ -562,9 +601,7 @@ namespace Cairn.AR
             tr.numCornerVertices = 2;
             tr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             tr.receiveShadows = false;
-            // Use additive material for trail
             tr.material = MakeAdditiveMat();
-            // Color gradient
             var grad = new Gradient();
             grad.SetKeys(
                 new GradientColorKey[] {
@@ -577,7 +614,26 @@ namespace Cairn.AR
                 });
             tr.colorGradient = grad;
             tr.emitting = true;
-            return tr;
+
+            // 2. 程序化 LineRenderer — batch mode + Editor 也能看到 trail(BLOCKER 3 fix)
+            // 挂在子 GO,因为 LineRenderer 自己用世界空间避免被 transform 拖动
+            var trailGo = new GameObject("ManualTrail");
+            trailGo.transform.SetParent(go.transform.parent, worldPositionStays: true);
+            var lr = trailGo.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.startWidth = startWidth;
+            lr.endWidth = 0f;
+            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.material = MakeAdditiveMat();
+            lr.colorGradient = grad;
+            lr.numCapVertices = 2;
+            lr.positionCount = 0;
+
+            // 历史 buffer 长度 = lifeSec * 30fps ≈ 12-15 点,够 visualize
+            int historyLen = Mathf.Max(4, Mathf.RoundToInt(lifeSec * 30f));
+            var history = new Vector3[historyLen];
+            return (tr, lr, history);
         }
     }
 }
