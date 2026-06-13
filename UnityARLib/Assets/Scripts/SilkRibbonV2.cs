@@ -328,6 +328,19 @@ namespace Cairn.AR
                 // Per-vertex alpha (height envelope * width profile * global fade)
                 float worldT = y / _lifeHeight;
                 float heightAlpha = Mathf.Pow(Mathf.Max(0f, 1f - worldT), 1.6f) * globalFade;
+                // V5.7 V2.3 fresnel rim (C# 路径,不动 shader vary):
+                // dot(view, widthDir) 接近 0 = 正面 alpha 满,接近 ±1 = 侧面 alpha 低
+                // billboard 永远朝相机,视角变化时 widthDir 也跟着调,fresnel=1 - |dot|
+                // 弱 fresnel 0.85-1.0 范围,边缘微透感不影响整体可见性(V5.4 教训:不能让 alpha→0)
+                float vdot = Mathf.Abs(Vector3.Dot(view, widthDir));
+                float fresnel = 1f - vdot;        // 0..1, 1 = head-on
+                float fresnelAlpha = Mathf.Lerp(0.85f, 1.0f, fresnel);
+                heightAlpha *= fresnelAlpha;
+                // V5.7 V2.3 soft particle 替代 — ribbon 顶部 5% 区域 alpha 软衰减
+                // 贴地落地时(sT 接近 ribbon 底部 0)无问题(已 _BaseSoftness 处理)
+                // ribbon 顶部(sT 接近 1)与"天空"过渡处加 softTipFade 模拟绸缎渐入
+                float softTipFade = Mathf.SmoothStep(1f, 0.7f, sT);
+                heightAlpha *= softTipFade;
                 float aHaloEdge = 0f;
                 float aHaloIn   = heightAlpha * 0.45f;
                 float aCenter   = heightAlpha * 1.0f;
