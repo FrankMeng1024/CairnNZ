@@ -592,6 +592,10 @@ public class CairnBridge : MonoBehaviour
             SendToRN("ArReady", arReadyJson);
             UnityLogger.IForward("CairnBridge", "ArReady sent");
 
+            // v0.2.4 Block F: 跨 session re-snap 启动器
+            // 5 秒后扫地面把已 plant cairn snap 到当下真实地面 Y
+            Cairn.AR.CrossSessionGroundSnap.EnsureRunning();
+
             // v22-DIAG-SESSION — emit ONCE at ArReady. Captures all v207-214
             // fix flag fingerprints. RN-side telemetry reader greps for
             // [v22-DIAG-SESSION] to confirm which fixes shipped in this

@@ -1,0 +1,9 @@
+{
+  "test": "v0.2.4 Block F — Cross-session ground snap",
+  "timestamp": "2026-06-13T08:40:12.2020267Z",
+  "beforeY": 1.000,
+  "afterY": 0.000,
+  "yDelta": 1.000,
+  "publicSnapToFloorYExists": true,
+  "verdict": "PASS"
+}
