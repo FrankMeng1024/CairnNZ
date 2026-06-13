@@ -246,8 +246,11 @@ namespace Cairn.AR.Editor
                 var rib = rgo.AddComponent<Cairn.AR.SilkRibbonV2>();
                 rgo.GetComponent<MeshRenderer>().sharedMaterial = ribMat;
                 // V5.9: phase 跨全周期 — 任意 capture 帧都同时看到 stage1/2/3 ribbon
-                float phaseRaw   = (float)i / RIBBON_COUNT + Mathf.Sin(i * 0.7f) * 0.13f;
-                float phaseOffset = phaseRaw - Mathf.Floor(phaseRaw);  // wrap to [0,1)
+                // V5.10b 修: V5.9 的 sin*0.13 抖动让 stage1 (phase<0.3) 只有 3 根
+                //   → 改用纯 i/N 均匀分布: 16 根 → phase = 0, 0.0625, ... 0.9375
+                //   → stage1 (0..0.30) 有 5 根升起、stage2 (0.30..0.65) 有 6 根中段、stage3 (0.65..1) 有 5 根高空
+                //   → 任意 frame 都看到 5 根接地、6 根升空、5 根飘空,真"从阵法升起"
+                float phaseOffset = (float)i / RIBBON_COUNT;
                 float widthBase = 0.16f;
                 float widthVar  = 0.05f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
                 float maxWidth  = widthBase + Mathf.Abs(widthVar);
@@ -343,8 +346,14 @@ namespace Cairn.AR.Editor
                 Vector3 clusterPos = new Vector3((i - 2) * 3f, 0f, 0f);
                 // V2.2 P0b fix: 相机距离 2.8m → 3.2m,匹配 HTML demo 4.5m 紧凑感
                 // V4.7 fix: lookAt y 1.0 → 1.2 让 label 卡片(放在 y=1.55)进入画面上 1/3
-                cam.transform.position = clusterPos + new Vector3(0f, 1.6f, -3.2f);
-                cam.transform.LookAt(clusterPos + new Vector3(0f, 1.2f, 0f));
+                // V5.10 sub#2 BLOCKER 修 ceremony invisible:
+                //   V4.12 设的 (0,1.6,-3.2) 看 (0,1.2,0) 让圆环在画面下半被边缘化,
+                //   ribbon 起源点 (y=0) 位于视野下方边缘,stage1 接地几乎看不到
+                //   → 改用 type-stack 同款 (0,1.4,-2.8) 看 (0,0.85,0):
+                //     - 看高度 0.85m → 圆环 + ribbon 接地点都在画面中下
+                //     - 距离 2.8m 视野更紧凑,ribbon 升起轨迹完整可见 0..3m
+                cam.transform.position = clusterPos + new Vector3(0f, 1.4f, -2.8f);
+                cam.transform.LookAt(clusterPos + new Vector3(0f, 0.85f, 0f));
 
                 // V2.2 P0a fix: 隐藏其他 cluster,避免相机视锥内出现穿帮(右下红色 danger 三角)
                 // 5 cluster 摆在 (-6/-3/0/3/6) X 轴,相机俯拍当前 cluster 时其他 cluster 仍在视场内
@@ -436,8 +445,9 @@ namespace Cairn.AR.Editor
             var t = TYPES[0];  // cairn
             Vector3 clusterPos = new Vector3((0 - 2) * 3f, 0f, 0f);
             // V4.12 fix: 用 V4.x 相机设置(同 5 type capture)+ 在暖白底/暖金地面/fog 下截图
-            cam.transform.position = clusterPos + new Vector3(0f, 1.6f, -3.2f);
-            cam.transform.LookAt(clusterPos + new Vector3(0f, 1.2f, 0f));
+            // V5.10: 同 ceremony,相机改 (0,1.4,-2.8) 看 (0,0.85,0) 让 ribbon 起源点入视野
+            cam.transform.position = clusterPos + new Vector3(0f, 1.4f, -2.8f);
+            cam.transform.LookAt(clusterPos + new Vector3(0f, 0.85f, 0f));
 
             // V4.12 fix: 用 transform.Find 路径(GameObject.Find 不找 inactive,V4.8 同 bug)
             // 5 type capture 末尾把所有 cluster 都 SetActive(true) 但保险起见还是激活当前 cluster

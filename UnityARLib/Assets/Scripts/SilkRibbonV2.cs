@@ -197,9 +197,11 @@ namespace Cairn.AR
             {
                 // 阶段 1: 贴地升起
                 float t1 = lifeT / STAGE1_END;
-                // smoothstep ease-out 让 ribbon 从 0 长到 bodyLength,慢起快达
-                float t1Smooth = Mathf.SmoothStep(0f, 1f, t1);
-                topY = _bodyLength * t1Smooth;
+                // V5.10 修: SmoothStep ease-out 让 t1=0.3 时长度才到 0.42 → 0.5s 内 ribbon 矮小不显眼
+                // 改 sqrt 让前段就拉满: t1=0.1 → length=0.32m, t1=0.3 → 0.55m, t1=0.5 → 0.71m
+                // 配合 globalFade 0.05 阈值让 stage1 升起阶段全程可见
+                float t1Curve = Mathf.Sqrt(t1);
+                topY = _bodyLength * t1Curve;
                 bottomY = 0f;
             }
             else if (lifeT < STAGE2_END)
@@ -227,8 +229,13 @@ namespace Cairn.AR
             _mr.enabled = true;
 
             // Global fade (lift-off + retreat)
+            // V5.10 sub#2 BLOCKER 修 ceremony invisible:
+            //   旧 lifeT<0.15 fade=lifeT/0.15 让 stage1 升起头 0.75s 几乎不可见
+            //   → 用户永远只看到 stage2/3 高空 ribbon,看不到"从阵法升起"
+            //   → 改 lifeT<0.05 fade-in (头 0.25s 微淡入防 pop),0.05+ 即满 alpha
+            //     stage1 升起整段 0..1.5s 都全亮 → ribbon 真"从阵法长出"
             float globalFade = 1f;
-            if (lifeT < 0.15f) globalFade = lifeT / 0.15f;
+            if (lifeT < 0.05f) globalFade = lifeT / 0.05f;
             else if (lifeT > 0.85f) globalFade = (1f - lifeT) / 0.15f;
 
             // V5.6 = V2.4 三段渐入浅色 + V2.5 光感自适应(C# 路径,不动 shader vary 防回归)
