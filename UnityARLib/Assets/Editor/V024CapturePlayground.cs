@@ -174,7 +174,12 @@ namespace Cairn.AR.Editor
                 // V2.2 G11 fix: phaseOffset 改均匀分配 0/0.2/0.4/0.6/0.8(原 Random.value 让错峰失效)
                 // V2.1 sub#2 抓出:5 根 phaseOffset 是 Random.value 完全独立随机 → 高概率 2-3 根同步
                 float phaseOffset = i / (float)RIBBON_COUNT;
-                rib.Configure(RING_RADIUS, angle, phaseOffset, t.color, new Color(0.95f, 0.97f, 1.0f, 1f));
+                // V2.2 P1c fix: maxWidth 每根用 phaseOffset 衍生(确定性,但 5 根 0.10/0.115/0.13/0.115/0.10 略变化)
+                // HTML demo 每根 0.10-0.15m 给"自然花束感",不要 5 根都 0.10m 整齐划一
+                float widthBase = 0.10f;
+                float widthVar  = 0.05f * Mathf.Sin(phaseOffset * Mathf.PI);  // 0/0.029/0.048/0.029/0
+                float maxWidth  = widthBase + Mathf.Abs(widthVar);
+                rib.Configure(RING_RADIUS, angle, phaseOffset, t.color, new Color(0.95f, 0.97f, 1.0f, 1f), maxWidth);
             }
 
             // --- Rune SDF quad lying flat on ground ---
@@ -229,9 +234,19 @@ namespace Cairn.AR.Editor
             {
                 var t = TYPES[i];
                 Vector3 clusterPos = new Vector3((i - 2) * 3f, 0f, 0f);
-                cam.transform.position = clusterPos + new Vector3(0f, 1.4f, -2.8f);
-                cam.transform.LookAt(clusterPos + new Vector3(0f, 0.85f, 0f));
+                // V2.2 P0b fix: 相机距离 2.8m → 3.2m,匹配 HTML demo 4.5m 紧凑感
+                // HTML camera.position (3.2, 2.0, 3.2) lookAt (0, 1.0, 0) 透视让 5 根紧凑
+                // Unity 旧版 (0, 1.4, -2.8) lookAt (0, 0.85, 0) 太近,5 根分散像独立柱子
+                cam.transform.position = clusterPos + new Vector3(0f, 1.6f, -3.2f);
+                cam.transform.LookAt(clusterPos + new Vector3(0f, 1.0f, 0f));
 
+                // V2.2 P0a fix: 隐藏其他 cluster,避免相机视锥内出现穿帮(右下红色 danger 三角)
+                // 5 cluster 摆在 (-6/-3/0/3/6) X 轴,相机俯拍当前 cluster 时其他 cluster 仍在视场内
+                for (int j = 0; j < TYPES.Length; j++)
+                {
+                    var otherClusterRoot = GameObject.Find($"Cluster_{TYPES[j].id}");
+                    if (otherClusterRoot != null) otherClusterRoot.SetActive(j == i);
+                }
                 // v0.2.4 manual ticks: drive ribbons + particles since
                 // batch mode does not fire MonoBehaviour Update / LateUpdate
                 // V2.2 P1 fix: 跑 30 帧而非 60 帧截图
@@ -244,7 +259,8 @@ namespace Cairn.AR.Editor
                 {
                     var ribbons = clusterRoot.GetComponentsInChildren<Cairn.AR.SilkRibbonV2>();
                     var parts   = clusterRoot.GetComponentsInChildren<Cairn.AR.TypeParticleController>();
-                    for (int frame = 0; frame < 30; frame++)
+                    // V2.2 P1c fix: frame 30 → 45,2.25s 让 5 根 lifeDuration 4-6s 都还在 lifeT < 0.6 中段强光
+                    for (int frame = 0; frame < 45; frame++)
                     {
                         // Advance shader animation time for flow noise
                         Shader.SetGlobalFloat("_CairnAnimTime", frame * 0.05f + 0.5f);
@@ -257,6 +273,13 @@ namespace Cairn.AR.Editor
                 for (int sub = 0; sub < 5; sub++) cam.Render();
 
                 CaptureCameraToPng(cam, $"{OUT_DIR}/type-{t.id}.png");
+            }
+
+            // V2.2 P0a fix: capture 完成后 restore 所有 cluster active(给后续 ceremony / anim 用)
+            for (int j = 0; j < TYPES.Length; j++)
+            {
+                var anyClusterRoot = GameObject.Find($"Cluster_{TYPES[j].id}");
+                if (anyClusterRoot != null) anyClusterRoot.SetActive(true);
             }
 
             // Ceremony flipbook (use cairn cluster, animate camera/material params per frame)
