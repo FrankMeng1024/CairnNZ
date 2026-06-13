@@ -616,6 +616,13 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             container.transform.localRotation = Quaternion.identity;
             UnityLogger.IForward("v22-ANCHOR",
                 $"id={data.id} pre-spawn-attach=ok planeAnchor={anchorOnSpawn.trackableId}");
+            // V4.13 A2.4 埋点(用户原话 "v22-PLANT-ANCHOR-CREATE / DRIFT-DETECTED"):
+            UnityLogger.IForward("v22-PLANT-ANCHOR-CREATE",
+                $"id={data.id} tier=plane-attached pos=({spawnX:F2},{groundY:F2},{spawnZ:F2}) trackableId={anchorOnSpawn.trackableId}");
+            // 挂 drift monitor (1s 检查一次,session 内最多 emit 5 次防 spam)
+            var driftMon = container.GetComponent<Cairn.AR.AnchorDriftMonitor>();
+            if (driftMon == null) driftMon = container.AddComponent<Cairn.AR.AnchorDriftMonitor>();
+            driftMon.Init(data.id ?? "unknown");
         }
         else
         {

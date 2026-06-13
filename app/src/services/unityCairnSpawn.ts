@@ -179,6 +179,8 @@ export function buildSpawnRequest(
     const dE = (origin.lng - marker.arOriginLng) * 111_000 * cosLat;
     const originDeltaM = Math.hypot(dN, dE);
     if (originDeltaM <= ARKIT_XYZ_TIER_A_MAX_DELTA_M) {
+      // A2.4 埋点:Tier-A 命中(用户原话"对账"用)
+      console.log(`[v22-PLANT-ANCHOR-TIER-A] id=${marker.id} originDelta=${originDeltaM.toFixed(2)}m arkit=(${marker.arkitX.toFixed(2)},${marker.arkitY.toFixed(2)},${marker.arkitZ.toFixed(2)})`);
       return {
         id: marker.id,
         type: marker.type,
@@ -193,12 +195,17 @@ export function buildSpawnRequest(
         note,
       };
     }
+    // A2.4 埋点:origin delta 太大,Tier-A 拒绝
+    console.log(`[v22-PLANT-ANCHOR-TIER-A-REJECT] id=${marker.id} originDelta=${originDeltaM.toFixed(2)}m > ${ARKIT_XYZ_TIER_A_MAX_DELTA_M}m → fallback Tier-B`);
     // origin delta 太大 → 持久化 ARKit XYZ 不再可信,fallback GPS
   }
 
   // Tier-B: GPS+geoToArkitWorld(原 v0.2.3 路径)
   const xz = geoToArkitWorld(marker.lat, marker.lng, origin);
   if (!xz) return null;
+  // A2.4 埋点:Tier-B fallback(无 arkitXYZ 或 origin 漂移)
+  const tierBReason = (marker.arkitX == null) ? 'no-arkit-xyz' : 'origin-delta-exceeded';
+  console.log(`[v22-PLANT-ANCHOR-TIER-B] id=${marker.id} reason=${tierBReason} gps=(${marker.lat.toFixed(5)},${marker.lng.toFixed(5)}) xz=(${xz.x.toFixed(2)},${xz.z.toFixed(2)}) y=${(groundY ?? 0).toFixed(2)}`);
   return {
     id: marker.id,
     type: marker.type,

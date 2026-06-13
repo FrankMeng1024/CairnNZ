@@ -106,6 +106,12 @@ namespace Cairn.AR
                                     foreach (var r in _hiddenRenderers)
                                         if (r != null) r.enabled = true;
                                     Debug.Log($"[v22-RETRY-OK] id={_markerId} after {(_deadline - Time.time):F2}s remaining");
+                                    // V4.13 A2.4 埋点 + drift monitor (retry 成功路径)
+                                    UnityLogger.IForward("v22-PLANT-ANCHOR-CREATE",
+                                        $"id={_markerId} tier=retry-plane-attached pos=({best.pose.position.x:F2},{best.pose.position.y:F2},{best.pose.position.z:F2}) trackableId={anchor.trackableId}");
+                                    var driftMon = GetComponent<AnchorDriftMonitor>();
+                                    if (driftMon == null) driftMon = gameObject.AddComponent<AnchorDriftMonitor>();
+                                    driftMon.Init(_markerId);
                                     Destroy(this);
                                     yield break;
                                 }
@@ -143,6 +149,12 @@ namespace Cairn.AR
                 var spawner = Object.FindFirstObjectByType<PortalSpawner>();
                 if (spawner != null) spawner.RegisterAuxiliaryAnchor(anchorGo);
                 Debug.LogWarning($"[v22-RETRY-DEADLINE-ANCHORED] id={_markerId} estimated_ground y={_intendedY:F2} pinned to free-floating ARAnchor");
+                // V4.13 A2.4 埋点 + drift monitor (deadline-anchor 路径)
+                UnityLogger.IForward("v22-PLANT-ANCHOR-CREATE",
+                    $"id={_markerId} tier=deadline-free-floating pos=({estimatedPose.x:F2},{estimatedPose.y:F2},{estimatedPose.z:F2})");
+                var driftMon = GetComponent<AnchorDriftMonitor>();
+                if (driftMon == null) driftMon = gameObject.AddComponent<AnchorDriftMonitor>();
+                driftMon.Init(_markerId);
             }
             else
             {
