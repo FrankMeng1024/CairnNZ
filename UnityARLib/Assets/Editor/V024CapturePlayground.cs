@@ -400,10 +400,25 @@ namespace Cairn.AR.Editor
 
             var t = TYPES[0];  // cairn
             Vector3 clusterPos = new Vector3((0 - 2) * 3f, 0f, 0f);
-            cam.transform.position = clusterPos + new Vector3(0f, 1.4f, -2.8f);
-            cam.transform.LookAt(clusterPos + new Vector3(0f, 0.85f, 0f));
+            // V4.12 fix: 用 V4.x 相机设置(同 5 type capture)+ 在暖白底/暖金地面/fog 下截图
+            cam.transform.position = clusterPos + new Vector3(0f, 1.6f, -3.2f);
+            cam.transform.LookAt(clusterPos + new Vector3(0f, 1.2f, 0f));
 
-            var clusterRoot = GameObject.Find($"Cluster_{t.id}");
+            // V4.12 fix: 用 transform.Find 路径(GameObject.Find 不找 inactive,V4.8 同 bug)
+            // 5 type capture 末尾把所有 cluster 都 SetActive(true) 但保险起见还是激活当前 cluster
+            var clustersParent = GameObject.Find(CLUSTER_PARENT);
+            GameObject clusterRoot = null;
+            if (clustersParent != null)
+            {
+                // 激活 cairn 隐藏其他(避免穿帮)
+                for (int j = 0; j < clustersParent.transform.childCount; j++)
+                {
+                    var c = clustersParent.transform.GetChild(j);
+                    c.gameObject.SetActive(c.name == $"Cluster_{t.id}");
+                }
+                var clusterTr = clustersParent.transform.Find($"Cluster_{t.id}");
+                if (clusterTr != null) clusterRoot = clusterTr.gameObject;
+            }
             if (clusterRoot == null) return;
 
             var ribbons = clusterRoot.GetComponentsInChildren<Cairn.AR.SilkRibbonV2>();
@@ -419,6 +434,15 @@ namespace Cairn.AR.Editor
                 foreach (var pc in parts)   pc.EditorManualTick(DT);
                 for (int sub = 0; sub < 2; sub++) cam.Render();
                 CaptureCameraToPng(cam, $"{animDir}/frame-{f:D2}.png");
+            }
+
+            // V4.12 fix: restore 所有 cluster active
+            if (clustersParent != null)
+            {
+                for (int j = 0; j < clustersParent.transform.childCount; j++)
+                {
+                    clustersParent.transform.GetChild(j).gameObject.SetActive(true);
+                }
             }
         }
 
