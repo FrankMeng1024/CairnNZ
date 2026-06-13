@@ -21,14 +21,14 @@ namespace Cairn.AR.Editor
 {
     public static class V024CapturePlayground
     {
-        struct TypeDef { public string id; public Color color; }
+        struct TypeDef { public string id; public Color color; public string title; public string note; public string author; public string daysAgo; }
         static readonly TypeDef[] TYPES = new[]
         {
-            new TypeDef { id = "cairn",    color = new Color(0.91f, 0.78f, 0.59f, 1f) },
-            new TypeDef { id = "danger",   color = new Color(1.00f, 0.16f, 0.10f, 1f) },
-            new TypeDef { id = "water",    color = new Color(0.35f, 0.90f, 1.00f, 1f) },
-            new TypeDef { id = "junction", color = new Color(0.77f, 0.91f, 0.28f, 1f) },
-            new TypeDef { id = "hut",      color = new Color(0.83f, 0.63f, 0.42f, 1f) },
+            new TypeDef { id = "cairn",    color = new Color(0.91f, 0.78f, 0.59f, 1f), title = "CAIRN",    note = "路过留念。视野很好。",   author = "Henare",   daysAgo = "5D"  },
+            new TypeDef { id = "danger",   color = new Color(1.00f, 0.16f, 0.10f, 1f), title = "DANGER",   note = "湿滑。小心。",            author = "Sarah",    daysAgo = "12D" },
+            new TypeDef { id = "water",    color = new Color(0.35f, 0.90f, 1.00f, 1f), title = "WATER",    note = "清澈溪水。可饮。",        author = "Te Aroha", daysAgo = "3D"  },
+            new TypeDef { id = "junction", color = new Color(0.77f, 0.91f, 0.28f, 1f), title = "JUNCTION", note = "分叉路。北 → 山顶。",     author = "Manaia",   daysAgo = "7D"  },
+            new TypeDef { id = "hut",      color = new Color(0.83f, 0.63f, 0.42f, 1f), title = "HUT",      note = "紧急避难所 200m 西北。",   author = "DOC",      daysAgo = "18D" },
         };
 
         const string OUT_DIR = "Logs/v024-capture";
@@ -84,9 +84,6 @@ namespace Cairn.AR.Editor
             RenderSettings.fogDensity = 0.012f;
 
             // V4.6 fix: URP Volume + ACES Filmic Tonemapping + Bloom
-            // HTML demo line 98-99 用 Three.js ACESFilmicToneMapping + exposure 1.2
-            // Unity 没 tonemapping → Additive 丝带在白底变成"saturated 平淡白"
-            // 加 URP Volume 全局 Tonemapping = ACES + Bloom intensity 0.5 让丝带有"高光溢出"
             var volumeGo = new GameObject("V024GlobalVolume");
             var volume = volumeGo.AddComponent<UnityEngine.Rendering.Volume>();
             volume.isGlobal = true;
@@ -254,6 +251,35 @@ namespace Cairn.AR.Editor
             var ctrl = partGo.AddComponent<Cairn.AR.TypeParticleController>();
             ctrl.Configure(t.id, t.color, RING_RADIUS);
             ctrl.SetSpawnEnabled(true);
+
+            // V4.7 fix: Label 卡片(world-space quad + 预生成 PNG 文字图)
+            // 直接用 quad 贴预生成 PNG(scripts/build_v024_labels.py 生成),batch mode 友好
+            // 不用 TMP — 因为项目没装 TMP Essentials,fontMaterial null 报错
+            var labelGo = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            labelGo.name = "Label";
+            UnityEngine.Object.DestroyImmediate(labelGo.GetComponent<Collider>());
+            labelGo.transform.SetParent(root.transform, false);
+            labelGo.transform.localPosition = new Vector3(0f, 1.45f, 0f);
+            labelGo.transform.localScale = new Vector3(0.7f, 0.21f, 1f);
+            // V4.7 v5 fix: Unity Quad 默认 mesh 法线朝 -Z(背对 +Z),相机在 -Z 方向
+            // 所以 Quad 法线 -Z 与相机视线方向 +Z 同向 = 背对相机被 backface culling 剔除
+            // 加 180° rot 让法线朝 +Z = 朝相机
+            labelGo.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            var labelMr = labelGo.GetComponent<MeshRenderer>();
+            labelMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            labelMr.receiveShadows = false;
+            // 加载预生成 label PNG(scripts/build_v024_labels.py 烘焙)
+            var labelTex = AssetDatabase.LoadAssetAtPath<Texture2D>($"Assets/Textures/V4_label_{t.id}.png");
+            // V4.7 v5 fix: Quad 法线确认朝相机后,改回 texture material
+            // 用 Sprites/Default 内置 alpha blend 支持
+            var labelMat = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Transparent"));
+            if (labelTex != null)
+            {
+                if (labelMat.HasProperty("_MainTex")) labelMat.SetTexture("_MainTex", labelTex);
+                if (labelMat.HasProperty("_BaseMap")) labelMat.SetTexture("_BaseMap", labelTex);
+            }
+            labelMat.renderQueue = 3500;
+            labelMr.sharedMaterial = labelMat;
         }
 
         // ============================================================
@@ -291,10 +317,9 @@ namespace Cairn.AR.Editor
                 var t = TYPES[i];
                 Vector3 clusterPos = new Vector3((i - 2) * 3f, 0f, 0f);
                 // V2.2 P0b fix: 相机距离 2.8m → 3.2m,匹配 HTML demo 4.5m 紧凑感
-                // HTML camera.position (3.2, 2.0, 3.2) lookAt (0, 1.0, 0) 透视让 5 根紧凑
-                // Unity 旧版 (0, 1.4, -2.8) lookAt (0, 0.85, 0) 太近,5 根分散像独立柱子
+                // V4.7 fix: lookAt y 1.0 → 1.2 让 label 卡片(放在 y=1.55)进入画面上 1/3
                 cam.transform.position = clusterPos + new Vector3(0f, 1.6f, -3.2f);
-                cam.transform.LookAt(clusterPos + new Vector3(0f, 1.0f, 0f));
+                cam.transform.LookAt(clusterPos + new Vector3(0f, 1.2f, 0f));
 
                 // V2.2 P0a fix: 隐藏其他 cluster,避免相机视锥内出现穿帮(右下红色 danger 三角)
                 // 5 cluster 摆在 (-6/-3/0/3/6) X 轴,相机俯拍当前 cluster 时其他 cluster 仍在视场内
