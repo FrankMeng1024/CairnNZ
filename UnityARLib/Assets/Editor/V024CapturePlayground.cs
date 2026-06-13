@@ -183,7 +183,7 @@ namespace Cairn.AR.Editor
             //   修: _DayMul 2.5 → 1.4, _MaxLuma 1.6 → 2.5(实质关 clamp)
             //     cairn * 1.4 = (1.29, 1.19, 0.98) 不被 clamp,真米色保留
             ribMat.SetFloat("_NightMul",      1.10f);
-            ribMat.SetFloat("_DayMul",        1.40f);
+            ribMat.SetFloat("_DayMul",        1.80f);  // V5.22: 1.4→1.8 补偿 bloom 关后的暗淡
             ribMat.SetFloat("_MaxLuma",       2.50f);  // V5.19: 1.6 → 2.5 实质关 clamp 让 source 色相不被烧白
             // V4.3 fix: _FlowStrength 同步 V2.3 default 0.30(原 0.55 让 white texture 变 1.47 增亮)
             ribMat.SetFloat("_FlowStrength",  0.30f);
@@ -325,8 +325,9 @@ namespace Cairn.AR.Editor
                 //   V5.19 phase [0, 0.4] 让 60帧 anim 都在 stage1/2 看不到生命周期
                 //   V5.20: 回 [0, 1] 全周期跨度让 anim 60帧能看到任意时刻 stage1/2/3 共存
                 float phaseOffset = (float)i / RIBBON_COUNT;
-                float widthBase = 0.14f;
-                float widthVar  = 0.04f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
+                // V5.22 mesh aspect 修 silk 不像火柱: width 0.14→0.18 让 ribbon 真宽
+                float widthBase = 0.18f;
+                float widthVar  = 0.05f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
                 float maxWidth  = widthBase + Mathf.Abs(widthVar);
                 rib.Configure(RING_RADIUS, angle, phaseOffset, t.color, new Color(0.95f, 0.97f, 1.0f, 1f), maxWidth);
             }
