@@ -38,8 +38,8 @@ Shader "Cairn/RibbonSilkV2"
         _BandIntensity      ("Energy band brightness",     Range(0, 1))   = 0.4
         _HeightAlphaPower   ("Tip falloff curve",          Range(0.5, 4)) = 1.6
         _BaseSoftness       ("Base soften (0..1, low fades)", Range(0, 0.3)) = 0.08
-        _DayMul             ("Day multiplier",  Range(0.05, 1.5)) = 0.55
-        _NightMul           ("Night multiplier", Range(0.5, 3.0)) = 1.6
+        _DayMul             ("Day multiplier",  Range(0.05, 1.5)) = 0.95
+        _NightMul           ("Night multiplier", Range(0.5, 3.0)) = 1.10
         _PhaseOffset        ("Phase offset (rad)", Range(0, 6.283)) = 0
         _MaxLuma            ("HDR max luma clamp", Range(0.5, 3.0)) = 1.6
         _BloomBoost         ("Distance bloom boost", Range(0.5, 2.0)) = 0.8
@@ -152,7 +152,10 @@ Shader "Cairn/RibbonSilkV2"
                 // ---- Color: base type tint → tip lighter ----
                 float colorT = smoothstep(_CoreToTipMixStart, _CoreToTipMixEnd, v);
                 float3 baseColor = lerp(_BaseTint.rgb, _TipTint.rgb, colorT);
-                float modeMul    = lerp(_NightMul, _DayMul, _CairnGlobalDayNightT);
+                // V2.2 G13 fix: lerp 顺序翻转 — _CairnGlobalDayNightT=0=day → _DayMul, =1=night → _NightMul
+                // 原代码 lerp(_NightMul, _DayMul, T) 让 T=0 用 night,语义反向
+                // 同时收窄到 0.95 / 1.10(用户原话:微调不切换主题色)
+                float modeMul    = lerp(_DayMul, _NightMul, _CairnGlobalDayNightT);
 
                 // Distance bloom for far cairns
                 float distFactor = saturate(_CairnGlobalCamDist / 18.0);
