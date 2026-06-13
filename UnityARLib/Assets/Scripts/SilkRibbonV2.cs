@@ -27,7 +27,7 @@ namespace Cairn.AR
         [SerializeField] float _angleRad = 0f;       // base angle on ring
         [SerializeField] float _phaseOffset = 0f;    // 0..1 lifecycle stagger
         [SerializeField] float _lifeHeight = 2.5f;   // V5.15 sub 共识: 必须 > bodyLength*2=2.0 让 stage3 bottomY 真升,V5.14 1.5 数学反向 bug
-        [SerializeField] float _bodyLength = 1.0f;   // m visible portion at any t
+        [SerializeField] float _bodyLength = 1.5f;   // V5.30 sub 推荐 height ×3: 1.0→1.5 让 ribbon 修长不胖锥
         [SerializeField] float _maxWidth = 0.10f;
         [SerializeField] int   _segs = 24;
         [SerializeField] float _swayAmp = 0.02f;   // V5.23 sub#2 抑火焰: 0.05→0.02 减弱 sway 让 ribbon 不扭曲成火焰
@@ -271,9 +271,10 @@ namespace Cairn.AR
             //   修: 0.95 让 ribbon 起源在 ring 内侧 5%, 与 ring 视觉真接合
             float baseX = Mathf.Cos(_angleRad) * _ringRadius * 0.95f;
             float baseZ = Mathf.Sin(_angleRad) * _ringRadius * 0.95f;
-            // V5.29 sub#2 推荐顶部向中心收束 (HTML baseline: 三股顶端汇聚成锥):
-            //   ribbon 顶部 sT=1 时往中心 (0, topY, 0) 拉,sT 越大越内收
-            //   公式: cx = baseX * (1 - sT^2 * 0.7)  让顶 30% 朝中心收
+            // V5.30 sub#19 reset 真根因修法:
+            //   V5.29 顶部收束让 ribbon 变纺锤(短2:1) — HTML baseline 是修长丝带(8:1)+顶 alpha 淡出
+            //   修: 取消 convergeFactor (ribbon 不收束),靠 alpha 淡出 + height 加长实现 HTML 风格
+            //   保留 swayTan 让 silk 仍有 wobble
 
             // Sway (gentle wobble)
             // V2.2 G16 fix: batch mode Time.time=0,改用 Shader.GetGlobalFloat("_CairnAnimTime")
@@ -302,10 +303,9 @@ namespace Cairn.AR
                 // Sway grows toward tip
                 float swayMag = _swayAmp * sT * sT;
                 float swayOff = swayMag * Mathf.Sin(sT * 2.5f + swayPhase);
-                // V5.29: 顶部向中心收束 (HTML 三股汇聚)
-                float convergeFactor = 1f - sT * sT * 0.7f;  // sT=0 → 1.0, sT=1 → 0.30
-                float cx = baseX * convergeFactor + swayTanX * swayOff;
-                float cz = baseZ * convergeFactor + swayTanZ * swayOff;
+                // V5.30: 取消顶部收束,ribbon 直立修长不再纺锤
+                float cx = baseX + swayTanX * swayOff;
+                float cz = baseZ + swayTanZ * swayOff;
 
                 Vector3 worldP = originWorld + new Vector3(cx, y, cz);
 
@@ -318,13 +318,11 @@ namespace Cairn.AR
                     widthDir.Normalize();
 
                 // Spindle width: narrow at base, fat at mid, fan at tip
-                // V5.24 sub#1 final 修 silk 形态收束:
-                //   sub#1 V5.23 仍说"顶部发散底部消散无宽度收束"
-                //   修 spindleShape: silk 真物理:底窄(挂点) + 中段最宽(摆幅) + 顶尖收(漂出)
-                //   公式: 0.3 + 0.7 * sin(π*sT) — sT=0 0.3, sT=0.5 1.0, sT=1 0.3 — 真 spindle
-                // V5.26 debug + 强化: spindle 振幅大 + 底端真贴近 0
-                //   sT=0 → 0.15 (真窄底), sT=0.5 → 1.0, sT=1 → 0.15 (真窄顶)
-                float spindleShape = 0.15f + 0.85f * Mathf.Sin(sT * Mathf.PI);
+                // V5.26 spindle 振幅强化: 0.15 + 0.85 * sin(π*sT)
+                // V5.30 sub#19 reset: HTML baseline 不是 spindle,是上窄下宽 + alpha 淡出
+                //   修 spindleShape: sT=0 1.0 (底宽,根植 cairn) → sT=1 0.4 (顶仍宽 alpha 淡出)
+                //   不再纺锤(底尖)
+                float spindleShape = 1.0f - sT * 0.6f;  // 1.0 → 0.4 单调减,底宽顶窄
                 #if UNITY_EDITOR
                 if (Application.isBatchMode && s == 0 && _life > 1.0f && _life < 1.05f)
                 {
