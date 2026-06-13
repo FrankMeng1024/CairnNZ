@@ -227,6 +227,25 @@ public partial class PortalSpawner
         }
         // Anchor parenting always runs (independent of ceremony).
         StartCoroutine(TryParentToAnchor(container, groundY));
+
+        // ── Block E1: 自动挂 CairnAcquireController(v0.2.4 wire-up)──
+        // 让 cairn 一旦 spawn 就由 5铁律 状态机驱动:
+        //   FAR → APPROACH → ACQUIRE → IMMORTAL,触发 CeremonyController.Play()
+        // 之前 MORNING_REPORT 记录"未自动挂"是 v0.2.4 build 的最大差距,本次修复。
+        if (globals == null || globals.GetBool("AcquireControllerEnabled", true))
+        {
+            var ceremony = container.GetComponentInChildren<Cairn.AR.CeremonyController>(true);
+            // existingAnchor 此刻可能 null(TryParentToAnchor 是 coroutine 异步)
+            // CairnAcquireController.GetTargetWorldPos() 已 fallback 到 transform.position
+            var existingAnchor = container.GetComponentInParent<ARAnchor>();
+            // LiDAR 检测:ARFoundation 6 通过 ARSession + meshing subsystem 判定
+            // 简单策略:_planeMgr 在且 ARSession 跑起来即可,实际 LiDAR 判定下沉到
+            // FloorPlaneValidator 内部(它已有 _lidarAvailable 入参驱动的不同验证规则)
+            bool lidar = false;  // 保守 default,FloorPlaneValidator 仍可用 polygon 路径
+            var ctl = container.AddComponent<Cairn.AR.CairnAcquireController>();
+            ctl.Init(data.id, existingAnchor, arRaycastManagerRef, arPlaneManagerRef,
+                     arAnchorManagerRef, arCameraRef, ceremony, lidar);
+        }
         UnityLogger.IForward("V199",
             $"add-done id={data.id} pebble={(pebbleMaterial!=null && data.type=="cairn")} " +
             $"chip={(typeChipMaterial!=null && data.type!="cairn")} " +
