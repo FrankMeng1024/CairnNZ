@@ -334,7 +334,17 @@ namespace Cairn.AR
 
                 // Per-vertex alpha (height envelope * width profile * global fade)
                 float worldT = y / _lifeHeight;
-                float heightAlpha = Mathf.Pow(Mathf.Max(0f, 1f - worldT), 1.6f) * globalFade;
+                // V5.12 sub#2 数学反推修 (S2-N4 CRITICAL):
+                //   V5.11 heightAlpha = pow(1-worldT, 1.6f) 在 stage3 worldT=1 → heightAlpha=0
+                //   配合 V5.11 midHighlight 顶亮的设计意图被双抵消:stage3 整段 alpha 几乎 0
+                //   sub#2 算: stage1 底=顶=0.65 (ribbon 灰平), stage3 全 0.10 (几乎不可见)
+                //   修: exponent 1.6 → 0.6 让顶部 falloff 平缓
+                // V5.12e BLOCKER: stage1 ribbon (y<0.5m) alpha 太低被暖底色吞 → ribbon 视觉脱地
+                //   修: stage1 (lifeT<0.30) 时 heightAlpha 额外乘 1.8 (但 clamp 1.0) 让接地段更亮
+                //     stage2/3 维持原值
+                float heightAlphaBase = Mathf.Pow(Mathf.Max(0f, 1f - worldT), 0.6f) * globalFade;
+                float stage1Boost = lifeT < 0.30f ? 1.8f : 1.0f;
+                float heightAlpha = Mathf.Min(1.0f, heightAlphaBase * stage1Boost);
                 // V5.11 V2.3 rim 学 HTML baseline (sub#1+sub#2 共识 V5.10 midHighlight 反向):
                 //   V5.10 让 sT 0.2-0.85 全 alpha=1 → "白热钢管"不是绸缎
                 //   HTML baseline silk 物理: 底部暗 (anchor)、上半段亮 (光线穿透)、tip 渐入天空

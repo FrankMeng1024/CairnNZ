@@ -186,7 +186,12 @@ namespace Cairn.AR.Editor
             runeMat.SetFloat("_Reveal",    1.0f);
 
             // --- Tier-1 圆环 (主环 + 内环,1:1 移植 Three.js demo line 142-166) ---
-            float RING_RADIUS = 0.50f;  // V4.11+V5.5: 0.55 → 0.42 太紧 ribbon 被 cairn 遮 → 折中 0.50
+            // V5.12 sub#2 数学反推 (S2-N2 CRITICAL): V5.11 RING_RADIUS=0.50 + 16 ribbon
+            //   → 邻接间距 周长/16 = π*0.5/8 = 0.196m,小于 maxWidth 0.16-0.21m → 几何重叠
+            // V5.12b 修法平衡: RING_RADIUS 0.65 + maxWidth 0.13 (从 0.16-0.21 缩到 0.10-0.13)
+            //   间距 π*0.65/8 = 0.255m, maxWidth 0.13 留 50% 间隙不重叠
+            //   且 ringRadius 0.65 不至于太分散让 ribbon 远到 cam 看不全
+            float RING_RADIUS = 0.65f;
             Color darkAmber = LerpToDarkAmber(t.color);
 
             var ringShader = Shader.Find("Cairn/RingFlat");
@@ -245,7 +250,12 @@ namespace Cairn.AR.Editor
                 float angle = (i / (float)RIBBON_COUNT) * Mathf.PI * 2f;
                 var rgo = new GameObject($"Ribbon_{i}");
                 rgo.transform.SetParent(root.transform, false);
-                rgo.transform.localPosition = Vector3.zero;
+                // V5.12e sub#2 BLOCKER 修 ribbon-ring 视觉脱节:
+                //   ribbon worldP.y 从 0 起源 = 在地面 plane 同高度,被 ground 暖金色吞噬
+                //   HTML baseline ribbon 从 cairn 石堆顶 (~0.3m) 开始喷出
+                //   修: ribbon transform.localPos.y = 0.05m 让起点略高于 ground plane
+                //     避免 ground 色和 ribbon 暖色在 y=0 处 z-fight 互相吞
+                rgo.transform.localPosition = new Vector3(0f, 0.05f, 0f);
                 var rib = rgo.AddComponent<Cairn.AR.SilkRibbonV2>();
                 rgo.GetComponent<MeshRenderer>().sharedMaterial = ribMat;
                 // V5.9: phase 跨全周期 — 任意 capture 帧都同时看到 stage1/2/3 ribbon
@@ -254,8 +264,8 @@ namespace Cairn.AR.Editor
                 //   → stage1 (0..0.30) 有 5 根升起、stage2 (0.30..0.65) 有 6 根中段、stage3 (0.65..1) 有 5 根高空
                 //   → 任意 frame 都看到 5 根接地、6 根升空、5 根飘空,真"从阵法升起"
                 float phaseOffset = (float)i / RIBBON_COUNT;
-                float widthBase = 0.16f;
-                float widthVar  = 0.05f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
+                float widthBase = 0.10f;
+                float widthVar  = 0.03f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
                 float maxWidth  = widthBase + Mathf.Abs(widthVar);
                 rib.Configure(RING_RADIUS, angle, phaseOffset, t.color, new Color(0.95f, 0.97f, 1.0f, 1f), maxWidth);
             }
@@ -355,8 +365,16 @@ namespace Cairn.AR.Editor
                 //   → 改用 type-stack 同款 (0,1.4,-2.8) 看 (0,0.85,0):
                 //     - 看高度 0.85m → 圆环 + ribbon 接地点都在画面中下
                 //     - 距离 2.8m 视野更紧凑,ribbon 升起轨迹完整可见 0..3m
-                cam.transform.position = clusterPos + new Vector3(0f, 1.4f, -2.8f);
-                cam.transform.LookAt(clusterPos + new Vector3(0f, 0.85f, 0f));
+                // V5.12c sub#2 第四轮 BLOCKER 修 ribbon-ring 视觉脱节:
+                //   V5.10 (0,1.4,-2.8) 看 (0,0.85,0) ringRadius 0.85 → ribbon 后排离 cam 3.65m
+                //     视差让远侧 ribbon 看起来更高,与圆环之间 200px 空白
+                //   V5.12c 试 (0,1.0,-2.0) 看 (0,0.5,0) — 太近,ribbon 跑出画面
+                // V5.12d 折中: (0,1.6,-3.5) 看 (0,1.0,0):
+                //   - cam 距离 3.5m 视野够大,ribbon 全程 0..3m 在画面内
+                //   - lookAt y=1.0m 让 ribbon 中段 (stage2 bottomY=0..1m) 在画面中部
+                //   - 圆环 y=0 在画面下 1/3,接近 ribbon stage1 起源,真"从阵法升起"
+                cam.transform.position = clusterPos + new Vector3(0f, 1.6f, -3.5f);
+                cam.transform.LookAt(clusterPos + new Vector3(0f, 1.0f, 0f));
 
                 // V2.2 P0a fix: 隐藏其他 cluster,避免相机视锥内出现穿帮(右下红色 danger 三角)
                 // 5 cluster 摆在 (-6/-3/0/3/6) X 轴,相机俯拍当前 cluster 时其他 cluster 仍在视场内
@@ -449,8 +467,9 @@ namespace Cairn.AR.Editor
             Vector3 clusterPos = new Vector3((0 - 2) * 3f, 0f, 0f);
             // V4.12 fix: 用 V4.x 相机设置(同 5 type capture)+ 在暖白底/暖金地面/fog 下截图
             // V5.10: 同 ceremony,相机改 (0,1.4,-2.8) 看 (0,0.85,0) 让 ribbon 起源点入视野
-            cam.transform.position = clusterPos + new Vector3(0f, 1.4f, -2.8f);
-            cam.transform.LookAt(clusterPos + new Vector3(0f, 0.85f, 0f));
+            // V5.12d: (0,1.6,-3.5) 看 (0,1.0,0) 让 ribbon 全程 + 圆环 同框
+            cam.transform.position = clusterPos + new Vector3(0f, 1.6f, -3.5f);
+            cam.transform.LookAt(clusterPos + new Vector3(0f, 1.0f, 0f));
 
             // V4.12 fix: 用 transform.Find 路径(GameObject.Find 不找 inactive,V4.8 同 bug)
             // 5 type capture 末尾把所有 cluster 都 SetActive(true) 但保险起见还是激活当前 cluster
