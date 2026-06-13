@@ -231,6 +231,28 @@ namespace Cairn.AR
             if (lifeT < 0.15f) globalFade = lifeT / 0.15f;
             else if (lifeT > 0.85f) globalFade = (1f - lifeT) / 0.15f;
 
+            // V5.6 = V2.4 三段渐入浅色 + V2.5 光感自适应(C# 路径,不动 shader vary 防回归)
+            // V2.4 时间维度色调淡化:
+            //   lifeT < 0.65 → 全 baseTint
+            //   lifeT 0.65→1.0 → lerp 30% 向 tipTint(微调,不爆白)
+            float lifeColorLerp = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((lifeT - 0.65f) / 0.35f));
+            float lifeWhitenAmt = lifeColorLerp * 0.30f;
+            // V2.5 光感自适应 — 读 RenderSettings.ambientLight 推 luma
+            // 亮光 luma > 0.6 → saturation +5% 防白底吞;弱光 < 0.35 → 暖色温微调
+            float ambLuma = (RenderSettings.ambientLight.r + RenderSettings.ambientLight.g + RenderSettings.ambientLight.b) / 3f;
+            float satBoost = Mathf.Clamp01((ambLuma - 0.6f) * 2.5f) * 0.05f;
+            float warmBoost = Mathf.Clamp01((0.35f - ambLuma) * 2.0f);  // 0..0.7
+            // 计算最终 baseColor:lifeBlend → satBoost → warmBoost
+            Color lifeBlendedBase = Color.Lerp(_baseTint, _tipTint, lifeWhitenAmt);
+            // 应用 sat boost(亮光下 +5%)
+            float gray = lifeBlendedBase.r * 0.299f + lifeBlendedBase.g * 0.587f + lifeBlendedBase.b * 0.114f;
+            lifeBlendedBase.r = Mathf.Lerp(lifeBlendedBase.r, gray + (lifeBlendedBase.r - gray) * 1.05f, satBoost);
+            lifeBlendedBase.g = Mathf.Lerp(lifeBlendedBase.g, gray + (lifeBlendedBase.g - gray) * 1.05f, satBoost);
+            lifeBlendedBase.b = Mathf.Lerp(lifeBlendedBase.b, gray + (lifeBlendedBase.b - gray) * 1.05f, satBoost);
+            // 应用 warm boost(弱光下 R+4% B-3%)
+            lifeBlendedBase.r *= 1.0f + warmBoost * 0.04f;
+            lifeBlendedBase.b *= 1.0f - warmBoost * 0.03f;
+
             float baseX = Mathf.Cos(_angleRad) * _ringRadius * 1.05f;
             float baseZ = Mathf.Sin(_angleRad) * _ringRadius * 1.05f;
 
@@ -311,15 +333,16 @@ namespace Cairn.AR
                 float aCenter   = heightAlpha * 1.0f;
 
                 // Color: base tint (halo + edges), brighter core (slight white)
-                float coreR = Mathf.Min(1f, _baseTint.r * 1.4f + 0.15f);
-                float coreG = Mathf.Min(1f, _baseTint.g * 1.4f + 0.15f);
-                float coreB = Mathf.Min(1f, _baseTint.b * 1.4f + 0.20f);
+                // V5.6: 用 lifeBlendedBase 替代 _baseTint(已含 V2.4 时间渐入浅色 + V2.5 光感)
+                float coreR = Mathf.Min(1f, lifeBlendedBase.r * 1.4f + 0.15f);
+                float coreG = Mathf.Min(1f, lifeBlendedBase.g * 1.4f + 0.15f);
+                float coreB = Mathf.Min(1f, lifeBlendedBase.b * 1.4f + 0.20f);
 
-                _colors[idx + 0] = new Color(_baseTint.r, _baseTint.g, _baseTint.b, aHaloEdge);
-                _colors[idx + 1] = new Color(_baseTint.r, _baseTint.g, _baseTint.b, aHaloIn);
+                _colors[idx + 0] = new Color(lifeBlendedBase.r, lifeBlendedBase.g, lifeBlendedBase.b, aHaloEdge);
+                _colors[idx + 1] = new Color(lifeBlendedBase.r, lifeBlendedBase.g, lifeBlendedBase.b, aHaloIn);
                 _colors[idx + 2] = new Color(coreR, coreG, coreB, aCenter);
-                _colors[idx + 3] = new Color(_baseTint.r, _baseTint.g, _baseTint.b, aHaloIn);
-                _colors[idx + 4] = new Color(_baseTint.r, _baseTint.g, _baseTint.b, aHaloEdge);
+                _colors[idx + 3] = new Color(lifeBlendedBase.r, lifeBlendedBase.g, lifeBlendedBase.b, aHaloIn);
+                _colors[idx + 4] = new Color(lifeBlendedBase.r, lifeBlendedBase.g, lifeBlendedBase.b, aHaloEdge);
             }
 
             _mesh.Clear();
