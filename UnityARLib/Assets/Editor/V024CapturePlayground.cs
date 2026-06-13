@@ -102,9 +102,12 @@ namespace Cairn.AR.Editor
             // V5.11 sub#1+sub#2 共识修: intensity 0.5 + threshold 0.9 让 16 ribbon 糊成 3 光柱
             //   intensity 0.5 → 0.30 减弱 halo radius 让 ribbon 间距 0.196m 不互相吞并
             //   threshold 0.9 → 1.10 只让真正高亮 (core+brightTint) 部分 trigger,halo 不参与 bloom
+            // V5.20 sub#2 P0 修 (S11-N5): bloom 仍把 ribbon mid 段也合并白化
+            //   intensity 0.30 → 0.15 (再减半 halo radius)
+            //   threshold 1.10 → 1.6 只让 ribbon highlight band 进 bloom 保 silhouette
             var bloom = profile.Add<Bloom>(true);
-            bloom.intensity.Override(0.30f);
-            bloom.threshold.Override(1.10f);
+            bloom.intensity.Override(0.15f);
+            bloom.threshold.Override(1.6f);
             bloom.intensity.overrideState = true;
             bloom.threshold.overrideState = true;
             volume.sharedProfile = profile;
@@ -206,7 +209,7 @@ namespace Cairn.AR.Editor
             //     8 根也匹配 HTML baseline 5-7 根的风格
             // V5.15 修: 8 ribbon viewing projection 5 distinct X 仍糊
             //   ringRadius 1.0 → 1.4, 12 ribbon 让 viewing projection 7 distinct X
-            float RING_RADIUS = 1.4f;
+            float RING_RADIUS = 1.7f;
             Color darkAmber = LerpToDarkAmber(t.color);
 
             var ringShader = Shader.Find("Cairn/RingFlat");
@@ -289,7 +292,10 @@ namespace Cairn.AR.Editor
             //     4-5 根在 stage2 中段、4-5 根在 stage3 高段 → 任意 capture 时刻都看到
             //     "升起 + 中段 + 飘空" 三阶段共存,真"错落生命感"
             //   maxWidth widthBase 0.18 → 0.16 微缩 (16 根更宽要避免互相挡光)
-            int RIBBON_COUNT = 12;
+            // V5.20 sub#2 P0 几何根治: 12→6 ribbon + ringRadius 1.4→1.7
+            //   sub#2 stall 第十一轮: 数量不解决合并问题, 几何间距才解决
+            //   6 ribbon @ ringRadius 1.7 → 间距 π*1.7/3 = 1.78m, 屏幕宽 ~480px / 6 = 80px > bloom 30px 大幅
+            int RIBBON_COUNT = 6;
             for (int i = 0; i < RIBBON_COUNT; i++)
             {
                 // V5.18 sub#2 F1 BLOCKER 修: angle noise-driven 不再均匀
@@ -312,11 +318,10 @@ namespace Cairn.AR.Editor
                 //   → 改用纯 i/N 均匀分布: 16 根 → phase = 0, 0.0625, ... 0.9375
                 //   → stage1 (0..0.30) 有 5 根升起、stage2 (0.30..0.65) 有 6 根中段、stage3 (0.65..1) 有 5 根高空
                 //   → 任意 frame 都看到 5 根接地、6 根升空、5 根飘空,真"从阵法升起"
-                // V5.19 sub#2 S10-N4 修 'flipbook 静态' 用户原话'生命错落感':
-                //   phase [0,1] 全周期 → 任意时刻看到稳态混合,失去"升起"动态
-                //   修: phase [0, 0.4] 集中起步,所有 ribbon 同步升起,
-                //     在 anim 60 帧 (2s) 内能看到 stage1→stage2 真升起进度
-                float phaseOffset = ((float)i / RIBBON_COUNT) * 0.4f;
+                // V5.20 sub#2 P0 修 phase 静态 (S11-N2):
+                //   V5.19 phase [0, 0.4] 让 60帧 anim 都在 stage1/2 看不到生命周期
+                //   V5.20: 回 [0, 1] 全周期跨度让 anim 60帧能看到任意时刻 stage1/2/3 共存
+                float phaseOffset = (float)i / RIBBON_COUNT;
                 float widthBase = 0.14f;
                 float widthVar  = 0.04f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
                 float maxWidth  = widthBase + Mathf.Abs(widthVar);
