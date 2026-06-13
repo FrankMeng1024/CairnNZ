@@ -100,6 +100,8 @@ Shader "Cairn/RibbonSilkV2"
                 float4 color      : COLOR;
                 float2 uv         : TEXCOORD0;
                 float3 worldPos   : TEXCOORD1;
+                // V4.9 fix: fogCoord 用于让远处 ribbon 融入 Unity fog,不再"飘在 fog 上"
+                float  fogCoord   : TEXCOORD2;
             };
 
             Varyings vert(Attributes IN)
@@ -107,6 +109,7 @@ Shader "Cairn/RibbonSilkV2"
                 Varyings OUT;
                 float3 worldPos = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.positionCS = TransformWorldToHClip(worldPos);
+                OUT.fogCoord = ComputeFogFactor(OUT.positionCS.z);
                 OUT.worldPos   = worldPos;
                 OUT.color      = IN.color;
                 OUT.uv         = IN.uv;
@@ -175,11 +178,18 @@ Shader "Cairn/RibbonSilkV2"
                             * _CairnGlobalAlpha
                             * _CairnGlobalThermalScale;
 
-                // V4.2 v3 fix: 回到 Additive,要 finalRGB = col * alpha (premultiplied 输出 + One One)
+                // V4.9 v3 fix: 回到 Additive,要 finalRGB = col * alpha (premultiplied 输出 + One One)
                 float3 finalRGB = col * alpha;
                 // HDR clamp so bright + flow doesn't saturate to white
                 float maxC = max(finalRGB.r, max(finalRGB.g, finalRGB.b));
                 if (maxC > _MaxLuma) finalRGB *= (_MaxLuma / maxC);
+
+                // V4.9 v2 fix: 用 worldPos 到相机距离手动计算 fog factor,不依赖 unity fogCoord
+                // Additive blend 远处 ribbon 应该衰减到 0(乘以 fog factor),否则会"飘在 fog 上"
+                // 近 0-3m fog 影响小(factor=1),远 >15m fog 强(factor→0)
+                float camDist = distance(_WorldSpaceCameraPos.xyz, IN.worldPos);
+                float fogFactor = saturate(1.0 - (camDist - 5.0) * 0.05);  // 5m 起 fog,20m 完全 fade
+                finalRGB *= fogFactor;
 
                 return half4(finalRGB, alpha);
             }
