@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 
@@ -81,6 +82,31 @@ namespace Cairn.AR.Editor
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = new Color(0.91f, 0.86f, 0.77f, 1f);  // 同 NZ 暖白
             RenderSettings.fogDensity = 0.012f;
+
+            // V4.6 fix: URP Volume + ACES Filmic Tonemapping + Bloom
+            // HTML demo line 98-99 用 Three.js ACESFilmicToneMapping + exposure 1.2
+            // Unity 没 tonemapping → Additive 丝带在白底变成"saturated 平淡白"
+            // 加 URP Volume 全局 Tonemapping = ACES + Bloom intensity 0.5 让丝带有"高光溢出"
+            var volumeGo = new GameObject("V024GlobalVolume");
+            var volume = volumeGo.AddComponent<UnityEngine.Rendering.Volume>();
+            volume.isGlobal = true;
+            volume.priority = 1;
+            var profile = ScriptableObject.CreateInstance<UnityEngine.Rendering.VolumeProfile>();
+            // Tonemapping ACES
+            var tonemap = profile.Add<Tonemapping>(true);
+            tonemap.mode.Override(TonemappingMode.ACES);
+            tonemap.mode.overrideState = true;
+            // Bloom
+            var bloom = profile.Add<Bloom>(true);
+            bloom.intensity.Override(0.5f);
+            bloom.threshold.Override(0.9f);
+            bloom.intensity.overrideState = true;
+            bloom.threshold.overrideState = true;
+            volume.sharedProfile = profile;
+
+            // Camera 启用 post-processing(URP)
+            var camData = cam.GetUniversalAdditionalCameraData();
+            if (camData != null) camData.renderPostProcessing = true;
 
             // Set day/night global once at scene load via a manager component
             var mgrGo = new GameObject("V024GlobalsManager");
