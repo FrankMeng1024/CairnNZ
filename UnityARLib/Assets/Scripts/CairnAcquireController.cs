@@ -389,7 +389,9 @@ namespace Cairn.AR
                 {
                     float pitchDelta = Mathf.DeltaAngle(_lastCamEulerX, currentEulerX);
                     _lastCamEulerX = currentEulerX;
-                    if (Mathf.Abs(pitchDelta) > 5f * Time.deltaTime)
+                    // pitchDelta 单位=度, Time.deltaTime 单位=秒, 阈值 5°/s
+                    float pitchRateDegPerSec = Mathf.Abs(pitchDelta) / Time.deltaTime;
+                    if (pitchRateDegPerSec > 5f)
                         return true;
                 }
                 else
