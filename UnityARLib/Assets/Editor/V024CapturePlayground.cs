@@ -329,7 +329,8 @@ namespace Cairn.AR.Editor
                 //   V5.25 cairn stones 顶 y=0.76m, ribbon 起源 y=0 让 ribbon 看起来从地下升起
                 //   修: ribbon transform.y = 0.5 让 ribbon 根部锚到 cairn 中段, 真"从 cairn 升起"
                 // V5.32: 0.5 → 0.76 真锚 stones 顶 (cairn stones 顶 y=0.66+stoneH/2=0.76m)
-                rgo.transform.localPosition = new Vector3(0f, 0.76f, 0f);
+                // V5.36: 0.76 → 0.6 让 ribbon 起源在 stones 中段而非顶, 与 ring 视觉渐变
+                rgo.transform.localPosition = new Vector3(0f, 0.6f, 0f);
                 var rib = rgo.AddComponent<Cairn.AR.SilkRibbonV2>();
                 rgo.GetComponent<MeshRenderer>().sharedMaterial = ribMat;
                 // V5.9: phase 跨全周期 — 任意 capture 帧都同时看到 stage1/2/3 ribbon
