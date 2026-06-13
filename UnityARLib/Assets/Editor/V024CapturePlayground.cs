@@ -323,10 +323,18 @@ namespace Cairn.AR.Editor
 
                 // V2.2 P0a fix: 隐藏其他 cluster,避免相机视锥内出现穿帮(右下红色 danger 三角)
                 // 5 cluster 摆在 (-6/-3/0/3/6) X 轴,相机俯拍当前 cluster 时其他 cluster 仍在视场内
-                for (int j = 0; j < TYPES.Length; j++)
+                // V4.8 fix: GameObject.Find() 不找 inactive 对象,改用 transform 路径查找
+                // 之前 bug: i=1 时 j=0 SetActive(false) 让 cairn inactive,然后 j=1 Find cluster_danger 因为前一轮被 SetActive(false) 找不到 → 不能 active 回来
+                var clustersParent = GameObject.Find(CLUSTER_PARENT);
+                if (clustersParent != null)
                 {
-                    var otherClusterRoot = GameObject.Find($"Cluster_{TYPES[j].id}");
-                    if (otherClusterRoot != null) otherClusterRoot.SetActive(j == i);
+                    for (int j = 0; j < clustersParent.transform.childCount; j++)
+                    {
+                        var clusterTr = clustersParent.transform.GetChild(j);
+                        // 通过名字匹配 type id
+                        bool isCurrent = clusterTr.name == $"Cluster_{t.id}";
+                        clusterTr.gameObject.SetActive(isCurrent);
+                    }
                 }
                 // v0.2.4 manual ticks: drive ribbons + particles since
                 // batch mode does not fire MonoBehaviour Update / LateUpdate
@@ -335,7 +343,13 @@ namespace Cairn.AR.Editor
                 // 部分根处于 lifeT~0 globalFade 极淡 → screenshot 像 4 根
                 // 30 帧 (1.5s) 后 5 根 lifeT = 0.3/0.5/0.7/0.9/1.1(根 4 刚重生 lifeT=0.1)
                 // 仍有 1 根淡相位,但比 60 帧更接近"5 根都在场"
-                var clusterRoot = GameObject.Find($"Cluster_{t.id}");
+                // V4.8 fix: 用 clustersParent 路径查找,Find 不找 inactive
+                GameObject clusterRoot = null;
+                if (clustersParent != null)
+                {
+                    var clusterTr = clustersParent.transform.Find($"Cluster_{t.id}");
+                    if (clusterTr != null) clusterRoot = clusterTr.gameObject;
+                }
                 if (clusterRoot != null)
                 {
                     var ribbons = clusterRoot.GetComponentsInChildren<Cairn.AR.SilkRibbonV2>();
