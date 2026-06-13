@@ -228,7 +228,15 @@ namespace Cairn.AR.Editor
             //   capture 2s 内 4 根 ribbon 几乎不可见 → 用户视觉只看到底座
             //   新公式:i*0.087 (1/RIBBON_COUNT * 0.7) 让全部 phase 在 0~0.61 起步可见区
             //   仍保持 8 根错落分布(0/0.087/0.174/...0.609)
-            int RIBBON_COUNT = 8;
+            //
+            // V5.9 sub#2 BLOCKER 修(用户 40/100 第 3 条 "稀疏单薄 同时飘起"):
+            //   8 → 16 根 (密度 +100%, 解决稀疏)
+            //   phaseOffset 公式改: 不再线性 i/N*0.7 让全部都从 stage1 起步,
+            //     而用 (i/N + sin(i*0.7)*0.2) % 1 跨越 [0..1] 全周期 → 4-5 根在 stage1 接地、
+            //     4-5 根在 stage2 中段、4-5 根在 stage3 高段 → 任意 capture 时刻都看到
+            //     "升起 + 中段 + 飘空" 三阶段共存,真"错落生命感"
+            //   maxWidth widthBase 0.18 → 0.16 微缩 (16 根更宽要避免互相挡光)
+            int RIBBON_COUNT = 16;
             for (int i = 0; i < RIBBON_COUNT; i++)
             {
                 float angle = (i / (float)RIBBON_COUNT) * Mathf.PI * 2f;
@@ -237,9 +245,10 @@ namespace Cairn.AR.Editor
                 rgo.transform.localPosition = Vector3.zero;
                 var rib = rgo.AddComponent<Cairn.AR.SilkRibbonV2>();
                 rgo.GetComponent<MeshRenderer>().sharedMaterial = ribMat;
-                // V5.5: phase 0~0.61 让 capture 2s 内 8 根全在升起 / 中段强光
-                float phaseOffset = (i / (float)RIBBON_COUNT) * 0.7f;
-                float widthBase = 0.18f;
+                // V5.9: phase 跨全周期 — 任意 capture 帧都同时看到 stage1/2/3 ribbon
+                float phaseRaw   = (float)i / RIBBON_COUNT + Mathf.Sin(i * 0.7f) * 0.13f;
+                float phaseOffset = phaseRaw - Mathf.Floor(phaseRaw);  // wrap to [0,1)
+                float widthBase = 0.16f;
                 float widthVar  = 0.05f * Mathf.Sin(phaseOffset * Mathf.PI * 3f + i * 1.7f);
                 float maxWidth  = widthBase + Mathf.Abs(widthVar);
                 rib.Configure(RING_RADIUS, angle, phaseOffset, t.color, new Color(0.95f, 0.97f, 1.0f, 1f), maxWidth);

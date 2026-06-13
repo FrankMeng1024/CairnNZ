@@ -328,17 +328,18 @@ namespace Cairn.AR
                 // Per-vertex alpha (height envelope * width profile * global fade)
                 float worldT = y / _lifeHeight;
                 float heightAlpha = Mathf.Pow(Mathf.Max(0f, 1f - worldT), 1.6f) * globalFade;
-                // V5.8 V2.3 rim 替代方案(sub#2 发现 V5.7 fresnel 几何错):
-                // V5.7 用 dot(view, widthDir),但 widthDir = Cross(view, up) 数学上永远⊥view
-                // → fresnel ≈ 0.996 几乎卡死无效果。
-                // V5.8 改用 ribbon 5-vert 内 u 坐标位置(0=halo-L 边,0.5=center,1=halo-R 边)
-                // 在 vert 写入时已经按 u 给不同 alpha (haloEdge=0,haloIn=0.45,center=1.0)
-                // 所以"边缘 vs 中心"差异本来就在 5-vert 5 alpha 里实现,不需要 fresnel
-                // 这里改为按"view 上下倾角"调全局 alpha:相机仰视/俯视 ribbon 时 alpha 微降模拟绸缎透感
-                float viewPitch = Mathf.Abs(view.y);  // 0=水平,1=垂直
-                float pitchAlpha = Mathf.Lerp(1.0f, 0.88f, viewPitch);  // 仰视/俯视轻度透感
-                heightAlpha *= pitchAlpha;
-                // V5.8 softTipFade 修复(sub#2 BLOCKER 发现):
+                // V5.9 V2.3 rim 替代方案 (sub#2 CRITICAL 第二轮发现 V5.8 viewPitch 等价无效):
+                // V5.8 用 |view.y|, 但相机近平视 view.y≈0.03 → pitchAlpha=0.9964 卡死无效
+                // V5.9 改用 sT-driven 中段 highlight:ribbon 中段 0.3-0.7 alpha 1.0 全亮,
+                //   边缘 0..0.2 / 0.85..1 微衰减,模拟绸缎"中段反光强"的物理特性
+                // 这是 view 无关的几何 — 不依赖相机角度永远有效
+                float midHighlight = sT < 0.2f
+                    ? Mathf.Lerp(0.85f, 1.0f, sT / 0.2f)
+                    : sT > 0.85f
+                        ? Mathf.Lerp(1.0f, 0.85f, (sT - 0.85f) / 0.15f)
+                        : 1.0f;
+                heightAlpha *= midHighlight;
+                // V5.8 softTipFade 修复 (sub#2 BLOCKER 发现):
                 // V5.7 写 SmoothStep(1f, 0.7f, sT),Unity SmoothStep(from=1,to=0.7,t=sT) 当 sT≥0.7 返回 0
                 // → ribbon 顶 30% 顶点 alpha = 0,物理截短不是渐入
                 // V5.8 改为线性衰减:sT=0..0.7 全亮,sT=0.7..1 衰到 0.55(保留顶部存在感)

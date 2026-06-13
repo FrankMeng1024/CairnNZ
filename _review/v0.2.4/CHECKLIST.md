@@ -160,8 +160,8 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
 
 - [x] **V2.2** 起源位置改正 — 5 根从阵法外圈位置升起 ✅(commit 11 个,V2.2 起源改外圈 + 错峰 + 紧凑相机)
 - [x] **V2.3** 丝带"电影丝绸感"+ 柔和电影级形态(质感层)✅ commit 697eaab(fresnel rim + soft particle depth fade)
-- [x] **V2.4** "脱离 + 渐入浅色 + 淡出" 三段生命周期 ✅ commit 5c029df(SilkRibbonV2 加 lifeColorLerp 三段时间维度)
-- [x] **V2.5** 光感自适应(微调,不切换)✅ commit 5c029df(_CairnGlobalAmbientLuma sat +10% / 暖色温微调)
+- [x] **V2.4** "脱离 + 渐入浅色 + 淡出" 三段生命周期 ✅ commit 5c029df → V5.6 实施 (SilkRibbonV2.cs:238-246 lifeColorLerp smoothstep((lifeT-0.65)/0.35) * 0.30 单 lerp baseTint→tipTint, 不是 CHECKLIST 早期写的 0.6 双 lerp — 实施收敛后 0.30 足够"微"达到不切主题色目的)
+- [x] **V2.5** 光感自适应(微调,不切换)✅ V5.8 改路径 (SilkRibbonV2.cs:242-254 C# 直接 read RenderSettings.ambientLight 计算 ambLuma; sat +5% 亮光 / R+4% B-3% 弱光; V5.4 shader uniform 路径已废弃,V5.8 删 _CairnGlobalAmbientLuma deadcode)
 - [x] **V2.6** 整合 + 性能 + 用户审 (留 GIF 重生成 + 用户审) ✅ GIF 整合完成,等用户审
 
 - [x] **V2.2** 起源位置改正 + 错峰确定性 + 视觉结构层修复 ✅ 2026-06-13
@@ -170,21 +170,27 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
   - 视觉结构层 ✅: 5 根错峰 / 紧凑 / 修穿帮 / 相机距离 / 宽度随机
   - 视觉质感层 ❌(留 V2.3): 还是细线非绸缎,缺 fresnel/soft particle/ 底色
 
-- [x] **V2.3** 丝带"电影丝绸感"+ 柔和电影级形态(质感层)✅ 2026-06-13 commit 697eaab
-  - shader fresnel rim power 2.5 + brightness 0.8
-  - shader soft particle depth fade 0.3m 防硬切割
-  - _maxWidth base 0.15 → 0.18 + 每根 ±0.05 噪声(花束感)
+- [x] **V2.3** 丝带"电影丝绸感"+ 柔和电影级形态(质感层)✅ 2026-06-13 commit 697eaab → V5.9 路径调整
+  - V5.4 shader fresnel/soft particle vary 字段引入 → V5.5 整体回退(让 ribbon alpha 回归)
+  - V5.7 fresnel 在 C# 路径(widthDir·view 几何错,sub#2 抓出无效)
+  - V5.8 改 |view.y| viewPitch (相机近平视等价无效,sub#2 第二轮抓出)
+  - **V5.9 最终方案**: sT-driven midHighlight (中段 0.3-0.7 全亮, 边缘 0.85 微衰减) — view 无关永远生效
+  - V5.7 softTipFade SmoothStep(1,0.7,sT) → 顶截短 → V5.8 改 sT<0.7?1:Lerp(1,0.55,(sT-0.7)/0.3) 真渐入
+  - _maxWidth base 0.15 → 0.18(V5.9 微缩到 0.16 配合 16 ribbon 不互挡)+ ±0.05 噪声(花束感)
+  - shader Additive Blend One One + premultiplied finalRGB
 
-- [x] **V2.4** "脱离 + 渐入浅色 + 淡出" 三段生命周期 ✅ 2026-06-13 commit 5c029df
+- [x] **V2.4** "脱离 + 渐入浅色 + 淡出" 三段生命周期 ✅ 2026-06-13 commit 5c029df → V5.6 实施
   - SilkRibbonV2.Rebuild 加 lifeColorLerp = smoothstep((lifeT-0.65)/0.35)
-  - lifeBlendedBase = Lerp(_baseTint, _tipTint, 0.6) — ribbon 升中段后整体偏白
-  - lifeBlendedTip  = Lerp(_tipTint, white, 0.3) — 顶部更白
+  - lifeWhitenAmt = lifeColorLerp * **0.30**(单 lerp,不是早期 doc 写的 0.6 双 lerp,实施收敛后 0.30 即"微"达预期)
+  - lifeBlendedBase = Lerp(_baseTint, _tipTint, lifeWhitenAmt) 单一路径,halo + core 同步偏白
   - 二段(贴地+抬升)+ 第三段(渐入浅色) + 第四段(0.85+ alpha fade-out)
 
-- [x] **V2.5** 光感自适应(微调,不切换)✅ 2026-06-13 commit 5c029df
-  - shader 加 _CairnGlobalAmbientLuma uniform(CairnDayNightAdapter 1Hz 已写)
-  - luma > 0.6 → saturation +10% 防白底吞
-  - luma < 0.35 → R+8% B-6% 暖色温防显冷
+- [x] **V2.5** 光感自适应(微调,不切换)✅ 2026-06-13 commit 5c029df → V5.8 改 C# 路径
+  - V5.4 shader 加 _CairnGlobalAmbientLuma uniform 方案废弃(V5.5 整体 shader 回退)
+  - **V5.8 真实路径**: SilkRibbonV2.cs:242 直接 read RenderSettings.ambientLight 算 ambLuma
+  - ambLuma > 0.6 → saturation **+5%** 防白底吞(line 243 satBoost 0.05)
+  - ambLuma < 0.35 → R **+4%** B **-3%** 暖色温防显冷(line 253-254)
+  - 数值 5/4/3% 比早期 doc 10/8/6% 更"微"贴用户原话"微调",代码即真实
   - 中间 0.35-0.6 不调,平滑过渡,不切主题色
 
 - [x] **V2.6** 整合 + 性能 + 用户审(整合 GIF 已生成,等用户审)
