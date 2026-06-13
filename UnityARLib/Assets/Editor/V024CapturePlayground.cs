@@ -177,7 +177,7 @@ namespace Cairn.AR.Editor
             runeMat.SetFloat("_Reveal",    1.0f);
 
             // --- Tier-1 圆环 (主环 + 内环,1:1 移植 Three.js demo line 142-166) ---
-            float RING_RADIUS = 0.55f;
+            float RING_RADIUS = 0.42f;  // V4.11: 0.55 → 0.42 紧凑感(用户原话"5 根更聚")
             Color darkAmber = LerpToDarkAmber(t.color);
 
             var ringShader = Shader.Find("Cairn/RingFlat");
@@ -307,6 +307,8 @@ namespace Cairn.AR.Editor
 
             // Set globals
             Shader.SetGlobalFloat("_CairnGlobalDayNightT", 0.0f);
+            // V2.5: 默认 ambient luma 0.7(白底亮天),让 saturation +10% 生效
+            Shader.SetGlobalFloat("_CairnGlobalAmbientLuma", 0.70f);
             Shader.SetGlobalFloat("_CairnGlobalCamDist",   2.5f);
             Shader.SetGlobalFloat("_CairnGlobalAlpha",        1.0f);
             Shader.SetGlobalFloat("_CairnGlobalThermalScale", 1.0f);
@@ -619,6 +621,8 @@ namespace Cairn.AR.Editor
         void Awake()
         {
             Shader.SetGlobalFloat("_CairnGlobalDayNightT", 0.0f);
+            // V2.5: 默认 ambient luma 0.7(白底亮天),让 saturation +10% 生效
+            Shader.SetGlobalFloat("_CairnGlobalAmbientLuma", 0.70f);
             Shader.SetGlobalFloat("_CairnGlobalCamDist",   2.5f);
             Shader.SetGlobalFloat("_CairnGlobalAlpha",        1.0f);
             Shader.SetGlobalFloat("_CairnGlobalThermalScale", 1.0f);

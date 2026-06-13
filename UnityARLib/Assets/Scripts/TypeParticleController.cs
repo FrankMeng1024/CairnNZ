@@ -51,6 +51,7 @@ namespace Cairn.AR
             public float orbitSpeed;
             public float orbitY;
             public TrailRenderer trail; // optional Unity built-in
+            public bool rippleSpawned;  // V3.1+V3.3: 落地涟漪去重(防多次反弹刷出多个 ripple)
             // BLOCKER 3 fix: 程序化 trail —— TrailRenderer 在 batch mode 不更新历史,
             // 用 LineRenderer + 自己维护 history buffer,EditorManualTick / runtime 都生效
             public LineRenderer manualTrail;
@@ -205,6 +206,13 @@ namespace Cairn.AR
                             p.vel.y = -p.vel.y * 0.4f;
                             p.vel.x *= 0.6f;
                             p.vel.z *= 0.6f;
+                            // V3.1 cairn 落地反弹涟漪(用户原话"落地反弹涟漪")
+                            // 仅首次反弹时 spawn 一个 ripple(p.life > 0.3 防止初始穿地误触发)
+                            if (!p.rippleSpawned && p.life > 0.3f && Mathf.Abs(p.vel.y) < 0.3f)
+                            {
+                                SpawnRipple(new Vector3(pos.x, 0.005f, pos.z), _typeColor, 0.06f, 0.18f, 0.5f);
+                                p.rippleSpawned = true;
+                            }
                         }
                         // v0.2.4 enhancement: emissive flicker for "stone has soul"
                         if (p.mat != null && p.mat.HasProperty("_EmissionColor"))
@@ -221,6 +229,13 @@ namespace Cairn.AR
                         // Flicker opacity
                         float a = (0.5f + 0.5f * Mathf.Sin(p.life * 14f)) * Mathf.Max(0f, 1f - p.life / p.maxLife);
                         SetOpacity(p.mat, a);
+                        // V3.2 danger: emissive 颜色闪烁(用户原话"火星 + 闪烁")
+                        if (p.mat != null && p.mat.HasProperty("_EmissionColor"))
+                        {
+                            float emFlick = 1.8f + 1.2f * Mathf.Sin(p.life * 18f + i);
+                            p.mat.SetColor("_EmissionColor",
+                                new Color(_typeColor.r * 1.2f, _typeColor.g * 0.6f, _typeColor.b * 0.2f) * emFlick);
+                        }
                     }
                     else if (p.kind == "ember")
                     {
@@ -232,11 +247,42 @@ namespace Cairn.AR
                         // 0.7 + 0.25 * sin(t * 2.5 + phase) 模拟烛芯闪动
                         float flameMod = 0.7f + 0.25f * Mathf.Sin(p.life * 2.5f + i * 1.3f);
                         SetOpacity(p.mat, flameMod * Mathf.Max(0f, 1f - p.life / p.maxLife));
+                        // V3.4 hut: 暖光晕 emissive 强(用户原话"烛火 + 暖光晕")
+                        if (p.mat != null && p.mat.HasProperty("_EmissionColor"))
+                        {
+                            float emPulse = 1.5f + 0.4f * Mathf.Sin(p.life * 2.5f + i * 1.3f);
+                            p.mat.SetColor("_EmissionColor",
+                                new Color(_typeColor.r * 1.0f, _typeColor.g * 0.7f, _typeColor.b * 0.3f) * emPulse);
+                        }
                     }
                     else if (p.kind == "drop")
                     {
                         // Water: gravity + alpha fade
                         SetOpacity(p.mat, 0.85f * Mathf.Max(0f, 1f - p.life / p.maxLife));
+                        // V3.3 water 落地涟漪(用户原话"水珠 + 落地涟漪")
+                        if (pos.y < 0.012f && p.vel.y < 0f && !p.rippleSpawned && p.life > 0.3f)
+                        {
+                            SpawnRipple(new Vector3(pos.x, 0.005f, pos.z), _typeColor, 0.05f, 0.20f, 0.6f);
+                            p.rippleSpawned = true;
+                        }
+                    }
+                    else if (p.kind == "smoke")
+                    {
+                        // V3.2 danger 烟柱(用户原话"烟柱"):缓升 + 横向 drift,fade gray
+                        p.vel.y += 0.6f * dt;  // counteract gravity
+                        p.vel.x += Mathf.Sin(tNow * 0.6f + i * 0.5f) * 0.04f * dt;
+                        // size grows over life
+                        float gs = 1f + p.life * 0.6f;
+                        p.tr.localScale = new Vector3(0.04f * gs, 0.04f * gs, 0.04f * gs);
+                        SetOpacity(p.mat, 0.4f * Mathf.Max(0f, 1f - p.life / p.maxLife));
+                    }
+                    else if (p.kind == "ripple")
+                    {
+                        // V3.1+V3.3: ripple 平面扩张
+                        float t = p.life / p.maxLife;
+                        float scale = Mathf.Lerp(0.05f, 0.4f, t);
+                        p.tr.localScale = new Vector3(scale, 1f, scale);
+                        SetOpacity(p.mat, 0.7f * (1f - t));
                     }
 
                     p.tr.localPosition = pos;
@@ -432,6 +478,11 @@ namespace Cairn.AR
                 maxLife = 2.5f,
                 kind = "spark",
             });
+            // V3.2: 20% spark 触发同位置烟柱(用户原话"火星 + 烟柱")
+            if (Random.value < 0.20f)
+            {
+                SpawnSmokeColumn(go.transform.localPosition + new Vector3(0f, 0.05f, 0f));
+            }
         }
 
         void SpawnEmber(GameObject go, float a)
@@ -503,6 +554,66 @@ namespace Cairn.AR
             });
         }
 
+        // V3.1+V3.3: 落地涟漪 ripple — 平面 quad 扩张并 fade
+        // 用 GetCubeMesh 拉扁(scale.y=0.001)做地面环;maxLife 后由 update loop 死
+        void SpawnRipple(Vector3 worldPos, Color tint, float startScale, float endScale, float duration)
+        {
+            var go = new GameObject("part_ripple_" + _type);
+            go.transform.SetParent(this.transform, worldPositionStays: false);
+            // worldPos 是 local of cluster origin(SpawnRipple 在 update loop 内 pos 是 local)
+            go.transform.localPosition = worldPos;
+            var mf = go.AddComponent<MeshFilter>();
+            mf.sharedMesh = GetCubeMesh();
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            var mat = MakeAdditiveMat();
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(tint.r, tint.g, tint.b, 0.7f));
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", new Color(tint.r, tint.g, tint.b, 0.7f));
+            mr.sharedMaterial = mat;
+            // 平面环 — y=0.001,xz 由 update loop scale 扩张
+            go.transform.localScale = new Vector3(startScale, 0.001f, startScale);
+            _points.Add(new Particle
+            {
+                tr = go.transform,
+                renderer = mr,
+                mat = mat,
+                vel = Vector3.zero,
+                life = 0f,
+                maxLife = duration,
+                kind = "ripple",
+            });
+        }
+
+        // V3.2 danger 烟柱 — 缓慢上升 + 横向 drift,scale grows
+        void SpawnSmokeColumn(Vector3 localOrigin)
+        {
+            var go = new GameObject("part_smoke_" + _type);
+            go.transform.SetParent(this.transform, worldPositionStays: false);
+            go.transform.localPosition = localOrigin;
+            var mf = go.AddComponent<MeshFilter>();
+            mf.sharedMesh = GetSphereMesh();
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            var mat = MakeAdditiveMat();
+            // 烟 = type 主色暗 30% + alpha 低
+            Color smokeCol = new Color(_typeColor.r * 0.3f, _typeColor.g * 0.25f, _typeColor.b * 0.2f, 0.4f);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", smokeCol);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", smokeCol);
+            mr.sharedMaterial = mat;
+            go.transform.localScale = Vector3.one * 0.04f;
+            _points.Add(new Particle
+            {
+                tr = go.transform,
+                renderer = mr,
+                mat = mat,
+                vel = new Vector3((Random.value - 0.5f) * 0.04f, 0.15f, (Random.value - 0.5f) * 0.04f),
+                life = 0f,
+                maxLife = 3.5f,
+                kind = "smoke",
+            });
+        }
         // ---- Mesh / material helpers (cached statics so 5 cairn × N parts share) ----
 
         static Mesh _sphereMesh, _cubeMesh, _coneMesh;

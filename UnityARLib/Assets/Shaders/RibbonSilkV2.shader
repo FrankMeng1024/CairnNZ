@@ -96,6 +96,7 @@ Shader "Cairn/RibbonSilkV2"
             float _CairnGlobalAlpha;
             float _CairnGlobalThermalScale;
             float _CairnGlobalCamDist;
+            float _CairnGlobalAmbientLuma;  // V2.5: 0=暗 1=亮,CairnDayNightAdapter 1Hz 写入
 
             struct Attributes
             {
@@ -183,6 +184,24 @@ Shader "Cairn/RibbonSilkV2"
 
                 float3 col = baseColor * modeMul * distBoost + band;
                 col       *= IN.color.rgb;  // C# per-vertex tint
+
+                // V2.5 光感自适应(用户原话:"任何光线下肉眼都可见 + 颜色微调不切换主题色"):
+                // _CairnGlobalAmbientLuma 0=暗 0.5=中 1=亮(CairnDayNightAdapter 1Hz 推)
+                // 亮光下:saturation +10%(防 ribbon 被白底吞)
+                // 弱光下:暖色温微调(防 ribbon 显得冷蓝)
+                float luma = _CairnGlobalAmbientLuma;
+                if (luma > 0.001)
+                {
+                    // gray (luminance preserve) 给 saturation lerp
+                    float gray = dot(col, float3(0.299, 0.587, 0.114));
+                    // 亮光 luma > 0.6 → saturation +10%(让丝带在白底依然 saturated)
+                    float satBoost = saturate((luma - 0.6) * 2.5) * 0.10;  // 0..0.10
+                    col = lerp(col, lerp(float3(gray, gray, gray), col, 1.10), satBoost);
+                    // 弱光 luma < 0.35 → 暖色温(R+, B-)
+                    float warmBoost = saturate((0.35 - luma) * 2.0);  // 0..0.7
+                    col.r *= 1.0 + warmBoost * 0.08;
+                    col.b *= 1.0 - warmBoost * 0.06;
+                }
 
                 // ---- Alpha ----
                 float alpha = heightA * widthHaloAlpha * widthRim * flow
