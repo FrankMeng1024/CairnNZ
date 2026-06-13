@@ -29,15 +29,15 @@ Shader "Cairn/RibbonSilkV2"
         _TipTint            ("Tip Tint (sky/white)", Color) = (0.95, 0.97, 1.0, 1)
         _CoreToTipMixStart  ("Color lerp start (uv.y)", Range(0, 1)) = 0.40
         _CoreToTipMixEnd    ("Color lerp end (uv.y)",   Range(0, 1)) = 0.95
-        _RimSharpness       ("Rim sharpness across width", Range(1, 6)) = 3.2
+        _RimSharpness       ("Rim sharpness across width", Range(1, 6)) = 2.0
         _FlowSpeedSlow      ("Slow flow speed (m/s up)",   Range(0.1, 2)) = 0.45
         _FlowSpeedFast      ("Counter flow speed",         Range(0.1, 3)) = 1.30
         _FlowStrength       ("Flow contribution",          Range(0, 1))   = 0.30
         _BandFreq           ("Energy band freq",           Range(0, 8))   = 4.0
         _BandSpeed          ("Energy band travel speed",   Range(0, 2))   = 0.6
-        _BandIntensity      ("Energy band brightness",     Range(0, 1))   = 0.4
-        _HeightAlphaPower   ("Tip falloff curve",          Range(0.5, 4)) = 1.6
-        _BaseSoftness       ("Base soften (0..1, low fades)", Range(0, 0.3)) = 0.08
+        _BandIntensity      ("Energy band brightness",     Range(0, 1))   = 0.0
+        _HeightAlphaPower   ("Tip falloff curve",          Range(0.5, 4)) = 2.2
+        _BaseSoftness       ("Base soften (0..1, low fades)", Range(0, 0.3)) = 0.15
         _DayMul             ("Day multiplier",  Range(0.05, 1.5)) = 0.95
         _NightMul           ("Night multiplier", Range(0.5, 3.0)) = 1.10
         _PhaseOffset        ("Phase offset (rad)", Range(0, 6.283)) = 0
@@ -114,12 +114,16 @@ Shader "Cairn/RibbonSilkV2"
                 float v = IN.uv.y;
 
                 // ---- Width rim across u (0..1) ----
-                // 0.5 is core, edges 0/1 are halo. Rim sharpness gates the
-                // bright band so the ribbon reads as "volume of light", not
-                // a flat strip.
-                float widthCenter = 1.0 - abs(u - 0.5) * 2.0;
-                float widthRim   = pow(saturate(widthCenter), _RimSharpness);
-                float widthHaloAlpha = smoothstep(0.5, 0.0, abs(u - 0.5));
+                // V2.3-B fix: 把 V 形改成 plateau + soft edge,让丝带有"绸缎宽阔感"而不是"细线条"
+                // V2.1 sub#2 抓出:HTML demo 丝带宽度有体积感,Unity 旧版双 V 形让 alpha 集中中心 → 细线条
+                // 公式改:widthRim = smoothstep(1.0, 0.7, abs(u-0.5)*2) — 内 70% plateau=1,外 30% 软衰减
+                //       widthHaloAlpha = smoothstep(1.0, 0.5, abs(u-0.5)*2) — 外 50% 软衰减
+                // 结果:中心 50% u 区域为亮 plateau,边缘 30% 软渐淡 → 像绸缎不像线
+                float uDist = abs(u - 0.5) * 2.0;  // 0=center, 1=edge
+                float widthRim       = smoothstep(1.0, 0.6, uDist);  // plateau in [0, 0.4], smooth fall to edge
+                float widthHaloAlpha = smoothstep(1.0, 0.3, uDist);  // wider halo,中央 70% u 全亮
+                // 保留 _RimSharpness 影响(可 OTA 调,默认值 2.0 起作用)
+                widthRim = pow(widthRim, _RimSharpness * 0.5);  // 0.5 因子让 default 2.0 不至于太硬
 
                 // ---- Height envelope ----
                 // Base soften — bottom 8% fades to 0 so feet don't pop.

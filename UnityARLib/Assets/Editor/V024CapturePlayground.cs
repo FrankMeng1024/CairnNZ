@@ -175,8 +175,8 @@ namespace Cairn.AR.Editor
                 // V2.1 sub#2 抓出:5 根 phaseOffset 是 Random.value 完全独立随机 → 高概率 2-3 根同步
                 float phaseOffset = i / (float)RIBBON_COUNT;
                 // V2.2 P1c fix: maxWidth 每根用 phaseOffset 衍生(确定性,但 5 根 0.10/0.115/0.13/0.115/0.10 略变化)
-                // HTML demo 每根 0.10-0.15m 给"自然花束感",不要 5 根都 0.10m 整齐划一
-                float widthBase = 0.10f;
+                // V2.3-B 加宽: base 0.10 → 0.15(+50%),让丝带更厚重像绸缎不像细金线
+                float widthBase = 0.15f;
                 float widthVar  = 0.05f * Mathf.Sin(phaseOffset * Mathf.PI);  // 0/0.029/0.048/0.029/0
                 float maxWidth  = widthBase + Mathf.Abs(widthVar);
                 rib.Configure(RING_RADIUS, angle, phaseOffset, t.color, new Color(0.95f, 0.97f, 1.0f, 1f), maxWidth);
