@@ -64,7 +64,9 @@ Shader "Cairn/RibbonSilkV2"
             #pragma vertex   vert
             #pragma fragment frag
             #pragma target   3.0
-            #pragma multi_compile_local _ _LOD_NEAR _LOD_MID
+            // V2.2 G15 fix: 删 multi_compile_local _LOD_NEAR/_LOD_MID
+            // V2.1 sub#2 抓出:variant 编译但 CairnRibbonLOD.cs 没 SetKeyword 调用 → 死代码
+            // 用户原话'远近不要做 LOD,世界坐标扎根跟真实效果走' → LOD 系统整体不需要
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             TEXTURE2D(_FlowTex); SAMPLER(sampler_FlowTex);
@@ -127,27 +129,21 @@ Shader "Cairn/RibbonSilkV2"
                 float heightA = pow(tipFalloff, _HeightAlphaPower) * baseSoft;
 
                 // ---- Flow noise (turbulence) ----
-                #if !defined(_LOD_MID)
-                    float t = _Time.y + _PhaseOffset;
-                    // Two layers: slow rising + fast counter.
-                    float2 uvA = float2(u * 1.4, v * 1.6 - t * _FlowSpeedSlow);
-                    float  nA  = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, uvA).r;
-                    float2 uvB = float2(u * 3.2, v * 3.0 + t * _FlowSpeedFast);
-                    float  nB  = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, uvB).r;
-                    float flow = saturate(nA * 0.6 + nB * 0.4);
-                    flow = lerp(1.0, 0.15 + 1.7 * flow, _FlowStrength);
-                #else
-                    float flow = 1.0;
-                #endif
+                // V2.2 G15: 删除 _LOD_MID 分支(LOD 系统整体不用)
+                float t = _Time.y + _PhaseOffset;
+                // Two layers: slow rising + fast counter.
+                float2 uvA = float2(u * 1.4, v * 1.6 - t * _FlowSpeedSlow);
+                float  nA  = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, uvA).r;
+                float2 uvB = float2(u * 3.2, v * 3.0 + t * _FlowSpeedFast);
+                float  nB  = SAMPLE_TEXTURE2D(_FlowTex, sampler_FlowTex, uvB).r;
+                float flow = saturate(nA * 0.6 + nB * 0.4);
+                flow = lerp(1.0, 0.15 + 1.7 * flow, _FlowStrength);
 
                 // ---- Horizontal energy bands (Pokémon GO raid pattern) ----
-                #if !defined(_LOD_MID)
-                    float bandPhase = v * _BandFreq - _Time.y * _BandSpeed + _PhaseOffset * 0.2;
-                    float band = step(0.0, frac(bandPhase) - 0.96);
-                    band *= _BandIntensity;
-                #else
-                    float band = 0.0;
-                #endif
+                // V2.2 G15: 删除 _LOD_MID 分支
+                float bandPhase = v * _BandFreq - _Time.y * _BandSpeed + _PhaseOffset * 0.2;
+                float band = step(0.0, frac(bandPhase) - 0.96);
+                band *= _BandIntensity;
 
                 // ---- Color: base type tint → tip lighter ----
                 float colorT = smoothstep(_CoreToTipMixStart, _CoreToTipMixEnd, v);
