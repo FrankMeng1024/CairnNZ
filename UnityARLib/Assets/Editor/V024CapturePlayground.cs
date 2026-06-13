@@ -162,7 +162,10 @@ namespace Cairn.AR.Editor
             // RING_RADIUS already declared above (in Tier-1 ring block)
             for (int i = 0; i < RIBBON_COUNT; i++)
             {
-                float angle = (i / (float)RIBBON_COUNT) * Mathf.PI * 2f + Random.value * 0.3f;
+                // V2.2 G12 fix: 删 + Random.value * 0.3f 扰动
+                // V2.1 sub#2 抓出:扰动让 5 根可能重合(±0.15 rad ≈ 8.6°),圆周 72° 间距下高概率 2 根挤近
+                // → 视觉看 4 根 (而非 5 根)
+                float angle = (i / (float)RIBBON_COUNT) * Mathf.PI * 2f;
                 var rgo = new GameObject($"Ribbon_{i}");
                 rgo.transform.SetParent(root.transform, false);
                 rgo.transform.localPosition = Vector3.zero;
