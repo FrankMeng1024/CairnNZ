@@ -46,6 +46,15 @@ export interface Marker {
   // persistence — the URI string itself, the m4a file lives on disk.
   voiceMemoUri?: string;
   voiceMemoDurationMs?: number;
+  // v0.2.4 Part 2 A2.2 — 双源持久化(用户原话:"AR plant 没用 arkit 世界坐标 用的是 GPS")
+  // Plant 时同时存 ARKit world XYZ + arOrigin 快照,re-spawn 时优先用 ARKit
+  // (前提:当前 arOrigin 跟 plant 时 arOrigin 偏差 < 5m,否则 fallback GPS+raycast)
+  // 旧 marker 这些字段为 undefined,走 fallback 路径,行为不变
+  arkitX?: number;
+  arkitY?: number;
+  arkitZ?: number;
+  arOriginLat?: number;     // plant 时 arOrigin 快照 lat
+  arOriginLng?: number;     // plant 时 arOrigin 快照 lng
 }
 
 const STORAGE_KEY_PREFIX = 'cairn_markers';

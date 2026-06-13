@@ -1067,6 +1067,9 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     crashLogger.breadcrumb(`ar:plant:before-addMarker lat=${cairnLat.toFixed(5)} lng=${cairnLng.toFixed(5)}`);
+    // v0.2.4 Part 2 A2.2: 取持久化 arOrigin 给 marker 作 plant-time 快照
+    // (line 942 的 arOrigin 定义在 if-block 内 scope 不可见,这里独立读 store)
+    const plantArOrigin = useMarkerStore.getState().arOrigin;
     try {
       const marker = await addMarker({
         type: type as any,
@@ -1082,6 +1085,16 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
         approximate: approximate || undefined,
         gpsAgeS: approximate ? age : undefined,
         alt: anchor.alt ?? undefined,
+        // v0.2.4 Part 2 A2.2 — 双源持久化:同时存 ARKit world XYZ + arOrigin 快照
+        // 用户原话:"AR plant 的 mark 没用 arkit 的世界坐标 用的是 GPS 所以每次打开都飘逸"
+        // re-spawn 时(unityCairnSpawn.buildSpawnRequest)若同 arOrigin 偏差 < 5m → 直接用 arkitXYZ
+        // 偏差 > 5m 则 fallback geoToArkitWorld GPS 路径(行为同旧)
+        // unitySpawnPos 仅 same-session hit-test 才非 null,fallback path 时 undefined → 走旧 GPS 重算
+        arkitX: unitySpawnPos?.x,
+        arkitY: unitySpawnPos?.y,
+        arkitZ: unitySpawnPos?.z,
+        arOriginLat: unitySpawnPos ? plantArOrigin?.lat : undefined,
+        arOriginLng: unitySpawnPos ? plantArOrigin?.lng : undefined,
       });
       crashLogger.breadcrumb(`ar:plant:after-addMarker id=${marker.id}`);
       if (sessionId) linkMarker(marker.id);

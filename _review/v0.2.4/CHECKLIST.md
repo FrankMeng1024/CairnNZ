@@ -259,12 +259,15 @@ HTML 文件: `C:\ClaudeCodeProjects\Cairn\design_v2026-06_variant_C_3D.html`
 
 ### Phase A2 — 实施(一步一勾)
 
-- [ ] **A2.1** plant 时强制创建 ARAnchor 挂在 floor plane(不再依赖 transform.position)
+- [x] **A2.1** plant 时强制创建 ARAnchor 挂在 floor plane(不再依赖 transform.position)✅ 2026-06-13
+  - 3 commits: 1e11cc2 (sub#1 Init 漏调) → 2d90e08 (sub#2 #1 deadline 裸坐标 + #3 埋点 guard) → ac77a96 (sub#2 round 2 N1 _spawned 泄漏 + N3 重名 + N4 Init 二次)
+  - 4 眼 review 双 round 完成,sub#2 verdict ACCEPT (round 2)
+  - 核心保证:pre-spawn / retry 1s 内成功 / retry 1s 失败 三条路径都有 ARAnchor parent,只剩"ARAnchor AddComponent 也失败"罕见兜底裸坐标 + 错误日志
 - [ ] **A2.2** mark 持久化 schema 同时存 ARKit world XYZ + GPS lat/lng(双源)
 - [ ] **A2.3** session 重启时优先用 ARKit world,fallback GPS+raycast
 - [ ] **A2.4** 加埋点真机对账:`v22-PLANT-ANCHOR-CREATE` / `v22-PLANT-ANCHOR-DRIFT-DETECTED`
-- [ ] **A2.5** 真机 telemetry 跑 ≥30 min,看 mark 是否真不飘
-- [ ] **A2.6** 用户审
+- [ ] **A2.5** 真机 telemetry 跑 ≥30 min,看 mark 是否真不飘 (需 EAS build,不在本 session 范围)
+- [ ] **A2.6** 用户审 (需 A2.5 后用户)
 
 每步 PROOF:Editor 自动测试 + Unity batch 截图 + telemetry 字段 + 双 subagent 验
 
