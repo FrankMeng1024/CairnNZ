@@ -117,10 +117,35 @@ namespace Cairn.AR
             // Deadline reached — fall back to estimated ground spawn rather than destroy.
             // 铁律 #5 (必须能展示) > 铁律 #2 (必须在地上) when it's truly hopeless.
             // User: "至少给个 retry,概率不大选 1"
-            transform.position = new Vector3(_intendedXZ.x, _intendedY, _intendedXZ.z);
+            //
+            // V4.13 sub#2 4 眼 review Finding #1 (Blocker) 修复:
+            // 旧实现:transform.position = 裸坐标 + 显示 → 等于 v0.2.3 飘逸 bug 复活
+            // 用户原话:"不存在移动 变换 飞天" → deadline 分支必须仍有 ARAnchor 锚定
+            // 镜像 PortalSpawner.cs:591-598 DepthAnchor 路径:
+            //   new GameObject + AddComponent<ARAnchor> 在 estimated pose 上
+            //   SetParent worldPositionStays:false → ARKit world frame 锁定 cairn
+            // 即使没 plane 命中,ARKit 也会 pin 住 anchor 不让 cairn 飘
+            Vector3 estimatedPose = new Vector3(_intendedXZ.x, _intendedY, _intendedXZ.z);
+            var anchorGo = new GameObject($"DegradedAnchor_{_markerId}");
+            anchorGo.transform.position = estimatedPose;
+            anchorGo.transform.rotation = Quaternion.identity;
+            var degradedAnchor = anchorGo.AddComponent<ARAnchor>();
+            if (degradedAnchor != null)
+            {
+                transform.SetParent(anchorGo.transform, worldPositionStays: false);
+                transform.localPosition = Vector3.zero;
+                Debug.LogWarning($"[v22-RETRY-DEADLINE-ANCHORED] id={_markerId} estimated_ground y={_intendedY:F2} pinned to free-floating ARAnchor");
+            }
+            else
+            {
+                // ARAnchor AddComponent 极少数失败:回退到裸坐标(原 v0.2.3 行为)
+                // 至少 cairn 能 show,不至于完全消失
+                Destroy(anchorGo);
+                transform.position = estimatedPose;
+                Debug.LogError($"[v22-RETRY-DEADLINE-BARE] id={_markerId} ARAnchor AddComponent failed, bare coords (FALLBACK OF FALLBACK)");
+            }
             foreach (var r in _hiddenRenderers)
                 if (r != null) r.enabled = true;
-            Debug.LogWarning($"[v22-RETRY-DEADLINE] id={_markerId} 1s reached, spawn estimated_ground at y={_intendedY:F2}");
 
             // Notify RN so it can show "请扫描地面 重新对准" toast
             var bridge = Object.FindFirstObjectByType<CairnBridge>();

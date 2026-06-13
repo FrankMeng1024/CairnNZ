@@ -636,6 +636,8 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             // (无 Init 调用 = _started=false = 死组件,4-eye sub#1 catch)
             var pendingRetry = container.GetComponent<Cairn.AR.PendingAnchorRetry>();
             if (pendingRetry == null) pendingRetry = container.AddComponent<Cairn.AR.PendingAnchorRetry>();
+            // V4.13 sub#2 Finding #3 (Critical) 修复:埋点必须区分 retry-启动 vs 跳过-Init 死组件
+            // 否则真机 dashboard "PENDING-ANCHOR" 行号和实际 retry 次数对不上 → 用户对账失败
             if (arRaycast != null && arAnchors != null && arPlanes != null && spawnCam != null)
             {
                 pendingRetry.Init(
@@ -647,9 +649,16 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
                     anchorMgr: arAnchors,
                     planeMgr: arPlanes,
                     cam: spawnCam);
+                UnityLogger.IForward("v22-PLANT-PENDING-ANCHOR",
+                    $"id={data.id} pos=({spawnX:F2},{groundY:F2},{spawnZ:F2}) reason=no-pre-spawn-anchor retry=started");
             }
-            UnityLogger.IForward("v22-PLANT-PENDING-ANCHOR",
-                $"id={data.id} pos=({spawnX:F2},{groundY:F2},{spawnZ:F2}) reason=no-pre-spawn-anchor");
+            else
+            {
+                // AR managers 缺失 = 无法 retry,组件死了。区分埋点让真机对账诚实。
+                UnityLogger.IForward("v22-PLANT-PENDING-DEAD",
+                    $"id={data.id} pos=({spawnX:F2},{groundY:F2},{spawnZ:F2}) " +
+                    $"raycast={(arRaycast!=null)} anchors={(arAnchors!=null)} planes={(arPlanes!=null)} cam={(spawnCam!=null)}");
+            }
         }
         HasSpawned = true;
 
