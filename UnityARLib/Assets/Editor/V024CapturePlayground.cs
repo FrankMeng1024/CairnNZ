@@ -265,8 +265,10 @@ namespace Cairn.AR.Editor
             labelGo.name = "Label";
             UnityEngine.Object.DestroyImmediate(labelGo.GetComponent<Collider>());
             labelGo.transform.SetParent(root.transform, false);
-            labelGo.transform.localPosition = new Vector3(0f, 1.45f, 0f);
-            labelGo.transform.localScale = new Vector3(0.7f, 0.21f, 1f);
+            // V5.2: 用户 40/100 review "中间的图标太大了" → 高度 1.45 → 1.6,scale 0.7x0.21 → 0.5x0.15
+            // 同时 PNG 改成 500x150 (旧 700x210),包含 type icon (cairn=3stones, danger=triangle, etc.)
+            labelGo.transform.localPosition = new Vector3(0f, 1.60f, 0f);
+            labelGo.transform.localScale = new Vector3(0.5f, 0.15f, 1f);
             // V4.7 v5 fix: Unity Quad 默认 mesh 法线朝 -Z(背对 +Z),相机在 -Z 方向
             // 所以 Quad 法线 -Z 与相机视线方向 +Z 同向 = 背对相机被 backface culling 剔除
             // 加 180° rot 让法线朝 +Z = 朝相机
@@ -377,10 +379,20 @@ namespace Cairn.AR.Editor
             }
 
             // V2.2 P0a fix: capture 完成后 restore 所有 cluster active(给后续 ceremony / anim 用)
-            for (int j = 0; j < TYPES.Length; j++)
+            // V5.1 fix(用户原话"仪式我看不到"根因):
+            // 旧用 GameObject.Find — 但前一轮 capture 末尾把 4 个 cluster SetActive(false)
+            // GameObject.Find 不返回 inactive → 4 个 cluster 永久 hidden
+            // → ceremony 跑时 cairn cluster 是 inactive,ring/rune 全没渲染
+            // → 画面只有底色 + 暖金 fog,24 帧像素全相同
+            // 修法:用 clustersParent.transform.GetChild 遍历(能拿 inactive)
+            var restoreParent = GameObject.Find(CLUSTER_PARENT);
+            if (restoreParent != null)
             {
-                var anyClusterRoot = GameObject.Find($"Cluster_{TYPES[j].id}");
-                if (anyClusterRoot != null) anyClusterRoot.SetActive(true);
+                for (int j = 0; j < restoreParent.transform.childCount; j++)
+                {
+                    restoreParent.transform.GetChild(j).gameObject.SetActive(true);
+                }
+                Debug.Log($"[v024-CAP] restored all {restoreParent.transform.childCount} clusters active=true before ceremony+anim");
             }
 
             // Ceremony flipbook (use cairn cluster, animate camera/material params per frame)
@@ -465,8 +477,30 @@ namespace Cairn.AR.Editor
             cam.transform.position = clusterPos + new Vector3(0f, 1.4f, -2.8f);
             cam.transform.LookAt(clusterPos + new Vector3(0f, 0.85f, 0f));
 
+            // V5.1 fix:ceremony 期间只激活 cairn cluster,避免其他 4 个 type 在视场里穿帮
+            // 用 transform.GetChild 遍历(GameObject.Find 不找 inactive,会漏)
+            var clustersParent2 = GameObject.Find(CLUSTER_PARENT);
+            if (clustersParent2 != null)
+            {
+                for (int j = 0; j < clustersParent2.transform.childCount; j++)
+                {
+                    var c = clustersParent2.transform.GetChild(j);
+                    c.gameObject.SetActive(c.name == $"Cluster_{t.id}");
+                }
+            }
+
             // Find materials (rune + outer ring + inner ring)
-            var clusterRoot = GameObject.Find($"Cluster_{t.id}");
+            // V5.1 fix(用户原话"仪式我看不到"根因):GameObject.Find 不查嵌套 child
+            // Cluster_cairn 是 V024Clusters 的 child → 用 clustersParent.transform.Find
+            // 之前用 GameObject.Find 直接全场景搜,sharedMaterial 是 null,SetFloat 全 no-op
+            // → 24 帧 ceremony PNG md5 全相同(用户看到的"仪式没动")
+            var clustersParent = GameObject.Find(CLUSTER_PARENT);
+            GameObject clusterRoot = null;
+            if (clustersParent != null)
+            {
+                var ct = clustersParent.transform.Find($"Cluster_{t.id}");
+                if (ct != null) clusterRoot = ct.gameObject;
+            }
             Material runeMat = null, outerRingMat = null, innerRingMat = null;
             if (clusterRoot != null)
             {
@@ -476,9 +510,19 @@ namespace Cairn.AR.Editor
                 if (outerRing != null) outerRingMat = outerRing.GetComponent<MeshRenderer>().sharedMaterial;
                 var innerRing = clusterRoot.transform.Find("InnerRing");
                 if (innerRing != null) innerRingMat = innerRing.GetComponent<MeshRenderer>().sharedMaterial;
+                Debug.Log($"[v024-CAP-CEREMONY] mats found: rune={runeMat!=null} outer={outerRingMat!=null} inner={innerRingMat!=null}");
+            }
+            else
+            {
+                Debug.LogError($"[v024-CAP-CEREMONY] Cluster_{t.id} NOT FOUND under {CLUSTER_PARENT} — ceremony will be static");
             }
 
             const int FRAMES = 24;
+            // V5.1 fix: ceremony 也要看到 ribbon "活起来"(用户原话"仪式我看不到")
+            // 拿 ribbons + particles 在 ceremony 后段(t>0.85)tick 起来
+            var ribbons = clusterRoot != null ? clusterRoot.GetComponentsInChildren<Cairn.AR.SilkRibbonV2>() : new Cairn.AR.SilkRibbonV2[0];
+            var parts   = clusterRoot != null ? clusterRoot.GetComponentsInChildren<Cairn.AR.TypeParticleController>() : new Cairn.AR.TypeParticleController[0];
+            const float CEREMONY_DT = 1f / 24f;  // 24 frames over 1s
             for (int f = 0; f < FRAMES; f++)
             {
                 float ceremonyT = f / (float)(FRAMES - 1);
@@ -495,6 +539,24 @@ namespace Cairn.AR.Editor
                 // Rune fade in 0.5..0.85
                 float runeT = Mathf.Clamp01((ceremonyT - 0.5f) / 0.35f);
                 if (runeMat != null) runeMat.SetFloat("_Reveal", runeT);
+
+                // V5.1 diag: 验证 SetFloat 是否真生效
+                if (f == 0 || f == 12 || f == 23)
+                {
+                    float gOuter = outerRingMat != null ? outerRingMat.GetFloat("_SweepProgress") : -1f;
+                    float gInner = innerRingMat != null ? innerRingMat.GetFloat("_SweepProgress") : -1f;
+                    float gRune  = runeMat != null ? runeMat.GetFloat("_Reveal") : -1f;
+                    Debug.Log($"[v024-CAP-CEREMONY-DIAG] f={f} t={ceremonyT:F2} sweep={sweepProgress:F2} (got outer={gOuter:F2} inner={gInner:F2} rune={gRune:F2})");
+                }
+
+                // V5.1: ribbon 在 ceremony 后段开始动画(0.7+ 起 tick)
+                // 让 24 帧 ceremony 末尾 ribbon 已经升起来,用户能看到"仪式 → ribbon 升起"过渡
+                if (ceremonyT > 0.7f)
+                {
+                    Shader.SetGlobalFloat("_CairnAnimTime", ceremonyT * 1.5f + 0.5f);
+                    foreach (var rb in ribbons) rb.EditorManualTick(CEREMONY_DT);
+                    foreach (var pc in parts)   pc.EditorManualTick(CEREMONY_DT);
+                }
 
                 for (int sub = 0; sub < 3; sub++) cam.Render();
                 CaptureCameraToPng(cam, $"{OUT_DIR}/ceremony-{f:D2}.png");
