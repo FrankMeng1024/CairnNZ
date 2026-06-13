@@ -456,8 +456,10 @@ namespace Cairn.AR.Editor
                 //   cam (0,1.6,-3.5) lookAt (0,1.0,0) 让 ring (y=0) 投影在画面下半,
                 //   ribbon 升 3m 投影在上半,中间 250px 空白
                 //   修: lookAt y 1.0→0.4 让 ring + ribbon 同框
+                // V5.33: ribbon.y 抬到 0.76 后 cam lookAt 0.4 让 ring 太靠下
+                //   修: lookAt 0.4→0.8 让 cam 中心对准 ribbon 中段, ring 上移视觉接合
                 cam.transform.position = clusterPos + new Vector3(0f, 1.6f, -3.5f);
-                cam.transform.LookAt(clusterPos + new Vector3(0f, 0.4f, 0f));
+                cam.transform.LookAt(clusterPos + new Vector3(0f, 0.8f, 0f));
 
                 // V2.2 P0a fix: 隐藏其他 cluster,避免相机视锥内出现穿帮(右下红色 danger 三角)
                 // 5 cluster 摆在 (-6/-3/0/3/6) X 轴,相机俯拍当前 cluster 时其他 cluster 仍在视场内
