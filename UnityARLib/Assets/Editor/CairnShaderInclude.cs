@@ -43,7 +43,6 @@ public class CairnShaderInclude : IPreprocessBuildWithReport
         "Cairn/PebbleShader",
         "Cairn/TypeChipShader",
         "Cairn/StoneBackplateShader",
-        "Cairn/RibbonStrandShader",
         "Cairn/LightShaftShader",
         "Cairn/ScanningGridShader",
         "Cairn/ConfidenceRingShader",

@@ -85,9 +85,8 @@ public partial class CairnGlobals
             };
         }
 
-        // §G.1a Strand visual (15 — v0.2.3 Stage 1: removed WispCurlStrength,
-        // HeroRibbonCount/Height/Curl since Stage 8 deletes RibbonStrandShader
-        // + HeroRibbon mesh system entirely, replacing with ParticleSystem.)
+        // §G.1a Strand visual (15 — v0.2.3 Stage 8: WispCurlStrength + HeroRibbon*
+        // OTA 已废弃,改用 ParticleSystem 路径; v0.2.4 cleanup 删 ribbon mesh 体系)
         F("RingEmitRate",          null, 2,  60,   14);
         F("WispLifetime",          null, 1,  10,   3.5f);
         F("WispRiseSpeed",         null, 0.2f, 4,  1.2f);

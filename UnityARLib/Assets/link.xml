@@ -59,7 +59,6 @@
     <type fullname="SpikeAnchorHarness" preserve="all"/>
     <!-- v199 cinematic-rebuild MonoBehaviours -->
     <type fullname="BillboardYaw" preserve="all"/>
-    <type fullname="MeshRibbonStrand" preserve="all"/>
     <type fullname="SpiritHandshake" preserve="all"/>
     <type fullname="CairnVolumeOverrides" preserve="all"/>
     <type fullname="GlobalScanGridController" preserve="all"/>

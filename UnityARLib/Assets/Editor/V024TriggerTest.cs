@@ -11,7 +11,7 @@
 //
 // Output:
 //   _review/v0.2.4/A-trigger-test-result.json — 3 case verdict + 详情
-//   _review/v0.2.4/A-case[1-3]-summary.png    — 视觉截图(用 V024CapturePlayground 场景)
+//   _review/v0.2.4/A-case[1-3]-summary.png    — 视觉截图(Editor playmode)
 
 using System.IO;
 using System.Reflection;

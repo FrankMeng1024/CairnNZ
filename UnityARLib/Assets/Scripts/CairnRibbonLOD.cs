@@ -15,9 +15,6 @@ namespace Cairn.AR
     /// Sets shader globals:
     ///   _CairnGlobalCamDist   (float, metres)  — used by CairnConeCore + CairnConeOutline shaders
     ///
-    /// 注 (2026-06-14 cleanup): _CairnGlobalLODBand 已删除. 0 shader 读取此 global,
-    /// CairnRibbonLOD 字段 band0Max/band1Max/band2Max 仍保留供 OTA 后续 wire 用.
-    ///
     /// Updates at 4Hz (every 0.25s) — distance changes slowly relative to AR
     /// frame rate, no need to re-evaluate every frame. Saves ~60Hz × 8 cairns
     /// of distance-vector math per second.

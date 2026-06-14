@@ -2,7 +2,7 @@
 // v0.2.4 BLOCKER 3 fix — 视觉真验证 trail 是否真渲染
 //
 // 独立 harness:
-//   - 单一 cairn 石头(不依赖 V024CapturePlayground 整套场景)
+//   - 单一 cairn 石头(独立场景)
 //   - 强对比颜色:亮黄绿 trail 在白底
 //   - 5 帧 / 15 帧 / 30 帧三个时间点都截图
 //   - 同时测 TrailRenderer 和 LineRenderer 两种 trail 实现

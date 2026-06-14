@@ -457,9 +457,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             via CairnGlobals; adaptive lerp (snap >0.15m, fast 2.5m/s,
 //             slow 1m/s)
 //           - PortalSpawnerV199: Pebble_S Y 0.45→0.43 stack alignment
-//           - WispCurlStrength shader binding to _CairnGlobalCurlStrength
-//             + RibbonStrandShader vert reads it + MeshRibbonStrand pushes
-//             curlAmp via MPB → ribbons actually wave per OTA value
 //           - 4 kill-switches wired (V199LayerEnabled, RuneTextEnabled,
 //             PebbleStackEnabled, TypeChipEnabledOTA)
 //           - FarShaftDistanceGate MonoBehaviour (5Hz hide when <6m)

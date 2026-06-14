@@ -422,7 +422,7 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         if (!groundDetected)
         {
 #if UNITY_EDITOR
-            // Editor batch mode (HeadlessRender / ConeStrandPlayCapture):
+            // Editor batch mode (HeadlessRender):
             // ARPlaneManager has no trackables → QueryGroundY always fails.
             // Bypass with data.y so visual capture tests can run.
             if (!Application.isPlaying)
