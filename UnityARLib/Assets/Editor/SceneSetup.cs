@@ -182,7 +182,18 @@ public static class SceneSetup
         planeManager.requestedDetectionMode = UnityEngine.XR.ARSubsystems.PlaneDetectionMode.Horizontal;
         var raycastManager = xrOriginGo.AddComponent<ARRaycastManager>();
         var anchorManager  = xrOriginGo.AddComponent<ARAnchorManager>();
-        Debug.Log($"[CairnUnity][SceneSetup] ARPlaneManager + ARRaycastManager + ARAnchorManager added");
+        // v0.2.4 R2.2 + R2.6 fix (sub#3 production-blocker):
+        //   FloorPlaneValidator + PendingAnchorRetry + PortalSpawnerV199 都用
+        //   FindFirstObjectByType<ARMeshManager>() 检测 LiDAR — 但 scene 之前
+        //   没挂 ARMeshManager,所有真机 (包括 LiDAR Pro) 永远返 null → lidar 永远 false。
+        //   现在加上,LiDAR Pro 设备的 mesh classification 路径才会真触发。
+        //   注: ARMeshManager 必须挂在子 GO 上 (ARMeshManager 内部要 mesh prefab),
+        //   非 LiDAR 设备 subsystem.running 自动返 false (ARFoundation 6 自治),
+        //   不会 break 非 LiDAR 设备。
+        var meshGo = new GameObject("AR Mesh Manager");
+        meshGo.transform.SetParent(xrOriginGo.transform, false);
+        var meshManager = meshGo.AddComponent<ARMeshManager>();
+        Debug.Log($"[CairnUnity][SceneSetup] ARPlaneManager + ARRaycastManager + ARAnchorManager + ARMeshManager added");
 
         // ─── PortalSpawner (v187 base + v199 superlayer) ───
         var spawnerGo  = new GameObject("PortalSpawner");

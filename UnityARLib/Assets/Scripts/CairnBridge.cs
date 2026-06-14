@@ -1051,6 +1051,20 @@ public class CairnBridge : MonoBehaviour
     public static float _sessionOffsetX;
     public static float _sessionOffsetZ;
 
+    /// <summary>
+    /// v0.2.4 R2 testable helper (anti-self-licking):
+    /// 给定 tier + raw (x,z),应用正确的 sessionOffset 规则 (Tier-A bypass)。
+    /// PortalSpawner / MultiSpawner / QA case 共用同一函数,确保所有 spawn
+    /// 路径行为对齐 + case 真调真函数。
+    /// </summary>
+    public static (float x, float z) ApplyTierAwareSpawnOffset(string tier, float rawX, float rawZ)
+    {
+        bool isTierA = tier == "A";
+        float x = rawX + (isTierA ? 0f : _sessionOffsetX);
+        float z = rawZ + (isTierA ? 0f : _sessionOffsetZ);
+        return (x, z);
+    }
+
     // ============================================================
     // Outbound (Unity -> RN) transport
     // ============================================================

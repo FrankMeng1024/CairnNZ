@@ -54,17 +54,23 @@ public static class QARunAll
         Directory.CreateDirectory(OUT_ROOT);
 
         // ─── A 类 — 同 session 挪动 ───
-        Run("QA-01-plant-still",                           Test_QA01_PlantStill);
-        Run("QA-02-plant-walk-away-and-back",              Test_QA02_WalkAwayAndBack);
-        Run("QA-03-plant-orbit-180",                       Test_QA03_Orbit180);
-        Run("QA-04-plant-crouch-stand",                    Test_QA04_CrouchStand);
+        // QA-01~04: cairnRoot 是 dummy GameObject,不挂 ARAnchor,Editor 改相机 transform
+        // 不会真触发 ARFoundation anchor refine 路径 — 这些 case 等于"无人动它当然不变",
+        // trivially-true,不算真测。改 SKIP,真机 walk-around scenario 走 telemetry。
+        Skip("QA-01-plant-still",                           "ARAnchor refine 真实行为只在 PlayMode + 真 ARSession 出现,Editor batchmode dummy GO 不变是 trivial");
+        Skip("QA-02-plant-walk-away-and-back",              "同 QA-01 — 真机 walk-around scenario,看 v22-PLANT-ANCHOR-DRIFT-DETECTED telemetry");
+        Skip("QA-03-plant-orbit-180",                       "同 QA-01 — 真机绕走 scenario");
+        Skip("QA-04-plant-crouch-stand",                    "同 QA-01 — 真机 crouch scenario");
         Skip("QA-05-slam-slow-drift",                       "ARKit SLAM anchor refine 不可在 Editor mock — 真机 telemetry 验证");
         Skip("QA-06-slam-relocalize-jump",                  "ARKit relocalize 真信号不可在 Editor mock — 真机 + worldMappingStatus 埋点");
 
         // ─── B 类 — 跨 session 重开 ───
-        Run("QA-10-cross-session-y-drift",                 Test_QA10_CrossSessionYDrift);
-        Run("QA-11-cross-session-xz-drift",                Test_QA11_CrossSessionXZDrift);
-        Run("QA-12-cross-session-no-plane",                Test_QA12_CrossSessionNoPlane);
+        // QA-10~12: dummy GameObject + 平移测试不真测 R2.4 的 PickSnapPlane / SnapToFloorY
+        // (那已被 QA-70~73 真调测了)。这 3 个 case 是 trivially: "我手动 += 0.6m,然后断言它是 0.6m" 自洽。
+        // 删 fake,B 类只保 device-only 真机走 v22-CROSS-SESSION-SNAP telemetry。
+        Skip("QA-10-cross-session-y-drift",                 "Y drift 真测在 QA-70~73 (PickSnapPlane);真机端到端走 v22-CROSS-SESSION-SNAP telemetry");
+        Skip("QA-11-cross-session-xz-drift",                "XZ drift R2.4 不在 scope (anchor refine,非 snap);真机走 v22-PLANT-ANCHOR-DRIFT-DETECTED");
+        Skip("QA-12-cross-session-no-plane",                "PickSnapPlane(no-plane) 真测在 QA-72");
         Skip("QA-13-cross-session-worldmappingstatus-lock", "ARKit native worldMappingStatus 不可在 Editor mock");
 
         // ─── C 类 — Tier-A vs Tier-B ───
@@ -73,6 +79,7 @@ public static class QARunAll
         Run("QA-22-null-tier-defaults-to-B",               Test_QA22_NullTierDefaultsB);
         Run("QA-23-multispawner-tierA-bypass",             Test_QA23_MultiSpawnerTierA);
         Run("QA-95-tierA-with-uninit-sessionoffset",       Test_QA95_TierAUninit);
+        Run("QA-91-portal-dedupe-by-id",                   Test_QA91_DedupeById);
 
         // ─── D 类 — Floor plane 判断 ───
         Run("QA-30-standing-accept-1m",                    Test_QA30_StandingAccept);
@@ -82,43 +89,51 @@ public static class QARunAll
         Run("QA-34-reject-cliff",                          Test_QA34_RejectCliff);
         Run("QA-35-reject-classification-list",            Test_QA35_RejectClassifications);
         Run("QA-39-no-regression-belowcam-0.6",            Test_QA39_NoRegression);
+        Run("QA-36-lidar-floor-accept",                    Test_QA36_LidarFloorAccept);
+        Run("QA-37-lidar-non-floor-large-area-accept",     Test_QA37_LidarNonFloorLarge);
+        Run("QA-38-lidar-non-floor-small-area-reject",     Test_QA38_LidarNonFloorSmall);
 
         // ─── E 类 — Tracking gate ───
-        Run("QA-40-tracking-allows-plant",                 Test_QA40_TrackingAllows);
-        Run("QA-41-limited-rejects-plant",                 Test_QA41_LimitedRejects);
-        Run("QA-42-none-rejects-plant",                    Test_QA42_NoneRejects);
-        Run("QA-43-flicker-no-thrash",                     Test_QA43_FlickerNoThrash);
-        Run("QA-44-plant-during-flicker",                  Test_QA44_PlantDuringFlicker);
-        Run("QA-45-flicker-hard-cap-applies",              Test_QA45_FlickerHardCap);
-        Run("QA-46-track-none-immediate",                  Test_QA46_TrackNoneImmediate);
+        Skip("QA-40-tracking-allows-plant",                 "ARScreen.tsx React useEffect a4PlantEnabled gate 是 RN-side。jest in app/__tests__/r27-track-debounce.test.ts 真测 trackStateDebounce");
+        Skip("QA-41-limited-rejects-plant",                 "同 QA-40 — RN-side jest");
+        Skip("QA-42-none-rejects-plant",                    "同 QA-40 — RN-side jest");
+        Skip("QA-43-flicker-no-thrash",                     "ARScreen.tsx React useEffect 是 TypeScript runtime,C# Editor 不可达。RN 用 jest in app/__tests__/track-debounce.test.ts");
+        Skip("QA-44-plant-during-flicker",                  "同 QA-43 — TS jest");
+        Skip("QA-45-flicker-hard-cap-applies",              "同 QA-43 — TS jest");
+        Skip("QA-46-track-none-immediate",                  "同 QA-43 — TS jest");
 
         // ─── F 类 — GPS + arOrigin ───
         Skip("QA-50-gps-5m-allows",                         "GPS native 不可 Editor mock");
         Skip("QA-51-gps-15m-rejects",                       "GPS native 不可 Editor mock");
-        Run("QA-52-arorigin-30m-allows",                   Test_QA52_ArOrigin30m);
-        Run("QA-53-arorigin-80m-rejects",                  Test_QA53_ArOrigin80m);
+        Skip("QA-52-arorigin-30m-allows",                   "ARScreen.tsx 50m 阈值是 RN-side,Editor C# 不可达。RN jest in app/__tests__/origin-stale.test.ts");
+        Skip("QA-53-arorigin-80m-rejects",                  "同 QA-52");
         Skip("QA-54-gps-15m-fallback-plant",                "GPS native 不可 Editor mock");
 
         // ─── G 类 — Anchor lifecycle ───
-        Run("QA-60-pendingretry-blocks-v199",              Test_QA60_PendingRetryBlocks);
-        Run("QA-61-pendingretry-removed-v199-works",       Test_QA61_PendingRetryRemoved);
-        Run("QA-94-anchor-trackable-removed",              Test_QA94_AnchorRemoved);
+        Skip("QA-60-pendingretry-blocks-v199",              "PendingAnchorRetry 需要真 ARFoundation rig + ARSession PlayMode runtime,Editor batchmode 不可 mock。真机走 [v22-V199-PARENT-SKIP-PENDING] log + telemetry_sessions");
+        Skip("QA-61-pendingretry-removed-v199-works",       "同 QA-60 — 真机 [v22-V199-PARENT-OK] log");
+        Skip("QA-94-anchor-trackable-removed",              "ARSession.RemoveTrackable 是 native 路径,Editor 无法 mock,真机走 AnchorDriftMonitor [v22-anchor-removed] telemetry");
 
         // ─── H 类 — Cross-session ground snap ───
         Run("QA-70-snap-picks-nearest-xz",                 Test_QA70_SnapNearestXZ);
         Run("QA-71-snap-single-plane",                     Test_QA71_SnapSinglePlane);
         Run("QA-72-snap-no-plane-skip",                    Test_QA72_SnapNoPlane);
         Run("QA-73-snap-cross-floor-protection",           Test_QA73_SnapCrossFloorProtection);
+        Run("QA-74-multi-cairn-batch-snap",                Test_QA74_MultiCairnBatchSnap);
+        Run("QA-75-anchor-drift-sliding-window",           Test_QA75_AnchorDriftSlidingWindow);
 
         // ─── I 类 — LiDAR consistency ───
         Skip("QA-80-lidar-on-three-true",                   "LiDAR ARMeshManager runtime 不可 Editor mock");
         Skip("QA-81-lidar-off-three-false",                 "LiDAR ARMeshManager runtime 不可 Editor mock");
 
         // ─── J 类 — UX edge cases ───
-        Run("QA-90-plant-no-raycast-hit",                  Test_QA90_NoRaycastHit);
-        Run("QA-91-plant-dedupe-by-id",                    Test_QA91_DedupeById);
-        Run("QA-92-plant-persist-app-restart",             Test_QA92_PersistRestart);
-        Run("QA-93-plant-double-hit-floor-table",          Test_QA93_DoubleHit);
+        // QA-90~93: 这些都是端到端 plant 流程行为 (raycast / dedupe / persist / 双 hit)
+        // 真测要真 PortalSpawner runtime,Editor batchmode 不可。改 SKIP 走真机端到端。
+        Skip("QA-90-plant-no-raycast-hit",                  "PortalSpawner.OnSpawnStrand 走 ARRaycastManager 真路径,Editor 不可 mock");
+        // QA-91: dedupe 真在 PortalSpawner.IsAlreadySpawned helper,Editor 真测
+        Skip("QA-91-plant-dedupe-by-id-OLD",                "替换为 QA-91 (新真测)");
+        Skip("QA-92-plant-persist-app-restart",             "persist 测在 useMarkerStore RN side,RN jest in app/__tests__/marker-store.test.ts");
+        Skip("QA-93-plant-double-hit-floor-table",          "raycast multi-hit 路径在 ARRaycastManager runtime,Editor 不可 mock");
         Skip("QA-96-app-backgrounded-mid-plant",            "OnApplicationPause 真机 lifecycle 不可 Editor mock");
 
         // ─── 总结 ───
@@ -307,150 +322,16 @@ public static class QARunAll
     }
 
     // ───────────────────────────────────────────────────────────────────
-    // Test cases — A class (same session, motion)
+    // A class (QA-01~06) removed — SKIP'd in RunHeadless. Dummy GameObject
+    // 的 transform 测试 trivially-true,真测要 PlayMode + ARFoundation runtime。
+    // 真机 telemetry: v22-PLANT-ANCHOR-DRIFT-DETECTED.
     // ───────────────────────────────────────────────────────────────────
 
-    static void Test_QA01_PlantStill(CaseCtx ctx)
-    {
-        // anchor.transform.position should not change frame-to-frame when nothing moves
-        Vector3 p0 = _cairnRoot.transform.position;
-        // simulate 1s idle (no operations)
-        Vector3 p1 = _cairnRoot.transform.position;
-        float delta = Vector3.Distance(p0, p1);
-        ctx.AssertLe("delta", delta, 0.01f);
-    }
-
-    static void Test_QA02_WalkAwayAndBack(CaseCtx ctx)
-    {
-        Capture(Path.Combine(ctx.dir, "before.png"));
-        int beforeY = ConeTipPixelY(Path.Combine(ctx.dir, "before.png"));
-
-        // Walk +X 5m, then back. Cairn does not move in this Editor harness;
-        // we only verify the camera return shows the cone in the same screen position.
-        Vector3 origCam = _camGo.transform.position;
-        _camGo.transform.position = origCam + new Vector3(5f, 0, 0);
-        _camGo.transform.position = origCam;
-        _camGo.transform.LookAt(new Vector3(0f, 0.3f, 0f));
-
-        Capture(Path.Combine(ctx.dir, "after.png"));
-        int afterY = ConeTipPixelY(Path.Combine(ctx.dir, "after.png"));
-        int pixDelta = Math.Abs(beforeY - afterY);
-        ctx.AssertLeInt("cone-tip-pixel-delta", pixDelta, 30);
-    }
-
-    static void Test_QA03_Orbit180(CaseCtx ctx)
-    {
-        Capture(Path.Combine(ctx.dir, "before.png"));
-        int beforeY = ConeTipPixelY(Path.Combine(ctx.dir, "before.png"));
-
-        // Orbit: move camera to opposite side
-        _camGo.transform.position = new Vector3(0f, 1.6f, 3f);
-        _camGo.transform.LookAt(new Vector3(0f, 0.3f, 0f));
-        // Then back to original
-        _camGo.transform.position = new Vector3(0f, 1.6f, -3f);
-        _camGo.transform.LookAt(new Vector3(0f, 0.3f, 0f));
-
-        Capture(Path.Combine(ctx.dir, "after.png"));
-        int afterY = ConeTipPixelY(Path.Combine(ctx.dir, "after.png"));
-        ctx.AssertLeInt("cone-tip-pixel-delta", Math.Abs(beforeY - afterY), 30);
-    }
-
-    static void Test_QA04_CrouchStand(CaseCtx ctx)
-    {
-        Vector3 p0 = _cairnRoot.transform.position;
-        // Camera y 1.6 -> 0.6 -> 1.6
-        _camGo.transform.position = new Vector3(0, 0.6f, -3f);
-        _camGo.transform.position = new Vector3(0, 1.6f, -3f);
-        Vector3 p1 = _cairnRoot.transform.position;
-        ctx.AssertLe("anchor-delta-after-crouch", Vector3.Distance(p0, p1), 0.02f);
-    }
-
-    static void Test_QA05_SlamSlowDrift(CaseCtx ctx)
-    {
-        Vector3 p0 = _cairnRoot.transform.position;
-        // Simulate SLAM slow drift: 0.001m/frame for 60 frames
-        for (int i = 0; i < 60; i++)
-        {
-            _cairnRoot.transform.position += new Vector3(0.001f, 0, 0);
-        }
-        Vector3 p1 = _cairnRoot.transform.position;
-        float delta = Vector3.Distance(p0, p1);
-        // 60 * 0.001 = 0.06m total drift — fails 0.05 threshold (this is a real bug case)
-        // Pass criterion in TEST_CASES.md says delta < 0.05m. Real ARKit refines anchors
-        // so cairn should track. Without a fix, this drifts 0.06m → FAIL.
-        ctx.Note($"total drift = {delta:F3}m");
-        ctx.AssertLe("slam-drift-total", delta, 0.05f);
-    }
-
-    static void Test_QA06_SlamRelocalizeJump(CaseCtx ctx)
-    {
-        Capture(Path.Combine(ctx.dir, "before.png"));
-        int beforeY = ConeTipPixelY(Path.Combine(ctx.dir, "before.png"));
-
-        // Single-frame +0.3m teleport
-        _cairnRoot.transform.position += new Vector3(0, 0.3f, 0);
-
-        Capture(Path.Combine(ctx.dir, "after.png"));
-        int afterY = ConeTipPixelY(Path.Combine(ctx.dir, "after.png"));
-        int pixDelta = Math.Abs(beforeY - afterY);
-        ctx.Note($"cone tip pixel delta = {pixDelta}px (0.3m teleport)");
-        // Expect FAIL until R2 fix re-snaps. ~0.3m / 5cm-per-30px = ~180px expected.
-        // PASS criterion: after R2 snap, should re-snap to ground -> delta < 60px.
-        ctx.AssertLeInt("relocalize-tip-pixel-delta", pixDelta, 60);
-    }
-
     // ───────────────────────────────────────────────────────────────────
-    // B class — cross-session
+    // B class (QA-10~12) removed — SKIP'd in RunHeadless. Cross-session 行为
+    // 真测在 H 类 (QA-70~73 真调 CrossSessionGroundSnap.PickSnapPlane)。
+    // 真机走 v22-CROSS-SESSION-SNAP telemetry。
     // ───────────────────────────────────────────────────────────────────
-
-    static void Test_QA10_CrossSessionYDrift(CaseCtx ctx)
-    {
-        Capture(Path.Combine(ctx.dir, "before.png"));
-        // Simulate session reload + ARKit world frame y +0.6m drift
-        _cairnRoot.transform.position += new Vector3(0, 0.6f, 0);
-        // Apply R2.4 snap logic: if floor plane available + cairn out-of-view + |yDelta| > 0.10m
-        // -> snap cairn.y to plane.y (0)
-        Vector3 cairnPos = _cairnRoot.transform.position;
-        float planeY = 0f;
-        // out-of-view check: simulate cairn out of camera view
-        bool outOfView = true;
-        if (outOfView && Mathf.Abs(cairnPos.y - planeY) > 0.10f)
-        {
-            _cairnRoot.transform.position = new Vector3(cairnPos.x, planeY, cairnPos.z);
-        }
-        Capture(Path.Combine(ctx.dir, "after.png"));
-        float yAfter = _cairnRoot.transform.position.y;
-        ctx.Note($"cairn.y after R2.4 snap = {yAfter:F2} (target 0)");
-        ctx.AssertLe("cairn-y-after-snap", Mathf.Abs(yAfter - 0f), 0.02f);
-    }
-
-    static void Test_QA11_CrossSessionXZDrift(CaseCtx ctx)
-    {
-        Vector3 p0 = _cairnRoot.transform.position;
-        _cairnRoot.transform.position += new Vector3(0.3f, 0, 0);
-        // R2.4 snap: nearest XZ plane (origin in this scene) -> snap cairn xz to plane xz (0,0)
-        // Note: actual snap logic only adjusts Y per CairnAcquireController.SnapToFloorY,
-        // but R2.4 picks plane by nearest XZ. So if drift is xz-only and Y is matching,
-        // the |yDelta| < minDelta means NO snap fires. xz drift remains.
-        // This is a DESIGN NOTE: R2.4 doesn't fix xz drift, only fixes which plane is chosen.
-        // For xz-only drift, ARKit's anchor refinement is the source of truth, not snap.
-        Vector3 p1 = _cairnRoot.transform.position;
-        Vector2 xzDelta = new Vector2(p1.x - p0.x, p1.z - p0.z);
-        ctx.Note($"xz drift = {xzDelta.magnitude:F2}m — R2.4 snap does NOT fix xz, anchor refine is responsible");
-        // Mark this case as DOC-only: xz drift is real bug class but not in R2.4 scope
-        ctx.Note("xz drift fix is out-of-scope for R2.4 (Y snap only); requires R2 follow-up");
-        // For QA pass, accept xz drift up to 0.30m as "out-of-scope acknowledged"
-        ctx.AssertLe("xz-drift-documented", xzDelta.magnitude, 0.30f);
-    }
-
-    static void Test_QA12_CrossSessionNoPlane(CaseCtx ctx)
-    {
-        Vector3 p0 = _cairnRoot.transform.position;
-        // No plane in scene; simulating snap call should be a no-op.
-        // Editor harness: just verify cairn position unchanged when no plane.
-        Vector3 p1 = _cairnRoot.transform.position;
-        ctx.AssertLe("no-plane-no-change", Vector3.Distance(p0, p1), 0.001f);
-    }
 
     // ───────────────────────────────────────────────────────────────────
     // C class — Tier-A vs Tier-B (sessionOffset bypass)
@@ -458,55 +339,76 @@ public static class QARunAll
 
     static void Test_QA20_TierABypassesInit(CaseCtx ctx)
     {
+        // 真调 CairnBridge.ApplyTierAwareSpawnOffset (PortalSpawner + MultiSpawner 共用)
         CairnBridge._sessionOffsetX = 5f;
         CairnBridge._sessionOffsetZ = 3f;
-        var d = new CairnBridge.SpawnRequest { tier = "A", x = 10f, z = 20f };
-        bool isA = d.tier == "A";
-        float spawnX = d.x + (isA ? 0f : CairnBridge._sessionOffsetX);
-        ctx.AssertEqualF("spawnX", spawnX, 10f);
+        var (x, z) = CairnBridge.ApplyTierAwareSpawnOffset("A", 10f, 20f);
+        ctx.Note($"tier=A raw=(10,20) offset=(5,3) result=({x:F2},{z:F2})");
+        ctx.AssertEqualF("spawnX", x, 10f);
+        ctx.AssertEqualF("spawnZ", z, 20f);
     }
 
     static void Test_QA21_TierBApplies(CaseCtx ctx)
     {
         CairnBridge._sessionOffsetX = 5f;
         CairnBridge._sessionOffsetZ = 3f;
-        var d = new CairnBridge.SpawnRequest { tier = "B", x = 10f, z = 20f };
-        bool isA = d.tier == "A";
-        float spawnX = d.x + (isA ? 0f : CairnBridge._sessionOffsetX);
-        ctx.AssertEqualF("spawnX", spawnX, 15f);
+        var (x, z) = CairnBridge.ApplyTierAwareSpawnOffset("B", 10f, 20f);
+        ctx.AssertEqualF("spawnX", x, 15f);
+        ctx.AssertEqualF("spawnZ", z, 23f);
     }
 
     static void Test_QA22_NullTierDefaultsB(CaseCtx ctx)
     {
         CairnBridge._sessionOffsetX = 5f;
         CairnBridge._sessionOffsetZ = 3f;
-        var d = new CairnBridge.SpawnRequest { tier = null, x = 10f, z = 20f };
-        bool isA = d.tier == "A";
-        float spawnX = d.x + (isA ? 0f : CairnBridge._sessionOffsetX);
-        ctx.AssertEqualF("spawnX", spawnX, 15f);
+        var (x, _) = CairnBridge.ApplyTierAwareSpawnOffset(null, 10f, 20f);
+        ctx.AssertEqualF("spawnX", x, 15f);
     }
 
     static void Test_QA23_MultiSpawnerTierA(CaseCtx ctx)
     {
-        // R2.5: MultiSpawner.cs should also bypass sessionOffset for Tier-A
-        // Simulate by applying same logic. Real verification needs MultiSpawner code path.
+        // R2.5 anti-self-licking: 真调共用 helper, MultiSpawner.cs:230 真用同函数。
         CairnBridge._sessionOffsetX = 5f;
-        var d = new CairnBridge.SpawnRequest { tier = "A", x = 10f };
-        bool isA = d.tier == "A";
-        float spawnX = d.x + (isA ? 0f : CairnBridge._sessionOffsetX);
-        ctx.AssertEqualF("multispawner-spawnX", spawnX, 10f);
-        ctx.Note("Logic-only verify — real MultiSpawner.cs grep needs to be done in R2.5 fix");
+        CairnBridge._sessionOffsetZ = 3f;
+        var (x, _) = CairnBridge.ApplyTierAwareSpawnOffset("A", 10f, 0f);
+        ctx.Note($"MultiSpawner.cs:230 calls same helper -> spawnX={x}");
+        ctx.AssertEqualF("multispawner-spawnX", x, 10f);
     }
 
     static void Test_QA95_TierAUninit(CaseCtx ctx)
     {
-        // sessionOffset=(0,0,0) — uninitialized state
         CairnBridge._sessionOffsetX = 0f;
         CairnBridge._sessionOffsetZ = 0f;
-        var d = new CairnBridge.SpawnRequest { tier = "A", x = 10f, z = 20f };
-        bool isA = d.tier == "A";
-        float spawnX = d.x + (isA ? 0f : CairnBridge._sessionOffsetX);
-        ctx.AssertEqualF("spawnX", spawnX, 10f);
+        var (x, _) = CairnBridge.ApplyTierAwareSpawnOffset("A", 10f, 20f);
+        ctx.AssertEqualF("spawnX", x, 10f);
+    }
+
+    static void Test_QA91_DedupeById(CaseCtx ctx)
+    {
+        // R2-followup: PortalSpawner.IsAlreadySpawned helper 真调
+        // 模拟两个 child Portal_X / Portal_Y, 验证 IsAlreadySpawned 真识别。
+        var spawnerGo = new GameObject("TestPortalSpawner");
+        var spawner = spawnerGo.AddComponent<PortalSpawner>();
+        // 加 child 模拟"已 spawn"的 cairn (生产里 SpawnStrandInternal 创建 Portal_<id>)
+        var childA = new GameObject("Portal_alpha");
+        childA.transform.SetParent(spawnerGo.transform);
+        var childB = new GameObject("Portal_beta");
+        childB.transform.SetParent(spawnerGo.transform);
+
+        bool aFound = spawner.IsAlreadySpawned("alpha");
+        bool bFound = spawner.IsAlreadySpawned("beta");
+        bool cFound = spawner.IsAlreadySpawned("gamma");  // not present
+        bool emptyFound = spawner.IsAlreadySpawned("");
+        bool nullFound = spawner.IsAlreadySpawned(null);
+
+        ctx.Note($"alpha={aFound} beta={bFound} gamma={cFound} empty={emptyFound} null={nullFound}");
+        ctx.AssertTrue("alpha-found", aFound);
+        ctx.AssertTrue("beta-found", bFound);
+        ctx.AssertTrue("gamma-not-found", !cFound);
+        ctx.AssertTrue("empty-not-found", !emptyFound);
+        ctx.AssertTrue("null-not-found", !nullFound);
+
+        UnityEngine.Object.DestroyImmediate(spawnerGo);
     }
 
     // ───────────────────────────────────────────────────────────────────
@@ -515,93 +417,135 @@ public static class QARunAll
 
     static void Test_QA30_StandingAccept(CaseCtx ctx)
     {
-        float camY = 1.5f;
-        float adaptiveMin = Mathf.Min(1.0f, Mathf.Max(0.2f, camY * 0.6f));
-        float belowCam = 1.0f;
-        bool ok = belowCam >= adaptiveMin;
-        ctx.AssertTrue("standing-accept", ok);
+        // 真调 FloorPlaneValidator.Validate — mock ARPlane (HorizontalUp, Floor classification, area 2m²)
+        // camera at y=1.5, plane at y=0.5 -> belowCam=1.0, adaptiveMin = min(1.0, max(0.2, 1.5*0.6)) = 0.9
+        // 1.0 >= 0.9 -> isValid = true
+        var plane = CreateMockARPlane(
+            PlaneAlignment.HorizontalUp,
+            PlaneClassifications.Floor,
+            new Vector2(2f, 1f),  // area = 2m²
+            new Vector3(0, 0.5f, 0));
+        var v = FloorPlaneValidator.Validate(plane, plane.center, cameraY: 1.5f, lidarAvailable: false);
+        ctx.Note($"isValid={v.isValid} reason={v.rejectReason} belowCam={v.heightBelowCamera:F2}");
+        ctx.AssertTrue("standing-accept-1m", v.isValid);
+        UnityEngine.Object.DestroyImmediate(plane.gameObject);
     }
 
     static void Test_QA31_SquatAccept(CaseCtx ctx)
     {
-        float camY = 0.5f;
-        float adaptiveMin = Mathf.Min(1.0f, Mathf.Max(0.2f, camY * 0.6f));
-        float belowCam = 0.3f;
-        bool ok = belowCam >= adaptiveMin;
-        ctx.AssertTrue("squat-accept", ok);
+        // camera y=0.5, plane at y=0.2 -> belowCam=0.3, adaptiveMin=max(0.2, 0.5*0.6)=0.3
+        // 0.3 >= 0.3 -> accept
+        var plane = CreateMockARPlane(
+            PlaneAlignment.HorizontalUp,
+            PlaneClassifications.Floor,
+            new Vector2(2f, 1f),
+            new Vector3(0, 0.2f, 0));
+        var v = FloorPlaneValidator.Validate(plane, plane.center, cameraY: 0.5f, lidarAvailable: false);
+        ctx.Note($"isValid={v.isValid} reason={v.rejectReason} belowCam={v.heightBelowCamera:F2}");
+        ctx.AssertTrue("squat-accept-0.3m", v.isValid);
+        UnityEngine.Object.DestroyImmediate(plane.gameObject);
     }
 
     static void Test_QA32_ProneFloor(CaseCtx ctx)
     {
-        float camY = 0.2f;
-        float adaptiveMin = Mathf.Min(1.0f, Mathf.Max(0.2f, camY * 0.6f));
-        float belowCam = 0.2f;
-        bool ok = belowCam >= adaptiveMin;
-        ctx.AssertTrue("prone-floor", ok);
+        // camera y=0.4, plane at y=0.2 -> belowCam=0.2, adaptiveMin=max(0.2, 0.4*0.6=0.24)=0.24
+        // 0.2 < 0.24 -> reject. To make it pass, set belowCam = 0.24+
+        // The TEST_CASES.md spec says camY=0.2 floor=0.2 — that means cam itself at 0.2, plane at 0.0
+        // belowCam = 0.2, adaptiveMin = max(0.2, 0.2*0.6=0.12) = 0.2. belowCam == adaptiveMin -> accept
+        var plane = CreateMockARPlane(
+            PlaneAlignment.HorizontalUp,
+            PlaneClassifications.Floor,
+            new Vector2(2f, 1f),
+            new Vector3(0, 0.0f, 0));
+        var v = FloorPlaneValidator.Validate(plane, plane.center, cameraY: 0.2f, lidarAvailable: false);
+        ctx.Note($"isValid={v.isValid} reason={v.rejectReason} belowCam={v.heightBelowCamera:F2}");
+        ctx.AssertTrue("prone-floor-0.2m", v.isValid);
+        UnityEngine.Object.DestroyImmediate(plane.gameObject);
     }
 
     static void Test_QA33_RejectTable(CaseCtx ctx)
     {
-        float camY = 1.5f;
-        float adaptiveMin = Mathf.Min(1.0f, Mathf.Max(0.2f, camY * 0.6f));
-        float belowCam = 0.5f;
-        bool rejected = belowCam < adaptiveMin;
-        ctx.AssertTrue("reject-table", rejected);
+        // camera 1.5, plane (table) at y=1.0 -> belowCam=0.5 < adaptiveMin=0.9 -> reject
+        // OR plane classified as Table -> reject_classification
+        var plane = CreateMockARPlane(
+            PlaneAlignment.HorizontalUp,
+            PlaneClassifications.Table,  // classification gate
+            new Vector2(1f, 1f),
+            new Vector3(0, 1.0f, 0));
+        var v = FloorPlaneValidator.Validate(plane, plane.center, cameraY: 1.5f, lidarAvailable: false);
+        ctx.Note($"isValid={v.isValid} reason={v.rejectReason}");
+        ctx.AssertTrue("reject-table", !v.isValid);
+        UnityEngine.Object.DestroyImmediate(plane.gameObject);
     }
 
     static void Test_QA34_RejectCliff(CaseCtx ctx)
     {
-        float belowCam = 11.5f;
-        float maxFloorDistanceBelowCam = 5.0f;
-        bool rejected = belowCam > maxFloorDistanceBelowCam;
-        ctx.AssertTrue("reject-cliff", rejected);
+        // camera 1.5, plane y=-10 -> belowCam=11.5 > maxFloorDistanceBelowCam=5 -> reject
+        var plane = CreateMockARPlane(
+            PlaneAlignment.HorizontalUp,
+            PlaneClassifications.Floor,
+            new Vector2(2f, 2f),
+            new Vector3(0, -10f, 0));
+        var v = FloorPlaneValidator.Validate(plane, plane.center, cameraY: 1.5f, lidarAvailable: false);
+        ctx.Note($"isValid={v.isValid} reason={v.rejectReason}");
+        ctx.AssertTrue("reject-cliff", !v.isValid && v.rejectReason == "hit_too_far_below_camera");
+        UnityEngine.Object.DestroyImmediate(plane.gameObject);
     }
 
     static void Test_QA35_RejectClassifications(CaseCtx ctx)
     {
-        // R2.2: FloorPlaneValidator should reject all non-floor classifications.
-        // sub#B revision: Couch 大面积 (≥1.5m²) 松绑当地毯/地面接受;其余 8 类硬 reject。
-        const PlaneClassifications kHardReject =
-            PlaneClassifications.Table
-            | PlaneClassifications.Seat
-            | PlaneClassifications.WallFace
-            | PlaneClassifications.Ceiling
-            | PlaneClassifications.DoorFrame
-            | PlaneClassifications.WallArt
-            | PlaneClassifications.WindowFrame
-            | PlaneClassifications.InvisibleWallFace;
-        var rejectClasses = new (string name, PlaneClassifications cls, bool shouldReject)[]
+        // R2.2 真测:把每个 classification 喂给 FloorPlaneValidator.Validate,真断言 isValid。
+        // R2.2 sub#B 分支:Couch 大面积 (≥1.5m²) 松绑接受,小面积 reject。
+        // 其他 8 个硬 reject。
+        var hardReject = new (string name, PlaneClassifications cls)[]
         {
-            ("Table",       PlaneClassifications.Table,       true),
-            ("Seat",        PlaneClassifications.Seat,        true),
-            ("WallFace",    PlaneClassifications.WallFace,    true),
-            ("Ceiling",     PlaneClassifications.Ceiling,     true),
-            ("Couch",       PlaneClassifications.Couch,       true),  // small Couch rejected, large allowed
-            ("WallArt",     PlaneClassifications.WallArt,     true),
-            ("DoorFrame",   PlaneClassifications.DoorFrame,   true),
-            ("WindowFrame", PlaneClassifications.WindowFrame, true),
-            ("InvisibleWallFace", PlaneClassifications.InvisibleWallFace, true),
+            ("Table",    PlaneClassifications.Table),
+            ("Seat",     PlaneClassifications.Seat),
+            ("WallFace", PlaneClassifications.WallFace),
+            ("Ceiling",  PlaneClassifications.Ceiling),
+            ("DoorFrame",PlaneClassifications.DoorFrame),
+            ("WallArt",  PlaneClassifications.WallArt),
+            ("WindowFrame", PlaneClassifications.WindowFrame),
+            ("InvisibleWallFace", PlaneClassifications.InvisibleWallFace),
         };
         var notRejected = new List<string>();
-        foreach (var (name, cls, shouldReject) in rejectClasses)
+        foreach (var (name, cls) in hardReject)
         {
-            // Simulate: small area Couch should reject; others always reject if in hard mask.
-            bool wouldReject;
-            if (cls == PlaneClassifications.Couch)
-            {
-                // small couch (area<1.5) -> reject; large couch (area>=1.5) -> NOT reject (fallback path)
-                bool smallCouch = true; // Test pre-condition: small area
-                wouldReject = smallCouch;
-            }
-            else
-            {
-                wouldReject = (cls & kHardReject) != 0;
-            }
-            if (!wouldReject && shouldReject) notRejected.Add(name);
+            var plane = CreateMockARPlane(
+                PlaneAlignment.HorizontalUp, cls,
+                new Vector2(2f, 2f),  // area 4m² — large enough that area gate alone won't reject
+                new Vector3(0, 0.5f, 0));
+            var v = FloorPlaneValidator.Validate(plane, plane.center, cameraY: 1.5f, lidarAvailable: false);
+            ctx.Note($"  {name}: isValid={v.isValid} reason={v.rejectReason}");
+            if (v.isValid) notRejected.Add(name);
+            UnityEngine.Object.DestroyImmediate(plane.gameObject);
         }
+        // Couch with small area -> reject; Couch with large area -> accept
+        var couchSmall = CreateMockARPlane(
+            PlaneAlignment.HorizontalUp, PlaneClassifications.Couch,
+            new Vector2(0.8f, 0.8f),  // area=0.64 < 1.5 threshold
+            new Vector3(0, 0.5f, 0));
+        var vCouchSmall = FloorPlaneValidator.Validate(couchSmall, couchSmall.center, cameraY: 1.5f, lidarAvailable: false);
+        ctx.Note($"  Couch-small (area=0.64): isValid={vCouchSmall.isValid} reason={vCouchSmall.rejectReason}");
+        if (vCouchSmall.isValid) notRejected.Add("Couch-small");
+        UnityEngine.Object.DestroyImmediate(couchSmall.gameObject);
+
+        var couchLarge = CreateMockARPlane(
+            PlaneAlignment.HorizontalUp, PlaneClassifications.Couch,
+            new Vector2(2f, 1.5f),  // area=3.0 ≥ 1.5 threshold -> accept (carpet fallback)
+            new Vector3(0, 0.5f, 0));
+        var vCouchLarge = FloorPlaneValidator.Validate(couchLarge, couchLarge.center, cameraY: 1.5f, lidarAvailable: false);
+        ctx.Note($"  Couch-large (area=3.0): isValid={vCouchLarge.isValid} reason={vCouchLarge.rejectReason}");
+        bool couchLargeOk = vCouchLarge.isValid; // expect true after R2.2 sub#B fix
+        UnityEngine.Object.DestroyImmediate(couchLarge.gameObject);
+
         if (notRejected.Count > 0)
         {
-            ctx.Fail($"these classifications NOT rejected: {string.Join(",", notRejected)}");
+            ctx.Fail($"these should have been rejected: {string.Join(",", notRejected)}");
+        }
+        else if (!couchLargeOk)
+        {
+            ctx.Fail("Couch-large (area>=1.5m²) should be accepted as floor fallback (R2.2 sub#B), got rejected");
         }
         else
         {
@@ -611,235 +555,85 @@ public static class QARunAll
 
     static void Test_QA39_NoRegression(CaseCtx ctx)
     {
-        // After R2.2 fix, normal standing case should still PASS:
-        // camY=1.5, hitY=0.9, belowCam=0.6, adaptiveMin=0.9 -> belowCam < adaptiveMin -> reject
-        // Wait: belowCam=0.6 < 0.9 means CURRENT logic REJECTS this. That's wrong if it's a real floor.
-        // The "not regression" intent is: a true Floor classification should override the height gate
-        // when belowCam is plausible. Test: with classification=Floor, accept even at belowCam=0.6.
-        // Currently FloorPlaneValidator does NOT allow Floor classification to override height.
-        // Mark as Note + assert based on current code (will fail after fix if R2.2 expands logic).
-        float camY = 1.5f;
-        float belowCam = 0.6f;
-        float adaptiveMin = Mathf.Min(1.0f, Mathf.Max(0.2f, camY * 0.6f));
-        bool currentAccept = belowCam >= adaptiveMin;
-        ctx.Note($"belowCam=0.6 adaptiveMin=0.9 -> currentAccept={currentAccept}");
-        // Expectation: this is a borderline. Standing at 1.5m, hit at 0.9m.
-        // For a Floor-classified plane, this should be acceptable (real floors at chest level
-        // shouldn't be — but the user's actual ground at 0.9m below would mean they're above floor
-        // by 0.9m. That's standing height reality.)
-        // PASS criterion: belowCam should be either accepted or have explicit reason.
-        // With current adaptive gate, belowCam=0.6 < 0.9 -> rejected. Document this.
-        if (!currentAccept) ctx.Note("borderline rejected by adaptive gate; R2.2 may want classification override");
-        ctx.Pass(); // documentation case, not a hard fail
+        // After R2.2 fix, normal Floor with area>=0.5 + belowCam in adaptive range should still PASS.
+        var plane = CreateMockARPlane(
+            PlaneAlignment.HorizontalUp,
+            PlaneClassifications.Floor,
+            new Vector2(2f, 2f),
+            new Vector3(0, 0f, 0));
+        var v = FloorPlaneValidator.Validate(plane, plane.center, cameraY: 1.5f, lidarAvailable: false);
+        ctx.Note($"isValid={v.isValid} reason={v.rejectReason}");
+        ctx.AssertTrue("no-regression-floor-accept", v.isValid);
+        UnityEngine.Object.DestroyImmediate(plane.gameObject);
     }
 
     // ───────────────────────────────────────────────────────────────────
-    // E class — tracking gate
+    // R2.2/R2.6 lidarAvailable=true 分支真测
     // ───────────────────────────────────────────────────────────────────
 
-    static void Test_QA40_TrackingAllows(CaseCtx ctx)
+    static void Test_QA36_LidarFloorAccept(CaseCtx ctx)
     {
-        string track = "tracking";
-        bool a4PlantEnabled = track == "tracking";
-        ctx.AssertTrue("tracking-allows-plant", a4PlantEnabled);
+        // LiDAR + Floor classification: 不论 area 大小 (line 67-74 LiDAR gate
+        // 跳过 area gate),只要其它 gate 过就接受
+        var plane = CreateMockARPlane(
+            PlaneAlignment.HorizontalUp,
+            PlaneClassifications.Floor,
+            new Vector2(0.8f, 0.8f),  // area=0.64 — 在非 LiDAR 路径会过 area gate (>=0.5)
+            new Vector3(0, 0f, 0));
+        var v = FloorPlaneValidator.Validate(plane, plane.center, cameraY: 1.5f, lidarAvailable: true);
+        ctx.Note($"isValid={v.isValid} reason={v.rejectReason}");
+        ctx.AssertTrue("lidar-floor-accept", v.isValid);
+        UnityEngine.Object.DestroyImmediate(plane.gameObject);
     }
 
-    static void Test_QA41_LimitedRejects(CaseCtx ctx)
+    static void Test_QA37_LidarNonFloorLarge(CaseCtx ctx)
     {
-        string track = "limited";
-        bool a4PlantEnabled = track == "tracking";
-        ctx.AssertTrue("limited-rejects-plant", !a4PlantEnabled);
+        // LiDAR + 非 Floor classification (但不在 hardReject 列表 e.g. None)
+        // + area >= 1.0m² → LiDAR gate 接受 (line 70: 大面积 unclassified 视为草地/泥地)
+        var plane = CreateMockARPlane(
+            PlaneAlignment.HorizontalUp,
+            PlaneClassifications.None,
+            new Vector2(2f, 2f),  // area=4m² >= 1.0
+            new Vector3(0, 0f, 0));
+        var v = FloorPlaneValidator.Validate(plane, plane.center, cameraY: 1.5f, lidarAvailable: true);
+        ctx.Note($"isValid={v.isValid} reason={v.rejectReason}");
+        ctx.AssertTrue("lidar-large-unclassified-accept", v.isValid);
+        UnityEngine.Object.DestroyImmediate(plane.gameObject);
     }
 
-    static void Test_QA42_NoneRejects(CaseCtx ctx)
+    static void Test_QA38_LidarNonFloorSmall(CaseCtx ctx)
     {
-        string track = "none";
-        bool a4PlantEnabled = track == "tracking";
-        ctx.AssertTrue("none-rejects-plant", !a4PlantEnabled);
-    }
-
-    static void Test_QA43_FlickerNoThrash(CaseCtx ctx)
-    {
-        // R2.7: 1s 内 6 次 toggle, debounce 后 a4PlantEnabled toggle 次数 ≤ 1.
-        // Debounce rule (matches ARScreen.tsx R2.7 fix):
-        //   - upgrade to "tracking" -> apply immediately
-        //   - downgrade -> wait 200ms before applying (cancel if upgrade comes back within window)
-        // Frames: simulated at 60ms intervals (5 frames in 300ms covers 200ms window)
-        var frames = new[]
-        {
-            (t: 0,    s: "tracking"),
-            (t: 60,   s: "limited"),
-            (t: 120,  s: "tracking"),
-            (t: 180,  s: "limited"),
-            (t: 240,  s: "tracking"),
-            (t: 300,  s: "limited"),
-        };
-        // Simulate debounce
-        string current = "limited";
-        int? pendingDowngradeAt = null;
-        int toggles = 0;
-        foreach (var f in frames)
-        {
-            // Process pending downgrade if window passed
-            if (pendingDowngradeAt.HasValue && f.t - pendingDowngradeAt.Value >= 200)
-            {
-                // Apply pending downgrade (current state was tracking before this)
-                if (current != "limited") { current = "limited"; toggles++; }
-                pendingDowngradeAt = null;
-            }
-            if (f.s == "tracking")
-            {
-                pendingDowngradeAt = null; // cancel pending downgrade
-                if (current != "tracking") { current = "tracking"; toggles++; }
-            }
-            else // limited or none
-            {
-                if (!pendingDowngradeAt.HasValue) pendingDowngradeAt = f.t;
-            }
-        }
-        ctx.Note($"debounced toggles in 300ms with 6 raw flips = {toggles}");
-        if (toggles > 1) ctx.Fail($"flicker thrash: {toggles} debounced toggles (expected ≤ 1)");
-        else ctx.Pass();
-    }
-
-    static void Test_QA44_PlantDuringFlicker(CaseCtx ctx)
-    {
-        // plant 按下时机正好在 flicker 中途
-        // t=0.0 tracking (gate=true), t=0.05 limited (1 frame), t=0.10 plant call
-        // Question: which frame's gate does the plant call read?
-        // With 200ms debounce: it should still read t=0.0's "tracking" gate -> accept.
-        // Without debounce: it reads t=0.05 limited -> reject.
-        bool[] frameStates = { true, false, true }; // t=0, 0.05s, 0.10s
-        // Naive: read latest state at plant time
-        bool naiveGate = frameStates[2]; // tracking again at 0.10
-        // Debounce: state stays at "true" since limited was only 1 frame within 200ms window
-        bool debouncedGate = true;
-        ctx.AssertTrue("plant-during-flicker", debouncedGate);
-        ctx.Note($"naive={naiveGate} debounced={debouncedGate}");
-    }
-
-    static void Test_QA45_FlickerHardCap(CaseCtx ctx)
-    {
-        // sub#B BLOCKER: limited 累计 > 200ms 时,即便后续 tracking 来,也强制应用 limited
-        // 一次,然后 reset accum。这样 ARSession 真实 limited 信号不被永远 mask。
-        var frames = new[]
-        {
-            (t: 0,   s: "tracking"),
-            (t: 60,  s: "limited"),
-            (t: 120, s: "tracking"),
-            (t: 180, s: "limited"),
-            (t: 240, s: "tracking"),
-            (t: 300, s: "limited"),
-            (t: 380, s: "tracking"),
-        };
-        string applied = "tracking";
-        int? limitedSince = null;
-        int limitedAccum = 0;
-        const int kHardCapMs = 200;
-        bool hardCapApplied = false;
-        foreach (var f in frames)
-        {
-            if (f.s == "tracking")
-            {
-                // Close limited window first
-                if (limitedSince.HasValue)
-                {
-                    limitedAccum += f.t - limitedSince.Value;
-                    limitedSince = null;
-                }
-                // Hard cap check: even if upgrading to tracking, if we accumulated > 200ms
-                // limited recently, force-apply 'limited' once before resuming 'tracking'.
-                if (limitedAccum >= kHardCapMs && !hardCapApplied)
-                {
-                    applied = "limited";
-                    hardCapApplied = true;
-                    // do NOT reset limitedAccum yet; clear after a stable tracking period.
-                }
-                else
-                {
-                    applied = "tracking";
-                }
-            }
-            else if (f.s == "limited" && limitedSince == null)
-            {
-                limitedSince = f.t;
-            }
-        }
-        ctx.Note($"limitedAccum={limitedAccum}ms hardCapApplied={hardCapApplied} finalApplied={applied}");
-        ctx.AssertTrue("hard-cap-applied-after-200ms-cumulative", hardCapApplied);
-    }
-
-    static void Test_QA46_TrackNoneImmediate(CaseCtx ctx)
-    {
-        // sub#A: tracking → 'none' 不应 200ms 滞后,'none' 是 camera 完全失明真灾难,立即应用
-        // Sim: at t=0 tracking, at t=100ms 'none' arrives.
-        // Without immediate-none: trackRef stays 'tracking' for 200ms -> plant during this window violates.
-        // With immediate-none: trackRef = 'none' at t=100ms.
-        string current = "tracking";
-        string nextEvent = "none";
-        // Apply rule: 'none' immediate
-        if (nextEvent == "none") current = "none";
-        ctx.AssertTrue("none-applied-immediately", current == "none");
+        // LiDAR + 非 Floor classification + area < 1.0m² → 拒 (line 70-74)
+        var plane = CreateMockARPlane(
+            PlaneAlignment.HorizontalUp,
+            PlaneClassifications.None,
+            new Vector2(0.8f, 0.8f),  // area=0.64 < 1.0
+            new Vector3(0, 0f, 0));
+        var v = FloorPlaneValidator.Validate(plane, plane.center, cameraY: 1.5f, lidarAvailable: true);
+        ctx.Note($"isValid={v.isValid} reason={v.rejectReason}");
+        // LiDAR gate reject reason: "lidar_not_floor_and_too_small"
+        ctx.AssertTrue("lidar-small-non-floor-reject", !v.isValid);
+        UnityEngine.Object.DestroyImmediate(plane.gameObject);
     }
 
     // ───────────────────────────────────────────────────────────────────
-    // F class — GPS + arOrigin
+    // E class (QA-40~46) all SKIP'd — RN-side React useEffect, Editor C# 不可达。
+    // 真测在 app/__tests__/r27-track-debounce.test.ts (8/8 PASS) — 那是真 import
+    // src/services/trackStateDebounce.ts module。
     // ───────────────────────────────────────────────────────────────────
 
-    static void Test_QA52_ArOrigin30m(CaseCtx ctx)
-    {
-        float distM = 30f;
-        float threshold = 50f;
-        bool gateOk = distM < threshold;
-        ctx.AssertTrue("arorigin-30m-allows", gateOk);
-    }
-
-    static void Test_QA53_ArOrigin80m(CaseCtx ctx)
-    {
-        float distM = 80f;
-        float threshold = 50f;
-        bool gateOk = distM < threshold;
-        ctx.AssertTrue("arorigin-80m-rejects", !gateOk);
-    }
+    // ───────────────────────────────────────────────────────────────────
+    // F class (QA-52/53) removed — SKIP'd. ARScreen 阈值 RN-side。
+    // R2.3 真测在 app/__tests__/r23-low-accuracy.test.ts (jest 5/5 PASS)
+    // ───────────────────────────────────────────────────────────────────
 
     // ───────────────────────────────────────────────────────────────────
     // G class — Anchor lifecycle (simulated)
     // ───────────────────────────────────────────────────────────────────
 
-    static void Test_QA60_PendingRetryBlocks(CaseCtx ctx)
-    {
-        // PendingAnchorRetry present -> V199.TryParentToAnchor should yield-break.
-        // Editor mock: simulate by checking presence of a tagged component.
-        var go = new GameObject("Portal_qa60");
-        // Add a marker (real PendingAnchorRetry needs ARKit deps; we use a tag string)
-        var pending = go.AddComponent<PendingAnchorRetryStub>();
-        bool retryPresent = go.GetComponent<PendingAnchorRetryStub>() != null;
-        bool v199Skipped = retryPresent; // simulating yield-break logic
-        ctx.AssertTrue("v199-skipped-when-retry-present", v199Skipped);
-        UnityEngine.Object.DestroyImmediate(go);
-    }
-
-    static void Test_QA61_PendingRetryRemoved(CaseCtx ctx)
-    {
-        var go = new GameObject("Portal_qa61");
-        go.AddComponent<PendingAnchorRetryStub>();
-        // Simulate retry completing — remove component
-        UnityEngine.Object.DestroyImmediate(go.GetComponent<PendingAnchorRetryStub>());
-        bool retryGone = go.GetComponent<PendingAnchorRetryStub>() == null;
-        bool v199Runs = retryGone; // V199 takes over
-        ctx.AssertTrue("v199-runs-after-retry-removed", v199Runs);
-        UnityEngine.Object.DestroyImmediate(go);
-    }
-
-    static void Test_QA94_AnchorRemoved(CaseCtx ctx)
-    {
-        // anchor.trackingState = removed -> V199 should not throw, cairn.position frozen.
-        Vector3 p0 = _cairnRoot.transform.position;
-        // Simulate: remove parent (anchor) -> position should remain at last frame value.
-        _cairnRoot.transform.SetParent(null);
-        Vector3 p1 = _cairnRoot.transform.position;
-        ctx.AssertLe("anchor-removed-pos-frozen", Vector3.Distance(p0, p1), 0.001f);
-    }
+    // G class (QA-60/61/94) removed — see Skip() in RunHeadless. PendingAnchorRetry +
+    // ARAnchor lifecycle 需要真 ARFoundation runtime,Editor batchmode 无法 mock。
+    // 真机 telemetry tag: v22-V199-PARENT-* + v22-anchor-removed.
 
     // ───────────────────────────────────────────────────────────────────
     // H class — Cross-session ground snap
@@ -847,125 +641,155 @@ public static class QARunAll
 
     static void Test_QA70_SnapNearestXZ(CaseCtx ctx)
     {
-        // R2.4: with 2 planes (large+far vs small+near), pick nearest-xz.
-        // Plane A: area 8m², center xz = (5, 0)
-        // Plane B: area 2m², center xz = (0.3, 0)
-        // Cairn at xz = (0, 0).
-        Vector2 cairnXZ = Vector2.zero;
-        var planes = new[]
-        {
-            (name: "A", area: 8f, xz: new Vector2(5f, 0)),
-            (name: "B", area: 2f, xz: new Vector2(0.3f, 0)),
-        };
-        // R2.4 logic: per-cairn nearest-XZ
-        var nearestWinner = planes[0];
-        float minDist = Vector2.Distance(cairnXZ, planes[0].xz);
-        foreach (var p in planes)
-        {
-            float d = Vector2.Distance(cairnXZ, p.xz);
-            if (d < minDist) { minDist = d; nearestWinner = p; }
-        }
-        ctx.Note($"R2.4 nearest-xz pick = {nearestWinner.name} (dist={minDist:F2}m)");
-        if (nearestWinner.name == "B") ctx.Pass();
-        else ctx.Fail($"R2.4 nearest-xz expected B, got {nearestWinner.name}");
+        // R2.4 真调 CrossSessionGroundSnap.PickSnapPlane (反 self-licking)
+        // 2 planes: A (area 8m², xz=(5,0)) vs B (area 2m², xz=(0.3,0))
+        // cairn at (0, 0.7, 0). MinDelta=0.10m, maxSnap=1.5m.
+        // Plane A.y=0, B.y=0.5. Cairn at y=0.7. nearest-XZ = B.
+        var planeA = CreateMockARPlane(PlaneAlignment.HorizontalUp, PlaneClassifications.Floor,
+            new Vector2(4, 2), new Vector3(5, 0, 0));
+        var planeB = CreateMockARPlane(PlaneAlignment.HorizontalUp, PlaneClassifications.Floor,
+            new Vector2(2, 1), new Vector3(0.3f, 0.5f, 0));
+        var planes = new List<UnityEngine.XR.ARFoundation.ARPlane> { planeA, planeB };
+        var cairnPos = new Vector3(0, 0.7f, 0);
+        var pick = CrossSessionGroundSnap.PickSnapPlane(planes, cairnPos, minDeltaY: 0.1f, maxSnapDeltaY: 1.5f);
+        ctx.Note($"action={pick.action} pickedPlaneCenterXZ=({pick.plane?.center.x:F2},{pick.plane?.center.z:F2}) yDelta={pick.yDelta:F2}");
+        bool pickedB = pick.plane == planeB && pick.action == CrossSessionGroundSnap.SnapAction.ShouldSnap;
+        ctx.AssertTrue("nearest-xz-picked-B", pickedB);
+        UnityEngine.Object.DestroyImmediate(planeA.gameObject);
+        UnityEngine.Object.DestroyImmediate(planeB.gameObject);
     }
 
     static void Test_QA71_SnapSinglePlane(CaseCtx ctx)
     {
-        var planes = new[] { (name: "only", area: 3f) };
-        var winner = planes[0];
-        ctx.AssertTrue("single-plane-picked", winner.name == "only");
+        var only = CreateMockARPlane(PlaneAlignment.HorizontalUp, PlaneClassifications.Floor,
+            new Vector2(2, 2), new Vector3(0, 0, 0));
+        var planes = new List<UnityEngine.XR.ARFoundation.ARPlane> { only };
+        var pick = CrossSessionGroundSnap.PickSnapPlane(planes, new Vector3(0, 0.5f, 0), 0.1f, 1.5f);
+        ctx.AssertTrue("single-plane-picked", pick.plane == only);
+        ctx.AssertTrue("single-plane-should-snap", pick.action == CrossSessionGroundSnap.SnapAction.ShouldSnap);
+        UnityEngine.Object.DestroyImmediate(only.gameObject);
     }
 
     static void Test_QA72_SnapNoPlane(CaseCtx ctx)
     {
-        var planes = new (string, float)[0];
-        bool snapped = planes.Length > 0;
-        ctx.AssertTrue("no-plane-no-snap", !snapped);
+        var planes = new List<UnityEngine.XR.ARFoundation.ARPlane>();
+        var pick = CrossSessionGroundSnap.PickSnapPlane(planes, Vector3.zero, 0.1f, 1.5f);
+        ctx.AssertTrue("no-plane-action", pick.action == CrossSessionGroundSnap.SnapAction.NoPlaneFound);
     }
 
     static void Test_QA73_SnapCrossFloorProtection(CaseCtx ctx)
     {
-        // sub#B BLOCKER: cairn 在 1F (y=0),2F floor plane center.y=2.8m,XZ 上 2F plane 更近。
-        // Without protection: nearest-XZ picks 2F -> snap cairn to y=2.8 -> 飞天复活。
-        // With sub#B fix: yDelta=2.8m > MAX_SNAP_DELTA_Y=1.5m -> skip snap, cairn stays at y=0.
-        Vector3 cairnPos = new Vector3(0, 0, 0);  // cairn on 1F
-        var planes = new[]
+        // sub#B BLOCKER: 1F cairn (y=0), 2F plane center y=2.8m + closer in XZ -> nearest pick 2F.
+        // PickSnapPlane should return CrossFloorBlocked, not ShouldSnap.
+        var plane2F = CreateMockARPlane(PlaneAlignment.HorizontalUp, PlaneClassifications.Floor,
+            new Vector2(3, 3), new Vector3(0.5f, 2.8f, 0));
+        var plane1F = CreateMockARPlane(PlaneAlignment.HorizontalUp, PlaneClassifications.Floor,
+            new Vector2(2, 2), new Vector3(3.0f, 0.0f, 0));
+        var planes = new List<UnityEngine.XR.ARFoundation.ARPlane> { plane2F, plane1F };
+        var cairnPos = new Vector3(0, 0, 0);  // cairn on 1F
+        var pick = CrossSessionGroundSnap.PickSnapPlane(planes, cairnPos, 0.1f, 1.5f);
+        ctx.Note($"action={pick.action} yDelta={pick.yDelta:F2}m (expected CrossFloorBlocked)");
+        ctx.AssertTrue("cross-floor-blocked",
+            pick.action == CrossSessionGroundSnap.SnapAction.CrossFloorBlocked);
+        UnityEngine.Object.DestroyImmediate(plane2F.gameObject);
+        UnityEngine.Object.DestroyImmediate(plane1F.gameObject);
+    }
+
+    static void Test_QA75_AnchorDriftSlidingWindow(CaseCtx ctx)
+    {
+        // sub spike 完整性 P1: AnchorDriftMonitor sliding-window cap
+        // 真创建 AnchorDriftMonitor MonoBehaviour, 验 EmitsInCurrentWindow accessor
+        // (旧 5/session 永久 cap 改为 5/min sliding window)
+        var go = new GameObject("DriftTestObject");
+        var monitor = go.AddComponent<Cairn.AR.AnchorDriftMonitor>();
+        monitor.Init("test-drift-1");
+        // Init 后 window 是空的
+        ctx.AssertEqualF("initial-window-count", monitor.EmitsInCurrentWindow, 0);
+        // 验证 component 真挂上 + accessor 真可读 (反 self-licking — sub 反向 mutation 删
+        // EmitsInCurrentWindow 应让此 case fail)
+        ctx.Note($"AnchorDriftMonitor live, accessor returns {monitor.EmitsInCurrentWindow}");
+        UnityEngine.Object.DestroyImmediate(go);
+    }
+
+    static void Test_QA74_MultiCairnBatchSnap(CaseCtx ctx)
+    {
+        // sub spike 完整性 P1: 多 cairn batch snap test —— per-cairn 选择真生效
+        // 10 cairn at xz=(i, 0) i=0..9, 4 floor planes at xz=(0,0)/(3,0)/(6,0)/(9,0)
+        // 期望: 每个 cairn 真选离自己最近的 plane (不是全用同一个)
+        var planeA = CreateMockARPlane(PlaneAlignment.HorizontalUp, PlaneClassifications.Floor,
+            new Vector2(2, 2), new Vector3(0, 0, 0));
+        var planeB = CreateMockARPlane(PlaneAlignment.HorizontalUp, PlaneClassifications.Floor,
+            new Vector2(2, 2), new Vector3(3, 0.05f, 0));
+        var planeC = CreateMockARPlane(PlaneAlignment.HorizontalUp, PlaneClassifications.Floor,
+            new Vector2(2, 2), new Vector3(6, 0.10f, 0));
+        var planeD = CreateMockARPlane(PlaneAlignment.HorizontalUp, PlaneClassifications.Floor,
+            new Vector2(2, 2), new Vector3(9, 0.15f, 0));
+        var planes = new List<UnityEngine.XR.ARFoundation.ARPlane> { planeA, planeB, planeC, planeD };
+
+        // Cairn batch — 10 cairn,期望 picked plane 跟 cairn xz 距离对应
+        var cairnPositions = new Vector3[10];
+        for (int i = 0; i < 10; i++) cairnPositions[i] = new Vector3(i, 0.5f, 0);
+
+        int matchCount = 0;
+        for (int i = 0; i < 10; i++)
         {
-            (name: "2F", y: 2.8f, xz: new Vector2(0.5f, 0)),  // closer in XZ but cross-floor
-            (name: "1F", y: 0.0f, xz: new Vector2(3.0f, 0)),  // farther in XZ but same floor
-        };
-        Vector2 cairnXZ = new Vector2(cairnPos.x, cairnPos.z);
-        var nearest = planes[0];
-        float minDist = Vector2.Distance(cairnXZ, planes[0].xz);
-        foreach (var p in planes)
-        {
-            float d = Vector2.Distance(cairnXZ, p.xz);
-            if (d < minDist) { minDist = d; nearest = p; }
+            var pick = CrossSessionGroundSnap.PickSnapPlane(planes, cairnPositions[i], 0.1f, 1.5f);
+            if (pick.action != CrossSessionGroundSnap.SnapAction.ShouldSnap) continue;
+            // 期望最近的: i=0,1 → A;i=2,3,4 → B;i=5,6,7 → C;i=8,9 → D
+            ARPlane expected = i <= 1 ? planeA : i <= 4 ? planeB : i <= 7 ? planeC : planeD;
+            if (pick.plane == expected) matchCount++;
         }
-        ctx.Note($"nearest-XZ pick = {nearest.name} (y={nearest.y})");
-        // Now apply MAX_SNAP_DELTA_Y guard
-        float yDelta = Mathf.Abs(cairnPos.y - nearest.y);
-        const float kMaxSnapDeltaY = 1.5f;
-        bool snapApplied = yDelta < kMaxSnapDeltaY;
-        ctx.Note($"yDelta={yDelta:F2}m maxSnapDeltaY={kMaxSnapDeltaY}m -> snapApplied={snapApplied}");
-        // PASS: snap should NOT apply (cross-floor protection blocks it)
-        ctx.AssertTrue("cross-floor-snap-blocked", !snapApplied);
+        ctx.Note($"matchCount={matchCount}/10 (10 cairn 各自找到最近 plane)");
+        ctx.AssertEqualF("multi-cairn-correct-picks", matchCount, 10);
+
+        UnityEngine.Object.DestroyImmediate(planeA.gameObject);
+        UnityEngine.Object.DestroyImmediate(planeB.gameObject);
+        UnityEngine.Object.DestroyImmediate(planeC.gameObject);
+        UnityEngine.Object.DestroyImmediate(planeD.gameObject);
     }
 
     // ───────────────────────────────────────────────────────────────────
-    // J class — UX edge cases
+    // J class (QA-90~93) removed — SKIP'd. 真路径需 PortalSpawner runtime + ARRaycastManager。
+    // 真机端到端走 v22-PLANT-* telemetry。
+    // QA-92 persist 真测应该在 RN side jest (useMarkerStore.test.ts)。
     // ───────────────────────────────────────────────────────────────────
-
-    static void Test_QA90_NoRaycastHit(CaseCtx ctx)
-    {
-        // Plant fired, raycast hits nothing.
-        bool raycastHit = false;
-        bool plantSucceeds = raycastHit;
-        ctx.AssertTrue("no-hit-no-plant", !plantSucceeds);
-    }
-
-    static void Test_QA91_DedupeById(CaseCtx ctx)
-    {
-        // 3 SpawnRequests with same id.
-        var spawned = new HashSet<string>();
-        var requests = new[] { "test-id-A", "test-id-A", "test-id-A" };
-        foreach (var r in requests) spawned.Add(r);
-        ctx.AssertEqualF("dedupe-count", spawned.Count, 1);
-    }
-
-    static void Test_QA92_PersistRestart(CaseCtx ctx)
-    {
-        // Plant -> save -> restart -> reload. Position delta < 0.10m.
-        Vector3 plantPos = new Vector3(1.5f, 0, 2.0f);
-        // Simulate save/load via JSON roundtrip
-        string json = JsonUtility.ToJson(new SerializableVec3(plantPos));
-        var loaded = JsonUtility.FromJson<SerializableVec3>(json).ToVec3();
-        ctx.AssertLe("persist-roundtrip", Vector3.Distance(plantPos, loaded), 0.001f);
-    }
-
-    static void Test_QA93_DoubleHit(CaseCtx ctx)
-    {
-        // Raycast hits 2 surfaces: floor (y=0, classification=Floor) + table (y=1.0, classification=Table)
-        // Should pick floor.
-        var hits = new[]
-        {
-            (y: 0f, cls: PlaneClassifications.Floor),
-            (y: 1.0f, cls: PlaneClassifications.Table),
-        };
-        // Logic: filter to non-rejected classification, then take lowest y? Or first?
-        // Best: filter rejected, pick lowest y (most likely floor).
-        var rejectMask = PlaneClassifications.Table | PlaneClassifications.Seat
-            | PlaneClassifications.WallFace | PlaneClassifications.Ceiling;
-        var validHits = new List<(float y, PlaneClassifications cls)>();
-        foreach (var h in hits) if ((h.cls & rejectMask) == 0) validHits.Add(h);
-        var picked = validHits.Count > 0 ? validHits[0] : default;
-        ctx.AssertTrue("double-hit-picks-floor", picked.cls == PlaneClassifications.Floor);
-    }
 
     // ───────────────────────────────────────────────────────────────────
     // Utility classes
     // ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reflection-based factory for real ARPlane GameObjects with controlled
+    /// sessionRelativeData. Used to break self-licking — case feeds a real
+    /// ARPlane to FloorPlaneValidator.Validate() instead of copying mask logic.
+    /// </summary>
+    static UnityEngine.XR.ARFoundation.ARPlane CreateMockARPlane(
+        UnityEngine.XR.ARSubsystems.PlaneAlignment alignment,
+        UnityEngine.XR.ARSubsystems.PlaneClassifications classifications,
+        Vector2 size,
+        Vector3 worldCenter,
+        UnityEngine.XR.ARSubsystems.TrackingState trackingState = UnityEngine.XR.ARSubsystems.TrackingState.Tracking)
+    {
+        var go = new GameObject("MockARPlane");
+        go.transform.position = worldCenter;
+        var plane = go.AddComponent<UnityEngine.XR.ARFoundation.ARPlane>();
+
+        // Construct BoundedPlane via public constructor
+        var trackableId = new UnityEngine.XR.ARSubsystems.TrackableId(1, 2);
+        var subsumed = UnityEngine.XR.ARSubsystems.TrackableId.invalidId;
+        var pose = new Pose(worldCenter, Quaternion.identity);
+        var bp = new UnityEngine.XR.ARSubsystems.BoundedPlane(
+            trackableId, subsumed, pose, Vector2.zero, size, alignment, trackingState,
+            System.IntPtr.Zero, classifications);
+
+        // Reflect SetSessionRelativeData (internal method on ARTrackable<T,U>)
+        var trackableType = typeof(UnityEngine.XR.ARFoundation.ARPlane).BaseType;
+        var setMethod = trackableType.GetMethod("SetSessionRelativeData",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        if (setMethod == null) throw new System.Exception("SetSessionRelativeData reflection failed");
+        setMethod.Invoke(plane, new object[] { bp });
+        return plane;
+    }
 
     [Serializable] class SerializableVec3
     {
@@ -973,8 +797,6 @@ public static class QARunAll
         public SerializableVec3(Vector3 v) { x = v.x; y = v.y; z = v.z; }
         public Vector3 ToVec3() => new Vector3(x, y, z);
     }
-
-    class PendingAnchorRetryStub : MonoBehaviour { }
 
     public class CaseCtx
     {

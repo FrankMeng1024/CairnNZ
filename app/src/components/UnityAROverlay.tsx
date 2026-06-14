@@ -28,6 +28,8 @@ import { StyleSheet, View, Platform, UIManager } from 'react-native';
 import UnityView from '@azesmway/react-native-unity';
 import { sendToUnity, parseUnityMessage, resetParseRecoveredThrottle } from '../services/unityBridge';
 import { crashLogger } from '../services/crashLogger';
+import { projectOrigin } from '../services/originPropagation';
+import { unmountOverlay } from '../services/arOverlayLifecycle';
 import { API_BASE_URL } from '../config/api';
 import * as FileSystem from 'expo-file-system/legacy';
 import { storage } from '../store/storage';
@@ -82,7 +84,7 @@ export type UnityAROverlayProps = {
    * accumulate GPS noise. If null/undefined, falls back to userPos
    * (legacy behavior).
    */
-  arOrigin?: { lat: number; lng: number; alt: number | null } | null;
+  arOrigin?: { lat: number; lng: number; alt: number | null; lowAccuracy?: boolean } | null;
   userHeading: number | null;
   onStatus?: (s: { glReady: boolean; cairnCount: number }) => void;
   onArFrame?: (info: {
@@ -331,28 +333,42 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
     return () => {
       clearTimeout(t5);
       clearTimeout(t15);
-      // Tell Unity to despawn all strands and reset RN's spawned-set, so
-      // re-entering the AR screen starts from a clean slate. Without this,
-      // @azesmway/react-native-unity's singleton UnityFramework keeps
-      // MultiSpawner._spawned populated across RN remounts → ghost pillars
-      // pile up. (Reviewer-flagged MEDIUM concern, OTA-fix #1.)
-      if (unityRef.current) {
-        try { unityRef.current.postMessage('CairnBridge', 'OnClearAll', ''); } catch {}
-      }
-      spawnedIdsRef.current.clear();
-      // v199 — reset offset/bulk-spawn one-shots so next mount can re-fire.
-      // v206 A2 — lastSentOriginRef replaces offsetSentRef
-      // v206 B1 — clear plane buffer + ground-lock for next session
-      // R2 fix: clear rejection blacklist too — fresh AR session = fresh
-      // chance for previously-failed surfaces. Without this, blacklisted
-      // markers stayed broken for app lifetime.
+      // v0.2.4 R2-followup: 用 services/arOverlayLifecycle.unmountOverlay helper
+      // jest 真测同函数 (反 self-licking)。helper 清所有 RN-side state 让 re-mount fresh,
+      // 同时返回需要发给 Unity 的 OnClearAll 消息防止 ghost pillars
+      // (@azesmway/react-native-unity singleton 跨 RN remount 持有 native state)。
+      //
+      // sub adversarial 修订: helper 内对 inline object literal 字段重赋(refs.recentPlanes = [])
+      // 不会传播回 component ref holder。Set/Map.clear() 是 in-place mutation 通过 reference
+      // 生效;array 重赋不行。所以 caller 在 helper 调用后:
+      //   - 显式 array refs.current.length = 0 (in-place truncate)
+      //   - 显式 scalar refs.current = null/false/0 (helper 改不到 caller scalar)
+      const cleanup = unmountOverlay({
+        spawnedIds: spawnedIdsRef.current,
+        lastSentOrigin: lastSentOriginRef.current,
+        bulkSpawned: bulkSpawnedRef.current,
+        emptyMarkerFrameCount: emptyMarkerFrameCountRef.current,
+        rejectionTracker: rejectionTrackerRef.current,
+        recentPlanes: recentPlanesRef.current,
+        observedPlaneYs: observedPlaneYsRef.current,
+        lastCameraY: lastCameraYRef.current,
+      });
+      // helper 已 in-place clear() Set + Map (reference 共享真生效)。
+      // 但 array 重赋 (refs.recentPlanes = []) 只改了 inline literal 字段,
+      // 没改 component ref holder。这里 in-place truncate:
+      recentPlanesRef.current.length = 0;
+      observedPlaneYsRef.current.length = 0;
+      // scalar refs 也必须 caller 自己 reset (helper 改不到 caller ref.current scalar):
       lastSentOriginRef.current = null;
       bulkSpawnedRef.current = false;
       emptyMarkerFrameCountRef.current = 0;
-      rejectionTrackerRef.current.clear();
-      recentPlanesRef.current = [];
-      observedPlaneYsRef.current = [];
       lastCameraYRef.current = null;
+      // Dispatch Unity messages from helper output (真发,jest 验发了)
+      if (unityRef.current) {
+        for (const m of cleanup.unityMessages) {
+          try { unityRef.current.postMessage(m.gameObject, m.method, m.payload); } catch {}
+        }
+      }
       crashLogger.breadcrumb(`${TAG}:unmount glReady=${arReadyRef.current}`);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -709,11 +725,12 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
             // Compass-direction bug (Error 1) still present after this
             // revert — needs EAS build with native iOS plugin to set
             // worldAlignment=GravityAndHeading. Tracked separately.
-            const persisted = props.arOrigin
-              ? { lat: props.arOrigin.lat, lng: props.arOrigin.lng }
-              : null;
+            // v0.2.4 R2.3 fix: 用 services/originPropagation projectOrigin 真函数,
+            // jest 也调同一函数 (反 self-licking)。保留 lowAccuracy 字段,buildSpawnRequest
+            // 用它决定 Tier-A 阈值 (low-acc 5m → 2m)。
+            const projOrigin = projectOrigin(props.arOrigin, props.userPos);
+            const persisted = props.arOrigin ? { lat: props.arOrigin.lat, lng: props.arOrigin.lng } : null;
             const live = { lat: props.userPos.lat, lng: props.userPos.lng };
-            const projOrigin = persisted ?? live;
             // v0.2.3 — sessionOffset PERMANENTLY HARDCODED TO 0.
             //
             // Product semantics (correct, locked 2026-06-11 by user):

@@ -116,43 +116,30 @@ namespace Cairn.AR
             var cairns = Object.FindObjectsByType<CairnAcquireController>(FindObjectsSortMode.None);
             int snapCount = 0;
             float startMs = Time.realtimeSinceStartup * 1000f;
+            float maxSnapDeltaY = (globals != null)
+                ? globals.GetForType(null, "CrossSessionSnapMaxDeltaY", 1.5f)
+                : 1.5f;
             foreach (var c in cairns)
             {
                 if (c == null) continue;
                 if (c.CurrentState != CairnAcquireController.State.IMMORTAL) continue;
 
                 Vector3 cairnPos = c.transform.position;
-                Vector2 cairnXZ = new Vector2(cairnPos.x, cairnPos.z);
 
                 // R2.4: 这个 cairn 单独找 nearest-XZ plane(不用全场景 area-largest)
-                ARPlane nearestPlane = null;
-                float nearestDist = float.MaxValue;
-                foreach (var p in validPlanes)
+                // R2.4 sub#B: cross-floor protection (yDelta > maxSnapDeltaY 不 snap)
+                // 抽到 PickSnapPlane public helper, case 直接复用 (反 self-licking)
+                var pick = PickSnapPlane(validPlanes, cairnPos, minDelta, maxSnapDeltaY);
+                if (pick.action == SnapAction.NoPlaneFound) continue;
+                if (pick.action == SnapAction.WithinMinDelta) continue;
+                if (pick.action == SnapAction.CrossFloorBlocked)
                 {
-                    Vector2 pXZ = new Vector2(p.center.x, p.center.z);
-                    float d = Vector2.Distance(cairnXZ, pXZ);
-                    if (d < nearestDist) { nearestDist = d; nearestPlane = p; }
-                }
-                if (nearestPlane == null) continue;
-
-                float planeY = nearestPlane.center.y;
-                float yDelta = cairnPos.y - planeY;
-                if (Mathf.Abs(yDelta) < minDelta) continue;
-
-                // v0.2.4 R2.4 sub#B fix:
-                //   多层结构 (loft / 楼梯下) nearest-XZ 不考虑 Y 接近度。
-                //   1F cairn 离 2F plane center 在 XZ 上更近时,会被 snap 到 2F (y=2.8m) → 飞天。
-                //   加 MAX_SNAP_DELTA_Y 上限:超过 1.5m 视为跨层错位,不 snap (保持原 anchor)。
-                //   1.5m 选择理由:房间天花板高度通常 2.4-3m,1.5m 既覆盖正常 floor 误差
-                //   (≤0.6m) 也能挡住跨层 (≥2m)。OTA 化以便真机校准。
-                float maxSnapDeltaY = (globals != null)
-                    ? globals.GetForType(null, "CrossSessionSnapMaxDeltaY", 1.5f)
-                    : 1.5f;
-                if (Mathf.Abs(yDelta) > maxSnapDeltaY)
-                {
-                    Debug.Log($"[v22-CROSS-SESSION-SNAP] skip cairn={GetMarkerId(c)} yDelta={yDelta:F2}m exceeds maxSnapDeltaY={maxSnapDeltaY}m (cross-floor protection)");
+                    Debug.Log($"[v22-CROSS-SESSION-SNAP] skip cairn={GetMarkerId(c)} yDelta={pick.yDelta:F2}m exceeds maxSnapDeltaY={maxSnapDeltaY}m (cross-floor protection)");
                     continue;
                 }
+                ARPlane nearestPlane = pick.plane;
+
+                float planeY = nearestPlane.center.y;
 
                 // 反 fight:cairn 在视野内不 snap
                 Vector3 toCairn = (cairnPos - cam.transform.position).normalized;
@@ -161,6 +148,7 @@ namespace Cairn.AR
                 bool inView = dot > 0.3f && distToCairn < 8f;
                 if (inView) continue;
 
+                Vector2 cairnXZ = new Vector2(cairnPos.x, cairnPos.z);
                 Vector2 planeXZ = new Vector2(nearestPlane.center.x, nearestPlane.center.z);
                 float xzDelta = Vector2.Distance(cairnXZ, planeXZ);
 
@@ -196,6 +184,66 @@ namespace Cairn.AR
         {
             // markerId 是 private field; 用 GO 名字回退(spawn 时 GO 名一般是 cairn-<id>)
             return c != null ? c.gameObject.name : "unknown";
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // R2.4 testable extraction (anti-self-licking).
+        //
+        // PickSnapPlane: 从 valid floor planes 中找一个 cairn 应该 snap 到的 plane,
+        // 同时应用 minDelta + maxSnapDeltaY (cross-floor protection)。
+        // 公开 API 让 QA case 真调,而不是把算法复制到 case 自己 simulator。
+        // ────────────────────────────────────────────────────────────────
+
+        public enum SnapAction
+        {
+            ShouldSnap,         // pick.plane 是 nearest-XZ + yDelta 在合法 snap 范围
+            NoPlaneFound,       // validPlanes 为空
+            WithinMinDelta,     // 离 nearest plane Y 太近,不需 snap
+            CrossFloorBlocked,  // yDelta > maxSnapDeltaY,可能跨层 (1F vs 2F),不 snap 防飞天
+        }
+
+        public struct SnapPick
+        {
+            public ARPlane plane;
+            public SnapAction action;
+            public float yDelta;
+            public float xzDistance;
+        }
+
+        /// <summary>
+        /// Pure decision function: 从 valid floor planes 给定一个 cairn world position,
+        /// 决定要 snap 到哪个 plane (R2.4 nearest-XZ + sub#B cross-floor protection)。
+        /// 不读 trackables / globals,纯输入 → 输出。
+        /// </summary>
+        public static SnapPick PickSnapPlane(
+            System.Collections.Generic.IList<ARPlane> validPlanes,
+            Vector3 cairnPos,
+            float minDeltaY,
+            float maxSnapDeltaY)
+        {
+            if (validPlanes == null || validPlanes.Count == 0)
+                return new SnapPick { action = SnapAction.NoPlaneFound };
+
+            Vector2 cairnXZ = new Vector2(cairnPos.x, cairnPos.z);
+            ARPlane nearestPlane = null;
+            float nearestDist = float.MaxValue;
+            foreach (var p in validPlanes)
+            {
+                if (p == null) continue;
+                Vector2 pXZ = new Vector2(p.center.x, p.center.z);
+                float d = Vector2.Distance(cairnXZ, pXZ);
+                if (d < nearestDist) { nearestDist = d; nearestPlane = p; }
+            }
+            if (nearestPlane == null)
+                return new SnapPick { action = SnapAction.NoPlaneFound };
+
+            float yDelta = cairnPos.y - nearestPlane.center.y;
+            float absYDelta = Mathf.Abs(yDelta);
+            if (absYDelta < minDeltaY)
+                return new SnapPick { plane = nearestPlane, action = SnapAction.WithinMinDelta, yDelta = yDelta, xzDistance = nearestDist };
+            if (absYDelta > maxSnapDeltaY)
+                return new SnapPick { plane = nearestPlane, action = SnapAction.CrossFloorBlocked, yDelta = yDelta, xzDistance = nearestDist };
+            return new SnapPick { plane = nearestPlane, action = SnapAction.ShouldSnap, yDelta = yDelta, xzDistance = nearestDist };
         }
     }
 }

@@ -15,8 +15,12 @@
 // aliyun debug_snapshots, 让我们看到真实数据再决定怎么修. 真正修法是 "重 attach anchor"
 // 不是 "改 transform" — 但需要 v0.2.5 EAS build + 真机数据.
 //
-// 监控周期: 每 1 秒检查一次, session 内累积 emit cap 5 次 防止 spam.
+// 监控周期 (v0.2.4 R2-followup):
+//   - drift detection: 每 1 秒检查; sliding-window cap 5 / 分钟 (sub#173 推荐)
+//     替换原 5/session 永久 cap (旧设计静默 5min+ 完全无信号)
+//   - LIVE-POSE emit: 每 10 秒 emit cairn world pos (准备 v0.2.5 收真机 drift 量级分布)
 
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 
@@ -27,14 +31,20 @@ namespace Cairn.AR
         [SerializeField] float _driftThresholdM = 0.5f;
         [SerializeField] float _singleFrameThresholdM = 0.2f;
         [SerializeField] float _checkIntervalSec = 1.0f;
-        [SerializeField] int _maxEmitsPerSession = 5;
+        // v0.2.4 R2-followup sub#B P1: sliding-window 替换原 5/session 永久 cap
+        [SerializeField] int _maxEmitsPerWindow = 5;
+        [SerializeField] float _emitWindowSec = 60f;
+        // v0.2.4 R2-followup Q3c §5 #1: 10s 周期 LIVE-POSE emit (v0.2.5 真机 drift 数据基础)
+        [SerializeField] float _livePoseIntervalSec = 10f;
 
         string _markerId;
         Vector3 _initialWorldPos;
         Vector3 _lastWorldPos;
         float _lastCheckTime;
-        int _emitCount;
+        float _lastLivePoseTime;
+        readonly Queue<float> _emitTimestamps = new Queue<float>();
         bool _initialized;
+        bool _anchorRemovedEmitted;
 
         public void Init(string markerId)
         {
@@ -42,15 +52,48 @@ namespace Cairn.AR
             _initialWorldPos = transform.position;
             _lastWorldPos = _initialWorldPos;
             _lastCheckTime = Time.time;
-            _emitCount = 0;
+            _lastLivePoseTime = Time.time;
+            _emitTimestamps.Clear();
             _initialized = true;
+            _anchorRemovedEmitted = false;
         }
 
         void Update()
         {
             if (!_initialized) return;
-            if (_emitCount >= _maxEmitsPerSession) return;
+
+            // v0.2.4 R2-followup: anchor-removed 埋点
+            if (!_anchorRemovedEmitted)
+            {
+                var anchorParent = GetComponentInParent<UnityEngine.XR.ARFoundation.ARAnchor>();
+                if (anchorParent == null && transform.parent == null)
+                {
+                    UnityLogger.IForward("v22-anchor-removed",
+                        $"id={_markerId} pos=({transform.position.x:F2},{transform.position.y:F2},{transform.position.z:F2})");
+                    _anchorRemovedEmitted = true;
+                }
+            }
+
+            // v0.2.4 R2-followup: v22-CAIRN-LIVE-POSE 10s 周期 emit (Q3c §5 #1)
+            // 这是 v0.2.5 真机收 drift 量级分布的关键数据源,不依赖 drift 是否超阈值
+            if (Time.time - _lastLivePoseTime >= _livePoseIntervalSec)
+            {
+                Vector3 nowPos = transform.position;
+                float driftFromInit = Vector3.Distance(nowPos, _initialWorldPos);
+                UnityLogger.IForward("v22-CAIRN-LIVE-POSE",
+                    $"id={_markerId} now=({nowPos.x:F3},{nowPos.y:F3},{nowPos.z:F3}) initial=({_initialWorldPos.x:F3},{_initialWorldPos.y:F3},{_initialWorldPos.z:F3}) driftM={driftFromInit:F3} sessionAgeSec={Time.time:F1}");
+                _lastLivePoseTime = Time.time;
+            }
+
             if (Time.time - _lastCheckTime < _checkIntervalSec) return;
+
+            // sliding-window cap: drop emits older than _emitWindowSec
+            float windowStart = Time.time - _emitWindowSec;
+            while (_emitTimestamps.Count > 0 && _emitTimestamps.Peek() < windowStart)
+            {
+                _emitTimestamps.Dequeue();
+            }
+            bool capReached = _emitTimestamps.Count >= _maxEmitsPerWindow;
 
             Vector3 now = transform.position;
             float frameDelta = Vector3.Distance(now, _lastWorldPos);
@@ -69,15 +112,18 @@ namespace Cairn.AR
                 reason = $"accumulated-drift totalM={totalDrift:F2}";
             }
 
-            if (emit)
+            if (emit && !capReached)
             {
                 UnityLogger.IForward("v22-PLANT-ANCHOR-DRIFT-DETECTED",
-                    $"id={_markerId} reason={reason} initial=({_initialWorldPos.x:F2},{_initialWorldPos.y:F2},{_initialWorldPos.z:F2}) now=({now.x:F2},{now.y:F2},{now.z:F2}) emit={_emitCount + 1}/{_maxEmitsPerSession}");
-                _emitCount++;
+                    $"id={_markerId} reason={reason} initial=({_initialWorldPos.x:F2},{_initialWorldPos.y:F2},{_initialWorldPos.z:F2}) now=({now.x:F2},{now.y:F2},{now.z:F2}) emitInWindow={_emitTimestamps.Count + 1}/{_maxEmitsPerWindow} (window={_emitWindowSec}s)");
+                _emitTimestamps.Enqueue(Time.time);
             }
 
             _lastWorldPos = now;
             _lastCheckTime = Time.time;
         }
+
+        // v0.2.4 R2-followup: testable accessor — sub jest/Editor 可独立验证 sliding-window 行为
+        public int EmitsInCurrentWindow => _emitTimestamps.Count;
     }
 }

@@ -53,6 +53,8 @@ import { useArOriginStore } from '../store/useArOriginStore';
 import { haversineM, type Coordinate } from '../utils/geo';
 import { crashLogger } from '../services/crashLogger';
 import { markerTypeToColor, markerTypeToShaderParams } from '../services/unityCairnSpawn';
+import { initialTrackDebounceState, onTrackEvent, onDowngradeTimerFire } from '../services/trackStateDebounce';
+import { decideGpsLock, isOriginStale, distanceMeters, ORIGIN_STALE_DISTANCE_M, GPS_MAX_ACC_M } from '../services/originPropagation';
 import { API_BASE_URL } from '../config/api';
 import { filterContent, type ContentLevel } from '../services/contentFilter';
 import { checkMarkerSpacing } from '../utils/geo';
@@ -329,71 +331,31 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   }>({ camera: null, cairns: [], origin: null, groundY: null, track: 'limited' });
 
   // v0.2.4 A: 同步 arFrame.track → trackRef (a4PlantEnabled useMemo 读 ref 避免 TDZ)
-  // v0.2.4 R2.7: 加 200ms downgrade debounce + sub#A/B 修订:
-  //   (1) same-value guard:防 same-value re-render 反复 cancel-then-rearm 永不 fire
-  //   (2) downgrade hard cap:300ms 内 limited→tracking→limited 来回时,如果 limited 累计
-  //       时长 > 200ms,强制立即降级 (防止 debounce 把 limited 的真实信号永久 mask 掉)
-  //   (3) safety: tracking → 'none' 直接立即应用 (camera 完全失明 = 真灾难,不 debounce)
+  // v0.2.4 R2.7 anti-self-licking: pure logic 抽到 trackStateDebounce module,jest 真测,
+  // 这里只做 React side-effect 编排:订阅 arFrame.track,调用 module,管理 setTimeout 句柄。
+  const trackDebounceStateRef = useRef(initialTrackDebounceState('limited'));
   const trackDowngradeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const trackLimitedAccumMsRef = useRef<number>(0);
-  const trackLimitedSinceMsRef = useRef<number | null>(null);
   useEffect(() => {
     const next = arFrame.track;
-    // (1) same-value guard
-    if (next === trackRef.current) return;
-
-    // (3) 'none' = camera fully blind, never debounce — apply immediately
-    if (next === 'none') {
-      if (trackDowngradeTimerRef.current) {
-        clearTimeout(trackDowngradeTimerRef.current);
-        trackDowngradeTimerRef.current = null;
-      }
-      trackRef.current = 'none';
-      trackLimitedAccumMsRef.current = 0;
-      trackLimitedSinceMsRef.current = null;
-      return;
-    }
-
-    if (next === 'tracking') {
-      // upgrade — apply immediately
-      if (trackDowngradeTimerRef.current) {
-        clearTimeout(trackDowngradeTimerRef.current);
-        trackDowngradeTimerRef.current = null;
-      }
-      // Accumulate limited time before clearing
-      if (trackLimitedSinceMsRef.current != null) {
-        trackLimitedAccumMsRef.current += Date.now() - trackLimitedSinceMsRef.current;
-        trackLimitedSinceMsRef.current = null;
-      }
-      // (2) hard cap: if accumulated limited > 200ms in last 300ms, force apply 'limited' first
-      const now = Date.now();
-      if (trackLimitedAccumMsRef.current > 200) {
-        trackRef.current = 'limited';
-        trackLimitedAccumMsRef.current = 0;
-        return;
-      }
-      trackRef.current = 'tracking';
-      // Reset accumulator after a clean tracking signal
-      setTimeout(() => { trackLimitedAccumMsRef.current = 0; }, 300);
-      return;
-    }
-
-    // next === 'limited' — start tracking accumulated limited time
-    trackLimitedSinceMsRef.current = Date.now();
-
-    // downgrade — wait 200ms before applying, but DON'T cancel pending timer
-    // (sub#B fix: original cancel-and-rearm meant rapid limited→tracking→limited
-    // bursts never fired). Only schedule one timer; if it's already pending, leave it.
-    if (trackDowngradeTimerRef.current == null) {
+    const now = Date.now();
+    const result = onTrackEvent(trackDebounceStateRef.current, { track: next, t: now });
+    trackDebounceStateRef.current = result.state;
+    trackRef.current = result.state.applied;
+    if (result.scheduleDowngradeAt != null) {
+      // 安排 200ms 后真应用 'limited'。已有 timer 在跑时,onTrackEvent 会返 null,这里不会双重 schedule。
+      const delay = result.scheduleDowngradeAt - now;
       trackDowngradeTimerRef.current = setTimeout(() => {
-        trackRef.current = 'limited';
+        trackDebounceStateRef.current = onDowngradeTimerFire(
+          trackDebounceStateRef.current,
+          Date.now(),
+        );
+        trackRef.current = trackDebounceStateRef.current.applied;
         trackDowngradeTimerRef.current = null;
-        if (trackLimitedSinceMsRef.current != null) {
-          trackLimitedAccumMsRef.current += Date.now() - trackLimitedSinceMsRef.current;
-          trackLimitedSinceMsRef.current = null;
-        }
-      }, 200);
+      }, Math.max(0, delay));
     }
+    return () => {
+      // 仅 cleanup 在 unmount 时跑;effect 内 timer 由 onTrackEvent 的 downgradePending 控制不会泄漏
+    };
   }, [arFrame.track]);
 
   // v199 §F.1 + V2.C1: 3D cone aim detection. Returns ARUiState
@@ -542,21 +504,20 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     //     10-25m: low-accuracy lock,标记 lowAccuracy=true,Tier-A only spawn
     //     >25m: 拒锁 (噪声太大,cairn 会飘)
     //   下游 unityCairnSpawn.ts 已有 Tier-A 路径,只需查 lowAccuracy flag 决定走哪条.
-    const acc = lastCoord.accuracy ?? 999;
-    if (acc > 25) {
-      crashLogger.breadcrumb(`ar:origin:reject acc=${acc.toFixed(1)} (>25m)`);
+    //   v0.2.4 R2.3 anti-self-licking: gate + stale 检测抽到 services/originPropagation,
+    //   jest 真测同函数。
+    const decision = decideGpsLock(lastCoord.accuracy);
+    if (decision.action === 'reject') {
+      crashLogger.breadcrumb(`ar:origin:reject acc=${(lastCoord.accuracy ?? 999).toFixed(1)} (>${GPS_MAX_ACC_M}m)`);
       return;
     }
-    const isLowAccuracy = acc > 10;
+    const isLowAccuracy = decision.lowAccuracy;
     const cur = useMarkerStore.getState().arOrigin;
     if (cur) {
-      const cosLat = Math.cos((cur.lat * Math.PI) / 180);
-      const dN = (lastCoord.lat - cur.lat) * 111000;
-      const dE = (lastCoord.lng - cur.lng) * 111000 * cosLat;
-      const distM = Math.hypot(dN, dE);
-      if (distM > 50) {  // 旧 100m → 50m
+      if (isOriginStale(cur, lastCoord)) {
+        const distM = distanceMeters(cur, lastCoord);
         useMarkerStore.getState().clearArOrigin();
-        crashLogger.breadcrumb(`ar:origin:stale-clear distM=${distM.toFixed(0)} (>50m)`);
+        crashLogger.breadcrumb(`ar:origin:stale-clear distM=${distM.toFixed(0)} (>${ORIGIN_STALE_DISTANCE_M}m)`);
       } else {
         return;
       }

@@ -228,9 +228,11 @@ public class MultiSpawner : MonoBehaviour, ICairnSpawner
         //   Tier-A 是 ARKit world-coord 直采 (data.x/z 已经是真世界点),
         //   不能再加 sessionOffset(GPS-drift 补偿仅适用于 Tier-B GPS 数据)。
         //   PortalSpawner 已在 v0.2.4 B2 修过同 bug;此处对齐。
+        // R2.5 anti-self-licking: 用 CairnBridge.ApplyTierAwareSpawnOffset 公共 helper。
         bool mxIsTierA = data.tier == "A";
-        float mxSpawnX = data.x + (mxIsTierA ? 0f : CairnBridge._sessionOffsetX);
-        float mxSpawnZ = data.z + (mxIsTierA ? 0f : CairnBridge._sessionOffsetZ);
+        var mxSpawnXZ = CairnBridge.ApplyTierAwareSpawnOffset(data.tier, data.x, data.z);
+        float mxSpawnX = mxSpawnXZ.x;
+        float mxSpawnZ = mxSpawnXZ.z;
 
         // v0.2.3 Branch A v3-review-fix: pre-spawn ARAnchor parity with
         // PortalSpawner. Same-session invariant: cairn must be anchor-parented

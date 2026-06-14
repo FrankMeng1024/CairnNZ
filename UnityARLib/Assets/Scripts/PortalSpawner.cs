@@ -312,6 +312,17 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
     {
         if (data == null) return;
 
+        // v0.2.4 R2-followup: dedupe by data.id — 重复 SpawnStrand 同 id (RN 端连发 / re-entry)
+        // 不应再生成第二个 cairn,防 cairn 双重叠 / 错位。
+        // 只检查"已 IMMORTAL"的 cairn,正在 spawn pipeline 中的不算 (race 由 ARSession ready
+        // gate 防住)。挂在 transform 子节点上的 Portal_<id> 是 spawn 完成的 marker。
+        if (!string.IsNullOrEmpty(data.id) && IsAlreadySpawned(data.id))
+        {
+            UnityLogger.I("PortalSpawner",
+                $"SpawnStrand DEDUPE id={data.id} — already spawned, ignoring");
+            return;
+        }
+
 #if UNITY_EDITOR
         // Editor batchmode visual capture: bypass session/camera readiness gate.
         // ARSession is never SessionTracking in Edit mode → would defer forever
@@ -340,6 +351,22 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         }
 
         SpawnStrandInternal(data);
+    }
+
+    /// <summary>
+    /// v0.2.4 R2-followup: 公共 helper — 检查 id 是否已 spawn。jest/QA case 共用。
+    /// 标准: 自身 transform 下面有命名 "Portal_&lt;id&gt;" 的子 GO。
+    /// </summary>
+    public bool IsAlreadySpawned(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return false;
+        string targetName = $"Portal_{id}";
+        for (int i = 0; i < transform.childCount; i++)
+        {
+            var child = transform.GetChild(i);
+            if (child != null && child.name == targetName) return true;
+        }
+        return false;
     }
 
     private readonly System.Collections.Generic.List<CairnBridge.SpawnRequest> _pendingSpawns =
@@ -525,9 +552,12 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         //     tier='A' (ARKit XYZ 真坐标 / Plant 时刻 raycast hit) → bypass sessionOffset
         //     tier='B' (GPS+geoToArkitWorld 反算 / 旧路径) → apply sessionOffset
         //   兼容:旧 SpawnRequest 没 tier 字段 (data.tier == null) 走 Tier-B 兼容路径.
+        //   v0.2.4 R2.5 anti-self-licking: 用 CairnBridge.ApplyTierAwareSpawnOffset
+        //   公共 helper,跟 MultiSpawner + QA case 共用同一函数。
+        var spawnXZ = CairnBridge.ApplyTierAwareSpawnOffset(data.tier, data.x, data.z);
         bool isTierA = data.tier == "A";
-        float spawnX = data.x + (isTierA ? 0f : CairnBridge._sessionOffsetX);
-        float spawnZ = data.z + (isTierA ? 0f : CairnBridge._sessionOffsetZ);
+        float spawnX = spawnXZ.x;
+        float spawnZ = spawnXZ.z;
 
         // ─────────────────────────────────────────────────────────────────
         // v0.2.3 Branch A: ARAnchor BEFORE render.
