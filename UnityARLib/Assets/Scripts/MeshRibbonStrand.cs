@@ -1,7 +1,12 @@
 using UnityEngine;
 
 /// <summary>
-/// MeshRibbonStrand — procedural mesh ribbon for the v199 ascending strand
+/// [OBSOLETE 2026-06-14] v0.2.2 ribbon "细条 + 内部流转" 实现, 用户原口径认可.
+/// PortalSpawnerV199 现走 AttachConeStrands 路径, AttachHeroRibbons 调用已删除.
+/// 文件保留: 用户授意 (后续可能恢复 v0.2.2 ribbon 视觉).
+/// 不删原因: 删了 RibbonStrandShader.shader 会让 CairnAR.unity 内嵌 material 报粉色.
+///
+/// 原 MeshRibbonStrand — procedural mesh ribbon for the v199 ascending strand
 /// flagship (per cinematic-ar-rebuild.md §D.6b).
 ///
 /// Each strand is a 2-vert-wide strip of N segments. Vertex shader

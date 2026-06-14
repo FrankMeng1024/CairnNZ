@@ -13,8 +13,10 @@ namespace Cairn.AR
     ///   • >25m  : same as 12-25m + bloom boost ×1.5
     ///
     /// Sets shader globals:
-    ///   _CairnGlobalCamDist   (float, metres)
-    ///   _CairnGlobalLODBand   (int, 0-3)
+    ///   _CairnGlobalCamDist   (float, metres)  — used by CairnConeCore + CairnConeOutline shaders
+    ///
+    /// 注 (2026-06-14 cleanup): _CairnGlobalLODBand 已删除. 0 shader 读取此 global,
+    /// CairnRibbonLOD 字段 band0Max/band1Max/band2Max 仍保留供 OTA 后续 wire 用.
     ///
     /// Updates at 4Hz (every 0.25s) — distance changes slowly relative to AR
     /// frame rate, no need to re-evaluate every frame. Saves ~60Hz × 8 cairns
@@ -38,7 +40,6 @@ namespace Cairn.AR
 
         // Globals — registered once, written each tick.
         private static readonly int CamDistID  = Shader.PropertyToID("_CairnGlobalCamDist");
-        private static readonly int LODBandID  = Shader.PropertyToID("_CairnGlobalLODBand");
 
         // v3-review-fix: auto-instantiate at first scene load so distance
         // LOD works on every device build without editor menu prerequisite.
@@ -53,14 +54,12 @@ namespace Cairn.AR
 
         private float _lastUpdate = -1f;
         private float _lastDist = -1f;
-        private int _lastBand = -1;
 
         void OnEnable()
         {
             if (arCamera == null) arCamera = Camera.main;
             // Init shader globals so first frame is sane (not stale 0).
             Shader.SetGlobalFloat(CamDistID, 5f);
-            Shader.SetGlobalInt(LODBandID, 0);
             _lastUpdate = -1f;
         }
 
@@ -77,24 +76,12 @@ namespace Cairn.AR
             Vector3 origin = (target != null) ? target.position : Vector3.zero;
             float dist = Vector3.Distance(arCamera.transform.position, origin);
 
-            // Compute band 0..3.
-            int band;
-            if      (dist < band0Max) band = 0;
-            else if (dist < band1Max) band = 1;
-            else if (dist < band2Max) band = 2;
-            else                       band = 3;
-
-            // Push to shader globals if changed (cheap — global state is sticky
+            // Push to shader global if changed (cheap — global state is sticky
             // anyway; we just avoid redundant API calls).
             if (Mathf.Abs(dist - _lastDist) > 0.05f)
             {
                 Shader.SetGlobalFloat(CamDistID, dist);
                 _lastDist = dist;
-            }
-            if (band != _lastBand)
-            {
-                Shader.SetGlobalInt(LODBandID, band);
-                _lastBand = band;
             }
         }
     }

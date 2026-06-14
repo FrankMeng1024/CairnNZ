@@ -203,7 +203,6 @@ public static class SceneSetup
         spawner.pebbleMaterial          = MaterialFromShader("Cairn/PebbleShader");
         spawner.typeChipMaterial        = MaterialFromShader("Cairn/TypeChipShader");
         spawner.stoneBackplateMaterial  = MaterialFromShader("Cairn/StoneBackplateShader");
-        spawner.ribbonStrandMaterial    = MaterialFromShader("Cairn/RibbonStrandShader");
         spawner.lightShaftMaterial      = MaterialFromShader("Cairn/LightShaftShader");
         spawner.confidenceRingMaterial  = MaterialFromShader("Cairn/ConfidenceRingShader");
         spawner.contactShadowMaterial   = MaterialFromShader("Cairn/ShadowBlobShader");
@@ -235,7 +234,6 @@ public static class SceneSetup
         Debug.Log($"[CairnUnity][SceneSetup] PortalSpawner v199 wired " +
                   $"(pebble={spawner.pebbleMaterial!=null} typeChip={spawner.typeChipMaterial!=null} " +
                   $"runeFont={spawner.runeFontAsset!=null} runeFontFrom={fontResolvedFrom} " +
-                  $"ribbon={spawner.ribbonStrandMaterial!=null} " +
                   $"anchor={spawner.arAnchorManagerRef!=null})");
 
         // ─── CairnBridge + CairnGlobals + CairnThermalMonitor ───

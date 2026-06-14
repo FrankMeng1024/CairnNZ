@@ -114,13 +114,6 @@ export interface UnityAROverlayHandle {
    *  (so the caller can use its already-computed ARKit world coordinates
    *  from the plant hit-test, instead of round-tripping through GPS). */
   spawnCairn(req: UnitySpawnRequest): void;
-  /** Convenience: re-spawn all current markers. Used after ArReady when
-   *  origin has just been established. */
-  spawnMarkers(
-    markers: Marker[],
-    origin: { lat: number; lng: number } | null,
-    groundY: number | null,
-  ): void;
   /** Tell Unity to despawn everything (e.g. AR screen unmount). */
   clearAll(): void;
   /** v186: set an OTA-tunable shader global. See unityGlobals.ts.
@@ -227,32 +220,6 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
     (): UnityAROverlayHandle => ({
       spawnCairn: (req) => {
         dispatchSpawn(req);
-      },
-      spawnMarkers: (markers, origin, groundY) => {
-        if (!origin) {
-          crashLogger.breadcrumb(`${TAG}:spawnMarkers-skip:no-origin n=${markers.length}`);
-          return;
-        }
-        let dispatched = 0;
-        for (const m of markers) {
-          if (spawnedIdsRef.current.has(m.id)) continue;
-          const req = buildSpawnRequest(
-            // v0.2.4 Part 2 A2.3: 传完整 marker(含 arkitX/Y/Z + arOriginLat/Lng)
-            // 让 buildSpawnRequest 能走 Tier-A ARKit XYZ 路径(若 plant-time origin
-            // 跟当前 origin 偏差 < 5m),否则 fallback Tier-B GPS+geoToArkitWorld
-            {
-              id: m.id, type: m.type, lat: m.lat, lng: m.lng, note: m.note,
-              arkitX: m.arkitX, arkitY: m.arkitY, arkitZ: m.arkitZ,
-              arOriginLat: m.arOriginLat, arOriginLng: m.arOriginLng,
-            },
-            origin,
-            groundY,
-          );
-          if (req && dispatchSpawn(req)) dispatched += 1;
-        }
-        crashLogger.breadcrumb(
-          `${TAG}:spawnMarkers requested=${markers.length} dispatched=${dispatched} alreadySpawned=${spawnedIdsRef.current.size - dispatched}`
-        );
       },
       clearAll: () => {
         if (!unityRef.current) return;
