@@ -57,13 +57,16 @@ describe('simplifyStroke', () => {
     expect(result.outputCount).toBe(MAPBOX_MATCHING_MAX_COORDS);
   });
 
-  test('200-vertex straight stroke reduces via DP ε=5m', () => {
-    // A perfectly straight 200-vertex line at any ε > 0 collapses to 2.
+  test('200-vertex straight stroke triggers uniform fallback (v259 dense-output rule)', () => {
+    // A perfectly straight 200-vertex line collapses to 2 at any ε > 0.
+    // v259: outputs < 60 trigger uniform fallback (otherwise Mapbox HMM
+    // sees a 2-point input and degenerates → straight-line-through-building
+    // bug). Uniform fallback gives 100 evenly-spaced points capping
+    // mid-gaps at total/100.
     const stroke = straightLine(200);
     const result = simplifyStroke(stroke);
-    expect(result.reason).toBe('dp_eps_5');
-    expect(result.outputCount).toBeLessThanOrEqual(MAPBOX_MATCHING_MAX_COORDS);
-    expect(result.outputCount).toBeGreaterThanOrEqual(2);
+    expect(result.reason).toBe('uniform_fallback');
+    expect(result.outputCount).toBe(MAPBOX_MATCHING_MAX_COORDS);
     // First and last preserved.
     expect(result.points[0]).toEqual(stroke[0]);
     expect(result.points[result.points.length - 1]).toEqual(stroke[stroke.length - 1]);

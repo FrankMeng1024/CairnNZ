@@ -781,26 +781,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             building. With r=50 Mapbox has 2× search radius to find a
 //             real detour (parallel road, nearest junction). r=50 is
 //             the API hard cap.
-//         (2) Three new diag events to triangulate any remaining
-//             through-building report:
-//             - brush_mapbox_attempt now logs raw_vertex_count,
-//               simplify_reason, input_first3/last3, input_max_gap_m
-//             - brush_mapbox_response: response_pts_count,
-//               response_first3/last3, max_segment_gap_m, confidence,
-//               degenerate flag (≤2 pts OR gap > 50m)
-//             - brush_splice_done: snapped_in_pts_per_stroke,
-//               spliced_out_pts, spliced_max_gap_m, suspicious_flatten
-//               flag (Mapbox returned ≥3 pts but splice has > 50m gap =
-//               splice flattened the polyline)
-//             This data correlates "user reports straight line through
-//             building" with whether the API returned the bad geometry
-//             (input-side root cause) or splice flattened a good one
-//             (output-side root cause). Pulled via edit_diagnostics
-//             table on aliyun, queryable by stroke_idx + timestamp.
-//         Activity stop separately reverted to pre-v6.4 (no Mapbox snap)
-//         in this same OTA — see useTrackingStore.ts; raw + Kalman +
-//         teleport reject logic restored, no snapTrack call.
-export const OTA_VERSION = 258;
+//   259 — v258 diag log evidence-based brush fixes (PO 4-case retest):
+//         Test result: case 1 ✅ Z字消失, case 2 ⚠️ 小尾巴, case 3 ❌ 穿楼,
+//         case 4 ❌ 穿楼. Real diag from edit_diagnostics:
+//           - route 3: Mapbox returned 16 healthy pts conf=0.94, but
+//             splice produced 260m gap, suspicious_flatten=true → splice
+//             flattened the polyline.
+//           - route 4: 159 raw → DP eps=5 → 19 pts with 239m input gap →
+//             Mapbox got sparse skeleton, returned 7 pts degenerate=true,
+//             splice gap 332m suspicious_flatten=true.
+//         Two fixes:
+//         (1) spliceMatched: drop [startPt, ...slice(1,-1), endPt] anchor
+//             replacement. Just push Mapbox's full polyline. Mapbox first/
+//             last points are real road nodes by construction; replacing
+//             them with brush-raw projections introduced multi-meter
+//             jumps that crossed buildings. slice(1,-1) on length=2 was
+//             also producing literal [startPt, endPt] straight lines.
+//         (2) strokeSimplify DP ladder: was accepting first ε producing
+//             ≤100 pts. Now requires ≥60 pts (sweet spot 60-100) — if
+//             ε=5 over-simplifies to <60, fall through to uniform-sample
+//             at exactly 100. Caps mid-stroke gaps at stroke_len/100.
+export const OTA_VERSION = 259;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

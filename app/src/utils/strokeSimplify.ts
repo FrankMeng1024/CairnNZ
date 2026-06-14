@@ -190,19 +190,34 @@ export function simplifyStroke(points: LngLat[]): SimplifyResult {
     };
   }
 
+  const MIN_DENSE_OUTPUT = 60;
   for (const eps of DP_EPSILON_LADDER_M) {
     const simplified = douglasPeucker(points, eps);
     if (simplified.length <= MAPBOX_MATCHING_MAX_COORDS) {
-      return {
-        points: simplified,
-        reason: `dp_eps_${eps}` as SimplifyReason,
-        inputCount,
-        outputCount: simplified.length,
-      };
+      // Accept ONLY if dense enough; otherwise fall through to uniform
+      // sampling. Sparse DP outputs (e.g., route 4 case: 159 → 19 pts
+      // with 239m mid-gap) leave Mapbox HMM unable to constrain the
+      // path and produce degenerate straight lines through buildings.
+      if (simplified.length >= MIN_DENSE_OUTPUT) {
+        return {
+          points: simplified,
+          reason: `dp_eps_${eps}` as SimplifyReason,
+          inputCount,
+          outputCount: simplified.length,
+        };
+      }
+      // Too sparse — break out of ladder and use uniform sampling instead.
+      // (Larger ε values would only produce even sparser results.)
+      break;
     }
   }
 
-  // Fallback: uniform sampling preserves whole-stroke geometry.
+  // No ε produced a dense-enough result. Use uniform sampling at exactly
+  // MAPBOX_MATCHING_MAX_COORDS — guarantees max density per Mapbox cap.
+  // This branch fires when the user drew a very long stroke (>>500m at
+  // 5m sampling = 100+ raw points whose detail compresses heavily); the
+  // DP-sparse fallback (bestSimplified) would have left mid gaps too
+  // large, but uniform 100 caps gap at stroke_length / 100.
   const sampled = uniformSample(points, MAPBOX_MATCHING_MAX_COORDS);
   return {
     points: sampled,

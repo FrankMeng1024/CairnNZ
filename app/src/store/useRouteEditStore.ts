@@ -773,11 +773,31 @@ function spliceMatched(
 
   // v249: project each stroke's endpoints onto the original polyline at
   // sub-vertex precision, then sort by projected arcStart.
+  //
+  // v259 R-A/R-B follow-up: arcStart/arcEnd are computed from Mapbox's
+  // snap[0]/snap[last] (real road nodes), NOT from the brush raw endpoints,
+  // because the splice section now keeps Mapbox's geometry as-is. If we
+  // clipped originalPoints at the raw projection but then started the snap
+  // at Mapbox's road node, there'd be a 5-15m gap between the original
+  // polyline lerp point and snap[0] (R-A "sub-10m kink", R-B "head jump").
+  // Projecting snap endpoints onto originalPoints gives a clip point that
+  // co-locates with Mapbox's anchor — the boundary is sub-2m smooth.
   type Item = { arcStart: number; arcEnd: number; startPt: LngLat; endPt: LngLat; snapped: LngLat[] };
   const items: Item[] = [];
   for (let i = 0; i < validated.length; i++) {
     const v = validated[i];
-    const proj = projectStrokeEndsOntoOriginal(v.stroke, originalPoints);
+    const snap = snappedPerStroke[i];
+    // Prefer Mapbox snap endpoints for projection. Fall back to brush raw
+    // endpoints if snap is degenerate (length < 2 — guarded but defensive).
+    const useSnapEndpoints = snap.length >= 2;
+    const probeStart = useSnapEndpoints ? snap[0] : v.stroke.points[0];
+    const probeEnd = useSnapEndpoints
+      ? snap[snap.length - 1]
+      : v.stroke.points[v.stroke.points.length - 1];
+    const proj = projectStrokeEndsOntoOriginal(
+      { ...v.stroke, points: [probeStart, probeEnd] },
+      originalPoints,
+    );
     if (!proj) {
       // Degenerate fallback: use vertex-arc range (old behavior).
       items.push({
@@ -785,7 +805,7 @@ function spliceMatched(
         arcEnd: v.arcEnd,
         startPt: v.stroke.points[0],
         endPt: v.stroke.points[v.stroke.points.length - 1],
-        snapped: snappedPerStroke[i],
+        snapped: snap,
       });
       continue;
     }
@@ -794,7 +814,7 @@ function spliceMatched(
       arcEnd: proj.arcEnd,
       startPt: proj.startPt,
       endPt: proj.endPt,
-      snapped: snappedPerStroke[i],
+      snapped: snap,
     });
   }
   items.sort((a, b) => a.arcStart - b.arcStart);
@@ -811,6 +831,12 @@ function spliceMatched(
     } else {
       // Mid-section between previous splice's arcEnd and this arcStart.
       // Walk originalPoints in [lastTailArc, it.arcStart].
+      // v259: lastTailArc = previous it.arcEnd = previous snap[last]'s
+      // projection. Skipping mid[0] still removes a near-duplicate of the
+      // previous snap[last]. it.arcStart = current snap[0]'s projection,
+      // so the mid clipping ends co-located with current snap[0] for sub-2m
+      // boundary smoothness. Same logic as v249 but anchored at Mapbox
+      // endpoints instead of brush raw endpoints.
       const mid = originalFrom(originalPoints, lastTailArc);
       // mid starts with a synthesized vertex at lastTailArc (we already
       // pushed something at lastTailArc as the tail of the previous
@@ -834,17 +860,47 @@ function spliceMatched(
       }
       for (const p of midClipped) out.push(p);
     }
-    // Push the snapped polyline with head/tail anchors replaced.
-    const snappedAnchored: LngLat[] = it.snapped.length >= 2
-      ? [it.startPt, ...it.snapped.slice(1, -1), it.endPt]
-      : [it.startPt, it.endPt];
-    for (const p of snappedAnchored) out.push(p);
+    // v259 PO direction "穿楼直线" fix:
+    // BEFORE: [it.startPt, ...it.snapped.slice(1, -1), it.endPt]
+    //   - it.startPt / it.endPt = projection of brush RAW endpoints onto
+    //     originalPoints. May sit several meters from where Mapbox's first/
+    //     last snap point actually is.
+    //   - slice(1, -1) drops Mapbox's actual endpoints.
+    //   - When the projection point and snapped[1] are far apart, the
+    //     implicit straight line connecting them crosses whatever is
+    //     between (often a building) → user-reported "笔笔直斜线穿楼".
+    //   - When Mapbox returns length=2, slice(1,-1) is empty → output is
+    //     literally [startPt, endPt] = a 2-point straight line.
+    //   - Real log evidence (route 3): Mapbox returned 16 pts conf=0.94,
+    //     splice output had a 260m gap. Mapbox geometry was healthy; the
+    //     splice step destroyed it.
+    //
+    // AFTER: keep Mapbox's polyline IN FULL. Snap ANCHOR is Mapbox's own
+    // first/last point — they're real road nodes by construction. The
+    // originalPoints prefix/suffix gets clipped at the arc closest to
+    // those Mapbox endpoints (already projected as arcStart/arcEnd above
+    // via projectStrokeEndsOntoOriginal). Result: no anchor-replacement
+    // straight line, no slice(1,-1) flatten.
+    //
+    // Edge case it.snapped.length < 2: shouldn't happen post-G0.5 (which
+    // requires Mapbox return ≥ 2 points), but if it does, we're better
+    // off skipping the segment than emitting a synthetic 2-pt line. The
+    // empty-array path makes that segment a no-op (out gets nothing
+    // pushed for this stroke), and the next stroke's pre-section will
+    // be picked up from the same lastTailArc → graceful degrade.
+    if (it.snapped.length >= 2) {
+      for (const p of it.snapped) out.push(p);
+    }
     lastTailArc = it.arcEnd;
   }
   // Tail: append originalPoints from lastTailArc onward.
+  // v259: lastTailArc was set to it.arcEnd which is now snap[last]'s
+  // projection on originalPoints. tail[0] is the synthesized vertex at
+  // that arc — co-locates with snap[last]. Skipping it avoids a sub-2m
+  // duplicate, same intent as before but for a different anchor.
   const tail = originalFrom(originalPoints, lastTailArc);
   for (let i = 0; i < tail.length; i++) {
-    if (i === 0) continue; // skip duplicate of last splice's endPt
+    if (i === 0) continue; // skip near-duplicate of last splice's snap[last]
     out.push(tail[i]);
   }
   // v250: Dedupe consecutive points within 0.5m of each other. The
