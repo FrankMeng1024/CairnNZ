@@ -152,6 +152,12 @@ export function geoToArkitWorld(
  *   超过 5m 表示用户重新 GPS lock 或 ARSession 重启,持久化的 ARKit XYZ 不再可信。
  */
 const ARKIT_XYZ_TIER_A_MAX_DELTA_M = 5.0;
+// v0.2.4 R2.3 fix: 当 origin 是低 GPS accuracy (10-25m) 锁的,GPS 反算
+// 误差被放大,Tier-A 阈值必须收紧。原 5m 阈值是基于 normal accuracy GPS
+// (±3-8m) 推算;低精度时 (±18m) 同 5m 阈值会让一个 origin 误差 18m 的
+// 锁覆盖 5m 内的 cairn → cairn 走 Tier-A ARKit XYZ 路径但 ARKit XYZ 自己
+// 也可能因低精度 GPS 锁错而错位。收紧到 2m,逼用户走更近的位置 / 重锁 origin。
+const ARKIT_XYZ_TIER_A_MAX_DELTA_M_LOW_ACC = 2.0;
 
 export function buildSpawnRequest(
   marker: {
@@ -166,7 +172,7 @@ export function buildSpawnRequest(
     arOriginLat?: number;
     arOriginLng?: number;
   },
-  origin: { lat: number; lng: number } | null,
+  origin: { lat: number; lng: number; lowAccuracy?: boolean } | null,
   groundY: number | null,
 ): UnitySpawnRequest | null {
   const colour = markerTypeToColor(marker.type);
@@ -184,9 +190,13 @@ export function buildSpawnRequest(
     const dN = (origin.lat - marker.arOriginLat) * 111_000;
     const dE = (origin.lng - marker.arOriginLng) * 111_000 * cosLat;
     const originDeltaM = Math.hypot(dN, dE);
-    if (originDeltaM <= ARKIT_XYZ_TIER_A_MAX_DELTA_M) {
+    // v0.2.4 R2.3: 低精度 origin 收紧 Tier-A 阈值 (5→2m)
+    const tierAMaxDelta = origin.lowAccuracy
+      ? ARKIT_XYZ_TIER_A_MAX_DELTA_M_LOW_ACC
+      : ARKIT_XYZ_TIER_A_MAX_DELTA_M;
+    if (originDeltaM <= tierAMaxDelta) {
       // A2.4 埋点:Tier-A 命中(用户原话"对账"用)
-      console.log(`[v22-PLANT-ANCHOR-TIER-A] id=${marker.id} originDelta=${originDeltaM.toFixed(2)}m arkit=(${marker.arkitX.toFixed(2)},${marker.arkitY.toFixed(2)},${marker.arkitZ.toFixed(2)})`);
+      console.log(`[v22-PLANT-ANCHOR-TIER-A] id=${marker.id} originDelta=${originDeltaM.toFixed(2)}m thresh=${tierAMaxDelta}m lowAcc=${!!origin.lowAccuracy} arkit=(${marker.arkitX.toFixed(2)},${marker.arkitY.toFixed(2)},${marker.arkitZ.toFixed(2)})`);
       return {
         id: marker.id,
         type: marker.type,
@@ -203,7 +213,7 @@ export function buildSpawnRequest(
       };
     }
     // A2.4 埋点:origin delta 太大,Tier-A 拒绝
-    console.log(`[v22-PLANT-ANCHOR-TIER-A-REJECT] id=${marker.id} originDelta=${originDeltaM.toFixed(2)}m > ${ARKIT_XYZ_TIER_A_MAX_DELTA_M}m → fallback Tier-B`);
+    console.log(`[v22-PLANT-ANCHOR-TIER-A-REJECT] id=${marker.id} originDelta=${originDeltaM.toFixed(2)}m > ${tierAMaxDelta}m lowAcc=${!!origin.lowAccuracy} → fallback Tier-B`);
     // origin delta 太大 → 持久化 ARKit XYZ 不再可信,fallback GPS
   }
 

@@ -73,13 +73,57 @@ namespace Cairn.AR
                     return result;
                 }
             }
-            // For all devices: explicitly reject Table / Seat / Wall / Ceiling / Window / Door
-            if ((plane.classifications & PlaneClassifications.Table) != 0
-                || (plane.classifications & PlaneClassifications.Seat) != 0
-                || (plane.classifications & PlaneClassifications.WallFace) != 0
-                || (plane.classifications & PlaneClassifications.Ceiling) != 0)
+            // For all devices: explicitly reject every non-floor classification.
+            // ARFoundation 6 PlaneClassifications enum (PlaneClassifications.cs):
+            //   Ceiling, DoorFrame, WallArt, WallFace, WindowFrame, Couch, Seat,
+            //   Table, InvisibleWallFace, Other. (Floor + None are not rejected.)
+            // v0.2.4 R2.2 fix: original list only had Table/Seat/WallFace/Ceiling.
+            // QA-35 caught Couch/WallArt/DoorFrame/WindowFrame/InvisibleWallFace
+            // were silently accepted — user铁律 "焊死在地面" forbids these.
+            //
+            // sub#B 修订:Couch 在客厅地毯/床边毛毯 ARKit 经常误识别;一刀切 reject
+            // 会让用户在自家客厅/卧室永远 plant 不了。修法:
+            //   - 默认仍 reject 所有 9 类(防"焊死自己")
+            //   - 大面积 Couch (≥ couchAcceptMinArea, default 1.5m²) 视为可接受
+            //     (1.5m² 大约一张双人沙发的 footprint,真沙发面≈1m²;大于此值大概率是
+            //     被错分类的地毯/地面)
+            //   - rejectReason 细分到具体 classification 字符串供 telemetry OTA 决策
+            const PlaneClassifications kRejectMaskHard =
+                PlaneClassifications.Table
+                | PlaneClassifications.Seat
+                | PlaneClassifications.WallFace
+                | PlaneClassifications.Ceiling
+                | PlaneClassifications.DoorFrame
+                | PlaneClassifications.WallArt
+                | PlaneClassifications.WindowFrame
+                | PlaneClassifications.InvisibleWallFace;
+            // Couch 单独处理 — 大面积 Couch 视为地毯/地面 fallback
+            if ((plane.classifications & PlaneClassifications.Couch) != 0)
             {
-                result.rejectReason = "rejected_classification";
+                if (area >= 1.5f)
+                {
+                    // 大面积 Couch → 当作地面接受,继续后续 normal/height/area gate
+                    // 不 return,落到下面的检查
+                }
+                else
+                {
+                    result.rejectReason = "rejected_classification:Couch:area=" + area.ToString("F2");
+                    return result;
+                }
+            }
+            if ((plane.classifications & kRejectMaskHard) != 0)
+            {
+                // 输出具体哪一类被拒,便于 telemetry OTA 决策
+                string reasonClass = "Unknown";
+                if ((plane.classifications & PlaneClassifications.Table) != 0) reasonClass = "Table";
+                else if ((plane.classifications & PlaneClassifications.Seat) != 0) reasonClass = "Seat";
+                else if ((plane.classifications & PlaneClassifications.WallFace) != 0) reasonClass = "WallFace";
+                else if ((plane.classifications & PlaneClassifications.Ceiling) != 0) reasonClass = "Ceiling";
+                else if ((plane.classifications & PlaneClassifications.DoorFrame) != 0) reasonClass = "DoorFrame";
+                else if ((plane.classifications & PlaneClassifications.WallArt) != 0) reasonClass = "WallArt";
+                else if ((plane.classifications & PlaneClassifications.WindowFrame) != 0) reasonClass = "WindowFrame";
+                else if ((plane.classifications & PlaneClassifications.InvisibleWallFace) != 0) reasonClass = "InvisibleWallFace";
+                result.rejectReason = "rejected_classification:" + reasonClass;
                 return result;
             }
 

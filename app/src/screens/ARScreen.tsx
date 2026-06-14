@@ -329,8 +329,71 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   }>({ camera: null, cairns: [], origin: null, groundY: null, track: 'limited' });
 
   // v0.2.4 A: 同步 arFrame.track → trackRef (a4PlantEnabled useMemo 读 ref 避免 TDZ)
+  // v0.2.4 R2.7: 加 200ms downgrade debounce + sub#A/B 修订:
+  //   (1) same-value guard:防 same-value re-render 反复 cancel-then-rearm 永不 fire
+  //   (2) downgrade hard cap:300ms 内 limited→tracking→limited 来回时,如果 limited 累计
+  //       时长 > 200ms,强制立即降级 (防止 debounce 把 limited 的真实信号永久 mask 掉)
+  //   (3) safety: tracking → 'none' 直接立即应用 (camera 完全失明 = 真灾难,不 debounce)
+  const trackDowngradeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trackLimitedAccumMsRef = useRef<number>(0);
+  const trackLimitedSinceMsRef = useRef<number | null>(null);
   useEffect(() => {
-    trackRef.current = arFrame.track;
+    const next = arFrame.track;
+    // (1) same-value guard
+    if (next === trackRef.current) return;
+
+    // (3) 'none' = camera fully blind, never debounce — apply immediately
+    if (next === 'none') {
+      if (trackDowngradeTimerRef.current) {
+        clearTimeout(trackDowngradeTimerRef.current);
+        trackDowngradeTimerRef.current = null;
+      }
+      trackRef.current = 'none';
+      trackLimitedAccumMsRef.current = 0;
+      trackLimitedSinceMsRef.current = null;
+      return;
+    }
+
+    if (next === 'tracking') {
+      // upgrade — apply immediately
+      if (trackDowngradeTimerRef.current) {
+        clearTimeout(trackDowngradeTimerRef.current);
+        trackDowngradeTimerRef.current = null;
+      }
+      // Accumulate limited time before clearing
+      if (trackLimitedSinceMsRef.current != null) {
+        trackLimitedAccumMsRef.current += Date.now() - trackLimitedSinceMsRef.current;
+        trackLimitedSinceMsRef.current = null;
+      }
+      // (2) hard cap: if accumulated limited > 200ms in last 300ms, force apply 'limited' first
+      const now = Date.now();
+      if (trackLimitedAccumMsRef.current > 200) {
+        trackRef.current = 'limited';
+        trackLimitedAccumMsRef.current = 0;
+        return;
+      }
+      trackRef.current = 'tracking';
+      // Reset accumulator after a clean tracking signal
+      setTimeout(() => { trackLimitedAccumMsRef.current = 0; }, 300);
+      return;
+    }
+
+    // next === 'limited' — start tracking accumulated limited time
+    trackLimitedSinceMsRef.current = Date.now();
+
+    // downgrade — wait 200ms before applying, but DON'T cancel pending timer
+    // (sub#B fix: original cancel-and-rearm meant rapid limited→tracking→limited
+    // bursts never fired). Only schedule one timer; if it's already pending, leave it.
+    if (trackDowngradeTimerRef.current == null) {
+      trackDowngradeTimerRef.current = setTimeout(() => {
+        trackRef.current = 'limited';
+        trackDowngradeTimerRef.current = null;
+        if (trackLimitedSinceMsRef.current != null) {
+          trackLimitedAccumMsRef.current += Date.now() - trackLimitedSinceMsRef.current;
+          trackLimitedSinceMsRef.current = null;
+        }
+      }, 200);
+    }
   }, [arFrame.track]);
 
   // v199 §F.1 + V2.C1: 3D cone aim detection. Returns ARUiState
@@ -471,7 +534,20 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   useEffect(() => {
     if (!arStatus.glReady) return;
     if (!lastCoord) return;
-    if (lastCoord.accuracy != null && lastCoord.accuracy > 10) return;  // 旧 15m → 10m 严控锁原点精度
+    // v0.2.4 R2.3 fix:
+    //   原: accuracy > 10m -> return,永远不锁原点 -> 室内/urban canyon 用户卡死,
+    //       不能 plant cairn 也不能展开新 cairn.
+    //   修: 分两档,
+    //     ≤10m: high-accuracy lock,正常路径
+    //     10-25m: low-accuracy lock,标记 lowAccuracy=true,Tier-A only spawn
+    //     >25m: 拒锁 (噪声太大,cairn 会飘)
+    //   下游 unityCairnSpawn.ts 已有 Tier-A 路径,只需查 lowAccuracy flag 决定走哪条.
+    const acc = lastCoord.accuracy ?? 999;
+    if (acc > 25) {
+      crashLogger.breadcrumb(`ar:origin:reject acc=${acc.toFixed(1)} (>25m)`);
+      return;
+    }
+    const isLowAccuracy = acc > 10;
     const cur = useMarkerStore.getState().arOrigin;
     if (cur) {
       const cosLat = Math.cos((cur.lat * Math.PI) / 180);
@@ -489,9 +565,10 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
       lat: lastCoord.lat,
       lng: lastCoord.lng,
       alt: lastCoord.alt ?? null,
+      lowAccuracy: isLowAccuracy,
     });
     crashLogger.breadcrumb(
-      `ar:origin:locked lat=${lastCoord.lat.toFixed(6)} lng=${lastCoord.lng.toFixed(6)} acc=${lastCoord.accuracy ?? 'null'}`
+      `ar:origin:locked lat=${lastCoord.lat.toFixed(6)} lng=${lastCoord.lng.toFixed(6)} acc=${lastCoord.accuracy ?? 'null'} lowAcc=${isLowAccuracy}`
     );
   }, [arStatus.glReady, lastCoord]);
 

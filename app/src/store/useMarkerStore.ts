@@ -108,8 +108,11 @@ interface MarkerState {
   /** v118: persistent AR origin (captured once on first plant per user).
    *  null until first plant. All cairns are positioned in ARKit world
    *  space via (lat, lng) deltas from this origin, so it must NOT change
-   *  between AR sessions or markers will appear to jump 5-15m. */
-  arOrigin: { lat: number; lng: number; alt: number | null } | null;
+   *  between AR sessions or markers will appear to jump 5-15m.
+   *  v0.2.4 R2.3: lowAccuracy 标记此 origin 是不是在 GPS accuracy 10-25m 范围
+   *  锁的(室内 / urban canyon)。下游 unityCairnSpawn 看到 true 时收紧 Tier-A
+   *  阈值(5m → 2m),否则低精度 origin 反算 cairn 会飘 15m+。 */
+  arOrigin: { lat: number; lng: number; alt: number | null; lowAccuracy?: boolean } | null;
   addMarker: (marker: Omit<Marker, 'id' | 'createdAt'>) => Promise<Marker>;
   updateMarker: (id: string, updates: Partial<Omit<Marker, 'id' | 'createdAt'>>) => Promise<void>;
   deleteMarker: (id: string) => Promise<void>;
@@ -120,7 +123,7 @@ interface MarkerState {
   /** v118: set the AR origin if not yet set. Called from ViroAROverlay
    *  when the first GPS fix arrives in a new AR session AND no origin
    *  exists yet. Subsequent calls are no-ops. */
-  setArOriginIfMissing: (origin: { lat: number; lng: number; alt: number | null }) => void;
+  setArOriginIfMissing: (origin: { lat: number; lng: number; alt: number | null; lowAccuracy?: boolean }) => void;
   /** v118: clear the AR origin (used when the user wipes all markers). */
   clearArOrigin: () => void;
 }
@@ -293,7 +296,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       try {
         const o = JSON.parse(oRaw);
         if (o && typeof o.lat === 'number' && typeof o.lng === 'number') {
-          set({ arOrigin: { lat: o.lat, lng: o.lng, alt: o.alt ?? null } });
+          set({ arOrigin: { lat: o.lat, lng: o.lng, alt: o.alt ?? null, lowAccuracy: !!o.lowAccuracy } });
         }
       } catch {
         storage.removeItem(arOriginKey(userId));
@@ -309,11 +312,12 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     const cur = get().arOrigin;
     if (cur) return; // origin already locked — never overwrite
     const userId = get().userId;
-    set({ arOrigin: { lat: origin.lat, lng: origin.lng, alt: origin.alt ?? null } });
+    const lowAccuracy = !!origin.lowAccuracy;
+    set({ arOrigin: { lat: origin.lat, lng: origin.lng, alt: origin.alt ?? null, lowAccuracy } });
     if (userId) {
-      storage.setItem(arOriginKey(userId), JSON.stringify(origin));
+      storage.setItem(arOriginKey(userId), JSON.stringify({ ...origin, lowAccuracy }));
     }
-    crashLogger.breadcrumb(`ar:origin:locked lat=${origin.lat.toFixed(6)} lng=${origin.lng.toFixed(6)}`);
+    crashLogger.breadcrumb(`ar:origin:locked lat=${origin.lat.toFixed(6)} lng=${origin.lng.toFixed(6)} lowAcc=${lowAccuracy}`);
   },
 
   clearArOrigin: () => {

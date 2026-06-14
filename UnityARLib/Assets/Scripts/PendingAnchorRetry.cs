@@ -84,9 +84,16 @@ namespace Cairn.AR
                             {
                                 var plane = _planeMgr != null ? _planeMgr.GetPlane(h.trackableId) : null;
                                 if (plane == null) continue;
+                                // v0.2.4 R2.6 fix:
+                                //   原写死 lidarAvailable=false → LiDAR 设备的 Floor 分类
+                                //   优势用不上,跟 PortalSpawnerV199.cs:251 runtime 检测不一致。
+                                //   统一为 runtime 检测 ARMeshManager 是否在跑。
+                                var meshMgr = UnityEngine.Object.FindFirstObjectByType<UnityEngine.XR.ARFoundation.ARMeshManager>();
+                                bool lidar = meshMgr != null && meshMgr.enabled
+                                          && meshMgr.subsystem != null && meshMgr.subsystem.running;
                                 var validation = FloorPlaneValidator.Validate(
                                     plane, h.pose.position, _cam.transform.position.y,
-                                    lidarAvailable: false /* unknown here, treat conservatively */);
+                                    lidarAvailable: lidar);
                                 if (!validation.isValid) continue;
                                 if (validation.planeArea > bestArea)
                                 {

@@ -85,9 +85,16 @@ namespace Cairn.AR
                 yield break;
             }
 
-            // 扫最大有效 floor plane(maxDist 米内)
-            ARPlane bestPlane = null;
-            float bestArea = 0f;
+            // v0.2.4 R2.4 fix:
+            //   原算法 = 全场景找 area-largest floor plane → 所有 cairn 用这同一个 Y。
+            //   QA-70 抓到:多 plane 时,远但大的 plane 会赢小但贴 cairn 的 plane。
+            //   修法 = 先收集所有合法 floor plane,然后**每个 cairn 单独**找 nearest-XZ
+            //   的 plane 来 snap。这样每个 cairn 都贴着自己脚下的真实地面,不会被
+            //   远处的大 plane 错拉。
+            //   单 plane case 退化等价 — 唯一 plane 一定就是 nearest。
+
+            // Pass 1 — 收集 maxDist 内合法 floor planes
+            var validPlanes = new System.Collections.Generic.List<ARPlane>();
             foreach (var p in planeMgr.trackables)
             {
                 float dist = Vector3.Distance(p.transform.position, cam.transform.position);
@@ -95,20 +102,15 @@ namespace Cairn.AR
                 bool lidar = false;  // 保守:走 polygon 路径
                 var v = FloorPlaneValidator.Validate(p, p.transform.position, cam.transform.position.y, lidar);
                 if (!v.isValid) continue;
-                if (v.planeArea > bestArea)
-                {
-                    bestPlane = p;
-                    bestArea = v.planeArea;
-                }
+                validPlanes.Add(p);
             }
-            if (bestPlane == null)
+            if (validPlanes.Count == 0)
             {
                 Debug.Log("[v22-CROSS-SESSION-SNAP] no valid floor plane found within " + maxDist + "m");
                 _coroutineRunning = false;
                 yield break;
             }
-
-            float planeY = bestPlane.center.y;
+            Debug.Log("[v22-CROSS-SESSION-SNAP] found " + validPlanes.Count + " valid floor planes");
 
             // 枚举 IMMORTAL cairn
             var cairns = Object.FindObjectsByType<CairnAcquireController>(FindObjectsSortMode.None);
@@ -120,8 +122,37 @@ namespace Cairn.AR
                 if (c.CurrentState != CairnAcquireController.State.IMMORTAL) continue;
 
                 Vector3 cairnPos = c.transform.position;
+                Vector2 cairnXZ = new Vector2(cairnPos.x, cairnPos.z);
+
+                // R2.4: 这个 cairn 单独找 nearest-XZ plane(不用全场景 area-largest)
+                ARPlane nearestPlane = null;
+                float nearestDist = float.MaxValue;
+                foreach (var p in validPlanes)
+                {
+                    Vector2 pXZ = new Vector2(p.center.x, p.center.z);
+                    float d = Vector2.Distance(cairnXZ, pXZ);
+                    if (d < nearestDist) { nearestDist = d; nearestPlane = p; }
+                }
+                if (nearestPlane == null) continue;
+
+                float planeY = nearestPlane.center.y;
                 float yDelta = cairnPos.y - planeY;
                 if (Mathf.Abs(yDelta) < minDelta) continue;
+
+                // v0.2.4 R2.4 sub#B fix:
+                //   多层结构 (loft / 楼梯下) nearest-XZ 不考虑 Y 接近度。
+                //   1F cairn 离 2F plane center 在 XZ 上更近时,会被 snap 到 2F (y=2.8m) → 飞天。
+                //   加 MAX_SNAP_DELTA_Y 上限:超过 1.5m 视为跨层错位,不 snap (保持原 anchor)。
+                //   1.5m 选择理由:房间天花板高度通常 2.4-3m,1.5m 既覆盖正常 floor 误差
+                //   (≤0.6m) 也能挡住跨层 (≥2m)。OTA 化以便真机校准。
+                float maxSnapDeltaY = (globals != null)
+                    ? globals.GetForType(null, "CrossSessionSnapMaxDeltaY", 1.5f)
+                    : 1.5f;
+                if (Mathf.Abs(yDelta) > maxSnapDeltaY)
+                {
+                    Debug.Log($"[v22-CROSS-SESSION-SNAP] skip cairn={GetMarkerId(c)} yDelta={yDelta:F2}m exceeds maxSnapDeltaY={maxSnapDeltaY}m (cross-floor protection)");
+                    continue;
+                }
 
                 // 反 fight:cairn 在视野内不 snap
                 Vector3 toCairn = (cairnPos - cam.transform.position).normalized;
@@ -130,8 +161,7 @@ namespace Cairn.AR
                 bool inView = dot > 0.3f && distToCairn < 8f;
                 if (inView) continue;
 
-                Vector2 cairnXZ = new Vector2(cairnPos.x, cairnPos.z);
-                Vector2 planeXZ = new Vector2(bestPlane.center.x, bestPlane.center.z);
+                Vector2 planeXZ = new Vector2(nearestPlane.center.x, nearestPlane.center.z);
                 float xzDelta = Vector2.Distance(cairnXZ, planeXZ);
 
                 float oldY = cairnPos.y;
@@ -154,10 +184,11 @@ namespace Cairn.AR
                     }
                     Debug.Log("[v22-CROSS-SESSION-SNAP] markerId=" + GetMarkerId(c)
                               + " oldY=" + oldY.ToString("F3") + " newY=" + planeY.ToString("F3")
-                              + " xzDelta=" + xzDelta.ToString("F2") + "m");
+                              + " xzDelta=" + xzDelta.ToString("F2") + "m"
+                              + " picked=nearest-xz");
                 }
             }
-            Debug.Log("[v22-CROSS-SESSION-SNAP] complete: " + snapCount + "/" + cairns.Length + " snapped, planeY=" + planeY.ToString("F3"));
+            Debug.Log("[v22-CROSS-SESSION-SNAP] complete: " + snapCount + "/" + cairns.Length + " snapped");
             _coroutineRunning = false;
         }
 
