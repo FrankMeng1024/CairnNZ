@@ -71,6 +71,13 @@ namespace Cairn.AR
             StartCoroutine(PlayCo());
         }
 
+        // v0.2.4 R2-followup Story C — public setter so PortalSpawner.cs:783 可以 wire
+        // ring 的 Renderer 到 outer ring (RN spawn 时不挂 prefab,直接 AddComponent + 设)
+        public void SetTargetRenderer(Renderer ringRenderer)
+        {
+            _outerRingRenderer = ringRenderer;
+        }
+
         public void Reset()
         {
             StopAllCoroutines();

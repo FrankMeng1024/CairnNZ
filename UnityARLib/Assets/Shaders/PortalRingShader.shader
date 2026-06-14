@@ -29,6 +29,9 @@ Shader "Cairn/PortalRingShader"
         _PulseAmp       ("Pulse Amplitude",   Range(0, 0.5)) = 0.15
         _InstanceAlpha  ("Instance Alpha",    Range(0, 1)) = 1.0
         _TypeIndex      ("Type Index 0=cairn 1=danger 2=junction 3=water 4=hut", Range(0, 5)) = 0
+        // v0.2.4 R2-followup Story C — 仪式 sweep gate (CeremonyController 真注入)
+        _SweepAngle     ("Sweep Angle (rad, 0=hidden 2π=full)", Range(0, 6.2831853)) = 6.2831853
+        _Reveal         ("Center Icon Reveal (0..1)", Range(0, 1)) = 1.0
     }
 
     SubShader
@@ -70,6 +73,8 @@ Shader "Cairn/PortalRingShader"
                 float  _PulseAmp;
                 float  _InstanceAlpha;
                 float  _TypeIndex;
+                float  _SweepAngle;
+                float  _Reveal;
             CBUFFER_END
 
             // OTA globals — same pattern as StrandShader. Read with
@@ -190,6 +195,22 @@ Shader "Cairn/PortalRingShader"
                 // Subtle inner ring for a tiny bit of depth (kept thin).
                 float innerRing = aaBand(r, _RingRadius - 0.07, 0.004) * 0.55;
 
+                // v0.2.4 R2-followup Story C — sweep gate.
+                // CeremonyController 注入 _SweepAngle (0=invisible, 2π=full circle).
+                // theta 在 -π..π,转成 0..2π clockwise from 12 o'clock (HTML 基准 -π/2 起点).
+                // 跟 HTML design_v2026-06_variant_C_3D.html line 643-657 一致:
+                //   thetaStart = -π/2, sweep clockwise (negative dθ).
+                // 这里 theta01 = (theta + π/2) mod 2π,值越小越靠近 sweep 起点。
+                // 当 theta01 > _SweepAngle 时 ring 不画 → 实现 clockwise sweep 揭示。
+                float theta01 = (theta + 1.5707963) ;            // 12 o'clock = 0
+                if (theta01 < 0) theta01 += 6.2831853;
+                if (theta01 >= 6.2831853) theta01 -= 6.2831853;
+                // sweep direction: clockwise (HTML 0..2π negative). Reverse so 0..2π reveals CW.
+                float sweepRev = 6.2831853 - theta01;
+                float sweepGate = step(sweepRev, _SweepAngle);
+                outerRing *= sweepGate;
+                innerRing *= sweepGate;
+
                 // ---- Sigil rotation (kept for icon spin, even if no chorus) ----
                 float spin       = _Time.y * _SigilSpinSpeed
                                    * _coalesce(_CairnGlobalScrollMul)
@@ -293,6 +314,9 @@ Shader "Cairn/PortalRingShader"
                                 aaOutline(s3, 0.005));
                 }
                 icon *= 1.4;   // slightly more prominent than other sigil layers
+                // v0.2.4 R2-followup Story C — Reveal gate (CeremonyController 注入)
+                // _Reveal: 0..1, controls icon fade-in跟 HTML rune fade (t=0.50→0.85)
+                icon *= _Reveal;
 
                 // ---- Combine sigil parts (minimalist) ----
                 // Outer ring + thin inner ring + orbiting highlight + the icon.

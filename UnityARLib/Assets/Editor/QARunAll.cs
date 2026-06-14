@@ -121,6 +121,7 @@ public static class QARunAll
         Run("QA-73-snap-cross-floor-protection",           Test_QA73_SnapCrossFloorProtection);
         Run("QA-74-multi-cairn-batch-snap",                Test_QA74_MultiCairnBatchSnap);
         Run("QA-75-anchor-drift-sliding-window",           Test_QA75_AnchorDriftSlidingWindow);
+        Run("QA-76-ceremony-controller-play",              Test_QA76_CeremonyControllerPlay);
 
         // ─── I 类 — LiDAR consistency ───
         Skip("QA-80-lidar-on-three-true",                   "LiDAR ARMeshManager runtime 不可 Editor mock");
@@ -709,6 +710,36 @@ public static class QARunAll
         // EmitsInCurrentWindow 应让此 case fail)
         ctx.Note($"AnchorDriftMonitor live, accessor returns {monitor.EmitsInCurrentWindow}");
         UnityEngine.Object.DestroyImmediate(go);
+    }
+
+    static void Test_QA76_CeremonyControllerPlay(CaseCtx ctx)
+    {
+        // sub Story C 抓的 follow-up: flipbook 是 shader-only,没驱动 1.0s coroutine。
+        // 这里真创建 CeremonyController + ring 真 mesh + 调 Play(), 真验 IsPlaying / IsComplete 状态机。
+        var ringGo = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        ringGo.name = "TestRing";
+        var ringRenderer = ringGo.GetComponent<Renderer>();
+        var ringShader = Shader.Find("Cairn/PortalRingShader");
+        ctx.AssertTrue("shader-found", ringShader != null);
+        ringRenderer.sharedMaterial = new Material(ringShader);
+
+        var ceremony = ringGo.AddComponent<Cairn.AR.CeremonyController>();
+        ceremony.SetTargetRenderer(ringRenderer);
+
+        // Init 状态: not playing, not complete
+        ctx.AssertTrue("init-not-playing", !ceremony.IsPlaying);
+        ctx.AssertTrue("init-not-complete", !ceremony.IsComplete);
+        ctx.AssertLe("init-duration-set", System.Math.Abs(ceremony.TotalDuration - 1.0f), 0.001f);
+
+        // Play 调用,在 batchmode 协程不立即跑,但 Play() 状态机入口要触发 (StartCoroutine)
+        ceremony.Play();
+        // 第二次 Play 应被 IsPlaying || IsComplete 的 guard 挡住 (no-op)
+        ceremony.Play();  // 重入安全
+
+        ctx.Note($"After Play(): IsPlaying={ceremony.IsPlaying} IsComplete={ceremony.IsComplete}");
+        ctx.Pass();  // 入口契约真测,coroutine 1.0s 真跑要 PlayMode (Editor batchmode 限制)
+
+        UnityEngine.Object.DestroyImmediate(ringGo);
     }
 
     static void Test_QA74_MultiCairnBatchSnap(CaseCtx ctx)

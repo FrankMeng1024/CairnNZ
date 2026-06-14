@@ -780,7 +780,18 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             mpb.SetFloat(_PulseAmpID,         0.30f);  // bigger breath
             mpb.SetFloat(_InstanceAlphaID,    1.0f);
             mpb.SetFloat(_TypeIndexID,        TypeToIndex(data.type));
+            // v0.2.4 R2-followup Story C — 仪式 sweep 真生效:
+            // 初始化 _SweepAngle=0 + _Reveal=0,等下面 CeremonyController.Play() 1.0s 内
+            // 注入 sweepT/runeT。跟 HTML design_v2026-06_variant_C_3D.html line 626-666 一致。
+            mpb.SetFloat(Shader.PropertyToID("_SweepAngle"), 0f);
+            mpb.SetFloat(Shader.PropertyToID("_Reveal"), 0f);
             ringRenderer.SetPropertyBlock(mpb);
+
+            // 挂 CeremonyController 到 ring GO,真触发 1.0s sweep + reveal 仪式动画
+            // (sub#182 抓的 BLOCKER: V199 拿了 component 但 0 处调 .Play())
+            var ceremony = ring.AddComponent<Cairn.AR.CeremonyController>();
+            ceremony.SetTargetRenderer(ringRenderer);
+            ceremony.Play();
         }
 
         // ─── Wisp filaments ───
