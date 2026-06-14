@@ -1078,6 +1078,7 @@ public class CairnBridge : MonoBehaviour
         public float  scrollSpeed;
         public float  bloomBoost;
         public string note;          // v187: optional user mark text, up to 30 chars, word-wrapped on the cairn
+        public string tier;          // v0.2.4 B2: 'A'=ARKit XYZ 真坐标 (bypass sessionOffset) | 'B'=GPS 反算 (apply sessionOffset)
     }
 
     [System.Serializable]

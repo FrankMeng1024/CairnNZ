@@ -51,6 +51,12 @@ export interface UnitySpawnRequest {
   scrollSpeed: number;
   bloomBoost: number;
   note?: string;   // v187 — optional ≤30-char user mark text rendered above the cairn
+  // v0.2.4 Part 2 B2 修(用户铁律 "plant 在哪 cairn 永远在哪"):
+  // tier='A' = ARKit world XYZ 已是当前 session ARKit world frame 真坐标
+  //   → Unity 端禁止再叠加 sessionOffset (会让 cairn 飘 2-5m 或堆出发点)
+  // tier='B' = GPS+geoToArkitWorld 反算的近似坐标
+  //   → Unity 端必须叠加 sessionOffset 补偿 arOrigin 漂移
+  tier: 'A' | 'B';
 }
 
 /**
@@ -193,6 +199,7 @@ export function buildSpawnRequest(
         scrollSpeed: shader.scrollSpeed,
         bloomBoost: shader.bloomBoost,
         note,
+        tier: 'A',
       };
     }
     // A2.4 埋点:origin delta 太大,Tier-A 拒绝
@@ -218,5 +225,6 @@ export function buildSpawnRequest(
     scrollSpeed: shader.scrollSpeed,
     bloomBoost: shader.bloomBoost,
     note,
+    tier: 'B',
   };
 }

@@ -478,8 +478,10 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         // any cairn position bug, grep telemetry for [v22-DIAG-SPAWN].
         try
         {
-            float spawnX_diag = data.x + CairnBridge._sessionOffsetX;
-            float spawnZ_diag = data.z + CairnBridge._sessionOffsetZ;
+            // v0.2.4 B2: telemetry 也要按 tier 算 final 位置 (匹配真 spawn 公式)
+            bool isTierA_diag = data.tier == "A";
+            float spawnX_diag = data.x + (isTierA_diag ? 0f : CairnBridge._sessionOffsetX);
+            float spawnZ_diag = data.z + (isTierA_diag ? 0f : CairnBridge._sessionOffsetZ);
             float camY_diag = Camera.main != null ? Camera.main.transform.position.y : 0f;
             float assumedH_diag = CairnGlobals.Instance != null
                 ? CairnGlobals.Instance.GetForType(null, "AssumedHoldHeight", 1.3f)
@@ -488,7 +490,7 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             // side than JsonUtility-formatted JSON which embeds quotes inside
             // the breadcrumb message that already wraps the line in [tag].
             UnityLogger.IForward("v22-DIAG-SPAWN",
-                $"id={data.id} type={data.type} " +
+                $"id={data.id} type={data.type} tier={(isTierA_diag ? "A" : "B")} " +
                 $"rnX={data.x:F3} rnY={data.y:F3} rnZ={data.z:F3} " +
                 $"ox={CairnBridge._sessionOffsetX:F3} oz={CairnBridge._sessionOffsetZ:F3} " +
                 $"finalX={spawnX_diag:F3} finalY={groundY:F3} finalZ={spawnZ_diag:F3} " +
@@ -516,18 +518,16 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         // Container.
         var container = new GameObject($"Portal_{data.id ?? "unknown"}");
         container.transform.SetParent(transform, false);
-        // v209 CRITICAL — apply per-session GPS offset that RN sent via
-        // OnSetSessionOffset. Old code (v199 → v208) dropped sessionOffset
-        // entirely: the static fields _sessionOffsetX/Z were stored but
-        // never consumed by any spawner. Result: every AR session reset
-        // ARKit world origin to camera, but cairn world coords were the
-        // RN-projected position relative to OLD persisted arOrigin → cairn
-        // appears at the same RELATIVE position to the new origin every
-        // time, i.e. "cairn follows camera" (user-reported critical bug).
-        // Fix: shift spawn XZ by sessionOffset so persisted-world coords
-        // resolve correctly in the current ARKit session frame.
-        float spawnX = data.x + CairnBridge._sessionOffsetX;
-        float spawnZ = data.z + CairnBridge._sessionOffsetZ;
+        // v0.2.4 B2 致命修 (用户铁律 "plant 在哪 cairn 永远在哪"):
+        //   旧 v209 实现无差别 spawnX = data.x + sessionOffset, 让 Tier-A
+        //   ARKit world 真坐标也被错叠加 → cairn 跨房间堆出发点 / 跨 session 飘 2-5m.
+        //   新规则:
+        //     tier='A' (ARKit XYZ 真坐标 / Plant 时刻 raycast hit) → bypass sessionOffset
+        //     tier='B' (GPS+geoToArkitWorld 反算 / 旧路径) → apply sessionOffset
+        //   兼容:旧 SpawnRequest 没 tier 字段 (data.tier == null) 走 Tier-B 兼容路径.
+        bool isTierA = data.tier == "A";
+        float spawnX = data.x + (isTierA ? 0f : CairnBridge._sessionOffsetX);
+        float spawnZ = data.z + (isTierA ? 0f : CairnBridge._sessionOffsetZ);
 
         // ─────────────────────────────────────────────────────────────────
         // v0.2.3 Branch A: ARAnchor BEFORE render.

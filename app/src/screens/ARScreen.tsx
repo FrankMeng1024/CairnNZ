@@ -1122,6 +1122,9 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
           // 3D mark text above the cairn (≤30 codepoints, word-wrapped).
           // Codepoint-aware clip (handles emoji surrogate pairs).
           note: [...(marker.note || '')].slice(0, 30).join(''),
+          // v0.2.4 B2: plant 时刻 raycast hit 直接是当前 ARKit world 真坐标
+          //   → Unity 端 PortalSpawner 必须 bypass sessionOffset (用户铁律)
+          tier: 'A',
         });
       } else {
         crashLogger.breadcrumb(
