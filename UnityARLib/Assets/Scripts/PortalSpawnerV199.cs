@@ -837,6 +837,19 @@ public partial class PortalSpawner
                 $"by-pre-spawn-attach planeAnchor={existingAnchor.trackableId}");
             yield break;
         }
+        // v0.2.4 B4 修 (用户铁律 'plant 在哪 cairn 永远在哪'):
+        //   PortalSpawner.cs:644 主路径 anchor 失败时启动 PendingAnchorRetry
+        //   1s × 0.1s 持续 raycast retry. V199 TryParentToAnchor 同时跑会让
+        //   两个 coroutine 并发 SetParent 不同 anchor → cairn 抖动跳位.
+        //   修法: 检测到 PendingAnchorRetry 已挂, V199 路径直接跳过 (PendingAnchorRetry
+        //   一定会兜底, 无需双跑).
+        var pendingRetry = container.GetComponent<Cairn.AR.PendingAnchorRetry>();
+        if (pendingRetry != null)
+        {
+            UnityLogger.IForward("v22-ANCHOR",
+                $"id={container.name} skipped reason=pending-anchor-retry-active");
+            yield break;
+        }
         // v0.2.3 Branch A: AnchorAttachEnabled OTA killswitch DELETED.
         // Anchoring is now mandatory — there is no fallback to "trust
         // transform.position and hope ARKit doesn't drift". The killswitch

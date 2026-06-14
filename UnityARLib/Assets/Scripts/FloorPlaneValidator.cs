@@ -93,9 +93,15 @@ namespace Cairn.AR
             }
 
             // 4. Height below camera (defends tables / car hoods)
+            // v0.2.4 B1 修 (用户铁律 'plant 在哪 cairn 永远在哪'):
+            //   原默认 maxHeightBelowCam=1.0m 让用户蹲下 (camY=0.5m) 时
+            //   所有 plane 都被拒 → 只能走 fallback heuristic 飞天.
+            //   修法: 自适应 camY * 0.6 (蹲 0.5m → gate=0.3m, 站 1.5m → gate=0.9m).
+            //   保留 maxHeightBelowCam 参数作 hard cap (调用方可显式传更严).
+            float adaptiveMin = Mathf.Min(maxHeightBelowCam, Mathf.Max(0.2f, cameraY * 0.6f));
             float belowCam = cameraY - worldHitPoint.y;
             result.heightBelowCamera = belowCam;
-            if (belowCam < maxHeightBelowCam)
+            if (belowCam < adaptiveMin)
             {
                 result.rejectReason = "hit_too_high_above_ground";
                 return result;

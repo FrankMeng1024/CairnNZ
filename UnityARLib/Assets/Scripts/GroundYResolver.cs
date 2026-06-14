@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 using System.Collections.Generic;
+using Cairn.AR;
 
 /// <summary>
 /// v0.2.3 Stage 3 (A1) — Ground-Y resolver with explicit FSM.
@@ -325,39 +326,33 @@ public class GroundYResolver : MonoBehaviour
         ARPlane plane, float camY, float heightOffsetMin, float minAreaM2,
         bool requireFloorClassification, bool requireAreaEvenIfFloor = false)
     {
-        // Height gate: plane must be at least heightOffsetMin below camera.
-        if (camY - plane.center.y < heightOffsetMin) return false;
+        // v0.2.4 B1 修 (用户铁律 'plant 在哪 cairn 永远在哪'):
+        //   原 GroundYResolver 自带规则跟 FloorPlaneValidator 完全独立, 同一 plane
+        //   可能一边过一边拒 (用户蹲姿 plant 玄学 / cairn 落桌面而 Acquire 拒认).
+        //   修法: 统一委派 FloorPlaneValidator.Validate, 一个真相源.
+        //   保留 GroundYResolver 自身的 pass-1/pass-2 (Floor 优先 → 大未分类 fallback)
+        //   语义, 通过 minAreaM2 调节 + classifications 检查实现.
+        // 用 plane.center 作 worldHitPoint (Tier-A 是 plane.center.y 直接读)
+        var validation = FloorPlaneValidator.Validate(
+            plane, plane.center, camY,
+            lidarAvailable: true,  // GroundYResolver Tier-A 自带 Floor classification 检查, lidarAvailable=true 启用更严
+            maxHeightBelowCam: heightOffsetMin,  // 用 caller 传入的自适应阈值
+            minAreaM2: minAreaM2);
+        if (!validation.isValid) return false;
 
-        // ARF 6.0+ Flags enum. Multiple classifications can coexist (rare but
-        // possible per Apple/ARCore providers).
+        // pass-1 严格 Floor classification (Tier-A 顶层语义)
         var c = plane.classifications;
-
-        // Reject obvious non-floor classifications. Use HasFlag (or bitwise
-        // AND for perf) — if ANY of these flags are set, the plane is unsafe.
-        const PlaneClassifications nonFloorMask =
-            PlaneClassifications.Table |
-            PlaneClassifications.Seat |
-            PlaneClassifications.Couch |
-            PlaneClassifications.Ceiling |
-            PlaneClassifications.WallFace |
-            PlaneClassifications.WallArt |
-            PlaneClassifications.WindowFrame |
-            PlaneClassifications.DoorFrame |
-            PlaneClassifications.InvisibleWallFace;
-        if ((c & nonFloorMask) != 0) return false;
-
-        float areaM2 = plane.size.x * plane.size.y;
         if (requireFloorClassification)
         {
-            // Pass 1 — only accept explicitly classified Floor.
-            // R2 fix: also enforce area gate at marginal heights (hip-hold)
-            // because ARKit occasionally misclassifies large tabletops as Floor.
             if ((c & PlaneClassifications.Floor) == 0) return false;
-            if (requireAreaEvenIfFloor && areaM2 < minAreaM2) return false;
-            return true;
+            if (requireAreaEvenIfFloor)
+            {
+                float areaM2 = plane.size.x * plane.size.y;
+                if (areaM2 < minAreaM2) return false;
+            }
         }
-        // Pass 2 — accept None/Other if plane is large enough.
-        return areaM2 >= minAreaM2;
+        // pass-2 大未分类已被 Validator 内部 area gate 通过.
+        return true;
     }
 
     /// <summary>
