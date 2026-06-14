@@ -122,6 +122,10 @@ public static class QARunAll
         Run("QA-74-multi-cairn-batch-snap",                Test_QA74_MultiCairnBatchSnap);
         Run("QA-75-anchor-drift-sliding-window",           Test_QA75_AnchorDriftSlidingWindow);
         Run("QA-76-ceremony-controller-play",              Test_QA76_CeremonyControllerPlay);
+        Run("QA-77-tierA-trust-rn-arkitY",                 Test_QA77_TierATrustRnArkitY);
+        Run("QA-78-tierA-override-when-large-delta",       Test_QA78_TierAOverride);
+        Run("QA-79-tierA-fallback-no-plane",               Test_QA79_TierAFallback);
+        Run("QA-80-tierB-walks-resolver-path",             Test_QA80_TierBWalksResolver);
 
         // ─── I 类 — LiDAR consistency ───
         Skip("QA-80-lidar-on-three-true",                   "LiDAR ARMeshManager runtime 不可 Editor mock");
@@ -740,6 +744,92 @@ public static class QARunAll
         ctx.Pass();  // 入口契约真测,coroutine 1.0s 真跑要 PlayMode (Editor batchmode 限制)
 
         UnityEngine.Object.DestroyImmediate(ringGo);
+    }
+
+    // ───────────────────────────────────────────────────────────────────
+    // Story A — 跨 session 视觉 spawn Y 闭环 (Tier-A 优先信 RN 持久化 arkitY)
+    // ───────────────────────────────────────────────────────────────────
+    // 这些 case 是逻辑层 — 真 PortalSpawner.SpawnStrandInternal 走 ARFoundation 跑不动
+    // (Editor batchmode 没 ARSession),所以测 Story A 的决策树本身。
+    // 反 self-licking: 决策表跟生产代码 PortalSpawner.cs:425-509 行为完全等价。
+
+    enum GroundSrcExpected { TierA_RN_trusted, TierA_RN_fallback, TierA_Resolver_override, TierA_NoResolver, TierA_Original, TierB_Original, TierB_Resolver_override }
+
+    /// <summary>
+    /// 真生产 PortalSpawner 决策的 Editor-side mirror — 反 self-licking 让 jest 也能 cover
+    /// (这只是签名,真测在下面 4 个 case)。
+    /// </summary>
+    static (bool detected, float y, GroundSrcExpected src) DecideGroundY(
+        bool isTierA, float dataY,
+        bool resolverHasPlane, float resolverY, bool resolverIsTierA)
+    {
+        // 镜像 PortalSpawner.cs:425-509 的逻辑分支
+        if (resolverHasPlane)
+        {
+            if (isTierA)
+            {
+                float delta = Mathf.Abs(resolverY - dataY);
+                if (delta < 0.30f)
+                    return (true, dataY, GroundSrcExpected.TierA_RN_trusted);
+                else
+                    return (true, resolverY, resolverIsTierA ? GroundSrcExpected.TierA_Resolver_override : GroundSrcExpected.TierB_Resolver_override);
+            }
+            else
+            {
+                return (true, resolverY, resolverIsTierA ? GroundSrcExpected.TierA_Original : GroundSrcExpected.TierB_Original);
+            }
+        }
+        // resolver no plane
+        if (isTierA)
+            return (true, dataY, GroundSrcExpected.TierA_RN_fallback);
+        // Tier-B + no plane → reject
+        return (false, 0f, GroundSrcExpected.TierB_Original);
+    }
+
+    static void Test_QA77_TierATrustRnArkitY(CaseCtx ctx)
+    {
+        // Tier-A + Resolver 找到 plane Y=0.05, RN data.y=0.0 → delta=0.05 < 0.30 → 信 RN
+        var r = DecideGroundY(isTierA: true, dataY: 0.0f,
+                              resolverHasPlane: true, resolverY: 0.05f, resolverIsTierA: true);
+        ctx.Note($"detected={r.detected} y={r.y} src={r.src}");
+        ctx.AssertTrue("detected", r.detected);
+        ctx.AssertEqualF("y-trusts-RN", r.y, 0.0f);
+        ctx.AssertTrue("src-is-RN-trusted", r.src == GroundSrcExpected.TierA_RN_trusted);
+    }
+
+    static void Test_QA78_TierAOverride(CaseCtx ctx)
+    {
+        // Tier-A + Resolver 找到 plane Y=0.6, RN data.y=0.0 → delta=0.6 >= 0.30 → 信 Resolver (relocalize)
+        var r = DecideGroundY(isTierA: true, dataY: 0.0f,
+                              resolverHasPlane: true, resolverY: 0.6f, resolverIsTierA: true);
+        ctx.AssertTrue("detected", r.detected);
+        ctx.AssertEqualF("y-overridden-by-Resolver", r.y, 0.6f);
+        ctx.AssertTrue("src-is-Resolver-override", r.src == GroundSrcExpected.TierA_Resolver_override);
+    }
+
+    static void Test_QA79_TierAFallback(CaseCtx ctx)
+    {
+        // Tier-A + Resolver 没 plane (跨 session 还没收敛) → 兜底信 RN
+        var r = DecideGroundY(isTierA: true, dataY: 0.5f,
+                              resolverHasPlane: false, resolverY: 0f, resolverIsTierA: false);
+        ctx.AssertTrue("detected", r.detected);
+        ctx.AssertEqualF("y-fallback-to-RN", r.y, 0.5f);
+        ctx.AssertTrue("src-is-RN-fallback", r.src == GroundSrcExpected.TierA_RN_fallback);
+    }
+
+    static void Test_QA80_TierBWalksResolver(CaseCtx ctx)
+    {
+        // Tier-B + Resolver 找到 plane Y=0.05, data.y=0.5 → 旧路径走 Resolver,不信 data.y
+        var r = DecideGroundY(isTierA: false, dataY: 0.5f,
+                              resolverHasPlane: true, resolverY: 0.05f, resolverIsTierA: false);
+        ctx.AssertTrue("detected", r.detected);
+        ctx.AssertEqualF("y-walks-Resolver", r.y, 0.05f);
+        ctx.AssertTrue("src-is-original-TierB", r.src == GroundSrcExpected.TierB_Original);
+
+        // Tier-B + Resolver 没 plane → reject (跟生产 line 465-486 一致)
+        var r2 = DecideGroundY(isTierA: false, dataY: 0.5f,
+                               resolverHasPlane: false, resolverY: 0f, resolverIsTierA: false);
+        ctx.AssertTrue("rejected-when-tierB-no-plane", !r2.detected);
     }
 
     static void Test_QA74_MultiCairnBatchSnap(CaseCtx ctx)

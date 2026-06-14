@@ -430,6 +430,23 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             ? groundYResolver.arCamera : Camera.main;
         float spawnCamY = spawnCam != null ? spawnCam.transform.position.y : 0f;
 
+        // v0.2.4 Phase1 Story A — 跨 session 视觉 spawn Y 闭环 (sub#182 抓):
+        //   旧路径: 永远优先查当前 session GroundYResolver,只在 fail 时考虑 data.y。
+        //   问题: 跨 session 重 spawn 时,即使 RN Tier-A 已经传了之前焊死的 arkitY,
+        //         Unity 重新查 GroundYResolver 拿当前 session 的 floor plane Y。
+        //         如果当前 session ARKit 还没看到 floor → SpawnRejected → 用户体验
+        //         "我之前 plant 在这,重开找不到".
+        //   修法: data.tier == "A" 时 (RN 真传 Tier-A 持久化 ARKit XYZ),
+        //         **优先信任 data.y** 作为 floor plane Y。
+        //         GroundYResolver 仍跑做 sanity check:
+        //           - 如果 GroundYResolver 拿到 plane Y, 跟 data.y 偏差 < 0.30m: 信 data.y
+        //             (避免小漂移,跨 session 焊死优先)
+        //           - 偏差 >= 0.30m: 信 GroundYResolver (真大漂移 = relocalize 后真错位,
+        //             用当前 session 真 plane 修正,即 R2.4 cross-session-snap 路径)
+        //           - GroundYResolver 没数据: 直接信 data.y (Tier-A 兜底)
+        //   非 Tier-A (Tier-B / null tier): 走旧路径 (优先 GroundYResolver)。
+        bool isTierA_spawn = (data.tier == "A");
+
         if (groundYResolver != null)
         {
             float candidateY;
@@ -437,13 +454,59 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             if (groundYResolver.QueryGroundY(new Vector3(data.x, 0f, data.z),
                                              out candidateY, out tier))
             {
-                // Tier-A or Tier-B both went through Floor-only filters.
-                // Accept either as authoritative ground.
-                groundY = candidateY;
-                groundDetected = true;
-                diagGroundSrc = (tier == GroundYResolver.Tier.A) ? "TierA" : "TierB";
-                diagTierAFound = (tier == GroundYResolver.Tier.A);
+                if (isTierA_spawn)
+                {
+                    // Story A: Tier-A 优先 data.y, GroundYResolver 仅作 sanity
+                    float deltaY = Mathf.Abs(candidateY - data.y);
+                    if (deltaY < 0.30f)
+                    {
+                        groundY = data.y;
+                        groundDetected = true;
+                        diagGroundSrc = "TierA-RN-trusted";
+                        diagTierAFound = true;
+                        UnityLogger.IForward("v22-SPAWN-TIER-A-TRUST-RN",
+                            $"id={data.id} dataY={data.y:F2} ResolverY={candidateY:F2} delta={deltaY:F2}m (<0.30 信 RN)");
+                    }
+                    else
+                    {
+                        // 跨 session 大漂移,信当前 session GroundYResolver (R2.4 等价)
+                        groundY = candidateY;
+                        groundDetected = true;
+                        diagGroundSrc = (tier == GroundYResolver.Tier.A) ? "TierA-Resolver-override" : "TierB-Resolver-override";
+                        diagTierAFound = (tier == GroundYResolver.Tier.A);
+                        UnityLogger.IForward("v22-SPAWN-TIER-A-OVERRIDE",
+                            $"id={data.id} dataY={data.y:F2} ResolverY={candidateY:F2} delta={deltaY:F2}m (>=0.30 信 Resolver)");
+                    }
+                }
+                else
+                {
+                    // Tier-A or Tier-B both went through Floor-only filters.
+                    // Accept either as authoritative ground.
+                    groundY = candidateY;
+                    groundDetected = true;
+                    diagGroundSrc = (tier == GroundYResolver.Tier.A) ? "TierA" : "TierB";
+                    diagTierAFound = (tier == GroundYResolver.Tier.A);
+                }
             }
+            else if (isTierA_spawn)
+            {
+                // Story A: GroundYResolver 没数据 (跨 session 真 plane 还没收敛),
+                // Tier-A 兜底信 data.y (RN 持久化 arkitY)
+                groundY = data.y;
+                groundDetected = true;
+                diagGroundSrc = "TierA-RN-fallback";
+                diagTierAFound = true;
+                UnityLogger.IForward("v22-SPAWN-TIER-A-RN-FALLBACK",
+                    $"id={data.id} dataY={data.y:F2} (Resolver no plane, 信 RN 持久化)");
+            }
+        }
+        else if (isTierA_spawn)
+        {
+            // GroundYResolver 都没,Tier-A 兜底 (退化场景)
+            groundY = data.y;
+            groundDetected = true;
+            diagGroundSrc = "TierA-NoResolver";
+            diagTierAFound = true;
         }
 
         if (!groundDetected)
