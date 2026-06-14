@@ -755,12 +755,25 @@ public class CairnBridge : MonoBehaviour
         // one '}' as part of the format spec and emits the literal "F3"
         // instead of the value. Observed in production iOS builds.
         var inv = CultureInfo.InvariantCulture;
+        // v0.2.4 B-Apple+A 修 (用户铁律 'plant 在哪 cairn 永远在哪'):
+        //   暴露 ARSession.state 给 RN, 让 RN 在 SessionTracking 之外禁 plant.
+        //   旧实现 plant 按钮检查 RN 自己的 a4PlantEnabled, 但漏了 ARKit
+        //   trackingState — 暗光/晃动/relocalize 时仍允许 plant 产生错 cairn.
+        //   tracking="tracking" → SessionTracking (Apple .normal 等价)
+        //   tracking="limited"  → SessionInitializing | NotTracking (Apple .limited)
+        //   tracking="none"     → None | CheckingAvailability | Unsupported
+        string trackState = ARSession.state == ARSessionState.SessionTracking
+            ? "tracking"
+            : (ARSession.state == ARSessionState.SessionInitializing || ARSession.state == ARSessionState.Ready)
+                ? "limited"
+                : "none";
         var json = "{\"px\":" + p.x.ToString("F3", inv)
                  + ",\"py\":" + p.y.ToString("F3", inv)
                  + ",\"pz\":" + p.z.ToString("F3", inv)
                  + ",\"fx\":" + f.x.ToString("F3", inv)
                  + ",\"fy\":" + f.y.ToString("F3", inv)
                  + ",\"fz\":" + f.z.ToString("F3", inv)
+                 + ",\"track\":\"" + trackState + "\""
                  + "}";
         SendToRN("ArFrame", json);
     }

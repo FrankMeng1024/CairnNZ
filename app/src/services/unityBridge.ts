@@ -81,7 +81,7 @@ export function sendToUnity(
  */
 export type UnityMessage =
   | { kind: 'ArReady';        unityVersion: string; arSession: string }
-  | { kind: 'ArFrame';        px: number; py: number; pz: number; fx: number; fy: number; fz: number }
+  | { kind: 'ArFrame';        px: number; py: number; pz: number; fx: number; fy: number; fz: number; track: 'tracking' | 'limited' | 'none' }
   | { kind: 'PlaneDetected';  x: number; y: number; z: number; area: number }
   | { kind: 'ArSessionState'; state: string }
   | { kind: 'Pong';           token: string; unityTime: number }
@@ -198,6 +198,12 @@ export function parseUnityMessage(raw: string): UnityMessage {
         fx: typeof data.fx === 'number' ? data.fx : 0,
         fy: typeof data.fy === 'number' ? data.fy : 1,
         fz: typeof data.fz === 'number' ? data.fz : 0,
+        // v0.2.4 B-Apple+A: ARSession.state forward (Apple .normal/.limited/.none)
+        // Cairn 默认 'limited' 安全侧 (ArFrame 来时若 track 字段缺失=旧 build, 走限制路径)
+        track:
+          data.track === 'tracking' ? 'tracking'
+          : data.track === 'none' ? 'none'
+          : 'limited',
       };
     case 'PlaneDetected':
       return {

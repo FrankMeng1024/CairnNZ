@@ -219,12 +219,19 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     const id = setInterval(() => setTick(t => (t + 1) % 1000), 200);
     return () => clearInterval(id);
   }, []);
+  // v0.2.4 A: arFrame.track 在 useMemo 里使用,但 arFrame state 声明在下面.
+  // 用 ref 镜像让 a4PlantEnabled 能读到不出 TDZ 错.
+  const trackRef = useRef<'tracking' | 'limited' | 'none'>('limited');
   const a4PlantEnabled = useMemo(() => {
     void tick; // referenced to keep effect-free re-eval each tick
     const arOriginLocked = a4State === 'PERSISTED' || a4State === 'GPS_LOCKED';
     if (!arOriginLocked) return false;
     if (a1State !== 'LOCKED') return false;
     if (Date.now() - lastA1TransitionAt < 500) return false;
+    // v0.2.4 A 修 (Apple ARCamera.trackingState 推荐):
+    //   ARSession 不在 Tracking 状态时 (晃动/暗光/relocalize) 禁 plant.
+    //   tracking → 安全; limited/none → 用户可能 plant 出"坏 cairn"飞天/穿墙.
+    if (trackRef.current !== 'tracking') return false;
     return true;
   }, [a4State, a1State, lastA1TransitionAt, tick]);
   // v0.2.3 Stage 6 (A9) — user-visible reason when Plant is disabled
@@ -314,7 +321,17 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     cairns: Array<{ id: string; type: string; x: number; y: number; z: number; dist: number }>;
     origin: { lat: number; lng: number; alt: number | null } | null;
     groundY: number | null;
-  }>({ camera: null, cairns: [], origin: null, groundY: null });
+    // v0.2.4 B-Apple+A: ARSession.state forward from Unity for plant gating.
+    // 'tracking' = SessionTracking (Apple .normal) → plant 安全
+    // 'limited'  = SessionInitializing | Ready | relocalize → plant 会出错 cairn
+    // 'none'     = None | NotAvailable → 完全不能 plant
+    track: 'tracking' | 'limited' | 'none';
+  }>({ camera: null, cairns: [], origin: null, groundY: null, track: 'limited' });
+
+  // v0.2.4 A: 同步 arFrame.track → trackRef (a4PlantEnabled useMemo 读 ref 避免 TDZ)
+  useEffect(() => {
+    trackRef.current = arFrame.track;
+  }, [arFrame.track]);
 
   // v199 §F.1 + V2.C1: 3D cone aim detection. Returns ARUiState
   // (idle | aim-pending | aim-locked) + lockedMarkerId after 600ms hold.
@@ -444,19 +461,26 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   // projected to (x,z)≈(0,0) relative to A but viewed from B's ARKit world =
   // appearing 500m away from camera = sky cairns. 100m gate forces re-lock
   // for any meaningful walk, keeping projections in sane range.
+  // v0.2.4 B-Apple+B3 修 (用户铁律 'plant 在哪 cairn 永远在哪'):
+  //   旧: 100m 阈值 → 用户走 50m 回来仍走 Tier-B GPS noise (cairn 飘 5-15m).
+  //   新: 50m 阈值 + 同时要求 GPS accuracy <= 10m 才接受 lock
+  //     (低精度 GPS 锁原点 → 后续所有 cairn 系统性偏移).
+  //   配合 unityCairnSpawn.ts ARKIT_XYZ_TIER_A_MAX_DELTA_M=5m,
+  //   走出 5m 触发 Tier-B 但 50m 内 origin 还在,Tier-B 用同一 origin GPS 反算 → 偏差 < 10m;
+  //   超过 50m 重新 lock 原点 → 新 origin 误差贡献小.
   useEffect(() => {
     if (!arStatus.glReady) return;
     if (!lastCoord) return;
-    if (lastCoord.accuracy != null && lastCoord.accuracy > 15) return;
+    if (lastCoord.accuracy != null && lastCoord.accuracy > 10) return;  // 旧 15m → 10m 严控锁原点精度
     const cur = useMarkerStore.getState().arOrigin;
     if (cur) {
       const cosLat = Math.cos((cur.lat * Math.PI) / 180);
       const dN = (lastCoord.lat - cur.lat) * 111000;
       const dE = (lastCoord.lng - cur.lng) * 111000 * cosLat;
       const distM = Math.hypot(dN, dE);
-      if (distM > 100) {
+      if (distM > 50) {  // 旧 100m → 50m
         useMarkerStore.getState().clearArOrigin();
-        crashLogger.breadcrumb(`ar:origin:stale-clear distM=${distM.toFixed(0)} (>100m)`);
+        crashLogger.breadcrumb(`ar:origin:stale-clear distM=${distM.toFixed(0)} (>50m)`);
       } else {
         return;
       }

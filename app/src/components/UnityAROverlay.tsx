@@ -90,6 +90,8 @@ export type UnityAROverlayProps = {
     cairns: CairnWorldPos[];
     origin: ArOriginInfo;
     groundY: number | null;
+    // v0.2.4 B-Apple+A: ARSession.state forward — ARScreen plant gate 用
+    track: 'tracking' | 'limited' | 'none';
   }) => void;
   beamingId?: string | null;
   onCairnPress?: (id: string) => void;
@@ -838,6 +840,7 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 ? { lat: props.userPos.lat, lng: props.userPos.lng, alt: props.userPos.alt }
                 : null,
               groundY: groundYRef.current,
+              track: msg.track,
             });
           }
           break;
