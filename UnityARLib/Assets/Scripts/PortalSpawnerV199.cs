@@ -208,7 +208,7 @@ public partial class PortalSpawner
         // Anchor parenting always runs (independent of ceremony).
         StartCoroutine(TryParentToAnchor(container, groundY));
 
-        // ── Block E1: 自动挂 CairnAcquireController(v0.2.4 wire-up)──
+            // ── Block E1: 自动挂 CairnAcquireController(v0.2.4 wire-up)──
         // 让 cairn 一旦 spawn 就由 5铁律 状态机驱动:
         //   FAR → APPROACH → ACQUIRE → IMMORTAL,触发 CeremonyController.Play()
         // 之前 MORNING_REPORT 记录"未自动挂"是 v0.2.4 build 的最大差距,本次修复。
@@ -238,7 +238,17 @@ public partial class PortalSpawner
             }
             else
             {
-                bool lidar = false;  // 保守 default,FloorPlaneValidator 仍可用 polygon 路径
+                // v0.2.4 C 修 (用户铁律 'plant 在哪 cairn 永远在哪'):
+                //   原写死 lidar = false → FloorPlaneValidator 永远走非 LiDAR 路径,
+                //   即使 iPhone Pro/iPad Pro 有 LiDAR mesh classification 也不用 →
+                //   地毯/楼梯/草地 plane 检测精度跟非 Pro 一样.
+                //   修法: 运行时检测 ARMeshManager 组件存在 = LiDAR 启用.
+                //   ARMeshManager 在 ARFoundation 6 仅当 device 支持 sceneReconstruction
+                //   才会激活 (内部检查 ARSession.descriptor.supportsMeshClassification),
+                //   组件存在即 LiDAR 真可用. 非 Pro 设备 scene 即使加了 ARMeshManager 也会
+                //   被 ARFoundation 自动 disable, GetComponent 仍找不到 enabled 实例.
+                var meshMgr = UnityEngine.Object.FindFirstObjectByType<UnityEngine.XR.ARFoundation.ARMeshManager>();
+                bool lidar = meshMgr != null && meshMgr.enabled && meshMgr.subsystem != null && meshMgr.subsystem.running;
                 var ctl = container.AddComponent<Cairn.AR.CairnAcquireController>();
                 ctl.Init(data.id, existingAnchor, rcMgr, pmMgr, amMgr, cam, ceremony, lidar);
             }
