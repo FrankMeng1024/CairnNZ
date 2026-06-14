@@ -167,8 +167,6 @@ public partial class PortalSpawner
         // 2026-06-11 user pushback: 'Unity 效果是核心 ... 深度理解我们想要的
         // v0.2.3 Branch C — Cone-strand visual (Plan E-prime).
         // Gated by OTA `ConeStrandEnabled` (default true).
-        // 注: 历史 AttachHeroRibbons + AttachWispRibbons (flat-strip ribbon)
-        // 已删除 (违反 user invariant #3 "不要纸带子")。
         bool useConeStrand = globals == null || globals.GetBool("ConeStrandEnabled", true);
         if (useConeStrand)
         {

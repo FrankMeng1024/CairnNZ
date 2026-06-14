@@ -9,7 +9,7 @@ namespace Cairn.AR.Editor
     /// v0.2.3 Branch C — one-shot setup tool for the new ribbon visual.
     ///
     /// Generates:
-    ///   • Procedural cone mesh (Assets/Meshes/cairn_cone_strand.asset)
+    ///   • Procedural cone meshes (cairn_cone_inner.asset + cairn_cone_outer.asset)
     ///       radius: 0.18m base → 0.05m tip
     ///       height: 1.6m (vertical, Y up, base at Y=0)
     ///       segments: 16 radial × 8 height (mobile-cheap)
@@ -59,16 +59,6 @@ namespace Cairn.AR.Editor
             string outerPath = "Assets/Resources/Meshes/cairn_cone_outer.asset";
             AssetDatabase.CreateAsset(meshOuter, outerPath);
 
-            // Keep the legacy single-mesh asset for compatibility (some debug
-            // paths reference it).
-            var meshLegacy = BuildConeMesh(
-                baseRadius: 0.18f,
-                tipRadius: 0.0f,
-                height: 1.6f,
-                radialSegments: 16,
-                heightSegments: 8);
-            string legacyPath = "Assets/Resources/Meshes/cairn_cone_strand.asset";
-            AssetDatabase.CreateAsset(meshLegacy, legacyPath);
             AssetDatabase.SaveAssets();
 
             // 2. Core material
@@ -157,7 +147,7 @@ namespace Cairn.AR.Editor
             int radialSegments, int heightSegments)
         {
             var mesh = new Mesh();
-            mesh.name = "cairn_cone_strand";
+            mesh.name = "cairn_cone";
 
             int ringCount = heightSegments + 1;       // count of vertex rings along height
             int verticesPerRing = radialSegments + 1;  // close the loop with seam vertex

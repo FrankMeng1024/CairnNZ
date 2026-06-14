@@ -39,7 +39,7 @@ namespace Cairn.AR
         [SerializeField] Renderer _innerRingRenderer;
         [SerializeField] Renderer _runeRenderer;
         [SerializeField] Transform _runeTransform;
-        [SerializeField] GameObject _ribbonsRoot;          // SilkRibbonV2 cluster parent
+        [SerializeField] GameObject _ribbonsRoot;          // ribbon/strand cluster parent (cone-strand or future ribbon)
         [SerializeField] TypeParticleController _typeParticles;
         [SerializeField] CanvasGroup _labelCanvas;          // 3D world-space label
 
