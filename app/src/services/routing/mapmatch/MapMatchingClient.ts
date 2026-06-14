@@ -111,12 +111,31 @@ function buildUrl(segment: MatchSegment): string {
     .join(';');
   // Mapbox radiuses constraint: each value must be 0 < r <= 50 meters
   // (verified via live API — 'unlimited' is rejected with InvalidInput).
-  // v6.3 (plan §1.2): default radius is 25m. Empirically (spike-fresh-v63-summary.md)
-  // r ∈ {15, 25, 40} all produce identical match output on the 250-case corpus,
-  // so 25 is chosen as a balanced midpoint. r=50 (the legacy default) was looser
-  // than needed; r=8 (pre-v252) was too tight and produced spurious NoMatch on
-  // long strokes (spike-corridor-100v-results.md, J1-036 800m → only 60m snapped).
-  const DEFAULT_RADIUS_M = 25;
+  //
+  // v258 (PO direction "穿楼直线" diag):
+  //   bumped DEFAULT from 25 → 50 (Mapbox cap). Why: when the user draws a
+  //   stroke whose middle segment crosses a building (no walking edge inside
+  //   25m of those points), HMM /matching at r=25 collapses the segment to
+  //   a 2-point degenerate match (just the endpoints' nearest road snaps).
+  //   That 2-point match shows up as a literal straight line through the
+  //   building. With r=50 Mapbox has 2× the search radius to find a real
+  //   detour — typically the parallel road behind/around the building, or
+  //   the nearest junction — and returns a multi-vertex polyline that
+  //   actually goes around. PO standard: brush always snaps to a real road,
+  //   never a straight line. r=50 is the API cap so this is the largest
+  //   we can give it; if the building is wider than 100m diameter this
+  //   still won't find a detour, which is a hard limit of /matching at the
+  //   API level.
+  //
+  // Prior history (kept for audit):
+  //   v6.3 (plan §1.2): default 25m. Empirically (spike-fresh-v63-summary.md)
+  //   r ∈ {15, 25, 40} all produce identical match output on the 250-case corpus,
+  //   so 25 was chosen as a balanced midpoint. r=50 was originally rejected
+  //   for being "looser than needed" — but the 250-case corpus did NOT include
+  //   the through-building stress case PO is now reporting. r=8 (pre-v252)
+  //   was too tight and produced spurious NoMatch on long strokes
+  //   (spike-corridor-100v-results.md, J1-036 800m → only 60m snapped).
+  const DEFAULT_RADIUS_M = 50;
   const radiusesStr = segment.radiuses
     .map(r => (r === null ? String(DEFAULT_RADIUS_M) : String(Math.min(50, Math.max(1, r)))))
     .join(';');

@@ -28,6 +28,20 @@ import { matchSegment } from '../services/routing/mapmatch/MapMatchingClient';
 import { simplifyStroke } from '../utils/strokeSimplify';
 import { checkG0, checkG0PostSimplify, checkG0_5, checkG3 } from '../utils/strokeGate';
 import { sendEditDiag } from '../services/editDiagSender';
+// v6.4 Stage D — algorithm-parity note:
+// Brush-edit and Activity-snap share the same primitive operations:
+//   - simplifyStroke (DP ladder + uniform fallback) — used directly here;
+//     also runs inside snapTrack (single-chunk path).
+//   - matchSegment   (Mapbox /matching with radius/timeout/abort) — used
+//     directly here (per-stroke single call, since brush strokes are
+//     always ≤100 vertices); snapTrack chunks long activity tracks.
+//   - checkG3 corridor — used directly here; activity snap relies on
+//     chunk-level radius+confidence guards (different invariant).
+// Because brush strokes never need chunking, calling snapTrack would add
+// pointless overhead. The algorithm parity contract (plan §1.4 / Stage D)
+// is satisfied at the primitive level: both pipelines call the same
+// simplify/match/gate functions in the same order with the same constants.
+// Verified by docs/spikes/STAGE_D_PARITY_NOTE.md.
 import { saveExtras, loadExtras, EditSegment } from '../services/LocalRouteExtras';
 import { migrateRouteIfNeeded, MigrationResult } from '../services/LegacyRouteMigrator';
 import { saveSession, clearSession, onSaveSessionFailure } from '../services/EditSessionPersistence';
@@ -1656,9 +1670,29 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
 
         let r;
         const mapboxT0 = Date.now();
+        // v258 PO direction: capture FULL input picture so we can correlate
+        // a "straight line through building" report with what we actually
+        // sent Mapbox. Diagnoses input-side root cause (R-A) — DP-simplify
+        // collapse vs. raw kept vs. wide radius giving HMM too much slack.
         sendEditDiag('brush_mapbox_attempt', {
           stroke_idx: strokeIdx,
           vertex_count: simRes.points.length,
+          raw_vertex_count: pts.length,
+          simplify_reason: simRes.reason,
+          // First/last 3 coords identify the spatial region without bloating payload.
+          input_first3: simRes.points.slice(0, 3).map(p => [p.lng, p.lat]),
+          input_last3: simRes.points.slice(-3).map(p => [p.lng, p.lat]),
+          // Max gap between consecutive simplified inputs — large gap means
+          // DP threw away middle so we sent Mapbox a sparse skeleton.
+          input_max_gap_m: (() => {
+            let mx = 0;
+            for (let i = 1; i < simRes.points.length; i++) {
+              const a = simRes.points[i - 1], b = simRes.points[i];
+              const d = haversineMetersLocal(a, b);
+              if (d > mx) mx = d;
+            }
+            return Math.round(mx);
+          })(),
         });
         try {
           r = await matchSegment(seg, { signal: previewAbort.signal });
@@ -1743,6 +1777,37 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         }
 
         const snapped = r.matchedPoints;
+        // v258 PO direction: capture Mapbox's actual response shape so we
+        // can prove whether "straight line through building" is API-side
+        // (Mapbox itself returned ≤2 points / a degenerate match because
+        // it couldn't find a real walking path through the user's middle
+        // segment) or splice-side (Mapbox returned a real polyline but
+        // spliceMatched mangled it). R-B's diagnosis: when Mapbox returns
+        // length=2 the slice(1,-1) branch in spliceMatched produces a
+        // 2-point straight line through whatever was between; we want to
+        // SEE the count + max-gap to know.
+        const _snapMaxGap = (() => {
+          let mx = 0;
+          for (let i = 1; i < snapped.length; i++) {
+            const a = snapped[i - 1], b = snapped[i];
+            const d = haversineMetersLocal(a, b);
+            if (d > mx) mx = d;
+          }
+          return Math.round(mx);
+        })();
+        sendEditDiag('brush_mapbox_response', {
+          stroke_idx: strokeIdx,
+          response_pts_count: snapped.length,
+          response_first3: snapped.slice(0, 3).map(p => [p.lng, p.lat]),
+          response_last3: snapped.slice(-3).map(p => [p.lng, p.lat]),
+          max_segment_gap_m: _snapMaxGap,
+          confidence: r.confidence,
+          ms_taken: Date.now() - mapboxT0,
+          // Red flag: Mapbox returned only 2 points OR has a >50m gap
+          // between consecutive points = degenerate match likely going
+          // through buildings.
+          degenerate: snapped.length <= 2 || _snapMaxGap > 50,
+        });
         strokeSnapCache.set(fp, snapped);
         if (strokeSnapCache.size > 100) {
           const firstKey = strokeSnapCache.keys().next().value;
@@ -1783,6 +1848,36 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
 
       // Splice accepted strokes into the baseline.
       const newMatched = spliceMatched(baseLine, acceptedValidated, snappedPerStroke);
+
+      // v258 PO direction: post-splice diag to confirm whether the splice
+      // step preserved Mapbox's polyline or flattened a multi-vertex match
+      // into a 2-point straight line. The smoking gun is when one of the
+      // snappedPerStroke entries had length > 2 but the splice output
+      // around that arc range becomes a single big jump > 50m — meaning
+      // spliceMatched's [startPt, ...slice(1,-1), endPt] anchor-replace
+      // step lost the middle. Combined with brush_mapbox_response above
+      // we now have full input-output traceability.
+      let _spliceMaxGap = 0;
+      let _spliceMaxGapIdx = -1;
+      for (let i = 1; i < newMatched.length; i++) {
+        const d = haversineMetersLocal(newMatched[i - 1], newMatched[i]);
+        if (d > _spliceMaxGap) {
+          _spliceMaxGap = d;
+          _spliceMaxGapIdx = i;
+        }
+      }
+      sendEditDiag('brush_splice_done', {
+        accepted_count: acceptedValidated.length,
+        snapped_in_pts_total: snappedPerStroke.reduce((s, x) => s + x.length, 0),
+        snapped_in_pts_per_stroke: snappedPerStroke.map(s => s.length),
+        spliced_out_pts: newMatched.length,
+        baseline_pts: baseLine.length,
+        spliced_max_gap_m: Math.round(_spliceMaxGap),
+        spliced_max_gap_at_idx: _spliceMaxGapIdx,
+        // Red flag: any Mapbox return had ≥3 pts but splice output has a
+        // big gap = splice mangled it.
+        suspicious_flatten: snappedPerStroke.some(s => s.length >= 3) && _spliceMaxGap > 50,
+      });
 
       // Plan §3 bug fix #2: undo of Preview must rebuild walkedIndex around the
       // *new* matched line so subsequent endpoint-snap is correct.

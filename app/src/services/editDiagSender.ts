@@ -39,7 +39,10 @@ export type TelemetryKind =
   | 'brush_undo'
   | 'brush_save_committed'
   | 'brush_mapbox_error'
-  | 'brush_alt_dem_null';
+  | 'brush_alt_dem_null'
+  // v258 PO direction "穿楼直线" diag — see OtaBadge.tsx note for v258
+  | 'brush_mapbox_response'
+  | 'brush_splice_done';
 
 /** Events that bypass the debounce timer (high-value or terminal events). */
 const KEY_EVENTS: ReadonlyArray<TelemetryKind> = [

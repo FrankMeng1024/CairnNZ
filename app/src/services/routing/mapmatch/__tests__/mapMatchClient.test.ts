@@ -251,7 +251,7 @@ describe('matchSegment — happy path', () => {
     if (!r.ok) expect(r.reason).toBe('no-match');
   });
 
-  test('builds URL with radiuses=25 default for null entries (v6.3)', async () => {
+  test('builds URL with radiuses=50 default for null entries (v258)', async () => {
     let capturedUrl = '';
     fetchMock.mockImplementation((url: string) => {
       capturedUrl = url;
@@ -266,6 +266,6 @@ describe('matchSegment — happy path', () => {
       });
     });
     await matchSegment(tinySegment());
-    expect(capturedUrl).toContain('radiuses=25;25;25;25;25');
+    expect(capturedUrl).toContain('radiuses=50;50;50;50;50');
   });
 });

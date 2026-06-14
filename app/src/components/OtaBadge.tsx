@@ -772,7 +772,35 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         distM helper, INVALIDATE_DISTANCE_M constant, INVALIDATED
 //         recovery path in onA1State. A4State enum keeps the value
 //         for backwards compat but no code path enters it.
-export const OTA_VERSION = 256;
+//   258 — v6.5 brush diagnostic + radius relax OTA:
+//         (1) Mapbox /matching DEFAULT_RADIUS_M 25 → 50 (API cap).
+//             Reason: with r=25, when a brush stroke's middle segment
+//             crosses a building (no walking edge within 25m of those
+//             points), HMM /matching collapses to a 2-point degenerate
+//             match — renders as a literal straight line through the
+//             building. With r=50 Mapbox has 2× search radius to find a
+//             real detour (parallel road, nearest junction). r=50 is
+//             the API hard cap.
+//         (2) Three new diag events to triangulate any remaining
+//             through-building report:
+//             - brush_mapbox_attempt now logs raw_vertex_count,
+//               simplify_reason, input_first3/last3, input_max_gap_m
+//             - brush_mapbox_response: response_pts_count,
+//               response_first3/last3, max_segment_gap_m, confidence,
+//               degenerate flag (≤2 pts OR gap > 50m)
+//             - brush_splice_done: snapped_in_pts_per_stroke,
+//               spliced_out_pts, spliced_max_gap_m, suspicious_flatten
+//               flag (Mapbox returned ≥3 pts but splice has > 50m gap =
+//               splice flattened the polyline)
+//             This data correlates "user reports straight line through
+//             building" with whether the API returned the bad geometry
+//             (input-side root cause) or splice flattened a good one
+//             (output-side root cause). Pulled via edit_diagnostics
+//             table on aliyun, queryable by stroke_idx + timestamp.
+//         Activity stop separately reverted to pre-v6.4 (no Mapbox snap)
+//         in this same OTA — see useTrackingStore.ts; raw + Kalman +
+//         teleport reject logic restored, no snapTrack call.
+export const OTA_VERSION = 258;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
