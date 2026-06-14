@@ -243,11 +243,14 @@ Shader "Cairn/PortalRingShader"
                 if (typeIdx == 0)
                 {
                     // === cairn: 3 stacked ellipses (outline) ===
-                    float s1 = sdfEllipse(ip, float2(0.0,  0.07), float2(0.04, 0.025));
-                    float s2 = sdfEllipse(ip, float2(0.0,  0.02), float2(0.07, 0.030));
-                    float s3 = sdfEllipse(ip, float2(0.0, -0.05), float2(0.10, 0.035));
-                    icon = max(max(aaOutline(s1, 0.005), aaOutline(s2, 0.005)),
-                                aaOutline(s3, 0.005));
+                    // sub Story B follow-up: 中间石 y 太靠近中心 (0.02) 被 core glow 吞掉,
+                    // 视觉只看到 2 石。把 3 块石头分得更开 (top y=0.085, mid y=0.025, bot y=-0.055),
+                    // 描边加粗到 0.006 让中间一块在 core glow 之上仍可见。
+                    float s1 = sdfEllipse(ip, float2(0.0,  0.085), float2(0.04, 0.025));
+                    float s2 = sdfEllipse(ip, float2(0.0,  0.025), float2(0.07, 0.030));
+                    float s3 = sdfEllipse(ip, float2(0.0, -0.055), float2(0.10, 0.035));
+                    icon = max(max(aaOutline(s1, 0.006), aaOutline(s2, 0.006)),
+                                aaOutline(s3, 0.006));
                 }
                 else if (typeIdx == 1)
                 {
