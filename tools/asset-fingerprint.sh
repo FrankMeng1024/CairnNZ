@@ -37,7 +37,6 @@ ASSETS=(
   "UnityARLib/Assets/Shaders/PebbleShader.shader"
   "UnityARLib/Assets/Shaders/TypeChipShader.shader"
   "UnityARLib/Assets/Shaders/StoneBackplateShader.shader"
-  "UnityARLib/Assets/Shaders/RibbonStrandShader.shader"
   "UnityARLib/Assets/Shaders/LightShaftShader.shader"
   "UnityARLib/Assets/Shaders/ScanningGridShader.shader"
   "UnityARLib/Assets/Shaders/ConfidenceRingShader.shader"
