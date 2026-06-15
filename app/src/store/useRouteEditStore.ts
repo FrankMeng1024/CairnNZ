@@ -25,7 +25,7 @@ import { isPointInCorridor } from '../services/routing/corridor/CorridorQuery';
 import { runMapMatching, clearMatchCache } from '../services/routing/mapmatch/runMapMatching';
 import type { MatchSegment } from '../services/routing/mapmatch/types';
 import { matchSegment } from '../services/routing/mapmatch/MapMatchingClient';
-import { simplifyStroke } from '../utils/strokeSimplify';
+import { simplifyStroke, MAPBOX_MATCHING_MAX_COORDS } from '../utils/strokeSimplify';
 import { checkG0, checkG0PostSimplify, checkG0_5, checkG3 } from '../utils/strokeGate';
 import { sendEditDiag } from '../services/editDiagSender';
 // v6.4 Stage D — algorithm-parity note:
@@ -627,11 +627,20 @@ export function validateStrokes(
       continue;
     }
 
-    // arc-range on original.
-    const a = nearestOriginalIdx(s.points[0], originalPoints);
-    const b = nearestOriginalIdx(s.points[s.points.length - 1], originalPoints);
-    const arcA = Math.min(arc[a.idx], arc[b.idx]);
-    const arcB = Math.max(arc[a.idx], arc[b.idx]);
+    // arc-range on original (sub-vertex precision).
+    // v260 R-B fix: must use the SAME arc-projection math BCEF uses
+    // downstream in spliceBCEF. The old `nearestOriginalIdx + arc[idx]`
+    // returned vertex-arc (snapped to nearest baseline vertex), which can
+    // disagree with `projectPointOntoBaseline`'s lerp-arc by up to one
+    // segment (5-50m). Two strokes that pass overlap-check on vertex-arc
+    // could overlap on lerp-arc and get silently dropped by spliceBCEF
+    // (or vice versa: vertex-arc says overlap but lerp-arc says fine,
+    // user erroneously sees "Two brush strokes overlap"). Unify here.
+    const projA = projectPointOntoBaseline(s.points[0], originalPoints);
+    const projB = projectPointOntoBaseline(s.points[s.points.length - 1], originalPoints);
+    if (!projA || !projB) continue; // shouldn't happen if originalPoints.length>=2
+    const arcA = Math.min(projA.arc, projB.arc);
+    const arcB = Math.max(projA.arc, projB.arc);
     validated.push({ stroke: s, arcStart: arcA, arcEnd: arcB });
   }
   // Overlap check.
@@ -643,6 +652,257 @@ export function validateStrokes(
     }
   }
   return { ok: errors.length === 0, errors, validated };
+}
+
+// ============================================================================
+// v260 BCEF — replace spliceMatched anchor-replace with direct Mapbox curve.
+//
+// PO direction (2026-06-15): retest of v259 4-route showed 22m "small tail"
+// (case 22), 79-260m suspicious_flatten on multi-stroke (cases 33/44/55), and
+// confirmed root cause via diag log: spliceMatched's [startPt, ...slice(1,-1),
+// endPt] anchor-replacement destroys Mapbox geometry at boundaries. Even after
+// v259 follow-up (re-projecting using snap[0]/snap[last]), 22m gap persisted
+// because Mapbox snap[0] is on a road centerline that may sit 5-22m off the
+// baseline polyline (different OSM edge than baseline GPS samples).
+//
+// Spike validated (C:/temp/spike_bcef_v2.py + 5-case PNG):
+//   C1 single small offset: ✅ snaps clean to baseline
+//   C2 single large offset: ✅ Mapbox bounces back to legal road
+//   C3 two separate strokes: ✅ each handled independently
+//   C5 stroke beyond 250m corridor: ✅ rejected (corridor gate works)
+//
+// New flow:
+//   1. Each stroke's brush start/end projects onto baseline → (B, C, arcB, arcC)
+//   2. Corridor gate: every brush point must be ≤ CORRIDOR_M of baseline.
+//      Brush stroke entirely beyond corridor = reject (no editing in dashed
+//      preview area, only solid baseline area).
+//   3. Loop gate: hav(B,C) < LOOP_MIN_M = 5m → reject (Mapbox can't match
+//      a closed curve, and "U-turn brush" is rare; PO accepted "split into
+//      two strokes" UX).
+//   4. Send Mapbox [B, ...brushSimplified, C]. B/C are baseline real points;
+//      Mapbox HMM sees real road anchors at both ends → returns a continuous
+//      curve [B', curve, C'] where B'≈B (within OSM-snap tolerance).
+//   5. Splice = baseline-up-to-min(arcB,arcC) + curve(reversed if reverse-drawn)
+//      + baseline-after-max(arcB,arcC). NO more anchor replacement.
+// ============================================================================
+
+const CORRIDOR_M = 250;     // brush must stay within 250m of baseline
+const LOOP_MIN_M = 5;       // |B - C| < 5m → reject as loop
+
+/**
+ * Project a single point onto baseline polyline, returning the foot
+ * (in baseline-segment local coords), arc-distance from baseline start,
+ * and segment index. Sub-vertex precision (lerp on the matched segment).
+ */
+function projectPointOntoBaseline(
+  p: LngLat,
+  baseline: LngLat[],
+): { pt: LngLat; arc: number; dist: number; segIdx: number } | null {
+  if (baseline.length < 2) return null;
+  let bestArc = 0;
+  let bestPt: LngLat = baseline[0];
+  let bestDist = Infinity;
+  let bestSegIdx = 0;
+  let acc = 0;
+  for (let i = 1; i < baseline.length; i++) {
+    const a = baseline[i - 1];
+    const b = baseline[i];
+    const segLen = haversineMetersLocal(a, b);
+    const midLat = ((a.lat + b.lat) / 2) * (Math.PI / 180);
+    const cosLat = Math.cos(midLat);
+    const M_PER_DEG = 111000;
+    const ax = a.lng * cosLat * M_PER_DEG;
+    const ay = a.lat * M_PER_DEG;
+    const bx = b.lng * cosLat * M_PER_DEG;
+    const by = b.lat * M_PER_DEG;
+    const px = p.lng * cosLat * M_PER_DEG;
+    const py = p.lat * M_PER_DEG;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    let t = lenSq < 1e-9 ? 0 : ((px - ax) * dx + (py - ay) * dy) / lenSq;
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
+    const fx = ax + t * dx;
+    const fy = ay + t * dy;
+    const d = Math.hypot(px - fx, py - fy);
+    if (d < bestDist) {
+      bestDist = d;
+      bestPt = { lng: fx / (cosLat * M_PER_DEG), lat: fy / M_PER_DEG };
+      bestArc = acc + t * segLen;
+      bestSegIdx = i - 1;
+    }
+    acc += segLen;
+  }
+  return { pt: bestPt, arc: bestArc, dist: bestDist, segIdx: bestSegIdx };
+}
+
+/**
+ * v260 corridor check — every point of a brush stroke must be within
+ * CORRIDOR_M of the baseline. Replaces the "snap-side" G3 corridor check
+ * which checked Mapbox output, not the user's raw input. PO rule: brush
+ * area = solid 250m corridor only, dashed preview-area is "doesn't exist".
+ */
+function strokeWithinCorridor(
+  stroke: LngLat[],
+  baseline: LngLat[],
+): { ok: boolean; maxDistM: number } {
+  let maxDist = 0;
+  for (const p of stroke) {
+    const proj = projectPointOntoBaseline(p, baseline);
+    if (!proj) return { ok: false, maxDistM: Infinity };
+    if (proj.dist > maxDist) maxDist = proj.dist;
+  }
+  return { ok: maxDist <= CORRIDOR_M, maxDistM: maxDist };
+}
+
+/**
+ * v260 BCEF splice — replaces v259 spliceMatched anchor-replace logic.
+ *
+ * Each item in `items` represents one accepted stroke:
+ *   - arcB: baseline arc where brush START projects
+ *   - arcC: baseline arc where brush END projects
+ *   - curve: Mapbox /matching response with [B, ...brush, C] as input.
+ *     curve[0] ≈ B (within OSM-snap tolerance ~ 1-10m typical, 50m worst);
+ *     curve[last] ≈ C similarly.
+ *
+ * Output = baseline-prefix + (curves in arc order, reversed if reverse-drawn)
+ *          + baseline-suffix, then dedupe + despik.
+ *
+ * Multi-stroke: items are sorted by min(arcB, arcC). Overlapping arc ranges
+ * with the previous item are skipped (caller should have merged overlapping
+ * strokes pre-Mapbox; if not, we drop the conflicting one and surface a
+ * warning later via lastError).
+ */
+interface BcefItem {
+  arcB: number;
+  arcC: number;
+  curve: LngLat[];
+}
+
+function spliceBCEF(
+  baseline: LngLat[],
+  items: BcefItem[],
+): LngLat[] {
+  if (items.length === 0) return [...baseline];
+  // Sort by arc-min ASC. Reverse-drawn strokes (arcB > arcC) sort by min.
+  const sortable = items.map(it => ({
+    arcMin: Math.min(it.arcB, it.arcC),
+    arcMax: Math.max(it.arcB, it.arcC),
+    reversed: it.arcB > it.arcC,
+    curve: it.curve,
+  }));
+  sortable.sort((a, b) => a.arcMin - b.arcMin);
+
+  const out: LngLat[] = [];
+  let cursorArc = 0;
+  for (const it of sortable) {
+    if (it.arcMin < cursorArc) {
+      // Overlap with prior accepted stroke — skip this one. (Should be
+      // caught earlier by validateStrokes' overlap check, but defensive.)
+      continue;
+    }
+    // Prefix: baseline from cursorArc up to it.arcMin (synthesize lerp at
+    // the exact arcMin so prefix ends at the projected point).
+    const prefix = baselineSlice(baseline, cursorArc, it.arcMin);
+    for (const p of prefix) out.push(p);
+    // Curve: keep all Mapbox geometry IN FULL. Reverse if the user drew
+    // the stroke in reverse-arc direction so the curve goes from arcMin
+    // to arcMax (matching the prefix→curve→suffix arc order).
+    const curve = it.reversed ? [...it.curve].reverse() : it.curve;
+    for (const p of curve) out.push(p);
+    cursorArc = it.arcMax;
+  }
+  // Suffix: baseline from cursorArc to end.
+  const totalArc = baselineTotalArc(baseline);
+  const suffix = baselineSlice(baseline, cursorArc, totalArc);
+  for (const p of suffix) out.push(p);
+
+  // Dedupe within 0.5m + alt repair (v6.3 plan §2.2 — preserved from v259).
+  if (out.length < 2) return out;
+  const deduped: LngLat[] = [out[0]];
+  for (let i = 1; i < out.length; i++) {
+    const prev = deduped[deduped.length - 1];
+    if (haversineMetersLocal(prev, out[i]) > 0.5) {
+      deduped.push(out[i]);
+    } else if (prev.alt == null && out[i].alt != null) {
+      deduped[deduped.length - 1] = { ...prev, alt: out[i].alt };
+    }
+  }
+  // Despike: a → b → c with hav(a,c) < 1m AND hav(a,b) > 4m AND hav(b,c) > 4m
+  // = b is a there-and-back tip (preserved from v259).
+  if (deduped.length < 3) return deduped;
+  const despik: LngLat[] = [deduped[0], deduped[1]];
+  for (let i = 2; i < deduped.length; i++) {
+    const a = despik[despik.length - 2];
+    const b = despik[despik.length - 1];
+    const c = deduped[i];
+    const ac = haversineMetersLocal(a, c);
+    const ab = haversineMetersLocal(a, b);
+    const bc = haversineMetersLocal(b, c);
+    if (ac < 1 && ab > 4 && bc > 4) {
+      despik[despik.length - 1] = c;
+    } else {
+      despik.push(c);
+    }
+  }
+  return despik;
+}
+
+function baselineTotalArc(baseline: LngLat[]): number {
+  let total = 0;
+  for (let i = 1; i < baseline.length; i++) {
+    total += haversineMetersLocal(baseline[i - 1], baseline[i]);
+  }
+  return total;
+}
+
+/**
+ * Slice baseline by arc range, synthesizing lerp vertices at exact start/end
+ * arcs. Returns [] if start >= end. Inclusive of synthesized boundary points.
+ */
+function baselineSlice(
+  baseline: LngLat[],
+  arcStart: number,
+  arcEnd: number,
+): LngLat[] {
+  if (arcEnd <= arcStart || baseline.length < 2) return [];
+  const out: LngLat[] = [];
+  let acc = 0;
+  let started = false;
+  for (let i = 1; i < baseline.length; i++) {
+    const a = baseline[i - 1];
+    const b = baseline[i];
+    const segLen = haversineMetersLocal(a, b);
+    const segEnd = acc + segLen;
+    if (!started) {
+      if (segEnd >= arcStart) {
+        const t = segLen > 0 ? (arcStart - acc) / segLen : 0;
+        if (t > 0 && t < 1) {
+          out.push(lerpLocal(a, b, t));
+        } else if (t <= 0) {
+          out.push(a);
+        }
+        if (segEnd >= arcEnd) {
+          // Same segment ends both — synthesize end too.
+          const t2 = segLen > 0 ? (arcEnd - acc) / segLen : 1;
+          out.push(lerpLocal(a, b, t2));
+          return out;
+        }
+        out.push(b);
+        started = true;
+      }
+    } else {
+      if (segEnd >= arcEnd) {
+        const t = segLen > 0 ? (arcEnd - acc) / segLen : 1;
+        out.push(lerpLocal(a, b, t));
+        return out;
+      }
+      out.push(b);
+    }
+    acc = segEnd;
+  }
+  return out;
 }
 
 /**
@@ -1644,6 +1904,9 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
 
     try {
       const snappedPerStroke: LngLat[][] = [];
+      // v260 BCEF: parallel array of {arcB, arcC, curve}. Same length as
+      // snappedPerStroke / acceptedValidated. spliceBCEF takes this directly.
+      const bcefItems: BcefItem[] = [];
       const acceptedValidated: ValidatedStroke[] = [];
       const rejectedStrokeIds: string[] = [];
       let firstRejectReason: string | null = null;
@@ -1654,13 +1917,15 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         if (fenceTriggered()) return { ok: false, error: 'state-changed' };
 
         const pts = vs.stroke.points;
+        // v260: cache disabled. The cache stored Mapbox snap geometry but
+        // not arcB/arcC; reusing it requires re-projecting B/C anyway, at
+        // which point we may as well re-call Mapbox (B/C input changes
+        // baseline-anchor behavior). Future: store {arcB, arcC, curve} in
+        // the cache key together if we observe noticeable redraw cost.
+        // const fp = strokeFingerprint(vs.stroke);
+        // const cached = strokeSnapCache.get(fp);
+        // if (cached) { ... }
         const fp = strokeFingerprint(vs.stroke);
-        const cached = strokeSnapCache.get(fp);
-        if (cached) {
-          snappedPerStroke.push(cached);
-          acceptedValidated.push(vs);
-          continue;
-        }
 
         // G0 — preflight (rejects 1-vertex tap, > MAX_STROKE_VERTICES_INPUT).
         const g0 = checkG0(pts);
@@ -1712,14 +1977,78 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           continue;
         }
 
-        // v6.3 plan §1.2: per-coord radius defaults to null → MapMatchingClient
-        // sends DEFAULT_RADIUS_M=25 to Mapbox. Empirically (spike-fresh-v63)
-        // r ∈ {15,25,40} produce identical match output; 25 is the chosen
-        // midpoint. Replaces v252's tight 6/12 mix that caused J1-036-style
-        // partial snaps on long strokes.
-        const radiuses: (number | null)[] = simRes.points.map(() => null);
+        // v260 BCEF: project brush start/end onto baseline → B/C. Send
+        // [B, ...brush, C] to Mapbox so HMM has real road anchors at both
+        // endpoints. This eliminates the "Mapbox snap[0] sits 22m off
+        // baseline → splice draws straight line through building" bug
+        // (diag 248 case 22, diag 250/252 case 33/44).
+        // PO rule: brush only allowed in solid 250m corridor of the
+        // ORIGINAL baseline (state.originalPoints) — NEVER the post-Preview
+        // matched baseline. Otherwise corridor center drifts after each
+        // Preview as Mapbox snap shifts vertices ±10m, slowly inflating
+        // the drawable area beyond what the user committed to. PO lock-in:
+        // dashed preview-area is "doesn't exist", only solid original is.
+        // R-A v260 review caught this — must use originalPoints.
+        const corridor = strokeWithinCorridor(pts, state.originalPoints);
+        if (!corridor.ok) {
+          rejectedStrokeIds.push(vs.stroke.id);
+          firstRejectReason ??= `画笔超出 ${CORRIDOR_M}m 范围,请贴近原路线`;
+          sendEditDiag('brush_gate_failure', {
+            gate: 'corridor_v260',
+            reason: 'beyond_corridor',
+            stroke_idx: strokeIdx,
+            stroke_vertex_count: pts.length,
+            metric_value: Math.round(corridor.maxDistM),
+            threshold: CORRIDOR_M,
+          });
+          continue;
+        }
+        // Project brush time-start/end (NOT arc-min/max — preserve user
+        // drawing direction so reverse-drawn strokes are handled correctly
+        // by spliceBCEF's reverse flag).
+        const projB = projectPointOntoBaseline(pts[0], baseLine);
+        const projC = projectPointOntoBaseline(pts[pts.length - 1], baseLine);
+        if (!projB || !projC) {
+          rejectedStrokeIds.push(vs.stroke.id);
+          firstRejectReason ??= '基准线无效';
+          continue;
+        }
+        const B = projB.pt, C = projC.pt;
+        // Loop gate: B==C means brush forms a closed loop. Mapbox /matching
+        // can't reliably handle closed inputs; UX is "draw two strokes".
+        if (haversineMetersLocal(B, C) < LOOP_MIN_M) {
+          rejectedStrokeIds.push(vs.stroke.id);
+          firstRejectReason ??= '一笔不能画回到起点 — 请分两笔';
+          sendEditDiag('brush_gate_failure', {
+            gate: 'loop_v260',
+            reason: 'B_eq_C',
+            stroke_idx: strokeIdx,
+            stroke_vertex_count: pts.length,
+            metric_value: Math.round(haversineMetersLocal(B, C)),
+            threshold: LOOP_MIN_M,
+          });
+          continue;
+        }
+
+        // v260: send [B, simplified_brush_with_2_extra_slots, C] to Mapbox.
+        // Mapbox cap = 100 coords. We need 2 slots for B/C, so brush gets
+        // up to 98. Re-simplify if the original simRes hit exactly 100.
+        const brushSlots = MAPBOX_MATCHING_MAX_COORDS - 2; // 98
+        let bcefBrush: LngLat[];
+        if (simRes.points.length <= brushSlots) {
+          bcefBrush = simRes.points;
+        } else {
+          // Uniform-sample down to 98 to leave room for B and C.
+          const step = (simRes.points.length - 1) / (brushSlots - 1);
+          bcefBrush = [];
+          for (let i = 0; i < brushSlots; i++) {
+            bcefBrush.push(simRes.points[Math.min(simRes.points.length - 1, Math.round(i * step))]);
+          }
+        }
+        const bcefInput: LngLat[] = [B, ...bcefBrush, C];
+        const radiuses: (number | null)[] = bcefInput.map(() => null);
         const seg: MatchSegment = {
-          coords: simRes.points,
+          coords: bcefInput,
           radiuses,
           viaIndicesInCoords: [],
         };
@@ -1870,6 +2199,14 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           if (firstKey) strokeSnapCache.delete(firstKey);
         }
         snappedPerStroke.push(snapped);
+        // v260 BCEF: track arcB/arcC alongside the snap so spliceBCEF can
+        // splice without re-projecting (we already projected pts[0], pts[-1]
+        // onto baseline above as projB/projC).
+        bcefItems.push({
+          arcB: projB.arc,
+          arcC: projC.arc,
+          curve: snapped,
+        });
         acceptedValidated.push(vs);
       }
 
@@ -1902,8 +2239,11 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         return { ok: false, error: firstRejectReason ?? 'rejected' };
       }
 
-      // Splice accepted strokes into the baseline.
-      const newMatched = spliceMatched(baseLine, acceptedValidated, snappedPerStroke);
+      // v260: Splice using BCEF (no anchor replace). Each bcefItems entry
+      // has the projected arcB/arcC + Mapbox curve. spliceBCEF concatenates
+      // baseline-prefix + curves (in arc order, reversed if reverse-drawn)
+      // + baseline-suffix. Replaces v249-v259 spliceMatched.
+      const newMatched = spliceBCEF(baseLine, bcefItems);
 
       // v258 PO direction: post-splice diag to confirm whether the splice
       // step preserved Mapbox's polyline or flattened a multi-vertex match

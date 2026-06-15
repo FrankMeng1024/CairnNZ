@@ -781,27 +781,28 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             building. With r=50 Mapbox has 2× search radius to find a
 //             real detour (parallel road, nearest junction). r=50 is
 //             the API hard cap.
-//   259 — v258 diag log evidence-based brush fixes (PO 4-case retest):
-//         Test result: case 1 ✅ Z字消失, case 2 ⚠️ 小尾巴, case 3 ❌ 穿楼,
-//         case 4 ❌ 穿楼. Real diag from edit_diagnostics:
-//           - route 3: Mapbox returned 16 healthy pts conf=0.94, but
-//             splice produced 260m gap, suspicious_flatten=true → splice
-//             flattened the polyline.
-//           - route 4: 159 raw → DP eps=5 → 19 pts with 239m input gap →
-//             Mapbox got sparse skeleton, returned 7 pts degenerate=true,
-//             splice gap 332m suspicious_flatten=true.
-//         Two fixes:
-//         (1) spliceMatched: drop [startPt, ...slice(1,-1), endPt] anchor
-//             replacement. Just push Mapbox's full polyline. Mapbox first/
-//             last points are real road nodes by construction; replacing
-//             them with brush-raw projections introduced multi-meter
-//             jumps that crossed buildings. slice(1,-1) on length=2 was
-//             also producing literal [startPt, endPt] straight lines.
-//         (2) strokeSimplify DP ladder: was accepting first ε producing
-//             ≤100 pts. Now requires ≥60 pts (sweet spot 60-100) — if
-//             ε=5 over-simplifies to <60, fall through to uniform-sample
-//             at exactly 100. Caps mid-stroke gaps at stroke_len/100.
-export const OTA_VERSION = 259;
+//   260 — v260 BCEF: replace spliceMatched anchor-replace with direct
+//         Mapbox curve. Root cause from v258/v259 diag: splice's
+//         [startPt, ...slice(1,-1), endPt] anchor-replacement destroys
+//         Mapbox geometry — Mapbox snap[0] sits 5-22m off baseline →
+//         splice draws straight line through whatever's between (e.g.
+//         buildings). New flow:
+//         (1) Project brush start/end onto baseline → B/C (real baseline
+//             points + arc). PO rule: brush only allowed in solid 250m
+//             corridor; dashed preview area not drawable.
+//         (2) Corridor gate: every brush point ≤ 250m of baseline.
+//         (3) Loop gate: |B-C| < 5m → reject (UX = draw two strokes).
+//         (4) Send Mapbox [B, ...brush, C]. HMM sees real road anchors
+//             at both ends → returns continuous curve where curve[0] ≈ B
+//             within OSM-snap tolerance (1-10m typical, 50m worst).
+//         (5) spliceBCEF: baseline-up-to-min(arcB,arcC) + curve (reversed
+//             if reverse-drawn) + baseline-after-max(arcB,arcC). NO more
+//             anchor replacement, NO straight-line connectors.
+//         Spike (5 cases on real baseline) validated: small/large offset
+//         strokes snap clean; > 250m corridor rejected; multi-stroke
+//         independent OK; reverse-drawn handled. Cache disabled (per-call
+//         re-projection cheap, < 1ms).
+export const OTA_VERSION = 260;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
