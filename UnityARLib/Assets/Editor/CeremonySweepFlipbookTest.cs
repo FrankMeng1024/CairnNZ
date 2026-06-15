@@ -95,8 +95,14 @@ public static class CeremonySweepFlipbookTest
 
             // ─── 24 frames timeline ───
             // 跟 HTML design_v2026-06_variant_C_3D.html line 626-666 一致
+            //
+            // 注意 (sub Phase1 final review 抓的真 BUG):
+            // _SweepAngle / _Reveal 在 CBUFFER_START(UnityPerMaterial) 里,SRP Batcher
+            // 启用时 MaterialPropertyBlock 写 CBUFFER 字段会被静默忽略 → ring 永远显示
+            // 默认值 (Properties default _SweepAngle=2π full ring)。
+            // 修法: 直接 material.SetFloat 不走 MPB,SRP Batcher 会重 batch (慢一点但真生效)。
             var ringRenderer = ringGo.GetComponent<Renderer>();
-            var mpb = new MaterialPropertyBlock();
+            var ringMatInstance = ringRenderer.material;  // material (instance), not sharedMaterial
             for (int frame = 0; frame < FRAME_COUNT; frame++)
             {
                 float t = (float)frame / (FRAME_COUNT - 1);  // 0..1 over 24 frames
@@ -113,11 +119,9 @@ public static class CeremonySweepFlipbookTest
                 float sweepAngle = sweepT * 2f * Mathf.PI;  // 0..2π
                 float reveal = runeT;
 
-                ringRenderer.GetPropertyBlock(mpb);
-                mpb.SetFloat("_SweepAngle", sweepAngle);
-                mpb.SetFloat("_Reveal", reveal);
-                mpb.SetFloat("_TypeIndex", 0);  // cairn for first test
-                ringRenderer.SetPropertyBlock(mpb);
+                ringMatInstance.SetFloat("_SweepAngle", sweepAngle);
+                ringMatInstance.SetFloat("_Reveal", reveal);
+                ringMatInstance.SetFloat("_TypeIndex", 0);  // cairn for first test
 
                 CaptureToPng(cam, Path.Combine(OUT_DIR, $"frame-{frame:D2}.png"));
             }

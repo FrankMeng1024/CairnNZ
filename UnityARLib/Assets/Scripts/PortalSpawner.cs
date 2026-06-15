@@ -846,9 +846,14 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             // v0.2.4 R2-followup Story C — 仪式 sweep 真生效:
             // 初始化 _SweepAngle=0 + _Reveal=0,等下面 CeremonyController.Play() 1.0s 内
             // 注入 sweepT/runeT。跟 HTML design_v2026-06_variant_C_3D.html line 626-666 一致。
-            mpb.SetFloat(Shader.PropertyToID("_SweepAngle"), 0f);
-            mpb.SetFloat(Shader.PropertyToID("_Reveal"), 0f);
+            // sub#acf50fb final review fix: _SweepAngle/_Reveal 在 CBUFFER_START(UnityPerMaterial),
+            // SRP Batcher 启用时 MPB 写 CBUFFER 字段被静默忽略,改用 material.SetFloat 真生效。
+            // (其余字段 _BaseColor/_BloomBoost 等可继续走 MPB 因为它们不影响 sweep visibility)
             ringRenderer.SetPropertyBlock(mpb);
+            // Material instance 写 sweep + reveal 真生效 (绕过 SRP Batcher CBUFFER mask)
+            var ringMatInstance = ringRenderer.material;  // material instance, not sharedMaterial
+            ringMatInstance.SetFloat("_SweepAngle", 0f);
+            ringMatInstance.SetFloat("_Reveal", 0f);
 
             // 挂 CeremonyController 到 ring GO,真触发 1.0s sweep + reveal 仪式动画
             // (sub#182 抓的 BLOCKER: V199 拿了 component 但 0 处调 .Play())

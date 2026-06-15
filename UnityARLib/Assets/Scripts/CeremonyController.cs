@@ -110,35 +110,36 @@ namespace Cairn.AR
                 float sweepT = _ringSweepEndT > 0f ? Mathf.Clamp01(t / _ringSweepEndT) : 1f;
                 float angle = sweepT * Mathf.PI * 2f;
                 float opacity = sweepT > 0.01f ? 0.55f : 0f;
-                _outerRingRenderer.GetPropertyBlock(_mpb);
-                if (_outerRingRenderer.sharedMaterial != null && _outerRingRenderer.sharedMaterial.HasProperty("_SweepAngle"))
-                    _mpb.SetFloat("_SweepAngle", angle);
-                if (_outerRingRenderer.sharedMaterial != null && _outerRingRenderer.sharedMaterial.HasProperty("_Opacity"))
-                    _mpb.SetFloat("_Opacity", opacity);
-                // Fallback: alpha via _BaseColor
-                if (_outerRingRenderer.sharedMaterial != null && _outerRingRenderer.sharedMaterial.HasProperty("_BaseColor"))
+                // v0.2.4 Phase1 final review fix:
+                // _SweepAngle/_Reveal 在 PortalRingShader CBUFFER_START(UnityPerMaterial) 里,
+                // SRP Batcher 启用时 MPB 写 CBUFFER 字段被静默忽略 → ring 永远显示默认 (full)。
+                // 改用 material.SetFloat 真生效。Sub#acf50fb 抓的真 BUG。
+                var outerMat = _outerRingRenderer.material;  // material instance, not sharedMaterial
+                if (outerMat != null && outerMat.HasProperty("_SweepAngle"))
+                    outerMat.SetFloat("_SweepAngle", angle);
+                if (outerMat != null && outerMat.HasProperty("_Opacity"))
+                    outerMat.SetFloat("_Opacity", opacity);
+                if (outerMat != null && outerMat.HasProperty("_BaseColor"))
                 {
-                    var c = _outerRingRenderer.sharedMaterial.GetColor("_BaseColor");
+                    var c = outerMat.GetColor("_BaseColor");
                     c.a = opacity;
-                    _mpb.SetColor("_BaseColor", c);
+                    outerMat.SetColor("_BaseColor", c);
                 }
-                _outerRingRenderer.SetPropertyBlock(_mpb);
             }
             if (_innerRingRenderer != null)
             {
                 float sweepT = _ringSweepEndT > 0f ? Mathf.Clamp01(t / _ringSweepEndT) : 1f;
                 float angle = sweepT * Mathf.PI * 2f;
                 float opacity = sweepT > 0.01f ? 0.50f : 0f;
-                _innerRingRenderer.GetPropertyBlock(_mpb);
-                if (_innerRingRenderer.sharedMaterial != null && _innerRingRenderer.sharedMaterial.HasProperty("_SweepAngle"))
-                    _mpb.SetFloat("_SweepAngle", angle);
-                if (_innerRingRenderer.sharedMaterial != null && _innerRingRenderer.sharedMaterial.HasProperty("_BaseColor"))
+                var innerMat = _innerRingRenderer.material;
+                if (innerMat != null && innerMat.HasProperty("_SweepAngle"))
+                    innerMat.SetFloat("_SweepAngle", angle);
+                if (innerMat != null && innerMat.HasProperty("_BaseColor"))
                 {
-                    var c = _innerRingRenderer.sharedMaterial.GetColor("_BaseColor");
+                    var c = innerMat.GetColor("_BaseColor");
                     c.a = opacity;
-                    _mpb.SetColor("_BaseColor", c);
+                    innerMat.SetColor("_BaseColor", c);
                 }
-                _innerRingRenderer.SetPropertyBlock(_mpb);
             }
 
             // ---- Rune reveal (runeStartT → runeEndT) ----
@@ -148,16 +149,15 @@ namespace Cairn.AR
             if (_runeRenderer != null)
             {
                 float runeOpacity = runeT * 0.95f;
-                _runeRenderer.GetPropertyBlock(_mpb);
-                if (_runeRenderer.sharedMaterial != null && _runeRenderer.sharedMaterial.HasProperty("_Reveal"))
-                    _mpb.SetFloat("_Reveal", runeT);
-                if (_runeRenderer.sharedMaterial != null && _runeRenderer.sharedMaterial.HasProperty("_BaseColor"))
+                var runeMat = _runeRenderer.material;
+                if (runeMat != null && runeMat.HasProperty("_Reveal"))
+                    runeMat.SetFloat("_Reveal", runeT);
+                if (runeMat != null && runeMat.HasProperty("_BaseColor"))
                 {
-                    var c = _runeRenderer.sharedMaterial.GetColor("_BaseColor");
+                    var c = runeMat.GetColor("_BaseColor");
                     c.a = runeOpacity;
-                    _mpb.SetColor("_BaseColor", c);
+                    runeMat.SetColor("_BaseColor", c);
                 }
-                _runeRenderer.SetPropertyBlock(_mpb);
             }
             if (_runeTransform != null)
             {
