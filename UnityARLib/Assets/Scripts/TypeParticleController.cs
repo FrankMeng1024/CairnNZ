@@ -1,30 +1,35 @@
-// Cairn AR — Type-specific particle controller (v0.2.4 Branch C)
+// Cairn AR — Type-specific particle controller (v0.2.4 Phase 2 Final)
 //
-// 1:1 port of design_v2026-06_variant_C_3D.html line 421-568 TypeParticles
-// class, with Unity-specific enhancements per user request "目前的太单调
-// 不够凸显type本身":
-//   * cairn  — small stones with emissive flicker + ground bounce dust
-//   * water  — drops with motion trail + landing ripple
-//   * danger — sparks already flicker; added rising ember sub-emitter
-//   * hut    — embers with lateral oscillation (candle-flame feel)
-//   * junction — orbiting arrows with subtle trail
+// 真机视觉对齐 AllTypesCinematicTest.cs harness (用户从 GIF 验收的 5 type 视觉).
+// 实现路径:Unity ParticleSystem + Billboard + 程序生成 SDF 纹理 + Additive shader
+// (取代了 v0.2.4 之前 GO-per-particle + Mesh + Material 单独 spawn 的旧路径).
 //
-// Activated by CeremonyController at t >= 0.5s, deactivated when cairn
-// LOD goes to FAR.
+// 5 type 区分(动效完全统一,只换 SDF 纹理 + size + intensity):
+//   * cairn    — 不规则 5 边形 SDF (实心), 翻滚旋转
+//   * danger   — 软 mote SDF (圆形 1.6 power)
+//   * water    — 水珠 + 反光高光斑 SDF, sizeMin/Max 0.16/0.26
+//   * hut      — Ember Flecked 炭火床 (软圆 + hash-noise 颗粒亮斑), sizeMin/Max 0.18/0.30 (用户从 5 候选选定 v3 + 加大)
+//   * junction — 锐利十字菱形 SDF
 //
-// Performance budget: 5 types × ~16 particles concurrent = ~80 per cluster.
-// 5 cairn clusters visible = ~400 particles. iPhone SE2 baseline OK.
+// 公共 API 保持兼容 (PortalSpawnerV199 + CeremonyController 调用方式不变):
+//   - Configure(type, color, ringRadius)
+//   - SetSpawnEnabled(bool)
+//   - Clear()
+//   - EditorManualTick(dt)
 //
-// Cleanup: clear() on type change or cairn destroy.
+// Performance budget: 1 ParticleSystem GPU instancing × maxParticles=130 / cluster.
+// 5 cluster visible = ~650 particles peak (GPU 端轻量, 远好于老路径 80 GO/cluster + GC).
+//
+// 资产依赖:
+//   - Shader: "Cairn/CinematicParticleAdditive" (Assets/Shaders/CinematicParticleAdditive.shader, 已 link.xml preserve)
+//   - 5 个 SDF 纹理: 程序生成,无外部 PNG 依赖,iOS IL2CPP / strip 安全.
 
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Cairn.AR
 {
     /// <summary>
     /// Per-type particle "soul" controller. One instance per cairn cluster.
-    /// Attach to a child GameObject of the cairn root.
     /// </summary>
     public class TypeParticleController : MonoBehaviour
     {
@@ -36,87 +41,106 @@ namespace Cairn.AR
         [Header("Behavior gates (driven by CeremonyController)")]
         [SerializeField] bool _spawnEnabled = false;
 
-        // Per-particle data
-        struct Particle
-        {
-            public Transform tr;
-            public Renderer renderer;
-            public Material mat;        // instance for opacity flicker
-            public Vector3 vel;
-            public float life;
-            public float maxLife;
-            public string kind;
-            public float orbitR;
-            public float orbitPhase;
-            public float orbitSpeed;
-            public float orbitY;
-            public TrailRenderer trail; // optional Unity built-in
-            public bool rippleSpawned;  // V3.1+V3.3: 落地涟漪去重(防多次反弹刷出多个 ripple)
-            // BLOCKER 3 fix: 程序化 trail —— TrailRenderer 在 batch mode 不更新历史,
-            // 用 LineRenderer + 自己维护 history buffer,EditorManualTick / runtime 都生效
-            public LineRenderer manualTrail;
-            public Vector3[] trailHistory;     // ring buffer 历史位置
-            public int trailHistoryCount;      // 已写入数(< trailHistory.Length 时不绕)
-            public int trailHistoryNext;       // 下一个写入索引
-            public float trailWidthStart;
-        }
+        // ════════════════════════════════════════════════════════════════════
+        // 统一动效模板锁定 (跟 AllTypesCinematicTest 完全一致, 用户已 GIF 验收)
+        // ════════════════════════════════════════════════════════════════════
+        const float LIFETIME_MIN = 2.5f;
+        const float LIFETIME_MAX = 3.5f;
+        const float EMISSION_RATE_PEAK = 22f;
+        const float EMISSION_RATE_INITIAL = 3f;
+        const float EMISSION_RAMP_DURATION = 0.6f;
+        const int MAX_PARTICLES = 130;
+        const float DONUT_RADIUS = 0.85f;
+        const float DONUT_TUBE_RADIUS = 0.18f;
+        const float VEL_Y_MIN = 0.12f;
+        const float VEL_Y_MAX = 0.25f;
+        const float VEL_RADIAL_MIN = 0.02f;
+        const float VEL_RADIAL_MAX = 0.10f;
 
-        readonly List<Particle> _points = new List<Particle>();
-        float _spawnAccum;
+        // ParticleSystem (取代老 GO-per-particle 路径)
+        ParticleSystem _ps;
+        ParticleSystem.MainModule _main;
+        ParticleSystem.EmissionModule _emission;
+        Material _matInstance;
+        bool _initialized;
+        float _spawnEnabledTime = -1f;  // 用于 ramp emission rate
 
-        // Spawn rate per type (per second)
-        static readonly Dictionary<string, float> _rates = new Dictionary<string, float>
-        {
-            { "cairn", 6f },
-            { "water", 14f },
-            { "danger", 16f },
-            { "hut", 4f },
-            { "junction", 0f },  // junction is orbital fixed-count (6)
-        };
-
-        // For "junction" — fixed 6 arrows always.
-        const int JUNCTION_ARROW_COUNT = 6;
+        // ════════════════════════════════════════════════════════════════════
+        // Public API (保持兼容 PortalSpawnerV199 + CeremonyController)
+        // ════════════════════════════════════════════════════════════════════
 
         public void Configure(string type, Color color, float ringRadius = 0.55f)
         {
-            // type change → clear existing particles
-            if (_type != type)
-            {
-                Clear();
-                _type = type;
-            }
+            bool typeChanged = (_type != type);
+            _type = type;
             _typeColor = color;
             _ringRadius = ringRadius;
+
+            if (typeChanged && _initialized)
+            {
+                // type 变了,重建 ParticleSystem(SDF 纹理 / size / intensity 都不一样)
+                Clear();
+            }
+            EnsureParticleSystem();
+            // 没启用 spawn 之前不显示
+            if (_ps != null) _ps.gameObject.SetActive(_spawnEnabled);
         }
 
         public void SetSpawnEnabled(bool enabled)
         {
             _spawnEnabled = enabled;
-            if (!enabled)
+            EnsureParticleSystem();
+            if (_ps == null) return;
+
+            if (enabled)
             {
-                // Don't immediately clear — let live particles finish their life
-                // for visual continuity. Just stop spawning new.
+                _spawnEnabledTime = Time.time;
+                _ps.gameObject.SetActive(true);
+                if (!_ps.isPlaying) _ps.Play();
+                // 重置 emission 到 initial,Update 会 ramp
+                var em = _ps.emission;
+                em.rateOverTime = EMISSION_RATE_INITIAL;
+            }
+            else
+            {
+                // 停止新 spawn,留活粒子自然消失
+                if (_ps.isPlaying) _ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
             }
         }
 
         public void Clear()
         {
-            for (int i = 0; i < _points.Count; i++)
+            if (_ps != null)
             {
-                var p = _points[i];
-                if (p.manualTrail != null) Destroy(p.manualTrail.gameObject);
-                if (p.tr != null) Destroy(p.tr.gameObject);
+                _ps.Clear(true);
+                Destroy(_ps.gameObject);
+                _ps = null;
             }
-            _points.Clear();
-            _spawnAccum = 0f;
+            if (_matInstance != null)
+            {
+                Destroy(_matInstance);
+                _matInstance = null;
+            }
+            _initialized = false;
+            _spawnEnabledTime = -1f;
         }
 
-        void OnDisable()
+        /// <summary>
+        /// Editor batch capture support (legacy AllTypesCinematicTest 调用).
+        /// 真机走 ParticleSystem 自带 Update,不需要这个。但保留 API 兼容性。
+        /// </summary>
+        public void EditorManualTick(float dt)
         {
-            // Lifecycle: hide cluster (LOD far / cairn destroyed) → reset.
-            // Don't Clear here so re-enable can pick up where it left off if
-            // designed that way. For now we keep state.
+            if (_ps != null && _spawnEnabled)
+            {
+                UpdateEmissionRamp();
+                _ps.Simulate(dt, true, false, true);
+            }
         }
+
+        // ════════════════════════════════════════════════════════════════════
+        // Lifecycle
+        // ════════════════════════════════════════════════════════════════════
 
         void OnDestroy()
         {
@@ -125,633 +149,338 @@ namespace Cairn.AR
 
         void Update()
         {
-            float dt = Time.deltaTime;
-            if (dt <= 0f || dt > 0.5f) return;  // skip pause / first frame
-            UpdateInternal(dt);
+            if (!_spawnEnabled) return;
+            UpdateEmissionRamp();
         }
 
-        /// <summary>
-        /// v0.2.4: manual tick for Editor batch capture.
-        /// Calls UpdateInternal directly with provided dt, bypassing
-        /// MonoBehaviour Update which doesn't fire in batch mode.
-        /// </summary>
-        public void EditorManualTick(float dt)
+        void UpdateEmissionRamp()
         {
-            UpdateInternal(dt);
+            if (_ps == null || _spawnEnabledTime < 0f) return;
+            float elapsed = Time.time - _spawnEnabledTime;
+            float ramp = Mathf.Clamp01(elapsed / EMISSION_RAMP_DURATION);
+            var em = _ps.emission;
+            em.rateOverTime = Mathf.Lerp(EMISSION_RATE_INITIAL, EMISSION_RATE_PEAK, ramp);
         }
 
-        void UpdateInternal(float dt)
+        // ════════════════════════════════════════════════════════════════════
+        // ParticleSystem 构造 (1 次, type 改变 / Clear 后重建)
+        // ════════════════════════════════════════════════════════════════════
+
+        void EnsureParticleSystem()
         {
-            // Spawn pacing
-            if (_spawnEnabled)
+            if (_initialized && _ps != null) return;
+
+            var addShader = Shader.Find("Cairn/CinematicParticleAdditive");
+            if (addShader == null)
             {
-                if (_type == "junction")
-                {
-                    int arrows = 0;
-                    for (int i = 0; i < _points.Count; i++)
-                    {
-                        if (_points[i].kind == "arrow") arrows++;
-                    }
-                    while (arrows < JUNCTION_ARROW_COUNT)
-                    {
-                        SpawnOne();
-                        arrows++;
-                    }
-                }
-                else
-                {
-                    float rate = _rates.TryGetValue(_type, out var r) ? r : 6f;
-                    _spawnAccum += dt * rate;
-                    while (_spawnAccum >= 1f)
-                    {
-                        _spawnAccum -= 1f;
-                        SpawnOne();
-                    }
-                }
+                Debug.LogError("[TypeParticles] Cairn/CinematicParticleAdditive shader missing — link.xml strip?");
+                return;
             }
 
-            // Update & cull
-            float tNow = Time.time;
-            for (int i = _points.Count - 1; i >= 0; i--)
-            {
-                var p = _points[i];
-                p.life += dt;
+            var psGo = new GameObject($"UnifiedSparks-{_type}");
+            psGo.transform.SetParent(transform, false);
+            psGo.transform.localPosition = Vector3.zero;
 
-                if (p.kind == "arrow")
-                {
-                    // Orbit + bobbing
-                    p.orbitPhase += dt * p.orbitSpeed;
-                    var pos = new Vector3(
-                        Mathf.Cos(p.orbitPhase) * p.orbitR,
-                        p.orbitY + Mathf.Sin(tNow * 1.5f + i) * 0.025f,
-                        Mathf.Sin(p.orbitPhase) * p.orbitR);
-                    p.tr.localPosition = pos;
-                    // Cone default tip is +Y; tilt 90° so it points along orbit tangent
-                    p.tr.localRotation = Quaternion.Euler(0, -p.orbitPhase * Mathf.Rad2Deg + 90f, 90f);
-                }
-                else
-                {
-                    // Physics: gravity + per-kind behaviour
-                    p.vel.y -= 1.4f * dt;
-                    var pos = p.tr.localPosition + p.vel * dt;
+            _ps = psGo.AddComponent<ParticleSystem>();
 
-                    if (p.kind == "stone")
-                    {
-                        // Tumble
-                        p.tr.localRotation *= Quaternion.Euler(dt * 200f, 0, dt * 115f);
-                        // Bounce on ground (y=0.012 above ring plane)
-                        if (pos.y < 0.012f && p.vel.y < 0f)
-                        {
-                            pos.y = 0.012f;
-                            p.vel.y = -p.vel.y * 0.4f;
-                            p.vel.x *= 0.6f;
-                            p.vel.z *= 0.6f;
-                            // V3.1 cairn 落地反弹涟漪(用户原话"落地反弹涟漪")
-                            // 仅首次反弹时 spawn 一个 ripple(p.life > 0.3 防止初始穿地误触发)
-                            if (!p.rippleSpawned && p.life > 0.3f && Mathf.Abs(p.vel.y) < 0.3f)
-                            {
-                                SpawnRipple(new Vector3(pos.x, 0.005f, pos.z), _typeColor, 0.06f, 0.18f, 0.5f);
-                                p.rippleSpawned = true;
-                            }
-                        }
-                        // v0.2.4 enhancement: emissive flicker for "stone has soul"
-                        if (p.mat != null && p.mat.HasProperty("_EmissionColor"))
-                        {
-                            float flick = 0.4f + 0.3f * Mathf.Sin(p.life * 9f + i * 0.7f);
-                            p.mat.SetColor("_EmissionColor", new Color(
-                                _typeColor.r * 0.4f, _typeColor.g * 0.3f, _typeColor.b * 0.2f) * flick);
-                        }
-                    }
-                    else if (p.kind == "spark")
-                    {
-                        // Counteract gravity (rising)
-                        p.vel.y += 1.2f * dt;
-                        // Flicker opacity
-                        float a = (0.5f + 0.5f * Mathf.Sin(p.life * 14f)) * Mathf.Max(0f, 1f - p.life / p.maxLife);
-                        SetOpacity(p.mat, a);
-                        // V3.2 danger: emissive 颜色闪烁(用户原话"火星 + 闪烁")
-                        if (p.mat != null && p.mat.HasProperty("_EmissionColor"))
-                        {
-                            float emFlick = 1.8f + 1.2f * Mathf.Sin(p.life * 18f + i);
-                            p.mat.SetColor("_EmissionColor",
-                                new Color(_typeColor.r * 1.2f, _typeColor.g * 0.6f, _typeColor.b * 0.2f) * emFlick);
-                        }
-                    }
-                    else if (p.kind == "ember")
-                    {
-                        // Slow rise + lateral drift (candle flame)
-                        p.vel.y += 1.1f * dt;
-                        p.vel.x += Mathf.Sin(tNow * 1.2f + i * 0.7f) * 0.025f * dt;
-                        p.vel.z += Mathf.Cos(tNow * 0.9f + i * 0.7f) * 0.025f * dt;
-                        // v0.2.4 D2-4: 烛光摇曳 — opacity sin wave 替代单调 fade
-                        // 0.7 + 0.25 * sin(t * 2.5 + phase) 模拟烛芯闪动
-                        float flameMod = 0.7f + 0.25f * Mathf.Sin(p.life * 2.5f + i * 1.3f);
-                        SetOpacity(p.mat, flameMod * Mathf.Max(0f, 1f - p.life / p.maxLife));
-                        // V3.4 hut: 暖光晕 emissive 强(用户原话"烛火 + 暖光晕")
-                        if (p.mat != null && p.mat.HasProperty("_EmissionColor"))
-                        {
-                            float emPulse = 1.5f + 0.4f * Mathf.Sin(p.life * 2.5f + i * 1.3f);
-                            p.mat.SetColor("_EmissionColor",
-                                new Color(_typeColor.r * 1.0f, _typeColor.g * 0.7f, _typeColor.b * 0.3f) * emPulse);
-                        }
-                    }
-                    else if (p.kind == "drop")
-                    {
-                        // Water: gravity + alpha fade
-                        SetOpacity(p.mat, 0.85f * Mathf.Max(0f, 1f - p.life / p.maxLife));
-                        // V3.3 water 落地涟漪(用户原话"水珠 + 落地涟漪")
-                        if (pos.y < 0.012f && p.vel.y < 0f && !p.rippleSpawned && p.life > 0.3f)
-                        {
-                            SpawnRipple(new Vector3(pos.x, 0.005f, pos.z), _typeColor, 0.05f, 0.20f, 0.6f);
-                            p.rippleSpawned = true;
-                        }
-                    }
-                    else if (p.kind == "smoke")
-                    {
-                        // V3.2 danger 烟柱(用户原话"烟柱"):缓升 + 横向 drift,fade gray
-                        p.vel.y += 0.6f * dt;  // counteract gravity
-                        p.vel.x += Mathf.Sin(tNow * 0.6f + i * 0.5f) * 0.04f * dt;
-                        // size grows over life
-                        // V5.35 sub#17 P3: 圆环刻度方块 0.04 → 0.02 缩小匹配 HTML baseline 几乎不可见
-                        float gs = 1f + p.life * 0.6f;
-                        p.tr.localScale = new Vector3(0.02f * gs, 0.02f * gs, 0.02f * gs);
-                        SetOpacity(p.mat, 0.3f * Mathf.Max(0f, 1f - p.life / p.maxLife));
-                    }
-                    else if (p.kind == "ripple")
-                    {
-                        // V3.1+V3.3: ripple 平面扩张
-                        // V5.5 fix: y scale 必须 0.001 平面!旧 1f 导致 cube 高 1m 全白挡 ribbon
-                        float t = p.life / p.maxLife;
-                        float scale = Mathf.Lerp(0.05f, 0.4f, t);
-                        p.tr.localScale = new Vector3(scale, 0.001f, scale);
-                        SetOpacity(p.mat, 0.7f * (1f - t));
-                    }
+            // ════ Main module (5 type 完全一致,size 在 per-type 段微调) ════
+            _main = _ps.main;
+            _main.duration = 100f;
+            _main.loop = true;
+            _main.startLifetime = new ParticleSystem.MinMaxCurve(LIFETIME_MIN, LIFETIME_MAX);
+            _main.startSpeed = 0f;
+            _main.startColor = Color.white;
+            _main.maxParticles = MAX_PARTICLES;
+            _main.simulationSpace = ParticleSystemSimulationSpace.World;
 
-                    p.tr.localPosition = pos;
-                }
+            // ════ Emission ════
+            _emission = _ps.emission;
+            _emission.rateOverTime = EMISSION_RATE_INITIAL;
 
-                // BLOCKER 3 fix: 程序化 trail — 每帧 push 当前 world position 到 history
-                // batch mode 下 TrailRenderer 不更新轨迹,manualTrail (LineRenderer) 弥补
-                if (p.manualTrail != null && p.trailHistory != null)
-                {
-                    Vector3 worldPos = p.tr.position;
-                    p.trailHistory[p.trailHistoryNext] = worldPos;
-                    p.trailHistoryNext = (p.trailHistoryNext + 1) % p.trailHistory.Length;
-                    if (p.trailHistoryCount < p.trailHistory.Length) p.trailHistoryCount++;
-                    // 写到 LineRenderer:从最旧到最新
-                    int n = p.trailHistoryCount;
-                    p.manualTrail.positionCount = n;
-                    for (int k = 0; k < n; k++)
-                    {
-                        int idx = (p.trailHistoryNext - n + k + p.trailHistory.Length) % p.trailHistory.Length;
-                        p.manualTrail.SetPosition(k, p.trailHistory[idx]);
-                    }
-                }
+            // ════ Shape (Donut 围底座圆环) ════
+            var shape = _ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Donut;
+            shape.radius = DONUT_RADIUS * (_ringRadius / 0.55f);
+            shape.donutRadius = DONUT_TUBE_RADIUS * (_ringRadius / 0.55f);
+            shape.rotation = new Vector3(90, 0, 0);
 
-                _points[i] = p;
+            // ════ Velocity (上升 + radial 散开) ════
+            var velOverLife = _ps.velocityOverLifetime;
+            velOverLife.enabled = true;
+            velOverLife.space = ParticleSystemSimulationSpace.World;
+            velOverLife.y = new ParticleSystem.MinMaxCurve(VEL_Y_MIN, VEL_Y_MAX);
+            velOverLife.radial = new ParticleSystem.MinMaxCurve(VEL_RADIAL_MIN, VEL_RADIAL_MAX);
+            velOverLife.x = new ParticleSystem.MinMaxCurve(0f);
+            velOverLife.z = new ParticleSystem.MinMaxCurve(0f);
 
-                // Death
-                bool dead = p.life >= p.maxLife;
-                if (p.kind != "arrow" && p.tr.localPosition.y < -0.3f) dead = true;
-                if (dead)
-                {
-                    if (p.manualTrail != null) Destroy(p.manualTrail.gameObject);
-                    Destroy(p.tr.gameObject);
-                    _points.RemoveAt(i);
-                }
-            }
-        }
+            // ════ Noise (柔和扰动) ════
+            var noise = _ps.noise;
+            noise.enabled = true;
+            noise.strength = 0.20f;
+            noise.frequency = 1.2f;
+            noise.scrollSpeed = 0.3f;
+            noise.damping = true;
+            noise.octaveCount = 2;
 
-        static void SetOpacity(Material mat, float a)
-        {
-            if (mat == null) return;
-            if (mat.HasProperty("_BaseColor"))
-            {
-                var c = mat.GetColor("_BaseColor");
-                c.a = a;
-                mat.SetColor("_BaseColor", c);
-            }
-            if (mat.HasProperty("_Color"))
-            {
-                var c = mat.GetColor("_Color");
-                c.a = a;
-                mat.SetColor("_Color", c);
-            }
-        }
+            // ════ Size over life (生→长→消) ════
+            var sizeOverLife = _ps.sizeOverLifetime;
+            sizeOverLife.enabled = true;
+            var sizeCurve = new AnimationCurve();
+            sizeCurve.AddKey(0f, 0.3f);
+            sizeCurve.AddKey(0.45f, 1.0f);
+            sizeCurve.AddKey(1f, 0.4f);
+            sizeOverLife.size = new ParticleSystem.MinMaxCurve(1f, sizeCurve);
 
-        void SpawnOne()
-        {
-            var go = new GameObject("part_" + _type);
-            go.transform.SetParent(this.transform, worldPositionStays: false);
-            float angle = Random.value * Mathf.PI * 2f;
+            // ════ Per-type 元素差异化 ════
+            var renderer = psGo.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            // 关闭 shadow & reflection probes (避免 mobile 性能问题)
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+
+            Texture2D particleTex;
+            float intensity;
+            float alphaPeak;
+            Color particleStartColor;
+            float sizeMin, sizeMax;
 
             switch (_type)
             {
-                case "cairn":
-                    SpawnStone(go, angle);
-                    break;
-                case "water":
-                    SpawnDrop(go, angle);
-                    break;
                 case "danger":
-                    SpawnSpark(go, angle);
-                    break;
-                case "hut":
-                    SpawnEmber(go, angle);
+                    particleTex = GenMoteSdf();
+                    intensity = 1.2f; alphaPeak = 0.85f;
+                    particleStartColor = new Color(1.0f, 0.85f, 0.5f);
+                    sizeMin = 0.10f; sizeMax = 0.22f;
                     break;
                 case "junction":
-                    SpawnArrow(go, angle);
+                    particleTex = GenJunctionDiamondSdf();
+                    intensity = 1.4f; alphaPeak = 0.95f;
+                    particleStartColor = new Color(0.85f, 1.0f, 0.7f);
+                    sizeMin = 0.10f; sizeMax = 0.22f;
                     break;
+                case "water":
+                    particleTex = GenWaterDropSdf();
+                    intensity = 1.5f; alphaPeak = 0.85f;
+                    particleStartColor = new Color(0.7f, 0.95f, 1.0f);
+                    sizeMin = 0.16f; sizeMax = 0.26f;
+                    break;
+                case "hut":
+                    // v3 Ember Flecked 加大 (用户从 5 候选选定)
+                    particleTex = GenEmberFleckedSdf();
+                    intensity = 1.5f; alphaPeak = 0.92f;
+                    particleStartColor = new Color(1.0f, 0.92f, 0.55f);
+                    sizeMin = 0.18f; sizeMax = 0.30f;
+                    break;
+                case "cairn":
                 default:
-                    SpawnStone(go, angle);
+                    particleTex = GenCairnRockSdf();
+                    intensity = 1.0f; alphaPeak = 0.95f;
+                    particleStartColor = new Color(0.95f, 0.85f, 0.65f);
+                    sizeMin = 0.10f; sizeMax = 0.22f;
+                    // cairn 翻滚 2D 旋转
+                    _main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+                    var rotLife = _ps.rotationOverLifetime;
+                    rotLife.enabled = true;
+                    rotLife.z = new ParticleSystem.MinMaxCurve(-0.5f, 0.5f);
                     break;
             }
-        }
 
-        void SpawnStone(GameObject go, float a)
-        {
-            float sz = 0.018f + Random.value * 0.014f;
-            var mf = go.AddComponent<MeshFilter>();
-            mf.sharedMesh = GetCubeMesh();
-            var mr = go.AddComponent<MeshRenderer>();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-            // Use Standard URP Lit (or fall back to Unlit) — stone should respond to light
-            var mat = MakeMat("Universal Render Pipeline/Lit", "Universal Render Pipeline/Unlit");
-            // V4.4 fix: SpawnStone 颜色改暖金接近 type color,不再硬编码深棕 (0.43,0.35,0.23)
-            // 旧色 (0.43,0.35,0.23) 在 NZ 暖白底色 #E8DCC4 上视觉极突兀(高对比黑点)
-            // HTML demo 颗粒接近 ground 暖金 (0.78,0.67,0.46),低对比融入场景
-            // 用 type color (cairn=0.91,0.78,0.59 暖金) 与 ground 色 lerp 0.6,得到融入感
-            Color stoneCol = Color.Lerp(_typeColor, new Color(0.78f, 0.67f, 0.46f, 1f), 0.6f);
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", stoneCol);
-            if (mat.HasProperty("_Color")) mat.SetColor("_Color", stoneCol);
-            if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", new Color(_typeColor.r * 0.15f, _typeColor.g * 0.12f, _typeColor.b * 0.08f, 1f));
-            if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
-            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.1f);
-            mr.sharedMaterial = mat;
+            _main.startSize = new ParticleSystem.MinMaxCurve(sizeMin, sizeMax);
 
-            float r = _ringRadius * (0.85f + Random.value * 0.30f);
-            go.transform.localPosition = new Vector3(Mathf.Cos(a) * r, 0.005f, Mathf.Sin(a) * r);
-            go.transform.localScale = Vector3.one * sz;
-
-            // v0.2.4 D2-1: 碎石尾迹(Reviewer B 加强)
-            var trailRet = AttachTrail(go, 0.4f, 0.005f, new Color(0.55f, 0.42f, 0.20f, 0.7f), Color.clear);
-
-            _points.Add(new Particle
-            {
-                tr = go.transform,
-                renderer = mr,
-                mat = mat,
-                vel = new Vector3((Random.value - 0.5f) * 0.10f, 0.45f + Random.value * 0.30f, (Random.value - 0.5f) * 0.10f),
-                life = 0f,
-                maxLife = 1.6f,
-                kind = "stone",
-                trail = trailRet.trail,
-                manualTrail = trailRet.manual,
-                trailHistory = trailRet.history,
-                trailWidthStart = 0.005f,
-            });
-        }
-
-        void SpawnDrop(GameObject go, float a)
-        {
-            float sz = 0.014f + Random.value * 0.010f;
-            var mf = go.AddComponent<MeshFilter>();
-            mf.sharedMesh = GetSphereMesh();
-            var mr = go.AddComponent<MeshRenderer>();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-            var mat = MakeAdditiveMat();
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.85f));
-            if (mat.HasProperty("_Color")) mat.SetColor("_Color", new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.85f));
-            mr.sharedMaterial = mat;
-
-            float r = _ringRadius * (0.85f + Random.value * 0.30f);
-            go.transform.localPosition = new Vector3(Mathf.Cos(a) * r, 0.005f, Mathf.Sin(a) * r);
-            go.transform.localScale = Vector3.one * sz;
-
-            // v0.2.4 D2-2: 水珠 motion trail(Reviewer B 加强 — 折射用 fresnel 替代,trail 模拟流体感)
-            var trailRet = AttachTrail(go, 0.5f, 0.008f,
-                new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.6f),
-                new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0f));
-
-            // Inward velocity (toward center)
-            float speed = 0.04f + Random.value * 0.06f;
-            _points.Add(new Particle
-            {
-                tr = go.transform,
-                renderer = mr,
-                mat = mat,
-                vel = new Vector3(Mathf.Cos(a + Mathf.PI) * speed, 0.55f + Random.value * 0.25f, Mathf.Sin(a + Mathf.PI) * speed),
-                life = 0f,
-                maxLife = 1.8f,
-                kind = "drop",
-                trail = trailRet.trail,
-                manualTrail = trailRet.manual,
-                trailHistory = trailRet.history,
-                trailWidthStart = 0.008f,
-            });
-        }
-
-        void SpawnSpark(GameObject go, float a)
-        {
-            float sz = 0.009f + Random.value * 0.008f;
-            var mf = go.AddComponent<MeshFilter>();
-            mf.sharedMesh = GetSphereMesh();
-            var mr = go.AddComponent<MeshRenderer>();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-            var mat = MakeAdditiveMat();
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(_typeColor.r, _typeColor.g, _typeColor.b, 1f));
-            if (mat.HasProperty("_Color")) mat.SetColor("_Color", new Color(_typeColor.r, _typeColor.g, _typeColor.b, 1f));
-            mr.sharedMaterial = mat;
-
-            float r = _ringRadius * (0.85f + Random.value * 0.30f);
-            go.transform.localPosition = new Vector3(Mathf.Cos(a) * r, 0.005f, Mathf.Sin(a) * r);
-            go.transform.localScale = Vector3.one * sz;
-
-            _points.Add(new Particle
-            {
-                tr = go.transform,
-                renderer = mr,
-                mat = mat,
-                vel = new Vector3((Random.value - 0.5f) * 0.04f, 0.30f + Random.value * 0.20f, (Random.value - 0.5f) * 0.04f),
-                life = 0f,
-                maxLife = 2.5f,
-                kind = "spark",
-            });
-            // V3.2: 20% spark 触发同位置烟柱(用户原话"火星 + 烟柱")
-            if (Random.value < 0.20f)
-            {
-                SpawnSmokeColumn(go.transform.localPosition + new Vector3(0f, 0.05f, 0f));
-            }
-        }
-
-        void SpawnEmber(GameObject go, float a)
-        {
-            float sz = 0.012f + Random.value * 0.012f;
-            var mf = go.AddComponent<MeshFilter>();
-            mf.sharedMesh = GetSphereMesh();
-            var mr = go.AddComponent<MeshRenderer>();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-            var mat = MakeAdditiveMat();
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.7f));
-            if (mat.HasProperty("_Color")) mat.SetColor("_Color", new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.7f));
-            mr.sharedMaterial = mat;
-
-            float r = _ringRadius * (0.85f + Random.value * 0.30f);
-            go.transform.localPosition = new Vector3(Mathf.Cos(a) * r, 0.01f, Mathf.Sin(a) * r);
-            go.transform.localScale = Vector3.one * sz;
-
-            _points.Add(new Particle
-            {
-                tr = go.transform,
-                renderer = mr,
-                mat = mat,
-                vel = new Vector3((Random.value - 0.5f) * 0.05f, 0.10f + Random.value * 0.10f, (Random.value - 0.5f) * 0.05f),
-                life = 0f,
-                maxLife = 4.0f,
-                kind = "ember",
-            });
-        }
-
-        void SpawnArrow(GameObject go, float a)
-        {
-            var mf = go.AddComponent<MeshFilter>();
-            mf.sharedMesh = GetConeMesh();
-            var mr = go.AddComponent<MeshRenderer>();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-            var mat = MakeAdditiveMat();
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.9f));
-            if (mat.HasProperty("_Color")) mat.SetColor("_Color", new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.9f));
-            mr.sharedMaterial = mat;
-
-            // Cone size: 0.020 base radius, 0.055 height; we use a unit cone mesh and scale.
-            go.transform.localScale = new Vector3(0.04f, 0.055f, 0.04f);
-
-            // v0.2.4 D2-5: 箭头分叉 trail(Reviewer B 加强 — junction 留下 0.3s 轨迹)
-            var trailRet = AttachTrail(go, 0.3f, 0.012f,
-                new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0.55f),
-                new Color(_typeColor.r, _typeColor.g, _typeColor.b, 0f));
-
-            _points.Add(new Particle
-            {
-                tr = go.transform,
-                renderer = mr,
-                mat = mat,
-                vel = Vector3.zero,
-                life = 0f,
-                maxLife = 999f,
-                kind = "arrow",
-                orbitR = _ringRadius * (1.10f + Random.value * 0.18f),
-                orbitPhase = a,
-                orbitSpeed = 0.35f + Random.value * 0.25f,
-                orbitY = 0.18f + Random.value * 0.20f,
-                trail = trailRet.trail,
-                manualTrail = trailRet.manual,
-                trailHistory = trailRet.history,
-                trailWidthStart = 0.012f,
-            });
-        }
-
-        // V3.1+V3.3: 落地涟漪 ripple — 平面 quad 扩张并 fade
-        // 用 GetCubeMesh 拉扁(scale.y=0.001)做地面环;maxLife 后由 update loop 死
-        void SpawnRipple(Vector3 worldPos, Color tint, float startScale, float endScale, float duration)
-        {
-            var go = new GameObject("part_ripple_" + _type);
-            go.transform.SetParent(this.transform, worldPositionStays: false);
-            // worldPos 是 local of cluster origin(SpawnRipple 在 update loop 内 pos 是 local)
-            go.transform.localPosition = worldPos;
-            var mf = go.AddComponent<MeshFilter>();
-            mf.sharedMesh = GetCubeMesh();
-            var mr = go.AddComponent<MeshRenderer>();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-            var mat = MakeAdditiveMat();
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(tint.r, tint.g, tint.b, 0.7f));
-            if (mat.HasProperty("_Color")) mat.SetColor("_Color", new Color(tint.r, tint.g, tint.b, 0.7f));
-            mr.sharedMaterial = mat;
-            // 平面环 — y=0.001,xz 由 update loop scale 扩张
-            go.transform.localScale = new Vector3(startScale, 0.001f, startScale);
-            _points.Add(new Particle
-            {
-                tr = go.transform,
-                renderer = mr,
-                mat = mat,
-                vel = Vector3.zero,
-                life = 0f,
-                maxLife = duration,
-                kind = "ripple",
-            });
-        }
-
-        // V3.2 danger 烟柱 — 缓慢上升 + 横向 drift,scale grows
-        void SpawnSmokeColumn(Vector3 localOrigin)
-        {
-            var go = new GameObject("part_smoke_" + _type);
-            go.transform.SetParent(this.transform, worldPositionStays: false);
-            go.transform.localPosition = localOrigin;
-            var mf = go.AddComponent<MeshFilter>();
-            mf.sharedMesh = GetSphereMesh();
-            var mr = go.AddComponent<MeshRenderer>();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-            var mat = MakeAdditiveMat();
-            // 烟 = type 主色暗 30% + alpha 低
-            Color smokeCol = new Color(_typeColor.r * 0.3f, _typeColor.g * 0.25f, _typeColor.b * 0.2f, 0.4f);
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", smokeCol);
-            if (mat.HasProperty("_Color")) mat.SetColor("_Color", smokeCol);
-            mr.sharedMaterial = mat;
-            go.transform.localScale = Vector3.one * 0.04f;
-            _points.Add(new Particle
-            {
-                tr = go.transform,
-                renderer = mr,
-                mat = mat,
-                vel = new Vector3((Random.value - 0.5f) * 0.04f, 0.15f, (Random.value - 0.5f) * 0.04f),
-                life = 0f,
-                maxLife = 3.5f,
-                kind = "smoke",
-            });
-        }
-        // ---- Mesh / material helpers (cached statics so 5 cairn × N parts share) ----
-
-        static Mesh _sphereMesh, _cubeMesh, _coneMesh;
-
-        static Mesh GetSphereMesh()
-        {
-            if (_sphereMesh != null) return _sphereMesh;
-            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            _sphereMesh = go.GetComponent<MeshFilter>().sharedMesh;
-            // v0.2.4 batch fix: Destroy is deferred to next frame, in batch
-            // mode that means the GO lingers in the scene and gets captured.
-            // DestroyImmediate kills it here and now.
-#if UNITY_EDITOR
-            UnityEngine.Object.DestroyImmediate(go);
-#else
-            Destroy(go);
-#endif
-            return _sphereMesh;
-        }
-        static Mesh GetCubeMesh()
-        {
-            if (_cubeMesh != null) return _cubeMesh;
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _cubeMesh = go.GetComponent<MeshFilter>().sharedMesh;
-#if UNITY_EDITOR
-            UnityEngine.Object.DestroyImmediate(go);
-#else
-            Destroy(go);
-#endif
-            return _cubeMesh;
-        }
-        static Mesh GetConeMesh()
-        {
-            if (_coneMesh != null) return _coneMesh;
-            // Unity has no cone primitive; build a 4-sided pyramid to match Three.js
-            // ConeGeometry(r, h, 4)
-            var mesh = new Mesh();
-            mesh.name = "JunctionArrowCone";
-            float r = 1f, h = 1f;
-            // Tip at +Y, base at Y=0 (pivot bottom-center)
-            var verts = new Vector3[5]
-            {
-                new Vector3(0, h, 0),                       // 0 tip
-                new Vector3( r, 0,  r),                     // 1 base ne
-                new Vector3( r, 0, -r),                     // 2 base se
-                new Vector3(-r, 0, -r),                     // 3 base sw
-                new Vector3(-r, 0,  r),                     // 4 base nw
-            };
-            var tris = new int[]
-            {
-                0, 1, 2,  // ne
-                0, 2, 3,  // se
-                0, 3, 4,  // sw
-                0, 4, 1,  // nw
-                // Base (downward facing)
-                1, 4, 3,
-                1, 3, 2,
-            };
-            mesh.vertices = verts;
-            mesh.triangles = tris;
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            _coneMesh = mesh;
-            return _coneMesh;
-        }
-
-        static Material MakeMat(string preferred, string fallback)
-        {
-            var sh = Shader.Find(preferred);
-            if (sh == null) sh = Shader.Find(fallback);
-            if (sh == null) sh = Shader.Find("Sprites/Default");
-            return new Material(sh);
-        }
-
-        static Material MakeAdditiveMat()
-        {
-            // Try built-in additive particle (works in batch mode), then URP unlit transparent.
-            var sh = Shader.Find("Legacy Shaders/Particles/Additive");
-            if (sh == null) sh = Shader.Find("Mobile/Particles/Additive");
-            if (sh == null) sh = Shader.Find("Universal Render Pipeline/Unlit");
-            if (sh == null) sh = Shader.Find("Sprites/Default");
-            var mat = new Material(sh);
-            // URP Unlit: switch to additive
-            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);  // Transparent
-            if (mat.HasProperty("_Blend")) mat.SetFloat("_Blend", 1f);      // Additive
-            return mat;
-        }
-
-        // v0.2.4 D2: TrailRenderer helper — Reviewer B 5 条加强里 cairn / water / junction 用
-        // BLOCKER 3 fix: 同时挂 LineRenderer (manualTrail) — batch mode + runtime 都生效
-        static (TrailRenderer trail, LineRenderer manual, Vector3[] history) AttachTrail(
-            GameObject go, float lifeSec, float startWidth, Color startColor, Color endColor)
-        {
-            // 1. Unity built-in TrailRenderer(运行时 device 上有 native trail accumulation)
-            var tr = go.AddComponent<TrailRenderer>();
-            tr.time = lifeSec;
-            tr.startWidth = startWidth;
-            tr.endWidth = 0f;
-            tr.minVertexDistance = 0.005f;
-            tr.numCapVertices = 2;
-            tr.numCornerVertices = 2;
-            tr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            tr.receiveShadows = false;
-            tr.material = MakeAdditiveMat();
+            // ════ Color over life (gradient — start tint → mid tint → fade) ════
+            var colorOverLife = _ps.colorOverLifetime;
+            colorOverLife.enabled = true;
             var grad = new Gradient();
+            var darken = new Color(_typeColor.r * 0.4f, _typeColor.g * 0.4f, _typeColor.b * 0.4f);
             grad.SetKeys(
-                new GradientColorKey[] {
-                    new GradientColorKey(new Color(startColor.r, startColor.g, startColor.b), 0f),
-                    new GradientColorKey(new Color(endColor.r,   endColor.g,   endColor.b),   1f),
+                new[] {
+                    new GradientColorKey(particleStartColor, 0f),
+                    new GradientColorKey(_typeColor, 0.5f),
+                    new GradientColorKey(darken, 1.0f),
                 },
-                new GradientAlphaKey[] {
-                    new GradientAlphaKey(startColor.a, 0f),
-                    new GradientAlphaKey(endColor.a,   1f),
+                new[] {
+                    new GradientAlphaKey(0f, 0f),
+                    new GradientAlphaKey(alphaPeak, 0.25f),
+                    new GradientAlphaKey(alphaPeak * 0.65f, 0.7f),
+                    new GradientAlphaKey(0f, 1f),
                 });
-            tr.colorGradient = grad;
-            tr.emitting = true;
+            colorOverLife.color = new ParticleSystem.MinMaxGradient(grad);
 
-            // 2. 程序化 LineRenderer — batch mode + Editor 也能看到 trail(BLOCKER 3 fix)
-            // 挂在子 GO,因为 LineRenderer 自己用世界空间避免被 transform 拖动
-            var trailGo = new GameObject("ManualTrail");
-            trailGo.transform.SetParent(go.transform.parent, worldPositionStays: true);
-            var lr = trailGo.AddComponent<LineRenderer>();
-            lr.useWorldSpace = true;
-            lr.startWidth = startWidth;
-            lr.endWidth = 0f;
-            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            lr.receiveShadows = false;
-            lr.material = MakeAdditiveMat();
-            lr.colorGradient = grad;
-            lr.numCapVertices = 2;
-            lr.positionCount = 0;
+            // ════ Material (一份 instance, OnDestroy 会 cleanup) ════
+            _matInstance = new Material(addShader);
+            _matInstance.SetTexture("_MainTex", particleTex);
+            _matInstance.SetColor("_TintColor", Color.white);
+            _matInstance.SetFloat("_Intensity", intensity);
+            renderer.material = _matInstance;
 
-            // 历史 buffer 长度 = lifeSec * 30fps ≈ 12-15 点,够 visualize
-            int historyLen = Mathf.Max(4, Mathf.RoundToInt(lifeSec * 30f));
-            var history = new Vector3[historyLen];
-            return (tr, lr, history);
+            psGo.SetActive(false);  // 等 SetSpawnEnabled(true) 才显示
+            _initialized = true;
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // 程序生成 SDF 纹理 (无外部 PNG 依赖, iOS IL2CPP 安全)
+        // 跟 AllTypesCinematicTest 保持完全一致(逐 pixel 对齐)
+        // ════════════════════════════════════════════════════════════════════
+
+        static Texture2D _moteSdf, _junctionDiamondSdf, _waterDropSdf, _emberFleckedSdf, _cairnRockSdf;
+
+        static Texture2D GenMoteSdf()
+        {
+            if (_moteSdf != null) return _moteSdf;
+            const int sz = 64;
+            var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            var pixels = new Color[sz * sz];
+            float cx = sz * 0.5f, cy = sz * 0.5f;
+            for (int y = 0; y < sz; y++)
+            {
+                for (int x = 0; x < sz; x++)
+                {
+                    float dx = (x - cx) / cx;
+                    float dy = (y - cy) / cy;
+                    float r = Mathf.Sqrt(dx * dx + dy * dy);
+                    // 软圆 (mote_soft 等价): r=0 → 1.0, r=1 → 0,中间 1.6 power 锐边
+                    float a = Mathf.Pow(Mathf.Clamp01(1f - r), 1.6f);
+                    pixels[y * sz + x] = new Color(a, a, a, a);
+                }
+            }
+            tex.SetPixels(pixels);
+            tex.Apply();
+            _moteSdf = tex;
+            return tex;
+        }
+
+        static Texture2D GenJunctionDiamondSdf()
+        {
+            if (_junctionDiamondSdf != null) return _junctionDiamondSdf;
+            const int sz = 64;
+            var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            var pixels = new Color[sz * sz];
+            float cx = sz * 0.5f, cy = sz * 0.5f;
+            for (int y = 0; y < sz; y++)
+            {
+                for (int x = 0; x < sz; x++)
+                {
+                    float dx = (x - cx) / cx;
+                    float dy = (y - cy) / cy;
+                    float r = Mathf.Abs(dx) + Mathf.Abs(dy);  // L1 norm = 菱形
+                    float a = Mathf.Pow(Mathf.Clamp01(1f - r), 1.8f);
+                    pixels[y * sz + x] = new Color(a, a, a, a);
+                }
+            }
+            tex.SetPixels(pixels);
+            tex.Apply();
+            _junctionDiamondSdf = tex;
+            return tex;
+        }
+
+        static Texture2D GenWaterDropSdf()
+        {
+            if (_waterDropSdf != null) return _waterDropSdf;
+            const int sz = 64;
+            var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            var pixels = new Color[sz * sz];
+            float cx = sz * 0.5f, cy = sz * 0.5f;
+            for (int y = 0; y < sz; y++)
+            {
+                for (int x = 0; x < sz; x++)
+                {
+                    float dx = (x - cx) / cx;
+                    float dy = (y - cy) / cy;
+                    float r = Mathf.Sqrt(dx * dx + dy * dy);
+                    // 主体软圆
+                    float body = Mathf.Pow(Mathf.Clamp01(1f - r), 1.6f);
+                    // 偏左上反光高光斑 (真水珠特征)
+                    float hx = dx + 0.30f, hy = dy + 0.30f;
+                    float hr = Mathf.Sqrt(hx * hx + hy * hy);
+                    float highlight = hr < 0.25f ? Mathf.Pow(1f - hr / 0.25f, 1.3f) * 0.8f : 0f;
+                    float a = Mathf.Clamp01(body * 0.65f + highlight);
+                    pixels[y * sz + x] = new Color(a, a, a, a);
+                }
+            }
+            tex.SetPixels(pixels);
+            tex.Apply();
+            _waterDropSdf = tex;
+            return tex;
+        }
+
+        static Texture2D GenEmberFleckedSdf()
+        {
+            if (_emberFleckedSdf != null) return _emberFleckedSdf;
+            const int sz = 64;
+            var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            var pixels = new Color[sz * sz];
+            float cx = sz * 0.5f, cy = sz * 0.5f;
+            for (int y = 0; y < sz; y++)
+            {
+                for (int x = 0; x < sz; x++)
+                {
+                    float dx = (x - cx) / cx;
+                    float dy = (y - cy) / cy;
+                    // v3 Ember Flecked 炭火床: 软圆 envelope + hash-noise 颗粒亮斑
+                    float r = Mathf.Sqrt(dx * dx + dy * dy);
+                    float env = Mathf.Clamp01((0.42f - r) / 0.12f);
+                    float h = Mathf.Repeat(Mathf.Sin(Mathf.Floor(dx * 8f) * 12.9f + Mathf.Floor(dy * 8f) * 78.2f) * 437.5f, 1f);
+                    float fleck = Mathf.SmoothStep(0.55f, 0.85f, h);
+                    float a = env * (0.30f + 0.70f * fleck);
+                    pixels[y * sz + x] = new Color(a, a, a, a);
+                }
+            }
+            tex.SetPixels(pixels);
+            tex.Apply();
+            _emberFleckedSdf = tex;
+            return tex;
+        }
+
+        static Texture2D GenCairnRockSdf()
+        {
+            if (_cairnRockSdf != null) return _cairnRockSdf;
+            const int sz = 64;
+            var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            var pixels = new Color[sz * sz];
+            float cx = sz * 0.5f, cy = sz * 0.5f;
+            // 5 顶点多边形 (deterministic)
+            float[] vertAngles = { -2.4f, -0.7f, 0.5f, 1.8f, 2.9f };
+            float[] vertRadii  = {  0.85f, 0.95f, 0.78f, 0.92f, 0.88f };
+            for (int y = 0; y < sz; y++)
+            {
+                for (int x = 0; x < sz; x++)
+                {
+                    float dx = (x - cx) / cx;
+                    float dy = (y - cy) / cy;
+                    float r = Mathf.Sqrt(dx * dx + dy * dy);
+                    float angle = Mathf.Atan2(dy, dx);
+                    float boundary = 0.85f;
+                    for (int i = 0; i < 5; i++)
+                    {
+                        int j = (i + 1) % 5;
+                        float a1 = vertAngles[i], a2 = vertAngles[j];
+                        if (a2 < a1) a2 += Mathf.PI * 2f;
+                        float ang = angle;
+                        if (ang < a1) ang += Mathf.PI * 2f;
+                        if (ang >= a1 && ang <= a2)
+                        {
+                            boundary = Mathf.Lerp(vertRadii[i], vertRadii[j], (ang - a1) / (a2 - a1));
+                            break;
+                        }
+                    }
+                    float aVal;
+                    if (r <= boundary - 0.05f) aVal = 1.0f;        // 实心
+                    else if (r <= boundary) aVal = (boundary - r) / 0.05f;  // 边缘软化
+                    else aVal = 0f;
+                    pixels[y * sz + x] = new Color(aVal, aVal, aVal, aVal);
+                }
+            }
+            tex.SetPixels(pixels);
+            tex.Apply();
+            _cairnRockSdf = tex;
+            return tex;
         }
     }
 }

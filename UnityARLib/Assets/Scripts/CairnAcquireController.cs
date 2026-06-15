@@ -258,6 +258,11 @@ namespace Cairn.AR
             if (next == _state) return;
             State prev = _state;
             _state = next;
+            // v0.2.4 Phase 3 LOG: subagent B Critical #7 fix — FSM transition emit。
+            // 用 IForward (5/s 速率限制) 防 cluster plant 100 cairn × 4 transition 风暴。
+            // 单 cairn FSM transition 频率低,5/s 限速对于真用户场景足够。
+            UnityLogger.IForward("v22-PHASE3-ACQUIRE-FSM-TRANSITION",
+                $"id={_markerId} {prev} → {next}");
             if (next == State.ACQUIRE)
             {
                 _timeInAcquire = 0f;
@@ -406,6 +411,9 @@ namespace Cairn.AR
         }
 
         // A8: 完成 pitch fallback — 陀螺仪不可用时用相机 eulerX 变化率检测
+        // v0.2.4 Phase 3 LOG: subagent A BLOCKER fix — 真机 25-30fps 帧间噪声可能误触发,
+        // 加 emit 看 false positive。0.5s 节流防风暴。
+        float _phase3LastA8EmitTime = -1f;
         bool IsUserActivelyScanning()
         {
             // Phone tilt change rate > threshold = active scanning
@@ -425,6 +433,15 @@ namespace Cairn.AR
                     _lastCamEulerX = currentEulerX;
                     // pitchDelta 单位=度, Time.deltaTime 单位=秒, 阈值 5°/s
                     float pitchRateDegPerSec = Mathf.Abs(pitchDelta) / Time.deltaTime;
+                    // v0.2.4 Phase 3 LOG: 边界值 emit (3-7°/s 区间) 看 false positive 频率
+                    // 0.5s 节流防风暴
+                    if (pitchRateDegPerSec >= 3f && pitchRateDegPerSec <= 7f &&
+                        Time.time - _phase3LastA8EmitTime > 0.5f)
+                    {
+                        UnityLogger.ICritical("v22-PHASE3-A8-PITCH-BOUNDARY",
+                            $"id={_markerId} pitchRateDegPerSec={pitchRateDegPerSec:F1} dt={Time.deltaTime:F3} fps={1f/Time.deltaTime:F1} thresh=5.0");
+                        _phase3LastA8EmitTime = Time.time;
+                    }
                     if (pitchRateDegPerSec > 5f)
                         return true;
                 }
@@ -564,6 +581,15 @@ namespace Cairn.AR
             }
 
             _state = State.IMMORTAL;
+            // v0.2.4 Phase 3 LOG: subagent A BLOCKER fix — IMMORTAL ≠ has anchor parent。
+            // AnchorAndCeremony 失败时 transform.parent 可能是 null 或非 ARAnchor。
+            // GroundYResolver 检查 ARAnchor parent 跳过 lerp,如果没 anchor parent 就 lerp = 飞天根因。
+            // 真机回来对账,如果 immortal_has_anchor_parent=false 多就是这个 bug。
+            var parentAnchor = transform.parent != null ? transform.parent.GetComponent<UnityEngine.XR.ARFoundation.ARAnchor>() : null;
+            UnityLogger.ICritical("v22-PHASE3-IMMORTAL-TRANSITION",
+                $"id={_markerId} fromFallback={fromFallback} immortal_has_anchor_parent={(parentAnchor != null)} " +
+                $"parent_name={(transform.parent != null ? transform.parent.name : "NULL")} " +
+                $"pos=({transform.position.x:F2},{transform.position.y:F2},{transform.position.z:F2})");
             OnImmortal?.Invoke(_markerId, transform.position, fromFallback);
             Debug.Log($"[v22-ACQUIRE-CEREMONY] id={_markerId} fromFallback={fromFallback} pos={transform.position}");
         }

@@ -818,10 +818,25 @@ public class CairnBridge : MonoBehaviour
         _stateChangeCount++;
         var sn = args.state.ToString();
         _stateTrail += (sn.Length > 4 ? sn.Substring(0, 4) : sn) + ",";
+        // v0.2.4 Phase 3 LOG: subagent A 漏 + subagent B Tier-A 半盲 fix。
+        // 每次进入 SessionTracking 状态 = 一个新 ARKit world frame。给一个 instance ID,
+        // 真机回来对账:同 marker_id 在不同 sessionInstanceId 下 spawn 即跨 session 飞天根因。
+        if (args.state == ARSessionState.SessionTracking)
+        {
+            _sessionInstanceCounter++;
+            UnityLogger.ICritical("v22-PHASE3-SESSION-RESTART",
+                $"sessionInstanceId={_sessionInstanceCounter} stateChangeCount={_stateChangeCount} " +
+                $"stateTrail={_stateTrail} unityRealtime={Time.realtimeSinceStartup:F1}s " +
+                $"meaning=new-ARKit-world-frame-active");
+        }
         // Manual concat — same IL2CPP {N:fmt}}} bug class as SendArFrame.
         var stateJson = "{\"state\":\"" + args.state + "\"}";
         SendToRN("ArSessionState", stateJson);
     }
+
+    // v0.2.4 Phase 3 — sessionInstanceId 自维护(ARSession 每次 Tracking ⊕ ⊕)
+    private static int _sessionInstanceCounter = 0;
+    public static int SessionInstanceId => _sessionInstanceCounter;
 
     // ============================================================
     // Methods invoked by RN (via SendMessage / postMessage)

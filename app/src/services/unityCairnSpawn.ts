@@ -27,6 +27,9 @@
  */
 
 import type { MarkerType } from '../config/markerTypes';
+// v0.2.4 Phase 3 — debugLogger 把 v22-PHASE3-* breadcrumb 推到 telemetry pipeline
+// (console.log 不进 telemetry,subagent#2 BLOCKER fix)
+import { debugLogger } from './debugLogger';
 
 /**
  * Wire-format expected by Unity's CairnBridge.SpawnRequest:
@@ -197,6 +200,30 @@ export function buildSpawnRequest(
     if (originDeltaM <= tierAMaxDelta) {
       // A2.4 埋点:Tier-A 命中(用户原话"对账"用)
       console.log(`[v22-PLANT-ANCHOR-TIER-A] id=${marker.id} originDelta=${originDeltaM.toFixed(2)}m thresh=${tierAMaxDelta}m lowAcc=${!!origin.lowAccuracy} arkit=(${marker.arkitX.toFixed(2)},${marker.arkitY.toFixed(2)},${marker.arkitZ.toFixed(2)})`);
+      // v0.2.4 Phase 3 LOG: subagent#2 BLOCKER 检测 — origin 不变但 ARKit world frame
+      // 重置时,Tier-A 错命中导致 cairn 用旧坐标在新 frame 飞天。emit 完整决策上下文
+      // 真机回来对账,如果用户报飞天但 originDelta 一直 0,说明 ARKit relocalize 是根因。
+      // ⚠️ subagent#2 BLOCKER fix: console.log 不进 telemetry pipeline,必须用 debugLogger.log 才上传
+      debugLogger.log({
+        event: 'breadcrumb',
+        tag: 'v22-PHASE3-TIER-DECISION',
+        ts: Date.now(),
+        payload: {
+          decision: 'A',
+          marker_id: marker.id,
+          origin_delta_m: parseFloat(originDeltaM.toFixed(3)),
+          thresh_m: tierAMaxDelta,
+          low_acc: !!origin.lowAccuracy,
+          marker_origin_lat: marker.arOriginLat ?? null,
+          marker_origin_lng: marker.arOriginLng ?? null,
+          current_origin_lat: origin.lat,
+          current_origin_lng: origin.lng,
+          marker_arkit_x: parseFloat(marker.arkitX.toFixed(3)),
+          marker_arkit_y: parseFloat(marker.arkitY.toFixed(3)),
+          marker_arkit_z: parseFloat(marker.arkitZ.toFixed(3)),
+          warn_arkit_frame_reset_if_relaunched: 1,
+        },
+      });
       return {
         id: marker.id,
         type: marker.type,
@@ -214,6 +241,23 @@ export function buildSpawnRequest(
     }
     // A2.4 埋点:origin delta 太大,Tier-A 拒绝
     console.log(`[v22-PLANT-ANCHOR-TIER-A-REJECT] id=${marker.id} originDelta=${originDeltaM.toFixed(2)}m > ${tierAMaxDelta}m lowAcc=${!!origin.lowAccuracy} → fallback Tier-B`);
+    // v0.2.4 Phase 3 LOG: Tier-A reject 完整决策上下文(via debugLogger 进 telemetry)
+    debugLogger.log({
+      event: 'breadcrumb',
+      tag: 'v22-PHASE3-TIER-DECISION',
+      ts: Date.now(),
+      payload: {
+        decision: 'B-from-A-reject',
+        marker_id: marker.id,
+        reason: 'originDeltaTooBig',
+        origin_delta_m: parseFloat(originDeltaM.toFixed(3)),
+        thresh_m: tierAMaxDelta,
+        marker_origin_lat: marker.arOriginLat ?? null,
+        marker_origin_lng: marker.arOriginLng ?? null,
+        current_origin_lat: origin.lat,
+        current_origin_lng: origin.lng,
+      },
+    });
     // origin delta 太大 → 持久化 ARKit XYZ 不再可信,fallback GPS
   }
 
@@ -221,8 +265,36 @@ export function buildSpawnRequest(
   const xz = geoToArkitWorld(marker.lat, marker.lng, origin);
   if (!xz) return null;
   // A2.4 埋点:Tier-B fallback(无 arkitXYZ 或 origin 漂移)
-  const tierBReason = (marker.arkitX == null) ? 'no-arkit-xyz' : 'origin-delta-exceeded';
+  // v0.2.4 Phase 3 LOG: subagent A BLOCKER fix — schema migration silent gap。
+  // 老 marker (v0.2.3 之前 plant) 永走 Tier-B,'no-arkit-xyz' 进一步区分:
+  //   legacy_no_origin: 老 schema 完全没 arkit*  字段
+  //   no_arkit_xyz_partial: 部分字段缺(异常)
+  let tierBReason: string;
+  if (marker.arkitX == null && marker.arkitY == null && marker.arkitZ == null && marker.arOriginLat == null) {
+    tierBReason = 'legacy_no_arkit_v023_or_earlier';
+  } else if (marker.arkitX == null || marker.arkitY == null || marker.arkitZ == null) {
+    tierBReason = 'partial_arkit_xyz_anomaly';
+  } else {
+    tierBReason = 'origin_delta_exceeded';
+  }
   console.log(`[v22-PLANT-ANCHOR-TIER-B] id=${marker.id} reason=${tierBReason} gps=(${marker.lat.toFixed(5)},${marker.lng.toFixed(5)}) xz=(${xz.x.toFixed(2)},${xz.z.toFixed(2)}) y=${(groundY ?? 0).toFixed(2)}`);
+  // v0.2.4 Phase 3 — Tier-B 也走 debugLogger.log 进 telemetry pipeline
+  debugLogger.log({
+    event: 'breadcrumb',
+    tag: 'v22-PHASE3-TIER-DECISION',
+    ts: Date.now(),
+    payload: {
+      decision: 'B',
+      marker_id: marker.id,
+      reason: tierBReason,
+      gps_lat: marker.lat,
+      gps_lng: marker.lng,
+      x: parseFloat(xz.x.toFixed(3)),
+      z: parseFloat(xz.z.toFixed(3)),
+      y: parseFloat((groundY ?? 0).toFixed(3)),
+      ground_y_null: groundY == null ? 1 : 0,
+    },
+  });
   return {
     id: marker.id,
     type: marker.type,

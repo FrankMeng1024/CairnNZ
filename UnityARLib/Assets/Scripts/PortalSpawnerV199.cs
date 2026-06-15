@@ -249,6 +249,15 @@ public partial class PortalSpawner
                 //   被 ARFoundation 自动 disable, GetComponent 仍找不到 enabled 实例.
                 var meshMgr = UnityEngine.Object.FindFirstObjectByType<UnityEngine.XR.ARFoundation.ARMeshManager>();
                 bool lidar = meshMgr != null && meshMgr.enabled && meshMgr.subsystem != null && meshMgr.subsystem.running;
+                // v0.2.4 Phase 3 LOG: subagent A BLOCKER fix — lidar race condition。
+                // 冷启动首 plant lidar=false → 后续 lidar=true 行为不一致。
+                // emit 真实决策值真机看,如果首 plant lidar=false 后续 lidar=true 即根因。
+                UnityLogger.ICritical("v22-PHASE3-LIDAR-DECISION",
+                    $"id={data.id} lidar={lidar} meshMgr={(meshMgr != null)} " +
+                    $"meshMgr_enabled={(meshMgr != null && meshMgr.enabled)} " +
+                    $"subsystem={(meshMgr != null && meshMgr.subsystem != null)} " +
+                    $"subsystem_running={(meshMgr != null && meshMgr.subsystem != null && meshMgr.subsystem.running)} " +
+                    $"sessionInstance={CairnBridge.SessionInstanceId}");
                 var ctl = container.AddComponent<Cairn.AR.CairnAcquireController>();
                 ctl.Init(data.id, existingAnchor, rcMgr, pmMgr, amMgr, cam, ceremony, lidar);
             }
@@ -258,11 +267,13 @@ public partial class PortalSpawner
         // Sub#2 反驳: 项目无 prefab, GetComponentInChildren 永远返 null. 必须主动 AddComponent.
         // 接入: 1) container AddComponent<TypeParticleController> 2) Configure(type, color)
         //      3) ceremony.SetTypeParticles → ribbon 阶段触发 SetSpawnEnabled
-        if (globals == null || globals.GetBool("TypeParticlesEnabled", true))
+        bool particlesEnabled = (globals == null || globals.GetBool("TypeParticlesEnabled", true));
+        if (particlesEnabled)
         {
             // Color fallback: 老后端不传 r/g/b 会是 0 (黑) → 用 type 默认配色 (HTML line 80-86)
             Color typeColor;
-            if (data.r == 0f && data.g == 0f && data.b == 0f)
+            bool colorFromBackend = !(data.r == 0f && data.g == 0f && data.b == 0f);
+            if (!colorFromBackend)
             {
                 switch (data.type)
                 {
@@ -288,6 +299,23 @@ public partial class PortalSpawner
             // wire ceremony → tp
             var ceremony = container.GetComponentInChildren<Cairn.AR.CeremonyController>(true);
             if (ceremony != null) ceremony.SetTypeParticles(tp);
+
+            // v0.2.4 Phase 3 LOG: 粒子接入完整状态(用户原话"粒子是生效的 和之前给我看的 gif 是一致的效果")
+            // 真机 build 后如果用户报"粒子没出来",这条 log 直接定位:
+            //   tp_attached=false → AddComponent<TypeParticleController> 失败(可能 IL2CPP strip)
+            //   ceremony_found=false → SetTypeParticles 永不调用 → SetSpawnEnabled 永不触发
+            //   color_from_backend=false → 老后端 r/g/b=0,fallback 默认色(应该没问题)
+            UnityLogger.ICritical("v22-PHASE3-PARTICLE-WIRE",
+                $"id={data.id} type={data.type ?? "cairn"} ota_enabled=true " +
+                $"tp_attached={(tp != null)} ceremony_found={(ceremony != null)} " +
+                $"color_from_backend={colorFromBackend} color=({typeColor.r:F2},{typeColor.g:F2},{typeColor.b:F2})");
+        }
+        else
+        {
+            // OTA flag 关闭粒子时也 log 一条,真机看是不是 flag 误关
+            UnityLogger.ICritical("v22-PHASE3-PARTICLE-WIRE",
+                $"id={data.id} type={data.type ?? "cairn"} ota_enabled=false " +
+                $"reason=TypeParticlesEnabled-OTA-killswitch");
         }
         UnityLogger.IForward("V199",
             $"add-done id={data.id} pebble={(pebbleMaterial!=null && data.type=="cairn")} " +
@@ -940,6 +968,12 @@ public partial class PortalSpawner
                         {
                             container.transform.SetParent(a.transform, worldPositionStays: true);
                             UnityLogger.IForward("V199", $"anchor-attached planeId={plane.trackableId}");
+                            // v0.2.4 Phase 3 LOG: plane-attached anchor 的 trackingState 真机对照
+                            // (vs PortalSpawner free-floating 路径)
+                            // immediate 字段必为 None (异步注册),用 ICritical 绕速率限制
+                            UnityLogger.ICritical("v22-PHASE3-ANCHOR-PLANE-ATTACHED",
+                                $"planeId={plane.trackableId} state-when-attached={a.trackingState}(expected-None-async-init) " +
+                                $"anchorPos=({a.transform.position.x:F2},{a.transform.position.y:F2},{a.transform.position.z:F2})");
                             yield break;
                         }
                         else

@@ -47,7 +47,14 @@ namespace Cairn.AR
         public void SetTypeParticles(TypeParticleController tp)
         {
             _typeParticles = tp;
+            // v0.2.4 Phase 3 LOG: 接入时刻 emit 一次,真机看 ceremony 真有 wire 到 tp
+            UnityLogger.ICritical("v22-PHASE3-PARTICLE-CEREMONY-WIRE",
+                $"ceremony={(this != null)} tp_set={(tp != null)}");
         }
+
+        // v0.2.4 Phase 3 LOG: SetSpawnEnabled 转换 latch (防每帧刷屏)
+        bool _phase3LastSpawnEnabled = false;
+        bool _phase3FirstTransition = true;
 
         // Current ceremony time normalized 0..1; -1 = not playing
         float _t = -1f;
@@ -176,6 +183,15 @@ namespace Cairn.AR
                 _ribbonsRoot.SetActive(ribbonsOn);
             if (_typeParticles != null)
                 _typeParticles.SetSpawnEnabled(ribbonsOn);
+            // v0.2.4 Phase 3 LOG: 仅在 transition 时 emit,latch 防刷屏
+            if (_phase3FirstTransition || ribbonsOn != _phase3LastSpawnEnabled)
+            {
+                UnityLogger.ICritical("v22-PHASE3-PARTICLE-SPAWN-ENABLED",
+                    $"t={t:F2} ribbonStartT={_ribbonStartT:F2} ribbonsOn={ribbonsOn} " +
+                    $"tp_attached={(_typeParticles != null)}");
+                _phase3LastSpawnEnabled = ribbonsOn;
+                _phase3FirstTransition = false;
+            }
             if (_labelCanvas != null)
             {
                 float labelT = ribbonsOn

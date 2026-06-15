@@ -96,5 +96,31 @@
          orientation drifts session-to-session (the same root-cause fix
          as Viro's worldAlignment="GravityAndHeading" prop). -->
     <type fullname="ARKitSessionInit" preserve="all"/>
+    <!-- v0.2.4 Phase 3 audit — 4 critical AR-fix classes that are
+         AddComponent'd at runtime OR static-called from preserved types.
+         Belt-and-suspenders consistent with project policy (lines 75-98)
+         — IL2CPP call-graph analysis SHOULD keep them, but project has
+         a policy of explicit preserve for every typeof-reachable
+         AddComponent target after multiple incidents (TMPDistanceFader,
+         FarShaftDistanceGate, ARKitSessionInit).
+
+         Note: this is NOT the v187 yellow-screen pattern. v187 was
+         SerializedObject-only YAML reference (zero C# code path).
+         These 4 classes all have direct C# call sites (AddComponent<T>
+         + static method calls), so call-graph analysis already covers
+         them. The preserve below is paranoid safety net, not active
+         bug fix.
+
+         Verified AddComponent / static-call paths:
+           - CrossSessionGroundSnap: line 46 EnsureRunning() singleton; called from CairnBridge.cs:597
+           - AnchorDriftMonitor: PortalSpawner.cs:717 + PendingAnchorRetry.cs:120,163
+           - PendingAnchorRetry: PortalSpawner.cs:738
+           - FloorPlaneValidator: static class, called from CairnAcquireController + CrossSessionGroundSnap + GroundYResolver + PendingAnchorRetry
+           - UnityLogger: static class, called from AnchorDriftMonitor + many preserved types -->
+    <type fullname="Cairn.AR.CrossSessionGroundSnap" preserve="all"/>
+    <type fullname="Cairn.AR.AnchorDriftMonitor" preserve="all"/>
+    <type fullname="Cairn.AR.PendingAnchorRetry" preserve="all"/>
+    <type fullname="Cairn.AR.FloorPlaneValidator" preserve="all"/>
+    <type fullname="UnityLogger" preserve="all"/>
   </assembly>
 </linker>

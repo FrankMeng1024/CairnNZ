@@ -586,6 +586,15 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
                 $"finalX={spawnX_diag:F3} finalY={groundY:F3} finalZ={spawnZ_diag:F3} " +
                 $"groundSrc={diagGroundSrc} tierAFound={diagTierAFound} " +
                 $"camY={camY_diag:F3} assumedH={assumedH_diag:F3}");
+            // v0.2.4 Phase 3 LOG: 关键字段 ICritical 绕速率限制 + 含 sessionInstanceId
+            // 真机回来 join 这条跟 v22-PHASE3-SESSION-RESTART 对账,看跨 session 同 marker_id
+            // 是不是 finalY / finalX / finalZ 跨 instance 漂移 = 飞天 ground truth
+            var camForLog = Camera.main;
+            UnityLogger.ICritical("v22-PHASE3-SPAWN-GROUND",
+                $"id={data.id} type={data.type} tier={(isTierA_diag ? "A" : "B")} " +
+                $"finalX={spawnX_diag:F3} finalY={groundY:F3} finalZ={spawnZ_diag:F3} " +
+                $"groundSrc={diagGroundSrc} sessionInstance={CairnBridge.SessionInstanceId} " +
+                $"camPos=({(camForLog != null ? camForLog.transform.position.x : 0f):F2},{(camForLog != null ? camForLog.transform.position.y : 0f):F2},{(camForLog != null ? camForLog.transform.position.z : 0f):F2})");
         }
         catch (System.Exception e)
         {
@@ -681,10 +690,28 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
                         // ARFoundation 6: synchronous AddAnchor exists via
                         // GameObject + ARAnchor component as fallback when
                         // plane-attached path doesn't apply.
+                        //
+                        // ⚠️ v0.2.4 Phase 3 audit: subagent#2 警告 ARFoundation 6
+                        // free-floating ARAnchor (new GameObject + AddComponent)
+                        // 可能不被 ARAnchorSubsystem 注册 → trackingState 永远 None
+                        // → SLAM 不 refine → 等于硬编码坐标 → 跨 session 飞天根因。
+                        // 不强修(改 fallback 路径风险大),加 log 真机看 trackingState。
                         var anchorGo = new GameObject($"DepthAnchor_{data.id ?? "unknown"}");
                         anchorGo.transform.position = hit.pose.position;
                         anchorGo.transform.rotation = hit.pose.rotation;
                         anchorOnSpawn = anchorGo.AddComponent<ARAnchor>();
+                        // v0.2.4 Phase 3 LOG: 立即 + 1s + 5s 检查 trackingState
+                        // ⚠️ subagent#2 警告:同帧读 trackingState 永远 None (ARAnchorSubsystem 异步注册)。
+                        // immediate 字段标 'expected None for free-floating' — 真值在 +1s/+5s。
+                        // 用 ICritical 绕过 5/s 速率限制,集群 plant 时不被 drop。
+                        UnityLogger.ICritical("v22-PHASE3-ANCHOR-FREE-FLOATING-CREATE",
+                            $"id={data.id} pos=({hit.pose.position.x:F2},{hit.pose.position.y:F2},{hit.pose.position.z:F2}) " +
+                            $"state-when-created={anchorOnSpawn.trackingState}(expected-None-async-init) " +
+                            $"trackableId-when-created={anchorOnSpawn.trackableId}");
+                        // delayed checks via coroutine (1s + 5s + 30s 三个 tick,覆盖 ARAnchorSubsystem 真注册延迟范围)
+                        StartCoroutine(CheckFreeFloatingAnchorTrackingStateDelayed(data.id ?? "unknown", anchorOnSpawn, 1.0f));
+                        StartCoroutine(CheckFreeFloatingAnchorTrackingStateDelayed(data.id ?? "unknown", anchorOnSpawn, 5.0f));
+                        StartCoroutine(CheckFreeFloatingAnchorTrackingStateDelayed(data.id ?? "unknown", anchorOnSpawn, 30.0f));
                         // R2 fix: track for ClearAll so DepthAnchor GO doesn't
                         // leak across session resets. Container will be parented
                         // to anchorGo; destroying anchorGo will cascade.
@@ -1259,4 +1286,25 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
 
     /// <summary>Alias for older callers. Prefer ClearAll().</summary>
     public void Clear() => ClearAll();
+
+    /// <summary>
+    /// v0.2.4 Phase 3 LOG — 检查 free-floating ARAnchor (new GameObject + AddComponent<ARAnchor>)
+    /// 在创建后 N 秒的 trackingState。subagent#2 警告这种 anchor 可能不被
+    /// ARAnchorSubsystem 注册 → trackingState 永远 None → SLAM 不 refine
+    /// → cross-session 飞天根因。真机回来根据 v22-PHASE3-ANCHOR-FREE-FLOATING-* log debug。
+    /// </summary>
+    System.Collections.IEnumerator CheckFreeFloatingAnchorTrackingStateDelayed(string id, ARAnchor anchor, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        if (anchor == null)
+        {
+            UnityLogger.ICritical("v22-PHASE3-ANCHOR-FREE-FLOATING-DESTROYED",
+                $"id={id} delay={delay:F1}s anchor was destroyed");
+            yield break;
+        }
+        UnityLogger.ICritical("v22-PHASE3-ANCHOR-FREE-FLOATING-CHECK",
+            $"id={id} delay={delay:F1}s state-after-{delay:F0}s={anchor.trackingState} " +
+            $"trackableId={anchor.trackableId} pos=({anchor.transform.position.x:F2}," +
+            $"{anchor.transform.position.y:F2},{anchor.transform.position.z:F2})");
+    }
 }

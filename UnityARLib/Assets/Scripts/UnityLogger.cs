@@ -37,6 +37,49 @@ public static class UnityLogger
         ForwardToRN("info", line);
     }
 
+    /// <summary>
+    /// v0.2.4 Phase 3 — Critical diagnostic forward, BYPASSES 5/s rate limit.
+    /// Use ONLY for high-value diagnostic events that must reach telemetry
+    /// even under cluster-plant load (e.g. ARAnchor tracking state checks,
+    /// session-restart detection). subagent#2 BLOCKER mitigation: 集群 plant
+    /// 100 cairn 时 IForward 被速率限制 drop 99%,关键 ARAnchor 诊断必须用 ICritical
+    /// 走 error 路径绕过限速。
+    ///
+    /// OTA gate: CairnGlobals.Phase3LogEnabled (default true)。真机出问题诊断完后
+    /// 通过 OTA 关掉,不污染长期 telemetry。
+    /// </summary>
+    public static void ICritical(string tag, string msg)
+    {
+        // OTA gate — 默认 enabled,诊断完关
+        var globals = CairnGlobals.Instance;
+        if (globals != null && !globals.GetBool("Phase3LogEnabled", true))
+        {
+            return;
+        }
+        var line = $"[{tag}][CRIT-DIAG] {msg}";
+        Debug.Log(PREFIX + line);
+        // v0.2.4 Phase 3 subagent B Critical #2 fix:不走 error 级别(避免真机 telemetry pipeline
+        // 误触发 alarm/Sentry/error-count dashboard)。改用专用 "diag" level 走 forceForward
+        // 路径绕过速率限制,但 RN 端能区分这是诊断不是错误。
+        ForceForwardToRN("diag", line);
+    }
+
+    /// <summary>
+    /// v0.2.4 Phase 3 — Diagnostic-grade forward, BYPASSES rate limit but does NOT
+    /// flag as error in telemetry. Use only for ICritical (Phase 3 diagnostic).
+    /// </summary>
+    private static void ForceForwardToRN(string level, string line)
+    {
+        try
+        {
+            CairnBridge.Instance?.SendUnityLog(level, line);
+        }
+        catch
+        {
+            // Logger failures must never recurse / crash.
+        }
+    }
+
     public static void W(string tag, string msg)
     {
         var line = $"[{tag}][WARN] {msg}";

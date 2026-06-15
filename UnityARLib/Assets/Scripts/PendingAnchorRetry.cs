@@ -159,6 +159,16 @@ namespace Cairn.AR
                 // V4.13 A2.4 埋点 + drift monitor (deadline-anchor 路径)
                 UnityLogger.IForward("v22-PLANT-ANCHOR-CREATE",
                     $"id={_markerId} tier=deadline-free-floating pos=({estimatedPose.x:F2},{estimatedPose.y:F2},{estimatedPose.z:F2})");
+                // v0.2.4 Phase 3 LOG: subagent#2 BLOCKER — DegradedAnchor 是 plane 检测彻底失败后的 fallback,
+                // free-floating ARAnchor 不被 ARAnchorSubsystem 注册的概率最高,**飞天最高风险路径**。
+                // 跟 PortalSpawner.cs DepthAnchor 同步加 trackingState 1s/5s/30s 检查。
+                UnityLogger.ICritical("v22-PHASE3-ANCHOR-FREE-FLOATING-CREATE",
+                    $"id={_markerId} path=DegradedAnchor pos=({estimatedPose.x:F2},{estimatedPose.y:F2},{estimatedPose.z:F2}) " +
+                    $"state-when-created={degradedAnchor.trackingState}(expected-None-async-init) " +
+                    $"trackableId-when-created={degradedAnchor.trackableId}");
+                StartCoroutine(CheckDegradedAnchorTrackingStateDelayed(_markerId, degradedAnchor, 1.0f));
+                StartCoroutine(CheckDegradedAnchorTrackingStateDelayed(_markerId, degradedAnchor, 5.0f));
+                StartCoroutine(CheckDegradedAnchorTrackingStateDelayed(_markerId, degradedAnchor, 30.0f));
                 var driftMon = GetComponent<AnchorDriftMonitor>();
                 if (driftMon == null) driftMon = gameObject.AddComponent<AnchorDriftMonitor>();
                 driftMon.Init(_markerId);
@@ -181,6 +191,25 @@ namespace Cairn.AR
                 bridge.SendToRN("SpawnDegraded", $"{{\"id\":\"{_markerId}\",\"reason\":\"anchor-retry-exhausted\"}}");
             }
             Destroy(this);
+        }
+
+        /// <summary>
+        /// v0.2.4 Phase 3 LOG — 检查 DegradedAnchor (free-floating, deadline path)
+        /// trackingState。subagent#2 警告这是飞天最高风险路径。
+        /// </summary>
+        System.Collections.IEnumerator CheckDegradedAnchorTrackingStateDelayed(string id, ARAnchor anchor, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            if (anchor == null)
+            {
+                UnityLogger.ICritical("v22-PHASE3-ANCHOR-FREE-FLOATING-DESTROYED",
+                    $"id={id} path=DegradedAnchor delay={delay:F1}s anchor was destroyed");
+                yield break;
+            }
+            UnityLogger.ICritical("v22-PHASE3-ANCHOR-FREE-FLOATING-CHECK",
+                $"id={id} path=DegradedAnchor delay={delay:F1}s state-after-{delay:F0}s={anchor.trackingState} " +
+                $"trackableId={anchor.trackableId} pos=({anchor.transform.position.x:F2}," +
+                $"{anchor.transform.position.y:F2},{anchor.transform.position.z:F2})");
         }
     }
 }

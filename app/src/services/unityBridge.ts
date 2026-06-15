@@ -85,7 +85,7 @@ export type UnityMessage =
   | { kind: 'PlaneDetected';  x: number; y: number; z: number; area: number }
   | { kind: 'ArSessionState'; state: string }
   | { kind: 'Pong';           token: string; unityTime: number }
-  | { kind: 'UnityLog';       level: 'info' | 'warn' | 'error'; line: string }
+  | { kind: 'UnityLog';       level: 'info' | 'warn' | 'error' | 'diag'; line: string }
   | { kind: 'Checkpoint';     step: string }
   | { kind: 'XRDiag';         phase: string; managerNull?: boolean; loaderCount?: number; loaders?: string; error?: string }
   | { kind: 'ARBgDiag';       phase: string; present?: boolean; enabled?: boolean; useCustomMaterial?: boolean; materialNull?: boolean; error?: string }
@@ -112,7 +112,8 @@ export function parseUnityMessage(raw: string): UnityMessage {
   //             Payload is plain text (not JSON), e.g. "step8-runEmbeddedWithArgc-START".
   if (raw.startsWith('UnityLog|') || raw.startsWith('NativeLog|')) {
     const parts = raw.split('|');
-    const level = (parts[1] === 'warn' || parts[1] === 'error') ? parts[1] : 'info';
+    // v0.2.4 Phase 3 — 'diag' level = ICritical(诊断专用,不当 error,不限速)
+    const level = (parts[1] === 'warn' || parts[1] === 'error' || parts[1] === 'diag') ? parts[1] : 'info';
     const line  = parts.slice(2).join('|');
     return { kind: 'UnityLog', level, line };
   }

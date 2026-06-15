@@ -27,6 +27,11 @@ import { BackButton } from '../components/BackButton';
 // need historical context for why a particular pattern is here, see the
 // pre-v186 commit history (HEAD~2 and earlier).
 import { UnityAROverlay, type UnityAROverlayHandle } from '../components/UnityAROverlay';
+// v0.2.4 Phase 3 — debugLogger session 必须在 ARScreen mount 时启动,
+// 否则 unityCairnSpawn.ts 里 v22-PHASE3-TIER-DECISION 等 breadcrumb 全部 silent drop
+// (debugLogger.log 第 238 行 if !this.currentSessionId return)
+// subagent B Critical #1 fix
+import { debugLogger } from '../services/debugLogger';
 import { CairnEdgeArrows } from '../components/CairnEdgeArrows';
 import { DistantMarkerArrow } from '../components/DistantMarkerArrow';
 import { AcquireGuidance } from '../components/AcquireGuidance';
@@ -220,6 +225,23 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
   useEffect(() => {
     const id = setInterval(() => setTick(t => (t + 1) % 1000), 200);
     return () => clearInterval(id);
+  }, []);
+  // v0.2.4 Phase 3 — ARScreen mount 时启动 debugLogger session,unmount 时 end。
+  // 用户最常见路径 "open app → AR → plant cairn → close → reopen 飞天" 之前没 session,
+  // PHASE3 breadcrumb 100% drop。subagent B Critical #1 fix。
+  // (RouteEditorScreen 也有自己的 startSession,二者互斥 — debugLogger.startSession
+  //  会先 endSessionWith 旧 session 再开新的,见 debugLogger.ts:117。)
+  // ⚠️ subagent B Round-2 race fix:用 useState lazy initializer 同步触发,
+  // 避免 useEffect [] 在 child useEffect 之后才跑(React effect order)
+  // 导致首批 buildSpawnRequest 调用时 currentSessionId 仍 null
+  useState(() => {
+    debugLogger.startSession({ activity_mode: 'free' });
+    return null;
+  });
+  useEffect(() => {
+    return () => {
+      debugLogger.endSession().catch(() => {});
+    };
   }, []);
   // v0.2.4 A: arFrame.track 在 useMemo 里使用,但 arFrame state 声明在下面.
   // 用 ref 镜像让 a4PlantEnabled 能读到不出 TDZ 错.

@@ -177,16 +177,12 @@ public static class AllTypesCinematicTest
             {
                 float dx = (x - cx) / cx;
                 float dy = (y - cy) / cy;
-                // 上窄下宽: dy=-1 顶部 (窄 0.12), dy=+1 底部 (宽 0.35)
-                float widthAtY = Mathf.Lerp(0.12f, 0.35f, (dy + 1f) * 0.5f);
-                // X 包络 (粒子在 |dx| < widthAtY 内有效)
-                float envX = Mathf.Clamp01((widthAtY - Mathf.Abs(dx)) / (widthAtY * 0.4f));
-                // Y 包络 (上下边界软化)
-                float envY = Mathf.Clamp01((0.50f - Mathf.Abs(dy)) / 0.10f);
-                float env = envX * envY;
-                // Wispy noise (内部漂浮感, sin-based 比 PerlinNoise 简单且足够)
-                float wisp = 0.7f + 0.3f * Mathf.Sin(dy * 9.0f + dx * 15.0f);
-                float a = Mathf.Clamp01(env * wisp);
+                // v3 Ember Flecked 炭火床: 软圆 envelope + hash-noise 颗粒亮斑
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                float env = Mathf.Clamp01((0.42f - r) / 0.12f);
+                float h = Mathf.Repeat(Mathf.Sin(Mathf.Floor(dx * 8f) * 12.9f + Mathf.Floor(dy * 8f) * 78.2f) * 437.5f, 1f);
+                float fleck = Mathf.SmoothStep(0.55f, 0.85f, h);
+                float a = env * (0.30f + 0.70f * fleck);
                 pixels[y * sz + x] = new Color(a, a, a, a);
             }
         }
@@ -454,12 +450,12 @@ public static class AllTypesCinematicTest
                 break;
 
             case CairnType.hut:
-                // 屋顶光晕 (House Silhouette + 2 窗户亮点) — 唯一非对称形态
+                // v3 Ember Flecked 炭火床 — 用户从 5 候选中选定 (HutCandidatesTest v3)
                 renderer.renderMode = ParticleSystemRenderMode.Billboard;
                 particleTex = GetHutLanternTex();
                 intensity = 1.5f; alphaPeak = 0.92f;
                 particleStartColor = new Color(1.0f, 0.92f, 0.55f);
-                sizeMin = 0.13f; sizeMax = 0.22f;  // 略大让窗户细节看清
+                sizeMin = 0.18f; sizeMax = 0.30f;  // v3 稍微大一点 (原 0.13-0.22 → 0.18-0.30)
                 break;
 
             case CairnType.cairn:

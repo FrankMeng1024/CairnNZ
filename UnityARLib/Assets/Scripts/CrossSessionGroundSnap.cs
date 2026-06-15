@@ -45,6 +45,10 @@ namespace Cairn.AR
                 DontDestroyOnLoad(go);
                 _instance = go.AddComponent<CrossSessionGroundSnap>();
             }
+            // v0.2.4 Phase 3 LOG: 每次 ArReady 触发都记录 — 真机看 EnsureRunning 调用次数 + 间隔
+            UnityLogger.ICritical("v22-PHASE3-CROSSSNAP-ENSURE-RUNNING",
+                $"instance={(_instance != null ? "ok" : "NULL")} " +
+                $"coroutineRunning={(_instance != null && _instance._coroutineRunning ? "true" : "false")}");
             // 每次都尝试启动 — 如果 coroutine 还在跑就跳过,否则重启
             _instance.TryStartSnap();
         }
@@ -78,6 +82,32 @@ namespace Cairn.AR
 
             var planeMgr = Object.FindFirstObjectByType<ARPlaneManager>();
             var cam      = Camera.main;
+
+            // v0.2.4 Phase 3 LOG: subagent#2 BLOCKER fix — emit 完整环境快照
+            // 真机回来对账:确认 SnapAfterDelay 真触发 + 当前 cairn 状态分布
+            // 用户报"重开 app cairn 飞天" 时,如果 snap 没跑或全 skip,这条 log 直接定位
+            int totalCairnCount = Object.FindObjectsByType<CairnAcquireController>(FindObjectsSortMode.None).Length;
+            int immortalCount = 0;
+            int farCount = 0;
+            int otherCount = 0;
+            foreach (var cAll in Object.FindObjectsByType<CairnAcquireController>(FindObjectsSortMode.None))
+            {
+                if (cAll == null) continue;
+                if (cAll.CurrentState == CairnAcquireController.State.IMMORTAL) immortalCount++;
+                else if (cAll.CurrentState == CairnAcquireController.State.FAR) farCount++;
+                else otherCount++;
+            }
+            int planeCountTotal = 0;
+            if (planeMgr != null)
+            {
+                foreach (var _p in planeMgr.trackables) planeCountTotal++;
+            }
+            UnityLogger.ICritical("v22-PHASE3-CROSSSNAP-INVOKE",
+                $"delay={delay:F1}s planeMgr={(planeMgr != null ? "ok" : "NULL")} " +
+                $"cam={(cam != null ? "ok" : "NULL")} totalCairns={totalCairnCount} " +
+                $"immortal={immortalCount} far={farCount} otherStates={otherCount} " +
+                $"planeCountTotal={planeCountTotal} maxDist={maxDist} minDelta={minDelta}");
+
             if (planeMgr == null || cam == null)
             {
                 Debug.LogWarning("[v22-CROSS-SESSION-SNAP] aborted: planeMgr or camera null");
@@ -107,6 +137,10 @@ namespace Cairn.AR
             if (validPlanes.Count == 0)
             {
                 Debug.Log("[v22-CROSS-SESSION-SNAP] no valid floor plane found within " + maxDist + "m");
+                // v0.2.4 Phase 3 LOG: 无 valid plane 是飞天根因之一(ARSession 重开后 plane 检测慢)
+                UnityLogger.ICritical("v22-PHASE3-CROSSSNAP-NO-PLANE",
+                    $"planeCountTotal={planeCountTotal} maxDist={maxDist} immortalCount={immortalCount} " +
+                    $"reason=ARSession-just-restarted-plane-not-yet-detected-OR-maxDist-too-small");
                 _coroutineRunning = false;
                 yield break;
             }
