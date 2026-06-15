@@ -795,7 +795,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         under 100 (very rare — 5km+ stroke at 5m density).
 //         Test: 200-pt straight stroke now produces 2-point DP output
 //         (was uniform 100 in v259).
-export const OTA_VERSION = 266;
+//   267 — endStroke magnet: insert B/C as new endpoints (was: replace
+//         brush[0]/brush[N-1]). Real-device case 3 evidence:
+//         input[0]=input[1]=B (duplicate magnet point), input[2]
+//         actually 38.7m away. Replacing brush[0] with B ate the
+//         distance between user's true fingertip down-point and B,
+//         producing a 38m L-jump from B to brush[1]. Mapbox HMM
+//         interpreted the L as a cross-street turn → bounced the
+//         matched curve onto a parallel road and back → tiny "过
+//         马路 Z" artifact at intersections. Insert preserves
+//         brush[0] as a continuous transition: new sequence is
+//         [B, brush[0], brush[1], ...]. By construction
+//         B→brush[0] ≤ 50m (the magnetism trigger condition is
+//         exactly that). Same for end: [..., brush[N-1], C].
+//         Direction is natural; no synthetic L-jump for HMM to
+//         misread. Tested on case 3 brush input via subagent
+//         dataflow review: SHIP verdict — no consumer of
+//         stroke.points[0] semantically depends on it being the
+//         baseline projection.
+export const OTA_VERSION = 267;
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

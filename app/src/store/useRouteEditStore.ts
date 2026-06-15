@@ -1329,9 +1329,23 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         stroke.points[stroke.points.length - 1],
         baseLine,
       );
+      // v267 PO direction: insert B/C as new endpoints (don't replace).
+      // Replacing brush[0] with B (= baseline projection) eats the
+      // distance between user's actual fingertip down-point and B.
+      // Real-device case 3 showed: brush[0] was at lat=31.2331 (Yumin Rd
+      // junction), B was 0m away (already on baseline), but user's brush[1]
+      // (real second sample) was 38.7m away — replace produced
+      // [B, brush_after_first_was_overwritten] = effectively a 38m L-jump
+      // from B to brush[1]. Mapbox HMM saw this L and bounced the
+      // matched curve across Yanping Rd to a parallel road and back ("过
+      // 马路小 Z"). Insert preserves user's original brush[0] as a
+      // continuous transition point: new sequence is
+      // [B, brush[0], brush[1], ...] where B → brush[0] ≤ 50m by
+      // construction (the magnetism trigger condition) and brush[0] is
+      // the user's actual down-point — direction is natural, no L-jump.
       const newPoints = [...stroke.points];
-      if (first.distM <= ENDPOINT_SNAP_M) newPoints[0] = first.point;
-      if (last.distM <= ENDPOINT_SNAP_M) newPoints[newPoints.length - 1] = last.point;
+      if (first.distM <= ENDPOINT_SNAP_M) newPoints.unshift(first.point);
+      if (last.distM <= ENDPOINT_SNAP_M) newPoints.push(last.point);
       const newStrokes = [...state.brushStrokes];
       newStrokes[idx] = { ...stroke, points: newPoints };
       set(s => ({
