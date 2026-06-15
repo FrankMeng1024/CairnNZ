@@ -795,59 +795,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         under 100 (very rare — 5km+ stroke at 5m density).
 //         Test: 200-pt straight stroke now produces 2-point DP output
 //         (was uniform 100 in v259).
-//   263 — multi-matching parse + output corridor gate.
-//         Empirical spike (real Mapbox /matching response from v262
-//         retest case 三, diag 268): a 91-coord input got split by
-//         Mapbox HMM into 3 matchings. Pre-v263 parseResponse only
-//         read matchings[0] → curve_end was 369m off the user's
-//         end-anchor C → spliceBCEF emitted a 317m through-building
-//         line at the curve→suffix seam. The matching containing
-//         C (m[2], conf=0.99, end 0.5m off C) was discarded.
-//         v263:
-//         (1) MapMatchingClient parseResponse extracts ALL matchings
-//             into a `segments` array on MatchResult. Legacy
-//             matchedPoints / confidence fields preserved (= [0]).
-//         (2) runPreview filters segments by confidence ≥ 0.3, sorts
-//             by min-arc, stitches with baseline-fill across
-//             inter-segment arc gaps. The final curve runs from B's
-//             arc to C's arc with no synthetic straight-line connectors.
-//         (3) NEW output corridor gate: stitched curve must stay
-//             within CORRIDOR_M + 50m (= 300m) of originalPoints.
-//             Mapbox occasionally bounces a high-conf segment to a
-//             parallel road > 250m away (user case: PO drew toward
-//             a far parallel road); PO direction is to reject in
-//             that case rather than emit a wrongly-bounced curve.
-//         Notes:
-//         (a) baseline-fill segments may produce a small V-kink at
-//             segment boundaries (< 10m local); PO accepted this
-//             trade-off since the alternative (Mapbox /directions
-//             bridging) introduced U-turns and 200m+ artifacts on
-//             other cases.
-//         (b) Legacy callers (runMapMatching.ts midpoint-drag pipeline)
-//             continue reading matchedPoints unchanged. They will
-//             behave identically to v262 since their inputs (≤20
-//             coords + vias) almost never trigger Mapbox to split
-//             into multiple matchings.
-//         (c) Reviewer fixes incorporated: fillStart/fillEnd use
-//             Math.max/min to handle reverse-drawn segments;
-//             output corridor uses 300m (= input + 50m OSM buffer)
-//             rather than naked 250m to avoid double-gating.
-//   264 — relax v263 confidence filter on segments.
-//         v263 filtered segments by conf ≥ 0.3, but case 二 retest
-//         (diag 270) showed Mapbox returned m[0] conf=0.93 (covering
-//         only the start) and additional low-conf segments containing
-//         the C anchor — filter dropped C's segment → curve end was
-//         245m off C → 245m splice gap (= through-building again).
-//         v264: keep all r.segments regardless of confidence. The
-//         output corridor gate (300m, added in v263) remains as the
-//         safety net for genuinely bogus segments.
-//         Also: when ALL segments lack conf, the prior "all-segments-
-//         low-conf" reject path no longer fires (every Ok response
-//         has at least one segment); user no longer sees the "未识别
-//         到这条路" toast for cases where Mapbox actually returned a
-//         path. PO comment "前面我们着重测的也没弹回 是直接给我报错说
-//         没识别 还是中文" indicated the 0.3 threshold was the issue.
-export const OTA_VERSION = 264;
+export const OTA_VERSION = 262;
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

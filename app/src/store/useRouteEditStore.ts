@@ -2151,11 +2151,68 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         return { ok: false, error: firstRejectReason ?? 'rejected' };
       }
 
-      // v260: Splice using BCEF (no anchor replace). Each bcefItems entry
-      // has the projected arcB/arcC + Mapbox curve. spliceBCEF concatenates
-      // baseline-prefix + curves (in arc order, reversed if reverse-drawn)
-      // + baseline-suffix. Replaces v249-v259 spliceMatched.
-      const newMatched = spliceBCEF(baseLine, bcefItems);
+      // v265: drop spliceBCEF entirely. PO direction (after empirical
+      // diag analysis showed Mapbox geometry is always valid OSM road
+      // points but our splice was wrongly anchoring): the new flow is
+      //   baseline_prefix (up to Mapbox curve START's projected arc)
+      // + Mapbox curve in full
+      // + baseline_suffix (from Mapbox curve END's projected arc)
+      // No arc-min/max games, no anchor replacement, no segment
+      // stitching gymnastics — Mapbox owns the curve, baseline owns
+      // the prefix/suffix, the cut point is wherever Mapbox's actual
+      // first/last point lands on baseline.
+      //
+      // Multi-stroke is handled stroke-by-stroke in arc order; for
+      // each stroke the Mapbox curve is taken as-is (already stitched
+      // via v263 multi-matching code in bcefItems[i].curve).
+      const newMatched: LngLat[] = (() => {
+        if (bcefItems.length === 0) return [...baseLine];
+        // Sort by min arc (handles user drawing in reverse direction).
+        const items = bcefItems
+          .map(it => {
+            const curve = it.curve;
+            // Project Mapbox curve's actual first/last onto baseline so
+            // the cut points are where Mapbox really lands, not where
+            // brush projected.
+            const first = projectPointOntoBaseline(curve[0], baseLine);
+            const last = projectPointOntoBaseline(curve[curve.length - 1], baseLine);
+            const arcFirst = first?.arc ?? 0;
+            const arcLast = last?.arc ?? 0;
+            const arcMin = Math.min(arcFirst, arcLast);
+            const arcMax = Math.max(arcFirst, arcLast);
+            const reversed = arcFirst > arcLast;
+            return { curve, arcMin, arcMax, reversed };
+          })
+          .sort((a, b) => a.arcMin - b.arcMin);
+
+        const out: LngLat[] = [];
+        let cursor = 0;
+        for (const it of items) {
+          if (it.arcMin < cursor) continue; // overlap → skip
+          // Prefix: baseline from cursor to arcMin.
+          for (const p of baselineSlice(baseLine, cursor, it.arcMin)) out.push(p);
+          // Mapbox curve, reversed if user drew in reverse-arc direction.
+          const curveOriented = it.reversed ? [...it.curve].reverse() : it.curve;
+          for (const p of curveOriented) out.push(p);
+          cursor = it.arcMax;
+        }
+        // Tail.
+        const total = baseLine.reduce((s, _, i) =>
+          i === 0 ? 0 : s + haversineMetersLocal(baseLine[i-1], baseLine[i]), 0);
+        for (const p of baselineSlice(baseLine, cursor, total)) out.push(p);
+
+        // 0.5m dedupe — same as v260 spliceBCEF tail.
+        if (out.length < 2) return out;
+        const deduped: LngLat[] = [out[0]];
+        for (let i = 1; i < out.length; i++) {
+          const prev = deduped[deduped.length - 1];
+          if (haversineMetersLocal(prev, out[i]) > 0.5) deduped.push(out[i]);
+          else if (prev.alt == null && out[i].alt != null) {
+            deduped[deduped.length - 1] = { ...prev, alt: out[i].alt };
+          }
+        }
+        return deduped;
+      })();
 
       // v258 PO direction: post-splice diag to confirm whether the splice
       // step preserved Mapbox's polyline or flattened a multi-vertex match
