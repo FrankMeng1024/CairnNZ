@@ -22,14 +22,28 @@ public static class TypeIconGridTest
     const string OUT_DIR = "Logs/type-icons-grid";
     const int W = 1280, H = 720;
 
-    static readonly (int idx, string name)[] TYPES = new[]
+    static readonly (int idx, string name, Color color)[] TYPES = new[]
     {
-        (0, "cairn"),
-        (1, "danger"),
-        (2, "junction"),
-        (3, "water"),
-        (4, "hut"),
+        // 颜色跟 app/src/services/unityCairnSpawn.ts:77-83 markerTypeToColor 同步:
+        // danger #FF2A1A 红, junction #FFB347 橙, water #5AE6FF 青蓝,
+        // hut #D4A06B 沙棕, cairn #E8C896 沙金
+        // HDR 强度跟 PortalSpawner.cs 主路径一致 (×3.0 让 bloom 兜底亮起来)
+        (0, "cairn",    HexHDR("E8C896")),
+        (1, "danger",   HexHDR("FF2A1A")),
+        (2, "junction", HexHDR("FFB347")),
+        (3, "water",    HexHDR("5AE6FF")),
+        (4, "hut",      HexHDR("D4A06B")),
     };
+
+    static Color HexHDR(string hex)
+    {
+        float r = System.Convert.ToInt32(hex.Substring(0, 2), 16) / 255f;
+        float g = System.Convert.ToInt32(hex.Substring(2, 2), 16) / 255f;
+        float b = System.Convert.ToInt32(hex.Substring(4, 2), 16) / 255f;
+        // ×1.5 HDR boost (不要冲白,保留 per-type 色饱和度)
+        // 测试发现 ×3 + additive + bloom 让 ring 冲到接近白色,丢失 per-type 视觉。
+        return new Color(r * 1.5f, g * 1.5f, b * 1.5f, 1f);
+    }
 
     [MenuItem("Cairn/Type Icon Grid Test")]
     public static void RunFromMenu() { RunHeadless(); }
@@ -91,19 +105,22 @@ public static class TypeIconGridTest
             UnityEngine.Object.DestroyImmediate(warmupRT);
 
             var ringRenderer = ringGo.GetComponent<Renderer>();
-            var mpb = new MaterialPropertyBlock();
+            // sub 修订: _SweepAngle/_Reveal 在 CBUFFER 里走 material.SetFloat 真生效
+            // (MPB 写 CBUFFER 字段被 SRP Batcher 静默忽略, 同 Story C HOTFIX)
+            var matInstance = ringRenderer.material;
 
-            foreach (var (idx, name) in TYPES)
+            foreach (var (idx, name, color) in TYPES)
             {
-                ringRenderer.GetPropertyBlock(mpb);
-                mpb.SetFloat("_SweepAngle", 6.2831853f);  // full ring (no sweep gate)
-                mpb.SetFloat("_Reveal", 1.0f);             // full icon reveal
-                mpb.SetFloat("_TypeIndex", idx);
-                ringRenderer.SetPropertyBlock(mpb);
+                matInstance.SetColor("_BaseColor", color);  // per-type 颜色
+                matInstance.SetFloat("_SweepAngle", 6.2831853f);  // full ring
+                matInstance.SetFloat("_Reveal", 1.0f);             // full icon reveal
+                matInstance.SetFloat("_TypeIndex", idx);
+                matInstance.SetFloat("_BloomBoost", 1.0f);  // 不要二次冲白
+                matInstance.SetFloat("_CoreIntensity", 0.5f);  // core 减弱让 per-type 色不被中央 glow 冲淡
 
                 var path = Path.Combine(OUT_DIR, $"type-{idx}-{name}.png");
                 CaptureToPng(cam, path);
-                Debug.Log($"[TypeIcons] Rendered {name} (idx={idx}) -> {path}");
+                Debug.Log($"[TypeIcons] Rendered {name} (idx={idx}, color=({color.r:F2},{color.g:F2},{color.b:F2})) -> {path}");
             }
 
             string summary =

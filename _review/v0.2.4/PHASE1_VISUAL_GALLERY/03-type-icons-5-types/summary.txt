@@ -1,0 +1,15 @@
+Type Icon Grid (Story B real test)
+===================================
+Mapping (PortalSpawner.cs:97-107 真用):
+  cairn=0 / danger=1 / junction=2 / water=3 / hut=4
+
+App 端对应 lucide icon (markerTypes.ts):
+  danger  → TriangleAlert (三角 + !)
+  junction → Navigation2 (向上分叉箭头)
+  water   → Droplets (水滴 — lucide 双水滴, Unity 单水滴, shape 70%)
+  hut     → House (房子 — 屋顶 + 墙 + 门)
+  cairn   → CairnStoneIcon SVG (三石堆 — Unity 3 ellipses)
+
+PASS criteria:
+  - 5 张 PNG md5 全唯一 (反 self-licking — typeIdx 真切换 → SDF 真选不同分支)
+  - 视觉看图: 形状跟 lucide app 端一致 (shape match 100%, sub#182 已 grep 验证)
