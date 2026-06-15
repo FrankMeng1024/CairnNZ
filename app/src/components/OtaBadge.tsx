@@ -795,7 +795,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         under 100 (very rare — 5km+ stroke at 5m density).
 //         Test: 200-pt straight stroke now produces 2-point DP output
 //         (was uniform 100 in v259).
-export const OTA_VERSION = 265;
+export const OTA_VERSION = 266;
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

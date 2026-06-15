@@ -2105,6 +2105,35 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           // through buildings.
           degenerate: snapped.length <= 2 || _snapMaxGap > 50,
         });
+        // v266 PO direction: dump FULL raw data for every preview round
+        // so we can offline-analyze without guessing. Includes:
+        //   - every brush raw point we sent Mapbox (post-magnetism, post-simplify)
+        //   - every Mapbox matching segment (each with its own conf + full
+        //     coordinates) — captures the multi-matching split
+        //   - the post-stitch "snapped" curve we use downstream
+        // Yes, this is verbose. Yes, it's worth it. Each preview round
+        // is one diag row; storage is cheap; the alternative is more
+        // OTAs to add fields one at a time.
+        sendEditDiag('brush_full_dump', {
+          stroke_idx: strokeIdx,
+          baseline_pts_count: baseLine.length,
+          baseline_first3: baseLine.slice(0, 3).map(p => [p.lng, p.lat]),
+          baseline_last3: baseLine.slice(-3).map(p => [p.lng, p.lat]),
+          original_pts_count: state.originalPoints.length,
+          mapbox_input_full: bcefInput.map(p => [p.lng, p.lat]),
+          mapbox_segments: r.segments.map(s => ({
+            confidence: s.confidence,
+            n: s.points.length,
+            coords: s.points.map(p => [p.lng, p.lat]),
+          })),
+          stitched_curve_full: snapped.map(p => [p.lng, p.lat]),
+          projected_B: [B.lng, B.lat],
+          projected_C: [C.lng, C.lat],
+          projB_arc: projB.arc,
+          projC_arc: projC.arc,
+          projB_dist_to_baseline: projB.dist,
+          projC_dist_to_baseline: projC.dist,
+        });
         strokeSnapCache.set(fp, snapped);
         if (strokeSnapCache.size > 100) {
           const firstKey = strokeSnapCache.keys().next().value;
@@ -2242,6 +2271,14 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         // Red flag: any Mapbox return had ≥3 pts but splice output has a
         // big gap = splice mangled it.
         suspicious_flatten: snappedPerStroke.some(s => s.length >= 3) && _spliceMaxGap > 50,
+      });
+      // v266 PO direction: full final geometry dump for offline analysis.
+      sendEditDiag('brush_final_dump', {
+        accepted_count: acceptedValidated.length,
+        final_pts_count: newMatched.length,
+        final_full: newMatched.map(p => [p.lng, p.lat]),
+        max_gap_m: _spliceMaxGap,
+        max_gap_at_idx: _spliceMaxGapIdx,
       });
 
       // v261: walkedIndex stays anchored to state.originalPoints across

@@ -42,7 +42,10 @@ export type TelemetryKind =
   | 'brush_alt_dem_null'
   // v258 PO direction "穿楼直线" diag — see OtaBadge.tsx note for v258
   | 'brush_mapbox_response'
-  | 'brush_splice_done';
+  | 'brush_splice_done'
+  // v266: full raw data dump for offline analysis
+  | 'brush_full_dump'
+  | 'brush_final_dump';
 
 /** Events that bypass the debounce timer (high-value or terminal events). */
 const KEY_EVENTS: ReadonlyArray<TelemetryKind> = [
