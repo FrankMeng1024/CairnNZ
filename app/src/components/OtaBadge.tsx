@@ -781,28 +781,42 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             building. With r=50 Mapbox has 2× search radius to find a
 //             real detour (parallel road, nearest junction). r=50 is
 //             the API hard cap.
-//   260 — v260 BCEF: replace spliceMatched anchor-replace with direct
-//         Mapbox curve. Root cause from v258/v259 diag: splice's
-//         [startPt, ...slice(1,-1), endPt] anchor-replacement destroys
-//         Mapbox geometry — Mapbox snap[0] sits 5-22m off baseline →
-//         splice draws straight line through whatever's between (e.g.
-//         buildings). New flow:
-//         (1) Project brush start/end onto baseline → B/C (real baseline
-//             points + arc). PO rule: brush only allowed in solid 250m
-//             corridor; dashed preview area not drawable.
-//         (2) Corridor gate: every brush point ≤ 250m of baseline.
-//         (3) Loop gate: |B-C| < 5m → reject (UX = draw two strokes).
-//         (4) Send Mapbox [B, ...brush, C]. HMM sees real road anchors
-//             at both ends → returns continuous curve where curve[0] ≈ B
-//             within OSM-snap tolerance (1-10m typical, 50m worst).
-//         (5) spliceBCEF: baseline-up-to-min(arcB,arcC) + curve (reversed
-//             if reverse-drawn) + baseline-after-max(arcB,arcC). NO more
-//             anchor replacement, NO straight-line connectors.
-//         Spike (5 cases on real baseline) validated: small/large offset
-//         strokes snap clean; > 250m corridor rejected; multi-stroke
-//         independent OK; reverse-drawn handled. Cache disabled (per-call
-//         re-projection cheap, < 1ms).
-export const OTA_VERSION = 260;
+//   261 — v261 brush + activity polish + regression-audit recovery:
+//         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
+//           * walkedIndex now permanently anchored to state.originalPoints
+//             — was being rebuilt from matchedPoints at Preview commit and
+//             at undo, accumulating Mapbox-OSM-snap drift each cycle. PO
+//             snap "尖角不是我画的是磁吸过去的" was traced to subsequent
+//             strokes magnetizing onto a drifted (no-longer-on-real-road)
+//             baseline. Reset already used originalPoints; Preview commit
+//             and undo did not.
+//           * endStroke magnetism re-enabled (was removed in an earlier
+//             draft; PO clarified magnet is essential for "last stroke
+//             connecting back to baseline" — without it BCEF projB/projC
+//             sit far off baseline when raw fingertip stops short).
+//             Magnet target = state.originalPoints, NOT matchedPoints.
+//           * runPreview baseLine = state.originalPoints (was matchedPoints
+//             || originalPoints — same drift class).
+//           * BCEF primitives moved to src/store/brush/bcef.ts so the
+//             Python self-test (scripts/brush_self_test.py) and future
+//             jest tests can exercise the exact production functions.
+//         ACTIVITY:
+//           * MapHistoryScreen first-frame "Activity too short to record
+//             path" flash fixed — trackPoints state changed from `[]` to
+//             `null` to distinguish loading vs empty. While null, map
+//             area renders nothing instead of showing the misleading
+//             too-short message.
+//         REGRESSION RECOVERY (audit subagent):
+//           * RoutesScreen.tsx: tap activity / route → directly to detail;
+//             long-press preserves the action sheet. Memory said this was
+//             fixed before but git log showed no commit — change had been
+//             stashed during another task and dropped.
+//           * RouteEditorScreen.tsx: Save → CommonActions.reset back to
+//             Home (replaces StackActions.replace which silently no-op'd
+//             on typed nav). Recovered from stash@{0}.
+//           * Backend route_points field on PATCH /api/sessions kept (no
+//             frontend caller in v261; reserved for future opt-in snap).
+export const OTA_VERSION = 261;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"

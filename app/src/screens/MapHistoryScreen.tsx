@@ -685,9 +685,18 @@ export function MapHistoryScreen() {
   // that hydrate() rebuilt the session list with, so the lookup
   // silently returned [] even when local data existed. Network failure
   // falls back to local storage as a best-effort.
-  const [loadedTrackPoints, setLoadedTrackPoints] = useState<import('../store/useSessionStore').TrackPoint[]>([]);
+  // v261: trackPoints state is now nullable to distinguish "still loading"
+  // from "really empty". Previously useState<TrackPoint[]>([]) caused the
+  // first frame to render "Activity too short to record path" before
+  // fetchSessionDetail / loadTrackPoints resolved (typically 50-800ms).
+  // Symptom: every Activity Detail open flashed the too-short message
+  // for ~half a second before the real polyline appeared. With null,
+  // first frame renders nothing while loading; only when the load
+  // completes (with [] for genuinely empty or [pts] for loaded) do we
+  // decide whether to show too-short or the polyline.
+  const [loadedTrackPoints, setLoadedTrackPoints] = useState<import('../store/useSessionStore').TrackPoint[] | null>(null);
   useEffect(() => {
-    if (!selectedSessionId) { setLoadedTrackPoints([]); return; }
+    if (!selectedSessionId) { setLoadedTrackPoints(null); return; }
     let cancelled = false;
     (async () => {
       const session = sessions.find(s => s.id === selectedSessionId);
@@ -714,9 +723,12 @@ export function MapHistoryScreen() {
     return () => { cancelled = true; };
   }, [selectedSessionId, sessions]);
 
-  // Merge loaded track points into the selected session for display
+  // Merge loaded track points into the selected session for display.
+  // v261: when loadedTrackPoints === null we are still loading; pass [] so
+  // existing length-checks stay safe, but track the loading flag separately.
+  const isLoadingTrackPoints = loadedTrackPoints === null;
   const sessionForDisplay = selectedSession
-    ? { ...selectedSession, trackPoints: loadedTrackPoints }
+    ? { ...selectedSession, trackPoints: loadedTrackPoints ?? [] }
     : null;
 
   // v75: full GPS quality pipeline applied at render time so historical
@@ -859,9 +871,15 @@ export function MapHistoryScreen() {
             @rnmapbox/maps available) renders the track on a real Mapbox
             map; web/Expo Go falls back to the SVG-on-panel rendering. */}
         {sessionRender ? (
-          MapView && sessionRender.trackPoints.length >= 2
-            ? <NativeTrackMap session={sessionRender} markers={routeFlags} />
-            : <TrackPolyline session={sessionRender} />
+          isLoadingTrackPoints
+            // v261: still fetching trackPoints — render nothing in the
+            // map area instead of flashing "Activity too short to record
+            // path" for ~half a second. The summary card at the bottom
+            // (km/time/elev) renders unaffected from server summary.
+            ? null
+            : MapView && sessionRender.trackPoints.length >= 2
+              ? <NativeTrackMap session={sessionRender} markers={routeFlags} />
+              : <TrackPolyline session={sessionRender} />
         ) : (
           // Decorative lines when no session selected
           <>
@@ -998,9 +1016,9 @@ export function MapHistoryScreen() {
               style={[
                 cardStyles.deleteBtn,
                 { flex: 1, borderColor: Colors.primary, backgroundColor: Colors.primaryBg },
-                loadedTrackPoints.length < 2 && { opacity: 0.4 },
+                loadedTrackPoints == null || loadedTrackPoints.length < 2 ? { opacity: 0.4 } : undefined,
               ]}
-              disabled={loadedTrackPoints.length < 2}
+              disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}
               onPress={() => {
                 // v198 Bug 1+2 fix: open RouteEditorScreen in save-as-route
                 // draft mode (fromSessionId) instead of persisting directly.
@@ -1028,7 +1046,7 @@ export function MapHistoryScreen() {
                   // and multi-device users would be unable to save).
                   // MapHistoryScreen has the authoritative server-fetched
                   // trace already loaded for the polyline render.
-                  fromSessionTrackPoints: loadedTrackPoints.map(p => ({
+                  fromSessionTrackPoints: (loadedTrackPoints ?? []).map(p => ({
                     lat: p.lat,
                     lng: p.lng,
                     alt: p.alt ?? null,
