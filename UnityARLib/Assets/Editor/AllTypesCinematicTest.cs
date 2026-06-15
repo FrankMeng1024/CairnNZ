@@ -126,7 +126,7 @@ public static class AllTypesCinematicTest
         return tex;
     }
 
-    // water: 精致小水珠 (锐边圆 + 偏左上反光高光斑, 比 danger 更小更亮点状)
+    // water: 三环涟漪 (Concentric Ripple Triplet) — 跟 danger 实心软圆完全相反结构
     static Texture2D _waterDropTex;
     static Texture2D GetWaterDropTex()
     {
@@ -143,13 +143,13 @@ public static class AllTypesCinematicTest
                 float dx = (x - cx) / cx;
                 float dy = (y - cy) / cy;
                 float r = Mathf.Sqrt(dx * dx + dy * dy);
-                // 主体: 锐边软圆 (水珠轮廓清楚, 不像 mote 那么糊)
-                float body = Mathf.Pow(Mathf.Clamp01(1f - r), 1.8f);
-                // 反光高光斑 (偏左上, 强对比 → 真水珠反光)
-                float hx = dx + 0.30f, hy = dy + 0.30f;
-                float hr = Mathf.Sqrt(hx * hx + hy * hy);
-                float highlight = hr < 0.22f ? Mathf.Pow(1f - hr / 0.22f, 1.2f) * 0.9f : 0f;
-                float a = Mathf.Clamp01(body * 0.55f + highlight);
+                // 3 个嵌套环 (空心 + 不同半径不同强度)
+                float ring1 = Mathf.Max(0f, 1f - Mathf.Abs(r - 0.30f) / 0.06f) * 1.0f;  // 内环最亮
+                float ring2 = Mathf.Max(0f, 1f - Mathf.Abs(r - 0.55f) / 0.06f) * 0.7f;  // 中环
+                float ring3 = Mathf.Max(0f, 1f - Mathf.Abs(r - 0.80f) / 0.06f) * 0.4f;  // 外环最弱
+                float a = Mathf.Clamp01(ring1 + ring2 + ring3);
+                // 外缘 fade
+                if (r > 0.95f) a *= Mathf.Clamp01((1f - r) / 0.05f);
                 pixels[y * sz + x] = new Color(a, a, a, a);
             }
         }
@@ -159,7 +159,7 @@ public static class AllTypesCinematicTest
         return tex;
     }
 
-    // hut: 烛火形状 (倒水滴 — 下窄上尖, 像跳动的火焰)
+    // hut: 屋顶光晕 (House Silhouette + 2 窗户亮点) — 唯一非对称形,"庇护"符号
     static Texture2D _hutLanternTex;
     static Texture2D GetHutLanternTex()
     {
@@ -175,20 +175,28 @@ public static class AllTypesCinematicTest
             {
                 float dx = (x - cx) / cx;
                 float dy = (y - cy) / cy;
-                // 烛火形: dy=-1 顶部 (尖), dy=+1 底部 (圆胖)
-                // x 半径随 dy 变 → 顶尖底圆: dy=-1→0.05, dy=0→0.45, dy=+1→0.65
-                float yNorm = (dy + 1f) * 0.5f;  // 0 顶 .. 1 底
-                float radiusAt = 0.05f + Mathf.Pow(yNorm, 0.8f) * 0.65f;
-                float distFromAxis = Mathf.Abs(dx) / Mathf.Max(0.05f, radiusAt);
-                float body = Mathf.Pow(Mathf.Clamp01(1f - distFromAxis), 1.5f);
-                // y 上下边界淡出 (顶部 & 底部边缘软化)
-                float yEdge = 1f - Mathf.Abs(dy);
-                body *= Mathf.Clamp01(yEdge * 1.4f);
-                // 中心烛芯 (中下部位 0.0-0.4 处一条亮核)
-                float coreY = dy - 0.15f;  // 偏下
-                float coreR = Mathf.Sqrt(dx * dx + coreY * coreY * 2f);  // 椭圆核
-                float core = coreR < 0.25f ? Mathf.Pow(1f - coreR / 0.25f, 1.5f) * 0.5f : 0f;
-                float a = Mathf.Clamp01(body + core);
+                // 屋顶三角: dy > 0.1 时, |dx| < (0.7 - dy) / 0.6 * 0.6 → 三角形
+                // body 矩形: -0.7 < dy < 0.1, |dx| < 0.5
+                bool inBody = dy >= -0.7f && dy <= 0.1f && Mathf.Abs(dx) <= 0.5f;
+                // 三角顶: 顶点 (0, 0.7), 底边 y=0.1 |dx|<0.6
+                bool inRoof = false;
+                if (dy >= 0.1f && dy <= 0.7f)
+                {
+                    float roofWidth = 0.6f * (0.7f - dy) / 0.6f;
+                    if (Mathf.Abs(dx) <= roofWidth) inRoof = true;
+                }
+                float house = (inBody || inRoof) ? 0.55f : 0f;
+                // 2 个窗户 (在 body 内, 偏左和偏右)
+                float winL_x = dx - (-0.22f), winL_y = dy - (-0.25f);
+                float winR_x = dx - 0.22f, winR_y = dy - (-0.25f);
+                bool inWinL = Mathf.Abs(winL_x) <= 0.08f && Mathf.Abs(winL_y) <= 0.10f;
+                bool inWinR = Mathf.Abs(winR_x) <= 0.08f && Mathf.Abs(winR_y) <= 0.10f;
+                float windows = (inWinL || inWinR) ? 1.0f : 0f;
+                // 边缘软化 (避免锯齿)
+                float a = Mathf.Clamp01(house + windows);
+                // 整体外圈 fade (距中心)
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                if (r > 0.95f) a *= Mathf.Clamp01((1f - r) / 0.05f);
                 pixels[y * sz + x] = new Color(a, a, a, a);
             }
         }
@@ -447,21 +455,21 @@ public static class AllTypesCinematicTest
                 break;
 
             case CairnType.water:
-                // 真水珠: Billboard + 水珠 SDF (锐边圆 + 强反光高光), 精致小巧
+                // 三环涟漪 (Concentric Ripple) — 跟 danger 实心圆相反, 空心多层
                 renderer.renderMode = ParticleSystemRenderMode.Billboard;
                 particleTex = GetWaterDropTex();
-                intensity = 1.6f; alphaPeak = 0.90f;
+                intensity = 1.5f; alphaPeak = 0.90f;
                 particleStartColor = new Color(0.7f, 0.95f, 1.0f);
-                sizeMin = 0.06f; sizeMax = 0.12f;  // 比 danger 还小, 精致水珠
+                sizeMin = 0.12f; sizeMax = 0.20f;  // 中等 (跟 danger 同量级)
                 break;
 
             case CairnType.hut:
-                // 烛火: Billboard + 倒水滴 SDF (顶尖底圆 + 中下烛芯亮核), 暖橙跳动感
+                // 屋顶光晕 (House Silhouette + 2 窗户亮点) — 唯一非对称形态
                 renderer.renderMode = ParticleSystemRenderMode.Billboard;
                 particleTex = GetHutLanternTex();
-                intensity = 1.7f; alphaPeak = 0.92f;
+                intensity = 1.5f; alphaPeak = 0.92f;
                 particleStartColor = new Color(1.0f, 0.92f, 0.55f);
-                sizeMin = 0.12f; sizeMax = 0.22f;
+                sizeMin = 0.13f; sizeMax = 0.22f;  // 略大让窗户细节看清
                 break;
 
             case CairnType.cairn:
