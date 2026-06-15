@@ -532,7 +532,12 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
           )
         }
         renderItem={({ item }) => (
-          <PressBtn style={styles.card} onPress={() => setSelectedRoute(item)} scaleTo={0.97}>
+          <PressBtn
+            style={styles.card}
+            onPress={() => nav.navigate('RouteEditor', { routeId: item.id })}
+            onLongPress={() => setSelectedRoute(item)}
+            scaleTo={0.97}
+          >
             <LinearGradient colors={[Colors.primaryLight, Colors.primaryDeep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardBadge}>
               <Icon name="Route" size={18} color={Colors.primary} strokeWidth={1.8} />
             </LinearGradient>
@@ -560,6 +565,11 @@ function ActivitiesTab() {
   const [selectedSession, setSelectedSession] = useState<import('../store/useSessionStore').TrackingSession | null>(null);
   const [filter, setFilter] = useState<'all' | 'hiking' | 'running'>('all');
   const [sort, setSort] = useState<'recent' | 'distance-desc' | 'duration-desc'>('recent');
+  // v261 PO direction: tap → direct to MapHistory detail (long-press still
+  // opens the action sheet for power users). The pre-v261 behavior had been
+  // changed once before but the fix never made it into a commit, so it
+  // regressed. This time it's persisted via git.
+  const nav = useNavigation<Nav>();
 
   const visible = useMemo(() => {
     let list = sessions;
@@ -614,7 +624,8 @@ function ActivitiesTab() {
           return (
             <PressBtn
               style={[styles.card, { borderLeftColor: accent }]}
-              onPress={() => setSelectedSession(item)}
+              onPress={() => nav.navigate('MapHistory', { sessionId: item.id })}
+              onLongPress={() => setSelectedSession(item)}
               scaleTo={0.97}
             >
               <View style={[styles.cardBadge, { backgroundColor: bg }]}>
