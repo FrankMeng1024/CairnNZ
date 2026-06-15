@@ -832,7 +832,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             Math.max/min to handle reverse-drawn segments;
 //             output corridor uses 300m (= input + 50m OSM buffer)
 //             rather than naked 250m to avoid double-gating.
-export const OTA_VERSION = 263;
+//   264 — relax v263 confidence filter on segments.
+//         v263 filtered segments by conf ≥ 0.3, but case 二 retest
+//         (diag 270) showed Mapbox returned m[0] conf=0.93 (covering
+//         only the start) and additional low-conf segments containing
+//         the C anchor — filter dropped C's segment → curve end was
+//         245m off C → 245m splice gap (= through-building again).
+//         v264: keep all r.segments regardless of confidence. The
+//         output corridor gate (300m, added in v263) remains as the
+//         safety net for genuinely bogus segments.
+//         Also: when ALL segments lack conf, the prior "all-segments-
+//         low-conf" reject path no longer fires (every Ok response
+//         has at least one segment); user no longer sees the "未识别
+//         到这条路" toast for cases where Mapbox actually returned a
+//         path. PO comment "前面我们着重测的也没弹回 是直接给我报错说
+//         没识别 还是中文" indicated the 0.3 threshold was the issue.
+export const OTA_VERSION = 264;
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

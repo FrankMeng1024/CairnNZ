@@ -1998,7 +1998,17 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         // fills inter-segment baseline arc gaps with originalPoints
         // geometry. The result is a single contiguous curve passed to
         // spliceBCEF.
-        const allSegs = r.segments.filter(s => s.confidence >= 0.3);
+        // v264 fix: previously (v263) we filtered segments by confidence
+        // ≥ 0.3 — but real-device retest (diag 270, route 2) showed
+        // Mapbox returned m[0] conf=0.93 + m[2] conf < 0.3, so the
+        // segment containing C-anchor got dropped → curve end stayed
+        // 245m off C → 245m splice gap (= through-building line again).
+        // The 0.3 threshold was too strict: even a low-conf segment
+        // that touches C is better than no end-anchor at all. Output
+        // corridor gate (300m) below catches truly bogus segments.
+        // Effectively: trust all matchings Mapbox returned, the corridor
+        // gate is the safety net.
+        const allSegs = r.segments;
         if (allSegs.length === 0) {
           rejectedStrokeIds.push(vs.stroke.id);
           firstRejectReason ??= '未识别到这条路';
