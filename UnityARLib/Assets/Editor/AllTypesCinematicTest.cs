@@ -159,8 +159,8 @@ public static class AllTypesCinematicTest
         return tex;
     }
 
-    // hut: 暖光团 + 内部微弱屋顶光影 (主体大软光晕, 内部 alpha 区分出屋顶轮廓暗示)
-    // 不要锐利 silhouette (闹鬼感), 要的是"温暖一家人的光" 团状柔
+    // hut: 纯粹暖光团 (大软光晕 + 偏下温暖核, 完全无 silhouette)
+    // 反思: 多个小屋 silhouette 飘升 = 闹鬼. 必须完全去掉 silhouette, 只有暖光感
     static Texture2D _hutLanternTex;
     static Texture2D GetHutLanternTex()
     {
@@ -177,25 +177,14 @@ public static class AllTypesCinematicTest
                 float dx = (x - cx) / cx;
                 float dy = (y - cy) / cy;
                 float r = Mathf.Sqrt(dx * dx + dy * dy);
-                // 主体: 大软光晕 (慢衰减, 暖光感)
+                // 大软光晕 (慢衰减, 暖光弥散感, 不像 mote 那么硬)
                 float halo = Mathf.Pow(Mathf.Clamp01(1f - r), 1.0f);
-                // 内部下半部 (dy < -0.05) 加一个 "暖核" 矩形 → 像窗户透出的光
-                // 上半部 (dy > 0.1) 顶部稍暗 → 暗示屋顶 silhouette (但不是锐利轮廓)
-                float warmCore = 0f;
-                if (dy >= -0.5f && dy <= 0.0f && Mathf.Abs(dx) <= 0.35f)
-                {
-                    // 中下部矩形暖核 (像炉火 / 房间内的灯光)
-                    warmCore = 0.6f;
-                }
-                // 顶部"屋顶"暗示 (微微抬高 alpha 让顶部不至于直接暴跌)
-                float roofHint = 0f;
-                if (dy > 0.0f && dy < 0.5f)
-                {
-                    float yNorm = (0.5f - dy) / 0.5f;  // 0..1
-                    float roofWidth = 0.5f * yNorm;
-                    if (Mathf.Abs(dx) < roofWidth) roofHint = 0.25f;
-                }
-                float a = Mathf.Clamp01(halo * 0.75f + warmCore + roofHint);
+                // 偏下温暖核 (椭圆): 给"炉火"暗示但不是锐利窗户
+                float coreY = dy + 0.15f;  // 中心偏下
+                float coreR = Mathf.Sqrt(dx * dx * 1.2f + coreY * coreY * 1.5f);
+                float core = coreR < 0.40f ? Mathf.Pow(1f - coreR / 0.40f, 1.5f) * 0.5f : 0f;
+                // 跟 danger 区分: 中心 hotspot 偏下不是中央 (danger 是中心 hotspot)
+                float a = Mathf.Clamp01(halo * 0.7f + core);
                 pixels[y * sz + x] = new Color(a, a, a, a);
             }
         }
