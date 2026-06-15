@@ -126,6 +126,118 @@ public static class AllTypesCinematicTest
         return tex;
     }
 
+    // water: 水珠 (软圆 + 偏左上反光高光斑)
+    static Texture2D _waterDropTex;
+    static Texture2D GetWaterDropTex()
+    {
+        if (_waterDropTex != null) return _waterDropTex;
+        const int sz = 64;
+        var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Bilinear;
+        var pixels = new Color[sz * sz];
+        float cx = sz * 0.5f, cy = sz * 0.5f;
+        for (int y = 0; y < sz; y++)
+        {
+            for (int x = 0; x < sz; x++)
+            {
+                float dx = (x - cx) / cx;
+                float dy = (y - cy) / cy;
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                // 主体: 水珠软圆轮廓 (边缘比 mote 锐, 中间有空)
+                float ring = Mathf.Clamp01(1f - r) * Mathf.Clamp01(r * 1.5f);  // 环形 (中心稍暗)
+                // 反光高光 (偏左上)
+                float hx = dx + 0.35f, hy = dy + 0.35f;
+                float hr = Mathf.Sqrt(hx * hx + hy * hy);
+                float highlight = hr < 0.30f ? Mathf.Pow(1f - hr / 0.30f, 1.5f) : 0f;
+                float a = Mathf.Clamp01(ring * 0.7f + highlight);
+                pixels[y * sz + x] = new Color(a, a, a, a);
+            }
+        }
+        tex.SetPixels(pixels);
+        tex.Apply();
+        _waterDropTex = tex;
+        return tex;
+    }
+
+    // hut: 灯笼 (大软圆 + 中心强暖核)
+    static Texture2D _hutLanternTex;
+    static Texture2D GetHutLanternTex()
+    {
+        if (_hutLanternTex != null) return _hutLanternTex;
+        const int sz = 64;
+        var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Bilinear;
+        var pixels = new Color[sz * sz];
+        float cx = sz * 0.5f, cy = sz * 0.5f;
+        for (int y = 0; y < sz; y++)
+        {
+            for (int x = 0; x < sz; x++)
+            {
+                float dx = (x - cx) / cx;
+                float dy = (y - cy) / cy;
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                // 大软圆 (慢衰减)
+                float halo = Mathf.Pow(Mathf.Clamp01(1f - r), 1.2f);
+                // 中心强亮核 (灯笼内火)
+                float core = r < 0.35f ? Mathf.Pow(1f - r / 0.35f, 2.0f) * 0.8f : 0f;
+                float a = Mathf.Clamp01(halo + core);
+                pixels[y * sz + x] = new Color(a, a, a, a);
+            }
+        }
+        tex.SetPixels(pixels);
+        tex.Apply();
+        _hutLanternTex = tex;
+        return tex;
+    }
+
+    // cairn: 不规则石头 SDF (5 顶点多边形 + 实心)
+    static Texture2D _cairnRockTex;
+    static Texture2D GetCairnRockTex()
+    {
+        if (_cairnRockTex != null) return _cairnRockTex;
+        const int sz = 64;
+        var tex = new Texture2D(sz, sz, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Bilinear;
+        var pixels = new Color[sz * sz];
+        float cx = sz * 0.5f, cy = sz * 0.5f;
+        // 5 顶点多边形定义 (random 但 deterministic)
+        float[] vertAngles = { -2.4f, -0.7f, 0.5f, 1.8f, 2.9f };
+        float[] vertRadii  = {  0.85f, 0.95f, 0.78f, 0.92f, 0.88f };
+        for (int y = 0; y < sz; y++)
+        {
+            for (int x = 0; x < sz; x++)
+            {
+                float dx = (x - cx) / cx;
+                float dy = (y - cy) / cy;
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                float angle = Mathf.Atan2(dy, dx);
+                float boundary = 0.85f;
+                for (int i = 0; i < 5; i++)
+                {
+                    int j = (i + 1) % 5;
+                    float a1 = vertAngles[i], a2 = vertAngles[j];
+                    if (a2 < a1) a2 += Mathf.PI * 2f;
+                    float ang = angle;
+                    if (ang < a1) ang += Mathf.PI * 2f;
+                    if (ang >= a1 && ang <= a2)
+                    {
+                        boundary = Mathf.Lerp(vertRadii[i], vertRadii[j], (ang - a1) / (a2 - a1));
+                        break;
+                    }
+                }
+                float a;
+                if (r <= boundary - 0.05f) a = 1.0f;        // 实心
+                else if (r <= boundary) a = (boundary - r) / 0.05f;  // 边缘软化
+                else a = 0f;
+                pixels[y * sz + x] = new Color(a, a, a, a);
+            }
+        }
+        tex.SetPixels(pixels);
+        tex.Apply();
+        _cairnRockTex = tex;
+        return tex;
+    }
+
     [MenuItem("Cairn/All Types Cinematic")]
     public static void RunFromMenu() { RunHeadless(); }
 
@@ -327,45 +439,34 @@ public static class AllTypesCinematicTest
                 break;
 
             case CairnType.water:
-                // Sphere mesh + 高 intensity / 低 alpha → 真水透明发光
-                renderer.renderMode = ParticleSystemRenderMode.Mesh;
-                renderer.mesh = GetSphereMesh();
-                particleTex = moteTex;  // mesh 也 sample texture 但 sphere 顶点 UV 是球面
-                intensity = 2.0f;       // 高 intensity 让 additive 透出"水内部发光"
-                alphaPeak = 0.40f;      // 低 alpha → 真透明感
+                // 真水珠: Billboard + 水珠 SDF (圆轮廓 + 反光高光)
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                particleTex = GetWaterDropTex();
+                intensity = 1.5f; alphaPeak = 0.85f;
                 particleStartColor = new Color(0.7f, 0.95f, 1.0f);
-                sizeMin = 0.13f; sizeMax = 0.25f;
-                break;
-
-            case CairnType.hut:
-                // 暖光柔球 (Sphere mesh, 高 intensity 暖光)
-                renderer.renderMode = ParticleSystemRenderMode.Mesh;
-                renderer.mesh = GetSphereMesh();
-                particleTex = moteTex;
-                intensity = 1.8f;       // 强暖光
-                alphaPeak = 0.80f;
-                particleStartColor = new Color(1.0f, 0.92f, 0.6f);
                 sizeMin = 0.13f; sizeMax = 0.26f;
                 break;
 
+            case CairnType.hut:
+                // 灯笼: Billboard + 大软圆 + 中心强亮核
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                particleTex = GetHutLanternTex();
+                intensity = 1.6f; alphaPeak = 0.90f;
+                particleStartColor = new Color(1.0f, 0.92f, 0.6f);
+                sizeMin = 0.14f; sizeMax = 0.28f;
+                break;
+
             case CairnType.cairn:
-                // 不规则石块 mesh + 翻滚
-                renderer.renderMode = ParticleSystemRenderMode.Mesh;
-                renderer.mesh = GetRockMesh();
-                particleTex = moteTex;
-                intensity = 0.85f;
-                alphaPeak = 0.95f;
+                // 真石头: Billboard + 不规则 5 边形多边形 SDF (实心)
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                particleTex = GetCairnRockTex();
+                intensity = 1.0f; alphaPeak = 0.95f;
                 particleStartColor = new Color(0.95f, 0.85f, 0.65f);
-                main.startRotation3D = true;
-                main.startRotationX = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-                main.startRotationY = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-                main.startRotationZ = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+                // 翻滚 2D 旋转 (billboard 也能旋转)
+                main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
                 var rotLife = ps.rotationOverLifetime;
                 rotLife.enabled = true;
-                rotLife.separateAxes = true;
-                rotLife.x = new ParticleSystem.MinMaxCurve(-0.4f, 0.4f);
-                rotLife.y = new ParticleSystem.MinMaxCurve(-0.4f, 0.4f);
-                rotLife.z = new ParticleSystem.MinMaxCurve(-0.4f, 0.4f);
+                rotLife.z = new ParticleSystem.MinMaxCurve(-0.5f, 0.5f);
                 break;
         }
 
