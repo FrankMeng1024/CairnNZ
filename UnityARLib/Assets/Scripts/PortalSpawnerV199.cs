@@ -253,6 +253,42 @@ public partial class PortalSpawner
                 ctl.Init(data.id, existingAnchor, rcMgr, pmMgr, amMgr, cam, ceremony, lidar);
             }
         }
+
+        // ── v0.2.4 Phase 2: TypeParticleController per-type 配置 + 接入 ──
+        // Sub#2 反驳: 项目无 prefab, GetComponentInChildren 永远返 null. 必须主动 AddComponent.
+        // 接入: 1) container AddComponent<TypeParticleController> 2) Configure(type, color)
+        //      3) ceremony.SetTypeParticles → ribbon 阶段触发 SetSpawnEnabled
+        if (globals == null || globals.GetBool("TypeParticlesEnabled", true))
+        {
+            // Color fallback: 老后端不传 r/g/b 会是 0 (黑) → 用 type 默认配色 (HTML line 80-86)
+            Color typeColor;
+            if (data.r == 0f && data.g == 0f && data.b == 0f)
+            {
+                switch (data.type)
+                {
+                    case "danger":   typeColor = HexColor(0xff7866); break;
+                    case "water":    typeColor = HexColor(0x5fa8d8); break;
+                    case "junction": typeColor = HexColor(0xa4d889); break;
+                    case "hut":      typeColor = HexColor(0xe8c47a); break;
+                    case "cairn":
+                    default:         typeColor = HexColor(0xb89968); break;
+                }
+            }
+            else
+            {
+                typeColor = new Color(data.r, data.g, data.b, 1f);
+            }
+
+            // 主动 AddComponent (不能依赖 prefab GetComponentInChildren)
+            var tpGo = new GameObject("TypeParticles");
+            tpGo.transform.SetParent(container.transform, false);
+            var tp = tpGo.AddComponent<Cairn.AR.TypeParticleController>();
+            tp.Configure(data.type ?? "cairn", typeColor, 0.55f);
+
+            // wire ceremony → tp
+            var ceremony = container.GetComponentInChildren<Cairn.AR.CeremonyController>(true);
+            if (ceremony != null) ceremony.SetTypeParticles(tp);
+        }
         UnityLogger.IForward("V199",
             $"add-done id={data.id} pebble={(pebbleMaterial!=null && data.type=="cairn")} " +
             $"chip={(typeChipMaterial!=null && data.type!="cairn")} " +
@@ -421,6 +457,15 @@ public partial class PortalSpawner
         mpb.SetFloat("_GlowMul", glow);
         mpb.SetFloat("_TypeIndex", TypeChipIndex(type));
         r.SetPropertyBlock(mpb);
+    }
+
+    private static Color HexColor(int hex)
+    {
+        return new Color(
+            ((hex >> 16) & 0xFF) / 255f,
+            ((hex >> 8) & 0xFF) / 255f,
+            (hex & 0xFF) / 255f,
+            1f);
     }
 
     private static int TypeChipIndex(string type)

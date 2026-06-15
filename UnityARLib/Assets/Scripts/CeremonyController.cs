@@ -43,6 +43,12 @@ namespace Cairn.AR
         [SerializeField] TypeParticleController _typeParticles;
         [SerializeField] CanvasGroup _labelCanvas;          // 3D world-space label
 
+        // v0.2.4 Phase 2: V199 spawn flow runtime wire (无 prefab 项目里 SerializeField 永远 null)
+        public void SetTypeParticles(TypeParticleController tp)
+        {
+            _typeParticles = tp;
+        }
+
         // Current ceremony time normalized 0..1; -1 = not playing
         float _t = -1f;
 

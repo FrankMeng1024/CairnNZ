@@ -63,6 +63,15 @@
     <type fullname="CairnVolumeOverrides" preserve="all"/>
     <type fullname="GlobalScanGridController" preserve="all"/>
     <type fullname="LikeBadge" preserve="all"/>
+    <!-- v0.2.4 Phase 2 — TypeParticleController + CeremonyController +
+         CairnAcquireController are AddComponent'd at runtime by
+         PortalSpawnerV199.AddV199Layers. iOS IL2CPP could strip these
+         types → AddComponent returns null → 5-type particles silent dead.
+         Same failure pattern as line 66-73 fader fix.
+    -->
+    <type fullname="Cairn.AR.TypeParticleController" preserve="all"/>
+    <type fullname="Cairn.AR.CeremonyController" preserve="all"/>
+    <type fullname="Cairn.AR.CairnAcquireController" preserve="all"/>
     <!-- v199 review M-FADER-2 — TMPDistanceFader is AddComponent'd at
          runtime by PortalSpawnerV199.AttachRuneText. Same belt-and-
          suspenders policy as MarkTextDistanceFader (line 57) and every
