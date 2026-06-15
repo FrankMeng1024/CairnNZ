@@ -190,25 +190,35 @@ export function simplifyStroke(points: LngLat[]): SimplifyResult {
     };
   }
 
-  const MIN_DENSE_OUTPUT = 60;
+  // v261 fix: keep the DP output even when it's "sparse" (<60 pts).
+  // Previously we fell through to uniform 100 when DP gave < 60, on the
+  // theory that "more points = better Mapbox match". But uniform sampling
+  // does NOT preserve real turning points — it just picks every Nth raw
+  // sample. On a brush with a sharp turn, DP keeps the turn vertex (even
+  // if the rest collapses to 5 points), while uniform 100 may smear the
+  // turn across many similar-direction points and lose its character.
+  //
+  // Real-world failure (route 3 retest, diag 265): a 120-pt user brush
+  // got uniform-sampled to 100 points, the resulting input shape was
+  // smeared, Mapbox HMM followed the smeared shape and returned a curve
+  // whose end was 308m off the actual brush endpoint — splice produced
+  // a 308m through-building line.
+  //
+  // New rule: take the FIRST DP epsilon that lands ≤ 100. Even if it
+  // produces e.g. 25 points, those are the geometrically-meaningful
+  // ones (start, real turns, end). Mapbox HMM at radius=50m has plenty
+  // of search room around each anchor and will reconstruct the road.
+  // Uniform fallback is reserved for the truly pathological case where
+  // even DP at the largest ε can't get under 100 (very rare).
   for (const eps of DP_EPSILON_LADDER_M) {
     const simplified = douglasPeucker(points, eps);
     if (simplified.length <= MAPBOX_MATCHING_MAX_COORDS) {
-      // Accept ONLY if dense enough; otherwise fall through to uniform
-      // sampling. Sparse DP outputs (e.g., route 4 case: 159 → 19 pts
-      // with 239m mid-gap) leave Mapbox HMM unable to constrain the
-      // path and produce degenerate straight lines through buildings.
-      if (simplified.length >= MIN_DENSE_OUTPUT) {
-        return {
-          points: simplified,
-          reason: `dp_eps_${eps}` as SimplifyReason,
-          inputCount,
-          outputCount: simplified.length,
-        };
-      }
-      // Too sparse — break out of ladder and use uniform sampling instead.
-      // (Larger ε values would only produce even sparser results.)
-      break;
+      return {
+        points: simplified,
+        reason: `dp_eps_${eps}` as SimplifyReason,
+        inputCount,
+        outputCount: simplified.length,
+      };
     }
   }
 

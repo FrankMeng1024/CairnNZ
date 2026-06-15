@@ -781,7 +781,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             building. With r=50 Mapbox has 2× search radius to find a
 //             real detour (parallel road, nearest junction). r=50 is
 //             the API hard cap.
-//   261 — v261 brush + activity polish + regression-audit recovery:
+//   262 — strokeSimplify uniform-fallback removed in normal path.
+//         Diag from v261 retest (route 3, diag 265): 120-pt user brush
+//         → uniform_fallback to 100 → Mapbox curve end 308m off C →
+//         splice gap 308m through-building. Root cause: uniform sampling
+//         smears real turning points; Mapbox HMM follows the smeared
+//         input shape. v261's "<60 → uniform" rule was wrong — even a
+//         5-point DP simplification preserves the meaningful turns and
+//         lets HMM at r=50m reconstruct the road.
+//         New rule: take FIRST DP epsilon ≤ 100 from the ladder
+//         {5,10,20,40}, regardless of output sparsity. Uniform fallback
+//         is now reserved for the edge case where even ε=40 can't get
+//         under 100 (very rare — 5km+ stroke at 5m density).
+//         Test: 200-pt straight stroke now produces 2-point DP output
+//         (was uniform 100 in v259).
+export const OTA_VERSION = 262;
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and
@@ -816,7 +830,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             on typed nav). Recovered from stash@{0}.
 //           * Backend route_points field on PATCH /api/sessions kept (no
 //             frontend caller in v261; reserved for future opt-in snap).
-export const OTA_VERSION = 261;
 
 type OtaState =
   | 'idle'          // checked, no update — "Up to date"
