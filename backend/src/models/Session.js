@@ -170,14 +170,23 @@ const Session = {
    * v77: optional routePointsRaw — full audit track including stationary
    * drift + low-accuracy fixes (everything except teleport-rejected).
    * Stored once at finalize, not in per-60s appendPoints flushes.
+   *
+   * v6.4: optional routePoints — Mapbox-snapped clean polyline computed on
+   * the client at stop time. Replaces the per-append raw aggregate as the
+   * canonical "route" geometry shown to the user. routePointsRaw stays as
+   * the immutable backup. Caller may pass null to clear (fall back to raw).
    */
-  async finalize(id, userId, { endTime, distanceM, durationS, name, routePointsRaw }) {
+  async finalize(id, userId, { endTime, distanceM, durationS, name, routePoints, routePointsRaw }) {
     const fields = [];
     const values = [];
     if (endTime != null) { fields.push('end_time = ?'); values.push(endTime); }
     if (distanceM != null) { fields.push('distance_m = ?'); values.push(distanceM); }
     if (durationS != null) { fields.push('duration_s = ?'); values.push(durationS); }
     if (name !== undefined) { fields.push('name = ?'); values.push(name); }
+    if (routePoints !== undefined) {
+      fields.push('route_points = ?');
+      values.push(routePoints ? JSON.stringify(routePoints) : null);
+    }
     if (routePointsRaw !== undefined) {
       fields.push('route_points_raw = ?');
       values.push(routePointsRaw ? JSON.stringify(routePointsRaw) : null);

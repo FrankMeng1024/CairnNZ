@@ -452,3 +452,47 @@ PO 给的真实用户行为分布:
 **Ship Summary**:`docs/spikes/V6_3_SHIP_SUMMARY.md`
 
 **等 PO 醒来真机 18 case 自测(case 14-18 必通过)+ 拍 OTA**。我不会主动推。
+
+---
+
+## 15. 2026-06-14 PO 拍板 — Activity snap 同步 + offline sync backlog
+
+**v6.4 实施(同步)**:Save hike → 写 raw → 跑 thin + Mapbox snap → 写 snap 后版 → 进 activity detail。spinner 1-4s。失败 fallback raw smoothed。**用户只看一种 activity**(snap 后),无 banner/状态。
+
+**v6.5+ Backlog(offline sync,非紧急)**:
+- 网不通:activity save **不传后端**,写本地 AsyncStorage `pending_sync_queue`
+- Settings 加 "Sync now" 按钮 → 一键推 pending
+- 自动 sync 时机:app 启动 + 网恢复 + 进 activity list 时
+- 所有弱网/无网问题统一靠此解决,跟 snap 算法解耦
+- 跟 v6.4 平行不阻塞 ship
+
+---
+
+## 16. v6.4 R-A + R-B 共识 backlog(非阻塞 OTA,下次迭代)
+
+- **Stop 处理中 overlay 5-8s 后加 "跳过优化" 按钮** — 弱网 60s 阻塞 UX 不友好
+- **stopTracking 外 catch 加 try/finally** — 防 addSession 抛错 isFinalizing 永远卡 true(R-A 提)
+- **backend route_points field 已加** ✅(R-B hard block)
+- **stopTracking re-entrancy guard 已加** ✅(R-B 提)
+- **混合 chunk 部分成功的回归测试** — 当前只 spike 测 session 46(R-A 提)
+- **snapTrack vs brush 真正 share-by-import** — 当前 share-by-convention,常量手动对齐(R-B 提,parity doc 已诚实标明)
+- **老 activity 一键 re-snap 按钮** — Settings 里加(给老用户的 v6.4 升级路径)
+
+---
+
+## 17. PO 锁定真原则(v6.5 必须按这个做)
+
+**核心区分**:
+- **Activity GPS = 用户真走过的** → 高信任 → "**去噪保形**":raw 是真,Mapbox 只在它跟 raw 差 < 15m + 不穿楼 时才用作精修
+- **Brush stroke = 用户手画的** → 低信任 → "**Mapbox 为准**":画的偏离主路时强制 snap
+
+**v6.4 的根本错误**:把 activity 当 brush 处理,Mapbox 主导 → 真 GPS 没穿楼,算法主动制造穿楼。
+
+**v6.5 hybrid 实施方向**:
+1. 不预过滤 raw(用户走过的不能丢)
+2. **G3 corridor 严格 15m**(activity 专用,brush 仍 250m)
+3. Mapbox snap 跟 raw 差 > 15m → 拒,该段用 raw smoothed
+4. Tilequery 检测穿楼 → 该段 raw smoothed
+5. 整体逻辑反转:**raw 为底,Mapbox 是可选 polish**
+
+工程 ~300 LOC,~3 天。

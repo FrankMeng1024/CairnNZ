@@ -25,7 +25,7 @@ import {
   KeyboardAvoidingView, ActivityIndicator, BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, StackActions } from '@react-navigation/native';
+import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { useRouteStore } from '../store/useRouteStore';
 import { useRouteEditStore } from '../store/useRouteEditStore';
 import { useSessionStore, loadTrackPoints } from '../store/useSessionStore';
@@ -573,16 +573,26 @@ export function RouteEditorScreen() {
       try { useRouteEditStore.getState().clearCommittedDraft(); } catch {}
       try { useRouteEditStore.getState().cancelEdit(); } catch {}
 
-      // v250/v252: After Save, go to the saved route's detail page.
-      // Use StackActions.replace via dispatch instead of (nav as any).replace
-      // because useNavigation()'s typed prop may not expose .replace and
-      // calling a non-existent method silently no-ops, leaving the user
-      // on the still-mounted RouteEditor screen — which is what
-      // "save→activity detail" boils down to (they were never moved).
-      // dispatch is universally available and works on native-stack.
+      // v6.4 PO direction: After "Save as route" succeeds, jump straight
+      // to the saved route's detail page AND reset the nav stack so back
+      // returns to Home (not the original ActivityDetail). The previous
+      // StackActions.replace kept the stack history (Home → ActivityDetail
+      // → RouteEditor), making back return to ActivityDetail — which the
+      // PO called out as "怪异" because the user is done with that flow.
+      // CommonActions.reset replaces the entire stack with [Home, RouteEditor]
+      // so back is consistently Home.
       if (!targetId && savedRouteId) {
-        nav.dispatch(StackActions.replace('RouteEditor', { routeId: savedRouteId }));
+        nav.dispatch(
+          CommonActions.reset({
+            index: 1,
+            routes: [
+              { name: 'Home' },
+              { name: 'RouteEditor', params: { routeId: savedRouteId } },
+            ],
+          }),
+        );
       } else {
+        // Editing an existing route — go back is already correct.
         nav.goBack();
       }
     } catch (e: any) {

@@ -134,6 +134,11 @@ export async function appendPoints(
  *
  * v78: failures enqueue with idempotency key — even if the user kills
  * the app right after Stop, the next launch's queue drain will finalize.
+ *
+ * v6.4: now also accepts `route_points` to upload the post-snap clean
+ * polyline. The pipeline at stopTracking computes Mapbox-snap on the
+ * raw track and writes `route_points` (snap) + `route_points_raw` (raw)
+ * in a single PATCH. Falls back to raw-as-route_points if snap fails.
  */
 export async function finalizeSession(
   remoteId: number,
@@ -142,6 +147,7 @@ export async function finalizeSession(
     distance_m?: number;
     duration_s?: number;
     name?: string | null;
+    route_points?: TrackPointLike[] | null;
     route_points_raw?: TrackPointLike[] | null;
   },
 ): Promise<boolean> {

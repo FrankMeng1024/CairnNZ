@@ -131,7 +131,7 @@ router.patch('/:id', authenticate, idempotency, async (req, res) => {
   if (!id || isNaN(id)) {
     return res.status(400).json({ error: 'Invalid session ID.' });
   }
-  const { end_time, distance_m, duration_s, name, route_points_raw } = req.body;
+  const { end_time, distance_m, duration_s, name, route_points, route_points_raw } = req.body;
   const fields = {};
   if (end_time !== undefined) {
     if (isNaN(Date.parse(end_time))) {
@@ -159,6 +159,17 @@ router.patch('/:id', authenticate, idempotency, async (req, res) => {
       return res.status(400).json({ error: 'route_points_raw must be an array or null.' });
     }
     fields.routePointsRaw = route_points_raw;
+  }
+  // v6.4: optional snapped polyline. Client computes Mapbox /matching on
+  // the raw GPS at stop time and ships the cleaned polyline here so cross-
+  // device loads, fresh installs, and brush-edit baselines all see the
+  // same clean geometry. The raw audit track stays in route_points_raw
+  // forever as a backup. Accept null to clear / fall back to raw.
+  if (route_points !== undefined) {
+    if (route_points !== null && !Array.isArray(route_points)) {
+      return res.status(400).json({ error: 'route_points must be an array or null.' });
+    }
+    fields.routePoints = route_points;
   }
   try {
     // Reject finalization if the session has no drawable path.
