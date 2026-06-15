@@ -159,8 +159,9 @@ public static class AllTypesCinematicTest
         return tex;
     }
 
-    // hut: Hearth Bands 炉膛同心暖晕 (subagent 推荐)
-    // 多模态径向高斯叠加 — 跟 danger 单峰 / water 单亮点 / junction 尖角 / cairn 硬边都正交
+    // hut: Smoke Plume 炊烟 (subagent#2 推荐 — 第一个非圆非 silhouette 非 radial 方案)
+    // 上窄下宽烟柱 + 内部 wispy noise. "炊烟"=有人住的庇护符号, 跟 vy 上升动效天然契合.
+    // 跟之前 9 次失败都不一样: 不是圆 / 不是 silhouette / 不是 radial rings.
     static Texture2D _hutLanternTex;
     static Texture2D GetHutLanternTex()
     {
@@ -176,12 +177,16 @@ public static class AllTypesCinematicTest
             {
                 float dx = (x - cx) / cx;
                 float dy = (y - cy) / cy;
-                float r = Mathf.Sqrt(dx * dx + dy * dy);
-                // 3 高斯峰 (位置 r=0/0.55/0.82, 系数 1.0/0.45/0.20)
-                float core  = Mathf.Exp(-Mathf.Pow(r / 0.35f, 2f)) * 1.0f;          // 中心暖核
-                float band1 = Mathf.Exp(-Mathf.Pow((r - 0.55f) / 0.12f, 2f)) * 0.45f; // 外暖环1
-                float band2 = Mathf.Exp(-Mathf.Pow((r - 0.82f) / 0.18f, 2f)) * 0.20f; // 外暖环2
-                float a = Mathf.Clamp01(core + band1 + band2);
+                // 上窄下宽: dy=-1 顶部 (窄 0.12), dy=+1 底部 (宽 0.35)
+                float widthAtY = Mathf.Lerp(0.12f, 0.35f, (dy + 1f) * 0.5f);
+                // X 包络 (粒子在 |dx| < widthAtY 内有效)
+                float envX = Mathf.Clamp01((widthAtY - Mathf.Abs(dx)) / (widthAtY * 0.4f));
+                // Y 包络 (上下边界软化)
+                float envY = Mathf.Clamp01((0.50f - Mathf.Abs(dy)) / 0.10f);
+                float env = envX * envY;
+                // Wispy noise (内部漂浮感, sin-based 比 PerlinNoise 简单且足够)
+                float wisp = 0.7f + 0.3f * Mathf.Sin(dy * 9.0f + dx * 15.0f);
+                float a = Mathf.Clamp01(env * wisp);
                 pixels[y * sz + x] = new Color(a, a, a, a);
             }
         }
@@ -440,12 +445,12 @@ public static class AllTypesCinematicTest
                 break;
 
             case CairnType.water:
-                // 水珠 + 反光高光 (略大 size)
+                // 水珠 + 反光高光 (再略大)
                 renderer.renderMode = ParticleSystemRenderMode.Billboard;
                 particleTex = GetWaterDropTex();
                 intensity = 1.5f; alphaPeak = 0.85f;
                 particleStartColor = new Color(0.7f, 0.95f, 1.0f);
-                sizeMin = 0.13f; sizeMax = 0.22f;  // 比 v6952fe9 略大 (从 0.10-0.18 → 0.13-0.22)
+                sizeMin = 0.16f; sizeMax = 0.26f;  // 再大 (从 0.13-0.22 → 0.16-0.26)
                 break;
 
             case CairnType.hut:
