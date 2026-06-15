@@ -152,12 +152,27 @@ function buildUrl(segment: MatchSegment): string {
 function parseResponse(body: MapboxMatchingResponse): {
   matchedPoints: LngLat[];
   confidence: number;
+  segments: { points: LngLat[]; confidence: number }[];
 } | null {
   if (!body.matchings || body.matchings.length === 0) return null;
-  const m = body.matchings[0];
-  if (!m.geometry || m.geometry.type !== 'LineString') return null;
-  const matchedPoints: LngLat[] = m.geometry.coordinates.map(([lng, lat]) => ({ lng, lat }));
-  return { matchedPoints, confidence: m.confidence ?? 0 };
+  // v263: extract ALL matchings. Mapbox can split a single input into
+  // multiple matching segments when mid-input deviates too far from
+  // roads (HMM cuts the trace). Earlier we only read matchings[0],
+  // missing the segment containing the end-anchor C → 300m+ splice gaps.
+  // Legacy fields (matchedPoints / confidence) keep v260-v262 behavior
+  // = matchings[0]; new callers consume `segments`.
+  const segments: { points: LngLat[]; confidence: number }[] = [];
+  for (const m of body.matchings) {
+    if (!m.geometry || m.geometry.type !== 'LineString') continue;
+    const points: LngLat[] = m.geometry.coordinates.map(([lng, lat]) => ({ lng, lat }));
+    segments.push({ points, confidence: m.confidence ?? 0 });
+  }
+  if (segments.length === 0) return null;
+  return {
+    matchedPoints: segments[0].points,
+    confidence: segments[0].confidence,
+    segments,
+  };
 }
 
 /**
@@ -248,6 +263,7 @@ export async function matchSegment(
         ok: true,
         matchedPoints: parsed.matchedPoints,
         confidence: parsed.confidence,
+        segments: parsed.segments,
         durationMs: Date.now() - t0,
       };
     } catch (e: any) {

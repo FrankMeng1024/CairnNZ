@@ -35,8 +35,41 @@ export interface MatchedSegment {
   confidence: number;
 }
 
+/**
+ * v263 — one element per `body.matchings[]` entry returned by Mapbox.
+ * Mapbox /matching can split a single input into multiple matchings when
+ * mid-segment points deviate too far from the road network. Earlier
+ * (v260-v262) we only read matchings[0], dropping the matching that
+ * contained the actual end-anchor C, which produced 300m+ splice gaps
+ * at the curve→baseline-suffix seam (= the through-building straight
+ * line PO reported on case 三 retest).
+ *
+ * v263 callers consume `segments` to reconstruct the full curve; legacy
+ * callers continue to read `matchedPoints` / `confidence` which preserve
+ * v262 behavior (= matchings[0] only).
+ */
+export interface MapboxMatchSegment {
+  points: LngLat[];
+  confidence: number;
+}
+
 export type MatchResult =
-  | { ok: true; matchedPoints: LngLat[]; confidence: number; durationMs: number }
+  | {
+      ok: true;
+      /** v263: legacy field. = segments[0].points. Preserves v260-v262 behavior
+       *  for callers that haven't been updated to consume `segments`. */
+      matchedPoints: LngLat[];
+      /** v263: legacy field. = segments[0].confidence. */
+      confidence: number;
+      /** v263: ALL matchings returned by Mapbox /matching. Length 1 in the
+       *  vast majority of cases (input fully snapped). Length >1 when mid-
+       *  input points deviated too far from roads, causing Mapbox HMM to
+       *  split the trace into independent matchings. New callers MUST use
+       *  this and stitch baseline-fill across the inter-segment arc gaps
+       *  to avoid v260-v262's curve-end-far-from-C bug. */
+      segments: MapboxMatchSegment[];
+      durationMs: number;
+    }
   | {
       ok: false;
       reason: 'no-match' | 'network' | 'timeout' | 'auth' | 'rate-limit' | 'invalid-input';

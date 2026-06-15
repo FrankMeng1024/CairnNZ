@@ -695,6 +695,7 @@ import {
   projectPointOntoBaseline,
   strokeWithinCorridor,
   spliceBCEF,
+  baselineSlice,
   type BcefItem,
 } from './brush/bcef';
 
@@ -1987,7 +1988,82 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           continue;
         }
 
-        const snapped = r.matchedPoints;
+        // v263: multi-matching stitch.
+        // Mapbox /matching can split input into multiple matchings when the
+        // mid-input deviates from roads (HMM cuts the trace). v260-v262 only
+        // read matchings[0] (= r.matchedPoints) and dropped the segment
+        // containing the end-anchor C, producing 300m+ splice gaps at the
+        // curve→baseline-suffix seam. v263 reads ALL segments via
+        // r.segments, filters confidence ≥ 0.3, sorts by min-arc, and
+        // fills inter-segment baseline arc gaps with originalPoints
+        // geometry. The result is a single contiguous curve passed to
+        // spliceBCEF.
+        const allSegs = r.segments.filter(s => s.confidence >= 0.3);
+        if (allSegs.length === 0) {
+          rejectedStrokeIds.push(vs.stroke.id);
+          firstRejectReason ??= '未识别到这条路';
+          sendEditDiag('brush_mapbox_error', {
+            reason: 'all-segments-low-conf',
+            ms_to_error: Date.now() - mapboxT0,
+          });
+          continue;
+        }
+        // Project each segment's first/last point onto originalPoints (=baseLine).
+        const accepted = allSegs.map(s => {
+          const first = projectPointOntoBaseline(s.points[0], baseLine);
+          const last = projectPointOntoBaseline(s.points[s.points.length - 1], baseLine);
+          return {
+            points: s.points,
+            confidence: s.confidence,
+            arcFirst: first?.arc ?? 0,
+            arcLast: last?.arc ?? 0,
+          };
+        });
+        // Sort by minimum arc — handles reverse-drawn segments correctly.
+        accepted.sort((a, b) =>
+          Math.min(a.arcFirst, a.arcLast) - Math.min(b.arcFirst, b.arcLast),
+        );
+        // Stitch: each segment's points + baseline-fill across inter-
+        // segment arc gaps. R-A/R-B fix: fillStart/fillEnd use Math.max/min
+        // to handle reverse segments; if fillEnd ≤ fillStart, segments
+        // overlap or are inverted — skip fill (small visual kink, accepted).
+        const stitched: LngLat[] = [];
+        for (let i = 0; i < accepted.length; i++) {
+          for (const p of accepted[i].points) stitched.push(p);
+          if (i < accepted.length - 1) {
+            const fillStart = Math.max(accepted[i].arcFirst, accepted[i].arcLast);
+            const fillEnd = Math.min(accepted[i + 1].arcFirst, accepted[i + 1].arcLast);
+            if (fillEnd > fillStart) {
+              const fill = baselineSlice(baseLine, fillStart, fillEnd);
+              for (const p of fill) stitched.push(p);
+            }
+          }
+        }
+        const snapped = stitched;
+        // v263 output corridor gate: the stitched curve must stay within
+        // CORRIDOR_M + 50m (= 300m) of originalPoints. Mapbox sometimes
+        // bounces a high-conf segment to a parallel road > 250m away;
+        // PO direction: reject in that case (user must redraw closer to
+        // the original line). The +50m buffer accounts for OSM-snap
+        // tolerance so legitimate 247m-off-baseline brushes don't get
+        // erroneously rejected by the output gate when input passed the
+        // 250m input gate.
+        const OUTPUT_CORRIDOR_M = CORRIDOR_M + 50;
+        const corridorOut = strokeWithinCorridor(snapped, baseLine);
+        if (corridorOut.maxDistM > OUTPUT_CORRIDOR_M) {
+          rejectedStrokeIds.push(vs.stroke.id);
+          firstRejectReason ??=
+            `Mapbox 弹回的路超出 ${OUTPUT_CORRIDOR_M}m 范围,请重画一笔贴近原路`;
+          sendEditDiag('brush_gate_failure', {
+            gate: 'output_corridor_v263',
+            reason: 'curve_beyond_corridor',
+            stroke_idx: strokeIdx,
+            stroke_vertex_count: pts.length,
+            metric_value: Math.round(corridorOut.maxDistM),
+            threshold: OUTPUT_CORRIDOR_M,
+          });
+          continue;
+        }
         // v258 PO direction: capture Mapbox's actual response shape so we
         // can prove whether "straight line through building" is API-side
         // (Mapbox itself returned ≤2 points / a degenerate match because
