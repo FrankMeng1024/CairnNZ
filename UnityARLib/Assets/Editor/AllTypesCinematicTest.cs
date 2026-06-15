@@ -159,8 +159,8 @@ public static class AllTypesCinematicTest
         return tex;
     }
 
-    // hut: 纯粹暖光团 (大软光晕 + 偏下温暖核, 完全无 silhouette)
-    // 反思: 多个小屋 silhouette 飘升 = 闹鬼. 必须完全去掉 silhouette, 只有暖光感
+    // hut: Hearth Bands 炉膛同心暖晕 (subagent 推荐)
+    // 多模态径向高斯叠加 — 跟 danger 单峰 / water 单亮点 / junction 尖角 / cairn 硬边都正交
     static Texture2D _hutLanternTex;
     static Texture2D GetHutLanternTex()
     {
@@ -177,14 +177,11 @@ public static class AllTypesCinematicTest
                 float dx = (x - cx) / cx;
                 float dy = (y - cy) / cy;
                 float r = Mathf.Sqrt(dx * dx + dy * dy);
-                // 大软光晕 (慢衰减, 暖光弥散感, 不像 mote 那么硬)
-                float halo = Mathf.Pow(Mathf.Clamp01(1f - r), 1.0f);
-                // 偏下温暖核 (椭圆): 给"炉火"暗示但不是锐利窗户
-                float coreY = dy + 0.15f;  // 中心偏下
-                float coreR = Mathf.Sqrt(dx * dx * 1.2f + coreY * coreY * 1.5f);
-                float core = coreR < 0.40f ? Mathf.Pow(1f - coreR / 0.40f, 1.5f) * 0.5f : 0f;
-                // 跟 danger 区分: 中心 hotspot 偏下不是中央 (danger 是中心 hotspot)
-                float a = Mathf.Clamp01(halo * 0.7f + core);
+                // 3 高斯峰 (位置 r=0/0.55/0.82, 系数 1.0/0.45/0.20)
+                float core  = Mathf.Exp(-Mathf.Pow(r / 0.35f, 2f)) * 1.0f;          // 中心暖核
+                float band1 = Mathf.Exp(-Mathf.Pow((r - 0.55f) / 0.12f, 2f)) * 0.45f; // 外暖环1
+                float band2 = Mathf.Exp(-Mathf.Pow((r - 0.82f) / 0.18f, 2f)) * 0.20f; // 外暖环2
+                float a = Mathf.Clamp01(core + band1 + band2);
                 pixels[y * sz + x] = new Color(a, a, a, a);
             }
         }
@@ -443,12 +440,12 @@ public static class AllTypesCinematicTest
                 break;
 
             case CairnType.water:
-                // 水珠 + 反光高光 (中等 size, 不大不小)
+                // 水珠 + 反光高光 (略大 size)
                 renderer.renderMode = ParticleSystemRenderMode.Billboard;
                 particleTex = GetWaterDropTex();
                 intensity = 1.5f; alphaPeak = 0.85f;
                 particleStartColor = new Color(0.7f, 0.95f, 1.0f);
-                sizeMin = 0.10f; sizeMax = 0.18f;  // 中等
+                sizeMin = 0.13f; sizeMax = 0.22f;  // 比 v6952fe9 略大 (从 0.10-0.18 → 0.13-0.22)
                 break;
 
             case CairnType.hut:
