@@ -119,8 +119,10 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
         </TouchableOpacity>
       )}
 
-      {/* v276 wheel: anchored at FAB position (top-right), 2x2 grid.
-          Tap backdrop to dismiss. No close ×. */}
+      {/* v276b wheel: 1-big + 3-small ring layout per PO direction
+          ("一大3小,move大,3 小围着她"). Move sits in the center as
+          the big disc; Draw / Undo / Reset orbit around it. Anchored
+          near the FAB position (top-right). Tap backdrop to dismiss. */}
       {wheelOpen && (
         <>
           <TouchableOpacity
@@ -130,37 +132,51 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
           />
           <View
             pointerEvents="box-none"
-            style={[
-              styles.wheel2x2Wrap,
-              { top: insets.top + 8, right: Spacing.md },
-            ]}
+            style={[styles.wheelCenterAnchor, { top: insets.top + 8 + FAB_SIZE / 2, right: Spacing.md + FAB_SIZE / 2 }]}
           >
-            <View style={styles.wheel2x2Row}>
-              <ToolBtn
-                icon="Pencil" label="Draw"
-                active={safeTool === 'brush'}
-                activeBg="#c87941"
-                onPress={() => pickTool('brush')}
-              />
-              <ToolBtn
-                icon="Navigation2" label="Move"
-                active={safeTool === 'pan'}
-                activeBg={Colors.primary}
-                onPress={() => pickTool('pan')}
-              />
-            </View>
-            <View style={styles.wheel2x2Row}>
-              <ToolBtn
-                icon="Undo2" label="Undo"
-                disabled={!canUndo}
-                onPress={handleUndoTap}
-              />
-              <ToolBtn
-                icon="RotateCcw" label="Reset"
-                danger
-                onPress={handleResetTap}
-              />
-            </View>
+            {/* Center BIG = Move (pan).
+                NOTE: even though the wheel is summoned by tapping the
+                top-right FAB which currently shows the active tool,
+                we treat Move as the "home" / dominant action of the
+                ring per PO direction. Tap to switch into pan. */}
+            <TouchableOpacity
+              style={[
+                styles.bigCenter,
+                {
+                  backgroundColor: safeTool === 'pan' ? Colors.primary : Colors.surface,
+                  borderColor: safeTool === 'pan' ? 'rgba(255,255,255,0.9)' : Colors.primary,
+                },
+              ]}
+              activeOpacity={0.85}
+              onPress={() => pickTool('pan')}
+            >
+              <Icon name="Navigation2" size={28} color={safeTool === 'pan' ? Colors.surface : Colors.primary} strokeWidth={2.6} />
+              <Text style={[styles.bigCenterLabel, { color: safeTool === 'pan' ? Colors.surface : Colors.primary }]} numberOfLines={1}>
+                Move
+              </Text>
+            </TouchableOpacity>
+
+            {/* Three small orbiters: top, bottom-left, bottom-right.
+                Distance R from center. Anchored to wheelCenterAnchor (0,0). */}
+            <SmallOrbit
+              dx={0} dy={-ORBIT_R}
+              icon="Pencil" label="Draw"
+              active={safeTool === 'brush'}
+              activeBg="#c87941"
+              onPress={() => pickTool('brush')}
+            />
+            <SmallOrbit
+              dx={-ORBIT_R * Math.SQRT1_2} dy={ORBIT_R * Math.SQRT1_2}
+              icon="Undo2" label="Undo"
+              disabled={!canUndo}
+              onPress={handleUndoTap}
+            />
+            <SmallOrbit
+              dx={ORBIT_R * Math.SQRT1_2} dy={ORBIT_R * Math.SQRT1_2}
+              icon="RotateCcw" label="Reset"
+              danger
+              onPress={handleResetTap}
+            />
           </View>
         </>
       )}
@@ -240,7 +256,9 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
   );
 }
 
-interface ToolBtnProps {
+interface SmallOrbitProps {
+  dx: number;
+  dy: number;
   icon: string;
   label: string;
   active?: boolean;
@@ -249,7 +267,7 @@ interface ToolBtnProps {
   danger?: boolean;
   onPress: () => void;
 }
-function ToolBtn({ icon, label, active, activeBg, disabled, danger, onPress }: ToolBtnProps): React.JSX.Element {
+function SmallOrbit({ dx, dy, icon, label, active, activeBg, disabled, danger, onPress }: SmallOrbitProps): React.JSX.Element {
   const bg = active ? (activeBg ?? Colors.primary)
            : danger ? Colors.dangerBg
            : Colors.surface;
@@ -262,14 +280,14 @@ function ToolBtn({ icon, label, active, activeBg, disabled, danger, onPress }: T
       disabled={disabled}
       onPress={onPress}
       style={[
-        styles.toolBtn,
-        { backgroundColor: bg },
+        styles.smallOrbit,
+        { left: dx - SMALL_SIZE / 2, top: dy - SMALL_SIZE / 2, backgroundColor: bg },
         disabled && styles.btnDisabled,
-        active && styles.toolBtnActive,
+        active && styles.smallOrbitActive,
       ]}
     >
-      <Icon name={icon as any} size={22} color={fg} strokeWidth={2.6} />
-      <Text style={[styles.toolBtnLabel, { color: fg }]} numberOfLines={1}>
+      <Icon name={icon as any} size={18} color={fg} strokeWidth={2.6} />
+      <Text style={[styles.smallOrbitLabel, { color: fg }]} numberOfLines={1}>
         {label}
       </Text>
     </TouchableOpacity>
@@ -277,8 +295,9 @@ function ToolBtn({ icon, label, active, activeBg, disabled, danger, onPress }: T
 }
 
 const FAB_SIZE = 56;
-const TOOL_BTN_SIZE = 64;
-const TOOL_GAP = 8;
+const BIG_CENTER_SIZE = 84;
+const SMALL_SIZE = 56;
+const ORBIT_R = 78;
 
 const styles = StyleSheet.create({
   container: {
@@ -300,31 +319,42 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.30)',
   },
-  wheel2x2Wrap: {
+  wheelCenterAnchor: {
     position: 'absolute',
-    width: TOOL_BTN_SIZE * 2 + TOOL_GAP,
+    width: 0, height: 0,
   },
-  wheel2x2Row: {
-    flexDirection: 'row',
-    gap: TOOL_GAP,
-    marginBottom: TOOL_GAP,
+  bigCenter: {
+    position: 'absolute',
+    left: -BIG_CENTER_SIZE / 2,
+    top: -BIG_CENTER_SIZE / 2,
+    width: BIG_CENTER_SIZE, height: BIG_CENTER_SIZE,
+    borderRadius: BIG_CENTER_SIZE / 2,
+    alignItems: 'center', justifyContent: 'center',
+    ...Shadow.elevated,
+    borderWidth: 3,
   },
-  toolBtn: {
-    width: TOOL_BTN_SIZE, height: TOOL_BTN_SIZE,
-    borderRadius: TOOL_BTN_SIZE / 2,
+  bigCenterLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+  smallOrbit: {
+    position: 'absolute',
+    width: SMALL_SIZE, height: SMALL_SIZE,
+    borderRadius: SMALL_SIZE / 2,
     alignItems: 'center', justifyContent: 'center',
     ...Shadow.elevated,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.7)',
   },
-  toolBtnActive: {
+  smallOrbitActive: {
     borderColor: 'rgba(255,255,255,0.9)',
     transform: [{ scale: 1.06 }],
   },
-  toolBtnLabel: {
-    fontSize: 11,
+  smallOrbitLabel: {
+    fontSize: 10,
     fontWeight: '700',
-    marginTop: 2,
+    marginTop: 1,
   },
 
   bottomWrap: {

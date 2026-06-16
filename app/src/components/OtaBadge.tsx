@@ -993,8 +993,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             v274 — pre-preview snapshot pushed instead of wiping
 //             undoStack). PO: "可以 undo preview 这种步骤" —
 //             confirmed working from v274.
-export const OTA_VERSION = 276;
-//         v275: 6 fixes (FAB + wheel reset-center + eraser-snap + beautify-api + densify-1m).
+// v277  PO direction.
+//         (1) Tail-fork bug fix: when last brush point landed 1-5m
+//             off baseline (e.g. 2.01m), v268's MIN_MAGNET_M=5 rule
+//             skipped the snap, so brush[-1] stayed off-line while
+//             baseline kept rendering past it → looked like a 2-pronged
+//             fork at the end. Lower bound dropped to 0; tiny distances
+//             produce 1-2 invisible densify points instead of nothing.
+//         (2) Wheel layout: 1-big + 3-small ring (instead of v276's
+//             2x2 grid). PO: "一大3小, move 大, 3 小围着她, 包围而不
+//             是格子". Big center = Move (pan); orbiters at top/SW/SE
+//             = Draw / Undo / Reset. Anchored near top-right FAB.
+export const OTA_VERSION = 277;
+//         v276: simplify — remove eraser, wheel top-right 2x2.
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and
