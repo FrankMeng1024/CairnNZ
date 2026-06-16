@@ -22,15 +22,26 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'src', 'migrations');
 
 function dbConfig() {
+    const dbName = process.env.DB_NAME;
+    if (!dbName) throw new Error('DB_NAME missing in env');
     return {
         host: process.env.DB_HOST,
         port: Number(process.env.DB_PORT || 3306),
         user: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME,
+        database: dbName,
         multipleStatements: true,
         connectTimeout: 15000,
     };
+}
+
+const ALLOWED_DB_NAMES = ['cairn', 'cairn_dev', 'cairn_test', 'cairn_staging'];
+
+function assertSafeDb() {
+    const dbName = process.env.DB_NAME;
+    if (!ALLOWED_DB_NAMES.includes(dbName)) {
+        throw new Error(`refusing to run migration against DB_NAME='${dbName}' — allowlist: ${ALLOWED_DB_NAMES.join(', ')}`);
+    }
 }
 
 async function withConn(fn) {
@@ -43,7 +54,8 @@ async function withConn(fn) {
 }
 
 function splitSql(text) {
-    // strip line comments
+    // RETAINED for reference but unused — see cmdApply: we now send the file in
+    // one query() with multipleStatements: true to let mysql parse natively.
     const stripped = text
         .split('\n')
         .filter(l => !l.trim().startsWith('--'))
@@ -55,17 +67,16 @@ function splitSql(text) {
 }
 
 async function cmdApply(file) {
+    assertSafeDb();
     const fp = path.isAbsolute(file) ? file : path.join(MIGRATIONS_DIR, file);
     if (!fs.existsSync(fp)) throw new Error(`migration file not found: ${fp}`);
     const text = fs.readFileSync(fp, 'utf-8');
-    const stmts = splitSql(text);
-    console.log(`apply ${path.basename(fp)} -> ${stmts.length} statements`);
+    console.log(`apply ${path.basename(fp)} (${text.length} bytes, multi-statement send)`);
     await withConn(async (c) => {
-        for (const s of stmts) {
-            const head = s.replace(/\s+/g, ' ').slice(0, 80);
-            console.log(`  > ${head}...`);
-            await c.query(s);
-        }
+        // multipleStatements: true is set in dbConfig() — let mysql parse the
+        // file natively. This is safer than splitting on `;` (string literals,
+        // COMMENT clauses with semicolons, etc. would break naive splits).
+        await c.query(text);
     });
     console.log(`apply OK`);
 }

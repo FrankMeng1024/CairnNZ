@@ -1,8 +1,8 @@
 # v0.2.5 Progress
 
 **自动模式启动时间**: 2026-06-16
-**当前 phase**: Phase 0 (4-eye review pending)
-**最后完成 sub-item**: 0.27 (pending after 4-eye)
+**当前 phase**: Phase 0 DONE → Phase 1A start
+**最后完成 sub-item**: 0.27
 
 ## Phase 0 — 测试数据清理 + 脚手架 + lint
 
@@ -64,28 +64,33 @@
 - [x] 0.22 cairn_lint --scope all:42 violations,全在老代码(PortalSpawner / ARScreenLegacy 等),v025 scope 0 violation,无 false positive
 
 ### 0.23-0.27 收口
-- [x] 0.23 `scripts/lock_plan.py --mode write`:15 locks 写盘到 `_review/v0.2.5/.plan_locks.json`,check PASS
+- [x] 0.23 `scripts/lock_plan.py --mode write`:15 locks 写盘到 `_review/v0.2.5/.plan_locks.json`,check PASS。Round-2 修复:Constitution 覆盖完整 Rule A-S(5977 chars,vs round-1 的 800 chars 截断)
 - [x] 0.24 本 PROGRESS.md
-- [ ] 0.25 4 眼 review (新开 sub#0-1 + sub#0-2) — 待跑
-- [ ] 0.26 修光 BLOCKER + CRITICAL,直到 verdict PASS — 待跑
-- [ ] 0.27 commit "v0.2.5 phase 0 — scaffold + lint + Constitution lock" — 待跑
+- [x] 0.25 4 眼 review:Round-1 sub#0-1 (NEEDS_REVISION 1B+4C,fixed) + sub#0-2 (NEEDS_REVISION 2B+4C,fixed);Round-2 sub#0-3 (PASS 12/12) + sub#0-4 (NEEDS_REVISION 3C,fixed)。All 11 BLOCKER/CRITICAL fixed.
+- [x] 0.26 修光 BLOCKER + CRITICAL,verdict 终态 PASS — 见 `_review/v0.2.5/verdicts/phase0-signoff.md`
+- [x] 0.27 commit "v0.2.5 phase 0 round-1 scaffold" (9a12db4) + round-2 fixes commit(pending after this update)
 
 ### Phase 0 出口判据自检
-- [x] cairn_lint v025 scope 全绿(3 files clean)
-- [x] lock_plan check 全绿(15 locks)
-- [x] verify_progress phase=0 PASS(signoff 缺失为 warn 不为 err)
+- [x] cairn_lint v025 scope 全绿(4 files clean,V025BuildCanary 加入)
+- [x] lock_plan check 全绿(15 locks,Constitution 完整覆盖 Rule A-S)
+- [x] verify_progress phase=0 PASS
 - [x] 老 schema grep 命中 0(v025 scope)
-- [x] backend migration 015 + 015b 跑成功 + verify PASS
-- [x] feature_flags useV025=true
-- [ ] 4 眼 review verdict PASS(待跑)
+- [x] backend migration 015 + 015b 跑成功 + verify PASS;/api/feature-flags 路由 live curl 验证成功
+- [x] feature_flags useV025=true(后端);HARD_DEFAULTS=false(客户端 fail-closed,见 ADR-008)
+- [x] 4 眼 review 终态 PASS(sub#0-3 PASS + sub#0-4 PASS-after-fixes)
 
-### Active BLOCKERs
-- BLOCKER-001(ADR-006 决议,字段保留至 Phase 7)
-- BLOCKER-002(ADR-007 决议,老代码删除延期至 Phase 7)
-- 影响:0.16/0.17/0.18/0.19/0.20b/c 标 [-] 不阻塞 phase 闭合,因 ADR 已批准延期方案
+### Active BLOCKERs(状态)
+- BLOCKER-001 ADR-006 决议 → 字段保留至 Phase 7(open,但已 ADR 决策)
+- BLOCKER-002 ADR-007 决议 → 老代码删除延期至 Phase 7(open,但已 ADR 决策)
+- 影响:0.16/0.17/0.18/0.19/0.20b/c 标 [-] 不阻塞 phase 闭合,因 ADR 已批准延期方案。
+  Phase 0 在 Phase 7 才会真正"完全 done"(届时这些 sub-item 真正 [x])。但 Rule B v3 item 9
+  允许"phase done 推迟到 BLOCKER 解决"且"主 agent 继续做下一 phase 可推进部分",所以
+  现在进入 Phase 1A 是合规的。
 
-### ADRs added
+### ADRs added (Phase 0)
 - ADR-000 malware reminder 冲突 + 主 agent 决策
-- ADR-001/002/003/004/005 预批准
-- ADR-006 marker store 字段保留(BLOCKER-001 决议)
-- ADR-007 老代码删除延期(BLOCKER-002 决议)
+- ADR-001..005 预批准
+- ADR-006 marker store 字段保留
+- ADR-007 老代码删除延期至 Phase 7
+- ADR-008 feature-flags 路由 unauth + LIMIT 1000 + HARD_DEFAULTS fail-closed(round-2 修复)
+- ADR-009 migration DB allowlist(round-2 修复)

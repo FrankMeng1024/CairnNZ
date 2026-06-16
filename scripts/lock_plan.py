@@ -42,25 +42,52 @@ def sha256_path(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
+def _strip_code_fences(text: str) -> str:
+    """Replace contents of ```...``` fenced blocks with blanks of the same length so that
+    line numbers and total length are preserved but '##' headers inside fences cannot
+    confuse extract_constitution / extract_phases regexes.
+    """
+    out = []
+    i = 0
+    in_fence = False
+    while i < len(text):
+        if text.startswith("```", i):
+            # toggle fence state, keep the marker itself unchanged
+            out.append(text[i:i+3])
+            i += 3
+            in_fence = not in_fence
+            continue
+        ch = text[i]
+        if in_fence and ch != "\n":
+            out.append(" ")
+        else:
+            out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def extract_constitution(plan_text: str) -> str:
-    m = re.search(r"^## 🔒 Constitution v3\b", plan_text, re.MULTILINE)
+    cleaned = _strip_code_fences(plan_text)
+    m = re.search(r"^## 🔒 Constitution v3\b", cleaned, re.MULTILINE)
     if not m:
         return ""
     start = m.start()
-    # next top-level `## ` (excluding sub-headings)
-    rest = plan_text[m.end():]
+    rest = cleaned[m.end():]
     next_h2 = re.search(r"^## (?!🔒)", rest, re.MULTILINE)
     end = m.end() + (next_h2.start() if next_h2 else len(rest))
+    # hash the ORIGINAL text in [start:end] so SHA still ties to the real content,
+    # but the boundary was decided using the fence-stripped version
     return plan_text[start:end]
 
 
 def extract_phases(plan_text: str) -> dict[str, str]:
     out: dict[str, str] = {}
-    matches = list(re.finditer(r"^### Phase ([\w.]+)\b.*$", plan_text, re.MULTILINE))
+    cleaned = _strip_code_fences(plan_text)
+    matches = list(re.finditer(r"^### Phase ([\w.]+)\b.*$", cleaned, re.MULTILINE))
     for i, m in enumerate(matches):
         name = m.group(1)
         start = m.start()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(plan_text)
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(cleaned)
         body = plan_text[start:end]
         out[f"phase_{name}"] = sha256_text(body)
     return out

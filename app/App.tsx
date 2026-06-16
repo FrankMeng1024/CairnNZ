@@ -8,6 +8,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 // Source kept on disk for reference but not imported.
 import { MigratorRetryPrompt } from './MigratorRetryPrompt';
 import { getFlags } from './src/config/featureFlags';
+import { loadFlagsCache, refreshFlagsFromBackend } from './src/services/v025/featureFlagsClient';
 import { useAppStore } from './src/store/useAppStore';
 import { useSettingsStore } from './src/store/useSettingsStore';
 import { useTrackingStore } from './src/store/useTrackingStore';
@@ -152,6 +153,13 @@ function AppRoot() {
     try {
       crashLogger.install();
       crashLogger.breadcrumb('app_boot');
+      // v0.2.5 Phase 0.15: load v025 feature flag cache early (sync-stale + async-refresh)
+      // so that ARScreen.useV025Enabled() can read a real value instead of HARD_DEFAULTS.
+      // Cached value loads from AsyncStorage (last-known); refresh fetches /api/feature-flags.
+      // Both run fire-and-forget — UI does not await; ARScreen reads whatever cache holds.
+      loadFlagsCache()
+        .then(() => refreshFlagsFromBackend(API_BASE_URL))
+        .catch((e) => crashLogger.breadcrumb('v025_flags_boot_failed: ' + (e?.message ?? 'unknown')));
       // OTA #183: log the running OTA bundle id + channel + runtime version
       // so diag uploads can be correlated to a specific OTA. Without this
       // the only OTA marker is OTA_VERSION (a hard-coded constant), which

@@ -9,9 +9,9 @@
   "phase_5": "d48ca01bd0078090f193bb9f435db9b36b399be21bf110b1027ae1b4cf0b4aea",
   "phase_6": "f5e7e5d76362f76420bb199d82364daed97a220aa8ba5d048b57d2deda1e7d42",
   "phase_7": "77247bee5db4673f6b24f1311975860a59f8669954748b3fd8511d31fdabf1b8",
-  "plan_constitution_v3": "d2798aa998a9f5563aa12c73013d75bee3adb87252a13eee247c075d33162ba8",
-  "scripts/cairn_lint.py": "9dac3c5d0a073125afa47ea2fbf8dbd067f0fa476369d2cfae7dc9040f75b0c4",
-  "scripts/lock_plan.py": "3454d0414e14f014fc86dc9fec61d288d4b9c8e4fce328323ef4c8522dce26f0",
-  "scripts/verify_progress.py": "cd27a36301595e736115c7b018af5879394ac4f676ca379a74fce9429032ed61",
+  "plan_constitution_v3": "0f2413935793cb3a4d6b03e7d7f05a88b7f5c1de66d38562cd5a6cf31266d601",
+  "scripts/cairn_lint.py": "55b45e5a920942ffb4e1add5668daa4c1fe5a220decd5c946a90a3d39a5451f5",
+  "scripts/lock_plan.py": "6ac7aff0c04dbd5ea99eb195f0cb0ae168126cb703d665f310c0551e6f0fb1b2",
+  "scripts/verify_progress.py": "dfe3ac191b1119f0a26ee13f37961fafbf683988d8517c315804edaa1c82ef14",
   "scripts/visual_compare.py": "4ffe127311ee987642af67fee7ca64639a8015c78b922674854eb29295f63399"
 }

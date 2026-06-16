@@ -4,6 +4,7 @@
     "references": [
         "Unity.XR.ARFoundation",
         "Unity.XR.ARKit",
+        "Unity.XR.ARSubsystems",
         "Unity.XR.CoreUtils",
         "Unity.XR.Management",
         "Unity.RenderPipelines.Universal.Runtime",

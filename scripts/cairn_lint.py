@@ -155,50 +155,121 @@ def check_c1(path: Path, text: str) -> list[Violation]:
     return v
 
 
+def _strip_comments_for_code_scan(text: str) -> str:
+    """Replace contents of // line comments and /* */ block comments with blanks of the
+    same length, preserving newlines and total length so line numbers stay correct.
+    Naive: does not respect string literals containing `//` (rare in C#).
+    """
+    out = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i] == '/' and i + 1 < n:
+            if text[i + 1] == '/':
+                out.append("  ")
+                i += 2
+                while i < n and text[i] != '\n':
+                    out.append(' ')
+                    i += 1
+                continue
+            if text[i + 1] == '*':
+                out.append("  ")
+                i += 2
+                while i + 1 < n and not (text[i] == '*' and text[i + 1] == '/'):
+                    out.append(' ' if text[i] != '\n' else '\n')
+                    i += 1
+                if i + 1 < n:
+                    out.append("  ")
+                    i += 2
+                continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
 def check_c2(path: Path, text: str) -> list[Violation]:
-    """Only applies to C# files in v025 scope."""
+    """Only applies to C# files in v025 scope. Strips comments first to avoid false
+    positives from `// catch (Exception)` doc comments. Also handles multi-line catch."""
     if path.suffix != ".cs":
         return []
+    code_only = _strip_comments_for_code_scan(text)
     v: list[Violation] = []
-    for i, line in enumerate(text.splitlines(), start=1):
-        # quick reject: skip lines with no 'catch'
+    # collapse to lines for reporting line numbers, but use code_only for matching
+    code_lines = code_only.splitlines()
+    raw_lines = text.splitlines()
+    # Multi-line catch detection: scan whole text with re.DOTALL for catch( ... ).
+    # Single-line happy path first.
+    for i, line in enumerate(code_lines, start=1):
         if "catch" not in line:
             continue
-        # bare catch or catch (Exception) -> violation
         if re.search(r"\bcatch\s*\{", line):
             v.append(Violation("C.2", str(path.relative_to(REPO_ROOT)), i,
-                               f"bare `catch` block, must specify exception type: {line}"))
+                               f"bare `catch` block, must specify exception type: {raw_lines[i-1] if i-1 < len(raw_lines) else line}"))
             continue
         m = CATCH_TYPED_RE.search(line)
         if m:
             t = m.group(1)
             if t in {"Exception", "System.Exception"}:
                 v.append(Violation("C.2", str(path.relative_to(REPO_ROOT)), i,
-                                   f"catch ({t}) is forbidden, use specific type: {line}"))
+                                   f"catch ({t}) is forbidden, use specific type: {raw_lines[i-1] if i-1 < len(raw_lines) else line}"))
+    # Multi-line catch: catch(\n    Exception ex\n)
+    for m in re.finditer(r"\bcatch\s*\(\s*(System\.)?Exception\b", code_only):
+        # if already captured by single-line scan, skip
+        line_no = code_only.count("\n", 0, m.start()) + 1
+        already = any(vv.line == line_no and vv.rule == "C.2" for vv in v)
+        if already:
+            continue
+        # check if the match itself is on a single line of code_lines we already scanned
+        line_text = code_lines[line_no - 1] if line_no - 1 < len(code_lines) else ""
+        if "catch" in line_text and "Exception" in line_text:
+            # would have been caught above — skip
+            continue
+        v.append(Violation("C.2", str(path.relative_to(REPO_ROOT)), line_no,
+                           f"multi-line catch (Exception) is forbidden, use specific type"))
     return v
 
 
+def _find_class_body(text: str, class_decl_end: int) -> str:
+    """Given the position right after `class Foo` declaration, find the `{ ... }` body
+    by brace counting. Returns the body string (excluding outer braces). If braces are
+    unbalanced, returns "" (no false positive)."""
+    n = len(text)
+    i = class_decl_end
+    # scan to first `{`
+    while i < n and text[i] != '{':
+        i += 1
+    if i >= n:
+        return ""
+    depth = 0
+    start = i
+    while i < n:
+        c = text[i]
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                return text[start + 1:i]
+        i += 1
+    return ""
+
+
 def check_rule_p(path: Path, text: str) -> list[Violation]:
-    """Classes ending Monitor/Validator/Observer must contain Mitigate*/Recover*/Resolve* method."""
+    """Classes ending Monitor/Validator/Observer must contain Mitigate*/Recover*/Resolve* method
+    in THEIR OWN body (brace-matched, not relative to next class)."""
     if path.suffix != ".cs":
         return []
+    code_only = _strip_comments_for_code_scan(text)
     v: list[Violation] = []
-    classes = list(CLASS_RE.finditer(text))
-    if not classes:
-        return v
-    for m in classes:
+    for m in CLASS_RE.finditer(code_only):
         cname = m.group(1)
         if not (cname.endswith("Monitor") or cname.endswith("Validator") or cname.endswith("Observer")):
             continue
-        # find class body span (naive: from this match to next class or EOF)
-        start = m.end()
-        next_match = next((mm for mm in classes if mm.start() > start), None)
-        end = next_match.start() if next_match else len(text)
-        body = text[start:end]
+        body = _find_class_body(code_only, m.end())
         if not MITIGATION_METHOD_RE.search(body):
-            line_no = text.count("\n", 0, m.start()) + 1
+            line_no = code_only.count("\n", 0, m.start()) + 1
             v.append(Violation("P", str(path.relative_to(REPO_ROOT)), line_no,
-                               f"class {cname} ends with Monitor/Validator/Observer but has no Mitigate*/Recover*/Resolve* method"))
+                               f"class {cname} ends with Monitor/Validator/Observer but has no Mitigate*/Recover*/Resolve* method in its own body"))
     return v
 
 

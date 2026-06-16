@@ -180,6 +180,14 @@ def main() -> int:
                    help="require commit + file:line on every [x] item")
     args = p.parse_args()
 
+    # Force UTF-8 output on Windows so PROGRESS.md Chinese / emoji do not crash.
+    if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     result = Result()
     progress_path = Path(args.progress)
     if not progress_path.exists():
