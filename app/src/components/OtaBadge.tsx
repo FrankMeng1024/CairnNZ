@@ -1053,8 +1053,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         135°/225°/315° (UL / LL / LR). Draw and Reset are
 //         diagonally symmetric around Move; Undo at exact bottom-left
 //         on the same arc. Same R=90 keeps all three equidistant.
-export const OTA_VERSION = 281;
-//         v280: full densify rollback + equidistant orbit.
+// v282  Wheel: equilateral-triangle layout per PO golden-ratio
+//         direction. Move at the centroid of an equilateral triangle
+//         whose vertices are Draw / Undo / Reset on a single arc of
+//         radius R=90:
+//           Draw  at 120° (upper-left of Move, slightly above)
+//           Undo  at 180° (directly left)
+//           Reset at 240° (lower-left, mirrored to Draw)
+//         Draw and Reset are upper/lower mirrors across Undo's
+//         horizontal — perfectly symmetric. Pairwise spacing equal
+//         (60° arc between each). Move is slightly south of the FAB
+//         to give Draw enough headroom above (R*0.85 push so 120°
+//         vertical extent stays in screen).
+//         A dashed sage ring (opacity 0.35) is drawn at radius R+2
+//         to make the orbit visible. PO: "他的弧线 要出来".
+export const OTA_VERSION = 282;
+//         v281: wheel angles 135/225/315 (Draw-Reset diagonal).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

@@ -132,8 +132,34 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
           />
           <View
             pointerEvents="box-none"
-            style={[styles.wheelCenterAnchor, { top: insets.top + 8 + FAB_SIZE / 2, right: Spacing.md + FAB_SIZE / 2 + 8 }]}
+            style={[styles.wheelCenterAnchor, {
+              // Push the wheel center DOWN from the FAB position so
+              // the upper-arc orbiter (Draw at 120°) doesn't clip
+              // the screen top. R=90 + Draw vertical offset = 78px,
+              // need ~95px of headroom above Move.
+              top: insets.top + 8 + FAB_SIZE / 2 + ORBIT_R * 0.85,
+              right: Spacing.md + FAB_SIZE / 2 + 6,
+            }]}
           >
+            {/* Visible orbit arc — a 1.5px sage stroke from 120° to
+                240° on the circle of radius R around Move. Three
+                small icons sit on this arc, equilateral triangle
+                with Move at the centroid. PO: "他的弧线 要出来" +
+                "黄金比例". */}
+            <View
+              pointerEvents="none"
+              style={[
+                styles.wheelArc,
+                {
+                  width: ORBIT_R * 2 + 4,
+                  height: ORBIT_R * 2 + 4,
+                  left: -(ORBIT_R + 2),
+                  top: -(ORBIT_R + 2),
+                  borderRadius: ORBIT_R + 2,
+                },
+              ]}
+            />
+
             {/* Move = the visible "boss" disc, sits in place of the FAB. */}
             <TouchableOpacity
               style={[
@@ -152,34 +178,30 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
               </Text>
             </TouchableOpacity>
 
-            {/* Three small orbiters at equal R from Move,
-                arranged so Draw (top-left) and Reset (bottom-right)
-                are diagonally symmetric across Move; Undo sits
-                directly bottom-left of Move on the same arc.
-                PO: "draw 离 move 上方的距离应该和 reset 离 move 右侧
-                的距离一致, 应该是对角线对称的".
-                Angles ccw from +x:
-                  Draw  : 135° (upper-left)
-                  Undo  : 225° (lower-left)
-                  Reset : 315° (lower-right) — diagonal of Draw */}
+            {/* Three small orbiters on the equilateral triangle whose
+                centroid is Move. Angles ccw from +x:
+                  Draw  : 120° (upper-left of Move, slightly above)
+                  Undo  : 180° (directly left)
+                  Reset : 240° (lower-left of Move, mirrored to Draw)
+                Equal R from Move; equal arc between each pair. */}
             <SmallOrbit
-              dx={ORBIT_R * Math.cos(135 * Math.PI / 180)}
-              dy={-ORBIT_R * Math.sin(135 * Math.PI / 180)}
+              dx={ORBIT_R * Math.cos(120 * Math.PI / 180)}
+              dy={-ORBIT_R * Math.sin(120 * Math.PI / 180)}
               icon="Pencil" label="Draw"
               active={safeTool === 'brush'}
               activeBg="#c87941"
               onPress={() => pickTool('brush')}
             />
             <SmallOrbit
-              dx={ORBIT_R * Math.cos(225 * Math.PI / 180)}
-              dy={-ORBIT_R * Math.sin(225 * Math.PI / 180)}
+              dx={ORBIT_R * Math.cos(180 * Math.PI / 180)}
+              dy={-ORBIT_R * Math.sin(180 * Math.PI / 180)}
               icon="Undo2" label="Undo"
               disabled={!canUndo}
               onPress={handleUndoTap}
             />
             <SmallOrbit
-              dx={ORBIT_R * Math.cos(315 * Math.PI / 180)}
-              dy={-ORBIT_R * Math.sin(315 * Math.PI / 180)}
+              dx={ORBIT_R * Math.cos(240 * Math.PI / 180)}
+              dy={-ORBIT_R * Math.sin(240 * Math.PI / 180)}
               icon="RotateCcw" label="Reset"
               danger
               onPress={handleResetTap}
@@ -329,6 +351,16 @@ const styles = StyleSheet.create({
   wheelCenterAnchor: {
     position: 'absolute',
     width: 0, height: 0,
+  },
+  wheelArc: {
+    // A faint sage ring around Move, on the same R as the orbit
+    // small icons. Visual hint that all three siblings sit on the
+    // same arc (PO: "他的弧线 要出来"). pointerEvents=none.
+    position: 'absolute',
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    opacity: 0.35,
+    borderStyle: 'dashed',
   },
   bigCenter: {
     position: 'absolute',
