@@ -6,7 +6,7 @@
 //
 // Phase + Step ARE strings (not enums) so adding a new event type does not
 // require schema migration — backend uses (phase, step) tuple as a free-form
-// pair. cairn_lint enforces lower-case-with-hyphen format via Rule H scan.
+// pair. Convention: phase is `v22-UPPER-HYPHEN`, step is `lower-hyphen`.
 
 using System;
 

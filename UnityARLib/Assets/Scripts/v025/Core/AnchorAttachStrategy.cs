@@ -67,21 +67,38 @@ namespace Cairn.AR.V025.Core
         /// Tries Tier-S then Tier-G. Returns Refused on every "no valid ground"
         /// path — caller MUST honor Refused (do not synthesize XYZ from GPS).
         /// </summary>
+        /// <param name="spaceId">Opaque ARWorldMap identifier.</param>
+        /// <param name="cairnTargetXyzInRelocalizedFrame">
+        ///   Position the cairn should occupy IF Tier-S relocalization succeeds.
+        ///   Caller pre-computes this in the assumed-relocalized frame from the
+        ///   cairn's lat/lng + the saved origin's lat/lng (via GeoMath.LatLngToEnuMeters).
+        ///   When Tier-S succeeds we trust the saved origin matched the relocalized
+        ///   origin to within ARWorldMap's stated cm precision, so this XYZ is
+        ///   the final attach position. When Tier-S fails we ignore this value
+        ///   and fall to Tier-G plane / raycast.
+        /// </param>
+        /// <param name="candidatePlanes">Tier-G fallback plane candidates from ARPlaneManager.</param>
+        /// <param name="cancel">Cooperative cancellation; honored after each tier and within plane loop.</param>
         public async Task<AnchorAttachOutcome> AttachAsync(
             string spaceId,
-            float3 tierSAttachIfRelocalized,
+            float3 cairnTargetXyzInRelocalizedFrame,
             PlaneCandidate[] candidatePlanes,
             CancellationToken cancel)
         {
             if (spaceId == null) throw new ArgumentNullException(nameof(spaceId));
             if (candidatePlanes == null) throw new ArgumentNullException(nameof(candidatePlanes));
+            // Round-2 #1A-4-2: guard against NaN propagating to AR anchor.
+            if (math.any(math.isnan(cairnTargetXyzInRelocalizedFrame)))
+                throw new ArgumentException(
+                    "cairnTargetXyzInRelocalizedFrame contains NaN — caller bug, would propagate to AR anchor",
+                    nameof(cairnTargetXyzInRelocalizedFrame));
 
             // Tier-S
             var loadResult = await _persistence.LoadAsync(spaceId, cancel).ConfigureAwait(false);
             if (loadResult.IsSuccess)
             {
                 return new AnchorAttachOutcome(AttachOutcomeKind.AttachedTierS,
-                    tierSAttachIfRelocalized,
+                    cairnTargetXyzInRelocalizedFrame,
                     $"Tier-S relocalized OK; spaceId={spaceId}");
             }
 
@@ -90,9 +107,13 @@ namespace Cairn.AR.V025.Core
                 return new AnchorAttachOutcome(AttachOutcomeKind.Refused, float3.zero, "cancelled");
             }
 
-            // Tier-G plane scan
+            // Tier-G plane scan (cancellation honored each iteration)
             for (int i = 0; i < candidatePlanes.Length; i++)
             {
+                if (cancel.IsCancellationRequested)
+                {
+                    return new AnchorAttachOutcome(AttachOutcomeKind.Refused, float3.zero, "cancelled during plane scan");
+                }
                 var v = _validator.Validate(candidatePlanes[i]);
                 if (v.Accepted)
                 {
@@ -100,6 +121,11 @@ namespace Cairn.AR.V025.Core
                         candidatePlanes[i].Center,
                         $"Tier-G plane {i} accepted; tier-S diagnostic={loadResult.Diagnostic}");
                 }
+            }
+
+            if (cancel.IsCancellationRequested)
+            {
+                return new AnchorAttachOutcome(AttachOutcomeKind.Refused, float3.zero, "cancelled before raycast");
             }
 
             // Tier-G raycast
@@ -117,7 +143,7 @@ namespace Cairn.AR.V025.Core
                     "Tier-G raycast hit feature point (meter precision)");
             }
 
-            // 见 ADR-001(Tier-S 失败时 fallback 到 Tier-G GPS 路径) — Tier-G 也没找到地面 → 拒绝 spawn,不允许裸 GPS XYZ
+            // 见 ADR-001(Tier-S 失败时 fallback 到 Tier-G GPS 路径) — Tier-G 也没找到地面 → 拒绝 spawn,不允许从原始 GPS 合成 XYZ
             return new AnchorAttachOutcome(AttachOutcomeKind.Refused, float3.zero,
                 $"all tiers failed; tier-S={loadResult.Diagnostic}; tier-G ground={resolved.Diagnostic}");
         }

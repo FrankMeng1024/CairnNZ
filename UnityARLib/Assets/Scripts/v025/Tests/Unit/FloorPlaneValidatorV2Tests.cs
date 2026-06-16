@@ -128,5 +128,49 @@ namespace Cairn.AR.V025.Tests.Unit
         {
             Assert.AreEqual(FallbackAction.None, FloorPlaneValidatorV2.ResolveFallback(PlaneRejectReason.Accepted));
         }
+
+        // Round-2 #1A-4-1: float-precision-safe boundary at MaxAboveUserMeters.
+        // Naive `userHeadY=1.6f, y=1.6f+0.3f` fails because float32 (1.6f+0.3f-1.6f) =
+        // 0.30000007 which strictly > MaxAboveUserMeters=0.30000001. Construct boundary
+        // exactly: userHeadY=0f, y=MaxAboveUserMeters → heightDelta=MaxAboveUserMeters
+        // exactly (no fp residue). This proves `>` strict-greater-than admits ==.
+        [Test]
+        public void Validate_PlaneAtExactlyMaxAboveUser_Accepted()
+        {
+            var p = Floor(y: FloorPlaneValidatorV2.MaxAboveUserMeters, userHeadY: 0f);
+            var verdict = _v.Validate(p);
+            Assert.AreEqual(PlaneRejectReason.Accepted, verdict.Reason);
+        }
+
+        // Boundary just above MaxAboveUserMeters → must reject. Pins the strict-`>`
+        // contract from the OTHER side, so a future change to `>=` is detected.
+        [Test]
+        public void Validate_PlaneJustAboveMaxAboveUser_Rejected_B7()
+        {
+            const float epsilon = 0.001f;
+            var p = Floor(y: FloorPlaneValidatorV2.MaxAboveUserMeters + epsilon, userHeadY: 0f);
+            var verdict = _v.Validate(p);
+            Assert.AreEqual(PlaneRejectReason.B7_TooHighAboveUser, verdict.Reason);
+        }
+
+        // Round-2 #1A-1-7: boundary at exactly -MaxBelowUserMeters.
+        // float32: 1.6 - 3.0 = -1.4 exactly (no residue), so this construction is
+        // already fp-safe. Kept original form for documentation.
+        [Test]
+        public void Validate_PlaneAtExactlyMaxBelowUser_Accepted()
+        {
+            var p = Floor(y: -FloorPlaneValidatorV2.MaxBelowUserMeters, userHeadY: 0f);
+            var verdict = _v.Validate(p);
+            Assert.AreEqual(PlaneRejectReason.Accepted, verdict.Reason);
+        }
+
+        // Round-2 #1A-1-7: default branch in ResolveFallback for unknown reason.
+        [Test]
+        public void ResolveFallback_UnknownReason_DefaultsToRejectSpawn()
+        {
+            // Cast an int outside the enum range to exercise default branch.
+            var unknown = (PlaneRejectReason)999;
+            Assert.AreEqual(FallbackAction.RejectSpawn, FloorPlaneValidatorV2.ResolveFallback(unknown));
+        }
     }
 }

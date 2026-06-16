@@ -54,5 +54,26 @@ namespace Cairn.AR.V025.Tests.AntiPattern
             lidar.Observe(false);
             Assert.IsTrue(lidar.IsAvailable);
         }
+
+        // Round-2 (#1A-1-7): ResetForTesting should fully reset state.
+        [Test]
+        public void ResetForTesting_ReturnsStateToUnknown()
+        {
+            var lidar = new LidarAvailability();
+            lidar.Observe(true);
+            Assert.IsTrue(lidar.IsAvailable);
+
+            lidar.ResetForTesting();
+            Assert.AreEqual(LidarAvailability.LidarState.Unknown, lidar.CurrentState);
+            Assert.IsFalse(lidar.IsAvailable);
+
+            // After reset, two falses should not be enough to confirm Unavailable
+            lidar.Observe(false);
+            lidar.Observe(false);
+            Assert.AreEqual(LidarAvailability.LidarState.Unknown, lidar.CurrentState);
+            // Third false confirms.
+            lidar.Observe(false);
+            Assert.AreEqual(LidarAvailability.LidarState.Unavailable, lidar.CurrentState);
+        }
     }
 }

@@ -21,6 +21,9 @@ namespace Cairn.AR.V025.Tests.AntiPattern
 
             Assert.AreEqual(GroundHitKind.NoHit, resolved.Kind);
             Assert.IsFalse(resolved.HasGround);
+            // Sub#1A-2 found: must explicitly assert position is float3.zero on NoHit
+            // so a future regression that returns (NoHit, position={1,2,3}) fails this test.
+            Assert.AreEqual(float3.zero, resolved.Position);
             // Diagnostic must mention 裸坐标 or refuse so callers can grep
             Assert.That(resolved.Diagnostic, Does.Contain("refuse").Or.Contain("裸坐标"));
         }

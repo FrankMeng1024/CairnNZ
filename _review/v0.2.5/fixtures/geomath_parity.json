@@ -1,0 +1,32 @@
+{
+  "$schema_version": 1,
+  "purpose": "Phase 1A.7 + 2A.2 Rule G algorithmic lock-step parity fixture. Both C# GeoMath and TS geoMath.ts read this file and must produce identical results within tolerance. Drift detection via CI / unit tests.",
+  "earth_radius_meters": 6371000.0,
+  "tolerance": {
+    "haversine_meters_abs": 0.5,
+    "enu_meters_abs": 0.01,
+    "bearing_degrees_abs": 0.01,
+    "latlng_degrees_abs": 1.0e-7
+  },
+  "haversine_cases": [
+    { "name": "same_point", "lat1": 40.7128, "lng1": -74.0060, "lat2": 40.7128, "lng2": -74.0060, "expected_meters": 0.0 },
+    { "name": "one_deg_lng_at_equator", "lat1": 0, "lng1": 0, "lat2": 0, "lng2": 1, "expected_meters": 111195.0 },
+    { "name": "one_deg_lat", "lat1": 0, "lng1": 0, "lat2": 1, "lng2": 0, "expected_meters": 111195.0 },
+    { "name": "ny_to_london", "lat1": 40.7128, "lng1": -74.0060, "lat2": 51.5074, "lng2": -0.1278, "expected_meters": 5570223.0 },
+    { "name": "5km_north_of_ny", "lat1": 40.7128, "lng1": -74.0060, "lat2": 40.7578, "lng2": -74.0060, "expected_meters": 5005.0 }
+  ],
+  "enu_forward_cases": [
+    { "name": "ny_to_self", "origin_lat": 40.7128, "origin_lng": -74.0060, "lat": 40.7128, "lng": -74.0060, "expected_east_m": 0.0, "expected_north_m": 0.0 },
+    { "name": "100m_east_of_ny", "origin_lat": 40.7128, "origin_lng": -74.0060, "lat": 40.7128, "lng": -73.99481, "expected_east_m": 99.99, "expected_north_m": 0.0 },
+    { "name": "100m_north_of_ny", "origin_lat": 40.7128, "origin_lng": -74.0060, "lat": 40.71370, "lng": -74.0060, "expected_east_m": 0.0, "expected_north_m": 100.07 }
+  ],
+  "enu_inverse_cases": [
+    { "name": "ny_zero_offset", "origin_lat": 40.7128, "origin_lng": -74.0060, "east_m": 0, "north_m": 0, "expected_lat": 40.7128, "expected_lng": -74.0060 }
+  ],
+  "bearing_cases": [
+    { "name": "due_north", "lat1": 0, "lng1": 0, "lat2": 1, "lng2": 0, "expected_deg": 0.0 },
+    { "name": "due_east", "lat1": 0, "lng1": 0, "lat2": 0, "lng2": 1, "expected_deg": 90.0 },
+    { "name": "due_south", "lat1": 0, "lng1": 0, "lat2": -1, "lng2": 0, "expected_deg": 180.0 },
+    { "name": "due_west", "lat1": 0, "lng1": 0, "lat2": 0, "lng2": -1, "expected_deg": 270.0 }
+  ]
+}

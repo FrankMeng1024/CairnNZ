@@ -1,8 +1,8 @@
 # v0.2.5 Progress
 
 **自动模式启动时间**: 2026-06-16
-**当前 phase**: Phase 0 DONE → Phase 1A start
-**最后完成 sub-item**: 0.27
+**当前 phase**: Phase 1A DONE → Phase 2A start
+**最后完成 sub-item**: 1A.16
 
 ## Phase 0 — 测试数据清理 + 脚手架 + lint
 

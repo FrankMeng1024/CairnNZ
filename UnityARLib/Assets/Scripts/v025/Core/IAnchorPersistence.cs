@@ -36,10 +36,23 @@ namespace Cairn.AR.V025.Core
         /// <summary>Map exists but cannot relocalize within timeout. Caller falls to Tier-G.</summary>
         RelocalizeTimeout,
 
+        /// <summary>
+        /// Saved blob exists but its binary format is from a different ARKit / Unity
+        /// version and cannot deserialize. Caller falls to Tier-G AND should
+        /// schedule a re-save of a fresh map next time the user opens the space.
+        /// </summary>
+        MapVersionMismatch,
+
+        /// <summary>
+        /// Saved blob exists but is truncated, length-mismatched, or otherwise
+        /// corrupt. Caller falls to Tier-G AND should delete the cached blob.
+        /// </summary>
+        MapCorrupt,
+
         /// <summary>Backend cannot fulfil request on this platform (e.g. Arcore stub on Android pre-v0.2.6).</summary>
         NotSupported,
 
-        /// <summary>Disk / IO failure (full disk, permission denied, file corrupt).</summary>
+        /// <summary>Disk / IO failure (full disk, permission denied, generic file system error).</summary>
         IoError,
 
         /// <summary>Network or remote service failure (worldmap blob upload/download).</summary>
@@ -69,6 +82,8 @@ namespace Cairn.AR.V025.Core
         public static PersistenceResult Success() => new PersistenceResult(PersistenceOutcome.Success, string.Empty);
         public static PersistenceResult NoCache() => new PersistenceResult(PersistenceOutcome.NoCache, string.Empty);
         public static PersistenceResult RelocalizeTimeout(string diagnostic) => new PersistenceResult(PersistenceOutcome.RelocalizeTimeout, diagnostic);
+        public static PersistenceResult MapVersionMismatch(string diagnostic) => new PersistenceResult(PersistenceOutcome.MapVersionMismatch, diagnostic);
+        public static PersistenceResult MapCorrupt(string diagnostic) => new PersistenceResult(PersistenceOutcome.MapCorrupt, diagnostic);
         public static PersistenceResult NotSupported(string diagnostic) => new PersistenceResult(PersistenceOutcome.NotSupported, diagnostic);
         public static PersistenceResult IoError(string diagnostic) => new PersistenceResult(PersistenceOutcome.IoError, diagnostic);
         public static PersistenceResult NetworkError(string diagnostic) => new PersistenceResult(PersistenceOutcome.NetworkError, diagnostic);
