@@ -1047,8 +1047,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             from Move (PO: "希望每个小 icon 和 Move 的距离都一样").
 //             ORBIT_R = 90; angles 165° / 210° / 255° (ccw from +x)
 //             so all three sit on the inner / bottom-left arc.
-export const OTA_VERSION = 280;
-//         v279: revert MIN=0 + spread wheel + sage bottom buttons.
+// v281  Wheel angles tweaked. PO: "draw 离 move 上方的距离应该和
+//         reset 离 move 右侧的距离一致, 应该是对角线对称的".
+//         Angles changed from 165°/210°/255° (all bottom-left) to
+//         135°/225°/315° (UL / LL / LR). Draw and Reset are
+//         diagonally symmetric around Move; Undo at exact bottom-left
+//         on the same arc. Same R=90 keeps all three equidistant.
+export const OTA_VERSION = 281;
+//         v280: full densify rollback + equidistant orbit.
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and
