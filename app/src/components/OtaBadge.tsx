@@ -955,8 +955,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             real data before relaxing the gate.
 //         Removed: 0/8 stroke counter (v274 says it's no longer
 //         meaningful — top status pill shows mode/state instead).
-export const OTA_VERSION = 274;
-//         v273: head magnet visual + undo/reset/eraser audit fixes.
+// v275  PO direction — 6 fixes from v274 testing.
+//         (1) FAB pixel quality — bumped to 56×56 + 26 icon + 2.5 border;
+//             no more crowded/blurry top-right.
+//         (2) Status pill removed from top — was occluding the back arrow.
+//             Errors now show ABOVE the bottom bar; "Drew N strokes"
+//             text removed entirely (PO: "没意义").
+//         (3) Wheel layout: Reset at CENTER (red), 4 tools at N/E/S/W
+//             (Draw / Erase / Undo / Move). No close × — tap backdrop.
+//         (4) Eraser-disabled bug: pre-v275 erase split a stroke whose
+//             cut endpoints landed off baseline → validateStrokes
+//             flagged them → Preview disabled. Now eraseAt
+//             auto-anchors each new sub-stroke endpoint to baseline
+//             projection if 5-50m off (mirrors endStroke magnetism).
+//         (5) Beautify route now actually calls Mapbox /matching —
+//             pre-v275 the no-strokes path just copied points without
+//             snapping. Now slices baseline into ≤100-coord segments
+//             with 1-coord overlap for stitching, calls matchSegment
+//             on each, falls back to raw on partial failure.
+//         (6) Head/tail magnet densify step 3m → 1m. PO reported
+//             "开头依旧没连上,preview 后才正确" — at 3m the connector
+//             still rendered as visible dashes. 1m is continuous.
+export const OTA_VERSION = 275;
+//         v274: edit UI redesign (radial wheel + smart bottom bar).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

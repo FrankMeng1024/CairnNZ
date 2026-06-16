@@ -1371,14 +1371,11 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         && first.distM <= ENDPOINT_SNAP_M;
       const lastMagnet = last.distM > MIN_MAGNET_M
         && last.distM <= ENDPOINT_SNAP_M;
-      // v273: densify the magnet connector so it visually reads as part
-      // of the brush stroke (continuous polyline) rather than a single
-      // long jump from baseline-projection to the user's fingertip.
-      // Without densification, BrushStrokeLayer renders the connector
-      // as one straight segment ~30m long, which feels "disconnected"
-      // even though geometrically it's correct. Densifying every ~3m
-      // makes the connector indistinguishable from the rest of the stroke.
-      const DENSIFY_STEP_M = 3;
+      // v275: tighten densify from 3m → 1m. PO reported "开头依旧没连
+      // 上,preview 后才正确" with v273's 3m step. At 3m the connector
+      // looked like ~10 separate dashes for a 30m gap; at 1m it's
+      // continuous and visually merges with the rest of the stroke.
+      const DENSIFY_STEP_M = 1;
       const densify = (a: LngLat, b: LngLat): LngLat[] => {
         const d = haversineMetersLocal(a, b);
         if (d <= DENSIFY_STEP_M) return [a];
@@ -1481,7 +1478,29 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       // Emit each run >= 2 points as its own stroke; drop runs < 2.
       for (const run of runs) {
         if (run.length >= 2) {
-          newStrokes.push({ id: genStrokeId(), points: run });
+          // v275: re-attach endpoints. After erase splits a stroke,
+          // the new sub-stroke's endpoints are wherever the user's
+          // original points happened to be — they used to be inside
+          // the original stroke's body, not anchored to baseline /
+          // another stroke. Without this fix, validateStrokes flags
+          // them as "start/end not on route" → Preview is disabled
+          // (PO: "橡皮擦擦过后都不连贯,下面 preview 是 disabled").
+          // Mirror endStroke's magnet logic: if either end is within
+          // ENDPOINT_SNAP_M of baseline AND >5m off, prepend/append
+          // a baseline projection point so the endpoint becomes
+          // anchored. Inside 5m → already on baseline, no insert.
+          // Beyond 50m → leave as-is; validateStrokes will surface.
+          let pts = run;
+          const fpFirst = projectPointOntoBaseline(run[0], state.originalPoints);
+          const fpLast = projectPointOntoBaseline(run[run.length - 1], state.originalPoints);
+          const MIN = 5;
+          if (fpFirst && fpFirst.dist > MIN && fpFirst.dist <= ENDPOINT_SNAP_M) {
+            pts = [fpFirst.pt, ...pts];
+          }
+          if (fpLast && fpLast.dist > MIN && fpLast.dist <= ENDPOINT_SNAP_M) {
+            pts = [...pts, fpLast.pt];
+          }
+          newStrokes.push({ id: genStrokeId(), points: pts });
         } else if (run.length === 1) {
           mutated = true;
         }
@@ -1824,21 +1843,83 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     if (state.isSaving) return { ok: false, error: 'Save in progress' };
     if (state.isComputing) return { ok: false, error: 'Already computing' };
 
-    // No brushes → preview = current matched (or original if pristine).
-    // Trim is applied client-side. v251: previewIsCurrent only matters
-    // for the "Preview first" gating; with brushStrokes=[] we are
-    // already in committed state.
+    // v275 fix: PO requirement "beautify route" must actually call
+    // mapbox /matching to clean up GPS noise on the baseline. Pre-v275
+    // the no-strokes path just copied points without snapping —
+    // visually identical to the input, no api call. Now we slice the
+    // baseline into ≤100-coord segments (mapbox cap), send each
+    // through matchSegment with overview=full + tidy=true, stitch the
+    // results into a new matchedPoints. If the api fails or returns
+    // nothing on a segment, that segment falls back to the raw
+    // baseline so we never silently lose route data.
     if (state.brushStrokes.length === 0) {
-      const base = state.matchedPoints.length >= 2 ? state.matchedPoints : state.originalPoints;
-      set(s => ({
-        previewMatchedPoints: null,
-        previewIsCurrent: true,
-        matchedPoints: [...base],
-        workingPoints: deriveWorking([...base], s.trimStartFrac, s.trimEndFrac),
-        validationErrors: [],
-        editOpSeq: s.editOpSeq + 1,
-      }));
-      return { ok: true };
+      const baseInput = state.matchedPoints.length >= 2 ? state.matchedPoints : state.originalPoints;
+      if (baseInput.length < 2) {
+        return { ok: false, error: 'No route to beautify' };
+      }
+      set({ isComputing: true });
+      try {
+        const SEG_CAP = 100;
+        // Slide window with 1-coord overlap so adjacent segments share
+        // an anchor and stitching has no gap.
+        const segments: { startIdx: number; endIdx: number; coords: typeof baseInput }[] = [];
+        let i = 0;
+        while (i < baseInput.length - 1) {
+          const end = Math.min(i + SEG_CAP, baseInput.length);
+          segments.push({ startIdx: i, endIdx: end - 1, coords: baseInput.slice(i, end) });
+          if (end >= baseInput.length) break;
+          i = end - 1; // overlap last point with next segment's first
+        }
+        const out: typeof baseInput = [];
+        let anyMatched = false;
+        for (let k = 0; k < segments.length; k++) {
+          const seg = segments[k];
+          const radiuses = seg.coords.map(() => 25 as number | null);
+          const r = await matchSegment(
+            { coords: seg.coords, radiuses, viaIndicesInCoords: [0, seg.coords.length - 1] },
+          );
+          let segOut: typeof baseInput;
+          if (r.ok && r.matchedPoints && r.matchedPoints.length >= 2) {
+            segOut = r.matchedPoints;
+            anyMatched = true;
+          } else {
+            // Fallback: keep raw baseline for this segment so we don't
+            // lose data on partial failure.
+            segOut = seg.coords;
+          }
+          if (k === 0) {
+            out.push(...segOut);
+          } else {
+            // Skip first point of this segment — it's the overlap with
+            // the previous segment's last point.
+            out.push(...segOut.slice(1));
+          }
+        }
+        const finalMatched = out.length >= 2 ? out : baseInput;
+        // Send telemetry so we can see beautify hit api + result quality.
+        sendEditDiag('brush_preview_completed', {
+          mode: 'beautify_route',
+          inputPoints: baseInput.length,
+          outputPoints: finalMatched.length,
+          segments: segments.length,
+          anyMatched,
+        });
+        set(s => ({
+          previewMatchedPoints: null,
+          previewIsCurrent: true,
+          matchedPoints: finalMatched,
+          workingPoints: deriveWorking(finalMatched, s.trimStartFrac, s.trimEndFrac),
+          validationErrors: [],
+          editOpSeq: s.editOpSeq + 1,
+          editCount: s.editCount + 1,
+          hasCommittedEdit: true,
+          isComputing: false,
+        }));
+        return { ok: true };
+      } catch (e: any) {
+        set({ isComputing: false, lastError: e?.message ?? 'Beautify failed' });
+        return { ok: false, error: e?.message ?? 'Beautify failed' };
+      }
     }
 
     // v6.3: pre-flight strokes via the new G-gate pipeline. validateStrokes
