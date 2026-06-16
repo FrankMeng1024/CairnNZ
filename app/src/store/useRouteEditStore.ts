@@ -1499,12 +1499,28 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     // v273 telemetry: capture eraseAt for audit. records the erase point,
     // radius, how many strokes existed before, how many remain, whether
     // any stroke was split (run count > 1 from any stroke).
+    // v274: also record whether the surviving strokes' endpoints are
+    // still acceptable (on baseline OR on another stroke). PO reported
+    // "橡皮擦擦过后再画线衔接收尾告诉我不对" — needs data to decide
+    // whether to relax the gate or improve the message.
+    const newStrokeEndpointStatus = newStrokes.map((s, i) => {
+      const others = newStrokes.filter((_, j) => j !== i);
+      const startOk = isPointAcceptableEndpoint(s.points[0], state.walkedIndex, others);
+      const endOk = isPointAcceptableEndpoint(s.points[s.points.length - 1], state.walkedIndex, others);
+      return {
+        startOk, endOk,
+        startCoord: s.points[0],
+        endCoord: s.points[s.points.length - 1],
+        pointCount: s.points.length,
+      };
+    });
     sendEditDiag('brush_eraser', {
       coord,
       radiusM,
       beforeStrokes: state.brushStrokes.length,
       afterStrokes: newStrokes.length,
       undoStackBefore: state.undoStack.length,
+      newStrokeEndpointStatus,
     });
     set(prev => ({
       undoStack: [...prev.undoStack, {
@@ -2446,9 +2462,17 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         // Plan §6.4: rejected strokes vanish from the canvas. Accepted ones
         // are committed into matchedPoints, so the in-progress array clears.
         brushStrokes: [],
-        // v6.3: clean Mapbox-only path. No Catmull-Rom fallback. No
-        // low-confidence warning (we either accepted clean or rejected).
-        undoStack: [],
+        // v274 fix: do NOT wipe undoStack on preview commit. Pre-v274
+        // wiped to [] so the user couldn't undo a preview they didn't
+        // like (PO confirmed: "preview 后 undo 不让用"). Now we push
+        // a pre-preview snapshot so undo restores brushStrokes +
+        // matchedPoints. Cap remains 20 entries.
+        undoStack: [...s.undoStack, {
+          brushStrokes: s.brushStrokes,
+          trimStartFrac: s.trimStartFrac,
+          trimEndFrac: s.trimEndFrac,
+          matchedPoints: s.matchedPoints,
+        }].slice(-20),
         activeStrokeId: null,
         hasCommittedEdit: true,
         previewMatchedPoints: null,

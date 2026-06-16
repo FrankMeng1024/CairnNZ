@@ -40,7 +40,7 @@ import { BackButton } from '../components/BackButton';
 import { DualLineLayer } from '../components/map/DualLineLayer';
 import { BrushOverlay, reportBrushOverlayCamera } from '../components/map/BrushOverlay';
 import { BrushStrokeLayer } from '../components/map/BrushStrokeLayer';
-import { EditOverlayV236 } from '../components/map/EditOverlayV236';
+import { EditOverlayV274 } from '../components/map/EditOverlayV274';
 import { getFlagsSync } from '../config/featureFlags';
 import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
 import { debugLogger } from '../services/debugLogger';
@@ -451,6 +451,21 @@ export function RouteEditorScreen() {
     }
   }, [routeId, fromSessionId, sessionTrackPoints, existingRoute, name, addRoute, loadRouteDetail, enterEditLoading, session]);
 
+  // v274: flatten the flow — when arriving from Save-as-Route
+  // (fromSessionId present, no routeId), auto-enter edit mode so the
+  // user lands directly on the editing canvas instead of a view
+  // screen with an "Edit" button.
+  const autoEnterTriedRef = useRef(false);
+  useEffect(() => {
+    if (autoEnterTriedRef.current) return;
+    if (routeId) return;                          // not Save-as-Route flow
+    if (!fromSessionId) return;                    // no session backing
+    if (editMode || enterEditLoading) return;     // already entering
+    if (sessionTrackPoints.length < 2) return;     // session not loaded yet
+    autoEnterTriedRef.current = true;
+    enterEdit();
+  }, [routeId, fromSessionId, sessionTrackPoints, editMode, enterEditLoading, enterEdit]);
+
   // ── Save / cancel handlers
   // v249: handlePostCancel removed — Cancel now stays in view-mode rather
   // than navigating back; the user can re-edit, change name, then Save.
@@ -459,6 +474,17 @@ export function RouteEditorScreen() {
     const r = await useRouteEditStore.getState().runPreview();
     if (!r.ok && r.error) {
       // Validation error already in store.lastError; nothing more to do.
+    }
+  }, []);
+
+  // v274: "Beautify whole route" — runPreview when there are no
+  // strokes is the same shape as Preview, just no detours: it returns
+  // the original baseline through map-matching to clean up GPS noise.
+  // Single source of truth so Preview / Beautify stay coherent.
+  const handleBeautify = useCallback(async () => {
+    const r = await useRouteEditStore.getState().runPreview();
+    if (!r.ok && r.error) {
+      // store.lastError already has the message
     }
   }, []);
 
@@ -826,7 +852,7 @@ export function RouteEditorScreen() {
           {/* Brush gesture capture — only intercepts when brush/eraser tool active */}
           <BrushOverlay mapViewRef={mapViewRef} />
           {/* Bottom card — tool strip is now inside this card */}
-          <EditOverlayV236 onCancel={handleCancelEdit} onSave={handleSave} onPreview={handlePreview} />
+          <EditOverlayV274 onCancel={handleCancelEdit} onSave={handleSave} onPreview={handlePreview} onBeautify={handleBeautify} />
         </>
       ) : (
         <>

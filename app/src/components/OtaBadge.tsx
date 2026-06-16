@@ -934,8 +934,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         counts + preview state. Together with v270 brush_raw_samples,
 //         a full N-step session can now be reproduced from telemetry
 //         alone for any combo of brush/preview/undo/reset/eraser.
-export const OTA_VERSION = 273;
-//         v272: rotation fix in self-mercator unproject.
+// v274  PO direction — major UX overhaul + 2 functional fixes.
+//         UI:
+//         (1) Replace EditOverlayV236 with EditOverlayV274 — top-right
+//             tool FAB, tap to bloom radial wheel (5 items: Draw / Move
+//             / Erase / Undo / Reset + close X). Game-feel.
+//         (2) Bottom bar single row, no Cancel (back arrow replaces).
+//             Smart logic: state A (has unpreviewed strokes) shows ONE
+//             button = Preview (disabled on validation error); state B
+//             (clean / previewed) shows TWO = Beautify + Save.
+//         (3) Flatten flow: arriving from Save-as-Route auto-enters
+//             edit mode, no view-then-edit middle screen.
+//         Functional:
+//         (4) Preview-undo bug: pre-v274 wiped undoStack on commit so
+//             "preview 后 undo 不让用". Now pushes pre-preview snapshot
+//             so undo restores brushStrokes + matchedPoints.
+//         (5) Eraser endpoint telemetry: brush_eraser now records
+//             newStrokeEndpointStatus per surviving stroke so we can
+//             diagnose "橡皮擦擦过后再画线衔接收尾告诉我不对" with
+//             real data before relaxing the gate.
+//         Removed: 0/8 stroke counter (v274 says it's no longer
+//         meaningful — top status pill shows mode/state instead).
+export const OTA_VERSION = 274;
+//         v273: head magnet visual + undo/reset/eraser audit fixes.
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and
