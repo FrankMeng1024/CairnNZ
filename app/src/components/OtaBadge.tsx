@@ -916,8 +916,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         view-projection matrix. Telemetry now also records bearing
 //         + pitch per sample so we can post-hoc detect any remaining
 //         issues. Single-threshold 250m corridor (v271) preserved.
-export const OTA_VERSION = 272;
-//         v271: self-mercator primary + single 250m corridor.
+// v273  Visual + 3 audit fixes (4-eye review of undo/reset/eraser combos).
+//         Visual: head/tail magnet connector (B-point unshift) was a
+//         single long polyline segment that read as "open beginning
+//         disconnected from baseline". Densified to ~3m steps so it
+//         visually merges with the brush stroke.
+//         Audit findings (all 100% from code, not telemetry):
+//         (1) eraseAt didn't clear strokeSnapCache → erase + redraw
+//             same shape would hit stale snap cache → preview ignored.
+//         (2) undo didn't clear strokeSnapCache → Preview → undo →
+//             redraw would similarly hit stale cache.
+//         (3) eraseAt didn't null previewMatchedPoints → Preview →
+//             erase → Save (no fresh Preview) would persist pre-erase
+//             geometry. Now cleared.
+//         Telemetry added: brush_eraser, brush_reset (new kinds);
+//         brush_undo enriched with stack depth + before/after stroke
+//         counts + preview state. Together with v270 brush_raw_samples,
+//         a full N-step session can now be reproduced from telemetry
+//         alone for any combo of brush/preview/undo/reset/eraser.
+export const OTA_VERSION = 273;
+//         v272: rotation fix in self-mercator unproject.
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

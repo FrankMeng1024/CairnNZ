@@ -1371,8 +1371,37 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         && first.distM <= ENDPOINT_SNAP_M;
       const lastMagnet = last.distM > MIN_MAGNET_M
         && last.distM <= ENDPOINT_SNAP_M;
-      if (firstMagnet) newPoints.unshift(first.point);
-      if (lastMagnet) newPoints.push(last.point);
+      // v273: densify the magnet connector so it visually reads as part
+      // of the brush stroke (continuous polyline) rather than a single
+      // long jump from baseline-projection to the user's fingertip.
+      // Without densification, BrushStrokeLayer renders the connector
+      // as one straight segment ~30m long, which feels "disconnected"
+      // even though geometrically it's correct. Densifying every ~3m
+      // makes the connector indistinguishable from the rest of the stroke.
+      const DENSIFY_STEP_M = 3;
+      const densify = (a: LngLat, b: LngLat): LngLat[] => {
+        const d = haversineMetersLocal(a, b);
+        if (d <= DENSIFY_STEP_M) return [a];
+        const n = Math.ceil(d / DENSIFY_STEP_M);
+        const out: LngLat[] = [];
+        for (let k = 0; k < n; k++) {
+          const t = k / n;
+          out.push({
+            lng: a.lng + (b.lng - a.lng) * t,
+            lat: a.lat + (b.lat - a.lat) * t,
+          });
+        }
+        return out;
+      };
+      if (firstMagnet) {
+        const head = densify(first.point, stroke.points[0]);
+        newPoints.unshift(...head);
+      }
+      if (lastMagnet) {
+        const tail = densify(stroke.points[stroke.points.length - 1], last.point);
+        // skip first element (= last raw point, already in newPoints)
+        newPoints.push(...tail.slice(1), last.point);
+      }
       // v268 telemetry — see OtaBadge v268 note. Recorded EVERY endStroke
       // so we can see, post-hoc, whether the kink corresponds to a magnet
       // event or to raw user gesture data. KEY_EVENT → flushed immediately
@@ -1459,6 +1488,24 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       }
     }
     if (!mutated) return;
+    // v273 audit fix #1: clear strokeSnapCache. Without this, if the user
+    // erases part of a stroke and re-draws the same shape, the cache hits
+    // the stale snap result keyed by the previous geometry → mapbox is
+    // never re-called → preview draws an old curve that doesn't match
+    // the current brush. This is the "莫名磁吸 / 鬼线" class of bug — PO
+    // snap122 was a sibling case in resetEdits, fixed there in v255 but
+    // eraseAt was missed.
+    clearStrokeSnapCache();
+    // v273 telemetry: capture eraseAt for audit. records the erase point,
+    // radius, how many strokes existed before, how many remain, whether
+    // any stroke was split (run count > 1 from any stroke).
+    sendEditDiag('brush_eraser', {
+      coord,
+      radiusM,
+      beforeStrokes: state.brushStrokes.length,
+      afterStrokes: newStrokes.length,
+      undoStackBefore: state.undoStack.length,
+    });
     set(prev => ({
       undoStack: [...prev.undoStack, {
         brushStrokes: prev.brushStrokes,
@@ -1468,6 +1515,13 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       }].slice(-20),
       brushStrokes: newStrokes,
       previewIsCurrent: false,
+      // v273 audit fix #3: clear previewMatchedPoints on erase. Without
+      // this, if the user does Preview → eraseAt → Save (skipping a fresh
+      // Preview), Save reads previewMatchedPoints (stale geometry from
+      // the pre-erase Preview) instead of falling through to the freshly
+      // recomputed matchedPoints. Result: saved route includes geometry
+      // that no longer matches the visible brush state.
+      previewMatchedPoints: null,
       editOpSeq: prev.editOpSeq + 1,
       editCount: prev.editCount + 1,
     }));
@@ -1600,6 +1654,13 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       editCount: s.editCount + 1,
       lastError: null,
     }));
+    // v273 telemetry: capture reset for audit. records what was wiped.
+    sendEditDiag('brush_reset', {
+      brushStrokesBefore: state.brushStrokes.length,
+      hadCommittedEdit: state.hasCommittedEdit,
+      hadPreview: state.matchedPoints.length >= 2 && state.previewIsCurrent,
+      undoStackBefore: state.undoStack.length,
+    });
     persistSession(get(), get().sessionId ?? undefined);
   },
 
@@ -1647,6 +1708,12 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           })),
         )
       : state.walkedIndex;
+    // v273 audit fix #2: clear strokeSnapCache on undo. Without this, if
+    // a user does Preview → undo → re-draws a similar stroke, the cache
+    // hits the previous snap result keyed by the original geometry —
+    // mapbox is never re-called even though the baseline state has
+    // changed. Same root cause as the eraseAt fix above.
+    clearStrokeSnapCache();
     set(s => ({
       undoStack: newStack,
       brushStrokes: last.brushStrokes,
@@ -1668,7 +1735,13 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       lastError: null,
     }));
     sendEditDiag('brush_undo', {
+      // v273: enrich for audit. records what the undo actually restored.
       undo_stack_depth: newStack.length,
+      brushStrokesBefore: state.brushStrokes.length,
+      brushStrokesAfter: last.brushStrokes.length,
+      hadPreviewBefore: state.matchedPoints.length >= 2 && state.previewIsCurrent,
+      restoredMatchedPointCount: last.matchedPoints.length,
+      noBrushAfter,
     });
     persistSession(get(), get().sessionId ?? undefined);
   },

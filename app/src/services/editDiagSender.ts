@@ -56,7 +56,13 @@ export type TelemetryKind =
   // Used to root-cause the mid-stroke "lng-quantized to a single value"
   // signature seen in v268 brush_end data. Single batch upload at
   // gesture end (key event) so it never blocks the UI thread.
-  | 'brush_raw_samples';
+  | 'brush_raw_samples'
+  // v273: audit telemetry for eraser + reset, plus richer brush_undo
+  // (already declared above). Each captures the operation context so
+  // post-hoc we can reproduce N-step combos and verify state stays
+  // clean (strokeSnapCache, walkedIndex, baseLine consistency).
+  | 'brush_eraser'
+  | 'brush_reset';
 
 /** Events that bypass the debounce timer (high-value or terminal events). */
 const KEY_EVENTS: ReadonlyArray<TelemetryKind> = [
