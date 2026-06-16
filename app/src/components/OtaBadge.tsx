@@ -857,8 +857,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         recent change, or is it baseline behavior? Need 3-5 fresh
 //         strokes at varying zoom levels to see if quantization scales
 //         with zoom (Z=19 tile size doubles every zoom step).
-export const OTA_VERSION = 269;
-//         v268: magnet 5m lower-bound + brush gesture telemetry.
+// v270  Spike B (DIAGNOSTIC ONLY, no behavior change). v269 telemetry
+//         100% confirmed: zoom < 15 → 0 lng quantization, zoom > 15 →
+//         lng pinned to Z=19 tile X integer boundaries (verified math:
+//         121.43394470 = Z19 X=438995, 121.43531799 = Z19 X=438997).
+//         enterSeq == pushSeq, droppedByGuard=0 — async path is clean.
+//         Root cause traced through code: Cairn → @rnmapbox/maps@10.3.1
+//         (post-PR-#4116, bridge uses .doubleValue) → MapboxMaps@~>11.20.1
+//         coordinate(for:) → __map.coordinateForPixel (CLOSED SOURCE
+//         MapboxCoreMaps C++ binary). Bug confirmed lives in mapbox
+//         native projection layer; not visible in any OSS code path.
+//         v270 adds Spike B: parallel pure-JS self-mercator unproject
+//         from getCenter+getZoom. Math sim shows 0 quantization at
+//         zoom=16.5, but real-device validation needed (getCenter/getZoom
+//         themselves might be quantized; viewport size assumption might
+//         not hold). Per-sample now also records selfLng/selfLat/cLng/
+//         cLat/zoom so we can post-hoc compute (a) does selfLng avoid
+//         f32 boundaries, (b) does selfLat ≈ native lat (within 1m),
+//         (c) consistency of camera state during a stroke.
+export const OTA_VERSION = 270;
+//         v269: per-frame brush sample telemetry (DIAGNOSTIC ONLY).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

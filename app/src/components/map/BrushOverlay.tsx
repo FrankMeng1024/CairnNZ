@@ -40,8 +40,20 @@ interface RawSample {
   pushTs: number;       // ms epoch when coord was pushed to store
   x: number;            // touch absoluteX
   y: number;            // touch absoluteY
-  lng: number | null;   // raw unproject result (null if dropped)
+  lng: number | null;   // raw native unproject result (null if dropped)
   lat: number | null;
+  // v270: parallel "self-mercator" unproject from getCenter+getZoom — pure JS,
+  // never touches the native projection matrix that quantizes lng to Z=19
+  // tile X grid. If real-device measurements show selfLng has 0 f32-quant
+  // matches AND selfLat is identical to native lat, we have a 100%-validated
+  // bypass path for the SDK quantization bug.
+  selfLng: number | null;
+  selfLat: number | null;
+  // The center+zoom captured for the self-mercator calc, so post-hoc we can
+  // see exactly what state the camera was in when this sample was taken.
+  cLng: number | null;
+  cLat: number | null;
+  zoom: number | null;
   droppedByGuard: boolean;  // updateInFlightRef gate dropped this frame
   unprojectFailed: boolean; // mapView.getCoordinateFromView returned bad
 }
@@ -103,6 +115,75 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
     }
   }
 
+  // v270: pure-JS self-mercator unproject (Spike B). Reads camera center +
+  // zoom, then uses standard Web Mercator inverse to convert (screen x, y)
+  // to (lng, lat) entirely in IEEE-754 double precision JavaScript.
+  // Used PARALLEL to native unproject so we can post-hoc compare both
+  // outputs frame-by-frame. We do NOT replace native here — that comes
+  // only after on-device data confirms self-mercator is quantization-free
+  // AND lat matches native within tolerance.
+  //
+  // Math: Mapbox uses 512-px tile size. World pixel coords are
+  //   px = (lng + 180)/360 * 512 * 2^zoom
+  //   py = (0.5 - asinh(tan(lat·π/180))/(2π)) * 512 * 2^zoom
+  // Center maps to viewport center (view_w/2, view_h/2). Touch (x, y) is
+  // an offset; world pixel = center pixel + offset. Then inverse mercator.
+  //
+  // mapView.getSize() returns the on-screen MapView pixel dimensions in
+  // density-independent points (DP), matching the units used by
+  // gesture handler's absoluteX/absoluteY. Both are points, not physical pixels.
+  async function unprojectSelfMercator(
+    x: number, y: number,
+  ): Promise<{ lng: number; lat: number; cLng: number; cLat: number; zoom: number } | null> {
+    try {
+      const map = mapViewRef.current;
+      if (!map) return null;
+      if (typeof map.getCenter !== 'function' || typeof map.getZoom !== 'function') return null;
+      const [center, zoom] = await Promise.all([map.getCenter(), map.getZoom()]);
+      // getCenter returns [lng, lat] per rnmapbox docs.
+      const cLng = Array.isArray(center) ? center[0] : (center?.lng ?? null);
+      const cLat = Array.isArray(center) ? center[1] : (center?.lat ?? null);
+      if (cLng == null || cLat == null || zoom == null) return null;
+      // We need the viewport size in points to compute the offset from center.
+      // mapView's container is StyleSheet.absoluteFillObject so we use
+      // window dimensions. To stay independent of getSize quirks we read
+      // both safe-area sized window via gesture absolute coords; gesture
+      // absoluteX/absoluteY come from the same coordinate system MapView
+      // is laid out in. We assume MapView is full-screen (Cairn does this)
+      // — if it isn't, getCenter/getZoom mismatch will show up as a constant
+      // offset that we can detect post-hoc. To be safe we also try map.getSize().
+      let viewW = 0, viewH = 0;
+      try {
+        if (typeof map.getSize === 'function') {
+          const s = await map.getSize();
+          if (Array.isArray(s) && s.length >= 2) { viewW = s[0]; viewH = s[1]; }
+          else if (s && typeof s.width === 'number') { viewW = s.width; viewH = s.height; }
+        }
+      } catch { /* ignore */ }
+      if (!viewW || !viewH) {
+        // Fallback to RN Dimensions — works only if MapView is full screen.
+        // This is acceptable as a Spike B sanity check; we'll flag if needed.
+        const { Dimensions } = require('react-native');
+        const d = Dimensions.get('window');
+        viewW = d.width;
+        viewH = d.height;
+      }
+      const TILE = 512;
+      const scale = Math.pow(2, zoom) * TILE;
+      const cPx = (cLng + 180) / 360 * scale;
+      const sinLat = Math.sin(cLat * Math.PI / 180);
+      const cPy = (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale;
+      const wPx = cPx + (x - viewW / 2);
+      const wPy = cPy + (y - viewH / 2);
+      const lng = wPx / scale * 360 - 180;
+      const n = Math.PI - 2 * Math.PI * wPy / scale;
+      const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+      return { lng, lat, cLng, cLat, zoom };
+    } catch {
+      return null;
+    }
+  }
+
   async function handleBegin(x: number, y: number) {
     endedRef.current = false;
     updateInFlightRef.current = false; // v250: reset for new stroke
@@ -149,13 +230,23 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
         enterTs, pushTs: enterTs,
         x, y,
         lng: null, lat: null,
+        selfLng: null, selfLat: null,
+        cLng: null, cLat: null, zoom: null,
         droppedByGuard: true, unprojectFailed: false,
       });
       return;
     }
     updateInFlightRef.current = true;
     try {
-      const coord = await unproject(x, y);
+      // v270: run native unproject and self-mercator unproject in PARALLEL
+      // so they capture the same camera state. Promise.all means both fire
+      // before either resolves; even if rnmapbox getCenter+getZoom is async
+      // and runs on a different RN frame than getCoordinateFromView, they
+      // start from the same JS tick. Any drift is post-hoc visible.
+      const [coord, selfRes] = await Promise.all([
+        unproject(x, y),
+        unprojectSelfMercator(x, y),
+      ]);
       const pushSeq = _pushSeqCounter++;
       const pushTs = Date.now();
       if (!coord) {
@@ -164,18 +255,25 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
           enterTs, pushTs,
           x, y,
           lng: null, lat: null,
+          selfLng: selfRes ? selfRes.lng : null,
+          selfLat: selfRes ? selfRes.lat : null,
+          cLng: selfRes ? selfRes.cLng : null,
+          cLat: selfRes ? selfRes.cLat : null,
+          zoom: selfRes ? selfRes.zoom : null,
           droppedByGuard: false, unprojectFailed: true,
         });
         return;
       }
-      // v269: record the raw unproject result BEFORE store accepts it,
-      // so we capture exactly the value the SDK returned, independent
-      // of any later transformation in appendStrokePoint.
       _rawSamples.push({
         enterSeq, pushSeq,
         enterTs, pushTs,
         x, y,
         lng: coord.lng, lat: coord.lat,
+        selfLng: selfRes ? selfRes.lng : null,
+        selfLat: selfRes ? selfRes.lat : null,
+        cLng: selfRes ? selfRes.cLng : null,
+        cLat: selfRes ? selfRes.cLat : null,
+        zoom: selfRes ? selfRes.zoom : null,
         droppedByGuard: false, unprojectFailed: false,
       });
       if (activeTool === 'brush') {
