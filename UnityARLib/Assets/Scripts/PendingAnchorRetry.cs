@@ -166,9 +166,10 @@ namespace Cairn.AR
                     $"id={_markerId} path=DegradedAnchor pos=({estimatedPose.x:F2},{estimatedPose.y:F2},{estimatedPose.z:F2}) " +
                     $"state-when-created={degradedAnchor.trackingState}(expected-None-async-init) " +
                     $"trackableId-when-created={degradedAnchor.trackableId}");
-                StartCoroutine(CheckDegradedAnchorTrackingStateDelayed(_markerId, degradedAnchor, 1.0f));
-                StartCoroutine(CheckDegradedAnchorTrackingStateDelayed(_markerId, degradedAnchor, 5.0f));
-                StartCoroutine(CheckDegradedAnchorTrackingStateDelayed(_markerId, degradedAnchor, 30.0f));
+                // Round 7 fix: 用持久 Phase3CoroutineHost 跑 delayed check
+                Phase3CoroutineHost.Instance.StartAnchorTrackingCheck(_markerId, degradedAnchor, 1.0f, "DegradedAnchor");
+                Phase3CoroutineHost.Instance.StartAnchorTrackingCheck(_markerId, degradedAnchor, 5.0f, "DegradedAnchor");
+                Phase3CoroutineHost.Instance.StartAnchorTrackingCheck(_markerId, degradedAnchor, 30.0f, "DegradedAnchor");
                 var driftMon = GetComponent<AnchorDriftMonitor>();
                 if (driftMon == null) driftMon = gameObject.AddComponent<AnchorDriftMonitor>();
                 driftMon.Init(_markerId);

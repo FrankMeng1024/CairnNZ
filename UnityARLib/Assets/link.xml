@@ -121,6 +121,7 @@
     <type fullname="Cairn.AR.AnchorDriftMonitor" preserve="all"/>
     <type fullname="Cairn.AR.PendingAnchorRetry" preserve="all"/>
     <type fullname="Cairn.AR.FloorPlaneValidator" preserve="all"/>
+    <type fullname="Cairn.AR.Phase3CoroutineHost" preserve="all"/>
     <type fullname="UnityLogger" preserve="all"/>
   </assembly>
 </linker>

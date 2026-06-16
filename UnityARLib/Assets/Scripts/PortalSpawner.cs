@@ -708,10 +708,14 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
                             $"id={data.id} pos=({hit.pose.position.x:F2},{hit.pose.position.y:F2},{hit.pose.position.z:F2}) " +
                             $"state-when-created={anchorOnSpawn.trackingState}(expected-None-async-init) " +
                             $"trackableId-when-created={anchorOnSpawn.trackableId}");
-                        // delayed checks via coroutine (1s + 5s + 30s 三个 tick,覆盖 ARAnchorSubsystem 真注册延迟范围)
-                        StartCoroutine(CheckFreeFloatingAnchorTrackingStateDelayed(data.id ?? "unknown", anchorOnSpawn, 1.0f));
-                        StartCoroutine(CheckFreeFloatingAnchorTrackingStateDelayed(data.id ?? "unknown", anchorOnSpawn, 5.0f));
-                        StartCoroutine(CheckFreeFloatingAnchorTrackingStateDelayed(data.id ?? "unknown", anchorOnSpawn, 30.0f));
+                        // Round 7 fix: 用持久 Phase3CoroutineHost 跑 delayed check,
+                        // 否则 PortalSpawner 自身 destroy 后 30s tick 永不 emit
+                        Cairn.AR.Phase3CoroutineHost.Instance.StartAnchorTrackingCheck(
+                            data.id ?? "unknown", anchorOnSpawn, 1.0f, "DepthAnchor");
+                        Cairn.AR.Phase3CoroutineHost.Instance.StartAnchorTrackingCheck(
+                            data.id ?? "unknown", anchorOnSpawn, 5.0f, "DepthAnchor");
+                        Cairn.AR.Phase3CoroutineHost.Instance.StartAnchorTrackingCheck(
+                            data.id ?? "unknown", anchorOnSpawn, 30.0f, "DepthAnchor");
                         // R2 fix: track for ClearAll so DepthAnchor GO doesn't
                         // leak across session resets. Container will be parented
                         // to anchorGo; destroying anchorGo will cascade.

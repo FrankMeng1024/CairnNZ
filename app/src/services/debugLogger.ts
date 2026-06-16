@@ -12,6 +12,11 @@
  * See docs/debug-logger-spec.md for full specification.
  */
 import type { LogEvent, SessionMetadata, DeviceInfo } from '../types/debugLog';
+// v0.2.4 Phase 3 Round 7 — AppState 监听用于 kill-app safety
+// (Round 7 audit B BLOCKER: kill app 路径 own session 永远孤立 — 无 endSession,
+// 无 writeMetadata,telemetryUploader.listSessions 找不到。修法:背景化时立即
+// flush + writeMetadata,session 仍 active 但 meta 已写盘)
+import { AppState } from 'react-native';
 
 // ── Lazy expo-file-system import (web safe) ────────────────────────────────
 // Use legacy API for stable documentDirectory + readAsStringAsync etc.
@@ -140,6 +145,30 @@ class DebugLogger {
     }, FLUSH_INTERVAL_MS);
 
     return sessionId;
+  }
+
+  /**
+   * v0.2.4 Phase 3 Round 7 — Kill-app safety. AppState 'background'/'inactive'
+   * 时立即 flush buffer + writeMetadata。session 不 end,meta 已写盘 →
+   * telemetryUploader.listSessions() 能找到该 session,retryAll() 可上传。
+   *
+   * Round 7 audit B BLOCKER #2 fix:
+   *   原 writeMetadata 仅在 endSession 路径调用。iOS app kill / suspend /
+   *   crash 不触发 React unmount → 无 endSession → 无 meta 文件 →
+   *   listSessions 看不到 → 永远不上传。冷启动直接进 AR 然后 kill app
+   *   场景下整个 PHASE3 数据黑洞。
+   */
+  async persistMetaForKillSafety(): Promise<void> {
+    if (!this.currentSessionId || !this.sessionMeta) return;
+    try {
+      // 同步 flush buffer 到 jsonl 文件
+      await this.flush();
+      // 立即 writeMetadata,但 ended_at 仍 null(session 还活着)
+      // upload 端遇到 ended_at=null 仍可读 jsonl 上传(jsonl 是 source of truth)
+      await this.writeMetadata(this.sessionMeta);
+    } catch {
+      // logger 失败永远不能 throw,避免 cascading
+    }
   }
 
   /**
@@ -543,6 +572,15 @@ async function ensureDirExists(fs: FsModule, filePath: string): Promise<void> {
 
 // ── Singleton ─────────────────────────────────────────────────────────────
 export const debugLogger = new DebugLogger();
+
+// v0.2.4 Phase 3 Round 7 — AppState 监听:background/inactive 时立即持久化
+// meta 让 telemetryUploader 能找到 session,kill app 也不丢数据。
+// 模块级注册一次,不依赖任何 component 生命周期。
+AppState.addEventListener('change', (state) => {
+  if (state === 'background' || state === 'inactive') {
+    debugLogger.persistMetaForKillSafety().catch(() => {});
+  }
+});
 
 // Default export for convenience
 export default debugLogger;
