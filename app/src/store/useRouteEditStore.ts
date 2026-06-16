@@ -2120,14 +2120,13 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         }
         const snapped = stitched;
         // v263 output corridor gate: the stitched curve must stay within
-        // CORRIDOR_M + 50m (= 300m) of originalPoints. Mapbox sometimes
-        // bounces a high-conf segment to a parallel road > 250m away;
-        // PO direction: reject in that case (user must redraw closer to
-        // the original line). The +50m buffer accounts for OSM-snap
-        // tolerance so legitimate 247m-off-baseline brushes don't get
-        // erroneously rejected by the output gate when input passed the
-        // 250m input gate.
-        const OUTPUT_CORRIDOR_M = CORRIDOR_M + 50;
+        // CORRIDOR_M of originalPoints. Mapbox sometimes bounces a
+        // high-conf segment to a parallel road > 250m away;
+        // PO direction (v271): single 250m threshold for both input AND
+        // output — original v263 added +50m buffer for "OSM-snap tolerance"
+        // but PO clarified the rule is "if user can't draw beyond 250m,
+        // mapbox return must also stay within 250m, otherwise reject".
+        const OUTPUT_CORRIDOR_M = CORRIDOR_M;
         const corridorOut = strokeWithinCorridor(snapped, baseLine);
         if (corridorOut.maxDistM > OUTPUT_CORRIDOR_M) {
           rejectedStrokeIds.push(vs.stroke.id);

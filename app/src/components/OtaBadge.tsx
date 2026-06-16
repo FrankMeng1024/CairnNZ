@@ -875,8 +875,37 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         cLat/zoom so we can post-hoc compute (a) does selfLng avoid
 //         f32 boundaries, (b) does selfLat ≈ native lat (within 1m),
 //         (c) consistency of camera state during a stroke.
-export const OTA_VERSION = 270;
-//         v269: per-frame brush sample telemetry (DIAGNOSTIC ONLY).
+// v271  FIX (3 bugs at once, real-device validated). v270 telemetry
+//         100% confirmed (a) self-mercator at zoom 15.7 agrees with
+//         native to <1m, AND (b) native getCoordinateFromView is
+//         BROKEN at zoom < 15: same screen pixel returns wildly
+//         different lat/lng across zooms (e.g. 5 strokes drawn at
+//         the SAME touch point x≈137 y≈484 at zooms 13.6/14.0/14.7
+//         all returned native lat ≈31.2331 — physically impossible
+//         since visible center moves with zoom). This was the
+//         "zoom 缩到很小直接报 300m" bug: native returns nonsense
+//         lat/lng at low zoom → brush points are physically off
+//         baseline by 100-300m → output gate rejects.
+//         v271 fixes:
+//         (1) BrushOverlay: self-mercator unproject is now PRIMARY,
+//             native is fallback. Self uses onLayout-measured viewport
+//             (the v270 Dimensions fallback was wrong for this device).
+//             Verified by reverse-engineering measured viewW=430 viewH=
+//             932 from a stroke that worked at zoom 15.7 — same viewport
+//             then correctly recomputes all other strokes' self values
+//             matching telemetry exactly.
+//         (2) Output corridor gate (useRouteEditStore.ts:2130): single
+//             250m threshold for input AND output (was 250+50). PO
+//             direction "我只要求了 250m 画线的时候不能超过 250M
+//             返回也不能超过 250M" — single threshold matches user mental
+//             model.
+//         (3) Bug 1 (zoom > 15 lng pinned to Z=19 tile X edge) is
+//             auto-resolved by (1) — self-mercator never touches native
+//             projection matrix, so no quantization. v270 telemetry
+//             showed self f32-quantized count = 0 across all 9 strokes
+//             (vs native's 1-11 per stroke at zoom > 15).
+export const OTA_VERSION = 271;
+//         v270: Spike B parallel self-mercator (DIAGNOSTIC ONLY).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

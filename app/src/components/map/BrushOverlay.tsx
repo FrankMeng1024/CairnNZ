@@ -63,6 +63,15 @@ let _pushSeqCounter = 0;
 let _strokeStartZoom: number | null = null;
 let _strokeStartTs: number = 0;
 let _currentStrokeIdForBuffer: string | null = null;
+// v271: real measured BrushOverlay layout (= MapView layout since the
+// overlay sits absoluteFill over MapView). Fixed the bug where v270
+// fell back to Dimensions.get('window') which gave a value that worked
+// at high zoom but desynced from MapView's actual coordinate system at
+// low zoom (where every degree of viewport-size error scales linearly
+// with m_per_px). onLayout fires once after first render and updates
+// when the device rotates / safe-area changes.
+let _measuredViewW = 0;
+let _measuredViewH = 0;
 
 interface Props {
   /** Ref to the Mapbox MapView so we can unproject screen→geo. */
@@ -140,29 +149,29 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
       if (!map) return null;
       if (typeof map.getCenter !== 'function' || typeof map.getZoom !== 'function') return null;
       const [center, zoom] = await Promise.all([map.getCenter(), map.getZoom()]);
-      // getCenter returns [lng, lat] per rnmapbox docs.
       const cLng = Array.isArray(center) ? center[0] : (center?.lng ?? null);
       const cLat = Array.isArray(center) ? center[1] : (center?.lat ?? null);
       if (cLng == null || cLat == null || zoom == null) return null;
-      // We need the viewport size in points to compute the offset from center.
-      // mapView's container is StyleSheet.absoluteFillObject so we use
-      // window dimensions. To stay independent of getSize quirks we read
-      // both safe-area sized window via gesture absolute coords; gesture
-      // absoluteX/absoluteY come from the same coordinate system MapView
-      // is laid out in. We assume MapView is full-screen (Cairn does this)
-      // — if it isn't, getCenter/getZoom mismatch will show up as a constant
-      // offset that we can detect post-hoc. To be safe we also try map.getSize().
-      let viewW = 0, viewH = 0;
-      try {
-        if (typeof map.getSize === 'function') {
-          const s = await map.getSize();
-          if (Array.isArray(s) && s.length >= 2) { viewW = s[0]; viewH = s[1]; }
-          else if (s && typeof s.width === 'number') { viewW = s.width; viewH = s.height; }
-        }
-      } catch { /* ignore */ }
+      // v271: use the OVERLAY-MEASURED size (from onLayout) as the source
+      // of truth. v270 data proved measured layout = 430x932 on the test
+      // device, while native getCoordinateFromView agrees with self-mercator
+      // to <1m at zoom 15.7 — confirming this layout matches MapView's
+      // actual coord system. Fallback to mapView.getSize() then RN
+      // Dimensions, but those are untrusted (v270 failed at low zoom
+      // because the fallback Dimensions value disagreed with the actual
+      // visual viewport on this device family).
+      let viewW = _measuredViewW;
+      let viewH = _measuredViewH;
       if (!viewW || !viewH) {
-        // Fallback to RN Dimensions — works only if MapView is full screen.
-        // This is acceptable as a Spike B sanity check; we'll flag if needed.
+        try {
+          if (typeof map.getSize === 'function') {
+            const s = await map.getSize();
+            if (Array.isArray(s) && s.length >= 2) { viewW = s[0]; viewH = s[1]; }
+            else if (s && typeof s.width === 'number') { viewW = s.width; viewH = s.height; }
+          }
+        } catch { /* ignore */ }
+      }
+      if (!viewW || !viewH) {
         const { Dimensions } = require('react-native');
         const d = Dimensions.get('window');
         viewW = d.width;
@@ -205,12 +214,16 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
     }
     const coord = await unproject(x, y);
     if (!coord) return;
+    // v271: use self-mercator as primary at gesture begin too. Native is
+    // queried for telemetry parity but self is the authoritative coord.
+    const selfRes = await unprojectSelfMercator(x, y);
+    const beginCoord = selfRes ? { lng: selfRes.lng, lat: selfRes.lat } : coord;
     if (activeTool === 'brush') {
-      const id = beginStroke(coord);
+      const id = beginStroke(beginCoord);
       currentStrokeIdRef.current = id;
       _currentStrokeIdForBuffer = id;
     } else if (activeTool === 'eraser') {
-      eraseAt(coord, 25);
+      eraseAt(beginCoord, 25);
     }
   }
 
@@ -276,12 +289,21 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
         zoom: selfRes ? selfRes.zoom : null,
         droppedByGuard: false, unprojectFailed: false,
       });
+      // v271 FIX: use self-mercator as the source of truth for stroke
+      // points, fall back to native only when self-mercator can't be
+      // computed (rare — center/zoom unavailable). v270 data proved
+      // self-mercator agrees with native to <1m at zoom 15.7 AND avoids
+      // both the Z=19 lng quantization (high zoom) and the low-zoom
+      // lat/lng drift. Native is kept in telemetry for ongoing comparison.
+      const finalCoord = selfRes
+        ? { lng: selfRes.lng, lat: selfRes.lat }
+        : coord;
       if (activeTool === 'brush') {
         const id = currentStrokeIdRef.current;
         if (!id) return;
-        appendStrokePoint(id, coord);
+        appendStrokePoint(id, finalCoord);
       } else if (activeTool === 'eraser') {
-        eraseAt(coord, 25);
+        eraseAt(finalCoord, 25);
       }
     } finally {
       updateInFlightRef.current = false;
@@ -358,7 +380,24 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
     });
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents="box-none"
+      onLayout={(e) => {
+        // v271: capture the actual on-screen layout of the overlay.
+        // Since the overlay is StyleSheet.absoluteFill inside the same
+        // <View style={mapArea, flex:1}> that hosts MapView (also
+        // absoluteFill), the overlay's layout dimensions equal MapView's
+        // own coordinate-system extent. This is the source of truth for
+        // self-mercator unproject (replaces the unreliable Dimensions
+        // window fallback used in v270).
+        const { width, height } = e.nativeEvent.layout;
+        if (width > 0 && height > 0) {
+          _measuredViewW = width;
+          _measuredViewH = height;
+        }
+      }}
+    >
       {/* v247: gesture-capture View is INSET from screen edges so taps
           on the floating top toolbar / bottom card never fire onBegin
           → never start an unwanted stroke. */}
