@@ -1365,14 +1365,16 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       // landed off the road centerline. Adding the lower bound keeps
       // the user-visible magnetism for real off-baseline endpoints
       // (the original PO requirement) while suppressing cosmetic stubs.
-      // v276 fix: drop magnet lower bound from 5m to 0. PO: "末端
-      // 分叉" — when last.distM landed in 1-5m (e.g. 2.01m in ev414),
-      // v268's MIN=5 rule skipped the snap, so brush[-1] sat 2m off
-      // baseline while baseline kept going visually past it → 2-pronged
-      // fork at the end. Now always snap when 0 < distM ≤ 50m. Tiny
-      // distances: densify produces 1-2 invisible extra points. Real
-      // off-baseline (5-50m): 1m densify keeps the connector continuous.
-      const MIN_MAGNET_M = 0;
+      // v279 fix: revert MIN_MAGNET_M from 0 back to 5. PO confirmed
+      // the "tail-fork" was actually a visual artifact of inserting a
+      // baseline-projection point at the end: brush terminates on the
+      // baseline, but the baseline itself keeps rendering in both
+      // directions through that projection point → looks like a V/fork.
+      // With MIN=5 we don't snap small distances at all → brush
+      // simply ends ≤5m off the baseline, which is visually
+      // imperceptible on small screens (< 5px) and avoids the fork
+      // entirely. The 5-50m band still gets the densified connector.
+      const MIN_MAGNET_M = 5;
       const newPoints = [...stroke.points];
       const firstMagnet = first.distM > MIN_MAGNET_M
         && first.distM <= ENDPOINT_SNAP_M;

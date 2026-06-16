@@ -132,7 +132,7 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
           />
           <View
             pointerEvents="box-none"
-            style={[styles.wheelCenterAnchor, { top: insets.top + 8 + FAB_SIZE / 2, right: Spacing.md + FAB_SIZE / 2 }]}
+            style={[styles.wheelCenterAnchor, { top: insets.top + 8 + FAB_SIZE / 2, right: Spacing.md + FAB_SIZE / 2 + 8 }]}
           >
             {/* Move = the visible "boss" disc, sits in place of the FAB. */}
             <TouchableOpacity
@@ -152,23 +152,23 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
               </Text>
             </TouchableOpacity>
 
-            {/* Three small orbiters all clustered to the bottom-left
-                of Move, fanned out in an arc so they don't overlap. */}
+            {/* Three small orbiters fanned bottom-left of Move,
+                spread further apart (PO: "3个小的也互相太近的 分散点"). */}
             <SmallOrbit
-              dx={-ORBIT_R} dy={ORBIT_R * 0.15}
+              dx={-ORBIT_R * 1.25} dy={ORBIT_R * 0.35}
               icon="Pencil" label="Draw"
               active={safeTool === 'brush'}
               activeBg="#c87941"
               onPress={() => pickTool('brush')}
             />
             <SmallOrbit
-              dx={-ORBIT_R * 0.85} dy={ORBIT_R * 0.95}
+              dx={-ORBIT_R * 1.05} dy={ORBIT_R * 1.35}
               icon="Undo2" label="Undo"
               disabled={!canUndo}
               onPress={handleUndoTap}
             />
             <SmallOrbit
-              dx={-ORBIT_R * 0.15} dy={ORBIT_R * 1.15}
+              dx={-ORBIT_R * 0.05} dy={ORBIT_R * 1.6}
               icon="RotateCcw" label="Reset"
               danger
               onPress={handleResetTap}
@@ -207,10 +207,10 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
               onPress={() => canPreview && onPreview()}
             >
               {isComputing ? (
-                <ActivityIndicator size="small" color={Colors.surface} />
+                <ActivityIndicator size="small" color={Colors.primary} />
               ) : (
                 <>
-                  <Icon name="Eye" size={16} color={Colors.surface} strokeWidth={2.5} />
+                  <Icon name="Eye" size={16} color={Colors.primary} strokeWidth={2.5} />
                   <Text style={styles.previewBtnText} numberOfLines={1}>
                     {inErrorState ? 'Fix the stroke first' : 'Preview'}
                   </Text>
@@ -226,10 +226,10 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                 onPress={() => canBeautify && onBeautify()}
               >
                 {isComputing ? (
-                  <ActivityIndicator size="small" color={Colors.surface} />
+                  <ActivityIndicator size="small" color={Colors.primary} />
                 ) : (
                   <>
-                    <Icon name="Star" size={16} color={Colors.surface} strokeWidth={2.5} />
+                    <Icon name="Star" size={16} color={Colors.primary} strokeWidth={2.5} />
                     <Text style={styles.beautifyBtnText} numberOfLines={1}>
                       Beautify route
                     </Text>
@@ -407,11 +407,15 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: Spacing.md,
     borderRadius: Radius.button,
-    backgroundColor: Colors.primary,
-    ...Shadow.card,
+    // v278b: align with HikingScreen's "Save as Route" style — sage
+    // border + sage tinted background + sage text. Consistent across
+    // the app for primary CTAs that act on a route.
+    backgroundColor: Colors.primaryBg,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
   },
   previewBtnText: {
-    color: Colors.surface,
+    color: Colors.primary,
     fontSize: FontSize.body,
     fontWeight: '700',
   },
@@ -423,11 +427,12 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: Spacing.md,
     borderRadius: Radius.button,
-    backgroundColor: Colors.primary,
-    ...Shadow.card,
+    backgroundColor: Colors.primaryBg,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
   },
   beautifyBtnText: {
-    color: Colors.surface,
+    color: Colors.primary,
     fontSize: FontSize.body,
     fontWeight: '700',
   },
@@ -437,13 +442,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Spacing.md,
     borderRadius: Radius.button,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.card,
+    backgroundColor: Colors.primaryBg,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
   },
   saveBtnText: {
-    color: Colors.textPrimary,
+    color: Colors.primary,
     fontSize: FontSize.body,
     fontWeight: '700',
   },

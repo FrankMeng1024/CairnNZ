@@ -1014,8 +1014,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         (2) Draw / Undo / Reset all clustered to the bottom-left of
 //             Move in a fanned arc (12-o'clock-left, 7-o'clock,
 //             5-o'clock-down) so nothing crosses the screen edge.
-export const OTA_VERSION = 278;
-//         v277: tail-fork fix + wheel 1-big-3-small.
+// v279  PO direction.
+//         (1) Tail-fork — true root cause confirmed visual:
+//             when MIN_MAGNET_M=0 (v277) every brush end snapped a
+//             baseline-projection point, but the baseline itself is
+//             rendered separately as a continuous line in both
+//             directions through that projection point. So brush
+//             ended at the projection but baseline kept rendering
+//             past it → V/fork visual. v279 reverts MIN to 5: small
+//             distances (<5m) skip the snap entirely. Brush simply
+//             ends ≤5m off the baseline; on small screens this is
+//             <5px and visually imperceptible. The 5-50m band still
+//             gets the densified connector.
+//         (2) Wheel layout (per PO): "Move 离边上太近 / 3个小的太近
+//             / 分散点". Move shifted left ~8px from FAB position;
+//             three orbiters spread further apart in a wider fan
+//             (Draw at -1.25R / Undo at -1.05R+1.35R / Reset at
+//             -0.05R+1.6R).
+//         (3) Bottom buttons restyled to match HikingScreen's
+//             "Save as Route" CTA: sage tinted background +
+//             1.5 sage border + sage text/icon. Consistent across
+//             the app for primary route-acting CTAs.
+export const OTA_VERSION = 279;
+//         v278: wheel — Move 68 + 3 small clustered bottom-left.
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and
