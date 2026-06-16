@@ -134,13 +134,76 @@
 
 ---
 
-## 下一步 (Phase 2B 入口)
+## 下一步 ⏸ Phase 5 等用户授权
 
-Phase 2B 起始 sub-item:**2B.1 CairnBaseRenderer.cs**
+Phase 0 + 1A + 2A + 2B + 3 + 4 全部 DONE,4 眼 review verdict PASS。
+14 个 ADR 落定(000-014)。
 
-git tag for resume: `v0.2.5-phase-2B-start`
+**Phase 5/6/7 等用户明文输入 "EAS#1 build 授权" — 主 agent 不能自主跑 EAS build。**
 
-详见 `_review/v0.2.5/progress/phase2A-DONE.md`
+Phase 5 entry checklist(用户授权后主 agent 执行):
+1. ProjectSettings/PlayerSettings → Scripting Define Symbols (iOS) 加 `HAS_ARKIT_WORLDMAP`
+2. 写 `UnityARLib/Assets/Scripts/v025/Core/ArkitWorldMapPersistence.iOS.cs`(单文件)
+   - 用 ARFoundation 6.0+ ARKit 真 GetARWorldMapAsync / Serialize / TryDeserialize / ApplyWorldMap
+3. Editor compile pass
+4. EAS build #1 iOS(用户授权)
+5. 真机:plant 手机A → recall 手机A 同位置(< 5min,2m 范围内)→ 验证 Tier-S cm 精度
+6. 真机:plant 手机A → recall 手机B 同位置 → 验证 Tier-G fallback(米级)
+7. 真机:long-running 30min spawn flow → 验证 telemetry 后端收到 events
+
+git tag for resume: `v0.2.5-phase-5-start`(commit 9de77bd)
+
+详见:
+- `_review/v0.2.5/progress/phase{0,1A,2A,2B,3,4}-DONE.md`
+- `_review/v0.2.5/verdicts/phase{N}-signoff.md`(每 phase 4 眼 review 全文)
+- `_review/v0.2.5/adr/ADR-{000..014}.md`(14 个 ADR)
+
+---
+
+## Phase 4 — iOS ARWorldMap Editor 集成
+
+**Phase 4 起始 git tag**: v0.2.5-phase-4-start (commit 213d4b4)
+**Phase 4 结束 commit**: 9de77bd
+**Phase 4 结束 git tag**: v0.2.5-phase-5-start
+
+- [x] 4.1a CairnFileExclude.mm ObjC bridge + meta
+- [x] 4.1b ArkitWorldMapPersistence shell 保留(ADR-014 deferred Phase 5)
+- [x] 4.1c .meta marks iOS only
+- [-] 4.2 ArkitWorldMapPersistence 完整 → ADR-014 single-file enable in Phase 5
+- [x] 4.3 WorldMapLoadGateV2 + 7 单测(round-2 加 terminal latch)
+- [x] 4.4 worldMapPreloader.ts(round-2 加 deleteLocalBlob on non-2xx)
+- [x] 4.5 backend/src/routes/v025/worldmaps.js + rate limit + 50MB cap + 404-empty-body(round-2)
+- [x] 4.6 反 pattern coverage(Phase 1A Anchor_C5 已 pin Tier-S→Tier-G + 新加 MapVersionMismatch/MapCorrupt outcomes)
+- [x] 4.7 双 Tier 集成 + V025Bootstrap composition root(Unity)+ telemetrySingleton(RN)
+- [x] 4.8-4.11 4 眼 review(sub#4-1 0B+2C+3M+2Lo + sub#4-2 1B+1C+1M+2Lo,all fixed)+ commit + tag
+
+### Phase 4 出口判据自检
+- [x] cairn_lint v025 scope 全绿(71 files)
+- [x] jest 53/53 PASS unchanged
+- [x] lock_plan 全绿
+- [x] 4 眼 verdict PASS
+- [x] 14 ADR 落定
+
+### ADRs added (Phase 4)
+- ADR-014 Phase 4 ArkitWorldMap real impl deferred to Phase 5
+
+---
+
+## Phase 3 — Telemetry 实时管线
+
+**Phase 3 起始 git tag**: v0.2.5-phase-3-start (commit 1d640bd → c9663cb 是 phase 1A 后的 progress commit)
+**Phase 3 结束 commit**: 213d4b4
+
+- [x] 3.1 backend migration 016 debug_events_v2(applied + verify PASS)
+- [x] 3.2 backend route /api/v025/debug-events bulk INSERT(round-1 + rate limit + PII strip;curl 验证 inserted=1)
+- [x] 3.3 TelemetryBatcherV2.cs + 8 单测
+- [x] 3.4 RN telemetryBatcher.ts + 7 jest tests
+- [-] 3.5-3.8 wiring + integration → ADR-012 deferred to Phase 4(已在 Phase 4 实现:V025Bootstrap + telemetrySingleton)
+- [x] 3.9-3.12 4 眼 + commit
+
+### ADRs added (Phase 3)
+- ADR-012 Phase 3 wiring deferred to Phase 4
+- ADR-013 Phase 3 telemetry policy(persistent queue + user_id + retention + PII)
 
 ---
 
