@@ -25,7 +25,32 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { useRouteEditStore } from '../../store/useRouteEditStore';
+import { sendEditDiag } from '../../services/editDiagSender';
 import { Colors, FontSize, Spacing } from '../tokens';
+
+// v269: per-stroke raw-sample diagnostic buffer. Module-scope so the
+// gesture handlers can write to it from the JS thread without React
+// state churn. Batched into a single brush_raw_samples telemetry event
+// at gesture end. Used to identify the source of the mid-stroke
+// "lng-pinned-to-one-value" pattern observed in v268 brush_end data.
+interface RawSample {
+  enterSeq: number;     // order handleUpdate was entered (gesture frame order)
+  pushSeq: number;      // order this sample's unproject resolved
+  enterTs: number;      // ms epoch at handleUpdate entry
+  pushTs: number;       // ms epoch when coord was pushed to store
+  x: number;            // touch absoluteX
+  y: number;            // touch absoluteY
+  lng: number | null;   // raw unproject result (null if dropped)
+  lat: number | null;
+  droppedByGuard: boolean;  // updateInFlightRef gate dropped this frame
+  unprojectFailed: boolean; // mapView.getCoordinateFromView returned bad
+}
+let _rawSamples: RawSample[] = [];
+let _enterSeqCounter = 0;
+let _pushSeqCounter = 0;
+let _strokeStartZoom: number | null = null;
+let _strokeStartTs: number = 0;
+let _currentStrokeIdForBuffer: string | null = null;
 
 interface Props {
   /** Ref to the Mapbox MapView so we can unproject screen→geo. */
@@ -81,24 +106,78 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
   async function handleBegin(x: number, y: number) {
     endedRef.current = false;
     updateInFlightRef.current = false; // v250: reset for new stroke
+    // v269: reset diagnostic buffer for this stroke
+    _rawSamples = [];
+    _enterSeqCounter = 0;
+    _pushSeqCounter = 0;
+    _strokeStartTs = Date.now();
+    _strokeStartZoom = null;
+    _currentStrokeIdForBuffer = null;
+    // Capture zoom level at gesture start (best-effort, doesn't block).
+    try {
+      const map = mapViewRef.current;
+      if (map && typeof map.getZoom === 'function') {
+        _strokeStartZoom = await map.getZoom();
+      }
+    } catch {
+      _strokeStartZoom = null;
+    }
     const coord = await unproject(x, y);
     if (!coord) return;
     if (activeTool === 'brush') {
       const id = beginStroke(coord);
       currentStrokeIdRef.current = id;
+      _currentStrokeIdForBuffer = id;
     } else if (activeTool === 'eraser') {
       eraseAt(coord, 25);
     }
   }
 
   async function handleUpdate(x: number, y: number) {
+    // v269: count EVERY entry, including ones dropped by the in-flight
+    // guard. Without this we can't tell post-hoc whether 60Hz frames
+    // were actually arriving — important for distinguishing
+    // "gesture-handler under-sampled" from "all frames captured but
+    // unproject corrupted some".
+    const enterSeq = _enterSeqCounter++;
+    const enterTs = Date.now();
     // v250: skip if a previous handleUpdate is still awaiting unproject.
     // Drops frames rather than queuing — keeps gesture responsive.
-    if (updateInFlightRef.current) return;
+    if (updateInFlightRef.current) {
+      _rawSamples.push({
+        enterSeq, pushSeq: -1,
+        enterTs, pushTs: enterTs,
+        x, y,
+        lng: null, lat: null,
+        droppedByGuard: true, unprojectFailed: false,
+      });
+      return;
+    }
     updateInFlightRef.current = true;
     try {
       const coord = await unproject(x, y);
-      if (!coord) return;
+      const pushSeq = _pushSeqCounter++;
+      const pushTs = Date.now();
+      if (!coord) {
+        _rawSamples.push({
+          enterSeq, pushSeq,
+          enterTs, pushTs,
+          x, y,
+          lng: null, lat: null,
+          droppedByGuard: false, unprojectFailed: true,
+        });
+        return;
+      }
+      // v269: record the raw unproject result BEFORE store accepts it,
+      // so we capture exactly the value the SDK returned, independent
+      // of any later transformation in appendStrokePoint.
+      _rawSamples.push({
+        enterSeq, pushSeq,
+        enterTs, pushTs,
+        x, y,
+        lng: coord.lng, lat: coord.lat,
+        droppedByGuard: false, unprojectFailed: false,
+      });
       if (activeTool === 'brush') {
         const id = currentStrokeIdRef.current;
         if (!id) return;
@@ -111,16 +190,45 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
     }
   }
 
-  function handleEnd() {
+  async function handleEnd() {
     // v247: onEnd + onFinalize both fire on normal completion. Guard so
     // endStroke (and editCount telemetry) only triggers once per stroke.
     if (endedRef.current) return;
     endedRef.current = true;
+    // v269: capture end-of-stroke zoom and ship the per-frame buffer
+    // BEFORE endStroke runs, so the diagnostic data is independent of
+    // any magnetism / store mutation. brush_raw_samples is a KEY_EVENT
+    // → flushed immediately by editDiagSender.
+    let endZoom: number | null = null;
+    try {
+      const map = mapViewRef.current;
+      if (map && typeof map.getZoom === 'function') {
+        endZoom = await map.getZoom();
+      }
+    } catch {
+      endZoom = null;
+    }
+    if (_rawSamples.length > 0 && _currentStrokeIdForBuffer) {
+      sendEditDiag('brush_raw_samples', {
+        strokeId: _currentStrokeIdForBuffer,
+        startZoom: _strokeStartZoom,
+        endZoom,
+        startTs: _strokeStartTs,
+        endTs: Date.now(),
+        frameCount: _rawSamples.length,
+        droppedCount: _rawSamples.filter(s => s.droppedByGuard).length,
+        unprojectFailedCount: _rawSamples.filter(s => s.unprojectFailed).length,
+        samples: _rawSamples,
+      });
+    }
     if (activeTool === 'brush') {
       const id = currentStrokeIdRef.current;
       if (id) endStroke(id);
       currentStrokeIdRef.current = null;
     }
+    // v269: clear after upload to free memory
+    _rawSamples = [];
+    _currentStrokeIdForBuffer = null;
   }
 
   const pan = Gesture.Pan()

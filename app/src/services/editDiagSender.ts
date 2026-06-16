@@ -50,7 +50,13 @@ export type TelemetryKind =
   // the in-progress stroke artifact (e.g. mid-segment kink before Preview).
   | 'brush_begin'
   | 'brush_end'
-  | 'brush_endpoint_magnet';
+  | 'brush_endpoint_magnet'
+  // v269: per-frame raw sampling diagnostic — captures (touch x,y) +
+  // unproject result + zoom + sequence number for every gesture frame.
+  // Used to root-cause the mid-stroke "lng-quantized to a single value"
+  // signature seen in v268 brush_end data. Single batch upload at
+  // gesture end (key event) so it never blocks the UI thread.
+  | 'brush_raw_samples';
 
 /** Events that bypass the debounce timer (high-value or terminal events). */
 const KEY_EVENTS: ReadonlyArray<TelemetryKind> = [
@@ -61,6 +67,9 @@ const KEY_EVENTS: ReadonlyArray<TelemetryKind> = [
   // the "I just tested and got a kink" scenario PO reported on v267.
   'brush_end',
   'brush_endpoint_magnet',
+  // v269: raw per-frame sample batch is single-shot at gesture end —
+  // flush immediately so it lands on the server before the user backgrounds.
+  'brush_raw_samples',
 ];
 
 interface QueuedEvent {

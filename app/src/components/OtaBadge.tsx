@@ -832,7 +832,33 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         raw stroke points + magnet projection distances + which
 //         endpoints were actually magnetized — enough to diagnose
 //         any future "莫名磁吸" report from raw_jsonl alone.
-export const OTA_VERSION = 268;
+// v269  PO request: brush 中段尖尖 root-cause hunting (DIAGNOSTIC ONLY,
+//         no behavior change). v268 brush_end telemetry exposed a hard
+//         signature: in 3 of 5 recent strokes, 2-5 consecutive sample
+//         points have lng pinned to the EXACT same float32 value
+//         121.433944702148438 (= 0x42F3796F, also a Mapbox Z=19 tile
+//         X-edge longitude); lat varies freely. Not finger jitter
+//         (consecutive frames + double-precision lat), not endpoint
+//         magnet (only fires at endStroke, doesn't touch mid-stroke
+//         points), not any app-layer snap (grep'd whole repo, no
+//         121.4339 literal anywhere; subagent confirmed no mid-stroke
+//         pull code). Two competing theories survive: (A) Mapbox SDK
+//         native bridge quantizes lng to a tile-grid value on certain
+//         frames; (B) async unproject reorders frames in a way that
+//         coincidentally sits on a tile edge. Need per-frame data to
+//         disambiguate. v269 adds brush_raw_samples telemetry: every
+//         handleUpdate entry records (enterSeq, pushSeq, enterTs, pushTs,
+//         x, y, lng, lat, droppedByGuard, unprojectFailed) plus
+//         startZoom/endZoom; one batch upload per stroke at endStroke
+//         (KEY_EVENT, immediate flush). enterSeq vs pushSeq mismatch
+//         proves async reordering (theory B). lng quantization with
+//         monotonic enterSeq=pushSeq proves SDK-layer issue (theory A).
+//         Other observable: did this only start happening after some
+//         recent change, or is it baseline behavior? Need 3-5 fresh
+//         strokes at varying zoom levels to see if quantization scales
+//         with zoom (Z=19 tile size doubles every zoom step).
+export const OTA_VERSION = 269;
+//         v268: magnet 5m lower-bound + brush gesture telemetry.
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and
