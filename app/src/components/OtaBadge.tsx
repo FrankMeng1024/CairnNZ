@@ -1004,8 +1004,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             2x2 grid). PO: "一大3小, move 大, 3 小围着她, 包围而不
 //             是格子". Big center = Move (pan); orbiters at top/SW/SE
 //             = Draw / Undo / Reset. Anchored near top-right FAB.
-export const OTA_VERSION = 277;
-//         v276: simplify — remove eraser, wheel top-right 2x2.
+// v278  PO direction.
+//         Wheel layout adjustment: v277 sized BIG=84 with the small
+//         orbiters at the cardinal directions (one even at the top —
+//         off-screen on small devices). PO: "出了界面了 我希望的是
+//         move 变大一点点 然后另外3个都在左下".
+//         (1) Move shrunk to 68 (just slightly bigger than the 56
+//             FAB) so it doesn't dominate.
+//         (2) Draw / Undo / Reset all clustered to the bottom-left of
+//             Move in a fanned arc (12-o'clock-left, 7-o'clock,
+//             5-o'clock-down) so nothing crosses the screen edge.
+export const OTA_VERSION = 278;
+//         v277: tail-fork fix + wheel 1-big-3-small.
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

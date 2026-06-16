@@ -119,10 +119,10 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
         </TouchableOpacity>
       )}
 
-      {/* v276b wheel: 1-big + 3-small ring layout per PO direction
-          ("一大3小,move大,3 小围着她"). Move sits in the center as
-          the big disc; Draw / Undo / Reset orbit around it. Anchored
-          near the FAB position (top-right). Tap backdrop to dismiss. */}
+      {/* v277b wheel: Move sits where the FAB was (slightly bigger);
+          Draw / Undo / Reset stack to its bottom-left in a vertical
+          column so they don't run off-screen on the right edge.
+          PO: "move 变大一点点 另外3个都在左下". */}
       {wheelOpen && (
         <>
           <TouchableOpacity
@@ -134,11 +134,7 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
             pointerEvents="box-none"
             style={[styles.wheelCenterAnchor, { top: insets.top + 8 + FAB_SIZE / 2, right: Spacing.md + FAB_SIZE / 2 }]}
           >
-            {/* Center BIG = Move (pan).
-                NOTE: even though the wheel is summoned by tapping the
-                top-right FAB which currently shows the active tool,
-                we treat Move as the "home" / dominant action of the
-                ring per PO direction. Tap to switch into pan. */}
+            {/* Move = the visible "boss" disc, sits in place of the FAB. */}
             <TouchableOpacity
               style={[
                 styles.bigCenter,
@@ -150,29 +146,29 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
               activeOpacity={0.85}
               onPress={() => pickTool('pan')}
             >
-              <Icon name="Navigation2" size={28} color={safeTool === 'pan' ? Colors.surface : Colors.primary} strokeWidth={2.6} />
+              <Icon name="Navigation2" size={26} color={safeTool === 'pan' ? Colors.surface : Colors.primary} strokeWidth={2.6} />
               <Text style={[styles.bigCenterLabel, { color: safeTool === 'pan' ? Colors.surface : Colors.primary }]} numberOfLines={1}>
                 Move
               </Text>
             </TouchableOpacity>
 
-            {/* Three small orbiters: top, bottom-left, bottom-right.
-                Distance R from center. Anchored to wheelCenterAnchor (0,0). */}
+            {/* Three small orbiters all clustered to the bottom-left
+                of Move, fanned out in an arc so they don't overlap. */}
             <SmallOrbit
-              dx={0} dy={-ORBIT_R}
+              dx={-ORBIT_R} dy={ORBIT_R * 0.15}
               icon="Pencil" label="Draw"
               active={safeTool === 'brush'}
               activeBg="#c87941"
               onPress={() => pickTool('brush')}
             />
             <SmallOrbit
-              dx={-ORBIT_R * Math.SQRT1_2} dy={ORBIT_R * Math.SQRT1_2}
+              dx={-ORBIT_R * 0.85} dy={ORBIT_R * 0.95}
               icon="Undo2" label="Undo"
               disabled={!canUndo}
               onPress={handleUndoTap}
             />
             <SmallOrbit
-              dx={ORBIT_R * Math.SQRT1_2} dy={ORBIT_R * Math.SQRT1_2}
+              dx={-ORBIT_R * 0.15} dy={ORBIT_R * 1.15}
               icon="RotateCcw" label="Reset"
               danger
               onPress={handleResetTap}
@@ -295,9 +291,9 @@ function SmallOrbit({ dx, dy, icon, label, active, activeBg, disabled, danger, o
 }
 
 const FAB_SIZE = 56;
-const BIG_CENTER_SIZE = 84;
-const SMALL_SIZE = 56;
-const ORBIT_R = 78;
+const BIG_CENTER_SIZE = 68;
+const SMALL_SIZE = 50;
+const ORBIT_R = 64;
 
 const styles = StyleSheet.create({
   container: {
