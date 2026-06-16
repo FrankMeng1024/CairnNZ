@@ -67,8 +67,9 @@ namespace Cairn.AR.V025.Visual
             var tex = Resources.Load<Texture2D>(_legacySdfResourcePath + "/" + name);
             if (tex == null)
             {
-                Debug.LogWarning($"[v025/typeIcon] missing legacy SDF texture: {_legacySdfResourcePath}/{name}");
-                return;
+                // Fallback to runtime placeholder per ADR-005 (revised 2026-06-17).
+                // Phase 4 EAS build #1 replaces this with designer-authored SDFs.
+                tex = PlaceholderTextures.Get(_cairnType);
             }
             // Use property block to avoid material instance leaks
             var block = new MaterialPropertyBlock();

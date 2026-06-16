@@ -33,12 +33,14 @@ namespace Cairn.AR.V025.Visual
         /// <summary>
         /// Compute alpha intensity at a given ring point given sweep position.
         /// Returns 1.0 at sweep peak, fading linearly over halfWidthRadians on either side.
+        /// Round-2 fix #2B-1-C2: use atan2(sin,cos) wrap directly (matches shader frag),
+        /// no degree round-trip.
         /// </summary>
         public static float SweepIntensityAtPoint(float pointAngleRad, float sweepAngleRad, float halfWidthRadians)
         {
-            // angular distance, wrapped to [-π, π]
-            var diff = Mathf.DeltaAngle(pointAngleRad * Mathf.Rad2Deg, sweepAngleRad * Mathf.Rad2Deg) * Mathf.Deg2Rad;
-            var d = Mathf.Abs(diff);
+            var raw = pointAngleRad - sweepAngleRad;
+            var wrapped = Mathf.Atan2(Mathf.Sin(raw), Mathf.Cos(raw));
+            var d = Mathf.Abs(wrapped);
             if (d >= halfWidthRadians) return 0.0f;
             return 1.0f - (d / halfWidthRadians);
         }

@@ -95,13 +95,41 @@ Shader "Cairn/V025/CairnBase"
                 float  _Alpha;
             CBUFFER_END
 
-            struct Attributes { float4 positionOS : POSITION; };
+            // Provided by URP shadow pipeline; declared here for ApplyShadowBias use.
+            float3 _LightDirection;
+            float3 _LightPosition;
+
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS   : NORMAL;
+            };
             struct Varyings   { float4 positionCS : SV_POSITION; };
+
+            // Matches URP's GetShadowPositionHClip pattern — applies normal + light-dir
+            // bias to prevent shadow acne / peter-panning. Round-2 fix #2B-1-C1.
+            float4 GetShadowPositionHClipBiased(Attributes IN)
+            {
+                float3 positionWS = TransformObjectToWorld(IN.positionOS.xyz);
+                float3 normalWS   = TransformObjectToWorldNormal(IN.normalOS);
+                float3 lightDir = _LightDirection;
+                float invNdotL = 1.0 - saturate(dot(lightDir, normalWS));
+                float scale = invNdotL * _ShadowBias.y;
+                positionWS = lightDir * _ShadowBias.xxx + positionWS;
+                positionWS = normalWS * scale.xxx + positionWS;
+                float4 positionCS = TransformWorldToHClip(positionWS);
+            #if UNITY_REVERSED_Z
+                positionCS.z = min(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+            #else
+                positionCS.z = max(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+            #endif
+                return positionCS;
+            }
 
             Varyings vert(Attributes IN)
             {
                 Varyings OUT;
-                OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionCS = GetShadowPositionHClipBiased(IN);
                 return OUT;
             }
             half4 frag(Varyings IN) : SV_Target { return 0; }

@@ -30,15 +30,31 @@ namespace Cairn.AR.V025.Visual
         public void RegisterPrefab(GameObject prefab) { _cairnPrefab = prefab; }
 
         /// <summary>
+        /// Ensure a prefab is available — if none was registered, build a runtime
+        /// fallback via V025PrefabFactory. Phase 4 EAS build #1 will register an
+        /// Editor-authored prefab; until then runtime build is the path.
+        /// (Round-2 fix #2B-2-D)
+        /// </summary>
+        public GameObject EnsurePrefab()
+        {
+            if (_cairnPrefab == null)
+            {
+                _cairnPrefab = V025PrefabFactory.BuildRuntimePrefab();
+            }
+            return _cairnPrefab;
+        }
+
+        /// <summary>
         /// Spawn or replace a cairn at the given world position.
         /// Returns the GameObject root (caller can attach AR anchor / parent it elsewhere).
         /// </summary>
         public GameObject SpawnAtPosition(string cairnId, float3 worldPos, CairnType type)
         {
             if (cairnId == null) throw new ArgumentNullException(nameof(cairnId));
+            EnsurePrefab();
             if (_cairnPrefab == null)
             {
-                Debug.LogError("[v025/CairnAssembly] no prefab registered — cannot spawn cairnId=" + cairnId);
+                Debug.LogError("[v025/CairnAssembly] no prefab registered AND runtime build failed — cannot spawn cairnId=" + cairnId);
                 return null;
             }
 
@@ -49,6 +65,7 @@ namespace Cairn.AR.V025.Visual
             }
 
             var go = Instantiate(_cairnPrefab, new Vector3(worldPos.x, worldPos.y, worldPos.z), Quaternion.identity);
+            go.SetActive(true);
             go.name = $"Cairn_{cairnId}";
             ApplyTypeToChildren(go, type);
             _instances[cairnId] = go;

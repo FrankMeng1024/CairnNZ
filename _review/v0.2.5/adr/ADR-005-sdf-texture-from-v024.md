@@ -2,30 +2,40 @@
 
 ## Context
 "视觉自包含" = v0.2.5 v025 包内不引用老 v0.2.4 代码 / 资源。
-但 5 type SDF 纹理(image/voice/video/text/route)在 v0.2.4 已绘制完成,质量优先 ⇒ 允许
-v0.2.5 引用老 SDF 纹理,跟"视觉自包含"局部矛盾,以"质量优先"裁定。
+但 5 type SDF 纹理(image/voice/video/text/video/route)v0.2.4 假设已绘制完成,质量优先 ⇒ 允许
+v0.2.5 引用老 SDF 纹理。
 
-## Decision
-- v025/Visual/CairnTypeIconRenderer.cs 引用 `Assets/Resources/cairn_type_sdf/*.png`(老
-  v0.2.4 资源路径)
-- 资源文件不在 v025 目录,但 v025 代码可读
-- 任何修改老 SDF 纹理 → ADR review
+**Phase 2B 4-eye 实际审计发现** (#2B-1-B2 + #2B-2.A):
+v0.2.4 老资源中只有 `cairn / danger / hut / junction / water`(5 个老 marker 类型),
+没有 v0.2.5 plan 要求的 `image / voice / video / text / route`。Plan 假设错。
+
+## Decision (修订)
+- **保留代码路径**:CairnTypeIconRenderer 仍从 `Resources/cairn_type_sdf/{name}.png` 加载
+- **资源策略变更**:不再"引老 SDF",改为 Phase 4(EAS build #1 真机阶段)创建新 SDF
+  - 新 SDF 由 designer 用 design_v2026-06_variant_C HTML demo 中的 5 个 icon 转 PNG (256×256, alpha=SDF)
+  - 临时占位:Phase 2B 写 PlaceholderTextures.cs 在 Awake 时 runtime-build 5 个 256×256 alpha 纹理
+    (简单几何形状区分 5 type:circle/triangle/square/star/arrow),让 Editor 跑得起来
+- **Phase 4 真机** 替换为正式 SDF
+- **视觉自包含**约束局部退让:Phase 2B 用 placeholder 纹理(自包含),Phase 4 引入正式
+  设计师产出的 SDF(可能从 v0.2.4 design pipeline 派生,但属于 v0.2.5 资产)
 
 ## Consequences
-- 实现速度提升(不重画 SDF)
-- v025 代码视觉自洽(纹理路径硬编码 Resources/)
-- 删 v0.2.4 老代码时必须保留 cairn_type_sdf/ 目录
+- (+) Phase 2B Editor playground 可以渲染(有 placeholder 纹理)
+- (+) Phase 4 正式 SDF 替换为单点改动(只改 Resources/cairn_type_sdf/)
+- (+) 视觉自包含从"绝对"变为"分阶段达成"(Phase 4 完成时全自包含)
+- (-) Phase 2B SSIM gate 与 HTML demo 的对比不严格(placeholder 不像 demo 图标)→ Phase 4 才能真测
+- (-) ADR-005 expiration 从 v0.2.6 提前到 Phase 4
 
 ## Failure modes
-- 老 SDF 路径变动 → 单测 SDFTextureExistTest 验证 5 个 .png 文件存在
-- v0.2.7 重画 SDF → 直接覆盖文件,代码不需改
+- Designer 不交 SDF → ADR-005 expiration 触发,verify_progress.py 阻止 Phase 4 关闭
+- Placeholder 纹理在 Phase 2B SSIM 跑出 < 0.65 → 已知,不阻塞,Phase 4 修
 
 ## Expiration phase
-v0.2.6(届时评估是否需要重新绘制)
+Phase 4 (EAS build #1 — 届时必须有正式 SDF 替换)
 
 ## Status
-active
+active(修订 2026-06-17)
 
 ## Signoff
-- Main agent: 2026-06-16
+- Main agent: 2026-06-17 修订
 - User review pending

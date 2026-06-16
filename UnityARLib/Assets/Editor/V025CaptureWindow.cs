@@ -167,18 +167,61 @@ namespace Cairn.AR.V025.EditorTools
     }
 
     /// <summary>
-    /// Minimal coroutine host for EditorWindow — Unity's EditorCoroutines package
-    /// not assumed; we drive yields via EditorApplication.update.
+    /// Minimal coroutine host for EditorWindow that honors CustomYieldInstruction
+    /// (WaitUntil / WaitForSeconds / WaitForSecondsRealtime). Round-2 fix #2B-1-B1:
+    /// previous version called MoveNext blindly, ignoring yield instructions, which
+    /// fired all 4 capture timepoints in a single editor frame.
     /// </summary>
     internal static class EditorCoroutineHost
     {
         public static void Start(IEnumerator routine)
         {
+            object pending = null;
+            double pendingDeadline = 0;
             EditorApplication.CallbackFunction step = null;
             step = () =>
             {
-                if (routine.MoveNext()) return;
-                EditorApplication.update -= step;
+                // Honor pending yield: if it's a CustomYieldInstruction, check keepWaiting.
+                if (pending is CustomYieldInstruction custom)
+                {
+                    if (custom.keepWaiting) return;
+                    pending = null;
+                }
+                else if (pending is WaitForSeconds || pending is WaitForSecondsRealtime)
+                {
+                    if (EditorApplication.timeSinceStartup < pendingDeadline) return;
+                    pending = null;
+                }
+
+                if (!routine.MoveNext())
+                {
+                    EditorApplication.update -= step;
+                    return;
+                }
+
+                var current = routine.Current;
+                if (current is CustomYieldInstruction)
+                {
+                    pending = current;
+                }
+                else if (current is WaitForSeconds wfs)
+                {
+                    // Reflection-extract seconds field (Unity does not expose it).
+                    var f = typeof(WaitForSeconds).GetField("m_Seconds",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                    var sec = f != null ? (float)f.GetValue(wfs) : 0f;
+                    pending = wfs;
+                    pendingDeadline = EditorApplication.timeSinceStartup + sec;
+                }
+                else if (current is WaitForSecondsRealtime wfsr)
+                {
+                    var f = typeof(WaitForSecondsRealtime).GetField("waitTime",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+                    var sec = f != null ? (float)f.GetValue(wfsr) : 0f;
+                    pending = wfsr;
+                    pendingDeadline = EditorApplication.timeSinceStartup + sec;
+                }
+                // null / other → fall through to next update
             };
             EditorApplication.update += step;
         }
