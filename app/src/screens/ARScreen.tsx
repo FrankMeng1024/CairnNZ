@@ -32,6 +32,9 @@ import { UnityAROverlay, type UnityAROverlayHandle } from '../components/UnityAR
 // (debugLogger.log 第 238 行 if !this.currentSessionId return)
 // subagent B Critical #1 fix
 import { debugLogger } from '../services/debugLogger';
+// v0.2.4 Phase 3 Round 5 — ARScreen own session 必须 upload 才能进 aliyun telemetry
+// (Round 4 review BLOCKER: 原 cleanup 只 endSession 不 upload,数据黑洞)
+import { telemetryUploader } from '../services/telemetryUploader';
 import { CairnEdgeArrows } from '../components/CairnEdgeArrows';
 import { DistantMarkerArrow } from '../components/DistantMarkerArrow';
 import { AcquireGuidance } from '../components/AcquireGuidance';
@@ -226,32 +229,40 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     const id = setInterval(() => setTick(t => (t + 1) % 1000), 200);
     return () => clearInterval(id);
   }, []);
-  // v0.2.4 Phase 3 — ARScreen mount 时启动 debugLogger session,unmount 时 end。
-  // Round 3 修补 (subagent B BLOCKER):
-  //   1. guard tracking-session-active(镜像 RouteEditorScreen.tsx:254 模式),否则
-  //      用户 tracking → 开 AR 会撕裂 session
-  //   2. cleanup 也要 guard,只 endSession 我们自己 own 的 session
+  // v0.2.4 Phase 3 — ARScreen mount 时启动 debugLogger session,unmount 时 end + upload。
+  // Round 5 修 (Round 4 review 双 BLOCKER):
+  //   1. arOwnSessionRef 必须只在真启动 own session 时赋值(不能无条件抓 currentSessionId,
+  //      否则会把 RouteEditor/tracking 的 foreign session 当成自己的,cleanup 时错杀)
+  //   2. cleanup 必须 telemetryUploader.upload(endedId) 才能进 aliyun
+  //      (镜像 RouteEditorScreen.tsx:267-271 模式)
+  //   3. tracking-session-active guard:已有 session 不动,我们的 log 合并进去
+  const arOwnSessionRef = useRef<string | null>(null);
   useState(() => {
-    // 已有 tracking session(或 RouteEditor session)→ 不动,我们的 log 会合并进去
+    // 已有 tracking session(或 RouteEditor session)→ 不启动 own,foreign session 不归我们
     if (debugLogger.getCurrentSessionId()) {
+      // 显式 set null 表明这不是 own session
+      arOwnSessionRef.current = null;
       return null;
     }
     try {
       debugLogger.setEnabled(true);
-      debugLogger.startSession({ activity_mode: 'free' });
+      const ownId = debugLogger.startSession({ activity_mode: 'free' });
+      // 同步把 own session id 记到 ref(只有这条路径才记,foreign 走上面 null 分支)
+      arOwnSessionRef.current = ownId;
     } catch { /* swallow */ }
     return null;
   });
-  // 用 ref 记 own 的 session id,unmount 时只清自己的
-  const arOwnSessionRef = useRef<string | null>(null);
   useEffect(() => {
-    // 第一次 render 之后捕获 own session(若 lazy init 启动了一个)
-    arOwnSessionRef.current = debugLogger.getCurrentSessionId();
     return () => {
-      // 只有在我们 own 的 session 还是 current 时才 endSession
-      // (避免撕裂 RouteEditor 后续启动的 session)
+      // 只有 own session 才 endSession + upload(Round 4 BLOCKER fix)
       if (arOwnSessionRef.current && debugLogger.getCurrentSessionId() === arOwnSessionRef.current) {
-        debugLogger.endSession().catch(() => {});
+        try {
+          debugLogger.endSession().then((endedId) => {
+            if (endedId) {
+              telemetryUploader.upload(endedId).catch(() => {});
+            }
+          }).catch(() => {});
+        } catch { /* swallow */ }
       }
     };
   }, []);

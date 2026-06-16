@@ -821,9 +821,19 @@ public class CairnBridge : MonoBehaviour
         // v0.2.4 Phase 3 LOG: subagent A 漏 + subagent B Tier-A 半盲 fix。
         // 每次进入 SessionTracking 状态 = 一个新 ARKit world frame。给一个 instance ID,
         // 真机回来对账:同 marker_id 在不同 sessionInstanceId 下 spawn 即跨 session 飞天根因。
+        // Round 5 修 (Round 4 CRITICAL): _sessionInstanceCounter 持久化 PlayerPrefs,
+        // 跨 process restart 不归零 — 否则 cold-launch 都是 1,2 个不同 ARKit frame 看起来同 sessionInstance。
         if (args.state == ARSessionState.SessionTracking)
         {
+            // 首次进入 Tracking,从 PlayerPrefs load 上次值,⊕ 后保存
+            if (!_sessionInstanceLoaded)
+            {
+                _sessionInstanceCounter = PlayerPrefs.GetInt(SESSION_INSTANCE_PREFS_KEY, 0);
+                _sessionInstanceLoaded = true;
+            }
             _sessionInstanceCounter++;
+            PlayerPrefs.SetInt(SESSION_INSTANCE_PREFS_KEY, _sessionInstanceCounter);
+            PlayerPrefs.Save();
             UnityLogger.ICritical("v22-PHASE3-SESSION-RESTART",
                 $"sessionInstanceId={_sessionInstanceCounter} stateChangeCount={_stateChangeCount} " +
                 $"stateTrail={_stateTrail} unityRealtime={Time.realtimeSinceStartup:F1}s " +
@@ -834,8 +844,10 @@ public class CairnBridge : MonoBehaviour
         SendToRN("ArSessionState", stateJson);
     }
 
-    // v0.2.4 Phase 3 — sessionInstanceId 自维护(ARSession 每次 Tracking ⊕ ⊕)
+    // v0.2.4 Phase 3 — sessionInstanceId 自维护(PlayerPrefs 持久化跨 process restart)
     private static int _sessionInstanceCounter = 0;
+    private static bool _sessionInstanceLoaded = false;
+    private const string SESSION_INSTANCE_PREFS_KEY = "v22.phase3.sessionInstanceCounter";
     public static int SessionInstanceId => _sessionInstanceCounter;
 
     // ============================================================

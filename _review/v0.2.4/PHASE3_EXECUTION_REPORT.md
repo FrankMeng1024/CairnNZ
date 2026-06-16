@@ -1,9 +1,114 @@
 # v0.2.4 Phase 3 EXECUTION REPORT — Audit + Log Instrumentation
 
 > **Date**: 2026-06-15
-> **Status**: 完成(13 项改动 + 双 review × 2 轮迭代)
+> **Status**: 完成(20 项改动 + 双 review × 5 轮迭代)
 > **目标**: 下次 EAS build 100% 抓到所有 AR 飞天/漂移/消失/二次进入问题
 > **不修**: v0.2.4 范围内只 audit + log,fix 留给真机数据回来后
+
+---
+
+## 总览
+
+- **Round 1** init: 9 项改动(link.xml + Phase 3 log instrumentation)
+- **Round 2** review 修补: +4 项(ARScreen lazy / ICritical 'diag' / FSM transition / IMMORTAL parent / lidar / legacy / groundY / sessionInstanceId)
+- **Round 3** review 修补: +4 项(ARScreen guard / Unity-RN sink unify / A8 static / .meta commit)
+- **Round 5** review 修补: +3 项(ARScreen ref ownership 真修 / cleanup 加 telemetryUploader.upload / sessionInstanceCounter PlayerPrefs 持久化)
+- **总计 17-20 项**(部分 fix 跨 round 改进)
+
+3 commit:
+- `514e831` Round 1+2(16 文件)
+- `d12bada` Round 3(4 文件)
+- (本次 R5 待 commit,3 文件)
+
+---
+
+## 已知诊断盲区(诚实文档化)
+
+1. **FSM TRANSITION 限速 drop**:`v22-PHASE3-ACQUIRE-FSM-TRANSITION` 用 IForward(5/s 速率限制)。cluster plant 100 cairn × 4 transition = 400/s,99% drop。原因是防风暴。代价是 cluster plant 场景下 FSM 几何分布看不到。单 cairn 场景仍可见。
+2. **Phase3LogEnabled OTA gate 依赖 OTA 健康**:globals 加载失败时 default true 仍 emit;但 globals 已加载且 flag=false → 整个 ICritical 静默。诊断完才 OTA 关。
+3. **A8 PITCH 静态节流**:`_phase3LastA8EmitTimeStatic` 全局 0.5s,cluster 内只第一个 cairn 的 boundary event emit,其余 99 个被压。这是 anti-storm 设计取舍。
+4. **Unity vs RN join key 不一致**:Unity ICritical 字段 `id=`,RN debugLogger.log 字段 `marker_id`。后端对账 grep 时两个 key 都要查。
+
+---
+
+## 修复(BLOCKER + CRITICAL 全修)
+
+| Round | # | 文件 | 改动 |
+|---|---|------|------|
+| 1 | FIX 1 | `link.xml` | 加 5 类 IL2CPP preserve |
+| 2 | FIX 2 | `ARScreen.tsx` | useState lazy startSession |
+| 2 | FIX 3 | `UnityLogger.cs` | ICritical 新 method,'diag' level 不走 error |
+| 2 | FIX 4 | `unityBridge.ts` | UnityMessage type 加 'diag' level |
+| 3 | FIX 5 | `ARScreen.tsx` | tracking-session-active guard |
+| 3 | FIX 6 | `UnityAROverlay.tsx` | 'diag' level UnityLog forward 到 debugLogger(sink 统一) |
+| 3 | FIX 7 | `CairnAcquireController.cs` | A8 节流改 static |
+| **5** | **FIX 8** | `ARScreen.tsx` | **arOwnSessionRef 只在真启动 own session 时赋值 + cleanup 加 telemetryUploader.upload(BLOCKER)** |
+| **5** | **FIX 9** | `CairnBridge.cs` | **_sessionInstanceCounter PlayerPrefs 持久化跨 process restart(CRITICAL)** |
+
+---
+
+## 诊断 log(17 个 v22-PHASE3-* tag)
+
+(同前)
+
+## 用户场景诊断闭环
+
+### 场景 1: 用户报"AR mark 飞天"(同 session)
+Telemetry 序列:
+```
+v22-PHASE3-SESSION-RESTART        sessionInstanceId=N
+v22-PHASE3-SPAWN-GROUND           id=cairn-X tier=A finalY=0.5 sessionInstance=N
+v22-PHASE3-ANCHOR-PLANE-ATTACHED  state-when-attached=None (expected)
+v22-PHASE3-ANCHOR-FREE-FLOATING-CHECK delay=5.0s state-after-5s=Tracking pos=(0.0, 5.2, 0.0) ← 飞天证据
+v22-PHASE3-IMMORTAL-TRANSITION    immortal_has_anchor_parent=true
+```
+
+### 场景 2: 用户报"重启 app cairn 飞天"(跨 session)
+现 sessionInstanceCounter PlayerPrefs 持久化,跨 process 不归零:
+```
+session 1 (旧 process): sessionInstanceId=5 plant marker A 在 (1.0, 0, 1.0)
+[kill app, cold launch]
+session 2 (新 process): v22-PHASE3-SESSION-RESTART sessionInstanceId=6 ← 真新 ARKit frame
+                       v22-PHASE3-TIER-DECISION decision=A originDelta=0.001 (RN debugLogger.log)
+                       v22-PHASE3-SPAWN-GROUND finalY=5.2 sessionInstance=6 ← marker A 在新 frame 飞天
+```
+两 sink 现都进 debugLogger session.jsonl(Round 3 sink unification)+ ARScreen own session 现真上传(Round 5)→ aliyun 真有数据。
+
+---
+
+## 编译验证
+
+- Unity batchmode EXIT=0(`Logs/phase3-r5.log`)
+- TypeScript tsc --noEmit 0 errors
+
+---
+
+## OTA
+
+`Phase3LogEnabled`(default true)— master switch。诊断完后 OTA 关。
+
+---
+
+## 真机查 log 命令
+
+```bash
+curl -s "https://api.yiiling.cn/api/telemetry/sessions/<sid>" > device.jsonl
+grep -E "v22-PHASE3-(SESSION-RESTART|TIER-DECISION|SPAWN-GROUND|ANCHOR-FREE-FLOATING|IMMORTAL|PARTICLE|FSM|A8-PITCH|LIDAR|CROSSSNAP)" device.jsonl
+```
+
+---
+
+## 双 subagent review 历史
+
+| Round | A verdict | B verdict | 修补量 |
+|---|---|---|---|
+| 1 | INCOMPLETE(4 BLOCKER 漏) | PARTIAL(3 Critical novel) | 4 项 |
+| 2 | INCOMPLETE(A8/RN diag 漏) | PARTIAL(ARScreen race + 5 finding) | 4 项 |
+| 3 final | FULLY_DONE w/ flags | PARTIAL(2 BLOCKER novel) | — |
+| 4 | INCOMPLETE(ARScreen ref 打架) | PARTIAL(2 BLOCKER + 1 CRITICAL) | 3 项 |
+
+**Round 5 fix**(本次): 直接对治 Round 4 review 的 2 BLOCKER + 1 CRITICAL,等 Round 6 final review。
+
 
 ---
 
