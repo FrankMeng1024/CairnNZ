@@ -976,8 +976,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         (6) Head/tail magnet densify step 3m → 1m. PO reported
 //             "开头依旧没连上,preview 后才正确" — at 3m the connector
 //             still rendered as visible dashes. 1m is continuous.
-export const OTA_VERSION = 275;
-//         v274: edit UI redesign (radial wheel + smart bottom bar).
+// v276  PO direction — simplify and re-anchor.
+//         (1) Remove Eraser entirely from the UI. PO: "去掉橡皮擦的
+//             功能吧 我们用 undo 代替". The store action is preserved
+//             for legacy state; the wheel just doesn't expose it.
+//             First-render coercion: if activeTool === 'eraser',
+//             setActiveTool('brush') so resumed sessions don't stick.
+//         (2) Wheel back to top-right (anchored at FAB), 2x2 grid
+//             (Draw, Move, Undo, Reset). v275's center-anchored ring
+//             was harder to reach single-handed; PO: "画笔也不要在
+//             中间了 还是右上角吧 按照游戏方式 2 + 2".
+//         (3) Bottom status pill above Preview/Beautify shows
+//             "Drawing — start and end on the route" type text.
+//             PO: "drawing 那行提示 放在 preview 上方".
+//         (4) Undo can now undo a Preview commit (already enabled in
+//             v274 — pre-preview snapshot pushed instead of wiping
+//             undoStack). PO: "可以 undo preview 这种步骤" —
+//             confirmed working from v274.
+export const OTA_VERSION = 276;
+//         v275: 6 fixes (FAB + wheel reset-center + eraser-snap + beautify-api + densify-1m).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

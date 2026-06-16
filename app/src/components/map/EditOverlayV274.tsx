@@ -1,22 +1,23 @@
 /**
- * EditOverlayV274 — radial tool wheel + smart bottom bar.
+ * EditOverlayV274 — v276 layout: top-right 2x2 wheel + bottom status.
  *
- * v275 fixes (PO direction):
- *   - Top-right FAB pixel quality fixed (icon size up + larger FAB).
- *   - Wheel layout: Reset at CENTER, 4 tools (Draw/Move/Erase/Undo)
- *     at 4 cardinal directions. No close ×, tap backdrop to dismiss.
- *   - Removed "Drew N strokes" status text per PO ("没意义").
- *   - Status pill no longer at top (was occluding the back button);
- *     errors now appear ABOVE the bottom bar so the back button stays
- *     fully visible. Stroke-self-red still handles the in-canvas hint.
+ * v276 (PO direction):
+ *   - Remove Eraser entirely. Use Undo instead — one action = one undo.
+ *   - Wheel goes back to top-right (anchored at the FAB) in a 2x2
+ *     game-style grid: Draw, Move, Undo, Reset. No center, no close ×.
+ *   - Status pill (e.g. "Drawing — start on the route") sits ABOVE the
+ *     bottom action button so the top of the screen stays clean and
+ *     the back arrow is never occluded.
+ *   - Errors render in the same status slot, in red. Stroke-self-red
+ *     in the canvas is unchanged.
  *
- * Smart bottom bar logic (unchanged from v274):
+ * Smart bottom logic (unchanged):
  *     state A (has unpreviewed strokes): ONE button = Preview;
  *       disabled on validation error.
  *     state B (clean / previewed):       Beautify route + Save.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert,
   KeyboardAvoidingView, Platform,
@@ -33,7 +34,7 @@ interface EditOverlayV274Props {
   onBeautify: () => Promise<void> | void;
 }
 
-type ToolKey = 'pan' | 'brush' | 'eraser';
+type ToolKey = 'pan' | 'brush';
 
 export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element {
   const { onSave, onPreview, onBeautify } = props;
@@ -51,6 +52,13 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
 
   const [wheelOpen, setWheelOpen] = useState(false);
 
+  // v276: eraser tool removed from UI. If a session resumed in
+  // 'eraser' mode (legacy state), coerce to 'brush' so the user
+  // doesn't get stuck in a tool that has no UI.
+  useEffect(() => {
+    if (activeTool === 'eraser') setActiveTool('brush');
+  }, [activeTool, setActiveTool]);
+
   const strokeCount = brushStrokes.length;
   const hasUnpreviewedStrokes = strokeCount > 0 && !previewIsCurrent;
   const inErrorState = !!lastError;
@@ -59,12 +67,10 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
   const canSave = !isComputing && !hasUnpreviewedStrokes;
   const canUndo = undoStackLen > 0;
 
-  const fabIcon = activeTool === 'brush' ? 'Pencil'
-                : activeTool === 'eraser' ? 'Trash2'
-                : 'Navigation2';
-  const fabBg = activeTool === 'brush' ? '#c87941'
-              : activeTool === 'eraser' ? '#8c7e72'
-              : Colors.primary;
+  // v276: eraser removed. Active tool can only be pan or brush.
+  const safeTool: ToolKey = activeTool === 'brush' ? 'brush' : 'pan';
+  const fabIcon = safeTool === 'brush' ? 'Pencil' : 'Navigation2';
+  const fabBg = safeTool === 'brush' ? '#c87941' : Colors.primary;
 
   function pickTool(t: ToolKey) {
     setActiveTool(t);
@@ -86,10 +92,23 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
     if (canUndo) undo();
   }
 
+  // v276: status text shown above bottom buttons. One line, never blocks.
+  const statusText: string | null = (() => {
+    if (inErrorState) return null;          // error has its own red pill
+    if (isComputing) return 'Computing…';
+    if (hasUnpreviewedStrokes) {
+      return safeTool === 'brush'
+        ? 'Drawing — start and end on the route'
+        : `Drew ${strokeCount} stroke${strokeCount > 1 ? 's' : ''} · tap Preview to snap`;
+    }
+    if (safeTool === 'brush') return 'Drawing — start and end on the route';
+    if (previewIsCurrent && strokeCount === 0) return null;
+    return null;
+  })();
+
   return (
     <View pointerEvents="box-none" style={styles.container}>
-      {/* Top-right tool FAB (closed). v275: bigger size + bigger icon
-          for crisp render at all DPRs. */}
+      {/* Top-right tool FAB (closed). v275 sizes preserved. */}
       {!wheelOpen && (
         <TouchableOpacity
           style={[styles.fab, { top: insets.top + 8, backgroundColor: fabBg }]}
@@ -100,7 +119,8 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
         </TouchableOpacity>
       )}
 
-      {/* Wheel — Reset at CENTER, 4 tools at N/E/S/W. Tap backdrop to dismiss. */}
+      {/* v276 wheel: anchored at FAB position (top-right), 2x2 grid.
+          Tap backdrop to dismiss. No close ×. */}
       {wheelOpen && (
         <>
           <TouchableOpacity
@@ -108,55 +128,44 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
             style={styles.wheelBackdrop}
             onPress={() => setWheelOpen(false)}
           />
-          <View pointerEvents="box-none" style={styles.wheelWrapCenter}>
-            {/* Center = Reset (destructive) */}
-            <TouchableOpacity
-              style={styles.radialCenter}
-              activeOpacity={0.85}
-              onPress={handleResetTap}
-            >
-              <Icon name="RotateCcw" size={22} color={Colors.surface} strokeWidth={2.6} />
-              <Text style={styles.radialCenterLabel} numberOfLines={1}>Reset</Text>
-            </TouchableOpacity>
-
-            {/* North = Draw */}
-            <RadialItem
-              pos="north"
-              icon="Pencil" label="Draw"
-              active={activeTool === 'brush'}
-              activeBg="#c87941"
-              onPress={() => pickTool('brush')}
-            />
-            {/* East = Erase */}
-            <RadialItem
-              pos="east"
-              icon="Trash2" label="Erase"
-              active={activeTool === 'eraser'}
-              activeBg="#8c7e72"
-              onPress={() => pickTool('eraser')}
-            />
-            {/* South = Undo */}
-            <RadialItem
-              pos="south"
-              icon="Undo2" label="Undo"
-              disabled={!canUndo}
-              onPress={handleUndoTap}
-            />
-            {/* West = Move */}
-            <RadialItem
-              pos="west"
-              icon="Navigation2" label="Move"
-              active={activeTool === 'pan'}
-              activeBg={Colors.primary}
-              onPress={() => pickTool('pan')}
-            />
+          <View
+            pointerEvents="box-none"
+            style={[
+              styles.wheel2x2Wrap,
+              { top: insets.top + 8, right: Spacing.md },
+            ]}
+          >
+            <View style={styles.wheel2x2Row}>
+              <ToolBtn
+                icon="Pencil" label="Draw"
+                active={safeTool === 'brush'}
+                activeBg="#c87941"
+                onPress={() => pickTool('brush')}
+              />
+              <ToolBtn
+                icon="Navigation2" label="Move"
+                active={safeTool === 'pan'}
+                activeBg={Colors.primary}
+                onPress={() => pickTool('pan')}
+              />
+            </View>
+            <View style={styles.wheel2x2Row}>
+              <ToolBtn
+                icon="Undo2" label="Undo"
+                disabled={!canUndo}
+                onPress={handleUndoTap}
+              />
+              <ToolBtn
+                icon="RotateCcw" label="Reset"
+                danger
+                onPress={handleResetTap}
+              />
+            </View>
           </View>
         </>
       )}
 
-      {/* Bottom bar.
-          Order: optional error pill above the row → action row.
-          Action row layout depends on state (Preview vs Beautify+Save). */}
+      {/* Bottom bar — status text + action row. */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.bottomWrap}
@@ -166,14 +175,17 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
           style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.sm }]}
           pointerEvents="auto"
         >
-          {/* v275: errors live above the action row (not at the top).
-              Top of the screen stays clear for the back arrow. */}
-          {inErrorState && (
+          {/* Error pill (red, overrides status) OR status pill (light) */}
+          {inErrorState ? (
             <View style={styles.errorPill}>
               <Icon name="TriangleAlert" size={14} color={Colors.surface} strokeWidth={2.5} />
               <Text style={styles.errorPillText} numberOfLines={2}>{lastError}</Text>
             </View>
-          )}
+          ) : statusText ? (
+            <View style={styles.statusPill}>
+              <Text style={styles.statusPillText} numberOfLines={1}>{statusText}</Text>
+            </View>
+          ) : null}
 
           {hasUnpreviewedStrokes ? (
             <TouchableOpacity
@@ -228,39 +240,36 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
   );
 }
 
-interface RadialItemProps {
-  pos: 'north' | 'east' | 'south' | 'west';
+interface ToolBtnProps {
   icon: string;
   label: string;
   active?: boolean;
   activeBg?: string;
   disabled?: boolean;
+  danger?: boolean;
   onPress: () => void;
 }
-function RadialItem({ pos, icon, label, active, activeBg, disabled, onPress }: RadialItemProps): React.JSX.Element {
-  const bg = active ? (activeBg ?? Colors.primary) : Colors.surface;
-  const fg = active ? Colors.surface : Colors.textPrimary;
-  // Distance from center to outer item (centre-to-centre)
-  const R = 86;
-  const positionStyle = pos === 'north' ? { top: -R, left: 0 - RADIAL_ITEM_SIZE / 2 + RADIAL_CENTER_SIZE / 2 }
-                      : pos === 'south' ? { top: R, left: 0 - RADIAL_ITEM_SIZE / 2 + RADIAL_CENTER_SIZE / 2 }
-                      : pos === 'east'  ? { left: R, top: 0 - RADIAL_ITEM_SIZE / 2 + RADIAL_CENTER_SIZE / 2 }
-                      :                   { left: -R, top: 0 - RADIAL_ITEM_SIZE / 2 + RADIAL_CENTER_SIZE / 2 };
+function ToolBtn({ icon, label, active, activeBg, disabled, danger, onPress }: ToolBtnProps): React.JSX.Element {
+  const bg = active ? (activeBg ?? Colors.primary)
+           : danger ? Colors.dangerBg
+           : Colors.surface;
+  const fg = active ? Colors.surface
+           : danger ? Colors.danger
+           : Colors.textPrimary;
   return (
     <TouchableOpacity
       activeOpacity={0.85}
       disabled={disabled}
       onPress={onPress}
       style={[
-        styles.radialItem,
-        positionStyle as any,
+        styles.toolBtn,
         { backgroundColor: bg },
         disabled && styles.btnDisabled,
-        active && styles.radialItemActive,
+        active && styles.toolBtnActive,
       ]}
     >
       <Icon name={icon as any} size={22} color={fg} strokeWidth={2.6} />
-      <Text style={[styles.radialItemLabel, { color: fg }]} numberOfLines={1}>
+      <Text style={[styles.toolBtnLabel, { color: fg }]} numberOfLines={1}>
         {label}
       </Text>
     </TouchableOpacity>
@@ -268,8 +277,8 @@ function RadialItem({ pos, icon, label, active, activeBg, disabled, onPress }: R
 }
 
 const FAB_SIZE = 56;
-const RADIAL_ITEM_SIZE = 64;
-const RADIAL_CENTER_SIZE = 76;
+const TOOL_BTN_SIZE = 64;
+const TOOL_GAP = 8;
 
 const styles = StyleSheet.create({
   container: {
@@ -291,44 +300,28 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.30)',
   },
-  wheelWrapCenter: {
+  wheel2x2Wrap: {
     position: 'absolute',
-    top: '40%',
-    left: '50%',
-    width: 0, height: 0,
+    width: TOOL_BTN_SIZE * 2 + TOOL_GAP,
   },
-  radialCenter: {
-    position: 'absolute',
-    left: -RADIAL_CENTER_SIZE / 2,
-    top: -RADIAL_CENTER_SIZE / 2,
-    width: RADIAL_CENTER_SIZE, height: RADIAL_CENTER_SIZE,
-    borderRadius: RADIAL_CENTER_SIZE / 2,
-    backgroundColor: Colors.danger,
-    alignItems: 'center', justifyContent: 'center',
-    ...Shadow.elevated,
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.7)',
+  wheel2x2Row: {
+    flexDirection: 'row',
+    gap: TOOL_GAP,
+    marginBottom: TOOL_GAP,
   },
-  radialCenterLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: Colors.surface,
-    marginTop: 2,
-  },
-  radialItem: {
-    position: 'absolute',
-    width: RADIAL_ITEM_SIZE, height: RADIAL_ITEM_SIZE,
-    borderRadius: RADIAL_ITEM_SIZE / 2,
+  toolBtn: {
+    width: TOOL_BTN_SIZE, height: TOOL_BTN_SIZE,
+    borderRadius: TOOL_BTN_SIZE / 2,
     alignItems: 'center', justifyContent: 'center',
     ...Shadow.elevated,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.7)',
   },
-  radialItemActive: {
+  toolBtnActive: {
     borderColor: 'rgba(255,255,255,0.9)',
-    transform: [{ scale: 1.08 }],
+    transform: [{ scale: 1.06 }],
   },
-  radialItemLabel: {
+  toolBtnLabel: {
     fontSize: 11,
     fontWeight: '700',
     marginTop: 2,
@@ -345,6 +338,22 @@ const styles = StyleSheet.create({
   bottomRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
+  },
+
+  statusPill: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.primaryBg,
+    marginBottom: Spacing.sm,
+    alignSelf: 'center',
+    maxWidth: '100%',
+    ...Shadow.card,
+  },
+  statusPillText: {
+    color: Colors.primary,
+    fontSize: FontSize.small,
+    fontWeight: '700',
   },
 
   errorPill: {
