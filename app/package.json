@@ -16,6 +16,13 @@
     "setupFilesAfterFramework": [
       "@testing-library/jest-native/extend-expect"
     ],
+    "testMatch": [
+      "**/__tests__/**/*.test.[jt]s?(x)",
+      "**/?(*.)+(spec|test).[jt]s?(x)",
+      "**/src/services/v025/**/*.test.[jt]s?(x)",
+      "**/src/store/v025/**/*.test.[jt]s?(x)",
+      "**/src/screens/v025/**/*.test.[jt]s?(x)"
+    ],
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?expo(nent)?|@expo(nent)?/.*|expo-location|expo-speech|react-native|@react-native(/.*)?|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|kdbush))"
     ],

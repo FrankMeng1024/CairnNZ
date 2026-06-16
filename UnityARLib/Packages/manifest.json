@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.unity.test-framework": "1.4.5",
     "com.unity.xr.arfoundation": "6.0.5",
     "com.unity.xr.arkit": "6.0.5",
     "com.unity.xr.core-utils": "2.5.1",
