@@ -88,6 +88,7 @@ app.use('/api/telemetry', require('./routes/telemetry'));
 app.use('/api/debug-snapshot', require('./routes/debug-snapshot'));
 app.use('/api/feature-flags', require('./routes/feature-flags'));
 app.use('/api/v025', require('./routes/v025/debug-events'));
+app.use('/api/v025', require('./routes/v025/worldmaps'));
 
 // 404 fallback
 app.use((req, res) => {

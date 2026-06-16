@@ -1,0 +1,19 @@
+{
+  "id": "C3_through_building",
+  "pass": false,
+  "reasons": [
+    "final max_gap 155.7m > 50m"
+  ],
+  "result": {
+    "ok": true,
+    "arcB": 343.60170089739756,
+    "arcC": 555.9935870259758,
+    "gapB_m": 0.0,
+    "gapC_m": 155.70784250907926,
+    "curve_len": 4,
+    "conf": 0.038910054608702005,
+    "final_len": 106,
+    "corridorMaxDist": 50.86167546100103,
+    "final_max_gap": 155.70784250977724
+  }
+}

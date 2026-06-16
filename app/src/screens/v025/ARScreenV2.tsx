@@ -26,6 +26,7 @@ import { makeCairnBridgeV2, type RawBridge } from '../../services/v025/cairnBrid
 import { spawnCairnV2, SpawnRefusedError } from '../../services/v025/cairnSpawnV2';
 import type { CairnBridgeV2Adapter } from '../../services/v025/cairnSpawnV2';
 import type { V025AnyMessage } from '../../services/v025/MessageTypes';
+import { emitTelemetry } from '../../services/v025/telemetrySingleton';
 import type { ARScreenProps } from '../ARScreenLegacy';
 import { crashLogger } from '../../services/crashLogger';
 
@@ -123,7 +124,7 @@ export function ARScreenV2(_props: ARScreenProps) {
         };
     }, [beginBringUp, activate, teardown, bridge]);
 
-    // Subscribe to v025/* responses → drive cairn store.
+    // Subscribe to v025/* responses → drive cairn store + telemetry singleton.
     useEffect(() => {
         const unsub = bridge.on((message) => {
             const m = message as V025AnyMessage;
@@ -131,8 +132,20 @@ export function ARScreenV2(_props: ARScreenProps) {
                 confirm(m.cairnId, m.outcomeKind, m.finalXyz, m.diagnostic ?? '');
             } else if (m.type === 'v025/spawn-refused') {
                 refuse(m.cairnId, m.diagnostic ?? '');
+            } else if (m.type === 'v025/telemetry') {
+                // Phase 4 composition: forward Unity-emitted telemetry into RN-side
+                // batcher so a single POST per 5s carries both Unity- and RN-originated events.
+                emitTelemetry({
+                    phase: m.phase,
+                    step: m.step,
+                    seq: m.seq,
+                    sessionInstanceId: m.sessionInstanceId,
+                    timestampUnixMs: m.timestampUnixMs,
+                    outcome: m.outcome,
+                    diagnostic: m.diagnostic,
+                });
             }
-            // session-ready / session-lost / telemetry handled by lifecycle/telemetry layers
+            // session-ready / session-lost handled by lifecycle layer
         });
         return unsub;
     }, [bridge, confirm, refuse]);

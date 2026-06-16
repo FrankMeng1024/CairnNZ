@@ -1,0 +1,10 @@
+{
+  "id": "C4_outside_corridor",
+  "pass": true,
+  "reasons": [],
+  "result": {
+    "ok": false,
+    "reason": "corridor",
+    "corridorMaxDist": 301.05750255785676
+  }
+}

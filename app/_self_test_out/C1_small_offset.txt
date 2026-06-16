@@ -1,0 +1,17 @@
+{
+  "id": "C1_small_offset",
+  "pass": true,
+  "reasons": [],
+  "result": {
+    "ok": true,
+    "arcB": 285.1581590268741,
+    "arcC": 497.48124634298324,
+    "gapB_m": 7.073230889886872e-10,
+    "gapC_m": 0.0,
+    "curve_len": 17,
+    "conf": 0.16572466421975318,
+    "final_len": 118,
+    "corridorMaxDist": 21.30379776401954,
+    "final_max_gap": 24.706538903369502
+  }
+}

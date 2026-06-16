@@ -9,6 +9,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { MigratorRetryPrompt } from './MigratorRetryPrompt';
 import { getFlags } from './src/config/featureFlags';
 import { loadFlagsCache, refreshFlagsFromBackend } from './src/services/v025/featureFlagsClient';
+import { initTelemetrySingleton } from './src/services/v025/telemetrySingleton';
 import { useAppStore } from './src/store/useAppStore';
 import { useSettingsStore } from './src/store/useSettingsStore';
 import { useTrackingStore } from './src/store/useTrackingStore';
@@ -160,6 +161,11 @@ function AppRoot() {
       loadFlagsCache()
         .then(() => refreshFlagsFromBackend(API_BASE_URL))
         .catch((e) => crashLogger.breadcrumb('v025_flags_boot_failed: ' + (e?.message ?? 'unknown')));
+      // Phase 4 composition root: init telemetry singleton + start 5s flush ticker.
+      // Subsequent emitTelemetry() calls (from ARScreenV2 v025/telemetry messages)
+      // route into the same batcher; one POST every 5s to /api/v025/debug-events.
+      try { initTelemetrySingleton(API_BASE_URL); }
+      catch (e) { crashLogger.breadcrumb('v025_telemetry_init_failed: ' + (e instanceof Error ? e.message : String(e))); }
       // OTA #183: log the running OTA bundle id + channel + runtime version
       // so diag uploads can be correlated to a specific OTA. Without this
       // the only OTA marker is OTA_VERSION (a hard-coded constant), which

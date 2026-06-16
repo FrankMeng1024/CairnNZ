@@ -1,0 +1,9 @@
+{
+  "id": "C6_loop",
+  "pass": true,
+  "reasons": [],
+  "result": {
+    "ok": false,
+    "reason": "loop"
+  }
+}

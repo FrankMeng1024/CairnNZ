@@ -67,3 +67,6 @@ pw_*.js
 scan_reminder*.ps1
 *.exe
 *.dmg
+
+# v025 backend ARWorldMap blob storage (dev-only filesystem; v0.2.6 → Aliyun OSS)
+backend/storage/

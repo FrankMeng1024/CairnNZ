@@ -1,0 +1,19 @@
+{
+  "id": "C2_large_offset",
+  "pass": false,
+  "reasons": [
+    "final max_gap 197.1m > 50m"
+  ],
+  "result": {
+    "ok": true,
+    "arcB": 285.1581590268741,
+    "arcC": 497.48124634298324,
+    "gapB_m": 9.53319781617969,
+    "gapC_m": 173.05597440712936,
+    "curve_len": 22,
+    "conf": 0,
+    "final_len": 123,
+    "corridorMaxDist": 81.0573900072522,
+    "final_max_gap": 197.09015930243092
+  }
+}

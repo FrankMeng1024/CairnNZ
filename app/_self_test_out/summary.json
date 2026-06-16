@@ -1,0 +1,95 @@
+[
+  {
+    "id": "C1_small_offset",
+    "pass": true,
+    "reasons": [],
+    "result": {
+      "ok": true,
+      "arcB": 285.1581590268741,
+      "arcC": 497.48124634298324,
+      "gapB_m": 7.073230889886872e-10,
+      "gapC_m": 0.0,
+      "curve_len": 17,
+      "conf": 0.16572466421975318,
+      "final_len": 118,
+      "corridorMaxDist": 21.30379776401954,
+      "final_max_gap": 24.706538903369502
+    }
+  },
+  {
+    "id": "C2_large_offset",
+    "pass": false,
+    "reasons": [
+      "final max_gap 197.1m > 50m"
+    ],
+    "result": {
+      "ok": true,
+      "arcB": 285.1581590268741,
+      "arcC": 497.48124634298324,
+      "gapB_m": 9.53319781617969,
+      "gapC_m": 173.05597440712936,
+      "curve_len": 22,
+      "conf": 0,
+      "final_len": 123,
+      "corridorMaxDist": 81.0573900072522,
+      "final_max_gap": 197.09015930243092
+    }
+  },
+  {
+    "id": "C3_through_building",
+    "pass": false,
+    "reasons": [
+      "final max_gap 155.7m > 50m"
+    ],
+    "result": {
+      "ok": true,
+      "arcB": 343.60170089739756,
+      "arcC": 555.9935870259758,
+      "gapB_m": 0.0,
+      "gapC_m": 155.70784250907926,
+      "curve_len": 4,
+      "conf": 0.038910054608702005,
+      "final_len": 106,
+      "corridorMaxDist": 50.86167546100103,
+      "final_max_gap": 155.70784250977724
+    }
+  },
+  {
+    "id": "C4_outside_corridor",
+    "pass": true,
+    "reasons": [],
+    "result": {
+      "ok": false,
+      "reason": "corridor",
+      "corridorMaxDist": 301.05750255785676
+    }
+  },
+  {
+    "id": "C5_two_separate",
+    "pass": false,
+    "reasons": [
+      "final max_gap 31.1m > 30m"
+    ],
+    "result": {
+      "ok": true,
+      "arcB": 152.2758246856929,
+      "arcC": 285.1581590268741,
+      "gapB_m": 1.3511386996355334e-09,
+      "gapC_m": 7.073230889886872e-10,
+      "curve_len": 11,
+      "conf": 0.04497192878914369,
+      "final_len": 117,
+      "corridorMaxDist": 32.11893392337348,
+      "final_max_gap": 31.114374728734134
+    }
+  },
+  {
+    "id": "C6_loop",
+    "pass": true,
+    "reasons": [],
+    "result": {
+      "ok": false,
+      "reason": "loop"
+    }
+  }
+]

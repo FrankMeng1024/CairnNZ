@@ -1,0 +1,19 @@
+{
+  "id": "C5_two_separate",
+  "pass": false,
+  "reasons": [
+    "final max_gap 31.1m > 30m"
+  ],
+  "result": {
+    "ok": true,
+    "arcB": 152.2758246856929,
+    "arcC": 285.1581590268741,
+    "gapB_m": 1.3511386996355334e-09,
+    "gapC_m": 7.073230889886872e-10,
+    "curve_len": 11,
+    "conf": 0.04497192878914369,
+    "final_len": 117,
+    "corridorMaxDist": 32.11893392337348,
+    "final_max_gap": 31.114374728734134
+  }
+}
