@@ -94,3 +94,60 @@
 - ADR-007 老代码删除延期至 Phase 7
 - ADR-008 feature-flags 路由 unauth + LIMIT 1000 + HARD_DEFAULTS fail-closed(round-2 修复)
 - ADR-009 migration DB allowlist(round-2 修复)
+
+---
+
+## Phase 1A — Core 接口 + Android stub + 工具类
+
+**Phase 1A 起始 git tag**: v0.2.5-phase-1A-start (commit 9a12db4 → 6472e20)
+**Phase 1A 结束 commit**: 82cacd3
+**Phase 1A 结束 git tag**: v0.2.5-phase-2A-start
+
+- [x] 1A.1 IAnchorPersistence interface + PersistenceOutcome 9 cases + PersistenceResult envelope (`UnityARLib/Assets/Scripts/v025/Core/IAnchorPersistence.cs:1`)
+- [x] 1A.2 PersistenceFactory(#if UNITY_EDITOR / UNITY_IOS / UNITY_ANDROID 三分支)
+- [x] 1A.3 ArkitWorldMapPersistence(Phase 4 will fill real impl)
+- [x] 1A.4 ArcoreStubPersistence(NotSupported, ADR-002)
+- [x] 1A.5 NullPersistence(Editor / fallback)
+- [x] 1A.6 EventTypes + V025Phases + V025Outcomes + PhaseStepTracker(thread-safe with _phaseLock)
+- [x] 1A.7 GeoMath(Haversine + ENU + bearing) + 9+2 单测 + parity fixture
+- [x] 1A.8 LidarAvailability sticky cache + 反 pattern C8(no flicker)
+- [x] 1A.9 FloorPlaneValidatorV2 + 13 单测(B6/B7/B7'/C6/C7 + boundary + ResolveFallback Rule P)
+- [x] 1A.10 GroundResolverV2 + 反 pattern B10(no Y=0 default)
+- [x] 1A.11 AnchorAttachStrategy(Tier-S → Tier-G plane → Tier-G raycast → refuse)+ 反 pattern C5
+- [x] 1A.12 BlockerSentinel + 4 单测(emit-before-throw)
+- [x] 1A.13 PROGRESS.md
+- [x] 1A.14 4 眼 review:Round-1 sub#1A-1 (3C/4M/2Mi) + sub#1A-2 (1C/3M/2Mi);Round-2 sub#1A-3 PASS + sub#1A-4 (1C/5M)。所有 5 CRITICAL fixed + 11 MEDIUM fixed/documented + 6 MINOR resolved.
+- [x] 1A.15 修光 BLOCKER + CRITICAL,verdict 终态 PASS — 见 `_review/v0.2.5/verdicts/phase1A-signoff.md`
+- [x] 1A.16 commit 82cacd3 + tag v0.2.5-phase-2A-start
+
+### Phase 1A 出口判据自检
+- [x] cairn_lint v025 scope 全绿(25 files clean)
+- [x] lock_plan check 全绿(15 locks)
+- [x] 反 pattern 单测全绿(C5 + C6/C7 + C8 + B6/B7/B7' + B10)
+- [x] Rule P compliance(FloorPlaneValidatorV2.ResolveFallback)
+- [x] Rule H envelope (PhaseStepTracker phase/step/seq/sessionInstanceId)
+- [x] Rule G parity infrastructure (geomath_parity.json + GeoMathParityFixtureTests)
+- [x] 4 眼 review 终态 PASS
+
+### ADRs added (Phase 1A)
+- ADR-010 Phase 1A interface design choices (IsPlatformSupported / Static ResolveFallback / GeoMath limits)
+
+---
+
+## 下一步 (Phase 2A 入口)
+
+Phase 2A 起始 sub-item:**2A.1 cairnSpawnV2.ts + 单测**
+
+git tag for resume: `v0.2.5-phase-2A-start` (commit 82cacd3)
+
+Phase 2A 重点:
+- 2A.1-2A.2 RN 端 cairnSpawnV2.ts + geoMath.ts(MUST 消费 _review/v0.2.5/fixtures/geomath_parity.json)
+- 2A.3 CairnSpawnerV2.cs(消费 AnchorAttachStrategy)
+- 2A.4 PendingAnchorRetryV2.cs(1s 失败拒绝,catch BlockerSentinelException 不是 Exception)
+- 2A.5 AnchorRecoveryV2.cs(Rule P mitigation 验证)
+- 2A.6 ArSessionLifecycleV2 + sessionInstanceId UUID 一次性(re-anchor 不重置)
+- 2A.7 useCairnStoreV2 + useArSessionStoreV2(RN store)
+- 2A.8 CairnBridgeV2 + MessageTypes
+- 2A.9 反 pattern B1
+- 2A.10 GPS 路径算法层 lock-step 单测(iOS / Android #if 分支输出等价)
+- 2A.11-2A.14 收口 + 4 眼 review
