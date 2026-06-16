@@ -227,20 +227,32 @@ export function ARScreen({ onClose, onPlaceMarker }: ARScreenProps) {
     return () => clearInterval(id);
   }, []);
   // v0.2.4 Phase 3 — ARScreen mount 时启动 debugLogger session,unmount 时 end。
-  // 用户最常见路径 "open app → AR → plant cairn → close → reopen 飞天" 之前没 session,
-  // PHASE3 breadcrumb 100% drop。subagent B Critical #1 fix。
-  // (RouteEditorScreen 也有自己的 startSession,二者互斥 — debugLogger.startSession
-  //  会先 endSessionWith 旧 session 再开新的,见 debugLogger.ts:117。)
-  // ⚠️ subagent B Round-2 race fix:用 useState lazy initializer 同步触发,
-  // 避免 useEffect [] 在 child useEffect 之后才跑(React effect order)
-  // 导致首批 buildSpawnRequest 调用时 currentSessionId 仍 null
+  // Round 3 修补 (subagent B BLOCKER):
+  //   1. guard tracking-session-active(镜像 RouteEditorScreen.tsx:254 模式),否则
+  //      用户 tracking → 开 AR 会撕裂 session
+  //   2. cleanup 也要 guard,只 endSession 我们自己 own 的 session
   useState(() => {
-    debugLogger.startSession({ activity_mode: 'free' });
+    // 已有 tracking session(或 RouteEditor session)→ 不动,我们的 log 会合并进去
+    if (debugLogger.getCurrentSessionId()) {
+      return null;
+    }
+    try {
+      debugLogger.setEnabled(true);
+      debugLogger.startSession({ activity_mode: 'free' });
+    } catch { /* swallow */ }
     return null;
   });
+  // 用 ref 记 own 的 session id,unmount 时只清自己的
+  const arOwnSessionRef = useRef<string | null>(null);
   useEffect(() => {
+    // 第一次 render 之后捕获 own session(若 lazy init 启动了一个)
+    arOwnSessionRef.current = debugLogger.getCurrentSessionId();
     return () => {
-      debugLogger.endSession().catch(() => {});
+      // 只有在我们 own 的 session 还是 current 时才 endSession
+      // (避免撕裂 RouteEditor 后续启动的 session)
+      if (arOwnSessionRef.current && debugLogger.getCurrentSessionId() === arOwnSessionRef.current) {
+        debugLogger.endSession().catch(() => {});
+      }
     };
   }, []);
   // v0.2.4 A: arFrame.track 在 useMemo 里使用,但 arFrame state 声明在下面.

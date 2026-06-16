@@ -28,6 +28,10 @@ import { StyleSheet, View, Platform, UIManager } from 'react-native';
 import UnityView from '@azesmway/react-native-unity';
 import { sendToUnity, parseUnityMessage, resetParseRecoveredThrottle } from '../services/unityBridge';
 import { crashLogger } from '../services/crashLogger';
+// v0.2.4 Phase 3 — 'diag' level UnityLog 也 forward 到 debugLogger,
+// 让 Unity ICritical 跟 RN debugLogger.log 进同一个 session.jsonl,
+// 跨 sink timeline join 才可能(subagent B Round 3 BLOCKER fix)
+import { debugLogger } from '../services/debugLogger';
 import { projectOrigin } from '../services/originPropagation';
 import { unmountOverlay } from '../services/arOverlayLifecycle';
 import { API_BASE_URL } from '../config/api';
@@ -428,6 +432,19 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           // Unity logger forwards WARN/ERROR by default (not INFO).
           // crashLogger ring buffer is 500 — guard against flood by tag prefix.
           crashLogger.breadcrumb(`unity-native:${msg.level}:${msg.line.slice(0, 200)}`);
+          // v0.2.4 Phase 3 — 'diag' level (ICritical) 同步 forward 到 debugLogger,
+          // 让 Unity 侧 v22-PHASE3-* ICritical 跟 RN 侧 v22-PHASE3-TIER-DECISION 进同一个
+          // session.jsonl,真机回来跨 Unity/RN timeline join 才可能完成。
+          if (msg.level === 'diag') {
+            try {
+              debugLogger.log({
+                event: 'breadcrumb',
+                tag: 'unity-diag',
+                ts: Date.now(),
+                payload: { line: msg.line.slice(0, 500) },
+              });
+            } catch { /* swallow */ }
+          }
           // v208 — DELETED v206 B1's lock-Y sniffer. The premise was wrong:
           // Unity GroundYResolver emits "locked Y=..." once PER CAIRN, not
           // per session. Indoor users plant cairns at floor + tabletop +

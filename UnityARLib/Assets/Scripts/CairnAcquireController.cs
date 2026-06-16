@@ -413,7 +413,8 @@ namespace Cairn.AR
         // A8: 完成 pitch fallback — 陀螺仪不可用时用相机 eulerX 变化率检测
         // v0.2.4 Phase 3 LOG: subagent A BLOCKER fix — 真机 25-30fps 帧间噪声可能误触发,
         // 加 emit 看 false positive。0.5s 节流防风暴。
-        float _phase3LastA8EmitTime = -1f;
+        // Round 3 fix: 改 static 全局节流(原 instance field 100 cairn cluster 时仍能 200/s)
+        static float _phase3LastA8EmitTimeStatic = -1f;
         bool IsUserActivelyScanning()
         {
             // Phone tilt change rate > threshold = active scanning
@@ -436,11 +437,11 @@ namespace Cairn.AR
                     // v0.2.4 Phase 3 LOG: 边界值 emit (3-7°/s 区间) 看 false positive 频率
                     // 0.5s 节流防风暴
                     if (pitchRateDegPerSec >= 3f && pitchRateDegPerSec <= 7f &&
-                        Time.time - _phase3LastA8EmitTime > 0.5f)
+                        Time.time - _phase3LastA8EmitTimeStatic > 0.5f)
                     {
                         UnityLogger.ICritical("v22-PHASE3-A8-PITCH-BOUNDARY",
                             $"id={_markerId} pitchRateDegPerSec={pitchRateDegPerSec:F1} dt={Time.deltaTime:F3} fps={1f/Time.deltaTime:F1} thresh=5.0");
-                        _phase3LastA8EmitTime = Time.time;
+                        _phase3LastA8EmitTimeStatic = Time.time;
                     }
                     if (pitchRateDegPerSec > 5f)
                         return true;
