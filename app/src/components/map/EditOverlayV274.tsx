@@ -152,23 +152,31 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
               </Text>
             </TouchableOpacity>
 
-            {/* Three small orbiters fanned bottom-left of Move,
-                spread further apart (PO: "3个小的也互相太近的 分散点"). */}
+            {/* Three small orbiters at equal distance from Move,
+                fanned to the bottom-left in 60° increments
+                (PO: "希望每个小 icon 和 Move 的距离都一样").
+                All three share the same R; angles 165° / 195° / 225°
+                (measured from +x ccw) put them at left, lower-left,
+                and lower-down — all on the inner side, never crossing
+                the right edge. */}
             <SmallOrbit
-              dx={-ORBIT_R * 1.25} dy={ORBIT_R * 0.35}
+              dx={ORBIT_R * Math.cos(165 * Math.PI / 180)}
+              dy={-ORBIT_R * Math.sin(165 * Math.PI / 180)}
               icon="Pencil" label="Draw"
               active={safeTool === 'brush'}
               activeBg="#c87941"
               onPress={() => pickTool('brush')}
             />
             <SmallOrbit
-              dx={-ORBIT_R * 1.05} dy={ORBIT_R * 1.35}
+              dx={ORBIT_R * Math.cos(210 * Math.PI / 180)}
+              dy={-ORBIT_R * Math.sin(210 * Math.PI / 180)}
               icon="Undo2" label="Undo"
               disabled={!canUndo}
               onPress={handleUndoTap}
             />
             <SmallOrbit
-              dx={-ORBIT_R * 0.05} dy={ORBIT_R * 1.6}
+              dx={ORBIT_R * Math.cos(255 * Math.PI / 180)}
+              dy={-ORBIT_R * Math.sin(255 * Math.PI / 180)}
               icon="RotateCcw" label="Reset"
               danger
               onPress={handleResetTap}
@@ -293,7 +301,7 @@ function SmallOrbit({ dx, dy, icon, label, active, activeBg, disabled, danger, o
 const FAB_SIZE = 56;
 const BIG_CENTER_SIZE = 68;
 const SMALL_SIZE = 50;
-const ORBIT_R = 64;
+const ORBIT_R = 90;
 
 const styles = StyleSheet.create({
   container: {

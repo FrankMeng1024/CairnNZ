@@ -1365,49 +1365,22 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       // landed off the road centerline. Adding the lower bound keeps
       // the user-visible magnetism for real off-baseline endpoints
       // (the original PO requirement) while suppressing cosmetic stubs.
-      // v279 fix: revert MIN_MAGNET_M from 0 back to 5. PO confirmed
-      // the "tail-fork" was actually a visual artifact of inserting a
-      // baseline-projection point at the end: brush terminates on the
-      // baseline, but the baseline itself keeps rendering in both
-      // directions through that projection point → looks like a V/fork.
-      // With MIN=5 we don't snap small distances at all → brush
-      // simply ends ≤5m off the baseline, which is visually
-      // imperceptible on small screens (< 5px) and avoids the fork
-      // entirely. The 5-50m band still gets the densified connector.
+      // v279b: full rollback to v272 endpoint magnet behaviour. PO
+      // confirmed the densified head/tail connector (added in v273)
+      // is what introduced the visible "fork" — even with MIN=5
+      // there are subtle artefacts from the densified intermediate
+      // points being rendered as part of the brush polyline while
+      // baseline keeps rendering separately. Going back to the v268
+      // unshift / push of a single baseline-projection point.
+      // No densify. No <5m magnet (avoids the V-fork). No tail dup.
       const MIN_MAGNET_M = 5;
       const newPoints = [...stroke.points];
       const firstMagnet = first.distM > MIN_MAGNET_M
         && first.distM <= ENDPOINT_SNAP_M;
       const lastMagnet = last.distM > MIN_MAGNET_M
         && last.distM <= ENDPOINT_SNAP_M;
-      // v275: tighten densify from 3m → 1m. PO reported "开头依旧没连
-      // 上,preview 后才正确" with v273's 3m step. At 3m the connector
-      // looked like ~10 separate dashes for a 30m gap; at 1m it's
-      // continuous and visually merges with the rest of the stroke.
-      const DENSIFY_STEP_M = 1;
-      const densify = (a: LngLat, b: LngLat): LngLat[] => {
-        const d = haversineMetersLocal(a, b);
-        if (d <= DENSIFY_STEP_M) return [a];
-        const n = Math.ceil(d / DENSIFY_STEP_M);
-        const out: LngLat[] = [];
-        for (let k = 0; k < n; k++) {
-          const t = k / n;
-          out.push({
-            lng: a.lng + (b.lng - a.lng) * t,
-            lat: a.lat + (b.lat - a.lat) * t,
-          });
-        }
-        return out;
-      };
-      if (firstMagnet) {
-        const head = densify(first.point, stroke.points[0]);
-        newPoints.unshift(...head);
-      }
-      if (lastMagnet) {
-        const tail = densify(stroke.points[stroke.points.length - 1], last.point);
-        // skip first element (= last raw point, already in newPoints)
-        newPoints.push(...tail.slice(1), last.point);
-      }
+      if (firstMagnet) newPoints.unshift(first.point);
+      if (lastMagnet) newPoints.push(last.point);
       // v268 telemetry — see OtaBadge v268 note. Recorded EVERY endStroke
       // so we can see, post-hoc, whether the kink corresponds to a magnet
       // event or to raw user gesture data. KEY_EVENT → flushed immediately

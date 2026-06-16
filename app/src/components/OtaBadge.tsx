@@ -1035,8 +1035,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             "Save as Route" CTA: sage tinted background +
 //             1.5 sage border + sage text/icon. Consistent across
 //             the app for primary route-acting CTAs.
-export const OTA_VERSION = 279;
-//         v278: wheel — Move 68 + 3 small clustered bottom-left.
+// v280  PO direction.
+//         (1) Full rollback of the v273-introduced densify of the
+//             head/tail magnet connector. PO confirmed v279 still
+//             showed a fork at the tail; turning off densify (back
+//             to v272 unshift/push of a single baselineProj point)
+//             eliminates the densified-polyline-vs-baseline-render
+//             interaction that produces the V shape. Net: v272
+//             magnet behaviour exactly.
+//         (2) Wheel layout — three small orbiters at EQUAL distance
+//             from Move (PO: "希望每个小 icon 和 Move 的距离都一样").
+//             ORBIT_R = 90; angles 165° / 210° / 255° (ccw from +x)
+//             so all three sit on the inner / bottom-left arc.
+export const OTA_VERSION = 280;
+//         v279: revert MIN=0 + spread wheel + sage bottom buttons.
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and
