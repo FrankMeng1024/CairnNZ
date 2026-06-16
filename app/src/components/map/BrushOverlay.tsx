@@ -54,6 +54,10 @@ interface RawSample {
   cLng: number | null;
   cLat: number | null;
   zoom: number | null;
+  // v272: also capture bearing+pitch so post-hoc data shows whether the
+  // map was rotated or tilted at the time of each sample.
+  bearing: number | null;
+  pitch: number | null;
   droppedByGuard: boolean;  // updateInFlightRef gate dropped this frame
   unprojectFailed: boolean; // mapView.getCoordinateFromView returned bad
 }
@@ -72,6 +76,27 @@ let _currentStrokeIdForBuffer: string | null = null;
 // when the device rotates / safe-area changes.
 let _measuredViewW = 0;
 let _measuredViewH = 0;
+// v272: live camera state pushed in by RouteEditorScreen via
+// MapView's onCameraChanged event. We need bearing (= heading,
+// degrees clockwise from north) and pitch (degrees, 0 = looking
+// straight down) to correctly invert the projection when the user
+// rotates / tilts the map. v271 silently assumed bearing=0 and
+// pitch=0, so any rotated stroke landed wildly off the finger.
+let _camBearing = 0;
+let _camPitch = 0;
+let _camCenterLng: number | null = null;
+let _camCenterLat: number | null = null;
+let _camZoom: number | null = null;
+export function reportBrushOverlayCamera(state: {
+  centerLng: number; centerLat: number; zoom: number;
+  bearing: number; pitch: number;
+}): void {
+  _camCenterLng = state.centerLng;
+  _camCenterLat = state.centerLat;
+  _camZoom = state.zoom;
+  _camBearing = state.bearing;
+  _camPitch = state.pitch;
+}
 
 interface Props {
   /** Ref to the Mapbox MapView so we can unproject screen→geo. */
@@ -143,23 +168,29 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
   // gesture handler's absoluteX/absoluteY. Both are points, not physical pixels.
   async function unprojectSelfMercator(
     x: number, y: number,
-  ): Promise<{ lng: number; lat: number; cLng: number; cLat: number; zoom: number } | null> {
+  ): Promise<{ lng: number; lat: number; cLng: number; cLat: number; zoom: number; bearing: number; pitch: number } | null> {
     try {
       const map = mapViewRef.current;
       if (!map) return null;
-      if (typeof map.getCenter !== 'function' || typeof map.getZoom !== 'function') return null;
-      const [center, zoom] = await Promise.all([map.getCenter(), map.getZoom()]);
-      const cLng = Array.isArray(center) ? center[0] : (center?.lng ?? null);
-      const cLat = Array.isArray(center) ? center[1] : (center?.lat ?? null);
+      // v272: prefer event-pushed camera state (covers bearing+pitch);
+      // fall back to async getCenter+getZoom (assumes bearing=pitch=0)
+      // for the very first sample of a session before onCameraChanged
+      // has fired even once.
+      let cLng: number | null = _camCenterLng;
+      let cLat: number | null = _camCenterLat;
+      let zoom: number | null = _camZoom;
+      let bearing = _camBearing;
+      let pitch = _camPitch;
+      if (cLng == null || cLat == null || zoom == null) {
+        if (typeof map.getCenter !== 'function' || typeof map.getZoom !== 'function') return null;
+        const [center, z] = await Promise.all([map.getCenter(), map.getZoom()]);
+        cLng = Array.isArray(center) ? center[0] : (center?.lng ?? null);
+        cLat = Array.isArray(center) ? center[1] : (center?.lat ?? null);
+        zoom = z;
+        bearing = 0; // unknown — assume north-up
+        pitch = 0;
+      }
       if (cLng == null || cLat == null || zoom == null) return null;
-      // v271: use the OVERLAY-MEASURED size (from onLayout) as the source
-      // of truth. v270 data proved measured layout = 430x932 on the test
-      // device, while native getCoordinateFromView agrees with self-mercator
-      // to <1m at zoom 15.7 — confirming this layout matches MapView's
-      // actual coord system. Fallback to mapView.getSize() then RN
-      // Dimensions, but those are untrusted (v270 failed at low zoom
-      // because the fallback Dimensions value disagreed with the actual
-      // visual viewport on this device family).
       let viewW = _measuredViewW;
       let viewH = _measuredViewH;
       if (!viewW || !viewH) {
@@ -177,17 +208,45 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
         viewW = d.width;
         viewH = d.height;
       }
+      // v272: rotate the screen-space offset (relative to map center) by
+      // -bearing so we get the offset in the map's own (north-up) frame
+      // before applying inverse Mercator. Bearing is degrees clockwise
+      // from north (Mapbox convention), so the world-frame inverse is
+      // a rotation of -bearing.
+      // Pitch handling: when pitch=0, the map plane is parallel to the
+      // screen and a screen pixel maps linearly to a world pixel. Under
+      // non-zero pitch the projection is perspective and a single pixel
+      // maps to a varying ground distance (further-from-camera pixels
+      // cover more ground). Full perspective inversion needs the full
+      // 4x4 view-projection matrix which Mapbox doesn't expose. We
+      // approximate by ignoring pitch — the common Cairn case has
+      // pitch=0 (unless the user explicitly tilts). If pitch is large
+      // we still produce a more correct answer than v271 (which also
+      // ignored pitch) because we now at least de-rotate. Accuracy
+      // beyond ~10° pitch is best-effort.
+      const dxScreen = x - viewW / 2;
+      const dyScreen = y - viewH / 2;
+      const cos = Math.cos(-bearing * Math.PI / 180);
+      const sin = Math.sin(-bearing * Math.PI / 180);
+      // Screen y grows DOWN, but pre-rotation we want a math-standard
+      // frame (y up). After rotation we flip it back, so equivalently
+      // we negate dy here:
+      const dxWorld = dxScreen * cos - (-dyScreen) * sin;
+      const dyWorld = dxScreen * sin + (-dyScreen) * cos;
+      // dyWorld is in math-frame (north positive); flip to pixel-frame
+      // (south positive) so it matches the Mercator inverse below.
+      const dyWorldPx = -dyWorld;
       const TILE = 512;
       const scale = Math.pow(2, zoom) * TILE;
       const cPx = (cLng + 180) / 360 * scale;
       const sinLat = Math.sin(cLat * Math.PI / 180);
       const cPy = (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale;
-      const wPx = cPx + (x - viewW / 2);
-      const wPy = cPy + (y - viewH / 2);
+      const wPx = cPx + dxWorld;
+      const wPy = cPy + dyWorldPx;
       const lng = wPx / scale * 360 - 180;
       const n = Math.PI - 2 * Math.PI * wPy / scale;
       const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
-      return { lng, lat, cLng, cLat, zoom };
+      return { lng, lat, cLng, cLat, zoom, bearing, pitch };
     } catch {
       return null;
     }
@@ -245,6 +304,7 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
         lng: null, lat: null,
         selfLng: null, selfLat: null,
         cLng: null, cLat: null, zoom: null,
+        bearing: null, pitch: null,
         droppedByGuard: true, unprojectFailed: false,
       });
       return;
@@ -273,6 +333,8 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
           cLng: selfRes ? selfRes.cLng : null,
           cLat: selfRes ? selfRes.cLat : null,
           zoom: selfRes ? selfRes.zoom : null,
+          bearing: selfRes ? selfRes.bearing : null,
+          pitch: selfRes ? selfRes.pitch : null,
           droppedByGuard: false, unprojectFailed: true,
         });
         return;
@@ -287,6 +349,8 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
         cLng: selfRes ? selfRes.cLng : null,
         cLat: selfRes ? selfRes.cLat : null,
         zoom: selfRes ? selfRes.zoom : null,
+        bearing: selfRes ? selfRes.bearing : null,
+        pitch: selfRes ? selfRes.pitch : null,
         droppedByGuard: false, unprojectFailed: false,
       });
       // v271 FIX: use self-mercator as the source of truth for stroke

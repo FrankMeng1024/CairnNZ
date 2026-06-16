@@ -38,7 +38,7 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens'
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { DualLineLayer } from '../components/map/DualLineLayer';
-import { BrushOverlay } from '../components/map/BrushOverlay';
+import { BrushOverlay, reportBrushOverlayCamera } from '../components/map/BrushOverlay';
 import { BrushStrokeLayer } from '../components/map/BrushStrokeLayer';
 import { EditOverlayV236 } from '../components/map/EditOverlayV236';
 import { getFlagsSync } from '../config/featureFlags';
@@ -684,6 +684,25 @@ export function RouteEditorScreen() {
             zoomEnabled={!isEditing || editActiveTool === 'pan'}
             pitchEnabled={!isEditing || editActiveTool === 'pan'}
             rotateEnabled={!isEditing || editActiveTool === 'pan'}
+            onCameraChanged={(state: any) => {
+              // v272: forward camera state (center+zoom+bearing+pitch) to
+              // BrushOverlay's self-mercator unprojector. Without bearing
+              // & pitch, rotated/tilted maps produced strokes that landed
+              // far from the user's finger.
+              try {
+                const p = state?.properties;
+                if (!p) return;
+                const c = p.center;
+                if (!c || c.length < 2) return;
+                reportBrushOverlayCamera({
+                  centerLng: c[0],
+                  centerLat: c[1],
+                  zoom: p.zoom ?? 0,
+                  bearing: p.heading ?? 0,
+                  pitch: p.pitch ?? 0,
+                });
+              } catch { /* swallow */ }
+            }}
           >
             {/* v6.3 plan §2.3: enable Terrain DEM so queryTerrainElevation()
                 returns real altitudes for Mapbox-snap polylines. Optional —

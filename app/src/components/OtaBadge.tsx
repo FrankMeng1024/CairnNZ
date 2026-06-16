@@ -904,8 +904,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             projection matrix, so no quantization. v270 telemetry
 //             showed self f32-quantized count = 0 across all 9 strokes
 //             (vs native's 1-11 per stroke at zoom > 15).
-export const OTA_VERSION = 271;
-//         v270: Spike B parallel self-mercator (DIAGNOSTIC ONLY).
+// v272  FIX rotation. v271 self-mercator silently assumed bearing=0
+//         and pitch=0, so any rotated map produced strokes that landed
+//         60-270m off the finger (real-device telemetry, S3-S7).
+//         Fix: subscribe to MapView.onCameraChanged in RouteEditorScreen,
+//         push center+zoom+bearing+pitch to a module-scoped state in
+//         BrushOverlay; self-mercator now de-rotates the screen offset
+//         by -bearing before inverting Mercator. Pitch (tilt) is best-
+//         effort: we still use the planar inverse, accuracy degrades
+//         past ~10° tilt because Mapbox doesn't expose the full
+//         view-projection matrix. Telemetry now also records bearing
+//         + pitch per sample so we can post-hoc detect any remaining
+//         issues. Single-threshold 250m corridor (v271) preserved.
+export const OTA_VERSION = 272;
+//         v271: self-mercator primary + single 250m corridor.
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and
