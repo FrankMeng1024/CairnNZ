@@ -1,8 +1,8 @@
 # v0.2.5 Progress
 
 **自动模式启动时间**: 2026-06-16
-**当前 phase**: Phase 1A DONE → Phase 2A start
-**最后完成 sub-item**: 1A.16
+**当前 phase**: Phase 2A DONE → Phase 2B start
+**最后完成 sub-item**: 2A.14
 
 ## Phase 0 — 测试数据清理 + 脚手架 + lint
 
@@ -134,20 +134,41 @@
 
 ---
 
-## 下一步 (Phase 2A 入口)
+## 下一步 (Phase 2B 入口)
 
-Phase 2A 起始 sub-item:**2A.1 cairnSpawnV2.ts + 单测**
+Phase 2B 起始 sub-item:**2B.1 CairnBaseRenderer.cs**
 
-git tag for resume: `v0.2.5-phase-2A-start` (commit 82cacd3)
+git tag for resume: `v0.2.5-phase-2B-start`
 
-Phase 2A 重点:
-- 2A.1-2A.2 RN 端 cairnSpawnV2.ts + geoMath.ts(MUST 消费 _review/v0.2.5/fixtures/geomath_parity.json)
-- 2A.3 CairnSpawnerV2.cs(消费 AnchorAttachStrategy)
-- 2A.4 PendingAnchorRetryV2.cs(1s 失败拒绝,catch BlockerSentinelException 不是 Exception)
-- 2A.5 AnchorRecoveryV2.cs(Rule P mitigation 验证)
-- 2A.6 ArSessionLifecycleV2 + sessionInstanceId UUID 一次性(re-anchor 不重置)
-- 2A.7 useCairnStoreV2 + useArSessionStoreV2(RN store)
-- 2A.8 CairnBridgeV2 + MessageTypes
-- 2A.9 反 pattern B1
-- 2A.10 GPS 路径算法层 lock-step 单测(iOS / Android #if 分支输出等价)
-- 2A.11-2A.14 收口 + 4 眼 review
+详见 `_review/v0.2.5/progress/phase2A-DONE.md`
+
+---
+
+## Phase 2A — GPS 路径主流程 (RN + Unity)
+
+**Phase 2A 起始 git tag**: v0.2.5-phase-2A-start (commit 82cacd3)
+**Phase 2A 结束 commit**: (after this update)
+**Phase 2A 结束 git tag**: v0.2.5-phase-2B-start
+
+- [x] 2A.1 cairnSpawnV2.ts + 8 单测
+- [x] 2A.2 geoMath.ts + parity fixture (TS↔C# Rule G)
+- [x] 2A.3 CairnSpawnerV2.cs + 3 单测
+- [x] 2A.4 PendingAnchorRetryV2 + 5 单测(round-2 加 per-attempt telemetry)
+- [x] 2A.5 AnchorRecoveryV2 + 6 单测 + Rule P MitigateOrReset
+- [x] 2A.6 ArSessionLifecycleV2 + 7 单测
+- [x] 2A.7 useCairnStoreV2 + useArSessionStoreV2 + 15 单测
+- [x] 2A.8 CairnBridgeV2 RN + Unity (round-2 BLOCKER fix:加 Unity 端 + MiniJson + 4 单测)
+- [x] 2A.9 反 pattern B1(scope=Core only,round-2 紧化)
+- [x] 2A.10 GpsAlgorithmLockStepTests
+- [x] 2A.11 PROGRESS.md (本节)
+- [x] 2A.12 4 眼 review:sub#2A-1 (1B+4C, all fixed) + sub#2A-2 (2M+5Lo, all fixed/documented)
+- [x] 2A.13 修光 BLOCKER + CRITICAL → verdict PASS
+- [x] 2A.14 commit + tag v0.2.5-phase-2B-start
+
+### Phase 2A 出口判据自检
+- [x] cairn_lint v025 scope 全绿(48 files)
+- [x] npx jest src/services/v025 src/store/v025 全绿(46/46)
+- [x] lock_plan check 全绿
+- [x] 反 pattern B1 + B3 单测全绿
+- [x] Rule G parity fixture 14 cases (5 haversine + 3 enu_forward + 4 enu_inverse + 4 bearing)
+- [x] 4 眼 review 终态 PASS

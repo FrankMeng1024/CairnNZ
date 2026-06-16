@@ -8,6 +8,10 @@
 // position. CairnSpawnerV2.HandleAsync is the ONLY entry point that consumes
 // SpawnRequest.TargetXyz, and HandleAsync passes it through to AttachStrategy
 // (which only honors it on Tier-S Success). This test pins that contract.
+//
+// SCOPE: only Cairn.AR.V025.Core namespace is checked. If Phase 2B+ legitimately
+// needs another producer of AnchorAttachOutcome, refactor to extract an
+// IAttachOutcomeProducer interface and update this test to scan for implementers.
 
 using System.Linq;
 using NUnit.Framework;
@@ -17,18 +21,14 @@ namespace Cairn.AR.V025.Tests.AntiPattern
 {
     public class Spawn_AntiPattern_B1_NoTierAArkitXyz
     {
-        // Static-sniff test: assert that within v025 namespace, the only public method
-        // that returns AnchorAttachOutcome.AttachedTierS / TierGPlane / TierGRaycast /
-        // TierGFeature is AnchorAttachStrategy.AttachAsync.
-        // We achieve this by reflection: enumerate all v025 types, for each public
-        // async method whose return type is Task<AnchorAttachOutcome>, assert the
-        // declaring type is AnchorAttachStrategy.
-
         [Test]
         public void OnlyAnchorAttachStrategyReturnsAttachOutcome()
         {
             var asm = typeof(AnchorAttachStrategy).Assembly;
+            // Round-2 #2A-2-4: scope tightened to Cairn.AR.V025.Core namespace so Phase 2B
+            // additions in Visual/Assembly namespaces don't trigger false positives.
             var attachReturnMethods = asm.GetTypes()
+                .Where(t => t.Namespace == "Cairn.AR.V025.Core")
                 .SelectMany(t => t.GetMethods(System.Reflection.BindingFlags.Public |
                                               System.Reflection.BindingFlags.Instance |
                                               System.Reflection.BindingFlags.Static |
@@ -42,11 +42,10 @@ namespace Cairn.AR.V025.Tests.AntiPattern
                 })
                 .ToArray();
 
-            // Exactly one such method, declared on AnchorAttachStrategy
             Assert.AreEqual(1, attachReturnMethods.Length,
-                "Exactly one async method should return Task<AnchorAttachOutcome> across the entire v025 assembly");
+                "Exactly one async method should return Task<AnchorAttachOutcome> in Cairn.AR.V025.Core namespace");
             Assert.AreEqual(typeof(AnchorAttachStrategy), attachReturnMethods[0].DeclaringType,
-                "AnchorAttachStrategy must be the only producer of AnchorAttachOutcome");
+                "AnchorAttachStrategy must be the only producer of AnchorAttachOutcome in Core");
         }
 
         [Test]

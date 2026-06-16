@@ -8,17 +8,18 @@
  *   1. Compute the cairn's target XYZ in the assumed-relocalized AR frame
  *      from (cairn lat/lng, saved space origin lat/lng) using geoMath.ts.
  *   2. Send a spawn request over CairnBridgeV2 carrying:
- *        { type: 'v025/spawn', spaceId, cairnId, targetXyz, candidateGroundY }
- *      where candidateGroundY is the device's current GPS-derived altitude
- *      (informational; CairnSpawnerV2.cs ignores it for actual ground resolution
- *      because Tier-G plane / raycast wins; carried only for telemetry).
+ *        { type: 'v025/spawn', spaceId, cairnId, targetXyz }
  *   3. Wait for one of the bridge response messages:
  *        - v025/spawn-ok        → Promise resolves with AnchorAttachKind
  *        - v025/spawn-refused   → Promise rejects with SpawnRefusedError
  *        - v025/spawn-timeout   → after 8s of no response
  *
+ * Kill switch: useV025=false rejects immediately. See ADR-008 for fail-closed
+ * default rationale.
+ *
  * Rule G algorithmic lock-step: every math op delegates to geoMath.ts so the
- * Unity C# side sees the same XYZ result for the same lat/lng inputs.
+ * Unity C# side sees the same XYZ result for the same lat/lng inputs. Both
+ * sides consume _review/v0.2.5/fixtures/geomath_parity.json for drift detection.
  */
 
 import { isFlagEnabled } from './featureFlagsClient';
@@ -37,8 +38,6 @@ export interface SpawnRequestInput {
     cairnLng: number;
     /** Optional altitude diff (meters above origin); 0 if unknown. */
     cairnAltAboveOriginM?: number;
-    /** GPS-derived ground altitude — informational only. */
-    candidateGroundAltM?: number;
 }
 
 export interface SpawnAttemptResult {
@@ -94,7 +93,6 @@ export function buildSpawnRequest(input: SpawnRequestInput): {
     spaceId: string;
     cairnId: string;
     targetXyz: { x: number; y: number; z: number };
-    candidateGroundAltM: number | null;
 } {
     const enu = latLngToEnuMeters(
         input.savedOriginLat,
@@ -112,7 +110,6 @@ export function buildSpawnRequest(input: SpawnRequestInput): {
         spaceId: input.spaceId,
         cairnId: input.cairnId,
         targetXyz,
-        candidateGroundAltM: input.candidateGroundAltM ?? null,
     };
 }
 

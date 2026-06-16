@@ -39,6 +39,16 @@ interface EnuForwardCase {
     expected_north_m: number;
 }
 
+interface EnuInverseCase {
+    name: string;
+    origin_lat: number;
+    origin_lng: number;
+    east_m: number;
+    north_m: number;
+    expected_lat: number;
+    expected_lng: number;
+}
+
 interface BearingCase {
     name: string;
     lat1: number;
@@ -58,6 +68,7 @@ interface Fixture {
     };
     haversine_cases: HaversineCase[];
     enu_forward_cases: EnuForwardCase[];
+    enu_inverse_cases: EnuInverseCase[];
     bearing_cases: BearingCase[];
 }
 
@@ -95,6 +106,16 @@ describe('geoMath Rule G parity (C# ↔ TS lock-step)', () => {
                 const result = latLngToEnuMeters(c.origin_lat, c.origin_lng, c.lat, c.lng);
                 expect(Math.abs(result.east - c.expected_east_m)).toBeLessThanOrEqual(0.5);
                 expect(Math.abs(result.north - c.expected_north_m)).toBeLessThanOrEqual(0.5);
+            });
+        }
+    });
+
+    describe('enu_inverse_cases', () => {
+        for (const c of fixture.enu_inverse_cases) {
+            test(`enu inverse: ${c.name}`, () => {
+                const result = enuMetersToLatLng(c.origin_lat, c.origin_lng, c.east_m, c.north_m);
+                expect(Math.abs(result.lat - c.expected_lat)).toBeLessThanOrEqual(fixture.tolerance.latlng_degrees_abs * 100);
+                expect(Math.abs(result.lng - c.expected_lng)).toBeLessThanOrEqual(fixture.tolerance.latlng_degrees_abs * 100);
             });
         }
     });

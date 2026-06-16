@@ -12,31 +12,54 @@ namespace Cairn.AR.V025.Tests.Unit
 {
     public class PendingAnchorRetryV2Tests
     {
-        private static (PendingAnchorRetryV2, List<V025Event>) Make()
+        private static (PendingAnchorRetryV2, List<V025Event>, PhaseStepTracker) Make()
         {
             var tracker = new PhaseStepTracker("test-session");
             var captured = new List<V025Event>();
             var sentinel = new BlockerSentinel(tracker, ev => captured.Add(ev));
-            return (new PendingAnchorRetryV2(sentinel), captured);
+            return (new PendingAnchorRetryV2(sentinel, tracker, ev => captured.Add(ev)), captured, tracker);
         }
 
         [Test]
         public async Task ReturnsOnFirstAttemptSuccess_NoSentinelRaise()
         {
-            var (retry, captured) = Make();
+            var (retry, captured, _) = Make();
             var calls = 0;
             await retry.AwaitAttachOrFailAsync(
                 attempt: () => { calls++; return Task.FromResult(true); },
                 cancel: CancellationToken.None,
                 timeoutMs: 1000);
             Assert.AreEqual(1, calls);
-            Assert.AreEqual(0, captured.Count, "no sentinel events on first-try success");
+            // 1 success telemetry event (per-attempt), no sentinel raise event
+            Assert.AreEqual(1, captured.Count, "exactly one per-attempt telemetry event for first-try success");
+            Assert.AreEqual(V025Outcomes.Success, captured[0].Outcome);
+        }
+
+        [Test]
+        public async Task SuccessAfterTwoRetries_EmitsThreePerAttemptEvents()
+        {
+            var (retry, captured, _) = Make();
+            var calls = 0;
+            await retry.AwaitAttachOrFailAsync(
+                attempt: () =>
+                {
+                    calls++;
+                    return Task.FromResult(calls >= 3); // succeed on 3rd attempt
+                },
+                cancel: CancellationToken.None,
+                timeoutMs: 1000);
+            Assert.AreEqual(3, calls);
+            // 3 per-attempt events (2 failure + 1 success); no sentinel raise
+            Assert.AreEqual(3, captured.Count);
+            Assert.AreEqual(V025Outcomes.Failure, captured[0].Outcome);
+            Assert.AreEqual(V025Outcomes.Failure, captured[1].Outcome);
+            Assert.AreEqual(V025Outcomes.Success, captured[2].Outcome);
         }
 
         [Test]
         public void Timeout_RaisesBlockerSentinelException()
         {
-            var (retry, captured) = Make();
+            var (retry, captured, _) = Make();
             var ex = Assert.ThrowsAsync<BlockerSentinelException>(async () =>
                 await retry.AwaitAttachOrFailAsync(
                     attempt: () => Task.FromResult(false),
@@ -44,13 +67,14 @@ namespace Cairn.AR.V025.Tests.Unit
                     timeoutMs: 100));
             Assert.That(ex.Message, Does.Contain("100ms"));
             Assert.That(ex.Message, Does.Contain("refuse"));
-            Assert.AreEqual(1, captured.Count, "sentinel emits one event before throwing");
+            // At least one per-attempt failure event + one sentinel raise event
+            Assert.GreaterOrEqual(captured.Count, 2);
         }
 
         [Test]
         public void Cancellation_RaisesBlockerSentinelException()
         {
-            var (retry, _) = Make();
+            var (retry, _, _) = Make();
             var cts = new CancellationTokenSource();
             cts.Cancel();
             Assert.ThrowsAsync<BlockerSentinelException>(async () =>
@@ -64,7 +88,7 @@ namespace Cairn.AR.V025.Tests.Unit
         [Test]
         public void RetryDoesNotExceedTimeout_WallClock()
         {
-            var (retry, _) = Make();
+            var (retry, _, _) = Make();
             var start = DateTime.UtcNow;
             try
             {
@@ -75,7 +99,6 @@ namespace Cairn.AR.V025.Tests.Unit
             }
             catch (BlockerSentinelException) { /* expected */ }
             var elapsedMs = (DateTime.UtcNow - start).TotalMilliseconds;
-            // allow 500ms slop for backoff overshoot, but must NOT exceed by 1s+
             Assert.Less(elapsedMs, 1500, "PendingAnchorRetryV2 exceeded timeout — B3 regression");
         }
     }

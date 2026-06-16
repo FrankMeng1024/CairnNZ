@@ -71,5 +71,31 @@ namespace Cairn.AR.V025.Tests.Unit
             var id = s.BringUp();
             Assert.That(id, Does.StartWith("arv2-"));
         }
+
+        // Round-2 #2A-1-C02: Teardown-during-active-spawn must be safe.
+        // Pattern: caller snapshots Tracker at spawn start (DI'd into CairnSpawnerV2),
+        // so a later Teardown that nulls lifecycle.Tracker doesn't NRE the in-flight
+        // spawn.
+        [Test]
+        public void Teardown_DuringActiveSpawn_DoesNotBreakSnapshottedTracker()
+        {
+            var s = new ArSessionLifecycleV2();
+            s.BringUp();
+            s.Activate();
+
+            var trackerSnapshot = s.Tracker;
+            Assert.IsNotNull(trackerSnapshot);
+
+            s.Teardown();
+            Assert.IsNull(s.Tracker);
+            Assert.IsNull(s.SessionInstanceId);
+
+            // The snapshotted reference is still usable — emits do not NRE.
+            Assert.DoesNotThrow(() =>
+            {
+                var ev = trackerSnapshot.NextEvent("success", "post-teardown");
+                Assert.IsNotNull(ev.SessionInstanceId);
+            });
+        }
     }
 }

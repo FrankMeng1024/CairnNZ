@@ -21,7 +21,6 @@ export interface SpawnRequest {
     spaceId: string;
     cairnId: string;
     targetXyz: { x: number; y: number; z: number };
-    candidateGroundAltM: number | null;
 }
 
 export interface SaveSpaceRequest {

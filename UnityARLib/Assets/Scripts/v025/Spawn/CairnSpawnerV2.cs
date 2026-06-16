@@ -1,14 +1,15 @@
 // Phase 2A.3 — CairnSpawnerV2.
 //
 // Bridges incoming v025/spawn requests (from CairnBridgeV2) to AnchorAttachStrategy
-// and emits v025/spawn-ok or v025/spawn-refused responses.
+// and emits SpawnResponse. CairnSpawnerV2 does NOT instantiate the cairn prefab —
+// CairnBridgeV2 (Phase 2A.8) sends v025/spawn-ok/refused over the wire and Phase
+// 2B's CairnAssemblyV2 will subscribe to those wire messages to perform the
+// actual GameObject.Instantiate at outcome.Position.
 //
-// Responsibilities:
-//   1. Receive (spaceId, cairnId, targetXyz, candidateGroundAltM) from RN
-//   2. Read current ARPlaneManager candidate planes — convert to PlaneCandidate[]
-//   3. Invoke AnchorAttachStrategy.AttachAsync
-//   4. On Success: instantiate cairn prefab at outcome.Position, emit v025/spawn-ok
-//   5. On Refused: do NOT spawn anything, emit v025/spawn-refused via BlockerSentinel
+// Composition root (Phase 3 will formalize):
+//   ArSessionLifecycleV2 owns the PhaseStepTracker (per-session sessionInstanceId).
+//   TelemetryBatcherV2 (Phase 3.3) owns the Action<V025Event> emit delegate.
+//   The composition wires them: new CairnSpawnerV2(strategy, lifecycle.Tracker, batcher.AddEvent).
 //
 // Phase 1A 4-eye concerns_for_phase_2A:
 //   - PendingAnchorRetryV2 calls BlockerSentinel.RaiseRefuseSpawn → catch

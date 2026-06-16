@@ -92,7 +92,8 @@ describe('cairnSpawnV2', () => {
         expect(req.targetXyz.x).toBeCloseTo(expected.east, 5);
         expect(req.targetXyz.z).toBeCloseTo(expected.north, 5);
         expect(req.targetXyz.y).toBe(1.5);
-        expect(req.candidateGroundAltM).toBeNull();
+        // Round-2 #2A-1-C01: candidateGroundAltM removed from wire
+        expect(req).not.toHaveProperty('candidateGroundAltM');
     });
 
     test('buildSpawnRequest defaults Y=0 when alt missing', () => {
