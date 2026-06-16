@@ -17,8 +17,8 @@
   ],
   "enu_forward_cases": [
     { "name": "ny_to_self", "origin_lat": 40.7128, "origin_lng": -74.0060, "lat": 40.7128, "lng": -74.0060, "expected_east_m": 0.0, "expected_north_m": 0.0 },
-    { "name": "100m_east_of_ny", "origin_lat": 40.7128, "origin_lng": -74.0060, "lat": 40.7128, "lng": -73.99481, "expected_east_m": 99.99, "expected_north_m": 0.0 },
-    { "name": "100m_north_of_ny", "origin_lat": 40.7128, "origin_lng": -74.0060, "lat": 40.71370, "lng": -74.0060, "expected_east_m": 0.0, "expected_north_m": 100.07 }
+    { "name": "100m_east_of_ny", "origin_lat": 40.7128, "origin_lng": -74.0060, "lat": 40.7128, "lng": -74.00481354, "expected_east_m": 100.0, "expected_north_m": 0.0 },
+    { "name": "100m_north_of_ny", "origin_lat": 40.7128, "origin_lng": -74.0060, "lat": 40.71369932, "lng": -74.0060, "expected_east_m": 0.0, "expected_north_m": 100.0 }
   ],
   "enu_inverse_cases": [
     { "name": "ny_zero_offset", "origin_lat": 40.7128, "origin_lng": -74.0060, "east_m": 0, "north_m": 0, "expected_lat": 40.7128, "expected_lng": -74.0060 }
