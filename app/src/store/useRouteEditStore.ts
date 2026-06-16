@@ -1198,6 +1198,14 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       return null;
     }
     const id = genStrokeId();
+    // v268: log every begin so the brush gesture lifecycle is observable
+    // server-side without requiring a Preview/Save (key event, immediate flush).
+    sendEditDiag('brush_begin', {
+      strokeId: id,
+      firstPoint,
+      strokeIndex: state.brushStrokes.length,
+      baselinePointCount: state.originalPoints.length,
+    });
     set(s => ({
       undoStack: [...s.undoStack, {
         brushStrokes: s.brushStrokes,
@@ -1261,6 +1269,16 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     }
     const stroke = state.brushStrokes[idx];
     const baseLine = state.originalPoints;
+    // v268: dump full raw stroke before ANY processing (magnetism, validation,
+    // discard). KEY_EVENT → flushed immediately. This is the canonical record
+    // of what the user actually drew, independent of magnet decisions taken
+    // below. If the user reports a kink, this is the ground truth to compare
+    // against the rendered stroke.
+    sendEditDiag('brush_end', {
+      strokeId,
+      rawPoints: stroke.points,
+      rawPointCount: stroke.points.length,
+    });
     // Build the brushStrokes list MINUS the stroke being ended (so the
     // endpoint check doesn't trivially pass via the stroke's own points).
     const otherStrokes = state.brushStrokes.filter((_, i) => i !== idx);
@@ -1329,23 +1347,53 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         stroke.points[stroke.points.length - 1],
         baseLine,
       );
-      // v267 PO direction: insert B/C as new endpoints (don't replace).
-      // Replacing brush[0] with B (= baseline projection) eats the
-      // distance between user's actual fingertip down-point and B.
-      // Real-device case 3 showed: brush[0] was at lat=31.2331 (Yumin Rd
-      // junction), B was 0m away (already on baseline), but user's brush[1]
-      // (real second sample) was 38.7m away — replace produced
-      // [B, brush_after_first_was_overwritten] = effectively a 38m L-jump
-      // from B to brush[1]. Mapbox HMM saw this L and bounced the
-      // matched curve across Yanping Rd to a parallel road and back ("过
-      // 马路小 Z"). Insert preserves user's original brush[0] as a
-      // continuous transition point: new sequence is
-      // [B, brush[0], brush[1], ...] where B → brush[0] ≤ 50m by
-      // construction (the magnetism trigger condition) and brush[0] is
-      // the user's actual down-point — direction is natural, no L-jump.
+      // v268 PO direction: keep endpoint magnetism, but ONLY insert when
+      // the brush endpoint is far enough from baseline that not snapping
+      // would visibly leave the stroke disconnected. v267 used a single
+      // ENDPOINT_SNAP_M=50m gate which:
+      //   - if d ≤ 5m: B is essentially the same point as brush[0]
+      //     → unshifting B produces a visible duplicate / 5m stub
+      //     → no value, just clutter
+      //   - if 5m < d ≤ 50m: B is meaningfully off brush[0]
+      //     → unshift creates a 5–50m connector segment from baseline
+      //     to fingertip — this IS the visual "magnetism" PO wants
+      //     ("起点终点要有磁吸")
+      //   - if d > 50m: caller already rejected (anchorsToBaseline
+      //     check above) — never reach here
+      // v267's all-or-nothing 50m unshift produced a ~30m visual jut
+      // across Yanping Rd in the middle of the stroke when brush[0]
+      // landed off the road centerline. Adding the lower bound keeps
+      // the user-visible magnetism for real off-baseline endpoints
+      // (the original PO requirement) while suppressing cosmetic stubs.
+      const MIN_MAGNET_M = 5;
       const newPoints = [...stroke.points];
-      if (first.distM <= ENDPOINT_SNAP_M) newPoints.unshift(first.point);
-      if (last.distM <= ENDPOINT_SNAP_M) newPoints.push(last.point);
+      const firstMagnet = first.distM > MIN_MAGNET_M
+        && first.distM <= ENDPOINT_SNAP_M;
+      const lastMagnet = last.distM > MIN_MAGNET_M
+        && last.distM <= ENDPOINT_SNAP_M;
+      if (firstMagnet) newPoints.unshift(first.point);
+      if (lastMagnet) newPoints.push(last.point);
+      // v268 telemetry — see OtaBadge v268 note. Recorded EVERY endStroke
+      // so we can see, post-hoc, whether the kink corresponds to a magnet
+      // event or to raw user gesture data. KEY_EVENT → flushed immediately
+      // (no Preview/Save needed).
+      sendEditDiag('brush_endpoint_magnet', {
+        strokeId,
+        rawPointCount: stroke.points.length,
+        first: {
+          brushPoint: stroke.points[0],
+          baselineProjection: first.point,
+          distM: Math.round(first.distM * 100) / 100,
+          magnetApplied: firstMagnet,
+        },
+        last: {
+          brushPoint: stroke.points[stroke.points.length - 1],
+          baselineProjection: last.point,
+          distM: Math.round(last.distM * 100) / 100,
+          magnetApplied: lastMagnet,
+        },
+        finalPointCount: newPoints.length,
+      });
       const newStrokes = [...state.brushStrokes];
       newStrokes[idx] = { ...stroke, points: newPoints };
       set(s => ({
@@ -1357,6 +1405,13 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         editOpSeq: s.editOpSeq + 1,
       }));
     } else {
+      // No magnetism path — still log so we know the stroke ended.
+      sendEditDiag('brush_endpoint_magnet', {
+        strokeId,
+        rawPointCount: stroke.points.length,
+        skipped: true,
+        reason: stroke.points.length < 3 ? 'too_few_points' : 'no_baseline',
+      });
       set(s => ({ ...s, activeStrokeId: null, editCount: s.editCount + 1, editOpSeq: s.editOpSeq + 1 }));
     }
     persistSession(get(), get().sessionId ?? undefined);

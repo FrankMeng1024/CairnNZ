@@ -813,7 +813,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         dataflow review: SHIP verdict — no consumer of
 //         stroke.points[0] semantically depends on it being the
 //         baseline projection.
-export const OTA_VERSION = 267;
+//   268 — endStroke magnet: lower-bound 5m + telemetry on begin/end/magnet.
+//         v267 unshift was unconditional within ENDPOINT_SNAP_M=50m,
+//         producing visible 5–50m connector segments even when brush[0]
+//         was effectively on the baseline (d ≤ 5m). Real-device test
+//         after v267 OTA showed a ~30m yellow jut across Yanping Rd in
+//         the middle of the rendered stroke (PNG 158, no Preview yet —
+//         confirmed it's pure stroke.points geometry, not Mapbox).
+//         Fix: only unshift when 5m < d ≤ 50m. d ≤ 5m → no-op (B is
+//         essentially the same point as brush[0]; inserting it adds
+//         visual clutter with no functional value). d > 50m → already
+//         rejected by anchorsToBaseline check above. PO requirement
+//         "起点终点要有磁吸" preserved for the meaningful range.
+//         Also: brush_begin / brush_end / brush_endpoint_magnet now
+//         registered as KEY_EVENTS in editDiagSender, so the gesture
+//         lifecycle is uploaded immediately on stroke end without
+//         requiring Preview/Save/backgrounding. Telemetry includes
+//         raw stroke points + magnet projection distances + which
+//         endpoints were actually magnetized — enough to diagnose
+//         any future "莫名磁吸" report from raw_jsonl alone.
+export const OTA_VERSION = 268;
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

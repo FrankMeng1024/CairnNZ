@@ -45,12 +45,22 @@ export type TelemetryKind =
   | 'brush_splice_done'
   // v266: full raw data dump for offline analysis
   | 'brush_full_dump'
-  | 'brush_final_dump';
+  | 'brush_final_dump'
+  // v268: brush gesture lifecycle (no Preview required) for diagnosing
+  // the in-progress stroke artifact (e.g. mid-segment kink before Preview).
+  | 'brush_begin'
+  | 'brush_end'
+  | 'brush_endpoint_magnet';
 
 /** Events that bypass the debounce timer (high-value or terminal events). */
 const KEY_EVENTS: ReadonlyArray<TelemetryKind> = [
   'brush_save_committed',
   'brush_mapbox_error',
+  // v268: ensure end-of-stroke + magnet diag uploads even when the user
+  // never previews/saves and never backgrounds the app — this is exactly
+  // the "I just tested and got a kink" scenario PO reported on v267.
+  'brush_end',
+  'brush_endpoint_magnet',
 ];
 
 interface QueuedEvent {
