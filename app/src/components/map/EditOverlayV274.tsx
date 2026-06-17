@@ -133,18 +133,12 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
           <View
             pointerEvents="box-none"
             style={[styles.wheelCenterAnchor, {
-              // v283: Move sits exactly where the FAB was — top-right
-              // corner. PO direction: "G 类的 move 正好" + "Reset 边
-              // 缘到屏顶 = Draw 边缘到屏右" symmetric.
-              // Move-center y = insets.top + 8 + FAB/2; Move-edge top
-              // = insets.top + 8. Reset (180°) center y = same as
-              // Move-y; Reset upper edge to top of Move container =
-              // (FAB/2 - SMALL/2) px because Reset is smaller. Same
-              // exact distance from Draw right-edge to right of FAB
-              // by symmetry. Therefore Reset-edge to screen-top =
-              // Draw-edge to screen-right = insets.top + 8 + (FAB-SMALL)/2.
-              top: insets.top + 8 + FAB_SIZE / 2,
-              right: Spacing.md + FAB_SIZE / 2,
+              // Push the wheel center DOWN from the FAB position so
+              // the upper-arc orbiter (Draw at 120°) doesn't clip
+              // the screen top. R=90 + Draw vertical offset = 78px,
+              // need ~95px of headroom above Move.
+              top: insets.top + 8 + FAB_SIZE / 2 + ORBIT_R * 0.85,
+              right: Spacing.md + FAB_SIZE / 2 + 6,
             }]}
           >
             {/* Visible orbit arc — a 1.5px sage stroke from 120° to
@@ -184,35 +178,33 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
               </Text>
             </TouchableOpacity>
 
-            {/* v283 wheel: 1/4 circle arc layout. Move at top-right
-                anchor, 3 small icons on a R=ORBIT_R circle.
-                  Reset : 180° (directly left of Move)
-                  Undo  : 225° (lower-left, on diagonal)
-                  Draw  : 270° (directly below Move)
-                All three same distance from Move = ORBIT_R. Reset
-                and Draw are mirror-symmetric across the Move→Undo
-                diagonal. PO confirmed "G class layout 正好". */}
+            {/* Three small orbiters on the equilateral triangle whose
+                centroid is Move. Angles ccw from +x:
+                  Draw  : 120° (upper-left of Move, slightly above)
+                  Undo  : 180° (directly left)
+                  Reset : 240° (lower-left of Move, mirrored to Draw)
+                Equal R from Move; equal arc between each pair. */}
             <SmallOrbit
-              dx={-ORBIT_R}
-              dy={0}
-              icon="RotateCcw" label="Reset"
-              danger
-              onPress={handleResetTap}
+              dx={ORBIT_R * Math.cos(120 * Math.PI / 180)}
+              dy={-ORBIT_R * Math.sin(120 * Math.PI / 180)}
+              icon="Pencil" label="Draw"
+              active={safeTool === 'brush'}
+              activeBg="#c87941"
+              onPress={() => pickTool('brush')}
             />
             <SmallOrbit
-              dx={-ORBIT_R * Math.SQRT1_2}
-              dy={ORBIT_R * Math.SQRT1_2}
+              dx={ORBIT_R * Math.cos(180 * Math.PI / 180)}
+              dy={-ORBIT_R * Math.sin(180 * Math.PI / 180)}
               icon="Undo2" label="Undo"
               disabled={!canUndo}
               onPress={handleUndoTap}
             />
             <SmallOrbit
-              dx={0}
-              dy={ORBIT_R}
-              icon="Pencil" label="Draw"
-              active={safeTool === 'brush'}
-              activeBg="#c87941"
-              onPress={() => pickTool('brush')}
+              dx={ORBIT_R * Math.cos(240 * Math.PI / 180)}
+              dy={-ORBIT_R * Math.sin(240 * Math.PI / 180)}
+              icon="RotateCcw" label="Reset"
+              danger
+              onPress={handleResetTap}
             />
           </View>
         </>
@@ -334,7 +326,7 @@ function SmallOrbit({ dx, dy, icon, label, active, activeBg, disabled, danger, o
 const FAB_SIZE = 56;
 const BIG_CENTER_SIZE = 68;
 const SMALL_SIZE = 50;
-const ORBIT_R = 110;
+const ORBIT_R = 90;
 
 const styles = StyleSheet.create({
   container: {
