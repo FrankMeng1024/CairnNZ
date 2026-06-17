@@ -600,7 +600,34 @@ public class GroundYResolver : MonoBehaviour
         // regressions in this branch are caught.
         ServicePendingTransition();
 
-        if (_tracks.Count == 0) return;
+        // v0.2.5 A1-bootstrap fix: when no cairns are placed yet, _tracks is
+        // empty and Update() would return immediately — OnTierAObserved() was
+        // never called, so A1 FSM stayed UNLOCKED forever and RN showed
+        // "Scanning the ground" indefinitely even when a valid floor plane
+        // was present. Scan plane manager every 12 frames (same cadence as
+        // the per-track requery) so A1 can reach ARMED/LOCKED before any
+        // cairn is planted, enabling the plant button.
+        if (_tracks.Count == 0)
+        {
+            if (arCamera != null && planeManager != null && (Time.frameCount % 12) == 0
+                && _state != A1State.FROZEN)
+            {
+                float camY = arCamera.transform.position.y;
+                float hMin = Mathf.Min(0.8f, Mathf.Max(0.2f, camY * 0.55f));
+                bool req = hMin < 0.65f;
+                float minArea = req ? 2.0f : 1.5f;
+                foreach (var plane in planeManager.trackables)
+                {
+                    if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
+                    if (!IsAcceptableFloorPlane(plane, camY, hMin, minArea,
+                            requireFloorClassification: false,
+                            requireAreaEvenIfFloor: false)) continue;
+                    OnTierAObserved();
+                    break;
+                }
+            }
+            return;
+        }
         float dt = Time.deltaTime;
 
         // v0.2.3 Stage 7 (A7) — phone-flat protection (review-corrected).
