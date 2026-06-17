@@ -38,28 +38,18 @@ namespace Cairn.AR.V025.EditorTools
         [MenuItem("Cairn/V025 Headless Capture")]
         public static void RunFromMenu() { Run(); }
 
-        /// <summary>
-        /// Create materials for v025 visual components. In batch mode (no Editor resources),
-        /// we create runtime materials from found shaders or fall back to Standard/URP-Lit.
-        /// </summary>
-        static Material MakeMaterial(string shaderPath, Color color)
+        static Shader FindShaderWithFallback(string shaderPath)
         {
             var shader = Shader.Find(shaderPath);
             if (shader == null)
             {
-                // URP fallback hierarchy
                 shader = Shader.Find("Universal Render Pipeline/Lit")
                       ?? Shader.Find("Universal Render Pipeline/Simple Lit")
                       ?? Shader.Find("Standard");
             }
             if (shader == null)
-            {
                 Debug.LogWarning($"[V025Capture] no shader found for {shaderPath}, using Error shader");
-                return new Material(Shader.Find("Hidden/InternalErrorShader") ?? Shader.Find("Standard"));
-            }
-            var mat = new Material(shader);
-            mat.color = color;
-            return mat;
+            return shader ?? Shader.Find("Hidden/InternalErrorShader") ?? Shader.Find("Standard");
         }
 
         public static void Run()
@@ -72,11 +62,26 @@ namespace Cairn.AR.V025.EditorTools
             Directory.CreateDirectory(outDir);
             Debug.Log($"[V025Capture] output dir: {outDir}");
 
-            // Pre-build materials so cairn components get proper colors (not magenta).
-            var stoneMat    = MakeMaterial("Cairn/V025/CairnBase",      new Color(0.55f, 0.45f, 0.35f));
-            var ringMat     = MakeMaterial("Cairn/V025/CairnCeremonyRing", new Color(0.98f, 0.57f, 0.24f));
-            var iconMat     = MakeMaterial("Cairn/V025/CairnTypeIcon",   new Color(0.9f, 0.8f, 0.5f));
-            Debug.Log($"[V025Capture] materials: stone={stoneMat.shader.name} ring={ringMat.shader.name} icon={iconMat.shader.name}");
+            // Build materials using the CORRECT property names for each v025 shader.
+            // CairnBase uses _BaseColor; CairnTypeIcon uses _IconColor; CairnCeremonyRing uses _RingColor.
+            // mat.color sets _Color which these shaders do NOT have — use SetColor() with the right name.
+            var stoneMat = new Material(FindShaderWithFallback("Cairn/V025/CairnBase"));
+            stoneMat.SetColor("_BaseColor", new Color(0.55f, 0.45f, 0.35f));
+
+            var ringMat = new Material(FindShaderWithFallback("Cairn/V025/CairnCeremonyRing"));
+            ringMat.SetColor("_RingColor", new Color(0.98f, 0.57f, 0.24f));
+            ringMat.SetFloat("_BaseAlpha", 0.5f);   // increase from 0.25 so ring is visible in capture
+            ringMat.SetFloat("_PeakAlpha", 1.0f);
+
+            var iconMat = new Material(FindShaderWithFallback("Cairn/V025/CairnTypeIcon"));
+            iconMat.SetColor("_IconColor", new Color(0.2f, 0.15f, 0.08f, 1f)); // dark brown = visible on warm bg
+            iconMat.SetFloat("_SdfThreshold", 0.5f);
+            iconMat.SetFloat("_SdfSmooth", 0.04f);
+
+            // Particles: use the v025 particle shader if available; fallback to URP Particles/Unlit.
+            var particleMat = new Material(FindShaderWithFallback("Cairn/V025/CairnTypeParticle"));
+
+            Debug.Log($"[V025Capture] materials: stone={stoneMat.shader.name} ring={ringMat.shader.name} icon={iconMat.shader.name} particle={particleMat.shader.name}");
 
             // Build render target.
             var rt = new RenderTexture(WIDTH, HEIGHT, 24, RenderTextureFormat.ARGB32);
@@ -87,11 +92,12 @@ namespace Cairn.AR.V025.EditorTools
             var cam   = camGo.AddComponent<Camera>();
             cam.backgroundColor = new Color(0.95f, 0.93f, 0.88f, 1f); // warm off-white
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.fieldOfView = 45f;
+            cam.fieldOfView = 60f;
             cam.targetTexture = rt;
-            // Position: slightly elevated, looking down at cairn at origin.
-            camGo.transform.position = new Vector3(0f, 0.8f, -1.5f);
-            camGo.transform.LookAt(new Vector3(0f, 0.2f, 0f));
+            // AR-realistic angle: camera ~1.4m high, 1.0m away (like holding phone at chest height)
+            // This makes the ceremony ring visible at ground level (Y=0) around the cairn base.
+            camGo.transform.position = new Vector3(0f, 1.4f, -1.0f);
+            camGo.transform.LookAt(new Vector3(0f, 0f, 0f));
 
             // Directional light.
             var lightGo = new GameObject("DirectionalLight");
@@ -116,7 +122,7 @@ namespace Cairn.AR.V025.EditorTools
                 try
                 {
                     cairnRoot = V025PrefabFactory.BuildRuntimePrefab(
-                        baseMaterial: stoneMat, iconMaterial: iconMat, ringMaterial: ringMat);
+                        baseMaterial: stoneMat, iconMaterial: iconMat, ringMaterial: ringMat, particleMaterial: particleMat);
                     if (cairnRoot == null)
                     {
                         Debug.LogError($"[V025Capture] BuildRuntimePrefab returned null for type={type}");
@@ -124,32 +130,43 @@ namespace Cairn.AR.V025.EditorTools
                         continue;
                     }
 
-                    // Set type on the icon renderer.
-                    var iconR = cairnRoot.GetComponentInChildren<CairnTypeIconRenderer>();
-                    if (iconR != null)
-                    {
-                        iconR.CairnType = type;
-                        iconR.BuildOrRefresh();
-                    }
-
-                    // Activate at world origin.
+                    // Activate at world origin FIRST — triggers Awake()+OnEnable() on all children so
+                    // _particles and _block fields are initialized before we reference them.
                     cairnRoot.transform.position = Vector3.zero;
                     cairnRoot.SetActive(true);
 
-                    // Simulate Update() calls to advance ceremony ring + particles.
+                    // Apply type AFTER SetActive so Awake() has run (GetComponentInChildren works on
+                    // active hierarchy; TypeParticleV2Controller._particles is non-null after Awake).
+                    var iconR = cairnRoot.GetComponentInChildren<CairnTypeIconRenderer>();
+                    if (iconR != null) { iconR.CairnType = type; iconR.BuildOrRefresh(); }
+                    var particleCtrl = cairnRoot.GetComponentInChildren<TypeParticleV2Controller>();
+                    if (particleCtrl != null) { particleCtrl.CairnType = type; }
+
+                    // Pre-fetch ceremony controller + cache renderer + private fields for per-frame sweep.
+                    var ceremony = cairnRoot.GetComponentInChildren<CeremonyV2Controller>();
+                    System.Reflection.FieldInfo elapsedField = null;
+                    UnityEngine.Renderer ceremonyRenderer    = null;
+                    if (ceremony != null)
+                    {
+                        elapsedField     = typeof(CeremonyV2Controller).GetField("_elapsed",
+                            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                        ceremonyRenderer = ceremony.GetComponent<UnityEngine.Renderer>();
+                    }
+
                     for (int f = 0; f < FRAMES; f++)
                     {
                         float t = f * FRAME_DT;
-                        // Manually tick ceremony controller.
-                        var ceremony = cairnRoot.GetComponentInChildren<CeremonyV2Controller>();
-                        if (ceremony != null)
+
+                        // Advance ceremony sweep angle for this frame (mirrors CeremonyV2Controller.Update).
+                        if (ceremony != null && elapsedField != null && ceremonyRenderer != null)
                         {
-                            // Use the static math to advance the sweep visually.
-                            var angle = CeremonySweepMath.SweepAngleRadians(t, 1.0f);
-                            // CeremonyV2Controller will advance on its own when we call
-                            // Update manually below — but Update is only called in PlayMode.
-                            // In Edit mode, simulate by calling the public tick if available,
-                            // or just capture the static state (ring is always visible).
+                            elapsedField.SetValue(ceremony, t);
+                            float sweepAngle = CeremonySweepMath.SweepAngleRadians(t, 1.0f);
+                            var block = new MaterialPropertyBlock();
+                            ceremonyRenderer.GetPropertyBlock(block);
+                            block.SetFloat("_SweepAngle", sweepAngle);
+                            block.SetFloat("_SweepHalfWidth", 0.6f);
+                            ceremonyRenderer.SetPropertyBlock(block);
                         }
 
                         // Render frame.

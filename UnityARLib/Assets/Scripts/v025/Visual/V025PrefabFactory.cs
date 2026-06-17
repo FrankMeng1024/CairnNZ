@@ -20,7 +20,7 @@ namespace Cairn.AR.V025.Visual
         /// Build a complete inactive cairn prefab GameObject. Caller is responsible for
         /// activating + parenting + positioning. Returns the root.
         /// </summary>
-        public static GameObject BuildRuntimePrefab(Material baseMaterial = null, Material iconMaterial = null, Material ringMaterial = null)
+        public static GameObject BuildRuntimePrefab(Material baseMaterial = null, Material iconMaterial = null, Material ringMaterial = null, Material particleMaterial = null)
         {
             var root = new GameObject("V025_Cairn_Prefab") { hideFlags = HideFlags.None };
             root.SetActive(false); // caller activates after positioning
@@ -61,6 +61,23 @@ namespace Cairn.AR.V025.Visual
                 var ringMatField = typeof(CeremonyV2Controller).GetField("_ringMaterial",
                     System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
                 if (ringMatField != null) ringMatField.SetValue(ceremonyCtrl, ringMaterial);
+            }
+
+            // Type particles — ambient per-type particle effect.
+            // CairnAssemblyV2.ApplyTypeToChildren searches for TypeParticleV2Controller
+            // in children; it must exist in the prefab hierarchy for the type effect to fire.
+            var particlesGo = new GameObject("TypeParticles");
+            particlesGo.transform.SetParent(root.transform, false);
+            var ps = particlesGo.AddComponent<ParticleSystem>();
+            particlesGo.AddComponent<TypeParticleV2Controller>();
+            var psMain = ps.main;
+            psMain.playOnAwake = false;
+            // Assign particle material to the auto-added ParticleSystemRenderer.
+            // Without a material, the renderer uses Unity's Default-Particle which is pink in URP.
+            if (particleMaterial != null)
+            {
+                var psRenderer = particlesGo.GetComponent<ParticleSystemRenderer>();
+                if (psRenderer != null) psRenderer.sharedMaterial = particleMaterial;
             }
 
             // Distance fader applied at root for global alpha
