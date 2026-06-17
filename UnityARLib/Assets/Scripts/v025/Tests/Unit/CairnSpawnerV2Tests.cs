@@ -38,7 +38,7 @@ namespace Cairn.AR.V025.Tests.Unit
             var emitted = new List<V025Event>();
             var spawner = new CairnSpawnerV2(strategy, tracker, ev => emitted.Add(ev));
 
-            var req = new CairnSpawnerV2.SpawnRequest("space-1", "cairn-1",
+            var req = new CairnSpawnerV2.SpawnRequest("space-1", "cairn-1", "cairn",
                 new float3(5, 0, 7), System.Array.Empty<PlaneCandidate>());
             var resp = await spawner.HandleAsync(req, CancellationToken.None);
 
@@ -59,7 +59,7 @@ namespace Cairn.AR.V025.Tests.Unit
             var emitted = new List<V025Event>();
             var spawner = new CairnSpawnerV2(strategy, tracker, ev => emitted.Add(ev));
 
-            var req = new CairnSpawnerV2.SpawnRequest("space-1", "cairn-1",
+            var req = new CairnSpawnerV2.SpawnRequest("space-1", "cairn-1", "cairn",
                 new float3(99, 99, 99), System.Array.Empty<PlaneCandidate>());
             var resp = await spawner.HandleAsync(req, CancellationToken.None);
 
@@ -79,7 +79,7 @@ namespace Cairn.AR.V025.Tests.Unit
             var tracker = new PhaseStepTracker("test-session");
             var spawner = new CairnSpawnerV2(strategy, tracker, _ => { });
 
-            var req = new CairnSpawnerV2.SpawnRequest(null, "cairn-1",
+            var req = new CairnSpawnerV2.SpawnRequest(null, "cairn-1", "cairn",
                 float3.zero, System.Array.Empty<PlaneCandidate>());
             Assert.ThrowsAsync<System.ArgumentNullException>(async () =>
                 await spawner.HandleAsync(req, CancellationToken.None));

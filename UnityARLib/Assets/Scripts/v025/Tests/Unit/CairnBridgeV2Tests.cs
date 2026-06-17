@@ -7,10 +7,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using Unity.Mathematics;
+using UnityEngine;
 using Cairn.AR.V025.Bridge;
 using Cairn.AR.V025.Core;
 using Cairn.AR.V025.Session;
 using Cairn.AR.V025.Spawn;
+using Cairn.AR.V025.Visual;
 
 namespace Cairn.AR.V025.Tests.Unit
 {
@@ -68,7 +70,9 @@ namespace Cairn.AR.V025.Tests.Unit
             var emitted = new List<V025Event>();
             var spawner = new CairnSpawnerV2(strategy, lifecycle.Tracker, ev => emitted.Add(ev));
             var transport = new FakeTransport();
-            var bridge = new CairnBridgeV2(transport, spawner, new StaticPlanes(planes), lifecycle, ev => emitted.Add(ev));
+            var assemblyGo = new GameObject("TestAssembly");
+            var assembly = assemblyGo.AddComponent<CairnAssemblyV2>();
+            var bridge = new CairnBridgeV2(transport, spawner, assembly, new StaticPlanes(planes), lifecycle, ev => emitted.Add(ev));
             bridge.Start();
             return (bridge, transport, lifecycle, emitted);
         }
@@ -135,7 +139,9 @@ namespace Cairn.AR.V025.Tests.Unit
             // Build a tracker placeholder; CairnSpawnerV2 needs a tracker but for this test it isn't invoked.
             var placeholderTracker = new PhaseStepTracker("placeholder");
             var spawner = new CairnSpawnerV2(strategy, placeholderTracker, _ => { });
-            var bridge = new CairnBridgeV2(transport, spawner, new StaticPlanes(), lifecycle, _ => { });
+            var assemblyGo = new GameObject("TestAssembly2");
+            var assembly = assemblyGo.AddComponent<CairnAssemblyV2>();
+            var bridge = new CairnBridgeV2(transport, spawner, assembly, new StaticPlanes(), lifecycle, _ => { });
             bridge.Start();
 
             transport.Emit("{\"type\":\"v025/begin-session\"}");
