@@ -111,9 +111,18 @@ namespace Cairn.AR
         {
             _t = 0f;
             float startTime = Time.time;
+            // v0.2.5 — read total duration from OTA at coroutine start.
+            // Falls back to the SerializeField default. This allows tuning
+            // ceremony length without rebuilding the ipa: RN can push
+            // CeremonyDurationSec to anything in [0.5, 6.0]s.
+            var ceremonyGlobals = CairnGlobals.Instance;
+            float dur = ceremonyGlobals != null
+                ? ceremonyGlobals.GetForType(null, "CeremonyDurationSec", _totalDuration)
+                : _totalDuration;
+            if (dur < 0.1f) dur = _totalDuration;  // safety: never freeze the ceremony
             while (_t < 1f)
             {
-                _t = Mathf.Clamp01((Time.time - startTime) / _totalDuration);
+                _t = Mathf.Clamp01((Time.time - startTime) / dur);
                 ApplyState(_t);
                 yield return null;
             }

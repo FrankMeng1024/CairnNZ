@@ -135,6 +135,28 @@ public partial class CairnGlobals
         // must explicitly opt in via OTA).
         B("ConeStrandEnabled", false);
 
+        // v0.2.5 review-fix — turn previously-hardcoded magic numbers into
+        // OTA-tunable globals so we don't have to ship a new ipa to retune
+        // when iOS/ARKit behavior changes. All have sane defaults that
+        // match the v0.2.5 hardcoded values so existing behavior is preserved.
+        // Trust-RN delta threshold for Tier-A spawn (PortalSpawner.cs).
+        // When |Resolver.Y - data.Y| < this, trust RN's hit-test data.y;
+        // else trust the resolver. v287 hardcoded 0.30 was too tight for
+        // iOS 26 merged-plane center drift; v288 hardcoded 0.60 fixed it
+        // but is now also tunable.
+        F("TrustRnDeltaThresholdM", null, 0.05f, 2.0f, 0.60f);
+        // ContainsXZ AABB tolerance multiplier on plane.size half-extent.
+        // 0.5 = strict (cairn must be inside plane edge); 1.0 = double the
+        // plane footprint. v288 hardcoded 0.7 is the empirical sweet spot.
+        F("ContainsXZTolerance",    null, 0.3f,  1.5f, 0.7f);
+        // Ceremony total duration (seconds). v293 hardcoded 2.5 was the
+        // "not too short / not dragging" sweet spot for the new timeline.
+        F("CeremonyDurationSec",    null, 0.5f,  6.0f, 2.5f);
+        // Plant distance forward of camera (meters). v293 hardcoded 4m
+        // was the "reachable with a small downward tilt" sweet spot.
+        // 0 = use pitch-based formula (legacy); >0 = fixed distance.
+        F("PlantDistanceM",         null, 0.5f,  30f,  4.0f);
+
         // §G.1d Text (additions to existing TextScale/Height/Alpha — 8 new)
         F("TextBevelDepth",       null, 0,    1,    0.5f);
         F("TextGlowIntensity",    null, 0,    3,    1.0f);

@@ -458,23 +458,27 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
                 {
                     // Story A: Tier-A 优先 data.y, GroundYResolver 仅作 sanity
                     float deltaY = Mathf.Abs(candidateY - data.y);
-                    // v0.2.5 — widen trust-RN window from 0.30 → 0.60.
-                    // Reason: iOS 26 ARKit aggressively merges adjacent floor
-                    // planes; the merged plane's center.y can drift 0.4-0.5m
-                    // below the visual floor (telemetry session
-                    // diag-plant-1781692474879 showed dataY=0.19 vs
-                    // ResolverY=-0.29 → cairn appeared 0.47m below ground).
-                    // RN's data.y comes from ARRaycast hit-test the user
-                    // explicitly aimed at — that's stronger evidence of
-                    // the visual floor than ARKit's global plane Y.
-                    if (deltaY < 0.60f)
+                    // v0.2.5 — trust-RN window now OTA-tunable
+                    // (TrustRnDeltaThresholdM, default 0.60). Reason: iOS 26
+                    // ARKit aggressively merges adjacent floor planes; the
+                    // merged plane's center.y can drift 0.4-0.5m below the
+                    // visual floor (telemetry session diag-plant-1781692474879
+                    // showed dataY=0.19 vs ResolverY=-0.29 → cairn appeared
+                    // 0.47m below ground). RN's data.y comes from ARRaycast
+                    // hit-test the user explicitly aimed at — that's stronger
+                    // evidence of the visual floor than ARKit's global plane Y.
+                    var globalsTrustRn = CairnGlobals.Instance;
+                    float trustThreshold = globalsTrustRn != null
+                        ? globalsTrustRn.GetForType(null, "TrustRnDeltaThresholdM", 0.60f)
+                        : 0.60f;
+                    if (deltaY < trustThreshold)
                     {
                         groundY = data.y;
                         groundDetected = true;
                         diagGroundSrc = "TierA-RN-trusted";
                         diagTierAFound = true;
                         UnityLogger.IForward("v22-SPAWN-TIER-A-TRUST-RN",
-                            $"id={data.id} dataY={data.y:F2} ResolverY={candidateY:F2} delta={deltaY:F2}m (<0.60 信 RN)");
+                            $"id={data.id} dataY={data.y:F2} ResolverY={candidateY:F2} delta={deltaY:F2}m (<{trustThreshold:F2} 信 RN)");
                     }
                     else
                     {
@@ -484,7 +488,7 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
                         diagGroundSrc = (tier == GroundYResolver.Tier.A) ? "TierA-Resolver-override" : "TierB-Resolver-override";
                         diagTierAFound = (tier == GroundYResolver.Tier.A);
                         UnityLogger.IForward("v22-SPAWN-TIER-A-OVERRIDE",
-                            $"id={data.id} dataY={data.y:F2} ResolverY={candidateY:F2} delta={deltaY:F2}m (>=0.60 信 Resolver)");
+                            $"id={data.id} dataY={data.y:F2} ResolverY={candidateY:F2} delta={deltaY:F2}m (>={trustThreshold:F2} 信 Resolver)");
                     }
                 }
                 else

@@ -394,14 +394,17 @@ public class GroundYResolver : MonoBehaviour
     {
         var c = plane.center;
         var s = plane.size;
-        // v0.2.5 — widen AABB tolerance from 0.5× to 0.7× so cairns near
-        // (but slightly outside) a small detected plane still pass the
-        // containment check. Original strict half-extent would reject any
-        // cairn whose XZ landed on the plane edge or just past it (common
-        // when ARKit's plane size is conservative). 0.7× = 40% wider
-        // tolerance, still rejects cairns clearly off the plane.
-        float halfX = s.x * 0.7f;
-        float halfZ = s.y * 0.7f;
+        // v0.2.5 — AABB tolerance is OTA-tunable (ContainsXZTolerance, default 0.7).
+        // 0.5 = strict (cairn must be inside plane edge); 1.0 = double the
+        // plane footprint. 0.7 was the empirical sweet spot when iOS 26
+        // ARKit reports conservative plane sizes; tweakable from RN if a
+        // future iOS update changes plane reporting.
+        var globals = CairnGlobals.Instance;
+        float tol = globals != null
+            ? globals.GetForType(null, "ContainsXZTolerance", 0.7f)
+            : 0.7f;
+        float halfX = s.x * tol;
+        float halfZ = s.y * tol;
         return Mathf.Abs(worldXZ.x - c.x) <= halfX &&
                Mathf.Abs(worldXZ.z - c.z) <= halfZ;
     }

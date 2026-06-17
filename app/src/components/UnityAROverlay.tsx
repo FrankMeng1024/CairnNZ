@@ -699,15 +699,26 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 if (p.y < best.y) best = p;
               }
               groundYRef.current = best.y;
-              // v0.2.5 OTA fix — Unity-side A1 FSM stays UNLOCKED when no
-              // cairn exists (GroundYResolver.Update returns early on
-              // _tracks.Count==0, so OnTierAObserved never fires). Server-
-              // side build has the proper fix, but until users get the new
-              // ipa we bootstrap A1=LOCKED from RN once we've accepted a
-              // ≥0.5m² floor plane that passed the same F4 anti-tabletop
-              // rules as Unity's Tier-A check. Safe because: (a) only
-              // promotes when a real Tier-A-equivalent plane is observed,
-              // (b) no-op once Unity's own A1State message arrives.
+              // v0.2.5 — RN-side A1 bootstrap. Originally a quick fix for
+              // "Scanning the ground" never clearing because Unity-side
+              // GroundYResolver.Update returned early when _tracks.Count==0.
+              // The Unity-side bug was properly fixed in v286 (Update now
+              // scans planeManager every 12 frames regardless of track count
+              // → A1 reaches ARMED → LOCKED on its own).
+              //
+              // Why this RN bootstrap is INTENTIONALLY kept (not removed
+              // even though the root cause is fixed in Unity):
+              //   1. Defense in depth: if iOS/ARKit ever returns plane data
+              //      to RN's PlaneDetected handler that Unity's resolver
+              //      didn't surface (different filter paths), RN can still
+              //      unblock the plant button.
+              //   2. Faster perceived response: PlaneDetected fires before
+              //      Unity's 12-frame poll on the same plane. Unblocks plant
+              //      button ~200ms sooner.
+              //   3. Idempotent: only promotes if not already LOCKED/FROZEN,
+              //      and Unity's subsequent A1State events still flow through
+              //      (with the v286 anti-downgrade rule preventing a stray
+              //      ARMED from kicking us back).
               const _curA1 = useArOriginStore.getState().a1State;
               if (_curA1 !== 'LOCKED' && _curA1 !== 'FROZEN') {
                 useArOriginStore.getState().onA1State('LOCKED' as A4_A1State);
