@@ -389,35 +389,33 @@ public partial class PortalSpawner
         go.transform.localRotation = Quaternion.Euler(90, 0, 0);
         var globals = CairnGlobals.Instance;
         float rmul = globals != null ? globals.GetForType(null, "ContactShadowRadiusMul", 1.0f) : 1.0f;
-        // v0.2.5 — apply ContactShadowAlpha. Was registered but never consumed,
-        // so OTA pushes had no effect. Apply via material instance _Color.a so
-        // the alpha reaches the shader (shadow material uses Particles/Unlit
-        // or Sprite/Default which honors color alpha).
+        // v0.2.5 — apply ContactShadowAlpha. Was registered in CairnGlobalsExt
+        // but never consumed; OTA pushes had no effect.
+        // ShadowBlobShader uses `_Intensity` (range 0..1, default 0.45) as
+        // the darkness multiplier — there is NO _Color / _BaseColor uniform
+        // (the shader does Multiply blend toward _ShadowColor scaled by
+        // _Intensity * _InstanceAlpha * _CairnGlobalAlpha). v290 wrote
+        // _Color which the shader never read; v292 added sharedMaterial
+        // assignment but still wrote the wrong uniform. v293 (this) writes
+        // _Intensity directly so the OTA value (0.95 in v288 grounded
+        // defaults) actually shows up as a darker shadow.
         float ashadow = globals != null ? globals.GetForType(null, "ContactShadowAlpha", 0.55f) : 0.55f;
         UnityLogger.IForward("v288-CONTACT-SHADOW",
-            $"alpha={ashadow:F2} radiusMul={rmul:F2} (was 0.55/1.0 default)");
+            $"intensity={ashadow:F2} radiusMul={rmul:F2} (uniform=_Intensity, was 0.45 default)");
         go.transform.localScale = new Vector3(1.4f * rmul, 1.4f * rmul, 1f);
         var r = go.GetComponent<MeshRenderer>();
-        // First assign the source material so the renderer has a valid base
-        // (otherwise r.material returns Unity's default-pink missing-shader
-        // placeholder). Then read .material to obtain a per-cairn instance,
-        // mutate alpha, and write back via material instance setter to bypass
-        // SRP Batcher's CBUFFER mask (same pattern as PortalRing _BaseColor
-        // v287 fix). Setting alpha on sharedMaterial would leak across all
-        // cairns at once.
+        // Assign sharedMaterial first so r.material derives a real instance
+        // from the configured ShadowBlobShader (otherwise r.material returns
+        // Unity's default-pink missing-shader placeholder).
         r.sharedMaterial = contactShadowMaterial;
         var matInst = r.material;
-        if (matInst.HasProperty("_Color"))
+        if (matInst.HasProperty("_Intensity"))
         {
-            var col = matInst.GetColor("_Color");
-            col.a = ashadow;
-            matInst.SetColor("_Color", col);
+            matInst.SetFloat("_Intensity", ashadow);
         }
-        else if (matInst.HasProperty("_BaseColor"))
+        if (matInst.HasProperty("_InstanceAlpha"))
         {
-            var col = matInst.GetColor("_BaseColor");
-            col.a = ashadow;
-            matInst.SetColor("_BaseColor", col);
+            matInst.SetFloat("_InstanceAlpha", 1.0f);
         }
         r.shadowCastingMode = ShadowCastingMode.Off;
         r.receiveShadows = false;
