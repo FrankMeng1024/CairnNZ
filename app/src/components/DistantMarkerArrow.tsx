@@ -86,8 +86,13 @@ function emaAngle(prev: number, target: number, alpha: number): number {
 export function DistantMarkerArrow({
   marker,
   user,
-  visibleAboveMeters = 15,
-  hideBelowMeters = 15,
+  // v0.2.5 OTA — show direction arrow much sooner. Original 15m only
+  // helped for far hikes; users plant cairns 1-10m apart indoors and
+  // were left with no indicator when the cairn was off-screen but only
+  // a few meters away. 3m floor lets the AR overlay take over once the
+  // user is right next to the cairn (Unity 3D model becomes visible).
+  visibleAboveMeters = 3,
+  hideBelowMeters = 3,
 }: Props) {
   const [distance, setDistance] = useState<number | null>(null);
   const [arrowAngle, setArrowAngle] = useState(0); // 0..360, relative to user heading

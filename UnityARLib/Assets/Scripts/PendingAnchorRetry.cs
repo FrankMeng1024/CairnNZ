@@ -52,10 +52,19 @@ namespace Cairn.AR
             _planeMgr = planeMgr;
             _cam = cam;
 
-            // Hide cairn while pending — user shouldn't see it half-placed
-            _hiddenRenderers = GetComponentsInChildren<Renderer>(includeInactive: false);
-            foreach (var r in _hiddenRenderers)
-                r.enabled = false;
+            // v0.2.5 — DO NOT hide the cairn during retry. User feedback:
+            // "感觉对于相机角度等要求很高 ... 如果用户在 mark 上方不扫
+            //  mark, mark 会不展示么 理论上用户在范围内就应该展示了".
+            // The previous behavior hid all renderers while RetryCoroutine
+            // tried to find a plane to attach to; if the user wasn't aiming
+            // at the cairn, the retry took up to 30s during which the cairn
+            // was invisible. Showing the cairn at the estimated XYZ from
+            // the start (parented to the GameObject's current transform)
+            // gives immediate feedback. If a plane is found later, the
+            // retry's AttachAnchor reparents the cairn to the real anchor —
+            // the visible position barely changes (estimated pose is
+            // already correct within ARKit jitter).
+            _hiddenRenderers = System.Array.Empty<Renderer>();
 
             _started = true;
             StartCoroutine(RetryCoroutine());

@@ -534,33 +534,25 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             }
 #endif
         }
-        // v0.2.5 — distance fallback: when QueryGroundY couldn't find a
-        // plane covering this cairn's XZ, accept RN's data.y if the cairn
-        // is far from the camera (> 2.0m horizontal). Reason: ARKit plane
-        // manager only tracks surfaces the user actively pointed at; for
-        // remote cairns the user planted earlier (different session, walked
-        // away, or aimed across the room), no nearby plane will ever appear.
-        // RN's data.y was set at the original plant time from a real
-        // ARRaycast hit-test, so it is a trusted historical ground anchor.
-        // Without this fallback, water/danger/etc. cairns more than ~2m
-        // from the camera permanently fail to spawn (Branch-B invariant
-        // would otherwise hide them forever).
+        // v0.2.5 — RN data.y fallback when QueryGroundY couldn't find a
+        // plane covering this cairn's XZ. Removed the 2m distance gate from
+        // v287.1 because user feedback: cairns < 2m away (e.g. user 1m from
+        // a planted cairn but looking elsewhere) were also rejected. ARKit
+        // plane manager only tracks surfaces the user actively points at;
+        // for ANY cairn the user planted earlier (any distance), the surface
+        // beneath it may not be in the current plane set. data.y was set at
+        // the original plant from a real ARRaycast hit-test, so it is the
+        // best available ground anchor regardless of distance.
+        // User invariant: "I planted it here, it should still be here" —
+        // every successful Tier-A plant guarantees data.y is real.
         if (!groundDetected && isTierA_spawn)
         {
-            float spawnCamX = spawnCam != null ? spawnCam.transform.position.x : 0f;
-            float spawnCamZ = spawnCam != null ? spawnCam.transform.position.z : 0f;
-            float dxRC = data.x - spawnCamX;
-            float dzRC = data.z - spawnCamZ;
-            float horizDist = Mathf.Sqrt(dxRC * dxRC + dzRC * dzRC);
-            if (horizDist >= 2.0f)
-            {
-                groundY = data.y;
-                groundDetected = true;
-                diagGroundSrc = "TierA-RN-distance-fallback";
-                diagTierAFound = true;
-                UnityLogger.IForward("v22-SPAWN-DISTANCE-FALLBACK",
-                    $"id={data.id} type={data.type} dist={horizDist:F2}m dataY={data.y:F2} (>=2m, no local plane, 信 RN)");
-            }
+            groundY = data.y;
+            groundDetected = true;
+            diagGroundSrc = "TierA-RN-no-plane-fallback";
+            diagTierAFound = true;
+            UnityLogger.IForward("v22-SPAWN-RN-FALLBACK",
+                $"id={data.id} type={data.type} dataY={data.y:F2} (no plane covers XZ, 信 RN historical)");
         }
         if (!groundDetected)
         {
@@ -1018,7 +1010,14 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         // ─── Sparse rising particles ───
         AttachWhisperParticles(container, color, preset.particleStartColor, fireflyRateM, haloIntenM);
 
-        if (groundYResolver != null) groundYResolver.RegisterCairn(container.transform);
+        // v0.2.5 — register cairn with immediate lock so the resolver does
+        // not lerp it during the first few seconds. PortalSpawner already
+        // determined groundY via hit-test or RN data.y; resolver's per-frame
+        // requery would otherwise pull the cairn toward whatever plane Y
+        // ARKit reports next (possibly different by 0.05-0.20m), producing
+        // the user-visible "mark 在眼前微调最后才固定" effect.
+        if (groundYResolver != null)
+            groundYResolver.RegisterCairn(container.transform, lockImmediately: true, initialTier: GroundYResolver.Tier.A);
 
         // ─── v199 cinematic-rebuild superlayer (per cinematic-ar-rebuild
         // .md §B.1). Adds Pebble/TypeChip/RuneText/HeroRibbons/FarShaft/

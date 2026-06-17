@@ -392,13 +392,36 @@ public class GroundYResolver : MonoBehaviour
     {
         var c = plane.center;
         var s = plane.size;
-        float halfX = s.x * 0.5f;
-        float halfZ = s.y * 0.5f;
+        // v0.2.5 — widen AABB tolerance from 0.5× to 0.7× so cairns near
+        // (but slightly outside) a small detected plane still pass the
+        // containment check. Original strict half-extent would reject any
+        // cairn whose XZ landed on the plane edge or just past it (common
+        // when ARKit's plane size is conservative). 0.7× = 40% wider
+        // tolerance, still rejects cairns clearly off the plane.
+        float halfX = s.x * 0.7f;
+        float halfZ = s.y * 0.7f;
         return Mathf.Abs(worldXZ.x - c.x) <= halfX &&
                Mathf.Abs(worldXZ.z - c.z) <= halfZ;
     }
 
     public void RegisterCairn(Transform cairnTransform)
+    {
+        RegisterCairn(cairnTransform, lockImmediately: false, initialTier: Tier.C);
+    }
+
+    /// <summary>
+    /// v0.2.5 — register cairn with explicit lock + tier so PortalSpawner
+    /// can pin a freshly-planted cairn at spawn time instead of letting it
+    /// drift through the lerp loop. Without this, every cairn enters
+    /// `locked=false, currentTier=C` and Update()'s requeryThisFrame loop
+    /// re-queries plane Y every 12 frames; if QueryGroundY returns a
+    /// slightly different Y (ARKit jitter ~0.05-0.20m during initial
+    /// convergence), the cairn lerps toward the new target — visually
+    /// the user sees the cairn "微调" for 0.5-2s before settling.
+    /// PortalSpawner already determined the spawn Y from a hit-test, so
+    /// there is no need for the resolver to second-guess it.
+    /// </summary>
+    public void RegisterCairn(Transform cairnTransform, bool lockImmediately, Tier initialTier = Tier.A)
     {
         if (cairnTransform == null) return;
         for (int i = 0; i < _tracks.Count; i++)
@@ -410,9 +433,9 @@ public class GroundYResolver : MonoBehaviour
             go = cairnTransform,
             currentY = cairnTransform.position.y,
             targetY = cairnTransform.position.y,
-            currentTier = Tier.C,
-            locked = false,
-            stableSince = -1f,
+            currentTier = lockImmediately ? initialTier : Tier.C,
+            locked = lockImmediately,
+            stableSince = lockImmediately ? Time.time : -1f,
         });
     }
 

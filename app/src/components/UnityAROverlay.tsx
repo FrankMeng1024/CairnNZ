@@ -508,8 +508,8 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
               ['WispHeight', 0.7],           // 1.0 → 0.7 — wisps below face
               ['TextHeight', 0.7],           // 1.0 → 0.7 — runes at 0.91m not 1.3m
               ['LikeBadgeFloatHeight', 1.0], // 1.6 → 1.0 — heart badge at chest
-              ['ContactShadowAlpha', 0.85],  // 0.55 → 0.85 — strong dark shadow #1 grounding cue
-              ['ContactShadowRadiusMul', 1.4], // 1.0 → 1.4 — wider shadow base
+              ['ContactShadowAlpha', 0.95],  // 0.85 → 0.95 — even darker, max grounding cue
+              ['ContactShadowRadiusMul', 1.6], // 1.4 → 1.6 — wider+stronger contact disc
               // v227 — DISABLE summon animation. v226 telemetry id=791-792
               // confirmed cairn rises from finalY-0.30 UP to finalY (ease-out
               // cubic, 0.4s). User's report "出现的时候是升上来的 → 感觉浮空"
