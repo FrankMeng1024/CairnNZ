@@ -545,14 +545,30 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         // best available ground anchor regardless of distance.
         // User invariant: "I planted it here, it should still be here" —
         // every successful Tier-A plant guarantees data.y is real.
+        //
+        // v290 review-fix Bug 1: sanity-check data.y before trusting. Bad
+        // values (NaN/Inf or extreme delta from camY) would cause cairn to
+        // appear above ceiling or below floor — drop these into the reject
+        // path instead of placing the cairn on a fictional ground.
         if (!groundDetected && isTierA_spawn)
         {
-            groundY = data.y;
-            groundDetected = true;
-            diagGroundSrc = "TierA-RN-no-plane-fallback";
-            diagTierAFound = true;
-            UnityLogger.IForward("v22-SPAWN-RN-FALLBACK",
-                $"id={data.id} type={data.type} dataY={data.y:F2} (no plane covers XZ, 信 RN historical)");
+            bool dataYUsable =
+                !float.IsNaN(data.y) && !float.IsInfinity(data.y) &&
+                Mathf.Abs(data.y - spawnCamY) < 5.0f;
+            if (dataYUsable)
+            {
+                groundY = data.y;
+                groundDetected = true;
+                diagGroundSrc = "TierA-RN-no-plane-fallback";
+                diagTierAFound = true;
+                UnityLogger.IForward("v22-SPAWN-RN-FALLBACK",
+                    $"id={data.id} type={data.type} dataY={data.y:F2} (no plane covers XZ, 信 RN historical)");
+            }
+            else
+            {
+                UnityLogger.IForward("v22-SPAWN-RN-FALLBACK-REJECT",
+                    $"id={data.id} type={data.type} dataY={data.y} camY={spawnCamY:F2} (NaN/Inf or |delta|>=5m, refusing fallback)");
+            }
         }
         if (!groundDetected)
         {
@@ -1013,12 +1029,12 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
         // ─── Sparse rising particles ───
         AttachWhisperParticles(container, color, preset.particleStartColor, fireflyRateM, haloIntenM);
 
-        // v0.2.5 — register cairn with immediate lock so the resolver does
-        // not lerp it during the first few seconds. PortalSpawner already
-        // determined groundY via hit-test or RN data.y; resolver's per-frame
-        // requery would otherwise pull the cairn toward whatever plane Y
-        // ARKit reports next (possibly different by 0.05-0.20m), producing
-        // the user-visible "mark 在眼前微调最后才固定" effect.
+        // v0.2.5 — register cairn for the resolver's lerp loop. Note: cairns
+        // with an ARAnchor parent (the normal post-attach state) are skipped
+        // by Update() before the locked check, so lockImmediately is mostly
+        // defensive — it only matters for the brief un-anchored window
+        // (PendingAnchorRetry) when the resolver could otherwise lerp Y
+        // toward the wrong plane.
         if (groundYResolver != null)
             groundYResolver.RegisterCairn(container.transform, lockImmediately: true, initialTier: GroundYResolver.Tier.A);
 

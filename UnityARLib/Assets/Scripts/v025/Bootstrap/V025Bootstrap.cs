@@ -125,27 +125,42 @@ namespace Cairn.AR.V025.Bootstrap
 
             // v0.2.5 OTA — auto-instantiate a SendMessage-based transport so
             // RN can drive v025 without a separate native bridge module.
-            // RN side calls UnityView.postMessage("v025", "OnRNMessage", json),
+            // RN side calls UnityView.postMessage("V025Bootstrap", "OnRNMessage", json),
             // this MonoBehaviour's OnRNMessage(string) forwards into the
             // transport's _onMessage handler, which CairnBridgeV2.OnRawMessage
             // is subscribed to. Outbound v025/* messages flow back through
-            // UnityNativeBridge.SendMessage (sendMessageToMobileApp) → JS
+            // UnityNativeBridge.Send (sendMessageToMobileApp) → JS
             // onUnityMessage where cairnBridgeV2.ts filters by type prefix.
-            _autoTransport = new SendMessageTransport();
+            //
+            // _autoTransport is field-initialized (see field decl below) so
+            // OnRNMessage can never NRE before this runs. We reuse the same
+            // instance — calling SetBridgeTransport with it wires the bridge.
             SetBridgeTransport(_autoTransport);
             // Bridge can also be replaced by a test harness via SetBridgeTransport
             // (the previous Bridge.Dispose() in SetBridgeTransport handles cleanup).
         }
 
-        private SendMessageTransport _autoTransport;
+        private SendMessageTransport _autoTransport = new SendMessageTransport();
 
         /// <summary>
-        /// RN entry point — UnityView.postMessage("v025", "OnRNMessage", json).
+        /// RN entry point — UnityView.postMessage("V025Bootstrap", "OnRNMessage", json).
         /// Forwards into the bridge transport so CairnBridgeV2 sees it.
+        /// _autoTransport is field-initialized so even if SendMessage races
+        /// Awake() (it shouldn't — Unity holds messages until Awake returns)
+        /// the receive path never NREs. Bridge is wired during Awake; messages
+        /// arriving before Awake completes are received by transport but not
+        /// yet routed to a CairnBridgeV2 subscription — Subscribe() in
+        /// SetBridgeTransport just registers _onMessage, no buffering needed
+        /// for normal lifecycle.
         /// </summary>
         public void OnRNMessage(string raw)
         {
-            _autoTransport?.Receive(raw);
+            if (_autoTransport == null)
+            {
+                Debug.LogWarning("[v025/Bootstrap] OnRNMessage called before transport init; dropping: " + raw);
+                return;
+            }
+            _autoTransport.Receive(raw);
         }
 
         /// <summary>
