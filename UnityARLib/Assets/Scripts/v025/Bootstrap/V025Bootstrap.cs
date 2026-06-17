@@ -123,9 +123,58 @@ namespace Cairn.AR.V025.Bootstrap
             // ARPlaneManager-backed adapter via SetPlaneSource().
             _planeSource = new SimplePlaneCandidateSource(null);
 
-            // Bridge will be created when SetBridgeTransport() is called by the
-            // iOS-side UnityMessageBridge or by a test harness. Not auto-instantiated
-            // because there's no default transport that makes sense in Editor.
+            // v0.2.5 OTA — auto-instantiate a SendMessage-based transport so
+            // RN can drive v025 without a separate native bridge module.
+            // RN side calls UnityView.postMessage("v025", "OnRNMessage", json),
+            // this MonoBehaviour's OnRNMessage(string) forwards into the
+            // transport's _onMessage handler, which CairnBridgeV2.OnRawMessage
+            // is subscribed to. Outbound v025/* messages flow back through
+            // UnityNativeBridge.SendMessage (sendMessageToMobileApp) → JS
+            // onUnityMessage where cairnBridgeV2.ts filters by type prefix.
+            _autoTransport = new SendMessageTransport();
+            SetBridgeTransport(_autoTransport);
+            // Bridge can also be replaced by a test harness via SetBridgeTransport
+            // (the previous Bridge.Dispose() in SetBridgeTransport handles cleanup).
+        }
+
+        private SendMessageTransport _autoTransport;
+
+        /// <summary>
+        /// RN entry point — UnityView.postMessage("v025", "OnRNMessage", json).
+        /// Forwards into the bridge transport so CairnBridgeV2 sees it.
+        /// </summary>
+        public void OnRNMessage(string raw)
+        {
+            _autoTransport?.Receive(raw);
+        }
+
+        /// <summary>
+        /// Default transport: outbound goes via UnityNativeBridge.SendMessage
+        /// (which fires JS onUnityMessage). Inbound is fed by V025Bootstrap.OnRNMessage.
+        /// </summary>
+        private sealed class SendMessageTransport : IBridgeTransport
+        {
+            private System.Action<string> _onMessage;
+            public void Send(string jsonPayload)
+            {
+                // CairnBridgeV2 sends compact JSON; reuse the same C# native
+                // bridge legacy uses (UnityNativeBridge.Send) so a
+                // single onUnityMessage stream reaches RN. cairnBridgeV2.ts
+                // filters to only handle messages starting with "v025/".
+                UnityNativeBridge.Send(jsonPayload);
+            }
+            public System.IDisposable Subscribe(System.Action<string> onMessage)
+            {
+                _onMessage = onMessage;
+                return new Sub(() => _onMessage = null);
+            }
+            public void Receive(string raw) { _onMessage?.Invoke(raw); }
+            private sealed class Sub : System.IDisposable
+            {
+                private readonly System.Action _onDispose;
+                public Sub(System.Action a) { _onDispose = a; }
+                public void Dispose() { _onDispose?.Invoke(); }
+            }
         }
 
         private async void Update()

@@ -473,6 +473,20 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           );
           crashLogger.uploadDiagnostic(API_BASE_URL, 'unity-ar-ready').catch(() => undefined);
           props.onStatus?.({ glReady: true, cairnCount: props.markers.length });
+          // v0.2.5 — v025 begin-session. Triggers ARWorldMap load (if a saved
+          // world map exists for this space) so cairn anchors can be re-grounded
+          // to the same physical world the user planted them in. No-op on ipas
+          // built before V025Bootstrap auto-instantiates SendMessageTransport
+          // (the Unity GameObject "v025" must have a method "OnRNMessage" for
+          // this to land — otherwise UnityView.postMessage silently drops it).
+          // The lat/lng-based spawn flow continues unchanged either way.
+          try {
+            unityRef.current?.postMessage('v025', 'OnRNMessage',
+              JSON.stringify({ type: 'v025/begin-session' }));
+            crashLogger.breadcrumb(`${TAG}:v025-begin-session-sent`);
+          } catch (e: any) {
+            crashLogger.breadcrumb(`${TAG}:v025-begin-session-error ${String(e?.message ?? e).slice(0, 80)}`);
+          }
           // v226 — auto-push "ground-anchored visual defaults" per
           // adversarial subagent diagnosis of v225 telemetry id=783-788
           // user complaint "全部浮空".
