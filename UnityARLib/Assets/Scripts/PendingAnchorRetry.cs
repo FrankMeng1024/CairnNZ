@@ -65,6 +65,8 @@ namespace Cairn.AR
             // the visible position barely changes (estimated pose is
             // already correct within ARKit jitter).
             _hiddenRenderers = System.Array.Empty<Renderer>();
+            UnityLogger.IForward("v288-PENDING-RETRY-START",
+                $"id={_markerId} xz=({intendedXZ.x:F2},{intendedXZ.z:F2}) y={intendedY:F2} deadline={deadlineSec:F1}s visible-from-start=true");
 
             _started = true;
             StartCoroutine(RetryCoroutine());

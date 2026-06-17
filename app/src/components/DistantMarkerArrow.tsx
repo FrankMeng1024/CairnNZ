@@ -22,6 +22,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { crashLogger } from '../services/crashLogger';
 
 export type Marker = {
   id: string;
@@ -158,6 +159,21 @@ export function DistantMarkerArrow({
       pulseAnim.setValue(0);
     }
   }, [distance, pulseAnim]);
+
+  // v288 — log visibility decision once per state transition (not per render)
+  // so we can verify in telemetry that the arrow is appearing when expected.
+  const prevVisStateRef = useRef<string>('init');
+  useEffect(() => {
+    let nextState: string;
+    if (distance === null) nextState = 'no-distance';
+    else if (distance < hideBelowMeters) nextState = `hidden-too-close(${distance.toFixed(1)}m<${hideBelowMeters}m)`;
+    else if (distance > 500) nextState = 'hidden-too-far(>500m)';
+    else nextState = `visible(${distance.toFixed(1)}m)`;
+    if (nextState !== prevVisStateRef.current) {
+      crashLogger.breadcrumb(`distant-arrow:${nextState} hideBelow=${hideBelowMeters}`);
+      prevVisStateRef.current = nextState;
+    }
+  }, [distance, hideBelowMeters]);
 
   if (distance === null) return null;
   if (distance < hideBelowMeters) return null;

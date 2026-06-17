@@ -231,6 +231,7 @@ public class GroundYResolver : MonoBehaviour
             // and contain worldXZ, choose the one with HIGHEST plane.center.y.
             ARPlane bestFloor = null;
             float bestFloorY = float.NegativeInfinity;
+            int floorCandidateCount = 0;
             foreach (var plane in planeManager.trackables)
             {
                 if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
@@ -238,6 +239,7 @@ public class GroundYResolver : MonoBehaviour
                                              requireFloorClassification: true,
                                              requireAreaEvenIfFloor: requireLargerArea)) continue;
                 if (!ContainsXZ(plane, worldXZ)) continue;
+                floorCandidateCount++;
                 if (plane.center.y > bestFloorY)
                 {
                     bestFloorY = plane.center.y;
@@ -250,7 +252,7 @@ public class GroundYResolver : MonoBehaviour
                 tier = Tier.A;
                 OnTierAObserved();
                 UnityLogger.IForward("v22-GROUND-Y-SOURCE",
-                    $"tier=A-floor-classified y={y:F2} camY={camY:F2} delta={(camY - y):F2} planeArea={(bestFloor.size.x * bestFloor.size.y):F2}");
+                    $"tier=A-floor-classified y={y:F2} camY={camY:F2} delta={(camY - y):F2} planeArea={(bestFloor.size.x * bestFloor.size.y):F2} candidates={floorCandidateCount}");
                 return true;
             }
             // Pass 2: unclassified-but-large planes — same max-Y selection
@@ -437,6 +439,8 @@ public class GroundYResolver : MonoBehaviour
             locked = lockImmediately,
             stableSince = lockImmediately ? Time.time : -1f,
         });
+        UnityLogger.IForward("v288-REGISTER-CAIRN",
+            $"name={cairnTransform.name} y={cairnTransform.position.y:F2} locked={lockImmediately} tier={(lockImmediately ? initialTier.ToString() : "C")} totalTracks={_tracks.Count}");
     }
 
     public void UnregisterCairn(Transform cairnTransform)

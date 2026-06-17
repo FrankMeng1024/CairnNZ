@@ -555,6 +555,12 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
               crashLogger.breadcrumb(
                 `${TAG}:v226-grounded-defaults pushed=${groundedDefaults.length}`
               );
+              // v288 — explicit dump so we can verify in telemetry which
+              // values the OTA pushed. Helps catch "I changed it but did
+              // it land" silent failures (e.g. clamp, key not registered).
+              for (const [name, value] of groundedDefaults) {
+                crashLogger.breadcrumb(`${TAG}:global-set ${name}=${value}`);
+              }
             } catch (e: any) {
               crashLogger.breadcrumb(
                 `${TAG}:v226-grounded-defaults-error ${String(e?.message ?? e).slice(0, 80)}`

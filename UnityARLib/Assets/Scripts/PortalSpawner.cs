@@ -559,14 +559,13 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             // No ground available. Reject the spawn. Branch B invariant:
             // never place a cairn at a fictional Y.
             //
-            // Telemetry tag: [v22-SPAWN-REJECTED] — RN side will retry once
-            // ARKit reports a new HorizontalUp plane at this XZ. PortalSpawner
-            // returning early means the cairn ID is not registered with
-            // GroundYResolver and not added to scene graph; subsequent retries
-            // are clean.
+            // v0.2.5 — should be unreachable for Tier-A spawns since the
+            // unconditional RN-fallback above always produces groundDetected.
+            // If we hit this branch, something is wrong (Tier-G spawn or
+            // data.y NaN).
             UnityLogger.IForward("v22-SPAWN-REJECTED",
-                $"id={data.id} type={data.type} reason=no-floor-tier " +
-                $"rnX={data.x:F3} rnY={data.y:F3} rnZ={data.z:F3} camY={spawnCamY:F3}");
+                $"id={data.id} type={data.type} reason=no-floor-tier-UNEXPECTED " +
+                $"rnX={data.x:F3} rnY={data.y:F3} rnZ={data.z:F3} camY={spawnCamY:F3} isTierA={isTierA_spawn}");
             // Notify RN so user gets feedback (reticle red, "point at ground").
             var bridge = Object.FindFirstObjectByType<CairnBridge>();
             if (bridge != null)
@@ -576,6 +575,10 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             }
             return;
         }
+        // v288 — log which ground source landed for this spawn so we can
+        // tell from telemetry whether the new fallback is doing its job.
+        UnityLogger.IForward("v288-GROUND-DECISION",
+            $"id={data.id} type={data.type} groundSrc={diagGroundSrc} groundY={groundY:F3} dataY={data.y:F3} delta={(groundY - data.y):F3}");
 
         var preset = CairnTypePresets.Get(data.type);
         Color color = preset.color;

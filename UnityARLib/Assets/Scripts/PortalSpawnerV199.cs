@@ -166,8 +166,10 @@ public partial class PortalSpawner
         //
         // 2026-06-11 user pushback: 'Unity 效果是核心 ... 深度理解我们想要的
         // v0.2.3 Branch C — Cone-strand visual (Plan E-prime).
-        // Gated by OTA `ConeStrandEnabled` (default true).
+        // Gated by OTA `ConeStrandEnabled` (default false in v0.2.5).
         bool useConeStrand = globals == null || globals.GetBool("ConeStrandEnabled", true);
+        UnityLogger.IForward("v288-FLAG-CHECK",
+            $"id={data.id} ConeStrandEnabled={useConeStrand} (globals_null={globals == null})");
         if (useConeStrand)
         {
             AttachConeStrands(v199, baseColor, data.type);
@@ -180,7 +182,10 @@ public partial class PortalSpawner
         }
 
         // ── Confidence ring ──
-        if (globals == null || globals.GetBool("ConfidenceRingEnabled", true))
+        bool useConfRing = globals == null || globals.GetBool("ConfidenceRingEnabled", true);
+        UnityLogger.IForward("v288-FLAG-CHECK",
+            $"id={data.id} ConfidenceRingEnabled={useConfRing}");
+        if (useConfRing)
         {
             AttachConfidenceRing(v199);
         }
@@ -384,9 +389,33 @@ public partial class PortalSpawner
         go.transform.localRotation = Quaternion.Euler(90, 0, 0);
         var globals = CairnGlobals.Instance;
         float rmul = globals != null ? globals.GetForType(null, "ContactShadowRadiusMul", 1.0f) : 1.0f;
+        // v0.2.5 — apply ContactShadowAlpha. Was registered but never consumed,
+        // so OTA pushes had no effect. Apply via material instance _Color.a so
+        // the alpha reaches the shader (shadow material uses Particles/Unlit
+        // or Sprite/Default which honors color alpha).
+        float ashadow = globals != null ? globals.GetForType(null, "ContactShadowAlpha", 0.55f) : 0.55f;
+        UnityLogger.IForward("v288-CONTACT-SHADOW",
+            $"alpha={ashadow:F2} radiusMul={rmul:F2} (was 0.55/1.0 default)");
         go.transform.localScale = new Vector3(1.4f * rmul, 1.4f * rmul, 1f);
         var r = go.GetComponent<MeshRenderer>();
-        r.sharedMaterial = contactShadowMaterial;
+        // Use material instance (not sharedMaterial) so per-cairn alpha changes
+        // don't leak across all cairns. SRP Batcher caveat: _Color is in
+        // CBUFFER, so MPB writes get silently dropped under SRP Batcher (same
+        // pattern as PortalSpawner ring _BaseColor v287 fix). Use material
+        // instance setter to bypass the CBUFFER mask.
+        var matInst = r.material;
+        if (matInst.HasProperty("_Color"))
+        {
+            var col = matInst.GetColor("_Color");
+            col.a = ashadow;
+            matInst.SetColor("_Color", col);
+        }
+        else if (matInst.HasProperty("_BaseColor"))
+        {
+            var col = matInst.GetColor("_BaseColor");
+            col.a = ashadow;
+            matInst.SetColor("_BaseColor", col);
+        }
         r.shadowCastingMode = ShadowCastingMode.Off;
         r.receiveShadows = false;
     }
