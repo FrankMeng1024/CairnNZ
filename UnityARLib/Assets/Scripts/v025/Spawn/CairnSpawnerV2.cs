@@ -45,13 +45,15 @@ namespace Cairn.AR.V025.Spawn
         {
             public string SpaceId { get; }
             public string CairnId { get; }
+            public string CairnType { get; }
             public float3 TargetXyz { get; }
             public PlaneCandidate[] CandidatePlanes { get; }
 
-            public SpawnRequest(string spaceId, string cairnId, float3 targetXyz, PlaneCandidate[] candidatePlanes)
+            public SpawnRequest(string spaceId, string cairnId, string cairnType, float3 targetXyz, PlaneCandidate[] candidatePlanes)
             {
                 SpaceId = spaceId;
                 CairnId = cairnId;
+                CairnType = cairnType ?? "cairn";
                 TargetXyz = targetXyz;
                 CandidatePlanes = candidatePlanes ?? Array.Empty<PlaneCandidate>();
             }
@@ -61,23 +63,25 @@ namespace Cairn.AR.V025.Spawn
         {
             public bool Ok { get; }
             public string CairnId { get; }
+            public string CairnType { get; }
             public AttachOutcomeKind Kind { get; }
             public float3 FinalXyz { get; }
             public string Diagnostic { get; }
 
-            private SpawnResponse(bool ok, string cairnId, AttachOutcomeKind kind, float3 xyz, string diag)
+            private SpawnResponse(bool ok, string cairnId, string cairnType, AttachOutcomeKind kind, float3 xyz, string diag)
             {
                 Ok = ok;
                 CairnId = cairnId;
+                CairnType = cairnType ?? "cairn";
                 Kind = kind;
                 FinalXyz = xyz;
                 Diagnostic = diag ?? string.Empty;
             }
 
-            public static SpawnResponse OkResp(string cairnId, AttachOutcomeKind kind, float3 xyz, string diag)
-                => new SpawnResponse(true, cairnId, kind, xyz, diag);
-            public static SpawnResponse Refused(string cairnId, string diag)
-                => new SpawnResponse(false, cairnId, AttachOutcomeKind.Refused, float3.zero, diag);
+            public static SpawnResponse OkResp(string cairnId, string cairnType, AttachOutcomeKind kind, float3 xyz, string diag)
+                => new SpawnResponse(true, cairnId, cairnType, kind, xyz, diag);
+            public static SpawnResponse Refused(string cairnId, string cairnType, string diag)
+                => new SpawnResponse(false, cairnId, cairnType, AttachOutcomeKind.Refused, float3.zero, diag);
         }
 
         public async Task<SpawnResponse> HandleAsync(SpawnRequest req, CancellationToken cancel)
@@ -98,12 +102,12 @@ namespace Cairn.AR.V025.Spawn
             if (outcome.Kind == AttachOutcomeKind.Refused)
             {
                 _emitTelemetry(_tracker.NextEvent(V025Outcomes.Failure, outcome.Diagnostic));
-                return SpawnResponse.Refused(req.CairnId, outcome.Diagnostic);
+                return SpawnResponse.Refused(req.CairnId, req.CairnType, outcome.Diagnostic);
             }
 
             _emitTelemetry(_tracker.NextEvent(V025Outcomes.Success,
                 $"kind={outcome.Kind} xyz=({outcome.Position.x:F2},{outcome.Position.y:F2},{outcome.Position.z:F2})"));
-            return SpawnResponse.OkResp(req.CairnId, outcome.Kind, outcome.Position, outcome.Diagnostic);
+            return SpawnResponse.OkResp(req.CairnId, req.CairnType, outcome.Kind, outcome.Position, outcome.Diagnostic);
         }
     }
 }

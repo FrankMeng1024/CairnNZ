@@ -171,6 +171,7 @@ export function ARScreenV2(_props: ARScreenProps) {
             await spawnCairnV2(bridge, {
                 spaceId: PLACEHOLDER_SPACE_ID,
                 cairnId,
+                cairnType: 'cairn',  // TODO Phase 6: read from user type selection UI
                 savedOriginLat: cairnLat,
                 savedOriginLng: cairnLng,
                 cairnLat,

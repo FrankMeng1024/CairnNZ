@@ -72,7 +72,7 @@ namespace Cairn.AR.V025.Bootstrap
         public void SetBridgeTransport(IBridgeTransport transport)
         {
             if (Bridge != null) { Bridge.Dispose(); }
-            Bridge = new CairnBridgeV2(transport, Spawner, _planeSource, Lifecycle, Telemetry.AddEvent);
+            Bridge = new CairnBridgeV2(transport, Spawner, Assembly, _planeSource, Lifecycle, Telemetry.AddEvent);
             Bridge.Start();
         }
 

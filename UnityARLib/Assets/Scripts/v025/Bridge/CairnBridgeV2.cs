@@ -33,6 +33,7 @@ namespace Cairn.AR.V025.Bridge
     using Cairn.AR.V025.Core;
     using Cairn.AR.V025.Session;
     using Cairn.AR.V025.Spawn;
+    using Cairn.AR.V025.Visual;
 
     /// <summary>
     /// Transport contract — the real implementation wraps the native bridge's
@@ -57,6 +58,7 @@ namespace Cairn.AR.V025.Bridge
     {
         private readonly IBridgeTransport _transport;
         private readonly CairnSpawnerV2 _spawner;
+        private readonly CairnAssemblyV2 _assembly;
         private readonly IPlaneCandidateSource _planes;
         private readonly ArSessionLifecycleV2 _lifecycle;
         private readonly Action<V025Event> _emitTelemetry;
@@ -66,12 +68,14 @@ namespace Cairn.AR.V025.Bridge
         public CairnBridgeV2(
             IBridgeTransport transport,
             CairnSpawnerV2 spawner,
+            CairnAssemblyV2 assembly,
             IPlaneCandidateSource planes,
             ArSessionLifecycleV2 lifecycle,
             Action<V025Event> emitTelemetry)
         {
             _transport = transport ?? throw new ArgumentNullException(nameof(transport));
             _spawner = spawner ?? throw new ArgumentNullException(nameof(spawner));
+            _assembly = assembly ?? throw new ArgumentNullException(nameof(assembly));
             _planes = planes ?? throw new ArgumentNullException(nameof(planes));
             _lifecycle = lifecycle ?? throw new ArgumentNullException(nameof(lifecycle));
             _emitTelemetry = emitTelemetry ?? throw new ArgumentNullException(nameof(emitTelemetry));
@@ -142,18 +146,21 @@ namespace Cairn.AR.V025.Bridge
 
         private async Task OnSpawnAsync(Dictionary<string, object> msg)
         {
-            var spaceId = msg.TryGetValue("spaceId", out var s) ? s as string : null;
-            var cairnId = msg.TryGetValue("cairnId", out var c) ? c as string : null;
+            var spaceId  = msg.TryGetValue("spaceId",   out var s) ? s as string : null;
+            var cairnId  = msg.TryGetValue("cairnId",   out var c) ? c as string : null;
+            var cairnType = msg.TryGetValue("cairnType", out var t) ? t as string : "cairn";
             if (spaceId == null || cairnId == null) return;
 
             var targetXyz = ParseXyz(msg, "targetXyz");
             var planes = _planes.CurrentCandidates();
 
-            var req = new CairnSpawnerV2.SpawnRequest(spaceId, cairnId, targetXyz, planes);
+            var req = new CairnSpawnerV2.SpawnRequest(spaceId, cairnId, cairnType, targetXyz, planes);
             var resp = await _spawner.HandleAsync(req, _disposeCts.Token).ConfigureAwait(false);
 
             if (resp.Ok)
             {
+                // Instantiate the visual using the v0.2.4 PortalSpawner pipeline.
+                _assembly.SpawnAtPosition(cairnId, resp.FinalXyz, resp.CairnType);
                 SendSpawnOk(cairnId, resp.Kind, resp.FinalXyz, resp.Diagnostic);
             }
             else

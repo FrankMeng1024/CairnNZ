@@ -30,6 +30,8 @@ export interface SpawnRequestInput {
     spaceId: string;
     /** Stable cairn identifier; round-trips through the bridge for telemetry. */
     cairnId: string;
+    /** Visual type: 'cairn' | 'danger' | 'water' | 'junction' | 'hut'. Drives color + particles. Defaults to 'cairn'. */
+    cairnType?: string;
     /** The space's saved origin (where ARWorldMap was initially captured). */
     savedOriginLat: number;
     savedOriginLng: number;
@@ -92,6 +94,7 @@ export function buildSpawnRequest(input: SpawnRequestInput): {
     type: 'v025/spawn';
     spaceId: string;
     cairnId: string;
+    cairnType: string;
     targetXyz: { x: number; y: number; z: number };
 } {
     const enu = latLngToEnuMeters(
@@ -109,6 +112,7 @@ export function buildSpawnRequest(input: SpawnRequestInput): {
         type: 'v025/spawn',
         spaceId: input.spaceId,
         cairnId: input.cairnId,
+        cairnType: input.cairnType ?? 'cairn',
         targetXyz,
     };
 }

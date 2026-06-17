@@ -20,6 +20,7 @@ export interface SpawnRequest {
     type: 'v025/spawn';
     spaceId: string;
     cairnId: string;
+    cairnType: string;  // 'cairn' | 'danger' | 'water' | 'junction' | 'hut'
     targetXyz: { x: number; y: number; z: number };
 }
 
