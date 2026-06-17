@@ -49,10 +49,10 @@ Phase 4 EAS build 自动覆盖。
   procedure 优化。
 
 ## Expiration phase
-Phase 4 (EAS build #1)
+Phase 4 — DELIVERED in V025Bootstrap.cs + telemetrySingleton.ts
 
 ## Status
-active
+superseded (2026-06-17 final-review: wiring was completed in Phase 4 as planned; V025Bootstrap composition root + RN telemetrySingleton + ARScreenV2 onUnityMessage shipped)
 
 ## Signoff
 - Main agent: 2026-06-17

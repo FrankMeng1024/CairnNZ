@@ -12,6 +12,6 @@
   "plan_constitution_v3": "0f2413935793cb3a4d6b03e7d7f05a88b7f5c1de66d38562cd5a6cf31266d601",
   "scripts/cairn_lint.py": "55b45e5a920942ffb4e1add5668daa4c1fe5a220decd5c946a90a3d39a5451f5",
   "scripts/lock_plan.py": "6ac7aff0c04dbd5ea99eb195f0cb0ae168126cb703d665f310c0551e6f0fb1b2",
-  "scripts/verify_progress.py": "dfe3ac191b1119f0a26ee13f37961fafbf683988d8517c315804edaa1c82ef14",
+  "scripts/verify_progress.py": "0bf2f0e6a9034ff6a387dcaedf15c8eb4b5cbe384130e3270e98fbc627720288",
   "scripts/visual_compare.py": "4ffe127311ee987642af67fee7ca64639a8015c78b922674854eb29295f63399"
 }

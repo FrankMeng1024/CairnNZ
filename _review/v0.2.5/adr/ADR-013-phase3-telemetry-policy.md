@@ -66,10 +66,10 @@ This ADR records the four decisions still open.
 - Cron job not deployed in Phase 4 → table grows; alert via disk usage monitor
 
 ## Expiration phase
-Phase 4 (EAS build #1) — persistent queue + retention cron + analytics docs
+Phase 5 (EAS build #1) — persistent queue + retention cron + analytics docs
 
 ## Status
-active
+renewed (2026-06-17 final-review: rate limit + PII strip + comment correction shipped Phase 3; persistent queue + retention cron + user_id analytics still Phase 5 work)
 
 ## Signoff
 - Main agent: 2026-06-17

@@ -88,6 +88,13 @@ export interface SessionLost {
     reason: string;
 }
 
+/**
+ * NOTE on TelemetryEvent: in v0.2.5 the Unity side does NOT forward telemetry
+ * over the bridge — TelemetryBatcherV2 (Unity) posts directly to backend
+ * /api/v025/debug-events. ARScreenV2 still subscribes to v025/telemetry messages
+ * for forward-compat with Phase 6+ where Unity may emit cross-channel correlation
+ * events through the bridge. Currently reserved-for-future; sender side absent.
+ */
 export interface TelemetryEvent {
     type: 'v025/telemetry';
     phase: string;

@@ -112,7 +112,12 @@ namespace Cairn.AR.V025.Bridge
                     case "v025/end-session":
                         OnEndSession();
                         break;
-                    // v025/save-space wired in Phase 4.5
+                    case "v025/save-space":
+                        // Final-A X-4 fix: dispatch save-space (Phase 1A shell returns
+                        // IoError; Phase 5 .iOS.cs replacement returns Success). Either
+                        // way, RN gets a v025/save-space-ok or save-space-failed response.
+                        OnSaveSpaceFireAndForget(msg);
+                        break;
                     default:
                         // unknown v025/* message: ignore (forward-compat)
                         break;
@@ -171,6 +176,39 @@ namespace Cairn.AR.V025.Bridge
             _lifecycle.Teardown();
             var json = $"{{\"type\":\"v025/session-lost\",\"sessionInstanceId\":{JsonStr(id)},\"reason\":\"client-requested\"}}";
             _transport.Send(json);
+        }
+
+        // Final-A X-4: save-space dispatch. Spawner doesn't own persistence directly,
+        // but PersistenceFactory.Create() gives us the right impl per platform.
+        // Phase 1A iOS shell returns IoError; Phase 5 .iOS.cs replacement returns
+        // Success. Either way, RN gets a structured response.
+        private async void OnSaveSpaceFireAndForget(System.Collections.Generic.Dictionary<string, object> msg)
+        {
+            var spaceId = msg.TryGetValue("spaceId", out var s) ? s as string : null;
+            if (spaceId == null) return;
+            var persistence = PersistenceFactory.Create();
+            try
+            {
+                var result = await persistence.SaveAsync(spaceId, _disposeCts.Token).ConfigureAwait(false);
+                if (result.IsSuccess)
+                {
+                    _transport.Send($"{{\"type\":\"v025/save-space-ok\",\"spaceId\":{JsonStr(spaceId)}}}");
+                }
+                else
+                {
+                    var json = "{"
+                        + "\"type\":\"v025/save-space-failed\","
+                        + $"\"spaceId\":{JsonStr(spaceId)},"
+                        + $"\"outcome\":{JsonStr(result.Outcome.ToString())},"
+                        + $"\"diagnostic\":{JsonStr(result.Diagnostic ?? string.Empty)}"
+                        + "}";
+                    _transport.Send(json);
+                }
+            }
+            catch (System.Threading.Tasks.TaskCanceledException)
+            {
+                _transport.Send($"{{\"type\":\"v025/save-space-failed\",\"spaceId\":{JsonStr(spaceId)},\"outcome\":\"Cancelled\",\"diagnostic\":\"\"}}");
+            }
         }
 
         private void SendSpawnOk(string cairnId, AttachOutcomeKind kind, float3 xyz, string diagnostic)

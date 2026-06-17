@@ -9,7 +9,10 @@
 //   TelemetryBatcherV2 (batches V025Event to /api/v025/debug-events)
 //     → 5s flush via MonoBehaviour Update
 //   CairnAssemblyV2 (consumes SpawnResponse → instantiate)
-//   CairnBridgeV2 (RN ↔ Unity wire layer)
+//   CairnBridgeV2 (RN ↔ Unity wire layer) — final-A round-2 fix:
+//     Bootstrap now instantiates CairnBridgeV2 and starts it. Production
+//     transport adapter is provided via SetTransport (called by the iOS-side
+//     UnityMessageBridge MonoBehaviour or a TestTransport for Editor PlayMode).
 //
 // One singleton MonoBehaviour anchors the whole stack. ARScreenV2 finds it via
 // FindObjectOfType, or Phase 5 wires it via prefab in the AR scene.
@@ -34,7 +37,10 @@ namespace Cairn.AR.V025.Bootstrap
     /// </summary>
     public sealed class V025Bootstrap : MonoBehaviour
     {
-        [SerializeField] private string _telemetryEndpoint = "https://api.cairn.app/api/v025/debug-events";
+        // Final-A B2 fix: default endpoint matches RN production (api.yiiling.cn).
+        // EAS builds use EXPO_PUBLIC_API_BASE_URL=https://api.yiiling.cn (eas.json
+        // dev/preview/production). Override via SerializeField for staging only.
+        [SerializeField] private string _telemetryBaseUrl = "https://api.yiiling.cn";
         [SerializeField] private float _telemetryFlushPeriodSeconds = 5.0f;
 
         public ArSessionLifecycleV2 Lifecycle { get; private set; }
@@ -44,8 +50,31 @@ namespace Cairn.AR.V025.Bootstrap
         public BlockerSentinel Sentinel { get; private set; }
         public PendingAnchorRetryV2 Retry { get; private set; }
         public CairnAssemblyV2 Assembly { get; private set; }
+        public CairnBridgeV2 Bridge { get; private set; }
 
+        private SimplePlaneCandidateSource _planeSource;
         private float _flushAccumSeconds;
+
+        /// <summary>
+        /// Default plane source returns empty array. Phase 5 ARRaycastManager-backed
+        /// adapter calls SetPlaneSource() to inject real planes.
+        /// </summary>
+        public void SetPlaneSource(IPlaneCandidateSource source)
+        {
+            _planeSource = new SimplePlaneCandidateSource(source);
+        }
+
+        /// <summary>
+        /// Final-A B1 fix: bridge transport injection. The native UnityMessageBridge
+        /// MonoBehaviour (Phase 5 .iOS.cs) calls this with a real transport that
+        /// wraps SendMessage / OnMessage. Tests inject a fake.
+        /// </summary>
+        public void SetBridgeTransport(IBridgeTransport transport)
+        {
+            if (Bridge != null) { Bridge.Dispose(); }
+            Bridge = new CairnBridgeV2(transport, Spawner, _planeSource, Lifecycle, Telemetry.AddEvent);
+            Bridge.Start();
+        }
 
         private void Awake()
         {
@@ -55,12 +84,16 @@ namespace Cairn.AR.V025.Bootstrap
             Lifecycle.Activate();
 
             // Telemetry batcher with UnityWebRequest-backed HTTP client.
-            Telemetry = new TelemetryBatcherV2(new UnityWebRequestTelemetryHttp(), _telemetryEndpoint);
+            var endpoint = _telemetryBaseUrl.TrimEnd('/') + "/api/v025/debug-events";
+            Telemetry = new TelemetryBatcherV2(new UnityWebRequestTelemetryHttp(), endpoint);
 
             // Strategy stack
             var persistence = PersistenceFactory.Create();
             var validator = new FloorPlaneValidatorV2();
-            // Phase 4 will replace this delegate with a real ARRaycastManager-backed adapter
+            // Phase 5 will replace this Miss stub via SetGroundResolver() once
+            // ARRaycastManager is live in the AR scene. Until then, Tier-G plane
+            // scan still works (Phase 1A FloorPlaneValidatorV2 path); only the
+            // raycast fallback after plane scan is dead. Documented in ADR-014.
             var ground = new GroundResolverV2(uv => GroundResolverV2.RaycastResult.Miss);
             var strategy = new AnchorAttachStrategy(persistence, validator, ground);
 
@@ -75,6 +108,14 @@ namespace Cairn.AR.V025.Bootstrap
             // Visual assembly — caller adds CairnAssemblyV2 component to a child or this GO
             var existing = GetComponent<CairnAssemblyV2>();
             Assembly = existing != null ? existing : gameObject.AddComponent<CairnAssemblyV2>();
+
+            // Plane candidate source: defaults to empty list; Phase 5 overrides with
+            // ARPlaneManager-backed adapter via SetPlaneSource().
+            _planeSource = new SimplePlaneCandidateSource(null);
+
+            // Bridge will be created when SetBridgeTransport() is called by the
+            // iOS-side UnityMessageBridge or by a test harness. Not auto-instantiated
+            // because there's no default transport that makes sense in Editor.
         }
 
         private async void Update()
@@ -96,8 +137,20 @@ namespace Cairn.AR.V025.Bootstrap
 
         private void OnDestroy()
         {
+            Bridge?.Dispose();
             Lifecycle?.Teardown();
         }
+    }
+
+    /// <summary>
+    /// Plane source wrapper — falls through to inner source if set, else empty.
+    /// </summary>
+    internal sealed class SimplePlaneCandidateSource : IPlaneCandidateSource
+    {
+        private static readonly PlaneCandidate[] _empty = System.Array.Empty<PlaneCandidate>();
+        private readonly IPlaneCandidateSource _inner;
+        public SimplePlaneCandidateSource(IPlaneCandidateSource inner) { _inner = inner; }
+        public PlaneCandidate[] CurrentCandidates() => _inner != null ? _inner.CurrentCandidates() : _empty;
     }
 
     /// <summary>

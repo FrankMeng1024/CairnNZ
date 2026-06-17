@@ -72,10 +72,10 @@ proven path". Until then: fail-closed.
   user sees Legacy. Conservative; matches kill-switch intent.
 
 ## Expiration phase
-Phase 1A canary signoff (re-evaluate HARD_DEFAULTS flip).
+Phase 5 canary signoff (re-evaluate HARD_DEFAULTS flip after real-device 7-day canary).
 
 ## Status
-active
+renewed (2026-06-17 final-review: rate limit + LIMIT 1000 + fail-closed all shipped Phase 0; Phase 5 re-evaluates flip)
 
 ## Signoff
 - Main agent: 2026-06-17

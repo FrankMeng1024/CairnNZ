@@ -52,13 +52,13 @@ Phase 1A 4 眼 review (#1A-1, #1A-2) 提出三个设计选择问题:
   数据 → 行为退化但不崩溃。需 Phase 4 self-check。
 
 ## Expiration phase
-- §A IsPlatformSupported retention: **Phase 2A**(end-of-phase audit:cairnSpawnV2.ts 是否真消费 IsPlatformSupported?未消费 → 删 + 3 impls)
-- §B Static ResolveFallback retention: Phase 4(届时 review 是否需要 instance)
+- §A IsPlatformSupported retention: Phase 5(EAS real-device validates pre-Save UI hint)
+- §B Static ResolveFallback retention: Phase 5(届时 review 是否需要 instance)
 - §C GeoMath caller-side constraint: 永久(架构决定)
 - §D Cancellation 已修复 in round-2(无 expiration)
 
 ## Status
-active
+renewed (2026-06-17 final-review: §A audit at end of Phase 2A confirmed IsPlatformSupported still dead; deferred to Phase 5 real-device check)
 
 ## Signoff
 - Main agent: 2026-06-17

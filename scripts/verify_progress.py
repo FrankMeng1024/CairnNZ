@@ -135,10 +135,12 @@ def verify_adrs(adr_dir: Path, phase: int, result: Result) -> list[Path]:
             continue
         if expir_phase > phase:
             continue
-        # check status
+        # check status — accept renewed | superseded-by-ADR-NNN | archived as
+        # equivalent to "expired but resolved", per ADR template (_TEMPLATE.md).
         status_match = ADR_STATUS_RE.search(text)
         status = status_match.group(1).strip().lower() if status_match else ""
-        if "renewed" not in status:
+        resolved_markers = ("renewed", "superseded", "archived")
+        if not any(marker in status for marker in resolved_markers):
             expired.append(adr)
     return expired
 

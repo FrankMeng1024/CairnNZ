@@ -31,10 +31,10 @@ v0.2.4 老资源中只有 `cairn / danger / hut / junction / water`(5 个老 mar
 - Placeholder 纹理在 Phase 2B SSIM 跑出 < 0.65 → 已知,不阻塞,Phase 4 修
 
 ## Expiration phase
-Phase 4 (EAS build #1 — 届时必须有正式 SDF 替换)
+Phase 5 (EAS build #1 — designer SDF replacement)
 
 ## Status
-active(修订 2026-06-17)
+renewed (2026-06-17 final-review: PlaceholderTextures shipped Phase 2B; designer SDF replacement is Phase 5 entry task)
 
 ## Signoff
 - Main agent: 2026-06-17 修订

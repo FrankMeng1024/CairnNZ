@@ -47,10 +47,10 @@ Phase 2B 4-eye 审计 (#2B-1 + #2B-2) 提出三个 visual fidelity 关联问题:
 - SSIM 基准跟实际 v0.2.5 cairn 风格不一致 → 用户 review 对齐 design v2026-06_variant_C 是否仍是基准
 
 ## Expiration phase
-Phase 4(EAS build #1)
+Phase 5(EAS build #1 + Playwright HTML demo baseline + designer prefab → SSIM ≥ 0.65 verify)
 
 ## Status
-active
+renewed (2026-06-17 final-review: SSIM gate moved from Phase 4 to Phase 5 because real-device + designer prefab + Playwright baseline all required)
 
 ## Signoff
 - Main agent: 2026-06-17
