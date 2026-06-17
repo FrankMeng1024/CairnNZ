@@ -15,7 +15,34 @@ Test B 显示 Phase 5 工作量比那大很多。
 
 ### A. ADR-014 范围扩大(原本只说 "single-file enable" — 不够)
 
-Phase 5 entry 必做的 wiring 清单(测试 B 全部 FAIL 的对应修复):
+Phase 5 entry 必做的 wiring 清单(测试 B 全部 FAIL 的对应修复 + 用户 2026-06-17 提问揭露的 Unity rebuild gap):
+
+#### A.0 **【最关键 — 用户提问揭露的 gap】Unity framework rebuild + GitHub Release 上传**
+
+**根因**:EAS build 通过 `app/scripts/download-unity-framework.js` 从 GitHub Release
+拉**预编译的** UnityFramework.xcframework,**不是** EAS 自动从 v025/ 源码 export。
+
+**当前状态(2026-06-17 文件系统检查)**:
+- v025/ 目录 100+ .cs 文件 — 2026-06-16/17 写的
+- UnityARLib/builds/iOS/ 最后修改 — 2026-06-07(v0.2.5 开始之前)
+- GitHub Release 里 UnityFramework.xcframework 是 v0.2.5 之前的旧版本
+- **如果今天直接 EAS build,Unity 内部跑的是旧代码;v025 全部 wiring 不生效**
+
+**Phase 5 起手第 0 步必做(在 A.1-A.6 之前)**:
+1. 在 Mac 上打开 UnityARLib(Unity Editor 6 / 6000.0.x)
+2. 启用 HAS_ARKIT_WORLDMAP define(iOS PlayerSettings)
+3. 写完 A.1-A.6 所有 wiring
+4. Editor compile pass + EditMode tests pass(`Unity.exe -batchmode -runTests EditMode`)
+5. **Unity Editor → File → Build Settings → iOS → Build → 生成 UnityFramework.xcframework**
+6. **上传新 xcframework 到 GitHub Release**(覆盖或新 tag)
+7. 更新 download-unity-framework.js Release URL(如果是新 tag)
+8. 然后才 `eas build --profile production` → pre-install hook 拉新 framework
+
+**跳过这一步的后果**:RN 端 plant 按钮工作,bridge 发 v025/spawn,Unity 旧 binary
+没 V025Bootstrap 没 CairnSpawnerV2 收不到 → 消息丢失 → spawnCairnV2 timeout → "AR config error"
+→ 等同 Phase 5 EAS build 直接失败。
+
+#### A.1 Unity 端 ArkitWorldMapPersistence.iOS.cs(替换 Phase 1A shell)
 
 #### A.1 Unity 端 ArkitWorldMapPersistence.iOS.cs(替换 Phase 1A shell)
 1. 启用 HAS_ARKIT_WORLDMAP define in PlayerSettings(iOS slot,见 FINAL-D R1)
