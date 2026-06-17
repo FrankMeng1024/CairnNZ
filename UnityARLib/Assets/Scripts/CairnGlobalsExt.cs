@@ -274,6 +274,18 @@ public partial class CairnGlobals
     public static int RegistryCount => _registry.Count;
 
     /// <summary>
+    /// v0.2.5 — enumerate every registered def. CairnGlobals.Awake uses this
+    /// to push registry defaults into Shader.SetGlobalFloat for every
+    /// ShaderUniform-bound Float key. Without it, ext globals like
+    /// _CairnGlobalArConfidence default to Unity's 0 instead of the
+    /// registry's intended default (e.g. 1.0 for ArConfidenceUni).
+    /// </summary>
+    public static System.Collections.Generic.IEnumerable<GlobalDef> EnumerateDefs()
+    {
+        foreach (var kv in _registry) yield return kv.Value;
+    }
+
+    /// <summary>
     /// Generic float setter — looked up in registry. Called from CairnBridge
     /// after legacy CairnGlobals.Set switch misses. Clamps + writes shader
     /// uniform if registered.

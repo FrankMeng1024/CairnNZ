@@ -139,6 +139,37 @@ public partial class CairnGlobals : MonoBehaviour
         Shader.SetGlobalFloat("_CairnGlobalHaloIntensity",  DEF_HALO_INTENSITY);
         Shader.SetGlobalFloat("_CairnGlobalFireflyRate",    DEF_FIREFLY_RATE);
         UnityLogger.IForward("CairnGlobals", "Initialized 7 base + 20 portal globals to defaults");
+
+        // v0.2.5 — also push defaults for every Float global registered
+        // in CairnGlobalsExt that has a ShaderUniform binding. Without this,
+        // shaders sampling extension uniforms (e.g. _CairnGlobalArConfidence)
+        // see Unity's default 0 instead of the registry's intended default.
+        // Concrete bug this caused: ConfidenceRingShader saturated 0 → red,
+        // so the ring appeared red on every cairn even though the registry
+        // default for ArConfidenceUni is 1.0 (which would saturate to green).
+        // Subagent C1-10 traced this.
+        try
+        {
+            int pushed = 0;
+            foreach (var def in EnumerateDefs())
+            {
+                if (string.IsNullOrEmpty(def.ShaderUniform)) continue;
+                if (def.Kind == GlobalKind.Float)
+                {
+                    Shader.SetGlobalFloat(def.ShaderUniform, def.Default);
+                    pushed++;
+                }
+            }
+            UnityLogger.IForward("CairnGlobals", $"v0.2.5 ext-defaults pushed={pushed} (Float uniforms)");
+        }
+        catch (System.NullReferenceException e)
+        {
+            UnityLogger.W("CairnGlobals", "ext-defaults push failed (null): " + e.Message);
+        }
+        catch (System.InvalidOperationException e)
+        {
+            UnityLogger.W("CairnGlobals", "ext-defaults push failed (invalid op): " + e.Message);
+        }
     }
 
     /// <summary>

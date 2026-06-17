@@ -74,14 +74,18 @@ const MAX_PLANT_M = 30;
  * directly under the user's feet, and the user couldn't tell GPS-lock
  * was working because they were standing inside the cairn.
  *
- * New approach: fixed plant distance = 10m forward of user (along
- * heading). User can see the whole cairn from a comfortable viewing
- * distance. If they walk past it, the cairn correctly disappears
- * behind them. The pitch sensor stays installed but is unused for now;
- * a future "distance picker" UI in the sheet (chips: 5m / 10m / 30m)
- * can replace this constant.
+ * v0.2.5 review-fix C2-5: lowered from 10m to 4m. User reported "视野
+ * 要求高(不扫到地面就不出现)". 10m forward of the user requires the
+ * camera to tilt very low to find the ground 10m away — most indoor and
+ * many outdoor spaces don't have 10m of unobstructed floor in front of
+ * a standing user. 4m is reachable with a small downward tilt and is
+ * still far enough that the user can step back to see the whole cairn
+ * (~1.5m tall after PortalScale=0.6 OTA).
+ *
+ * Future: distance picker UI (chips 3m / 5m / 10m) once we have data
+ * on which range users actually want.
  */
-const FIXED_PLANT_DISTANCE_M = 10;
+const FIXED_PLANT_DISTANCE_M = 4;
 export function distanceFromPitch(_pitchRad: number): number {
   return FIXED_PLANT_DISTANCE_M;
 }

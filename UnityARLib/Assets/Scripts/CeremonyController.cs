@@ -23,16 +23,16 @@ namespace Cairn.AR
     public class CeremonyController : MonoBehaviour
     {
         [Header("Timeline")]
-        [Tooltip("Total ceremony length in seconds (v0.2.5: extended to 3.0s — user reported 1.0s ceremony was over before they could turn to look at the cairn)")]
-        [SerializeField] float _totalDuration = 3.0f;
-        [Tooltip("Ring sweep ends at this normalized t (variant_C_3D.html = 0.50)")]
-        [SerializeField] float _ringSweepEndT = 0.50f;
-        [Tooltip("Rune reveal starts at this t (variant_C_3D.html = 0.50)")]
-        [SerializeField] float _runeStartT = 0.50f;
-        [Tooltip("Rune reveal ends at this t (variant_C_3D.html = 0.85)")]
-        [SerializeField] float _runeEndT = 0.85f;
-        [Tooltip("Ribbons + particles activate at this t (variant_C_3D.html = 0.85)")]
-        [SerializeField] float _ribbonStartT = 0.85f;
+        [Tooltip("Total ceremony length in seconds. v0.2.5 review-fix: 2.5s (was 3.0s). Subagent C2-3 found 3s with original 0.50/0.85 timeline keys made the ribbon-only segment 2.15s long → user feels 'dragging'. 2.5s with re-balanced keys (sweep 0-0.40, rune 0.40-0.65, ribbons 0.65-1.0 = 0.875s ribbon segment) keeps each phase visible and ends with a clear punctuation.")]
+        [SerializeField] float _totalDuration = 2.5f;
+        [Tooltip("Ring sweep ends at this normalized t. v0.2.5: 0.40 (was 0.50)")]
+        [SerializeField] float _ringSweepEndT = 0.40f;
+        [Tooltip("Rune reveal starts at this t. v0.2.5: 0.40 (was 0.50)")]
+        [SerializeField] float _runeStartT = 0.40f;
+        [Tooltip("Rune reveal ends at this t. v0.2.5: 0.65 (was 0.85)")]
+        [SerializeField] float _runeEndT = 0.65f;
+        [Tooltip("Ribbons + particles activate at this t. v0.2.5: 0.65 (was 0.85)")]
+        [SerializeField] float _ribbonStartT = 0.65f;
 
         [Header("Wired sub-controllers")]
         [SerializeField] Renderer _outerRingRenderer;
@@ -80,6 +80,12 @@ namespace Cairn.AR
         public void Play()
         {
             if (IsPlaying || IsComplete) return;
+            // v0.2.5 — telemetry breadcrumb so we can confirm in real
+            // session logs whether each ceremony actually started + how
+            // long it ran. Pairs with the existing "v22-CEREMONY end
+            // actual=" log emitted at PlayCo's tail.
+            UnityLogger.IForward("v288-CEREMONY-PLAY",
+                $"durTotal={_totalDuration:F2}s sweepEnd={_ringSweepEndT:F2} runeEnd={_runeEndT:F2} ribbonStart={_ribbonStartT:F2}");
             StopAllCoroutines();
             StartCoroutine(PlayCo());
         }
