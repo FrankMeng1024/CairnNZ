@@ -60,13 +60,18 @@ namespace Cairn.AR.V025.Core
             if (cancel.IsCancellationRequested) return Task.FromResult(PersistenceResult.Cancelled());
 
 #if UNITY_IOS && !UNITY_EDITOR
-            // Phase 4.2/4.3 will fill in:
-            //   1. read base64 blob from disk
-            //   2. ARWorldMap.SerializationFromBase64
-            //   3. ARSession.SetWorldMap + WorldMapLoadGateV2 wait worldMappingStatus=Mapped
+            // Phase 5 will fill in (see ADR-015 §A.1):
+            //   1. read bytes from disk
+            //   2. NativeArray<byte>(Allocator.Temp) + ARWorldMap.TryDeserialize(out worldMap)
+            //      (NOT SerializationFromBase64 — that API does not exist;
+            //       final-review Test A confirmed via ARKit XR Plugin 6.0.5 source)
+            //   3. ARKitSessionSubsystem.ApplyWorldMap(map) + WorldMapLoadGateV2
+            //      poll worldMappingStatus until Mapped
+            //      (NOT SetWorldMap — final-review Test A drift fix)
             //   4. emit v22-PERSIST/load/(success|timeout)
             // 见 ADR-001(Tier-S 失败时 fallback 到 Tier-G GPS 路径)
-            Debug.Log($"[v025/Arkit] LoadAsync stub spaceId={spaceId} — Phase 4 will implement");
+            // 见 ADR-015(Phase 5 完整 wiring 清单)
+            Debug.Log($"[v025/Arkit] LoadAsync stub spaceId={spaceId} — Phase 5 will implement");
             return Task.FromResult(PersistenceResult.NoCache());
 #else
             return Task.FromResult(PersistenceResult.NotSupported("ARKit only available on iOS device build"));

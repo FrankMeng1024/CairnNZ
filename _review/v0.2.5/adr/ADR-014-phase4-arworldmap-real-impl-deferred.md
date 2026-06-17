@@ -16,7 +16,15 @@ Serialize / TryDeserialize / SetWorldMap)+ 双 Tier 集成。
 - shell 已通过 cairn_lint + Phase 1A 单测 + Phase 2A AnchorAttachStrategy 集成测试
 - 行为正确:Tier-S NoCache → AnchorAttachStrategy 走 Tier-G → 正确 fallback
 
-### B. Phase 4 真机时启用 HAS_ARKIT_WORLDMAP define
+### B. Phase 5 真机时启用 HAS_ARKIT_WORLDMAP define + 完整 wiring
+- **重要修订(2026-06-17 final-review)**: §B 原版低估 Phase 5 工作量。
+  Test B 揭露的 6 wiring bug + Test A 的 API drift 全在 **ADR-015 §A.1-A.6**。
+- API drift 修正:之前 §B 写 "SetWorldMap" 实际 API 是 **ApplyWorldMap**
+  (Test A 真实查 ARKit XR Plugin 6.0.5 源码确认)
+- 真路径:`bytes → NativeArray<byte>(Allocator.Temp) → ARWorldMap.TryDeserialize(out)`
+  (不是 SerializationFromBase64 — 该 API 不存在)
+- ARWorldMap 是 struct + IDisposable,必须 `using` 否则 native handle 泄漏
+- Phase 5 起手第一件事:看 ADR-015 完整清单(8-12 file 改动,不是 1 file)
 - Phase 5 EAS build 之前(用户授权后):
   1. 主 agent 写 ArkitWorldMapPersistence.iOS.cs(`#if HAS_ARKIT_WORLDMAP` 守护)
   2. 在 ProjectSettings/PlayerSettings → ARKit XR Plugin 文件中确认 ARWorldMap API 存在
