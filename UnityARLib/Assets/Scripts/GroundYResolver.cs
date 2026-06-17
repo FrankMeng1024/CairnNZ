@@ -218,9 +218,19 @@ public class GroundYResolver : MonoBehaviour
         // Tier A — PlaneClassification.Floor preferred, height + area gates.
         if (planeManager != null)
         {
-            // Pass 1: Floor-classified planes win immediately (with area gate
-            // when at marginal height, R2 fix: prevents floor-misclassified
-            // tabletops at hip-hold from passing).
+            // v0.2.5 — pick the BEST Floor-classified plane (highest Y that
+            // still passes height gate), not the first one we iterate. iOS
+            // 26 ARKit aggressively merges adjacent floor planes; the merged
+            // plane's `center.y` can drift below the actual visual floor by
+            // 0.4-0.5m when it spans multiple sub-areas (e.g. floor under a
+            // sofa joined to floor in the open). Picking max-Y among
+            // candidates aligns Resolver's chosen Y with the surface the
+            // user sees and the RN hit-test ARRaycast lands on.
+            //
+            // Pass 1: Floor-classified planes — among all that pass gates
+            // and contain worldXZ, choose the one with HIGHEST plane.center.y.
+            ARPlane bestFloor = null;
+            float bestFloorY = float.NegativeInfinity;
             foreach (var plane in planeManager.trackables)
             {
                 if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
@@ -228,15 +238,24 @@ public class GroundYResolver : MonoBehaviour
                                              requireFloorClassification: true,
                                              requireAreaEvenIfFloor: requireLargerArea)) continue;
                 if (!ContainsXZ(plane, worldXZ)) continue;
-                y = plane.center.y;
+                if (plane.center.y > bestFloorY)
+                {
+                    bestFloorY = plane.center.y;
+                    bestFloor = plane;
+                }
+            }
+            if (bestFloor != null)
+            {
+                y = bestFloor.center.y;
                 tier = Tier.A;
                 OnTierAObserved();
-                // V4.13 G2.5 埋点 — ground Y 来源 tier 真机对账
                 UnityLogger.IForward("v22-GROUND-Y-SOURCE",
-                    $"tier=A-floor-classified y={y:F2} camY={camY:F2} delta={(camY - y):F2} planeArea={(plane.size.x * plane.size.y):F2}");
+                    $"tier=A-floor-classified y={y:F2} camY={camY:F2} delta={(camY - y):F2} planeArea={(bestFloor.size.x * bestFloor.size.y):F2}");
                 return true;
             }
-            // Pass 2: unclassified-but-large planes
+            // Pass 2: unclassified-but-large planes — same max-Y selection
+            ARPlane bestLarge = null;
+            float bestLargeY = float.NegativeInfinity;
             foreach (var plane in planeManager.trackables)
             {
                 if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
@@ -244,11 +263,19 @@ public class GroundYResolver : MonoBehaviour
                                              requireFloorClassification: false,
                                              requireAreaEvenIfFloor: false)) continue;
                 if (!ContainsXZ(plane, worldXZ)) continue;
-                y = plane.center.y;
+                if (plane.center.y > bestLargeY)
+                {
+                    bestLargeY = plane.center.y;
+                    bestLarge = plane;
+                }
+            }
+            if (bestLarge != null)
+            {
+                y = bestLarge.center.y;
                 tier = Tier.A;
                 OnTierAObserved();
                 UnityLogger.IForward("v22-GROUND-Y-SOURCE",
-                    $"tier=A-large-unclassified y={y:F2} camY={camY:F2} delta={(camY - y):F2} planeArea={(plane.size.x * plane.size.y):F2}");
+                    $"tier=A-large-unclassified y={y:F2} camY={camY:F2} delta={(camY - y):F2} planeArea={(bestLarge.size.x * bestLarge.size.y):F2}");
                 return true;
             }
         }
