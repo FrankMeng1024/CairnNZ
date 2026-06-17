@@ -12,7 +12,8 @@
 //   - ARWorldMap.TryDeserialize(NativeArray<byte>, out ARWorldMap) — does NOT throw on bad bytes
 //   - ARKitSessionSubsystem.ApplyWorldMap(ARWorldMap) — NOT SetWorldMap (drift fix per Test A)
 //   - ARKitSessionSubsystem.worldMappingStatus — instance property
-//   - ARWorldMap.worldMapSupported — static, requires iOS 12+
+//   - ARKitSessionSubsystem.worldMapSupported — static, requires iOS 12+
+//     (CI build #1 commit 2f8a6ec caught the drift: was using ARWorldMap.worldMapSupported)
 //
 // File persistence: Application.persistentDataPath/v025/worldmaps/{spaceId}.arworldmap
 // iCloud backup exclusion via ObjC bridge `Cairn_ExcludeFromBackup` (Plugins/iOS/CairnFileExclude.mm)
@@ -55,7 +56,10 @@ namespace Cairn.AR.V025.Core
             get
             {
 #if HAS_ARKIT_WORLDMAP && UNITY_IOS && !UNITY_EDITOR
-                return ARWorldMap.worldMapSupported; // iOS 12+
+                // ARKitSessionSubsystem.worldMapSupported is a STATIC property
+                // (Api.AtLeast12_0) — NOT ARWorldMap.worldMapSupported.
+                // CI build #1 (commit 2f8a6ec) caught this drift via CS0117.
+                return ARKitSessionSubsystem.worldMapSupported; // iOS 12+
 #else
                 return false;
 #endif
@@ -101,7 +105,8 @@ namespace Cairn.AR.V025.Core
         private async Task<PersistenceResult> SaveAsyncIOS(string spaceId, CancellationToken cancel)
         {
             // Pre-call guards (Test A R3): worldMapSupported + subsystem + tracking + status.
-            if (!ARWorldMap.worldMapSupported)
+            // ARKitSessionSubsystem.worldMapSupported (static, NOT ARWorldMap's).
+            if (!ARKitSessionSubsystem.worldMapSupported)
                 return PersistenceResult.NotSupported("ARWorldMap requires iOS 12+");
             if (_arSession == null)
                 return PersistenceResult.IoError("ARSession not wired (V025Bootstrap.SetArSession not called)");
