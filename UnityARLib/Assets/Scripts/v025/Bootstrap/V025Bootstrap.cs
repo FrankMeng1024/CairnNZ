@@ -164,19 +164,43 @@ namespace Cairn.AR.V025.Bootstrap
         }
 
         /// <summary>
-        /// Default transport: outbound goes via UnityNativeBridge.SendMessage
-        /// (which fires JS onUnityMessage). Inbound is fed by V025Bootstrap.OnRNMessage.
+        /// Default transport: outbound uses sendMessageToMobileApp (the same
+        /// C function legacy CairnBridge calls via UnityNativeBridge.Send).
+        /// We P/Invoke directly here to avoid an asmdef reference to the
+        /// default Assembly-CSharp, which is the build that contains
+        /// UnityNativeBridge but cannot be referenced from an asmdef-defined
+        /// assembly. Inbound is fed by V025Bootstrap.OnRNMessage.
         /// </summary>
         private sealed class SendMessageTransport : IBridgeTransport
         {
             private System.Action<string> _onMessage;
+#if UNITY_IOS && !UNITY_EDITOR
+            [System.Runtime.InteropServices.DllImport("__Internal")]
+            private static extern void sendMessageToMobileApp(string message);
+#endif
             public void Send(string jsonPayload)
             {
-                // CairnBridgeV2 sends compact JSON; reuse the same C# native
-                // bridge legacy uses (UnityNativeBridge.Send) so a
-                // single onUnityMessage stream reaches RN. cairnBridgeV2.ts
-                // filters to only handle messages starting with "v025/".
-                UnityNativeBridge.Send(jsonPayload);
+                if (string.IsNullOrEmpty(jsonPayload)) return;
+#if UNITY_IOS && !UNITY_EDITOR
+                try
+                {
+                    sendMessageToMobileApp(jsonPayload);
+                }
+                catch (System.EntryPointNotFoundException e)
+                {
+                    // Symbol missing at runtime — bridge module not linked.
+                    UnityEngine.Debug.LogWarning("[v025/transport] Send failed (symbol missing): " + e.Message);
+                }
+                catch (System.DllNotFoundException e)
+                {
+                    // __Internal not resolvable — extremely rare on iOS.
+                    UnityEngine.Debug.LogWarning("[v025/transport] Send failed (dll not found): " + e.Message);
+                }
+#else
+                // Editor / non-iOS: log so roundtrip behaviour is visible during dev.
+                UnityEngine.Debug.Log("[v025/transport][Editor] Send: " +
+                    (jsonPayload.Length > 200 ? jsonPayload.Substring(0, 200) + "..." : jsonPayload));
+#endif
             }
             public System.IDisposable Subscribe(System.Action<string> onMessage)
             {

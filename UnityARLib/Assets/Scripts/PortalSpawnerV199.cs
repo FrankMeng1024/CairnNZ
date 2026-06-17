@@ -398,11 +398,14 @@ public partial class PortalSpawner
             $"alpha={ashadow:F2} radiusMul={rmul:F2} (was 0.55/1.0 default)");
         go.transform.localScale = new Vector3(1.4f * rmul, 1.4f * rmul, 1f);
         var r = go.GetComponent<MeshRenderer>();
-        // Use material instance (not sharedMaterial) so per-cairn alpha changes
-        // don't leak across all cairns. SRP Batcher caveat: _Color is in
-        // CBUFFER, so MPB writes get silently dropped under SRP Batcher (same
-        // pattern as PortalSpawner ring _BaseColor v287 fix). Use material
-        // instance setter to bypass the CBUFFER mask.
+        // First assign the source material so the renderer has a valid base
+        // (otherwise r.material returns Unity's default-pink missing-shader
+        // placeholder). Then read .material to obtain a per-cairn instance,
+        // mutate alpha, and write back via material instance setter to bypass
+        // SRP Batcher's CBUFFER mask (same pattern as PortalRing _BaseColor
+        // v287 fix). Setting alpha on sharedMaterial would leak across all
+        // cairns at once.
+        r.sharedMaterial = contactShadowMaterial;
         var matInst = r.material;
         if (matInst.HasProperty("_Color"))
         {
