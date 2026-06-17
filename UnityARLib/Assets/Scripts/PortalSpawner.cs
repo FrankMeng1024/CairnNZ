@@ -534,6 +534,34 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             }
 #endif
         }
+        // v0.2.5 — distance fallback: when QueryGroundY couldn't find a
+        // plane covering this cairn's XZ, accept RN's data.y if the cairn
+        // is far from the camera (> 2.0m horizontal). Reason: ARKit plane
+        // manager only tracks surfaces the user actively pointed at; for
+        // remote cairns the user planted earlier (different session, walked
+        // away, or aimed across the room), no nearby plane will ever appear.
+        // RN's data.y was set at the original plant time from a real
+        // ARRaycast hit-test, so it is a trusted historical ground anchor.
+        // Without this fallback, water/danger/etc. cairns more than ~2m
+        // from the camera permanently fail to spawn (Branch-B invariant
+        // would otherwise hide them forever).
+        if (!groundDetected && isTierA_spawn)
+        {
+            float spawnCamX = spawnCam != null ? spawnCam.transform.position.x : 0f;
+            float spawnCamZ = spawnCam != null ? spawnCam.transform.position.z : 0f;
+            float dxRC = data.x - spawnCamX;
+            float dzRC = data.z - spawnCamZ;
+            float horizDist = Mathf.Sqrt(dxRC * dxRC + dzRC * dzRC);
+            if (horizDist >= 2.0f)
+            {
+                groundY = data.y;
+                groundDetected = true;
+                diagGroundSrc = "TierA-RN-distance-fallback";
+                diagTierAFound = true;
+                UnityLogger.IForward("v22-SPAWN-DISTANCE-FALLBACK",
+                    $"id={data.id} type={data.type} dist={horizDist:F2}m dataY={data.y:F2} (>=2m, no local plane, 信 RN)");
+            }
+        }
         if (!groundDetected)
         {
             // No ground available. Reject the spawn. Branch B invariant:
