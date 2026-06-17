@@ -4,7 +4,10 @@
 // (PortalSpawner + CairnTypePresets), avoiding a cross-asmdef reference.
 //
 // Place this MonoBehaviour on the same GameObject as V025Bootstrap (or any
-// persistent AR scene GO). It runs Awake() and injects the spawn delegate.
+// persistent AR scene GO).
+//
+// Lifecycle: wiring is done in Start() (not Awake()) so that V025Bootstrap.Awake()
+// is guaranteed to have completed and Assembly is non-null before wiring.
 //
 // cairnType string: 'cairn' | 'danger' | 'water' | 'junction' | 'hut'
 
@@ -15,7 +18,9 @@ using Cairn.AR.V025.Visual;
 
 public sealed class V025VisualBridge : MonoBehaviour
 {
-    private void Awake()
+    private PortalSpawner _portalSpawner;
+
+    private void Start()
     {
         var bootstrap = GetComponent<V025Bootstrap>()
                      ?? Object.FindFirstObjectByType<V025Bootstrap>();
@@ -32,14 +37,20 @@ public sealed class V025VisualBridge : MonoBehaviour
             return;
         }
 
+        _portalSpawner = Object.FindFirstObjectByType<PortalSpawner>();
+        if (_portalSpawner == null)
+        {
+            Debug.LogError("[V025VisualBridge] PortalSpawner not found in scene at Start — visual spawn will fail.");
+        }
+
         assembly.SetSpawnDelegate(SpawnViav024Visual);
         Debug.Log("[V025VisualBridge] SpawnDelegate wired to PortalSpawner v0.2.4 pipeline.");
     }
 
+    // Called by CairnAssemblyV2.Update() on the Unity main thread.
     private void SpawnViav024Visual(string cairnId, float3 worldPos, string cairnType)
     {
-        var portalSpawner = Object.FindFirstObjectByType<PortalSpawner>();
-        if (portalSpawner == null)
+        if (_portalSpawner == null)
         {
             Debug.LogError("[V025VisualBridge] PortalSpawner not found in scene — cannot spawn cairnId=" + cairnId);
             return;
@@ -50,17 +61,20 @@ public sealed class V025VisualBridge : MonoBehaviour
 
         var data = new CairnBridge.SpawnRequest
         {
-            id   = cairnId,
-            type = cairnType,
-            x    = worldPos.x,
-            y    = worldPos.y,
-            z    = worldPos.z,
-            r    = color.r,
-            g    = color.g,
-            b    = color.b,
+            id          = cairnId,
+            type        = cairnType,
+            x           = worldPos.x,
+            y           = worldPos.y,
+            z           = worldPos.z,
+            r           = color.r,
+            g           = color.g,
+            b           = color.b,
+            scrollSpeed = preset.scrollSpeed,
+            bloomBoost  = preset.bloomBoost,
+            tier        = "A",   // AR-anchored XYZ from AnchorAttachStrategy — bypass sessionOffset
         };
 
-        portalSpawner.SpawnStrand(data);
+        _portalSpawner.SpawnStrand(data);
         Debug.Log($"[V025VisualBridge] SpawnStrand id={cairnId} type={cairnType} pos=({worldPos.x:F2},{worldPos.y:F2},{worldPos.z:F2})");
     }
 }
