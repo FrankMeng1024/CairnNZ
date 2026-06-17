@@ -1067,8 +1067,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         vertical extent stays in screen).
 //         A dashed sage ring (opacity 0.35) is drawn at radius R+2
 //         to make the orbit visible. PO: "他的弧线 要出来".
-export const OTA_VERSION = 282;
-//         v281: wheel angles 135/225/315 (Draw-Reset diagonal).
+// v283  Wheel: G5-style 1/4 arc, Move at true top-right corner.
+//         PO: "G 类的 move 正好" + "Reset 边缘到屏顶 = Draw 边缘到
+//         屏右" — true edge-to-edge symmetry.
+//         Move anchor restored to FAB position (top: insets.top+8,
+//         right: Spacing.md). Pre-v283 wheel pushed Move down by
+//         ORBIT_R*0.85 to give the 120° Draw orbiter headroom — but
+//         the new layout puts Draw at 270° (directly below Move) so
+//         no headroom needed.
+//         3 orbiters on R=110 quarter-circle:
+//           Reset : 180° (directly left)
+//           Undo  : 225° (down-left diagonal)
+//           Draw  : 270° (directly below)
+//         Reset and Draw mirror across Move-Undo diagonal; both R=110
+//         from Move; both edges (50/2=25px from center) are exactly
+//         the same distance from screen edges as the FAB's edges.
+export const OTA_VERSION = 283;
+//         v282: equilateral wheel + visible arc.
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and
