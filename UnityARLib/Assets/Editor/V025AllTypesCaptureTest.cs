@@ -19,7 +19,7 @@ public static class V025AllTypesCaptureTest
     const int    H          = 720;
     const int    FRAME_COUNT = 120;   // 4s @ 30fps
     const float  FRAME_DT   = 1f / 30f;
-    const float  PREWARM    = 1.2f;   // ceremony sweep takes ~0.85s
+    const float  PREWARM    = 1.5f;   // ceremony sweep takes ~0.85s; extra time for particles to accumulate
 
     static readonly string[] TYPES  = { "cairn", "danger", "water", "junction", "hut" };
 
@@ -44,6 +44,13 @@ public static class V025AllTypesCaptureTest
             Shader.SetGlobalFloat("_CairnGlobalBreathFreq",    1.0f);
             Shader.SetGlobalFloat("_CairnGlobalThermalScale",  1.0f);
             Shader.SetGlobalFloat("_CairnGlobalHaloRadiusMul", 1.0f);
+            // Cone strand brightness: day mode (1.0) = 0.20× — set to 0 (night=0.32×) for more cone visibility.
+            Shader.SetGlobalFloat("_CairnGlobalDayNightT",     0.0f);   // night = cones brightest
+            // Distance boost: camera is 1.8m away — set a moderate value for boost.
+            Shader.SetGlobalFloat("_CairnGlobalCamDist",       6.0f);   // moderate distance boost on cones
+            // ConfidenceRing: AR confidence = 1 (green); hide ring in capture (alpha=0).
+            Shader.SetGlobalFloat("_CairnGlobalArConfidence",       1.0f);
+            Shader.SetGlobalFloat("_CairnGlobalConfidenceRingAlpha", 0.0f);
 
             var spawner = Object.FindFirstObjectByType<PortalSpawner>();
             if (spawner == null)
@@ -92,12 +99,26 @@ public static class V025AllTypesCaptureTest
                 spawner.SpawnStrand(req);
                 Debug.Log($"[V025AllTypesCap] SpawnStrand type={typeName} color=({preset.color.r:F2},{preset.color.g:F2},{preset.color.b:F2})");
 
-                // Simulate particle systems to get past ceremony sweep
+                // Editor batchmode: coroutines don't run, so ceremony sweep never advances.
+                // Manually push all ring material instances to fully-revealed state,
+                // and enable TypeParticleController emission so particles appear.
+                ForceFullReveal();
+                EnableAllTypeParticles();
+                // Batch mode: FarShaftDistanceGate.Update() never runs (no play mode),
+                // so FarShaft renders even at close range (camera is 2.3m from cairn).
+                // Hide FarShaft + GroundHalo to avoid magenta/broken-shader artifacts.
+                HideBatchModeArtifacts();
+
+                // Advance _CairnAnimTime global so cone shaders animate visibly.
+                float animTime = 0f;
+                // Prewarm particle systems so ring is populated when capture starts.
                 SimulateAllParticles(PREWARM);
 
                 // Capture FRAME_COUNT frames
                 for (int frame = 0; frame < FRAME_COUNT; frame++)
                 {
+                    animTime += FRAME_DT;
+                    Shader.SetGlobalFloat("_CairnAnimTime", animTime);
                     SimulateAllParticles(FRAME_DT);
                     string path = Path.Combine(outDir, $"frame-{frame:D3}.png");
                     CaptureToPng(cam, path);
@@ -161,6 +182,80 @@ public static class V025AllTypesCaptureTest
         byte[] png = tex.EncodeToPNG();
         Object.DestroyImmediate(tex);
         File.WriteAllBytes(path, png);
+    }
+
+    /// <summary>
+    /// Editor batchmode fix: coroutines don't run, so CeremonyController.PlayCo() never
+    /// advances _SweepAngle / _Reveal. Manually set all ring material instances to
+    /// fully-revealed (sweep=2π, reveal=1) so the sigil is visible in the capture.
+    /// </summary>
+    static void ForceFullReveal()
+    {
+        foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+        {
+            // Only mutate instances created by PortalSpawner (they have "PortalRing" in name).
+            if (!r.gameObject.name.Contains("PortalRing")) continue;
+            // renderer.material returns the instance (creates one if not yet done).
+            var mat = r.material;
+            if (mat.HasProperty("_SweepAngle")) mat.SetFloat("_SweepAngle", Mathf.PI * 2f);
+            if (mat.HasProperty("_Reveal"))     mat.SetFloat("_Reveal",     1f);
+        }
+    }
+
+    /// <summary>
+    /// Editor batchmode fix: TypeParticleController.SetSpawnEnabled is called by
+    /// CeremonyController after the sweep completes, but that coroutine never runs.
+    /// Find all TypeParticleController instances and force enable emission.
+    /// </summary>
+    static void EnableAllTypeParticles()
+    {
+        foreach (var tp in Object.FindObjectsByType<Cairn.AR.TypeParticleController>(FindObjectsSortMode.None))
+        {
+            tp.SetSpawnEnabled(true);
+        }
+    }
+
+    /// <summary>
+    /// Editor batchmode fix: FarShaftDistanceGate.Update() never runs, so FarShaft
+    /// renders even at close range (camera 2.3m — below 6m hide threshold). Also hides
+    /// GroundHalo which can render as magenta when Particles/Unlit shader is missing
+    /// from batch mode shader cache. Neither element is meaningful at 1.8m capture distance.
+    /// </summary>
+    static void HideBatchModeArtifacts()
+    {
+        // In Editor batch mode, several components don't work correctly:
+        // - FarShaftDistanceGate.Update() never runs → FarShaft renders even close-up
+        // - BillboardYaw.Update() never runs → FarShaft faces wrong direction
+        // - GroundHalo uses URP Particles/Unlit which may not be in batch shader cache
+        // - ScanGridQuad / ContactShadow may render with wrong shader state
+        // Strategy: hide everything EXCEPT the core visual elements we want to capture.
+        var keepNames = new System.Collections.Generic.HashSet<string>
+        {
+            "Inner", "Outer",     // cone strands (Inner + Outer submeshes)
+            "PortalRing",         // ground portal ring SDF
+            "ConfidenceRing",     // animated dashed ring (working)
+            "UnifiedSparks",      // type particles
+            "Fireflies_Core", "Fireflies_Dust",  // ambient particle rings
+            "Pebble_M", "Pebble_L", "Pebble_S",  // cairn pebble stack
+        };
+        int hidden = 0;
+        foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+        {
+            string n = r.gameObject.name;
+            // Keep cone BgStrands and UnifiedSparks (names contain these)
+            bool keep = keepNames.Contains(n)
+                || n.StartsWith("BgStrand_")
+                || n.StartsWith("UnifiedSparks")
+                || n.StartsWith("Pebble_")
+                || n.StartsWith("Fireflies_");
+            if (!keep)
+            {
+                r.enabled = false;
+                hidden++;
+                Debug.Log($"[V025AllTypesCap] HIDDEN: '{n}'");
+            }
+        }
+        Debug.Log($"[V025AllTypesCap] HideBatchModeArtifacts: hidden {hidden} renderers");
     }
 }
 #endif

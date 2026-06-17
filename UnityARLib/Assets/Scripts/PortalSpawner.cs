@@ -881,8 +881,11 @@ public partial class PortalSpawner : MonoBehaviour, ICairnSpawner
             // SRP Batcher 启用时 MPB 写 CBUFFER 字段被静默忽略,改用 material.SetFloat 真生效。
             // (其余字段 _BaseColor/_BloomBoost 等可继续走 MPB 因为它们不影响 sweep visibility)
             ringRenderer.SetPropertyBlock(mpb);
-            // Material instance 写 sweep + reveal 真生效 (绕过 SRP Batcher CBUFFER mask)
+            // Material instance 写 sweep + reveal + BaseColor 真生效 (绕过 SRP Batcher CBUFFER mask)
+            // _BaseColor 在 CBUFFER_START(UnityPerMaterial) 里, MPB 写入被 SRP Batcher 静默忽略.
+            // 必须用 material instance SetColor 覆盖. (同 _SweepAngle/_Reveal 修法.)
             var ringMatInstance = ringRenderer.material;  // material instance, not sharedMaterial
+            ringMatInstance.SetColor("_BaseColor", hdrColor);
             ringMatInstance.SetFloat("_SweepAngle", 0f);
             ringMatInstance.SetFloat("_Reveal", 0f);
 
