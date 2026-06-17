@@ -89,6 +89,16 @@ namespace Cairn.AR.V025.Bootstrap
 
             // Strategy stack
             var persistence = PersistenceFactory.Create();
+            // Phase 5 §A.1: if iOS path returned ArkitWorldMapPersistence, wire ARSession
+            // so SaveAsync/LoadAsync can access ARKitSessionSubsystem.
+#if HAS_ARKIT_WORLDMAP && UNITY_IOS && !UNITY_EDITOR
+            if (persistence is Cairn.AR.V025.Core.ArkitWorldMapPersistence arkit)
+            {
+                var session = FindObjectOfType<UnityEngine.XR.ARFoundation.ARSession>();
+                if (session != null) arkit.SetArSession(session);
+                else Debug.LogWarning("[v025/Bootstrap] ARSession not found in scene; ArkitWorldMapPersistence will fail until SetArSession is called");
+            }
+#endif
             var validator = new FloorPlaneValidatorV2();
             // Phase 5 will replace this Miss stub via SetGroundResolver() once
             // ARRaycastManager is live in the AR scene. Until then, Tier-G plane

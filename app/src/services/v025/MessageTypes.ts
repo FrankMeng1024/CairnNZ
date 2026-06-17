@@ -77,6 +77,14 @@ export interface SaveSpaceFailed {
     diagnostic: string;
 }
 
+// Phase 5 §A.3: LoadAsync failure outbound wire (was missing pre-final-review)
+export interface LoadSpaceFailed {
+    type: 'v025/load-space-failed';
+    spaceId: string;
+    outcome: string; // PersistenceOutcome enum string (NoCache/MapCorrupt/MapVersionMismatch/RelocalizeTimeout/IoError)
+    diagnostic: string;
+}
+
 export interface SessionReady {
     type: 'v025/session-ready';
     sessionInstanceId: string;
@@ -111,6 +119,7 @@ export type V025ResponseMessage =
     | SpawnRefused
     | SaveSpaceOk
     | SaveSpaceFailed
+    | LoadSpaceFailed
     | SessionReady
     | SessionLost
     | TelemetryEvent;

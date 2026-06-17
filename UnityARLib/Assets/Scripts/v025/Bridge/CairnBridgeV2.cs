@@ -113,10 +113,10 @@ namespace Cairn.AR.V025.Bridge
                         OnEndSession();
                         break;
                     case "v025/save-space":
-                        // Final-A X-4 fix: dispatch save-space (Phase 1A shell returns
-                        // IoError; Phase 5 .iOS.cs replacement returns Success). Either
-                        // way, RN gets a v025/save-space-ok or save-space-failed response.
-                        OnSaveSpaceFireAndForget(msg);
+                        // Phase 5 §A.5 fix: awaitable Task instead of async void.
+                        // Fire-and-forget at the dispatcher with explicit `_ =` so
+                        // unobserved exceptions are caught by the outer try/catch.
+                        _ = OnSaveSpaceAsync(msg);
                         break;
                     default:
                         // unknown v025/* message: ignore (forward-compat)
@@ -182,7 +182,11 @@ namespace Cairn.AR.V025.Bridge
         // but PersistenceFactory.Create() gives us the right impl per platform.
         // Phase 1A iOS shell returns IoError; Phase 5 .iOS.cs replacement returns
         // Success. Either way, RN gets a structured response.
-        private async void OnSaveSpaceFireAndForget(System.Collections.Generic.Dictionary<string, object> msg)
+        // Phase 5 §A.5: changed from `async void OnSaveSpaceFireAndForget` to
+        // `async Task OnSaveSpaceAsync`. Caller in OnRawMessage uses `_ = ...`
+        // for fire-and-forget; unobserved exceptions surface to the outer
+        // try/catch instead of becoming SynchronizationContext crashes.
+        private async Task OnSaveSpaceAsync(System.Collections.Generic.Dictionary<string, object> msg)
         {
             var spaceId = msg.TryGetValue("spaceId", out var s) ? s as string : null;
             if (spaceId == null) return;

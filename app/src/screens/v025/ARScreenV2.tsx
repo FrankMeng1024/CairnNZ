@@ -132,6 +132,15 @@ export function ARScreenV2(_props: ARScreenProps) {
                 confirm(m.cairnId, m.outcomeKind, m.finalXyz, m.diagnostic ?? '');
             } else if (m.type === 'v025/spawn-refused') {
                 refuse(m.cairnId, m.diagnostic ?? '');
+            } else if (m.type === 'v025/save-space-ok') {
+                // Phase 5 §A.4: save-space outcome handlers (was zero-wire pre-final-review)
+                crashLogger.breadcrumb('v025_save_space_ok:' + m.spaceId);
+            } else if (m.type === 'v025/save-space-failed') {
+                crashLogger.breadcrumb('v025_save_space_failed:' + m.spaceId + ':' + m.outcome);
+            } else if (m.type === 'v025/load-space-failed') {
+                // Phase 5 §A.3: load failure visibility — caller (Tier-G fallback) is automatic
+                // via AnchorAttachStrategy, but we record diagnostic for analytics
+                crashLogger.breadcrumb('v025_load_space_failed:' + m.spaceId + ':' + m.outcome);
             } else if (m.type === 'v025/telemetry') {
                 // Phase 4 composition: forward Unity-emitted telemetry into RN-side
                 // batcher so a single POST per 5s carries both Unity- and RN-originated events.
@@ -168,6 +177,16 @@ export function ARScreenV2(_props: ARScreenProps) {
                 cairnLng,
             });
             // confirm/refuse already handled by bridge subscription; no-op here
+            // Phase 5 §A.4: trigger save-space 30s after spawn so ARSession has time
+            // to reach worldMappingStatus=Mapped/Extending. Fire-and-forget; outcome
+            // arrives via v025/save-space-{ok|failed} listener above.
+            setTimeout(() => {
+                try {
+                    bridge.send({ type: 'v025/save-space', spaceId: PLACEHOLDER_SPACE_ID });
+                } catch (sendErr) {
+                    crashLogger.breadcrumb('v025_save_space_send_failed: ' + String(sendErr));
+                }
+            }, 30000);
         } catch (err) {
             if (err instanceof SpawnRefusedError) {
                 refuse(cairnId, err.diagnostic);

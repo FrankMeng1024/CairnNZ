@@ -685,7 +685,7 @@ PlayerSettings:
   webWasm2023: 0
   scriptingDefineSymbols:
     iOS: UNITY_AR_FOUNDATION
-    iPhone: UNITY_XR_ARKIT_LOADER_ENABLED
+    iPhone: UNITY_XR_ARKIT_LOADER_ENABLED;HAS_ARKIT_WORLDMAP
   additionalCompilerArguments: {}
   platformArchitecture:
     iOS: 2
