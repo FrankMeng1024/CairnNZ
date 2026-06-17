@@ -666,6 +666,22 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
                 if (p.y < best.y) best = p;
               }
               groundYRef.current = best.y;
+              // v0.2.5 OTA fix — Unity-side A1 FSM stays UNLOCKED when no
+              // cairn exists (GroundYResolver.Update returns early on
+              // _tracks.Count==0, so OnTierAObserved never fires). Server-
+              // side build has the proper fix, but until users get the new
+              // ipa we bootstrap A1=LOCKED from RN once we've accepted a
+              // ≥0.5m² floor plane that passed the same F4 anti-tabletop
+              // rules as Unity's Tier-A check. Safe because: (a) only
+              // promotes when a real Tier-A-equivalent plane is observed,
+              // (b) no-op once Unity's own A1State message arrives.
+              const _curA1 = useArOriginStore.getState().a1State;
+              if (_curA1 !== 'LOCKED' && _curA1 !== 'FROZEN') {
+                useArOriginStore.getState().onA1State('LOCKED' as A4_A1State);
+                crashLogger.breadcrumb(
+                  `${TAG}:rn-bootstrap-a1-locked y=${best.y.toFixed(2)} area=${best.area.toFixed(1)}`
+                );
+              }
             } else if (groundYRef.current === null) {
               // Cold start — no prior plane and this one is too small.
               // Use it temporarily; the next ≥0.5m plane will replace it.
