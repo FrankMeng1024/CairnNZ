@@ -1067,8 +1067,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         vertical extent stays in screen).
 //         A dashed sage ring (opacity 0.35) is drawn at radius R+2
 //         to make the orbit visible. PO: "他的弧线 要出来".
-export const OTA_VERSION = 282;
-//         v281: wheel angles 135/225/315 (Draw-Reset diagonal).
+// v283  PO selected I1 from the iPhone-real-size demos.
+//         Wheel layout:
+//           Move at FAB anchor (top-right corner, no offset).
+//           Reset : 180° (R=90 directly left)
+//           Undo  : 225° (R=90 lower-left, on symmetry diagonal)
+//           Draw  : 270° (R=90 directly below)
+//         True edge-to-edge symmetry: Reset upper-edge to screen-top
+//         equals Draw right-edge to screen-right (geometric: both
+//         orbiters 50px wide, both at distance R=90 from Move-center,
+//         Move itself padded equally from top & right).
+export const OTA_VERSION = 283;
+//         v282: equilateral wheel + visible arc (rolled back).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

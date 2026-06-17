@@ -133,12 +133,13 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
           <View
             pointerEvents="box-none"
             style={[styles.wheelCenterAnchor, {
-              // Push the wheel center DOWN from the FAB position so
-              // the upper-arc orbiter (Draw at 120°) doesn't clip
-              // the screen top. R=90 + Draw vertical offset = 78px,
-              // need ~95px of headroom above Move.
-              top: insets.top + 8 + FAB_SIZE / 2 + ORBIT_R * 0.85,
-              right: Spacing.md + FAB_SIZE / 2 + 6,
+              // v283 (I1 selected): Move sits at the FAB position
+              // (top-right). Pre-v283 wheel pushed Move down by
+              // ORBIT_R*0.85 to give the 120° upper-arc Draw orbiter
+              // headroom — but with the new 180°/225°/270° layout,
+              // no orbiter is above Move, so no shift needed.
+              top: insets.top + 8 + FAB_SIZE / 2,
+              right: Spacing.md + FAB_SIZE / 2,
             }]}
           >
             {/* Visible orbit arc — a 1.5px sage stroke from 120° to
@@ -178,33 +179,37 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
               </Text>
             </TouchableOpacity>
 
-            {/* Three small orbiters on the equilateral triangle whose
-                centroid is Move. Angles ccw from +x:
-                  Draw  : 120° (upper-left of Move, slightly above)
-                  Undo  : 180° (directly left)
-                  Reset : 240° (lower-left of Move, mirrored to Draw)
-                Equal R from Move; equal arc between each pair. */}
+            {/* v283 wheel (I1): 1/4 circle arc, R=90.
+                  Reset : 180° (directly left of Move)
+                  Undo  : 225° (lower-left, on the symmetry diagonal)
+                  Draw  : 270° (directly below Move)
+                All three same distance from Move. Reset/Draw are
+                mirror-symmetric across the Move→Undo diagonal —
+                Reset upper-edge to screen-top equals Draw right-edge
+                to screen-right (geometric proof: both small icons
+                are 50px wide, sit at distance R from Move-center,
+                which is itself padded equally from top & right). */}
             <SmallOrbit
-              dx={ORBIT_R * Math.cos(120 * Math.PI / 180)}
-              dy={-ORBIT_R * Math.sin(120 * Math.PI / 180)}
-              icon="Pencil" label="Draw"
-              active={safeTool === 'brush'}
-              activeBg="#c87941"
-              onPress={() => pickTool('brush')}
+              dx={-ORBIT_R}
+              dy={0}
+              icon="RotateCcw" label="Reset"
+              danger
+              onPress={handleResetTap}
             />
             <SmallOrbit
-              dx={ORBIT_R * Math.cos(180 * Math.PI / 180)}
-              dy={-ORBIT_R * Math.sin(180 * Math.PI / 180)}
+              dx={-ORBIT_R * Math.SQRT1_2}
+              dy={ORBIT_R * Math.SQRT1_2}
               icon="Undo2" label="Undo"
               disabled={!canUndo}
               onPress={handleUndoTap}
             />
             <SmallOrbit
-              dx={ORBIT_R * Math.cos(240 * Math.PI / 180)}
-              dy={-ORBIT_R * Math.sin(240 * Math.PI / 180)}
-              icon="RotateCcw" label="Reset"
-              danger
-              onPress={handleResetTap}
+              dx={0}
+              dy={ORBIT_R}
+              icon="Pencil" label="Draw"
+              active={safeTool === 'brush'}
+              activeBg="#c87941"
+              onPress={() => pickTool('brush')}
             />
           </View>
         </>
