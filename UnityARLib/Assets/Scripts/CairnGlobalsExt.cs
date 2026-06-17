@@ -130,6 +130,10 @@ public partial class CairnGlobals
         B("ArOriginCompensationEnabled", true);
         B("ConfidenceRingEnabled", true);
         F("ConfidenceRingAlpha",  null, 0,    1,    0.6f);
+        // v0.2.5 — register ConeStrand kill-switch so RN OTA can disable
+        // the 5 cone pillars (defaults to false; users who want them on
+        // must explicitly opt in via OTA).
+        B("ConeStrandEnabled", false);
 
         // §G.1d Text (additions to existing TextScale/Height/Alpha — 8 new)
         F("TextBevelDepth",       null, 0,    1,    0.5f);

@@ -520,6 +520,14 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
               // settles at finalPos on first frame).
               ['SummonEnabled', 0],          // true → false — no rise animation
               ['SummonRiseDistance', 0.0],   // safety: also zero the magnitude
+              // v0.2.5 OTA — disable confidence ring (red/amber/green ring on
+              // ground around each cairn). User explicitly does not want it.
+              // PortalSpawnerV199.cs:183 reads this; 0=disabled, 1=enabled.
+              // ConeStrand (5 light pillars) cannot be turned off via OTA in
+              // this ipa — its key is not registered in CairnGlobalsExt, so
+              // GetBool falls through to fallback=true. Removing them will
+              // require the next Unity build.
+              ['ConfidenceRingEnabled', 0],
             ];
             try {
               for (const [name, value] of groundedDefaults) {
@@ -909,6 +917,20 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           crashLogger.breadcrumb(
             `${TAG}:recv:A1State next=${msg.state} prev=${msg.prev ?? '?'} a11=${msg.a11 ?? '?'}`
           );
+          // v0.2.5 OTA — anti-downgrade: Unity's A1 FSM in current ipa only
+          // calls OnTierAObserved() during plant (when _tracks.Count>0), so
+          // after first plant it transitions UNLOCKED→ARMED and never reaches
+          // LOCKED (no continuous plane scan triggers ARMED→LOCKED). That
+          // would lock the plant button after every successful plant.
+          // Fix: ignore ARMED downgrades when RN already promoted to LOCKED
+          // via PlaneDetected bootstrap (the plane data is the same evidence
+          // Unity uses; RN just sees it earlier and continuously). Only
+          // accept FROZEN (ceremony freeze) and UNLOCKED (full reset).
+          const _curStateForA1 = useArOriginStore.getState().a1State;
+          if (_curStateForA1 === 'LOCKED' && msg.state === 'ARMED') {
+            crashLogger.breadcrumb(`${TAG}:recv:A1State ignored-ARMED-downgrade prev=LOCKED`);
+            break;
+          }
           useArOriginStore.getState().onA1State(msg.state as A4_A1State);
           break;
         }
@@ -982,10 +1004,10 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
           }
           if (typeof (globalThis as any).__cairnPlantRejected === 'function') {
             const userMessage = msg.reason === 'no-floor'
-              ? '指向地面再 plant'
+              ? 'Point at the ground to plant'
               : msg.reason === 'anchor-failed'
-              ? 'AR 锚定失败，重试'
-              : '种植失败，重试';
+              ? 'AR anchor failed — try again'
+              : 'Plant failed — try again';
             (globalThis as any).__cairnPlantRejected(userMessage);
           }
           break;

@@ -1094,7 +1094,7 @@ export function ARScreenLegacy({ onClose, onPlaceMarker }: ARScreenProps) {
           // Surface a non-blocking toast so user knows what happened.
           // This keeps UX continuous: user just re-aims downward at trail.
           if (typeof (globalThis as any).__cairnPlantRejected === 'function') {
-            (globalThis as any).__cairnPlantRejected('指向地面再 plant');
+            (globalThis as any).__cairnPlantRejected('Point at the ground to plant');
           }
           return;
         }

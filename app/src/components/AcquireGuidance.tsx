@@ -29,11 +29,11 @@ import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 
 // ---- Copy (Reviewer R-B6 情感化重写) ----
 const GUIDANCE_COPY: Record<number, string> = {
-  0: '抬起手机,让 cairn 找到地面醒来',
-  1: '再慢一点,让镜头看到地面',
-  2: '低头看一下地面',
-  3: '蹲下来一点点',
-  4: '', // silent at T15 — 不暗示系统介入
+  0: 'Lift your phone — let the cairn find the ground',
+  1: 'Slow down so the camera can see the floor',
+  2: 'Look down at the ground',
+  3: 'Crouch a little lower',
+  4: '', // silent at T15 — do not hint at system intervention
 };
 
 interface Props {

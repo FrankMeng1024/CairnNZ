@@ -23,8 +23,8 @@ namespace Cairn.AR
     public class CeremonyController : MonoBehaviour
     {
         [Header("Timeline")]
-        [Tooltip("Total ceremony length in seconds (variant_C_3D.html = 1.0)")]
-        [SerializeField] float _totalDuration = 1.0f;
+        [Tooltip("Total ceremony length in seconds (v0.2.5: extended to 3.0s — user reported 1.0s ceremony was over before they could turn to look at the cairn)")]
+        [SerializeField] float _totalDuration = 3.0f;
         [Tooltip("Ring sweep ends at this normalized t (variant_C_3D.html = 0.50)")]
         [SerializeField] float _ringSweepEndT = 0.50f;
         [Tooltip("Rune reveal starts at this t (variant_C_3D.html = 0.50)")]

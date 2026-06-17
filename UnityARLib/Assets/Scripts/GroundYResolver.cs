@@ -600,32 +600,34 @@ public class GroundYResolver : MonoBehaviour
         // regressions in this branch are caught.
         ServicePendingTransition();
 
-        // v0.2.5 A1-bootstrap fix: when no cairns are placed yet, _tracks is
-        // empty and Update() would return immediately — OnTierAObserved() was
-        // never called, so A1 FSM stayed UNLOCKED forever and RN showed
-        // "Scanning the ground" indefinitely even when a valid floor plane
-        // was present. Scan plane manager every 12 frames (same cadence as
-        // the per-track requery) so A1 can reach ARMED/LOCKED before any
-        // cairn is planted, enabling the plant button.
+        // v0.2.5 A1-bootstrap fix (revised): always scan planeManager every
+        // 12 frames regardless of _tracks.Count. Original v0.2.5 fix only
+        // ran on empty tracks, but that left A1 stuck at ARMED after the
+        // first plant — OnTierAObserved was only invoked from QueryGroundY
+        // (per-track lerp) which doesn't help when the existing track's
+        // plane location is the only one queried. Continuous global plane
+        // scan ensures ARMED→LOCKED stability-window promotion fires after
+        // 1s of any visible Tier-A floor plane, not just the cairn's plane.
+        if (arCamera != null && planeManager != null
+            && _state != A1State.FROZEN && (Time.frameCount % 12) == 0)
+        {
+            float _camY = arCamera.transform.position.y;
+            float _hMin = Mathf.Min(0.8f, Mathf.Max(0.2f, _camY * 0.55f));
+            bool _req = _hMin < 0.65f;
+            float _minArea = _req ? 2.0f : 1.5f;
+            foreach (var plane in planeManager.trackables)
+            {
+                if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
+                if (!IsAcceptableFloorPlane(plane, _camY, _hMin, _minArea,
+                        requireFloorClassification: false,
+                        requireAreaEvenIfFloor: false)) continue;
+                OnTierAObserved();
+                break;
+            }
+        }
+
         if (_tracks.Count == 0)
         {
-            if (arCamera != null && planeManager != null && (Time.frameCount % 12) == 0
-                && _state != A1State.FROZEN)
-            {
-                float camY = arCamera.transform.position.y;
-                float hMin = Mathf.Min(0.8f, Mathf.Max(0.2f, camY * 0.55f));
-                bool req = hMin < 0.65f;
-                float minArea = req ? 2.0f : 1.5f;
-                foreach (var plane in planeManager.trackables)
-                {
-                    if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
-                    if (!IsAcceptableFloorPlane(plane, camY, hMin, minArea,
-                            requireFloorClassification: false,
-                            requireAreaEvenIfFloor: false)) continue;
-                    OnTierAObserved();
-                    break;
-                }
-            }
             return;
         }
         float dt = Time.deltaTime;
