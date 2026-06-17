@@ -1077,8 +1077,34 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         equals Draw right-edge to screen-right (geometric: both
 //         orbiters 50px wide, both at distance R=90 from Move-center,
 //         Move itself padded equally from top & right).
-export const OTA_VERSION = 283;
-//         v282: equilateral wheel + visible arc (rolled back).
+// v284  Bug fix: head-magnet visual missing.
+//         Real-device confirmed: brush head-magnet's data was correct
+//         (endStroke unshift'd baseline-projection point into
+//         stroke.points; Preview output was correct), but the visual
+//         polyline never showed the head connection. Tail-magnet was
+//         fine.
+//         Root cause (sub-agent + manual code re-verification):
+//         BrushStrokeLayer.buildStrokeIncremental is an APPEND-only
+//         incremental builder, keyed by stroke.id, that tracks
+//         lastBuiltPointCount and processes only segments
+//         [lastBuiltPointCount, N). When endStroke unshifts a
+//         baseline-projection point at the head, every existing
+//         index shifts +1 — but the cached builder is unaware. Next
+//         render frame:
+//           startSeg = max(1, lastBuiltPointCount) = old count
+//           for i = old..N: a = points[i-1], b = points[i]
+//         → the new head segment [points[0], points[1]] is never
+//         processed, and existing segments are mis-indexed.
+//         Tail push doesn't shift indices so the same builder
+//         correctly handles it.
+//         Fix: builder now caches firstPointRef = s.points[0]. On
+//         each render, if points[0] !== firstPointRef → full rebuild.
+//         appendStrokePoint never changes points[0], so the live
+//         drawing path stays incremental (no perf regression).
+//         No OTA — will ship with next native build. Verify on
+//         next-build manual test.
+export const OTA_VERSION = 284;
+//         v283: wheel I1 — Move at FAB anchor, R=90 1/4 arc.
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

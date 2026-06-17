@@ -120,6 +120,14 @@ interface IncrementalStrokeBuilder {
   /** the trailing run's feature object — we mutate its coordinates as
    *  more points arrive, so we never need to rebuild it. */
   runFeature: any | null;
+  /** v284: reference to s.points[0] at last build. If the stroke gets
+   *  prepended (e.g. endStroke unshifts a baseline-projection point
+   *  for head magnet), s.points[0] will be a different object — we
+   *  detect that and force a full rebuild. Without this guard the
+   *  incremental builder, which only tracks lastBuiltPointCount and
+   *  assumes append-only growth, silently mis-renders the head magnet
+   *  segment. */
+  firstPointRef: any | null;
 }
 
 const strokeBuildCache = new Map<string, IncrementalStrokeBuilder>();
@@ -135,6 +143,7 @@ function newBuilder(): IncrementalStrokeBuilder {
     runSeverity: 'sage',
     runComputed: false,
     runFeature: null,
+    firstPointRef: null,
   };
 }
 
@@ -203,6 +212,7 @@ function buildStrokeIncremental(
 
   if (N < 2) {
     builder.lastBuiltPointCount = N;
+    builder.firstPointRef = N > 0 ? s.points[0] : null;
     return builder;
   }
 
@@ -253,6 +263,9 @@ function buildStrokeIncremental(
     }
   }
   builder.lastBuiltPointCount = N;
+  // v284: snapshot points[0] reference so subsequent calls can detect
+  // a head-prepend (endStroke head magnet) and trigger a full rebuild.
+  builder.firstPointRef = N > 0 ? s.points[0] : null;
   return builder;
 }
 
@@ -272,8 +285,17 @@ function buildFeatures(
   for (const s of strokes) {
     liveKeys.add(s.id);
     let builder = strokeBuildCache.get(s.id);
-    if (!builder || builder.lastBuiltPointCount > s.points.length) {
-      // Cache miss OR stroke shrank (erase-split / undo): rebuild fresh.
+    // v284: also rebuild on head-prepend. endStroke unshifts a
+    // baseline-projection point for head magnet, which shifts every
+    // existing index by +1. The incremental builder assumes
+    // append-only growth and would otherwise mis-render the new
+    // head segment. Detecting via points[0] reference change.
+    if (
+      !builder
+      || builder.lastBuiltPointCount > s.points.length
+      || (builder.firstPointRef !== null && s.points.length > 0 && s.points[0] !== builder.firstPointRef)
+    ) {
+      // Cache miss / stroke shrank / head was prepended: rebuild fresh.
       builder = newBuilder();
       strokeBuildCache.set(s.id, builder);
     }
