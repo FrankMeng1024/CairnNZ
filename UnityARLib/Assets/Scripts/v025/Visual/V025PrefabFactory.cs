@@ -9,6 +9,7 @@
 // for performance, but the runtime build path stays as the fallback so EditorWindow
 // playground always works.
 
+using System.Reflection;
 using UnityEngine;
 
 namespace Cairn.AR.V025.Visual
@@ -39,6 +40,12 @@ namespace Cairn.AR.V025.Visual
             iconGo.AddComponent<MeshFilter>();
             iconGo.AddComponent<MeshRenderer>();
             var iconRenderer = iconGo.AddComponent<CairnTypeIconRenderer>();
+            if (iconMaterial != null)
+            {
+                var iconMatField = typeof(CairnTypeIconRenderer).GetField("_iconMaterial",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                if (iconMatField != null) iconMatField.SetValue(iconRenderer, iconMaterial);
+            }
             iconRenderer.BuildOrRefresh();
             // Add billboard so icon faces camera
             iconGo.AddComponent<BillboardYawV2>();
@@ -48,7 +55,13 @@ namespace Cairn.AR.V025.Visual
             ringGo.transform.SetParent(root.transform, false);
             ringGo.AddComponent<MeshFilter>();
             ringGo.AddComponent<MeshRenderer>();
-            ringGo.AddComponent<CeremonyV2Controller>();
+            var ceremonyCtrl = ringGo.AddComponent<CeremonyV2Controller>();
+            if (ringMaterial != null)
+            {
+                var ringMatField = typeof(CeremonyV2Controller).GetField("_ringMaterial",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                if (ringMatField != null) ringMatField.SetValue(ceremonyCtrl, ringMaterial);
+            }
 
             // Distance fader applied at root for global alpha
             // (children read shader _Alpha property via property block)
