@@ -12,6 +12,8 @@ import {
   // Sprint 8
   Droplets, X, Trash2, Navigation2, GitBranch,
   Check, CircleCheck,
+  // v284
+  Scissors,
   // Sprint 9
   LogIn, Eye, EyeOff, Mail, KeyRound, UserPlus,
   // Sprint 11
@@ -52,6 +54,7 @@ const ICON_MAP = {
   Target, Timer, Heart, Zap, MapPin, Route,
   Droplets, X, Trash2, Navigation2, GitBranch,
   Check, CircleCheck,
+  Scissors,
   LogIn, Eye, EyeOff, Mail, KeyRound, UserPlus,
   Info, Send,
   BookOpen, Moon, Volume2, LogOut, User, ArrowUp, Save,

@@ -1103,8 +1103,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         drawing path stays incremental (no perf regression).
 //         No OTA — will ship with next native build. Verify on
 //         next-build manual test.
-export const OTA_VERSION = 284;
-//         v283: wheel I1 — Move at FAB anchor, R=90 1/4 arc.
+// v285  Trim restored. PO: "trim 功能咋没了... T4 但是大小平分
+//         点击 trim 上方展示拉条 点其他地方就隐藏".
+//         Bottom action bar (state B = clean / previewed) becomes
+//         3 EQUAL-WIDTH buttons: [ Beautify | Trim | Save ]. Tapping
+//         Trim toggles a slider panel that lifts above the action
+//         row showing the existing TrimSlider component (preserves
+//         all v242 gesture handling). A full-screen invisible
+//         backdrop catches taps outside the panel and dismisses it.
+//         Tapping Beautify or Save also dismisses the panel.
+//         When the user enters brush mode (hasUnpreviewedStrokes),
+//         the trim panel auto-hides since the bottom bar collapses
+//         to a single Preview button anyway.
+//         Scissors icon registered in Icon.tsx for this feature.
+//         No OTA — ships with next native build.
+export const OTA_VERSION = 285;
+//         v284: head-magnet visual fix (incremental builder).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
 //             — was being rebuilt from matchedPoints at Preview commit and

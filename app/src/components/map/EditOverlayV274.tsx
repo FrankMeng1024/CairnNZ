@@ -24,6 +24,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouteEditStore } from '../../store/useRouteEditStore';
+import { polylineLengthM } from '../../services/routing/corridor/PolylineSampler';
+import { TrimSlider } from './TrimSlider';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../tokens';
 import { Icon } from '../Icon';
 
@@ -49,8 +51,20 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
   const resetEdits = useRouteEditStore(s => s.resetEdits);
   const undo = useRouteEditStore(s => s.undo);
   const undoStackLen = useRouteEditStore(s => s.undoStack.length);
+  // v284: trim re-introduced. Bottom action bar becomes 3 equal-width
+  // buttons (Beautify | Trim | Save). Tapping Trim toggles a slider
+  // panel that lifts above the action row; tapping anywhere else
+  // dismisses it. PO direction: "T4 但是大小平分 点击 trim 上方展示
+  // 拉条 点其他地方就隐藏".
+  const matchedPoints = useRouteEditStore(s => s.matchedPoints);
+  const trimStartFrac = useRouteEditStore(s => s.trimStartFrac);
+  const trimEndFrac = useRouteEditStore(s => s.trimEndFrac);
+  const setTrimStart = useRouteEditStore(s => s.setTrimStart);
+  const setTrimEnd = useRouteEditStore(s => s.setTrimEnd);
+  const beginTrimDrag = useRouteEditStore(s => s.beginTrimDrag);
 
   const [wheelOpen, setWheelOpen] = useState(false);
+  const [trimOpen, setTrimOpen] = useState(false);
 
   // v276: eraser tool removed from UI. If a session resumed in
   // 'eraser' mode (legacy state), coerce to 'brush' so the user
@@ -66,6 +80,16 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
   const canBeautify = !isComputing;
   const canSave = !isComputing && !hasUnpreviewedStrokes;
   const canUndo = undoStackLen > 0;
+
+  // v284: trim length math for the readout shown above the slider.
+  const totalLengthM = polylineLengthM(matchedPoints);
+  const editedLengthM = totalLengthM * (trimEndFrac - trimStartFrac);
+
+  // v284: switching back to brush state hides the trim panel (no point
+  // showing it while the user is mid-stroke).
+  useEffect(() => {
+    if (hasUnpreviewedStrokes && trimOpen) setTrimOpen(false);
+  }, [hasUnpreviewedStrokes, trimOpen]);
 
   // v276: eraser removed. Active tool can only be pan or brush.
   const safeTool: ToolKey = activeTool === 'brush' ? 'brush' : 'pan';
@@ -215,6 +239,19 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
         </>
       )}
 
+      {/* v284 trim backdrop — full-screen tap-catcher to dismiss
+          the trim panel when the user taps the map / anywhere outside.
+          Sits BELOW the bottom bar in z-order so the 3 action
+          buttons remain interactive (KeyboardAvoidingView renders
+          after this). */}
+      {trimOpen && (
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.trimBackdrop}
+          onPress={() => setTrimOpen(false)}
+        />
+      )}
+
       {/* Bottom bar — status text + action row. */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -256,33 +293,69 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
               )}
             </TouchableOpacity>
           ) : (
-            <View style={styles.bottomRow}>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={[styles.beautifyBtn, !canBeautify && styles.btnDisabled]}
-                disabled={!canBeautify}
-                onPress={() => canBeautify && onBeautify()}
-              >
-                {isComputing ? (
-                  <ActivityIndicator size="small" color={Colors.primary} />
-                ) : (
-                  <>
-                    <Icon name="Star" size={16} color={Colors.primary} strokeWidth={2.5} />
-                    <Text style={styles.beautifyBtnText} numberOfLines={1}>
-                      Beautify route
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={[styles.saveBtn, !canSave && styles.btnDisabled]}
-                disabled={!canSave}
-                onPress={() => canSave && onSave()}
-              >
-                <Text style={styles.saveBtnText} numberOfLines={1}>Save</Text>
-              </TouchableOpacity>
-            </View>
+            <>
+              {/* v284 trim panel — lifted above the action row when
+                  trimOpen. Tap-outside backdrop dismisses it (rendered
+                  separately, see below). */}
+              {trimOpen && (
+                <View style={styles.trimPanel} pointerEvents="auto">
+                  <View style={styles.trimHeaderRow}>
+                    <Icon name="Scissors" size={14} color={Colors.primary} strokeWidth={2.5} />
+                    <Text style={styles.trimHeaderText} numberOfLines={1}>Trim · drag handles</Text>
+                    {totalLengthM > 0 && (trimStartFrac > 0 || trimEndFrac < 1) && (
+                      <Text style={styles.trimReadout} numberOfLines={1}>
+                        {(editedLengthM / 1000).toFixed(2)} / {(totalLengthM / 1000).toFixed(2)} km
+                      </Text>
+                    )}
+                  </View>
+                  <TrimSlider
+                    trimStartFrac={trimStartFrac}
+                    trimEndFrac={trimEndFrac}
+                    onTrimStartChange={setTrimStart}
+                    onTrimEndChange={setTrimEnd}
+                    onTrimDragBegin={beginTrimDrag}
+                    totalLengthM={totalLengthM}
+                  />
+                </View>
+              )}
+              <View style={styles.bottomRow}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={[styles.thirdBtn, !canBeautify && styles.btnDisabled]}
+                  disabled={!canBeautify}
+                  onPress={() => { setTrimOpen(false); if (canBeautify) onBeautify(); }}
+                >
+                  {isComputing ? (
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                  ) : (
+                    <>
+                      <Icon name="Star" size={16} color={Colors.primary} strokeWidth={2.5} />
+                      <Text style={styles.thirdBtnText} numberOfLines={1}>Beautify</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={[styles.thirdBtn, trimOpen && styles.thirdBtnActive]}
+                  onPress={() => setTrimOpen(v => !v)}
+                >
+                  <Icon name="Scissors" size={16} color={trimOpen ? Colors.surface : Colors.primary} strokeWidth={2.5} />
+                  <Text
+                    style={[styles.thirdBtnText, trimOpen && styles.thirdBtnTextActive]}
+                    numberOfLines={1}
+                  >Trim</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={[styles.thirdBtn, !canSave && styles.btnDisabled]}
+                  disabled={!canSave}
+                  onPress={() => { setTrimOpen(false); if (canSave) onSave(); }}
+                >
+                  <Icon name="Check" size={16} color={Colors.primary} strokeWidth={2.5} />
+                  <Text style={styles.thirdBtnText} numberOfLines={1}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </>
           )}
         </View>
       </KeyboardAvoidingView>
@@ -498,6 +571,65 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: FontSize.body,
     fontWeight: '700',
+  },
+  // v284: 3-equal-width buttons (Beautify | Trim | Save). Same sage
+  // CTA style as the other primary buttons.
+  thirdBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.button,
+    backgroundColor: Colors.primaryBg,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
+  thirdBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  thirdBtnText: {
+    color: Colors.primary,
+    fontSize: FontSize.small,
+    fontWeight: '700',
+  },
+  thirdBtnTextActive: {
+    color: Colors.surface,
+  },
+  // v284 trim panel
+  trimPanel: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.button,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    paddingBottom: 4,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadow.card,
+  },
+  trimHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  trimHeaderText: {
+    fontSize: FontSize.caption,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  trimReadout: {
+    marginLeft: 'auto',
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  trimBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
   },
   btnDisabled: {
     opacity: 0.5,
