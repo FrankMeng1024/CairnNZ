@@ -29,6 +29,7 @@ import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { PressBtn } from '../components/PressBtn';
+import { MemorySettingsSection } from '../components/settings/MemorySettingsSection';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -304,6 +305,9 @@ export function SettingsScreen() {
             pending={locationShare !== false}
           />
         </View>
+
+        {/* ── Memory ── (v0.2.6) */}
+        <MemorySettingsSection />
 
         {/* ── Display ── */}
         <SectionHeader title="Display" />

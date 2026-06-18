@@ -57,7 +57,14 @@ export interface Marker {
   arOriginLng?: number;     // plant 时 arOrigin 快照 lng
 }
 
-const STORAGE_KEY_PREFIX = 'cairn_markers';
+// v0.2.6: bumped from 'cairn_markers' → 'cairn_markers_v026'.
+// Reason: title/body wire format changed (now uses U+001E separator
+// instead of '\n' join), and v0.2.6 ships fresh — server-side markers
+// table was truncated. Old client-side notes from prior versions would
+// render incorrectly under the new splitTitleBody decoder. Bumping the
+// key prefix abandons the old AsyncStorage entries in place; they
+// occupy a few KB of disk but are never read.
+const STORAGE_KEY_PREFIX = 'cairn_markers_v026';
 
 function storageKey(userId: string): string {
   return `${STORAGE_KEY_PREFIX}_${userId}`;

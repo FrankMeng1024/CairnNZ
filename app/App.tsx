@@ -4,6 +4,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { useFonts } from 'expo-font';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { ForegroundUnlockManager } from './src/features/memory/components/ForegroundUnlockManager';
+import { useMemorySettingsStore } from './src/features/memory/store/useMemorySettingsStore';
 // v241: EditResumePrompt removed — PO requested no resume modal.
 // Source kept on disk for reference but not imported.
 import { MigratorRetryPrompt } from './MigratorRetryPrompt';
@@ -205,6 +207,16 @@ function AppRoot() {
     try { hydrateSettings(); } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[hydrateSettings failed]', err);
+    }
+    // v0.2.6 — hydrate Memory settings (foreground unlock + friend overlay
+    // toggles) and Memory tile data (explored fog) for the current user.
+    // Memory tile hydration deferred until after auth resolves so we know
+    // which user's tiles to load.
+    try {
+      void useMemorySettingsStore.getState().hydrate();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[memory settings hydrate failed]', err);
     }
     try { hydrate().catch((err: unknown) => {
       // v9-audit (BUG-V8-007): hydrate() is async; synchronous try/catch
@@ -452,6 +464,7 @@ function AppRoot() {
   return (
     <>
       <RootNavigator />
+      <ForegroundUnlockManager />
       {/* v241: EditResumePrompt removed — PO requested no resume modal.
           Exit means exit. detachUI clears the AsyncStorage session, so
           there's nothing to resume. */}

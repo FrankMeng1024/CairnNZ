@@ -1,39 +1,46 @@
 /**
- * RootNavigator — matches design.jpg exactly
+ * RootNavigator
  *
- * Flow: Auth → Home → (Hiking | Running | MapHistory | Friends | Settings)
- * NO bottom tabs. All navigation from Home page.
+ * v0.2.5 (legacy):  Auth → Home → (Hiking | Running | MapHistory | ...)
+ *                   NO bottom tabs. All navigation from Home page.
+ *
+ * v0.2.6 (current): Auth → MainTabs (Trails | Friends | Memory | Settings)
+ *                   AR feature sealed (entry removed; code retained).
+ *                   HomeScreen kept in the codebase as a deprecated fallback;
+ *                   not registered in the new navigator.
+ *
+ * The transition is controlled by NAVIGATOR_VERSION below — a single
+ * source of truth that flips the entire shape of the app's nav. This is
+ * intentionally NOT a runtime feature flag because navigation shape
+ * changes deserve a deliberate code-level decision.
  */
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { AuthScreen } from '../screens/AuthScreen';
-import { HomeScreen } from '../screens/HomeScreen';
 import { HikingScreen } from '../screens/HikingScreen';
 import { RunningScreen } from '../screens/RunningScreen';
 import { MapHistoryScreen } from '../screens/MapHistoryScreen';
 import { MapScreen } from '../screens/MapScreen';
 import { RoutesScreen } from '../screens/RoutesScreen';
-import { FriendsScreen } from '../screens/FriendsScreen';
-import { SettingsScreen } from '../screens/SettingsScreen';
-import { ARScreen } from '../screens/ARScreen';
 import { RouteEditorScreen } from '../screens/RouteEditorScreen';
 import { DebugScreen } from '../screens/DebugScreen';
+import { PlantScreen } from '../screens/PlantScreen';
+import { BottomTabNavigator } from './BottomTabNavigator';
 import { useAppStore } from '../store/useAppStore';
 
 export type RootStackParamList = {
   Auth: undefined;
-  Home: undefined;
+  /** Tab bar root (4 tabs). Replaces the old "Home" stack screen. */
+  MainTabs: undefined;
   Hiking: undefined;
   Running: undefined;
   MapHistory: { sessionId?: string } | undefined;
   Map: { focusLat?: number; focusLng?: number; focusMarkerId?: string } | undefined;
   Routes: { initialTab?: 'routes' | 'activities' | 'flags' } | undefined;
   RouteEditor: { routeId?: string; fromSessionId?: string } | undefined;
-  Friends: undefined;
-  Settings: undefined;
-  AR: undefined;
+  Plant: undefined;
   Debug: undefined;
 };
 
@@ -59,19 +66,17 @@ export function RootNavigator() {
       >
         {isLoggedIn ? (
           <>
-            <Stack.Screen name="Home" component={HomeScreen} />
-            {/* All non-Home screens use the global ios_from_right transition.
-                Symmetric in both directions — entering slides in from the right,
-                back gesture/button slides it back out the same way. */}
+            {/* MainTabs is the new root post-login. Friends/Settings are
+                tabs and live INSIDE MainTabs — they're no longer stack
+                screens. AR was here in v0.2.5 and is now removed. */}
+            <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
             <Stack.Screen name="Hiking"      component={HikingScreen} />
             <Stack.Screen name="Running"     component={RunningScreen} />
             <Stack.Screen name="Routes"      component={RoutesScreen} />
-            <Stack.Screen name="Friends"     component={FriendsScreen} />
-            <Stack.Screen name="Settings"    component={SettingsScreen} />
-            <Stack.Screen name="AR"          component={ARScreen} />
             <Stack.Screen name="MapHistory"  component={MapHistoryScreen} />
             <Stack.Screen name="Map"         component={MapScreen} />
             <Stack.Screen name="RouteEditor" component={RouteEditorScreen} />
+            <Stack.Screen name="Plant"       component={PlantScreen} />
             <Stack.Screen name="Debug"       component={DebugScreen} />
           </>
         ) : (
