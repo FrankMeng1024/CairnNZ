@@ -1117,7 +1117,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         to a single Preview button anyway.
 //         Scissors icon registered in Icon.tsx for this feature.
 //         No OTA — ships with next native build.
-export const OTA_VERSION = 285;
+// v286  v0.2.6 → v0.2.6.3 Memory Mode (4 consecutive OTAs without
+//         bumping OTA_VERSION — fixed in this push). Memory Mode
+//         introduces fog-of-world map (zoom-17 tile + 25m circle
+//         renders), 3-step Plant flow (GPS lock → Mapbox pin adjust
+//         → title/text/voice stub), 4-tab navigation
+//         (Trails/Friends/Memory/Settings), per-user cloud-bound
+//         memory points, 8 Shanghai seed cairns from official user.
+//         Backend: new /api/memory/points (GET keyset paginated /
+//         POST INSERT-ON-DUPLICATE-KEY-with-confirm-SELECT / DELETE),
+//         memory_points table with UNIQUE(user_id, client_id) +
+//         covering index, markers.text widened VARCHAR(50→500).
+//         Sync: per-op AbortControllers, epoch token, central
+//         resetForUserSwitch chokepoint, deterministic-cid for
+//         legacy v0.2.6.2 client compat. Convergence after 7 review
+//         rounds (K → L → M → N → O → P): 0 Blocker / 0 Critical
+//         remaining. 35/35 unit tests pass. 0 new TypeScript errors.
+export const OTA_VERSION = 286;
 //         v284: head-magnet visual fix (incremental builder).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
