@@ -28,9 +28,11 @@
 import { storage } from '../../../store/storage';
 import { useMemoryStore, VisitedPoint } from '../store/useMemoryStore';
 
-// v0.2.6.1: schema bumped from v1 (tile bitmaps) to v2 (point array).
-// Storage key prefix bumped to v2 so old v1 payloads are abandoned.
-const STORAGE_KEY_PREFIX = 'cairn:memory:tiles:v2:';
+// v0.2.6.3: schema bumped from v2 (point array, no cid) to v3 (cid required).
+// Storage key prefix bumped to v3 so old v2 payloads are abandoned, but
+// deserialize() also accepts v2 input and synthesizes a deterministic cid
+// per point so the migration round-trips correctly without losing data.
+const STORAGE_KEY_PREFIX = 'cairn:memory:tiles:v3:';
 const DEBOUNCE_MS = 3_000;
 /**
  * Hard cap on how long a flush can be deferred. Without this, every GPS
@@ -84,39 +86,63 @@ interface SerializedPoint {
   t: number;
   /** synced flag (1 = synced, 0 = pending) */
   s: 0 | 1;
+  /** cid (uuid v4 or sha1-derived). v3 schema; absent in v2. */
+  c?: string;
 }
 
-interface SerializedMemoryV2 {
-  v: 2;
+interface SerializedMemoryV3 {
+  v: 3 | 2;
   points: SerializedPoint[];
   initialRevealDone: boolean;
 }
 
-function serialize(points: VisitedPoint[], initialRevealDone: boolean): SerializedMemoryV2 {
+function serialize(points: VisitedPoint[], initialRevealDone: boolean): SerializedMemoryV3 {
   return {
-    v: 2,
+    v: 3,
     points: points.map((p) => ({
       a: p.lat,
       o: p.lng,
       t: p.ts,
       s: p.synced ? 1 : 0,
+      c: p.cid,
     })),
     initialRevealDone,
   };
 }
 
+/**
+ * L1 fix (v0.2.6.3): for v2 (no cid) legacy points, leave cid empty.
+ * The first push will arrive at the server WITHOUT cid; server applies
+ * deterministicCid (sha1 of userId|ts|lat|lng) and echoes the canonical
+ * cid back. The sync service's markPointsSyncedByEcho() will then write
+ * the server's cid into the local point. This avoids the v2→v3
+ * dual-cid duplication where client-side legacyDeterministicCid (FNV)
+ * disagreed with server-side deterministicCid (sha1) and created two
+ * server rows for the same physical location.
+ */
+function legacyDeterministicCid(_lat: number, _lng: number, _ts: number): string {
+  // Empty cid is a sentinel: persistence saw a v2 point. The next
+  // push round-trip will fill in the canonical server cid.
+  return '';
+}
+
 function deserialize(raw: string): { points: VisitedPoint[]; initialRevealDone: boolean } | null {
   try {
-    const parsed = JSON.parse(raw) as SerializedMemoryV2;
-    if (parsed.v !== 2 || !Array.isArray(parsed.points)) return null;
+    const parsed = JSON.parse(raw) as SerializedMemoryV3;
+    if ((parsed.v !== 2 && parsed.v !== 3) || !Array.isArray(parsed.points)) return null;
     const points: VisitedPoint[] = [];
     for (const p of parsed.points) {
       if (typeof p?.a !== 'number' || typeof p?.o !== 'number') continue;
       if (!isFinite(p.a) || !isFinite(p.o)) continue;
+      const ts = typeof p.t === 'number' ? p.t : Date.now();
+      const cid = (typeof p.c === 'string' && p.c.length > 0)
+        ? p.c
+        : legacyDeterministicCid(p.a, p.o, ts);
       points.push({
         lat: p.a,
         lng: p.o,
-        ts: typeof p.t === 'number' ? p.t : Date.now(),
+        ts,
+        cid,
         synced: p.s === 1,
       });
     }
@@ -142,14 +168,18 @@ function clearTimers(): void {
 }
 
 /**
- * Flush pending state to disk for the given user. Caller passes the
- * userId so we cannot misroute A's tiles to B's storage key on a user
- * switch race.
+ * Flush a snapshot to disk. The caller (scheduleFlush) snapshots the
+ * store at schedule TIME, not at flush execution time, so a user switch
+ * mid-debounce cannot serialize the wrong content.
+ *
+ * N5 fix (v0.2.6.3): previously read useMemoryStore.getState() at flush
+ * time. If the new user's clearAll fired between schedule and flush,
+ * we'd serialize empty (or worse, the new user's points) to the OLD
+ * user's storage key.
  */
-async function flush(userId: string): Promise<void> {
+async function flush(userId: string, snapshot: { points: VisitedPoint[]; initialRevealDone: boolean }): Promise<void> {
   if (!userId) return;
-  const state = useMemoryStore.getState();
-  const payload = serialize(state.points, state.initialRevealDone);
+  const payload = serialize(snapshot.points, snapshot.initialRevealDone);
   try {
     await storage.setItem(storageKey(userId), JSON.stringify(payload));
   } catch {
@@ -157,11 +187,28 @@ async function flush(userId: string): Promise<void> {
   }
 }
 
+/**
+ * O3 fix (v0.2.6.3): scheduleFlush now updates BOTH timers' snapshots
+ * on each call. Previously the maxWaitTimer was only armed once per
+ * burst and held the FIRST snapshot in closure → after MAX_WAIT_MS of
+ * continuous walking, it flushed stale 15-second-old data. Now we
+ * keep `latestSnapshot` at module scope and the maxWaitTimer reads
+ * from that on fire.
+ */
+let latestSnapshot: { points: VisitedPoint[]; initialRevealDone: boolean } | null = null;
+let latestSnapshotUserId: string | null = null;
+
 function scheduleFlush(): void {
-  // Capture currentUserId AT SCHEDULE TIME so the closure cannot
-  // misfire if currentUserId mutates while the timer is queued.
   const userIdAtSchedule = currentUserId;
   if (!userIdAtSchedule) return;
+  const state = useMemoryStore.getState();
+  // Update the latest snapshot on EVERY call. Both timers read this
+  // when they fire — so the maxWaitTimer always uses the freshest data.
+  latestSnapshot = {
+    points: state.points.slice(),
+    initialRevealDone: state.initialRevealDone,
+  };
+  latestSnapshotUserId = userIdAtSchedule;
 
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = setTimeout(() => {
@@ -170,12 +217,11 @@ function scheduleFlush(): void {
       clearTimeout(maxWaitTimer);
       maxWaitTimer = null;
     }
-    void flush(userIdAtSchedule);
+    if (latestSnapshot && latestSnapshotUserId === userIdAtSchedule) {
+      void flush(userIdAtSchedule, latestSnapshot);
+    }
   }, DEBOUNCE_MS);
 
-  // Arm max-wait timer if not already armed. This is the
-  // starvation-prevention path — guarantees a flush at least every
-  // MAX_WAIT_MS even under continuous state changes.
   if (!maxWaitTimer) {
     maxWaitTimer = setTimeout(() => {
       maxWaitTimer = null;
@@ -183,7 +229,9 @@ function scheduleFlush(): void {
         clearTimeout(flushTimer);
         flushTimer = null;
       }
-      void flush(userIdAtSchedule);
+      if (latestSnapshot && latestSnapshotUserId === userIdAtSchedule) {
+        void flush(userIdAtSchedule, latestSnapshot);
+      }
     }, MAX_WAIT_MS);
   }
 }
@@ -196,7 +244,8 @@ export async function flushMemoryNow(): Promise<void> {
   const userId = currentUserId;
   if (!userId) return;
   clearTimers();
-  await flush(userId);
+  const state = useMemoryStore.getState();
+  await flush(userId, { points: state.points.slice(), initialRevealDone: state.initialRevealDone });
 }
 
 /**
@@ -214,8 +263,13 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
   // fix.
   await detachMemoryPersistence();
 
-  // If another hydrate started while we were awaiting detach, bail.
   if (myGeneration !== generation) return;
+
+  // O1 fix (v0.2.6.3): reset the in-memory store NOW (after the old
+  // user's flush completed in detachMemoryPersistence). This way the
+  // hydrate replacePoints below has a clean slate AND the empty-disk
+  // case (no raw) leaves the store correctly empty for the new user.
+  useMemoryStore.getState().resetForUserSwitch();
 
   currentUserId = userId;
 
@@ -232,10 +286,10 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
   if (raw) {
     const decoded = deserialize(raw);
     if (decoded) {
-      useMemoryStore.setState({
-        points: decoded.points,
-        initialRevealDone: decoded.initialRevealDone,
-      });
+      // L7 fix: use the store's replacePoints action which bumps
+      // geometryVersion and rebuilds _bucketIndex. Direct setState
+      // bypassed those, leaving FogLayer / CairnPinsLayer stale.
+      useMemoryStore.getState().replacePoints(decoded.points, decoded.initialRevealDone);
     }
   }
 
@@ -258,11 +312,12 @@ export async function detachMemoryPersistence(): Promise<void> {
   clearTimers();
   if (currentUserId) {
     const userId = currentUserId;
-    // Do NOT clear currentUserId until the flush is on the wire — the
-    // serialize() reads from useMemoryStore.getState() synchronously,
-    // so capturing userId here is sufficient.
+    // Snapshot store BEFORE clearing currentUserId so we capture the
+    // OLD user's content even if a concurrent clearAll runs after.
+    const state = useMemoryStore.getState();
+    const snapshot = { points: state.points.slice(), initialRevealDone: state.initialRevealDone };
     currentUserId = null;
-    await flush(userId);
+    await flush(userId, snapshot);
   }
 }
 

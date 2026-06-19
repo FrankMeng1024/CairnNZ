@@ -25,14 +25,14 @@
  * no message.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useMarkerStore, MarkerPermission } from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
-import { MemoryColors } from '../features/memory/config/memoryConfig';
+import { MemoryColors, UnlockConfig } from '../features/memory/config/memoryConfig';
 import { GpsLockStep } from '../features/plant/components/GpsLockStep';
 import { PinAdjustStep } from '../features/plant/components/PinAdjustStep';
 import { ContentStep } from '../features/plant/components/ContentStep';
@@ -59,6 +59,11 @@ interface PlantDraft {
 
 const DEFAULT_TYPE = 'cairn';
 
+/** AsyncStorage key for a failed-plant draft, scoped by user. */
+function draftKey(uid: string): string {
+  return `cairn:plant:draft:v3:${uid}`;
+}
+
 function defaultVisibility(): MarkerPermission {
   switch (VisibilityConfig.defaultLevel) {
     case 'self':   return 'personal';
@@ -83,13 +88,44 @@ const INITIAL_DRAFT: PlantDraft = {
 export function PlantScreen() {
   const nav = useNavigation<any>();
   const addMarker = useMarkerStore((s) => s.addMarker);
-  const recordPoint = useMemoryStore((s) => s.recordPoint);
+  const recordCircleUnlock = useMemoryStore((s) => s.recordCircleUnlock);
   const userId = useAppStore((s) => s.user?.id ?? '');
   const [step, setStep] = useState<Step>('gps');
   const [draft, setDraft] = useState<PlantDraft>(INITIAL_DRAFT);
-  // Tracks an in-flight commit so the Plant Cairn button can be
-  // disabled — prevents double-tap from creating two markers.
   const [submitting, setSubmitting] = useState(false);
+
+  /**
+   * K3 fix (v0.2.6.3): on mount, hydrate any failed-plant draft from
+   * AsyncStorage. Gated on userId — won't read with key
+   * '...:undefined'. Single draft per user; latest failure overwrites
+   * the previous (intentional, simpler than a draft list).
+   */
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { storage } = await import('../store/storage');
+        const raw = await storage.getItem(draftKey(userId));
+        if (cancelled || !raw) return;
+        const parsed = JSON.parse(raw) as PlantDraft;
+        if (
+          parsed && typeof parsed === 'object' &&
+          typeof parsed.title === 'string' &&
+          typeof parsed.text === 'string'
+        ) {
+          setDraft(parsed);
+          // If the saved draft already has a GPS lock, skip to content step.
+          if (parsed.lat != null && parsed.lng != null) {
+            setStep('content');
+          }
+        }
+      } catch {
+        // Ignore — corrupt draft is silently dropped.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
 
   const commit = useCallback(
     async (final: PlantDraft) => {
@@ -112,16 +148,22 @@ export function PlantScreen() {
           voiceMemoUri: final.voiceUri ?? undefined,
           voiceMemoDurationMs: final.voiceMs ?? undefined,
         } as any);
-        recordPoint(final.lat, final.lng, Date.now());
+        // L3 fix (v0.2.6.3): use recordCircleUnlock — it bypasses the
+        // 12.5m cull that recordPoint applies. Plant always clears fog
+        // around the plant location regardless of recent visit history.
+        recordCircleUnlock(final.lat, final.lng, UnlockConfig.radiusMeters, Date.now());
+        // K3 fix: clear any previously saved draft on successful commit.
+        try {
+          const { storage } = await import('../store/storage');
+          await storage.removeItem(draftKey(userId));
+        } catch { /* best-effort */ }
         nav.goBack();
       } catch (e: any) {
         // Stay on the content step so the user can retry without
         // re-entering everything. No silent failure.
-        // v0.2.6.2: persist the draft to AsyncStorage so a crash or
-        // navigate-away doesn't lose what they typed.
         try {
           const { storage } = await import('../store/storage');
-          await storage.setItem(`cairn:plant:draft:v1:${userId}`, JSON.stringify(final));
+          await storage.setItem(draftKey(userId), JSON.stringify(final));
         } catch {
           // Best-effort — can't help if storage itself is broken.
         }
@@ -133,7 +175,7 @@ export function PlantScreen() {
         );
       }
     },
-    [addMarker, recordPoint, userId, nav, submitting]
+    [addMarker, recordCircleUnlock, userId, nav, submitting]
   );
 
   const onContentSubmit = (payload: {

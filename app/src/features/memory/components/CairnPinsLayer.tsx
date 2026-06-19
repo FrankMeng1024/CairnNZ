@@ -47,6 +47,12 @@ type Selection =
 
 export function CairnPinsLayer({ markers, centerLat, centerLng }: Props) {
   const isExplored = useMemoryStore((s) => s.isExplored);
+  // L4 fix (v0.2.6.3): subscribe to geometryVersion so the classified
+  // memo re-runs when explored set changes. Previously isExplored was a
+  // stable function reference, so the memo's deps array never changed
+  // even after fog cleared — pins kept showing as Mystery until the
+  // user panned the map.
+  const geometryVersion = useMemoryStore((s) => s.geometryVersion);
   const Mapbox = getMapbox();
   const [selection, setSelection] = useState<Selection>({ kind: 'none' });
 
@@ -59,7 +65,8 @@ export function CairnPinsLayer({ markers, centerLat, centerLng }: Props) {
         { lat: m.lat, lng: m.lng }
       ),
     })),
-    [markers, centerLat, centerLng, isExplored]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [markers, centerLat, centerLng, geometryVersion]
   );
 
   const visible = useMemo(

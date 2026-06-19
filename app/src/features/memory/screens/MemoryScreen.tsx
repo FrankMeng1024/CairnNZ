@@ -42,6 +42,7 @@ export function MemoryScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
     setFailReason(null);
 
     const fetchOnce = async () => {
@@ -55,32 +56,42 @@ export function MemoryScreen() {
           setFailReason('permission');
           return;
         }
-        // Race the GPS request against a hard timeout — Apple's
-        // getCurrentPositionAsync can hang indefinitely on bad signal.
+        // L8 fix: capture the timeout timer id and clear it once the
+        // race resolves, in either direction. Without this the inner
+        // setTimeout leaks for up to ONE_SHOT_TIMEOUT_MS.
         const locPromise = Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
         });
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('timeout')), ONE_SHOT_TIMEOUT_MS)
-        );
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutTimer = setTimeout(() => reject(new Error('timeout')), ONE_SHOT_TIMEOUT_MS);
+        });
         const loc = (await Promise.race([locPromise, timeoutPromise])) as Awaited<typeof locPromise>;
+        if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = null; }
         if (cancelled) return;
         setOneShot({
           lat: loc.coords.latitude,
           lng: loc.coords.longitude,
         });
       } catch (e: any) {
+        if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = null; }
         if (cancelled) return;
         setFailReason(e?.message === 'timeout' ? 'timeout' : 'error');
       }
     };
     void fetchOnce();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = null; }
+    };
   }, [retryToken]);
 
   const coord = trackedCoord ?? oneShot;
 
   useEffect(() => {
+    // M10 fix: gate locally on initialDone before calling. The function
+    // is internally idempotent, but checking the flag here saves a
+    // function call + getState read on every coord update during a
+    // Hiking session.
     if (initialDone) return;
     if (!coord) return;
     performInitialRevealIfNeeded(coord.lat, coord.lng);

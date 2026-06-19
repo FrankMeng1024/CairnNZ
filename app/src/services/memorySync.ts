@@ -1,156 +1,285 @@
 /**
- * memorySync — cloud sync layer for the Memory tile data.
+ * memorySync — cloud sync layer.
  *
- * Architecture:
- *   - Cloud is the source of truth (account-bound)
- *   - Local AsyncStorage is OFFLINE BUFFER ONLY
- *   - When online: upload pending points → server → mark synced
- *   - When offline: append locally; retry on next push tick
- *
- * v0.2.6.2 fixes (J1 review):
- *   - inFlightTimestamps tracks ts of points currently being POSTed,
- *     so pull's localUnsynced merge can EXCLUDE them and not double-
- *     submit the same point through pull-then-push.
- *   - activeUserIdAtRequest captured per-request so a logout/login
- *     race cannot leak markPointsSynced into the new user's store.
- *   - Pull is gated on pushInFlight — won't run while a push is mid-flight.
- *   - Subscription explicitly skips push when only synced points changed
- *     (i.e. our own markPointsSynced caused the change).
+ * v0.2.6.3 O-round fixes:
+ *   O2: per-op AbortControllers (push has its own; pull has its own).
+ *       Push and pull no longer abort each other. detachMemorySync
+ *       aborts both.
+ *   O6: serverError tail (backoffUntil + schedulePush) is guarded by
+ *       epoch / activeUserId so a logged-out user's failure can't
+ *       pollute the next user's session.
+ *   O7: aborted-mid-pagination pull preserves accumulated pages and
+ *       remembers cursor; resumes on next call.
+ *   O8: applyEcho pre-builds a (ts,lat,lng) map for empty-cid lookup —
+ *       O(N+M) instead of O(N*M) per push.
+ *   O9: pull also bumps inFlight so the chip honestly reports state.
+ *   O10: skip replacePoints when the merge result is identical to
+ *        current store (avoid unnecessary fog rebuild).
  */
 
 import { authenticatedFetch } from './apiService';
 import { useMemoryStore, VisitedPoint } from '../features/memory/store/useMemoryStore';
 
 const PUSH_DEBOUNCE_MS = 5_000;
+const BACKOFF_MS = 15_000;
 const MAX_BATCH = 500;
+const HTTP_TIMEOUT_MS = 30_000;
+const PULL_PAGE_LIMIT = 10_000;
+const PULL_MAX_PAGES = 50;
+const RETRY_PULL_DELAY_MS = 1_500;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
-let pushInFlight = false;
-/** Timestamps currently being POSTed — excluded from pull-merge. */
-const inFlightTimestamps: Set<number> = new Set();
-let unsubscribe: (() => void) | null = null;
+/** Are we currently performing a push or pull? Serializes pushes/pulls. */
+let pushRunning = false;
+let pullRunning = false;
 let activeUserId: string | null = null;
-let lastUnsyncedCount = 0;
+let backoffUntil = 0;
+let unsubscribe: (() => void) | null = null;
+/** O2 fix: separate controllers per op, aborted only on detach. */
+let pushAbortController: AbortController | null = null;
+let pullAbortController: AbortController | null = null;
+/** Epoch token, bumped on every detach/reset. */
+let epoch = 0;
+
+/** O7 fix: persistent pull cursor so an aborted pull resumes from where it stopped. */
+let pullCursor: { afterTs: number; afterCid: string } = { afterTs: 0, afterCid: '' };
 
 interface ServerPoint {
   lat: number;
   lng: number;
   ts: number;
+  cid: string;
+}
+
+interface EchoEntry {
+  batch_index: number;
+  ts: number;
+  cid: string;
 }
 
 /**
- * Pull the user's memory points from the server. Replaces the local
- * store with: server points (synced=true) merged with local-only
- * unsynced points that aren't already mid-flight.
- *
- * Will not run while a push is in flight — avoids overwriting points
- * the server has accepted but hasn't yet been marked synced locally.
+ * O2 fix: separate AbortController per op. Detach is the only thing
+ * that aborts both. Internal request timeouts use the same controller
+ * so the timeout abort is op-scoped.
  */
-export async function pullMemoryFromServer(userId: string): Promise<void> {
-  if (!userId) return;
-  if (pushInFlight) {
-    // Try again after the in-flight push settles — schedule a retry.
-    setTimeout(() => { void pullMemoryFromServer(userId); }, 1500);
-    return;
-  }
-  const myUserId = userId;
+async function fetchWithTimeout(
+  path: string,
+  init: any,
+  controller: AbortController,
+): Promise<Response> {
+  const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
   try {
-    const res = await authenticatedFetch('/api/memory/points', { method: 'GET' });
-    if (!res.ok) return;
-    if (myUserId !== activeUserId) return; // user switched mid-request
-    const body = await res.json();
-    const serverPoints: VisitedPoint[] = (body.points ?? []).map((p: ServerPoint) => ({
-      lat: p.lat,
-      lng: p.lng,
-      ts: p.ts,
-      synced: true,
-    }));
-    // Preserve local-only points the server doesn't yet know AND that
-    // aren't currently being uploaded. The in-flight set ensures we
-    // don't double-count points the server accepted but hasn't yet
-    // been markPointsSynced locally.
-    const localUnsynced = useMemoryStore.getState().points.filter(
-      (p) => !p.synced && !inFlightTimestamps.has(p.ts)
-    );
-    const merged = [...serverPoints, ...localUnsynced];
-    // Dedup by (lat, lng, ts) — server-side dedup happens via the
-    // unique index, but the client must dedup defensively in case a
-    // local-unsynced point shares ts with a server point.
-    const seen = new Set<string>();
-    const dedup = merged.filter((p) => {
-      const key = `${p.lat.toFixed(6)}|${p.lng.toFixed(6)}|${p.ts}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-    dedup.sort((a, b) => a.ts - b.ts);
-    useMemoryStore.getState().replacePoints(dedup, useMemoryStore.getState().initialRevealDone);
-    lastUnsyncedCount = dedup.filter((p) => !p.synced).length;
-  } catch {
-    // Network down. Keep local-only state.
+    return await authenticatedFetch(path, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
   }
 }
 
+export async function pullMemoryFromServer(userId: string): Promise<void> {
+  if (!userId) return;
+  if (pullRunning || pushRunning) {
+    setTimeout(() => {
+      if (userId === activeUserId) void pullMemoryFromServer(userId);
+    }, RETRY_PULL_DELAY_MS);
+    return;
+  }
+  pullRunning = true;
+  pullAbortController = new AbortController();
+  const myCtrl = pullAbortController;
+  const myEpoch = epoch;
+  const myUserId = userId;
+  // O9: bump inFlight so the chip honestly says "Syncing…" during pull.
+  useMemoryStore.getState().bumpInFlight(1);
+  let pullStartTs = Date.now();
+  let { afterTs, afterCid } = pullCursor;
+  const accumulated: ServerPoint[] = [];
+  let aborted = false;
+  try {
+    for (let page = 0; page < PULL_MAX_PAGES; page++) {
+      const url = `/api/memory/points?after_ts=${afterTs}&after_cid=${encodeURIComponent(afterCid)}&until=${pullStartTs}&limit=${PULL_PAGE_LIMIT}`;
+      const res = await fetchWithTimeout(url, { method: 'GET' }, myCtrl);
+      if (myEpoch !== epoch || myUserId !== activeUserId) { aborted = true; return; }
+      if (!res.ok) { aborted = true; return; }
+      const body = await res.json();
+      if (myEpoch !== epoch || myUserId !== activeUserId) { aborted = true; return; }
+      const batch: ServerPoint[] = (body.points ?? []).filter((p: any): p is ServerPoint =>
+        typeof p?.lat === 'number' && typeof p?.lng === 'number' &&
+        typeof p?.ts === 'number' && typeof p?.cid === 'string'
+      );
+      accumulated.push(...batch);
+      if (batch.length < PULL_PAGE_LIMIT) {
+        // Done — full snapshot acquired. Reset cursor so next pull
+        // starts fresh.
+        pullCursor = { afterTs: 0, afterCid: '' };
+        break;
+      }
+      const last = batch[batch.length - 1];
+      afterTs = last.ts;
+      afterCid = last.cid;
+      // O7: persist cursor in case we get aborted mid-pagination.
+      pullCursor = { afterTs, afterCid };
+    }
+  } catch {
+    aborted = true;
+  } finally {
+    pullRunning = false;
+    if (pullAbortController === myCtrl) pullAbortController = null;
+    if (myEpoch === epoch && myUserId === activeUserId) {
+      useMemoryStore.getState().bumpInFlight(-1);
+    }
+  }
+
+  if (myEpoch !== epoch || myUserId !== activeUserId) return;
+
+  // Apply whatever pages we got — O7 partial-result rule.
+  if (accumulated.length === 0) {
+    // If we were aborted with NO pages, nothing to merge. Schedule a
+    // retry so user data eventually loads.
+    if (aborted && pullCursor.afterTs > 0) {
+      setTimeout(() => { if (myUserId === activeUserId) void pullMemoryFromServer(myUserId); }, RETRY_PULL_DELAY_MS);
+    }
+    return;
+  }
+
+  const serverPoints: VisitedPoint[] = accumulated.map((p) => ({
+    lat: p.lat, lng: p.lng, ts: p.ts, cid: p.cid, synced: true,
+  }));
+  const serverCidSet = new Set(serverPoints.map((p) => p.cid));
+  const serverGeoTsSet = new Set(
+    serverPoints.map((p) => `${p.lat.toFixed(6)}|${p.lng.toFixed(6)}|${p.ts}`)
+  );
+  const localPoints = useMemoryStore.getState().points;
+  const localOnly = localPoints.filter((p) => {
+    if (p.cid && serverCidSet.has(p.cid)) return false;
+    if (!p.cid) {
+      const geoKey = `${p.lat.toFixed(6)}|${p.lng.toFixed(6)}|${p.ts}`;
+      if (serverGeoTsSet.has(geoKey)) return false;
+    }
+    return true;
+  });
+  const seen = new Set<string>();
+  const merged = [...serverPoints, ...localOnly].filter((p) => {
+    const key = p.cid || `${p.lat.toFixed(6)}|${p.lng.toFixed(6)}|${p.ts}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  merged.sort((a, b) => a.ts - b.ts);
+
+  // O10: skip replacePoints if merge is identical to current state
+  // — avoids unnecessary fog/cairn rebuild on no-op pulls.
+  if (sameContent(merged, localPoints)) return;
+  useMemoryStore.getState().replacePoints(merged, useMemoryStore.getState().initialRevealDone);
+
+  // If we got aborted mid-pagination, schedule resume on remaining pages.
+  if (aborted && pullCursor.afterTs > 0) {
+    setTimeout(() => { if (myUserId === activeUserId) void pullMemoryFromServer(myUserId); }, RETRY_PULL_DELAY_MS);
+  }
+}
+
+function sameContent(a: VisitedPoint[], b: VisitedPoint[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].cid !== b[i].cid) return false;
+    if (a[i].synced !== b[i].synced) return false;
+    if (a[i].ts !== b[i].ts) return false;
+    if (a[i].lat !== b[i].lat || a[i].lng !== b[i].lng) return false;
+  }
+  return true;
+}
+
 async function pushPendingPoints(): Promise<void> {
-  if (pushInFlight) return;
+  if (pushRunning || pullRunning) {
+    schedulePush(PUSH_DEBOUNCE_MS);
+    return;
+  }
   if (!activeUserId) return;
+  const now = Date.now();
+  if (now < backoffUntil) {
+    schedulePush(backoffUntil - now);
+    return;
+  }
+  const myEpoch = epoch;
   const myUserId = activeUserId;
   const allPoints = useMemoryStore.getState().points;
-  const pending = allPoints.filter((p) => !p.synced && !inFlightTimestamps.has(p.ts));
+  const pending = allPoints.filter((p) => !p.synced);
   if (pending.length === 0) return;
 
   const batch = pending.slice(0, MAX_BATCH);
-  // Mark in flight BEFORE the network call.
-  for (const p of batch) inFlightTimestamps.add(p.ts);
-  pushInFlight = true;
+  pushRunning = true;
+  pushAbortController = new AbortController();
+  const myCtrl = pushAbortController;
+  useMemoryStore.getState().bumpInFlight(1);
+  let serverError = false;
   try {
-    const res = await authenticatedFetch('/api/memory/points', {
+    const res = await fetchWithTimeout('/api/memory/points', {
       method: 'POST',
       body: JSON.stringify({
-        points: batch.map((p) => ({ lat: p.lat, lng: p.lng, ts: p.ts })),
+        points: batch.map((p) => p.cid ? ({ lat: p.lat, lng: p.lng, ts: p.ts, cid: p.cid })
+                                       : ({ lat: p.lat, lng: p.lng, ts: p.ts })),
       }),
-    });
-    // Re-check user identity — if the user logged out / switched,
-    // do NOT call markPointsSynced (that would mutate the new user's
-    // store).
-    if (myUserId !== activeUserId) {
-      return;
-    }
+    }, myCtrl);
+    if (myEpoch !== epoch || myUserId !== activeUserId) return;
     if (res.ok) {
-      useMemoryStore.getState().markPointsSynced(batch.map((p) => p.ts));
+      const body = await res.json().catch(() => null);
+      const echo: Array<EchoEntry | null> = Array.isArray(body?.points) ? body.points : [];
+      useMemoryStore.getState().applyServerEchoForPushAligned(batch, echo);
+      backoffUntil = 0;
       if (pending.length > MAX_BATCH) schedulePush(0);
+    } else {
+      serverError = true;
     }
   } catch {
-    // Offline — leave points unsynced; next push retries.
+    serverError = true;
   } finally {
-    for (const p of batch) inFlightTimestamps.delete(p.ts);
-    pushInFlight = false;
+    pushRunning = false;
+    if (pushAbortController === myCtrl) pushAbortController = null;
+    if (myEpoch === epoch && myUserId === activeUserId) {
+      useMemoryStore.getState().bumpInFlight(-1);
+    }
+  }
+  // O6 fix: epoch-guard the serverError tail. Don't pollute a new
+  // user's session with a logged-out user's failure backoff.
+  if (serverError && myEpoch === epoch && myUserId === activeUserId) {
+    backoffUntil = Date.now() + BACKOFF_MS;
+    schedulePush(BACKOFF_MS);
   }
 }
 
 function schedulePush(delayMs = PUSH_DEBOUNCE_MS): void {
+  const now = Date.now();
+  const effectiveDelay = Math.max(delayMs, backoffUntil - now);
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     pushTimer = null;
     void pushPendingPoints();
-  }, delayMs);
+  }, effectiveDelay);
 }
 
 export function attachMemorySync(userId: string): void {
   detachMemorySync();
   activeUserId = userId;
-  // Subscribe — but only schedule a push when the count of unsynced
-  // points actually GROWS. markPointsSynced shrinks the set; pull's
-  // replacePoints can either grow or shrink it. We don't want to push
-  // when our own bookkeeping caused the change.
-  unsubscribe = useMemoryStore.subscribe(() => {
-    const unsyncedCount = useMemoryStore.getState().points.filter((p) => !p.synced).length;
-    if (unsyncedCount > lastUnsyncedCount) schedulePush();
-    lastUnsyncedCount = unsyncedCount;
+  let lastUnsyncedCount = useMemoryStore.getState()._unsyncedCount;
+  unsubscribe = useMemoryStore.subscribe((s) => {
+    const u = s._unsyncedCount;
+    if (u > lastUnsyncedCount) schedulePush();
+    lastUnsyncedCount = u;
   });
+  if (useMemoryStore.getState()._unsyncedCount > 0) {
+    schedulePush(PUSH_DEBOUNCE_MS);
+  }
 }
 
 export function detachMemorySync(): void {
+  epoch++;
+  if (pushAbortController) {
+    try { pushAbortController.abort(); } catch { /* noop */ }
+    pushAbortController = null;
+  }
+  if (pullAbortController) {
+    try { pullAbortController.abort(); } catch { /* noop */ }
+    pullAbortController = null;
+  }
   if (pushTimer) {
     clearTimeout(pushTimer);
     pushTimer = null;
@@ -160,11 +289,10 @@ export function detachMemorySync(): void {
     unsubscribe = null;
   }
   activeUserId = null;
-  inFlightTimestamps.clear();
-  lastUnsyncedCount = 0;
-  // pushInFlight stays true if a request is genuinely in flight; it
-  // will set itself false in the finally block. We just won't act on
-  // its result because activeUserId is null.
+  backoffUntil = 0;
+  pushRunning = false;
+  pullRunning = false;
+  pullCursor = { afterTs: 0, afterCid: '' };
 }
 
 export async function pushMemoryNow(): Promise<void> {
@@ -175,13 +303,14 @@ export async function pushMemoryNow(): Promise<void> {
   await pushPendingPoints();
 }
 
-/** Force-clear memory on the server (Settings → Clear my memory). */
+/** Force-clear memory on the server. Uses its own controller so it
+ *  doesn't abort an active push/pull. */
 export async function deleteAllMemoryFromServer(): Promise<boolean> {
+  const ctrl = new AbortController();
   try {
-    const res = await authenticatedFetch('/api/memory/points', { method: 'DELETE' });
+    const res = await fetchWithTimeout('/api/memory/points', { method: 'DELETE' }, ctrl);
     if (res.ok) {
       useMemoryStore.getState().clearAll();
-      lastUnsyncedCount = 0;
       return true;
     }
     return false;
@@ -190,11 +319,10 @@ export async function deleteAllMemoryFromServer(): Promise<boolean> {
   }
 }
 
-/** Read API for sync-status indicator UI. */
-export function getSyncStatus(): {
-  pendingCount: number;
-  inFlight: boolean;
-} {
-  const pending = useMemoryStore.getState().points.filter((p) => !p.synced).length;
-  return { pendingCount: pending, inFlight: pushInFlight };
+export function getSyncStatus(): { pendingCount: number; inFlight: boolean } {
+  const s = useMemoryStore.getState();
+  return {
+    pendingCount: s._unsyncedCount,
+    inFlight: s.syncState.inFlightCount > 0,
+  };
 }

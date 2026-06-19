@@ -17,10 +17,9 @@
  * in incrementally without restructuring.
  */
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
-import { useMemoryStore } from '../store/useMemoryStore';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { MemoryColors } from '../config/memoryConfig';
 import { FogLayer } from './FogLayer';
@@ -35,7 +34,6 @@ const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12'; // TODO(v0.2.6 §
 
 export function MemoryMap({ centerLat, centerLng }: Props) {
   const Mapbox = getMapbox();
-  const visitedPoints = useMemoryStore((s) => s.points);
   const allMarkers = useMarkerStore((s) => s.markers);
 
   // Web fallback — Mapbox isn't available.
@@ -60,7 +58,7 @@ export function MemoryMap({ centerLat, centerLng }: Props) {
           animationDuration={500}
         />
         <UserLocation visible={true} />
-        <FogLayer visitedPoints={visitedPoints} />
+        <FogLayer />
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>
     </View>

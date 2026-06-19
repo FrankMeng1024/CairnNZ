@@ -1,46 +1,71 @@
 /**
  * MemorySummaryCard — bottom info card on the Memory map.
  *
+ * v0.2.6.3 (K6 fix): replaced setInterval polling with Zustand selectors.
+ * inFlight state lives in the store (memorySync mutates via bumpInFlight).
+ * Adds a 600ms minimum-display window so very fast pushes still show
+ * "Syncing…" briefly (otherwise the chip would flash imperceptibly).
+ *
  * Shows:
  *   - "Your Memory Map" title
- *   - Tile count (rough scale: # of unique zoom-17 tiles touched)
- *   - Cairn count (markers planted by you)
- *   - Friend memory share indicator
- *
- * No percentages of country/global — by product policy these would
- * be too small to be meaningful and demoralizing. We may add region-
- * level percentages in a later release.
+ *   - Sync chip (☁️ Syncing… / N pending / All saved)
+ *   - Places visited + cairns left counters
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { useAppStore } from '../../../store/useAppStore';
 import { MemoryColors } from '../config/memoryConfig';
-import { getSyncStatus } from '../../../services/memorySync';
+
+const MIN_SYNCING_DISPLAY_MS = 600;
 
 export function MemorySummaryCard() {
   const pointCount = useMemoryStore((s) => s.points.length);
+  // M9 fix: read incrementally-maintained count instead of filtering.
+  const pendingCount = useMemoryStore((s) => s._unsyncedCount);
+  const inFlightCount = useMemoryStore((s) => s.syncState.inFlightCount);
   const userId = useAppStore((s) => s.user?.id ?? null);
   const allMarkers = useMarkerStore((s) => s.markers);
-  // Poll every 2s for sync status — cheap, getSyncStatus is local read.
-  const [syncStatus, setSyncStatus] = useState(() => getSyncStatus());
+
+  // Min display window: when inFlight goes true, hold "Syncing…" for at
+  // least MIN_SYNCING_DISPLAY_MS so users see the indicator even when
+  // the push completes in <100ms (typical good network).
+  const [displaySyncing, setDisplaySyncing] = useState(false);
+  const lastInFlightStartRef = useRef<number>(0);
   useEffect(() => {
-    const id = setInterval(() => setSyncStatus(getSyncStatus()), 2_000);
-    return () => clearInterval(id);
-  }, []);
+    if (inFlightCount > 0) {
+      lastInFlightStartRef.current = Date.now();
+      setDisplaySyncing(true);
+      return;
+    }
+    // inFlightCount went to 0 — hold the chip until min window elapses.
+    const elapsed = Date.now() - lastInFlightStartRef.current;
+    const remaining = Math.max(0, MIN_SYNCING_DISPLAY_MS - elapsed);
+    if (remaining === 0) {
+      setDisplaySyncing(false);
+      return;
+    }
+    const t = setTimeout(() => setDisplaySyncing(false), remaining);
+    return () => clearTimeout(t);
+  }, [inFlightCount]);
 
   const myCairnCount = useMemo(() => {
     if (!userId) return 0;
     return allMarkers.filter((m) => m.authorId === userId).length;
   }, [allMarkers, userId]);
 
-  const syncChip = syncStatus.inFlight
+  // L9 fix (v0.2.6.3): "N pending" reads as broken to non-technical
+  // users. After a long offline hike showing "400 pending" was
+  // anxiety-inducing. New copy: "Saved on this device" while points
+  // are local-only — communicates safety. The exact count surfaces
+  // only on press/long-press in a future iteration.
+  const syncChip = displaySyncing
     ? '☁️↑ Syncing…'
-    : syncStatus.pendingCount > 0
-    ? `☁️ ${syncStatus.pendingCount} pending`
-    : '☁️ All saved';
+    : pendingCount > 0
+    ? '☁️ Saved on this device'
+    : '☁️ All synced';
 
   return (
     <View style={styles.card}>

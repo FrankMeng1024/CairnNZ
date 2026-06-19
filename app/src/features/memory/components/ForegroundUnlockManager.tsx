@@ -24,6 +24,8 @@ import * as Location from 'expo-location';
 import { processReading, performInitialRevealIfNeeded, resetUnlockEngineForUser } from '../services/unlockEngine';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useAppStore } from '../../../store/useAppStore';
+import { useMemoryStore } from '../store/useMemoryStore';
+import { useMarkerStore } from '../../../store/useMarkerStore';
 import { hydrateMemoryForUser, detachMemoryPersistence, flushMemoryNow } from '../services/memoryPersistence';
 import { attachMemorySync, detachMemorySync, pullMemoryFromServer, pushMemoryNow } from '../../../services/memorySync';
 
@@ -54,15 +56,21 @@ export function ForegroundUnlockManager() {
         if (myGen !== userGenRef.current) return;
         detachMemorySync();
         resetUnlockEngineForUser();
+        useMemoryStore.getState().resetForUserSwitch();
+        // O4 fix (v0.2.6.3): also clear cross-user marker state so
+        // CairnPinsLayer doesn't flash the previous user's pins.
+        useMarkerStore.getState().clearMarkers();
       })();
       return;
     }
     void (async () => {
-      // Reset cross-user dedup BEFORE hydrate so the new user's first
-      // reading isn't silently suppressed.
+      detachMemorySync();
       resetUnlockEngineForUser();
+      // O4 fix: clear marker store before hydrate so the new user's
+      // marker hydration starts from a clean slate.
+      useMarkerStore.getState().clearMarkers();
       await hydrateMemoryForUser(userId);
-      if (myGen !== userGenRef.current) return; // user switched again
+      if (myGen !== userGenRef.current) return;
       attachMemorySync(userId);
       void pullMemoryFromServer(userId);
     })();

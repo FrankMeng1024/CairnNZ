@@ -9,7 +9,7 @@ import { buildFogPolygon, countHoles } from '../src/features/memory/services/fog
 import { VisitedPoint } from '../src/features/memory/store/useMemoryStore';
 
 function p(lat: number, lng: number): VisitedPoint {
-  return { lat, lng, ts: 0 };
+  return { lat, lng, ts: 0, cid: `test-${lat}-${lng}` };
 }
 
 describe('fogBuilder · buildFogPolygon', () => {
@@ -52,7 +52,7 @@ describe('fogBuilder · buildFogPolygon', () => {
   it('skips malformed points without throwing', () => {
     const malformed = [
       p(NaN, 121.430),
-      { lat: 'not-a-number' as any, lng: 121.430, ts: 0 },
+      { lat: 'not-a-number' as any, lng: 121.430, ts: 0, cid: 'malformed' },
     ];
     expect(() => buildFogPolygon(malformed as VisitedPoint[])).not.toThrow();
     const f = buildFogPolygon(malformed as VisitedPoint[]);

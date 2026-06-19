@@ -1,31 +1,34 @@
 /**
- * FogLayer — single FillLayer that draws fog everywhere except a set of
- * 25m circles centered on each visited GPS point.
+ * FogLayer — single FillLayer that draws fog except 25m circles around
+ * each visited GPS point.
  *
- * v0.2.6.2 (J1 B4 fix): memo signature was previously `count|lastTs`,
- * which missed cases where pull/replacePoints produced an array with
- * the same count + lastTs but different content (e.g. a server pull
- * that replaces 5 local points with 5 different server points). Now
- * memoize on the array reference itself — the store always replaces
- * the array on any mutation (no in-place modification), so reference
- * equality is a sound signal for "set changed".
+ * v0.2.6.3 (K5 fix): memoized on `geometryVersion` from the store,
+ * NOT on the points array reference. markPointsSyncedByCid mutates
+ * the array reference but does not bump geometryVersion — fog is
+ * not rebuilt on sync flag flips. This is the perf fix called out
+ * by reviewer A.
+ *
+ * The component subscribes to geometryVersion via a Zustand selector
+ * (which triggers re-render on bump), and reads `points` via
+ * getState() inside the memo factory (one-shot snapshot — no double
+ * subscription).
  */
 
 import React, { useMemo } from 'react';
-import { VisitedPoint } from '../store/useMemoryStore';
+import { useMemoryStore } from '../store/useMemoryStore';
 import { getMapbox } from '../services/mapboxAdapter';
 import { buildFogPolygon } from '../services/fogBuilder';
 import { MemoryColors } from '../config/memoryConfig';
 
-interface Props {
-  visitedPoints: VisitedPoint[];
-}
-
-export function FogLayer({ visitedPoints }: Props) {
+export function FogLayer() {
   const Mapbox = getMapbox();
+  // Subscribe to geometryVersion ONLY — triggers re-render when geometry
+  // changes (recordPoint / replacePoints / clearAll). Synced-flag flips
+  // do NOT bump this counter (per K5 plan).
+  const geometryVersion = useMemoryStore((s) => s.geometryVersion);
   const fogShape = useMemo(
-    () => buildFogPolygon(visitedPoints),
-    [visitedPoints]
+    () => buildFogPolygon(useMemoryStore.getState().points),
+    [geometryVersion]
   );
 
   if (!Mapbox.available) return null;
