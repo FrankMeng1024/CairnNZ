@@ -1,51 +1,112 @@
 /**
- * MemoryScreen — the main Memory tab screen.
+ * MemoryScreen — Memory tab screen.
  *
- * v0.2.6.2 (J2 review fixes):
- *   - 12s timeout on getCurrentPositionAsync. Catch path now sets an
- *     error state instead of leaving the spinner forever.
- *   - "Try again" button on the waiting state.
- *   - Permission-denied shows a real "Open Settings" button via
- *     Linking.openSettings().
- *
- * Source-of-position fallback chain:
- *   1. useTrackingStore.lastCoordinate (active Hiking session)
- *   2. one-shot Location.getCurrentPositionAsync on mount
- *   Whichever arrives first wins.
+ * v0.2.6.4 R-round:
+ *   R4: prefer the watcher's cached fix (useMemoryStore.lastWatcherFix)
+ *       over getCurrentPositionAsync. Avoids dual-watcher conflict on
+ *       iOS that caused 12s timeouts when Hiking watcher was active.
+ *   R5: mountKey is useState (not useRef) so its bump actually
+ *       triggers re-render and MemoryMap remount.
+ *   R7: recenter only bumps cameraKey; if no fresh fix is available
+ *       it falls back to the watcher cache; the retryToken refetch is
+ *       gated on actual staleness.
+ *   R8: showHint waits for settings store hydrate so existing users
+ *       don't see a one-frame flash of the hint.
+ *   R9: rapid focus events are debounced — at most one GPS refetch
+ *       per 5 seconds.
  */
 
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Modal } from 'react-native';
 import * as Location from 'expo-location';
-import { useTrackingStore } from '../../../store/useTrackingStore';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useMemoryStore } from '../store/useMemoryStore';
+import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { performInitialRevealIfNeeded } from '../services/unlockEngine';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap } from '../components/MemoryMap';
 import { MemorySummaryCard } from '../components/MemorySummaryCard';
+import { BackButton } from '../../../components/BackButton';
+import { Icon } from '../../../components/Icon';
+import { Colors } from '../../../components/tokens';
+import { log } from '../../../services/appLog';
 
-interface FixState {
-  lat: number;
-  lng: number;
-}
-
+interface FixState { lat: number; lng: number }
+/** S4 fix: extended freshness window to 10 minutes. Stale lat/lng is
+ *  acceptable for showing the map (user typically opens Memory while
+ *  near the last known location); the watcher updates as soon as user
+ *  moves. This avoids spawning a competing high-accuracy one-shot that
+ *  conflicts with the running watcher on iOS. */
 const ONE_SHOT_TIMEOUT_MS = 12_000;
+const WATCHER_FIX_FRESH_MS = 10 * 60 * 1000; // 10 min — stale lat/lng OK for map display
+const FOCUS_REFETCH_DEBOUNCE_MS = 5_000;
+const FOCUS_REMOUNT_DEBOUNCE_MS = 30_000; // S3 fix: don't tear down map on rapid back-and-forth
 
 type FailReason = 'permission' | 'timeout' | 'error';
 
 export function MemoryScreen() {
-  const trackedCoord = useTrackingStore((s) => s.lastCoordinate);
+  const nav = useNavigation<any>();
+  const watcherFix = useMemoryStore((s) => s.lastWatcherFix);
   const initialDone = useMemoryStore((s) => s.initialRevealDone);
+  const firstVisitDone = useMemorySettingsStore((s) => s.firstVisitDone);
+  const settingsHydrated = useMemorySettingsStore((s) => s.hydrated);
+  const setSetting = useMemorySettingsStore((s) => s.set);
+
   const [oneShot, setOneShot] = useState<FixState | null>(null);
   const [failReason, setFailReason] = useState<FailReason | null>(null);
-  const [retryToken, setRetryToken] = useState(0);
+  const [refetchToken, setRefetchToken] = useState(0);
+  const [recenterToken, setRecenterToken] = useState(0);
+  const [mountKey, setMountKey] = useState(0);
+  const [showHint, setShowHint] = useState(false);
+  const lastRefetchAtRef = useRef(0);
+  // S3 fix: separate debounce for the EXPENSIVE map remount.
+  const lastMountAtRef = useRef(0);
 
+  useEffect(() => {
+    if (!settingsHydrated) return;
+    if (!firstVisitDone) setShowHint(true);
+  }, [settingsHydrated, firstVisitDone]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      log('memory.tab_focus');
+      const now = Date.now();
+      // S3 fix: debounce map remount separately. Cheap to keep the
+      // map mounted across rapid back-and-forth; expensive to tear
+      // it down and reload Mapbox tiles.
+      if (now - lastMountAtRef.current >= FOCUS_REMOUNT_DEBOUNCE_MS) {
+        lastMountAtRef.current = now;
+        setMountKey((n) => n + 1);
+      }
+      if (now - lastRefetchAtRef.current >= FOCUS_REFETCH_DEBOUNCE_MS) {
+        lastRefetchAtRef.current = now;
+        setRefetchToken((n) => n + 1);
+      }
+      return () => { log('memory.tab_blur'); };
+    }, [])
+  );
+
+  // R4 + S1: only fetch a one-shot fix when (a) user explicitly
+  // asked (refetchToken bumped) AND (b) watcher cache is stale.
+  // The dep array is [refetchToken] — does NOT include watcherFix
+  // so a watcher tick doesn't re-run this effect / wipe failReason.
   useEffect(() => {
     let cancelled = false;
     let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
-    setFailReason(null);
+
+    if (watcherFix && Date.now() - watcherFix.ts < WATCHER_FIX_FRESH_MS) {
+      log('memory.using_watcher_fix', { age_ms: Date.now() - watcherFix.ts });
+      // Watcher fresh — we're not going to fetch, but we should clear
+      // any stale failReason so the success UI shows.
+      setFailReason(null);
+      return;
+    }
 
     const fetchOnce = async () => {
+      // T-round: only clear failReason when we actually start a new
+      // attempt — otherwise Try-Again with a fresh watcher would clear
+      // the error UI without surfacing a result.
+      setFailReason(null);
       try {
         let perm = await Location.getForegroundPermissionsAsync();
         if (perm.status !== 'granted') {
@@ -53,12 +114,10 @@ export function MemoryScreen() {
         }
         if (cancelled) return;
         if (perm.status !== 'granted') {
+          log('memory.permission_denied', { status: perm.status });
           setFailReason('permission');
           return;
         }
-        // L8 fix: capture the timeout timer id and clear it once the
-        // race resolves, in either direction. Without this the inner
-        // setTimeout leaks for up to ONE_SHOT_TIMEOUT_MS.
         const locPromise = Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
         });
@@ -68,14 +127,14 @@ export function MemoryScreen() {
         const loc = (await Promise.race([locPromise, timeoutPromise])) as Awaited<typeof locPromise>;
         if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = null; }
         if (cancelled) return;
-        setOneShot({
-          lat: loc.coords.latitude,
-          lng: loc.coords.longitude,
-        });
+        log('memory.gps_fix_ok', { accuracy: loc.coords.accuracy });
+        setOneShot({ lat: loc.coords.latitude, lng: loc.coords.longitude });
       } catch (e: any) {
         if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = null; }
         if (cancelled) return;
-        setFailReason(e?.message === 'timeout' ? 'timeout' : 'error');
+        const reason: FailReason = e?.message === 'timeout' ? 'timeout' : 'error';
+        log('memory.gps_fix_failed', { reason });
+        setFailReason(reason);
       }
     };
     void fetchOnce();
@@ -83,24 +142,60 @@ export function MemoryScreen() {
       cancelled = true;
       if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = null; }
     };
-  }, [retryToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetchToken]);
 
-  const coord = trackedCoord ?? oneShot;
+  // S1 fix (v0.2.6.4): prefer fresh watcher → else oneShot → else stale
+  // watcher. The previous `watcherFix ?? oneShot` made oneShot dead code
+  // whenever watcherFix was set, even if stale. Now the user's
+  // recently-fetched one-shot wins over a stale watcher cache.
+  const watcherFresh = !!watcherFix && Date.now() - watcherFix.ts < WATCHER_FIX_FRESH_MS;
+  const coord: FixState | null = watcherFresh && watcherFix
+    ? { lat: watcherFix.lat, lng: watcherFix.lng }
+    : oneShot
+      ? oneShot
+      : watcherFix
+        ? { lat: watcherFix.lat, lng: watcherFix.lng }
+        : null;
 
   useEffect(() => {
-    // M10 fix: gate locally on initialDone before calling. The function
-    // is internally idempotent, but checking the flag here saves a
-    // function call + getState read on every coord update during a
-    // Hiking session.
     if (initialDone) return;
     if (!coord) return;
+    log('memory.initial_reveal', { lat: coord.lat, lng: coord.lng });
     performInitialRevealIfNeeded(coord.lat, coord.lng);
   }, [initialDone, coord]);
 
+  const dismissHint = () => {
+    log('memory.first_visit_hint_dismissed');
+    setSetting('firstVisitDone', true);
+    setShowHint(false);
+  };
+
+  const onRecenter = () => {
+    log('memory.recenter_tap');
+    setRecenterToken((n) => n + 1);
+    // R7 fix: only refetch GPS if we have nothing OR our cached fix is
+    // older than the freshness window. Otherwise just camera-flyTo.
+    const stale = !watcherFix || Date.now() - watcherFix.ts >= WATCHER_FIX_FRESH_MS;
+    if (stale && Date.now() - lastRefetchAtRef.current >= FOCUS_REFETCH_DEBOUNCE_MS) {
+      lastRefetchAtRef.current = Date.now();
+      setRefetchToken((n) => n + 1);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.root}>
+      <View style={styles.topBar}>
+        <BackButton onPress={() => nav.goBack()} />
+      </View>
+
       {coord ? (
-        <MemoryMap centerLat={coord.lat} centerLng={coord.lng} />
+        <MemoryMap
+          centerLat={coord.lat}
+          centerLng={coord.lng}
+          recenterToken={recenterToken}
+          key={`map-${mountKey}`}
+        />
       ) : failReason === 'permission' ? (
         <View style={styles.waitingForGps}>
           <Text style={styles.waitingTitle}>Location permission needed</Text>
@@ -110,7 +205,7 @@ export function MemoryScreen() {
           <TouchableOpacity style={styles.primaryBtn} onPress={() => Linking.openSettings()}>
             <Text style={styles.primaryBtnText}>Open Settings</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => setRetryToken((n) => n + 1)}>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => setRefetchToken((n) => n + 1)}>
             <Text style={styles.secondaryBtnText}>Try again</Text>
           </TouchableOpacity>
         </View>
@@ -124,7 +219,7 @@ export function MemoryScreen() {
               ? 'GPS signal is weak. Move outside or near a window and try again.'
               : 'We could not read your location. Check that location services are on.'}
           </Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => setRetryToken((n) => n + 1)}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => setRefetchToken((n) => n + 1)}>
             <Text style={styles.primaryBtnText}>Try again</Text>
           </TouchableOpacity>
         </View>
@@ -137,45 +232,69 @@ export function MemoryScreen() {
           </Text>
         </View>
       )}
+
+      {coord && (
+        <TouchableOpacity style={styles.recenterBtn} onPress={onRecenter} activeOpacity={0.8}>
+          <Icon name="Navigation" size={20} color={MemoryColors.sepiaDeep} strokeWidth={2.2} />
+        </TouchableOpacity>
+      )}
+
       <MemorySummaryCard />
+
+      <Modal visible={showHint} transparent animationType="fade" onRequestClose={dismissHint}>
+        <View style={styles.hintBackdrop}>
+          <View style={styles.hintCard}>
+            <Text style={styles.hintTitle}>Walk to unlock your memory</Text>
+            <Text style={styles.hintBody}>
+              The map starts covered in fog. As you walk around, the fog clears
+              and the places you have been become part of your memory.
+              {'\n\n'}
+              Cairns left by you and others appear as you discover them.
+            </Text>
+            <TouchableOpacity style={styles.hintBtn} onPress={dismissHint} activeOpacity={0.85}>
+              <Text style={styles.hintBtnText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: MemoryColors.cream,
-  },
-  waitingForGps: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  waitingTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: MemoryColors.sepiaDeep,
-  },
-  waitingSub: {
-    fontSize: 13,
-    color: MemoryColors.cairnPublic,
-    marginTop: 8,
-    textAlign: 'center',
-  },
+  root: { flex: 1, backgroundColor: MemoryColors.cream },
+  topBar: { position: 'absolute', top: 8, left: 8, zIndex: 10 },
+  waitingForGps: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  waitingTitle: { fontSize: 16, fontWeight: '500', color: MemoryColors.sepiaDeep },
+  waitingSub:   { fontSize: 13, color: MemoryColors.cairnPublic, marginTop: 8, textAlign: 'center' },
   primaryBtn: {
     marginTop: 20,
     backgroundColor: MemoryColors.sepia,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12,
   },
   primaryBtnText: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  secondaryBtn: {
-    marginTop: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-  },
+  secondaryBtn: { marginTop: 10, paddingVertical: 10, paddingHorizontal: 18 },
   secondaryBtnText: { color: MemoryColors.cairnPublic, fontSize: 13 },
+  recenterBtn: {
+    position: 'absolute',
+    right: 16, bottom: 110,
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 }, elevation: 4,
+    borderWidth: 1, borderColor: '#e8dfc8',
+  },
+  hintBackdrop: {
+    flex: 1, backgroundColor: 'rgba(20,20,20,0.55)',
+    alignItems: 'center', justifyContent: 'center', padding: 28,
+  },
+  hintCard: {
+    backgroundColor: '#fff', borderRadius: 18, padding: 22,
+    width: '100%', maxWidth: 360,
+  },
+  hintTitle: { fontSize: 17, fontWeight: '600', color: MemoryColors.sepiaDeep, marginBottom: 10 },
+  hintBody:  { fontSize: 13, lineHeight: 19, color: Colors.textSecondary, marginBottom: 18 },
+  hintBtn:   { backgroundColor: MemoryColors.sepia, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
+  hintBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 });

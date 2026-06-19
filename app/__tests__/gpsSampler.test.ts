@@ -14,8 +14,8 @@ function r(lat: number, lng: number, accuracy: number): Reading {
 }
 
 describe('gpsSampler · decideFromReadings', () => {
-  it('rejects when fewer than 3 readings', () => {
-    const out = decideFromReadings([r(0, 0, 5), r(0, 0, 5)]);
+  it('rejects when fewer than 2 readings', () => {
+    const out = decideFromReadings([r(0, 0, 5)]);
     expect(out.ok).toBe(false);
     expect(out.reason).toBe('no-readings');
   });

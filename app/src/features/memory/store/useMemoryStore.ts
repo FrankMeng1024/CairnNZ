@@ -59,6 +59,13 @@ interface MemoryState {
   /** Bumped on geometry mutations. FogLayer keys its memo on this. */
   geometryVersion: number;
   /**
+   * R4 fix (v0.2.6.4): cache the most recent GPS fix any watcher saw.
+   * MemoryScreen reads this to avoid spawning a competing
+   * getCurrentPositionAsync that conflicts with ForegroundUnlockManager's
+   * BestForNavigation watcher on iOS.
+   */
+  lastWatcherFix: { lat: number; lng: number; ts: number } | null;
+  /**
    * M9 fix: incrementally-maintained count of unsynced points. Lets the
    * memorySync subscribe avoid O(N) scans of points on every state
    * mutation. Always equals points.filter(p => !p.synced).length.
@@ -118,6 +125,10 @@ interface MemoryState {
   resetForUserSwitch: () => void;
 
   bumpInFlight: (delta: 1 | -1) => void;
+
+  /** R4: any GPS watcher caches its latest fix here so MemoryScreen
+   *  can use it without competing for a fresh fix. */
+  setLastWatcherFix: (lat: number, lng: number, ts: number) => void;
 }
 
 const CULL_THRESHOLD_M = UnlockConfig.radiusMeters * 0.5;
@@ -198,6 +209,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   _unsyncedCount: 0,
   initialRevealDone: false,
   syncState: { inFlightCount: 0, lastSyncAt: 0 },
+  lastWatcherFix: null,
 
   recordPoint: (lat, lng, atMs = Date.now()) => {
     if (!isFinite(lat) || !isFinite(lng)) return;
@@ -414,6 +426,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     geometryVersion: get().geometryVersion + 1,
     _unsyncedCount: 0,
     initialRevealDone: false,
+    lastWatcherFix: null,
     // N1 fix (v0.2.6.3): reset syncState too. Otherwise a logout
     // mid-push leaves inFlightCount=1 in the store; the next user's
     // MemorySummaryCard reads "Syncing…" indefinitely.
@@ -430,6 +443,24 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     });
   },
 
+  setLastWatcherFix: (lat, lng, ts) => {
+    if (!isFinite(lat) || !isFinite(lng)) return;
+    const cur = get().lastWatcherFix;
+    if (cur) {
+      const dt = ts - cur.ts;
+      // T-round: out-of-order ts (clock skew / queued events) — take
+      // the new value rather than silently drop it.
+      if (dt >= 0 && dt < 5_000) {
+        const dLat = (lat - cur.lat) * 111_000;
+        const cosLat = Math.cos((cur.lat * Math.PI) / 180);
+        const dLng = (lng - cur.lng) * 111_000 * cosLat;
+        const dM2 = dLat * dLat + dLng * dLng;
+        if (dM2 < 25 /* 5m squared */) return;
+      }
+    }
+    set({ lastWatcherFix: { lat, lng, ts } });
+  },
+
   /**
    * N1 fix: single source of truth for state reset on user-switch.
    * Calls clearAll's logic plus syncState reset. Use anywhere a
@@ -442,5 +473,6 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     _unsyncedCount: 0,
     initialRevealDone: false,
     syncState: { inFlightCount: 0, lastSyncAt: 0 },
+    lastWatcherFix: null,
   }),
 }));

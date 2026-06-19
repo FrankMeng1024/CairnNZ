@@ -28,7 +28,7 @@ export const UnlockConfig = {
    * Initial reveal on first app open (so the user doesn't see a blank
    * black map and bounce). Centered on the user's first valid GPS fix.
    */
-  initialRevealRadiusMeters: 200,
+  initialRevealRadiusMeters: 500,
 
   /**
    * Minimum accuracy (meters) for a GPS reading to be admitted to the

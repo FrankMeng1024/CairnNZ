@@ -26,8 +26,10 @@ import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useAppStore } from '../../../store/useAppStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMarkerStore } from '../../../store/useMarkerStore';
+import { useTrackingStore } from '../../../store/useTrackingStore';
 import { hydrateMemoryForUser, detachMemoryPersistence, flushMemoryNow } from '../services/memoryPersistence';
 import { attachMemorySync, detachMemorySync, pullMemoryFromServer, pushMemoryNow } from '../../../services/memorySync';
+import { log } from '../../../services/appLog';
 
 const WATCH_OPTIONS: Location.LocationOptions = {
   accuracy: Location.Accuracy.BestForNavigation,
@@ -37,12 +39,23 @@ const WATCH_OPTIONS: Location.LocationOptions = {
 
 export function ForegroundUnlockManager() {
   const enabled = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
+  // Q9 + R6: recordMode gates whether watcher should record without
+  // an active session. `status` includes 'tracking' AND 'paused' as
+  // active session phases (lastCoordinate is null during pause but
+  // user is still in a session).
+  const recordMode = useMemorySettingsStore((s) => s.recordMode);
+  const trackingStatus = useTrackingStore((s) => s.status);
+  const sessionActive = trackingStatus === 'tracking' || trackingStatus === 'paused';
   const userId = useAppStore((s) => s.user?.id ?? null);
   const subRef = useRef<Location.LocationSubscription | null>(null);
   // Read latest `enabled` from a ref inside async closures so a toggle
   // mid-AppState transition doesn't fire the wrong branch.
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
+  const recordModeRef = useRef(recordMode);
+  recordModeRef.current = recordMode;
+  const sessionActiveRef = useRef(sessionActive);
+  sessionActiveRef.current = sessionActive;
 
   // Memory tile hydration tied to user identity.
   // v0.2.6.2 fix (J1 B3): track a generation token so the cleanup +
@@ -101,7 +114,18 @@ export function ForegroundUnlockManager() {
         if (cancelled || subRef.current) return;
         const sub = await Location.watchPositionAsync(WATCH_OPTIONS, (loc) => {
           if (cancelled) return;
+          // R4 fix (v0.2.6.4): cache the latest fix for MemoryScreen
+          // even if recordMode gates the actual fog clearing — this
+          // way Memory tab opens fast without competing for GPS.
+          useMemoryStore.getState().setLastWatcherFix(
+            loc.coords.latitude,
+            loc.coords.longitude,
+            loc.timestamp ?? Date.now(),
+          );
           if (!enabledRef.current) return;
+          if (recordModeRef.current === 'session-only' && !sessionActiveRef.current) {
+            return;
+          }
           performInitialRevealIfNeeded(loc.coords.latitude, loc.coords.longitude);
           processReading({
             lat: loc.coords.latitude,
@@ -111,6 +135,7 @@ export function ForegroundUnlockManager() {
             timestampMs: loc.timestamp ?? Date.now(),
           });
         });
+        log('memory.watcher_started', { mode: recordModeRef.current });
         if (cancelled) {
           sub.remove();
         } else {

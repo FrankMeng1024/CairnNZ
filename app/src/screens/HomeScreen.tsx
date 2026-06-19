@@ -309,14 +309,17 @@ export function HomeScreen() {
             cardBg="#fff5e9"
             onPress={() => nav.navigate('Plant')}
             anim={card2}
-            flex={0.5}
+            flex={0.4}
           />
         </View>
 
-        {/* Tools — v0.2.6.2: restored Routes/History entry. Friends
-            and Settings live in the bottom tab bar; AR is sealed. */}
+        {/* Tools — v0.2.6.4: Trails (=Routes renamed) / Friends /
+            Memory (=AR renamed) / Settings. AR is sealed. */}
         <View style={styles.toolsRow}>
-          <ToolBtn iconName="Route" label="Routes" onPress={() => nav.navigate('Routes')} />
+          <ToolBtn iconName="Route" label="Trails" onPress={() => nav.navigate('Routes')} />
+          <ToolBtn iconName="Users" label="Friends" onPress={() => nav.navigate('Friends')} />
+          <ToolBtn iconName="Map" label="Memory" onPress={() => nav.navigate('Memory')} />
+          <ToolBtn iconName="Settings2" label="Settings" onPress={() => nav.navigate('Settings')} />
         </View>
 
       </Animated.View>

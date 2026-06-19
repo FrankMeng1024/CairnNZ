@@ -19,6 +19,7 @@ import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'rea
 import { sampleGpsWindow, SampleResult } from '../services/gpsSampler';
 import { GpsSamplingConfig } from '../config/plantConfig';
 import { MemoryColors } from '../../memory/config/memoryConfig';
+import { log } from '../../../services/appLog';
 
 interface Props {
   onLocked: (lat: number, lng: number, accuracyM: number) => void;
@@ -43,6 +44,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
     setProgress(0);
     setResult(null);
     setBusy(true);
+    log('plant.gps_lock_started', { retry: retryToken });
 
     const start = Date.now();
     const tick = () => {
@@ -55,6 +57,14 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
 
     sampleGpsWindow().then((res) => {
       if (cancelled) return;
+      log('plant.gps_decision', {
+        ok: res.ok,
+        reason: res.reason,
+        accuracy_m: res.accuracyMeters,
+        std_dev_m: res.stdDevMeters,
+        samples_used: res.samplesUsed,
+        retry: retryToken,
+      });
       setResult(res);
       setBusy(false);
       if (res.ok) onLockedRef.current(res.lat, res.lng, res.accuracyMeters);

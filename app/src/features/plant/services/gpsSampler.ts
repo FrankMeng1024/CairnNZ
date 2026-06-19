@@ -1,22 +1,33 @@
 /**
- * GPS sampler — collects N seconds of CLLocation readings and returns
+ * GPS sampler — collects readings over `windowSeconds` and returns
  * the best-confidence position estimate.
  *
- * Strategy:
- *   1. Subscribe to expo-location's high-accuracy stream.
- *   2. Collect readings for `windowSeconds`.
- *   3. Reject the worst readings (above accuracy threshold) and
- *      compute a weighted mean of the survivors. Weight is
- *      1 / accuracy², so a 3m reading weighs 11× more than a 10m one.
- *   4. Reject the whole sample if best accuracy still > threshold OR
- *      if the std-dev of the cluster is too large (jumpy signal).
+ * v0.2.6.4 (Q3 fix): previously used Location.watchPositionAsync,
+ * which on iOS interferes with Hiking's own watcher — when both are
+ * active iOS may only push to one of them, so Plant flow gets zero
+ * readings even though Hiking is receiving GPS fine. The user-reported
+ * bug "No GPS readings received" while Hiking works perfectly is this
+ * exact case.
  *
- * Returns a `SampleResult` with either { ok: true, lat, lng, ... } or
+ * New strategy: poll `getCurrentPositionAsync` at a fixed cadence.
+ * Each call is independent of any active watcher, so Plant works
+ * regardless of what other GPS consumers are running.
+ *
+ * Strategy:
+ *   1. Poll getCurrentPositionAsync every `sampleIntervalMs` for
+ *      `windowSeconds` total.
+ *   2. Reject readings with terrible accuracy and compute weighted
+ *      mean of survivors. Weight is 1/accuracy².
+ *   3. Reject the whole sample if best accuracy still > threshold OR
+ *      if std-dev of cluster too large (jumpy signal).
+ *
+ * Returns SampleResult with either { ok: true, lat, lng, ... } or
  * { ok: false, reason }.
  */
 
 import * as Location from 'expo-location';
 import { GpsSamplingConfig } from '../config/plantConfig';
+import { log } from '../../../services/appLog';
 
 export interface SampleResult {
   ok: boolean;
@@ -38,40 +49,82 @@ interface RawReading {
   timestamp: number;
 }
 
-const MIN_READINGS_FOR_DECISION = 3;
+const MIN_READINGS_FOR_DECISION = 2;
 
 /**
  * Run the full sampling window. Resolves after `windowSeconds`.
  * Caller should display a progress indicator using this same window.
  */
 export async function sampleGpsWindow(): Promise<SampleResult> {
+  log('plant.gps_window_start', { windowSec: GpsSamplingConfig.windowSeconds, intervalMs: GpsSamplingConfig.sampleIntervalMs });
   const { status } = await Location.getForegroundPermissionsAsync();
   if (status !== 'granted') {
+    log('plant.gps_permission_denied', { status });
     return makeFailure('permission-denied');
   }
 
   const readings: RawReading[] = [];
-  const sub = await Location.watchPositionAsync(
-    {
-      accuracy: Location.Accuracy.BestForNavigation,
-      timeInterval: GpsSamplingConfig.sampleIntervalMs,
-      distanceInterval: 0,
-    },
-    (loc) => {
-      const acc = loc.coords.accuracy;
-      if (acc === null || acc === undefined) return;
+  const startMs = Date.now();
+  const windowMs = GpsSamplingConfig.windowSeconds * 1000;
+  const intervalMs = GpsSamplingConfig.sampleIntervalMs;
+
+  let cancelled = false;
+  try {
+    const last = await Location.getLastKnownPositionAsync({
+      maxAge: 5_000,
+      requiredAccuracy: 100,
+    });
+    if (last && last.coords.accuracy != null) {
       readings.push({
-        lat: loc.coords.latitude,
-        lng: loc.coords.longitude,
-        accuracy: acc,
-        timestamp: loc.timestamp,
+        lat: last.coords.latitude,
+        lng: last.coords.longitude,
+        accuracy: last.coords.accuracy,
+        timestamp: last.timestamp,
       });
+      log('plant.gps_seed_lastknown', { accuracy: last.coords.accuracy });
+    } else {
+      log('plant.gps_seed_lastknown', { result: 'none' });
     }
-  );
+  } catch (e: any) {
+    log('plant.gps_seed_lastknown_error', { msg: String(e?.message ?? e).slice(0, 200) });
+  }
 
-  await new Promise((resolve) => setTimeout(resolve, GpsSamplingConfig.windowSeconds * 1000));
-  sub.remove();
+  let pollIdx = 0;
+  // S5+T1 (v0.2.6.4): per-call timeout floor 8s for cold-start TTFF
+  // (iOS BestForNavigation can take 5-15s on first fix). Subsequent
+  // calls are cached and fast — they'll resolve well before timeout.
+  // Without this floor we'd abort cold-start polls at 2s and report
+  // 'no-readings' even on perfect signal.
+  const PER_CALL_TIMEOUT_MS = Math.max(8000, intervalMs * 4);
+  while (!cancelled && Date.now() - startMs < windowMs) {
+    pollIdx++;
+    try {
+      const locPromise = Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.BestForNavigation,
+      });
+      const timeoutP = new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error('per-call-timeout')), PER_CALL_TIMEOUT_MS)
+      );
+      const loc = (await Promise.race([locPromise, timeoutP])) as Awaited<typeof locPromise>;
+      if (loc.coords.accuracy != null && isFinite(loc.coords.accuracy)) {
+        readings.push({
+          lat: loc.coords.latitude,
+          lng: loc.coords.longitude,
+          accuracy: loc.coords.accuracy,
+          timestamp: loc.timestamp,
+        });
+        log('plant.gps_sample_ok', { idx: pollIdx, accuracy: loc.coords.accuracy });
+      } else {
+        log('plant.gps_sample_no_accuracy', { idx: pollIdx });
+      }
+    } catch (e: any) {
+      log('plant.gps_sample_error', { idx: pollIdx, msg: String(e?.message ?? e).slice(0, 200) });
+    }
+    if (Date.now() - startMs >= windowMs) break;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 
+  log('plant.gps_window_end', { reading_count: readings.length, poll_count: pollIdx });
   return decideFromReadings(readings);
 }
 
@@ -83,8 +136,7 @@ export function decideFromReadings(readings: RawReading[]): SampleResult {
     return makeFailure('no-readings');
   }
 
-  // Drop readings with terrible accuracy (preserves the rest from
-  // having their weighted mean dragged off-target).
+  // Drop readings with terrible accuracy.
   const candidates = readings.filter(
     (r) => r.accuracy <= GpsSamplingConfig.rejectAccuracyAboveMeters * 2
   );

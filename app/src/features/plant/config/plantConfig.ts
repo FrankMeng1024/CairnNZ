@@ -8,8 +8,11 @@
 
 // ── GPS sampling ───────────────────────────────────────────────────────
 export const GpsSamplingConfig = {
-  /** Total sampling window before we consider position "locked". */
-  windowSeconds: 5,
+  /** Total sampling window before we consider position "locked".
+   *  S5 (v0.2.6.4): 10→15. Cold-start GPS first fix on iOS can take
+   *  5-15s on BestForNavigation accuracy. We need the window long
+   *  enough to fit ≥2 readings even in the worst case. */
+  windowSeconds: 15,
   /** Sample interval — iOS native location updates are usually ~1Hz. */
   sampleIntervalMs: 500,
   /**

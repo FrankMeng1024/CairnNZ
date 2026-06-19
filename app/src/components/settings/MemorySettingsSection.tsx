@@ -23,6 +23,7 @@ import { deleteAllMemoryFromServer } from '../../services/memorySync';
 export function MemorySettingsSection() {
   const fg = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
   const fri = useMemorySettingsStore((s) => s.showFriendOverlay);
+  const recordMode = useMemorySettingsStore((s) => s.recordMode);
   const setSetting = useMemorySettingsStore((s) => s.set);
   const pointCount = useMemoryStore((s) => s.points.length);
   const userId = useAppStore((s) => s.user?.id ?? null);
@@ -64,6 +65,30 @@ export function MemorySettingsSection() {
           value={fg}
           onToggle={() => setSetting('foregroundAutoUnlockEnabled', !fg)}
         />
+        <View style={styles.divider} />
+        {/* Q9: when to record. 'always' = any time the app is open;
+            'session-only' = only during an active Hiking/Running session. */}
+        <View style={styles.segmentRow}>
+          <Text style={styles.segmentLabel}>Record memory</Text>
+          <View style={styles.segmentBox}>
+            <TouchableOpacity
+              style={[styles.segment, recordMode === 'always' && styles.segmentActive]}
+              onPress={() => setSetting('recordMode', 'always')}
+            >
+              <Text style={[styles.segmentText, recordMode === 'always' && styles.segmentTextActive]}>
+                Whenever app is open
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.segment, recordMode === 'session-only' && styles.segmentActive]}
+              onPress={() => setSetting('recordMode', 'session-only')}
+            >
+              <Text style={[styles.segmentText, recordMode === 'session-only' && styles.segmentTextActive]}>
+                Only during Hiking / Running
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         <View style={styles.divider} />
         <ToggleRow
           iconName="Users"
@@ -148,6 +173,13 @@ const styles = StyleSheet.create({
   label:   { fontSize: 14, color: Colors.textPrimary, fontWeight: '500' },
   hint:    { fontSize: 11, color: Colors.textSecondary, marginTop: 2, lineHeight: 14 },
   divider: { height: 1, backgroundColor: Colors.border, marginLeft: 56 },
+  segmentRow: { paddingHorizontal: 12, paddingVertical: 12 },
+  segmentLabel: { fontSize: 13, color: Colors.textPrimary, fontWeight: '500', marginBottom: 8 },
+  segmentBox: { flexDirection: 'row', backgroundColor: Colors.bg, borderRadius: 10, padding: 3 },
+  segment: { flex: 1, paddingVertical: 8, paddingHorizontal: 6, alignItems: 'center', borderRadius: 8 },
+  segmentActive: { backgroundColor: Colors.surface, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
+  segmentText: { fontSize: 11, color: Colors.textSecondary, textAlign: 'center' },
+  segmentTextActive: { color: Colors.primary, fontWeight: '500' },
   statsRow: { paddingVertical: 12, paddingHorizontal: 16 },
   statText: { fontSize: 12, color: Colors.textSecondary },
   dangerRow: {

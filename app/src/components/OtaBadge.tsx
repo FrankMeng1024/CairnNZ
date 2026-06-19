@@ -1133,7 +1133,57 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         legacy v0.2.6.2 client compat. Convergence after 7 review
 //         rounds (K → L → M → N → O → P): 0 Blocker / 0 Critical
 //         remaining. 35/35 unit tests pass. 0 new TypeScript errors.
-export const OTA_VERSION = 286;
+// v287  v0.2.6.4 — post-v286 user feedback bundle:
+//         (1) BottomTabNavigator removed; restored v0.2.5 NativeStack.
+//             HomeScreen ToolsRow has Trails/Friends/Memory/Settings.
+//         (2) Plant card flex 0.5→0.4 (smaller, tertiary action).
+//         (3) GPS sampler rewritten — poll getCurrentPositionAsync
+//             instead of watchPositionAsync (avoids iOS watcher
+//             collision with Hiking that caused "No GPS readings").
+//         (4) Universal appLog: services/appLog.ts. Single log(tag,
+//             ctx?) — Plant + Memory + foreground unlock all
+//             instrumented. Reuses /api/edit-diag (existing schema,
+//             rate-limited, TTL'd).
+//         (5) Memory: BackButton, first-visit hint modal, recenter
+//             FAB, useFocusEffect remount on tab open.
+//         (6) Memory initial zoom 15→16.5; initialRevealRadius
+//             200m→500m so first impression isn't "all fog".
+//         (7) Settings segmented control: Record memory =
+//             "Whenever app open" | "Only during Hiking/Running".
+// v288  R-round: post-v287 subagent review fixes.
+//         (1) appLog: drain queue on 4xx too (was retry storm against
+//             permanent failures); only 5xx/network retain for retry.
+//         (2) gpsSampler: windowSec 5→10, MIN_READINGS 3→2 — cold GPS
+//             used to consume the whole 5s window on a single call.
+//         (3) Memory tab now reuses ForegroundUnlockManager's watcher
+//             cache (useMemoryStore.lastWatcherFix). Avoids iOS
+//             dual-watcher conflict that produced 12s timeouts when
+//             Hiking watcher was already running.
+//         (4) MemoryScreen mountKey is useState (was useRef →
+//             mutating it never re-rendered, remount fired only by
+//             accident via retryToken).
+//         (5) session-only mode uses tracking.status ('tracking' OR
+//             'paused') instead of lastCoordinate != null.
+//         (6) Recenter only refetches GPS when watcher cache stale
+//             (>30s); otherwise just camera-flies. retryToken bump
+//             gated by 5s debounce.
+//         (7) First-visit hint shows only after settings hydrate.
+//         (8) Focus refetch debounced 5s.
+//         (9) Deleted dead BottomTabNavigator.tsx.
+// v289  S-round: post-v288 review fixes.
+//         (1) S1: coord = fresh watcher → oneShot → stale watcher
+//             (oneShot was dead code under watcherFix??oneShot).
+//         (2) S2: MemoryMap Camera follows user motion. cameraKey
+//             now includes coords (rounded ≈10m).
+//         (3) S3: mountKey debounce 30s — Memory tab back-and-forth
+//             no longer reloads Mapbox tiles.
+//         (4) S4: WATCHER_FIX_FRESH 30s→10min. Stale lat/lng > iOS
+//             dual-watcher conflict.
+//         (5) S5: gpsSampler per-call timeout (4×interval).
+//             windowSec 10→15 for cold-start safety.
+//         (6) S6: setLastWatcherFix throttle (>5m or >5s).
+//         (7) MemoryScreen useEffect dep [refetchToken] only.
+export const OTA_VERSION = 289;
 //         v284: head-magnet visual fix (incremental builder).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
