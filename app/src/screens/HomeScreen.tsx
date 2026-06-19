@@ -299,15 +299,24 @@ export function HomeScreen() {
             onPress={() => nav.navigate('Running')}
             anim={card2}
           />
+          {/* v0.2.6.1 — Plant cairn entry. Same ActivityCard size as
+              Hiking/Running so the home grid stays balanced. Flag/cairn
+              palette so it reads as a third distinct activity. */}
+          <ActivityCard
+            icon={(sz) => <FlagMarkerIcon size={sz} stoneColor={Colors.flag} flagColor={Colors.primary} />}
+            title="Leave a Cairn here"
+            subtitle="Drop a note for friends or your future self"
+            accentColor={Colors.flag}
+            lightBg="#fbe9d8"
+            cardBg="#fff5e9"
+            onPress={() => nav.navigate('Plant')}
+            anim={card2}
+          />
         </View>
 
-        {/* Tools */}
-        <View style={styles.toolsRow}>
-          <ToolBtn iconName="Route" label="Routes" onPress={() => nav.navigate('Routes')} />
-          <ToolBtn iconName="Users" label="Friends" onPress={() => nav.navigate('Friends')} />
-          <ToolBtn iconName="Compass" label="AR" onPress={() => nav.navigate('AR')} />
-          <ToolBtn iconName="Settings2" label="Settings" onPress={() => nav.navigate('Settings')} />
-        </View>
+        {/* Tools row removed in v0.2.6.1 — Friends / Settings live in
+            the bottom tab bar; AR is sealed; Routes is reachable from
+            within Hiking. */}
 
       </Animated.View>
     </SafeAreaView>

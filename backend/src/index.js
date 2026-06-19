@@ -84,6 +84,7 @@ app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/routes', require('./routes/routes'));
 app.use('/api/friends', require('./routes/friends'));
 app.use('/api/markers', require('./routes/markers'));
+app.use('/api/memory', require('./routes/memory'));
 app.use('/api/telemetry', require('./routes/telemetry'));
 app.use('/api/debug-snapshot', require('./routes/debug-snapshot'));
 app.use('/api/feature-flags', require('./routes/feature-flags'));

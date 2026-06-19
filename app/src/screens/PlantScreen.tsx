@@ -32,7 +32,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useMarkerStore, MarkerPermission } from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
-import { MemoryColors, UnlockConfig } from '../features/memory/config/memoryConfig';
+import { MemoryColors } from '../features/memory/config/memoryConfig';
 import { GpsLockStep } from '../features/plant/components/GpsLockStep';
 import { PinAdjustStep } from '../features/plant/components/PinAdjustStep';
 import { ContentStep } from '../features/plant/components/ContentStep';
@@ -83,7 +83,7 @@ const INITIAL_DRAFT: PlantDraft = {
 export function PlantScreen() {
   const nav = useNavigation<any>();
   const addMarker = useMarkerStore((s) => s.addMarker);
-  const recordCircleUnlock = useMemoryStore((s) => s.recordCircleUnlock);
+  const recordPoint = useMemoryStore((s) => s.recordPoint);
   const userId = useAppStore((s) => s.user?.id ?? '');
   const [step, setStep] = useState<Step>('gps');
   const [draft, setDraft] = useState<PlantDraft>(INITIAL_DRAFT);
@@ -112,7 +112,7 @@ export function PlantScreen() {
           voiceMemoUri: final.voiceUri ?? undefined,
           voiceMemoDurationMs: final.voiceMs ?? undefined,
         } as any);
-        recordCircleUnlock(final.lat, final.lng, UnlockConfig.radiusMeters, Date.now());
+        recordPoint(final.lat, final.lng, Date.now());
         nav.goBack();
       } catch (e: any) {
         // Stay on the content step so the user can retry without
@@ -124,7 +124,7 @@ export function PlantScreen() {
         );
       }
     },
-    [addMarker, recordCircleUnlock, userId, nav, submitting]
+    [addMarker, recordPoint, userId, nav, submitting]
   );
 
   const onContentSubmit = (payload: {

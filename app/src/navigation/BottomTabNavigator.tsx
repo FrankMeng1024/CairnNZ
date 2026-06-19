@@ -1,42 +1,37 @@
 /**
- * BottomTabNavigator — v0.2.6 introduces a 4-tab bottom bar:
- *   Trails | Friends | Memory | Settings
+ * BottomTabNavigator — v0.2.6.1: 4-tab bottom bar with restored icons.
  *
- * The previous Home page (HomeScreen) is no longer used as a hub — its
- * activity-card content (Hiking / Running buttons) moves into the
- * Trails tab. The AR tool button is gone (AR feature sealed in v0.2.6).
+ *   Trails (= v0.2.5 HomeScreen) | Friends | Memory | Settings
  *
- * This component is plugged into RootNavigator after the Auth stack
- * — see RootNavigator.tsx for the integration point.
- *
- * Tabs are described declaratively in TAB_CONFIG so adding/reordering
- * doesn't require editing JSX. Each tab points to a screen component
- * and a tabBarIcon.
+ * Per user feedback (2026-06-19): emoji icons looked cheap. Replaced
+ * with the same Lucide icons used elsewhere in the app, so the bottom
+ * bar matches the rest of the visual system. Labels stay as the
+ * v0.2.6 names.
  */
 
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { TrailsScreen } from '../screens/TrailsScreen';
+import { HomeScreen } from '../screens/HomeScreen';
 import { FriendsScreen } from '../screens/FriendsScreen';
 import { MemoryScreen } from '../features/memory/screens/MemoryScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
-import { Text } from 'react-native';
-import { MemoryColors } from '../features/memory/config/memoryConfig';
+import { Icon } from '../components/Icon';
+import { Colors } from '../components/tokens';
 
 const Tab = createBottomTabNavigator();
 
 interface TabDef {
   name: string;
   component: React.ComponentType<any>;
-  icon: string;
+  iconName: 'Mountain' | 'Users' | 'BookOpen' | 'Settings2';
   label: string;
 }
 
 const TAB_CONFIG: TabDef[] = [
-  { name: 'Trails',   component: TrailsScreen,   icon: '🥾', label: 'Trails' },
-  { name: 'Friends',  component: FriendsScreen,  icon: '👥', label: 'Friends' },
-  { name: 'Memory',   component: MemoryScreen,   icon: '📓', label: 'Memory' },
-  { name: 'Settings', component: SettingsScreen, icon: '⚙️', label: 'Settings' },
+  { name: 'Trails',   component: HomeScreen,     iconName: 'Mountain',   label: 'Trails' },
+  { name: 'Friends',  component: FriendsScreen,  iconName: 'Users',      label: 'Friends' },
+  { name: 'Memory',   component: MemoryScreen,   iconName: 'BookOpen',   label: 'Memory' },
+  { name: 'Settings', component: SettingsScreen, iconName: 'Settings2',  label: 'Settings' },
 ];
 
 export function BottomTabNavigator() {
@@ -44,11 +39,11 @@ export function BottomTabNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: MemoryColors.sepia,
-        tabBarInactiveTintColor: '#b5a890',
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.textSecondary,
         tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopColor: '#e8dfc8',
+          backgroundColor: Colors.surface,
+          borderTopColor: Colors.border,
         },
       }}
     >
@@ -59,7 +54,9 @@ export function BottomTabNavigator() {
           component={tab.component}
           options={{
             tabBarLabel: tab.label,
-            tabBarIcon: () => <Text style={{ fontSize: 18 }}>{tab.icon}</Text>,
+            tabBarIcon: ({ color, size }) => (
+              <Icon name={tab.iconName} size={size ?? 22} color={color} strokeWidth={2} />
+            ),
           }}
         />
       ))}

@@ -26,9 +26,11 @@
  */
 
 import { storage } from '../../../store/storage';
-import { useMemoryStore, ExploredTile } from '../store/useMemoryStore';
+import { useMemoryStore, VisitedPoint } from '../store/useMemoryStore';
 
-const STORAGE_KEY_PREFIX = 'cairn:memory:tiles:v1:';
+// v0.2.6.1: schema bumped from v1 (tile bitmaps) to v2 (point array).
+// Storage key prefix bumped to v2 so old v1 payloads are abandoned.
+const STORAGE_KEY_PREFIX = 'cairn:memory:tiles:v2:';
 const DEBOUNCE_MS = 3_000;
 /**
  * Hard cap on how long a flush can be deferred. Without this, every GPS
@@ -47,7 +49,9 @@ let currentUserId: string | null = null;
  */
 let generation = 0;
 
-/** base64 encode helper — Node-friendly + RN-friendly. */
+/** base64 encode helper — Node-friendly + RN-friendly. Kept for the
+ * persistence layer's potential future use (server payloads etc.); not
+ * used by the v2 point-array schema below. */
 function bytesToBase64(bytes: Uint8Array): string {
   if (typeof btoa === 'function') {
     let binary = '';
@@ -67,47 +71,56 @@ function base64ToBytes(b64: string): Uint8Array {
   return new Uint8Array(Buffer.from(b64, 'base64'));
 }
 
-interface SerializedTile {
-  k: string;
-  b: string;
-  f: number;
-  l: number;
+// Re-export to avoid TS dead-code warnings; consumers may use them later.
+void bytesToBase64;
+void base64ToBytes;
+
+interface SerializedPoint {
+  /** lat (number) */
+  a: number;
+  /** lng (number) */
+  o: number;
+  /** ts (Unix ms) */
+  t: number;
+  /** synced flag (1 = synced, 0 = pending) */
+  s: 0 | 1;
 }
 
-interface SerializedMemory {
-  v: 1;
-  tiles: SerializedTile[];
+interface SerializedMemoryV2 {
+  v: 2;
+  points: SerializedPoint[];
   initialRevealDone: boolean;
 }
 
-function serialize(tiles: Map<string, ExploredTile>, initialRevealDone: boolean): SerializedMemory {
-  const out: SerializedTile[] = [];
-  tiles.forEach((tile) => {
-    out.push({
-      k: tile.key,
-      b: bytesToBase64(tile.bitmap),
-      f: tile.firstSeenAt,
-      l: tile.lastSeenAt,
-    });
-  });
-  return { v: 1, tiles: out, initialRevealDone };
+function serialize(points: VisitedPoint[], initialRevealDone: boolean): SerializedMemoryV2 {
+  return {
+    v: 2,
+    points: points.map((p) => ({
+      a: p.lat,
+      o: p.lng,
+      t: p.ts,
+      s: p.synced ? 1 : 0,
+    })),
+    initialRevealDone,
+  };
 }
 
-function deserialize(raw: string): { tiles: Map<string, ExploredTile>; initialRevealDone: boolean } | null {
+function deserialize(raw: string): { points: VisitedPoint[]; initialRevealDone: boolean } | null {
   try {
-    const parsed = JSON.parse(raw) as SerializedMemory;
-    if (parsed.v !== 1 || !Array.isArray(parsed.tiles)) return null;
-    const tiles = new Map<string, ExploredTile>();
-    for (const t of parsed.tiles) {
-      if (typeof t.k !== 'string') continue;
-      tiles.set(t.k, {
-        key: t.k,
-        bitmap: base64ToBytes(t.b),
-        firstSeenAt: typeof t.f === 'number' ? t.f : Date.now(),
-        lastSeenAt: typeof t.l === 'number' ? t.l : Date.now(),
+    const parsed = JSON.parse(raw) as SerializedMemoryV2;
+    if (parsed.v !== 2 || !Array.isArray(parsed.points)) return null;
+    const points: VisitedPoint[] = [];
+    for (const p of parsed.points) {
+      if (typeof p?.a !== 'number' || typeof p?.o !== 'number') continue;
+      if (!isFinite(p.a) || !isFinite(p.o)) continue;
+      points.push({
+        lat: p.a,
+        lng: p.o,
+        ts: typeof p.t === 'number' ? p.t : Date.now(),
+        synced: p.s === 1,
       });
     }
-    return { tiles, initialRevealDone: Boolean(parsed.initialRevealDone) };
+    return { points, initialRevealDone: Boolean(parsed.initialRevealDone) };
   } catch {
     return null;
   }
@@ -136,13 +149,11 @@ function clearTimers(): void {
 async function flush(userId: string): Promise<void> {
   if (!userId) return;
   const state = useMemoryStore.getState();
-  const payload = serialize(state.tiles, state.initialRevealDone);
+  const payload = serialize(state.points, state.initialRevealDone);
   try {
     await storage.setItem(storageKey(userId), JSON.stringify(payload));
   } catch {
-    // AsyncStorage quota exceeded / disk error. Drop silently — next
-    // tick will retry. We do not surface this to the user because the
-    // memory feature degrades gracefully (in-memory state is intact).
+    // AsyncStorage quota exceeded / disk error. Drop silently.
   }
 }
 
@@ -222,7 +233,7 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
     const decoded = deserialize(raw);
     if (decoded) {
       useMemoryStore.setState({
-        tiles: decoded.tiles,
+        points: decoded.points,
         initialRevealDone: decoded.initialRevealDone,
       });
     }

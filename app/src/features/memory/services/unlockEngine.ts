@@ -73,10 +73,11 @@ export function processReading(reading: GpsReading): UnlockDecision {
   }
   lastUnlockedCellKey = cellKey;
 
-  // Apply unlock as a circle of UnlockConfig.radiusMeters.
-  useMemoryStore
-    .getState()
-    .recordCircleUnlock(reading.lat, reading.lng, UnlockConfig.radiusMeters, reading.timestampMs);
+  // Apply unlock as a single visited point. The fog renderer paints a
+  // 25m circle around it. v0.2.6.1 simplification — was `recordCircleUnlock`
+  // that pre-computed sub-grid cells, but the new point-based fog model
+  // makes that work redundant.
+  useMemoryStore.getState().recordPoint(reading.lat, reading.lng, reading.timestampMs);
 
   return {
     kind: 'unlocked',

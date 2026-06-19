@@ -35,7 +35,7 @@ const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12'; // TODO(v0.2.6 §
 
 export function MemoryMap({ centerLat, centerLng }: Props) {
   const Mapbox = getMapbox();
-  const exploredTiles = useMemoryStore((s) => s.tiles);
+  const visitedPoints = useMemoryStore((s) => s.points);
   const allMarkers = useMarkerStore((s) => s.markers);
 
   // Web fallback — Mapbox isn't available.
@@ -60,7 +60,7 @@ export function MemoryMap({ centerLat, centerLng }: Props) {
           animationDuration={500}
         />
         <UserLocation visible={true} />
-        <FogLayer exploredTiles={exploredTiles} />
+        <FogLayer visitedPoints={visitedPoints} />
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>
     </View>

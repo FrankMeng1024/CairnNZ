@@ -1,89 +1,122 @@
 /**
- * Fog GeoJSON builder.
+ * fogBuilder — produce GeoJSON for the fog overlay.
  *
- * Produces a single GeoJSON Polygon Feature with:
- *   - Outer ring = the whole world (or visible viewport extent)
- *   - Inner rings = "holes" for explored tiles
+ * v0.2.6.1 (this rewrite): the fog is now built from a sequence of GPS
+ * POINTS, not from rectangular Web Mercator tiles. Each point becomes a
+ * `unlockRadiusMeters` circle (default 25m) rendered as a 32-vertex
+ * polygon hole in the global outer ring. Mapbox draws polygon-with-
+ * many-holes natively, so overlapping circles visually merge into a
+ * smooth, organic explored area — exactly what the user asked for
+ * (a "circle around me" model, not a square tile grid).
  *
- * Mapbox FillLayer renders this Polygon by filling the outer ring
- * minus the holes — exactly what we want for fog (dark everywhere
- * except where the user has walked).
+ * Why no turf.js union: a real polygon-union per render is O(N²) for
+ * N circles (eats CPU on long hikes). Letting Mapbox's renderer handle
+ * the visual overlap is correct AND fast — same trick that Strava and
+ * other GPS apps use for their heatmaps.
  *
- * For v0.2.6 MVP we use one rectangular hole per explored zoom-17
- * tile (≈30m on a side). Sub-tile precision (which cells inside the
- * tile are unlocked) is captured in the bitmap but visualized as a
- * single rectangle. This is much cheaper than marching-squares and
- * looks fine at the typical viewing zoom levels (14-18).
- *
- * Future: replace one-rect-per-tile with proper marching-squares for
- * sub-tile precision — only worth it if telemetry shows users zoom
- * way in and notice the rectangular borders.
+ * Output:
+ *   Feature<Polygon>
+ *     coordinates[0] = world outer ring (clockwise)
+ *     coordinates[1..N] = one inner ring per visited point (CCW)
  */
 
-import { ExploredTile } from '../store/useMemoryStore';
-import { tileToTopLeftLatLng } from './tileEncoder';
-import { TileConfig } from '../config/memoryConfig';
+import { UnlockConfig } from '../config/memoryConfig';
+import { VisitedPoint } from '../store/useMemoryStore';
 
-export type FogPolygonFeature = {
-  type: 'Feature';
-  geometry: { type: 'Polygon'; coordinates: number[][][] };
-  properties: { kind: 'fog' };
-};
-
-/** Outer ring covering the entire Mercator world (clockwise). */
 const WORLD_OUTER_RING: number[][] = [
-  [-180, 85.05112878],
-  [-180, -85.05112878],
-  [180, -85.05112878],
-  [180, 85.05112878],
-  [-180, 85.05112878],
+  [-180,  85.05],
+  [ 180,  85.05],
+  [ 180, -85.05],
+  [-180, -85.05],
+  [-180,  85.05],
 ];
 
+const CIRCLE_VERTICES = 32;
+const EARTH_RADIUS_M = 6_378_137;
+
 /**
- * Build the fog GeoJSON Feature: world outer ring + one hole per
- * explored tile. Holes wind counter-clockwise per GeoJSON RFC 7946.
+ * Build a 32-vertex closed counter-clockwise ring approximating a
+ * circle of `radiusM` meters around (centerLat, centerLng).
+ *
+ * Uses the equirectangular approximation: at the radii we deal with
+ * (≤ 50m for unlocks) the deviation from a true geodesic circle is
+ * sub-pixel at city zooms.
  */
-export function buildFogPolygon(tiles: ExploredTile[]): FogPolygonFeature {
-  const holes: number[][][] = [];
+function makeCircleRing(centerLat: number, centerLng: number, radiusM: number): number[][] {
+  const safeLat = Math.max(-85.05, Math.min(85.05, centerLat));
+  const cosLat = Math.max(Math.cos((safeLat * Math.PI) / 180), 1e-6);
+  const dLatPerM = 1 / (EARTH_RADIUS_M * Math.PI / 180);
+  const dLngPerM = dLatPerM / cosLat;
 
-  for (const tile of tiles) {
-    const parts = tile.key.split('/');
-    if (parts.length !== 3) continue;
-    const z = parseInt(parts[0], 10);
-    const x = parseInt(parts[1], 10);
-    const y = parseInt(parts[2], 10);
-    if (!Number.isFinite(z) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
-
-    const tl = tileToTopLeftLatLng({ z, x, y });
-    const br = tileToTopLeftLatLng({ z, x: x + 1, y: y + 1 });
-    // Counter-clockwise hole ring (outer is clockwise above):
-    holes.push([
-      [tl.lng, tl.lat],
-      [tl.lng, br.lat],
-      [br.lng, br.lat],
-      [br.lng, tl.lat],
-      [tl.lng, tl.lat],
+  const ring: number[][] = [];
+  for (let i = 0; i < CIRCLE_VERTICES; i++) {
+    const theta = -2 * Math.PI * (i / CIRCLE_VERTICES);
+    const dx = radiusM * Math.cos(theta);
+    const dy = radiusM * Math.sin(theta);
+    ring.push([
+      centerLng + dx * dLngPerM,
+      safeLat + dy * dLatPerM,
     ]);
+  }
+  ring.push([...ring[0]]);
+  return ring;
+}
+
+export interface FogFeature {
+  type: 'Feature';
+  geometry: {
+    type: 'Polygon';
+    coordinates: number[][][];
+  };
+  properties: Record<string, unknown>;
+}
+
+/**
+ * Build the fog polygon from an array of visited GPS points. Each
+ * point gets a `unlockRadiusMeters` circle hole.
+ *
+ * For dense paths we cull neighbours within `cullThresholdM` meters —
+ * adjacent circles already overlap so additional rings cost geometry
+ * without adding visual area. Cull threshold defaults to half the
+ * unlock radius so ~50% overlap is preserved for a smooth boundary.
+ */
+export function buildFogPolygon(points: VisitedPoint[]): FogFeature {
+  const radius = UnlockConfig.radiusMeters;
+  const cullThresholdM = radius * 0.5;
+  const cullThresholdSq = cullThresholdM * cullThresholdM;
+
+  const kept: VisitedPoint[] = [];
+  for (const p of points) {
+    if (
+      typeof p?.lat !== 'number' || typeof p?.lng !== 'number' ||
+      !isFinite(p.lat) || !isFinite(p.lng)
+    ) continue;
+    let skip = false;
+    for (let i = kept.length - 1; i >= 0 && !skip; i--) {
+      const dLat = (p.lat - kept[i].lat) * 111_000;
+      const cosLat = Math.cos((kept[i].lat * Math.PI) / 180);
+      const dLng = (p.lng - kept[i].lng) * 111_000 * cosLat;
+      if (dLat * dLat + dLng * dLng < cullThresholdSq) skip = true;
+    }
+    if (!skip) kept.push(p);
+  }
+
+  const coordinates: number[][][] = [WORLD_OUTER_RING];
+  for (const p of kept) {
+    coordinates.push(makeCircleRing(p.lat, p.lng, radius));
   }
 
   return {
     type: 'Feature',
     geometry: {
       type: 'Polygon',
-      coordinates: [WORLD_OUTER_RING, ...holes],
+      coordinates,
     },
-    properties: { kind: 'fog' },
+    properties: {},
   };
 }
 
-/** Tile size in meters for telemetry / debug output. */
-export function tileMetersAtLatitude(lat: number): number {
-  const earthCirc = 40075016.686;
-  const tilesPerWorld = Math.pow(2, TileConfig.zoom);
-  return (earthCirc * Math.cos((lat * Math.PI) / 180)) / tilesPerWorld;
-}
-
-/** Diagnostic — how many holes are in the fog polygon. */
-export function countHoles(feature: FogPolygonFeature): number {
+/** Number of rendered circles in the polygon (excludes outer ring). */
+export function countHoles(feature: FogFeature): number {
   return Math.max(0, feature.geometry.coordinates.length - 1);
 }

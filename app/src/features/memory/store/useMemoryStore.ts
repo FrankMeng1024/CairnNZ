@@ -1,60 +1,82 @@
 /**
- * Memory store — Zustand store holding the user's explored tile set.
+ * Memory store — Zustand store holding the user's visited GPS points.
+ *
+ * v0.2.6.1 model rewrite:
+ *   Previously: tile-bitmap (Web Mercator z17 tile + 128×128 sub-grid)
+ *   Now:        sequence of GPS points; each point unlocks a 25m circle
+ *
+ * Why the switch: visual model is "circle around me", not "square
+ * tiles". Storage is also simpler (~30 bytes/point vs 2KB/tile) and
+ * directly cloud-syncable as a typed JSON array.
  *
  * Responsibilities:
- *   - Track which tiles / sub-grid cells the user has unlocked.
- *   - Persist to MMKV between sessions.
- *   - Provide read APIs (isExplored, listExploredTiles) for the map
- *     renderer.
- *   - Provide write APIs (recordUnlock) for the unlock engine.
+ *   - Record visited points (idempotent — culls near-duplicates).
+ *   - Persist to AsyncStorage as offline buffer.
+ *   - Cloud sync (separate service uploads + clears local once acked).
+ *   - Provide read APIs for fogBuilder + isExplored checks.
  *
  * It does NOT:
- *   - Talk to the network. Server sync is a separate service that
- *     reads/writes this store. Keeping IO out of the store keeps it
- *     unit-testable.
- *   - Decide unlock policy (radius, speed gates, etc.). That logic
- *     lives in unlockEngine which calls into this store.
- *
- * Persistence note: storing every sub-grid cell as a Set would balloon
- * to MB on a single hike. We compact at the tile level — each tile is
- * a Uint8Array of size 128*128/8 = 2KB.
+ *   - Talk to the network. The sync service in services/memorySync.ts
+ *     subscribes to this store and uploads.
+ *   - Decide unlock policy (radius, speed gates). Logic lives in
+ *     unlockEngine which calls into this store.
  */
 
 import { create } from 'zustand';
-import { latLngToSubgridCell, tileKey } from '../services/tileEncoder';
-import { TileConfig } from '../config/memoryConfig';
+import { UnlockConfig } from '../config/memoryConfig';
 
+/**
+ * One GPS reading the user has visited. Stored chronologically.
+ *
+ * `synced` flags whether this point has been uploaded to the server
+ * (true) or is still local-only (false). The sync service flips false
+ * → true as it acks each batch.
+ */
+export interface VisitedPoint {
+  lat: number;
+  lng: number;
+  /** Unix ms when the user was here. */
+  ts: number;
+  /** True iff successfully uploaded to server. */
+  synced?: boolean;
+}
+
+/**
+ * Tile-shaped record kept ONLY for backwards compatibility with the
+ * persistence layer's older `SerializedMemory v1` payloads. New writes
+ * never produce one; deserialize will convert v1 tiles → v2 points by
+ * picking the tile center.
+ */
 export interface ExploredTile {
-  /** Encoded tile ID (e.g. "17/12345/6789"). */
   key: string;
-  /**
-   * Bitmap of unlocked sub-grid cells. Length = 128*128/8 = 2048
-   * bytes. bit at (row * 128 + col) is set iff that cell is unlocked.
-   */
   bitmap: Uint8Array;
-  /** First-time-seen Unix ms (used in 'cities visited' UI). */
   firstSeenAt: number;
-  /** Most recent unlock Unix ms. */
   lastSeenAt: number;
 }
 
 interface MemoryState {
-  /** key → tile (small object reuses references for fast diffing). */
-  tiles: Map<string, ExploredTile>;
-  /** Whether we've performed the initial reveal for this session. */
+  /** All visited points, chronological. Cull-on-write keeps it sparse. */
+  points: VisitedPoint[];
+  /** Whether the initial reveal has been performed. */
   initialRevealDone: boolean;
 
-  /** Mark a single GPS point as explored (idempotent). */
-  recordUnlock: (lat: number, lng: number, atMs?: number) => void;
+  /** Record one GPS point as visited. Idempotent. */
+  recordPoint: (lat: number, lng: number, atMs?: number) => void;
 
-  /** Mark a circular region as explored (used for initial-reveal). */
+  /** Mark a circular region (initial reveal) — drops a single point. */
   recordCircleUnlock: (lat: number, lng: number, radiusMeters: number, atMs?: number) => void;
 
-  /** Read API — is this lat/lng inside an unlocked cell? */
+  /** Read API — is this lat/lng within `unlockRadius` of any visited point? */
   isExplored: (lat: number, lng: number) => boolean;
 
-  /** Read API — full list of explored tiles for map rendering. */
-  listExploredTiles: () => ExploredTile[];
+  /** Read API — full list for the fog renderer. */
+  listVisitedPoints: () => VisitedPoint[];
+
+  /** Mark unsynced points as synced (called by the sync service). */
+  markPointsSynced: (timestamps: number[]) => void;
+
+  /** Replace all points (called by persistence on hydrate / by sync on download). */
+  replacePoints: (points: VisitedPoint[], initialRevealDone: boolean) => void;
 
   /** Mark initial-reveal as done so we don't re-trigger. */
   markInitialRevealDone: () => void;
@@ -63,135 +85,70 @@ interface MemoryState {
   clearAll: () => void;
 }
 
-const SUBGRID_BITS = TileConfig.subgridSize * TileConfig.subgridSize;
-const SUBGRID_BYTES = SUBGRID_BITS / 8;
+const CULL_THRESHOLD_M = UnlockConfig.radiusMeters * 0.5; // 12.5m at default 25m radius
+const CULL_THRESHOLD_SQ = CULL_THRESHOLD_M * CULL_THRESHOLD_M;
 
-function newEmptyBitmap(): Uint8Array {
-  return new Uint8Array(SUBGRID_BYTES);
-}
-
-function setBit(bitmap: Uint8Array, row: number, col: number): boolean {
-  const idx = row * TileConfig.subgridSize + col;
-  const byteIdx = idx >> 3;
-  const bitIdx = idx & 7;
-  const mask = 1 << bitIdx;
-  const wasSet = (bitmap[byteIdx] & mask) !== 0;
-  bitmap[byteIdx] |= mask;
-  return !wasSet; // true if newly unlocked
-}
-
-function getBit(bitmap: Uint8Array, row: number, col: number): boolean {
-  const idx = row * TileConfig.subgridSize + col;
-  const byteIdx = idx >> 3;
-  const bitIdx = idx & 7;
-  return (bitmap[byteIdx] & (1 << bitIdx)) !== 0;
+function distanceSqMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const dLat = (a.lat - b.lat) * 111_000;
+  const cosLat = Math.cos((b.lat * Math.PI) / 180);
+  const dLng = (a.lng - b.lng) * 111_000 * cosLat;
+  return dLat * dLat + dLng * dLng;
 }
 
 export const useMemoryStore = create<MemoryState>((set, get) => ({
-  tiles: new Map(),
+  points: [],
   initialRevealDone: false,
 
-  recordUnlock: (lat, lng, atMs = Date.now()) => {
-    const cell = latLngToSubgridCell(lat, lng);
-    const key = tileKey(cell.tile);
-    const tiles = new Map(get().tiles);
-    let tile = tiles.get(key);
-    if (!tile) {
-      tile = {
-        key,
-        bitmap: newEmptyBitmap(),
-        firstSeenAt: atMs,
-        lastSeenAt: atMs,
-      };
-    } else {
-      // Reuse the existing tile object but with a fresh bitmap reference
-      // so React state-updates pick up the change. (Uint8Array mutation
-      // doesn't trigger Zustand re-renders.)
-      tile = {
-        ...tile,
-        bitmap: new Uint8Array(tile.bitmap),
-        lastSeenAt: atMs,
-      };
+  recordPoint: (lat, lng, atMs = Date.now()) => {
+    if (!isFinite(lat) || !isFinite(lng)) return;
+    const points = get().points;
+    // Cull: drop if within CULL_THRESHOLD_M of any recent point.
+    // Recent-only check (last 32 points) keeps O(N) under control on long hikes.
+    const recent = points.slice(-32);
+    for (const p of recent) {
+      if (distanceSqMeters({ lat, lng }, p) < CULL_THRESHOLD_SQ) return;
     }
-    setBit(tile.bitmap, cell.row, cell.col);
-    tiles.set(key, tile);
-    set({ tiles });
+    set({
+      points: [...points, { lat, lng, ts: atMs, synced: false }],
+    });
   },
 
-  recordCircleUnlock: (lat, lng, radiusMeters, atMs = Date.now()) => {
-    // Walk a coarse step (~3m) across a square bounding the circle and
-    // mark every cell whose center is inside the circle.
-    //
-    // Iteration count = (2*ceil(r/3)+1)^2. For r=200m that's ~17,956
-    // cells (not 4400 as an earlier comment claimed). For r=25m
-    // (plant unlock) it's ~289 — fast.
-    //
-    // Immutability: we build a NEW Map and clone any tile we touch so
-    // that consumers comparing tile.bitmap by reference (Zustand
-    // selectors, React.memo, useMemo deps) detect the change.
-    const STEP_M = 3;
-    // Clamp lat to Mercator bounds to avoid cosLat→0 producing a
-    // longitude step that wraps the globe.
-    const safeLat = Math.max(-85.05, Math.min(85.05, lat));
-    const cosLat = Math.cos((safeLat * Math.PI) / 180);
-    const latStepDeg = STEP_M / 111_000;
-    const lngStepDeg = STEP_M / (111_000 * Math.max(cosLat, 1e-6));
-
-    const stepCount = Math.ceil(radiusMeters / STEP_M);
-    const newTiles = new Map(get().tiles);
-    // Track which tiles we cloned this call so we don't re-clone the
-    // same tile thousands of times when many sample points fall in it.
-    const clonedKeys = new Set<string>();
-
-    for (let dy = -stepCount; dy <= stepCount; dy++) {
-      for (let dx = -stepCount; dx <= stepCount; dx++) {
-        const dyM = dy * STEP_M;
-        const dxM = dx * STEP_M;
-        if (dyM * dyM + dxM * dxM > radiusMeters * radiusMeters) continue;
-        const sampleLat = safeLat + dy * latStepDeg;
-        const sampleLng = lng + dx * lngStepDeg;
-        const cell = latLngToSubgridCell(sampleLat, sampleLng);
-        const key = tileKey(cell.tile);
-        let tile = newTiles.get(key);
-        if (!tile) {
-          tile = {
-            key,
-            bitmap: newEmptyBitmap(),
-            firstSeenAt: atMs,
-            lastSeenAt: atMs,
-          };
-          newTiles.set(key, tile);
-          clonedKeys.add(key);
-        } else if (!clonedKeys.has(key)) {
-          // Clone once on first touch this call.
-          tile = {
-            ...tile,
-            bitmap: new Uint8Array(tile.bitmap),
-            lastSeenAt: atMs,
-          };
-          newTiles.set(key, tile);
-          clonedKeys.add(key);
-        } else {
-          // Already cloned in this call — safe to keep mutating its
-          // private bitmap copy.
-          tile.lastSeenAt = atMs;
-        }
-        setBit(tile.bitmap, cell.row, cell.col);
-      }
-    }
-    set({ tiles: newTiles });
+  recordCircleUnlock: (lat, lng, _radiusMeters, atMs = Date.now()) => {
+    // The "radius" is implicit in the renderer (UnlockConfig.radiusMeters).
+    // For initial reveal we just drop the center point; the fog renderer
+    // will paint a 25m circle around it. If product later wants a larger
+    // initial reveal we can drop multiple offset points here.
+    if (!isFinite(lat) || !isFinite(lng)) return;
+    set({
+      points: [...get().points, { lat, lng, ts: atMs, synced: false }],
+    });
   },
 
   isExplored: (lat, lng) => {
-    const cell = latLngToSubgridCell(lat, lng);
-    const tile = get().tiles.get(tileKey(cell.tile));
-    if (!tile) return false;
-    return getBit(tile.bitmap, cell.row, cell.col);
+    const target = { lat, lng };
+    const radiusSq = UnlockConfig.radiusMeters * UnlockConfig.radiusMeters;
+    for (const p of get().points) {
+      if (distanceSqMeters(target, p) <= radiusSq) return true;
+    }
+    return false;
   },
 
-  listExploredTiles: () => Array.from(get().tiles.values()),
+  listVisitedPoints: () => get().points,
+
+  markPointsSynced: (timestamps) => {
+    const set_ = new Set(timestamps);
+    set({
+      points: get().points.map((p) =>
+        set_.has(p.ts) ? { ...p, synced: true } : p
+      ),
+    });
+  },
+
+  replacePoints: (points, initialRevealDone) => {
+    set({ points, initialRevealDone });
+  },
 
   markInitialRevealDone: () => set({ initialRevealDone: true }),
 
-  clearAll: () => set({ tiles: new Map(), initialRevealDone: false }),
+  clearAll: () => set({ points: [], initialRevealDone: false }),
 }));

@@ -20,7 +20,7 @@ import { useAppStore } from '../../../store/useAppStore';
 import { MemoryColors } from '../config/memoryConfig';
 
 export function MemorySummaryCard() {
-  const tileCount = useMemoryStore((s) => s.tiles.size);
+  const pointCount = useMemoryStore((s) => s.points.length);
   const userId = useAppStore((s) => s.user?.id ?? null);
   const allMarkers = useMarkerStore((s) => s.markers);
 
@@ -33,7 +33,7 @@ export function MemorySummaryCard() {
     <View style={styles.card}>
       <Text style={styles.title}>Your Memory Map</Text>
       <View style={styles.statsRow}>
-        <Stat label="explored areas" value={String(tileCount)} />
+        <Stat label="places visited" value={String(pointCount)} />
         <Stat label="cairns left" value={String(myCairnCount)} />
       </View>
     </View>

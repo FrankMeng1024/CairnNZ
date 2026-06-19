@@ -24,7 +24,7 @@ function formatGreeting(now: Date): string {
 export function TrailsHeader() {
   const sessions  = useSessionStore((s) => s.sessions);
   const markers   = useMarkerStore((s) => s.markers);
-  const tileCount = useMemoryStore((s) => s.tiles.size);
+  const tileCount = useMemoryStore((s) => s.points.length);
 
   const weekKm = React.useMemo(() => {
     const cutoff = Date.now() - ONE_WEEK_MS;

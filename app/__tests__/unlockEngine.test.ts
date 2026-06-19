@@ -28,7 +28,7 @@ describe('unlockEngine · processReading', () => {
       timestampMs: Date.now(),
     });
     expect(out.kind).toBe('unlocked');
-    expect(useMemoryStore.getState().tiles.size).toBeGreaterThan(0);
+    expect(useMemoryStore.getState().points.length).toBeGreaterThan(0);
   });
 
   it('skips when speed is above the vehicle threshold', () => {
@@ -40,7 +40,7 @@ describe('unlockEngine · processReading', () => {
     });
     expect(out.kind).toBe('skipped');
     if (out.kind === 'skipped') expect(out.reason).toBe('speed-too-fast');
-    expect(useMemoryStore.getState().tiles.size).toBe(0);
+    expect(useMemoryStore.getState().points.length).toBe(0);
   });
 
   it('skips when accuracy is too poor', () => {

@@ -25,6 +25,7 @@ import { processReading, performInitialRevealIfNeeded, resetUnlockEngineForUser 
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useAppStore } from '../../../store/useAppStore';
 import { hydrateMemoryForUser, detachMemoryPersistence, flushMemoryNow } from '../services/memoryPersistence';
+import { attachMemorySync, detachMemorySync, pullMemoryFromServer, pushMemoryNow } from '../../../services/memorySync';
 
 const WATCH_OPTIONS: Location.LocationOptions = {
   accuracy: Location.Accuracy.BestForNavigation,
@@ -47,19 +48,24 @@ export function ForegroundUnlockManager() {
       // No user: detach any prior subscription and reset dedup so the
       // next sign-in starts clean.
       void detachMemoryPersistence();
+      detachMemorySync();
       resetUnlockEngineForUser();
       return;
     }
     // Reset cross-user dedup BEFORE hydrate so the new user's first
     // reading isn't silently suppressed.
     resetUnlockEngineForUser();
-    void hydrateMemoryForUser(userId);
+    // 1. Hydrate from local AsyncStorage offline buffer (instant)
+    // 2. Attach sync service (subscribes to store changes)
+    // 3. Pull server state to seed the store (overwrites local)
+    void (async () => {
+      await hydrateMemoryForUser(userId);
+      attachMemorySync(userId);
+      void pullMemoryFromServer(userId);
+    })();
     return () => {
-      // Cleanup is sync; persistence layer awaits its own final flush
-      // internally. We fire-and-forget here because React doesn't
-      // support async cleanup, but the hydrate code uses a generation
-      // token to discard stale awaits.
       void detachMemoryPersistence();
+      detachMemorySync();
     };
   }, [userId]);
 
@@ -116,9 +122,12 @@ export function ForegroundUnlockManager() {
       } else if (state === 'background') {
         // Distinguish 'background' (real absence) from 'inactive'
         // (transient — control center, multitask switcher). Stop only
-        // on real background, and force-flush memory to disk.
+        // on real background, force-flush memory to disk AND push
+        // pending points to the server before iOS suspends the JS
+        // thread.
         stop();
         void flushMemoryNow();
+        void pushMemoryNow();
       }
       // 'inactive': do nothing — keep the watcher alive briefly to
       // survive transient OS interactions.
