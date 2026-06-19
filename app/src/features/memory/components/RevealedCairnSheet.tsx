@@ -80,12 +80,12 @@ export function RevealedCairnSheet({
 
             {hasVoice && (
               <View style={styles.voiceCard}>
-                <View style={styles.voicePlayBtn}>
+                <View style={[styles.voicePlayBtn, { opacity: 0.4 }]}>
                   <Text style={styles.voicePlayIcon}>▶</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.voiceWave}>▁▃▆█▇▅▃▂▁▁▂▄▆▄▂▁▁▂▃▅▃▁</Text>
-                  <Text style={styles.voiceTime}>tap to listen</Text>
+                  <Text style={[styles.voiceWave, { opacity: 0.4 }]}>▁▃▆█▇▅▃▂▁▁▂▄▆▄▂▁▁▂▃▅▃▁</Text>
+                  <Text style={styles.voiceTime}>Voice playback coming soon</Text>
                 </View>
               </View>
             )}

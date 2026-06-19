@@ -44,12 +44,15 @@ router.post('/points', authenticate, async (req, res) => {
   // overall on partial success.
   const rows = [];
   let rejected = 0;
+  // Upper bound: 24h in the future relative to server clock. Catches
+  // clients with broken clocks or replay-attack payloads.
+  const tsUpperBound = Date.now() + 24 * 60 * 60 * 1000;
   for (const p of points) {
     if (
       typeof p?.lat !== 'number' || typeof p?.lng !== 'number' || typeof p?.ts !== 'number' ||
       !isFinite(p.lat) || !isFinite(p.lng) || !isFinite(p.ts) ||
       p.lat < -90 || p.lat > 90 || p.lng < -180 || p.lng > 180 ||
-      p.ts <= 0
+      p.ts <= 0 || p.ts > tsUpperBound || p.ts > Number.MAX_SAFE_INTEGER
     ) {
       rejected++;
       continue;
@@ -62,10 +65,10 @@ router.post('/points', authenticate, async (req, res) => {
   }
 
   try {
-    // INSERT IGNORE de-duplicates against the (user_id, ts) index if
-    // we ever add a unique constraint — for now we accept duplicates.
+    // INSERT IGNORE de-duplicates against UNIQUE (user_id, ts) — re-uploads
+    // from the offline buffer or pull/push races collapse to a single row.
     await pool.query(
-      'INSERT INTO memory_points (user_id, lat, lng, ts) VALUES ?',
+      'INSERT IGNORE INTO memory_points (user_id, lat, lng, ts) VALUES ?',
       [rows]
     );
     return res.json({ accepted: rows.length, rejected });
@@ -76,17 +79,23 @@ router.post('/points', authenticate, async (req, res) => {
 
 /**
  * GET /api/memory/points
+ * Query: ?since=<ts>  (optional — only return points with ts > since)
+ *        ?limit=<n>   (optional — default 5000, max 10000)
  * Returns: { points: [{ lat, lng, ts }, ...] }
  *
- * Returns all of the authenticated user's visited points, ordered by ts
- * ascending so the client can apply them in chronological order.
+ * Returns the authenticated user's visited points, ordered by ts ASC.
+ * For long-time users with many points, use `since` for incremental
+ * sync.
  */
 router.get('/points', authenticate, async (req, res) => {
   const userId = req.user.userId;
+  const since = Number(req.query.since) || 0;
+  const requested = Number(req.query.limit) || 5000;
+  const limit = Math.max(1, Math.min(10000, requested));
   try {
     const [rows] = await pool.query(
-      'SELECT lat, lng, ts FROM memory_points WHERE user_id = ? ORDER BY ts ASC',
-      [userId]
+      'SELECT lat, lng, ts FROM memory_points WHERE user_id = ? AND ts > ? ORDER BY ts ASC LIMIT ?',
+      [userId, since, limit]
     );
     return res.json({
       points: rows.map((r) => ({

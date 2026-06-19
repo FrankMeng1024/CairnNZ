@@ -13,6 +13,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-nativ
 import { MarkerPermission } from '../../../store/useMarkerStore';
 import { ContentConfig, VisibilityConfig } from '../config/plantConfig';
 import { MemoryColors } from '../../memory/config/memoryConfig';
+import { Icon, IconName } from '../../../components/Icon';
 
 interface Props {
   initialTitle: string;
@@ -60,6 +61,7 @@ export function ContentStep({
         value={title}
         onChangeText={setTitle}
       />
+      <Text style={styles.charCounter}>{title.length} / {ContentConfig.titleMaxChars}</Text>
       <TextInput
         style={[styles.input, styles.textArea]}
         placeholder="Tell whoever finds this…"
@@ -68,6 +70,7 @@ export function ContentStep({
         onChangeText={setText}
         multiline
       />
+      <Text style={styles.charCounter}>{text.length} / {ContentConfig.textMaxChars}</Text>
 
       <View style={styles.voiceBox}>
         {/* TODO(v0.2.6 §plant-voice): hold-to-record button + waveform */}
@@ -76,10 +79,10 @@ export function ContentStep({
 
       <Text style={styles.label}>Who can see this</Text>
       <View style={styles.chipRow}>
-        <VisChip label="Just me"  active={visibility === 'personal'} onPress={() => setVisibility('personal')} icon="🔒" />
-        <VisChip label="Friends"  active={visibility === 'group'}    onPress={() => setVisibility('group')}    icon="👥" />
+        <VisChip label="Just me"  active={visibility === 'personal'} onPress={() => setVisibility('personal')} iconName="Lock" />
+        <VisChip label="Friends"  active={visibility === 'group'}    onPress={() => setVisibility('group')}    iconName="Users" />
         {VisibilityConfig.enablePublicOption && (
-          <VisChip label="Anyone" active={visibility === 'public'}   onPress={() => setVisibility('public')}   icon="🌍" />
+          <VisChip label="Anyone" active={visibility === 'public'}   onPress={() => setVisibility('public')}   iconName="Globe" />
         )}
       </View>
 
@@ -108,12 +111,12 @@ export function ContentStep({
 }
 
 interface ChipProps {
-  label: string; active: boolean; onPress: () => void; icon: string;
+  label: string; active: boolean; onPress: () => void; iconName: IconName;
 }
-function VisChip({ label, active, onPress, icon }: ChipProps) {
+function VisChip({ label, active, onPress, iconName }: ChipProps) {
   return (
     <TouchableOpacity style={[styles.chip, active && styles.chipActive]} onPress={onPress}>
-      <Text style={styles.chipIcon}>{icon}</Text>
+      <Icon name={iconName} size={14} color={active ? MemoryColors.sepia : MemoryColors.cairnPublic} strokeWidth={2} />
       <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -144,6 +147,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   voiceTodo: { fontSize: 12, color: MemoryColors.cairnPublic },
+  charCounter: {
+    fontSize: 10,
+    color: MemoryColors.cairnPublic,
+    textAlign: 'right',
+    marginTop: -8,
+    marginBottom: 8,
+  },
   label: { fontSize: 11, color: MemoryColors.cairnPublic, marginBottom: 8, marginTop: 4 },
   chipRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   chip: {

@@ -117,10 +117,19 @@ export function PlantScreen() {
       } catch (e: any) {
         // Stay on the content step so the user can retry without
         // re-entering everything. No silent failure.
+        // v0.2.6.2: persist the draft to AsyncStorage so a crash or
+        // navigate-away doesn't lose what they typed.
+        try {
+          const { storage } = await import('../store/storage');
+          await storage.setItem(`cairn:plant:draft:v1:${userId}`, JSON.stringify(final));
+        } catch {
+          // Best-effort — can't help if storage itself is broken.
+        }
         setSubmitting(false);
         Alert.alert(
           'Could not plant cairn',
-          e?.message ? String(e.message) : 'Please try again in a moment.',
+          (e?.message ? String(e.message) : 'Please try again in a moment.') +
+          '\n\nYour draft is saved — try again or come back later.',
         );
       }
     },

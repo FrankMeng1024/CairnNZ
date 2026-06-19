@@ -1,24 +1,21 @@
 /**
  * MemoryScreen — the main Memory tab screen.
  *
- * v0.2.6.1: previously this screen relied on `useTrackingStore.lastCoordinate`,
- * which only gets populated when a Hiking session is active. Per user
- * feedback, Memory should work without first tapping Hiking — opening
- * the app + Memory tab is enough. We now:
- *   - request foreground location permission on first mount
- *   - read a one-shot GPS fix to render the map
- *   - keep listening to ForegroundUnlockManager's GPS stream for fog
- *     unlocks
+ * v0.2.6.2 (J2 review fixes):
+ *   - 12s timeout on getCurrentPositionAsync. Catch path now sets an
+ *     error state instead of leaving the spinner forever.
+ *   - "Try again" button on the waiting state.
+ *   - Permission-denied shows a real "Open Settings" button via
+ *     Linking.openSettings().
  *
- * Composition:
- *   <MemoryScreen>
- *     <MemoryMap>            ← renders mapbox + fog + cairns
- *     <MemorySummaryCard>    ← bottom sheet stats
- *   </MemoryScreen>
+ * Source-of-position fallback chain:
+ *   1. useTrackingStore.lastCoordinate (active Hiking session)
+ *   2. one-shot Location.getCurrentPositionAsync on mount
+ *   Whichever arrives first wins.
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import { useTrackingStore } from '../../../store/useTrackingStore';
 import { useMemoryStore } from '../store/useMemoryStore';
@@ -32,21 +29,22 @@ interface FixState {
   lng: number;
 }
 
+const ONE_SHOT_TIMEOUT_MS = 12_000;
+
+type FailReason = 'permission' | 'timeout' | 'error';
+
 export function MemoryScreen() {
-  // Either source of the user's position works:
-  //   1. Active Hiking session pushes into useTrackingStore.lastCoordinate
-  //   2. This screen pulls a one-shot fix on mount
-  // Whichever arrives first wins. After that the ForegroundUnlockManager
-  // keeps the fog up to date as the user moves.
   const trackedCoord = useTrackingStore((s) => s.lastCoordinate);
   const initialDone = useMemoryStore((s) => s.initialRevealDone);
   const [oneShot, setOneShot] = useState<FixState | null>(null);
-  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [failReason, setFailReason] = useState<FailReason | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
 
-  // One-shot location request on first mount.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    setFailReason(null);
+
+    const fetchOnce = async () => {
       try {
         let perm = await Location.getForegroundPermissionsAsync();
         if (perm.status !== 'granted') {
@@ -54,29 +52,34 @@ export function MemoryScreen() {
         }
         if (cancelled) return;
         if (perm.status !== 'granted') {
-          setPermissionDenied(true);
+          setFailReason('permission');
           return;
         }
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
+        // Race the GPS request against a hard timeout — Apple's
+        // getCurrentPositionAsync can hang indefinitely on bad signal.
+        const locPromise = Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
         });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), ONE_SHOT_TIMEOUT_MS)
+        );
+        const loc = (await Promise.race([locPromise, timeoutPromise])) as Awaited<typeof locPromise>;
         if (cancelled) return;
         setOneShot({
           lat: loc.coords.latitude,
           lng: loc.coords.longitude,
         });
-      } catch {
-        // Silent fail — UI shows "Looking for your position…" indefinitely.
-        // The user can tap Hiking to retry from a different code path.
+      } catch (e: any) {
+        if (cancelled) return;
+        setFailReason(e?.message === 'timeout' ? 'timeout' : 'error');
       }
-    })();
+    };
+    void fetchOnce();
     return () => { cancelled = true; };
-  }, []);
+  }, [retryToken]);
 
-  // Use whichever fix we have.
   const coord = trackedCoord ?? oneShot;
 
-  // Trigger initial reveal once we have any GPS fix.
   useEffect(() => {
     if (initialDone) return;
     if (!coord) return;
@@ -87,19 +90,39 @@ export function MemoryScreen() {
     <SafeAreaView style={styles.root}>
       {coord ? (
         <MemoryMap centerLat={coord.lat} centerLng={coord.lng} />
-      ) : permissionDenied ? (
+      ) : failReason === 'permission' ? (
         <View style={styles.waitingForGps}>
           <Text style={styles.waitingTitle}>Location permission needed</Text>
           <Text style={styles.waitingSub}>
-            Memory needs your location to draw the map. Open Settings to grant access.
+            Memory needs your location to draw the map.
           </Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => Linking.openSettings()}>
+            <Text style={styles.primaryBtnText}>Open Settings</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => setRetryToken((n) => n + 1)}>
+            <Text style={styles.secondaryBtnText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : failReason === 'timeout' || failReason === 'error' ? (
+        <View style={styles.waitingForGps}>
+          <Text style={styles.waitingTitle}>
+            {failReason === 'timeout' ? 'Could not get a GPS fix' : 'Location unavailable'}
+          </Text>
+          <Text style={styles.waitingSub}>
+            {failReason === 'timeout'
+              ? 'GPS signal is weak. Move outside or near a window and try again.'
+              : 'We could not read your location. Check that location services are on.'}
+          </Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => setRetryToken((n) => n + 1)}>
+            <Text style={styles.primaryBtnText}>Try again</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.waitingForGps}>
           <ActivityIndicator color={MemoryColors.sepia} size="large" />
           <Text style={[styles.waitingTitle, { marginTop: 16 }]}>Looking for your position…</Text>
           <Text style={styles.waitingSub}>
-            We need a GPS fix to draw your memory map. This usually takes a few seconds outdoors.
+            We need a GPS fix to draw your memory map.
           </Text>
         </View>
       )}
@@ -130,4 +153,18 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+  primaryBtn: {
+    marginTop: 20,
+    backgroundColor: MemoryColors.sepia,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+  },
+  primaryBtnText: { color: '#fff', fontSize: 14, fontWeight: '500' },
+  secondaryBtn: {
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+  },
+  secondaryBtnText: { color: MemoryColors.cairnPublic, fontSize: 13 },
 });

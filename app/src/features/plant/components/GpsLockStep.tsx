@@ -29,6 +29,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<SampleResult | null>(null);
   const [busy, setBusy] = useState(true);
+  const [retryToken, setRetryToken] = useState(0);
   // Read latest onLocked from a ref so this effect's deps array can be
   // empty — otherwise a parent re-render with an inline arrow would
   // restart the GPS sample window and leak Location subscriptions.
@@ -38,6 +39,10 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
   useEffect(() => {
     let cancelled = false;
     let raf: any = null;
+
+    setProgress(0);
+    setResult(null);
+    setBusy(true);
 
     const start = Date.now();
     const tick = () => {
@@ -59,10 +64,9 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
       cancelled = true;
       if (raf) cancelAnimationFrame(raf);
     };
-    // Run-once: GPS sampling is a one-shot operation per mount. New
-    // onLocked references must not restart it.
+    // Re-run when the user taps "Try again" (retryToken bumps).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [retryToken]);
 
   const failed = !busy && result && !result.ok;
 
@@ -93,6 +97,9 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
           <Text style={styles.failSub}>
             Move to a more open spot and try again.
           </Text>
+          <TouchableOpacity style={styles.retry} onPress={() => setRetryToken((n) => n + 1)}>
+            <Text style={styles.retryText}>Try again</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -146,6 +153,15 @@ const styles = StyleSheet.create({
   },
   failTitle: { fontSize: 13, fontWeight: '500', color: '#c44545' },
   failSub:   { fontSize: 12, color: '#a83838', marginTop: 4 },
+  retry: {
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: MemoryColors.sepia,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  retryText: { color: '#fff', fontSize: 13, fontWeight: '500' },
   cancel: { padding: 14, alignItems: 'center' },
   cancelText: { fontSize: 14, color: MemoryColors.cairnPublic },
 });

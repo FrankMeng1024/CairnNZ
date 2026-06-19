@@ -142,7 +142,7 @@ function RecentRow({ onPress }: { onPress: (id: string) => void }) {
 
 // ── Big activity card — flex-based, no parent height dependency ──────────────
 function ActivityCard({
-  icon, title, subtitle, accentColor, lightBg, cardBg, onPress, anim,
+  icon, title, subtitle, accentColor, lightBg, cardBg, onPress, anim, flex = 1,
 }: {
   icon: (size: number) => React.ReactNode;
   title: string;
@@ -152,18 +152,15 @@ function ActivityCard({
   cardBg: string;
   onPress: () => void;
   anim: Animated.Value;
+  flex?: number;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
-  // Panel width is derived from screen width — known on first paint —
-  // so the card never re-measures and re-renders. Was: useState(h) +
-  // onLayout, which caused a visible "jump" on first sign-in as the
-  // initial 90px panel resized to ~110px after layout.
   const { width: screenW } = useWindowDimensions();
   const panelW = Math.min(Math.round(screenW * 0.32), 130);
   const iconSize = Math.round(panelW * 0.55);
 
   return (
-    <Animated.View style={{ flex: 1, opacity: anim, transform: [{ scale }] }}>
+    <Animated.View style={{ flex, opacity: anim, transform: [{ scale }] }}>
       <TouchableOpacity
         activeOpacity={1}
         onPress={onPress}
@@ -282,7 +279,7 @@ export function HomeScreen() {
           <ActivityCard
             icon={(sz) => <HikingIcon size={sz} color={Colors.primary} />}
             title="Hiking"
-            subtitle="Navigate tracks · Leave cairns · Explore at your pace"
+            subtitle="Track your route · Explore at your pace"
             accentColor={Colors.primary}
             lightBg={Colors.primaryLight}
             cardBg="#eef4e8"
@@ -299,9 +296,10 @@ export function HomeScreen() {
             onPress={() => nav.navigate('Running')}
             anim={card2}
           />
-          {/* v0.2.6.1 — Plant cairn entry. Same ActivityCard size as
-              Hiking/Running so the home grid stays balanced. Flag/cairn
-              palette so it reads as a third distinct activity. */}
+          {/* v0.2.6.2 — Plant cairn entry. Smaller flex (0.5) so it
+              reads as a tertiary action and Hiking/Running cards keep
+              their v0.2.5 visual proportions. Flag/cairn palette so it
+              reads as a third distinct activity. */}
           <ActivityCard
             icon={(sz) => <FlagMarkerIcon size={sz} stoneColor={Colors.flag} flagColor={Colors.primary} />}
             title="Leave a Cairn here"
@@ -311,12 +309,15 @@ export function HomeScreen() {
             cardBg="#fff5e9"
             onPress={() => nav.navigate('Plant')}
             anim={card2}
+            flex={0.5}
           />
         </View>
 
-        {/* Tools row removed in v0.2.6.1 — Friends / Settings live in
-            the bottom tab bar; AR is sealed; Routes is reachable from
-            within Hiking. */}
+        {/* Tools — v0.2.6.2: restored Routes/History entry. Friends
+            and Settings live in the bottom tab bar; AR is sealed. */}
+        <View style={styles.toolsRow}>
+          <ToolBtn iconName="Route" label="Routes" onPress={() => nav.navigate('Routes')} />
+        </View>
 
       </Animated.View>
     </SafeAreaView>

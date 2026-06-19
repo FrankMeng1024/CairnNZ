@@ -1,26 +1,21 @@
 /**
  * memorySync — cloud sync layer for the Memory tile data.
  *
- * Architecture (per user request, v0.2.6.1):
- *   - Cloud is the source of truth (account-bound, follows the user)
- *   - Local AsyncStorage is an OFFLINE BUFFER ONLY
- *   - When online: upload pending points → server, then drop them from local
- *   - When offline: append locally; retry upload on next online tick
+ * Architecture:
+ *   - Cloud is the source of truth (account-bound)
+ *   - Local AsyncStorage is OFFLINE BUFFER ONLY
+ *   - When online: upload pending points → server → mark synced
+ *   - When offline: append locally; retry on next push tick
  *
- * Lifecycle (called from ForegroundUnlockManager on user change):
- *
- *   pullFromServer(userId)              // app open / login
- *     → GET /api/memory/points
- *     → useMemoryStore.replacePoints(server points + any local-pending)
- *
- *   schedulePush()                       // store subscription
- *     → debounced 5s
- *     → batch unsynced points
- *     → POST /api/memory/points
- *     → on success: mark synced + flush local (so AsyncStorage stays small)
- *
- * Offline detection: we just try the request. fetch() throwing = offline,
- * we keep the points local and try again on next push.
+ * v0.2.6.2 fixes (J1 review):
+ *   - inFlightTimestamps tracks ts of points currently being POSTed,
+ *     so pull's localUnsynced merge can EXCLUDE them and not double-
+ *     submit the same point through pull-then-push.
+ *   - activeUserIdAtRequest captured per-request so a logout/login
+ *     race cannot leak markPointsSynced into the new user's store.
+ *   - Pull is gated on pushInFlight — won't run while a push is mid-flight.
+ *   - Subscription explicitly skips push when only synced points changed
+ *     (i.e. our own markPointsSynced caused the change).
  */
 
 import { authenticatedFetch } from './apiService';
@@ -31,8 +26,11 @@ const MAX_BATCH = 500;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pushInFlight = false;
+/** Timestamps currently being POSTed — excluded from pull-merge. */
+const inFlightTimestamps: Set<number> = new Set();
 let unsubscribe: (() => void) | null = null;
 let activeUserId: string | null = null;
+let lastUnsyncedCount = 0;
 
 interface ServerPoint {
   lat: number;
@@ -41,16 +39,25 @@ interface ServerPoint {
 }
 
 /**
- * Pull all of the user's memory points from the server. Replaces the
- * local store with: server points (marked synced) + any local-only
- * points that haven't been uploaded yet (preserved as unsynced so the
- * next push retries them).
+ * Pull the user's memory points from the server. Replaces the local
+ * store with: server points (synced=true) merged with local-only
+ * unsynced points that aren't already mid-flight.
+ *
+ * Will not run while a push is in flight — avoids overwriting points
+ * the server has accepted but hasn't yet been marked synced locally.
  */
 export async function pullMemoryFromServer(userId: string): Promise<void> {
   if (!userId) return;
+  if (pushInFlight) {
+    // Try again after the in-flight push settles — schedule a retry.
+    setTimeout(() => { void pullMemoryFromServer(userId); }, 1500);
+    return;
+  }
+  const myUserId = userId;
   try {
     const res = await authenticatedFetch('/api/memory/points', { method: 'GET' });
-    if (!res.ok) return; // silent failure — local stays as-is
+    if (!res.ok) return;
+    if (myUserId !== activeUserId) return; // user switched mid-request
     const body = await res.json();
     const serverPoints: VisitedPoint[] = (body.points ?? []).map((p: ServerPoint) => ({
       lat: p.lat,
@@ -58,20 +65,27 @@ export async function pullMemoryFromServer(userId: string): Promise<void> {
       ts: p.ts,
       synced: true,
     }));
-    // Preserve any local-only (unsynced) points that the server doesn't
-    // yet know about. The next pushPending call will upload them.
-    const localUnsynced = useMemoryStore.getState().points.filter((p) => !p.synced);
+    // Preserve local-only points the server doesn't yet know AND that
+    // aren't currently being uploaded. The in-flight set ensures we
+    // don't double-count points the server accepted but hasn't yet
+    // been markPointsSynced locally.
+    const localUnsynced = useMemoryStore.getState().points.filter(
+      (p) => !p.synced && !inFlightTimestamps.has(p.ts)
+    );
     const merged = [...serverPoints, ...localUnsynced];
-    // Deduplicate by ts (server-side may already have duplicates of
-    // local-unsynced if a previous push partially succeeded).
-    const seen = new Set<number>();
+    // Dedup by (lat, lng, ts) — server-side dedup happens via the
+    // unique index, but the client must dedup defensively in case a
+    // local-unsynced point shares ts with a server point.
+    const seen = new Set<string>();
     const dedup = merged.filter((p) => {
-      if (seen.has(p.ts)) return false;
-      seen.add(p.ts);
+      const key = `${p.lat.toFixed(6)}|${p.lng.toFixed(6)}|${p.ts}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
       return true;
     });
     dedup.sort((a, b) => a.ts - b.ts);
     useMemoryStore.getState().replacePoints(dedup, useMemoryStore.getState().initialRevealDone);
+    lastUnsyncedCount = dedup.filter((p) => !p.synced).length;
   } catch {
     // Network down. Keep local-only state.
   }
@@ -80,13 +94,14 @@ export async function pullMemoryFromServer(userId: string): Promise<void> {
 async function pushPendingPoints(): Promise<void> {
   if (pushInFlight) return;
   if (!activeUserId) return;
+  const myUserId = activeUserId;
   const allPoints = useMemoryStore.getState().points;
-  const pending = allPoints.filter((p) => !p.synced);
+  const pending = allPoints.filter((p) => !p.synced && !inFlightTimestamps.has(p.ts));
   if (pending.length === 0) return;
 
-  // Cap batch so we don't hammer the server with 10k points after a
-  // long offline session.
   const batch = pending.slice(0, MAX_BATCH);
+  // Mark in flight BEFORE the network call.
+  for (const p of batch) inFlightTimestamps.add(p.ts);
   pushInFlight = true;
   try {
     const res = await authenticatedFetch('/api/memory/points', {
@@ -95,19 +110,20 @@ async function pushPendingPoints(): Promise<void> {
         points: batch.map((p) => ({ lat: p.lat, lng: p.lng, ts: p.ts })),
       }),
     });
-    if (res.ok) {
-      // Mark these points synced. The next debounced cycle will pick
-      // up the rest if there are more than MAX_BATCH pending.
-      useMemoryStore.getState().markPointsSynced(batch.map((p) => p.ts));
-      if (pending.length > MAX_BATCH) {
-        // More to send — re-arm immediately.
-        schedulePush(0);
-      }
+    // Re-check user identity — if the user logged out / switched,
+    // do NOT call markPointsSynced (that would mutate the new user's
+    // store).
+    if (myUserId !== activeUserId) {
+      return;
     }
-    // Non-2xx: leave them unsynced; will retry on the next state change.
+    if (res.ok) {
+      useMemoryStore.getState().markPointsSynced(batch.map((p) => p.ts));
+      if (pending.length > MAX_BATCH) schedulePush(0);
+    }
   } catch {
-    // Network down — keep points unsynced; they'll retry next time.
+    // Offline — leave points unsynced; next push retries.
   } finally {
+    for (const p of batch) inFlightTimestamps.delete(p.ts);
     pushInFlight = false;
   }
 }
@@ -120,16 +136,17 @@ function schedulePush(delayMs = PUSH_DEBOUNCE_MS): void {
   }, delayMs);
 }
 
-/**
- * Wire the sync service to the active user. Called from
- * ForegroundUnlockManager on user change.
- */
 export function attachMemorySync(userId: string): void {
   detachMemorySync();
   activeUserId = userId;
-  // Subscribe to store mutations — every recordPoint schedules a push.
+  // Subscribe — but only schedule a push when the count of unsynced
+  // points actually GROWS. markPointsSynced shrinks the set; pull's
+  // replacePoints can either grow or shrink it. We don't want to push
+  // when our own bookkeeping caused the change.
   unsubscribe = useMemoryStore.subscribe(() => {
-    schedulePush();
+    const unsyncedCount = useMemoryStore.getState().points.filter((p) => !p.synced).length;
+    if (unsyncedCount > lastUnsyncedCount) schedulePush();
+    lastUnsyncedCount = unsyncedCount;
   });
 }
 
@@ -143,16 +160,41 @@ export function detachMemorySync(): void {
     unsubscribe = null;
   }
   activeUserId = null;
+  inFlightTimestamps.clear();
+  lastUnsyncedCount = 0;
+  // pushInFlight stays true if a request is genuinely in flight; it
+  // will set itself false in the finally block. We just won't act on
+  // its result because activeUserId is null.
 }
 
-/**
- * Force an immediate push (e.g. on AppState background). Returns when
- * the request completes; safe to call repeatedly.
- */
 export async function pushMemoryNow(): Promise<void> {
   if (pushTimer) {
     clearTimeout(pushTimer);
     pushTimer = null;
   }
   await pushPendingPoints();
+}
+
+/** Force-clear memory on the server (Settings → Clear my memory). */
+export async function deleteAllMemoryFromServer(): Promise<boolean> {
+  try {
+    const res = await authenticatedFetch('/api/memory/points', { method: 'DELETE' });
+    if (res.ok) {
+      useMemoryStore.getState().clearAll();
+      lastUnsyncedCount = 0;
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** Read API for sync-status indicator UI. */
+export function getSyncStatus(): {
+  pendingCount: number;
+  inFlight: boolean;
+} {
+  const pending = useMemoryStore.getState().points.filter((p) => !p.synced).length;
+  return { pendingCount: pending, inFlight: pushInFlight };
 }

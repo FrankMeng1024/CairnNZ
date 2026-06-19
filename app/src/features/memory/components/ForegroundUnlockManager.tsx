@@ -43,29 +43,37 @@ export function ForegroundUnlockManager() {
   enabledRef.current = enabled;
 
   // Memory tile hydration tied to user identity.
+  // v0.2.6.2 fix (J1 B3): track a generation token so the cleanup +
+  // re-hydrate sequence cannot interleave under fast user switch.
+  const userGenRef = useRef(0);
   useEffect(() => {
+    const myGen = ++userGenRef.current;
     if (!userId) {
-      // No user: detach any prior subscription and reset dedup so the
-      // next sign-in starts clean.
-      void detachMemoryPersistence();
-      detachMemorySync();
-      resetUnlockEngineForUser();
+      void (async () => {
+        await detachMemoryPersistence();
+        if (myGen !== userGenRef.current) return;
+        detachMemorySync();
+        resetUnlockEngineForUser();
+      })();
       return;
     }
-    // Reset cross-user dedup BEFORE hydrate so the new user's first
-    // reading isn't silently suppressed.
-    resetUnlockEngineForUser();
-    // 1. Hydrate from local AsyncStorage offline buffer (instant)
-    // 2. Attach sync service (subscribes to store changes)
-    // 3. Pull server state to seed the store (overwrites local)
     void (async () => {
+      // Reset cross-user dedup BEFORE hydrate so the new user's first
+      // reading isn't silently suppressed.
+      resetUnlockEngineForUser();
       await hydrateMemoryForUser(userId);
+      if (myGen !== userGenRef.current) return; // user switched again
       attachMemorySync(userId);
       void pullMemoryFromServer(userId);
     })();
     return () => {
-      void detachMemoryPersistence();
-      detachMemorySync();
+      // Cleanup runs synchronously but may chain async work. Bumping
+      // the gen ref lets in-flight async fall out of the race.
+      userGenRef.current++;
+      void (async () => {
+        await detachMemoryPersistence();
+        detachMemorySync();
+      })();
     };
   }, [userId]);
 

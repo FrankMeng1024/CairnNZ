@@ -93,9 +93,6 @@ export function MysteryCairnSheet({ marker, userLat, userLng, onClose }: Props) 
           <Text style={styles.desc}>You'll be able to read it when you get closer.</Text>
 
           <View style={styles.metaRow}>
-            {MysteryPreviewConfig.showLikeCount && (
-              <Meta label="liked" value="♥ —" />
-            )}
             {MysteryPreviewConfig.showAgeRelative && (
               <Meta label="ago" value={formatAge(marker.createdAt)} />
             )}

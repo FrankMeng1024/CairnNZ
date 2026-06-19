@@ -23,14 +23,14 @@ const Tab = createBottomTabNavigator();
 interface TabDef {
   name: string;
   component: React.ComponentType<any>;
-  iconName: 'Mountain' | 'Users' | 'BookOpen' | 'Settings2';
+  iconName: 'Mountain' | 'Users' | 'Map' | 'Settings2';
   label: string;
 }
 
 const TAB_CONFIG: TabDef[] = [
   { name: 'Trails',   component: HomeScreen,     iconName: 'Mountain',   label: 'Trails' },
   { name: 'Friends',  component: FriendsScreen,  iconName: 'Users',      label: 'Friends' },
-  { name: 'Memory',   component: MemoryScreen,   iconName: 'BookOpen',   label: 'Memory' },
+  { name: 'Memory',   component: MemoryScreen,   iconName: 'Map',        label: 'Memory' },
   { name: 'Settings', component: SettingsScreen, iconName: 'Settings2',  label: 'Settings' },
 ];
 

@@ -2,10 +2,13 @@
  * FogLayer — single FillLayer that draws fog everywhere except a set of
  * 25m circles centered on each visited GPS point.
  *
- * v0.2.6.1: rewritten from tile-bitmap holes to point-based circles.
- * Memo signature is point count + last point timestamp; same set of
- * points → same signature, no rebuild. New point → signature changes,
- * polygon rebuilt.
+ * v0.2.6.2 (J1 B4 fix): memo signature was previously `count|lastTs`,
+ * which missed cases where pull/replacePoints produced an array with
+ * the same count + lastTs but different content (e.g. a server pull
+ * that replaces 5 local points with 5 different server points). Now
+ * memoize on the array reference itself — the store always replaces
+ * the array on any mutation (no in-place modification), so reference
+ * equality is a sound signal for "set changed".
  */
 
 import React, { useMemo } from 'react';
@@ -18,19 +21,11 @@ interface Props {
   visitedPoints: VisitedPoint[];
 }
 
-function pointsSignature(points: VisitedPoint[]): string {
-  if (points.length === 0) return '0';
-  const last = points[points.length - 1];
-  return `${points.length}|${last.ts}`;
-}
-
 export function FogLayer({ visitedPoints }: Props) {
   const Mapbox = getMapbox();
-  const signature = pointsSignature(visitedPoints);
   const fogShape = useMemo(
     () => buildFogPolygon(visitedPoints),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [signature]
+    [visitedPoints]
   );
 
   if (!Mapbox.available) return null;
