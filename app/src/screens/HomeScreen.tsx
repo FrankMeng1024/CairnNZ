@@ -307,7 +307,10 @@ export function HomeScreen() {
             accentColor={Colors.flag}
             lightBg="#fbe9d8"
             cardBg="#fff5e9"
-            onPress={() => nav.navigate('Plant')}
+            onPress={() => {
+              import('../services/appLog').then(({ log }) => log('home.tap_plant'));
+              nav.navigate('Plant');
+            }}
             anim={card2}
             flex={0.4}
           />

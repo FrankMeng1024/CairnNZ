@@ -120,6 +120,19 @@ export async function sampleGpsWindow(): Promise<SampleResult> {
     } catch (e: any) {
       log('plant.gps_sample_error', { idx: pollIdx, msg: String(e?.message ?? e).slice(0, 200) });
     }
+
+    // U1 fix (v0.2.6.5): early-exit when we have enough good data.
+    // No reason to wait the full 15s when 1 second of clean signal
+    // is already plenty. Real-device log showed users sitting through
+    // 30 polls of identical 8m readings.
+    if (readings.length >= MIN_READINGS_FOR_DECISION) {
+      const bestAcc = readings.reduce((b, r) => (r.accuracy < b ? r.accuracy : b), Infinity);
+      if (bestAcc <= GpsSamplingConfig.rejectAccuracyAboveMeters) {
+        log('plant.gps_window_early_exit', { reading_count: readings.length, best_acc: bestAcc, elapsed_ms: Date.now() - startMs });
+        break;
+      }
+    }
+
     if (Date.now() - startMs >= windowMs) break;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }

@@ -1183,7 +1183,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             windowSec 10→15 for cold-start safety.
 //         (6) S6: setLastWatcherFix throttle (>5m or >5s).
 //         (7) MemoryScreen useEffect dep [refetchToken] only.
-export const OTA_VERSION = 289;
+// v290  U-round: real-device feedback after v289 OTA.
+//         Server-log diagnosis: gps_decision after 30 polls of identical
+//         8m readings = 15s wasted; first-attempt failed because React 18
+//         StrictMode double-mount cancelled mid-flight before any sample
+//         landed.
+//         Fixes:
+//         (1) U1: gpsSampler early-exit. As soon as ≥2 readings have
+//             best accuracy ≤ rejectThreshold (15m), return immediately.
+//             Plant lock now ~1-2s on a phone with cached GPS.
+//         (2) U2: GpsLockStep mount guard via inFlightRetryRef so the
+//             StrictMode double-mount no longer races the first attempt.
+//         (3) U3: PinAdjust default style is now Hiking's outdoors-v12
+//             (lighter, more battery-friendly). Top-right toggle 🌐/🗺
+//             switches to satellite. First-time satellite tap shows
+//             a 1-2 MB data warning Alert.
+//         (4) U4: pin onDragEnd accepts both v10+ payload shapes
+//             (top-level coordinates AND nested geometry.coordinates).
+//             Pin can drag again. Logs unknown shapes for SDK upgrade
+//             debugging.
+//         (5) U5: full plant flow telemetry — every step transition,
+//             commit attempt/ok/failed, pin drag, style toggle,
+//             cancel — all uploaded to /api/edit-diag (kind=app_log).
+export const OTA_VERSION = 290;
 //         v284: head-magnet visual fix (incremental builder).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints

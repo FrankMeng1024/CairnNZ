@@ -1,29 +1,31 @@
 /**
  * PinAdjustStep — Step 2 of plant flow.
  *
- * Shows the algorithm-suggested position on a Mapbox satellite mini map
- * with a draggable pin and accuracy circle. User can:
- *   - Confirm (default — most users will)
- *   - Drag the pin within PinNudgeConfig.maxNudgeMeters of the original
- *     algorithm position (prevents accidental kilometer-scale moves)
+ * v0.2.6.5 (U3+U4):
+ *   - Default map style is the same as Hiking (outdoors-v12) — easier
+ *     on the eye and battery. A toggle button in the corner switches
+ *     to satellite imagery for users who want to see roof / tree
+ *     features for ultra-precise positioning.
+ *   - Pin drag handler now accepts both the legacy event shape
+ *     (e.geometry.coordinates) and the v10+ shape (e.coordinates).
  *
  * Visual layers (bottom → top):
- *   1. Mapbox satellite raster (most useful tile-set for ground features)
+ *   1. Mapbox style raster
  *   2. ShapeSource + FillLayer for the accuracy circle
- *   3. ShapeSource + LineLayer for the max-nudge boundary (subtle)
+ *   3. ShapeSource + LineLayer for the max-nudge boundary
  *   4. PointAnnotation (draggable pin)
- *
- * The map uses `mapbox://styles/mapbox/satellite-streets-v12` so users
- * can read street labels while dropping a pin on a path/building edge.
  */
 
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { getMapbox } from '../../memory/services/mapboxAdapter';
 import { PinNudgeConfig } from '../config/plantConfig';
 import { MemoryColors } from '../../memory/config/memoryConfig';
 import { Colors } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
+import { getPrimaryMapStyle } from '../../../config/mapbox';
+import { log } from '../../../services/appLog';
+import { Icon } from '../../../components/Icon';
 
 interface Props {
   lat: number;
@@ -61,6 +63,41 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
   const [pinLat, setPinLat] = useState(lat);
   const [pinLng, setPinLng] = useState(lng);
   const originRef = useRef({ lat, lng });
+  // U3 (v0.2.6.5): default to outdoors style (same as Hiking; lighter
+  // tile data; vector instead of raster). User can toggle to satellite
+  // for finer roof/tree visibility, with a one-time data warning since
+  // satellite tiles are ~3-5× heavier.
+  const [mapStyle, setMapStyle] = useState<'outdoors' | 'satellite'>('outdoors');
+  const [satelliteWarned, setSatelliteWarned] = useState(false);
+
+  const onToggleStyle = () => {
+    if (mapStyle === 'outdoors') {
+      // First time switching to satellite this session: warn about data.
+      if (!satelliteWarned) {
+        Alert.alert(
+          'Switch to satellite view?',
+          'Satellite imagery uses about 1–2 MB of mobile data on first load. The view caches locally afterwards. Continue?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Use satellite',
+              onPress: () => {
+                log('plant.pin_style_toggle', { to: 'satellite' });
+                setSatelliteWarned(true);
+                setMapStyle('satellite');
+              },
+            },
+          ]
+        );
+        return;
+      }
+      log('plant.pin_style_toggle', { to: 'satellite' });
+      setMapStyle('satellite');
+    } else {
+      log('plant.pin_style_toggle', { to: 'outdoors' });
+      setMapStyle('outdoors');
+    }
+  };
 
   const accuracyCircle = useMemo(
     () => makeCircleGeoJson(originRef.current.lat, originRef.current.lng, Math.max(accuracyM, 2)),
@@ -72,12 +109,23 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
   );
 
   const onPinDragEnd = (e: any) => {
-    const coord = e?.geometry?.coordinates;
-    if (!Array.isArray(coord)) return;
+    // U4 fix (v0.2.6.5): @rnmapbox/maps v10+ payload may be either
+    // top-level `coordinates` or nested `geometry.coordinates`.
+    // Accept both shapes; log when we hit one of the unexpected
+    // payloads so future SDK upgrades surface fast.
+    let coord: any = null;
+    if (Array.isArray(e?.coordinates)) coord = e.coordinates;
+    else if (Array.isArray(e?.geometry?.coordinates)) coord = e.geometry.coordinates;
+    else if (Array.isArray(e?.nativeEvent?.coordinates)) coord = e.nativeEvent.coordinates;
+    if (!Array.isArray(coord) || coord.length < 2) {
+      log('plant.pin_drag_unknown_shape', {
+        keys: Object.keys(e ?? {}).slice(0, 10),
+      });
+      return;
+    }
     const newLng = coord[0];
     const newLat = coord[1];
-    // Enforce maxNudgeMeters — clamp to the nearest point on the boundary
-    // if the user dragged too far.
+    log('plant.pin_drag_end', { newLat, newLng });
     const dist = haversineM(
       { lat: originRef.current.lat, lng: originRef.current.lng },
       { lat: newLat, lng: newLng }
@@ -110,7 +158,7 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
       <View style={styles.mapWrap}>
         <MapView
           style={styles.map}
-          styleURL={SATELLITE_STYLE}
+          styleURL={mapStyle === 'satellite' ? SATELLITE_STYLE : getPrimaryMapStyle()}
           compassEnabled={false}
           scaleBarEnabled={false}
           attributionEnabled={false}
@@ -155,6 +203,19 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
             </View>
           </PointAnnotation>
         </MapView>
+        {/* U3: style toggle overlay (top-right) */}
+        <TouchableOpacity
+          style={styles.styleToggle}
+          onPress={onToggleStyle}
+          activeOpacity={0.7}
+        >
+          <Icon
+            name={mapStyle === 'satellite' ? 'Map' : 'Globe'}
+            size={18}
+            color={MemoryColors.sepiaDeep}
+            strokeWidth={2}
+          />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.metaRow}>
@@ -214,6 +275,17 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   map: { flex: 1 },
+  styleToggle: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: Colors.border,
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 }, elevation: 3,
+  },
   metaRow: {
     paddingVertical: 8,
     alignItems: 'center',

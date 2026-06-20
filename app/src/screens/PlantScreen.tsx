@@ -38,6 +38,7 @@ import { PinAdjustStep } from '../features/plant/components/PinAdjustStep';
 import { ContentStep } from '../features/plant/components/ContentStep';
 import { VisibilityConfig } from '../features/plant/config/plantConfig';
 import { encodeTitleBody } from '../features/plant/services/noteEncoding';
+import { log } from '../services/appLog';
 
 type Step = 'gps' | 'pin' | 'content';
 
@@ -131,14 +132,13 @@ export function PlantScreen() {
     async (final: PlantDraft) => {
       if (final.lat == null || final.lng == null) return;
       if (submitting) return;          // belt-and-suspenders
+      log('plant.commit_attempt', { hasTitle: !!final.title, textLen: final.text.length, vis: final.visibility });
       setSubmitting(true);
       try {
         await addMarker({
           type: final.type,
           lat: final.lat,
           lng: final.lng,
-          // Title + body encoded with U+001E so RevealedCairnSheet can
-          // split unambiguously. No data loss for multiline text.
           note: encodeTitleBody(final.title, final.text),
           authorId: userId,
           permission: final.visibility,
@@ -148,9 +148,7 @@ export function PlantScreen() {
           voiceMemoUri: final.voiceUri ?? undefined,
           voiceMemoDurationMs: final.voiceMs ?? undefined,
         } as any);
-        // L3 fix (v0.2.6.3): use recordCircleUnlock — it bypasses the
-        // 12.5m cull that recordPoint applies. Plant always clears fog
-        // around the plant location regardless of recent visit history.
+        log('plant.commit_ok');
         recordCircleUnlock(final.lat, final.lng, UnlockConfig.radiusMeters, Date.now());
         // K3 fix: clear any previously saved draft on successful commit.
         try {
@@ -159,6 +157,7 @@ export function PlantScreen() {
         } catch { /* best-effort */ }
         nav.goBack();
       } catch (e: any) {
+        log('plant.commit_failed', { msg: String(e?.message ?? e).slice(0, 200) });
         // Stay on the content step so the user can retry without
         // re-entering everything. No silent failure.
         try {
@@ -196,10 +195,11 @@ export function PlantScreen() {
         {step === 'gps' && (
           <GpsLockStep
             onLocked={(lat, lng, accuracyM) => {
+              log('plant.step_gps_to_pin', { accuracyM });
               setDraft((d) => ({ ...d, lat, lng, accuracyM }));
               setStep('pin');
             }}
-            onCancel={() => nav.goBack()}
+            onCancel={() => { log('plant.cancel'); nav.goBack(); }}
           />
         )}
         {step === 'pin' && draft.lat != null && draft.lng != null && (
@@ -208,10 +208,11 @@ export function PlantScreen() {
             lng={draft.lng}
             accuracyM={draft.accuracyM ?? 5}
             onConfirm={(lat, lng) => {
+              log('plant.step_pin_to_content');
               setDraft((d) => ({ ...d, lat, lng }));
               setStep('content');
             }}
-            onBack={() => setStep('gps')}
+            onBack={() => { log('plant.step_back_pin_to_gps'); setStep('gps'); }}
           />
         )}
         {step === 'content' && (

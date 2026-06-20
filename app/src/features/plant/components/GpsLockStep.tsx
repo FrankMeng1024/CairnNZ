@@ -31,13 +31,24 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
   const [result, setResult] = useState<SampleResult | null>(null);
   const [busy, setBusy] = useState(true);
   const [retryToken, setRetryToken] = useState(0);
-  // Read latest onLocked from a ref so this effect's deps array can be
-  // empty — otherwise a parent re-render with an inline arrow would
-  // restart the GPS sample window and leak Location subscriptions.
   const onLockedRef = useRef(onLocked);
   onLockedRef.current = onLocked;
+  // U2 fix (v0.2.6.5): prevent React 18 StrictMode double-mount from
+  // spawning two concurrent sampleGpsWindow() calls. The second
+  // mount's call would race with the first's pending Location requests
+  // on iOS and leave the user staring at a "no readings" error on
+  // the very first plant attempt. With this guard, the FIRST effect
+  // owns the sampling and the StrictMode-induced second invocation
+  // is a no-op until retryToken explicitly bumps.
+  const inFlightRetryRef = useRef<number>(-1);
 
   useEffect(() => {
+    if (inFlightRetryRef.current === retryToken) {
+      // Same retryToken already in flight — skip duplicate (StrictMode).
+      log('plant.gps_lock_skipped_dup', { retry: retryToken });
+      return;
+    }
+    inFlightRetryRef.current = retryToken;
     let cancelled = false;
     let raf: any = null;
 
