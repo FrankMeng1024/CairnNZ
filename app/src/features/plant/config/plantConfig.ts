@@ -62,7 +62,7 @@ export const VisibilityConfig = {
    * v0.2.6 MVP: 'public' option is hidden until content moderation
    * pipeline is ready. Toggle this to enable once moderation lands.
    */
-  enablePublicOption: false,
+  enablePublicOption: true,
 } as const;
 
 export type PlantConfigBundle = {

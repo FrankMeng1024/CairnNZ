@@ -9,13 +9,14 @@
  * didn't pan.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { MemoryColors } from '../config/memoryConfig';
 import { FogLayer } from './FogLayer';
 import { CairnPinsLayer } from './CairnPinsLayer';
+import { log } from '../../../services/appLog';
 
 interface Props {
   centerLat: number;
@@ -39,16 +40,23 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0 }: Props) {
 
   const { MapView, Camera, UserLocation } = Mapbox;
 
-  // S2 fix: cameraKey changes when EITHER recenterToken bumps OR
-  // center coords change appreciably. The coord delta gate
-  // (rounded to ~10m) prevents micro-drift from re-mounting Camera
-  // on every watcher tick — that would re-trigger flyTo, costing
-  // animation frames. Big jumps (>~10m) and recenter taps both
-  // re-mount and animate.
+  // V8 + R-round B8: cameraKey changes ONLY when recenterToken bumps.
+  // The previous fix included centerLat/Lng (toFixed(4) ≈ 11m precision)
+  // which caused Camera to remount on every watcher tick when the user
+  // walks — interrupting flyTo animations every ~1s. centerCoordinate
+  // is still passed as a prop, so manual recenter (recenterToken++)
+  // forces a fresh flyTo to the current center; passive watcher
+  // updates flow through prop change without remount.
   const cameraKey = useMemo(
-    () => `cam-${recenterToken}-${centerLat.toFixed(4)}-${centerLng.toFixed(4)}`,
-    [recenterToken, centerLat, centerLng]
+    () => `cam-${recenterToken}`,
+    [recenterToken]
   );
+
+  // V8 telemetry: log every cameraKey change so the dev team can see
+  // whether the recenter button actually triggers remount.
+  useEffect(() => {
+    log('memory.map_camera_key', { cameraKey, recenterToken });
+  }, [cameraKey, recenterToken]);
 
   return (
     <View style={styles.container}>

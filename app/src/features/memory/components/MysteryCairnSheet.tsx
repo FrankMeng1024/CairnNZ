@@ -131,7 +131,7 @@ function Meta({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(20,20,20,0.55)',
+    backgroundColor: 'rgba(20,20,20,0.30)',
     justifyContent: 'flex-end',
   },
   sheet: {

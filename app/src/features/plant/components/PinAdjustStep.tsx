@@ -1,22 +1,25 @@
 /**
  * PinAdjustStep — Step 2 of plant flow.
  *
- * v0.2.6.5 (U3+U4):
- *   - Default map style is the same as Hiking (outdoors-v12) — easier
- *     on the eye and battery. A toggle button in the corner switches
- *     to satellite imagery for users who want to see roof / tree
- *     features for ultra-precise positioning.
- *   - Pin drag handler now accepts both the legacy event shape
- *     (e.geometry.coordinates) and the v10+ shape (e.coordinates).
+ * v0.2.6.6 (V1+V2):
+ *   Drag UX rewritten to Didi/Uber style: the pin is FIXED at screen
+ *   center; the user pans the MAP under it. This is dramatically
+ *   smoother than PointAnnotation drag (no per-finger event lag, no
+ *   pin jumping back, no SDK-version event-shape mismatch).
  *
- * Visual layers (bottom → top):
- *   1. Mapbox style raster
- *   2. ShapeSource + FillLayer for the accuracy circle
- *   3. ShapeSource + LineLayer for the max-nudge boundary
- *   4. PointAnnotation (draggable pin)
+ *   We subscribe to Camera regionDidChange and compute the new
+ *   pin coords from the map's center coord. As the user drags the
+ *   map, we update pinLat/pinLng in real time. The accuracy + max-
+ *   nudge circles still render anchored to the original GPS spot.
+ *
+ *   When the user drags the map past the max-nudge boundary, we show
+ *   a hint banner explaining why the pin can't move farther.
+ *
+ * Style toggle (top-right): outdoors ↔ satellite, with first-time
+ * mobile-data warning.
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { getMapbox } from '../../memory/services/mapboxAdapter';
 import { PinNudgeConfig } from '../config/plantConfig';
@@ -37,10 +40,6 @@ interface Props {
 
 const SATELLITE_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12';
 
-/**
- * Generate a circle GeoJSON polygon (used for accuracy + max-nudge rings).
- * Returns 64-vertex polygon centered at (lat, lng).
- */
 function makeCircleGeoJson(lat: number, lng: number, radiusM: number): any {
   const points: [number, number][] = [];
   const earthRad = 6378137;
@@ -62,17 +61,14 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
   const Mapbox = getMapbox();
   const [pinLat, setPinLat] = useState(lat);
   const [pinLng, setPinLng] = useState(lng);
+  const [hintVisible, setHintVisible] = useState(false);
   const originRef = useRef({ lat, lng });
-  // U3 (v0.2.6.5): default to outdoors style (same as Hiking; lighter
-  // tile data; vector instead of raster). User can toggle to satellite
-  // for finer roof/tree visibility, with a one-time data warning since
-  // satellite tiles are ~3-5× heavier.
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapStyle, setMapStyle] = useState<'outdoors' | 'satellite'>('outdoors');
   const [satelliteWarned, setSatelliteWarned] = useState(false);
 
   const onToggleStyle = () => {
     if (mapStyle === 'outdoors') {
-      // First time switching to satellite this session: warn about data.
       if (!satelliteWarned) {
         Alert.alert(
           'Switch to satellite view?',
@@ -108,51 +104,64 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
     []
   );
 
-  const onPinDragEnd = (e: any) => {
-    // U4 fix (v0.2.6.5): @rnmapbox/maps v10+ payload may be either
-    // top-level `coordinates` or nested `geometry.coordinates`.
-    // Accept both shapes; log when we hit one of the unexpected
-    // payloads so future SDK upgrades surface fast.
-    let coord: any = null;
-    if (Array.isArray(e?.coordinates)) coord = e.coordinates;
-    else if (Array.isArray(e?.geometry?.coordinates)) coord = e.geometry.coordinates;
-    else if (Array.isArray(e?.nativeEvent?.coordinates)) coord = e.nativeEvent.coordinates;
-    if (!Array.isArray(coord) || coord.length < 2) {
-      log('plant.pin_drag_unknown_shape', {
-        keys: Object.keys(e ?? {}).slice(0, 10),
-      });
-      return;
-    }
+  // V2: show a hint banner when the user pushes past the boundary;
+  // hide it 2 s after they stop pushing.
+  const briefHint = () => {
+    setHintVisible(true);
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    hintTimer.current = setTimeout(() => setHintVisible(false), 2500);
+  };
+
+  useEffect(() => () => {
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+  }, []);
+
+  /**
+   * V1+R-round B7: onMapIdle fires AFTER pan/zoom settles (NOT during
+   * pan like onCameraChanged would). This is the correct event for a
+   * "drop pin where map stops" UX — high-frequency continuous events
+   * caused setState jitter at ~30-60Hz on lower-end devices.
+   *
+   * @rnmapbox/maps v10 onMapIdle payload is a MapState whose center
+   * lives at `properties.center` (NOT geometry.coordinates — that field
+   * is undefined on MapState; previous fallback masked the wrong
+   * contract).
+   */
+  const onMapSettle = (feature: any) => {
+    const coord = feature?.properties?.center;
+    if (!Array.isArray(coord) || coord.length < 2) return;
     const newLng = coord[0];
     const newLat = coord[1];
-    log('plant.pin_drag_end', { newLat, newLng });
     const dist = haversineM(
       { lat: originRef.current.lat, lng: originRef.current.lng },
       { lat: newLat, lng: newLng }
     );
     if (dist > PinNudgeConfig.maxNudgeMeters) {
       const ratio = PinNudgeConfig.maxNudgeMeters / dist;
-      setPinLat(originRef.current.lat + (newLat - originRef.current.lat) * ratio);
-      setPinLng(originRef.current.lng + (newLng - originRef.current.lng) * ratio);
+      const clampedLat = originRef.current.lat + (newLat - originRef.current.lat) * ratio;
+      const clampedLng = originRef.current.lng + (newLng - originRef.current.lng) * ratio;
+      setPinLat(clampedLat);
+      setPinLng(clampedLng);
+      briefHint();
+      log('plant.pin_clamped', { distM: Math.round(dist) });
     } else {
       setPinLat(newLat);
       setPinLng(newLng);
     }
   };
 
-  // Web fallback / Mapbox unavailable
   if (!Mapbox.available || Platform.OS === 'web') {
     return <PinAdjustFallback lat={lat} lng={lng} accuracyM={accuracyM}
                               onConfirm={() => onConfirm(pinLat, pinLng)}
                               onBack={onBack} />;
   }
-  const { MapView, Camera, ShapeSource, FillLayer, LineLayer, PointAnnotation } = Mapbox;
+  const { MapView, Camera, ShapeSource, FillLayer, LineLayer } = Mapbox;
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>You are here?</Text>
       <Text style={styles.sub}>
-        We placed the pin where the GPS said. Drag if you can see a more accurate spot.
+        Drag the map to fine-tune. The pin marks where your cairn will be planted.
       </Text>
 
       <View style={styles.mapWrap}>
@@ -163,12 +172,13 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
           scaleBarEnabled={false}
           attributionEnabled={false}
           logoEnabled={false}
+          onMapIdle={onMapSettle}
         >
           <Camera
-            centerCoordinate={[originRef.current.lng, originRef.current.lat]}
-            zoomLevel={18}
-            animationMode={'flyTo'}
-            animationDuration={400}
+            defaultSettings={{
+              centerCoordinate: [originRef.current.lng, originRef.current.lat],
+              zoomLevel: 18,
+            }}
           />
           <ShapeSource id="acc-src" shape={accuracyCircle}>
             <FillLayer
@@ -191,19 +201,25 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
               }}
             />
           </ShapeSource>
-          <PointAnnotation
-            id="plant-pin"
-            coordinate={[pinLng, pinLat]}
-            draggable={true}
-            onDragEnd={onPinDragEnd}
-          >
-            <View style={styles.pin}>
-              <View style={styles.pinHead} />
-              <View style={styles.pinTail} />
-            </View>
-          </PointAnnotation>
         </MapView>
-        {/* U3: style toggle overlay (top-right) */}
+
+        {/* V1: pin is fixed at screen center — non-interactive overlay. */}
+        <View pointerEvents="none" style={styles.centerOverlay}>
+          <View style={styles.pin}>
+            <View style={styles.pinHead} />
+            <View style={styles.pinTail} />
+          </View>
+        </View>
+
+        {/* V2: hint banner when user pushes past the max-nudge ring */}
+        {hintVisible && (
+          <View style={styles.hintBanner} pointerEvents="none">
+            <Text style={styles.hintBannerText}>
+              Pin stays within {PinNudgeConfig.maxNudgeMeters} m of your GPS spot.
+            </Text>
+          </View>
+        )}
+
         <TouchableOpacity
           style={styles.styleToggle}
           onPress={onToggleStyle}
@@ -220,12 +236,15 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
 
       <View style={styles.metaRow}>
         <Text style={styles.metaText}>
-          ± {accuracyM.toFixed(1)} m · drag pin to fine-tune
+          ± {accuracyM.toFixed(1)} m · drag the map to fine-tune
         </Text>
       </View>
 
       <View style={{ flex: 1 }} />
-      <TouchableOpacity style={styles.primaryBtn} onPress={() => onConfirm(pinLat, pinLng)}>
+      <TouchableOpacity style={styles.primaryBtn} onPress={() => {
+        log('plant.pin_confirm', { lat: pinLat, lng: pinLng });
+        onConfirm(pinLat, pinLng);
+      }}>
         <Text style={styles.primaryBtnText}>Looks right</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.backBtn} onPress={onBack}>
@@ -235,7 +254,6 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
   );
 }
 
-/** Web / Mapbox-unavailable fallback — text-only version. */
 function PinAdjustFallback({
   lat, lng, accuracyM, onConfirm, onBack,
 }: {
@@ -247,9 +265,7 @@ function PinAdjustFallback({
       <Text style={styles.title}>You are here?</Text>
       <Text style={styles.sub}>Map preview not available on this platform.</Text>
       <View style={styles.fallbackBox}>
-        <Text style={styles.fallbackCoord}>
-          {lat.toFixed(6)}, {lng.toFixed(6)}
-        </Text>
+        <Text style={styles.fallbackCoord}>{lat.toFixed(6)}, {lng.toFixed(6)}</Text>
         <Text style={styles.fallbackAcc}>± {accuracyM.toFixed(1)} m</Text>
       </View>
       <View style={{ flex: 1 }} />
@@ -277,14 +293,28 @@ const styles = StyleSheet.create({
   map: { flex: 1 },
   styleToggle: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 8, right: 8,
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.95)',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: Colors.border,
     shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 }, elevation: 3,
+  },
+  centerOverlay: {
+    position: 'absolute',
+    top: 0, bottom: 0, left: 0, right: 0,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  hintBanner: {
+    position: 'absolute',
+    bottom: 12, left: 12, right: 12,
+    backgroundColor: 'rgba(0,0,0,0.78)',
+    borderRadius: 10,
+    paddingVertical: 8, paddingHorizontal: 12,
+  },
+  hintBannerText: {
+    color: '#fff', fontSize: 12, textAlign: 'center',
   },
   metaRow: {
     paddingVertical: 8,

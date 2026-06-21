@@ -238,33 +238,100 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     });
   },
 
-  recordCircleUnlock: (lat, lng, _radiusMeters, atMs = Date.now()) => {
+  recordCircleUnlock: (lat, lng, radiusMeters, atMs = Date.now()) => {
     if (!isFinite(lat) || !isFinite(lng)) return;
     const ts = Math.floor(atMs);
-    // O5 fix (v0.2.6.3): if a point already exists within the cull
-    // radius (e.g. ForegroundUnlockManager's watcher just recorded
-    // one at the same coords), reuse it instead of inserting a
-    // duplicate. The fog renderer paints a 25m circle around the
-    // existing point, which is what plant wants. Avoids server
-    // storing 2 rows for the same physical location.
+    // V6 fix (v0.2.6.6): if radiusMeters > the rendered fog hole
+    // (UnlockConfig.radiusMeters = 25m), we need MULTIPLE visited
+    // points to actually cover the requested area. A single point
+    // renders only a 25m circle in fogBuilder, so requesting "500m
+    // initial reveal" but writing one point gives the user the
+    // unintentional "two-circles-with-fog-between" effect they
+    // reported.
+    //
+    // Strategy: tile the requested circle with a hex grid of points
+    // spaced ~30m apart (5m less than 25m radius so circles overlap
+    // and the fog renderer paints a continuous area).
+    const pointSpacingM = 30;
+    const requestedRadius = Math.max(0, radiusMeters);
     const points = get().points;
     const recent = points.slice(-32);
-    for (const p of recent) {
-      if (distanceSqMeters({ lat, lng }, p) < CULL_THRESHOLD_SQ) {
-        // Existing nearby point — no new insertion needed.
-        return;
+    // If asked for ≤ pointSpacing radius, behave as before — single
+    // point + cull-against-recent (plant flow path).
+    if (requestedRadius <= pointSpacingM) {
+      for (const p of recent) {
+        if (distanceSqMeters({ lat, lng }, p) < CULL_THRESHOLD_SQ) {
+          return; // existing nearby point — no new insertion needed
+        }
+      }
+      const newPoint: VisitedPoint = { lat, lng, ts, cid: uuidv4(), synced: false };
+      const idx = get()._bucketIndex ? new Map(get()._bucketIndex!) : buildBucketIndex(points);
+      const k = bucketKey(lat, lng);
+      const arr = idx.get(k) ? [...idx.get(k)!, newPoint] : [newPoint];
+      idx.set(k, arr);
+      set({
+        points: [...points, newPoint],
+        _bucketIndex: idx,
+        geometryVersion: get().geometryVersion + 1,
+        _unsyncedCount: get()._unsyncedCount + 1,
+      });
+      return;
+    }
+
+    // Larger radius (initial reveal): tile with a TRUE axial hex grid
+    // so fog circles overlap continuously (no off-axis gaps).
+    //
+    // R-round B3 fix: the previous concentric-ring layout left ~36m
+    // gaps between adjacent rings at off-axis angles → fog circles
+    // (25m radius each) did NOT overlap → the user's reported
+    // "two-circles-with-fog-between" pattern reappeared.
+    //
+    // Axial hex grid: rows offset by hexHeight*0.75, columns offset by
+    // hexWidth. With spacing ≤ 2*fogRadius (=50m for 25m circles), any
+    // two adjacent tile centers are ≤ spacing apart → guaranteed
+    // continuous coverage. We pick 40m: under the 50m limit with margin,
+    // ~30% fewer points than 30m spacing.
+    //
+    // R-round B4 fix: large-radius reveals are CLIENT-DERIVED (no user
+    // GPS evidence). They are computed deterministically and don't
+    // need to be pushed to backend — flagging them synced=true avoids
+    // a ~hundreds-of-points sync storm on first launch.
+    const idx = get()._bucketIndex ? new Map(get()._bucketIndex!) : buildBucketIndex(points);
+    const newPoints: VisitedPoint[] = [];
+    const cosLat = Math.cos((lat * Math.PI) / 180);
+    const dLatPerM = 1 / 111_000;
+    const dLngPerM = dLatPerM / Math.max(cosLat, 1e-6);
+    const hexSpacing = 40; // metres between hex tile centres
+    const rowStep = hexSpacing * Math.sqrt(3) / 2; // ≈ 34.6m
+    const radiusSq = requestedRadius * requestedRadius;
+    // Iterate rows (north-south) and columns (east-west) over the
+    // bounding square, keep only points within the circle.
+    const rowsHalf = Math.ceil(requestedRadius / rowStep);
+    const colsHalf = Math.ceil(requestedRadius / hexSpacing);
+    for (let row = -rowsHalf; row <= rowsHalf; row++) {
+      const dy = row * rowStep;
+      // Alternate rows offset by hexSpacing/2 for the axial pattern.
+      const rowOffset = (row & 1) === 0 ? 0 : hexSpacing / 2;
+      for (let col = -colsHalf; col <= colsHalf; col++) {
+        const dx = col * hexSpacing + rowOffset;
+        if (dx * dx + dy * dy > radiusSq) continue;
+        const pLat = lat + dy * dLatPerM;
+        const pLng = lng + dx * dLngPerM;
+        newPoints.push({ lat: pLat, lng: pLng, ts, cid: uuidv4(), synced: true });
       }
     }
-    const newPoint: VisitedPoint = { lat, lng, ts, cid: uuidv4(), synced: false };
-    const idx = get()._bucketIndex ? new Map(get()._bucketIndex!) : buildBucketIndex(points);
-    const k = bucketKey(lat, lng);
-    const arr = idx.get(k) ? [...idx.get(k)!, newPoint] : [newPoint];
-    idx.set(k, arr);
+    // Bucket-index every new point.
+    for (const p of newPoints) {
+      const k = bucketKey(p.lat, p.lng);
+      const arr = idx.get(k) ? [...idx.get(k)!, p] : [p];
+      idx.set(k, arr);
+    }
     set({
-      points: [...points, newPoint],
+      points: [...points, ...newPoints],
       _bucketIndex: idx,
       geometryVersion: get().geometryVersion + 1,
-      _unsyncedCount: get()._unsyncedCount + 1,
+      // synced=true above → DO NOT bump _unsyncedCount.
+      _unsyncedCount: get()._unsyncedCount,
     });
   },
 

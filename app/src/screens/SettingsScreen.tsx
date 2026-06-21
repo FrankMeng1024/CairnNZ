@@ -30,6 +30,8 @@ import type { IconName } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { PressBtn } from '../components/PressBtn';
 import { MemorySettingsSection } from '../components/settings/MemorySettingsSection';
+import { pickDebugScreenshots, uploadDebugScreenshots } from '../services/debugUpload';
+import { log } from '../services/appLog';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -139,17 +141,21 @@ function ToggleRow({
 
 // ── Action Row ───────────────────────────────────────────────────────────────
 function ActionRow({
-  iconName, iconColor, iconBg, label, labelColor, onPress, hideChevron,
+  iconName, iconColor, iconBg, label, hint, labelColor, onPress, hideChevron, disabled,
 }: {
   iconName: IconName; iconColor: string; iconBg: string;
-  label: string; labelColor?: string; onPress: () => void; hideChevron?: boolean;
+  label: string; hint?: string; labelColor?: string;
+  onPress: () => void; hideChevron?: boolean; disabled?: boolean;
 }) {
   return (
-    <PressBtn style={rowStyles.actionRow} onPress={onPress} scaleTo={0.97}>
+    <PressBtn style={rowStyles.actionRow} onPress={onPress} scaleTo={0.97} disabled={disabled}>
       <View style={[rowStyles.iconWrap, { backgroundColor: iconBg }]}>
         <Icon name={iconName} size={16} color={iconColor} strokeWidth={1.8} />
       </View>
-      <Text style={[rowStyles.actionLabel, labelColor ? { color: labelColor } : null]}>{label}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={[rowStyles.actionLabel, labelColor ? { color: labelColor } : null]}>{label}</Text>
+        {hint ? <Text style={rowStyles.hint} numberOfLines={2}>{hint}</Text> : null}
+      </View>
       {!hideChevron && (
         <Icon name="ChevronRight" size={IconSize.sm} color={Colors.textMuted} strokeWidth={2} />
       )}
@@ -218,6 +224,120 @@ export function SettingsScreen() {
   // (settings toggles auto-persist via useSettingsStore.updateSetting)
 
   const hasChanges = pendingMode !== uiMode;
+
+  // ── V10 · Debug screenshot upload ──────────────────────────────────────
+  // User-initiated screenshot upload to /api/debug-snapshot. Allowed
+  // regardless of login state — bug reports from unauthenticated users
+  // are exactly the ones we miss most. Web platform hides the entry
+  // because expo-file-system uploadAsync is native-only.
+  const [dbgState, setDbgState] = useState<'idle' | 'picking' | 'uploading' | 'done' | 'err'>('idle');
+  const [dbgLabel, setDbgLabel] = useState<string>('');
+  const dbgResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // R-round B9: track mount status. If user nav away mid-upload, the
+  // onProgress callback + final setState branch must NOT call setState.
+  const dbgMountedRef = useRef(true);
+
+  const dbgFlashAndReset = (next: 'done' | 'err', label: string, ms = 5000) => {
+    if (!dbgMountedRef.current) return;
+    setDbgState(next);
+    setDbgLabel(label);
+    if (dbgResetTimer.current) clearTimeout(dbgResetTimer.current);
+    dbgResetTimer.current = setTimeout(() => {
+      if (!dbgMountedRef.current) return;
+      setDbgState('idle');
+      setDbgLabel('');
+    }, ms);
+  };
+
+  useEffect(() => {
+    dbgMountedRef.current = true;
+    return () => {
+      dbgMountedRef.current = false;
+      if (dbgResetTimer.current) clearTimeout(dbgResetTimer.current);
+    };
+  }, []);
+
+  const handleDebugUpload = async () => {
+    // B10: while picking/uploading, hard-guard re-entry. In done/err
+    // the user may want to retry — clear any pending reset timer and
+    // continue fresh.
+    if (dbgState === 'picking' || dbgState === 'uploading') return;
+    if (dbgResetTimer.current) {
+      clearTimeout(dbgResetTimer.current);
+      dbgResetTimer.current = null;
+    }
+    log('settings.debug_upload.pick_open', { logged_in: isLoggedIn });
+    if (!dbgMountedRef.current) return;
+    setDbgState('picking');
+    setDbgLabel('Opening Photos…');
+    const outcome = await pickDebugScreenshots({ selectionLimit: 3 });
+    if (!dbgMountedRef.current) return;
+    if (outcome.kind === 'permission_denied') {
+      log('settings.debug_upload.pick_perm_denied');
+      dbgFlashAndReset('err', 'Photo permission denied', 4000);
+      return;
+    }
+    if (outcome.kind === 'canceled') {
+      log('settings.debug_upload.pick_canceled');
+      if (!dbgMountedRef.current) return;
+      setDbgState('idle');
+      setDbgLabel('');
+      return;
+    }
+    if (outcome.kind === 'error') {
+      log('settings.debug_upload.pick_err', { error: outcome.message });
+      dbgFlashAndReset('err', outcome.message, 4000);
+      return;
+    }
+    const photos = outcome.photos;
+    log('settings.debug_upload.pick_done', { count: photos.length });
+    const noun = photos.length === 1 ? 'screenshot' : 'screenshots';
+    const confirmed = await new Promise<boolean>((resolve) =>
+      Alert.alert(
+        'Send to dev team?',
+        `${photos.length} ${noun} will be uploaded for debugging.`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Upload', onPress: () => resolve(true) },
+        ],
+      ),
+    );
+    if (!confirmed) {
+      log('settings.debug_upload.confirm_canceled');
+      if (!dbgMountedRef.current) return;
+      setDbgState('idle');
+      setDbgLabel('');
+      return;
+    }
+    log('settings.debug_upload.upload_start', { count: photos.length });
+    if (!dbgMountedRef.current) return;
+    setDbgState('uploading');
+    setDbgLabel(`Uploading 0/${photos.length}…`);
+    const result = await uploadDebugScreenshots(photos, 'settings', (p) => {
+      if (dbgMountedRef.current) setDbgLabel(`Uploading ${p.index}/${p.total}…`);
+      log('settings.debug_upload.upload_progress', { index: p.index, total: p.total, ok: p.ok });
+    });
+    log('settings.debug_upload.upload_done', {
+      ok_count: result.okCount,
+      total: result.total,
+      partial: result.okCount > 0 && result.okCount < result.total,
+      last_error: result.lastError ?? undefined,
+    });
+    if (result.okCount === result.total) {
+      dbgFlashAndReset('done', `Sent ${result.okCount} — thanks!`);
+    } else if (result.okCount === 0) {
+      dbgFlashAndReset('err', result.lastError ?? 'All uploads failed');
+    } else {
+      dbgFlashAndReset('err', `${result.okCount}/${result.total} ok · ${result.lastError ?? ''}`);
+    }
+  };
+
+  const dbgRowLabel = dbgState === 'idle' ? 'Send screenshot to dev team' : dbgLabel;
+  // R-round B10: only DISABLE during active picking/uploading. done/err
+  // states already auto-reset; keeping row enabled lets the user retry
+  // immediately AND keeps PressBtn's reduced-opacity treatment from
+  // dimming the success/danger label color.
+  const dbgRowDisabled = dbgState === 'picking' || dbgState === 'uploading';
 
   // Hint fade animation — fades in (200ms) when hasChanges, out when not
   const hintOpacity = useRef(new Animated.Value(0)).current;
@@ -502,6 +622,29 @@ export function SettingsScreen() {
         {/* Feedback Section */}
         <SectionHeader title="Feedback" />
         <View style={styles.card}>
+          {/* V10 · Debug screenshot upload — native only. Web users won't
+              see this row because expo-file-system uploadAsync isn't
+              available on web. */}
+          {Platform.OS !== 'web' && (
+            <>
+              <ActionRow
+                iconName="Send"
+                iconColor={Colors.info}
+                iconBg={Colors.infoBg}
+                label={dbgRowLabel}
+                hint="Help us debug by sending a screenshot of any issue you've seen"
+                onPress={handleDebugUpload}
+                hideChevron={dbgRowDisabled}
+                disabled={dbgRowDisabled}
+                labelColor={
+                  dbgState === 'done' ? Colors.success
+                  : dbgState === 'err' ? Colors.danger
+                  : undefined
+                }
+              />
+              <View style={styles.divider} />
+            </>
+          )}
           <ToggleRow
             iconName="Zap"
             iconColor={Colors.primary}
@@ -808,7 +951,7 @@ const rowStyles = StyleSheet.create({
     paddingHorizontal: Spacing.base, paddingVertical: Spacing.md,
     minHeight: 64, // match toggle rows
   },
-  actionLabel: { flex: 1, fontSize: FontSize.body, fontWeight: '500', color: Colors.textPrimary },
+  actionLabel: { fontSize: FontSize.body, fontWeight: '500', color: Colors.textPrimary },
 });
 
 const profileStyles = StyleSheet.create({

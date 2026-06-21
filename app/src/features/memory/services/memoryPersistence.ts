@@ -289,7 +289,23 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
       // L7 fix: use the store's replacePoints action which bumps
       // geometryVersion and rebuilds _bucketIndex. Direct setState
       // bypassed those, leaving FogLayer / CairnPinsLayer stale.
-      useMemoryStore.getState().replacePoints(decoded.points, decoded.initialRevealDone);
+      //
+      // R-round B2 migration (v0.2.6.x): legacy v290 users had
+      // recordCircleUnlock ignore radiusMeters → single point only.
+      // After OTA-291 the hex-grid tile path won't re-run because
+      // initialRevealDone=true. Detect this signature (initialRevealDone
+      // AND only a handful of points) and force a re-reveal so the
+      // user finally sees the connected fog they were promised.
+      // Threshold 50: a single visit + plant on day 1 = ~2-3 points;
+      // even an active week of walking is well under 50 unique cells
+      // before the next launch. New hex grid emits ~560 points,
+      // leaving headroom on both sides.
+      const needsRevealMigration =
+        decoded.initialRevealDone && decoded.points.length < 50;
+      const migratedInitialRevealDone = needsRevealMigration
+        ? false
+        : decoded.initialRevealDone;
+      useMemoryStore.getState().replacePoints(decoded.points, migratedInitialRevealDone);
     }
   }
 

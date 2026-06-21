@@ -1205,7 +1205,46 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //         (5) U5: full plant flow telemetry — every step transition,
 //             commit attempt/ok/failed, pin drag, style toggle,
 //             cancel — all uploaded to /api/edit-diag (kind=app_log).
-export const OTA_VERSION = 290;
+// v291  V+R-round: 10-fix bundle from user feedback on v290 +
+//         double-subagent review fixes.
+//         V1: PinAdjustStep Didi-style fixed-center pan (replaces drag).
+//             R-round B7 follow-up: switched onCameraChanged → onMapIdle
+//             (settle event, NOT continuous ~60Hz), removed dead
+//             geometry.coordinates fallback per @rnmapbox v10 contract.
+//         V2: max-nudge hint banner when user pushes past ring.
+//         V3: enablePublicOption flipped on (Public visibility option).
+//         V4: ContentStep keyboard now dismissible by tapping outside;
+//             button no longer blocked. R-round B6: multiline
+//             blurOnSubmit=false + returnKeyType=default so return key
+//             inserts newline (previously dismissed keyboard).
+//         V5: success modal + cairn type chips. R-round B1: draft.type
+//             now plumbed to ContentStep initialType — back/rehydrate
+//             preserves user's choice. R-round: setTimeout for modal
+//             dismiss cleared on unmount (prev: stale nav.goBack on
+//             background suspend).
+//         V6: Memory initial reveal hex-tiled. R-round B3: switched
+//             from concentric rings (36m off-axis gaps caused fog
+//             discontinuity) to TRUE axial hex grid at 40m spacing —
+//             continuous coverage guaranteed. R-round B4: large-radius
+//             reveal points marked synced=true (client-derived, no
+//             push storm). R-round B2 migration: legacy v290 users
+//             with initialRevealDone + <50 points auto re-reveal on
+//             first launch after OTA (original 'two circles' reporters
+//             now get the fix).
+//         V7: cairn-tap modal backdrop opacity reduced (0.55→0.30 /
+//             0.45→0.25).
+//         V8: MemoryMap recenter telemetry. R-round B8: cameraKey
+//             reduced to recenterToken-only (was toFixed(4) ≈ 11m,
+//             causing Camera remount every GPS tick while walking).
+//         V9: Memory back button now safe-area-inset aware,
+//             matches Hiking pill variant.
+//         V10: NEW — Settings → Feedback "Send screenshot to dev team"
+//             action row. New services/debugUpload.ts (AR migration
+//             deferred to v0.2.7). R-round B9: isMountedRef guards
+//             all upload setState calls. R-round B10: success/err
+//             states stay clickable so retry is immediate and label
+//             color isn't dimmed by disabled treatment.
+export const OTA_VERSION = 291;
 //         v284: head-magnet visual fix (incremental builder).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints

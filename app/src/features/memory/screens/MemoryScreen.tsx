@@ -18,6 +18,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useMemoryStore } from '../store/useMemoryStore';
@@ -46,6 +47,7 @@ type FailReason = 'permission' | 'timeout' | 'error';
 
 export function MemoryScreen() {
   const nav = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const watcherFix = useMemoryStore((s) => s.lastWatcherFix);
   const initialDone = useMemoryStore((s) => s.initialRevealDone);
   const firstVisitDone = useMemorySettingsStore((s) => s.firstVisitDone);
@@ -185,8 +187,10 @@ export function MemoryScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <View style={styles.topBar}>
-        <BackButton onPress={() => nav.goBack()} />
+      {/* V9: Back button matches Hiking — pill variant + safe-area top inset
+          so it doesn't intrude into the Dynamic Island area. */}
+      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+        <BackButton variant="pill" onPress={() => nav.goBack()} />
       </View>
 
       {coord ? (
@@ -263,7 +267,16 @@ export function MemoryScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: MemoryColors.cream },
-  topBar: { position: 'absolute', top: 8, left: 8, zIndex: 10 },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 12,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
   waitingForGps: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   waitingTitle: { fontSize: 16, fontWeight: '500', color: MemoryColors.sepiaDeep },
   waitingSub:   { fontSize: 13, color: MemoryColors.cairnPublic, marginTop: 8, textAlign: 'center' },

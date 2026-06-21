@@ -25,14 +25,16 @@
  * no message.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, StyleSheet, View, Modal, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useMarkerStore, MarkerPermission } from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import { MemoryColors, UnlockConfig } from '../features/memory/config/memoryConfig';
+import { Icon } from '../components/Icon';
+import { MARKER_TYPES, MarkerType } from '../config/markerTypes';
 import { GpsLockStep } from '../features/plant/components/GpsLockStep';
 import { PinAdjustStep } from '../features/plant/components/PinAdjustStep';
 import { ContentStep } from '../features/plant/components/ContentStep';
@@ -50,7 +52,7 @@ interface PlantDraft {
   lat: number | null;
   lng: number | null;
   accuracyM: number | null;
-  type: string;
+  type: MarkerType;
   title: string;
   text: string;
   voiceUri: string | null;
@@ -94,6 +96,15 @@ export function PlantScreen() {
   const [step, setStep] = useState<Step>('gps');
   const [draft, setDraft] = useState<PlantDraft>(INITIAL_DRAFT);
   const [submitting, setSubmitting] = useState(false);
+  // V5: show success modal after a successful plant
+  const [successType, setSuccessType] = useState<MarkerType | null>(null);
+  // R-round B1 fix: hold the dismiss timer so it can be cleared on
+  // unmount. Without this, an iOS suspension or fast nav.goBack causes
+  // the timer to fire on a stale nav ref and pop the wrong screen.
+  const successDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (successDismissTimer.current) clearTimeout(successDismissTimer.current);
+  }, []);
 
   /**
    * K3 fix (v0.2.6.3): on mount, hydrate any failed-plant draft from
@@ -155,7 +166,15 @@ export function PlantScreen() {
           const { storage } = await import('../store/storage');
           await storage.removeItem(draftKey(userId));
         } catch { /* best-effort */ }
-        nav.goBack();
+        // V5: show a success modal — auto-dismisses to the home screen.
+        setSubmitting(false);
+        setSuccessType(final.type ?? 'cairn');
+        if (successDismissTimer.current) clearTimeout(successDismissTimer.current);
+        successDismissTimer.current = setTimeout(() => {
+          successDismissTimer.current = null;
+          if (nav.canGoBack()) nav.goBack();
+        }, 1600);
+        return;
       } catch (e: any) {
         log('plant.commit_failed', { msg: String(e?.message ?? e).slice(0, 200) });
         // Stay on the content step so the user can retry without
@@ -178,6 +197,7 @@ export function PlantScreen() {
   );
 
   const onContentSubmit = (payload: {
+    type: MarkerType;
     title: string;
     text: string;
     visibility: MarkerPermission;
@@ -220,12 +240,37 @@ export function PlantScreen() {
             initialTitle={draft.title}
             initialText={draft.text}
             initialVisibility={draft.visibility}
+            initialType={draft.type}
             submitting={submitting}
             onSubmit={onContentSubmit}
             onBack={() => setStep('pin')}
           />
         )}
       </View>
+
+      {/* V5: success modal — auto-dismisses to home after 1.6s. */}
+      <Modal visible={successType != null} transparent animationType="fade">
+        <View style={styles.successBackdrop}>
+          <View style={styles.successCard}>
+            <View style={[styles.successIconWrap, {
+              backgroundColor: successType ? MARKER_TYPES[successType].bg : MemoryColors.cream,
+            }]}>
+              {successType && (
+                <Icon
+                  name={MARKER_TYPES[successType].icon as any}
+                  size={28}
+                  color={MARKER_TYPES[successType].color}
+                  strokeWidth={2.2}
+                />
+              )}
+            </View>
+            <Text style={styles.successTitle}>Cairn planted</Text>
+            <Text style={styles.successSub}>
+              {successType ? MARKER_TYPES[successType].label : 'Cairn'} · Saved to your Memory
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -233,4 +278,26 @@ export function PlantScreen() {
 const styles = StyleSheet.create({
   root:      { flex: 1, backgroundColor: MemoryColors.cream },
   container: { flex: 1, padding: 20 },
+  successBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(20,20,20,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  successCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    width: '85%',
+    maxWidth: 320,
+  },
+  successIconWrap: {
+    width: 60, height: 60, borderRadius: 30,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 12,
+  },
+  successTitle: { fontSize: 17, fontWeight: '600', color: MemoryColors.sepiaDeep },
+  successSub:   { fontSize: 12, color: MemoryColors.cairnPublic, marginTop: 6, textAlign: 'center' },
 });

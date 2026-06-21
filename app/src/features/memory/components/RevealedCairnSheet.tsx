@@ -127,7 +127,7 @@ function ActionBtn({ label, onPress }: { label: string; onPress?: () => void }) 
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(20,20,20,0.45)',
+    backgroundColor: 'rgba(20,20,20,0.25)',
     justifyContent: 'flex-end',
   },
   sheet: {
