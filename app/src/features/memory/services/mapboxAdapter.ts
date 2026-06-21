@@ -25,7 +25,21 @@ let cached: MapboxAdapter | null = null;
 export function getMapbox(): MapboxAdapter {
   if (cached) return cached;
   if (Platform.OS === 'web') {
-    cached = makeUnavailable();
+    // R-round Phase 2: on web, use the react-map-gl shim so Playwright
+    // can drive a real Mapbox render. Falls back to unavailable if the
+    // shim module can't load (e.g. in jsdom-based unit tests).
+    try {
+      // Metro resolves `mapboxAdapter.web` to mapboxAdapter.web.tsx on
+      // web target; we add the explicit '.web' extension so node-side
+      // jest does NOT accidentally try to load it.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const shim = require('./mapboxAdapter.web.tsx');
+      cached = shim.makeWebMapboxAdapter();
+      console.log('[mapboxAdapter] web shim loaded', { available: cached?.available });
+    } catch (e) {
+      console.warn('[mapboxAdapter] web shim load failed', e);
+      cached = makeUnavailable();
+    }
     return cached;
   }
   try {

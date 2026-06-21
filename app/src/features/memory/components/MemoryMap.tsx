@@ -34,7 +34,7 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0 }: Props) {
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
 
-  if (!Mapbox.available || Platform.OS === 'web') {
+  if (!Mapbox.available) {
     return <View style={styles.webStub} />;
   }
 

@@ -174,7 +174,7 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
     }
   };
 
-  if (!Mapbox.available || Platform.OS === 'web') {
+  if (!Mapbox.available) {
     return <PinAdjustFallback lat={lat} lng={lng} accuracyM={accuracyM}
                               onConfirm={() => onConfirm(pinLat, pinLng)}
                               onBack={onBack} />;
