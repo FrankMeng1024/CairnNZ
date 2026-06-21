@@ -70,6 +70,44 @@ export const MysteryVisibilityConfig = {
   mysteryMaxDistanceMeters: 5000,
 } as const;
 
+/**
+ * Fog rendering tuning. Lives next to UnlockConfig because the two are
+ * intimately tied (hole radius = unlock radius), but separated so the
+ * VISUAL aspects (vertex count, padding, cull tightness) can be tweaked
+ * without touching the SEMANTIC unlock policy (radius, accuracy gate).
+ */
+export const FogConfig = {
+  /** Polygon vertex count per circular hole. Higher = smoother edges. */
+  circleVertices: 32,
+  /**
+   * Cull-threshold multiplier: when two visited points are closer than
+   * `radiusMeters * cullThresholdFactor` we drop the second one — the
+   * first point's hole already covers it. 0.5 = keep ~50% overlap for
+   * smooth boundaries between adjacent circles.
+   */
+  cullThresholdFactor: 0.5,
+  /**
+   * Outer-ring padding multiplier. The fog outer ring is built from the
+   * map's visible bounds expanded by this factor on each side.
+   *
+   * IMPORTANT: mapbox-gl-js silently SKIPS rendering polygons whose
+   * vertices project too far outside the viewport (~8000+ pixels). A
+   * naive "huge polygon" approach (e.g. world bounds, or 5x viewport)
+   * causes the fog to never paint. 0.5x keeps corners within ~640
+   * pixels of the screen edge — covers small pans, stays renderable.
+   *
+   * Verified via Playwright web spike: pad=5 silently fails, pad=0.5
+   * works. Re-verify on native if changing.
+   */
+  outerRingPadFactor: 0.5,
+  /**
+   * Debounce window (ms) between map-pan-triggered fog rebuilds. We do
+   * NOT rebuild on every frame — only after the camera idles. Helps
+   * keep main-thread JS work bounded.
+   */
+  rebuildDebounceMs: 150,
+} as const;
+
 // ── Visual tokens (sepia / Topo50 palette) ─────────────────────────────
 export const MemoryColors = {
   cream: '#f7f2e5',

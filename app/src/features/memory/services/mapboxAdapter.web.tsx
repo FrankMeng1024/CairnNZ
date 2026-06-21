@@ -38,7 +38,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { Map as MapGL, Source, Layer, Marker, useMap } from 'react-map-gl/mapbox';
+import { Map as MapGL, Source, Layer, Marker } from 'react-map-gl/mapbox';
 import type { MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -89,9 +89,23 @@ export function MapView({ style, styleURL, onMapIdle, children }: MapViewProps) 
 
   return (
     <MapInstanceContext.Provider value={mapRef}>
-      <div style={style ?? { flex: 1, position: 'relative', minHeight: 200 }}>
+      <div style={{
+        ...(style ?? {}),
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        width: '100%', height: '100%',
+        minHeight: 200,
+      }}>
         <MapGL
-          ref={(r) => { mapRef.current = r; }}
+          ref={(r) => {
+            mapRef.current = r;
+            // Expose underlying mapbox-gl Map on `window.__cairnMap` for
+            // Playwright introspection (see feedback_playwright_before_realdevice.md).
+            // No-op for end users — there is no UI that depends on it.
+            if (typeof window !== 'undefined' && r) {
+              (window as any).__cairnMap = r.getMap?.() ?? r;
+            }
+          }}
           mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
           mapStyle={styleUrl}
           initialViewState={
@@ -149,8 +163,15 @@ interface ShapeSourceProps {
 }
 
 export function ShapeSource({ id, shape, children }: ShapeSourceProps) {
-  // Children are FillLayer/LineLayer with id + style. Forward source id
-  // so they can register against this Source.
+  // react-map-gl handles `data` prop diffing internally and calls
+  // mapbox-gl's source.setData when the prop changes. We do NOT manually
+  // call setData here — doing so causes the source to enter a permanent
+  // 'reloading' tile state when the polygon is large (e.g. 571-hole fog),
+  // because every render creates a new shape reference, which kicks
+  // a fresh worker pass before the previous one finishes.
+  //
+  // Upstream consumers (FogLayer) should memoize `shape` so this prop
+  // is referentially stable when geometry hasn't actually changed.
   const enriched = React.Children.map(children, (child) => {
     if (!React.isValidElement(child)) return child;
     return React.cloneElement(child as any, { __sourceId: id });

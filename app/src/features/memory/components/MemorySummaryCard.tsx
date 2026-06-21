@@ -126,8 +126,11 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
   },
-  statsRow: { flexDirection: 'row', gap: 18 },
-  stat: { flex: 0 },
+  statsRow: { flexDirection: 'row', gap: 18, flexWrap: 'wrap' },
+  // flex: 0 on RN-web compiled to flex-shrink:1 which let the Text node
+  // collapse to width 0 → "571" rendered as one digit per row. minWidth
+  // guarantees each stat block reserves enough room for its content.
+  stat: { flex: 0, minWidth: 80 },
   statValue: {
     fontSize: 18,
     fontWeight: '500',

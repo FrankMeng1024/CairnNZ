@@ -1,37 +1,67 @@
 /**
- * FogLayer — single FillLayer that draws fog except 25m circles around
- * each visited GPS point.
+ * FogLayer — Fill layer that renders the sepia fog overlay with a hole
+ * for every visited GPS point.
  *
- * v0.2.6.3 (K5 fix): memoized on `geometryVersion` from the store,
- * NOT on the points array reference. markPointsSyncedByCid mutates
- * the array reference but does not bump geometryVersion — fog is
- * not rebuilt on sync flag flips. This is the perf fix called out
- * by reviewer A.
+ * The fog is driven by TWO inputs:
+ *   1. The store's geometryVersion — bumps when visited points change.
+ *   2. The map's current viewport bounds — drives the outer-ring size.
  *
- * The component subscribes to geometryVersion via a Zustand selector
- * (which triggers re-render on bump), and reads `points` via
- * getState() inside the memo factory (one-shot snapshot — no double
- * subscription).
+ * Both must be inputs because (per N5 root-cause work) mapbox-gl-js
+ * cannot render a polygon whose outer ring spans the world; it must
+ * be sized relative to the visible viewport.
+ *
+ * Performance:
+ *   - geometryVersion subscription triggers a re-render only when
+ *     points actually change.
+ *   - Viewport bound changes are debounced via FogConfig.rebuildDebounceMs
+ *     so a fast pan/zoom doesn't rebuild the polygon every frame.
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { getMapbox } from '../services/mapboxAdapter';
-import { buildFogPolygon } from '../services/fogBuilder';
-import { MemoryColors } from '../config/memoryConfig';
+import { buildFogPolygon, FogBounds } from '../services/fogBuilder';
+import { MemoryColors, FogConfig } from '../config/memoryConfig';
+import { log } from '../../../services/appLog';
 
-export function FogLayer() {
+interface Props {
+  /** Current map viewport bounds. Driven by parent MapView. */
+  bounds: FogBounds | null;
+}
+
+export function FogLayer({ bounds }: Props) {
   const Mapbox = getMapbox();
-  // Subscribe to geometryVersion ONLY — triggers re-render when geometry
-  // changes (recordPoint / replacePoints / clearAll). Synced-flag flips
-  // do NOT bump this counter (per K5 plan).
   const geometryVersion = useMemoryStore((s) => s.geometryVersion);
-  const fogShape = useMemo(
-    () => buildFogPolygon(useMemoryStore.getState().points),
-    [geometryVersion]
-  );
 
-  if (!Mapbox.available) return null;
+  // Debounce bounds changes so we don't rebuild on every pan frame.
+  const [debouncedBounds, setDebouncedBounds] = useState<FogBounds | null>(bounds);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!bounds) return;
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedBounds(bounds);
+    }, FogConfig.rebuildDebounceMs);
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [bounds]);
+
+  const fogShape = useMemo(() => {
+    if (!debouncedBounds) return null;
+    const points = useMemoryStore.getState().points;
+    const shape = buildFogPolygon(points, debouncedBounds);
+    log('memory.fog_built', {
+      version: geometryVersion,
+      input_points: points.length,
+      ring_count: shape.geometry.coordinates.length,
+      bounds_w: debouncedBounds.west.toFixed(4),
+      bounds_e: debouncedBounds.east.toFixed(4),
+    });
+    return shape;
+  }, [geometryVersion, debouncedBounds]);
+
+  if (!Mapbox.available || !fogShape) return null;
   const { ShapeSource, FillLayer } = Mapbox;
 
   return (

@@ -1,75 +1,57 @@
 /**
  * fogBuilder — produce GeoJSON for the fog overlay.
  *
- * v0.2.6.1 (this rewrite): the fog is now built from a sequence of GPS
- * POINTS, not from rectangular Web Mercator tiles. Each point becomes a
- * `unlockRadiusMeters` circle (default 25m) rendered as a 32-vertex
- * polygon hole in the global outer ring. Mapbox draws polygon-with-
- * many-holes natively, so overlapping circles visually merge into a
- * smooth, organic explored area — exactly what the user asked for
- * (a "circle around me" model, not a square tile grid).
+ * Architecture:
+ *   The fog is a single Feature<Polygon> with:
+ *     coordinates[0] = outer ring (the fog area) — VIEWPORT-RELATIVE, NOT
+ *                      a world-spanning constant. mapbox-gl-js v2 silently
+ *                      culls Polygons with huge -180..180 outer rings;
+ *                      using a viewport-padded box keeps the polygon at a
+ *                      tile-friendly size on every zoom level.
+ *     coordinates[1..N] = one inner ring (hole) per visited GPS point.
  *
- * Why no turf.js union: a real polygon-union per render is O(N²) for
- * N circles (eats CPU on long hikes). Letting Mapbox's renderer handle
- * the visual overlap is correct AND fast — same trick that Strava and
- * other GPS apps use for their heatmaps.
+ *   Each inner ring is a `unlockRadiusMeters` circle (default 25m)
+ *   approximated as `FogConfig.circleVertices` polygon vertices. Mapbox
+ *   renders polygon-with-holes natively, so overlapping circles visually
+ *   merge into a smooth, organic explored area.
  *
- * Output:
- *   Feature<Polygon>
- *     coordinates[0] = world outer ring (clockwise)
- *     coordinates[1..N] = one inner ring per visited point (CCW)
+ * History — why viewport bounds:
+ *   v0.2.6.1 originally used a hard-coded WORLD_OUTER_RING
+ *   ([-180..180, -85..85]). This worked on native @rnmapbox/maps but the
+ *   web mapbox-gl renderer silently dropped the polygon because the
+ *   outer ring exceeds tile-clipping thresholds. Result was a blank map
+ *   (no fog, but ALSO no holes — every "hole" got re-classified as a
+ *   filled disc by some renderers) — that was the v291 "fog donut" bug
+ *   the user reported.
+ *
+ * Why no turf.union of the inner circles:
+ *   A real polygon-union per render is O(N²) for N circles (eats CPU on
+ *   long hikes with thousands of points). Letting Mapbox's renderer
+ *   handle the visual overlap is correct AND fast — same approach used
+ *   by Strava heatmaps. If we ever need pixel-perfect smooth boundaries
+ *   we can pre-union at recordCircleUnlock time.
+ *
+ * Output: see `FogFeature` below.
  */
 
-import { UnlockConfig } from '../config/memoryConfig';
+import { UnlockConfig, FogConfig } from '../config/memoryConfig';
 import { VisitedPoint } from '../store/useMemoryStore';
 
-const WORLD_OUTER_RING: number[][] = [
-  [-180,  85.05],
-  [ 180,  85.05],
-  [ 180, -85.05],
-  [-180, -85.05],
-  [-180,  85.05],
-];
-
-const CIRCLE_VERTICES = 32;
-const EARTH_RADIUS_M = 6_378_137;
-
 /**
- * Build a 32-vertex closed counter-clockwise ring approximating a
- * circle of `radiusM` meters around (centerLat, centerLng).
- *
- * Uses the equirectangular approximation: at the radii we deal with
- * (≤ 50m for unlocks) the deviation from a true geodesic circle is
- * sub-pixel at city zooms.
+ * Geographic bounds rectangle. Matches mapbox-gl's LngLatBounds shape
+ * (sw, ne corners). The fog outer ring is built from these corners
+ * plus a padding multiplier so a small pan doesn't reveal un-fogged
+ * edges before the source re-renders.
  */
-function makeCircleRing(centerLat: number, centerLng: number, radiusM: number): number[][] {
-  const safeLat = Math.max(-85.05, Math.min(85.05, centerLat));
-  const cosLat = Math.max(Math.cos((safeLat * Math.PI) / 180), 1e-6);
-  const dLatPerM = 1 / (EARTH_RADIUS_M * Math.PI / 180);
-  const dLngPerM = dLatPerM / cosLat;
-
-  const ring: number[][] = [];
-  for (let i = 0; i < CIRCLE_VERTICES; i++) {
-    // R-round N1 fix: inner rings (holes) must be COUNTER-clockwise per
-    // GeoJSON spec (RFC 7946). The previous `-2 * PI * (i/N)` walked
-    // vertices clockwise — same winding as the outer world ring → Mapbox
-    // treated each "hole" as an additional filled polygon. With one or
-    // two points the visual difference was invisible (the small circle
-    // just painted over the same area twice). With v291's hex-tiled
-    // initial reveal emitting ~567 points, every one rendered as a
-    // FILLED 25m fog disc → the user saw a screen full of fog "donuts".
-    //
-    // Counter-clockwise: +2 * PI * (i/N).
-    const theta = 2 * Math.PI * (i / CIRCLE_VERTICES);
-    const dx = radiusM * Math.cos(theta);
-    const dy = radiusM * Math.sin(theta);
-    ring.push([
-      centerLng + dx * dLngPerM,
-      safeLat + dy * dLatPerM,
-    ]);
-  }
-  ring.push([...ring[0]]);
-  return ring;
+export interface FogBounds {
+  /** Western lng (minimum) */
+  west: number;
+  /** Eastern lng (maximum) */
+  east: number;
+  /** Northern lat (maximum) */
+  north: number;
+  /** Southern lat (minimum) */
+  south: number;
 }
 
 export interface FogFeature {
@@ -81,18 +63,87 @@ export interface FogFeature {
   properties: Record<string, unknown>;
 }
 
+const EARTH_RADIUS_M = 6_378_137;
+
 /**
- * Build the fog polygon from an array of visited GPS points. Each
- * point gets a `unlockRadiusMeters` circle hole.
+ * Build a closed clockwise ring approximating a circle of
+ * `radiusM` meters around (centerLat, centerLng). Vertex count comes
+ * from `FogConfig.circleVertices` so it's tunable, not hard-coded.
  *
- * For dense paths we cull neighbours within `cullThresholdM` meters —
- * adjacent circles already overlap so additional rings cost geometry
- * without adding visual area. Cull threshold defaults to half the
- * unlock radius so ~50% overlap is preserved for a smooth boundary.
+ * Uses the equirectangular approximation: at the radii we deal with
+ * (≤ 50m for unlocks) the deviation from a true geodesic circle is
+ * sub-pixel at city zooms.
+ *
+ * Winding rule per GeoJSON RFC 7946 §3.1.6: in a Polygon, the OUTER
+ * ring is counter-clockwise and inner rings (holes) follow the
+ * OPPOSITE winding. Our outer is CW (see makeOuterRing), so holes
+ * are CCW. We achieve that with a negative theta increment.
+ *
+ * Why this matters in practice: mapbox-gl-js v2 + earcut respect
+ * winding for hole detection. If both rings wind the same way, the
+ * "hole" gets re-classified as a second filled polygon and stamps
+ * an EXTRA sepia disc on top instead of cutting through — that was
+ * the "leaf" appearance the user saw in the first N5 verification pass.
  */
-export function buildFogPolygon(points: VisitedPoint[]): FogFeature {
+function makeCircleRing(centerLat: number, centerLng: number, radiusM: number): number[][] {
+  const safeLat = Math.max(-85.05, Math.min(85.05, centerLat));
+  const cosLat = Math.max(Math.cos((safeLat * Math.PI) / 180), 1e-6);
+  const dLatPerM = 1 / (EARTH_RADIUS_M * Math.PI / 180);
+  const dLngPerM = dLatPerM / cosLat;
+
+  const verts = FogConfig.circleVertices;
+  const ring: number[][] = [];
+  for (let i = 0; i < verts; i++) {
+    // Counter-clockwise: positive theta with mathematical convention
+    // where y axis points north → CCW in lng/lat plane.
+    const theta = (2 * Math.PI * i) / verts;
+    const dx = radiusM * Math.cos(theta);
+    const dy = radiusM * Math.sin(theta);
+    ring.push([
+      centerLng + dx * dLngPerM,
+      safeLat + dy * dLatPerM,
+    ]);
+  }
+  ring.push([...ring[0]]);
+  return ring;
+}
+
+/**
+ * Build the outer fog ring as a viewport-bounded box, padded to keep
+ * the user from seeing un-fogged map edges during a small pan before
+ * the source re-renders.
+ *
+ * Clockwise winding when read in lng/lat. The hole rings (above) wind
+ * opposite — CCW — which mapbox-gl-js interprets as cut-outs.
+ */
+function makeOuterRing(bounds: FogBounds): number[][] {
+  const padX = (bounds.east - bounds.west) * FogConfig.outerRingPadFactor;
+  const padY = (bounds.north - bounds.south) * FogConfig.outerRingPadFactor;
+  const w = bounds.west - padX;
+  const e = bounds.east + padX;
+  const n = Math.min(85.05, bounds.north + padY);
+  const s = Math.max(-85.05, bounds.south - padY);
+  // CW (when y is up): NW → NE → SE → SW → NW.
+  return [
+    [w, n],
+    [e, n],
+    [e, s],
+    [w, s],
+    [w, n],
+  ];
+}
+
+/**
+ * Build the fog Feature<Polygon>.
+ *
+ * @param points  Visited GPS points (each becomes a hole)
+ * @param bounds  Map viewport bounds (drives outer-ring size)
+ * @returns Feature whose first coordinates ring is the fog area and
+ *          rings 1..N are circular holes at each visited point.
+ */
+export function buildFogPolygon(points: VisitedPoint[], bounds: FogBounds): FogFeature {
   const radius = UnlockConfig.radiusMeters;
-  const cullThresholdM = radius * 0.5;
+  const cullThresholdM = radius * FogConfig.cullThresholdFactor;
   const cullThresholdSq = cullThresholdM * cullThresholdM;
 
   const kept: VisitedPoint[] = [];
@@ -111,7 +162,7 @@ export function buildFogPolygon(points: VisitedPoint[]): FogFeature {
     if (!skip) kept.push(p);
   }
 
-  const coordinates: number[][][] = [WORLD_OUTER_RING];
+  const coordinates: number[][][] = [makeOuterRing(bounds)];
   for (const p of kept) {
     coordinates.push(makeCircleRing(p.lat, p.lng, radius));
   }
