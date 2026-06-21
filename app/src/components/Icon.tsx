@@ -34,6 +34,8 @@ import {
   Pause, Pencil, Undo2, TrendingUp, Phone, Signal, MessageCircle,
   // Sprint 54
   Search, Plus, Edit3,
+  // v297 — pin-adjust zoom buttons
+  Minus,
   // Sprint 56 — activity icons
   Footprints, SportShoe,
   // Sprint 57 — routes screen
@@ -65,6 +67,7 @@ const ICON_MAP = {
   PlayCircle,
   Pause, Pencil, Undo2, TrendingUp, Phone, Signal, MessageCircle,
   Search, Plus, Edit3,
+  Minus,
   Footprints, SportShoe,
   Milestone, Calendar,
   Mic,

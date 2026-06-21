@@ -1,19 +1,31 @@
 /**
  * PinAdjustStep — Step 2 of plant flow.
  *
- * v0.2.6.6 (V1+V2):
- *   Drag UX rewritten to Didi/Uber style: the pin is FIXED at screen
- *   center; the user pans the MAP under it. This is dramatically
- *   smoother than PointAnnotation drag (no per-finger event lag, no
- *   pin jumping back, no SDK-version event-shape mismatch).
+ * v0.2.6.7 (v297) — true root-cause fix:
+ *   Two-subagent investigation confirmed Mapbox iOS native SDK pinch
+ *   zoom anchor is hardcoded = pinch midpoint. No public API can
+ *   change it to screen-center. gestureSettings.pinchPanEnabled only
+ *   disables the PAN component of a pinch, NOT the zoom anchor.
+ *   v296's "post-settle setCamera recenter" couldn't prevent the
+ *   visible drift DURING the gesture (onMapIdle only fires AFTER
+ *   the user lifts fingers).
  *
- *   We subscribe to Camera regionDidChange and compute the new
- *   pin coords from the map's center coord. As the user drags the
- *   map, we update pinLat/pinLng in real time. The accuracy + max-
- *   nudge circles still render anchored to the original GPS spot.
+ *   Fix: completely disable all native zoom gestures (pinch, double-
+ *   tap, quick-zoom) and add explicit +/- buttons. The +/- buttons
+ *   call setCamera with centerCoordinate locked to current pin GPS
+ *   coord, so zoom is PHYSICALLY incapable of drifting. This is the
+ *   same UX Didi/Uber use on their pin-adjust screens.
  *
- *   When the user drags the map past the max-nudge boundary, we show
- *   a hint banner explaining why the pin can't move farther.
+ *   Side-effect: onMapSettle is now always a pan event (no zoom can
+ *   be triggered without the +/- buttons, which use setCamera that
+ *   bypasses the gesture system). The zoom-branch early-return that
+ *   was masking pinLat/pinLng updates is gone — so the >50m hint and
+ *   the disabled-button gate now fire reliably.
+ *
+ * Previous (v0.2.6.6 V1+V2): Drag UX rewritten to Didi/Uber style:
+ * the pin is FIXED at screen center; the user pans the MAP under it.
+ * accuracy + max-nudge circles render anchored to the original GPS
+ * spot. Drag past the max-nudge boundary shows a hint banner.
  *
  * Style toggle (top-right): outdoors ↔ satellite, with first-time
  * mobile-data warning.
@@ -40,6 +52,13 @@ interface Props {
 
 const SATELLITE_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12';
 
+// Zoom range — same physical bounds as v296. Below 14 the 50m ring
+// collapses to a few px; above 20 mapbox runs out of tile data.
+const MIN_ZOOM = 14;
+const MAX_ZOOM = 20;
+const INITIAL_ZOOM = 17.5;
+const ZOOM_STEP = 1;
+
 function makeCircleGeoJson(lat: number, lng: number, radiusM: number): any {
   const points: [number, number][] = [];
   const earthRad = 6378137;
@@ -61,28 +80,36 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
   const Mapbox = getMapbox();
   const [pinLat, setPinLat] = useState(lat);
   const [pinLng, setPinLng] = useState(lng);
+  const [zoom, setZoom] = useState(INITIAL_ZOOM);
   const [hintVisible, setHintVisible] = useState(false);
   const originRef = useRef({ lat, lng });
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapStyle, setMapStyle] = useState<'outdoors' | 'satellite'>('outdoors');
   const [satelliteWarned, setSatelliteWarned] = useState(false);
-  // Camera ref — needed for two reasons:
-  //   1. Zoom-with-pin-as-anchor: when user pinches to zoom, mapbox
-  //      anchors at the pinch focus (often off-center). We re-center
-  //      the camera on the pin AFTER each zoom settle so the pin
-  //      stays at the GPS coord under the screen-center marker.
-  //   2. Clamp-back: when user pans past the 50m max-nudge ring,
-  //      we both set pinLat/pinLng to the clamped coord AND call
-  //      cameraRef.setCamera() so the map visibly snaps back to
-  //      the boundary — without this the map stays at the user's
-  //      pan position and pinLat/pinLng silently diverge from
-  //      what the user sees.
+  // Camera ref — used by the +/- zoom buttons to set both
+  // centerCoordinate (locked to current pin) and zoomLevel in one
+  // atomic call. Because we disable all native zoom gestures below,
+  // setCamera is the ONLY path that changes zoom. Map cannot drift.
   const cameraRef = useRef<any>(null);
-  const lastSettleRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null);
-  // Suppress one onMapSettle after a programmatic setCamera (clamp /
-  // re-center). Otherwise we'd ping-pong: settle → clamp → setCamera
-  // → settle → clamp again.
-  const suppressNextSettleRef = useRef(false);
+  // v297 subagent-review fixes:
+  //   B1/C2: replace boolean "next-settle suppress" with an expected
+  //     center match. setCamera's 180ms ease can produce >1 onMapIdle
+  //     events; a boolean only swallows the first, leaking later ones.
+  //     We now only skip the settle handler if the settled center is
+  //     within ~1m of the expected post-setCamera center.
+  //   B2: the confirm-tap handler used React state pinLat/pinLng,
+  //     which lags onMapIdle by up to ~120ms on native (touch-end →
+  //     bridge → JS render). User could pan past 50m and tap "Looks
+  //     right" inside that window before the gate disabled itself.
+  //     latestCoordRef is updated on every onCameraChanged event
+  //     (continuous during pan, not just on settle) — confirm-tap
+  //     reads it instead of state for the source-of-truth coord.
+  //   C3: doZoom now reads latestZoomRef instead of stale closure
+  //     `zoom` state — rapid double-tap +/- advances zoom by the
+  //     correct delta even if React state hasn't committed yet.
+  const expectedCenterRef = useRef<[number, number] | null>(null);
+  const latestCoordRef = useRef<{ lat: number; lng: number }>({ lat, lng });
+  const latestZoomRef = useRef<number>(INITIAL_ZOOM);
 
   const onToggleStyle = () => {
     if (mapStyle === 'outdoors') {
@@ -121,8 +148,8 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
     []
   );
 
-  // V2: show a hint banner when the user pushes past the boundary;
-  // hide it 2 s after they stop pushing.
+  // Show a hint banner when the user pushes past the boundary;
+  // hide it 2.5s after they stop pushing.
   const briefHint = () => {
     setHintVisible(true);
     if (hintTimer.current) clearTimeout(hintTimer.current);
@@ -134,71 +161,56 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
   }, []);
 
   /**
-   * V1+R-round B7: onMapIdle fires AFTER pan/zoom settles (NOT during
-   * pan like onCameraChanged would). This is the correct event for a
-   * "drop pin where map stops" UX — high-frequency continuous events
-   * caused setState jitter at ~30-60Hz on lower-end devices.
+   * onCameraChanged fires high-frequency (every frame during pan).
+   * We use it ONLY to update refs (no setState → no React render
+   * storm). The refs are read by the confirm-tap handler so it
+   * sees the true current map center even during the touch-end →
+   * onMapIdle latency window (subagent review B2).
    *
-   * @rnmapbox/maps v10 onMapIdle payload is a MapState whose center
-   * lives at `properties.center` (NOT geometry.coordinates — that field
-   * is undefined on MapState; previous fallback masked the wrong
-   * contract).
+   * For UI updates (hint banner, button gate visual state) we still
+   * use the lower-frequency onMapIdle settle event below.
+   */
+  const onCameraTick = (feature: any) => {
+    const coord = feature?.properties?.center;
+    if (!Array.isArray(coord) || coord.length < 2) return;
+    latestCoordRef.current = { lng: coord[0], lat: coord[1] };
+    const z = feature?.properties?.zoom;
+    if (typeof z === 'number') latestZoomRef.current = z;
+  };
+
+  /**
+   * onMapIdle fires AFTER pan settles. With native zoom gestures
+   * fully disabled (gestureSettings below), the only way the map
+   * center moves is the user dragging it (pan). So every settle is
+   * a pan event — no need for a zoom branch.
+   *
+   * The +/- buttons trigger a setCamera that also fires mapIdle.
+   * Instead of a boolean suppress (which only swallows ONE idle —
+   * see B1), we compare the settled center to the expected post-
+   * setCamera center. Only events whose center matches expected
+   * within ~1m are dropped; subsequent real pans pass through.
    */
   const onMapSettle = (feature: any) => {
-    // Drop the settle that immediately follows a programmatic
-    // setCamera (zoom re-center). Otherwise we double-process the
-    // same camera state and risk ping-pong.
-    if (suppressNextSettleRef.current) {
-      suppressNextSettleRef.current = false;
-      return;
-    }
     const coord = feature?.properties?.center;
     if (!Array.isArray(coord) || coord.length < 2) return;
     const newLng = coord[0];
     const newLat = coord[1];
-    const newZoom = feature?.properties?.zoom ?? 0;
 
-    // First-settle baseline (see prior v294 fix).
-    const prev = lastSettleRef.current;
-    if (!prev) {
-      lastSettleRef.current = {
-        lat: originRef.current.lat,
-        lng: originRef.current.lng,
-        zoom: newZoom,
-      };
-      return;
-    }
-
-    const dZoom = Math.abs(newZoom - prev.zoom);
-
-    // ── Zoom event ──────────────────────────────────────────────
-    // User feedback (原话): "zoom 的时候不要变 以他为中心的放大缩
-    // 小地图". When the user pinches to zoom, Mapbox anchors at the
-    // pinch focus, not screen-center — the pin (a screen-center
-    // marker) appears to slide off its GPS coord. We compensate by
-    // re-centering the camera on the PRIOR pin position after the
-    // zoom settles. Pin GPS coord stays put; only zoom level changes.
-    if (dZoom > 0.05) {
-      lastSettleRef.current = { lat: prev.lat, lng: prev.lng, zoom: newZoom };
-      if (cameraRef.current && cameraRef.current.setCamera) {
-        suppressNextSettleRef.current = true;
-        cameraRef.current.setCamera({
-          centerCoordinate: [prev.lng, prev.lat],
-          zoomLevel: newZoom,
-          animationDuration: 0,
-        });
+    // Suppress only events that match the expected post-setCamera
+    // center. Once matched, clear the expectation. A subsequent
+    // pan to a different center will not match → processes normally.
+    const expected = expectedCenterRef.current;
+    if (expected) {
+      const dExp = haversineM(
+        { lat: expected[1], lng: expected[0] },
+        { lat: newLat, lng: newLng }
+      );
+      if (dExp < 1.0) {
+        expectedCenterRef.current = null;
+        return;
       }
-      return;
     }
 
-    // ── Pan event ───────────────────────────────────────────────
-    // User dragged the map. pin follows the map center.
-    //
-    // User feedback (原话): "移出圈的一刹那就提示报错 不需要弹回".
-    // We do NOT clamp the camera back. Pin tracks the finger; if
-    // distM > 50m we show the hint banner and grey out the Looks
-    // right button (handled below via pinDistFromOrigin gate).
-    lastSettleRef.current = { lat: newLat, lng: newLng, zoom: newZoom };
     setPinLat(newLat);
     setPinLng(newLng);
     const dist = haversineM(
@@ -209,6 +221,28 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
       briefHint();
       log('plant.pin_out_of_range', { distM: Math.round(dist) });
     }
+  };
+
+  // +/- zoom buttons. setCamera with centerCoordinate=[latest pin coord]
+  // explicitly locks the map center on the pin's current GPS coord,
+  // so the visible map cannot drift during the zoom animation. We
+  // read latestZoomRef (not React state) so rapid taps within the
+  // same render frame advance zoom correctly (C3 fix).
+  const doZoom = (delta: number) => {
+    const currentZoom = latestZoomRef.current;
+    const target = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom + delta));
+    if (Math.abs(target - currentZoom) < 0.01) return;
+    const lng = latestCoordRef.current.lng;
+    const latC = latestCoordRef.current.lat;
+    latestZoomRef.current = target;  // keep ref in sync immediately
+    setZoom(target);                 // and update UI state for button disabled
+    expectedCenterRef.current = [lng, latC];
+    cameraRef.current?.setCamera?.({
+      centerCoordinate: [lng, latC],
+      zoomLevel: target,
+      animationDuration: 180,
+    });
+    log('plant.pin_zoom', { zoom: target });
   };
 
   if (!Mapbox.available) {
@@ -222,7 +256,7 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
     <View style={styles.container}>
       <Text style={styles.title}>You are here?</Text>
       <Text style={styles.sub}>
-        Drag the map to fine-tune. The pin marks where your cairn will be planted.
+        Drag the map to fine-tune. Use + / − to zoom.
       </Text>
 
       <View style={styles.mapWrap}>
@@ -233,38 +267,31 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
           scaleBarEnabled={false}
           attributionEnabled={false}
           logoEnabled={false}
-          // Zoom / pan mutual exclusion on native iOS:
-          // gestureSettings.pinchPanEnabled=false stops the two-finger
-          // pinch gesture from ALSO translating the map center
-          // (subagent A Q2 — node_modules/@rnmapbox/maps/src/components/
-          // MapView.tsx:77-80 + ios/RNMBX/RNMBXMapView.swift:598-599).
-          // Combined with the onMapSettle zoom-branch recenter, this
-          // prevents the "一边 zoom 一边滑动" user complaint.
+          // v297: disable ALL native zoom gestures. The +/- buttons
+          // are the only zoom path, and they call setCamera with an
+          // explicit centerCoordinate locked to the current pin —
+          // so zoom physically cannot drift. (See file-level doc.)
           gestureSettings={{
+            pinchZoomEnabled: false,
             pinchPanEnabled: false,
             rotateEnabled: false,
             pitchEnabled: false,
+            quickZoomEnabled: false,
+            doubleTapToZoomInEnabled: false,
+            doubleTouchToZoomOutEnabled: false,
+            panEnabled: true,
           }}
           onMapIdle={onMapSettle}
+          onCameraChanged={onCameraTick}
         >
           <Camera
             ref={cameraRef}
             defaultSettings={{
               centerCoordinate: [originRef.current.lng, originRef.current.lat],
-              // R-round N3 fix: zoom 18 made the 50m max-nudge ring extend
-              // off the map preview (user couldn't see the boundary).
-              // At zoom 17.5, ground resolution at lat≈-41° (NZ) is
-              // ~0.6 m/px → 100m diameter ring ≈ 165px, comfortable on
-              // a 340px-tall map frame.
-              zoomLevel: 17.5,
+              zoomLevel: INITIAL_ZOOM,
             }}
-            // Zoom range limits. Below 14 you can no longer see the 50m
-            // ring (the entire pin-adjust target collapses to a few px);
-            // above 20 mapbox runs out of tiles. User feedback: "zoom
-            // 也不能 zoom 太多 因为没意义". 14 lets you see the
-            // surrounding block for context, 20 lets you pick a doorway.
-            minZoomLevel={14}
-            maxZoomLevel={20}
+            minZoomLevel={MIN_ZOOM}
+            maxZoomLevel={MAX_ZOOM}
           />
           <ShapeSource id="acc-src" shape={accuracyCircle}>
             <FillLayer
@@ -289,7 +316,7 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
           </ShapeSource>
         </MapView>
 
-        {/* V1: pin is fixed at screen center — non-interactive overlay. */}
+        {/* pin is fixed at screen center — non-interactive overlay. */}
         <View pointerEvents="none" style={styles.centerOverlay}>
           <View style={styles.pin}>
             <View style={styles.pinHead} />
@@ -297,7 +324,7 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
           </View>
         </View>
 
-        {/* V2: hint banner when user pushes past the max-nudge ring */}
+        {/* hint banner when user drags past the max-nudge ring */}
         {hintVisible && (
           <View style={styles.hintBanner} pointerEvents="none">
             <Text style={styles.hintBannerText}>
@@ -318,6 +345,36 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
             strokeWidth={2}
           />
         </TouchableOpacity>
+
+        {/* +/- zoom buttons — v297 replacement for native pinch zoom */}
+        <View style={styles.zoomCol} pointerEvents="box-none">
+          <TouchableOpacity
+            style={[styles.zoomBtn, zoom >= MAX_ZOOM && styles.zoomBtnDisabled]}
+            onPress={() => doZoom(+ZOOM_STEP)}
+            disabled={zoom >= MAX_ZOOM}
+            activeOpacity={0.7}
+          >
+            <Icon
+              name="Plus"
+              size={18}
+              color={zoom >= MAX_ZOOM ? Colors.textSecondary : MemoryColors.sepiaDeep}
+              strokeWidth={2.5}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.zoomBtn, { marginTop: 6 }, zoom <= MIN_ZOOM && styles.zoomBtnDisabled]}
+            onPress={() => doZoom(-ZOOM_STEP)}
+            disabled={zoom <= MIN_ZOOM}
+            activeOpacity={0.7}
+          >
+            <Icon
+              name="Minus"
+              size={18}
+              color={zoom <= MIN_ZOOM ? Colors.textSecondary : MemoryColors.sepiaDeep}
+              strokeWidth={2.5}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.metaRow}>
@@ -327,25 +384,45 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
       </View>
 
       <View style={{ flex: 1 }} />
-      {/* R-round N4: hard-gate confirmation on distance. Even though the
-          settle handler clamps, edge cases (zoom-only events, settle
-          before first pan, etc.) could leave pin == origin but user
-          intent unclear. Distance from origin to pin must be within
-          maxNudge for the button to fire. */}
+      {/* Confirm button. visualGate uses React state pinLat/pinLng for
+          the button's visible disabled/text — this is what the user
+          SEES. But onPress reads latestCoordRef (updated by
+          onCameraChanged every frame during pan) for the actual
+          coord to submit — this is what the user GETS. The two are
+          identical at idle; they only differ during the ~120ms
+          window between user touch-end and onMapIdle, in which
+          window the button's visible state lags the true map center.
+          Reading the ref at tap time means the SUBMITTED coord is
+          always the latest map center, never stale (B2 fix). */}
       {(() => {
-        const pinDistFromOrigin = haversineM(
+        const visualDist = haversineM(
           { lat: originRef.current.lat, lng: originRef.current.lng },
           { lat: pinLat, lng: pinLng }
         );
-        const canConfirm = pinDistFromOrigin <= PinNudgeConfig.maxNudgeMeters + 0.5;
+        const canConfirm = visualDist <= PinNudgeConfig.maxNudgeMeters + 0.5;
         return (
           <TouchableOpacity
             style={[styles.primaryBtn, !canConfirm && styles.primaryBtnDisabled]}
             disabled={!canConfirm}
             onPress={() => {
-              if (!canConfirm) return;
-              log('plant.pin_confirm', { lat: pinLat, lng: pinLng });
-              onConfirm(pinLat, pinLng);
+              // Read the TRUE current map center at tap time, not the
+              // possibly-stale React state.
+              const latestLat = latestCoordRef.current.lat;
+              const latestLng = latestCoordRef.current.lng;
+              const trueDist = haversineM(
+                { lat: originRef.current.lat, lng: originRef.current.lng },
+                { lat: latestLat, lng: latestLng }
+              );
+              if (trueDist > PinNudgeConfig.maxNudgeMeters + 0.5) {
+                // Race caught: visible state said within-range but
+                // map center has since moved past. Refuse the tap,
+                // surface the hint so the user knows why.
+                briefHint();
+                log('plant.pin_confirm_blocked_race', { distM: Math.round(trueDist) });
+                return;
+              }
+              log('plant.pin_confirm', { lat: latestLat, lng: latestLng });
+              onConfirm(latestLat, latestLng);
             }}
           >
             <Text style={[styles.primaryBtnText, !canConfirm && styles.primaryBtnTextDisabled]}>
@@ -391,10 +468,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '500', color: MemoryColors.sepiaDeep, marginBottom: 6 },
   sub:   { fontSize: 13, color: MemoryColors.cairnPublic, marginBottom: 16 },
   mapWrap: {
-    // R-round N3 fix: 280 was too short to show the full 50m max-nudge
-    // ring at any practical zoom. 340 gives the ring vertical breathing
-    // room AND leaves room for content step content below the bottom
-    // bar.
     height: 340,
     borderRadius: 14,
     overflow: 'hidden',
@@ -411,6 +484,23 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border,
     shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 }, elevation: 3,
+  },
+  zoomCol: {
+    position: 'absolute',
+    top: 52, right: 8,
+    alignItems: 'center',
+  },
+  zoomBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: Colors.border,
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 }, elevation: 3,
+  },
+  zoomBtnDisabled: {
+    backgroundColor: 'rgba(240,240,240,0.95)',
+    opacity: 0.6,
   },
   centerOverlay: {
     position: 'absolute',

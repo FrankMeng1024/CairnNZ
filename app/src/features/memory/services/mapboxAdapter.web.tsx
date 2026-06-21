@@ -63,6 +63,12 @@ interface MapViewProps {
   style?: any;
   styleURL?: string;
   onMapIdle?: (feature: any) => void;
+  // v297 — high-frequency camera change events used by PinAdjustStep
+  // to keep a "latest pan position" ref in sync with map state, so
+  // the confirm-tap handler can read the true map center without the
+  // onIdle latency window (subagent review B2). Maps to mapbox-gl
+  // `onMove` (fires continuously during drag/zoom).
+  onCameraChanged?: (feature: any) => void;
   compassEnabled?: boolean;
   scaleBarEnabled?: boolean;
   attributionEnabled?: boolean;
@@ -83,7 +89,7 @@ interface MapViewProps {
   children?: React.ReactNode;
 }
 
-export function MapView({ style, styleURL, onMapIdle, children }: MapViewProps) {
+export function MapView({ style, styleURL, onMapIdle, onCameraChanged, children }: MapViewProps) {
   const mapRef = useRef<MapRef | null>(null);
 
   // Translate mapbox:// style url to a public URL the JS SDK accepts.
@@ -181,6 +187,12 @@ export function MapView({ style, styleURL, onMapIdle, children }: MapViewProps) 
             // onCameraChanged / onMapIdle shape so component code reads
             // properties.center + properties.zoom identically.
             onMapIdle({ properties: { center: [c.lng, c.lat], zoom: z } });
+          }}
+          onMove={(e) => {
+            if (!onCameraChanged) return;
+            const c = e.target.getCenter();
+            const z = e.target.getZoom();
+            onCameraChanged({ properties: { center: [c.lng, c.lat], zoom: z } });
           }}
           style={{ width: '100%', height: '100%' }}
         >
