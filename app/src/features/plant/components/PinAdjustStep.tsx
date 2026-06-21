@@ -139,6 +139,28 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
     const newLng = coord[0];
     const newLat = coord[1];
     const newZoom = feature?.properties?.zoom ?? 0;
+
+    // First-settle skip: when the map first finishes its initial
+    // camera fit, an onMapIdle fires whose `center` may differ from
+    // originRef by a few decimal places due to Mapbox's internal
+    // fit/pan computation. Treat this as the establishing baseline:
+    // record the camera state but DON'T update pinLat/pinLng — the
+    // pin must stay anchored to the GPS origin, not to whatever
+    // micro-drift Mapbox reports. Subsequent settles (real user pan
+    // or zoom) will run the normal path. User-reported symptom that
+    // motivated this: "zoom 时当前位置的标记也会变 没随着 zoom 会偏
+    // 移的很厉害" — the drift was being captured on the first idle
+    // and then frozen as "current pin" by the zoom-skip rule below.
+    const prev = lastSettleRef.current;
+    if (!prev) {
+      lastSettleRef.current = {
+        lat: originRef.current.lat,
+        lng: originRef.current.lng,
+        zoom: newZoom,
+      };
+      return;
+    }
+
     // R-round N4 (revised after sub#1 review): zoom CHANGED is a
     // reliable signal that this settle was triggered by a pinch, NOT
     // a pan. A pure pan doesn't change zoom. Previously we required
@@ -146,14 +168,11 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
     // center by 10-30m at zoom 17.5, which incorrectly fell into the
     // pan branch and moved the pin. New rule: if zoom changed at all,
     // ignore the center delta — keep the pin where it was.
-    const prev = lastSettleRef.current;
-    if (prev) {
-      const dZoom = Math.abs(newZoom - prev.zoom);
-      if (dZoom > 0.05) {
-        // zoom event — record new zoom but keep pin at prev center.
-        lastSettleRef.current = { lat: prev.lat, lng: prev.lng, zoom: newZoom };
-        return;
-      }
+    const dZoom = Math.abs(newZoom - prev.zoom);
+    if (dZoom > 0.05) {
+      // zoom event — record new zoom but keep pin at prev center.
+      lastSettleRef.current = { lat: prev.lat, lng: prev.lng, zoom: newZoom };
+      return;
     }
     lastSettleRef.current = { lat: newLat, lng: newLng, zoom: newZoom };
     const dist = haversineM(

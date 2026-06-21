@@ -232,7 +232,12 @@ export function PlantScreen() {
               setDraft((d) => ({ ...d, lat, lng }));
               setStep('content');
             }}
-            onBack={() => { log('plant.step_back_pin_to_gps'); setStep('gps'); }}
+            // Back from Pin Adjust exits the whole Plant flow.
+            // Going back to step='gps' is useless: gps step auto-
+            // advances the moment it gets a fix (which we already have),
+            // so the user would just bounce right back to 'pin'. Closing
+            // the screen is the only behavior that matches user intent.
+            onBack={() => { log('plant.step_back_pin_to_home'); nav.goBack(); }}
           />
         )}
         {step === 'content' && (

@@ -113,7 +113,7 @@ export const MemoryColors = {
   cream: '#f7f2e5',
   sepia: '#b5823d',
   sepiaDeep: '#5b4628',
-  fogOverlay: 'rgba(74, 50, 30, 0.55)',
+  fogOverlay: 'rgba(74, 50, 30, 0.78)',
   contour: 'rgba(181, 130, 61, 0.18)',
   userPath: '#d4a96a',
   userDot: '#4a8b3f',

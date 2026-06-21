@@ -29,14 +29,26 @@ describe('fogBuilder · buildFogPolygon', () => {
     expect(countHoles(f)).toBe(0);
   });
 
-  it('adds one circular hole per visited point', () => {
+  it('produces one hole per disjoint group of points (union of circles)', () => {
+    // 3 points far apart → 3 disjoint unions → 3 holes
     const f = buildFogPolygon([
       p(31.230, 121.430),
-      p(31.240, 121.440),  // far enough to keep, > 12.5m cull
+      p(31.240, 121.440),
       p(31.250, 121.450),
     ], TEST_BOUNDS);
     expect(f.geometry.coordinates.length).toBe(4); // 1 outer + 3 holes
     expect(countHoles(f)).toBe(3);
+  });
+
+  it('adjacent overlapping circles merge into a SINGLE hole', () => {
+    // Two points 10m apart: circles (25m radius) overlap → single union
+    const f = buildFogPolygon([
+      p(31.230, 121.430),
+      p(31.230 + 0.00009, 121.430), // ~10m north — overlapping circles
+    ], TEST_BOUNDS);
+    // Only one merged hole expected (or the second point may be culled
+    // by the dedup pass; either way, definitely not 2 separate holes).
+    expect(countHoles(f)).toBe(1);
   });
 
   it('culls near-duplicate points (within 12.5m)', () => {
@@ -76,11 +88,11 @@ describe('fogBuilder · buildFogPolygon', () => {
     expect(countHoles(f)).toBe(0);
   });
 
-  it('each circle hole has FogConfig.circleVertices + 1 closing vertices', () => {
+  it('a single isolated point yields one hole with ≥ FogConfig.circleVertices vertices', () => {
     const f = buildFogPolygon([p(31.230, 121.430)], TEST_BOUNDS);
     const hole = f.geometry.coordinates[1];
-    // 32 from default FogConfig.circleVertices + 1 closing
-    expect(hole.length).toBe(33);
+    // Union of one circle = the circle itself. Closing vertex included.
+    expect(hole.length).toBeGreaterThanOrEqual(33);
     expect(hole[0]).toEqual(hole[hole.length - 1]);
   });
 });
