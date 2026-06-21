@@ -146,8 +146,8 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
    */
   const onMapSettle = (feature: any) => {
     // Drop the settle that immediately follows a programmatic
-    // setCamera (zoom re-center / clamp-back). Otherwise we double-
-    // process the same camera state and risk infinite ping-pong.
+    // setCamera (zoom re-center). Otherwise we double-process the
+    // same camera state and risk ping-pong.
     if (suppressNextSettleRef.current) {
       suppressNextSettleRef.current = false;
       return;
@@ -158,11 +158,7 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
     const newLat = coord[1];
     const newZoom = feature?.properties?.zoom ?? 0;
 
-    // First-settle baseline. The very first onMapIdle fires right
-    // after Mapbox's initial camera fit; its center may have
-    // sub-meter drift relative to originRef due to internal float
-    // math. Record the camera baseline at the ORIGIN — never let
-    // this drift contaminate pinLat/pinLng.
+    // First-settle baseline (see prior v294 fix).
     const prev = lastSettleRef.current;
     if (!prev) {
       lastSettleRef.current = {
@@ -176,13 +172,12 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
     const dZoom = Math.abs(newZoom - prev.zoom);
 
     // ── Zoom event ──────────────────────────────────────────────
-    // When the user pinches to zoom, Mapbox anchors the zoom at
-    // the pinch focus, which can be off the pin (the screen-center
-    // marker). The visible result: pin appears to "slide off" the
-    // user's actual GPS position under it. We compensate by
-    // re-centering the camera on the pin after every zoom — Didi/
-    // Uber style. The pin stays fixed at screen center AND at its
-    // GPS coord.
+    // User feedback (原话): "zoom 的时候不要变 以他为中心的放大缩
+    // 小地图". When the user pinches to zoom, Mapbox anchors at the
+    // pinch focus, not screen-center — the pin (a screen-center
+    // marker) appears to slide off its GPS coord. We compensate by
+    // re-centering the camera on the PRIOR pin position after the
+    // zoom settles. Pin GPS coord stays put; only zoom level changes.
     if (dZoom > 0.05) {
       lastSettleRef.current = { lat: prev.lat, lng: prev.lng, zoom: newZoom };
       if (cameraRef.current && cameraRef.current.setCamera) {
@@ -197,40 +192,22 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
     }
 
     // ── Pan event ───────────────────────────────────────────────
-    // User dragged the map. Compute new pin coord from new center,
-    // measured against the GPS origin.
+    // User dragged the map. pin follows the map center.
+    //
+    // User feedback (原话): "移出圈的一刹那就提示报错 不需要弹回".
+    // We do NOT clamp the camera back. Pin tracks the finger; if
+    // distM > 50m we show the hint banner and grey out the Looks
+    // right button (handled below via pinDistFromOrigin gate).
     lastSettleRef.current = { lat: newLat, lng: newLng, zoom: newZoom };
+    setPinLat(newLat);
+    setPinLng(newLng);
     const dist = haversineM(
       { lat: originRef.current.lat, lng: originRef.current.lng },
       { lat: newLat, lng: newLng }
     );
     if (dist > PinNudgeConfig.maxNudgeMeters) {
-      // Clamp to the 50m ring AND snap the camera back so the user
-      // sees the boundary visually. Without setCamera the map would
-      // stay where the user dragged it while pinLat/pinLng silently
-      // sit on the clamped value — exactly the confusing UX the user
-      // reported ("我超过了范围 没提示").
-      const ratio = PinNudgeConfig.maxNudgeMeters / dist;
-      const clampedLat = originRef.current.lat + (newLat - originRef.current.lat) * ratio;
-      const clampedLng = originRef.current.lng + (newLng - originRef.current.lng) * ratio;
-      setPinLat(clampedLat);
-      setPinLng(clampedLng);
       briefHint();
-      log('plant.pin_clamped', { distM: Math.round(dist) });
-      if (cameraRef.current && cameraRef.current.setCamera) {
-        suppressNextSettleRef.current = true;
-        cameraRef.current.setCamera({
-          centerCoordinate: [clampedLng, clampedLat],
-          zoomLevel: newZoom,
-          animationDuration: 180,
-        });
-        // Reflect the clamped position in lastSettle so subsequent
-        // zooms re-center on the clamped pin, not on the stale pan.
-        lastSettleRef.current = { lat: clampedLat, lng: clampedLng, zoom: newZoom };
-      }
-    } else {
-      setPinLat(newLat);
-      setPinLng(newLng);
+      log('plant.pin_out_of_range', { distM: Math.round(dist) });
     }
   };
 
@@ -256,6 +233,18 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
           scaleBarEnabled={false}
           attributionEnabled={false}
           logoEnabled={false}
+          // Zoom / pan mutual exclusion on native iOS:
+          // gestureSettings.pinchPanEnabled=false stops the two-finger
+          // pinch gesture from ALSO translating the map center
+          // (subagent A Q2 — node_modules/@rnmapbox/maps/src/components/
+          // MapView.tsx:77-80 + ios/RNMBX/RNMBXMapView.swift:598-599).
+          // Combined with the onMapSettle zoom-branch recenter, this
+          // prevents the "一边 zoom 一边滑动" user complaint.
+          gestureSettings={{
+            pinchPanEnabled: false,
+            rotateEnabled: false,
+            pitchEnabled: false,
+          }}
           onMapIdle={onMapSettle}
         >
           <Camera

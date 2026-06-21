@@ -67,6 +67,19 @@ interface MapViewProps {
   scaleBarEnabled?: boolean;
   attributionEnabled?: boolean;
   logoEnabled?: boolean;
+  // Native-only props. Listed here so TypeScript / consumers
+  // (PinAdjustStep, MemoryMap) can pass them on both targets
+  // without `Platform.OS=='web'` branches; the web shim ignores
+  // them because the equivalent behavior is achieved via the
+  // mapbox-gl handler API in the mapRef onRef callback (see
+  // touchZoomRotate.enable({around:'center'}) below).
+  gestureSettings?: {
+    pinchPanEnabled?: boolean;
+    rotateEnabled?: boolean;
+    pitchEnabled?: boolean;
+    panEnabled?: boolean;
+    pinchZoomEnabled?: boolean;
+  };
   children?: React.ReactNode;
 }
 
@@ -103,7 +116,54 @@ export function MapView({ style, styleURL, onMapIdle, children }: MapViewProps) 
             // Playwright introspection (see feedback_playwright_before_realdevice.md).
             // No-op for end users — there is no UI that depends on it.
             if (typeof window !== 'undefined' && r) {
-              (window as any).__cairnMap = r.getMap?.() ?? r;
+              const inner = r.getMap?.() ?? r;
+              (window as any).__cairnMap = inner;
+
+              // Pin-as-zoom-anchor: tell mapbox-gl to anchor every pinch
+              // and wheel zoom on the viewport center (which is where
+              // the absolute pin div sits). Without this, pinch uses
+              // the finger midpoint as the zoom focal — the pin's GPS
+              // coord drifts off the screen-center pin marker as the
+              // user zooms. See subagent_b investigation: mapbox-gl
+              // src/ui/handler/touch_zoom_rotate.js:78-81 (around=center).
+              try {
+                inner.touchZoomRotate?.enable?.({ around: 'center' });
+                inner.scrollZoom?.enable?.({ around: 'center' });
+              } catch (e) {
+                // Older mapbox-gl versions may not accept the {around}
+                // option object — fall back silently rather than break
+                // the map for users on stale clients.
+              }
+
+              // Zoom / pan mutual exclusion: when two fingers go down
+              // (pinch), disable touchPan; restore on touchend. Per
+              // user feedback: "一边 zoom 一边就在滑动位置了 这个应该
+              // 被禁止 两个动作同时只能做一个".
+              try {
+                const touchPanHandler = inner.handlers?._handlersById?.touchPan;
+                if (touchPanHandler) {
+                  const onTouchStart = (e: TouchEvent) => {
+                    if (e.touches && e.touches.length >= 2 && touchPanHandler.disable) {
+                      touchPanHandler.disable();
+                    }
+                  };
+                  const onTouchEnd = (e: TouchEvent) => {
+                    if ((!e.touches || e.touches.length < 2) && touchPanHandler.enable) {
+                      touchPanHandler.enable();
+                    }
+                  };
+                  const canvas = inner.getCanvasContainer?.();
+                  if (canvas) {
+                    canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+                    canvas.addEventListener('touchend', onTouchEnd, { passive: true });
+                    canvas.addEventListener('touchcancel', onTouchEnd, { passive: true });
+                  }
+                }
+              } catch (e) {
+                // Internal handler API is undocumented (subagent_b
+                // risk #1). If shape changes, we degrade to default
+                // mapbox behavior, not crash.
+              }
             }
           }}
           mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
