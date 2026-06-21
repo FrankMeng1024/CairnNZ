@@ -1244,7 +1244,36 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             all upload setState calls. R-round B10: success/err
 //             states stay clickable so retry is immediate and label
 //             color isn't dimmed by disabled treatment.
-export const OTA_VERSION = 291;
+// v292  N-round: 4 fixes after v291 real-device feedback + double
+//         subagent review.
+//         N1: fogBuilder.ts inner-ring winding fixed (theta -2π→+2π).
+//             v291's hex-tile reveal exposed an old latent bug — inner
+//             rings shared winding with the outer world ring, so each
+//             of the 567 visited points rendered as an ADDITIONAL FILLED
+//             25m disc (the "fog donut" the user saw on screen) rather
+//             than as a hole. With CCW inner rings now opposite the
+//             CW world outer ring, Mapbox correctly cuts them as holes.
+//         N2: GpsLockStep fast-path. Plant GPS was 15s every time even
+//             when an active Memory watcher had a fresh fix. Now:
+//               (a) lastWatcherFix < 8s old → use it (~10ms)
+//               (b) else Location.getLastKnownPositionAsync(maxAge=8s,
+//                   requiredAccuracy=20m) → use it (~50ms)
+//               (c) else fall through to the 15s sampleGpsWindow
+//             Fast path also guards iOS CLLocation horizontalAccuracy<0
+//             (invalid fix) which expo-location's requiredAccuracy
+//             numeric filter wouldn't catch on its own.
+//         N3: PinAdjustStep zoom 18→17.5, mapWrap height 280→340.
+//             50m max-nudge ring now fits inside the map preview;
+//             user could see "out of bounds" boundary they were
+//             told to stay within.
+//         N4: PinAdjustStep zoom-vs-pan disambiguation. Previously
+//             onMapIdle treated pinch with off-center focus as a pan
+//             → pin moved when user only meant to zoom. New rule: any
+//             zoom delta > 0.05 → ignore center change, keep pin
+//             where it was. Hard-disable "Looks right" button if pin
+//             ever exceeds maxNudge (defensive — clamp normally
+//             prevents this, but the gate is cheap insurance).
+export const OTA_VERSION = 292;
 //         v284: head-magnet visual fix (incremental builder).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints

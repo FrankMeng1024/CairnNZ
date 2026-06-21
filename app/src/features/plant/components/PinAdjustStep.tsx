@@ -66,6 +66,12 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapStyle, setMapStyle] = useState<'outdoors' | 'satellite'>('outdoors');
   const [satelliteWarned, setSatelliteWarned] = useState(false);
+  // R-round N4: track last camera state so we can distinguish a real
+  // pan (center moved appreciably) from a pure zoom (center didn't move).
+  // Without this, onMapIdle after a pinch-to-zoom re-reads `center` —
+  // which CAN drift a few pixels if the pinch focus isn't exactly screen
+  // center — and the pin would jump every zoom.
+  const lastSettleRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null);
 
   const onToggleStyle = () => {
     if (mapStyle === 'outdoors') {
@@ -132,6 +138,24 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
     if (!Array.isArray(coord) || coord.length < 2) return;
     const newLng = coord[0];
     const newLat = coord[1];
+    const newZoom = feature?.properties?.zoom ?? 0;
+    // R-round N4 (revised after sub#1 review): zoom CHANGED is a
+    // reliable signal that this settle was triggered by a pinch, NOT
+    // a pan. A pure pan doesn't change zoom. Previously we required
+    // dPan < 5 too — but a pinch with off-center focus easily drifts
+    // center by 10-30m at zoom 17.5, which incorrectly fell into the
+    // pan branch and moved the pin. New rule: if zoom changed at all,
+    // ignore the center delta — keep the pin where it was.
+    const prev = lastSettleRef.current;
+    if (prev) {
+      const dZoom = Math.abs(newZoom - prev.zoom);
+      if (dZoom > 0.05) {
+        // zoom event — record new zoom but keep pin at prev center.
+        lastSettleRef.current = { lat: prev.lat, lng: prev.lng, zoom: newZoom };
+        return;
+      }
+    }
+    lastSettleRef.current = { lat: newLat, lng: newLng, zoom: newZoom };
     const dist = haversineM(
       { lat: originRef.current.lat, lng: originRef.current.lng },
       { lat: newLat, lng: newLng }
@@ -177,7 +201,12 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
           <Camera
             defaultSettings={{
               centerCoordinate: [originRef.current.lng, originRef.current.lat],
-              zoomLevel: 18,
+              // R-round N3 fix: zoom 18 made the 50m max-nudge ring extend
+              // off the map preview (user couldn't see the boundary).
+              // At zoom 17.5, ground resolution at lat≈-41° (NZ) is
+              // ~0.6 m/px → 100m diameter ring ≈ 165px, comfortable on
+              // a 340px-tall map frame.
+              zoomLevel: 17.5,
             }}
           />
           <ShapeSource id="acc-src" shape={accuracyCircle}>
@@ -241,12 +270,33 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
       </View>
 
       <View style={{ flex: 1 }} />
-      <TouchableOpacity style={styles.primaryBtn} onPress={() => {
-        log('plant.pin_confirm', { lat: pinLat, lng: pinLng });
-        onConfirm(pinLat, pinLng);
-      }}>
-        <Text style={styles.primaryBtnText}>Looks right</Text>
-      </TouchableOpacity>
+      {/* R-round N4: hard-gate confirmation on distance. Even though the
+          settle handler clamps, edge cases (zoom-only events, settle
+          before first pan, etc.) could leave pin == origin but user
+          intent unclear. Distance from origin to pin must be within
+          maxNudge for the button to fire. */}
+      {(() => {
+        const pinDistFromOrigin = haversineM(
+          { lat: originRef.current.lat, lng: originRef.current.lng },
+          { lat: pinLat, lng: pinLng }
+        );
+        const canConfirm = pinDistFromOrigin <= PinNudgeConfig.maxNudgeMeters + 0.5;
+        return (
+          <TouchableOpacity
+            style={[styles.primaryBtn, !canConfirm && styles.primaryBtnDisabled]}
+            disabled={!canConfirm}
+            onPress={() => {
+              if (!canConfirm) return;
+              log('plant.pin_confirm', { lat: pinLat, lng: pinLng });
+              onConfirm(pinLat, pinLng);
+            }}
+          >
+            <Text style={[styles.primaryBtnText, !canConfirm && styles.primaryBtnTextDisabled]}>
+              {canConfirm ? 'Looks right' : `Pin too far — pan back within ${PinNudgeConfig.maxNudgeMeters} m`}
+            </Text>
+          </TouchableOpacity>
+        );
+      })()}
       <TouchableOpacity style={styles.backBtn} onPress={onBack}>
         <Text style={styles.backBtnText}>Back</Text>
       </TouchableOpacity>
@@ -284,7 +334,11 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '500', color: MemoryColors.sepiaDeep, marginBottom: 6 },
   sub:   { fontSize: 13, color: MemoryColors.cairnPublic, marginBottom: 16 },
   mapWrap: {
-    height: 280,
+    // R-round N3 fix: 280 was too short to show the full 50m max-nudge
+    // ring at any practical zoom. 340 gives the ring vertical breathing
+    // room AND leaves room for content step content below the bottom
+    // bar.
+    height: 340,
     borderRadius: 14,
     overflow: 'hidden',
     borderWidth: 1,
@@ -355,7 +409,11 @@ const styles = StyleSheet.create({
     backgroundColor: MemoryColors.sepia,
     padding: 14, borderRadius: 12, alignItems: 'center',
   },
+  primaryBtnDisabled: {
+    backgroundColor: '#d4ccbd',
+  },
   primaryBtnText: { color: '#fff', fontSize: 14, fontWeight: '500' },
+  primaryBtnTextDisabled: { color: '#fff', opacity: 0.85 },
   backBtn: { padding: 14, alignItems: 'center' },
   backBtnText: { fontSize: 13, color: MemoryColors.cairnPublic },
 });

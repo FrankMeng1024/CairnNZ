@@ -50,7 +50,17 @@ function makeCircleRing(centerLat: number, centerLng: number, radiusM: number): 
 
   const ring: number[][] = [];
   for (let i = 0; i < CIRCLE_VERTICES; i++) {
-    const theta = -2 * Math.PI * (i / CIRCLE_VERTICES);
+    // R-round N1 fix: inner rings (holes) must be COUNTER-clockwise per
+    // GeoJSON spec (RFC 7946). The previous `-2 * PI * (i/N)` walked
+    // vertices clockwise — same winding as the outer world ring → Mapbox
+    // treated each "hole" as an additional filled polygon. With one or
+    // two points the visual difference was invisible (the small circle
+    // just painted over the same area twice). With v291's hex-tiled
+    // initial reveal emitting ~567 points, every one rendered as a
+    // FILLED 25m fog disc → the user saw a screen full of fog "donuts".
+    //
+    // Counter-clockwise: +2 * PI * (i/N).
+    const theta = 2 * Math.PI * (i / CIRCLE_VERTICES);
     const dx = radiusM * Math.cos(theta);
     const dy = radiusM * Math.sin(theta);
     ring.push([

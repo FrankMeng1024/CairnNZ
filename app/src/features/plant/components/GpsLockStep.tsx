@@ -16,9 +16,11 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import * as Location from 'expo-location';
 import { sampleGpsWindow, SampleResult } from '../services/gpsSampler';
 import { GpsSamplingConfig } from '../config/plantConfig';
 import { MemoryColors } from '../../memory/config/memoryConfig';
+import { useMemoryStore } from '../../memory/store/useMemoryStore';
 import { log } from '../../../services/appLog';
 
 interface Props {
@@ -57,28 +59,91 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
     setBusy(true);
     log('plant.gps_lock_started', { retry: retryToken });
 
-    const start = Date.now();
-    const tick = () => {
-      const elapsedMs = Date.now() - start;
-      const p = Math.min(1, elapsedMs / (GpsSamplingConfig.windowSeconds * 1000));
-      setProgress(p);
-      if (p < 1 && !cancelled) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-
-    sampleGpsWindow().then((res) => {
+    // R-round N2 fast-path: if we already have a watcher-cached fix
+    // less than 8s old (Memory tab's watcher publishes these as the
+    // user walks), use it immediately. Falls back to the 15s sampling
+    // window only if the cache is stale or never populated. This is
+    // why Memory loads in <1s but Plant takes 15s on the same device —
+    // we weren't reusing the watcher's stream.
+    //
+    // Even faster path (works even without an active watcher):
+    // expo-location's getLastKnownPositionAsync returns the OS's last
+    // delivered fix synchronously (~10ms), if any. We accept it only
+    // when fresh and accurate enough.
+    (async () => {
+      try {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (perm.status !== 'granted') {
+          // Skip fast path — full sampler will request permission
+          // properly and produce the right failure UI.
+          return null;
+        }
+        const watcherFix = useMemoryStore.getState().lastWatcherFix;
+        if (watcherFix && Date.now() - watcherFix.ts < 8000) {
+          log('plant.gps_fast_path', { source: 'watcher', age_ms: Date.now() - watcherFix.ts });
+          // Watcher cache has no accuracy — approximate as 10m (the
+          // typical iOS BestForNavigation steady-state). Pin step shows
+          // an accuracy ring of this size; user can pan if they
+          // disagree.
+          return { lat: watcherFix.lat, lng: watcherFix.lng, accuracyM: 10 };
+        }
+        const last = await Location.getLastKnownPositionAsync({
+          maxAge: 8000,
+          requiredAccuracy: 20,
+        });
+        // iOS CLLocation reports horizontalAccuracy < 0 when the fix is
+        // invalid. expo-location's requiredAccuracy filter uses a raw
+        // numeric comparison (negative <= 20 passes!), so we must
+        // double-check on the JS side. accuracy === null means "not
+        // reported" — accept conservatively.
+        if (last && (last.coords.accuracy == null || last.coords.accuracy > 0)) {
+          log('plant.gps_fast_path', {
+            source: 'last_known',
+            age_ms: Date.now() - last.timestamp,
+            accuracy_m: last.coords.accuracy,
+          });
+          return {
+            lat: last.coords.latitude,
+            lng: last.coords.longitude,
+            accuracyM: last.coords.accuracy ?? 10,
+          };
+        }
+      } catch (e: any) {
+        log('plant.gps_fast_path_err', { msg: String(e?.message ?? e).slice(0, 120) });
+      }
+      return null;
+    })().then((fast) => {
       if (cancelled) return;
-      log('plant.gps_decision', {
-        ok: res.ok,
-        reason: res.reason,
-        accuracy_m: res.accuracyMeters,
-        std_dev_m: res.stdDevMeters,
-        samples_used: res.samplesUsed,
-        retry: retryToken,
+      if (fast) {
+        setProgress(1);
+        setBusy(false);
+        onLockedRef.current(fast.lat, fast.lng, fast.accuracyM);
+        return;
+      }
+      // No fast fix → fall through to the slow 15s sampler.
+      const start = Date.now();
+      const tick = () => {
+        const elapsedMs = Date.now() - start;
+        const p = Math.min(1, elapsedMs / (GpsSamplingConfig.windowSeconds * 1000));
+        setProgress(p);
+        if (p < 1 && !cancelled) raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+
+      sampleGpsWindow().then((res) => {
+        if (cancelled) return;
+        log('plant.gps_decision', {
+          ok: res.ok,
+          reason: res.reason,
+          accuracy_m: res.accuracyMeters,
+          std_dev_m: res.stdDevMeters,
+          samples_used: res.samplesUsed,
+          retry: retryToken,
+        });
+        setResult(res);
+        setBusy(false);
+        if (res.ok) onLockedRef.current(res.lat, res.lng, res.accuracyMeters);
       });
-      setResult(res);
-      setBusy(false);
-      if (res.ok) onLockedRef.current(res.lat, res.lng, res.accuracyMeters);
     });
 
     return () => {
