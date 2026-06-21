@@ -26,6 +26,7 @@ import { MemoryColors } from '../../memory/config/memoryConfig';
 import { Icon, IconName } from '../../../components/Icon';
 import { MARKER_TYPE_ORDER, MARKER_TYPES, MarkerType } from '../../../config/markerTypes';
 import { log } from '../../../services/appLog';
+import { BackButton } from '../../../components/BackButton';
 
 interface Props {
   initialTitle: string;
@@ -48,7 +49,7 @@ export function ContentStep({
   initialTitle,
   initialText,
   initialVisibility,
-  initialType = 'cairn',
+  initialType = 'danger',
   submitting = false,
   onSubmit,
   onBack,
@@ -69,6 +70,11 @@ export function ContentStep({
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View style={styles.container}>
+          {/* v299 N5b: top BackButton — replaces the bottom-of-screen
+              text Back link. Matches PinAdjustStep step 2 layout. */}
+          <View style={styles.backRow}>
+            <BackButton variant="pill" onPress={() => { Keyboard.dismiss(); onBack(); }} />
+          </View>
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: 16 }}
@@ -138,6 +144,11 @@ export function ContentStep({
           </ScrollView>
 
           <View style={styles.bottomBar}>
+            {/* v299 N6: warn user that planting is permanent — detail
+                page is read-only, no future edits. */}
+            <Text style={styles.permanentHint}>
+              Once planted, this cairn cannot be edited.
+            </Text>
             <TouchableOpacity
               style={[styles.primary, !canSubmit && styles.primaryDisabled]}
               disabled={!canSubmit}
@@ -154,9 +165,6 @@ export function ContentStep({
               }}
             >
               <Text style={styles.primaryText}>{submitting ? 'Planting…' : 'Plant Cairn'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.back} onPress={() => { Keyboard.dismiss(); onBack(); }}>
-              <Text style={styles.backText}>Back</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -235,6 +243,15 @@ const styles = StyleSheet.create({
   },
   primaryDisabled: { opacity: 0.4 },
   primaryText: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  back: { padding: 14, alignItems: 'center' },
-  backText: { fontSize: 13, color: MemoryColors.cairnPublic },
+  permanentHint: {
+    fontSize: 11,
+    color: MemoryColors.cairnPublic,
+    textAlign: 'center',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  backRow: {
+    flexDirection: 'row',
+    paddingBottom: 8,
+  },
 });

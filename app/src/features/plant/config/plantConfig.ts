@@ -56,8 +56,9 @@ export const ContentConfig = {
 
 // ── Visibility default ────────────────────────────────────────────────
 export const VisibilityConfig = {
-  /** Initial selection in the visibility chip row. */
-  defaultLevel: 'friends' as 'self' | 'friends' | 'public',
+  /** Initial selection in the visibility chip row.
+   *  v299: 'self' (Just me) per user request — "默认是 just me". */
+  defaultLevel: 'self' as 'self' | 'friends' | 'public',
   /**
    * v0.2.6 MVP: 'public' option is hidden until content moderation
    * pipeline is ready. Toggle this to enable once moderation lands.

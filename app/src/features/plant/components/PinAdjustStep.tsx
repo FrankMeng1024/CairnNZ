@@ -67,9 +67,12 @@ const SATELLITE_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12';
 // collapses to a few px; above 20 mapbox runs out of tile data.
 const MIN_ZOOM = 14;
 const MAX_ZOOM = 20;
-// v298 N7: -1 from previous 17.5 per user request — gives more
-// peripheral context around the pin / 50m ring.
-const INITIAL_ZOOM = 16.5;
+// v299 N2: another -1 from previous 16.5 per user request — "默认应该
+// 是现在的zoom -1的大小 就是我点了屏幕的-". Initial view now starts at
+// the same zoom as one minus tap from v298. At 15.5 the 50m ring is
+// still readable (~80px diameter) but more peripheral context is
+// visible.
+const INITIAL_ZOOM = 15.5;
 const ZOOM_STEP = 1;
 
 function makeCircleGeoJson(lat: number, lng: number, radiusM: number): any {
@@ -106,6 +109,10 @@ export function PinAdjustStep({
   const [pinLng, setPinLng] = useState(startLng);
   const [zoom, setZoom] = useState(INITIAL_ZOOM);
   const [hintVisible, setHintVisible] = useState(false);
+  // v299 N4: only show the Target (recenter) button once the user has
+  // actually moved the map. Initial mount = map already centered on
+  // origin, recenter would be a no-op.
+  const [hasMoved, setHasMoved] = useState(false);
   // v298 N4: high-frequency boundary flag so the confirm button
   // disables IMMEDIATELY when the map center crosses the 50m ring
   // (no 200ms onMapIdle latency). Updated by onCameraTick; setState
@@ -151,10 +158,9 @@ export function PinAdjustStep({
     setMapStyle(next);
   };
 
-  const accuracyCircle = useMemo(
-    () => makeCircleGeoJson(originRef.current.lat, originRef.current.lng, Math.max(accuracyM, 2)),
-    [accuracyM]
-  );
+  // v299 N1: removed accuracy fill+outline ring per user request —
+  // "实心圈不要 只要外层虚线50m圈". Only the 50m maxNudgeCircle
+  // remains on the map.
   const maxNudgeCircle = useMemo(
     () => makeCircleGeoJson(originRef.current.lat, originRef.current.lng, PinNudgeConfig.maxNudgeMeters),
     []
@@ -203,6 +209,13 @@ export function PinAdjustStep({
     setOverLimit((prev) => (prev === newOver ? prev : newOver));
     if (newOver) {
       briefHint();
+    }
+
+    // v299 N4: surface the Target button only once the map has moved
+    // noticeably from origin (> 0.5m, well above GPS jitter & float
+    // noise). Once flipped to true, stays true until doRecenter clears.
+    if (!hasMoved && dist > 0.5) {
+      setHasMoved(true);
     }
   };
 
@@ -287,6 +300,7 @@ export function PinAdjustStep({
       zoomLevel: z,
       animationDuration: 280,
     });
+    setHasMoved(false);  // v299 N4: hide the Target button after recenter
     log('plant.pin_recenter', {});
   };
 
@@ -299,6 +313,12 @@ export function PinAdjustStep({
 
   return (
     <View style={styles.container}>
+      {/* v299 N3: BackButton in the top area, above the title — not
+          overlaid on the map. Matches the user's preference of "back
+          不是在图层里的 是在 you are here 上方的". */}
+      <View style={styles.backRow}>
+        <BackButton variant="pill" onPress={onBack} />
+      </View>
       <Text style={styles.title}>You are here?</Text>
       <Text style={styles.sub}>
         Drag the map to fine-tune. Use + / − to zoom.
@@ -338,16 +358,7 @@ export function PinAdjustStep({
             minZoomLevel={MIN_ZOOM}
             maxZoomLevel={MAX_ZOOM}
           />
-          <ShapeSource id="acc-src" shape={accuracyCircle}>
-            <FillLayer
-              id="acc-fill"
-              style={{ fillColor: Colors.primary, fillOpacity: 0.18 }}
-            />
-            <LineLayer
-              id="acc-line"
-              style={{ lineColor: Colors.primary, lineWidth: 1.5, lineOpacity: 0.6 }}
-            />
-          </ShapeSource>
+          {/* v299 N1: accuracy ring removed; only 50m nudge ring stays. */}
           <ShapeSource id="nudge-src" shape={maxNudgeCircle}>
             <LineLayer
               id="nudge-line"
@@ -419,36 +430,31 @@ export function PinAdjustStep({
               strokeWidth={2.5}
             />
           </TouchableOpacity>
-          {/* v298 N1: "回归当前位置" — pulls map back to GPS anchor */}
-          <TouchableOpacity
-            style={[styles.zoomBtn, { marginTop: 6 }]}
-            onPress={doRecenter}
-            activeOpacity={0.7}
-          >
-            <Icon
-              name="Target"
-              size={18}
-              color={Colors.primary}
-              strokeWidth={2}
-            />
-          </TouchableOpacity>
+          {/* v299 N4: Target only visible after the user has moved
+              the map from origin. Hidden initially since recenter
+              is a no-op. */}
+          {hasMoved && (
+            <TouchableOpacity
+              style={[styles.zoomBtn, { marginTop: 6 }]}
+              onPress={doRecenter}
+              activeOpacity={0.7}
+            >
+              <Icon
+                name="Target"
+                size={18}
+                color={Colors.primary}
+                strokeWidth={2}
+              />
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* v298 N3: top-left BackButton (pill variant, frosted-glass) —
-            matches FriendsScreen / RoutesScreen / SettingsScreen /
-            HikingScreen back-button placement. Replaces the bottom-of-
-            screen text "Back" link that used to be next to the
-            confirm button. */}
-        <View style={styles.backTopLeft} pointerEvents="box-none">
-          <BackButton variant="pill" onPress={onBack} />
-        </View>
+        {/* v299 N3: BackButton moved out of the map layer — see
+            backRow above the title. */}
       </View>
 
-      <View style={styles.metaRow}>
-        <Text style={styles.metaText}>
-          ± {accuracyM.toFixed(1)} m · drag the map to fine-tune
-        </Text>
-      </View>
+      {/* v299 N5a: removed "± 5.0 m · drag the map to fine-tune"
+          meta row per user request — "下方的+9.4没用 去掉". */}
 
       <View style={{ flex: 1 }} />
       {/* Confirm button.
@@ -496,21 +502,20 @@ export function PinAdjustStep({
 }
 
 function PinAdjustFallback({
-  lat, lng, accuracyM, onConfirm, onBack,
+  lat, lng, onConfirm, onBack,
 }: {
   lat: number; lng: number; accuracyM: number;
   onConfirm: () => void; onBack: () => void;
 }) {
   return (
     <View style={styles.container}>
-      <View style={styles.backTopLeft} pointerEvents="box-none">
+      <View style={styles.backRow}>
         <BackButton variant="pill" onPress={onBack} />
       </View>
       <Text style={styles.title}>You are here?</Text>
       <Text style={styles.sub}>Map preview not available on this platform.</Text>
       <View style={styles.fallbackBox}>
         <Text style={styles.fallbackCoord}>{lat.toFixed(6)}, {lng.toFixed(6)}</Text>
-        <Text style={styles.fallbackAcc}>± {accuracyM.toFixed(1)} m</Text>
       </View>
       <View style={{ flex: 1 }} />
       <TouchableOpacity style={styles.primaryBtn} onPress={onConfirm}>
@@ -559,13 +564,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(240,240,240,0.95)',
     opacity: 0.6,
   },
-  // v298 N3: BackButton placement on top-left of the map area. Map
-  // wrap has its own borderRadius/overflow:hidden, so we sit the
-  // pill INSIDE the map area but above all other map overlays.
-  backTopLeft: {
-    position: 'absolute',
-    top: 8, left: 8,
-    zIndex: 5,
+  // v299 N3: BackButton row above the title (not overlaid on map).
+  backRow: {
+    flexDirection: 'row',
+    paddingBottom: 8,
   },
   centerOverlay: {
     position: 'absolute',
@@ -581,10 +583,6 @@ const styles = StyleSheet.create({
   },
   hintBannerText: {
     color: '#fff', fontSize: 12, textAlign: 'center',
-  },
-  metaRow: {
-    paddingVertical: 8,
-    alignItems: 'center',
   },
   metaText: { fontSize: 11, color: Colors.textSecondary },
   pin: { alignItems: 'center', justifyContent: 'center' },
@@ -616,7 +614,6 @@ const styles = StyleSheet.create({
     padding: 16, alignItems: 'center',
   },
   fallbackCoord: { fontFamily: 'Courier', fontSize: 13, color: MemoryColors.sepiaDeep },
-  fallbackAcc:   { fontSize: 12, color: Colors.primary, marginTop: 6 },
   primaryBtn: {
     backgroundColor: MemoryColors.sepia,
     padding: 14, borderRadius: 12, alignItems: 'center',

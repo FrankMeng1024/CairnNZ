@@ -848,13 +848,15 @@ const PERM_FILTERS: { id: MarkerPermission | 'all'; icon: IconName }[] = [
 
 function FlagsTab() {
   const markers = useMarkerStore(s => s.markers);
-  const deleteMarker = useMarkerStore(s => s.deleteMarker);
-  const updateMarker = useMarkerStore(s => s.updateMarker);
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
   const [typeFilter, setTypeFilter] = useState<MarkerType | 'all'>('all');
   const [permFilter, setPermFilter] = useState<MarkerPermission | 'all'>('all');
   const [sort, setSort] = useState<'recent' | 'nearest'>('recent');
-  const [editingMarker, setEditingMarker] = useState<Marker | null>(null);
+  // v299 N8: flags now open the read-only MarkerDetailScreen instead
+  // of the in-place FlagEditSheet. Editing/deleting is no longer
+  // exposed from this tab — per user spec, planted cairns are
+  // immutable.
+  const nav = useNavigation<Nav>();
 
   const filtered = markers.filter(m => {
     if (typeFilter !== 'all' && m.type !== typeFilter) return false;
@@ -874,11 +876,6 @@ function FlagsTab() {
     };
     return [...filtered].sort((a, b) => dist(a) - dist(b));
   }, [filtered, sort, lastCoord]);
-
-  const handleSaveEdit = async (id: string, type: MarkerType, note: string, permission: MarkerPermission) => {
-    await updateMarker(id, { type, note, permission });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
 
   if (markers.length === 0) {
     return <EmptyState icon="Flag" title="No flags planted yet" hint="Leave your first mark when you find something worth noting." illustration={<EmptyMarkers size={160} />} />;
@@ -945,7 +942,7 @@ function FlagsTab() {
             distanceStr = distM < 1000 ? `${Math.round(distM)}m` : `${(distM / 1000).toFixed(1)}km`;
           }
           return (
-            <PressBtn style={[styles.card, { borderLeftColor: meta.color }]} onPress={() => setEditingMarker(item)} scaleTo={0.97}>
+            <PressBtn style={[styles.card, { borderLeftColor: meta.color }]} onPress={() => nav.navigate('MarkerDetail', { markerId: item.id })} scaleTo={0.97}>
               <View style={[styles.cardBadge, { backgroundColor: meta.bg }]}>
                 <Icon name={(FLAG_TYPES.find(f => f.id === item.type)?.icon ?? 'Flag') as IconName} size={16} color={meta.color} strokeWidth={2} />
               </View>
@@ -964,13 +961,8 @@ function FlagsTab() {
         }}
         ListEmptyComponent={<View style={{ padding: Spacing.xl, alignItems: 'center' }}><Text style={styles.emptyHint}>No flags matching filter</Text></View>}
       />
-
-      <FlagEditSheet
-        marker={editingMarker}
-        onClose={() => setEditingMarker(null)}
-        onSave={handleSaveEdit}
-        onDelete={(id) => deleteMarker(id)}
-      />
+      {/* v299 N8: FlagEditSheet removed — Flags now navigate to
+          read-only MarkerDetailScreen. */}
     </View>
   );
 }

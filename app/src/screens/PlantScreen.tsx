@@ -25,16 +25,17 @@
  * no message.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, StyleSheet, View, Modal, Text, TouchableOpacity } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useMarkerStore, MarkerPermission } from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import { MemoryColors, UnlockConfig } from '../features/memory/config/memoryConfig';
-import { Icon } from '../components/Icon';
-import { MARKER_TYPES, MarkerType } from '../config/markerTypes';
+import { MarkerType } from '../config/markerTypes';
 import { GpsLockStep } from '../features/plant/components/GpsLockStep';
 import { PinAdjustStep } from '../features/plant/components/PinAdjustStep';
 import { ContentStep } from '../features/plant/components/ContentStep';
@@ -68,7 +69,10 @@ interface PlantDraft {
   visibility: MarkerPermission;
 }
 
-const DEFAULT_TYPE = 'cairn';
+// v299 N6: default to 'danger' per user request — "默认是 danger".
+// Most common plant scenario is flagging a hazard; this saves the
+// user from selecting it every time.
+const DEFAULT_TYPE = 'danger';
 
 /** AsyncStorage key for a failed-plant draft, scoped by user. */
 function draftKey(uid: string): string {
@@ -99,22 +103,15 @@ const INITIAL_DRAFT: PlantDraft = {
 };
 
 export function PlantScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const addMarker = useMarkerStore((s) => s.addMarker);
   const recordCircleUnlock = useMemoryStore((s) => s.recordCircleUnlock);
   const userId = useAppStore((s) => s.user?.id ?? '');
   const [step, setStep] = useState<Step>('gps');
   const [draft, setDraft] = useState<PlantDraft>(INITIAL_DRAFT);
   const [submitting, setSubmitting] = useState(false);
-  // V5: show success modal after a successful plant
-  const [successType, setSuccessType] = useState<MarkerType | null>(null);
-  // R-round B1 fix: hold the dismiss timer so it can be cleared on
-  // unmount. Without this, an iOS suspension or fast nav.goBack causes
-  // the timer to fire on a stale nav ref and pop the wrong screen.
-  const successDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (successDismissTimer.current) clearTimeout(successDismissTimer.current);
-  }, []);
+  // v299: success modal removed. PlantScreen.commit now navigates
+  // directly to MarkerDetailScreen.
 
   /**
    * K3 fix (v0.2.6.3): on mount, hydrate any failed-plant draft from
@@ -166,7 +163,7 @@ export function PlantScreen() {
       log('plant.commit_attempt', { hasTitle: !!final.title, textLen: final.text.length, vis: final.visibility });
       setSubmitting(true);
       try {
-        await addMarker({
+        const created = await addMarker({
           type: final.type,
           lat: final.lat,
           lng: final.lng,
@@ -179,21 +176,28 @@ export function PlantScreen() {
           voiceMemoUri: final.voiceUri ?? undefined,
           voiceMemoDurationMs: final.voiceMs ?? undefined,
         } as any);
-        log('plant.commit_ok');
+        log('plant.commit_ok', { id: created?.id });
         recordCircleUnlock(final.lat, final.lng, UnlockConfig.radiusMeters, Date.now());
         // K3 fix: clear any previously saved draft on successful commit.
         try {
           const { storage } = await import('../store/storage');
           await storage.removeItem(draftKey(userId));
         } catch { /* best-effort */ }
-        // V5: show a success modal — auto-dismisses to the home screen.
         setSubmitting(false);
-        setSuccessType(final.type ?? 'cairn');
-        if (successDismissTimer.current) clearTimeout(successDismissTimer.current);
-        successDismissTimer.current = setTimeout(() => {
-          successDismissTimer.current = null;
+        // v299 N7: instead of an auto-dismiss success modal, push the
+        // user straight to the read-only MarkerDetailScreen. Same screen
+        // is reused for the Flags tab tap (RoutesScreen). Use `replace`
+        // so the navigation back stack is: Home → MarkerDetail (no
+        // intermediate Plant flow tombstone the user would Back through).
+        if (created?.id) {
+          nav.replace('MarkerDetail', { markerId: created.id });
+        } else {
+          // Defensive fallback — never expected; addMarker contract
+          // says it returns a Marker, but if persistence is mocked or
+          // the id field is empty, just go home rather than navigate
+          // to a broken detail page.
           if (nav.canGoBack()) nav.goBack();
-        }, 1600);
+        }
         return;
       } catch (e: any) {
         log('plant.commit_failed', { msg: String(e?.message ?? e).slice(0, 200) });
@@ -279,30 +283,8 @@ export function PlantScreen() {
           />
         )}
       </View>
-
-      {/* V5: success modal — auto-dismisses to home after 1.6s. */}
-      <Modal visible={successType != null} transparent animationType="fade">
-        <View style={styles.successBackdrop}>
-          <View style={styles.successCard}>
-            <View style={[styles.successIconWrap, {
-              backgroundColor: successType ? MARKER_TYPES[successType].bg : MemoryColors.cream,
-            }]}>
-              {successType && (
-                <Icon
-                  name={MARKER_TYPES[successType].icon as any}
-                  size={28}
-                  color={MARKER_TYPES[successType].color}
-                  strokeWidth={2.2}
-                />
-              )}
-            </View>
-            <Text style={styles.successTitle}>Cairn planted</Text>
-            <Text style={styles.successSub}>
-              {successType ? MARKER_TYPES[successType].label : 'Cairn'} · Saved to your Memory
-            </Text>
-          </View>
-        </View>
-      </Modal>
+      {/* v299: success modal removed — commit() now navigates directly
+          to MarkerDetailScreen. */}
     </SafeAreaView>
   );
 }
@@ -310,26 +292,4 @@ export function PlantScreen() {
 const styles = StyleSheet.create({
   root:      { flex: 1, backgroundColor: MemoryColors.cream },
   container: { flex: 1, padding: 20 },
-  successBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(20,20,20,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  successCard: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 24,
-    alignItems: 'center',
-    width: '85%',
-    maxWidth: 320,
-  },
-  successIconWrap: {
-    width: 60, height: 60, borderRadius: 30,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 12,
-  },
-  successTitle: { fontSize: 17, fontWeight: '600', color: MemoryColors.sepiaDeep },
-  successSub:   { fontSize: 12, color: MemoryColors.cairnPublic, marginTop: 6, textAlign: 'center' },
 });

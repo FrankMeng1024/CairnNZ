@@ -26,6 +26,7 @@ import { PlantScreen } from '../screens/PlantScreen';
 import { FriendsScreen } from '../screens/FriendsScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { MemoryScreen } from '../features/memory/screens/MemoryScreen';
+import { MarkerDetailScreen } from '../screens/MarkerDetailScreen';
 import { useAppStore } from '../store/useAppStore';
 
 export type RootStackParamList = {
@@ -38,6 +39,7 @@ export type RootStackParamList = {
   Routes: { initialTab?: 'routes' | 'activities' | 'flags' } | undefined;
   RouteEditor: { routeId?: string; fromSessionId?: string } | undefined;
   Plant: undefined;
+  MarkerDetail: { markerId: string };
   Friends: undefined;
   Settings: undefined;
   Memory: undefined;
@@ -69,6 +71,7 @@ export function RootNavigator() {
             <Stack.Screen name="Map"         component={MapScreen} />
             <Stack.Screen name="RouteEditor" component={RouteEditorScreen} />
             <Stack.Screen name="Plant"       component={PlantScreen} />
+            <Stack.Screen name="MarkerDetail" component={MarkerDetailScreen} />
             <Stack.Screen name="Friends"     component={FriendsScreen} />
             <Stack.Screen name="Settings"    component={SettingsScreen} />
             <Stack.Screen name="Memory"      component={MemoryScreen} />
