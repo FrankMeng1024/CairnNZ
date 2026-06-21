@@ -66,12 +66,23 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapStyle, setMapStyle] = useState<'outdoors' | 'satellite'>('outdoors');
   const [satelliteWarned, setSatelliteWarned] = useState(false);
-  // R-round N4: track last camera state so we can distinguish a real
-  // pan (center moved appreciably) from a pure zoom (center didn't move).
-  // Without this, onMapIdle after a pinch-to-zoom re-reads `center` —
-  // which CAN drift a few pixels if the pinch focus isn't exactly screen
-  // center — and the pin would jump every zoom.
+  // Camera ref — needed for two reasons:
+  //   1. Zoom-with-pin-as-anchor: when user pinches to zoom, mapbox
+  //      anchors at the pinch focus (often off-center). We re-center
+  //      the camera on the pin AFTER each zoom settle so the pin
+  //      stays at the GPS coord under the screen-center marker.
+  //   2. Clamp-back: when user pans past the 50m max-nudge ring,
+  //      we both set pinLat/pinLng to the clamped coord AND call
+  //      cameraRef.setCamera() so the map visibly snaps back to
+  //      the boundary — without this the map stays at the user's
+  //      pan position and pinLat/pinLng silently diverge from
+  //      what the user sees.
+  const cameraRef = useRef<any>(null);
   const lastSettleRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null);
+  // Suppress one onMapSettle after a programmatic setCamera (clamp /
+  // re-center). Otherwise we'd ping-pong: settle → clamp → setCamera
+  // → settle → clamp again.
+  const suppressNextSettleRef = useRef(false);
 
   const onToggleStyle = () => {
     if (mapStyle === 'outdoors') {
@@ -134,23 +145,24 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
    * contract).
    */
   const onMapSettle = (feature: any) => {
+    // Drop the settle that immediately follows a programmatic
+    // setCamera (zoom re-center / clamp-back). Otherwise we double-
+    // process the same camera state and risk infinite ping-pong.
+    if (suppressNextSettleRef.current) {
+      suppressNextSettleRef.current = false;
+      return;
+    }
     const coord = feature?.properties?.center;
     if (!Array.isArray(coord) || coord.length < 2) return;
     const newLng = coord[0];
     const newLat = coord[1];
     const newZoom = feature?.properties?.zoom ?? 0;
 
-    // First-settle skip: when the map first finishes its initial
-    // camera fit, an onMapIdle fires whose `center` may differ from
-    // originRef by a few decimal places due to Mapbox's internal
-    // fit/pan computation. Treat this as the establishing baseline:
-    // record the camera state but DON'T update pinLat/pinLng — the
-    // pin must stay anchored to the GPS origin, not to whatever
-    // micro-drift Mapbox reports. Subsequent settles (real user pan
-    // or zoom) will run the normal path. User-reported symptom that
-    // motivated this: "zoom 时当前位置的标记也会变 没随着 zoom 会偏
-    // 移的很厉害" — the drift was being captured on the first idle
-    // and then frozen as "current pin" by the zoom-skip rule below.
+    // First-settle baseline. The very first onMapIdle fires right
+    // after Mapbox's initial camera fit; its center may have
+    // sub-meter drift relative to originRef due to internal float
+    // math. Record the camera baseline at the ORIGIN — never let
+    // this drift contaminate pinLat/pinLng.
     const prev = lastSettleRef.current;
     if (!prev) {
       lastSettleRef.current = {
@@ -161,25 +173,43 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
       return;
     }
 
-    // R-round N4 (revised after sub#1 review): zoom CHANGED is a
-    // reliable signal that this settle was triggered by a pinch, NOT
-    // a pan. A pure pan doesn't change zoom. Previously we required
-    // dPan < 5 too — but a pinch with off-center focus easily drifts
-    // center by 10-30m at zoom 17.5, which incorrectly fell into the
-    // pan branch and moved the pin. New rule: if zoom changed at all,
-    // ignore the center delta — keep the pin where it was.
     const dZoom = Math.abs(newZoom - prev.zoom);
+
+    // ── Zoom event ──────────────────────────────────────────────
+    // When the user pinches to zoom, Mapbox anchors the zoom at
+    // the pinch focus, which can be off the pin (the screen-center
+    // marker). The visible result: pin appears to "slide off" the
+    // user's actual GPS position under it. We compensate by
+    // re-centering the camera on the pin after every zoom — Didi/
+    // Uber style. The pin stays fixed at screen center AND at its
+    // GPS coord.
     if (dZoom > 0.05) {
-      // zoom event — record new zoom but keep pin at prev center.
       lastSettleRef.current = { lat: prev.lat, lng: prev.lng, zoom: newZoom };
+      if (cameraRef.current && cameraRef.current.setCamera) {
+        suppressNextSettleRef.current = true;
+        cameraRef.current.setCamera({
+          centerCoordinate: [prev.lng, prev.lat],
+          zoomLevel: newZoom,
+          animationDuration: 0,
+        });
+      }
       return;
     }
+
+    // ── Pan event ───────────────────────────────────────────────
+    // User dragged the map. Compute new pin coord from new center,
+    // measured against the GPS origin.
     lastSettleRef.current = { lat: newLat, lng: newLng, zoom: newZoom };
     const dist = haversineM(
       { lat: originRef.current.lat, lng: originRef.current.lng },
       { lat: newLat, lng: newLng }
     );
     if (dist > PinNudgeConfig.maxNudgeMeters) {
+      // Clamp to the 50m ring AND snap the camera back so the user
+      // sees the boundary visually. Without setCamera the map would
+      // stay where the user dragged it while pinLat/pinLng silently
+      // sit on the clamped value — exactly the confusing UX the user
+      // reported ("我超过了范围 没提示").
       const ratio = PinNudgeConfig.maxNudgeMeters / dist;
       const clampedLat = originRef.current.lat + (newLat - originRef.current.lat) * ratio;
       const clampedLng = originRef.current.lng + (newLng - originRef.current.lng) * ratio;
@@ -187,6 +217,17 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
       setPinLng(clampedLng);
       briefHint();
       log('plant.pin_clamped', { distM: Math.round(dist) });
+      if (cameraRef.current && cameraRef.current.setCamera) {
+        suppressNextSettleRef.current = true;
+        cameraRef.current.setCamera({
+          centerCoordinate: [clampedLng, clampedLat],
+          zoomLevel: newZoom,
+          animationDuration: 180,
+        });
+        // Reflect the clamped position in lastSettle so subsequent
+        // zooms re-center on the clamped pin, not on the stale pan.
+        lastSettleRef.current = { lat: clampedLat, lng: clampedLng, zoom: newZoom };
+      }
     } else {
       setPinLat(newLat);
       setPinLng(newLng);
@@ -218,6 +259,7 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
           onMapIdle={onMapSettle}
         >
           <Camera
+            ref={cameraRef}
             defaultSettings={{
               centerCoordinate: [originRef.current.lng, originRef.current.lat],
               // R-round N3 fix: zoom 18 made the 50m max-nudge ring extend
@@ -227,6 +269,13 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
               // a 340px-tall map frame.
               zoomLevel: 17.5,
             }}
+            // Zoom range limits. Below 14 you can no longer see the 50m
+            // ring (the entire pin-adjust target collapses to a few px);
+            // above 20 mapbox runs out of tiles. User feedback: "zoom
+            // 也不能 zoom 太多 因为没意义". 14 lets you see the
+            // surrounding block for context, 20 lets you pick a doorway.
+            minZoomLevel={14}
+            maxZoomLevel={20}
           />
           <ShapeSource id="acc-src" shape={accuracyCircle}>
             <FillLayer

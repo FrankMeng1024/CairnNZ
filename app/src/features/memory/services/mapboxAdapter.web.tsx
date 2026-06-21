@@ -138,11 +138,64 @@ interface CameraProps {
   defaultSettings?: { centerCoordinate?: [number, number]; zoomLevel?: number };
   animationMode?: string;
   animationDuration?: number;
+  minZoomLevel?: number;
+  maxZoomLevel?: number;
 }
 
-export function Camera(props: CameraProps) {
+/**
+ * Imperative camera handle the parent obtains via ref.
+ * Matches the subset of @rnmapbox/maps' CameraRef we actually call.
+ */
+export interface CameraRef {
+  setCamera: (config: {
+    centerCoordinate?: [number, number];
+    zoomLevel?: number;
+    animationDuration?: number;
+  }) => void;
+}
+
+export const Camera = React.forwardRef<CameraRef, CameraProps>(function Camera(props, ref) {
   const mapCtx = React.useContext(MapInstanceContext);
-  const { centerCoordinate, zoomLevel } = props;
+  const { centerCoordinate, zoomLevel, minZoomLevel, maxZoomLevel } = props;
+
+  // Apply zoom range limits whenever they change.
+  useEffect(() => {
+    const m = mapCtx?.current;
+    if (!m) return;
+    const inner = (m as any).getMap?.() ?? m;
+    if (!inner) return;
+    if (typeof minZoomLevel === 'number') inner.setMinZoom(minZoomLevel);
+    if (typeof maxZoomLevel === 'number') inner.setMaxZoom(maxZoomLevel);
+  }, [minZoomLevel, maxZoomLevel, mapCtx]);
+
+  // Imperative setCamera — used by parent to recenter on the pin
+  // after a zoom (Didi-style anchor) or to clamp-back the map after
+  // an over-50m pan.
+  React.useImperativeHandle(ref, () => ({
+    setCamera: (config) => {
+      const m = mapCtx?.current;
+      if (!m) return;
+      const inner = (m as any).getMap?.() ?? m;
+      if (!inner) return;
+      const center = config.centerCoordinate;
+      const z = config.zoomLevel;
+      const duration = config.animationDuration ?? 0;
+      if (duration <= 0) {
+        if (center) inner.jumpTo({ center, zoom: z ?? inner.getZoom() });
+        else if (typeof z === 'number') inner.setZoom(z);
+      } else {
+        inner.easeTo({
+          center: center ?? inner.getCenter(),
+          zoom: z ?? inner.getZoom(),
+          duration,
+        });
+      }
+    },
+  }), [mapCtx]);
+
+  // Declarative centerCoordinate prop (rarely used now that callers
+  // prefer ref.setCamera, but kept for compatibility with the native
+  // Camera surface).
   useEffect(() => {
     if (!mapCtx?.current || !centerCoordinate) return;
     mapCtx.current.flyTo({
@@ -152,7 +205,7 @@ export function Camera(props: CameraProps) {
     });
   }, [centerCoordinate?.[0], centerCoordinate?.[1], zoomLevel]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
-}
+});
 (Camera as any).__cairnMapboxComponent = 'Camera';
 
 // ── ShapeSource ───────────────────────────────────────────────────────
