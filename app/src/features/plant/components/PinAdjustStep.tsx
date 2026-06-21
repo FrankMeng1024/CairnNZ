@@ -32,7 +32,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { getMapbox } from '../../memory/services/mapboxAdapter';
 import { PinNudgeConfig } from '../config/plantConfig';
 import { MemoryColors } from '../../memory/config/memoryConfig';
@@ -41,10 +41,21 @@ import { haversineM } from '../../../utils/geo';
 import { getPrimaryMapStyle } from '../../../config/mapbox';
 import { log } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
+import { BackButton } from '../../../components/BackButton';
 
 interface Props {
-  lat: number;
-  lng: number;
+  /** GPS-locked anchor — the immutable center of the 50m ring. Set
+   *  once in step 1 (GpsLockStep) and never overwritten across step
+   *  3 → step 2 back navigation. */
+  gpsLat: number;
+  gpsLng: number;
+  /** Initial pin position on remount. On first entry equals (gpsLat,
+   *  gpsLng); on re-entry from step 3, equals the last-confirmed pin
+   *  coord. The 50m gate still measures from (gpsLat,gpsLng), so the
+   *  pin cannot drift further than 50m from the original GPS spot
+   *  even across step transitions (N5 fix). */
+  initialLat: number;
+  initialLng: number;
   accuracyM: number;
   onConfirm: (lat: number, lng: number) => void;
   onBack: () => void;
@@ -56,7 +67,9 @@ const SATELLITE_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12';
 // collapses to a few px; above 20 mapbox runs out of tile data.
 const MIN_ZOOM = 14;
 const MAX_ZOOM = 20;
-const INITIAL_ZOOM = 17.5;
+// v298 N7: -1 from previous 17.5 per user request — gives more
+// peripheral context around the pin / 50m ring.
+const INITIAL_ZOOM = 16.5;
 const ZOOM_STEP = 1;
 
 function makeCircleGeoJson(lat: number, lng: number, radiusM: number): any {
@@ -76,16 +89,34 @@ function makeCircleGeoJson(lat: number, lng: number, radiusM: number): any {
   };
 }
 
-export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props) {
+export function PinAdjustStep({
+  gpsLat, gpsLng, initialLat, initialLng, accuracyM, onConfirm, onBack,
+}: Props) {
   const Mapbox = getMapbox();
-  const [pinLat, setPinLat] = useState(lat);
-  const [pinLng, setPinLng] = useState(lng);
+  // Safety: if the supplied initial pin is somehow outside the 50m
+  // ring (shouldn't happen — confirm gate is also 50m — but defends
+  // against draft persistence migration / future refactors), clamp
+  // it back to the GPS anchor. (N5 invariant: visible pin is always
+  // within the ring on mount.)
+  const initialDist = haversineM({ lat: gpsLat, lng: gpsLng }, { lat: initialLat, lng: initialLng });
+  const startLat = initialDist > PinNudgeConfig.maxNudgeMeters ? gpsLat : initialLat;
+  const startLng = initialDist > PinNudgeConfig.maxNudgeMeters ? gpsLng : initialLng;
+
+  const [pinLat, setPinLat] = useState(startLat);
+  const [pinLng, setPinLng] = useState(startLng);
   const [zoom, setZoom] = useState(INITIAL_ZOOM);
   const [hintVisible, setHintVisible] = useState(false);
-  const originRef = useRef({ lat, lng });
+  // v298 N4: high-frequency boundary flag so the confirm button
+  // disables IMMEDIATELY when the map center crosses the 50m ring
+  // (no 200ms onMapIdle latency). Updated by onCameraTick; setState
+  // only fires when crossing the boundary (1 event per crossing),
+  // so this is NOT a render storm.
+  const [overLimit, setOverLimit] = useState(false);
+  // origin = the immutable GPS anchor from step 1, NOT the last
+  // confirmed pin coord. Cannot drift across step 3 → step 2 back.
+  const originRef = useRef({ lat: gpsLat, lng: gpsLng });
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapStyle, setMapStyle] = useState<'outdoors' | 'satellite'>('outdoors');
-  const [satelliteWarned, setSatelliteWarned] = useState(false);
   // Camera ref — used by the +/- zoom buttons to set both
   // centerCoordinate (locked to current pin) and zoomLevel in one
   // atomic call. Because we disable all native zoom gestures below,
@@ -108,35 +139,16 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
   //     `zoom` state — rapid double-tap +/- advances zoom by the
   //     correct delta even if React state hasn't committed yet.
   const expectedCenterRef = useRef<[number, number] | null>(null);
-  const latestCoordRef = useRef<{ lat: number; lng: number }>({ lat, lng });
+  const latestCoordRef = useRef<{ lat: number; lng: number }>({ lat: startLat, lng: startLng });
   const latestZoomRef = useRef<number>(INITIAL_ZOOM);
 
+  // v298 N2: removed first-time mobile-data Alert per user feedback.
+  // Style toggle is now instant + free; satellite tiles still cache
+  // locally on Mapbox's side after first load.
   const onToggleStyle = () => {
-    if (mapStyle === 'outdoors') {
-      if (!satelliteWarned) {
-        Alert.alert(
-          'Switch to satellite view?',
-          'Satellite imagery uses about 1–2 MB of mobile data on first load. The view caches locally afterwards. Continue?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Use satellite',
-              onPress: () => {
-                log('plant.pin_style_toggle', { to: 'satellite' });
-                setSatelliteWarned(true);
-                setMapStyle('satellite');
-              },
-            },
-          ]
-        );
-        return;
-      }
-      log('plant.pin_style_toggle', { to: 'satellite' });
-      setMapStyle('satellite');
-    } else {
-      log('plant.pin_style_toggle', { to: 'outdoors' });
-      setMapStyle('outdoors');
-    }
+    const next = mapStyle === 'outdoors' ? 'satellite' : 'outdoors';
+    log('plant.pin_style_toggle', { to: next });
+    setMapStyle(next);
   };
 
   const accuracyCircle = useMemo(
@@ -162,20 +174,36 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
 
   /**
    * onCameraChanged fires high-frequency (every frame during pan).
-   * We use it ONLY to update refs (no setState → no React render
-   * storm). The refs are read by the confirm-tap handler so it
-   * sees the true current map center even during the touch-end →
-   * onMapIdle latency window (subagent review B2).
+   * Refs (latestCoordRef, latestZoomRef) update every event — these
+   * power the confirm-tap source-of-truth read (no setState, no
+   * render).
    *
-   * For UI updates (hint banner, button gate visual state) we still
-   * use the lower-frequency onMapIdle settle event below.
+   * v298 N4: also flip `overLimit` state when the map center crosses
+   * the 50m ring. This gives REAL-TIME visual feedback (button
+   * disabled, hint banner) — previously the button only disabled at
+   * onMapIdle settle which had a 100-200ms lag. We compare against
+   * the current state and setState only when crossing (once per
+   * crossing) so this is NOT a render storm despite 30-60Hz events.
    */
   const onCameraTick = (feature: any) => {
     const coord = feature?.properties?.center;
     if (!Array.isArray(coord) || coord.length < 2) return;
-    latestCoordRef.current = { lng: coord[0], lat: coord[1] };
+    const lng = coord[0];
+    const lat = coord[1];
+    latestCoordRef.current = { lng, lat };
     const z = feature?.properties?.zoom;
     if (typeof z === 'number') latestZoomRef.current = z;
+
+    // Real-time boundary cross detection (N4).
+    const dist = haversineM(
+      { lat: originRef.current.lat, lng: originRef.current.lng },
+      { lat, lng }
+    );
+    const newOver = dist > PinNudgeConfig.maxNudgeMeters;
+    setOverLimit((prev) => (prev === newOver ? prev : newOver));
+    if (newOver) {
+      briefHint();
+    }
   };
 
   /**
@@ -245,8 +273,25 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
     log('plant.pin_zoom', { zoom: target });
   };
 
+  // v298 N1: "回归当前位置" button — pull the map back to the GPS
+  // anchor (originRef), preserving current zoom level. Works in both
+  // outdoors and satellite styles. Equivalent to HikingScreen's
+  // Target button at HikingScreen.tsx:1647-1664.
+  const doRecenter = () => {
+    const lng = originRef.current.lng;
+    const latC = originRef.current.lat;
+    const z = latestZoomRef.current;
+    expectedCenterRef.current = [lng, latC];
+    cameraRef.current?.setCamera?.({
+      centerCoordinate: [lng, latC],
+      zoomLevel: z,
+      animationDuration: 280,
+    });
+    log('plant.pin_recenter', {});
+  };
+
   if (!Mapbox.available) {
-    return <PinAdjustFallback lat={lat} lng={lng} accuracyM={accuracyM}
+    return <PinAdjustFallback lat={startLat} lng={startLng} accuracyM={accuracyM}
                               onConfirm={() => onConfirm(pinLat, pinLng)}
                               onBack={onBack} />;
   }
@@ -374,6 +419,28 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
               strokeWidth={2.5}
             />
           </TouchableOpacity>
+          {/* v298 N1: "回归当前位置" — pulls map back to GPS anchor */}
+          <TouchableOpacity
+            style={[styles.zoomBtn, { marginTop: 6 }]}
+            onPress={doRecenter}
+            activeOpacity={0.7}
+          >
+            <Icon
+              name="Target"
+              size={18}
+              color={Colors.primary}
+              strokeWidth={2}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* v298 N3: top-left BackButton (pill variant, frosted-glass) —
+            matches FriendsScreen / RoutesScreen / SettingsScreen /
+            HikingScreen back-button placement. Replaces the bottom-of-
+            screen text "Back" link that used to be next to the
+            confirm button. */}
+        <View style={styles.backTopLeft} pointerEvents="box-none">
+          <BackButton variant="pill" onPress={onBack} />
         </View>
       </View>
 
@@ -384,22 +451,15 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
       </View>
 
       <View style={{ flex: 1 }} />
-      {/* Confirm button. visualGate uses React state pinLat/pinLng for
-          the button's visible disabled/text — this is what the user
-          SEES. But onPress reads latestCoordRef (updated by
-          onCameraChanged every frame during pan) for the actual
-          coord to submit — this is what the user GETS. The two are
-          identical at idle; they only differ during the ~120ms
-          window between user touch-end and onMapIdle, in which
-          window the button's visible state lags the true map center.
-          Reading the ref at tap time means the SUBMITTED coord is
-          always the latest map center, never stale (B2 fix). */}
+      {/* Confirm button.
+          v298 N4: button state driven by `overLimit` (flipped in
+          onCameraChanged the moment the map crosses the 50m ring) —
+          NOT by onMapIdle-state pinLat/pinLng which lagged ~120ms.
+          v297 B2: onPress still re-reads latestCoordRef as final
+          source of truth, so even a residual visible/real mismatch
+          can't submit a stale coord. */}
       {(() => {
-        const visualDist = haversineM(
-          { lat: originRef.current.lat, lng: originRef.current.lng },
-          { lat: pinLat, lng: pinLng }
-        );
-        const canConfirm = visualDist <= PinNudgeConfig.maxNudgeMeters + 0.5;
+        const canConfirm = !overLimit;
         return (
           <TouchableOpacity
             style={[styles.primaryBtn, !canConfirm && styles.primaryBtnDisabled]}
@@ -431,9 +491,6 @@ export function PinAdjustStep({ lat, lng, accuracyM, onConfirm, onBack }: Props)
           </TouchableOpacity>
         );
       })()}
-      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Text style={styles.backBtnText}>Back</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -446,6 +503,9 @@ function PinAdjustFallback({
 }) {
   return (
     <View style={styles.container}>
+      <View style={styles.backTopLeft} pointerEvents="box-none">
+        <BackButton variant="pill" onPress={onBack} />
+      </View>
       <Text style={styles.title}>You are here?</Text>
       <Text style={styles.sub}>Map preview not available on this platform.</Text>
       <View style={styles.fallbackBox}>
@@ -455,9 +515,6 @@ function PinAdjustFallback({
       <View style={{ flex: 1 }} />
       <TouchableOpacity style={styles.primaryBtn} onPress={onConfirm}>
         <Text style={styles.primaryBtnText}>Confirm</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Text style={styles.backBtnText}>Back</Text>
       </TouchableOpacity>
     </View>
   );
@@ -501,6 +558,14 @@ const styles = StyleSheet.create({
   zoomBtnDisabled: {
     backgroundColor: 'rgba(240,240,240,0.95)',
     opacity: 0.6,
+  },
+  // v298 N3: BackButton placement on top-left of the map area. Map
+  // wrap has its own borderRadius/overflow:hidden, so we sit the
+  // pill INSIDE the map area but above all other map overlays.
+  backTopLeft: {
+    position: 'absolute',
+    top: 8, left: 8,
+    zIndex: 5,
   },
   centerOverlay: {
     position: 'absolute',
@@ -561,6 +626,4 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: '#fff', fontSize: 14, fontWeight: '500' },
   primaryBtnTextDisabled: { color: '#fff', opacity: 0.85 },
-  backBtn: { padding: 14, alignItems: 'center' },
-  backBtnText: { fontSize: 13, color: MemoryColors.cairnPublic },
 });

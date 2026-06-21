@@ -49,6 +49,14 @@ type Step = 'gps' | 'pin' | 'content';
 export { TITLE_BODY_SEP, encodeTitleBody } from '../features/plant/services/noteEncoding';
 
 interface PlantDraft {
+  /** v298 N5: GPS-locked anchor — set ONCE in step 1, never modified
+   *  by step 2 confirm. The 50m ring is centered here regardless of
+   *  step transitions, so back-from-content can never expand the
+   *  allowed pin radius. */
+  gpsLat: number | null;
+  gpsLng: number | null;
+  /** Current pin position. May be moved by step 2 (up to 50m from
+   *  gpsLat/gpsLng). On first entry to step 2, equals gpsLat/gpsLng. */
   lat: number | null;
   lng: number | null;
   accuracyM: number | null;
@@ -77,6 +85,8 @@ function defaultVisibility(): MarkerPermission {
 }
 
 const INITIAL_DRAFT: PlantDraft = {
+  gpsLat: null,
+  gpsLng: null,
   lat: null,
   lng: null,
   accuracyM: null,
@@ -126,7 +136,17 @@ export function PlantScreen() {
           typeof parsed.title === 'string' &&
           typeof parsed.text === 'string'
         ) {
-          setDraft(parsed);
+          // v298 N5 migration: drafts persisted before this version
+          // didn't have gpsLat/gpsLng. Fall back to the persisted
+          // pin coord so step 2 (if re-entered from step 3 back) has
+          // a valid anchor — yielding pre-v298 behavior for legacy
+          // drafts only.
+          const migrated: PlantDraft = {
+            ...parsed,
+            gpsLat: parsed.gpsLat ?? parsed.lat ?? null,
+            gpsLng: parsed.gpsLng ?? parsed.lng ?? null,
+          };
+          setDraft(migrated);
           // If the saved draft already has a GPS lock, skip to content step.
           if (parsed.lat != null && parsed.lng != null) {
             setStep('content');
@@ -216,19 +236,26 @@ export function PlantScreen() {
           <GpsLockStep
             onLocked={(lat, lng, accuracyM) => {
               log('plant.step_gps_to_pin', { accuracyM });
-              setDraft((d) => ({ ...d, lat, lng, accuracyM }));
+              // v298 N5: GPS anchor + initial pin both = locked point,
+              // but gpsLat/gpsLng is then frozen — step 2 confirm only
+              // updates lat/lng, leaving the anchor intact for step
+              // 3 → step 2 back navigation.
+              setDraft((d) => ({ ...d, gpsLat: lat, gpsLng: lng, lat, lng, accuracyM }));
               setStep('pin');
             }}
             onCancel={() => { log('plant.cancel'); nav.goBack(); }}
           />
         )}
-        {step === 'pin' && draft.lat != null && draft.lng != null && (
+        {step === 'pin' && draft.gpsLat != null && draft.gpsLng != null && draft.lat != null && draft.lng != null && (
           <PinAdjustStep
-            lat={draft.lat}
-            lng={draft.lng}
+            gpsLat={draft.gpsLat}
+            gpsLng={draft.gpsLng}
+            initialLat={draft.lat}
+            initialLng={draft.lng}
             accuracyM={draft.accuracyM ?? 5}
             onConfirm={(lat, lng) => {
               log('plant.step_pin_to_content');
+              // Only update the pin coord — gpsLat/gpsLng stays frozen.
               setDraft((d) => ({ ...d, lat, lng }));
               setStep('content');
             }}
