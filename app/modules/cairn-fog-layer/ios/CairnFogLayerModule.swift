@@ -43,7 +43,7 @@ public class CairnFogLayerModule: Module {
                     return
                 }
                 guard let mapHandle = self.extractMapboxMap(from: view) else {
-                    promise.reject("NOT_RNMBX", "View at reactTag \(reactTag) is not an RNMBXMapView (or its mapView handle is nil)")
+                    promise.reject("NOT_RNMBX", "View at reactTag \(reactTag) is not an RNMBXMapView. View tree:\n\(self.lastExtractFailureTree)")
                     return
                 }
                 if self.layersByTag[reactTag] != nil {
@@ -145,6 +145,27 @@ public class CairnFogLayerModule: Module {
                 promise.resolve(nil)
             }
         }
+
+        // v303 subagent #3 fix: pipeline-ready ping. Because Mapbox calls
+        // renderingWillStart on the render thread AFTER addPersistentLayer
+        // returns, the addFogLayer promise resolves before we know the
+        // Metal pipeline is actually ready. Server-side log of
+        // 'fog_native_attached' can lie. JS calls this 1s after attach and
+        // logs the result; we can grep server logs for failed pipeline
+        // builds without device access.
+        AsyncFunction("isPipelineReady") { (reactTag: Int, promise: Promise) in
+            DispatchQueue.main.async {
+                guard let layer = self.layersByTag[reactTag] as? CairnFogCustomLayer else {
+                    promise.resolve([
+                        "ready": false,
+                        "reason": "NO_LAYER_ATTACHED",
+                    ] as [String: Any])
+                    return
+                }
+                let status = layer.pipelineStatus()
+                promise.resolve(status)
+            }
+        }
     }
 
     // MARK: - Internal helpers
@@ -202,12 +223,27 @@ public class CairnFogLayerModule: Module {
         }
         guard let host = innerView,
               let mapBoxView = host.value(forKey: "mapView") as? MapView else {
-            log("extractMapboxMap: 'mapView' KVC key not found on \(type(of: view)) or its contentView. Subview tree:")
-            self.dumpViewTree(view, depth: 0)
+            // v303 subagent #3 fix: capture the view tree as a string so
+            // the JS-side reject message contains enough context to
+            // diagnose remotely (no device log needed). NSLog also kept
+            // for local development.
+            let tree = self.dumpViewTreeString(view, depth: 0)
+            log("extractMapboxMap: 'mapView' KVC key not found. Tree:\n\(tree)")
+            self.lastExtractFailureTree = String(tree.prefix(800))
             return nil
         }
         let style = mapBoxView.mapboxMap.style
         return MapHandle(mapView: mapBoxView, style: style)
+    }
+
+    private var lastExtractFailureTree: String = ""
+
+    private func dumpViewTreeString(_ view: UIView, depth: Int) -> String {
+        let prefix = String(repeating: "  ", count: depth)
+        let tag = view.value(forKey: "reactTag") ?? "nil"
+        var out = "\(prefix)\(type(of: view)) reactTag=\(tag)\n"
+        for sub in view.subviews { out += dumpViewTreeString(sub, depth: depth + 1) }
+        return out
     }
 
     private func dumpViewTree(_ view: UIView, depth: Int) {

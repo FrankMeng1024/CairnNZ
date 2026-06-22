@@ -47,24 +47,51 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
     private var pipelineState: MTLRenderPipelineState?
     private var uniformBuffer: MTLBuffer?
     private var startTimestamp: TimeInterval = Date().timeIntervalSince1970
+    // v303 subagent #3 fix: expose pipeline build status to JS for
+    // remote debug via isPipelineReady ping.
+    private var libSource: String = "unknown"     // "precompiled" | "embedded" | "failed"
+    private var renderingStarted: Bool = false
+    private var pipelineError: String? = nil
+    private var renderFrameCount: Int = 0          // bumped each render(); JS can read once
 
-    // MARK: - Uniform layout (must match shader)
-
-    private struct FogUniforms {
-        var projectionMatrix: float4x4
-        var inverseProjection: float4x4
-        var circles: (SIMD4<Float>, SIMD4<Float>) // placeholder; we send the real 256-array below
-        var circleCount: UInt32 = 0
-        var feather: Float = 0.30
-        var time: Float = 0.0
-        var rippleEnabled: UInt32 = 0
-        var fogColor: SIMD4<Float> = SIMD4(0,0,0,0)
+    public func pipelineStatus() -> [String: Any] {
+        return [
+            "ready": pipelineState != nil,
+            "hasDevice": device != nil,
+            "hasUniformBuffer": uniformBuffer != nil,
+            "libSource": libSource,
+            "renderingStarted": renderingStarted,
+            "pipelineError": pipelineError ?? "",
+            "renderFrameCount": renderFrameCount,
+        ]
     }
+
+    // MARK: - Uniform layout
+    //
+    // The uniform buffer is packed manually (not via a Swift struct) because
+    // Metal's struct field alignment rules differ subtly from Swift's, and
+    // we want bit-perfect agreement with the shader's `FogUniforms` (defined
+    // both in CairnFogShader.metal and the embedded shader source string
+    // below). Packing order matches the shader exactly:
+    //
+    //   [proj 4x4 float = 64 bytes]
+    //   [inv  4x4 float = 64 bytes]
+    //   [circles 256 × float4 = 4096 bytes]
+    //   [circleCount uint = 4]
+    //   [feather float = 4]
+    //   [time float = 4]
+    //   [rippleEnabled uint = 4]
+    //   [fogColor float4 = 16] (16-byte aligned — naturally aligned here)
+    //
+    // Total = 4256 bytes (verified: 128 + 4096 + 4*4 + 16 = 4256).
 
     // Real on-the-wire uniform packing:
     // [proj 64 bytes][inv 64 bytes][circles 256×16=4096 bytes][circleCount 4][feather 4][time 4][rippleEnabled 4][fogColor 16]
+    // Subtotal: 64 + 64 + 4096 + 4 + 4 + 4 + 4 + 16 = 4256 bytes.
+    // Note: Swift will evaluate the expression below correctly to 4256.
+    // (An earlier comment incorrectly arithmetic'd this to 4252 — that
+    // was a documentation bug; the expression itself is right.)
     private let uniformByteSize = 64 + 64 + (256 * 16) + 4 + 4 + 4 + 4 + 16
-    // = 128 + 4096 + 28 = 4252 bytes. Round to next 256 for Metal alignment.
 
     // MARK: - Public mutators (called from main thread in module)
 
@@ -123,12 +150,13 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
     // MARK: - CustomLayerHost protocol
 
     public func renderingWillStart(_ metalDevice: MTLDevice,
-                                   colorPixelFormat: UInt,
-                                   depthStencilPixelFormat: UInt)
+                                   colorPixelFormat: MTLPixelFormat,
+                                   depthStencilPixelFormat: MTLPixelFormat)
     {
-        NSLog("[CairnFog] renderingWillStart")
+        NSLog("[CairnFog] renderingWillStart pixelFormat=\(colorPixelFormat.rawValue)")
         self.device = metalDevice
         self.startTimestamp = Date().timeIntervalSince1970
+        self.renderingStarted = true
 
         // v303 subagent #1 fix A1: the .metal file is compiled into our
         // POD's resource bundle, NOT Bundle.main. With static_framework=true
@@ -169,6 +197,7 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         }
         guard let vertexFn = library.makeFunction(name: "fogVertex"),
               let fragmentFn = library.makeFunction(name: "fogFragment") else {
+            pipelineError = "fogVertex/fogFragment not found in library (libSource=\(libSource))"
             NSLog("[CairnFog] FATAL: shader functions not found in library")
             return
         }
@@ -177,7 +206,7 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         pipelineDesc.vertexFunction = vertexFn
         pipelineDesc.fragmentFunction = fragmentFn
         let colorAttachment = pipelineDesc.colorAttachments[0]!
-        colorAttachment.pixelFormat = MTLPixelFormat(rawValue: colorPixelFormat) ?? .bgra8Unorm
+        colorAttachment.pixelFormat = colorPixelFormat
         colorAttachment.isBlendingEnabled = true
         colorAttachment.rgbBlendOperation = .add
         colorAttachment.alphaBlendOperation = .add
@@ -189,6 +218,7 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         do {
             self.pipelineState = try metalDevice.makeRenderPipelineState(descriptor: pipelineDesc)
         } catch {
+            pipelineError = "makeRenderPipelineState failed: \(error.localizedDescription)"
             NSLog("[CairnFog] FATAL: pipeline state error: \(error.localizedDescription)")
             return
         }
@@ -203,6 +233,7 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
     {
         guard let pipeline = pipelineState, let uBuffer = uniformBuffer else { return }
         guard modeFlag != 0 else { return } // mode=off: render nothing
+        renderFrameCount += 1
 
         // Snapshot uniforms under lock.
         circleLock.lock()

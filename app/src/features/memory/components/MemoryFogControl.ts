@@ -57,7 +57,12 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
       if (attachedRef.current) {
         const node = findNodeHandle(mapViewRef.current);
         if (node != null) {
-          Fog.removeFogLayer(node).catch(() => {});
+          Fog.removeFogLayer(node).catch((e: any) => {
+            log('memory.fog_native_remove_error', {
+              where: 'mode_change',
+              msg: String(e?.message ?? e).slice(0, 500),
+            });
+          });
           log('memory.fog_native_detached_on_mode_change');
         }
         attachedRef.current = false;
@@ -65,6 +70,7 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
       return;
     }
     const node = findNodeHandle(mapViewRef.current);
+    log('memory.fog_native_handle_resolved', { node, hasRef: !!mapViewRef.current, mode });
     if (node == null) {
       log('memory.fog_native_no_handle', { mode });
       return;
@@ -76,12 +82,36 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
           // Set flag BEFORE await so rapid mode toggles don't re-enter
           // addFogLayer (subagent fix: race in attachedRef).
           attachedRef.current = true;
-          await Fog.addFogLayer(node);
+          try {
+            await Fog.addFogLayer(node);
+          } catch (e: any) {
+            attachedRef.current = false;
+            log('memory.fog_native_add_error', { msg: String(e?.message ?? e).slice(0, 500) });
+            return;
+          }
           if (cancelled) return;
           log('memory.fog_native_attached', { reactTag: node, mode });
+          // v303 subagent #3 fix: pipeline-ready ping. Mapbox calls
+          // renderingWillStart on the render thread AFTER our promise
+          // resolved — silent shader/pipeline failures wouldn't surface.
+          // Ping 1.2s later, log the status so server-side debug can
+          // catch the failure without device log.
+          setTimeout(() => {
+            if (cancelled) return;
+            Fog.isPipelineReady(node).then((status) => {
+              log('memory.fog_native_pipeline_ping', status as any);
+            }).catch((e: any) => {
+              log('memory.fog_native_pipeline_ping_error', { msg: String(e?.message ?? e).slice(0, 200) });
+            });
+          }, 1200);
         }
         if (cancelled) return;
-        await Fog.setMode(node, mode === 'off' ? 'off' : mode);
+        try {
+          await Fog.setMode(node, mode === 'off' ? 'off' : mode);
+        } catch (e: any) {
+          log('memory.fog_native_setmode_error', { mode, msg: String(e?.message ?? e).slice(0, 500) });
+          return;
+        }
         if (cancelled) return;
         // Upload current circle set.
         const points = useMemoryStore.getState().points;
@@ -91,11 +121,16 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
           radius: UnlockConfig.radiusMeters,
           bornAt: p.t ?? 0,
         }));
-        await Fog.updateCircles(node, circles);
+        try {
+          await Fog.updateCircles(node, circles);
+        } catch (e: any) {
+          log('memory.fog_native_circles_error', { count: circles.length, msg: String(e?.message ?? e).slice(0, 500) });
+          return;
+        }
         if (cancelled) return;
         log('memory.fog_native_circles_uploaded', { count: circles.length });
       } catch (e: any) {
-        log('memory.fog_native_error', { msg: String(e?.message ?? e).slice(0, 200) });
+        log('memory.fog_native_error', { msg: String(e?.message ?? e).slice(0, 500) });
         // Reset attached flag on failure so next attempt re-tries.
         attachedRef.current = false;
       }
@@ -112,7 +147,9 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
       if (!attachedRef.current) return;
       const node = findNodeHandle(mapViewRef.current);
       if (node == null) return;
-      Fog.removeFogLayer(node).catch(() => {});
+      Fog.removeFogLayer(node).catch((e: any) => {
+        log('memory.fog_native_remove_error', { where: 'unmount', msg: String(e?.message ?? e).slice(0, 200) });
+      });
       attachedRef.current = false;
       log('memory.fog_native_detached');
     };

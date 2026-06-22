@@ -194,11 +194,12 @@ export function MemoryScreen() {
         <BackButton variant="pill" onPress={() => nav.goBack()} />
       </View>
 
-      {/* v303 debug: fog-mode pill row, dev-only. Lets the user A/B
-          between the legacy polygon fog and the new native Metal SDF
-          modes on a real device. Setting is persisted in MemorySettings.
-          Gated behind __DEV__ so production users don't see this. */}
-      {__DEV__ && (
+      {/* v303: fog-mode pill row, available to all users so they can
+          A/B between the legacy polygon fog and the new native Metal
+          SDF modes on a real device. Persisted in MemorySettings.
+          (Originally __DEV__ only, but subagent review flagged that
+          production users would never see the new code path; default
+          is now 'sdf-soft' and the pill is always visible.) */}
       <View style={[styles.fogModeRow, { top: insets.top + 8 }]} pointerEvents="box-none">
         {(['legacy', 'sdf-soft', 'sdf-sharp', 'off'] as const).map((m) => {
           const active = fogMode === m;
@@ -218,7 +219,6 @@ export function MemoryScreen() {
           );
         })}
       </View>
-      )}
 
       {coord ? (
         <MemoryMap

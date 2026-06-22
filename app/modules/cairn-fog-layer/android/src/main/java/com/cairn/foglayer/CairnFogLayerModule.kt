@@ -1,7 +1,8 @@
-// v303: Android implementation — STUB. Returns "not implemented" until
-// the GLSL ES port is done in v304 (next sprint). The module still
-// loads so JS API resolves without throwing; setMode("off") becomes the
-// effective default on Android.
+// Android implementation — STUB. iOS-only for the current sprint.
+// The expo-module.config.json platforms array does NOT list "android",
+// so this Kotlin file is NOT autolinked/compiled in the current build.
+// It is retained as a placeholder for a future Android GLSL ES port,
+// not as a scheduled commitment.
 package expo.modules.cairnfoglayer
 
 import expo.modules.kotlin.modules.Module

@@ -5,23 +5,29 @@ Pod::Spec.new do |s|
   s.description    = 'Renders a Metal-shader SDF fog overlay on top of a Mapbox @rnmapbox/maps MapView. Up to 256 unlock circles uploaded as a uniform array; alpha computed per-pixel with smoothstep soft edges. Designed for tens of thousands of unlocks via texture-packed alternative path (future).'
   s.author         = ''
   s.homepage       = 'https://github.com/yiiling/cairn'
-  s.platforms      = { :ios => '15.1', :tvos => '15.1' }
+  s.platforms = { :ios => '15.1' }
   s.source         = { git: '' }
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
-  # MapboxMaps is supplied by @rnmapbox/maps (transitively); we declare the
-  # dependency loosely so cocoapods picks the same version rnmapbox locked.
-  # Forcing an exact version here would conflict with rnmapbox's Podfile.
+  # v303 subagent fix: declare MapboxMaps explicitly so pod-install
+  # order is deterministic (CairnFogLayer must compile AFTER MapboxMaps
+  # since we import it). Version is unconstrained — cocoapods will pick
+  # whatever @rnmapbox/maps locked (currently 11.20.1).
+  s.dependency 'MapboxMaps'
 
   # Swift/Objective-C compatibility
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'SWIFT_COMPILATION_MODE' => 'wholemodule',
-    # We use the runtime metal compiler for our .metal file; this pod is
-    # bundled with rnmapbox already so we don't need separate flags.
   }
 
   s.source_files = "ios/**/*.{h,m,mm,swift,metal}"
-  s.resources    = "ios/**/*.metal"
+  # v303 subagent fix: do NOT also list .metal as resources — Xcode
+  # auto-compiles .metal under source_files into the framework's
+  # metallib. Listing it in resources additionally caused "multiple
+  # commands produce" build error on Xcode 15+. The runtime shader
+  # loader first tries the precompiled metallib (Bundle(for:Self.self)
+  # / sub-bundle), and falls back to compiling from the embedded
+  # source string if not found.
 end

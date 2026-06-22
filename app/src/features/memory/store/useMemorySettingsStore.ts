@@ -45,7 +45,13 @@ const DEFAULTS: MemorySettings = {
   recordMode: 'always',
   showFriendOverlay: true,
   firstVisitDone: false,
-  fogMode: 'legacy',
+  // v303: default to the new native Metal SDF fog so a fresh production
+  // install observes the new visual immediately. Existing users with
+  // 'legacy' persisted (or anyone who toggles via the dev pill) keep
+  // their choice. If the native module fails on a device, the JS-side
+  // catch logs the error and the screen falls back to the underlying
+  // map without fog — not great but not silently broken either.
+  fogMode: 'sdf-soft',
 };
 
 function persist(state: MemorySettings): void {

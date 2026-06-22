@@ -87,7 +87,6 @@
       ],
       "expo-asset",
       "expo-font",
-      "./plugins/withUnityEmbed",
       "expo-localization"
     ],
     "extra": {

@@ -27,6 +27,24 @@ interface CairnFogLayerNativeModule {
   setRipple: (reactTag: number, enabled: boolean) => Promise<void>;
   setFogColor: (reactTag: number, r: number, g: number, b: number, a: number) => Promise<void>;
   removeFogLayer: (reactTag: number) => Promise<void>;
+  /** v303 subagent #3 fix: pipeline-ready ping. Returns the Metal
+   *  pipeline build status, including which library source was used
+   *  (precompiled metallib vs embedded shader source vs failed) and
+   *  any pipeline build error. Call ~1s after addFogLayer resolves to
+   *  detect silent shader/pipeline failures that don't surface via
+   *  the addFogLayer promise. */
+  isPipelineReady: (reactTag: number) => Promise<PipelineStatus>;
+}
+
+export interface PipelineStatus {
+  ready: boolean;
+  hasDevice?: boolean;
+  hasUniformBuffer?: boolean;
+  libSource?: 'precompiled-default' | 'precompiled-subbundle' | 'embedded' | 'failed' | 'unknown';
+  renderingStarted?: boolean;
+  pipelineError?: string;
+  renderFrameCount?: number;
+  reason?: string;
 }
 
 const NativeModule = requireNativeModule<CairnFogLayerNativeModule>('CairnFogLayer');
@@ -39,8 +57,9 @@ export function addFogLayer(reactTag: number): Promise<void> {
 }
 
 /** Replace the entire unlock-circle set. Up to 256 circles uploaded to
- *  the GPU uniform buffer. Excess circles silently dropped (in v304 we
- *  pack into a texture for >256). */
+ *  the GPU uniform buffer. Excess circles silently dropped. (Higher
+ *  counts would require packing circles into a texture and using
+ *  texelFetch in the shader — not implemented in this version.) */
 export function updateCircles(reactTag: number, circles: FogCircle[]): Promise<void> {
   const packed = circles.map((c) => [
     c.lng,
@@ -81,6 +100,11 @@ export function removeFogLayer(reactTag: number): Promise<void> {
   return NativeModule.removeFogLayer(reactTag);
 }
 
+/** v303 subagent #3 fix: pipeline-ready ping. */
+export function isPipelineReady(reactTag: number): Promise<PipelineStatus> {
+  return NativeModule.isPipelineReady(reactTag);
+}
+
 export default {
   addFogLayer,
   updateCircles,
@@ -89,4 +113,5 @@ export default {
   setRipple,
   setFogColor,
   removeFogLayer,
+  isPipelineReady,
 };

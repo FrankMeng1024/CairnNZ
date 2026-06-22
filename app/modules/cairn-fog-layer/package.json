@@ -1,7 +1,7 @@
 {
   "name": "cairn-fog-layer",
   "version": "0.1.0",
-  "description": "Native Mapbox CustomLayerHost for SDF fog-of-war (iOS Metal, Android GLES placeholder).",
+  "description": "Native Mapbox CustomLayerHost for SDF fog-of-war (iOS Metal). Android not implemented.",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
