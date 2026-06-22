@@ -1,34 +1,38 @@
 /**
- * MarkerDetailScreen — v299
+ * MarkerDetailScreen — v300
  *
- * Read-only detail page for a single cairn / marker. Used by two
- * entry points (per user spec, "Flags detail and plant complete
- * flag 最后成功展示的页面是一样的"):
+ * Detail page for a single cairn / marker. UI styled to match the
+ * project's other detail screens (MapHistoryScreen, RoutesScreen):
+ * top map hero + scrollable content panel + top-left BackButton.
  *
- *   1. Plant flow success: PlantScreen.commit replaces the route
- *      with this screen instead of dismissing back to home.
- *   2. RoutesScreen Flags tab: tapping a flag row navigates here
- *      (replacing the previous editable FlagEditSheet).
+ * Two entry points (the user spec calls for one shared screen):
+ *   1. Plant flow success: PlantScreen.commit replaces the route here
+ *   2. RoutesScreen Flags tab: tap navigates here
  *
- * Layout matches the project's other detail screens (MapHistoryScreen
- * for activity, RouteEditorScreen for route): top map + scrollable
- * detail panel + top-left BackButton.
- *
- * Read-only by design — user confirmed in plant flow that once
- * planted, a cairn cannot be edited. Editing previously lived in
- * FlagEditSheet and has been removed.
+ * Behavior (v300 reversal of v299's read-only stance):
+ *   - Owner sees Edit + Delete actions
+ *   - Edit can modify title / body / type / permission (lat/lng locked)
+ *   - Delete prompts confirm, then removes + nav.goBack
+ *   - publicSnapshot: once a marker has been public, what others
+ *     see is frozen. If the owner has edited away from the snapshot,
+ *     a small banner shows "Others see: «snapshot.note», pinned as
+ *     «snapshot.type»" so the owner is reminded of the divergence.
+ *   - Toggling public off/on flips visibility but never re-snapshots.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Dimensions, Platform,
+  View, Text, StyleSheet, ScrollView, Dimensions, Platform, Alert,
+  TouchableOpacity, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { useMarkerStore } from '../store/useMarkerStore';
-import { MARKER_TYPES } from '../config/markerTypes';
-import { splitTitleBody } from '../features/plant/services/noteEncoding';
+import { useMarkerStore, type MarkerPermission } from '../store/useMarkerStore';
+import { useAppStore } from '../store/useAppStore';
+import { MARKER_TYPES, MARKER_TYPE_ORDER, type MarkerType } from '../config/markerTypes';
+import { splitTitleBody, encodeTitleBody } from '../features/plant/services/noteEncoding';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
@@ -36,9 +40,9 @@ import { BackButton } from '../components/BackButton';
 import { MemoryColors } from '../features/memory/config/memoryConfig';
 import { getPrimaryMapStyle } from '../config/mapbox';
 import { formatDate } from '../utils/geo';
+import { log } from '../services/appLog';
+import { ContentConfig, VisibilityConfig } from '../features/plant/config/plantConfig';
 
-// Native Mapbox import (web falls back to no-map panel — same pattern
-// as MapHistoryScreen).
 let MapView: any = null;
 let CameraComponent: any = null;
 let PointAnnotation: any = null;
@@ -49,9 +53,7 @@ if (Platform.OS !== 'web') {
     MapView = Mapbox.MapView;
     CameraComponent = Mapbox.Camera;
     PointAnnotation = Mapbox.PointAnnotation;
-  } catch {
-    // not available — fall back to web stub below
-  }
+  } catch {}
 } else {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -62,35 +64,101 @@ if (Platform.OS !== 'web') {
       CameraComponent = m.Camera;
       PointAnnotation = m.PointAnnotation;
     }
-  } catch {
-    // web adapter unavailable — show no-map fallback panel
-  }
+  } catch {}
 }
 
 const { height: H } = Dimensions.get('window');
-const MAP_H = Math.max(300, H - 420);
+const MAP_H = Math.max(280, H - 480);
 
 type DetailRoute = RouteProp<RootStackParamList, 'MarkerDetail'>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const VISIBILITY_LABEL: Record<string, { label: string; iconName: IconName }> = {
-  personal: { label: 'Just me',  iconName: 'Lock' },
-  group:    { label: 'Friends',  iconName: 'Users' },
-  public:   { label: 'Anyone',   iconName: 'Globe' },
+const VISIBILITY_LABEL: Record<MarkerPermission, { label: string; iconName: IconName }> = {
+  personal: { label: 'Just me', iconName: 'Lock' },
+  group:    { label: 'Friends', iconName: 'Users' },
+  public:   { label: 'Anyone',  iconName: 'Globe' },
 };
 
 export function MarkerDetailScreen() {
+  const nav = useNavigation<Nav>();
   const route = useRoute<DetailRoute>();
   const markerId = route.params?.markerId;
   const markers = useMarkerStore((s) => s.markers);
+  const updateMarker = useMarkerStore((s) => s.updateMarker);
+  const deleteMarker = useMarkerStore((s) => s.deleteMarker);
+  const userId = useAppStore((s) => s.user?.id ?? '');
+
   const marker = useMemo(
     () => markers.find((m) => m.id === markerId),
     [markers, markerId]
   );
 
+  // Edit-mode local state. Initialized from marker only when entering edit.
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editBody, setEditBody] = useState('');
+  const [editType, setEditType] = useState<MarkerType>('cairn');
+  const [editPermission, setEditPermission] = useState<MarkerPermission>('personal');
+  const [saving, setSaving] = useState(false);
+
+  const enterEdit = useCallback(() => {
+    if (!marker) return;
+    const { title, body } = splitTitleBody(marker.note);
+    setEditTitle(title);
+    setEditBody(body);
+    setEditType(marker.type);
+    setEditPermission(marker.permission);
+    setIsEditing(true);
+    log('marker.edit_open', { id: marker.id });
+  }, [marker]);
+
+  const cancelEdit = useCallback(() => {
+    setIsEditing(false);
+  }, []);
+
+  const saveEdit = useCallback(async () => {
+    if (!marker) return;
+    setSaving(true);
+    try {
+      const newNote = encodeTitleBody(editTitle.trim(), editBody.trim());
+      await updateMarker(marker.id, {
+        type: editType,
+        note: newNote,
+        permission: editPermission,
+      });
+      log('marker.edit_save', { id: marker.id, type: editType, perm: editPermission });
+      setIsEditing(false);
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message ?? 'Please try again in a moment.');
+    } finally {
+      setSaving(false);
+    }
+  }, [marker, editTitle, editBody, editType, editPermission, updateMarker]);
+
+  const handleDelete = useCallback(() => {
+    if (!marker) return;
+    Alert.alert(
+      'Delete this cairn?',
+      'It will be removed from your Memory and (if shared) from public view. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            log('marker.delete', { id: marker.id });
+            await deleteMarker(marker.id);
+            if (nav.canGoBack()) nav.goBack();
+          },
+        },
+      ]
+    );
+  }, [marker, deleteMarker, nav]);
+
   if (!marker) {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-        <View style={styles.backRow}>
+        <View style={styles.backRowTop}>
           <BackButton variant="pill" />
         </View>
         <View style={styles.notFoundBox}>
@@ -104,13 +172,24 @@ export function MarkerDetailScreen() {
   }
 
   const meta = MARKER_TYPES[marker.type];
-  const { title, body } = splitTitleBody(marker.note);
+  const { title: privateTitle, body: privateBody } = splitTitleBody(marker.note);
   const vis = VISIBILITY_LABEL[marker.permission] ?? VISIBILITY_LABEL.personal;
   const dateStr = formatDate(marker.createdAt);
+  const isOwner = marker.authorId === userId || marker.authorId === 'local' || marker.authorId === 'server';
+
+  // Public snapshot divergence: only relevant if a snapshot exists AND
+  // its content differs from the current marker fields (or the marker
+  // is currently not public — in which case "others see nothing right
+  // now, but here's what they'd see if you re-share").
+  const snap = marker.publicSnapshot;
+  const snapDiffers = !!snap && (
+    snap.type !== marker.type ||
+    snap.note !== marker.note
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      {/* Top map area */}
+      {/* ── Map hero ──────────────────────────────────────────── */}
       <View style={[styles.mapWrap, { height: MAP_H }]}>
         {MapView ? (
           <MapView
@@ -124,12 +203,15 @@ export function MarkerDetailScreen() {
             <CameraComponent
               defaultSettings={{
                 centerCoordinate: [marker.lng, marker.lat],
-                zoomLevel: 17,
+                zoomLevel: 16.5,
               }}
             />
             {PointAnnotation && (
               <PointAnnotation id="marker-pin" coordinate={[marker.lng, marker.lat]}>
-                <View style={[styles.pinHead, { backgroundColor: meta.color }]} />
+                {/* v300 N1: hollow pin — type color is border + icon only */}
+                <View style={[styles.pinHead, { borderColor: meta.color }]}>
+                  <Icon name={meta.icon as IconName} size={12} color={meta.color} strokeWidth={2.5} />
+                </View>
               </PointAnnotation>
             )}
           </MapView>
@@ -140,60 +222,168 @@ export function MarkerDetailScreen() {
             </Text>
           </View>
         )}
-        <View style={styles.backRow} pointerEvents="box-none">
+        <View style={styles.backRowOverlay} pointerEvents="box-none">
           <BackButton variant="pill" />
         </View>
       </View>
 
-      {/* Detail panel */}
+      {/* ── Detail panel ──────────────────────────────────────── */}
       <ScrollView
         style={styles.panel}
         contentContainerStyle={styles.panelContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Type badge */}
-        <View style={[styles.typeBadge, { backgroundColor: meta.bg, borderColor: meta.color }]}>
-          <Icon name={meta.icon as IconName} size={14} color={meta.color} strokeWidth={2} />
-          <Text style={[styles.typeBadgeText, { color: meta.color }]}>{meta.label}</Text>
+        {/* Type + meta row */}
+        <View style={styles.headerRow}>
+          <View style={[styles.typeBadge, { backgroundColor: meta.bg, borderColor: meta.color }]}>
+            <Icon name={meta.icon as IconName} size={14} color={meta.color} strokeWidth={2} />
+            <Text style={[styles.typeBadgeText, { color: meta.color }]}>{meta.label}</Text>
+          </View>
+          <View style={[styles.visBadge, { borderColor: Colors.border }]}>
+            <Icon name={vis.iconName} size={12} color={Colors.textSecondary} strokeWidth={2} />
+            <Text style={styles.visBadgeText}>{vis.label}</Text>
+          </View>
         </View>
 
-        {/* Title */}
-        {title ? (
-          <Text style={styles.title}>{title}</Text>
+        {isEditing ? (
+          /* ─── EDIT MODE ─── */
+          <View>
+            <Text style={styles.fieldLabel}>Type</Text>
+            <View style={styles.chipRow}>
+              {MARKER_TYPE_ORDER.map((t) => {
+                const m = MARKER_TYPES[t];
+                const active = editType === t;
+                return (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.typeChip, active && { backgroundColor: m.bg, borderColor: m.color }]}
+                    onPress={() => setEditType(t)}
+                  >
+                    <Icon name={m.icon as IconName} size={14} color={active ? m.color : Colors.textSecondary} strokeWidth={2} />
+                    <Text style={[styles.typeChipLabel, active && { color: m.color, fontWeight: '600' }]}>
+                      {m.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.fieldLabel}>Title</Text>
+            <TextInput
+              style={styles.input}
+              value={editTitle}
+              onChangeText={setEditTitle}
+              maxLength={ContentConfig.titleMaxChars}
+              placeholder={`Title (max ${ContentConfig.titleMaxChars})`}
+            />
+
+            <Text style={styles.fieldLabel}>Note</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={editBody}
+              onChangeText={setEditBody}
+              maxLength={ContentConfig.textMaxChars}
+              placeholder="Tell whoever finds this…"
+              multiline
+            />
+
+            <Text style={styles.fieldLabel}>Who can see this</Text>
+            <View style={styles.chipRow}>
+              <PermChip label="Just me" active={editPermission === 'personal'} iconName="Lock" onPress={() => setEditPermission('personal')} />
+              <PermChip label="Friends" active={editPermission === 'group'}    iconName="Users" onPress={() => setEditPermission('group')} />
+              {VisibilityConfig.enablePublicOption && (
+                <PermChip label="Anyone" active={editPermission === 'public'}  iconName="Globe" onPress={() => setEditPermission('public')} />
+              )}
+            </View>
+
+            {/* Location locked notice */}
+            <View style={styles.lockedField}>
+              <Icon name="Lock" size={12} color={Colors.textMuted} strokeWidth={2} />
+              <Text style={styles.lockedFieldText}>Location is fixed where you planted it.</Text>
+            </View>
+
+            {/* Save / Cancel actions */}
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnGhost]} onPress={cancelEdit} disabled={saving}>
+                <Text style={styles.actionBtnGhostText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary, saving && { opacity: 0.6 }]} onPress={saveEdit} disabled={saving}>
+                <Text style={styles.actionBtnPrimaryText}>{saving ? 'Saving…' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : (
-          <Text style={styles.titleEmpty}>Untitled cairn</Text>
+          /* ─── VIEW MODE ─── */
+          <View>
+            {privateTitle ? (
+              <Text style={styles.title}>{privateTitle}</Text>
+            ) : (
+              <Text style={styles.titleEmpty}>Untitled cairn</Text>
+            )}
+
+            {privateBody ? <Text style={styles.body}>{privateBody}</Text> : null}
+
+            <View style={styles.metaList}>
+              <MetaRow iconName="Calendar" text={dateStr} />
+              <MetaRow iconName="MapPin" text={`${marker.lat.toFixed(5)}, ${marker.lng.toFixed(5)}`} />
+            </View>
+
+            {/* Public snapshot divergence banner (owner only) */}
+            {snap && snapDiffers && isOwner && (
+              <View style={styles.snapshotBanner}>
+                <View style={styles.snapshotHeaderRow}>
+                  <Icon name="Globe" size={12} color={Colors.textSecondary} strokeWidth={2} />
+                  <Text style={styles.snapshotHeader}>Public viewers see</Text>
+                </View>
+                <Text style={styles.snapshotBody}>
+                  {(() => {
+                    const sm = MARKER_TYPES[snap.type];
+                    const sn = splitTitleBody(snap.note);
+                    return `«${sn.title || sn.body || 'Untitled'}», pinned as ${sm?.label ?? snap.type}.`;
+                  })()}
+                </Text>
+                <Text style={styles.snapshotFootnote}>
+                  Public content is frozen at the moment you first shared.
+                </Text>
+              </View>
+            )}
+
+            {/* Owner-only actions */}
+            {isOwner && (
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={[styles.actionBtn, styles.actionBtnGhost]} onPress={handleDelete}>
+                  <Icon name="Trash2" size={14} color={Colors.danger} strokeWidth={2} />
+                  <Text style={[styles.actionBtnGhostText, { color: Colors.danger }]}>Delete</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={enterEdit}>
+                  <Icon name="Pencil" size={14} color="#fff" strokeWidth={2} />
+                  <Text style={styles.actionBtnPrimaryText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         )}
-
-        {/* Body */}
-        {body ? <Text style={styles.body}>{body}</Text> : null}
-
-        {/* Meta row */}
-        <View style={styles.metaRow}>
-          <View style={styles.metaItem}>
-            <Icon name="Calendar" size={13} color={MemoryColors.cairnPublic} strokeWidth={2} />
-            <Text style={styles.metaText}>{dateStr}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Icon name={vis.iconName} size={13} color={MemoryColors.cairnPublic} strokeWidth={2} />
-            <Text style={styles.metaText}>{vis.label}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Icon name="MapPin" size={13} color={MemoryColors.cairnPublic} strokeWidth={2} />
-            <Text style={styles.metaText}>
-              {marker.lat.toFixed(5)}, {marker.lng.toFixed(5)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Read-only notice */}
-        <View style={styles.lockNotice}>
-          <Icon name="Lock" size={12} color={MemoryColors.cairnPublic} strokeWidth={2} />
-          <Text style={styles.lockNoticeText}>
-            Once planted, a cairn cannot be edited.
-          </Text>
-        </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function MetaRow({ iconName, text }: { iconName: IconName; text: string }) {
+  return (
+    <View style={styles.metaItem}>
+      <Icon name={iconName} size={13} color={Colors.textSecondary} strokeWidth={2} />
+      <Text style={styles.metaText}>{text}</Text>
+    </View>
+  );
+}
+
+function PermChip({ label, active, iconName, onPress }: { label: string; active: boolean; iconName: IconName; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={[styles.typeChip, active && { backgroundColor: Colors.primaryBg, borderColor: Colors.primary }]} onPress={onPress}>
+      <Icon name={iconName} size={13} color={active ? Colors.primary : Colors.textSecondary} strokeWidth={2} />
+      <Text style={[styles.typeChipLabel, active && { color: Colors.primary, fontWeight: '600' }]}>{label}</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -201,36 +391,45 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: MemoryColors.cream },
   mapWrap: {
     width: '100%',
-    backgroundColor: '#dde4d2',
+    backgroundColor: Colors.mapBg,
     overflow: 'hidden',
   },
   map: { flex: 1 },
   mapFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flex: 1, alignItems: 'center', justifyContent: 'center',
   },
   mapFallbackText: {
-    fontFamily: 'Courier',
-    fontSize: 13,
-    color: MemoryColors.sepiaDeep,
+    fontFamily: 'Courier', fontSize: FontSize.caption, color: MemoryColors.sepiaDeep,
   },
-  backRow: {
+  backRowOverlay: {
     position: 'absolute',
     top: Spacing.md, left: Spacing.md,
     zIndex: 10,
   },
+  backRowTop: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+  },
   pinHead: {
-    width: 22, height: 22, borderRadius: 11,
-    borderWidth: 3, borderColor: '#fff',
+    width: 28, height: 28,
+    borderRadius: 14,
+    borderWidth: 2.5,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
     ...Shadow.card,
   },
-  panel: {
-    flex: 1,
-  },
+  panel: { flex: 1 },
   panelContent: {
     padding: Spacing.lg,
-    paddingBottom: Spacing.xl,
+    paddingBottom: Spacing.xxl,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+    flexWrap: 'wrap',
   },
   typeBadge: {
     flexDirection: 'row',
@@ -241,21 +440,31 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 14,
     borderWidth: 1,
-    marginBottom: 14,
   },
   typeBadgeText: { fontSize: FontSize.small, fontWeight: '600' },
+  visBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: '#fff',
+  },
+  visBadgeText: { fontSize: 11, color: Colors.textSecondary, fontWeight: '500' },
   title: {
-    fontSize: 22,
-    fontWeight: '500',
+    fontSize: 24,
+    fontWeight: '600',
     color: MemoryColors.sepiaDeep,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   titleEmpty: {
     fontSize: 22,
     fontWeight: '500',
     color: MemoryColors.cairnPublic,
     fontStyle: 'italic',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   body: {
     fontSize: 14,
@@ -263,8 +472,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 18,
   },
-  metaRow: {
-    flexDirection: 'column',
+  metaList: {
     gap: 8,
     marginBottom: 18,
   },
@@ -275,36 +483,119 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: FontSize.caption,
-    color: MemoryColors.cairnPublic,
+    color: Colors.textSecondary,
   },
-  lockNotice: {
+  snapshotBanner: {
+    backgroundColor: '#fff',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+    marginBottom: 18,
+  },
+  snapshotHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#e8dfc8',
+    marginBottom: 4,
   },
-  lockNoticeText: {
+  snapshotHeader: {
     fontSize: 11,
-    color: MemoryColors.cairnPublic,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  snapshotBody: {
+    fontSize: 12,
+    color: MemoryColors.sepiaDeep,
+    marginBottom: 4,
+  },
+  snapshotFootnote: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+  },
+  actionBtnPrimary: {
+    backgroundColor: MemoryColors.sepia,
+  },
+  actionBtnPrimaryText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  actionBtnGhost: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  actionBtnGhostText: { color: MemoryColors.sepiaDeep, fontSize: 14, fontWeight: '500' },
+  // Edit-mode fields
+  fieldLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 6,
+    marginTop: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 1, borderColor: Colors.border,
+    borderRadius: Radius.md, padding: 12, fontSize: 14,
+    color: MemoryColors.sepiaDeep, marginBottom: 8,
+  },
+  textArea: { minHeight: 90, textAlignVertical: 'top' },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  typeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: '#fff',
+    borderWidth: 1, borderColor: Colors.border,
+    borderRadius: 18,
+  },
+  typeChipLabel: { fontSize: 12, color: Colors.textSecondary },
+  lockedField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderRadius: Radius.sm,
+    marginVertical: 10,
+  },
+  lockedFieldText: {
+    fontSize: 11,
+    color: Colors.textMuted,
     fontStyle: 'italic',
   },
   notFoundBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.lg,
+    flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.lg,
   },
   notFoundTitle: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: MemoryColors.sepiaDeep,
-    marginBottom: 8,
+    fontSize: 18, fontWeight: '500', color: MemoryColors.sepiaDeep, marginBottom: 8,
   },
   notFoundSub: {
-    fontSize: 13,
-    color: MemoryColors.cairnPublic,
-    textAlign: 'center',
+    fontSize: 13, color: Colors.textSecondary, textAlign: 'center',
   },
 });

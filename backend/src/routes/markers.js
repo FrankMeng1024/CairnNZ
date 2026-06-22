@@ -101,7 +101,7 @@ function voteRateLimit(req, res, next) {
 router.get('/', async (req, res) => {
   try {
     const [markers] = await pool.execute(
-      `SELECT id, type, text, lat, lng, alt, permission, approximate, created_at, updated_at
+      `SELECT id, type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at
        FROM markers WHERE user_id = ? ORDER BY created_at DESC`,
       [req.user.userId]
     );
@@ -120,23 +120,37 @@ router.post('/', idempotency, async (req, res) => {
     if (!type || lat == null || lng == null) {
       return res.status(400).json({ error: 'type, lat, lng required' });
     }
-    if (text && text.length > 50) {
-      return res.status(400).json({ error: 'Text max 50 characters' });
+    // v300: bumped 50→250 to fit plant-flow title (30) + sep + body (200).
+    if (text && text.length > 250) {
+      return res.status(400).json({ error: 'Text max 250 characters' });
     }
 
     const validPermissions = ['personal', 'group', 'public'];
     const perm = validPermissions.includes(permission) ? permission : 'personal';
     const approx = approximate ? 1 : 0;
 
+    // v300: if the marker is born public, snapshot it immediately.
+    let publicSnapshotJson = null;
+    if (perm === 'public') {
+      publicSnapshotJson = JSON.stringify({
+        type,
+        lat,
+        lng,
+        note: text || '',
+        snapshottedAt: Date.now(),
+      });
+    }
+
     const [result] = await pool.execute(
-      `INSERT INTO markers (user_id, type, text, lat, lng, alt, permission, approximate, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-      [req.user.userId, type, text || '', lat, lng, alt || null, perm, approx]
+      `INSERT INTO markers (user_id, type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      [req.user.userId, type, text || '', lat, lng, alt || null, perm, approx, publicSnapshotJson]
     );
 
     res.status(201).json({
       id: result.insertId,
       type, text: text || '', lat, lng, alt, permission: perm, approximate: !!approximate,
+      public_snapshot: publicSnapshotJson,
       created_at: new Date().toISOString(),
     });
   } catch (err) {
@@ -151,18 +165,21 @@ router.put('/:id', async (req, res) => {
     const { text, permission, type } = req.body;
     const markerId = req.params.id;
 
-    // Verify ownership
+    // Verify ownership AND fetch current state for snapshot logic.
     const [existing] = await pool.execute(
-      'SELECT id FROM markers WHERE id = ? AND user_id = ?',
+      'SELECT id, type, lat, lng, text, permission, public_snapshot FROM markers WHERE id = ? AND user_id = ?',
       [markerId, req.user.userId]
     );
     if (existing.length === 0) return res.status(404).json({ error: 'Marker not found' });
+    const current = existing[0];
 
     const updates = [];
     const values = [];
 
     if (type !== undefined) {
-      const validTypes = ['danger', 'scenic', 'supply', 'junction', 'free'];
+      // v300: valid type list updated to v105 marker types
+      // (was the stale ['danger','scenic','supply','junction','free']).
+      const validTypes = ['danger', 'junction', 'water', 'hut', 'cairn'];
       if (!validTypes.includes(type)) {
         return res.status(400).json({ error: 'Invalid type' });
       }
@@ -170,7 +187,7 @@ router.put('/:id', async (req, res) => {
       values.push(type);
     }
     if (text !== undefined) {
-      if (text.length > 50) return res.status(400).json({ error: 'Text max 50 characters' });
+      if (text.length > 250) return res.status(400).json({ error: 'Text max 250 characters' });
       updates.push('text = ?');
       values.push(text);
     }
@@ -181,6 +198,25 @@ router.put('/:id', async (req, res) => {
       }
       updates.push('permission = ?');
       values.push(permission);
+
+      // v300: first transition to 'public' — snapshot the CURRENT state
+      // (= state about to be saved, which is current + any pending
+      // type/text updates from this same request). The snapshot is
+      // written only if public_snapshot is currently NULL; subsequent
+      // re-publics never re-snapshot.
+      if (permission === 'public' && current.public_snapshot == null) {
+        const snapshotType = type !== undefined ? type : current.type;
+        const snapshotText = text !== undefined ? text : current.text;
+        const snapshotJson = JSON.stringify({
+          type: snapshotType,
+          lat: current.lat,
+          lng: current.lng,
+          note: snapshotText || '',
+          snapshottedAt: Date.now(),
+        });
+        updates.push('public_snapshot = ?');
+        values.push(snapshotJson);
+      }
     }
 
     if (updates.length === 0) return res.status(400).json({ error: 'No updates provided' });

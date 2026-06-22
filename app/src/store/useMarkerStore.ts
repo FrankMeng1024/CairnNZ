@@ -55,6 +55,19 @@ export interface Marker {
   arkitZ?: number;
   arOriginLat?: number;     // plant 时 arOrigin 快照 lat
   arOriginLng?: number;     // plant 时 arOrigin 快照 lng
+  /** v300: immutable copy of (type/lat/lng/note) taken the FIRST time
+   *  this marker had permission='public'. Subsequent edits to the
+   *  main fields do NOT touch this. Subsequent public/unpublic toggles
+   *  do NOT re-snapshot. Outside viewers (friends, public) see this
+   *  snapshot; the owner sees the main fields. Field is null on
+   *  markers that have never been public. */
+  publicSnapshot?: {
+    type: MarkerType;
+    lat: number;
+    lng: number;
+    note: string;
+    snapshottedAt: number;
+  } | null;
 }
 
 // v0.2.6: bumped from 'cairn_markers' → 'cairn_markers_v026'.
@@ -90,8 +103,20 @@ function fromBackend(row: {
   alt?: number | null;
   permission: string;
   approximate?: number | boolean | null;
+  public_snapshot?: string | null | any;
   created_at: string;
 }): Marker {
+  // v300: backend may return public_snapshot as either a parsed object
+  // (mysql2 JSON columns auto-parse) or a JSON string (some drivers /
+  // older marshallers). Handle both shapes defensively.
+  let publicSnapshot: Marker['publicSnapshot'] = null;
+  if (row.public_snapshot != null) {
+    if (typeof row.public_snapshot === 'string') {
+      try { publicSnapshot = JSON.parse(row.public_snapshot); } catch { publicSnapshot = null; }
+    } else {
+      publicSnapshot = row.public_snapshot;
+    }
+  }
   return {
     id: String(row.id),
     type: row.type as MarkerType,
@@ -105,6 +130,7 @@ function fromBackend(row: {
     permission: (row.permission as MarkerPermission) || 'personal',
     synced: true,
     approximate: row.approximate === true || row.approximate === 1 || false,
+    publicSnapshot,
   };
 }
 
@@ -144,11 +170,23 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   addMarker: async (data) => {
     // Optimistic local create
     const localId = generateId();
+    // v300: if marker is born public, snapshot immediately. Backend
+    // does the same on POST so the server row will agree.
+    const publicSnapshot = data.permission === 'public'
+      ? {
+          type: data.type,
+          lat: data.lat,
+          lng: data.lng,
+          note: data.note,
+          snapshottedAt: Date.now(),
+        }
+      : null;
     const marker: Marker = {
       ...data,
       id: localId,
       createdAt: Date.now(),
       synced: false,
+      publicSnapshot,
     };
     set((s) => {
       const next = [...s.markers, marker];
@@ -213,12 +251,32 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
 
   updateMarker: async (id, updates) => {
     set((s) => {
-      const next = s.markers.map((m) => m.id === id ? { ...m, ...updates } : m);
+      const next = s.markers.map((m) => {
+        if (m.id !== id) return m;
+        // v300: if this update is the FIRST transition to public, snapshot
+        // the marker's current state (including any pending changes in
+        // this same updates patch). Skip if publicSnapshot already exists.
+        let publicSnapshot = m.publicSnapshot;
+        if (updates.permission === 'public' && publicSnapshot == null) {
+          const snapType = updates.type !== undefined ? updates.type : m.type;
+          const snapNote = updates.note !== undefined ? updates.note : m.note;
+          publicSnapshot = {
+            type: snapType,
+            lat: m.lat,     // lat/lng are immutable
+            lng: m.lng,
+            note: snapNote,
+            snapshottedAt: Date.now(),
+          };
+        }
+        return { ...m, ...updates, publicSnapshot };
+      });
       if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
       return { markers: next };
     });
 
-    // Sync to backend (text, permission, type are updatable)
+    // Sync to backend (text, permission, type are updatable). Backend
+    // mirrors the same publicSnapshot-on-first-public logic so a stale
+    // local row sync wouldn't reset the server-side snapshot.
     const backendUpdates: Record<string, string> = {};
     if (updates.note !== undefined) backendUpdates.text = updates.note;
     if (updates.permission !== undefined) backendUpdates.permission = updates.permission;

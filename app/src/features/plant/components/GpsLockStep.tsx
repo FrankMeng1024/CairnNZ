@@ -79,7 +79,11 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
           return null;
         }
         const watcherFix = useMemoryStore.getState().lastWatcherFix;
-        if (watcherFix && Date.now() - watcherFix.ts < 8000) {
+        // v300 N2: 8s → 12s. Slightly longer cache window so users who
+        // open Plant a few seconds after stopping their Hiking watcher
+        // still hit the fast path instead of falling into the full
+        // sample window.
+        if (watcherFix && Date.now() - watcherFix.ts < 12000) {
           log('plant.gps_fast_path', { source: 'watcher', age_ms: Date.now() - watcherFix.ts });
           // Watcher cache has no accuracy — approximate as 10m (the
           // typical iOS BestForNavigation steady-state). Pin step shows

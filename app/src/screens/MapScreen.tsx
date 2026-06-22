@@ -163,7 +163,7 @@ function RealMap({
               coordinate={[m.lng, m.lat]}
               onSelected={() => onMarkerPress(m)}
             >
-              <View style={[styles.markerPin, { borderColor: meta.color, backgroundColor: meta.bg }]}>
+              <View style={[styles.markerPin, { borderColor: meta.color, backgroundColor: 'rgba(255,255,255,0.85)' }]}>
                 <Icon name={(flagType?.icon ?? meta.iconName) as IconName} size={14} color={meta.color} strokeWidth={2.5} />
               </View>
             </PointAnnotation>

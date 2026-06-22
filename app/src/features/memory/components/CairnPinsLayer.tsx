@@ -119,9 +119,10 @@ export function CairnPinsLayer({ markers, centerLat, centerLng }: Props) {
 }
 
 function CairnPin({ color }: { color: string }) {
+  // v300: hollow pin — type color is the border + glyph, not the fill.
   return (
-    <View style={[pinStyles.pin, { backgroundColor: color }]}>
-      <Text style={pinStyles.pinIcon}>▲</Text>
+    <View style={[pinStyles.pin, { borderColor: color, backgroundColor: 'rgba(255,255,255,0.85)' }]}>
+      <Text style={[pinStyles.pinIcon, { color }]}>▲</Text>
     </View>
   );
 }
@@ -138,10 +139,10 @@ const pinStyles = StyleSheet.create({
   pin: {
     width: 28, height: 28,
     borderRadius: 14,
-    borderWidth: 2, borderColor: '#fff',
+    borderWidth: 2,
     alignItems: 'center', justifyContent: 'center',
   },
-  pinIcon: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  pinIcon: { fontWeight: '600', fontSize: 13 },
   mystery: {
     width: 28, height: 28,
     borderRadius: 14,

@@ -144,10 +144,12 @@ export function ContentStep({
           </ScrollView>
 
           <View style={styles.bottomBar}>
-            {/* v299 N6: warn user that planting is permanent — detail
-                page is read-only, no future edits. */}
+            {/* v300 N6+: replace v299's "cannot edit" notice with
+                the new product rule — markers are editable, BUT what
+                public viewers see freezes at the moment of first
+                public share. */}
             <Text style={styles.permanentHint}>
-              Once planted, this cairn cannot be edited.
+              Once shared publicly, what others see is frozen forever.
             </Text>
             <TouchableOpacity
               style={[styles.primary, !canSubmit && styles.primaryDisabled]}

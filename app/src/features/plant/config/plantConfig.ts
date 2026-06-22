@@ -9,24 +9,36 @@
 // ── GPS sampling ───────────────────────────────────────────────────────
 export const GpsSamplingConfig = {
   /** Total sampling window before we consider position "locked".
-   *  S5 (v0.2.6.4): 10→15. Cold-start GPS first fix on iOS can take
-   *  5-15s on BestForNavigation accuracy. We need the window long
-   *  enough to fit ≥2 readings even in the worst case. */
-  windowSeconds: 15,
+   *  v300 N2: 15→10. With the wider acceptance threshold below, the
+   *  early-exit kicks in within 1-2 polls in the common case; 10s is
+   *  ample headroom for cold-start TTFF without holding the user on
+   *  a black screen. The window is the worst-case ceiling, not the
+   *  typical wait. */
+  windowSeconds: 10,
   /** Sample interval — iOS native location updates are usually ~1Hz. */
   sampleIntervalMs: 500,
   /**
-   * Reject the plant entirely if the best accuracy reading after the
-   * window is worse than this. Surfaces "signal too weak — move to
-   * open sky" message instead of recording a garbage point.
+   * v300 N2: 15→30. Real-device user complaint was "15s remaining,
+   * no GPS reading received, retry succeeds" — the actual reason
+   * was indoor / urban-canyon accuracy hovering at 18-35m for the
+   * full window, so the 15m gate kept rejecting every reading.
+   *
+   * 30m is still useful for plant: step 2 has a 50m manual pan
+   * radius, so as long as the system lock is within ~30m the user
+   * can drag the pin onto the real spot. Better to give them a
+   * draggable pin than a permanent "no GPS" wall.
    */
-  rejectAccuracyAboveMeters: 15,
+  rejectAccuracyAboveMeters: 30,
   /**
    * Sigma threshold (meters) — if the standard deviation of the 5s
    * sample window exceeds this, the GPS is considered "jumpy" and we
    * also reject. Catches multi-path bouncing in narrow streets.
+   *
+   * v300 N2: 5→8. Slightly more permissive to match the relaxed
+   * accuracy gate above — otherwise the std-dev check would become
+   * the new bottleneck for users on weak signal.
    */
-  rejectStdDevAboveMeters: 5,
+  rejectStdDevAboveMeters: 8,
 } as const;
 
 // ── Manual pin nudge ──────────────────────────────────────────────────
