@@ -25,7 +25,21 @@ import React, {
   useState,
 } from 'react';
 import { StyleSheet, View, Platform, UIManager } from 'react-native';
-import UnityView from '@azesmway/react-native-unity';
+// v303 build-slim: dynamic require so Metro's static module resolver
+// doesn't blow up on missing module. We pass the module name as a
+// template-built string — Metro's static analyzer gives up on dynamic
+// strings, so the require is purely a runtime concern.
+// At runtime, when the module is absent from the binary,
+// the require throws and we fall back to a no-op UnityView.
+let UnityView: any = null;
+const TRY_UNITY_MODULE = ['@azesmway', 'react-native-unity'].join('/');
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  const mod = (require as any)(TRY_UNITY_MODULE);
+  UnityView = mod?.default ?? mod;
+} catch {
+  UnityView = null;
+}
 import { sendToUnity, parseUnityMessage, resetParseRecoveredThrottle } from '../services/unityBridge';
 import { crashLogger } from '../services/crashLogger';
 // v0.2.4 Phase 3 — 'diag' level UnityLog 也 forward 到 debugLogger,
@@ -131,7 +145,7 @@ export interface UnityAROverlayHandle {
 
 export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayProps>(
   function UnityAROverlay(props, ref) {
-  const unityRef     = useRef<UnityView | null>(null);
+  const unityRef     = useRef<any>(null);
   const groundYRef   = useRef<number | null>(null);
   // v206 B1 — area-weighted ground tracking. Old code did "last plane wins"
   // regardless of plane area, so a tiny outlier plane (area=0.3) could
@@ -1085,12 +1099,17 @@ export const UnityAROverlay = forwardRef<UnityAROverlayHandle, UnityAROverlayPro
         crashLogger.breadcrumb(`${TAG}:view-layout w=${Math.round(width)} h=${Math.round(height)}`);
       }}
     >
-      <UnityView
-        ref={unityRef}
-        style={StyleSheet.absoluteFill}
-        onUnityMessage={onUnityMessage}
-        fullScreen={true}
-      />
+      {/* v303 build-slim: if UnityView native module is not in the
+          binary, render nothing. AR features degrade to no-op; the
+          rest of the app stays functional. */}
+      {UnityView && (
+        <UnityView
+          ref={unityRef}
+          style={StyleSheet.absoluteFill}
+          onUnityMessage={onUnityMessage}
+          fullScreen={true}
+        />
+      )}
     </View>
   );
 });

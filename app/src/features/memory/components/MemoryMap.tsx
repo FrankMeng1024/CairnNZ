@@ -26,6 +26,7 @@ import { log } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
+import { useMemoryFogControl, type FogRenderMode } from './MemoryFogControl';
 
 interface Props {
   centerLat: number;
@@ -35,6 +36,15 @@ interface Props {
    * uses it for the recenter button.
    */
   recenterToken?: number;
+  /**
+   * v303: fog rendering mode. Default 'legacy' (existing polygon-with-
+   * holes path) until users opt-in to a native SDF mode.
+   * - 'legacy'   — current FogLayer (JS, polygon-union + holes)
+   * - 'off'      — no fog at all (debug)
+   * - 'sdf-soft' — native Metal SDF with feathered soft edge (~30%)
+   * - 'sdf-sharp'— native Metal SDF with hard edge
+   */
+  fogMode?: FogRenderMode;
 }
 
 const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12';
@@ -62,9 +72,16 @@ function estimateInitialBounds(centerLat: number, centerLng: number): FogBounds 
   };
 }
 
-export function MemoryMap({ centerLat, centerLng, recenterToken = 0 }: Props) {
+export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = 'legacy' }: Props) {
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
+  // v303: ref to the actual MapView so the native fog module can
+  // find its reactTag via findNodeHandle.
+  const mapViewRef = useRef<any>(null);
+
+  // v303: drive the native Metal SDF fog layer. No-op when fogMode
+  // is 'legacy' — the JS <FogLayer> below handles that case.
+  useMemoryFogControl({ mapViewRef, mode: fogMode });
 
   const [bounds, setBounds] = useState<FogBounds>(() =>
     estimateInitialBounds(centerLat, centerLng)
@@ -195,6 +212,7 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0 }: Props) {
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapViewRef}
         style={styles.map}
         styleURL={SEPIA_STYLE_URL}
         compassEnabled={false}
@@ -216,7 +234,10 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0 }: Props) {
           animationDuration={600}
         />
         <UserLocation visible={true} />
-        <FogLayer bounds={bounds} />
+        {/* v303: only mount JS FogLayer in 'legacy' mode. Other
+            modes are rendered by the native Metal SDF layer via
+            useMemoryFogControl. */}
+        {fogMode === 'legacy' && <FogLayer bounds={bounds} />}
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>
       {/* v302 N6: recenter pill — shown after user pans away. Same

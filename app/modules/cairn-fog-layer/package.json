@@ -1,0 +1,30 @@
+{
+  "name": "cairn-fog-layer",
+  "version": "0.1.0",
+  "description": "Native Mapbox CustomLayerHost for SDF fog-of-war (iOS Metal, Android GLES placeholder).",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "expo-module build",
+    "clean": "expo-module clean",
+    "lint": "expo-module lint",
+    "prepare": "expo-module prepare",
+    "prepublishOnly": "expo-module prepublishOnly",
+    "expo-module": "expo-module"
+  },
+  "keywords": ["expo", "expo-modules", "mapbox", "fog-of-war", "metal"],
+  "repository": "",
+  "author": "Cairn",
+  "license": "UNLICENSED",
+  "homepage": "",
+  "dependencies": {},
+  "devDependencies": {
+    "expo-module-scripts": "^4.0.0",
+    "expo-modules-core": "*"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

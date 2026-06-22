@@ -8,8 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest --watchAll=false",
-    "test:watch": "jest",
-    "eas-build-pre-install": "node ./scripts/download-unity-framework.js"
+    "test:watch": "jest"
   },
   "jest": {
     "preset": "jest-expo",
@@ -32,7 +31,6 @@
     }
   },
   "dependencies": {
-    "@azesmway/react-native-unity": "^1.0.11",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo/metro-runtime": "~6.1.2",
     "@gorhom/bottom-sheet": "^5.2.14",

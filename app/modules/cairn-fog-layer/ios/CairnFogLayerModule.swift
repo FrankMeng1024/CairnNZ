@@ -1,0 +1,233 @@
+// CairnFogLayerModule.swift — Expo native module entry point.
+//
+// Responsibilities:
+//   1. Expose a JS API: addFogLayer(reactTag) / updateCircles(circles)
+//      / setMode(mode) / setFeather(f) / setRipple(on) / removeFogLayer()
+//   2. Look up the RNMBXMapView for `reactTag` from RN's view registry.
+//   3. Reach into the public `mapView` handle exposed by RNMBXMapView
+//      (Swift `public var mapView : MapView!`) — Mapbox v11 MapView.
+//   4. Add a CairnFogCustomLayer (implements CustomLayerHost) to the
+//      map's style on the main queue.
+//   5. Forward subsequent uniform updates (circle array + mode flags)
+//      to the layer instance.
+//
+// Failure modes & how they surface to JS:
+//   - reactTag not found        → reject('NOT_FOUND')
+//   - View is not RNMBXMapView  → reject('NOT_RNMBX')
+//   - Mapbox MapView not ready  → reject('MAP_NOT_READY')
+//   - Style not loaded yet      → reject('STYLE_NOT_LOADED')
+//
+// Logging: extensive, prefixed with [CairnFog] so device-log filtering
+// is easy. Every call logs ts + reactTag + payload size.
+
+import ExpoModulesCore
+import UIKit
+
+#if canImport(MapboxMaps)
+import MapboxMaps
+#endif
+
+public class CairnFogLayerModule: Module {
+    // Per-mapView state. Keyed by reactTag (NSNumber).
+    private var layersByTag: [Int: AnyObject] = [:]
+
+    public func definition() -> ModuleDefinition {
+        Name("CairnFogLayer")
+
+        AsyncFunction("addFogLayer") { (reactTag: Int, promise: Promise) in
+            self.log("addFogLayer reactTag=\(reactTag)")
+            DispatchQueue.main.async {
+                #if canImport(MapboxMaps)
+                guard let view = self.findReactView(reactTag: reactTag) else {
+                    promise.reject("NOT_FOUND", "View for reactTag \(reactTag) not found")
+                    return
+                }
+                guard let mapHandle = self.extractMapboxMap(from: view) else {
+                    promise.reject("NOT_RNMBX", "View at reactTag \(reactTag) is not an RNMBXMapView (or its mapView handle is nil)")
+                    return
+                }
+                if self.layersByTag[reactTag] != nil {
+                    self.log("addFogLayer: layer already exists for reactTag=\(reactTag); replacing")
+                    self.removeLayerForTag(reactTag, on: mapHandle.style)
+                }
+                let layer = CairnFogCustomLayer()
+                do {
+                    let customLayer = CustomLayer(id: "cairn-fog-sdf", renderer: layer)
+                    try mapHandle.style.addPersistentLayer(customLayer)
+                    self.layersByTag[reactTag] = layer
+                    self.log("addFogLayer OK reactTag=\(reactTag)")
+                    promise.resolve(nil)
+                } catch {
+                    promise.reject("ADD_FAILED", "Style.addPersistentLayer failed: \(error.localizedDescription)")
+                }
+                #else
+                promise.reject("NO_MAPBOX", "MapboxMaps framework not linked (slim build)")
+                #endif
+            }
+        }
+
+        AsyncFunction("updateCircles") { (reactTag: Int, circles: [[Double]], promise: Promise) in
+            // circles: Array of [lng, lat, radiusMeters, bornEpochMs] tuples.
+            // Truncate at 256 in the layer.
+            DispatchQueue.main.async {
+                guard let layer = self.layersByTag[reactTag] as? CairnFogCustomLayer else {
+                    promise.reject("NO_LAYER", "addFogLayer() must be called first for reactTag \(reactTag)")
+                    return
+                }
+                layer.updateCircles(circles)
+                self.log("updateCircles reactTag=\(reactTag) count=\(circles.count)")
+                promise.resolve(nil)
+            }
+        }
+
+        AsyncFunction("setMode") { (reactTag: Int, mode: String, promise: Promise) in
+            // mode: "off" | "sdf-soft" | "sdf-sharp"
+            DispatchQueue.main.async {
+                guard let layer = self.layersByTag[reactTag] as? CairnFogCustomLayer else {
+                    promise.reject("NO_LAYER", "addFogLayer() must be called first")
+                    return
+                }
+                layer.setMode(mode)
+                self.log("setMode reactTag=\(reactTag) mode=\(mode)")
+                promise.resolve(nil)
+            }
+        }
+
+        AsyncFunction("setFeather") { (reactTag: Int, feather: Double, promise: Promise) in
+            DispatchQueue.main.async {
+                guard let layer = self.layersByTag[reactTag] as? CairnFogCustomLayer else {
+                    promise.reject("NO_LAYER", "addFogLayer() must be called first")
+                    return
+                }
+                layer.setFeather(Float(feather))
+                self.log("setFeather reactTag=\(reactTag) feather=\(feather)")
+                promise.resolve(nil)
+            }
+        }
+
+        AsyncFunction("setRipple") { (reactTag: Int, enabled: Bool, promise: Promise) in
+            DispatchQueue.main.async {
+                guard let layer = self.layersByTag[reactTag] as? CairnFogCustomLayer else {
+                    promise.reject("NO_LAYER", "addFogLayer() must be called first")
+                    return
+                }
+                layer.setRippleEnabled(enabled)
+                self.log("setRipple reactTag=\(reactTag) enabled=\(enabled)")
+                promise.resolve(nil)
+            }
+        }
+
+        AsyncFunction("setFogColor") { (reactTag: Int, r: Double, g: Double, b: Double, a: Double, promise: Promise) in
+            DispatchQueue.main.async {
+                guard let layer = self.layersByTag[reactTag] as? CairnFogCustomLayer else {
+                    promise.reject("NO_LAYER", "addFogLayer() must be called first")
+                    return
+                }
+                layer.setFogColor(r: Float(r), g: Float(g), b: Float(b), a: Float(a))
+                self.log("setFogColor reactTag=\(reactTag) rgba=(\(r),\(g),\(b),\(a))")
+                promise.resolve(nil)
+            }
+        }
+
+        AsyncFunction("removeFogLayer") { (reactTag: Int, promise: Promise) in
+            DispatchQueue.main.async {
+                #if canImport(MapboxMaps)
+                guard let view = self.findReactView(reactTag: reactTag),
+                      let mapHandle = self.extractMapboxMap(from: view) else {
+                    self.layersByTag.removeValue(forKey: reactTag)
+                    promise.resolve(nil)
+                    return
+                }
+                self.removeLayerForTag(reactTag, on: mapHandle.style)
+                self.layersByTag.removeValue(forKey: reactTag)
+                self.log("removeFogLayer OK reactTag=\(reactTag)")
+                #endif
+                promise.resolve(nil)
+            }
+        }
+    }
+
+    // MARK: - Internal helpers
+
+    private func findReactView(reactTag: Int) -> UIView? {
+        // Try several lookup paths — Expo / RN new arch handles vary.
+        // (1) UIApplication.shared.delegate.window root view tree.
+        guard let window = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first(where: { $0.isKeyWindow }) ?? UIApplication.shared.windows.first
+        else {
+            log("findReactView: no key window")
+            return nil
+        }
+        return findSubviewWithReactTag(window, tag: reactTag)
+    }
+
+    private func findSubviewWithReactTag(_ view: UIView, tag: Int) -> UIView? {
+        if view.value(forKey: "reactTag") as? Int == tag { return view }
+        for sub in view.subviews {
+            if let found = findSubviewWithReactTag(sub, tag: tag) { return found }
+        }
+        return nil
+    }
+
+    #if canImport(MapboxMaps)
+    private struct MapHandle {
+        let mapView: MapView
+        let style: StyleManager
+    }
+
+    private func extractMapboxMap(from view: UIView) -> MapHandle? {
+        // @rnmapbox/maps under React Native's new architecture (Fabric)
+        // wraps the legacy `RNMBXMapView` (UIView subclass with the
+        // `public var mapView : MapView!`) inside a Fabric component
+        // view called `RNMBXMapViewComponentView` (subclass of
+        // `RCTViewComponentView`). Layout: componentView.contentView
+        // is set to the inner RNMBXMapView (see node_modules/@rnmapbox/
+        // maps/ios/RNMBX/RNMBXMapViewComponentView.mm:103).
+        //
+        // Lookup order:
+        //   1. If view IS the RNMBXMapView (Paper / old arch), use directly.
+        //   2. Else, try view.contentView (Fabric component view).
+        //   3. Else, give up.
+        // We bridge via KVC so we don't have to import RNMBX symbols.
+
+        var innerView: UIView? = view
+        if view.responds(to: Selector(("mapView"))) {
+            // Looks like RNMBXMapView already.
+            innerView = view
+        } else if let contentView = view.value(forKey: "contentView") as? UIView,
+                  contentView.responds(to: Selector(("mapView"))) {
+            innerView = contentView
+        }
+        guard let host = innerView,
+              let mapBoxView = host.value(forKey: "mapView") as? MapView else {
+            log("extractMapboxMap: 'mapView' KVC key not found on \(type(of: view)) or its contentView. Subview tree:")
+            self.dumpViewTree(view, depth: 0)
+            return nil
+        }
+        let style = mapBoxView.mapboxMap.style
+        return MapHandle(mapView: mapBoxView, style: style)
+    }
+
+    private func dumpViewTree(_ view: UIView, depth: Int) {
+        let prefix = String(repeating: "  ", count: depth)
+        log("\(prefix)\(type(of: view)) reactTag=\(view.value(forKey: "reactTag") ?? "nil")")
+        for sub in view.subviews { dumpViewTree(sub, depth: depth + 1) }
+    }
+
+    private func removeLayerForTag(_ tag: Int, on style: StyleManager) {
+        if style.layerExists(withId: "cairn-fog-sdf") {
+            do {
+                try style.removeLayer(withId: "cairn-fog-sdf")
+            } catch {
+                log("removeLayer failed: \(error.localizedDescription)")
+            }
+        }
+    }
+    #endif
+
+    private func log(_ msg: String) {
+        NSLog("[CairnFog] %@", msg)
+    }
+}

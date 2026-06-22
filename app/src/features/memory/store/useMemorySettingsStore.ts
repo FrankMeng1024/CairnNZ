@@ -21,12 +21,16 @@ import { storage } from '../../../store/storage';
 const STORAGE_KEY = 'cairn:memorySettings:v2';
 
 export type RecordMode = 'always' | 'session-only';
+/** v303: fog rendering pipeline. Default 'legacy' until users opt in to
+ *  the native Metal SDF mode. Switching is live (no app restart). */
+export type FogMode = 'legacy' | 'off' | 'sdf-soft' | 'sdf-sharp';
 
 export interface MemorySettings {
   foregroundAutoUnlockEnabled: boolean;
   recordMode: RecordMode;
   showFriendOverlay: boolean;
   firstVisitDone: boolean;
+  fogMode: FogMode;
 }
 
 interface MemorySettingsState extends MemorySettings {
@@ -41,6 +45,7 @@ const DEFAULTS: MemorySettings = {
   recordMode: 'always',
   showFriendOverlay: true,
   firstVisitDone: false,
+  fogMode: 'legacy',
 };
 
 function persist(state: MemorySettings): void {
@@ -56,11 +61,17 @@ async function tryLoad(): Promise<MemorySettings | null> {
     const recordModeRaw = parsed.recordMode;
     const recordMode: RecordMode =
       recordModeRaw === 'session-only' ? 'session-only' : 'always';
+    const fogModeRaw = parsed.fogMode;
+    const fogMode: FogMode =
+      fogModeRaw === 'off' || fogModeRaw === 'sdf-soft' || fogModeRaw === 'sdf-sharp'
+        ? fogModeRaw
+        : 'legacy';
     return {
       foregroundAutoUnlockEnabled: Boolean(parsed.foregroundAutoUnlockEnabled ?? DEFAULTS.foregroundAutoUnlockEnabled),
       recordMode,
       showFriendOverlay: Boolean(parsed.showFriendOverlay ?? DEFAULTS.showFriendOverlay),
       firstVisitDone: Boolean(parsed.firstVisitDone ?? DEFAULTS.firstVisitDone),
+      fogMode,
     };
   } catch {
     return null;
@@ -83,8 +94,8 @@ export const useMemorySettingsStore = create<MemorySettingsState>((set, get) => 
 
   set: (key, value) => {
     set({ [key]: value } as Partial<MemorySettingsState>);
-    const { foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone } = get();
-    persist({ foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone });
+    const { foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone, fogMode } = get();
+    persist({ foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone, fogMode });
   },
 
   reset: () => {

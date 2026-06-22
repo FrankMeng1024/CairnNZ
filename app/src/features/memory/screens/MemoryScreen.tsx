@@ -51,6 +51,7 @@ export function MemoryScreen() {
   const watcherFix = useMemoryStore((s) => s.lastWatcherFix);
   const initialDone = useMemoryStore((s) => s.initialRevealDone);
   const firstVisitDone = useMemorySettingsStore((s) => s.firstVisitDone);
+  const fogMode = useMemorySettingsStore((s) => s.fogMode);
   const settingsHydrated = useMemorySettingsStore((s) => s.hydrated);
   const setSetting = useMemorySettingsStore((s) => s.set);
 
@@ -193,11 +194,38 @@ export function MemoryScreen() {
         <BackButton variant="pill" onPress={() => nav.goBack()} />
       </View>
 
+      {/* v303 debug: fog-mode pill row, dev-only. Lets the user A/B
+          between the legacy polygon fog and the new native Metal SDF
+          modes on a real device. Setting is persisted in MemorySettings.
+          Gated behind __DEV__ so production users don't see this. */}
+      {__DEV__ && (
+      <View style={[styles.fogModeRow, { top: insets.top + 8 }]} pointerEvents="box-none">
+        {(['legacy', 'sdf-soft', 'sdf-sharp', 'off'] as const).map((m) => {
+          const active = fogMode === m;
+          const label = m === 'legacy' ? 'Legacy'
+                     : m === 'sdf-soft' ? 'Soft'
+                     : m === 'sdf-sharp' ? 'Sharp'
+                     : 'Off';
+          return (
+            <TouchableOpacity
+              key={m}
+              style={[styles.fogModeChip, active && styles.fogModeChipActive]}
+              onPress={() => { log('memory.fog_mode_change', { from: fogMode, to: m }); setSetting('fogMode', m); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.fogModeChipText, active && styles.fogModeChipTextActive]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      )}
+
       {coord ? (
         <MemoryMap
           centerLat={coord.lat}
           centerLng={coord.lng}
           recenterToken={recenterToken}
+          fogMode={fogMode}
           key={`map-${mountKey}`}
         />
       ) : failReason === 'permission' ? (
@@ -276,6 +304,33 @@ const styles = StyleSheet.create({
     zIndex: 10,
     flexDirection: 'row',
     alignItems: 'flex-start',
+  },
+  fogModeRow: {
+    position: 'absolute',
+    right: 12,
+    zIndex: 10,
+    flexDirection: 'row',
+    gap: 4,
+  },
+  fogModeChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  fogModeChipActive: {
+    backgroundColor: MemoryColors.sepia,
+    borderColor: MemoryColors.sepia,
+  },
+  fogModeChipText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: MemoryColors.sepiaDeep,
+  },
+  fogModeChipTextActive: {
+    color: '#fff',
   },
   waitingForGps: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   waitingTitle: { fontSize: 16, fontWeight: '500', color: MemoryColors.sepiaDeep },

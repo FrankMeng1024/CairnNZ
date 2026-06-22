@@ -43,8 +43,9 @@ type UnityViewComponent = React.ComponentType<{
 
 let UnityViewLazy: UnityViewComponent | null = null;
 try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('@azesmway/react-native-unity');
+    // v303 build-slim: same dynamic-require trick as UnityAROverlay.tsx
+    // so Metro doesn't statically resolve the (now-removed) dep.
+    const mod = (require as any)(['@azesmway', 'react-native-unity'].join('/'));
     UnityViewLazy = (mod?.default ?? mod) as UnityViewComponent;
 } catch {
     UnityViewLazy = null;
