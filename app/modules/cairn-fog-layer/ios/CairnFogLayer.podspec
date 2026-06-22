@@ -7,12 +7,18 @@ Pod::Spec.new do |s|
   s.homepage       = 'https://github.com/yiiling/cairn'
   s.platforms = { :ios => '15.1' }
   s.source         = { git: '' }
-  # v303 三轮 subagent #1 fix: 删掉 s.static_framework = true。
-  # @rnmapbox/maps 强制 MapboxMaps 为 dynamic framework(podfile
-  # post_install 把 MapboxMaps* 都改 dynamic),我们这边再 static
-  # 会冲突 → "framework not found MapboxMaps" 或 duplicate symbol。
-  # 默认(不写 static_framework)等价 dynamic,跟 rnmapbox 对齐。
-  s.swift_version  = '5.0'
+  # v303 五轮 fix (真根因): 加回 static_framework。
+  # 四轮删了之后 ExpoModulesProvider.swift `import CairnFogLayer` 编不过 —
+  # "no such module 'CairnFogLayer'"。Swift import 一个 CocoaPod 需要 modulemap;
+  # static_framework=true 时 CocoaPods 自动包成 .framework + 生成 modulemap,
+  # 不加则只生成 static lib (.a) 没 modulemap → Swift 看不见这个 module。
+  #
+  # 四轮 subagent #1 担心"跟 rnmapbox dynamic MapboxMaps 冲突"是误判:
+  # rnmapbox post_install 只动 MapboxMaps* pods,不动我们这个 pod;我们 depend
+  # MapboxMaps 不重打包它。本 build log 已证 librnmapbox-maps.a + MapboxMaps.framework
+  # 并存编译通过,没 duplicate symbol。
+  s.static_framework = true
+  s.swift_version    = '5.0'
 
   s.dependency 'ExpoModulesCore'
   # v303 subagent fix: declare MapboxMaps explicitly so pod-install
