@@ -225,7 +225,12 @@ export function MemoryScreen() {
           centerLat={coord.lat}
           centerLng={coord.lng}
           recenterToken={recenterToken}
-          fogMode={fogMode}
+          // v303 四轮 subagent #2 fix (verify V4): settings 还没 hydrate
+          // 时 fogMode 是 DEFAULTS('sdf-soft'),会让 MemoryMap 第一帧就
+          // attach native fog,而老用户实际 persist 是 'legacy'。hydrate
+          // 完成后立刻 detach 浪费一次完整 attach+ping。在 hydrate 前
+          // 用 'legacy'(JS fog,无 native 风险),hydrate 完才用真值。
+          fogMode={settingsHydrated ? fogMode : 'legacy'}
           key={`map-${mountKey}`}
         />
       ) : failReason === 'permission' ? (

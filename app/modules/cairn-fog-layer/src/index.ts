@@ -57,25 +57,20 @@ export interface PipelineStatus {
 // 会立刻 throw "Cannot find native module"。原代码在文件 top-level
 // 做 require → Android app 一加载这文件就 crash。
 //
-// 改成 lazy: iOS 才真的 require,Android 返回 throw-on-call 占位 stub。
-// 所有 API 方法都用 getNative() 间接拿,保证 module 文件本身 import
-// 在任意平台都安全。
+// 改成 lazy: iOS 才真的 require,Android 直接 throw。
+//
+// v303 四轮 subagent #2 fix (Serious): 不再 cache loadError。冷启动
+// race(expo-modules-core registry 还没 ready)是 transient,cache 一
+// 次就让用户永远进不来。每次调失败让 caller 的 try/catch 处理,下次
+// 调用重新 try。成功后才 cache module 实例。
 let _native: CairnFogLayerNativeModule | null = null;
-let _nativeLoadError: Error | null = null;
 function getNative(): CairnFogLayerNativeModule {
   if (_native) return _native;
-  if (_nativeLoadError) throw _nativeLoadError;
   if (Platform.OS !== 'ios') {
-    _nativeLoadError = new Error(`CairnFogLayer is iOS-only (current platform: ${Platform.OS})`);
-    throw _nativeLoadError;
+    throw new Error(`CairnFogLayer is iOS-only (current platform: ${Platform.OS})`);
   }
-  try {
-    _native = requireNativeModule<CairnFogLayerNativeModule>('CairnFogLayer');
-    return _native;
-  } catch (e: any) {
-    _nativeLoadError = e instanceof Error ? e : new Error(String(e));
-    throw _nativeLoadError;
-  }
+  _native = requireNativeModule<CairnFogLayerNativeModule>('CairnFogLayer');
+  return _native;
 }
 
 /** Attach the SDF fog layer to the @rnmapbox/maps MapView identified by

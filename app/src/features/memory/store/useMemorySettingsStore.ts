@@ -68,10 +68,17 @@ async function tryLoad(): Promise<MemorySettings | null> {
     const recordMode: RecordMode =
       recordModeRaw === 'session-only' ? 'session-only' : 'always';
     const fogModeRaw = parsed.fogMode;
+    // v303 四轮 subagent #2 fix (Critical #4): 之前缺字段 fallback 'legacy',
+    // 跟 DEFAULTS.fogMode='sdf-soft' 矛盾,导致 90% 升级用户卡 legacy 永远
+    // 看不到新视觉(v303 这次 release 等于白做)。修法:有效值列表加上
+    // 'legacy',其他(undefined / 老版本字段缺失 / 损坏) 全走 DEFAULTS。
     const fogMode: FogMode =
-      fogModeRaw === 'off' || fogModeRaw === 'sdf-soft' || fogModeRaw === 'sdf-sharp'
+      fogModeRaw === 'legacy' ||
+      fogModeRaw === 'off' ||
+      fogModeRaw === 'sdf-soft' ||
+      fogModeRaw === 'sdf-sharp'
         ? fogModeRaw
-        : 'legacy';
+        : DEFAULTS.fogMode;
     return {
       foregroundAutoUnlockEnabled: Boolean(parsed.foregroundAutoUnlockEnabled ?? DEFAULTS.foregroundAutoUnlockEnabled),
       recordMode,

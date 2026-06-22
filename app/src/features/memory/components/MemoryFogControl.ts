@@ -34,6 +34,13 @@ interface Props {
   mode: FogRenderMode;
 }
 
+// v303 四轮 subagent #2 fix (Critical #5): 3 次连续失败才 persist 'legacy'。
+// 单次失败可能是 Mapbox 还没真正跑过帧(用户没移动地图)的假阴 — 不能因为
+// 一次假阴就把用户永久踢出 SDF。
+const MAX_CONSECUTIVE_FALLBACKS = 3;
+// 8s 比 5s 给 Mapbox 更长时间真正调一次 render()。
+const PIPELINE_PING_DELAY_MS = 8000;
+
 /**
  * Side-effect hook: attach / update the native fog layer based on the
  * memory store's unlock points + chosen mode. Returns nothing — pure
@@ -43,12 +50,68 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
   // Subscribe to geometry version so any unlock causes re-upload.
   const geometryVersion = useMemoryStore((s) => s.geometryVersion);
   const attachedRef = useRef(false);
+  // v303 四轮 fix: capture last good node 给 unmount cleanup 用 — 那时
+  // mapViewRef.current 可能已经 null。
+  const lastNodeRef = useRef<number | null>(null);
+  // v303 四轮 fix Critical #5: in-memory fallback 计数,3 次失败才 persist。
+  const fallbackAttemptsRef = useRef(0);
+  // v303 四轮 fix Serious: session-only 标记,本次 session 已经判定 native
+  // 不行,effect 直接走 detach 路径不再 re-attach。下次 app 启动重置。
+  const sessionGiveUpRef = useRef(false);
 
-  // iOS only — Android 没 autolink 这个原生 module(expo-module.config.json
-  // 不含 android)。模块层用 lazy getNative() 已经把 import-time crash 避
-  // 开了,这里再用 Platform.OS 跳过所有调用,Android 上 mode 始终走 legacy。
+  // iOS only — Android 没 autolink 这个原生 module。
   const supported = Platform.OS === 'ios';
-  const isNativeMode = mode === 'sdf-soft' || mode === 'sdf-sharp' || mode === 'off';
+  const isNativeMode = (mode === 'sdf-soft' || mode === 'sdf-sharp' || mode === 'off') && !sessionGiveUpRef.current;
+
+  // Helper: 累计 fallback,达阈值才 persist。
+  const tryFallbackToLegacy = (reason: string, extra: Record<string, any>) => {
+    fallbackAttemptsRef.current += 1;
+    const attempts = fallbackAttemptsRef.current;
+    log('memory.fog_native_fallback_candidate', { reason, attempts, ...extra });
+    if (attempts >= MAX_CONSECUTIVE_FALLBACKS) {
+      log('memory.fog_native_auto_fallback_to_legacy', { reason, attempts, ...extra });
+      useMemorySettingsStore.getState().set('fogMode', 'legacy');
+      fallbackAttemptsRef.current = 0; // reset 以防再次循环
+    } else {
+      // session-only:本次先停 SDF,不 persist。用户重新点 pill 会重试。
+      sessionGiveUpRef.current = true;
+    }
+  };
+
+  // Helper: pipeline 准备就绪检查 — 如果 !ready,先 kick Mapbox 重画再 ping
+  // 一次,过滤"Mapbox 没主动 redraw 导致 renderFrameCount=0"的假阴。
+  const checkPipelineWithKick = async (node: number, m: FogRenderMode) => {
+    try {
+      const status = await Fog.isPipelineReady(node);
+      log('memory.fog_native_pipeline_ping', { ...status, mode: m } as any);
+      if (status?.ready) {
+        fallbackAttemptsRef.current = 0; // 成功 → 重置失败计数
+        return;
+      }
+      // 假阴 kick:Mapbox 在用户没动作时不主动 redraw。我们通过 setRipple
+      // 一次 toggle 强制下一帧重画(setRipple 改 uniform 仅 noop 也算
+      // dirty)。然后 2s 后再 ping 一次。
+      try {
+        await Fog.setRipple(node, true);
+        await Fog.setRipple(node, false);
+      } catch {/* ignore — best-effort kick */}
+      await new Promise((r) => setTimeout(r, 2000));
+      const status2 = await Fog.isPipelineReady(node);
+      log('memory.fog_native_pipeline_ping_retry', { ...status2, mode: m } as any);
+      if (status2?.ready) {
+        fallbackAttemptsRef.current = 0;
+        return;
+      }
+      tryFallbackToLegacy('pipeline_not_ready_after_kick', {
+        libSource: status2?.libSource,
+        err: status2?.pipelineError,
+        pipelineBuilt: (status2 as any)?.pipelineBuilt,
+        renderFrameCount: status2?.renderFrameCount,
+      });
+    } catch (e: any) {
+      log('memory.fog_native_pipeline_ping_error', { msg: String(e?.message ?? e).slice(0, 200) });
+    }
+  };
 
   useEffect(() => {
     if (!supported) return;
@@ -57,17 +120,27 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
     // legacy polygon → double fog visible.
     if (!isNativeMode) {
       if (attachedRef.current) {
-        const node = findNodeHandle(mapViewRef.current);
+        const node = lastNodeRef.current ?? findNodeHandle(mapViewRef.current);
         if (node != null) {
-          Fog.removeFogLayer(node).catch((e: any) => {
-            log('memory.fog_native_remove_error', {
-              where: 'mode_change',
-              msg: String(e?.message ?? e).slice(0, 500),
-            });
-          });
-          log('memory.fog_native_detached_on_mode_change');
+          // v303 四轮 fix Serious: await removeFogLayer 完成才设 attachedRef
+          // = false,否则 sdf→legacy→sdf 50ms 内连点会让 add/remove 在
+          // native 端打架。
+          (async () => {
+            try {
+              await Fog.removeFogLayer(node);
+              log('memory.fog_native_detached_on_mode_change');
+            } catch (e: any) {
+              log('memory.fog_native_remove_error', {
+                where: 'mode_change',
+                msg: String(e?.message ?? e).slice(0, 500),
+              });
+            } finally {
+              attachedRef.current = false;
+            }
+          })();
+        } else {
+          attachedRef.current = false;
         }
-        attachedRef.current = false;
       }
       return;
     }
@@ -77,6 +150,7 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
       log('memory.fog_native_no_handle', { mode });
       return;
     }
+    lastNodeRef.current = node;
     let cancelled = false;
     let pingTimer: ReturnType<typeof setTimeout> | null = null;
     (async () => {
@@ -91,21 +165,20 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
             attachedRef.current = false;
             const msg = String(e?.message ?? e).slice(0, 500);
             log('memory.fog_native_add_error', { msg });
-            // v303 二轮 subagent #2 critical fix: auto-fallback to
-            // legacy on attach failure. Otherwise the user sees a
-            // clean map with no fog at all and no indication anything
-            // is wrong. setSetting persists, so next launch also
-            // stays on legacy until the user explicitly tries SDF.
-            log('memory.fog_native_auto_fallback_to_legacy', { reason: 'attach_failed' });
-            useMemorySettingsStore.getState().set('fogMode', 'legacy');
+            // v303 四轮 fix Critical #5: attach 失败也走计数器路径,不是
+            // 立刻 persist。冷启动 race(expo-modules-core registry 还
+            // 没 ready)是常见 transient 故障。
+            tryFallbackToLegacy('attach_failed', { msg });
             return;
           }
           if (cancelled) return;
           log('memory.fog_native_attached', { reactTag: node, mode });
         }
         if (cancelled) return;
+        // v303 四轮 fix Nitpick #1: mode === 'off' ? 'off' : mode 是冗余
+        // (isNativeMode 已 filter 'legacy'),直接传 mode。
         try {
-          await Fog.setMode(node, mode === 'off' ? 'off' : mode);
+          await Fog.setMode(node, mode as 'off' | 'sdf-soft' | 'sdf-sharp');
           log('memory.fog_native_setmode_ok', { mode });
         } catch (e: any) {
           log('memory.fog_native_setmode_error', { mode, msg: String(e?.message ?? e).slice(0, 500) });
@@ -113,8 +186,10 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
         }
         if (cancelled) return;
         // Upload current circle set.
-        const points = useMemoryStore.getState().points;
-        const circles = points.slice(0, 256).map((p) => ({
+        // v303 四轮 subagent #2 fix (Critical #6): slice(-256) 取最新 unlock。
+        const allPoints = useMemoryStore.getState().points;
+        const points = allPoints.length > 256 ? allPoints.slice(-256) : allPoints;
+        const circles = points.map((p) => ({
           lat: p.lat,
           lng: p.lng,
           radius: UnlockConfig.radiusMeters,
@@ -129,37 +204,12 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
         if (cancelled) return;
         log('memory.fog_native_circles_uploaded', { count: circles.length });
 
-        // v303 三轮 subagent #2 fix (Scenario D): pipeline-ready ping
-        // 必须每次 mode/geometryVersion 变化都跑,不能只在新 attach 时
-        // 跑。原来嵌在 `if (!attachedRef.current)` 里 → 切 mode 时
-        // 已 attach → 跳过 ping → 切到坏 mode 无人发现。
-        //
-        // 现在 ping 提到 effect 末尾,每次 effect 都 schedule。
-        // cleanup 把 timer clear 掉防内存泄漏 + 防过时 ping 触发误
-        // fallback。第一次 5s(给 Mapbox 真的跑帧的时间 — pipeline
-        // ready 不等于 render 跑过,renderFrameCount 才靠谱)。
+        // v303 四轮 fix Critical #5: 8s 给 Mapbox 真的 render 时间;ping
+        // 不 ready 时先 kick 一次 (setRipple toggle)再 2s 后 retry。
         pingTimer = setTimeout(() => {
           if (cancelled) return;
-          Fog.isPipelineReady(node).then((status) => {
-            log('memory.fog_native_pipeline_ping', { ...status, mode } as any);
-            // v303 二轮 subagent #2: if pipeline didn't actually
-            // build (silent Swift failure), auto-fallback to legacy
-            // so user sees fog. 三轮: ready 现在包含 renderFrameCount > 0,
-            // 不会再因为"Mapbox 还没调 render"假阴。
-            if (!status?.ready) {
-              log('memory.fog_native_auto_fallback_to_legacy', {
-                reason: 'pipeline_not_ready',
-                libSource: status?.libSource,
-                err: status?.pipelineError,
-                pipelineBuilt: (status as any)?.pipelineBuilt,
-                renderFrameCount: status?.renderFrameCount,
-              });
-              useMemorySettingsStore.getState().set('fogMode', 'legacy');
-            }
-          }).catch((e: any) => {
-            log('memory.fog_native_pipeline_ping_error', { msg: String(e?.message ?? e).slice(0, 200) });
-          });
-        }, 5000);
+          void checkPipelineWithKick(node, mode);
+        }, PIPELINE_PING_DELAY_MS);
       } catch (e: any) {
         log('memory.fog_native_error', { msg: String(e?.message ?? e).slice(0, 500) });
         // Reset attached flag on failure so next attempt re-tries.
@@ -180,13 +230,18 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
   useEffect(() => {
     return () => {
       if (!attachedRef.current) return;
-      const node = findNodeHandle(mapViewRef.current);
-      if (node == null) return;
+      // v303 四轮 fix Critical #3: 用 lastNodeRef,unmount 时 mapViewRef
+      // 可能已经 null。
+      const node = lastNodeRef.current;
+      if (node == null) {
+        attachedRef.current = false;
+        return;
+      }
       Fog.removeFogLayer(node).catch((e: any) => {
         log('memory.fog_native_remove_error', { where: 'unmount', msg: String(e?.message ?? e).slice(0, 200) });
       });
       attachedRef.current = false;
       log('memory.fog_native_detached');
     };
-  }, [mapViewRef]);
+  }, []);
 }

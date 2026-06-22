@@ -45,7 +45,15 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
 
     private var device: MTLDevice?
     private var pipelineState: MTLRenderPipelineState?
-    private var uniformBuffer: MTLBuffer?
+    // v303 四轮 subagent #1 fix (Critical #3): single uniform buffer
+    // 在 60Hz/120Hz 下会撕裂(CPU memcpy 覆盖时 GPU 可能还在读上一帧)。
+    // 改 triple-buffered ring:3 个 buffer,每帧轮换;semaphore.wait()
+    // 保证 in-flight 帧 <= 3;commandBuffer.addCompletedHandler 里 signal。
+    // 标准 Metal best practice (Apple sample MetalNBuffering)。
+    private static let kInFlightBuffers = 3
+    private var uniformBuffers: [MTLBuffer] = []
+    private var uniformBufferIndex: Int = 0
+    private let inFlightSemaphore = DispatchSemaphore(value: kInFlightBuffers)
     private var startTimestamp: TimeInterval = Date().timeIntervalSince1970
     // v303 subagent #3 fix: expose pipeline build status to JS for
     // remote debug via isPipelineReady ping.
@@ -53,6 +61,19 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
     private var renderingStarted: Bool = false
     private var pipelineError: String? = nil
     private var renderFrameCount: Int = 0          // bumped each render(); JS can read once
+    // v303 四轮 subagent #1 fix (Serious #3): sampleCount 不能在
+    // renderingWillStart 时就定,因为 CustomLayerRenderParameters 没暴露
+    // sampleCount。改 lazy:把建 pipeline 用到的参数存下来,第一次 render
+    // 拿到 mtlRenderPassDescriptor 后,按真实 sampleCount 重新 build。
+    private var pendingPipelineBuild: PipelineBuildConfig? = nil
+    private var lastSampleCount: Int = 0
+    private struct PipelineBuildConfig {
+        let vertexFn: MTLFunction
+        let fragmentFn: MTLFunction
+        let colorFmt: MTLPixelFormat
+        let depthFmt: MTLPixelFormat
+        let stencilFmt: MTLPixelFormat
+    }
 
     public func pipelineStatus() -> [String: Any] {
         // v303 三轮 subagent #2 fix: 单看 pipelineState != nil 会假阳 —
@@ -65,7 +86,7 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
             "ready": pipelineOK && hasRendered,
             "pipelineBuilt": pipelineOK,
             "hasDevice": device != nil,
-            "hasUniformBuffer": uniformBuffer != nil,
+            "hasUniformBuffer": !uniformBuffers.isEmpty,
             "libSource": libSource,
             "renderingStarted": renderingStarted,
             "pipelineError": pipelineError ?? "",
@@ -111,6 +132,7 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         circleLock.lock()
         defer { circleLock.unlock() }
         let n = min(rawCircles.count, maxCircles)
+        var written = 0
         for i in 0..<n {
             let row = rawCircles[i]
             guard row.count >= 3 else { continue }
@@ -118,6 +140,13 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
             let lat = row[1]
             let rM  = row[2]
             let born = row.count > 3 ? row[3] : 0.0
+            // v303 四轮 subagent #1 fix (Serious #6): NaN/Inf 防御。
+            // shader length(p-c.xy) 算 NaN 会让 min() 行为依平台不同,
+            // 整屏 fog 可能消失或全 black。JS bridge 偶尔会传 NaN
+            // (新 unlock 还没 sync 时 lat/lng 暂时 undefined → NaN)。
+            guard lng.isFinite, lat.isFinite, rM.isFinite, rM > 0 else { continue }
+            // lat clamp 在 ±85 mercator 安全范围
+            guard lat >= -85.051 && lat <= 85.051 else { continue }
             // Web mercator projection — same math Mapbox uses internally.
             // y is flipped vs lat (north +y in mercator, north +lat).
             let merc = Self.mercatorXY(lng: lng, lat: lat)
@@ -125,28 +154,33 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
             // meterInMercatorCoordinateUnits = 1 / (cos(lat) * earthCircumferenceM)
             let earthCircM = 40_075_017.0
             let metersPerMerc = cos(lat * .pi / 180.0) * earthCircM
+            guard metersPerMerc > 0 else { continue }
             let rMerc = rM / metersPerMerc
-            circleBufferData[i] = SIMD4<Float>(
+            circleBufferData[written] = SIMD4<Float>(
                 Float(merc.x),
                 Float(merc.y),
                 Float(rMerc),
                 Float(born / 1000.0)
             )
+            written += 1
         }
         // Zero unused slots so the shader's circleCount gate is the only check.
-        if n < maxCircles {
-            for i in n..<maxCircles {
+        if written < maxCircles {
+            for i in written..<maxCircles {
                 circleBufferData[i] = SIMD4<Float>(0,0,0,0)
             }
         }
-        circleCount = n
+        circleCount = written
     }
 
     public func setMode(_ mode: String) {
+        // v303 四轮 subagent #1 fix (Serious #5): setMode 不再副作用 feather。
+        // 之前 sharp 写 0.02、其他写 0.30,会覆盖 JS 显式 setFeather 调用。
+        // feather 完全由 setFeather 控制;mode 只决定渲染分支。
         switch mode {
         case "off":       modeFlag = 0
-        case "sdf-sharp": modeFlag = 2; feather = 0.02
-        default:          modeFlag = 1; feather = 0.30
+        case "sdf-sharp": modeFlag = 2
+        default:          modeFlag = 1
         }
     }
     public func setFeather(_ f: Float) { feather = max(0.0, min(1.0, f)) }
@@ -168,8 +202,18 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         // conformance is type-exact in Swift, so any mismatch would
         // refuse to compile.
         NSLog("[CairnFog] renderingWillStart pixelFormat=\(colorPixelFormat)")
+        // v303 四轮 subagent #1 fix (Serious #2): 重入时显式释放上一轮资源,
+        // 别靠 ARC 不可预测的时机。Mapbox style reload 会再次调这个方法,
+        // 旧 pipeline/buffer 还在 GPU 队列里被引用时 ARC 不立刻 free。
+        self.pipelineState = nil
+        self.uniformBuffers.removeAll()
+        self.pipelineError = nil
+        self.libSource = "unknown"
+        // 不重置 startTimestamp 如果之前已经 started 过(ripple 动画连续性)
+        if !self.renderingStarted {
+            self.startTimestamp = Date().timeIntervalSince1970
+        }
         self.device = metalDevice
-        self.startTimestamp = Date().timeIntervalSince1970
         self.renderingStarted = true
 
         // v303 subagent #1 fix A1: the .metal file is compiled into our
@@ -232,52 +276,105 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
             return
         }
 
-        let pipelineDesc = MTLRenderPipelineDescriptor()
-        pipelineDesc.vertexFunction = vertexFn
-        pipelineDesc.fragmentFunction = fragmentFn
-        // v303 三轮 subagent #1 fix: Mapbox 的 render pass 带 depth/stencil
-        // attachment。pipelineDesc 没设 → MTL assert "depth attachment
-        // pixel format does not match" 在第一帧 crash。把 host 给我们的
-        // depthStencilPixelFormat 同时设到 depth 和 stencil(常见是
-        // depth32Float_stencil8 这种组合格式,两边一致是安全的)。
-        let depthFmt = MTLPixelFormat(rawValue: depthStencilPixelFormat) ?? .invalid
-        pipelineDesc.depthAttachmentPixelFormat = depthFmt
-        pipelineDesc.stencilAttachmentPixelFormat = depthFmt
-        let colorAttachment = pipelineDesc.colorAttachments[0]!
-        // v303 二轮 subagent #1 fix: convert UInt → MTLPixelFormat now
-        // that the protocol-witness signature uses UInt directly.
-        colorAttachment.pixelFormat = MTLPixelFormat(rawValue: colorPixelFormat) ?? .bgra8Unorm
-        colorAttachment.isBlendingEnabled = true
-        colorAttachment.rgbBlendOperation = .add
-        colorAttachment.alphaBlendOperation = .add
-        colorAttachment.sourceRGBBlendFactor = .sourceAlpha
-        colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
-        colorAttachment.sourceAlphaBlendFactor = .one
-        colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
-
-        do {
-            self.pipelineState = try metalDevice.makeRenderPipelineState(descriptor: pipelineDesc)
-        } catch {
-            pipelineError = "makeRenderPipelineState failed: \(error.localizedDescription)"
-            NSLog("[CairnFog] FATAL: pipeline state error: \(error.localizedDescription)")
-            return
-        }
-
-        self.uniformBuffer = metalDevice.makeBuffer(length: uniformByteSize, options: .storageModeShared)
-        if self.uniformBuffer == nil {
-            self.pipelineError = "uniform buffer allocation failed (size=\(uniformByteSize))"
+        // v303 四轮 subagent #1 fix (Serious #3): depth/stencil + color
+        // pixel format 解析,但 pipeline build 推迟到第一次 render()
+        // (那时才能拿到 mtlRenderPassDescriptor 的 sampleCount)。
+        let stencilFmt: MTLPixelFormat
+        let depthFmt: MTLPixelFormat
+        if let dfmt = MTLPixelFormat(rawValue: depthStencilPixelFormat) {
+            depthFmt = dfmt
+            switch dfmt {
+            case .depth32Float_stencil8, .depth24Unorm_stencil8, .x32_stencil8, .x24_stencil8:
+                stencilFmt = dfmt
+            default:
+                stencilFmt = .invalid
+            }
+        } else {
+            self.pipelineError = "unknown depthStencilPixelFormat raw=\(depthStencilPixelFormat)"
             NSLog("[CairnFog] FATAL: \(self.pipelineError ?? "")")
             return
         }
-        NSLog("[CairnFog] renderingWillStart OK")
+        guard let colorFmt = MTLPixelFormat(rawValue: colorPixelFormat) else {
+            self.pipelineError = "unknown colorPixelFormat raw=\(colorPixelFormat)"
+            NSLog("[CairnFog] FATAL: \(self.pipelineError ?? "")")
+            return
+        }
+        // 存配置,等 render() 第一次拿到 sampleCount 再 build
+        self.pendingPipelineBuild = PipelineBuildConfig(
+            vertexFn: vertexFn,
+            fragmentFn: fragmentFn,
+            colorFmt: colorFmt,
+            depthFmt: depthFmt,
+            stencilFmt: stencilFmt
+        )
+        self.lastSampleCount = 0  // 未知,等 render
+
+        self.uniformBuffers.removeAll(keepingCapacity: true)
+        for i in 0..<Self.kInFlightBuffers {
+            guard let buf = metalDevice.makeBuffer(length: uniformByteSize, options: .storageModeShared) else {
+                self.pipelineError = "uniform buffer #\(i) allocation failed (size=\(uniformByteSize))"
+                NSLog("[CairnFog] FATAL: \(self.pipelineError ?? "")")
+                return
+            }
+            self.uniformBuffers.append(buf)
+        }
+        self.uniformBufferIndex = 0
+        NSLog("[CairnFog] renderingWillStart OK uniformBuffers=\(self.uniformBuffers.count)")
     }
 
     public func render(_ parameters: CustomLayerRenderParameters,
                        mtlCommandBuffer: MTLCommandBuffer,
                        mtlRenderPassDescriptor: MTLRenderPassDescriptor)
     {
-        guard let pipeline = pipelineState, let uBuffer = uniformBuffer else { return }
         guard modeFlag != 0 else { return } // mode=off: render nothing
+        guard !uniformBuffers.isEmpty else { return }
+        // v303 四轮 subagent #1 fix (Serious #3): lazy build pipeline 用真
+        // 实 sampleCount。每次 render 先确认 pipeline 跟 attachment 的
+        // sampleCount 一致,不一致就用新 sampleCount 重建。常见 sampleCount
+        // = 1(无 MSAA) 或 4(MSAA 4x)。
+        let actualSampleCount = mtlRenderPassDescriptor.colorAttachments[0].texture?.sampleCount ?? 1
+        if pipelineState == nil || actualSampleCount != lastSampleCount {
+            guard let cfg = pendingPipelineBuild, let dev = device else { return }
+            let desc = MTLRenderPipelineDescriptor()
+            desc.vertexFunction = cfg.vertexFn
+            desc.fragmentFunction = cfg.fragmentFn
+            desc.depthAttachmentPixelFormat = cfg.depthFmt
+            desc.stencilAttachmentPixelFormat = cfg.stencilFmt
+            desc.rasterSampleCount = actualSampleCount
+            let ca = desc.colorAttachments[0]!
+            ca.pixelFormat = cfg.colorFmt
+            ca.isBlendingEnabled = true
+            ca.rgbBlendOperation = .add
+            ca.alphaBlendOperation = .add
+            ca.sourceRGBBlendFactor = .sourceAlpha
+            ca.destinationRGBBlendFactor = .oneMinusSourceAlpha
+            ca.sourceAlphaBlendFactor = .one
+            ca.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+            do {
+                self.pipelineState = try dev.makeRenderPipelineState(descriptor: desc)
+                self.lastSampleCount = actualSampleCount
+                self.pipelineError = nil
+                NSLog("[CairnFog] pipeline built sampleCount=\(actualSampleCount)")
+            } catch {
+                self.pipelineError = "makeRenderPipelineState(sampleCount=\(actualSampleCount)) failed: \(error.localizedDescription)"
+                NSLog("[CairnFog] FATAL: \(self.pipelineError ?? "")")
+                return
+            }
+        }
+        guard let pipeline = pipelineState else { return }
+
+        // v303 四轮 subagent #1 fix (Critical #3): triple-buffer ring +
+        // semaphore 防 CPU/GPU 共享内存撕裂。等到至少 1 个 in-flight slot
+        // 空出来才继续(timeout=DISPATCH_TIME_FOREVER 是 Metal 标准做法,
+        // GPU 最多卡 3 帧后必定 signal,实际通常 < 16ms)。
+        _ = inFlightSemaphore.wait(timeout: .distantFuture)
+        let bufIdx = uniformBufferIndex
+        uniformBufferIndex = (uniformBufferIndex + 1) % Self.kInFlightBuffers
+        let uBuffer = uniformBuffers[bufIdx]
+        // 帧完成后 signal,允许下一个 slot 被 wait 拿走
+        mtlCommandBuffer.addCompletedHandler { [weak self] _ in
+            self?.inFlightSemaphore.signal()
+        }
         renderFrameCount += 1
 
         // Snapshot uniforms under lock.
@@ -286,15 +383,36 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         let circlesCopy = circleBufferData
         circleLock.unlock()
 
-        // Build projection matrix from parameters. v11 passes 4x4
-        // doubles in `projectionMatrix` — flatten to float4x4.
+        // v303 四轮 subagent #1 fix (Critical #1): projectionMatrix
+        // 实际类型是 [NSNumber] 16 个数, column-major 顺序 (源:Mapbox
+        // CustomLayerExample.swift v11.20.1 line 376-383)。
+        //   col0 = pm[0..3], col1 = pm[4..7], col2 = pm[8..11], col3 = pm[12..15]
+        // 之前当 [[Double]] 2D array (pm[i][j]) 是错的 — Swift bridge 偶
+        // 然能跑但 Mapbox 内部声明就是扁平 NSArray of NSNumber。直接照
+        // example 的 .simdFloat4x4 写法。
         let pm = parameters.projectionMatrix
-        let proj = float4x4(
-            SIMD4<Float>(Float(pm[0][0]), Float(pm[0][1]), Float(pm[0][2]), Float(pm[0][3])),
-            SIMD4<Float>(Float(pm[1][0]), Float(pm[1][1]), Float(pm[1][2]), Float(pm[1][3])),
-            SIMD4<Float>(Float(pm[2][0]), Float(pm[2][1]), Float(pm[2][2]), Float(pm[2][3])),
-            SIMD4<Float>(Float(pm[3][0]), Float(pm[3][1]), Float(pm[3][2]), Float(pm[3][3]))
-        )
+        let proj: float4x4
+        if pm.count >= 16 {
+            // Swift bridge: pm 是 [NSNumber]。`pm[i]` 返回 NSNumber,
+            // .floatValue 转 Float。column-major 16 个数 → simd_float4x4(cols)。
+            let nums = pm.flatMap { $0 as? [NSNumber] } // 兼容 [[NSNumber]] 旧 SDK
+            let flat: [NSNumber] = nums.isEmpty ? (pm as? [NSNumber] ?? []) : nums
+            if flat.count >= 16 {
+                proj = float4x4(
+                    SIMD4<Float>(flat[0].floatValue, flat[1].floatValue, flat[2].floatValue, flat[3].floatValue),
+                    SIMD4<Float>(flat[4].floatValue, flat[5].floatValue, flat[6].floatValue, flat[7].floatValue),
+                    SIMD4<Float>(flat[8].floatValue, flat[9].floatValue, flat[10].floatValue, flat[11].floatValue),
+                    SIMD4<Float>(flat[12].floatValue, flat[13].floatValue, flat[14].floatValue, flat[15].floatValue)
+                )
+            } else {
+                // 真的拿不到 — 用 identity,fog 不会偏但也不会跟地图对齐
+                proj = matrix_identity_float4x4
+                if renderFrameCount < 5 { NSLog("[CairnFog] WARN projectionMatrix flat count=%d", flat.count) }
+            }
+        } else {
+            proj = matrix_identity_float4x4
+            if renderFrameCount < 5 { NSLog("[CairnFog] WARN projectionMatrix count=%d", pm.count) }
+        }
         let inv = proj.inverse
 
         let now = Float(Date().timeIntervalSince1970 - self.startTimestamp)
@@ -317,7 +435,10 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         var n32 = UInt32(count)
         memcpy(contents.advanced(by: offset), &n32, 4); offset += 4
         // 5. feather (4)
-        var f = feather; memcpy(contents.advanced(by: offset), &f, 4); offset += 4
+        // v303 四轮 fix (Serious #5): modeFlag=2 (sharp) 时 effective feather
+        // = min(feather, 0.02),保留 sharp 视觉但不再覆盖用户 setFeather。
+        var f: Float = (modeFlag == 2) ? min(feather, 0.02) : feather
+        memcpy(contents.advanced(by: offset), &f, 4); offset += 4
         // 6. time (4)
         var t = now; memcpy(contents.advanced(by: offset), &t, 4); offset += 4
         // 7. rippleEnabled (4)
@@ -334,9 +455,18 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
 
     public func renderingWillEnd() {
         NSLog("[CairnFog] renderingWillEnd")
+        // v303 四轮 subagent #1 fix (Serious #1+#2): 把 lifecycle 字段都清,
+        // 否则 Mapbox 重 attach(style reload 等)时 isPipelineReady 假阳:
+        //   - renderFrameCount 残留 → ready=true 但新 pipeline 还没跑过帧
+        //   - pipelineError 残留 → 新建成功但 status 仍报上次错
+        //   - libSource/renderingStarted 残留 → 误诊
         self.pipelineState = nil
-        self.uniformBuffer = nil
+        self.uniformBuffers.removeAll()
         self.device = nil
+        self.renderFrameCount = 0
+        self.renderingStarted = false
+        self.libSource = "unknown"
+        self.pipelineError = nil
     }
 
     // MARK: - Mercator helper

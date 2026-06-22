@@ -164,9 +164,19 @@ public class CairnFogLayerModule: Module {
         AsyncFunction("isPipelineReady") { (reactTag: Int, promise: Promise) in
             DispatchQueue.main.async {
                 guard let layer = self.layersByTag[reactTag] as? CairnFogCustomLayer else {
+                    // v303 四轮 fix (Nitpick): JS 端读 modeFlag 时若 NO_LAYER 也得有,
+                    // 否则 undefined。给个空 schema 保持字段一致。
                     promise.resolve([
                         "ready": false,
                         "reason": "NO_LAYER_ATTACHED",
+                        "pipelineBuilt": false,
+                        "hasDevice": false,
+                        "hasUniformBuffer": false,
+                        "libSource": "unknown",
+                        "renderingStarted": false,
+                        "pipelineError": "",
+                        "renderFrameCount": 0,
+                        "modeFlag": -1,
                     ] as [String: Any])
                     return
                 }
@@ -193,7 +203,13 @@ public class CairnFogLayerModule: Module {
     }
 
     private func findSubviewWithReactTag(_ view: UIView, tag: Int) -> UIView? {
-        if view.value(forKey: "reactTag") as? Int == tag { return view }
+        // v303 四轮 subagent #1 fix (Serious #4): Fabric 下 RCTViewComponentView
+        // 不一定有 "reactTag" KVC key,直接 value(forKey:) 在某些 RN 版本会
+        // throw NSUnknownKeyException → app crash。先 responds(to:) 守护。
+        if view.responds(to: NSSelectorFromString("reactTag")) {
+            if let v = view.value(forKey: "reactTag") as? Int, v == tag { return view }
+            if let v = view.value(forKey: "reactTag") as? NSNumber, v.intValue == tag { return view }
+        }
         for sub in view.subviews {
             if let found = findSubviewWithReactTag(sub, tag: tag) { return found }
         }
@@ -204,10 +220,13 @@ public class CairnFogLayerModule: Module {
     private struct MapHandle {
         let mapView: MapView
         let map: MapboxMap
-        let style: StyleManager
+        // v303 四轮 fix (Nitpick): style 字段已无人使用 — 全切到 map.addPersistentCustomLayer
+        // 后留下死字段,删掉减少耦合(StyleManager 在 v11 是 wrapper)。
     }
 
     private func extractMapboxMap(from view: UIView) -> MapHandle? {
+        // v303 四轮 fix (Nitpick): 入口先清上次失败的 tree,否则成功后
+        // lastExtractFailureTree 残留下次 reject 误报。
         // @rnmapbox/maps under React Native's new architecture (Fabric)
         // wraps the legacy `RNMBXMapView` (UIView subclass with the
         // `public var mapView : MapView!`) inside a Fabric component
@@ -222,6 +241,7 @@ public class CairnFogLayerModule: Module {
         //   3. Else, give up.
         // We bridge via KVC so we don't have to import RNMBX symbols.
 
+        self.lastExtractFailureTree = ""
         var innerView: UIView? = view
         if view.responds(to: Selector(("mapView"))) {
             // Looks like RNMBXMapView already.
@@ -241,15 +261,15 @@ public class CairnFogLayerModule: Module {
             self.lastExtractFailureTree = String(tree.prefix(800))
             return nil
         }
-        let style = mapBoxView.mapboxMap.style
-        return MapHandle(mapView: mapBoxView, map: mapBoxView.mapboxMap, style: style)
+        return MapHandle(mapView: mapBoxView, map: mapBoxView.mapboxMap)
     }
 
     private var lastExtractFailureTree: String = ""
 
     private func dumpViewTreeString(_ view: UIView, depth: Int) -> String {
         let prefix = String(repeating: "  ", count: depth)
-        let tag = view.value(forKey: "reactTag") ?? "nil"
+        let tag: Any = view.responds(to: NSSelectorFromString("reactTag"))
+            ? (view.value(forKey: "reactTag") ?? "nil") : "n/a"
         var out = "\(prefix)\(type(of: view)) reactTag=\(tag)\n"
         for sub in view.subviews { out += dumpViewTreeString(sub, depth: depth + 1) }
         return out
@@ -257,7 +277,9 @@ public class CairnFogLayerModule: Module {
 
     private func dumpViewTree(_ view: UIView, depth: Int) {
         let prefix = String(repeating: "  ", count: depth)
-        log("\(prefix)\(type(of: view)) reactTag=\(view.value(forKey: "reactTag") ?? "nil")")
+        let tag: Any = view.responds(to: NSSelectorFromString("reactTag"))
+            ? (view.value(forKey: "reactTag") ?? "nil") : "n/a"
+        log("\(prefix)\(type(of: view)) reactTag=\(tag)")
         for sub in view.subviews { dumpViewTree(sub, depth: depth + 1) }
     }
 
