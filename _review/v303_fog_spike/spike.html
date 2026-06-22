@@ -36,7 +36,7 @@
 
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
 <script>
-mapboxgl.accessToken = 'pk.eyJ1IjoiNzRqdHgiLCJhIjoiY21wOWQ3d3g0MG9zYTMzcHhraDQ2N3hiYyJ9.ICN7x0SsiUafGaN09Boy8w';
+mapboxgl.accessToken = (window.__MAPBOX_TOKEN__ || '');
 
 // NZ Wellington area
 const CENTER = [174.7762, -41.2865];
