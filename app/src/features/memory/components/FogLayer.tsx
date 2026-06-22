@@ -73,6 +73,14 @@ export function FogLayer({ bounds }: Props) {
           fillOpacity: 1,
         }}
       />
+      {/* v302 N5: a LineLayer for soft hole edges was prototyped but
+          reverted — the line would have drawn on the outer ring too
+          (= a frame around the entire viewport, not the look the
+          user wanted). Proper fix requires the hole rings shipped
+          via a SEPARATE ShapeSource, which is deferred to v303 when
+          fogBuilder is restructured. The new fog alpha (0.62 from
+          0.78) on its own already softens the contrast users
+          complained about. */}
     </ShapeSource>
   );
 }

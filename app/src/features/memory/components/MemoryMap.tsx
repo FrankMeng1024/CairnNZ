@@ -14,8 +14,8 @@
  * doesn't follow centerCoordinate prop updates after first mount.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { MemoryColors } from '../config/memoryConfig';
@@ -23,6 +23,9 @@ import { FogLayer } from './FogLayer';
 import { FogBounds } from '../services/fogBuilder';
 import { CairnPinsLayer } from './CairnPinsLayer';
 import { log } from '../../../services/appLog';
+import { Icon } from '../../../components/Icon';
+import { Colors } from '../../../components/tokens';
+import { haversineM } from '../../../utils/geo';
 
 interface Props {
   centerLat: number;
@@ -66,6 +69,16 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0 }: Props) {
   const [bounds, setBounds] = useState<FogBounds>(() =>
     estimateInitialBounds(centerLat, centerLng)
   );
+  // v302 N6: track whether the user has panned the map away from
+  // the GPS-driven center. Hiking-style: don't auto-follow user
+  // location; instead expose a recenter pill when the camera drifts
+  // beyond ~50m of the GPS fix. Same UX as HikingScreen.
+  const [hasPannedAway, setHasPannedAway] = useState(false);
+  // We anchor on the first known center (the GPS fix at mount time)
+  // — not the live coord prop, which would let `centerCoord` updates
+  // from the watcher quietly drag the "did the user pan?" baseline.
+  const anchorRef = useRef({ lat: centerLat, lng: centerLng });
+  const cameraRef = useRef<any>(null);
 
   /**
    * Update bounds only if the new bounds differ from current beyond a
@@ -90,10 +103,15 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0 }: Props) {
     });
   }, []);
 
-  // Update initial bounds estimate if the center coord changes (e.g.
-  // navigation re-enter at a different location) BEFORE the first
-  // onMapIdle fires.
+  // Update initial bounds estimate only on FIRST mount. After that,
+  // watcher-driven centerLat/Lng prop changes must NOT recompute
+  // bounds (v302 N6: the Camera is intentionally not following the
+  // watcher; rebuilding fog bounds on every push would still trigger
+  // fogBuilder work for a map view that never moved).
+  const firstBoundsSetRef = useRef(false);
   useEffect(() => {
+    if (firstBoundsSetRef.current) return;
+    firstBoundsSetRef.current = true;
     updateBoundsIfChanged(estimateInitialBounds(centerLat, centerLng));
   }, [centerLat, centerLng, updateBoundsIfChanged]);
 
@@ -107,6 +125,17 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0 }: Props) {
     const center = feature?.properties?.center;
     const zoom = feature?.properties?.zoom;
     if (!Array.isArray(center) || center.length < 2 || typeof zoom !== 'number') return;
+
+    // v302 N6: compare the settled center to the GPS anchor. If the
+    // user panned > 50m away, surface the recenter pill (same as
+    // HikingScreen's followUser=false UX).
+    const dist = haversineM(
+      { lat: anchorRef.current.lat, lng: anchorRef.current.lng },
+      { lat: center[1], lng: center[0] }
+    );
+    const panned = dist > 50;
+    setHasPannedAway((prev) => (prev === panned ? prev : panned));
+
     // Approximate degrees-per-screen at this zoom using a standard
     // Web Mercator m/px formula. We use a generous half-width that
     // safely covers all phone aspect ratios.
@@ -125,6 +154,28 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0 }: Props) {
       south: Math.max(-85.05, center[1] - halfLat),
     });
   }, [updateBoundsIfChanged]);
+
+  // v302 N6: when the recenter button bumps the token, re-anchor on
+  // the current GPS coord and reset the pan-away flag. The Camera is
+  // also remounted (via cameraKey) so it flies to the new center.
+  useEffect(() => {
+    if (recenterToken > 0) {
+      anchorRef.current = { lat: centerLat, lng: centerLng };
+      setHasPannedAway(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recenterToken]);
+
+  const onRecenter = useCallback(() => {
+    log('memory.map_recenter_btn');
+    anchorRef.current = { lat: centerLat, lng: centerLng };
+    setHasPannedAway(false);
+    cameraRef.current?.setCamera?.({
+      centerCoordinate: [centerLng, centerLat],
+      zoomLevel: INITIAL_ZOOM,
+      animationDuration: 600,
+    });
+  }, [centerLat, centerLng]);
 
   // Camera key remount strategy — bumping recenterToken alone triggers
   // a fresh flyTo to the current center. Center prop changes flow into
@@ -151,9 +202,16 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0 }: Props) {
         onMapIdle={onMapSettle}
       >
         <Camera
+          ref={cameraRef}
           key={cameraKey}
-          centerCoordinate={[centerLng, centerLat]}
-          zoomLevel={INITIAL_ZOOM}
+          // v302 N6: defaultSettings (instead of centerCoordinate prop)
+          // so a centerLat/Lng prop change (e.g. watcher push) does NOT
+          // auto-fly back to the user's current position. The user
+          // explicitly drives recenter via the pill button.
+          defaultSettings={{
+            centerCoordinate: [centerLng, centerLat],
+            zoomLevel: INITIAL_ZOOM,
+          }}
           animationMode={'flyTo'}
           animationDuration={600}
         />
@@ -161,6 +219,13 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0 }: Props) {
         <FogLayer bounds={bounds} />
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>
+      {/* v302 N6: recenter pill — shown after user pans away. Same
+          interaction as HikingScreen.tsx Target button. */}
+      {hasPannedAway && (
+        <TouchableOpacity style={styles.recenterBtn} onPress={onRecenter} activeOpacity={0.85}>
+          <Icon name="Target" size={22} color={Colors.primary} strokeWidth={2} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -169,4 +234,15 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
   webStub: { flex: 1, backgroundColor: MemoryColors.cream },
+  recenterBtn: {
+    position: 'absolute',
+    right: 16,
+    bottom: 24,
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: Colors.border,
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 }, elevation: 4,
+  },
 });

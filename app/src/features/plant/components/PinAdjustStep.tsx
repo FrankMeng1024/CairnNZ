@@ -454,11 +454,16 @@ export function PinAdjustStep({
           </ShapeSource>
         </MapView>
 
-        {/* pin is fixed at screen center — non-interactive overlay. */}
+        {/* v302 N1: simplified pin — single circle, no tail.
+            With the old pinHead+pinTail bounding box the View center
+            (= screenCenter = map.center = stored lat/lng) was NOT
+            the visual circle center but a midpoint between head and
+            tail, so the visible arrow could be outside the 50m ring
+            while the stored coord was still inside. Now the circle
+            IS the anchor, no ambiguity. */}
         <View pointerEvents="none" style={styles.centerOverlay}>
-          <View style={styles.pin}>
-            <View style={styles.pinHead} />
-            <View style={styles.pinTail} />
+          <View style={styles.pinDot}>
+            <View style={styles.pinDotInner} />
           </View>
         </View>
 
@@ -655,6 +660,26 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0, bottom: 0, left: 0, right: 0,
     alignItems: 'center', justifyContent: 'center',
+  },
+  // v302 N1: replacement for old pin head+tail. Outer ring is the
+  // type color (defaults to flag/orange) at 30 px; inner dot at 10 px
+  // gives a clear, centered "this is the spot" marker. Both centers
+  // align to the View's geometric center, which Flexbox places
+  // exactly on the screen center. Stored lat/lng == visual center.
+  pinDot: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderWidth: 3,
+    borderColor: Colors.flag,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  pinDotInner: {
+    width: 10, height: 10, borderRadius: 5,
+    backgroundColor: Colors.flag,
   },
   hintBanner: {
     position: 'absolute',

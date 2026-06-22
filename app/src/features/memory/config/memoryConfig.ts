@@ -77,7 +77,14 @@ export const MysteryVisibilityConfig = {
  * without touching the SEMANTIC unlock policy (radius, accuracy gate).
  */
 export const FogConfig = {
-  /** Polygon vertex count per circular hole. Higher = smoother edges. */
+  /** Polygon vertex count per circular hole. Higher = smoother edges.
+   *  v302: investigated 32→64 (subagent perf review) but reverted —
+   *  600 points × 64 verts doubles turf.union cost (300ms→600ms),
+   *  worsening the user's "memory 打开慢" complaint. Smooth edges
+   *  is a polish item, open speed is a red-line. Defer to v303 when
+   *  fogBuilder is rewritten with a non-union approach (deck.gl mask
+   *  or SDF shader) where vertex count is decoupled from open time.
+   */
   circleVertices: 32,
   /**
    * Cull-threshold multiplier: when two visited points are closer than
@@ -98,6 +105,11 @@ export const FogConfig = {
    *
    * Verified via Playwright web spike: pad=5 silently fails, pad=0.5
    * works. Re-verify on native if changing.
+   *
+   * v302: investigated 0.5→2 to fix the "zoom out shows fog ring
+   * edge" complaint, but subagent perf review flagged risk of silent-
+   * skip at MIN_ZOOM=14. Reverted. Proper fix requires zoom-aware
+   * padFactor (compute per-frame) — defer to v303.
    */
   outerRingPadFactor: 0.5,
   /**
@@ -113,7 +125,14 @@ export const MemoryColors = {
   cream: '#f7f2e5',
   sepia: '#b5823d',
   sepiaDeep: '#5b4628',
-  fogOverlay: 'rgba(74, 50, 30, 0.78)',
+  // v302 N5: softer, less heavy fog. The previous 0.78 alpha read as
+  // a brown wall; 0.62 keeps the "I haven't been here" feeling but
+  // lets the underlying map peek through. Color shifted slightly
+  // warmer / darker so the cleared map (cream) pops more on contrast.
+  fogOverlay: 'rgba(50, 35, 20, 0.62)',
+  // Soft edge color for the cleared/fog boundary — drawn as a thin
+  // LineLayer on the hole rings to anti-alias the union outline.
+  fogEdge: 'rgba(247, 242, 229, 0.55)',
   contour: 'rgba(181, 130, 61, 0.18)',
   userPath: '#d4a96a',
   userDot: '#4a8b3f',

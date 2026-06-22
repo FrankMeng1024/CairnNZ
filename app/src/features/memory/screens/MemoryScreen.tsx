@@ -41,7 +41,7 @@ interface FixState { lat: number; lng: number }
 const ONE_SHOT_TIMEOUT_MS = 12_000;
 const WATCHER_FIX_FRESH_MS = 10 * 60 * 1000; // 10 min — stale lat/lng OK for map display
 const FOCUS_REFETCH_DEBOUNCE_MS = 5_000;
-const FOCUS_REMOUNT_DEBOUNCE_MS = 30_000; // S3 fix: don't tear down map on rapid back-and-forth
+const FOCUS_REMOUNT_DEBOUNCE_MS = 5 * 60 * 1000; // v302 N3: 30s→5min — Mapbox cold reload is heavy (1-3s), don't redo it during the same session unless old.
 
 type FailReason = 'permission' | 'timeout' | 'error';
 
