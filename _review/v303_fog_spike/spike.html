@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>v303 SDF Fog Spike</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+<style>
+  body, html { margin: 0; padding: 0; height: 100%; background: #1a1612; font-family: -apple-system, sans-serif; color: #fff; }
+  #map { position: absolute; inset: 0; }
+  #panel {
+    position: absolute; top: 12px; left: 12px; z-index: 10;
+    background: rgba(20,16,12,0.85); padding: 12px 14px; border-radius: 10px;
+    font-size: 12px; line-height: 1.6; max-width: 280px;
+  }
+  #panel h1 { margin: 0 0 6px; font-size: 14px; color: #ffce6b; }
+  #panel button { margin-top: 6px; padding: 6px 10px; background: #ffce6b; color: #1a1612; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; }
+  #stats { position: absolute; bottom: 12px; left: 12px; z-index: 10; background: rgba(20,16,12,0.85); padding: 8px 12px; border-radius: 8px; font-size: 11px; color: #aaa; font-family: monospace; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h1>SDF Fog Spike (v303)</h1>
+  <div>Per-pixel SDF in fragment shader.</div>
+  <div>Soft edge via <code>smoothstep</code>.</div>
+  <div>All unlock circles uploaded as uniform array.</div>
+  <button onclick="window.addRandomCircles(50)">+50 圆 (test scale)</button>
+  <button onclick="window.toggleRipple()">切换 ripple 动画</button>
+  <button onclick="window.toggleEdgeSoftness()">切换软边强度</button>
+</div>
+<div id="stats">
+  <span id="circle-count">0 unlocks</span> ·
+  <span id="fps">-- fps</span>
+</div>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiNzRqdHgiLCJhIjoiY21wOWQ3d3g0MG9zYTMzcHhraDQ2N3hiYyJ9.ICN7x0SsiUafGaN09Boy8w';
+
+// NZ Wellington area
+const CENTER = [174.7762, -41.2865];
+const INITIAL_ZOOM = 14;
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/outdoors-v12',
+  center: CENTER,
+  zoom: INITIAL_ZOOM,
+  pitch: 0,
+  bearing: 0,
+});
+window.map = map;
+
+// ────────────────────────────────────────────────────────────────────
+// State
+// ────────────────────────────────────────────────────────────────────
+
+// Each unlock = lng, lat, radius (meters)
+const unlockCircles = [];
+let rippleEnabled = false;
+let edgeFeatherFraction = 0.30; // 30% of radius for soft edge
+
+// Seed with a few circles around the center
+function seed() {
+  const startTime = performance.now();
+  for (let i = 0; i < 12; i++) {
+    const dx = (Math.random() - 0.5) * 0.012;
+    const dy = (Math.random() - 0.5) * 0.008;
+    unlockCircles.push({
+      lng: CENTER[0] + dx,
+      lat: CENTER[1] + dy,
+      radius: 25 + Math.random() * 8,
+      bornAt: startTime - i * 100,
+    });
+  }
+}
+seed();
+
+window.addRandomCircles = function(n) {
+  const t = performance.now();
+  for (let i = 0; i < n; i++) {
+    const dx = (Math.random() - 0.5) * 0.030;
+    const dy = (Math.random() - 0.5) * 0.020;
+    unlockCircles.push({
+      lng: CENTER[0] + dx,
+      lat: CENTER[1] + dy,
+      radius: 25 + Math.random() * 8,
+      bornAt: t + i * 30,
+    });
+  }
+  updateUnlockUniforms();
+  document.getElementById('circle-count').textContent = unlockCircles.length + ' unlocks';
+  map.triggerRepaint();
+};
+
+window.toggleRipple = function() {
+  rippleEnabled = !rippleEnabled;
+  map.triggerRepaint();
+};
+
+window.toggleEdgeSoftness = function() {
+  edgeFeatherFraction = edgeFeatherFraction < 0.5 ? 0.5 : 0.30;
+  map.triggerRepaint();
+};
+
+// ────────────────────────────────────────────────────────────────────
+// Coordinate helper — lat/lng to Mapbox MercatorCoordinate (clip space ready)
+// ────────────────────────────────────────────────────────────────────
+
+function lngLatToMercatorXY(lng, lat) {
+  const merc = mapboxgl.MercatorCoordinate.fromLngLat([lng, lat], 0);
+  return { x: merc.x, y: merc.y, meterUnit: merc.meterInMercatorCoordinateUnits() };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Custom WebGL layer — SDF fog
+// ────────────────────────────────────────────────────────────────────
+
+// We pack circles as a flat Float32Array [x0, y0, r0, _,  x1, y1, r1, _, ...]
+// where x,y are in mercator units, r is in mercator units too (radius_m * meterInMercatorUnits).
+const MAX_CIRCLES = 256;
+let circleData = new Float32Array(MAX_CIRCLES * 4);
+let activeCircleCount = 0;
+
+function updateUnlockUniforms() {
+  activeCircleCount = Math.min(unlockCircles.length, MAX_CIRCLES);
+  for (let i = 0; i < activeCircleCount; i++) {
+    const c = unlockCircles[i];
+    const m = lngLatToMercatorXY(c.lng, c.lat);
+    const r_merc = c.radius * m.meterUnit;
+    circleData[i * 4 + 0] = m.x;
+    circleData[i * 4 + 1] = m.y;
+    circleData[i * 4 + 2] = r_merc;
+    circleData[i * 4 + 3] = (c.bornAt || 0) / 1000.0;
+  }
+  document.getElementById('circle-count').textContent = unlockCircles.length + ' unlocks';
+}
+
+const fogLayer = {
+  id: 'sdf-fog',
+  type: 'custom',
+  renderingMode: '2d',
+
+  onAdd: function (mapInstance, gl) {
+    this.map = mapInstance;
+
+    // Full-screen triangle vertex shader (covers entire viewport in clip space).
+    const vs = `
+      attribute vec2 a_pos;
+      varying vec2 v_clip;
+      void main() {
+        v_clip = a_pos;
+        gl_Position = vec4(a_pos, 0.0, 1.0);
+      }
+    `;
+
+    // Fragment shader: for each pixel:
+    //  - compute its mercator position by inverse-projecting clip space
+    //  - find min distance to any unlock circle center (in mercator units)
+    //  - alpha = smoothstep(r_inner, r_outer, dist) — soft edge
+    //  - clear inside, fog outside
+    const fs = `
+      precision highp float;
+      varying vec2 v_clip;
+      uniform mat4 u_inv_proj;     // mercator -> clip-space inverse
+      uniform vec4 u_circles[${MAX_CIRCLES}]; // x,y in merc; z = radius_merc; w = bornTime
+      uniform int u_n_circles;
+      uniform float u_feather;     // fraction of radius for soft edge (0..1)
+      uniform float u_time;        // seconds since page load
+      uniform float u_ripple;      // 0 or 1
+      uniform vec4 u_fog_color;
+
+      void main() {
+        // Inverse-project clip-space [-1,1] to mercator coordinate.
+        vec4 m = u_inv_proj * vec4(v_clip, 0.0, 1.0);
+        vec2 p = m.xy / m.w;
+
+        // DEBUG: visualize the mercator coord as color to verify projection.
+        // Comment this back out after we confirm SDF math is correct.
+        // gl_FragColor = vec4(fract(p.x * 100.0), fract(p.y * 100.0), 0.5, 1.0); return;
+
+        // Find minimum (dist - radius) over all unlock circles, normalized by radius.
+        float minSignedNormalized = 1.0e10;
+        for (int i = 0; i < ${MAX_CIRCLES}; i++) {
+          if (i >= u_n_circles) break;
+          vec4 c = u_circles[i];
+          vec2 d = p - c.xy;
+          float dist = length(d);
+          float signed = dist - c.z; // negative inside
+          float normalized = signed / c.z;
+          if (normalized < minSignedNormalized) {
+            minSignedNormalized = normalized;
+          }
+        }
+
+        // DEBUG (commented out — uncomment to inspect projection):
+        // gl_FragColor = vec4(p.x, p.y, 0.0, 0.85); return;
+
+        // Soft edge: smoothstep from -feather to 0 (inside transition to outside).
+        // alpha = 0 well inside (cleared), 1 well outside (full fog).
+        float alpha = smoothstep(-u_feather, 0.0, minSignedNormalized);
+
+        // Ripple: subtle pulse on the ring of each circle.
+        if (u_ripple > 0.5) {
+          float ringDist = abs(minSignedNormalized); // 0 on the ring
+          float ringMask = smoothstep(0.10, 0.0, ringDist);
+          float wave = 0.5 + 0.5 * sin(u_time * 2.5);
+          alpha = mix(alpha, alpha * (1.0 - 0.35 * ringMask * wave), 1.0);
+        }
+
+        gl_FragColor = vec4(u_fog_color.rgb, u_fog_color.a * alpha);
+      }
+    `;
+
+    this.program = createProgram(gl, vs, fs);
+    this.aPos = gl.getAttribLocation(this.program, 'a_pos');
+    this.uInvProj = gl.getUniformLocation(this.program, 'u_inv_proj');
+    this.uCircles = gl.getUniformLocation(this.program, 'u_circles');
+    this.uN = gl.getUniformLocation(this.program, 'u_n_circles');
+    this.uFeather = gl.getUniformLocation(this.program, 'u_feather');
+    this.uTime = gl.getUniformLocation(this.program, 'u_time');
+    this.uRipple = gl.getUniformLocation(this.program, 'u_ripple');
+    this.uFogColor = gl.getUniformLocation(this.program, 'u_fog_color');
+
+    // Full-screen triangle (covers viewport in clip space).
+    this.buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1,
+       3, -1,
+      -1,  3,
+    ]), gl.STATIC_DRAW);
+
+    this.startTime = performance.now();
+    updateUnlockUniforms();
+  },
+
+  render: function (gl, matrix) {
+    gl.useProgram(this.program);
+
+    // matrix passed by mapbox-gl is the projection matrix mercator -> clip space.
+    // We need its inverse to go clip -> mercator in the shader.
+    const inv = mat4Invert(matrix);
+    gl.uniformMatrix4fv(this.uInvProj, false, inv);
+
+    gl.uniform4fv(this.uCircles, circleData);
+    gl.uniform1i(this.uN, activeCircleCount);
+    gl.uniform1f(this.uFeather, edgeFeatherFraction);
+    gl.uniform1f(this.uTime, (performance.now() - this.startTime) / 1000);
+    gl.uniform1f(this.uRipple, rippleEnabled ? 1.0 : 0.0);
+    // sepia fog — match Cairn MemoryColors.fogOverlay
+    gl.uniform4f(this.uFogColor, 0.19, 0.14, 0.08, 0.78);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+    gl.enableVertexAttribArray(this.aPos);
+    gl.vertexAttribPointer(this.aPos, 2, gl.FLOAT, false, 0, 0);
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  },
+};
+
+// ────────────────────────────────────────────────────────────────────
+// GL utils
+// ────────────────────────────────────────────────────────────────────
+
+function createShader(gl, type, source) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, source);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(s);
+    console.error('Shader compile error:', log);
+    throw new Error(log);
+  }
+  return s;
+}
+function createProgram(gl, vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, createShader(gl, gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, createShader(gl, gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    throw new Error(gl.getProgramInfoLog(p));
+  }
+  return p;
+}
+function mat4Invert(m) {
+  const inv = new Float32Array(16);
+  const a00 = m[0], a01 = m[1], a02 = m[2], a03 = m[3];
+  const a10 = m[4], a11 = m[5], a12 = m[6], a13 = m[7];
+  const a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11];
+  const a30 = m[12], a31 = m[13], a32 = m[14], a33 = m[15];
+
+  const b00 = a00 * a11 - a01 * a10;
+  const b01 = a00 * a12 - a02 * a10;
+  const b02 = a00 * a13 - a03 * a10;
+  const b03 = a01 * a12 - a02 * a11;
+  const b04 = a01 * a13 - a03 * a11;
+  const b05 = a02 * a13 - a03 * a12;
+  const b06 = a20 * a31 - a21 * a30;
+  const b07 = a20 * a32 - a22 * a30;
+  const b08 = a20 * a33 - a23 * a30;
+  const b09 = a21 * a32 - a22 * a31;
+  const b10 = a21 * a33 - a23 * a31;
+  const b11 = a22 * a33 - a23 * a32;
+
+  let det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+  if (!det) return inv;
+  det = 1.0 / det;
+
+  inv[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det;
+  inv[1] = (a02 * b10 - a01 * b11 - a03 * b09) * det;
+  inv[2] = (a31 * b05 - a32 * b04 + a33 * b03) * det;
+  inv[3] = (a22 * b04 - a21 * b05 - a23 * b03) * det;
+  inv[4] = (a12 * b08 - a10 * b11 - a13 * b07) * det;
+  inv[5] = (a00 * b11 - a02 * b08 + a03 * b07) * det;
+  inv[6] = (a32 * b02 - a30 * b05 - a33 * b01) * det;
+  inv[7] = (a20 * b05 - a22 * b02 + a23 * b01) * det;
+  inv[8] = (a10 * b10 - a11 * b08 + a13 * b06) * det;
+  inv[9] = (a01 * b08 - a00 * b10 - a03 * b06) * det;
+  inv[10] = (a30 * b04 - a31 * b02 + a33 * b00) * det;
+  inv[11] = (a21 * b02 - a20 * b04 - a23 * b00) * det;
+  inv[12] = (a11 * b07 - a10 * b09 - a12 * b06) * det;
+  inv[13] = (a00 * b09 - a01 * b07 + a02 * b06) * det;
+  inv[14] = (a31 * b01 - a30 * b03 - a32 * b00) * det;
+  inv[15] = (a20 * b03 - a21 * b01 + a22 * b00) * det;
+  return inv;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// FPS
+// ────────────────────────────────────────────────────────────────────
+let frames = 0;
+let lastFpsT = performance.now();
+function fpsTick() {
+  frames++;
+  const now = performance.now();
+  if (now - lastFpsT > 500) {
+    const fps = Math.round(frames * 1000 / (now - lastFpsT));
+    document.getElementById('fps').textContent = fps + ' fps';
+    frames = 0;
+    lastFpsT = now;
+  }
+  requestAnimationFrame(fpsTick);
+}
+fpsTick();
+
+map.on('load', () => {
+  map.addLayer(fogLayer);
+  // Keep redrawing for ripple animation when enabled.
+  setInterval(() => {
+    if (rippleEnabled) map.triggerRepaint();
+  }, 1000 / 30);
+  window.__mapReady = true;
+});
+</script>
+</body>
+</html>
