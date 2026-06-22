@@ -150,10 +150,16 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
     // MARK: - CustomLayerHost protocol
 
     public func renderingWillStart(_ metalDevice: MTLDevice,
-                                   colorPixelFormat: MTLPixelFormat,
-                                   depthStencilPixelFormat: MTLPixelFormat)
+                                   colorPixelFormat: UInt,
+                                   depthStencilPixelFormat: UInt)
     {
-        NSLog("[CairnFog] renderingWillStart pixelFormat=\(colorPixelFormat.rawValue)")
+        // v303 二轮 subagent #1 fix: Mapbox v11 CustomLayerHost protocol
+        // declares colorPixelFormat / depthStencilPixelFormat as UInt
+        // (NOT MTLPixelFormat). Reference: mapbox-maps-ios
+        // EmptyCustomRenderer.swift + CustomLayerExample.swift. Protocol
+        // conformance is type-exact in Swift, so any mismatch would
+        // refuse to compile.
+        NSLog("[CairnFog] renderingWillStart pixelFormat=\(colorPixelFormat)")
         self.device = metalDevice
         self.startTimestamp = Date().timeIntervalSince1970
         self.renderingStarted = true
@@ -173,6 +179,7 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
             if let lib = try? metalDevice.makeDefaultLibrary(bundle: bundle) {
                 NSLog("[CairnFog] loaded metallib from \(bundle.bundlePath)")
                 library = lib
+                self.libSource = "precompiled-default"
                 break
             }
             // Try a sub-bundle named after our pod (cocoapods resource bundle convention).
@@ -181,6 +188,7 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
                let lib = try? metalDevice.makeDefaultLibrary(bundle: subBundle) {
                 NSLog("[CairnFog] loaded metallib from sub-bundle \(subUrl.path)")
                 library = lib
+                self.libSource = "precompiled-subbundle"
                 break
             }
         }
@@ -189,10 +197,24 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         // pipeline isn't silently broken by a bundle lookup miss.
         if library == nil {
             NSLog("[CairnFog] WARN: no precompiled metallib found, compiling shader from source")
-            library = try? metalDevice.makeLibrary(source: Self.embeddedShaderSource, options: nil)
+            do {
+                library = try metalDevice.makeLibrary(source: Self.embeddedShaderSource, options: nil)
+                self.libSource = "embedded"
+            } catch {
+                self.libSource = "failed"
+                self.pipelineError = "embedded compile failed: \(error.localizedDescription)"
+                NSLog("[CairnFog] FATAL: embedded shader compile failed: \(error.localizedDescription)")
+            }
         }
         guard let library = library else {
-            NSLog("[CairnFog] FATAL: shader library load failed (both bundle and source compile failed)")
+            // v303 二轮 subagent #2 fix: must set pipelineError so the
+            // remote ping can distinguish "library failed to load" from
+            // "still building".
+            if self.pipelineError == nil {
+                self.pipelineError = "shader library load failed (no precompiled metallib found, embedded source compile not attempted or failed)"
+            }
+            self.libSource = "failed"
+            NSLog("[CairnFog] FATAL: \(self.pipelineError ?? "library load failed")")
             return
         }
         guard let vertexFn = library.makeFunction(name: "fogVertex"),
@@ -206,7 +228,9 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         pipelineDesc.vertexFunction = vertexFn
         pipelineDesc.fragmentFunction = fragmentFn
         let colorAttachment = pipelineDesc.colorAttachments[0]!
-        colorAttachment.pixelFormat = colorPixelFormat
+        // v303 二轮 subagent #1 fix: convert UInt → MTLPixelFormat now
+        // that the protocol-witness signature uses UInt directly.
+        colorAttachment.pixelFormat = MTLPixelFormat(rawValue: colorPixelFormat) ?? .bgra8Unorm
         colorAttachment.isBlendingEnabled = true
         colorAttachment.rgbBlendOperation = .add
         colorAttachment.alphaBlendOperation = .add
@@ -224,6 +248,11 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         }
 
         self.uniformBuffer = metalDevice.makeBuffer(length: uniformByteSize, options: .storageModeShared)
+        if self.uniformBuffer == nil {
+            self.pipelineError = "uniform buffer allocation failed (size=\(uniformByteSize))"
+            NSLog("[CairnFog] FATAL: \(self.pipelineError ?? "")")
+            return
+        }
         NSLog("[CairnFog] renderingWillStart OK")
     }
 

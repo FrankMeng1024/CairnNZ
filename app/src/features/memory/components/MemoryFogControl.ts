@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { findNodeHandle, Platform } from 'react-native';
 import * as Fog from '../../../../modules/cairn-fog-layer/src';
 import { useMemoryStore } from '../store/useMemoryStore';
+import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { UnlockConfig } from '../config/memoryConfig';
 import { log } from '../../../services/appLog';
 
@@ -86,7 +87,15 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
             await Fog.addFogLayer(node);
           } catch (e: any) {
             attachedRef.current = false;
-            log('memory.fog_native_add_error', { msg: String(e?.message ?? e).slice(0, 500) });
+            const msg = String(e?.message ?? e).slice(0, 500);
+            log('memory.fog_native_add_error', { msg });
+            // v303 二轮 subagent #2 critical fix: auto-fallback to
+            // legacy on attach failure. Otherwise the user sees a
+            // clean map with no fog at all and no indication anything
+            // is wrong. setSetting persists, so next launch also
+            // stays on legacy until the user explicitly tries SDF.
+            log('memory.fog_native_auto_fallback_to_legacy', { reason: 'attach_failed' });
+            useMemorySettingsStore.getState().set('fogMode', 'legacy');
             return;
           }
           if (cancelled) return;
@@ -100,6 +109,17 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
             if (cancelled) return;
             Fog.isPipelineReady(node).then((status) => {
               log('memory.fog_native_pipeline_ping', status as any);
+              // v303 二轮 subagent #2: if pipeline didn't actually
+              // build (silent Swift failure), auto-fallback to legacy
+              // so user sees fog.
+              if (!status?.ready) {
+                log('memory.fog_native_auto_fallback_to_legacy', {
+                  reason: 'pipeline_not_ready',
+                  libSource: status?.libSource,
+                  err: status?.pipelineError,
+                });
+                useMemorySettingsStore.getState().set('fogMode', 'legacy');
+              }
             }).catch((e: any) => {
               log('memory.fog_native_pipeline_ping_error', { msg: String(e?.message ?? e).slice(0, 200) });
             });
