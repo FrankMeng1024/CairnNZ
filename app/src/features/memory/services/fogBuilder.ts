@@ -135,25 +135,31 @@ function makeOuterRingCW(bounds: FogBounds, extentBbox: FogBounds | null, padFac
     if (extentBbox.south < s) s = extentBbox.south;
     if (extentBbox.north > n) n = extentBbox.north;
   }
+  // v303 OTA 三修 (A 真根因):**outer ring 必须包含 extentBbox**(否则 mapbox
+  // 渲染失败 — holes 在 outer 外面 mapbox tile-clip 干掉,只画 outer 那个
+  // 小矩形 = 用户截图的"屏幕中央小方块")。
+  //
+  // 二修加的 `outer cap = viewport × 3` 本意防 silent-skip,但 cap 后
+  // outer < extent → polygon 失败。删!
+  //
+  // 防 silent-skip 改为 padFactor 控制 — padFactor 在 0.25-0.5 范围,
+  // 配合 polygon 度数级 sanity check(< 5° 是 mapbox-gl 安全极限,实测过)。
   const padX = (e - w) * padFactor;
   const padY = (n - s) * padFactor;
   w -= padX; e += padX;
   n = Math.min(85.05, n + padY);
   s = Math.max(-85.05, s - padY);
-  // v303 OTA fix (R1 二修):extentBbox 在长期用户上可以横跨几十公里 →
-  // (extent × padFactor) 即便 padFactor 砍到 0.5 也可能 > 0.5° = mapbox
-  // silent-skip 风险区。 cap outer ring 总跨度不超过 viewport 跨度 × 3
-  // (足够给小范围 pan,不会 silent-skip)。
-  const vpDLng = bounds.east - bounds.west;
-  const vpDLat = bounds.north - bounds.south;
-  const maxDLng = vpDLng * 3;
-  const maxDLat = vpDLat * 3;
+  // 安全网:outer 度数 > 5° 时强制裁回 5°(以 viewport 中心为中心)。
+  // 用户极端走过整个城市的话仍允许 ~5° (~550km @ equator),但
+  // mapbox-gl 在 ~5° polygon 内 zoom out 时通常仍能渲染。超过 5° 是
+  // 极少数极端用户,这种情况 fog 不渲染比 silent-skip 整片好。
+  const ABS_MAX_DEG = 5.0;
   const cx = (bounds.east + bounds.west) / 2;
   const cy = (bounds.north + bounds.south) / 2;
-  if (e - w > maxDLng) { w = cx - maxDLng / 2; e = cx + maxDLng / 2; }
-  if (n - s > maxDLat) {
-    n = Math.min(85.05, cy + maxDLat / 2);
-    s = Math.max(-85.05, cy - maxDLat / 2);
+  if (e - w > ABS_MAX_DEG) { w = cx - ABS_MAX_DEG / 2; e = cx + ABS_MAX_DEG / 2; }
+  if (n - s > ABS_MAX_DEG) {
+    n = Math.min(85.05, cy + ABS_MAX_DEG / 2);
+    s = Math.max(-85.05, cy - ABS_MAX_DEG / 2);
   }
   return [
     [w, n],
@@ -239,19 +245,39 @@ function padFactorForZoom(zoom: number): number {
  * at every visited point, punched as holes into the viewport-sized fog.
  */
 export function buildFogPolygon(points: VisitedPoint[], bounds: FogBounds, zoom: number = 15): FogFeature {
+  // v303 OTA 三修 (B-2 perf):log trace 整个 pipeline 每段耗时,server
+  // 可远程分析阻塞点。
+  const t0 = Date.now();
   const padFactor = padFactorForZoom(zoom);
   const radius = UnlockConfig.radiusMeters;
-  const cullThresholdM = radius * FogConfig.cullThresholdFactor;
+  // v303 OTA 三修 (B-2 cull 加强):580 → 1147 点用户 cullThreshold 0.5
+  // 还是不够紧。改 0.85 — 圆与圆 85% 半径内重叠就丢一个,union 后视觉
+  // 上仍连续(无 gap),但 union 输入数大幅减少。
+  const effectiveCullFactor = points.length > 300 ? 0.85 : FogConfig.cullThresholdFactor;
+  const cullThresholdM = radius * effectiveCullFactor;
   const cullThresholdSq = cullThresholdM * cullThresholdM;
+  // v303 OTA 三修 (B-2 viewport clip):union 只对 viewport + 1×padding 内
+  // 的点做。屏幕外的解锁圆暂时不画 holes(用户也看不到),节省 90%+
+  // union 工作量。pan/zoom 后会触发 rebuild,新视野的圆再进 union。
+  const vpW = bounds.west - (bounds.east - bounds.west);   // viewport + 1x padding 左
+  const vpE = bounds.east + (bounds.east - bounds.west);
+  const vpS = bounds.south - (bounds.north - bounds.south);
+  const vpN = bounds.north + (bounds.north - bounds.south);
 
   // Cull near-duplicate points so we don't union 600 essentially-identical
   // circles when the GPS is sitting still.
   const kept: VisitedPoint[] = [];
+  let droppedOutOfViewport = 0;
   for (const p of points) {
     if (
       typeof p?.lat !== 'number' || typeof p?.lng !== 'number' ||
       !isFinite(p.lat) || !isFinite(p.lng)
     ) continue;
+    // viewport clip:超出 viewport+1x padding 的点跳过 union(节省 90%+)
+    if (p.lng < vpW || p.lng > vpE || p.lat < vpS || p.lat > vpN) {
+      droppedOutOfViewport++;
+      continue;
+    }
     let skip = false;
     for (let i = kept.length - 1; i >= 0 && !skip; i--) {
       const dLat = (p.lat - kept[i].lat) * 111_000;
@@ -273,8 +299,13 @@ export function buildFogPolygon(points: VisitedPoint[], bounds: FogBounds, zoom:
   }
 
   // Build N CCW circles and union them.
+  const tCull = Date.now();
+  const cullMs = tCull - t0;
   const circles = kept.map((p) => singleCirclePolygon(p.lat, p.lng, radius));
+  const tCirc = Date.now();
   const merged = unionCircles(circles);
+  const tUnion = Date.now();
+  const unionMs = tUnion - tCirc;
 
   const holes: number[][][] = [];
   // Track the bounding box of all hole rings so the outer ring can be
@@ -289,18 +320,23 @@ export function buildFogPolygon(points: VisitedPoint[], bounds: FogBounds, zoom:
       if (c[1] > extentN) extentN = c[1];
     }
   }
+  // v303 OTA 三修 (B-2 perf): smooth gate 提到外层,perf trace 也能用
+  const shouldSmooth = kept.length <= 300;
   if (merged) {
     // v303 OTA fix (N4 真根因):union 后 holes 在圆与圆 相切处出现锐角
     // 看起来像"狗啃"。@turf/polygon-smooth 用 Chaikin 算法一轮平滑 →
     // 每个锐角变两个钝角,视觉上接近圆弧。一轮 +25% vertex,可接受。
     //
-    // polygonSmooth 返回 FeatureCollection<Polygon>,不论输入是 Polygon
-    // 还是 MultiPolygon — Multi 被拆成多个 Feature。取 features 直接用。
+    // v303 OTA 三修 (B-2 perf):N > 300 时 Chaikin 一轮可能 +25% × union 后
+    // 的几千顶点 = 100-300ms 额外阻塞。skip。N 大用户走的范围也大,边
+    // 缘锐角问题没那么明显(union 互锁圆数多)。
     let smoothedFeatures: GeoJSON.Feature<GeoJSON.Polygon>[] | null = null;
     try {
-      const sm = polygonSmooth(merged as any, { iterations: 1 }) as GeoJSON.FeatureCollection<GeoJSON.Polygon>;
-      if (sm && Array.isArray(sm.features) && sm.features.length > 0) {
-        smoothedFeatures = sm.features;
+      if (shouldSmooth) {
+        const sm = polygonSmooth(merged as any, { iterations: 1 }) as GeoJSON.FeatureCollection<GeoJSON.Polygon>;
+        if (sm && Array.isArray(sm.features) && sm.features.length > 0) {
+          smoothedFeatures = sm.features;
+        }
       }
     } catch {
       smoothedFeatures = null;
@@ -334,13 +370,41 @@ export function buildFogPolygon(points: VisitedPoint[], bounds: FogBounds, zoom:
     : null;
   const finalOuter = makeOuterRingCW(bounds, extentBbox, padFactor);
 
+  // v303 OTA 三修 perf trace 字段:让 FogLayer log 到 server。
+  const tEnd = Date.now();
+  const totalMs = tEnd - t0;
+  const smoothMs = tEnd - tUnion;
+  const outerW = finalOuter[0]?.[0] ?? 0;
+  const outerN = finalOuter[0]?.[1] ?? 0;
+  const outerE = finalOuter[1]?.[0] ?? 0;
+  const outerS = finalOuter[2]?.[1] ?? 0;
+
   return {
     type: 'Feature',
     geometry: {
       type: 'Polygon',
       coordinates: [finalOuter, ...holes],
     },
-    properties: { hole_count: holes.length, point_count: kept.length },
+    properties: {
+      hole_count: holes.length,
+      point_count: kept.length,
+      // v303 OTA 三修 perf:server 远程诊断
+      input_n: points.length,
+      kept_n: kept.length,
+      dropped_oov: droppedOutOfViewport,
+      cull_ms: cullMs,
+      union_ms: unionMs,
+      smooth_ms: smoothMs,
+      total_ms: totalMs,
+      smoothed: shouldSmooth,
+      outer_w: outerW, outer_e: outerE, outer_n: outerN, outer_s: outerS,
+      extent_w: extentBbox?.west ?? null,
+      extent_e: extentBbox?.east ?? null,
+      extent_n: extentBbox?.north ?? null,
+      extent_s: extentBbox?.south ?? null,
+      pad_factor: padFactor,
+      zoom,
+    },
   };
 }
 

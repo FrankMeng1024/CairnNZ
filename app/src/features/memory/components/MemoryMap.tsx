@@ -143,39 +143,52 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
    * bounds from these — both native and web shims expose these fields
    * uniformly so the math is platform-agnostic.
    */
+  // v303 OTA 三修 (B-3 + log): onMapSettle 在初始化期间 Mapbox 会 fire
+  // 多次(styleURL 加载、camera flyTo、tile fetch 各阶段),每次都触发
+  // setState → FogLayer useMemo 重算 buildFogPolygon(1-2s 主线程阻塞)。
+  // 用 ref 累加 fire 计数,加 trailing-throttle 500ms 把短时间内连续 fire
+  // 合并成一次 bounds 更新。
+  const idleFireCountRef = useRef(0);
+  const lastIdleAtRef = useRef(0);
+  const idleThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onMapSettle = useCallback((feature: any) => {
     const center = feature?.properties?.center;
     const zoom = feature?.properties?.zoom;
     if (!Array.isArray(center) || center.length < 2 || typeof zoom !== 'number') return;
-    setCurrentZoom(zoom);
+    idleFireCountRef.current += 1;
+    const fireCount = idleFireCountRef.current;
+    const tNow = Date.now();
+    const msSinceLast = lastIdleAtRef.current === 0 ? -1 : tNow - lastIdleAtRef.current;
+    lastIdleAtRef.current = tNow;
+    log('memory.map_idle', { fire: fireCount, zoom: Number(zoom.toFixed(2)), ms_since_last: msSinceLast });
+    // throttle:500ms 内连续 fire 只更新最后一次
+    if (idleThrottleTimerRef.current) clearTimeout(idleThrottleTimerRef.current);
+    idleThrottleTimerRef.current = setTimeout(() => {
+      idleThrottleTimerRef.current = null;
+      setCurrentZoom(zoom);
 
-    // v302 N6: compare the settled center to the GPS anchor. If the
-    // user panned > 50m away, surface the recenter pill (same as
-    // HikingScreen's followUser=false UX).
-    const dist = haversineM(
-      { lat: anchorRef.current.lat, lng: anchorRef.current.lng },
-      { lat: center[1], lng: center[0] }
-    );
-    const panned = dist > 50;
-    setHasPannedAway((prev) => (prev === panned ? prev : panned));
+      const dist = haversineM(
+        { lat: anchorRef.current.lat, lng: anchorRef.current.lng },
+        { lat: center[1], lng: center[0] }
+      );
+      const panned = dist > 50;
+      setHasPannedAway((prev) => (prev === panned ? prev : panned));
 
-    // Approximate degrees-per-screen at this zoom using a standard
-    // Web Mercator m/px formula. We use a generous half-width that
-    // safely covers all phone aspect ratios.
-    const metersPerPixel = (Math.cos(center[1] * Math.PI / 180) * 2 * Math.PI * 6378137) /
-                           (256 * Math.pow(2, zoom));
-    const halfMeters = metersPerPixel * 400; // 800px viewport, half
-    const dLatPerM = 1 / 111_000;
-    const cosLat = Math.max(Math.cos(center[1] * Math.PI / 180), 1e-6);
-    const dLngPerM = dLatPerM / cosLat;
-    const halfLat = halfMeters * dLatPerM;
-    const halfLng = halfMeters * dLngPerM;
-    updateBoundsIfChanged({
-      west: center[0] - halfLng,
-      east: center[0] + halfLng,
-      north: Math.min(85.05, center[1] + halfLat),
-      south: Math.max(-85.05, center[1] - halfLat),
-    });
+      const metersPerPixel = (Math.cos(center[1] * Math.PI / 180) * 2 * Math.PI * 6378137) /
+                             (256 * Math.pow(2, zoom));
+      const halfMeters = metersPerPixel * 400;
+      const dLatPerM = 1 / 111_000;
+      const cosLat = Math.max(Math.cos(center[1] * Math.PI / 180), 1e-6);
+      const dLngPerM = dLatPerM / cosLat;
+      const halfLat = halfMeters * dLatPerM;
+      const halfLng = halfMeters * dLngPerM;
+      updateBoundsIfChanged({
+        west: center[0] - halfLng,
+        east: center[0] + halfLng,
+        north: Math.min(85.05, center[1] + halfLat),
+        south: Math.max(-85.05, center[1] - halfLat),
+      });
+    }, 500);
   }, [updateBoundsIfChanged]);
 
   // v302 N6: when the recenter button bumps the token, re-anchor on

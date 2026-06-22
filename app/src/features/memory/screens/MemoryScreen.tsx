@@ -72,7 +72,15 @@ export function MemoryScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      log('memory.tab_focus');
+      // v303 OTA 三修:扩充 tab_focus log,包含进入时的 state 快照,server
+      // 可看用户进 memory 时 fog / points / hydrate 状态。
+      log('memory.tab_focus', {
+        points: useMemoryStore.getState().points.length,
+        initialDone: useMemoryStore.getState().initialRevealDone,
+        settingsHydrated,
+        fogMode,
+        mountKey,
+      });
       const now = Date.now();
       // S3 fix: debounce map remount separately. Cheap to keep the
       // map mounted across rapid back-and-forth; expensive to tear
@@ -85,7 +93,19 @@ export function MemoryScreen() {
         lastRefetchAtRef.current = now;
         setRefetchToken((n) => n + 1);
       }
-      return () => { log('memory.tab_blur'); };
+      // v303 OTA 三修:JS heartbeat — 500ms 一次的 log,证明 JS thread alive
+      // (用户报"卡 15s 期间 log 也没上传" → heartbeat 帮我们看到 freeze 区间)。
+      // 用 setInterval,失败时 GC 自动停。tab_blur cleanup 时 clearInterval。
+      const heartbeatStart = Date.now();
+      const heartbeat = setInterval(() => {
+        const elapsed = Date.now() - heartbeatStart;
+        log('memory.js_heartbeat', { elapsed_ms: elapsed });
+      }, 500);
+      return () => {
+        clearInterval(heartbeat);
+        log('memory.tab_blur', { total_focus_ms: Date.now() - heartbeatStart });
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
   );
 

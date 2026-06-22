@@ -139,21 +139,20 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
     lastNodeRef.current = node;
     let cancelled = false;
     let pingTimer: ReturnType<typeof setTimeout> | null = null;
+    let didAttachThisRun = false;  // v303 OTA 三修 (B-3):只在新 attach 才 schedule ping
     (async () => {
       try {
         if (!attachedRef.current) {
           // Set flag BEFORE await so rapid mode toggles don't re-enter
           // addFogLayer (subagent fix: race in attachedRef).
           attachedRef.current = true;
+          didAttachThisRun = true;
           try {
             await Fog.addFogLayer(node);
           } catch (e: any) {
             attachedRef.current = false;
             const msg = String(e?.message ?? e).slice(0, 500);
             log('memory.fog_native_add_error', { msg });
-            // v303 四轮 fix Critical #5: attach 失败也走计数器路径,不是
-            // 立刻 persist。冷启动 race(expo-modules-core registry 还
-            // 没 ready)是常见 transient 故障。
             fallbackToLegacy('attach_failed', { msg });
             return;
           }
@@ -161,8 +160,13 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
           log('memory.fog_native_attached', { reactTag: node, mode });
         }
         if (cancelled) return;
-        // v303 四轮 fix Nitpick #1: mode === 'off' ? 'off' : mode 是冗余
-        // (isNativeMode 已 filter 'legacy'),直接传 mode。
+        // v303 OTA 三修 (B-3): setMode 只在 attach 那一刻或 mode 变化时调,
+        // geometryVersion bump(纯 unlock)不调。但 effect dep 含 mode,
+        // 所以 mode 变化时这个分支会跑;geometryVersion 变化时跳过 setMode。
+        // (我们无法在 effect 内直接拿到"上一次的 mode",但 didAttachThisRun
+        // + 检查 attachedRef 就够 — attachedRef 在新 attach 之后才 true,
+        // re-run 时 attached 已 true 跳过 attach 分支,setMode 还是要跑因为
+        // mode prop 可能真变了。简化:都跑,这是 ~5ms 的 native call。)
         try {
           await Fog.setMode(node, mode as 'off' | 'sdf-soft' | 'sdf-sharp');
           log('memory.fog_native_setmode_ok', { mode });
@@ -172,7 +176,6 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
         }
         if (cancelled) return;
         // Upload current circle set.
-        // v303 四轮 subagent #2 fix (Critical #6): slice(-256) 取最新 unlock。
         const allPoints = useMemoryStore.getState().points;
         const points = allPoints.length > 256 ? allPoints.slice(-256) : allPoints;
         const circles = points.map((p) => ({
@@ -190,15 +193,16 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
         if (cancelled) return;
         log('memory.fog_native_circles_uploaded', { count: circles.length });
 
-        // v303 四轮 fix Critical #5: 8s 给 Mapbox 真的 render 时间;ping
-        // 不 ready 时先 kick 一次 (setRipple toggle)再 2s 后 retry。
-        pingTimer = setTimeout(() => {
-          if (cancelled) return;
-          void checkPipelineWithKick(node, mode);
-        }, PIPELINE_PING_DELAY_MS);
+        // v303 OTA 三修 (B-3): ping 只在新 attach 之后 schedule,避免每次
+        // geometryVersion bump 都开 8s timer + 2s retry 排队累加。
+        if (didAttachThisRun) {
+          pingTimer = setTimeout(() => {
+            if (cancelled) return;
+            void checkPipelineWithKick(node, mode);
+          }, PIPELINE_PING_DELAY_MS);
+        }
       } catch (e: any) {
         log('memory.fog_native_error', { msg: String(e?.message ?? e).slice(0, 500) });
-        // Reset attached flag on failure so next attempt re-tries.
         attachedRef.current = false;
       }
     })();

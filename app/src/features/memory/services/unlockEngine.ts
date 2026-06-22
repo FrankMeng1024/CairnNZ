@@ -88,12 +88,36 @@ export function processReading(reading: GpsReading): UnlockDecision {
 /**
  * Apply the initial-reveal circle on first app open.
  * Idempotent — checks the store flag.
+ *
+ * v303 OTA 三修 (B-1 真根因):500m hex grid 生成 ~567 个新点 + 重建
+ * bucketIndex(1147 keys) 主线程同步阻塞 200-400ms,跟 fog rebuild 叠
+ * 加形成"卡 15s"感。setTimeout(0) 让出当前 tick,MemoryMap 和 GPS
+ * 渲染先跑完,再异步 reveal。用户第一帧看到 map(无 reveal fog)→
+ * 几百 ms 后 reveal 完成 → fog 出现。比 freeze 15s 友好得多。
  */
 export function performInitialRevealIfNeeded(lat: number, lng: number): boolean {
   const store = useMemoryStore.getState();
   if (store.initialRevealDone) return false;
-  store.recordCircleUnlock(lat, lng, UnlockConfig.initialRevealRadiusMeters, Date.now());
+  // 立刻标记 done,防止同步 path 多次调
   store.markInitialRevealDone();
+  // 延迟到下一 tick,let 主线程先 layout MemoryMap
+  setTimeout(() => {
+    try {
+      const t0 = Date.now();
+      const before = useMemoryStore.getState().points.length;
+      useMemoryStore.getState().recordCircleUnlock(lat, lng, UnlockConfig.initialRevealRadiusMeters, Date.now());
+      const after = useMemoryStore.getState().points.length;
+      // log perf — server 可看
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { log } = require('../../../services/appLog');
+      log('memory.initial_reveal_done', {
+        radius_m: UnlockConfig.initialRevealRadiusMeters,
+        added: after - before,
+        total: after,
+        total_ms: Date.now() - t0,
+      });
+    } catch {/* best-effort */}
+  }, 0);
   // Reset the dedup hint so the next walking reading still records.
   lastUnlockedCellKey = null;
   return true;

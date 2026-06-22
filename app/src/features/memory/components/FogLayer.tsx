@@ -51,15 +51,20 @@ export function FogLayer({ bounds, zoom = 15 }: Props) {
 
   const fogShape = useMemo(() => {
     if (!debouncedBounds) return null;
+    const t0 = Date.now();
+    log('memory.fog_build_start', {
+      bounds_w: debouncedBounds.west,
+      bounds_e: debouncedBounds.east,
+      zoom,
+      version: geometryVersion,
+    });
     const points = useMemoryStore.getState().points;
     const shape = buildFogPolygon(points, debouncedBounds, zoom);
+    const props = (shape.properties ?? {}) as Record<string, any>;
     log('memory.fog_built', {
       version: geometryVersion,
-      input_points: points.length,
-      ring_count: shape.geometry.coordinates.length,
-      bounds_w: debouncedBounds.west.toFixed(4),
-      bounds_e: debouncedBounds.east.toFixed(4),
-      zoom: zoom.toFixed(1),
+      build_ms: Date.now() - t0,
+      ...props,  // 包含 cull_ms / union_ms / smooth_ms / outer_w/e/n/s / extent_*
     });
     return shape;
   }, [geometryVersion, debouncedBounds, zoom]);
