@@ -4,6 +4,7 @@
 // with explicit error codes propagated as rejected promises.
 
 import { requireNativeModule } from 'expo-modules-core';
+import { Platform } from 'react-native';
 
 /** SDF fog mode. "off" disables rendering entirely (alpha=0 globally).
  *  "sdf-soft" is the default — smooth feathered edges, ~30% of radius.
@@ -38,22 +39,50 @@ interface CairnFogLayerNativeModule {
 
 export interface PipelineStatus {
   ready: boolean;
+  /** v303 三轮: pipelineState != nil(pipeline 建好了);ready 还多看 renderFrameCount > 0。 */
+  pipelineBuilt?: boolean;
   hasDevice?: boolean;
   hasUniformBuffer?: boolean;
   libSource?: 'precompiled-default' | 'precompiled-subbundle' | 'embedded' | 'failed' | 'unknown';
   renderingStarted?: boolean;
   pipelineError?: string;
   renderFrameCount?: number;
+  /** v303 三轮: 0=off, 1=soft, 2=sharp。服务端可对账实际 mode。 */
+  modeFlag?: number;
   reason?: string;
 }
 
-const NativeModule = requireNativeModule<CairnFogLayerNativeModule>('CairnFogLayer');
+// v303 三轮 subagent #2 fix: Android 的 expo-module.config.json 不
+// 含 "android" 平台,Android 上 requireNativeModule('CairnFogLayer')
+// 会立刻 throw "Cannot find native module"。原代码在文件 top-level
+// 做 require → Android app 一加载这文件就 crash。
+//
+// 改成 lazy: iOS 才真的 require,Android 返回 throw-on-call 占位 stub。
+// 所有 API 方法都用 getNative() 间接拿,保证 module 文件本身 import
+// 在任意平台都安全。
+let _native: CairnFogLayerNativeModule | null = null;
+let _nativeLoadError: Error | null = null;
+function getNative(): CairnFogLayerNativeModule {
+  if (_native) return _native;
+  if (_nativeLoadError) throw _nativeLoadError;
+  if (Platform.OS !== 'ios') {
+    _nativeLoadError = new Error(`CairnFogLayer is iOS-only (current platform: ${Platform.OS})`);
+    throw _nativeLoadError;
+  }
+  try {
+    _native = requireNativeModule<CairnFogLayerNativeModule>('CairnFogLayer');
+    return _native;
+  } catch (e: any) {
+    _nativeLoadError = e instanceof Error ? e : new Error(String(e));
+    throw _nativeLoadError;
+  }
+}
 
 /** Attach the SDF fog layer to the @rnmapbox/maps MapView identified by
  *  `reactTag`. The view must be mounted and its Mapbox MapView ready.
  *  Subsequent updateCircles / setMode / etc. calls target this layer. */
 export function addFogLayer(reactTag: number): Promise<void> {
-  return NativeModule.addFogLayer(reactTag);
+  return getNative().addFogLayer(reactTag);
 }
 
 /** Replace the entire unlock-circle set. Up to 256 circles uploaded to
@@ -67,23 +96,23 @@ export function updateCircles(reactTag: number, circles: FogCircle[]): Promise<v
     c.radius,
     c.bornAt ?? 0,
   ]);
-  return NativeModule.updateCircles(reactTag, packed);
+  return getNative().updateCircles(reactTag, packed);
 }
 
 /** Switch fog rendering mode at runtime. No re-attach needed. */
 export function setMode(reactTag: number, mode: FogMode): Promise<void> {
-  return NativeModule.setMode(reactTag, mode);
+  return getNative().setMode(reactTag, mode);
 }
 
 /** Soft-edge band as fraction of circle radius. 0 = hard. 0.30 = default. */
 export function setFeather(reactTag: number, feather: number): Promise<void> {
-  return NativeModule.setFeather(reactTag, feather);
+  return getNative().setFeather(reactTag, feather);
 }
 
 /** Toggle the ring-pulse animation. Default off (saves battery — the
  *  layer redraws every frame when on, vs only on map-pan when off). */
 export function setRipple(reactTag: number, enabled: boolean): Promise<void> {
-  return NativeModule.setRipple(reactTag, enabled);
+  return getNative().setRipple(reactTag, enabled);
 }
 
 /** Override the fog color. RGBA in [0,1]. Default = sepia
@@ -92,17 +121,17 @@ export function setFogColor(
   reactTag: number,
   r: number, g: number, b: number, a: number,
 ): Promise<void> {
-  return NativeModule.setFogColor(reactTag, r, g, b, a);
+  return getNative().setFogColor(reactTag, r, g, b, a);
 }
 
 /** Detach the layer from the map. Releases Metal resources. */
 export function removeFogLayer(reactTag: number): Promise<void> {
-  return NativeModule.removeFogLayer(reactTag);
+  return getNative().removeFogLayer(reactTag);
 }
 
 /** v303 subagent #3 fix: pipeline-ready ping. */
 export function isPipelineReady(reactTag: number): Promise<PipelineStatus> {
-  return NativeModule.isPipelineReady(reactTag);
+  return getNative().isPipelineReady(reactTag);
 }
 
 export default {

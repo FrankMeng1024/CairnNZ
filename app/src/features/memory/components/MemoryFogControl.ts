@@ -44,8 +44,9 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
   const geometryVersion = useMemoryStore((s) => s.geometryVersion);
   const attachedRef = useRef(false);
 
-  // iOS only — Android stub will accept calls but render nothing.
-  // We still call through so Android isn't silently broken.
+  // iOS only — Android 没 autolink 这个原生 module(expo-module.config.json
+  // 不含 android)。模块层用 lazy getNative() 已经把 import-time crash 避
+  // 开了,这里再用 Platform.OS 跳过所有调用,Android 上 mode 始终走 legacy。
   const supported = Platform.OS === 'ios';
   const isNativeMode = mode === 'sdf-soft' || mode === 'sdf-sharp' || mode === 'off';
 
@@ -77,6 +78,7 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
       return;
     }
     let cancelled = false;
+    let pingTimer: ReturnType<typeof setTimeout> | null = null;
     (async () => {
       try {
         if (!attachedRef.current) {
@@ -100,34 +102,11 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
           }
           if (cancelled) return;
           log('memory.fog_native_attached', { reactTag: node, mode });
-          // v303 subagent #3 fix: pipeline-ready ping. Mapbox calls
-          // renderingWillStart on the render thread AFTER our promise
-          // resolved — silent shader/pipeline failures wouldn't surface.
-          // Ping 1.2s later, log the status so server-side debug can
-          // catch the failure without device log.
-          setTimeout(() => {
-            if (cancelled) return;
-            Fog.isPipelineReady(node).then((status) => {
-              log('memory.fog_native_pipeline_ping', status as any);
-              // v303 二轮 subagent #2: if pipeline didn't actually
-              // build (silent Swift failure), auto-fallback to legacy
-              // so user sees fog.
-              if (!status?.ready) {
-                log('memory.fog_native_auto_fallback_to_legacy', {
-                  reason: 'pipeline_not_ready',
-                  libSource: status?.libSource,
-                  err: status?.pipelineError,
-                });
-                useMemorySettingsStore.getState().set('fogMode', 'legacy');
-              }
-            }).catch((e: any) => {
-              log('memory.fog_native_pipeline_ping_error', { msg: String(e?.message ?? e).slice(0, 200) });
-            });
-          }, 1200);
         }
         if (cancelled) return;
         try {
           await Fog.setMode(node, mode === 'off' ? 'off' : mode);
+          log('memory.fog_native_setmode_ok', { mode });
         } catch (e: any) {
           log('memory.fog_native_setmode_error', { mode, msg: String(e?.message ?? e).slice(0, 500) });
           return;
@@ -139,7 +118,7 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
           lat: p.lat,
           lng: p.lng,
           radius: UnlockConfig.radiusMeters,
-          bornAt: p.t ?? 0,
+          bornAt: p.ts ?? 0,
         }));
         try {
           await Fog.updateCircles(node, circles);
@@ -149,6 +128,38 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
         }
         if (cancelled) return;
         log('memory.fog_native_circles_uploaded', { count: circles.length });
+
+        // v303 三轮 subagent #2 fix (Scenario D): pipeline-ready ping
+        // 必须每次 mode/geometryVersion 变化都跑,不能只在新 attach 时
+        // 跑。原来嵌在 `if (!attachedRef.current)` 里 → 切 mode 时
+        // 已 attach → 跳过 ping → 切到坏 mode 无人发现。
+        //
+        // 现在 ping 提到 effect 末尾,每次 effect 都 schedule。
+        // cleanup 把 timer clear 掉防内存泄漏 + 防过时 ping 触发误
+        // fallback。第一次 5s(给 Mapbox 真的跑帧的时间 — pipeline
+        // ready 不等于 render 跑过,renderFrameCount 才靠谱)。
+        pingTimer = setTimeout(() => {
+          if (cancelled) return;
+          Fog.isPipelineReady(node).then((status) => {
+            log('memory.fog_native_pipeline_ping', { ...status, mode } as any);
+            // v303 二轮 subagent #2: if pipeline didn't actually
+            // build (silent Swift failure), auto-fallback to legacy
+            // so user sees fog. 三轮: ready 现在包含 renderFrameCount > 0,
+            // 不会再因为"Mapbox 还没调 render"假阴。
+            if (!status?.ready) {
+              log('memory.fog_native_auto_fallback_to_legacy', {
+                reason: 'pipeline_not_ready',
+                libSource: status?.libSource,
+                err: status?.pipelineError,
+                pipelineBuilt: (status as any)?.pipelineBuilt,
+                renderFrameCount: status?.renderFrameCount,
+              });
+              useMemorySettingsStore.getState().set('fogMode', 'legacy');
+            }
+          }).catch((e: any) => {
+            log('memory.fog_native_pipeline_ping_error', { msg: String(e?.message ?? e).slice(0, 200) });
+          });
+        }, 5000);
       } catch (e: any) {
         log('memory.fog_native_error', { msg: String(e?.message ?? e).slice(0, 500) });
         // Reset attached flag on failure so next attempt re-tries.
@@ -157,6 +168,10 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
     })();
     return () => {
       cancelled = true;
+      if (pingTimer != null) {
+        clearTimeout(pingTimer);
+        pingTimer = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, geometryVersion, isNativeMode, supported]);

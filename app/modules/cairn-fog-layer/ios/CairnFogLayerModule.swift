@@ -48,17 +48,25 @@ public class CairnFogLayerModule: Module {
                 }
                 if self.layersByTag[reactTag] != nil {
                     self.log("addFogLayer: layer already exists for reactTag=\(reactTag); replacing")
-                    self.removeLayerForTag(reactTag, on: mapHandle.style)
+                    self.removeLayerForTag(reactTag, on: mapHandle.map)
                 }
                 let layer = CairnFogCustomLayer()
+                // v303 三轮 subagent #1 fix: CustomLayer struct is
+                // @_spi(Experimental) in Mapbox v11, plain `import MapboxMaps`
+                // can't construct it. Use the public StyleManager API
+                // addPersistentCustomLayer(withId:layerHost:layerPosition:)
+                // directly — same outcome, no SPI requirement.
                 do {
-                    let customLayer = CustomLayer(id: "cairn-fog-sdf", renderer: layer)
-                    try mapHandle.style.addPersistentLayer(customLayer)
+                    try mapHandle.map.addPersistentCustomLayer(
+                        withId: "cairn-fog-sdf",
+                        layerHost: layer,
+                        layerPosition: nil
+                    )
                     self.layersByTag[reactTag] = layer
                     self.log("addFogLayer OK reactTag=\(reactTag)")
                     promise.resolve(nil)
                 } catch {
-                    promise.reject("ADD_FAILED", "Style.addPersistentLayer failed: \(error.localizedDescription)")
+                    promise.reject("ADD_FAILED", "addPersistentCustomLayer failed: \(error.localizedDescription)")
                 }
                 #else
                 promise.reject("NO_MAPBOX", "MapboxMaps framework not linked (slim build)")
@@ -138,7 +146,7 @@ public class CairnFogLayerModule: Module {
                     promise.resolve(nil)
                     return
                 }
-                self.removeLayerForTag(reactTag, on: mapHandle.style)
+                self.removeLayerForTag(reactTag, on: mapHandle.map)
                 self.layersByTag.removeValue(forKey: reactTag)
                 self.log("removeFogLayer OK reactTag=\(reactTag)")
                 #endif
@@ -195,6 +203,7 @@ public class CairnFogLayerModule: Module {
     #if canImport(MapboxMaps)
     private struct MapHandle {
         let mapView: MapView
+        let map: MapboxMap
         let style: StyleManager
     }
 
@@ -233,7 +242,7 @@ public class CairnFogLayerModule: Module {
             return nil
         }
         let style = mapBoxView.mapboxMap.style
-        return MapHandle(mapView: mapBoxView, style: style)
+        return MapHandle(mapView: mapBoxView, map: mapBoxView.mapboxMap, style: style)
     }
 
     private var lastExtractFailureTree: String = ""
@@ -252,10 +261,10 @@ public class CairnFogLayerModule: Module {
         for sub in view.subviews { dumpViewTree(sub, depth: depth + 1) }
     }
 
-    private func removeLayerForTag(_ tag: Int, on style: StyleManager) {
-        if style.layerExists(withId: "cairn-fog-sdf") {
+    private func removeLayerForTag(_ tag: Int, on map: MapboxMap) {
+        if map.layerExists(withId: "cairn-fog-sdf") {
             do {
-                try style.removeLayer(withId: "cairn-fog-sdf")
+                try map.removeLayer(withId: "cairn-fog-sdf")
             } catch {
                 log("removeLayer failed: \(error.localizedDescription)")
             }

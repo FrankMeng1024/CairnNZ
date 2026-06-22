@@ -7,7 +7,12 @@ Pod::Spec.new do |s|
   s.homepage       = 'https://github.com/yiiling/cairn'
   s.platforms = { :ios => '15.1' }
   s.source         = { git: '' }
-  s.static_framework = true
+  # v303 三轮 subagent #1 fix: 删掉 s.static_framework = true。
+  # @rnmapbox/maps 强制 MapboxMaps 为 dynamic framework(podfile
+  # post_install 把 MapboxMaps* 都改 dynamic),我们这边再 static
+  # 会冲突 → "framework not found MapboxMaps" 或 duplicate symbol。
+  # 默认(不写 static_framework)等价 dynamic,跟 rnmapbox 对齐。
+  s.swift_version  = '5.0'
 
   s.dependency 'ExpoModulesCore'
   # v303 subagent fix: declare MapboxMaps explicitly so pod-install

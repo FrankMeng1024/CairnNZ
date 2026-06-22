@@ -55,14 +55,22 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
     private var renderFrameCount: Int = 0          // bumped each render(); JS can read once
 
     public func pipelineStatus() -> [String: Any] {
+        // v303 三轮 subagent #2 fix: 单看 pipelineState != nil 会假阳 —
+        // pipeline 建好了但 Mapbox 因 z-order/style/visibility 从没调
+        // 我们的 render() 也会显示 ready=true → JS 看 ready 不 fallback
+        // → 用户屏幕上没 fog。renderFrameCount 是真实跑过帧的证据。
+        let pipelineOK = pipelineState != nil
+        let hasRendered = renderFrameCount > 0
         return [
-            "ready": pipelineState != nil,
+            "ready": pipelineOK && hasRendered,
+            "pipelineBuilt": pipelineOK,
             "hasDevice": device != nil,
             "hasUniformBuffer": uniformBuffer != nil,
             "libSource": libSource,
             "renderingStarted": renderingStarted,
             "pipelineError": pipelineError ?? "",
             "renderFrameCount": renderFrameCount,
+            "modeFlag": Int(modeFlag),
         ]
     }
 
@@ -227,6 +235,14 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         let pipelineDesc = MTLRenderPipelineDescriptor()
         pipelineDesc.vertexFunction = vertexFn
         pipelineDesc.fragmentFunction = fragmentFn
+        // v303 三轮 subagent #1 fix: Mapbox 的 render pass 带 depth/stencil
+        // attachment。pipelineDesc 没设 → MTL assert "depth attachment
+        // pixel format does not match" 在第一帧 crash。把 host 给我们的
+        // depthStencilPixelFormat 同时设到 depth 和 stencil(常见是
+        // depth32Float_stencil8 这种组合格式,两边一致是安全的)。
+        let depthFmt = MTLPixelFormat(rawValue: depthStencilPixelFormat) ?? .invalid
+        pipelineDesc.depthAttachmentPixelFormat = depthFmt
+        pipelineDesc.stencilAttachmentPixelFormat = depthFmt
         let colorAttachment = pipelineDesc.colorAttachments[0]!
         // v303 二轮 subagent #1 fix: convert UInt → MTLPixelFormat now
         // that the protocol-witness signature uses UInt directly.
