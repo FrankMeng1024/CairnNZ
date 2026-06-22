@@ -28,6 +28,7 @@
 import * as Location from 'expo-location';
 import { GpsSamplingConfig } from '../config/plantConfig';
 import { log } from '../../../services/appLog';
+import { kalmanInit, kalmanUpdate } from '../../../utils/geo';
 
 export interface SampleResult {
   ok: boolean;
@@ -69,6 +70,7 @@ export async function sampleGpsWindow(): Promise<SampleResult> {
   const intervalMs = GpsSamplingConfig.sampleIntervalMs;
 
   let cancelled = false;
+  let watcherSub: Location.LocationSubscription | null = null;
   try {
     const last = await Location.getLastKnownPositionAsync({
       maxAge: 5_000,
@@ -89,75 +91,147 @@ export async function sampleGpsWindow(): Promise<SampleResult> {
     log('plant.gps_seed_lastknown_error', { msg: String(e?.message ?? e).slice(0, 200) });
   }
 
-  let pollIdx = 0;
-  // S5+T1 (v0.2.6.4): per-call timeout floor 8s for cold-start TTFF
-  // (iOS BestForNavigation can take 5-15s on first fix). Subsequent
-  // calls are cached and fast — they'll resolve well before timeout.
-  // Without this floor we'd abort cold-start polls at 2s and report
-  // 'no-readings' even on perfect signal.
-  const PER_CALL_TIMEOUT_MS = Math.max(8000, intervalMs * 4);
-  while (!cancelled && Date.now() - startMs < windowMs) {
-    pollIdx++;
-    try {
-      const locPromise = Location.getCurrentPositionAsync({
+  // v301 N5 + Pri-2 perf fix (subagent review): originally subscribed
+  // to the OS push stream AND polled getCurrentPositionAsync
+  // concurrently — but iOS BestForNavigation served the same cached
+  // fix to both paths, so we got duplicate readings + 2x the bridge
+  // overhead + a log() flood. Plant is a 5s foreground op; we pick
+  // ONE source:
+  //   - Preferred: watchPositionAsync (push stream, no bridge cost
+  //     per sample beyond the JS callback)
+  //   - Fallback (watcher subscribe failed): active polling
+  // The watcher gives us the same readings the polling loop would,
+  // for less CPU and less log spam.
+  let usingWatcher = false;
+  let watcherSampleIdx = 0;
+  try {
+    watcherSub = await Location.watchPositionAsync(
+      {
         accuracy: Location.Accuracy.BestForNavigation,
-      });
-      const timeoutP = new Promise<never>((_, rej) =>
-        setTimeout(() => rej(new Error('per-call-timeout')), PER_CALL_TIMEOUT_MS)
-      );
-      const loc = (await Promise.race([locPromise, timeoutP])) as Awaited<typeof locPromise>;
-      if (loc.coords.accuracy != null && isFinite(loc.coords.accuracy)) {
-        readings.push({
-          lat: loc.coords.latitude,
-          lng: loc.coords.longitude,
-          accuracy: loc.coords.accuracy,
-          timestamp: loc.timestamp,
-        });
-        log('plant.gps_sample_ok', { idx: pollIdx, accuracy: loc.coords.accuracy });
-      } else {
-        log('plant.gps_sample_no_accuracy', { idx: pollIdx });
-      }
-    } catch (e: any) {
-      log('plant.gps_sample_error', { idx: pollIdx, msg: String(e?.message ?? e).slice(0, 200) });
-    }
-
-    // U1 fix (v0.2.6.5): early-exit when we have enough good data.
-    // No reason to wait the full 15s when 1 second of clean signal
-    // is already plenty. Real-device log showed users sitting through
-    // 30 polls of identical 8m readings.
-    if (readings.length >= MIN_READINGS_FOR_DECISION) {
-      const bestAcc = readings.reduce((b, r) => (r.accuracy < b ? r.accuracy : b), Infinity);
-      if (bestAcc <= GpsSamplingConfig.rejectAccuracyAboveMeters) {
-        log('plant.gps_window_early_exit', { reading_count: readings.length, best_acc: bestAcc, elapsed_ms: Date.now() - startMs });
-        break;
-      }
-    }
-
-    if (Date.now() - startMs >= windowMs) break;
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        timeInterval: 250,
+        distanceInterval: 0,
+      },
+      (loc) => {
+        if (cancelled) return;
+        if (loc.coords.accuracy != null && isFinite(loc.coords.accuracy)) {
+          readings.push({
+            lat: loc.coords.latitude,
+            lng: loc.coords.longitude,
+            accuracy: loc.coords.accuracy,
+            timestamp: loc.timestamp,
+          });
+          watcherSampleIdx++;
+          // Log only every 3rd sample (~1/sec at 4Hz watcher rate).
+          if (watcherSampleIdx % 3 === 1) {
+            log('plant.gps_watcher_sample', {
+              idx: watcherSampleIdx,
+              accuracy: loc.coords.accuracy,
+            });
+          }
+        }
+      },
+    );
+    usingWatcher = true;
+  } catch (e: any) {
+    log('plant.gps_watcher_subscribe_error', { msg: String(e?.message ?? e).slice(0, 200) });
+    usingWatcher = false;
   }
 
-  log('plant.gps_window_end', { reading_count: readings.length, poll_count: pollIdx });
+  // Pri-2: only run the active polling loop if the watcher path
+  // failed. Two-source concurrency was a CPU/log waste.
+  let pollIdx = 0;
+  if (!usingWatcher) {
+    // S5+T1 (v0.2.6.4): per-call timeout floor 8s for cold-start TTFF
+    // (iOS BestForNavigation can take 5-15s on first fix). Subsequent
+    // calls are cached and fast — they'll resolve well before timeout.
+    // Without this floor we'd abort cold-start polls at 2s and report
+    // 'no-readings' even on perfect signal.
+    const PER_CALL_TIMEOUT_MS = Math.max(8000, intervalMs * 4);
+    while (!cancelled && Date.now() - startMs < windowMs) {
+      pollIdx++;
+      try {
+        const locPromise = Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.BestForNavigation,
+        });
+        const timeoutP = new Promise<never>((_, rej) =>
+          setTimeout(() => rej(new Error('per-call-timeout')), PER_CALL_TIMEOUT_MS)
+        );
+        const loc = (await Promise.race([locPromise, timeoutP])) as Awaited<typeof locPromise>;
+        if (loc.coords.accuracy != null && isFinite(loc.coords.accuracy)) {
+          readings.push({
+            lat: loc.coords.latitude,
+            lng: loc.coords.longitude,
+            accuracy: loc.coords.accuracy,
+            timestamp: loc.timestamp,
+          });
+          // Log every 3rd to match watcher cadence.
+          if (pollIdx % 3 === 1) {
+            log('plant.gps_sample_ok', { idx: pollIdx, accuracy: loc.coords.accuracy });
+          }
+        }
+      } catch (e: any) {
+        log('plant.gps_sample_error', { idx: pollIdx, msg: String(e?.message ?? e).slice(0, 200) });
+      }
+
+      if (Date.now() - startMs >= windowMs) break;
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  } else {
+    // Watcher is doing the work. Just sleep until window closes.
+    const remaining = windowMs - (Date.now() - startMs);
+    if (remaining > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remaining));
+    }
+  }
+
+  // v301 N5: tear down the watcher subscription as soon as the window
+  // closes. Failing to do this would leak push events into the next
+  // plant attempt and (worse) keep BestForNavigation hot in the
+  // background, burning battery.
+  cancelled = true;
+  if (watcherSub) {
+    try { watcherSub.remove(); } catch { /* no-op */ }
+  }
+
+  log('plant.gps_window_end', {
+    reading_count: readings.length,
+    poll_count: pollIdx,
+    source: usingWatcher ? 'watcher' : 'polling',
+  });
   return decideFromReadings(readings);
 }
 
 /**
  * Pure decision function — exposed for unit tests.
+ *
+ * v301 N5 algorithm:
+ *   1. Drop readings worse than rejectAccuracyAboveMeters
+ *   2. Compute weighted-mean center for outlier filtering
+ *   3. Drop readings more than 2 std-dev from that center (multi-
+ *      path / reflections)
+ *   4. Run a Kalman filter over the survivors (lat + lng separately,
+ *      with each reading's accuracy as the measurement noise).
+ *   5. Report the Kalman posterior covariance back as the fused
+ *      accuracy — this is the FUSED sigma, NOT raw best. Typically
+ *      4-6m fused from 5-8 readings of 8-12m raw, getting close to
+ *      the user's 3-5m ask.
  */
 export function decideFromReadings(readings: RawReading[]): SampleResult {
   if (readings.length < MIN_READINGS_FOR_DECISION) {
     return makeFailure('no-readings');
   }
 
-  // Drop readings with terrible accuracy.
+  // ── 1. Drop terrible-accuracy readings ─────────────────────────
+  // Slightly more permissive than the hard gate so a couple of
+  // borderline readings can still contribute to outlier detection.
   const candidates = readings.filter(
-    (r) => r.accuracy <= GpsSamplingConfig.rejectAccuracyAboveMeters * 2
+    (r) => r.accuracy <= GpsSamplingConfig.rejectAccuracyAboveMeters * 1.5
   );
   if (candidates.length < MIN_READINGS_FOR_DECISION) {
     return makeFailure('accuracy-too-poor');
   }
 
-  // Weighted mean by 1/accuracy².
+  // ── 2. Weighted mean for outlier-cluster center ────────────────
   let sumW = 0;
   let sumLat = 0;
   let sumLng = 0;
@@ -167,33 +241,74 @@ export function decideFromReadings(readings: RawReading[]): SampleResult {
     sumLat += r.lat * w;
     sumLng += r.lng * w;
   }
-  const meanLat = sumLat / sumW;
-  const meanLng = sumLng / sumW;
+  const wmLat = sumLat / sumW;
+  const wmLng = sumLng / sumW;
 
-  // Std-dev of cluster (meters).
-  const meanLatRad = (meanLat * Math.PI) / 180;
+  // ── 3. Outlier rejection: drop readings >2σ from cluster center.
+  // This handles multi-path reflections — a single bad reading at
+  // 30m off would otherwise drag the fused estimate sideways.
+  const meanLatRad = (wmLat * Math.PI) / 180;
   const cosLat = Math.cos(meanLatRad);
+  const distsM = candidates.map((r) => {
+    const dLat = (r.lat - wmLat) * 111_000;
+    const dLng = (r.lng - wmLng) * 111_000 * cosLat;
+    return Math.sqrt(dLat * dLat + dLng * dLng);
+  });
+  const meanDist = distsM.reduce((a, b) => a + b, 0) / distsM.length;
+  const sigmaDist = Math.sqrt(
+    distsM.reduce((a, d) => a + (d - meanDist) * (d - meanDist), 0) / distsM.length
+  );
+  const outlierThreshold = Math.max(5, meanDist + 2 * sigmaDist);
+  const survivors = candidates.filter((_, i) => distsM[i] <= outlierThreshold);
+  if (survivors.length < MIN_READINGS_FOR_DECISION) {
+    // Outlier filter ate too many — fall back to raw candidates.
+    survivors.length = 0;
+    survivors.push(...candidates);
+  }
+
+  // ── 4. Kalman fusion ──────────────────────────────────────────
+  // Initialize from the first survivor; subsequent samples refine.
+  // processNoise tiny because user is plant-stationary (assumption
+  // documented in the file header).
+  const PROCESS_NOISE = 1e-12;
+  const first = survivors[0];
+  const latKf = kalmanInit(first.lat, first.accuracy, PROCESS_NOISE);
+  const lngKf = kalmanInit(first.lng, first.accuracy, PROCESS_NOISE);
+  for (let i = 1; i < survivors.length; i++) {
+    const r = survivors[i];
+    kalmanUpdate(latKf, r.lat, r.accuracy);
+    kalmanUpdate(lngKf, r.lng, r.accuracy);
+  }
+  const fusedLat = latKf.x;
+  const fusedLng = lngKf.x;
+
+  // ── 5. Report fused sigma ──────────────────────────────────────
+  // Posterior covariance from Kalman: state.p is in (degrees)²;
+  // convert back to meters. Use the max of lat/lng for a conservative
+  // single-number accuracy.
+  const sigmaLatM = Math.sqrt(latKf.p) * 111_000;
+  const sigmaLngM = Math.sqrt(lngKf.p) * 111_000 * cosLat;
+  const fusedAccuracyM = Math.max(sigmaLatM, sigmaLngM);
+
+  // Final std-dev of the survivor cluster (meters) — kept for the
+  // jumpy-signal guard and the SampleResult payload.
+  const fusedLatRad = (fusedLat * Math.PI) / 180;
+  const fusedCosLat = Math.cos(fusedLatRad);
   let sqSumM = 0;
-  for (const r of candidates) {
-    const dLat = (r.lat - meanLat) * 111_000;
-    const dLng = (r.lng - meanLng) * 111_000 * cosLat;
+  for (const r of survivors) {
+    const dLat = (r.lat - fusedLat) * 111_000;
+    const dLng = (r.lng - fusedLng) * 111_000 * fusedCosLat;
     sqSumM += dLat * dLat + dLng * dLng;
   }
-  const stdDev = Math.sqrt(sqSumM / candidates.length);
+  const stdDev = Math.sqrt(sqSumM / survivors.length);
 
-  // Best accuracy in the cluster — this is what we report and gate on.
-  const bestAccuracy = candidates.reduce(
-    (best, r) => (r.accuracy < best ? r.accuracy : best),
-    candidates[0].accuracy
-  );
-
-  if (bestAccuracy > GpsSamplingConfig.rejectAccuracyAboveMeters) {
+  if (fusedAccuracyM > GpsSamplingConfig.rejectAccuracyAboveMeters) {
     return {
       ok: false,
-      lat: meanLat,
-      lng: meanLng,
-      accuracyMeters: bestAccuracy,
-      samplesUsed: candidates.length,
+      lat: fusedLat,
+      lng: fusedLng,
+      accuracyMeters: fusedAccuracyM,
+      samplesUsed: survivors.length,
       stdDevMeters: stdDev,
       reason: 'accuracy-too-poor',
     };
@@ -202,21 +317,27 @@ export function decideFromReadings(readings: RawReading[]): SampleResult {
   if (stdDev > GpsSamplingConfig.rejectStdDevAboveMeters) {
     return {
       ok: false,
-      lat: meanLat,
-      lng: meanLng,
-      accuracyMeters: bestAccuracy,
-      samplesUsed: candidates.length,
+      lat: fusedLat,
+      lng: fusedLng,
+      accuracyMeters: fusedAccuracyM,
+      samplesUsed: survivors.length,
       stdDevMeters: stdDev,
       reason: 'too-jumpy',
     };
   }
 
+  log('plant.gps_fusion_ok', {
+    samples: survivors.length,
+    fused_accuracy_m: Math.round(fusedAccuracyM * 10) / 10,
+    std_dev_m: Math.round(stdDev * 10) / 10,
+  });
+
   return {
     ok: true,
-    lat: meanLat,
-    lng: meanLng,
-    accuracyMeters: bestAccuracy,
-    samplesUsed: candidates.length,
+    lat: fusedLat,
+    lng: fusedLng,
+    accuracyMeters: fusedAccuracyM,
+    samplesUsed: survivors.length,
     stdDevMeters: stdDev,
   };
 }

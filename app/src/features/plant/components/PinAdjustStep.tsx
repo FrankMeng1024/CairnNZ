@@ -168,15 +168,33 @@ export function PinAdjustStep({
 
   // Show a hint banner when the user pushes past the boundary;
   // hide it 2.5s after they stop pushing.
+  // v301 Bug B: dedup — if hint is already visible, don't reset the
+  // timer on every camera-tick. Under high-frequency onCameraChanged
+  // events (30-60Hz) the previous always-reset path created a
+  // setTimeout / clearTimeout churn that pinned the JS thread and
+  // delayed `Back` taps by several seconds.
   const briefHint = () => {
+    if (hintTimer.current) return;  // already counting down — leave alone
+    tickCountRef.current.hintShows++;
     setHintVisible(true);
-    if (hintTimer.current) clearTimeout(hintTimer.current);
-    hintTimer.current = setTimeout(() => setHintVisible(false), 2500);
+    hintTimer.current = setTimeout(() => {
+      setHintVisible(false);
+      hintTimer.current = null;
+    }, 2500);
   };
 
   useEffect(() => () => {
     if (hintTimer.current) clearTimeout(hintTimer.current);
   }, []);
+
+  // v301 Bug A: skip the very first batch of onCameraChanged events.
+  // Mapbox emits transient camera positions during init (e.g. [0,0]
+  // before defaultSettings applies) which haversine to GPS origin
+  // measures as thousands of km — that wrongly flips overLimit=true
+  // and triggers a hint on mount, BEFORE the user has even seen the
+  // map. We wait for onMapIdle to fire ONCE (= camera has settled at
+  // defaultSettings center) before honoring camera-tick events.
+  const cameraReadyRef = useRef(false);
 
   /**
    * onCameraChanged fires high-frequency (every frame during pan).
@@ -190,31 +208,87 @@ export function PinAdjustStep({
    * onMapIdle settle which had a 100-200ms lag. We compare against
    * the current state and setState only when crossing (once per
    * crossing) so this is NOT a render storm despite 30-60Hz events.
+   *
+   * v301 Bug A+B: gate dist/hint work behind cameraReadyRef so the
+   * map's init transients never flip overLimit/hint on mount; gate
+   * briefHint() so reflowing setTimeout doesn't pile up under
+   * high-frequency mapbox events.
    */
+  // v301 perf instrumentation: count onCameraChanged frequency and
+  // briefHint setTimeout reuses, so we can see in real-device telemetry
+  // whether the v301 fixes keep the JS-thread cost bounded.
+  const tickCountRef = useRef({ ticks: 0, overLimitFlips: 0, hintShows: 0 });
+  // v301 Pri-1 fix (subagent perf review): mirror overLimit + hasMoved
+  // to refs so the high-frequency onCameraTick path can EARLY-RETURN
+  // before scheduling a setState. Previously setOverLimit((prev) =>
+  // prev === newOver ? prev : newOver) still went through React's
+  // scheduler queue (which de-dupes on reconcile but pays per-tick
+  // queue cost) — under 30-60Hz pan events that queue starved user
+  // tap events, causing the reported "Back tap delayed 5 seconds".
+  const overLimitRef = useRef(false);
+  const hasMovedRef = useRef(false);
+  // v301 Pri-1 fix: throttle onCameraTick to 10Hz (every 100ms). The
+  // human eye can't tell the difference between 10Hz and 60Hz boundary
+  // detection on a 50m ring; the JS thread certainly can. Light work
+  // (ref writes) still runs every frame; heavy work (haversine,
+  // setState, briefHint) runs at most 10×/s.
+  const lastTickMsRef = useRef(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const c = tickCountRef.current;
+      if (c.ticks > 0) {
+        log('plant.pin_perf', {
+          ticks_5s: c.ticks,
+          over_flips_5s: c.overLimitFlips,
+          hint_shows_5s: c.hintShows,
+        });
+        tickCountRef.current = { ticks: 0, overLimitFlips: 0, hintShows: 0 };
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, []);
+
   const onCameraTick = (feature: any) => {
+    tickCountRef.current.ticks++;
     const coord = feature?.properties?.center;
     if (!Array.isArray(coord) || coord.length < 2) return;
     const lng = coord[0];
     const lat = coord[1];
+    // Cheap path: always update refs so confirm-tap reads truth even
+    // mid-frame between throttled ticks.
     latestCoordRef.current = { lng, lat };
     const z = feature?.properties?.zoom;
     if (typeof z === 'number') latestZoomRef.current = z;
 
-    // Real-time boundary cross detection (N4).
+    // v301 Bug A: ignore camera-tick events that arrive before the
+    // map has settled at the GPS origin for the first time.
+    if (!cameraReadyRef.current) return;
+
+    // v301 Pri-1: throttle heavy work (haversine + state) to 10Hz.
+    const now = Date.now();
+    if (now - lastTickMsRef.current < 100) return;
+    lastTickMsRef.current = now;
+
+    // Real-time boundary cross detection (N4) — now throttled.
     const dist = haversineM(
       { lat: originRef.current.lat, lng: originRef.current.lng },
       { lat, lng }
     );
     const newOver = dist > PinNudgeConfig.maxNudgeMeters;
-    setOverLimit((prev) => (prev === newOver ? prev : newOver));
+    // Pri-1: ref-gate so React scheduler queue stays clean.
+    if (overLimitRef.current !== newOver) {
+      overLimitRef.current = newOver;
+      tickCountRef.current.overLimitFlips++;
+      setOverLimit(newOver);
+    }
     if (newOver) {
       briefHint();
     }
 
-    // v299 N4: surface the Target button only once the map has moved
-    // noticeably from origin (> 0.5m, well above GPS jitter & float
-    // noise). Once flipped to true, stays true until doRecenter clears.
-    if (!hasMoved && dist > 0.5) {
+    // v299 N4 + v301 Pri-1: ref-gate (avoid setHasMoved re-queue
+    // every tick after first move).
+    if (!hasMovedRef.current && dist > 0.5) {
+      hasMovedRef.current = true;
       setHasMoved(true);
     }
   };
@@ -236,6 +310,13 @@ export function PinAdjustStep({
     if (!Array.isArray(coord) || coord.length < 2) return;
     const newLng = coord[0];
     const newLat = coord[1];
+
+    // v301 Bug A: first settle = camera has snapped to defaultSettings
+    // (= GPS origin). From this point on it's safe to trust subsequent
+    // onCameraChanged events as real user-initiated motion.
+    if (!cameraReadyRef.current) {
+      cameraReadyRef.current = true;
+    }
 
     // Suppress only events that match the expected post-setCamera
     // center. Once matched, clear the expectation. A subsequent
@@ -301,6 +382,7 @@ export function PinAdjustStep({
       animationDuration: 280,
     });
     setHasMoved(false);  // v299 N4: hide the Target button after recenter
+    hasMovedRef.current = false;
     log('plant.pin_recenter', {});
   };
 
