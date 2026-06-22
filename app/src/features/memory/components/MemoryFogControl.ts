@@ -34,11 +34,16 @@ interface Props {
   mode: FogRenderMode;
 }
 
-// v303 四轮 subagent #2 fix (Critical #5): 3 次连续失败才 persist 'legacy'。
-// 单次失败可能是 Mapbox 还没真正跑过帧(用户没移动地图)的假阴 — 不能因为
-// 一次假阴就把用户永久踢出 SDF。
-const MAX_CONSECUTIVE_FALLBACKS = 3;
-// 8s 比 5s 给 Mapbox 更长时间真正调一次 render()。
+// v303 OTA fix R3 (subagent 真根因):上一版用 sessionGiveUpRef 想"先停
+// 本 session 不 persist,3 次失败才永久 legacy" — 但 useRef 改值不触发
+// re-render → isNativeMode 进入吸收态:pill 显示 Soft 但 effect short-
+// circuit 没 attach 没 fallback,1 次失败后永远卡在中间状态,直到 app
+// 重启。用户感受 = "切了没反应、卡死"。
+//
+// 现在策略:既然 R2 让 JS FogLayer 永远兜底(off mode 除外),fallback
+// 到 legacy 不会让用户看到空屏 — 第 1 次失败立刻 persist legacy,UI 上
+// pill 自然跳回 Legacy 高亮,**用户能感知**到 native 不可用,而不是状
+// 态机黑洞。简单可靠。
 const PIPELINE_PING_DELAY_MS = 8000;
 
 /**
@@ -50,32 +55,19 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
   // Subscribe to geometry version so any unlock causes re-upload.
   const geometryVersion = useMemoryStore((s) => s.geometryVersion);
   const attachedRef = useRef(false);
-  // v303 四轮 fix: capture last good node 给 unmount cleanup 用 — 那时
-  // mapViewRef.current 可能已经 null。
+  // capture last good node 给 unmount cleanup 用 — 那时 mapViewRef.current 可能已经 null。
   const lastNodeRef = useRef<number | null>(null);
-  // v303 四轮 fix Critical #5: in-memory fallback 计数,3 次失败才 persist。
-  const fallbackAttemptsRef = useRef(0);
-  // v303 四轮 fix Serious: session-only 标记,本次 session 已经判定 native
-  // 不行,effect 直接走 detach 路径不再 re-attach。下次 app 启动重置。
-  const sessionGiveUpRef = useRef(false);
 
   // iOS only — Android 没 autolink 这个原生 module。
   const supported = Platform.OS === 'ios';
-  const isNativeMode = (mode === 'sdf-soft' || mode === 'sdf-sharp' || mode === 'off') && !sessionGiveUpRef.current;
+  const isNativeMode = mode === 'sdf-soft' || mode === 'sdf-sharp' || mode === 'off';
 
-  // Helper: 累计 fallback,达阈值才 persist。
-  const tryFallbackToLegacy = (reason: string, extra: Record<string, any>) => {
-    fallbackAttemptsRef.current += 1;
-    const attempts = fallbackAttemptsRef.current;
-    log('memory.fog_native_fallback_candidate', { reason, attempts, ...extra });
-    if (attempts >= MAX_CONSECUTIVE_FALLBACKS) {
-      log('memory.fog_native_auto_fallback_to_legacy', { reason, attempts, ...extra });
-      useMemorySettingsStore.getState().set('fogMode', 'legacy');
-      fallbackAttemptsRef.current = 0; // reset 以防再次循环
-    } else {
-      // session-only:本次先停 SDF,不 persist。用户重新点 pill 会重试。
-      sessionGiveUpRef.current = true;
-    }
+  // v303 OTA R3 fix: 第 1 次 attach/ping 失败立刻 persist 'legacy'。
+  // R2 让 JS FogLayer 兜底,fallback 不会让用户看空屏。pill 跳回
+  // Legacy 让用户知道 native 不可用,而不是黑洞状态。
+  const fallbackToLegacy = (reason: string, extra: Record<string, any>) => {
+    log('memory.fog_native_auto_fallback_to_legacy', { reason, ...extra });
+    useMemorySettingsStore.getState().set('fogMode', 'legacy');
   };
 
   // Helper: pipeline 准备就绪检查 — 如果 !ready,先 kick Mapbox 重画再 ping
@@ -84,10 +76,7 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
     try {
       const status = await Fog.isPipelineReady(node);
       log('memory.fog_native_pipeline_ping', { ...status, mode: m } as any);
-      if (status?.ready) {
-        fallbackAttemptsRef.current = 0; // 成功 → 重置失败计数
-        return;
-      }
+      if (status?.ready) return;
       // 假阴 kick:Mapbox 在用户没动作时不主动 redraw。我们通过 setRipple
       // 一次 toggle 强制下一帧重画(setRipple 改 uniform 仅 noop 也算
       // dirty)。然后 2s 后再 ping 一次。
@@ -98,11 +87,8 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
       await new Promise((r) => setTimeout(r, 2000));
       const status2 = await Fog.isPipelineReady(node);
       log('memory.fog_native_pipeline_ping_retry', { ...status2, mode: m } as any);
-      if (status2?.ready) {
-        fallbackAttemptsRef.current = 0;
-        return;
-      }
-      tryFallbackToLegacy('pipeline_not_ready_after_kick', {
+      if (status2?.ready) return;
+      fallbackToLegacy('pipeline_not_ready_after_kick', {
         libSource: status2?.libSource,
         err: status2?.pipelineError,
         pipelineBuilt: (status2 as any)?.pipelineBuilt,
@@ -168,7 +154,7 @@ export function useMemoryFogControl({ mapViewRef, mode }: Props) {
             // v303 四轮 fix Critical #5: attach 失败也走计数器路径,不是
             // 立刻 persist。冷启动 race(expo-modules-core registry 还
             // 没 ready)是常见 transient 故障。
-            tryFallbackToLegacy('attach_failed', { msg });
+            fallbackToLegacy('attach_failed', { msg });
             return;
           }
           if (cancelled) return;

@@ -349,6 +349,25 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       geometryVersion: get().geometryVersion + 1,
       // synced=true above → DO NOT bump _unsyncedCount.
       _unsyncedCount: get()._unsyncedCount,
+      // v303 OTA R4 fix: 之前 recordCircleUnlock 不写 recentUnlocks,
+      // 用户首次 reveal(500m)看不到 Skia 解锁动画。修法:不 push 全部
+      // newPoints(几百个 burst 太多),只 push 中心点 + 4 个圆周采样点,
+      // 视觉是"中心一个大圈扩散开"。
+      recentUnlocks: (() => {
+        const nowMs = Date.now();
+        const recent = get().recentUnlocks.filter((u) => nowMs - u.ts < 5000);
+        // 中心点
+        recent.push({ lat, lng, ts });
+        // 4 个圆周采样(N/S/E/W,half radius 处)
+        const half = requestedRadius * 0.5;
+        const dLat = half * dLatPerM;
+        const dLng = half * dLngPerM;
+        recent.push({ lat: lat + dLat, lng, ts });
+        recent.push({ lat: lat - dLat, lng, ts });
+        recent.push({ lat, lng: lng + dLng, ts });
+        recent.push({ lat, lng: lng - dLng, ts });
+        return recent;
+      })(),
     });
   },
 

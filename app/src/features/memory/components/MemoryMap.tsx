@@ -243,7 +243,13 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
         {/* v303: only mount JS FogLayer in 'legacy' mode. Other
             modes are rendered by the native Metal SDF layer via
             useMemoryFogControl. */}
-        {fogMode === 'legacy' && <FogLayer bounds={bounds} zoom={currentZoom} />}
+        {/* v303: JS FogLayer 永远挂(除非 mode 显式 off),让 SDF mode
+            没装 native binary 时也有 fog 兜底。Native fog 7/1 build 上线
+            后,SDF mode 在底下画 native fog,JS FogLayer 仍画但 z-order
+            一致颜色一致,视觉上不显眼;用户 fogMode='legacy' 时则只有
+            JS fog 一层。off mode 显式不画任何 fog。
+            R2 真根因修:之前只 legacy 挂 → 切 SDF 整屏没 fog。 */}
+        {fogMode !== 'off' && <FogLayer bounds={bounds} zoom={currentZoom} />}
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>
       {/* v303 OTA: Skia 解锁扩散动画 overlay。在 MapView 之上 absoluteFill。

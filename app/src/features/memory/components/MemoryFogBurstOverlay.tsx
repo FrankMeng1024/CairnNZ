@@ -96,18 +96,6 @@ export function MemoryFogBurstOverlay({ mapViewRef }: Props) {
     }
   }, [recentUnlocks, mapViewRef]);
 
-  // 2. 动画 tick — 当 cache 非空时 16ms 一帧 setTick;空时停。
-  useEffect(() => {
-    if (cacheRef.current.size === 0 && recentUnlocks.length === 0) return;
-    let raf: any;
-    const loop = () => {
-      setTick((t) => (t + 1) % 1_000_000);
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => { if (raf) cancelAnimationFrame(raf); };
-  }, [recentUnlocks.length]);
-
   // 3. 计算当前帧每个 burst 的 (x, y, radius, opacity)
   const visible = useMemo(() => {
     const now = Date.now();
@@ -127,6 +115,23 @@ export function MemoryFogBurstOverlay({ mapViewRef }: Props) {
     // tick 是为了每帧 recompute;recentUnlocks 触发 cache add
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, recentUnlocks]);
+
+  // 2. 动画 tick — visible 非空时 16ms 一帧 setTick;空时停。
+  // 关键:不能用 cacheRef.size 作为 stop 判定(useRef 不上报 React)。
+  // 这里把 visible.length 暴露给 effect closure via ref,每帧检查空 → 停。
+  const visibleCountRef = useRef(0);
+  visibleCountRef.current = visible.length;
+  useEffect(() => {
+    if (recentUnlocks.length === 0) return;
+    let raf: any;
+    const loop = () => {
+      setTick((t) => (t + 1) % 1_000_000);
+      if (visibleCountRef.current === 0 && cacheRef.current.size === 0) return;
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => { if (raf) cancelAnimationFrame(raf); };
+  }, [recentUnlocks.length]);
 
   if (visible.length === 0) return null;
   if (!SkiaModule) return null;

@@ -140,6 +140,21 @@ function makeOuterRingCW(bounds: FogBounds, extentBbox: FogBounds | null, padFac
   w -= padX; e += padX;
   n = Math.min(85.05, n + padY);
   s = Math.max(-85.05, s - padY);
+  // v303 OTA fix (R1 二修):extentBbox 在长期用户上可以横跨几十公里 →
+  // (extent × padFactor) 即便 padFactor 砍到 0.5 也可能 > 0.5° = mapbox
+  // silent-skip 风险区。 cap outer ring 总跨度不超过 viewport 跨度 × 3
+  // (足够给小范围 pan,不会 silent-skip)。
+  const vpDLng = bounds.east - bounds.west;
+  const vpDLat = bounds.north - bounds.south;
+  const maxDLng = vpDLng * 3;
+  const maxDLat = vpDLat * 3;
+  const cx = (bounds.east + bounds.west) / 2;
+  const cy = (bounds.north + bounds.south) / 2;
+  if (e - w > maxDLng) { w = cx - maxDLng / 2; e = cx + maxDLng / 2; }
+  if (n - s > maxDLat) {
+    n = Math.min(85.05, cy + maxDLat / 2);
+    s = Math.max(-85.05, cy - maxDLat / 2);
+  }
   return [
     [w, n],
     [e, n],
@@ -198,24 +213,25 @@ function unionCircles(
 }
 
 /**
- * v303 OTA fix (N5 真根因):zoom 越大(越细节),padFactor 可以越大不怕
- * silent skip(viewport 物理小,扩 N 倍也在 mapbox-gl 渲染窗口内);zoom
- * 越小(越远),padFactor 必须小,否则 outer ring 跨越 8000+ pixels,
- * mapbox-gl 静默不画 → 屏幕亮屏。
+ * v303 OTA fix (N5 真根因 — 二修):zoom-aware padFactor 第一版砍太狠
+ * (zoom 17+ 用 2.0),用户走过一片之后 extentBbox 已经撑大,(extent_e -
+ * extent_w) × 2.0 等于把 outer ring 扩到 viewport 的 4-6 倍,**超出
+ * mapbox-gl silent-skip 阈值 ~8000 pixels** → fillLayer 整个不画 → 用户
+ * 看到屏幕角落露底图 + holes LineLayer 画出方框 = "方形 fog"。
  *
- * 数值实测(Playwright web spike):
- *   zoom 17+:pad 2.0 OK
- *   zoom 15:pad 1.5 OK
- *   zoom 14:pad 1.0 OK
- *   zoom 13:pad 0.5 OK
- *   zoom <= 12:pad 0.3(viewport 已经覆盖一大片,小 pad 够)
+ * v302 的 0.5 是用 Playwright spike 实测过的安全值。这次保持 zoom-aware,
+ * 但所有档位都不超过 v302 那个安全值 0.5,zoom out 时更小(0.25)防 zoom
+ * out 时 (extent × pad) 仍然撑爆。
+ *
+ * 关键约束:padFactor × max(viewport_degrees, extent_degrees) 必须 < 0.5°
+ * 才安全。下面的 padFactor 把这个安全边界 hardcode 在 zoom 区分上。
  */
 function padFactorForZoom(zoom: number): number {
-  if (zoom >= 17) return 2.0;
-  if (zoom >= 15) return 1.5;
-  if (zoom >= 14) return 1.0;
-  if (zoom >= 13) return 0.5;
-  return 0.3;
+  if (zoom >= 17) return 0.5;   // 细节区,viewport 物理很小,pad 0.5 仍在像素安全线内
+  if (zoom >= 15) return 0.5;
+  if (zoom >= 14) return 0.4;
+  if (zoom >= 13) return 0.3;
+  return 0.25;                  // zoom out 越远 viewport 越大,pad 必须越小
 }
 
 /**
