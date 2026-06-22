@@ -39,6 +39,7 @@
 
 import union from '@turf/union';
 import { featureCollection } from '@turf/helpers';
+import polygonSmooth from '@turf/polygon-smooth';
 import { UnlockConfig, FogConfig } from '../config/memoryConfig';
 import { VisitedPoint } from '../store/useMemoryStore';
 
@@ -56,6 +57,22 @@ export interface FogFeature {
     coordinates: number[][][];
   };
   properties: Record<string, unknown>;
+}
+
+/**
+ * v303 OTA: 从 FogFeature 提取 hole rings 作 MultiLineString,
+ * 让 FogLayer 在 fill 上面叠一层柔光 LineLayer 画羊皮纸软边。
+ * 跳过 outer ring(viewport box)— 那是 fog 的外边,不是 hole。
+ */
+export function extractHoleRings(feature: FogFeature): GeoJSON.Feature<GeoJSON.MultiLineString> | null {
+  const rings = feature.geometry.coordinates;
+  if (rings.length < 2) return null; // 没 holes 就没东西画
+  const holeRings = rings.slice(1); // 跳过 outer
+  return {
+    type: 'Feature',
+    geometry: { type: 'MultiLineString', coordinates: holeRings },
+    properties: {},
+  };
 }
 
 const EARTH_RADIUS_M = 6_378_137;
@@ -107,7 +124,7 @@ function makeCircleRingCCW(
  * We expand the box to encompass `extentBbox` (the hole's bounding
  * box) when present.
  */
-function makeOuterRingCW(bounds: FogBounds, extentBbox: FogBounds | null): number[][] {
+function makeOuterRingCW(bounds: FogBounds, extentBbox: FogBounds | null, padFactor: number = FogConfig.outerRingPadFactor): number[][] {
   let w = bounds.west;
   let e = bounds.east;
   let n = bounds.north;
@@ -118,8 +135,8 @@ function makeOuterRingCW(bounds: FogBounds, extentBbox: FogBounds | null): numbe
     if (extentBbox.south < s) s = extentBbox.south;
     if (extentBbox.north > n) n = extentBbox.north;
   }
-  const padX = (e - w) * FogConfig.outerRingPadFactor;
-  const padY = (n - s) * FogConfig.outerRingPadFactor;
+  const padX = (e - w) * padFactor;
+  const padY = (n - s) * padFactor;
   w -= padX; e += padX;
   n = Math.min(85.05, n + padY);
   s = Math.max(-85.05, s - padY);
@@ -181,10 +198,32 @@ function unionCircles(
 }
 
 /**
+ * v303 OTA fix (N5 真根因):zoom 越大(越细节),padFactor 可以越大不怕
+ * silent skip(viewport 物理小,扩 N 倍也在 mapbox-gl 渲染窗口内);zoom
+ * 越小(越远),padFactor 必须小,否则 outer ring 跨越 8000+ pixels,
+ * mapbox-gl 静默不画 → 屏幕亮屏。
+ *
+ * 数值实测(Playwright web spike):
+ *   zoom 17+:pad 2.0 OK
+ *   zoom 15:pad 1.5 OK
+ *   zoom 14:pad 1.0 OK
+ *   zoom 13:pad 0.5 OK
+ *   zoom <= 12:pad 0.3(viewport 已经覆盖一大片,小 pad 够)
+ */
+function padFactorForZoom(zoom: number): number {
+  if (zoom >= 17) return 2.0;
+  if (zoom >= 15) return 1.5;
+  if (zoom >= 14) return 1.0;
+  if (zoom >= 13) return 0.5;
+  return 0.3;
+}
+
+/**
  * Build the fog Feature. The cleared area is the union of unlock-circles
  * at every visited point, punched as holes into the viewport-sized fog.
  */
-export function buildFogPolygon(points: VisitedPoint[], bounds: FogBounds): FogFeature {
+export function buildFogPolygon(points: VisitedPoint[], bounds: FogBounds, zoom: number = 15): FogFeature {
+  const padFactor = padFactorForZoom(zoom);
   const radius = UnlockConfig.radiusMeters;
   const cullThresholdM = radius * FogConfig.cullThresholdFactor;
   const cullThresholdSq = cullThresholdM * cullThresholdM;
@@ -207,7 +246,7 @@ export function buildFogPolygon(points: VisitedPoint[], bounds: FogBounds): FogF
     if (!skip) kept.push(p);
   }
 
-  const outer = makeOuterRingCW(bounds, null);
+  const outer = makeOuterRingCW(bounds, null, padFactor);
 
   if (kept.length === 0) {
     return {
@@ -235,15 +274,37 @@ export function buildFogPolygon(points: VisitedPoint[], bounds: FogBounds): FogF
     }
   }
   if (merged) {
-    if (merged.geometry.type === 'Polygon') {
-      // First sub-ring is the outer of the merged polygon = a fog HOLE.
-      // (any further sub-rings are holes in the merged polygon = solid
-      // islands inside the cleared area, which we don't punch.)
+    // v303 OTA fix (N4 真根因):union 后 holes 在圆与圆 相切处出现锐角
+    // 看起来像"狗啃"。@turf/polygon-smooth 用 Chaikin 算法一轮平滑 →
+    // 每个锐角变两个钝角,视觉上接近圆弧。一轮 +25% vertex,可接受。
+    //
+    // polygonSmooth 返回 FeatureCollection<Polygon>,不论输入是 Polygon
+    // 还是 MultiPolygon — Multi 被拆成多个 Feature。取 features 直接用。
+    let smoothedFeatures: GeoJSON.Feature<GeoJSON.Polygon>[] | null = null;
+    try {
+      const sm = polygonSmooth(merged as any, { iterations: 1 }) as GeoJSON.FeatureCollection<GeoJSON.Polygon>;
+      if (sm && Array.isArray(sm.features) && sm.features.length > 0) {
+        smoothedFeatures = sm.features;
+      }
+    } catch {
+      smoothedFeatures = null;
+    }
+    if (smoothedFeatures) {
+      // smooth 成功:用 smoothed features 的 outer ring 当 holes
+      for (const f of smoothedFeatures) {
+        if (f.geometry?.type !== 'Polygon') continue;
+        const outerHole = f.geometry.coordinates[0];
+        if (outerHole) {
+          holes.push(outerHole);
+          extendBy(outerHole);
+        }
+      }
+    } else if (merged.geometry.type === 'Polygon') {
+      // smooth 失败:用原 merged polygon
       const outerHole = merged.geometry.coordinates[0];
       holes.push(outerHole);
       extendBy(outerHole);
     } else if (merged.geometry.type === 'MultiPolygon') {
-      // Each disconnected polygon's outer ring becomes one hole.
       for (const poly of merged.geometry.coordinates) {
         const outerHole = poly[0];
         holes.push(outerHole);
@@ -255,7 +316,7 @@ export function buildFogPolygon(points: VisitedPoint[], bounds: FogBounds): FogF
   const extentBbox = isFinite(extentW)
     ? { west: extentW, east: extentE, north: extentN, south: extentS }
     : null;
-  const finalOuter = makeOuterRingCW(bounds, extentBbox);
+  const finalOuter = makeOuterRingCW(bounds, extentBbox, padFactor);
 
   return {
     type: 'Feature',

@@ -20,6 +20,7 @@ import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { MemoryColors } from '../config/memoryConfig';
 import { FogLayer } from './FogLayer';
+import { MemoryFogBurstOverlay } from './MemoryFogBurstOverlay';
 import { FogBounds } from '../services/fogBuilder';
 import { CairnPinsLayer } from './CairnPinsLayer';
 import { log } from '../../../services/appLog';
@@ -86,6 +87,10 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
   const [bounds, setBounds] = useState<FogBounds>(() =>
     estimateInitialBounds(centerLat, centerLng)
   );
+  // v303 OTA: zoom 从 onMapSettle 拿到,传给 FogLayer 做 zoom-aware padFactor
+  // (N5 真根因:之前固定 padFactor=0.5 在 zoom out 时 outer ring 没盖到
+  // viewport 边角,亮屏。zoom 高用大 pad,zoom 低用小 pad 防 silent skip)
+  const [currentZoom, setCurrentZoom] = useState<number>(15);
   // v302 N6: track whether the user has panned the map away from
   // the GPS-driven center. Hiking-style: don't auto-follow user
   // location; instead expose a recenter pill when the camera drifts
@@ -142,6 +147,7 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
     const center = feature?.properties?.center;
     const zoom = feature?.properties?.zoom;
     if (!Array.isArray(center) || center.length < 2 || typeof zoom !== 'number') return;
+    setCurrentZoom(zoom);
 
     // v302 N6: compare the settled center to the GPS anchor. If the
     // user panned > 50m away, surface the recenter pill (same as
@@ -237,9 +243,13 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
         {/* v303: only mount JS FogLayer in 'legacy' mode. Other
             modes are rendered by the native Metal SDF layer via
             useMemoryFogControl. */}
-        {fogMode === 'legacy' && <FogLayer bounds={bounds} />}
+        {fogMode === 'legacy' && <FogLayer bounds={bounds} zoom={currentZoom} />}
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>
+      {/* v303 OTA: Skia 解锁扩散动画 overlay。在 MapView 之上 absoluteFill。
+          数据从 useMemoryStore.recentUnlocks 来,native fog 7/1 上线后保留
+          本组件不变(burst 永远纯 JS 视觉层)。 */}
+      <MemoryFogBurstOverlay mapViewRef={mapViewRef} />
       {/* v302 N6: recenter pill — shown after user pans away. Same
           interaction as HikingScreen.tsx Target button. */}
       {hasPannedAway && (

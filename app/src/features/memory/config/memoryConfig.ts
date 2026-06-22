@@ -125,11 +125,10 @@ export const MemoryColors = {
   cream: '#f7f2e5',
   sepia: '#b5823d',
   sepiaDeep: '#5b4628',
-  // v302 N5: softer, less heavy fog. The previous 0.78 alpha read as
-  // a brown wall; 0.62 keeps the "I haven't been here" feeling but
-  // lets the underlying map peek through. Color shifted slightly
-  // warmer / darker so the cleared map (cream) pops more on contrast.
-  fogOverlay: 'rgba(50, 35, 20, 0.62)',
+  // v303 OTA 视觉调:62% → 58% 透一点,色温暖一点。塑料感主要来源是
+  // 整片色块完全均匀 + 锐利边界 — 现在锐利边界靠 polygon-smooth 一轮
+  // Chaikin 解决;透明度降一点让底图(Topo50)透出色调,色块感破掉。
+  fogOverlay: 'rgba(58, 42, 24, 0.58)',
   // Soft edge color for the cleared/fog boundary — drawn as a thin
   // LineLayer on the hole rings to anti-alias the union outline.
   fogEdge: 'rgba(247, 242, 229, 0.55)',

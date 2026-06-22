@@ -59,6 +59,16 @@ interface MemoryState {
   /** Bumped on geometry mutations. FogLayer keys its memo on this. */
   geometryVersion: number;
   /**
+   * v303 OTA: 最近 5 秒内新解锁的点(给 Skia 扩散动画 overlay 用)。
+   * 不参与 geometryVersion / fog 几何 — 纯视觉副作用。每次 recordPoint
+   * 或 applyServerEchoForPushAligned 路径 push,5s 后 GC(由 overlay
+   * 组件读取时过滤,或在新 push 时清理过期)。
+   *
+   * 跟 v303 native fog 接口一致(bornAt 字段 = ts) — 7/1 native 上线后
+   * 这个数组继续 feed Skia overlay,native 跑底下 fog,**互不重复**。
+   */
+  recentUnlocks: Array<{ lat: number; lng: number; ts: number }>;
+  /**
    * R4 fix (v0.2.6.4): cache the most recent GPS fix any watcher saw.
    * MemoryScreen reads this to avoid spawning a competing
    * getCurrentPositionAsync that conflicts with ForegroundUnlockManager's
@@ -206,6 +216,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   points: [],
   _bucketIndex: null,
   geometryVersion: 0,
+  recentUnlocks: [],
   _unsyncedCount: 0,
   initialRevealDone: false,
   syncState: { inFlightCount: 0, lastSyncAt: 0 },
@@ -230,11 +241,17 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     idx.set(k, arr);
     // M9 fix: maintain unsyncedCount incrementally — saves O(N) scan
     // in memorySync subscribe.
+    // v303 OTA: 同时 push 到 recentUnlocks 给 Skia burst overlay 用,
+    // 5s 过期清理(burst 动画 0.8s + buffer)。
+    const nowMs = Date.now();
+    const recentBurst = get().recentUnlocks.filter((u) => nowMs - u.ts < 5000);
+    recentBurst.push({ lat, lng, ts });
     set({
       points: newPoints,
       _bucketIndex: idx,
       geometryVersion: get().geometryVersion + 1,
       _unsyncedCount: get()._unsyncedCount + 1,
+      recentUnlocks: recentBurst,
     });
   },
 
