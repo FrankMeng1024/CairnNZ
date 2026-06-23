@@ -205,6 +205,14 @@ function AppRoot() {
       //
       // 这条 OTA 推下去之后,从下一次 cold start 开始,每次都会等最多
       // 10s 拉新 bundle → 用户拉版本不再滞后。
+      //
+      // v303-AUDIT FIX (v303 retrospective): 这条 boot-time auto-reload
+      // 视觉上和"刚打开就崩"几乎不可区分 — 用户看到 splash + 8s 黑屏
+      // + reload 闪屏 + 新 bundle 起来,会报"crush"。subagent audit
+      // 确认这是用户报告 "崩溃" 的可能根因 #5。
+      //
+      // 暂时关闭 boot-time reloadAsync。仍然 check + fetch(让新 bundle
+      // 进 cache),但 reload 由 OtaBadge 用户主动 tap 触发。
       try {
         import('expo-updates').then(async (Updates) => {
           try {
@@ -212,12 +220,17 @@ function AppRoot() {
               Promise.race([p, new Promise<null>(r => setTimeout(() => r(null), ms))]);
             const check = await withTimeout(Updates.checkForUpdateAsync(), 8000);
             if (check && (check as any).isAvailable) {
-              crashLogger.breadcrumb('ota_boot_new_available');
+              crashLogger.breadcrumb('ota_boot_new_available_no_auto_reload');
               const fetched = await withTimeout(Updates.fetchUpdateAsync(), 8000);
               if (fetched && (fetched as any).isNew) {
-                crashLogger.breadcrumb('ota_boot_reloading_to_new_bundle');
-                // 600ms 让 breadcrumb 写出去 + UI 不闪
-                setTimeout(() => { Updates.reloadAsync().catch(() => {}); }, 600);
+                crashLogger.breadcrumb('ota_boot_new_bundle_fetched_user_tap_to_reload');
+                // v303-AUDIT FIX: NO auto reload. User taps OtaBadge to reload.
+                try {
+                  // eslint-disable-next-line @typescript-eslint/no-require-imports
+                  require('./src/services/bootDiagnostics').markBootPhase('ota_new_bundle_pending', {
+                    ota_version: OTA_VERSION,
+                  });
+                } catch {/* ignore */}
               }
             }
           } catch (e) {
@@ -237,9 +250,29 @@ function AppRoot() {
           const updateId = (U as any).updateId ?? 'embedded';
           const channel = (U as any).channel ?? 'unknown';
           const runtimeVersion = (U as any).runtimeVersion ?? 'unknown';
+          // v303 audit: also capture emergency-launch + launchDuration.
+          // isEmergencyLaunch=true means a prior bundle launch failed twice
+          // and expo-updates rolled back to embedded. This is the smoking
+          // gun for "user reports crash but JS layer shows clean boot" —
+          // the crash happens in a *previous* bundle, current bundle is the
+          // rollback.
+          const isEmergencyLaunch = !!(U as any).isEmergencyLaunch;
+          const launchDuration = (U as any).launchDuration ?? null;
           crashLogger.breadcrumb(
-            `ota:bundle id=${updateId} channel=${channel} runtime=${runtimeVersion} ota_version=${OTA_VERSION}`
+            `ota:bundle id=${updateId} channel=${channel} runtime=${runtimeVersion} ota_version=${OTA_VERSION} emergency=${isEmergencyLaunch} launch_ms=${launchDuration}`
           );
+          // Also fire to bootDiagnostics so server has structured row.
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            require('./src/services/bootDiagnostics').markBootPhase('ota_runtime_info', {
+              updateId,
+              channel,
+              runtimeVersion,
+              ota_version: OTA_VERSION,
+              emergency: isEmergencyLaunch,
+              launch_ms: launchDuration,
+            });
+          } catch {/* ignore */}
         })
         .catch(() => {
           crashLogger.breadcrumb(`ota:bundle module-unavailable ota_version=${OTA_VERSION}`);
