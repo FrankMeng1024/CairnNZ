@@ -27,7 +27,12 @@ import { API_BASE_URL } from './src/config/api';
 // v300 DIAG: jetsam-resistant boot tracing. ANY heavy module above
 // this line that crashes will leave no trace — but the next cold
 // start drains the AsyncStorage checkpoint and reports where we died.
-import { markBootPhase, drainPreviousBootCheckpoint } from './src/services/bootDiagnostics';
+import { markBootPhase, drainPreviousBootCheckpoint, rotateCheckpoint } from './src/services/bootDiagnostics';
+
+// v300.1: rotate previous checkpoint to a dedicated key BEFORE markBootPhase
+// overwrites it. Without this, drainPreviousBootCheckpoint always reads
+// "module_loaded" because module_loaded was just written one line below.
+rotateCheckpoint();
 
 // First side-effect: report that module loading completed. This runs
 // AFTER all the imports above (which is when iOS jetsam most likely
@@ -496,12 +501,20 @@ function AppRoot() {
   // Don't block forever on font loading — show app once hydrated even if
   // fonts errored. If they're loaded, body text will use Inter; if not,
   // it falls back to system default.
-  if (!hydrated) return <View style={{ flex: 1 }} />;
+  if (!hydrated) {
+    markBootPhase('render_wait_hydrate');
+    return <View style={{ flex: 1 }} />;
+  }
+  markBootPhase('render_after_hydrate');
   // In Playwright bypass mode, skip the font-loading gate — fonts may never
   // resolve in the sandboxed Chromium (no local file access), but the app
   // should still render so UI tests can run.
   const playwrightBypass = isPlaywrightBypass;
-  if (!playwrightBypass && !fontsLoaded && !fontError) return <View style={{ flex: 1 }} />;
+  if (!playwrightBypass && !fontsLoaded && !fontError) {
+    markBootPhase('render_wait_fonts');
+    return <View style={{ flex: 1 }} />;
+  }
+  markBootPhase('render_after_fonts');
 
   // Apply Inter as the default font family for every <Text> and <TextInput>
   // in the app — runs once after fonts confirmed loaded. Existing per-component
@@ -521,6 +534,7 @@ function AppRoot() {
     (RNText as any)._cairnFontPatched = true;
   }
 
+  markBootPhase('render_about_to_mount_root');
   return (
     <>
       <RootNavigator />
