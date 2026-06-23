@@ -431,6 +431,11 @@ const REMEMBER_ME_KEY = 'cairn_remember_me';
 export function AuthScreen() {
   // Breadcrumb FIRST so even if hooks below crash we know we got here.
   crashLogger.breadcrumb('AuthScreen:render_start');
+  // v302 boot diag: server beacon — survives jetsam/native-crash.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('auth_screen_render_start');
+  } catch {/* ignore */}
   const nav = useNavigation<Nav>();
   const { setLoggedIn, setUIMode, setUser, hydrate } = useAppStore();
   const [view, setView] = useState<AuthView>('splash');

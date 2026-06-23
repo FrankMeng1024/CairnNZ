@@ -212,6 +212,13 @@ function ToolBtn({ iconName, label, onPress }: { iconName: IconName; label: stri
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export function HomeScreen() {
+  // v302 boot diag: probe first thing in render — if app dies after
+  // navigation_container_ready but no home_screen_render_start, mount is dying
+  // in react-navigation transition, not user code.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('home_screen_render_start');
+  } catch {/* ignore */}
   const nav = useNavigation<Nav>();
   const uiMode = useAppStore(s => s.uiMode);
   const sessions = useSessionStore(s => s.sessions);

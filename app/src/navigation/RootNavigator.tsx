@@ -28,6 +28,12 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { MemoryScreen } from '../features/memory/screens/MemoryScreen';
 import { MarkerDetailScreen } from '../screens/MarkerDetailScreen';
 import { useAppStore } from '../store/useAppStore';
+import { markBootPhase } from '../services/bootDiagnostics';
+
+// v302: mark immediately after all transitive imports above resolved.
+// If app dies between `render_about_to_mount_root` (App.tsx) and
+// `navigator_module_loaded` (here), some Screen's module-level code crashed.
+markBootPhase('navigator_module_loaded');
 
 export type RootStackParamList = {
   Auth: undefined;
@@ -50,9 +56,14 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
   const { isLoggedIn } = useAppStore();
+  markBootPhase('navigator_body_running', { isLoggedIn: !!isLoggedIn });
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      onReady={() => {
+        markBootPhase('navigation_container_ready', { isLoggedIn: !!isLoggedIn });
+      }}
+    >
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
