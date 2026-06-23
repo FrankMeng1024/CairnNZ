@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Cairn — Home Layout Variants</title>
+<style>
+  :root {
+    --primary: #5d7c46;
+    --primary-light: rgba(93,124,70,0.15);
+    --primary-bg: rgba(93,124,70,0.08);
+    --primary-dark: #4a6b38;
+    --running: #3d7ab5;
+    --running-light: rgba(61,122,181,0.12);
+    --running-dark: #2d5e8e;
+    --flag: #c87941;
+    --flag-light: rgba(200,121,65,0.12);
+    --bg: #faf7f2;
+    --surface: #ffffff;
+    --border: #ece6de;
+    --text-primary: #2d2a26;
+    --text-secondary: #8c7e72;
+    --text-muted: #b5a99d;
+    --doc-orange: #F26522;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+    background: #1a1a1a;
+    color: var(--text-primary);
+    padding: 24px 16px;
+  }
+  h1 { color: #faf7f2; text-align: center; font-weight: 500; font-size: 22px; margin-bottom: 8px; }
+  .sub { text-align: center; color: #8c7e72; font-size: 12px; margin-bottom: 32px; }
+  .grid { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; max-width: 1700px; margin: 0 auto; }
+  .frame { width: 320px; flex-shrink: 0; }
+  .frame-label {
+    font-size: 10px; color: var(--flag);
+    text-transform: uppercase; letter-spacing: 2px;
+    margin-bottom: 8px; text-align: center; font-weight: 600;
+  }
+  .frame-name { font-size: 13px; color: #faf7f2; text-align: center; margin-bottom: 8px; font-weight: 500; }
+  .frame-desc { font-size: 11px; color: var(--text-muted); margin-top: 10px; text-align: center; line-height: 1.5; }
+  .phone {
+    width: 320px; height: 640px;
+    background: var(--bg);
+    border-radius: 36px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    color: var(--text-primary);
+  }
+  .phone-notch {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    width: 100px; height: 22px;
+    background: #1a1a1a; border-radius: 12px; z-index: 100;
+  }
+  .status-bar {
+    height: 44px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 22px 8px;
+    font-size: 12px; font-weight: 600;
+    color: var(--text-primary);
+  }
+  .screen-content { display: flex; flex-direction: column; height: calc(100% - 44px); }
+
+  /* Common pieces */
+  .header {
+    padding: 0 20px 12px;
+  }
+  .logo-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .logo-icon { font-size: 22px; color: var(--primary); }
+  .logo-text { font-size: 20px; font-weight: 600; color: var(--text-primary); }
+  .greeting { font-size: 12px; color: var(--text-secondary); }
+  .stats-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .stat-chip {
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 5px 9px; border-radius: 12px;
+    font-size: 10px; color: var(--text-secondary);
+    display: flex; align-items: center; gap: 4px;
+    font-weight: 500;
+  }
+  .stat-chip strong { color: var(--primary); }
+
+  /* Tab bar */
+  .tab-bar {
+    display: flex; background: var(--surface); border-top: 1px solid var(--border);
+    padding: 8px 0 28px;
+  }
+  .tab { flex: 1; text-align: center; padding: 4px 4px; color: var(--text-muted); font-size: 10px; }
+  .tab.active { color: var(--primary); }
+  .tab-icon { font-size: 18px; margin-bottom: 3px; display: block; }
+
+  .recent-row {
+    background: rgba(93,124,70,0.06);
+    border: 1px solid var(--primary-light);
+    padding: 10px 12px; border-radius: 12px;
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 12px;
+  }
+  .recent-row-text { flex: 1; }
+  .recent-row-title { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+  .recent-row-sub   { font-size: 10px; color: var(--text-secondary); margin-top: 1px; }
+
+  /* ============ Variant A: SQUARE TILES ============ */
+  .va-content { flex: 1; padding: 12px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .va-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .va-tile {
+    aspect-ratio: 1.1;
+    border-radius: 18px;
+    padding: 14px;
+    color: #fff;
+    display: flex; flex-direction: column; justify-content: space-between;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+  }
+  .va-tile.hike { background: linear-gradient(160deg, #6a8a52, var(--primary), var(--primary-dark)); }
+  .va-tile.run  { background: linear-gradient(160deg, #4a8bc4, var(--running), var(--running-dark)); }
+  .va-tile-icon { font-size: 26px; }
+  .va-tile-title { font-size: 17px; font-weight: 700; }
+  .va-tile-sub   { font-size: 10px; opacity: 0.85; line-height: 1.4; }
+  .va-plant {
+    background: linear-gradient(135deg, #d68a4f, var(--flag));
+    color: #fff;
+    border-radius: 18px;
+    padding: 16px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 6px 18px rgba(200,121,65,0.3);
+  }
+  .va-plant-icon {
+    width: 44px; height: 44px;
+    background: rgba(255,255,255,0.22);
+    border-radius: 22px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .va-plant-text { flex: 1; }
+  .va-plant-t { font-size: 15px; font-weight: 700; }
+  .va-plant-s { font-size: 11px; opacity: 0.9; margin-top: 2px; }
+
+  /* ============ Variant B: HERO PLANT + horizontal pills ============ */
+  .vb-content { flex: 1; padding: 12px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .vb-hero {
+    background: linear-gradient(135deg, #d68a4f 0%, var(--flag) 60%, #a8612d 100%);
+    color: #fff; border-radius: 22px;
+    padding: 24px 20px;
+    box-shadow: 0 8px 24px rgba(200,121,65,0.3);
+    position: relative;
+    overflow: hidden;
+  }
+  .vb-hero-bg {
+    position: absolute; right: -30px; bottom: -30px;
+    font-size: 130px; opacity: 0.18;
+  }
+  .vb-hero-t { font-size: 22px; font-weight: 700; margin-bottom: 4px; position: relative; z-index: 1; }
+  .vb-hero-s { font-size: 12px; opacity: 0.92; line-height: 1.5; position: relative; z-index: 1; max-width: 220px; }
+  .vb-hero-cta {
+    margin-top: 14px;
+    background: rgba(255,255,255,0.95);
+    color: var(--flag);
+    padding: 10px 16px;
+    border-radius: 22px;
+    font-size: 12px; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 6px;
+    position: relative; z-index: 1;
+  }
+  .vb-row { display: flex; gap: 10px; }
+  .vb-pill {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .vb-pill-icon {
+    width: 36px; height: 36px;
+    border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+  }
+  .vb-pill.hike .vb-pill-icon { background: var(--primary-light); color: var(--primary); }
+  .vb-pill.run .vb-pill-icon { background: var(--running-light); color: var(--running); }
+  .vb-pill-text { flex: 1; }
+  .vb-pill-t { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .vb-pill-s { font-size: 10px; color: var(--text-secondary); margin-top: 1px; }
+
+  /* ============ Variant C: SINGLE COMBINED CARD ============ */
+  .vc-content { flex: 1; padding: 12px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .vc-combo {
+    background: var(--surface);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
+  }
+  .vc-half {
+    display: flex;
+    height: 90px;
+  }
+  .vc-half-side {
+    flex: 1;
+    color: #fff;
+    padding: 14px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    cursor: pointer;
+  }
+  .vc-half-side.hike { background: linear-gradient(135deg, #6a8a52, var(--primary)); }
+  .vc-half-side.run  { background: linear-gradient(135deg, #4a8bc4, var(--running)); }
+  .vc-half-icon { font-size: 22px; }
+  .vc-half-title { font-size: 14px; font-weight: 700; }
+  .vc-half-sub { font-size: 10px; opacity: 0.85; }
+  .vc-plant {
+    padding: 16px;
+    display: flex; align-items: center; gap: 12px;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .vc-plant-icon {
+    width: 42px; height: 42px;
+    background: var(--flag);
+    border-radius: 21px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    font-size: 20px;
+  }
+  .vc-plant-text { flex: 1; }
+  .vc-plant-t { font-size: 14px; font-weight: 700; color: var(--flag); }
+  .vc-plant-s { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* ============ Variant D: HORIZONTAL ROW (current production-like) ============ */
+  .vd-content { flex: 1; padding: 12px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .vd-card-row {
+    display: flex; gap: 10px;
+    flex: 1;
+    max-height: 180px;
+  }
+  .vd-card {
+    flex: 1;
+    border-radius: 18px;
+    padding: 18px;
+    color: #fff;
+    display: flex; flex-direction: column; justify-content: space-between;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+  }
+  .vd-card.hike { background: linear-gradient(160deg, #6a8a52, var(--primary), var(--primary-dark)); }
+  .vd-card.run  { background: linear-gradient(160deg, #4a8bc4, var(--running), var(--running-dark)); }
+  .vd-card-icon { font-size: 28px; }
+  .vd-card-title { font-size: 18px; font-weight: 700; margin-top: 4px; }
+  .vd-card-sub { font-size: 10px; opacity: 0.85; line-height: 1.4; margin-top: 2px; }
+  .vd-plant {
+    background: var(--surface);
+    border: 2px solid var(--flag);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 4px 14px rgba(200,121,65,0.18);
+  }
+  .vd-plant-icon {
+    width: 40px; height: 40px;
+    background: var(--flag);
+    color: #fff;
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .vd-plant-text { flex: 1; }
+  .vd-plant-t { font-size: 14px; font-weight: 700; color: var(--flag); }
+  .vd-plant-s { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* ============ Variant E: MAP-LED (preview map at top + actions below) ============ */
+  .ve-content { flex: 1; display: flex; flex-direction: column; }
+  .ve-mapview {
+    height: 180px;
+    background: linear-gradient(180deg, #d6e6cb, #c4dabb);
+    position: relative;
+    overflow: hidden;
+  }
+  .ve-mapview::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 60%, transparent 60px, rgba(93,124,70,0.18) 62px, transparent 64px),
+      radial-gradient(ellipse at 50% 60%, transparent 100px, rgba(93,124,70,0.18) 102px, transparent 104px),
+      radial-gradient(ellipse at 50% 60%, transparent 140px, rgba(93,124,70,0.15) 142px, transparent 144px);
+  }
+  .ve-mapview-pill {
+    position: absolute; top: 12px; left: 12px;
+    background: rgba(255,255,255,0.95);
+    padding: 6px 10px;
+    border-radius: 14px;
+    font-size: 10px;
+    color: var(--text-primary);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .ve-mapview-pill strong { color: var(--primary); }
+  .ve-mapview-trail {
+    position: absolute; left: 30%; top: 70%;
+    width: 60px; height: 6px;
+    background: var(--flag);
+    border-radius: 3px;
+    transform: rotate(-15deg);
+    opacity: 0.7;
+  }
+  .ve-mapview-dot {
+    position: absolute; left: 50%; top: 60%;
+    transform: translate(-50%, -50%);
+    width: 12px; height: 12px;
+    background: var(--primary);
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(93,124,70,0.25);
+  }
+  .ve-actions {
+    flex: 1;
+    padding: 14px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .ve-plant-prim {
+    background: linear-gradient(135deg, #d68a4f, var(--flag));
+    color: #fff;
+    padding: 14px 16px;
+    border-radius: 14px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 4px 14px rgba(200,121,65,0.3);
+  }
+  .ve-plant-prim-icon {
+    width: 38px; height: 38px;
+    background: rgba(255,255,255,0.25);
+    border-radius: 19px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .ve-plant-prim-text { flex: 1; }
+  .ve-plant-prim-t { font-size: 14px; font-weight: 700; }
+  .ve-plant-prim-s { font-size: 11px; opacity: 0.92; }
+  .ve-secondary-row { display: flex; gap: 8px; }
+  .ve-sec-btn {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .ve-sec-icon { font-size: 18px; }
+  .ve-sec-label { font-size: 11px; font-weight: 600; }
+  .ve-sec-btn.hike .ve-sec-label { color: var(--primary); }
+  .ve-sec-btn.run .ve-sec-label { color: var(--running); }
+</style>
+</head>
+<body>
+
+<h1>Cairn — Home Layout Variants</h1>
+<div class="sub">5 directions, same data, real production palette</div>
+
+<div class="grid">
+
+  <!-- VARIANT A — Square tiles -->
+  <div class="frame">
+    <div class="frame-label">Variant A</div>
+    <div class="frame-name">Square Tiles</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="header">
+          <div class="logo-row"><span class="logo-icon">▲</span><span class="logo-text">Cairn</span></div>
+          <div class="greeting">Wednesday morning</div>
+          <div class="stats-row">
+            <div class="stat-chip">📍 <strong>23 km</strong> this week</div>
+            <div class="stat-chip">📓 <strong>4</strong> cairns</div>
+          </div>
+        </div>
+        <div class="va-content">
+          <div class="recent-row">
+            <span style="font-size:14px">🥾</span>
+            <div class="recent-row-text">
+              <div class="recent-row-title">Yesterday's hike</div>
+              <div class="recent-row-sub">West Lake · 5.2 km · 1h 24m</div>
+            </div>
+          </div>
+          <div class="va-grid">
+            <div class="va-tile hike">
+              <div class="va-tile-icon">🥾</div>
+              <div>
+                <div class="va-tile-title">Hiking</div>
+                <div class="va-tile-sub">Track route<br/>plant cairns</div>
+              </div>
+            </div>
+            <div class="va-tile run">
+              <div class="va-tile-icon">🏃</div>
+              <div>
+                <div class="va-tile-title">Running</div>
+                <div class="va-tile-sub">Lock screen<br/>voice cues</div>
+              </div>
+            </div>
+          </div>
+          <div class="va-plant">
+            <div class="va-plant-icon">🪨</div>
+            <div class="va-plant-text">
+              <div class="va-plant-t">Leave a Cairn here</div>
+              <div class="va-plant-s">Drop a note for friends or your future self</div>
+            </div>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab active"><span class="tab-icon">🥾</span>Trails</div>
+          <div class="tab"><span class="tab-icon">👥</span>Friends</div>
+          <div class="tab"><span class="tab-icon">📓</span>Memory</div>
+          <div class="tab"><span class="tab-icon">⚙️</span>Settings</div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">两个正方形并排 + Plant 横长卡。<br/>对称、紧凑、像 iOS 设置 app。</div>
+  </div>
+
+  <!-- VARIANT B — Hero plant + small activity pills -->
+  <div class="frame">
+    <div class="frame-label">Variant B</div>
+    <div class="frame-name">Hero Plant + Pills</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="header">
+          <div class="logo-row"><span class="logo-icon">▲</span><span class="logo-text">Cairn</span></div>
+          <div class="greeting">Wednesday morning</div>
+          <div class="stats-row">
+            <div class="stat-chip">📍 <strong>23 km</strong> this week</div>
+            <div class="stat-chip">📓 <strong>4</strong> cairns</div>
+          </div>
+        </div>
+        <div class="vb-content">
+          <div class="vb-hero">
+            <div class="vb-hero-bg">🪨</div>
+            <div class="vb-hero-t">Leave a Cairn here</div>
+            <div class="vb-hero-s">Drop a note where you stand. Friends or strangers can find it later.</div>
+            <div class="vb-hero-cta">Plant now ›</div>
+          </div>
+          <div class="recent-row">
+            <span style="font-size:14px">🥾</span>
+            <div class="recent-row-text">
+              <div class="recent-row-title">Yesterday's hike</div>
+              <div class="recent-row-sub">West Lake · 5.2 km · 1h 24m</div>
+            </div>
+          </div>
+          <div class="vb-row">
+            <div class="vb-pill hike">
+              <div class="vb-pill-icon">🥾</div>
+              <div class="vb-pill-text">
+                <div class="vb-pill-t">Start hike</div>
+                <div class="vb-pill-s">Track + plant</div>
+              </div>
+            </div>
+            <div class="vb-pill run">
+              <div class="vb-pill-icon">🏃</div>
+              <div class="vb-pill-text">
+                <div class="vb-pill-t">Start run</div>
+                <div class="vb-pill-s">Lock screen</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab active"><span class="tab-icon">🥾</span>Trails</div>
+          <div class="tab"><span class="tab-icon">👥</span>Friends</div>
+          <div class="tab"><span class="tab-icon">📓</span>Memory</div>
+          <div class="tab"><span class="tab-icon">⚙️</span>Settings</div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">Plant 是英雄 hero 卡（最大）。<br/>Hiking/Running 降级为小 pill。<br/>"Plant 是核心"产品立场最强。</div>
+  </div>
+
+  <!-- VARIANT C — Single combined card -->
+  <div class="frame">
+    <div class="frame-label">Variant C</div>
+    <div class="frame-name">Combined Card</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="header">
+          <div class="logo-row"><span class="logo-icon">▲</span><span class="logo-text">Cairn</span></div>
+          <div class="greeting">Wednesday morning</div>
+          <div class="stats-row">
+            <div class="stat-chip">📍 <strong>23 km</strong> this week</div>
+            <div class="stat-chip">📓 <strong>4</strong> cairns</div>
+          </div>
+        </div>
+        <div class="vc-content">
+          <div class="recent-row">
+            <span style="font-size:14px">🥾</span>
+            <div class="recent-row-text">
+              <div class="recent-row-title">Yesterday's hike</div>
+              <div class="recent-row-sub">West Lake · 5.2 km · 1h 24m</div>
+            </div>
+          </div>
+          <div class="vc-combo">
+            <div class="vc-half">
+              <div class="vc-half-side hike">
+                <div class="vc-half-icon">🥾</div>
+                <div>
+                  <div class="vc-half-title">Hiking</div>
+                  <div class="vc-half-sub">Track + plant</div>
+                </div>
+              </div>
+              <div class="vc-half-side run">
+                <div class="vc-half-icon">🏃</div>
+                <div>
+                  <div class="vc-half-title">Running</div>
+                  <div class="vc-half-sub">Lock screen</div>
+                </div>
+              </div>
+            </div>
+            <div class="vc-plant">
+              <div class="vc-plant-icon">🪨</div>
+              <div class="vc-plant-text">
+                <div class="vc-plant-t">Leave a Cairn here</div>
+                <div class="vc-plant-s">Drop a note where you stand</div>
+              </div>
+              <span style="color:var(--text-muted);font-size:18px;">›</span>
+            </div>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab active"><span class="tab-icon">🥾</span>Trails</div>
+          <div class="tab"><span class="tab-icon">👥</span>Friends</div>
+          <div class="tab"><span class="tab-icon">📓</span>Memory</div>
+          <div class="tab"><span class="tab-icon">⚙️</span>Settings</div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">3 个动作合并到一张卡。<br/>上半 Hiking/Running 左右，下半 Plant 整条。<br/>视觉最干净，但 plant 不那么突出。</div>
+  </div>
+
+  <!-- VARIANT D — Two big cards horizontal + plant below -->
+  <div class="frame">
+    <div class="frame-label">Variant D</div>
+    <div class="frame-name">Two Big Cards (current style)</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="header">
+          <div class="logo-row"><span class="logo-icon">▲</span><span class="logo-text">Cairn</span></div>
+          <div class="greeting">Wednesday morning</div>
+          <div class="stats-row">
+            <div class="stat-chip">📍 <strong>23 km</strong> this week</div>
+            <div class="stat-chip">📓 <strong>4</strong> cairns</div>
+          </div>
+        </div>
+        <div class="vd-content">
+          <div class="recent-row">
+            <span style="font-size:14px">🥾</span>
+            <div class="recent-row-text">
+              <div class="recent-row-title">Yesterday's hike</div>
+              <div class="recent-row-sub">West Lake · 5.2 km · 1h 24m</div>
+            </div>
+          </div>
+          <div class="vd-card-row">
+            <div class="vd-card hike">
+              <div class="vd-card-icon">🥾</div>
+              <div>
+                <div class="vd-card-title">Hiking</div>
+                <div class="vd-card-sub">Track route<br/>plant cairns</div>
+              </div>
+            </div>
+            <div class="vd-card run">
+              <div class="vd-card-icon">🏃</div>
+              <div>
+                <div class="vd-card-title">Running</div>
+                <div class="vd-card-sub">Lock screen<br/>voice cues</div>
+              </div>
+            </div>
+          </div>
+          <div class="vd-plant">
+            <div class="vd-plant-icon">🪨</div>
+            <div class="vd-plant-text">
+              <div class="vd-plant-t">Leave a Cairn here</div>
+              <div class="vd-plant-s">Drop a note where you stand</div>
+            </div>
+            <span style="color:var(--flag);font-size:18px;">›</span>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab active"><span class="tab-icon">🥾</span>Trails</div>
+          <div class="tab"><span class="tab-icon">👥</span>Friends</div>
+          <div class="tab"><span class="tab-icon">📓</span>Memory</div>
+          <div class="tab"><span class="tab-icon">⚙️</span>Settings</div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">最接近现 HomeScreen。<br/>两张大卡片对称撑起视觉。<br/>Plant 用边框卡片次级显示。</div>
+  </div>
+
+  <!-- VARIANT E — Map-led -->
+  <div class="frame">
+    <div class="frame-label">Variant E</div>
+    <div class="frame-name">Map-Led (preview)</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="header">
+          <div class="logo-row"><span class="logo-icon">▲</span><span class="logo-text">Cairn</span></div>
+          <div class="greeting">Wednesday · 23 km this week · 4 cairns</div>
+        </div>
+        <div class="ve-content">
+          <div class="ve-mapview">
+            <div class="ve-mapview-pill">📍 <strong>West Lake</strong> · last hike</div>
+            <div class="ve-mapview-trail"></div>
+            <div class="ve-mapview-dot"></div>
+          </div>
+          <div class="ve-actions">
+            <div class="ve-plant-prim">
+              <div class="ve-plant-prim-icon">🪨</div>
+              <div class="ve-plant-prim-text">
+                <div class="ve-plant-prim-t">Leave a Cairn here</div>
+                <div class="ve-plant-prim-s">Drop a note where you stand</div>
+              </div>
+            </div>
+            <div class="ve-secondary-row">
+              <div class="ve-sec-btn hike">
+                <div class="ve-sec-icon">🥾</div>
+                <div class="ve-sec-label">Start hike</div>
+              </div>
+              <div class="ve-sec-btn run">
+                <div class="ve-sec-icon">🏃</div>
+                <div class="ve-sec-label">Start run</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab active"><span class="tab-icon">🥾</span>Trails</div>
+          <div class="tab"><span class="tab-icon">👥</span>Friends</div>
+          <div class="tab"><span class="tab-icon">📓</span>Memory</div>
+          <div class="tab"><span class="tab-icon">⚙️</span>Settings</div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">顶部一张迷你地图（昨天的轨迹）。<br/>地图 → Plant 按钮 → 两个小活动。<br/>视觉故事最强，但开发成本最高。</div>
+  </div>
+
+</div>
+
+</body>
+</html>

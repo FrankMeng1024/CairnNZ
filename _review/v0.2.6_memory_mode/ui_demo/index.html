@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cairn v0.2.6 — Production-style UI Demo</title>
+<style>
+  /* === Production color tokens (from app/src/components/tokens.ts) === */
+  :root {
+    --primary: #5d7c46;
+    --primary-light: rgba(93,124,70,0.15);
+    --primary-bg: rgba(93,124,70,0.08);
+    --primary-dark: #4a6b38;
+    --primary-muted: rgba(93,124,70,0.40);
+    --running: #3d7ab5;
+    --running-light: rgba(61,122,181,0.12);
+    --flag: #c87941;
+    --flag-light: rgba(200,121,65,0.12);
+    --bg: #faf7f2;
+    --surface: #ffffff;
+    --border: #ece6de;
+    --text-primary: #2d2a26;
+    --text-secondary: #8c7e72;
+    --text-muted: #b5a99d;
+    --doc-orange: #F26522;
+    --map-bg: #e8f0e0;
+    --fog: rgba(45, 42, 38, 0.45);
+    --fog-light: rgba(45, 42, 38, 0.20);
+    --friend-blue: rgba(61, 122, 181, 0.30);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    background: #1a1a1a;
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+  h1 {
+    text-align: center;
+    color: #faf7f2;
+    font-weight: 500;
+    margin-bottom: 4px;
+    font-size: 22px;
+    letter-spacing: 0.5px;
+  }
+  .sub {
+    text-align: center;
+    color: #8c7e72;
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+  .grid {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+  .frame { width: 320px; flex-shrink: 0; }
+  .frame-label {
+    font-size: 10px; color: var(--flag);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    text-align: center;
+    font-weight: 600;
+  }
+  .frame-desc {
+    font-size: 11px; color: var(--text-muted);
+    margin-top: 8px; text-align: center;
+    line-height: 1.5;
+  }
+  .phone {
+    width: 320px; height: 640px;
+    background: var(--bg);
+    border-radius: 36px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    color: var(--text-primary);
+  }
+  .phone-notch {
+    position: absolute;
+    top: 12px; left: 50%; transform: translateX(-50%);
+    width: 100px; height: 22px;
+    background: #1a1a1a;
+    border-radius: 12px;
+    z-index: 100;
+  }
+  .status-bar {
+    height: 44px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 22px 8px;
+    font-size: 12px; font-weight: 600;
+    color: var(--text-primary);
+  }
+  .screen-content { display: flex; flex-direction: column; height: calc(100% - 44px); }
+
+  /* === Trails screen === */
+  .trails-header {
+    padding: 0 20px 12px;
+  }
+  .logo-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 4px;
+  }
+  .logo-icon {
+    font-size: 22px; color: var(--primary);
+  }
+  .logo-text {
+    font-size: 20px; font-weight: 600;
+    color: var(--text-primary);
+  }
+  .greeting {
+    font-size: 12px; color: var(--text-secondary);
+  }
+  .stats-row {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .stat-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 5px 9px;
+    border-radius: 12px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    display: flex; align-items: center; gap: 4px;
+    font-weight: 500;
+  }
+  .stat-chip strong { color: var(--primary); }
+
+  .trails-content {
+    flex: 1;
+    padding: 12px 20px 16px;
+    display: flex; flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+  }
+
+  /* === Trapezoid activity row (V-cross, equal area) === */
+  .activity-trap-row {
+    display: flex;
+    height: 120px;
+    margin-bottom: 12px;
+    gap: 0;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .trap {
+    flex: 1;
+    position: relative;
+    cursor: pointer;
+  }
+  .trap-shape { position: absolute; inset: 0; }
+  .trap-hiking .trap-shape {
+    background: linear-gradient(135deg, #6a8a52 0%, var(--primary) 60%, #4a6b38 100%);
+    /* Symmetric: tall on left edge, slants down to a point on the right */
+    -webkit-clip-path: polygon(0 0, 100% 0, 60% 100%, 0 100%);
+    clip-path: polygon(0 0, 100% 0, 60% 100%, 0 100%);
+    border-radius: 14px 0 0 14px;
+    box-shadow: 0 4px 12px rgba(74,107,56,0.25);
+  }
+  .trap-running { margin-left: -40%; }
+  .trap-running .trap-shape {
+    background: linear-gradient(135deg, #4a8bc4 0%, var(--running) 60%, #2d5e8e 100%);
+    /* Mirror: starts at a point on the left, fills out to the right */
+    -webkit-clip-path: polygon(40% 0, 100% 0, 100% 100%, 0 100%);
+    clip-path: polygon(40% 0, 100% 0, 100% 100%, 0 100%);
+    border-radius: 0 14px 14px 0;
+    box-shadow: 0 4px 12px rgba(45,94,142,0.25);
+  }
+  .trap-content {
+    position: absolute;
+    inset: 0;
+    padding: 16px;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    z-index: 2;
+  }
+  .trap-hiking .trap-content { padding-right: 50px; }
+  .trap-running .trap-content { padding-left: 70px; align-items: flex-end; text-align: right; }
+  .trap-icon-bg {
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.22);
+    border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .trap-text-wrap { width: 100%; }
+  .trap-title { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; margin-bottom: 2px; }
+  .trap-sub   { font-size: 11px; opacity: 0.88; line-height: 1.3; }
+
+  /* Plant card — full width, secondary visual weight */
+  .plant-card {
+    background: var(--surface);
+    border: 1.5px solid var(--flag);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex; align-items: center; gap: 14px;
+    box-shadow: 0 4px 12px rgba(200,121,65,0.15);
+    cursor: pointer;
+    margin-bottom: 12px;
+  }
+  .plant-card-icon {
+    width: 48px; height: 48px;
+    background: var(--flag);
+    border-radius: 24px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    color: #fff;
+  }
+  .plant-card-text { flex: 1; }
+  .plant-card-title { font-size: 15px; font-weight: 600; color: var(--flag); margin-bottom: 2px; }
+  .plant-card-sub   { font-size: 12px; color: var(--text-secondary); }
+  .plant-card-arrow { font-size: 22px; color: var(--flag); }
+
+  /* Activity cards — sage/blue, smaller than plant */
+  .activity-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .activity-card-icon {
+    width: 40px; height: 40px;
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .activity-card.hiking .activity-card-icon { background: var(--primary-light); }
+  .activity-card.running .activity-card-icon { background: var(--running-light); }
+  .activity-card-text { flex: 1; }
+  .activity-card-title {
+    font-size: 15px; font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .activity-card.hiking .activity-card-title { color: var(--primary); }
+  .activity-card.running .activity-card-title { color: var(--running); }
+  .activity-card-sub {
+    font-size: 11px; color: var(--text-secondary);
+  }
+  .activity-card-arrow {
+    color: var(--text-muted);
+    font-size: 18px;
+  }
+
+  /* Recent row */
+  .recent-row {
+    background: rgba(93,124,70,0.05);
+    border: 1px solid var(--primary-light);
+    padding: 10px 12px;
+    border-radius: 12px;
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 4px;
+  }
+  .recent-row-icon { font-size: 14px; }
+  .recent-row-text { flex: 1; }
+  .recent-row-title { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+  .recent-row-sub   { font-size: 10px; color: var(--text-secondary); margin-top: 1px; }
+
+  /* Section links */
+  .section-link {
+    display: flex; align-items: center;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-link:last-child { border-bottom: none; }
+  .section-link-text { flex: 1; font-size: 13px; color: var(--text-primary); }
+  .section-link-chevron { color: var(--text-muted); font-size: 16px; }
+
+  /* === Bottom tab bar === */
+  .tab-bar {
+    display: flex;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 8px 0 28px;
+  }
+  .tab {
+    flex: 1; text-align: center; padding: 4px 4px;
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+  }
+  .tab.active { color: var(--primary); }
+  .tab-icon { font-size: 18px; margin-bottom: 3px; display: block; }
+  .tab-label { font-weight: 500; font-size: 10px; }
+
+  /* === Memory Map === */
+  .memory-map {
+    position: relative; flex: 1;
+    background: var(--map-bg);
+    overflow: hidden;
+  }
+  /* Topo lines - sage green */
+  .topo-bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 30% 40%, transparent 80px, rgba(93,124,70,0.10) 82px, transparent 84px),
+      radial-gradient(ellipse at 30% 40%, transparent 130px, rgba(93,124,70,0.10) 132px, transparent 134px),
+      radial-gradient(ellipse at 30% 40%, transparent 180px, rgba(93,124,70,0.10) 182px, transparent 184px),
+      radial-gradient(ellipse at 30% 40%, transparent 230px, rgba(93,124,70,0.08) 232px, transparent 234px),
+      radial-gradient(ellipse at 75% 75%, transparent 60px, rgba(93,124,70,0.10) 62px, transparent 64px),
+      radial-gradient(ellipse at 75% 75%, transparent 110px, rgba(93,124,70,0.10) 112px, transparent 114px),
+      radial-gradient(ellipse at 75% 75%, transparent 160px, rgba(93,124,70,0.08) 162px, transparent 164px);
+  }
+  /* Light fog (unexplored is darker but still readable) */
+  .fog-overlay {
+    position: absolute; inset: 0;
+    background: var(--fog);
+    -webkit-mask-image:
+      radial-gradient(ellipse 110px 80px at 50% 60%, transparent 60%, black 100%),
+      radial-gradient(ellipse 60px 50px at 30% 30%, transparent 60%, black 100%),
+      radial-gradient(ellipse 80px 50px at 70% 25%, transparent 60%, black 100%);
+    mask-image:
+      radial-gradient(ellipse 110px 80px at 50% 60%, transparent 60%, black 100%),
+      radial-gradient(ellipse 60px 50px at 30% 30%, transparent 60%, black 100%),
+      radial-gradient(ellipse 80px 50px at 70% 25%, transparent 60%, black 100%);
+  }
+  /* User dot */
+  .user-dot {
+    position: absolute; left: 50%; top: 60%;
+    transform: translate(-50%, -50%);
+    width: 14px; height: 14px;
+    background: var(--primary);
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(93,124,70,0.2),
+                0 2px 8px rgba(0,0,0,0.3);
+    z-index: 50;
+  }
+  /* Cairn pin (revealed) */
+  .cairn-pin {
+    position: absolute;
+    width: 28px; height: 36px;
+    transform: translate(-50%, -100%);
+    z-index: 40;
+  }
+  .cairn-pin .pin-icon {
+    width: 100%; height: 28px;
+    background: var(--flag);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    border: 2px solid #fff;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px; font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
+  /* Mystery pin in fog */
+  .mystery-pin {
+    position: absolute;
+    width: 28px; height: 36px;
+    transform: translate(-50%, -100%);
+    z-index: 40;
+  }
+  .mystery-pin .pin-icon {
+    width: 100%; height: 28px;
+    background: rgba(45, 42, 38, 0.9);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    border: 2px dashed #c87941;
+    display: flex; align-items: center; justify-content: center;
+    color: #c87941; font-size: 14px; font-weight: 700;
+  }
+  /* Map controls */
+  .map-controls-row {
+    position: absolute; top: 12px; left: 12px;
+    z-index: 60;
+    display: flex; gap: 8px;
+  }
+  .map-pill {
+    background: rgba(255,255,255,0.96);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    border-radius: 18px;
+    font-size: 11px;
+    color: var(--text-primary);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .map-pill strong { color: var(--primary); }
+  .map-controls-side {
+    position: absolute; right: 12px; top: 60px;
+    z-index: 60;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .map-btn {
+    width: 38px; height: 38px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .map-btn.active { color: var(--primary); border-color: var(--primary); }
+
+  /* Bottom info card */
+  .bottom-info {
+    position: absolute; bottom: 12px; left: 12px; right: 12px;
+    z-index: 60;
+    background: rgba(255,255,255,0.97);
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+  .bi-row1 { display: flex; align-items: center; justify-content: space-between; }
+  .bi-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .bi-stat-text { font-size: 11px; color: var(--text-secondary); }
+  .bi-stat-text strong { color: var(--primary); }
+  .bi-friends {
+    display: flex; align-items: center; gap: 4px;
+    margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--text-secondary);
+  }
+  .friend-avatar {
+    width: 20px; height: 20px;
+    border-radius: 10px;
+    background: var(--running); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600;
+    border: 2px solid #fff;
+    margin-left: -4px;
+  }
+  .friend-avatar:first-of-type { margin-left: 0; }
+
+  /* === Plant flow === */
+  .plant-screen { padding: 16px 20px 24px; flex: 1; display: flex; flex-direction: column; }
+  .plant-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 16px;
+  }
+  .back-btn {
+    width: 32px; height: 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+  .step-indicator { display: flex; gap: 4px; flex: 1; }
+  .step-dot {
+    flex: 1; height: 3px; border-radius: 2px;
+    background: var(--border);
+  }
+  .step-dot.active { background: var(--primary); }
+  .step-title { font-size: 22px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+  .step-sub   { font-size: 13px; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5; }
+
+  .gps-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 16px;
+    text-align: center;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .gps-icon-wrap {
+    width: 60px; height: 60px;
+    background: var(--primary-light);
+    border-radius: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    color: var(--primary);
+    margin-bottom: 12px;
+  }
+  .gps-status-text { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+  .gps-progress-bar {
+    width: 100%; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 12px 0 8px;
+    overflow: hidden;
+  }
+  .gps-progress-fill {
+    width: 60%; height: 100%;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+  .gps-meta { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+  .gps-accuracy {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 10px;
+    background: rgba(93,124,70,0.08);
+    color: var(--primary);
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .map-mini {
+    position: relative;
+    height: 200px;
+    background: var(--map-bg);
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+  .accuracy-circle {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 70px; height: 70px;
+    border: 2px solid var(--primary);
+    border-radius: 50%;
+    background: rgba(93,124,70,0.12);
+  }
+  .pin-draggable {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -100%);
+    width: 32px; height: 40px;
+    z-index: 10;
+  }
+  .pin-draggable .pin-icon {
+    width: 100%; height: 32px;
+    background: var(--flag);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    border: 2px solid #fff;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+  }
+  .map-mini-hint {
+    position: absolute; bottom: 8px; left: 8px; right: 8px;
+    background: rgba(255,255,255,0.96);
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .input-field {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 13px;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    width: 100%;
+    font-family: inherit;
+  }
+  .input-field.tall { min-height: 76px; }
+
+  .voice-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .voice-btn {
+    width: 50px; height: 50px;
+    background: var(--doc-orange);
+    border-radius: 25px;
+    color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 4px 12px rgba(242,101,34,0.4);
+  }
+  .voice-hint { font-size: 11px; color: var(--text-secondary); margin-top: 6px; }
+
+  .vis-row {
+    display: flex; gap: 6px;
+    margin-bottom: 12px;
+  }
+  .vis-chip {
+    flex: 1; padding: 9px 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .vis-chip.active {
+    background: var(--primary-bg);
+    border-color: var(--primary);
+    color: var(--primary);
+    font-weight: 600;
+  }
+  .vis-chip-icon { font-size: 14px; display: block; margin-bottom: 2px; }
+
+  .primary-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 12px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(93,124,70,0.25);
+  }
+
+  /* === Mystery card === */
+  .mystery-screen {
+    background: linear-gradient(180deg, #2d2a26 0%, #45403a 100%);
+    color: #faf7f2;
+    padding: 30px 20px;
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+  }
+  .mystery-icon {
+    width: 80px; height: 80px;
+    background: rgba(200,121,65,0.18);
+    border: 2px dashed var(--flag);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px;
+    color: var(--flag);
+    margin-bottom: 18px;
+  }
+  .mystery-title {
+    font-size: 17px; font-weight: 600;
+    color: var(--flag);
+    margin-bottom: 6px;
+  }
+  .mystery-desc {
+    font-size: 13px;
+    color: rgba(250,247,242,0.7);
+    line-height: 1.6;
+    max-width: 240px;
+    margin-bottom: 20px;
+  }
+  .mystery-meta {
+    display: flex; gap: 14px;
+    background: rgba(0,0,0,0.25);
+    padding: 10px 14px;
+    border-radius: 18px;
+    margin-bottom: 24px;
+  }
+  .mm-item { font-size: 11px; color: rgba(250,247,242,0.6); }
+  .mm-item strong { display: block; color: var(--flag); font-size: 16px; font-weight: 600; }
+  .mystery-arrow {
+    width: 70px; height: 70px;
+    background: var(--flag);
+    color: #fff;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    box-shadow: 0 6px 20px rgba(200,121,65,0.5);
+    margin-bottom: 10px;
+  }
+  .mystery-cta {
+    font-size: 12px; color: var(--flag); font-weight: 500;
+  }
+
+  /* === Revealed card === */
+  .revealed-screen { padding: 16px 20px; flex: 1; overflow-y: auto; }
+  .rev-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .rev-avatar {
+    width: 38px; height: 38px;
+    border-radius: 19px;
+    background: var(--running);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .rev-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .rev-meta { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+  .rev-title {
+    font-size: 18px; font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+  .rev-voice {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px;
+  }
+  .rev-voice-play {
+    width: 36px; height: 36px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+  }
+  .rev-voice-info { flex: 1; }
+  .rev-voice-wave { font-size: 12px; color: var(--primary); letter-spacing: -1px; }
+  .rev-voice-time { font-size: 11px; color: var(--text-secondary); }
+  .rev-text {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.6;
+    margin-bottom: 14px;
+  }
+  .rev-actions { display: flex; gap: 8px; }
+  .rev-btn {
+    flex: 1; padding: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .rev-btn.liked {
+    background: rgba(200,121,65,0.1);
+    border-color: var(--flag);
+    color: var(--flag);
+  }
+
+  /* === Onboarding card === */
+  .onboard-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 200;
+    display: flex; align-items: flex-end;
+    padding: 0 16px 90px;
+  }
+  .onboard-card {
+    background: var(--surface);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+    width: 100%;
+  }
+  .onboard-icon {
+    font-size: 28px; margin-bottom: 8px;
+  }
+  .onboard-title { font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+  .onboard-text {
+    font-size: 12px; color: var(--text-secondary);
+    line-height: 1.6; margin-bottom: 14px;
+  }
+  .onboard-btn {
+    width: 100%;
+    padding: 11px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 10px;
+    border: none;
+    font-size: 13px; font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<h1>Cairn v0.2.6 — Production-style UI</h1>
+<div class="sub">Real production palette · primary green / flag orange / cream bg · 6 frames</div>
+
+<div class="grid">
+
+  <!-- FRAME 1 — TRAILS TAB (Plant CTA + Hiking/Running) -->
+  <div class="frame">
+    <div class="frame-label">Frame 1 · TRAILS TAB (home)</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="trails-header">
+          <div class="logo-row">
+            <span class="logo-icon">▲</span>
+            <span class="logo-text">Cairn</span>
+          </div>
+          <div class="greeting">Wednesday morning · welcome back</div>
+          <div class="stats-row">
+            <div class="stat-chip">📍 <strong>23 km</strong> this week</div>
+            <div class="stat-chip">📓 <strong>4</strong> cairns</div>
+            <div class="stat-chip">🗺️ <strong>2</strong> regions</div>
+          </div>
+        </div>
+        <div class="trails-content">
+          <div class="recent-row">
+            <span class="recent-row-icon">🥾</span>
+            <div class="recent-row-text">
+              <div class="recent-row-title">Yesterday's hike</div>
+              <div class="recent-row-sub">West Lake · 5.2 km · 1h 24m</div>
+            </div>
+          </div>
+
+          <div class="activity-trap-row">
+            <div class="trap trap-hiking">
+              <div class="trap-shape"></div>
+              <div class="trap-content">
+                <div class="trap-icon-bg">🥾</div>
+                <div class="trap-text-wrap">
+                  <div class="trap-title">Hiking</div>
+                  <div class="trap-sub">Track route · plant cairns</div>
+                </div>
+              </div>
+            </div>
+            <div class="trap trap-running">
+              <div class="trap-shape"></div>
+              <div class="trap-content">
+                <div class="trap-icon-bg">🏃</div>
+                <div class="trap-text-wrap">
+                  <div class="trap-title">Running</div>
+                  <div class="trap-sub">Lock screen · voice cues</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="plant-card">
+            <div class="plant-card-icon">🪨</div>
+            <div class="plant-card-text">
+              <div class="plant-card-title">Leave a Cairn here</div>
+              <div class="plant-card-sub">Drop a note for friends or your future self</div>
+            </div>
+            <div class="plant-card-arrow">›</div>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab active"><span class="tab-icon">🥾</span><span class="tab-label">Trails</span></div>
+          <div class="tab"><span class="tab-icon">👥</span><span class="tab-label">Friends</span></div>
+          <div class="tab"><span class="tab-icon">📓</span><span class="tab-label">Memory</span></div>
+          <div class="tab"><span class="tab-icon">⚙️</span><span class="tab-label">Settings</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">
+      Plant 是 #1 醒目按钮（橙色），出门即用。<br/>
+      下面 Hiking/Running 是次级活动。<br/>
+      没有 AR 入口（已雪藏）。
+    </div>
+  </div>
+
+  <!-- FRAME 2 — MEMORY TAB with onboarding -->
+  <div class="frame">
+    <div class="frame-label">Frame 2 · MEMORY TAB (first visit)</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="memory-map">
+          <div class="topo-bg"></div>
+          <div class="fog-overlay"></div>
+
+          <div class="cairn-pin" style="left:50%;top:55%"><div class="pin-icon">▲</div></div>
+          <div class="mystery-pin" style="left:25%;top:25%"><div class="pin-icon">?</div></div>
+          <div class="mystery-pin" style="left:75%;top:22%"><div class="pin-icon">?</div></div>
+          <div class="user-dot"></div>
+
+          <div class="map-controls-row">
+            <div class="map-pill">📍 <strong>2.4 km²</strong> explored</div>
+          </div>
+          <div class="map-controls-side">
+            <div class="map-btn">⊕</div>
+            <div class="map-btn active">📍</div>
+            <div class="map-btn">👥</div>
+          </div>
+          <div class="bottom-info">
+            <div class="bi-row1">
+              <div class="bi-title">Your Memory</div>
+              <div class="bi-stat-text"><strong>23</strong> places · <strong>4</strong> cairns</div>
+            </div>
+            <div class="bi-friends">
+              <div class="friend-avatar">A</div>
+              <div class="friend-avatar" style="background:var(--primary)">L</div>
+              <div class="friend-avatar" style="background:var(--flag)">M</div>
+              <span style="margin-left:6px;">3 friends sharing</span>
+            </div>
+          </div>
+
+          <!-- Onboarding overlay (first visit only) -->
+          <div class="onboard-overlay">
+            <div class="onboard-card">
+              <div class="onboard-icon">📓</div>
+              <div class="onboard-title">Open the app and walk — fog clears</div>
+              <div class="onboard-text">
+                When the app is open, the area you walk through becomes part of your memory. Close the app and we stop. We never track you in the background.
+              </div>
+              <button class="onboard-btn">Got it</button>
+            </div>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab"><span class="tab-icon">🥾</span><span class="tab-label">Trails</span></div>
+          <div class="tab"><span class="tab-icon">👥</span><span class="tab-label">Friends</span></div>
+          <div class="tab active"><span class="tab-icon">📓</span><span class="tab-label">Memory</span></div>
+          <div class="tab"><span class="tab-icon">⚙️</span><span class="tab-label">Settings</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">
+      首次打开 Memory tab 显示一次性卡片：<br/>
+      "App 开着就在记，关了就停"。<br/>
+      右上角小图标 (👥) 切换是否显示朋友的雾。
+    </div>
+  </div>
+
+  <!-- FRAME 3 — PLANT STEP 1 (GPS LOCK) -->
+  <div class="frame">
+    <div class="frame-label">Frame 3 · PLANT step 1 (GPS lock)</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="plant-screen">
+          <div class="plant-header">
+            <div class="back-btn">‹</div>
+            <div class="step-indicator">
+              <div class="step-dot active"></div>
+              <div class="step-dot"></div>
+              <div class="step-dot"></div>
+            </div>
+          </div>
+
+          <div class="step-title">Where are you?</div>
+          <div class="step-sub">Hold still for 5 seconds. We're getting an accurate read.</div>
+
+          <div class="gps-card">
+            <div class="gps-icon-wrap">📡</div>
+            <div class="gps-status-text">Locking your spot…</div>
+            <div class="gps-progress-bar">
+              <div class="gps-progress-fill"></div>
+            </div>
+            <div class="gps-meta">3.2 seconds remaining</div>
+            <div class="gps-accuracy">Accuracy: 2.8 m ✓</div>
+          </div>
+
+          <div style="background: rgba(93,124,70,0.06); border-radius: 12px; padding: 12px; font-size: 12px; color: var(--text-secondary); line-height:1.5;">
+            <strong style="color: var(--primary);">💡 Tip</strong><br/>
+            For best accuracy, plant outside under open sky. Indoors GPS can be off by 20+ meters.
+          </div>
+
+          <div style="flex:1;"></div>
+          <button class="primary-btn" disabled style="opacity:0.5;">Continue (waiting…)</button>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">
+      5 秒采样 + 实时精度显示。<br/>
+      精度 < 15m 才让 Continue。<br/>
+      "在户外更准" 文案教育用户。
+    </div>
+  </div>
+
+  <!-- FRAME 4 — PLANT STEP 2 (PIN ADJUST) -->
+  <div class="frame">
+    <div class="frame-label">Frame 4 · PLANT step 2 (pin adjust)</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="plant-screen">
+          <div class="plant-header">
+            <div class="back-btn">‹</div>
+            <div class="step-indicator">
+              <div class="step-dot active"></div>
+              <div class="step-dot active"></div>
+              <div class="step-dot"></div>
+            </div>
+          </div>
+
+          <div class="step-title">Looks right?</div>
+          <div class="step-sub">We placed the pin where the GPS said. Drag if you need to.</div>
+
+          <div class="map-mini" style="height: 280px;">
+            <div class="topo-bg"></div>
+            <div class="accuracy-circle"></div>
+            <div class="pin-draggable">
+              <div class="pin-icon"></div>
+            </div>
+            <div class="map-mini-hint">Pinch to zoom · drag the pin to fine-tune</div>
+          </div>
+
+          <div style="font-size:11px; color: var(--text-secondary); text-align:center; margin: 8px 0 16px;">
+            Position: 31.230349, 121.435398 · ± 2.8 m
+          </div>
+
+          <div style="flex:1;"></div>
+          <button class="primary-btn">Looks right</button>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">
+      算法已定位，多数用户直接 Confirm。<br/>
+      不满意可拖（限 50m 内）。<br/>
+      不强制拖，避免增加摩擦。
+    </div>
+  </div>
+
+  <!-- FRAME 5 — PLANT STEP 3 (CONTENT) -->
+  <div class="frame">
+    <div class="frame-label">Frame 5 · PLANT step 3 (content)</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="plant-screen">
+          <div class="plant-header">
+            <div class="back-btn">‹</div>
+            <div class="step-indicator">
+              <div class="step-dot active"></div>
+              <div class="step-dot active"></div>
+              <div class="step-dot active"></div>
+            </div>
+          </div>
+
+          <div class="step-title">Leave a mark</div>
+          <div class="step-sub">A few words, a voice memo, or both.</div>
+
+          <input class="input-field" placeholder="Title (optional)" value="Hidden tea spot"/>
+          <textarea class="input-field tall" placeholder="Tell whoever finds this…">Bring water. Old man here makes the best tea in the city.</textarea>
+
+          <div class="voice-card">
+            <div class="voice-btn">🎤</div>
+            <div class="voice-hint">Hold to record (max 30 s)</div>
+          </div>
+
+          <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">Who can see this</div>
+          <div class="vis-row">
+            <div class="vis-chip"><span class="vis-chip-icon">🔒</span>Just me</div>
+            <div class="vis-chip active"><span class="vis-chip-icon">👥</span>Friends</div>
+            <div class="vis-chip" style="opacity:0.4"><span class="vis-chip-icon">🌍</span>Anyone</div>
+          </div>
+
+          <button class="primary-btn">Plant Cairn</button>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">
+      文字 / 语音 / 都行。<br/>
+      默认 Friends 可见。Anyone 选项 v0.2.6 灰掉（等审核机制）。<br/>
+      Plant 后周围 25m 自动解锁。
+    </div>
+  </div>
+
+  <!-- FRAME 6 — MARK MYSTERY (in fog) -->
+  <div class="frame">
+    <div class="frame-label">Frame 6 · MARK MYSTERY (in fog)</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar" style="color:#faf7f2"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="mystery-screen">
+          <div class="mystery-icon">?</div>
+          <div class="mystery-title">Someone left a cairn</div>
+          <div class="mystery-desc">
+            You'll be able to read it when you get closer.<br/>
+            About 240 m southwest.
+          </div>
+
+          <div class="mystery-meta">
+            <div class="mm-item"><strong>♥ 12</strong>liked</div>
+            <div class="mm-item"><strong>3 d</strong>ago</div>
+            <div class="mm-item"><strong>240 m</strong>away</div>
+          </div>
+
+          <div class="mystery-arrow">↘</div>
+          <div class="mystery-cta">Walk this way to reveal</div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab"><span class="tab-icon">🥾</span><span class="tab-label">Trails</span></div>
+          <div class="tab"><span class="tab-icon">👥</span><span class="tab-label">Friends</span></div>
+          <div class="tab active"><span class="tab-icon">📓</span><span class="tab-label">Memory</span></div>
+          <div class="tab"><span class="tab-icon">⚙️</span><span class="tab-label">Settings</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">
+      点雾里的 ? cairn 进这个屏。<br/>
+      只看赞数 + 时间 + 距离 + 方向。<br/>
+      不能看内容。走到 25m 才解锁。
+    </div>
+  </div>
+
+  <!-- FRAME 7 — MARK REVEALED -->
+  <div class="frame">
+    <div class="frame-label">Frame 7 · MARK REVEALED</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>•••</span></div>
+      <div class="screen-content">
+        <div class="revealed-screen">
+          <div class="rev-header">
+            <div class="rev-avatar">A</div>
+            <div style="flex:1">
+              <div class="rev-name">Alice Wang</div>
+              <div class="rev-meta">3 days ago · West Lake</div>
+            </div>
+            <div class="rev-btn liked" style="flex:0; padding:6px 10px;">♥ 13</div>
+          </div>
+
+          <div class="rev-title">Hidden tea spot</div>
+
+          <div class="rev-voice">
+            <div class="rev-voice-play">▶</div>
+            <div class="rev-voice-info">
+              <div class="rev-voice-wave">▁▃▆█▇▅▃▂▁▁▂▄▆▄▂▁▁▂▃▅▃▁</div>
+              <div class="rev-voice-time">0:14 / 0:24</div>
+            </div>
+          </div>
+
+          <div class="rev-text">
+            Bring water. The shrine is behind the third bend, not the second. The old man here makes the best dragon-well tea in the city.
+          </div>
+
+          <div class="rev-actions">
+            <div class="rev-btn">♥ Like</div>
+            <div class="rev-btn">⚑ Report</div>
+            <div class="rev-btn">↗ Share</div>
+          </div>
+
+          <div style="margin-top:14px; padding:10px 12px; background:var(--primary-bg); border-radius:10px; font-size:11px; color:var(--text-secondary); text-align:center;">
+            ✓ This cairn is now in your Memory. You can read it anywhere.
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab"><span class="tab-icon">🥾</span><span class="tab-label">Trails</span></div>
+          <div class="tab"><span class="tab-icon">👥</span><span class="tab-label">Friends</span></div>
+          <div class="tab active"><span class="tab-icon">📓</span><span class="tab-label">Memory</span></div>
+          <div class="tab"><span class="tab-icon">⚙️</span><span class="tab-label">Settings</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-desc">
+      走到 25m 内自动解锁完整内容。<br/>
+      解锁后任何地方都能再读（永久）。<br/>
+      底部小提示告诉用户"已收入 memory"。
+    </div>
+  </div>
+
+</div>
+
+<div style="text-align:center;color:#8c7e72;font-size:11px;margin-top:32px;line-height:1.6;">
+  Production tokens: <code>--primary #5d7c46</code> · <code>--flag #c87941</code> · <code>--bg #faf7f2</code><br/>
+  All UI is plain CSS — no images. Mapbox satellite/topo tile fills the actual map area in production.
+</div>
+
+</body>
+</html>

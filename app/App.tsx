@@ -24,16 +24,34 @@ import { isPlaywrightBypass } from './src/utils/devFlags';
 import { crashLogger } from './src/services/crashLogger';
 import { OTA_VERSION } from './src/components/OtaBadge';
 import { API_BASE_URL } from './src/config/api';
+// v300 DIAG: jetsam-resistant boot tracing. ANY heavy module above
+// this line that crashes will leave no trace — but the next cold
+// start drains the AsyncStorage checkpoint and reports where we died.
+import { markBootPhase, drainPreviousBootCheckpoint } from './src/services/bootDiagnostics';
+
+// First side-effect: report that module loading completed. This runs
+// AFTER all the imports above (which is when iOS jetsam most likely
+// kills us in v298/v299). If user sees no `boot.module_loaded` event
+// for their session_id on server, JS bundle never finished parsing →
+// confirms the root cause hypothesis.
+markBootPhase('module_loaded', { ota: OTA_VERSION });
+// Drain whatever the previous boot recorded as its last phase. Fires
+// `boot.previous_boot_died` if the previous run didn't reach
+// 'boot_complete'.
+void drainPreviousBootCheckpoint(OTA_VERSION);
 
 // Must run at app entry — handles Google OAuth popup redirect on web
 WebBrowser.maybeCompleteAuthSession();
+markBootPhase('after_webbrowser_init');
 
 // Initialize Mapbox token (native + web) before any MapView renders
 initMapbox();
+markBootPhase('after_mapbox_init');
 
 // Pre-register background location TaskManager handler (no-op on web).
 // MUST run at module load before any startLocationUpdatesAsync call.
 registerBackgroundTask().catch(() => {});
+markBootPhase('after_register_bg_task');
 
 // Best-effort: clean up any orphaned background location task left over from
 // a previous app instance that was killed mid-session. Without this, a user
@@ -156,6 +174,7 @@ function AppRoot() {
     try {
       crashLogger.install();
       crashLogger.breadcrumb('app_boot');
+      markBootPhase('after_crashlogger_install');
       // v0.2.5 Phase 0.15: load v025 feature flag cache early (sync-stale + async-refresh)
       // so that ARScreen.useV025Enabled() can read a real value instead of HARD_DEFAULTS.
       // Cached value loads from AsyncStorage (last-known); refresh fetches /api/feature-flags.
@@ -163,11 +182,13 @@ function AppRoot() {
       loadFlagsCache()
         .then(() => refreshFlagsFromBackend(API_BASE_URL))
         .catch((e) => crashLogger.breadcrumb('v025_flags_boot_failed: ' + (e?.message ?? 'unknown')));
+      markBootPhase('after_load_flags_cache');
       // Phase 4 composition root: init telemetry singleton + start 5s flush ticker.
       // Subsequent emitTelemetry() calls (from ARScreenV2 v025/telemetry messages)
       // route into the same batcher; one POST every 5s to /api/v025/debug-events.
       try { initTelemetrySingleton(API_BASE_URL); }
       catch (e) { crashLogger.breadcrumb('v025_telemetry_init_failed: ' + (e instanceof Error ? e.message : String(e))); }
+      markBootPhase('after_telemetry_init');
       // v303 OTA 四修 P0-2: 手动强制 OTA check-on-load。
       // 默认 expo-updates ON_LOAD + fallbackToCacheTimeout=0,意味着 app
       // 启动用 cached bundle,新 bundle 后台下,**下次** cold start 才
@@ -462,6 +483,14 @@ function AppRoot() {
       });
     });
     return () => sub.remove();
+  }, []);
+
+  // v300 DIAG: mark boot complete once render reaches first non-loading state.
+  // useEffect with empty deps runs after first paint — if we got here, every
+  // synchronous init in the top useEffect ran without crashing. drainPrevious
+  // on the next cold start will NOT report this boot as a failure.
+  useEffect(() => {
+    markBootPhase('boot_complete', { ota: OTA_VERSION });
   }, []);
 
   // Don't block forever on font loading — show app once hydrated even if

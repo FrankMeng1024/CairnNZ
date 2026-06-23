@@ -1,0 +1,6 @@
+fog of war signed distance field SDF shader Unity
+tile based fog of war reveal algorithm 2D
+GDC talk fog of war implementation
+Reddit gamedev fog of war soft edge gradient shader
+RimMap RimWorld fog of war pixel
+Civilization 6 fog of war stylized edge clouds
