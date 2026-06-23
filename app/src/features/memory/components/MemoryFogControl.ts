@@ -1,237 +1,38 @@
 /**
- * MemoryFogControl — wires the native CairnFogLayer module to the
- * @rnmapbox/maps MapView and exposes a debug pill (3-mode toggle)
- * for on-device A/B-ing during v303 ship.
+ * MemoryFogControl — DISABLED via OTA v304.
  *
- * Modes:
- *   - "legacy" — uses the existing FogLayer (polygon-with-holes,
- *                pre-v303). Slower, harder edges, but proven path.
- *   - "sdf-soft" — native Metal SDF with smoothstep soft edge.
- *   - "sdf-sharp" — native Metal SDF with feather=0 (hard cut).
- *   - "off" — no fog rendered (debug: see the underlying map cleanly).
+ * Original purpose: wire the native CairnFogLayer (Metal SDF) module to
+ * @rnmapbox/maps MapView. Native module was introduced in commit 3d97c7c
+ * for build 46. Build 46 ERRORED on EAS. User devices run build 45 which
+ * does NOT include cairn-fog-layer.framework.
  *
- * The user picks on real device. Whichever mode they choose, the
- * persisted setting (memoryFogMode in app settings) controls future
- * launches. Default "legacy" until they switch — so a broken native
- * module doesn't break Memory entirely.
+ * Why we keep the file: type FogRenderMode is imported by other modules
+ * (MemoryMap, useMemorySettingsStore). Removing the file would force a
+ * lot of unrelated changes. Instead the hook is now a typed no-op and
+ * the imports of the native `cairn-fog-layer/src` module are GONE — so
+ * Metro will no longer bundle requireNativeModule('CairnFogLayer') into
+ * the JS bundle, and the runtime native-module-not-found exception is
+ * impossible.
+ *
+ * When the native binary catches up (build 47+ with cairn-fog-layer
+ * actually shipped), revert this file to its v303 form (git show
+ * 3d97c7c:app/src/features/memory/components/MemoryFogControl.ts).
  */
 
-import { useEffect, useMemo, useRef } from 'react';
-import { findNodeHandle, Platform } from 'react-native';
-import * as Fog from '../../../../modules/cairn-fog-layer/src';
-import { useMemoryStore } from '../store/useMemoryStore';
-import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
-import { UnlockConfig } from '../config/memoryConfig';
 import { log } from '../../../services/appLog';
 
 export type FogRenderMode = 'legacy' | 'off' | 'sdf-soft' | 'sdf-sharp';
 
-interface Props {
-  /** A ref pointing to the @rnmapbox/maps MapView (the native view).
-   *  We resolve to a reactTag via findNodeHandle. */
-  mapViewRef: React.RefObject<any>;
-  /** Current render mode from app settings (or local debug toggle). */
+interface UseMemoryFogControlArgs {
+  mapViewRef: any;
   mode: FogRenderMode;
 }
 
-// v303 OTA fix R3 (subagent 真根因):上一版用 sessionGiveUpRef 想"先停
-// 本 session 不 persist,3 次失败才永久 legacy" — 但 useRef 改值不触发
-// re-render → isNativeMode 进入吸收态:pill 显示 Soft 但 effect short-
-// circuit 没 attach 没 fallback,1 次失败后永远卡在中间状态,直到 app
-// 重启。用户感受 = "切了没反应、卡死"。
-//
-// 现在策略:既然 R2 让 JS FogLayer 永远兜底(off mode 除外),fallback
-// 到 legacy 不会让用户看到空屏 — 第 1 次失败立刻 persist legacy,UI 上
-// pill 自然跳回 Legacy 高亮,**用户能感知**到 native 不可用,而不是状
-// 态机黑洞。简单可靠。
-const PIPELINE_PING_DELAY_MS = 8000;
-
 /**
- * Side-effect hook: attach / update the native fog layer based on the
- * memory store's unlock points + chosen mode. Returns nothing — pure
- * effect. Caller renders an `<FogLayer />` only when mode === 'legacy'.
+ * v304 OTA: native fog control no-op.
+ * Logs once per call so server can see this branch is being exercised.
  */
-export function useMemoryFogControl({ mapViewRef, mode }: Props) {
-  // Subscribe to geometry version so any unlock causes re-upload.
-  const geometryVersion = useMemoryStore((s) => s.geometryVersion);
-  const attachedRef = useRef(false);
-  // capture last good node 给 unmount cleanup 用 — 那时 mapViewRef.current 可能已经 null。
-  const lastNodeRef = useRef<number | null>(null);
-
-  // iOS only — Android 没 autolink 这个原生 module。
-  const supported = Platform.OS === 'ios';
-  const isNativeMode = mode === 'sdf-soft' || mode === 'sdf-sharp' || mode === 'off';
-
-  // v303 OTA R3 fix: 第 1 次 attach/ping 失败立刻 persist 'legacy'。
-  // R2 让 JS FogLayer 兜底,fallback 不会让用户看空屏。pill 跳回
-  // Legacy 让用户知道 native 不可用,而不是黑洞状态。
-  const fallbackToLegacy = (reason: string, extra: Record<string, any>) => {
-    log('memory.fog_native_auto_fallback_to_legacy', { reason, ...extra });
-    useMemorySettingsStore.getState().set('fogMode', 'legacy');
-  };
-
-  // Helper: pipeline 准备就绪检查 — 如果 !ready,先 kick Mapbox 重画再 ping
-  // 一次,过滤"Mapbox 没主动 redraw 导致 renderFrameCount=0"的假阴。
-  const checkPipelineWithKick = async (node: number, m: FogRenderMode) => {
-    try {
-      const status = await Fog.isPipelineReady(node);
-      log('memory.fog_native_pipeline_ping', { ...status, mode: m } as any);
-      if (status?.ready) return;
-      // 假阴 kick:Mapbox 在用户没动作时不主动 redraw。我们通过 setRipple
-      // 一次 toggle 强制下一帧重画(setRipple 改 uniform 仅 noop 也算
-      // dirty)。然后 2s 后再 ping 一次。
-      try {
-        await Fog.setRipple(node, true);
-        await Fog.setRipple(node, false);
-      } catch {/* ignore — best-effort kick */}
-      await new Promise((r) => setTimeout(r, 2000));
-      const status2 = await Fog.isPipelineReady(node);
-      log('memory.fog_native_pipeline_ping_retry', { ...status2, mode: m } as any);
-      if (status2?.ready) return;
-      fallbackToLegacy('pipeline_not_ready_after_kick', {
-        libSource: status2?.libSource,
-        err: status2?.pipelineError,
-        pipelineBuilt: (status2 as any)?.pipelineBuilt,
-        renderFrameCount: status2?.renderFrameCount,
-      });
-    } catch (e: any) {
-      log('memory.fog_native_pipeline_ping_error', { msg: String(e?.message ?? e).slice(0, 200) });
-    }
-  };
-
-  useEffect(() => {
-    if (!supported) return;
-    // v303 subagent fix B3: detach the native Metal layer when switching
-    // back to legacy. Without this, Metal keeps drawing on top of the
-    // legacy polygon → double fog visible.
-    if (!isNativeMode) {
-      if (attachedRef.current) {
-        const node = lastNodeRef.current ?? findNodeHandle(mapViewRef.current);
-        if (node != null) {
-          // v303 四轮 fix Serious: await removeFogLayer 完成才设 attachedRef
-          // = false,否则 sdf→legacy→sdf 50ms 内连点会让 add/remove 在
-          // native 端打架。
-          (async () => {
-            try {
-              await Fog.removeFogLayer(node);
-              log('memory.fog_native_detached_on_mode_change');
-            } catch (e: any) {
-              log('memory.fog_native_remove_error', {
-                where: 'mode_change',
-                msg: String(e?.message ?? e).slice(0, 500),
-              });
-            } finally {
-              attachedRef.current = false;
-            }
-          })();
-        } else {
-          attachedRef.current = false;
-        }
-      }
-      return;
-    }
-    const node = findNodeHandle(mapViewRef.current);
-    log('memory.fog_native_handle_resolved', { node, hasRef: !!mapViewRef.current, mode });
-    if (node == null) {
-      log('memory.fog_native_no_handle', { mode });
-      return;
-    }
-    lastNodeRef.current = node;
-    let cancelled = false;
-    let pingTimer: ReturnType<typeof setTimeout> | null = null;
-    let didAttachThisRun = false;  // v303 OTA 三修 (B-3):只在新 attach 才 schedule ping
-    (async () => {
-      try {
-        if (!attachedRef.current) {
-          // Set flag BEFORE await so rapid mode toggles don't re-enter
-          // addFogLayer (subagent fix: race in attachedRef).
-          attachedRef.current = true;
-          didAttachThisRun = true;
-          try {
-            await Fog.addFogLayer(node);
-          } catch (e: any) {
-            attachedRef.current = false;
-            const msg = String(e?.message ?? e).slice(0, 500);
-            log('memory.fog_native_add_error', { msg });
-            fallbackToLegacy('attach_failed', { msg });
-            return;
-          }
-          if (cancelled) return;
-          log('memory.fog_native_attached', { reactTag: node, mode });
-        }
-        if (cancelled) return;
-        // v303 OTA 三修 (B-3): setMode 只在 attach 那一刻或 mode 变化时调,
-        // geometryVersion bump(纯 unlock)不调。但 effect dep 含 mode,
-        // 所以 mode 变化时这个分支会跑;geometryVersion 变化时跳过 setMode。
-        // (我们无法在 effect 内直接拿到"上一次的 mode",但 didAttachThisRun
-        // + 检查 attachedRef 就够 — attachedRef 在新 attach 之后才 true,
-        // re-run 时 attached 已 true 跳过 attach 分支,setMode 还是要跑因为
-        // mode prop 可能真变了。简化:都跑,这是 ~5ms 的 native call。)
-        try {
-          await Fog.setMode(node, mode as 'off' | 'sdf-soft' | 'sdf-sharp');
-          log('memory.fog_native_setmode_ok', { mode });
-        } catch (e: any) {
-          log('memory.fog_native_setmode_error', { mode, msg: String(e?.message ?? e).slice(0, 500) });
-          return;
-        }
-        if (cancelled) return;
-        // Upload current circle set.
-        const allPoints = useMemoryStore.getState().points;
-        const points = allPoints.length > 256 ? allPoints.slice(-256) : allPoints;
-        const circles = points.map((p) => ({
-          lat: p.lat,
-          lng: p.lng,
-          radius: UnlockConfig.radiusMeters,
-          bornAt: p.ts ?? 0,
-        }));
-        try {
-          await Fog.updateCircles(node, circles);
-        } catch (e: any) {
-          log('memory.fog_native_circles_error', { count: circles.length, msg: String(e?.message ?? e).slice(0, 500) });
-          return;
-        }
-        if (cancelled) return;
-        log('memory.fog_native_circles_uploaded', { count: circles.length });
-
-        // v303 OTA 三修 (B-3): ping 只在新 attach 之后 schedule,避免每次
-        // geometryVersion bump 都开 8s timer + 2s retry 排队累加。
-        if (didAttachThisRun) {
-          pingTimer = setTimeout(() => {
-            if (cancelled) return;
-            void checkPipelineWithKick(node, mode);
-          }, PIPELINE_PING_DELAY_MS);
-        }
-      } catch (e: any) {
-        log('memory.fog_native_error', { msg: String(e?.message ?? e).slice(0, 500) });
-        attachedRef.current = false;
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (pingTimer != null) {
-        clearTimeout(pingTimer);
-        pingTimer = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, geometryVersion, isNativeMode, supported]);
-
-  // Detach on full unmount.
-  useEffect(() => {
-    return () => {
-      if (!attachedRef.current) return;
-      // v303 四轮 fix Critical #3: 用 lastNodeRef,unmount 时 mapViewRef
-      // 可能已经 null。
-      const node = lastNodeRef.current;
-      if (node == null) {
-        attachedRef.current = false;
-        return;
-      }
-      Fog.removeFogLayer(node).catch((e: any) => {
-        log('memory.fog_native_remove_error', { where: 'unmount', msg: String(e?.message ?? e).slice(0, 200) });
-      });
-      attachedRef.current = false;
-      log('memory.fog_native_detached');
-    };
-  }, []);
+export function useMemoryFogControl(_args: UseMemoryFogControlArgs): void {
+  // Intentionally empty. JS FogLayer (H3 hex-cell) renders the fog.
+  log('memory.fog_control_noop_v304', { mode: _args?.mode ?? 'legacy' });
 }

@@ -27,7 +27,18 @@ import { log } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
-import { useMemoryFogControl, type FogRenderMode } from './MemoryFogControl';
+// v304 OTA — REMOVED cairn-fog-layer native module reference.
+// Native binary on user devices is build 45 (commit 29ac3df). Build 46
+// (which would have included cairn-fog-layer.framework) ERRORED on EAS.
+// Any JS code that references this native module triggers
+// `requireNativeModule('CairnFogLayer')` throw at runtime → JS crash
+// even though current default mode is 'legacy'. Metro statically bundles
+// the import, so just having `import * as Fog from '../../../../modules/cairn-fog-layer/src'`
+// at module top causes the lazy `requireNativeModule` resolver to run as
+// soon as Fog.* is read by any code path — including dead-code paths
+// optimizer might preserve.
+// FogRenderMode kept as a local type alias so callers still typecheck.
+export type FogRenderMode = 'legacy' | 'off' | 'sdf-soft' | 'sdf-sharp';
 
 interface Props {
   centerLat: number;
@@ -80,9 +91,13 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
   // find its reactTag via findNodeHandle.
   const mapViewRef = useRef<any>(null);
 
-  // v303: drive the native Metal SDF fog layer. No-op when fogMode
-  // is 'legacy' — the JS <FogLayer> below handles that case.
-  useMemoryFogControl({ mapViewRef, mode: fogMode });
+  // v304 OTA: native fog control DISABLED. cairn-fog-layer.framework is
+  // not in build 45 binary. Calling useMemoryFogControl resolves the
+  // native module, which throws "Cannot find native module 'CairnFogLayer'".
+  // Mode is always treated as 'legacy' here — JS <FogLayer> below handles
+  // rendering. fogMode prop kept for API compat; ignored.
+  log('memory.fog_native_disabled_v304', { received_mode: fogMode });
+  if (false) { /* dead-code branch to satisfy type checker */ }
 
   const [bounds, setBounds] = useState<FogBounds>(() =>
     estimateInitialBounds(centerLat, centerLng)
