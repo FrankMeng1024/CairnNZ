@@ -24,6 +24,10 @@
  */
 
 import { create } from 'zustand';
+// v305 OTA: dual-write to H3 hex-cell store on every recordPoint /
+// recordCircleUnlock / replacePoints / pullMemoryFromServer path so the
+// new H3-based FogLayer sees the same world as the legacy points store.
+import { useH3VisitedStore } from './useH3VisitedStore';
 import { UnlockConfig } from '../config/memoryConfig';
 
 export interface VisitedPoint {
@@ -239,10 +243,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     const k = bucketKey(lat, lng);
     const arr = idx.get(k) ? [...idx.get(k)!, newPoint] : [newPoint];
     idx.set(k, arr);
-    // M9 fix: maintain unsyncedCount incrementally — saves O(N) scan
-    // in memorySync subscribe.
-    // v303 OTA: 同时 push 到 recentUnlocks 给 Skia burst overlay 用,
-    // 5s 过期清理(burst 动画 0.8s + buffer)。
+    // v303 OTA: recentUnlocks for Skia burst overlay (5s GC).
     const nowMs = Date.now();
     const recentBurst = get().recentUnlocks.filter((u) => nowMs - u.ts < 5000);
     recentBurst.push({ lat, lng, ts });
@@ -253,6 +254,11 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       _unsyncedCount: get()._unsyncedCount + 1,
       recentUnlocks: recentBurst,
     });
+    // v305 OTA: dual-write to H3 cell store, AFTER setState so the two
+    // stores update in the same JS tick — FogLayer (subscribed to
+    // cellVersion) will see both stores consistent on next render.
+    // Done last so any throw above doesn't desync.
+    useH3VisitedStore.getState().addPointToCells(lat, lng, ts);
   },
 
   recordCircleUnlock: (lat, lng, radiusMeters, atMs = Date.now()) => {
@@ -369,6 +375,11 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
         return recent;
       })(),
     });
+    // v305 OTA: bulk-import the hex-grid newPoints into the H3 store so
+    // the initial reveal (hundreds of points) clears the right cells.
+    useH3VisitedStore.getState().bulkImport(
+      newPoints.map((p) => ({ lat: p.lat, lng: p.lng, ts: p.ts })),
+    );
   },
 
   isExplored: (lat, lng) => {
@@ -519,6 +530,16 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       _unsyncedCount: unsyncedCount,
       initialRevealDone,
     });
+    // v305 OTA: H3 cells is a CACHE of points (single source of truth =
+    // points). On every replacePoints (hydrate, server pull, user
+    // switch), rebuild cells from scratch so the two stores can never
+    // disagree. clear() first so cells removed on server side (rare —
+    // admin moderation) also disappear from local cells.
+    const h3 = useH3VisitedStore.getState();
+    h3.clear();
+    if (points.length > 0) {
+      h3.bulkImport(points.map((p) => ({ lat: p.lat, lng: p.lng, ts: p.ts })));
+    }
   },
 
   markInitialRevealDone: () => set({ initialRevealDone: true }),

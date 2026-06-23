@@ -28,6 +28,8 @@ import { useMemoryStore } from '../store/useMemoryStore';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { useTrackingStore } from '../../../store/useTrackingStore';
 import { hydrateMemoryForUser, detachMemoryPersistence, flushMemoryNow } from '../services/memoryPersistence';
+// v305 OTA: H3 hex-cell fog layer — replaces turf.union polygon path.
+import { hydrateH3ForUser, detachH3Persistence, flushH3Now } from '../services/h3Persistence';
 import { attachMemorySync, detachMemorySync, pullMemoryFromServer, pushMemoryNow } from '../../../services/memorySync';
 import { log } from '../../../services/appLog';
 
@@ -66,6 +68,7 @@ export function ForegroundUnlockManager() {
     if (!userId) {
       void (async () => {
         await detachMemoryPersistence();
+        await detachH3Persistence();
         if (myGen !== userGenRef.current) return;
         detachMemorySync();
         resetUnlockEngineForUser();
@@ -82,6 +85,13 @@ export function ForegroundUnlockManager() {
       // O4 fix: clear marker store before hydrate so the new user's
       // marker hydration starts from a clean slate.
       useMarkerStore.getState().clearMarkers();
+      // v305 OTA: H3 cache hydrate first (fast path — fog visible
+      // immediately if cache exists). Then hydrateMemoryForUser fires
+      // replacePoints which is the canonical rebuild of cells from
+      // points (source of truth). If H3 cache was stale or missing,
+      // replacePoints fixes it. No separate migration step needed.
+      await hydrateH3ForUser(userId);
+      if (myGen !== userGenRef.current) return;
       await hydrateMemoryForUser(userId);
       if (myGen !== userGenRef.current) return;
       attachMemorySync(userId);
@@ -93,6 +103,7 @@ export function ForegroundUnlockManager() {
       userGenRef.current++;
       void (async () => {
         await detachMemoryPersistence();
+        await detachH3Persistence();
         detachMemorySync();
       })();
     };
@@ -168,6 +179,7 @@ export function ForegroundUnlockManager() {
         // thread.
         stop();
         void flushMemoryNow();
+        void flushH3Now();
         void pushMemoryNow();
       }
       // 'inactive': do nothing — keep the watcher alive briefly to

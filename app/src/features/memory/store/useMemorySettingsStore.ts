@@ -31,6 +31,10 @@ export interface MemorySettings {
   showFriendOverlay: boolean;
   firstVisitDone: boolean;
   fogMode: FogMode;
+  /** v305 OTA: H3 hex-cell fog enabled. Default true. False = kill-switch
+   *  (FogLayer returns null, user sees base map without fog) — for debug
+   *  triage when H3 path misbehaves on real device. */
+  useH3Fog: boolean;
 }
 
 interface MemorySettingsState extends MemorySettings {
@@ -49,6 +53,8 @@ const DEFAULTS: MemorySettings = {
   // 用户冷启动直接看到 fog,不再走 SDF fallback 链(8-10s 后跳回 legacy)。
   // pill 上 SDF 三个 mode 已 disabled。7/1 build 完成后改回 'sdf-soft'。
   fogMode: 'legacy',
+  // v305 OTA: H3 hex fog 默认开启。
+  useH3Fog: true,
 };
 
 function persist(state: MemorySettings): void {
@@ -76,6 +82,8 @@ async function tryLoad(): Promise<MemorySettings | null> {
       showFriendOverlay: Boolean(parsed.showFriendOverlay ?? DEFAULTS.showFriendOverlay),
       firstVisitDone: Boolean(parsed.firstVisitDone ?? DEFAULTS.firstVisitDone),
       fogMode,
+      // v305 OTA: useH3Fog 默认 true(老用户字段不存在时也启用)。
+      useH3Fog: typeof parsed.useH3Fog === 'boolean' ? parsed.useH3Fog : DEFAULTS.useH3Fog,
     };
   } catch {
     return null;
@@ -98,8 +106,8 @@ export const useMemorySettingsStore = create<MemorySettingsState>((set, get) => 
 
   set: (key, value) => {
     set({ [key]: value } as Partial<MemorySettingsState>);
-    const { foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone, fogMode } = get();
-    persist({ foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone, fogMode });
+    const { foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone, fogMode, useH3Fog } = get();
+    persist({ foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone, fogMode, useH3Fog });
   },
 
   reset: () => {

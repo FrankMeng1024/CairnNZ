@@ -71,6 +71,12 @@ export const MysteryVisibilityConfig = {
 } as const;
 
 /**
+ * @deprecated v305 OTA: all FogConfig fields below are only consumed by
+ *   `services/fogBuilder.ts`, which is itself deprecated (replaced by
+ *   `h3FogBuilder`). Slated for deletion alongside fogBuilder in the
+ *   version after v305. Kept here this release so fogBuilder still
+ *   typechecks if someone needs the emergency rollback.
+ *
  * Fog rendering tuning. Lives next to UnlockConfig because the two are
  * intimately tied (hole radius = unlock radius), but separated so the
  * VISUAL aspects (vertex count, padding, cull tightness) can be tweaked

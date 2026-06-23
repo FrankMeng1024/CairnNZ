@@ -214,42 +214,10 @@ export function MemoryScreen() {
         <BackButton variant="pill" onPress={() => nav.goBack()} />
       </View>
 
-      {/* v303 OTA 四修 P2: SDF (Soft/Sharp/Off) 在没装 native module 的
-          OTA 期间禁用。我们用 Fog.isPipelineReady ping 检测,native 不
-          可用就 disabled + 显示 "Build 7/1" 提示。仅 Legacy 可点。 */}
-      <View style={[styles.fogModeRow, { top: insets.top + 8 }]} pointerEvents="box-none">
-        {(['legacy', 'sdf-soft', 'sdf-sharp', 'off'] as const).map((m) => {
-          const active = fogMode === m;
-          const isSdfMode = m !== 'legacy';
-          // 当前 OTA-only 期间(native 没 build):SDF 三个 mode 灰掉
-          const sdfDisabled = isSdfMode;
-          const label = m === 'legacy' ? 'Legacy'
-                     : m === 'sdf-soft' ? 'Soft 🔒'
-                     : m === 'sdf-sharp' ? 'Sharp 🔒'
-                     : 'Off 🔒';
-          return (
-            <TouchableOpacity
-              key={m}
-              style={[
-                styles.fogModeChip,
-                active && styles.fogModeChipActive,
-                sdfDisabled && { opacity: 0.4 },
-              ]}
-              onPress={() => {
-                if (sdfDisabled) {
-                  log('memory.fog_mode_locked_tap', { to: m });
-                  return;
-                }
-                log('memory.fog_mode_change', { from: fogMode, to: m });
-                setSetting('fogMode', m);
-              }}
-              activeOpacity={sdfDisabled ? 1 : 0.8}
-            >
-              <Text style={[styles.fogModeChipText, active && styles.fogModeChipTextActive]}>{label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      {/* v305 OTA: removed fogMode pill row (Legacy/Soft/Sharp/Off) —
+          SDF 三 mode 在 native binary build (7/1) 前都是灰掉的,只剩
+          Legacy 一个独苗,pill 无意义。fogMode 字段仍在 settings store,
+          7/1 重新激活 SDF 选项时再加回 pill。 */}
 
       {coord ? (
         <MemoryMap
@@ -340,33 +308,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
     flexDirection: 'row',
     alignItems: 'flex-start',
-  },
-  fogModeRow: {
-    position: 'absolute',
-    right: 12,
-    zIndex: 10,
-    flexDirection: 'row',
-    gap: 4,
-  },
-  fogModeChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
-  },
-  fogModeChipActive: {
-    backgroundColor: MemoryColors.sepia,
-    borderColor: MemoryColors.sepia,
-  },
-  fogModeChipText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: MemoryColors.sepiaDeep,
-  },
-  fogModeChipTextActive: {
-    color: '#fff',
   },
   waitingForGps: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   waitingTitle: { fontSize: 16, fontWeight: '500', color: MemoryColors.sepiaDeep },

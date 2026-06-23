@@ -21,7 +21,7 @@ import { useMarkerStore } from '../../../store/useMarkerStore';
 import { MemoryColors } from '../config/memoryConfig';
 import { FogLayer } from './FogLayer';
 import { MemoryFogBurstOverlay } from './MemoryFogBurstOverlay';
-import { FogBounds } from '../services/fogBuilder';
+import { FogBounds } from '../services/h3FogBuilder';
 import { CairnPinsLayer } from './CairnPinsLayer';
 import { log } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
@@ -87,9 +87,9 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
   const [bounds, setBounds] = useState<FogBounds>(() =>
     estimateInitialBounds(centerLat, centerLng)
   );
-  // v303 OTA: zoom 从 onMapSettle 拿到,传给 FogLayer 做 zoom-aware padFactor
-  // (N5 真根因:之前固定 padFactor=0.5 在 zoom out 时 outer ring 没盖到
-  // viewport 边角,亮屏。zoom 高用大 pad,zoom 低用小 pad 防 silent skip)
+  // v305 OTA: currentZoom from useState → useState retained because H3
+  // FogLayer needs it for resolution selection. (Previously stored for
+  // turf.union zoom-aware padFactor; same state, new consumer.)
   const [currentZoom, setCurrentZoom] = useState<number>(15);
   // v302 N6: track whether the user has panned the map away from
   // the GPS-driven center. Hiking-style: don't auto-follow user
@@ -188,7 +188,7 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
         north: Math.min(85.05, center[1] + halfLat),
         south: Math.max(-85.05, center[1] - halfLat),
       });
-    }, 500);
+    }, 100);  // v305 OTA: throttle 500ms → 100ms (H3 fast, no longer needs heavy debounce)
   }, [updateBoundsIfChanged]);
 
   // v302 N6: when the recenter button bumps the token, re-anchor on
@@ -253,16 +253,11 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
           animationDuration={600}
         />
         <UserLocation visible={true} />
-        {/* v303: only mount JS FogLayer in 'legacy' mode. Other
-            modes are rendered by the native Metal SDF layer via
-            useMemoryFogControl. */}
-        {/* v303: JS FogLayer 永远挂(除非 mode 显式 off),让 SDF mode
-            没装 native binary 时也有 fog 兜底。Native fog 7/1 build 上线
-            后,SDF mode 在底下画 native fog,JS FogLayer 仍画但 z-order
-            一致颜色一致,视觉上不显眼;用户 fogMode='legacy' 时则只有
-            JS fog 一层。off mode 显式不画任何 fog。
-            R2 真根因修:之前只 legacy 挂 → 切 SDF 整屏没 fog。 */}
-        {fogMode !== 'off' && <FogLayer bounds={bounds} zoom={currentZoom} />}
+        {/* v305 OTA: H3 hex-cell fog. Gated by useMemorySettingsStore.useH3Fog
+            (default true; false = kill-switch for debug). The `fogMode`
+            prop from settings is retained but no longer drives this layer
+            — kept for the 7/1 native SDF path. */}
+        <FogLayer bounds={bounds} zoom={currentZoom} />
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>
       {/* v303 OTA: Skia 解锁扩散动画 overlay。在 MapView 之上 absoluteFill。

@@ -1,4 +1,15 @@
 /**
+ * @deprecated v305 OTA: replaced by h3FogBuilder (H3 hex-cell rendering).
+ *   The turf.union polygon-with-holes approach was O(N²) on the JS
+ *   main thread and locked up at ~1500 GPS points. FogLayer.tsx no
+ *   longer imports anything from this file. Kept on disk for one
+ *   release as an emergency rollback (set useMemorySettingsStore.useH3Fog
+ *   = false to disable H3 path; but at that point FogLayer renders
+ *   nothing — fogBuilder is NOT wired as the kill-switch fallback,
+ *   it's just dormant). To re-enable the old path you would need to
+ *   import buildFogPolygon / extractHoleRings back into FogLayer.
+ *   Slated for deletion in the version after v305.
+ *
  * fogBuilder — produce GeoJSON for the fog overlay.
  *
  * Output: a single Feature<Polygon | MultiPolygon> with

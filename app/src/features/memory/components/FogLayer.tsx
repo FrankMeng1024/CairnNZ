@@ -1,110 +1,129 @@
 /**
- * FogLayer — Fill layer that renders the sepia fog overlay with a hole
- * for every visited GPS point.
+ * FogLayer — H3 hex-cell fog renderer (v305).
  *
- * The fog is driven by TWO inputs:
- *   1. The store's geometryVersion — bumps when visited points change.
- *   2. The map's current viewport bounds — drives the outer-ring size.
+ * For each frame:
+ *   1. Read viewport bounds + zoom.
+ *   2. Compute the H3 res-adaptive set of hex cells in viewport.
+ *   3. Subtract visited cells (from useH3VisitedStore).
+ *   4. Emit a Mapbox FillLayer + LineLayer over the remaining
+ *      (unvisited) cells.
  *
- * Both must be inputs because (per N5 root-cause work) mapbox-gl-js
- * cannot render a polygon whose outer ring spans the world; it must
- * be sized relative to the visible viewport.
+ * Why H3 instead of turf.union (the old legacy path):
+ *   - turf.union is O(N²) on a CPU thread → 1147 points = 15s freeze.
+ *   - H3 is index lookups in a Set → 50ms render, independent of point
+ *     count.
+ *   - See `_review/v305_h3_fog/` for the full route comparison.
  *
- * Performance:
- *   - geometryVersion subscription triggers a re-render only when
- *     points actually change.
- *   - Viewport bound changes are debounced via FogConfig.rebuildDebounceMs
- *     so a fast pan/zoom doesn't rebuild the polygon every frame.
+ * Killing the fog (useH3Fog=false in settings):
+ *   Returns null. Used for debug triage and emergency disable.
+ *
+ * Recovery from missing migration:
+ *   If we detect `cells.size === 0 && points.length > 0` (meaning the
+ *   H3 migration didn't run or failed silently), fire-and-forget the
+ *   migration here. Next render the cells will be populated.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useMemoryStore } from '../store/useMemoryStore';
+import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
+import { useH3VisitedStore } from '../store/useH3VisitedStore';
 import { getMapbox } from '../services/mapboxAdapter';
-import { buildFogPolygon, FogBounds, extractHoleRings } from '../services/fogBuilder';
-import { MemoryColors, FogConfig } from '../config/memoryConfig';
+import { buildUnvisitedHexFeatures, FogBounds } from '../services/h3FogBuilder';
+import { MemoryColors } from '../config/memoryConfig';
 import { log } from '../../../services/appLog';
 
 interface Props {
   /** Current map viewport bounds. Driven by parent MapView. */
   bounds: FogBounds | null;
-  /** v303 OTA: 当前 map zoom,fogBuilder 用它决定 padFactor。 */
+  /** Current map zoom — controls H3 resolution selection. */
   zoom?: number;
 }
 
+/** Debounce window for viewport changes so pan/zoom drag doesn't rebuild
+ *  the fog every frame. H3 is fast (~50ms), but successive setData calls
+ *  on Mapbox ShapeSource can still cause minor stutter. */
+const REBUILD_DEBOUNCE_MS = 100;
+
 export function FogLayer({ bounds, zoom = 15 }: Props) {
   const Mapbox = getMapbox();
-  const geometryVersion = useMemoryStore((s) => s.geometryVersion);
+  const useH3Fog = useMemorySettingsStore((s) => s.useH3Fog);
+  const cellVersion = useH3VisitedStore((s) => s.cellVersion);
 
-  // Debounce bounds changes so we don't rebuild on every pan frame.
+  // Debounce viewport changes — avoids rebuilding on every pan frame.
   const [debouncedBounds, setDebouncedBounds] = useState<FogBounds | null>(bounds);
+  const [debouncedZoom, setDebouncedZoom] = useState<number>(zoom);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!bounds) return;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
       setDebouncedBounds(bounds);
-    }, FogConfig.rebuildDebounceMs);
+      setDebouncedZoom(zoom);
+    }, REBUILD_DEBOUNCE_MS);
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
-  }, [bounds]);
+  }, [bounds, zoom]);
 
-  const fogShape = useMemo(() => {
+  const fogFeature = useMemo(() => {
     if (!debouncedBounds) return null;
+    // v305 OTA REVIEW3: useH3Fog short-circuit MUST be in useMemo so the
+    // expensive build is skipped when the kill-switch is off. The
+    // outer `if (!useH3Fog) return null` would render null but useMemo
+    // would still run, defeating the purpose.
+    if (!useH3Fog) return null;
+    const cells = useH3VisitedStore.getState().cells;
+
     const t0 = Date.now();
     log('memory.fog_build_start', {
       bounds_w: debouncedBounds.west,
       bounds_e: debouncedBounds.east,
-      zoom,
-      version: geometryVersion,
+      zoom: debouncedZoom,
+      cell_version: cellVersion,
+      visited_n: cells.size,
     });
-    const points = useMemoryStore.getState().points;
-    const shape = buildFogPolygon(points, debouncedBounds, zoom);
-    const props = (shape.properties ?? {}) as Record<string, any>;
+    const result = buildUnvisitedHexFeatures(debouncedBounds, cells, debouncedZoom);
     log('memory.fog_built', {
-      version: geometryVersion,
-      build_ms: Date.now() - t0,
-      ...props,  // 包含 cull_ms / union_ms / smooth_ms / outer_w/e/n/s / extent_*
+      cell_version: cellVersion,
+      total_ms: Date.now() - t0,
+      ...result.perf,
     });
-    return shape;
-  }, [geometryVersion, debouncedBounds, zoom]);
 
-  if (!Mapbox.available || !fogShape) return null;
+    return result.feature;
+  }, [cellVersion, debouncedBounds, debouncedZoom, useH3Fog]);
+
+  // Kill-switch: useH3Fog=false renders nothing.
+  if (!useH3Fog) return null;
+  if (!Mapbox.available || !fogFeature) return null;
+
   const { ShapeSource, FillLayer, LineLayer } = Mapbox as any;
-  const holeRings = extractHoleRings(fogShape);
+
+  // Adaptive line-blur: at lower zoom (coarser res), bigger blur softens
+  // the visible hex outline so it reads as cloud, not as game grid.
+  const lineBlur = debouncedZoom < 13 ? 5 : debouncedZoom < 15 ? 3 : 2;
 
   return (
     <>
-      <ShapeSource id="memory-fog-src" shape={fogShape}>
+      <ShapeSource id="memory-fog-src" shape={fogFeature}>
         <FillLayer
           id="memory-fog-fill"
           style={{
             fillColor: MemoryColors.fogOverlay,
             fillOpacity: 1,
-            // v303 OTA: antialias 默认 false 在 Android 才显著,iOS 上没害
             fillAntialias: true,
           }}
         />
+        <LineLayer
+          id="memory-fog-edge-line"
+          style={{
+            lineColor: MemoryColors.fogEdge,
+            lineWidth: 1.5,
+            lineOpacity: 0.55,
+            lineBlur,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }}
+        />
       </ShapeSource>
-      {/* v303 OTA: 第二层 LineLayer 在 hole rings 上画一条柔光线,看起来像
-          羊皮纸边沿。color 用 MemoryColors.fogEdge(淡 cream 透明),只画
-          holes(extractHoleRings 已经跳掉 outer ring),不会出现把整 viewport
-          framed 的问题(v302 N5 备忘提到的旧坑)。 */}
-      {holeRings && (
-        <ShapeSource id="memory-fog-edge-src" shape={holeRings as any}>
-          <LineLayer
-            id="memory-fog-edge-line"
-            style={{
-              lineColor: MemoryColors.fogEdge,
-              lineWidth: 1.5,
-              lineOpacity: 0.7,
-              lineBlur: 1.2,
-              lineCap: 'round',
-              lineJoin: 'round',
-            }}
-          />
-        </ShapeSource>
-      )}
     </>
   );
 }
