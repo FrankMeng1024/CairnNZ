@@ -149,13 +149,24 @@ function makeOuterRingCW(bounds: FogBounds, extentBbox: FogBounds | null, padFac
   w -= padX; e += padX;
   n = Math.min(85.05, n + padY);
   s = Math.max(-85.05, s - padY);
-  // 安全网:outer 度数 > 5° 时强制裁回 5°(以 viewport 中心为中心)。
-  // 用户极端走过整个城市的话仍允许 ~5° (~550km @ equator),但
-  // mapbox-gl 在 ~5° polygon 内 zoom out 时通常仍能渲染。超过 5° 是
-  // 极少数极端用户,这种情况 fog 不渲染比 silent-skip 整片好。
-  const ABS_MAX_DEG = 5.0;
+  // v303 OTA 四修 P1 (fog 矩形真根因 — 最后一关):
+  // 即使 outer 包含 extentBbox + padFactor,zoom out 时仍可能 outer 只比
+  // viewport 大 25% → 屏幕角露底。这是用户截图 "矩形 fog,外面没遮罩"
+  // 的真因之一。
+  //
+  // 修法:outer 跨度有最小值 1.0°(~110km),不管 viewport 多大、extent
+  // 多小,outer 永远撑到 1°,zoom 11/12 视野(典型 ~0.5° lng)被完全覆盖。
+  // 以 viewport 中心扩。1° 远小于 mapbox-gl 5° silent-skip 阈值,安全。
+  const MIN_OUTER_DEG = 1.0;
   const cx = (bounds.east + bounds.west) / 2;
   const cy = (bounds.north + bounds.south) / 2;
+  if (e - w < MIN_OUTER_DEG) { w = cx - MIN_OUTER_DEG / 2; e = cx + MIN_OUTER_DEG / 2; }
+  if (n - s < MIN_OUTER_DEG) {
+    n = Math.min(85.05, cy + MIN_OUTER_DEG / 2);
+    s = Math.max(-85.05, cy - MIN_OUTER_DEG / 2);
+  }
+  // 安全网:outer 度数 > 5° 时强制裁回 5°(以 viewport 中心为中心)。
+  const ABS_MAX_DEG = 5.0;
   if (e - w > ABS_MAX_DEG) { w = cx - ABS_MAX_DEG / 2; e = cx + ABS_MAX_DEG / 2; }
   if (n - s > ABS_MAX_DEG) {
     n = Math.min(85.05, cy + ABS_MAX_DEG / 2);
@@ -256,13 +267,22 @@ export function buildFogPolygon(points: VisitedPoint[], bounds: FogBounds, zoom:
   const effectiveCullFactor = points.length > 300 ? 0.85 : FogConfig.cullThresholdFactor;
   const cullThresholdM = radius * effectiveCullFactor;
   const cullThresholdSq = cullThresholdM * cullThresholdM;
-  // v303 OTA 三修 (B-2 viewport clip):union 只对 viewport + 1×padding 内
-  // 的点做。屏幕外的解锁圆暂时不画 holes(用户也看不到),节省 90%+
-  // union 工作量。pan/zoom 后会触发 rebuild,新视野的圆再进 union。
-  const vpW = bounds.west - (bounds.east - bounds.west);   // viewport + 1x padding 左
-  const vpE = bounds.east + (bounds.east - bounds.west);
-  const vpS = bounds.south - (bounds.north - bounds.south);
-  const vpN = bounds.north + (bounds.north - bounds.south);
+  // v303 OTA 四修 P1 (fog 矩形真根因):viewport clip 三修时太狠,
+  // zoom out 时 viewport 大但仍是城市中心一片 → 90% 点被丢 →
+  // extentBbox 只覆盖 viewport 内 hole → outer ring 用 viewport+pad
+  // 没盖到屏幕角 → 用户看到"矩形 fog,外面露底"。
+  //
+  // 改法:viewport clip **极宽松**(只丢点超出当前 viewport 6 倍的极
+  // 外点 — 通常就是噪音/迁移导致的远点),保留所有正常解锁点入 union。
+  // outer ring 在 makeOuterRingCW 内会用 extentBbox 撑大,覆盖整片走过
+  // 区域 — 用户 zoom out 时 fog 会跟着扩大盖满 viewport。
+  const vpDLng = bounds.east - bounds.west;
+  const vpDLat = bounds.north - bounds.south;
+  const clipPaddingMul = 6;  // viewport 6 倍距离之外的点才丢
+  const vpW = bounds.west - vpDLng * clipPaddingMul;
+  const vpE = bounds.east + vpDLng * clipPaddingMul;
+  const vpS = bounds.south - vpDLat * clipPaddingMul;
+  const vpN = bounds.north + vpDLat * clipPaddingMul;
 
   // Cull near-duplicate points so we don't union 600 essentially-identical
   // circles when the GPS is sitting still.

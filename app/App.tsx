@@ -168,6 +168,37 @@ function AppRoot() {
       // route into the same batcher; one POST every 5s to /api/v025/debug-events.
       try { initTelemetrySingleton(API_BASE_URL); }
       catch (e) { crashLogger.breadcrumb('v025_telemetry_init_failed: ' + (e instanceof Error ? e.message : String(e))); }
+      // v303 OTA 四修 P0-2: 手动强制 OTA check-on-load。
+      // 默认 expo-updates ON_LOAD + fallbackToCacheTimeout=0,意味着 app
+      // 启动用 cached bundle,新 bundle 后台下,**下次** cold start 才
+      // 生效 → 我推 3 次 OTA 用户拉到的是上次推的(滞后 1 次)。
+      //
+      // 现在 boot 时:check → 若有新版本 → fetch(后台)→ reloadAsync 立刻
+      // 用新 bundle 重启。10s 超时兜底防永远等。**已经在 splash screen 显示
+      // 阶段,reload 用户感受是"启动稍微久一点",不是卡死**。
+      //
+      // 这条 OTA 推下去之后,从下一次 cold start 开始,每次都会等最多
+      // 10s 拉新 bundle → 用户拉版本不再滞后。
+      try {
+        import('expo-updates').then(async (Updates) => {
+          try {
+            const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
+              Promise.race([p, new Promise<null>(r => setTimeout(() => r(null), ms))]);
+            const check = await withTimeout(Updates.checkForUpdateAsync(), 8000);
+            if (check && (check as any).isAvailable) {
+              crashLogger.breadcrumb('ota_boot_new_available');
+              const fetched = await withTimeout(Updates.fetchUpdateAsync(), 8000);
+              if (fetched && (fetched as any).isNew) {
+                crashLogger.breadcrumb('ota_boot_reloading_to_new_bundle');
+                // 600ms 让 breadcrumb 写出去 + UI 不闪
+                setTimeout(() => { Updates.reloadAsync().catch(() => {}); }, 600);
+              }
+            }
+          } catch (e) {
+            crashLogger.breadcrumb('ota_boot_check_failed: ' + (e instanceof Error ? e.message : String(e)));
+          }
+        }).catch(() => {/* expo-updates not installed (web) */});
+      } catch {/* ignore */}
       // OTA #183: log the running OTA bundle id + channel + runtime version
       // so diag uploads can be correlated to a specific OTA. Without this
       // the only OTA marker is OTA_VERSION (a hard-coded constant), which

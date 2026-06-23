@@ -214,25 +214,36 @@ export function MemoryScreen() {
         <BackButton variant="pill" onPress={() => nav.goBack()} />
       </View>
 
-      {/* v303: fog-mode pill row, available to all users so they can
-          A/B between the legacy polygon fog and the new native Metal
-          SDF modes on a real device. Persisted in MemorySettings.
-          (Originally __DEV__ only, but subagent review flagged that
-          production users would never see the new code path; default
-          is now 'sdf-soft' and the pill is always visible.) */}
+      {/* v303 OTA 四修 P2: SDF (Soft/Sharp/Off) 在没装 native module 的
+          OTA 期间禁用。我们用 Fog.isPipelineReady ping 检测,native 不
+          可用就 disabled + 显示 "Build 7/1" 提示。仅 Legacy 可点。 */}
       <View style={[styles.fogModeRow, { top: insets.top + 8 }]} pointerEvents="box-none">
         {(['legacy', 'sdf-soft', 'sdf-sharp', 'off'] as const).map((m) => {
           const active = fogMode === m;
+          const isSdfMode = m !== 'legacy';
+          // 当前 OTA-only 期间(native 没 build):SDF 三个 mode 灰掉
+          const sdfDisabled = isSdfMode;
           const label = m === 'legacy' ? 'Legacy'
-                     : m === 'sdf-soft' ? 'Soft'
-                     : m === 'sdf-sharp' ? 'Sharp'
-                     : 'Off';
+                     : m === 'sdf-soft' ? 'Soft 🔒'
+                     : m === 'sdf-sharp' ? 'Sharp 🔒'
+                     : 'Off 🔒';
           return (
             <TouchableOpacity
               key={m}
-              style={[styles.fogModeChip, active && styles.fogModeChipActive]}
-              onPress={() => { log('memory.fog_mode_change', { from: fogMode, to: m }); setSetting('fogMode', m); }}
-              activeOpacity={0.8}
+              style={[
+                styles.fogModeChip,
+                active && styles.fogModeChipActive,
+                sdfDisabled && { opacity: 0.4 },
+              ]}
+              onPress={() => {
+                if (sdfDisabled) {
+                  log('memory.fog_mode_locked_tap', { to: m });
+                  return;
+                }
+                log('memory.fog_mode_change', { from: fogMode, to: m });
+                setSetting('fogMode', m);
+              }}
+              activeOpacity={sdfDisabled ? 1 : 0.8}
             >
               <Text style={[styles.fogModeChipText, active && styles.fogModeChipTextActive]}>{label}</Text>
             </TouchableOpacity>

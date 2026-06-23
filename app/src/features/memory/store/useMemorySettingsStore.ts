@@ -45,13 +45,10 @@ const DEFAULTS: MemorySettings = {
   recordMode: 'always',
   showFriendOverlay: true,
   firstVisitDone: false,
-  // v303: default to the new native Metal SDF fog so a fresh production
-  // install observes the new visual immediately. Existing users with
-  // 'legacy' persisted (or anyone who toggles via the dev pill) keep
-  // their choice. If the native module fails on a device, the JS-side
-  // catch logs the error and the screen falls back to the underlying
-  // map without fog — not great but not silently broken either.
-  fogMode: 'sdf-soft',
+  // v303 OTA 四修 P2: native binary 还没 build(7/1),默认 'legacy' 让
+  // 用户冷启动直接看到 fog,不再走 SDF fallback 链(8-10s 后跳回 legacy)。
+  // pill 上 SDF 三个 mode 已 disabled。7/1 build 完成后改回 'sdf-soft'。
+  fogMode: 'legacy',
 };
 
 function persist(state: MemorySettings): void {
@@ -68,17 +65,11 @@ async function tryLoad(): Promise<MemorySettings | null> {
     const recordMode: RecordMode =
       recordModeRaw === 'session-only' ? 'session-only' : 'always';
     const fogModeRaw = parsed.fogMode;
-    // v303 四轮 subagent #2 fix (Critical #4): 之前缺字段 fallback 'legacy',
-    // 跟 DEFAULTS.fogMode='sdf-soft' 矛盾,导致 90% 升级用户卡 legacy 永远
-    // 看不到新视觉(v303 这次 release 等于白做)。修法:有效值列表加上
-    // 'legacy',其他(undefined / 老版本字段缺失 / 损坏) 全走 DEFAULTS。
+    // v303 OTA 四修 P2: SDF native 还没 build (7/1)。所有已经 persist
+    // 'sdf-soft'/'sdf-sharp'/'off' 的用户强制改回 'legacy',避免 SDF
+    // fallback 链卡 8-10s。7/1 native binary 上线后这条改回原逻辑。
     const fogMode: FogMode =
-      fogModeRaw === 'legacy' ||
-      fogModeRaw === 'off' ||
-      fogModeRaw === 'sdf-soft' ||
-      fogModeRaw === 'sdf-sharp'
-        ? fogModeRaw
-        : DEFAULTS.fogMode;
+      fogModeRaw === 'legacy' ? 'legacy' : 'legacy';
     return {
       foregroundAutoUnlockEnabled: Boolean(parsed.foregroundAutoUnlockEnabled ?? DEFAULTS.foregroundAutoUnlockEnabled),
       recordMode,
