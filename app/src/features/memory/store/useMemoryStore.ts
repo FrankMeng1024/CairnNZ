@@ -533,12 +533,25 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     // v305 OTA: H3 cells is a CACHE of points (single source of truth =
     // points). On every replacePoints (hydrate, server pull, user
     // switch), rebuild cells from scratch so the two stores can never
-    // disagree. clear() first so cells removed on server side (rare —
-    // admin moderation) also disappear from local cells.
-    const h3 = useH3VisitedStore.getState();
-    h3.clear();
+    // disagree.
+    //
+    // v306 fix: DEFER bulkImport to next macro task via setTimeout(0).
+    // bulkImport triggers h3-js lazy load → 32 MB ArrayBuffer alloc.
+    // On cold start that collides with Mapbox's memory budget and
+    // triggers iOS jetsam SIGKILL. Deferring lets cold start complete
+    // (release transient cold-start memory) before h3-js init kicks in.
+    // Side effect: FogLayer's first render may have empty cells; useMemo
+    // will rebuild once bulkImport finishes and bumps cellVersion.
     if (points.length > 0) {
-      h3.bulkImport(points.map((p) => ({ lat: p.lat, lng: p.lng, ts: p.ts })));
+      const snapshot = points.map((p) => ({ lat: p.lat, lng: p.lng, ts: p.ts }));
+      setTimeout(() => {
+        const h3 = useH3VisitedStore.getState();
+        h3.clear();
+        h3.bulkImport(snapshot);
+      }, 0);
+    } else {
+      // Clear synchronously when empty — no h3-js load needed.
+      useH3VisitedStore.getState().clear();
     }
   },
 

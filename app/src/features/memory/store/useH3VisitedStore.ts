@@ -30,7 +30,58 @@
  */
 
 import { create } from 'zustand';
-import { latLngToCell } from 'h3-js';
+
+/**
+ * v306 fix: lazy-load h3-js to avoid 32 MB ArrayBuffer allocation at
+ * import time. h3-js is an Emscripten-compiled C library — its module
+ * init synchronously allocates a 32 MB ArrayBuffer + decodes a 70K
+ * char base64 blob. On iOS this collides with Mapbox's memory budget
+ * during cold-start and triggers jetsam SIGKILL (no throw, no log,
+ * expo-updates rolls back).
+ *
+ * By lazy-requiring inside the mutator, the allocation deferred until
+ * the user actually opens the Memory screen. We also wrap in try/catch
+ * so an OOM at lazy-require time degrades gracefully (cell stays
+ * empty, FogLayer renders nothing) instead of crashing.
+ */
+type H3Module = typeof import('h3-js');
+let h3Ref: H3Module | null = null;
+let h3LoadFailed = false;
+let h3LoadAttempted = false;
+function getH3(): H3Module | null {
+  if (h3Ref) return h3Ref;
+  if (h3LoadFailed) return null;
+  try {
+    const t0 = Date.now();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    h3Ref = require('h3-js');
+    const elapsed = Date.now() - t0;
+    if (!h3LoadAttempted) {
+      h3LoadAttempted = true;
+      // Fire-and-forget log so we can see in server data when h3-js
+      // actually inits (vs. when it fails / never loads).
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { log } = require('../../../services/appLog');
+        log('memory.h3_module_loaded', { load_ms: elapsed });
+      } catch {/* ignore */}
+    }
+    return h3Ref;
+  } catch (e: any) {
+    h3LoadFailed = true;
+    if (!h3LoadAttempted) {
+      h3LoadAttempted = true;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { log } = require('../../../services/appLog');
+        log('memory.h3_module_load_failed', {
+          msg: String(e?.message ?? e).slice(0, 500),
+        });
+      } catch {/* ignore */}
+    }
+    return null;
+  }
+}
 
 /** Default H3 resolution used by addPointToCells / FogLayer's reverse lookup.
  *  Render uses zoom-adaptive res via getResForZoom() in memoryConfig. */
@@ -74,10 +125,12 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
 
   addPointToCells: (lat, lng, ts) => {
     if (!isFinite(lat) || !isFinite(lng)) return;
+    const h3 = getH3();
+    if (!h3) return;  // h3-js failed to load → silently skip; FogLayer will show nothing
     const safeTs = isFinite(ts) ? ts : Date.now();
     let cellID: string;
     try {
-      cellID = latLngToCell(lat, lng, STORE_RES);
+      cellID = h3.latLngToCell(lat, lng, STORE_RES);
     } catch {
       return; // h3-js can throw on out-of-range lat (e.g. > 90)
     }
@@ -102,12 +155,14 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
 
   bulkImport: (points) => {
     if (points.length === 0) return;
+    const h3 = getH3();
+    if (!h3) return;
     const cells = new Map(get().cells);
     for (const p of points) {
       if (!isFinite(p.lat) || !isFinite(p.lng)) continue;
       let cellID: string;
       try {
-        cellID = latLngToCell(p.lat, p.lng, STORE_RES);
+        cellID = h3.latLngToCell(p.lat, p.lng, STORE_RES);
       } catch {
         continue;
       }

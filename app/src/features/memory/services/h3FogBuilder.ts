@@ -6,7 +6,7 @@
  *
  * Algorithm:
  *   1. Pick resolution R from zoom (zoom-adaptive — see getResForZoom).
- *   2. polygonToCells(viewport, R) → all cells overlapping viewport.
+ *   2. h3.polygonToCells(viewport, R) → all cells overlapping viewport.
  *   3. For each viewport cell, check if it's in visited (at res R or
  *      its res-11 ancestors). If NOT, emit a hex polygon as fog.
  *   4. Return FeatureCollection + perf trace.
@@ -28,8 +28,29 @@
  *   by 1 and recompute. Log so we can tune budget.
  */
 
-import { polygonToCells, cellToParent, cellsToMultiPolygon } from 'h3-js';
 import { H3_STORE_RESOLUTION, useH3VisitedStore, VisitedCell } from '../store/useH3VisitedStore';
+
+/**
+ * v306 fix: lazy-require h3-js. Same reason as in useH3VisitedStore —
+ * defer the 32 MB ArrayBuffer allocation until the user opens Memory.
+ * On lazy-load failure (OOM, hostile Hermes version) FogLayer falls
+ * back to "no fog rendered" rather than crashing the app.
+ */
+type H3Module = typeof import('h3-js');
+let h3Ref: H3Module | null = null;
+let h3LoadFailed = false;
+function getH3(): H3Module | null {
+  if (h3Ref) return h3Ref;
+  if (h3LoadFailed) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    h3Ref = require('h3-js');
+    return h3Ref;
+  } catch {
+    h3LoadFailed = true;
+    return null;
+  }
+}
 
 export interface FogBounds {
   west: number;
@@ -114,13 +135,15 @@ function visitedParentsAtRes(
     // the Map itself IS the answer at this resolution.
     return new Set(cells.keys());
   }
+  const h3 = getH3();
+  if (!h3) return new Set();  // h3-js failed to load — degrade gracefully
   const key = `${cellVersion}:${targetRes}`;
   const cached = parentSetCache.get(key);
   if (cached) return cached;
   const out = new Set<string>();
   for (const id of cells.keys()) {
     try {
-      out.add(cellToParent(id, targetRes));
+      out.add(h3.cellToParent(id, targetRes));
     } catch {
       // skip malformed
     }
@@ -151,11 +174,23 @@ export function buildUnvisitedHexFeatures(
   let demoted = false;
   const cellVersion = useH3VisitedStore.getState().cellVersion;
 
+  // v306 fix: bail out early if h3-js failed to load. FogLayer renders
+  // nothing in that case (rather than crash). Subsequent retries will
+  // come from new addPointToCells / pan events; each goes through
+  // getH3() and short-circuits the same way.
+  const h3 = getH3();
+  if (!h3) {
+    return {
+      feature: null,
+      perf: { res_used: res, viewport_cell_n: 0, unvisited_n: 0, build_ms: Date.now() - t0, demoted: false, dissolve_ms: 0 },
+    };
+  }
+
   // Compute viewport cells. If too many, demote res-1 and recompute.
   const ring = viewportRing(bounds);
   let viewportCells: string[];
   try {
-    viewportCells = polygonToCells([ring], res, true);
+    viewportCells = h3.polygonToCells([ring], res, true);
   } catch {
     return {
       feature: null,
@@ -167,7 +202,7 @@ export function buildUnvisitedHexFeatures(
     res = res - 1;
     demoted = true;
     try {
-      viewportCells = polygonToCells([ring], res, true);
+      viewportCells = h3.polygonToCells([ring], res, true);
     } catch {
       viewportCells = [];
     }
@@ -206,7 +241,7 @@ export function buildUnvisitedHexFeatures(
     // cellsToMultiPolygon returns Array<Polygon> where each Polygon is
     // Array<Ring> where each Ring is Array<[lng, lat]>. Matches
     // GeoJSON MultiPolygon coordinates shape exactly.
-    multiPolygonCoords = cellsToMultiPolygon(unvisitedIDs, true);
+    multiPolygonCoords = h3.cellsToMultiPolygon(unvisitedIDs, true);
   } catch {
     multiPolygonCoords = [];
   }
