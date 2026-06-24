@@ -49,14 +49,28 @@ void drainPreviousBootCheckpoint(OTA_VERSION);
 WebBrowser.maybeCompleteAuthSession();
 markBootPhase('after_webbrowser_init');
 
-// Initialize Mapbox token (native + web) before any MapView renders
-initMapbox();
-markBootPhase('after_mapbox_init');
+// v316: protect against double-init on OTA reload — initMapbox calls
+// Mapbox.setAccessToken + setTelemetryEnabled on the native singleton.
+// If the singleton was already initialized by the previous bundle and
+// hasn't been torn down, the second call can throw silently in native
+// land. Wrap in try/catch + jetsam-resistant beacon so we can tell.
+markBootPhase('before_initMapbox');
+try {
+  initMapbox();
+  markBootPhase('after_mapbox_init');
+} catch (e: any) {
+  markBootPhase('initMapbox_threw', { msg: String(e?.message ?? e).slice(0, 200) });
+}
 
 // Pre-register background location TaskManager handler (no-op on web).
 // MUST run at module load before any startLocationUpdatesAsync call.
-registerBackgroundTask().catch(() => {});
-markBootPhase('after_register_bg_task');
+markBootPhase('before_register_bg_task');
+try {
+  registerBackgroundTask().catch(() => {});
+  markBootPhase('after_register_bg_task');
+} catch (e: any) {
+  markBootPhase('register_bg_task_threw', { msg: String(e?.message ?? e).slice(0, 200) });
+}
 
 // Best-effort: clean up any orphaned background location task left over from
 // a previous app instance that was killed mid-session. Without this, a user

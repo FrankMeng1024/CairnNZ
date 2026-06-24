@@ -655,16 +655,40 @@ export function AuthScreen() {
       // returned, causing a visible content jitter (RecentRow appearing,
       // stats row appearing, cards reflowing). Waiting here keeps the
       // first paint of Home in its terminal state.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('login_before_setUser');
+      } catch {/* ignore */}
       if (result.user) setUser(result.user);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('login_before_hydrate');
+      } catch {/* ignore */}
       await hydrate();
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('login_after_hydrate');
+      } catch {/* ignore */}
       setLoggedIn(true);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('login_after_setLoggedIn');
+      } catch {/* ignore */}
       if (isRegister) {
         setUIMode('beginner');
         setWelcomeName(result.user?.name || name.trim() || 'Explorer');
         setView('welcome');
         setTimeout(() => nav.replace('Home'), 1800);
       } else {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../services/bootDiagnostics').markBootPhase('login_before_nav_home');
+        } catch {/* ignore */}
         nav.replace('Home');
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../services/bootDiagnostics').markBootPhase('login_after_nav_home');
+        } catch {/* ignore */}
       }
     } catch (e: any) {
       const msg: string = e?.message || '';
