@@ -194,6 +194,18 @@ function AppRoot() {
       try { initTelemetrySingleton(API_BASE_URL); }
       catch (e) { crashLogger.breadcrumb('v025_telemetry_init_failed: ' + (e instanceof Error ? e.message : String(e))); }
       markBootPhase('after_telemetry_init');
+      // v311: prime the h3 load gate from AsyncStorage. If a previous
+      // session died mid-bulkImport (iOS watchdog SIGKILL on 581 sync
+      // emscripten latLngToCell calls), the persisted flag is read here
+      // so that getH3() returns null on this boot — breaking the
+      // emergency-rollback crash loop. Fire-and-forget; the 100ms
+      // setTimeout in useMemoryStore.replacePoints gives this read a
+      // window to complete before bulkImport runs.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { primeH3FailedFlag } = require('./src/features/memory/lib/h3LoadGate');
+        void primeH3FailedFlag();
+      } catch {/* ignore */}
       // v303 OTA 四修 P0-2: 手动强制 OTA check-on-load。
       // 默认 expo-updates ON_LOAD + fallbackToCacheTimeout=0,意味着 app
       // 启动用 cached bundle,新 bundle 后台下,**下次** cold start 才

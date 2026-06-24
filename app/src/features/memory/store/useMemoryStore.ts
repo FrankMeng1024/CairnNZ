@@ -542,13 +542,19 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     // (release transient cold-start memory) before h3-js init kicks in.
     // Side effect: FogLayer's first render may have empty cells; useMemo
     // will rebuild once bulkImport finishes and bumps cellVersion.
+    //
+    // v311 fix: bumped 0ms → 100ms. The 100ms window gives the boot-time
+    // primeH3FailedFlag() AsyncStorage read time to populate the in-memory
+    // gate cache before bulkImport's first getH3() check. Without this,
+    // a cold-start race could miss the persisted "previously failed"
+    // signal and re-trigger the same crash that set the flag.
     if (points.length > 0) {
       const snapshot = points.map((p) => ({ lat: p.lat, lng: p.lng, ts: p.ts }));
       setTimeout(() => {
         const h3 = useH3VisitedStore.getState();
         h3.clear();
         h3.bulkImport(snapshot);
-      }, 0);
+      }, 100);
     } else {
       // Clear synchronously when empty — no h3-js load needed.
       useH3VisitedStore.getState().clear();

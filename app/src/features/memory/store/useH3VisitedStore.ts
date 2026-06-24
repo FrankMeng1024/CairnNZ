@@ -30,6 +30,11 @@
  */
 
 import { create } from 'zustand';
+import {
+  h3HasFailedBefore,
+  markH3InProgress,
+  markH3SuccessAndClear,
+} from '../lib/h3LoadGate';
 
 /**
  * v306 fix: lazy-load h3-js to avoid 32 MB ArrayBuffer allocation at
@@ -48,9 +53,26 @@ type H3Module = typeof import('h3-js');
 let h3Ref: H3Module | null = null;
 let h3LoadFailed = false;
 let h3LoadAttempted = false;
+// v311: 5s cooldown after a failed require so GPS 1Hz / re-mount loops
+// don't retry require('h3-js') every tick under hot-restart RSS pressure.
+let h3LastFailureMs = 0;
+const H3_RETRY_COOLDOWN_MS = 5000;
+
 function getH3(): H3Module | null {
   if (h3Ref) return h3Ref;
   if (h3LoadFailed) return null;
+  // v311: persisted gate. If a previous session marked h3 in-progress
+  // and never cleared it (sync death mid-bulkImport / mid-emscripten-init),
+  // permanently skip h3-js in this session to avoid the watchdog loop.
+  // Fog won't render but app boots — stability > visibility.
+  if (h3HasFailedBefore()) {
+    h3LoadFailed = true;
+    return null;
+  }
+  // v311: cooldown between failed attempts.
+  if (h3LastFailureMs > 0 && Date.now() - h3LastFailureMs < H3_RETRY_COOLDOWN_MS) {
+    return null;
+  }
   try {
     const t0 = Date.now();
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -69,6 +91,7 @@ function getH3(): H3Module | null {
     return h3Ref;
   } catch (e: any) {
     h3LoadFailed = true;
+    h3LastFailureMs = Date.now();
     if (!h3LoadAttempted) {
       h3LoadAttempted = true;
       try {
@@ -157,27 +180,53 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
     if (points.length === 0) return;
     const h3 = getH3();
     if (!h3) return;
+    // v311: mark in-progress on disk BEFORE the heavy loop so that if
+    // we sync-die mid-loop (iOS watchdog SIGKILL after 6-10s of main
+    // thread freeze), the next boot reads the flag and permanently
+    // skips h3-js, breaking the emergency-rollback crash loop.
+    markH3InProgress();
+    // v311: chunked processing — 581 sync latLngToCell calls block the
+    // main thread long enough to trigger iOS watchdog (0x8badf00d).
+    // Split into 50-point chunks, yield to event loop between chunks.
+    // Total wall time is roughly the same, but distributed across N
+    // event loop ticks so watchdog never sees a frozen main thread.
+    const CHUNK_SIZE = 50;
     const cells = new Map(get().cells);
-    for (const p of points) {
-      if (!isFinite(p.lat) || !isFinite(p.lng)) continue;
-      let cellID: string;
-      try {
-        cellID = h3.latLngToCell(p.lat, p.lng, STORE_RES);
-      } catch {
-        continue;
+    let i = 0;
+    const processChunk = () => {
+      const end = Math.min(i + CHUNK_SIZE, points.length);
+      for (; i < end; i++) {
+        const p = points[i];
+        if (!isFinite(p.lat) || !isFinite(p.lng)) continue;
+        let cellID: string;
+        try {
+          cellID = h3.latLngToCell(p.lat, p.lng, STORE_RES);
+        } catch {
+          continue;
+        }
+        const existing = cells.get(cellID);
+        if (existing) {
+          cells.set(cellID, {
+            first: Math.min(existing.first, p.ts),
+            last: Math.max(existing.last, p.ts),
+            count: existing.count + 1,
+          });
+        } else {
+          cells.set(cellID, { first: p.ts, last: p.ts, count: 1 });
+        }
       }
-      const existing = cells.get(cellID);
-      if (existing) {
-        cells.set(cellID, {
-          first: Math.min(existing.first, p.ts),
-          last: Math.max(existing.last, p.ts),
-          count: existing.count + 1,
-        });
+      if (i < points.length) {
+        // Yield main thread to event loop. RN scheduler will handle
+        // UI events, native bridge callbacks, and watchdog heartbeat
+        // before resuming.
+        setTimeout(processChunk, 0);
       } else {
-        cells.set(cellID, { first: p.ts, last: p.ts, count: 1 });
+        // Done — commit cells + clear in-progress flag.
+        set({ cells, cellVersion: get().cellVersion + 1 });
+        markH3SuccessAndClear();
       }
-    }
-    set({ cells, cellVersion: get().cellVersion + 1 });
+    };
+    processChunk();
   },
 
   replaceCells: (cells) => {

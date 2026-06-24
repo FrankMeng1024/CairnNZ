@@ -29,25 +29,43 @@
  */
 
 import { H3_STORE_RESOLUTION, useH3VisitedStore, VisitedCell } from '../store/useH3VisitedStore';
+import { h3HasFailedBefore } from '../lib/h3LoadGate';
 
 /**
  * v306 fix: lazy-require h3-js. Same reason as in useH3VisitedStore —
  * defer the 32 MB ArrayBuffer allocation until the user opens Memory.
  * On lazy-load failure (OOM, hostile Hermes version) FogLayer falls
  * back to "no fog rendered" rather than crashing the app.
+ *
+ * v311: also consult the persisted h3LoadGate. If a previous session
+ * died mid-bulkImport, never re-require here either — same crash
+ * loop avoidance as useH3VisitedStore.getH3.
  */
 type H3Module = typeof import('h3-js');
 let h3Ref: H3Module | null = null;
 let h3LoadFailed = false;
+let h3LastFailureMs = 0;
+const H3_RETRY_COOLDOWN_MS = 5000;
+
 function getH3(): H3Module | null {
   if (h3Ref) return h3Ref;
   if (h3LoadFailed) return null;
+  // v311: persisted gate (cross-session crash loop break).
+  if (h3HasFailedBefore()) {
+    h3LoadFailed = true;
+    return null;
+  }
+  // v311: in-session retry cooldown.
+  if (h3LastFailureMs > 0 && Date.now() - h3LastFailureMs < H3_RETRY_COOLDOWN_MS) {
+    return null;
+  }
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     h3Ref = require('h3-js');
     return h3Ref;
   } catch {
     h3LoadFailed = true;
+    h3LastFailureMs = Date.now();
     return null;
   }
 }
