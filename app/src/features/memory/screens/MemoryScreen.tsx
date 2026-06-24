@@ -46,6 +46,13 @@ const FOCUS_REMOUNT_DEBOUNCE_MS = 5 * 60 * 1000; // v302 N3: 30s→5min — Mapb
 type FailReason = 'permission' | 'timeout' | 'error';
 
 export function MemoryScreen() {
+  // v317: mark memory-screen render entry. v316 server data showed user
+  // navigated from login → Memory tab → crash. No beacon coverage in
+  // MemoryScreen mount path.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('memory_screen_render_start');
+  } catch {/* ignore */}
   const nav = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const watcherFix = useMemoryStore((s) => s.lastWatcherFix);

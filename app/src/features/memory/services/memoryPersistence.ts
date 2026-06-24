@@ -27,6 +27,11 @@
 
 import { storage } from '../../../store/storage';
 import { useMemoryStore, VisitedPoint } from '../store/useMemoryStore';
+import {
+  hasMemoryHydrateFailedBefore,
+  markMemoryHydrateInProgress,
+  markMemoryHydrateSuccess,
+} from '../lib/memoryHydrateGate';
 
 // v0.2.6.3: schema bumped from v2 (point array, no cid) to v3 (cid required).
 // Storage key prefix bumped to v3 so old v2 payloads are abandoned, but
@@ -258,6 +263,25 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('../../../services/bootDiagnostics').markBootPhase('memhydrate_entry');
   } catch {/* ignore */}
+  // v317: persisted gate — if a previous session died mid-hydrate
+  // (sync JSON.parse death, iOS watchdog SIGKILL), this flag is still
+  // set on disk. Skip the hydrate entirely so the app boots even if
+  // the memory cache is too big for Hermes JSON.parse.
+  if (hasMemoryHydrateFailedBefore()) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('memhydrate_gate_blocked');
+    } catch {/* ignore */}
+    // Still attach subscriber so future flushes work (but skip the parse).
+    currentUserId = userId;
+    unsubscribe = useMemoryStore.subscribe(() => {
+      scheduleFlush();
+    });
+    return;
+  }
+  // v317: mark in-progress on disk BEFORE the heavy parse so that if
+  // we sync-die, next boot reads the flag and skips hydrate.
+  markMemoryHydrateInProgress();
   // Bump generation; any in-flight hydrate from a prior call will see
   // a mismatch on resume and bail out.
   const myGeneration = ++generation;
@@ -346,6 +370,13 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
     }
     }  // close v314 else (raw.length <= MAX_RAW_BYTES)
   }
+
+  // v317: hydrate completed (or raw was null/empty). Clear in-progress flag.
+  markMemoryHydrateSuccess();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_success_cleared_flag');
+  } catch {/* ignore */}
 
   // Subscribe to subsequent updates so we persist on change.
   unsubscribe = useMemoryStore.subscribe(() => {

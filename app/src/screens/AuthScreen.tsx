@@ -593,6 +593,10 @@ export function AuthScreen() {
   };
 
   const handleAuth = async () => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../services/bootDiagnostics').markBootPhase('login_handleAuth_enter');
+    } catch {/* ignore */}
     const isRegister = view === 'register';
     submitAttempted.current = true;  // STORY-00133: enable blur validation after first submit
     let valid = true;
