@@ -292,10 +292,12 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
   } catch {/* ignore */}
 
   if (raw) {
-    // v314 fix: guard against MB-sized AsyncStorage payloads. JSON.parse
+    // v314/v315 fix: guard against MB-sized AsyncStorage payloads. JSON.parse
     // on multi-MB raw in Hermes sync-blocks main thread → iOS watchdog
-    // SIGKILL. Bail rather than freeze.
-    const MAX_RAW_BYTES = 2_000_000;  // 2 MB
+    // SIGKILL. Bail rather than freeze. v315: tightened from 2MB to 500KB
+    // — server beacons showed app dying inside JSON.parse with payloads
+    // smaller than 2MB on lower-end devices.
+    const MAX_RAW_BYTES = 500_000;  // 500 KB
     if (raw.length > MAX_RAW_BYTES) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports

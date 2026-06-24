@@ -19,7 +19,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { AppState } from 'react-native';
+import { AppState, InteractionManager } from 'react-native';
 import * as Location from 'expo-location';
 import { processReading, performInitialRevealIfNeeded, resetUnlockEngineForUser } from '../services/unlockEngine';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
@@ -125,15 +125,33 @@ export function ForegroundUnlockManager() {
       })();
       return;
     }
-    void (async () => {
+    // v315 fix: wrap the heavy hydrate+pull chain in
+    // InteractionManager.runAfterInteractions so it yields to UI thread
+    // before doing sync-blocking JSON.parse / fetch. This is critical
+    // because the chain runs RIGHT AFTER login (setLoggedIn → fgum
+    // useEffect re-runs → enters hasUser branch). Login transition
+    // animation + Home screen mount must complete first; otherwise the
+    // JSON.parse on memory cache blocks the main thread mid-transition
+    // and triggers iOS watchdog SIGKILL.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_scheduled');
+    } catch {/* ignore */}
+    InteractionManager.runAfterInteractions(() => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_async_enter');
+        require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_interaction_done');
       } catch {/* ignore */}
-      detachMemorySync();
-      resetUnlockEngineForUser();
-      // O4 fix: clear marker store before hydrate so the new user's
-      // marker hydration starts from a clean slate.
+      if (myGen !== userGenRef.current) return;
+      void (async () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_async_enter');
+        } catch {/* ignore */}
+        detachMemorySync();
+        resetUnlockEngineForUser();
+        // O4 fix: clear marker store before hydrate so the new user's
+        // marker hydration starts from a clean slate.
       useMarkerStore.getState().clearMarkers();
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -178,7 +196,8 @@ export function ForegroundUnlockManager() {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_pull_memory_dispatched');
       } catch {/* ignore */}
-    })();
+      })();
+    });  // close v315 InteractionManager.runAfterInteractions
     return () => {
       // Cleanup runs synchronously but may chain async work. Bumping
       // the gen ref lets in-flight async fall out of the race.

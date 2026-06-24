@@ -178,9 +178,9 @@ export async function hydrateH3ForUser(userId: string): Promise<void> {
   } catch {/* ignore */}
 
   if (raw) {
-    // v314 fix: guard MB-sized payloads — JSON.parse sync-blocks main
-    // thread in Hermes → iOS watchdog SIGKILL at 9s.
-    const MAX_RAW_BYTES = 2_000_000;
+    // v314/v315 fix: guard MB-sized payloads — JSON.parse sync-blocks main
+    // thread in Hermes → iOS watchdog SIGKILL at 9s. v315: tightened to 500KB.
+    const MAX_RAW_BYTES = 500_000;
     if (raw.length > MAX_RAW_BYTES) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
