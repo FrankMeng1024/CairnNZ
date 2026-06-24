@@ -114,22 +114,58 @@ export function ForegroundUnlockManager() {
       return;
     }
     void (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_async_enter');
+      } catch {/* ignore */}
       detachMemorySync();
       resetUnlockEngineForUser();
       // O4 fix: clear marker store before hydrate so the new user's
       // marker hydration starts from a clean slate.
       useMarkerStore.getState().clearMarkers();
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_before_hydrate_h3');
+      } catch {/* ignore */}
       // v305 OTA: H3 cache hydrate first (fast path — fog visible
       // immediately if cache exists). Then hydrateMemoryForUser fires
       // replacePoints which is the canonical rebuild of cells from
       // points (source of truth). If H3 cache was stale or missing,
       // replacePoints fixes it. No separate migration step needed.
       await hydrateH3ForUser(userId);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_hydrate_h3');
+      } catch {/* ignore */}
       if (myGen !== userGenRef.current) return;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_before_hydrate_memory');
+      } catch {/* ignore */}
       await hydrateMemoryForUser(userId);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_hydrate_memory');
+      } catch {/* ignore */}
       if (myGen !== userGenRef.current) return;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_before_attach_sync');
+      } catch {/* ignore */}
       attachMemorySync(userId);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_attach_sync');
+      } catch {/* ignore */}
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_before_pull_memory');
+      } catch {/* ignore */}
       void pullMemoryFromServer(userId);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_pull_memory_dispatched');
+      } catch {/* ignore */}
     })();
     return () => {
       // Cleanup runs synchronously but may chain async work. Bumping

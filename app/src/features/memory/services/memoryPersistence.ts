@@ -254,6 +254,10 @@ export async function flushMemoryNow(): Promise<void> {
  */
 export async function hydrateMemoryForUser(userId: string): Promise<void> {
   if (!userId) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_entry');
+  } catch {/* ignore */}
   // Bump generation; any in-flight hydrate from a prior call will see
   // a mismatch on resume and bail out.
   const myGeneration = ++generation;
@@ -282,9 +286,17 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
 
   // Generation check after async read.
   if (myGeneration !== generation) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_getitem', { raw_len: raw ? raw.length : -1 });
+  } catch {/* ignore */}
 
   if (raw) {
     const decoded = deserialize(raw);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_decode', { points_n: decoded ? decoded.points.length : -1 });
+    } catch {/* ignore */}
     if (decoded) {
       // L7 fix: use the store's replacePoints action which bumps
       // geometryVersion and rebuilds _bucketIndex. Direct setState
@@ -305,7 +317,15 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
       const migratedInitialRevealDone = needsRevealMigration
         ? false
         : decoded.initialRevealDone;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_before_replacepoints', { points_n: decoded.points.length });
+      } catch {/* ignore */}
       useMemoryStore.getState().replacePoints(decoded.points, migratedInitialRevealDone);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_replacepoints');
+      } catch {/* ignore */}
     }
   }
 

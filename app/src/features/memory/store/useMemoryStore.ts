@@ -522,6 +522,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   },
 
   replacePoints: (points, initialRevealDone) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('replacepoints_entry', { points_n: points.length });
+    } catch {/* ignore */}
     const unsyncedCount = points.reduce((n, p) => n + (p.synced ? 0 : 1), 0);
     set({
       points,
@@ -530,6 +534,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       _unsyncedCount: unsyncedCount,
       initialRevealDone,
     });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('replacepoints_after_set');
+    } catch {/* ignore */}
     // v305 OTA: H3 cells is a CACHE of points (single source of truth =
     // points). On every replacePoints (hydrate, server pull, user
     // switch), rebuild cells from scratch so the two stores can never
@@ -551,8 +559,16 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     if (points.length > 0) {
       const snapshot = points.map((p) => ({ lat: p.lat, lng: p.lng, ts: p.ts }));
       setTimeout(() => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../../../services/bootDiagnostics').markBootPhase('replacepoints_settimeout_fired', { n: snapshot.length });
+        } catch {/* ignore */}
         const h3 = useH3VisitedStore.getState();
         h3.clear();
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../../../services/bootDiagnostics').markBootPhase('replacepoints_after_h3clear');
+        } catch {/* ignore */}
         h3.bulkImport(snapshot);
       }, 100);
     } else {

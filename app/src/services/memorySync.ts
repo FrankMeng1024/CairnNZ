@@ -77,6 +77,11 @@ async function fetchWithTimeout(
 
 export async function pullMemoryFromServer(userId: string): Promise<void> {
   if (!userId) return;
+  // v313: beacon at entry so we can see if pull even started.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('pull_memory_entry');
+  } catch {/* ignore */}
   if (pullRunning || pushRunning) {
     setTimeout(() => {
       if (userId === activeUserId) void pullMemoryFromServer(userId);
@@ -96,11 +101,23 @@ export async function pullMemoryFromServer(userId: string): Promise<void> {
   let aborted = false;
   try {
     for (let page = 0; page < PULL_MAX_PAGES; page++) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('pull_memory_before_fetch', { page });
+      } catch {/* ignore */}
       const url = `/api/memory/points?after_ts=${afterTs}&after_cid=${encodeURIComponent(afterCid)}&until=${pullStartTs}&limit=${PULL_PAGE_LIMIT}`;
       const res = await fetchWithTimeout(url, { method: 'GET' }, myCtrl);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('pull_memory_after_fetch', { page, ok: res.ok, status: res.status });
+      } catch {/* ignore */}
       if (myEpoch !== epoch || myUserId !== activeUserId) { aborted = true; return; }
       if (!res.ok) { aborted = true; return; }
       const body = await res.json();
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('pull_memory_after_parse', { page, n: (body.points ?? []).length });
+      } catch {/* ignore */}
       if (myEpoch !== epoch || myUserId !== activeUserId) { aborted = true; return; }
       const batch: ServerPoint[] = (body.points ?? []).filter((p: any): p is ServerPoint =>
         typeof p?.lat === 'number' && typeof p?.lng === 'number' &&
@@ -130,6 +147,14 @@ export async function pullMemoryFromServer(userId: string): Promise<void> {
   }
 
   if (myEpoch !== epoch || myUserId !== activeUserId) return;
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('pull_memory_pages_done', {
+      total: accumulated.length,
+      aborted,
+    });
+  } catch {/* ignore */}
 
   // Apply whatever pages we got — O7 partial-result rule.
   if (accumulated.length === 0) {
@@ -169,7 +194,17 @@ export async function pullMemoryFromServer(userId: string): Promise<void> {
   // O10: skip replacePoints if merge is identical to current state
   // — avoids unnecessary fog/cairn rebuild on no-op pulls.
   if (sameContent(merged, localPoints)) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('pull_memory_before_replacepoints', {
+      merged_n: merged.length,
+    });
+  } catch {/* ignore */}
   useMemoryStore.getState().replacePoints(merged, useMemoryStore.getState().initialRevealDone);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('pull_memory_after_replacepoints');
+  } catch {/* ignore */}
 
   // If we got aborted mid-pagination, schedule resume on remaining pages.
   if (aborted && pullCursor.afterTs > 0) {

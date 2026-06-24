@@ -150,6 +150,10 @@ export async function flushH3Now(): Promise<void> {
  */
 export async function hydrateH3ForUser(userId: string): Promise<void> {
   if (!userId) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('h3hydrate_entry');
+  } catch {/* ignore */}
   const myGen = ++generation;
 
   // Detach prior subscription first; force-flush old user.
@@ -168,9 +172,17 @@ export async function hydrateH3ForUser(userId: string): Promise<void> {
     raw = null;
   }
   if (myGen !== generation) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('h3hydrate_after_getitem', { raw_len: raw ? raw.length : -1 });
+  } catch {/* ignore */}
 
   if (raw) {
     const decoded = deserialize(raw);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('h3hydrate_after_decode', { cells_n: decoded ? decoded.size : -1 });
+    } catch {/* ignore */}
     if (decoded) {
       useH3VisitedStore.getState().replaceCells(decoded);
     }
@@ -183,6 +195,10 @@ export async function hydrateH3ForUser(userId: string): Promise<void> {
   unsubscribe = useH3VisitedStore.subscribe(() => {
     scheduleFlush();
   });
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('h3hydrate_exit');
+  } catch {/* ignore */}
 }
 
 /** Detach + final flush. */
