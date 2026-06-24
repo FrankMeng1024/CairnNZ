@@ -61,12 +61,21 @@ const H3_RETRY_COOLDOWN_MS = 5000;
 function getH3(): H3Module | null {
   if (h3Ref) return h3Ref;
   if (h3LoadFailed) return null;
+  // v312: jetsam-resistant entry beacon — survives process death.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('h3_get_called');
+  } catch {/* ignore */}
   // v311: persisted gate. If a previous session marked h3 in-progress
   // and never cleared it (sync death mid-bulkImport / mid-emscripten-init),
   // permanently skip h3-js in this session to avoid the watchdog loop.
   // Fog won't render but app boots — stability > visibility.
   if (h3HasFailedBefore()) {
     h3LoadFailed = true;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('h3_gate_blocked');
+    } catch {/* ignore */}
     return null;
   }
   // v311: cooldown between failed attempts.
@@ -74,10 +83,23 @@ function getH3(): H3Module | null {
     return null;
   }
   try {
+    // v312: jetsam-resistant — beacon BEFORE the heavy require so we
+    // can tell if h3-js's emscripten factory is what killed us.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('h3_about_to_require');
+    } catch {/* ignore */}
     const t0 = Date.now();
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     h3Ref = require('h3-js');
     const elapsed = Date.now() - t0;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('h3_require_ok', {
+        load_ms: elapsed,
+        hasLatLngToCell: !!(h3Ref && typeof (h3Ref as any).latLngToCell === 'function'),
+      });
+    } catch {/* ignore */}
     if (!h3LoadAttempted) {
       h3LoadAttempted = true;
       // Fire-and-forget log so we can see in server data when h3-js
@@ -92,6 +114,13 @@ function getH3(): H3Module | null {
   } catch (e: any) {
     h3LoadFailed = true;
     h3LastFailureMs = Date.now();
+    // v312: jetsam-resistant failure beacon.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('h3_require_threw', {
+        msg: String(e?.message ?? e).slice(0, 200),
+      });
+    } catch {/* ignore */}
     if (!h3LoadAttempted) {
       h3LoadAttempted = true;
       try {
@@ -178,8 +207,20 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
 
   bulkImport: (points) => {
     if (points.length === 0) return;
+    // v312: jetsam-resistant entry beacon — fires before getH3()
+    // so we can tell whether bulkImport was called at all.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('h3_bulkimport_called', { n: points.length });
+    } catch {/* ignore */}
     const h3 = getH3();
-    if (!h3) return;
+    if (!h3) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('h3_bulkimport_skipped_no_h3');
+      } catch {/* ignore */}
+      return;
+    }
     // v311: mark in-progress on disk BEFORE the heavy loop so that if
     // we sync-die mid-loop (iOS watchdog SIGKILL after 6-10s of main
     // thread freeze), the next boot reads the flag and permanently
@@ -224,6 +265,10 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
         // Done — commit cells + clear in-progress flag.
         set({ cells, cellVersion: get().cellVersion + 1 });
         markH3SuccessAndClear();
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../../../services/bootDiagnostics').markBootPhase('h3_bulkimport_done', { cells_n: cells.size });
+        } catch {/* ignore */}
       }
     };
     processChunk();

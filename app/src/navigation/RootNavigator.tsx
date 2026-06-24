@@ -58,6 +58,11 @@ export function RootNavigator() {
   const { isLoggedIn } = useAppStore();
   markBootPhase('navigator_body_running', { isLoggedIn: !!isLoggedIn });
 
+  // v312 anchor: just before NavigationContainer JSX. If we see this
+  // beacon but no `navigation_container_ready`, the death is inside
+  // NavigationContainer's mount.
+  markBootPhase('navigator_before_jsx');
+
   return (
     <NavigationContainer
       onReady={() => {

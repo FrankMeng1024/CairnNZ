@@ -40,6 +40,13 @@ const WATCH_OPTIONS: Location.LocationOptions = {
 };
 
 export function ForegroundUnlockManager() {
+  // v312: mark mount so we can see whether ForegroundUnlockManager
+  // ever renders. v311 server data showed boot dying after AuthScreen
+  // mounted — checking if FGUM mount runs at all.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('fgum_render_enter');
+  } catch {/* ignore */}
   const enabled = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
   // Q9 + R6: recordMode gates whether watcher should record without
   // an active session. `status` includes 'tracking' AND 'paused' as
@@ -64,11 +71,34 @@ export function ForegroundUnlockManager() {
   // re-hydrate sequence cannot interleave under fast user switch.
   const userGenRef = useRef(0);
   useEffect(() => {
+    // v312: fine-grained user-effect anchor.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../services/bootDiagnostics').markBootPhase('fgum_user_effect_enter', {
+        hasUserId: !!userId,
+      });
+    } catch {/* ignore */}
     const myGen = ++userGenRef.current;
     if (!userId) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('fgum_user_effect_no_user_branch');
+      } catch {/* ignore */}
       void (async () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../../../services/bootDiagnostics').markBootPhase('fgum_nouser_async_enter');
+        } catch {/* ignore */}
         await detachMemoryPersistence();
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../../../services/bootDiagnostics').markBootPhase('fgum_nouser_after_detach_memory');
+        } catch {/* ignore */}
         await detachH3Persistence();
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../../../services/bootDiagnostics').markBootPhase('fgum_nouser_after_detach_h3');
+        } catch {/* ignore */}
         if (myGen !== userGenRef.current) return;
         detachMemorySync();
         resetUnlockEngineForUser();
@@ -76,6 +106,10 @@ export function ForegroundUnlockManager() {
         // O4 fix (v0.2.6.3): also clear cross-user marker state so
         // CairnPinsLayer doesn't flash the previous user's pins.
         useMarkerStore.getState().clearMarkers();
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../../../services/bootDiagnostics').markBootPhase('fgum_nouser_async_done');
+        } catch {/* ignore */}
       })();
       return;
     }

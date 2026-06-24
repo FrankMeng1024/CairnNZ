@@ -24,3 +24,8 @@ Local state: clean. Branch master is 4 commits ahead of origin/master.
 
 Action: retry push when network restored. Commits intact, no data loss.
 DO NOT discard the commits.
+[2026-06-24] git push origin master failed: GitHub secret scanning rejected
+  _review/fog_research_2026-06-21/results.md:229 has secret (commit not from this session — historical)
+  6 commits unpushed including 58954ab (v311 OTA).
+  OTA已经成功推送 (eas update production channel 完成).
+  Resolution path: scrub secret from history OR unblock via GitHub link in error message.

@@ -481,6 +481,11 @@ export function AuthScreen() {
 
   const splashFade = useRef(new Animated.Value(0)).current;
   const splashTranslate = useRef(new Animated.Value(8)).current;
+  // v312 anchor: splash refs created.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('auth_screen_after_splash_refs');
+  } catch {/* ignore */}
   // STORY-00135: wordmark + tagline sequential animations
   const wordmarkOpacity = useRef(new Animated.Value(0)).current;
   const wordmarkTranslate = useRef(new Animated.Value(-8)).current;
@@ -494,6 +499,11 @@ export function AuthScreen() {
   // replays its stone-rising animation from scratch — without this, the user
   // hits Back from Sign In and sees the stones already stacked.
   const [splashMountKey, setSplashMountKey] = useState(0);
+  // v312 anchor: all useRef + useState done.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('auth_screen_after_all_state');
+  } catch {/* ignore */}
 
   const animateWordmark = () => {
     // Wordmark fades in alongside the first stone landing — no delay.
@@ -881,6 +891,12 @@ export function AuthScreen() {
 
   // ── Login / Register ────────────────────────────────────────────────────
   const isRegister = view === 'register';
+
+  // v312 anchor: just before JSX return — all hooks and handlers defined.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('auth_screen_before_jsx_return');
+  } catch {/* ignore */}
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>

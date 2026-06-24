@@ -173,10 +173,17 @@ function AppRoot() {
   });
 
   useEffect(() => {
+    // v312: fine-grained boot-phase beacons inside the big useEffect.
+    // v311 server data showed sessions dying inside this useEffect with
+    // no further beacon after `boot_complete`. Add anchors around every
+    // try-block so the next crash's last-fired beacon points to the
+    // exact step that died.
+    markBootPhase('ue_main_enter');
     // Install global crash handler — wrap everything in try/catch so any
     // bootstrap error (e.g. AsyncStorage native module unavailable) cannot
     // prevent the rest of the app from booting.
     try {
+      markBootPhase('ue_main_before_crashlogger_install');
       crashLogger.install();
       crashLogger.breadcrumb('app_boot');
       markBootPhase('after_crashlogger_install');
@@ -306,7 +313,7 @@ function AppRoot() {
       console.warn('[crashLogger init failed]', err);
     }
 
-    try { hydrateSettings(); } catch (err) {
+    try { markBootPhase('ue_main_before_hydrate_settings'); hydrateSettings(); markBootPhase('ue_main_after_hydrate_settings'); } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[hydrateSettings failed]', err);
     }
@@ -315,28 +322,44 @@ function AppRoot() {
     // Memory tile hydration deferred until after auth resolves so we know
     // which user's tiles to load.
     try {
+      markBootPhase('ue_main_before_memorysettings_hydrate');
       void useMemorySettingsStore.getState().hydrate();
+      markBootPhase('ue_main_after_memorysettings_hydrate');
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[memory settings hydrate failed]', err);
     }
-    try { hydrate().catch((err: unknown) => {
-      // v9-audit (BUG-V8-007): hydrate() is async; synchronous try/catch
-      // doesn't catch promise rejection. Convert to .catch.
-      console.warn('[hydrate failed]', err);
-    }); } catch (err) {
+    try {
+      markBootPhase('ue_main_before_app_hydrate');
+      hydrate().catch((err: unknown) => {
+        // v9-audit (BUG-V8-007): hydrate() is async; synchronous try/catch
+        // doesn't catch promise rejection. Convert to .catch.
+        console.warn('[hydrate failed]', err);
+      });
+      markBootPhase('ue_main_after_app_hydrate');
+    } catch (err) {
       console.warn('[hydrate failed sync]', err);
     }
 
     // Configure debug logger device info + start network monitor
     try {
+      markBootPhase('ue_main_before_debuglogger_configure');
       debugLogger.configure({ deviceInfo: telemetryUploader.getDeviceInfo() });
+      markBootPhase('ue_main_after_debuglogger_configure');
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[debugLogger.configure failed]', err);
     }
-    try { networkMonitor.start().catch(() => {}); } catch { /* swallow */ }
-    try { telemetryUploader.init(); } catch (err) {
+    try {
+      markBootPhase('ue_main_before_networkmonitor_start');
+      networkMonitor.start().catch(() => {});
+      markBootPhase('ue_main_after_networkmonitor_start');
+    } catch { /* swallow */ }
+    try {
+      markBootPhase('ue_main_before_telemetry_uploader_init');
+      telemetryUploader.init();
+      markBootPhase('ue_main_after_telemetry_uploader_init');
+    } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[telemetryUploader.init failed]', err);
     }
@@ -353,6 +376,7 @@ function AppRoot() {
     // written `1` originally; that would have made TTS still interrupt
     // music, defeating the whole point of this change.
     try {
+      markBootPhase('ue_main_before_audio_ducking');
       const { Audio, InterruptionModeIOS, InterruptionModeAndroid } = require('expo-av');
       Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
@@ -366,6 +390,7 @@ function AppRoot() {
       }).catch((err: any) => {
         crashLogger.breadcrumb(`audio:ducking-mode-failed ${String(err).slice(0, 60)}`);
       });
+      markBootPhase('ue_main_after_audio_ducking');
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[audio ducking init failed]', err);
@@ -377,11 +402,13 @@ function AppRoot() {
     // tracking lifecycle — runs as long as the app is alive.
     let unsubOfflineQueue: (() => void) | null = null;
     try {
+      markBootPhase('ue_main_before_offline_queue');
       const { subscribeOfflineQueueDrains, drain } = require('./src/services/offlineQueue');
       unsubOfflineQueue = subscribeOfflineQueueDrains();
       // Also do an initial drain on app boot in case the previous
       // session was killed mid-flight with a non-empty queue.
       drain().catch(() => {});
+      markBootPhase('ue_main_after_offline_queue');
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[offlineQueue init failed]', err);
@@ -396,9 +423,11 @@ function AppRoot() {
     // Post-merge audit (ARCH-020): also gate the dependent root mounts on
     // flag readiness — see flagsPrimed state below. The fire-and-forget
     // catch here remains for safety; the await sequence runs in parallel.
+    markBootPhase('ue_main_before_getflags');
     getFlags()
       .catch(() => {})
       .finally(() => setFlagsPrimed(true));
+    markBootPhase('ue_main_after_getflags');
 
     // v5-audit (ARCH-001) + v8-audit (ARCH-V7-002): drain pending
     // route-cleanup IDs left over from a crashed deleteRoute cascade.
@@ -410,8 +439,10 @@ function AppRoot() {
     //
     // v6-audit (FUNC-001): also wire reconcileOrphans so orphaned extras
     // for routes deleted on other devices (no pending mark) are pruned.
+    markBootPhase('ue_main_before_route_cleanup_iife');
     (async () => {
       try {
+        markBootPhase('ue_main_route_cleanup_iife_enter');
         const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
         const PENDING_PREFIX_V2 = '@cairn:pending_route_cleanup:v2:';
         const PENDING_KEY_V1 = '@cairn:pending_route_cleanup:v1';
@@ -516,6 +547,7 @@ function AppRoot() {
     })();
 
     // App state change listener for debug logger
+    markBootPhase('ue_main_before_appstate_listener');
     const sub = AppState.addEventListener('change', (next) => {
       const prev = lastAppState.current;
       lastAppState.current = next;
@@ -532,6 +564,7 @@ function AppRoot() {
         tracking_active: trackingActive,
       });
     });
+    markBootPhase('ue_main_exit');
     return () => sub.remove();
   }, []);
 
