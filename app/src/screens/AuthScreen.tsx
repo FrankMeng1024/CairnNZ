@@ -547,6 +547,10 @@ export function AuthScreen() {
   }, []);
 
   useEffect(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../services/bootDiagnostics').markBootPhase('auth_view_effect', { view });
+    } catch {/* ignore */}
     if (view === 'splash') {
       // Reset every animation back to its starting state so re-entering the
       // splash from Sign In replays the full sequence from scratch.
@@ -575,6 +579,10 @@ export function AuthScreen() {
   };
 
   const handleViewChange = (v: AuthView) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../services/bootDiagnostics').markBootPhase('auth_view_change', { to: v });
+    } catch {/* ignore */}
     resetErrors();
     submitAttempted.current = false;
     setView(v);
@@ -688,11 +696,29 @@ export function AuthScreen() {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           require('../services/bootDiagnostics').markBootPhase('login_before_nav_home');
         } catch {/* ignore */}
-        nav.replace('Home');
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          require('../services/bootDiagnostics').markBootPhase('login_after_nav_home');
-        } catch {/* ignore */}
+        // v319 fix: DEFER nav.replace to next tick. v311-v318 crashed
+        // here because setLoggedIn(true) + nav.replace('Home') on the
+        // same JS tick made native-stack reconcile Stack.Navigator
+        // children from 1 (Auth) → 13 (Home + 12 others) AND dispatch
+        // a 'replace' command simultaneously — native-stack iOS edge
+        // case = synchronous JS throw / native crash.
+        //
+        // Smoking gun: register branch above uses setTimeout(...,1800)
+        // for nav.replace AND has never been reported as crashing.
+        // Login branch was synchronous AND consistently crashes. Single
+        // operational difference is the deferral. (Subagent C analysis,
+        // 2026-06-24, _review/v319_login_crash_investigation/subagent_C.md.)
+        setTimeout(() => {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            require('../services/bootDiagnostics').markBootPhase('login_settimeout_fired');
+          } catch {/* ignore */}
+          nav.replace('Home');
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            require('../services/bootDiagnostics').markBootPhase('login_after_nav_home');
+          } catch {/* ignore */}
+        }, 0);
       }
     } catch (e: any) {
       const msg: string = e?.message || '';
