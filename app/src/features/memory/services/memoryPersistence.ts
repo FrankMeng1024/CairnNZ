@@ -279,9 +279,18 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
     });
     return;
   }
+  // v321 fine-grained: confirm gate check passed
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_gate_check');
+  } catch {/* ignore */}
   // v317: mark in-progress on disk BEFORE the heavy parse so that if
   // we sync-die, next boot reads the flag and skips hydrate.
   markMemoryHydrateInProgress();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_markInProgress');
+  } catch {/* ignore */}
   // Bump generation; any in-flight hydrate from a prior call will see
   // a mismatch on resume and bail out.
   const myGeneration = ++generation;
@@ -289,7 +298,15 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
   // Detach prior subscription FIRST and force-flush prior user before
   // we overwrite currentUserId. This is the cross-user data-corruption
   // fix.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_before_detach');
+  } catch {/* ignore */}
   await detachMemoryPersistence();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_detach');
+  } catch {/* ignore */}
 
   if (myGeneration !== generation) return;
 
@@ -298,9 +315,17 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
   // hydrate replacePoints below has a clean slate AND the empty-disk
   // case (no raw) leaves the store correctly empty for the new user.
   useMemoryStore.getState().resetForUserSwitch();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_resetSwitch');
+  } catch {/* ignore */}
 
   currentUserId = userId;
 
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_before_getitem');
+  } catch {/* ignore */}
   let raw: string | null = null;
   try {
     raw = await storage.getItem(storageKey(userId));
