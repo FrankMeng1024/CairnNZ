@@ -91,7 +91,12 @@ function getH3(): H3Module | null {
     } catch {/* ignore */}
     const t0 = Date.now();
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    h3Ref = require('h3-js');
+    // v323: replace h3-js (emscripten WASM 32MB alloc → iOS Hermes
+    // SIGKILL) with pure JS h3Pure. Spike G+H 2026-06-24 confirmed:
+    // only 4 functions used, cellID stays on device, fog dissolve
+    // hides hex/square difference, ~230 LOC replaces 600KB+32MB.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    h3Ref = require('../lib/h3Pure').default;
     const elapsed = Date.now() - t0;
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports

@@ -29,7 +29,11 @@
 import { storage } from '../../../store/storage';
 import { useH3VisitedStore, VisitedCell } from '../store/useH3VisitedStore';
 
-const STORAGE_KEY_PREFIX = 'cairn:memory:h3:v1:';
+// v323: bump schema v1 → v2. v1 cellIDs are h3-js format ("8a1f..." 16-char hex).
+// v2 cellIDs are h3Pure format ("11:48372:-91205"). Old v1 cache abandoned;
+// hydrate falls back to rebuilding cells from points (which are UUID-keyed
+// and have their own persistence in memoryPersistence).
+const STORAGE_KEY_PREFIX = 'cairn:memory:h3:v2:';
 const DEBOUNCE_MS = 3_000;
 const MAX_WAIT_MS = 15_000;
 

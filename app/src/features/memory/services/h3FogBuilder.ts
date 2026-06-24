@@ -61,7 +61,9 @@ function getH3(): H3Module | null {
   }
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    h3Ref = require('h3-js');
+    // v323: pure JS h3Pure replaces h3-js (see useH3VisitedStore.ts)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    h3Ref = require('../lib/h3Pure').default;
     return h3Ref;
   } catch {
     h3LoadFailed = true;

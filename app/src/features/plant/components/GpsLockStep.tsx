@@ -59,6 +59,24 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
     setBusy(true);
     log('plant.gps_lock_started', { retry: retryToken });
 
+    // v323 fix: explicitly request foreground location permission
+    // BEFORE any GPS sampling. Previously, if Memory tab never ran
+    // (no fgum mount yet) AND user never opened Hiking, permission
+    // was never requested → Plant flow saw permission-denied and
+    // showed an error UI. Now: prompt user the first time they
+    // enter Plant.
+    void (async () => {
+      try {
+        const existing = await Location.getForegroundPermissionsAsync();
+        if (existing.status !== 'granted' && existing.canAskAgain) {
+          log('plant.gps_lock_requesting_permission', {});
+          await Location.requestForegroundPermissionsAsync();
+        }
+      } catch (err) {
+        log('plant.gps_lock_permission_request_error', { msg: String(err).slice(0, 100) });
+      }
+    })();
+
     // R-round N2 fast-path: if we already have a watcher-cached fix
     // less than 8s old (Memory tab's watcher publishes these as the
     // user walks), use it immediately. Falls back to the 15s sampling
