@@ -137,7 +137,18 @@ export function ForegroundUnlockManager() {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_scheduled');
     } catch {/* ignore */}
-    InteractionManager.runAfterInteractions(() => {
+    // v320 fix: replace InteractionManager.runAfterInteractions with
+    // explicit setTimeout(5000). Subagent E + F (2026-06-24 round 2)
+    // confirmed user crashes 1s after seeing HomeScreen — exactly when
+    // InteractionManager callback fires (after nav transition ~500ms +
+    // home mount ~300ms + first commit). Inside that callback the
+    // hydrate+pull chain runs sync-heavy work (h3-js 32MB emscripten
+    // alloc OR res.json() 500KB+ parse) on a freshly-mounted Home with
+    // OtaBadge re-checking updates → main thread freeze → iOS watchdog
+    // SIGKILL. 5000ms gives Home + OtaBadge + react-navigation transition
+    // full time to settle. Trade-off: fog rendering delayed by 5s vs
+    // crash.
+    setTimeout(() => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_interaction_done');
@@ -197,7 +208,7 @@ export function ForegroundUnlockManager() {
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_pull_memory_dispatched');
       } catch {/* ignore */}
       })();
-    });  // close v315 InteractionManager.runAfterInteractions
+    }, 5000);  // v320: defer 5s instead of InteractionManager — see fgum_hasuser_scheduled comment above
     return () => {
       // Cleanup runs synchronously but may chain async work. Bumping
       // the gen ref lets in-flight async fall out of the race.

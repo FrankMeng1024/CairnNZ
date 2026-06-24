@@ -120,7 +120,7 @@ export async function pullMemoryFromServer(userId: string): Promise<void> {
       // pull rather than freeze the app.
       const contentLengthHeader = res.headers.get('content-length');
       const contentLength = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
-      const MAX_RESPONSE_BYTES = 2_000_000;  // 2 MB
+      const MAX_RESPONSE_BYTES = 500_000;  // 500 KB (v320: tightened from 2MB; Subagent F confirmed 500KB-2MB Hermes JSON.parse can sync-freeze 1-3s)
       if (contentLength > MAX_RESPONSE_BYTES) {
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports

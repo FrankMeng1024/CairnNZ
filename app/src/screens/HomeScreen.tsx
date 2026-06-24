@@ -223,6 +223,15 @@ export function HomeScreen() {
   const uiMode = useAppStore(s => s.uiMode);
   const sessions = useSessionStore(s => s.sessions);
   const allMarkers = useMarkerStore(s => s.markers);
+  // v320: beacon after selectors read — confirms zustand subscriptions
+  // worked without throw. Heavy computation goes here (filter/sort/derive).
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('home_after_selectors', {
+      sessions_n: sessions.length,
+      markers_n: allMarkers.length,
+    });
+  } catch {/* ignore */}
   const region = getCurrentRegion();
   const markerCount = allMarkers.filter(m => m.regionCode === region.code).length;
   const hasData = sessions.length > 0 || markerCount > 0;
@@ -232,6 +241,45 @@ export function HomeScreen() {
   const card1 = useRef(new Animated.Value(1)).current;
   const card2 = useRef(new Animated.Value(1)).current;
   const insets = useSafeAreaInsets();
+
+  // v320: beacon right before JSX return — if app dies between selectors
+  // and JSX render, we'll see home_after_selectors but no home_before_jsx.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('home_before_jsx');
+  } catch {/* ignore */}
+
+  // v320: schedule alive heartbeats — if these fire, JS thread survived.
+  // If 500ms fires but 2000ms doesn't, we know death was between.
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../services/bootDiagnostics').markBootPhase('home_mounted_useEffect');
+    } catch {/* ignore */}
+    const t500 = setTimeout(() => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('home_alive_500ms');
+      } catch {/* ignore */}
+    }, 500);
+    const t2000 = setTimeout(() => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('home_alive_2000ms');
+      } catch {/* ignore */}
+    }, 2000);
+    const t5000 = setTimeout(() => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('home_alive_5000ms');
+      } catch {/* ignore */}
+    }, 5000);
+    return () => {
+      clearTimeout(t500);
+      clearTimeout(t2000);
+      clearTimeout(t5000);
+    };
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
