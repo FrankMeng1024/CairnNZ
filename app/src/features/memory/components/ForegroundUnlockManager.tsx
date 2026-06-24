@@ -211,6 +211,12 @@ export function ForegroundUnlockManager() {
   }, [effectiveUserId]);
 
   // GPS watcher tied to enabled flag + app state.
+  // v318: also gate on isLoggedIn. Pre-login GPS readings were triggering
+  // performInitialRevealIfNeeded → recordCircleUnlock → bulkImport → store
+  // subscriber chain (memoryPersistence.scheduleFlush) — and crashing
+  // before user could complete login. GPS data is only useful AFTER login
+  // anyway (no user → nowhere to record fog clearing).
+  const isLoggedInForGps = useAppStore((s) => s.isLoggedIn);
   useEffect(() => {
     let cancelled = false;
     // Serialize concurrent start() calls so a fast inactive→active
@@ -287,8 +293,20 @@ export function ForegroundUnlockManager() {
       // survive transient OS interactions.
     };
 
-    if (enabled && (AppState.currentState === 'active' || AppState.currentState === 'inactive' || AppState.currentState === 'unknown')) {
+    if (enabled && isLoggedInForGps && (AppState.currentState === 'active' || AppState.currentState === 'inactive' || AppState.currentState === 'unknown')) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('gps_watcher_starting');
+      } catch {/* ignore */}
       void start();
+    } else {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('gps_watcher_gated', {
+          enabled: !!enabled,
+          loggedIn: !!isLoggedInForGps,
+        });
+      } catch {/* ignore */}
     }
     const listener = AppState.addEventListener('change', handleAppState);
 
@@ -297,7 +315,7 @@ export function ForegroundUnlockManager() {
       listener.remove();
       stop();
     };
-  }, [enabled]);
+  }, [enabled, isLoggedInForGps]);
 
   return null;
 }
