@@ -31,6 +31,12 @@ import { BackButton } from '../../../components/BackButton';
 import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
 import { log } from '../../../services/appLog';
+// v322: ForegroundUnlockManager moved here from App root. Mounts only
+// when MemoryScreen mounts, unmounts when user leaves. This means H3 +
+// memory hydrate + pullMemoryFromServer only run when fog is actually
+// being viewed — fixes login-time crash where eager-loading these on
+// Home (which has no fog UI) crashed the app.
+import { ForegroundUnlockManager } from '../components/ForegroundUnlockManager';
 
 interface FixState { lat: number; lng: number }
 /** S4 fix: extended freshness window to 10 minutes. Stale lat/lng is
@@ -215,6 +221,10 @@ export function MemoryScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
+      {/* v322: fgum mounts here. Unmounts when MemoryScreen unmounts
+          (user navigates back to Home), releasing GPS watcher + h3
+          + memory-store subscriptions. */}
+      <ForegroundUnlockManager />
       {/* V9: Back button matches Hiking — pill variant + safe-area top inset
           so it doesn't intrude into the Dynamic Island area. */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">

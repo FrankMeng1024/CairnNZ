@@ -4,10 +4,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { useFonts } from 'expo-font';
 import { RootNavigator } from './src/navigation/RootNavigator';
-import { ForegroundUnlockManager } from './src/features/memory/components/ForegroundUnlockManager';
 import { useMemorySettingsStore } from './src/features/memory/store/useMemorySettingsStore';
 // v241: EditResumePrompt removed — PO requested no resume modal.
 // Source kept on disk for reference but not imported.
+// v322: ForegroundUnlockManager moved to MemoryScreen (lazy mount).
 import { MigratorRetryPrompt } from './MigratorRetryPrompt';
 import { getFlags } from './src/config/featureFlags';
 import { loadFlagsCache, refreshFlagsFromBackend } from './src/services/v025/featureFlagsClient';
@@ -640,10 +640,17 @@ function AppRoot() {
   return (
     <>
       <RootNavigator />
-      <ForegroundUnlockManager />
-      {/* v241: EditResumePrompt removed — PO requested no resume modal.
-          Exit means exit. detachUI clears the AsyncStorage session, so
-          there's nothing to resume. */}
+      {/* v322 ARCHITECTURE FIX: ForegroundUnlockManager moved into
+          MemoryScreen. User question 2026-06-24: "Home page has no
+          fog UI — why does H3 hydrate run on login?" Answer: because
+          fgum was at App root, eager-loading H3+memory before user
+          even navigated to Memory tab. This caused login crashes
+          (v305-v321) since H3 loading is heavy.
+
+          Now: fgum mounts ONLY when MemoryScreen mounts. Login →
+          Home does ZERO H3/memory work. User pays the hydrate cost
+          only when they actually open Memory tab, and resources
+          release when they leave it. */}
       {flagsPrimed && <MigratorRetryPrompt />}
     </>
   );
