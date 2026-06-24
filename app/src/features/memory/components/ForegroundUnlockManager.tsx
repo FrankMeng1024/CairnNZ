@@ -56,6 +56,14 @@ export function ForegroundUnlockManager() {
   const trackingStatus = useTrackingStore((s) => s.status);
   const sessionActive = trackingStatus === 'tracking' || trackingStatus === 'paused';
   const userId = useAppStore((s) => s.user?.id ?? null);
+  // v314 fix: also require isLoggedIn=true. v312/v313 server data showed
+  // hydrate+pull running with isLoggedIn=false but user.id present
+  // (session-expired state: user object hydrated from cache but auth
+  // gate still gated). pullMemoryFromServer then hits /api/memory/points
+  // with stale token → server returns full payload → res.json() of MB-sized
+  // body sync-blocks main thread → iOS watchdog (~9s) SIGKILL.
+  const isLoggedIn = useAppStore((s) => s.isLoggedIn);
+  const effectiveUserId = isLoggedIn ? userId : null;
   const subRef = useRef<Location.LocationSubscription | null>(null);
   // Read latest `enabled` from a ref inside async closures so a toggle
   // mid-AppState transition doesn't fire the wrong branch.
@@ -76,10 +84,14 @@ export function ForegroundUnlockManager() {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require('../../../services/bootDiagnostics').markBootPhase('fgum_user_effect_enter', {
         hasUserId: !!userId,
+        isLoggedIn: !!isLoggedIn,
+        effective: !!effectiveUserId,
       });
     } catch {/* ignore */}
     const myGen = ++userGenRef.current;
-    if (!userId) {
+    // v314 fix: only enter hasUser branch if effectively logged in
+    // (user.id AND isLoggedIn). Otherwise treat as no-user (clean up).
+    if (!effectiveUserId) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_user_effect_no_user_branch');
@@ -132,7 +144,7 @@ export function ForegroundUnlockManager() {
       // replacePoints which is the canonical rebuild of cells from
       // points (source of truth). If H3 cache was stale or missing,
       // replacePoints fixes it. No separate migration step needed.
-      await hydrateH3ForUser(userId);
+      await hydrateH3ForUser(effectiveUserId);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_hydrate_h3');
@@ -142,7 +154,7 @@ export function ForegroundUnlockManager() {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_before_hydrate_memory');
       } catch {/* ignore */}
-      await hydrateMemoryForUser(userId);
+      await hydrateMemoryForUser(effectiveUserId);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_hydrate_memory');
@@ -152,7 +164,7 @@ export function ForegroundUnlockManager() {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_before_attach_sync');
       } catch {/* ignore */}
-      attachMemorySync(userId);
+      attachMemorySync(effectiveUserId);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_attach_sync');
@@ -161,7 +173,7 @@ export function ForegroundUnlockManager() {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_before_pull_memory');
       } catch {/* ignore */}
-      void pullMemoryFromServer(userId);
+      void pullMemoryFromServer(effectiveUserId);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_pull_memory_dispatched');
@@ -177,7 +189,7 @@ export function ForegroundUnlockManager() {
         detachMemorySync();
       })();
     };
-  }, [userId]);
+  }, [effectiveUserId]);
 
   // GPS watcher tied to enabled flag + app state.
   useEffect(() => {

@@ -113,6 +113,26 @@ export async function pullMemoryFromServer(userId: string): Promise<void> {
       } catch {/* ignore */}
       if (myEpoch !== epoch || myUserId !== activeUserId) { aborted = true; return; }
       if (!res.ok) { aborted = true; return; }
+      // v314 fix: guard against MB-sized response bodies. res.json() on
+      // a huge body sync-blocks the main thread in Hermes (no streaming),
+      // matching the 9s watchdog SIGKILL pattern observed in v312/v313
+      // server beacons. If Content-Length exceeds threshold, abort the
+      // pull rather than freeze the app.
+      const contentLengthHeader = res.headers.get('content-length');
+      const contentLength = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
+      const MAX_RESPONSE_BYTES = 2_000_000;  // 2 MB
+      if (contentLength > MAX_RESPONSE_BYTES) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../services/bootDiagnostics').markBootPhase('pull_memory_too_large', {
+            page,
+            content_length: contentLength,
+            limit: MAX_RESPONSE_BYTES,
+          });
+        } catch {/* ignore */}
+        aborted = true;
+        return;
+      }
       const body = await res.json();
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports

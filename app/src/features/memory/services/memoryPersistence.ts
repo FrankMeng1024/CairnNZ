@@ -292,12 +292,27 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
   } catch {/* ignore */}
 
   if (raw) {
-    const decoded = deserialize(raw);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_decode', { points_n: decoded ? decoded.points.length : -1 });
-    } catch {/* ignore */}
-    if (decoded) {
+    // v314 fix: guard against MB-sized AsyncStorage payloads. JSON.parse
+    // on multi-MB raw in Hermes sync-blocks main thread → iOS watchdog
+    // SIGKILL. Bail rather than freeze.
+    const MAX_RAW_BYTES = 2_000_000;  // 2 MB
+    if (raw.length > MAX_RAW_BYTES) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_payload_too_large', {
+          raw_len: raw.length,
+          limit: MAX_RAW_BYTES,
+        });
+      } catch {/* ignore */}
+      // Subscribe still attached below for future flushes — but skip
+      // the parse + replacePoints to avoid the freeze.
+    } else {
+      const decoded = deserialize(raw);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_decode', { points_n: decoded ? decoded.points.length : -1 });
+      } catch {/* ignore */}
+      if (decoded) {
       // L7 fix: use the store's replacePoints action which bumps
       // geometryVersion and rebuilds _bucketIndex. Direct setState
       // bypassed those, leaving FogLayer / CairnPinsLayer stale.
@@ -327,6 +342,7 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
         require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_replacepoints');
       } catch {/* ignore */}
     }
+    }  // close v314 else (raw.length <= MAX_RAW_BYTES)
   }
 
   // Subscribe to subsequent updates so we persist on change.

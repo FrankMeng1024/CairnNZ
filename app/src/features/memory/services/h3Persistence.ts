@@ -178,13 +178,26 @@ export async function hydrateH3ForUser(userId: string): Promise<void> {
   } catch {/* ignore */}
 
   if (raw) {
-    const decoded = deserialize(raw);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require('../../../services/bootDiagnostics').markBootPhase('h3hydrate_after_decode', { cells_n: decoded ? decoded.size : -1 });
-    } catch {/* ignore */}
-    if (decoded) {
-      useH3VisitedStore.getState().replaceCells(decoded);
+    // v314 fix: guard MB-sized payloads — JSON.parse sync-blocks main
+    // thread in Hermes → iOS watchdog SIGKILL at 9s.
+    const MAX_RAW_BYTES = 2_000_000;
+    if (raw.length > MAX_RAW_BYTES) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('h3hydrate_payload_too_large', {
+          raw_len: raw.length,
+          limit: MAX_RAW_BYTES,
+        });
+      } catch {/* ignore */}
+    } else {
+      const decoded = deserialize(raw);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('h3hydrate_after_decode', { cells_n: decoded ? decoded.size : -1 });
+      } catch {/* ignore */}
+      if (decoded) {
+        useH3VisitedStore.getState().replaceCells(decoded);
+      }
     }
   }
   // Note: if raw is null OR deserialize failed, cells stay empty.
