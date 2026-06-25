@@ -1,12 +1,15 @@
 /**
  * globalFogBuilder — v327 Zelda-style fog of war.
  *
- * Architecture (replaces v305-v326 viewport-clipped h3 fog):
+ * v328+: dissolve adjacent cells in the SAME ROW into a single
+ * rectangular hole. 1100 separate 25m × 25m holes → ~30 long
+ * rectangles. Visually merges the checkerboard into a continuous
+ * cleared region.
  *
  *   ┌───────────────────────────────────────────────────────────┐
  *   │  fog = ONE Polygon                                        │
  *   │  ├── outer ring:  global lat/lng bounds (-85..85, -180..180) │
- *   │  └── holes[]:    one 25m × 25m rectangle per visited cell  │
+ *   │  └── holes[]:    ROW-RUN rectangles (NOT per-cell)         │
  *   └───────────────────────────────────────────────────────────┘
  *
  * Rendered by Mapbox FillLayer with even-odd fill rule:
@@ -25,10 +28,12 @@
  *   - **Sub-millisecond build**: 582 GPS pts → 189 unique cells → 0ms
  *     to assemble the GeoJSON Polygon (vs 4.3s for turf.union, vs
  *     50-150ms for old h3 build).
+ *   - **Row-run dissolve (v328+)**: ~95% reduction in hole count for
+ *     dense reveal areas. Eliminates the checkerboard look.
  *
  * Soft edges are NOT done by this builder. The builder produces a
  * sharp-edge polygon. Soft-edge feathering is the FogLayer's job
- * (multi-stop FillLayer or paint.fill-blur).
+ * (LineLayer with blur).
  */
 
 import type { VisitedCell } from '../store/useH3VisitedStore';
@@ -67,37 +72,17 @@ export interface GlobalFogResult {
 }
 
 /**
- * Decode our internal cellID "11:ix:iy" into the rectangle ring it
- * represents. This mirrors h3Pure.cellToBoundary but inlined to avoid
- * the dynamic require of h3Pure (which is lazy-loaded for OOM safety).
+ * Decode cellID "11:ix:iy" into row/column indices.
  */
-function cellToRect(cellID: string): number[][] | null {
+function decodeCell(cellID: string): { ix: number; iy: number } | null {
   const parts = cellID.split(':');
   if (parts.length !== 3) return null;
   const res = parseInt(parts[0], 10);
   const ix = parseInt(parts[1], 10);
   const iy = parseInt(parts[2], 10);
   if (!isFinite(res) || !isFinite(ix) || !isFinite(iy)) return null;
-  if (res !== FOG_RES) return null;  // only res 11 cells supported
-
-  const dLat = FOG_RES_METERS / METERS_PER_DEG_LAT;
-  const south = iy * dLat;
-  const north = (iy + 1) * dLat;
-  const anchorLat = (iy + 0.5) * dLat;
-  const cosLat = Math.max(0.1, Math.cos((anchorLat * Math.PI) / 180));
-  const dLng = FOG_RES_METERS / (METERS_PER_DEG_LAT * cosLat);
-  const west = ix * dLng;
-  const east = (ix + 1) * dLng;
-
-  // Hole ring: must wind OPPOSITE to the outer ring. Outer is CCW
-  // (lng increasing then lat increasing), so hole is CW.
-  return [
-    [west, south],
-    [west, north],
-    [east, north],
-    [east, south],
-    [west, south],
-  ];
+  if (res !== FOG_RES) return null;
+  return { ix, iy };
 }
 
 /**
@@ -105,7 +90,7 @@ function cellToRect(cellID: string): number[][] | null {
  *
  * @param cells Visited cells map from useH3VisitedStore. Always res 11.
  * @returns A single Polygon feature with global outer ring and one
- *          rectangular hole per visited cell.
+ *          rectangular hole per row-run of contiguous visited cells.
  */
 export function buildGlobalFog(
   cells: Map<string, VisitedCell>,
@@ -121,19 +106,63 @@ export function buildGlobalFog(
     [GLOBAL_WEST, GLOBAL_SOUTH],
   ];
 
+  // Group cells by iy
+  const byRow = new Map<number, number[]>();
+  for (const cellID of cells.keys()) {
+    const d = decodeCell(cellID);
+    if (!d) continue;
+    let list = byRow.get(d.iy);
+    if (!list) {
+      list = [];
+      byRow.set(d.iy, list);
+    }
+    list.push(d.ix);
+  }
+
+  const dLat = FOG_RES_METERS / METERS_PER_DEG_LAT;
   const holes: number[][][] = [];
   let totalVerts = outerRing.length;
-  for (const cellID of cells.keys()) {
-    const rect = cellToRect(cellID);
-    if (!rect) continue;
-    holes.push(rect);
-    totalVerts += rect.length;
+
+  for (const [iy, ixs] of byRow) {
+    ixs.sort((a, b) => a - b);
+    const anchorLat = (iy + 0.5) * dLat;
+    const cosLat = Math.max(0.1, Math.cos((anchorLat * Math.PI) / 180));
+    const dLng = FOG_RES_METERS / (METERS_PER_DEG_LAT * cosLat);
+    const south = iy * dLat;
+    const north = (iy + 1) * dLat;
+
+    // Walk sorted ix list, find contiguous runs, emit ONE rectangle per run
+    let runStart = ixs[0];
+    let runEnd = ixs[0];
+    for (let i = 1; i <= ixs.length; i++) {
+      if (i < ixs.length && ixs[i] === runEnd + 1) {
+        runEnd = ixs[i];
+      } else {
+        const west = runStart * dLng;
+        const east = (runEnd + 1) * dLng;
+        // Hole ring CW (opposite to outer CCW)
+        const hole: number[][] = [
+          [west, south],
+          [west, north],
+          [east, north],
+          [east, south],
+          [west, south],
+        ];
+        holes.push(hole);
+        totalVerts += hole.length;
+        if (i < ixs.length) {
+          runStart = ixs[i];
+          runEnd = ixs[i];
+        }
+      }
+    }
   }
 
   const feature: GeoJSON.Feature<GeoJSON.Polygon> = {
     type: 'Feature',
     properties: {
-      cell_count: holes.length,
+      cell_count: cells.size,
+      hole_count: holes.length,
       res: FOG_RES,
       total_verts: totalVerts,
     },

@@ -313,11 +313,13 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     // (25m radius each) did NOT overlap → the user's reported
     // "two-circles-with-fog-between" pattern reappeared.
     //
-    // Axial hex grid: rows offset by hexHeight*0.75, columns offset by
-    // hexWidth. With spacing ≤ 2*fogRadius (=50m for 25m circles), any
-    // two adjacent tile centers are ≤ spacing apart → guaranteed
-    // continuous coverage. We pick 40m: under the 50m limit with margin,
-    // ~30% fewer points than 30m spacing.
+    // v328+ fix: spacing dropped 40m → 20m. The 40m spacing left gaps
+    // between visited 25m cells (40m centers → 15m gap between cell
+    // edges). globalFogBuilder treats unvisited cells as fog so the
+    // gaps showed up as a checkerboard pattern inside the reveal
+    // circle. 20m spacing guarantees adjacent hex centers land in
+    // adjacent (sometimes same) res-11 cells → no gaps, row-run
+    // dissolve merges everything into a clean filled circle.
     //
     // R-round B4 fix: large-radius reveals are CLIENT-DERIVED (no user
     // GPS evidence). They are computed deterministically and don't
@@ -328,8 +330,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     const cosLat = Math.cos((lat * Math.PI) / 180);
     const dLatPerM = 1 / 111_000;
     const dLngPerM = dLatPerM / Math.max(cosLat, 1e-6);
-    const hexSpacing = 40; // metres between hex tile centres
-    const rowStep = hexSpacing * Math.sqrt(3) / 2; // ≈ 34.6m
+    const hexSpacing = 20; // metres between hex tile centres (v328+: 40→20 for no-gap coverage)
+    const rowStep = hexSpacing * Math.sqrt(3) / 2; // ≈ 17.3m
     const radiusSq = requestedRadius * requestedRadius;
     // Iterate rows (north-south) and columns (east-west) over the
     // bounding square, keep only points within the circle.
