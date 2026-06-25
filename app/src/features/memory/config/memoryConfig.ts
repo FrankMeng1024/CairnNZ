@@ -27,8 +27,10 @@ export const UnlockConfig = {
   /**
    * Initial reveal on first app open (so the user doesn't see a blank
    * black map and bounce). Centered on the user's first valid GPS fix.
+   * v332: dropped 500→200 per user feedback "初始稍微大点 但没那么大".
+   * Walking-time reveal is still 25m per GPS point (radiusMeters above).
    */
-  initialRevealRadiusMeters: 500,
+  initialRevealRadiusMeters: 200,
 
   /**
    * Minimum accuracy (meters) for a GPS reading to be admitted to the

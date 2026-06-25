@@ -250,7 +250,17 @@ export function FogLayer({ userCenter }: Props) {
             id="memory-fog-mask"
             style={{
               rasterOpacity: 1,
-              rasterOpacityTransition: { duration: 300, delay: 0 },
+              // v332: drop opacity transition. With it on (300ms), zooming
+              // triggered Mapbox to re-sample the raster and the fade-in
+              // showed as a one-shot "loading" flicker. We don't need
+              // cross-fade between mask revisions either — the mask
+              // changes are GPS-walk-driven, slow enough that no
+              // transition is needed.
+              rasterOpacityTransition: { duration: 0, delay: 0 },
+              // Disable Mapbox's between-tile fade for raster sources.
+              // (We're a single-image raster, not a tiled raster, but the
+              // prop applies anyway and prevents zoom-step fades.)
+              rasterFadeDuration: 0,
             }}
           />
         </ImageSource>
