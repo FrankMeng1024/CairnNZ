@@ -21,7 +21,7 @@ import { useMarkerStore } from '../../../store/useMarkerStore';
 import { MemoryColors } from '../config/memoryConfig';
 import { FogLayer } from './FogLayer';
 import { MemoryFogBurstOverlay } from './MemoryFogBurstOverlay';
-import { FogBounds } from '../services/h3FogBuilder';
+import { FogBounds } from '../services/globalFogBuilder';
 import { CairnPinsLayer } from './CairnPinsLayer';
 import { log } from '../../../services/appLog';
 import { flushNow as flushLogsNow } from '../../../services/appLog';

@@ -62,6 +62,20 @@ export interface GlobalFogPerf {
   total_rings: number;
 }
 
+/**
+ * Viewport bounding box, used by MemoryMap to pass camera state to
+ * FogLayer (currently informational only — global fog renders the
+ * whole world regardless of viewport, but the type is the contract
+ * between map and overlay). Migrated from the deprecated h3FogBuilder
+ * in v329 cleanup.
+ */
+export interface FogBounds {
+  west: number;
+  east: number;
+  north: number;
+  south: number;
+}
+
 export interface GlobalFogResult {
   /** Single Polygon feature: outer ring + N holes. null only when
    *  visited cells is empty (we still want fog — render a Polygon

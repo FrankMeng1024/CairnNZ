@@ -33,8 +33,7 @@ import React, { useMemo } from 'react';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useH3VisitedStore } from '../store/useH3VisitedStore';
 import { getMapbox } from '../services/mapboxAdapter';
-import { buildGlobalFog } from '../services/globalFogBuilder';
-import { FogBounds } from '../services/h3FogBuilder';
+import { buildGlobalFog, FogBounds } from '../services/globalFogBuilder';
 import { MemoryColors } from '../config/memoryConfig';
 import { log } from '../../../services/appLog';
 

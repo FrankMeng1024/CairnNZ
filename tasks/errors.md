@@ -29,3 +29,11 @@ DO NOT discard the commits.
   6 commits unpushed including 58954ab (v311 OTA).
   OTA已经成功推送 (eas update production channel 完成).
   Resolution path: scrub secret from history OR unblock via GitHub link in error message.
+
+## 2026-06-25 — git push blocked by GitHub secret scanning
+- Commit 8348cbc (v300) contains _review/fog_research_2026-06-21/results.md:229 with a third-party Mapbox token scraped from a public CSDN blog
+- Not our secret, but GitHub secret scanning blocks the push
+- Local commits: 24 ahead of origin/master (up to b9fd191 v329)
+- OTA v329 published successfully to EAS (production branch)
+- Resolution options: (a) user unblocks via https://github.com/FrankMeng1024/CairnNZ/security/secret-scanning/unblock-secret/3FcVx5gbQozl3iAaO7KLkH4Fmop  (b) rewrite history to scrub line 229 from commit 8348cbc onward
+- Per §Git Strategy: commit is the guarantee, push retries at next trigger point; will accumulate
