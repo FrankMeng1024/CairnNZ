@@ -59,23 +59,40 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
     setBusy(true);
     log('plant.gps_lock_started', { retry: retryToken });
 
-    // v323 fix: explicitly request foreground location permission
-    // BEFORE any GPS sampling. Previously, if Memory tab never ran
-    // (no fgum mount yet) AND user never opened Hiking, permission
-    // was never requested → Plant flow saw permission-denied and
-    // showed an error UI. Now: prompt user the first time they
-    // enter Plant.
+    // v324: wrap everything in async IIFE so we can `await` permission
+    // check before kicking off the GPS sampler. v323 used fire-and-forget
+    // request which raced with sampleGpsWindow → UI showed "retry /
+    // countdown" before permission dialog. User feedback 2026-06-25:
+    // "界面渲染了 然后页面会显示 retry 和读秒 并且展示不出正确的结果".
+    //
+    // v324 HomeScreen now requests permission on Home mount (one-shot
+    // for whole app). By the time user reaches Plant, permission is
+    // already granted → this `await` resolves immediately. If user
+    // somehow lands on Plant without HomeScreen mount having run
+    // (deep link / nav edge case), we still request here as fallback.
     void (async () => {
+      let permissionGranted = true;
       try {
         const existing = await Location.getForegroundPermissionsAsync();
-        if (existing.status !== 'granted' && existing.canAskAgain) {
-          log('plant.gps_lock_requesting_permission', {});
-          await Location.requestForegroundPermissionsAsync();
+        if (existing.status !== 'granted') {
+          if (existing.canAskAgain) {
+            log('plant.gps_lock_requesting_permission_fallback', {});
+            const r = await Location.requestForegroundPermissionsAsync();
+            permissionGranted = r.status === 'granted';
+          } else {
+            permissionGranted = false;
+          }
         }
       } catch (err) {
-        log('plant.gps_lock_permission_request_error', { msg: String(err).slice(0, 100) });
+        log('plant.gps_lock_permission_check_error', { msg: String(err).slice(0, 100) });
+        permissionGranted = false;
       }
-    })();
+      if (cancelled) return;
+      if (!permissionGranted) {
+        setBusy(false);
+        setResult({ ok: false, reason: 'permission-denied' } as any);
+        return;
+      }
 
     // R-round N2 fast-path: if we already have a watcher-cached fix
     // less than 8s old (Memory tab's watcher publishes these as the
@@ -167,6 +184,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
         if (res.ok) onLockedRef.current(res.lat, res.lng, res.accuracyMeters);
       });
     });
+    })();  // v324: close async IIFE wrapping the permission check + sampler
 
     return () => {
       cancelled = true;

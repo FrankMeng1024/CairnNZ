@@ -281,6 +281,44 @@ export function HomeScreen() {
     };
   }, []);
 
+  // v324: unified GPS permission request on Home mount.
+  // User feedback 2026-06-25: "我们的 hiking 也好 plant 也好 memory 也好
+  // 这几个都是需要位置和 GPS 这些的权限的 那我们是否应该在 homepage 去
+  // 做这个事情". Confirmed via AskUserQuestion: yes, Home unified request.
+  //
+  // Trade-off accepted: permission prompt appears once when user reaches
+  // Home (first time after login or fresh install). All downstream
+  // screens (Hiking/Plant/Memory) can then assume permission granted
+  // and skip the prompt + UI-already-rendered-before-prompt problem.
+  //
+  // Delay 800ms after mount so Home renders first; user has visual
+  // context before iOS permission dialog appears (better UX than
+  // dialog-on-blank-screen).
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        // Lazy-import expo-location to avoid pulling it into Home's
+        // initial render path.
+        const Location = await import('expo-location');
+        const existing = await Location.getForegroundPermissionsAsync();
+        if (existing.status !== 'granted' && existing.canAskAgain) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            require('../services/bootDiagnostics').markBootPhase('home_requesting_location_permission');
+          } catch {/* ignore */}
+          await Location.requestForegroundPermissionsAsync();
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            require('../services/bootDiagnostics').markBootPhase('home_location_permission_responded');
+          } catch {/* ignore */}
+        }
+      } catch {
+        // expo-location unavailable (web) — silent skip.
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />

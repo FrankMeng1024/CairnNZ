@@ -34,10 +34,29 @@
  */
 
 // --- Resolution → cell physical size table ---------------------------------
+//
+// v324 fix: matches Cairn h3FogBuilder viewport cell count expectations.
+// h3-js comment in h3FogBuilder.ts:99-101 says:
+//   res 8 (174m hex):  20km × 14km viewport → ~3700 cells
+//   res 9 (~66m):       5km × 4km          →  ~500 cells
+//   res 10 (~25m):      5km × 4km          → ~3700 cells
+//
+// Working backwards: hex area = (5e3 × 4e3) / 500 = 40000 m² at res 9
+// → equivalent square edge = sqrt(40000) = 200m
+//
+//   res 8  edge 600m → ~ 600 cells per 20km × 14km viewport
+//   res 9  edge 200m → ~ 500 cells per 5km × 4km viewport
+//   res 10 edge 70m  → ~ 4000 cells per 5km × 4km viewport (still within budget)
+//   res 11 edge 25m  → ~ store-only resolution, matches Cairn fog radius
+//
+// v323 original was wrong (used h3 HEX EDGE not equivalent SQUARE EDGE),
+// produced 11806 cells in NZ test viewport → blew past VIEWPORT_CELL_BUDGET
+// (3500) → demote-to-8 also overflowed → fallback returned empty cells
+// → unvisited empty → fog feature null → user saw NO fog.
 const RES_METERS: Record<number, number> = {
-  8: 480,
-  9: 180,
-  10: 65,
+  8: 600,
+  9: 200,
+  10: 70,
   11: 25,
 };
 
