@@ -42,28 +42,36 @@ import { useH3VisitedStore } from '../store/useH3VisitedStore';
 import { getMapbox } from '../services/mapboxAdapter';
 import {
   worldRectMinusCircle,
-  Quad,
 } from '../services/fogFloorGeometry';
 import { renderMask, scheduleStaleCleanup, clearAllMasks, RenderResult } from '../services/fogMaskRenderer';
 import { log } from '../../../services/appLog';
-import type { FogBounds } from '../services/globalFogBuilder';
-
-// Re-export type for back-compat with MemoryMap import expectations.
-// MemoryMap historically imported FogBounds from FogLayer or its services;
-// keep the canonical export at globalFogBuilder (v331 keeps that file as
-// a type-only module even though the polygon builder itself is unused).
-export type { FogBounds };
 
 interface Props {
   /** Current map center (camera target). Drives L1 hole anchor + L2 bbox center. */
   userCenter?: { lat: number; lng: number } | null;
-  /** Legacy props (kept for back-compat; ignored). */
-  bounds?: FogBounds | null;
-  zoom?: number;
 }
 
-const FLOOR_RADIUS_M = 2800; // L1 hole radius — MUST be < MASK_PADDING_M so L2 covers it at all cardinal directions
-const MASK_PADDING_M = 3000; // L2 bbox half-side
+// v333 final: L1 hole radius vs L2 raster bbox geometry.
+//
+// L1 is a CIRCLE (worldRectMinusCircle); L2 is a SQUARE raster bbox.
+// L1 renders BEFORE L2, so L2 sits on top of L1.
+//
+// Invariant (Engineer #11): L1 hole MUST fully contain L2 bbox →
+//   FLOOR_RADIUS_M > MASK_PADDING_M × √2 (L2 square's corner distance)
+//   4500 > 3000 × √2 = 4243 ✓
+//
+// This prevents L1 brown fog from showing under L2's transparent
+// (visited) cells. Visited cells inside L2 show bare map through L2.
+//
+// Between L2 corners (4243m) and L1 edge (4500m) there is a 257m
+// annulus where L1 hole exists but L2 doesn't cover. Inside this
+// annulus the raw basemap shows (no fog, no raster). To prevent
+// the user from seeing this annulus on zoom-out (it would look
+// like the v32x "bright circle" bug), MemoryMap caps the camera
+// at minZoomLevel=14 (viewport ≤ ~3.6km diagonal, fully inside
+// L2 bbox). See MemoryMap.tsx Camera minZoomLevel.
+const FLOOR_RADIUS_M = 4500;  // > 3000 × √2 ≈ 4243
+const MASK_PADDING_M = 3000;  // L2 bbox half-side
 const FLOOR_SEGMENTS = 32;
 const MASK_RECENTER_DISTANCE_M = 500; // re-render if user has moved this far
 
@@ -102,7 +110,7 @@ export function FogLayer({ userCenter }: Props) {
   const isMountedRef = useRef(true);
   const cleanupTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
-  // L1 geometry — depends on userCenter only (not cellVersion)
+  // L1 geometry — depends on userCenter only (not cellVersion).
   const fogFloor = useMemo(() => {
     if (!userCenter) return null;
     return worldRectMinusCircle(
@@ -216,23 +224,32 @@ export function FogLayer({ userCenter }: Props) {
   }, [scheduleRender, useH3Fog]);
 
   if (!useH3Fog) return null;
-  if (!Mapbox.available || !fogFloor) return null;
+  // v333: dropped `|| !fogFloor` guard. With FLOOR_RADIUS_M=0 the
+  // fogFloor is intentionally null (no L1 hole), but the L2 raster
+  // mask still needs to render. Use a conditional ShapeSource render
+  // for L1 below instead of killing the whole component.
+  if (!Mapbox.available) return null;
 
   const { ShapeSource, FillLayer, ImageSource, RasterLayer } = Mapbox as any;
 
   return (
     <>
-      {/* L1 — global fog floor (world rect minus circle around user) */}
-      <ShapeSource id="memory-fog-floor-src" shape={fogFloor}>
-        <FillLayer
-          id="memory-fog-floor"
-          style={{
-            fillColor: 'rgba(58, 42, 24, 0.66)',
-            fillOpacity: 1,
-            fillAntialias: true,
-          }}
-        />
-      </ShapeSource>
+      {/* L1 — global fog floor (world rect minus circle around user).
+          v333: hole radius exactly matches L2 raster bbox half-side so
+          L2 sits perfectly inside L1's transparent window — no L1 fog
+          ever shows through L2's visited-cell punches. */}
+      {fogFloor && (
+        <ShapeSource id="memory-fog-floor-src" shape={fogFloor}>
+          <FillLayer
+            id="memory-fog-floor"
+            style={{
+              fillColor: 'rgba(58, 42, 24, 0.66)',
+              fillOpacity: 1,
+              fillAntialias: true,
+            }}
+          />
+        </ShapeSource>
+      )}
 
       {/* L2 — local Skia raster (per-cell precision + cream halo) */}
       {mask && ImageSource && RasterLayer && (

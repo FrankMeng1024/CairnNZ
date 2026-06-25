@@ -52,6 +52,16 @@ const FOCUS_REMOUNT_DEBOUNCE_MS = 5 * 60 * 1000; // v302 N3: 30s→5min — Mapb
 
 type FailReason = 'permission' | 'timeout' | 'error';
 
+// v333: module-scope cache for "Looking for your position…" flicker fix
+// (Spike L true root cause — transient store-state null causes the real
+// <Text> node to mount for one paint cycle). The 30s TTL lets us bridge
+// re-render hiccups without showing wildly stale coords. Lives at module
+// scope so it survives MemoryScreen unmount/remount within a session
+// (tab switching). Does NOT survive app cold start — that's fine.
+// Dev caveat: Metro fast refresh resets module scope, so the fix is only
+// verifiable on release builds.
+let _lastKnownCoord: { lat: number; lng: number; ts: number } | null = null;
+
 export function MemoryScreen() {
   // v317: mark memory-screen render entry. v316 server data showed user
   // navigated from login → Memory tab → crash. No beacon coverage in
@@ -65,7 +75,6 @@ export function MemoryScreen() {
   const watcherFix = useMemoryStore((s) => s.lastWatcherFix);
   const initialDone = useMemoryStore((s) => s.initialRevealDone);
   const firstVisitDone = useMemorySettingsStore((s) => s.firstVisitDone);
-  const fogMode = useMemorySettingsStore((s) => s.fogMode);
   const settingsHydrated = useMemorySettingsStore((s) => s.hydrated);
   const setSetting = useMemorySettingsStore((s) => s.set);
 
@@ -75,6 +84,51 @@ export function MemoryScreen() {
   const [recenterToken, setRecenterToken] = useState(0);
   const [mountKey, setMountKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
+  // v333: Recenter button is hidden until the user actively pans/zooms.
+  // User intent (decision E): "an icon like Hiking — only appears after I
+  // move the map, so I can get back to my current location."
+  //
+  // R8-5 fix (Engineer #8): if the persisted lastWatcherFix (from a
+  // prior session, possibly a different city) is far from the just-
+  // acquired GPS fix, force mapMoved=true so the Recenter button shows
+  // immediately — otherwise a user who flies from city A to city B
+  // would be stranded looking at city A with no visible way to find
+  // themselves except panning blindly.
+  //
+  // UX #11 CRIT-2 fix: GPS cold-start can flutter 500m-2km on first
+  // 1-2 fixes even when user is at home. To avoid false positives:
+  //  (a) require horizontal accuracy < 100m before trusting the sample
+  //  (b) raise dist threshold to 2km (true cross-city, not GPS noise)
+  //  (c) keep re-evaluating until accuracy is good enough (no one-shot
+  //      ref that locks in the first fluttered fix forever)
+  const [mapMoved, setMapMoved] = useState(false);
+  useEffect(() => {
+    if (mapMoved) return;       // already true: nothing to do
+    if (!watcherFix) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const fresh = await Location.getLastKnownPositionAsync({ maxAge: 30_000 });
+        if (cancelled || !fresh) return;
+        // UX #11 CRIT-2: drop fluttered low-accuracy fixes
+        if (fresh.coords.accuracy != null && fresh.coords.accuracy > 100) return;
+        const freshLat = fresh.coords.latitude;
+        const freshLng = fresh.coords.longitude;
+        const M_PER_DEG_LAT = 111320;
+        const cosLat = Math.cos(((watcherFix.lat + freshLat) / 2 * Math.PI) / 180);
+        const dy = (freshLat - watcherFix.lat) * M_PER_DEG_LAT;
+        const dx = (freshLng - watcherFix.lng) * M_PER_DEG_LAT * Math.max(cosLat, 1e-6);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 2000) {
+          log('memory.cross_city_detected', { dist_m: Math.round(dist) });
+          setMapMoved(true);
+        }
+      } catch {
+        // Best-effort — if GPS lookup fails, fall back to user gesture
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [watcherFix, mapMoved]);
   const lastRefetchAtRef = useRef(0);
   // S3 fix: separate debounce for the EXPENSIVE map remount.
   const lastMountAtRef = useRef(0);
@@ -112,7 +166,6 @@ export function MemoryScreen() {
         points: useMemoryStore.getState().points.length,
         initialDone: useMemoryStore.getState().initialRevealDone,
         settingsHydrated,
-        fogMode,
         mountKey,
       });
       const now = Date.now();
@@ -220,6 +273,26 @@ export function MemoryScreen() {
         ? { lat: watcherFix.lat, lng: watcherFix.lng }
         : null;
 
+  // v333: stableCoord — fix the "Looking for your position…" flicker
+  // (Spike L true root cause). When the Zustand selectors briefly
+  // resolve coord to null within a single render commit cycle (e.g.
+  // during a re-render where watcherFix/oneShot are transiently re-read
+  // as null), the literal `<Text>` at line ~330 renders for one paint,
+  // producing the user-visible flicker on zoom. Hold the last non-null
+  // coord at module scope so this transient null falls back to a
+  // recent known value. 30s TTL is enough to absorb GPS reacquisition
+  // gaps while preventing wildly stale positions from being shown.
+  // QA note: dev fast-refresh resets module scope; verify the fix on a
+  // release build, not dev/Metro.
+  useEffect(() => {
+    if (coord) _lastKnownCoord = { lat: coord.lat, lng: coord.lng, ts: Date.now() };
+  }, [coord]);
+  const stableCoord: FixState | null = coord ?? (
+    _lastKnownCoord && Date.now() - _lastKnownCoord.ts < 30_000
+      ? { lat: _lastKnownCoord.lat, lng: _lastKnownCoord.lng }
+      : null
+  );
+
   // v327 debug: track WHY the "Looking for your position" UI appears.
   // User reports it shows up briefly during zoom — but zoom should not
   // affect coord. Log every change in the inputs that decide coord so
@@ -279,22 +352,12 @@ export function MemoryScreen() {
         <BackButton variant="pill" onPress={() => nav.goBack()} />
       </View>
 
-      {/* v305 OTA: removed fogMode pill row (Legacy/Soft/Sharp/Off) —
-          SDF 三 mode 在 native binary build (7/1) 前都是灰掉的,只剩
-          Legacy 一个独苗,pill 无意义。fogMode 字段仍在 settings store,
-          7/1 重新激活 SDF 选项时再加回 pill。 */}
-
-      {coord ? (
+      {stableCoord ? (
         <MemoryMap
-          centerLat={coord.lat}
-          centerLng={coord.lng}
+          centerLat={stableCoord.lat}
+          centerLng={stableCoord.lng}
           recenterToken={recenterToken}
-          // v303 四轮 subagent #2 fix (verify V4): settings 还没 hydrate
-          // 时 fogMode 是 DEFAULTS('sdf-soft'),会让 MemoryMap 第一帧就
-          // attach native fog,而老用户实际 persist 是 'legacy'。hydrate
-          // 完成后立刻 detach 浪费一次完整 attach+ping。在 hydrate 前
-          // 用 'legacy'(JS fog,无 native 风险),hydrate 完才用真值。
-          fogMode={settingsHydrated ? fogMode : 'legacy'}
+          onMapMoved={() => setMapMoved(true)}
           key={`map-${mountKey}`}
         />
       ) : failReason === 'permission' ? (
@@ -334,8 +397,15 @@ export function MemoryScreen() {
         </View>
       )}
 
-      {coord && (
-        <TouchableOpacity style={styles.recenterBtn} onPress={onRecenter} activeOpacity={0.8}>
+      {stableCoord && mapMoved && (
+        <TouchableOpacity
+          style={styles.recenterBtn}
+          onPress={() => {
+            onRecenter();
+            setMapMoved(false);
+          }}
+          activeOpacity={0.8}
+        >
           <Icon name="Navigation" size={20} color={MemoryColors.sepiaDeep} strokeWidth={2.2} />
         </TouchableOpacity>
       )}

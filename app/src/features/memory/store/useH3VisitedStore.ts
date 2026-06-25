@@ -168,6 +168,12 @@ interface H3VisitedState {
   /** Batch import — used by migration and by recordCircleUnlock when a
    *  hex grid of points is added at once. */
   bulkImport: (points: Array<{ lat: number; lng: number; ts: number }>) => void;
+  /** v333: synchronous batch import (no chunking). Used by
+   *  flushHikingToMemory after stopTracking, where ~600 points * ~5ms is
+   *  acceptable and chunked async (50-150ms total) would cause the fog
+   *  hole to lag visibly behind the StopSummarySheet "+X km²" banner.
+   *  bulkImport (chunked) remains for initialReveal / replaceCells. */
+  bulkImportSync: (points: Array<{ lat: number; lng: number; ts: number }>) => void;
   /** Replace whole cells map (used by hydrate). Does not bump cellVersion
    *  beyond the implicit re-render — caller handles invalidation. */
   replaceCells: (cells: Map<string, VisitedCell>) => void;
@@ -281,6 +287,40 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
 
   replaceCells: (cells) => {
     set({ cells, cellVersion: get().cellVersion + 1, hydrated: true });
+  },
+
+  /**
+   * v333: synchronous bulk import. flushHikingToMemory uses this so that
+   * the fog hole renders immediately when the user switches to the Memory
+   * tab after Save (no 50-150ms chunked-async delay vs. the
+   * StopSummarySheet "+X km²" banner). ~600 points is ~5ms — acceptable
+   * one-time cost at session end.
+   */
+  bulkImportSync: (points) => {
+    if (points.length === 0) return;
+    const h3 = getH3();
+    if (!h3) return;
+    const cells = new Map(get().cells);
+    for (const p of points) {
+      if (!isFinite(p.lat) || !isFinite(p.lng)) continue;
+      let cellID: string;
+      try {
+        cellID = h3.latLngToCell(p.lat, p.lng, STORE_RES);
+      } catch {
+        continue;
+      }
+      const existing = cells.get(cellID);
+      if (existing) {
+        cells.set(cellID, {
+          first: Math.min(existing.first, p.ts),
+          last: Math.max(existing.last, p.ts),
+          count: existing.count + 1,
+        });
+      } else {
+        cells.set(cellID, { first: p.ts, last: p.ts, count: 1 });
+      }
+    }
+    set({ cells, cellVersion: get().cellVersion + 1 });
   },
 
   clear: () => {

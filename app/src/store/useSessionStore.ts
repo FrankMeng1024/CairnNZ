@@ -42,6 +42,11 @@ export interface TrackingSession {
   markerIds: string[];        // markers planted during this session
   pausePins?: Coordinate[];   // locations where user paused (rendered as flag pins)
   name?: string;              // user-assigned name (optional, auto-generated if absent)
+  /** v333: number of NEW H3 cells unlocked in the Memory map by this
+   *  session. LOCAL-ONLY — NOT included in the POST /api/sessions body
+   *  whitelist (see line ~95-117 below), so it does not leak to backend.
+   *  Used by StopSummarySheet to show "Memory: +X km²" banner. */
+  memoryNewCells?: number;
 }
 
 const MAX_SESSIONS = 100;

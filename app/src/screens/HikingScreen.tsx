@@ -11,7 +11,7 @@
  * expo-keep-awake: activates when status === 'tracking'
  * Real stores: useTrackingStore (GPS), useMarkerStore (flags)
  */
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView,
   TextInput, Alert, Animated, Easing, KeyboardAvoidingView, Platform,
@@ -34,6 +34,7 @@ import { getPrimaryMapStyle } from '../config/mapbox';
 import { formatDistance, formatDuration, haversineM, createTrackSmoother, smoothGPSPoint, getSamplingInterval, classifyMovement, type SmoothedTrackState, type GPSPoint } from '../utils/geo';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
+import { previewMemoryGain } from '../features/memory/services/flushHikingToMemory';
 import { BackButton } from '../components/BackButton';
 import { PressBtn } from '../components/PressBtn';
 import { MARKER_META, type MarkerType } from '../data/mockData';
@@ -906,6 +907,14 @@ function StopSummarySheet({
   const yyyy = date.getFullYear();
   const defaultName = `${label} — ${dd}/${mm}/${yyyy}`;
 
+  // v333: dry-run preview of how many new H3 cells this hike unlocks.
+  // The actual flush happens in useTrackingStore.stopTracking on confirm;
+  // here we only read store state for the banner display, no writes.
+  const memoryNewCells = useMemo(
+    () => previewMemoryGain(summary.trackPoints),
+    [summary.trackPoints],
+  );
+
   return (
     <Animated.View style={[stopSheetStyles.scrim, { opacity }]} pointerEvents="auto">
       <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => dismiss(onCancel)} />
@@ -920,6 +929,23 @@ function StopSummarySheet({
           {/* v120: stats row + GPS sample count removed — user already saw
               all of those in the live tracking bar above. The sheet should
               only do what the bar can't: name + confirm. */}
+
+          {/* v333: Memory banner — shows how much new ground this hike
+              will reveal on the Memory map. Uses dry-run preview so the
+              number is consistent with what the user will see after Save.
+              UX #11 fix: always show the chip (no silent absence). For
+              too-short sessions show "Too short to record". km² is H3
+              res 11 avg cell area = 0.00215 km² (~2150 m²) per cell. */}
+          <View style={stopSheetStyles.memoryBanner}>
+            <Icon name="Map" size={18} color={accent} strokeWidth={2.2} />
+            <Text style={[stopSheetStyles.memoryBannerText, { color: accent }]}>
+              {summary.trackPoints.length < 2
+                ? 'Memory: Too short to record'
+                : memoryNewCells > 0
+                  ? `Memory: +${(memoryNewCells * 0.00215).toFixed(2)} km²`
+                  : 'Memory: Familiar ground'}
+            </Text>
+          </View>
 
           {/* Name input — placeholder shows the default name so users
               don't need a separate caption explaining "leave blank to
@@ -1003,6 +1029,24 @@ const stopSheetStyles = StyleSheet.create({
   statValue: { fontSize: FontSize.body, fontWeight: '700', fontVariant: ['tabular-nums'] },
   points: { fontSize: FontSize.caption, color: Colors.textMuted, textAlign: 'center', marginTop: -Spacing.xs },
   inputWrap: { gap: 4 },
+  // v333: Memory banner inside StopSummarySheet — shows new Memory map
+  // ground unlocked by this hike, or "Familiar ground" when revisiting.
+  // Styled as a celebration chip (decision C "连成一片领土视觉"), not a
+  // metadata caption — soft pill bg + accent-colored body text + body
+  // font size give it visual weight comparable to the title.
+  memoryBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.bg,
+    borderRadius: Radius.button,
+    borderWidth: 1, borderColor: Colors.border,
+    alignSelf: 'flex-start',
+  },
+  memoryBannerText: {
+    fontSize: FontSize.body,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
   inputLabel: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textPrimary },
   input: {
     backgroundColor: Colors.bg, borderRadius: Radius.button,

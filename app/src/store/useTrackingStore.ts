@@ -32,6 +32,7 @@ import { sessionRecorder } from '../services/sessionRecorder';
 import { telemetryUploader } from '../services/telemetryUploader';
 import { startSession, appendPoints as remoteAppendPoints, finalizeSession, deleteRemoteSession } from '../services/sessionService';
 import { crashLogger } from '../services/crashLogger';
+import { flushHikingToMemory } from '../features/memory/services/flushHikingToMemory';
 import {
   BACKGROUND_LOCATION_TASK,
   registerBackgroundTask,
@@ -620,6 +621,22 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         })().catch(() => undefined);
       }
 
+      // v333: flush this session's trackPoints into Memory store.
+      // Spike W: since v322 ForegroundUnlockManager only runs while
+      // MemoryScreen is mounted — users hiking with Hiking tab open and
+      // Memory tab unopened were getting Activity saved but NO Memory
+      // cells unlocked. This closes that loop.
+      // try/catch (Challenge #8 BS-1): never let a flush error throw
+      // out of stopTracking and lose the session via skipped addSession.
+      let memoryNewCells = 0;
+      try {
+        const result = flushHikingToMemory(s.trackPoints);
+        memoryNewCells = result.newCells;
+        crashLogger.breadcrumb(`v333:hiking_to_memory ok pts=${s.trackPoints.length} new=${memoryNewCells}`);
+      } catch (e) {
+        crashLogger.breadcrumb(`v333:hiking_to_memory failed ${String(e).slice(0, 80)}`);
+      }
+
       useSessionStore.getState().addSession({
         id: s.sessionId,
         // Pre-populate remoteId so addSession knows to SKIP the legacy
@@ -638,6 +655,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         markerIds: s.markerIds,
         pausePins: s.pausePins.length > 0 ? s.pausePins : undefined,
         name: finalName,
+        memoryNewCells,
       });
       stopReason = 'saved';
       } // end too-short guard

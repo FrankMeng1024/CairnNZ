@@ -3,11 +3,9 @@
  *
  * Wires together:
  *   - Mapbox MapView/Camera (cross-platform via mapboxAdapter)
- *   - FogLayer (needs current viewport bounds — see N5 root cause work,
- *     mapbox-gl-js can't render a world-spanning polygon so the fog
- *     outer ring is built from the visible bounds)
+ *   - FogLayer (renders L1 world fog + L2 raster mask around user)
  *   - CairnPinsLayer (markers within the explored area)
- *   - UserLocation (the blue dot)
+ *   - UserLocation (the blue dot — user's current position anchor)
  *
  * recenterToken bump forces Camera remount → fresh flyTo to the current
  * `centerCoordinate`. Without remount, native @rnmapbox/maps' Camera
@@ -21,25 +19,12 @@ import { useMarkerStore } from '../../../store/useMarkerStore';
 import { MemoryColors } from '../config/memoryConfig';
 import { FogLayer } from './FogLayer';
 import { MemoryFogBurstOverlay } from './MemoryFogBurstOverlay';
-import { FogBounds } from '../services/globalFogBuilder';
 import { CairnPinsLayer } from './CairnPinsLayer';
 import { log } from '../../../services/appLog';
 import { flushNow as flushLogsNow } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
-// v304 OTA — REMOVED cairn-fog-layer native module reference.
-// Native binary on user devices is build 45 (commit 29ac3df). Build 46
-// (which would have included cairn-fog-layer.framework) ERRORED on EAS.
-// Any JS code that references this native module triggers
-// `requireNativeModule('CairnFogLayer')` throw at runtime → JS crash
-// even though current default mode is 'legacy'. Metro statically bundles
-// the import, so just having `import * as Fog from '../../../../modules/cairn-fog-layer/src'`
-// at module top causes the lazy `requireNativeModule` resolver to run as
-// soon as Fog.* is read by any code path — including dead-code paths
-// optimizer might preserve.
-// FogRenderMode kept as a local type alias so callers still typecheck.
-export type FogRenderMode = 'legacy' | 'off' | 'sdf-soft' | 'sdf-sharp';
 
 interface Props {
   centerLat: number;
@@ -50,63 +35,22 @@ interface Props {
    */
   recenterToken?: number;
   /**
-   * v303: fog rendering mode. Default 'legacy' (existing polygon-with-
-   * holes path) until users opt-in to a native SDF mode.
-   * - 'legacy'   — current FogLayer (JS, polygon-union + holes)
-   * - 'off'      — no fog at all (debug)
-   * - 'sdf-soft' — native Metal SDF with feathered soft edge (~30%)
-   * - 'sdf-sharp'— native Metal SDF with hard edge
+   * v333: fired when the user actively pans/zooms the map (not when
+   * code-driven Camera animation moves it). Parent gates the Recenter
+   * button on this so the button only appears after the user has
+   * moved the map (decision E).
    */
-  fogMode?: FogRenderMode;
+  onMapMoved?: () => void;
 }
 
 const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12';
 const INITIAL_ZOOM = 16.5;
 
-/**
- * Estimate the viewport bounds before the first onMapIdle fires. Lets
- * FogLayer render fog immediately on first mount instead of waiting
- * for the camera to settle.
- *
- * Sized to match the visible viewport at INITIAL_ZOOM (16.5) on a
- * typical phone-sized map — at lat ~31° that's roughly 0.005° wide,
- * 0.002° tall. We pick slightly larger to account for tall phone
- * aspect ratios. The first onMapIdle event replaces this estimate.
- */
-function estimateInitialBounds(centerLat: number, centerLng: number): FogBounds {
-  // ≈ 0.005° = 550m at lat 31°, slightly bigger than visible viewport
-  const halfDegLng = 0.005;
-  const halfDegLat = 0.003;
-  return {
-    west: centerLng - halfDegLng,
-    east: centerLng + halfDegLng,
-    north: centerLat + halfDegLat,
-    south: centerLat - halfDegLat,
-  };
-}
-
-export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = 'legacy' }: Props) {
+export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved }: Props) {
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
-  // v303: ref to the actual MapView so the native fog module can
-  // find its reactTag via findNodeHandle.
   const mapViewRef = useRef<any>(null);
 
-  // v304 OTA: native fog control DISABLED. cairn-fog-layer.framework is
-  // not in build 45 binary. Calling useMemoryFogControl resolves the
-  // native module, which throws "Cannot find native module 'CairnFogLayer'".
-  // Mode is always treated as 'legacy' here — JS <FogLayer> below handles
-  // rendering. fogMode prop kept for API compat; ignored.
-  log('memory.fog_native_disabled_v304', { received_mode: fogMode });
-  if (false) { /* dead-code branch to satisfy type checker */ }
-
-  const [bounds, setBounds] = useState<FogBounds>(() =>
-    estimateInitialBounds(centerLat, centerLng)
-  );
-  // v305 OTA: currentZoom from useState → useState retained because H3
-  // FogLayer needs it for resolution selection. (Previously stored for
-  // turf.union zoom-aware padFactor; same state, new consumer.)
-  const [currentZoom, setCurrentZoom] = useState<number>(15);
   // v302 N6: track whether the user has panned the map away from
   // the GPS-driven center. Hiking-style: don't auto-follow user
   // location; instead expose a recenter pill when the camera drifts
@@ -119,51 +63,12 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
   const cameraRef = useRef<any>(null);
 
   /**
-   * Update bounds only if the new bounds differ from current beyond a
-   * small epsilon. mapbox-gl's onIdle fires after every micro-movement
-   * (including the user-location dot's reflow), and replacing the bounds
-   * object on every fire would re-trigger fogBuilder for a 571-hole
-   * polygon — causing the source's tiles to enter permanent 'reloading'
-   * and never finish painting.
-   */
-  const updateBoundsIfChanged = useCallback((next: FogBounds) => {
-    setBounds((prev) => {
-      const eps = 1e-5; // ≈ 1m at lat 31°
-      if (
-        Math.abs(prev.west - next.west) < eps &&
-        Math.abs(prev.east - next.east) < eps &&
-        Math.abs(prev.north - next.north) < eps &&
-        Math.abs(prev.south - next.south) < eps
-      ) {
-        return prev; // same object reference → useMemo upstream skips
-      }
-      return next;
-    });
-  }, []);
-
-  // Update initial bounds estimate only on FIRST mount. After that,
-  // watcher-driven centerLat/Lng prop changes must NOT recompute
-  // bounds (v302 N6: the Camera is intentionally not following the
-  // watcher; rebuilding fog bounds on every push would still trigger
-  // fogBuilder work for a map view that never moved).
-  const firstBoundsSetRef = useRef(false);
-  useEffect(() => {
-    if (firstBoundsSetRef.current) return;
-    firstBoundsSetRef.current = true;
-    updateBoundsIfChanged(estimateInitialBounds(centerLat, centerLng));
-  }, [centerLat, centerLng, updateBoundsIfChanged]);
-
-  /**
    * onMapIdle receives a synthesized event from the adapter with
-   * properties.center and properties.zoom. We approximate viewport
-   * bounds from these — both native and web shims expose these fields
-   * uniformly so the math is platform-agnostic.
+   * properties.center and properties.zoom. We use these to detect
+   * pan-away (anchor diff > 50m) for the internal recenter pill.
    */
-  // v303 OTA 三修 (B-3 + log): onMapSettle 在初始化期间 Mapbox 会 fire
-  // 多次(styleURL 加载、camera flyTo、tile fetch 各阶段),每次都触发
-  // setState → FogLayer useMemo 重算 buildFogPolygon(1-2s 主线程阻塞)。
-  // 用 ref 累加 fire 计数,加 trailing-throttle 500ms 把短时间内连续 fire
-  // 合并成一次 bounds 更新。
+  // v303 OTA 三修: onMapSettle 在初始化期间 Mapbox 会 fire 多次,
+  // 用 throttle 100ms 合并连续 fire 防多次 setState 抖动。
   const idleFireCountRef = useRef(0);
   const lastIdleAtRef = useRef(0);
   const idleThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -180,43 +85,21 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
       fire: fireCount,
       zoom: Number(zoom.toFixed(2)),
       ms_since_last: msSinceLast,
-      // v327 debug: capture state at zoom/pan time to diagnose
-      // user-reported "Looking for your position appears during zoom"
       center_lat: Number(center[1].toFixed(5)),
       center_lng: Number(center[0].toFixed(5)),
     });
-    // v327: force-flush logs after a zoom/pan settles so user-reported
-    // mid-interaction issues are visible on the server within seconds.
     void flushLogsNow();
-    // throttle:500ms 内连续 fire 只更新最后一次
     if (idleThrottleTimerRef.current) clearTimeout(idleThrottleTimerRef.current);
     idleThrottleTimerRef.current = setTimeout(() => {
       idleThrottleTimerRef.current = null;
-      setCurrentZoom(zoom);
-
       const dist = haversineM(
         { lat: anchorRef.current.lat, lng: anchorRef.current.lng },
         { lat: center[1], lng: center[0] }
       );
       const panned = dist > 50;
       setHasPannedAway((prev) => (prev === panned ? prev : panned));
-
-      const metersPerPixel = (Math.cos(center[1] * Math.PI / 180) * 2 * Math.PI * 6378137) /
-                             (256 * Math.pow(2, zoom));
-      const halfMeters = metersPerPixel * 400;
-      const dLatPerM = 1 / 111_000;
-      const cosLat = Math.max(Math.cos(center[1] * Math.PI / 180), 1e-6);
-      const dLngPerM = dLatPerM / cosLat;
-      const halfLat = halfMeters * dLatPerM;
-      const halfLng = halfMeters * dLngPerM;
-      updateBoundsIfChanged({
-        west: center[0] - halfLng,
-        east: center[0] + halfLng,
-        north: Math.min(85.05, center[1] + halfLat),
-        south: Math.max(-85.05, center[1] - halfLat),
-      });
-    }, 100);  // v305 OTA: throttle 500ms → 100ms (H3 fast, no longer needs heavy debounce)
-  }, [updateBoundsIfChanged]);
+    }, 100);
+  }, []);
 
   // v302 N6: when the recenter button bumps the token, re-anchor on
   // the current GPS coord and reset the pan-away flag. The Camera is
@@ -264,6 +147,15 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
         compassEnabled={false}
         scaleBarEnabled={false}
         onMapIdle={onMapSettle}
+        onRegionDidChange={(e: { properties?: { isUserInteraction?: boolean } }) => {
+          // v333: only fire onMapMoved for user-initiated pan/zoom,
+          // not when our own Camera setCamera() animation moves the map.
+          // rnmapbox/maps RegionPayload exposes `isUserInteraction` on
+          // feature.properties (Eng #7 REV7-2 confirmed via source).
+          if (onMapMoved && e?.properties?.isUserInteraction) {
+            onMapMoved();
+          }
+        }}
       >
         <Camera
           ref={cameraRef}
@@ -276,15 +168,19 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
             centerCoordinate: [centerLng, centerLat],
             zoomLevel: INITIAL_ZOOM,
           }}
+          // v333: cap zoom-out at 14 so the user cannot pinch out far
+          // enough to see the L1 fog hole edge (4500m radius circle)
+          // or the 257m bare annulus between L2 corners (4243m) and
+          // L1 edge (4500m). At z=14 viewport ~3.6km diagonal, fully
+          // inside the L2 raster bbox (6km × 6km) — the entire visible
+          // area is governed by L2 raster, not the L1 circle. This
+          // prevents the v32x "bright circle" complaint from recurring.
+          minZoomLevel={14}
           animationMode={'flyTo'}
           animationDuration={600}
         />
         <UserLocation visible={true} />
-        {/* v305 OTA: H3 hex-cell fog. Gated by useMemorySettingsStore.useH3Fog
-            (default true; false = kill-switch for debug). The `fogMode`
-            prop from settings is retained but no longer drives this layer
-            — kept for the 7/1 native SDF path. */}
-        <FogLayer bounds={bounds} zoom={currentZoom} userCenter={{ lat: centerLat, lng: centerLng }} />
+        <FogLayer userCenter={{ lat: centerLat, lng: centerLng }} />
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>
       {/* v303 OTA: Skia 解锁扩散动画 overlay。在 MapView 之上 absoluteFill。
