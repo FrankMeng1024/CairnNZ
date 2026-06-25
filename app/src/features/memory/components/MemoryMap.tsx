@@ -284,7 +284,7 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
             (default true; false = kill-switch for debug). The `fogMode`
             prop from settings is retained but no longer drives this layer
             — kept for the 7/1 native SDF path. */}
-        <FogLayer bounds={bounds} zoom={currentZoom} />
+        <FogLayer bounds={bounds} zoom={currentZoom} userCenter={{ lat: centerLat, lng: centerLng }} />
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>
       {/* v303 OTA: Skia 解锁扩散动画 overlay。在 MapView 之上 absoluteFill。
