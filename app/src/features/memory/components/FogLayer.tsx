@@ -87,21 +87,32 @@ export function FogLayer(_props: Props) {
             fillAntialias: true,
           }}
         />
-        {/* v327.1 Zelda soft-edge feathering.
-            Each hole (visited cell) has a sharp 25m right-angle border.
-            On a dense reveal area (e.g. the initial 500m circle =
-            ~1100 cells) this looks like a hard checkerboard.
-            Drawing a LineLayer over the same polygon adds a soft
-            line along every ring (outer + each hole). With heavy
-            lineBlur the lines become a feathered halo at each
-            hole boundary, softening the checkerboard visually
-            without changing the underlying geometry. */}
+        {/* v330 fix — soft-edge feathering done RIGHT.
+            v327.1–v329 used lineColor = fogOverlay (the dark fog color)
+            with lineWidth=6 + lineBlur=8. At high zoom each 25m cell
+            projected to ~30-50 px, so the 14 px halo only feathered
+            the outer perimeter and looked correct. As soon as the user
+            zoomed out, each cell's projected size dropped below the
+            stroke width — the dark fog-colored stroke covered the
+            entire cell interior, re-painting fog over the cleared
+            reveal. Adjacent row-run rectangles each contributed their
+            own top+bottom strokes, producing the persistent
+            checkerboard the user reported on v326/327/328.
+            Two-part fix:
+              1. Use MemoryColors.fogEdge (the cream halo color that
+                 was already in config since v303 but never wired up
+                 here) instead of fogOverlay. Even if strokes overlap
+                 at low zoom, they paint cream — the SAME color the
+                 cleared reveal already shows — so no checkerboard.
+              2. Cut lineWidth 6→2 and lineBlur 8→3 so the stroke is
+                 too thin to ever fully cover a cell. Keeps the soft
+                 perimeter feathering visible at all zoom levels. */}
         <LineLayer
           id="memory-fog-edge-soft"
           style={{
-            lineColor: MemoryColors.fogOverlay,
-            lineWidth: 6,
-            lineBlur: 8,
+            lineColor: MemoryColors.fogEdge,
+            lineWidth: 2,
+            lineBlur: 3,
             lineOpacity: 0.7,
             lineCap: 'round',
             lineJoin: 'round',
