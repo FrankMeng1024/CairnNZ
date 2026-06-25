@@ -1,87 +1,67 @@
 /**
- * FogLayer — H3 hex-cell fog renderer (v305).
+ * FogLayer — v327 Zelda-style fog of war.
  *
- * For each frame:
- *   1. Read viewport bounds + zoom.
- *   2. Compute the H3 res-adaptive set of hex cells in viewport.
- *   3. Subtract visited cells (from useH3VisitedStore).
- *   4. Emit a Mapbox FillLayer + LineLayer over the remaining
- *      (unvisited) cells.
+ * One global Polygon: outer ring covers the whole world, holes are
+ * the visited 25m × 25m cells. Mapbox FillLayer with even-odd fill rule
+ * paints the world in fog and lets the holes show through.
  *
- * Why H3 instead of turf.union (the old legacy path):
- *   - turf.union is O(N²) on a CPU thread → 1147 points = 15s freeze.
- *   - H3 is index lookups in a Set → 50ms render, independent of point
- *     count.
- *   - See `_review/v305_h3_fog/` for the full route comparison.
+ * Why this is different from v305-v326:
+ *   - v305-v324 (h3 zoom-adaptive): viewport-clipped + cellToParent
+ *     over-visit → user saw "中间亮一大块,远处也亮,只是补丁".
+ *   - v325 (per-cell): grid checkerboard everywhere.
+ *   - v326 (row-run): horizontal stripe grid.
+ *   - v327 (this file): GLOBAL fog with hole-per-visited-cell.
+ *     Zooms freely. No over-visit. No grid stripes. Matches Zelda
+ *     fog-of-war: dark world, only visited spots clear.
  *
- * Killing the fog (useH3Fog=false in settings):
- *   Returns null. Used for debug triage and emergency disable.
+ * Bounds prop and zoom prop are accepted but no longer drive a rebuild.
+ * They're kept on the type for back-compat with MemoryMap's existing
+ * callsite; the new builder is bounds-independent (the outer ring is
+ * always the global bbox).
  *
- * Recovery from missing migration:
- *   If we detect `cells.size === 0 && points.length > 0` (meaning the
- *   H3 migration didn't run or failed silently), fire-and-forget the
- *   migration here. Next render the cells will be populated.
+ * Rebuild trigger: cellVersion from useH3VisitedStore. Bumps when the
+ * user enters a NEW cell (not every GPS tick — see useH3VisitedStore
+ * for the de-dup logic). Typical walking: a few bumps per minute.
+ *
+ * Soft edges are NOT done here yet. The outer-and-hole polygon has
+ * sharp 25m-grid edges. Feathering will be a separate FogLayer feature
+ * once the core fog model is validated by users — done as either
+ * Mapbox's `paint.fill-blur` or a multi-stop fill stack.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useH3VisitedStore } from '../store/useH3VisitedStore';
 import { getMapbox } from '../services/mapboxAdapter';
-import { buildUnvisitedHexFeatures, FogBounds } from '../services/h3FogBuilder';
+import { buildGlobalFog } from '../services/globalFogBuilder';
+import { FogBounds } from '../services/h3FogBuilder';
 import { MemoryColors } from '../config/memoryConfig';
 import { log } from '../../../services/appLog';
 
 interface Props {
-  /** Current map viewport bounds. Driven by parent MapView. */
-  bounds: FogBounds | null;
-  /** Current map zoom — controls H3 resolution selection. */
+  /** Kept for back-compat with MemoryMap; ignored by the v327 builder. */
+  bounds?: FogBounds | null;
+  /** Kept for back-compat with MemoryMap; ignored by the v327 builder. */
   zoom?: number;
 }
 
-/** Debounce window for viewport changes so pan/zoom drag doesn't rebuild
- *  the fog every frame. H3 is fast (~50ms), but successive setData calls
- *  on Mapbox ShapeSource can still cause minor stutter. */
-const REBUILD_DEBOUNCE_MS = 100;
-
-export function FogLayer({ bounds, zoom = 15 }: Props) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function FogLayer(_props: Props) {
   const Mapbox = getMapbox();
   const useH3Fog = useMemorySettingsStore((s) => s.useH3Fog);
   const cellVersion = useH3VisitedStore((s) => s.cellVersion);
 
-  // Debounce viewport changes — avoids rebuilding on every pan frame.
-  const [debouncedBounds, setDebouncedBounds] = useState<FogBounds | null>(bounds);
-  const [debouncedZoom, setDebouncedZoom] = useState<number>(zoom);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!bounds) return;
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      setDebouncedBounds(bounds);
-      setDebouncedZoom(zoom);
-    }, REBUILD_DEBOUNCE_MS);
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    };
-  }, [bounds, zoom]);
-
   const fogFeature = useMemo(() => {
-    if (!debouncedBounds) return null;
-    // v305 OTA REVIEW3: useH3Fog short-circuit MUST be in useMemo so the
-    // expensive build is skipped when the kill-switch is off. The
-    // outer `if (!useH3Fog) return null` would render null but useMemo
-    // would still run, defeating the purpose.
     if (!useH3Fog) return null;
     const cells = useH3VisitedStore.getState().cells;
 
     const t0 = Date.now();
     log('memory.fog_build_start', {
-      bounds_w: debouncedBounds.west,
-      bounds_e: debouncedBounds.east,
-      zoom: debouncedZoom,
       cell_version: cellVersion,
       visited_n: cells.size,
+      builder: 'global_v327',
     });
-    const result = buildUnvisitedHexFeatures(debouncedBounds, cells, debouncedZoom);
+    const result = buildGlobalFog(cells);
     log('memory.fog_built', {
       cell_version: cellVersion,
       total_ms: Date.now() - t0,
@@ -89,17 +69,13 @@ export function FogLayer({ bounds, zoom = 15 }: Props) {
     });
 
     return result.feature;
-  }, [cellVersion, debouncedBounds, debouncedZoom, useH3Fog]);
+  }, [cellVersion, useH3Fog]);
 
-  // Kill-switch: useH3Fog=false renders nothing.
+  // Kill-switch.
   if (!useH3Fog) return null;
   if (!Mapbox.available || !fogFeature) return null;
 
-  const { ShapeSource, FillLayer, LineLayer } = Mapbox as any;
-
-  // Adaptive line-blur: at lower zoom (coarser res), bigger blur softens
-  // the visible hex outline so it reads as cloud, not as game grid.
-  const lineBlur = debouncedZoom < 13 ? 5 : debouncedZoom < 15 ? 3 : 2;
+  const { ShapeSource, FillLayer } = Mapbox as any;
 
   return (
     <>
@@ -110,17 +86,16 @@ export function FogLayer({ bounds, zoom = 15 }: Props) {
             fillColor: MemoryColors.fogOverlay,
             fillOpacity: 1,
             fillAntialias: true,
-          }}
-        />
-        <LineLayer
-          id="memory-fog-edge-line"
-          style={{
-            lineColor: MemoryColors.fogEdge,
-            lineWidth: 1.5,
-            lineOpacity: 0.55,
-            lineBlur,
-            lineCap: 'round',
-            lineJoin: 'round',
+            // Even-odd fill rule turns the holes (visited cells) into
+            // transparent windows. Without this, holes are also painted
+            // and the user sees no clearing.
+            //
+            // NOTE: Mapbox GL JS supports `fill-sort-key` but not an
+            // explicit fill-rule — Polygon evenodd is the default for
+            // single-feature polygons with multiple rings (outer + holes).
+            // Each visited cell is in the SAME Polygon's coordinates[]
+            // so they ARE holes by virtue of being non-first rings.
+            // No additional flag needed.
           }}
         />
       </ShapeSource>
