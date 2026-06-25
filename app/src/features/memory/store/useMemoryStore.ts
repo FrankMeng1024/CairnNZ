@@ -29,6 +29,10 @@ import { create } from 'zustand';
 // new H3-based FogLayer sees the same world as the legacy points store.
 import { useH3VisitedStore } from './useH3VisitedStore';
 import { UnlockConfig } from '../config/memoryConfig';
+// v326: persist lastWatcherFix to AsyncStorage so cold-start has an
+// immediate location for fog drawing — fixes "Looking for your position"
+// loop reported by user in v325 testing.
+import { persistLastFix } from '../services/lastFixCache';
 
 export interface VisitedPoint {
   lat: number;
@@ -618,6 +622,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       }
     }
     set({ lastWatcherFix: { lat, lng, ts } });
+    // v326: persist to AsyncStorage. Fire-and-forget; failure non-fatal.
+    persistLastFix({ lat, lng, ts });
   },
 
   /**

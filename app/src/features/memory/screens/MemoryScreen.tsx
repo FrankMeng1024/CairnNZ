@@ -24,6 +24,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { performInitialRevealIfNeeded } from '../services/unlockEngine';
+import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap } from '../components/MemoryMap';
 import { MemorySummaryCard } from '../components/MemorySummaryCard';
@@ -82,6 +83,26 @@ export function MemoryScreen() {
     if (!settingsHydrated) return;
     if (!firstVisitDone) setShowHint(true);
   }, [settingsHydrated, firstVisitDone]);
+
+  // v326: hydrate persisted last-fix immediately on mount. If watcherFix
+  // is already populated (warm reopen during the same session), do
+  // nothing. Otherwise read AsyncStorage cache and write to store so the
+  // map can draw at the last-known location while the watcher boots.
+  // Prevents 12s "Looking for your position" on every cold-start.
+  useEffect(() => {
+    if (useMemoryStore.getState().lastWatcherFix) return;
+    let cancelled = false;
+    void (async () => {
+      const cached = await readLastFix();
+      if (cancelled) return;
+      if (!cached) return;
+      // Don't overwrite if a fresh watcher fix arrived during the await.
+      if (useMemoryStore.getState().lastWatcherFix) return;
+      log('memory.last_fix_hydrated', { age_ms: Date.now() - cached.ts });
+      useMemoryStore.getState().setLastWatcherFix(cached.lat, cached.lng, cached.ts);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
