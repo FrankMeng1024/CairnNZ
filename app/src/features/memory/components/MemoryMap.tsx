@@ -24,6 +24,7 @@ import { MemoryFogBurstOverlay } from './MemoryFogBurstOverlay';
 import { FogBounds } from '../services/h3FogBuilder';
 import { CairnPinsLayer } from './CairnPinsLayer';
 import { log } from '../../../services/appLog';
+import { flushNow as flushLogsNow } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
@@ -175,7 +176,18 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, fogMode = '
     const tNow = Date.now();
     const msSinceLast = lastIdleAtRef.current === 0 ? -1 : tNow - lastIdleAtRef.current;
     lastIdleAtRef.current = tNow;
-    log('memory.map_idle', { fire: fireCount, zoom: Number(zoom.toFixed(2)), ms_since_last: msSinceLast });
+    log('memory.map_idle', {
+      fire: fireCount,
+      zoom: Number(zoom.toFixed(2)),
+      ms_since_last: msSinceLast,
+      // v327 debug: capture state at zoom/pan time to diagnose
+      // user-reported "Looking for your position appears during zoom"
+      center_lat: Number(center[1].toFixed(5)),
+      center_lng: Number(center[0].toFixed(5)),
+    });
+    // v327: force-flush logs after a zoom/pan settles so user-reported
+    // mid-interaction issues are visible on the server within seconds.
+    void flushLogsNow();
     // throttle:500ms 内连续 fire 只更新最后一次
     if (idleThrottleTimerRef.current) clearTimeout(idleThrottleTimerRef.current);
     idleThrottleTimerRef.current = setTimeout(() => {

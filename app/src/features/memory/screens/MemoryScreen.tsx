@@ -31,7 +31,7 @@ import { MemorySummaryCard } from '../components/MemorySummaryCard';
 import { BackButton } from '../../../components/BackButton';
 import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
-import { log } from '../../../services/appLog';
+import { log, flushNow as flushLogsNow } from '../../../services/appLog';
 // v322: ForegroundUnlockManager moved here from App root. Mounts only
 // when MemoryScreen mounts, unmounts when user leaves. This means H3 +
 // memory hydrate + pullMemoryFromServer only run when fog is actually
@@ -138,6 +138,11 @@ export function MemoryScreen() {
       return () => {
         clearInterval(heartbeat);
         log('memory.tab_blur', { total_focus_ms: Date.now() - heartbeatStart });
+        // v327: force-flush logs on tab blur. Without this, all the
+        // memory.* / fog.* / gps.* logs sit in the in-memory queue
+        // until the app goes to background. User reported issues
+        // while inside the tab can never be diagnosed otherwise.
+        void flushLogsNow();
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -214,6 +219,28 @@ export function MemoryScreen() {
       : watcherFix
         ? { lat: watcherFix.lat, lng: watcherFix.lng }
         : null;
+
+  // v327 debug: track WHY the "Looking for your position" UI appears.
+  // User reports it shows up briefly during zoom — but zoom should not
+  // affect coord. Log every change in the inputs that decide coord so
+  // we can see the actual trigger.
+  const coordSignature = coord ? `${coord.lat.toFixed(5)},${coord.lng.toFixed(5)}` : 'null';
+  const prevCoordSigRef = useRef<string>(coordSignature);
+  useEffect(() => {
+    if (prevCoordSigRef.current !== coordSignature) {
+      log('memory.coord_changed', {
+        prev: prevCoordSigRef.current,
+        next: coordSignature,
+        has_watcher: !!watcherFix,
+        watcher_age_ms: watcherFix ? Date.now() - watcherFix.ts : null,
+        watcher_fresh: watcherFresh,
+        has_oneshot: !!oneShot,
+        fail_reason: failReason,
+        refetch_token: refetchToken,
+      });
+      prevCoordSigRef.current = coordSignature;
+    }
+  }, [coordSignature, watcherFix, watcherFresh, oneShot, failReason, refetchToken]);
 
   useEffect(() => {
     if (initialDone) return;

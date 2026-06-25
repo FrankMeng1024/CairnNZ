@@ -75,7 +75,7 @@ export function FogLayer(_props: Props) {
   if (!useH3Fog) return null;
   if (!Mapbox.available || !fogFeature) return null;
 
-  const { ShapeSource, FillLayer } = Mapbox as any;
+  const { ShapeSource, FillLayer, LineLayer } = Mapbox as any;
 
   return (
     <>
@@ -86,16 +86,26 @@ export function FogLayer(_props: Props) {
             fillColor: MemoryColors.fogOverlay,
             fillOpacity: 1,
             fillAntialias: true,
-            // Even-odd fill rule turns the holes (visited cells) into
-            // transparent windows. Without this, holes are also painted
-            // and the user sees no clearing.
-            //
-            // NOTE: Mapbox GL JS supports `fill-sort-key` but not an
-            // explicit fill-rule — Polygon evenodd is the default for
-            // single-feature polygons with multiple rings (outer + holes).
-            // Each visited cell is in the SAME Polygon's coordinates[]
-            // so they ARE holes by virtue of being non-first rings.
-            // No additional flag needed.
+          }}
+        />
+        {/* v327.1 Zelda soft-edge feathering.
+            Each hole (visited cell) has a sharp 25m right-angle border.
+            On a dense reveal area (e.g. the initial 500m circle =
+            ~1100 cells) this looks like a hard checkerboard.
+            Drawing a LineLayer over the same polygon adds a soft
+            line along every ring (outer + each hole). With heavy
+            lineBlur the lines become a feathered halo at each
+            hole boundary, softening the checkerboard visually
+            without changing the underlying geometry. */}
+        <LineLayer
+          id="memory-fog-edge-soft"
+          style={{
+            lineColor: MemoryColors.fogOverlay,
+            lineWidth: 6,
+            lineBlur: 8,
+            lineOpacity: 0.7,
+            lineCap: 'round',
+            lineJoin: 'round',
           }}
         />
       </ShapeSource>
