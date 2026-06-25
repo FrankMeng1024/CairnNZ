@@ -88,6 +88,12 @@ export interface H3FogPerf {
   /** ms spent inside cellsToMultiPolygon. Tracked separately because it's
    *  a known hot spot in long-walker (50k cells) profiles. */
   dissolve_ms: number;
+  /** v325: count of rings with <=4 vertices. After per-cell rewrite,
+   *  every polygon is a clean 5-vertex closed rectangle, so tinyRings
+   *  should always be 0. >0 = regression of the triangle bug. */
+  tiny_rings?: number;
+  total_rings?: number;
+  total_verts?: number;
 }
 
 export interface H3FogResult {
@@ -267,6 +273,22 @@ export function buildUnvisitedHexFeatures(
   }
   const dissolveMs = Date.now() - tDissolve;
 
+  // v325 telemetry: ring-size histogram. After the per-cell rewrite
+  // (h3Pure.cellsToMultiPolygon) every polygon should have exactly one
+  // ring of 5 vertices (closed rectangle). Any short-ring (<=4) count
+  // > 0 means the old buggy algorithm or a new defect is in play —
+  // this is the canary for the triangle bug regression.
+  let tinyRings = 0;
+  let totalRings = 0;
+  let totalVerts = 0;
+  for (const poly of multiPolygonCoords) {
+    for (const ring of poly) {
+      totalRings++;
+      totalVerts += ring.length;
+      if (ring.length <= 4) tinyRings++;
+    }
+  }
+
   // Defensive: cellsToMultiPolygon may return rings that aren't
   // explicitly closed. Close any open rings (first vs last vertex).
   for (const poly of multiPolygonCoords) {
@@ -297,7 +319,7 @@ export function buildUnvisitedHexFeatures(
 
   const feature: GeoJSON.Feature<GeoJSON.MultiPolygon> = {
     type: 'Feature',
-    properties: { cell_count: unvisitedCount, res },
+    properties: { cell_count: unvisitedCount, res, tinyRings, totalRings, totalVerts },
     geometry: {
       type: 'MultiPolygon',
       coordinates: multiPolygonCoords,
@@ -313,6 +335,9 @@ export function buildUnvisitedHexFeatures(
       build_ms: Date.now() - t0,
       demoted,
       dissolve_ms: dissolveMs,
+      tiny_rings: tinyRings,
+      total_rings: totalRings,
+      total_verts: totalVerts,
     },
   };
 }
