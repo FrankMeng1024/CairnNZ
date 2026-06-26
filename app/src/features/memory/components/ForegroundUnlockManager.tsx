@@ -161,9 +161,20 @@ export function ForegroundUnlockManager() {
         } catch {/* ignore */}
         detachMemorySync();
         resetUnlockEngineForUser();
-        // O4 fix: clear marker store before hydrate so the new user's
-        // marker hydration starts from a clean slate.
-      useMarkerStore.getState().clearMarkers();
+        // v345 fix: only clear marker store on actual user switch — NOT
+        // on every FGUM mount. Pre-v345 this fired clearMarkers() on
+        // every Memory-tab open (v322 moved FGUM into MemoryScreen, so
+        // FGUM mounts/unmounts on each tab focus); the 5s setTimeout
+        // delay + clearMarkers() chain produced "markers visible for
+        // 5s, then disappear, only fixed by app kill" — useMarkerStore
+        // re-hydrate is only wired in useAppStore at login time, never
+        // in FGUM, so the cleared store stayed empty until next cold
+        // start. Now only clear when the marker store's tracked userId
+        // doesn't match the effective userId (real user switch).
+        const markerStore = useMarkerStore.getState();
+        if (markerStore.userId && markerStore.userId !== effectiveUserId) {
+          markerStore.clearMarkers();
+        }
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_before_hydrate_h3');

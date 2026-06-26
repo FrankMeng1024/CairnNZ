@@ -1273,7 +1273,70 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 344;
+export const OTA_VERSION = 346;
+//         v346: COMPLETE fog architecture rewrite — buffered GPS path
+//         as polygon hole. Replaces v331-v345's Skia raster + ImageSource
+//         pipeline, which was fundamentally incompatible with Mapbox iOS
+//         SDK 11.20.1 dynamic image loading (rnmapbox/maps#1457 confirmed
+//         for both file:// AND data: URIs via v344 magenta diagnostic).
+//
+//         New architecture (FogLayer.tsx):
+//           - useMemoryStore.points → segment by 5min gap → per segment:
+//             turf.simplify + turf.buffer(25m corridor) → MultiPolygon
+//           - turf.difference(world rect, all corridors) → fog GeoJSON
+//           - Single ShapeSource + FillLayer rgba(40,30,18,0.80)
+//           - fillAntialias:false (mapbox-gl-js#7023 workaround)
+//
+//         Spike validation (_spike/v346-fog-options/spike-A-z*.png):
+//           VISIBLE clean ribbon shape z14/z12 on Playwright mapbox-gl-js
+//           SUB-PIXEL at z9 (acceptable — hiking zoom is z14+)
+//
+//         Drops: Skia rendering, PNG file write, ImageSource transport,
+//         file://, data:, magenta diagnostic. Net deletion of ~250 LOC.
+//
+//         flushHikingToMemory.ts: also calls useMemoryStore.recordPoint
+//         for each GPS sample (12.5m CULL inside dedups). Fixes the
+//         v322-v345 server sync gap — hike points now reach server AND
+//         survive reinstall (previously only H3 cells were written, which
+//         have no sync path).
+//
+//         ForegroundUnlockManager.tsx: clearMarkers() now gated on
+//         userId change (was: every FGUM mount fired clearMarkers() in
+//         a 5s setTimeout, causing markers-visible-then-vanish-after-5s
+//         on every Memory tab entry since v322).
+//
+//         v344 magenta diagnostic + L1 fillOpacity 0 fully reverted (not
+//         needed in new architecture — L1 collapsed into single FogLayer
+//         polygon).
+//
+//         Uses @turf/buffer @turf/difference @turf/helpers @turf/simplify
+//         — all already transitive deps of @turf/turf 7.3.5 in package.json,
+//         zero bundle size increment, pure JS Hermes-compatible.
+//         v345: two-bug fix OTA, both diagnosed from v344 user feedback.
+//
+//         BUG A (markers vanish 5s after Memory tab open, only restored
+//         by full app kill): ForegroundUnlockManager.tsx line 166 called
+//         useMarkerStore.getState().clearMarkers() unconditionally inside
+//         the hasUser branch's 5-second deferred async block. Pre-v322
+//         FGUM mounted once at App root → fired once at login (no-op
+//         because markers not yet loaded). v322 moved FGUM into
+//         MemoryScreen → fires on every Memory-tab open → 5s after
+//         opening, markers cleared. useMarkerStore re-hydrate is only
+//         wired in useAppStore at login, never in FGUM, so cleared
+//         markers stayed empty until cold-restart.
+//         v345 fix: only clearMarkers() when markerStore.userId !==
+//         effectiveUserId (real user switch). Same-user FGUM remounts
+//         no longer wipe the store.
+//
+//         BUG B revert: v344's magenta + L1 fillOpacity:0 diagnostic
+//         changes are reverted (sepia + opacity 1 restored). Magenta
+//         confirmed Mapbox iOS rejects data: URI same as file://. The
+//         real fog-mask visibility fix requires routing the PNG through
+//         our own HTTPS backend (v346 — server-side upload to
+//         api.yiiling.cn, Mapbox loads via standard HTTPS URL loader).
+//
+//         v345 visual state: markers stable (no 5s vanish), fog floor
+//         back to opaque sepia, hike paths still NOT visible (v346 fix).
 //         v344: DIAGNOSTIC OTA — magenta debug fill. v343's data:
 //         image/png;base64 fix may or may not actually be loaded by
 //         Mapbox iOS — telemetry only proves Skia rendered the PNG,

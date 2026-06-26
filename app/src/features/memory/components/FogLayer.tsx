@@ -1,313 +1,238 @@
 /**
- * FogLayer — v331 hybrid raster fog (Fog-of-World style).
+ * FogLayer — v346 buffered-path fog of war (path-shaped cutout).
  *
- * Architecture (see _spike/v331-pc/v331_plan_v2.md + global_fog_architecture.md):
+ * Architecture (replaces v331-v345 hybrid Skia+ImageSource pipeline):
  *
- *   L1 = ShapeSource + FillLayer over "world rect minus one circle around user"
- *        GeoJSON Polygon. 38 vertices total. Provides global fog at all zooms.
- *        Earcut-safe because the geometry has only one outer ring + one inner ring,
- *        well below the 1000+-inner-ring threshold that triggers the v325-v330 bug.
+ *   Single ShapeSource + FillLayer:
+ *     - Outer ring = world rect
+ *     - Inner rings = turf.buffer(GPS path, 25m) corridors per hike segment
+ *     - Result: fog covers everywhere EXCEPT where the user actually walked
  *
- *   L2 = ImageSource + RasterLayer of a Skia-rendered PNG. The PNG paints fog
- *        color over the bbox area, punches visited cells transparent, and adds
- *        a cream halo around them. Bbox is centered on user (6km square default).
- *        L1's hole radius (4.2km) is slightly smaller than L2's bbox half-side
- *        (3km) so L2 covers the L1 hole completely — no visible seam.
+ * Why this works where v331-v345 didn't:
+ *   - v331-v345 used <ImageSource url={mask.uri}> with Skia-rendered PNG.
+ *     - v331-v342 tried file:// URI → silent fail (rnmapbox/maps#1457, open
+ *       5+ years on iOS Mapbox SDK 11.x)
+ *     - v343 tried data:image/png;base64 → also silent fail (verified by
+ *       v344 magenta diagnostic — user saw zero magenta = data: rejected)
+ *     - The "Skia + ImageSource" architecture is fundamentally incompatible
+ *       with Mapbox iOS SDK 11.20.1 dynamic image loading. No OTA fix exists.
+ *   - v346 abandons raster entirely: GPS path → turf.buffer → polygon hole.
+ *     Mapbox ShapeSource + GeoJSON polygon-with-holes IS supported and works.
  *
- *   L3 = MemoryFogBurstOverlay (existing component, golden ring on cell reveal).
+ * Spike validation (_spike/v346-fog-options/spike-A-z14.png etc):
+ *   - 10-point GPS path + turf.buffer 25m → 1 polygon ring with ~60 vertices
+ *   - z14/z12: VISIBLE — clean ribbon shape, basemap roads readable
+ *   - z9: corridor becomes sub-pixel (~1m wide on screen) — acceptable
  *
- * Why this works where v325-v330 didn't:
- *   - v325-v330 fed Mapbox a polygon with hundreds of inner rings (one per H3
- *     cell or per row-run). Mapbox geojson-vt+earcut has a known unfixed bug
- *     with such polygons (mapbox-gl-js#7023, 7+ yrs open). At zoom-out the
- *     polygon developed self-intersections and rendering collapsed.
- *   - v331 keeps geometry SIMPLE (38 verts total) and offloads per-cell
- *     detail to a raster image — which has zero of those bugs.
- *
- * Spike validation:
- *   - F1: confirmed old polygon path breaks at z≤12 on PC mapbox-gl-js
- *   - F3v2: PNG with blur+halo renders cleanly z=8..18
- *   - F4: world-minus-circle (38 verts) renders cleanly z=2..18
+ * Avoids the v325-v330 earcut bug (mapbox-gl-js#7023):
+ *   - v325-v330 used N independent small holes (one per H3 cell) → triggers
+ *     earcut tessellation failure at zoom-out
+ *   - v346 uses ONE buffered corridor per hike (or unioned for all hikes) →
+ *     ~60-200 vertices total → well below earcut threshold
  *
  * Triggers:
- *   - cellVersion bump (new cell visited) → debounced 500ms → re-render mask
- *   - User position changes substantially (>500m from previous mask center) →
- *     re-render mask with new center
+ *   - userCenter changes → recompute fog if needed (geometry doesn't depend
+ *     on viewport; pan/zoom doesn't trigger rebuild)
+ *   - useMemoryStore.points changes (new hike saved) → recompute corridors
+ *
+ * No Skia, no PNG, no transport, no http URL, no file://, no data: URI.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
-import { useH3VisitedStore } from '../store/useH3VisitedStore';
+import { useMemoryStore } from '../store/useMemoryStore';
 import { getMapbox } from '../services/mapboxAdapter';
-import {
-  worldRectMinusCircle,
-} from '../services/fogFloorGeometry';
-import { renderMask, scheduleStaleCleanup, clearAllMasks, RenderResult } from '../services/fogMaskRenderer';
 import { log } from '../../../services/appLog';
+import bufferTurf from '@turf/buffer';
+import differenceTurf from '@turf/difference';
+import simplifyTurf from '@turf/simplify';
+import { lineString, polygon, multiLineString, featureCollection, multiPolygon } from '@turf/helpers';
+import type { Feature, Polygon, MultiPolygon, LineString, MultiLineString } from 'geojson';
 
 interface Props {
-  /** Current map center (camera target). Drives L1 hole anchor + L2 bbox center. */
+  /** Current map center. Reserved for future use (e.g. recompute on big pan). */
   userCenter?: { lat: number; lng: number } | null;
 }
 
-// v333 final: NO L1 hole — L1 fog covers the entire world.
-//
-// Earlier v333 iterations tried FLOOR_RADIUS_M = {2800, 100, 3000, 4500}
-// — every non-zero value produces a circular "bright" hole visible on
-// zoom-out (the v32x "5.6km bright circle" bug). The complaint was the
-// hole itself, not its size.
-//
-// v333 architecture: L1 = solid world fog (no hole). L2 raster mask
-// punches transparent cells only where the user actually walked. User's
-// current position is shown by the independent UserLocation blue dot
-// in MemoryMap — there is no need for a fog hole as a position anchor.
-//
-// At radius=0 fogFloorGeometry.worldRectMinusCircle returns the solid
-// world rect (no inner ring), so no degenerate polygon, no hole edge.
-const FLOOR_RADIUS_M = 0;
-// v340: rolled back v339 enlargement (24km bbox was too big — caused
-// iOS jetsam SIGKILL on boot due to ~920k cell entries in Skia paint).
-// Back to 3km half-side / 6km square. Hikes outside this radius from
-// user GPS won't render — that's the next problem to solve, but a
-// crashing app is worse than partial render.
-const MASK_PADDING_M = 3000;
-const FLOOR_SEGMENTS = 32;
-const MASK_RECENTER_DISTANCE_M = 500; // re-render if user has moved this far
+// Corridor width in meters around each GPS line — this is the "trail width"
+// visible to the user. 25m feels generous on hiking-zoom (z14-z16) without
+// looking absurdly wide on city streets.
+const CORRIDOR_WIDTH_M = 25;
+// Douglas-Peucker simplification tolerance — 5m smooths jitter without
+// distorting visible path shape.
+const SIMPLIFY_TOLERANCE_DEG = 5 / 111320;
+// Max GPS points per hike before chunking (keeps turf.buffer cost bounded).
+const MAX_POINTS_PER_HIKE = 2000;
+// Recompute the fog geometry at most once per N ms (the points store is
+// append-only during hike, but we only re-render after each save).
+const RECOMPUTE_DEBOUNCE_MS = 500;
 
-// Monotonic revision counter — avoids Date.now() collisions on rapid bumps
-// (reviewer #1 BLOCKER fix)
-let revisionCounter = 0;
-
-// Debounce window for cell bumps. Initial reveal bulk-imports 1281 cells in
-// one cellVersion bump, but later GPS walks can produce ~1 bump per 5-20s.
-const RENDER_DEBOUNCE_MS = 500;
-
-// One-time startup cleanup of stale mask files.
-let startupCleanupDone = false;
-
-function distanceMeters(
-  lat1: number, lng1: number, lat2: number, lng2: number,
-): number {
-  const M_PER_DEG_LAT = 111320;
-  const cosLat = Math.cos(((lat1 + lat2) / 2 * Math.PI) / 180);
-  const dy = (lat2 - lat1) * M_PER_DEG_LAT;
-  const dx = (lng2 - lng1) * M_PER_DEG_LAT * Math.max(cosLat, 1e-6);
-  return Math.sqrt(dx * dx + dy * dy);
+/**
+ * Group GPS points into hike segments. A new segment starts when there is
+ * a > 5 minute gap between consecutive points (likely a new hike).
+ *
+ * Note: Cairn's useMemoryStore.points is a flat array across all hikes; we
+ * synthesise hike boundaries from timestamp gaps. In future, when sessions
+ * store explicit hike IDs, we can group by hikeId instead.
+ */
+function segmentByGap(points: Array<{ lat: number; lng: number; ts: number }>): Array<Array<[number, number]>> {
+  if (points.length === 0) return [];
+  const HIKE_GAP_MS = 5 * 60 * 1000;
+  const segments: Array<Array<[number, number]>> = [];
+  let current: Array<[number, number]> = [];
+  let prevTs = points[0].ts;
+  for (const p of points) {
+    if (p.ts - prevTs > HIKE_GAP_MS && current.length > 0) {
+      segments.push(current);
+      current = [];
+    }
+    current.push([p.lng, p.lat]);
+    prevTs = p.ts;
+  }
+  if (current.length > 0) segments.push(current);
+  return segments;
 }
 
-export function FogLayer({ userCenter }: Props) {
+/**
+ * Build the fog GeoJSON: world rect with corridor-shaped holes.
+ */
+function buildFogShape(
+  points: Array<{ lat: number; lng: number; ts: number }>,
+): Feature<Polygon | MultiPolygon> | null {
+  // World rect — slightly inset from poles to avoid Mapbox projection edge cases.
+  const world = polygon([[
+    [-180, -85],
+    [180, -85],
+    [180, 85],
+    [-180, 85],
+    [-180, -85],
+  ]]);
+
+  if (points.length === 0) {
+    // No hikes yet — return solid fog with no holes.
+    return world;
+  }
+
+  const segments = segmentByGap(points);
+  // Each segment becomes a buffered polygon. Single-point segments are
+  // skipped (no line geometry possible).
+  const corridors: Array<Feature<Polygon | MultiPolygon>> = [];
+  for (const seg of segments) {
+    if (seg.length < 2) continue;
+    // Cap at MAX_POINTS_PER_HIKE per segment (defensive — turf.buffer cost
+    // scales with vertex count).
+    const capped = seg.length > MAX_POINTS_PER_HIKE
+      ? seg.filter((_, i) => i % Math.ceil(seg.length / MAX_POINTS_PER_HIKE) === 0)
+      : seg;
+    try {
+      let line = lineString(capped);
+      // Simplify before buffering — fewer vertices = faster buffer + cleaner shape.
+      try {
+        line = simplifyTurf(line, { tolerance: SIMPLIFY_TOLERANCE_DEG, highQuality: false });
+      } catch {/* simplify can fail on duplicate points; use unsimplified */}
+      const buf = bufferTurf(line, CORRIDOR_WIDTH_M, { units: 'meters', steps: 4 });
+      if (buf && buf.geometry) {
+        corridors.push(buf as Feature<Polygon | MultiPolygon>);
+      }
+    } catch (e: any) {
+      log('fog.buffer_failed', { seg_len: seg.length, err: String(e?.message ?? e).slice(0, 100) });
+    }
+  }
+
+  if (corridors.length === 0) return world;
+
+  // Combine all corridor polygons into one MultiPolygon for a single
+  // turf.difference call (more reliable than chained per-corridor difference).
+  const allCoords: any[] = [];
+  for (const c of corridors) {
+    if (c.geometry.type === 'Polygon') {
+      allCoords.push(c.geometry.coordinates);
+    } else if (c.geometry.type === 'MultiPolygon') {
+      for (const poly of c.geometry.coordinates) allCoords.push(poly);
+    }
+  }
+  if (allCoords.length === 0) return world;
+
+  const combinedCorridors = multiPolygon(allCoords);
+
+  try {
+    const fc = featureCollection([world as any, combinedCorridors as any]);
+    const fog = differenceTurf(fc as any);
+    if (fog && fog.geometry) {
+      return fog as Feature<Polygon | MultiPolygon>;
+    }
+  } catch (e: any) {
+    log('fog.difference_failed', { n_corridors: corridors.length, err: String(e?.message ?? e).slice(0, 100) });
+  }
+  // Fallback: solid world fog (no holes) — never blank screen.
+  return world;
+}
+
+export function FogLayer({ userCenter: _userCenter }: Props) {
   const Mapbox = getMapbox();
   const useH3Fog = useMemorySettingsStore((s) => s.useH3Fog);
-  const cellVersion = useH3VisitedStore((s) => s.cellVersion);
+  // v346: drive geometry from useMemoryStore.points (real GPS path),
+  // not from useH3VisitedStore.cells (hex mosaic — wrong abstraction).
+  const points = useMemoryStore((s) => s.points);
+  const geometryVersion = useMemoryStore((s) => s.geometryVersion);
 
-  // Track current mask + last mask-center for re-center decisions
-  const [mask, setMask] = useState<RenderResult | null>(null);
-  const lastCenterRef = useRef<{ lat: number; lng: number } | null>(null);
-  const renderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previousUriRef = useRef<string | null>(null);
-  // Reviewer #1 MAJOR fixes: isMounted guard + pending cleanup timers
+  const [fogShape, setFogShape] = useState<Feature<Polygon | MultiPolygon> | null>(null);
+  const recomputeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
-  const cleanupTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
-  // L1 geometry — depends on userCenter only (not cellVersion).
-  const fogFloor = useMemo(() => {
-    if (!userCenter) return null;
-    return worldRectMinusCircle(
-      userCenter.lat,
-      userCenter.lng,
-      FLOOR_RADIUS_M,
-      FLOOR_SEGMENTS,
-    );
-  }, [userCenter?.lat, userCenter?.lng]);
-
-  // Startup: clear stale mask files once per app session
+  // Debounced recompute of fog geometry. Cheap when points haven't changed,
+  // but turf.buffer + difference can be 50-300ms with 1000+ vertices.
   useEffect(() => {
-    if (startupCleanupDone) return;
-    startupCleanupDone = true;
-    void clearAllMasks();
-  }, []);
-
-  // Debounced renderer
-  const scheduleRender = useCallback(
-    (lat: number, lng: number, reason: string) => {
-      const hadPending = !!renderTimerRef.current;
-      if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
-      // v342 diag: trace timer scheduling so we can tell whether timer
-      // gets cleared before fire vs fires but log gets dropped.
-      log('v342.fog_schedule', { reason, had_pending: hadPending });
-      renderTimerRef.current = setTimeout(async () => {
-        // v342 diag: confirm timer actually fired (before any other
-        // log call — earliest possible signal).
-        log('v342.fog_timer_fired', { reason, is_mounted: isMountedRef.current });
-        if (!isMountedRef.current) return;
-        const cells = useH3VisitedStore.getState().cells;
-        log('fog.mask_render_start', {
-          reason,
-          cell_count: cells.size,
-          center_lat: lat,
-          center_lng: lng,
-        });
-        try {
-          // Monotonic revision avoids Date.now() collision (reviewer #1 fix)
-          const rev = ++revisionCounter;
-          const result = await renderMask({
-            centerLat: lat,
-            centerLng: lng,
-            paddingMeters: MASK_PADDING_M,
-            cells,
-            revision: rev,
-          });
-          // isMounted guard (reviewer #1 MAJOR fix)
-          if (!isMountedRef.current) return;
-          // schedule old file cleanup with cancellable timer
-          const previousUri = previousUriRef.current;
-          previousUriRef.current = result.uri;
-          setMask(result);
-          lastCenterRef.current = { lat, lng };
-          if (previousUri) {
-            const timer = setTimeout(() => {
-              cleanupTimersRef.current.delete(timer);
-              scheduleStaleCleanup(previousUri, 0);
-            }, 800);
-            cleanupTimersRef.current.add(timer);
-          }
-        } catch (e: any) {
-          // 'render_cancelled' is benign; everything else is a real error
-          if (e?.message !== 'render_cancelled') {
-            log('fog.mask_render_error', { error: String(e?.message ?? e) });
-          }
-        }
-      }, RENDER_DEBOUNCE_MS);
-    },
-    [],
-  );
-
-  // Trigger: cellVersion bump OR substantial pan
-  useEffect(() => {
-    // v338 diagnostic: log cell store state on every cellVersion bump
-    // to debug "Memory all-black after pull" — verify cells.size is
-    // actually growing after pullMemoryFromServer fires.
-    const cellsSize = useH3VisitedStore.getState().cells.size;
-    log('v338.foglayer_cellversion_tick', {
-      cellVersion,
-      cells_size: cellsSize,
-      has_center: !!userCenter,
-      useH3Fog,
-    });
-    if (!useH3Fog) return;
-    if (!userCenter) return;
-
-    const last = lastCenterRef.current;
-    if (!last) {
-      scheduleRender(userCenter.lat, userCenter.lng, 'first');
+    if (!useH3Fog) {
+      setFogShape(null);
       return;
     }
+    if (recomputeTimerRef.current) clearTimeout(recomputeTimerRef.current);
+    recomputeTimerRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      const t0 = Date.now();
+      const shape = buildFogShape(points);
+      if (!isMountedRef.current) return;
+      log('fog.shape_built', {
+        n_points: points.length,
+        build_ms: Date.now() - t0,
+        has_holes: shape !== null && shape.geometry.type === 'Polygon'
+          && (shape.geometry.coordinates as any[]).length > 1,
+      });
+      setFogShape(shape);
+    }, RECOMPUTE_DEBOUNCE_MS);
+  }, [points, geometryVersion, useH3Fog]);
 
-    const dist = distanceMeters(last.lat, last.lng, userCenter.lat, userCenter.lng);
-    const shouldRecenter = dist > MASK_RECENTER_DISTANCE_M;
-
-    if (shouldRecenter) {
-      scheduleRender(userCenter.lat, userCenter.lng, 'recenter');
-    } else {
-      // Re-render in place to reflect new cells
-      scheduleRender(last.lat, last.lng, 'cell_version');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cellVersion, userCenter?.lat, userCenter?.lng, useH3Fog]);
-
-  // Cleanup timer on unmount
   useEffect(() => {
     isMountedRef.current = true;
-    // v342 diag: track mount events so we can spot unwanted remount
-    // (which would clear timer + reset state).
-    log('v342.fog_mounted', {});
     return () => {
-      // v342 diag: unmount = timer killer suspect #1
-      log('v342.fog_unmount', { had_pending_timer: !!renderTimerRef.current });
       isMountedRef.current = false;
-      if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
-      // Cancel all pending stale-cleanup timers (reviewer #1 fix)
-      for (const t of cleanupTimersRef.current) clearTimeout(t);
-      cleanupTimersRef.current.clear();
+      if (recomputeTimerRef.current) clearTimeout(recomputeTimerRef.current);
     };
   }, []);
 
-  // Reviewer #1 MAJOR fix: iOS may purge cacheDirectory while app is in
-  // background. On resume, re-render the mask in place so we have a fresh
-  // file regardless of whether the old one survived.
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active' && lastCenterRef.current && useH3Fog) {
-        scheduleRender(lastCenterRef.current.lat, lastCenterRef.current.lng, 'app_resume');
-      }
-    });
-    return () => sub.remove();
-  }, [scheduleRender, useH3Fog]);
-
   if (!useH3Fog) return null;
-  // v333: dropped `|| !fogFloor` guard. With FLOOR_RADIUS_M=0 the
-  // fogFloor is intentionally null (no L1 hole), but the L2 raster
-  // mask still needs to render. Use a conditional ShapeSource render
-  // for L1 below instead of killing the whole component.
   if (!Mapbox.available) return null;
+  if (!fogShape) return null;
 
-  const { ShapeSource, FillLayer, ImageSource, RasterLayer } = Mapbox as any;
+  const { ShapeSource, FillLayer } = Mapbox as any;
 
   return (
-    <>
-      {/* L1 — global fog floor (world rect minus circle around user).
-          v333: hole radius exactly matches L2 raster bbox half-side so
-          L2 sits perfectly inside L1's transparent window — no L1 fog
-          ever shows through L2's visited-cell punches.
-          v344 DIAGNOSTIC: fillOpacity dropped 1 → 0 to fully unmask L2
-          raster. Combined with magenta debug color in fogMaskRenderer,
-          this proves whether Mapbox iOS actually loaded the data: URI.
-          Revert to fillOpacity:1 in v345. */}
-      {fogFloor && (
-        <ShapeSource id="memory-fog-floor-src" shape={fogFloor}>
-          <FillLayer
-            id="memory-fog-floor"
-            style={{
-              fillColor: 'rgba(58, 42, 24, 0.66)',
-              fillOpacity: 0,
-              fillAntialias: true,
-            }}
-          />
-        </ShapeSource>
-      )}
-
-      {/* L2 — local Skia raster (per-cell precision + cream halo) */}
-      {mask && ImageSource && RasterLayer && (
-        <ImageSource
-          id="memory-fog-mask-src"
-          url={mask.uri}
-          coordinates={[
-            mask.corners.nw,
-            mask.corners.ne,
-            mask.corners.se,
-            mask.corners.sw,
-          ]}
-        >
-          <RasterLayer
-            id="memory-fog-mask"
-            style={{
-              rasterOpacity: 1,
-              // v332: drop opacity transition. With it on (300ms), zooming
-              // triggered Mapbox to re-sample the raster and the fade-in
-              // showed as a one-shot "loading" flicker. We don't need
-              // cross-fade between mask revisions either — the mask
-              // changes are GPS-walk-driven, slow enough that no
-              // transition is needed.
-              rasterOpacityTransition: { duration: 0, delay: 0 },
-              // Disable Mapbox's between-tile fade for raster sources.
-              // (We're a single-image raster, not a tiled raster, but the
-              // prop applies anyway and prevents zoom-step fades.)
-              rasterFadeDuration: 0,
-            }}
-          />
-        </ImageSource>
-      )}
-    </>
+    <ShapeSource id="memory-fog-src" shape={fogShape}>
+      <FillLayer
+        id="memory-fog"
+        style={{
+          // Slightly deeper than the previous sepia (#3A2A18 at 0.66) per
+          // user feedback "颜色可以更深一点". This produces a clear "I haven't
+          // been here" feel while still letting basemap roads show through
+          // the corridor cutouts.
+          fillColor: 'rgba(40, 30, 18, 0.80)',
+          fillOpacity: 1,
+          // Disable AA to avoid 1px seams along hole edges (mapbox-gl-js#7023
+          // workaround per Simon Sat 2019).
+          fillAntialias: false,
+        }}
+      />
+    </ShapeSource>
   );
 }

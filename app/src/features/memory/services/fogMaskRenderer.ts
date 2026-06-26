@@ -272,16 +272,14 @@ export async function renderMask(input: RenderInput): Promise<RenderResult> {
 
   // Helper: setColor accepting an rgb hex + alpha float, more reliable than
   // CSS rgba string parsing (which is inconsistent across Skia versions).
-  // v344 DIAGNOSTIC: replace sepia fog with magenta so we can tell whether
-  // Mapbox iOS actually loaded the data:image/png;base64 URI. After v343
-  // shipped data URI fix, telemetry confirms Skia rendered cells_drawn=387
-  // PNGs successfully, but no Mapbox-side load confirmation exists.
-  // If user sees magenta anywhere on the map after this OTA → data URI is
-  // loaded by Mapbox (v343 architecture works). If user sees no magenta →
-  // data URI is silently rejected by Mapbox iOS, we need a different
-  // transport (e.g. local HTTP server via EAS build).
-  // Revert to sepia in v345 once confirmed.
-  const fogColor = Skia.Color('#FF00FF');
+  // v344 used #FF00FF magenta as a diagnostic to prove whether Mapbox iOS
+  // actually loaded the data:image/png;base64 URI. User confirmed: magenta
+  // completely absent from map → Mapbox iOS silently rejects data: URI
+  // (same class of failure as file://, rnmapbox/maps#1457). v345 reverts
+  // to sepia. The fix for fog-mask visibility is in v346: route the PNG
+  // through https://api.yiiling.cn (our own backend) so Mapbox uses its
+  // standard HTTPS URL loader (proven path).
+  const fogColor = Skia.Color('#3A2A18');
   const creamColor = Skia.Color(`#${CREAM_R.toString(16).padStart(2, '0')}${CREAM_G.toString(16).padStart(2, '0')}${CREAM_B.toString(16).padStart(2, '0')}`);
 
   // Step 1: fill entire surface with fog color

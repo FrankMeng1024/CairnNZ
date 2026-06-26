@@ -10,6 +10,16 @@
  * before addSession, it flushes the session's clean trackPoints into
  * useH3VisitedStore so the map reflects what the user actually walked.
  *
+ * v346: ALSO writes points into useMemoryStore. Pre-v346 this path only
+ * wrote H3 cells, leaving useMemoryStore.points untouched. Two consequences:
+ *   (1) FogLayer v346 reads useMemoryStore.points (real GPS path, buffered
+ *       into corridor polygons via turf.buffer) — without this write, hike
+ *       paths never appear on the Memory map even though km² counter goes up.
+ *   (2) useMemoryStore.points is the only store synced to server via
+ *       memorySync.pushPendingPoints; pre-v346 hike points were lost on
+ *       reinstall / new device (server only knew about points from the
+ *       ForegroundUnlockManager watcher path, not from hike save).
+ *
  * Implementation notes:
  *   - Uses trackPoints (clean, drift-gated), NOT trackPointsRaw — the
  *     raw audit track includes stationary drift that would paint
@@ -23,8 +33,12 @@
  *     Memory tab and see the fog hole grow visibly, contradicting the
  *     "+X km²" banner. Sync write keeps banner number and fog hole
  *     consistent. ~5ms at 600 points is acceptable at session end.
+ *   - Points also written via recordPoint (which has 12.5m CULL inside).
+ *     For a typical 600-point hike that culls down to ~50-150 distinct
+ *     points after distance filtering.
  */
 import { useH3VisitedStore, H3_STORE_RESOLUTION } from '../store/useH3VisitedStore';
+import { useMemoryStore } from '../store/useMemoryStore';
 import { latLngToCell } from '../lib/h3Pure';
 import type { TrackPoint } from '../../../store/useSessionStore';
 
@@ -57,6 +71,18 @@ export function flushHikingToMemory(
       .filter((p) => isFinite(p.lat) && isFinite(p.lng))
       .map((p) => ({ lat: p.lat, lng: p.lng, ts: p.t })),
   );
+
+  // v346: ALSO record points into useMemoryStore so FogLayer can build
+  // the buffered corridor geometry, AND memorySync.pushPendingPoints
+  // can sync them to the server.
+  // recordPoint has internal 12.5m CULL that dedups near-stationary
+  // samples — for a 600-point hike this typically reduces to 50-150
+  // distinct points (one every ~12-20m of movement).
+  const memoryStore = useMemoryStore.getState();
+  for (const p of trackPoints) {
+    if (!isFinite(p.lat) || !isFinite(p.lng)) continue;
+    memoryStore.recordPoint(p.lat, p.lng, p.t);
+  }
 
   return { newCells };
 }
