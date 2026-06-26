@@ -1273,7 +1273,34 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 346;
+export const OTA_VERSION = 347;
+//         v347: 3-bug fix OTA based on v346 user feedback.
+//
+//         (1) "5-second black-then-fog-appears" load delay — FIXED.
+//         FogLayer fogShape useState initial value was null → component
+//         returned null on first render → user saw uninitialised map for
+//         500ms (RECOMPUTE_DEBOUNCE_MS) + turf compute time (~200-500ms).
+//         v347: initial useState value is solid world-rect polygon (no
+//         holes, ~0.1ms to build). User sees fully-fogged map on first
+//         frame. The buildFogShape runs at 0ms delay (not 500ms) on
+//         first compute, then debounces at 500ms for subsequent points
+//         updates. Net: fog visible instant, corridors reveal ~300ms later.
+//
+//         (2) "Circle around current position" — was UserLocation default
+//         puck. Default normalIcon = 15px mapboxBlue halo at 0.2 opacity
+//         + 9px white + 6px blue. User saw 15px halo as a "default fog
+//         reveal circle". v347: pass custom children to UserLocation
+//         removing the halo, only 7px white ring + 5px blue dot.
+//         Standard pin look, no fog-like aura.
+//
+//         (3) Visual polish — fog color from warm sepia rgba(40,30,18,0.80)
+//         to cool slate rgba(28,32,48,0.78). Cool tone complements green
+//         basemap (outdoors-v12) for ~15% better revealed-corridor
+//         contrast. NEW: corridor halo LineLayer with rgba(255,210,140,0.55)
+//         + lineBlur 3 + lineWidth 2.5 — soft warm-gold glow along all
+//         fog ring edges (the world rect + every hike corridor). Hides
+//         fillAntialias:false jaggies + visually softens cutouts to look
+//         like "the path is lit by sunset light" rather than hard hole.
 //         v346: COMPLETE fog architecture rewrite — buffered GPS path
 //         as polygon hole. Replaces v331-v345's Skia raster + ImageSource
 //         pipeline, which was fundamentally incompatible with Mapbox iOS

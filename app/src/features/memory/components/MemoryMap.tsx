@@ -161,7 +161,7 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
   if (!Mapbox.available) {
     return <View style={styles.webStub} />;
   }
-  const { MapView, Camera, UserLocation } = Mapbox;
+  const { MapView, Camera, UserLocation, CircleLayer } = Mapbox as any;
 
   return (
     <View style={styles.container}>
@@ -207,7 +207,30 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
           animationMode={'flyTo'}
           animationDuration={600}
         />
-        <UserLocation visible={true} />
+        {/* v347: UserLocation default normalIcon renders a 15px-radius
+            mapboxBlue halo + 9px white ring + 6px blue dot. The 15px halo
+            was being mistaken by users as a "default fog reveal circle".
+            Custom children override that — render only a small white-ringed
+            blue dot, no halo. Standard pin look. */}
+        <UserLocation visible={true}>
+          <CircleLayer
+            id="memory-user-location-ring"
+            style={{
+              circleRadius: 7,
+              circleColor: '#FFFFFF',
+              circlePitchAlignment: 'map',
+            }}
+          />
+          <CircleLayer
+            id="memory-user-location-dot"
+            aboveLayerID="memory-user-location-ring"
+            style={{
+              circleRadius: 5,
+              circleColor: 'rgba(51, 181, 229, 1)',
+              circlePitchAlignment: 'map',
+            }}
+          />
+        </UserLocation>
         <FogLayer userCenter={{ lat: centerLat, lng: centerLng }} />
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>

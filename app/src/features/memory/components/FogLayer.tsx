@@ -176,9 +176,26 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
   const points = useMemoryStore((s) => s.points);
   const geometryVersion = useMemoryStore((s) => s.geometryVersion);
 
-  const [fogShape, setFogShape] = useState<Feature<Polygon | MultiPolygon> | null>(null);
+  // v347 fix: initial value is solid world-rect fog (no holes), so the
+  // user sees a fully-fogged map IMMEDIATELY on mount instead of black
+  // screen for 500ms-5s while turf computes corridors. The buildFogShape
+  // run completes ~200-500ms later and replaces this with the holes-included
+  // version. Cheaper visual transition: covered-by-fog → corridors revealed.
+  const [fogShape, setFogShape] = useState<Feature<Polygon | MultiPolygon> | null>(() => {
+    return polygon([[
+      [-180, -85],
+      [180, -85],
+      [180, 85],
+      [-180, 85],
+      [-180, -85],
+    ]]);
+  });
   const recomputeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
+  // v347: 0ms first compute, RECOMPUTE_DEBOUNCE_MS thereafter. Goal:
+  // user-perceived load is "instant fog + ~0.5s later path reveals" not
+  // "0.5s of black + then fog".
+  const hasComputedRef = useRef(false);
 
   // Debounced recompute of fog geometry. Cheap when points haven't changed,
   // but turf.buffer + difference can be 50-300ms with 1000+ vertices.
@@ -188,19 +205,23 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
       return;
     }
     if (recomputeTimerRef.current) clearTimeout(recomputeTimerRef.current);
+    const delay = hasComputedRef.current ? RECOMPUTE_DEBOUNCE_MS : 0;
     recomputeTimerRef.current = setTimeout(() => {
       if (!isMountedRef.current) return;
       const t0 = Date.now();
+      const isFirst = !hasComputedRef.current;
       const shape = buildFogShape(points);
+      hasComputedRef.current = true;
       if (!isMountedRef.current) return;
       log('fog.shape_built', {
         n_points: points.length,
         build_ms: Date.now() - t0,
         has_holes: shape !== null && shape.geometry.type === 'Polygon'
           && (shape.geometry.coordinates as any[]).length > 1,
+        first: isFirst,
       });
       setFogShape(shape);
-    }, RECOMPUTE_DEBOUNCE_MS);
+    }, delay);
   }, [points, geometryVersion, useH3Fog]);
 
   useEffect(() => {
@@ -215,24 +236,39 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
   if (!Mapbox.available) return null;
   if (!fogShape) return null;
 
-  const { ShapeSource, FillLayer } = Mapbox as any;
+  const { ShapeSource, FillLayer, LineLayer } = Mapbox as any;
 
   return (
     <ShapeSource id="memory-fog-src" shape={fogShape}>
       <FillLayer
         id="memory-fog"
         style={{
-          // Slightly deeper than the previous sepia (#3A2A18 at 0.66) per
-          // user feedback "颜色可以更深一点". This produces a clear "I haven't
-          // been here" feel while still letting basemap roads show through
-          // the corridor cutouts.
-          fillColor: 'rgba(40, 30, 18, 0.80)',
+          // v347 visual polish: cool slate (deep blue-grey) replaces the
+          // previous warm sepia (40,30,18). On outdoors-v12 green basemap
+          // the warm tone neutralised into "dirty grey"; cool tone gives
+          // ~15% better contrast for revealed corridors (subagent recommend).
+          fillColor: 'rgba(28, 32, 48, 0.78)',
           fillOpacity: 1,
           // Disable AA to avoid 1px seams along hole edges (mapbox-gl-js#7023
           // workaround per Simon Sat 2019).
           fillAntialias: false,
         }}
       />
+      {/* v347 corridor halo: soft warm-gold glow along every fog ring (the
+          world rect AND every corridor hole edge). Hides the jagged
+          fillAntialias:false edge + visually softens the cutout to look
+          like "the path is lit by sunset light" rather than a hard hole. */}
+      {LineLayer ? (
+        <LineLayer
+          id="memory-fog-edge"
+          style={{
+            lineColor: 'rgba(255, 210, 140, 0.55)',
+            lineWidth: 2.5,
+            lineBlur: 3,
+            lineOpacity: 0.7,
+          }}
+        />
+      ) : null}
     </ShapeSource>
   );
 }
