@@ -17,12 +17,15 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Modal } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Modal, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
+import { useSessionStore } from '../../../store/useSessionStore';
+import { flushHikingToMemory } from '../services/flushHikingToMemory';
 import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap } from '../components/MemoryMap';
@@ -83,6 +86,58 @@ export function MemoryScreen() {
   const [recenterToken, setRecenterToken] = useState(0);
   const [mountKey, setMountKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
+
+  // v334 DEV-ONLY one-shot migration button. Per user request
+  // (2026-06-26): "write a one-shot test that calls the hiking-save
+  // memory conversion method on existing activities so I can see if
+  // the conversion is right and what the map looks like. NOT a feature
+  // — only for test data."
+  // Lifecycle: shown until user taps. Tapping cleans too-short sessions
+  // (< 100m OR < 5 trackPoints), then flushes remaining sessions into
+  // Memory via the same flushHikingToMemory used by stopTracking. After
+  // success, AsyncStorage flag hides the button forever. Real production
+  // doesn't run this — every new hike write Memory in its own save
+  // transaction, no migration needed.
+  const [migrationDone, setMigrationDone] = useState<boolean | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem('cairn:v334:dev_migration_done').then((v) => {
+      setMigrationDone(v === '1');
+    });
+  }, []);
+  const runDevMigration = async () => {
+    const allSessions = useSessionStore.getState().sessions;
+    let cleaned = 0;
+    let flushedSessions = 0;
+    let totalNewCells = 0;
+    // Step 1: delete too-short sessions
+    const deleteSession = useSessionStore.getState().deleteSession;
+    const tooShort = allSessions.filter(
+      (s) => (s.distanceM ?? 0) < 100 || (s.trackPoints?.length ?? 0) < 5
+    );
+    for (const s of tooShort) {
+      deleteSession(s.id);
+      cleaned++;
+    }
+    // Step 2: flush remaining sessions
+    const remaining = useSessionStore.getState().sessions;
+    for (const s of remaining) {
+      if (!s.trackPoints || s.trackPoints.length < 2) continue;
+      try {
+        const { newCells } = flushHikingToMemory(s.trackPoints);
+        totalNewCells += newCells;
+        flushedSessions++;
+      } catch (e) {
+        log('v334.dev_migration_session_failed', { id: s.id, err: String(e) });
+      }
+    }
+    log('v334.dev_migration_done', { cleaned, flushedSessions, totalNewCells });
+    await AsyncStorage.setItem('cairn:v334:dev_migration_done', '1');
+    setMigrationDone(true);
+    Alert.alert(
+      'Migration done',
+      `Cleaned ${cleaned} too-short sessions\nFlushed ${flushedSessions} sessions\n+${totalNewCells} cells (~${(totalNewCells * 0.00215).toFixed(2)} km²)`,
+    );
+  };
   // v333: Recenter button is hidden until the user actively pans/zooms.
   // User intent (decision E): "an icon like Hiking — only appears after I
   // move the map, so I can get back to my current location."
@@ -404,9 +459,22 @@ export function MemoryScreen() {
             onRecenter();
             setMapMoved(false);
           }}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
-          <Icon name="Navigation" size={20} color={MemoryColors.sepiaDeep} strokeWidth={2.2} />
+          {/* v334: Target icon to match HikingScreen.tsx recenter pill
+              (decision E: "and an icon like Hiking, ..."). */}
+          <Icon name="Target" size={22} color={Colors.primary} strokeWidth={2} />
+        </TouchableOpacity>
+      )}
+
+      {/* v334 DEV-ONLY one-shot button. Disappears after first tap. */}
+      {migrationDone === false && (
+        <TouchableOpacity
+          style={styles.devMigrateBtn}
+          onPress={runDevMigration}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.devMigrateText}>🧪 Migrate test activities → Memory</Text>
         </TouchableOpacity>
       )}
 
@@ -465,6 +533,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 }, elevation: 4,
     borderWidth: 1, borderColor: '#e8dfc8',
   },
+  // v334 DEV-ONLY one-shot button for test-data migration.
+  devMigrateBtn: {
+    position: 'absolute',
+    left: 16, bottom: 170,
+    paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 22,
+    borderWidth: 1, borderColor: '#e8dfc8',
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 }, elevation: 4,
+  },
+  devMigrateText: { fontSize: 13, color: MemoryColors.sepiaDeep, fontWeight: '600' },
   hintBackdrop: {
     flex: 1, backgroundColor: 'rgba(20,20,20,0.55)',
     alignItems: 'center', justifyContent: 'center', padding: 28,

@@ -179,13 +179,10 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
           数据从 useMemoryStore.recentUnlocks 来,native fog 7/1 上线后保留
           本组件不变(burst 永远纯 JS 视觉层)。 */}
       <MemoryFogBurstOverlay mapViewRef={mapViewRef} />
-      {/* v302 N6: recenter pill — shown after user pans away. Same
-          interaction as HikingScreen.tsx Target button. */}
-      {hasPannedAway && (
-        <TouchableOpacity style={styles.recenterBtn} onPress={onRecenter} activeOpacity={0.85}>
-          <Icon name="Target" size={22} color={Colors.primary} strokeWidth={2} />
-        </TouchableOpacity>
-      )}
+      {/* v334: removed MemoryMap's internal Recenter pill — MemoryScreen
+          now owns this UI (decision E: "icon like Hiking, only after I
+          move the map, taps it to go back"). MemoryMap stays as a pure
+          map renderer; pan/zoom signals bubble up via onMapMoved prop. */}
     </View>
   );
 }
