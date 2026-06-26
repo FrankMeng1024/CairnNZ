@@ -1273,7 +1273,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 341;
+export const OTA_VERSION = 342;
+//         v342: pure-diagnostic OTA — no business logic changes. Adds
+//         3 telemetry beacons in FogLayer to definitively locate why
+//         the second fog mask render timer never fires after bulkImport
+//         completes (462 cells confirmed in cells store, cellVersion
+//         tick observed at telemetry, but `fog.mask_render_start
+//         reason='cell_version'` never appears).
+//         v342.fog_schedule    — every scheduleRender call + had_pending
+//         v342.fog_timer_fired — earliest possible signal that setTimeout
+//                                 callback actually executed
+//         v342.fog_mounted/unmount — track unmount as a timer-killer
+//                                 suspect (FogLayer cleanup clears timer)
+//         Next OTA (v343) acts on whatever this round's data points at.
 //         v341: disable h3LoadGate — legacy AsyncStorage flag from
 //         v305-v322 emscripten WASM crash era permanently blocked
 //         bulkImport. h3Pure (v323+) cannot fail, so the gate is

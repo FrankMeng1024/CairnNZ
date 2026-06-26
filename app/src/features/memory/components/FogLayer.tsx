@@ -131,8 +131,15 @@ export function FogLayer({ userCenter }: Props) {
   // Debounced renderer
   const scheduleRender = useCallback(
     (lat: number, lng: number, reason: string) => {
+      const hadPending = !!renderTimerRef.current;
       if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
+      // v342 diag: trace timer scheduling so we can tell whether timer
+      // gets cleared before fire vs fires but log gets dropped.
+      log('v342.fog_schedule', { reason, had_pending: hadPending });
       renderTimerRef.current = setTimeout(async () => {
+        // v342 diag: confirm timer actually fired (before any other
+        // log call — earliest possible signal).
+        log('v342.fog_timer_fired', { reason, is_mounted: isMountedRef.current });
         if (!isMountedRef.current) return;
         const cells = useH3VisitedStore.getState().cells;
         log('fog.mask_render_start', {
@@ -212,7 +219,12 @@ export function FogLayer({ userCenter }: Props) {
   // Cleanup timer on unmount
   useEffect(() => {
     isMountedRef.current = true;
+    // v342 diag: track mount events so we can spot unwanted remount
+    // (which would clear timer + reset state).
+    log('v342.fog_mounted', {});
     return () => {
+      // v342 diag: unmount = timer killer suspect #1
+      log('v342.fog_unmount', { had_pending_timer: !!renderTimerRef.current });
       isMountedRef.current = false;
       if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
       // Cancel all pending stale-cleanup timers (reviewer #1 fix)
