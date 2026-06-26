@@ -17,7 +17,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Modal, Alert } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -26,6 +26,7 @@ import { useMemoryStore } from '../store/useMemoryStore';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useSessionStore } from '../../../store/useSessionStore';
 import { flushHikingToMemory } from '../services/flushHikingToMemory';
+import { fetchSessionDetail } from '../../../services/sessionService';
 import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap } from '../components/MemoryMap';
@@ -87,57 +88,56 @@ export function MemoryScreen() {
   const [mountKey, setMountKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
 
-  // v334 DEV-ONLY one-shot migration button. Per user request
-  // (2026-06-26): "write a one-shot test that calls the hiking-save
-  // memory conversion method on existing activities so I can see if
-  // the conversion is right and what the map looks like. NOT a feature
-  // — only for test data."
-  // Lifecycle: shown until user taps. Tapping cleans too-short sessions
-  // (< 100m OR < 5 trackPoints), then flushes remaining sessions into
-  // Memory via the same flushHikingToMemory used by stopTracking. After
-  // success, AsyncStorage flag hides the button forever. Real production
-  // doesn't run this — every new hike write Memory in its own save
-  // transaction, no migration needed.
-  const [migrationDone, setMigrationDone] = useState<boolean | null>(null);
+  // v336: silent one-shot migration. On first Memory tab open after
+  // upgrade, fetch full route_points for every server-backed session
+  // and run the SAME flushHikingToMemory used by stopTracking, so
+  // existing activities show up on the Memory map. Production users
+  // who completed hikes after v333 already have their cells in store
+  // (the save transaction wrote them). This boot-time job is for
+  // pre-v333 sessions that never got the transaction. AsyncStorage
+  // flag prevents re-running. NO UI — runs silently in background.
   useEffect(() => {
-    AsyncStorage.getItem('cairn:v334:dev_migration_done').then((v) => {
-      setMigrationDone(v === '1');
-    });
-  }, []);
-  const runDevMigration = async () => {
-    const allSessions = useSessionStore.getState().sessions;
-    let cleaned = 0;
-    let flushedSessions = 0;
-    let totalNewCells = 0;
-    // Step 1: delete too-short sessions
-    const deleteSession = useSessionStore.getState().deleteSession;
-    const tooShort = allSessions.filter(
-      (s) => (s.distanceM ?? 0) < 100 || (s.trackPoints?.length ?? 0) < 5
-    );
-    for (const s of tooShort) {
-      deleteSession(s.id);
-      cleaned++;
-    }
-    // Step 2: flush remaining sessions
-    const remaining = useSessionStore.getState().sessions;
-    for (const s of remaining) {
-      if (!s.trackPoints || s.trackPoints.length < 2) continue;
+    let cancelled = false;
+    (async () => {
       try {
-        const { newCells } = flushHikingToMemory(s.trackPoints);
-        totalNewCells += newCells;
-        flushedSessions++;
+        const flag = await AsyncStorage.getItem('cairn:v336:silent_migration_done');
+        if (flag === '1') return;
+        const sessions = useSessionStore.getState().sessions;
+        if (sessions.length === 0) return;  // nothing to migrate yet, retry next mount
+        let flushed = 0;
+        let totalCells = 0;
+        for (const s of sessions) {
+          if (cancelled) return;
+          if (s.remoteId == null) continue;  // local-only, will be flushed by stopTracking
+          try {
+            const detail = await fetchSessionDetail(s.remoteId);
+            if (!detail?.route_points || !Array.isArray(detail.route_points)) continue;
+            if (detail.route_points.length < 2) continue;
+            // route_points from server: [{ lat, lng, alt?, t?, timestamp? }]
+            // flushHikingToMemory expects TrackPoint[] with { lat, lng, t }
+            const trackPoints = detail.route_points
+              .filter((p: any) => typeof p.lat === 'number' && typeof p.lng === 'number')
+              .map((p: any) => ({
+                lat: p.lat,
+                lng: p.lng,
+                t: typeof p.t === 'number' ? p.t : (p.timestamp ? Date.parse(p.timestamp) : Date.now()),
+              }));
+            if (trackPoints.length < 2) continue;
+            const { newCells } = flushHikingToMemory(trackPoints);
+            totalCells += newCells;
+            flushed++;
+          } catch (e) {
+            log('v336.silent_migration_session_failed', { id: s.id, err: String(e) });
+          }
+        }
+        await AsyncStorage.setItem('cairn:v336:silent_migration_done', '1');
+        log('v336.silent_migration_done', { flushed, totalCells });
       } catch (e) {
-        log('v334.dev_migration_session_failed', { id: s.id, err: String(e) });
+        log('v336.silent_migration_outer_error', { err: String(e) });
       }
-    }
-    log('v334.dev_migration_done', { cleaned, flushedSessions, totalNewCells });
-    await AsyncStorage.setItem('cairn:v334:dev_migration_done', '1');
-    setMigrationDone(true);
-    Alert.alert(
-      'Migration done',
-      `Cleaned ${cleaned} too-short sessions\nFlushed ${flushedSessions} sessions\n+${totalNewCells} cells (~${(totalNewCells * 0.00215).toFixed(2)} km²)`,
-    );
-  };
+    })();
+    return () => { cancelled = true; };
+  }, []);
   // v333: Recenter button is hidden until the user actively pans/zooms.
   // User intent (decision E): "an icon like Hiking — only appears after I
   // move the map, so I can get back to my current location."
@@ -467,17 +467,6 @@ export function MemoryScreen() {
         </TouchableOpacity>
       )}
 
-      {/* v334 DEV-ONLY one-shot button. Disappears after first tap. */}
-      {migrationDone === false && (
-        <TouchableOpacity
-          style={styles.devMigrateBtn}
-          onPress={runDevMigration}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.devMigrateText}>🧪 Migrate test activities → Memory</Text>
-        </TouchableOpacity>
-      )}
-
       <MemorySummaryCard />
 
       <Modal visible={showHint} transparent animationType="fade" onRequestClose={dismissHint}>
@@ -533,18 +522,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 }, elevation: 4,
     borderWidth: 1, borderColor: '#e8dfc8',
   },
-  // v334 DEV-ONLY one-shot button for test-data migration.
-  devMigrateBtn: {
-    position: 'absolute',
-    left: 16, bottom: 170,
-    paddingHorizontal: 14, paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    borderRadius: 22,
-    borderWidth: 1, borderColor: '#e8dfc8',
-    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 }, elevation: 4,
-  },
-  devMigrateText: { fontSize: 13, color: MemoryColors.sepiaDeep, fontWeight: '600' },
   hintBackdrop: {
     flex: 1, backgroundColor: 'rgba(20,20,20,0.55)',
     alignItems: 'center', justifyContent: 'center', padding: 28,

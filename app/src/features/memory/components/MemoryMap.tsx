@@ -98,8 +98,17 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
       );
       const panned = dist > 50;
       setHasPannedAway((prev) => (prev === panned ? prev : panned));
+      // v336: bubble pan-away signal to parent (MemoryScreen) so the
+      // Recenter pill shows up. Earlier versions relied on rnmapbox's
+      // onRegionDidChange + isUserInteraction, but that event was not
+      // firing reliably in our setup. onMapIdle fires every time the
+      // camera settles, and we already compute the anchor-distance here
+      // — just forward the same boolean upstream.
+      if (panned && onMapMoved) {
+        onMapMoved();
+      }
     }, 100);
-  }, []);
+  }, [onMapMoved]);
 
   // v302 N6: when the recenter button bumps the token, re-anchor on
   // the current GPS coord and reset the pan-away flag. The Camera is
@@ -147,15 +156,6 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
         compassEnabled={false}
         scaleBarEnabled={false}
         onMapIdle={onMapSettle}
-        onRegionDidChange={(e: { properties?: { isUserInteraction?: boolean } }) => {
-          // v333: only fire onMapMoved for user-initiated pan/zoom,
-          // not when our own Camera setCamera() animation moves the map.
-          // rnmapbox/maps RegionPayload exposes `isUserInteraction` on
-          // feature.properties (Eng #7 REV7-2 confirmed via source).
-          if (onMapMoved && e?.properties?.isUserInteraction) {
-            onMapMoved();
-          }
-        }}
       >
         <Camera
           ref={cameraRef}
