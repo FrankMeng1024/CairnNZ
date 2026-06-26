@@ -24,13 +24,9 @@ import * as Location from 'expo-location';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
-import { useSessionStore } from '../../../store/useSessionStore';
-import { flushHikingToMemory } from '../services/flushHikingToMemory';
-import { fetchSessionDetail } from '../../../services/sessionService';
 import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap } from '../components/MemoryMap';
-import { MemorySummaryCard } from '../components/MemorySummaryCard';
 import { BackButton } from '../../../components/BackButton';
 import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
@@ -87,57 +83,6 @@ export function MemoryScreen() {
   const [recenterToken, setRecenterToken] = useState(0);
   const [mountKey, setMountKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
-
-  // v336: silent one-shot migration. On first Memory tab open after
-  // upgrade, fetch full route_points for every server-backed session
-  // and run the SAME flushHikingToMemory used by stopTracking, so
-  // existing activities show up on the Memory map. Production users
-  // who completed hikes after v333 already have their cells in store
-  // (the save transaction wrote them). This boot-time job is for
-  // pre-v333 sessions that never got the transaction. AsyncStorage
-  // flag prevents re-running. NO UI — runs silently in background.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const flag = await AsyncStorage.getItem('cairn:v336:silent_migration_done');
-        if (flag === '1') return;
-        const sessions = useSessionStore.getState().sessions;
-        if (sessions.length === 0) return;  // nothing to migrate yet, retry next mount
-        let flushed = 0;
-        let totalCells = 0;
-        for (const s of sessions) {
-          if (cancelled) return;
-          if (s.remoteId == null) continue;  // local-only, will be flushed by stopTracking
-          try {
-            const detail = await fetchSessionDetail(s.remoteId);
-            if (!detail?.route_points || !Array.isArray(detail.route_points)) continue;
-            if (detail.route_points.length < 2) continue;
-            // route_points from server: [{ lat, lng, alt?, t?, timestamp? }]
-            // flushHikingToMemory expects TrackPoint[] with { lat, lng, t }
-            const trackPoints = detail.route_points
-              .filter((p: any) => typeof p.lat === 'number' && typeof p.lng === 'number')
-              .map((p: any) => ({
-                lat: p.lat,
-                lng: p.lng,
-                t: typeof p.t === 'number' ? p.t : (p.timestamp ? Date.parse(p.timestamp) : Date.now()),
-              }));
-            if (trackPoints.length < 2) continue;
-            const { newCells } = flushHikingToMemory(trackPoints);
-            totalCells += newCells;
-            flushed++;
-          } catch (e) {
-            log('v336.silent_migration_session_failed', { id: s.id, err: String(e) });
-          }
-        }
-        await AsyncStorage.setItem('cairn:v336:silent_migration_done', '1');
-        log('v336.silent_migration_done', { flushed, totalCells });
-      } catch (e) {
-        log('v336.silent_migration_outer_error', { err: String(e) });
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
   // v333: Recenter button is hidden until the user actively pans/zooms.
   // User intent (decision E): "an icon like Hiking — only appears after I
   // move the map, so I can get back to my current location."
@@ -466,8 +411,6 @@ export function MemoryScreen() {
           <Icon name="Target" size={22} color={Colors.primary} strokeWidth={2} />
         </TouchableOpacity>
       )}
-
-      <MemorySummaryCard />
 
       <Modal visible={showHint} transparent animationType="fade" onRequestClose={dismissHint}>
         <View style={styles.hintBackdrop}>

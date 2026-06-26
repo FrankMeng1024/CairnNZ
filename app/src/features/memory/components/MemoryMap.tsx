@@ -12,7 +12,7 @@
  * doesn't follow centerCoordinate prop updates after first mount.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
@@ -110,13 +110,21 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
     }, 100);
   }, [onMapMoved]);
 
-  // v302 N6: when the recenter button bumps the token, re-anchor on
-  // the current GPS coord and reset the pan-away flag. The Camera is
-  // also remounted (via cameraKey) so it flies to the new center.
+  // v336: when recenterToken bumps, fly the camera back to the current
+  // GPS coord WITHOUT remounting Camera (the old cameraKey strategy
+  // caused a one-frame fog reset on every tap). setCamera on the same
+  // Camera ref is animated and produces no remount flash. Reset the
+  // anchor so the pan-detection (onMapSettle) doesn't immediately fire
+  // panned=true again.
   useEffect(() => {
     if (recenterToken > 0) {
       anchorRef.current = { lat: centerLat, lng: centerLng };
       setHasPannedAway(false);
+      cameraRef.current?.setCamera?.({
+        centerCoordinate: [centerLng, centerLat],
+        zoomLevel: INITIAL_ZOOM,
+        animationDuration: 600,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recenterToken]);
@@ -133,14 +141,11 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
   }, [centerLat, centerLng]);
 
   // Camera key remount strategy — bumping recenterToken alone triggers
-  // a fresh flyTo to the current center. Center prop changes flow into
-  // Camera without remount (native @rnmapbox doesn't follow prop
-  // changes well, but the recenter button bumps the token to compensate).
-  const cameraKey = useMemo(() => `cam-${recenterToken}`, [recenterToken]);
-
-  useEffect(() => {
-    log('memory.map_camera_key', { cameraKey, recenterToken });
-  }, [cameraKey, recenterToken]);
+  // v336: Camera no longer remounts on recenter (was: bumping
+  // cameraKey via recenterToken caused a 1-frame fog reset = flash).
+  // We now drive recenter via cameraRef.setCamera in the recenterToken
+  // useEffect above. The Camera stays mounted for the whole MemoryMap
+  // lifetime.
 
   if (!Mapbox.available) {
     return <View style={styles.webStub} />;
@@ -159,7 +164,6 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
       >
         <Camera
           ref={cameraRef}
-          key={cameraKey}
           // v302 N6: defaultSettings (instead of centerCoordinate prop)
           // so a centerLat/Lng prop change (e.g. watcher push) does NOT
           // auto-fly back to the user's current position. The user
