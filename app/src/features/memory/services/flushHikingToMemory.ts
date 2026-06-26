@@ -41,18 +41,76 @@ import { useH3VisitedStore, H3_STORE_RESOLUTION } from '../store/useH3VisitedSto
 import { useMemoryStore } from '../store/useMemoryStore';
 import { latLngToCell } from '../lib/h3Pure';
 import type { TrackPoint } from '../../../store/useSessionStore';
+import simplifyTurf from '@turf/simplify';
+import { lineString } from '@turf/helpers';
+
+/**
+ * v352: Ramer-Douglas-Peucker simplify of clean trackPoints before
+ * memory write. useTrackingStore already applies 3 point-level gates
+ * (teleport / accuracy>25m / stationary), but the 25m accuracy threshold
+ * still admits GPS multi-path in dense urban canyons → polyline visibly
+ * goes "two directions" at folded sections. RDP simplify at 10m
+ * tolerance compresses these folds into the actual main-line path.
+ *
+ * Why 10m: matches the perceptual scale users care about (a 5m bump in
+ * the trail doesn't matter for fog reveal; a 25m parallel street looks
+ * wrong). Lower would preserve drift; higher would skip real corners.
+ *
+ * Why here (not in useTrackingStore.addTrackPoint): activity feature
+ * (route view, distance calculation) needs raw clean points. Only the
+ * memory fog reveal benefits from path-level simplification. Filtering
+ * at the memory boundary keeps activity data unchanged.
+ */
+function rdpSimplifyTrackPoints(trackPoints: TrackPoint[]): TrackPoint[] {
+  if (trackPoints.length < 3) return trackPoints;
+  const valid = trackPoints.filter((p) => isFinite(p.lat) && isFinite(p.lng));
+  if (valid.length < 3) return valid;
+  try {
+    const line = lineString(valid.map((p) => [p.lng, p.lat]));
+    // tolerance in degrees ≈ 10m at 31° lat (Shanghai)
+    const SIMPLIFY_TOLERANCE_DEG = 10 / 111320;
+    const simplified = simplifyTurf(line, { tolerance: SIMPLIFY_TOLERANCE_DEG, highQuality: false });
+    if (!simplified?.geometry?.coordinates) return valid;
+    const simplifiedCoords = simplified.geometry.coordinates as [number, number][];
+    // Map simplified coords back to TrackPoint (carry first matching ts).
+    // We use sequential index match because simplifyTurf preserves order
+    // and uses original coordinate references when possible.
+    const out: TrackPoint[] = [];
+    let srcIdx = 0;
+    for (const [lng, lat] of simplifiedCoords) {
+      // Find the next valid point that matches lat/lng exactly.
+      while (srcIdx < valid.length && (valid[srcIdx].lat !== lat || valid[srcIdx].lng !== lng)) {
+        srcIdx++;
+      }
+      if (srcIdx >= valid.length) break;
+      out.push(valid[srcIdx]);
+      srcIdx++;
+    }
+    // Safety: if mapping fails (e.g. RDP rounds coords), fall back to original.
+    if (out.length < 2) return valid;
+    return out;
+  } catch {
+    return valid;
+  }
+}
 
 export function flushHikingToMemory(
   trackPoints: TrackPoint[],
 ): { newCells: number } {
   if (!trackPoints || trackPoints.length === 0) return { newCells: 0 };
 
+  // v352: simplify with 10m tolerance first. trackPoints are already
+  // accuracy-filtered (≤25m) and stationary-suppressed by useTrackingStore,
+  // but GPS multi-path / parallel-street drift still creates visible
+  // 'two-direction' artifacts in fog reveal at lat 25-40m off main path.
+  const simplifiedPoints = rdpSimplifyTrackPoints(trackPoints);
+
   // Pre-compute newCells via set-diff. Mirror bulkImportSync's NaN +
   // latLngToCell try/catch guards so the count matches what actually
   // ends up in the store.
   const currentCells = useH3VisitedStore.getState().cells;
   const incomingCellIds = new Set<string>();
-  for (const p of trackPoints) {
+  for (const p of simplifiedPoints) {
     if (!isFinite(p.lat) || !isFinite(p.lng)) continue;
     try {
       incomingCellIds.add(latLngToCell(p.lat, p.lng, H3_STORE_RESOLUTION));
@@ -67,7 +125,7 @@ export function flushHikingToMemory(
 
   // Map TrackPoint.t -> { ts } expected by H3 store API.
   useH3VisitedStore.getState().bulkImportSync(
-    trackPoints
+    simplifiedPoints
       .filter((p) => isFinite(p.lat) && isFinite(p.lng))
       .map((p) => ({ lat: p.lat, lng: p.lng, ts: p.t })),
   );
@@ -79,7 +137,7 @@ export function flushHikingToMemory(
   // samples — for a 600-point hike this typically reduces to 50-150
   // distinct points (one every ~12-20m of movement).
   const memoryStore = useMemoryStore.getState();
-  for (const p of trackPoints) {
+  for (const p of simplifiedPoints) {
     if (!isFinite(p.lat) || !isFinite(p.lng)) continue;
     memoryStore.recordPoint(p.lat, p.lng, p.t);
   }

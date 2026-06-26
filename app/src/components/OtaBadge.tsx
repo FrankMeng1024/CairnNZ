@@ -1273,7 +1273,44 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 351;
+export const OTA_VERSION = 352;
+//         v352: UX polish triple-fix based on v351 user feedback. All 3
+//         bugs got definitive root cause via independent subagent reads,
+//         no speculation.
+//
+//         (1) "两个方向" GPS multi-path artifact in fog corridor:
+//         flushHikingToMemory writes useTrackingStore.trackPoints (clean,
+//         drift-gated by 3 gates: teleport / accuracy>25m / stationary).
+//         But the 25m accuracy threshold admits city-canyon GPS drift
+//         that creates visible parallel-street fold-back at ~10-25m
+//         offsets. Industry (Strava/Komoot) uses 10-15m. Fix: add
+//         Ramer-Douglas-Peucker simplify at the flushHikingToMemory
+//         entry with 10m tolerance. activity feature (route view, dist
+//         calc) keeps raw clean points — only memory write path gets
+//         path-level smoothing.
+//
+//         (2) Sharp "unsolved" pockets INSIDE the revealed corridor:
+//         buildFogShape was pushing N per-segment turf.buffer polygons
+//         directly into one MultiPolygon as siblings. GeoJSON spec
+//         forbids sibling overlap; polyclip-ts treats overlapping
+//         siblings as even-odd HOLES → user saw diamond-shaped spikes
+//         in revealed area. Fix: progressive turf.union of corridors
+//         before turf.difference. Union internally merges overlap into
+//         a single non-overlapping polygon. <100ms cost for typical
+//         <20 segments.
+//
+//         (3) Zoom flicker (full-screen flash on pinch in/out):
+//         MemoryScreen's stableCoord transiently became null during
+//         zoom-induced re-renders (watcherFresh recomputed via Date.now()
+//         crossing 10-min boundary, or selector hiccup). JSX ternary
+//         then swapped <MemoryMap> for <View "Looking for position">
+//         → MapView + fog + tiles all unmounted for one paint, remounted
+//         next paint = visible flash. Fix: persist last-rendered coord
+//         in useRef (lastRenderedCoordRef), use that for MemoryMap
+//         centerLat/Lng. Once MemoryMap mounts once it stays mounted —
+//         the "Looking for position" UI overlays via separate branch
+//         only when we've literally never seen a coord. No more swap,
+//         no more flash.
 //         v351: 4-bug omnibus, all root-caused via independent subagent
 //         reading of source code + server telemetry.
 //

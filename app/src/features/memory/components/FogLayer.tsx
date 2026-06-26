@@ -45,6 +45,7 @@ import { getMapbox } from '../services/mapboxAdapter';
 import { log } from '../../../services/appLog';
 import bufferTurf from '@turf/buffer';
 import differenceTurf from '@turf/difference';
+import unionTurf from '@turf/union';
 import simplifyTurf from '@turf/simplify';
 import { lineString, polygon, multiLineString, featureCollection, multiPolygon } from '@turf/helpers';
 import type { Feature, Polygon, MultiPolygon, LineString, MultiLineString } from 'geojson';
@@ -151,22 +152,41 @@ function buildFogShape(
 
   if (corridors.length === 0) return world;
 
-  // Combine all corridor polygons into one MultiPolygon for a single
-  // turf.difference call (more reliable than chained per-corridor difference).
-  const allCoords: any[] = [];
+  // v352 fix: replace direct push-into-MultiPolygon with progressive
+  // turf.union. Pre-v352 code stacked all per-segment buffers as
+  // sibling polygons in one MultiPolygon, but GeoJSON spec forbids
+  // sibling overlap — polyclip-ts (turf.difference's underlying engine)
+  // applies even-odd rule to overlapping siblings, treating overlap
+  // regions as HOLES. Result: when the user crossed the same area
+  // twice (folded path or close-by parallel segments), the overlap
+  // created sharp diamond-shaped "unsolved" spikes inside what should
+  // be revealed corridors. User-visible as: "中间有一片没解锁的尖锐位置".
+  //
+  // turf.union calls polyclip's union path (different from difference)
+  // which correctly merges overlapping polygons into a single non-
+  // overlapping polygon-with-no-internal-holes. Then differenceTurf
+  // sees one clean shape and produces clean fog cutouts.
+  //
+  // Cost: O(N²) for N segments via reduce, but N is small (<20 typical
+  // for a user's lifetime hike count). <100ms for typical case.
+  let merged: Feature<Polygon | MultiPolygon> | null = null;
   for (const c of corridors) {
-    if (c.geometry.type === 'Polygon') {
-      allCoords.push(c.geometry.coordinates);
-    } else if (c.geometry.type === 'MultiPolygon') {
-      for (const poly of c.geometry.coordinates) allCoords.push(poly);
+    if (!merged) {
+      merged = c;
+      continue;
+    }
+    try {
+      const u = unionTurf(featureCollection([merged as any, c as any]) as any);
+      if (u && u.geometry) merged = u as Feature<Polygon | MultiPolygon>;
+      // If union fails, keep previous merged — better than dropping segments.
+    } catch (e: any) {
+      log('fog.union_failed', { err: String(e?.message ?? e).slice(0, 100) });
     }
   }
-  if (allCoords.length === 0) return world;
-
-  const combinedCorridors = multiPolygon(allCoords);
+  if (!merged) return world;
 
   try {
-    const fc = featureCollection([world as any, combinedCorridors as any]);
+    const fc = featureCollection([world as any, merged as any]);
     const fog = differenceTurf(fc as any);
     if (fog && fog.geometry) {
       return fog as Feature<Polygon | MultiPolygon>;

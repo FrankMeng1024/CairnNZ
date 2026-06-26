@@ -131,6 +131,18 @@ export function MemoryScreen() {
   const lastRefetchAtRef = useRef(0);
   // S3 fix: separate debounce for the EXPENSIVE map remount.
   const lastMountAtRef = useRef(0);
+  // v352 zoom-flicker fix: persist the last coord that MemoryMap was
+  // mounted with, across re-renders. If stableCoord transiently
+  // becomes null (selector hiccup during zoom-induced re-render),
+  // we render MemoryMap with this last-known value instead of
+  // tearing it down to a "Looking for position" overlay. Map never
+  // unmounts after first successful render → no full-screen flash
+  // during pinch/zoom.
+  const lastRenderedCoordRef = useRef<{ lat: number; lng: number } | null>(null);
+  if (stableCoord) {
+    lastRenderedCoordRef.current = { lat: stableCoord.lat, lng: stableCoord.lng };
+  }
+  const persistentCoord = lastRenderedCoordRef.current;
 
   useEffect(() => {
     if (!settingsHydrated) return;
@@ -352,10 +364,19 @@ export function MemoryScreen() {
         <BackButton variant="pill" onPress={() => nav.goBack()} />
       </View>
 
-      {stableCoord ? (
+      {/* v352 zoom-flicker fix: render MemoryMap with persistentCoord
+          (last-rendered coord, kept in ref across re-renders) instead of
+          stableCoord directly. Once MemoryMap has mounted once with
+          valid coords, it stays mounted forever — transient nulls in
+          stableCoord during zoom-induced re-renders no longer tear down
+          MapView. The "Looking for position" / permission / error UI
+          renders as an OVERLAY only when we've never seen any coord
+          (i.e. persistentCoord is null too). Eliminates the full-screen
+          flash that v346-v351 had on every zoom gesture. */}
+      {persistentCoord ? (
         <MemoryMap
-          centerLat={stableCoord.lat}
-          centerLng={stableCoord.lng}
+          centerLat={persistentCoord.lat}
+          centerLng={persistentCoord.lng}
           recenterToken={recenterToken}
           onMapMoved={() => setMapMoved(true)}
           key={`map-${mountKey}`}
@@ -397,7 +418,7 @@ export function MemoryScreen() {
         </View>
       )}
 
-      {stableCoord && mapMoved && (
+      {persistentCoord && mapMoved && (
         <TouchableOpacity
           style={styles.recenterBtn}
           onPress={() => {
