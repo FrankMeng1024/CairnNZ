@@ -41,12 +41,24 @@ interface Props {
    * moved the map (decision E).
    */
   onMapMoved?: () => void;
+  /**
+   * v359: fired when Mapbox `onDidFinishRenderingMapFully` triggers —
+   * the basemap is fully painted. Used by MemoryScreen as one of two
+   * gates for hiding the loading overlay.
+   */
+  onMapFullyReady?: () => void;
+  /**
+   * v359: fired when FogLayer first computes a fog shape with holes
+   * (corridor cutouts from GPS data). Used by MemoryScreen as the
+   * second gate for hiding the loading overlay.
+   */
+  onFogReady?: () => void;
 }
 
 const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12';
 const INITIAL_ZOOM = 16.5;
 
-export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved }: Props) {
+export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved, onMapFullyReady, onFogReady }: Props) {
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
   const mapViewRef = useRef<any>(null);
@@ -120,6 +132,12 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
   // back on immediately after the user taps it.
   const suppressPanDetectUntilRef = useRef<number>(0);
 
+  // v359: fire onMapFullyReady once on the first
+  // onDidFinishRenderingMapFully event. Subsequent fires (zoom/pan
+  // settle) are ignored — the loading overlay only cares about the
+  // first paint.
+  const mapFullyReadyFiredRef = useRef(false);
+
   // v336: when recenterToken bumps, fly the camera back to the current
   // GPS coord WITHOUT remounting Camera (the old cameraKey strategy
   // caused a one-frame fog reset on every tap). setCamera on the same
@@ -187,7 +205,14 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
         // We log without ctx — these are points, not measurements.
         onWillStartLoadingMap={() => { log('v357.mapbox_willStartLoadingMap', {}); }}
         onDidFinishLoadingMap={() => { log('v357.mapbox_didFinishLoadingMap', {}); }}
-        onDidFinishRenderingMapFully={() => { log('v357.mapbox_didFinishRenderingMapFully', {}); }}
+        onDidFinishRenderingMapFully={() => {
+          log('v357.mapbox_didFinishRenderingMapFully', {});
+          // v359: fire onMapFullyReady once for loading overlay gate.
+          if (!mapFullyReadyFiredRef.current && onMapFullyReady) {
+            mapFullyReadyFiredRef.current = true;
+            onMapFullyReady();
+          }
+        }}
         onRegionIsChanging={(feature: any) => {
           // v340: suppress pan-detect for 1s after a programmatic
           // recenter — rnmapbox flyTo can emit isUserInteraction=true
@@ -249,7 +274,7 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
             }}
           />
         </UserLocation>
-        <FogLayer userCenter={{ lat: centerLat, lng: centerLng }} />
+        <FogLayer userCenter={{ lat: centerLat, lng: centerLng }} onFogReady={onFogReady} />
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>
       {/* v303 OTA: Skia 解锁扩散动画 overlay。在 MapView 之上 absoluteFill。

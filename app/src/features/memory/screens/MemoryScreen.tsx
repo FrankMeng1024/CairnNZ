@@ -17,7 +17,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Modal } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Modal, Animated } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -95,6 +95,69 @@ export function MemoryScreen() {
   const [recenterToken, setRecenterToken] = useState(0);
   const [mountKey, setMountKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
+
+  // v359: loading overlay state. Covers the entire MemoryMap during the
+  // 3-stage flicker window (cream → basemap → fog with holes). Fades out
+  // when BOTH (a) Mapbox onDidFinishRenderingMapFully has fired AND
+  // (b) FogLayer first builds geometry with corridor holes. 3s safety
+  // timeout forces fade-out so the user is never stuck on the overlay.
+  const [mapReady, setMapReady] = useState(false);
+  const [fogReady, setFogReady] = useState(false);
+  const overlayOpacity = useRef(new Animated.Value(1)).current;
+  const overlayHiddenRef = useRef(false);
+  const overlayFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset overlay state on each remount (mountKey bump). Without this,
+  // a tab-switch that bumps mountKey would re-show the map but never
+  // re-show the overlay because mapReady/fogReady are still true from
+  // last session.
+  useEffect(() => {
+    overlayHiddenRef.current = false;
+    setMapReady(false);
+    setFogReady(false);
+    overlayOpacity.setValue(1);
+    if (overlayFadeTimerRef.current) {
+      clearTimeout(overlayFadeTimerRef.current);
+      overlayFadeTimerRef.current = null;
+    }
+    // 3s safety timeout: even if mapReady or fogReady never fire,
+    // force the overlay to fade out so the user is never stuck.
+    overlayFadeTimerRef.current = setTimeout(() => {
+      if (!overlayHiddenRef.current) {
+        log('v359.overlay_timeout_fadeout', {});
+        overlayHiddenRef.current = true;
+        Animated.timing(overlayOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      }
+    }, 3000);
+    return () => {
+      if (overlayFadeTimerRef.current) {
+        clearTimeout(overlayFadeTimerRef.current);
+        overlayFadeTimerRef.current = null;
+      }
+    };
+  }, [mountKey, overlayOpacity]);
+
+  // Fade overlay out when BOTH gates are satisfied.
+  useEffect(() => {
+    if (overlayHiddenRef.current) return;
+    if (!mapReady || !fogReady) return;
+    overlayHiddenRef.current = true;
+    if (overlayFadeTimerRef.current) {
+      clearTimeout(overlayFadeTimerRef.current);
+      overlayFadeTimerRef.current = null;
+    }
+    log('v359.overlay_both_ready_fadeout', {});
+    Animated.timing(overlayOpacity, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [mapReady, fogReady, overlayOpacity]);
+
   // v333: Recenter button is hidden until the user actively pans/zooms.
   // User intent (decision E): "an icon like Hiking — only appears after I
   // move the map, so I can get back to my current location."
@@ -424,6 +487,14 @@ export function MemoryScreen() {
           centerLng={persistentCoord.lng}
           recenterToken={recenterToken}
           onMapMoved={() => setMapMoved(true)}
+          onMapFullyReady={() => {
+            log('v359.map_fully_ready_cb', {});
+            setMapReady(true);
+          }}
+          onFogReady={() => {
+            log('v359.fog_ready_cb', {});
+            setFogReady(true);
+          }}
           key={`map-${mountKey}`}
         />
       ) : failReason === 'permission' ? (
@@ -476,6 +547,32 @@ export function MemoryScreen() {
               (decision E: "and an icon like Hiking, ..."). */}
           <Icon name="Target" size={22} color={Colors.primary} strokeWidth={2} />
         </TouchableOpacity>
+      )}
+
+      {/* v359: loading overlay covering MemoryMap until both gates fire
+          (Mapbox onDidFinishRenderingMapFully + FogLayer first holes) or
+          3s timeout. pointerEvents="none" so user gestures pass through
+          to the back button and (once visible) the map. Only shown when
+          persistentCoord exists — the no-coord branches above render
+          their own full-screen UI and don't need this overlay. */}
+      {persistentCoord && (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.loadingOverlay, { opacity: overlayOpacity }]}
+        >
+          <View style={styles.loadingInner}>
+            <View style={styles.loadingLogoCircle}>
+              <Icon name="Mountain" size={44} color={MemoryColors.sepia} strokeWidth={1.5} />
+            </View>
+            <Text style={styles.loadingTitle}>Cairn</Text>
+            <Text style={styles.loadingSub}>正在加载你的探索记忆…</Text>
+            <ActivityIndicator
+              color={MemoryColors.sepia}
+              size="small"
+              style={styles.loadingSpinner}
+            />
+          </View>
+        </Animated.View>
       )}
 
       <Modal visible={showHint} transparent animationType="fade" onRequestClose={dismissHint}>
@@ -543,4 +640,49 @@ const styles = StyleSheet.create({
   hintBody:  { fontSize: 13, lineHeight: 19, color: Colors.textSecondary, marginBottom: 18 },
   hintBtn:   { backgroundColor: MemoryColors.sepia, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
   hintBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  // v359: loading overlay — covers the entire MemoryMap during the
+  // map+fog hydrate window. Cream background matches the screen root
+  // so the cream→overlay transition is invisible; only the overlay→map
+  // fade-out is perceived.
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: MemoryColors.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+  },
+  loadingInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  loadingLogoCircle: {
+    width: 84, height: 84, borderRadius: 42,
+    backgroundColor: '#fffaf0',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: '#e8dfc8',
+    shadowColor: '#5b4628',
+    shadowOpacity: 0.10,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+    marginBottom: 18,
+  },
+  loadingTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: MemoryColors.sepiaDeep,
+    letterSpacing: 1.2,
+    marginBottom: 6,
+  },
+  loadingSub: {
+    fontSize: 13,
+    color: MemoryColors.sepia,
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  loadingSpinner: {
+    marginTop: 4,
+  },
 });

@@ -1273,7 +1273,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 358;
+export const OTA_VERSION = 359;
+//         v359: loading overlay for Memory tab — eliminates the 3-stage
+//         flicker (cream → basemap-no-fog → fog-with-holes) by covering
+//         MemoryMap with a cream pleasant loading view that fades out
+//         when BOTH (a) Mapbox onDidFinishRenderingMapFully fires AND
+//         (b) FogLayer first computes geometry with corridor holes.
+//         3s safety timeout forces fade-out. pointerEvents="none" so
+//         user gestures (back button) pass through. Reset state on
+//         mountKey bump so tab re-entry triggers the overlay again.
+//         Files: MemoryScreen.tsx (overlay JSX + state + timeout),
+//         MemoryMap.tsx (onMapFullyReady prop wired to
+//         onDidFinishRenderingMapFully), FogLayer.tsx (onFogReady prop
+//         fired once when shape first has holes).
 //         v358: real flicker fix based on v357 diagnostic telemetry
 //         (which showed timeline T+0..123 cream → T+123..457 basemap
 //         without fog → T+457 fog with holes — the 334ms middle stage

@@ -53,6 +53,12 @@ import type { Feature, Polygon, MultiPolygon, LineString, MultiLineString } from
 interface Props {
   /** Current map center. Reserved for future use (e.g. recompute on big pan). */
   userCenter?: { lat: number; lng: number } | null;
+  /**
+   * v359: fired once when fog geometry first has holes (i.e. corridor cutouts
+   * from real GPS path data, not the empty world-rect placeholder). MemoryScreen
+   * uses this as one of two gates for hiding the loading overlay.
+   */
+  onFogReady?: () => void;
 }
 
 // Corridor width in meters around each GPS line — this is the "trail width"
@@ -230,7 +236,7 @@ function buildFogShape(
   return world;
 }
 
-export function FogLayer({ userCenter: _userCenter }: Props) {
+export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
   const Mapbox = getMapbox();
   const useH3Fog = useMemorySettingsStore((s) => s.useH3Fog);
   // v346: drive geometry from useMemoryStore.points (real GPS path),
@@ -265,11 +271,13 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
   // structurally identical to last computed fog.
   const lastSigRef = useRef<string>('');
   const lastShapeRef = useRef<Feature<Polygon | MultiPolygon> | null>(null);
-  // v357 diagnostic: count build invocations for this FogLayer instance.
+  // v359 diagnostic: count build invocations for this FogLayer instance.
   // Lets us tell apart "first build after mount" vs "rebuild on points
   // change" vs "rebuild on geometryVersion bump". Counter is per-instance,
   // i.e. it resets when FogLayer unmounts/remounts.
   const buildCountRef = useRef(0);
+  // v359: fire onFogReady ONCE when first holes appear (data hydrated).
+  const fogReadyFiredRef = useRef(false);
   // v357 diagnostic: mount/unmount of this FogLayer instance.
   useEffect(() => {
     log('v357.fog_layer_mount', { points_n: points.length });
@@ -381,6 +389,26 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
     return shape;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, geometryVersion, useH3Fog]);
+
+  // v359: detect when fogShape first contains holes (corridor cutouts from
+  // GPS data), then fire onFogReady ONCE. This is one of two gates the
+  // loading overlay in MemoryScreen waits on.
+  useEffect(() => {
+    if (fogReadyFiredRef.current) return;
+    if (!fogShape || !fogShape.geometry) return;
+    let hasHoles = false;
+    if (fogShape.geometry.type === 'Polygon') {
+      hasHoles = (fogShape.geometry.coordinates as any[]).length > 1;
+    } else if (fogShape.geometry.type === 'MultiPolygon') {
+      const polys = fogShape.geometry.coordinates as any[];
+      hasHoles = polys.length > 1 || polys.some((p) => p.length > 1);
+    }
+    if (hasHoles && onFogReady) {
+      fogReadyFiredRef.current = true;
+      log('v359.fog_ready_fired', { n_points: points.length });
+      onFogReady();
+    }
+  }, [fogShape, onFogReady, points.length]);
 
   if (!useH3Fog) return null;
   if (!Mapbox.available) return null;
