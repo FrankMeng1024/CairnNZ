@@ -154,7 +154,7 @@ export function MemoryScreen() {
           useNativeDriver: true,
         }).start();
       }
-    }, 8000); // v363: restored from v362 debug 500ms back to production 8s
+    }, 500); // v364: TEMPORARY debug — 500ms to verify banner UX. v365 will restore to 8000ms.
     return () => {
       if (overlayFadeTimerRef.current) {
         clearTimeout(overlayFadeTimerRef.current);

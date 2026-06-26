@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>F3 — Raster ImageSource clean rendering</title>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet" />
+<style>
+  body { margin: 0; font-family: -apple-system, sans-serif; }
+  #map { position: absolute; top: 0; bottom: 0; left: 0; right: 300px; }
+  #panel {
+    position: absolute; top: 0; right: 0; width: 300px; height: 100%;
+    background: #1a3a1a; color: #eee; padding: 12px; overflow: auto;
+    font-size: 13px; box-sizing: border-box;
+  }
+  #panel h2 { font-size: 15px; margin: 0 0 8px; color: #afa; }
+  #panel .row { background: #224422; padding: 6px 8px; margin: 6px 0; border-radius: 4px; }
+  #zoomLabel { font-size: 18px; color: #afa; font-weight: bold; }
+  input[type="range"] { width: 100%; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h2>F3 · Raster ImageSource</h2>
+  <div class="row">
+    Zoom: <span id="zoomLabel">14</span><br>
+    <input type="range" id="zoom" min="8" max="18" step="0.5" value="14" />
+  </div>
+  <div class="row">
+    <strong>What you should see:</strong><br>
+    Same Shanghai location as F1.<br>
+    Fog mask is a pre-rendered PNG.<br>
+    Circle reveal should be CLEAN at every zoom — no checkerboard, no banding, no z-out artifacts.
+  </div>
+  <div class="row">
+    <strong>Stats:</strong><br>
+    <span id="stats">loading…</span>
+  </div>
+</div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiNzRqdHgiLCJhIjoiY21wOWQ3d3g0MG9zYTMzcHhraDQ2N3hiYyJ9.ICN7x0SsiUafGaN09Boy8w';
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/outdoors-v12',
+  center: [121.457, 31.232],
+  zoom: 14,
+});
+window.map = map;
+
+map.on('load', async () => {
+  const vp = await (await fetch('./F3_viewport.json')).json();
+  const [nw, ne, se, sw] = vp.corners;
+
+  map.addSource('fog-raster', {
+    type: 'image',
+    url: './F3_fog_mask.png',
+    coordinates: [nw, ne, se, sw],  // top-left, top-right, bottom-right, bottom-left
+  });
+
+  map.addLayer({
+    id: 'fog-raster-layer',
+    type: 'raster',
+    source: 'fog-raster',
+    paint: { 'raster-opacity': 1 },
+  });
+
+  document.getElementById('stats').textContent =
+    `raster source: 1024×1024 PNG with 1281 cells punched out`;
+});
+
+const z = document.getElementById('zoom');
+z.addEventListener('input', () => {
+  map.setZoom(parseFloat(z.value));
+  document.getElementById('zoomLabel').textContent = z.value;
+});
+map.on('zoom', () => {
+  const cur = map.getZoom().toFixed(1);
+  z.value = cur;
+  document.getElementById('zoomLabel').textContent = cur;
+});
+</script>
+</body>
+</html>

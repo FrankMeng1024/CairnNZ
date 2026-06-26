@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>F2 Mapbox Synthetic Repro — Cairn Checkerboard Artifact</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
+  <style>
+    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    #map { position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
+    #panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      background: rgba(255,255,255,0.92);
+      padding: 12px 14px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      font-size: 13px;
+      min-width: 280px;
+    }
+    #panel label { display: block; margin: 6px 0; }
+    #panel input[type=range] { width: 160px; vertical-align: middle; }
+    #status {
+      margin-top: 8px;
+      padding: 6px 8px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+    }
+    #zval { display: inline-block; min-width: 32px; font-weight: bold; }
+    button {
+      padding: 4px 10px;
+      cursor: pointer;
+      margin: 2px;
+      border: 1px solid #888;
+      background: #fff;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <strong>F2 Mapbox Synthetic Repro</strong><br/>
+  <small>Reproduce Cairn fog checkerboard artifact (#7023 / #14316)</small>
+  <label>
+    Zoom: <span id="zval">14</span>
+    <input id="zoom" type="range" min="8" max="18" step="0.5" value="14" />
+  </label>
+  <label>
+    <input id="line" type="checkbox" /> Show LineLayer
+  </label>
+  <label>
+    <input id="aa" type="checkbox" checked /> fill-antialias
+  </label>
+  <div>
+    <button id="go8">z=8</button>
+    <button id="go10">z=10</button>
+    <button id="go14">z=14</button>
+    <button id="go18">z=18</button>
+    <button id="auto">Auto sequence</button>
+  </div>
+  <div id="status">Booting…</div>
+</div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiNzRqdHgiLCJhIjoiY21wOWQ3d3g0MG9zYTMzcHhraDQ2N3hiYyJ9.ICN7x0SsiUafGaN09Boy8w';
+
+const CENTER_LAT = 31.232;
+const CENTER_LNG = 121.457;
+const NUM_HOLES = 500;
+const SCATTER_KM = 5;
+const CELL_M = 25;
+
+// Convert meters to degrees at given latitude
+function metersToLngDeg(meters, lat) {
+  return meters / (111320 * Math.cos(lat * Math.PI / 180));
+}
+function metersToLatDeg(meters) {
+  return meters / 110540;
+}
+
+// Seeded RNG so screenshots reproducible across runs
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const rand = mulberry32(42);
+
+function buildFogGeoJSON() {
+  // Outer ring CCW (mapbox/geojson-vt convention: outer = CCW, holes = CW)
+  const outer = [
+    [-179.9, -85],
+    [ 179.9, -85],
+    [ 179.9,  85],
+    [-179.9,  85],
+    [-179.9, -85]
+  ];
+
+  const holes = [];
+  const dLat = metersToLatDeg(CELL_M);
+  const dLng = metersToLngDeg(CELL_M, CENTER_LAT);
+  const scatterLat = metersToLatDeg(SCATTER_KM * 1000);
+  const scatterLng = metersToLngDeg(SCATTER_KM * 1000, CENTER_LAT);
+
+  for (let i = 0; i < NUM_HOLES; i++) {
+    const cLat = CENTER_LAT + (rand() - 0.5) * 2 * scatterLat;
+    const cLng = CENTER_LNG + (rand() - 0.5) * 2 * scatterLng;
+    const minLat = cLat - dLat / 2;
+    const maxLat = cLat + dLat / 2;
+    const minLng = cLng - dLng / 2;
+    const maxLng = cLng + dLng / 2;
+    // CW (hole)
+    holes.push([
+      [minLng, minLat],
+      [minLng, maxLat],
+      [maxLng, maxLat],
+      [maxLng, minLat],
+      [minLng, minLat]
+    ]);
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: {
+        type: 'Polygon',
+        coordinates: [outer, ...holes]
+      },
+      properties: {}
+    }]
+  };
+}
+
+const fogData = buildFogGeoJSON();
+const statusEl = document.getElementById('status');
+function log(m) { statusEl.textContent += '\n' + m; console.log(m); }
+
+statusEl.textContent = 'Building map…';
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/light-v11',
+  center: [CENTER_LNG, CENTER_LAT],
+  zoom: 14
+});
+
+map.on('load', () => {
+  log('Map loaded. Adding fog source with ' + NUM_HOLES + ' holes…');
+
+  map.addSource('fog', {
+    type: 'geojson',
+    data: fogData
+  });
+
+  map.addLayer({
+    id: 'fog-fill',
+    type: 'fill',
+    source: 'fog',
+    paint: {
+      'fill-color': 'rgba(58,42,24,1)',
+      'fill-opacity': 0.58,
+      'fill-antialias': true
+    }
+  });
+
+  map.addLayer({
+    id: 'fog-line',
+    type: 'line',
+    source: 'fog',
+    layout: { visibility: 'none' },
+    paint: {
+      'line-color': '#f5e6c8',
+      'line-width': 2
+    }
+  });
+
+  log('Layers added. Ready.');
+  document.title = 'F2 READY';
+});
+
+map.on('error', (e) => {
+  log('ERROR: ' + (e.error?.message || JSON.stringify(e)));
+});
+
+// UI wiring
+const zoomSlider = document.getElementById('zoom');
+const zval = document.getElementById('zval');
+zoomSlider.addEventListener('input', () => {
+  const z = parseFloat(zoomSlider.value);
+  zval.textContent = z.toFixed(1);
+  map.setZoom(z);
+});
+map.on('zoom', () => {
+  const z = map.getZoom();
+  zoomSlider.value = z;
+  zval.textContent = z.toFixed(1);
+});
+
+document.getElementById('line').addEventListener('change', (e) => {
+  map.setLayoutProperty('fog-line', 'visibility', e.target.checked ? 'visible' : 'none');
+});
+document.getElementById('aa').addEventListener('change', (e) => {
+  map.setPaintProperty('fog-fill', 'fill-antialias', e.target.checked);
+});
+
+function jumpTo(z) {
+  map.jumpTo({ zoom: z });
+  log('Jumped to z=' + z);
+}
+document.getElementById('go8').onclick = () => jumpTo(8);
+document.getElementById('go10').onclick = () => jumpTo(10);
+document.getElementById('go14').onclick = () => jumpTo(14);
+document.getElementById('go18').onclick = () => jumpTo(18);
+
+async function autoSequence() {
+  log('=== AUTO SEQUENCE START ===');
+  const steps = [
+    { z: 14, label: 'baseline z=14' },
+    { z: 10, label: 'zoom out z=10' },
+    { z: 8,  label: 'zoom out z=8 (artifact expected)' },
+    { z: 14, label: 'back to z=14' },
+    { z: 18, label: 'zoom in z=18' }
+  ];
+  for (const s of steps) {
+    map.jumpTo({ zoom: s.z });
+    log(s.label);
+    document.title = 'F2 AT z=' + s.z;
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  log('=== AUTO SEQUENCE DONE ===');
+  document.title = 'F2 DONE';
+}
+document.getElementById('auto').onclick = autoSequence;
+
+// Kick off auto sequence 3s after load
+map.on('load', () => {
+  setTimeout(autoSequence, 3000);
+});
+</script>
+</body>
+</html>

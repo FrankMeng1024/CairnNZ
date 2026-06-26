@@ -1,0 +1,10 @@
+Google Maps Timeline visited places vs route history visual style different precision
+Google Maps Timeline screenshot route line vs blue dot frequent location
+Apple iOS Significant Locations vs route history map display
+Strava personal heatmap vs single activity route overlay visualization
+Strava heatmap opacity color blending activity line
+Pokemon GO Adventure Sync walked path display vs precise GPS
+Arc app timeline visited place vs movement line precision visualization
+dual precision GPS visualization UX pattern heatmap vs polyline
+Material Design data layering map precision opacity best practice
+fog of war exploration game map low precision vs high precision reveal

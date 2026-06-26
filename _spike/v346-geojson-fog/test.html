@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>v346 GeoJSON Fog Spike</title>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.css" rel="stylesheet">
+<style>
+  body { margin: 0; font-family: monospace; }
+  #map { height: 900px; width: 1200px; }
+  #status { position: fixed; top: 8px; left: 8px; background: white; padding: 6px 10px; z-index: 999; border: 1px solid #333; font-size: 14px; }
+  #controls { position: fixed; top: 8px; right: 8px; background: white; padding: 6px 10px; z-index: 999; border: 1px solid #333; }
+  button { margin: 2px; padding: 4px 8px; }
+</style>
+</head>
+<body>
+<div id="status">INIT</div>
+<div id="controls">
+  <button onclick="setZ(16)">z=16</button>
+  <button onclick="setZ(14)">z=14</button>
+  <button onclick="setZ(12)">z=12</button>
+  <button onclick="setZ(9)">z=9</button>
+</div>
+<div id="map"></div>
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiNzRqdHgiLCJhIjoiY21wOWQ3d3g0MG9zYTMzcHhraDQ2N3hiYyJ9.ICN7x0SsiUafGaN09Boy8w';
+
+const CENTER = [121.46, 31.23];
+
+// Approximate 25m hex cell at this latitude.
+// 25m / 111320m/deg ≈ 0.000225 deg lat
+// At lat 31.23, lon scales by 1/cos(31.23°) ≈ 1.169
+const CELL_R_LAT = 0.000225;
+const CELL_R_LON = 0.000225 / Math.cos(31.23 * Math.PI / 180);
+
+function hexAt(cx, cy) {
+  // pointy-top hex: vertices at angles 30, 90, 150, 210, 270, 330
+  const ring = [];
+  for (let v = 0; v < 6; v++) {
+    const a = (v * 60 + 30) * Math.PI / 180;
+    ring.push([cx + CELL_R_LON * Math.cos(a), cy + CELL_R_LAT * Math.sin(a)]);
+  }
+  ring.push(ring[0]); // close ring
+  return ring;
+}
+
+// Generate 462 hex cells in an axial layout around CENTER.
+// Axial hex grid: q,r coords -> cartesian
+// pointy-top: x = R*sqrt(3)*(q + r/2),  y = R*1.5*r
+function generateCells() {
+  const cells = [];
+  // 462 cells: try q from -12..12, r from -12..12, ring distance <=12 gives 1+6+12+...+72 = 469. Use first 462.
+  const list = [];
+  for (let q = -13; q <= 13; q++) {
+    for (let r = -13; r <= 13; r++) {
+      const s = -q - r;
+      const dist = Math.max(Math.abs(q), Math.abs(r), Math.abs(s));
+      if (dist <= 12) list.push({q, r, dist});
+    }
+  }
+  list.sort((a, b) => a.dist - b.dist);
+  const taken = list.slice(0, 462);
+  for (const {q, r} of taken) {
+    const sqrt3 = Math.sqrt(3);
+    const dx = CELL_R_LON * sqrt3 * (q + r / 2);
+    const dy = CELL_R_LAT * 1.5 * r;
+    const cx = CENTER[0] + dx;
+    const cy = CENTER[1] + dy;
+    cells.push(hexAt(cx, cy));
+  }
+  return cells;
+}
+
+function worldRect() {
+  const c = CENTER;
+  const r = 0.054; // ~6km
+  return [
+    [c[0] - r, c[1] - r],
+    [c[0] + r, c[1] - r],
+    [c[0] + r, c[1] + r],
+    [c[0] - r, c[1] + r],
+    [c[0] - r, c[1] - r],
+  ];
+}
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/outdoors-v12',
+  center: CENTER,
+  zoom: 16,
+});
+
+window.setZ = function(z) {
+  map.setZoom(z);
+  document.getElementById('status').innerText = 'ZOOM=' + z + ' (462 cells loaded)';
+  document.title = 'zoom-' + z;
+};
+
+map.on('load', () => {
+  const cells = generateCells();
+  console.log('Generated', cells.length, 'cells');
+  const fogPolygon = {
+    type: 'Feature',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [worldRect(), ...cells],
+    },
+  };
+  map.addSource('fog', { type: 'geojson', data: fogPolygon });
+  map.addLayer({
+    id: 'fog-fill',
+    type: 'fill',
+    source: 'fog',
+    paint: {
+      'fill-color': 'rgba(58,42,24,0.66)',
+      'fill-antialias': false,
+    },
+  });
+  document.title = 'LOADED-462-cells';
+  document.getElementById('status').innerText = 'LOADED 462 cells, zoom=16';
+});
+
+map.on('error', (e) => {
+  console.error('MAP ERROR:', e);
+  document.getElementById('status').innerText = 'ERROR: ' + (e.error && e.error.message);
+});
+</script>
+</body>
+</html>

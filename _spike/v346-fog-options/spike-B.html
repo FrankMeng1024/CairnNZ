@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Spike B — Fog Fill + LineLayer Mask</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+<script src="./gps-path.js"></script>
+<style>
+  body { margin:0; padding:0; }
+  #map { width:1200px; height:800px; }
+  #status { position:absolute; top:10px; left:10px; background:white; padding:6px 12px; font:14px monospace; z-index:10; }
+</style>
+</head>
+<body>
+<div id="status">loading...</div>
+<div id="map"></div>
+<script>
+mapboxgl.accessToken = window.MAPBOX_TOKEN;
+const urlParams = new URLSearchParams(window.location.search);
+const zoom = parseFloat(urlParams.get('zoom') || '14');
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/streets-v12',
+  center: [121.46, 31.23],
+  zoom: zoom,
+  fadeDuration: 0
+});
+
+map.on('load', () => {
+  try {
+    // Layer 1: fog rectangle over whole world
+    const fogPolygon = {
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [window.WORLD_RECT] }
+    };
+    map.addSource('fog', { type: 'geojson', data: fogPolygon });
+    map.addLayer({
+      id: 'fog-fill',
+      type: 'fill',
+      source: 'fog',
+      paint: {
+        'fill-color': 'rgba(58,42,24,0.75)',
+        'fill-antialias': false
+      }
+    });
+
+    // Layer 2: LineLayer over fog, color similar to basemap to "erase"
+    const pathLine = {
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: window.GPS_PATH }
+    };
+    map.addSource('path', { type: 'geojson', data: pathLine });
+    map.addLayer({
+      id: 'path-mask',
+      type: 'line',
+      source: 'path',
+      paint: {
+        // Match Mapbox streets-v12 basemap road/ground tone
+        'line-color': '#f0e6d6',
+        'line-width': 14,
+        'line-opacity': 1.0,
+        'line-blur': 2
+      }
+    });
+
+    document.getElementById('status').textContent = 'B: fog + line-mask zoom=' + zoom;
+    window.__SPIKE_READY = true;
+  } catch (e) {
+    document.getElementById('status').textContent = 'ERROR: ' + e.message;
+    window.__SPIKE_ERROR = e.message;
+  }
+});
+map.on('error', (e) => {
+  document.getElementById('status').textContent = 'MAP ERROR: ' + (e.error && e.error.message);
+});
+</script>
+</body>
+</html>

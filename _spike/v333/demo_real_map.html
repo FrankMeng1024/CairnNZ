@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Cairn v333 demo — real Shanghai basemap</title>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet" />
+<style>
+  body { margin: 0; font-family: -apple-system, sans-serif; background: #1a1a1a; color: #eee; }
+  .row { display: flex; gap: 10px; padding: 10px; height: calc(100vh - 100px); }
+  .col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .col h2 { margin: 0 0 4px; font-size: 14px; padding: 4px 8px; background: #333; }
+  .map { flex: 1; min-height: 400px; }
+  .header { padding: 10px; background: #222; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="header"><strong>Cairn v333 unlock styles</strong> — real Shanghai basemap, 6.8 km synthetic hike from Jingan to Pudong</div>
+<div class="row">
+  <div class="col"><h2>A) Corridor 50m (Strava-like)</h2><div id="mapA" class="map"></div></div>
+  <div class="col"><h2>B) Blob 25m per-point</h2><div id="mapB" class="map"></div></div>
+  <div class="col"><h2>C) Blob 25m + Cream Path 3px (proposed)</h2><div id="mapC" class="map"></div></div>
+</div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiNzRqdHgiLCJhIjoiY21wOWQ3d3g0MG9zYTMzcHhraDQ2N3hiYyJ9.ICN7x0SsiUafGaN09Boy8w';
+
+async function init() {
+  const vp = await (await fetch('./demo_bbox.json')).json();
+  const center = vp.center;
+
+  const maps = [];
+  for (const [id, png] of [
+    ['mapA', './demo_A_corridor.png'],
+    ['mapB', './demo_B_blob.png'],
+    ['mapC', './demo_C_combo.png'],
+  ]) {
+    const m = new mapboxgl.Map({
+      container: id,
+      style: 'mapbox://styles/mapbox/outdoors-v12',
+      center, zoom: 13,
+    });
+    m.on('load', () => {
+      m.addSource(`fog-${id}`, { type: 'image', url: png, coordinates: vp.corners });
+      m.addLayer({ id: `fog-${id}`, type: 'raster', source: `fog-${id}`, paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 } });
+    });
+    maps.push(m);
+  }
+  window.maps = maps;
+}
+init();
+</script>
+</body>
+</html>

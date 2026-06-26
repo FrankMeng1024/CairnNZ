@@ -1,0 +1,12 @@
+iOS Significant Location Changes API battery accuracy frequency apple documentation
+iOS CLVisit Visit Monitoring API accuracy minimum stay time background battery
+iOS CLLocationManager startMonitoringSignificantLocationChanges background app killed terminated
+Android Fused Location Provider PRIORITY_LOW_POWER battery interval accuracy meters
+Android Fused Location Provider PRIORITY_BALANCED_POWER_ACCURACY interval accuracy battery drain
+Android Activity Recognition API walking running driving battery usage
+expo-location LocationAccuracy.Lowest startLocationUpdatesAsync TaskManager background iOS Android
+expo-location significant location changes iOS background task accuracy options
+Fog of World app passive background location tracking how it works battery
+Strava passive tracking background location iOS Android battery
+react-native background-geolocation transistorsoft hybrid strategy stationary moving
+iOS CLLocationManager allowsBackgroundLocationUpdates pausesLocationUpdatesAutomatically deferredLocationUpdates

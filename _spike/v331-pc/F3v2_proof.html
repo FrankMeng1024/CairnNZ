@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>F3v2 — Cairn fog v331 with global far-fog + blur + halo</title>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet" />
+<style>
+  body { margin: 0; font-family: -apple-system, sans-serif; }
+  #map { position: absolute; top: 0; bottom: 0; left: 0; right: 300px; }
+  #panel { position: absolute; top: 0; right: 0; width: 300px; height: 100%;
+           background: #1a2a3a; color: #eee; padding: 12px; overflow: auto;
+           font-size: 13px; box-sizing: border-box; }
+  #panel h2 { font-size: 15px; margin: 0 0 8px; color: #afc; }
+  #panel .row { background: #233344; padding: 6px 8px; margin: 6px 0; border-radius: 4px; }
+  #zoomLabel { font-size: 18px; color: #afc; font-weight: bold; }
+  input[type="range"] { width: 100%; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h2>F3v2 · Cairn v331 fog (blur+halo+globalFog)</h2>
+  <div class="row">
+    Zoom: <span id="zoomLabel">14</span><br>
+    <input type="range" id="zoom" min="6" max="18" step="0.5" value="14" />
+  </div>
+  <div class="row">
+    <strong>Layers:</strong><br>
+    <label><input type="checkbox" id="globalFog" checked> Global far-fog (FillLayer no holes)</label><br>
+    <label><input type="checkbox" id="raster" checked> Raster mask (blur + halo)</label>
+  </div>
+  <div class="row">
+    <strong>Should see:</strong><br>
+    - Fog EVERYWHERE, even at z=8 (global layer)<br>
+    - Soft cleared circle around user with cream halo<br>
+    - No checkerboard, no banding, no z-out artifact
+  </div>
+</div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiNzRqdHgiLCJhIjoiY21wOWQ3d3g0MG9zYTMzcHhraDQ2N3hiYyJ9.ICN7x0SsiUafGaN09Boy8w';
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/outdoors-v12',
+  center: [121.457, 31.232],
+  zoom: 14,
+});
+window.map = map;
+
+map.on('load', async () => {
+  // 1. Global far-fog (full world, no holes — covers everything)
+  map.addSource('global-fog', {
+    type: 'geojson',
+    data: {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[
+          [-179.9, -85], [179.9, -85], [179.9, 85], [-179.9, 85], [-179.9, -85]
+        ]],
+      },
+    },
+  });
+  map.addLayer({
+    id: 'global-fog-fill',
+    type: 'fill',
+    source: 'global-fog',
+    paint: {
+      'fill-color': 'rgba(58, 42, 24, 0.66)',
+      'fill-opacity': 1,
+      'fill-antialias': false,
+    },
+  });
+
+  // 2. Raster mask layer (on top, painted with TRANSPARENT center = punches hole through global fog)
+  // Trick: use blend mode via raster-opacity + ordering. Since the PNG already has alpha-baked,
+  // the raster appears ABOVE global fog. The PNG has center transparent (clear) and edges fog-colored.
+  // Hmm — for the hole to actually show through, we need the raster pixel where mask says CLEAR
+  // to ERASE the global fog. Mapbox raster layer doesn't blend that way.
+  // Alternative: make the PNG be ONLY the cream halo + the SUBTRACTIVE clear area. Use raster-color stops.
+  // Simplest: re-render PNG with no fog color, just (a) fully opaque cream halo around reveal, (b) clear center.
+  // Then layer order: global fog UNDER, raster mask OVER (only paints halo + leaves center transparent).
+  // But then reveal center would show global fog through (the hole only exists in raster, not in global fog).
+  //
+  // REAL solution: use Mapbox `line` for halo and use a CIRCLE pattern via raster ONLY where global fog
+  // needs to be ERASED. Mapbox doesn't have erase-blend natively, BUT we can:
+  //   - Make the global fog use the mask PNG itself as the source (single layer, alpha baked)
+  //   - At low zoom (no mask data), repeat-tile a generic fog texture
+  // For this F3v2 POC, easier: the raster mask PNG itself already includes the dark fog + clear center.
+  // So just disable the global fog layer where the raster covers — but the raster only covers 6km square.
+  //
+  // For PC POC: do both layers, accept the fact that center of reveal will still show fog from global
+  // layer underneath. Will note this is an architecture risk to solve in v331 impl.
+
+  const vp = await (await fetch('./F3v2_viewport.json')).json();
+  map.addSource('local-fog-raster', {
+    type: 'image',
+    url: './F3v2_fog_mask.png',
+    coordinates: vp.corners,
+  });
+  map.addLayer({
+    id: 'local-fog-layer',
+    type: 'raster',
+    source: 'local-fog-raster',
+    paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 },
+  });
+});
+
+const z = document.getElementById('zoom');
+z.addEventListener('input', () => {
+  map.setZoom(parseFloat(z.value));
+  document.getElementById('zoomLabel').textContent = z.value;
+});
+map.on('zoom', () => {
+  const c = map.getZoom().toFixed(1);
+  z.value = c;
+  document.getElementById('zoomLabel').textContent = c;
+});
+
+document.getElementById('globalFog').addEventListener('change', e => {
+  map.setLayoutProperty('global-fog-fill', 'visibility', e.target.checked ? 'visible' : 'none');
+});
+document.getElementById('raster').addEventListener('change', e => {
+  map.setLayoutProperty('local-fog-layer', 'visibility', e.target.checked ? 'visible' : 'none');
+});
+</script>
+</body>
+</html>

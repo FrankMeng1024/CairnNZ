@@ -1,0 +1,37 @@
+{
+  "results": [
+    {
+      "label": "1 year active walker",
+      "nPoints": 100000,
+      "wallMs": 29968,
+      "tickCount": 2000,
+      "maxTickMs": 1.2328,
+      "uniqueCells": 87
+    },
+    {
+      "label": "3 years",
+      "nPoints": 300000,
+      "wallMs": 90354,
+      "tickCount": 6000,
+      "maxTickMs": 0.7351,
+      "uniqueCells": 147
+    },
+    {
+      "label": "5 years (target)",
+      "nPoints": 500000,
+      "wallMs": 151415,
+      "tickCount": 10000,
+      "maxTickMs": 1.1482,
+      "uniqueCells": 268
+    },
+    {
+      "label": "5 years extreme",
+      "nPoints": 1000000,
+      "wallMs": 304827,
+      "tickCount": 20000,
+      "maxTickMs": 0.7995,
+      "uniqueCells": 478
+    }
+  ],
+  "generatedAt": "2026-06-25T13:08:35.785Z"
+}

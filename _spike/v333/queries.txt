@@ -1,0 +1,9 @@
+HKWorkoutRoute HealthKit GPS path data iOS passive walking automatic
+HealthKit HKQuantityTypeIdentifierStepCount only steps no GPS location route
+Apple Health automatic walking workout detected GPS route recorded
+react-native-health HKWorkoutRoute getWorkoutRouteSamples expo
+Android Health Connect ExerciseRoute walking GPS path API 2025
+react-native-health-connect ExerciseRoute getRoute coverage
+Google Fit deprecation 2024 2025 Health Connect migration GPS path
+HealthKit privacy App Store review NSHealthShareUsageDescription rejection
+Apple Watch percentage users record workouts versus passive iPhone steps

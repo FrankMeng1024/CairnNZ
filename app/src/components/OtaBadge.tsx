@@ -1273,7 +1273,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 363;
+export const OTA_VERSION = 364;
+//         v364: TEMPORARY debug build — slow-banner timeout 8000ms→500ms
+//         so user can verify the v363 banner UX. v365 will restore to
+//         production 8000ms. Network on normal 4G/wifi loads MemoryMap
+//         in well under 8s (v361 fixed the map-ready event), so user
+//         couldn't see the banner at all on v363.
+//
 //         v363: slow-network banner UX redesign + revert v362 debug.
 //         User feedback on v361 banner:
 //           - Don't put it below back button — put it to the right of

@@ -1,0 +1,67 @@
+[
+  {
+    "cells_stored": 1000,
+    "cells_in_bbox": 500,
+    "cull_ms": 1.1278999991191085,
+    "decode_ms": 0.0,
+    "draw_ms": 2.343000000109896,
+    "blur_encode_ms": 98.92299999773968,
+    "total_ms": 102.39389999696868,
+    "rss_mb": 58.49609375,
+    "rss_delta_mb": 24.19140625,
+    "label": "1 week newbie",
+    "wall_s": 0.10915600000225822
+  },
+  {
+    "cells_stored": 10000,
+    "cells_in_bbox": 5000,
+    "cull_ms": 11.11999999920954,
+    "decode_ms": 0.0,
+    "draw_ms": 7.929999999760184,
+    "blur_encode_ms": 143.99019999837037,
+    "total_ms": 163.0401999973401,
+    "rss_mb": 60.1328125,
+    "rss_delta_mb": 24.4296875,
+    "label": "1 year active user",
+    "wall_s": 0.17605309999999008
+  },
+  {
+    "cells_stored": 100000,
+    "cells_in_bbox": 50000,
+    "cull_ms": 118.35659999997006,
+    "decode_ms": 0.0,
+    "draw_ms": 65.14519999836921,
+    "blur_encode_ms": 185.11709999802406,
+    "total_ms": 368.6188999963633,
+    "rss_mb": 79.2265625,
+    "rss_delta_mb": 41.671875,
+    "label": "5 year power user",
+    "wall_s": 0.5137771000008797
+  },
+  {
+    "cells_stored": 1000000,
+    "cells_in_bbox": 58072,
+    "cull_ms": 1060.167100000399,
+    "decode_ms": 0.0,
+    "draw_ms": 77.35470000261557,
+    "blur_encode_ms": 108.76279999865801,
+    "total_ms": 1246.2846000016725,
+    "rss_mb": 161.2890625,
+    "rss_delta_mb": 120.078125,
+    "label": "earth-scale, theoretical",
+    "wall_s": 4.196411900000385
+  },
+  {
+    "cells_stored": 10000000,
+    "cells_in_bbox": 58085,
+    "cull_ms": 11455.480000000534,
+    "decode_ms": 0.0,
+    "draw_ms": 75.66099999894504,
+    "blur_encode_ms": 106.82340000130353,
+    "total_ms": 11637.964400000783,
+    "rss_mb": 918.60546875,
+    "rss_delta_mb": 876.05859375,
+    "label": "100M GPS points dedup ceiling",
+    "wall_s": 43.67608130000008
+  }
+]

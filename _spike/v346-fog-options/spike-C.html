@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Spike C — Expression-based dynamic mask</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+<script src="./gps-path.js"></script>
+<style>
+  body { margin:0; padding:0; }
+  #map { width:1200px; height:800px; }
+  #status { position:absolute; top:10px; left:10px; background:white; padding:6px 12px; font:14px monospace; z-index:10; max-width:1100px; }
+</style>
+</head>
+<body>
+<div id="status">loading...</div>
+<div id="map"></div>
+<script>
+mapboxgl.accessToken = window.MAPBOX_TOKEN;
+const urlParams = new URLSearchParams(window.location.search);
+const zoom = parseFloat(urlParams.get('zoom') || '14');
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/streets-v12',
+  center: [121.46, 31.23],
+  zoom: zoom,
+  fadeDuration: 0
+});
+
+map.on('load', () => {
+  try {
+    // Spike C: investigate whether Mapbox paint expressions support
+    // distance-from-feature / distance-from-line for dynamic opacity mask.
+    //
+    // Mapbox GL JS v3 expression operators (paint-domain):
+    //   ['distance', point]    - returns distance from current feature centroid
+    //   ['within', polygon]    - boolean: feature within polygon
+    //   ['interpolate', ...]   - works on zoom or feature-state
+    //
+    // There is NO 'distance-from-line' or pixel-space distance expression.
+    // 'distance' operator works only inside filter expressions on point features.
+    //
+    // We test the closest alternative: put a fog FillLayer, and try to use
+    // ['within', linePolygon] to set fill-opacity to 0 inside a buffered region.
+    // This requires a Polygon geometry, so we still need turf.buffer first —
+    // proving that "pure expression-only" approach is NOT possible.
+
+    // Render world fog with a single feature, try ['within'] expression.
+    // Build a corridor polygon manually (no turf) — wide rectangle around line.
+    const corridor = {
+      type: 'Polygon',
+      coordinates: [[
+        [121.450, 31.220],
+        [121.475, 31.220],
+        [121.475, 31.240],
+        [121.450, 31.240],
+        [121.450, 31.220]
+      ]]
+    };
+
+    const fogPolygon = {
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [window.WORLD_RECT] }
+    };
+    map.addSource('fog', { type: 'geojson', data: fogPolygon });
+
+    // Try 'within' expression on fill-opacity.
+    // Per spec: 'within' returns true if the source feature lies within
+    // the given GeoJSON. The fog polygon (worldwide rect) is NOT inside the
+    // small corridor — so 'within' returns false. This expression cannot do
+    // pixel-level cutting; it only tests the whole feature.
+    try {
+      map.addLayer({
+        id: 'fog-fill',
+        type: 'fill',
+        source: 'fog',
+        paint: {
+          'fill-color': 'rgba(58,42,24,0.75)',
+          'fill-opacity': [
+            'case',
+            ['within', corridor],
+            0,
+            0.75
+          ]
+        }
+      });
+    } catch (e) {
+      // If expression rejected, fall back to plain fill and report
+      map.addLayer({
+        id: 'fog-fill',
+        type: 'fill',
+        source: 'fog',
+        paint: { 'fill-color': 'rgba(58,42,24,0.75)' }
+      });
+      window.__SPIKE_C_EXPR_ERROR = e.message;
+    }
+
+    document.getElementById('status').textContent =
+      "C: 'within' expression test zoom=" + zoom +
+      ' — Mapbox has no pixel-distance op; within() tests whole-feature only';
+    window.__SPIKE_READY = true;
+  } catch (e) {
+    document.getElementById('status').textContent = 'ERROR: ' + e.message;
+    window.__SPIKE_ERROR = e.message;
+  }
+});
+map.on('error', (e) => {
+  document.getElementById('status').textContent = 'MAP ERROR: ' + (e.error && e.error.message);
+});
+</script>
+</body>
+</html>

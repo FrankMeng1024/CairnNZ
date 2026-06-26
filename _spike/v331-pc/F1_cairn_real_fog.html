@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>F1 — Cairn real fog @ PC</title>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet" />
+<style>
+  body { margin: 0; font-family: -apple-system, sans-serif; }
+  #map { position: absolute; top: 0; bottom: 0; left: 0; right: 300px; }
+  #panel {
+    position: absolute; top: 0; right: 0; width: 300px; height: 100%;
+    background: #1a1a1a; color: #eee; padding: 12px; overflow: auto;
+    font-size: 13px; box-sizing: border-box;
+  }
+  #panel h2 { font-size: 15px; margin: 0 0 8px; color: #fc7; }
+  #panel label { display: block; margin: 8px 0; }
+  #panel input[type="range"] { width: 100%; }
+  #panel button { margin: 4px 2px; padding: 6px 10px; background: #333; color: #eee; border: 1px solid #555; cursor: pointer; }
+  #panel button:hover { background: #444; }
+  #panel .row { background: #222; padding: 6px 8px; margin: 6px 0; border-radius: 4px; }
+  #zoomLabel { font-size: 18px; color: #fc7; font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h2>F1 · Cairn real fog</h2>
+  <div class="row">
+    Zoom: <span id="zoomLabel">14</span><br>
+    <input type="range" id="zoom" min="8" max="18" step="0.5" value="14" />
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="fill" checked> FillLayer (fogOverlay)</label>
+    <label><input type="checkbox" id="fillAA" checked> fill-antialias</label>
+    <label><input type="checkbox" id="line"> LineLayer (cream, v330)</label>
+    <label><input type="checkbox" id="lineFog"> LineLayer (dark fog, v328)</label>
+  </div>
+  <div class="row">
+    <strong>Scenarios:</strong><br>
+    <button onclick="setScenario('v327')">v327 (no line)</button>
+    <button onclick="setScenario('v328')">v328 (dark line w=6)</button>
+    <button onclick="setScenario('v330')">v330 (cream line w=2)</button>
+    <button onclick="setScenario('v331proposed')">v331 (no line + noAA)</button>
+  </div>
+  <div class="row">
+    <strong>Zoom sequence (auto):</strong><br>
+    <button onclick="autoZoom()">Run 14→10→14→18→10</button>
+  </div>
+  <div class="row">
+    <strong>Stats:</strong><br>
+    <span id="stats">loading…</span>
+  </div>
+</div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiNzRqdHgiLCJhIjoiY21wOWQ3d3g0MG9zYTMzcHhraDQ2N3hiYyJ9.ICN7x0SsiUafGaN09Boy8w';
+
+const FOG_OVERLAY = 'rgba(58, 42, 24, 0.58)';
+const FOG_EDGE    = 'rgba(247, 242, 229, 0.55)';
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/outdoors-v12',
+  center: [121.457, 31.232],
+  zoom: 14,
+  pitch: 0,
+});
+window.map = map;
+
+map.on('load', async () => {
+  const r = await fetch('./real_fog.geojson');
+  const feat = await r.json();
+  document.getElementById('stats').textContent =
+    `cells: ${feat.properties.cell_count}, holes (row-runs): ${feat.properties.hole_count}`;
+
+  map.addSource('fog', { type: 'geojson', data: feat });
+
+  map.addLayer({
+    id: 'fog-fill',
+    type: 'fill',
+    source: 'fog',
+    paint: {
+      'fill-color': FOG_OVERLAY,
+      'fill-opacity': 1,
+      'fill-antialias': true,
+    },
+  });
+
+  map.addLayer({
+    id: 'fog-line-cream',
+    type: 'line',
+    source: 'fog',
+    paint: {
+      'line-color': FOG_EDGE,
+      'line-width': 2,
+      'line-blur': 3,
+      'line-opacity': 0.7,
+    },
+    layout: { visibility: 'none' },
+  });
+
+  map.addLayer({
+    id: 'fog-line-dark',
+    type: 'line',
+    source: 'fog',
+    paint: {
+      'line-color': FOG_OVERLAY,
+      'line-width': 6,
+      'line-blur': 8,
+      'line-opacity': 0.7,
+    },
+    layout: { visibility: 'none' },
+  });
+
+  bindUI();
+});
+
+function bindUI() {
+  const z = document.getElementById('zoom');
+  z.addEventListener('input', () => {
+    map.setZoom(parseFloat(z.value));
+    document.getElementById('zoomLabel').textContent = z.value;
+  });
+  map.on('zoom', () => {
+    const cur = map.getZoom().toFixed(1);
+    z.value = cur;
+    document.getElementById('zoomLabel').textContent = cur;
+  });
+
+  document.getElementById('fill').addEventListener('change', e => {
+    map.setLayoutProperty('fog-fill', 'visibility', e.target.checked ? 'visible' : 'none');
+  });
+  document.getElementById('fillAA').addEventListener('change', e => {
+    map.setPaintProperty('fog-fill', 'fill-antialias', e.target.checked);
+  });
+  document.getElementById('line').addEventListener('change', e => {
+    map.setLayoutProperty('fog-line-cream', 'visibility', e.target.checked ? 'visible' : 'none');
+  });
+  document.getElementById('lineFog').addEventListener('change', e => {
+    map.setLayoutProperty('fog-line-dark', 'visibility', e.target.checked ? 'visible' : 'none');
+  });
+}
+
+window.setScenario = function(name) {
+  const fill = document.getElementById('fill');
+  const fillAA = document.getElementById('fillAA');
+  const line = document.getElementById('line');
+  const lineFog = document.getElementById('lineFog');
+
+  if (name === 'v327') {
+    fill.checked = true; fillAA.checked = true; line.checked = false; lineFog.checked = false;
+  } else if (name === 'v328') {
+    fill.checked = true; fillAA.checked = true; line.checked = false; lineFog.checked = true;
+  } else if (name === 'v330') {
+    fill.checked = true; fillAA.checked = true; line.checked = true; lineFog.checked = false;
+  } else if (name === 'v331proposed') {
+    fill.checked = true; fillAA.checked = false; line.checked = false; lineFog.checked = false;
+  }
+  fill.dispatchEvent(new Event('change'));
+  fillAA.dispatchEvent(new Event('change'));
+  line.dispatchEvent(new Event('change'));
+  lineFog.dispatchEvent(new Event('change'));
+};
+
+window.autoZoom = async function() {
+  const seq = [14, 10, 14, 18, 10];
+  for (const z of seq) {
+    map.easeTo({ zoom: z, duration: 800 });
+    await new Promise(r => setTimeout(r, 1200));
+  }
+};
+</script></body></html>
