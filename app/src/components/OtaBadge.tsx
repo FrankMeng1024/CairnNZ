@@ -1273,7 +1273,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 343;
+export const OTA_VERSION = 344;
+//         v344: DIAGNOSTIC OTA — magenta debug fill. v343's data:
+//         image/png;base64 fix may or may not actually be loaded by
+//         Mapbox iOS — telemetry only proves Skia rendered the PNG,
+//         not that Mapbox decoded the data URI.
+//         Two changes (both temporary, reverted in v345 after diagnosis):
+//         a) fogMaskRenderer Step 1 fill color: sepia #3A2A18 → magenta
+//            #FF00FF so any successfully-loaded mask is unmistakable
+//         b) FogLayer L1 fillOpacity: 1 → 0 to remove L1 interference
+//            during diagnosis (otherwise L2 hidden under L1 fog)
+//         Result interpretation:
+//         - User sees magenta on map → data URI loaded, L2 architecture
+//           works. v345 revert to sepia + L1 opacity 1.
+//         - User sees no magenta (only basemap) → data URI silently
+//           rejected by Mapbox iOS. Need plan B: local HTTP server via
+//           react-native-static-server (EAS build required).
 //         v343: fog mask uri scheme change file:// → data:image/png;base64.
 //         Root cause confirmed via v342 diagnostic telemetry:
 //         - Skia renders PNG correctly (cells_drawn=387, build_ms=87)

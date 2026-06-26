@@ -259,14 +259,18 @@ export function FogLayer({ userCenter }: Props) {
       {/* L1 — global fog floor (world rect minus circle around user).
           v333: hole radius exactly matches L2 raster bbox half-side so
           L2 sits perfectly inside L1's transparent window — no L1 fog
-          ever shows through L2's visited-cell punches. */}
+          ever shows through L2's visited-cell punches.
+          v344 DIAGNOSTIC: fillOpacity dropped 1 → 0 to fully unmask L2
+          raster. Combined with magenta debug color in fogMaskRenderer,
+          this proves whether Mapbox iOS actually loaded the data: URI.
+          Revert to fillOpacity:1 in v345. */}
       {fogFloor && (
         <ShapeSource id="memory-fog-floor-src" shape={fogFloor}>
           <FillLayer
             id="memory-fog-floor"
             style={{
               fillColor: 'rgba(58, 42, 24, 0.66)',
-              fillOpacity: 1,
+              fillOpacity: 0,
               fillAntialias: true,
             }}
           />
