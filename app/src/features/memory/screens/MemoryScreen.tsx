@@ -341,7 +341,7 @@ export function MemoryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.root}>
+    <View style={styles.root}>
       {/* v322: fgum mounts here. Unmounts when MemoryScreen unmounts
           (user navigates back to Home), releasing GPS watcher + h3
           + memory-store subscriptions. */}
@@ -428,7 +428,7 @@ export function MemoryScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 

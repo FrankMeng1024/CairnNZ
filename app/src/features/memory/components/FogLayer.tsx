@@ -173,6 +173,16 @@ export function FogLayer({ userCenter }: Props) {
 
   // Trigger: cellVersion bump OR substantial pan
   useEffect(() => {
+    // v338 diagnostic: log cell store state on every cellVersion bump
+    // to debug "Memory all-black after pull" — verify cells.size is
+    // actually growing after pullMemoryFromServer fires.
+    const cellsSize = useH3VisitedStore.getState().cells.size;
+    log('v338.foglayer_cellversion_tick', {
+      cellVersion,
+      cells_size: cellsSize,
+      has_center: !!userCenter,
+      useH3Fog,
+    });
     if (!useH3Fog) return;
     if (!userCenter) return;
 

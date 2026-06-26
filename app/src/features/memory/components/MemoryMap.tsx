@@ -160,7 +160,27 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
         styleURL={SEPIA_STYLE_URL}
         compassEnabled={false}
         scaleBarEnabled={false}
+        logoEnabled={false}
+        attributionEnabled={false}
         onMapIdle={onMapSettle}
+        onCameraChanged={(state: any) => {
+          // v338: fire onMapMoved on every camera frame (real-time)
+          // instead of waiting for the post-pan idle window (which can
+          // be 2-3 seconds). state.properties.isUserInteraction filters
+          // out code-driven flyTo animations.
+          const isUser = state?.properties?.isUserInteraction;
+          if (!isUser) return;
+          const cc = state?.properties?.center;
+          if (!Array.isArray(cc) || cc.length < 2) return;
+          const dist = haversineM(
+            { lat: anchorRef.current.lat, lng: anchorRef.current.lng },
+            { lat: cc[1], lng: cc[0] }
+          );
+          if (dist > 50) {
+            setHasPannedAway((prev) => prev ? prev : true);
+            if (onMapMoved) onMapMoved();
+          }
+        }}
       >
         <Camera
           ref={cameraRef}

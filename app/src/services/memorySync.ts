@@ -213,13 +213,25 @@ export async function pullMemoryFromServer(userId: string): Promise<void> {
 
   // O10: skip replacePoints if merge is identical to current state
   // — avoids unnecessary fog/cairn rebuild on no-op pulls.
-  if (sameContent(merged, localPoints)) return;
+  if (sameContent(merged, localPoints)) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('./appLog').log('v338.pull_memory_skip_same_content', {
+        accumulated_n: accumulated.length,
+        local_n: localPoints.length,
+        merged_n: merged.length,
+      });
+    } catch { /* ignore */ }
+    return;
+  }
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../services/bootDiagnostics').markBootPhase('pull_memory_before_replacepoints', {
+    require('./appLog').log('v338.pull_memory_before_replacepoints', {
+      accumulated_n: accumulated.length,
+      local_n: localPoints.length,
       merged_n: merged.length,
     });
-  } catch {/* ignore */}
+  } catch { /* ignore */ }
   useMemoryStore.getState().replacePoints(merged, useMemoryStore.getState().initialRevealDone);
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
