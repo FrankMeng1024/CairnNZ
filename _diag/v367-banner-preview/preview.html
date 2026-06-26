@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>v367 Banner Preview — Weak Signal + Auto-Close</title>
+<style>
+  body { margin: 0; padding: 0; background: #2d2a26; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  .phone {
+    width: 390px; height: 200px;
+    margin: 40px auto;
+    background: linear-gradient(180deg, #faf7f2 0%, #e8f0e0 100%);
+    border-radius: 32px;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    overflow: hidden;
+  }
+  /* status bar */
+  .statusBar {
+    height: 47px;
+    background: transparent;
+  }
+  /* topBar = paddingTop: 47 + 8 = 55 from top, paddingHorizontal: 12 */
+  .topBar {
+    position: absolute;
+    top: 55px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+  }
+  /* BackButton.pill — frosted-light white, primary color text, soft shadow */
+  .backBtn {
+    background: rgba(255,255,255,0.65);
+    border-radius: 20px;
+    padding: 7px 12px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    height: 31px;
+    box-sizing: border-box;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  .backBtn .chev { color: #5d7c46; font-size: 14px; font-weight: bold; line-height: 1; }
+  .backBtn .lbl { color: #5d7c46; font-size: 11px; font-weight: 600; }
+  /* v367 banner — same height/radius/style as BackButton */
+  .banner {
+    position: absolute;
+    top: 55px;
+    left: 100px;   /* 12 topbar + ~72 back + 16 gap */
+    right: 12px;
+    height: 31px;
+    background: rgba(255,255,255,0.85);
+    border-radius: 20px;
+    padding: 7px 8px 7px 12px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-sizing: border-box;
+  }
+  .spinner {
+    width: 12px; height: 12px;
+    border: 1.5px solid rgba(93,124,70,0.25);
+    border-top-color: #5d7c46;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .bannerText {
+    color: #5d7c46;
+    font-size: 11px;
+    font-weight: 600;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .closeBtn {
+    width: 20px; height: 20px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #5d7c46;
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.7;
+    margin-left: 4px;
+    cursor: pointer;
+  }
+  .label {
+    color: #fff;
+    font-size: 13px;
+    text-align: center;
+    margin-top: 20px;
+    opacity: 0.7;
+    font-weight: 500;
+  }
+  .stateInfo {
+    color: #fff;
+    font-size: 11px;
+    text-align: center;
+    margin-top: 8px;
+    opacity: 0.5;
+    font-family: monospace;
+  }
+  .demoTitle { color: #fff; font-size: 16px; text-align: center; margin: 30px 0 0; opacity: 0.85; font-weight: 600; }
+  .phaseHeader { color: #fff; font-size: 14px; text-align: center; margin: 30px 0 -25px; opacity: 0.65; }
+</style>
+</head>
+<body>
+  <h1 class="demoTitle">v367 Banner — Weak Signal + Auto-Close Behavior</h1>
+
+  <p class="phaseHeader">Phase 1 — Normal load (banner never appears, map loads fast)</p>
+  <div class="phone">
+    <div class="statusBar"></div>
+    <div class="topBar">
+      <div class="backBtn"><span class="chev">‹</span><span class="lbl">Back</span></div>
+    </div>
+  </div>
+  <p class="label">No banner — map loaded within timeout</p>
+  <p class="stateInfo">loadingState='ready' · mapReady=true · fogReady=true</p>
+
+  <p class="phaseHeader">Phase 2 — Weak signal (timeout fires, banner appears, Mapbox still retrying)</p>
+  <div class="phone">
+    <div class="statusBar"></div>
+    <div class="topBar">
+      <div class="backBtn"><span class="chev">‹</span><span class="lbl">Back</span></div>
+    </div>
+    <div class="banner">
+      <div class="spinner"></div>
+      <span class="bannerText">Weak signal — still loading map…</span>
+      <div class="closeBtn">✕</div>
+    </div>
+  </div>
+  <p class="label">Banner visible — informs user network is weak, Mapbox auto-retrying in background</p>
+  <p class="stateInfo">loadingState='slow' · slowBannerDismissed=false</p>
+
+  <p class="phaseHeader">Phase 3 — Network recovered (banner auto-closes, no user action needed)</p>
+  <div class="phone">
+    <div class="statusBar"></div>
+    <div class="topBar">
+      <div class="backBtn"><span class="chev">‹</span><span class="lbl">Back</span></div>
+    </div>
+  </div>
+  <p class="label">Banner auto-disappeared — map finally finished loading</p>
+  <p class="stateInfo">loadingState='ready' (was 'slow') · mapReady=true · fogReady=true · v367 auto-close fired</p>
+
+</body>
+</html>

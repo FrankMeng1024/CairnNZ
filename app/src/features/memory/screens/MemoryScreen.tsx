@@ -166,10 +166,16 @@ export function MemoryScreen() {
   }, [mountKey, overlayOpacity]);
 
   // Fade overlay out when BOTH gates are satisfied.
+  // v367: do NOT early-return on overlayHiddenRef.current — that guard
+  // was preventing the slow-banner from auto-closing when the map
+  // eventually finished loading. Now: if we have already faded the
+  // overlay (timed out into 'slow' state), we still need to detect
+  // map+fog ready and clear loadingState back to 'ready' so the banner
+  // disappears. Mapbox keeps retrying tiles in the background — when
+  // it finally succeeds, the banner should vanish automatically.
   useEffect(() => {
-    if (overlayHiddenRef.current) return;
     if (!mapReady || !fogReady) return;
-    overlayHiddenRef.current = true;
+    // Always clear timers + flip to 'ready'.
     if (overlayFadeTimerRef.current) {
       clearTimeout(overlayFadeTimerRef.current);
       overlayFadeTimerRef.current = null;
@@ -177,6 +183,13 @@ export function MemoryScreen() {
     if (stageTimer1Ref.current) clearTimeout(stageTimer1Ref.current);
     if (stageTimer2Ref.current) clearTimeout(stageTimer2Ref.current);
     setLoadingState('ready');
+    // Only run the fade-out animation if the overlay hasn't been faded
+    // out yet (i.e. first time we hit ready before the 500ms/8s timer).
+    if (overlayHiddenRef.current) {
+      log('v367.banner_auto_close_after_slow', {});
+      return;
+    }
+    overlayHiddenRef.current = true;
     log('v360.overlay_both_ready_fadeout', {});
     Animated.timing(overlayOpacity, {
       toValue: 0,
@@ -646,7 +659,7 @@ export function MemoryScreen() {
             style={styles.slowBannerSpinner}
           />
           <Text style={styles.slowBannerText} numberOfLines={1}>
-            Still loading…
+            Weak signal — still loading map…
           </Text>
           <TouchableOpacity
             style={styles.slowBannerClose}

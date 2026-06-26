@@ -1273,8 +1273,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 366;
-//         v366: slow-banner refinement per user feedback on v365:
+export const OTA_VERSION = 367;
+//         v367: banner auto-close + clearer message per user feedback:
+//           - 'Still loading…' didn't explain WHY user sees a banner.
+//             Changed to 'Weak signal — still loading map…' so user
+//             knows it's a network issue, not an app failure.
+//           - Banner had no auto-close path: once loadingState entered
+//             'slow', the overlayHiddenRef guard in the map+fog ready
+//             useEffect blocked the state transition back to 'ready'.
+//             Mapbox keeps retrying tiles in the background — when it
+//             eventually succeeds, the banner should auto-disappear
+//             without user action.
+//         v367 fix: removed the early-return on overlayHiddenRef from
+//         the map+fog-ready effect. Effect now always flips
+//         loadingState='ready' on mapReady && fogReady, ensuring the
+//         banner vanishes whenever the map finally loads.
+//
+//         timeout still 500ms (DEBUG); v368 will restore 8000ms.
+//
+//         v366: banner gap/height/color refinement to match BackButton.
 //           - Bar was hugging back button (gap too small)
 //           - Height didn't match back button (32 vs 31)
 //           - Sepia brown background looked off
