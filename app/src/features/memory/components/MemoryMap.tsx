@@ -161,7 +161,7 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
   if (!Mapbox.available) {
     return <View style={styles.webStub} />;
   }
-  const { MapView, Camera, UserLocation } = Mapbox;
+  const { MapView, Camera, UserLocation, CircleLayer } = Mapbox as any;
 
   return (
     <View style={styles.container}>
@@ -207,15 +207,34 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
           animationMode={'flyTo'}
           animationDuration={600}
         />
-        {/* v348: reverted v347 custom UserLocation children — passing
-            raw CircleLayer as children of UserLocation caused a native
-            crash on iOS (rnmapbox UserLocation doesn't accept arbitrary
-            CircleLayer children at top level; renderMode="custom" is
-            required for that pattern). Back to v346 default puck (blue
-            dot + 9px white ring + 15px blue halo). The "halo mistaken
-            for fog reveal circle" UX issue will be revisited in a
-            future OTA via renderMode="custom" properly. */}
-        <UserLocation visible={true} />
+        {/* v349: re-enable custom UserLocation puck — CircleLayer is now
+            exported by mapboxAdapter (v348 fix), so the v347 crash root
+            cause (CircleLayer === undefined) is gone. UserLocation.js:201
+            confirms: children prop fully replaces normalIcon's 15px halo
+            + 9px white + 6px blue stack. With renderMode default ('normal',
+            line 44-48) the children path is the official API.
+
+            Result: small white-ringed blue dot. No 15px translucent halo
+            that users were mistaking for a "default fog reveal circle". */}
+        <UserLocation visible={true} animated={true}>
+          <CircleLayer
+            id="memory-user-location-ring"
+            style={{
+              circleRadius: 7,
+              circleColor: '#FFFFFF',
+              circlePitchAlignment: 'map',
+            }}
+          />
+          <CircleLayer
+            id="memory-user-location-dot"
+            aboveLayerID="memory-user-location-ring"
+            style={{
+              circleRadius: 5,
+              circleColor: 'rgba(51, 181, 229, 1)',
+              circlePitchAlignment: 'map',
+            }}
+          />
+        </UserLocation>
         <FogLayer userCenter={{ lat: centerLat, lng: centerLng }} />
         <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
       </MapView>

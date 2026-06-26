@@ -1273,7 +1273,42 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 348;
+export const OTA_VERSION = 349;
+//         v349: 3 visual polish fixes responding to v348 user feedback.
+//
+//         (1) UserLocation custom puck re-enabled (no halo) — v348 had
+//         to revert this because mapboxAdapter didn't export CircleLayer
+//         (v347 crashed with CircleLayer === undefined). v348 added the
+//         export but kept the default puck. Now (v349) we re-enable
+//         the custom children pattern: 7px white ring + 5px solid blue
+//         dot. Confirmed via rnmapbox source (UserLocation.js:201 —
+//         `children || normalIcon`): children fully replaces the
+//         default 15px halo + 9px white + 6px blue stack. No
+//         renderMode="custom" needed — that mode doesn't exist (only
+//         Native and Normal). Default Normal is correct.
+//
+//         (2) Fog color back to warm dark-brown rgba(58,42,24,0.78).
+//         User v348 feedback: "很冷血" on the v347 cool slate
+//         rgba(28,32,48,0.78). Hiking fog of war reads as
+//         "unexplored wilderness" not "tech UI", and industry
+//         (Diablo/AoE/Civ) confirms dark-brown is the canonical fog
+//         color. #3A2A18 is the original Skia design value
+//         (fogMaskRenderer.ts:282 pre-v346) — at alpha 0.78 it sits
+//         between v346's muddy 0.80 and a washed-out 0.70.
+//
+//         (3) Path edge softening for "less sharp / more game feel":
+//         - turf.buffer steps: 4 → 8 (turf default). Doubles vertex
+//           density at corner caps; round corners visibly smoother.
+//           ~480 verts/hike (was 240) — still well under earcut bug
+//           threshold (#7023, broke at ~5000 verts in old spike).
+//         - Single LineLayer warm-gold halo → DOUBLE LineLayer:
+//           outer wide soft glow (lineWidth 7, lineBlur 8) hides the
+//           fillAntialias:false jaggies completely;
+//           inner crisp gold rim (lineWidth 1.6, lineBlur 1.2) gives
+//           the edge a "lit by lantern" feel.
+//         Mirrors the original Skia 2-pass cream halo design intent
+//         (fogMaskRenderer.ts:351-364 pre-v346), now rendered via
+//         native Mapbox layers instead of Skia PNG.
 //         v348: emergency hotfix for v347 Memory tab crash + fix
 //         first-sign-in bottom tabs jump.
 //

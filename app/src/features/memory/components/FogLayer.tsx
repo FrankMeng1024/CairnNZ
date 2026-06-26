@@ -130,7 +130,13 @@ function buildFogShape(
       try {
         line = simplifyTurf(line, { tolerance: SIMPLIFY_TOLERANCE_DEG, highQuality: false });
       } catch {/* simplify can fail on duplicate points; use unsimplified */}
-      const buf = bufferTurf(line, CORRIDOR_WIDTH_M, { units: 'meters', steps: 4 });
+      // v349: steps 4 → 8 (turf default). Doubles vertex count at corner
+      // caps for smoother round corners (less "sharp / angular" feel
+      // user reported). 30-GPS-pt hike: ~240 → ~480 verts. 5-hike accum
+      // ~2400 verts — still under the ~5000-vert earcut-bug threshold
+      // empirically observed in spike testing (#7023). Do NOT raise
+      // further without a vertex-count budget guard.
+      const buf = bufferTurf(line, CORRIDOR_WIDTH_M, { units: 'meters', steps: 8 });
       if (buf && buf.geometry) {
         corridors.push(buf as Feature<Polygon | MultiPolygon>);
       }
@@ -243,31 +249,47 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
       <FillLayer
         id="memory-fog"
         style={{
-          // v347 visual polish: cool slate (deep blue-grey) replaces the
-          // previous warm sepia (40,30,18). On outdoors-v12 green basemap
-          // the warm tone neutralised into "dirty grey"; cool tone gives
-          // ~15% better contrast for revealed corridors (subagent recommend).
-          fillColor: 'rgba(28, 32, 48, 0.78)',
+          // v349: fog color back to warm dark-brown. User feedback on v347
+          // cool slate rgba(28,32,48,0.78): "很冷血" — fog of war is a
+          // hiking exploration metaphor, warm earth tones read as
+          // "unexplored wilderness" (Diablo, AoE, Civ all use dark-brown
+          // ~#2A1F12-#3D2C1A range). #3A2A18 is the original Skia design
+          // value (fogMaskRenderer.ts:282 pre-v346), at alpha 0.78 it
+          // sits between v346's too-muddy 0.80 and a too-light 0.70.
+          fillColor: 'rgba(58, 42, 24, 0.78)',
           fillOpacity: 1,
           // Disable AA to avoid 1px seams along hole edges (mapbox-gl-js#7023
           // workaround per Simon Sat 2019).
           fillAntialias: false,
         }}
       />
-      {/* v347 corridor halo: soft warm-gold glow along every fog ring (the
-          world rect AND every corridor hole edge). Hides the jagged
-          fillAntialias:false edge + visually softens the cutout to look
-          like "the path is lit by sunset light" rather than a hard hole. */}
+      {/* v349 two-pass corridor halo (mirrors the original Skia fog
+          renderer's two-pass cream halo design — see fogMaskRenderer.ts:
+          351-364 pre-v346): wide soft outer glow hides the jagged
+          fillAntialias:false stairsteps + a tight inner gold rim crisps
+          the cutout edge. Reads as "lantern light on a trail through fog"
+          rather than "hole punched in fog". */}
       {LineLayer ? (
-        <LineLayer
-          id="memory-fog-edge"
-          style={{
-            lineColor: 'rgba(255, 210, 140, 0.55)',
-            lineWidth: 2.5,
-            lineBlur: 3,
-            lineOpacity: 0.7,
-          }}
-        />
+        <>
+          <LineLayer
+            id="memory-fog-edge-outer"
+            style={{
+              lineColor: 'rgba(247, 232, 200, 0.35)',
+              lineWidth: 7,
+              lineBlur: 8,
+              lineOpacity: 0.85,
+            }}
+          />
+          <LineLayer
+            id="memory-fog-edge-inner"
+            style={{
+              lineColor: 'rgba(255, 220, 165, 0.85)',
+              lineWidth: 1.6,
+              lineBlur: 1.2,
+              lineOpacity: 0.9,
+            }}
+          />
+        </>
       ) : null}
     </ShapeSource>
   );
