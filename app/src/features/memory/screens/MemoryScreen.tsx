@@ -131,18 +131,6 @@ export function MemoryScreen() {
   const lastRefetchAtRef = useRef(0);
   // S3 fix: separate debounce for the EXPENSIVE map remount.
   const lastMountAtRef = useRef(0);
-  // v352 zoom-flicker fix: persist the last coord that MemoryMap was
-  // mounted with, across re-renders. If stableCoord transiently
-  // becomes null (selector hiccup during zoom-induced re-render),
-  // we render MemoryMap with this last-known value instead of
-  // tearing it down to a "Looking for position" overlay. Map never
-  // unmounts after first successful render → no full-screen flash
-  // during pinch/zoom.
-  const lastRenderedCoordRef = useRef<{ lat: number; lng: number } | null>(null);
-  if (stableCoord) {
-    lastRenderedCoordRef.current = { lat: stableCoord.lat, lng: stableCoord.lng };
-  }
-  const persistentCoord = lastRenderedCoordRef.current;
 
   useEffect(() => {
     if (!settingsHydrated) return;
@@ -303,6 +291,25 @@ export function MemoryScreen() {
       ? { lat: _lastKnownCoord.lat, lng: _lastKnownCoord.lng }
       : null
   );
+
+  // v353 emergency fix: v352 placed this block at line 141 (BEFORE
+  // stableCoord was declared at line 301). stableCoord was undefined
+  // there → lastRenderedCoordRef.current never populated → persistentCoord
+  // always null → user permanently saw "Looking for your position"
+  // overlay and the map never rendered. Moved here, AFTER stableCoord
+  // declaration, so the ref correctly captures the last valid coord.
+  //
+  // v352 intent: persist the last coord that MemoryMap was mounted
+  // with, across re-renders. If stableCoord transiently becomes null
+  // (selector hiccup during zoom-induced re-render), we render
+  // MemoryMap with this last-known value instead of tearing it down
+  // to a "Looking for position" overlay. Map never unmounts after
+  // first successful render → no full-screen flash during pinch/zoom.
+  const lastRenderedCoordRef = useRef<{ lat: number; lng: number } | null>(null);
+  if (stableCoord) {
+    lastRenderedCoordRef.current = { lat: stableCoord.lat, lng: stableCoord.lng };
+  }
+  const persistentCoord = lastRenderedCoordRef.current;
 
   // v327 debug: track WHY the "Looking for your position" UI appears.
   // User reports it shows up briefly during zoom — but zoom should not

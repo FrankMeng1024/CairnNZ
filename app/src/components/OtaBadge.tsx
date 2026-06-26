@@ -1273,7 +1273,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 352;
+export const OTA_VERSION = 353;
+//         v353: EMERGENCY HOTFIX for v352 regression.
+//         v352 placed the new `lastRenderedCoordRef + persistentCoord`
+//         block at MemoryScreen.tsx line 141 — BEFORE stableCoord was
+//         declared at line 301. Inside the function component body,
+//         `stableCoord` at line 142 was undefined (no TS error because
+//         it was implicit `any` via referencing a not-yet-declared
+//         const in the same scope). The if (stableCoord) check always
+//         failed → lastRenderedCoordRef.current never populated →
+//         persistentCoord always null → JSX always rendered the
+//         "Looking for your position" overlay, map never appeared.
+//         v353 moves the block immediately AFTER stableCoord declaration
+//         so the ref captures real coords. Map renders correctly.
 //         v352: UX polish triple-fix based on v351 user feedback. All 3
 //         bugs got definitive root cause via independent subagent reads,
 //         no speculation.
