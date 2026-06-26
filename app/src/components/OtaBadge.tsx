@@ -1273,8 +1273,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 365;
-//         v365: slow-banner redesign per user feedback on v363/v364:
+export const OTA_VERSION = 366;
+//         v366: slow-banner refinement per user feedback on v365:
+//           - Bar was hugging back button (gap too small)
+//           - Height didn't match back button (32 vs 31)
+//           - Sepia brown background looked off
+//         v366 fixes:
+//           1. left: 100 (12 topBar gutter + ~72 BackButton width +
+//              16 visible gap). Real BackButton width ≈ 72px not 56.
+//           2. height: 31, paddingVertical: 7, borderRadius: 20
+//              (Radius.pill) — exactly matches BackButton.pillContent.
+//           3. Frosted-light style: rgba(255,255,255,0.85) background +
+//              Colors.primary text/spinner/X + soft card shadow. Visual
+//              continuity with the BackButton frosted pill.
+//           4. Slightly smaller spinner (scale 0.7) and X (20x20) to
+//              fit the tighter 31px height.
+//           5. timeout still 500ms (DEBUG); v367 will restore 8000ms.
+//
+//         v365: full-width bar (next to back button, stretches to right
+//              edge) + all user-visible Chinese -> English.
 //           1. Full-width horizontal BAR (not a tight pill): starts to
 //              the right of back button with a gap (left: 12+56+12),
 //              stretches to screen right edge (right: 12). borderRadius

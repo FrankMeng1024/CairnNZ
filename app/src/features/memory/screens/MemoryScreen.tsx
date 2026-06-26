@@ -620,23 +620,28 @@ export function MemoryScreen() {
           </View>
         </Animated.View>
       )}
-      {/* v365: slow-network banner — full-width horizontal bar that
-          starts just to the right of the back button (with a gap) and
-          extends to the screen right edge. Mapbox auto-retries tile
-          loading underneath so no explicit retry action needed; user
-          can dismiss the bar via the X button.
-          Position: top: insets.top + 8 (matches topBar). Horizontally
-          stretched: left: 12 + 56 + 12 (after back button + gap), right: 12
-          (screen edge gutter). pointerEvents box-none so map underneath
-          stays interactive. English copy only (project rule: no Chinese
-          in user-facing strings). */}
+      {/* v366: slow-network banner — height-matched frosted pill that
+          starts AFTER a visible gap from the back button and stretches
+          to the screen right edge.
+          User feedback on v365: bar was hugging the back button (gap too
+          small), height didn't match back button (32 vs 31), and sepia
+          brown looked off against the rest of the UI.
+          v366 fixes:
+            - left: 100 (12 topBar gutter + ~72 BackButton width + 16 gap)
+            - height 31, paddingVertical 7 (matches BackButton.pillContent)
+            - borderRadius 20 (Radius.pill, same as BackButton)
+            - frosted-light background rgba(255,255,255,0.85) + dark
+              text + soft card shadow — visually consistent with the
+              back button instead of a foreign sepia bar
+          Mapbox auto-retries tile loading underneath; user can dismiss
+          via the X button. English copy only. */}
       {persistentCoord && loadingState === 'slow' && !slowBannerDismissed && (
         <View
-          style={[styles.slowBanner, { top: insets.top + 8, left: 12 + 56 + 12, right: 12 }]}
+          style={[styles.slowBanner, { top: insets.top + 8, left: 100, right: 12 }]}
           pointerEvents="box-none"
         >
           <ActivityIndicator
-            color="#FFFFFF"
+            color={Colors.primary}
             size="small"
             style={styles.slowBannerSpinner}
           />
@@ -767,48 +772,47 @@ const styles = StyleSheet.create({
   loadingSpinner: {
     marginTop: 4,
   },
-  // v365 slow-network full-width bar (next to back button, stretching to
-  // screen right edge). Replaces v363 inline pill. Bar style with rounded
-  // corners; spinner + text left-aligned, X close right-aligned. Mapbox
-  // auto-retries tile loading underneath so no explicit retry action
-  // needed; user can dismiss the bar any time.
+  // v366 slow-network banner — frosted pill matched to BackButton.
+  // Height = BackButton.pillContent (paddingVertical 7 + small font ~17
+  // line-height = 31). borderRadius = Radius.pill (20). White semi-
+  // translucent background + soft card shadow for visual continuity.
   slowBanner: {
     position: 'absolute',
-    backgroundColor: 'rgba(91, 70, 40, 0.92)',
-    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderRadius: 20,
     paddingLeft: 12,
     paddingRight: 8,
-    paddingVertical: 6,
+    paddingVertical: 7,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
     elevation: 4,
     zIndex: 8,
-    height: 32,
+    height: 31,
   },
   slowBannerSpinner: {
     marginRight: 8,
-    transform: [{ scale: 0.75 }],
+    transform: [{ scale: 0.7 }],
   },
   slowBannerText: {
-    color: '#FFFFFF',
-    fontSize: 12.5,
-    fontWeight: '500',
+    color: Colors.primary,
+    fontSize: 11,
+    fontWeight: '600',
     flex: 1,
   },
   slowBannerClose: {
-    width: 22, height: 22, borderRadius: 11,
+    width: 20, height: 20, borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 4,
   },
   slowBannerCloseText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+    color: Colors.primary,
+    fontSize: 11,
     fontWeight: '700',
-    opacity: 0.85,
+    opacity: 0.7,
   },
 });
