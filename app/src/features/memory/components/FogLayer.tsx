@@ -38,7 +38,7 @@
  * No Skia, no PNG, no transport, no http URL, no file://, no data: URI.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { getMapbox } from '../services/mapboxAdapter';
@@ -254,6 +254,17 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
   //       viewing.
   // If a hike is huge (5000+ points) and block exceeds 800ms, add
   // a vertex-budget cap inside buildFogShape (deferred).
+  //
+  // v356: content-hash short-circuit. hydrate (memhydrate_after_replacepoints
+  // at T+417ms in v355 telemetry) calls replacePoints with the SAME 367
+  // points already in store from a previous tick. New array reference =>
+  // useMemo dep changed => fog rebuilds (2nd time, build_ms 331ms) =>
+  // ShapeSource shape prop changes => Mapbox layer rebuilds => visible
+  // flicker on Memory tab open. Adding a content signature (count + first
+  // 3 + last 3 point cids) lets us bail out when the new array is
+  // structurally identical to last computed fog.
+  const lastSigRef = useRef<string>('');
+  const lastShapeRef = useRef<Feature<Polygon | MultiPolygon> | null>(null);
   const fogShape = useMemo<Feature<Polygon | MultiPolygon> | null>(() => {
     if (!useH3Fog) return null;
     // v355: defer fog rendering until hydrate completes (points populated).
@@ -269,14 +280,42 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
     // see, just without fog, (b) "fog without my paths" was the more
     // jarring of the two states per user feedback.
     if (points.length === 0) return null;
+    // v356: content-hash short-circuit. Build a cheap signature from
+    // count + first 3 + last 3 cids. If unchanged from last build,
+    // return cached shape — same reference → ShapeSource doesn't see
+    // shape change → Mapbox layer doesn't rebuild → no flicker.
+    const sig = `${points.length}|${points.slice(0, 3).map((p) => p.cid).join(',')}|${points.slice(-3).map((p) => p.cid).join(',')}`;
+    if (sig === lastSigRef.current && lastShapeRef.current) {
+      return lastShapeRef.current;
+    }
     const t0 = Date.now();
     const shape = buildFogShape(points);
+    // v356 fix: has_holes telemetry was lying — only checked Polygon
+    // case (outer ring + inner ring count > 1) but turf.difference
+    // often returns MultiPolygon for complex corridors. MultiPolygon
+    // with >1 inner ring across its polygons OR >1 polygon members
+    // both indicate holes. v355 fog.shape_built reported has_holes:false
+    // on user data with 367 points → made us think fog rendering failed,
+    // when actually the geometry was fine but telemetry was wrong.
+    let hasHoles = false;
+    if (shape && shape.geometry) {
+      if (shape.geometry.type === 'Polygon') {
+        hasHoles = (shape.geometry.coordinates as any[]).length > 1;
+      } else if (shape.geometry.type === 'MultiPolygon') {
+        // Any polygon with inner ring(s) counts, OR multi-polygon
+        // structure itself (>1 distinct polygon) is "has cutouts".
+        const polys = shape.geometry.coordinates as any[];
+        hasHoles = polys.length > 1 || polys.some((p) => p.length > 1);
+      }
+    }
     log('fog.shape_built', {
       n_points: points.length,
       build_ms: Date.now() - t0,
-      has_holes: shape !== null && shape.geometry.type === 'Polygon'
-        && (shape.geometry.coordinates as any[]).length > 1,
+      has_holes: hasHoles,
+      geom_type: shape?.geometry?.type ?? 'null',
     });
+    lastSigRef.current = sig;
+    lastShapeRef.current = shape;
     return shape;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, geometryVersion, useH3Fog]);

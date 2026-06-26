@@ -1273,7 +1273,30 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 355;
+export const OTA_VERSION = 356;
+//         v356: kill the residual Memory tab flicker (v355 still flashed).
+//
+//         Telemetry showed fog.shape_built fired TWICE on every cold
+//         Memory tab open:
+//           T+399ms: build #1, n_points=367, build_ms=346 (initial render)
+//           T+770ms: build #2, n_points=367, build_ms=331 (after hydrate
+//                    fired replacePoints with the same 367 points already
+//                    in store, but new array reference triggered useMemo
+//                    rerun → new ShapeSource.shape → Mapbox layer rebuild
+//                    → visible flicker)
+//
+//         v356 adds content-signature short-circuit to FogLayer useMemo:
+//         signature = `${count}|${first 3 cids}|${last 3 cids}`. On
+//         re-runs with structurally identical input, return cached
+//         shape reference. Mapbox sees same shape prop → no layer
+//         rebuild → no flicker.
+//
+//         Also: has_holes telemetry was lying. Only checked Polygon case
+//         (outer + inner ring count > 1) but turf.difference often
+//         returns MultiPolygon. v355 logs reported has_holes:false on
+//         user 4 data even though geometry was correct. v356 expanded
+//         judgment to count MultiPolygon members > 1 OR any inner
+//         ring across them. Adds geom_type field to telemetry.
 //         v355: 2 fixes responding to v354 user feedback.
 //
 //         (1) Three-stage flash on Memory tab open (brown → solid fog
