@@ -163,14 +163,15 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
         logoEnabled={false}
         attributionEnabled={false}
         onMapIdle={onMapSettle}
-        onCameraChanged={(state: any) => {
-          // v338: fire onMapMoved on every camera frame (real-time)
-          // instead of waiting for the post-pan idle window (which can
-          // be 2-3 seconds). state.properties.isUserInteraction filters
-          // out code-driven flyTo animations.
-          const isUser = state?.properties?.isUserInteraction;
+        onRegionIsChanging={(feature: any) => {
+          // v339: fire onMapMoved DURING pan (not after settle) so the
+          // Target pill appears in real-time. onRegionIsChanging is the
+          // pre-v10 API that fires every frame while the user is panning;
+          // v338 used onCameraChanged which appeared to conflict with
+          // onMapIdle and slow everything down.
+          const isUser = feature?.properties?.isUserInteraction;
           if (!isUser) return;
-          const cc = state?.properties?.center;
+          const cc = feature?.geometry?.coordinates;
           if (!Array.isArray(cc) || cc.length < 2) return;
           const dist = haversineM(
             { lat: anchorRef.current.lat, lng: anchorRef.current.lng },
