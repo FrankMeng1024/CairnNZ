@@ -1273,7 +1273,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 340;
+export const OTA_VERSION = 341;
+//         v341: disable h3LoadGate — legacy AsyncStorage flag from
+//         v305-v322 emscripten WASM crash era permanently blocked
+//         bulkImport. h3Pure (v323+) cannot fail, so the gate is
+//         obsolete. Without this fix, 398 server points pulled
+//         successfully but Memory cells never written → map all
+//         black. h3HasFailedBefore() now always returns false;
+//         primeH3FailedFlag() actively removes the legacy key.
 //         v284: head-magnet visual fix (incremental builder).
 //         BRUSH (root cause: walkedIndex/baseLine drift after Preview):
 //           * walkedIndex now permanently anchored to state.originalPoints
