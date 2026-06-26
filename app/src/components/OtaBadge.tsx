@@ -1273,7 +1273,46 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 349;
+export const OTA_VERSION = 350;
+//         v350: hotfix for v349 corridor edges still sharp + partial fix
+//         for tabs jump.
+//
+//         (1) Corridor edges sharp despite v349 double LineLayer halo:
+//         ROOT CAUSE FOUND — rnmapbox/maps/src/utils/index.ts:93-96
+//         explicitly skips React.Fragment when iterating children to
+//         inject sourceID. v349 wrapped two LineLayers in <>...</>
+//         Fragment → cloneReactChildrenWithProps never assigned them
+//         sourceID='memory-fog-src' → they silently rendered against
+//         defaultProps.sourceID (NOT our fog source) and never appeared.
+//         This explains why v346 single LineLayer ALSO didn't show:
+//         not Fragment-related, but the same source-binding class of
+//         silent failure (separate root cause if so; v350's inline
+//         placement should fix the Fragment one definitively).
+//         FIX: removed the Fragment wrapper — two LineLayers now placed
+//         as direct ShapeSource children (sibling of FillLayer), so
+//         rnmapbox cloneReactChildrenWithProps injects sourceID correctly.
+//         Net result: warm-gold halo finally visible around hike corridors.
+//
+//         (2) Tabs jump partial fix: SafeAreaView edges={['top']} —
+//         was ['top', 'bottom']. Subagent found the visible jump is a
+//         double-counting race between SafeAreaView's edges:'bottom'
+//         (which auto-pads via native layout) AND HomeScreen's manual
+//         paddingBottom: insets.bottom (line 341, kept). Removing the
+//         edges:bottom source eliminates one of the two padding sources.
+//         CAVEAT: the deeper "first OTA reload sign-in" jump is a
+//         react-native-safe-area-context native-layer timing bug
+//         (initialWindowMetrics returns cached pre-reload zero
+//         insets — verified via InitialWindow.native.ts:4-5). That
+//         bug is NOT OTA-fixable; only cold-start (kill app, reopen)
+//         gets fresh native metrics. Accepting this as known limitation.
+//
+//         (3) UserLocation halo still reported visible by user:
+//         INVESTIGATION — Annotation.js:78-83 confirms children spread
+//         correctly into ShapeSource without Fragment, so v349 children
+//         pattern is correct per rnmapbox source. Subagent hypothesis:
+//         what user sees may be the native Mapbox iOS SDK 11.20.1 puck
+//         accuracy ring (a separate native layer, not the React-controlled
+//         normalIcon). Need screenshot to confirm. Not changed in v350.
 //         v349: 3 visual polish fixes responding to v348 user feedback.
 //
 //         (1) UserLocation custom puck re-enabled (no halo) — v348 had

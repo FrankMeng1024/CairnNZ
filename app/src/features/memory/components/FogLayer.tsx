@@ -263,33 +263,39 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
           fillAntialias: false,
         }}
       />
-      {/* v349 two-pass corridor halo (mirrors the original Skia fog
-          renderer's two-pass cream halo design — see fogMaskRenderer.ts:
-          351-364 pre-v346): wide soft outer glow hides the jagged
-          fillAntialias:false stairsteps + a tight inner gold rim crisps
-          the cutout edge. Reads as "lantern light on a trail through fog"
-          rather than "hole punched in fog". */}
+      {/* v350: Fragment-wrapped LineLayers were silently broken in v346-v349.
+          rnmapbox/maps/src/utils/index.ts:93-96 explicitly skips React.Fragment
+          when iterating children to inject sourceID. Result: both LineLayers
+          fell back to defaultProps.sourceID (NOT 'memory-fog-src') and never
+          rendered on our polygon source. v350 inlines them as direct ShapeSource
+          children so cloneReactChildrenWithProps injects sourceID correctly.
+
+          Two-pass corridor halo (mirrors the original Skia fog renderer's
+          two-pass cream halo design — see fogMaskRenderer.ts:351-364 pre-v346):
+          wide soft outer glow hides the jagged fillAntialias:false stairsteps
+          + a tight inner gold rim crisps the cutout edge. Reads as "lantern
+          light on a trail through fog" rather than "hole punched in fog". */}
       {LineLayer ? (
-        <>
-          <LineLayer
-            id="memory-fog-edge-outer"
-            style={{
-              lineColor: 'rgba(247, 232, 200, 0.35)',
-              lineWidth: 7,
-              lineBlur: 8,
-              lineOpacity: 0.85,
-            }}
-          />
-          <LineLayer
-            id="memory-fog-edge-inner"
-            style={{
-              lineColor: 'rgba(255, 220, 165, 0.85)',
-              lineWidth: 1.6,
-              lineBlur: 1.2,
-              lineOpacity: 0.9,
-            }}
-          />
-        </>
+        <LineLayer
+          id="memory-fog-edge-outer"
+          style={{
+            lineColor: 'rgba(247, 232, 200, 0.35)',
+            lineWidth: 7,
+            lineBlur: 8,
+            lineOpacity: 0.85,
+          }}
+        />
+      ) : null}
+      {LineLayer ? (
+        <LineLayer
+          id="memory-fog-edge-inner"
+          style={{
+            lineColor: 'rgba(255, 220, 165, 0.85)',
+            lineWidth: 1.6,
+            lineBlur: 1.2,
+            lineOpacity: 0.9,
+          }}
+        />
       ) : null}
     </ShapeSource>
   );
