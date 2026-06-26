@@ -256,6 +256,19 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
   // a vertex-budget cap inside buildFogShape (deferred).
   const fogShape = useMemo<Feature<Polygon | MultiPolygon> | null>(() => {
     if (!useH3Fog) return null;
+    // v355: defer fog rendering until hydrate completes (points populated).
+    // Pre-v355 we returned world rect (no holes) when points was empty,
+    // producing a visible "brown screen flash → solid fog → fog with
+    // holes" three-stage sequence on Memory tab open. By skipping the
+    // first render entirely (return null) the user sees:
+    //   1. basemap (Mapbox tiles loaded)
+    //   2. fog WITH corridor holes appears in one frame (~100-300ms after
+    //      hydrate completes), no intermediate "fully fogged map" flash
+    // Trade-off: ~100-300ms of basemap is visible before fog appears.
+    // Acceptable because (a) it's the right map the user is about to
+    // see, just without fog, (b) "fog without my paths" was the more
+    // jarring of the two states per user feedback.
+    if (points.length === 0) return null;
     const t0 = Date.now();
     const shape = buildFogShape(points);
     log('fog.shape_built', {

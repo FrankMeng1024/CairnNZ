@@ -1273,7 +1273,37 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 354;
+export const OTA_VERSION = 355;
+//         v355: 2 fixes responding to v354 user feedback.
+//
+//         (1) Three-stage flash on Memory tab open (brown → solid fog
+//         → fog with paths): v354 only fixed the 5s black screen,
+//         leaving a 100-300ms visible "solid fog without paths" stage
+//         between basemap load and corridors render. ROOT CAUSE:
+//         useMemoryStore.points has no persist middleware, mount-time
+//         is always [] until ForegroundUnlockManager defer (now 100ms)
+//         calls hydrateMemoryForUser → AsyncStorage read → JSON parse
+//         → replacePoints. FogLayer useMemo runs synchronously on every
+//         render; with empty points it was returning world rect (solid
+//         fog no holes), creating the visible middle stage.
+//         v355: FogLayer returns null when points.length === 0. User
+//         sees basemap → (hydrate completes ~100-300ms later) → fog
+//         with corridor holes in one frame. Two stages instead of
+//         three; the intermediate "solid fog" flash is eliminated.
+//
+//         (2) "Parallel street drift" and "sharp inner wedge" — these
+//         were caused by 385 dirty memory_points written by v336 server
+//         migration script directly from sessions.route_points (gated
+//         but NOT Kalman-smoothed). v354 fixed the client write path
+//         (uses trackPointsSmoothed = Kalman) but old data was untouched.
+//         v355 ran resmooth_memory_points.py server-side, replacing
+//         all 385 user 4 points with Kalman-smoothed + 12.5m cull
+//         versions (now 367 points). Activity and memory now read
+//         from data with identical mathematical provenance.
+//         Old data backed up at server table memory_points_pre_kalman.
+//
+//         No client code changes for #2 — server data swap is
+//         transparent to client pull.
 //         v354: 4 real-root-cause fixes (subagent evidence-based,
 //         each tied to specific file:line, no speculation).
 //
