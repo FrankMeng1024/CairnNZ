@@ -1273,7 +1273,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 368;
+export const OTA_VERSION = 369;
+//         v369: revert timeout 8000ms->500ms for debugging.
+//         User feedback on v368: "刷了好几遍都没有message出现" — they
+//         still want to verify the v368 min-show-2s logic, but I had
+//         restored the production 8s timeout in v368 thinking the case
+//         was closed. On normal network the map loads within 8s so
+//         the banner never appears. v370 will restore 8000ms after
+//         the user signs off on the min-show behavior.
+//
 //         v368: banner minimum-visible duration (2s) + restore 8s timeout.
 //         User feedback on v367: if the network completes a few ms after
 //         the timeout, the banner flashes onto screen and is gone before

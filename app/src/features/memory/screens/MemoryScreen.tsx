@@ -170,7 +170,7 @@ export function MemoryScreen() {
           useNativeDriver: true,
         }).start();
       }
-    }, 8000); // v368: restored to production 8s. User confirmed banner UX in v367; case closed. v365-v367 used 500ms debug.
+    }, 500); // v369: DEBUG — restored 500ms so user can verify v368 min-show 2s logic. Production 8000ms returns in v370 after sign-off.
     return () => {
       if (overlayFadeTimerRef.current) {
         clearTimeout(overlayFadeTimerRef.current);
