@@ -364,27 +364,33 @@ export async function renderMask(input: RenderInput): Promise<RenderResult> {
     canvas.drawRect(Skia.XYWHRect(rectX, rectY, rectW, rectH), haloPaint);
   }
 
-  // Snapshot + encode + write
+  // Snapshot + encode
   const image = surface.makeImageSnapshot();
   const base64 = image.encodeToBase64(ImageFormat.PNG, 100);
 
   if (myToken !== currentToken) {
-    // Cancelled by newer render; abort write
+    // Cancelled by newer render
     throw new Error('render_cancelled');
   }
 
-  const filename = `${FILE_PREFIX}${input.revision}${FILE_EXT}`;
-  const cacheDir = fs.cacheDirectory!;
-  const path = `${cacheDir}${filename}`;
-  await fs.writeAsStringAsync(path, base64, {
-    encoding: fs.EncodingType.Base64,
-  });
-
-  if (myToken !== currentToken) {
-    // Cancelled while writing; clean up our partial file
-    deletePrevious(path);
-    throw new Error('render_cancelled');
-  }
+  // v343 fix: use data:image/png;base64 inline instead of writing PNG to
+  // expo-file-system cacheDirectory and passing file:// URL to Mapbox.
+  //
+  // Root cause (proven via v342 diagnostic OTA): rnmapbox iOS forwards
+  // mask.uri verbatim to Mapbox iOS SDK 11.20.1 ImageSource.url. With
+  // file:// scheme the SDK enqueues the load but silently fails (no JS
+  // error, no native log) — see rnmapbox/maps#1457 (open 5 years, unfixed).
+  // Skia rendered the PNG correctly (cells_drawn=387 confirmed in
+  // telemetry) but Mapbox never painted it, so L1 fog fully covered
+  // the entire bbox → user saw all-black.
+  //
+  // Data URI bypasses the iOS URL loader pipeline entirely (Mapbox decodes
+  // inline). Both @rnmapbox/maps src/components/Images.tsx _isUrlOrPath
+  // and Mapbox iOS SDK explicitly whitelist data: scheme.
+  //
+  // Cost: ~1.3 MB base64 string per 1024×1024 PNG. At 500ms RENDER_DEBOUNCE
+  // this is well within Hermes string budget. Net I/O is *lower* than
+  // before because writeAsStringAsync is gone.
 
   const corners = computeBboxCorners(input.centerLat, input.centerLng, padding);
   const buildMs = Date.now() - t0;
@@ -398,7 +404,7 @@ export async function renderMask(input: RenderInput): Promise<RenderResult> {
   });
 
   return {
-    uri: `file://${path.replace(/^file:\/\//, '')}`,
+    uri: `data:image/png;base64,${base64}`,
     corners,
     buildMs,
     size: MASK_SIZE,
@@ -414,6 +420,9 @@ export async function renderMask(input: RenderInput): Promise<RenderResult> {
  */
 export function scheduleStaleCleanup(prevUri: string | null, delayMs: number = 800): void {
   if (!prevUri) return;
+  // v343: data: URIs have no filesystem footprint — nothing to clean.
+  // Only file:// URIs (from pre-v343 builds left on disk) need delete.
+  if (prevUri.startsWith('data:')) return;
   setTimeout(() => {
     const path = prevUri.replace(/^file:\/\//, '');
     void deletePrevious(path);

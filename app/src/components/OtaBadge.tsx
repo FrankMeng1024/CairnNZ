@@ -1273,7 +1273,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 342;
+export const OTA_VERSION = 343;
+//         v343: fog mask uri scheme change file:// → data:image/png;base64.
+//         Root cause confirmed via v342 diagnostic telemetry:
+//         - Skia renders PNG correctly (cells_drawn=387, build_ms=87)
+//         - fog.mask_rendered logged every cycle
+//         - But Mapbox iOS SDK silently rejects file:// URL in
+//           ImageSource.url (rnmapbox/maps#1457, open 5 years, no fix)
+//         - L1 fog floor remained fully opaque → user saw all-black
+//
+//         Fix: skip the expo-file-system write step entirely. Skia's
+//         encodeToBase64 output is wrapped directly as a data: URI and
+//         passed to ImageSource. Both rnmapbox's _isUrlOrPath whitelist
+//         and Mapbox iOS SDK accept data: scheme. Bypasses the URL loader
+//         pipeline that was silently dropping file://.
+//
+//         Net change: 1.3 MB base64 string per 500ms render cycle in
+//         place of a 1 MB disk write + read. Less I/O, no sandbox path
+//         hazards, no stale-file cleanup needed on data: URIs.
 //         v342: pure-diagnostic OTA — no business logic changes. Adds
 //         3 telemetry beacons in FogLayer to definitively locate why
 //         the second fog mask render timer never fires after bulkImport
