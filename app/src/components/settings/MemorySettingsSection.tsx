@@ -57,6 +57,15 @@ export function MemorySettingsSection() {
     <View>
       <Text style={styles.sectionHeader}>Memory</Text>
       <View style={styles.card}>
+        {/* v334: PHASE 2 (after 2026-07-01 eas build) — toggles below
+            control the "passive memory recording while app is open"
+            pipeline. v333 product decision: Memory unlocks ONLY via
+            hiking-save → activity → memory transaction. The two UI
+            rows below would let a user opt into pre-PHASE2 passive
+            recording, but the underlying watcher path is disabled in
+            ForegroundUnlockManager. Hide them entirely until PHASE 2
+            ships (re-enables the watcher + adds background SLC). */}
+        {/*
         <ToggleRow
           iconName="Mountain"
           iconBg={Colors.primaryLight}
@@ -66,8 +75,6 @@ export function MemorySettingsSection() {
           onToggle={() => setSetting('foregroundAutoUnlockEnabled', !fg)}
         />
         <View style={styles.divider} />
-        {/* Q9: when to record. 'always' = any time the app is open;
-            'session-only' = only during an active Hiking/Running session. */}
         <View style={styles.segmentRow}>
           <Text style={styles.segmentLabel}>Record memory</Text>
           <View style={styles.segmentBox}>
@@ -90,6 +97,7 @@ export function MemorySettingsSection() {
           </View>
         </View>
         <View style={styles.divider} />
+        */}
         <ToggleRow
           iconName="Users"
           iconBg={Colors.runningLight}

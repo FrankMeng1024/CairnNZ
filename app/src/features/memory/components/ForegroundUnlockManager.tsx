@@ -251,6 +251,18 @@ export function ForegroundUnlockManager() {
             loc.coords.longitude,
             loc.timestamp ?? Date.now(),
           );
+          // v334: PHASE 2 deferred (after 2026-07-01 eas build).
+          // v333 product decision: Memory unlocks ONLY via the hiking-save
+          // activity → memory transaction. Standing still / panning the
+          // map / opening Memory tab MUST NOT auto-unlock cells around
+          // the user — that contradicts "no hike imported = ALL fog".
+          // The setLastWatcherFix above is kept because it powers the
+          // UserLocation blue dot + stableCoord flicker fix, both of
+          // which are pure VISUAL position rendering (no fog clearing).
+          // When PHASE 2 (background SLC recording) ships, re-enable the
+          // call below — or replace with a SLC-driven 100m reveal.
+          return;
+          // eslint-disable-next-line no-unreachable
           if (!enabledRef.current) return;
           if (recordModeRef.current === 'session-only' && !sessionActiveRef.current) {
             return;
