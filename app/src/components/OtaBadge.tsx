@@ -1273,7 +1273,30 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 362;
+export const OTA_VERSION = 363;
+//         v363: slow-network banner UX redesign + revert v362 debug.
+//         User feedback on v361 banner:
+//           - Don't put it below back button — put it to the right of
+//             back button with a small gap
+//           - 'Retry' button is misleading: Mapbox auto-retries tiles
+//             in the background regardless. Replace with a spinner
+//             (signals 'still working') + X close button
+//           - Let user dismiss the banner if they don't want to see it
+//
+//         v363 changes:
+//           1. Banner repositioned to inline pill next to back button
+//              (top: insets.top + 8, left: 12 + 56 + 12 = 80)
+//           2. Shape: compact rounded pill (borderRadius 999), height
+//              32px, much smaller than v361/v360 full-width banner
+//           3. Content: small white ActivityIndicator + '正在加载…' +
+//              X close button. No retry button.
+//           4. User-dismissible: tap X → slowBannerDismissed=true,
+//              banner hidden for the rest of this Memory tab session.
+//              Resets on mountKey bump (next tab open).
+//           5. v362 debug timeout 500ms reverted to v360 production 8s.
+//         Mapbox continues to auto-retry tiles under the hood — the
+//         banner is purely informational, not interactive (other than
+//         the close button).
 //         v362 DEBUG OTA: temporarily reduces the slow-network timeout
 //         from 8000ms to 500ms so the user can visually verify the
 //         banner placement (no overlap with back button) and retry

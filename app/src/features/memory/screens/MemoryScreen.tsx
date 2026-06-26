@@ -113,6 +113,10 @@ export function MemoryScreen() {
   const [loadingStage, setLoadingStage] = useState<0 | 1 | 2>(0); // 0..2s / 2..5s / 5s+
   const [mapReady, setMapReady] = useState(false);
   const [fogReady, setFogReady] = useState(false);
+  // v363: user-dismissed banner state. When user taps the X close on
+  // the slow-network banner, hide it for the rest of this Memory tab
+  // session. Resets on mountKey bump.
+  const [slowBannerDismissed, setSlowBannerDismissed] = useState(false);
   const overlayOpacity = useRef(new Animated.Value(1)).current;
   const overlayHiddenRef = useRef(false);
   const overlayFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -126,6 +130,7 @@ export function MemoryScreen() {
     setFogReady(false);
     setLoadingState('loading');
     setLoadingStage(0);
+    setSlowBannerDismissed(false); // v363: reset dismissal on remount
     overlayOpacity.setValue(1);
     if (overlayFadeTimerRef.current) {
       clearTimeout(overlayFadeTimerRef.current);
@@ -149,7 +154,7 @@ export function MemoryScreen() {
           useNativeDriver: true,
         }).start();
       }
-    }, 500); // v362 DEBUG: 8000→500 to force-show slow banner for visual review
+    }, 8000); // v363: restored from v362 debug 500ms back to production 8s
     return () => {
       if (overlayFadeTimerRef.current) {
         clearTimeout(overlayFadeTimerRef.current);
@@ -615,23 +620,39 @@ export function MemoryScreen() {
           </View>
         </Animated.View>
       )}
-      {/* v360: slow-network banner. Appears when 8s hard timeout fires
-          AND map+fog weren't both ready. Shows above content, doesn't
-          block; user can tap retry or just keep using partial map. */}
-      {persistentCoord && loadingState === 'slow' && (
+      {/* v363: slow-network banner — small inline pill next to the
+          back button, NOT a wide full-width banner. Tells user the
+          load isn't done yet AND lets them dismiss it. Mapbox tile
+          loading auto-retries in the background regardless, so a
+          manual "retry" button was misleading — replaced with a
+          spinner (indicates 'still working') + X close.
+          Position: just right of the back button (insets.top + 8 to
+          match topBar, then offset left by back-button width 56 +
+          12 gap). pointerEvents box-none so map underneath stays
+          interactive. */}
+      {persistentCoord && loadingState === 'slow' && !slowBannerDismissed && (
         <View
-          style={[styles.slowBanner, { top: insets.top + 60 }]}
+          style={[styles.slowBanner, { top: insets.top + 8, left: 12 + 56 + 12 }]}
           pointerEvents="box-none"
         >
-          <Text style={styles.slowBannerText} numberOfLines={2}>
-            网络较慢，地图未完全加载完
+          <ActivityIndicator
+            color="#FFFFFF"
+            size="small"
+            style={styles.slowBannerSpinner}
+          />
+          <Text style={styles.slowBannerText} numberOfLines={1}>
+            正在加载…
           </Text>
           <TouchableOpacity
-            style={styles.slowBannerRetry}
-            onPress={handleRetryLoad}
+            style={styles.slowBannerClose}
+            onPress={() => {
+              log('v363.slow_banner_dismissed');
+              setSlowBannerDismissed(true);
+            }}
             activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={styles.slowBannerRetryText}>重试</Text>
+            <Text style={styles.slowBannerCloseText}>✕</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -746,44 +767,48 @@ const styles = StyleSheet.create({
   loadingSpinner: {
     marginTop: 4,
   },
-  // v360 slow-network banner — appears as a thin pill at the top of
-  // the screen when 8s timeout fires and map/fog weren't both ready.
-  // Visually distinct from a blocking modal: user can keep using the
-  // partial map underneath; tapping the pill triggers retry.
+  // v363 slow-network inline pill (next to back button) — replaces v360
+  // full-width banner. Compact size, sits to the right of back button.
+  // ActivityIndicator + brief text + X close. Mapbox auto-retries tile
+  // loading underneath so no explicit retry action needed; user can
+  // dismiss the pill any time.
   slowBanner: {
     position: 'absolute',
-    left: 16,
-    right: 16,
     backgroundColor: 'rgba(91, 70, 40, 0.92)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 999,
+    paddingLeft: 10,
+    paddingRight: 6,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     shadowColor: '#000',
     shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
     zIndex: 8,
+    height: 32,
+  },
+  slowBannerSpinner: {
+    marginRight: 6,
+    transform: [{ scale: 0.75 }],
   },
   slowBannerText: {
-    flex: 1,
     color: '#FFFFFF',
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '500',
-    marginRight: 10,
+    marginRight: 4,
   },
-  slowBannerRetry: {
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 8,
+  slowBannerClose: {
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 2,
   },
-  slowBannerRetryText: {
+  slowBannerCloseText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
+    opacity: 0.85,
   },
 });
