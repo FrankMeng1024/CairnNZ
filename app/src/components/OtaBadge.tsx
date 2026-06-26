@@ -1273,8 +1273,32 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 367;
-//         v367: banner auto-close + clearer message per user feedback:
+export const OTA_VERSION = 368;
+//         v368: banner minimum-visible duration (2s) + restore 8s timeout.
+//         User feedback on v367: if the network completes a few ms after
+//         the timeout, the banner flashes onto screen and is gone before
+//         the user can read it — confusing. Solution: once the banner
+//         becomes visible, keep it on screen for AT LEAST 2 seconds even
+//         if mapReady+fogReady fire immediately afterward; only then
+//         flip back to 'ready' and dismiss the banner.
+//
+//         Implementation:
+//           - slowShownAtRef stamps the moment loadingState flips to
+//             'slow'.
+//           - map+fog-ready useEffect now has TWO paths:
+//               Path A (overlay still visible): normal fade-out as before.
+//               Path B (banner already showing): compute elapsed time
+//                 since shown; if < 2000ms, schedule the 'ready'
+//                 transition for the remaining delta; otherwise close
+//                 immediately.
+//           - bannerMinShowTimerRef tracks the pending close so we can
+//             cancel on unmount / remount.
+//
+//         Also: timeout restored from 500ms (debug, v365-v367) to
+//         production 8000ms. User confirmed banner UX in v367 — case
+//         closed.
+//
+//         v367: banner auto-close + clearer 'Weak signal' message.
 //           - 'Still loading…' didn't explain WHY user sees a banner.
 //             Changed to 'Weak signal — still loading map…' so user
 //             knows it's a network issue, not an app failure.

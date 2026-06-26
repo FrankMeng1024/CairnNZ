@@ -122,6 +122,16 @@ export function MemoryScreen() {
   const overlayFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stageTimer1Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stageTimer2Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // v368: when the slow banner appears, hold it visible for AT LEAST
+  // SLOW_BANNER_MIN_MS so the user actually has time to read it.
+  // Without this, a network that completes a few ms after the timeout
+  // would show the banner for a single frame — a confusing flash.
+  // slowShownAtRef = timestamp banner became visible; bannerMinShowTimerRef
+  // = pending timer that will re-evaluate map-ready state once the
+  // minimum has elapsed.
+  const slowShownAtRef = useRef<number>(0);
+  const bannerMinShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const SLOW_BANNER_MIN_MS = 2000;
 
   // Reset overlay state on each remount (mountKey bump).
   useEffect(() => {
@@ -131,6 +141,7 @@ export function MemoryScreen() {
     setLoadingState('loading');
     setLoadingStage(0);
     setSlowBannerDismissed(false); // v363: reset dismissal on remount
+    slowShownAtRef.current = 0; // v368
     overlayOpacity.setValue(1);
     if (overlayFadeTimerRef.current) {
       clearTimeout(overlayFadeTimerRef.current);
@@ -138,6 +149,10 @@ export function MemoryScreen() {
     }
     if (stageTimer1Ref.current) clearTimeout(stageTimer1Ref.current);
     if (stageTimer2Ref.current) clearTimeout(stageTimer2Ref.current);
+    if (bannerMinShowTimerRef.current) {
+      clearTimeout(bannerMinShowTimerRef.current);
+      bannerMinShowTimerRef.current = null;
+    }
     // Stage transitions: stage 1 at 2s, stage 2 at 5s.
     stageTimer1Ref.current = setTimeout(() => setLoadingStage(1), 2000);
     stageTimer2Ref.current = setTimeout(() => setLoadingStage(2), 5000);
@@ -148,13 +163,14 @@ export function MemoryScreen() {
         log('v360.overlay_timeout_slow', {});
         overlayHiddenRef.current = true;
         setLoadingState('slow');
+        slowShownAtRef.current = Date.now(); // v368: stamp visibility start
         Animated.timing(overlayOpacity, {
           toValue: 0,
           duration: 300,
           useNativeDriver: true,
         }).start();
       }
-    }, 500); // v365: DEBUG — keep 500ms so user can verify the new full-width banner UX. v366 will restore to 8000ms.
+    }, 8000); // v368: restored to production 8s. User confirmed banner UX in v367; case closed. v365-v367 used 500ms debug.
     return () => {
       if (overlayFadeTimerRef.current) {
         clearTimeout(overlayFadeTimerRef.current);
@@ -162,6 +178,10 @@ export function MemoryScreen() {
       }
       if (stageTimer1Ref.current) clearTimeout(stageTimer1Ref.current);
       if (stageTimer2Ref.current) clearTimeout(stageTimer2Ref.current);
+      if (bannerMinShowTimerRef.current) {
+        clearTimeout(bannerMinShowTimerRef.current);
+        bannerMinShowTimerRef.current = null;
+      }
     };
   }, [mountKey, overlayOpacity]);
 
@@ -173,29 +193,52 @@ export function MemoryScreen() {
   // map+fog ready and clear loadingState back to 'ready' so the banner
   // disappears. Mapbox keeps retrying tiles in the background — when
   // it finally succeeds, the banner should vanish automatically.
+  // v368: when the banner is currently visible (loadingState === 'slow'),
+  // enforce a minimum visible duration of SLOW_BANNER_MIN_MS. Otherwise
+  // a network that finishes a few ms after the timeout would flash the
+  // banner for a single frame, which is more confusing than helpful.
   useEffect(() => {
     if (!mapReady || !fogReady) return;
-    // Always clear timers + flip to 'ready'.
+    // Always clear the timeout/stage timers — they're irrelevant once
+    // both gates are satisfied.
     if (overlayFadeTimerRef.current) {
       clearTimeout(overlayFadeTimerRef.current);
       overlayFadeTimerRef.current = null;
     }
     if (stageTimer1Ref.current) clearTimeout(stageTimer1Ref.current);
     if (stageTimer2Ref.current) clearTimeout(stageTimer2Ref.current);
-    setLoadingState('ready');
-    // Only run the fade-out animation if the overlay hasn't been faded
-    // out yet (i.e. first time we hit ready before the 500ms/8s timer).
-    if (overlayHiddenRef.current) {
-      log('v367.banner_auto_close_after_slow', {});
+
+    // Path A: overlay still visible (haven't hit the slow timeout yet).
+    // Standard happy-path fade-out.
+    if (!overlayHiddenRef.current) {
+      overlayHiddenRef.current = true;
+      setLoadingState('ready');
+      log('v360.overlay_both_ready_fadeout', {});
+      Animated.timing(overlayOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
       return;
     }
-    overlayHiddenRef.current = true;
-    log('v360.overlay_both_ready_fadeout', {});
-    Animated.timing(overlayOpacity, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+
+    // Path B: overlay already faded (banner is showing in 'slow' state).
+    // Enforce minimum visible duration before flipping to 'ready'.
+    const shownFor = Date.now() - slowShownAtRef.current;
+    const remaining = SLOW_BANNER_MIN_MS - shownFor;
+    if (remaining <= 0) {
+      setLoadingState('ready');
+      log('v367.banner_auto_close_after_slow', { shown_ms: shownFor });
+      return;
+    }
+    // Wait the remaining time, then close. Cancel any prior scheduled
+    // close (e.g. if useEffect re-runs).
+    if (bannerMinShowTimerRef.current) clearTimeout(bannerMinShowTimerRef.current);
+    bannerMinShowTimerRef.current = setTimeout(() => {
+      setLoadingState('ready');
+      log('v368.banner_min_show_elapsed_close', { shown_ms: SLOW_BANNER_MIN_MS });
+      bannerMinShowTimerRef.current = null;
+    }, remaining);
   }, [mapReady, fogReady, overlayOpacity]);
 
   // Retry handler: reset state + bump refetchToken to re-trigger pull.
