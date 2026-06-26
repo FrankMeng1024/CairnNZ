@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Platform, AppState, Text as RNText, TextInput as RNTextInput } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { useFonts } from 'expo-font';
 import { RootNavigator } from './src/navigation/RootNavigator';
@@ -658,7 +658,13 @@ function AppRoot() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
+    // v348: pass initialMetrics so useSafeAreaInsets returns real values
+    // on first frame instead of {0,0,0,0}. Pre-v348 every cold sign-in
+    // → Home transition rendered the bottom tabs with paddingBottom=0
+    // for one frame (tabs visually clipped under home indicator) then
+    // jumped up ~34px when context populated. initialWindowMetrics is
+    // measured natively at app start, available before React mounts.
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <AppRoot />
     </SafeAreaProvider>
   );

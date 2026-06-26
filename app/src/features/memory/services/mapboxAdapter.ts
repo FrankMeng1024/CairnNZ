@@ -17,6 +17,7 @@ interface MapboxAdapter {
   LineLayer: any;
   FillLayer: any;
   ShapeSource: any;
+  CircleLayer: any;
   available: boolean;
 }
 
@@ -52,6 +53,7 @@ export function getMapbox(): MapboxAdapter {
       LineLayer: m.LineLayer,
       FillLayer: m.FillLayer,
       ShapeSource: m.ShapeSource,
+      CircleLayer: m.CircleLayer,
       available: true,
     };
   } catch {
@@ -69,6 +71,7 @@ function makeUnavailable(): MapboxAdapter {
     LineLayer: null,
     FillLayer: null,
     ShapeSource: null,
+    CircleLayer: null,
     available: false,
   };
 }

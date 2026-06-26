@@ -1273,7 +1273,34 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 347;
+export const OTA_VERSION = 348;
+//         v348: emergency hotfix for v347 Memory tab crash + fix
+//         first-sign-in bottom tabs jump.
+//
+//         (1) Memory tab crash (v347 regression — CRITICAL): MemoryMap
+//         destructured `CircleLayer` from getMapbox() which never exported
+//         it. CircleLayer was undefined; rendering <undefined/> as a child
+//         of UserLocation triggered a native crash on iOS (rnmapbox
+//         bridge expects known native child types). v348 reverts the
+//         custom UserLocation children back to v346's plain
+//         <UserLocation visible={true} /> (with default puck: 6px blue
+//         dot + 9px white + 15px halo). The "halo mistaken for fog
+//         reveal" UX issue will be revisited in a future OTA via the
+//         proper renderMode="custom" pattern. Also added CircleLayer to
+//         mapboxAdapter exports for future use.
+//
+//         (2) First-sign-in bottom tabs half-shown then jumping up:
+//         SafeAreaProvider in App.tsx was wrapping AppRoot without
+//         initialMetrics, so the first frame after sign-in had
+//         useSafeAreaInsets returning {0,0,0,0}. HomeScreen's
+//         paddingBottom + SafeAreaView used these zero insets → tabs
+//         rendered flush to bottom (clipped under home indicator) then
+//         jumped up ~34px on next frame. v348 passes initialMetrics=
+//         initialWindowMetrics so real insets are available from frame 1.
+//
+//         All other v347 wins preserved: FogLayer instant world-rect fog
+//         (no 5s black screen), cool slate fog color, warm-gold corridor
+//         halo LineLayer, fast first compute (0ms delay).
 //         v347: 3-bug fix OTA based on v346 user feedback.
 //
 //         (1) "5-second black-then-fog-appears" load delay — FIXED.
