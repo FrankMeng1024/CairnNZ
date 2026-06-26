@@ -33,6 +33,77 @@ import {
   markMemoryHydrateSuccess,
 } from '../lib/memoryHydrateGate';
 
+/**
+ * v351 plant-cluster filter for hydrate-time migration.
+ *
+ * Background: pre-v351 PlantScreen.tsx:180 wrote a single VisitedPoint
+ * per plant via recordCircleUnlock. Those points have UUID-style cids
+ * (NOT 'migration-' prefix that hike-imported points carry). v351 removes
+ * the recordCircleUnlock call on plant + server-side cleanup runs DELETE
+ * memory_points WHERE client_id NOT LIKE 'migration-%'. But local
+ * AsyncStorage cache from prior runs still holds plant points.
+ *
+ * Cannot filter by cid alone — hike-derived points written by
+ * flushHikingToMemory.ts also have UUID cids (recordPoint generates
+ * uuidv4 in useMemoryStore.ts:244). Must distinguish by spatial pattern:
+ *   - Hike track: 50+ points strung along a path
+ *   - Plant: 1 isolated point (or a small <10-point cluster tightly
+ *     packed within ~30m if multiple plants happened at same location)
+ *
+ * Algorithm: drop any point whose 30m neighborhood contains < 20 points
+ * AND whose cid does NOT start with 'migration-' (server-managed hike
+ * import). Keeps all migration- points unconditionally + keeps non-
+ * migration points only if they're part of a dense path cluster
+ * (legitimate hike trail).
+ */
+function stripPlantClusters(points: VisitedPoint[]): VisitedPoint[] {
+  if (points.length === 0) return points;
+  const KEEP_RADIUS_M = 30;
+  const KEEP_RADIUS_M2 = KEEP_RADIUS_M * KEEP_RADIUS_M;
+  const KEEP_MIN_NEIGHBORS = 20;
+  const M_PER_DEG = 111320;
+  // Bucket index for O(N*avgK) neighbor count instead of O(N²).
+  const bucketKey = (lat: number, lng: number) =>
+    `${Math.round(lat * 1000)}|${Math.round(lng * 1000)}`;
+  const buckets = new Map<string, VisitedPoint[]>();
+  for (const p of points) {
+    const k = bucketKey(p.lat, p.lng);
+    const arr = buckets.get(k);
+    if (arr) arr.push(p); else buckets.set(k, [p]);
+  }
+  const kept: VisitedPoint[] = [];
+  for (const p of points) {
+    if (p.cid && p.cid.startsWith('migration-')) {
+      kept.push(p);
+      continue;
+    }
+    // Check ±1 bucket (~111m) for neighbors within 30m.
+    const lat1k = Math.round(p.lat * 1000);
+    const lng1k = Math.round(p.lng * 1000);
+    let neighbors = 0;
+    for (let di = -1; di <= 1 && neighbors < KEEP_MIN_NEIGHBORS; di++) {
+      for (let dj = -1; dj <= 1 && neighbors < KEEP_MIN_NEIGHBORS; dj++) {
+        const bk = `${lat1k + di}|${lng1k + dj}`;
+        const arr = buckets.get(bk);
+        if (!arr) continue;
+        for (const q of arr) {
+          if (q === p) continue;
+          const dLat = (q.lat - p.lat) * M_PER_DEG;
+          const cosLat = Math.cos((p.lat * Math.PI) / 180);
+          const dLng = (q.lng - p.lng) * M_PER_DEG * cosLat;
+          if (dLat * dLat + dLng * dLng < KEEP_RADIUS_M2) {
+            neighbors++;
+            if (neighbors >= KEEP_MIN_NEIGHBORS) break;
+          }
+        }
+      }
+    }
+    if (neighbors >= KEEP_MIN_NEIGHBORS) kept.push(p);
+    // else: plant/orphan, dropped
+  }
+  return kept;
+}
+
 // v0.2.6.3: schema bumped from v2 (point array, no cid) to v3 (cid required).
 // Storage key prefix bumped to v3 so old v2 payloads are abandoned, but
 // deserialize() also accepts v2 input and synthesizes a deterministic cid
@@ -383,11 +454,36 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
       const migratedInitialRevealDone = needsRevealMigration
         ? false
         : decoded.initialRevealDone;
+      // v351 migration: strip plant-origin points from local cache.
+      // Pre-v351 PlantScreen.tsx:180 called recordCircleUnlock which
+      // wrote a single point per plant into useMemoryStore.points,
+      // then memorySync pushed those to server. v351 dropped that
+      // PlantScreen call AND cleaned server-side (DELETE FROM
+      // memory_points WHERE user_id=N AND client_id NOT LIKE
+      // 'migration-%'). But local AsyncStorage may still hold the
+      // hydrated plant points from a previous run. Plant points have
+      // UUID-style client_id (NOT 'migration-' prefix); hike points
+      // written by flushHikingToMemory ALSO have UUID cids in some
+      // versions — so we can't filter by cid alone. Instead detect
+      // plant pattern: small spatially-tight cluster (<10 points
+      // within 30m of each other) with cid != 'migration-*'. Any
+      // such cluster gets dropped — they're plant artefacts not hike
+      // tracks. Hike tracks are 50+ points strung along a path, not
+      // tightly clustered.
+      const cleanedPoints = stripPlantClusters(decoded.points);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_before_replacepoints', { points_n: decoded.points.length });
+        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_v351_plant_strip', {
+          before: decoded.points.length,
+          after: cleanedPoints.length,
+          stripped: decoded.points.length - cleanedPoints.length,
+        });
       } catch {/* ignore */}
-      useMemoryStore.getState().replacePoints(decoded.points, migratedInitialRevealDone);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_before_replacepoints', { points_n: cleanedPoints.length });
+      } catch {/* ignore */}
+      useMemoryStore.getState().replacePoints(cleanedPoints, migratedInitialRevealDone);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_replacepoints');

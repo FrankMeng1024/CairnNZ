@@ -1273,7 +1273,43 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 350;
+export const OTA_VERSION = 351;
+//         v351: 4-bug omnibus, all root-caused via independent subagent
+//         reading of source code + server telemetry.
+//
+//         (1) HomeScreen bottom occlusion (v350 regression): SafeAreaView
+//         edges={['top']} removed the native 34px bottom padding. The
+//         design was always dual-tier (native + manual), not double-counting.
+//         v351 restores edges={['top','bottom']}.
+//
+//         (2) Fog + path don't load simultaneously (v347 design choice
+//         user rejected): useState(world-rect) + useEffect(async turf)
+//         gave first frame as no-holes fog. v351 replaces with
+//         useMemo(() => buildFogShape(points)) — synchronous first
+//         compute. JS blocks ~300ms during tab transition (turf cost),
+//         but user sees fog+path appear together at end of transition
+//         instead of "fog now, path 500ms later".
+//
+//         (3) Mysterious circle at user GPS — ROOT CAUSE: PlantScreen.tsx
+//         :180 called recordCircleUnlock on every plant. Plant writes a
+//         single VisitedPoint into useMemoryStore.points. Multiple plants
+//         clustered within 30m get turf.buffer'd into one lumpy "circle"
+//         corridor. v351:
+//           - PlantScreen.tsx:180 recordCircleUnlock call REMOVED.
+//             Planting drops a marker, no longer unlocks fog.
+//           - Server SQL: DELETE FROM memory_points WHERE user_id=4
+//             AND client_id NOT LIKE 'migration-%' — purged 13 plant
+//             points already executed.
+//           - memoryPersistence.ts adds stripPlantClusters() hydrate-time
+//             filter: drops any local-cached point with <20 neighbors
+//             within 30m AND non-migration cid. Cleans local AsyncStorage
+//             cache from pre-v351 plants without affecting hike data.
+//
+//         (4) "Dog-bitten" corridor edges: turf.buffer steps 8 → 16
+//         (double the per-quadrant vertex count, ~5.6° per segment vs
+//         11.25° before, sub-pixel smooth at z14+). 5-hike vertex
+//         budget ~2400 verts, still under earcut bug threshold for
+//         single-MultiPolygon-with-corridor-holes geometry class.
 //         v350: hotfix for v349 corridor edges still sharp + partial fix
 //         for tabs jump.
 //

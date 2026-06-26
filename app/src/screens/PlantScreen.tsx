@@ -177,7 +177,22 @@ export function PlantScreen() {
           voiceMemoDurationMs: final.voiceMs ?? undefined,
         } as any);
         log('plant.commit_ok', { id: created?.id });
-        recordCircleUnlock(final.lat, final.lng, UnlockConfig.radiusMeters, Date.now());
+        // v351: removed recordCircleUnlock — planting a cairn no longer
+        // unlocks fog around the plant location. User feedback: "I planted
+        // 8 cairns, those plant points became fog reveal circles around
+        // my current location which I don't want — only hikes should
+        // unlock fog."
+        // Pre-v351 PlantScreen.tsx:180 called
+        // recordCircleUnlock(lat, lng, UnlockConfig.radiusMeters=25, ...)
+        // which writes a single VisitedPoint per plant into
+        // useMemoryStore.points. Those points then get turf.buffer'd by
+        // FogLayer into a corridor — visually a lumpy circle around each
+        // planted cairn. Pin still drops via addMarker; only the fog
+        // reveal side effect is removed.
+        // Server-side cleanup of legacy plant-origin points is a separate
+        // one-off SQL operation (delete from memory_points where
+        // client_id NOT LIKE 'migration-%').
+        // recordCircleUnlock(final.lat, final.lng, UnlockConfig.radiusMeters, Date.now());
         // K3 fix: clear any previously saved draft on successful commit.
         try {
           const { storage } = await import('../store/storage');

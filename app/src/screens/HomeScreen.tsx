@@ -320,15 +320,16 @@ export function HomeScreen() {
   }, []);
 
   return (
-    // v350: SafeAreaView edges removed 'bottom' — keep only 'top'. The
-    // toolsRow already applies its own paddingBottom via useSafeAreaInsets
-    // (line 333 below). Having both <SafeAreaView edges={'bottom'}> AND
-    // manual paddingBottom: insets.bottom double-counts on first mount
-    // and causes a one-frame layout race where the tabs render with the
-    // SafeAreaView's bottom padding but before the manual insets apply
-    // → visual "tabs jump up" on every first sign-in after OTA reload.
-    // Single source of truth via manual insets eliminates the race.
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    // v351: REVERTED v350 edges={['top']} change. v350 was based on
+    // "double-padding race" hypothesis — wrong. v346-v349 design was
+    // intentional: SafeAreaView provides ~34px native bottom padding
+    // (home indicator) AND manual paddingBottom inset.bottom + 12px
+    // provides a second tier. Total ~72px buffer keeps toolsRow above
+    // the home indicator visual strip with comfortable margin. v350
+    // removing one tier left only 12-38px → tabs visually pressed
+    // against home indicator (or under on devices with insets=0 first
+    // frame). Restore double-tier.
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
       <OtaBadge />
       <Animated.View

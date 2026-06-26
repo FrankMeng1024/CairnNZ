@@ -38,7 +38,7 @@
  * No Skia, no PNG, no transport, no http URL, no file://, no data: URI.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { getMapbox } from '../services/mapboxAdapter';
@@ -130,13 +130,17 @@ function buildFogShape(
       try {
         line = simplifyTurf(line, { tolerance: SIMPLIFY_TOLERANCE_DEG, highQuality: false });
       } catch {/* simplify can fail on duplicate points; use unsimplified */}
-      // v349: steps 4 → 8 (turf default). Doubles vertex count at corner
-      // caps for smoother round corners (less "sharp / angular" feel
-      // user reported). 30-GPS-pt hike: ~240 → ~480 verts. 5-hike accum
-      // ~2400 verts — still under the ~5000-vert earcut-bug threshold
-      // empirically observed in spike testing (#7023). Do NOT raise
-      // further without a vertex-count budget guard.
-      const buf = bufferTurf(line, CORRIDOR_WIDTH_M, { units: 'meters', steps: 8 });
+      // v351: steps 8 → 16. v349-v350 used steps:8 (quadrant segments,
+      // 32 vertices per full circle = 11.25° per segment). At z16 a 25m
+      // corridor cap is ~80-150px wide on screen, so each segment was
+      // 3-5px — visible jagged "dog-bitten" edges per user feedback.
+      // steps:16 → 64 vertices per circle, 5.6° per segment, sub-pixel
+      // smooth at z14+. Vertex budget: 5-hike accum × 30 GPS pts × 16
+      // = ~2400 verts, still well under the ~5000 vert earcut bug
+      // threshold (#7023 was confirmed broken at 1848 in v325-v330 era,
+      // but those were N independent small holes; we have 1 MultiPolygon
+      // with corridors — different geometry class, higher safe threshold).
+      const buf = bufferTurf(line, CORRIDOR_WIDTH_M, { units: 'meters', steps: 16 });
       if (buf && buf.geometry) {
         corridors.push(buf as Feature<Polygon | MultiPolygon>);
       }
@@ -182,61 +186,35 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
   const points = useMemoryStore((s) => s.points);
   const geometryVersion = useMemoryStore((s) => s.geometryVersion);
 
-  // v347 fix: initial value is solid world-rect fog (no holes), so the
-  // user sees a fully-fogged map IMMEDIATELY on mount instead of black
-  // screen for 500ms-5s while turf computes corridors. The buildFogShape
-  // run completes ~200-500ms later and replaces this with the holes-included
-  // version. Cheaper visual transition: covered-by-fog → corridors revealed.
-  const [fogShape, setFogShape] = useState<Feature<Polygon | MultiPolygon> | null>(() => {
-    return polygon([[
-      [-180, -85],
-      [180, -85],
-      [180, 85],
-      [-180, 85],
-      [-180, -85],
-    ]]);
-  });
-  const recomputeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isMountedRef = useRef(true);
-  // v347: 0ms first compute, RECOMPUTE_DEBOUNCE_MS thereafter. Goal:
-  // user-perceived load is "instant fog + ~0.5s later path reveals" not
-  // "0.5s of black + then fog".
-  const hasComputedRef = useRef(false);
-
-  // Debounced recompute of fog geometry. Cheap when points haven't changed,
-  // but turf.buffer + difference can be 50-300ms with 1000+ vertices.
-  useEffect(() => {
-    if (!useH3Fog) {
-      setFogShape(null);
-      return;
-    }
-    if (recomputeTimerRef.current) clearTimeout(recomputeTimerRef.current);
-    const delay = hasComputedRef.current ? RECOMPUTE_DEBOUNCE_MS : 0;
-    recomputeTimerRef.current = setTimeout(() => {
-      if (!isMountedRef.current) return;
-      const t0 = Date.now();
-      const isFirst = !hasComputedRef.current;
-      const shape = buildFogShape(points);
-      hasComputedRef.current = true;
-      if (!isMountedRef.current) return;
-      log('fog.shape_built', {
-        n_points: points.length,
-        build_ms: Date.now() - t0,
-        has_holes: shape !== null && shape.geometry.type === 'Polygon'
-          && (shape.geometry.coordinates as any[]).length > 1,
-        first: isFirst,
-      });
-      setFogShape(shape);
-    }, delay);
+  // v351: SYNCHRONOUS fog shape via useMemo. Replaces v347's
+  // useState(worldRect) + useEffect(buildFogShape) async pattern, which
+  // caused users to see "all fog, no path" on first mount for ~200-500ms
+  // while turf finished computing. User explicitly reported:
+  // "应该是和背景同时load出来的不应该是单独load的".
+  //
+  // Trade-off: first mount blocks JS thread ~200-500ms (telemetry v350
+  // build_ms=321ms on 765 points). But:
+  //   (a) MemoryTab transition animation is ~200-300ms anyway — turf
+  //       runs IN that window, user perceives slightly longer tab
+  //       slide-in instead of "fog appears, then path appears".
+  //   (b) Subsequent recomputes only fire when points/geometryVersion
+  //       actually change (recordPoint or pull) — rare during quiet
+  //       viewing.
+  // If a hike is huge (5000+ points) and block exceeds 800ms, add
+  // a vertex-budget cap inside buildFogShape (deferred).
+  const fogShape = useMemo<Feature<Polygon | MultiPolygon> | null>(() => {
+    if (!useH3Fog) return null;
+    const t0 = Date.now();
+    const shape = buildFogShape(points);
+    log('fog.shape_built', {
+      n_points: points.length,
+      build_ms: Date.now() - t0,
+      has_holes: shape !== null && shape.geometry.type === 'Polygon'
+        && (shape.geometry.coordinates as any[]).length > 1,
+    });
+    return shape;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, geometryVersion, useH3Fog]);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      if (recomputeTimerRef.current) clearTimeout(recomputeTimerRef.current);
-    };
-  }, []);
 
   if (!useH3Fog) return null;
   if (!Mapbox.available) return null;
