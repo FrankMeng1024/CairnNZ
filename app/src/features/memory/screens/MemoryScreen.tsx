@@ -96,48 +96,67 @@ export function MemoryScreen() {
   const [mountKey, setMountKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
 
-  // v359: loading overlay state. Covers the entire MemoryMap during the
-  // 3-stage flicker window (cream → basemap → fog with holes). Fades out
-  // when BOTH (a) Mapbox onDidFinishRenderingMapFully has fired AND
-  // (b) FogLayer first builds geometry with corridor holes. 3s safety
-  // timeout forces fade-out so the user is never stuck on the overlay.
+  // v360: full UX loading state machine — replaces v359's simple 3s
+  // hard timeout. Industry benchmark (Nielsen 10s attention limit,
+  // Mapbox official latency guidance, AllTrails/Komoot offline UX):
+  //   - 8s hard timeout (was 3s; 3s misjudged normal 4G as failure)
+  //   - Stage-based loading copy at 0/2s/5s gives "things are happening"
+  //     feedback (perceived speed +30% vs pure spinner per skeleton
+  //     screen research)
+  //   - On timeout, do NOT force-fade. Fade the overlay BUT keep a
+  //     small top banner "网络较慢，未完全加载完 [重试]" so the user
+  //     sees the partial state AND can retry without leaving the tab.
+  //
+  // States: 'loading' (overlay opaque) | 'ready' (faded out) | 'slow'
+  // (faded out + banner).
+  const [loadingState, setLoadingState] = useState<'loading' | 'ready' | 'slow'>('loading');
+  const [loadingStage, setLoadingStage] = useState<0 | 1 | 2>(0); // 0..2s / 2..5s / 5s+
   const [mapReady, setMapReady] = useState(false);
   const [fogReady, setFogReady] = useState(false);
   const overlayOpacity = useRef(new Animated.Value(1)).current;
   const overlayHiddenRef = useRef(false);
   const overlayFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stageTimer1Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stageTimer2Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Reset overlay state on each remount (mountKey bump). Without this,
-  // a tab-switch that bumps mountKey would re-show the map but never
-  // re-show the overlay because mapReady/fogReady are still true from
-  // last session.
+  // Reset overlay state on each remount (mountKey bump).
   useEffect(() => {
     overlayHiddenRef.current = false;
     setMapReady(false);
     setFogReady(false);
+    setLoadingState('loading');
+    setLoadingStage(0);
     overlayOpacity.setValue(1);
     if (overlayFadeTimerRef.current) {
       clearTimeout(overlayFadeTimerRef.current);
       overlayFadeTimerRef.current = null;
     }
-    // 3s safety timeout: even if mapReady or fogReady never fire,
-    // force the overlay to fade out so the user is never stuck.
+    if (stageTimer1Ref.current) clearTimeout(stageTimer1Ref.current);
+    if (stageTimer2Ref.current) clearTimeout(stageTimer2Ref.current);
+    // Stage transitions: stage 1 at 2s, stage 2 at 5s.
+    stageTimer1Ref.current = setTimeout(() => setLoadingStage(1), 2000);
+    stageTimer2Ref.current = setTimeout(() => setLoadingStage(2), 5000);
+    // 8s hard timeout: fade overlay AND switch to 'slow' state which
+    // shows the retry banner.
     overlayFadeTimerRef.current = setTimeout(() => {
       if (!overlayHiddenRef.current) {
-        log('v359.overlay_timeout_fadeout', {});
+        log('v360.overlay_timeout_slow', {});
         overlayHiddenRef.current = true;
+        setLoadingState('slow');
         Animated.timing(overlayOpacity, {
           toValue: 0,
           duration: 300,
           useNativeDriver: true,
         }).start();
       }
-    }, 3000);
+    }, 8000);
     return () => {
       if (overlayFadeTimerRef.current) {
         clearTimeout(overlayFadeTimerRef.current);
         overlayFadeTimerRef.current = null;
       }
+      if (stageTimer1Ref.current) clearTimeout(stageTimer1Ref.current);
+      if (stageTimer2Ref.current) clearTimeout(stageTimer2Ref.current);
     };
   }, [mountKey, overlayOpacity]);
 
@@ -150,13 +169,29 @@ export function MemoryScreen() {
       clearTimeout(overlayFadeTimerRef.current);
       overlayFadeTimerRef.current = null;
     }
-    log('v359.overlay_both_ready_fadeout', {});
+    if (stageTimer1Ref.current) clearTimeout(stageTimer1Ref.current);
+    if (stageTimer2Ref.current) clearTimeout(stageTimer2Ref.current);
+    setLoadingState('ready');
+    log('v360.overlay_both_ready_fadeout', {});
     Animated.timing(overlayOpacity, {
       toValue: 0,
       duration: 300,
       useNativeDriver: true,
     }).start();
   }, [mapReady, fogReady, overlayOpacity]);
+
+  // Retry handler: reset state + bump refetchToken to re-trigger pull.
+  const handleRetryLoad = () => {
+    log('v360.user_retry');
+    setLoadingState('loading');
+    setLoadingStage(0);
+    setMapReady(false);
+    setFogReady(false);
+    overlayHiddenRef.current = false;
+    overlayOpacity.setValue(1);
+    setRefetchToken((n) => n + 1);
+    setMountKey((n) => n + 1);
+  };
 
   // v333: Recenter button is hidden until the user actively pans/zooms.
   // User intent (decision E): "an icon like Hiking — only appears after I
@@ -565,7 +600,13 @@ export function MemoryScreen() {
               <Icon name="Mountain" size={44} color={MemoryColors.sepia} strokeWidth={1.5} />
             </View>
             <Text style={styles.loadingTitle}>Cairn</Text>
-            <Text style={styles.loadingSub}>正在加载你的探索记忆…</Text>
+            <Text style={styles.loadingSub}>
+              {loadingStage === 0
+                ? '加载地图中…'
+                : loadingStage === 1
+                  ? '加载你的足迹…'
+                  : '网络较慢，请稍候…'}
+            </Text>
             <ActivityIndicator
               color={MemoryColors.sepia}
               size="small"
@@ -573,6 +614,23 @@ export function MemoryScreen() {
             />
           </View>
         </Animated.View>
+      )}
+      {/* v360: slow-network banner. Appears when 8s hard timeout fires
+          AND map+fog weren't both ready. Shows above content, doesn't
+          block; user can tap retry or just keep using partial map. */}
+      {persistentCoord && loadingState === 'slow' && (
+        <View style={styles.slowBanner} pointerEvents="box-none">
+          <Text style={styles.slowBannerText} numberOfLines={2}>
+            网络较慢，地图未完全加载完
+          </Text>
+          <TouchableOpacity
+            style={styles.slowBannerRetry}
+            onPress={handleRetryLoad}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.slowBannerRetryText}>重试</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       <Modal visible={showHint} transparent animationType="fade" onRequestClose={dismissHint}>
@@ -684,5 +742,46 @@ const styles = StyleSheet.create({
   },
   loadingSpinner: {
     marginTop: 4,
+  },
+  // v360 slow-network banner — appears as a thin pill at the top of
+  // the screen when 8s timeout fires and map/fog weren't both ready.
+  // Visually distinct from a blocking modal: user can keep using the
+  // partial map underneath; tapping the pill triggers retry.
+  slowBanner: {
+    position: 'absolute',
+    top: 56,
+    left: 16,
+    right: 16,
+    backgroundColor: 'rgba(91, 70, 40, 0.92)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+    zIndex: 8,
+  },
+  slowBannerText: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontWeight: '500',
+    marginRight: 10,
+  },
+  slowBannerRetry: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  slowBannerRetryText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

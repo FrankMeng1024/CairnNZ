@@ -1273,7 +1273,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 359;
+export const OTA_VERSION = 360;
+//         v360: industry-standard loading UX. Replaces v359's hard 3s
+//         timeout with 8s timeout + stage-based copy + slow-network
+//         retry banner. Based on Nielsen 10s attention limit + AllTrails/
+//         Komoot/Gaia GPS weak-network patterns. Stage copy at 0/2s/5s
+//         gives 30%+ better perceived speed than pure spinner. On
+//         timeout, fade overlay AND show top banner '网络较慢，地图未
+//         完全加载完 [重试]' instead of silently revealing the partial
+//         state. Retry resets state + bumps refetchToken + mountKey.
 //         v359: loading overlay for Memory tab — eliminates the 3-stage
 //         flicker (cream → basemap-no-fog → fog-with-holes) by covering
 //         MemoryMap with a cream pleasant loading view that fades out
