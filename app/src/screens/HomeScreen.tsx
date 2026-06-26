@@ -7,7 +7,7 @@
  */
 import React, { useRef, useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, useWindowDimensions,
+  View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, useWindowDimensions, Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -242,6 +242,31 @@ export function HomeScreen() {
   const card2 = useRef(new Animated.Value(1)).current;
   const insets = useSafeAreaInsets();
 
+  // v354 fix: OTA-reload-first-signin tab-jump root cause.
+  // iOS doesn't guarantee window.safeAreaInsets is final at JS-init
+  // time after OTA reloadAsync. SafeAreaProvider's initialMetrics
+  // may seed insets.bottom = 0 → first frame paddingBottom is wrong
+  // → tabs visually clipped under home indicator → onInsetsChange
+  // fires one layout pass later → tabs visibly jump up.
+  // Fix: defer first render until insets.bottom has been measured
+  // (or 250ms timeout fallback). User sees splash background for
+  // up to one extra frame instead of jumping tabs. Pure JS, OTA.
+  const [insetsReady, setInsetsReady] = useState(
+    () => Platform.OS !== 'ios' || insets.bottom > 0,
+  );
+  useEffect(() => {
+    if (insetsReady) return;
+    if (insets.bottom > 0) {
+      setInsetsReady(true);
+      return;
+    }
+    // Fallback: paint after 250ms even if insets still 0 (iPhone SE
+    // or other no-home-indicator devices where insets.bottom is
+    // legitimately 0).
+    const t = setTimeout(() => setInsetsReady(true), 250);
+    return () => clearTimeout(t);
+  }, [insets.bottom, insetsReady]);
+
   // v320: beacon right before JSX return — if app dies between selectors
   // and JSX render, we'll see home_after_selectors but no home_before_jsx.
   try {
@@ -318,6 +343,16 @@ export function HomeScreen() {
     }, 800);
     return () => clearTimeout(timer);
   }, []);
+
+  // v354: defer first paint until insets are ready (or 250ms timeout).
+  // Prevents the OTA-reload-first-signin tab-jump bug where iOS hasn't
+  // yet provided real safeAreaInsets to JS at the moment HomeScreen
+  // mounts. With insetsReady gate, when we DO render we already have
+  // correct paddingBottom and tabs are positioned right on the first
+  // pixel the user sees.
+  if (!insetsReady) {
+    return <View style={styles.safe} />;
+  }
 
   return (
     // v351: REVERTED v350 edges={['top']} change. v350 was based on

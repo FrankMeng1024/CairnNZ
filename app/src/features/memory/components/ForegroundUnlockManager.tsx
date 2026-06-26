@@ -137,17 +137,23 @@ export function ForegroundUnlockManager() {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_scheduled');
     } catch {/* ignore */}
-    // v320 fix: replace InteractionManager.runAfterInteractions with
-    // explicit setTimeout(5000). Subagent E + F (2026-06-24 round 2)
-    // confirmed user crashes 1s after seeing HomeScreen — exactly when
-    // InteractionManager callback fires (after nav transition ~500ms +
-    // home mount ~300ms + first commit). Inside that callback the
-    // hydrate+pull chain runs sync-heavy work (h3-js 32MB emscripten
-    // alloc OR res.json() 500KB+ parse) on a freshly-mounted Home with
-    // OtaBadge re-checking updates → main thread freeze → iOS watchdog
-    // SIGKILL. 5000ms gives Home + OtaBadge + react-navigation transition
-    // full time to settle. Trade-off: fog rendering delayed by 5s vs
-    // crash.
+    // v354 fix: 5000ms → 100ms. The original v320 5s defer was
+    // protecting against h3-js emscripten 32MB alloc + Mapbox tile
+    // init colliding on Home mount → iOS watchdog SIGKILL. Three
+    // things have since neutralised that risk:
+    //   (1) v323 replaced h3-js (WASM) with h3Pure (pure JS, zero
+    //       heap pressure, sync ~5ms)
+    //   (2) v320 added 500KB Content-Length guard in pullMemoryFromServer
+    //       blocking the huge res.json() that could 9s-freeze Hermes
+    //   (3) v322 moved FGUM into MemoryScreen so it doesn't run on
+    //       Home tab mount anymore — only when user explicitly opens
+    //       Memory, where there's no concurrent OtaBadge re-check
+    // The 5s defer now only adds 5000ms of empty fog to Memory tab
+    // first paint with no protection benefit. Telemetry on v353 boot
+    // confirmed: Memory tab → 5000ms wait → memhydrate → fog. Pure
+    // dead time. 100ms is enough to let the navigation transition
+    // animation complete without competing for the main thread on
+    // the heavy hydrate burst.
     setTimeout(() => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -219,7 +225,7 @@ export function ForegroundUnlockManager() {
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_pull_memory_dispatched');
       } catch {/* ignore */}
       })();
-    }, 5000);  // v320: defer 5s instead of InteractionManager — see fgum_hasuser_scheduled comment above
+    }, 100);  // v354: was 5000 — see v354 comment block ~line 140
     return () => {
       // Cleanup runs synchronously but may chain async work. Bumping
       // the gen ref lets in-flight async fall out of the race.

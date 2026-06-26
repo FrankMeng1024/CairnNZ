@@ -630,9 +630,20 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // out of stopTracking and lose the session via skipped addSession.
       let memoryNewCells = 0;
       try {
-        const result = flushHikingToMemory(s.trackPoints);
+        // v354 fix: use Kalman-smoothed track for memory (same source
+        // as the live HikingScreen polyline). Pre-v354 memory used
+        // s.trackPoints (clean but non-Kalman), while activity polyline
+        // uses s.trackPointsSmoothed (Kalman). The two streams produce
+        // visibly different shapes — activity reads as a single line,
+        // memory shows "parallel drift / fork" artifacts. Fix is to
+        // use the SAME stream for both. Fallback to trackPoints if
+        // Kalman didn't produce enough points (rare edge case).
+        const memorySource = s.trackPointsSmoothed.length >= 2
+          ? s.trackPointsSmoothed
+          : s.trackPoints;
+        const result = flushHikingToMemory(memorySource);
         memoryNewCells = result.newCells;
-        crashLogger.breadcrumb(`v333:hiking_to_memory ok pts=${s.trackPoints.length} new=${memoryNewCells}`);
+        crashLogger.breadcrumb(`v354:hiking_to_memory ok kalman=${s.trackPointsSmoothed.length>=2} pts=${memorySource.length} new=${memoryNewCells}`);
       } catch (e) {
         crashLogger.breadcrumb(`v333:hiking_to_memory failed ${String(e).slice(0, 80)}`);
       }

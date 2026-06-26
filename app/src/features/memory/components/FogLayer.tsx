@@ -78,7 +78,20 @@ const RECOMPUTE_DEBOUNCE_MS = 500;
  */
 function segmentByGap(points: Array<{ lat: number; lng: number; ts: number }>): Array<Array<[number, number]>> {
   if (points.length === 0) return [];
-  const HIKE_GAP_MS = 5 * 60 * 1000;
+  // v354 fix: increase HIKE_GAP_MS 5min → 60min AND add spatial
+  // proximity merge. User reported "中间有尖角洞" — root cause was
+  // a single hike with a 29-minute rest break got split into two
+  // segments. Buffer 25m each, parallel offset 20-50m, resulted in
+  // an unbridged sharp wedge between corridors.
+  // Two fixes here:
+  //   (1) HIKE_GAP_MS 5min → 60min — rest breaks during a single
+  //       walk count as one hike, not two
+  //   (2) AFTER time-based split, if segment[i] last point is within
+  //       SPATIAL_MERGE_RADIUS_M of segment[i+1] first point, merge.
+  //       Catches the case where two real hikes happen to start/end
+  //       at the same trailhead but >60min apart.
+  const HIKE_GAP_MS = 60 * 60 * 1000;
+  const SPATIAL_MERGE_RADIUS_M = 100;
   const segments: Array<Array<[number, number]>> = [];
   let current: Array<[number, number]> = [];
   let prevTs = points[0].ts;
@@ -91,7 +104,26 @@ function segmentByGap(points: Array<{ lat: number; lng: number; ts: number }>): 
     prevTs = p.ts;
   }
   if (current.length > 0) segments.push(current);
-  return segments;
+  // Spatial proximity merge: walk segments in order, merge i+1 into i
+  // if last(i) is within 100m of first(i+1).
+  const merged: Array<Array<[number, number]>> = [];
+  const M_PER_DEG_LAT = 111320;
+  for (const seg of segments) {
+    const prev = merged[merged.length - 1];
+    if (prev && prev.length > 0 && seg.length > 0) {
+      const [plng, plat] = prev[prev.length - 1];
+      const [nlng, nlat] = seg[0];
+      const dLat = (nlat - plat) * M_PER_DEG_LAT;
+      const cosLat = Math.cos((plat * Math.PI) / 180);
+      const dLng = (nlng - plng) * M_PER_DEG_LAT * cosLat;
+      if (dLat * dLat + dLng * dLng < SPATIAL_MERGE_RADIUS_M * SPATIAL_MERGE_RADIUS_M) {
+        prev.push(...seg);
+        continue;
+      }
+    }
+    merged.push([...seg]);
+  }
+  return merged;
 }
 
 /**

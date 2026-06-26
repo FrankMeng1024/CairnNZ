@@ -1273,7 +1273,46 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 353;
+export const OTA_VERSION = 354;
+//         v354: 4 real-root-cause fixes (subagent evidence-based,
+//         each tied to specific file:line, no speculation).
+//
+//         (1) Memory 5s black screen: ROOT CAUSE = v320's
+//         ForegroundUnlockManager.tsx hard 5000ms setTimeout. v320
+//         added it to defer hydrate behind nav transition+OtaBadge
+//         to prevent iOS watchdog SIGKILL during h3-js emscripten
+//         alloc burst. But v323 replaced h3-js with pure-JS h3Pure
+//         (no alloc), v320 added 500KB pull cap, v322 moved FGUM
+//         into MemoryScreen so it no longer fires on Home tab mount.
+//         The 5s defer is now pure dead time. v354 reduces 5000→100ms.
+//
+//         (2) Memory shows "two-direction" GPS multi-path while
+//         activity polyline shows single line: ROOT CAUSE = data
+//         stream divergence. HikingScreen activity polyline reads
+//         trackPointsSmoothed (Kalman-smoothed clean). Memory was
+//         reading trackPoints (clean but non-Kalman). Two visibly
+//         different shapes from same hike. v354 useTrackingStore.ts:
+//         flushHikingToMemory now reads trackPointsSmoothed
+//         (Kalman) matching activity polyline source.
+//
+//         (3) Sharp "unsolved" wedge inside revealed corridor:
+//         ROOT CAUSE = segmentByGap 5min threshold split a single
+//         hike with rest break into two segments. Two parallel
+//         corridors 20-50m apart, 25m buffer each → unbridged gap
+//         visualised as sharp wedge. v354 FogLayer.tsx: HIKE_GAP_MS
+//         5min→60min + post-split spatial-proximity merge (if seg[i]
+//         end within 100m of seg[i+1] start, treat as one hike).
+//
+//         (4) OTA-reload-first-signin tab-jump: ROOT CAUSE = iOS
+//         doesn't guarantee window.safeAreaInsets is final at the
+//         moment SafeAreaProvider initialises post-OTA reload. JS
+//         sees {0,0,0,0} for one frame, real values arrive via
+//         onInsetsChange next frame. HomeScreen now defers first
+//         paint until insets.bottom > 0 (or 250ms fallback for SE
+//         devices). On the first frame we DO paint, tabs already
+//         have correct paddingBottom. No more jump. Previous claim
+//         "OTA can't fix this" was wrong — confirmed via reading
+//         RNCSafeAreaContext.mm + RNCSafeAreaProvider.m source.
 //         v353: EMERGENCY HOTFIX for v352 regression.
 //         v352 placed the new `lastRenderedCoordRef + persistentCoord`
 //         block at MemoryScreen.tsx line 141 — BEFORE stableCoord was
