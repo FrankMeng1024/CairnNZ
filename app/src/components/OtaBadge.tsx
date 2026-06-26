@@ -1273,7 +1273,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 357;
+export const OTA_VERSION = 358;
+//         v358: real flicker fix based on v357 diagnostic telemetry
+//         (which showed timeline T+0..123 cream → T+123..457 basemap
+//         without fog → T+457 fog with holes — the 334ms middle stage
+//         was the visible 'brown without fog'). v355 had returned null
+//         on empty points; v358 reverses to render solid world-rect fog
+//         from frame 0. User now sees: cream → solid fog → in-place
+//         ShapeSource diff reveals corridor holes (no remount, no flash).
+//         Plus server-side v358 Kalman migration fixed session 46 'back'
+//         which v355 silently dropped (no 't' field on its route_points
+//         entries). user 4 memory_points 367 → 413. Storage key bumped
+//         v4 → v5 to force client re-pull and pick up the new data.
 //         v357: pure-diagnostic telemetry for 3-stage Memory tab flicker.
 //         No business logic change. Added v357.* logs at:
 //           - MemoryScreen render entry (with render counter)

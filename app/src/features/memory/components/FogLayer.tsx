@@ -280,19 +280,34 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
   }, []);
   const fogShape = useMemo<Feature<Polygon | MultiPolygon> | null>(() => {
     if (!useH3Fog) return null;
-    // v355: defer fog rendering until hydrate completes (points populated).
-    // Pre-v355 we returned world rect (no holes) when points was empty,
-    // producing a visible "brown screen flash → solid fog → fog with
-    // holes" three-stage sequence on Memory tab open. By skipping the
-    // first render entirely (return null) the user sees:
-    //   1. basemap (Mapbox tiles loaded)
-    //   2. fog WITH corridor holes appears in one frame (~100-300ms after
-    //      hydrate completes), no intermediate "fully fogged map" flash
-    // Trade-off: ~100-300ms of basemap is visible before fog appears.
-    // Acceptable because (a) it's the right map the user is about to
-    // see, just without fog, (b) "fog without my paths" was the more
-    // jarring of the two states per user feedback.
-    if (points.length === 0) return null;
+    // v358 fix (reverse v355): when points=0 (hydrate not yet completed)
+    // render SOLID world-rect fog (no holes) instead of returning null.
+    // v357 telemetry showed exactly this is the 'middle stage' the user
+    // reports — for ~334ms between Mapbox didFinishLoadingMap and
+    // first fog.shape_built with points=367, FogLayer was returning
+    // null → basemap visible bare → that's what user sees as 'brown
+    // map without fog'. v358 covers the entire bbox with solid fog
+    // from frame 0 instead, so user sees:
+    //   T+0..123ms: cream/Mapbox loading
+    //   T+123ms+: solid fog overlay (no flash to basemap)
+    //   T+457ms: same fog refines to show corridor holes (in-place
+    //            ShapeSource diff, no remount, no flash)
+    // Two stages instead of three. The 'no holes' middle stage is
+    // now visually identical to the final state outside corridors,
+    // so the holes appearing is the only visible transition.
+    if (points.length === 0) {
+      // Use cached lastShapeRef if available (after first build), else
+      // synthesize solid world rect on first call. lastShapeRef will be
+      // updated to the corridor-cut version once points arrive.
+      if (lastShapeRef.current) return lastShapeRef.current;
+      return polygon([[
+        [-180, -85],
+        [180, -85],
+        [180, 85],
+        [-180, 85],
+        [-180, -85],
+      ]]);
+    }
     // v356: content-hash short-circuit. Build a cheap signature from
     // count + first 3 + last 3 cids. If unchanged from last build,
     // return cached shape — same reference → ShapeSource doesn't see

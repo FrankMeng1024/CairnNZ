@@ -108,16 +108,14 @@ function stripPlantClusters(points: VisitedPoint[]): VisitedPoint[] {
 // Storage key prefix bumped to v3 so old v2 payloads are abandoned, but
 // deserialize() also accepts v2 input and synthesizes a deterministic cid
 // per point so the migration round-trips correctly without losing data.
-// v355: bumped v3 → v4. Server-side ran Kalman re-smooth migration
-// (resmooth_memory_points.py) replacing pre-Kalman migration-v336 data
-// with Kalman-smoothed migration-v355 points. Existing client caches at
-// the v3 prefix hold the pre-Kalman points; on v355 first boot we want
-// to abandon those caches and re-pull from server to pick up the
-// Kalman-smoothed version. Bumping the prefix is the simplest way:
-// memoryPersistence.hydrate finds nothing at v4, calls replacePoints([],...),
-// then memorySync.pullMemoryFromServer (triggered by FGUM) populates
-// useMemoryStore.points from server's now-Kalman data.
-const STORAGE_KEY_PREFIX = 'cairn:memory:tiles:v4:';
+// v358: bumped v4 → v5. Server-side ran v358 Kalman re-smooth that fixed
+// the v355 bug where sessions without 't' (timestamp) field on each
+// route_points entry were silently dropped — specifically the "back"
+// session (id 46). v358 synthesises ts from session.start_time + idx.
+// Old v4 client caches hold the v355 data missing session 46; bumping
+// the key forces a fresh pull from server which now contains 413 points
+// for user 4 (vs 367 in v355) including the 46 points for the "back" hike.
+const STORAGE_KEY_PREFIX = 'cairn:memory:tiles:v5:';
 const DEBOUNCE_MS = 3_000;
 /**
  * Hard cap on how long a flush can be deferred. Without this, every GPS
