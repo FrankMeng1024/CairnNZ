@@ -204,10 +204,24 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
         //     after this fires, the bug is in FogLayer, not Mapbox.
         // We log without ctx — these are points, not measurements.
         onWillStartLoadingMap={() => { log('v357.mapbox_willStartLoadingMap', {}); }}
-        onDidFinishLoadingMap={() => { log('v357.mapbox_didFinishLoadingMap', {}); }}
+        onDidFinishLoadingMap={() => {
+          log('v357.mapbox_didFinishLoadingMap', {});
+          // v361 fix: onDidFinishRenderingMapFully is unreliable —
+          // v357 telemetry showed it never fired in a normal session
+          // while onDidFinishLoadingMap did. The 8s timeout was being
+          // hit even on good networks because we were waiting for the
+          // wrong event. Fire onMapFullyReady on didFinishLoadingMap
+          // instead (style + first tile batch ready → basemap visible),
+          // matching what users perceive as "map loaded".
+          if (!mapFullyReadyFiredRef.current && onMapFullyReady) {
+            mapFullyReadyFiredRef.current = true;
+            onMapFullyReady();
+          }
+        }}
         onDidFinishRenderingMapFully={() => {
           log('v357.mapbox_didFinishRenderingMapFully', {});
-          // v359: fire onMapFullyReady once for loading overlay gate.
+          // Backup: also fire here in case didFinishLoadingMap was
+          // somehow missed (defensive — ref guard prevents duplicate).
           if (!mapFullyReadyFiredRef.current && onMapFullyReady) {
             mapFullyReadyFiredRef.current = true;
             onMapFullyReady();

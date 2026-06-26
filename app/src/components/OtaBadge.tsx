@@ -1273,7 +1273,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 360;
+export const OTA_VERSION = 361;
+//         v361 hotfix for v360 false-positive 'slow network' banner:
+//
+//         (1) v359 wired the loading overlay gate to Mapbox's
+//         onDidFinishRenderingMapFully. v357 telemetry showed this
+//         event never fired in normal sessions (only LoadingMap did).
+//         Result: even on healthy networks, mapReady never fired, the
+//         8s timeout always tripped, banner always appeared. v361
+//         switches the gate to onDidFinishLoadingMap (style + first
+//         tile batch ready — what users actually perceive as 'map
+//         loaded'). Keeps onDidFinishRenderingMapFully as backup with
+//         duplicate-fire guard.
+//
+//         (2) Slow-network banner was sitting at top:56 hardcoded,
+//         colliding with the back-button pill at insets.top + 8. v361
+//         moves banner to insets.top + 60 so it sits cleanly below
+//         the back button on every device, no overlap.
 //         v360: industry-standard loading UX. Replaces v359's hard 3s
 //         timeout with 8s timeout + stage-based copy + slow-network
 //         retry banner. Based on Nielsen 10s attention limit + AllTrails/

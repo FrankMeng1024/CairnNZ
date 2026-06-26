@@ -619,7 +619,10 @@ export function MemoryScreen() {
           AND map+fog weren't both ready. Shows above content, doesn't
           block; user can tap retry or just keep using partial map. */}
       {persistentCoord && loadingState === 'slow' && (
-        <View style={styles.slowBanner} pointerEvents="box-none">
+        <View
+          style={[styles.slowBanner, { top: insets.top + 60 }]}
+          pointerEvents="box-none"
+        >
           <Text style={styles.slowBannerText} numberOfLines={2}>
             网络较慢，地图未完全加载完
           </Text>
@@ -749,7 +752,6 @@ const styles = StyleSheet.create({
   // partial map underneath; tapping the pill triggers retry.
   slowBanner: {
     position: 'absolute',
-    top: 56,
     left: 16,
     right: 16,
     backgroundColor: 'rgba(91, 70, 40, 0.92)',
