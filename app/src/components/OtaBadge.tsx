@@ -1273,7 +1273,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 369;
+export const OTA_VERSION = 370;
+//         v370: restore production 8000ms timeout. Memory banner UX
+//         case closed.
+//
+//         Final behavior (production):
+//           - Normal network (<8s map ready): no banner ever shown,
+//             only the cream loading overlay fades into the map.
+//           - Weak signal (>8s): cream overlay fades out, frosted-pill
+//             banner appears next to back button (same height + frosted
+//             style), "Weak signal — still loading map…", with X close.
+//             Banner stays visible for AT LEAST 2 seconds (v368) even
+//             if Mapbox finishes immediately after appearing.
+//             Auto-closes when Mapbox finally finishes loading (v367
+//             auto-close + v368 min-show interaction).
+//           - User X tap: banner dismissed for the rest of the Memory
+//             tab session (v363).
+//
 //         v369: revert timeout 8000ms->500ms for debugging.
 //         User feedback on v368: "刷了好几遍都没有message出现" — they
 //         still want to verify the v368 min-show-2s logic, but I had
