@@ -149,7 +149,7 @@ export function MemoryScreen() {
           useNativeDriver: true,
         }).start();
       }
-    }, 8000);
+    }, 500); // v362 DEBUG: 8000→500 to force-show slow banner for visual review
     return () => {
       if (overlayFadeTimerRef.current) {
         clearTimeout(overlayFadeTimerRef.current);

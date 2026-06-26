@@ -1273,7 +1273,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 361;
+export const OTA_VERSION = 362;
+//         v362 DEBUG OTA: temporarily reduces the slow-network timeout
+//         from 8000ms to 500ms so the user can visually verify the
+//         banner placement (no overlap with back button) and retry
+//         button styling. Will be reverted in v363 back to 8000ms.
 //         v361 hotfix for v360 false-positive 'slow network' banner:
 //
 //         (1) v359 wired the loading overlay gate to Mapbox's
