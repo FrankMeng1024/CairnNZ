@@ -66,14 +66,12 @@ interface Props {
 // At radius=0 fogFloorGeometry.worldRectMinusCircle returns the solid
 // world rect (no inner ring), so no degenerate polygon, no hole edge.
 const FLOOR_RADIUS_M = 0;
-// v339: L2 mask bbox enlarged from 3km to 12km half-side. Old 6km
-// square couldn't render hikes more than ~3km from the user — e.g. a
-// user standing in Jing'an could not see their Pudong (15km away)
-// hikes on the Memory map. With 24km square, all of Shanghai fits in
-// one mask. Per-pixel resolution at 1024 raster = 24m, just enough
-// for 25m cell display. If users walk wider than ~25km the L2 mask
-// will need to follow camera pan (TBD: v340).
-const MASK_PADDING_M = 12000;
+// v340: rolled back v339 enlargement (24km bbox was too big — caused
+// iOS jetsam SIGKILL on boot due to ~920k cell entries in Skia paint).
+// Back to 3km half-side / 6km square. Hikes outside this radius from
+// user GPS won't render — that's the next problem to solve, but a
+// crashing app is worse than partial render.
+const MASK_PADDING_M = 3000;
 const FLOOR_SEGMENTS = 32;
 const MASK_RECENTER_DISTANCE_M = 500; // re-render if user has moved this far
 

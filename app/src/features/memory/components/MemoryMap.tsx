@@ -110,6 +110,16 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
     }, 100);
   }, [onMapMoved]);
 
+  // v340: when Recenter pill is tapped, MemoryScreen bumps
+  // recenterToken; we then run cameraRef.setCamera with 600ms flyTo.
+  // During that animation rnmapbox sometimes labels intermediate
+  // onRegionIsChanging events with isUserInteraction=true (depends on
+  // SDK version + gesture state at the moment of flyTo). Use a
+  // suppress-ref to ignore pan-detect events during the 1s window
+  // after a programmatic recenter, otherwise the Recenter pill flashes
+  // back on immediately after the user taps it.
+  const suppressPanDetectUntilRef = useRef<number>(0);
+
   // v336: when recenterToken bumps, fly the camera back to the current
   // GPS coord WITHOUT remounting Camera (the old cameraKey strategy
   // caused a one-frame fog reset on every tap). setCamera on the same
@@ -120,6 +130,7 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
     if (recenterToken > 0) {
       anchorRef.current = { lat: centerLat, lng: centerLng };
       setHasPannedAway(false);
+      suppressPanDetectUntilRef.current = Date.now() + 1000;
       cameraRef.current?.setCamera?.({
         centerCoordinate: [centerLng, centerLat],
         zoomLevel: INITIAL_ZOOM,
@@ -164,11 +175,11 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
         attributionEnabled={false}
         onMapIdle={onMapSettle}
         onRegionIsChanging={(feature: any) => {
-          // v339: fire onMapMoved DURING pan (not after settle) so the
-          // Target pill appears in real-time. onRegionIsChanging is the
-          // pre-v10 API that fires every frame while the user is panning;
-          // v338 used onCameraChanged which appeared to conflict with
-          // onMapIdle and slow everything down.
+          // v340: suppress pan-detect for 1s after a programmatic
+          // recenter — rnmapbox flyTo can emit isUserInteraction=true
+          // mid-animation depending on SDK state, which would flash the
+          // Recenter pill back on immediately after the user tapped it.
+          if (Date.now() < suppressPanDetectUntilRef.current) return;
           const isUser = feature?.properties?.isUserInteraction;
           if (!isUser) return;
           const cc = feature?.geometry?.coordinates;
