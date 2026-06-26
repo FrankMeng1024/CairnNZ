@@ -1273,7 +1273,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 364;
+export const OTA_VERSION = 365;
+//         v365: slow-banner redesign per user feedback on v363/v364:
+//           1. Full-width horizontal BAR (not a tight pill): starts to
+//              the right of back button with a gap (left: 12+56+12),
+//              stretches to screen right edge (right: 12). borderRadius
+//              16 (rectangular bar feel, not pill).
+//           2. Spinner + text left-aligned (text: flex 1 to push X to
+//              the right edge), X close right-aligned.
+//           3. Text changed to English: "Still loading…" (project rule:
+//              no Chinese in user-facing strings).
+//           4. Loading overlay copy translated to English:
+//              "Loading map…" / "Loading your trails…" / "Network is
+//              slow, please wait…"
+//           5. useRouteEditStore.ts: all 19 user-visible Chinese reject
+//              reason strings translated to English (rendered via
+//              <Text>{lastError}</Text> in EditOverlayV236.tsx).
+//           6. timeout still 500ms (DEBUG) so user can verify the new
+//              bar UX. v366 will restore to production 8000ms.
+//
 //         v364: TEMPORARY debug build — slow-banner timeout 8000ms→500ms
 //         so user can verify the v363 banner UX. v365 will restore to
 //         production 8000ms. Network on normal 4G/wifi loads MemoryMap

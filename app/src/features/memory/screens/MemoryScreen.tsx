@@ -154,7 +154,7 @@ export function MemoryScreen() {
           useNativeDriver: true,
         }).start();
       }
-    }, 500); // v364: TEMPORARY debug — 500ms to verify banner UX. v365 will restore to 8000ms.
+    }, 500); // v365: DEBUG — keep 500ms so user can verify the new full-width banner UX. v366 will restore to 8000ms.
     return () => {
       if (overlayFadeTimerRef.current) {
         clearTimeout(overlayFadeTimerRef.current);
@@ -607,10 +607,10 @@ export function MemoryScreen() {
             <Text style={styles.loadingTitle}>Cairn</Text>
             <Text style={styles.loadingSub}>
               {loadingStage === 0
-                ? '加载地图中…'
+                ? 'Loading map…'
                 : loadingStage === 1
-                  ? '加载你的足迹…'
-                  : '网络较慢，请稍候…'}
+                  ? 'Loading your trails…'
+                  : 'Network is slow, please wait…'}
             </Text>
             <ActivityIndicator
               color={MemoryColors.sepia}
@@ -620,19 +620,19 @@ export function MemoryScreen() {
           </View>
         </Animated.View>
       )}
-      {/* v363: slow-network banner — small inline pill next to the
-          back button, NOT a wide full-width banner. Tells user the
-          load isn't done yet AND lets them dismiss it. Mapbox tile
-          loading auto-retries in the background regardless, so a
-          manual "retry" button was misleading — replaced with a
-          spinner (indicates 'still working') + X close.
-          Position: just right of the back button (insets.top + 8 to
-          match topBar, then offset left by back-button width 56 +
-          12 gap). pointerEvents box-none so map underneath stays
-          interactive. */}
+      {/* v365: slow-network banner — full-width horizontal bar that
+          starts just to the right of the back button (with a gap) and
+          extends to the screen right edge. Mapbox auto-retries tile
+          loading underneath so no explicit retry action needed; user
+          can dismiss the bar via the X button.
+          Position: top: insets.top + 8 (matches topBar). Horizontally
+          stretched: left: 12 + 56 + 12 (after back button + gap), right: 12
+          (screen edge gutter). pointerEvents box-none so map underneath
+          stays interactive. English copy only (project rule: no Chinese
+          in user-facing strings). */}
       {persistentCoord && loadingState === 'slow' && !slowBannerDismissed && (
         <View
-          style={[styles.slowBanner, { top: insets.top + 8, left: 12 + 56 + 12 }]}
+          style={[styles.slowBanner, { top: insets.top + 8, left: 12 + 56 + 12, right: 12 }]}
           pointerEvents="box-none"
         >
           <ActivityIndicator
@@ -641,7 +641,7 @@ export function MemoryScreen() {
             style={styles.slowBannerSpinner}
           />
           <Text style={styles.slowBannerText} numberOfLines={1}>
-            正在加载…
+            Still loading…
           </Text>
           <TouchableOpacity
             style={styles.slowBannerClose}
@@ -767,17 +767,17 @@ const styles = StyleSheet.create({
   loadingSpinner: {
     marginTop: 4,
   },
-  // v363 slow-network inline pill (next to back button) — replaces v360
-  // full-width banner. Compact size, sits to the right of back button.
-  // ActivityIndicator + brief text + X close. Mapbox auto-retries tile
-  // loading underneath so no explicit retry action needed; user can
-  // dismiss the pill any time.
+  // v365 slow-network full-width bar (next to back button, stretching to
+  // screen right edge). Replaces v363 inline pill. Bar style with rounded
+  // corners; spinner + text left-aligned, X close right-aligned. Mapbox
+  // auto-retries tile loading underneath so no explicit retry action
+  // needed; user can dismiss the bar any time.
   slowBanner: {
     position: 'absolute',
     backgroundColor: 'rgba(91, 70, 40, 0.92)',
-    borderRadius: 999,
-    paddingLeft: 10,
-    paddingRight: 6,
+    borderRadius: 16,
+    paddingLeft: 12,
+    paddingRight: 8,
     paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
@@ -790,20 +790,20 @@ const styles = StyleSheet.create({
     height: 32,
   },
   slowBannerSpinner: {
-    marginRight: 6,
+    marginRight: 8,
     transform: [{ scale: 0.75 }],
   },
   slowBannerText: {
     color: '#FFFFFF',
     fontSize: 12.5,
     fontWeight: '500',
-    marginRight: 4,
+    flex: 1,
   },
   slowBannerClose: {
     width: 22, height: 22, borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 2,
+    marginLeft: 4,
   },
   slowBannerCloseText: {
     color: '#FFFFFF',

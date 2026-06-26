@@ -1979,8 +1979,8 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const g0 = checkG0(pts);
         if (!g0.ok) {
           rejectedStrokeIds.push(vs.stroke.id);
-          // Plan §4.5: short, product-friendly Chinese reject copy.
-          firstRejectReason ??= '画笔太短或太长';
+          // Plan §4.5: short, product-friendly reject copy (English).
+          firstRejectReason ??= 'Brush stroke is too short or too long';
           sendEditDiag('brush_gate_failure', {
             gate: g0.gate,
             reason: g0.reason,
@@ -1997,7 +1997,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const simRes = simplifyStroke(pts);
         if (simRes.reason === 'rejected_too_long') {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= '画笔太长';
+          firstRejectReason ??= 'Brush stroke is too long';
           sendEditDiag('brush_gate_failure', {
             gate: 'G0',
             reason: 'too_long',
@@ -2013,7 +2013,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const g0p = checkG0PostSimplify(simRes.points);
         if (!g0p.ok) {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= '画笔形状无效';
+          firstRejectReason ??= 'Brush shape is invalid';
           sendEditDiag('brush_gate_failure', {
             gate: g0p.gate,
             reason: g0p.reason,
@@ -2040,7 +2040,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const corridor = strokeWithinCorridor(pts, state.originalPoints);
         if (!corridor.ok) {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= `画笔超出 ${CORRIDOR_M}m 范围,请贴近原路线`;
+          firstRejectReason ??= `Brush is outside the ${CORRIDOR_M}m range — stay closer to the original route`;
           sendEditDiag('brush_gate_failure', {
             gate: 'corridor_v260',
             reason: 'beyond_corridor',
@@ -2058,7 +2058,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const projC = projectPointOntoBaseline(pts[pts.length - 1], baseLine);
         if (!projB || !projC) {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= '基准线无效';
+          firstRejectReason ??= 'Reference line is invalid';
           continue;
         }
         const B = projB.pt, C = projC.pt;
@@ -2066,7 +2066,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         // can't reliably handle closed inputs; UX is "draw two strokes".
         if (haversineMetersLocal(B, C) < LOOP_MIN_M) {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= '一笔不能画回到起点 — 请分两笔';
+          firstRejectReason ??= 'Cannot draw a loop in one stroke — split into two strokes';
           sendEditDiag('brush_gate_failure', {
             gate: 'loop_v260',
             reason: 'B_eq_C',
@@ -2134,7 +2134,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           // Reaching here means an unhandled throw — treat as G2 fail.
           if (fenceTriggered()) return { ok: false, error: 'state-changed' };
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= '未识别到这条路';
+          firstRejectReason ??= 'Could not match this route';
           sendEditDiag('brush_mapbox_error', {
             reason: 'throw',
             ms_to_error: Date.now() - mapboxT0,
@@ -2155,21 +2155,21 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           if (firstRejectReason === null) {
             switch (r.reason) {
               case 'no-match':
-                firstRejectReason = '未识别到这条路';
+                firstRejectReason = 'Could not match this route';
                 break;
               case 'timeout':
-                firstRejectReason = '网络慢,请重试';
+                firstRejectReason = 'Network is slow, please retry';
                 break;
               case 'network':
               case 'rate-limit':
               case 'auth':
-                firstRejectReason = '网络问题,请重试';
+                firstRejectReason = 'Network error, please retry';
                 break;
               case 'invalid-input':
-                firstRejectReason = '画笔不符合要求';
+                firstRejectReason = 'Brush stroke does not meet requirements';
                 break;
               default:
-                firstRejectReason = '未识别到这条路';
+                firstRejectReason = 'Could not match this route';
             }
           }
           continue;
@@ -2179,7 +2179,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const g05 = checkG0_5(r.matchedPoints);
         if (!g05.ok) {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= '未识别到这条路';
+          firstRejectReason ??= 'Could not match this route';
           sendEditDiag('brush_gate_failure', {
             gate: g05.gate,
             reason: g05.reason,
@@ -2197,7 +2197,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const g3 = checkG3({ stroke: pts, snap: r.matchedPoints });
         if (!g3.ok) {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= '画的太远了,试着贴近原路线';
+          firstRejectReason ??= 'Drawn too far away — try staying closer to the original route';
           sendEditDiag('brush_gate_failure', {
             gate: g3.gate,
             reason: g3.reason,
@@ -2232,7 +2232,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const allSegs = r.segments;
         if (allSegs.length === 0) {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= '未识别到这条路';
+          firstRejectReason ??= 'Could not match this route';
           sendEditDiag('brush_mapbox_error', {
             reason: 'all-segments-low-conf',
             ms_to_error: Date.now() - mapboxT0,
@@ -2283,7 +2283,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         if (corridorOut.maxDistM > OUTPUT_CORRIDOR_M) {
           rejectedStrokeIds.push(vs.stroke.id);
           firstRejectReason ??=
-            `Mapbox 弹回的路超出 ${OUTPUT_CORRIDOR_M}m 范围,请重画一笔贴近原路`;
+            `Mapbox-returned route is outside the ${OUTPUT_CORRIDOR_M}m range — redraw closer to the original`;
           sendEditDiag('brush_gate_failure', {
             gate: 'output_corridor_v263',
             reason: 'curve_beyond_corridor',
@@ -2384,7 +2384,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           rejected: rejectedStrokeIds.length,
           ms_taken: Date.now() - previewT0,
         });
-        const errMsg = firstRejectReason ?? '未识别到这条路';
+        const errMsg = firstRejectReason ?? 'Could not match this route';
         set({
           lastError: errMsg,
           // Drop the rejected strokes from the canvas (plan §4.3).
@@ -2580,7 +2580,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         return live.sessionId !== startSid || live.editOpSeq !== startSeq;
       })();
       if (fenceTrip) return { ok: false, error: 'state-changed' };
-      const errMsg = e?.name === 'AbortError' ? '网络慢,请重试' : '未识别到这条路';
+      const errMsg = e?.name === 'AbortError' ? 'Network is slow, please retry' : 'Could not match this route';
       set({ lastError: errMsg });
       setTimeout(() => {
         const live = get();
