@@ -174,6 +174,20 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
         logoEnabled={false}
         attributionEnabled={false}
         onMapIdle={onMapSettle}
+        // v357 diagnostic: three Mapbox native events.
+        //   willStartLoadingMap — style + first tile fetch begins. This is
+        //     the earliest frame where MapView is in DOM but renders no
+        //     basemap yet (likely the "brown screen" stage user reports).
+        //   didFinishLoadingMap — style + initial tile batch ready. Basemap
+        //     becomes visible; fog may or may not be layered yet depending
+        //     on FogLayer build_ms vs this event order.
+        //   didFinishRenderingMapFully — all tiles in viewport rendered.
+        //     This is when "fully painted" map exists; if fog is missing
+        //     after this fires, the bug is in FogLayer, not Mapbox.
+        // We log without ctx — these are points, not measurements.
+        onWillStartLoadingMap={() => { log('v357.mapbox_willStartLoadingMap', {}); }}
+        onDidFinishLoadingMap={() => { log('v357.mapbox_didFinishLoadingMap', {}); }}
+        onDidFinishRenderingMapFully={() => { log('v357.mapbox_didFinishRenderingMapFully', {}); }}
         onRegionIsChanging={(feature: any) => {
           // v340: suppress pan-detect for 1s after a programmatic
           // recenter — rnmapbox flyTo can emit isUserInteraction=true

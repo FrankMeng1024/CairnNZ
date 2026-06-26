@@ -38,7 +38,7 @@
  * No Skia, no PNG, no transport, no http URL, no file://, no data: URI.
  */
 
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { getMapbox } from '../services/mapboxAdapter';
@@ -265,6 +265,19 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
   // structurally identical to last computed fog.
   const lastSigRef = useRef<string>('');
   const lastShapeRef = useRef<Feature<Polygon | MultiPolygon> | null>(null);
+  // v357 diagnostic: count build invocations for this FogLayer instance.
+  // Lets us tell apart "first build after mount" vs "rebuild on points
+  // change" vs "rebuild on geometryVersion bump". Counter is per-instance,
+  // i.e. it resets when FogLayer unmounts/remounts.
+  const buildCountRef = useRef(0);
+  // v357 diagnostic: mount/unmount of this FogLayer instance.
+  useEffect(() => {
+    log('v357.fog_layer_mount', { points_n: points.length });
+    return () => {
+      log('v357.fog_layer_unmount', {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const fogShape = useMemo<Feature<Polygon | MultiPolygon> | null>(() => {
     if (!useH3Fog) return null;
     // v355: defer fog rendering until hydrate completes (points populated).
@@ -286,10 +299,19 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
     // shape change → Mapbox layer doesn't rebuild → no flicker.
     const sig = `${points.length}|${points.slice(0, 3).map((p) => p.cid).join(',')}|${points.slice(-3).map((p) => p.cid).join(',')}`;
     if (sig === lastSigRef.current && lastShapeRef.current) {
+      buildCountRef.current += 1;
+      // v357 diagnostic: short-circuit hit means useMemo dep changed but
+      // content sig was identical — fog geometry is reused as-is, no
+      // ShapeSource rebuild, no flicker source from FogLayer.
+      log('v357.fog_useMemo_shortcircuit', {
+        build_n: buildCountRef.current,
+        n_points: points.length,
+      });
       return lastShapeRef.current;
     }
     const t0 = Date.now();
     const shape = buildFogShape(points);
+    buildCountRef.current += 1;
     // v356 fix: has_holes telemetry was lying — only checked Polygon
     // case (outer ring + inner ring count > 1) but turf.difference
     // often returns MultiPolygon for complex corridors. MultiPolygon
@@ -313,6 +335,31 @@ export function FogLayer({ userCenter: _userCenter }: Props) {
       build_ms: Date.now() - t0,
       has_holes: hasHoles,
       geom_type: shape?.geometry?.type ?? 'null',
+    });
+    // v357 diagnostic: extra build telemetry with build counter +
+    // outer/inner ring count, so we can tell apart different builds in
+    // the same session by structural signature. Keeps existing
+    // fog.shape_built unchanged (don't break dashboards).
+    let outerLen = 0;
+    let innerRings = 0;
+    if (shape && shape.geometry) {
+      if (shape.geometry.type === 'Polygon') {
+        const rings = shape.geometry.coordinates as any[];
+        outerLen = rings[0]?.length ?? 0;
+        innerRings = Math.max(0, rings.length - 1);
+      } else if (shape.geometry.type === 'MultiPolygon') {
+        const polys = shape.geometry.coordinates as any[];
+        outerLen = polys[0]?.[0]?.length ?? 0;
+        innerRings = polys.reduce((acc, p) => acc + Math.max(0, p.length - 1), 0);
+      }
+    }
+    log('v357.fog_shape_built', {
+      build_n: buildCountRef.current,
+      n_points: points.length,
+      build_ms: Date.now() - t0,
+      geom_type: shape?.geometry?.type ?? 'null',
+      outer_coords_n: outerLen,
+      inner_rings_n: innerRings,
     });
     lastSigRef.current = sig;
     lastShapeRef.current = shape;

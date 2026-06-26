@@ -1273,7 +1273,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 356;
+export const OTA_VERSION = 357;
+//         v357: pure-diagnostic telemetry for 3-stage Memory tab flicker.
+//         No business logic change. Added v357.* logs at:
+//           - MemoryScreen render entry (with render counter)
+//           - useFocusEffect tab focus entry (before mountKey bump)
+//           - useFocusEffect after mountKey bump
+//           - FogLayer mount / unmount
+//           - FogLayer useMemo build (build counter + geometry shape)
+//           - MemoryMap onWillStartLoadingMap (native event)
+//           - MemoryMap onDidFinishLoadingMap (native event)
+//           - MemoryMap onDidFinishRenderingMapFully (native event)
+//         Goal: next user test → server log a timestamp ladder that maps
+//         each visible flicker frame to a React/Mapbox event.
 //         v356: kill the residual Memory tab flicker (v355 still flashed).
 //
 //         Telemetry showed fog.shape_built fired TWICE on every cold

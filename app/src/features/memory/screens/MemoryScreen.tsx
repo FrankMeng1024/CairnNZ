@@ -61,6 +61,11 @@ type FailReason = 'permission' | 'timeout' | 'error';
 // verifiable on release builds.
 let _lastKnownCoord: { lat: number; lng: number; ts: number } | null = null;
 
+// v357 diagnostic: module-scope counter for MemoryScreen render invocations.
+// Counts across mount/unmount within the same JS session so we can tell
+// apart "1st cold render" vs "Nth re-render after tab switch".
+let _memoryScreenRenderCount = 0;
+
 export function MemoryScreen() {
   // v317: mark memory-screen render entry. v316 server data showed user
   // navigated from login → Memory tab → crash. No beacon coverage in
@@ -69,6 +74,13 @@ export function MemoryScreen() {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('../../../services/bootDiagnostics').markBootPhase('memory_screen_render_start');
   } catch {/* ignore */}
+  // v357 diagnostic: log every MemoryScreen render. persistentCoord and
+  // points.length are populated lower in the function body — we just
+  // increment the module counter here and log later (after both refs are
+  // assigned) so the ctx is accurate. See `v357.memory_screen_render` log
+  // at end of body.
+  _memoryScreenRenderCount += 1;
+  const _v357RenderN = _memoryScreenRenderCount;
   const nav = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const watcherFix = useMemoryStore((s) => s.lastWatcherFix);
@@ -159,6 +171,15 @@ export function MemoryScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
+      // v357 diagnostic: tab focus entry — fires BEFORE mountKey bump.
+      // The pair (v357.tab_focus_entry → v357.mountKey_bumped) lets us
+      // see whether mountKey actually bumped this focus (debounce-gated)
+      // or was skipped (FOCUS_REMOUNT_DEBOUNCE_MS window still active).
+      log('v357.tab_focus_entry', {
+        points_n: useMemoryStore.getState().points.length,
+        mountKey_pre: mountKey,
+        ms_since_last_mount: lastMountAtRef.current === 0 ? -1 : Date.now() - lastMountAtRef.current,
+      });
       // v303 OTA 三修:扩充 tab_focus log,包含进入时的 state 快照,server
       // 可看用户进 memory 时 fog / points / hydrate 状态。
       log('memory.tab_focus', {
@@ -174,6 +195,10 @@ export function MemoryScreen() {
       if (now - lastMountAtRef.current >= FOCUS_REMOUNT_DEBOUNCE_MS) {
         lastMountAtRef.current = now;
         setMountKey((n) => n + 1);
+        // v357 diagnostic: mountKey was actually bumped this focus.
+        // Next MemoryScreen render will use a new key for MemoryMap →
+        // MapView remount → mapbox style reload → fog_layer_mount.
+        log('v357.mountKey_bumped', { from: mountKey, to: mountKey + 1 });
       }
       if (now - lastRefetchAtRef.current >= FOCUS_REFETCH_DEBOUNCE_MS) {
         lastRefetchAtRef.current = now;
@@ -310,6 +335,19 @@ export function MemoryScreen() {
     lastRenderedCoordRef.current = { lat: stableCoord.lat, lng: stableCoord.lng };
   }
   const persistentCoord = lastRenderedCoordRef.current;
+
+  // v357 diagnostic: log every render of MemoryScreen body. ctx tells us
+  // (a) which render index this is, (b) whether we have a coord to draw
+  // the map with, (c) how many points exist in store at this instant.
+  // Combined with v357.tab_focus_entry / v357.mountKey_bumped / v357.fog_*
+  // / v357.mapbox_* this is the canonical timestamp ladder used to map
+  // each visible flicker frame to a specific React/Mapbox event.
+  log('v357.memory_screen_render', {
+    render_n: _v357RenderN,
+    persistentCoord_set: !!persistentCoord,
+    points_n: useMemoryStore.getState().points.length,
+    mountKey,
+  });
 
   // v327 debug: track WHY the "Looking for your position" UI appears.
   // User reports it shows up briefly during zoom — but zoom should not
