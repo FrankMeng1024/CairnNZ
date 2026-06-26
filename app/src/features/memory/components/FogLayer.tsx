@@ -51,26 +51,21 @@ interface Props {
   userCenter?: { lat: number; lng: number } | null;
 }
 
-// v333 final: L1 hole radius vs L2 raster bbox geometry.
+// v333 final: NO L1 hole — L1 fog covers the entire world.
 //
-// L1 is a CIRCLE (worldRectMinusCircle); L2 is a SQUARE raster bbox.
-// L1 renders BEFORE L2, so L2 sits on top of L1.
+// Earlier v333 iterations tried FLOOR_RADIUS_M = {2800, 100, 3000, 4500}
+// — every non-zero value produces a circular "bright" hole visible on
+// zoom-out (the v32x "5.6km bright circle" bug). The complaint was the
+// hole itself, not its size.
 //
-// Invariant (Engineer #11): L1 hole MUST fully contain L2 bbox →
-//   FLOOR_RADIUS_M > MASK_PADDING_M × √2 (L2 square's corner distance)
-//   4500 > 3000 × √2 = 4243 ✓
+// v333 architecture: L1 = solid world fog (no hole). L2 raster mask
+// punches transparent cells only where the user actually walked. User's
+// current position is shown by the independent UserLocation blue dot
+// in MemoryMap — there is no need for a fog hole as a position anchor.
 //
-// This prevents L1 brown fog from showing under L2's transparent
-// (visited) cells. Visited cells inside L2 show bare map through L2.
-//
-// Between L2 corners (4243m) and L1 edge (4500m) there is a 257m
-// annulus where L1 hole exists but L2 doesn't cover. Inside this
-// annulus the raw basemap shows (no fog, no raster). To prevent
-// the user from seeing this annulus on zoom-out (it would look
-// like the v32x "bright circle" bug), MemoryMap caps the camera
-// at minZoomLevel=14 (viewport ≤ ~3.6km diagonal, fully inside
-// L2 bbox). See MemoryMap.tsx Camera minZoomLevel.
-const FLOOR_RADIUS_M = 4500;  // > 3000 × √2 ≈ 4243
+// At radius=0 fogFloorGeometry.worldRectMinusCircle returns the solid
+// world rect (no inner ring), so no degenerate polygon, no hole edge.
+const FLOOR_RADIUS_M = 0;
 const MASK_PADDING_M = 3000;  // L2 bbox half-side
 const FLOOR_SEGMENTS = 32;
 const MASK_RECENTER_DISTANCE_M = 500; // re-render if user has moved this far

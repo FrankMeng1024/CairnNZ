@@ -68,6 +68,27 @@ export function worldRectMinusCircle(
     [WORLD_WEST, WORLD_SOUTH],
   ];
 
+  // v333: radius=0 means "no hole" — return solid world rect so L1
+  // covers the entire planet with fog. L2 raster mask alone reveals
+  // visited cells. This is the v333 final architecture: user current
+  // position is shown by the UserLocation blue dot, NOT by a hole in
+  // the fog. The "5.6km bright circle" v32x bug was the L1 hole itself
+  // — at any radius > 0 the hole edge becomes visible on zoom-out.
+  if (radiusMeters <= 0) {
+    return {
+      type: 'Feature',
+      properties: {
+        outer_verts: outer.length,
+        inner_verts: 0,
+        radius_m: 0,
+      },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [outer],
+      },
+    };
+  }
+
   // Inner ring CW (opposite winding to mark hole), closed
   const cosLat = Math.cos((centerLat * Math.PI) / 180);
   const cosLatSafe = Math.max(cosLat, 1e-6);

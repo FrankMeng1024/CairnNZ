@@ -23,7 +23,6 @@ import * as Location from 'expo-location';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
-import { performInitialRevealIfNeeded } from '../services/unlockEngine';
 import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap } from '../components/MemoryMap';
@@ -315,12 +314,13 @@ export function MemoryScreen() {
     }
   }, [coordSignature, watcherFix, watcherFresh, oneShot, failReason, refetchToken]);
 
-  useEffect(() => {
-    if (initialDone) return;
-    if (!coord) return;
-    log('memory.initial_reveal', { lat: coord.lat, lng: coord.lng });
-    performInitialRevealIfNeeded(coord.lat, coord.lng);
-  }, [initialDone, coord]);
+  // v333: removed initial-reveal call. User's expectation (2026-06-26):
+  // "no hike imported = NO area unlocked". The initial 200m reveal was
+  // a v32x concept that pre-unlocks ground the user never walked, which
+  // conflicts with "Memory only shows what you actually walked".
+  // Initial reveal logic stays in the codebase (performInitialRevealIfNeeded)
+  // but is not invoked here; it will be re-enabled in phase 2 (background
+  // SLC recording, 100m circle on app open).
 
   const dismissHint = () => {
     log('memory.first_visit_hint_dismissed');

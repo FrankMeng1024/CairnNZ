@@ -168,14 +168,6 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved 
             centerCoordinate: [centerLng, centerLat],
             zoomLevel: INITIAL_ZOOM,
           }}
-          // v333: cap zoom-out at 14 so the user cannot pinch out far
-          // enough to see the L1 fog hole edge (4500m radius circle)
-          // or the 257m bare annulus between L2 corners (4243m) and
-          // L1 edge (4500m). At z=14 viewport ~3.6km diagonal, fully
-          // inside the L2 raster bbox (6km × 6km) — the entire visible
-          // area is governed by L2 raster, not the L1 circle. This
-          // prevents the v32x "bright circle" complaint from recurring.
-          minZoomLevel={14}
           animationMode={'flyTo'}
           animationDuration={600}
         />
