@@ -661,8 +661,10 @@ export function MapScreen() {
   // permanently 'self tier only' — contradicting Sprint 68 Story-532 ACs.
   const circleMarkers = useMarkerStore(s => s.circleMarkers);
   const loadCircleMarkers = useMarkerStore(s => s.loadCircleMarkers);
+  const loadingCircle = useMarkerStore(s => s.loadingCircle);
   const subscriptions = useMemorySubscriptionsStore(s => s.subscriptions);
   const loadSubscriptions = useMemorySubscriptionsStore(s => s.load);
+  const loadingSubs = useMemorySubscriptionsStore(s => s.loading);
   // Sprint 68 STORY-00531: viewer perspective for tier-aware marker visuals.
   // viewerId comes from useMarkerStore (set by hydrate after login).
   // friendIds from useFriendStore (already loaded by Friends tab / auth flow).
@@ -694,11 +696,24 @@ export function MapScreen() {
   // per mount; FlagsTab Friends sub-tab (Sprint 69) ALSO triggers via its
   // own effect — both calls hit the same slice and the second one is a
   // no-op if data already loaded.
+  //
+  // BUG-007 fix (Sprint 71 post-review round 2): added length+loading
+  // guard matching the FlagsTab pattern. Without the guard, every Map
+  // mount unconditionally refetches and races with in-flight POST /api/hide
+  // (Story-534): user hides a friend mark in Trails, switches to Map,
+  // refetch overwrites the BUG-005 client-wipe with the still-present
+  // server row, ghost-resurrects the mark. Guard means refetch only runs
+  // when slice is empty and not already loading.
   React.useEffect(() => {
-    if (viewerId) {
-      void loadCircleMarkers();
-      void loadSubscriptions();
-    }
+    if (!viewerId) return;
+    if (circleMarkers.length === 0 && !loadingCircle) void loadCircleMarkers();
+    if (subscriptions.length === 0 && !loadingSubs) void loadSubscriptions();
+    // BUG-011 fix: ESLint exhaustive-deps would want all of the conditions
+    // above in the deps array — but adding them would fire the effect on
+    // every change and defeat the BUG-007 single-flight pattern. The store
+    // getter functions are stable Zustand references, so reading them
+    // through the closure on a stable [viewerId] dep is safe. Intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewerId]);
 
   // BUG-002 fix: merged marker list passed to RealMap. Own marks render

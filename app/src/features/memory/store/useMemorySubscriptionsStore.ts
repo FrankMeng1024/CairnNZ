@@ -34,6 +34,10 @@ interface State {
   unsubscribe: (friendId: number) => Promise<number>;
   /** Convenience selector — does this user count as picked? */
   isSubscribed: (friendId: number) => boolean;
+  /** BUG-010 fix: reset slice on user switch (called from useMarkerStore
+   *  clearMarkers / hydrate). Prevents prior user's subscriptions leaking
+   *  into a new session. */
+  reset: () => void;
 }
 
 export const useMemorySubscriptionsStore = create<State>((set, get) => ({
@@ -44,11 +48,40 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
   lastMutationStatus: null,
 
   load: async () => {
+    // BUG-007 fix: single-flight guard. Multiple consumers (MapScreen +
+    // MemoryFriendPickModal + FlagsTab Friends sub-tab) can fire load()
+    // concurrently — without this guard 3 parallel HTTP requests race
+    // and whichever resolves last wins. The trigger is harmless (no
+    // mutation), but burns network + flickers the slice.
+    //
+    // BUG-013 fix (round 4): stale-load guard. Capture the viewerId at
+    // load start via dynamic require (avoids module cycle with
+    // useMarkerStore). If the viewer changes during the fetch (logout/
+    // login), drop the response — without this, user A's in-flight
+    // load() resolving after user B's hydrate() would overwrite B's
+    // empty subs slice with A's data, leaking cross-session.
+    if (get().loading) return;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { useMarkerStore } = require('../../../store/useMarkerStore');
+    const viewerAtStart: string | null = useMarkerStore.getState().userId;
     set({ loading: true, error: null });
     try {
       const res = await authenticatedFetch('/api/memory-subscriptions');
+      const viewerNow: string | null = useMarkerStore.getState().userId;
+      if (viewerNow !== viewerAtStart) {
+        // User switched during the fetch — drop response, leave reset()'s
+        // empty slice intact. Do not flag as error; this is correct discard.
+        set({ loading: false });
+        return;
+      }
       if (!res.ok) { set({ loading: false, error: `HTTP ${res.status}` }); return; }
       const data = await res.json();
+      // Re-check viewer after the json() await — another potential yield point.
+      const viewerAfterJson: string | null = useMarkerStore.getState().userId;
+      if (viewerAfterJson !== viewerAtStart) {
+        set({ loading: false });
+        return;
+      }
       set({
         limit: data.limit ?? 5,
         subscriptions: Array.isArray(data.subscriptions) ? data.subscriptions : [],
@@ -95,4 +128,13 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
 
   isSubscribed: (friendId) =>
     get().subscriptions.some((s) => s.friend_id === friendId),
+
+  reset: () =>
+    set({
+      limit: 5,
+      subscriptions: [],
+      loading: false,
+      error: null,
+      lastMutationStatus: null,
+    }),
 }));

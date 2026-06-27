@@ -218,6 +218,12 @@ router.post('/', idempotency, async (req, res) => {
 
     res.status(201).json({
       id: result.insertId,
+      // BUG-006 fix (Sprint 71 post-review round 2): echo user_id so the
+      // client addMarker post-sync can populate Marker.authorId with the
+      // real owner id instead of preserving the caller-passed 'local' /
+      // 'server' literal. Without this, in-session new marks remain
+      // tier='stranger' until the next app restart triggers GET (BUG-001).
+      user_id: req.user.userId,
       type, text: text || '', lat, lng, alt, permission: perm, approximate: !!approximate,
       public_snapshot: publicSnapshotJson,
       created_at: new Date().toISOString(),
@@ -291,7 +297,10 @@ router.put('/:id', async (req, res) => {
       values
     );
 
-    res.json({ message: 'Marker updated' });
+    // BUG-006 fix: echo user_id on update too. Updating a mark currently
+    // does not refresh client-side authorId — but to keep response shape
+    // consistent across POST/PUT/GET, include user_id here as well.
+    res.json({ message: 'Marker updated', user_id: req.user.userId, id: Number(markerId) });
   } catch (err) {
     console.error('[markers/update]', err.message);
     res.status(500).json({ error: 'Server error' });

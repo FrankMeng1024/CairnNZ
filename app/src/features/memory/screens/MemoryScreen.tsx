@@ -52,6 +52,12 @@ const ONE_SHOT_TIMEOUT_MS = 12_000;
 const WATCHER_FIX_FRESH_MS = 10 * 60 * 1000; // 10 min — stale lat/lng OK for map display
 const FOCUS_REFETCH_DEBOUNCE_MS = 5_000;
 const FOCUS_REMOUNT_DEBOUNCE_MS = 5 * 60 * 1000; // v302 N3: 30s→5min — Mapbox cold reload is heavy (1-3s), don't redo it during the same session unless old.
+// BUG-011 fix (Sprint 71 post-review round 3): stable module-level empty
+// list used for the strangerMarks prop until F5 loader populates real
+// data. Avoids creating a new array literal on every MemoryScreen render,
+// which would churn MemoryMap props identity + force CairnPinsLayer
+// re-renders even when nothing relevant changed.
+const EMPTY_STRANGER_MARKS: import('../../../store/useMarkerStore').Marker[] = [];
 
 type FailReason = 'permission' | 'timeout' | 'error';
 
@@ -603,6 +609,15 @@ export function MemoryScreen() {
             log('v359.fog_ready_cb', {});
             setFogReady(true);
           }}
+          // BUG-008 fix (Sprint 71 post-review round 2): close the
+          // strangerMarks prop chain with an explicit empty list. F5
+          // STORY-00543 follow-up will add a loadPublicMarksBbox action
+          // and populate this prop. Closing the prop chain now means F5
+          // only needs to populate the source, not also touch MemoryMap.
+          // Without this, CairnPinsLayer's strangerMarks defaulted to
+          // undefined and Sprint 70 STORY-00543's visual layer was
+          // structurally inert — caught by Devil's Advocate round 2.
+          strangerMarks={EMPTY_STRANGER_MARKS}
           key={`map-${mountKey}`}
         />
       ) : failReason === 'permission' ? (
