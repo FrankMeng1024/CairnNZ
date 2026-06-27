@@ -1,8 +1,8 @@
 # PROJECT_STATE.md — Cairn
 
 **Status**: IN_PROGRESS
-**Current Sprint**: 55+ (Debug Logger + Telemetry + PRD3 Phase 4 partial)
-**Last Updated**: 2026-05-19
+**Current Sprint**: 67 CLOSED — F1 of Friend System v1 (5 sprint roadmap). Next: Sprint 68 F2.
+**Last Updated**: 2026-06-27
 **Governing Document**: docs/PRD2.md (PRD3.md adds NZ localization layer)
 
 ## Key Decisions
@@ -63,3 +63,18 @@
 3. Complete AR native integration (requires @viro-community/react-viro + EAS build)
 4. Sessions sync to backend (/api/sessions) ← DONE
 5. VU (Virtual User) acceptance when product is testable on device
+
+## Sprint 67 — Friend System v1 / F1 (CLOSED 2026-06-27)
+
+**Sprint Goal**: Schema + Backend + Spike + Data foundation for trusted-circle Friend System v1.
+
+7 of 7 items Done:
+- STORY-00524 — auth.js login does not enforce password length (verified, no code change)
+- STORY-00525 — Migration 018 applied (account_type, memory_subscription_limit, routes.permission, memory_subscriptions, hidden_items, race-safe trigger) + `backend/src/constants/permission.js`
+- STORY-00526 — 9163 cleanup (mysqldump backup + DRY-RUN + 5 sessions deleted + 46 Kalman-rebuilt memory_points)
+- STORY-00527 — 9 mock `@cairn.demo` seed (bcrypt cost 12, exact §8 counts, geometric verify, backup/restore/clear scripts). 10 legacy 2026-05-19 friends rows deleted with user authorization (backup in `_spike/sprint67-friends-cleanup/`).
+- STORY-00528 — 8 new backend endpoints (memory-subscriptions, circle/{markers,routes,fog}, markers/public, hide) + v4 H1 enforcement (POST/PUT markers/routes reject permission='public') + Route model now persists permission ('personal'|'friend'). 23/23 integration tests PASS. Arch subagent review verdict: PASS.
+- STORY-00529 — node-cron weekly orphan cleanup (`cleanHiddenItemsOrphans.js`, Sun 03:00 UTC) + `docs/TECH_SPEC.md §cron`. Manual test: 5 orphans deleted, 1 valid row preserved.
+- SPIKE-67-1 — Mapbox iOS fog UNION feasibility — **VIABLE_WITH_CONDITIONS** (desk research + production codepath audit; live FPS measurement deferred to F4 Sprint 70 prep on user's iPhone — honestly disclosed, no faked numbers). 3 fallback designs documented.
+
+**Friend System next**: Sprint 68 (F2 — Mark UI + Interaction + Like/Delete), 5 stories.

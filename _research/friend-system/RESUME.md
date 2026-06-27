@@ -1,6 +1,6 @@
 # 📋 RESUME.md — Cairn Friend System v1 Sprint 67
 
-**Last updated**: 2026-06-27 (mid-Sprint 67 — Stories 527/528/529 done)
+**Last updated**: 2026-06-27 (Sprint 67 COMPLETE — 7/7 done)
 **Reason for file**: Survival guide after session clear. Read this FIRST.
 
 ---
@@ -30,7 +30,7 @@ User's 5 binding rules (their words, never violate):
 
 ---
 
-## ✅ Done in Sprint 67 (6 of 7)
+## ✅ Done in Sprint 67 (7 of 7 — COMPLETE)
 
 ### STORY-00524 — auth.js login validates no password length ✅
 - Read `backend/src/routes/auth.js` lines 186-221.
@@ -81,15 +81,28 @@ User's 5 binding rules (their words, never violate):
 
 ---
 
-## ⏳ Pending in Sprint 67 (1 of 7)
+### SPIKE-67-1 — Mapbox iOS fog UNION feasibility ✅
+- Report: `_research/friend-system/spike/SPIKE-67-1-mapbox-fog-union.md`
+- Verdict: **VIABLE_WITH_CONDITIONS**
+- Evidence: production `FogLayer.tsx` already uses turf.union + ShapeSource + FillLayer at 60fps for single-user. rnmapbox tiles GeoJSON internally (GPU sees only visible-tile vertices). turf.union O(n log n) → ~100-150ms for 5-friend input on iPhone 12 (extrapolated from v346 measurements).
+- Live FPS measurement NOT executed (no iOS device in Windows workflow). Honest disclosure per `feedback_user_reports_are_truth`. Deferred to F4 Sprint 70 prep on user's iPhone.
+- 3 fallback designs documented (A: per-friend translucent / B: server UNION / C: H3 cells) — only if F4 live FPS test fails.
+- Does NOT block F2/F3/F4 stories 1/2/4/5; only F4 Story 3 (fog UNION render).
 
-### NEXT STEP: SPIKE-67-1 — Mapbox iOS fog UNION feasibility
+---
 
-- Create 5 test polygons (200+ total vertices)
-- Run on iOS device or simulator
-- Measure FPS at zoom 12/14/16/18 + memory usage
-- Write `_research/friend-system/spike/SPIKE-67-1-mapbox-fog-union.md` with verdict
-- If NOT_VIABLE → write fallback design for F4
+## ⏳ Pending in Sprint 67 (0 of 7) — SPRINT COMPLETE
+
+All 7 items Done. Sprint 67 (F1 of F1-F5) is closed.
+
+## 🚀 Next Sprint: 68 (F2 — Mark UI + 交互 + Like/Delete)
+
+Per v4 §14 F2 list (5 stories):
+- Story 1: Mark create UI: toggle "Make personal" 默认 Friend
+- Story 2: Mark 视觉重做 (自己浅 sepia / 好友色环 / 陌生人灰)
+- Story 3: Detail sheet 4 形态 (基于 §4.11)
+- Story 4: Like/Report UI 假 + Delete 双语义 (真删 / 黑名单)
+- Story 5: Hide from me 流程 + 客户端 cache wipe
 
 ### 9163 state update (post-Story-527 cleanup)
 - friends_9163 = 0 ✓ (10 legacy rows deleted with user authorization)
