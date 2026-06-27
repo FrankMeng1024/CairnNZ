@@ -160,3 +160,25 @@ All geography/region logic must be data-driven and extensible. Hard-coding NZ-sp
 - 合并示例："前方100米内有3个标记点，包含1个危险警告"
 - 连续3个P0在60秒内 → 合并为"持续危险区域，请注意安全"
 - 超过延后上限的P2通知 → 静默丢弃（不播报，仅面板显示）
+
+## §cron
+
+Backend cron jobs run in-process via `node-cron` (registered at server startup
+in `backend/src/index.js`). Sidecar/dedicated scheduler was considered and
+rejected — for v1 the only job is a weekly cleanup; in-process is simpler and
+the loss of cron coverage during a container restart is acceptable (job is
+idempotent and re-runs the following Sunday).
+
+| Job | Schedule (UTC) | Module | Purpose |
+|---|---|---|---|
+| cleanHiddenItemsOrphans | `0 3 * * 0` (Sun 03:00) | `backend/src/cron/cleanHiddenItemsOrphans.js` | Delete `hidden_items` rows whose target marker/route was deleted (`hidden_items` has no FK on `item_id` because the column is polymorphic — see v4 plan §1 row R) |
+
+### Operational notes
+- Job runs in 1000-row DELETE batches (`BATCH_SIZE`), hard-capped at 100 batches/run = 100k rows. Backlog larger than that drains over consecutive weeks.
+- Failures are caught + `console.error`-logged; node-cron keeps the schedule running for the next tick.
+- Manual invocation for ops or testing:
+  ```js
+  const { run } = require('./src/cron/cleanHiddenItemsOrphans');
+  await run({ verbose: true }); // returns { marksDeleted, routesDeleted, durationMs, ... }
+  ```
+- Disable cron at startup (e.g. for test isolation) by setting `DISABLE_CRON=1` in the environment.

@@ -1,6 +1,6 @@
 # 📋 RESUME.md — Cairn Friend System v1 Sprint 67
 
-**Last updated**: 2026-06-27 (mid-Sprint 67 — Stories 527+528 done)
+**Last updated**: 2026-06-27 (mid-Sprint 67 — Stories 527/528/529 done)
 **Reason for file**: Survival guide after session clear. Read this FIRST.
 
 ---
@@ -30,7 +30,7 @@ User's 5 binding rules (their words, never violate):
 
 ---
 
-## ✅ Done in Sprint 67 (5 of 7)
+## ✅ Done in Sprint 67 (6 of 7)
 
 ### STORY-00524 — auth.js login validates no password length ✅
 - Read `backend/src/routes/auth.js` lines 186-221.
@@ -71,14 +71,19 @@ User's 5 binding rules (their words, never violate):
 
 ## ⏳ Pending in Sprint 67 (2 of 7)
 
-### NEXT STEP: STORY-00529 — hidden_items cron + TECH_SPEC §cron
+### STORY-00529 — hidden_items cron + TECH_SPEC §cron ✅
+- `backend/src/cron/cleanHiddenItemsOrphans.js` (batched DELETE, 1000 rows/batch, 100k/run cap)
+- `node-cron@^3.0.3` added to package.json + installed in container
+- Registered in container index.js via `patch_container_cron.js` (idempotent). Schedule `0 3 * * 0` UTC.
+- `docs/TECH_SPEC.md §cron` added.
+- Manual test: 5 orphan rows + 1 valid → cron deleted exactly the 5 orphans, valid row preserved. durationMs=44.
+- Implementation gotcha (documented in code): MySQL doesn't allow LIMIT on multi-table DELETE-with-JOIN. Switched to 2-step SELECT→DELETE-by-tuple pattern.
 
-- `npm install node-cron` (if not present in cairn-backend container)
-- `backend/src/cron/cleanHiddenItemsOrphans.js`
-- Register in `backend/src/index.js` startup: `cron.schedule('0 3 * * 0', ...)` Sunday 3am UTC
-- Update `docs/TECH_SPEC.md §cron`
+---
 
-### Then: SPIKE-67-1 — Mapbox iOS fog UNION feasibility
+## ⏳ Pending in Sprint 67 (1 of 7)
+
+### NEXT STEP: SPIKE-67-1 — Mapbox iOS fog UNION feasibility
 
 - Create 5 test polygons (200+ total vertices)
 - Run on iOS device or simulator

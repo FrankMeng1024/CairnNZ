@@ -23,6 +23,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.22.3",
+    "node-cron": "^3.0.3",
     "nodemailer": "^8.0.7",
     "pbf": "^3.3.0"
   },

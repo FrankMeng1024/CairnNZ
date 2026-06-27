@@ -12,7 +12,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const cron = require('node-cron');
 const pool = require('./config/db');
+const { run: cleanHiddenOrphans } = require('./cron/cleanHiddenItemsOrphans');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -124,6 +126,20 @@ async function start() {
     console.log(`✓ Cairn backend running on http://localhost:${PORT}`);
     console.log(`  Health: http://localhost:${PORT}/health`);
   });
+
+  // ── Cron jobs (Sprint 67 STORY-00529) ───────────────────────────────────
+  // hidden_items has no FK on item_id (polymorphic — see cron module header).
+  // Sunday 03:00 UTC weekly cleanup of orphan rows.
+  if (process.env.DISABLE_CRON === '1') {
+    console.log('✓ Cron disabled via DISABLE_CRON=1');
+  } else {
+    cron.schedule('0 3 * * 0', () => {
+      cleanHiddenOrphans({ verbose: true }).catch((err) => {
+        console.error('[cron/scheduler] cleanHiddenItemsOrphans failed:', err.message);
+      });
+    }, { timezone: 'UTC' });
+    console.log('✓ Cron registered: cleanHiddenItemsOrphans (0 3 * * 0 UTC)');
+  }
 }
 
 start();
