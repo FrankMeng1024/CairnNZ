@@ -1,0 +1,12 @@
+Strava activity feed UI how does it differentiate own activities from friends activities visual design
+Strava following tab vs you tab feed UI design
+Polarsteps app following friends trip map view UI design
+Komoot tour list UI my tours vs other users discovery visual
+Instagram Close Friends green ring story circle visual indicator
+Snapchat Snap Map friend bitmoji avatar visual design
+Find My app friends location map avatar visual design Apple
+Google Maps Shared with you saved places list UI design
+Google Photos shared album who uploaded what visual attribution UI
+Notion shared workspace pages created by me vs others visual indicator
+Mobile map app multi-user marker color coding UX pattern
+Social app own content vs friend content visual differentiation pattern

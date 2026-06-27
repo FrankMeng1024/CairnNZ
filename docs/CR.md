@@ -50,3 +50,20 @@ Four issues found post-Sprint 38:
 4. **Splash animation uplift**: Current cairn-stone-stack animation lacks "hiking trail" soul. Needs: trail path drawing (SVG stroke animation), flag/banner plant at top of cairn with bounce, subtle particle dust on flag impact. Reference: premium outdoor app onboarding (summit flag moment).
 
 **Status**: Approved — Sprint 39 execution target
+
+
+---
+
+## CR-Friend-System-v1 — Approved (Sprint 67 execution target)
+**Date**: 2026-06-27
+**Source**: User multi-round product decisions
+**Plan**: `_research/friend-system/FINAL_PRODUCT_PLAN_v4.md` (v4.2 final)
+
+Three-tier visibility model (Personal/Friend/Public), trusted-circle friend system, Memory 5-friend subscription with paywall, stranger Public mark icon-only display, Like/Report UI without API. Full plan in v4.md.
+
+## CR-Deferred-RouteEditor-Story-519-520
+**Status**: Moved to backlog (Sprint 66 deferred contents)
+**Reason**: Sprint 67 dedicated to Friend System F1 per user /project --auto invocation
+**Stories**: STORY-00519 (RouteEditor runtime integration), STORY-00520 (trim/midpoint-drag interaction)
+**Action**: To be re-scheduled after Friend System v1 (F5) ships, likely Sprint 72+
+

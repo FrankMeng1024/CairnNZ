@@ -1,0 +1,6 @@
+死亡搁浅 strand contract 双向 好友 区别 匹配机制
+死亡搁浅 私人房间 私人模式 看不到其他玩家 建筑
+死亡搁浅 路标 sign 玩家留下 显示 玩家名字 显示
+死亡搁浅 异步多人 同一张地图 不同玩家 服务器 池
+死亡搁浅 玩家建筑 消失 时间 衰减 持久性
+Death Stranding sign types signal happy danger thumbs up appear on map
