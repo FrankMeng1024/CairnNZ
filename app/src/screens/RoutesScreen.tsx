@@ -573,9 +573,6 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
       ) : null}
       {scope === 'friends' && !loadingCircleRoutes && circleRoutes.length === 0 ? (
         <View style={styles.emptyHero}>
-          <View style={{ marginBottom: Spacing.md }}>
-            <EmptyRoutes size={160} />
-          </View>
           <View style={styles.emptyHeroIcon}>
             <Icon name="Users" size={40} color={Colors.primary} strokeWidth={1.5} />
           </View>
@@ -584,15 +581,6 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
             Subscribe to a friend in the{'\n'}
             <Text style={{ fontWeight: '700', color: Colors.primary }}>Memory</Text> tab to see their routes here.
           </Text>
-          <TouchableOpacity
-            style={styles.emptyHeroCta}
-            activeOpacity={0.85}
-            onPress={() => nav.navigate('Friends')}
-            testID="routes-friends-empty-friends-cta"
-          >
-            <Icon name="UserPlus" size={16} color="#fff" strokeWidth={2} />
-            <Text style={styles.emptyHeroCtaText}>Find friends</Text>
-          </TouchableOpacity>
         </View>
       ) : null}
       {(scope === 'mine' || (scope === 'friends' && circleRoutes.length > 0)) && (
@@ -627,9 +615,6 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
              they exist but the current filter/search hides them, just say so. */
           routes.length === 0 ? (
             <View style={styles.emptyHero}>
-              <View style={{ marginBottom: Spacing.md }}>
-                <EmptyRoutes size={160} />
-              </View>
               <View style={styles.emptyHeroIcon}>
                 <Icon name="Route" size={40} color={Colors.primary} strokeWidth={1.5} />
               </View>
@@ -1035,9 +1020,6 @@ function FlagsTab() {
           <View style={{ marginBottom: Spacing.md }}>
             <EmptyMarkers size={160} />
           </View>
-          <View style={styles.emptyHeroIcon}>
-            <Icon name="Flag" size={40} color={Colors.primary} strokeWidth={1.5} />
-          </View>
           <Text style={styles.emptyHeroTitle}>No flags planted yet</Text>
           <Text style={styles.emptyHeroBody}>
             Leave a mark when you find something worth noting —{'\n'}
@@ -1073,23 +1055,11 @@ function FlagsTab() {
           <View style={{ marginBottom: Spacing.md }}>
             <EmptyMarkers size={160} />
           </View>
-          <View style={styles.emptyHeroIcon}>
-            <Icon name="Users" size={40} color={Colors.primary} strokeWidth={1.5} />
-          </View>
           <Text style={styles.emptyHeroTitle}>No marks from your friends yet</Text>
           <Text style={styles.emptyHeroBody}>
             Subscribe to a friend in the{'\n'}
             <Text style={{ fontWeight: '700', color: Colors.primary }}>Memory</Text> tab to see their marks here.
           </Text>
-          <TouchableOpacity
-            style={styles.emptyHeroCta}
-            activeOpacity={0.85}
-            onPress={() => nav.navigate('Friends')}
-            testID="flags-friends-empty-friends-cta"
-          >
-            <Icon name="UserPlus" size={16} color="#fff" strokeWidth={2} />
-            <Text style={styles.emptyHeroCtaText}>Find friends</Text>
-          </TouchableOpacity>
         </View>
       ) : null}
 

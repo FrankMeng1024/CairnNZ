@@ -46,13 +46,15 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
   // UX-E fix: Animated values for smooth slide + backdrop fade matching
   // Hiking choose-a-route. Mount Modal in 'fade' mode (instant) and own
   // the slide via our Animated.View so we control easing precisely.
-  const slideAnim = useRef(new Animated.Value(400)).current;
+  // v374: align starting translateY 400 → 300 to match Hiking exactly
+  // (was 100px further off-screen = faster perceived velocity).
+  const slideAnim = useRef(new Animated.Value(300)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
       void load();
-      slideAnim.setValue(400);
+      slideAnim.setValue(300);
       backdropAnim.setValue(0);
       Animated.parallel([
         Animated.timing(slideAnim, {
@@ -74,7 +76,7 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
   const dismiss = () => {
     Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: 400,
+        toValue: 300,
         duration: 220,
         easing: Easing.in(Easing.quad),
         useNativeDriver: true,

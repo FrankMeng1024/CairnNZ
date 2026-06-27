@@ -145,10 +145,12 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
   const [addState, setAddState] = useState<AddState>('idle');
   const successEmail = useRef('');
 
-  // UX-A fix (v372→v373): match Hiking choose-a-route sheet animation
+  // UX-A fix (v372→v373→v374): match Hiking choose-a-route sheet animation
   // (Animated.timing + Easing.out(Easing.cubic), 280ms slide, 220ms
-  // backdrop). Spring caused subtle bounce that read as "jarring".
-  const slideAnim = useRef(new Animated.Value(400)).current;
+  // backdrop). v374: align starting translateY to 300 (Hiking uses 300,
+  // we had 400 = 100px further off-screen = same duration but faster
+  // perceived velocity = "less smooth"). Now matches Hiking exactly.
+  const slideAnim = useRef(new Animated.Value(300)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -171,7 +173,7 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
   const dismiss = () => {
     Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: 400,
+        toValue: 300,
         duration: 220,
         easing: Easing.in(Easing.quad),
         useNativeDriver: true,
