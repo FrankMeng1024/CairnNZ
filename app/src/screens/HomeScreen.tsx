@@ -462,6 +462,17 @@ export function HomeScreen() {
           <ToolBtn iconName="Settings2" label="Settings" onPress={() => nav.navigate('Settings')} />
         </View>
 
+        {/* Sprint 68 STORY-00532 dev preview entry — only renders in __DEV__ */}
+        {__DEV__ ? (
+          <TouchableOpacity
+            onPress={() => nav.navigate('MarkDetailDevPreview')}
+            style={{ marginTop: 8, alignSelf: 'center', paddingVertical: 6, paddingHorizontal: 12 }}
+            testID="dev-mark-detail-preview"
+          >
+            <Text style={{ color: '#8c7e72', fontSize: 11 }}>[dev] MarkDetail preview</Text>
+          </TouchableOpacity>
+        ) : null}
+
       </Animated.View>
     </SafeAreaView>
   );

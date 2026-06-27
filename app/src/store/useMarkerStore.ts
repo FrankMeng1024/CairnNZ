@@ -46,6 +46,11 @@ export interface Marker {
   // persistence — the URI string itself, the m4a file lives on disk.
   voiceMemoUri?: string;
   voiceMemoDurationMs?: number;
+  // Sprint 68 STORY-00532: optional author display name. Populated by the
+  // /api/circle/markers endpoint for friend-tier marks (Public marks are
+  // anonymized server-side per v4 row Q — author_name returns null even
+  // when the creator is a friend). Local-only / self marks have no value.
+  authorName?: string | null;
   // v0.2.4 Part 2 A2.2 — 双源持久化(用户原话:"AR plant 没用 arkit 世界坐标 用的是 GPS")
   // Plant 时同时存 ARKit world XYZ + arOrigin 快照,re-spawn 时优先用 ARKit
   // (前提:当前 arOrigin 跟 plant 时 arOrigin 偏差 < 5m,否则 fallback GPS+raycast)
@@ -149,6 +154,9 @@ interface MarkerState {
   addMarker: (marker: Omit<Marker, 'id' | 'createdAt'>) => Promise<Marker>;
   updateMarker: (id: string, updates: Partial<Omit<Marker, 'id' | 'createdAt'>>) => Promise<void>;
   deleteMarker: (id: string) => Promise<void>;
+  /** Sprint 68 STORY-00534: hide a foreign mark from this viewer's map.
+   *  Optimistic local wipe + POST /api/hide. Idempotent. */
+  hideMark: (id: string) => Promise<void>;
   clearMarkers: () => void;
   getMarkersForRegion: (regionCode: string) => Marker[];
   hydrate: (userId: string) => Promise<void>;
@@ -306,6 +314,40 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       crashLogger.breadcrumb(`marker:delete:remote ok=${res.ok} id=${id}`);
     } catch (err) {
       crashLogger.breadcrumb(`marker:delete:remote-error ${String(err).slice(0, 80)}`);
+    }
+  },
+
+  // Sprint 68 STORY-00534: hide-from-me cache wipe + server call.
+  // Calls Sprint 67 POST /api/hide; on success the row joins hidden_items,
+  // and future /api/circle/markers calls filter it server-side (LEFT JOIN).
+  // The client also wipes the mark from useMarkerStore + MMKV so the mark
+  // disappears immediately (no waiting for the next pull-on-focus refresh).
+  // Per v4 §15 V3 review §4.2: "client-side useMarkerStore 主动 wipe".
+  //
+  // Optimistic strategy: wipe locally first. On HTTP failure, log + log
+  // breadcrumb but DO NOT restore (the user expressed intent to hide; if
+  // the next /api/circle/markers re-includes the row server-side the
+  // entry will come back legitimately). Trade-off accepted because the
+  // hide flow only runs after a strong confirm modal — slipping a mark
+  // back into view on transient failure is worse UX than honoring intent.
+  hideMark: async (id) => {
+    crashLogger.breadcrumb(`marker:hide:start id=${id}`);
+    set((s) => {
+      const next = s.markers.filter((m) => m.id !== id);
+      if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
+      return { markers: next };
+    });
+
+    try {
+      const numericId = Number(id);
+      const body = { item_type: 'mark', item_id: Number.isFinite(numericId) ? numericId : id };
+      const res = await authenticatedFetch('/api/hide', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      crashLogger.breadcrumb(`marker:hide:remote ok=${res.ok} id=${id}`);
+    } catch (err) {
+      crashLogger.breadcrumb(`marker:hide:remote-error ${String(err).slice(0, 80)}`);
     }
   },
 

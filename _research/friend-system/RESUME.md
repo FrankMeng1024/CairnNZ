@@ -1,6 +1,6 @@
 # 📋 RESUME.md — Cairn Friend System v1 Sprint 67
 
-**Last updated**: 2026-06-27 (Sprint 67 closed; Sprint 68 2/5 done)
+**Last updated**: 2026-06-27 (Sprint 67 closed; Sprint 68 5/5 COMPLETE)
 **Reason for file**: Survival guide after session clear. Read this FIRST.
 
 ---
@@ -95,25 +95,30 @@ User's 5 binding rules (their words, never violate):
 
 All 7 items Done. Sprint 67 (F1 of F1-F5) is closed.
 
-## 🚀 Sprint 68 (F2 — Mark UI + 交互 + Like/Delete) — IN PROGRESS 2/5
+## 🚀 Sprint 68 (F2 — Mark UI + 交互 + Like/Delete) — COMPLETE 5/5
 
 | Story | Status |
 |---|---|
 | STORY-00530 — Mark create visibility toggle (default Friend) | ✅ Done |
 | STORY-00531 — Mark visual treatment by tier (self/friend/stranger) | ✅ Done |
-| STORY-00532 — Detail Sheet 4 forms (§4.11) | ⏳ Pending |
-| STORY-00533 — Like/Report fake + Delete dual | ⏳ Pending |
-| STORY-00534 — Hide-from-me + cache wipe | ⏳ Pending |
+| STORY-00532 — Detail Sheet 4 forms (§4.11) | ✅ Done |
+| STORY-00533 — Like/Report fake + Delete dual | ✅ Done |
+| STORY-00534 — Hide-from-me + cache wipe | ✅ Done |
 
-### Web testing unblocked for Friend-system / Trails UI
-- `cd app && npx expo start --web --port 8081` then Playwright @ localhost:8081
-- GpsLockStep has Platform.OS==='web' mock — Plant flow walks past GPS step
-- Memory tab fog UNION still iPhone-only (SPIKE-67-1 deferred)
+### Sprint 68 evidence + verification
+- 4 forms verified via Playwright on Expo Web (`docs/qa/sprint68-evidence/STORY-00532-form*.png`)
+- 9/9 logic tests PASS for iron-law form selection (`app/src/features/marks/__tests__/markVisibility.dev-test.mjs`)
+- Like toggle verified: ♡ Like → ❤ Liked (red fill + colored text)
+- Hide flow wired: confirm modal → POST /api/hide + optimistic local wipe via `useMarkerStore.hideMark`
+- Dead code: `useCommunityStore.ts` deleted (zero refs). ARScreenLegacy LikeReportSheet left intact (still used by AR kill-switch — not dead).
 
-### Sprint 68 follow-up noted (NOT in 531)
-- `loadCircleMarkers()` consuming `GET /api/circle/markers` — small follow-up Story
-- Merge circle markers into MapScreen render list
-- Tier visuals will activate automatically once circle markers enter the render
+### Sprint 68 follow-up still pending
+- Wire `loadCircleMarkers()` consuming `GET /api/circle/markers` so subscribed-friend marks reach the map render list. Tier visuals (Story-531) + Detail Sheet B/C forms (Story-532) only activate once this is in place.
+- Live device verification on iPhone — F5 hardening Sprint.
+
+### Sprint 68 web-test infrastructure
+- `app/src/features/plant/components/GpsLockStep.tsx`: Platform.OS==='web' mock (9163 Back Loop coord, 100ms timer) skips GPS sampler — Plant flow reachable in Playwright.
+- Dev preview route `MarkDetailDevPreview` mounted in RootNavigator, entry link rendered conditionally on `__DEV__` at HomeScreen bottom. 7 hand-crafted scenarios exercise every form including anonymization edge cases.
 
 ### 9163 state update (post-Story-527 cleanup)
 - friends_9163 = 0 ✓ (10 legacy rows deleted with user authorization)

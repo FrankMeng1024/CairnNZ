@@ -1,7 +1,7 @@
 # PROJECT_STATE.md — Cairn
 
 **Status**: IN_PROGRESS
-**Current Sprint**: 67 CLOSED — F1 of Friend System v1 (5 sprint roadmap). Next: Sprint 68 F2.
+**Current Sprint**: 68 CLOSED — F2 of Friend System v1. Next: Sprint 69 F3 (Route + Trails).
 **Last Updated**: 2026-06-27
 **Governing Document**: docs/PRD2.md (PRD3.md adds NZ localization layer)
 
@@ -78,3 +78,24 @@
 - SPIKE-67-1 — Mapbox iOS fog UNION feasibility — **VIABLE_WITH_CONDITIONS** (desk research + production codepath audit; live FPS measurement deferred to F4 Sprint 70 prep on user's iPhone — honestly disclosed, no faked numbers). 3 fallback designs documented.
 
 **Friend System next**: Sprint 68 (F2 — Mark UI + Interaction + Like/Delete), 5 stories.
+
+## Sprint 68 — Friend System v1 / F2 (CLOSED 2026-06-27)
+
+**Sprint Goal**: Land the user-facing Mark surface for Friend System v1: tri-tier visibility on create, tier-aware visual treatment, the 4-form Detail Sheet, fake Like/Report UI, dual-semantic Delete, and Hide-from-me with client-side cache wipe.
+
+5 of 5 stories Done:
+- STORY-00530 — Mark create UI: visibility toggle (default Friend). `defaultLevel: 'self' → 'friends'`, `enablePublicOption: false`. Playwright verified: 2-chip toggle, Friends highlighted, no Anyone chip.
+- STORY-00531 — Mark visual treatment by tier. New `markTier.ts` pure function + `colorFromUserId` stable hash (8-color palette). MapScreen RealMap accepts viewerId + friendIds; per-marker tier computed inline; self = inline pin, friend = +2px colored ring, stranger = opacity 0.6.
+- STORY-00532 — Detail Sheet 4 forms. `markVisibility.ts` (iron law 1) + `MarkDetailSheet.tsx` (modal switching A/B/C/D). 9/9 logic tests PASS. Playwright screenshots for forms A-personal, A-public, B-friend, B-public-anon, C — `docs/qa/sprint68-evidence/`.
+- STORY-00533 — Like/Report fake + Delete dual. `useMarkLikeStore` session-only. NO HTTP for Like/Report. Delete dual-semantic: own → DELETE marker, other → Hide. Like toggle visually verified (♡ → ❤ Liked red).
+- STORY-00534 — Hide-from-me + cache wipe. `useMarkerStore.hideMark()` action: optimistic local filter + MMKV write + POST /api/hide. Strong-warning Alert modal. Dev preview wired to real action for end-to-end testing.
+
+**Dead-code cleanup**: `useCommunityStore.ts` deleted (zero refs). ARScreenLegacy LikeReportSheet left intact (active kill-switch fallback — not dead).
+
+**Web testing infrastructure built**: Platform.OS==='web' GPS mock in GpsLockStep; `MarkDetailDevPreview` route + HomeScreen `__DEV__` entry link. Enables Playwright verification for all Friend-system / Trails UI; only Memory tab fog requires iPhone (SPIKE-67-1 deferred).
+
+**Sprint 68 follow-up (NOT done — explicit deferral)**:
+- `loadCircleMarkers()` consuming `GET /api/circle/markers` (Sprint 67 endpoint) so subscribed-friend marks reach MapScreen render. Tier visuals + Detail Sheet B/C forms only fully activate with this load wired.
+- Live iPhone device verification — F5 hardening Sprint.
+
+**Friend System next**: Sprint 69 (F3 — Route + Trails), 4 stories per v4 §14.

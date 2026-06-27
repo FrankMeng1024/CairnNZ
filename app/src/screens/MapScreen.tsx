@@ -25,6 +25,9 @@ import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../componen
 import { PressBtn } from '../components/PressBtn';
 import { Icon } from '../components/Icon';
 import { getMarkerTierVisuals } from '../features/marks/utils/markTier';
+import { MarkDetailSheet } from '../features/marks/components/MarkDetailSheet';
+import { useMarkLikeStore } from '../features/marks/store/useMarkLikeStore';
+import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import type { IconName } from '../components/Icon';
 import { GlassPanel, Elevation } from '../components/GlassPanel';
 import { MapBottomPanel, type PanelMarkerItem } from '../components/MapBottomPanel';
@@ -648,17 +651,43 @@ export function MapScreen() {
   const addMarker = useMarkerStore(s => s.addMarker);
   const deleteMarker = useMarkerStore(s => s.deleteMarker);
   const updateMarker = useMarkerStore(s => s.updateMarker);
+  // Sprint 68 STORY-00534: hide-from-me action (POST /api/hide + cache wipe).
+  const hideMark = useMarkerStore(s => s.hideMark);
   // Sprint 68 STORY-00531: viewer perspective for tier-aware marker visuals.
   // viewerId comes from useMarkerStore (set by hydrate after login).
   // friendIds from useFriendStore (already loaded by Friends tab / auth flow).
   const viewerId = useMarkerStore(s => s.userId);
   const friends = useFriendStore(s => s.friends);
   const friendIds = React.useMemo(() => friends.map(f => f.id), [friends]);
+  // Sprint 68 STORY-00532: subscribed friend ids for visibility computation.
+  // Sprint 67 STORY-00528 wire (GET /api/memory-subscriptions) returns the
+  // 5-pick set. v1 store wiring is a follow-up; default empty so visibility
+  // falls back to inMyFog-only for now. friend marks loaded from
+  // /api/circle/markers will still appear in the store (Story-531 follow-up)
+  // but won't render in MapScreen until subscriptions are consumed.
+  const subscribedFriendIds = React.useMemo<ReadonlyArray<string | number>>(() => [], []);
+  // Iron law 1 / form-B-vs-C check: viewer's own fog membership.
+  const isExploredFn = useMemoryStore(s => s.isExplored);
+  // Sprint 68 STORY-00533: session-only Like state.
+  const likeToggle = useMarkLikeStore(s => s.toggle);
+  // Subscribe to `liked` array so the sheet re-renders when toggle fires.
+  // Use a closure isLiked over the subscribed array; identity changes on
+  // every toggle, forcing React.useCallback's dep array to recompute and
+  // the consumer prop to update.
+  const likedSet = useMarkLikeStore(s => s.liked);
+  const isMarkLiked = React.useCallback(
+    (id: string) => likedSet.includes(id),
+    [likedSet]
+  );
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
   const region = getCurrentRegion();
 
   const [selectedMarker, setSelectedMarker] = useState<Marker | null>(null);
   const [editMarker, setEditMarker] = useState<Marker | null>(null);
+  // Sprint 68 STORY-00532: tap-to-detail surface. Tap → opens MarkDetailSheet
+  // (forms A/B/C); Edit button inside form A then opens EditMarkerSheet.
+  // Form D never reaches here because RealMap only renders visible marks.
+  const [detailMarker, setDetailMarker] = useState<Marker | null>(null);
   const [createVisible, setCreateVisible] = useState(false);
   const [showModeModal, setShowModeModal] = useState(false);
   const [offlineVisible, setOfflineVisible] = useState(false);
@@ -713,7 +742,7 @@ export function MapScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       {/* Map — full bleed topo placeholder */}
-      <RealMap markers={storeMarkers} onMarkerPress={(m) => setEditMarker(m)} viewerId={viewerId} friendIds={friendIds} />
+      <RealMap markers={storeMarkers} onMarkerPress={(m) => setDetailMarker(m)} viewerId={viewerId} friendIds={friendIds} />
 
       {/* Top bar — STORY-00099: rgba(255,255,255,0.95) overlay chips */}
       <SafeAreaView style={styles.topBar} edges={['top']} pointerEvents="box-none">
@@ -850,6 +879,62 @@ export function MapScreen() {
         onClose={() => setEditMarker(null)}
         onSave={(id, type, note, permission) => updateMarker(id, { type, note, permission })}
         onDelete={(id) => deleteMarker(id)}
+      />
+      {/* Sprint 68 STORY-00532: 4-form Detail Sheet. Mounted alongside the
+          legacy EditMarkerSheet — tap on a map marker first opens this;
+          form A's Edit button then opens EditMarkerSheet for the actual
+          edit UI. Story-533 will wire Like/Report fake handlers; Story-534
+          will wire the Hide-from-view cache wipe. */}
+      <MarkDetailSheet
+        marker={detailMarker}
+        viewerId={viewerId}
+        subscribedFriendIds={subscribedFriendIds}
+        friendIds={friendIds}
+        inMyFog={isExploredFn}
+        isLiked={isMarkLiked}
+        onClose={() => setDetailMarker(null)}
+        onEdit={(m) => { setDetailMarker(null); setEditMarker(m); }}
+        onLike={(m) => {
+          // Sprint 68 STORY-00533: session-only toggle. NO HTTP, NO DB write.
+          // Force a re-render of the sheet by closing+reopening — Zustand
+          // selector subscription handles the cheap fan-out automatically.
+          likeToggle(m.id);
+        }}
+        onReport={(_m) => {
+          // Sprint 68 STORY-00533: v1 fake report. Toast then nothing.
+          // v1.1 will wire to POST /api/markers/:id/vote (already live).
+          Alert.alert('Thank you', 'Thank you for reporting.', [{ text: 'OK' }]);
+        }}
+        onDelete={(m, semantic) => {
+          if (semantic === 'own') {
+            Alert.alert(
+              'Delete this mark?',
+              'This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => {
+                  deleteMarker(m.id);
+                  setDetailMarker(null);
+                }},
+              ],
+            );
+          } else {
+            // Sprint 68 STORY-00534: real Hide-from-me. POST /api/hide +
+            // cache wipe. Strong confirm copy per v4 plan §5 ("irreversible
+            // from client, strong warning").
+            Alert.alert(
+              'Hide this mark permanently?',
+              "You won't see it again on your map. (Other users still see it.)",
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Hide', style: 'destructive', onPress: () => {
+                  hideMark(m.id);
+                  setDetailMarker(null);
+                }},
+              ],
+            );
+          }
+        }}
       />
 
       {/* Bottom Panel — hidden when viewing a specific marker or tracking */}

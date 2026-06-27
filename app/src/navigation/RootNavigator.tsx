@@ -26,6 +26,7 @@ import { PlantScreen } from '../screens/PlantScreen';
 import { FriendsScreen } from '../screens/FriendsScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { MemoryScreen } from '../features/memory/screens/MemoryScreen';
+import { MarkDetailDevPreviewScreen } from '../features/marks/dev/MarkDetailDevPreviewScreen';
 import { MarkerDetailScreen } from '../screens/MarkerDetailScreen';
 import { useAppStore } from '../store/useAppStore';
 import { markBootPhase } from '../services/bootDiagnostics';
@@ -50,6 +51,8 @@ export type RootStackParamList = {
   Settings: undefined;
   Memory: undefined;
   Debug: undefined;
+  /** Sprint 68 STORY-00532: dev-only preview for MarkDetailSheet 4 forms. */
+  MarkDetailDevPreview: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -92,6 +95,7 @@ export function RootNavigator() {
             <Stack.Screen name="Settings"    component={SettingsScreen} />
             <Stack.Screen name="Memory"      component={MemoryScreen} />
             <Stack.Screen name="Debug"       component={DebugScreen} />
+            <Stack.Screen name="MarkDetailDevPreview" component={MarkDetailDevPreviewScreen} />
           </>
         ) : (
           <Stack.Screen
