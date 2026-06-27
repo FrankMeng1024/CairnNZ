@@ -1273,7 +1273,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 370;
+export const OTA_VERSION = 371;
+//         v371: Friend System v1 — F1+F2+F3+F4 code complete + 14 bug
+//         fixes from 5 rounds of subagent review + 5 UX friction fixes
+//         from UX subagent round 2. Backend: 8 new endpoints
+//         (/api/memory-subscriptions, /api/circle/{markers,routes,fog},
+//         /api/markers/public bbox, /api/hide) + H1 reject public on
+//         POST/PUT markers+routes + GET /api/markers user_id echo (BUG-001).
+//         Frontend: Mark create visibility toggle (default Friend),
+//         tier-aware marker visuals (self/friend/stranger ring/opacity),
+//         4-form MarkDetailSheet (A/B/C/D + iron-law gating), session-
+//         local Like store, Hide-from-me dual-slice wipe + hidingIds
+//         race guard, RouteEditor visibility, Trails Flags+Routes
+//         Mine|Friends sub-tabs, Memory tab Mine|Friends scope + Pick
+//         friends modal + Paywall + Stranger blurred icon prop chain.
+//         Cross-session leak protection (BUG-010..014).
+//         UX: visible Like count + sync caption (UX-Crit-1), no Report-
+//         self (UX-Crit-2), positive vouch copy (UX-Med-3), aligned
+//         hide tone (UX-Med-4), segmented underline scope (UX-Med-5).
+//         Memory tab fog UNION render deferred to F5 iPhone gate per
+//         SPIKE-67-1. Stranger Public marks blurred icon visual ready
+//         but loader F5-deferred.
 //         v370: restore production 8000ms timeout. Memory banner UX
 //         case closed.
 //
