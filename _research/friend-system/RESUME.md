@@ -1,6 +1,6 @@
 # 📋 RESUME.md — Cairn Friend System v1 Sprint 67
 
-**Last updated**: 2026-06-27 (Sprint 67 COMPLETE — 7/7 done)
+**Last updated**: 2026-06-27 (Sprint 67 closed; Sprint 68 2/5 done)
 **Reason for file**: Survival guide after session clear. Read this FIRST.
 
 ---
@@ -95,14 +95,25 @@ User's 5 binding rules (their words, never violate):
 
 All 7 items Done. Sprint 67 (F1 of F1-F5) is closed.
 
-## 🚀 Next Sprint: 68 (F2 — Mark UI + 交互 + Like/Delete)
+## 🚀 Sprint 68 (F2 — Mark UI + 交互 + Like/Delete) — IN PROGRESS 2/5
 
-Per v4 §14 F2 list (5 stories):
-- Story 1: Mark create UI: toggle "Make personal" 默认 Friend
-- Story 2: Mark 视觉重做 (自己浅 sepia / 好友色环 / 陌生人灰)
-- Story 3: Detail sheet 4 形态 (基于 §4.11)
-- Story 4: Like/Report UI 假 + Delete 双语义 (真删 / 黑名单)
-- Story 5: Hide from me 流程 + 客户端 cache wipe
+| Story | Status |
+|---|---|
+| STORY-00530 — Mark create visibility toggle (default Friend) | ✅ Done |
+| STORY-00531 — Mark visual treatment by tier (self/friend/stranger) | ✅ Done |
+| STORY-00532 — Detail Sheet 4 forms (§4.11) | ⏳ Pending |
+| STORY-00533 — Like/Report fake + Delete dual | ⏳ Pending |
+| STORY-00534 — Hide-from-me + cache wipe | ⏳ Pending |
+
+### Web testing unblocked for Friend-system / Trails UI
+- `cd app && npx expo start --web --port 8081` then Playwright @ localhost:8081
+- GpsLockStep has Platform.OS==='web' mock — Plant flow walks past GPS step
+- Memory tab fog UNION still iPhone-only (SPIKE-67-1 deferred)
+
+### Sprint 68 follow-up noted (NOT in 531)
+- `loadCircleMarkers()` consuming `GET /api/circle/markers` — small follow-up Story
+- Merge circle markers into MapScreen render list
+- Tier visuals will activate automatically once circle markers enter the render
 
 ### 9163 state update (post-Story-527 cleanup)
 - friends_9163 = 0 ✓ (10 legacy rows deleted with user authorization)
