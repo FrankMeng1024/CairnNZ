@@ -61,13 +61,19 @@ export const ContentConfig = {
 // ── Visibility default ────────────────────────────────────────────────
 export const VisibilityConfig = {
   /** Initial selection in the visibility chip row.
-   *  v299: 'self' (Just me) per user request — "默认是 just me". */
-  defaultLevel: 'self' as 'self' | 'friends' | 'public',
-  /**
-   * v0.2.6 MVP: 'public' option is hidden until content moderation
-   * pipeline is ready. Toggle this to enable once moderation lands.
+   *  Sprint 68 STORY-00530 (Friend System v1 v4.U): default is 'friends'.
+   *  Reasoning: v4 product binding — Friend is the social default. v1 UI
+   *  exposes only Personal vs Friend (Public hidden, see enablePublicOption).
+   *  Pre-Sprint 68 was 'self' (v299 user request). v1 supersedes that.
    */
-  enablePublicOption: true,
+  defaultLevel: 'friends' as 'self' | 'friends' | 'public',
+  /**
+   * Sprint 68 STORY-00530 (Friend System v1 v4 §11): 'public' option is
+   * hidden in v1 UI. Backend also rejects POST permission='public' via the
+   * Sprint 67 H1 enforcement (defense in depth). Keep this flag so future
+   * versions (v1.1+) can re-enable Public once moderation lands.
+   */
+  enablePublicOption: false,
 } as const;
 
 export type PlantConfigBundle = {

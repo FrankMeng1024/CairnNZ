@@ -144,13 +144,16 @@ export function ContentStep({
           </ScrollView>
 
           <View style={styles.bottomBar}>
-            {/* v300 N6+: replace v299's "cannot edit" notice with
-                the new product rule — markers are editable, BUT what
-                public viewers see freezes at the moment of first
-                public share. */}
-            <Text style={styles.permanentHint}>
-              Once shared publicly, what others see is frozen forever.
-            </Text>
+            {/* Sprint 68 STORY-00530 (Friend System v1):
+                Public option is hidden in v1 UI (VisibilityConfig.enablePublicOption=false).
+                The "frozen forever" hint only matters if Public is offered, so suppress
+                it when the public option is disabled. Kept conditional so v1.1+ revert is
+                a one-line config flip without re-touching this component. */}
+            {VisibilityConfig.enablePublicOption && (
+              <Text style={styles.permanentHint}>
+                Once shared publicly, what others see is frozen forever.
+              </Text>
+            )}
             <TouchableOpacity
               style={[styles.primary, !canSubmit && styles.primaryDisabled]}
               disabled={!canSubmit}

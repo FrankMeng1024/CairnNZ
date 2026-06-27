@@ -19,10 +19,12 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppStore } from '../store/useAppStore';
 import { useMarkerStore, type Marker, type MarkerPermission } from '../store/useMarkerStore';
+import { useFriendStore } from '../store/useFriendStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { PressBtn } from '../components/PressBtn';
 import { Icon } from '../components/Icon';
+import { getMarkerTierVisuals } from '../features/marks/utils/markTier';
 import type { IconName } from '../components/Icon';
 import { GlassPanel, Elevation } from '../components/GlassPanel';
 import { MapBottomPanel, type PanelMarkerItem } from '../components/MapBottomPanel';
@@ -89,10 +91,13 @@ function PressableMarker({ x, y, borderColor, bg, iconColor, iconName, onPress }
 
 // ── Map Component (Real Mapbox or Fallback) ─────────────────────────────────
 function RealMap({
-  markers, onMarkerPress,
+  markers, onMarkerPress, viewerId, friendIds,
 }: {
   markers: Marker[];
   onMarkerPress: (m: Marker) => void;
+  /** Sprint 68 STORY-00531: viewer perspective for tier-aware visual treatment. */
+  viewerId: string | null;
+  friendIds: ReadonlyArray<string | number>;
 }) {
   const region = getCurrentRegion();
 
@@ -156,6 +161,17 @@ function RealMap({
         {markers.map((m) => {
           const meta = MARKER_META[m.type as keyof typeof MARKER_META] ?? MARKER_META.free;
           const flagType = FLAG_TYPES.find(f => f.id === m.type);
+          // Sprint 68 STORY-00531: tier-aware visual treatment.
+          //   self     → existing inline pin (no ring, full opacity)
+          //   friend   → +2px colored ring (color stable per friend user_id)
+          //   stranger → opacity 0.6 (desaturated feel without filter chain)
+          // Pure function — caller passes viewer/friendIds via props.
+          const { tier, ringColor, opacity } = getMarkerTierVisuals({
+            viewerId,
+            markUserId: m.authorId,
+            permission: m.permission,
+            friendIds,
+          });
           return (
             <PointAnnotation
               key={m.id}
@@ -163,8 +179,13 @@ function RealMap({
               coordinate={[m.lng, m.lat]}
               onSelected={() => onMarkerPress(m)}
             >
-              <View style={[styles.markerPin, { borderColor: meta.color, backgroundColor: 'rgba(255,255,255,0.85)' }]}>
-                <Icon name={(flagType?.icon ?? meta.iconName) as IconName} size={14} color={meta.color} strokeWidth={2.5} />
+              <View style={{ opacity }}>
+                {tier === 'friend' && ringColor ? (
+                  <View style={[styles.markerFriendRing, { borderColor: ringColor }]} />
+                ) : null}
+                <View style={[styles.markerPin, { borderColor: meta.color, backgroundColor: 'rgba(255,255,255,0.85)' }]}>
+                  <Icon name={(flagType?.icon ?? meta.iconName) as IconName} size={14} color={meta.color} strokeWidth={2.5} />
+                </View>
               </View>
             </PointAnnotation>
           );
@@ -627,6 +648,12 @@ export function MapScreen() {
   const addMarker = useMarkerStore(s => s.addMarker);
   const deleteMarker = useMarkerStore(s => s.deleteMarker);
   const updateMarker = useMarkerStore(s => s.updateMarker);
+  // Sprint 68 STORY-00531: viewer perspective for tier-aware marker visuals.
+  // viewerId comes from useMarkerStore (set by hydrate after login).
+  // friendIds from useFriendStore (already loaded by Friends tab / auth flow).
+  const viewerId = useMarkerStore(s => s.userId);
+  const friends = useFriendStore(s => s.friends);
+  const friendIds = React.useMemo(() => friends.map(f => f.id), [friends]);
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
   const region = getCurrentRegion();
 
@@ -686,7 +713,7 @@ export function MapScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       {/* Map — full bleed topo placeholder */}
-      <RealMap markers={storeMarkers} onMarkerPress={(m) => setEditMarker(m)} />
+      <RealMap markers={storeMarkers} onMarkerPress={(m) => setEditMarker(m)} viewerId={viewerId} friendIds={friendIds} />
 
       {/* Top bar — STORY-00099: rgba(255,255,255,0.95) overlay chips */}
       <SafeAreaView style={styles.topBar} edges={['top']} pointerEvents="box-none">
@@ -910,6 +937,17 @@ const styles = StyleSheet.create({
     width: 32, height: 32, borderRadius: 16,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, ...Elevation[2],
+  },
+  // Sprint 68 STORY-00531: friend-tier ring. 2px solid ring offset 2px
+  // outside the 32px pin → total visual width 36px. Color is set inline
+  // per-marker by colorFromUserId(). Positioned absolutely so it
+  // doesn't push the icon when the marker is selected/scaled.
+  markerFriendRing: {
+    position: 'absolute',
+    width: 36, height: 36, borderRadius: 18,
+    top: -2, left: -2,
+    borderWidth: 2,
+    backgroundColor: 'transparent',
   },
   topoRing: {
     position: 'absolute',

@@ -15,7 +15,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import { sampleGpsWindow, SampleResult } from '../services/gpsSampler';
 import { GpsSamplingConfig } from '../config/plantConfig';
@@ -27,6 +27,16 @@ interface Props {
   onLocked: (lat: number, lng: number, accuracyM: number) => void;
   onCancel: () => void;
 }
+
+// Sprint 68 STORY-00530: web platform has no real GPS — Playwright/desktop
+// preview needs the rest of the Plant flow reachable to validate the
+// visibility toggle and downstream steps. iOS/Android are unaffected; this
+// fallback only runs when Platform.OS === 'web'. Coord chosen = 9163's
+// Back Loop center (Shanghai test bbox) so any mock-data heuristics still
+// resolve to a known region.
+const WEB_MOCK_LAT = 31.232068;
+const WEB_MOCK_LNG = 121.434262;
+const WEB_MOCK_ACCURACY_M = 5;
 
 export function GpsLockStep({ onLocked, onCancel }: Props) {
   const [progress, setProgress] = useState(0);
@@ -45,6 +55,16 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
   const inFlightRetryRef = useRef<number>(-1);
 
   useEffect(() => {
+    // Sprint 68 STORY-00530: web mock — short-circuit GPS sampling entirely
+    // on web so the Plant flow can be exercised in Playwright. Native
+    // platforms keep the real sampler below unchanged.
+    if (Platform.OS === 'web') {
+      log('plant.gps_lock_web_mock', { lat: WEB_MOCK_LAT, lng: WEB_MOCK_LNG });
+      const t = setTimeout(() => {
+        onLockedRef.current(WEB_MOCK_LAT, WEB_MOCK_LNG, WEB_MOCK_ACCURACY_M);
+      }, 100);
+      return () => clearTimeout(t);
+    }
     if (inFlightRetryRef.current === retryToken) {
       // Same retryToken already in flight — skip duplicate (StrictMode).
       log('plant.gps_lock_skipped_dup', { retry: retryToken });
