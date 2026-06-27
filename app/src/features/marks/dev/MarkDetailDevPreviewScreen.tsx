@@ -20,6 +20,7 @@ import { useMarkerStore } from '../../../store/useMarkerStore';
 import { Colors, Spacing, Radius, FontSize } from '../../../components/tokens';
 import { MarkDetailSheet } from '../components/MarkDetailSheet';
 import { useMarkLikeStore } from '../store/useMarkLikeStore';
+import { PaywallSheet } from '../../memory/components/PaywallSheet';
 
 type ScenarioId = 'A-personal' | 'A-public' | 'B-friend' | 'B-public' | 'C' | 'D-personal' | 'D-far-public';
 
@@ -156,6 +157,11 @@ export function MarkDetailDevPreviewScreen() {
   // network/cache-wipe pipeline (useful for verifying the Alert flow even
   // though no real circle markers are loaded in dev preview).
   const hideMark = useMarkerStore(s => s.hideMark);
+  // Sprint 70 STORY-00542 + 543 UX evidence (post-review): allow dev
+  // preview to imperatively open PaywallSheet for screenshot verification
+  // (web env can't reach Paywall via the normal 5-cap user flow without
+  // real subscriptions).
+  const [paywallOpen, setPaywallOpen] = useState(false);
 
   const activeScenario = SCENARIOS.find(s => s.id === active);
 
@@ -186,7 +192,19 @@ export function MarkDetailDevPreviewScreen() {
           Tap a scenario to render the sheet. Form D scenarios should produce NO sheet (the
           component renders null).
         </Text>
+
+        {/* Sprint 70 STORY-00542 UX evidence trigger (post-review):
+            imperatively open the Paywall sheet for visual verification. */}
+        <TouchableOpacity
+          style={styles.paywallBtn}
+          onPress={() => setPaywallOpen(true)}
+          testID="dev-paywall-trigger"
+        >
+          <Text style={styles.paywallBtnText}>Open Paywall sheet (Sprint 70)</Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      <PaywallSheet visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
 
       <MarkDetailSheet
         marker={activeScenario ? activeScenario.marker : null}
@@ -278,5 +296,19 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
     color: Colors.textMuted,
     fontStyle: 'italic',
+  },
+  paywallBtn: {
+    marginTop: Spacing.lg,
+    padding: Spacing.md,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.card,
+    alignItems: 'center',
+  },
+  paywallBtnText: {
+    fontSize: FontSize.body,
+    color: Colors.primary,
+    fontWeight: '600',
   },
 });

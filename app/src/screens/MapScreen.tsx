@@ -967,11 +967,15 @@ export function MapScreen() {
             );
           } else {
             // Sprint 68 STORY-00534: real Hide-from-me. POST /api/hide +
-            // cache wipe. Strong confirm copy per v4 plan §5 ("irreversible
-            // from client, strong warning").
+            // cache wipe.
+            // UX-Med-4 fix (post-review UX round 2): tone aligned with the
+            // soft button label "Hide from my map" — pre-fix copy
+            // "Hide this mark permanently?" was scary "bait-and-switch"
+            // (button soft, modal hard). New copy explains the
+            // consequence factually without scare-word "permanently".
             Alert.alert(
-              'Hide this mark permanently?',
-              "You won't see it again on your map. (Other users still see it.)",
+              'Hide this mark?',
+              "You won't see it on your map again. Other users still see it.",
               [
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Hide', style: 'destructive', onPress: () => {

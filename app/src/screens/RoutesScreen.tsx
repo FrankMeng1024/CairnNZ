@@ -117,31 +117,40 @@ function ScopeTabBar({
 }
 
 const scopeStyles = StyleSheet.create({
+  // UX-Med-5 fix (post-review UX round 2): scope sub-tab visual weight
+  // was too low — pills were small + left-aligned, floating in empty
+  // space. Now: centered row, bigger padding, body-size text, contained
+  // in a soft pill-shaped container ("segmented control" pattern users
+  // recognize from iOS). Sits clearly under the top tab bar as a scope
+  // switch rather than an orphaned filter chip.
   row: {
     flexDirection: 'row',
+    justifyContent: 'center',
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.sm,
-    gap: Spacing.sm,
+    paddingBottom: Spacing.xs,
   },
   btn: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 8,
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderRadius: 0,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    minWidth: 88,
+    alignItems: 'center',
   },
   btnActive: {
-    backgroundColor: Colors.primaryBg,
-    borderColor: Colors.primary,
+    borderBottomColor: Colors.primary,
   },
   text: {
-    fontSize: FontSize.caption,
+    fontSize: FontSize.body,
     color: Colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   textActive: {
     color: Colors.primary,
+    fontWeight: '700',
   },
 });
 

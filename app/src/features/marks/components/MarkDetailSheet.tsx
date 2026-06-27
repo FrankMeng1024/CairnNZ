@@ -130,6 +130,11 @@ export function MarkDetailSheet(props: Props) {
   const canEdit = form === 'A';
   const deleteSemantic: 'own' | 'hide' = form === 'A' ? 'own' : 'hide';
   const liked = isLiked?.(marker.id) ?? false;
+  // UX-Crit-1 fix (post-review UX round 2): own marks should not Report
+  // themselves — current behavior shows misleading 'Thank you for reporting'
+  // toast. Hide Report on form A (own marks); keep Like (own Public mark
+  // can be liked per v4 §4.11 simplified rule).
+  const showReport = canLikeReport && form !== 'A';
 
   // Split note → title + body (existing convention from PlantScreen).
   // Inline split: first line up to 30 chars is the title, rest is body.
@@ -194,7 +199,12 @@ export function MarkDetailSheet(props: Props) {
           {/* Helper text (form C) */}
           {form === 'C' ? (
             <Text style={styles.helperText} testID="mark-detail-helper-walk">
-              (Walk here to like or report)
+              {/* UX-Med-3 fix (post-review UX round 2): reframed positively.
+                  Original "(Walk here to like or report)" read like a
+                  restriction. v4 §3 iron law 2 frames in-fog liking as
+                  authenticity (you can only vouch for places you've
+                  actually been). Copy now sells the rule. */}
+              Walk this spot to vouch for it.
             </Text>
           ) : null}
 
@@ -218,12 +228,25 @@ export function MarkDetailSheet(props: Props) {
             >
               <Icon name="Trash2" size={14} color={Colors.danger} strokeWidth={2.2} />
               <Text style={[styles.actionTextSecondary, { color: Colors.danger }]}>
-                {deleteSemantic === 'own' ? 'Delete' : 'Hide from view'}
+                {/* UX-Med-4 fix (post-review UX round 2): button vs modal
+                    tone aligned at medium. Pre-fix: button "Hide from view"
+                    (soft) → modal "Hide permanently?" (hard) felt like
+                    bait-and-switch. Now both at medium tone — button labels
+                    the action factually, modal explains the consequence
+                    without scare-word "permanently". */}
+                {deleteSemantic === 'own' ? 'Delete' : 'Hide from my map'}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Like / Report row (forms B + A-public). v1: NO API wire — Story-533 stubs. */}
+          {/* Like / Report row (forms B + A-public). v1: NO API wire — Story-533 stubs.
+              UX-Crit-1 fix: show visible count delta so the local-only Like
+              state doesn't read as "did it work?". Caption below clarifies
+              the session-scope so users don't expect sync.
+              UX-Crit-2 fix: hide Report on own marks (form A) — reporting
+              your own mark would fire the misleading "Thank you for
+              reporting" toast. v4 §4.11 lets own Public mark Like itself
+              (simplified rule), but Report-self is incoherent. */}
           {canLikeReport ? (
             <View style={styles.likeRow}>
               <TouchableOpacity
@@ -238,18 +261,25 @@ export function MarkDetailSheet(props: Props) {
                   strokeWidth={2.2}
                 />
                 <Text style={[styles.likeText, liked && { color: Colors.danger }]}>
-                  {liked ? 'Liked' : 'Like'}
+                  {liked ? '1 Liked' : 'Like'}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.reportBtn}
-                onPress={() => onReport?.(marker)}
-                testID="mark-detail-report"
-              >
-                <Icon name="Flag" size={16} color={Colors.warning} strokeWidth={2.2} />
-                <Text style={styles.reportText}>Report</Text>
-              </TouchableOpacity>
+              {showReport ? (
+                <TouchableOpacity
+                  style={styles.reportBtn}
+                  onPress={() => onReport?.(marker)}
+                  testID="mark-detail-report"
+                >
+                  <Icon name="Flag" size={16} color={Colors.warning} strokeWidth={2.2} />
+                  <Text style={styles.reportText}>Report</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
+          ) : null}
+          {canLikeReport && liked ? (
+            <Text style={styles.likeCaption} testID="mark-detail-like-caption">
+              Saved on this device · sync coming in v1.1
+            </Text>
           ) : null}
         </Pressable>
       </Pressable>
@@ -394,5 +424,13 @@ const styles = StyleSheet.create({
     fontSize: FontSize.body,
     color: Colors.warning,
     fontWeight: '500',
+  },
+  // UX-Crit-1 fix: low-key caption telling the user the Like state is
+  // local-only. Prevents "did it save?" confusion after restart.
+  likeCaption: {
+    fontSize: FontSize.caption,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: Spacing.xs,
   },
 });
