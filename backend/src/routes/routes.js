@@ -12,12 +12,13 @@ const express = require('express');
 const router = express.Router();
 const Route = require('../models/Route');
 const authenticate = require('../middleware/authenticate');
+const { isClientWriteable, PERMISSION } = require('../constants/permission');
 
 router.use(authenticate);
 
 // ── POST /api/routes ────────────────────────────────────────────────────────
 router.post('/', async (req, res) => {
-  const { name, description, points, waypoints, distance_m, elevation_gain_m } = req.body;
+  const { name, description, points, waypoints, distance_m, elevation_gain_m, permission } = req.body;
 
   // v120 debug: dump body shape so we can see exactly why JSON.stringify
   // produces "[object Object],[object Object]" in storage.
@@ -34,6 +35,22 @@ router.post('/', async (req, res) => {
   if (!Array.isArray(points) || points.length === 0) {
     return res.status(400).json({ error: 'points must be a non-empty array.' });
   }
+  // v4 H1: routes also reject permission='public' on client writes.
+  // The Route model currently ignores permission entirely (default 'personal'
+  // applied by the DB column default), but we still reject explicit 'public'
+  // requests so contract tests pass and future Route.create extension stays
+  // correct. 'friend' and 'personal' are accepted but currently no-op until
+  // Route.create is taught about permission in a follow-up Story.
+  if (permission !== undefined) {
+    if (permission === PERMISSION.PUBLIC) {
+      return res.status(400).json({
+        error: "permission='public' is not allowed for client writes",
+      });
+    }
+    if (!isClientWriteable(permission)) {
+      return res.status(400).json({ error: 'Invalid permission' });
+    }
+  }
 
   try {
     const id = await Route.create({
@@ -44,6 +61,7 @@ router.post('/', async (req, res) => {
       waypoints: waypoints ?? [],
       distanceM: distance_m ?? 0,
       elevationGainM: elevation_gain_m ?? 0,
+      permission, // already validated above; Route.create defaults undefined → 'personal'
     });
     const route = await Route.findByIdAndUser(id, req.user.userId);
     return res.status(201).json({ route });
@@ -84,7 +102,19 @@ router.put('/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id || isNaN(id)) return res.status(400).json({ error: 'Invalid route ID.' });
 
-  const { name, description, points, waypoints, distance_m, elevation_gain_m } = req.body;
+  const { name, description, points, waypoints, distance_m, elevation_gain_m, permission } = req.body;
+
+  // v4 H1: client cannot set permission='public'. See POST handler for context.
+  if (permission !== undefined) {
+    if (permission === PERMISSION.PUBLIC) {
+      return res.status(400).json({
+        error: "permission='public' is not allowed for client writes",
+      });
+    }
+    if (!isClientWriteable(permission)) {
+      return res.status(400).json({ error: 'Invalid permission' });
+    }
+  }
 
   try {
     const affected = await Route.update(id, req.user.userId, {
@@ -94,6 +124,7 @@ router.put('/:id', async (req, res) => {
       waypoints,
       distanceM: distance_m,
       elevationGainM: elevation_gain_m,
+      permission, // already validated; Route.update ignores undefined
     });
     if (affected === 0) return res.status(404).json({ error: 'Route not found.' });
 

@@ -18,7 +18,7 @@ function parseJsonCol(v) {
 }
 
 const Route = {
-  async create({ userId, name, description, points, waypoints, distanceM, elevationGainM }) {
+  async create({ userId, name, description, points, waypoints, distanceM, elevationGainM, permission }) {
     // v120 fix: explicitly validate + stringify so mysql2 doesn't fall
     // through to Array.toString() for the JSON column. The "[object
     // Object],[object Object]" corruption seen in route id=1 happened
@@ -26,9 +26,14 @@ const Route = {
     // its default conversion is .toString() on arrays.
     const pointsJson = typeof points === 'string' ? points : JSON.stringify(points);
     const waypointsJson = typeof waypoints === 'string' ? waypoints : JSON.stringify(waypoints ?? []);
+    // Sprint 67 Story-528: persist routes.permission (added by migration 018).
+    // Caller (routes.js POST handler) has already rejected 'public' per v4 H1
+    // and rejected unknown values. Accept ('personal','friend') and default to
+    // 'personal' when undefined to preserve previous behavior.
+    const perm = permission === 'friend' ? 'friend' : 'personal';
     const [result] = await pool.execute(
-      `INSERT INTO routes (user_id, name, description, points, waypoints, distance_m, elevation_gain_m)
-       VALUES (?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?)`,
+      `INSERT INTO routes (user_id, name, description, points, waypoints, distance_m, elevation_gain_m, permission)
+       VALUES (?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?)`,
       [
         userId,
         name,
@@ -37,6 +42,7 @@ const Route = {
         waypointsJson,
         distanceM ?? 0,
         elevationGainM ?? 0,
+        perm,
       ]
     );
     return result.insertId;
@@ -45,7 +51,7 @@ const Route = {
   // List — omits heavy points JSON for performance
   async findByUser(userId) {
     const [rows] = await pool.execute(
-      `SELECT id, user_id, name, description, distance_m, elevation_gain_m, run_count, last_run_at, created_at, updated_at
+      `SELECT id, user_id, name, description, distance_m, elevation_gain_m, run_count, last_run_at, permission, created_at, updated_at
        FROM routes WHERE user_id = ? ORDER BY run_count DESC, created_at DESC`,
       [userId]
     );
@@ -55,7 +61,7 @@ const Route = {
   // Detail — includes full points + waypoints
   async findByIdAndUser(id, userId) {
     const [rows] = await pool.execute(
-      `SELECT id, user_id, name, description, points, waypoints, distance_m, elevation_gain_m, run_count, last_run_at, created_at, updated_at
+      `SELECT id, user_id, name, description, points, waypoints, distance_m, elevation_gain_m, run_count, last_run_at, permission, created_at, updated_at
        FROM routes WHERE id = ? AND user_id = ?`,
       [id, userId]
     );
@@ -68,7 +74,7 @@ const Route = {
     };
   },
 
-  async update(id, userId, { name, description, points, waypoints, distanceM, elevationGainM }) {
+  async update(id, userId, { name, description, points, waypoints, distanceM, elevationGainM, permission }) {
     const updates = [];
     const values = [];
 
@@ -78,6 +84,12 @@ const Route = {
     if (waypoints !== undefined)      { updates.push('waypoints = ?');        values.push(JSON.stringify(waypoints)); }
     if (distanceM !== undefined)      { updates.push('distance_m = ?');       values.push(distanceM); }
     if (elevationGainM !== undefined) { updates.push('elevation_gain_m = ?'); values.push(elevationGainM); }
+    // Sprint 67 Story-528: persist permission. Caller has already validated
+    // and rejected 'public'. Accept ('personal','friend') here.
+    if (permission !== undefined && (permission === 'personal' || permission === 'friend')) {
+      updates.push('permission = ?');
+      values.push(permission);
+    }
 
     if (updates.length === 0) return 0;
 

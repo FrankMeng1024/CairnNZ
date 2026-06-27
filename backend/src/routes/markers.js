@@ -22,6 +22,7 @@ const idempotency = require('../middleware/idempotency');
 const { haversineM } = require('../utils/haversine');
 const nonceUtil = require('../utils/nonce');
 const abuseSignals = require('../utils/abuseSignals');
+const { isClientWriteable, PERMISSION } = require('../constants/permission');
 
 router.use(authenticate);
 
@@ -112,6 +113,63 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ── Get Public markers within bbox (strangers' marks for Memory tab) ────────
+// v4 §7: GET /api/markers/public?bbox=lat1,lng1,lat2,lng2
+//   - returns Public marks from any user (including the viewer's friends —
+//     UI filters non-strangers in the Memory tab if needed)
+//   - LEFT JOIN hidden_items so the viewer doesn't see ones they hid
+//   - ORDER BY created_at DESC LIMIT 50 (per plan §7 line 314)
+//   - bbox is two corners: (lat1,lng1) = SW, (lat2,lng2) = NE
+//   - Anonymous: author_name is intentionally null even when the row's
+//     creator is the viewer's friend — Public marks are always anonymous
+//     in v1 (per v4 row Q + §10).
+router.get('/public', async (req, res) => {
+  const viewerId = req.user.userId;
+  const bbox = String(req.query.bbox || '');
+  const parts = bbox.split(',').map((s) => Number(s));
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) {
+    return res.status(400).json({
+      error: 'bbox required: lat_sw,lng_sw,lat_ne,lng_ne (4 numbers)',
+    });
+  }
+  const [latSw, lngSw, latNe, lngNe] = parts;
+  if (latSw >= latNe || lngSw >= lngNe) {
+    return res.status(400).json({ error: 'bbox: SW must be south-west of NE' });
+  }
+  // Reject pathological bbox sizes (>10° span = abuse risk, default world map
+  // never legitimately fetches more than a few degrees).
+  if (latNe - latSw > 10 || lngNe - lngSw > 10) {
+    return res.status(400).json({ error: 'bbox too large (max 10° span)' });
+  }
+
+  try {
+    const sql = `
+      SELECT m.id, m.type, m.text, m.lat, m.lng, m.alt,
+             m.permission, m.approximate, m.public_snapshot,
+             m.created_at, m.updated_at
+        FROM markers m
+   LEFT JOIN hidden_items h
+          ON h.user_id   = ?
+         AND h.item_type = 'mark'
+         AND h.item_id   = m.id
+       WHERE m.permission = 'public'
+         AND m.status = 'healthy'
+         AND m.lat BETWEEN ? AND ?
+         AND m.lng BETWEEN ? AND ?
+         AND h.user_id IS NULL
+    ORDER BY m.created_at DESC
+       LIMIT 50`;
+    const [rows] = await pool.execute(sql, [viewerId, latSw, latNe, lngSw, lngNe]);
+    // author_name always null (anonymous per v4)
+    return res.json({
+      markers: rows.map((m) => ({ ...m, author_name: null })),
+    });
+  } catch (err) {
+    console.error('[markers/public]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── Create marker ───────────────────────────────────────────────────────────
 router.post('/', idempotency, async (req, res) => {
   try {
@@ -125,21 +183,26 @@ router.post('/', idempotency, async (req, res) => {
       return res.status(400).json({ error: 'Text max 250 characters' });
     }
 
-    const validPermissions = ['personal', 'group', 'public'];
-    const perm = validPermissions.includes(permission) ? permission : 'personal';
-    const approx = approximate ? 1 : 0;
-
-    // v300: if the marker is born public, snapshot it immediately.
-    let publicSnapshotJson = null;
-    if (perm === 'public') {
-      publicSnapshotJson = JSON.stringify({
-        type,
-        lat,
-        lng,
-        note: text || '',
-        snapshottedAt: Date.now(),
+    // v4 H1: client can never write permission='public'. Only seed scripts do.
+    // Accept 'personal' | 'group' (legacy) | 'friend' (modern alias). Map
+    // 'friend' → DB 'group' to keep the ENUM stable. Reject anything else.
+    if (permission === PERMISSION.PUBLIC) {
+      return res.status(400).json({
+        error: "permission='public' is not allowed for client writes",
       });
     }
+    if (permission !== undefined && !isClientWriteable(permission)) {
+      return res.status(400).json({ error: 'Invalid permission' });
+    }
+    const perm =
+      permission === PERMISSION.FRIEND ? PERMISSION.GROUP_LEGACY :
+      permission || PERMISSION.PERSONAL;
+    const approx = approximate ? 1 : 0;
+
+    // v300 snapshot logic only applied to public — H1 now blocks the public
+    // write path at the API layer, so the snapshot branch below is unreachable
+    // from client POST. Retained as null for column write consistency.
+    let publicSnapshotJson = null;
 
     const [result] = await pool.execute(
       `INSERT INTO markers (user_id, type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at)
@@ -192,31 +255,24 @@ router.put('/:id', async (req, res) => {
       values.push(text);
     }
     if (permission !== undefined) {
-      const validPermissions = ['personal', 'group', 'public'];
-      if (!validPermissions.includes(permission)) {
+      // v4 H1: client can never set permission='public'.
+      if (permission === PERMISSION.PUBLIC) {
+        return res.status(400).json({
+          error: "permission='public' is not allowed for client writes",
+        });
+      }
+      if (!isClientWriteable(permission)) {
         return res.status(400).json({ error: 'Invalid permission' });
       }
+      const dbPerm =
+        permission === PERMISSION.FRIEND ? PERMISSION.GROUP_LEGACY : permission;
       updates.push('permission = ?');
-      values.push(permission);
+      values.push(dbPerm);
 
-      // v300: first transition to 'public' — snapshot the CURRENT state
-      // (= state about to be saved, which is current + any pending
-      // type/text updates from this same request). The snapshot is
-      // written only if public_snapshot is currently NULL; subsequent
-      // re-publics never re-snapshot.
-      if (permission === 'public' && current.public_snapshot == null) {
-        const snapshotType = type !== undefined ? type : current.type;
-        const snapshotText = text !== undefined ? text : current.text;
-        const snapshotJson = JSON.stringify({
-          type: snapshotType,
-          lat: current.lat,
-          lng: current.lng,
-          note: snapshotText || '',
-          snapshottedAt: Date.now(),
-        });
-        updates.push('public_snapshot = ?');
-        values.push(snapshotJson);
-      }
+      // v300 snapshot branch was: "first transition to public → snapshot".
+      // Under v4 H1 this branch is unreachable from a client PATCH because
+      // permission='public' is rejected above. Removed to keep the code
+      // honest about what client paths can do.
     }
 
     if (updates.length === 0) return res.status(400).json({ error: 'No updates provided' });

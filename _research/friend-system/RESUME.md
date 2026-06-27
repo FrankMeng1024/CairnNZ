@@ -1,6 +1,6 @@
 # 📋 RESUME.md — Cairn Friend System v1 Sprint 67
 
-**Last updated**: 2026-06-27 (mid-Sprint 67 — Story 527 done)
+**Last updated**: 2026-06-27 (mid-Sprint 67 — Stories 527+528 done)
 **Reason for file**: Survival guide after session clear. Read this FIRST.
 
 ---
@@ -30,7 +30,7 @@ User's 5 binding rules (their words, never violate):
 
 ---
 
-## ✅ Done in Sprint 67 (4 of 7)
+## ✅ Done in Sprint 67 (5 of 7)
 
 ### STORY-00524 — auth.js login validates no password length ✅
 - Read `backend/src/routes/auth.js` lines 186-221.
@@ -58,32 +58,24 @@ User's 5 binding rules (their words, never violate):
 - Applied to aliyun. 9 mock users login OK (HTTP 200 + JWT). Per-user counts match §8 exactly.
 - Stranger 1 mark at 20.02m from 9163 Back Loop center (geometric verify SQL embedded).
 - `markers.permission` uses legacy `'group'` for Friend tier (normalized via `permission.js`); `routes.permission` uses `'friend'` directly.
-- **Outstanding finding**: 10 pre-existing rows in `friends` for user_id=4 (2026-05-19, links to real users `816354835@qq.com`, `test@example.com`, `testverify@example.com`, `devtest_final@test.com`, `ldy@sina.com`). v4 §8 wants 9163 = 0 friends initially. NOT deleted — per `feedback_dry_run_before_delete`, requires user authorization.
+- **9163 friends cleanup done** (with user authorization): 10 legacy rows from 2026-05-19 deleted; backup in `_spike/sprint67-friends-cleanup/`. 9163 now matches v4 §8 initial state.
+
+### STORY-00528 — 8 backend endpoints + POST/PUT Public rejection ✅
+- New files: `backend/src/routes/memory-subscriptions.js`, `circle.js`, `hide.js`. Modified: `markers.js`, `routes.js`, `index.js`, `models/Route.js`.
+- All 8 endpoints live + integration-tested. 23/23 PASS in `backend/scripts/seed/integration_test_story_528_serverside.sh`.
+- v4 H1 enforced: POST/PUT markers + POST/PUT routes reject `permission='public'` → 400.
+- Arch review: PASS. 1 Medium (route permission not persisted) + 1 Low (fog test coverage) found, both fixed in same Sprint.
+- 9163 friends cleanup commit applied earlier: DELETE FROM friends WHERE user_id=4 OR friend_id=4 (10 legacy rows). Backup in `_spike/sprint67-friends-cleanup/`.
 
 ---
 
-## ⏳ Pending in Sprint 67 (3 of 7)
+## ⏳ Pending in Sprint 67 (2 of 7)
 
-### NEXT STEP: STORY-00528 — Backend endpoints (8 new + POST/PATCH Public rejection)
+### NEXT STEP: STORY-00529 — hidden_items cron + TECH_SPEC §cron
 
-Build endpoints per v4 plan §7:
-1. POST /api/memory-subscriptions
-2. DELETE /api/memory-subscriptions/:friend_id
-3. GET /api/memory-subscriptions
-4. GET /api/circle/markers
-5. GET /api/circle/routes
-6. GET /api/circle/fog
-7. GET /api/markers/public?bbox=
-8. POST /api/hide
-+ HARDEN: POST /api/markers, PATCH /api/markers/:id, POST /api/routes, PATCH /api/routes/:id reject `permission='public'` → 400
-
-Use `backend/src/constants/permission.js` for all ENUM logic.
-
-### Then: STORY-00529 — hidden_items cron + TECH_SPEC §cron
-
-- `npm install node-cron` (if not present)
+- `npm install node-cron` (if not present in cairn-backend container)
 - `backend/src/cron/cleanHiddenItemsOrphans.js`
-- Register in `backend/src/index.js` (or wherever startup lives): `cron.schedule('0 3 * * 0', ...)` Sunday 3am UTC
+- Register in `backend/src/index.js` startup: `cron.schedule('0 3 * * 0', ...)` Sunday 3am UTC
 - Update `docs/TECH_SPEC.md §cron`
 
 ### Then: SPIKE-67-1 — Mapbox iOS fog UNION feasibility
@@ -93,6 +85,11 @@ Use `backend/src/constants/permission.js` for all ENUM logic.
 - Measure FPS at zoom 12/14/16/18 + memory usage
 - Write `_research/friend-system/spike/SPIKE-67-1-mapbox-fog-union.md` with verdict
 - If NOT_VIABLE → write fallback design for F4
+
+### 9163 state update (post-Story-527 cleanup)
+- friends_9163 = 0 ✓ (10 legacy rows deleted with user authorization)
+- subscriptions_9163 = 0 ✓
+- ready for full add-friend journey testing in F2
 
 ---
 
