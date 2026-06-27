@@ -101,8 +101,14 @@ function voteRateLimit(req, res, next) {
 // ── Get user's markers ──────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
+    // BUG-001 fix (Sprint 71 post-review): include user_id so the client can
+    // populate Marker.authorId with the real owner id instead of the literal
+    // 'server' fallback. Without user_id in the response, viewerId vs
+    // markUserId comparison in markVisibility/markTier returns 'stranger'
+    // for the user's OWN marks, making own Personal marks invisible after
+    // backend hydrate.
     const [markers] = await pool.execute(
-      `SELECT id, type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at
+      `SELECT id, user_id, type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at
        FROM markers WHERE user_id = ? ORDER BY created_at DESC`,
       [req.user.userId]
     );

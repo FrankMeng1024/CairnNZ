@@ -28,6 +28,7 @@ import { getMarkerTierVisuals } from '../features/marks/utils/markTier';
 import { MarkDetailSheet } from '../features/marks/components/MarkDetailSheet';
 import { useMarkLikeStore } from '../features/marks/store/useMarkLikeStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
+import { useMemorySubscriptionsStore } from '../features/memory/store/useMemorySubscriptionsStore';
 import type { IconName } from '../components/Icon';
 import { GlassPanel, Elevation } from '../components/GlassPanel';
 import { MapBottomPanel, type PanelMarkerItem } from '../components/MapBottomPanel';
@@ -653,19 +654,27 @@ export function MapScreen() {
   const updateMarker = useMarkerStore(s => s.updateMarker);
   // Sprint 68 STORY-00534: hide-from-me action (POST /api/hide + cache wipe).
   const hideMark = useMarkerStore(s => s.hideMark);
+  // BUG-002 fix (Sprint 71 post-review): MapScreen now consumes circle
+  // markers + memory subscriptions so friend-tier marks render on the
+  // map (forms B/C in tap-to-detail flow). Previously these slices were
+  // only consumed by Trails Friends tab; the headline map surface was
+  // permanently 'self tier only' — contradicting Sprint 68 Story-532 ACs.
+  const circleMarkers = useMarkerStore(s => s.circleMarkers);
+  const loadCircleMarkers = useMarkerStore(s => s.loadCircleMarkers);
+  const subscriptions = useMemorySubscriptionsStore(s => s.subscriptions);
+  const loadSubscriptions = useMemorySubscriptionsStore(s => s.load);
   // Sprint 68 STORY-00531: viewer perspective for tier-aware marker visuals.
   // viewerId comes from useMarkerStore (set by hydrate after login).
   // friendIds from useFriendStore (already loaded by Friends tab / auth flow).
   const viewerId = useMarkerStore(s => s.userId);
   const friends = useFriendStore(s => s.friends);
   const friendIds = React.useMemo(() => friends.map(f => f.id), [friends]);
-  // Sprint 68 STORY-00532: subscribed friend ids for visibility computation.
-  // Sprint 67 STORY-00528 wire (GET /api/memory-subscriptions) returns the
-  // 5-pick set. v1 store wiring is a follow-up; default empty so visibility
-  // falls back to inMyFog-only for now. friend marks loaded from
-  // /api/circle/markers will still appear in the store (Story-531 follow-up)
-  // but won't render in MapScreen until subscriptions are consumed.
-  const subscribedFriendIds = React.useMemo<ReadonlyArray<string | number>>(() => [], []);
+  // BUG-002 fix: real subscribed friend ids from the Sprint 70 store
+  // (was hardcoded []). Drives form C visibility on Map.
+  const subscribedFriendIds = React.useMemo<ReadonlyArray<string | number>>(
+    () => subscriptions.map(s => s.friend_id),
+    [subscriptions]
+  );
   // Iron law 1 / form-B-vs-C check: viewer's own fog membership.
   const isExploredFn = useMemoryStore(s => s.isExplored);
   // Sprint 68 STORY-00533: session-only Like state.
@@ -679,6 +688,29 @@ export function MapScreen() {
     (id: string) => likedSet.includes(id),
     [likedSet]
   );
+
+  // BUG-002 fix: load circle markers + subscriptions when the user enters
+  // Map. Cached after first fetch; cheap to keep current. Triggered once
+  // per mount; FlagsTab Friends sub-tab (Sprint 69) ALSO triggers via its
+  // own effect — both calls hit the same slice and the second one is a
+  // no-op if data already loaded.
+  React.useEffect(() => {
+    if (viewerId) {
+      void loadCircleMarkers();
+      void loadSubscriptions();
+    }
+  }, [viewerId]);
+
+  // BUG-002 fix: merged marker list passed to RealMap. Own marks render
+  // with full opacity + no ring; friend marks render with colored ring;
+  // stranger marks render at 0.6 opacity. Tier function decides.
+  const mapMarkers = React.useMemo(() => {
+    // Deduplicate: prefer the own-store entry over circle (the latter is a
+    // server snapshot; the former carries optimistic local mutations).
+    const ownIds = new Set(storeMarkers.map(m => m.id));
+    const additional = circleMarkers.filter(m => !ownIds.has(m.id));
+    return [...storeMarkers, ...additional];
+  }, [storeMarkers, circleMarkers]);
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
   const region = getCurrentRegion();
 
@@ -742,7 +774,7 @@ export function MapScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       {/* Map — full bleed topo placeholder */}
-      <RealMap markers={storeMarkers} onMarkerPress={(m) => setDetailMarker(m)} viewerId={viewerId} friendIds={friendIds} />
+      <RealMap markers={mapMarkers} onMarkerPress={(m) => setDetailMarker(m)} viewerId={viewerId} friendIds={friendIds} />
 
       {/* Top bar — STORY-00099: rgba(255,255,255,0.95) overlay chips */}
       <SafeAreaView style={styles.topBar} edges={['top']} pointerEvents="box-none">

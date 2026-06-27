@@ -356,9 +356,18 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   hideMark: async (id) => {
     crashLogger.breadcrumb(`marker:hide:start id=${id}`);
     set((s) => {
-      const next = s.markers.filter((m) => m.id !== id);
-      if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
-      return { markers: next };
+      // BUG-005 fix (Sprint 71 post-review): wipe from BOTH slices.
+      // markers = own marks (Mine path). circleMarkers = friend-tier marks
+      // loaded from /api/circle/markers (Sprint 69 Story-537). v4 row Q +
+      // §15 V3 review §4.2 says "client-side useMarkerStore 主动 wipe" —
+      // Story-534 originally only filtered `markers`, leaving friend marks
+      // alive in `circleMarkers` until the next loadCircleMarkers() pulled
+      // them again (post-hide they'd be filtered by server-side LEFT JOIN
+      // hidden_items, but the in-memory slice still showed them).
+      const nextMarkers = s.markers.filter((m) => m.id !== id);
+      const nextCircle = s.circleMarkers.filter((m) => m.id !== id);
+      if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(nextMarkers));
+      return { markers: nextMarkers, circleMarkers: nextCircle };
     });
 
     try {

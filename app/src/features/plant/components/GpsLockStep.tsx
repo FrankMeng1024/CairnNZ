@@ -55,10 +55,12 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
   const inFlightRetryRef = useRef<number>(-1);
 
   useEffect(() => {
-    // Sprint 68 STORY-00530: web mock — short-circuit GPS sampling entirely
-    // on web so the Plant flow can be exercised in Playwright. Native
-    // platforms keep the real sampler below unchanged.
-    if (Platform.OS === 'web') {
+    // Sprint 68 STORY-00530 + BUG-004 fix: web mock for GPS sampling. ONLY
+    // in __DEV__ — production web builds (if ever shipped via expo build:web)
+    // must use real expo-location even on web rather than silently writing
+    // every plant at the Shanghai mock coord. Native iOS/Android always
+    // use the real sampler below.
+    if (__DEV__ && Platform.OS === 'web') {
       log('plant.gps_lock_web_mock', { lat: WEB_MOCK_LAT, lng: WEB_MOCK_LNG });
       const t = setTimeout(() => {
         onLockedRef.current(WEB_MOCK_LAT, WEB_MOCK_LNG, WEB_MOCK_ACCURACY_M);

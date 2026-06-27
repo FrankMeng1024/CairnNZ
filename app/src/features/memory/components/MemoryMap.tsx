@@ -35,6 +35,15 @@ interface Props {
    */
   recenterToken?: number;
   /**
+   * BUG-003 fix (Sprint 71 post-review): stranger Public marks within
+   * visibility radius but outside fog — forwarded to CairnPinsLayer for
+   * blurred-icon render (Sprint 70 STORY-00543). When MemoryScreen wires
+   * the /api/markers/public?bbox= loader in F5, populating this prop
+   * activates the visual layer end-to-end. Optional; defaults undefined =
+   * no stranger icons rendered.
+   */
+  strangerMarks?: import('../../../store/useMarkerStore').Marker[];
+  /**
    * v333: fired when the user actively pans/zooms the map (not when
    * code-driven Camera animation moves it). Parent gates the Recenter
    * button on this so the button only appears after the user has
@@ -58,7 +67,7 @@ interface Props {
 const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12';
 const INITIAL_ZOOM = 16.5;
 
-export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved, onMapFullyReady, onFogReady }: Props) {
+export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved, onMapFullyReady, onFogReady, strangerMarks }: Props) {
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
   const mapViewRef = useRef<any>(null);
@@ -289,7 +298,7 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
           />
         </UserLocation>
         <FogLayer userCenter={{ lat: centerLat, lng: centerLng }} onFogReady={onFogReady} />
-        <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} />
+        <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
       </MapView>
       {/* v303 OTA: Skia 解锁扩散动画 overlay。在 MapView 之上 absoluteFill。
           数据从 useMemoryStore.recentUnlocks 来,native fog 7/1 上线后保留
