@@ -580,10 +580,23 @@ export function MemoryScreen() {
           so it doesn't intrude into the Dynamic Island area. */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <BackButton variant="pill" onPress={() => nav.goBack()} />
-        {/* Sprint 70 STORY-00539: Memory tab Mine|Friends scope toggle.
-            Friends view will display subscribed-friend fog UNION + marks
-            (Story-541 deferred to F5 iPhone gate per SPIKE-67-1). */}
-        <MemoryScopeToggle />
+        {/* BUG-D fix (v371 post-OTA UX): scope toggle stays right-side;
+            Pick friends entry moved from a bottom-right FAB (occluded the
+            map) to a top-right icon button next to the toggle. Only
+            visible in Friends scope. */}
+        <View style={styles.topRightCluster}>
+          {memoryScope === 'friends' ? (
+            <TouchableOpacity
+              style={styles.topPickBtn}
+              onPress={() => setPickModalOpen(true)}
+              activeOpacity={0.7}
+              testID="memory-pick-friends-top"
+            >
+              <Icon name="Users" size={16} color={Colors.primary} strokeWidth={2.2} />
+            </TouchableOpacity>
+          ) : null}
+          <MemoryScopeToggle />
+        </View>
       </View>
 
       {/* v352 zoom-flicker fix: render MemoryMap with persistentCoord
@@ -762,19 +775,10 @@ export function MemoryScreen() {
         </View>
       </Modal>
 
-      {/* Sprint 70 STORY-00540 + 542: friend-pick + paywall.
-          FAB visible only when Friends scope is active. */}
-      {memoryScope === 'friends' && (
-        <TouchableOpacity
-          style={styles.friendPickFab}
-          onPress={() => setPickModalOpen(true)}
-          activeOpacity={0.85}
-          testID="memory-pick-friends-fab"
-        >
-          <Icon name="Users" size={18} color="#fff" strokeWidth={2.2} />
-          <Text style={styles.friendPickFabText}>Pick friends</Text>
-        </TouchableOpacity>
-      )}
+      {/* BUG-D fix (v371 post-OTA): old bottom-right "Pick friends" FAB
+          was replaced by the top-right Users icon in the top bar above.
+          The bottom-right area was occluding map content too aggressively.
+          The pick modal itself is unchanged — only its entry point moved. */}
       <MemoryFriendPickModal
         visible={pickModalOpen}
         onClose={() => setPickModalOpen(false)}
@@ -824,25 +828,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 }, elevation: 4,
     borderWidth: 1, borderColor: '#e8dfc8',
   },
-  // Sprint 70 STORY-00540: pick-friends FAB. Pill-shaped, sits above the
-  // recenter button on the same right edge. Friend scope only.
-  friendPickFab: {
-    position: 'absolute',
-    right: 16, bottom: 170,
+  // BUG-D fix (v371 post-OTA): Pick friends top-right cluster — sits
+  // inline with the scope toggle in the top bar. Replaces the bottom-
+  // right FAB pattern which was occluding map content.
+  topRightCluster: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: Colors.primary,
-    shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 }, elevation: 6,
+    gap: 8,
   },
-  friendPickFabText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
+  topPickBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: Colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: Colors.border,
+    shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 }, elevation: 3,
   },
   hintBackdrop: {
     flex: 1, backgroundColor: 'rgba(20,20,20,0.55)',

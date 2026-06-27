@@ -75,12 +75,24 @@ async function fetchWithTimeout(
   }
 }
 
-export async function pullMemoryFromServer(userId: string): Promise<void> {
+export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: boolean }): Promise<void> {
   if (!userId) return;
+  const reconcile = !!opts?.reconcile;
+  // BUG-E fix (v371 post-OTA): reconcile=true forces a full server sweep
+  // and treats server response as canonical truth. Without it, the
+  // incremental keyset cursor (afterTs/afterCid) means once a client has
+  // pulled past a point, server-side deletes (e.g. Sprint 67 Story-526
+  // 9163 cleanup) are NEVER reflected — pullMemoryFromServer's append-only
+  // model means stale local points persist forever. reconcile=true resets
+  // the cursor to (0, '') and after a successful full sweep replaces the
+  // local store with serverPoints only (no localOnly merge).
+  if (reconcile) {
+    pullCursor = { afterTs: 0, afterCid: '' };
+  }
   // v313: beacon at entry so we can see if pull even started.
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../services/bootDiagnostics').markBootPhase('pull_memory_entry');
+    require('../services/bootDiagnostics').markBootPhase('pull_memory_entry', { reconcile });
   } catch {/* ignore */}
   if (pullRunning || pushRunning) {
     setTimeout(() => {
@@ -178,6 +190,17 @@ export async function pullMemoryFromServer(userId: string): Promise<void> {
 
   // Apply whatever pages we got — O7 partial-result rule.
   if (accumulated.length === 0) {
+    // BUG-E fix: in reconcile mode, an empty server result means
+    // "server canonically has zero points" — wipe local. Without this
+    // branch, server-side delete is invisible to client forever.
+    if (reconcile && !aborted) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('./appLog').log('v371.pull_memory_reconcile_server_empty', { local_n: useMemoryStore.getState().points.length });
+      } catch {/* ignore */}
+      useMemoryStore.getState().replacePoints([], useMemoryStore.getState().initialRevealDone);
+      return;
+    }
     // If we were aborted with NO pages, nothing to merge. Schedule a
     // retry so user data eventually loads.
     if (aborted && pullCursor.afterTs > 0) {
@@ -194,6 +217,35 @@ export async function pullMemoryFromServer(userId: string): Promise<void> {
     serverPoints.map((p) => `${p.lat.toFixed(6)}|${p.lng.toFixed(6)}|${p.ts}`)
   );
   const localPoints = useMemoryStore.getState().points;
+
+  // BUG-E fix: reconcile mode treats server as truth — no localOnly merge.
+  // Server-side delete is honored. Cursor was reset to (0,0) so this is
+  // a full sweep; if we got here with accumulated.length > 0 it's complete
+  // (or partially aborted, in which case we'd have hit the empty short-
+  // circuit above with reconcile && aborted; that path returns without
+  // wiping to avoid losing local on a transient network error).
+  if (reconcile) {
+    if (aborted) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('./appLog').log('v371.pull_memory_reconcile_aborted', {
+          accumulated_n: accumulated.length, local_n: localPoints.length,
+        });
+      } catch {/* ignore */}
+      // Aborted reconcile: don't wipe; skip this run, leave local intact.
+      return;
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('./appLog').log('v371.pull_memory_reconcile_replace', {
+        server_n: serverPoints.length, local_n: localPoints.length,
+      });
+    } catch {/* ignore */}
+    serverPoints.sort((a, b) => a.ts - b.ts);
+    useMemoryStore.getState().replacePoints(serverPoints, useMemoryStore.getState().initialRevealDone);
+    return;
+  }
+
   const localOnly = localPoints.filter((p) => {
     if (p.cid && serverCidSet.has(p.cid)) return false;
     if (!p.cid) {

@@ -1,9 +1,12 @@
 /**
  * EmptyFriends — illustration for the Friends empty state.
  *
- * PRD3 E-019. Two cairns face each other across a soft dashed track,
- * one slightly larger than the other. The track between them suggests
- * "you and a friend, both walking the same network".
+ * PRD3 E-019. Two cairns face each other across a soft dashed track.
+ *
+ * v371 UX fix (BUG-B): both cairns now have 3 stones for visual balance.
+ * Previous design (left=4, right=3, "taller user vs smaller friend") was
+ * read as broken/asymmetric rather than as a metaphor. Equality is the
+ * better story for a Friends empty state anyway.
  */
 import React from 'react';
 import Svg, { Path, Ellipse, G } from 'react-native-svg';
@@ -33,18 +36,17 @@ export function EmptyFriends({ size = 160, primary = '#5d7c46', trail = '#b5823d
         strokeLinecap="round"
         fill="none"
       />
-      {/* left cairn (taller — the user) */}
-      <G transform="translate(38 66)">
-        <Ellipse cx="6" cy="32" rx="10" ry="3" fill={trail} fillOpacity="0.85" />
-        <Ellipse cx="5" cy="24" rx="7.5" ry="2.4" fill={trail} fillOpacity="0.78" />
-        <Ellipse cx="7" cy="17" rx="5.4" ry="2.0" fill={trail} fillOpacity="0.70" />
-        <Ellipse cx="5" cy="10" rx="3.2" ry="1.5" fill={trail} fillOpacity="0.60" />
+      {/* left cairn — 3 stones (you) */}
+      <G transform="translate(38 74)">
+        <Ellipse cx="6" cy="24" rx="10" ry="3" fill={trail} fillOpacity="0.85" />
+        <Ellipse cx="5" cy="16" rx="7.2" ry="2.4" fill={trail} fillOpacity="0.78" />
+        <Ellipse cx="7" cy="8.5" rx="4.4" ry="1.8" fill={trail} fillOpacity="0.65" />
       </G>
-      {/* right cairn (smaller — the friend) */}
-      <G transform="translate(150 78)">
-        <Ellipse cx="6" cy="20" rx="9" ry="2.8" fill={trail} fillOpacity="0.85" />
-        <Ellipse cx="4" cy="13" rx="6.4" ry="2.2" fill={trail} fillOpacity="0.75" />
-        <Ellipse cx="7" cy="6.5" rx="3.6" ry="1.6" fill={trail} fillOpacity="0.62" />
+      {/* right cairn — 3 stones (a friend) */}
+      <G transform="translate(150 74)">
+        <Ellipse cx="6" cy="24" rx="10" ry="3" fill={trail} fillOpacity="0.85" />
+        <Ellipse cx="5" cy="16" rx="7.2" ry="2.4" fill={trail} fillOpacity="0.78" />
+        <Ellipse cx="7" cy="8.5" rx="4.4" ry="1.8" fill={trail} fillOpacity="0.65" />
       </G>
     </Svg>
   );

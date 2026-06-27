@@ -33,6 +33,13 @@ import { hydrateH3ForUser, detachH3Persistence, flushH3Now } from '../services/h
 import { attachMemorySync, detachMemorySync, pullMemoryFromServer, pushMemoryNow } from '../../../services/memorySync';
 import { log } from '../../../services/appLog';
 
+// BUG-E fix (v371 post-OTA): tracks which userIds we've already
+// reconciled this app-session. First pull per user uses reconcile=true
+// (full server sweep + replace) so server-side deletes propagate to
+// client cache. Subsequent pulls in the same session use the cheaper
+// incremental keyset cursor. Cleared on process restart (module re-eval).
+const reconciledUsersThisSession = new Set<string>();
+
 const WATCH_OPTIONS: Location.LocationOptions = {
   accuracy: Location.Accuracy.BestForNavigation,
   timeInterval: 2_000,    // 2s between readings — enough for walking pace
@@ -219,7 +226,17 @@ export function ForegroundUnlockManager() {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_before_pull_memory');
       } catch {/* ignore */}
-      void pullMemoryFromServer(effectiveUserId);
+      // BUG-E fix (v371 post-OTA): first pull per session is reconcile-mode
+      // so server-side deletes (e.g. Sprint 67 Story-526 9163 cleanup)
+      // wipe stale local cache. Subsequent pulls in the same session run
+      // in incremental keyset mode (default) for efficiency.
+      const wasReconciled = reconciledUsersThisSession.has(effectiveUserId);
+      if (!wasReconciled) {
+        reconciledUsersThisSession.add(effectiveUserId);
+        void pullMemoryFromServer(effectiveUserId, { reconcile: true });
+      } else {
+        void pullMemoryFromServer(effectiveUserId);
+      }
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_after_pull_memory_dispatched');

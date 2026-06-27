@@ -145,6 +145,46 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
   const [addState, setAddState] = useState<AddState>('idle');
   const successEmail = useRef('');
 
+  // BUG-A fix (v371 post-OTA UX): smooth slide-up + backdrop fade for
+  // the Add Friend sheet. Pre-fix the sheet appeared instantly, which
+  // felt jarring against iOS conventions. Now spring-eases in over
+  // ~280ms and fades the backdrop in parallel.
+  const slideAnim = useRef(new Animated.Value(400)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 18,
+        stiffness: 220,
+        mass: 0.8,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const dismiss = () => {
+    // Animate out, then call onDismiss so parent removes the component.
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 400,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => onDismiss());
+  };
+
   const handleSubmit = async () => {
     const trimmed = email.trim();
     if (!isValidEmail(trimmed)) {
@@ -161,7 +201,7 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
       setTimeout(() => {
         setEmail('');
         setAddState('idle');
-        onDismiss();
+        dismiss();
       }, 2000);
     } else {
       setValidationError(result.error || 'Failed to send request');
@@ -170,12 +210,12 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
   };
 
   return (
-    <View style={sheetStyles.backdrop}>
+    <Animated.View style={[sheetStyles.backdrop, { opacity: backdropAnim }]}>
       {/* Tap outside the sheet to dismiss — matches iOS modal convention */}
       <TouchableOpacity
         style={sheetStyles.backdropTouch}
         activeOpacity={1}
-        onPress={onDismiss}
+        onPress={dismiss}
       />
       {/* KeyboardAvoidingView lifts the sheet above the on-screen keyboard so
           the email input and Send button remain visible while typing. */}
@@ -184,7 +224,7 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
         style={sheetStyles.kbWrap}
         pointerEvents="box-none"
       >
-        <View style={sheetStyles.sheet}>
+        <Animated.View style={[sheetStyles.sheet, { transform: [{ translateY: slideAnim }] }]}>
           {/* Drag handle */}
           <View style={sheetStyles.handle} />
 
@@ -242,14 +282,14 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
               )}
             </PressBtn>
 
-            <PressBtn style={sheetStyles.cancelBtn} onPress={onDismiss} scaleTo={0.97}>
+            <PressBtn style={sheetStyles.cancelBtn} onPress={dismiss} scaleTo={0.97}>
               <Text style={sheetStyles.cancelText}>Cancel</Text>
             </PressBtn>
           </>
         )}
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
-    </View>
+    </Animated.View>
   );
 }
 

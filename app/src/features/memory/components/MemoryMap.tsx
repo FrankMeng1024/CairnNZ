@@ -279,10 +279,27 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
             Result: small white-ringed blue dot. No 15px translucent halo
             that users were mistaking for a "default fog reveal circle". */}
         <UserLocation visible={true} animated={true}>
+          {/* BUG-C fix (v371 post-OTA): User-location ring + dot now scale
+              with zoom. Mapbox `circleRadius` default is screen pixels —
+              constant size regardless of zoom — which at low zoom levels
+              made the blue dot visually huge relative to map features
+              ("bigger than a house"). Now interpolated: small at world
+              zoom (z=4), normal at hiking zoom (z=14+). Numbers chosen
+              so the dot still reads as "you" at all zooms but doesn't
+              dominate the map at low zoom.
+              The 8px / 6px at z>=14 matches the prior 7px / 5px feel
+              (slightly larger because the ring is now more sparse at low
+              zoom). */}
           <CircleLayer
             id="memory-user-location-ring"
             style={{
-              circleRadius: 7,
+              circleRadius: [
+                'interpolate', ['linear'], ['zoom'],
+                4, 2.5,    // world zoom — tiny
+                10, 4.5,   // city zoom — small
+                14, 7,     // hiking zoom — normal
+                18, 9,     // street zoom — slightly larger
+              ],
               circleColor: '#FFFFFF',
               circlePitchAlignment: 'map',
             }}
@@ -291,7 +308,13 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
             id="memory-user-location-dot"
             aboveLayerID="memory-user-location-ring"
             style={{
-              circleRadius: 5,
+              circleRadius: [
+                'interpolate', ['linear'], ['zoom'],
+                4, 1.6,    // tiny inner dot at world zoom
+                10, 3,
+                14, 5,
+                18, 6.5,
+              ],
               circleColor: 'rgba(51, 181, 229, 1)',
               circlePitchAlignment: 'map',
             }}
