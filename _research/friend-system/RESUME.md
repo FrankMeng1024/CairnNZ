@@ -1,6 +1,6 @@
 # 📋 RESUME.md — Cairn Friend System v1 Sprint 67
 
-**Last updated**: 2026-06-27 (mid-Sprint 67)
+**Last updated**: 2026-06-27 (mid-Sprint 67 — Story 527 done)
 **Reason for file**: Survival guide after session clear. Read this FIRST.
 
 ---
@@ -30,7 +30,7 @@ User's 5 binding rules (their words, never violate):
 
 ---
 
-## ✅ Done in Sprint 67 (3 of 7)
+## ✅ Done in Sprint 67 (4 of 7)
 
 ### STORY-00524 — auth.js login validates no password length ✅
 - Read `backend/src/routes/auth.js` lines 186-221.
@@ -53,39 +53,18 @@ User's 5 binding rules (their words, never violate):
 
 ---
 
-## ⏳ Pending in Sprint 67 (4 of 7)
+### STORY-00527 — Seed 9 mock @cairn.demo accounts ✅
+- Created `backend/scripts/seed/` with 6 files: `gen_bcrypt_hashes.js`, `seed_mock_users.sql`, `seed_mock_sessions_markers_routes.sql`, `backup_mock_data.sh`, `restore_mock_data.sh`, `clear_mock_data.sql`
+- Applied to aliyun. 9 mock users login OK (HTTP 200 + JWT). Per-user counts match §8 exactly.
+- Stranger 1 mark at 20.02m from 9163 Back Loop center (geometric verify SQL embedded).
+- `markers.permission` uses legacy `'group'` for Friend tier (normalized via `permission.js`); `routes.permission` uses `'friend'` directly.
+- **Outstanding finding**: 10 pre-existing rows in `friends` for user_id=4 (2026-05-19, links to real users `816354835@qq.com`, `test@example.com`, `testverify@example.com`, `devtest_final@test.com`, `ldy@sina.com`). v4 §8 wants 9163 = 0 friends initially. NOT deleted — per `feedback_dry_run_before_delete`, requires user authorization.
 
-### NEXT STEP: STORY-00527 — Seed 9 mock @cairn.demo accounts
+---
 
-**File**: `tasks/jira/sprint67/STORY-00527.md`
+## ⏳ Pending in Sprint 67 (3 of 7)
 
-What to build:
-- `backend/scripts/seed/gen_bcrypt_hashes.js` — Node script generating bcrypt hashes (cost 12) for passwords `1`, `2`, `3`, `4`, `5`, `6`, `x1`, `x2`, `x3`
-- `backend/scripts/seed/seed_mock_users.sql` — 9 INSERT into users
-- `backend/scripts/seed/seed_mock_sessions_markers_routes.sql` — per v4 plan §8 data spec
-- `backend/scripts/seed/backup_mock_data.sh` / `restore_mock_data.sh` / `clear_mock_data.sql`
-
-Mock matrix (v4 plan §8 — DO NOT change):
-| email | pwd | role | data |
-|---|---|---|---|
-| 1@cairn.demo | 1 | Alice (active friend A) | 3 sessions / 12 marks / 1 route |
-| 2@cairn.demo | 2 | Bob (active friend B) | 2 sessions / 8 marks / 1 route |
-| 3@cairn.demo | 3 | **Carol (stranger→friend conversion)** | 2 sessions + 4 Public marks (NOT 9163's friend initially) |
-| 4@cairn.demo | 4 | Dave (empty) | NO data |
-| 5@cairn.demo | 5 | LDY (rich friend) | 4 sessions / 15 marks / 2 routes |
-| 6@cairn.demo | 6 | Eve (6th friend, paywall) | 2 sessions / 6 marks |
-| x1@cairn.demo | x1 | Stranger 1 (single) | 1 Public mark in 9163 Back Loop 50m |
-| x2@cairn.demo | x2 | Stranger 2 (heatmap) | 3 Public marks within 100m |
-| x3@cairn.demo | x3 | Stranger 3 (chain) | 5 Public marks scattered |
-
-**Critical constraints**:
-- 9163 (user_id=4) bbox is needed for mock GPS coords. Query: `SELECT MIN/MAX(lat,lng) FROM memory_points WHERE user_id=4;` — use this bbox ±5km for mock data.
-- All emails MUST end with `@cairn.demo` (backup/clear scripts filter on this).
-- **9163 initial state must remain**: 0 friends, 0 subscriptions. Do NOT auto-add friends.
-- Stranger 1 mark MUST be within 50m of 9163 Back Loop GPS path (geometric verification SQL required).
-- 9163's session 46 "back" is in GPS coords near Shanghai (lat ~31.20, lng ~121.59 based on Story-526 cleanup data).
-
-### Then: STORY-00528 — Backend endpoints (8 new + POST/PATCH Public rejection)
+### NEXT STEP: STORY-00528 — Backend endpoints (8 new + POST/PATCH Public rejection)
 
 Build endpoints per v4 plan §7:
 1. POST /api/memory-subscriptions
