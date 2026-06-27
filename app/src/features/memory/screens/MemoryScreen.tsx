@@ -586,16 +586,25 @@ export function MemoryScreen() {
             put Mine between the icon and Friends — reads as disconnected. */}
         <View style={styles.topRightCluster}>
           <MemoryScopeToggle />
-          {memoryScope === 'friends' ? (
-            <TouchableOpacity
-              style={styles.topPickBtn}
-              onPress={() => setPickModalOpen(true)}
-              activeOpacity={0.7}
-              testID="memory-pick-friends-top"
-            >
-              <Icon name="Users" size={16} color={Colors.primary} strokeWidth={2.2} />
-            </TouchableOpacity>
-          ) : null}
+          {/* v374→v375 fix: Pick icon永远占位,Mine模式不可见但保留spacer,
+              避免toggle在切换scope时左右移动 (用户感知"toggle变小"是
+              因为周围间距变化产生的相对错觉)。v375 review: 删除
+              pointerEvents (RN 0.70+ 已 deprecate 作为 prop),disabled
+              已足够阻止 onPress; 保留 accessibility props 隐藏 a11y。 */}
+          <TouchableOpacity
+            style={[
+              styles.topPickBtn,
+              memoryScope !== 'friends' && styles.topPickBtnHidden,
+            ]}
+            onPress={() => { if (memoryScope === 'friends') setPickModalOpen(true); }}
+            activeOpacity={memoryScope === 'friends' ? 0.7 : 1}
+            disabled={memoryScope !== 'friends'}
+            accessibilityElementsHidden={memoryScope !== 'friends'}
+            importantForAccessibility={memoryScope === 'friends' ? 'yes' : 'no-hide-descendants'}
+            testID="memory-pick-friends-top"
+          >
+            <Icon name="Users" size={16} color={Colors.primary} strokeWidth={2.2} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -843,6 +852,15 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border,
     shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 }, elevation: 3,
+  },
+  // v375: Mine模式下 Pick icon 不可见但保留占位,
+  // 防止 scope toggle 视觉位置在切换时移动。
+  topPickBtnHidden: {
+    opacity: 0,
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   hintBackdrop: {
     flex: 1, backgroundColor: 'rgba(20,20,20,0.55)',

@@ -542,10 +542,21 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
   const [sort, setSort] = useState<'recent' | 'distance-desc' | 'distance-asc'>('recent');
   // Sprint 69 STORY-00538: Mine|Friends scope sub-tab.
   const [scope, setScope] = useState<'mine' | 'friends'>('mine');
+  // v375: track whether we've completed at least one Friends fetch.
+  // Without this, the brief gap between "user clicks Friends" and "fetch
+  // resolves" renders the empty hero, then re-renders the list — a
+  // visible flash. The user reported this as flicker in v374.
+  const [hasFetchedFriends, setHasFetchedFriends] = useState(false);
 
   React.useEffect(() => {
-    if (scope === 'friends' && circleRoutes.length === 0 && !loadingCircleRoutes) {
-      void loadCircleRoutes();
+    if (scope === 'friends' && circleRoutes.length === 0 && !loadingCircleRoutes && !hasFetchedFriends) {
+      // v375 review fix: use .finally() not .then() — without it, a network
+      // reject leaves hasFetchedFriends=false forever and the empty hero
+      // never renders (user stuck looking at a blank tab).
+      void loadCircleRoutes().finally(() => setHasFetchedFriends(true));
+    } else if (scope === 'friends' && !hasFetchedFriends && !loadingCircleRoutes) {
+      // Already have cached routes from a prior fetch — skip ahead.
+      setHasFetchedFriends(true);
     }
   }, [scope]);
 
@@ -566,15 +577,10 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
     <View style={{ flex: 1 }}>
       {/* Sprint 69 STORY-00538: Mine|Friends scope sub-tab. */}
       <ScopeTabBar scope={scope} onChange={setScope} />
-      {scope === 'friends' && loadingCircleRoutes && circleRoutes.length === 0 ? (
-        <View style={{ alignItems: 'center', paddingTop: 40 }}>
-          <Text style={styles.emptyHint}>Loading friends' routes…</Text>
-        </View>
-      ) : null}
-      {scope === 'friends' && !loadingCircleRoutes && circleRoutes.length === 0 ? (
+      {scope === 'friends' && hasFetchedFriends && circleRoutes.length === 0 ? (
         <View style={styles.emptyHero}>
           <View style={styles.emptyHeroIcon}>
-            <Icon name="Users" size={40} color={Colors.primary} strokeWidth={1.5} />
+            <Icon name="Route" size={40} color={Colors.primary} strokeWidth={1.5} />
           </View>
           <Text style={styles.emptyHeroTitle}>No routes from your friends yet</Text>
           <Text style={styles.emptyHeroBody}>
@@ -973,6 +979,9 @@ function FlagsTab() {
   // Sprint 69 STORY-00537: Mine|Friends scope sub-tab. Mine = own marks,
   // Friends = subscribed-friend marks via /api/circle/markers.
   const [scope, setScope] = useState<'mine' | 'friends'>('mine');
+  // v375 STORY-00537: track whether the first Friends fetch has settled
+  // — same flicker-prevention pattern as RoutesTab.
+  const [hasFetchedFriends, setHasFetchedFriends] = useState(false);
   // v299 N8: flags now open the read-only MarkerDetailScreen instead
   // of the in-place FlagEditSheet. Editing/deleting is no longer
   // exposed from this tab — per user spec, planted cairns are
@@ -983,8 +992,12 @@ function FlagsTab() {
   // Subsequent visits use the cached slice; pull-to-refresh would re-fetch
   // (not in v1 scope).
   React.useEffect(() => {
-    if (scope === 'friends' && circleMarkers.length === 0 && !loadingCircle) {
-      void loadCircleMarkers();
+    if (scope === 'friends' && circleMarkers.length === 0 && !loadingCircle && !hasFetchedFriends) {
+      // v375 review fix: .finally() — same as RoutesTab, never strand
+      // the user on a never-fetched state if /api/circle/markers rejects.
+      void loadCircleMarkers().finally(() => setHasFetchedFriends(true));
+    } else if (scope === 'friends' && !hasFetchedFriends && !loadingCircle) {
+      setHasFetchedFriends(true);
     }
   }, [scope]);
 
@@ -1045,12 +1058,7 @@ function FlagsTab() {
           stays Mine-only (Story-536); Flags + Routes get this control. */}
       <ScopeTabBar scope={scope} onChange={setScope} />
 
-      {scope === 'friends' && loadingCircle && circleMarkers.length === 0 ? (
-        <View style={{ alignItems: 'center', paddingTop: 40 }}>
-          <Text style={styles.emptyHint}>Loading friends' marks…</Text>
-        </View>
-      ) : null}
-      {scope === 'friends' && !loadingCircle && circleMarkers.length === 0 ? (
+      {scope === 'friends' && hasFetchedFriends && circleMarkers.length === 0 ? (
         <View style={styles.emptyHero}>
           <View style={{ marginBottom: Spacing.md }}>
             <EmptyMarkers size={160} />

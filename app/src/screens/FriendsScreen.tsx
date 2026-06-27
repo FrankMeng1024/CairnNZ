@@ -230,6 +230,15 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
           {/* Drag handle */}
           <View style={sheetStyles.handle} />
 
+          {/* v375: ScrollView guarantees Send/Cancel buttons stay reachable
+              when the keyboard pushes the sheet up against the maxHeight
+              cap. Without this, on shorter devices the bottom CTAs are
+              clipped (review finding MEDIUM-2). */}
+          <ScrollView
+            contentContainerStyle={sheetStyles.sheetScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
         {addState === 'success' ? (
           <View style={sheetStyles.successState}>
             <View style={sheetStyles.successIcon}>
@@ -261,7 +270,6 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
                 onChangeText={(t) => { setEmail(t); if (validationError) setValidationError(''); }}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                autoFocus
               />
             </View>
             {!!validationError && (
@@ -289,6 +297,7 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
             </PressBtn>
           </>
         )}
+          </ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
     </Animated.View>
@@ -795,6 +804,20 @@ const sheetStyles = StyleSheet.create({
   sheet: {
     backgroundColor: Colors.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     padding: Spacing.xl, paddingTop: Spacing.md,
+    gap: Spacing.md,
+    // v375: cap sheet height so it does NOT reach above the screen midpoint
+    // when no keyboard is present. Pre-fix the sheet expanded to fit all
+    // content, which on shorter devices pushed the top edge over the
+    // page's title bar and covered the parent screen text.
+    // v375 review: flexShrink:1 required for maxHeight to actually
+    // constrain a flex child; without it the sheet sizes to content and
+    // bypasses the cap, breaking the embedded ScrollView.
+    maxHeight: '70%',
+    flexShrink: 1,
+  },
+  // v375: ScrollView inside sheet — keeps Send/Cancel reachable when
+  // keyboard pushes content against the maxHeight cap.
+  sheetScrollContent: {
     gap: Spacing.md,
   },
   handle: {
