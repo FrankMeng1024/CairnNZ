@@ -85,6 +85,66 @@ function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) 
   );
 }
 
+// Sprint 69 STORY-00537 + STORY-00538: scope sub-tab used inside Flags
+// and Routes tabs (NOT Activities — v4 §10 binding). Small inline component
+// since the styling is bespoke (lighter than the main SegmentControl).
+function ScopeTabBar({
+  scope,
+  onChange,
+}: {
+  scope: 'mine' | 'friends';
+  onChange: (s: 'mine' | 'friends') => void;
+}) {
+  const SCOPES: { id: 'mine' | 'friends'; label: string }[] = [
+    { id: 'mine', label: 'Mine' },
+    { id: 'friends', label: 'Friends' },
+  ];
+  return (
+    <View style={scopeStyles.row} testID="scope-tab-bar">
+      {SCOPES.map(s => (
+        <TouchableOpacity
+          key={s.id}
+          style={[scopeStyles.btn, scope === s.id && scopeStyles.btnActive]}
+          onPress={() => onChange(s.id)}
+          activeOpacity={0.7}
+          testID={`scope-${s.id}`}
+        >
+          <Text style={[scopeStyles.text, scope === s.id && scopeStyles.textActive]}>{s.label}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+const scopeStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  btn: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  btnActive: {
+    backgroundColor: Colors.primaryBg,
+    borderColor: Colors.primary,
+  },
+  text: {
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  textActive: {
+    color: Colors.primary,
+  },
+});
+
 // ── Empty State ──────────────────────────────────────────────────────────────
 function EmptyState({ icon, title, hint, illustration }: { icon: IconName; title: string; hint: string; illustration?: React.ReactNode }) {
   return (
@@ -233,12 +293,16 @@ function RouteMapPreview({ points }: { points: { lat: number; lng: number }[] })
 }
 
 function RouteSheet({
-  route, onClose, onEdit, onDelete,
+  route, onClose, onEdit, onDelete, readOnly = false,
 }: {
   route: import('../store/useRouteStore').Route | null;
   onClose: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Sprint 69 STORY-00538: hide Edit + Delete when viewing a friend's
+   *  route (Friends sub-tab). The sheet still renders the metadata + map
+   *  preview; only the owner actions are suppressed. */
+  readOnly?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(400)).current;
@@ -330,15 +394,20 @@ function RouteSheet({
 
         {/* Actions — v122 fix #8: a single View button (full-width
             primary). Edit + Delete moved to inside the View screen.
-            Matches the Activity flow: list → tap → detail → edit/delete. */}
+            Matches the Activity flow: list → tap → detail → edit/delete.
+
+            Sprint 69 STORY-00538: when readOnly (friend route via Friends
+            sub-tab), the View button stays but onEdit is suppressed —
+            the friend's route is not editable in v1. Future v1.1 may add
+            a "Save as my route" affordance (out of scope here). */}
         <View style={sheetStyles.actions}>
           <PressBtn
-            style={[sheetStyles.saveBtn, { flex: 1 }]}
-            onPress={() => dismiss(() => onEdit(data.id))}
-            scaleTo={0.96}
+            style={[sheetStyles.saveBtn, { flex: 1, opacity: readOnly ? 0.5 : 1 }]}
+            onPress={() => { if (!readOnly) dismiss(() => onEdit(data.id)); }}
+            scaleTo={readOnly ? 1 : 0.96}
           >
             <Icon name="Map" size={14} color="#fff" strokeWidth={2} />
-            <Text style={sheetStyles.saveBtnText}>View</Text>
+            <Text style={sheetStyles.saveBtnText}>{readOnly ? 'View (friend route)' : 'View'}</Text>
           </PressBtn>
         </View>
       </Animated.View>
@@ -454,13 +523,25 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
   const nav = useNavigation<Nav>();
   const routes = useRouteStore(s => s.routes);
   const deleteRoute = useRouteStore(s => s.deleteRoute);
+  // Sprint 69 STORY-00538: circle routes slice + loader.
+  const circleRoutes = useRouteStore(s => s.circleRoutes);
+  const loadingCircleRoutes = useRouteStore(s => s.loadingCircleRoutes);
+  const loadCircleRoutes = useRouteStore(s => s.loadCircleRoutes);
   const [selectedRoute, setSelectedRoute] = useState<import('../store/useRouteStore').Route | null>(null);
   // Filter + sort state — local-only, resets if user leaves the tab.
   const [filter, setFilter] = useState<'all' | 'hiking' | 'running'>('all');
   const [sort, setSort] = useState<'recent' | 'distance-desc' | 'distance-asc'>('recent');
+  // Sprint 69 STORY-00538: Mine|Friends scope sub-tab.
+  const [scope, setScope] = useState<'mine' | 'friends'>('mine');
+
+  React.useEffect(() => {
+    if (scope === 'friends' && circleRoutes.length === 0 && !loadingCircleRoutes) {
+      void loadCircleRoutes();
+    }
+  }, [scope]);
 
   const visible = useMemo(() => {
-    let list = routes;
+    let list = scope === 'mine' ? routes : circleRoutes;
     if (filter !== 'all') list = list.filter(r => r.activityMode === filter);
     if (sort === 'recent') {
       list = [...list].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -470,10 +551,27 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
       list = [...list].sort((a, b) => a.distanceM - b.distanceM);
     }
     return list;
-  }, [routes, filter, sort]);
+  }, [routes, circleRoutes, scope, filter, sort]);
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Sprint 69 STORY-00538: Mine|Friends scope sub-tab. */}
+      <ScopeTabBar scope={scope} onChange={setScope} />
+      {scope === 'friends' && loadingCircleRoutes && circleRoutes.length === 0 ? (
+        <View style={{ alignItems: 'center', paddingTop: 40 }}>
+          <Text style={styles.emptyHint}>Loading friends' routes…</Text>
+        </View>
+      ) : null}
+      {scope === 'friends' && !loadingCircleRoutes && circleRoutes.length === 0 ? (
+        <EmptyState
+          icon="Users"
+          title="No routes from your friends yet"
+          hint="Subscribe to a friend in Memory tab to see their routes here."
+          illustration={<EmptyRoutes size={160} />}
+        />
+      ) : null}
+      {(scope === 'mine' || (scope === 'friends' && circleRoutes.length > 0)) && (
+        <>
       <FilterSortBar
         filters={[
           { id: 'all', label: 'All' },
@@ -554,7 +652,10 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
         onClose={() => setSelectedRoute(null)}
         onEdit={(id) => nav.navigate('RouteEditor', { routeId: id })}
         onDelete={(id) => deleteRoute(id)}
+        readOnly={scope === 'friends'}
       />
+        </>
+      )}
     </View>
   );
 }
@@ -848,17 +949,34 @@ const PERM_FILTERS: { id: MarkerPermission | 'all'; icon: IconName }[] = [
 
 function FlagsTab() {
   const markers = useMarkerStore(s => s.markers);
+  // Sprint 69 STORY-00537: circle markers slice + loader.
+  const circleMarkers = useMarkerStore(s => s.circleMarkers);
+  const loadingCircle = useMarkerStore(s => s.loadingCircle);
+  const loadCircleMarkers = useMarkerStore(s => s.loadCircleMarkers);
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
   const [typeFilter, setTypeFilter] = useState<MarkerType | 'all'>('all');
   const [permFilter, setPermFilter] = useState<MarkerPermission | 'all'>('all');
   const [sort, setSort] = useState<'recent' | 'nearest'>('recent');
+  // Sprint 69 STORY-00537: Mine|Friends scope sub-tab. Mine = own marks,
+  // Friends = subscribed-friend marks via /api/circle/markers.
+  const [scope, setScope] = useState<'mine' | 'friends'>('mine');
   // v299 N8: flags now open the read-only MarkerDetailScreen instead
   // of the in-place FlagEditSheet. Editing/deleting is no longer
   // exposed from this tab — per user spec, planted cairns are
   // immutable.
   const nav = useNavigation<Nav>();
 
-  const filtered = markers.filter(m => {
+  // Lazy-load friend markers when the user first switches to Friends.
+  // Subsequent visits use the cached slice; pull-to-refresh would re-fetch
+  // (not in v1 scope).
+  React.useEffect(() => {
+    if (scope === 'friends' && circleMarkers.length === 0 && !loadingCircle) {
+      void loadCircleMarkers();
+    }
+  }, [scope]);
+
+  const baseList = scope === 'mine' ? markers : circleMarkers;
+  const filtered = baseList.filter(m => {
     if (typeFilter !== 'all' && m.type !== typeFilter) return false;
     if (permFilter !== 'all' && (m.permission ?? 'personal') !== permFilter) return false;
     return true;
@@ -877,12 +995,37 @@ function FlagsTab() {
     return [...filtered].sort((a, b) => dist(a) - dist(b));
   }, [filtered, sort, lastCoord]);
 
-  if (markers.length === 0) {
-    return <EmptyState icon="Flag" title="No flags planted yet" hint="Leave your first mark when you find something worth noting." illustration={<EmptyMarkers size={160} />} />;
+  if (scope === 'mine' && markers.length === 0) {
+    return (
+      <View style={{ flex: 1 }}>
+        <ScopeTabBar scope={scope} onChange={setScope} />
+        <EmptyState icon="Flag" title="No flags planted yet" hint="Leave your first mark when you find something worth noting." illustration={<EmptyMarkers size={160} />} />
+      </View>
+    );
   }
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Sprint 69 STORY-00537: Mine|Friends scope sub-tab — Activities
+          stays Mine-only (Story-536); Flags + Routes get this control. */}
+      <ScopeTabBar scope={scope} onChange={setScope} />
+
+      {scope === 'friends' && loadingCircle && circleMarkers.length === 0 ? (
+        <View style={{ alignItems: 'center', paddingTop: 40 }}>
+          <Text style={styles.emptyHint}>Loading friends' marks…</Text>
+        </View>
+      ) : null}
+      {scope === 'friends' && !loadingCircle && circleMarkers.length === 0 ? (
+        <EmptyState
+          icon="Users"
+          title="No marks from your friends yet"
+          hint="Subscribe to a friend in Memory tab to see their marks here."
+          illustration={<EmptyMarkers size={160} />}
+        />
+      ) : null}
+
+      {(scope === 'mine' || (scope === 'friends' && circleMarkers.length > 0)) && (
+        <>
       {/* Two-row filter bar — type chips on row 1, permission toggles
           on row 2. The original single-row layout pushed perm toggles
           off-screen on narrower devices ("一行放不下"). Splitting
@@ -963,6 +1106,8 @@ function FlagsTab() {
       />
       {/* v299 N8: FlagEditSheet removed — Flags now navigate to
           read-only MarkerDetailScreen. */}
+        </>
+      )}
     </View>
   );
 }

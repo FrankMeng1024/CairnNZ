@@ -97,6 +97,10 @@ export function RouteEditorScreen() {
   const [enterEditLoading, setEnterEditLoading] = useState(false);
   const [enterEditError, setEnterEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Sprint 69 STORY-00535: route visibility toggle. Default 'friend' per
+  // v4.U binding (social default). No 'public' option in v1 UI per §11;
+  // backend H1 also rejects (Sprint 67 STORY-00528).
+  const [permission, setPermission] = useState<'personal' | 'friend'>('friend');
 
   const editIsOpen = useRouteEditStore(s => s.isOpen);
   const editRouteId = useRouteEditStore(s => s.routeId);
@@ -169,6 +173,11 @@ export function RouteEditorScreen() {
   useEffect(() => {
     if (existingRoute) {
       setName(existingRoute.name);
+      // Sprint 69 STORY-00535: hydrate visibility for edit. Default 'friend'
+      // when the existing row has no permission field (legacy rows).
+      if (existingRoute.permission === 'personal' || existingRoute.permission === 'friend') {
+        setPermission(existingRoute.permission);
+      }
     }
   }, [existingRoute]);
 
@@ -574,6 +583,8 @@ export function RouteEditorScreen() {
           distanceM: dist,
           // v6.3 plan §2.5: also persist recomputed elevation gain.
           elevationGainM,
+          // Sprint 69 STORY-00535: persist updated visibility on edit.
+          permission,
         }).catch((e: any) => {
           throw e;
         });
@@ -587,6 +598,8 @@ export function RouteEditorScreen() {
           // v6.3 plan §2.5: prefer the recomputed gain (reflects post-edit
           // geometry) over the raw session aggregate.
           elevationGainM: elevationGainM > 0 ? elevationGainM : (session?.elevationGainM ?? 0),
+          // Sprint 69 STORY-00535: persist visibility tier picked in the UI.
+          permission,
         });
         if (!createdId) {
           Alert.alert('Save failed', 'Could not save route — check your connection.');
@@ -891,6 +904,27 @@ export function RouteEditorScreen() {
                     <Text style={styles.viewStatText}>{formatDistance(polylineLengthM(renderPoints), 'km', 1)} km</Text>
                   </View>
                 )}
+                {/* Sprint 69 STORY-00535: visibility toggle. Personal | Friend,
+                    default Friend. Public hidden in v1 UI (v4 §11). Visual
+                    parity with Mark create chip pattern (Sprint 68 STORY-00530). */}
+                <View style={styles.permissionRow} testID="route-permission-row">
+                  <TouchableOpacity
+                    style={[styles.permissionChip, permission === 'personal' && styles.permissionChipActive]}
+                    onPress={() => setPermission('personal')}
+                    testID="route-permission-personal"
+                  >
+                    <Icon name="Lock" size={12} color={permission === 'personal' ? Colors.primary : Colors.textSecondary} strokeWidth={2.2} />
+                    <Text style={[styles.permissionText, permission === 'personal' && styles.permissionTextActive]}>Just me</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.permissionChip, permission === 'friend' && styles.permissionChipActive]}
+                    onPress={() => setPermission('friend')}
+                    testID="route-permission-friend"
+                  >
+                    <Icon name="Users" size={12} color={permission === 'friend' ? Colors.primary : Colors.textSecondary} strokeWidth={2.2} />
+                    <Text style={[styles.permissionText, permission === 'friend' && styles.permissionTextActive]}>Friends</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Action row: Delete (existing only) + Edit + Save.
@@ -1033,6 +1067,36 @@ const styles = StyleSheet.create({
   viewStatDot: {
     fontSize: FontSize.small,
     color: Colors.textMuted,
+  },
+  // Sprint 69 STORY-00535: route permission chip row + chip styles.
+  permissionRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  permissionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  permissionChipActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryBg,
+  },
+  permissionText: {
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  permissionTextActive: {
+    color: Colors.primary,
+    fontWeight: '700',
   },
 
   // Two equal-width action buttons (Delete + Edit)

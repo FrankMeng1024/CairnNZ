@@ -82,6 +82,11 @@ export interface Route {
   // (NZ photographers get name + Tourism NZ / DOC partnership credit).
   heroPhotoUrl?: string;
   photoCredit?: string;
+  // Sprint 69 STORY-00535: visibility tier persisted to backend (added by
+  // Sprint 67 migration 018 to routes.permission ENUM). Default 'personal'
+  // for legacy routes; new routes saved via the v1 Route create UI default
+  // to 'friend' per v4.U binding.
+  permission?: 'personal' | 'friend';
 }
 
 export interface RouteStore {
@@ -93,9 +98,17 @@ export interface RouteStore {
    * pre-load empty array isn't mistaken for "user has 0 routes".
    */
   routesLoadCompleted: boolean;
+  /** Sprint 69 STORY-00538: subscribed-friend friend+public routes
+   *  loaded from GET /api/circle/routes. Stored separately from `routes`
+   *  (Mine) so Trails Friends sub-tab can render them without touching
+   *  the viewer's own route list. */
+  circleRoutes: Route[];
+  loadingCircleRoutes: boolean;
 
   // Load from backend
   loadRoutes: () => Promise<void>;
+  /** Sprint 69 STORY-00538: load friend routes. */
+  loadCircleRoutes: () => Promise<void>;
   // v123: hydrate the FULL route (including points) for a single id.
   // Used by RouteEditor when opening an existing route — the list
   // endpoint omits points for perf, so the in-store route may have
@@ -129,6 +142,9 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
   routes: [],
   activeRouteId: null,
   routesLoadCompleted: false,
+  // Sprint 69 STORY-00538: initial empty until first loadCircleRoutes().
+  circleRoutes: [],
+  loadingCircleRoutes: false,
 
   loadRoutes: async () => {
     // v8-audit (V7-BUG-006): set routesLoadCompleted=true only after
@@ -142,6 +158,46 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     } catch (err) {
       // Don't flag completion on error — orphan reconcile must wait.
       throw err;
+    }
+  },
+
+  // Sprint 69 STORY-00538: load subscribed-friend routes from
+  // GET /api/circle/routes. Wire shape (Sprint 67 STORY-00528):
+  //   { routes: [{ id, user_id, name, description, points, distance_m,
+  //                elevation_gain_m, permission, author_name, ... }] }
+  // author_name is null for Public routes (server-side anonymization).
+  loadCircleRoutes: async () => {
+    set({ loadingCircleRoutes: true });
+    try {
+      const { authenticatedFetch } = await import('../services/apiService');
+      const res = await authenticatedFetch('/api/circle/routes');
+      if (!res.ok) { set({ loadingCircleRoutes: false }); return; }
+      const data = await res.json();
+      const rows: any[] = Array.isArray(data?.routes) ? data.routes : [];
+      // Minimal local shape — these routes are read-only in the UI so we
+      // don't need full Route field coverage. Use the existing remoteToLocal
+      // by importing from routeService.
+      const { default: remoteRoutes } = { default: rows.map((r) => ({
+        id: String(r.id),
+        name: r.name,
+        description: r.description ?? undefined,
+        createdAt: new Date(r.created_at).getTime(),
+        updatedAt: new Date(r.updated_at).getTime(),
+        points: Array.isArray(r.points) ? r.points : (typeof r.points === 'string' ? (() => { try { return JSON.parse(r.points); } catch { return []; } })() : []),
+        waypoints: [],
+        distanceM: r.distance_m,
+        elevationGainM: r.elevation_gain_m,
+        runCount: r.run_count ?? 0,
+        lastRunAt: r.last_run_at ? new Date(r.last_run_at).getTime() : undefined,
+        isActive: false,
+        mutedMarkerIds: [],
+        permission: r.permission === 'personal' || r.permission === 'friend' ? r.permission : undefined,
+        // Author name when friend tier; null on Public per anonymization.
+        sharedBy: r.author_name ?? undefined,
+      })) };
+      set({ circleRoutes: remoteRoutes as Route[], loadingCircleRoutes: false });
+    } catch {
+      set({ loadingCircleRoutes: false });
     }
   },
 
@@ -161,6 +217,9 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       waypoints: routeData.waypoints,
       distance_m: routeData.distanceM,
       elevation_gain_m: routeData.elevationGainM,
+      // Sprint 69 STORY-00535: thread permission to backend POST /api/routes.
+      // Caller (RouteEditorScreen) defaults to 'friend' per v4.U binding.
+      permission: routeData.permission,
     });
     if (!created) return null;
     const route: Route = {

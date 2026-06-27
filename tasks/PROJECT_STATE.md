@@ -1,7 +1,7 @@
 # PROJECT_STATE.md — Cairn
 
 **Status**: IN_PROGRESS
-**Current Sprint**: 68 CLOSED — F2 of Friend System v1. Next: Sprint 69 F3 (Route + Trails).
+**Current Sprint**: 69 CLOSED — F3 of Friend System v1. Next: Sprint 70 F4 (Memory tab).
 **Last Updated**: 2026-06-27
 **Governing Document**: docs/PRD2.md (PRD3.md adds NZ localization layer)
 
@@ -99,3 +99,17 @@
 - Live iPhone device verification — F5 hardening Sprint.
 
 **Friend System next**: Sprint 69 (F3 — Route + Trails), 4 stories per v4 §14.
+
+## Sprint 69 — Friend System v1 / F3 (CLOSED 2026-06-27)
+
+**Sprint Goal**: Extend Friend System visibility model from Marks to Routes + Trails.
+
+4 of 4 stories Done:
+- STORY-00535 — Route create UI visibility toggle (default Friend). RouteEditorScreen + useRouteStore + routeService thread `permission`. v4 §11 no-Public binding satisfied.
+- STORY-00536 — Trails Activities stays Mine-only. Defensive verification — code is already correct, no Friends sub-tab present (v4 §10 binding).
+- STORY-00537 — Trails Flags Mine|Friends sub-tab. New shared ScopeTabBar component. useMarkerStore got `circleMarkers` slice + `loadCircleMarkers()` action. fromBackend now reads `user_id` + `author_name`. **Closes Sprint 68 follow-up** "wire loadCircleMarkers".
+- STORY-00538 — Trails Routes Mine|Friends sub-tab. useRouteStore got `circleRoutes` slice + `loadCircleRoutes()`. RouteSheet gained `readOnly` prop — Friends-tab routes don't show Edit affordance.
+
+**Playwright verified** (web Trails screen): Activities has NO sub-tab; Flags + Routes both have Mine|Friends sub-tabs with correct empty states; Friends scope triggers correct network call (/api/circle/markers + /api/circle/routes). Evidence: `docs/qa/sprint69-evidence/`.
+
+**Friend System progress**: 3/5 F-buckets complete (F1+F2+F3). Sprint 70 (F4 Memory) next — fog UNION render gated on SPIKE-67-1 iPhone live FPS check.

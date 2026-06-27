@@ -12,6 +12,9 @@ export interface RoutePayload {
   waypoints?: Waypoint[];
   distance_m: number;
   elevation_gain_m: number;
+  // Sprint 69 STORY-00535: visibility tier ('personal' | 'friend'). Backend
+  // rejects 'public' from clients via Sprint 67 H1.
+  permission?: 'personal' | 'friend';
 }
 
 export interface RemoteRoute {
@@ -27,6 +30,9 @@ export interface RemoteRoute {
   last_run_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Sprint 67 migration 018 added the column; Sprint 67 STORY-00528 wires
+   *  Route.findByUser / findByIdAndUser to return it. */
+  permission?: 'personal' | 'friend' | 'public';
 }
 
 function remoteToLocal(r: RemoteRoute): Route {
@@ -44,6 +50,11 @@ function remoteToLocal(r: RemoteRoute): Route {
     lastRunAt: r.last_run_at ? new Date(r.last_run_at).getTime() : undefined,
     isActive: false,
     mutedMarkerIds: [],
+    // Sprint 69 STORY-00535: collapse server 'public' → undefined for local
+    // type narrowing (clients should never see Public routes via /api/routes
+    // because that endpoint scopes to the viewer's own; /api/circle/routes
+    // is the only path Public routes traverse — see Story-538).
+    permission: r.permission === 'public' ? undefined : r.permission,
   };
 }
 

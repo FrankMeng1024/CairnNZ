@@ -110,6 +110,11 @@ function fromBackend(row: {
   approximate?: number | boolean | null;
   public_snapshot?: string | null | any;
   created_at: string;
+  /** Sprint 69 STORY-00537: circle endpoint returns user_id (for tier
+   *  computation) and author_name (Friend tier only — Public anonymized
+   *  server-side per v4 row Q). Optional on /api/markers (own) path. */
+  user_id?: number | string;
+  author_name?: string | null;
 }): Marker {
   // v300: backend may return public_snapshot as either a parsed object
   // (mysql2 JSON columns auto-parse) or a JSON string (some drivers /
@@ -130,12 +135,18 @@ function fromBackend(row: {
     lng: row.lng,
     note: row.text || '',
     alt: row.alt ?? undefined,
-    authorId: 'server',
+    // Sprint 69 STORY-00537: prefer real user_id when present (circle
+    // endpoint provides it); fall back to 'server' for /api/markers
+    // own-marker responses which don't echo user_id.
+    authorId: row.user_id != null ? String(row.user_id) : 'server',
     createdAt: new Date(row.created_at).getTime(),
     permission: (row.permission as MarkerPermission) || 'personal',
     synced: true,
     approximate: row.approximate === true || row.approximate === 1 || false,
     publicSnapshot,
+    // Sprint 68 STORY-00532: author display name for Friend-tier marks.
+    // Sprint 67 backend nulls this for Public marks (anonymized).
+    authorName: row.author_name ?? undefined,
   };
 }
 
@@ -143,6 +154,12 @@ interface MarkerState {
   markers: Marker[];
   userId: string | null;
   syncing: boolean;
+  /** Sprint 69 STORY-00537: subscribed-friend friend+public marks from
+   *  GET /api/circle/markers. Separate from `markers` so Mine path stays
+   *  intact; Trails Flags Friends-subtab + Map circle render both read this. */
+  circleMarkers: Marker[];
+  /** Loading flag for circle fetch — UI uses it for spinner state. */
+  loadingCircle: boolean;
   /** v118: persistent AR origin (captured once on first plant per user).
    *  null until first plant. All cairns are positioned in ARKit world
    *  space via (lat, lng) deltas from this origin, so it must NOT change
@@ -161,6 +178,9 @@ interface MarkerState {
   getMarkersForRegion: (regionCode: string) => Marker[];
   hydrate: (userId: string) => Promise<void>;
   loadFromBackend: () => Promise<void>;
+  /** Sprint 69 STORY-00537: load subscribed-friend marks (friend+public
+   *  tiers) from GET /api/circle/markers. Stored in `circleMarkers`. */
+  loadCircleMarkers: () => Promise<void>;
   /** v118: set the AR origin if not yet set. Called from ViroAROverlay
    *  when the first GPS fix arrives in a new AR session AND no origin
    *  exists yet. Subsequent calls are no-ops. */
@@ -174,6 +194,9 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   userId: null,
   syncing: false,
   arOrigin: null,
+  // Sprint 69 STORY-00537: initial empty until first loadCircleMarkers().
+  circleMarkers: [],
+  loadingCircle: false,
 
   addMarker: async (data) => {
     // Optimistic local create
@@ -379,6 +402,26 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       });
     } catch {
       set({ syncing: false });
+    }
+  },
+
+  // Sprint 69 STORY-00537: load subscribed-friend marks from
+  // GET /api/circle/markers. Stored separately from `markers` (which holds
+  // only the viewer's own) so Mine path stays untouched.
+  // Wire shape (Sprint 67 STORY-00528): { markers: [{ id, user_id, type,
+  //   text, lat, lng, alt, permission, approximate, created_at, updated_at,
+  //   author_name }] } — author_name null for Public marks (anonymized).
+  loadCircleMarkers: async () => {
+    set({ loadingCircle: true });
+    try {
+      const res = await authenticatedFetch('/api/circle/markers');
+      if (!res.ok) { set({ loadingCircle: false }); return; }
+      const data = await res.json();
+      const rows: any[] = Array.isArray(data?.markers) ? data.markers : [];
+      const circle: Marker[] = rows.map(fromBackend);
+      set({ circleMarkers: circle, loadingCircle: false });
+    } catch {
+      set({ loadingCircle: false });
     }
   },
 

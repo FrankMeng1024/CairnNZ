@@ -1,6 +1,6 @@
 # 📋 RESUME.md — Cairn Friend System v1 Sprint 67
 
-**Last updated**: 2026-06-27 (Sprint 67 closed; Sprint 68 5/5 COMPLETE)
+**Last updated**: 2026-06-27 (Sprints 67+68+69 all CLOSED — 3/5 F-buckets done)
 **Reason for file**: Survival guide after session clear. Read this FIRST.
 
 ---
@@ -95,7 +95,42 @@ User's 5 binding rules (their words, never violate):
 
 All 7 items Done. Sprint 67 (F1 of F1-F5) is closed.
 
-## 🚀 Sprint 68 (F2 — Mark UI + 交互 + Like/Delete) — COMPLETE 5/5
+## 🚀 Sprint 69 (F3 — Route + Trails) — COMPLETE 4/4
+
+| Story | Status |
+|---|---|
+| STORY-00535 — Route create visibility toggle (default Friend) | ✅ Done |
+| STORY-00536 — Trails Activities stays Mine-only | ✅ Done (verification) |
+| STORY-00537 — Trails Flags Mine\|Friends sub-tab + loadCircleMarkers | ✅ Done |
+| STORY-00538 — Trails Routes Mine\|Friends sub-tab + loadCircleRoutes | ✅ Done |
+
+### Sprint 69 evidence
+- `docs/qa/sprint69-evidence/STORY-00536-activities-no-subtab.png` — Activities has NO sub-tab
+- `docs/qa/sprint69-evidence/STORY-00537-flags-mine-empty.png` — Flags Mine empty state with sub-tab
+- `docs/qa/sprint69-evidence/STORY-00537-flags-friends-empty.png` — Flags Friends empty + `/api/circle/markers` triggered
+- `docs/qa/sprint69-evidence/STORY-00538-routes-friends-empty.png` — Routes Friends empty + `/api/circle/routes` triggered
+
+### Sprint 69 deliverables
+- **Stores**: useMarkerStore + useRouteStore now have `circleMarkers/circleRoutes` slices + `loadCircleMarkers/loadCircleRoutes` actions
+- **fromBackend** in useMarkerStore now reads `user_id` + `author_name` from wire
+- **RoutesScreen**: new shared `ScopeTabBar` (Mine|Friends pill toggle) used in Flags + Routes tabs (NOT Activities)
+- **RouteSheet**: `readOnly` prop — Friends route doesn't expose Edit
+- **RouteEditorScreen**: 2-chip permission toggle (Personal|Friend, default Friend)
+
+### Sprint 69 closes prior follow-up
+- Sprint 68 "wire loadCircleMarkers()" — done in Story-537
+
+## ⏳ Next: Sprint 70 (F4 — Memory tab) — 5 stories per v4 §14
+
+- Story 1: Memory tab Mine|Friends 切换
+- Story 2: 5-friend pick modal (6+ 显示 🔒)
+- Story 3: fog UNION 渲染 (基于 Spike-1 结果) — **iPhone-only verification per SPIKE-67-1**
+- Story 4: Paywall sheet UI (TestFlight only)
+- Story 5: 陌生人 Public mark 模糊 icon 显示
+
+Plus Sprint 71 (F5 — Hardening, 1 sprint): 18 Playwright scenarios green + 真机 Memory tab 验证 + 死代码清理 + perf acceptance + TestFlight 包.
+
+## ✅ Sprint 68 (F2) COMPLETE — 5/5 done
 
 | Story | Status |
 |---|---|
