@@ -32,6 +32,12 @@ interface Props {
   markers: Marker[];
   centerLat: number;
   centerLng: number;
+  /** Sprint 70 STORY-00543: stranger Public marks (from /api/markers/public
+   *  bbox query — not yet wired into Memory; loader is a F5 follow-up). When
+   *  provided, renders blurred non-interactive icons within the standard
+   *  visibility radius (v4 §3 matrix row 4 — "远观模糊 不在 fog 内但在我 500m 周围").
+   *  Tap is a no-op (caller does not pass onSelected). */
+  strangerMarks?: Marker[];
 }
 
 interface Classified {
@@ -45,7 +51,7 @@ type Selection =
   | { kind: 'mystery'; marker: Marker }
   | { kind: 'revealed'; marker: Marker };
 
-export function CairnPinsLayer({ markers, centerLat, centerLng }: Props) {
+export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }: Props) {
   const isExplored = useMemoryStore((s) => s.isExplored);
   // L4 fix (v0.2.6.3): subscribe to geometryVersion so the classified
   // memo re-runs when explored set changes. Previously isExplored was a
@@ -100,6 +106,23 @@ export function CairnPinsLayer({ markers, centerLat, centerLng }: Props) {
           )}
         </PointAnnotation>
       ))}
+      {/* Sprint 70 STORY-00543: stranger Public marks rendered as blurred
+          icons when within visibility radius but outside the viewer's fog
+          (v4 §3 matrix row 4). No onSelected → tap is a no-op. The standard
+          mystery distance gate applies (mysteryMaxDistanceMeters). */}
+      {(strangerMarks ?? []).filter((m) => {
+        if (isExplored(m.lat, m.lng)) return false; // covered by viewer's own fog → use normal pin path
+        const d = haversineM({ lat: centerLat, lng: centerLng }, { lat: m.lat, lng: m.lng });
+        return d <= MysteryVisibilityConfig.mysteryMaxDistanceMeters;
+      }).map((m) => (
+        <PointAnnotation
+          key={`stranger-${m.id}`}
+          id={`stranger-${m.id}`}
+          coordinate={[m.lng, m.lat]}
+        >
+          <StrangerBlurredPin />
+        </PointAnnotation>
+      ))}
       {selection.kind === 'mystery' && (
         <MysteryCairnSheet
           marker={selection.marker}
@@ -135,6 +158,19 @@ function MysteryPin() {
   );
 }
 
+// Sprint 70 STORY-00543: stranger Public mark — visible-but-blurred icon
+// per v4 §3 matrix row 4. Smaller than mystery (24px vs 28px), gray fill,
+// half opacity → reads as "someone left something here but you can't get
+// close enough to know what". No tap surface — caller does not pass
+// onSelected so PointAnnotation drops the event.
+function StrangerBlurredPin() {
+  return (
+    <View style={pinStyles.stranger} pointerEvents="none">
+      <Text style={pinStyles.strangerIcon}>•</Text>
+    </View>
+  );
+}
+
 const pinStyles = StyleSheet.create({
   pin: {
     width: 28, height: 28,
@@ -152,4 +188,14 @@ const pinStyles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   mysteryIcon: { color: MemoryColors.sepia, fontWeight: '600', fontSize: 14 },
+  stranger: {
+    width: 24, height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(140,126,114,0.6)',  // textSecondary @ 60%
+    backgroundColor: 'rgba(180,170,160,0.55)',
+    alignItems: 'center', justifyContent: 'center',
+    opacity: 0.6,
+  },
+  strangerIcon: { color: 'rgba(80,72,64,0.7)', fontWeight: '700', fontSize: 16 },
 });

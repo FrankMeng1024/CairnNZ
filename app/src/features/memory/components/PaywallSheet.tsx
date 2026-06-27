@@ -1,0 +1,147 @@
+/**
+ * PaywallSheet — Friend System v1 / Sprint 70 / STORY-00542
+ *
+ * Shown when the user taps a 6th friend (beyond the
+ * memory_subscription_limit = 5 cap) in MemoryFriendPickModal.
+ *
+ * v1 binding (v4 §7 + §12):
+ *   - TestFlight-only. NO real IAP. Tap "Subscribe" → "Coming soon" toast.
+ *   - App Store public release requires real IAP (deferred to v1.2).
+ *   - Keep $4.99 price in copy so the perceived value is set.
+ *
+ * UX: full-screen sheet with hero image, value props, single CTA.
+ */
+import React from 'react';
+import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity, Alert } from 'react-native';
+import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
+import { Icon } from '../../../components/Icon';
+
+interface Props {
+  visible: boolean;
+  onClose: () => void;
+}
+
+export function PaywallSheet({ visible, onClose }: Props) {
+  const onSubscribe = () => {
+    // v1: NO IAP. v1.2 wires real RevenueCat / StoreKit flow.
+    Alert.alert(
+      'Coming soon',
+      'Memory Pro will be available in the App Store release. For now, you have 5 friend slots.',
+      [{ text: 'OK', onPress: onClose }],
+    );
+  };
+
+  return (
+    <Modal
+      transparent
+      animationType="slide"
+      visible={visible}
+      onRequestClose={onClose}
+      testID="paywall-sheet"
+    >
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+          <TouchableOpacity style={styles.close} onPress={onClose} testID="paywall-close">
+            <Icon name="X" size={20} color={Colors.textSecondary} strokeWidth={2.2} />
+          </TouchableOpacity>
+
+          {/* Hero — sepia gradient circle with sparkle */}
+          <View style={styles.hero}>
+            <View style={styles.heroCircle}>
+              <Icon name="Heart" size={32} color={Colors.primary} strokeWidth={2.2} />
+            </View>
+          </View>
+
+          <Text style={styles.title}>See more of your friends' world</Text>
+          <Text style={styles.subtitle}>
+            You've reached the free tier of 5 friend memories. Upgrade to see all your friends' fog,
+            marks, and routes on your map.
+          </Text>
+
+          <View style={styles.valueList}>
+            <ValueRow icon="Map" text="Unlimited friend memories on your map" />
+            <ValueRow icon="Users" text="Switch between many friends instantly" />
+            <ValueRow icon="Heart" text="Support the makers of Cairn" />
+          </View>
+
+          <View style={styles.priceRow}>
+            <Text style={styles.price}>$4.99</Text>
+            <Text style={styles.priceUnit}>per month</Text>
+          </View>
+
+          <TouchableOpacity style={styles.cta} onPress={onSubscribe} testID="paywall-subscribe">
+            <Text style={styles.ctaText}>Subscribe</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.foot}>Restore purchases · Privacy · Terms</Text>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function ValueRow({ icon, text }: { icon: string; text: string }) {
+  return (
+    <View style={valueRowStyles.row}>
+      <View style={valueRowStyles.bullet}>
+        <Icon name={icon as any} size={14} color={Colors.primary} strokeWidth={2.2} />
+      </View>
+      <Text style={valueRowStyles.text}>{text}</Text>
+    </View>
+  );
+}
+
+const valueRowStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginVertical: Spacing.xs },
+  bullet: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: Colors.primaryBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  text: { fontSize: FontSize.body, color: Colors.textPrimary, flex: 1 },
+});
+
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: Colors.overlayDark,
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.sheet,
+    borderTopRightRadius: Radius.sheet,
+    paddingTop: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xxl,
+    ...Shadow.card,
+  },
+  close: { alignSelf: 'flex-end', padding: Spacing.xs },
+  hero: { alignItems: 'center', marginVertical: Spacing.md },
+  heroCircle: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: Colors.primaryBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  title: { fontSize: FontSize.h1, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
+  subtitle: {
+    fontSize: FontSize.body, color: Colors.textSecondary, textAlign: 'center',
+    lineHeight: 22, marginTop: Spacing.sm, marginBottom: Spacing.lg,
+  },
+  valueList: { marginVertical: Spacing.md },
+  priceRow: {
+    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center',
+    gap: 4, marginTop: Spacing.md,
+  },
+  price: { fontSize: 32, fontWeight: '700', color: Colors.textPrimary },
+  priceUnit: { fontSize: FontSize.body, color: Colors.textSecondary },
+  cta: {
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.button,
+    alignItems: 'center',
+    marginTop: Spacing.lg,
+  },
+  ctaText: { color: '#fff', fontSize: FontSize.body, fontWeight: '700' },
+  foot: { textAlign: 'center', fontSize: FontSize.caption, color: Colors.textMuted, marginTop: Spacing.md },
+});

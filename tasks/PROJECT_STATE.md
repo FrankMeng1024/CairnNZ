@@ -1,7 +1,7 @@
 # PROJECT_STATE.md — Cairn
 
-**Status**: IN_PROGRESS
-**Current Sprint**: 69 CLOSED — F3 of Friend System v1. Next: Sprint 70 F4 (Memory tab).
+**Status**: IN_PROGRESS (v1 implementation complete, iPhone hardening gates pending)
+**Current Sprint**: 70 CLOSED + Sprint 71 SPEC WRITTEN; F5 hardening gated on user iPhone session
 **Last Updated**: 2026-06-27
 **Governing Document**: docs/PRD2.md (PRD3.md adds NZ localization layer)
 
@@ -113,3 +113,29 @@
 **Playwright verified** (web Trails screen): Activities has NO sub-tab; Flags + Routes both have Mine|Friends sub-tabs with correct empty states; Friends scope triggers correct network call (/api/circle/markers + /api/circle/routes). Evidence: `docs/qa/sprint69-evidence/`.
 
 **Friend System progress**: 3/5 F-buckets complete (F1+F2+F3). Sprint 70 (F4 Memory) next — fog UNION render gated on SPIKE-67-1 iPhone live FPS check.
+
+## Sprint 70 — Friend System v1 / F4 (CLOSED 2026-06-27)
+
+**Sprint Goal**: Memory tab fog + subscriptions + paywall — landed every UI surface, fog UNION render deferred to F5/iPhone gate.
+
+4 of 5 stories Done + 1 explicitly Deferred:
+- STORY-00539 — Memory tab Mine|Friends scope toggle in top bar. `useMemoryScopeStore` + `MemoryScopeToggle` component.
+- STORY-00540 — 5-friend pick modal. `useMemorySubscriptionsStore` (wraps Sprint 67 `/api/memory-subscriptions` CRUD). `MemoryFriendPickModal` + FAB visible only in Friends scope.
+- **STORY-00541 — fog UNION render — DEFERRED to F5/Story-546** (iPhone-only per SPIKE-67-1 verdict). Honest disclosure per `feedback_unity_visual_test`.
+- STORY-00542 — Paywall sheet UI. `PaywallSheet` component; Subscribe button → "Coming soon" Alert (NO real IAP per v4 §12).
+- STORY-00543 — Stranger Public mark blurred icon. `StrangerBlurredPin` in CairnPinsLayer; 24px gray opacity 0.6, no tap handler.
+
+Type-check clean across all 5 modified files. Sprint 70 follow-up explicit: wire `loadCircleFog()` + `loadStrangerPublicBbox()` in F5 alongside iPhone gate.
+
+## Sprint 71 — Friend System v1 / F5 (SPEC WRITTEN, EXECUTION QUEUED 2026-06-27)
+
+**Sprint Goal**: iPhone-only hardening — fog UNION FPS gate, real-device visual review, TestFlight build, Virtual User acceptance.
+
+5 stories written:
+- STORY-00544 — 18 Playwright scenarios (web subset). **Done (spec written)**: `app/tests/sprint71/friend-system-v4-scenarios.spec.ts` + `playwright.config.ts`. 11/18 scenarios web-runnable; 5 deferred to iPhone (Story-545); 2 cross-referenced to Sprint 67 (Story-528 integration test + migration 018 trigger).
+- STORY-00545 — iPhone real-device visual review. **Queued for user iPhone session.**
+- STORY-00546 — fog UNION live FPS + Story-541 impl. **Queued; SPIKE-67-1 gate.**
+- STORY-00547 — 5-friend UNION < 3s perf acceptance. **Queued.**
+- STORY-00548 — TestFlight build + Virtual User score ≥ 9.5/10 → v1 COMPLETE. **Queued.**
+
+**Friend System v1 status**: All implementation Sprints complete (67/68/69/70 + 71 spec). v1 closes when user runs the iPhone-gated F5 stories and Virtual User scores ≥ 9.5/10.

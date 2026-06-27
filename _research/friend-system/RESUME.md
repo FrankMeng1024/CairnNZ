@@ -1,6 +1,6 @@
 # 📋 RESUME.md — Cairn Friend System v1 Sprint 67
 
-**Last updated**: 2026-06-27 (Sprints 67+68+69 all CLOSED — 3/5 F-buckets done)
+**Last updated**: 2026-06-27 (Sprints 67/68/69/70/71 all written — F1-F5 complete in this session; iPhone gates queued)
 **Reason for file**: Survival guide after session clear. Read this FIRST.
 
 ---
@@ -94,6 +94,34 @@ User's 5 binding rules (their words, never violate):
 ## ⏳ Pending in Sprint 67 (0 of 7) — SPRINT COMPLETE
 
 All 7 items Done. Sprint 67 (F1 of F1-F5) is closed.
+
+## 🚀 Sprint 71 (F5 — Hardening) — Spec WRITTEN; iPhone gates queued for user
+
+| Story | Status |
+|---|---|
+| STORY-00544 — 18 Playwright scenarios (web subset) | ✅ Spec written (`app/tests/sprint71/friend-system-v4-scenarios.spec.ts`) |
+| STORY-00545 — iPhone real-device visual review | ⏳ User-iPhone gated |
+| STORY-00546 — fog UNION live FPS + Story-541 impl | ⏳ User-iPhone gated (SPIKE-67-1) |
+| STORY-00547 — 5-friend UNION < 3s perf acceptance | ⏳ User-iPhone gated |
+| STORY-00548 — TestFlight build + Virtual User score | ⏳ User-iPhone + Mac gated |
+
+### How to run when user has iPhone session
+1. `cd app && npm i -D @playwright/test && npx playwright install chromium`
+2. Terminal 1: `npx expo start --web --port 8081`
+3. Terminal 2: `npx playwright test tests/sprint71` — verifies 11/18 scenarios
+4. iPhone steps: see `tasks/jira/sprint71/STORY-00545.md` + `STORY-00546.md` + `STORY-00547.md`
+
+## 🚀 Sprint 70 (F4 — Memory tab) — CLOSED 4/5 (Story-541 explicitly deferred)
+
+| Story | Status |
+|---|---|
+| STORY-00539 — Memory tab Mine\|Friends toggle | ✅ Done |
+| STORY-00540 — 5-friend pick modal | ✅ Done |
+| STORY-00541 — fog UNION render | ⏸ DEFERRED to F5/Story-546 (iPhone-only) |
+| STORY-00542 — Paywall sheet UI (TestFlight only) | ✅ Done |
+| STORY-00543 — Stranger blurred Public mark icon | ✅ Done (visual layer; loader deferred to F5) |
+
+Sprint 70 deliverables: `useMemoryScopeStore`, `MemoryScopeToggle`, `useMemorySubscriptionsStore`, `MemoryFriendPickModal`, `PaywallSheet`, `StrangerBlurredPin`. MemoryScreen mount: scope toggle in top bar, FAB + modals at bottom, type-checked clean.
 
 ## 🚀 Sprint 69 (F3 — Route + Trails) — COMPLETE 4/4
 

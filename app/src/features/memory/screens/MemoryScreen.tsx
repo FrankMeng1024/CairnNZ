@@ -24,9 +24,13 @@ import * as Location from 'expo-location';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
+import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap } from '../components/MemoryMap';
+import { MemoryScopeToggle } from '../components/MemoryScopeToggle';
+import { MemoryFriendPickModal } from '../components/MemoryFriendPickModal';
+import { PaywallSheet } from '../components/PaywallSheet';
 import { BackButton } from '../../../components/BackButton';
 import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
@@ -112,6 +116,10 @@ export function MemoryScreen() {
   const [loadingState, setLoadingState] = useState<'loading' | 'ready' | 'slow'>('loading');
   const [loadingStage, setLoadingStage] = useState<0 | 1 | 2>(0); // 0..2s / 2..5s / 5s+
   const [mapReady, setMapReady] = useState(false);
+  // Sprint 70 STORY-00540 + 542: 5-friend pick modal + paywall when 6+.
+  const [pickModalOpen, setPickModalOpen] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const memoryScope = useMemoryScopeStore((s) => s.scope);
   const [fogReady, setFogReady] = useState(false);
   // v363: user-dismissed banner state. When user taps the X close on
   // the slow-network banner, hide it for the rest of this Memory tab
@@ -566,6 +574,10 @@ export function MemoryScreen() {
           so it doesn't intrude into the Dynamic Island area. */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <BackButton variant="pill" onPress={() => nav.goBack()} />
+        {/* Sprint 70 STORY-00539: Memory tab Mine|Friends scope toggle.
+            Friends view will display subscribed-friend fog UNION + marks
+            (Story-541 deferred to F5 iPhone gate per SPIKE-67-1). */}
+        <MemoryScopeToggle />
       </View>
 
       {/* v352 zoom-flicker fix: render MemoryMap with persistentCoord
@@ -734,6 +746,29 @@ export function MemoryScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Sprint 70 STORY-00540 + 542: friend-pick + paywall.
+          FAB visible only when Friends scope is active. */}
+      {memoryScope === 'friends' && (
+        <TouchableOpacity
+          style={styles.friendPickFab}
+          onPress={() => setPickModalOpen(true)}
+          activeOpacity={0.85}
+          testID="memory-pick-friends-fab"
+        >
+          <Icon name="Users" size={18} color="#fff" strokeWidth={2.2} />
+          <Text style={styles.friendPickFabText}>Pick friends</Text>
+        </TouchableOpacity>
+      )}
+      <MemoryFriendPickModal
+        visible={pickModalOpen}
+        onClose={() => setPickModalOpen(false)}
+        onCapHit={() => {
+          setPickModalOpen(false);
+          setPaywallOpen(true);
+        }}
+      />
+      <PaywallSheet visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
     </View>
   );
 }
@@ -749,6 +784,9 @@ const styles = StyleSheet.create({
     zIndex: 10,
     flexDirection: 'row',
     alignItems: 'flex-start',
+    // Sprint 70 STORY-00539: BackButton on left, MemoryScopeToggle pushed
+    // to right via space-between. Both pill-shaped so they balance visually.
+    justifyContent: 'space-between',
   },
   waitingForGps: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   waitingTitle: { fontSize: 16, fontWeight: '500', color: MemoryColors.sepiaDeep },
@@ -770,6 +808,26 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 }, elevation: 4,
     borderWidth: 1, borderColor: '#e8dfc8',
+  },
+  // Sprint 70 STORY-00540: pick-friends FAB. Pill-shaped, sits above the
+  // recenter button on the same right edge. Friend scope only.
+  friendPickFab: {
+    position: 'absolute',
+    right: 16, bottom: 170,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: Colors.primary,
+    shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 }, elevation: 6,
+  },
+  friendPickFabText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   hintBackdrop: {
     flex: 1, backgroundColor: 'rgba(20,20,20,0.55)',
