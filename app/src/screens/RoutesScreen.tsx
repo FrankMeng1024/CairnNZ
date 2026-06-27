@@ -572,12 +572,28 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
         </View>
       ) : null}
       {scope === 'friends' && !loadingCircleRoutes && circleRoutes.length === 0 ? (
-        <EmptyState
-          icon="Users"
-          title="No routes from your friends yet"
-          hint="Subscribe to a friend in Memory tab to see their routes here."
-          illustration={<EmptyRoutes size={160} />}
-        />
+        <View style={styles.emptyHero}>
+          <View style={{ marginBottom: Spacing.md }}>
+            <EmptyRoutes size={160} />
+          </View>
+          <View style={styles.emptyHeroIcon}>
+            <Icon name="Users" size={40} color={Colors.primary} strokeWidth={1.5} />
+          </View>
+          <Text style={styles.emptyHeroTitle}>No routes from your friends yet</Text>
+          <Text style={styles.emptyHeroBody}>
+            Subscribe to a friend in the{'\n'}
+            <Text style={{ fontWeight: '700', color: Colors.primary }}>Memory</Text> tab to see their routes here.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyHeroCta}
+            activeOpacity={0.85}
+            onPress={() => nav.navigate('Friends')}
+            testID="routes-friends-empty-friends-cta"
+          >
+            <Icon name="UserPlus" size={16} color="#fff" strokeWidth={2} />
+            <Text style={styles.emptyHeroCtaText}>Find friends</Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
       {(scope === 'mine' || (scope === 'friends' && circleRoutes.length > 0)) && (
         <>
@@ -611,6 +627,9 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
              they exist but the current filter/search hides them, just say so. */
           routes.length === 0 ? (
             <View style={styles.emptyHero}>
+              <View style={{ marginBottom: Spacing.md }}>
+                <EmptyRoutes size={160} />
+              </View>
               <View style={styles.emptyHeroIcon}>
                 <Icon name="Route" size={40} color={Colors.primary} strokeWidth={1.5} />
               </View>
@@ -1008,7 +1027,32 @@ function FlagsTab() {
     return (
       <View style={{ flex: 1 }}>
         <ScopeTabBar scope={scope} onChange={setScope} />
-        <EmptyState icon="Flag" title="No flags planted yet" hint="Leave your first mark when you find something worth noting." illustration={<EmptyMarkers size={160} />} />
+        {/* UX-G fix (v372→v373): match the RoutesTab empty state — illustration
+            + hero copy + 'Plant a new mark' CTA navigating to the Plant flow.
+            Pre-fix the Flags-Mine empty state was a passive copy block with
+            no actionable affordance. */}
+        <View style={styles.emptyHero}>
+          <View style={{ marginBottom: Spacing.md }}>
+            <EmptyMarkers size={160} />
+          </View>
+          <View style={styles.emptyHeroIcon}>
+            <Icon name="Flag" size={40} color={Colors.primary} strokeWidth={1.5} />
+          </View>
+          <Text style={styles.emptyHeroTitle}>No flags planted yet</Text>
+          <Text style={styles.emptyHeroBody}>
+            Leave a mark when you find something worth noting —{'\n'}
+            a viewpoint, a junction, a hut.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyHeroCta}
+            activeOpacity={0.85}
+            onPress={() => nav.navigate('Plant')}
+            testID="flags-mine-empty-plant-cta"
+          >
+            <Icon name="Plus" size={16} color="#fff" strokeWidth={2} />
+            <Text style={styles.emptyHeroCtaText}>Plant a new mark</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -1025,12 +1069,28 @@ function FlagsTab() {
         </View>
       ) : null}
       {scope === 'friends' && !loadingCircle && circleMarkers.length === 0 ? (
-        <EmptyState
-          icon="Users"
-          title="No marks from your friends yet"
-          hint="Subscribe to a friend in Memory tab to see their marks here."
-          illustration={<EmptyMarkers size={160} />}
-        />
+        <View style={styles.emptyHero}>
+          <View style={{ marginBottom: Spacing.md }}>
+            <EmptyMarkers size={160} />
+          </View>
+          <View style={styles.emptyHeroIcon}>
+            <Icon name="Users" size={40} color={Colors.primary} strokeWidth={1.5} />
+          </View>
+          <Text style={styles.emptyHeroTitle}>No marks from your friends yet</Text>
+          <Text style={styles.emptyHeroBody}>
+            Subscribe to a friend in the{'\n'}
+            <Text style={{ fontWeight: '700', color: Colors.primary }}>Memory</Text> tab to see their marks here.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyHeroCta}
+            activeOpacity={0.85}
+            onPress={() => nav.navigate('Friends')}
+            testID="flags-friends-empty-friends-cta"
+          >
+            <Icon name="UserPlus" size={16} color="#fff" strokeWidth={2} />
+            <Text style={styles.emptyHeroCtaText}>Find friends</Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
 
       {(scope === 'mine' || (scope === 'friends' && circleMarkers.length > 0)) && (

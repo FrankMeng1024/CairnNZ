@@ -8,7 +8,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Switch, Animated, ActivityIndicator,
+  TextInput, Switch, Animated, Easing, ActivityIndicator,
   KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -145,41 +145,41 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
   const [addState, setAddState] = useState<AddState>('idle');
   const successEmail = useRef('');
 
-  // BUG-A fix (v371 post-OTA UX): smooth slide-up + backdrop fade for
-  // the Add Friend sheet. Pre-fix the sheet appeared instantly, which
-  // felt jarring against iOS conventions. Now spring-eases in over
-  // ~280ms and fades the backdrop in parallel.
+  // UX-A fix (v372→v373): match Hiking choose-a-route sheet animation
+  // (Animated.timing + Easing.out(Easing.cubic), 280ms slide, 220ms
+  // backdrop). Spring caused subtle bounce that read as "jarring".
   const slideAnim = useRef(new Animated.Value(400)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.spring(slideAnim, {
+      Animated.timing(slideAnim, {
         toValue: 0,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-        damping: 18,
-        stiffness: 220,
-        mass: 0.8,
       }),
       Animated.timing(backdropAnim, {
         toValue: 1,
         duration: 220,
+        easing: Easing.out(Easing.ease),
         useNativeDriver: true,
       }),
     ]).start();
   }, []);
 
   const dismiss = () => {
-    // Animate out, then call onDismiss so parent removes the component.
     Animated.parallel([
       Animated.timing(slideAnim, {
         toValue: 400,
-        duration: 200,
+        duration: 220,
+        easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.timing(backdropAnim, {
         toValue: 0,
         duration: 200,
+        easing: Easing.in(Easing.ease),
         useNativeDriver: true,
       }),
     ]).start(() => onDismiss());
@@ -438,7 +438,7 @@ export function FriendsScreen() {
         <BackButton variant="pill" onPress={() => nav.goBack()} />
         <Text style={styles.topTitle}>Friends</Text>
         <PressBtn style={styles.addTopBtn} onPress={() => setShowAdd(true)} scaleTo={0.94}>
-          <Icon name="UserPlus" size={14} color="#fff" strokeWidth={2} />
+          <Icon name="UserPlus" size={12} color="#fff" strokeWidth={2.2} />
           <Text style={styles.addTopBtnText}>Add</Text>
         </PressBtn>
       </View>
@@ -627,11 +627,17 @@ const styles = StyleSheet.create({
     fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary,
   },
   addTopBtn: {
+    // UX-H fix (v372→v373): match BackButton pill dimensions and visual
+    // weight. Pre-fix Add was a heavier solid-primary pill, taller and
+    // bolder than Back; now mirrors Back's pill: same paddingVertical=7,
+    // FontSize.small, fontWeight=600, but kept solid primary for the
+    // "primary action" affordance. Icon size also reduced 14 -> 12 to
+    // match Back's chevron weight.
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: Colors.primary, borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.md, paddingVertical: 6,
+    paddingHorizontal: Spacing.md, paddingVertical: 7,
   },
-  addTopBtnText: { fontSize: FontSize.small, fontWeight: '700', color: '#fff' },
+  addTopBtnText: { fontSize: FontSize.small, fontWeight: '600', color: '#fff' },
 
   shareBannerRow: {
     paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm,
@@ -768,9 +774,12 @@ const cardStyles = StyleSheet.create({
 const sheetStyles = StyleSheet.create({
   backdrop: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    // Cream tint backdrop (Colors.overlayDark — name kept for compat;
-    // value is no longer dark). Sheet still reads as elevated via shadow.
-    backgroundColor: Colors.overlayDark,
+    // UX-A fix (v372→v373): match Hiking choose-a-route backdrop —
+    // soft dark layer (rgba(0,0,0,0.35)) instead of the cream-tint
+    // overlayDark token. The cream tint reads as "white veil" which
+    // user reported as jarring; the dark layer reads as conventional
+    // modal scrim.
+    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'flex-end',
   },
   backdropTouch: {

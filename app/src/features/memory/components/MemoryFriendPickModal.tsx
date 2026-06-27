@@ -8,9 +8,18 @@
  *
  * v4 §1 row M: cap = users.memory_subscription_limit (default 5). Server
  * trigger enforces; client shows 🔒 on rows beyond the cap.
+ *
+ * v372→v373 UX overhaul (UX-C/D/E):
+ *   - Title copy: 'See friends on your map' → 'Show friends on your map'
+ *     ('Show' is more direct — this is a control, not a wish).
+ *   - Backdrop: cream-tint overlayDark → 'rgba(0,0,0,0.35)' soft-dark.
+ *     Matches Hiking choose-a-route convention.
+ *   - Animation: Modal's built-in animationType='slide' replaced with
+ *     custom Animated.timing + Easing.out(Easing.cubic) 280ms + parallel
+ *     backdrop fade. Same easing as Hiking route picker.
  */
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useFriendStore } from '../../../store/useFriendStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
@@ -34,9 +43,50 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
   const unsubscribe = useMemorySubscriptionsStore((s) => s.unsubscribe);
   const isSubscribed = useMemorySubscriptionsStore((s) => s.isSubscribed);
 
+  // UX-E fix: Animated values for smooth slide + backdrop fade matching
+  // Hiking choose-a-route. Mount Modal in 'fade' mode (instant) and own
+  // the slide via our Animated.View so we control easing precisely.
+  const slideAnim = useRef(new Animated.Value(400)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    if (visible) void load();
+    if (visible) {
+      void load();
+      slideAnim.setValue(400);
+      backdropAnim.setValue(0);
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
   }, [visible]);
+
+  const dismiss = () => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 400,
+        duration: 220,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start(() => onClose());
+  };
 
   const atCap = subs.length >= limit;
 
@@ -59,21 +109,24 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
   return (
     <Modal
       transparent
-      animationType="slide"
+      animationType="none"
       visible={visible}
-      onRequestClose={onClose}
+      onRequestClose={dismiss}
       testID="memory-friend-pick-modal"
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+      <Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
+        <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={dismiss} activeOpacity={1} />
+        <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
+          {/* Handle */}
+          <View style={styles.handle} />
           <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>See friends on your map</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>Show friends on your map</Text>
               <Text style={styles.subtitle}>
-                Pick up to {limit}. Currently subscribed: {subs.length} / {limit}.
+                {subs.length} of {limit} picked
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} testID="memory-friend-pick-close" style={styles.close}>
+            <TouchableOpacity onPress={dismiss} testID="memory-friend-pick-close" style={styles.close}>
               <Icon name="X" size={18} color={Colors.textSecondary} strokeWidth={2.2} />
             </TouchableOpacity>
           </View>
@@ -114,8 +167,8 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
               ItemSeparatorComponent={() => <View style={styles.sep} />}
             />
           )}
-        </Pressable>
-      </Pressable>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -123,18 +176,35 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: Colors.overlayDark,
+    // UX-D fix (v372→v373): soft-dark backdrop matches Hiking choose-a-
+    // route convention. Replaces cream-tint Colors.overlayDark which
+    // read as "white veil".
+    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: Colors.surface,
     borderTopLeftRadius: Radius.sheet,
     borderTopRightRadius: Radius.sheet,
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.sm,
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
     maxHeight: '70%',
-    ...Shadow.card,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  // Drag handle pattern matches Hiking route picker.
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.md,
   },
   header: {
     flexDirection: 'row',

@@ -580,11 +580,12 @@ export function MemoryScreen() {
           so it doesn't intrude into the Dynamic Island area. */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <BackButton variant="pill" onPress={() => nav.goBack()} />
-        {/* BUG-D fix (v371 post-OTA UX): scope toggle stays right-side;
-            Pick friends entry moved from a bottom-right FAB (occluded the
-            map) to a top-right icon button next to the toggle. Only
-            visible in Friends scope. */}
+        {/* UX-B fix (v372→v373): Pick friends icon moved to AFTER the
+            scope toggle (right side of Friends pill) so it visually pairs
+            with the Friends segment. Pre-fix order [icon][Mine|Friends]
+            put Mine between the icon and Friends — reads as disconnected. */}
         <View style={styles.topRightCluster}>
+          <MemoryScopeToggle />
           {memoryScope === 'friends' ? (
             <TouchableOpacity
               style={styles.topPickBtn}
@@ -595,7 +596,6 @@ export function MemoryScreen() {
               <Icon name="Users" size={16} color={Colors.primary} strokeWidth={2.2} />
             </TouchableOpacity>
           ) : null}
-          <MemoryScopeToggle />
         </View>
       </View>
 
