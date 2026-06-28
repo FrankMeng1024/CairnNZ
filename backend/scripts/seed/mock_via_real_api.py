@@ -57,57 +57,70 @@ ACCOUNTS = [
 # Hand-pick a handful of way-corners; Mapbox snaps them to real road geometry.
 
 WALKING_LOOPS = {
-    19: [  # Alice — small north loop
-        (31.23317, 121.43138),
-        (31.23300, 121.43450),
-        (31.23150, 121.43580),
-        (31.23030, 121.43509),
-        (31.23070, 121.43230),
-        (31.23317, 121.43138),  # close loop
+    # All coordinates pulled from Mapbox tilequery on actual walkable roads
+    # near user's home (康定路/延平路/武定路/胶州路/万春街/乌鲁木齐北路).
+    # These will snap reliably because every waypoint already sits ON a road.
+    19: [  # Alice — north loop on 康定路 + 武定路
+        (31.23249, 121.43514),  # 康定路
+        (31.23279, 121.43359),  # 康定路 west
+        (31.23246, 121.43191),  # 康定路 西头
+        (31.23144, 121.43152),  # 万春街
+        (31.23128, 121.43151),  # 万春街南
+        (31.23046, 121.43432),  # 武定路
+        (31.23117, 121.43621),  # 武定路东
+        (31.23144, 121.43598),  # 延平路
+        (31.23249, 121.43514),  # close loop
     ],
-    20: [  # Bob — west arc
-        (31.23300, 121.43200),
-        (31.23150, 121.43150),
-        (31.23000, 121.43300),
-        (31.23100, 121.43500),
-        (31.23300, 121.43450),
+    20: [  # Bob — east arc on 延平路 + 胶州路
+        (31.23087, 121.43646),  # 延平路东
+        (31.22994, 121.43721),  # 延平路东
+        (31.22983, 121.43729),  # 胶州路273弄
+        (31.23081, 121.43721),  # 胶州路319弄
+        (31.23144, 121.43689),  # service
+        (31.23087, 121.43646),  # close
     ],
     21: [  # Carol — short east stretch
-        (31.23200, 121.43500),
-        (31.23150, 121.43600),
-        (31.23080, 121.43580),
+        (31.23117, 121.43621),
+        (31.23144, 121.43598),
+        (31.23087, 121.43646),
     ],
-    23: [  # LDY (rich) — bigger loop covering everything
-        (31.23317, 121.43138),
-        (31.23380, 121.43200),
-        (31.23400, 121.43500),
-        (31.23250, 121.43620),
-        (31.23030, 121.43580),
-        (31.22950, 121.43400),
-        (31.23050, 121.43250),
-        (31.23200, 121.43180),
-        (31.23317, 121.43138),
+    23: [  # LDY (rich) — bigger loop covering most streets
+        (31.23249, 121.43514),  # 康定路
+        (31.23279, 121.43359),
+        (31.23246, 121.43191),
+        (31.23144, 121.43152),
+        (31.23046, 121.43432),  # 武定路
+        (31.22960, 121.43462),  # service
+        (31.22994, 121.43721),  # 延平路东
+        (31.23081, 121.43721),  # 胶州路319弄
+        (31.23144, 121.43689),
+        (31.23087, 121.43646),  # 延平路
+        (31.23144, 121.43598),
+        (31.23249, 121.43514),  # close
     ],
-    24: [  # Eve — south crescent
-        (31.23000, 121.43300),
-        (31.22950, 121.43450),
-        (31.22980, 121.43600),
-        (31.23080, 121.43580),
+    24: [  # Eve — south crescent on service+乌鲁木齐北路
+        (31.22960, 121.43462),  # service
+        (31.22892, 121.43201),  # 武定西路
+        (31.22813, 121.43481),  # service
+        (31.22725, 121.43641),  # 乌鲁木齐北路
+        (31.22930, 121.43721),  # service
+        (31.22960, 121.43462),  # close
     ],
-    25: [  # Stranger 1 — east of LDY
-        (31.23200, 121.43580),
-        (31.23150, 121.43620),
-        (31.23080, 121.43580),
+    25: [  # Stranger 1 — 胶州路 short
+        (31.23081, 121.43721),
+        (31.22983, 121.43729),
+        (31.22994, 121.43721),
     ],
     26: [  # Stranger 2 — south-west
-        (31.23000, 121.43200),
-        (31.22950, 121.43300),
-        (31.22950, 121.43400),
+        (31.22892, 121.43201),
+        (31.22813, 121.43481),
+        (31.22960, 121.43462),
     ],
-    27: [  # Stranger 3 — north spike
-        (31.23380, 121.43250),
-        (31.23420, 121.43400),
-        (31.23380, 121.43550),
+    27: [  # Stranger 3 — north spike on 康定路
+        (31.23279, 121.43359),
+        (31.23262, 121.43311),
+        (31.23281, 121.43302),
+        (31.23249, 121.43514),
     ],
 }
 
@@ -180,9 +193,13 @@ def map_match(waypoints):
         return waypoints
     # Mapbox expects lng,lat order
     coord_str = ";".join(f"{lng:.6f},{lat:.6f}" for lat, lng in waypoints)
+    # 25m search radius per waypoint = tolerates GPS jitter + lets us
+    # snap to nearest walking edge even when coord isn't on the centreline.
+    radiuses = ";".join("25" for _ in waypoints)
     url = (
         f"https://api.mapbox.com/matching/v5/mapbox/walking/{coord_str}"
-        f"?geometries=geojson&overview=full&access_token={MAPBOX_TOKEN}"
+        f"?geometries=geojson&overview=full&radiuses={radiuses}"
+        f"&access_token={MAPBOX_TOKEN}"
     )
     req = urllib.request.Request(url)
     try:
@@ -253,7 +270,10 @@ def wipe_user_data(token, uid):
     # delete sessions
     s, body = http_get(f"{BACKEND}/api/sessions", headers=h)
     if s == 200:
-        sessions = body.get("sessions", body if isinstance(body, list) else [])
+        if isinstance(body, list):
+            sessions = body
+        else:
+            sessions = body.get("sessions", [])
         for sess in sessions:
             sid = sess.get("id")
             if sid:
@@ -261,7 +281,10 @@ def wipe_user_data(token, uid):
     # delete markers
     s, body = http_get(f"{BACKEND}/api/markers", headers=h)
     if s == 200:
-        markers = body.get("markers", body if isinstance(body, list) else [])
+        if isinstance(body, list):
+            markers = body
+        else:
+            markers = body.get("markers", [])
         for m in markers:
             mid = m.get("id")
             if mid:
@@ -390,7 +413,7 @@ def main():
         # Snap loop to road
         loop = WALKING_LOOPS[uid]
         snapped = map_match(loop)
-        print(f"  snapped {len(loop)} waypoints → {len(snapped)} road-aligned points")
+        print(f"  snapped {len(loop)} waypoints -> {len(snapped)} road-aligned points")
 
         # Densify
         dense = densify(snapped, spacing_m=15)
