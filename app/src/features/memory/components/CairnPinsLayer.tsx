@@ -209,12 +209,47 @@ const CREST_W = 20;
 const CREST_H = 16;
 const CREST_TOP_OFFSET = -2;
 
+// v383-exp: dedupe layout logs — only log first occurrence per (tier,type,part).
+// Without this, every pan/zoom re-renders dozens of pins and floods aliyun.
+const _v383LayoutLogged = new Set<string>();
+
 interface PinCommon { tier: Tier; }
 
 export function CairnPin({ tier, type }: PinCommon & { type: string }) {
   const enamel = TYPE_ENAMEL[type] || TYPE_ENAMEL.cairn;
   const tierColour = tier === 'self' ? TIER_GOLD : tier === 'friend' ? TIER_GREEN : TIER_SILVER;
   const tierGlow = tier === 'self' ? TIER_GLOW_GOLD : tier === 'friend' ? TIER_GLOW_GREEN : TIER_GLOW_SILVER;
+
+  // v383-exp: log actual rendered dimensions on real device so we can
+  // diagnose whether the user's "皇冠在 圆没了" report is:
+  //   - iOS PointAnnotation clipping (core height < expected 44)
+  //   - layout failure (core height = 0)
+  //   - shadow bleed / z-order (sizes match but visually hidden)
+  // Per feedback_review_loop_dynamic.md — real-device data, not subagent
+  // text reasoning. Logs land in aliyun debug_snapshots via appLog.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { log } = require('../../../services/appLog');
+  const onParentLayout = (e: any) => {
+    const k = `parent|${tier}|${type}`;
+    if (_v383LayoutLogged.has(k)) return;
+    _v383LayoutLogged.add(k);
+    const { width, height, x, y } = e.nativeEvent.layout;
+    log('v383.pin_parent_layout', { tier, type, width, height, x, y, expected_w: PIN_SIZE, expected_h: PIN_SIZE + CREST_H + 4 });
+  };
+  const onCrestLayout = (e: any) => {
+    const k = `crest|${tier}|${type}`;
+    if (_v383LayoutLogged.has(k)) return;
+    _v383LayoutLogged.add(k);
+    const { width, height, x, y } = e.nativeEvent.layout;
+    log('v383.pin_crest_layout', { tier, type, width, height, x, y, expected_w: CREST_W, expected_h: CREST_H });
+  };
+  const onCoreLayout = (e: any) => {
+    const k = `core|${tier}|${type}`;
+    if (_v383LayoutLogged.has(k)) return;
+    _v383LayoutLogged.add(k);
+    const { width, height, x, y } = e.nativeEvent.layout;
+    log('v383.pin_core_layout', { tier, type, width, height, x, y, expected_w: CORE_SIZE, expected_h: CORE_SIZE });
+  };
 
   // v381 fix: crest must live INSIDE parent View bounds. Mapbox PointAnnotation
   // on iOS clips children to the View's frame. Pre-fix the crest was at
@@ -223,13 +258,19 @@ export function CairnPin({ tier, type }: PinCommon & { type: string }) {
   // core sits below it. Total height 60. Container is centred on the marker
   // anchor point (PointAnnotation anchors at centre of View by default).
   return (
-    <View style={{ width: PIN_SIZE, height: PIN_SIZE + CREST_H + 4, alignItems: 'center' }}>
+    <View
+      onLayout={onParentLayout}
+      style={{ width: PIN_SIZE, height: PIN_SIZE + CREST_H + 4, alignItems: 'center' }}
+    >
       {/* Crest — drawn first (top of column), explicit width/height (RN-svg requires) */}
-      <Svg width={CREST_W} height={CREST_H} viewBox="0 0 18 14" style={{ marginBottom: 2 }}>
-        <Crest tier={tier} colour={tierColour} />
-      </Svg>
+      <View onLayout={onCrestLayout} style={{ width: CREST_W, height: CREST_H, marginBottom: 2 }}>
+        <Svg width={CREST_W} height={CREST_H} viewBox="0 0 18 14">
+          <Crest tier={tier} colour={tierColour} />
+        </Svg>
+      </View>
       {/* Core medallion */}
       <View
+        onLayout={onCoreLayout}
         style={{
           width: CORE_SIZE,
           height: CORE_SIZE,

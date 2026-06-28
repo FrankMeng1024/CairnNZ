@@ -18,6 +18,13 @@ interface MapboxAdapter {
   FillLayer: any;
   ShapeSource: any;
   CircleLayer: any;
+  // v383: SymbolLayer + Images + Image needed for sprite-driven pin rendering
+  // with zoom-responsive iconSize. Images supports children (Mapbox.Image
+  // wrapping a RN View tree) so sprites render via OTA-only JS — no native
+  // PNG asset shipped, no eas build required.
+  SymbolLayer: any;
+  Images: any;
+  Image: any;
   available: boolean;
 }
 
@@ -41,7 +48,7 @@ export function getMapbox(): MapboxAdapter {
       console.warn('[mapboxAdapter] web shim load failed', e);
       cached = makeUnavailable();
     }
-    return cached;
+    return cached!;
   }
   try {
     const m = require('@rnmapbox/maps');
@@ -54,6 +61,9 @@ export function getMapbox(): MapboxAdapter {
       FillLayer: m.FillLayer,
       ShapeSource: m.ShapeSource,
       CircleLayer: m.CircleLayer,
+      SymbolLayer: m.SymbolLayer,
+      Images: m.Images,
+      Image: m.Image,
       available: true,
     };
   } catch {
@@ -72,6 +82,9 @@ function makeUnavailable(): MapboxAdapter {
     FillLayer: null,
     ShapeSource: null,
     CircleLayer: null,
+    SymbolLayer: null,
+    Images: null,
+    Image: null,
     available: false,
   };
 }

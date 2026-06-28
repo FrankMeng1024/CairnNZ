@@ -392,6 +392,13 @@ export function makeWebMapboxAdapter() {
     LineLayer,
     FillLayer,
     ShapeSource,
+    // v383: web doesn't need sprite-rendering — Memory map web is
+    // playwright-only and uses PointAnnotation. Stub the new exports
+    // so the TS interface is satisfied; consumers must check truthy.
+    CircleLayer: null,
+    SymbolLayer: null,
+    Images: null,
+    Image: null,
     available: true,
   };
 }
