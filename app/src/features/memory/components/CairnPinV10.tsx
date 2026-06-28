@@ -208,23 +208,35 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
   const tierColour = tier === 'self' ? TIER_GOLD : tier === 'friend' ? TIER_GREEN : TIER_SILVER;
   const tierGlow = tier === 'self' ? TIER_GLOW_GOLD : tier === 'friend' ? TIER_GLOW_GREEN : TIER_GLOW_SILVER;
 
-  // Crest centred horizontally over core. Core sits below with overlap.
-  const crestLeft = (f.width - f.crestW) / 2;
-  const coreLeft = (f.width - f.core) / 2;
-  // Crest top: -2 means visual top sits 2px above core's top, but absolute
-  // within the parent box. crestVisibleAboveCore = crestH - crestOverlap.
-  const crestTop = 0;
-  // Core sits below crest's non-overlapping portion
-  const coreTop = f.crestH - f.crestOverlap;
+  // v383 review (real-device): Mapbox.Image rasteriser snapshots the child View
+  // tree. If every child is position:absolute, parent has no intrinsic content
+  // size and the snapshot collapses to the parent's solid background — user
+  // saw a "black circle" (the DARK_STAGE backdrop with no foreground content).
+  //
+  // Fix: use normal flex layout for the medallion (intrinsic size visible to
+  // Mapbox), and absolute-position only the crest (which overlaps from above).
+  // The dark stage becomes a wrapping View around the core (concentric, normal
+  // flow) instead of a separate absolute layer.
+  const stageSize = f.core + 2;
+  const visibleHeight = (f.crestH - f.crestOverlap) + stageSize;
 
   return (
-    <View style={{ width: f.width, height: f.height, position: 'relative' }}>
-      {/* Crest — absolute, behind core in source order but above via zIndex */}
+    <View
+      style={{
+        width: Math.max(f.width, stageSize) + 4,
+        height: visibleHeight,
+        alignItems: 'center',
+        // top padding so absolute-positioned crest is in-bounds
+        paddingTop: f.crestH - f.crestOverlap,
+      }}
+    >
+      {/* Crest — absolute, overlaps top edge of medallion below */}
       <View
         style={{
           position: 'absolute',
-          left: crestLeft,
-          top: crestTop,
+          left: '50%',
+          marginLeft: -f.crestW / 2,
+          top: 0,
           width: f.crestW,
           height: f.crestH,
           zIndex: 3,
@@ -239,60 +251,49 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
         />
       </View>
 
-      {/* Outer dark "stage" — provides high-contrast backing for the tier ring.
-          Renders 1px larger than core so a sliver of dark shows even when
-          tier ring sits flush against a map background of similar hue. */}
+      {/* Medallion: dark stage wrap → tier ring core → inner hairline → glyph.
+          All normal flex flow so Mapbox.Image rasteriser sees real content. */}
       <View
         style={{
-          position: 'absolute',
-          left: coreLeft - 1,
-          top: coreTop - 1,
-          width: f.core + 2,
-          height: f.core + 2,
-          borderRadius: (f.core + 2) / 2,
+          width: stageSize,
+          height: stageSize,
+          borderRadius: stageSize / 2,
           backgroundColor: DARK_STAGE,
-          zIndex: 1,
-        }}
-      />
-
-      {/* Core medallion — tier ring + enamel fill + glyph */}
-      <View
-        style={{
-          position: 'absolute',
-          left: coreLeft,
-          top: coreTop,
-          width: f.core,
-          height: f.core,
-          borderRadius: f.core / 2,
-          borderWidth: 4,
-          borderColor: tierColour,
-          backgroundColor: enamel.fill,
           alignItems: 'center',
           justifyContent: 'center',
-          overflow: 'hidden',
-          zIndex: 2,
-          // NO shadow — was shadowRadius=7 in v382, caused gold halo to bleed
-          // over the gold border, erasing the visible circle edge.
         }}
       >
-        {/* Inner dark hairline — gives the tier ring a defined inner edge */}
         <View
           style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            width: f.core - 8,
-            height: f.core - 8,
-            margin: 4,
-            borderRadius: (f.core - 8) / 2,
-            borderWidth: 1,
-            borderColor: DARK_BORDER,
-            opacity: 0.4,
+            width: f.core,
+            height: f.core,
+            borderRadius: f.core / 2,
+            borderWidth: 4,
+            borderColor: tierColour,
+            backgroundColor: enamel.fill,
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
           }}
-        />
-        <Svg width={f.glyph} height={f.glyph} viewBox="0 0 24 24">
-          <TypeGlyph type={type} darkColour={enamel.dark} />
-        </Svg>
+        >
+          {/* Inner dark hairline — sits inside core, gives tier ring a defined edge */}
+          <View
+            style={{
+              position: 'absolute',
+              left: 4,
+              top: 4,
+              right: 4,
+              bottom: 4,
+              borderRadius: (f.core - 8) / 2,
+              borderWidth: 1,
+              borderColor: DARK_BORDER,
+              opacity: 0.4,
+            }}
+          />
+          <Svg width={f.glyph} height={f.glyph} viewBox="0 0 24 24">
+            <TypeGlyph type={type} darkColour={enamel.dark} />
+          </Svg>
+        </View>
       </View>
     </View>
   );
@@ -307,16 +308,23 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
   const f = computeFrame(size);
   const tierColour = tier === 'self' ? TIER_GOLD : tier === 'friend' ? TIER_GREEN : TIER_SILVER;
   const tierGlow = tier === 'self' ? TIER_GLOW_GOLD : tier === 'friend' ? TIER_GLOW_GREEN : TIER_GLOW_SILVER;
-  const crestLeft = (f.width - f.crestW) / 2;
-  const coreLeft = (f.width - f.core) / 2;
-  const coreTop = f.crestH - f.crestOverlap;
+  const stageSize = f.core;
+  const visibleHeight = (f.crestH - f.crestOverlap) + stageSize;
 
   return (
-    <View style={{ width: f.width, height: f.height, position: 'relative' }}>
+    <View
+      style={{
+        width: Math.max(f.width, stageSize) + 4,
+        height: visibleHeight,
+        alignItems: 'center',
+        paddingTop: f.crestH - f.crestOverlap,
+      }}
+    >
       <View
         style={{
           position: 'absolute',
-          left: crestLeft,
+          left: '50%',
+          marginLeft: -f.crestW / 2,
           top: 0,
           width: f.crestW,
           height: f.crestH,
@@ -327,12 +335,9 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
       </View>
       <View
         style={{
-          position: 'absolute',
-          left: coreLeft,
-          top: coreTop,
-          width: f.core,
-          height: f.core,
-          borderRadius: f.core / 2,
+          width: stageSize,
+          height: stageSize,
+          borderRadius: stageSize / 2,
           borderWidth: 2,
           borderStyle: 'dashed',
           borderColor: tierColour,
@@ -341,19 +346,16 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
           justifyContent: 'center',
         }}
       >
-        {/* Mystery "?" */}
-        <View style={{ width: f.glyph, height: f.glyph, alignItems: 'center', justifyContent: 'center' }}>
-          <Svg width={f.glyph} height={f.glyph} viewBox="0 0 24 24">
-            <Path
-              d="M9 8 Q9 5 12 5 Q15 5 15 8 Q15 10 13 11 Q12 12 12 14"
-              stroke={tierColour}
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              fill="none"
-            />
-            <Circle cx="12" cy="18" r="1.2" fill={tierColour} />
-          </Svg>
-        </View>
+        <Svg width={f.glyph} height={f.glyph} viewBox="0 0 24 24">
+          <Path
+            d="M9 8 Q9 5 12 5 Q15 5 15 8 Q15 10 13 11 Q12 12 12 14"
+            stroke={tierColour}
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            fill="none"
+          />
+          <Circle cx="12" cy="18" r="1.2" fill={tierColour} />
+        </Svg>
       </View>
     </View>
   );
