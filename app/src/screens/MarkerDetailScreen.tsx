@@ -217,11 +217,15 @@ export function MarkerDetailScreen() {
                     medallion (Self gold crown / Friend green star /
                     Public silver footprints + 5 type cores). Detail page
                     tier resolution: if marker is in own store → self,
-                    permission=public → public, else friend. */}
-                <CairnPin
-                  tier={resolveTier(marker as any, new Set(markers.map(m => m.id)))}
-                  type={marker.type}
-                />
+                    permission=public → public, else friend.
+                    Scaled 0.75 because detail page hero map gives the pin
+                    more visual weight than necessary at default size. */}
+                <View style={{ transform: [{ scale: 0.75 }] }}>
+                  <CairnPin
+                    tier={resolveTier(marker as any, new Set(markers.map(m => m.id)))}
+                    type={marker.type}
+                  />
+                </View>
               </PointAnnotation>
             )}
           </MapView>

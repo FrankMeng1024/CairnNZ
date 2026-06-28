@@ -216,18 +216,21 @@ export function CairnPin({ tier, type }: PinCommon & { type: string }) {
   const tierColour = tier === 'self' ? TIER_GOLD : tier === 'friend' ? TIER_GREEN : TIER_SILVER;
   const tierGlow = tier === 'self' ? TIER_GLOW_GOLD : tier === 'friend' ? TIER_GLOW_GREEN : TIER_GLOW_SILVER;
 
+  // v381 fix: crest must live INSIDE parent View bounds. Mapbox PointAnnotation
+  // on iOS clips children to the View's frame. Pre-fix the crest was at
+  // top: -2 (outside parent bounds via absolute positioning) → invisible on
+  // device. Now: crest sits at top of a tall container (height = crest + core),
+  // core sits below it. Total height 60. Container is centred on the marker
+  // anchor point (PointAnnotation anchors at centre of View by default).
   return (
-    <View style={{ width: PIN_SIZE, height: 60, alignItems: 'center' }}>
-      {/* Crest sitting -2px above core */}
-      <View style={{ position: 'absolute', top: CREST_TOP_OFFSET, zIndex: 3 }}>
-        <Svg width={CREST_W} height={CREST_H} viewBox="0 0 18 14">
-          <Crest tier={tier} colour={tierColour} />
-        </Svg>
-      </View>
+    <View style={{ width: PIN_SIZE, height: PIN_SIZE + CREST_H + 4, alignItems: 'center' }}>
+      {/* Crest — drawn first (top of column), explicit width/height (RN-svg requires) */}
+      <Svg width={CREST_W} height={CREST_H} viewBox="0 0 18 14" style={{ marginBottom: 2 }}>
+        <Crest tier={tier} colour={tierColour} />
+      </Svg>
       {/* Core medallion */}
       <View
         style={{
-          marginTop: 8,
           width: CORE_SIZE,
           height: CORE_SIZE,
           borderRadius: CORE_SIZE / 2,
@@ -236,7 +239,6 @@ export function CairnPin({ tier, type }: PinCommon & { type: string }) {
           backgroundColor: enamel.fill,
           alignItems: 'center',
           justifyContent: 'center',
-          // dark casting-seam (1.5px equivalent via inner ring shadow approximation)
           shadowColor: tierGlow,
           shadowOpacity: tier === 'public' ? 0.4 : 0.8,
           shadowRadius: 7,
@@ -256,15 +258,12 @@ export function CairnPin({ tier, type }: PinCommon & { type: string }) {
 function MysteryPin({ tier }: PinCommon) {
   const tierColour = tier === 'self' ? TIER_GOLD : tier === 'friend' ? TIER_GREEN : TIER_SILVER;
   return (
-    <View style={{ width: PIN_SIZE, height: 60, alignItems: 'center' }}>
-      <View style={{ position: 'absolute', top: CREST_TOP_OFFSET, zIndex: 3 }}>
-        <Svg width={CREST_W} height={CREST_H} viewBox="0 0 18 14">
-          <Crest tier={tier} colour={tierColour} />
-        </Svg>
-      </View>
+    <View style={{ width: PIN_SIZE, height: PIN_SIZE + CREST_H + 4, alignItems: 'center' }}>
+      <Svg width={CREST_W} height={CREST_H} viewBox="0 0 18 14" style={{ marginBottom: 2 }}>
+        <Crest tier={tier} colour={tierColour} />
+      </Svg>
       <View
         style={{
-          marginTop: 8,
           width: CORE_SIZE,
           height: CORE_SIZE,
           borderRadius: CORE_SIZE / 2,
