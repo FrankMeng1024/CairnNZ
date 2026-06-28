@@ -38,6 +38,11 @@ import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { MemoryColors } from '../features/memory/config/memoryConfig';
+// v381: use the v10 reliquary medallion pin in detail page too, not just
+// on Memory map. Pre-fix the detail page rendered a v300 hollow pin which
+// looked nothing like the v10 design users see on the Memory map — visual
+// inconsistency between "where I saw it" and "where I tap to read it".
+import { CairnPin, resolveTier } from '../features/memory/components/CairnPinsLayer';
 import { getPrimaryMapStyle } from '../config/mapbox';
 import { formatDate } from '../utils/geo';
 import { log } from '../services/appLog';
@@ -208,10 +213,15 @@ export function MarkerDetailScreen() {
             />
             {PointAnnotation && (
               <PointAnnotation id="marker-pin" coordinate={[marker.lng, marker.lat]}>
-                {/* v300 N1: hollow pin — type color is border + icon only */}
-                <View style={[styles.pinHead, { borderColor: meta.color }]}>
-                  <Icon name={meta.icon as IconName} size={12} color={meta.color} strokeWidth={2.5} />
-                </View>
+                {/* v381: replaced v300 hollow pin with v10 reliquary
+                    medallion (Self gold crown / Friend green star /
+                    Public silver footprints + 5 type cores). Detail page
+                    tier resolution: if marker is in own store → self,
+                    permission=public → public, else friend. */}
+                <CairnPin
+                  tier={resolveTier(marker as any, new Set(markers.map(m => m.id)))}
+                  type={marker.type}
+                />
               </PointAnnotation>
             )}
           </MapView>

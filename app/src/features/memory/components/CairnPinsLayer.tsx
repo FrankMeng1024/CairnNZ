@@ -56,8 +56,9 @@ const TYPE_ENAMEL: Record<string, { fill: string; dark: string }> = {
 };
 
 type Tier = 'self' | 'friend' | 'public';
+export type { Tier };
 
-function resolveTier(marker: Marker, selfAuthorIds: Set<string>): Tier {
+export function resolveTier(marker: Marker, selfAuthorIds: Set<string>): Tier {
   // authorId === 'server' means "own marker after backend hydrate" pre-v300;
   // newer markers carry a real user_id string. Either way, if the marker
   // sits in the viewer's own marker store, it's self.
@@ -122,6 +123,22 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
 
   if (!Mapbox.available) return null;
   const { PointAnnotation } = Mapbox;
+
+  // v381 diagnostic: log mount + render decision so we can prove on real
+  // device whether v10 CairnPin component actually executes. If user sees
+  // "old pins" but no v381.cairn_pin_render log, the issue is mount path
+  // (fogReady gate / wrong screen). If logs fire but pins still look old,
+  // the SVG inside CairnPin is broken on RN.
+  if (visible.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { log } = require('../../../services/appLog');
+    log('v381.cairn_pins_render', {
+      n_visible: visible.length,
+      first_tier: visible[0].tier,
+      first_explored: visible[0].isExplored,
+      first_type: visible[0].marker.type,
+    });
+  }
 
   return (
     <>
@@ -194,7 +211,7 @@ const CREST_TOP_OFFSET = -2;
 
 interface PinCommon { tier: Tier; }
 
-function CairnPin({ tier, type }: PinCommon & { type: string }) {
+export function CairnPin({ tier, type }: PinCommon & { type: string }) {
   const enamel = TYPE_ENAMEL[type] || TYPE_ENAMEL.cairn;
   const tierColour = tier === 'self' ? TIER_GOLD : tier === 'friend' ? TIER_GREEN : TIER_SILVER;
   const tierGlow = tier === 'self' ? TIER_GLOW_GOLD : tier === 'friend' ? TIER_GLOW_GREEN : TIER_GLOW_SILVER;
