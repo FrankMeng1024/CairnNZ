@@ -230,15 +230,6 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
           {/* Drag handle */}
           <View style={sheetStyles.handle} />
 
-          {/* v375: ScrollView guarantees Send/Cancel buttons stay reachable
-              when the keyboard pushes the sheet up against the maxHeight
-              cap. Without this, on shorter devices the bottom CTAs are
-              clipped (review finding MEDIUM-2). */}
-          <ScrollView
-            contentContainerStyle={sheetStyles.sheetScrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
         {addState === 'success' ? (
           <View style={sheetStyles.successState}>
             <View style={sheetStyles.successIcon}>
@@ -297,7 +288,6 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
             </PressBtn>
           </>
         )}
-          </ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
     </Animated.View>
@@ -805,20 +795,11 @@ const sheetStyles = StyleSheet.create({
     backgroundColor: Colors.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     padding: Spacing.xl, paddingTop: Spacing.md,
     gap: Spacing.md,
-    // v375: cap sheet height so it does NOT reach above the screen midpoint
-    // when no keyboard is present. Pre-fix the sheet expanded to fit all
-    // content, which on shorter devices pushed the top edge over the
-    // page's title bar and covered the parent screen text.
-    // v375 review: flexShrink:1 required for maxHeight to actually
-    // constrain a flex child; without it the sheet sizes to content and
-    // bypasses the cap, breaking the embedded ScrollView.
-    maxHeight: '70%',
-    flexShrink: 1,
-  },
-  // v375: ScrollView inside sheet — keeps Send/Cancel reachable when
-  // keyboard pushes content against the maxHeight cap.
-  sheetScrollContent: {
-    gap: Spacing.md,
+    // v376: 回退 v375 的 maxHeight + flexShrink + ScrollView 方案。
+    // 真机看到 sheet 底下大量空白 — 因为 maxHeight:'70%' + flexShrink:1
+    // 把 sheet 撑到屏幕 70% 高度,但内容只有 ~400px,剩余 ~200px 是
+    // 内部 ScrollView 留出的空白。让 sheet 自适应内容高度即可,
+    // KeyboardAvoidingView 会在键盘弹起时把 sheet 推上去。
   },
   handle: {
     width: 40, height: 4, borderRadius: 2,
@@ -860,7 +841,10 @@ const sheetStyles = StyleSheet.create({
   cancelBtn: { alignItems: 'center', paddingVertical: Spacing.sm },
   cancelText: { fontSize: FontSize.body, color: Colors.textSecondary, fontWeight: '500' },
 
-  successState: { alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.md },
+  // v376 review NIT-7 (round 2): minHeight 380 — pass-2 reviewer
+  // measured form-state at ~360-400px (illustration ~136 + label/input
+  // ~52 + send ~52 + cancel ~40 + paddings/gaps). 320 undershot.
+  successState: { alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.md, minHeight: 380, justifyContent: 'center' },
   successIcon: {
     width: 72, height: 72, borderRadius: 36,
     backgroundColor: Colors.successBg,

@@ -580,32 +580,10 @@ export function MemoryScreen() {
           so it doesn't intrude into the Dynamic Island area. */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <BackButton variant="pill" onPress={() => nav.goBack()} />
-        {/* UX-B fix (v372→v373): Pick friends icon moved to AFTER the
-            scope toggle (right side of Friends pill) so it visually pairs
-            with the Friends segment. Pre-fix order [icon][Mine|Friends]
-            put Mine between the icon and Friends — reads as disconnected. */}
-        <View style={styles.topRightCluster}>
-          <MemoryScopeToggle />
-          {/* v374→v375 fix: Pick icon永远占位,Mine模式不可见但保留spacer,
-              避免toggle在切换scope时左右移动 (用户感知"toggle变小"是
-              因为周围间距变化产生的相对错觉)。v375 review: 删除
-              pointerEvents (RN 0.70+ 已 deprecate 作为 prop),disabled
-              已足够阻止 onPress; 保留 accessibility props 隐藏 a11y。 */}
-          <TouchableOpacity
-            style={[
-              styles.topPickBtn,
-              memoryScope !== 'friends' && styles.topPickBtnHidden,
-            ]}
-            onPress={() => { if (memoryScope === 'friends') setPickModalOpen(true); }}
-            activeOpacity={memoryScope === 'friends' ? 0.7 : 1}
-            disabled={memoryScope !== 'friends'}
-            accessibilityElementsHidden={memoryScope !== 'friends'}
-            importantForAccessibility={memoryScope === 'friends' ? 'yes' : 'no-hide-descendants'}
-            testID="memory-pick-friends-top"
-          >
-            <Icon name="Users" size={16} color={Colors.primary} strokeWidth={2.2} />
-          </TouchableOpacity>
-        </View>
+        {/* v376: Pick icon 移到 MemoryScopeToggle 内部作为第三个 segment,
+            scope=friends 时 width+opacity 展开,scope=mine 时 collapse 到 0
+            (用户 v375 反馈: 之前的 fixed-position 占位空白难看)。 */}
+        <MemoryScopeToggle onPickPress={() => setPickModalOpen(true)} />
       </View>
 
       {/* v352 zoom-flicker fix: render MemoryMap with persistentCoord
@@ -840,28 +818,9 @@ const styles = StyleSheet.create({
   // BUG-D fix (v371 post-OTA): Pick friends top-right cluster — sits
   // inline with the scope toggle in the top bar. Replaces the bottom-
   // right FAB pattern which was occluding map content.
-  topRightCluster: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  topPickBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: Colors.surface,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: Colors.border,
-    shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 }, elevation: 3,
-  },
-  // v375: Mine模式下 Pick icon 不可见但保留占位,
-  // 防止 scope toggle 视觉位置在切换时移动。
-  topPickBtnHidden: {
-    opacity: 0,
-    backgroundColor: 'transparent',
-    borderColor: 'transparent',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
+  // v376: topPickBtn / topPickBtnHidden / topRightCluster styles removed
+  // — Pick icon is now an internal segment of MemoryScopeToggle (third
+  // expand-out segment), no external button cluster.
   hintBackdrop: {
     flex: 1, backgroundColor: 'rgba(20,20,20,0.55)',
     alignItems: 'center', justifyContent: 'center', padding: 28,

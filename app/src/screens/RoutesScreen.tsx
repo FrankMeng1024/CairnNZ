@@ -577,6 +577,36 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
     <View style={{ flex: 1 }}>
       {/* Sprint 69 STORY-00538: Mine|Friends scope sub-tab. */}
       <ScopeTabBar scope={scope} onChange={setScope} />
+      {/* v376 fix: empty hero takes the place of the list when there is
+          no data — FilterSortBar must NOT render when there's nothing to
+          filter (用户 v375 反馈: filter 不应该在没有数据时出现)。 */}
+      {scope === 'mine' && routes.length === 0 ? (
+        <View style={styles.emptyHero}>
+          <View style={styles.emptyHeroIcon}>
+            <Icon name="Route" size={40} color={Colors.primary} strokeWidth={1.5} />
+          </View>
+          <Text style={styles.emptyHeroTitle}>No saved routes yet</Text>
+          <Text style={styles.emptyHeroBody}>
+            Routes are paths you've already walked.{'\n'}
+            Open an Activity, tap{' '}
+            <Text style={{ fontWeight: '700', color: Colors.primary }}>Save as Route</Text>
+            , and it'll show up here.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyHeroCta}
+            activeOpacity={0.85}
+            onPress={() => onGoToActivities?.()}
+          >
+            <Icon name="Map" size={16} color="#fff" strokeWidth={2} />
+            <Text style={styles.emptyHeroCtaText}>View Activities</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      {scope === 'friends' && !hasFetchedFriends && circleRoutes.length === 0 ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={styles.emptyHint}>Loading friends' routes…</Text>
+        </View>
+      ) : null}
       {scope === 'friends' && hasFetchedFriends && circleRoutes.length === 0 ? (
         <View style={styles.emptyHero}>
           <View style={styles.emptyHeroIcon}>
@@ -589,7 +619,7 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
           </Text>
         </View>
       ) : null}
-      {(scope === 'mine' || (scope === 'friends' && circleRoutes.length > 0)) && (
+      {((scope === 'mine' && routes.length > 0) || (scope === 'friends' && circleRoutes.length > 0)) && (
         <>
       <FilterSortBar
         filters={[
@@ -616,37 +646,13 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
            button is also gone (per route-rules.md §2.3 manual drawing
            is forbidden). The list now starts straight at the cards. */
         ListEmptyComponent={
-          /* v118: friendly empty state. If no routes exist at all, guide
-             the user to Activities (the only valid creation source). If
-             they exist but the current filter/search hides them, just say so. */
-          routes.length === 0 ? (
-            <View style={styles.emptyHero}>
-              <View style={styles.emptyHeroIcon}>
-                <Icon name="Route" size={40} color={Colors.primary} strokeWidth={1.5} />
-              </View>
-              <Text style={styles.emptyHeroTitle}>No saved routes yet</Text>
-              <Text style={styles.emptyHeroBody}>
-                Routes are paths you've already walked.{'\n'}
-                Open an Activity, tap{' '}
-                <Text style={{ fontWeight: '700', color: Colors.primary }}>Save as Route</Text>
-                , and it'll show up here.
-              </Text>
-              <TouchableOpacity
-                style={styles.emptyHeroCta}
-                activeOpacity={0.85}
-                onPress={() => onGoToActivities?.()}
-              >
-                <Icon name="Map" size={16} color="#fff" strokeWidth={2} />
-                <Text style={styles.emptyHeroCtaText}>View Activities</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={{ alignItems: 'center', paddingTop: 40 }}>
-              <Text style={styles.emptyHint}>
-                {'No routes match this filter.'}
-              </Text>
-            </View>
-          )
+          /* v376: routes.length===0 已在外层提前 return,这里只剩
+             "filter 把所有数据筛掉"的场景。 */
+          <View style={{ alignItems: 'center', paddingTop: 40 }}>
+            <Text style={styles.emptyHint}>
+              {'No routes match this filter.'}
+            </Text>
+          </View>
         }
         renderItem={({ item }) => (
           <PressBtn
@@ -1058,6 +1064,11 @@ function FlagsTab() {
           stays Mine-only (Story-536); Flags + Routes get this control. */}
       <ScopeTabBar scope={scope} onChange={setScope} />
 
+      {scope === 'friends' && !hasFetchedFriends && circleMarkers.length === 0 ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={styles.emptyHint}>Loading friends' marks…</Text>
+        </View>
+      ) : null}
       {scope === 'friends' && hasFetchedFriends && circleMarkers.length === 0 ? (
         <View style={styles.emptyHero}>
           <View style={{ marginBottom: Spacing.md }}>
