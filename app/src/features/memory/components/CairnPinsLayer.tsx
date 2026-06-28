@@ -177,7 +177,15 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   // SymbolLayer path (preferred — zoom-responsive, GL-accelerated).
   // Falls back to PointAnnotation only if Mapbox.SymbolLayer is unavailable
   // (e.g. running on a stale binary without it).
-  const useSymbolLayer = !!(SymbolLayer && ShapeSource && Images && MbxImage);
+  //
+  // v385 HOTFIX: real-device testing on v383/v384 showed that
+  // <Mapbox.Image><CairnPinV10/></Mapbox.Image> renders sprites as black
+  // circles only — Mapbox SDK rasteriser collapses the RN+react-native-svg
+  // child View tree to the parent's solid background. Until subagent
+  // research finds a working sprite path (see docs/plan/v385-sprite-zoom-
+  // research.md), force PointAnnotation fallback so users at least get
+  // correct V10 visuals. Zoom-responsive scaling is temporarily disabled.
+  const useSymbolLayer = false;
 
   if (useSymbolLayer) {
     return (
