@@ -1,50 +1,60 @@
 /**
- * useMapZoom — shared reanimated value for current map zoom, driven by
- * MemoryMap's <MapView onCameraChanged>. Pin components subscribe via
- * useMapZoomShared() and animate transform:scale on the UI thread.
+ * useMapZoom — JS-side zoom store driven by MemoryMap onCameraChanged.
+ * Pin components subscribe via useMapZoom() and re-render with new
+ * size/scale values.
  *
- * v386: replaces SymbolLayer GL-side zoom interpolation (which couldn't
- * ship because Mapbox SDK rasteriser doesn't see react-native-svg
- * content — see docs/plan/v385-sprite-zoom-research.md). Reanimated
- * shared value is purely JS, runs at 60fps on the UI thread.
+ * v387 change vs v386: dropped reanimated UI-thread shared value path
+ * because PointAnnotation on iOS appears to not honor RN transform on
+ * its child View (host annotation view manages its own frame, child
+ * transform is silently ignored). useState-driven re-render is
+ * slower but reliably visible.
+ *
+ * Throttled to ~10Hz via lastSetRef so 60fps onCameraChanged events
+ * don't trigger 60 re-renders per second. 100ms feels live during
+ * pinch and is well within React batching tolerance.
  */
-import { useSharedValue } from 'react-native-reanimated';
-import type { SharedValue } from 'react-native-reanimated';
+import { useSyncExternalStore } from 'react';
 
-// Module-level singleton so all pin components subscribe to the same value.
-// Default zoom 16 = neutral scale (1.0 in the typical interpolation range).
-const _zoomShared: { current: SharedValue<number> | null } = { current: null };
+let _zoom = 16;
+let _lastSetAt = 0;
+const THROTTLE_MS = 100;
+const _listeners = new Set<() => void>();
 
-function getOrCreate(): SharedValue<number> {
-  // Hook below initialises lazily so module load doesn't require react context.
-  if (!_zoomShared.current) {
-    throw new Error('useMapZoomShared: not initialised — useMapZoomProvider must mount first');
-  }
-  return _zoomShared.current;
+function subscribe(cb: () => void) {
+  _listeners.add(cb);
+  return () => {
+    _listeners.delete(cb);
+  };
 }
 
-/** Call this in the screen / map provider once. Returns the same shared value
- * across renders so updates from <MapView onCameraChanged> propagate to all
- * subscribers. */
-export function useMapZoomProvider(): SharedValue<number> {
-  const sv = useSharedValue<number>(16);
-  if (!_zoomShared.current) _zoomShared.current = sv;
-  return _zoomShared.current;
+function getSnapshot() {
+  return _zoom;
 }
 
-/** Subscribe to zoom in any component (pin etc.). */
-export function useMapZoomShared(): SharedValue<number> {
-  // Lazy default: if provider hasn't mounted yet (defensive), create a
-  // default-16 shared value via a one-shot hook call. Components that read
-  // before MemoryMap mounts will just see scale = 1.0.
-  const fallback = useSharedValue<number>(16);
-  if (!_zoomShared.current) _zoomShared.current = fallback;
-  return _zoomShared.current;
+/** React hook — re-renders the calling component when zoom changes. */
+export function useMapZoom(): number {
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
-/** Imperative setter — called from MapView onCameraChanged in MemoryMap. */
+/** Imperative setter — called from MapView onCameraChanged. Throttled. */
 export function setMapZoom(z: number) {
-  if (_zoomShared.current) {
-    _zoomShared.current.value = z;
-  }
+  if (typeof z !== 'number' || Number.isNaN(z)) return;
+  const now = Date.now();
+  if (now - _lastSetAt < THROTTLE_MS && Math.abs(z - _zoom) < 0.5) return;
+  _lastSetAt = now;
+  _zoom = z;
+  _listeners.forEach((cb) => {
+    try { cb(); } catch { /* ignore */ }
+  });
+}
+
+// Kept for backward compat with v386 imports if any.
+// Returns nothing useful — components should switch to useMapZoom().
+export function useMapZoomShared() {
+  // Stub: returns a fake shared value compatible object.
+  return { value: _zoom };
+}
+export function useMapZoomProvider() {
+  // No-op now that store is module-level.
+  return { value: _zoom };
 }

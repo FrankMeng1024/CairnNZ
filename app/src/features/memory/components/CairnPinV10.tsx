@@ -25,10 +25,9 @@
 
 import React from 'react';
 import { View } from 'react-native';
-import Animated, { useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
 import Svg, { Path, Circle, Ellipse, Rect } from 'react-native-svg';
 import type { Tier } from './pinTier';
-import { useMapZoomShared } from './useMapZoom';
+import { useMapZoom } from './useMapZoom';
 
 // ─── Palette (mirrors v10 HTML lines 59-61) ────────────────────────────────
 const TIER_GOLD = '#ffd460';
@@ -56,6 +55,19 @@ const SIZES = {
 } as const;
 export type PinSize = keyof typeof SIZES;
 
+// v387: scale derived from current zoom. PointAnnotation's host view
+// auto-sizes to the child View's measured frame on iOS, so by setting
+// width/height/border/glyph as scaled px values (not via RN transform
+// which iOS PointAnnotation silently ignores) we get true visible
+// re-sizing across pinches.
+function scaleForZoom(z: number): number {
+  // z=11 → 0.35, z=13 → 0.55, z=15 → 0.78, z=17 → 1.0, z=19 → 1.15
+  if (z <= 11) return 0.35;
+  if (z >= 19) return 1.15;
+  if (z < 17) return 0.35 + (z - 11) * (1.0 - 0.35) / (17 - 11);
+  return 1.0 + (z - 17) * (1.15 - 1.0) / (19 - 17);
+}
+
 function computeFrame(size: PinSize) {
   const s = SIZES[size];
   const width = Math.max(s.core, s.crestW) + 4; // padding for shadow bleed
@@ -65,19 +77,28 @@ function computeFrame(size: PinSize) {
   return { ...s, width, height };
 }
 
-// ─── Crest SVG paths (1:1 from v10 HTML) ──────────────────────────────────
+// ─── Crest SVG paths (1:1 from v10 HTML, except self crown base is
+// curved to hug the core circle's top edge — flat base v10 used had
+// a visible seam against the round medallion below) ──────────────────
 function CrestPaths({ tier, colour }: { tier: Tier; colour: string }) {
   if (tier === 'self') {
     return (
       <>
+        {/* Crown spikes (unchanged from v10) */}
         <Path d="M9 1.5 L11.5 4.5 L14.5 1.5 L15.5 8 L2.5 8 L3.5 1.5 L6.5 4.5 Z" fill={colour} />
-        <Path d="M 2 9 L16 9 L16 10.5 L2 10.5 Z" fill={colour} />
+        {/* Crown base — concave bottom hugs core circle top.
+            viewBox is 18×14; core (44px @ 1.0) maps to crest width 18.
+            Bottom uses quadratic arc with downward curvature so the base
+            appears to follow the medallion's circumference. */}
+        <Path d="M 2 9 L16 9 L16 10.5 Q 9 12.3 2 10.5 Z" fill={colour} />
       </>
     );
   }
   if (tier === 'friend') {
+    // 8-point compass star — symmetric, no base seam issue
     return <Path d="M9 1 L10.2 6 L15 7 L10.2 8 L9 13 L7.8 8 L3 7 L7.8 6 Z" fill={colour} />;
   }
+  // Public footprints — already organic shapes, no seam
   return (
     <>
       <Ellipse cx="5" cy="5" rx="1.8" ry="2.6" fill={colour} />
@@ -176,39 +197,38 @@ export interface CairnPinV10Props {
 }
 
 export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
-  const f = computeFrame(size);
+  const baseFrame = computeFrame(size);
   const enamel = TYPE_ENAMEL[type] || TYPE_ENAMEL.cairn;
   const tierColour = tier === 'self' ? TIER_GOLD : tier === 'friend' ? TIER_GREEN : TIER_SILVER;
   const tierGlow = tier === 'self' ? TIER_GLOW_GOLD : tier === 'friend' ? TIER_GLOW_GREEN : TIER_GLOW_SILVER;
 
-  // v386: zoom-responsive scaling via reanimated. Parent <Animated.View>
-  // reads shared value and applies transform:scale. Pin's physical size
-  // on map stays roughly constant — small at far zoom, large at close.
-  const zoom = useMapZoomShared();
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{
-      scale: interpolate(
-        zoom.value,
-        [11, 13, 15, 17, 19],
-        [0.35, 0.6, 0.85, 1.0, 1.15],
-        Extrapolation.CLAMP,
-      ),
-    }],
-  }));
+  // v387: PointAnnotation iOS ignores RN transform on its child View. We
+  // scale by changing the real width/height/border numbers — pin actually
+  // re-lays-out larger/smaller, host annotation view re-anchors to the new
+  // child measured frame. Throttled re-render via useMapZoom external store.
+  const zoom = useMapZoom();
+  const s = scaleForZoom(zoom);
+  const f = {
+    width: baseFrame.width * s,
+    height: baseFrame.height * s,
+    core: baseFrame.core * s,
+    crestW: baseFrame.crestW * s,
+    crestH: baseFrame.crestH * s,
+    crestOverlap: baseFrame.crestOverlap * s,
+    glyph: baseFrame.glyph * s,
+    border: Math.max(1, baseFrame.border * s),
+  };
 
   return (
-    <Animated.View
-      style={[
-        {
-          width: f.width,
-          height: f.height,
-          alignItems: 'center',
-          justifyContent: 'flex-start',
-        },
-        animStyle,
-      ]}
+    <View
+      style={{
+        width: f.width,
+        height: f.height,
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+      }}
     >
-      {/* Crest at top, normal flow, marginBottom negative pulls core up to overlap */}
+      {/* Crest at top, marginBottom negative so core overlaps from below */}
       <View style={{ marginBottom: -f.crestOverlap, zIndex: 3 }}>
         <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
       </View>
@@ -225,8 +245,6 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
-          // Shadow that ADDS contrast against map (drop shadow, not the
-          // bleed-into-border glow that caused v382's invisible-border bug)
           shadowColor: '#000',
           shadowOpacity: 0.45,
           shadowRadius: 3,
@@ -234,8 +252,6 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
           elevation: 4,
         }}
       >
-        {/* Dark inner hairline — gives the tier ring a defined inner edge,
-            replaces v10's inset bezel which RN can't do */}
         <View
           style={{
             position: 'absolute',
@@ -253,7 +269,7 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
           <TypeGlyph type={type} darkColour={enamel.dark} />
         </Svg>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -263,33 +279,30 @@ export interface MysteryPinV10Props {
 }
 
 export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
-  const f = computeFrame(size);
+  const baseFrame = computeFrame(size);
   const tierColour = tier === 'self' ? TIER_GOLD : tier === 'friend' ? TIER_GREEN : TIER_SILVER;
   const tierGlow = tier === 'self' ? TIER_GLOW_GOLD : tier === 'friend' ? TIER_GLOW_GREEN : TIER_GLOW_SILVER;
 
-  const zoom = useMapZoomShared();
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{
-      scale: interpolate(
-        zoom.value,
-        [11, 13, 15, 17, 19],
-        [0.35, 0.6, 0.85, 1.0, 1.15],
-        Extrapolation.CLAMP,
-      ),
-    }],
-  }));
+  const zoom = useMapZoom();
+  const s = scaleForZoom(zoom);
+  const f = {
+    width: baseFrame.width * s,
+    height: baseFrame.height * s,
+    core: baseFrame.core * s,
+    crestW: baseFrame.crestW * s,
+    crestH: baseFrame.crestH * s,
+    crestOverlap: baseFrame.crestOverlap * s,
+    glyph: baseFrame.glyph * s,
+  };
 
   return (
-    <Animated.View
-      style={[
-        {
-          width: f.width,
-          height: f.height,
-          alignItems: 'center',
-          justifyContent: 'flex-start',
-        },
-        animStyle,
-      ]}
+    <View
+      style={{
+        width: f.width,
+        height: f.height,
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+      }}
     >
       <View style={{ marginBottom: -f.crestOverlap, zIndex: 3 }}>
         <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
@@ -299,7 +312,7 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
           width: f.core,
           height: f.core,
           borderRadius: f.core / 2,
-          borderWidth: 2,
+          borderWidth: Math.max(1, 2 * s),
           borderStyle: 'dashed',
           borderColor: tierColour,
           backgroundColor: 'rgba(40,32,20,0.6)',
@@ -318,7 +331,7 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
           <Circle cx="12" cy="18" r="1.2" fill={tierColour} />
         </Svg>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

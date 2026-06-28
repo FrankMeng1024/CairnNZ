@@ -20,6 +20,7 @@ import { MemoryColors } from '../config/memoryConfig';
 import { FogLayer } from './FogLayer';
 import { MemoryFogBurstOverlay } from './MemoryFogBurstOverlay';
 import { CairnPinsLayer } from './CairnPinsLayer';
+import { useMemoryStore } from '../store/useMemoryStore';
 import { log } from '../../../services/appLog';
 import { flushNow as flushLogsNow } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
@@ -86,6 +87,9 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
   // timer covers the `useH3Fog=false` settings path where FogLayer returns
   // null and never fires.
   const [fogReady, setFogReady] = useState(false);
+  // v387: also gate CairnPinsLayer on server memory hydrate to avoid the
+  // first-entry "Mystery flash" then second-entry "Revealed" transition.
+  const initialRevealDone = useMemoryStore((s) => s.initialRevealDone);
   useEffect(() => {
     const timer = setTimeout(() => setFogReady(() => true), 2000);
     return () => clearTimeout(timer);
@@ -231,6 +235,12 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { setMapZoom } = require('./useMapZoom');
             setMapZoom(z);
+            // v386b: log every ~250ms-ish for telemetry verification
+            if (Math.random() < 0.05) {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { log } = require('../../../services/appLog');
+              log('v386.camera_zoom', { zoom: Number(z.toFixed(2)) });
+            }
           }
         }}
         // v357 diagnostic: three Mapbox native events.
@@ -357,9 +367,11 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
           onFogReady?.();
         }} />
         {/* v380: render pins only AFTER fog is ready, so they appear
-            together. Pre-fix some pins missed first paint, others popped
-            in before fog. */}
-        {fogReady && (
+            on top of the fog mask layer.
+            v387: additionally gate on initialRevealDone so server-hydrated
+            memory_points have arrived — otherwise user sees Mystery pins
+            on first entry, then Revealed on second (Mystery flash). */}
+        {fogReady && initialRevealDone && (
           <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
         )}
       </MapView>
