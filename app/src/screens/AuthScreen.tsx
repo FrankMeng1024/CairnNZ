@@ -590,13 +590,18 @@ export function AuthScreen() {
 
   const validateEmail = (val: string) => {
     if (!val.trim()) return 'Email is required';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) return 'Please enter a valid email';
+    // TEMP DEMO REMOVE LATER: email format validation disabled so that
+    // pure-numeric demo logins ("1", "2", …) work. Restore the regex line
+    // below before production. The original validator was:
+    //   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) return 'Please enter a valid email';
     return '';
   };
 
   const validatePassword = (val: string) => {
     if (!val) return 'Password is required';
-    if (val.length < 8) return 'Minimum 8 characters';
+    // TEMP DEMO REMOVE LATER: 8-char minimum removed so single-char demo
+    // account passwords (1, 2, 3, …) work. Restore:
+    //   if (val.length < 8) return 'Minimum 8 characters';
     return '';
   };
 
