@@ -614,8 +614,8 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
           </View>
           <Text style={styles.emptyHeroTitle}>No routes from your friends yet</Text>
           <Text style={styles.emptyHeroBody}>
-            Subscribe to a friend in the{'\n'}
-            <Text style={{ fontWeight: '700', color: Colors.primary }}>Memory</Text> tab to see their routes here.
+            Routes your friends share at Friend tier{'\n'}
+            will show up here.
           </Text>
         </View>
       ) : null}
@@ -1076,8 +1076,8 @@ function FlagsTab() {
           </View>
           <Text style={styles.emptyHeroTitle}>No marks from your friends yet</Text>
           <Text style={styles.emptyHeroBody}>
-            Subscribe to a friend in the{'\n'}
-            <Text style={{ fontWeight: '700', color: Colors.primary }}>Memory</Text> tab to see their marks here.
+            Marks your friends share at Friend tier{'\n'}
+            will show up here.
           </Text>
         </View>
       ) : null}

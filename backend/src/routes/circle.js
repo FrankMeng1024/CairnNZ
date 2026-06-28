@@ -3,20 +3,25 @@
  *
  * Friend System v1 / Sprint 67 / STORY-00528
  *
- * "Circle" = the UNION of memory data from a viewer's subscribed friends
- * (subset of friends, capped at memory_subscription_limit — see
- * memory-subscriptions.js).
+ * "Circle" historically meant "UNION from subscribed friends" (capped at
+ * memory_subscription_limit). v376 split this into TWO scopes per v4 §1:
  *
- * Three endpoints, all gated by:
- *   - viewer is authenticated
- *   - viewer has subscribed to >= 1 friend (otherwise returns empty payload)
+ *   - /markers, /routes — gated on MUTUAL FRIENDSHIP only (no cap, no
+ *     memory subscription required). Friend-tier shares are bidirectional:
+ *     two users are friends → both see each other's Friend-tier content.
+ *   - /fog               — gated on MEMORY_SUBSCRIPTIONS (cap = 5). This
+ *     is the only "explore together with N friends" budget; fog UNION
+ *     reveals others' GPS history and is the privacy-sensitive piece.
+ *
+ * All three endpoints share:
+ *   - viewer must be authenticated
  *   - LEFT JOIN hidden_items: any (mark|route, item_id) the viewer has hidden
  *     is filtered out (per v4 §5: "Hide from me" is a personal blacklist that
  *     also removes the item even if it would otherwise be visible through a
  *     friend's fog UNION).
  *
- * GET /api/circle/markers  — UNION of subscribed-friends' (Friend + Public) markers
- * GET /api/circle/routes   — UNION of subscribed-friends' (Friend + Public) routes
+ * GET /api/circle/markers  — UNION of mutual-friends' (Friend + Public) markers
+ * GET /api/circle/routes   — UNION of mutual-friends' (Friend + Public) routes
  * GET /api/circle/fog      — UNION of subscribed-friends' memory_points (GPS history)
  *                            v1 returns a flat point list keyed by friend_id;
  *                            client tessellates into polygons. Server-side polygon
@@ -37,9 +42,36 @@ router.use(authenticate);
 
 // ── Helper: get viewer's subscribed friend ids ───────────────────────────────
 // Returns [] if the user has no subscriptions — caller short-circuits with [].
+// USED BY /fog ONLY. Memory fog UNION is the only scope capped at
+// memory_subscription_limit=5 (v4 §1 row M). Routes and Markers DO NOT use
+// this — they query mutual friendships directly (see getFriendIds).
 async function getSubscribedFriendIds(viewerId) {
   const [rows] = await pool.execute(
     'SELECT friend_id FROM memory_subscriptions WHERE user_id = ?',
+    [viewerId]
+  );
+  return rows.map((r) => r.friend_id);
+}
+
+// ── Helper: get viewer's mutual-friend ids (v376 fix) ────────────────────────
+// Returns [] if the user has zero friends. Used by /markers and /routes.
+//
+// Root cause behind v376 fix: previously /markers and /routes also gated on
+// memory_subscriptions, conflating two unrelated mechanisms. Per v4 §1 row
+// matrix:
+//   - Memory fog UNION: capped at memory_subscription_limit (the "explore
+//     together with N people" budget).
+//   - Routes / Markers (Friend tier): NO limit. Once two users are mutual
+//     friends and one of them shares a route/mark at Friend tier, the other
+//     sees it. Subscribing in Memory tab is irrelevant.
+//
+// The `friends` table stores ACCEPTED friendships as two symmetric rows
+// (see routes/friends.js INSERT after request accept), so a single
+// `WHERE user_id = ?` is sufficient — every row already represents a
+// mutual friendship from the viewer's perspective.
+async function getFriendIds(viewerId) {
+  const [rows] = await pool.execute(
+    'SELECT friend_id FROM friends WHERE user_id = ?',
     [viewerId]
   );
   return rows.map((r) => r.friend_id);
@@ -49,7 +81,9 @@ async function getSubscribedFriendIds(viewerId) {
 router.get('/markers', async (req, res) => {
   const viewerId = req.user.userId;
   try {
-    const friendIds = await getSubscribedFriendIds(viewerId);
+    // v376 fix: Markers are gated on mutual friendship, NOT memory subscription.
+    // See getFriendIds rationale.
+    const friendIds = await getFriendIds(viewerId);
     if (friendIds.length === 0) {
       return res.json({ markers: [] });
     }
@@ -98,7 +132,9 @@ router.get('/markers', async (req, res) => {
 router.get('/routes', async (req, res) => {
   const viewerId = req.user.userId;
   try {
-    const friendIds = await getSubscribedFriendIds(viewerId);
+    // v376 fix: Routes are gated on mutual friendship, NOT memory subscription.
+    // See getFriendIds rationale.
+    const friendIds = await getFriendIds(viewerId);
     if (friendIds.length === 0) {
       return res.json({ routes: [] });
     }
