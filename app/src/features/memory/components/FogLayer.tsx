@@ -393,6 +393,13 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
   // v359: detect when fogShape first contains holes (corridor cutouts from
   // GPS data), then fire onFogReady ONCE. This is one of two gates the
   // loading overlay in MemoryScreen waits on.
+  //
+  // v380 fix (zero-points users): also fire when fogShape is NON-NULL even
+  // without holes. Pre-fix: a brand-new user with no memory_points produces
+  // a fogShape that is just the world rect (no holes), so the original
+  // `hasHoles && onFogReady` gate never fired → CairnPinsLayer's gate in
+  // MemoryMap stayed false forever → pins never rendered for new users.
+  // Now: any non-null fogShape counts as "fog has finished rendering".
   useEffect(() => {
     if (fogReadyFiredRef.current) return;
     if (!fogShape || !fogShape.geometry) return;
@@ -403,9 +410,10 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
       const polys = fogShape.geometry.coordinates as any[];
       hasHoles = polys.length > 1 || polys.some((p) => p.length > 1);
     }
-    if (hasHoles && onFogReady) {
+    // v380: fire on ANY non-null shape (hasHoles OR zero-point world rect).
+    if (onFogReady) {
       fogReadyFiredRef.current = true;
-      log('v359.fog_ready_fired', { n_points: points.length });
+      log('v359.fog_ready_fired', { n_points: points.length, has_holes: hasHoles });
       onFogReady();
     }
   }, [fogShape, onFogReady, points.length]);

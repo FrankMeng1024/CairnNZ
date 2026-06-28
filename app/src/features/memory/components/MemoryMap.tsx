@@ -77,6 +77,19 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
   // location; instead expose a recenter pill when the camera drifts
   // beyond ~50m of the GPS fix. Same UX as HikingScreen.
   const [hasPannedAway, setHasPannedAway] = useState(false);
+  // v380: fog/map ready gate — pins should not appear until fog is
+  // rendered. Pre-fix the user saw pins "popping in" before fog, and some
+  // pins missed first paint entirely.
+  //
+  // v380 review (round 2): primary signal = FogLayer.onFogReady (fixed in
+  // round 1 to fire for zero-points users too). Belt-and-suspenders: a 2s
+  // timer covers the `useH3Fog=false` settings path where FogLayer returns
+  // null and never fires.
+  const [fogReady, setFogReady] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setFogReady(() => true), 2000);
+    return () => clearTimeout(timer);
+  }, []);
   // We anchor on the first known center (the GPS fix at mount time)
   // — not the live coord prop, which would let `centerCoord` updates
   // from the watcher quietly drag the "did the user pan?" baseline.
@@ -320,8 +333,16 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
             }}
           />
         </UserLocation>
-        <FogLayer userCenter={{ lat: centerLat, lng: centerLng }} onFogReady={onFogReady} />
-        <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
+        <FogLayer userCenter={{ lat: centerLat, lng: centerLng }} onFogReady={() => {
+          setFogReady(true);
+          onFogReady?.();
+        }} />
+        {/* v380: render pins only AFTER fog is ready, so they appear
+            together. Pre-fix some pins missed first paint, others popped
+            in before fog. */}
+        {fogReady && (
+          <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
+        )}
       </MapView>
       {/* v303 OTA: Skia 解锁扩散动画 overlay。在 MapView 之上 absoluteFill。
           数据从 useMemoryStore.recentUnlocks 来,native fog 7/1 上线后保留

@@ -234,6 +234,30 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       return { markers: next };
     });
 
+    // v380: plant-unlocks-memory — when a user plants a mark, also unlock
+    // the fog at that point (25m radius, same as walking unlock). Pre-fix
+    // a user planting a mark in fog couldn't see their own mark until they
+    // also walked through that point. Per user request: planting a mark
+    // should unlock at least the point itself.
+    //
+    // v380 review fix: defer to next tick to avoid blocking the same React
+    // commit (buildFogShape with 1000+ points takes 300-700ms; doing it
+    // synchronously inside the marker set() doubles the perceived plant
+    // latency for the user).
+    setTimeout(() => {
+      try {
+        // Lazy require to break the circular dep risk with useMemoryStore.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useMemoryStore } = require('../features/memory/store/useMemoryStore');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { UnlockConfig } = require('../features/memory/config/memoryConfig');
+        useMemoryStore.getState().recordCircleUnlock(data.lat, data.lng, UnlockConfig.radiusMeters);
+      } catch (err) {
+        // Non-fatal — memory unlock is best-effort, don't block the plant.
+        console.warn('[addMarker] recordCircleUnlock failed:', err);
+      }
+    }, 0);
+
     // Debug logger: marker_placed
     debugLogger.log({
       ts: Date.now(),
