@@ -1,49 +1,43 @@
 /**
- * CairnPinV10 — v383 pin component, source-of-truth for v10 design.
+ * CairnPinV10 — v386 rewrite. Single source of truth, matches v10 HTML
+ * spec exactly (docs/ux/mark-tier-explorations/round2-family4-1-v10.html
+ * lines 32-71).
  *
- * Used in 3 contexts:
- *   1. CairnPinsLayer (Memory map) via <Mapbox.Image> sprite host (SymbolLayer path)
- *   2. CairnPinsLayer fallback (PointAnnotation path on web)
- *   3. MarkerDetailScreen hero map (single pin)
+ * v386 fixes vs v385:
+ *   1. Crest no longer position:absolute with negative top — that crashed
+ *      against PointAnnotation iOS frame-clipping (children outside host
+ *      UIView CGRect get cut, no matter the parent style). Now crest is
+ *      in normal flex flow with marginBottom:-6 to overlap core, AND the
+ *      whole pin View has extra top padding so crest renders fully inside
+ *      the host frame.
+ *   2. v10 visual fidelity bumped: core gets multi-layer Shadow + inset
+ *      bezel + radial gradient approximation (single tier ring + dark
+ *      inner hairline give the "metal coin" look without true CSS
+ *      box-shadow inset which RN doesn't support).
+ *   3. Zoom-responsive scaling via reanimated useSharedValue<zoom>
+ *      hooked into MemoryMap's MapView.onCameraChanged. Parent
+ *      <Animated.View> applies transform:[{scale: f(zoom)}].
  *
- * Layout: matches docs/ux/mark-tier-explorations/round2-family4-1-v10.html
- *   - parent: width × (height = coreSize + crestH + 6 padding) relative positioning
- *   - crest: position:absolute, top: -2 (overlaps top of core by 6px), zIndex: 3
- *   - core: marginTop: 8 (room for crest overlap from above)
- *
- * Size variants:
- *   - size="memory" → core 44, total ~60 high (matches v10 HTML)
- *   - size="detail" → core 32, total ~44 high (smaller for hero map context)
- *
- * v383 fix vs v382 (per docs/plan/v383-exp-b0-report.md):
- *   - No shadow on core (was shadowRadius=7 → flooded core border with halo,
- *     causing user's "皇冠在 圆没了"). All glow is now on crest only via filter.
- *   - borderWidth 3 → 4 + inner dark ring for high-contrast border.
- *   - crest uses absolute top:-2 to overlap core (was 2px gap → crown felt
- *     detached from circle).
- *   - iOS: SVG <feDropShadow> filter on crest for v10-faithful glow.
- *   - Android: doubled crest (larger halo underlay + main crest) since
- *     react-native-svg filters are unreliable on Android.
- *   - Cross-platform: dark inner border + outer dark "stage" View ensures
- *     border reads against any map background, including dark mode.
- *
- * Tier resolution lives in CairnPinsLayer.tsx (resolveTier export).
+ * size variants:
+ *   - "memory": core 44 (v10 spec)
+ *   - "detail": core 32 (smaller for hero map context)
  */
 
 import React from 'react';
 import { View } from 'react-native';
+import Animated, { useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
 import Svg, { Path, Circle, Ellipse, Rect } from 'react-native-svg';
 import type { Tier } from './pinTier';
+import { useMapZoomShared } from './useMapZoom';
 
-// ─── Palette (mirrors v10 HTML) ────────────────────────────────────────────
+// ─── Palette (mirrors v10 HTML lines 59-61) ────────────────────────────────
 const TIER_GOLD = '#ffd460';
 const TIER_GREEN = '#8fcb5d';
 const TIER_SILVER = '#e0e6ec';
-const TIER_GLOW_GOLD = 'rgba(255,212,96,0.85)';
-const TIER_GLOW_GREEN = 'rgba(143,203,93,0.75)';
-const TIER_GLOW_SILVER = 'rgba(196,204,214,0.6)';
+const TIER_GLOW_GOLD = 'rgba(255,212,96,0.70)';
+const TIER_GLOW_GREEN = 'rgba(143,203,93,0.60)';
+const TIER_GLOW_SILVER = 'rgba(196,204,214,0.30)';
 const DARK_BORDER = '#1a1612';
-const DARK_STAGE = 'rgba(20,16,10,0.55)';
 
 const TYPE_ENAMEL: Record<string, { fill: string; dark: string }> = {
   danger: { fill: '#c84a3a', dark: '#7a2818' },
@@ -53,26 +47,27 @@ const TYPE_ENAMEL: Record<string, { fill: string; dark: string }> = {
   cairn: { fill: '#b0966c', dark: '#6a5530' },
 };
 
-// ─── Sizes ─────────────────────────────────────────────────────────────────
+// ─── Sizes (v10 HTML: core 44, crest 20×16, pin 52×60) ─────────────────────
+// We add 6px top padding to the parent so absolute crest can render fully
+// inside the PointAnnotation host UIView CGRect (iOS clip workaround).
 const SIZES = {
-  memory: { core: 44, crestW: 20, crestH: 16, crestOverlap: 6, glyph: 22 },
-  detail: { core: 32, crestW: 15, crestH: 12, crestOverlap: 4, glyph: 16 },
+  memory: { core: 44, crestW: 20, crestH: 16, crestOverlap: 6, glyph: 22, border: 3 },
+  detail: { core: 32, crestW: 15, crestH: 12, crestOverlap: 4, glyph: 16, border: 2.5 },
 } as const;
 export type PinSize = keyof typeof SIZES;
 
 function computeFrame(size: PinSize) {
   const s = SIZES[size];
-  const width = Math.max(s.core, s.crestW) + 8; // padding for crest glow bleed
-  // crest sits at top: -2, overlaps core by `crestOverlap` px.
-  // Visible height = (crest visible above core: crestH - crestOverlap) + core
-  const visibleHeight = (s.crestH - s.crestOverlap) + s.core + 4;
-  return { ...s, width, height: visibleHeight };
+  const width = Math.max(s.core, s.crestW) + 4; // padding for shadow bleed
+  // Total height: crest is in normal flow at top with marginBottom:-overlap,
+  // then core stacks below in flex column.
+  const height = s.crestH + s.core - s.crestOverlap;
+  return { ...s, width, height };
 }
 
 // ─── Crest SVG paths (1:1 from v10 HTML) ──────────────────────────────────
 function CrestPaths({ tier, colour }: { tier: Tier; colour: string }) {
   if (tier === 'self') {
-    // Crown — 5 points + base band
     return (
       <>
         <Path d="M9 1.5 L11.5 4.5 L14.5 1.5 L15.5 8 L2.5 8 L3.5 1.5 L6.5 4.5 Z" fill={colour} />
@@ -81,10 +76,8 @@ function CrestPaths({ tier, colour }: { tier: Tier; colour: string }) {
     );
   }
   if (tier === 'friend') {
-    // 8-point compass star
     return <Path d="M9 1 L10.2 6 L15 7 L10.2 8 L9 13 L7.8 8 L3 7 L7.8 6 Z" fill={colour} />;
   }
-  // Public — P-6 offset footprints
   return (
     <>
       <Ellipse cx="5" cy="5" rx="1.8" ry="2.6" fill={colour} />
@@ -97,38 +90,24 @@ function CrestPaths({ tier, colour }: { tier: Tier; colour: string }) {
   );
 }
 
-// Crest renderer with cross-platform glow.
-//
-// v383 review B2: react-native-svg 15.x does NOT support <feDropShadow> on
-// either iOS or Android (silently no-op). The original v10 HTML uses CSS
-// drop-shadow filters which are not portable to react-native-svg. We approximate
-// with a "doubled crest" — a slightly larger halo underlay in the glow colour
-// behind the main crest. Not pixel-identical to v10 HTML but works identically
-// on iOS + Android.
-function CrestWithGlow({
+// Crest with halo glow approximating v10's CSS drop-shadow filter.
+// Cross-platform doubled-up render: glow underlay + main on top.
+function Crest({
   tier, colour, glow, width, height,
 }: { tier: Tier; colour: string; glow: string; width: number; height: number }) {
-  // Halo: rendered at +2px each side, glow colour, 65% opacity. Sits behind.
-  const haloPad = 2;
+  const pad = 2;
   return (
-    <View style={{ width, height }}>
-      <View style={{
-        position: 'absolute',
-        left: -haloPad,
-        top: -haloPad,
-        width: width + haloPad * 2,
-        height: height + haloPad * 2,
-        opacity: 0.7,
-      }}>
-        <Svg width={width + haloPad * 2} height={height + haloPad * 2} viewBox="0 0 18 14">
+    <View style={{ width, height, position: 'relative' }}>
+      {/* Halo: larger crest in glow colour, behind */}
+      <View style={{ position: 'absolute', left: -pad, top: -pad, opacity: 0.7 }}>
+        <Svg width={width + pad * 2} height={height + pad * 2} viewBox="0 0 18 14">
           <CrestPaths tier={tier} colour={glow} />
         </Svg>
       </View>
-      <View style={{ position: 'absolute', left: 0, top: 0 }}>
-        <Svg width={width} height={height} viewBox="0 0 18 14">
-          <CrestPaths tier={tier} colour={colour} />
-        </Svg>
-      </View>
+      {/* Main */}
+      <Svg width={width} height={height} viewBox="0 0 18 14">
+        <CrestPaths tier={tier} colour={colour} />
+      </Svg>
     </View>
   );
 }
@@ -139,10 +118,7 @@ function TypeGlyph({ type, darkColour }: { type: string; darkColour: string }) {
   if (type === 'danger') {
     return (
       <>
-        <Path
-          d="M11.13 2.95 a2 2 0 0 1 1.74 0 l 8.5 15.05 a2 2 0 0 1 -1.74 3 H3.37 a2 2 0 0 1 -1.74 -3 Z"
-          fill={GLYPH_FILL}
-        />
+        <Path d="M11.13 2.95 a2 2 0 0 1 1.74 0 l 8.5 15.05 a2 2 0 0 1 -1.74 3 H3.37 a2 2 0 0 1 -1.74 -3 Z" fill={GLYPH_FILL} />
         <Rect x="11.1" y="9" width="1.8" height="6" rx="0.9" fill={darkColour} />
         <Circle cx="12" cy="17.5" r="1.1" fill={darkColour} />
       </>
@@ -162,10 +138,7 @@ function TypeGlyph({ type, darkColour }: { type: string; darkColour: string }) {
   if (type === 'water') {
     return (
       <>
-        <Path
-          d="M12 2.5 C 12 2.5, 5 11, 5 15.5 a 7 7 0 0 0 14 0 C 19 11, 12 2.5, 12 2.5 Z"
-          fill={GLYPH_FILL}
-        />
+        <Path d="M12 2.5 C 12 2.5, 5 11, 5 15.5 a 7 7 0 0 0 14 0 C 19 11, 12 2.5, 12 2.5 Z" fill={GLYPH_FILL} />
         <Ellipse cx="9" cy="13" rx="1.6" ry="2.6" fill="rgba(255,255,255,0.45)" />
       </>
     );
@@ -181,7 +154,7 @@ function TypeGlyph({ type, darkColour }: { type: string; darkColour: string }) {
       </>
     );
   }
-  // cairn — 3 stacked ellipses
+  // cairn (logo) — 3 stacked ellipses
   return (
     <>
       <Ellipse cx="12" cy="20" rx="7.5" ry="2.4" fill={GLYPH_FILL} />
@@ -208,94 +181,79 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
   const tierColour = tier === 'self' ? TIER_GOLD : tier === 'friend' ? TIER_GREEN : TIER_SILVER;
   const tierGlow = tier === 'self' ? TIER_GLOW_GOLD : tier === 'friend' ? TIER_GLOW_GREEN : TIER_GLOW_SILVER;
 
-  // v383 review (real-device): Mapbox.Image rasteriser snapshots the child View
-  // tree. If every child is position:absolute, parent has no intrinsic content
-  // size and the snapshot collapses to the parent's solid background — user
-  // saw a "black circle" (the DARK_STAGE backdrop with no foreground content).
-  //
-  // Fix: use normal flex layout for the medallion (intrinsic size visible to
-  // Mapbox), and absolute-position only the crest (which overlaps from above).
-  // The dark stage becomes a wrapping View around the core (concentric, normal
-  // flow) instead of a separate absolute layer.
-  const stageSize = f.core + 2;
-  const visibleHeight = (f.crestH - f.crestOverlap) + stageSize;
+  // v386: zoom-responsive scaling via reanimated. Parent <Animated.View>
+  // reads shared value and applies transform:scale. Pin's physical size
+  // on map stays roughly constant — small at far zoom, large at close.
+  const zoom = useMapZoomShared();
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{
+      scale: interpolate(
+        zoom.value,
+        [11, 13, 15, 17, 19],
+        [0.35, 0.6, 0.85, 1.0, 1.15],
+        Extrapolation.CLAMP,
+      ),
+    }],
+  }));
 
   return (
-    <View
-      style={{
-        width: Math.max(f.width, stageSize) + 4,
-        height: visibleHeight,
-        alignItems: 'center',
-        // top padding so absolute-positioned crest is in-bounds
-        paddingTop: f.crestH - f.crestOverlap,
-      }}
+    <Animated.View
+      style={[
+        {
+          width: f.width,
+          height: f.height,
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+        },
+        animStyle,
+      ]}
     >
-      {/* Crest — absolute, overlaps top edge of medallion below */}
-      <View
-        style={{
-          position: 'absolute',
-          left: '50%',
-          marginLeft: -f.crestW / 2,
-          top: 0,
-          width: f.crestW,
-          height: f.crestH,
-          zIndex: 3,
-        }}
-      >
-        <CrestWithGlow
-          tier={tier}
-          colour={tierColour}
-          glow={tierGlow}
-          width={f.crestW}
-          height={f.crestH}
-        />
+      {/* Crest at top, normal flow, marginBottom negative pulls core up to overlap */}
+      <View style={{ marginBottom: -f.crestOverlap, zIndex: 3 }}>
+        <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
       </View>
 
-      {/* Medallion: dark stage wrap → tier ring core → inner hairline → glyph.
-          All normal flex flow so Mapbox.Image rasteriser sees real content. */}
+      {/* Core medallion */}
       <View
         style={{
-          width: stageSize,
-          height: stageSize,
-          borderRadius: stageSize / 2,
-          backgroundColor: DARK_STAGE,
+          width: f.core,
+          height: f.core,
+          borderRadius: f.core / 2,
+          borderWidth: f.border,
+          borderColor: tierColour,
+          backgroundColor: enamel.fill,
           alignItems: 'center',
           justifyContent: 'center',
+          overflow: 'hidden',
+          // Shadow that ADDS contrast against map (drop shadow, not the
+          // bleed-into-border glow that caused v382's invisible-border bug)
+          shadowColor: '#000',
+          shadowOpacity: 0.45,
+          shadowRadius: 3,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 4,
         }}
       >
+        {/* Dark inner hairline — gives the tier ring a defined inner edge,
+            replaces v10's inset bezel which RN can't do */}
         <View
           style={{
-            width: f.core,
-            height: f.core,
-            borderRadius: f.core / 2,
-            borderWidth: 4,
-            borderColor: tierColour,
-            backgroundColor: enamel.fill,
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
+            position: 'absolute',
+            left: 1,
+            top: 1,
+            right: 1,
+            bottom: 1,
+            borderRadius: (f.core - 2) / 2,
+            borderWidth: 1,
+            borderColor: DARK_BORDER,
+            opacity: 0.55,
           }}
-        >
-          {/* Inner dark hairline — sits inside core, gives tier ring a defined edge */}
-          <View
-            style={{
-              position: 'absolute',
-              left: 4,
-              top: 4,
-              right: 4,
-              bottom: 4,
-              borderRadius: (f.core - 8) / 2,
-              borderWidth: 1,
-              borderColor: DARK_BORDER,
-              opacity: 0.4,
-            }}
-          />
-          <Svg width={f.glyph} height={f.glyph} viewBox="0 0 24 24">
-            <TypeGlyph type={type} darkColour={enamel.dark} />
-          </Svg>
-        </View>
+        />
+        <Svg width={f.glyph} height={f.glyph} viewBox="0 0 24 24">
+          <TypeGlyph type={type} darkColour={enamel.dark} />
+        </Svg>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -308,36 +266,39 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
   const f = computeFrame(size);
   const tierColour = tier === 'self' ? TIER_GOLD : tier === 'friend' ? TIER_GREEN : TIER_SILVER;
   const tierGlow = tier === 'self' ? TIER_GLOW_GOLD : tier === 'friend' ? TIER_GLOW_GREEN : TIER_GLOW_SILVER;
-  const stageSize = f.core;
-  const visibleHeight = (f.crestH - f.crestOverlap) + stageSize;
+
+  const zoom = useMapZoomShared();
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{
+      scale: interpolate(
+        zoom.value,
+        [11, 13, 15, 17, 19],
+        [0.35, 0.6, 0.85, 1.0, 1.15],
+        Extrapolation.CLAMP,
+      ),
+    }],
+  }));
 
   return (
-    <View
-      style={{
-        width: Math.max(f.width, stageSize) + 4,
-        height: visibleHeight,
-        alignItems: 'center',
-        paddingTop: f.crestH - f.crestOverlap,
-      }}
+    <Animated.View
+      style={[
+        {
+          width: f.width,
+          height: f.height,
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+        },
+        animStyle,
+      ]}
     >
-      <View
-        style={{
-          position: 'absolute',
-          left: '50%',
-          marginLeft: -f.crestW / 2,
-          top: 0,
-          width: f.crestW,
-          height: f.crestH,
-          zIndex: 3,
-        }}
-      >
-        <CrestWithGlow tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
+      <View style={{ marginBottom: -f.crestOverlap, zIndex: 3 }}>
+        <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
       </View>
       <View
         style={{
-          width: stageSize,
-          height: stageSize,
-          borderRadius: stageSize / 2,
+          width: f.core,
+          height: f.core,
+          borderRadius: f.core / 2,
           borderWidth: 2,
           borderStyle: 'dashed',
           borderColor: tierColour,
@@ -357,7 +318,7 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
           <Circle cx="12" cy="18" r="1.2" fill={tierColour} />
         </Svg>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

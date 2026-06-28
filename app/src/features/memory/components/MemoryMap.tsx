@@ -110,6 +110,14 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
     const center = feature?.properties?.center;
     const zoom = feature?.properties?.zoom;
     if (!Array.isArray(center) || center.length < 2 || typeof zoom !== 'number') return;
+    // v386: propagate zoom to shared value so pin components can animate
+    // transform:scale on the UI thread (reanimated). This is the
+    // OTA-friendly zoom-responsive scaling for PointAnnotation, since
+    // Mapbox SDK's GL-side iconSize works only for SymbolLayer (which
+    // can't render react-native-svg per v383-exp diagnostic).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { setMapZoom } = require('./useMapZoom');
+    setMapZoom(zoom);
     idleFireCountRef.current += 1;
     const fireCount = idleFireCountRef.current;
     const tNow = Date.now();
@@ -214,6 +222,17 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
         logoEnabled={false}
         attributionEnabled={false}
         onMapIdle={onMapSettle}
+        onCameraChanged={(e: any) => {
+          // v386: propagate live zoom to shared value every camera frame
+          // so PointAnnotation pin transform:scale tracks smoothly during
+          // pinch. onMapIdle alone fires only at end of pinch (sticky size).
+          const z = e?.properties?.zoom ?? e?.zoom;
+          if (typeof z === 'number') {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { setMapZoom } = require('./useMapZoom');
+            setMapZoom(z);
+          }
+        }}
         // v357 diagnostic: three Mapbox native events.
         //   willStartLoadingMap — style + first tile fetch begins. This is
         //     the earliest frame where MapView is in DOM but renders no
