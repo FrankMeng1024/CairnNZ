@@ -70,3 +70,6 @@ scan_reminder*.ps1
 
 # v025 backend ARWorldMap blob storage (dev-only filesystem; v0.2.6 → Aliyun OSS)
 backend/storage/
+
+# v383 mock script preview output — produced fresh on every dry-run, do not commit
+backend/scripts/seed/output/

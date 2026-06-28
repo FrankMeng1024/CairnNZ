@@ -218,14 +218,14 @@ export function MarkerDetailScreen() {
                     Public silver footprints + 5 type cores). Detail page
                     tier resolution: if marker is in own store → self,
                     permission=public → public, else friend.
-                    Scaled 0.75 because detail page hero map gives the pin
-                    more visual weight than necessary at default size. */}
-                <View style={{ transform: [{ scale: 0.75 }] }}>
-                  <CairnPin
-                    tier={resolveTier(marker as any, new Set(markers.map(m => m.id)))}
-                    type={marker.type}
-                  />
-                </View>
+                    v383: use size="detail" (smaller core 32 vs memory's 44)
+                    instead of transform:scale(0.75) hack — user reported
+                    detail pin was too big at 0.75 scale. */}
+                <CairnPin
+                  tier={resolveTier(marker as any, new Set(markers.map(m => m.id)))}
+                  type={marker.type}
+                  size="detail"
+                />
               </PointAnnotation>
             )}
           </MapView>
