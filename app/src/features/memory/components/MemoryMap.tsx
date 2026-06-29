@@ -371,7 +371,12 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
             v387: additionally gate on initialRevealDone so server-hydrated
             memory_points have arrived — otherwise user sees Mystery pins
             on first entry, then Revealed on second (Mystery flash). */}
-        {fogReady && initialRevealDone && (
+        {/* v387b: revert initialRevealDone gate — that flag is only set on
+            FIRST-EVER reveal (new user). Existing users skip the reveal step,
+            so the flag stays false forever → CairnPinsLayer never mounted →
+            no pins visible at all. fogReady alone is enough; Mystery flash
+            on first entry is acceptable. */}
+        {fogReady && (
           <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
         )}
       </MapView>

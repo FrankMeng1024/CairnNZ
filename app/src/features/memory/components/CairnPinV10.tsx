@@ -47,11 +47,14 @@ const TYPE_ENAMEL: Record<string, { fill: string; dark: string }> = {
 };
 
 // ─── Sizes (v10 HTML: core 44, crest 20×16, pin 52×60) ─────────────────────
-// We add 6px top padding to the parent so absolute crest can render fully
-// inside the PointAnnotation host UIView CGRect (iOS clip workaround).
+// v387b: crestOverlap = 0 (crest sits directly above core, no negative margin).
+// Previous overlap caused crest to render BEHIND core in RN's z order in some
+// PointAnnotation host views (no native CSS z-index) — user saw "no crown" on
+// Flag detail. Visual seam between crest and core is handled by the curved
+// crown-base path instead of geometric overlap.
 const SIZES = {
-  memory: { core: 44, crestW: 20, crestH: 16, crestOverlap: 6, glyph: 22, border: 3 },
-  detail: { core: 32, crestW: 15, crestH: 12, crestOverlap: 4, glyph: 16, border: 2.5 },
+  memory: { core: 44, crestW: 20, crestH: 16, crestOverlap: 0, glyph: 22, border: 3 },
+  detail: { core: 32, crestW: 15, crestH: 12, crestOverlap: 0, glyph: 16, border: 2.5 },
 } as const;
 export type PinSize = keyof typeof SIZES;
 
