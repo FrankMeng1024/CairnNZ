@@ -87,9 +87,24 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
   // timer covers the `useH3Fog=false` settings path where FogLayer returns
   // null and never fires.
   const [fogReady, setFogReady] = useState(false);
-  // v387: also gate CairnPinsLayer on server memory hydrate to avoid the
-  // first-entry "Mystery flash" then second-entry "Revealed" transition.
-  const initialRevealDone = useMemoryStore((s) => s.initialRevealDone);
+  // v389: gate on (fogReady AND memory points have arrived OR 2s timeout)
+  // — first-entry "Mystery flash" was caused by rendering CairnPinsLayer
+  // before server memory_points hydrate finishes. We don't gate on
+  // initialRevealDone (only set for brand-new users); instead we gate
+  // on the actual points array.
+  const memoryPointsCount = useMemoryStore((s) => s.points.length);
+  const [pinsCanShow, setPinsCanShow] = useState(false);
+  useEffect(() => {
+    // Show pins as soon as memory points have arrived (Revealed will paint
+    // directly). Fallback timer ensures pins still show for users with 0
+    // memory points (nothing to hydrate).
+    if (memoryPointsCount > 0) {
+      setPinsCanShow(true);
+      return;
+    }
+    const t = setTimeout(() => setPinsCanShow(true), 2500);
+    return () => clearTimeout(t);
+  }, [memoryPointsCount]);
   useEffect(() => {
     const timer = setTimeout(() => setFogReady(() => true), 2000);
     return () => clearTimeout(timer);
@@ -371,12 +386,12 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
             v387: additionally gate on initialRevealDone so server-hydrated
             memory_points have arrived — otherwise user sees Mystery pins
             on first entry, then Revealed on second (Mystery flash). */}
-        {/* v387b: revert initialRevealDone gate — that flag is only set on
-            FIRST-EVER reveal (new user). Existing users skip the reveal step,
-            so the flag stays false forever → CairnPinsLayer never mounted →
-            no pins visible at all. fogReady alone is enough; Mystery flash
-            on first entry is acceptable. */}
-        {fogReady && (
+        {/* v389: pin layer gated on fogReady AND pinsCanShow.
+            pinsCanShow flips true as soon as memory points have arrived
+            (or 2.5s fallback for users with 0 points). This prevents the
+            Mystery flash without breaking the case where the flag never
+            sets (existing users). */}
+        {fogReady && pinsCanShow && (
           <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
         )}
       </MapView>

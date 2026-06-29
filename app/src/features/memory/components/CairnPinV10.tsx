@@ -73,11 +73,13 @@ function scaleForZoom(z: number): number {
 
 function computeFrame(size: PinSize) {
   const s = SIZES[size];
-  const width = Math.max(s.core, s.crestW) + 4; // padding for shadow bleed
-  // Total height: crest is in normal flow at top with marginBottom:-overlap,
-  // then core stacks below in flex column.
-  const height = s.crestH + s.core - s.crestOverlap;
-  return { ...s, width, height };
+  // v389: explicit big square frame. PointAnnotation iOS anchors to
+  // child view CENTRE = lat/lng. We make the View bigger than the
+  // visible pin (3× core) so the core ends up at exact centre while
+  // the crest above and shadow below all sit inside the host frame —
+  // no clip by PointAnnotation's measurement assumptions.
+  const frameSide = s.core * 2; // 88 for memory, 64 for detail
+  return { ...s, width: frameSide, height: frameSide, frameSide };
 }
 
 // ─── Crest SVG paths (1:1 from v10 HTML, except self crown base is
@@ -227,18 +229,16 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
       style={{
         width: f.width,
         height: f.height,
-        alignItems: 'center',
-        justifyContent: 'flex-start',
+        position: 'relative',
       }}
+      pointerEvents="box-none"
     >
-      {/* Crest at top, marginBottom negative so core overlaps from below */}
-      <View style={{ marginBottom: -f.crestOverlap, zIndex: 3 }}>
-        <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
-      </View>
-
-      {/* Core medallion */}
+      {/* Core medallion — centred in the View (lat/lng anchor) */}
       <View
         style={{
+          position: 'absolute',
+          left: (f.width - f.core) / 2,
+          top: (f.height - f.core) / 2,
           width: f.core,
           height: f.core,
           borderRadius: f.core / 2,
@@ -272,6 +272,20 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
           <TypeGlyph type={type} darkColour={enamel.dark} />
         </Svg>
       </View>
+
+      {/* Crest — absolute above the core, fully inside the big frame */}
+      <View
+        style={{
+          position: 'absolute',
+          left: (f.width - f.crestW) / 2,
+          top: (f.height - f.core) / 2 - f.crestH + 2, // tuck 2px under core's top edge
+          width: f.crestW,
+          height: f.crestH,
+          zIndex: 10,
+        }}
+      >
+        <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
+      </View>
     </View>
   );
 }
@@ -303,15 +317,16 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
       style={{
         width: f.width,
         height: f.height,
-        alignItems: 'center',
-        justifyContent: 'flex-start',
+        position: 'relative',
       }}
+      pointerEvents="box-none"
     >
-      <View style={{ marginBottom: -f.crestOverlap, zIndex: 3 }}>
-        <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
-      </View>
+      {/* Mystery core (dashed) — centred */}
       <View
         style={{
+          position: 'absolute',
+          left: (f.width - f.core) / 2,
+          top: (f.height - f.core) / 2,
           width: f.core,
           height: f.core,
           borderRadius: f.core / 2,
@@ -333,6 +348,20 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
           />
           <Circle cx="12" cy="18" r="1.2" fill={tierColour} />
         </Svg>
+      </View>
+
+      {/* Crest absolute above core — same anchor as CairnPinV10 */}
+      <View
+        style={{
+          position: 'absolute',
+          left: (f.width - f.crestW) / 2,
+          top: (f.height - f.core) / 2 - f.crestH + 2,
+          width: f.crestW,
+          height: f.crestH,
+          zIndex: 10,
+        }}
+      >
+        <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
       </View>
     </View>
   );
