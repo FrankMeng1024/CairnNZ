@@ -242,7 +242,16 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
       }}
       pointerEvents="box-none"
     >
-      {/* Core medallion — centred in the View (lat/lng anchor) */}
+      {/* Core medallion — centred in the View (lat/lng anchor).
+          v392: crest moved INSIDE this View as its absolute child (top
+          negative, sticking out above), and overflow changed to 'visible'.
+          Reason: PointAnnotation iOS offscreen rasterise (layer.render(in:))
+          captures only CALayers it can walk. core View has explicit
+          backgroundColor+borderColor+shadow so RN allocates native UIView
+          and rasteriser captures everything inside it — including the
+          crest now that it's a child. Crest as a sibling of core (v381-v391)
+          had its own optionally-collapsable layer that the rasteriser
+          consistently missed. */}
       <View
         style={{
           position: 'absolute',
@@ -256,7 +265,7 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
           backgroundColor: enamel.fill,
           alignItems: 'center',
           justifyContent: 'center',
-          overflow: 'hidden',
+          overflow: 'visible', // CHANGED: let crest stick out without clip
           shadowColor: '#000',
           shadowOpacity: 0.45,
           shadowRadius: 3,
@@ -264,6 +273,7 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
           elevation: 4,
         }}
       >
+        {/* Inner dark hairline */}
         <View
           style={{
             position: 'absolute',
@@ -277,46 +287,40 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
             opacity: 0.55,
           }}
         />
+        {/* Type glyph */}
         <Svg width={f.glyph} height={f.glyph} viewBox="0 0 24 24">
           <TypeGlyph type={type} darkColour={enamel.dark} />
         </Svg>
-      </View>
-
-      {/* Crest — absolute above the core, fully inside the big frame.
-          v391: backgroundColor 'rgba(0,0,0,0.001)' forces RN to allocate a
-          true native UIView (transparent backgroundColor:'transparent' was
-          insufficient — RN still collapsed). 1/1000 alpha is sub-perceptible
-          but non-zero, so RN/Fabric cannot optimise it out. This is the
-          only reliable way to force the child react-native-svg CAShapeLayer
-          to be part of PointAnnotation's offscreen-rasterise CALayer walk. */}
-      <View
-        style={{
-          position: 'absolute',
-          left: (f.width - f.crestW) / 2,
-          top: (f.height - f.core) / 2 - f.crestH + 2,
-          width: f.crestW,
-          height: f.crestH,
-          backgroundColor: 'rgba(0,0,0,0.001)',
-          zIndex: 10,
-        }}
-        collapsable={false}
-        onLayout={(e) => {
-          const { width: w, height: h, x, y } = e.nativeEvent.layout;
-          if (w > 0 && h > 0) {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { log } = require('../../../services/appLog');
-            const key = `crest|${tier}|${type}`;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const g = global as any;
-            if (!g._v391LayoutLogged) g._v391LayoutLogged = new Set();
-            if (!g._v391LayoutLogged.has(key)) {
-              g._v391LayoutLogged.add(key);
-              log('v391.crest_layout', { tier, type, w, h, x, y, frame_w: f.width, frame_h: f.height });
+        {/* CREST — child of core View, sticks out above via negative top */}
+        <View
+          style={{
+            position: 'absolute',
+            left: (f.core - f.crestW) / 2,
+            top: -f.crestH + 2, // crest top above core, 2px tucked under
+            width: f.crestW,
+            height: f.crestH,
+            backgroundColor: 'rgba(0,0,0,0.001)',
+            zIndex: 10,
+          }}
+          collapsable={false}
+          onLayout={(e) => {
+            const { width: w, height: h, x, y } = e.nativeEvent.layout;
+            if (w > 0 && h > 0) {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { log } = require('../../../services/appLog');
+              const key = `crest|${tier}|${type}`;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const g = global as any;
+              if (!g._v392LayoutLogged) g._v392LayoutLogged = new Set();
+              if (!g._v392LayoutLogged.has(key)) {
+                g._v392LayoutLogged.add(key);
+                log('v392.crest_layout', { tier, type, w, h, x, y, in_core: true });
+              }
             }
-          }
-        }}
-      >
-        <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
+          }}
+        >
+          <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
+        </View>
       </View>
     </View>
   );
@@ -353,7 +357,8 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
       }}
       pointerEvents="box-none"
     >
-      {/* Mystery core (dashed) — centred */}
+      {/* Mystery core (dashed) — centred. v392: crest is now child of this
+          View so PointAnnotation rasterise captures it. */}
       <View
         style={{
           position: 'absolute',
@@ -368,6 +373,7 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
           backgroundColor: 'rgba(40,32,20,0.6)',
           alignItems: 'center',
           justifyContent: 'center',
+          overflow: 'visible',
         }}
       >
         <Svg width={f.glyph} height={f.glyph} viewBox="0 0 24 24">
@@ -380,22 +386,21 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
           />
           <Circle cx="12" cy="18" r="1.2" fill={tierColour} />
         </Svg>
-      </View>
-
-      {/* Crest absolute above core — same anchor as CairnPinV10 */}
-      <View
-        style={{
-          position: 'absolute',
-          left: (f.width - f.crestW) / 2,
-          top: (f.height - f.core) / 2 - f.crestH + 2,
-          width: f.crestW,
-          height: f.crestH,
-          backgroundColor: 'rgba(0,0,0,0.001)',
-          zIndex: 10,
-        }}
-        collapsable={false}
-      >
-        <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
+        {/* Crest as child of core View */}
+        <View
+          style={{
+            position: 'absolute',
+            left: (f.core - f.crestW) / 2,
+            top: -f.crestH + 2,
+            width: f.crestW,
+            height: f.crestH,
+            backgroundColor: 'rgba(0,0,0,0.001)',
+            zIndex: 10,
+          }}
+          collapsable={false}
+        >
+          <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
+        </View>
       </View>
     </View>
   );
