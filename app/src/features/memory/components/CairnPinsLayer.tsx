@@ -28,7 +28,7 @@
  */
 
 import React, { useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMarkerStore, Marker, type MarkerPermission } from '../../../store/useMarkerStore';
@@ -159,7 +159,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   }, [markers, ownIds]);
 
   if (!Mapbox.available) return null;
-  const { SymbolLayer, ShapeSource, Images, Image: MbxImage, PointAnnotation } = Mapbox;
+  const { SymbolLayer, ShapeSource, Images, Image: MbxImage, PointAnnotation, MarkerView } = Mapbox;
 
   // v381 diagnostic kept — proves on real device that v10 layer mounts
   if (visible.length > 0) {
@@ -297,7 +297,63 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
     );
   }
 
-  // Legacy PointAnnotation fallback path (only when SymbolLayer unavailable).
+  // v393: MarkerView path (preferred — uses native viewAnnotations,
+  // NO offscreen rasterise, NO react-native-svg async-commit race).
+  // Falls back to PointAnnotation only if MarkerView missing.
+  if (MarkerView) {
+    return (
+      <>
+        {visible.map(({ marker, tier, isExplored: explored }) => (
+          <MarkerView
+            key={marker.id}
+            coordinate={[marker.lng, marker.lat]}
+            anchor={{ x: 0.5, y: 0.5 }}
+            allowOverlap
+          >
+            <Pressable
+              onPress={() => setSelection(
+                explored
+                  ? { kind: 'revealed', marker, tier }
+                  : { kind: 'mystery', marker, tier }
+              )}
+            >
+              {explored ? (
+                <CairnPinV10 tier={tier} type={marker.type} size="memory" />
+              ) : (
+                <MysteryPinV10 tier={tier} size="memory" />
+              )}
+            </Pressable>
+          </MarkerView>
+        ))}
+        {strangerVisible.map((m) => (
+          <MarkerView
+            key={`stranger-${m.id}`}
+            coordinate={[m.lng, m.lat]}
+            anchor={{ x: 0.5, y: 0.5 }}
+            allowOverlap
+          >
+            <View><StrangerBlurredPinV10 /></View>
+          </MarkerView>
+        ))}
+        {selection.kind === 'mystery' && (
+          <MysteryCairnSheet
+            marker={selection.marker}
+            userLat={centerLat}
+            userLng={centerLng}
+            onClose={() => setSelection({ kind: 'none' })}
+          />
+        )}
+        {selection.kind === 'revealed' && (
+          <RevealedCairnSheet
+            marker={selection.marker}
+            onClose={() => setSelection({ kind: 'none' })}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Legacy PointAnnotation fallback path (only when MarkerView unavailable).
   return (
     <>
       {visible.map(({ marker, tier, isExplored: explored }) => (

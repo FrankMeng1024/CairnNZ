@@ -51,6 +51,7 @@ import { ContentConfig, VisibilityConfig } from '../features/plant/config/plantC
 let MapView: any = null;
 let CameraComponent: any = null;
 let PointAnnotation: any = null;
+let MarkerView: any = null;
 if (Platform.OS !== 'web') {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -58,6 +59,7 @@ if (Platform.OS !== 'web') {
     MapView = Mapbox.MapView;
     CameraComponent = Mapbox.Camera;
     PointAnnotation = Mapbox.PointAnnotation;
+    MarkerView = Mapbox.MarkerView;
   } catch {}
 } else {
   try {
@@ -68,6 +70,7 @@ if (Platform.OS !== 'web') {
       MapView = m.MapView;
       CameraComponent = m.Camera;
       PointAnnotation = m.PointAnnotation;
+      MarkerView = m.MarkerView;
     }
   } catch {}
 }
@@ -211,7 +214,20 @@ export function MarkerDetailScreen() {
                 zoomLevel: 16.5,
               }}
             />
-            {PointAnnotation && (
+            {MarkerView ? (
+              <MarkerView coordinate={[marker.lng, marker.lat]} anchor={{ x: 0.5, y: 0.5 }} allowOverlap>
+                {/* v393: MarkerView instead of PointAnnotation — viewAnnotations
+                    native UIView, no offscreen rasterise → crest (react-native-svg)
+                    renders correctly. */}
+                <View>
+                  <CairnPin
+                    tier={resolveTier(marker as any, new Set(markers.map(m => m.id)))}
+                    type={marker.type}
+                    size="detail"
+                  />
+                </View>
+              </MarkerView>
+            ) : PointAnnotation && (
               <PointAnnotation id="marker-pin" coordinate={[marker.lng, marker.lat]}>
                 {/* v381: replaced v300 hollow pin with v10 reliquary
                     medallion (Self gold crown / Friend green star /

@@ -25,6 +25,11 @@ interface MapboxAdapter {
   SymbolLayer: any;
   Images: any;
   Image: any;
+  // v393: MarkerView — viewAnnotations-based, NO rasterise, NO async-commit
+  // race with react-native-svg. PointAnnotation's bitmap rasterise misses
+  // react-native-svg CAShapeLayer (commits on next CATransaction, ~16ms after
+  // PointAnnotation's 10μs delay). MarkerView attaches actual UIView to map.
+  MarkerView: any;
   available: boolean;
 }
 
@@ -64,6 +69,7 @@ export function getMapbox(): MapboxAdapter {
       SymbolLayer: m.SymbolLayer,
       Images: m.Images,
       Image: m.Image,
+      MarkerView: m.MarkerView,
       available: true,
     };
   } catch {
@@ -85,6 +91,7 @@ function makeUnavailable(): MapboxAdapter {
     SymbolLayer: null,
     Images: null,
     Image: null,
+    MarkerView: null,
     available: false,
   };
 }

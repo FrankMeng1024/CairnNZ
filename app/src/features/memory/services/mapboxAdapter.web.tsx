@@ -399,6 +399,7 @@ export function makeWebMapboxAdapter() {
     SymbolLayer: null,
     Images: null,
     Image: null,
+    MarkerView: null,
     available: true,
   };
 }
