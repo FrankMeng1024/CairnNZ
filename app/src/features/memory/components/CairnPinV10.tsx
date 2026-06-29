@@ -126,16 +126,19 @@ function Crest({
 }: { tier: Tier; colour: string; glow: string; width: number; height: number }) {
   const pad = 2;
   return (
-    <View style={{ width, height, position: 'relative' }} collapsable={false}>
+    <View
+      style={{ width, height, position: 'relative', backgroundColor: 'rgba(0,0,0,0.001)' }}
+      collapsable={false}
+    >
       <View
-        style={{ position: 'absolute', left: -pad, top: -pad, opacity: 0.7 }}
+        style={{ position: 'absolute', left: -pad, top: -pad, opacity: 0.7, backgroundColor: 'rgba(0,0,0,0.001)' }}
         collapsable={false}
       >
         <Svg width={width + pad * 2} height={height + pad * 2} viewBox="0 0 18 14">
           <CrestPaths tier={tier} colour={glow} />
         </Svg>
       </View>
-      <View collapsable={false}>
+      <View collapsable={false} style={{ backgroundColor: 'rgba(0,0,0,0.001)' }}>
         <Svg width={width} height={height} viewBox="0 0 18 14">
           <CrestPaths tier={tier} colour={colour} />
         </Svg>
@@ -280,19 +283,20 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
       </View>
 
       {/* Crest — absolute above the core, fully inside the big frame.
-          v390: wrap in a View with explicit transparent background AND a
-          fixed size, forcing RN to allocate a native CALayer for this
-          subtree. Without it, react-native-svg's CAShapeLayer may not be
-          captured by PointAnnotation iOS rasteriser (layer.render walks
-          composited CALayers only). */}
+          v391: backgroundColor 'rgba(0,0,0,0.001)' forces RN to allocate a
+          true native UIView (transparent backgroundColor:'transparent' was
+          insufficient — RN still collapsed). 1/1000 alpha is sub-perceptible
+          but non-zero, so RN/Fabric cannot optimise it out. This is the
+          only reliable way to force the child react-native-svg CAShapeLayer
+          to be part of PointAnnotation's offscreen-rasterise CALayer walk. */}
       <View
         style={{
           position: 'absolute',
           left: (f.width - f.crestW) / 2,
-          top: (f.height - f.core) / 2 - f.crestH + 2, // tuck 2px under core's top edge
+          top: (f.height - f.core) / 2 - f.crestH + 2,
           width: f.crestW,
           height: f.crestH,
-          backgroundColor: 'transparent',
+          backgroundColor: 'rgba(0,0,0,0.001)',
           zIndex: 10,
         }}
         collapsable={false}
@@ -301,14 +305,13 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
           if (w > 0 && h > 0) {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { log } = require('../../../services/appLog');
-            // Dedupe per (tier, type) — flood-protect
             const key = `crest|${tier}|${type}`;
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const g = global as any;
-            if (!g._v390LayoutLogged) g._v390LayoutLogged = new Set();
-            if (!g._v390LayoutLogged.has(key)) {
-              g._v390LayoutLogged.add(key);
-              log('v390.crest_layout', { tier, type, w, h, x, y, frame_w: f.width, frame_h: f.height });
+            if (!g._v391LayoutLogged) g._v391LayoutLogged = new Set();
+            if (!g._v391LayoutLogged.has(key)) {
+              g._v391LayoutLogged.add(key);
+              log('v391.crest_layout', { tier, type, w, h, x, y, frame_w: f.width, frame_h: f.height });
             }
           }
         }}
@@ -387,7 +390,7 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
           top: (f.height - f.core) / 2 - f.crestH + 2,
           width: f.crestW,
           height: f.crestH,
-          backgroundColor: 'transparent',
+          backgroundColor: 'rgba(0,0,0,0.001)',
           zIndex: 10,
         }}
         collapsable={false}
