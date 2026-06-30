@@ -477,7 +477,11 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
       // such cluster gets dropped — they're plant artefacts not hike
       // tracks. Hike tracks are 50+ points strung along a path, not
       // tightly clustered.
-      const cleanedPoints = stripPlantClusters(decoded.points);
+      // v397: user explicit request that plant unlock its own location.
+      // v351 stripPlantClusters used to delete plant-origin points from
+      // local cache on hydrate; that's now reversed — plant points are
+      // legitimate visited points that user wants to keep.
+      const cleanedPoints = decoded.points;
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('memhydrate_v351_plant_strip', {

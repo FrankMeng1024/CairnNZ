@@ -234,6 +234,20 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       return { markers: next };
     });
 
+    // v397: log unconditionally at the START so we know addMarker hit this
+    // path at all (v396 had no plant_unlock logs in production → either the
+    // try block threw early or this entire addMarker was never reached).
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { log } = require('../services/appLog');
+      log('v397.addmarker_enter', {
+        lat: Number(data.lat.toFixed(5)),
+        lng: Number(data.lng.toFixed(5)),
+        permission: data.permission,
+        type: data.type,
+      });
+    } catch {/* never throw on log */}
+
     // v380: plant-unlocks-memory — when a user plants a mark, also unlock
     // the fog at that point (25m radius, same as walking unlock).
     //
@@ -253,7 +267,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       const newPoints = [...state.points, newPoint];
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { log } = require('../services/appLog');
-      log('v396.plant_unlock', {
+      log('v397.plant_unlock', {
         lat: Number(data.lat.toFixed(5)),
         lng: Number(data.lng.toFixed(5)),
         points_before: state.points.length,
@@ -271,6 +285,13 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       const { useH3VisitedStore } = require('../features/memory/store/useH3VisitedStore');
       useH3VisitedStore.getState().addPointToCells(data.lat, data.lng, ts);
     } catch (err) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { log } = require('../services/appLog');
+        log('v397.plant_unlock_err', {
+          err: String(err && (err as any).message ? (err as any).message : err),
+        });
+      } catch {/* ignore */}
       console.warn('[addMarker] plant-unlock failed:', err);
     }
 
