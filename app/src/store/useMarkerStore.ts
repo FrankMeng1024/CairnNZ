@@ -259,15 +259,17 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useMemoryStore } = require('../features/memory/store/useMemoryStore');
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { v4: uuidv4 } = require('uuid');
+      // v398 fix: uuid library throws "crypto.getRandomValues() not supported"
+      // in RN (no polyfill). Replaced with timestamp + Math.random cid —
+      // doesn't need cryptographic uniqueness, only unique-per-plant-event.
       const ts = Math.floor(Date.now());
-      const newPoint = { lat: data.lat, lng: data.lng, ts, cid: uuidv4(), synced: false };
+      const cid = `plant-${ts}-${Math.floor(Math.random() * 1e9).toString(36)}`;
+      const newPoint = { lat: data.lat, lng: data.lng, ts, cid, synced: false };
       const state = useMemoryStore.getState();
       const newPoints = [...state.points, newPoint];
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { log } = require('../services/appLog');
-      log('v397.plant_unlock', {
+      log('v398.plant_unlock', {
         lat: Number(data.lat.toFixed(5)),
         lng: Number(data.lng.toFixed(5)),
         points_before: state.points.length,
@@ -277,10 +279,9 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       useMemoryStore.setState({
         points: newPoints,
         geometryVersion: state.geometryVersion + 1,
-        _bucketIndex: null, // force rebuild on next isExplored
+        _bucketIndex: null,
         _unsyncedCount: state._unsyncedCount + 1,
       });
-      // Dual-write to H3 cell store so FogLayer sees consistent state.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useH3VisitedStore } = require('../features/memory/store/useH3VisitedStore');
       useH3VisitedStore.getState().addPointToCells(data.lat, data.lng, ts);
@@ -288,7 +289,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { log } = require('../services/appLog');
-        log('v397.plant_unlock_err', {
+        log('v398.plant_unlock_err', {
           err: String(err && (err as any).message ? (err as any).message : err),
         });
       } catch {/* ignore */}
