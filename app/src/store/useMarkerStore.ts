@@ -235,23 +235,43 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     });
 
     // v380: plant-unlocks-memory — when a user plants a mark, also unlock
-    // the fog at that point (25m radius, same as walking unlock). Pre-fix
-    // a user planting a mark in fog couldn't see their own mark until they
-    // also walked through that point. Per user request: planting a mark
-    // should unlock at least the point itself.
+    // the fog at that point (25m radius, same as walking unlock).
     //
-    // v394 directly synchronous (was setTimeout(0) which raced with React
-    // commit, sometimes never ran on slow devices). recordPoint immediately
-    // adds a VisitedPoint to memory store, bumps geometryVersion → FogLayer
-    // rebuilds with the new unlock hole. CULL_THRESHOLD (12.5m) inside
-    // recordPoint dedupes if a nearby point already exists, but in fog
-    // (which is the failure case) there's no nearby point, so it inserts.
+    // v396 真 fix: recordPoint has 12.5m CULL that silently returns if
+    // any of the last 32 visited points is within 12.5m. Plant on a
+    // partially-explored boundary triggers the cull → fog stays closed.
+    // We now directly push a VisitedPoint, bypassing cull. Plant must
+    // ALWAYS unlock its own location.
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useMemoryStore } = require('../features/memory/store/useMemoryStore');
-      useMemoryStore.getState().recordPoint(data.lat, data.lng, Date.now());
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { v4: uuidv4 } = require('uuid');
+      const ts = Math.floor(Date.now());
+      const newPoint = { lat: data.lat, lng: data.lng, ts, cid: uuidv4(), synced: false };
+      const state = useMemoryStore.getState();
+      const newPoints = [...state.points, newPoint];
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { log } = require('../services/appLog');
+      log('v396.plant_unlock', {
+        lat: Number(data.lat.toFixed(5)),
+        lng: Number(data.lng.toFixed(5)),
+        points_before: state.points.length,
+        points_after: newPoints.length,
+        geom_v_before: state.geometryVersion,
+      });
+      useMemoryStore.setState({
+        points: newPoints,
+        geometryVersion: state.geometryVersion + 1,
+        _bucketIndex: null, // force rebuild on next isExplored
+        _unsyncedCount: state._unsyncedCount + 1,
+      });
+      // Dual-write to H3 cell store so FogLayer sees consistent state.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useH3VisitedStore } = require('../features/memory/store/useH3VisitedStore');
+      useH3VisitedStore.getState().addPointToCells(data.lat, data.lng, ts);
     } catch (err) {
-      console.warn('[addMarker] recordPoint failed:', err);
+      console.warn('[addMarker] plant-unlock failed:', err);
     }
 
     // Debug logger: marker_placed
