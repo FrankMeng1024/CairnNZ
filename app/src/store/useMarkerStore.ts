@@ -272,18 +272,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       // 解锁 plant 位置周围 25m fog.
       const ts = Math.floor(Date.now());
       const cidBase = `plant-${ts}-${Math.floor(Math.random() * 1e9).toString(36)}`;
-      // 4 个对称偏移点 + 中心点 = 5 个点, 重心严格在 plant 中心.
-      // 形成一个 5m 半径的"+"号 line cluster, turf.buffer(25m) 后
-      // → ~30m 半径圆形, plant 中心严格在圆心. 满足用户原话"以
-      // mark 为中心解锁".
-      const dLat = 4.5e-5;  // ~5m
-      const dLng = 4.5e-5 / Math.max(0.1, Math.cos((data.lat * Math.PI) / 180));
+      // v400: single point — FogLayer.tsx:160 now buffers single-point
+      // segments via turf.point + buffer. plant 中心严格在 fog hole 圆心.
       const planted = [
-        { lat: data.lat,         lng: data.lng,         ts: ts,   cid: `${cidBase}-0`, synced: false },
-        { lat: data.lat + dLat,  lng: data.lng,         ts: ts+1, cid: `${cidBase}-1`, synced: false }, // N
-        { lat: data.lat - dLat,  lng: data.lng,         ts: ts+2, cid: `${cidBase}-2`, synced: false }, // S
-        { lat: data.lat,         lng: data.lng + dLng,  ts: ts+3, cid: `${cidBase}-3`, synced: false }, // E
-        { lat: data.lat,         lng: data.lng - dLng,  ts: ts+4, cid: `${cidBase}-4`, synced: false }, // W
+        { lat: data.lat, lng: data.lng, ts, cid: `${cidBase}-0`, synced: false },
       ];
       const state = useMemoryStore.getState();
       const newPoints = [...state.points, ...planted];

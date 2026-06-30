@@ -153,11 +153,26 @@ function buildFogShape(
   }
 
   const segments = segmentByGap(points);
-  // Each segment becomes a buffered polygon. Single-point segments are
-  // skipped (no line geometry possible).
+  // v400: single-point segments are now buffered via turf.point instead
+  // of skipped — pre-v400 a single VisitedPoint (e.g. from plant-unlock)
+  // formed a segment of length 1, was skipped (lineString needs ≥2 pts),
+  // produced no fog hole. Now: 1-point → turf.point + buffer; ≥2-point →
+  // turf.lineString + buffer. Plant center sits exactly at the hole center.
   const corridors: Array<Feature<Polygon | MultiPolygon>> = [];
   for (const seg of segments) {
-    if (seg.length < 2) continue;
+    if (seg.length === 0) continue;
+    if (seg.length === 1) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { point: turfPoint } = require('@turf/helpers');
+        const p = turfPoint(seg[0]);
+        const buf = bufferTurf(p, CORRIDOR_WIDTH_M, { units: 'meters', steps: 16 });
+        if (buf && buf.geometry) corridors.push(buf as Feature<Polygon | MultiPolygon>);
+      } catch (e: any) {
+        log('fog.buffer_failed', { seg_len: 1, err: String(e?.message ?? e).slice(0, 100) });
+      }
+      continue;
+    }
     // Cap at MAX_POINTS_PER_HIKE per segment (defensive — turf.buffer cost
     // scales with vertex count).
     const capped = seg.length > MAX_POINTS_PER_HIKE
