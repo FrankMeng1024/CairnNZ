@@ -259,20 +259,41 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useMemoryStore } = require('../features/memory/store/useMemoryStore');
-      // v398 fix: uuid library throws "crypto.getRandomValues() not supported"
-      // in RN (no polyfill). Replaced with timestamp + Math.random cid —
-      // doesn't need cryptographic uniqueness, only unique-per-plant-event.
+      // v399 真根因 (FogLayer.tsx:160): `if (seg.length < 2) continue` —
+      // 单点 segment 在 turf.buffer 前被跳过 (lineString 需要 ≥2 点).
+      // v398 push 1 个 point → fog builder n_points=1 has_holes=FALSE
+      // 验证: aliyun fog.shape_built n_points=1 has_holes=False, 接着
+      // 3 秒后 server hydrate 把 points 替换成 server 371 个, plant
+      // point 永远 silently dropped.
+      //
+      // 修法: plant 时 add 3 个点形成小三角形 (中心 + 5m 北 + 5m 东
+      // 偏移), 间隔大于 GAP_TIME_THRESHOLD 内. segmentByGap 把它们
+      // 当一个 segment, turf.buffer 25m → ~55m 直径圆形通道, 真正
+      // 解锁 plant 位置周围 25m fog.
       const ts = Math.floor(Date.now());
-      const cid = `plant-${ts}-${Math.floor(Math.random() * 1e9).toString(36)}`;
-      const newPoint = { lat: data.lat, lng: data.lng, ts, cid, synced: false };
+      const cidBase = `plant-${ts}-${Math.floor(Math.random() * 1e9).toString(36)}`;
+      // 4 个对称偏移点 + 中心点 = 5 个点, 重心严格在 plant 中心.
+      // 形成一个 5m 半径的"+"号 line cluster, turf.buffer(25m) 后
+      // → ~30m 半径圆形, plant 中心严格在圆心. 满足用户原话"以
+      // mark 为中心解锁".
+      const dLat = 4.5e-5;  // ~5m
+      const dLng = 4.5e-5 / Math.max(0.1, Math.cos((data.lat * Math.PI) / 180));
+      const planted = [
+        { lat: data.lat,         lng: data.lng,         ts: ts,   cid: `${cidBase}-0`, synced: false },
+        { lat: data.lat + dLat,  lng: data.lng,         ts: ts+1, cid: `${cidBase}-1`, synced: false }, // N
+        { lat: data.lat - dLat,  lng: data.lng,         ts: ts+2, cid: `${cidBase}-2`, synced: false }, // S
+        { lat: data.lat,         lng: data.lng + dLng,  ts: ts+3, cid: `${cidBase}-3`, synced: false }, // E
+        { lat: data.lat,         lng: data.lng - dLng,  ts: ts+4, cid: `${cidBase}-4`, synced: false }, // W
+      ];
       const state = useMemoryStore.getState();
-      const newPoints = [...state.points, newPoint];
+      const newPoints = [...state.points, ...planted];
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { log } = require('../services/appLog');
-      log('v398.plant_unlock', {
+      log('v399.plant_unlock', {
         lat: Number(data.lat.toFixed(5)),
         lng: Number(data.lng.toFixed(5)),
         points_before: state.points.length,
+        points_added: planted.length,
         points_after: newPoints.length,
         geom_v_before: state.geometryVersion,
       });
@@ -280,16 +301,18 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
         points: newPoints,
         geometryVersion: state.geometryVersion + 1,
         _bucketIndex: null,
-        _unsyncedCount: state._unsyncedCount + 1,
+        _unsyncedCount: state._unsyncedCount + planted.length,
       });
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useH3VisitedStore } = require('../features/memory/store/useH3VisitedStore');
-      useH3VisitedStore.getState().addPointToCells(data.lat, data.lng, ts);
+      for (const p of planted) {
+        useH3VisitedStore.getState().addPointToCells(p.lat, p.lng, p.ts);
+      }
     } catch (err) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { log } = require('../services/appLog');
-        log('v398.plant_unlock_err', {
+        log('v399.plant_unlock_err', {
           err: String(err && (err as any).message ? (err as any).message : err),
         });
       } catch {/* ignore */}

@@ -242,7 +242,19 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
       });
     } catch {/* ignore */}
     serverPoints.sort((a, b) => a.ts - b.ts);
-    useMemoryStore.getState().replacePoints(serverPoints, useMemoryStore.getState().initialRevealDone);
+    // v399 fix: preserve unsynced local points (synced=false). These are
+    // freshly-planted points that haven't been pushed to server yet — if
+    // we drop them during reconcile, plant-unlock fog hole disappears 3
+    // sec after plant (aliyun fog.shape_built logs confirmed this race).
+    const localUnsynced = localPoints.filter((p) => !p.synced);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('./appLog').log('v399.reconcile_keep_unsynced', {
+        unsynced_n: localUnsynced.length,
+      });
+    } catch {/* ignore */}
+    const merged = [...serverPoints, ...localUnsynced].sort((a, b) => a.ts - b.ts);
+    useMemoryStore.getState().replacePoints(merged, useMemoryStore.getState().initialRevealDone);
     return;
   }
 
