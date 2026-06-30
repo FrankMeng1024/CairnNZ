@@ -73,13 +73,20 @@ function scaleForZoom(z: number): number {
 
 function computeFrame(size: PinSize) {
   const s = SIZES[size];
-  // v389: explicit big square frame. PointAnnotation iOS anchors to
-  // child view CENTRE = lat/lng. We make the View bigger than the
-  // visible pin (3× core) so the core ends up at exact centre while
-  // the crest above and shadow below all sit inside the host frame —
-  // no clip by PointAnnotation's measurement assumptions.
-  const frameSide = s.core * 2; // 88 for memory, 64 for detail
-  return { ...s, width: frameSide, height: frameSide, frameSide };
+  // v394: tighter frame than v389's 88×88 big square. Width = core + 4
+  // (small padding for shadow bleed). Height = crestH + core (crest 直接在
+  // core 上方,核心和皇冠紧贴). MarkerView anchor (0.5, 0.5) puts view
+  // center == coordinate. We arrange so core's CENTER sits at view center;
+  // crest sticks out via marginBottom: negative within a flex column.
+  const width = s.core + 6; // shadow padding
+  // Visible height: crestH (above core) + core. Anchor at (0.5, 0.5) = view
+  // center; core center coincides with view center BY DESIGN: extra padding
+  // above and below core equal. So pad = crestH + extra; height = crestH*2 + core
+  // Wait — simpler: put core at view CENTER. Total view = core×3 in height
+  // gives core enough margin top for crest, bottom for shadow, with core
+  // visually anchored at the center → MarkerView anchor 0.5/0.5 = core center.
+  const height = s.core + s.crestH * 2 + 4; // crest can sit above + symmetric pad below
+  return { ...s, width, height };
 }
 
 // ─── Crest SVG paths (1:1 from v10 HTML, except self crown base is
@@ -242,16 +249,11 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
       }}
       pointerEvents="box-none"
     >
-      {/* Core medallion — centred in the View (lat/lng anchor).
-          v392: crest moved INSIDE this View as its absolute child (top
-          negative, sticking out above), and overflow changed to 'visible'.
-          Reason: PointAnnotation iOS offscreen rasterise (layer.render(in:))
-          captures only CALayers it can walk. core View has explicit
-          backgroundColor+borderColor+shadow so RN allocates native UIView
-          and rasteriser captures everything inside it — including the
-          crest now that it's a child. Crest as a sibling of core (v381-v391)
-          had its own optionally-collapsable layer that the rasteriser
-          consistently missed. */}
+      {/* Core medallion — exact view center (MarkerView anchor 0.5/0.5).
+          v394: width = core + 6, height = crestH*2 + core + 4. Core
+          centered: top = (height - core) / 2 = crestH + 2, left =
+          (width - core) / 2 = 3. Crest is core's absolute child sticking
+          out top by -crestH + 2. */}
       <View
         style={{
           position: 'absolute',

@@ -79,15 +79,24 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   const [selection, setSelection] = useState<Selection>({ kind: 'none' });
 
   const classified = useMemo<Classified[]>(
-    () => markers.map((m) => ({
-      marker: m,
-      tier: resolveTier(m, ownIds),
-      isExplored: isExplored(m.lat, m.lng),
-      distanceM: haversineM(
-        { lat: centerLat, lng: centerLng },
-        { lat: m.lat, lng: m.lng }
-      ),
-    })),
+    () => markers.map((m) => {
+      const tier = resolveTier(m, ownIds);
+      // v394 fix: self-planted marks are ALWAYS revealed at their own
+      // location. Even if recordCircleUnlock failed for any reason
+      // (setTimeout race, cull threshold, store hydrate timing), the
+      // user must see what they themselves just planted. Mystery state
+      // is only meaningful for OTHER users' marks in unexplored fog.
+      const own = ownIds.has(m.id) || tier === 'self';
+      return {
+        marker: m,
+        tier,
+        isExplored: own ? true : isExplored(m.lat, m.lng),
+        distanceM: haversineM(
+          { lat: centerLat, lng: centerLng },
+          { lat: m.lat, lng: m.lng }
+        ),
+      };
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [markers, centerLat, centerLng, geometryVersion, ownIds]
   );
