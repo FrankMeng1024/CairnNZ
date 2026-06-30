@@ -240,23 +240,19 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     // also walked through that point. Per user request: planting a mark
     // should unlock at least the point itself.
     //
-    // v380 review fix: defer to next tick to avoid blocking the same React
-    // commit (buildFogShape with 1000+ points takes 300-700ms; doing it
-    // synchronously inside the marker set() doubles the perceived plant
-    // latency for the user).
-    setTimeout(() => {
-      try {
-        // Lazy require to break the circular dep risk with useMemoryStore.
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { useMemoryStore } = require('../features/memory/store/useMemoryStore');
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { UnlockConfig } = require('../features/memory/config/memoryConfig');
-        useMemoryStore.getState().recordCircleUnlock(data.lat, data.lng, UnlockConfig.radiusMeters);
-      } catch (err) {
-        // Non-fatal — memory unlock is best-effort, don't block the plant.
-        console.warn('[addMarker] recordCircleUnlock failed:', err);
-      }
-    }, 0);
+    // v394 directly synchronous (was setTimeout(0) which raced with React
+    // commit, sometimes never ran on slow devices). recordPoint immediately
+    // adds a VisitedPoint to memory store, bumps geometryVersion → FogLayer
+    // rebuilds with the new unlock hole. CULL_THRESHOLD (12.5m) inside
+    // recordPoint dedupes if a nearby point already exists, but in fog
+    // (which is the failure case) there's no nearby point, so it inserts.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useMemoryStore } = require('../features/memory/store/useMemoryStore');
+      useMemoryStore.getState().recordPoint(data.lat, data.lng, Date.now());
+    } catch (err) {
+      console.warn('[addMarker] recordPoint failed:', err);
+    }
 
     // Debug logger: marker_placed
     debugLogger.log({

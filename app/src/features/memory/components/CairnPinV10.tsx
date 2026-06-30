@@ -25,7 +25,7 @@
 
 import React from 'react';
 import { View } from 'react-native';
-import Svg, { Path, Circle, Ellipse, Rect } from 'react-native-svg';
+import Svg, { Path, Circle, Ellipse, Rect, G } from 'react-native-svg';
 import type { Tier } from './pinTier';
 import { useMapZoom } from './useMapZoom';
 
@@ -223,10 +223,8 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
   const tierColour = tier === 'self' ? TIER_GOLD : tier === 'friend' ? TIER_GREEN : TIER_SILVER;
   const tierGlow = tier === 'self' ? TIER_GLOW_GOLD : tier === 'friend' ? TIER_GLOW_GREEN : TIER_GLOW_SILVER;
 
-  // v387: PointAnnotation iOS ignores RN transform on its child View. We
-  // scale by changing the real width/height/border numbers — pin actually
-  // re-lays-out larger/smaller, host annotation view re-anchors to the new
-  // child measured frame. Throttled re-render via useMapZoom external store.
+  // v394b: zoom scale via JS re-render (PointAnnotation/MarkerView ignore
+  // RN transform on children; we change real px sizes).
   const zoom = useMapZoom();
   const s = scaleForZoom(zoom);
   const f = {
@@ -240,90 +238,78 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
     border: Math.max(1, baseFrame.border * s),
   };
 
+  // ── 全部画在一个 SVG 里 — crest + core + glyph 同一 SVG 坐标空间
+  // 不再嵌套 View → 不存在两个独立的 native UIView 让 crest 跟 core
+  // 视觉错位的可能。SVG viewBox 是统一坐标,内容数学上固定相对位置.
+  //
+  // 设计坐标 (viewBox base=100 单位):
+  //   crest: cx=50, cy=20 (上方居中), w=30, h=22
+  //   core:  cx=50, cy=58 (中间略下), r=24
+  //   crest 底 (cy=31) 进入 core 顶 (cy=58-24=34) 上方 3 单位 → 视觉融合
+  //
+  // 实际渲染时 SVG 缩放到 f.width × f.height。core 圆心始终在
+  // x=50/100*width, y=58/100*height. MarkerView anchor 0.5/0.5 让 view
+  // center == coordinate; view center 是 (f.width/2, f.height/2). 我们
+  // 把 core cy 也设到 height 中心 → core center == view center == coord.
+  const vbW = 100;
+  const vbH = 100;
+  // core: cy at view center = 50 (so core center == view center)
+  const coreCy = 50;
+  const coreR = (f.core / f.width) * vbW / 2; // core radius in viewBox units
+  // crest sits above core, bottom of crest overlaps top of core by ~3 units
+  const crestVBw = (f.crestW / f.width) * vbW;
+  const crestVBh = (f.crestH / f.height) * vbH;
+  const crestTop = coreCy - coreR - crestVBh + 3; // 3 = overlap
+
   return (
     <View
       style={{
         width: f.width,
         height: f.height,
-        position: 'relative',
       }}
       pointerEvents="box-none"
     >
-      {/* Core medallion — exact view center (MarkerView anchor 0.5/0.5).
-          v394: width = core + 6, height = crestH*2 + core + 4. Core
-          centered: top = (height - core) / 2 = crestH + 2, left =
-          (width - core) / 2 = 3. Crest is core's absolute child sticking
-          out top by -crestH + 2. */}
-      <View
-        style={{
-          position: 'absolute',
-          left: (f.width - f.core) / 2,
-          top: (f.height - f.core) / 2,
-          width: f.core,
-          height: f.core,
-          borderRadius: f.core / 2,
-          borderWidth: f.border,
-          borderColor: tierColour,
-          backgroundColor: enamel.fill,
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'visible', // CHANGED: let crest stick out without clip
-          shadowColor: '#000',
-          shadowOpacity: 0.45,
-          shadowRadius: 3,
-          shadowOffset: { width: 0, height: 2 },
-          elevation: 4,
-        }}
-      >
-        {/* Inner dark hairline */}
-        <View
-          style={{
-            position: 'absolute',
-            left: 1,
-            top: 1,
-            right: 1,
-            bottom: 1,
-            borderRadius: (f.core - 2) / 2,
-            borderWidth: 1,
-            borderColor: DARK_BORDER,
-            opacity: 0.55,
-          }}
+      <Svg width={f.width} height={f.height} viewBox={`0 0 ${vbW} ${vbH}`}>
+        {/* Drop shadow on core via duplicated darker circle, slightly offset */}
+        <Circle cx={50} cy={coreCy + 0.8} r={coreR} fill="rgba(0,0,0,0.45)" />
+        {/* Core fill */}
+        <Circle cx={50} cy={coreCy} r={coreR} fill={enamel.fill} />
+        {/* Tier ring (border) */}
+        <Circle
+          cx={50} cy={coreCy} r={coreR - (f.border / f.width) * vbW / 2}
+          fill="none" stroke={tierColour}
+          strokeWidth={(f.border / f.width) * vbW}
         />
-        {/* Type glyph */}
-        <Svg width={f.glyph} height={f.glyph} viewBox="0 0 24 24">
-          <TypeGlyph type={type} darkColour={enamel.dark} />
-        </Svg>
-        {/* CREST — child of core View, sticks out above via negative top */}
-        <View
-          style={{
-            position: 'absolute',
-            left: (f.core - f.crestW) / 2,
-            top: -f.crestH + 2, // crest top above core, 2px tucked under
-            width: f.crestW,
-            height: f.crestH,
-            backgroundColor: 'rgba(0,0,0,0.001)',
-            zIndex: 10,
-          }}
-          collapsable={false}
-          onLayout={(e) => {
-            const { width: w, height: h, x, y } = e.nativeEvent.layout;
-            if (w > 0 && h > 0) {
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              const { log } = require('../../../services/appLog');
-              const key = `crest|${tier}|${type}`;
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const g = global as any;
-              if (!g._v392LayoutLogged) g._v392LayoutLogged = new Set();
-              if (!g._v392LayoutLogged.has(key)) {
-                g._v392LayoutLogged.add(key);
-                log('v392.crest_layout', { tier, type, w, h, x, y, in_core: true });
-              }
-            }
-          }}
-        >
-          <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
-        </View>
-      </View>
+        {/* Inner dark hairline */}
+        <Circle
+          cx={50} cy={coreCy} r={coreR - (f.border / f.width) * vbW - 1}
+          fill="none" stroke={DARK_BORDER}
+          strokeWidth={0.5} strokeOpacity={0.55}
+        />
+        {/* Type glyph — translated and scaled to fit inside core */}
+        {(() => {
+          const glyphVBsize = (f.glyph / f.width) * vbW;
+          const glyphX = 50 - glyphVBsize / 2;
+          const glyphY = coreCy - glyphVBsize / 2;
+          // SVG coordinate transform: translate + scale so 24-unit glyph
+          // viewBox fits into glyphVBsize × glyphVBsize at (glyphX, glyphY)
+          const k = glyphVBsize / 24;
+          return (
+            <G transform={`translate(${glyphX} ${glyphY}) scale(${k})`}>
+              <TypeGlyph type={type} darkColour={enamel.dark} />
+            </G>
+          );
+        })()}
+        {/* Crest — drawn in same SVG above core */}
+        {/* Halo (glow) layer, slightly larger underneath */}
+        <G transform={`translate(${50 - crestVBw / 2 - 1} ${crestTop - 1}) scale(${(crestVBw + 2) / 18})`} opacity={0.7}>
+          <CrestPaths tier={tier} colour={tierGlow} />
+        </G>
+        {/* Main crest layer */}
+        <G transform={`translate(${50 - crestVBw / 2} ${crestTop}) scale(${crestVBw / 18})`}>
+          <CrestPaths tier={tier} colour={tierColour} />
+        </G>
+      </Svg>
     </View>
   );
 }
@@ -346,64 +332,46 @@ export function MysteryPinV10({ tier, size = 'memory' }: MysteryPinV10Props) {
     core: baseFrame.core * s,
     crestW: baseFrame.crestW * s,
     crestH: baseFrame.crestH * s,
-    crestOverlap: baseFrame.crestOverlap * s,
-    glyph: baseFrame.glyph * s,
   };
 
+  const vbW = 100, vbH = 100, coreCy = 50;
+  const coreR = (f.core / f.width) * vbW / 2;
+  const crestVBw = (f.crestW / f.width) * vbW;
+  const crestVBh = (f.crestH / f.height) * vbH;
+  const crestTop = coreCy - coreR - crestVBh + 3;
+
   return (
-    <View
-      style={{
-        width: f.width,
-        height: f.height,
-        position: 'relative',
-      }}
-      pointerEvents="box-none"
-    >
-      {/* Mystery core (dashed) — centred. v392: crest is now child of this
-          View so PointAnnotation rasterise captures it. */}
-      <View
-        style={{
-          position: 'absolute',
-          left: (f.width - f.core) / 2,
-          top: (f.height - f.core) / 2,
-          width: f.core,
-          height: f.core,
-          borderRadius: f.core / 2,
-          borderWidth: Math.max(1, 2 * s),
-          borderStyle: 'dashed',
-          borderColor: tierColour,
-          backgroundColor: 'rgba(40,32,20,0.6)',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'visible',
-        }}
-      >
-        <Svg width={f.glyph} height={f.glyph} viewBox="0 0 24 24">
-          <Path
-            d="M9 8 Q9 5 12 5 Q15 5 15 8 Q15 10 13 11 Q12 12 12 14"
-            stroke={tierColour}
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            fill="none"
-          />
-          <Circle cx="12" cy="18" r="1.2" fill={tierColour} />
-        </Svg>
-        {/* Crest as child of core View */}
-        <View
-          style={{
-            position: 'absolute',
-            left: (f.core - f.crestW) / 2,
-            top: -f.crestH + 2,
-            width: f.crestW,
-            height: f.crestH,
-            backgroundColor: 'rgba(0,0,0,0.001)',
-            zIndex: 10,
-          }}
-          collapsable={false}
-        >
-          <Crest tier={tier} colour={tierColour} glow={tierGlow} width={f.crestW} height={f.crestH} />
-        </View>
-      </View>
+    <View style={{ width: f.width, height: f.height }} pointerEvents="box-none">
+      <Svg width={f.width} height={f.height} viewBox={`0 0 ${vbW} ${vbH}`}>
+        {/* Mystery core (dashed via stroke-dasharray) */}
+        <Circle cx={50} cy={coreCy} r={coreR} fill="rgba(40,32,20,0.6)" />
+        <Circle
+          cx={50} cy={coreCy} r={coreR}
+          fill="none" stroke={tierColour}
+          strokeWidth={1.5}
+          strokeDasharray="3 2"
+        />
+        {/* Question mark */}
+        {(() => {
+          const k = (coreR * 0.85) / 12;
+          return (
+            <G transform={`translate(${50 - 12 * k} ${coreCy - 12 * k}) scale(${k})`}>
+              <Path
+                d="M9 8 Q9 5 12 5 Q15 5 15 8 Q15 10 13 11 Q12 12 12 14"
+                stroke={tierColour} strokeWidth="2.4" strokeLinecap="round" fill="none"
+              />
+              <Circle cx="12" cy="18" r="1.2" fill={tierColour} />
+            </G>
+          );
+        })()}
+        {/* Crest above core, same SVG */}
+        <G transform={`translate(${50 - crestVBw / 2 - 1} ${crestTop - 1}) scale(${(crestVBw + 2) / 18})`} opacity={0.7}>
+          <CrestPaths tier={tier} colour={tierGlow} />
+        </G>
+        <G transform={`translate(${50 - crestVBw / 2} ${crestTop}) scale(${crestVBw / 18})`}>
+          <CrestPaths tier={tier} colour={tierColour} />
+        </G>
+      </Svg>
     </View>
   );
 }

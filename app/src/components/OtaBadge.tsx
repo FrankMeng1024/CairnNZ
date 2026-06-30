@@ -1273,7 +1273,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //             where it was. Hard-disable "Looks right" button if pin
 //             ever exceeds maxNudge (defensive — clamp normally
 //             prevents this, but the gate is cheap insurance).
-export const OTA_VERSION = 394;
+export const OTA_VERSION = 395;
 //         v372: 5 UX bug fixes post v371 user testing.
 //         BUG-A: AddFriendSheet smooth spring slide-in + backdrop fade
 //           (was jarring instant appear).
