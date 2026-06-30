@@ -420,11 +420,32 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
           stripped: decoded.points.length - cleanedPoints.length,
         });
       } catch {/* ignore */}
+      // v401 真根因: hydrate 在 plant 后才完成 (boot lifecycle 异步).
+      // AsyncStorage 是 plant 前的 snapshot, replacePoints 直接抹掉
+      // in-memory 包含的 plant points. 真机 log 证明:
+      //   77520 v399.plant_unlock points_after=372
+      //   81511 fog_built n=372 (plant hole 短暂出现)
+      //   81557 memhydrate_v351_plant_strip + replacepoints_entry
+      //   81906 fog_built n=371 (replacePoints 把 plant 删了)
+      // 修法: hydrate 前抓 in-memory 的 unsynced points (plant 来的),
+      // 合并到 cache 后 replacePoints. 跟 reconcile 同样的逻辑.
+      const inMemoryUnsynced = useMemoryStore.getState().points.filter((p) => !p.synced);
+      const mergedForHydrate = inMemoryUnsynced.length > 0
+        ? [...cleanedPoints, ...inMemoryUnsynced].sort((a, b) => a.ts - b.ts)
+        : cleanedPoints;
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_before_replacepoints', { points_n: cleanedPoints.length });
+        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_keep_inmem_unsynced', {
+          cache_n: cleanedPoints.length,
+          unsynced_n: inMemoryUnsynced.length,
+          merged_n: mergedForHydrate.length,
+        });
       } catch {/* ignore */}
-      useMemoryStore.getState().replacePoints(cleanedPoints, migratedInitialRevealDone);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_before_replacepoints', { points_n: mergedForHydrate.length });
+      } catch {/* ignore */}
+      useMemoryStore.getState().replacePoints(mergedForHydrate, migratedInitialRevealDone);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_replacepoints');
