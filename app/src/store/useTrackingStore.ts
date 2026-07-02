@@ -33,6 +33,9 @@ import { telemetryUploader } from '../services/telemetryUploader';
 import { startSession, appendPoints as remoteAppendPoints, finalizeSession, deleteRemoteSession } from '../services/sessionService';
 import { crashLogger } from '../services/crashLogger';
 import { flushHikingToMemory } from '../features/memory/services/flushHikingToMemory';
+// v402: snap-to-road + synchronous memory push at hike-save.
+import { snapTrack } from '../services/routing/snapTrack';
+import { pushMemoryNow } from '../services/memorySync';
 import {
   BACKGROUND_LOCATION_TASK,
   registerBackgroundTask,
@@ -154,7 +157,7 @@ interface TrackingState {
   // Optional sessionName: when supplied (from the post-stop summary sheet)
   // the saved session is tagged with this name; otherwise the session
   // gets a default name on the consumer side ("Hike — DD/MM/YYYY").
-  stopTracking: (sessionName?: string) => void;
+  stopTracking: (sessionName?: string) => Promise<void>;
   pauseTracking: () => void;
   resumeTracking: () => void;
   addTrackPoint: (coord: Coordinate, timestamp?: number) => void;
@@ -466,7 +469,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
   },
 
-  stopTracking: (sessionName?: string) => {
+  stopTracking: async (sessionName?: string) => {
     // v118 too-short pre-check (BEFORE any cleanup): if the session has
     // < 2 trackPoints, surface a "too short" sheet but DON'T tear down
     // location subscriptions / intervals. The user gets a friendly modal
@@ -629,6 +632,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // try/catch (Challenge #8 BS-1): never let a flush error throw
       // out of stopTracking and lose the session via skipped addSession.
       let memoryNewCells = 0;
+      // v402: default to smoothed/raw for both memory + addSession. If
+      // snapTrack succeeds we overwrite these with the snapped stream.
+      let snappedTrackPoints: TrackPoint[] | null = null;
       try {
         // v354 fix: use Kalman-smoothed track for memory (same source
         // as the live HikingScreen polyline). Pre-v354 memory used
@@ -641,11 +647,60 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         const memorySource = s.trackPointsSmoothed.length >= 2
           ? s.trackPointsSmoothed
           : s.trackPoints;
-        const result = flushHikingToMemory(memorySource);
+        // v402: snap-to-road BEFORE flushing to memory. Kuala Lumpur
+        // hike "testkk" showed raw Kalman polyline never got snapped —
+        // reason was snapTrack was only wired to useRouteEditStore (edit
+        // mode), never to hike-save. Fix: run snapTrack synchronously
+        // here; if it succeeds, both memory + addSession use snapped
+        // stream; if it fails (network / token / too_short), fall back
+        // to Kalman-smoothed input (previous behaviour).
+        const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
+        let hikeSource: TrackPoint[] = memorySource;
+        if (mapboxToken && memorySource.length >= 2) {
+          try {
+            const snapRes = await snapTrack(
+              memorySource.map(p => ({ lat: p.lat, lng: p.lng, t: p.t })),
+              { mapboxToken },
+            );
+            if (snapRes.ok && snapRes.points.length >= 2) {
+              // SnappedPoint has no timestamp — interpolate linearly
+              // between memorySource start/end times so downstream
+              // consumers (flushHikingToMemory recordPoint) keep a
+              // monotonic time axis.
+              const tStart = memorySource[0].t;
+              const tEnd = memorySource[memorySource.length - 1].t;
+              const n = snapRes.points.length;
+              hikeSource = snapRes.points.map((p, i) => ({
+                lat: p.lat, lng: p.lng,
+                t: tStart + Math.round(((tEnd - tStart) * i) / Math.max(1, n - 1)),
+              }));
+              snappedTrackPoints = hikeSource;
+              crashLogger.breadcrumb(`v402:snap ok in=${memorySource.length} out=${hikeSource.length} chunks_ok=${snapRes.stats.chunksOk} fallback=${snapRes.stats.chunksFallback}`);
+            } else {
+              crashLogger.breadcrumb(`v402:snap fail reason=${snapRes.ok ? 'empty' : snapRes.reason}`);
+            }
+          } catch (snapErr) {
+            crashLogger.breadcrumb(`v402:snap threw ${String(snapErr).slice(0, 80)}`);
+          }
+        }
+        const result = flushHikingToMemory(hikeSource);
         memoryNewCells = result.newCells;
-        crashLogger.breadcrumb(`v354:hiking_to_memory ok kalman=${s.trackPointsSmoothed.length>=2} pts=${memorySource.length} new=${memoryNewCells}`);
+        crashLogger.breadcrumb(`v354:hiking_to_memory ok kalman=${s.trackPointsSmoothed.length>=2} pts=${hikeSource.length} new=${memoryNewCells} snapped=${snappedTrackPoints !== null}`);
       } catch (e) {
         crashLogger.breadcrumb(`v333:hiking_to_memory failed ${String(e).slice(0, 80)}`);
+      }
+
+      // v402: push memory points to server SYNCHRONOUSLY before
+      // completing stopTracking. Prior behaviour relied on the debounced
+      // pushPendingPoints scheduler, which frequently didn't fire if the
+      // user backgrounded the app right after saving — 89-point testkk
+      // hike ended up with zero memory_points on the server. Await here
+      // so the row is durable before we hand control back.
+      try {
+        await pushMemoryNow();
+        crashLogger.breadcrumb(`v402:mem_push_done`);
+      } catch (pushErr) {
+        crashLogger.breadcrumb(`v402:mem_push_failed ${String(pushErr).slice(0, 80)}`);
       }
 
       useSessionStore.getState().addSession({
@@ -661,8 +716,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         durationS: s.durationS,
         distanceM: s.distanceM,
         elevationGainM: s.elevationGainM,
-        trackPoints: s.trackPoints,
-        trackPointsRaw: s.trackPointsRaw.length > 0 ? s.trackPointsRaw : undefined,
+        // v402: prefer snapped stream for trackPoints (what users see
+        // on Activity map). Keep original s.trackPoints as raw if snap
+        // succeeded; otherwise leave existing raw untouched.
+        trackPoints: snappedTrackPoints ?? s.trackPoints,
+        trackPointsRaw: snappedTrackPoints
+          ? s.trackPoints
+          : (s.trackPointsRaw.length > 0 ? s.trackPointsRaw : undefined),
         markerIds: s.markerIds,
         pausePins: s.pausePins.length > 0 ? s.pausePins : undefined,
         name: finalName,

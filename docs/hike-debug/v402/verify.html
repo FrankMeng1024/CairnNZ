@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>testkkFix visual verify</title>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.5.2/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.5.2/mapbox-gl.css" rel="stylesheet">
+<style>
+body { margin:0; }
+#map { width: 100vw; height: 100vh; }
+.info { position: absolute; top: 8px; left: 8px; z-index: 5; background: rgba(0,0,0,0.75); color: white; padding: 8px 12px; font-family: sans-serif; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="info" id="info">Loading...</div>
+<div id="map"></div>
+<script src="testkk_orig.js"></script>
+<script src="testkkFix_snap.js"></script>
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiNzRqdHgiLCJhIjoiY21wOWQ3d3g0MG9zYTMzcHhraDQ2N3hiYyJ9.ICN7x0SsiUafGaN09Boy8w';
+
+// bounds
+const all = [...ORIG, ...SNAP];
+const bbox = all.reduce((acc, p) => [
+  Math.min(acc[0], p.lng), Math.min(acc[1], p.lat),
+  Math.max(acc[2], p.lng), Math.max(acc[3], p.lat)
+], [180, 90, -180, -90]);
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/streets-v12',
+  center: [(bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2],
+  zoom: 17,
+});
+map.on('load', () => {
+  // Orig raw (red)
+  map.addSource('orig', {type:'geojson', data:{type:'Feature',geometry:{type:'LineString',coordinates:ORIG.map(p=>[p.lng,p.lat])}}});
+  map.addLayer({id:'orig-line', type:'line', source:'orig', paint:{'line-color':'#dd3333','line-width':4, 'line-opacity':0.7}});
+  // Snap (green)
+  map.addSource('snap', {type:'geojson', data:{type:'Feature',geometry:{type:'LineString',coordinates:SNAP.map(p=>[p.lng,p.lat])}}});
+  map.addLayer({id:'snap-line', type:'line', source:'snap', paint:{'line-color':'#22cc22','line-width':4}});
+  // 25m buffer circles for snap points = fog holes
+  const buffers = SNAP.map((p, i) => {
+    const km = 0.025;
+    const n = 32;
+    const coords = [];
+    for (let k=0; k<=n; k++) {
+      const angle = k / n * 2 * Math.PI;
+      const dLat = km / 111.32 * Math.sin(angle);
+      const dLng = km / (111.32 * Math.cos(p.lat * Math.PI/180)) * Math.cos(angle);
+      coords.push([p.lng + dLng, p.lat + dLat]);
+    }
+    return {type:'Feature', geometry:{type:'Polygon', coordinates:[coords]}};
+  });
+  map.addSource('fog', {type:'geojson', data:{type:'FeatureCollection', features:buffers}});
+  map.addLayer({id:'fog-buffer', type:'fill', source:'fog', paint:{'fill-color':'#22cc22','fill-opacity':0.15,'fill-outline-color':'#116611'}});
+  // markers each snap point
+  SNAP.forEach((p, i) => {
+    const el = document.createElement('div');
+    el.style.cssText = 'width:6px;height:6px;background:#118811;border-radius:50%;';
+    new mapboxgl.Marker(el).setLngLat([p.lng, p.lat]).addTo(map);
+  });
+  // fit
+  map.fitBounds(bbox, {padding: 40, animate: false});
+  document.getElementById('info').textContent = `orig=${ORIG.length} snap=${SNAP.length}  red=orig  green=snap+25m fog buffers`;
+});
+</script>
+</body>
+</html>
