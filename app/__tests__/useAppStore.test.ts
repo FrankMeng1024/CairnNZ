@@ -84,7 +84,7 @@ describe('useAppStore.hydrate', () => {
       expect(state.hydrated).toBe(true);
     });
 
-    it('restores user (isLoggedIn=true) when JWT is valid', async () => {
+    it('v404: valid JWT → user pre-warmed, but isLoggedIn STAYS false (cold boot 必登)', async () => {
       const realUser = { id: '42', name: 'Frank', email: 'frank@example.com' };
       setupMocks(() => realUser);
       const { useAppStore } = require('../src/store/useAppStore');
@@ -92,7 +92,11 @@ describe('useAppStore.hydrate', () => {
       await useAppStore.getState().hydrate();
       const state = useAppStore.getState();
 
-      expect(state.isLoggedIn).toBe(true);
+      // v404 rule: 任何 cold boot 都不 auto-login。hydrate 触发 = 一定
+      // 是 cold boot(JS bundle 重启),用户必须手动重登。切后台/回前台
+      // 走 warm resume,不经过 hydrate,内存里 isLoggedIn 保留。
+      expect(state.isLoggedIn).toBe(false);
+      // user pre-warmed 使登录后 UI 立可见,不留空白
       expect(state.user).toEqual(realUser);
       expect(state.hydrated).toBe(true);
     });

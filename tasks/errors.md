@@ -37,3 +37,10 @@ DO NOT discard the commits.
 - OTA v329 published successfully to EAS (production branch)
 - Resolution options: (a) user unblocks via https://github.com/FrankMeng1024/CairnNZ/security/secret-scanning/unblock-secret/3FcVx5gbQozl3iAaO7KLkH4Fmop  (b) rewrite history to scrub line 229 from commit 8348cbc onward
 - Per §Git Strategy: commit is the guarantee, push retries at next trigger point; will accumulate
+
+## 2026-07-06 — github.com push blocked (Sprint 72 close)
+- `git push origin master` failed twice: `Failed to connect to github.com port 443` after 21s.
+- Local commits `c62e7a8` (backend) + `12dc53c` (v403 Sprint 72) are safe locally.
+- OTA v403 published via EAS successfully (aliyun/expo servers reachable).
+- Backend files already deployed via scp+docker cp (aliyun reachable).
+- Retry pending; git push scheduled to retry at next commit trigger point.

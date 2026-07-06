@@ -135,30 +135,40 @@ export const useAppStore = create<AppState>((set) => ({
         return;
       }
 
-      // ── Auth policy (Sprint 72 STORY-00549) ──────────────────────────
-      // Cold start behavior:
-      //   1. If a logout marker exists → force AuthScreen (do NOT auto-login)
-      //      even if a token still exists. User explicitly signed out; respect it.
-      //   2. If getMe() returns a valid user AND no logout marker → auto-login
-      //      directly to Home. This is the new default, per Sprint 72 user
-      //      requirement "没在 hiking 时也不应该动不动回 login".
-      //   3. If getMe() returns null (401/403 real token invalid) → AuthScreen.
-      //   4. If getMe() throws (network timeout, offline) → keep token,
-      //      AuthScreen shown so user can retry / sign in offline. Token is
-      //      NOT cleared on network errors (see authService.getMe:121-124).
+      // ── Auth policy (v404 — kill 后必登 / warm 无感) ──────────────────
+      // hydrate 只在 App.tsx mount 时跑一次（cold boot）。切后台/回前台
+      // JS runtime 存活 → Zustand isLoggedIn 保留 → 不经过这里 → 用户
+      // 无感回到 Home。所以 hydrate 触发 = 必然是 cold boot（kill /
+      // iOS jetsam / 首次冷启）。
+      //
+      // 产品规则：任何 cold boot → 强制 AuthScreen，永远不 auto-login。
+      // 用户想重开就要重登（记住邮箱 checkbox 已由 AuthScreen 处理）。
+      //
+      // 但 pre-warm 数据要做：markers/sessions/AR origin 从本地缓存加载
+      // user.id 的槽位，登录成功后 UI 立刻可见，无空白等待。
+      //
+      // token 处理：
+      //   - getMe() 成功（token 有效）→ pre-warm user-scoped 缓存，
+      //     token 保留（下次登录只需密码）。
+      //   - getMe() null（token 真无效）→ guest 缓存 + token 已被
+      //     authService.getMe 清（见 authService 401 分支）。
+      //   - getMe() throw（网络挂）→ token 保留，走 guest 缓存兜底。
+      //
+      // logoutMarker 从此变成 no-op（读一下清一下即可），因为无 marker
+      // 也不 auto-login，marker 存在意义消失。保留读取只为把老 marker
+      // 清干净。
       crashLogger.breadcrumb('hydrate:start');
-      let logoutMarker: string | null = null;
       try {
-        logoutMarker = await storage.getItem(STORAGE_KEY_LOGOUT_MARKER);
+        await storage.setItem(STORAGE_KEY_LOGOUT_MARKER, '');
       } catch { /* swallow */ }
-      const hasLogoutMarker = logoutMarker === '1';
 
       try {
         const user = await getMe();
-        if (user && !hasLogoutMarker) {
-          // Auto-login: token valid + no active logout marker
-          set({ user, isLoggedIn: true });
-          crashLogger.breadcrumb(`hydrate:auto_login_success user_id=${user.id}`);
+        if (user) {
+          // Token 有效 —— pre-warm user-scoped 缓存，但 **不** flip isLoggedIn。
+          // AuthScreen 会显示；用户登录成功后 setLoggedIn(true) 即刻可见数据。
+          set({ user });
+          crashLogger.breadcrumb(`hydrate:cold_boot_prewarm user_id=${user.id}`);
           try { await useMarkerStore.getState().hydrate(user.id); } catch { /* swallow */ }
           // v0.2.3 Stage 5 — A8 schema migration. Boot order (Plan
           // V2-CONFLICT-2): markerStore hydrate → A8 → arOriginStore
@@ -174,13 +184,10 @@ export const useAppStore = create<AppState>((set) => ({
           // v0.2.3 Stage 4 — hydrate A4 FSM (useArOriginStore) AFTER
           // markerStore + A8 migration so it sees the stamped schemaVersion.
           try { await useArOriginStore.getState().hydrate(user.id); } catch { /* swallow */ }
+          // v404: fetch backend sessions on cold boot even though isLoggedIn=false.
+          // 登录成功后 UI 需要立刻看到 activity 列表，避免登录后再等一轮网络。
           try {
             const remote = await fetchSessions();
-            // Pre-load any locally-stored sessions so we can preserve
-            // names the user just typed in the post-stop summary —
-            // the backend may not have returned them yet (network race
-            // condition), and we don't want hydrate to wipe out a
-            // freshly-named activity.
             const localSessionStore = useSessionStore.getState();
             const localByRemoteId = new Map<number, string>();
             for (const s of localSessionStore.sessions) {
@@ -190,11 +197,6 @@ export const useAppStore = create<AppState>((set) => ({
             }
             const sessions = remote.map((r) => ({
               id: String(r.id),
-              // Mirror the backend row id so future delete / update calls
-              // can target the correct backend record. Without this,
-              // deleteSession's "fire-and-forget DELETE" was a no-op for
-              // every session that came from the server, leaving zombie
-              // rows in the DB after a user "deletes" an activity.
               remoteId: r.id,
               activityMode: r.type as SessionActivityMode,
               regionCode: 'nz',
@@ -205,30 +207,12 @@ export const useAppStore = create<AppState>((set) => ({
               elevationGainM: 0,
               trackPoints: [] as TrackPoint[],
               markerIds: [] as string[],
-              // Prefer backend-stored name; fall back to whatever was
-              // in the local cache (covers the race where backend
-              // hadn't persisted name yet at fetch time).
               name: r.name ?? localByRemoteId.get(r.id) ?? undefined,
             }));
             useSessionStore.setState({ sessions, currentUserId: user.id });
           } catch {
-            // Session fetch failed — fall back to user-scoped local cache
             try { await useSessionStore.getState().hydrate(user.id); } catch { /* swallow */ }
           }
-        } else if (user && hasLogoutMarker) {
-          // Token still valid but user explicitly signed out — respect marker.
-          // Pre-warm data so Sign In feels instant, but do NOT flip isLoggedIn.
-          set({ user });
-          crashLogger.breadcrumb('hydrate:logout_marker_detected user_prewarmed');
-          try { await useMarkerStore.getState().hydrate(user.id); } catch { /* swallow */ }
-          try {
-            const result = await runA8Migration(user.id);
-            if (result.showToast && result.toastMessage) {
-              useArOriginStore.getState().setMigrationToast(result.toastMessage);
-            }
-          } catch { /* swallow */ }
-          try { await useArOriginStore.getState().hydrate(user.id); } catch { /* swallow */ }
-          try { await useSessionStore.getState().hydrate(user.id); } catch { /* swallow */ }
         } else {
           // getMe returned null — token invalid or missing.
           crashLogger.breadcrumb('hydrate:token_invalid_back_to_auth');

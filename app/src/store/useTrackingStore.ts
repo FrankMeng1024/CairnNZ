@@ -732,28 +732,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       } else {
       const remoteId = s.remoteSessionId;
       const endedAt = Date.now();
+      // v404: final-flush 提前跑（还是 fire-and-forget，只推增量 tail）。
+      // 不含 finalize —— finalize 挪到 snap 完成之后，才能带上 snapped
+      // route_points。
       if (remoteId) {
         const tail = s.trackPoints.slice(lastFlushedIdx);
-        // Fire and forget — addSession's local-store write is the user-
-        // visible truth; server sync is best-effort.
-        (async () => {
-          if (tail.length > 0) {
+        if (tail.length > 0) {
+          (async () => {
             const ok = await remoteAppendPoints(remoteId, tail);
             crashLogger.breadcrumb(`session:final-flush count=${tail.length} ok=${ok}`);
             if (ok) lastFlushedIdx = s.trackPoints.length;
-          }
-          const ok2 = await finalizeSession(remoteId, {
-            end_time: new Date(endedAt).toISOString(),
-            distance_m: s.distanceM,
-            duration_s: s.durationS,
-            name: finalName,
-            // v77: ship full audit track at finalize. ~50% larger than
-            // clean track (includes drift + low-acc fixes); fine to
-            // upload once at session end, not in 60s flushes.
-            route_points_raw: s.trackPointsRaw.length > 0 ? s.trackPointsRaw : null,
-          });
-          crashLogger.breadcrumb(`session:finalize ok=${ok2} raw=${s.trackPointsRaw.length}`);
-        })().catch(() => undefined);
+          })().catch(() => undefined);
+        }
       }
 
       // v333: flush this session's trackPoints into Memory store.
@@ -833,6 +823,32 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         crashLogger.breadcrumb(`v402:mem_push_done`);
       } catch (pushErr) {
         crashLogger.breadcrumb(`v402:mem_push_failed ${String(pushErr).slice(0, 80)}`);
+      }
+
+      // v404: finalizeSession 挪到这里 —— snap 已完成，可以把 snapped
+      // route_points 和原 GPS route_points_raw 一起 PATCH 上去。
+      // route_points = snapped(Activity 展示 + save as route 用)
+      // route_points_raw = 原 trackPoints(纯 debug 参照,不参与 UI)
+      // 依然 fire-and-forget（不阻塞 UI 关闭），但 snappedTrackPoints
+      // 此时已 ready，PATCH body 完整。
+      if (remoteId) {
+        const finalizePayload = {
+          end_time: new Date(endedAt).toISOString(),
+          distance_m: s.distanceM,
+          duration_s: s.durationS,
+          name: finalName,
+          // v404: 优先送 snapped;snap 挂了就送 Kalman-smoothed 兜底,
+          // 保证 server route_points 一定有值可用于 Activity 渲染。
+          route_points: snappedTrackPoints ?? (s.trackPointsSmoothed.length >= 2 ? s.trackPointsSmoothed : s.trackPoints),
+          // v404: 原 GPS 点始终传服务器作 debug 参照。用户原话:
+          // "原GPS的作用是未来出现问题的Debug参照。原GPS点在没出问题
+          // 的时候没任何作用,出了问题也只是分析作用"。
+          route_points_raw: s.trackPointsRaw.length > 0 ? s.trackPointsRaw : s.trackPoints,
+        };
+        (async () => {
+          const ok2 = await finalizeSession(remoteId, finalizePayload);
+          crashLogger.breadcrumb(`v404:session:finalize ok=${ok2} snapped=${snappedTrackPoints !== null} raw=${s.trackPointsRaw.length}`);
+        })().catch(() => undefined);
       }
 
       useSessionStore.getState().addSession({
