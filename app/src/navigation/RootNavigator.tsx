@@ -10,8 +10,14 @@
  * the existing tools row, not a wholesale tab-bar swap.
  */
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { Platform } from 'react-native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+// v405: expose nav ref to Playwright web replay for asserting current
+// route name after auto-nav. Guarded on Platform.OS==='web' at NavigationContainer
+// onReady below.
+export const navigationRef = createNavigationContainerRef();
 
 import { AuthScreen } from '../screens/AuthScreen';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -68,8 +74,18 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer
+      ref={navigationRef}
       onReady={() => {
         markBootPhase('navigation_container_ready', { isLoggedIn: !!isLoggedIn });
+        // v405: expose nav helpers to __cairnStores for Playwright replay
+        try {
+          if (Platform.OS === 'web' && typeof globalThis !== 'undefined') {
+            const stores = (globalThis as unknown as { __cairnStores?: Record<string, unknown> }).__cairnStores ?? {};
+            stores.navigationRef = navigationRef;
+            stores.getCurrentRoute = () => navigationRef.isReady() ? navigationRef.getCurrentRoute()?.name : null;
+            (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = stores;
+          }
+        } catch { /* ignore */ }
       }}
     >
       <Stack.Navigator

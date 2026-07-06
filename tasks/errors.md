@@ -44,3 +44,23 @@ DO NOT discard the commits.
 - OTA v403 published via EAS successfully (aliyun/expo servers reachable).
 - Backend files already deployed via scp+docker cp (aliyun reachable).
 - Retry pending; git push scheduled to retry at next commit trigger point.
+
+## 2026-07-06 — v406 web test hook 待清理 (production release blocker)
+
+**位置**:
+- `app/App.tsx` — `__cairnStores` global exposure (Platform.OS==='web' guard)
+- `app/src/navigation/RootNavigator.tsx` — `navigationRef` + `getCurrentRoute` exposure
+
+**性质**: 测试后门。让 Playwright web 能直接操作 Zustand stores + navigation,不必模拟真实 UI 交互。native 侧 tree-shake 掉不影响 iOS/Android 行为。
+
+**保留原因**: v405 replay session 191 全靠这套 hook 才能自动验证 (memory push / snap / auto-nav / back stack)。未来同类回归可复用。
+
+**上线前必删**: production public release 之前把这两块代码删除,防止:
+- Web 版本被第三方 injectscript 攻击 stores
+- `__cairnStores` 名字被搜索引擎索引成 API 表面
+
+**删除 checklist** (release-day):
+1. `app/App.tsx` 里 v405 web hook 注释块整段删
+2. `app/src/navigation/RootNavigator.tsx` 里 `navigationRef` export + `onReady` 里 web hook 分支删 (createNavigationContainerRef import 也删)
+3. jest test 里若引用了 `globalThis.__cairnStores` 一并清
+4. 搜 `__cairnStores` 全 repo 应 0 命中才算清完

@@ -365,6 +365,30 @@ function AppRoot() {
       console.warn('[hydrate failed sync]', err);
     }
 
+    // v405: expose Zustand stores to Playwright web replay. Guarded on
+    // Platform.OS==='web' so native iOS/Android production builds never
+    // leak store instances. Same pattern as crashLogger.__cairnBreadcrumbs
+    // (Sprint 72 STORY-00557).
+    try {
+      if (Platform.OS === 'web' && typeof globalThis !== 'undefined') {
+        // Dynamic require so native bundles never touch these lines.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const trackingStore = require('./src/store/useTrackingStore').useTrackingStore;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const sessionStore = require('./src/store/useSessionStore').useSessionStore;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const memoryStore = require('./src/features/memory/store/useMemoryStore').useMemoryStore;
+        (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = {
+          useAppStore,
+          useTrackingStore: trackingStore,
+          useSessionStore: sessionStore,
+          useMemoryStore: memoryStore,
+        };
+      }
+    } catch (err) {
+      console.warn('[__cairnStores web hook failed]', err);
+    }
+
     // Configure debug logger device info + start network monitor
     try {
       markBootPhase('ue_main_before_debuglogger_configure');
