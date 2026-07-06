@@ -286,6 +286,23 @@ router.get('/me', authenticate, async (req, res) => {
   }
 });
 
+// ── POST /api/auth/refresh (Sprint 72 STORY-00550) ─────────────────────────
+// Trades an existing valid JWT for a fresh one with a new expiry.
+// Used by:
+//   1. Frontend hydrate-time pre-expiry check (if <3 days left)
+//   2. useTrackingStore periodic refresh during active hiking (every 30 min)
+// Any 401 here means the token is truly invalid — frontend treats this as
+// a hard signout signal (see apiService.ts iron rule).
+router.post('/refresh', authenticate, async (req, res) => {
+  try {
+    const newToken = signToken({ userId: req.user.userId, email: req.user.email });
+    return res.json({ token: newToken });
+  } catch (err) {
+    console.error('[refresh]', err);
+    return res.status(500).json({ error: 'Failed to refresh token.' });
+  }
+});
+
 // ── PATCH /api/auth/password ───────────────────────────────────────────────
 // Set password (no current password needed) or change password (requires current)
 router.patch('/password', authenticate, async (req, res) => {
