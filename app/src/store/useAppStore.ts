@@ -12,6 +12,11 @@ import { useArOriginStore } from './useArOriginStore';
 import { runA8Migration } from '../services/a8Migration';
 import { isPlaywrightBypass } from '../utils/devFlags';
 import { crashLogger } from '../services/crashLogger';
+// v405: memorySync attach 从 FGUM 提前到 hydrate,让 stopTracking →
+// pushMemoryNow 无论用户是否进过 Memory tab 都能 push。见 happy-path
+// 诊断报告 修复 1。
+import { attachMemorySync, detachMemorySync } from '../services/memorySync';
+import { hydrateMemoryForUser, detachMemoryPersistence } from '../features/memory/services/memoryPersistence';
 
 export type UIMode = 'beginner' | 'expert';
 export type ActivityMode = 'hiking' | 'running';
@@ -111,6 +116,11 @@ export const useAppStore = create<AppState>((set) => ({
     crashLogger.breadcrumb('logout:sessions_cleared');
     useMarkerStore.getState().clearMarkers();
     crashLogger.breadcrumb('logout:markers_cleared');
+    // v405: 断开 memory sync + memory persistence,避免 logout 后
+    // 后续 pushPendingPoints 用旧 userId 推数据到新用户。
+    try { detachMemorySync(); } catch { /* swallow */ }
+    try { void detachMemoryPersistence(); } catch { /* swallow */ }
+    crashLogger.breadcrumb('logout:memory_sync_detached');
     // Sprint 72 STORY-00549: 硬清标记 — 阻止下次冷启动 auto-login。
     // 用户下次点 Sign In 成功后 AuthScreen 清此标记。
     storage.setItem(STORAGE_KEY_LOGOUT_MARKER, '1').catch(() => {});
@@ -184,6 +194,27 @@ export const useAppStore = create<AppState>((set) => ({
           // v0.2.3 Stage 4 — hydrate A4 FSM (useArOriginStore) AFTER
           // markerStore + A8 migration so it sees the stamped schemaVersion.
           try { await useArOriginStore.getState().hydrate(user.id); } catch { /* swallow */ }
+          // v405: hydrate memory points from AsyncStorage + attach memory
+          // sync. 修复 happy path bug: pre-v405 attachMemorySync 只在
+          // MemoryScreen 挂载时跑,用户 hike → save → pushMemoryNow 因
+          // activeUserId=null 直接 return, memory_points 表无新增。
+          // 现在 cold-boot 就 attach,任何屏幕的 pushMemoryNow 都能 push。
+          //
+          // 顺序: hydrateMemoryForUser (从 AsyncStorage 载 unsynced points
+          // 到 useMemoryStore) → attachMemorySync (subscriber 检测到 unsynced
+          // count 就 schedulePush)。反过来会漏掉旧 unsynced points。
+          try {
+            await hydrateMemoryForUser(user.id);
+            crashLogger.breadcrumb(`v405:mem_hydrate_ok user_id=${user.id}`);
+          } catch (memErr) {
+            crashLogger.breadcrumb(`v405:mem_hydrate_failed ${String(memErr).slice(0, 80)}`);
+          }
+          try {
+            attachMemorySync(user.id);
+            crashLogger.breadcrumb(`v405:mem_sync_attached user_id=${user.id}`);
+          } catch (attachErr) {
+            crashLogger.breadcrumb(`v405:mem_sync_attach_failed ${String(attachErr).slice(0, 80)}`);
+          }
           // v404: fetch backend sessions on cold boot even though isLoggedIn=false.
           // 登录成功后 UI 需要立刻看到 activity 列表，避免登录后再等一轮网络。
           try {

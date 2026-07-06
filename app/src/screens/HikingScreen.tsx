@@ -22,7 +22,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location';
 import Svg, { Path, Circle as SvgCircle } from 'react-native-svg';
 import { useKeepAwake } from 'expo-keep-awake';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppStore } from '../store/useAppStore';
@@ -1765,7 +1765,15 @@ export function HikingScreen() {
             resumeTracking();
             setStopSummary(null);
           }}
-          onConfirm={(name) => {
+          onConfirm={async (name) => {
+            // v405: Snapshot sessionId + trackPoints BEFORE stopTracking
+            // clears the store. Needed for auto-nav to MapHistory below,
+            // and for "too-short" defensive check (skip nav if session
+            // was discarded).
+            const preState = useTrackingStore.getState();
+            const capturedSessionId = preState.sessionId;
+            const wasTooShort = preState.trackPoints.length < 2 || preState.distanceM < 20;
+
             // We pass the name through stopTracking; useTrackingStore
             // forwards it to the saved session. Falsy / empty name
             // → store falls back to the default "Hike — DD/MM/YYYY".
@@ -1774,11 +1782,31 @@ export function HikingScreen() {
             // lastStopReason without resetting state. We close the
             // summary sheet here either way; if a too-short was
             // detected, TooShortSheet renders next based on lastStopReason.
-            stopTracking(name);
+            //
+            // v405: **await** stopTracking so snap+memory push+finalize
+            // 完成后再决定 nav。之前 fire-and-forget 导致用户看到
+            // "还在 Hiking 页,不知道是否 save 成功"。
+            await stopTracking(name);
             setStopSummary(null);
-            // Phase reset back to selection screen on next render
-            // is already handled by the existing status === idle
-            // observer in HikingScreen's useEffect.
+
+            // v405 fix (Happy Path bug #7,#8): 自动跳 Activity Detail,
+            // back stack 补 Routes(activities) 让 back 直接回列表页。
+            // - 太短 session: 不 nav (TooShortSheet 会展示)
+            // - 正常保存: nav.reset 到 [Home, Routes(activities), MapHistory{sessionId}]
+            if (!wasTooShort && capturedSessionId) {
+              nav.dispatch(
+                CommonActions.reset({
+                  index: 2,
+                  routes: [
+                    { name: 'Home' },
+                    { name: 'Routes', params: { initialTab: 'activities' } },
+                    { name: 'MapHistory', params: { sessionId: capturedSessionId } },
+                  ],
+                })
+              );
+            }
+            // else: 依赖 status === idle observer 回 selection 屏 +
+            // TooShortSheet 提示 (line 1826 useEffect)
           }}
           onSaveAsRoute={async (name) => {
             // Snapshot trackPoints BEFORE stopTracking clears the store.

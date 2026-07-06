@@ -47,6 +47,16 @@ const setupMocks = (getMeImpl: () => any) => {
       getState: () => ({ hydrate: jest.fn(async () => {}), clearMarkers: jest.fn() }),
     },
   }));
+  // v405: hydrate 现在 attach memory sync + hydrate memory points。
+  // mock 两者,避免测试拉入 expo-* native deps。
+  jest.doMock('../src/services/memorySync', () => ({
+    attachMemorySync: jest.fn(),
+    detachMemorySync: jest.fn(),
+  }));
+  jest.doMock('../src/features/memory/services/memoryPersistence', () => ({
+    hydrateMemoryForUser: jest.fn(async () => {}),
+    detachMemoryPersistence: jest.fn(async () => {}),
+  }));
 };
 
 describe('useAppStore.hydrate', () => {
@@ -99,6 +109,37 @@ describe('useAppStore.hydrate', () => {
       // user pre-warmed 使登录后 UI 立可见,不留空白
       expect(state.user).toEqual(realUser);
       expect(state.hydrated).toBe(true);
+    });
+
+    it('v405: valid JWT cold-boot → attachMemorySync 被调用 (happy path 修复 1)', async () => {
+      const realUser = { id: '4', name: 'Frank', email: 'f@example.com' };
+      setupMocks(() => realUser);
+      const memSync = require('../src/services/memorySync');
+      const memPersist = require('../src/features/memory/services/memoryPersistence');
+      const { useAppStore } = require('../src/store/useAppStore');
+
+      await useAppStore.getState().hydrate();
+
+      // 铁证: hydrate 里必须先 hydrateMemoryForUser 再 attachMemorySync,
+      // 否则 AsyncStorage 里悬挂的 unsynced points 无法被 subscriber 捕获。
+      expect(memPersist.hydrateMemoryForUser).toHaveBeenCalledWith('4');
+      expect(memSync.attachMemorySync).toHaveBeenCalledWith('4');
+      // Verify order: hydrate 先于 attach (通过调用序号)
+      const hydrateOrder = memPersist.hydrateMemoryForUser.mock.invocationCallOrder[0];
+      const attachOrder = memSync.attachMemorySync.mock.invocationCallOrder[0];
+      expect(hydrateOrder).toBeLessThan(attachOrder);
+    });
+
+    it('v405: logout → detachMemorySync + detachMemoryPersistence 双清 (避免旧 userId 泄漏)', async () => {
+      setupMocks(() => null);
+      const memSync = require('../src/services/memorySync');
+      const memPersist = require('../src/features/memory/services/memoryPersistence');
+      const { useAppStore } = require('../src/store/useAppStore');
+
+      useAppStore.getState().logout();
+
+      expect(memSync.detachMemorySync).toHaveBeenCalled();
+      expect(memPersist.detachMemoryPersistence).toHaveBeenCalled();
     });
 
     it('lands on Sign In when network throws (offline first launch)', async () => {
