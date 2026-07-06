@@ -21,6 +21,18 @@ const setupMocks = (getMeImpl: () => any) => {
   jest.doMock('../src/services/authService', () => ({
     getMe: jest.fn(getMeImpl),
   }));
+  // Sprint 72 STORY-00549: mocks for new dependencies pulled in by hydrate rewrite
+  jest.doMock('../src/services/crashLogger', () => ({
+    crashLogger: { breadcrumb: jest.fn(), install: jest.fn(), uploadCrashIfAny: jest.fn(async () => {}) },
+  }));
+  jest.doMock('../src/services/a8Migration', () => ({
+    runA8Migration: jest.fn(async () => ({ showToast: false })),
+  }));
+  jest.doMock('../src/store/useArOriginStore', () => ({
+    useArOriginStore: {
+      getState: () => ({ hydrate: jest.fn(async () => {}), setMigrationToast: jest.fn() }),
+    },
+  }));
   jest.doMock('../src/services/sessionService', () => ({
     fetchSessions: jest.fn(async () => []),
   }));

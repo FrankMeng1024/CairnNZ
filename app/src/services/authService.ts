@@ -141,3 +141,47 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
 export async function logout(): Promise<void> {
   await clearToken();
 }
+
+/**
+ * Sprint 72 STORY-00550: exchange current valid token for a fresh one.
+ * Called by:
+ *   - useAppStore.hydrate() pre-expiry (if token <3 days from expiry)
+ *   - useTrackingStore periodic refresh during active hiking (every 30 min)
+ *
+ * Returns { token } on success. On any failure (network / 401 / 5xx) returns
+ * { error } — caller decides whether to clear token (only clearToken on the
+ * strict "TOKEN_INVALID" signal, per apiService iron rule).
+ *
+ * IMPORTANT: This function itself never clears the token — the decision to
+ * treat a failure as "user must re-login" is up to the caller (typically
+ * apiService.ts, which owns the auth-invalid header check).
+ */
+export async function refreshToken(): Promise<{ token?: string; error?: string; authInvalid?: boolean }> {
+  const token = await getToken();
+  if (!token) return { error: 'no_token' };
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const authInvalid = res.headers.get('X-Cairn-Auth-Invalid') === 'true';
+        return { error: `http_${res.status}`, authInvalid };
+      }
+      const data = await res.json();
+      if (data.token) {
+        await saveToken(data.token);
+        return { token: data.token };
+      }
+      return { error: 'no_token_in_response' };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch {
+    return { error: 'network' };
+  }
+}

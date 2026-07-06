@@ -50,6 +50,8 @@ let durationInterval: ReturnType<typeof setInterval> | null = null;
 let drainInterval: ReturnType<typeof setInterval> | null = null;
 let dynamicSamplingInterval: ReturnType<typeof setInterval> | null = null;
 let incrementalFlushInterval: ReturnType<typeof setInterval> | null = null;
+// Sprint 72 STORY-00555 — hiking token refresh interval
+let tokenRefreshInterval: ReturnType<typeof setInterval> | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
 let lastSamplingIntervalMs = 3000;
 let backgroundTaskActive = false;
@@ -340,6 +342,40 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       appStateSubscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
         if (get().status !== 'tracking') return;
         crashLogger.breadcrumb(`appstate:${nextState}`);
+        // Sprint 72 STORY-00553: immediate sampling re-eval on AppState change
+        // (don't wait for the 10s dynamicSamplingInterval tick).
+        try {
+          const speed = get().lastCoordinate ? estimateSpeed(get().trackPoints) : 0;
+          const movement = classifyMovement(speed);
+          const bl = batteryMonitor.getCurrentLevel();
+          const desired = getSamplingInterval(
+            movement,
+            bl !== null && bl < 0.2,
+            {
+              appState: nextState as 'active' | 'background' | 'inactive' | 'unknown',
+              batteryLevel: bl ?? undefined,
+              isCharging: batteryMonitor.getIsCharging(),
+            }
+          );
+          if (Math.abs(desired - lastSamplingIntervalMs) >= 500) {
+            const from = lastSamplingIntervalMs;
+            lastSamplingIntervalMs = desired;
+            const downgraded = desired > from;
+            crashLogger.breadcrumb(
+              `sampling:${downgraded ? 'downgrade' : 'restore'} from_ms=${from} to_ms=${desired} reason=appstate_change:${nextState}`
+            );
+          }
+        } catch { /* swallow */ }
+        // Sprint 72 STORY-00554: also switch flush interval based on AppState.
+        try {
+          const restart = (globalThis as unknown as { __cairnRestartFlush?: (ms: number) => void }).__cairnRestartFlush;
+          if (restart) {
+            const inBg = nextState === 'background' || nextState === 'inactive';
+            const newMs = inBg ? 300_000 : 120_000;
+            restart(newMs);
+            crashLogger.breadcrumb(`timer:flush_interval_adjust to_ms=${newMs} reason=${inBg ? 'background' : 'foreground'}`);
+          }
+        } catch { /* swallow */ }
         if (nextState === 'active') {
           // If we already have a pending active-flip, leave it. If we
           // were going to background within the debounce window, reset.
@@ -419,15 +455,36 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         const movement = classifyMovement(speed);
         const batteryLevel = batteryMonitor.getCurrentLevel();
         const batteryLow = batteryLevel !== null && batteryLevel < 0.2;
-        const desiredMs = getSamplingInterval(movement, batteryLow);
+        // Sprint 72 STORY-00553: pass AppState + battery ctx so background
+        // + low-battery + not-charging combos downgrade sampling. Foreground
+        // or charging or ≥50% battery still uses tight rates.
+        const currentAppState = AppState.currentState as 'active' | 'background' | 'inactive' | 'unknown';
+        const isCharging = batteryMonitor.getIsCharging();
+        const desiredMs = getSamplingInterval(movement, batteryLow, {
+          appState: currentAppState,
+          batteryLevel: batteryLevel ?? undefined,
+          isCharging,
+        });
+
+        // Emit a diagnostic breadcrumb on every eval so log-based inspection
+        // can prove which branch fired even without adjusting the interval.
+        crashLogger.breadcrumb(
+          `sampling:eval movement=${movement} app_state=${currentAppState} battery=${batteryLevel ?? 'na'} charging=${isCharging} interval_ms=${desiredMs}`
+        );
 
         if (Math.abs(desiredMs - lastSamplingIntervalMs) >= 500) {
+          const from = lastSamplingIntervalMs;
           lastSamplingIntervalMs = desiredMs;
+          const downgraded = desiredMs > from;
+          crashLogger.breadcrumb(
+            `sampling:${downgraded ? 'downgrade' : 'restore'} from_ms=${from} to_ms=${desiredMs} reason=${
+              downgraded ? 'background_low_battery' : 'foreground_or_charging'
+            }`
+          );
 
           // Restart whichever source is currently active with the new interval.
           // Goes through the activation queue to avoid racing with AppState
           // listener-driven flips.
-          const currentAppState = AppState.currentState;
           if (currentAppState === 'background' || currentAppState === 'inactive') {
             if (backgroundTaskActive) {
               enqueueActivation(activateBackgroundSource);
@@ -447,22 +504,85 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // saves modest battery. Trade-off: at most 2 minutes of points
       // lost on a force-kill instead of 1 minute. Acceptable: real
       // session crashes are rare and a 1-min vs 2-min loss is minor.
-      incrementalFlushInterval = setInterval(async () => {
-        const state = get();
-        if (state.status !== 'tracking') return;
-        const remoteId = state.remoteSessionId;
-        if (!remoteId) return; // server-side row not yet created (start POST in flight or failed)
-        const total = state.trackPoints.length;
-        if (total <= lastFlushedIdx) return; // nothing new
-        const slice = state.trackPoints.slice(lastFlushedIdx, total);
-        const ok = await remoteAppendPoints(remoteId, slice);
-        if (ok) {
-          lastFlushedIdx = total;
-          crashLogger.breadcrumb(`session:flush count=${slice.length} idx=${total}`);
-        } else {
-          crashLogger.breadcrumb(`session:flush:failed count=${slice.length}`);
-        }
-      }, 120_000);
+      // Sprint 72 STORY-00554: further stretch to 300s when app is in
+      // background. Cuts background network wakeups roughly in half again.
+      // Foreground stays at 120s so users see near-live sync when watching.
+      const FLUSH_FG_MS = 120_000;
+      const FLUSH_BG_MS = 300_000;
+      const startFlushInterval = (ms: number) => {
+        if (incrementalFlushInterval) clearInterval(incrementalFlushInterval);
+        incrementalFlushInterval = setInterval(async () => {
+          const state = get();
+          if (state.status !== 'tracking') return;
+          const remoteId = state.remoteSessionId;
+          if (!remoteId) return;
+          const total = state.trackPoints.length;
+          if (total <= lastFlushedIdx) return;
+          const slice = state.trackPoints.slice(lastFlushedIdx, total);
+          const ok = await remoteAppendPoints(remoteId, slice);
+          if (ok) {
+            lastFlushedIdx = total;
+            crashLogger.breadcrumb(`session:flush count=${slice.length} idx=${total}`);
+          } else {
+            crashLogger.breadcrumb(`session:flush:failed count=${slice.length}`);
+          }
+        }, ms);
+      };
+      // Initial state — pick based on current AppState.
+      const initialAs = AppState.currentState;
+      startFlushInterval(initialAs === 'background' || initialAs === 'inactive' ? FLUSH_BG_MS : FLUSH_FG_MS);
+      // Expose an internal restart hook the AppState listener can call.
+      (globalThis as unknown as { __cairnRestartFlush?: (ms: number) => void }).__cairnRestartFlush = startFlushInterval;
+
+      // Sprint 72 STORY-00552: auto-pause monitor
+      try {
+        const { startAutoPauseMonitor } = await import('../services/autoPauseMonitor');
+        startAutoPauseMonitor({
+          getStatus: () => get().status,
+          getPoints: () => get().trackPoints.map(p => ({
+            latitude: p.latitude,
+            longitude: p.longitude,
+            timestamp: p.timestamp,
+            speed: p.speed ?? undefined,
+          })),
+          onSilentEnd: () => {
+            // Fire-and-forget: ends session with no user prompt.
+            void get().stopTracking();
+          },
+        });
+      } catch { /* swallow */ }
+
+      // Sprint 72 STORY-00555: proactive hiking token refresh — every 30
+      // minutes while actively tracking, silently POST /api/auth/refresh
+      // so an 8-hour hike never crosses a token boundary. Failure NEVER
+      // clears the token (iron rule); we just breadcrumb and keep hiking.
+      try {
+        const HIKING_REFRESH_MS = 30 * 60_000;
+        tokenRefreshInterval = setInterval(async () => {
+          if (get().status !== 'tracking' && get().status !== 'paused') return;
+          crashLogger.breadcrumb('hiking_refresh:start');
+          try {
+            const { refreshToken } = await import('../services/authService');
+            const result = await refreshToken();
+            if (result.token) {
+              crashLogger.breadcrumb('hiking_refresh:success');
+            } else {
+              crashLogger.breadcrumb(`hiking_refresh:fail reason=${result.error ?? 'unknown'} authInvalid=${!!result.authInvalid}`);
+              // Iron rule: refresh failure does NOT logout the user mid-hike.
+              // Even if authInvalid=true, we keep GPS running and let the
+              // hydrate/AppState=active path handle re-login after tracking.
+            }
+          } catch (err) {
+            crashLogger.breadcrumb(`hiking_refresh:fail reason=exception msg=${String(err).slice(0, 50)}`);
+          }
+        }, HIKING_REFRESH_MS);
+      } catch { /* swallow */ }
+
+      // Sprint 72 STORY-00556: check Low Power Mode once at tracking start
+      try {
+        const { checkAndWarnLowPowerMode } = await import('../services/lowPowerModeWarn');
+        void checkAndWarnLowPowerMode();
+      } catch { /* swallow */ }
     } catch (err) {
       debugLogger.logError(err, 'startTracking');
       set({ locationAvailable: false });
@@ -539,6 +659,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     if (incrementalFlushInterval) {
       clearInterval(incrementalFlushInterval);
       incrementalFlushInterval = null;
+    }
+
+    // Sprint 72 STORY-00552: stop auto-pause monitor along with tracking.
+    try {
+      const { stopAutoPauseMonitor } = require('../services/autoPauseMonitor');
+      stopAutoPauseMonitor();
+    } catch { /* swallow */ }
+
+    // Sprint 72 STORY-00555: stop hiking token refresh
+    if (tokenRefreshInterval) {
+      clearInterval(tokenRefreshInterval);
+      tokenRefreshInterval = null;
     }
 
     // Stop monitors. We do this asynchronously but the order matters:

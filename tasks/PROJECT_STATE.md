@@ -1,8 +1,8 @@
 # PROJECT_STATE.md — Cairn
 
-**Status**: IN_PROGRESS (v1 implementation complete, iPhone hardening gates pending)
-**Current Sprint**: 70 CLOSED + Sprint 71 SPEC WRITTEN; F5 hardening gated on user iPhone session
-**Last Updated**: 2026-06-27
+**Status**: IN_PROGRESS (Sprint 72 CLOSED — 6 user asks landed via web Playwright; F5 iPhone gates still pending)
+**Current Sprint**: 72 CLOSED (Sprint 71 SPEC WRITTEN awaits iPhone session; Sprint 72 = Auth 无感 + 后台生存)
+**Last Updated**: 2026-07-06
 **Governing Document**: docs/PRD2.md (PRD3.md adds NZ localization layer)
 
 ## Key Decisions
@@ -139,3 +139,40 @@ Type-check clean across all 5 modified files. Sprint 70 follow-up explicit: wire
 - STORY-00548 — TestFlight build + Virtual User score ≥ 9.5/10 → v1 COMPLETE. **Queued.**
 
 **Friend System v1 status**: All implementation Sprints complete (67/68/69/70 + 71 spec). v1 closes when user runs the iPhone-gated F5 stories and Virtual User scores ≥ 9.5/10.
+
+## Sprint 72 — 后台生存 + Auth 无感 (CLOSED 2026-07-06)
+
+**Sprint Goal**: 6 条用户诉求 —— 后台 hiking 持续记录 / 息屏 / 记录时省电 / 无端不回 login / hiking token 不过期 / 产品持续记录本质.
+
+**9 of 9 stories Done (all via web Playwright acceptance)**:
+
+- STORY-00549 — 冷启动 auto-login + 注销硬清. `useAppStore.hydrate` 重写 + logout marker + AuthScreen 清 marker. Playwright: 有效 token → Home; marker → AuthScreen (token preserved); 无 token → AuthScreen; 全部有 breadcrumb.
+- STORY-00550 — JWT 30d + refresh endpoint + iron rule. Backend `.env` 30d + `POST /api/auth/refresh` + `authenticate.js` sets `X-Cairn-Auth-Invalid: true` + body `code: TOKEN_INVALID`. Frontend apiService 4-rule iron law (fetch throw / 401 no signal / 401 hard signal / tracking guard). 7/7 jest pass + real backend curl + Playwright iron-rule via `apiService:401_ignored` breadcrumb in production.
+- STORY-00551 — 未结束 session 恢复 banner. `UnfinishedSessionBanner` + hydrate detect `cairn_bg_active_session_id`. Playwright: seeded id → banner shown → End&save → cleared. Full UI + breadcrumb loop verified.
+- STORY-00552 — Auto-pause / 静止提醒. `autoPauseMonitor` service + 15min/30min thresholds + expo-notifications. 5/5 jest.
+- STORY-00553 — 后台 GPS 采样降频. `getSamplingInterval(movement, batteryLow, opts)` with appState + battery + charging. 9/9 jest + 10/10 real-web matrix via `__cairnGetSamplingInterval`.
+- STORY-00554 — 非 tracking 时后台定时器 pause. Flush interval fg 120s / bg 300s via `__cairnRestartFlush(newMs)` + `timer:flush_interval_adjust` breadcrumb.
+- STORY-00555 — Hiking 中主动续 token (30min interval). `tokenRefreshInterval` in `startTracking()`. Iron rule preserved (refresh fail NEVER clears token). Real refresh endpoint verified live.
+- STORY-00556 — AuthScreen "Your tracks stay on this device" + iOS LPM warning. Playwright screenshot verified; LPM 24h dedupe via AsyncStorage.
+- STORY-00557 — Web breadcrumb hook `__cairnBreadcrumbs` (Platform.OS==='web' guard, no __DEV__ gate). All Sprint 72 breadcrumb tags round-trip.
+
+**Backend deployed to aliyun**: `.env` JWT_EXPIRES_IN 7d→30d + docker compose recreate + `docker cp` new `auth.js`+`authenticate.js` into `cairn-backend` container + restart. Verified: login token exp = 30d, refresh endpoint 200, invalid token → 401 + `code:TOKEN_INVALID` header+body.
+
+**Blocker fixed during QA**:
+- CORS strips `X-Cairn-Auth-Invalid` header from browser fetch → apiService now falls back to `body.code === 'TOKEN_INVALID'`. Native iOS/Android fetch has no CORS restriction so header path still works there.
+- Dev hooks were `__DEV__`-gated → didn't expose under `--no-dev`. Changed to `Platform.OS === 'web'` only (still safe — native bundle never enters this branch).
+
+**Arch verdict**: PASS (docs/arch/sprint72-review.md)
+**QA verdict**: PASS (docs/qa/sprint72-verdict.md)
+**UX review**: PASS 0 friction items (docs/ux/sprint72-review.md)
+
+**Medium items → Sprint 73 backlog**:
+- M1: tokenRefreshInterval/autoPauseMonitor safety cleanup in reset()/logout() (hygiene)
+- M2: apiService ← useTrackingStore circular import runtime verify on real device
+- M3: UnfinishedSessionBanner End&save should write ended-status to sessions row (currently only clears marker)
+
+**Deferred to real iPhone gate (not web-testable)**:
+- Sprint 71 F5 stories (fog UNION FPS, TestFlight, Virtual User) — still queued
+- STORY-552 auto-pause real notification delivery
+- STORY-553 real battery savings measurement
+- STORY-556 LPM real device alert

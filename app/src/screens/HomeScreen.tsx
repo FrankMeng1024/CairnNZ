@@ -23,6 +23,7 @@ import { useTrackingStore } from '../store/useTrackingStore';
 import { formatDistance, formatDuration, getRelativeTime } from '../utils/geo';
 import { getCurrentRegion } from '../config/regions';
 import { OtaBadge } from '../components/OtaBadge';
+import { UnfinishedSessionBanner } from '../components/banners/UnfinishedSessionBanner';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -367,6 +368,8 @@ export function HomeScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
       <OtaBadge />
+      {/* Sprint 72 STORY-00551: surface unfinished-hike banner if any */}
+      <UnfinishedSessionBanner />
       <Animated.View
         style={[
           styles.screen,

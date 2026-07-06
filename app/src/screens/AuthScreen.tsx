@@ -686,6 +686,12 @@ export function AuthScreen() {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../services/bootDiagnostics').markBootPhase('login_after_hydrate');
       } catch {/* ignore */}
+      // Sprint 72 STORY-00549: clear logout marker on successful login so
+      // next cold start can auto-login.
+      try {
+        await storage.removeItem('cairn_logout_marker');
+        crashLogger.breadcrumb('login:marker_cleared');
+      } catch {/* ignore */}
       setLoggedIn(true);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -772,6 +778,11 @@ export function AuthScreen() {
     const result = await verifyCode(verifyEmail, trimmed);
     setVerifyLoading(false);
     if (result.error) { setVerifyError(result.error); return; }
+    // Sprint 72 STORY-00549: verify (registration) also counts as fresh login
+    try {
+      await storage.removeItem('cairn_logout_marker');
+      crashLogger.breadcrumb('login:marker_cleared');
+    } catch {/* ignore */}
     setLoggedIn(true);
     if (result.user) setUser(result.user);
     await hydrate();
@@ -843,6 +854,20 @@ export function AuthScreen() {
                 <Text style={styles.secondaryBtnText}>Create Account</Text>
               </View>
             </PressBtn>
+            {/* Sprint 72 STORY-00556: reassurance that local data survives 30-day token expiry */}
+            <Text
+              testID="auth-data-local-hint"
+              style={{
+                marginTop: 12,
+                fontSize: 12,
+                color: Colors.textSecondary,
+                textAlign: 'center',
+                paddingHorizontal: 24,
+                lineHeight: 16,
+              }}
+            >
+              Your tracks stay on this device. Sign in to sync new activity to the cloud.
+            </Text>
           </View>
         </Animated.View>
       </SafeAreaView>

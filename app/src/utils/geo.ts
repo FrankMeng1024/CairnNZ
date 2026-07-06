@@ -264,17 +264,61 @@ export function classifyMovement(speedMs: number): MovementState {
  * Get the appropriate GPS sampling interval in milliseconds.
  * @param movement    Current movement state
  * @param batteryLow  Whether battery is below 20%
+ * @param opts        Sprint 72 STORY-00553: optional context for background
+ *                    downgrade. When app is in background AND battery <50%
+ *                    AND not charging, running/walking rates are relaxed
+ *                    (running 500→1000, walking 1000→3000, static 10s→15s).
+ *                    Foreground always uses tight rates. Charging or battery
+ *                    ≥50% keeps foreground rates in background too.
  * @returns Sampling interval in ms
  */
-export function getSamplingInterval(movement: MovementState, batteryLow = false): number {
-  if (batteryLow) return 2000; // 0.5Hz forced
+export const BG_SAMPLING = {
+  RUNNING_MS: 1000,
+  WALKING_MS: 3000,
+  STATIC_MS: 15000,
+  BATTERY_HIGH_THRESHOLD: 0.5,
+};
 
+export function getSamplingInterval(
+  movement: MovementState,
+  batteryLow = false,
+  opts?: {
+    appState?: 'active' | 'background' | 'inactive' | 'unknown';
+    batteryLevel?: number;   // 0..1
+    isCharging?: boolean;
+  }
+): number {
+  if (batteryLow) return 2000; // 0.5Hz forced (unchanged; battery <20%)
+
+  const inBackground = opts?.appState === 'background' || opts?.appState === 'inactive';
+  const batteryOk = (opts?.batteryLevel ?? 1) >= BG_SAMPLING.BATTERY_HIGH_THRESHOLD;
+  const shouldDowngrade = inBackground && !opts?.isCharging && !batteryOk;
+
+  if (shouldDowngrade) {
+    switch (movement) {
+      case 'static':  return BG_SAMPLING.STATIC_MS;
+      case 'walking': return BG_SAMPLING.WALKING_MS;
+      case 'running': return BG_SAMPLING.RUNNING_MS;
+    }
+  }
+
+  // Foreground OR charging OR battery ≥50% → tight foreground rates
   switch (movement) {
     case 'static':  return 10000; // 0.1Hz
     case 'walking': return 1000;  // 1Hz
     case 'running': return 500;   // 2Hz
   }
 }
+
+// Sprint 72 STORY-00553: expose to Playwright web session for spec verification.
+// This module is imported by web-side code paths only when Platform.OS==='web'
+// (via useTrackingStore), so binding unconditionally at module load is safe;
+// native builds never evaluate this branch because they never reach the web
+// bundle. Kept minimal — one function reference.
+try {
+  const g = globalThis as unknown as { __cairnGetSamplingInterval?: typeof getSamplingInterval };
+  g.__cairnGetSamplingInterval = getSamplingInterval;
+} catch { /* ignore */ }
 
 // ── GPS Track Smoother (combines Kalman + validation) ───────────────────────
 

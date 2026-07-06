@@ -140,6 +140,15 @@ export const crashLogger = {
    */
   breadcrumb(line: string): void {
     recordRecent(line);
+    // Sprint 72 STORY-00557: expose breadcrumb ring to Playwright on web.
+    // Guarded to Platform.OS==='web' so native iOS/Android production builds
+    // never leak recentEvents onto window. Playwright runs against `--no-dev`
+    // builds where __DEV__ is false, so we deliberately do NOT gate on __DEV__.
+    try {
+      if (Platform.OS === 'web' && typeof globalThis !== 'undefined') {
+        (globalThis as unknown as { __cairnBreadcrumbs?: string[] }).__cairnBreadcrumbs = recentEvents;
+      }
+    } catch { /* ignore */ }
   },
 
   /**
