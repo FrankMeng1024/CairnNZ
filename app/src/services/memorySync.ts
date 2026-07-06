@@ -325,6 +325,17 @@ async function pushPendingPoints(): Promise<void> {
     return;
   }
   if (!activeUserId) return;
+  // v407 fix #2: 若未登录(pre-warm 阶段 hydrate 已 attach 但用户还没登录),
+  // 不推。避免 401 → apiService 走 auto-logout → 清刚 pre-warm 的 sessions/markers。
+  // subscriber 依然订阅,用户登录后 next unsynced count 变化会 re-trigger push。
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useAppStore } = require('../store/useAppStore');
+    if (!useAppStore.getState().isLoggedIn) {
+      // Reschedule for after login flip — subscriber will pick it up naturally.
+      return;
+    }
+  } catch { /* module cycle safety */ }
   const now = Date.now();
   if (now < backoffUntil) {
     schedulePush(backoffUntil - now);
@@ -388,7 +399,20 @@ function schedulePush(delayMs = PUSH_DEBOUNCE_MS): void {
 }
 
 export function attachMemorySync(userId: string): void {
+  // v407 fix #1: idempotent attach — 若已 attach 到相同 userId 且 subscriber
+  // 活着,跳过 detach+re-subscribe。避免 hydrate(pre-warm) + FGUM(Memory tab)
+  // + AuthScreen 二次 hydrate 三处都调 attachMemorySync 时反复 detach
+  // abort in-flight push,memory_points 丢批次(下次 5s 后重推)。
+  // 用户场景: hike → save → 立刻点 Memory tab → memory 空(要等 5s 才补)。
+  if (activeUserId === userId && unsubscribe) {
+    require('./appLog').log('memory_sync.attach_skip', { userId, reason: 'same-user-already-attached' });
+    return;
+  }
+  const fromEpoch = epoch;
   detachMemorySync();
+  require('./appLog').log('memory_sync.attach_epoch_bump', {
+    userId, from: fromEpoch, to: epoch, prev_active: activeUserId,
+  });
   activeUserId = userId;
   let lastUnsyncedCount = useMemoryStore.getState()._unsyncedCount;
   unsubscribe = useMemoryStore.subscribe((s) => {

@@ -891,7 +891,17 @@ function StopSummarySheet({
     ]).start();
   }, []);
 
+  // v407 fix #6: dismiss guard — 防止用户在 dismiss 220ms 动画期间再点
+  // 背景 scrim 触发第二次 dismiss(onCancel)。第一次 dismiss 触发 onConfirm
+  // (await stopTracking 开始),第二次 dismiss 触发 resumeTracking → 竞态:
+  // stopTracking 已清 timers + set initialState 后 resumeTracking 恢复
+  // status='tracking' 但只 restart durationInterval,其它 flush/drain/
+  // sampling/tokenRefresh 全死 → 用户以为在 hike,实际服务器没备份、
+  // token 8h 后过期。
+  const dismissedRef = useRef(false);
   const dismiss = (then?: () => void) => {
+    if (dismissedRef.current) return;
+    dismissedRef.current = true;
     Animated.parallel([
       Animated.timing(slideY, { toValue: 500, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(opacity, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
@@ -1774,36 +1784,56 @@ export function HikingScreen() {
             const capturedSessionId = preState.sessionId;
             const wasTooShort = preState.trackPoints.length < 2 || preState.distanceM < 20;
 
-            // We pass the name through stopTracking; useTrackingStore
-            // forwards it to the saved session. Falsy / empty name
-            // → store falls back to the default "Hike — DD/MM/YYYY".
-            //
-            // v118: stopTracking has a too-short pre-check that sets
-            // lastStopReason without resetting state. We close the
-            // summary sheet here either way; if a too-short was
-            // detected, TooShortSheet renders next based on lastStopReason.
-            //
-            // v405: **await** stopTracking so snap+memory push+finalize
-            // 完成后再决定 nav。之前 fire-and-forget 导致用户看到
-            // "还在 Hiking 页,不知道是否 save 成功"。
-            await stopTracking(name);
+            // v407 fix #5: wrap the whole stopTracking → nav chain in try/catch
+            // + 5s wall-clock timeout. Prior version: 弱网下 pushMemoryNow +
+            // finalize 各挂 30s → sheet 卡 60 秒,onConfirm 抛错 UI 不 unmount。
+            // 现在: 最多 5 秒 sheet 关闭,数据本地写入(addSession 已 sync),
+            // 网络重推交给 memorySync 自然的 backoff+schedulePush 重试。
+            const STOP_WALL_TIMEOUT_MS = 5000;
+            let stopFailed = false;
+            try {
+              await Promise.race([
+                stopTracking(name),
+                new Promise<void>((_, reject) => setTimeout(() => reject(new Error('stopTracking_timeout_5s')), STOP_WALL_TIMEOUT_MS)),
+              ]);
+            } catch (err) {
+              stopFailed = true;
+              // stopTracking 内部本地写入(addSession)已完成,只是 server sync
+              // 挂了。memorySync 有自己的 backoff 重推循环。用户可见:
+              // sheet 关闭+回 activity detail,细节由 memorySync 后台完成。
+              // eslint-disable-next-line no-console
+              console.warn('[v407] stopTracking wall-timeout / error:', String(err));
+              // NB: stopTracking 内部的 promise 依然在后台跑(未 abort),
+              // finalize + pushMemoryNow 该重试就重试。
+            }
             setStopSummary(null);
 
             // v405 fix (Happy Path bug #7,#8): 自动跳 Activity Detail,
             // back stack 补 Routes(activities) 让 back 直接回列表页。
             // - 太短 session: 不 nav (TooShortSheet 会展示)
             // - 正常保存: nav.reset 到 [Home, Routes(activities), MapHistory{sessionId}]
-            if (!wasTooShort && capturedSessionId) {
-              nav.dispatch(
-                CommonActions.reset({
-                  index: 2,
-                  routes: [
-                    { name: 'Home' },
-                    { name: 'Routes', params: { initialTab: 'activities' } },
-                    { name: 'MapHistory', params: { sessionId: capturedSessionId } },
-                  ],
-                })
-              );
+            //
+            // v407 fix #3: dispatch 前 snapshot isLoggedIn。若 stopTracking
+            // 期间 401_invalid 触发 auto-logout → RootNavigator 只剩 Auth
+            // 一个 stack → reset 到 Home/Routes/MapHistory 会 throw。
+            // 未登录时依赖 auto-logout 已把用户送 Auth,不做 nav。
+            const stillLoggedIn = useAppStore.getState().isLoggedIn;
+            if (!wasTooShort && capturedSessionId && stillLoggedIn) {
+              try {
+                nav.dispatch(
+                  CommonActions.reset({
+                    index: 2,
+                    routes: [
+                      { name: 'Home' },
+                      { name: 'Routes', params: { initialTab: 'activities' } },
+                      { name: 'MapHistory', params: { sessionId: capturedSessionId } },
+                    ],
+                  })
+                );
+              } catch (navErr) {
+                // eslint-disable-next-line no-console
+                console.warn('[v407] nav.reset failed:', String(navErr));
+              }
             }
             // else: 依赖 status === idle observer 回 selection 屏 +
             // TooShortSheet 提示 (line 1826 useEffect)

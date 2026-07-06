@@ -15,9 +15,14 @@ import { NavigationContainer, createNavigationContainerRef } from '@react-naviga
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // v405: expose nav ref to Playwright web replay for asserting current
-// route name after auto-nav. Guarded on Platform.OS==='web' at NavigationContainer
-// onReady below.
-export const navigationRef = createNavigationContainerRef();
+// route name after auto-nav. Guarded on Platform.OS==='web' — native
+// bundle 不创建 ref instance,dSYM 里也不出现 navigationRef 符号。
+// v407 fix #8: v405 只 guard 了 onReady 里的 __cairnStores 挂载,
+// 但 module-level createNavigationContainerRef() 无 Platform 门,native
+// 依然 create ref 对象。现在 Platform.OS === 'web' 才创建。
+export const navigationRef = Platform.OS === 'web'
+  ? createNavigationContainerRef()
+  : null as unknown as ReturnType<typeof createNavigationContainerRef>;
 
 import { AuthScreen } from '../screens/AuthScreen';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -74,7 +79,7 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer
-      ref={navigationRef}
+      ref={navigationRef ?? undefined}
       onReady={() => {
         markBootPhase('navigation_container_ready', { isLoggedIn: !!isLoggedIn });
         // v405: expose nav helpers to __cairnStores for Playwright replay

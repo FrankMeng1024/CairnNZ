@@ -26,7 +26,7 @@ function fmtAge(ms: number | undefined): string {
   return `${Math.round(hrs / 24)} days ago`;
 }
 
-export function UnfinishedSessionBanner() {
+export function UnfinishedSessionBanner({ authMode = false }: { authMode?: boolean } = {}) {
   const pending = useAppStore(s => s.pendingSessionResume);
   const setPending = useAppStore(s => s.setPendingSessionResume);
   const trackingStatus = useTrackingStore(s => s.status);
@@ -79,6 +79,31 @@ export function UnfinishedSessionBanner() {
   // other way, or startTracking picked up the session automatically).
   if (!pending) return null;
   if (trackingStatus === 'tracking' || trackingStatus === 'paused') return null;
+
+  // v407 fix #4: AuthScreen mode — 用户未登录冷启时,pendingSessionResume
+  // 已被 hydrate 检测出来但 HomeScreen 不 mount。此时在 AuthScreen 顶部
+  // 显示只读版 banner (Sprint 72 STORY-00551 原意 "屏幕最上方立刻看到")。
+  // 不提供 Continue (需要 tracking store,未登录用不了),只提供 End & save
+  // (清 marker,避免登录后 banner 又跳出来吓用户)。
+  if (authMode) {
+    return (
+      <View style={styles.banner} testID="unfinished-session-banner-auth">
+        <View style={styles.textCol}>
+          <Text style={styles.title}>You have an unfinished hike</Text>
+          <Text style={styles.subtitle}>Started {ageLabel}. Sign in to continue, or dismiss to save & clear.</Text>
+        </View>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            testID="unfinished-session-dismiss-auth"
+            style={[styles.btn, styles.btnSecondary]}
+            onPress={onDiscard}
+          >
+            <Text style={styles.btnSecondaryText}>Dismiss</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.banner} testID="unfinished-session-banner">

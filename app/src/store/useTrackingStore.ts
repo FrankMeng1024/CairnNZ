@@ -839,10 +839,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           name: finalName,
           // v404: 优先送 snapped;snap 挂了就送 Kalman-smoothed 兜底,
           // 保证 server route_points 一定有值可用于 Activity 渲染。
-          route_points: snappedTrackPoints ?? (s.trackPointsSmoothed.length >= 2 ? s.trackPointsSmoothed : s.trackPoints),
+          // v407 fix #7: no-token / snap-fail fallback 也 strip 到三字段
+          // (lat/lng/t) 保证 v404 "route_points 永远三字段" 承诺兑现。
+          // 之前 snappedTrackPoints=null 直接抛 s.trackPointsSmoothed 六
+          // 字段 (alt/speed/accuracy 全带),server 上又变回 v403 shape。
+          route_points: (snappedTrackPoints ?? (s.trackPointsSmoothed.length >= 2 ? s.trackPointsSmoothed : s.trackPoints))
+            .map(p => ({ lat: p.lat, lng: p.lng, t: p.t })),
           // v404: 原 GPS 点始终传服务器作 debug 参照。用户原话:
           // "原GPS的作用是未来出现问题的Debug参照。原GPS点在没出问题
           // 的时候没任何作用,出了问题也只是分析作用"。
+          // route_points_raw 保留全字段 (alt/speed/accuracy) 作 debug 用。
           route_points_raw: s.trackPointsRaw.length > 0 ? s.trackPointsRaw : s.trackPoints,
         };
         (async () => {
@@ -917,6 +923,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         }
       }, 1000);
     }
+    // v407 fix #6: defensive restart of ALL timers. Normal pauseTracking
+    // only kills durationInterval,so most resumes are OK. But场景 E
+    // (用户在 Stop dismiss 动画 220ms 内点背景触发第二次 dismiss →
+    // onCancel/resumeTracking after onConfirm/stopTracking 已跑一半)
+    // 会让 flush/drain/sampling/tokenRefresh 全死 — 用户以为在 hike,
+    // 实际 60s 无 server backup + 8h 后 token 过期。HikingScreen 加了
+    // dismiss guard 挡住这条路径,但保留这段作为最后防线,以防其它
+    // 未来入口也调 resumeTracking。
+    // 具体 timer 重启由 activateForegroundSource / activateBackgroundSource
+    // 负责(它们 own drain/sampling/flush/tokenRefresh setup) → 见 line 421+。
     // Resume whichever source matches current AppState (treat 'unknown' as active)
     const currentAppState = AppState.currentState;
     if (currentAppState === 'background' || currentAppState === 'inactive') {
