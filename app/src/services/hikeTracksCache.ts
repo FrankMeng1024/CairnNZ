@@ -23,16 +23,70 @@ const ACTIVE_DIR = HIKE_DIR + 'active/';
 const COMPLETED_DIR = HIKE_DIR + 'completed/';
 const META_DIR = HIKE_DIR + 'meta/';
 
-const SIZE_CAP_BYTES = 300 * 1024 * 1024; // 300MB (v409 决策 3)
-const SIZE_TARGET_BYTES = 250 * 1024 * 1024; // 触发后清到 250MB 以下留缓冲
+// v409 决策 3: 300MB size cap + 30-day TTL + manual clean.
+// v409-test: 允许 Playwright web 测试通过 globalThis.__cairnSizeCapOverride
+// (Platform.OS==='web' + __DEV__ 情况下,production native 无此机制) 降低
+// SIZE_CAP_BYTES 到 KB 级触发真删。native production 走默认 300MB 常量。
+const DEFAULT_SIZE_CAP_BYTES = 300 * 1024 * 1024;
+const DEFAULT_SIZE_TARGET_BYTES = 250 * 1024 * 1024;
+function getSizeCap(): { cap: number; target: number } {
+  try {
+    const override = (globalThis as unknown as { __cairnSizeCapOverride?: { cap: number; target: number } }).__cairnSizeCapOverride;
+    if (override && typeof override.cap === 'number' && typeof override.target === 'number' && override.cap > override.target) {
+      return { cap: override.cap, target: override.target };
+    }
+  } catch { /* ignore */ }
+  return { cap: DEFAULT_SIZE_CAP_BYTES, target: DEFAULT_SIZE_TARGET_BYTES };
+}
 const TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 天 (v409 决策 3)
 
 async function getFs(): Promise<any | null> {
   try {
     const legacy = await import('expo-file-system/legacy');
     if (legacy && legacy.documentDirectory) return legacy;
-    return null;
-  } catch { return null; }
+  } catch { /* fallthrough */ }
+  // v409 web fallback: 复用 hikeTrackWriter 的 localStorage shim.
+  // 逻辑相同,直接内联复制避免循环 import。
+  if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+    const PREFIX = 'cairn-fs://';
+    return {
+      documentDirectory: PREFIX,
+      async getInfoAsync(path: string) {
+        const raw = window.localStorage.getItem(path);
+        if (path.endsWith('/')) {
+          const dirEntry = window.localStorage.getItem(path + '__dir__');
+          return { exists: !!dirEntry, isDirectory: true, uri: path };
+        }
+        return { exists: raw !== null, isDirectory: false, uri: path, size: raw ? raw.length : 0 };
+      },
+      async readAsStringAsync(path: string): Promise<string> {
+        const raw = window.localStorage.getItem(path);
+        if (raw === null) throw new Error('File not found: ' + path);
+        return raw;
+      },
+      async readDirectoryAsync(path: string): Promise<string[]> {
+        if (!path.endsWith('/')) path = path + '/';
+        const raw = window.localStorage.getItem(path + '__files__');
+        return raw ? JSON.parse(raw) : [];
+      },
+      async deleteAsync(path: string, _opts?: { idempotent?: boolean }) {
+        window.localStorage.removeItem(path);
+        const parent = path.substring(0, path.lastIndexOf('/') + 1);
+        const listKey = parent + '__files__';
+        const raw = window.localStorage.getItem(listKey);
+        if (raw) {
+          const list: string[] = JSON.parse(raw);
+          const filename = path.substring(parent.length);
+          const idx = list.indexOf(filename);
+          if (idx >= 0) {
+            list.splice(idx, 1);
+            window.localStorage.setItem(listKey, JSON.stringify(list));
+          }
+        }
+      },
+    };
+  }
+  return null;
 }
 
 interface FileInfo {
@@ -96,16 +150,17 @@ async function deleteFile(fs: any, info: FileInfo): Promise<void> {
 export async function enforceSizeCap(): Promise<{ deleted: number; freed_bytes: number; total_after: number }> {
   const fs = await getFs();
   if (!fs) return { deleted: 0, freed_bytes: 0, total_after: 0 };
+  const { cap, target } = getSizeCap();
   const files = await scanCompleted();
   const total = await totalSize(files);
-  if (total <= SIZE_CAP_BYTES) return { deleted: 0, freed_bytes: 0, total_after: total };
+  if (total <= cap) return { deleted: 0, freed_bytes: 0, total_after: total };
   // Sort uploaded files by ended_at asc (oldest first)
   const uploaded = files.filter(f => f.uploaded).sort((a, b) => a.ended_at - b.ended_at);
   let running = total;
   let deleted = 0;
   let freed = 0;
   for (const f of uploaded) {
-    if (running <= SIZE_TARGET_BYTES) break;
+    if (running <= target) break;
     await deleteFile(fs, f);
     running -= f.size;
     freed += f.size;

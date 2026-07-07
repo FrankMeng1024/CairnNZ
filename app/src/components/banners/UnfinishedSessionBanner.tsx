@@ -87,14 +87,28 @@ export function UnfinishedSessionBanner({ authMode = false }: { authMode?: boole
           distanceM,
           durationS: Math.floor((Date.now() - meta.started_at) / 1000),
         });
-        // 触发 GPS watcher 重启 —— 通过 setStatus (监听 status 变化会 activate source)
-        const ts = useTrackingStore.getState() as unknown as { startTracking?: () => Promise<void> };
-        if (typeof ts.startTracking === 'function') {
-          // 不真调 startTracking 会 reset store;只手动 reactivate GPS
-          // 通过 flip status='paused' → 'tracking' 触发 subscription
-          // 但 pauseTracking 会清 lastCoord,不做 pause。直接依赖 store hydrate
-          // 后的 tracking status 让 GPS watcher 重启 (activateForegroundSource
-          // 在 startTracking 里,若直接 setState 不会触发) — 需要显式激活。
+        // v409 audit-v2 fix: GPS watcher 重启 —— 必须显式调 startTracking。
+        // 之前空 if 只 setState status='tracking',GPS subscription 不会 auto-activate,
+        // 用户看到旧点但**新走的路不记录**。
+        // startTracking 会 reset 一些 state 但保留 sessionId (我们刚 setState 的),
+        // 通过 pauseTracking + resumeTracking 组合更安全: pauseTracking 不 reset
+        // trackPoints,只 clear lastCoordinate; resumeTracking 走 activateForegroundSource。
+        //
+        // 但简化: 直接调 resumeTracking (它会 activateForegroundSource + 重启 durationInterval)
+        // — resumeTracking 假设 status='paused',不会 clear trackPoints (那是 pauseTracking 做的)
+        const ts = useTrackingStore.getState() as unknown as {
+          resumeTracking?: () => Promise<void>;
+          startTracking?: () => Promise<void>;
+        };
+        // Flip status to 'paused' first so resumeTracking's status transition works cleanly
+        useTrackingStore.setState({ status: 'paused' });
+        if (typeof ts.resumeTracking === 'function') {
+          await ts.resumeTracking();
+          crashLogger.breadcrumb(`v409:resume_replay_gps_reactivated sid=${pending.sessionId}`);
+        } else if (typeof ts.startTracking === 'function') {
+          // Fallback (never should hit): startTracking reset store, 我们的 replay 会丢
+          await ts.startTracking();
+          crashLogger.breadcrumb(`v409:resume_replay_gps_fallback_startTracking sid=${pending.sessionId}`);
         }
       } else {
         crashLogger.breadcrumb(`v409:resume_replay_empty sid=${pending.sessionId} pts=${points.length}`);
