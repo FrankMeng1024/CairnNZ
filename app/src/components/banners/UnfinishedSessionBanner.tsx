@@ -87,6 +87,20 @@ export function UnfinishedSessionBanner({ authMode = false }: { authMode?: boole
           distanceM,
           durationS: Math.floor((Date.now() - meta.started_at) / 1000),
         });
+        // v410 audit-v4 fix: resume hikeTrackWriter module-level state.
+        // hikeTrackWriter.state is module-scoped, null after cold-boot.
+        // Without resumeHikeTrack, appendHikePoint early-returns (line 216)
+        // and new GPS points after Continue don't hit disk file.
+        // Preserves disk file + meta (unlike startHikeTrack which truncates),
+        // only rebuilds in-memory buffer/counter for next append.
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { resumeHikeTrack } = require('../../services/hikeTrackWriter');
+          const rt = await resumeHikeTrack(pending.sessionId);
+          crashLogger.breadcrumb(`v410:resume_writer_state_rebuilt total=${rt.totalPoints}`);
+        } catch (e) {
+          crashLogger.breadcrumb(`v410:resume_writer_state_failed ${String(e).slice(0, 80)}`);
+        }
         // v409 audit-v2 fix: GPS watcher 重启 —— 必须显式调 startTracking。
         // 之前空 if 只 setState status='tracking',GPS subscription 不会 auto-activate,
         // 用户看到旧点但**新走的路不记录**。

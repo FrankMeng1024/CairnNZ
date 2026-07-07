@@ -72,18 +72,92 @@ let state: WriterState | null = null;
 
 /**
  * Dynamic import expo-file-system/legacy — same pattern as
- * backgroundLocationTask.ts. Falls back to null on web where fs is
- * not available.
+ * backgroundLocationTask.ts. Falls back to localStorage-backed shim on
+ * web where expo-file-system is not available. Native iOS/Android always
+ * uses the real fs.
+ *
+ * v409 Playwright web coverage: the localStorage shim lets us test disk
+ * write / read / listActiveHikes / cache clean on web without shipping
+ * anything native-affecting (Platform.OS !== 'web' → real fs unchanged).
  */
 async function getFs(): Promise<any | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const legacy = await import('expo-file-system/legacy');
     if (legacy && legacy.documentDirectory) return legacy;
-    return null;
   } catch {
-    return null;
+    /* fallthrough to web shim */
   }
+  // Web fallback: localStorage-backed shim. Keyspace: 'cairn-fs://<path>'.
+  // Only activated when real fs unavailable (web browser). Native RN always
+  // returns the real fs above. Testing-only path.
+  if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+    const PREFIX = 'cairn-fs://';
+    const docDir = PREFIX;
+    const shim = {
+      documentDirectory: docDir,
+      async getInfoAsync(path: string) {
+        const raw = window.localStorage.getItem(path);
+        // Directory tracking: paths ending in '/' are dirs, tracked as JSON list.
+        if (path.endsWith('/')) {
+          const dirEntry = window.localStorage.getItem(path + '__dir__');
+          return { exists: !!dirEntry, isDirectory: true, uri: path };
+        }
+        return { exists: raw !== null, isDirectory: false, uri: path, size: raw ? raw.length : 0 };
+      },
+      async makeDirectoryAsync(path: string, _opts?: { intermediates?: boolean }) {
+        if (!path.endsWith('/')) path = path + '/';
+        window.localStorage.setItem(path + '__dir__', '1');
+      },
+      async writeAsStringAsync(path: string, content: string) {
+        window.localStorage.setItem(path, content);
+        // Track parent directory listing so readDirectoryAsync works
+        const parent = path.substring(0, path.lastIndexOf('/') + 1);
+        const listKey = parent + '__files__';
+        const raw = window.localStorage.getItem(listKey);
+        const list: string[] = raw ? JSON.parse(raw) : [];
+        const filename = path.substring(parent.length);
+        if (!list.includes(filename)) {
+          list.push(filename);
+          window.localStorage.setItem(listKey, JSON.stringify(list));
+        }
+      },
+      async readAsStringAsync(path: string): Promise<string> {
+        const raw = window.localStorage.getItem(path);
+        if (raw === null) throw new Error('File not found: ' + path);
+        return raw;
+      },
+      async readDirectoryAsync(path: string): Promise<string[]> {
+        if (!path.endsWith('/')) path = path + '/';
+        const raw = window.localStorage.getItem(path + '__files__');
+        return raw ? JSON.parse(raw) : [];
+      },
+      async deleteAsync(path: string, _opts?: { idempotent?: boolean }) {
+        window.localStorage.removeItem(path);
+        // Remove from parent listing
+        const parent = path.substring(0, path.lastIndexOf('/') + 1);
+        const listKey = parent + '__files__';
+        const raw = window.localStorage.getItem(listKey);
+        if (raw) {
+          const list: string[] = JSON.parse(raw);
+          const filename = path.substring(parent.length);
+          const idx = list.indexOf(filename);
+          if (idx >= 0) {
+            list.splice(idx, 1);
+            window.localStorage.setItem(listKey, JSON.stringify(list));
+          }
+        }
+      },
+      async moveAsync(opts: { from: string; to: string }) {
+        const raw = window.localStorage.getItem(opts.from);
+        if (raw === null) return;
+        await this.writeAsStringAsync(opts.to, raw);
+        await this.deleteAsync(opts.from);
+      },
+    };
+    return shim;
+  }
+  return null;
 }
 
 async function ensureDirs(fs: any): Promise<void> {
@@ -127,6 +201,33 @@ export async function startHikeTrack(sessionId: string, meta: Omit<HikeMeta, 'se
     await fs.writeAsStringAsync(fs.documentDirectory + META_DIR + sessionId + '.json', JSON.stringify(fullMeta));
   } catch { /* best effort */ }
   state = { sessionId, buffer: [], flushTimer: null, totalPoints: 0, lastFlushError: null };
+}
+
+/**
+ * v410 fix (fresh audit v4): Resume writing an existing hike track without
+ * truncating disk file or resetting meta. Called from UnfinishedSessionBanner
+ * onContinue after readActiveHikeTail restored trackPoints to Zustand store.
+ *
+ * Without this, hikeTrackWriter.state stays null after cold-boot (module-scoped),
+ * appendHikePoint early-returns, new GPS points never hit disk. If user kills
+ * app twice in a row, second-time recovery loses the mid-section walked between
+ * kills. See docs/qa/v409-evidence/fresh-audit-v4.md Op 2 finding.
+ */
+export async function resumeHikeTrack(sessionId: string): Promise<{ resumed: boolean; totalPoints: number }> {
+  const fs = await getFs();
+  if (!fs) {
+    state = { sessionId, buffer: [], flushTimer: null, totalPoints: 0, lastFlushError: 'web-no-fs' };
+    return { resumed: true, totalPoints: 0 };
+  }
+  // Read existing meta to preserve total_points count
+  let existingTotal = 0;
+  try {
+    const metaRaw = await fs.readAsStringAsync(fs.documentDirectory + META_DIR + sessionId + '.json');
+    const meta: HikeMeta = JSON.parse(metaRaw);
+    existingTotal = meta.total_points ?? 0;
+  } catch { /* meta absent — start fresh count but don't fail */ }
+  state = { sessionId, buffer: [], flushTimer: null, totalPoints: existingTotal, lastFlushError: null };
+  return { resumed: true, totalPoints: existingTotal };
 }
 
 /**

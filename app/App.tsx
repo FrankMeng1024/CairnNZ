@@ -403,6 +403,16 @@ function AppRoot() {
             listActiveHikes: hikeTrackWriter.listActiveHikes,
             readActiveHikeTail: hikeTrackWriter.readActiveHikeTail,
             flushNow: hikeTrackWriter.flushNow,
+            // v409 test: 暴露 startHikeTrack / appendHikePoint / renameToCompleted
+            // / discardActiveHike / markUploaded 供 Playwright 场景直接调用,
+            // 不需绕道 startTracking (会 side-effect 触发 GPS 权限等)。
+            startHikeTrack: hikeTrackWriter.startHikeTrack,
+            appendHikePoint: hikeTrackWriter.appendHikePoint,
+            renameToCompleted: hikeTrackWriter.renameToCompleted,
+            discardActiveHike: hikeTrackWriter.discardActiveHike,
+            markUploaded: hikeTrackWriter.markUploaded,
+            // v410 (fresh audit v4 fix): resumeHikeTrack for Continue-after-kill
+            resumeHikeTrack: hikeTrackWriter.resumeHikeTrack,
           };
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const hikeTracksCache = require('./src/services/hikeTracksCache');
