@@ -676,6 +676,78 @@ export function SettingsScreen() {
           />
         </View>
 
+        {/* v409 fix #15: Cache management — 用户可见 hike-tracks 缓存清理 */}
+        <View style={{ marginTop: Spacing.xl }}>
+          <Text style={styles.sectionHeader}>HIKE DATA CACHE</Text>
+          <TouchableOpacity
+            style={{
+              marginHorizontal: Spacing.base,
+              backgroundColor: '#fff',
+              padding: Spacing.base,
+              borderRadius: Radius.card,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: Spacing.sm,
+            }}
+            onPress={async () => {
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const { clearUploaded, getDiskUsage } = require('../services/hikeTracksCache');
+                const before = await getDiskUsage();
+                const res = await clearUploaded();
+                const after = await getDiskUsage();
+                Alert.alert(
+                  'Cleared',
+                  `Deleted ${res.deleted} uploaded hike file(s), freed ${(res.freed_bytes / 1024 / 1024).toFixed(1)} MB.\nRemaining: ${after.completed_count} completed (${(after.total_bytes / 1024 / 1024).toFixed(1)} MB).`,
+                );
+              } catch (e) {
+                Alert.alert('Failed', String(e).slice(0, 200));
+              }
+            }}
+          >
+            <Text style={{ fontSize: FontSize.body, color: Colors.textPrimary }}>Clear uploaded hike data</Text>
+            <Icon name="Trash" size={IconSize.sm} color={Colors.textMuted} strokeWidth={2} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              marginHorizontal: Spacing.base,
+              backgroundColor: '#fff',
+              padding: Spacing.base,
+              borderRadius: Radius.card,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+            onPress={() => {
+              Alert.alert(
+                'Danger: Clear ALL local hike data',
+                'This will delete BOTH uploaded and pending (not-yet-uploaded) hike files. Any pending data will be lost. Continue?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete All',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        // eslint-disable-next-line @typescript-eslint/no-require-imports
+                        const { clearAll } = require('../services/hikeTracksCache');
+                        const res = await clearAll();
+                        Alert.alert('Cleared', `Deleted ${res.deleted} files, freed ${(res.freed_bytes / 1024 / 1024).toFixed(1)} MB.`);
+                      } catch (e) {
+                        Alert.alert('Failed', String(e).slice(0, 200));
+                      }
+                    },
+                  },
+                ],
+              );
+            }}
+          >
+            <Text style={{ fontSize: FontSize.body, color: '#c0392b' }}>Clear ALL hike data (danger)</Text>
+            <Icon name="Trash" size={IconSize.sm} color="#c0392b" strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
+
         {/* Debug section — only visible when debug mode enabled (5-tap version to toggle) */}
         {debugMode && (
           <View style={{ marginTop: Spacing.xl }}>

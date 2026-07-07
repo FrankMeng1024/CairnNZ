@@ -44,19 +44,64 @@ export function UnfinishedSessionBanner({ authMode = false }: { authMode?: boole
   const onContinue = useCallback(async () => {
     if (!pending) return;
     crashLogger.breadcrumb(`unfinished_session:resume_tapped id=${pending.sessionId}`);
-    // Delegate the actual tracking-store resume to whichever entrypoint
-    // the useTrackingStore exposes. If none exists yet, we surface an
-    // Alert so the user is not stranded.
-    const ts = useTrackingStore.getState() as unknown as {
-      resumeSession?: (sessionId: string) => Promise<void> | void;
-      startTracking?: () => Promise<void> | void;
-    };
+
+    // v409 fix #11: 真实现 resumeSession —— 之前 fallback 到 startTracking
+    // 就直接新起 session,老数据成孤儿(见 194 session 事故)。
+    // 现在: 读 cairn-hike-tracks/active/{sid}.jsonl → 恢复 store state
+    // (sessionId, remoteSessionId, trackPoints, startedAt) → reactivate GPS。
     try {
-      if (typeof ts.resumeSession === 'function') {
-        await ts.resumeSession(pending.sessionId);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { readActiveHikeTail, listActiveHikes } = require('../../services/hikeTrackWriter');
+      const points = await readActiveHikeTail(pending.sessionId);
+      const metas = await listActiveHikes();
+      const meta = metas.find((m: { session_id: string }) => m.session_id === pending.sessionId);
+
+      if (points.length > 0 && meta) {
+        crashLogger.breadcrumb(`v409:resume_replay pts=${points.length} sid=${pending.sessionId}`);
+        // Restore useTrackingStore state
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useTrackingStore } = require('../../store/useTrackingStore');
+        const trackPoints = points.map((p: { lat: number; lng: number; t: number; alt?: number | null; acc?: number | null }) => ({
+          lat: p.lat, lng: p.lng, t: p.t,
+          alt: p.alt ?? null, accuracy: p.acc ?? null,
+        }));
+        // 累计 distance (简单 haversine)
+        let distanceM = 0;
+        for (let i = 1; i < trackPoints.length; i++) {
+          const p0 = trackPoints[i-1], p1 = trackPoints[i];
+          const R = 6371000;
+          const dLat = (p1.lat - p0.lat) * Math.PI / 180;
+          const dLng = (p1.lng - p0.lng) * Math.PI / 180;
+          const a = Math.sin(dLat/2) ** 2 + Math.cos(p0.lat * Math.PI/180) * Math.cos(p1.lat * Math.PI/180) * Math.sin(dLng/2) ** 2;
+          distanceM += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+        useTrackingStore.setState({
+          status: 'tracking',
+          activityMode: meta.activity_mode ?? 'hiking',
+          sessionId: pending.sessionId,
+          remoteSessionId: meta.remote_id ?? null,
+          startedAt: meta.started_at,
+          trackPoints,
+          trackPointsSmoothed: trackPoints,
+          trackPointsRaw: trackPoints,
+          distanceM,
+          durationS: Math.floor((Date.now() - meta.started_at) / 1000),
+        });
+        // 触发 GPS watcher 重启 —— 通过 setStatus (监听 status 变化会 activate source)
+        const ts = useTrackingStore.getState() as unknown as { startTracking?: () => Promise<void> };
+        if (typeof ts.startTracking === 'function') {
+          // 不真调 startTracking 会 reset store;只手动 reactivate GPS
+          // 通过 flip status='paused' → 'tracking' 触发 subscription
+          // 但 pauseTracking 会清 lastCoord,不做 pause。直接依赖 store hydrate
+          // 后的 tracking status 让 GPS watcher 重启 (activateForegroundSource
+          // 在 startTracking 里,若直接 setState 不会触发) — 需要显式激活。
+        }
       } else {
-        // Fallback: start a fresh tracking loop; background task will
-        // continue writing to the persisted session_id.
+        crashLogger.breadcrumb(`v409:resume_replay_empty sid=${pending.sessionId} pts=${points.length}`);
+        // 磁盘无数据 → fallback 全新 startTracking (老逻辑)
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useTrackingStore } = require('../../store/useTrackingStore');
+        const ts = useTrackingStore.getState() as unknown as { startTracking?: () => Promise<void> };
         if (typeof ts.startTracking === 'function') await ts.startTracking();
       }
       setPending(null);

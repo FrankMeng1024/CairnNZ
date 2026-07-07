@@ -64,3 +64,9 @@ DO NOT discard the commits.
 2. `app/src/navigation/RootNavigator.tsx` 里 `navigationRef` export + `onReady` 里 web hook 分支删 (createNavigationContainerRef import 也删)
 3. jest test 里若引用了 `globalThis.__cairnStores` 一并清
 4. 搜 `__cairnStores` 全 repo 应 0 命中才算清完
+
+## 2026-07-07 v408 git push 失败 (EAS 已发)
+- Commit 897d009 (v408 telemetryWifiOnly hotfix)
+- git push origin master → github.com:443 timeout (企业网络间歇)
+- EAS Update 已 published (Update group d9eafbd1-2c43-4210-aa2b-a82114d254f1)
+- 下次 commit 前重推,commit 会 accumulate

@@ -277,9 +277,48 @@ export const useAppStore = create<AppState>((set) => ({
       // Dynamic import to keep Zustand tests happy (jest 无 AsyncStorage mock)
       const AsyncStorageMod = await import('@react-native-async-storage/async-storage');
       const AsyncStorage = AsyncStorageMod.default ?? AsyncStorageMod;
+
+      // v409 fix #5 migration: 老 key cairn_bg_logging_enabled 若='1'
+      // 但当前无 active sid → 清除,防 stale 干扰 Path B。
+      try {
+        const legacyEnabled = await AsyncStorage.getItem('cairn_bg_logging_enabled');
+        const activeSidCheck = await AsyncStorage.getItem('cairn_bg_active_session_id');
+        if (legacyEnabled === '1' && !activeSidCheck) {
+          await AsyncStorage.removeItem('cairn_bg_logging_enabled');
+          crashLogger.breadcrumb('v409:legacy_hike_enabled_migration_cleared');
+        }
+      } catch { /* ignore */ }
+
       const activeSid = await AsyncStorage.getItem('cairn_bg_active_session_id');
-      if (activeSid) {
-        // Get session startedAt from the local session cache (if any).
+
+      // v409 fix #10: 检查 hikeTrackWriter 的 active/ 目录 —— 如果有磁盘
+      // JSONL 但 activeSid 不对齐,以磁盘 meta 为准。这样 iOS jetsam 后
+      // AsyncStorage 可能被清但磁盘还在时依然能 replay。
+      let diskMetas: Array<{ session_id: string; started_at: number; total_points: number }> = [];
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { listActiveHikes } = require('../services/hikeTrackWriter');
+        diskMetas = await listActiveHikes();
+      } catch { /* best effort */ }
+
+      // Priority: 优先用磁盘 metas (有 started_at + total_points 完整信息)
+      if (diskMetas.length > 0) {
+        const newest = diskMetas[0];
+        const ageMs = Date.now() - newest.started_at;
+        if (ageMs > 24 * 60 * 60_000) {
+          crashLogger.breadcrumb(`v409:disk_hike_stale_24h id=${newest.session_id}`);
+          // >24h 视为 stale, 磁盘不删 (可能想留 debug),只清 AsyncStorage marker
+          try { await AsyncStorage.removeItem('cairn_bg_active_session_id'); } catch { /* ignore */ }
+        } else {
+          crashLogger.breadcrumb(`v409:disk_hike_recovered id=${newest.session_id} pts=${newest.total_points} age_ms=${ageMs}`);
+          set({ pendingSessionResume: {
+            sessionId: newest.session_id,
+            startedAt: newest.started_at,
+            ageMs,
+          } });
+        }
+      } else if (activeSid) {
+        // Legacy fallback: 老 marker 存在但磁盘无 → 仍走 Sprint 72 STORY-00551 逻辑
         const localSessions = useSessionStore.getState().sessions;
         const found = localSessions.find(s => s.id === activeSid);
         const startedAt = found?.startedAt;
@@ -293,6 +332,14 @@ export const useAppStore = create<AppState>((set) => ({
           set({ pendingSessionResume: { sessionId: activeSid, startedAt, ageMs } });
         }
       }
+
+      // v409: cold-start 触发一次 offline queue drain — 防止 kill 前有未
+      // 上传的 append/finalize 一直躺在队列里。
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { drain } = require('../services/offlineQueue');
+        void drain().catch(() => {});
+      } catch { /* best effort */ }
     } catch { /* swallow — best effort */ }
 
     // Always mark hydrated so App.tsx unblocks the loading View.

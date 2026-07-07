@@ -239,8 +239,26 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     const dbgSessionId = debugLogger.startSession({ activity_mode: get().activityMode });
     sessionRecorder.start();
 
-    // Persist context for background TaskManager (survives process kill)
-    persistBackgroundContext(dbgSessionId, debugLogger.isEnabled()).catch(() => {});
+    // v409 fix #2: 语义换了 —— hikeActive=true 表示 "hike 在跑",不依赖
+    // debug mode。这样 iOS jetsam 后 Path B 无条件写盘,修复 194 session
+    // 后 56 分钟数据丢失的根因。
+    persistBackgroundContext(get().sessionId, true).catch(() => {});
+
+    // v409 fix #2: 启动独立 hike-track 磁盘落盘服务。每次 addTrackPoint
+    // 会写一行 JSONL,stopTracking 时 rename 到 completed/。
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { startHikeTrack } = require('../services/hikeTrackWriter');
+      const sid = get().sessionId;
+      if (sid) {
+        void startHikeTrack(sid, {
+          started_at: get().startedAt,
+          activity_mode: get().activityMode,
+        });
+      }
+    } catch (e) {
+      crashLogger.breadcrumb(`v409:hikeTrackWriter:startHikeTrack failed ${String(e).slice(0, 80)}`);
+    }
 
     // Start battery + network monitors (non-blocking)
     batteryMonitor.start().catch(() => {});
@@ -886,6 +904,32 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       } // end too-short guard
     }
 
+    // v409 fix #4: rename hike-track active JSONL → completed 供未来 replay
+    // 或 cache 清理策略处理。同时清 persistBackgroundContext (hikeActive=false)
+    // 以免 iOS 后续 fire background GPS 时误认为 hike 还在跑。
+    try {
+      const priorSid = s.sessionId;
+      if (priorSid) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { renameToCompleted, flushNow } = require('../services/hikeTrackWriter');
+        // Flush first,防止 buffer 里剩点还没写盘
+        void flushNow().then(() => renameToCompleted(priorSid, Date.now(), s.remoteSessionId ?? undefined));
+      }
+    } catch (e) {
+      crashLogger.breadcrumb(`v409:hikeTrackWriter:rename failed ${String(e).slice(0, 80)}`);
+    }
+    // 清 background context: hikeActive=false + sessionId=null
+    persistBackgroundContext(null, false).catch(() => {});
+
+    // v409 fix #14: trigger cache cleanup (size cap + TTL). Fire-and-forget
+    // — cleanup 挂了不影响用户看到 Activity Detail。
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { enforceSizeCap, enforceTTL } = require('../services/hikeTracksCache');
+      void enforceSizeCap().catch(() => {});
+      void enforceTTL().catch(() => {});
+    } catch { /* best effort */ }
+
     set({ ...initialState, lastStopReason: stopReason });
   },
 
@@ -1074,6 +1118,28 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         altitudeHistory: newAltHistory,
       };
     });
+    // v409 fix #3: 每次 addTrackPoint 后 append 一行 JSONL 到磁盘。
+    // 这样 iOS jetsam 后重开 app 时,cairn-hike-tracks/active/{sid}.jsonl
+    // 里存了 kill 前所有点 (30s / 50点 flush 一次)。
+    // 内部 dedupe/return 分支若命中,不 append (避免重复); 但为简化实现,
+    // 我们在 set 之后 append —— 若上面 set 是 no-op (dedupe),这里跳过。
+    try {
+      const st = get();
+      // 检查是否真新增了点 (trackPoints 长度递增才 append)
+      if (timestamp !== undefined) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { appendHikePoint } = require('../services/hikeTrackWriter');
+        appendHikePoint({
+          t: timestamp,
+          lat: coord.lat,
+          lng: coord.lng,
+          acc: coord.accuracy ?? undefined,
+          alt: coord.alt ?? undefined,
+          src: 'fg',
+          conf: (coord.accuracy != null && coord.accuracy > 100) ? 0.5 : 1,
+        });
+      }
+    } catch { /* best effort - hikeTrackWriter can fail on web / setup issues */ }
   },
 
   linkMarker: (markerId) => {

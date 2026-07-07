@@ -110,8 +110,50 @@ export function makeOp(
 /**
  * Push a new op onto the queue. Idempotent on opId — re-enqueueing the
  * same opId is a no-op, the existing entry's `attempts` is bumped.
+ *
+ * v409 fix #8: If body is a session_append with too many points
+ * (> ~512 KB estimated payload), automatically chunk into smaller ops
+ * each with a distinct opId. This keeps individual retries fast and
+ * prevents server 413 payload-too-large errors.
  */
+const CHUNK_SIZE_BYTES = 512 * 1024;
+
+function estimatePayloadBytes(body: any): number {
+  try { return JSON.stringify(body).length; } catch { return 0; }
+}
+
+// UUID v4 fallback (no crypto dep on some RN versions).
+function makeChunkOpId(baseOpId: string, idx: number): string {
+  return `${baseOpId}-chunk-${idx}`;
+}
+
 export async function enqueue(op: OfflineOp): Promise<void> {
+  // v409 fix #8: chunk session_append if payload too large.
+  if (op.kind === 'session_append' && op.body?.points && Array.isArray(op.body.points)) {
+    const bytes = estimatePayloadBytes(op.body);
+    if (bytes > CHUNK_SIZE_BYTES) {
+      const points = op.body.points as any[];
+      // Estimate points per chunk based on avg size
+      const pointsPerChunk = Math.max(1, Math.floor(points.length * (CHUNK_SIZE_BYTES / bytes) * 0.9));
+      const q = await readQueue();
+      let idx = 0;
+      for (let i = 0; i < points.length; i += pointsPerChunk) {
+        const slice = points.slice(i, i + pointsPerChunk);
+        const chunkOp: OfflineOp = {
+          ...op,
+          opId: makeChunkOpId(op.opId, idx),
+          body: { ...op.body, points: slice },
+          attempts: 0,
+          enqueuedAt: Date.now(),
+        };
+        if (!q.find(o => o.opId === chunkOp.opId)) q.push(chunkOp);
+        idx++;
+      }
+      await writeQueue(q);
+      crashLogger.breadcrumb(`offlineQueue:enqueue:chunked kind=${op.kind} chunks=${idx} bytes=${bytes} size=${q.length}`);
+      return;
+    }
+  }
   const q = await readQueue();
   const existing = q.find(o => o.opId === op.opId);
   if (existing) {
@@ -144,10 +186,10 @@ export async function drain(): Promise<void> {
         remaining.push(op);
         continue;
       }
-      // Backoff: don't retry an op that already failed within the last
-      // (attempts^2 * 5) seconds. Keeps the queue from hammering on a
-      // server that's down.
-      const backoffMs = Math.min(5_000 * op.attempts * op.attempts, 5 * 60_000);
+      // v409 fix #7: Exponential backoff (previous was attempts^2 * 5s
+      // which is slow to catch up. Now min(2^attempts * 5s, 30min) with
+      // 30min ceiling matching debate recommendation).
+      const backoffMs = Math.min(5_000 * Math.pow(2, op.attempts), 30 * 60_000);
       if (op.lastTriedAt && Date.now() - op.lastTriedAt < backoffMs) {
         remaining.push(op);
         continue;
@@ -244,4 +286,17 @@ export function uuidv4(): string {
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+}
+
+/**
+ * v409: expose queue read/clear for Playwright web replay + hydrate cold
+ * start replay. Read is const-safe (returns a copy).
+ */
+export async function readQueueSnapshot(): Promise<OfflineOp[]> {
+  const q = await readQueue();
+  return q.map(o => ({ ...o }));
+}
+
+export async function clearQueue(): Promise<void> {
+  await writeQueue([]);
 }

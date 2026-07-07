@@ -384,6 +384,38 @@ function AppRoot() {
           useSessionStore: sessionStore,
           useMemoryStore: memoryStore,
         };
+        // v409: expose offlineQueue + hikeTrackWriter for Playwright test
+        // scenarios (offline retry, cache clear, disk replay assertions).
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const offlineQueue = require('./src/services/offlineQueue');
+          (globalThis as unknown as { __cairnOfflineQueue?: unknown }).__cairnOfflineQueue = {
+            readSnapshot: offlineQueue.readQueueSnapshot,
+            clear: offlineQueue.clearQueue,
+            drain: offlineQueue.drain,
+            enqueue: offlineQueue.enqueue,
+            makeOp: offlineQueue.makeOp,
+          };
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const hikeTrackWriter = require('./src/services/hikeTrackWriter');
+          (globalThis as unknown as { __cairnHikeWriter?: unknown }).__cairnHikeWriter = {
+            getWriterState: hikeTrackWriter.getWriterState,
+            listActiveHikes: hikeTrackWriter.listActiveHikes,
+            readActiveHikeTail: hikeTrackWriter.readActiveHikeTail,
+            flushNow: hikeTrackWriter.flushNow,
+          };
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const hikeTracksCache = require('./src/services/hikeTracksCache');
+          (globalThis as unknown as { __cairnHikeCache?: unknown }).__cairnHikeCache = {
+            getDiskUsage: hikeTracksCache.getDiskUsage,
+            enforceSizeCap: hikeTracksCache.enforceSizeCap,
+            enforceTTL: hikeTracksCache.enforceTTL,
+            clearUploaded: hikeTracksCache.clearUploaded,
+            clearAll: hikeTracksCache.clearAll,
+          };
+        } catch (innerErr) {
+          console.warn('[v409 web hooks failed]', innerErr);
+        }
       }
     } catch (err) {
       console.warn('[__cairnStores web hook failed]', err);

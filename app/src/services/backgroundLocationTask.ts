@@ -24,16 +24,27 @@ export const BACKGROUND_LOCATION_TASK = 'cairn-background-location';
 
 // AsyncStorage keys for crash-survival of session metadata
 const STORAGE_KEY_SESSION = 'cairn_bg_active_session_id';
-const STORAGE_KEY_ENABLED = 'cairn_bg_logging_enabled';
+// v409 fix #5: semantic rename — 老 key 'cairn_bg_logging_enabled' 语义
+// 是"debug 是否开",现在语义应为"hike 是否 active"。v409 迁移在
+// useAppStore.hydrate 里做:老 key 值若='1' 但无 active session
+// (STORAGE_KEY_SESSION 空) → 清除,防止 stale flag 触发误 Path B 写盘。
+const STORAGE_KEY_HIKE_ACTIVE = 'cairn_bg_hike_active';
+// v409: 保留老 key 仅用于 hydrate 迁移检测,新写入统一用 HIKE_ACTIVE
+const STORAGE_KEY_LEGACY_ENABLED = 'cairn_bg_logging_enabled';
+
+export { STORAGE_KEY_SESSION, STORAGE_KEY_HIKE_ACTIVE, STORAGE_KEY_LEGACY_ENABLED };
 
 /**
- * Persist current session_id + enabled flag for the background task to read
- * even after the app process is killed. Call from useTrackingStore on
- * startTracking/stopTracking.
+ * Persist current session_id + hike-active flag for the background task
+ * to read even after the app process is killed.
+ *
+ * v409 fix #5: hikeActive 语义 = "hike 正在进行(startTracking 后,stopTracking 前)",
+ * 不再是 debug logger 的 enabled 状态。这样 iOS jetsam 后 native TaskManager
+ * fire 时 Path B 能无条件写盘(gate 移除)。
  */
 export async function persistBackgroundContext(
   sessionId: string | null,
-  enabled: boolean,
+  hikeActive: boolean,
 ): Promise<void> {
   try {
     if (sessionId) {
@@ -41,7 +52,11 @@ export async function persistBackgroundContext(
     } else {
       await AsyncStorage.removeItem(STORAGE_KEY_SESSION);
     }
-    await AsyncStorage.setItem(STORAGE_KEY_ENABLED, enabled ? '1' : '0');
+    await AsyncStorage.setItem(STORAGE_KEY_HIKE_ACTIVE, hikeActive ? '1' : '0');
+    // v409 fix #5 migration: 清老 key 避免 hydrate 时 stale 干扰
+    if (!hikeActive) {
+      try { await AsyncStorage.removeItem(STORAGE_KEY_LEGACY_ENABLED); } catch { /* ignore */ }
+    }
   } catch {
     // best effort
   }
@@ -70,29 +85,33 @@ export function drainBackgroundLocations(): LocationCoords[] {
  * Direct file-system append for the case when app process was killed and
  * TaskManager woke us up just to deliver a GPS fix. We bypass debugLogger
  * because its in-memory state is empty.
+ *
+ * v409 fix #6: 写到 cairn-hike-tracks/active/{sid}.jsonl (与 hikeTrackWriter
+ * 同目录同文件),不再写到 cairn-logs/sessions/。这样 stopTracking 之后
+ * 完整 tail 都在同一个文件,hydrate 补 replay 一次读齐。
+ * gate 从 debugLogger.enabled 换成 STORAGE_KEY_HIKE_ACTIVE (语义换了)。
  */
-async function appendDirectlyToSessionFile(events: object[]): Promise<void> {
+async function appendDirectlyToHikeTrack(events: object[]): Promise<void> {
   try {
     const FS = await import('expo-file-system/legacy');
     if (!FS.documentDirectory) return;
 
     const rawSid = await AsyncStorage.getItem(STORAGE_KEY_SESSION);
     if (!rawSid) return; // no active session — drop silently
-    // Sanitize defensively (we control the writer but mistakes happen)
     const sid = String(rawSid).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
     if (!sid) return;
-    const path = FS.documentDirectory + 'cairn-logs/sessions/' + sid + '.jsonl';
 
-    // Ensure dir exists
-    const dir = FS.documentDirectory + 'cairn-logs/sessions/';
+    const dir = FS.documentDirectory + 'cairn-hike-tracks/active/';
     const dirInfo = await FS.getInfoAsync(dir);
     if (!dirInfo.exists) {
       await FS.makeDirectoryAsync(dir, { intermediates: true });
     }
+    const path = dir + sid + '.jsonl';
 
-    // Read existing + append
-    const lines =
-      events.map((e) => JSON.stringify({ ...e, session_id: sid })).join('\n') + '\n';
+    // Read existing + append (still read-modify-write because expo-file-system
+    // legacy has no native append; but each call is atomic-write within JS
+    // callback, so at worst we lose the last chunk on kill mid-write).
+    const lines = events.map((e) => JSON.stringify({ ...e, session_id: sid })).join('\n') + '\n';
     let existing = '';
     const info = await FS.getInfoAsync(path);
     if (info.exists) {
@@ -162,10 +181,21 @@ export async function registerBackgroundTask(): Promise<boolean> {
 
         // Path B — app was killed by iOS; debugLogger has no session.
         // Read persisted context from AsyncStorage and append to file directly.
+        //
+        // v409 fix #6: gate 从 debug logger enabled 换成 STORAGE_KEY_HIKE_ACTIVE。
+        // 语义清晰: 只要 hike 在跑 (startTracking 后 stopTracking 前),就写 GPS
+        // 到 hike-tracks 目录,不依赖用户是否开 debug mode。这修复 194 session
+        // 后 56 分钟数据丢失的根因: hikeActive='1' 但 debug='0' 时数据丢了。
+        //
+        // 迁移兼容: 老用户可能只有 legacy STORAGE_KEY_ENABLED='1' (来自 debugMode)
+        // 而无新 STORAGE_KEY_HIKE_ACTIVE。此时如果 STORAGE_KEY_SESSION 存在,认为
+        // 是 legacy active hike,也允许写盘。
         try {
-          const enabled = (await AsyncStorage.getItem(STORAGE_KEY_ENABLED)) === '1';
-          if (!enabled) return;
-          await appendDirectlyToSessionFile(events);
+          const hikeActive = (await AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE)) === '1';
+          const hasActiveSid = !!(await AsyncStorage.getItem(STORAGE_KEY_SESSION));
+          const legacyEnabled = (await AsyncStorage.getItem(STORAGE_KEY_LEGACY_ENABLED)) === '1';
+          if (!hikeActive && !(legacyEnabled && hasActiveSid)) return;
+          await appendDirectlyToHikeTrack(events);
         } catch {
           // swallow
         }
