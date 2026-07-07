@@ -58,7 +58,12 @@ const DEFAULTS: Settings = {
   debugMode: false,
   debugAnnotationFabVisible: true,
   telemetryUploadEnabled: true,
-  telemetryWifiOnly: true,
+  // v408 fix: 默认 false — 用户在地铁/山里 4G/5G 场景下没 WiFi,
+  // 之前 WiFi-only=true 会导致 JSONL 文件永远上不去,昨天 hike 数据
+  // 只有前 21 点 (JS 死前) 上了服务器,后 56 分钟 native 记的都没推。
+  // debug telemetry 本质上是 dev 工具,不该默认阻塞真实数据流。
+  // 用户可在 Settings 手动开 WiFi-only。
+  telemetryWifiOnly: false,
   telemetryBackendUrl: '',
   telemetryApiKey: '',
 };
@@ -91,7 +96,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const raw = await storage.getItem(STORAGE_KEY);
       if (raw) {
         const saved: Partial<Settings> = JSON.parse(raw);
-        set({ ...DEFAULTS, ...saved });
+        // v408 migration: 老用户 AsyncStorage 里 telemetryWifiOnly=true 已存,
+        // hydrate 会覆盖 DEFAULTS 让新默认 false 失效。一次性强制覆盖:
+        // 若 saved 里显式 wifiOnly=true 且没有 migration flag,强制 false 一次。
+        // Migration flag 存在 saved 里,以后用户手动改 wifiOnly 也不会再触发。
+        const migrated: Partial<Settings> & { __v408_wifionly_migrated?: boolean } = { ...saved };
+        if (saved.telemetryWifiOnly === true && !(saved as Record<string, unknown>).__v408_wifionly_migrated) {
+          migrated.telemetryWifiOnly = false;
+          (migrated as Record<string, unknown>).__v408_wifionly_migrated = true;
+          try { storage.setItem(STORAGE_KEY, JSON.stringify(migrated)); } catch { /* ignore */ }
+        }
+        set({ ...DEFAULTS, ...migrated });
         debugLogger.setEnabled(Boolean(saved.debugMode));
       } else {
         debugLogger.setEnabled(DEFAULTS.debugMode);
