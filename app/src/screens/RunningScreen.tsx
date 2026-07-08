@@ -479,10 +479,10 @@ export function RunningScreen() {
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md }}>
             <Icon name="Map" size={48} color={Colors.primaryMuted} />
             <Text style={{ fontSize: FontSize.h3, fontWeight: '600', color: Colors.textPrimary }}>
-              Map preview unavailable
+              Real Map (EAS Build)
             </Text>
             <Text style={{ fontSize: FontSize.body, color: Colors.textSecondary, textAlign: 'center' }}>
-              Real-time map appears in the production build.
+              Build with EAS to enable live tracking map
             </Text>
           </View>
         )}

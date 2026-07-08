@@ -109,8 +109,14 @@ function RecentRow({ onPress }: { onPress: (id: string) => void }) {
   }
 
   // ── Last activity mode (only within 24h) ──
-  if (sessions.length === 0) return null;
-  const last = sessions.reduce((best, s) => s.startedAt > best.startedAt ? s : best);
+  // v413 UX fix (Bug A): filter out zombie sessions (name=undefined + distance=0 + duration=0).
+  // 这些是 offline pending 从未 drain 成功的残余 (case-6 test data 之类).
+  // 显示"Hike 00:00 · Nh ago"对用户是无信息噪音, 应该隐藏直到真数据.
+  const validSessions = sessions.filter((s) =>
+    (s.distanceM > 0 || s.durationS > 0) && s.startedAt
+  );
+  if (validSessions.length === 0) return null;
+  const last = validSessions.reduce((best, s) => s.startedAt > best.startedAt ? s : best);
   const ageMs = Date.now() - last.startedAt;
   if (ageMs > 24 * 60 * 60 * 1000) return null;
 
@@ -474,7 +480,7 @@ export function HomeScreen() {
         {/* Tools — v0.2.6.4: Trails (=Routes renamed) / Friends /
             Memory (=AR renamed) / Settings. AR is sealed. */}
         <View style={styles.toolsRow}>
-          <ToolBtn iconName="Route" label="Trails" onPress={() => nav.navigate('Routes')} />
+          <ToolBtn iconName="Route" label="Activity" onPress={() => nav.navigate('Routes')} />
           <ToolBtn iconName="Users" label="Friends" onPress={() => nav.navigate('Friends')} />
           <ToolBtn iconName="Map" label="Memory" onPress={() => nav.navigate('Memory')} />
           <ToolBtn iconName="Settings2" label="Settings" onPress={() => nav.navigate('Settings')} />
