@@ -79,19 +79,23 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   const [selection, setSelection] = useState<Selection>({ kind: 'none' });
 
   const classified = useMemo<Classified[]>(
-    () => markers.map((m) => ({
-      marker: m,
-      tier: resolveTier(m, ownIds),
-      // v394b: removed "own ? true : ..." override — that was a visual
-      // hack that hid the real bug. Plant must REALLY unlock fog (via
-      // recordPoint in useMarkerStore.addMarker), and isExplored
-      // truthfully reflects the fog state.
-      isExplored: isExplored(m.lat, m.lng),
-      distanceM: haversineM(
-        { lat: centerLat, lng: centerLng },
-        { lat: m.lat, lng: m.lng }
-      ),
-    })),
+    () => markers.map((m) => {
+      const isOwn = ownIds.has(m.id);
+      return {
+        marker: m,
+        tier: resolveTier(m, ownIds),
+        // v412 fix: owner override 回加. v394b 删除时的担忧 (plant-unlock 不真解锁 fog)
+        // 已经在 v399/v400 修好 (useMarkerStore.addMarker push memory point +
+        // FogLayer 单点 buffer 25m). 现在 owner 无条件视为 explored 是正确的产品语义:
+        // "?" = "未知内容, 去探索" 只对 friend/public 观察者有意义, owner 知道自己 marker
+        // 里放了什么. 也顺带覆盖 memorySync.replacePoints([]) reconcile 场景 (defense in depth).
+        isExplored: isOwn ? true : isExplored(m.lat, m.lng),
+        distanceM: haversineM(
+          { lat: centerLat, lng: centerLng },
+          { lat: m.lat, lng: m.lng }
+        ),
+      };
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [markers, centerLat, centerLng, geometryVersion, ownIds]
   );
