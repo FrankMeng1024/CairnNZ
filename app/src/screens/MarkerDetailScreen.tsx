@@ -183,7 +183,12 @@ export function MarkerDetailScreen() {
   const { title: privateTitle, body: privateBody } = splitTitleBody(marker.note);
   const vis = VISIBILITY_LABEL[marker.permission] ?? VISIBILITY_LABEL.personal;
   const dateStr = formatDate(marker.createdAt);
-  const isOwner = marker.authorId === userId || marker.authorId === 'local' || marker.authorId === 'server';
+  // v416 fix (Bug D): 移除 authorId === 'server' 视为 owner. 后端 GET /api/markers
+  // 之前未返回 user_id, fromBackend fallback 'server' 使**任何** marker 都被视为 owner,
+  // 显示 Edit/Delete 按钮但 backend DELETE 会静默失败 (WHERE user_id 保护). optimistic
+  // 移除本地 state 造成"删了但重启回来"的诡异体验. v414 backend fix 后 user_id 已回,
+  // 只需信 authorId === userId. 'local' 保留 (未同步本地 marker, id 未生成 remote id).
+  const isOwner = marker.authorId === userId || marker.authorId === 'local';
 
   // Public snapshot divergence: only relevant if a snapshot exists AND
   // its content differs from the current marker fields (or the marker

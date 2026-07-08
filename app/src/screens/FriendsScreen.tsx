@@ -319,6 +319,7 @@ export function FriendsScreen() {
   // user's view, regardless of who they were logged in as.)
   const storeFriends = useFriendStore(s => s.friends);
   const loadFriendsFromBackend = useFriendStore(s => s.loadFriendsFromBackend);
+  const toggleShareMarkersInStore = useFriendStore(s => s.toggleShareMarkers);
 
   const mapStoreFriend = (f: typeof storeFriends[0]): Friend => ({
     id: f.id,
@@ -425,6 +426,9 @@ export function FriendsScreen() {
   }, []);
 
   const toggleShare = (id: string) => {
+    // v416 fix (Bug F): 同步到 useFriendStore 才能持久化 (MMKV via persistFriends).
+    // 之前只更新本地 setFriends state, 关闭页面重新打开 useEffect 从 store 覆盖回来.
+    toggleShareMarkersInStore(id);
     setFriends(prev => prev.map(f => f.id === id ? { ...f, sharing: !f.sharing } : f));
   };
 

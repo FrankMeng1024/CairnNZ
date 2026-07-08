@@ -117,8 +117,17 @@ export function RevealedCairnSheet({
 }
 
 function ActionBtn({ label, onPress }: { label: string; onPress?: () => void }) {
+  // v416 fix (Bug E): CairnPinsLayer 从未传 onLike/onReport/onShare handler,
+  // 之前 onPress={undefined} 让按钮"看起来可点但完全无反应". 现在 disabled 视觉
+  // 明确表达"暂未实装", 避免用户困惑地反复戳. handler 真接线后自动恢复正常.
+  const isDisabled = typeof onPress !== 'function';
   return (
-    <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={[styles.actionBtn, isDisabled && { opacity: 0.4 }]}
+      onPress={onPress}
+      disabled={isDisabled}
+      activeOpacity={0.7}
+    >
       <Text style={styles.actionBtnText}>{label}</Text>
     </TouchableOpacity>
   );
