@@ -24,7 +24,7 @@ import {
 import Svg, { Path, Ellipse, Line, G } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { UnfinishedSessionBanner } from '../components/banners/UnfinishedSessionBanner';
+// v412: UnfinishedSessionBanner 已被 v412 UnfinishedRecoveryModal 取代 (HikingScreen 内)
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -805,10 +805,7 @@ export function AuthScreen() {
   if (view === 'splash') {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* v407 fix #4: 顶置未完成 hike banner。Sprint 72 STORY-00551 原意
-          是"屏幕最上方立刻看到",v404 冷启必登后 HomeScreen 不 mount,
-          必须在 AuthScreen 也 render。authMode=true 简化为只读 Dismiss 版本。 */}
-      <UnfinishedSessionBanner authMode />
+      {/* v412: v409 UnfinishedSessionBanner 已删除, 恢复流程走 HikingScreen 的 UnfinishedRecoveryModal */}
       <Animated.View style={[styles.splashInner, { opacity: splashFade, transform: [{ translateY: splashTranslate }] }]}>
           {/* Hero area */}
           <View style={styles.logoArea}>

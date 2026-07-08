@@ -184,9 +184,76 @@ export async function fetchSessionDetail(remoteId: number): Promise<RemoteSessio
 }
 
 /**
- * DELETE the session from the backend.
- * Returns true on success, false on failure (caller continues regardless).
+ * v412: 原子 save-hike 端点封装。
+ *
+ * 一次请求完成: sessions 表 UPDATE (route_points + raw + finalized_at + 元数据)
+ * + memory_points 批量 INSERT, 服务器事务保证要么全成一起要么全不发生。
+ *
+ * 幂等契约:
+ *   idempotencyKey 由 client 生成, retry 用同一个。服务器 middleware cache 或
+ *   finalized_at 兜底保证同 key 重试返 200 + idempotent_replay: true。
+ *
+ * 返回:
+ *   { ok: true, session_id, finalized_at, memory, idempotent_replay? }
+ *   throw on 网络错误 / 5xx / 4xx (让 caller 走 pendingSyncStore)
  */
+export interface SaveHikeAtomicPayload {
+  end_time: string;
+  distance_m: number;
+  duration_s: number;
+  name: string;
+  route_points: Array<{ lat: number; lng: number; t: number }>;
+  route_points_raw: Array<{ lat: number; lng: number; t: number; acc?: number | null }>;
+  memory_points: Array<{ lat: number; lng: number; ts: number }>;
+}
+
+export interface SaveHikeAtomicResult {
+  ok: true;
+  session_id: number;
+  finalized_at: string;
+  memory: { accepted: number; rejected: number };
+  idempotent_replay?: boolean;
+}
+
+export async function saveHikeAtomic(
+  remoteId: number,
+  payload: SaveHikeAtomicPayload,
+  idempotencyKey: string,
+): Promise<SaveHikeAtomicResult> {
+  const path = `/api/sessions/${remoteId}/save`;
+  let res: Response;
+  try {
+    res = await authenticatedFetch(path, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (netErr: any) {
+    // 网络异常 (无网络 / 超时 / DNS 失败) → throw 让 caller 走 pendingSyncStore
+    const err: any = new Error(`saveHikeAtomic network error: ${netErr?.message || netErr}`);
+    err.status = 0;
+    err.cause = netErr;
+    throw err;
+  }
+  if (!res.ok) {
+    // 4xx / 5xx / 网络异常都算失败, 让 caller 决定是否入 pendingSyncStore
+    let errBody: any = null;
+    try { errBody = await res.json(); } catch { /* ignore */ }
+    const err: any = new Error(
+      `saveHikeAtomic HTTP ${res.status}: ${errBody?.error || 'unknown'}`,
+    );
+    err.status = res.status;
+    err.body = errBody;
+    throw err;
+  }
+  const body = await res.json();
+  return body as SaveHikeAtomicResult;
+}
+
+
 export async function deleteRemoteSession(remoteId: number): Promise<boolean> {
   try {
     const res = await authenticatedFetch(`/api/sessions/${remoteId}`, { method: 'DELETE' });

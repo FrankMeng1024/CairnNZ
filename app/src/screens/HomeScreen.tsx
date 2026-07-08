@@ -23,7 +23,7 @@ import { useTrackingStore } from '../store/useTrackingStore';
 import { formatDistance, formatDuration, getRelativeTime } from '../utils/geo';
 import { getCurrentRegion } from '../config/regions';
 import { OtaBadge } from '../components/OtaBadge';
-import { UnfinishedSessionBanner } from '../components/banners/UnfinishedSessionBanner';
+// v412: UnfinishedSessionBanner 已被 v412 UnfinishedRecoveryModal 取代 (HikingScreen 内)
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -368,8 +368,7 @@ export function HomeScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
       <OtaBadge />
-      {/* Sprint 72 STORY-00551: surface unfinished-hike banner if any */}
-      <UnfinishedSessionBanner />
+      {/* v412: v409 UnfinishedSessionBanner 已删除, 恢复流程走 HikingScreen 的 UnfinishedRecoveryModal */}
       <Animated.View
         style={[
           styles.screen,
@@ -396,6 +395,22 @@ export function HomeScreen() {
           </View>
           <Text style={styles.greeting}>{getGreeting(uiMode)}</Text>
         </View>
+
+        {/* v412: 离线未同步 hike pending 提示条 — 只在有 pending 时显示 */}
+        {(() => {
+          const pendingCount = sessions.filter(
+            (s: any) => s.syncState === 'pending' || s.syncState === 'syncing'
+          ).length;
+          if (pendingCount === 0) return null;
+          return (
+            <View style={styles.pendingBanner}>
+              <Icon name="CloudOff" size={14} color={Colors.textSecondary} strokeWidth={2} />
+              <Text style={styles.pendingBannerText}>
+                {pendingCount} 条 hike 还没同步, 有网时会自动完成
+              </Text>
+            </View>
+          );
+        })()}
 
         {/* Stats strip — only when data exists */}
         {hasData && (
@@ -500,6 +515,22 @@ const styles = StyleSheet.create({
   greeting: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textSecondary },
 
   statsRow: { flexDirection: 'row', gap: Spacing.sm },
+  // v412: 离线未同步提示条
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    backgroundColor: Colors.surfaceMuted ?? '#F5F0E5',
+    borderRadius: Radius.chip,
+    marginBottom: Spacing.xs,
+  },
+  pendingBannerText: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.caption,
+    flex: 1,
+  },
   statChip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: Radius.pill,

@@ -30,9 +30,13 @@ import { batteryMonitor } from '../services/batteryMonitor';
 import { networkMonitor } from '../services/networkMonitor';
 import { sessionRecorder } from '../services/sessionRecorder';
 import { telemetryUploader } from '../services/telemetryUploader';
-import { startSession, appendPoints as remoteAppendPoints, finalizeSession, deleteRemoteSession } from '../services/sessionService';
+import { startSession, appendPoints as remoteAppendPoints, finalizeSession, deleteRemoteSession, saveHikeAtomic } from '../services/sessionService';
 import { crashLogger } from '../services/crashLogger';
 import { flushHikingToMemory } from '../features/memory/services/flushHikingToMemory';
+// v412: 用于 saveHikeAtomic idempotencyKey + memory unsynced 采样
+import { uuidv4 } from '../services/offlineQueue';
+import { useMemoryStore } from '../features/memory/store/useMemoryStore';
+import { useAppStore } from './useAppStore';
 // v402: snap-to-road + synchronous memory push at hike-save.
 import { snapTrack } from '../services/routing/snapTrack';
 import { pushMemoryNow } from '../services/memorySync';
@@ -151,7 +155,7 @@ interface TrackingState {
    *  - 'too-short' : < 2 trackPoints, session was discarded (no path to draw)
    *  - null        : initial state, or after the consuming screen has shown the notice and cleared it
    *  Screens watch this to surface a friendly explanation when a stop produces no Activities-list entry. */
-  lastStopReason: 'saved' | 'too-short' | null;
+  lastStopReason: 'saved' | 'saved_pending' | 'too-short' | null;
 
   // Actions
   setActivityMode: (mode: ActivityMode) => void;
@@ -193,7 +197,7 @@ const initialState = {
   lastCoordinateTime: null,
   lastFixTimestamp: null,
   altitudeHistory: [] as (number | null)[],
-  lastStopReason: null as 'saved' | 'too-short' | null,
+  lastStopReason: null as 'saved' | 'saved_pending' | 'too-short' | null,
 };
 
 export const useTrackingStore = create<TrackingState>((set, get) => ({
@@ -321,6 +325,51 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       } catch {
         // Background permission not available on this build (e.g. web, simulator).
         backgroundGrantedCached = false;
+      }
+
+      // v412 §3 iOS Always Allow 位置权限教育弹窗 (一次性):
+      // 用户第一次授权时若选了 "While Using the App" (不给 background),
+      // 弹一次教育对话框引导升级到 "Always Allow"。已弹过 (SecureStore flag)
+      // 就不再弹。用户后续 hike 结束路径断了会知道原因。
+      if (!backgroundGrantedCached) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const SecureStore = require('expo-secure-store');
+          const KEY = 'cairn_has_seen_always_allow_education';
+          let hasSeen = false;
+          try {
+            hasSeen = (await SecureStore.getItemAsync(KEY)) === '1';
+          } catch { /* silent */ }
+          if (!hasSeen) {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { Alert, Linking } = require('react-native');
+            await new Promise<void>((resolve) => {
+              Alert.alert(
+                '为了更好地记录 hike',
+                'Cairn 需要在屏幕锁定或后台时持续记录你的 GPS。请在设置中把位置权限设为 "始终允许 (Always Allow)"。',
+                [
+                  {
+                    text: '稍后',
+                    style: 'cancel',
+                    onPress: async () => {
+                      try { await SecureStore.setItemAsync(KEY, '1'); } catch { /* silent */ }
+                      resolve();
+                    },
+                  },
+                  {
+                    text: '打开设置',
+                    onPress: async () => {
+                      try { await SecureStore.setItemAsync(KEY, '1'); } catch { /* silent */ }
+                      try { Linking.openSettings(); } catch { /* silent */ }
+                      resolve();
+                    },
+                  },
+                ],
+                { cancelable: false }
+              );
+            });
+          }
+        } catch { /* silent — 教育弹窗失败不影响主流程 */ }
       }
 
       set({ status: 'tracking', locationAvailable: true });
@@ -709,7 +758,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       });
 
     const s = get();
-    let stopReason: 'saved' | 'too-short' | null = null;
+    let stopReason: 'saved' | 'saved_pending' | 'too-short' | null = null;
     if (s.sessionId && s.startedAt) {
       const region = getCurrentRegion();
       // Default name: "Hike — DD/MM/YYYY" / "Run — DD/MM/YYYY". Used
@@ -830,49 +879,110 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         crashLogger.breadcrumb(`v333:hiking_to_memory failed ${String(e).slice(0, 80)}`);
       }
 
-      // v402: push memory points to server SYNCHRONOUSLY before
-      // completing stopTracking. Prior behaviour relied on the debounced
-      // pushPendingPoints scheduler, which frequently didn't fire if the
-      // user backgrounded the app right after saving — 89-point testkk
-      // hike ended up with zero memory_points on the server. Await here
-      // so the row is durable before we hand control back.
-      try {
-        await pushMemoryNow();
-        crashLogger.breadcrumb(`v402:mem_push_done`);
-      } catch (pushErr) {
-        crashLogger.breadcrumb(`v402:mem_push_failed ${String(pushErr).slice(0, 80)}`);
-      }
+      // v412: 用原子 save-hike-atomic 端点替换 v411 的 "pushMemoryNow +
+      // fire-and-forget finalize" 双请求。目标: 服务器一次事务完成
+      // sessions + memory_points 落库, 要么全成一起要么全不发生。
+      //
+      // 失败分支: 网络异常 / 5xx → 完整 payload 写 pendingSyncStore,
+      // SyncDaemon 后续用同 idempotencyKey 自动重试直到成功 or 用户长按放弃。
+      //
+      // v411 老路径 (pushMemoryNow + finalizeSession) **不再调用**,
+      // v412 之后只走这一个 code path。
+      const v412Route3 = (snappedTrackPoints ?? (s.trackPointsSmoothed.length >= 2 ? s.trackPointsSmoothed : s.trackPoints))
+        .map(p => ({ lat: p.lat, lng: p.lng, t: p.t }));
+      const v412RouteRaw = (s.trackPointsRaw.length > 0 ? s.trackPointsRaw : s.trackPoints)
+        .map(p => ({ lat: p.lat, lng: p.lng, t: p.t, acc: (p as any).accuracy ?? null }));
 
-      // v404: finalizeSession 挪到这里 —— snap 已完成，可以把 snapped
-      // route_points 和原 GPS route_points_raw 一起 PATCH 上去。
-      // route_points = snapped(Activity 展示 + save as route 用)
-      // route_points_raw = 原 trackPoints(纯 debug 参照,不参与 UI)
-      // 依然 fire-and-forget（不阻塞 UI 关闭），但 snappedTrackPoints
-      // 此时已 ready，PATCH body 完整。
+      // 采样 memory_points: 从 memoryStore 里拉这次 hike 期间产生的 unsynced points
+      const memoryUnsynced = useMemoryStore.getState().points
+        .filter((p: any) => !p.synced && p.ts >= s.startedAt && p.ts <= endedAt)
+        .map((p: any) => ({ lat: p.lat, lng: p.lng, ts: Math.floor(p.ts) }));
+
+      const v412Payload = {
+        end_time: new Date(endedAt).toISOString(),
+        distance_m: s.distanceM,
+        duration_s: s.durationS,
+        name: finalName,
+        route_points: v412Route3,
+        route_points_raw: v412RouteRaw,
+        memory_points: memoryUnsynced,
+      };
+      const idempotencyKey = uuidv4();
+      let v412Result: any = null;
+      let v412Success = false;
+
       if (remoteId) {
-        const finalizePayload = {
-          end_time: new Date(endedAt).toISOString(),
-          distance_m: s.distanceM,
-          duration_s: s.durationS,
-          name: finalName,
-          // v404: 优先送 snapped;snap 挂了就送 Kalman-smoothed 兜底,
-          // 保证 server route_points 一定有值可用于 Activity 渲染。
-          // v407 fix #7: no-token / snap-fail fallback 也 strip 到三字段
-          // (lat/lng/t) 保证 v404 "route_points 永远三字段" 承诺兑现。
-          // 之前 snappedTrackPoints=null 直接抛 s.trackPointsSmoothed 六
-          // 字段 (alt/speed/accuracy 全带),server 上又变回 v403 shape。
-          route_points: (snappedTrackPoints ?? (s.trackPointsSmoothed.length >= 2 ? s.trackPointsSmoothed : s.trackPoints))
-            .map(p => ({ lat: p.lat, lng: p.lng, t: p.t })),
-          // v404: 原 GPS 点始终传服务器作 debug 参照。用户原话:
-          // "原GPS的作用是未来出现问题的Debug参照。原GPS点在没出问题
-          // 的时候没任何作用,出了问题也只是分析作用"。
-          // route_points_raw 保留全字段 (alt/speed/accuracy) 作 debug 用。
-          route_points_raw: s.trackPointsRaw.length > 0 ? s.trackPointsRaw : s.trackPoints,
-        };
-        (async () => {
-          const ok2 = await finalizeSession(remoteId, finalizePayload);
-          crashLogger.breadcrumb(`v404:session:finalize ok=${ok2} snapped=${snappedTrackPoints !== null} raw=${s.trackPointsRaw.length}`);
-        })().catch(() => undefined);
+        try {
+          // v412 M5: wall-clock 20s timeout, 防切后台 setTimeout 暂停
+          const startedAt = Date.now();
+          v412Result = await new Promise<any>((resolve, reject) => {
+            let done = false;
+            const timer = setInterval(() => {
+              if (done) return;
+              if (Date.now() - startedAt > 20000) {
+                clearInterval(timer);
+                done = true;
+                reject(new Error('v412 wall-clock timeout 20s'));
+              }
+            }, 500);
+            saveHikeAtomic(remoteId, v412Payload, idempotencyKey)
+              .then((r) => { if (!done) { done = true; clearInterval(timer); resolve(r); } })
+              .catch((e) => { if (!done) { done = true; clearInterval(timer); reject(e); } });
+          });
+          v412Success = true;
+          crashLogger.breadcrumb(`v412:save_atomic ok sid=${v412Result?.session_id} replay=${!!v412Result?.idempotent_replay} mem_acc=${v412Result?.memory?.accepted}`);
+          // 服务器已把 memory 落库 → 标 client 端 memoryStore 里对应的点为 synced
+          try {
+            const cids = (useMemoryStore.getState().points || [])
+              .filter((p: any) => !p.synced && p.ts >= s.startedAt && p.ts <= endedAt)
+              .map((p: any) => p.cid);
+            if (cids.length > 0 && typeof useMemoryStore.getState().markPointsSyncedByCid === 'function') {
+              useMemoryStore.getState().markPointsSyncedByCid(cids);
+            }
+          } catch (markErr) {
+            crashLogger.breadcrumb(`v412:mark_synced_failed ${String(markErr).slice(0, 60)}`);
+          }
+        } catch (v412Err: any) {
+          v412Success = false;
+          crashLogger.breadcrumb(`v412:save_atomic_failed status=${v412Err?.status || 'net'} → pending`);
+          // 写 pendingSyncStore, SyncDaemon 后续重试
+          try {
+            const { savePending } = require('../services/pendingSyncStore');
+            await savePending({
+              localId: s.sessionId,
+              userId: String(useAppStore.getState().user?.id ?? 'unknown'),
+              remoteId,
+              idempotencyKey,
+              activityMode: s.activityMode,  // v412 blocker 1: 传真实 type, 不硬编码
+              payload: v412Payload,
+              createdAt: Date.now(),
+              lastAttemptAt: null,
+              attemptCount: 0,
+            });
+            crashLogger.breadcrumb(`v412:saved_to_pending localId=${s.sessionId.slice(0, 8)}`);
+          } catch (persistErr) {
+            crashLogger.breadcrumb(`v412:pending_persist_failed ${String(persistErr).slice(0, 60)}`);
+          }
+        }
+      } else {
+        // 极端: hike 开始时也离线, remoteId 为 null → 直接写 pendingSyncStore, 让 SyncDaemon 之后先 startSession 再 saveHikeAtomic
+        try {
+          const { savePending } = require('../services/pendingSyncStore');
+          await savePending({
+            localId: s.sessionId,
+            userId: String(useAppStore.getState().user?.id ?? 'unknown'),
+            remoteId: null,
+            idempotencyKey,
+            activityMode: s.activityMode,  // v412 blocker 1: 传真实 type
+            payload: v412Payload,
+            createdAt: Date.now(),
+            lastAttemptAt: null,
+            attemptCount: 0,
+          });
+          crashLogger.breadcrumb(`v412:no_remoteid_saved_to_pending`);
+        } catch (persistErr) {
+          crashLogger.breadcrumb(`v412:pending_persist_failed ${String(persistErr).slice(0, 60)}`);
+        }
       }
 
       useSessionStore.getState().addSession({
@@ -899,8 +1009,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         pausePins: s.pausePins.length > 0 ? s.pausePins : undefined,
         name: finalName,
         memoryNewCells,
+        // v412: 根据 saveHikeAtomic 结果标 syncState
+        // v412Success = true → 服务器已收 → 'synced', 卡片正常可点
+        // v412Success = false → 走了 pendingSyncStore → 'pending', 灰卡不可点
+        syncState: v412Success ? 'synced' : 'pending',
       });
-      stopReason = 'saved';
+      stopReason = v412Success ? 'saved' : 'saved_pending';
       } // end too-short guard
     }
 

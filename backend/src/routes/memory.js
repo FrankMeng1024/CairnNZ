@@ -17,21 +17,13 @@
  *     so ts-collisions don't break the cursor.
  */
 const express = require('express');
-const crypto = require('crypto');
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
+const { deterministicCid } = require('../lib/deterministicCid');
 
 const router = express.Router();
 
-/** Deterministic cid for legacy clients that don't send one. */
-function deterministicCid(userId, ts, lat, lng) {
-  // sha1 hex truncated to 36 chars (uuid-shaped). Same inputs → same output.
-  return crypto
-    .createHash('sha1')
-    .update(`${userId}|${ts}|${lat.toFixed(7)}|${lng.toFixed(7)}`)
-    .digest('hex')
-    .slice(0, 36);
-}
+// v412: deterministicCid 抽到 lib/deterministicCid.js, sessions.js /save 端点复用同一实现
 
 /**
  * POST /api/memory/points

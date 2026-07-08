@@ -47,6 +47,11 @@ export interface TrackingSession {
    *  whitelist (see line ~95-117 below), so it does not leak to backend.
    *  Used by StopSummarySheet to show "Memory: +X km²" banner. */
   memoryNewCells?: number;
+  /** v412: 同步状态机
+   *   - 'synced' (default): 已在服务器, 卡片正常可点
+   *   - 'pending': 已 Save 但未同步 (pendingSyncStore 里有 payload), 灰卡不可点
+   *   - 'syncing': SyncDaemon 正在上传该条 (短暂) */
+  syncState?: 'synced' | 'pending' | 'syncing';
 }
 
 const MAX_SESSIONS = 100;
@@ -64,6 +69,13 @@ interface SessionState {
   getSessions: () => TrackingSession[];
   getSessionsByRegion: (regionCode: string) => TrackingSession[];
   hydrate: (userId?: string) => Promise<void>;
+  // v412: 已 Save 未同步 hike 的 syncState 管理
+  /** SyncDaemon 上传成功后调用: syncState → 'synced', 更新 remoteId */
+  markSynced: (localId: string, remoteId: number) => void;
+  /** SyncDaemon 上传前短暂标记 syncing (可选) */
+  markSyncing: (localId: string) => void;
+  /** 用户长按灰卡"放弃"调用: 从 sessions 数组删除, 不通知服务器 */
+  removeLocal: (localId: string) => void;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -184,6 +196,41 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   getSessionsByRegion: (regionCode) =>
     get().sessions.filter((s) => s.regionCode === regionCode),
+
+  // v412: SyncDaemon 上传成功后调用
+  markSynced: (localId, remoteId) => {
+    set((s) => {
+      const updated = s.sessions.map((sess) =>
+        sess.id === localId
+          ? { ...sess, remoteId, syncState: 'synced' as const }
+          : sess
+      );
+      const summaries = updated.map(({ trackPoints: _, ...rest }) => rest);
+      storage.setItem(sessionsKey(get().currentUserId), JSON.stringify(summaries));
+      return { sessions: updated };
+    });
+  },
+
+  // v412: SyncDaemon 开始上传时短暂标记 (可选, 用于 spinning icon)
+  markSyncing: (localId) => {
+    set((s) => ({
+      sessions: s.sessions.map((sess) =>
+        sess.id === localId ? { ...sess, syncState: 'syncing' as const } : sess
+      ),
+    }));
+  },
+
+  // v412: 用户长按灰卡"放弃"调用 (无 remoteId or 未成功同步的场景)
+  removeLocal: (localId) => {
+    const userId = get().currentUserId;
+    set((s) => {
+      const next = s.sessions.filter((sess) => sess.id !== localId);
+      const summaries = next.map(({ trackPoints: _, ...rest }) => rest);
+      storage.setItem(sessionsKey(userId), JSON.stringify(summaries));
+      storage.removeItem(trackPointsKey(userId, localId));
+      return { sessions: next };
+    });
+  },
 
   hydrate: async (userId = 'guest') => {
     set({ currentUserId: userId });

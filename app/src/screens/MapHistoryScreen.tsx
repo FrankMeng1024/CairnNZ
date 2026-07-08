@@ -469,8 +469,84 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
 
   const expandedHeight = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 210] });
 
+  // v412: 离线未同步 hike = 纯 placeholder 灰卡, 主体不可点, 只能长按放弃
+  const isPendingSync = session.syncState === 'pending' || session.syncState === 'syncing';
+
+  const handleLongPressAbandon = () => {
+    if (!isPendingSync) return;
+    Alert.alert(
+      '放弃这条?',
+      '',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '放弃',
+          style: 'destructive',
+          onPress: () => {
+            // 二次确认
+            Alert.alert(
+              '确认放弃?',
+              '这条数据将永久删除, 不可恢复。',
+              [
+                { text: '取消', style: 'cancel' },
+                {
+                  text: '确认',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      // eslint-disable-next-line @typescript-eslint/no-require-imports
+                      const { abandonPending } = require('../services/syncDaemon');
+                      await abandonPending(session.id);
+                    } catch { /* silent */ }
+                  },
+                },
+              ],
+              { cancelable: true }
+            );
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
   return (
     <View style={{ marginBottom: Spacing.sm }}>
+      {isPendingSync ? (
+        // 灰卡: 主体 press 不可点 (noop), 但整块 onLongPress 触发放弃菜单
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => { /* noop — 灰卡不可点 */ }}
+          onLongPress={handleLongPressAbandon}
+          delayLongPress={800}
+        >
+          <View style={[cardStyles.routeCard, { opacity: 0.55 }]}>
+            <LinearGradient
+              colors={[actLightBg, actDeepBg]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={cardStyles.routeCardGradient}
+            >
+              <View style={cardStyles.routeCardHeader}>
+                <View style={[cardStyles.iconCircle, { backgroundColor: 'rgba(255,255,255,0.7)' }]}>
+                  <Icon name={isRun ? 'Footprints' : 'Mountain'} size={20} color={actColor} strokeWidth={2} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={cardStyles.routeCardTitle}>{actLabel}</Text>
+                  <Text style={cardStyles.routeCardSubtitle}>
+                    {distStr} · {durationStr}
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                <Icon name="CloudOff" size={12} color={Colors.textSecondary} strokeWidth={2} />
+                <Text style={{ color: Colors.textSecondary, fontSize: FontSize.caption }}>
+                  {session.syncState === 'syncing' ? '同步中…' : '离线保存中, 联网后自动上传'}
+                </Text>
+              </View>
+            </LinearGradient>
+          </View>
+        </TouchableOpacity>
+      ) : (
       <PressRow onPress={onPress}>
         <View style={[cardStyles.routeCard, (isSelected || isExpanded) && cardStyles.routeCardSelected]}>
           <LinearGradient
@@ -503,7 +579,9 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
           </View>
         </View>
       </PressRow>
-      {/* Inline expanded stats + route preview card */}
+      )}
+      {/* Inline expanded stats + route preview card — 只在非 pending 时渲染 */}
+      {!isPendingSync && (
       <Animated.View style={[cardStyles.expandedArea, { height: expandedHeight, opacity: expandAnim }]}>
         <Animated.View style={{ opacity: statsOpacity, transform: [{ translateY: statsTransY }] }}>
         <View style={cardStyles.expandedStats}>
@@ -556,6 +634,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
         </TouchableOpacity>
         </Animated.View>
       </Animated.View>
+      )}
     </View>
   );
 }

@@ -423,6 +423,24 @@ function AppRoot() {
             clearUploaded: hikeTracksCache.clearUploaded,
             clearAll: hikeTracksCache.clearAll,
           };
+          // v412: 曝露 pendingSyncStore + syncDaemon 给 Playwright 测试
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const pendingSyncStore = require('./src/services/pendingSyncStore');
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const syncDaemon = require('./src/services/syncDaemon');
+            (globalThis as unknown as { __cairnPendingSync?: unknown }).__cairnPendingSync = {
+              savePending: pendingSyncStore.savePending,
+              listPending: pendingSyncStore.listPending,
+              removePending: pendingSyncStore.removePending,
+              markAttempt: pendingSyncStore.markAttempt,
+              updateRemoteId: pendingSyncStore.updateRemoteId,
+              drainPending: syncDaemon.drainPending,
+              abandonPending: syncDaemon.abandonPending,
+            };
+          } catch (v412Err) {
+            console.warn('[v412 web hooks failed]', v412Err);
+          }
         } catch (innerErr) {
           console.warn('[v409 web hooks failed]', innerErr);
         }
@@ -444,6 +462,17 @@ function AppRoot() {
       markBootPhase('ue_main_before_networkmonitor_start');
       networkMonitor.start().catch(() => {});
       markBootPhase('ue_main_after_networkmonitor_start');
+      // v412: 网络恢复在线时触发 SyncDaemon 扫 pendingSyncStore
+      // 已 Save 未同步的 hike 会自动重试上传
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { drainPending } = require('./src/services/syncDaemon');
+        networkMonitor.onChange((state: { state: string }) => {
+          if (state.state === 'online') {
+            void drainPending().catch(() => {});
+          }
+        });
+      } catch { /* best effort */ }
     } catch { /* swallow */ }
     try {
       markBootPhase('ue_main_before_telemetry_uploader_init');

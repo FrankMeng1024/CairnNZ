@@ -40,6 +40,7 @@ import { PressBtn } from '../components/PressBtn';
 import { MARKER_META, type MarkerType } from '../data/mockData';
 import type { Marker } from '../store/useMarkerStore';
 import { TooShortSheet } from '../components/TooShortSheet';
+import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
 
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -1229,6 +1230,84 @@ export function HikingScreen() {
   // bar stays visible so the user can still see distance/time/elev).
   const isTrackingOrPaused = status === 'tracking' || status === 'paused';
 
+  // v412: unfinished 恢复弹窗 state
+  // 进入 Hiking 界面时检测磁盘 backup, 依赖 hydrationTs 让 iOS jetsam 复活后能重跑
+  // v412 4-eye fix (Critical #4): hydrationTs 现在是 useAppStore 真实字段, 冷启 hydrate 完成后会变
+  const hydrationTs = useAppStore(s => s.hydrationTs ?? 0);
+  const [unfinished, setUnfinished] = useState<{
+    sessionId: string;
+    remoteId?: number | null;
+    activityMode: 'hiking' | 'running';
+    startedAt: number;
+    distanceM: number;
+    durationS: number;
+    lastPointAt: number;
+  } | null>(null);
+  useEffect(() => {
+    // 只在非 tracking/paused 状态下检测: 用户已经在 recording 中不该弹恢复
+    if (isTrackingOrPaused) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const hikeTrackWriter = require('../services/hikeTrackWriter');
+        if (typeof hikeTrackWriter.listActiveHikes !== 'function') return;
+        const active = await hikeTrackWriter.listActiveHikes();
+        if (cancelled || !Array.isArray(active) || active.length === 0) return;
+
+        // v412 修 (real UI test): hikeTrackWriter.listActiveHikes 返回 snake_case
+        // (session_id / last_ts), 老代码用 camelCase 匹配 filter 空. 兼容两种命名.
+        const norm = (f: any) => ({
+          sessionId: f.session_id ?? f.sessionId,
+          lastTs: f.last_ts ?? f.lastTs,
+          startedAt: f.started_at ?? f.startedAt,
+          activityMode: f.activity_mode ?? f.activityMode ?? 'hiking',
+          remoteId: f.remote_id ?? f.remoteId ?? null,
+          distanceM: f.distance_m ?? f.distanceM ?? 0,
+          durationS: f.duration_s ?? f.durationS ?? 0,
+        });
+        const normalized = active.map(norm);
+
+        // 72h 内: 弹恢复; 72h 外: 静默删 (由 syncDaemon/hikeTracksCache 别处兜底)
+        // v412 修 (real UI test): hikeTrackWriter.listActiveHikes 不返回 activityMode 字段
+        // 因此不能按 activityMode 过滤. 假设 hikeTrackWriter 只跟 hike, run 走另一个 writer (未来).
+        const cutoff = Date.now() - 72 * 3600_000;
+        const recent = normalized
+          .filter((f: any) => (f.lastTs ?? f.startedAt ?? 0) > cutoff)
+          .sort((a: any, b: any) => (b.lastTs ?? 0) - (a.lastTs ?? 0));
+        if (recent.length === 0) return;
+        const latest = recent[0];
+        // 读文件 tail 拿最后 GPS 点作 lastPointAt
+        let lastPointAt = latest.lastTs || latest.startedAt || Date.now();
+        let distanceM = latest.distanceM || 0;
+        let durationS = latest.durationS || 0;
+        try {
+          if (typeof hikeTrackWriter.readActiveHikeTail === 'function') {
+            const tail = await hikeTrackWriter.readActiveHikeTail(latest.sessionId, 1);
+            if (Array.isArray(tail) && tail.length > 0) {
+              lastPointAt = tail[tail.length - 1].t || lastPointAt;
+            }
+          }
+          const start = latest.startedAt || (lastPointAt - 40 * 60_000);
+          durationS = Math.max(1, Math.floor((lastPointAt - start) / 1000));
+        } catch { /* silent */ }
+        setUnfinished({
+          sessionId: latest.sessionId,
+          remoteId: latest.remoteId ?? null,
+          // v412 4-eye fix (Critical #2): 用真实 activityMode, 不硬编码 'hiking'
+          // hikeTrackWriter.startHikeTrack 存 meta.activity_mode, norm() 里已带过来.
+          // 兜底 'hiking' 只在字段缺失 (v411 前老数据) 时启用.
+          activityMode: (latest.activityMode === 'running' ? 'running' : 'hiking'),
+          startedAt: latest.startedAt || lastPointAt,
+          distanceM,
+          durationS,
+          lastPointAt,
+        });
+      } catch { /* silent — v412 UI 恢复不影响主流程 */ }
+    })();
+    return () => { cancelled = true; };
+  }, [hydrationTs, isTrackingOrPaused]);
+
   useEffect(() => { loadRoutes(); }, []);
 
   // Pre-fetch a one-shot GPS fix on enter so the route picker can show
@@ -1367,9 +1446,85 @@ export function HikingScreen() {
 
   const selectedRouteName = routes.find(r => r.id === selectedRoute)?.name ?? 'Free Hiking';
 
+  // v412: 两个 return 分支 (phase='select' early return + Phase 2 主 return) 都需要挂
+  // UnfinishedRecoveryModal, 抽成一个 node 避免复制粘贴导致 onContinue/onDiscard 逻辑分叉。
+  const recoveryModalNode = (
+    <UnfinishedRecoveryModal
+      visible={unfinished !== null && !isTrackingOrPaused}
+      data={unfinished}
+      onContinue={async () => {
+        const u = unfinished;
+        if (!u) return;
+        try {
+          // 先停 background location task 避免 iOS jetsam 复活后 task 已跑 → 重复
+          // v412 blocker 3 修 (subagent 视角B): 用真实 task name 'cairn-background-location', 不硬编码字符串
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const Location = require('expo-location');
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { BACKGROUND_LOCATION_TASK } = require('../services/backgroundLocationTask');
+          if (Location && typeof Location.stopLocationUpdatesAsync === 'function') {
+            await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => {});
+          }
+        } catch { /* silent */ }
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const hikeTrackWriter = require('../services/hikeTrackWriter');
+          if (typeof hikeTrackWriter.readActiveHikeTail === 'function') {
+            const pts = await hikeTrackWriter.readActiveHikeTail(u.sessionId, Infinity);
+            // 恢复到 tracking store
+            // v412 4-eye fix (Critical #2): 用 u.activityMode 不硬编码, 保 running 语义
+            useTrackingStore.setState({
+              sessionId: u.sessionId,
+              remoteSessionId: u.remoteId ?? null,
+              trackPoints: pts,
+              startedAt: u.startedAt,
+              status: 'paused', // v412 4-eye fix (Blocker #1): 先设 paused, 让 resumeTracking 走 activate*Source
+              distanceM: u.distanceM,
+              durationS: u.durationS,
+              activityMode: u.activityMode,
+            } as any);
+            if (typeof hikeTrackWriter.resumeHikeTrack === 'function') {
+              await hikeTrackWriter.resumeHikeTrack(u.sessionId);
+            }
+          }
+          // v412 4-eye fix (Blocker #1): activate*Source 是模块级私有函数, 从 store 外调不到.
+          // 改用 store 里真实存在的 resumeTracking action, 它内部会按 AppState 调 activate*Source.
+          const trackingStore = useTrackingStore.getState() as any;
+          if (typeof trackingStore.resumeTracking === 'function') {
+            await trackingStore.resumeTracking();
+          }
+        } catch (_recoverErr) {
+          // v412 4-eye fix (Medium): 恢复失败必须留 breadcrumb, 之前 silent 让 blocker#1 静默死了
+          try {
+            const cl = require('../services/crashLogger');
+            (cl.crashLogger ?? cl.default)?.breadcrumb?.(`v412:recovery_continue_failed ${String(_recoverErr).slice(0, 80)}`);
+          } catch { /* silent */ }
+          // 恢复失败: 简化处理 = 走 discard, 用户可以重新开
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const hikeTrackWriter = require('../services/hikeTrackWriter');
+            await hikeTrackWriter.discardActiveHike(u.sessionId);
+          } catch { /* silent */ }
+        }
+        setUnfinished(null);
+      }}
+      onDiscard={async () => {
+        const u = unfinished;
+        if (!u) return;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const hikeTrackWriter = require('../services/hikeTrackWriter');
+          await hikeTrackWriter.discardActiveHike(u.sessionId);
+        } catch { /* silent */ }
+        setUnfinished(null);
+      }}
+    />
+  );
+
   // ── Phase 1: Route Selection ─────────────────────────────────────────────
   if (phase === 'select') {
     return (
+      <>
       <View style={styles.container}>
         <HikingMap markers={[]} trackPoints={[]} onMarkerPress={() => {}} />
 
@@ -1497,7 +1652,10 @@ export function HikingScreen() {
             </Animated.View>
           </Animated.View>
         )}
+        {/* v412 4-eye fix (Critical #3): recoveryModalNode 已提到最外层 Fragment, 见函数结尾. */}
       </View>
+      {recoveryModalNode}
+      </>
     );
   }
 
@@ -1508,6 +1666,7 @@ export function HikingScreen() {
   const routePolyline = activeRoute?.points ?? [];
 
   return (
+    <>
     <View style={styles.container}>
       <HikingMap
         markers={markers}
@@ -1890,7 +2049,10 @@ export function HikingScreen() {
         onContinue={() => clearLastStopReason()}
         onDiscard={() => { clearLastStopReason(); discardCurrentSession(); }}
       />
+      {/* v412: 未完成 hike 恢复弹窗 — 挂在 Fragment 顶层, 见下方 */}
     </View>
+    {recoveryModalNode}
+    </>
   );
 }
 

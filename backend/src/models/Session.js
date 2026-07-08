@@ -192,6 +192,10 @@ const Session = {
       values.push(routePointsRaw ? JSON.stringify(routePointsRaw) : null);
     }
     if (fields.length === 0) return false;
+    // v412 §1.9 (backend subagent B4): 旧 finalize 端点也写 finalized_at,
+    // 保证 v411 client 用旧端点后, v3.3 新逻辑不误认为"未 finalize"
+    fields.push('finalized_at = ?');
+    values.push(new Date());
     values.push(id, userId);
     const [result] = await pool.execute(
       `UPDATE sessions SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`,

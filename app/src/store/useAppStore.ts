@@ -62,6 +62,11 @@ interface AppState {
   setSessionExpired: (v: boolean) => void;
   logout: () => void;
 
+  // v412 4-eye fix (Critical #4): hydrationTs 供 HikingScreen 的 v412 unfinished recovery
+  // useEffect 依赖数组用. hydrate 结束时 set({hydrationTs: Date.now()}), 让 iOS jetsam
+  // 后组件 re-mount 或 冷启 hydrate 完成后, useEffect 重跑读盘检测未完成 hike.
+  hydrationTs: number;
+
   // Sprint 72 STORY-00551: pending unfinished session detected at hydrate.
   // RootNavigator / HomeScreen reads this to show the "Continue your hike?" banner.
   pendingSessionResume: {
@@ -103,6 +108,9 @@ export const useAppStore = create<AppState>((set) => ({
   hydrated: false,
   sessionExpired: false,
   setSessionExpired: (v) => set({ sessionExpired: v }),
+
+  // v412 4-eye fix (Critical #4): 供 HikingScreen recovery useEffect 依赖数组用
+  hydrationTs: 0,
 
   // Sprint 72 STORY-00551
   pendingSessionResume: null,
@@ -342,8 +350,16 @@ export const useAppStore = create<AppState>((set) => ({
       } catch { /* best effort */ }
     } catch { /* swallow — best effort */ }
 
+    // v412: 触发 SyncDaemon 扫本地 pendingSyncStore, 后台上传"已 Save 未同步" hike
+    // 与 offlineQueue.drain 并行, 互不影响
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { drainPending } = require('../services/syncDaemon');
+      void drainPending().catch(() => {});
+    } catch { /* best effort */ }
+
     // Always mark hydrated so App.tsx unblocks the loading View.
     crashLogger.breadcrumb('hydrate:end');
-    set({ hydrated: true });
+    set({ hydrated: true, hydrationTs: Date.now() });
   },
 }));

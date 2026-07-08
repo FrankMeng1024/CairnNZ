@@ -1,34 +1,55 @@
 /**
- * Idempotency middleware — v78 #7.
+ * Idempotency middleware — v78 #7, v412 扩展。
  *
- * If the request body has `client_op_id` (UUID v4), check the
- * idempotency_keys table. If we've already processed this op for this
- * user, return the cached response. Otherwise, attach a captureSuccess
- * hook to res that stores the response after the route handler runs.
+ * v411 及以前: 只读 req.body.client_op_id
+ * v412 起 (backend subagent B2 修): 优先 X-Idempotency-Key header, fallback body.
+ * 两者同时存在时严格用 header 忽略 body — header 是明确的请求头, body 可能被
+ * 中间件/proxy 改写。
  *
- * Routes that opt in: just include this middleware before their handler.
- * Routes that don't care (GET, profile reads): omit and behave normally.
+ * Replay 时:
+ *   - 老实现: 复制 cached body 原样返回
+ *   - v412: cached body 里追加 idempotent_replay: true 让 client 明确知道这是重放
+ *
+ * **重要约束 (v412 review 视角 A 提)**:
+ *   同一 idempotencyKey **必须** 携带完全相同的 payload 才重试。
+ *   Client 若用同 key 但改 payload → middleware 返回 old cached body, client 可能
+ *   看到与实际 payload 不符的响应。设计上禁止这种行为。
+ *   SyncDaemon 严格保证: pendingSyncStore.payload 一旦写入就不改, retry 用相同 key + 相同 payload。
  *
  * Failure modes:
  *   - DB read fails → fall through (handler runs, no caching)
- *   - DB write of response fails → next retry will execute again (safe
- *     because of the same UUID — at worst we get a server-side dup,
- *     but the client's retry will be returned the same response anyway)
+ *   - DB write fails → next retry will execute again (safe because same UUID)
  */
 const pool = require('../config/db');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/**
+ * v412: 读取 idempotency key。header 优先, body fallback。
+ * 若 header 存在且合法, 完全忽略 body 里的 client_op_id。
+ * req.get() 大小写不敏感 (Express 标准)。
+ */
+function readIdempotencyKey(req) {
+  const header = req.get && req.get('X-Idempotency-Key');
+  if (header && typeof header === 'string' && UUID_RE.test(header)) {
+    return header;
+  }
+  const bodyKey = req.body && req.body.client_op_id;
+  if (bodyKey && typeof bodyKey === 'string' && UUID_RE.test(bodyKey)) {
+    return bodyKey;
+  }
+  return null;
+}
+
 async function idempotency(req, res, next) {
-  const opId = req.body && req.body.client_op_id;
-  if (!opId || typeof opId !== 'string' || !UUID_RE.test(opId)) {
+  const opId = readIdempotencyKey(req);
+  if (!opId) {
     // No op id, or malformed — proceed normally without caching.
     return next();
   }
   const userId = req.user && (req.user.userId || req.user.id);
   if (!userId) {
-    // Not authenticated — should be unreachable (authenticate runs first),
-    // but be defensive.
+    // Not authenticated — defensive, authenticate runs first normally.
     return next();
   }
 
@@ -44,11 +65,15 @@ async function idempotency(req, res, next) {
         ? (typeof row.response_json === 'string' ? JSON.parse(row.response_json) : row.response_json)
         : {};
       res.set('X-Idempotent-Replay', '1');
-      return res.status(row.status_code || 200).json(cachedBody);
+      // v412: response body 里也加 idempotent_replay: true, 让 client 明确知道
+      // (v411 clients 会忽略这个未知字段, 无害兼容)
+      return res.status(row.status_code || 200).json({
+        ...cachedBody,
+        idempotent_replay: true,
+      });
     }
   } catch (err) {
-    // Read failure shouldn't block the request — fall through and let
-    // the handler run as if there was no idempotency layer.
+    // Read failure shouldn't block the request.
     // eslint-disable-next-line no-console
     console.warn('[idempotency] read failed', err.message);
   }
@@ -56,11 +81,8 @@ async function idempotency(req, res, next) {
   // Hook res.json to persist the response after the handler runs.
   const originalJson = res.json.bind(res);
   res.json = function (body) {
-    // Persist asynchronously; don't block the response.
     const status = res.statusCode || 200;
-    // Only cache successful responses (2xx). 4xx might be transient
-    // input issues — let the client retry with corrected data and get
-    // a fresh server eval.
+    // Only cache successful responses (2xx). 4xx/5xx let client retry fresh.
     if (status >= 200 && status < 300) {
       pool.query(
         `INSERT IGNORE INTO idempotency_keys (op_id, op_kind, user_id, status_code, response_json)
