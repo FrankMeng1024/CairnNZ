@@ -1191,8 +1191,7 @@ export function RoutesScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <BackButton variant="pill" onPress={() => nav.goBack()} />
-        {/* v413 UX: title 反映当前 tab, 不硬编码 "Routes". 修 Home→Trails→page="Routes" 命名混乱 */}
-        <Text style={styles.title}>{tab === 'activities' ? 'Activity' : tab === 'routes' ? 'Routes' : 'Flags'}</Text>
+        <Text style={styles.title}>Routes</Text>
         <View style={{ minWidth: 60 }} />
       </View>
       <SegmentControl active={tab} onChange={setTab} />
