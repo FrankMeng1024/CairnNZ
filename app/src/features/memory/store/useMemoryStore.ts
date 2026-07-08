@@ -388,6 +388,21 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     );
   },
 
+  /**
+   * v413 invariant (DO NOT UNION FRIEND POINTS HERE):
+   * This method MUST stay self-only. Friend memory union is done at the
+   * consumer layer (FogLayer, CairnPinsLayer) gated on memoryScope === 'friends'.
+   *
+   * Callers that DEPEND on self-only semantics:
+   * - MapScreen.tsx: `inMyFog` predicate for MarkDetailSheet — determines
+   *   form-B (own fog) vs form-C (friend-fog) rendering
+   * - markVisibility.ts: `getMarkVisibility()` uses this to compute
+   *   `viaSubscribedFriend` classification (iron law 2: can_like_report)
+   *
+   * If a future PR needs union behavior, add a SEPARATE method (e.g.
+   * `isExploredUnion`) instead of modifying this. Or take the union at
+   * the call-site (see CairnPinsLayer.tsx:82-99 for the pattern).
+   */
   isExplored: (lat, lng) => {
     const target = { lat, lng };
     const radiusSq = UnlockConfig.radiusMeters * UnlockConfig.radiusMeters;

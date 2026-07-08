@@ -41,6 +41,8 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useMemoryStore } from '../store/useMemoryStore';
+import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
+import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { getMapbox } from '../services/mapboxAdapter';
 import { log } from '../../../services/appLog';
 import bufferTurf from '@turf/buffer';
@@ -256,8 +258,37 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
   const useH3Fog = useMemorySettingsStore((s) => s.useH3Fog);
   // v346: drive geometry from useMemoryStore.points (real GPS path),
   // not from useH3VisitedStore.cells (hex mosaic — wrong abstraction).
-  const points = useMemoryStore((s) => s.points);
+  const selfPoints = useMemoryStore((s) => s.points);
   const geometryVersion = useMemoryStore((s) => s.geometryVersion);
+
+  // v413: friend memory union (纯前端 render 层, 不 merge 到 self).
+  // 用户勾选 friend → enabledFriendIds 增 → union → fog 立即扩展
+  // 反勾 → enabledFriendIds 删 → union → fog 立即回缩 (借来的解锁还回去)
+  // v413 (4-eye fix E2): union 只在 Friends tab 生效, Mine tab 保 self-only
+  // 尊重 useMemoryScopeStore.ts:5-8 已文档化的契约 + 用户口述"打开 Memory 首先看到自己"
+  const scope = useMemoryScopeStore((s) => s.scope);
+  const friendMemoryVersion = useFriendMemoryStore((s) => s.version);
+  const friendMemoryRef = useFriendMemoryStore.getState;
+
+  // v413: union self ∪ enabled friend points. 每次 self 或 friend 变化都重算.
+  // 用 useMemo 只依赖 version 号避免 array ref instability.
+  const points = useMemo(() => {
+    // Mine tab: 严格 self-only, 不 union friend
+    if (scope !== 'friends') return selfPoints;
+    const enabledPts = friendMemoryRef().getEnabledFriendPoints();
+    if (enabledPts.length === 0) return selfPoints;
+    // 转成 VisitedPoint 结构 (加 cid + synced 占位) 才能与 selfPoints 混
+    // cid 用 lat,lng,ts 组合作为 stable key 供 sig 缓存
+    const asVisited = enabledPts.map((p) => ({
+      lat: p.lat,
+      lng: p.lng,
+      ts: p.ts,
+      cid: `fr-${p.lat.toFixed(6)}-${p.lng.toFixed(6)}-${p.ts}`,
+      synced: true,
+    }));
+    return [...selfPoints, ...asVisited];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selfPoints, friendMemoryVersion, scope]);
 
   // v351: SYNCHRONOUS fog shape via useMemo. Replaces v347's
   // useState(worldRect) + useEffect(buildFogShape) async pattern, which

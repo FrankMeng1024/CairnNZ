@@ -508,6 +508,15 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     } catch (_e) {
       // Subs store not loaded (e.g. cold-start logout) — nothing to reset.
     }
+    try {
+      // v413 (4-eye fix C3): reset friend memory cache on logout to prevent
+      // prior user's GPS points leaking into next login. Same pattern as subs reset.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
+      useFriendMemoryStore.getState().reset();
+    } catch (_e) {
+      // Store not loaded yet — nothing to reset.
+    }
   },
 
   getMarkersForRegion: (regionCode) => {
@@ -594,6 +603,14 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
         useMemorySubscriptionsStore.getState().reset();
       } catch (_e) {
         // Subs store not loaded yet (cold start) — nothing to reset.
+      }
+      try {
+        // v413 (4-eye fix C3): reset friend memory cache on user-switch
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
+        useFriendMemoryStore.getState().reset();
+      } catch (_e) {
+        // Store not loaded yet — nothing to reset.
       }
     }
     // 1. Load from local cache first (instant)

@@ -25,6 +25,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
+import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
+import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap } from '../components/MemoryMap';
@@ -127,6 +129,23 @@ export function MemoryScreen() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
   const [fogReady, setFogReady] = useState(false);
+  // v413: friend memory 加载 — Memory 页 mount + subscribed friends 变化时拉 /api/circle/fog
+  const subscriptionsCount = useMemorySubscriptionsStore((s) => s.subscriptions.length);
+  const loadSubs = useMemorySubscriptionsStore((s) => s.load);
+  const loadFriendFog = useFriendMemoryStore((s) => s.loadFriendFog);
+  useEffect(() => {
+    // 冷启 / 每次 MemoryScreen mount 时拉 subscriptions + friend fog
+    void loadSubs();
+    void loadFriendFog();
+  }, [loadSubs, loadFriendFog]);
+  useEffect(() => {
+    // subscribed friends 增加时 (subscribe 后 subs.length 会+1), 重拉 friend fog
+    // 这样新订阅的 friend 的 points 会被立即拉到本地 → FogLayer union
+    // unsubscribe 时 length 减少也会触发, 但 friendMemory 已缓存, refetch 会返回缩短的 friend list
+    if (subscriptionsCount > 0) {
+      void loadFriendFog();
+    }
+  }, [subscriptionsCount, loadFriendFog]);
   // v363: user-dismissed banner state. When user taps the X close on
   // the slow-network banner, hide it for the rest of this Memory tab
   // session. Resets on mountKey bump.
