@@ -10,8 +10,7 @@ import { useMemorySettingsStore } from './src/features/memory/store/useMemorySet
 // v322: ForegroundUnlockManager moved to MemoryScreen (lazy mount).
 import { MigratorRetryPrompt } from './MigratorRetryPrompt';
 import { getFlags } from './src/config/featureFlags';
-import { loadFlagsCache, refreshFlagsFromBackend } from './src/services/v025/featureFlagsClient';
-import { initTelemetrySingleton } from './src/services/v025/telemetrySingleton';
+// v417 AR removal: v025 featureFlagsClient + telemetrySingleton deleted (AR feature scrapped)
 import { useAppStore } from './src/store/useAppStore';
 import { useSettingsStore } from './src/store/useSettingsStore';
 import { useTrackingStore } from './src/store/useTrackingStore';
@@ -201,20 +200,10 @@ function AppRoot() {
       crashLogger.install();
       crashLogger.breadcrumb('app_boot');
       markBootPhase('after_crashlogger_install');
-      // v0.2.5 Phase 0.15: load v025 feature flag cache early (sync-stale + async-refresh)
-      // so that ARScreen.useV025Enabled() can read a real value instead of HARD_DEFAULTS.
-      // Cached value loads from AsyncStorage (last-known); refresh fetches /api/feature-flags.
-      // Both run fire-and-forget — UI does not await; ARScreen reads whatever cache holds.
-      loadFlagsCache()
-        .then(() => refreshFlagsFromBackend(API_BASE_URL))
-        .catch((e) => crashLogger.breadcrumb('v025_flags_boot_failed: ' + (e?.message ?? 'unknown')));
-      markBootPhase('after_load_flags_cache');
-      // Phase 4 composition root: init telemetry singleton + start 5s flush ticker.
-      // Subsequent emitTelemetry() calls (from ARScreenV2 v025/telemetry messages)
-      // route into the same batcher; one POST every 5s to /api/v025/debug-events.
-      try { initTelemetrySingleton(API_BASE_URL); }
-      catch (e) { crashLogger.breadcrumb('v025_telemetry_init_failed: ' + (e instanceof Error ? e.message : String(e))); }
-      markBootPhase('after_telemetry_init');
+      // v417 AR removal: v0.2.5 flags cache + telemetry singleton init deleted
+      // (was loadFlagsCache/refreshFlagsFromBackend/initTelemetrySingleton for
+      //  ARScreen.useV025Enabled() and v025/debug-events telemetry — no longer needed)
+      markBootPhase('after_ar_removal_noop');
       // v311: prime the h3 load gate from AsyncStorage. If a previous
       // session died mid-bulkImport (iOS watchdog SIGKILL on 581 sync
       // emscripten latLngToCell calls), the persisted flag is read here

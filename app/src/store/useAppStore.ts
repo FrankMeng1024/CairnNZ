@@ -8,8 +8,7 @@ import { getMe } from '../services/authService';
 import { fetchSessions } from '../services/sessionService';
 import { useSessionStore, type ActivityMode as SessionActivityMode, type TrackPoint } from './useSessionStore';
 import { useMarkerStore } from './useMarkerStore';
-import { useArOriginStore } from './useArOriginStore';
-import { runA8Migration } from '../services/a8Migration';
+// v417 AR removal: useArOriginStore + runA8Migration deleted (AR feature scrapped)
 import { isPlaywrightBypass } from '../utils/devFlags';
 import { crashLogger } from '../services/crashLogger';
 // v405: memorySync attach 从 FGUM 提前到 hydrate,让 stopTracking →
@@ -193,15 +192,7 @@ export const useAppStore = create<AppState>((set) => ({
           // hydrate → UI mount. Preserves cairn world coords for v0.2.2
           // upgraders, stamps schemaVersion=2 so A4 FSM can advance from
           // COLD_INIT.
-          try {
-            const result = await runA8Migration(user.id);
-            if (result.showToast && result.toastMessage) {
-              useArOriginStore.getState().setMigrationToast(result.toastMessage);
-            }
-          } catch { /* swallow */ }
-          // v0.2.3 Stage 4 — hydrate A4 FSM (useArOriginStore) AFTER
-          // markerStore + A8 migration so it sees the stamped schemaVersion.
-          try { await useArOriginStore.getState().hydrate(user.id); } catch { /* swallow */ }
+          // v417 AR removal: runA8Migration + useArOriginStore.hydrate deleted
           // v405: hydrate memory points from AsyncStorage + attach memory
           // sync. 修复 happy path bug: pre-v405 attachMemorySync 只在
           // MemoryScreen 挂载时跑,用户 hike → save → pushMemoryNow 因
@@ -258,8 +249,7 @@ export const useAppStore = create<AppState>((set) => ({
           // Not logged in — load from guest slots only
           try { await useSessionStore.getState().hydrate('guest'); } catch { /* swallow */ }
           try { await useMarkerStore.getState().hydrate('guest'); } catch { /* swallow */ }
-          try { await runA8Migration('guest'); } catch { /* swallow */ }
-          try { await useArOriginStore.getState().hydrate('guest'); } catch { /* swallow */ }
+          // v417 AR removal: runA8Migration + useArOriginStore.hydrate deleted
         }
       } catch {
         // Network unavailable — token preserved by getMe (see authService).
@@ -267,8 +257,7 @@ export const useAppStore = create<AppState>((set) => ({
         crashLogger.breadcrumb('hydrate:network_error_token_preserved');
         try { await useSessionStore.getState().hydrate('guest'); } catch { /* swallow */ }
         try { await useMarkerStore.getState().hydrate('guest'); } catch { /* swallow */ }
-        try { await runA8Migration('guest'); } catch { /* swallow */ }
-        try { await useArOriginStore.getState().hydrate('guest'); } catch { /* swallow */ }
+        // v417 AR removal: runA8Migration + useArOriginStore.hydrate deleted
       }
     } catch (err) {
       // Last-resort safeguard: never block app boot on hydrate.

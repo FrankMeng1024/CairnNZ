@@ -1880,7 +1880,7 @@ export function HikingScreen() {
               <Animated.View style={{ transform: [{ scale: fabScale }] }}>
                 <TouchableOpacity
                   style={styles.circleBtnPrimary}
-                  onPress={() => nav.navigate('AR')}
+                  onPress={() => nav.navigate('Plant')}
                   activeOpacity={1}
                   onPressIn={() => springIn(fabScale)}
                   onPressOut={() => springOut(fabScale)}
