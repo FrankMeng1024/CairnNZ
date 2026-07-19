@@ -179,7 +179,7 @@ export function MarkerDetailScreen() {
     );
   }
 
-  const meta = MARKER_TYPES[marker.type];
+  const meta = MARKER_TYPES[marker.type] ?? MARKER_TYPES.cairn;
   const { title: privateTitle, body: privateBody } = splitTitleBody(marker.note);
   const vis = VISIBILITY_LABEL[marker.permission] ?? VISIBILITY_LABEL.personal;
   const dateStr = formatDate(marker.createdAt);
