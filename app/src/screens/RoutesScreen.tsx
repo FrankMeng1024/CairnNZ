@@ -25,7 +25,7 @@ import { PressBtn } from '../components/PressBtn';
 import { formatDistance, formatDuration, haversineM } from '../utils/geo';
 import { MARKER_META, type MarkerType } from '../data/mockData';
 import { shareGPX, sharePDF } from '../services/exportService'; // kept for future Export action
-import { EmptyRoutes, EmptyMarkers } from '../components/Illustrations';
+import { EmptyRoutes, EmptyMarkers, IllustrationHalo } from '../components/Illustrations';
 
 // ── Mapbox conditional import (for RouteSheet preview) ────────────────────
 // Native-only — on web fallback to a static placeholder.
@@ -712,7 +712,7 @@ function ActivitiesTab() {
   }, [sessions, filter, sort]);
 
   if (sessions.length === 0) {
-    return <EmptyState icon="Map" title="No tracks walked yet" hint="Start hiking or running. Your tracks will live here." illustration={<EmptyRoutes size={160} />} />;
+    return <EmptyState icon="Map" title="No tracks walked yet" hint="Start hiking or running. Your tracks will live here." illustration={<IllustrationHalo size={220}><EmptyRoutes size={192} /></IllustrationHalo>} />;
   }
 
   return (
@@ -1038,7 +1038,9 @@ function FlagsTab() {
             no actionable affordance. */}
         <View style={styles.emptyHero}>
           <View style={{ marginBottom: Spacing.md }}>
-            <EmptyMarkers size={160} />
+            <IllustrationHalo size={220}>
+              <EmptyMarkers size={192} />
+            </IllustrationHalo>
           </View>
           <Text style={styles.emptyHeroTitle}>No flags planted yet</Text>
           <Text style={styles.emptyHeroBody}>
@@ -1073,7 +1075,9 @@ function FlagsTab() {
       {scope === 'friends' && hasFetchedFriends && circleMarkers.length === 0 ? (
         <View style={styles.emptyHero}>
           <View style={{ marginBottom: Spacing.md }}>
-            <EmptyMarkers size={160} />
+            <IllustrationHalo size={220}>
+              <EmptyMarkers size={192} />
+            </IllustrationHalo>
           </View>
           <Text style={styles.emptyHeroTitle}>No marks from your friends yet</Text>
           <Text style={styles.emptyHeroBody}>

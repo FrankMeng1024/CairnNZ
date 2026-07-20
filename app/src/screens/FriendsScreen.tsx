@@ -21,7 +21,7 @@ import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { PressBtn } from '../components/PressBtn';
 import { useFriendStore, sendFriendRequest, fetchFriendRequests, acceptFriendRequestAPI, rejectFriendRequestAPI } from '../store/useFriendStore';
-import { EmptyFriends } from '../components/Illustrations';
+import { EmptyFriends, IllustrationHalo } from '../components/Illustrations';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -298,7 +298,9 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
 function EmptyState({ onAddFriend }: { onAddFriend: () => void }) {
   return (
     <View style={emptyStyles.container}>
-      <EmptyFriends size={160} />
+      <IllustrationHalo size={220}>
+        <EmptyFriends size={192} />
+      </IllustrationHalo>
       <Text style={emptyStyles.heading}>Cairn is better with trail companions</Text>
       <Text style={emptyStyles.body}>Invite friends to share markers and stay connected on the track.</Text>
       <PressBtn style={emptyStyles.cta} onPress={onAddFriend} scaleTo={0.96}>

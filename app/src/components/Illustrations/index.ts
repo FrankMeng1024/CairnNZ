@@ -8,3 +8,4 @@
 export { EmptyRoutes } from './EmptyRoutes';
 export { EmptyMarkers } from './EmptyMarkers';
 export { EmptyFriends } from './EmptyFriends';
+export { IllustrationHalo } from './IllustrationHalo';
