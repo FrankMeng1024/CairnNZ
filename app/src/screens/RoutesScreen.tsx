@@ -414,9 +414,10 @@ function RouteSheet({
             style={[sheetStyles.saveBtn, { flex: 1, opacity: readOnly ? 0.5 : 1 }]}
             onPress={() => { if (!readOnly) dismiss(() => onEdit(data.id)); }}
             scaleTo={readOnly ? 1 : 0.96}
+            disabled={readOnly}
           >
             <Icon name="Map" size={14} color="#fff" strokeWidth={2} />
-            <Text style={sheetStyles.saveBtnText}>{readOnly ? 'View (friend route)' : 'View'}</Text>
+            <Text style={sheetStyles.saveBtnText}>{readOnly ? 'Friend route (view only)' : 'View'}</Text>
           </PressBtn>
         </View>
       </Animated.View>
