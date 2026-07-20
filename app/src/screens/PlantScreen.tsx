@@ -42,6 +42,7 @@ import { ContentStep } from '../features/plant/components/ContentStep';
 import { VisibilityConfig } from '../features/plant/config/plantConfig';
 import { encodeTitleBody } from '../features/plant/services/noteEncoding';
 import { log } from '../services/appLog';
+import * as Haptics from 'expo-haptics';
 
 type Step = 'gps' | 'pin' | 'content';
 
@@ -204,7 +205,15 @@ export function PlantScreen() {
         // is reused for the Flags tab tap (RoutesScreen). Use `replace`
         // so the navigation back stack is: Home → MarkerDetail (no
         // intermediate Plant flow tombstone the user would Back through).
+        //
+        // v418 ceremony: fire a success haptic + short 250ms delay before
+        // navigating so users physically feel "cairn planted" instead of
+        // an instant flash of a new screen. Non-blocking (haptics is fire-
+        // and-forget) so total added latency = 250ms of visible pause on
+        // step 3 UI, which reads as "committing…" rather than a jerk.
         if (created?.id) {
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* silent */ }
+          await new Promise<void>((r) => setTimeout(r, 250));
           nav.replace('MarkerDetail', { markerId: created.id });
         } else {
           // Defensive fallback — never expected; addMarker contract
