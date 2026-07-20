@@ -163,6 +163,11 @@ router.post('/sessions', uploadLimiter, requireApiKey, async (req, res) => {
 });
 
 // ── GET /api/telemetry/sessions ────────────────────────────────────────────
+// ⚠️ DEV TOOL ONLY (2026-07-20 phase3 decision "defer 到工具类的 controller")
+// 用途: 开发者本地 curl 查询过去 upload 的 telemetry session 列表, 排查
+//       客户端 crash / breadcrumb。前端不调用此 endpoint(0 处 fetch)。
+// 保护: requireApiKey — 需 X-Api-Key header, 生产 nginx 不暴露给公网 SPA。
+// 不进 client bundle; 保留供 SSH+curl 分析线上 crash log。
 router.get('/sessions', readLimiter, requireApiKey, async (req, res) => {
   const since = req.query.since;
   const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
@@ -196,6 +201,8 @@ router.get('/sessions', readLimiter, requireApiKey, async (req, res) => {
 });
 
 // ── GET /api/telemetry/sessions/:session_id ────────────────────────────────
+// ⚠️ DEV TOOL ONLY (2026-07-20 phase3 decision) — 单条 telemetry 详情查询。
+// 前端不调; requireApiKey 保护; 保留供开发者 SSH+curl 排查特定 session。
 router.get('/sessions/:session_id', readLimiter, requireApiKey, async (req, res) => {
   try {
     const [rows] = await pool.execute(
