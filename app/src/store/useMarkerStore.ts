@@ -19,6 +19,7 @@ import type { MarkerType } from '../data/mockData';
 import {
   offlineMarkers,
   setMarkerCreateAckHandler,
+  clearMarkersQueueForCurrentUser,
   type MarkerCreatePayload,
   type MarkerCreateServerResponse,
 } from '../services/markerOfflineEntities';
@@ -208,7 +209,9 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
         }
       : null;
 
-    // 存 offlineMarkers entity, 拿到 localId (= idempotency key)
+    // 存 offlineMarkers entity, 拿到 localId (= idempotency key).
+    // v423 B1 fix: saveLocal 现在会在 AsyncStorage 满 / hydrate 未完成时 throw.
+    // 我们 catch 并向用户报"存不下", 不让 marker 在内存里假成功.
     const payload: MarkerCreatePayload = {
       type: data.type,
       text: data.note,
@@ -218,7 +221,15 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       permission: data.permission,
       approximate: data.approximate || false,
     };
-    const { localId } = await offlineMarkers.saveLocal(payload);
+    let localId: string;
+    try {
+      const saved = await offlineMarkers.saveLocal(payload);
+      localId = saved.localId;
+    } catch (err) {
+      crashLogger.breadcrumb(`marker:saveLocal_failed err=${String(err).slice(0, 80)}`);
+      // 不静默丢: 抛给上层 (PlantScreen commit 会 catch 显示 Alert "Could not plant cairn").
+      throw err;
+    }
 
     const marker: Marker = {
       ...data,
@@ -441,6 +452,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   },
 
   clearMarkers: () => {
+    // v423 B3 fix: logout 时也清 offline marker queue. 否则 A logout → B login
+    // 后 B 的 auth token 会上传 A 的 pending marker → server 归到 B 名下.
+    // 顺序: 先 clear queue (async, 用 current userId), 再 reset state.
+    clearMarkersQueueForCurrentUser().catch(() => { /* best-effort */ });
     // BUG-010 fix: also reset cross-session slices so a logout/login
     // doesn't leak prior user's circle data into the new session.
     // BUG-014 fix (round 4): also reset memory subscriptions slice via

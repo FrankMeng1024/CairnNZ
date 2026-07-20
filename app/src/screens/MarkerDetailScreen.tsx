@@ -101,7 +101,11 @@ export function MarkerDetailScreen() {
   const userId = useAppStore((s) => s.user?.id ?? '');
 
   const marker = useMemo(
-    () => markers.find((m) => m.id === markerId),
+    // v423 C1 fix: offline-first ack 后 marker.id 会从 localId 换成 server id.
+    // Plant flow nav.replace 传的 markerId 是 localId, 若只按 m.id 匹配, ack
+    // 一成功 find 立刻返回 undefined, 屏幕空白. 用 (id | localId) 双匹配保证
+    // 用户在同一屏看到 pending → syncing → synced 完整生命周期.
+    () => markers.find((m) => m.id === markerId || m.localId === markerId),
     [markers, markerId]
   );
 

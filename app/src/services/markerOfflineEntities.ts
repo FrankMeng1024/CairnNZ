@@ -63,28 +63,81 @@ export function setMarkerCreateAckHandler(
 }
 
 async function fetchOrThrow(path: string, method: string, body: any): Promise<any> {
-  const res = await authenticatedFetch(path, {
-    method,
-    body: JSON.stringify(body),
-    // offline drain 是后台重试, 401 不 logout
-    skipLogoutOn401: true,
-  });
-  if (!res.ok) {
-    const err: any = new Error(`HTTP ${res.status}`);
-    err.status = res.status;
-    throw err;
-  }
+  // v423 B4 fix: 加 30s AbortController timeout. 弱网 (NZ 山区 1-2 格) 场景下
+  // TCP 半连接 fetch 会挂 90s+ 等 iOS 内核 timeout, 期间 daemon 被 daemonRunning
+  // mutex 卡死, pendingSignal 吞掉所有新 drain 触发. 30s 足够正常网络完成,
+  // 超时后走 5xx backoff 分支, entry 保留在队列下次再试. Idempotency middleware
+  // (client_op_id) 保证重试幂等.
+  const ctrl = new AbortController();
+  const timeoutHandle = setTimeout(() => ctrl.abort(), 30_000);
   try {
-    return await res.json();
-  } catch {
-    return null;
+    const res = await authenticatedFetch(path, {
+      method,
+      body: JSON.stringify(body),
+      // offline drain 是后台重试, 401 不 logout
+      skipLogoutOn401: true,
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      const err: any = new Error(`HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
+  } catch (err: any) {
+    // Abort → 标记为可重试 (视为网络错走 backoff)
+    if (err?.name === 'AbortError') {
+      const wrap: any = new Error('sync timeout');
+      wrap.status = 0; // 0 = 网络错, offlineEntity 走 retry 分支
+      throw wrap;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutHandle);
   }
 }
 
 export const offlineMarkers = createOfflineEntity<MarkerCreatePayload, MarkerCreateServerResponse>({
   kind: 'marker_create',
-  storageKey: '@cairn:offline_markers:v1',
+  // v423 B3 fix: per-user storageKey. 户外用户 A 攒了 pending marker 后
+  // logout, 若 key 不带 userId 则 B 登录后 daemon 会用 B 的 token 上传 A 的
+  // marker, 归属错乱. 现在 A 的队列存 @cairn:offline_markers:v2:A_id,
+  // B 只看到自己的空队列. clearMarkersQueueForUser() 提供 logout 清理入口.
+  storageKey: () => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useMarkerStore } = require('../store/useMarkerStore');
+      const uid = useMarkerStore.getState().userId;
+      return uid ? `@cairn:offline_markers:v2:${uid}` : '';
+    } catch {
+      return '';
+    }
+  },
   syncToServer: async (data, localId) => {
+    // v423 B2 fix: hydrate 前 daemon 不能上传. 否则 ack handler 里
+    // `if (s.userId) storage.setItem(...)` skip 写盘, 且 hydrate 从 MMKV 读
+    // 旧数据覆盖内存, 刚 sync 的 marker 蒸发. 抛 5xx 让 entry 保留队列, 等
+    // hydrate 后网络/AppState 事件重新触发 drain.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useMarkerStore } = require('../store/useMarkerStore');
+      const uid = useMarkerStore.getState().userId;
+      if (!uid) {
+        const err: any = new Error('store not hydrated');
+        err.status = 503;  // 走 backoff 保留
+        throw err;
+      }
+    } catch (e: any) {
+      if (e?.status === 503) throw e;
+      // require 失败 (circular / lazy load) → 稳妥不上传
+      const err: any = new Error('store unavailable');
+      err.status = 503;
+      throw err;
+    }
     return fetchOrThrow('/api/markers', 'POST', { ...data, client_op_id: localId });
   },
   onSyncSuccess: (localId, server) => {
@@ -94,6 +147,21 @@ export const offlineMarkers = createOfflineEntity<MarkerCreatePayload, MarkerCre
     try { markerCreateFailHandler?.(localId, err); } catch { /* silent */ }
   },
 });
+
+/**
+ * v423 B3 fix: logout 或 user-switch 时调, 清 current userId 的 queue.
+ * 内部靠 discard 每条 entry — 触发 subscribe 通知 UI 更新.
+ */
+export async function clearMarkersQueueForCurrentUser(): Promise<void> {
+  try {
+    const pending = await offlineMarkers.listPending();
+    for (const entry of pending) {
+      await offlineMarkers.discard(entry.localId);
+    }
+  } catch {
+    /* silent — logout flow 不能因 queue clear 失败卡死 */
+  }
+}
 
 // ─── A 类预留: Like / Report (marker vote) ────────────────────────────────
 //

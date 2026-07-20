@@ -54,8 +54,12 @@ export interface OfflineEntry<T> {
 export interface OfflineEntityConfig<T, Server> {
   /** 类型标识, 用于 log */
   kind: string;
-  /** AsyncStorage key */
-  storageKey: string;
+  /**
+   * AsyncStorage key. 可以是固定字符串, 或返回 string 的 function (支持 per-user key).
+   * v423 B3 fix: marker/session queue 应该分 userId, 否则 logout/login 后前用户
+   * 的 pending 会被新用户 auth token 上传, 归属错误.
+   */
+  storageKey: string | (() => string);
   /**
    * 有网时如何调后端。抛异常会被 catch 走失败分支。
    * 返回值传给 onSyncSuccess。
@@ -158,15 +162,37 @@ export function createOfflineEntity<T, Server = unknown>(
 ): OfflineEntity<T> {
   wireDaemonOnce();
 
-  const { kind, storageKey, syncToServer, onSyncSuccess, onSyncFailure } = config;
+  const { kind, syncToServer, onSyncSuccess, onSyncFailure } = config;
+  const resolveKey = (): string =>
+    typeof config.storageKey === 'function' ? config.storageKey() : config.storageKey;
   const isAuthError = config.isAuthError ?? ((err: any) => err?.status === 401 || err === 401);
 
   const listeners: Array<(entries: OfflineEntry<T>[]) => void> = [];
   let draining = false;
+  // v423 C2 fix: read-modify-write mutex 序列化 saveLocal / drain 内部所有的
+  // "读→改→写"块. 之前 drain 慢 (30s timeout) 期间用户 plant, saveLocal read
+  // 到磁盘老快照 push 新 entry write; drain 结束 write(remaining) 用 drain
+  // 开头 read 的 remaining 覆盖磁盘, 抹掉了 saveLocal 期间新增的 entry.
+  let writeLock: Promise<void> = Promise.resolve();
+  async function withLock<R>(fn: () => Promise<R>): Promise<R> {
+    const prev = writeLock;
+    let release: () => void = () => {};
+    writeLock = new Promise<void>((r) => { release = r; });
+    try {
+      await prev;
+      return await fn();
+    } finally {
+      release();
+    }
+  }
 
   async function read(): Promise<OfflineEntry<T>[]> {
+    const key = resolveKey();
+    // v423 B3 fix: 若 storageKey resolver 返回 empty (userId 未 hydrate),
+    // 不读磁盘 (避免读到 'undefined' 后缀的错误 key).
+    if (!key || key.endsWith(':')) return [];
     try {
-      const raw = await AsyncStorage.getItem(storageKey);
+      const raw = await AsyncStorage.getItem(key);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
@@ -176,10 +202,19 @@ export function createOfflineEntity<T, Server = unknown>(
   }
 
   async function write(entries: OfflineEntry<T>[]): Promise<void> {
+    const key = resolveKey();
+    if (!key || key.endsWith(':')) {
+      // v423 B1 fix: 无有效 storageKey (未 hydrate) → 抛异常让上层知道
+      // saveLocal 失败, 而不是静默丢. addMarker 会 catch 并回滚 UI.
+      throw new Error('storage_key_unavailable');
+    }
     try {
-      await AsyncStorage.setItem(storageKey, JSON.stringify(entries));
+      await AsyncStorage.setItem(key, JSON.stringify(entries));
     } catch (err) {
       crashLogger.breadcrumb(`offlineEntity:write_failed kind=${kind} err=${String(err).slice(0, 60)}`);
+      // v423 B1 fix: 写盘失败 rethrow, 上层能感知. 之前静默 breadcrumb + emit
+      // 会造成 saveLocal 假成功, marker 只存内存不进队列, 重启就丢.
+      throw err;
     }
     emit(entries);
   }
@@ -200,10 +235,14 @@ export function createOfflineEntity<T, Server = unknown>(
       syncState: 'pending',
       attempts: 0,
     };
-    const q = await read();
-    q.push(entry);
-    await write(q);
-    crashLogger.breadcrumb(`offlineEntity:save kind=${kind} localId=${localId.slice(0, 8)} size=${q.length}`);
+    // v423 C2 fix: read-modify-write 包 withLock, 防止与 drain 的 write(remaining)
+    // 并发覆盖. 若锁内 write throw (B1), 让异常传出让 addMarker catch.
+    await withLock(async () => {
+      const q = await read();
+      q.push(entry);
+      await write(q);
+      crashLogger.breadcrumb(`offlineEntity:save kind=${kind} localId=${localId.slice(0, 8)} size=${q.length}`);
+    });
 
     // 触发一次 drain (若在线立即上传)
     drainAllEntities().catch(() => {});
@@ -220,10 +259,12 @@ export function createOfflineEntity<T, Server = unknown>(
   }
 
   async function discard(localId: string): Promise<void> {
-    const q = await read();
-    const next = q.filter((e) => e.localId !== localId);
-    await write(next);
-    crashLogger.breadcrumb(`offlineEntity:discard kind=${kind} localId=${localId.slice(0, 8)}`);
+    await withLock(async () => {
+      const q = await read();
+      const next = q.filter((e) => e.localId !== localId);
+      await write(next);
+      crashLogger.breadcrumb(`offlineEntity:discard kind=${kind} localId=${localId.slice(0, 8)}`);
+    });
   }
 
   async function drain(): Promise<{ synced: number; failed: number; remaining: number }> {
@@ -232,28 +273,32 @@ export function createOfflineEntity<T, Server = unknown>(
     let synced = 0;
     let failed = 0;
     try {
-      let q = await read();
+      // v423 C2 fix: read 也走 lock, 保证与 saveLocal/write 序列化 快照一致.
+      const q = await withLock(async () => read());
       if (q.length === 0) return { synced: 0, failed: 0, remaining: 0 };
       crashLogger.breadcrumb(`offlineEntity:drain_start kind=${kind} size=${q.length}`);
 
-      const remaining: OfflineEntry<T>[] = [];
+      // v423 C3 fix: 用 Map 追踪 entry 处理结果, 避免 emit 中间态用 indexOf 拼错.
+      // 三种结果: 'keep' (backoff/5xx) / 'drop' (成功/4xx硬失败) / 'stopped' (401).
+      const results = new Map<string, 'keep' | 'drop'>();
       let stopped = false;
 
       for (const entry of q) {
         if (stopped) {
-          remaining.push(entry);
+          results.set(entry.localId, 'keep');
           continue;
         }
         // Exponential backoff
         const backoffMs = Math.min(5_000 * Math.pow(2, entry.attempts), 30 * 60_000);
         if (entry.lastTriedAt && Date.now() - entry.lastTriedAt < backoffMs) {
-          remaining.push(entry);
+          results.set(entry.localId, 'keep');
           continue;
         }
         try {
           entry.syncState = 'syncing';
-          // 中间态短暂 emit, 让 UI 显示 syncing spinner
-          emit([...remaining, entry, ...q.slice(q.indexOf(entry) + 1)]);
+          // v423 C3 fix: 中间态 emit 用 map 生成稳定 shape, 不用 indexOf.
+          // 该 emit 只影响订阅者 UI, 不写盘.
+          emit(q.map((e) => e.localId === entry.localId ? entry : e));
 
           const server = await syncToServer(entry.data, entry.localId);
           synced += 1;
@@ -261,16 +306,15 @@ export function createOfflineEntity<T, Server = unknown>(
           try { onSyncSuccess?.(entry.localId, server, entry.data); } catch (e) {
             crashLogger.breadcrumb(`offlineEntity:onSyncSuccess_threw kind=${kind} err=${String(e).slice(0, 60)}`);
           }
-          // 成功: 不推入 remaining (从队列删)
+          results.set(entry.localId, 'drop');
         } catch (err: any) {
           entry.attempts += 1;
           entry.lastTriedAt = Date.now();
           entry.lastError = String(err?.message ?? err).slice(0, 120);
 
           if (isAuthError(err)) {
-            // 401: 保留, 暂停 drain, 等 token 恢复
             entry.syncState = 'failed';
-            remaining.push(entry);
+            results.set(entry.localId, 'keep');
             stopped = true;
             crashLogger.breadcrumb(`offlineEntity:auth_stop kind=${kind}`);
             continue;
@@ -278,30 +322,47 @@ export function createOfflineEntity<T, Server = unknown>(
 
           const status = err?.status;
           if (typeof status === 'number' && status >= 400 && status < 500) {
-            // 4xx (非 401): 后端拒了 payload, 硬失败, 不重试
             failed += 1;
             entry.syncState = 'failed';
             crashLogger.breadcrumb(`offlineEntity:hard_fail kind=${kind} status=${status} localId=${entry.localId.slice(0, 8)}`);
             try { onSyncFailure?.(entry.localId, err, entry.data); } catch (e) {
               crashLogger.breadcrumb(`offlineEntity:onSyncFailure_threw kind=${kind} err=${String(e).slice(0, 60)}`);
             }
-            // 从队列删 (调用方通过 onSyncFailure 回滚前端)
+            results.set(entry.localId, 'drop');
             continue;
           }
 
-          // 5xx / 网络失败: 保留, backoff
           if (entry.attempts >= MAX_ATTEMPTS) {
             failed += 1;
             entry.syncState = 'failed';
             crashLogger.breadcrumb(`offlineEntity:exhausted kind=${kind} localId=${entry.localId.slice(0, 8)}`);
             try { onSyncFailure?.(entry.localId, err, entry.data); } catch { /* ignore */ }
+            results.set(entry.localId, 'drop');
             continue;
           }
           entry.syncState = 'pending';
-          remaining.push(entry);
+          results.set(entry.localId, 'keep');
         }
       }
-      await write(remaining);
+
+      // v423 C2 fix: 关键 —— 在锁内 re-read 磁盘, 合并 saveLocal 期间新增的
+      // entry (drain 中 syncToServer 可能耗时 30s, 期间 saveLocal 会写盘).
+      // 只处理本轮 quipped 的 localId; 新条目直接保留.
+      const remaining = await withLock(async () => {
+        const fresh = await read();
+        const kept = fresh.filter((e) => {
+          const r = results.get(e.localId);
+          // 未处理的 (新加入的) 保留; keep 也保留; drop 删除.
+          return r !== 'drop';
+        });
+        // 用本轮更新过的 entry 覆盖 (attempts / lastTriedAt / syncState)
+        const merged = kept.map((e) => {
+          const processedEntry = q.find((qe) => qe.localId === e.localId);
+          return processedEntry && results.get(e.localId) === 'keep' ? processedEntry : e;
+        });
+        await write(merged);
+        return merged;
+      });
       crashLogger.breadcrumb(`offlineEntity:drain_end kind=${kind} synced=${synced} failed=${failed} remaining=${remaining.length}`);
       return { synced, failed, remaining: remaining.length };
     } finally {
