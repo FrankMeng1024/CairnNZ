@@ -1,9 +1,9 @@
 /**
- * Playwright config for Sprint 71 web-runnable scenarios.
+ * Playwright config for Cairn web-runnable regression tests.
  *
  * Run:
  *   cd app
- *   npx playwright test tests/sprint71
+ *   npx playwright test
  *
  * Prereqs:
  *   - `expo start --web --port 8081` running in another terminal
@@ -13,7 +13,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './tests/sprint71',
+  testDir: './tests',
   fullyParallel: false,           // expo web shared port; serialize
   timeout: 60_000,
   expect: { timeout: 8_000 },
