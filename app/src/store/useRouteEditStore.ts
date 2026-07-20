@@ -1,7 +1,28 @@
 /**
  * useRouteEditStore — Sprint 67 v245 brush+eraser model.
  *
- * Edit semantics:
+ * ─── FILE INDEX (2891 lines total — jump by section) ─────────────────
+ *   L20-68    Imports + type declarations (LngLat, BrushStroke, UndoEntry)
+ *   L70-160   State interface (~90 fields, grouped: identity/points/
+ *             tools/undo/preview/committed/error/telemetry)
+ *   L160-655  Store implementation — actions: beginEdit / brush ops /
+ *             trim ops / undo/redo / commit / clone-guard / persistence
+ *   L657-1100 v260 BCEF: brush → Mapbox map-matching → splice into baseline
+ *   L1100-1800 Validation gates (G0/G0.5/G3) + stroke simplification
+ *   L1800-2400 Undo snapshot logic + preview computation
+ *   L2400-2891 Persistence / clone / hydration / save flow
+ *
+ * ─── ARCHITECTURAL NOTE (round-2 review 2026-07-20) ──────────────────
+ *   Subagent B round-1 flagged this file (2891 lines) as SRP violation.
+ *   Analysis showed all 8 consumers already use granular selectors
+ *   (useRouteEditStore(s => s.field)), so runtime re-renders are already
+ *   optimal — Zustand only fires the consumer when that specific field
+ *   changes. Splitting into 5 stores is a maintainability improvement,
+ *   not a perf fix. Deferred to a dedicated Sprint (~4-6 hours, updates
+ *   8 consumer files + persistence layer + undo semantics).
+ *   See: _review/2026-07-market-research/subagent-b-round1.md
+ *
+ * ─── EDIT SEMANTICS ──────────────────────────────────────────────────
  *   - Trim head/tail: pure client-side fraction-based slicing (kept).
  *   - Brush mode: user draws polylines on the map. Each stroke must
  *     start AND end within 50m of the original GPS trace. Strokes are
