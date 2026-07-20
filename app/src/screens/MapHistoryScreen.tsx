@@ -475,22 +475,22 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
   const handleLongPressAbandon = () => {
     if (!isPendingSync) return;
     Alert.alert(
-      '放弃这条?',
+      'Discard this activity?',
       '',
       [
-        { text: '取消', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: '放弃',
+          text: 'Discard',
           style: 'destructive',
           onPress: () => {
-            // 二次确认
+            // Second confirmation
             Alert.alert(
-              '确认放弃?',
-              '这条数据将永久删除, 不可恢复。',
+              'Confirm discard?',
+              'This activity will be permanently deleted and cannot be recovered.',
               [
-                { text: '取消', style: 'cancel' },
+                { text: 'Cancel', style: 'cancel' },
                 {
-                  text: '确认',
+                  text: 'Confirm',
                   style: 'destructive',
                   onPress: async () => {
                     try {
@@ -540,7 +540,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
                 <Icon name="CloudOff" size={12} color={Colors.textSecondary} strokeWidth={2} />
                 <Text style={{ color: Colors.textSecondary, fontSize: FontSize.caption }}>
-                  {session.syncState === 'syncing' ? '同步中…' : '离线保存中, 联网后自动上传'}
+                  {session.syncState === 'syncing' ? 'Syncing…' : 'Saved offline, will upload when online'}
                 </Text>
               </View>
             </LinearGradient>

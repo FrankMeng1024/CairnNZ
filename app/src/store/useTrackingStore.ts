@@ -345,11 +345,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             const { Alert, Linking } = require('react-native');
             await new Promise<void>((resolve) => {
               Alert.alert(
-                '为了更好地记录 hike',
-                'Cairn 需要在屏幕锁定或后台时持续记录你的 GPS。请在设置中把位置权限设为 "始终允许 (Always Allow)"。',
+                'Improve hike tracking',
+                'Cairn needs to keep tracking your GPS when the screen is locked or the app is in the background. Please set Location permission to "Always Allow" in Settings.',
                 [
                   {
-                    text: '稍后',
+                    text: 'Later',
                     style: 'cancel',
                     onPress: async () => {
                       try { await SecureStore.setItemAsync(KEY, '1'); } catch { /* silent */ }
@@ -357,7 +357,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                     },
                   },
                   {
-                    text: '打开设置',
+                    text: 'Open Settings',
                     onPress: async () => {
                       try { await SecureStore.setItemAsync(KEY, '1'); } catch { /* silent */ }
                       try { Linking.openSettings(); } catch { /* silent */ }

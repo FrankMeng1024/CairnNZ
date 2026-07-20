@@ -26,7 +26,7 @@ interface UnfinishedData {
   startedAt: number;    // Unix ms
   distanceM: number;
   durationS: number;
-  lastPointAt: number;  // Unix ms of last GPS point (for "X 小时前")
+  lastPointAt: number;  // Unix ms of last GPS point (for "X hours ago")
 }
 
 interface Props {
@@ -38,17 +38,17 @@ interface Props {
 
 function formatRelative(pastMs: number): string {
   const diffMs = Date.now() - pastMs;
-  if (diffMs < 60_000) return '刚刚';
-  if (diffMs < 3600_000) return `${Math.floor(diffMs / 60_000)} 分钟前`;
-  if (diffMs < 86400_000) return `${Math.floor(diffMs / 3600_000)} 小时前`;
-  return `${Math.floor(diffMs / 86400_000)} 天前`;
+  if (diffMs < 60_000) return 'just now';
+  if (diffMs < 3600_000) return `${Math.floor(diffMs / 60_000)} min ago`;
+  if (diffMs < 86400_000) return `${Math.floor(diffMs / 3600_000)} hr ago`;
+  return `${Math.floor(diffMs / 86400_000)} days ago`;
 }
 
 function formatDuration(s: number): string {
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
   const mm = m % 60;
-  return h > 0 ? `${h} 小时 ${mm} 分钟` : `${m} 分钟`;
+  return h > 0 ? `${h} hr ${mm} min` : `${m} min`;
 }
 
 export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }: Props) {
