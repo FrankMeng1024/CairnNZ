@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cairn — UI Style Comparison (Now vs Recommended)</title>
+<style>
+  /* ============ GLOBAL ============ */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: #ebe4d4;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #2d2a24;
+    line-height: 1.45;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  /* Doc header */
+  .doc-hero {
+    background: linear-gradient(135deg, #f5efe4 0%, #ede4cf 100%);
+    border-radius: 24px;
+    padding: 40px 44px;
+    margin-bottom: 48px;
+    border: 1px solid rgba(126, 160, 101, 0.15);
+  }
+  .doc-hero h1 { font-size: 32px; letter-spacing: -0.02em; color: #3d4a2d; }
+  .doc-hero .sub { margin-top: 8px; font-size: 15px; color: #6b6558; max-width: 720px; }
+  .doc-hero .callout {
+    margin-top: 24px;
+    padding: 16px 20px;
+    background: #fff8ea;
+    border-left: 4px solid #c88a2a;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #6b5638;
+  }
+  .doc-hero .callout b { color: #8b5a17; }
+
+  /* Section headers */
+  .sec-hdr { display: flex; align-items: baseline; gap: 12px; margin: 56px 0 24px; }
+  .sec-hdr h2 { font-size: 24px; color: #3d4a2d; letter-spacing: -0.01em; }
+  .sec-hdr .tag {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em;
+    padding: 4px 10px; border-radius: 12px; font-weight: 600;
+  }
+  .tag-now { background: #e8ddc9; color: #7a5f2a; }
+  .tag-rec { background: linear-gradient(135deg, #7ea065, #a5c184); color: white; }
+
+  /* Screen frames */
+  .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+  @media (max-width: 900px) { .row { grid-template-columns: 1fr; } }
+  .phone {
+    background: #f5efe4;
+    border-radius: 28px;
+    box-shadow: 0 8px 32px rgba(60, 45, 30, 0.08), 0 1px 3px rgba(60, 45, 30, 0.05);
+    overflow: hidden;
+    height: 640px;
+    position: relative;
+    border: 8px solid #1a1815;
+  }
+  .phone-label {
+    text-align: center;
+    font-size: 12px;
+    color: #6b6558;
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .phone-scroll {
+    height: 100%;
+    overflow: hidden;
+    padding: 16px 14px;
+    position: relative;
+  }
+
+  /* NOW screens: flat, sage + beige */
+  .now-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .now-brand { font-weight: 700; font-size: 20px; color: #3d4a2d; display: flex; align-items: center; gap: 6px; }
+  .now-brand-icon {
+    width: 22px; height: 22px;
+    background:
+      radial-gradient(circle at 50% 30%, #c88a2a 3px, transparent 3.5px),
+      radial-gradient(circle at 35% 60%, #c88a2a 4px, transparent 4.5px),
+      radial-gradient(circle at 65% 62%, #c88a2a 4px, transparent 4.5px),
+      radial-gradient(circle at 50% 88%, #c88a2a 5px, transparent 5.5px);
+  }
+  .now-kia { font-size: 12px; color: #6b6558; }
+  .now-chips { display: flex; gap: 6px; margin-bottom: 14px; }
+  .now-chip { background: white; border: 1px solid #e0d7c3; padding: 5px 10px; border-radius: 12px; font-size: 11px; color: #3d4a2d; }
+  .now-card {
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+  }
+  .now-card .arrow { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #7ea065; }
+  .now-card.hike { background: #dfe7d1; }
+  .now-card.run { background: #dde3ec; }
+  .now-card.plant { background: #f2e2c4; }
+  .now-card-icon { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; }
+  .now-card-body h3 { font-size: 14px; color: #2d2a24; margin-bottom: 3px; }
+  .now-card-body p { font-size: 11px; color: #6b6558; }
+  .now-underline { display: inline-block; width: 24px; height: 2px; background: #7ea065; margin-top: 4px; border-radius: 1px; }
+  .run .now-underline { background: #5872a3; }
+  .plant .now-underline { background: #c88a2a; }
+  .now-quicknav {
+    position: absolute; bottom: 12px; left: 14px; right: 14px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px;
+  }
+  .now-quicknav > div {
+    background: white; padding: 8px 4px; border-radius: 10px;
+    text-align: center; font-size: 10px; color: #3d4a2d;
+  }
+  .now-quicknav i {
+    display: block; width: 18px; height: 18px; margin: 0 auto 3px;
+    background: #e8ddc9; border-radius: 50%;
+  }
+
+  /* Empty (NOW) */
+  .empty-now {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; text-align: center; padding: 20px;
+  }
+  .empty-now h3 { font-size: 15px; color: #3d4a2d; margin: 20px 0 6px; }
+  .empty-now p { font-size: 12px; color: #6b6558; }
+  .flat-mountain {
+    width: 140px; height: 90px;
+    background:
+      linear-gradient(135deg, transparent 45%, #b8c9a5 45.5%, #b8c9a5 55%, transparent 55.5%) center bottom / 30px 60px no-repeat,
+      linear-gradient(to top, #cdd8bd 0%, #dfe7d1 100%);
+    clip-path: polygon(0% 100%, 12% 55%, 22% 75%, 38% 30%, 50% 55%, 62% 20%, 74% 60%, 88% 45%, 100% 100%);
+    position: relative;
+  }
+  .flat-mountain::after {
+    content: ""; position: absolute; left: 50%; top: 45%; transform: translateX(-50%);
+    width: 3px; height: 40%;
+    background: repeating-linear-gradient(to bottom, #c88a2a 0 3px, transparent 3px 7px);
+  }
+  .flat-friends-icon {
+    width: 120px; height: 60px; position: relative;
+    background: #ede4d0; border-radius: 10px;
+  }
+  .flat-friends-icon .stone {
+    position: absolute; bottom: 12px; width: 14px; height: 10px;
+    background: #c88a2a; border-radius: 50% 50% 20% 20%;
+  }
+  .flat-friends-icon .stone.s1 { left: 20px; }
+  .flat-friends-icon .stone.s2 { right: 20px; }
+  .flat-friends-icon::after {
+    content: ""; position: absolute; top: 40%; left: 25%; right: 25%; height: 1px;
+    background: repeating-linear-gradient(to right, #c88a2a 0 3px, transparent 3px 6px);
+  }
+  .now-cta {
+    margin-top: 20px;
+    background: #556b3d; color: white;
+    padding: 10px 18px; border-radius: 22px; font-size: 13px; font-weight: 600;
+    border: none;
+  }
+
+  /* Problem badges on Now */
+  .problem-badge {
+    position: absolute;
+    background: rgba(200, 60, 60, 0.95);
+    color: white;
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 5;
+    pointer-events: none;
+  }
+  .problem-badge::before {
+    content: "";
+    position: absolute;
+    width: 8px; height: 8px;
+    background: inherit;
+    transform: rotate(45deg);
+  }
+
+  /* =========================================
+     RECOMMENDED (Handbook + soft illustration)
+     ========================================= */
+  .phone.rec { background: #f5efe4; }
+  .phone.rec .phone-scroll {
+    background:
+      radial-gradient(ellipse at top left, rgba(126, 160, 101, 0.08) 0%, transparent 45%),
+      radial-gradient(ellipse at bottom right, rgba(200, 138, 42, 0.06) 0%, transparent 40%),
+      #f5efe4;
+  }
+  /* subtle paper texture */
+  .phone.rec .phone-scroll::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.35;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(139, 90, 23, 0.04) 1px, transparent 1.5px),
+      radial-gradient(circle at 65% 70%, rgba(139, 90, 23, 0.03) 1px, transparent 1.5px),
+      radial-gradient(circle at 40% 85%, rgba(139, 90, 23, 0.03) 1px, transparent 1.5px);
+    background-size: 60px 60px, 90px 90px, 45px 45px;
+  }
+  .rec-hdr { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; position: relative; z-index: 2; }
+  .rec-brand { font-weight: 700; font-size: 22px; color: #3d4a2d; display: flex; align-items: center; gap: 8px; letter-spacing: -0.01em; }
+  .rec-brand-icon {
+    width: 26px; height: 26px; position: relative;
+  }
+  .rec-brand-icon::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 50% 25%, #b0791f 3.5px, transparent 4px),
+      radial-gradient(circle at 32% 58%, #c88a2a 4.5px, transparent 5px),
+      radial-gradient(circle at 68% 60%, #b0791f 4.5px, transparent 5px),
+      radial-gradient(circle at 50% 88%, #8b5a17 6px, transparent 6.5px);
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.08));
+  }
+  .rec-brand-icon::after {
+    content: ""; position: absolute; top: 22%; left: 42%;
+    width: 4px; height: 4px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,240,180,0.6), transparent);
+    animation: sparkle 2.4s ease-in-out infinite;
+  }
+  @keyframes sparkle { 0%, 100% { opacity: 0; transform: scale(0.5); } 50% { opacity: 1; transform: scale(1.2); } }
+  .rec-kia { font-size: 12px; color: #6b6558; font-style: italic; }
+  .rec-kia b { font-style: normal; color: #3d4a2d; }
+
+  .rec-chips { display: flex; gap: 8px; margin-bottom: 14px; position: relative; z-index: 2; }
+  .rec-chip {
+    background: linear-gradient(135deg, #ffffff, #faf5ea);
+    border: 1px solid rgba(126, 160, 101, 0.25);
+    padding: 6px 12px; border-radius: 14px; font-size: 11px; color: #3d4a2d;
+    box-shadow: 0 1px 2px rgba(60, 45, 30, 0.04);
+    display: flex; align-items: center; gap: 5px;
+  }
+  .rec-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: #7ea065; }
+
+  /* Cards with painted edge */
+  .rec-card {
+    border-radius: 16px;
+    padding: 14px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(60, 45, 30, 0.06), 0 0 0 1px rgba(255,255,255,0.4) inset;
+    transition: transform 0.2s ease;
+    z-index: 2;
+  }
+  .rec-card::after {
+    /* watercolor edge */
+    content: ""; position: absolute; right: 0; bottom: 0;
+    width: 40%; height: 100%; opacity: 0.4;
+    background: radial-gradient(ellipse at bottom right, rgba(126, 160, 101, 0.3), transparent 60%);
+    pointer-events: none;
+  }
+  .rec-card.hike {
+    background: linear-gradient(135deg, #dfe7d1 0%, #eaf0d9 100%);
+  }
+  .rec-card.hike::before {
+    content: ""; position: absolute; top: -8px; right: -10px;
+    width: 60px; height: 40px;
+    background:
+      linear-gradient(135deg, transparent 40%, rgba(126,160,101,0.15) 40%, rgba(126,160,101,0.15) 60%, transparent 60%);
+    clip-path: polygon(0% 100%, 30% 20%, 50% 60%, 70% 15%, 100% 100%);
+    opacity: 0.6;
+  }
+  .rec-card.run {
+    background: linear-gradient(135deg, #dde3ec 0%, #e8edf4 100%);
+  }
+  .rec-card.run::after {
+    background: radial-gradient(ellipse at bottom right, rgba(88, 114, 163, 0.25), transparent 60%);
+  }
+  .rec-card.plant {
+    background: linear-gradient(135deg, #f2e2c4 0%, #f9edd4 100%);
+  }
+  .rec-card.plant::after {
+    background: radial-gradient(ellipse at bottom right, rgba(200, 138, 42, 0.28), transparent 60%);
+  }
+  .rec-card:hover { transform: translateY(-1px); }
+  .rec-card .rec-icon {
+    width: 52px; height: 52px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; z-index: 3;
+    filter: drop-shadow(0 2px 3px rgba(60, 45, 30, 0.1));
+  }
+  .rec-card-body { position: relative; z-index: 3; flex: 1; }
+  .rec-card-body h3 { font-size: 15px; color: #2d2a24; letter-spacing: -0.005em; }
+  .rec-card-body p { font-size: 11.5px; color: #6b6558; margin-top: 2px; }
+  .rec-card-body .brush {
+    display: block; width: 34px; height: 3px; margin-top: 5px;
+    background: linear-gradient(90deg, #7ea065, transparent);
+    border-radius: 2px;
+    filter: blur(0.3px);
+  }
+  .run .rec-card-body .brush { background: linear-gradient(90deg, #5872a3, transparent); }
+  .plant .rec-card-body .brush { background: linear-gradient(90deg, #c88a2a, transparent); }
+  .rec-card .rec-arrow {
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    width: 26px; height: 26px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #556b3d; z-index: 3;
+  }
+
+  .rec-quicknav {
+    position: absolute; bottom: 12px; left: 14px; right: 14px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px;
+    z-index: 2;
+  }
+  .rec-quicknav > div {
+    background: linear-gradient(135deg, #ffffff, #faf5ea);
+    padding: 10px 4px; border-radius: 12px;
+    text-align: center; font-size: 10px; color: #3d4a2d; font-weight: 500;
+    box-shadow: 0 1px 3px rgba(60, 45, 30, 0.06);
+    border: 1px solid rgba(126, 160, 101, 0.12);
+  }
+  .rec-quicknav i {
+    display: block; width: 22px; height: 22px; margin: 0 auto 4px;
+    background: linear-gradient(135deg, #f0e6d1, #e8ddc9); border-radius: 50%;
+    position: relative;
+  }
+  .rec-quicknav i::after {
+    content: ""; position: absolute; top: 30%; left: 30%; width: 40%; height: 40%;
+    background: #7ea065; border-radius: 50%; opacity: 0.4;
+  }
+
+  /* Empty (REC) — Routes */
+  .empty-rec {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; text-align: center; padding: 20px; position: relative;
+  }
+  .empty-rec-scene {
+    width: 180px; height: 130px; position: relative;
+  }
+  .empty-rec-scene .sky {
+    position: absolute; top: 0; left: 0; right: 0; height: 70%;
+    background: radial-gradient(ellipse at 60% 20%, #f9edd4 0%, transparent 60%);
+    border-radius: 60% 60% 20% 20% / 40% 40% 20% 20%;
+  }
+  .empty-rec-scene .sun {
+    position: absolute; top: 8%; right: 20%; width: 18px; height: 18px;
+    background: radial-gradient(circle, #f4c470 0%, #e8a940 60%, transparent 70%);
+    border-radius: 50%;
+    box-shadow: 0 0 20px rgba(244, 196, 112, 0.5);
+    animation: sun-pulse 3s ease-in-out infinite;
+  }
+  @keyframes sun-pulse { 0%,100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.08); opacity: 1; } }
+  .empty-rec-scene .mtn-back {
+    position: absolute; bottom: 20%; left: 0; right: 0; height: 55%;
+    background: linear-gradient(to top, #a5b895, #c2d0af);
+    clip-path: polygon(0% 100%, 8% 60%, 20% 75%, 32% 30%, 45% 60%, 58% 20%, 72% 55%, 84% 40%, 100% 100%);
+    opacity: 0.75;
+  }
+  .empty-rec-scene .mtn-front {
+    position: absolute; bottom: 15%; left: 5%; right: 5%; height: 45%;
+    background: linear-gradient(to top, #7ea065, #a5c184);
+    clip-path: polygon(0% 100%, 15% 45%, 30% 70%, 48% 15%, 65% 55%, 80% 30%, 100% 100%);
+  }
+  .empty-rec-scene .ground {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 22%;
+    background: linear-gradient(to bottom, #d4c9ae, #c9bd9c);
+    border-radius: 0 0 12px 12px;
+  }
+  .empty-rec-scene .path {
+    position: absolute; bottom: 5%; left: 45%;
+    width: 4px; height: 45%;
+    background: repeating-linear-gradient(to top, #c88a2a 0 4px, transparent 4px 8px);
+    transform: rotate(3deg);
+    filter: blur(0.2px);
+  }
+  .empty-rec-scene .cairn {
+    position: absolute; bottom: 8%; left: 47%;
+    width: 12px; height: 16px;
+  }
+  .empty-rec-scene .cairn::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 50% 25%, #b0791f 3px, transparent 3.5px),
+      radial-gradient(circle at 40% 55%, #c88a2a 4px, transparent 4.5px),
+      radial-gradient(circle at 60% 90%, #8b5a17 5px, transparent 5.5px);
+    animation: cairn-breathe 4s ease-in-out infinite;
+  }
+  @keyframes cairn-breathe { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+  .empty-rec h3 {
+    font-size: 17px; color: #3d4a2d;
+    margin: 22px 0 8px;
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    letter-spacing: -0.005em;
+  }
+  .empty-rec p { font-size: 13px; color: #6b6558; max-width: 220px; line-height: 1.5; }
+  .rec-cta {
+    margin-top: 22px;
+    background: linear-gradient(135deg, #7ea065 0%, #556b3d 100%);
+    color: white;
+    padding: 12px 22px; border-radius: 24px;
+    font-size: 13px; font-weight: 600;
+    border: none;
+    box-shadow: 0 4px 14px rgba(85, 107, 61, 0.35);
+    display: inline-flex; align-items: center; gap: 8px;
+    animation: cta-pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes cta-pulse {
+    0%, 100% { box-shadow: 0 4px 14px rgba(85, 107, 61, 0.35); }
+    50% { box-shadow: 0 6px 22px rgba(85, 107, 61, 0.5); }
+  }
+
+  /* Empty rec — Friends */
+  .empty-rec-friends {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; text-align: center; padding: 20px;
+  }
+  .friends-scene {
+    width: 180px; height: 100px; position: relative;
+    background: linear-gradient(135deg, rgba(244, 196, 112, 0.15), rgba(126, 160, 101, 0.12));
+    border-radius: 16px;
+    padding: 20px;
+  }
+  .friends-scene .cairn-l, .friends-scene .cairn-r {
+    position: absolute; bottom: 20%; width: 20px; height: 26px;
+  }
+  .friends-scene .cairn-l { left: 20%; animation: sway-l 3s ease-in-out infinite; }
+  .friends-scene .cairn-r { right: 20%; animation: sway-r 3s ease-in-out infinite 0.5s; }
+  @keyframes sway-l { 0%,100% { transform: rotate(-2deg); } 50% { transform: rotate(1deg); } }
+  @keyframes sway-r { 0%,100% { transform: rotate(2deg); } 50% { transform: rotate(-1deg); } }
+  .friends-scene .cairn-l::before, .friends-scene .cairn-r::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 50% 20%, #b0791f 3.5px, transparent 4px),
+      radial-gradient(circle at 40% 50%, #c88a2a 4.5px, transparent 5px),
+      radial-gradient(circle at 55% 85%, #8b5a17 6px, transparent 6.5px);
+  }
+  .friends-scene .link {
+    position: absolute; top: 45%; left: 30%; right: 30%; height: 2px;
+    background: repeating-linear-gradient(to right, #c88a2a 0 4px, transparent 4px 8px);
+    filter: drop-shadow(0 1px 0 rgba(200,138,42,0.15));
+  }
+  .friends-scene .heart {
+    position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+    color: #d47a7a; font-size: 14px;
+    animation: heartbeat 1.8s ease-in-out infinite;
+  }
+  @keyframes heartbeat { 0%,100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.15); } }
+  .empty-rec-friends h3 {
+    font-family: Georgia, serif; font-style: italic; font-size: 18px; color: #3d4a2d;
+    margin: 20px 0 8px;
+  }
+  .empty-rec-friends p { font-size: 13px; color: #6b6558; max-width: 240px; line-height: 1.5; }
+
+  /* Icons for Home cards */
+  .icon-hike {
+    width: 44px; height: 44px; position: relative;
+  }
+  .icon-hike::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      linear-gradient(45deg, transparent 40%, #556b3d 40%, #556b3d 45%, transparent 45%),
+      linear-gradient(-45deg, transparent 40%, #556b3d 40%, #556b3d 45%, transparent 45%);
+    clip-path: polygon(0% 100%, 20% 55%, 35% 75%, 50% 25%, 65% 55%, 80% 40%, 100% 100%);
+  }
+  .icon-run {
+    width: 44px; height: 44px; position: relative;
+  }
+  .icon-run::before {
+    content: ""; position: absolute; top: 10%; left: 20%;
+    width: 22%; height: 30%;
+    background: #3d5a99; border-radius: 50% 50% 20% 20%;
+  }
+  .icon-run::after {
+    content: ""; position: absolute; top: 45%; right: 20%;
+    width: 22%; height: 30%;
+    background: #3d5a99; border-radius: 50% 50% 20% 20%;
+  }
+  .icon-plant {
+    width: 44px; height: 44px; position: relative;
+  }
+  .icon-plant::before {
+    content: ""; position: absolute; left: 45%; top: 15%;
+    width: 3px; height: 70%; background: #8b5a17;
+  }
+  .icon-plant::after {
+    content: ""; position: absolute; left: 48%; top: 15%;
+    width: 18px; height: 14px;
+    background: #556b3d;
+    clip-path: polygon(0% 100%, 0% 40%, 100% 0%, 100% 100%);
+  }
+
+  /* Comparison table */
+  table.compare {
+    width: 100%; border-collapse: collapse; margin-top: 16px;
+    background: white; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 2px 8px rgba(60, 45, 30, 0.06);
+  }
+  table.compare th, table.compare td {
+    padding: 14px 16px; text-align: left; font-size: 14px;
+    border-bottom: 1px solid #f0e8d5;
+  }
+  table.compare th {
+    background: #f5efe4; color: #3d4a2d;
+    font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  table.compare td.now-cell { color: #8a6f4a; font-style: italic; }
+  table.compare td.rec-cell { color: #2d2a24; }
+  table.compare tr:last-child td { border-bottom: none; }
+  table.compare td.dim { color: #6b6558; font-weight: 500; width: 20%; }
+
+  /* Before/After */
+  .ba-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; align-items: stretch; }
+  @media (max-width: 900px) { .ba-row { grid-template-columns: 1fr; } }
+  .ba-panel {
+    padding: 24px; border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(60, 45, 30, 0.06);
+    display: flex; flex-direction: column;
+  }
+  .ba-panel.before { background: #ede4d0; border: 1px dashed #c9b78c; }
+  .ba-panel.after {
+    background: linear-gradient(135deg, #ffffff, #faf5ea);
+    border: 1px solid rgba(126, 160, 101, 0.25);
+  }
+  .ba-panel .ba-hdr {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: #6b6558; margin-bottom: 12px; font-weight: 600;
+  }
+  .ba-panel .ba-hdr.rec-hdr-lbl { color: #556b3d; }
+  .ba-panel h4 { font-size: 16px; color: #2d2a24; margin-bottom: 12px; letter-spacing: -0.005em; }
+  .ba-panel p { font-size: 13px; color: #4a4437; line-height: 1.55; }
+  .ba-panel .demo-area {
+    margin-top: 14px; padding: 16px; border-radius: 12px;
+    background: #f5efe4; min-height: 130px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  .ba-panel .spec {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(126, 160, 101, 0.08);
+    border-left: 3px solid #7ea065;
+    border-radius: 4px;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    color: #3d4a2d;
+    line-height: 1.6;
+  }
+
+  /* Mini Cairn animation demo */
+  .cairn-demo {
+    width: 60px; height: 60px; position: relative;
+  }
+  .cairn-demo .stone {
+    position: absolute;
+    background: #c88a2a;
+    border-radius: 50% 50% 30% 30%;
+    box-shadow: 0 1px 2px rgba(60, 45, 30, 0.2);
+    animation: stone-stack 3s ease-out infinite;
+  }
+  .cairn-demo .s1 { width: 22px; height: 12px; bottom: 5px; left: 19px; background: #8b5a17; animation-delay: 0s; }
+  .cairn-demo .s2 { width: 18px; height: 10px; bottom: 17px; left: 21px; background: #c88a2a; animation-delay: 0.4s; }
+  .cairn-demo .s3 { width: 14px; height: 8px; bottom: 27px; left: 23px; background: #b0791f; animation-delay: 0.8s; }
+  .cairn-demo .s4 { width: 10px; height: 7px; bottom: 35px; left: 25px; background: #8b5a17; animation-delay: 1.2s; }
+  .cairn-demo .glow {
+    position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+    width: 30px; height: 30px;
+    background: radial-gradient(circle, rgba(244, 196, 112, 0.6) 0%, transparent 65%);
+    animation: glow-appear 3s ease-out infinite;
+    opacity: 0;
+  }
+  @keyframes stone-stack {
+    0% { opacity: 0; transform: translateY(-20px) rotate(-15deg); }
+    30% { opacity: 1; transform: translateY(2px) rotate(2deg); }
+    40% { transform: translateY(0) rotate(0); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes glow-appear {
+    0%, 70% { opacity: 0; transform: translateX(-50%) scale(0.5); }
+    80% { opacity: 1; transform: translateX(-50%) scale(1.2); }
+    100% { opacity: 0; transform: translateX(-50%) scale(1.5); }
+  }
+
+  /* Guardrails section */
+  .guard {
+    margin-top: 56px;
+    padding: 32px;
+    background: linear-gradient(135deg, #fff8ea 0%, #f5efe4 100%);
+    border-radius: 16px;
+    border: 1px solid #e5d5a8;
+  }
+  .guard h3 { color: #8b5a17; margin-bottom: 16px; font-size: 18px; }
+  .guard ul { list-style: none; padding: 0; }
+  .guard li {
+    padding: 10px 0 10px 32px; position: relative;
+    font-size: 14px; color: #4a4437; line-height: 1.55;
+  }
+  .guard li::before {
+    content: "✗"; position: absolute; left: 0; top: 10px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #d47a7a; color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+  }
+  .guard li.do::before { content: "✓"; background: #7ea065; }
+
+  /* footer */
+  .foot { text-align: center; margin-top: 60px; font-size: 12px; color: #8a8177; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ HERO ============ -->
+  <div class="doc-hero">
+    <h1>Cairn UI Style — Now vs Recommended</h1>
+    <p class="sub">
+      Cairn is a New Zealand outdoor journal where hikers plant stones of kindness for strangers to find.
+      The product soul is <b style="color:#556b3d;">digital handbook + stranger kindness</b>.
+      Current UI reads as flat, cold, tool-like. This document proposes a lightweight shift toward
+      <i>handbook warmth + soft illustration</i>, keeping information density intact.
+    </p>
+    <div class="callout">
+      <b>User feedback (2026-07-20):</b> "过于死板,UX 糟糕" — too rigid, no emotional temperature.
+      The empty-Routes mountain illustration is the only element with warmth today; everything else feels like Notion.
+    </div>
+  </div>
+
+  <!-- ============ SECTION 1: NOW ============ -->
+  <div class="sec-hdr">
+    <h2>1. Current State</h2>
+    <span class="tag tag-now">Now</span>
+    <span style="font-size:13px; color:#6b6558;">— what users see today (as of v416)</span>
+  </div>
+
+  <div class="row">
+    <!-- NOW Home -->
+    <div>
+      <div class="phone">
+        <div class="phone-scroll">
+          <div class="problem-badge" style="top: 62px; left: 20px;">flat sage block</div>
+          <div class="problem-badge" style="top: 240px; right: 20px;">no personality</div>
+          <div class="problem-badge" style="bottom: 100px; left: 20px;">generic pills</div>
+
+          <div class="now-hdr">
+            <div class="now-brand"><span class="now-brand-icon"></span>Cairn</div>
+            <div class="now-kia">Kia ora, Explorer</div>
+          </div>
+          <div class="now-chips">
+            <div class="now-chip">🥾 0 sessions</div>
+            <div class="now-chip">🚩 8 flags</div>
+          </div>
+
+          <div class="now-card hike">
+            <div class="now-card-icon"><div class="icon-hike"></div></div>
+            <div class="now-card-body">
+              <h3>Hiking</h3>
+              <p>Track your route · Explore at your pace</p>
+              <span class="now-underline"></span>
+            </div>
+            <div class="arrow">›</div>
+          </div>
+          <div class="now-card run">
+            <div class="now-card-icon"><div class="icon-run"></div></div>
+            <div class="now-card-body">
+              <h3>Running</h3>
+              <p>Route planning · Voice guidance · Lock mode</p>
+              <span class="now-underline"></span>
+            </div>
+            <div class="arrow">›</div>
+          </div>
+          <div class="now-card plant">
+            <div class="now-card-icon"><div class="icon-plant"></div></div>
+            <div class="now-card-body">
+              <h3>Leave a Cairn here</h3>
+              <p>Drop a note for friends or your future self</p>
+              <span class="now-underline"></span>
+            </div>
+            <div class="arrow">›</div>
+          </div>
+
+          <div class="now-quicknav">
+            <div><i></i>Trails</div>
+            <div><i></i>Friends</div>
+            <div><i></i>Memory</div>
+            <div><i></i>Settings</div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">Home</div>
+    </div>
+
+    <!-- NOW Routes empty -->
+    <div>
+      <div class="phone">
+        <div class="phone-scroll">
+          <div class="problem-badge" style="top: 200px; left: 30px;">isolated icon</div>
+          <div class="problem-badge" style="top: 320px; right: 30px;">no primary CTA</div>
+          <div class="problem-badge" style="bottom: 200px; left: 50%; transform: translateX(-50%);">80% blank space</div>
+
+          <div style="text-align:center; padding: 8px 0; font-weight:700; color:#2d2a24;">Routes</div>
+          <div style="display:flex; gap:0; background:white; border-radius:12px; padding:4px; margin: 12px 0 20px;">
+            <div style="flex:1; text-align:center; padding:8px; background:#dfe7d1; border-radius:8px; font-size:11px; font-weight:600; color:#3d4a2d;">Activities</div>
+            <div style="flex:1; text-align:center; padding:8px; font-size:11px; color:#6b6558;">Routes</div>
+            <div style="flex:1; text-align:center; padding:8px; font-size:11px; color:#6b6558;">Flags</div>
+          </div>
+          <div class="empty-now">
+            <div class="flat-mountain"></div>
+            <h3>No tracks walked yet</h3>
+            <p>Start hiking or running. Your tracks will live here.</p>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">Routes — Empty</div>
+    </div>
+
+    <!-- NOW Friends empty -->
+    <div>
+      <div class="phone">
+        <div class="phone-scroll">
+          <div class="problem-badge" style="top: 220px; left: 25px;">tiny illustration</div>
+          <div class="problem-badge" style="top: 400px; right: 25px;">good CTA — keep it</div>
+
+          <div style="text-align:center; padding: 8px 0; font-weight:700; color:#2d2a24;">Friends</div>
+          <div class="empty-now">
+            <div class="flat-friends-icon">
+              <div class="stone s1"></div>
+              <div class="stone s2"></div>
+            </div>
+            <h3>Cairn is better with trail companions</h3>
+            <p>Invite friends to share markers and stay connected on the track.</p>
+            <button class="now-cta">👤 Add a Friend</button>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">Friends — Empty</div>
+    </div>
+  </div>
+
+  <div style="margin-top: 20px; padding: 14px 20px; background: rgba(212, 122, 122, 0.08); border-left: 3px solid #d47a7a; border-radius: 8px; font-size: 13px; color: #6b4a4a;">
+    <b>Diagnosis:</b> Cards are flat sage blocks. No paper texture, no watercolor edge, no depth. Empty states are lonely — a single icon floating in beige space with no scene, no CTA. The <i>Kia ora</i> line is the only Māori/local temperature signal and it's tucked in the corner.
+  </div>
+
+  <!-- ============ SECTION 2: RECOMMENDED ============ -->
+  <div class="sec-hdr">
+    <h2>2. Recommended Direction</h2>
+    <span class="tag tag-rec">Handbook + Soft Illustration</span>
+    <span style="font-size:13px; color:#6b6558;">— same layout, added warmth</span>
+  </div>
+
+  <div class="row">
+    <!-- REC Home -->
+    <div>
+      <div class="phone rec">
+        <div class="phone-scroll">
+          <div class="rec-hdr">
+            <div class="rec-brand"><span class="rec-brand-icon"></span>Cairn</div>
+            <div class="rec-kia">Kia ora,<br><b>Explorer</b></div>
+          </div>
+          <div class="rec-chips">
+            <div class="rec-chip"><span class="dot"></span>0 sessions</div>
+            <div class="rec-chip"><span class="dot" style="background:#c88a2a"></span>8 flags</div>
+          </div>
+
+          <div class="rec-card hike">
+            <div class="rec-icon"><div class="icon-hike"></div></div>
+            <div class="rec-card-body">
+              <h3>Hiking</h3>
+              <p>Track your route · Explore at your pace</p>
+              <span class="brush"></span>
+            </div>
+            <div class="rec-arrow">›</div>
+          </div>
+          <div class="rec-card run">
+            <div class="rec-icon"><div class="icon-run"></div></div>
+            <div class="rec-card-body">
+              <h3>Running</h3>
+              <p>Route planning · Voice guidance · Lock mode</p>
+              <span class="brush"></span>
+            </div>
+            <div class="rec-arrow">›</div>
+          </div>
+          <div class="rec-card plant">
+            <div class="rec-icon"><div class="icon-plant"></div></div>
+            <div class="rec-card-body">
+              <h3>Leave a Cairn here</h3>
+              <p>Drop a note for a stranger — or your future self.</p>
+              <span class="brush"></span>
+            </div>
+            <div class="rec-arrow">›</div>
+          </div>
+
+          <div class="rec-quicknav">
+            <div><i></i>Trails</div>
+            <div><i></i>Friends</div>
+            <div><i></i>Memory</div>
+            <div><i></i>Settings</div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">Home</div>
+    </div>
+
+    <!-- REC Routes empty -->
+    <div>
+      <div class="phone rec">
+        <div class="phone-scroll">
+          <div style="text-align:center; padding: 8px 0; font-weight:700; color:#3d4a2d; font-family:Georgia,serif; letter-spacing:-0.005em;">Routes</div>
+          <div style="display:flex; gap:0; background:linear-gradient(135deg,#fff,#faf5ea); border-radius:14px; padding:4px; margin: 12px 0 20px; box-shadow:0 1px 3px rgba(60,45,30,0.06); border:1px solid rgba(126,160,101,0.12);">
+            <div style="flex:1; text-align:center; padding:9px; background:linear-gradient(135deg,#dfe7d1,#eaf0d9); border-radius:10px; font-size:11px; font-weight:600; color:#3d4a2d;">Activities</div>
+            <div style="flex:1; text-align:center; padding:9px; font-size:11px; color:#6b6558;">Routes</div>
+            <div style="flex:1; text-align:center; padding:9px; font-size:11px; color:#6b6558;">Flags</div>
+          </div>
+          <div class="empty-rec">
+            <div class="empty-rec-scene">
+              <div class="sky"></div>
+              <div class="sun"></div>
+              <div class="mtn-back"></div>
+              <div class="mtn-front"></div>
+              <div class="ground"></div>
+              <div class="path"></div>
+              <div class="cairn"></div>
+            </div>
+            <h3>Your journal awaits its first page</h3>
+            <p>Every trail begins with a single step. Plant your first cairn today.</p>
+            <button class="rec-cta">🥾 Start a Hike</button>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">Routes — Empty (fuller)</div>
+    </div>
+
+    <!-- REC Friends empty -->
+    <div>
+      <div class="phone rec">
+        <div class="phone-scroll">
+          <div style="text-align:center; padding: 8px 0; font-weight:700; color:#3d4a2d; font-family:Georgia,serif;">Friends</div>
+          <div class="empty-rec-friends">
+            <div class="friends-scene">
+              <div class="heart">♥</div>
+              <div class="cairn-l"></div>
+              <div class="link"></div>
+              <div class="cairn-r"></div>
+            </div>
+            <h3>The trail is warmer with company</h3>
+            <p>Invite a friend to share cairns and see each other's fog on the map.</p>
+            <button class="rec-cta">👤 Add a Friend</button>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">Friends — Empty (breathing)</div>
+    </div>
+  </div>
+
+  <div style="margin-top: 20px; padding: 14px 20px; background: rgba(126, 160, 101, 0.1); border-left: 3px solid #7ea065; border-radius: 8px; font-size: 13px; color: #3d4a2d;">
+    <b>What changed (and what didn't):</b> Card layout, spacing, and info hierarchy are <i>identical</i>. What we added: watercolor edge on cards (bottom-right radial), paper-grain texture on background (very faint), a serif-italic voice for headings (handbook feel), a mini scene in each empty state, a soft glow on the CTA, and micro-animation on illustrations (sun pulse, cairn breathe, heartbeat). No mascot. No cartoon. No story arc. Just <i>a page from a well-loved notebook</i>.
+  </div>
+
+  <!-- ============ SECTION 3: COMPARISON TABLE ============ -->
+  <div class="sec-hdr">
+    <h2>3. Key Differences</h2>
+    <span style="font-size:13px; color:#6b6558;">— specific, executable</span>
+  </div>
+
+  <table class="compare">
+    <thead>
+      <tr>
+        <th style="width:20%;">Element</th>
+        <th style="width:40%;">Now</th>
+        <th style="width:40%;">Recommended</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="dim">Primary palette</td>
+        <td class="now-cell">#f5efe4 flat / #7ea065 flat / #c88a2a flat</td>
+        <td class="rec-cell">Same base + <b>135° linear-gradient with 6% lightness delta</b> per card + faint radial watercolor at bottom-right corner (opacity 0.4)</td>
+      </tr>
+      <tr>
+        <td class="dim">Background</td>
+        <td class="now-cell">Solid #f5efe4</td>
+        <td class="rec-cell">Same base + 2 radial gradients (sage top-left 8%, ochre bottom-right 6%) + paper-grain dot noise (opacity 0.35, 3 layered radial-gradients)</td>
+      </tr>
+      <tr>
+        <td class="dim">Card treatment</td>
+        <td class="now-cell">Flat block, no shadow, no border</td>
+        <td class="rec-cell"><code>box-shadow: 0 2px 8px rgba(60,45,30,0.06), 0 0 0 1px rgba(255,255,255,0.4) inset</code>; watercolor bottom-right; hover: <code>transform: translateY(-1px)</code></td>
+      </tr>
+      <tr>
+        <td class="dim">Card underline</td>
+        <td class="now-cell">Solid 2px rectangle (24px wide)</td>
+        <td class="rec-cell"><b>Brushstroke</b>: 34×3px linear-gradient(90°, sage → transparent) with <code>filter: blur(0.3px)</code></td>
+      </tr>
+      <tr>
+        <td class="dim">Heading typography</td>
+        <td class="now-cell">System sans-serif, weight 700, all screens</td>
+        <td class="rec-cell">Same sans for card titles; <b>Georgia italic for empty-state H3</b> ("Your journal awaits...") — a handbook voice signal, used sparingly</td>
+      </tr>
+      <tr>
+        <td class="dim">Empty state — Routes</td>
+        <td class="now-cell">Single mountain icon (140×90) + text. No CTA. 80% blank space.</td>
+        <td class="rec-cell"><b>Full scene</b>: sky gradient + pulsing sun + 2 mountain layers + textured ground + dotted path + micro-cairn breathing. Serif italic H3. Primary CTA "Start a Hike" with sage gradient and glow-pulse animation.</td>
+      </tr>
+      <tr>
+        <td class="dim">Empty state — Friends</td>
+        <td class="now-cell">2 stones + dashed link in beige box (120×60)</td>
+        <td class="rec-cell">Same 2 stones, but <b>swaying gently (±2°, 3s ease-in-out)</b> + heartbeat ♥ above the link + soft warm gradient box background</td>
+      </tr>
+      <tr>
+        <td class="dim">Transition</td>
+        <td class="now-cell">Hard cut on route change</td>
+        <td class="rec-cell"><b>200ms cross-fade + 8px slide-up</b> on stack navigate. Preserves scroll position on back.</td>
+      </tr>
+      <tr>
+        <td class="dim">Feedback: plant a cairn</td>
+        <td class="now-cell">Toast: "Cairn planted"</td>
+        <td class="rec-cell"><b>Toast + haptic (medium) + 4-stone stacking animation</b> (0.4s stagger, 1.6s total) + soft yellow glow on final stone</td>
+      </tr>
+      <tr>
+        <td class="dim">CTA button</td>
+        <td class="now-cell">Solid #556b3d, no shadow</td>
+        <td class="rec-cell"><code>linear-gradient(135°, #7ea065, #556b3d)</code> + <code>box-shadow: 0 4px 14px rgba(85,107,61,0.35)</code> + 2.5s pulse animation (shadow only, no size change)</td>
+      </tr>
+      <tr>
+        <td class="dim">Kia ora line</td>
+        <td class="now-cell">Small gray, corner-tucked</td>
+        <td class="rec-cell">Two-line, italic on greeting, bold on name — reads as a handwritten note, not a system label</td>
+      </tr>
+      <tr>
+        <td class="dim">Quick-nav tiles (bottom)</td>
+        <td class="now-cell">Flat white, gray circle icon</td>
+        <td class="rec-cell">Same layout + white→cream gradient + 1px sage border (12% opacity) + subtle inner shadow. Icons get a warm inner-glow dot.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ============ SECTION 4: BEFORE/AFTER ============ -->
+  <div class="sec-hdr">
+    <h2>4. Three Before / After Deep Dives</h2>
+    <span style="font-size:13px; color:#6b6558;">— specific CSS diffs, no vague talk</span>
+  </div>
+
+  <!-- Deep dive 1: Hiking card -->
+  <div class="ba-row">
+    <div class="ba-panel before">
+      <div class="ba-hdr">Before — Home Hiking Card</div>
+      <h4>Flat sage rectangle</h4>
+      <p>Solid <code>#dfe7d1</code>. No depth, no texture, no light source. Icon sits on a plain circle. Underline is a straight 2px bar. Reads like a settings row.</p>
+      <div class="demo-area">
+        <div class="now-card hike" style="width: 90%; margin:0;">
+          <div class="now-card-icon"><div class="icon-hike"></div></div>
+          <div class="now-card-body">
+            <h3>Hiking</h3>
+            <p>Track your route</p>
+            <span class="now-underline"></span>
+          </div>
+        </div>
+      </div>
+      <div class="spec">
+background: #dfe7d1;
+border-radius: 14px;
+padding: 14px;
+      </div>
+    </div>
+    <div class="ba-panel after">
+      <div class="ba-hdr rec-hdr-lbl">After — Watercolor Card</div>
+      <h4>Same block, breathing edge</h4>
+      <p>Add: 135° gradient (6% lightness delta), watercolor radial at bottom-right (sage, opacity 0.4), tiny mountain glyph decoration top-right, brushstroke underline, drop shadow + inset highlight, 1px lift on hover.</p>
+      <div class="demo-area" style="background: #f5efe4;">
+        <div class="rec-card hike" style="width: 90%; margin:0;">
+          <div class="rec-icon"><div class="icon-hike"></div></div>
+          <div class="rec-card-body">
+            <h3>Hiking</h3>
+            <p>Track your route</p>
+            <span class="brush"></span>
+          </div>
+          <div class="rec-arrow">›</div>
+        </div>
+      </div>
+      <div class="spec">
+background: linear-gradient(135deg, #dfe7d1 0%, #eaf0d9 100%);
+box-shadow: 0 2px 8px rgba(60,45,30,0.06),
+            0 0 0 1px rgba(255,255,255,0.4) inset;
+&::after {
+  background: radial-gradient(ellipse at bottom right,
+    rgba(126,160,101,0.3), transparent 60%);
+  opacity: 0.4;
+}
+&:hover { transform: translateY(-1px); }
+      </div>
+    </div>
+  </div>
+
+  <!-- Deep dive 2: Empty Routes -->
+  <div class="ba-row">
+    <div class="ba-panel before">
+      <div class="ba-hdr">Before — Empty Routes</div>
+      <h4>Lonely icon in 80% blank space</h4>
+      <p>One mountain SVG floats in the center. Text is small, gray, generic. No CTA. First-time user has no anchor for what to do next.</p>
+      <div class="demo-area" style="min-height: 180px;">
+        <div style="text-align:center;">
+          <div class="flat-mountain" style="margin:0 auto;"></div>
+          <div style="font-size:12px; color:#3d4a2d; margin-top:12px; font-weight:600;">No tracks walked yet</div>
+          <div style="font-size:10px; color:#6b6558; margin-top:4px;">Start hiking or running.</div>
+        </div>
+      </div>
+      <div class="spec">
+&lt;EmptyState&gt;
+  &lt;MountainIcon /&gt;
+  &lt;Text&gt;No tracks walked yet&lt;/Text&gt;
+  &lt;SubText&gt;Start hiking or running.&lt;/SubText&gt;
+&lt;/EmptyState&gt;
+      </div>
+    </div>
+    <div class="ba-panel after">
+      <div class="ba-hdr rec-hdr-lbl">After — Journal Waiting Page</div>
+      <h4>A scene, a voice, a call</h4>
+      <p>Replace flat icon with a scene: sky gradient + pulsing sun + 2-layer mountains + textured ground + dotted trail with a breathing cairn at the top. Serif italic heading. Primary CTA takes the user directly into a Hiking session.</p>
+      <div class="demo-area" style="background: #f5efe4; min-height: 240px; flex-direction:column;">
+        <div class="empty-rec-scene" style="width:150px; height:110px; transform:scale(0.9);">
+          <div class="sky"></div>
+          <div class="sun"></div>
+          <div class="mtn-back"></div>
+          <div class="mtn-front"></div>
+          <div class="ground"></div>
+          <div class="path"></div>
+          <div class="cairn"></div>
+        </div>
+        <div style="font-family:Georgia,serif; font-style:italic; font-size:14px; color:#3d4a2d; margin-top:10px;">Your journal awaits its first page</div>
+        <button class="rec-cta" style="margin-top:12px; padding:8px 16px; font-size:11px;">🥾 Start a Hike</button>
+      </div>
+      <div class="spec">
+&lt;Scene&gt;
+  &lt;Sky /&gt;         // radial gradient, sunrise warm
+  &lt;Sun /&gt;         // 3s scale pulse
+  &lt;Mountains /&gt;   // 2 layers, front sage / back muted
+  &lt;Ground /&gt;      // beige gradient
+  &lt;Path /&gt;        // 4px dotted, rotate 3°
+  &lt;Cairn /&gt;       // -1px translateY breathe, 4s
+&lt;/Scene&gt;
+&lt;H3 font="Georgia italic"&gt;Your journal awaits...&lt;/H3&gt;
+&lt;PrimaryCTA glow="rgba(85,107,61,0.35)" pulse=2.5s /&gt;
+      </div>
+    </div>
+  </div>
+
+  <!-- Deep dive 3: Cairn plant animation -->
+  <div class="ba-row">
+    <div class="ba-panel before">
+      <div class="ba-hdr">Before — Plant a Cairn</div>
+      <h4>Silent submit</h4>
+      <p>User taps "Leave a Cairn", writes a note, submits. A toast appears: "Cairn planted." Nothing else. The moment of leaving kindness for a stranger feels the same as saving a form.</p>
+      <div class="demo-area" style="flex-direction:column;">
+        <div style="background:#556b3d; color:white; padding:10px 18px; border-radius:22px; font-size:13px;">✓ Cairn planted</div>
+      </div>
+      <div class="spec">
+Toast.show({ message: 'Cairn planted', duration: 2000 });
+      </div>
+    </div>
+    <div class="ba-panel after">
+      <div class="ba-hdr rec-hdr-lbl">After — Stone Stacking Ritual</div>
+      <h4>4 stones, 1.6s, 1 glow</h4>
+      <p>On successful plant: 4 stones stack from top with 0.4s stagger. Each falls -20px with -15° rotation, settles with a bounce. On stone 4, a soft yellow glow appears (radial-gradient, 0.4s fade). Haptic medium fires with stone 1. Toast appears after glow.</p>
+      <div class="demo-area" style="min-height: 130px;">
+        <div class="cairn-demo">
+          <div class="glow"></div>
+          <div class="stone s4"></div>
+          <div class="stone s3"></div>
+          <div class="stone s2"></div>
+          <div class="stone s1"></div>
+        </div>
+      </div>
+      <div class="spec">
+@keyframes stone-stack {
+  0%   { opacity: 0; transform: translateY(-20px) rotate(-15deg); }
+  30%  { opacity: 1; transform: translateY(2px)   rotate(2deg); }
+  40%  { transform: translateY(0)   rotate(0); }
+  100% { opacity: 1; }
+}
+// Stone 1 → 4: animation-delay 0s / 0.4s / 0.8s / 1.2s
+// On stone 1: Haptics.impactAsync(MEDIUM)
+// On stone 4 + 0.4s: glow-appear (radial yellow, 0.8s)
+// Toast after 1.8s total
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ GUARDRAILS ============ -->
+  <div class="guard">
+    <h3>Guardrails — what we are NOT doing</h3>
+    <ul>
+      <li><b>No mascot / no 旅行青蛙-style character.</b> Cairn itself (the stone stack) is the icon-mascot. No frog, no fox, no illustrated hiker persona.</li>
+      <li><b>No story arc / no narrative overlay.</b> This is a handbook, not a game. No progress rings dressed as adventure meters, no "Level 3 Explorer" titles.</li>
+      <li><b>No maximalist decoration.</b> Outdoor users read this in bright sun, gloves on, one thumb. Every added element must survive a 1s glance at 400 nits sun.</li>
+      <li><b>No color-scheme overhaul.</b> The Cairn palette is #f5efe4 / #7ea065 / #c88a2a. We layer gradients and textures on top; we do not replace.</li>
+      <li><b>No animation over 300ms on interactive elements.</b> Only decorative/idle elements (sun pulse, cairn breathe, CTA glow) can run 2-4s loops. Never delay the user.</li>
+      <li class="do"><b>Yes: watercolor edges, paper grain, brushstroke underlines</b> — these are handbook signals costing zero cognitive load.</li>
+      <li class="do"><b>Yes: serif italic for empty-state headings only</b> — used sparingly as a voice signal.</li>
+      <li class="do"><b>Yes: full scenes in empty states with primary CTA</b> — turn dead pages into invitations.</li>
+      <li class="do"><b>Yes: micro-animations tied to real user actions</b> — stone stacking on plant, fog reveal on step, haptic on cairn found.</li>
+    </ul>
+  </div>
+
+  <div class="foot">
+    Cairn UI Style Study — 2026-07-20 — <i>from Notion-flat to well-loved-notebook</i>
+  </div>
+
+</div>
+</body>
+</html>
