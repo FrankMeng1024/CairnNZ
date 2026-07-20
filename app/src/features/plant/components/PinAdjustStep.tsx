@@ -567,7 +567,10 @@ export function PinAdjustStep({
         </Text>
       </View>
 
-      <View style={{ flex: 1 }} />
+      {/* v419: removed empty flex:1 spacer — mapWrap is now flex:1 so
+          it absorbs remaining space between header (title+sub) and
+          footer (chip+field note+button). Button naturally sits below
+          field note; no dead zone between. */}
       {/* Confirm button.
           v298 N4: button state driven by `overLimit` (flipped in
           onCameraChanged the moment the map crosses the 50m ring) —
@@ -641,7 +644,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '500', color: MemoryColors.sepiaDeep, marginBottom: 6 },
   sub:   { fontSize: 13, color: MemoryColors.cairnPublic, marginBottom: 16 },
   mapWrap: {
-    height: 300,
+    // v419: was fixed 300px which left 227-347px empty below on iPhone
+    // 14/15 Pro Max. Now flex:1 lets the map absorb remaining vertical
+    // space between the fixed header (back+title+sub) and footer
+    // (chip+field note+button). Result: map always fills naturally,
+    // no dead zone above Confirm button, no overflow on iPhone SE.
+    flex: 1,
+    minHeight: 280,
     borderRadius: 14,
     overflow: 'hidden',
     borderWidth: 1,
