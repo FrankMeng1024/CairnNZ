@@ -331,7 +331,7 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
         attributionEnabled={false}
         // Mapbox's built-in compass is hidden — we draw our own as a
         // bottom-left chip so it sits in a predictable spot relative to
-        // SOS (centre) and Place Flag (right). showCompass is also
+        // Place Flag (right). showCompass is also
         // gated on tracking state so a fresh map screen isn't cluttered.
         compassEnabled={false}
         // Disable gestures during the fly-in so a stray tap doesn't
@@ -1801,10 +1801,10 @@ export function HikingScreen() {
         )}
       </View>
 
-      {/* Bottom controls. Three-column layout when tracking:
-          [Compass]  [SOS]  [Place Flag]
+      {/* Bottom controls. Two-column layout when tracking:
+          [Compass]  [Place Flag]
           When pre-tracking, only the route picker + Start button are
-          visible (no compass, no SOS, no flag). */}
+          visible (no compass, no flag). */}
       <View style={[styles.bottomOverlay, { paddingBottom: insets.bottom + 8 }]} pointerEvents="box-none">
         {!isTracking ? (
           // Pre-tracking: full-width Start button.
