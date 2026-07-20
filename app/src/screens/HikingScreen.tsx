@@ -36,6 +36,7 @@ import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../componen
 import { Icon, type IconName } from '../components/Icon';
 import { previewMemoryGain } from '../features/memory/services/flushHikingToMemory';
 import { BackButton } from '../components/BackButton';
+import { PulseDot } from '../components/PulseDot';
 import { PressBtn } from '../components/PressBtn';
 import { MARKER_META, type MarkerType } from '../data/mockData';
 import type { Marker } from '../store/useMarkerStore';
@@ -1716,11 +1717,13 @@ export function HikingScreen() {
             styles.gpsChip,
             status === 'idle' ? styles.gpsChipAmber : (!locationAvailable && styles.gpsChipOffline),
           ]}>
-            <View style={[styles.gpsDot, {
-              backgroundColor: locationAvailable
+            <PulseDot
+              size={8}
+              color={locationAvailable
                 ? Colors.success
-                : status === 'idle' ? Colors.severityCaution : Colors.danger,
-            }]} />
+                : status === 'idle' ? Colors.severityCaution : Colors.danger}
+              pulsing={locationAvailable}
+            />
             <Text style={[
               styles.gpsText,
               status === 'idle' ? styles.gpsTextAmber : (!locationAvailable && styles.gpsTextOffline),

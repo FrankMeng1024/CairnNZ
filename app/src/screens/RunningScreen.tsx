@@ -30,6 +30,7 @@ import { formatDistance, formatDuration } from '../utils/geo';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
+import { PulseDot } from '../components/PulseDot';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { crashLogger } from '../services/crashLogger';
 
@@ -613,7 +614,11 @@ export function RunningScreen() {
               <StatItem value={durationDisplay} label="elapsed" />
               <StatItem value={paceDisplay} label="pace" />
               <View style={[runStyles.statItem, { justifyContent: 'center' }]}>
-                <View style={[runStyles.gpsIndicator, { backgroundColor: locationAvailable ? Colors.success : Colors.textMuted }]} />
+                <PulseDot
+                  size={8}
+                  color={locationAvailable ? Colors.success : Colors.textMuted}
+                  pulsing={locationAvailable}
+                />
                 <Text style={runStyles.statLabel}>{locationAvailable ? 'GPS' : 'Offline'}</Text>
               </View>
             </View>
