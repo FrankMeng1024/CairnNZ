@@ -51,15 +51,6 @@ export interface Marker {
   // anonymized server-side per v4 row Q — author_name returns null even
   // when the creator is a friend). Local-only / self marks have no value.
   authorName?: string | null;
-  // v0.2.4 Part 2 A2.2 — 双源持久化(用户原话:"AR plant 没用 arkit 世界坐标 用的是 GPS")
-  // Plant 时同时存 ARKit world XYZ + arOrigin 快照,re-spawn 时优先用 ARKit
-  // (前提:当前 arOrigin 跟 plant 时 arOrigin 偏差 < 5m,否则 fallback GPS+raycast)
-  // 旧 marker 这些字段为 undefined,走 fallback 路径,行为不变
-  arkitX?: number;
-  arkitY?: number;
-  arkitZ?: number;
-  arOriginLat?: number;     // plant 时 arOrigin 快照 lat
-  arOriginLng?: number;     // plant 时 arOrigin 快照 lng
   /** v300: immutable copy of (type/lat/lng/note) taken the FIRST time
    *  this marker had permission='public'. Subsequent edits to the
    *  main fields do NOT touch this. Subsequent public/unpublic toggles
@@ -86,16 +77,6 @@ const STORAGE_KEY_PREFIX = 'cairn_markers_v026';
 
 function storageKey(userId: string): string {
   return `${STORAGE_KEY_PREFIX}_${userId}`;
-}
-
-// v118: persistent ARKit origin. Cairn world positions are computed as
-// (lat, lng) deltas relative to a single origin captured the first time
-// the user plants in AR. Using a persistent origin (not a fresh GPS read
-// every session) eliminates the 5-15m inter-session drift that made
-// markers visibly jump between AR sessions on the same spot.
-const AR_ORIGIN_KEY_PREFIX = 'cairn_ar_origin_v1';
-function arOriginKey(userId: string): string {
-  return `${AR_ORIGIN_KEY_PREFIX}_${userId}`;
 }
 
 /** Convert backend row → frontend Marker */
@@ -167,14 +148,6 @@ interface MarkerState {
    *  but the client has already wiped them locally. Cleared on POST
    *  success or failure. */
   hidingIds: ReadonlyArray<string>;
-  /** v118: persistent AR origin (captured once on first plant per user).
-   *  null until first plant. All cairns are positioned in ARKit world
-   *  space via (lat, lng) deltas from this origin, so it must NOT change
-   *  between AR sessions or markers will appear to jump 5-15m.
-   *  v0.2.4 R2.3: lowAccuracy 标记此 origin 是不是在 GPS accuracy 10-25m 范围
-   *  锁的(室内 / urban canyon)。下游 unityCairnSpawn 看到 true 时收紧 Tier-A
-   *  阈值(5m → 2m),否则低精度 origin 反算 cairn 会飘 15m+。 */
-  arOrigin: { lat: number; lng: number; alt: number | null; lowAccuracy?: boolean } | null;
   addMarker: (marker: Omit<Marker, 'id' | 'createdAt'>) => Promise<Marker>;
   updateMarker: (id: string, updates: Partial<Omit<Marker, 'id' | 'createdAt'>>) => Promise<void>;
   deleteMarker: (id: string) => Promise<void>;
@@ -188,19 +161,12 @@ interface MarkerState {
   /** Sprint 69 STORY-00537: load subscribed-friend marks (friend+public
    *  tiers) from GET /api/circle/markers. Stored in `circleMarkers`. */
   loadCircleMarkers: () => Promise<void>;
-  /** v118: set the AR origin if not yet set. Called from ViroAROverlay
-   *  when the first GPS fix arrives in a new AR session AND no origin
-   *  exists yet. Subsequent calls are no-ops. */
-  setArOriginIfMissing: (origin: { lat: number; lng: number; alt: number | null; lowAccuracy?: boolean }) => void;
-  /** v118: clear the AR origin (used when the user wipes all markers). */
-  clearArOrigin: () => void;
 }
 
 export const useMarkerStore = create<MarkerState>((set, get) => ({
   markers: [],
   userId: null,
   syncing: false,
-  arOrigin: null,
   // Sprint 69 STORY-00537: initial empty until first loadCircleMarkers().
   circleMarkers: [],
   loadingCircle: false,
@@ -627,40 +593,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     } else {
       set({ markers: [], userId });
     }
-    // v118: hydrate persistent AR origin too.
-    const oRaw = await storage.getItem(arOriginKey(userId));
-    if (oRaw) {
-      try {
-        const o = JSON.parse(oRaw);
-        if (o && typeof o.lat === 'number' && typeof o.lng === 'number') {
-          set({ arOrigin: { lat: o.lat, lng: o.lng, alt: o.alt ?? null, lowAccuracy: !!o.lowAccuracy } });
-        }
-      } catch {
-        storage.removeItem(arOriginKey(userId));
-      }
-    } else {
-      set({ arOrigin: null });
-    }
     // 2. Then fetch from backend (async, updates state when done)
     get().loadFromBackend();
-  },
-
-  setArOriginIfMissing: (origin) => {
-    const cur = get().arOrigin;
-    if (cur) return; // origin already locked — never overwrite
-    const userId = get().userId;
-    const lowAccuracy = !!origin.lowAccuracy;
-    set({ arOrigin: { lat: origin.lat, lng: origin.lng, alt: origin.alt ?? null, lowAccuracy } });
-    if (userId) {
-      storage.setItem(arOriginKey(userId), JSON.stringify({ ...origin, lowAccuracy }));
-    }
-    crashLogger.breadcrumb(`ar:origin:locked lat=${origin.lat.toFixed(6)} lng=${origin.lng.toFixed(6)} lowAcc=${lowAccuracy}`);
-  },
-
-  clearArOrigin: () => {
-    const userId = get().userId;
-    set({ arOrigin: null });
-    if (userId) storage.removeItem(arOriginKey(userId));
-    crashLogger.breadcrumb('ar:origin:cleared');
   },
 }));
