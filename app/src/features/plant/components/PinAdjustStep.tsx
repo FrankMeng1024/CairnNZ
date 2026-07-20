@@ -285,11 +285,18 @@ export function PinAdjustStep({
       briefHint();
     }
 
-    // v299 N4 + v301 Pri-1: ref-gate (avoid setHasMoved re-queue
-    // every tick after first move).
-    if (!hasMovedRef.current && dist > 0.5) {
-      hasMovedRef.current = true;
-      setHasMoved(true);
+    // v418 fix: hasMoved is a symmetric position check, not a one-way flag.
+    // Show recenter icon iff map center is >0.5m from GPS origin. Setting
+    // hasMoved=true in one direction only (as v299 did) means doRecenter's
+    // setCamera animation frames (which pass through onCameraTick with
+    // dist>0.5 mid-transition) can re-flip it back to true after doRecenter
+    // sets false — causing the icon to require a second tap to disappear.
+    // Now the flag mirrors current position vs origin every tick, no
+    // timers or suppress windows needed.
+    const shouldShow = dist > 0.5;
+    if (hasMovedRef.current !== shouldShow) {
+      hasMovedRef.current = shouldShow;
+      setHasMoved(shouldShow);
     }
   };
 
@@ -381,8 +388,9 @@ export function PinAdjustStep({
       zoomLevel: z,
       animationDuration: 280,
     });
-    setHasMoved(false);  // v299 N4: hide the Target button after recenter
-    hasMovedRef.current = false;
+    // v418: no manual setHasMoved needed — onCameraTick now mirrors
+    // position vs origin every tick. Icon stays visible during the
+    // 280ms recenter animation and disappears cleanly when settled.
     log('plant.pin_recenter', {});
   };
 
