@@ -200,42 +200,50 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
   const GAP_THRESHOLD_MS = 120_000;
   const GAP_DIST_THRESHOLD_M = 200;
   type Segment = { coords: [number, number][]; gap: boolean };
-  const segments: Segment[] = [];
-  if (trackPoints.length >= 2) {
-    let cur: Segment = { coords: [[trackPoints[0].lng, trackPoints[0].lat]], gap: false };
-    for (let i = 1; i < trackPoints.length; i++) {
-      const prev = trackPoints[i - 1];
-      const p = trackPoints[i];
-      const dt = (prev.t != null && p.t != null) ? (p.t - prev.t) : 0;
-      const distM = haversineM({ lat: prev.lat, lng: prev.lng }, { lat: p.lat, lng: p.lng });
-      const isGap = dt > GAP_THRESHOLD_MS && distM > GAP_DIST_THRESHOLD_M;
-      if (isGap) {
-        // close the solid segment, push, then push a 2-point gap segment
-        if (cur.coords.length >= 2) segments.push(cur);
-        segments.push({ coords: [[prev.lng, prev.lat], [p.lng, p.lat]], gap: true });
-        cur = { coords: [[p.lng, p.lat]], gap: false };
-      } else {
-        cur.coords.push([p.lng, p.lat]);
+
+  // 2026-07-20 perf: memoize segment computation + GeoJSON build.
+  // Runs O(N) over trackPoints; without memo this fires every render even
+  // when trackPoints reference is unchanged. `trackPoints` gets a new
+  // reference every 3s during a hike so the memo dep is intentional.
+  const { solidGeoJSON, gapGeoJSON } = useMemo(() => {
+    const segs: Segment[] = [];
+    if (trackPoints.length >= 2) {
+      let cur: Segment = { coords: [[trackPoints[0].lng, trackPoints[0].lat]], gap: false };
+      for (let i = 1; i < trackPoints.length; i++) {
+        const prev = trackPoints[i - 1];
+        const p = trackPoints[i];
+        const dt = (prev.t != null && p.t != null) ? (p.t - prev.t) : 0;
+        const distM = haversineM({ lat: prev.lat, lng: prev.lng }, { lat: p.lat, lng: p.lng });
+        const isGap = dt > GAP_THRESHOLD_MS && distM > GAP_DIST_THRESHOLD_M;
+        if (isGap) {
+          if (cur.coords.length >= 2) segs.push(cur);
+          segs.push({ coords: [[prev.lng, prev.lat], [p.lng, p.lat]], gap: true });
+          cur = { coords: [[p.lng, p.lat]], gap: false };
+        } else {
+          cur.coords.push([p.lng, p.lat]);
+        }
       }
+      if (cur.coords.length >= 2) segs.push(cur);
     }
-    if (cur.coords.length >= 2) segments.push(cur);
-  }
-  const solidGeoJSON = {
-    type: 'FeatureCollection' as const,
-    features: segments.filter(s => !s.gap).map(s => ({
-      type: 'Feature' as const,
-      geometry: { type: 'LineString' as const, coordinates: s.coords },
-      properties: {},
-    })),
-  };
-  const gapGeoJSON = {
-    type: 'FeatureCollection' as const,
-    features: segments.filter(s => s.gap).map(s => ({
-      type: 'Feature' as const,
-      geometry: { type: 'LineString' as const, coordinates: s.coords },
-      properties: {},
-    })),
-  };
+    return {
+      solidGeoJSON: {
+        type: 'FeatureCollection' as const,
+        features: segs.filter(s => !s.gap).map(s => ({
+          type: 'Feature' as const,
+          geometry: { type: 'LineString' as const, coordinates: s.coords },
+          properties: {},
+        })),
+      },
+      gapGeoJSON: {
+        type: 'FeatureCollection' as const,
+        features: segs.filter(s => s.gap).map(s => ({
+          type: 'Feature' as const,
+          geometry: { type: 'LineString' as const, coordinates: s.coords },
+          properties: {},
+        })),
+      },
+    };
+  }, [trackPoints]);
 
   // Imperative camera ref — used to forcefully snap the camera to the
   // user's position on resume, bypassing the followUserLocation
@@ -1138,8 +1146,15 @@ export function HikingScreen() {
   const addMarker = useMarkerStore(s => s.addMarker);
   const deleteMarker = useMarkerStore(s => s.deleteMarker);
   const getMarkersForRegion = useMarkerStore(s => s.getMarkersForRegion);
+  const allMarkers = useMarkerStore(s => s.markers);
   const region = getCurrentRegion();
-  const markers = getMarkersForRegion(region.code);
+  // 2026-07-20 perf: memoize markers filter so trackPoints updates (every 3s
+  // during hike) don't force downstream <MarkerList> to see a new array ref.
+  const markers = useMemo(
+    () => getMarkersForRegion(region.code),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allMarkers, region.code]
+  );
 
   const [ui, setUi] = useState<UIState>('map');
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
