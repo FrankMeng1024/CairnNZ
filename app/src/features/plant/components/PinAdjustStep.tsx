@@ -409,9 +409,9 @@ export function PinAdjustStep({
       <View style={styles.backRow}>
         <BackButton variant="pill" onPress={onBack} />
       </View>
-      <Text style={styles.title}>You are here?</Text>
+      <Text style={styles.title}>Where's your cairn?</Text>
       <Text style={styles.sub}>
-        Drag the map to fine-tune. Use + / − to zoom.
+        Drag the map to fine-tune. Tap Confirm when it feels right.
       </Text>
 
       <View style={styles.mapWrap}>
@@ -548,8 +548,24 @@ export function PinAdjustStep({
             backRow above the title. */}
       </View>
 
-      {/* v299 N5a: removed "± 5.0 m · drag the map to fine-tune"
-          meta row per user request — "下方的+9.4没用 去掉". */}
+      {/* v418: accuracy chip + field note fill the previously-empty
+          gap between map and Confirm button. Keeps user oriented
+          (accuracy) and reinforces Cairn/NZ handbook tone. */}
+      <View style={styles.metaRow}>
+        <View style={styles.metaChip}>
+          <View style={styles.metaDot} />
+          <Text style={styles.metaChipText}>± {Math.round(accuracyM)} m accuracy</Text>
+        </View>
+      </View>
+
+      <View style={styles.fieldNote}>
+        <View style={styles.fieldNoteAccent} />
+        <Text style={styles.fieldNoteHeader}>·· Field note ··</Text>
+        <Text style={styles.fieldNoteBody}>
+          <Text style={styles.fieldNoteLede}>Cairns rest lightly.</Text>
+          {' '}Return them when you leave.
+        </Text>
+      </View>
 
       <View style={{ flex: 1 }} />
       {/* Confirm button.
@@ -587,7 +603,7 @@ export function PinAdjustStep({
             }}
           >
             <Text style={[styles.primaryBtnText, !canConfirm && styles.primaryBtnTextDisabled]}>
-              {canConfirm ? 'Looks right' : `Pin too far — pan back within ${PinNudgeConfig.maxNudgeMeters} m`}
+              {canConfirm ? 'Confirm this spot' : `Pin too far — pan back within ${PinNudgeConfig.maxNudgeMeters} m`}
             </Text>
           </TouchableOpacity>
         );
@@ -607,7 +623,7 @@ function PinAdjustFallback({
       <View style={styles.backRow}>
         <BackButton variant="pill" onPress={onBack} />
       </View>
-      <Text style={styles.title}>You are here?</Text>
+      <Text style={styles.title}>Where's your cairn?</Text>
       <Text style={styles.sub}>Map preview not available on this platform.</Text>
       <View style={styles.fallbackBox}>
         <Text style={styles.fallbackCoord}>{lat.toFixed(6)}, {lng.toFixed(6)}</Text>
@@ -625,11 +641,83 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '500', color: MemoryColors.sepiaDeep, marginBottom: 6 },
   sub:   { fontSize: 13, color: MemoryColors.cairnPublic, marginBottom: 16 },
   mapWrap: {
-    height: 340,
+    height: 300,
     borderRadius: 14,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  // v418: single-chip meta row under the map for accuracy readout.
+  metaRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    flexWrap: 'wrap',
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  metaDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#5d7c46',
+  },
+  metaChipText: {
+    fontSize: 12,
+    color: '#4a3d2c',
+    fontWeight: '500',
+  },
+  // v418: field note — handbook book-edge style. Top warm-sepia hairline
+  // gives it a "torn from a field notebook" feel, so it reads as a
+  // natural part of the page instead of a toast/warning banner.
+  fieldNote: {
+    marginTop: 12,
+    paddingTop: 14,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#faf4e6',
+    borderRadius: 10,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  fieldNoteAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#c88a2a',
+    opacity: 0.85,
+  },
+  fieldNoteHeader: {
+    fontSize: 10,
+    color: '#a67c3e',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+    marginBottom: 5,
+  },
+  fieldNoteBody: {
+    fontSize: 13,
+    color: '#6a4c22',
+    lineHeight: 20,
+  },
+  fieldNoteLede: {
+    color: '#5d7c46',
+    fontStyle: 'italic',
+    fontWeight: '500',
   },
   map: { flex: 1 },
   styleToggle: {

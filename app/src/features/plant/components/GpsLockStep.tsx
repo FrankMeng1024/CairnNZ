@@ -220,7 +220,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Locking your spot…</Text>
+      <Text style={styles.title}>Finding your ground</Text>
       <Text style={styles.sub}>
         Hold still for a moment while we get an accurate reading.
       </Text>
@@ -250,6 +250,19 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* v418: field note filler — same handbook style as PinAdjustStep
+          so the two screens read as one continuous experience. Shown in
+          both busy/success and failed states — page stays warm even on
+          permission-denied. */}
+      <View style={styles.fieldNote}>
+        <View style={styles.fieldNoteAccent} />
+        <Text style={styles.fieldNoteHeader}>·· Field note ··</Text>
+        <Text style={styles.fieldNoteBody}>
+          <Text style={styles.fieldNoteLede}>Cairns rest lightly.</Text>
+          {' '}Return them when you leave.
+        </Text>
+      </View>
 
       <View style={{ flex: 1 }} />
       <TouchableOpacity style={styles.cancel} onPress={onCancel}>
@@ -291,6 +304,44 @@ const styles = StyleSheet.create({
   },
   progressFill: { height: '100%', backgroundColor: MemoryColors.sepia },
   progressText: { fontSize: 12, color: MemoryColors.cairnPublic, marginTop: 10 },
+  // v418: field note filler — handbook book-edge style, matches PinAdjustStep.
+  fieldNote: {
+    marginTop: 20,
+    paddingTop: 14,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#faf4e6',
+    borderRadius: 10,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  fieldNoteAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#c88a2a',
+    opacity: 0.85,
+  },
+  fieldNoteHeader: {
+    fontSize: 10,
+    color: '#a67c3e',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+    marginBottom: 5,
+  },
+  fieldNoteBody: {
+    fontSize: 13,
+    color: '#6a4c22',
+    lineHeight: 20,
+  },
+  fieldNoteLede: {
+    color: '#5d7c46',
+    fontStyle: 'italic',
+    fontWeight: '500',
+  },
   failBox: {
     backgroundColor: '#fee5e0',
     borderColor: '#c44545',

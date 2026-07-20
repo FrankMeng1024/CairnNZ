@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Plant page — Full iPhone 375×812</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-font-smoothing:antialiased }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#e8e2d4; color:#2b241b; padding:32px 16px }
+  h1 { color:#5d7c46; font-size:22px; margin-bottom:6px }
+  .lead { color:#6a5f4f; font-size:13px; margin-bottom:24px; max-width:1200px; line-height:1.5 }
+  .lead b { color:#a83a2f }
+  .row { display:flex; gap:20px; overflow-x:auto; padding-bottom:24px; align-items:flex-start }
+  .col { flex:0 0 auto }
+  .col h2 { color:#5d7c46; font-size:14px; margin-bottom:6px; font-weight:700 }
+  .col .tag { display:inline-block; background:#fff; color:#5d7c46; font-size:9.5px; padding:2px 8px; border-radius:8px; margin-bottom:6px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase }
+  .caption { font-size:11px; color:#7a6f5f; margin-top:6px; max-width:280px; line-height:1.5 }
+
+  /* Real iPhone 14 frame: 375 × 812 */
+  .phone { width:375px; height:812px; background:#f5efe4; border-radius:44px; box-shadow:0 12px 32px rgba(0,0,0,0.15); overflow:hidden; position:relative; border:8px solid #1a1a1a }
+  .phone::before { content:''; position:absolute; top:12px; left:50%; transform:translateX(-50%); width:120px; height:28px; background:#1a1a1a; border-radius:14px; z-index:5 }
+
+  /* Content — real spacing */
+  .safe-top { height:60px }
+  .back-row { display:flex; align-items:center; padding:8px 16px }
+  .back-pill { display:flex; align-items:center; gap:2px; padding:8px 14px; border-radius:20px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.08); font-size:14px; color:#5d7c46; font-weight:600 }
+  .title { padding:12px 24px 6px; font-size:26px; font-weight:700; color:#2b241b; letter-spacing:-0.4px; line-height:1.15 }
+  .sub { padding:0 24px 16px; font-size:14px; color:#7a6f5f; line-height:1.45 }
+
+  /* Map larger — matches real screen (~380px height) */
+  .map-wrap { margin:0 16px; height:380px; border-radius:20px; overflow:hidden; position:relative; background:linear-gradient(135deg,#c9d4b8 0%,#a8bb96 60%,#9dad83 100%); box-shadow:0 4px 12px rgba(93,124,70,0.15) }
+  .map-wrap::before { content:''; position:absolute; inset:0; background: radial-gradient(ellipse 60% 40% at 50% 50%, transparent 40%, rgba(93,124,70,0.15) 100%) }
+  .contour { position:absolute; border:2px dashed rgba(200,138,42,0.55); border-radius:50%; top:50%; left:50%; transform:translate(-50%,-50%) }
+  .contour.c1 { width:120px; height:120px }
+  .contour.c2 { width:220px; height:220px; opacity:0.35 }
+  .pin { position:absolute; top:50%; left:50%; width:14px; height:14px; background:#c88a2a; border:4px solid #fff; border-radius:50%; transform:translate(-50%,-50%); box-shadow:0 3px 8px rgba(0,0,0,0.35) }
+  .zoom-col { position:absolute; right:14px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:8px }
+  .zoom-btn { width:40px; height:40px; background:#fff; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px; color:#4a3d2c; box-shadow:0 1px 3px rgba(0,0,0,0.12); font-weight:300 }
+  .style-toggle { position:absolute; left:14px; top:14px; width:40px; height:40px; background:#fff; border-radius:12px; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,0.12); font-size:18px }
+
+  .primary-btn { position:absolute; bottom:44px; left:20px; right:20px; height:56px; background:#5d7c46; border-radius:16px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; font-size:16px; box-shadow:0 3px 10px rgba(93,124,70,0.35) }
+
+  /* Meta chips (accuracy + altitude) — usable info */
+  .meta-row { display:flex; gap:8px; padding:12px 24px 0; flex-wrap:wrap }
+  .meta-chip { display:flex; align-items:center; gap:5px; background:#fff; padding:7px 12px; border-radius:14px; font-size:12px; color:#4a3d2c; box-shadow:0 1px 2px rgba(0,0,0,0.06); font-weight:500 }
+  .meta-chip .dot { width:7px; height:7px; border-radius:50%; background:#5d7c46 }
+
+  /* ═══ Direction 1: Stone icon + side note ═══ */
+  .fn-stone { margin:14px 24px 0; display:flex; align-items:center; gap:14px }
+  .fn-stone .text { font-size:13px; color:#6a5f4f; line-height:1.5; font-style:italic; flex:1 }
+  .fn-stone .text b { font-style:normal; color:#5d7c46; font-weight:500; font-family:Georgia,serif; display:block; margin-bottom:2px }
+
+  /* ═══ Direction 2: Handbook book-edge ═══ */
+  .fn-book { margin:14px 24px 0; padding:14px 18px 12px; background:#faf4e6; border-radius:10px; position:relative; overflow:hidden }
+  .fn-book::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg, transparent, #c88a2a 15%, #c88a2a 85%, transparent) }
+  .fn-book .fn-header { font-size:10px; color:#a67c3e; letter-spacing:1.4px; text-transform:uppercase; margin-bottom:6px; font-weight:700 }
+  .fn-book .fn-body { font-size:13px; color:#6a4c22; line-height:1.55 }
+  .fn-book .fn-body b { color:#5d7c46; font-family:Georgia,serif; font-style:italic; font-weight:500 }
+
+  /* ═══ Direction 3: No box, italic caption ═══ */
+  .fn-caption { margin:18px 28px 0; text-align:center; font-size:13px; color:#8a7d6f; font-style:italic; line-height:1.6; font-family:Georgia,serif }
+  .fn-caption b { color:#5d7c46; font-style:normal; font-weight:500 }
+  .fn-caption::before { content:'· · ·'; display:block; color:#c88a2a; font-size:16px; letter-spacing:8px; margin-bottom:10px; font-style:normal; opacity:0.55 }
+
+  /* ═══ Direction 4: Gradient fade ═══ */
+  .fn-fade { margin-top:-14px; padding:24px 28px 12px; background:linear-gradient(180deg, transparent 0%, rgba(93,124,70,0.06) 45%, rgba(200,138,42,0.09) 100%); text-align:center; font-size:12.5px; color:#8a7d6f; line-height:1.55; font-family:Georgia,serif; font-style:italic }
+  .fn-fade b { color:#5d7c46; font-style:normal; display:block; margin-bottom:2px }
+</style>
+</head>
+<body>
+
+<h1>Plant page · 完整 iPhone 375×812</h1>
+<div class="lead">
+  4 个 field note 方向 + 原方案对比,在**真实 iPhone 尺寸**下的完整页面效果。<br>
+  <b>看关键位置</b>: field note 和 Map + Confirm 按钮之间的关系 · 页面是否"撑满" · 视觉层次
+</div>
+
+<div class="row">
+
+<!-- Direction 1 -->
+<div class="col">
+  <span class="tag">方向 1</span>
+  <h2>石堆图标 + side note</h2>
+  <div class="phone">
+    <div class="safe-top"></div>
+    <div class="back-row"><div class="back-pill">‹ Back</div></div>
+    <div class="title">Where's your cairn?</div>
+    <div class="sub">Drag the map to fine-tune. Tap Confirm when it feels right.</div>
+    <div class="map-wrap">
+      <div class="contour c2"></div><div class="contour c1"></div><div class="pin"></div>
+      <div class="style-toggle">🌍</div>
+      <div class="zoom-col"><div class="zoom-btn">+</div><div class="zoom-btn">−</div></div>
+    </div>
+    <div class="meta-row">
+      <div class="meta-chip"><span class="dot"></span>± 5 m accuracy</div>
+      <div class="meta-chip">🏔 1,247 m</div>
+    </div>
+    <div class="fn-stone">
+      <svg width="36" height="48" viewBox="0 0 18 24" fill="none">
+        <ellipse cx="9.5" cy="21" rx="7.5" ry="2.4" fill="#5d7c46"/>
+        <path d="M 2 21 a 7.5 2.4 0 0 0 15 0" fill="#5d7c46" opacity="0.18"/>
+        <ellipse cx="8.5" cy="15" rx="5.5" ry="2.0" fill="#5d7c46"/>
+        <path d="M 3 15 a 5.5 2 0 0 0 11 0" fill="#5d7c46" opacity="0.22"/>
+        <ellipse cx="11" cy="9.5" rx="3.4" ry="1.7" fill="#5d7c46"/>
+        <path d="M 7.6 9.5 a 3.4 1.7 0 0 0 6.8 0" fill="#5d7c46" opacity="0.26"/>
+      </svg>
+      <div class="text">
+        <b>Cairns rest lightly.</b>
+        Return them when you leave.
+      </div>
+    </div>
+    <div class="primary-btn">✓ Confirm this spot</div>
+  </div>
+  <div class="caption">石堆图标 = Cairn 主 logo,品牌 recall 强。可读性好。</div>
+</div>
+
+<!-- Direction 2 -->
+<div class="col">
+  <span class="tag">方向 2</span>
+  <h2>手账书页边样式</h2>
+  <div class="phone">
+    <div class="safe-top"></div>
+    <div class="back-row"><div class="back-pill">‹ Back</div></div>
+    <div class="title">Where's your cairn?</div>
+    <div class="sub">Drag the map to fine-tune. Tap Confirm when it feels right.</div>
+    <div class="map-wrap">
+      <div class="contour c2"></div><div class="contour c1"></div><div class="pin"></div>
+      <div class="style-toggle">🌍</div>
+      <div class="zoom-col"><div class="zoom-btn">+</div><div class="zoom-btn">−</div></div>
+    </div>
+    <div class="meta-row">
+      <div class="meta-chip"><span class="dot"></span>± 5 m accuracy</div>
+      <div class="meta-chip">🏔 1,247 m</div>
+    </div>
+    <div class="fn-book">
+      <div class="fn-header">·· Field note ··</div>
+      <div class="fn-body"><b>Cairns rest lightly.</b> Return them when you leave.</div>
+    </div>
+    <div class="primary-btn">✓ Confirm this spot</div>
+  </div>
+  <div class="caption">"FIELD NOTE" 标签让功能明确,handbook 感最强。</div>
+</div>
+
+<!-- Direction 3 -->
+<div class="col">
+  <span class="tag">方向 3</span>
+  <h2>无框斜体 caption</h2>
+  <div class="phone">
+    <div class="safe-top"></div>
+    <div class="back-row"><div class="back-pill">‹ Back</div></div>
+    <div class="title">Where's your cairn?</div>
+    <div class="sub">Drag the map to fine-tune. Tap Confirm when it feels right.</div>
+    <div class="map-wrap">
+      <div class="contour c2"></div><div class="contour c1"></div><div class="pin"></div>
+      <div class="style-toggle">🌍</div>
+      <div class="zoom-col"><div class="zoom-btn">+</div><div class="zoom-btn">−</div></div>
+    </div>
+    <div class="meta-row">
+      <div class="meta-chip"><span class="dot"></span>± 5 m accuracy</div>
+      <div class="meta-chip">🏔 1,247 m</div>
+    </div>
+    <div class="fn-caption">
+      <b>Cairns rest lightly.</b>
+      Return them when you leave.
+    </div>
+    <div class="primary-btn">✓ Confirm this spot</div>
+  </div>
+  <div class="caption">极简。文字像书末页题字。最不 distracting。</div>
+</div>
+
+<!-- Direction 4 -->
+<div class="col">
+  <span class="tag">方向 4</span>
+  <h2>Gradient 融入型</h2>
+  <div class="phone">
+    <div class="safe-top"></div>
+    <div class="back-row"><div class="back-pill">‹ Back</div></div>
+    <div class="title">Where's your cairn?</div>
+    <div class="sub">Drag the map to fine-tune. Tap Confirm when it feels right.</div>
+    <div class="map-wrap">
+      <div class="contour c2"></div><div class="contour c1"></div><div class="pin"></div>
+      <div class="style-toggle">🌍</div>
+      <div class="zoom-col"><div class="zoom-btn">+</div><div class="zoom-btn">−</div></div>
+    </div>
+    <div class="meta-row">
+      <div class="meta-chip"><span class="dot"></span>± 5 m accuracy</div>
+      <div class="meta-chip">🏔 1,247 m</div>
+    </div>
+    <div class="fn-fade">
+      <b>Cairns rest lightly.</b>
+      Return them when you leave.
+    </div>
+    <div class="primary-btn">✓ Confirm this spot</div>
+  </div>
+  <div class="caption">从 map 到 button gradient 融入,最像 app 自然一部分。</div>
+</div>
+
+<!-- Original -->
+<div class="col">
+  <span class="tag" style="background:#fdf8f7; color:#a83a2f">原方案</span>
+  <h2 style="color:#a83a2f">灰白盒子 + 竖条 (补丁版)</h2>
+  <div class="phone">
+    <div class="safe-top"></div>
+    <div class="back-row"><div class="back-pill">‹ Back</div></div>
+    <div class="title">You are here?</div>
+    <div class="sub">Drag the map to fine-tune. Use + / − to zoom.</div>
+    <div class="map-wrap">
+      <div class="contour c2"></div><div class="contour c1"></div><div class="pin"></div>
+      <div class="style-toggle">🌍</div>
+      <div class="zoom-col"><div class="zoom-btn">+</div><div class="zoom-btn">−</div></div>
+    </div>
+    <div style="margin:14px 24px 0; padding:12px 14px; background:rgba(200,138,42,0.08); border-left:3px solid #c88a2a; border-radius:6px; font-size:12.5px; color:#6a4c22; line-height:1.55">
+      <span style="color:#5d7c46; font-family:Georgia,serif; font-style:italic; font-weight:500; margin-right:6px">Cairns rest lightly.</span>Return them when you leave.
+    </div>
+    <div class="primary-btn">✓ Confirm this spot</div>
+  </div>
+  <div class="caption">竖条 + 米色盒子像 warning banner,不属于页面本身。</div>
+</div>
+
+</div>
+
+<div style="margin-top:8px; padding:14px 20px; background:#fff; border-radius:8px; max-width:1200px; font-size:13px; color:#4a3d2c; line-height:1.6">
+  <b>观察点</b>:<br>
+  • Map 高度 380px (真实比例),两侧 zoom + style toggle 位置<br>
+  • Field note 位置: map 和 Confirm 按钮**中间**,不会过于挤压<br>
+  • Meta chips (accuracy + altitude) 提供实用信息填充,补充 field note 的文化温度<br>
+  • Confirm 按钮离底部 44px (Home indicator 空间)<br><br>
+  <b>你觉得哪个方向 fit 完整页面感?</b>
+</div>
+
+</body>
+</html>

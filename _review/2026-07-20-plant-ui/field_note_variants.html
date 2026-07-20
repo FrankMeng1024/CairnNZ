@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Plant field note — 4 视觉方向对比</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#e8e2d4; color:#2b241b; padding:32px; }
+  h1 { color:#5d7c46; font-size:22px; margin-bottom:6px }
+  .lead { color:#6a5f4f; font-size:14px; margin-bottom:24px; max-width:900px; line-height:1.6 }
+  .row { display:flex; gap:24px; overflow-x:auto; padding-bottom:16px; margin-bottom:12px }
+  .col { flex:0 0 auto; }
+  .col h2 { color:#5d7c46; font-size:15px; margin-bottom:6px; font-weight:700 }
+  .col .tag { display:inline-block; background:#fff; color:#5d7c46; font-size:10px; padding:2px 8px; border-radius:8px; margin-bottom:8px; font-weight:600; letter-spacing:0.4px; text-transform:uppercase }
+  .caption { font-size:11.5px; color:#7a6f5f; margin-top:6px; max-width:400px; line-height:1.5 }
+
+  /* iPhone frame — abbreviated,只显示 map + field note 区 */
+  .phone { width:375px; height:440px; background:#f5efe4; border-radius:24px; box-shadow:0 8px 24px rgba(0,0,0,0.12); overflow:hidden; position:relative }
+  .title { padding:14px 20px 4px; font-size:22px; font-weight:700; color:#2b241b; letter-spacing:-0.3px }
+  .sub { padding:0 20px 12px; font-size:13px; color:#7a6f5f; line-height:1.4 }
+
+  /* Map wrap */
+  .map-wrap { margin:0 16px; height:200px; border-radius:16px; overflow:hidden; position:relative; background:linear-gradient(135deg,#c9d4b8 0%,#a8bb96 60%,#9dad83 100%) }
+  .map-wrap::before { content:''; position:absolute; inset:0; background: radial-gradient(ellipse 60% 40% at 50% 50%, transparent 50%, rgba(93,124,70,0.15) 100%) }
+  .contour { position:absolute; border:1.5px dashed rgba(200,138,42,0.55); border-radius:50%; top:50%; left:50%; transform:translate(-50%,-50%) }
+  .contour.c1 { width:80px; height:80px }
+  .contour.c2 { width:150px; height:150px; opacity:0.4 }
+  .pin { position:absolute; top:50%; left:50%; width:12px; height:12px; background:#c88a2a; border:3px solid #fff; border-radius:50%; transform:translate(-50%,-50%); box-shadow:0 2px 6px rgba(0,0,0,0.3) }
+
+  .primary-btn { position:absolute; bottom:16px; left:20px; right:20px; height:48px; background:#5d7c46; border-radius:14px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; font-size:14px; box-shadow:0 2px 6px rgba(93,124,70,0.3) }
+
+  /* ═══ Direction 1: Stone icon + side note ═══ */
+  .fn-stone { margin:14px 20px 0; display:flex; align-items:center; gap:12px }
+  .fn-stone .stones { flex-shrink:0 }
+  .fn-stone .text { font-size:12.5px; color:#6a5f4f; line-height:1.5; font-style:italic }
+  .fn-stone .text b { font-style:normal; color:#5d7c46; font-weight:500; font-family:Georgia,serif }
+
+  /* ═══ Direction 2: Handbook book-edge ═══ */
+  .fn-book { margin:14px 20px 0; padding:14px 16px 12px; background:#faf4e6; border-radius:8px; position:relative; overflow:hidden }
+  .fn-book::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg, transparent, #c88a2a 15%, #c88a2a 85%, transparent) }
+  .fn-book .fn-header { font-size:9.5px; color:#a67c3e; letter-spacing:1.2px; text-transform:uppercase; margin-bottom:5px; font-weight:600 }
+  .fn-book .fn-body { font-size:12.5px; color:#6a4c22; line-height:1.55 }
+  .fn-book .fn-body b { color:#5d7c46; font-family:Georgia,serif; font-style:italic; font-weight:500 }
+
+  /* ═══ Direction 3: No box, italic caption ═══ */
+  .fn-caption { margin:16px 24px 0; text-align:center; font-size:12.5px; color:#8a7d6f; font-style:italic; line-height:1.55; font-family:Georgia,serif }
+  .fn-caption b { color:#5d7c46; font-style:normal; font-weight:500 }
+  .fn-caption::before { content:'· · ·'; display:block; color:#c88a2a; font-size:14px; letter-spacing:6px; margin-bottom:8px; font-style:normal; opacity:0.55 }
+
+  /* ═══ Direction 4: Gradient fade ═══ */
+  .fn-fade { margin-top:-8px; padding:22px 24px 8px; background:linear-gradient(180deg, transparent 0%, rgba(93,124,70,0.06) 40%, rgba(200,138,42,0.09) 100%); text-align:center; font-size:12px; color:#8a7d6f; line-height:1.55; font-family:Georgia,serif; font-style:italic }
+  .fn-fade b { color:#5d7c46; font-style:normal }
+
+  /* ═══ Original (for reference) ═══ */
+  .fn-original { margin:14px 20px 0; padding:12px 14px; background:rgba(200,138,42,0.08); border-left:3px solid #c88a2a; border-radius:6px; font-size:12.5px; color:#6a4c22; line-height:1.55 }
+  .fn-original b { color:#5d7c46; font-family:Georgia,serif; font-style:italic; font-weight:500; margin-right:6px }
+
+  .note-block { background:#fff8ea; border-left:3px solid #c88a2a; padding:12px 16px; margin-bottom:20px; font-size:13px; color:#7a5a1a; line-height:1.55; border-radius:4px; max-width:900px }
+</style>
+</head>
+<body>
+
+<h1>Plant page · Field note 4 视觉方向</h1>
+<div class="lead">
+  你觉得原方案的 field note 像"补丁",让文字看起来是硬塞的。<br>
+  4 个视觉方向让它看起来更像 Cairn 一部分。文案内容不变: "Cairns rest lightly. Return them when you leave."
+</div>
+
+<div class="note-block">
+  <b>底部框架相同</b>：iPhone 375 宽,Map 200 高。field note 在 map 和 Confirm 按钮之间。看这块的视觉差异,不看整体页面。
+</div>
+
+<!-- ═══ 4 方向并列 ═══ -->
+<div class="row">
+
+  <!-- Direction 1: Stone icon + side note -->
+  <div class="col">
+    <span class="tag">方向 1</span>
+    <h2>石堆图标 + 手账 side note</h2>
+    <div class="phone">
+      <div class="title">Where's your cairn?</div>
+      <div class="sub">Drag the map to fine-tune.</div>
+      <div class="map-wrap">
+        <div class="contour c2"></div><div class="contour c1"></div><div class="pin"></div>
+      </div>
+      <!-- Field note -->
+      <div class="fn-stone">
+        <svg class="stones" width="32" height="42" viewBox="0 0 18 24" fill="none">
+          <ellipse cx="9.5" cy="21" rx="7.5" ry="2.4" fill="#5d7c46"/>
+          <path d="M 2 21 a 7.5 2.4 0 0 0 15 0" fill="#5d7c46" opacity="0.18"/>
+          <ellipse cx="8.5" cy="15" rx="5.5" ry="2.0" fill="#5d7c46"/>
+          <path d="M 3 15 a 5.5 2 0 0 0 11 0" fill="#5d7c46" opacity="0.22"/>
+          <ellipse cx="11" cy="9.5" rx="3.4" ry="1.7" fill="#5d7c46"/>
+          <path d="M 7.6 9.5 a 3.4 1.7 0 0 0 6.8 0" fill="#5d7c46" opacity="0.26"/>
+        </svg>
+        <div class="text"><b>Cairns rest lightly.</b><br>Return them when you leave.</div>
+      </div>
+      <div class="primary-btn">✓ Confirm this spot</div>
+    </div>
+    <div class="caption">
+      <b>特点</b>: 石堆 SVG 图标(和 Cairn 主 logo 一致)在左,文字在右像手账边注。<br>
+      <b>感觉</b>: 有品牌一致性,像 app 自己在说话,不像通用装饰。
+    </div>
+  </div>
+
+  <!-- Direction 2: Handbook book-edge -->
+  <div class="col">
+    <span class="tag">方向 2</span>
+    <h2>手账书页边样式</h2>
+    <div class="phone">
+      <div class="title">Where's your cairn?</div>
+      <div class="sub">Drag the map to fine-tune.</div>
+      <div class="map-wrap">
+        <div class="contour c2"></div><div class="contour c1"></div><div class="pin"></div>
+      </div>
+      <div class="fn-book">
+        <div class="fn-header">·· Field note ··</div>
+        <div class="fn-body"><b>Cairns rest lightly.</b> Return them when you leave.</div>
+      </div>
+      <div class="primary-btn">✓ Confirm this spot</div>
+    </div>
+    <div class="caption">
+      <b>特点</b>: 圆角 card + 顶部一条 warm sepia 细线像书页装订边。有明确的 "FIELD NOTE" 小标签。<br>
+      <b>感觉</b>: 像徒步手册翻开一页,有 handbook 的专业感,但不冷。
+    </div>
+  </div>
+
+  <!-- Direction 3: No box, italic caption -->
+  <div class="col">
+    <span class="tag">方向 3</span>
+    <h2>无边框,斜体 caption</h2>
+    <div class="phone">
+      <div class="title">Where's your cairn?</div>
+      <div class="sub">Drag the map to fine-tune.</div>
+      <div class="map-wrap">
+        <div class="contour c2"></div><div class="contour c1"></div><div class="pin"></div>
+      </div>
+      <div class="fn-caption">
+        <b>Cairns rest lightly.</b><br>
+        Return them when you leave.
+      </div>
+      <div class="primary-btn">✓ Confirm this spot</div>
+    </div>
+    <div class="caption">
+      <b>特点</b>: 无框,居中,Georgia 斜体,顶部 · · · 分隔符暗示这是"注脚"。<br>
+      <b>感觉</b>: 极简,像书末页的题字。最不像补丁,但存在感弱。
+    </div>
+  </div>
+
+  <!-- Direction 4: Gradient fade -->
+  <div class="col">
+    <span class="tag">方向 4</span>
+    <h2>Gradient 融入型</h2>
+    <div class="phone">
+      <div class="title">Where's your cairn?</div>
+      <div class="sub">Drag the map to fine-tune.</div>
+      <div class="map-wrap">
+        <div class="contour c2"></div><div class="contour c1"></div><div class="pin"></div>
+      </div>
+      <div class="fn-fade">
+        <b>Cairns rest lightly.</b><br>
+        Return them when you leave.
+      </div>
+      <div class="primary-btn">✓ Confirm this spot</div>
+    </div>
+    <div class="caption">
+      <b>特点</b>: 无边界,map 底部渐变到浅 sage/sepia 融入 field note 区。<br>
+      <b>感觉</b>: 最像 app 自然一部分,几乎无装饰。但文字有点淡。
+    </div>
+  </div>
+
+</div>
+
+<!-- Original for reference -->
+<h2 style="color:#a83a2f; font-size:15px; margin:32px 0 6px">对比: 原方案 (你说的"补丁"版)</h2>
+<div class="row">
+  <div class="col">
+    <span class="tag" style="background:#fdf8f7; color:#a83a2f">原方案</span>
+    <h2 style="color:#a83a2f">灰白盒子 + 左侧竖条</h2>
+    <div class="phone">
+      <div class="title">Where's your cairn?</div>
+      <div class="sub">Drag the map to fine-tune.</div>
+      <div class="map-wrap">
+        <div class="contour c2"></div><div class="contour c1"></div><div class="pin"></div>
+      </div>
+      <div class="fn-original">
+        <b>Cairns rest lightly.</b>Return them when you leave.
+      </div>
+      <div class="primary-btn">✓ Confirm this spot</div>
+    </div>
+    <div class="caption">
+      <b>问题</b>: 左边竖条 + 米色盒子太像"toast 提示"或"警告框",不属于页面本身。像补丁。
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:32px; padding:16px 20px; background:#fff; border-radius:8px; max-width:900px">
+  <div style="font-size:13px; color:#4a3d2c; line-height:1.6">
+    <b>我的评估</b>:<br>
+    • <b>方向 1 (石堆图标)</b>: 品牌一致性最强,推荐 ⭐<br>
+    • <b>方向 2 (书页样式)</b>: 最"handbook",有明确身份 "FIELD NOTE"<br>
+    • <b>方向 3 (无框斜体)</b>: 最不打扰,但可能被忽略<br>
+    • <b>方向 4 (gradient)</b>: 最融入,但过淡
+    <br><br>
+    <b>你选哪个</b>?或者要我出更多变体?
+  </div>
+</div>
+
+</body>
+</html>
