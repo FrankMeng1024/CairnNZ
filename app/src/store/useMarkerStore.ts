@@ -11,12 +11,18 @@
  */
 import { create } from 'zustand';
 import { storage } from './storage';
-import { generateId } from '../utils/geo';
 import { authenticatedFetch } from '../services/apiService';
-import { enqueue, makeOp, uuidv4 } from '../services/offlineQueue';
 import { debugLogger } from '../services/debugLogger';
 import { crashLogger } from '../services/crashLogger';
 import type { MarkerType } from '../data/mockData';
+// v422: offline-first framework — B 类 (Plant cairn) 用 offlineMarkers entity
+import {
+  offlineMarkers,
+  setMarkerCreateAckHandler,
+  type MarkerCreatePayload,
+  type MarkerCreateServerResponse,
+} from '../services/markerOfflineEntities';
+import type { SyncState } from '../services/offlineEntity';
 
 export type MarkerPermission = 'personal' | 'group' | 'public';
 
@@ -64,6 +70,16 @@ export interface Marker {
     note: string;
     snapshottedAt: number;
   } | null;
+  /** v422: 离线保存状态. 由 offlineMarkers entity 驱动.
+   *   - undefined / 'synced': 服务器已确认 (正常状态)
+   *   - 'pending': 已存本地, 未同步 (offline queue 里有条目)
+   *   - 'syncing': daemon 正在上传该条
+   *   - 'failed': 硬失败 (4xx 非 401), 用户需手动重试/删除
+   *  UI (MarkerDetail / MarkerCard) 显示 SyncBadge 让用户知晓状态. */
+  syncState?: SyncState;
+  /** v422: offline placeholder 的 localId. 服务器 ack 后, id 会被替换成
+   *   server id, 但 localId 保留以便 UI 追踪历史 + subscribe 匹配. */
+  localId?: string;
 }
 
 // v0.2.6: bumped from 'cairn_markers' → 'cairn_markers_v026'.
@@ -174,8 +190,12 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   hidingIds: [],
 
   addMarker: async (data) => {
-    // Optimistic local create
-    const localId = generateId();
+    // v422 offline-first: 无论在线离线, 走同一条路径
+    //   1. 立即生成 local placeholder (localId, synced=false, syncState='pending')
+    //   2. offlineMarkers.saveLocal → 存本地 kv + 触发 drain
+    //   3. drain 成功后 ackHandler 把 localId → server id, syncState='synced'
+    //   4. drain 硬失败 (4xx) → failHandler 标 syncState='failed', 用户手动重试
+    //   5. drain 软失败 (5xx/网络) → 保留 pending, 网络恢复时 daemon 再试
     // v300: if marker is born public, snapshot immediately. Backend
     // does the same on POST so the server row will agree.
     const publicSnapshot = data.permission === 'public'
@@ -187,11 +207,26 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
           snapshottedAt: Date.now(),
         }
       : null;
+
+    // 存 offlineMarkers entity, 拿到 localId (= idempotency key)
+    const payload: MarkerCreatePayload = {
+      type: data.type,
+      text: data.note,
+      lat: data.lat,
+      lng: data.lng,
+      alt: data.alt,
+      permission: data.permission,
+      approximate: data.approximate || false,
+    };
+    const { localId } = await offlineMarkers.saveLocal(payload);
+
     const marker: Marker = {
       ...data,
-      id: localId,
+      id: localId,       // 前端立即用 localId 作 id, ack 后被替换
+      localId,
       createdAt: Date.now(),
       synced: false,
+      syncState: 'pending',
       publicSnapshot,
     };
     set((s) => {
@@ -206,11 +241,12 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { log } = require('../services/appLog');
-      log('v397.addmarker_enter', {
+      log('v422.addmarker_enter', {
         lat: Number(data.lat.toFixed(5)),
         lng: Number(data.lng.toFixed(5)),
         permission: data.permission,
         type: data.type,
+        localId: localId.slice(0, 8),
       });
     } catch {/* never throw on log */}
 
@@ -227,19 +263,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       const { useMemoryStore } = require('../features/memory/store/useMemoryStore');
       // v399 真根因 (FogLayer.tsx:160): `if (seg.length < 2) continue` —
       // 单点 segment 在 turf.buffer 前被跳过 (lineString 需要 ≥2 点).
-      // v398 push 1 个 point → fog builder n_points=1 has_holes=FALSE
-      // 验证: aliyun fog.shape_built n_points=1 has_holes=False, 接着
-      // 3 秒后 server hydrate 把 points 替换成 server 371 个, plant
-      // point 永远 silently dropped.
-      //
-      // 修法: plant 时 add 3 个点形成小三角形 (中心 + 5m 北 + 5m 东
-      // 偏移), 间隔大于 GAP_TIME_THRESHOLD 内. segmentByGap 把它们
-      // 当一个 segment, turf.buffer 25m → ~55m 直径圆形通道, 真正
-      // 解锁 plant 位置周围 25m fog.
-      const ts = Math.floor(Date.now());
-      const cidBase = `plant-${ts}-${Math.floor(Math.random() * 1e9).toString(36)}`;
       // v400: single point — FogLayer.tsx:160 now buffers single-point
       // segments via turf.point + buffer. plant 中心严格在 fog hole 圆心.
+      const ts = Math.floor(Date.now());
+      const cidBase = `plant-${ts}-${Math.floor(Math.random() * 1e9).toString(36)}`;
       const planted = [
         { lat: data.lat, lng: data.lng, ts, cid: `${cidBase}-0`, synced: false },
       ];
@@ -247,7 +274,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       const newPoints = [...state.points, ...planted];
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { log } = require('../services/appLog');
-      log('v399.plant_unlock', {
+      log('v422.plant_unlock', {
         lat: Number(data.lat.toFixed(5)),
         lng: Number(data.lng.toFixed(5)),
         points_before: state.points.length,
@@ -270,7 +297,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { log } = require('../services/appLog');
-        log('v399.plant_unlock_err', {
+        log('v422.plant_unlock_err', {
           err: String(err && (err as any).message ? (err as any).message : err),
         });
       } catch {/* ignore */}
@@ -290,53 +317,8 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       permission: (data.permission ?? 'personal') as 'personal' | 'group' | 'public',
     });
 
-    // Sync to backend. v78 #7: on transient failure, enqueue for retry
-    // with idempotency key. Local marker remains usable (synced=false).
-    const opId = uuidv4();
-    const body = {
-      type: data.type,
-      text: data.note,
-      lat: data.lat,
-      lng: data.lng,
-      alt: data.alt,
-      permission: data.permission,
-      approximate: data.approximate || false,
-    };
-    try {
-      const res = await authenticatedFetch('/api/markers', {
-        method: 'POST',
-        body: JSON.stringify({ ...body, client_op_id: opId }),
-      });
-      if (res.ok) {
-        const serverMarker = await res.json();
-        // BUG-006 fix (Sprint 71 post-review round 2): backend POST response
-        // now echoes user_id (BUG-001 round 2). Use it to overwrite the
-        // caller-passed authorId ('local' / 'server' literal) so the mark
-        // immediately tier-tags as 'self' in the marker render — without
-        // this, in-session new marks stayed authorId='local' until the next
-        // app restart triggered hydrate via GET /api/markers.
-        const serverAuthorId =
-          serverMarker.user_id != null ? String(serverMarker.user_id) : marker.authorId;
-        // Replace local optimistic id with server id + correct authorId.
-        set((s) => {
-          const next = s.markers.map((m) =>
-            m.id === localId
-              ? { ...m, id: String(serverMarker.id), authorId: serverAuthorId, synced: true }
-              : m
-          );
-          if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
-          return { markers: next };
-        });
-        return { ...marker, id: String(serverMarker.id), authorId: serverAuthorId, synced: true };
-      }
-      // 5xx / 401: enqueue for retry. 4xx (other): give up.
-      if (res.status >= 500 || res.status === 401) {
-        await enqueue(makeOp('marker_create', '/api/markers', 'POST', body, opId));
-      }
-    } catch {
-      // Network failure — enqueue for retry on next online/foreground.
-      await enqueue(makeOp('marker_create', '/api/markers', 'POST', body, opId));
-    }
+    // 返回本地 marker. 调用方 (Plant flow) 立即可导航到 MarkerDetail — 那里
+    // 通过 offlineMarkers.subscribe 显示 SyncBadge 让用户看到同步进度。
     return marker;
   },
 
@@ -597,3 +579,54 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     get().loadFromBackend();
   },
 }));
+
+// ─── v422 offline-first ack handlers ─────────────────────────────────────
+//
+// 在 store 定义完之后注册, 保证 useMarkerStore.getState() 可用. Module load
+// 时执行一次, 之后 offlineMarkers.drain() 成功时会回调这里.
+//
+// ack: 服务器接受了 marker → 用 server id/authorId 替换 local placeholder
+// fail: 4xx 硬失败 → 标 syncState='failed', 让 UI 显示 Retry badge
+//
+// 注意: 本 handler 不能抛异常, 抛会拖累 offlineEntity daemon. 全部 try/catch。
+
+setMarkerCreateAckHandler(
+  (localId, server: MarkerCreateServerResponse) => {
+    try {
+      const serverAuthorId =
+        server.user_id != null ? String(server.user_id) : undefined;
+      useMarkerStore.setState((s) => {
+        const next = s.markers.map((m) => {
+          if (m.localId !== localId && m.id !== localId) return m;
+          return {
+            ...m,
+            id: String(server.id),
+            authorId: serverAuthorId ?? m.authorId,
+            synced: true,
+            syncState: 'synced' as SyncState,
+          };
+        });
+        if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
+        return { markers: next };
+      });
+      crashLogger.breadcrumb(`marker:ack localId=${localId.slice(0, 8)} serverId=${server.id}`);
+    } catch (err) {
+      crashLogger.breadcrumb(`marker:ack_threw ${String(err).slice(0, 60)}`);
+    }
+  },
+  (localId, err) => {
+    try {
+      useMarkerStore.setState((s) => {
+        const next = s.markers.map((m) => {
+          if (m.localId !== localId && m.id !== localId) return m;
+          return { ...m, syncState: 'failed' as SyncState };
+        });
+        if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
+        return { markers: next };
+      });
+      crashLogger.breadcrumb(`marker:fail localId=${localId.slice(0, 8)} err=${String(err?.status ?? err).slice(0, 40)}`);
+    } catch (e) {
+      crashLogger.breadcrumb(`marker:fail_threw ${String(e).slice(0, 60)}`);
+    }
+  },
+);

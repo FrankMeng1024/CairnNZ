@@ -47,6 +47,10 @@ import { getPrimaryMapStyle } from '../config/mapbox';
 import { formatDate } from '../utils/geo';
 import { log } from '../services/appLog';
 import { ContentConfig, VisibilityConfig } from '../features/plant/config/plantConfig';
+// v422 offline-first: 显示同步状态 badge (pending / syncing / synced / failed)
+import { SyncBadge } from '../components/SyncBadge';
+// v422 D 类: marker edit/delete 是"回家做"的动作, 无网禁用按钮 + 提示
+import { useOnlineOnly } from '../hooks/useOnlineOnly';
 
 let MapView: any = null;
 let CameraComponent: any = null;
@@ -108,6 +112,9 @@ export function MarkerDetailScreen() {
   const [editType, setEditType] = useState<MarkerType>('cairn');
   const [editPermission, setEditPermission] = useState<MarkerPermission>('personal');
   const [saving, setSaving] = useState(false);
+
+  // v422 D 类: edit/delete 无网禁用. reason="Needs internet" 用于 button hint.
+  const { online } = useOnlineOnly();
 
   const enterEdit = useCallback(() => {
     if (!marker) return;
@@ -275,6 +282,11 @@ export function MarkerDetailScreen() {
             <Icon name={meta.icon as IconName} size={14} color={meta.color} strokeWidth={2} />
             <Text style={[styles.typeBadgeText, { color: meta.color }]}>{meta.label}</Text>
           </View>
+          {/* v422: 离线同步状态 badge. synced 状态不显示 (hideWhenSynced=true).
+              pending → 用户看到 "Waiting to sync" 知道已保存本地待上传. */}
+          {marker.syncState && marker.syncState !== 'synced' ? (
+            <SyncBadge state={marker.syncState} />
+          ) : null}
           <View style={[styles.visBadge, { borderColor: Colors.border }]}>
             <Icon name={vis.iconName} size={12} color={Colors.textSecondary} strokeWidth={2} />
             <Text style={styles.visBadgeText}>{vis.label}</Text>
@@ -384,16 +396,29 @@ export function MarkerDetailScreen() {
               </View>
             )}
 
-            {/* Owner-only actions */}
+            {/* Owner-only actions.
+                v422: edit/delete 是"回家做"的动作 (D 类), 无网禁用 + 显示提示. */}
             {isOwner && (
               <View style={styles.actionRow}>
-                <TouchableOpacity style={[styles.actionBtn, styles.actionBtnGhost]} onPress={handleDelete}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnGhost, !online && { opacity: 0.4 }]}
+                  onPress={handleDelete}
+                  disabled={!online}
+                >
                   <Icon name="Trash2" size={14} color={Colors.danger} strokeWidth={2} />
-                  <Text style={[styles.actionBtnGhostText, { color: Colors.danger }]}>Delete</Text>
+                  <Text style={[styles.actionBtnGhostText, { color: Colors.danger }]}>
+                    {online ? 'Delete' : 'Delete · Needs internet'}
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={enterEdit}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnPrimary, !online && { opacity: 0.4 }]}
+                  onPress={enterEdit}
+                  disabled={!online}
+                >
                   <Icon name="Pencil" size={14} color="#fff" strokeWidth={2} />
-                  <Text style={styles.actionBtnPrimaryText}>Edit</Text>
+                  <Text style={styles.actionBtnPrimaryText}>
+                    {online ? 'Edit' : 'Edit · Needs internet'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}

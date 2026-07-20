@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Plant · Content step v3 — Type + Location 均下拉</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; -webkit-font-smoothing:antialiased }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#e8e2d4; color:#2b241b; padding:32px 16px }
+h1 { color:#5d7c46; font-size:22px; margin-bottom:6px }
+.lead { color:#6a5f4f; font-size:13px; margin-bottom:20px; max-width:1400px; line-height:1.55 }
+.lead b { color:#a83a2f }
+.row { display:flex; gap:20px; overflow-x:auto; padding-bottom:24px; align-items:flex-start }
+.col { flex:0 0 auto }
+.col h2 { color:#5d7c46; font-size:14px; margin-bottom:6px; font-weight:700 }
+.col .tag { display:inline-block; background:#fff; color:#5d7c46; font-size:9.5px; padding:2px 8px; border-radius:8px; margin-bottom:6px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase }
+.caption { font-size:11px; color:#7a6f5f; margin-top:6px; max-width:340px; line-height:1.5 }
+
+.phone { width:375px; height:812px; background:#f5efe4; border-radius:44px; box-shadow:0 12px 32px rgba(0,0,0,0.15); overflow:hidden; position:relative; border:8px solid #1a1a1a }
+.phone::before { content:''; position:absolute; top:12px; left:50%; transform:translateX(-50%); width:120px; height:28px; background:#1a1a1a; border-radius:14px; z-index:5 }
+
+.safe-top { height:60px }
+.back-row { display:flex; align-items:center; padding:8px 16px }
+.back-pill { display:flex; align-items:center; gap:2px; padding:8px 14px; border-radius:20px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.08); font-size:14px; color:#5d7c46; font-weight:600 }
+.title-h { padding:12px 20px 4px; font-size:24px; font-weight:700; color:#2b241b; letter-spacing:-0.3px }
+.sub-t { padding:0 20px 14px; font-size:13px; color:#7a6f5f; line-height:1.45 }
+
+/* Preview map — clean, no chips */
+.preview-map { margin:0 20px 6px; height:100px; border-radius:14px; overflow:hidden; position:relative; background:linear-gradient(135deg,#c9d4b8 0%,#a8bb96 60%,#9dad83 100%); box-shadow:0 2px 6px rgba(93,124,70,0.15) }
+.preview-map::before { content:''; position:absolute; inset:0; background: radial-gradient(ellipse 60% 40% at 50% 50%, transparent 40%, rgba(93,124,70,0.12) 100%) }
+.preview-map .pin { position:absolute; top:50%; left:50%; width:14px; height:14px; background:#c88a2a; border:3px solid #fff; border-radius:50%; transform:translate(-50%,-50%); box-shadow:0 2px 8px rgba(0,0,0,0.35); animation:pulse 3s ease-in-out infinite }
+@keyframes pulse { 50% { transform:translate(-50%,-50%) scale(1.15) } }
+
+/* Dropdown row (Type / Location) */
+.dropdown-row { margin:6px 20px 0; padding:12px 14px; background:#fff; border-radius:12px; display:flex; align-items:center; gap:10px; border:1px solid rgba(0,0,0,0.05); box-shadow:0 1px 2px rgba(0,0,0,0.03) }
+.dropdown-row .ico { width:34px; height:34px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:16px }
+.dropdown-row .ico.danger { background:#fee5e0; color:#c44545 }
+.dropdown-row .ico.water { background:#e0eff2; color:#4a8fa0 }
+.dropdown-row .ico.cairn { background:#eef4e8; color:#5d7c46 }
+.dropdown-row .ico.junction { background:#fceecf; color:#c88a2a }
+.dropdown-row .ico.hut { background:#f0e2cf; color:#b5823d }
+.dropdown-row .ico.loc { background:#eef4e8; color:#5d7c46 }
+.dropdown-row .body { flex:1; min-width:0 }
+.dropdown-row .k { font-size:10.5px; color:#8a7d6f; text-transform:uppercase; letter-spacing:0.9px; font-weight:700; margin-bottom:2px }
+.dropdown-row .v { font-size:15px; color:#2b241b; font-weight:600; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.dropdown-row .h { font-size:11.5px; color:#8a7d6f; margin-top:2px }
+.dropdown-row .chev { color:#c8beac; font-size:16px }
+
+/* Note field */
+.note-label { padding:14px 20px 6px; font-size:10.5px; color:#8a7d6f; text-transform:uppercase; letter-spacing:0.9px; font-weight:700 }
+.note-field { margin:0 20px; padding:14px 16px; background:#fff; border-radius:12px; border:1px solid rgba(0,0,0,0.05); font-size:15px; color:#2b241b; min-height:78px; line-height:1.45; box-shadow:0 1px 2px rgba(0,0,0,0.03) }
+.note-field.empty { color:#b5aa96 }
+.note-counter { text-align:right; padding:4px 20px 0; font-size:10.5px; color:#b5aa96 }
+
+/* Visibility */
+.vis-row { display:flex; gap:6px; padding:0 20px; margin-top:6px }
+.vis-chip { flex:1; padding:9px 6px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,0.05); font-size:11.5px; color:#4a3d2c; text-align:center; font-weight:500 }
+.vis-chip.active { background:#5d7c46; color:#fff; border-color:#5d7c46 }
+.vis-chip .lock { display:block; font-size:14px; margin-bottom:2px; opacity:0.9 }
+
+/* Confirm */
+.primary-btn { position:absolute; bottom:40px; left:20px; right:20px; height:56px; background:#5d7c46; border-radius:16px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; font-size:16px; box-shadow:0 3px 10px rgba(93,124,70,0.35) }
+.primary-btn.disabled { opacity:0.4; box-shadow:none }
+
+/* Bottom sheet */
+.sheet-overlay { position:absolute; inset:0; background:rgba(30,25,20,0.5); display:flex; align-items:flex-end; z-index:20; border-radius:36px }
+.sheet { width:100%; background:#f5efe4; border-radius:20px 20px 0 0; padding:12px 20px 32px; max-height:80% }
+.sheet-handle { width:44px; height:5px; background:#c8beac; border-radius:3px; margin:0 auto 12px }
+.sheet-title { font-size:19px; font-weight:700; color:#2b241b; margin-bottom:4px }
+.sheet-sub { font-size:12.5px; color:#7a6f5f; margin-bottom:14px }
+
+/* Type sheet items */
+.type-item { display:flex; align-items:center; gap:12px; padding:14px 14px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,0.05); margin-bottom:6px }
+.type-item.selected { border-color:#5d7c46; background:rgba(93,124,70,0.05) }
+.type-item .ico { width:36px; height:36px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:16px }
+.type-item .name { flex:1; font-size:15px; font-weight:600; color:#2b241b }
+.type-item .hint { font-size:11.5px; color:#8a7d6f; margin-top:2px }
+.type-item .check { color:#5d7c46; font-size:18px }
+
+/* Location sheet */
+.sheet-input { display:flex; align-items:center; gap:8px; padding:12px 14px; border-radius:11px; background:#fff; border:1px solid rgba(0,0,0,0.06); margin-bottom:10px }
+.sheet-input input { flex:1; border:none; outline:none; font-size:14.5px; color:#2b241b; background:transparent }
+.sheet-input .max { font-size:10.5px; color:#b5aa96 }
+.sheet-hint { font-size:11px; color:#8a7d6f; padding:0 4px 10px }
+
+.loc-item { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,0.05); margin-bottom:6px }
+.loc-item.selected { border-color:#5d7c46; background:rgba(93,124,70,0.05) }
+.loc-item .ico { width:32px; height:32px; border-radius:11px; background:#eef4e8; display:flex; align-items:center; justify-content:center; color:#5d7c46; font-size:14px }
+.loc-item .info { flex:1 }
+.loc-item .name { font-size:14px; font-weight:600; color:#2b241b; line-height:1.3 }
+.loc-item .dist { font-size:11px; color:#8a7d6f; margin-top:2px }
+.loc-item .check { color:#5d7c46; font-size:16px }
+
+/* Note block */
+.note-block { background:#fff8ea; border-left:3px solid #c88a2a; padding:12px 16px; margin-bottom:20px; font-size:13px; color:#7a5a1a; line-height:1.55; border-radius:4px; max-width:1400px }
+</style>
+</head>
+<body>
+
+<h1>Plant · Content Step v3 — Type + Location 均下拉</h1>
+<div class="lead">
+<b>你的指令</b>: ① Type 下拉 ② Location 下拉 (不在地图 overlay) ③ Location 可自定义 max 30 字 ④ 自然<br>
+5 屏展示: 主页面 · Type sheet 展开 · Location sheet (有网) · Location sheet (无网 GPS) · Location 用户编辑中
+</div>
+
+<div class="note-block">
+<b>页面结构</b> (从上到下):<br>
+Back · Title · Sub · <b>Preview Map</b> (100h, 干净无 overlay, pin breathing) · <b>Type dropdown</b> · <b>Location dropdown</b> · <b>Note textarea</b> · Visibility · Confirm
+</div>
+
+<div class="row">
+
+<!-- 屏 1: 主页面 -->
+<div class="col">
+<span class="tag">屏 1</span>
+<h2>Content 主页 (含 Type + Location dropdown)</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row"><div class="back-pill">‹ Back</div></div>
+<div class="title-h">Leave a mark</div>
+<div class="sub-t">Tell the next traveller.</div>
+
+<div class="preview-map">
+<div class="pin"></div>
+</div>
+
+<div class="dropdown-row">
+<div class="ico danger">⚠</div>
+<div class="body">
+<div class="k">Type</div>
+<div class="v">Danger</div>
+</div>
+<div class="chev">›</div>
+</div>
+
+<div class="dropdown-row">
+<div class="ico loc">📍</div>
+<div class="body">
+<div class="k">Location</div>
+<div class="v">Emerald Lakes, Tongariro</div>
+</div>
+<div class="chev">›</div>
+</div>
+
+<div class="note-label">Note</div>
+<div class="note-field">Slippery on the descent after rain. Slow down at the switchback.</div>
+<div class="note-counter" style="color:#5d7c46">62 / 200</div>
+
+<div class="note-label">Visibility</div>
+<div class="vis-row">
+<div class="vis-chip active"><span class="lock">🔒</span>Just me</div>
+<div class="vis-chip"><span class="lock">👥</span>Friends</div>
+<div class="vis-chip"><span class="lock">🌐</span>Anyone</div>
+</div>
+
+<div class="primary-btn">✓ Plant this cairn</div>
+</div>
+<div class="caption">
+Type + Location 平行两行 dropdown row。<br>
+Preview map 顶部 100h 干净展示 pin (breathing pulse)。<br>
+下方 Note / Visibility / Confirm 自然堆叠,无留白。
+</div>
+</div>
+
+<!-- 屏 2: Type sheet -->
+<div class="col">
+<span class="tag">屏 2</span>
+<h2>Type dropdown 展开</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row" style="opacity:0.4"><div class="back-pill">‹ Back</div></div>
+<div class="title-h" style="opacity:0.4">Leave a mark</div>
+<div class="sub-t" style="opacity:0.4">Tell the next traveller.</div>
+<div class="preview-map" style="opacity:0.4"><div class="pin"></div></div>
+
+<div class="sheet-overlay">
+<div class="sheet">
+<div class="sheet-handle"></div>
+<div class="sheet-title">What kind of mark?</div>
+<div class="sheet-sub">Choose the type. Others will see this icon on the map.</div>
+
+<div class="type-item selected">
+<div class="ico danger">⚠</div>
+<div style="flex:1">
+<div class="name">Danger</div>
+<div class="hint">Flooded crossing, slip, hazard</div>
+</div>
+<div class="check">✓</div>
+</div>
+<div class="type-item">
+<div class="ico junction">↕</div>
+<div style="flex:1">
+<div class="name">Junction</div>
+<div class="hint">Track split or turn-off</div>
+</div>
+</div>
+<div class="type-item">
+<div class="ico water">💧</div>
+<div style="flex:1">
+<div class="name">Water</div>
+<div class="hint">Drinkable stream, hut tank</div>
+</div>
+</div>
+<div class="type-item">
+<div class="ico hut">🏠</div>
+<div style="flex:1">
+<div class="name">Hut</div>
+<div class="hint">DOC hut, shelter, campsite</div>
+</div>
+</div>
+<div class="type-item">
+<div class="ico cairn">◐</div>
+<div style="flex:1">
+<div class="name">Cairn</div>
+<div class="hint">Note, memento, personal mark</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="caption">
+点 Type row → sheet 弹起。5 个 type 每个一行,含 icon + label + hint。选中打勾。<br>
+Handbook 风格 + hint 帮新用户理解含义 (NZ 徒步词汇)。
+</div>
+</div>
+
+<!-- 屏 3: Location sheet (online) -->
+<div class="col">
+<span class="tag">屏 3</span>
+<h2>Location dropdown (有网,4 候选)</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row" style="opacity:0.4"><div class="back-pill">‹ Back</div></div>
+<div class="title-h" style="opacity:0.4">Leave a mark</div>
+<div class="sub-t" style="opacity:0.4">Tell the next traveller.</div>
+<div class="preview-map" style="opacity:0.4"><div class="pin"></div></div>
+
+<div class="sheet-overlay">
+<div class="sheet">
+<div class="sheet-handle"></div>
+<div class="sheet-title">Where's this cairn?</div>
+<div class="sheet-sub">Pick a nearby place, or type your own name (max 30).</div>
+
+<div class="sheet-input">
+<span style="color:#8a7d6f">✎</span>
+<input placeholder="Type your own name..." />
+<span class="max">30</span>
+</div>
+<div class="sheet-hint">Choose from nearby places:</div>
+
+<div class="loc-item selected">
+<div class="ico">📍</div>
+<div class="info">
+<div class="name">Emerald Lakes, Tongariro</div>
+<div class="dist">15 m away · Volcanic lake</div>
+</div>
+<div class="check">✓</div>
+</div>
+<div class="loc-item">
+<div class="ico">🏠</div>
+<div class="info">
+<div class="name">Ketetahi Hut</div>
+<div class="dist">1.2 km away · DOC hut</div>
+</div>
+</div>
+<div class="loc-item">
+<div class="ico">⛰</div>
+<div class="info">
+<div class="name">Red Crater rim</div>
+<div class="dist">380 m away · Volcanic peak</div>
+</div>
+</div>
+<div class="loc-item">
+<div class="ico">🥾</div>
+<div class="info">
+<div class="name">Tongariro Alpine Crossing</div>
+<div class="dist">Track region</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="caption">
+点 Location row → sheet 弹起。<br>
+**顶部**输入框: 自己命名 (max 30 字, 右侧 chip 显示上限)<br>
+**下方**候选: 4 个 Mapbox 附近 POI,含距离 + 类型 hint<br>
+Input 和 候选相互替代 —— 用哪个都行。
+</div>
+</div>
+
+<!-- 屏 4: Location sheet (offline) -->
+<div class="col">
+<span class="tag">屏 4</span>
+<h2>Location dropdown (无网,GPS fallback)</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row" style="opacity:0.4"><div class="back-pill">‹ Back</div></div>
+<div class="title-h" style="opacity:0.4">Leave a mark</div>
+<div class="sub-t" style="opacity:0.4">Tell the next traveller.</div>
+<div class="preview-map" style="opacity:0.4"><div class="pin"></div></div>
+
+<div class="sheet-overlay">
+<div class="sheet">
+<div class="sheet-handle"></div>
+<div class="sheet-title">Where's this cairn?</div>
+<div class="sheet-sub">Offline — type a name for this spot (max 30).</div>
+
+<div class="sheet-input">
+<span style="color:#8a7d6f">✎</span>
+<input placeholder="e.g. Emerald Lakes descent" />
+<span class="max">30</span>
+</div>
+
+<div style="margin-top:12px; padding:16px 14px; border-radius:12px; background:rgba(200,138,42,0.08); display:flex; align-items:center; gap:12px">
+<div style="width:32px; height:32px; border-radius:11px; background:rgba(200,138,42,0.15); display:flex; align-items:center; justify-content:center; color:#c88a2a">📡</div>
+<div style="flex:1">
+<div style="font-size:13px; color:#7a5a1a; font-weight:600">No connection right now</div>
+<div style="font-size:11.5px; color:#8a7d6f; margin-top:2px">We'll use GPS coords if you skip the name.</div>
+</div>
+</div>
+
+<div style="margin-top:14px; padding:14px; border-radius:12px; background:#fff; border:1px dashed #c8beac">
+<div style="font-size:10.5px; color:#8a7d6f; text-transform:uppercase; letter-spacing:0.8px; font-weight:700; margin-bottom:4px">GPS fallback</div>
+<div style="font-family:'SF Mono',Courier,monospace; font-size:13.5px; color:#5d7c46; font-weight:500">S 40.877° · E 175.831°</div>
+</div>
+</div>
+</div>
+</div>
+<div class="caption">
+无网状态: 上方 offline notice + 用户自命名输入框 + GPS 坐标 fallback card。<br>
+用户直接输入 or 用 GPS 数字。回程有网后可返回编辑成真地名。
+</div>
+</div>
+
+<!-- 屏 5: Location sheet editing (typing) -->
+<div class="col">
+<span class="tag">屏 5</span>
+<h2>Location 编辑中 (自定义命名)</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row" style="opacity:0.4"><div class="back-pill">‹ Back</div></div>
+<div class="title-h" style="opacity:0.4">Leave a mark</div>
+<div class="sub-t" style="opacity:0.4">Tell the next traveller.</div>
+<div class="preview-map" style="opacity:0.4"><div class="pin"></div></div>
+
+<div class="sheet-overlay">
+<div class="sheet">
+<div class="sheet-handle"></div>
+<div class="sheet-title">Where's this cairn?</div>
+<div class="sheet-sub">Pick a nearby place, or type your own name (max 30).</div>
+
+<div class="sheet-input" style="border-color:#5d7c46; border-width:2px; box-shadow:0 0 0 3px rgba(93,124,70,0.12)">
+<span style="color:#5d7c46">✎</span>
+<input value="Slippery ridge, day 2" />
+<span class="max" style="color:#5d7c46">20/30</span>
+</div>
+<div style="font-size:11px; color:#5d7c46; padding:0 4px 12px">Your name will be used.</div>
+
+<div class="sheet-hint">Or pick from nearby:</div>
+
+<div class="loc-item" style="opacity:0.5">
+<div class="ico">📍</div>
+<div class="info">
+<div class="name">Emerald Lakes, Tongariro</div>
+<div class="dist">15 m away · Volcanic lake</div>
+</div>
+</div>
+<div class="loc-item" style="opacity:0.5">
+<div class="ico">🏠</div>
+<div class="info">
+<div class="name">Ketetahi Hut</div>
+<div class="dist">1.2 km away · DOC hut</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="caption">
+用户 focus 输入框 → sage green ring + counter 变 sage。<br>
+候选 list 变淡 (强化"你选择了自己命名"的 signal)。<br>
+Counter 显示 "20/30" 剩余字数,超过 30 变红。
+</div>
+</div>
+
+</div>
+
+<div style="margin-top:8px; max-width:1400px; padding:20px 24px; background:#fff; border-radius:12px; font-size:13.5px; color:#4a3d2c; line-height:1.7">
+<b>关键交互 (自然感)</b>:<br>
+• Type + Location 两行 dropdown 视觉一致,ico + label + value + chevron<br>
+• Preview map 100h 干净,pin breathing pulse (类似 v418 GPS 呼吸)<br>
+• Sheet 弹起 spring bounce 360ms,dim 淡入<br>
+• Location sheet 里 <b>input 和 候选</b> 是**相互替代**关系 —— 用哪个都行<br>
+• 用户 focus input 时,候选自动 dim 50% (视觉暗示"用你的"或"用候选")<br>
+• Counter 平滑变色: 0-20 muted → 20-30 sage → 超过 30 无法输入 (硬限)<br>
+• 无网时 sheet 顶部 offline notice + GPS fallback card,明确"没网也 OK"<br>
+• 选中候选或输入完成 → sheet 关闭,主页 dropdown row 更新为新 value<br>
+• 主页 dropdown row 选中项有 tiny <b>haptic tick</b><br><br>
+
+<b>字数决策</b>:<br>
+• Note: 200 字 (跟你之前决定,不改)<br>
+• Location 自定义: <b>30 字 max</b> (你说的)<br><br>
+
+<b>确认后我进 code</b>:<br>
+1. 删除 title 字段 (ContentStep 中)<br>
+2. 添加 preview map + Type dropdown row + Location dropdown row + note textarea<br>
+3. 添加 Type sheet + Location sheet 两个 bottom sheet component<br>
+4. Backend: markers table 新增 <code>location_name VARCHAR(30)</code>, 现有 <code>text</code> 字段作 note (200 字)<br>
+5. Mapbox reverse geocode: plant 时调用 → 存 location_name<br>
+6. List (Routes → Flags) 用 location_name 代替 title 作 primary<br>
+7. 修 map 紧贴 button (bottom padding)<br><br>
+
+<b>你 OK 吗?</b>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Plant · Content step v2 — Location as primary + 微交互</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; -webkit-font-smoothing:antialiased }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#e8e2d4; color:#2b241b; padding:32px 16px }
+h1 { color:#5d7c46; font-size:22px; margin-bottom:6px }
+.lead { color:#6a5f4f; font-size:13px; margin-bottom:20px; max-width:1400px; line-height:1.55 }
+.lead b { color:#a83a2f }
+.row { display:flex; gap:20px; overflow-x:auto; padding-bottom:24px; align-items:flex-start }
+.col { flex:0 0 auto }
+.col h2 { color:#5d7c46; font-size:14px; margin-bottom:6px; font-weight:700 }
+.col .tag { display:inline-block; background:#fff; color:#5d7c46; font-size:9.5px; padding:2px 8px; border-radius:8px; margin-bottom:6px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase }
+.tag.b { color:#c88a2a } .tag.c { color:#8a5a3a }
+.caption { font-size:11px; color:#7a6f5f; margin-top:6px; max-width:340px; line-height:1.5 }
+
+.phone { width:375px; height:812px; background:#f5efe4; border-radius:44px; box-shadow:0 12px 32px rgba(0,0,0,0.15); overflow:hidden; position:relative; border:8px solid #1a1a1a }
+.phone::before { content:''; position:absolute; top:12px; left:50%; transform:translateX(-50%); width:120px; height:28px; background:#1a1a1a; border-radius:14px; z-index:5 }
+
+.safe-top { height:60px }
+.back-row { display:flex; align-items:center; padding:8px 16px }
+.back-pill { display:flex; align-items:center; gap:2px; padding:8px 14px; border-radius:20px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.08); font-size:14px; color:#5d7c46; font-weight:600 }
+.title-h { padding:12px 20px 4px; font-size:24px; font-weight:700; color:#2b241b; letter-spacing:-0.3px }
+.sub-t { padding:0 20px 12px; font-size:13px; color:#7a6f5f; line-height:1.45 }
+.label { padding:12px 20px 6px; font-size:10.5px; color:#8a7d6f; text-transform:uppercase; letter-spacing:0.9px; font-weight:700 }
+
+/* Preview map */
+.preview-map { margin:0 20px; height:120px; border-radius:14px; overflow:hidden; position:relative; background:linear-gradient(135deg,#c9d4b8 0%,#a8bb96 60%,#9dad83 100%); box-shadow:0 2px 6px rgba(93,124,70,0.15) }
+.preview-map::before { content:''; position:absolute; inset:0; background: radial-gradient(ellipse 60% 40% at 50% 50%, transparent 40%, rgba(93,124,70,0.15) 100%) }
+.preview-map .pin { position:absolute; top:50%; left:50%; width:12px; height:12px; background:#c88a2a; border:3px solid #fff; border-radius:50%; transform:translate(-50%,-50%); box-shadow:0 2px 6px rgba(0,0,0,0.3) }
+.preview-map .loc-chip { position:absolute; top:8px; left:8px; right:8px; background:rgba(255,255,255,0.94); backdrop-filter:blur(8px); border-radius:10px; padding:8px 12px; display:flex; align-items:center; gap:8px; font-size:12.5px; color:#2b241b; box-shadow:0 1px 3px rgba(0,0,0,0.1) }
+.preview-map .loc-chip .name { flex:1; font-weight:500 }
+.preview-map .loc-chip .caret { font-size:12px; color:#8a7d6f }
+.preview-map .loc-chip .dot { width:6px; height:6px; border-radius:50%; background:#c88a2a }
+
+/* Type chips */
+.type-row { display:flex; gap:6px; padding:0 20px }
+.type-chip { display:flex; align-items:center; gap:5px; padding:8px 12px; border-radius:16px; background:#fff; border:1px solid rgba(0,0,0,0.06); font-size:12.5px; color:#4a3d2c; font-weight:500 }
+.type-chip.active { background:#5d7c46; color:#fff; border-color:#5d7c46 }
+.type-chip.danger.active { background:#c44545; border-color:#c44545 }
+
+/* Body input */
+.body-field { margin:6px 20px 0; padding:14px 16px; background:#fff; border-radius:12px; border:1px solid rgba(0,0,0,0.06); font-size:15px; color:#b5aa96; min-height:100px }
+.body-field.filled { color:#2b241b }
+.char-counter { text-align:right; padding:4px 20px 0; font-size:10.5px; color:#b5aa96 }
+
+/* Visibility */
+.vis-row { display:flex; gap:6px; padding:0 20px; margin-top:6px }
+.vis-chip { flex:1; padding:10px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,0.06); font-size:12px; color:#4a3d2c; text-align:center; font-weight:500 }
+.vis-chip.active { background:#5d7c46; color:#fff; border-color:#5d7c46 }
+.vis-chip .lock { display:block; font-size:14px; margin-bottom:2px; opacity:0.9 }
+
+/* Confirm */
+.primary-btn { position:absolute; bottom:44px; left:20px; right:20px; height:56px; background:#5d7c46; border-radius:16px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; font-size:16px; box-shadow:0 3px 10px rgba(93,124,70,0.35) }
+.primary-btn.disabled { opacity:0.4; box-shadow:none }
+
+/* Location sheet (bottom sheet mockup) */
+.sheet-overlay { position:absolute; inset:0; background:rgba(30,25,20,0.5); display:flex; align-items:flex-end; z-index:20; border-radius:36px }
+.sheet { width:100%; background:#f5efe4; border-radius:20px 20px 0 0; padding:12px 20px 32px; max-height:72% }
+.sheet-handle { width:44px; height:5px; background:#c8beac; border-radius:3px; margin:0 auto 12px }
+.sheet-title { font-size:18px; font-weight:700; color:#2b241b; margin-bottom:4px }
+.sheet-sub { font-size:12.5px; color:#7a6f5f; margin-bottom:16px }
+.sheet-search { display:flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; background:#fff; border:1px solid rgba(0,0,0,0.06); margin-bottom:12px }
+.sheet-search input { flex:1; border:none; outline:none; font-size:14px; color:#2b241b; background:transparent }
+.sheet-list { display:flex; flex-direction:column; gap:6px }
+.sheet-item { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,0.05); cursor:pointer }
+.sheet-item.selected { border-color:#5d7c46; background:rgba(93,124,70,0.06) }
+.sheet-item .marker-ico { width:32px; height:32px; border-radius:16px; background:#eef4e8; display:flex; align-items:center; justify-content:center; color:#5d7c46; font-size:15px }
+.sheet-item .name { flex:1; font-size:14px; color:#2b241b; font-weight:500; line-height:1.35 }
+.sheet-item .dist { font-size:11px; color:#8a7d6f; margin-top:2px }
+.sheet-item .check { color:#5d7c46; font-size:16px }
+.sheet-custom { margin-top:10px; padding:10px 14px; border-radius:10px; border:1px dashed #c88a2a; color:#8a5a3a; font-size:12.5px; text-align:center }
+
+/* Preview list card */
+.list-card { display:flex; align-items:center; gap:12px; padding:14px; background:#fff; border-radius:14px; margin-bottom:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05) }
+.list-card .type-badge { width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:16px }
+.list-card .type-badge.danger { background:#fee5e0; color:#c44545 }
+.list-card .type-badge.water { background:#e0eff2; color:#4a8fa0 }
+.list-card .type-badge.cairn { background:#eef4e8; color:#5d7c46 }
+.list-card .info { flex:1 }
+.list-card .name { font-size:14.5px; font-weight:600; color:#2b241b; line-height:1.3 }
+.list-card .meta { font-size:11.5px; color:#8a7d6f; margin-top:2px }
+.list-card .chev { color:#c8beac; font-size:16px }
+
+/* Note block */
+.note-block { background:#fff8ea; border-left:3px solid #c88a2a; padding:12px 16px; margin-bottom:20px; font-size:13px; color:#7a5a1a; line-height:1.55; border-radius:4px; max-width:1400px }
+</style>
+</head>
+<body>
+
+<h1>Plant · Content Step v2 — Location as identity</h1>
+<div class="lead">
+<b>你的核心 idea</b>: 用 location 替代 title 作 marker identifier · 用户可从候选选/自定义 · 有网 geocode / 无网 GPS fallback · 强制 content 不空<br>
+<b>3 个方向</b> vs Location 呈现 + 交互。都包含 location bottom sheet 编辑体验。风格保留 handbook,加**微动画**质感 (spring pulse / haptic hint / subtle shadow tint)。
+</div>
+
+<div class="note-block">
+<b>信息架构对比</b>:<br>
+现状: Type + <s>Title</s> + Body + <s>Voice memo</s> + Visibility → Confirm<br>
+新版: <b>Preview Map</b> (锚位置,unread-only) + <b>Location</b> (点开 sheet 编辑) + Type + Body + Visibility → Confirm
+</div>
+
+<div class="row">
+
+<!-- ═════ 方向 A: Location as top pill (地图 overlay) ═════ -->
+<div class="col">
+<span class="tag">方向 A</span>
+<h2>Location chip 覆盖在小 preview 上</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row"><div class="back-pill">‹ Back</div></div>
+<div class="title-h">Leave a mark</div>
+<div class="sub-t">Tell the next traveller.</div>
+
+<!-- Preview map with location chip -->
+<div class="preview-map">
+<div class="pin"></div>
+<div class="loc-chip">
+<span class="dot"></span>
+<span class="name">Emerald Lakes, Tongariro</span>
+<span class="caret">›</span>
+</div>
+</div>
+
+<div class="label">Type</div>
+<div class="type-row">
+<div class="type-chip danger active">⚠ Danger</div>
+<div class="type-chip">↕ Junction</div>
+<div class="type-chip">💧 Water</div>
+<div class="type-chip">🏠 Hut</div>
+<div class="type-chip">◐ Cairn</div>
+</div>
+
+<div class="label">What to know</div>
+<div class="body-field">Slippery on the descent after rain. Slow down at the switchback…</div>
+<div class="char-counter" style="color:#5d7c46">62 / 200</div>
+
+<div class="label">Visibility</div>
+<div class="vis-row">
+<div class="vis-chip active"><span class="lock">🔒</span>Just me</div>
+<div class="vis-chip"><span class="lock">👥</span>Friends</div>
+<div class="vis-chip"><span class="lock">🌐</span>Anyone</div>
+</div>
+
+<div class="primary-btn">✓ Plant this cairn</div>
+</div>
+<div class="caption">
+<b>特点</b>: preview map (120h) 顶部 overlay location chip,点击展开 sheet。视觉锚在最上,内容跟着往下。<br>
+<b>好</b>: location 是页面第一眼看到的,身份感强,handbook 风格连续。<br>
+<b>缺</b>: preview 稍占空间, body 只有 100h。
+</div>
+</div>
+
+<!-- ═════ 方向 B: Location 独立行 (无 preview map) ═════ -->
+<div class="col">
+<span class="tag b">方向 B</span>
+<h2>Location 独立行 (无 preview map)</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row"><div class="back-pill">‹ Back</div></div>
+<div class="title-h">Leave a mark</div>
+<div class="sub-t">Tell the next traveller.</div>
+
+<div class="label">Location</div>
+<div style="margin:0 20px; padding:14px 16px; border-radius:12px; background:#fff; display:flex; align-items:center; gap:10px; border:1px solid rgba(0,0,0,0.06)">
+<div style="width:38px; height:38px; border-radius:12px; background:#eef4e8; display:flex; align-items:center; justify-content:center; color:#5d7c46; font-size:16px">📍</div>
+<div style="flex:1">
+<div style="font-size:14.5px; font-weight:600; color:#2b241b">Emerald Lakes, Tongariro</div>
+<div style="font-size:11.5px; color:#8a7d6f; margin-top:2px">Tap to change · 4 options nearby</div>
+</div>
+<div style="color:#c8beac; font-size:16px">›</div>
+</div>
+
+<div class="label">Type</div>
+<div class="type-row">
+<div class="type-chip danger active">⚠ Danger</div>
+<div class="type-chip">↕ Junction</div>
+<div class="type-chip">💧 Water</div>
+<div class="type-chip">🏠 Hut</div>
+<div class="type-chip">◐ Cairn</div>
+</div>
+
+<div class="label">What to know</div>
+<div class="body-field" style="min-height:130px">Slippery on the descent after rain. Slow down at the switchback…</div>
+<div class="char-counter" style="color:#5d7c46">62 / 200</div>
+
+<div class="label">Visibility</div>
+<div class="vis-row">
+<div class="vis-chip active"><span class="lock">🔒</span>Just me</div>
+<div class="vis-chip"><span class="lock">👥</span>Friends</div>
+<div class="vis-chip"><span class="lock">🌐</span>Anyone</div>
+</div>
+
+<div class="primary-btn">✓ Plant this cairn</div>
+</div>
+<div class="caption">
+<b>特点</b>: 无 preview map,location 是独立 row 卡片, 更多 body 空间。<br>
+<b>好</b>: 简洁,body 130h 舒服。<br>
+<b>缺</b>: 少了视觉锚,页面偏文字系。
+</div>
+</div>
+
+<!-- ═════ 方向 C: 方向 A + 位置 sheet 展开状态 ═════ -->
+<div class="col">
+<span class="tag c">方向 A + Sheet</span>
+<h2>点开 location chip 后</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row"><div class="back-pill">‹ Back</div></div>
+<div class="title-h" style="opacity:0.5">Leave a mark</div>
+<div class="sub-t" style="opacity:0.5">Tell the next traveller.</div>
+<div class="preview-map" style="opacity:0.5">
+<div class="pin"></div>
+<div class="loc-chip" style="opacity:0.85">
+<span class="dot"></span>
+<span class="name">Emerald Lakes, Tongariro</span>
+<span class="caret">›</span>
+</div>
+</div>
+
+<!-- Bottom sheet overlay -->
+<div class="sheet-overlay">
+<div class="sheet">
+<div class="sheet-handle"></div>
+<div class="sheet-title">Where's this cairn?</div>
+<div class="sheet-sub">Pick a nearby place, or type your own.</div>
+
+<div class="sheet-search">
+<span style="color:#8a7d6f">🔍</span>
+<input placeholder="Type a name (optional)" />
+</div>
+
+<div class="sheet-list">
+<div class="sheet-item selected">
+<div class="marker-ico">📍</div>
+<div style="flex:1">
+<div class="name">Emerald Lakes, Tongariro</div>
+<div class="dist">15 m away · Volcanic lake</div>
+</div>
+<div class="check">✓</div>
+</div>
+<div class="sheet-item">
+<div class="marker-ico">🏠</div>
+<div style="flex:1">
+<div class="name">Ketetahi Hut</div>
+<div class="dist">1.2 km away · DOC hut</div>
+</div>
+</div>
+<div class="sheet-item">
+<div class="marker-ico">⛰</div>
+<div style="flex:1">
+<div class="name">Red Crater rim</div>
+<div class="dist">380 m away · Volcanic peak</div>
+</div>
+</div>
+<div class="sheet-item">
+<div class="marker-ico">🥾</div>
+<div style="flex:1">
+<div class="name">Tongariro Alpine Crossing</div>
+<div class="dist">Track region</div>
+</div>
+</div>
+</div>
+
+<div class="sheet-custom">Or type your own name above ↑</div>
+</div>
+</div>
+</div>
+<div class="caption">
+<b>点开 location chip 后</b>: bottom sheet 显示 4 个 mapbox 候选 + search 输入框 (可自定义)。距离/描述 badge 帮判断。选一个或输入自己写的 → 关闭 sheet。<br>
+<b>无网时</b>: 只显示 GPS chip + input,无候选。
+</div>
+</div>
+
+</div>
+
+<!-- ═════ List 展示对比 ═════ -->
+<h1 style="margin-top:8px">Marker list 展示 (Location as primary)</h1>
+<div class="lead" style="margin-bottom:16px">List 页 (Routes → Flags tab) 现在用 title 作 primary,改成 <b>type icon + location + distance</b>。位置成为身份。</div>
+
+<div class="row">
+
+<div class="col">
+<span class="tag">现状 (List)</span>
+<h2 style="color:#a83a2f">Title 为主</h2>
+<div class="phone" style="height:500px">
+<div class="safe-top" style="height:24px"></div>
+<div class="back-row" style="padding:8px 16px 0"><div class="back-pill">‹ Back</div></div>
+<div class="title-h">Flags</div>
+<div style="padding:14px 20px">
+<div class="list-card">
+<div class="type-badge danger">⚠</div>
+<div class="info">
+<div class="name">Slippery track</div>
+<div class="meta">2h ago · 340m away</div>
+</div>
+<div class="chev">›</div>
+</div>
+<div class="list-card">
+<div class="type-badge water">💧</div>
+<div class="info">
+<div class="name">Water source</div>
+<div class="meta">Yesterday · 2.8km away</div>
+</div>
+<div class="chev">›</div>
+</div>
+<div class="list-card">
+<div class="type-badge cairn">◐</div>
+<div class="info">
+<div class="name">Frank's note</div>
+<div class="meta">2 days ago · 8km away</div>
+</div>
+<div class="chev">›</div>
+</div>
+</div>
+</div>
+<div class="caption">"Slippery track" / "Water source" / "Frank's note" — 但 title 是 danger 类型时的默认 label,信息价值低。</div>
+</div>
+
+<div class="col">
+<span class="tag">新版 (List)</span>
+<h2>Location 为主</h2>
+<div class="phone" style="height:500px">
+<div class="safe-top" style="height:24px"></div>
+<div class="back-row" style="padding:8px 16px 0"><div class="back-pill">‹ Back</div></div>
+<div class="title-h">Flags</div>
+<div style="padding:14px 20px">
+<div class="list-card">
+<div class="type-badge danger">⚠</div>
+<div class="info">
+<div class="name">Emerald Lakes descent</div>
+<div class="meta">Danger · 340m away · 2h ago</div>
+</div>
+<div class="chev">›</div>
+</div>
+<div class="list-card">
+<div class="type-badge water">💧</div>
+<div class="info">
+<div class="name">Ketetahi stream</div>
+<div class="meta">Water · 2.8km away · yesterday</div>
+</div>
+<div class="chev">›</div>
+</div>
+<div class="list-card">
+<div class="type-badge cairn">◐</div>
+<div class="info">
+<div class="name">Red Crater rim</div>
+<div class="meta">Cairn · 8km away · 2 days ago</div>
+</div>
+<div class="chev">›</div>
+</div>
+</div>
+</div>
+<div class="caption">"Emerald Lakes descent" 直接告诉用户**这个 danger 在哪里**。Meta 行加 type 名 + 距离 + 时间。信息密度高但清晰。</div>
+</div>
+
+</div>
+
+<!-- ═════ 交互细节 & 微动画说明 ═════ -->
+<h1 style="margin-top:16px">交互细节 (让 UI 更"炫酷")</h1>
+<div class="lead" style="margin-bottom:16px">保留 handbook 风格,加以下微交互质感 (纯 code 层可实现,不改设计):</div>
+
+<div style="max-width:1400px; background:#fff; padding:20px 24px; border-radius:12px; font-size:13.5px; color:#4a3d2c; line-height:1.7">
+<b>🎬 Location chip → sheet 展开</b><br>
+- 点击时 chip 有 <b>spring scale 0.97 弹跳</b> (haptic light)<br>
+- Sheet 从底部 <b>360ms spring 弹入</b>,background dim 淡入<br>
+- 候选 list <b>staggered fade + slide-up</b> (每个 40ms delay,像卡片轻轻落下)<br>
+- 选中候选后 chip <b>pulse 光晕 + haptic success</b>,sheet 关闭<br><br>
+
+<b>🎬 Type 切换</b><br>
+- 选中 chip 有 <b>underline 从中心展开</b> 240ms<br>
+- 未选中的 chip <b>轻微 desaturate</b> (opacity 0.7),视觉重心明确<br>
+- 切换时 haptic selection tick<br><br>
+
+<b>🎬 Preview map</b><br>
+- Pin 上有 <b>持续 breathing pulse</b> (类似 v418 GPS PulseDot,更慢 3s 循环)<br>
+- 首次进入页面时 pin <b>drop-in bounce</b> (从上方 20px 落下,300ms spring)<br><br>
+
+<b>🎬 Body 输入</b><br>
+- 键盘弹起时,页面 <b>smooth scroll</b> 到 body field 附近 (不遮挡)<br>
+- 字数接近 200 时 counter 从 muted <b>渐变到 amber</b> (150+),超过变 red<br>
+- Confirm button <b>禁用时轻微 desaturate + 无阴影</b> (body 空时)<br><br>
+
+<b>🎬 Confirm 按钮</b><br>
+- 内容有效时 button 有 <b>subtle inner gradient shimmer</b> (very slow,像微风吹过草地)<br>
+- 点击 → <b>scale 0.96 spring</b> + haptic success + 3 石头堆叠动画 (AuthScreen 已有的 AnimatedCairn 复用) → nav.replace to MarkerDetail<br><br>
+
+<b>🎬 Sheet 内候选选择</b><br>
+- 候选点击时 <b>整行 spring scale 0.98</b> + subtle sage tint<br>
+- 已选那行 border 用 <b>sage gradient</b> (不是纯色,更细腻)
+</div>
+
+<!-- Discussion -->
+<div style="margin-top:20px; max-width:1400px; padding:20px 24px; background:#fff; border-radius:12px; font-size:13.5px; color:#4a3d2c; line-height:1.7">
+<b>推荐: 方向 A</b> (preview map + location chip overlay)<br>
+理由:<br>
+• Location 是 marker 身份,应该在页面上部,视觉优先<br>
+• Preview map 提供**视觉锚**,让用户填 body 时"看着地方写"<br>
+• Chip overlay 在地图上比独立 row 更 elegant<br>
+• 现有 handbook 风格延续,不引入新 pattern<br><br>
+
+<b>妥协</b>: preview map 占 120h,body field 只有 100h。但 200 字 body 显示 5 行足够。<br>
+
+<b>剩余讨论点</b>:<br>
+1. Preview map 显示 <b>satellite (卫星)</b> vs <b>outdoor (线条地图)</b>? — Step 2 已经允许切换,Step 3 沿用用户选择就行<br>
+2. Location 输入框放<b>顶部 chip</b> vs <b>底部独立 row</b>? Demo A vs Demo B 对比<br>
+3. 有网 vs 无网 chip 样式差异? 无网显示 <code>GPS -40.877, 175.831</code> 代替名字<br><br>
+
+<b>你选哪个方向?</b>
+</div>
+
+</body>
+</html>

@@ -34,6 +34,8 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useMarkerStore, MarkerPermission } from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
+// v422 offline-first: 使 Plant flow 明确告知用户是否离线保存
+import networkMonitor from '../services/networkMonitor';
 import { MemoryColors, UnlockConfig } from '../features/memory/config/memoryConfig';
 import { MarkerType } from '../config/markerTypes';
 import { GpsLockStep } from '../features/plant/components/GpsLockStep';
@@ -213,6 +215,16 @@ export function PlantScreen() {
         // step 3 UI, which reads as "committing…" rather than a jerk.
         if (created?.id) {
           try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* silent */ }
+          // v422: 若离线保存, 弹一次性 Alert 让用户知道 "已存本地, 联网自动上传".
+          // 有网时不弹 (Haptic + 无缝跳转足以传达成功).
+          const isOnline = networkMonitor.getState()?.state === 'online';
+          if (!isOnline) {
+            Alert.alert(
+              'Cairn planted (offline)',
+              "Saved locally. We'll upload it as soon as you're back online.",
+              [{ text: 'OK' }],
+            );
+          }
           await new Promise<void>((r) => setTimeout(r, 250));
           nav.replace('MarkerDetail', { markerId: created.id });
         } else {

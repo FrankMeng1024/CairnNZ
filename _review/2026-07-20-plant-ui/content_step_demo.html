@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Plant · Content step — R1 极简 demo</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; -webkit-font-smoothing:antialiased }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#e8e2d4; color:#2b241b; padding:32px 16px }
+h1 { color:#5d7c46; font-size:22px; margin-bottom:6px }
+.lead { color:#6a5f4f; font-size:13px; margin-bottom:24px; max-width:1200px; line-height:1.5 }
+.lead b { color:#a83a2f }
+.row { display:flex; gap:20px; overflow-x:auto; padding-bottom:24px; align-items:flex-start }
+.col { flex:0 0 auto }
+.col h2 { color:#5d7c46; font-size:14px; margin-bottom:6px; font-weight:700 }
+.col .tag { display:inline-block; background:#fff; color:#5d7c46; font-size:9.5px; padding:2px 8px; border-radius:8px; margin-bottom:6px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase }
+.caption { font-size:11px; color:#7a6f5f; margin-top:6px; max-width:280px; line-height:1.5 }
+.phone { width:375px; height:812px; background:#f5efe4; border-radius:44px; box-shadow:0 12px 32px rgba(0,0,0,0.15); overflow:hidden; position:relative; border:8px solid #1a1a1a }
+.phone::before { content:''; position:absolute; top:12px; left:50%; transform:translateX(-50%); width:120px; height:28px; background:#1a1a1a; border-radius:14px; z-index:5 }
+.safe-top { height:60px }
+.back-row { display:flex; align-items:center; padding:8px 16px }
+.back-pill { display:flex; align-items:center; gap:2px; padding:8px 14px; border-radius:20px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.08); font-size:14px; color:#5d7c46; font-weight:600 }
+.title { padding:12px 20px 6px; font-size:24px; font-weight:700; color:#2b241b; letter-spacing:-0.3px; line-height:1.15 }
+.sub { padding:0 20px 12px; font-size:13px; color:#7a6f5f; line-height:1.45 }
+.label { padding:14px 20px 6px; font-size:11px; color:#8a7d6f; text-transform:uppercase; letter-spacing:0.8px; font-weight:700 }
+
+/* Type chips */
+.type-row { display:flex; gap:6px; padding:0 20px; flex-wrap:wrap }
+.type-chip { display:flex; align-items:center; gap:5px; padding:8px 12px; border-radius:16px; background:#fff; border:1px solid rgba(0,0,0,0.06); font-size:12.5px; color:#4a3d2c; font-weight:500 }
+.type-chip.active { background:#5d7c46; color:#fff; border-color:#5d7c46 }
+.type-chip .ico { width:14px; height:14px; border-radius:50%; background:currentColor; opacity:0.55 }
+.type-chip.danger.active { background:#c44545; border-color:#c44545 }
+.type-chip.water.active { background:#4a8fa0; border-color:#4a8fa0 }
+.type-chip.junction.active { background:#d99733; border-color:#d99733 }
+.type-chip.hut.active { background:#b5823d; border-color:#b5823d }
+
+/* Inputs */
+.field-title, .field-body { margin:6px 20px 0; padding:14px 16px; background:#fff; border-radius:12px; border:1px solid rgba(0,0,0,0.06); font-size:15px; color:#2b241b }
+.field-title { font-weight:600 }
+.field-title-empty { color:#b5aa96; font-weight:normal }
+.field-body { height:110px; padding-top:14px; color:#b5aa96 }
+.char-counter { text-align:right; padding:4px 20px 0; font-size:10.5px; color:#b5aa96 }
+
+/* Visibility */
+.vis-row { display:flex; gap:6px; padding:0 20px; margin-top:6px }
+.vis-chip { flex:1; padding:12px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,0.06); font-size:12.5px; color:#4a3d2c; text-align:center; font-weight:500 }
+.vis-chip.active { background:#5d7c46; color:#fff; border-color:#5d7c46 }
+.vis-chip .lock { display:block; font-size:14px; margin-bottom:2px; opacity:0.9 }
+
+/* Confirm button */
+.primary-btn { position:absolute; bottom:44px; left:20px; right:20px; height:56px; background:#5d7c46; border-radius:16px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; font-size:16px; box-shadow:0 3px 10px rgba(93,124,70,0.35) }
+
+/* Note block */
+.note-block { background:#fff8ea; border-left:3px solid #c88a2a; padding:12px 16px; margin-bottom:20px; font-size:13px; color:#7a5a1a; line-height:1.55; border-radius:4px; max-width:1200px }
+</style>
+</head>
+<body>
+
+<h1>Plant · Content Step — R1 (纯文字)</h1>
+<div class="lead">
+<b>用户反馈</b>: ① Type 5 chip 挤成 2 行不好看 &nbsp;&nbsp; ② 下方留白太多 &nbsp;&nbsp; ③ R1 不上 voice / photo<br>
+<b>3 个 demo 方向</b>: Type 都不同呈现方式,Voice memo placeholder 全删,visibility 排列微调
+</div>
+
+<div class="note-block">
+<b>共同点</b>: Title / body 输入 + Visibility 3-way choice。<br>
+<b>差异</b>: Type 5 个 (danger / junction / water / hut / cairn) 怎么放
+</div>
+
+<div class="row">
+
+<!-- 方向 1: Icon grid 2x3 (5 empty slot 或 4+1) -->
+<div class="col">
+<span class="tag">方向 1</span>
+<h2>Type = Icon 2x3 grid</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row"><div class="back-pill">‹ Back</div></div>
+<div class="title">Leave a mark</div>
+<div class="sub">A few words — that's it.</div>
+<div class="label">Type</div>
+<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:0 20px">
+<div style="padding:16px 8px; border-radius:12px; background:#fee5e0; border:2px solid #c44545; text-align:center">
+<div style="font-size:20px">⚠</div><div style="font-size:12px; margin-top:4px; color:#c44545; font-weight:600">Danger</div>
+</div>
+<div style="padding:16px 8px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,0.06); text-align:center">
+<div style="font-size:20px; opacity:0.6">↕</div><div style="font-size:12px; margin-top:4px; color:#8a7d6f">Junction</div>
+</div>
+<div style="padding:16px 8px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,0.06); text-align:center">
+<div style="font-size:20px; opacity:0.6">💧</div><div style="font-size:12px; margin-top:4px; color:#8a7d6f">Water</div>
+</div>
+<div style="padding:16px 8px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,0.06); text-align:center">
+<div style="font-size:20px; opacity:0.6">🏠</div><div style="font-size:12px; margin-top:4px; color:#8a7d6f">Hut</div>
+</div>
+<div style="padding:16px 8px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,0.06); text-align:center">
+<div style="font-size:20px; opacity:0.6">◐</div><div style="font-size:12px; margin-top:4px; color:#8a7d6f">Cairn</div>
+</div>
+<div style="opacity:0"></div>
+</div>
+<div class="field-title field-title-empty" style="margin-top:14px">Title</div>
+<div class="char-counter">0 / 60</div>
+<div class="field-body">Add details (optional)</div>
+<div class="label">Visibility</div>
+<div class="vis-row">
+<div class="vis-chip active"><span class="lock">🔒</span>Just me</div>
+<div class="vis-chip"><span class="lock">👥</span>Friends</div>
+<div class="vis-chip"><span class="lock">🌐</span>Anyone</div>
+</div>
+<div class="primary-btn">✓ Plant this cairn</div>
+</div>
+<div class="caption">Type 用 icon+label 卡片,一目了然。选中 danger 用 red 突出,其余灰。占用高度 ~150px。</div>
+</div>
+
+<!-- 方向 2: Type dropdown (下拉) -->
+<div class="col">
+<span class="tag">方向 2</span>
+<h2>Type = 单行水平滚动 chip</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row"><div class="back-pill">‹ Back</div></div>
+<div class="title">Leave a mark</div>
+<div class="sub">A few words — that's it.</div>
+<div class="label">Type</div>
+<div class="type-row" style="flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px">
+<div class="type-chip danger active">⚠ Danger</div>
+<div class="type-chip">↕ Junction</div>
+<div class="type-chip">💧 Water</div>
+<div class="type-chip">🏠 Hut</div>
+<div class="type-chip">◐ Cairn</div>
+</div>
+<div class="field-title field-title-empty" style="margin-top:14px">Title</div>
+<div class="char-counter">0 / 60</div>
+<div class="field-body">Add details (optional)</div>
+<div class="label">Visibility</div>
+<div class="vis-row">
+<div class="vis-chip active"><span class="lock">🔒</span>Just me</div>
+<div class="vis-chip"><span class="lock">👥</span>Friends</div>
+<div class="vis-chip"><span class="lock">🌐</span>Anyone</div>
+</div>
+<div class="primary-btn">✓ Plant this cairn</div>
+</div>
+<div class="caption">Type 5 chip 单行水平滚动,溢出的向右滑。占高度 ~50px (最省)。</div>
+</div>
+
+<!-- 方向 3: Type dropdown (select-like) -->
+<div class="col">
+<span class="tag">方向 3</span>
+<h2>Type = 选择器 pill (点开 sheet)</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row"><div class="back-pill">‹ Back</div></div>
+<div class="title">Leave a mark</div>
+<div class="sub">A few words — that's it.</div>
+<div class="label">Type</div>
+<div style="margin:0 20px; padding:14px 16px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,0.06); display:flex; align-items:center; justify-content:space-between">
+<div style="display:flex; align-items:center; gap:10px">
+<div style="width:32px; height:32px; border-radius:16px; background:#fee5e0; display:flex; align-items:center; justify-content:center; font-size:16px">⚠</div>
+<div>
+<div style="font-size:15px; font-weight:600; color:#2b241b">Danger</div>
+<div style="font-size:11px; color:#8a7d6f; margin-top:2px">Flooded crossing, slip, hazard</div>
+</div>
+</div>
+<div style="font-size:14px; color:#8a7d6f">›</div>
+</div>
+<div class="field-title field-title-empty" style="margin-top:14px">Title</div>
+<div class="char-counter">0 / 60</div>
+<div class="field-body">Add details (optional)</div>
+<div class="label">Visibility</div>
+<div class="vis-row">
+<div class="vis-chip active"><span class="lock">🔒</span>Just me</div>
+<div class="vis-chip"><span class="lock">👥</span>Friends</div>
+<div class="vis-chip"><span class="lock">🌐</span>Anyone</div>
+</div>
+<div class="primary-btn">✓ Plant this cairn</div>
+</div>
+<div class="caption">当前 type 大 card 显示 + hint 副标题,点开 bottom sheet 选。信息密度低,一次看清一个 type 的含义,新用户友好。</div>
+</div>
+
+<!-- 原方案 (对比) -->
+<div class="col">
+<span class="tag" style="background:#fdf8f7; color:#a83a2f">现状</span>
+<h2 style="color:#a83a2f">Type 5 chip 挤 2 行</h2>
+<div class="phone">
+<div class="safe-top"></div>
+<div class="back-row"><div class="back-pill">‹ Back</div></div>
+<div class="title">Leave a mark</div>
+<div class="sub">A few words, a voice memo, or both.</div>
+<div class="label">Type</div>
+<div class="type-row">
+<div class="type-chip danger active">⚠ Danger</div>
+<div class="type-chip">↕ Junction</div>
+<div class="type-chip">💧 Water</div>
+<div class="type-chip">🏠 Hut</div>
+<div class="type-chip">◐ Cairn</div>
+</div>
+<div class="field-title field-title-empty" style="margin-top:14px">Title (max 60)</div>
+<div class="char-counter">0 / 60</div>
+<div class="field-body">Add details for others (optional)</div>
+<div style="margin:14px 20px 0; padding:12px 16px; background:#fee5e0; border-radius:12px; opacity:0.5">
+<div style="font-size:12px; color:#8a7d6f">🎤 Voice memo (coming soon, max 5s)</div>
+</div>
+<div class="label">Visibility</div>
+<div class="vis-row">
+<div class="vis-chip active"><span class="lock">🔒</span>Just me</div>
+<div class="vis-chip"><span class="lock">👥</span>Friends</div>
+<div class="vis-chip"><span class="lock">🌐</span>Anyone</div>
+</div>
+<div class="primary-btn">✓ Plant this cairn</div>
+</div>
+<div class="caption">Type 5 chip 一行放不下容易换行,Voice memo placeholder 空占位。Sub 提到 voice memo 但功能没有。</div>
+</div>
+
+</div>
+
+<div style="margin-top:8px; padding:16px 20px; background:#fff; border-radius:8px; max-width:1200px; font-size:13px; color:#4a3d2c; line-height:1.6">
+<b>3 个方向对比</b>:<br>
+• <b>方向 1 · 2x3 icon grid</b>: 5 type 一次看清,视觉大方,占屏空间中等。缺 1 格位置 (只 5 个 type,布局需处理)。<br>
+• <b>方向 2 · 单行水平滚动</b>: 最省空间,但溢出的用户不知道要向右滑。可加个 fade-out 边缘暗示。<br>
+• <b>方向 3 · Selector pill</b>: 最优雅,新用户看得懂每个 type 是什么 (含 hint),点开 bottom sheet 选。占屏最少但多一次交互。<br><br>
+<b>文案改进</b> (3 个 demo 都用):<br>
+• Title: "Leave a mark" (保留)<br>
+• Sub: "A few words, a voice memo, or both." → "A few words — that's it." (删了 voice 提及)<br>
+• Voice memo placeholder → 删掉<br>
+• Confirm button: "Plant" → "Plant this cairn" (更 Cairn 语义)<br><br>
+<b>你选哪个?</b>
+</div>
+
+</body>
+</html>
