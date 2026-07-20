@@ -251,18 +251,8 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
         </View>
       )}
 
-      {/* v418: field note filler — same handbook style as PinAdjustStep
-          so the two screens read as one continuous experience. Shown in
-          both busy/success and failed states — page stays warm even on
-          permission-denied. */}
-      <View style={styles.fieldNote}>
-        <View style={styles.fieldNoteAccent} />
-        <Text style={styles.fieldNoteHeader}>·· Field note ··</Text>
-        <Text style={styles.fieldNoteBody}>
-          <Text style={styles.fieldNoteLede}>Cairns rest lightly.</Text>
-          {' '}Return them when you leave.
-        </Text>
-      </View>
+      {/* v420: removed field note per user preference. Loading state
+          stays simple — title + progress + (fail box if any) + Cancel. */}
 
       <View style={{ flex: 1 }} />
       <TouchableOpacity style={styles.cancel} onPress={onCancel}>

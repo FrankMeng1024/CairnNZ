@@ -227,6 +227,12 @@ export function PinAdjustStep({
   // tap events, causing the reported "Back tap delayed 5 seconds".
   const overLimitRef = useRef(false);
   const hasMovedRef = useRef(false);
+  // v420: suppresses onCameraTick's hasMoved side-effect during the
+  // ~280ms setCamera animation triggered by doRecenter. Without this,
+  // mid-animation frames (map partway between old pos and origin) have
+  // dist > 0.5 and would keep the icon visible until the very last frame,
+  // making it feel like "the icon didn't disappear immediately".
+  const recenterSuppressRef = useRef(false);
   // v301 Pri-1 fix: throttle onCameraTick to 10Hz (every 100ms). The
   // human eye can't tell the difference between 10Hz and 60Hz boundary
   // detection on a 50m ring; the JS thread certainly can. Light work
@@ -285,14 +291,15 @@ export function PinAdjustStep({
       briefHint();
     }
 
-    // v418 fix: hasMoved is a symmetric position check, not a one-way flag.
-    // Show recenter icon iff map center is >0.5m from GPS origin. Setting
-    // hasMoved=true in one direction only (as v299 did) means doRecenter's
-    // setCamera animation frames (which pass through onCameraTick with
-    // dist>0.5 mid-transition) can re-flip it back to true after doRecenter
-    // sets false — causing the icon to require a second tap to disappear.
-    // Now the flag mirrors current position vs origin every tick, no
-    // timers or suppress windows needed.
+    // v420 fix: symmetric position check + suppress window during setCamera
+    // animation. Without the suppress ref, doRecenter's setCamera animation
+    // (280ms) passes through onCameraTick with mid-transition dist > 0.5
+    // (map is between old pos and origin), so hasMoved stays true until
+    // the final settled frame — user perceives "icon didn't disappear
+    // immediately". HikingScreen solves this the same way (700ms suppress
+    // via setFollowUser(true) timer). Here we hide the icon on tap, then
+    // let onCameraTick take over naturally after animation settles.
+    if (recenterSuppressRef.current) return;
     const shouldShow = dist > 0.5;
     if (hasMovedRef.current !== shouldShow) {
       hasMovedRef.current = shouldShow;
@@ -383,14 +390,23 @@ export function PinAdjustStep({
     const latC = originRef.current.lat;
     const z = latestZoomRef.current;
     expectedCenterRef.current = [lng, latC];
+    // v420: hide icon immediately + suppress onCameraTick's hasMoved
+    // logic during the animation, so mid-transition frames can't flip
+    // the icon back on. Matches HikingScreen's setFollowUser(false) →
+    // setCamera → setTimeout(setFollowUser(true), 700) pattern.
+    recenterSuppressRef.current = true;
+    hasMovedRef.current = false;
+    setHasMoved(false);
     cameraRef.current?.setCamera?.({
       centerCoordinate: [lng, latC],
       zoomLevel: z,
       animationDuration: 280,
     });
-    // v418: no manual setHasMoved needed — onCameraTick now mirrors
-    // position vs origin every tick. Icon stays visible during the
-    // 280ms recenter animation and disappears cleanly when settled.
+    // Release suppress a hair after animation settles (300ms vs 280ms
+    // animation) so subsequent user pans update hasMoved normally.
+    setTimeout(() => {
+      recenterSuppressRef.current = false;
+    }, 350);
     log('plant.pin_recenter', {});
   };
 
@@ -548,29 +564,9 @@ export function PinAdjustStep({
             backRow above the title. */}
       </View>
 
-      {/* v418: accuracy chip + field note fill the previously-empty
-          gap between map and Confirm button. Keeps user oriented
-          (accuracy) and reinforces Cairn/NZ handbook tone. */}
-      <View style={styles.metaRow}>
-        <View style={styles.metaChip}>
-          <View style={styles.metaDot} />
-          <Text style={styles.metaChipText}>± {Math.round(accuracyM)} m accuracy</Text>
-        </View>
-      </View>
-
-      <View style={styles.fieldNote}>
-        <View style={styles.fieldNoteAccent} />
-        <Text style={styles.fieldNoteHeader}>·· Field note ··</Text>
-        <Text style={styles.fieldNoteBody}>
-          <Text style={styles.fieldNoteLede}>Cairns rest lightly.</Text>
-          {' '}Return them when you leave.
-        </Text>
-      </View>
-
-      {/* v419: removed empty flex:1 spacer — mapWrap is now flex:1 so
-          it absorbs remaining space between header (title+sub) and
-          footer (chip+field note+button). Button naturally sits below
-          field note; no dead zone between. */}
+      {/* v420: removed accuracy chip + field note per user preference:
+          keep only title, map, button. mapWrap is flex:1 so it fills
+          all space between sub and Confirm button. */}
       {/* Confirm button.
           v298 N4: button state driven by `overLimit` (flipped in
           onCameraChanged the moment the map crosses the 50m ring) —
