@@ -1,0 +1,17 @@
+{
+  "total_records": 4847,
+  "themes": {
+    "getting_lost": 43,
+    "weather_storm": 63,
+    "signal_offline_battery": 20,
+    "planning_anxiety": 672,
+    "rescue_sar": 68,
+    "gear_failure": 133,
+    "injury": 34,
+    "solo_fear": 86,
+    "river_crossing": 46
+  },
+  "uncategorized": 3682,
+  "method": "strict phrase regex, first-match-wins, no double counting",
+  "source": "raw/reddit_outdoor.jsonl"
+}

@@ -18,51 +18,10 @@ const { deterministicCid } = require('../lib/deterministicCid');
 
 const router = express.Router();
 
-// ── POST /api/sessions ─────────────────────────────────────────────────────
-router.post('/', authenticate, idempotency, async (req, res) => {
-  const { type, start_time, end_time, distance_m, duration_s, route_points, route_points_raw, flags, route_id, name } = req.body;
-
-  if (!type || !['hiking', 'running'].includes(type)) {
-    return res.status(400).json({ error: 'type must be "hiking" or "running".' });
-  }
-  if (!start_time || isNaN(Date.parse(start_time))) {
-    return res.status(400).json({ error: 'start_time must be a valid ISO date.' });
-  }
-  if (!end_time || isNaN(Date.parse(end_time))) {
-    return res.status(400).json({ error: 'end_time must be a valid ISO date.' });
-  }
-  if (distance_m !== undefined && (typeof distance_m !== 'number' || distance_m < 0)) {
-    return res.status(400).json({ error: 'distance_m must be a non-negative number.' });
-  }
-  // Reject sessions with no drawable path — "too short to record".
-  // < 2 points means we cannot draw a line; there is nothing useful to store.
-  const pts = route_points ?? [];
-  if (!Array.isArray(pts) || pts.length < 2) {
-    return res.status(422).json({ error: 'Session has no drawable path (fewer than 2 GPS points). Not saved.' });
-  }
-
-  try {
-    const id = await Session.create({
-      userId: req.user.userId,
-      routeId: route_id ?? null,
-      type,
-      startTime: new Date(start_time),
-      endTime: new Date(end_time),
-      distanceM: distance_m ?? 0,
-      durationS: duration_s ?? 0,
-      routePoints: route_points ?? null,
-      routePointsRaw: route_points_raw ?? null,
-      flags: flags ?? null,
-      name: name ?? null,
-    });
-
-    const session = await Session.findByIdAndUser(id, req.user.userId);
-    return res.status(201).json({ session });
-  } catch (err) {
-    console.error('[sessions/post]', err);
-    return res.status(500).json({ error: 'Server error. Please try again.' });
-  }
-});
+// ── POST /api/sessions (LEGACY - REMOVED 2026-07-20) ──────────────────────
+// v411 legacy 一次性保存 endpoint 已删除。v412+ 使用 start + append-points + save
+// 三步原子保存流程。若旧 client 仍调 POST /api/sessions,将得到 404。
+// 30d nginx log: 0 次调用。前端源码: 0 处 fetch。
 
 // ── GET /api/sessions ──────────────────────────────────────────────────────
 router.get('/', authenticate, async (req, res) => {

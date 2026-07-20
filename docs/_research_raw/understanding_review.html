@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Cairn 理解确认清单 — 2026-07-17</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px;
+    background: #fafaf7;
+    color: #222;
+    line-height: 1.6;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: #888; margin-bottom: 24px; font-size: 13px; }
+  .toolbar {
+    position: sticky; top: 0;
+    background: #fafaf7;
+    padding: 12px 0;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    z-index: 10;
+  }
+  .toolbar button {
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .toolbar button:hover { background: #f0f0f0; }
+  .progress {
+    font-size: 13px;
+    color: #666;
+    margin-left: auto;
+  }
+  h2 {
+    font-size: 17px;
+    margin: 28px 0 12px;
+    padding: 8px 12px;
+    background: #eee5d3;
+    border-left: 4px solid #a67c52;
+    border-radius: 4px;
+  }
+  h3 {
+    font-size: 14px;
+    color: #555;
+    margin: 20px 0 8px;
+    font-weight: 600;
+  }
+  .item {
+    display: grid;
+    grid-template-columns: 22px 1fr 260px;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #eee;
+    align-items: start;
+  }
+  .item:hover { background: #f5f2ea; }
+  .item.ok { background: #eef7ee; }
+  .item.no { background: #fbeaea; }
+  .item input[type="checkbox"] {
+    margin-top: 4px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+  }
+  .item .body { min-width: 0; }
+  .item .id {
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: #999;
+    display: inline-block;
+    min-width: 42px;
+  }
+  .item .desc { font-size: 14px; }
+  .item .hint {
+    font-size: 12px;
+    color: #888;
+    margin-top: 4px;
+    font-style: italic;
+  }
+  .actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .actions button {
+    padding: 2px 8px;
+    font-size: 11px;
+    border: 1px solid #ccc;
+    background: white;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .actions button.ok { border-color: #4a9d4a; color: #4a9d4a; }
+  .actions button.no { border-color: #c94a4a; color: #c94a4a; }
+  .actions button.active[data-val="ok"] { background: #4a9d4a; color: white; }
+  .actions button.active[data-val="no"] { background: #c94a4a; color: white; }
+  .note {
+    display: block;
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 56px;
+    background: #fffef8;
+  }
+  .note::placeholder { color: #bbb; }
+  .note:focus { border-color: #a67c52; outline: none; background: white; }
+  @media (max-width: 720px) {
+    .item { grid-template-columns: 22px 1fr; }
+    .note { grid-column: 1 / -1; }
+  }
+  .warn {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 10px 14px;
+    margin: 8px 0;
+    font-size: 13px;
+  }
+  .critical {
+    background: #f8d7da;
+    border-left: 4px solid #dc3545;
+    padding: 10px 14px;
+    margin: 8px 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<h1>Cairn 理解确认清单</h1>
+<div class="subtitle">2026-07-17 · 请你逐条打勾/打叉/加备注 · 页面本地保存(刷新不丢)</div>
+
+<div class="toolbar">
+  <button onclick="exportResult()">📋 导出结果(复制到剪贴板)</button>
+  <button onclick="clearAll()">🗑️ 清空所有</button>
+  <span class="progress" id="progress">0 / 0</span>
+</div>
+
+<!-- ============ A 产品灵魂 ============ -->
+<h2>A. 产品灵魂 — Cairn 到底是什么</h2>
+
+<div class="item" data-id="A1">
+  <input type="checkbox">
+  <div class="body">
+    <div class="desc"><span class="id">A1</span>Cairn 的核心不是安全工具、不是 AR,而是<b>"数字手账 + 陌生人善意"</b> 两个词概括。</div>
+    <div class="hint">数字手账 = 记录自己走过的路、想留的话,给未来的自己看</div>
+    <div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div>
+    </div><textarea class="note" placeholder="补充/纠正..."></textarea></div>
+
+<div class="item" data-id="A2">
+  <input type="checkbox">
+  <div class="body">
+    <div class="desc"><span class="id">A2</span><b>自己看</b>:GPS 记录轨迹 + fog-of-war 迷雾地图 + marker 留短文本,N 年后自己回来还能看得到。</div>
+    <div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div>
+    </div><textarea class="note" placeholder="补充/纠正..."></textarea></div>
+
+<div class="item" data-id="A3">
+  <input type="checkbox">
+  <div class="body">
+    <div class="desc"><span class="id">A3</span><b>给别人看</b>:好友订阅式互看 marker,<b>陌生人也可看/被看到 marker</b>,但不做社交、不做广场、不做算法推荐。</div>
+    <div class="hint">跟 AllTrails 那种公开路线库、社交推荐完全反着做</div>
+    <div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div>
+    </div><textarea class="note" placeholder="补充/纠正..."></textarea></div>
+
+<div class="item" data-id="A4">
+  <input type="checkbox">
+  <div class="body">
+    <div class="desc"><span class="id">A4</span>灵魂来源:<b>Death Stranding 的异步社交哲学</b> — "独处时感受到人类温度"。</div>
+    <div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div>
+    </div><textarea class="note" placeholder="补充/纠正..."></textarea></div>
+
+<div class="item" data-id="A5">
+  <input type="checkbox">
+  <div class="body">
+    <div class="desc"><span class="id">A5</span>统计是<b>"回忆录"</b>不是<b>"成绩单"</b>。没排行榜、没勋章、没成就系统。</div>
+    <div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div>
+    </div><textarea class="note" placeholder="补充/纠正..."></textarea></div>
+
+<!-- ============ B 已实现功能 ============ -->
+<h2>B. 已实现功能 — 我看到代码里真实存在的</h2>
+
+<h3>B1. 账号 &amp; 首页</h3>
+<div class="item" data-id="B1.1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B1.1</span>邮箱 + Google OAuth 登录 (AuthScreen)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B1.2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B1.2</span>首页显示总里程/活动数 + 最近 24 小时活动 + 快捷入口</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B1.3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B1.3</span>底部 tab 导航:Trails / Map / Routes / Friends / Settings</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<h3>B2. 记录 — Hiking / Running</h3>
+<div class="item" data-id="B2.1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B2.1</span><b>Hiking 模式</b>:GPS 追踪 + Kalman 滤波 + 距离/时长/速度显示</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B2.2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B2.2</span><b>Running 模式</b>:锁屏跑步 + 屏幕黑掉省电</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B2.3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B2.3</span>后台 GPS + Keep-awake(hiking 时防止手机休眠)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B2.4"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B2.4</span>Session 保存 + 后台增量同步(v412 atomic save 已上线)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B2.5"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B2.5</span>离线队列:没网也能记录,联网后自动补传</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<h3>B3. 地图</h3>
+<div class="item" data-id="B3.1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B3.1</span>Mapbox 实时地图 + 卫星/地形样式切换</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B3.2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B3.2</span><b>离线地图基础设施在</b>(NZ 区域),但<b>离线下载 UI 还没做</b>(在 backlog)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B3.3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B3.3</span>回看历史轨迹(MapHistoryScreen):按 session 展示当时的路线 + 当时的 marker</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B3.4"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B3.4</span>路线编辑器:长按地图加中间点 + 拖动调整 + snap-to-road</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<h3>B4. Marker(核心)</h3>
+<div class="item" data-id="B4.1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B4.1</span>Marker 类型有 <b>6 种</b>:view / peak / rest / shelter / danger / summit</div><div class="hint">代码里读到的 enum,你可能想改类型分类</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B4.2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B4.2</span>3 级权限:Personal(只自己) / Group=friend(好友) / Public(陌生人)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B4.3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B4.3</span>PlantScreen 3 步:①5 秒 GPS 采样 → ②地图定位微调 → ③输入内容</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B4.4"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B4.4</span>owner 可编辑/删除自己的 marker</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<div class="critical">
+  ⚠️ B4.5 冲突点:代码 backend 里 marker text 是 <b>250 字符上限</b>,但 DISCOVERY.md 写的是 <b>30 字</b>。到底哪个是你想要的?
+</div>
+<div class="item" data-id="B4.5"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B4.5</span>Marker 文字上限 = <b>250 字符</b>(代码实际)/ 30 字(文档说)</div><div class="actions"><button class="ok" data-val="ok">250字对</button><button class="no" data-val="no">30字对</button></div></div><textarea class="note" placeholder="或者其他数字..."></textarea></div>
+
+<div class="item" data-id="B4.6"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B4.6</span>Marker 可附<b>照片 + 语音 memo</b></div><div class="hint">语音 memo 之前和 AR 一起放到 Phase 2,AR 舍弃后语音 memo 保留吗?</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B4.7"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B4.7</span>陌生人能看到 public marker,作者名字自动匿名(author_name = null)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<h3>B5. Memory / Fog-of-War 迷雾地图</h3>
+<div class="item" data-id="B5.1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B5.1</span>MemoryScreen:H3 六边形迷雾地图,走过的区域被"点亮"</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B5.2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B5.2</span>Hiking session 结束时自动解锁 memory cells</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B5.3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B5.3</span>好友订阅:<b>最多订阅 5 个好友</b>的 fog UNION 合并显示</div><div class="hint">5 个上限是产品刻意设计还是可以放宽?</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B5.4"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B5.4</span>陌生人<b>看不到</b>你的 fog(fog 只在好友间共享)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<h3>B6. 好友</h3>
+<div class="item" data-id="B6.1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B6.1</span>邮箱添加 + 双向确认</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B6.2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B6.2</span>好友能看到你的 group/public marker + 你的 route(如果 route 允许)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B6.3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B6.3</span>Hide-from-me:主动屏蔽好友/陌生人的某个 marker,以后再也看不到</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<h3>B7. 陌生人互动(最重要,请仔细看)</h3>
+<div class="critical">
+  ⚠️ 关键冲突:代码里陌生人可以 50 米内点赞/举报 marker,<b>已在生产</b>。但 DISCOVERY.md Won't Build 明确写"点赞/评论/陌生人互动"。你到底要不要这个?
+</div>
+
+<div class="item" data-id="B7.1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B7.1</span>陌生人在地图上看得到 public marker,但按 bbox 限制,一次最多 50 条</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B7.2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B7.2</span><b>陌生人在 50 米内能给 marker 点赞或举报</b>(每人 1 票)</div><div class="hint">这就是 Death Stranding 的 "Like" 机制的现实版</div><div class="actions"><button class="ok" data-val="ok">保留</button><button class="no" data-val="no">砍掉</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B7.3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B7.3</span>反作弊限流:30 like/分钟、5 举报/分钟、20 举报/小时</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B7.4"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B7.4</span>反作弊 GPS 门槛:精度 &lt;100m、距离 &lt;50m、防瞬移(5km/60s)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B7.5"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B7.5</span><b>5 个举报</b>后 marker 自动 hidden(auto-hide 已在生产)</div><div class="hint">5 这个阈值是不是刻意的?会不会被恶意刷下去?</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B7.6"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B7.6</span><b>没有</b>关键词黑名单、<b>没有</b> AI 审核、<b>没有</b>人工审核队列、<b>没有</b>封号系统</div><div class="hint">这是 URGENT 待补的合规底线</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<h3>B8. 系统 / 运维</h3>
+<div class="item" data-id="B8.1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B8.1</span>JWT 30 天 + refresh token(Sprint 72 加的)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B8.2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B8.2</span>DebugScreen:开发者工具,查看 session、上传日志、切后端 URL</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B8.3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B8.3</span>OTA 更新(expo-updates)+ GPX/PDF 导出</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<h3>B9. AR — 用户已声明舍弃</h3>
+<div class="item" data-id="B9.1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B9.1</span>ARScreen 代码<b>还在</b>,但用户 2026-07-17 已明确舍弃(GPS 误差过大)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B9.2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B9.2</span>DISCOVERY.md 已划掉 Phase 2 AR 插旗 + AR 语音 memo</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="B9.3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">B9.3</span>PlantScreen 保留(用 GPS 采样定位,不是 AR)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<!-- ============ C 未做但计划中 ============ -->
+<h2>C. 计划中 / 未实现</h2>
+
+<div class="item" data-id="C1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">C1</span><b>Phase 4 NZ 本地化</b>:Inter 字体 + Te Reo 毛利文字符 + LINZ Topo50 地形图离线包 + Cairn Topo cream+sepia 复古样式</div><div class="hint">目标"让 NZ tramper 打开前 30 秒就能感受到本地气质"</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="C2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">C2</span>离线 tile 下载 UI(基础设施在,UI 未做)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="C3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">C3</span>Marker 内容关键词过滤(骨架有,API 未接)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="C4"><input type="checkbox"><div class="body"><div class="desc"><span class="id">C4</span>VU (Virtual User) acceptance ≥ 9.5/10(上架前最终关卡)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="C5"><input type="checkbox"><div class="body"><div class="desc"><span class="id">C5</span>TestFlight 真机测试(F5 iPhone gate 未过)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<h3>C6. Feature Map 里的产品叙事</h3>
+<div class="item" data-id="C6.1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">C6.1</span><b>核心 slogan</b>:"一个人走在新西兰的山里,你以为只有自己……走着走着,会在某个雨夜发现一面陌生人留下的标记'前方有避雨亭'"</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="C6.2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">C6.2</span><b>Persona 1 Jamie</b>:常驻徒步者,周末走 Great Walks,想"感觉到别人来过但不社交"</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="C6.3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">C6.3</span><b>Persona 2 Murray</b>:hut bagger,想把经验留给后来的人,不要回报</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="C6.4"><input type="checkbox"><div class="body"><div class="desc"><span class="id">C6.4</span><b>Persona 3 Alex</b>:trail runner,"步行探路,跑步重走",跟昨天的自己赛跑</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<!-- ============ D 明确不做 ============ -->
+<h2>D. Won't Build — 用户主动砍掉的功能</h2>
+<div class="item" data-id="D1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">D1</span>不做:活动 feed / 动态广场 / 流量机制</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<div class="warn">
+  ⚠️ D2 冲突:Won't Build 写"点赞/评论/陌生人互动",但 B7.2 陌生人点赞已经在生产。真实边界是什么?
+</div>
+<div class="item" data-id="D2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">D2</span>不做:陌生人评论 / 陌生人聊天(<b>点赞可能保留,因为是 DS Like 机制</b>)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="D3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">D3</span>不做:好友推荐 / 附近的人 / 路线重合推荐</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="D4"><input type="checkbox"><div class="body"><div class="desc"><span class="id">D4</span>不做:手机号注册 / 通讯录读取</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="D5"><input type="checkbox"><div class="body"><div class="desc"><span class="id">D5</span>不做:排行榜 / 勋章 / 成就系统</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="D6"><input type="checkbox"><div class="body"><div class="desc"><span class="id">D6</span>不做:直播 / 实时位置共享</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="D7"><input type="checkbox"><div class="body"><div class="desc"><span class="id">D7</span>不做:广告变现</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<!-- ============ E 需要决策 ============ -->
+<h2>E. 需要你决策(调研 plan 依赖这些)</h2>
+
+<div class="critical">这几条不是打勾,是让你选立场。选完调研方向才能定。</div>
+
+<div class="item" data-id="E1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">E1</span><b>陌生人可见 marker 的最终形态?</b></div><div class="hint">A. 完全保留 like/report(现状) · B. 只可见不可互动 · C. 完全砍掉,只留好友可见 · D. 保留但加严 moderation</div><div class="actions"><button class="ok" data-val="ok">A 保留全部</button><button class="no" data-val="no">C 完全砍</button></div></div><textarea class="note" placeholder="选 B / D 请在这里说,或写你的意图..."></textarea></div>
+
+<div class="item" data-id="E2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">E2</span><b>目标市场路径?</b></div><div class="hint">A. NZ 优先 → 未来 global · B. 永久 NZ-only · C. 从一开始 global(NZ 只是 dogfooding)</div><div class="actions"><button class="ok" data-val="ok">A NZ 先→global</button><button class="no" data-val="no">B 永久 NZ</button></div></div><textarea class="note" placeholder="如果选 A,global 具体是哪些市场?华人/日本/欧美?"></textarea></div>
+
+<div class="item" data-id="E3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">E3</span><b>商业模式?</b></div><div class="hint">A. 免费 + 情怀项目 · B. Freemium 订阅($3-5/月) · C. 一次性买断 · D. 不商业化,爱好而已</div><div class="actions"><button class="ok" data-val="ok">B 订阅</button><button class="no" data-val="no">D 爱好</button></div></div><textarea class="note" placeholder="选 A/C 请说..."></textarea></div>
+
+<div class="item" data-id="E4"><input type="checkbox"><div class="body"><div class="desc"><span class="id">E4</span><b>Utility 层加多少?</b></div><div class="hint">Utility = 今天有用的工具属性(高精度 GPS、离线大区域、多设备同步)。灵魂 = 情感/记忆</div><div class="hint">A. 纯情感,不加 utility · B. 情感核心 + utility 是付费钩子 · C. Utility 优先,情感是附加</div><div class="actions"><button class="ok" data-val="ok">B 情感+utility付费</button><button class="no" data-val="no">A 纯情感</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<!-- ============ F 当前状态 ============ -->
+<h2>F. 当前状态(事实性,基本无争议)</h2>
+<div class="item" data-id="F1"><input type="checkbox"><div class="body"><div class="desc"><span class="id">F1</span>版本 v416(2026-07-08 已 OTA)</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="F2"><input type="checkbox"><div class="body"><div class="desc"><span class="id">F2</span>Sprint 72 CLOSED,Sprint 73 排队</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="F3"><input type="checkbox"><div class="body"><div class="desc"><span class="id">F3</span>已完成 70+ Sprint,主线功能基本完备</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="F4"><input type="checkbox"><div class="body"><div class="desc"><span class="id">F4</span>下一步:Sprint 71 F5(iPhone fog UNION 真机测试)→ TestFlight → VU</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+<div class="item" data-id="F5"><input type="checkbox"><div class="body"><div class="desc"><span class="id">F5</span>尚未上架 App Store</div><div class="actions"><button class="ok" data-val="ok">对</button><button class="no" data-val="no">错</button></div></div><textarea class="note" placeholder="..."></textarea></div>
+
+<script>
+  const STORAGE_KEY = "cairn-review-2026-07-17";
+
+  function saveState() {
+    const state = {};
+    document.querySelectorAll(".item").forEach(item => {
+      const id = item.dataset.id;
+      state[id] = {
+        checked: item.querySelector('input[type="checkbox"]').checked,
+        val: item.dataset.val || "",
+        note: item.querySelector(".note").value
+      };
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    updateProgress();
+  }
+
+  function loadState() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    document.querySelectorAll(".item").forEach(item => {
+      const id = item.dataset.id;
+      const s = state[id];
+      if (!s) return;
+      item.querySelector('input[type="checkbox"]').checked = s.checked;
+      if (s.val) {
+        item.dataset.val = s.val;
+        item.classList.add(s.val);
+        item.querySelectorAll(".actions button").forEach(btn => {
+          if (btn.dataset.val === s.val) btn.classList.add("active");
+        });
+      }
+      item.querySelector(".note").value = s.note || "";
+    });
+    updateProgress();
+  }
+
+  function updateProgress() {
+    const items = document.querySelectorAll(".item");
+    let done = 0;
+    items.forEach(item => {
+      if (item.dataset.val || item.querySelector(".note").value.trim() || item.querySelector('input[type="checkbox"]').checked) done++;
+    });
+    document.getElementById("progress").textContent = `${done} / ${items.length}`;
+  }
+
+  function clearAll() {
+    if (!confirm("确定清空所有回答?")) return;
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
+  }
+
+  function exportResult() {
+    const lines = ["# Cairn 理解确认结果 - " + new Date().toISOString().slice(0,10), ""];
+    document.querySelectorAll("h2, h3, .item").forEach(el => {
+      if (el.tagName === "H2") { lines.push("\n## " + el.textContent); }
+      else if (el.tagName === "H3") { lines.push("\n### " + el.textContent); }
+      else {
+        const id = el.dataset.id;
+        const desc = el.querySelector(".desc").textContent.trim();
+        const val = el.dataset.val || "";
+        const note = el.querySelector(".note").value.trim();
+        const mark = val === "ok" ? "✅" : val === "no" ? "❌" : "⬜";
+        let line = `- ${mark} \`${id}\` ${desc}`;
+        if (note) line += `  \n  📝 ${note}`;
+        lines.push(line);
+      }
+    });
+    const text = lines.join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      alert("已复制到剪贴板!粘贴给 Claude 即可。");
+    }).catch(() => {
+      // fallback
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      alert("已复制!");
+    });
+  }
+
+  // Bind events
+  document.querySelectorAll(".actions button").forEach(btn => {
+    btn.addEventListener("click", e => {
+      const item = btn.closest(".item");
+      const val = btn.dataset.val;
+      if (item.dataset.val === val) {
+        // Toggle off
+        delete item.dataset.val;
+        item.classList.remove("ok", "no");
+        btn.classList.remove("active");
+      } else {
+        item.dataset.val = val;
+        item.classList.remove("ok", "no");
+        item.classList.add(val);
+        item.querySelectorAll(".actions button").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+      }
+      saveState();
+    });
+  });
+  document.querySelectorAll('input[type="checkbox"], .note').forEach(el => {
+    el.addEventListener("change", saveState);
+    el.addEventListener("input", saveState);
+  });
+
+  loadState();
+</script>
+
+</body>
+</html>

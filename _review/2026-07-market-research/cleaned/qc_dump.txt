@@ -1,0 +1,105 @@
+=== CATEGORY: pain ===
+ID=a020027 rating=1 int=4 rel=3 cat=pain sec=[]
+  Q: 最近记录的总里程一直在反复变啊 为什么最近记录的总里程总是来回变 一会1w 一会5k 这是bug还是什么原因？ 更新之后最近一直这样
+ID=a004568 rating=3 int=3 rel=5 cat=pain sec=['pricing']
+  Q: I love at least the idea of this app. AllTrails tries to do everything I want it to do. Unfortunately, it doesn’t always succeed. For example, it’s sort of a mess to use on my first gen Apple Watch Ultra. My watch is constantly getting disconnected from my phone, but only for AllTrails. And then whe
+ID=a001520 rating=1 int=4 rel=4 cat=pain sec=['relation']
+  Q: Deep links broken again Sending links to friends doesn't work. This app has been good. Not at the moment. Trying to send a link and the app opens and sits on a totally different screen and doesn't show the trail at all
+ID=a009402 rating=1 int=4 rel=3 cat=pain sec=['pricing']
+  Q: The Big Oof. So you locked dark mode as a premium. Ouch. That's a no go for me. Some minor features also make me go OOF from roblox because many other apps set some features for free. It's like making a handicap pay a fee for using a acessability ramp that they need. Nah, not even gonna write up my 
+ID=a008728 rating=2 int=3 rel=3 cat=pain sec=[]
+  Q: Buy a Journal After about 10 days you are unable to make any further entries without subscribing at £32.99 a year.   I bought a Journal from Amazon fo £6.00.
+
+=== CATEGORY: praise ===
+ID=a005693 rating=5 int=3 rel=2 cat=praise sec=[]
+  Q: Rhoton Men Estes Park
+ID=a003356 rating=5 int=3 rel=3 cat=praise sec=[]
+  Q: Banner Good tracking app
+ID=a002578 rating=4 int=3 rel=3 cat=praise sec=[]
+  Q: Great app but … They’ve removed the editing button within individual lists so that you can’t access your chosen walk quickly….. which was super handy ! Otherwise this app easily smashes 5 stars !
+ID=a019573 rating=5 int=3 rel=4 cat=praise sec=[]
+  Q: 能关闭软件，后台省电模式记录足迹吗 请问
+ID=a015797 rating=5 int=3 rel=2 cat=praise sec=[]
+  Q: Intuitive & Easy to use This is an excellent apps to record your tour activities in real time. Best of all, each tour can be recorded separately for easy viewing.
+
+=== CATEGORY: pricing ===
+ID=a001919 rating=2 int=3 rel=5 cat=pricing sec=[]
+  Q: Why remove the map from the Watch app Became a premium subscriber last month after being impressed with having a map of my route available on the Watch app which was super convenient and better than getting my phone out repeatedly.  Disappointed to find this weekend that this now been replaced with 
+ID=a011756 rating=5 int=3 rel=2 cat=pricing sec=[]
+  Q: 用着可以 感觉钱花的值
+ID=a000832 rating=1 int=4 rel=2 cat=pricing sec=[]
+  Q: Tricked me into getting “pro” I just wanted the free trial. Thought that’s what I was getting. Now it says pro and I can’t see where to cancel. Give me my money back!
+ID=a000800 rating=1 int=4 rel=3 cat=pricing sec=[]
+  Q: No Topographic Map On Subscription Subscribed for the topographic maps and it doesn’t have it in Australia very misleading feature that was advertised falsely. Asked for a refund and was rejected. Don’t subscribe if you plan to use the topographic map.
+ID=a002003 rating=1 int=4 rel=4 cat=pricing sec=[]
+  Q: Not a free app This is not a free app. Yes it costs nothing to install, but as soon as you sign up, I.e. they have your personal information, you’re asked to sign up to their subscription. The app is literally useless unless you subscribe. Another apple scam app. Don’t believe the thousands of 5 sta
+
+=== CATEGORY: emotion ===
+ID=a009962 rating=2 int=3 rel=3 cat=emotion sec=[]
+  Q: Journals Lost. Feels like Ransom. Journals Lost in iPhone transfer and no help available except with upgrade.
+ID=a010340 rating=5 int=3 rel=3 cat=emotion sec=[]
+  Q: Convenient and Secure Journaling App A few years ago I finally adopted an intermittent journaling habit that helps me organize my thoughts and experiences. Day One has worked very well and I like the encryption features. It also adds data to an entry such as weather and location which can be very ni
+ID=a019709 rating=5 int=3 rel=4 cat=emotion sec=[]
+  Q: 回忆是最珍贵的 用了快5年了，回头看看以前的轨迹，能想起来很多事，这就是轨迹的意义
+ID=a004639 rating=5 int=3 rel=5 cat=emotion sec=[]
+  Q: Almost feels like cheating Having the app is such a great companion when hiking. So many times it’s prevented me from taking the wrong turn and having to backtrack or worse getting lost. Setting waypoint for hikes, that you repeat is a great benefit. The app seems to work even with poor signal and f
+ID=a009626 rating=5 int=4 rel=3 cat=emotion sec=[]
+  Q: Falling back in love with Day One I used Day One years ago when it first came out and recently decided to give it another try and I am blown away by all the functionality. My favorite feature is the ability to write my entries with my Apple Pencil. There is something about handwriting my entries tha
+
+=== CATEGORY: relation ===
+ID=cn0175 rating=None int=3 rel=5 cat=relation sec=[]
+  Q: 一款记录旅行时光的工具。添加你的足迹，看看你去了多少个国家、省份、城市。    制作路线：生成你的轨迹路线动画   点亮地图：勾选去过的地方，生成分享海报   足迹日历：快速回顾每一天的行程   地图相册：在地图上显示你的足迹照片   随机旅行：随机来一场说走就走的旅行吧   旅行计划：先计划，然后去旅行吧   海拔高度：查看当前的海拔高度   出行宜忌：根据算法查看每一天的出行宜忌   足迹比拼：看看你们共同去了哪些地方   猜地名：随机给地图区域，猜地名
+ID=a018358 rating=5 int=3 rel=3 cat=relation sec=[]
+  Q: Great site With Polarsteps Travel we can enjoy seeing and learning about every trip our friends take in Europe.
+ID=a018904 rating=5 int=3 rel=3 cat=relation sec=[]
+  Q: 动态图片能分享就更好了 如题
+ID=a017700 rating=5 int=3 rel=5 cat=relation sec=[]
+  Q: A special way to keep in touch! This is a great way of showing our friends the progress of our trip. The ability to link pictures and words to a map of our route is a real bonus.
+ID=a016965 rating=5 int=4 rel=3 cat=relation sec=[]
+  Q: Great way to remember your journey in the future Lovely to let friends know where you are.
+
+=== CATEGORY: complaint ===
+ID=a008193 rating=1 int=5 rel=3 cat=complaint sec=[]
+  Q: New update slow! The latest update has slowed the app down to the point it’s virtually unusable! The app lags behind the typing In the screen considerably. Please sort it out! Been using this app for about 11 years!
+ID=a013592 rating=1 int=5 rel=2 cat=complaint sec=[]
+  Q: Reset at level 180 I'm on a world tour got to level 180 and it reset itself. What a waste of time. Feb- April!!! No good.
+ID=a015887 rating=1 int=4 rel=3 cat=complaint sec=[]
+  Q: Won’t even run unless location services are always enables In order to use this app on an iPad you must agree to let the app access your location even when you are not using it.  This is outrageous. It should be optional for people who are not interested in the app automatically tracking them.
+ID=a010072 rating=2 int=3 rel=2 cat=complaint sec=[]
+  Q: Can’t even open the app The app shows downloading for days and won’t let open it
+ID=a020034 rating=1 int=4 rel=3 cat=complaint sec=[]
+  Q: 问一下最近为啥不能记录了 如题。
+
+=== CAIRN RELEVANCE=5 (10 samples) ===
+ID=a000053 src=appstore_alltrails_au cat=praise rel=5
+  Q: Great app! Use this all the time to find hikes, download the maps for tracking during hikes and record them after. It also lets you save and create categories for hikes to plan in advance :) overall no criticism. Love it 🙌🏽
+ID=a002719 src=appstore_alltrails_gb cat=praise rel=5
+  Q: Best walking app going If you are a passionate walker, hiker or biker this absolutely not only needs to be downloaded but also pinned on your Home Screen. Amazing app - brilliant quality!
+ID=rt0061 src=reddit_r_tramping cat=pain rel=5
+  Q: Kia ora!   With the change of seasons comes a change in daylight hours, temperature drop, increased snowfall/icy terrain and growing risk of avalanches. NZ Mountain Safety Council understands the desire to want to get out and explore the beautiful backcountry of Aotearoa, so we want to ensure everyo
+ID=a007885 src=appstore_dayone_gb cat=pain rel=5
+  Q: Broken! I have used this app for over ten years but recently I’ve found it to be almost unusable. It is very slow to respond to my typing and often crashes mid diary entry so I lose everything I have written. I have updated to the latest version and the issues persist. I’m very disappointed and may 
+ID=a004822 src=appstore_alltrails_us cat=pain rel=5
+  Q: Great app but… I love this app, I’m able to get so much hiking done with this app. There’s just one thing that’s pretty frustrating. I had to delete a lot of my hikes I recorded because I forget to end the hike and then I drive all the way to my house. I don’t want no one to know where I live, plus 
+ID=a004460 src=appstore_alltrails_us cat=praise rel=5
+  Q: Awesome App…perhaps one improvement This is THE best app for hikers scouting nearby - or wherever, for that matter - trails to hike, bike or walk. Good detail, lots of good and helpful comments from other hikers/bikers, navigates to trail head (about 85% accurate in my experience) and will track you
+ID=a002638 src=appstore_alltrails_gb cat=praise rel=5
+  Q: Free features are great I use AllTrails frequently with my partner for our hikes, I even chose a route on it that I took her up to Helvellyn to propose to her. So thank you AllTrails, keep doing what you are doing
+ID=a004152 src=appstore_alltrails_us cat=pain rel=5
+  Q: Once a great App, Useless if you turn off location Last update to this app is horrible,,, moved the map icon to the bottom which your fingers hit and changes your screen,,, put it back in the upper right corner where it was for the longest time,,, second, when searching for new trails in a different
+ID=a004801 src=appstore_alltrails_us cat=pain rel=5
+  Q: Review for our class The app itself was very accurate as long as there was some kind of cell service.  I had to close out the app and reopen, but it did let me continue where I left off at.  I feel AllTrails is a good hiking app, not sure about paddling or biking but I will try it out on my next pad
+ID=a002040 src=appstore_alltrails_gb cat=pain rel=5
+  Q: Good for discovery This is a good app to find hikes and get user reviews. It is also useful to download the map to check the route of not in coverage.   The slightly annoying thing is that sometimes when switching to the app, it reverts to the start view (looking for nearby trails) rather than the t
+
+=== INTENSITY=5 (5 samples) ===
+ID=a002705 rating=5 int=5 cat=praise
+  Q: Use it daily! Shows all distances, time and the offline maps work perfect
+ID=a008624 rating=5 int=5 cat=pain
+  Q: Without doubt the best diary app in every way. Too many other, more eloquent, people have given great write-ups for Day One for me to do so again. All I will say is how grateful I am that having designed the best diary app for iPhone, the DayOne team have had the decency to only add subtle and helpf
+ID=a002806 rating=5 int=5 cat=praise
+  Q: Amazing app This is such a good place to find new walks
+ID=a008196 rating=5 int=5 cat=praise
+  Q: David A I’ve been using this app for circa ten years now and for the past seven years I haven’t missed a day. It’s absolutely brilliant! It’s a great way of reminiscing! It ticks all of my boxes. It’s easy to use and really easy to store various media. I like the fact that you can tag events and sea
+ID=a007827 rating=5 int=5 cat=praise
+  Q: Great! Such an amazing app. I can gather my thoughts when i’m overwhelmed. It has been a great asset for when i went through therapy to help with my memory/grounding myself. I love that i can add pictures for reference!

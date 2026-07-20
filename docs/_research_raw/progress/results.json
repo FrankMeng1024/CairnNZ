@@ -1,0 +1,777 @@
+[
+  {
+    "success": true,
+    "query": "iOS App Store rejection user generated content moderation 2024 2025",
+    "content": "**常见App Store审核被拒条款解读1.0(附解决方案)_知乎** (2021-03-25)\n 解决方案: 针对Guideline 1.2 - Safety - User Generated Content,需要有: 1.用户协议明确; 2.举报机制; 3.屏蔽拉黑,屏蔽此条动态,屏蔽此人动态｡ 其中1､2两条是大多数开发者都能想到的,但是第3条也是必须的｡ 三､iOS App被拒2.3.1 解决方案: a)可以先删除第三方支付代码; b)把需要隐藏功能模块的代码做混淆处理; c)可以尝试美国的IP控制; d)如果自查过了,确定自身产品都没有第三方支付的问题,可以向苹果发邮件申诉,说明情况｡\nSource: https://zhuanlan.zhihu.com/p/359849271\n\n**解决苹果App审核被拒问题 Guideline 1.2 - Safety - User Generated Content_1.2.0 safety: user generated content-CSDN博客** (2021-03-12)\n苹果App审核被拒问题: Guideline 1.2 - Safety - User Generated Content 原因描述:A mechanism for users to block abusive users 分析一下,这里指的是该App中包含有用户自己生成内容的功能｡那么根据苹果公司的上架管理条例,这就要求当出现不合规或滥用内容时,其他用户看到后是否可以阻止该内容的出现或传播｡\nSource: https://blog.csdn.net/solosudo/article/details/114685712\n\n**IOS审核被拒?_知乎** (2017-02-16)\n审核被拒后,苹果会将被拒理由､解决方案､具体违反了哪项条款(一般情况下,反馈信息中,最前面的数字对应的便是App Store审核规则或开发者计划许可协议的相应条款)等发到Resolution Centre (解决方案中心); 下一步 请根据以下措施修改您的应用程序: ——包含要求用户同意的条款(EULA),这些条款必须清楚明了,明确说明应用内没有令人反感的内容或滥用用户信息的情况; ——包含过滤不良内容的方法; ——用户可以标记那些令人反感的内容; ——用户可以举报那些辱骂他的用户; ——开发商必须根据报告在24小时内删除令人反感的内容和注销违规用户的账户 其实在上述内容中已有解决办法,可以 在用户生成内容上添加上举报按钮 ,同时也要按相应要求加入其他相关功能并立即执行;\nSource: https://www.zhihu.com/question/55597726\n\n**iOSApp被rejected的原因汇总 - 岁月枫林 - 博客园** (2016-03-25)\n1. Terms and conditions(法律与条款) 1.1 As a developer of applications for the App Store you are bound by the terms of theProgram License Agreement(PLA), Human Interface Guidelines (HIG), and any other \nSource: https://www.cnblogs.com/AndyBoyzkw/p/5318287.html\n\n**iOS 18.4 Bug Seemingly Resurrects Previously Deleted iPhone Apps - MacRumors** (2025-04-02)\nApple's latest iOS 18.4 software update appears to be causing long-deleted apps to reappear on some users' iPhones, based on corroborating reports on forums and social media. Several Reddit threads ( \nSource: https://www.macrumors.com/2025/04/02/ios-18-4-update-deleted-apps-returning/\n\n**iOS 26.4 暗改 App Store,切换 ID 更麻烦了** (2026-02-21)\n苹果跟安卓最大的区别是,iOS的生态是完整的,只是有地区限制｡而国内的安卓只是操作系统一样,用的不是谷歌官方服务,而是手机厂商私自建的服务｡因此,iPhone是国内能买到的,国际化程度最高的手机｡安卓手机需要刷谷歌套件才能下载的App,在iPhone上你只需要切换App Store的ID｡为了合规经营,App Store 不同地区的审核标准不同｡部分 APP \nSource: https://new.qq.com/rain/a/20260221A0656400\n\n**iOS端APP提交审核被拒绝包含用户生成内容必须有举报和拉黑功能_we found in our review that your app includes user-CSDN博客** (2021-06-12)\n最近iOS端APP更新提交App Store Connect审核时却多次被拒绝,因为我之前已经加举报功能, 最近iOS端APP更新提交App Store Connect审核时却多次被拒绝,因为我之前已经加举报功能,而目前APP主要以路人用户为主,加拉黑感觉没什么意义,于是一直不想加,然后就在备注那里跟老外理论,后来他们给我安排了在3到5个工作日内提供电话服务｡ 2021年6月1日 下午7:29 \nSource: https://blog.csdn.net/xubingtao/article/details/117852903\n\n**苹果 App Store 更新:并行审核提升效率、自定义页面扩容** (2025-10-30)\nIT之家 10 月 30 日消息,苹果公司今日宣布,对其 App Store 应用审核流程新增多项功能并进一步提升灵活性｡开发者现可在已有应用提交审核的同时,额外提交其他内容进行并行审核｡      苹果表示,即使当前已有某个应用版本正在审核中,开发者仍可提交更新以修复重大漏洞｡公司列举了多种可独立提交审核的情形,包括:      \nSource: https://new.qq.com/rain/a/20251030A01BHZ00\n\n**App Review Guidelines - Apple Developer** (2026-06-08)\nIntroduction The guiding principle of the App Store is simple—we want to provide a safe experience for users to get apps and a great opportunity for all developers to be successful. We do this by \nSource: https://developer.apple.com/app-store/review/guidelines/#game-center\n\n**iPadOS 18** (2023-11-14)\n\"iPadOS 18是苹果公司于北京时间2024年6月11日发布的移动端操作系统,适用于一部分iPad｡ 2024年6月11日凌晨,iPadOS 18正式发布,首次加入计算器App｡8月6日消息,苹果向 iPhone 和 iPad 用户推送了 iOS / iPadOS 18 开发者预览版 Beta 5 更新(内部版本号:22A5326f),本次更新距离上次发布 Beta / RC 间隔 7 天｡\nSource: https://baike.baidu.com/item/iPadOS%2018/63716727\n",
+    "web_references": [
+      {
+        "content": " 解决方案: 针对Guideline 1.2 - Safety - User Generated Content,需要有: 1.用户协议明确; 2.举报机制; 3.屏蔽拉黑,屏蔽此条动态,屏蔽此人动态｡ 其中1､2两条是大多数开发者都能想到的,但是第3条也是必须的｡ 三､iOS App被拒2.3.1 解决方案: a)可以先删除第三方支付代码; b)把需要隐藏功能模块的代码做混淆处理; c)可以尝试美国的IP控制; d)如果自查过了,确定自身产品都没有第三方支付的问题,可以向苹果发邮件申诉,说明情况｡",
+        "icon": "",
+        "link": "https://zhuanlan.zhihu.com/p/359849271",
+        "media": "知乎",
+        "publish_date": "2021-03-25",
+        "refer": "ref_1",
+        "title": "常见App Store审核被拒条款解读1.0(附解决方案)_知乎"
+      },
+      {
+        "content": "苹果App审核被拒问题: Guideline 1.2 - Safety - User Generated Content 原因描述:A mechanism for users to block abusive users 分析一下,这里指的是该App中包含有用户自己生成内容的功能｡那么根据苹果公司的上架管理条例,这就要求当出现不合规或滥用内容时,其他用户看到后是否可以阻止该内容的出现或传播｡",
+        "icon": "",
+        "link": "https://blog.csdn.net/solosudo/article/details/114685712",
+        "media": "",
+        "publish_date": "2021-03-12",
+        "refer": "ref_2",
+        "title": "解决苹果App审核被拒问题 Guideline 1.2 - Safety - User Generated Content_1.2.0 safety: user generated content-CSDN博客"
+      },
+      {
+        "content": "审核被拒后,苹果会将被拒理由､解决方案､具体违反了哪项条款(一般情况下,反馈信息中,最前面的数字对应的便是App Store审核规则或开发者计划许可协议的相应条款)等发到Resolution Centre (解决方案中心); 下一步 请根据以下措施修改您的应用程序: ——包含要求用户同意的条款(EULA),这些条款必须清楚明了,明确说明应用内没有令人反感的内容或滥用用户信息的情况; ——包含过滤不良内容的方法; ——用户可以标记那些令人反感的内容; ——用户可以举报那些辱骂他的用户; ——开发商必须根据报告在24小时内删除令人反感的内容和注销违规用户的账户 其实在上述内容中已有解决办法,可以 在用户生成内容上添加上举报按钮 ,同时也要按相应要求加入其他相关功能并立即执行;",
+        "icon": "",
+        "link": "https://www.zhihu.com/question/55597726",
+        "media": "知乎",
+        "publish_date": "2017-02-16",
+        "refer": "ref_3",
+        "title": "IOS审核被拒?_知乎"
+      },
+      {
+        "content": "1. Terms and conditions(法律与条款) 1.1 As a developer of applications for the App Store you are bound by the terms of theProgram License Agreement(PLA), Human Interface Guidelines (HIG), and any other ",
+        "icon": "",
+        "link": "https://www.cnblogs.com/AndyBoyzkw/p/5318287.html",
+        "media": "博客园",
+        "publish_date": "2016-03-25",
+        "refer": "ref_4",
+        "title": "iOSApp被rejected的原因汇总 - 岁月枫林 - 博客园"
+      },
+      {
+        "content": "Apple's latest iOS 18.4 software update appears to be causing long-deleted apps to reappear on some users' iPhones, based on corroborating reports on forums and social media. Several Reddit threads ( ",
+        "icon": "",
+        "link": "https://www.macrumors.com/2025/04/02/ios-18-4-update-deleted-apps-returning/",
+        "media": "",
+        "publish_date": "2025-04-02",
+        "refer": "ref_5",
+        "title": "iOS 18.4 Bug Seemingly Resurrects Previously Deleted iPhone Apps - MacRumors"
+      },
+      {
+        "content": "苹果跟安卓最大的区别是,iOS的生态是完整的,只是有地区限制｡而国内的安卓只是操作系统一样,用的不是谷歌官方服务,而是手机厂商私自建的服务｡因此,iPhone是国内能买到的,国际化程度最高的手机｡安卓手机需要刷谷歌套件才能下载的App,在iPhone上你只需要切换App Store的ID｡为了合规经营,App Store 不同地区的审核标准不同｡部分 APP ",
+        "icon": "",
+        "link": "https://new.qq.com/rain/a/20260221A0656400",
+        "media": "腾讯网",
+        "publish_date": "2026-02-21",
+        "refer": "ref_6",
+        "title": "iOS 26.4 暗改 App Store,切换 ID 更麻烦了"
+      },
+      {
+        "content": "最近iOS端APP更新提交App Store Connect审核时却多次被拒绝,因为我之前已经加举报功能, 最近iOS端APP更新提交App Store Connect审核时却多次被拒绝,因为我之前已经加举报功能,而目前APP主要以路人用户为主,加拉黑感觉没什么意义,于是一直不想加,然后就在备注那里跟老外理论,后来他们给我安排了在3到5个工作日内提供电话服务｡ 2021年6月1日 下午7:29 ",
+        "icon": "",
+        "link": "https://blog.csdn.net/xubingtao/article/details/117852903",
+        "media": "",
+        "publish_date": "2021-06-12",
+        "refer": "ref_7",
+        "title": "iOS端APP提交审核被拒绝包含用户生成内容必须有举报和拉黑功能_we found in our review that your app includes user-CSDN博客"
+      },
+      {
+        "content": "IT之家 10 月 30 日消息,苹果公司今日宣布,对其 App Store 应用审核流程新增多项功能并进一步提升灵活性｡开发者现可在已有应用提交审核的同时,额外提交其他内容进行并行审核｡      苹果表示,即使当前已有某个应用版本正在审核中,开发者仍可提交更新以修复重大漏洞｡公司列举了多种可独立提交审核的情形,包括:      ",
+        "icon": "",
+        "link": "https://new.qq.com/rain/a/20251030A01BHZ00",
+        "media": "腾讯网",
+        "publish_date": "2025-10-30",
+        "refer": "ref_8",
+        "title": "苹果 App Store 更新:并行审核提升效率、自定义页面扩容"
+      },
+      {
+        "content": "Introduction The guiding principle of the App Store is simple—we want to provide a safe experience for users to get apps and a great opportunity for all developers to be successful. We do this by ",
+        "icon": "",
+        "link": "https://developer.apple.com/app-store/review/guidelines/#game-center",
+        "media": "",
+        "publish_date": "2026-06-08",
+        "refer": "ref_9",
+        "title": "App Review Guidelines - Apple Developer"
+      },
+      {
+        "content": "\"iPadOS 18是苹果公司于北京时间2024年6月11日发布的移动端操作系统,适用于一部分iPad｡ 2024年6月11日凌晨,iPadOS 18正式发布,首次加入计算器App｡8月6日消息,苹果向 iPhone 和 iPad 用户推送了 iOS / iPadOS 18 开发者预览版 Beta 5 更新(内部版本号:22A5326f),本次更新距离上次发布 Beta / RC 间隔 7 天｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/iPadOS%2018/63716727",
+        "media": "百度百科",
+        "publish_date": "2023-11-14",
+        "refer": "ref_10",
+        "title": "iPadOS 18"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "ios app store rejection user generated content moderator 2024 2025",
+        "query": "iOS App Store rejection user generated content moderation 2024 2025"
+      }
+    ],
+    "latency_seconds": 2.1,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Path social app shutdown reason 2018 users data",
+    "content": "**2026高口碑英语口语APP盘点 全球真人社交AI工具系统课程全覆盖** (2026-06-24)\n<p>在英语口语能力提升的道路上,不少学习者都曾深陷“哑巴英语”的困局:背过的单词不计其数,各类语法规则也烂熟于心,可真到了需要开口交流的真实场景,却迟迟不敢主动表达｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_0696a3b813354252\n\n**Issues · calypsobronte/pioCamp2018 · GitHub** (2026-04-21)\nNavigation Menu Toggle navigation Appearance settings Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search \nSource: https://github.com/calypsobronte/pioCamp2018/labels/invalid\n\n** The 2018-2023 World Outlook for to 1-inch Nylon Plastic Bushings - 道客巴巴 ** (2022-01-17)\n粉丝量:170 该文档贡献者很忙,什么也没留下｡ 下载此文档 相关 目录 笔记 \nSource: https://www.doc88.com/p-77447199171759.html\n\n**2025年按用户数划分的最常用社交网络分析:三大Meta系产品稳居前列** (2026-06-05)\n当前位置: 正��艾媒咨询研究院深入调研相关企业以及投资人士,结合国内外案例,依据艾媒北极星监测系统､草莓派用户调研中心的相关数据和预测模型,对行业的未来发展进行深度洞悉,推出了《2024-2027年中国社交网络行业深度调研与投资规划分析报告》｡报告对行业区域发展､企业经营､行业竞争格局等进行了重点分析,最后分析了行 艾媒数据中心(data.iimedia.\nSource: https://www.iimedia.cn/c1094/111810.html\n\n**exception-solr增量更新报错 您的主机中的软件中止了一个已建立的连接。——CSDN问答频道** (2017-09-22)\nsolr 做索引时抛出的异常,导致索引失败!_course 2018-02-28 org.apache. solr .common. Solr Exception : Exception writing document id 211328 to the index; possible analysis error: startOffset must be non-negative, and \nSource: https://ask.csdn.net/questions/658824?sort=votes_count\n\n**QuestMobile 2026年男性用户APP偏好榜单** (2026-06-09)\n<img src='http://qqpublic.qpic.cn/qq_public/0/28-1442661743-548842F7F2A14C1C81F84C9C78C6BB69/0?fmt=gif&size=119&h=138&w=638&ppv=1' data-aigc-mark='0'/></p><p><img src='http://qqpublic.qpic.cn/qq_public/0/28-492213611-4FF52DDBC6756ABB81DF55FCE20D2F73/0?\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_9036a27736b74352\n\n**随笔档案「2022年3月5日」:Ubuntu18 下TeXstudio 编译不了含有 .eps 格式的图片 ... - zhaopw5 - 博客园** (2022-03-05)\n帮助来源:https://tex.stackexchange.com/questions/76455/converted-xxx-eps-converted-to-pdf-not-found sudo apt install texlive-font-utils 问题解决｡ 帮助来源:https:/ \nSource: https://www.cnblogs.com/zhaopw5/p/archive/2022/03/05\n\n**高等学校科学技术学术规范指南(第二版)** (2024-09-08)\n\"《高等学校科学技术学术规范指南(第二版)》是2017年中国人民大学出版社出版的图书,作者是教育部科学技术委员会学风建设委员会｡内容简介本书初版于2010年6月,曾被多所高等学校作为研究生科研诚信教育的范本,并取得了良好的效果｡\nSource: https://baike.baidu.com/item/%E9%AB%98%E7%AD%89%E5%AD%A6%E6%A0%A1%E7%A7%91%E5%AD%A6%E6%8A%80%E6%9C%AF%E5%AD%A6%E6%9C%AF%E8%A7%84%E8%8C%83%E6%8C%87%E5%8D%97(%E7%AC%AC%E4%BA%8C%E7%89%88)/20817202\n\n**List Length Means (Standard Deviations)  Download Table** (2024-06-19)\nSource publication Conference Paper Full-text available Oct 2009 As the number and scale of Semantic Web applications in use increases, so does the need to efficiently store and retrieve RDF data. \nSource: https://www.researchgate.net/figure/List-Length-Means-Standard-Deviations_tbl1_228910462\n\n**GuideforToonBlast2018APP下载安装_最新正版手机免费下载_25PP** (2026-02-12)\n版本 8.5.0.1 要求 查看权限要求   隐私政策 APP 九游 游戏 介绍 用户点评 相关应用 加速器下载 游戏 介绍 Guide for Toon Blast 2018 游戏 简介 分类 : 休闲益智 休闲 Guide for Toon Blast 2018产品特色 《Guide for Toon Blast 2018》是一款令人兴奋的益智游戏,给玩家带来了许多愉快的时光｡\nSource: https://www.25pp.com/xiazai/7723672/\n",
+    "web_references": [
+      {
+        "content": "<p>在英语口语能力提升的道路上,不少学习者都曾深陷“哑巴英语”的困局:背过的单词不计其数,各类语法规则也烂熟于心,可真到了需要开口交流的真实场景,却迟迟不敢主动表达｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_0696a3b813354252",
+        "media": "企鹅号",
+        "publish_date": "2026-06-24",
+        "refer": "ref_1",
+        "title": "2026高口碑英语口语APP盘点 全球真人社交AI工具系统课程全覆盖"
+      },
+      {
+        "content": "Navigation Menu Toggle navigation Appearance settings Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search ",
+        "icon": "",
+        "link": "https://github.com/calypsobronte/pioCamp2018/labels/invalid",
+        "media": "",
+        "publish_date": "2026-04-21",
+        "refer": "ref_2",
+        "title": "Issues · calypsobronte/pioCamp2018 · GitHub"
+      },
+      {
+        "content": "粉丝量:170 该文档贡献者很忙,什么也没留下｡ 下载此文档 相关 目录 笔记 ",
+        "icon": "",
+        "link": "https://www.doc88.com/p-77447199171759.html",
+        "media": "道客巴巴",
+        "publish_date": "2022-01-17",
+        "refer": "ref_3",
+        "title": " The 2018-2023 World Outlook for to 1-inch Nylon Plastic Bushings - 道客巴巴 "
+      },
+      {
+        "content": "当前位置: 正��艾媒咨询研究院深入调研相关企业以及投资人士,结合国内外案例,依据艾媒北极星监测系统､草莓派用户调研中心的相关数据和预测模型,对行业的未来发展进行深度洞悉,推出了《2024-2027年中国社交网络行业深度调研与投资规划分析报告》｡报告对行业区域发展､企业经营､行业竞争格局等进行了重点分析,最后分析了行 艾媒数据中心(data.iimedia.",
+        "icon": "",
+        "link": "https://www.iimedia.cn/c1094/111810.html",
+        "media": "艾媒网",
+        "publish_date": "2026-06-05",
+        "refer": "ref_4",
+        "title": "2025年按用户数划分的最常用社交网络分析:三大Meta系产品稳居前列"
+      },
+      {
+        "content": "solr 做索引时抛出的异常,导致索引失败!_course 2018-02-28 org.apache. solr .common. Solr Exception : Exception writing document id 211328 to the index; possible analysis error: startOffset must be non-negative, and ",
+        "icon": "",
+        "link": "https://ask.csdn.net/questions/658824?sort=votes_count",
+        "media": "",
+        "publish_date": "2017-09-22",
+        "refer": "ref_5",
+        "title": "exception-solr增量更新报错 您的主机中的软件中止了一个已建立的连接。——CSDN问答频道"
+      },
+      {
+        "content": "<img src='http://qqpublic.qpic.cn/qq_public/0/28-1442661743-548842F7F2A14C1C81F84C9C78C6BB69/0?fmt=gif&size=119&h=138&w=638&ppv=1' data-aigc-mark='0'/></p><p><img src='http://qqpublic.qpic.cn/qq_public/0/28-492213611-4FF52DDBC6756ABB81DF55FCE20D2F73/0?",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_9036a27736b74352",
+        "media": "企鹅号",
+        "publish_date": "2026-06-09",
+        "refer": "ref_6",
+        "title": "QuestMobile 2026年男性用户APP偏好榜单"
+      },
+      {
+        "content": "帮助来源:https://tex.stackexchange.com/questions/76455/converted-xxx-eps-converted-to-pdf-not-found sudo apt install texlive-font-utils 问题解决｡ 帮助来源:https:/ ",
+        "icon": "",
+        "link": "https://www.cnblogs.com/zhaopw5/p/archive/2022/03/05",
+        "media": "博客园",
+        "publish_date": "2022-03-05",
+        "refer": "ref_7",
+        "title": "随笔档案「2022年3月5日」:Ubuntu18 下TeXstudio 编译不了含有 .eps 格式的图片 ... - zhaopw5 - 博客园"
+      },
+      {
+        "content": "\"《高等学校科学技术学术规范指南(第二版)》是2017年中国人民大学出版社出版的图书,作者是教育部科学技术委员会学风建设委员会｡内容简介本书初版于2010年6月,曾被多所高等学校作为研究生科研诚信教育的范本,并取得了良好的效果｡",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E9%AB%98%E7%AD%89%E5%AD%A6%E6%A0%A1%E7%A7%91%E5%AD%A6%E6%8A%80%E6%9C%AF%E5%AD%A6%E6%9C%AF%E8%A7%84%E8%8C%83%E6%8C%87%E5%8D%97(%E7%AC%AC%E4%BA%8C%E7%89%88)/20817202",
+        "media": "百度百科",
+        "publish_date": "2024-09-08",
+        "refer": "ref_8",
+        "title": "高等学校科学技术学术规范指南(第二版)"
+      },
+      {
+        "content": "Source publication Conference Paper Full-text available Oct 2009 As the number and scale of Semantic Web applications in use increases, so does the need to efficiently store and retrieve RDF data. ",
+        "icon": "",
+        "link": "https://www.researchgate.net/figure/List-Length-Means-Standard-Deviations_tbl1_228910462",
+        "media": "",
+        "publish_date": "2024-06-19",
+        "refer": "ref_9",
+        "title": "List Length Means (Standard Deviations)  Download Table"
+      },
+      {
+        "content": "版本 8.5.0.1 要求 查看权限要求   隐私政策 APP 九游 游戏 介绍 用户点评 相关应用 加速器下载 游戏 介绍 Guide for Toon Blast 2018 游戏 简介 分类 : 休闲益智 休闲 Guide for Toon Blast 2018产品特色 《Guide for Toon Blast 2018》是一款令人兴奋的益智游戏,给玩家带来了许多愉快的时光｡",
+        "icon": "",
+        "link": "https://www.25pp.com/xiazai/7723672/",
+        "media": "PP助手",
+        "publish_date": "2026-02-12",
+        "refer": "ref_10",
+        "title": "GuideforToonBlast2018APP下载安装_最新正版手机免费下载_25PP"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "path social app shutdown reason 2018 users data",
+        "query": "Path social app shutdown reason 2018 users data"
+      }
+    ],
+    "latency_seconds": 2.0,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "AllTrails New Zealand overtourism controversy DOC hiking",
+    "content": "**新西兰副总理涉殖民历史言论引毛利民众抗议** (2026-02-06)\n<p>中新网北京2月6日电  惠灵顿消息:当地时间2月6日,在新西兰北岛怀唐伊举行的怀唐伊日晨祷活动中,毛利民众抗议该国副总理大卫·西摩日前涉殖民历史的不当言论｡</p><p>每年的2月6日是新西兰的怀唐伊日,用来纪念1840年《怀唐伊条约》的签署,该条约被视为新西兰建国基石｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_7876985946769852\n\n**新西兰艾斯派林山国家公园** (2023-07-20)\n\"新西兰阿斯帕林山国家公园也被称为艾斯派林山国家公园,位于新西兰南岛西岸大区和奥塔哥区的交界处,成立于1964年,占地面积3555平方千米,因步行旅游和爬山而知名｡基本内容Mount Aspiring National Park 新西兰最壮观的国家公园 景点所在大洲: 大洋洲【Oceania】 景点所在国家/地区:新西兰[New Zealand] 景点所在省､州:西岸和奥塔哥大区 [West \nSource: https://baike.baidu.com/item/%E6%96%B0%E8%A5%BF%E5%85%B0%E8%89%BE%E6%96%AF%E6%B4%BE%E6%9E%97%E5%B1%B1%E5%9B%BD%E5%AE%B6%E5%85%AC%E5%9B%AD/18844722\n\n**新西兰有一种人类刚刚统治地球的感觉** (2026-06-16)\n<p>今年｢新西兰兵家不争之地的含金量｣的话题火了｡</p><p>作为南半球的众多岛国之一,新西兰可能是唯一一个偏远到经常被世界地图丢掉的国家｡</p><p><img src='http://qqpublic.qpic.cn/qq_public/0/28-3783142411-53CD4CAF2DC20C71353AF8A5CCA635F0/0?\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_3386a30cf1e90952\n\n**textbook railway operation and control railroadsignalling train scheduling interlocking blocksystems** (2025-03-01)\nPachl, J.: Railway Signalling Principles. Braunschweig 2024, 85 p. DOI: 10.24355/dbbs.084-202110181429-0 Free Download This tutorial E-book is based on the long-standing experience of teaching \nSource: http://www.joernpachl.de/rsp.htm\n\n**Welcome to New Zealand  Official site for Tourism New Zealand** (2022-10-22)\nVehicle rental Public Transport Hobbiton, Waikato By Miles Holden Across our incredible country, you can find everything from untamed wilderness to rich culture. There's more to find in Aotearoa New \nSource: https://www.newzealand.com/sg/\n\n**AllWhite** (2025-12-20)\n<p>ootd</p><p><img src='http://qqpublic.qpic.cn/qq_public/0/28-3601311868-09884EBFA36AF6A3CFA15F8929179D83/0?fmt=jpg&size=845&h=1440&w=1080&ppv=1' data-aigc-mark='0'/></p><p><img src='http://qqpublic.\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_4526945e2bd57352\n\n**Regulate** (2024-03-25)\n\"regulate是一个英语单词,动词,作动词时意为“调节,规定;控制;校准;有系统的管理”｡单词发音英 [ˈregjuleɪt] 美 [ˈrɛɡjəˌlet]短语搭配REG regulate 控制 ; 校准 ; 节制 ; 调节 Voltage regulate 电压调节方式 ; 电压调节 ; 电压调理方式 ; 速度调节 regulate blood 调节血液 ; 规管血 ; 调节血 ; \nSource: https://baike.baidu.com/item/Regulate/20808501\n\n**Neutrophil trapping and nexocytosis, mast cell-mediated processes for inflammatory signal relay - ScienceDirect** (2024-09-19)\nArticle Author links open overlay panel Michael Mihlan 1 2 , Stefanie Wissmann 1 3 , Alina Gavrilov 1 4 , Lukas Kaltenbach 1 , Marie Britz 5 , Kristin Franke 6 7 , Barbara Hummel 1 , Andrea Imle 8 , \nSource: https://www.sciencedirect.com/science/article/pii/S0092867424007748\n\n**旺阿雷市** (2023-12-07)\n\"旺阿雷市位于新西兰北岛,为北地大区的首府,是新西兰最北的城市｡该城市是新西兰北部区最大产业中心都市,同时也是天然良港､观光胜地､渔业据点,以及新西兰拥有石油精制基地的工业地带｡基本内容简介 新西兰最北的城市 景点所在大洲: 大洋洲【Oceania】 景点所在国家/地区:新西兰[New Zealand] 景点所在省､州:北地大区 [Northland Region] 景点所在城市:旺阿雷 \nSource: https://baike.baidu.com/item/%E6%97%BA%E9%98%BF%E9%9B%B7%E5%B8%82/18803643\n\n**New study reveals how 'free radicals' drive cell division, uncovering a potential new way to target cancer** (2022-07-27)\nTopics Science X Account share this! Staining for reactive oxygen species in retina pigment epithelial cells. Credit: Dr Jörg Mansfeld Scientists have discovered how naturally occurring but unstable \nSource: https://phys.org/news/2022-07-reveals-free-radicals-cell-division.html\n",
+    "web_references": [
+      {
+        "content": "<p>中新网北京2月6日电  惠灵顿消息:当地时间2月6日,在新西兰北岛怀唐伊举行的怀唐伊日晨祷活动中,毛利民众抗议该国副总理大卫·西摩日前涉殖民历史的不当言论｡</p><p>每年的2月6日是新西兰的怀唐伊日,用来纪念1840年《怀唐伊条约》的签署,该条约被视为新西兰建国基石｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_7876985946769852",
+        "media": "企鹅号",
+        "publish_date": "2026-02-06",
+        "refer": "ref_1",
+        "title": "新西兰副总理涉殖民历史言论引毛利民众抗议"
+      },
+      {
+        "content": "\"新西兰阿斯帕林山国家公园也被称为艾斯派林山国家公园,位于新西兰南岛西岸大区和奥塔哥区的交界处,成立于1964年,占地面积3555平方千米,因步行旅游和爬山而知名｡基本内容Mount Aspiring National Park 新西兰最壮观的国家公园 景点所在大洲: 大洋洲【Oceania】 景点所在国家/地区:新西兰[New Zealand] 景点所在省､州:西岸和奥塔哥大区 [West ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E6%96%B0%E8%A5%BF%E5%85%B0%E8%89%BE%E6%96%AF%E6%B4%BE%E6%9E%97%E5%B1%B1%E5%9B%BD%E5%AE%B6%E5%85%AC%E5%9B%AD/18844722",
+        "media": "百度百科",
+        "publish_date": "2023-07-20",
+        "refer": "ref_2",
+        "title": "新西兰艾斯派林山国家公园"
+      },
+      {
+        "content": "<p>今年｢新西兰兵家不争之地的含金量｣的话题火了｡</p><p>作为南半球的众多岛国之一,新西兰可能是唯一一个偏远到经常被世界地图丢掉的国家｡</p><p><img src='http://qqpublic.qpic.cn/qq_public/0/28-3783142411-53CD4CAF2DC20C71353AF8A5CCA635F0/0?",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_3386a30cf1e90952",
+        "media": "企鹅号",
+        "publish_date": "2026-06-16",
+        "refer": "ref_3",
+        "title": "新西兰有一种人类刚刚统治地球的感觉"
+      },
+      {
+        "content": "Pachl, J.: Railway Signalling Principles. Braunschweig 2024, 85 p. DOI: 10.24355/dbbs.084-202110181429-0 Free Download This tutorial E-book is based on the long-standing experience of teaching ",
+        "icon": "",
+        "link": "http://www.joernpachl.de/rsp.htm",
+        "media": "",
+        "publish_date": "2025-03-01",
+        "refer": "ref_4",
+        "title": "textbook railway operation and control railroadsignalling train scheduling interlocking blocksystems"
+      },
+      {
+        "content": "Vehicle rental Public Transport Hobbiton, Waikato By Miles Holden Across our incredible country, you can find everything from untamed wilderness to rich culture. There's more to find in Aotearoa New ",
+        "icon": "",
+        "link": "https://www.newzealand.com/sg/",
+        "media": "",
+        "publish_date": "2022-10-22",
+        "refer": "ref_5",
+        "title": "Welcome to New Zealand  Official site for Tourism New Zealand"
+      },
+      {
+        "content": "<p>ootd</p><p><img src='http://qqpublic.qpic.cn/qq_public/0/28-3601311868-09884EBFA36AF6A3CFA15F8929179D83/0?fmt=jpg&size=845&h=1440&w=1080&ppv=1' data-aigc-mark='0'/></p><p><img src='http://qqpublic.",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_4526945e2bd57352",
+        "media": "企鹅号",
+        "publish_date": "2025-12-20",
+        "refer": "ref_6",
+        "title": "AllWhite"
+      },
+      {
+        "content": "\"regulate是一个英语单词,动词,作动词时意为“调节,规定;控制;校准;有系统的管理”｡单词发音英 [ˈregjuleɪt] 美 [ˈrɛɡjəˌlet]短语搭配REG regulate 控制 ; 校准 ; 节制 ; 调节 Voltage regulate 电压调节方式 ; 电压调节 ; 电压调理方式 ; 速度调节 regulate blood 调节血液 ; 规管血 ; 调节血 ; ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/Regulate/20808501",
+        "media": "百度百科",
+        "publish_date": "2024-03-25",
+        "refer": "ref_7",
+        "title": "Regulate"
+      },
+      {
+        "content": "Article Author links open overlay panel Michael Mihlan 1 2 , Stefanie Wissmann 1 3 , Alina Gavrilov 1 4 , Lukas Kaltenbach 1 , Marie Britz 5 , Kristin Franke 6 7 , Barbara Hummel 1 , Andrea Imle 8 , ",
+        "icon": "",
+        "link": "https://www.sciencedirect.com/science/article/pii/S0092867424007748",
+        "media": "",
+        "publish_date": "2024-09-19",
+        "refer": "ref_8",
+        "title": "Neutrophil trapping and nexocytosis, mast cell-mediated processes for inflammatory signal relay - ScienceDirect"
+      },
+      {
+        "content": "\"旺阿雷市位于新西兰北岛,为北地大区的首府,是新西兰最北的城市｡该城市是新西兰北部区最大产业中心都市,同时也是天然良港､观光胜地､渔业据点,以及新西兰拥有石油精制基地的工业地带｡基本内容简介 新西兰最北的城市 景点所在大洲: 大洋洲【Oceania】 景点所在国家/地区:新西兰[New Zealand] 景点所在省､州:北地大区 [Northland Region] 景点所在城市:旺阿雷 ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E6%97%BA%E9%98%BF%E9%9B%B7%E5%B8%82/18803643",
+        "media": "百度百科",
+        "publish_date": "2023-12-07",
+        "refer": "ref_9",
+        "title": "旺阿雷市"
+      },
+      {
+        "content": "Topics Science X Account share this! Staining for reactive oxygen species in retina pigment epithelial cells. Credit: Dr Jörg Mansfeld Scientists have discovered how naturally occurring but unstable ",
+        "icon": "",
+        "link": "https://phys.org/news/2022-07-reveals-free-radicals-cell-division.html",
+        "media": "",
+        "publish_date": "2022-07-27",
+        "refer": "ref_10",
+        "title": "New study reveals how 'free radicals' drive cell division, uncovering a potential new way to target cancer"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "allTrails new Zealand overtourism controversy doc hiking",
+        "query": "AllTrails New Zealand overtourism controversy DOC hiking"
+      }
+    ],
+    "latency_seconds": 1.71,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "diary journaling app retention 90 days D30 D90 statistics",
+    "content": "**心事放心写:谷歌推 Pixel Journal 日记 App,AI 写作提示** (2025-08-21)\nEA606A2D5F54B80/0?fmt=png&size=162&h=649&w=1154&ppv=1' /></p><p>和苹果在 2023 年推出的手记(Journal)应用类似,Pixel Journal 是一款数字日记工具,主要帮助用户记录生活点滴,但不同的是,Pixel Journal 采用了 AI 技术作为核心驱动力,实现更智能化的写作体验｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_63768a6ce8604252\n\n**Day One新增Apple Journal导入功能,日记迁移更便捷** (2026-05-14)\n<p>苹果的日记应用Apple Journal为用户提供了一个私密的写作与记录空间,支持iPhone､iPad和Mac使用｡而Day One作为功能更丰富的第三方日记应用,一直是希望获得进阶体验的用户的首选｡现在,从Apple Journal迁移到Day One变得更加简单,用户无需从头开始｡</p><p>Day One for iPhone､iPad和Mac的最新版本新增了专属的Apple \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_1546a052f8c75052\n\n**Individual characteristic associated with 90Yday rehospitalization  Download Scientific Diagram** (2024-08-04)\nCopy reference, caption or embed code - The Frequency of Unplanned Rehospitalization and Associated Factors in Gyneoncology Patients: A Retrospective Study Individual characteristic associated with \nSource: https://www.researchgate.net/figure/Individual-characteristic-associated-with-90Yday-rehospitalization_tbl2_310592302/actions\n\n**苹果Journal应用登陆iPadOS 26,iPad用户迎来完整日记体验** (2026-01-06)\n对我来说,去年最令人兴奋的应用首次亮相毫无疑问是苹果的Journal日记应用｡      Journal应用最初于2023年独家在iPhone上发布｡在随后的iOS 18更新中获得了稳定的改进,但仍然仅限于iPhone平台｡      我已经写日记多年,最初对苹果这款应用有很多喜爱之处｡但尽管我很想全面使用它,仅限于iPhone的限制让我难以实现｡\nSource: https://new.qq.com/rain/a/20260106A03R1100\n\n**Activity · abilashjram/NikonD90Scripts · GitHub** (2026-06-02)\nNavigation Menu Toggle navigation Appearance settings Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert Footer © 2026 GitHub, Inc. Footer navigation Manage cookies Do not share my personal information You can’t perform that action at this time.\nSource: https://github.com/abilashjram/NikonD90Scripts/activity\n\n**01Agent内容发布日历怎么用?完整解析** (2026-05-29)\n01Agent内容发布日历使用解析 开篇导语 在内容运营领域,合理规划多平台内容发布节奏至关重要｡它不仅能保持用户的关注度,还能提升内容的传播效果｡然而,很多内容创作者和运营人员在安排发布时间时,常常会陷入混乱,容易忽略不同平台的用户活跃时间､内容类型适配等因素｡01Agent作为一款内容发布规划工具,其内容发布日历功能可以帮助用户智能规划发布节奏｡\nSource: https://www.sohu.com/a/1029526180_122560471\n\n**MSC3083: Check for space membership during a local join of restricted… · matrix-org/synapse@4529915 · GitHub** (2024-04-26)\n. Copy full SHA for 4529915 3 file s changed + 76 - 2 Lines changed: 76 additions & 2 deletions File tree Expand file tree Collapse file tree Open diff view settings Filter options changelog.d 9735.feature synapse/handlers room_member.py Expand file tree Collapse file tree Open diff view settings Collapse file + 1 Lines changed: 1 addition & 0 deletions Original file line number Diff line number Diff line change @@ -0,0 +1 @@ 1 + Add experimental support for [MSC3083](https://github.com/matrix-org/matrix-doc/pull/3083): restricting room access via group membership. Collapse file + 1 - 1 Lines changed: 1 addition & 1 deletion Original file \nSource: https://github.com/matrix-org/synapse/commit/452991527a3e76715f0571f81f036ea20de0be36\n\n**DirectX 90 3D SetRenderState 设置渲染状态 - cmd9x的专栏 - CSDN博客** (2017-01-20)\n改变D3D中的渲染状态 1､设置着色模式: SetRenderState(D3DRS_SHADEMODE, D3DSHADE_FLAT); //设置平面着色模式 SetRenderState(D3DRS_SHADEMODE, D3DSHADE_GOURAUD); //设置格劳德着色模式 2､设置多边形填充模式: SetRenderState(D3DRS_FILLMODE, \nSource: https://blog.csdn.net/cmd9x/article/details/54629679?locationNum=2&fps=1\n\n**跟单托收采用了“D/P 90 days after sight“的条件,见票日期-刷刷题APP** (2026-05-06)\n举一反三 A. 主动交代违法行为的 B. 配合调查如实说明情况的 C. 主动挽回损失的 D. 拒绝提供证据的 A. 公务员 B. 国有企业管理人员 C. 公办学校管理人员 D. 基层群众性自治组织中从事管理的人员 A. 结婚嫁娶 B. 悼亡发丧 C. 庆典贺礼 D. 探亲休假 A. 串供或者伪造证据的 B. 阻止他人检举的 C. 主动上交违法所得的 D. 政务处分期内再次违法的 A. 没收 B. \nSource: https://www.shuashuati.com/ti/388f1a9f037a469c88e997184565bf42.html\n\n**Retraction Note: Dysregulation of CD30 T cells by leukemia impairs isotype switching in normal B cells  Nature Immunology** (2026-01-09)\nYour privacy, your choice We use essential cookies to make sure the site can function. We also use optional cookies for advertising, personalisation of content, usage analysis, and social media, as \nSource: https://www.nature.com/articles/s41590-025-02405-2\n",
+    "web_references": [
+      {
+        "content": "EA606A2D5F54B80/0?fmt=png&size=162&h=649&w=1154&ppv=1' /></p><p>和苹果在 2023 年推出的手记(Journal)应用类似,Pixel Journal 是一款数字日记工具,主要帮助用户记录生活点滴,但不同的是,Pixel Journal 采用了 AI 技术作为核心驱动力,实现更智能化的写作体验｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_63768a6ce8604252",
+        "media": "企鹅号",
+        "publish_date": "2025-08-21",
+        "refer": "ref_1",
+        "title": "心事放心写:谷歌推 Pixel Journal 日记 App,AI 写作提示"
+      },
+      {
+        "content": "<p>苹果的日记应用Apple Journal为用户提供了一个私密的写作与记录空间,支持iPhone､iPad和Mac使用｡而Day One作为功能更丰富的第三方日记应用,一直是希望获得进阶体验的用户的首选｡现在,从Apple Journal迁移到Day One变得更加简单,用户无需从头开始｡</p><p>Day One for iPhone､iPad和Mac的最新版本新增了专属的Apple ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_1546a052f8c75052",
+        "media": "企鹅号",
+        "publish_date": "2026-05-14",
+        "refer": "ref_2",
+        "title": "Day One新增Apple Journal导入功能,日记迁移更便捷"
+      },
+      {
+        "content": "Copy reference, caption or embed code - The Frequency of Unplanned Rehospitalization and Associated Factors in Gyneoncology Patients: A Retrospective Study Individual characteristic associated with ",
+        "icon": "",
+        "link": "https://www.researchgate.net/figure/Individual-characteristic-associated-with-90Yday-rehospitalization_tbl2_310592302/actions",
+        "media": "",
+        "publish_date": "2024-08-04",
+        "refer": "ref_3",
+        "title": "Individual characteristic associated with 90Yday rehospitalization  Download Scientific Diagram"
+      },
+      {
+        "content": "对我来说,去年最令人兴奋的应用首次亮相毫无疑问是苹果的Journal日记应用｡      Journal应用最初于2023年独家在iPhone上发布｡在随后的iOS 18更新中获得了稳定的改进,但仍然仅限于iPhone平台｡      我已经写日记多年,最初对苹果这款应用有很多喜爱之处｡但尽管我很想全面使用它,仅限于iPhone的限制让我难以实现｡",
+        "icon": "",
+        "link": "https://new.qq.com/rain/a/20260106A03R1100",
+        "media": "腾讯网",
+        "publish_date": "2026-01-06",
+        "refer": "ref_4",
+        "title": "苹果Journal应用登陆iPadOS 26,iPad用户迎来完整日记体验"
+      },
+      {
+        "content": "Navigation Menu Toggle navigation Appearance settings Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly Cancel Create saved search Appearance settings Resetting focus You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert Footer © 2026 GitHub, Inc. Footer navigation Manage cookies Do not share my personal information You can’t perform that action at this time.",
+        "icon": "",
+        "link": "https://github.com/abilashjram/NikonD90Scripts/activity",
+        "media": "",
+        "publish_date": "2026-06-02",
+        "refer": "ref_5",
+        "title": "Activity · abilashjram/NikonD90Scripts · GitHub"
+      },
+      {
+        "content": "01Agent内容发布日历使用解析 开篇导语 在内容运营领域,合理规划多平台内容发布节奏至关重要｡它不仅能保持用户的关注度,还能提升内容的传播效果｡然而,很多内容创作者和运营人员在安排发布时间时,常常会陷入混乱,容易忽略不同平台的用户活跃时间､内容类型适配等因素｡01Agent作为一款内容发布规划工具,其内容发布日历功能可以帮助用户智能规划发布节奏｡",
+        "icon": "",
+        "link": "https://www.sohu.com/a/1029526180_122560471",
+        "media": "搜狐",
+        "publish_date": "2026-05-29",
+        "refer": "ref_6",
+        "title": "01Agent内容发布日历怎么用?完整解析"
+      },
+      {
+        "content": ". Copy full SHA for 4529915 3 file s changed + 76 - 2 Lines changed: 76 additions & 2 deletions File tree Expand file tree Collapse file tree Open diff view settings Filter options changelog.d 9735.feature synapse/handlers room_member.py Expand file tree Collapse file tree Open diff view settings Collapse file + 1 Lines changed: 1 addition & 0 deletions Original file line number Diff line number Diff line change @@ -0,0 +1 @@ 1 + Add experimental support for [MSC3083](https://github.com/matrix-org/matrix-doc/pull/3083): restricting room access via group membership. Collapse file + 1 - 1 Lines changed: 1 addition & 1 deletion Original file ",
+        "icon": "",
+        "link": "https://github.com/matrix-org/synapse/commit/452991527a3e76715f0571f81f036ea20de0be36",
+        "media": "",
+        "publish_date": "2024-04-26",
+        "refer": "ref_7",
+        "title": "MSC3083: Check for space membership during a local join of restricted… · matrix-org/synapse@4529915 · GitHub"
+      },
+      {
+        "content": "改变D3D中的渲染状态 1､设置着色模式: SetRenderState(D3DRS_SHADEMODE, D3DSHADE_FLAT); //设置平面着色模式 SetRenderState(D3DRS_SHADEMODE, D3DSHADE_GOURAUD); //设置格劳德着色模式 2､设置多边形填充模式: SetRenderState(D3DRS_FILLMODE, ",
+        "icon": "",
+        "link": "https://blog.csdn.net/cmd9x/article/details/54629679?locationNum=2&fps=1",
+        "media": "",
+        "publish_date": "2017-01-20",
+        "refer": "ref_8",
+        "title": "DirectX 90 3D SetRenderState 设置渲染状态 - cmd9x的专栏 - CSDN博客"
+      },
+      {
+        "content": "举一反三 A. 主动交代违法行为的 B. 配合调查如实说明情况的 C. 主动挽回损失的 D. 拒绝提供证据的 A. 公务员 B. 国有企业管理人员 C. 公办学校管理人员 D. 基层群众性自治组织中从事管理的人员 A. 结婚嫁娶 B. 悼亡发丧 C. 庆典贺礼 D. 探亲休假 A. 串供或者伪造证据的 B. 阻止他人检举的 C. 主动上交违法所得的 D. 政务处分期内再次违法的 A. 没收 B. ",
+        "icon": "",
+        "link": "https://www.shuashuati.com/ti/388f1a9f037a469c88e997184565bf42.html",
+        "media": "刷刷题",
+        "publish_date": "2026-05-06",
+        "refer": "ref_9",
+        "title": "跟单托收采用了“D/P 90 days after sight“的条件,见票日期-刷刷题APP"
+      },
+      {
+        "content": "Your privacy, your choice We use essential cookies to make sure the site can function. We also use optional cookies for advertising, personalisation of content, usage analysis, and social media, as ",
+        "icon": "",
+        "link": "https://www.nature.com/articles/s41590-025-02405-2",
+        "media": "Nature",
+        "publish_date": "2026-01-09",
+        "refer": "ref_10",
+        "title": "Retraction Note: Dysregulation of CD30 T cells by leukemia impairs isotype switching in normal B cells  Nature Immunology"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "diary journaling app retention 90 days d30 d90 statistics",
+        "query": "diary journaling app retention 90 days D30 D90 statistics"
+      }
+    ],
+    "latency_seconds": 1.63,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Randonautica shutdown decline user engagement 2024",
+    "content": "**PC shuts down randomly during img2img generation · vladmandic sdnext · Discussion #3273 · GitHub** (2024-06-23)\nReplies: 2 comments · 2 replies Oldest Newest Labels None yet 2 participants Heading Bold Italic Quote Code Link Numbered list Unordered list Task list Attach files Mention Reference Menu Heading Bold Italic Quote Code Link Numbered list Unordered list Task list Attach files Mention Reference Select a reply Loading Uh oh! There was an error while loading. Please reload this page . Create a new saved reply 👍 1 reacted with thumbs up emoji 👎 1 reacted with thumbs down emoji 😄 1 reacted with laugh emoji 🎉 1 reacted with hooray emoji 😕 1 reacted with confused emoji ❤️ 1 reacted with heart emoji 🚀 1 reacted with rocket emoji 👀 1 reacted \nSource: https://github.com/vladmandic/automatic/discussions/3273\n\n**Retraction Note: China’s 2060 carbon-neutrality agenda: the nexus between energy consumption and environmental quality  Environmental Science** (2024-07-06)\nYour privacy, your choice We use essential cookies to make sure the site can function. We also use optional cookies for advertising, personalisation of content, usage analysis, and social media, as \nSource: https://link.springer.com/article/10.1007/s11356-024-34324-4\n\n**rand* construction’s 2024 Year in Review - rand construction corporation** (2025-01-24)\nrand* construction’s 2024 Year in Review 2024 was an incredible year at rand*! From celebrating 35 years in business to welcoming 81 new team members and promoting 60 outstanding individuals, our \nSource: https://randcc.com/rand-constructions-2024-year-in-review/\n\n**mysql8.4安装遇到的问题-CSDN博客** (2024-09-12)\n1 安装mysql时报错MySQL 8.4.0 : default_authentication_plugin=mysql_native_password has been removed 或mysql: unknown variable ‘default_authentication_plugin=mysql_native_password’ 原因 mysql 8.4删除了 default_authentication_plugin=mysql_native_password,原生密码认证已被弃用｡所以从 8.3.0 版本切换到 8.4.0 版本后,MySQL将无法正常工作｡ 解决 “–default-authentication-plugin=mysql_native_password” 已被移除,因为原生密码认证已被弃用｡在MySQL 8.4 中仍然可以使用原生密码认证,但参数已重命名为 “–mysql-native-password=ON”,因为它不仅设置了插件,还激活了插件(该插件现在默认被禁用)｡将“–mysql-native-password=ON” 添加到你的参数中,并移除 “–default-authentication-plugin=mysql_native_password”｡ \nSource: https://blog.csdn.net/ibigboy/article/details/142167865\n\n**RandomNumberGenerator.GetNonZeroBytes Method (System.Security.Cryptography)  Microsoft Learn** (2025-07-01)\nTable of contents Exit editor mode Ask Learn Ask Learn Language csharp vb fsharp cpp Copy Markdown Print Note Access to this page requires authorization. You can try signing in or changing \nSource: http://msdn.microsoft.com/library/azure/system.security.cryptography.randomnumbergenerator.getnonzerobytes(v=vs.100)?cs-save-lang=1&cs-lang=cpp\n\n**Randomizer - 2024 May build file - ModDB** (2024-05-09)\nI saw you live, it was fun, thanks for playing and good luck for the next runs. Reply Good karma +2 votes Author There was a bug found were the stocks/scopes would revert the weapon capacity to \nSource: https://www.moddb.com/downloads/randomizer-2024-may-build\n\n**don't update current withdrawn amount when rate limit is reset when duration hasn't passed by viraj124 · Pull Request #290 · FuelLabs** (2024-09-18)\n# 290 Merged Merged don't update current withdrawn amount when rate limit is reset when duration hasn't passed # 290 refactor: don't update current withdrawn amount when rate limit is reset Copy full \nSource: https://github.com/FuelLabs/fuel-bridge/pull/290/commits\n\n**Update dependency mermaid to v10.8.0 by renovate[bot] · Pull Request #8054 · rust-lang/crates.io · GitHub** (2024-02-03)\n There was an error while loading. Please reload this page . Merged Update dependency mermaid to v10.8.0 3b9a4c0 Select commit Loading Failed to load commit list.  Uh oh! There was an error while \nSource: https://github.com/rust-lang/crates.io/pull/8054/checks\n\n**Rayman - Hoodlums' Revenge (U)(TrashMan) ROM Download  GBA ROMs  Emuparadise** (2026-05-22)\nLove this game ? Write a review! We are preparing your download... Please scroll down to get your download link! This game is unavailable ( ? ) LIKE us on Facebook and stay updated with Emuparadise! \nSource: https://www.emuparadise.me/Nintendo_Gameboy_Advance_ROMs/Rayman_-_Hoodlums'_Revenge_(U)(TrashMan)/45182-download\n\n**GATE 2024 Counselling (Started), 3rd Allotment (Out), Schedule** (2025-03-28)\nLatest Applications Open 2024: GATE 2025 COAP Counselling Registration has been Started now. CCMT 1st Round Counselling Registration will be Started in July 2025 . The GATE is popularly known as the \nSource: https://www.iaspaper.net/gate-counseling/\n",
+    "web_references": [
+      {
+        "content": "Replies: 2 comments · 2 replies Oldest Newest Labels None yet 2 participants Heading Bold Italic Quote Code Link Numbered list Unordered list Task list Attach files Mention Reference Menu Heading Bold Italic Quote Code Link Numbered list Unordered list Task list Attach files Mention Reference Select a reply Loading Uh oh! There was an error while loading. Please reload this page . Create a new saved reply 👍 1 reacted with thumbs up emoji 👎 1 reacted with thumbs down emoji 😄 1 reacted with laugh emoji 🎉 1 reacted with hooray emoji 😕 1 reacted with confused emoji ❤️ 1 reacted with heart emoji 🚀 1 reacted with rocket emoji 👀 1 reacted ",
+        "icon": "",
+        "link": "https://github.com/vladmandic/automatic/discussions/3273",
+        "media": "",
+        "publish_date": "2024-06-23",
+        "refer": "ref_1",
+        "title": "PC shuts down randomly during img2img generation · vladmandic sdnext · Discussion #3273 · GitHub"
+      },
+      {
+        "content": "Your privacy, your choice We use essential cookies to make sure the site can function. We also use optional cookies for advertising, personalisation of content, usage analysis, and social media, as ",
+        "icon": "",
+        "link": "https://link.springer.com/article/10.1007/s11356-024-34324-4",
+        "media": "",
+        "publish_date": "2024-07-06",
+        "refer": "ref_2",
+        "title": "Retraction Note: China’s 2060 carbon-neutrality agenda: the nexus between energy consumption and environmental quality  Environmental Science"
+      },
+      {
+        "content": "rand* construction’s 2024 Year in Review 2024 was an incredible year at rand*! From celebrating 35 years in business to welcoming 81 new team members and promoting 60 outstanding individuals, our ",
+        "icon": "",
+        "link": "https://randcc.com/rand-constructions-2024-year-in-review/",
+        "media": "",
+        "publish_date": "2025-01-24",
+        "refer": "ref_3",
+        "title": "rand* construction’s 2024 Year in Review - rand construction corporation"
+      },
+      {
+        "content": "1 安装mysql时报错MySQL 8.4.0 : default_authentication_plugin=mysql_native_password has been removed 或mysql: unknown variable ‘default_authentication_plugin=mysql_native_password’ 原因 mysql 8.4删除了 default_authentication_plugin=mysql_native_password,原生密码认证已被弃用｡所以从 8.3.0 版本切换到 8.4.0 版本后,MySQL将无法正常工作｡ 解决 “–default-authentication-plugin=mysql_native_password” 已被移除,因为原生密码认证已被弃用｡在MySQL 8.4 中仍然可以使用原生密码认证,但参数已重命名为 “–mysql-native-password=ON”,因为它不仅设置了插件,还激活了插件(该插件现在默认被禁用)｡将“–mysql-native-password=ON” 添加到你的参数中,并移除 “–default-authentication-plugin=mysql_native_password”｡ ",
+        "icon": "",
+        "link": "https://blog.csdn.net/ibigboy/article/details/142167865",
+        "media": "",
+        "publish_date": "2024-09-12",
+        "refer": "ref_4",
+        "title": "mysql8.4安装遇到的问题-CSDN博客"
+      },
+      {
+        "content": "Table of contents Exit editor mode Ask Learn Ask Learn Language csharp vb fsharp cpp Copy Markdown Print Note Access to this page requires authorization. You can try signing in or changing ",
+        "icon": "",
+        "link": "http://msdn.microsoft.com/library/azure/system.security.cryptography.randomnumbergenerator.getnonzerobytes(v=vs.100)?cs-save-lang=1&cs-lang=cpp",
+        "media": "",
+        "publish_date": "2025-07-01",
+        "refer": "ref_5",
+        "title": "RandomNumberGenerator.GetNonZeroBytes Method (System.Security.Cryptography)  Microsoft Learn"
+      },
+      {
+        "content": "I saw you live, it was fun, thanks for playing and good luck for the next runs. Reply Good karma +2 votes Author There was a bug found were the stocks/scopes would revert the weapon capacity to ",
+        "icon": "",
+        "link": "https://www.moddb.com/downloads/randomizer-2024-may-build",
+        "media": "",
+        "publish_date": "2024-05-09",
+        "refer": "ref_6",
+        "title": "Randomizer - 2024 May build file - ModDB"
+      },
+      {
+        "content": "# 290 Merged Merged don't update current withdrawn amount when rate limit is reset when duration hasn't passed # 290 refactor: don't update current withdrawn amount when rate limit is reset Copy full ",
+        "icon": "",
+        "link": "https://github.com/FuelLabs/fuel-bridge/pull/290/commits",
+        "media": "",
+        "publish_date": "2024-09-18",
+        "refer": "ref_7",
+        "title": "don't update current withdrawn amount when rate limit is reset when duration hasn't passed by viraj124 · Pull Request #290 · FuelLabs"
+      },
+      {
+        "content": " There was an error while loading. Please reload this page . Merged Update dependency mermaid to v10.8.0 3b9a4c0 Select commit Loading Failed to load commit list.  Uh oh! There was an error while ",
+        "icon": "",
+        "link": "https://github.com/rust-lang/crates.io/pull/8054/checks",
+        "media": "",
+        "publish_date": "2024-02-03",
+        "refer": "ref_8",
+        "title": "Update dependency mermaid to v10.8.0 by renovate[bot] · Pull Request #8054 · rust-lang/crates.io · GitHub"
+      },
+      {
+        "content": "Love this game ? Write a review! We are preparing your download... Please scroll down to get your download link! This game is unavailable ( ? ) LIKE us on Facebook and stay updated with Emuparadise! ",
+        "icon": "",
+        "link": "https://www.emuparadise.me/Nintendo_Gameboy_Advance_ROMs/Rayman_-_Hoodlums'_Revenge_(U)(TrashMan)/45182-download",
+        "media": "",
+        "publish_date": "2026-05-22",
+        "refer": "ref_9",
+        "title": "Rayman - Hoodlums' Revenge (U)(TrashMan) ROM Download  GBA ROMs  Emuparadise"
+      },
+      {
+        "content": "Latest Applications Open 2024: GATE 2025 COAP Counselling Registration has been Started now. CCMT 1st Round Counselling Registration will be Started in July 2025 . The GATE is popularly known as the ",
+        "icon": "",
+        "link": "https://www.iaspaper.net/gate-counseling/",
+        "media": "",
+        "publish_date": "2025-03-28",
+        "refer": "ref_10",
+        "title": "GATE 2024 Counselling (Started), 3rd Allotment (Out), Schedule"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "randonautica shutdown 2024 user engagement",
+        "query": "Randonautica shutdown decline user engagement 2024"
+      }
+    ],
+    "latency_seconds": 1.63,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "Foursquare Tips inappropriate content moderation legal",
+    "content": "**Challenges in multi-modal content moderation（发布时间：2025-06-27 00:39:35）** (2025-06-27)\nAI原生内容过滤在社交媒体的应用案例分析\n关键词：AI原生内容过滤、社交媒体、应用案例、内容审查、信息安全\n摘要：本文聚焦于AI原生内容过滤在社交媒体中的应用，深入剖析了相关核心概念和原理，通过实际案例展示其具体应用情况。介绍了开发环境搭建、代码实现等技术细节，探讨了其实际应用场景、未来发展趋势与挑战。旨在帮助读者全面了解AI原生内容过滤在社交媒体领域的重要作用和应用方式。\n背景介绍\n目的和范围\n在当今社交媒体高度发达的时代，每天都会产生海量的内容。这些内容的质量参差不齐，其中可能包含不良信息，如暴力、色情、虚假信息等。本文章的目的就是要探讨如何利用AI原生内容过滤技术来筛选和管理这些内容，范围涵盖了常见的社交媒体平台及其面临的内容管理问题。\n预期读者\n本文适合对人工智能、社交媒体技术感兴趣的人群，包括普通的社交媒体用户、技术爱好者、社交媒体平台的开发者和运营者等。无论你是想了解这项技术背后的原理，还是希望在实际工作中应用它，都能从本文中获得有价值的信息。\n文档结构概述\n本文首先会介绍AI原生内容过滤的核心概念和它们之间的联系，接着讲解其核心算法原理和具体操作步骤，然后通过数学模型和公式进一步阐述。之后会有项目实战部分，包括开发环境搭建、源代码实现和解读。还会探讨其实际应用场景、推荐相关工具和资源，分析未来发展趋势与挑战。最后进行总结，提出思考题，并给出常见问题解答和扩展阅读资料。\n术语表\n核心术语定义\nAI原生内容过滤：指利用人工智能技术对原始产生的内容进行筛选和判断，决定是否允许其在社交媒体平台上展示。\n社交媒体：是人们用来分享意见、见解、经验和观点等内容的在\nSource: https://blog.csdn.net/universsky2015/article/details/148936632\n",
+    "web_references": [
+      {
+        "content": "AI原生内容过滤在社交媒体的应用案例分析\n关键词：AI原生内容过滤、社交媒体、应用案例、内容审查、信息安全\n摘要：本文聚焦于AI原生内容过滤在社交媒体中的应用，深入剖析了相关核心概念和原理，通过实际案例展示其具体应用情况。介绍了开发环境搭建、代码实现等技术细节，探讨了其实际应用场景、未来发展趋势与挑战。旨在帮助读者全面了解AI原生内容过滤在社交媒体领域的重要作用和应用方式。\n背景介绍\n目的和范围\n在当今社交媒体高度发达的时代，每天都会产生海量的内容。这些内容的质量参差不齐，其中可能包含不良信息，如暴力、色情、虚假信息等。本文章的目的就是要探讨如何利用AI原生内容过滤技术来筛选和管理这些内容，范围涵盖了常见的社交媒体平台及其面临的内容管理问题。\n预期读者\n本文适合对人工智能、社交媒体技术感兴趣的人群，包括普通的社交媒体用户、技术爱好者、社交媒体平台的开发者和运营者等。无论你是想了解这项技术背后的原理，还是希望在实际工作中应用它，都能从本文中获得有价值的信息。\n文档结构概述\n本文首先会介绍AI原生内容过滤的核心概念和它们之间的联系，接着讲解其核心算法原理和具体操作步骤，然后通过数学模型和公式进一步阐述。之后会有项目实战部分，包括开发环境搭建、源代码实现和解读。还会探讨其实际应用场景、推荐相关工具和资源，分析未来发展趋势与挑战。最后进行总结，提出思考题，并给出常见问题解答和扩展阅读资料。\n术语表\n核心术语定义\nAI原生内容过滤：指利用人工智能技术对原始产生的内容进行筛选和判断，决定是否允许其在社交媒体平台上展示。\n社交媒体：是人们用来分享意见、见解、经验和观点等内容的在",
+        "icon": "https://sfile.chatglm.cn/searchImage/blog_csdn_net_icon_new.jpg",
+        "link": "https://blog.csdn.net/universsky2015/article/details/148936632",
+        "media": "CSDN博客",
+        "publish_date": "2025-06-27",
+        "refer": "ref_1",
+        "title": "Challenges in multi-modal content moderation（发布时间：2025-06-27 00:39:35）"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "foursquare content moderation legal 技巧",
+        "query": "Foursquare Tips inappropriate content moderation legal"
+      }
+    ],
+    "latency_seconds": 1.11,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "NZ Section 230 equivalent Harmful Digital Communications Act UGC liability",
+    "content": "**[skip publish] Simplify release process by vgarciabnz · Pull Request #137 · dhis2/dhis2-rule-engine · GitHub** (2024-06-26)\n[skip publish] Simplify release process # 137 Merged Copy link Copy Markdown Member This file contains hidden or bidirectional Unicode text that may be interpreted or compiled differently than what \nSource: https://github.com/dhis2/dhis2-rule-engine/pull/137\n\n**nlp-edu/README.md at main · alihanekiz/nlp-edu · GitHub** (2025-10-12)\nNavigation Menu Toggle navigation Appearance settings Platform Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly \nSource: https://github.com/alihanekiz/nlp-edu/blob/main/README.md\n\n**第十三届通信和宽带网络国际会议(ICCBN 2025)在蓉举行** (2025-12-01)\n<p>随着全球数字化转型的加速,网络架构演进､数据隐私保护以及新兴技术商业化等领域的创新正亟待突破｡在这一背景下,第十三届通信和宽带网络国际会议(ICCBN 2025)于11月27日至29日在成都召开｡本次会议由IEEE､西南交通大学和西华大学联合主办,吸引了近百位专家学者､研究人员和行业领袖共同分享和探讨通信与宽带网络领域的最新创新成果与发展趋势｡</p><p><img \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_313692d4d6a14652\n\n**Digital Brunei 2030 to drive nation's digital transformation: minister** (2026-07-08)\n<p>Digital Brunei 2030 represents the next phase of the nation's digital journey that unites digital approaches across government, society, business, data and artificial intelligence (AI) into one \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_6166a4d954d41052\n\n**Modal UI Improvement: Add Space Between Title and Copy Button · Issue #2230 · rupali-codes/LinksHub · GitHub** (2024-01-05)\n  #2230 New issue Copy link New issue Copy link Closed Copy link Assignees Labels priority: low Addition of new links/categories or doing any small task (e.g fixing typos) Addition of new \nSource: https://github.com/rupali-codes/LinksHub/issues/2230\n\n**无标题** (2024-04-20)\nThis communication presents only an overview of the more complete proxy materials that are available to y2R'S-XM!X5<8:)U(]J0SWVBN(^-?Q3L/@G\\*_$?C?4H&N[71[;SOLR.$:9RP1(PQ!P6M=E7.#UK+_9U^..F_M$_\"C2_&^F6;Z9'>230RV,LHD>W>.1D*LP !R K=.C\"@M#TNBO*/VCOCY!^SWX1TC5VT.X\\27VKZO!HUCI=I,(I9IY0Y7!(/]S'3N*Y;XMV?M9P?!3XLKZ-=6:S68%Q86TT?EK),J2QF,R.7*JV5<$9)^YZZ-O\\ !'PK:VUG!#9F$0V4MVGSO$J(][%(H5_/8*\"[94-D8(;GVJ2V^$]M@MJ6NZQK5P'M3'/>R0AHT@E$LM: )&JX+ ;F(+-_>Z8.:C\nSource: https://www.sec.gov/Archives/edgar/data/1370450/000155837024005370/0001558370-24-005370.txt\n\n**Institutional innovation powers up China's digital economy** (2026-05-09)\n<p>Visitors explored Beijing's Forbidden City through VR or tried AI health consultations, while nearby, tech experts debated token pricing and data sandbox security. This scene took place at the \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_20469fe7b8353152\n\n**[2308.03877] CECM: A continuous empirical cubature method with application to the dimensional hyperreduction of parameterized finite element** (2023-08-07)\nView a PDF of the paper titled CECM: A continuous empirical cubature method with application to the dimensional hyperreduction of parameterized finite element models, by J.A. Hernandez and 2 other \nSource: https://arxiv.org/abs/2308.03877\n\n**InstanceDatabaseLogFileCollection.Add Method (Microsoft.SqlServer.Management.Nmo)  Microsoft Learn** (2008-12-15)\n已不再支援此瀏覽器｡ 請升級至 Microsoft Edge,以利用最新功能､安全性更新和技術支援｡ 目錄 結束焦點模式 Ask Learn Ask Learn 語言 csharp jscript c++ jsharp vb 目錄 閱讀英文 加 新增至計劃 列印 注意 需要授權才能存取此頁面｡ 您可以嘗試登入或 變更目錄 ｡ 需要授權才能存取此頁面｡ 您可以嘗試 變更目錄 ｡ 命名空間: \nSource: http://msdn.microsoft.com/zh-tw/asp.net/microsoft.sqlserver.management.nmo.instancedatabaselogfilecollection.add(v=sql.90)\n\n**On the deformations and derivations of n-ary multiplicative Hom-Nambu-Lie superalgebras - Open Access Library** (2025-04-19)\nOALib Journal期刊 ISSN: 2333-9721 费用:99美元 查看量 下载量 相关文章 Cite this paper Abstract: In this paper, we introduce the relevant concepts of $n$-ary multiplicative Hom-Nambu-Lie superalgebras and construct \nSource: https://www.oalib.com/research/3960465\n",
+    "web_references": [
+      {
+        "content": "[skip publish] Simplify release process # 137 Merged Copy link Copy Markdown Member This file contains hidden or bidirectional Unicode text that may be interpreted or compiled differently than what ",
+        "icon": "",
+        "link": "https://github.com/dhis2/dhis2-rule-engine/pull/137",
+        "media": "",
+        "publish_date": "2024-06-26",
+        "refer": "ref_1",
+        "title": "[skip publish] Simplify release process by vgarciabnz · Pull Request #137 · dhis2/dhis2-rule-engine · GitHub"
+      },
+      {
+        "content": "Navigation Menu Toggle navigation Appearance settings Platform Solutions Resources Search or jump to... Cancel Submit feedback Saved searches Use saved searches to filter your results more quickly ",
+        "icon": "",
+        "link": "https://github.com/alihanekiz/nlp-edu/blob/main/README.md",
+        "media": "",
+        "publish_date": "2025-10-12",
+        "refer": "ref_2",
+        "title": "nlp-edu/README.md at main · alihanekiz/nlp-edu · GitHub"
+      },
+      {
+        "content": "<p>随着全球数字化转型的加速,网络架构演进､数据隐私保护以及新兴技术商业化等领域的创新正亟待突破｡在这一背景下,第十三届通信和宽带网络国际会议(ICCBN 2025)于11月27日至29日在成都召开｡本次会议由IEEE､西南交通大学和西华大学联合主办,吸引了近百位专家学者､研究人员和行业领袖共同分享和探讨通信与宽带网络领域的最新创新成果与发展趋势｡</p><p><img ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_313692d4d6a14652",
+        "media": "企鹅号",
+        "publish_date": "2025-12-01",
+        "refer": "ref_3",
+        "title": "第十三届通信和宽带网络国际会议(ICCBN 2025)在蓉举行"
+      },
+      {
+        "content": "<p>Digital Brunei 2030 represents the next phase of the nation's digital journey that unites digital approaches across government, society, business, data and artificial intelligence (AI) into one ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_6166a4d954d41052",
+        "media": "企鹅号",
+        "publish_date": "2026-07-08",
+        "refer": "ref_4",
+        "title": "Digital Brunei 2030 to drive nation's digital transformation: minister"
+      },
+      {
+        "content": "  #2230 New issue Copy link New issue Copy link Closed Copy link Assignees Labels priority: low Addition of new links/categories or doing any small task (e.g fixing typos) Addition of new ",
+        "icon": "",
+        "link": "https://github.com/rupali-codes/LinksHub/issues/2230",
+        "media": "",
+        "publish_date": "2024-01-05",
+        "refer": "ref_5",
+        "title": "Modal UI Improvement: Add Space Between Title and Copy Button · Issue #2230 · rupali-codes/LinksHub · GitHub"
+      },
+      {
+        "content": "This communication presents only an overview of the more complete proxy materials that are available to y2R'S-XM!X5<8:)U(]J0SWVBN(^-?Q3L/@G\\*_$?C?4H&N[71[;SOLR.$:9RP1(PQ!P6M=E7.#UK+_9U^..F_M$_\"C2_&^F6;Z9'>230RV,LHD>W>.1D*LP !R K=.C\"@M#TNBO*/VCOCY!^SWX1TC5VT.X\\27VKZO!HUCI=I,(I9IY0Y7!(/]S'3N*Y;XMV?M9P?!3XLKZ-=6:S68%Q86TT?EK),J2QF,R.7*JV5<$9)^YZZ-O\\ !'PK:VUG!#9F$0V4MVGSO$J(][%(H5_/8*\"[94-D8(;GVJ2V^$]M@MJ6NZQK5P'M3'/>R0AHT@E$LM: )&JX+ ;F(+-_>Z8.:C",
+        "icon": "",
+        "link": "https://www.sec.gov/Archives/edgar/data/1370450/000155837024005370/0001558370-24-005370.txt",
+        "media": "",
+        "publish_date": "2024-04-20",
+        "refer": "ref_6",
+        "title": "无标题"
+      },
+      {
+        "content": "<p>Visitors explored Beijing's Forbidden City through VR or tried AI health consultations, while nearby, tech experts debated token pricing and data sandbox security. This scene took place at the ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_20469fe7b8353152",
+        "media": "企鹅号",
+        "publish_date": "2026-05-09",
+        "refer": "ref_7",
+        "title": "Institutional innovation powers up China's digital economy"
+      },
+      {
+        "content": "View a PDF of the paper titled CECM: A continuous empirical cubature method with application to the dimensional hyperreduction of parameterized finite element models, by J.A. Hernandez and 2 other ",
+        "icon": "",
+        "link": "https://arxiv.org/abs/2308.03877",
+        "media": "",
+        "publish_date": "2023-08-07",
+        "refer": "ref_8",
+        "title": "[2308.03877] CECM: A continuous empirical cubature method with application to the dimensional hyperreduction of parameterized finite element"
+      },
+      {
+        "content": "已不再支援此瀏覽器｡ 請升級至 Microsoft Edge,以利用最新功能､安全性更新和技術支援｡ 目錄 結束焦點模式 Ask Learn Ask Learn 語言 csharp jscript c++ jsharp vb 目錄 閱讀英文 加 新增至計劃 列印 注意 需要授權才能存取此頁面｡ 您可以嘗試登入或 變更目錄 ｡ 需要授權才能存取此頁面｡ 您可以嘗試 變更目錄 ｡ 命名空間: ",
+        "icon": "",
+        "link": "http://msdn.microsoft.com/zh-tw/asp.net/microsoft.sqlserver.management.nmo.instancedatabaselogfilecollection.add(v=sql.90)",
+        "media": "",
+        "publish_date": "2008-12-15",
+        "refer": "ref_9",
+        "title": "InstanceDatabaseLogFileCollection.Add Method (Microsoft.SqlServer.Management.Nmo)  Microsoft Learn"
+      },
+      {
+        "content": "OALib Journal期刊 ISSN: 2333-9721 费用:99美元 查看量 下载量 相关文章 Cite this paper Abstract: In this paper, we introduce the relevant concepts of $n$-ary multiplicative Hom-Nambu-Lie superalgebras and construct ",
+        "icon": "",
+        "link": "https://www.oalib.com/research/3960465",
+        "media": "",
+        "publish_date": "2025-04-19",
+        "refer": "ref_10",
+        "title": "On the deformations and derivations of n-ary multiplicative Hom-Nambu-Lie superalgebras - Open Access Library"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "nz section 230 harmful digital communication act ugc liab",
+        "query": "NZ Section 230 equivalent Harmful Digital Communications Act UGC liab"
+      }
+    ],
+    "latency_seconds": 1.98,
+    "model": "search-pro",
+    "mode": "tools"
+  },
+  {
+    "success": true,
+    "query": "iOS 18 background location restrictions Always Allow apps",
+    "content": "**苹果地图在iOS 18上推出新的徒步旅行功能 与AllTrails展开竞争远足iosappleiphone_网易订阅** (2024-06-13)\n应用几个月后,苹果公司又在 iOS 18 的地图应用程序中添加了新的徒步旅行功能｡美国的 Apple Maps 用户可以浏览美国所有 63 个国家公园的数千条远足路线,这些路线可按长度､海拔高度和路线类型进行筛选｡用户还可以创建并保存自己的自定义步行和远足路线,并可选择单程､往返和环形路线｡去年,Apple Maps在watchOS 10 中为 Apple Watch 添加了地形图,现在 iOS \nSource: https://www.163.com/dy/article/J4I9EDEE0511BLFD.html\n\n**iOS18新功能:App锁定与隐藏,渣男渣女的福音? - 今日头条** (2024-06-25)\n 隐藏后的去向 被隐藏的应用会被放到桌面最右侧的App资源库里,底部会有一个“已隐藏”的小角落,只有验证了Face ID才能看到里面的内容｡比如你下载了一些“特别的颜色”应用,也可以用这个功能藏起来,App资源库底部就成了你的私密文件夹｡ 如果你想解除这些隐私保护,同样只需长按应用图标,点击“Don’t Require Face ID”并验证身份即可｡ \nSource: https://www.toutiao.com/article/7384352730510410303\n\n**iOS 18新增四项日常实用功能深度体验** (2026-01-26)\n我是苹果备忘录的深度用户,拥有超过2600条备忘录,在日常使用中有多种应用方式｡      在iOS 18的新功能中,我最喜欢的是备忘录的自适应工具栏功能｡      备忘录多年来持续新增功能,但对于许多应用来说,不断的功能增加可能会造成功能臃肿,或者让用户难以发现应用的全部功能｡自适应工具栏很好地缓解了这些问题｡      \nSource: https://new.qq.com/rain/a/20260126A02DBN00\n\n**iOS定位从 “始终”定位,改变成“使用期间”定位_nslocationalwaysusagedescription-CSDN博客** (2016-06-11)\n 需要进行以下设置: 在应用的info.plist文件中添加有关定位授权的属性,常使用到的有两个: 1､NSLocationAlwaysUsageDescription 这个关键字的意思是:持续(一直)定位描述,它的值是个NSString类型,填写的就是向用户请求定位授权时给用户看的信息“XXXXX”,目的就是告诉用户:我现在正在向你请求定位功能的授权,之所以要使用你的手机的定位功能是因为XXXXX原因,这是苹果在iOS8开始要求的｡ 2､NSLocationWhenInUseUsageDescription 这个关键字的意思是:使用期间定位描述,它的值是个NSString类型,填写的内容与上面相似｡ 关于定位授权状态改变时,应该如何处理: // 定位失败后执行此方法 - (void) locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error { if ( [error code] == kCLErrorDenied ) { //第一次安装含有定位功能的软件时 //程序将自动提示用户是否让当前App打开定位功能, //如果这里选择不打开定位功能, //再次调用定位的方法将会失败,并且进到这里｡ //除非用户在手机的设置页面中重新对该软件打开定位服务, //否则程序只要用到定位就总会进到这里｡ UIAlertView *alert = [[UIAlertView alloc] \nSource: https://blog.csdn.net/fanyong245758753/article/details/51638723\n\n**iOS 18.6.1正式版测评** (2025-08-15)\n苹果公司今日推送了 iOS 18.6.1正式版的更新,版本号:22G90｡iOS 18.6.1  此次更新的核心目的是重新启用在美国销售的 Apple Watch Series 9､Series 10 和 Ultra 2 的血氧检测功能｡      一､爱思助手使用体验      信号:信号稳定网络一般,部分场景网络会有460,在地下车库,电信､联通运营商5G稳定,信号在2格｡      \nSource: https://new.qq.com/rain/a/20250815A05P9E00\n\n**iOS经典讲解之地图定位请求位置信息时出现的问题_nslocationalwaysusagedescription-CSDN博客** (2015-10-06)\n地图定位请求位置信息在iOS8之后新增两个方法: - (void)requestWhenInUseAuthorization - (void)requestAlwaysAuthorization, 但是在使用这两个方法的时候需要手动在Info.plist文件加两个字段, NSLocationWhenInUseUsageDescription \nSource: https://blog.csdn.net/loving_ios/article/details/48929961\n\n**iPhone苹果手机如何隐藏APP和恢复?iOS18最新操作指南!_应用_隐私_保护** (2024-12-30)\n首先,滑动你的智能手机到最后一屏的APP资源库,这里记录着你手机上所有的应用｡往下滑动,直到页面底部,你会看到一个“已隐藏”的选项｡点击它后,系统会要求你解锁才能查看这些已经隐藏的APP｡这样做确保了你的私密性,只有你能看到这些隐藏的内容｡ 当你成功解锁后,想要打开这些隱藏的APP只需点击一下即可｡如此简单的操作,不足以让任何人知晓你的秘密了｡\nSource: https://www.sohu.com/a/843337971_121850900\n\n**曝苹果地图将添加广告/iPhone 18或将延期/微信桌面端灰测「元宝总结」功能** (2025-10-28)\n<p><img src='http://qqpublic.qpic.cn/qq_public/0/28-932521494-3744758484668A93932D992CA0B9B725/0?fmt=png&size=165&h=383&w=1080&ppv=1' data-aigc-mark='0'/></p><p></p><p>iPhone 18 延期至 2027 \nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_09169000e4d50852\n\n**视频增强** (2024-08-24)\n跳转到设置 ￫位置服务和确保的位置服务都启用了皮条客我的剪辑｡这仅仅是必要的,因为在iPhone上保存的视频可能包含位置信息｡然而,我们尊重您的隐私和不使用也分享这些信息｡  PLEASE NOTE You cannot save videos made with this app to your device, only upload to our dedicated server on \nSource: https://baike.baidu.com/item/%E8%A7%86%E9%A2%91%E5%A2%9E%E5%BC%BA/3176344\n\n**iOS18.6正式版更新** (2025-07-30)\n<p>7月30日,今天凌晨,苹果为iPhone用户推送iOS18.6正式版更新,本次更新距上次发布正式版间隔78天｡更新日志显示,本更新解决了系统语言设为“简体中文”或“繁体中文(香港)”的用户使用旁白时,默认声音设置错误且无法更改的问题｡同时修复了“照片”中可能导致回忆影片无法共享的问题｡\nSource: https://so.html5.qq.com/page/real/search_news?docid=70000021_0936889a95775952\n",
+    "web_references": [
+      {
+        "content": "应用几个月后,苹果公司又在 iOS 18 的地图应用程序中添加了新的徒步旅行功能｡美国的 Apple Maps 用户可以浏览美国所有 63 个国家公园的数千条远足路线,这些路线可按长度､海拔高度和路线类型进行筛选｡用户还可以创建并保存自己的自定义步行和远足路线,并可选择单程､往返和环形路线｡去年,Apple Maps在watchOS 10 中为 Apple Watch 添加了地形图,现在 iOS ",
+        "icon": "",
+        "link": "https://www.163.com/dy/article/J4I9EDEE0511BLFD.html",
+        "media": "网易",
+        "publish_date": "2024-06-13",
+        "refer": "ref_1",
+        "title": "苹果地图在iOS 18上推出新的徒步旅行功能 与AllTrails展开竞争远足iosappleiphone_网易订阅"
+      },
+      {
+        "content": " 隐藏后的去向 被隐藏的应用会被放到桌面最右侧的App资源库里,底部会有一个“已隐藏”的小角落,只有验证了Face ID才能看到里面的内容｡比如你下载了一些“特别的颜色”应用,也可以用这个功能藏起来,App资源库底部就成了你的私密文件夹｡ 如果你想解除这些隐私保护,同样只需长按应用图标,点击“Don’t Require Face ID”并验证身份即可｡ ",
+        "icon": "",
+        "link": "https://www.toutiao.com/article/7384352730510410303",
+        "media": "今日头条",
+        "publish_date": "2024-06-25",
+        "refer": "ref_2",
+        "title": "iOS18新功能:App锁定与隐藏,渣男渣女的福音? - 今日头条"
+      },
+      {
+        "content": "我是苹果备忘录的深度用户,拥有超过2600条备忘录,在日常使用中有多种应用方式｡      在iOS 18的新功能中,我最喜欢的是备忘录的自适应工具栏功能｡      备忘录多年来持续新增功能,但对于许多应用来说,不断的功能增加可能会造成功能臃肿,或者让用户难以发现应用的全部功能｡自适应工具栏很好地缓解了这些问题｡      ",
+        "icon": "",
+        "link": "https://new.qq.com/rain/a/20260126A02DBN00",
+        "media": "腾讯网",
+        "publish_date": "2026-01-26",
+        "refer": "ref_3",
+        "title": "iOS 18新增四项日常实用功能深度体验"
+      },
+      {
+        "content": " 需要进行以下设置: 在应用的info.plist文件中添加有关定位授权的属性,常使用到的有两个: 1､NSLocationAlwaysUsageDescription 这个关键字的意思是:持续(一直)定位描述,它的值是个NSString类型,填写的就是向用户请求定位授权时给用户看的信息“XXXXX”,目的就是告诉用户:我现在正在向你请求定位功能的授权,之所以要使用你的手机的定位功能是因为XXXXX原因,这是苹果在iOS8开始要求的｡ 2､NSLocationWhenInUseUsageDescription 这个关键字的意思是:使用期间定位描述,它的值是个NSString类型,填写的内容与上面相似｡ 关于定位授权状态改变时,应该如何处理: // 定位失败后执行此方法 - (void) locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error { if ( [error code] == kCLErrorDenied ) { //第一次安装含有定位功能的软件时 //程序将自动提示用户是否让当前App打开定位功能, //如果这里选择不打开定位功能, //再次调用定位的方法将会失败,并且进到这里｡ //除非用户在手机的设置页面中重新对该软件打开定位服务, //否则程序只要用到定位就总会进到这里｡ UIAlertView *alert = [[UIAlertView alloc] ",
+        "icon": "",
+        "link": "https://blog.csdn.net/fanyong245758753/article/details/51638723",
+        "media": "",
+        "publish_date": "2016-06-11",
+        "refer": "ref_4",
+        "title": "iOS定位从 “始终”定位,改变成“使用期间”定位_nslocationalwaysusagedescription-CSDN博客"
+      },
+      {
+        "content": "苹果公司今日推送了 iOS 18.6.1正式版的更新,版本号:22G90｡iOS 18.6.1  此次更新的核心目的是重新启用在美国销售的 Apple Watch Series 9､Series 10 和 Ultra 2 的血氧检测功能｡      一､爱思助手使用体验      信号:信号稳定网络一般,部分场景网络会有460,在地下车库,电信､联通运营商5G稳定,信号在2格｡      ",
+        "icon": "",
+        "link": "https://new.qq.com/rain/a/20250815A05P9E00",
+        "media": "腾讯网",
+        "publish_date": "2025-08-15",
+        "refer": "ref_5",
+        "title": "iOS 18.6.1正式版测评"
+      },
+      {
+        "content": "地图定位请求位置信息在iOS8之后新增两个方法: - (void)requestWhenInUseAuthorization - (void)requestAlwaysAuthorization, 但是在使用这两个方法的时候需要手动在Info.plist文件加两个字段, NSLocationWhenInUseUsageDescription ",
+        "icon": "",
+        "link": "https://blog.csdn.net/loving_ios/article/details/48929961",
+        "media": "",
+        "publish_date": "2015-10-06",
+        "refer": "ref_6",
+        "title": "iOS经典讲解之地图定位请求位置信息时出现的问题_nslocationalwaysusagedescription-CSDN博客"
+      },
+      {
+        "content": "首先,滑动你的智能手机到最后一屏的APP资源库,这里记录着你手机上所有的应用｡往下滑动,直到页面底部,你会看到一个“已隐藏”的选项｡点击它后,系统会要求你解锁才能查看这些已经隐藏的APP｡这样做确保了你的私密性,只有你能看到这些隐藏的内容｡ 当你成功解锁后,想要打开这些隱藏的APP只需点击一下即可｡如此简单的操作,不足以让任何人知晓你的秘密了｡",
+        "icon": "",
+        "link": "https://www.sohu.com/a/843337971_121850900",
+        "media": "搜狐",
+        "publish_date": "2024-12-30",
+        "refer": "ref_7",
+        "title": "iPhone苹果手机如何隐藏APP和恢复?iOS18最新操作指南!_应用_隐私_保护"
+      },
+      {
+        "content": "<p><img src='http://qqpublic.qpic.cn/qq_public/0/28-932521494-3744758484668A93932D992CA0B9B725/0?fmt=png&size=165&h=383&w=1080&ppv=1' data-aigc-mark='0'/></p><p></p><p>iPhone 18 延期至 2027 ",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_09169000e4d50852",
+        "media": "企鹅号",
+        "publish_date": "2025-10-28",
+        "refer": "ref_8",
+        "title": "曝苹果地图将添加广告/iPhone 18或将延期/微信桌面端灰测「元宝总结」功能"
+      },
+      {
+        "content": "跳转到设置 ￫位置服务和确保的位置服务都启用了皮条客我的剪辑｡这仅仅是必要的,因为在iPhone上保存的视频可能包含位置信息｡然而,我们尊重您的隐私和不使用也分享这些信息｡  PLEASE NOTE You cannot save videos made with this app to your device, only upload to our dedicated server on ",
+        "icon": "",
+        "link": "https://baike.baidu.com/item/%E8%A7%86%E9%A2%91%E5%A2%9E%E5%BC%BA/3176344",
+        "media": "百度百科",
+        "publish_date": "2024-08-24",
+        "refer": "ref_9",
+        "title": "视频增强"
+      },
+      {
+        "content": "<p>7月30日,今天凌晨,苹果为iPhone用户推送iOS18.6正式版更新,本次更新距上次发布正式版间隔78天｡更新日志显示,本更新解决了系统语言设为“简体中文”或“繁体中文(香港)”的用户使用旁白时,默认声音设置错误且无法更改的问题｡同时修复了“照片”中可能导致回忆影片无法共享的问题｡",
+        "icon": "",
+        "link": "https://so.html5.qq.com/page/real/search_news?docid=70000021_0936889a95775952",
+        "media": "企鹅号",
+        "publish_date": "2025-07-30",
+        "refer": "ref_10",
+        "title": "iOS18.6正式版更新"
+      }
+    ],
+    "search_intent": [
+      {
+        "intent": "SEARCH_ALL",
+        "keywords": "ios 18 background location restrictions always allow applications",
+        "query": "iOS 18 background location restrictions Always Allow apps"
+      }
+    ],
+    "latency_seconds": 2.09,
+    "model": "search-pro",
+    "mode": "tools"
+  }
+]

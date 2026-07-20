@@ -1,0 +1,439 @@
+{
+  "total": 54,
+  "keep": 23,
+  "suspect": 31,
+  "all": [
+    {
+      "endpoint": "DELETE /api/friends/:id",
+      "route_file": "friends.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "DELETE /api/markers/:id",
+      "route_file": "markers.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "DELETE /api/memory-subscriptions/:id",
+      "route_file": "memory-subscriptions.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 5,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "DELETE /api/memory/points",
+      "route_file": "memory.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "DELETE /api/routes/:id",
+      "route_file": "routes.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "DELETE /api/sessions/:id",
+      "route_file": "sessions.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 2,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "GET /api/auth/me",
+      "route_file": "auth.js",
+      "static": "in bundle",
+      "runtime_count": 1,
+      "nginx_30d_count": 75,
+      "verdict": "KEEP (runtime + prod both used)"
+    },
+    {
+      "endpoint": "GET /api/circle/fog",
+      "route_file": "circle.js",
+      "static": "in bundle",
+      "runtime_count": 1,
+      "nginx_30d_count": 13,
+      "verdict": "KEEP (runtime + prod both used)"
+    },
+    {
+      "endpoint": "GET /api/circle/markers",
+      "route_file": "circle.js",
+      "static": "in bundle",
+      "runtime_count": 1,
+      "nginx_30d_count": 1,
+      "verdict": "KEEP (runtime + prod both used)"
+    },
+    {
+      "endpoint": "GET /api/circle/routes",
+      "route_file": "circle.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "GET /api/debug-snapshot/:id",
+      "route_file": "debug-snapshot.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "GET /api/debug-snapshot/latest",
+      "route_file": "debug-snapshot.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "GET /api/feature-flags",
+      "route_file": "feature-flags.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 71,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "GET /api/friends",
+      "route_file": "friends.js",
+      "static": "in bundle",
+      "runtime_count": 1,
+      "nginx_30d_count": 2,
+      "verdict": "KEEP (runtime + prod both used)"
+    },
+    {
+      "endpoint": "GET /api/friends/:id/markers",
+      "route_file": "friends.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "GET /api/friends/requests",
+      "route_file": "friends.js",
+      "static": "in bundle",
+      "runtime_count": 1,
+      "nginx_30d_count": 2,
+      "verdict": "KEEP (runtime + prod both used)"
+    },
+    {
+      "endpoint": "GET /api/markers",
+      "route_file": "markers.js",
+      "static": "in bundle",
+      "runtime_count": 1,
+      "nginx_30d_count": 87,
+      "verdict": "KEEP (runtime + prod both used)"
+    },
+    {
+      "endpoint": "GET /api/markers/:id/community-state",
+      "route_file": "markers.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "GET /api/markers/:id/interact-nonce",
+      "route_file": "markers.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "GET /api/markers/public",
+      "route_file": "markers.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "GET /api/memory-subscriptions",
+      "route_file": "memory-subscriptions.js",
+      "static": "in bundle",
+      "runtime_count": 2,
+      "nginx_30d_count": 2,
+      "verdict": "KEEP (runtime + prod both used)"
+    },
+    {
+      "endpoint": "GET /api/memory/points",
+      "route_file": "memory.js",
+      "static": "in bundle",
+      "runtime_count": 1,
+      "nginx_30d_count": 9,
+      "verdict": "KEEP (runtime + prod both used)"
+    },
+    {
+      "endpoint": "GET /api/routes",
+      "route_file": "routes.js",
+      "static": "in bundle",
+      "runtime_count": 3,
+      "nginx_30d_count": 38,
+      "verdict": "KEEP (runtime + prod both used)"
+    },
+    {
+      "endpoint": "GET /api/routes/:id",
+      "route_file": "routes.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "GET /api/sessions",
+      "route_file": "sessions.js",
+      "static": "in bundle",
+      "runtime_count": 1,
+      "nginx_30d_count": 64,
+      "verdict": "KEEP (runtime + prod both used)"
+    },
+    {
+      "endpoint": "GET /api/sessions/:id",
+      "route_file": "sessions.js",
+      "static": "in bundle",
+      "runtime_count": 1,
+      "nginx_30d_count": 13576,
+      "verdict": "KEEP (runtime + prod both used)"
+    },
+    {
+      "endpoint": "GET /api/telemetry/sessions",
+      "route_file": "telemetry.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "GET /api/telemetry/sessions/:id",
+      "route_file": "telemetry.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "PATCH /api/auth/password",
+      "route_file": "auth.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "PATCH /api/routes/:id/run",
+      "route_file": "routes.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "PATCH /api/sessions/:id",
+      "route_file": "sessions.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 5,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "PATCH /api/sessions/:id/append-points",
+      "route_file": "sessions.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 14,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "PATCH /api/sessions/:id/save",
+      "route_file": "sessions.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 10,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "POST /api/auth/google",
+      "route_file": "auth.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/auth/login",
+      "route_file": "auth.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 17,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "POST /api/auth/refresh",
+      "route_file": "auth.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 4,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "POST /api/auth/register",
+      "route_file": "auth.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/auth/resend",
+      "route_file": "auth.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/auth/verify",
+      "route_file": "auth.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/debug-snapshot",
+      "route_file": "debug-snapshot.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/friends/accept",
+      "route_file": "friends.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/friends/reject",
+      "route_file": "friends.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/friends/request",
+      "route_file": "friends.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/hide",
+      "route_file": "hide.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/markers",
+      "route_file": "markers.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 2,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "POST /api/markers/:id/vote",
+      "route_file": "markers.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/memory-subscriptions",
+      "route_file": "memory-subscriptions.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 4,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "POST /api/memory/points",
+      "route_file": "memory.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 4,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "POST /api/routes",
+      "route_file": "routes.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/sessions",
+      "route_file": "sessions.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "POST /api/sessions/start",
+      "route_file": "sessions.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 12,
+      "verdict": "KEEP (prod used, playwright missed - likely triggered by user action)"
+    },
+    {
+      "endpoint": "POST /api/telemetry/sessions",
+      "route_file": "telemetry.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "PUT /api/markers/:id",
+      "route_file": "markers.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    },
+    {
+      "endpoint": "PUT /api/routes/:id",
+      "route_file": "routes.js",
+      "static": "in bundle",
+      "runtime_count": 0,
+      "nginx_30d_count": 0,
+      "verdict": "SUSPECT (no runtime + no prod trace in 30d)"
+    }
+  ]
+}

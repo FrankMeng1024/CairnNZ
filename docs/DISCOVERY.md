@@ -10,15 +10,27 @@ Mobile App (React Native + Expo, iOS priority)
 
 ## Competitive Analysis
 
-详见 `research/market_analysis.md` 和 `research/product_spec_v2.md`。
+**2026-07-17 定位重校准**：AR 已舍弃（GPS 误差过大导致体验不可用）。产品实际定位不是安全工具、不是 AR 工具，而是 **数字手账 + 陌生人善意**：
+- 自我维度：走过的路、探索过的区域、留下的话，N 年后依旧可以回看
+- 他人维度：非社交、非社群、非算法推荐，好友订阅式互看 marker 的克制善意
 
-核心竞品：
-- **AllTrails** — 路线发现+离线地图，社交弱，无AR，月$400万流水
-- **Strava** — 运动GPS+社交竞争，1.2亿用户，不做徒步安全
-- **Komoot** — 路线规划，欧洲为主，NZ覆盖弱
-- **PeakVisor** — AR识山峰，功能单一
+**真正的直接竞品**（重新识别）：
+- **Polarsteps** — 走过的路 + 时间线 + 分享给亲友，最直接对标
+- **Day One (journal app)** — 带地理位置的手账，"on this day" 回顾机制
+- **Findpenguins** — 旅行 footprint + 故事
+- **Strava Heatmap** — 只对标它的"heatmap 情感"部分，非运动指标部分
 
-**直接竞品**：无。"AR标记+安全工具+异步社交"组合在市场上不存在。
+**间接竞品**（异步善意哲学）：
+- **Death Stranding (游戏)** — 产品灵魂来源，Like 系统 + 异步留言
+- **Geocaching** — 现实版异步藏点，20+ 年老牌
+- **Randonautica** — 已凉，但探索未知点的诉求还在
+
+**反面参考**：
+- **AllTrails** — 反着做（不做发现/不做公开路线数据库/不做算法推荐）
+- **Foursquare / Swarm** — 只记录不产生意义 = 死
+- **Path (2015 关停)** — 亲密社交哲学接近但商业化失败，必读死因
+
+详见 `research/market_analysis.md`（原）和 `research/2026-07/`（新一轮真实用户调研）。
 
 ---
 
@@ -60,8 +72,8 @@ Mobile App (React Native + Expo, iOS priority)
 10. 新手/老手双UI模式
 
 ### Should Have (Phase 2)
-11. AR插旗视觉体验（ARKit）
-12. 旗帜附带5秒语音memo
+11. ~~AR插旗视觉体验（ARKit）~~ **[2026-07-17 舍弃：GPS 误差过大]**
+12. ~~旗帜附带5秒语音memo~~ **[随 AR 一并舍弃]**
 13. "有帮助"反馈机制 + 周汇总通知
 14. 社区公开旗帜展示（同区域可选查看）
 15. 发现密度算法（每500米最多3面旗）

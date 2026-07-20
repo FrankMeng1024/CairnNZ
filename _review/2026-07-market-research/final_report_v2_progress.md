@@ -1,0 +1,7 @@
+[STARTED T+2026-07-17]
+[A: Roadmap 时间轴 4 Sprint × 13 actions 表格,含 owner/points/AC — DONE]
+[B: 战略 1/2/3 量化风险 span 已插入首屏 3 大战略结论 li — DONE]
+[C: 新增 §11 陌生人善意 section,3 具体面 + 5 主题证据 + 依赖关系 — DONE]
+[D: Biz section 加 3-phase pilot (Phase A/B/C) 卡片组 — DONE]
+[E: 5 分抽样降级 Q5.6/Q5.7 5→3, offset_measurement.md v2 已 Write, 附录 note 已加 — DONE]
+[COMPLETE T+2026-07-17, additions: A/B/C/D/E]

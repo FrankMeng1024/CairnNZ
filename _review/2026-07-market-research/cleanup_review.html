@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Cairn Cleanup Review v2 · 全景 + 备注</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; background: #f5efe4; color: #3a2f22; padding: 20px; max-width: 1400px; margin: 0 auto; }
+h1 { font-size: 22px; color: #7ea065; margin-bottom: 6px; }
+.sub { color: #8a7d6f; font-size: 13px; margin-bottom: 16px; line-height:1.6 }
+h2 { font-size: 17px; color: #c88a2a; margin: 24px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #d9cebd; }
+h2.keep { color:#4a6b3a; border-bottom-color: #7ea065 }
+h2.suspect { color:#a83a2f; border-bottom-color: #d95d4a }
+h3 { font-size: 14px; color: #a67c3e; margin: 14px 0 4px; }
+.item { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; padding: 8px 12px; margin: 3px 0; background: #fff; border-radius: 4px; border-left: 3px solid #a8b0c4; font-size: 13.5px; align-items: start; }
+.item.keep-panel { border-left-color: #7ea065; background: #f0ede4; opacity: 0.85 }
+.item.keep-panel .radio-group label { cursor: not-allowed; opacity: 0.5 }
+.item.keep-panel .radio-group label:hover { background: transparent }
+.item.keep-panel .note-input { background: #f0ede4; color: #888; cursor: not-allowed }
+.item.suspect-panel { border-left-color: #d95d4a; background: #fdf8f7 }
+.readonly-tag { font-size:10px; background:#8a7d6f; color:#fff; padding:1px 6px; border-radius:3px; margin-left:6px }
+.frontend-tag { font-size:10px; background:#4a6b3a; color:#fff; padding:1px 6px; border-radius:3px; margin-left:6px }
+.frontend-tag.dead { background: #a83a2f }
+.frontend-loc { font-size: 11px; color: #4a6b3a; margin-top: 2px; font-family: monospace }
+.frontend-loc.dead { color: #a83a2f }
+.item .main { display: flex; flex-direction: column; gap: 3px }
+.item .code-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.item .code { font-family: monospace; font-size: 12px; color: #444; background: #f0e9dd; padding: 1px 6px; border-radius: 3px; white-space: nowrap }
+.item .stats { font-size: 11px; color: #888; margin-left: auto }
+.item .desc { color: #3a2f22; font-size: 13px }
+.item .rec { font-size: 11px; color: #999 }
+.radio-group { display: flex; gap: 4px; flex-shrink: 0 }
+.radio-group label { display: flex; align-items: center; gap: 2px; cursor: pointer; padding: 3px 8px; border-radius: 3px; font-size: 12px; }
+.radio-group label:hover { background: #f5efe4; }
+.radio-group input[type=radio] { cursor: pointer; }
+.radio-group label:has(input[value=keep]:checked) { background: #d9e5c9; color: #4a6b3a; font-weight: 600; }
+.radio-group label:has(input[value=delete]:checked) { background: #f5c6be; color: #a83a2f; font-weight: 600; }
+.radio-group label:has(input[value=defer]:checked) { background: #f5e0b3; color: #7a5a1a; font-weight: 600; }
+.radio-group label:has(input[value=annotate]:checked) { background: #b3d4f5; color: #1a5a7a; font-weight: 600; }
+.note-input { width: 220px; font-size: 12px; padding: 3px 6px; border: 1px solid #d9cebd; border-radius: 3px; font-family: inherit; background: #fffdf9 }
+.note-input:focus { outline: none; border-color: #7ea065; background: #fff }
+.actions { position: sticky; bottom: 0; background: #fff; padding: 12px; margin-top: 20px; border-top: 2px solid #7ea065; box-shadow: 0 -4px 8px rgba(0,0,0,0.1); text-align: center; z-index: 10 }
+button { background: #7ea065; color: #fff; border: none; padding: 10px 24px; border-radius: 4px; font-size: 14px; cursor: pointer; font-weight: 600; margin: 0 4px; }
+button:hover { background: #6d8f56; }
+.batch button { background: #a8b0c4; color: #fff; font-size: 11px; padding: 4px 12px; }
+.stat { display: inline-block; padding: 2px 10px; margin: 0 4px; background: #f0e9dd; border-radius: 12px; font-size: 12px; }
+.stat.k { color: #4a6b3a; }
+.stat.d { color: #a83a2f; }
+.stat.f { color: #7a5a1a; }
+.stat.a { color: #1a5a7a; }
+#result { display: none; margin-top: 16px; background: #fff; padding: 12px; border-radius: 4px; border: 1px solid #d9cebd; }
+#result pre { background: #f5efe4; padding: 10px; border-radius: 4px; font-size: 11px; overflow-x: auto; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+.section-hint { background: #fff8ea; border-left: 3px solid #c88a2a; padding: 8px 12px; margin: 6px 0; font-size: 12.5px; color: #7a5a1a; border-radius: 3px }
+.batch { margin: 6px 0 }
+.legend { display:flex; gap:12px; font-size:12px; margin-bottom:6px }
+.legend span { padding:2px 8px; border-radius:3px }
+</style>
+</head>
+<body>
+
+<h1>🧹 Cairn Cleanup Review v2 · 全景 + 备注</h1>
+<div class="sub">
+  <b>2 大类</b>：<b style="color:#4a6b3a">Part 1</b> - 在用清单（54 项，<b>只读展示</b>，仅供了解上下文） · <b style="color:#a83a2f">Part 2</b> - 候选删清单（74 项，请你决策）。<br>
+  <b>4 种选择</b>（仅 Part 2）：<span class="legend"><span style="background:#d9e5c9;color:#4a6b3a">留</span><span style="background:#f5c6be;color:#a83a2f">删</span><span style="background:#f5e0b3;color:#7a5a1a">延后</span><span style="background:#b3d4f5;color:#1a5a7a">加注释</span></span>
+  <br>Part 2 每项右侧有备注框，写你的想法（我未来会读）。
+</div>
+
+<div class="stat k">留: <span id="cnt-keep">0</span></div>
+<div class="stat d">删: <span id="cnt-del">0</span></div>
+<div class="stat f">延后: <span id="cnt-def">0</span></div>
+<div class="stat a">加注释: <span id="cnt-ann">0</span></div>
+<span style="margin-left: 20px; font-size: 12px; color: #666">Part 2 共 74 · 未选: <span id="cnt-none">74</span></span>
+
+<div class="batch" style="margin-top: 12px">
+  <button onclick="applyRecommended()">应用所有推荐</button>
+  <button onclick="setAllPart2('delete')">Part 2 全"删"</button>
+</div>
+
+<!-- ═══════════════ Part 1 · 在用清单 ═══════════════ -->
+<h2 class="keep">Part 1 · 在用清单（只读展示 · 上下文用）</h2>
+<div class="section-hint">这些是三源验证"确实在用"的模块，仅列出供你了解上下文。<b>不可编辑</b>——它们默认都会保留并在 Phase 4 加注释。你只需要专注 Part 2 的决策。</div>
+
+<h3>1a. 后端 KEEP endpoints（23 项 · 三源都验证在用）</h3>
+<div id="P1_backend"></div>
+
+<h3>1b. 前端核心 modules（按目录 group · 21 项）</h3>
+<div id="P1_frontend_modules"></div>
+
+<h3>1c. 关键 services（10 项）</h3>
+<div id="P1_services"></div>
+
+<!-- ═══════════════ Part 2 · 候选删清单 ═══════════════ -->
+<h2 class="suspect">Part 2 · 候选删清单（前 v1 版本 74 项）</h2>
+<div class="section-hint">这些是三源里 "playwright 没打到 + 30d nginx 没打到" 的 endpoint 和 "static import 走不到" 的 file。<br>
+<b style="color:#4a6b3a">🟢 前端有代码</b> = 前端源码里已找到真实 fetch 调用（Playwright 只是没触发到那个按钮/流程,<b>不是 dead</b>,推荐自动上调为"留"）。<br>
+<b style="color:#a83a2f">🔴 前端无调用</b> = 前端源码搜过没有 fetch,是真 dead 或纯 dev-only 后端工具。</div>
+
+<h3>2a. 后端 SUSPECT endpoints (31 项)</h3>
+<div id="P2_backend"></div>
+
+<h3>2b. 前端 dead files (43 项)</h3>
+<div id="P2_frontend"></div>
+
+<div class="actions">
+  <button onclick="generate()">📋 生成决策 JSON</button>
+  <button onclick="copyResult()">📎 复制到剪贴板</button>
+</div>
+
+<div id="result">
+  <h3>决策结果（复制下面 JSON 发给 Claude）</h3>
+  <pre id="result-json"></pre>
+</div>
+
+<script>
+// ═════════════ 数据定义 ═════════════
+const ITEMS = [
+  // ── Part 1a · KEEP endpoints (23 项) ──
+  { p:'P1', panel:'keep-panel', id:'K_ep1', group:'P1_backend', code:'POST /api/auth/login', desc:'邮箱登录（primary user auth flow）', stats:'runtime:1·nginx:17', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep2', group:'P1_backend', code:'GET /api/auth/me', desc:'读取当前用户信息（每次 launch 调）', stats:'runtime:1·nginx:75', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep3', group:'P1_backend', code:'POST /api/auth/refresh', desc:'JWT token 30 分钟刷新', stats:'nginx:4', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep4', group:'P1_backend', code:'GET /api/feature-flags', desc:'读特性开关配置（每次 launch 调）', stats:'nginx:71', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep5', group:'P1_backend', code:'POST /api/edit-diag', desc:'客户端 diag log 上传（现在 404 因为 backend 未接，前端不停 retry）', stats:'runtime:155·nginx:6364', rec:'defer' },
+  { p:'P1', panel:'keep-panel', id:'K_ep6', group:'P1_backend', code:'GET /api/sessions', desc:'session 列表（RoutesScreen Activities tab 加载）', stats:'runtime:1·nginx:64', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep7', group:'P1_backend', code:'GET /api/sessions/:id', desc:'单个 session 详情（MapHistoryScreen 加载轨迹）', stats:'runtime:1·nginx:13576', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep8', group:'P1_backend', code:'POST /api/sessions/start', desc:'开始 hike/run 时创建空 session', stats:'nginx:12', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep9', group:'P1_backend', code:'PATCH /api/sessions/:id/append-points', desc:'追踪中 60s 一次批量上传 GPS 点', stats:'nginx:14', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep10', group:'P1_backend', code:'PATCH /api/sessions/:id/save', desc:'v412 原子保存 session + memory_points', stats:'nginx:10', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep11', group:'P1_backend', code:'PATCH /api/sessions/:id', desc:'v411 legacy finalize 兼容路径', stats:'nginx:5', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep12', group:'P1_backend', code:'DELETE /api/sessions/:id', desc:'删除自己的 session（RoutesScreen 长按）', stats:'nginx:2', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep13', group:'P1_backend', code:'GET /api/markers', desc:'自己所有 markers 列表（MapScreen 加载）', stats:'runtime:1·nginx:87', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep14', group:'P1_backend', code:'POST /api/markers', desc:'创建新 marker（PlantScreen 提交）', stats:'nginx:2', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep15', group:'P1_backend', code:'GET /api/routes', desc:'自己所有 routes 列表（RoutesScreen 加载）', stats:'runtime:3·nginx:38', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep16', group:'P1_backend', code:'GET /api/friends', desc:'好友列表（FriendsScreen 加载）', stats:'runtime:1·nginx:2', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep17', group:'P1_backend', code:'GET /api/friends/requests', desc:'待处理好友请求（FriendsScreen 加载）', stats:'runtime:1·nginx:2', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep18', group:'P1_backend', code:'GET /api/circle/markers', desc:'v4 好友圈所有可见 markers', stats:'runtime:1·nginx:1', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep19', group:'P1_backend', code:'GET /api/circle/fog', desc:'v4 好友圈订阅 fog 数据', stats:'runtime:1·nginx:13', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep20', group:'P1_backend', code:'GET /api/memory/points', desc:'memory fog 点分页读取（MemoryScreen）', stats:'runtime:1·nginx:9', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep21', group:'P1_backend', code:'POST /api/memory/points', desc:'memory 点批量上传', stats:'nginx:4', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep22', group:'P1_backend', code:'GET /api/memory-subscriptions', desc:'我的好友 fog 订阅列表', stats:'runtime:2·nginx:2', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_ep23', group:'P1_backend', code:'POST /api/memory-subscriptions', desc:'订阅一个好友的 fog', stats:'nginx:4', rec:'annotate' },
+
+  // ── Part 1b · Frontend 核心 modules (21 项) ──
+  { p:'P1', panel:'keep-panel', id:'K_f1', group:'P1_frontend_modules', code:'src/screens/ 14 files', desc:'所有活跃 screens（Home/Hiking/Running/Auth/Plant/MarkerDetail/Map/MapHistory/Routes/RouteEditor/Friends/Settings/Debug/MemoryScreen）', stats:'播 all reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f2', group:'P1_frontend_modules', code:'src/navigation/RootNavigator.tsx', desc:'导航中心（Stack.Navigator 14 screens 路由映射）', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f3', group:'P1_frontend_modules', code:'src/store/ (12 zustand stores)', desc:'全局状态：useAppStore/useSessionStore/useTrackingStore/useMarkerStore/useMemoryStore/useFriendStore/useRouteStore 等', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f4', group:'P1_frontend_modules', code:'src/services/apiService.ts', desc:'所有 backend API 调用的中心（withAuth wrapper）', stats:'core', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f5', group:'P1_frontend_modules', code:'src/services/authService.ts', desc:'JWT 登录 / 注册 / verify / refresh 流程', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f6', group:'P1_frontend_modules', code:'src/services/mapboxAdapter.*.tsx', desc:'Mapbox 平台适配（web=mapbox-gl-js, native=@rnmapbox）', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f7', group:'P1_frontend_modules', code:'src/services/sessionService.ts', desc:'session start/append/save/finalize backend 调用', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f8', group:'P1_frontend_modules', code:'src/services/markerService.ts', desc:'markers CRUD backend 调用', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f9', group:'P1_frontend_modules', code:'src/services/circleService.ts', desc:'v4 好友圈聚合 API 调用', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f10', group:'P1_frontend_modules', code:'src/services/memoryService.ts', desc:'memory points 上传/下载 + subscription', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f11', group:'P1_frontend_modules', code:'src/services/hikeTrackWriter.ts', desc:'v409 GPS 点 append 队列（AsyncStorage 缓冲 + flush）', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f12', group:'P1_frontend_modules', code:'src/services/hikeTracksCache.ts', desc:'v409 hike file cache（离线首屏加载优化）', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f13', group:'P1_frontend_modules', code:'src/services/syncDaemon.ts + pendingSyncStore.ts', desc:'v412 pending sync 后台自动重试', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f14', group:'P1_frontend_modules', code:'src/services/offlineQueue.ts', desc:'v409 通用离线队列', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f15', group:'P1_frontend_modules', code:'src/services/batteryMonitor.ts', desc:'电池监控（户外 4h < 5%/h 硬门槛准备就绪）', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f16', group:'P1_frontend_modules', code:'src/services/crashLogger.ts', desc:'崩溃日志 breadcrumb + ring buffer', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f17', group:'P1_frontend_modules', code:'src/services/gpsSampler.ts + unlockEngine.ts', desc:'GPS 采样 + 里程/成就解锁引擎', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f18', group:'P1_frontend_modules', code:'src/features/memory/ (fog + medallion)', desc:'memory 手账主功能（fog H3 + medallion pin）', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f19', group:'P1_frontend_modules', code:'src/features/plant/ (GPS lock + content)', desc:'plant 标记 flow（GPS→pin→content→visibility）', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f20', group:'P1_frontend_modules', code:'src/features/marks/ (marker detail + like/report)', desc:'marker 展示 + 交互（vote / report）', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_f21', group:'P1_frontend_modules', code:'src/components/ (~45 files 活跃)', desc:'活跃 UI 组件：Icon/Modal/Toast/Sheet/tokens/Marker 等', stats:'reachable', rec:'annotate' },
+
+  // ── Part 1c · 关键 services 边角 (10 项) ──
+  { p:'P1', panel:'keep-panel', id:'K_s1', group:'P1_services', code:'src/services/appLog.ts', desc:'/api/edit-diag 上传通道（Agent B 说 client 完备但全项目 0 处调用 log()）', stats:'reachable but no callers', rec:'defer' },
+  { p:'P1', panel:'keep-panel', id:'K_s2', group:'P1_services', code:'src/services/telemetryUploader.ts', desc:'telemetry 上传', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_s3', group:'P1_services', code:'src/services/debugUpload.ts', desc:'Settings 里 debug 截图上传（通用 photo upload，非 AR）', stats:'reachable · used by Settings', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_s4', group:'P1_services', code:'src/services/voiceMemoService.ts', desc:'语音标记录音（PlantScreen 用）', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_s5', group:'P1_services', code:'src/services/exportService.ts', desc:'GPX/PDF 导出（RoutesScreen 注释 "kept for future Export action"）', stats:'reachable but UI hidden', rec:'defer' },
+  { p:'P1', panel:'keep-panel', id:'K_s6', group:'P1_services', code:'src/services/routing/snapTrack.ts', desc:'Mapbox /matching snap-to-road', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_s7', group:'P1_services', code:'src/services/routing/routeService.ts', desc:'route CRUD + snap', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_s8', group:'P1_services', code:'src/services/friendService.ts', desc:'friends CRUD + requests', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_s9', group:'P1_services', code:'src/services/hidenItemsService.ts', desc:'/api/hide 拉黑功能', stats:'reachable', rec:'annotate' },
+  { p:'P1', panel:'keep-panel', id:'K_s10', group:'P1_services', code:'src/services/bootDiagnostics.ts', desc:'App 启动阶段 breadcrumb（crashLogger 用）', stats:'reachable', rec:'annotate' },
+
+  // ── Part 2 · 复制 v1 的 74 项 (P2 前缀标记) ──
+  // A1. 注册
+  { p:'P2', panel:'suspect-panel', id:'A1_1', group:'P2_backend', code:'POST /api/auth/register', desc:'邮箱注册（30d nginx 0 次 + playwright 未测到，但新用户注册流程必需）', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A1_2', group:'P2_backend', code:'POST /api/auth/verify', desc:'6 位邮箱验证码校验', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A1_3', group:'P2_backend', code:'POST /api/auth/resend', desc:'重发验证码', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A1_4', group:'P2_backend', code:'POST /api/auth/google', desc:'Google OAuth 一键登录', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A1_5', group:'P2_backend', code:'PATCH /api/auth/password', desc:'修改密码', stats:'nginx:0·playwright:0', rec:'keep' },
+  // A2. Marker
+  { p:'P2', panel:'suspect-panel', id:'A2_1', group:'P2_backend', code:'PUT /api/markers/:id', desc:'编辑自己的 marker', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A2_2', group:'P2_backend', code:'DELETE /api/markers/:id', desc:'删除自己的 marker', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A2_3', group:'P2_backend', code:'GET /api/markers/public', desc:'公开 markers bbox 列表（地图展示公开 marker）', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A2_4', group:'P2_backend', code:'GET /api/markers/:id/community-state', desc:'marker 社区互动状态（有多少赞/举报）', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A2_5', group:'P2_backend', code:'GET /api/markers/:id/interact-nonce', desc:'投票反作弊 nonce', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A2_6', group:'P2_backend', code:'POST /api/markers/:id/vote', desc:'点赞/举报 marker（陌生人善意核心机制）', stats:'nginx:0·playwright:0', rec:'keep' },
+  // A3. Route
+  { p:'P2', panel:'suspect-panel', id:'A3_1', group:'P2_backend', code:'POST /api/routes', desc:'创建路线（RouteEditor 保存）', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A3_2', group:'P2_backend', code:'GET /api/routes/:id', desc:'单条路线详情', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A3_3', group:'P2_backend', code:'PUT /api/routes/:id', desc:'编辑路线', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A3_4', group:'P2_backend', code:'DELETE /api/routes/:id', desc:'删除路线', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A3_5', group:'P2_backend', code:'PATCH /api/routes/:id/run', desc:'记录路线被走过一次', stats:'nginx:0·playwright:0', rec:'keep' },
+  // A4. Friends
+  { p:'P2', panel:'suspect-panel', id:'A4_1', group:'P2_backend', code:'POST /api/friends/request', desc:'发送好友请求（email 邀请）', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A4_2', group:'P2_backend', code:'POST /api/friends/accept', desc:'接受好友请求', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A4_3', group:'P2_backend', code:'POST /api/friends/reject', desc:'拒绝好友请求', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A4_4', group:'P2_backend', code:'DELETE /api/friends/:id', desc:'删除好友', stats:'nginx:0·playwright:0', rec:'keep' },
+  // A5
+  { p:'P2', panel:'suspect-panel', id:'A5_1', group:'P2_backend', code:'GET /api/friends/:id/markers', desc:'legacy：单个好友 markers（v4 circle 已取代）', stats:'nginx:0·playwright:0', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'A5_2', group:'P2_backend', code:'GET /api/circle/routes', desc:'v4 好友圈所有路线', stats:'nginx:0·playwright:0', rec:'keep' },
+  // A6/7/8
+  { p:'P2', panel:'suspect-panel', id:'A6_1', group:'P2_backend', code:'POST /api/hide', desc:'拉黑某 marker/route', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A7_1', group:'P2_backend', code:'DELETE /api/memory/points', desc:'Settings "Clear all my memory" 按钮', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A8_1', group:'P2_backend', code:'POST /api/sessions', desc:'legacy 一次性保存（v412 已 start+append+save 替代）', stats:'nginx:0·playwright:0', rec:'delete' },
+  // A9
+  { p:'P2', panel:'suspect-panel', id:'A9_1', group:'P2_backend', code:'POST /api/telemetry/sessions', desc:'client 上传 session 事件日志（dev debug 用）', stats:'nginx:0·playwright:0', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'A9_2', group:'P2_backend', code:'GET /api/telemetry/sessions', desc:'dev 查询 telemetry 列表', stats:'nginx:0·playwright:0', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'A9_3', group:'P2_backend', code:'GET /api/telemetry/sessions/:id', desc:'dev 查单条 telemetry', stats:'nginx:0·playwright:0', rec:'defer' },
+  // A10
+  { p:'P2', panel:'suspect-panel', id:'A10_1', group:'P2_backend', code:'POST /api/debug-snapshot', desc:'Settings 里 Upload debug screenshots', stats:'nginx:0·playwright:0', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'A10_2', group:'P2_backend', code:'GET /api/debug-snapshot/latest', desc:'dev 查最新截图', stats:'nginx:0·playwright:0', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'A10_3', group:'P2_backend', code:'GET /api/debug-snapshot/:id', desc:'dev 查单条截图', stats:'nginx:0·playwright:0', rec:'defer' },
+
+  // ── Part 2b · Frontend dead (43 项) ──
+  { p:'P2', panel:'suspect-panel', id:'B1_1', group:'P2_frontend', code:'tests/sprint71/friend-system-v4-scenarios.spec.ts', desc:'Sprint 71 好友系统测试', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_2', group:'P2_frontend', code:'tests/sprint72/helpers.ts', desc:'Sprint 72 测试 helpers', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_3', group:'P2_frontend', code:'tests/sprint72/story-549-auto-login.spec.ts', desc:'Sprint 72 auto-login 测试', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_4', group:'P2_frontend', code:'tests/sprint72/story-550-refresh.spec.ts', desc:'Sprint 72 refresh token 测试', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_5', group:'P2_frontend', code:'tests/sprint72/story-551-unfinished-session.spec.ts', desc:'Sprint 72 unfinished session 测试', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_6', group:'P2_frontend', code:'tests/sprint72/story-552-auto-pause.spec.ts', desc:'Sprint 72 auto-pause 测试', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_7', group:'P2_frontend', code:'tests/sprint72/story-553-sampling-downgrade.spec.ts', desc:'Sprint 72 采样降级测试', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_8', group:'P2_frontend', code:'tests/sprint72/story-554-flush-interval.spec.ts', desc:'Sprint 72 flush 间隔测试', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_9', group:'P2_frontend', code:'tests/sprint72/story-555-hiking-refresh.spec.ts', desc:'Sprint 72 hiking refresh 测试', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_10', group:'P2_frontend', code:'tests/sprint72/story-556-hint.spec.ts', desc:'Sprint 72 hint 测试', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_11', group:'P2_frontend', code:'tests/sprint72/story-557-breadcrumb-hook.spec.ts', desc:'Sprint 72 breadcrumb hook 测试', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_12', group:'P2_frontend', code:'tests/sprint73/v404-cold-boot.spec.ts', desc:'Sprint 73 v404 cold boot 测试', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B1_13', group:'P2_frontend', code:'tests/sprint74/v409-offline-reliability.spec.ts', desc:'Sprint 74 v409 offline 测试（最大的测试，最新）', stats:'static:dead', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'B1_14', group:'P2_frontend', code:'tests/cleanup-baseline/all-screens.spec.ts', desc:'本次清理基线测试脚本', stats:'static:dead', rec:'delete' },
+
+  { p:'P2', panel:'suspect-panel', id:'B2_1', group:'P2_frontend', code:'components/trails/ActivityBigCard.tsx', desc:'Trails screen 老组件（screen 已删）', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B2_2', group:'P2_frontend', code:'components/trails/LeaveCairnCard.tsx', desc:'Trails screen 老组件', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B2_3', group:'P2_frontend', code:'components/trails/RecentActivityRow.tsx', desc:'Trails screen 老组件', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B2_4', group:'P2_frontend', code:'components/trails/TrailsHeader.tsx', desc:'Trails screen 老组件', stats:'static:dead', rec:'delete' },
+
+  { p:'P2', panel:'suspect-panel', id:'B3_1', group:'P2_frontend', code:'components/Illustrations/EmptyFriends.tsx', desc:'Friends 空态插画（Friends 有空态但没用这个）', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B3_2', group:'P2_frontend', code:'components/Illustrations/EmptyMarkers.tsx', desc:'Markers 空态插画', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B3_3', group:'P2_frontend', code:'components/Illustrations/EmptyRoutes.tsx', desc:'Routes 空态插画', stats:'static:dead', rec:'delete' },
+
+  { p:'P2', panel:'suspect-panel', id:'B4_1', group:'P2_frontend', code:'modules/cairn-fog-layer/src/index.ts', desc:'fog Metal 原生模块入口（native 加载，静态漏）', stats:'static:dead but native', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'B5_1', group:'P2_frontend', code:'components/ActivityIcons/FlagMarkerIcon.tsx', desc:'Flag SVG icon（可能 dynamic load）', stats:'static:dead', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'B5_2', group:'P2_frontend', code:'components/ActivityIcons/HikingIcon.tsx', desc:'Hiking SVG icon', stats:'static:dead', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'B5_3', group:'P2_frontend', code:'components/ActivityIcons/RunningIcon.tsx', desc:'Running SVG icon', stats:'static:dead', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'B6_1', group:'P2_frontend', code:'config/fonts.ts', desc:'字体配置（Expo font 可能 dynamic 加载）', stats:'static:dead', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'B6_2', group:'P2_frontend', code:'config/i18n.ts', desc:'国际化配置（未来中文版会用）', stats:'static:dead', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'B6_3', group:'P2_frontend', code:'config/routeThresholds.ts', desc:'路线阈值参数（老配置）', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B6_4', group:'P2_frontend', code:'config/trackDifficulty.ts', desc:'步道难度分级配置', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B7_1', group:'P2_frontend', code:'hooks/useBackFade.ts', desc:'返回时淡出动画 hook（已删组件用的）', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B7_2', group:'P2_frontend', code:'hooks/useLikeReport.ts', desc:'Blocker #2 提到"接后端 vote"的 real hook（未来接上会用）', stats:'static:dead but future', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'B7_3', group:'P2_frontend', code:'utils/offRoute.ts', desc:'偏离路线检测算法', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B8_1', group:'P2_frontend', code:'services/contentFilter.ts', desc:'硬编码 34 词英语黑名单（空壳）', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B8_2', group:'P2_frontend', code:'services/routing/mapmatch/coordSampling.ts', desc:'GPS 坐标采样（未接入 map matching）', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B9_1', group:'P2_frontend', code:'stubs/mapbox.web.ts', desc:'Web 版 Mapbox stub（可能测试用）', stats:'static:dead', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'B10_1', group:'P2_frontend', code:'components/AimShutter.tsx', desc:'AR aim shutter（AR 残余）', stats:'static:dead', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B10_2', group:'P2_frontend', code:'components/CairnStoneIcon.tsx', desc:'Cairn 石头 SVG icon（品牌 logo 应在用）', stats:'static:dead', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'B10_3', group:'P2_frontend', code:'components/DistantMarkerArrow.tsx', desc:'远处 marker 箭头指示器', stats:'static:dead', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'B10_4', group:'P2_frontend', code:'components/ErrorBoundary.tsx', desc:'React ErrorBoundary（应加到 App root 但漏了）', stats:'static:dead but should-use', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'B11_1', group:'P2_frontend', code:'features/memory/services/fogFloorGeometry.ts', desc:'fog 底层几何计算', stats:'static:dead', rec:'defer' },
+  { p:'P2', panel:'suspect-panel', id:'B12_1', group:'P2_frontend', code:'playwright.config.ts', desc:'Playwright 主配置', stats:'not tracked by static', rec:'keep' },
+  { p:'P2', panel:'suspect-panel', id:'B12_2', group:'P2_frontend', code:'playwright.cleanup-baseline.config.ts', desc:'本次清理基线 playwright 配置', stats:'not tracked', rec:'delete' },
+  { p:'P2', panel:'suspect-panel', id:'B12_3', group:'P2_frontend', code:'playwright.sprint72.config.ts', desc:'Sprint 72 专用 playwright 配置', stats:'not tracked', rec:'delete' },
+];
+
+// ═════════════ 前端调用位置 map · 按 endpoint code 查 ═════════════
+// null = 前端源码里没找到真实 fetch/authenticatedFetch 调用（真 dead 或 dev-only 后端工具）
+// 字符串 = 前端源码路径:行号（Playwright 30d 没打到但代码里有，说明只是没触发到）
+const FRONTEND_CALLS = {
+  'POST /api/auth/register': 'services/authService.ts:38',
+  'POST /api/auth/verify': 'services/authService.ts:53',
+  'POST /api/auth/resend': 'services/authService.ts:67',
+  'POST /api/auth/google': 'services/authService.ts:129',
+  'PATCH /api/auth/password': 'screens/SettingsScreen.tsx:208',
+  'PUT /api/markers/:id': 'store/useMarkerStore.ts:412',
+  'DELETE /api/markers/:id': 'store/useMarkerStore.ts:430',
+  'GET /api/markers/public': null,  // 只有注释,无 fetch
+  'GET /api/markers/:id/community-state': 'hooks/useLikeReport.ts:89',
+  'GET /api/markers/:id/interact-nonce': 'hooks/useLikeReport.ts:142',
+  'POST /api/markers/:id/vote': 'hooks/useLikeReport.ts:177',
+  'POST /api/routes': 'services/routeService.ts:88',
+  'GET /api/routes/:id': 'services/routeService.ts:77',
+  'PUT /api/routes/:id': 'services/routeService.ts:105',
+  'DELETE /api/routes/:id': 'services/routeService.ts:119',
+  'PATCH /api/routes/:id/run': 'services/routeService.ts:128',
+  'POST /api/friends/request': 'store/useFriendStore.ts:234',
+  'POST /api/friends/accept': 'store/useFriendStore.ts:266',
+  'POST /api/friends/reject': 'store/useFriendStore.ts:281',
+  'DELETE /api/friends/:id': 'store/useFriendStore.ts (deleteFriend)',
+  'GET /api/friends/:id/markers': 'store/useFriendStore.ts:296',
+  'GET /api/circle/routes': 'store/useRouteStore.ts:173',
+  'POST /api/hide': 'store/useMarkerStore.ts:477',
+  'DELETE /api/memory/points': 'services/memorySync.ts:466',
+  'POST /api/sessions': null,  // v411 legacy 前端已不用
+  'POST /api/telemetry/sessions': 'services/crashLogger.ts:205 + telemetryUploader.ts:121',
+  'GET /api/telemetry/sessions': null,  // dev query tool, 前端不用
+  'GET /api/telemetry/sessions/:id': null,  // dev query tool
+  'POST /api/debug-snapshot': 'services/debugUpload.ts:131',
+  'GET /api/debug-snapshot/latest': null,  // dev query tool
+  'GET /api/debug-snapshot/:id': null,  // dev query tool
+};
+
+function render() {
+  const byGroup = {};
+  for (const it of ITEMS) {
+    if (!byGroup[it.group]) byGroup[it.group] = [];
+    byGroup[it.group].push(it);
+  }
+  for (const g in byGroup) {
+    const container = document.getElementById(g);
+    if (!container) continue;
+    container.innerHTML = byGroup[g].map(it => {
+      const isP1 = it.p === 'P1';
+      const dis = isP1 ? 'disabled' : '';
+      const ro = isP1 ? 'readonly' : '';
+      const roTag = isP1 ? '<span class="readonly-tag">只读</span>' : '';
+      const placeholder = isP1 ? '（只读）' : '备注...';
+      // 前端代码引用检测（只对 P2 backend endpoint 显示）
+      let feTag = '';
+      let feLoc = '';
+      let effectiveRec = it.rec;
+      if (it.p === 'P2' && it.group === 'P2_backend' && FRONTEND_CALLS.hasOwnProperty(it.code)) {
+        const loc = FRONTEND_CALLS[it.code];
+        if (loc) {
+          feTag = '<span class="frontend-tag">前端有代码</span>';
+          feLoc = `<div class="frontend-loc">↳ ${loc}（Playwright 30d 没打到,只是没触发到,不是真 dead）</div>`;
+          effectiveRec = 'keep';  // 前端有代码,自动改成 keep 推荐
+        } else {
+          feTag = '<span class="frontend-tag dead">前端无调用</span>';
+          feLoc = `<div class="frontend-loc dead">↳ 前端源码搜索无 fetch 调用（真 dead 或 dev-only 后端工具）</div>`;
+        }
+      }
+      return `
+      <div class="item ${it.panel}" id="row-${it.id}">
+        <div class="main">
+          <div class="code-row">
+            <span class="code">${it.code}</span>${roTag}${feTag}
+            <span class="stats">${it.stats}</span>
+          </div>
+          <div class="desc">${it.desc}</div>
+          ${feLoc}
+          <div class="rec">推荐: <b>${effectiveRec}</b>${effectiveRec !== it.rec ? ` <span style="color:#7ea065">(由"前端有代码"自动上调)</span>` : ''}</div>
+        </div>
+        <div class="radio-group">
+          <label><input type="radio" name="${it.id}" value="keep" ${dis}> 留</label>
+          <label><input type="radio" name="${it.id}" value="delete" ${dis}> 删</label>
+          <label><input type="radio" name="${it.id}" value="defer" ${dis}> 延</label>
+          <label><input type="radio" name="${it.id}" value="annotate" ${dis}> 注</label>
+        </div>
+        <input type="text" class="note-input" name="note_${it.id}" placeholder="${placeholder}" ${ro}>
+      </div>
+    `;
+    }).join('');
+  }
+  applyRecommended();
+  updateCounts();
+  document.body.addEventListener('change', e => {
+    if (e.target.type === 'radio') updateCounts();
+  });
+}
+
+function applyRecommended() {
+  // 只对 Part 2 应用推荐（Part 1 只读，不需要选中）
+  // P2 backend endpoint 里前端有代码的自动上调为 keep
+  for (const it of ITEMS) {
+    if (it.p !== 'P2') continue;
+    let rec = it.rec;
+    if (it.group === 'P2_backend' && FRONTEND_CALLS[it.code]) rec = 'keep';
+    const radios = document.getElementsByName(it.id);
+    for (const r of radios) if (r.value === rec) r.checked = true;
+  }
+  updateCounts();
+}
+function setAllPart2(v) {
+  for (const it of ITEMS) if (it.p === 'P2') {
+    const radios = document.getElementsByName(it.id);
+    for (const r of radios) if (r.value === v) r.checked = true;
+  }
+  updateCounts();
+}
+
+function updateCounts() {
+  // 只统计 Part 2
+  let k=0,d=0,f=0,a=0,none=0;
+  for (const it of ITEMS) {
+    if (it.p !== 'P2') continue;
+    const val = document.querySelector(`input[name=${it.id}]:checked`)?.value;
+    if (val === 'keep') k++;
+    else if (val === 'delete') d++;
+    else if (val === 'defer') f++;
+    else if (val === 'annotate') a++;
+    else none++;
+  }
+  document.getElementById('cnt-keep').textContent = k;
+  document.getElementById('cnt-del').textContent = d;
+  document.getElementById('cnt-def').textContent = f;
+  document.getElementById('cnt-ann').textContent = a;
+  document.getElementById('cnt-none').textContent = none;
+}
+
+function generate() {
+  // 只生成 Part 2 决策（Part 1 只读，默认全部 annotate）
+  const decisions = { keep: [], delete: [], defer: [], annotate: [], unset: [] };
+  for (const it of ITEMS) {
+    if (it.p !== 'P2') continue;
+    const val = document.querySelector(`input[name=${it.id}]:checked`)?.value || 'unset';
+    const note = document.querySelector(`input[name=note_${it.id}]`)?.value?.trim() || '';
+    const entry = { code: it.code, desc: it.desc };
+    if (note) entry.note = note;
+    (decisions[val] || decisions.unset).push(entry);
+  }
+  const out = {
+    timestamp: new Date().toISOString(),
+    part1_note: 'Part 1 (54 项在用清单) 只读展示，默认全部保留 + Phase 4 加注释',
+    counts: { keep: decisions.keep.length, delete: decisions.delete.length, defer: decisions.defer.length, annotate: decisions.annotate.length, unset: decisions.unset.length },
+    decisions,
+  };
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('result-json').textContent = JSON.stringify(out, null, 2);
+}
+
+function copyResult() {
+  const text = document.getElementById('result-json').textContent;
+  if (!text) { alert('先点"生成决策 JSON"'); return; }
+  navigator.clipboard.writeText(text).then(() => alert('已复制！粘贴给 Claude'));
+}
+
+render();
+</script>
+</body>
+</html>

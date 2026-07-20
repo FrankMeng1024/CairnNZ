@@ -6,7 +6,8 @@ const App = (() => {
   const VIEWS = {
     'view-overview': () => ViewOverview.render(),
     'view-story':    () => ViewStory.render(),
-    'view-planning': () => ViewPlanning.render()
+    'view-planning': () => ViewPlanning.render(),
+    'view-research': () => {} // static iframe, no render needed
   };
 
   let currentView = 'view-overview';

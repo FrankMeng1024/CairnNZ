@@ -1,0 +1,1269 @@
+{
+  "themes": {
+    "map_completion_obsession": {
+      "count": 453,
+      "unique_count": 189,
+      "src_dist": {
+        "appstore_fogofworld_us": 119,
+        "appstore_alltrails_us": 94,
+        "appstore_alltrails_gb": 54,
+        "appstore_dayone_us": 43,
+        "appstore_alltrails_au": 34,
+        "appstore_fogofworld_gb": 21,
+        "appstore_fogofworld_au": 20,
+        "appstore_alltrails_nz": 14
+      },
+      "cat_dist": {
+        "praise": 218,
+        "pain": 183,
+        "relation": 11,
+        "pricing": 20,
+        "emotion": 8,
+        "complaint": 13
+      },
+      "avg_intensity": 4.57,
+      "top_quotes": [
+        {
+          "id": "a001639",
+          "src": "appstore_alltrails_au",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Best trail app ever!\nThe AllTrails app is a fantastic tool for outdoor enthusiasts. It offers a comprehensive database of hiking, running, and biking trails, making it easy to find the perfect adventure for any skill level. The app provides detailed trail maps, including elevation gain, difficulty level, and user reviews, helping users plan their outdoor activities with confidence.\n\nOne of the standout features of the AllTrails app is its offline map capability. This means that even if you're in an area with no cell service, you can still access trail maps and navigate through your chosen route. This is especially useful for remote wilderness areas or when traveling to unfamiliar locations.\n\nThe app also allows users to track their progress and record their hikes, runs, or bike rides. This feature is great for setting personal goals and keeping a log of your outdoor activities. Additiona"
+        },
+        {
+          "id": "a004066",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "So happy I found this app!\nReading the reviews on here from a few months ago, I’m assuming they’ve fixed the issues and updated it since then because I’m on an iphone7 and it always loads within a minute on my phone, I think people are accustomed to super fast things but if you think of what the app is loading you’d expect to wait just a few seconds longer. \nI found this app recently by just looking around for a trail app as I moved to a new area and really just need to find new little spots. I’ve used this app four times in the first week and already upgraded to pro for the offline capabilities and to just use it to its full potential. I love that people can review as I go highly off the reviews for what I’m looking for. Every trail I’ve found I’ve loved for different reasons and I’m literally telling everyone I know that hikes to check into it  and no one has recommended another one, s"
+        },
+        {
+          "id": "a004169",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Used to be great, now DANGEROUS\nI’ve hiked over 600 miles this year alone using this app. I used to get to the trail, turn on the app, go into “Airplane Mode” to preserve battery life and then watch the curser move around the map as I explored trails and side trails for hours without issue. It WAS amazing and wholly reliable and above all else SAFE. I suggested the app to everyone I met on trail and off. I just updated the app, went out on the trail, but can no longer go into Airplane Mode, or all the black dotted line side trails vanish from the map. Why?!! Left with no safe alternative, I didn’t go into Airplane Mode to retain the side trails up on my map screen, which should have enabled me to explore other trails off of the AllTrails suggested hiking loop (the way I always do). BUT, with this new update, I lost internet connection and ALL of the black-dotted side trail lines INSTANTL"
+        },
+        {
+          "id": "a004192",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Fantastic! Except for a couple of things\nLet me start by saying I really love this app and use it weekly, even several times a week. The maps have helped me get back on track when my rambling exploring has been too rambly and it has helped me discover new awesome places to hike with my dog. In addition, it can be really helpful when I’m following something that is, for instance, a 6 mile hike but I don’t want to go that far, I can see shortcuts that will make it more the length I am after - though sometimes they are more adventurous than I expected!\n\nOn to the less good stuff: it can take a lot of poking around to figure out some of the functions and it can be hard to search by location. That is, it will let me search by proximity to my home location (I pay for the “pro” and consider it worth it) but when I’m looking for new places to explore in a particular area a little farther from my"
+        },
+        {
+          "id": "a008985",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "I absolutely love it so far!\nI have tried to have a journal many times throughout my life and the one reason I kept failing at it was because it wasn’t fun. I looked at things like my handwriting and thought no one could read this even if they wanted to! I also didn’t like that if by chance the could read my handwriting they would be totally invading my privacy because anyone can open a notebook if they find it under your mattress. I also couldn’t add photos to it unless I printed them out and tapped them in. And my biggest problem of all was how tired my hand would get writing and how long it took (I have a lot to say). This app has solved all those issues! Typing everything insures that it is legible, the passcode options keeps it safe and private while the sync option ensures everything is backed up and can be accessed from more than one device which is super handy when you don’t want"
+        },
+        {
+          "id": "a009046",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Top Notch\nFor a long time, I resisted this app because I already use Evernote, drafts, bear and too many archives of paper journals to want another journal. This deliberate chronicle, albeit digital, has its own set of new nightmares (e.g. losing brilliant drafts never to be recovered in this lifetime; 99 CENT pay wall hitting at that critical juncture where poverty and verisimilitude collide to disrupt the latest masterpiece with a Mephisto phenomenon option: or else!)\n\n I like the interface, platform, obvious intention & execution of this app. The \"interface\" to me means how I interact with the digital input of my thoughts and artist way type Journaling that I've been doing doe twenty odd years - so I want to pick up where I left off not have to adjust my creative process to some fraudulent fad, but rather seamlessly fold the \"platform\" which in this case is iphone app into my creative"
+        }
+      ]
+    },
+    "offline_map_need": {
+      "count": 282,
+      "unique_count": 133,
+      "src_dist": {
+        "appstore_alltrails_us": 154,
+        "appstore_alltrails_gb": 52,
+        "appstore_alltrails_au": 50,
+        "appstore_alltrails_nz": 14,
+        "appstore_fogofworld_us": 6,
+        "appstore_polarsteps_us": 4,
+        "appstore_polarsteps_au": 1,
+        "appstore_polarsteps_gb": 1
+      },
+      "cat_dist": {
+        "praise": 132,
+        "pricing": 23,
+        "pain": 110,
+        "relation": 8,
+        "emotion": 5,
+        "complaint": 4
+      },
+      "avg_intensity": 4.51,
+      "top_quotes": [
+        {
+          "id": "a001639",
+          "src": "appstore_alltrails_au",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Best trail app ever!\nThe AllTrails app is a fantastic tool for outdoor enthusiasts. It offers a comprehensive database of hiking, running, and biking trails, making it easy to find the perfect adventure for any skill level. The app provides detailed trail maps, including elevation gain, difficulty level, and user reviews, helping users plan their outdoor activities with confidence.\n\nOne of the standout features of the AllTrails app is its offline map capability. This means that even if you're in an area with no cell service, you can still access trail maps and navigate through your chosen route. This is especially useful for remote wilderness areas or when traveling to unfamiliar locations.\n\nThe app also allows users to track their progress and record their hikes, runs, or bike rides. This feature is great for setting personal goals and keeping a log of your outdoor activities. Additiona"
+        },
+        {
+          "id": "a004066",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "So happy I found this app!\nReading the reviews on here from a few months ago, I’m assuming they’ve fixed the issues and updated it since then because I’m on an iphone7 and it always loads within a minute on my phone, I think people are accustomed to super fast things but if you think of what the app is loading you’d expect to wait just a few seconds longer. \nI found this app recently by just looking around for a trail app as I moved to a new area and really just need to find new little spots. I’ve used this app four times in the first week and already upgraded to pro for the offline capabilities and to just use it to its full potential. I love that people can review as I go highly off the reviews for what I’m looking for. Every trail I’ve found I’ve loved for different reasons and I’m literally telling everyone I know that hikes to check into it  and no one has recommended another one, s"
+        },
+        {
+          "id": "a004595",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Deleted trails and argumentative customer “service”\nADDENDUM: Your response to my review completely made my point!! Instead of trying to figure out how to fix a problem, you continued to argue your point. My point was: crucial trails are missing from at least one hiking area I know of. It renders Alltrails useless for hiking in Forest Park, Portland. Those trails need to be added back in to the Alltrails layer of your maps. I have just downloaded and begun to use Gaia because their maps do include all of the appropriate trails in that area. If you decide to take action to correct the problem rather than argue, let me know. (My Pro subscription will not be renewed if I can’t trust your maps to include crucial trails, which happen to have names which include “road” or “drive” in them. \n\n At some point in the last year, for some reason certain trails— which are labeled as roads, but no long"
+        },
+        {
+          "id": "a012197",
+          "src": "appstore_fogofworld_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Simple and fun\nI downloaded this app the day I moved to New York City about a year ago.  It’s fascinating to see how much of the city I’ve explored, and it’s fun to level up by “un-fogging” more.  It makes you truly realize how much - and how little - you’ve explored of this big world of ours.  I always had an adventurous spirit and like to spend my days off exploring, and this app helps me by showing me places I still haven’t been to so I’m not aimlessly hopping on a train and somehow finding myself surrounded by the same familiar sights as any creature of habit would.  I find myself leaving the house more and just walking the streets in places I never would have known about Unless this app didn’t subtly bring to my attention that I’d never been THERE before.  I even find myself taking the scenic route home from work just because I haven’t unforced that one block a quarter mile away.  I"
+        },
+        {
+          "id": "a004181",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "So close to perfect!\nConsidering I only have one negative thing to say about the app as a whole I will put that up front.  I wish I could reverse a loop trail!!!  \n\nOther than that I have been using this app happily for about a year.  It has absolutely saved me from unplanned miles on poorly marked trail junctions.  It has helped me introduce people to hiking and backpacking.  I use it any time I am in a new place and can always find a trail, or a drive worth taking.\n\nI use this app on every bike I take, weather that is an hour or a multi-day backpacking trip.    \n\nIt has REPLACED my need for a dedicated GPS device.   I don’t recommend it but honestly I don’t carry maps or books either, this has simply replaced them and that means saving weight (I mean always carry your map...lol)\n\nI am a pro (paid) member and so long as the app continues to update and add new content I will continue to "
+        },
+        {
+          "id": "a004068",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Great app with one major flaw\nI’ve been using AllTrails for a couple months now and I love it. It is a 5 star app by far, yet that is not my rating for it. There are a few quirks I have with the UI, but they are not worth mentioning as they are minor and do not effect the app use whatsoever. \nMy only real issue, which caused my 4 star rating (which killed me to do so), is the fact that you CANNOT LAUNCH THE APP WITHOUT A CELLULAR OR WIFI CONNECTION!! It is ridiculous, plain and simple. I am a Pro subscriber to AllTrails. I did this solely so I could download trail maps prior to going in case I lost service on the trail. That feature works beautifully. But let’s say you download your map, head out to your trail, arrive and go to open app to use the map that is already saved on your phone. Guess what?? Unless you have service, you can’t open the app! So it’s essentially useless. The last t"
+        }
+      ]
+    },
+    "life_changing_love": {
+      "count": 181,
+      "unique_count": 90,
+      "src_dist": {
+        "appstore_alltrails_us": 37,
+        "appstore_dayone_us": 31,
+        "appstore_alltrails_gb": 20,
+        "appstore_dayone_au": 20,
+        "appstore_alltrails_au": 14,
+        "appstore_dayone_gb": 13,
+        "appstore_fogofworld_us": 12,
+        "appstore_alltrails_nz": 10
+      },
+      "cat_dist": {
+        "praise": 85,
+        "pain": 77,
+        "relation": 6,
+        "pricing": 8,
+        "emotion": 5
+      },
+      "avg_intensity": 4.65,
+      "top_quotes": [
+        {
+          "id": "a009041",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Truly Lifechanging\nI’m not a big app reviewer but when it comes to my experience with Day One, I felt completely compelled to share the impact it has made on my life. \n\nWhen I left home to live across the country from the only life I knew, I wanted a companion in which to document every step of that journey to remember it by and relish the memories I documented for the rest of my life. \n\nI stumbled across Day One and quickly started to realize the magic behind it. Every day I started adding photos, jotting down everything in which to remember my journey, all with time stamps, geolocation, and more all at my fingertips.  \n\nAs my life shifted and changed, it’s companionship grew with me. \n\nFrom going through an abusive relationship, difficult career moves, the global pandemic, to a new relationship with love, marriage, and a baby on the way, Day One has been there with tons of supportive f"
+        },
+        {
+          "id": "rp0031",
+          "src": "reddit_r_polarsteps",
+          "i": 5,
+          "cat": "praise",
+          "quote": "First of all I want to say I absolutely love the app and I'm addicted. It's absolutely the best one out there. But I'm always thinking of ways to make it even better, and I think DayTrips would be a great addition.\n\n  It would simply be a way to add locations without adding an entire new step, since these locations have been visited while being based in another location, only for the day and returning to the ''base'' for the night.\n\n  I will use a recent trip to Andalusia as an example. After visiting Seville, we made our way to Malaga. We then used Malaga as a hub to visit other places for day trips, like Ronda and Gibraltar. Right now, the only way to show this on the app is either to make new steps for all of them, which shows an itinerary that is inaccurate, or to make multiple steps in Malaga after every daytrips, which in my opinion looks pretty bad. Here is a beautiful drawing to "
+        },
+        {
+          "id": "a012198",
+          "src": "appstore_fogofworld_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Amazing App, A Few Additions Needed!\nI love this app and have been addicted for the past few months. I’ve been using programs on my computer to add past trips and it’s so much fun. I would love if a few more features were added, including regions of countries! For instance, I’d love to be able to see my explored area in square kilometers and percentage traveled in each of the 50 US states, Canadian provinces, Australian territories, etc. \n\nA bit more detailed information about there you’ve been would be great, including a way to view a list of your top countries ranked from most-visited to least-visited, maybe a list of the cities you’ve traveled to (if you made it within city boundaries on the map, it would count on your list), and maybe an additional page on the app that has a general checklist of popular sights/attractions around the world - if you visit one, it would check off on you"
+        },
+        {
+          "id": "a006201",
+          "src": "appstore_dayone_au",
+          "i": 5,
+          "cat": "pain",
+          "quote": "High hopes .... Fulfilled eventually.\n'Classic' Day One has been my companion on trips, holidays and just everyday life for over five years now. It's been there, reliably, when I had something to note. \nThe 'new, improved' 2.0 imported my old entries... then crashed whenever I tried to review more than two or three entries. I was very, very sad because there were some new features I really wanted to use. \nFast forward a couple of months and 2.0 gets another chance....and delivers! My rating goes from one star to five stars and I get all the features I longed for. \nI particularly like the \"On this day...\" option - today just happens to be my son's 18th birthday and choosing this shows me his picture 'on this (special) day' over the last six years. (Huge 'ahhhh'!). It's nostalgia that I just couldn't get anywhere else - and I'm a sucker for nostalgia. \nBeing able to add more than one pictu"
+        },
+        {
+          "id": "a009002",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Always looking for better, Day One always wins\nI’ve been journaling and digitally archiving for decades now. If I could retire right now I’d do it a lot more but, in the meantime, it’s important to me to take and keep snapshots of my and my family’s life as the years roll by. I stopped using Facebook and Instagram years ago and journaling has been a great replacement. I still have motivation to take pictures of semi-ordinary events, along with a note about what happened. Beyond that, it’s helped me to see a picture of my overall mental health year by year and identify things I struggle with over and over.\n\nDay One has been a near-perfect companion for the last several years. The product is both easy and fun to use and it’s rare that I think of something I want but don’t have. The updates are thoughtful and have yet to encounter an issue of any kind. I would love to see more support for t"
+        },
+        {
+          "id": "a005399",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Great App for Hiking, with Room for Improvement\nI’ve been using AllTrails for over a year now, and it’s become one of my go-to apps whenever I’m hiking or exploring new areas. The interface is clean, easy to navigate, and the premium version is well worth the price. I especially like being able to download maps for offline use and track my progress with distance completed and remaining.\n\nMy biggest issue is that some trail ratings don’t always match the actual difficulty. I’ve come across a few trails marked as easy or moderate that turned out to be much more challenging than expected. There are also times when the mapped trail doesn’t perfectly line up with the actual path. It’s usually only off by a little, but it can still be confusing.\n\nOne feature I’d love to see is more real-time trail information, such as trail closures, maintenance updates, seasonal hazards like ticks, or recent "
+        }
+      ]
+    },
+    "trail_bad_data": {
+      "count": 72,
+      "unique_count": 37,
+      "src_dist": {
+        "appstore_alltrails_us": 28,
+        "appstore_dayone_us": 12,
+        "appstore_alltrails_gb": 8,
+        "appstore_alltrails_au": 7,
+        "appstore_dayone_au": 7,
+        "appstore_fogofworld_us": 4,
+        "appstore_dayone_gb": 2,
+        "appstore_polarsteps_us": 2
+      },
+      "cat_dist": {
+        "praise": 15,
+        "pain": 44,
+        "pricing": 4,
+        "complaint": 4,
+        "relation": 5
+      },
+      "avg_intensity": 4.47,
+      "top_quotes": [
+        {
+          "id": "a004169",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Used to be great, now DANGEROUS\nI’ve hiked over 600 miles this year alone using this app. I used to get to the trail, turn on the app, go into “Airplane Mode” to preserve battery life and then watch the curser move around the map as I explored trails and side trails for hours without issue. It WAS amazing and wholly reliable and above all else SAFE. I suggested the app to everyone I met on trail and off. I just updated the app, went out on the trail, but can no longer go into Airplane Mode, or all the black dotted line side trails vanish from the map. Why?!! Left with no safe alternative, I didn’t go into Airplane Mode to retain the side trails up on my map screen, which should have enabled me to explore other trails off of the AllTrails suggested hiking loop (the way I always do). BUT, with this new update, I lost internet connection and ALL of the black-dotted side trail lines INSTANTL"
+        },
+        {
+          "id": "a004595",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Deleted trails and argumentative customer “service”\nADDENDUM: Your response to my review completely made my point!! Instead of trying to figure out how to fix a problem, you continued to argue your point. My point was: crucial trails are missing from at least one hiking area I know of. It renders Alltrails useless for hiking in Forest Park, Portland. Those trails need to be added back in to the Alltrails layer of your maps. I have just downloaded and begun to use Gaia because their maps do include all of the appropriate trails in that area. If you decide to take action to correct the problem rather than argue, let me know. (My Pro subscription will not be renewed if I can’t trust your maps to include crucial trails, which happen to have names which include “road” or “drive” in them. \n\n At some point in the last year, for some reason certain trails— which are labeled as roads, but no long"
+        },
+        {
+          "id": "a005779",
+          "src": "appstore_dayone_au",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Love it.\nWould like to be able to use my apple pencil when I'm in bed on my iPad but since I mostly use this app on my phone it's not a big deal. \n\nAnother little thing, I was writing an entry tonight and I wanted to be able to add a small bit of text at the bottom to attach to an asterisk from earlier in the entry but it seems you are unable to change the font size of just a snippet of text. Only the whole diary! I mean... I know its not a word processor or anything but this seems like it should be doable in a diary - something that is all about the words!\n\nAlso I don't want every single entry to show my home address under it! It looks cluttered and unnecessary, I never go anywhere exciting and it's a depressing reminder 😅. I have been going into the metadata and turning off after completing each entry but there must be a better way, if there is, I couldn't find it!\n\nOk another update e"
+        },
+        {
+          "id": "a009051",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "relation",
+          "quote": "The power of journaling!\nI’ve been using DayOne as my private journal for over 6 years.  I started using it when I realized I was never doing the journaling I wanted to do because 1.) writing on paper meant leaving it around the house for prying eyes, and 2.) I never had my journal on me when I had something to say.  Keeping my journal with its own password on my phone means I can jot down my thoughts anywhere - in the bathroom (honestly, the most common place when I started), sitting next to whomever I was ranting about, sitting in the doctor’s office before a procedure, in the car waiting for someone, etc.\n\nI have had multiple journaling templates over the years that provide a little guidance to my morning journaling - it is a place to collect data from my habits, build new practices into daily life, and the place that I process through my thoughts & feelings.  It helps me keep in mind"
+        },
+        {
+          "id": "rp0031",
+          "src": "reddit_r_polarsteps",
+          "i": 5,
+          "cat": "praise",
+          "quote": "First of all I want to say I absolutely love the app and I'm addicted. It's absolutely the best one out there. But I'm always thinking of ways to make it even better, and I think DayTrips would be a great addition.\n\n  It would simply be a way to add locations without adding an entire new step, since these locations have been visited while being based in another location, only for the day and returning to the ''base'' for the night.\n\n  I will use a recent trip to Andalusia as an example. After visiting Seville, we made our way to Malaga. We then used Malaga as a hub to visit other places for day trips, like Ronda and Gibraltar. Right now, the only way to show this on the app is either to make new steps for all of them, which shows an itinerary that is inaccurate, or to make multiple steps in Malaga after every daytrips, which in my opinion looks pretty bad. Here is a beautiful drawing to "
+        },
+        {
+          "id": "a004068",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Great app with one major flaw\nI’ve been using AllTrails for a couple months now and I love it. It is a 5 star app by far, yet that is not my rating for it. There are a few quirks I have with the UI, but they are not worth mentioning as they are minor and do not effect the app use whatsoever. \nMy only real issue, which caused my 4 star rating (which killed me to do so), is the fact that you CANNOT LAUNCH THE APP WITHOUT A CELLULAR OR WIFI CONNECTION!! It is ridiculous, plain and simple. I am a Pro subscriber to AllTrails. I did this solely so I could download trail maps prior to going in case I lost service on the trail. That feature works beautifully. But let’s say you download your map, head out to your trail, arrive and go to open app to use the map that is already saved on your phone. Guess what?? Unless you have service, you can’t open the app! So it’s essentially useless. The last t"
+        }
+      ]
+    },
+    "solo_private": {
+      "count": 195,
+      "unique_count": 92,
+      "src_dist": {
+        "appstore_dayone_us": 44,
+        "appstore_alltrails_us": 40,
+        "appstore_fogofworld_us": 25,
+        "appstore_dayone_au": 22,
+        "appstore_alltrails_au": 19,
+        "appstore_alltrails_gb": 8,
+        "appstore_dayone_gb": 8,
+        "appstore_polarsteps_us": 8
+      },
+      "cat_dist": {
+        "praise": 80,
+        "pain": 99,
+        "pricing": 2,
+        "relation": 10,
+        "emotion": 4
+      },
+      "avg_intensity": 4.62,
+      "top_quotes": [
+        {
+          "id": "a004083",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Littlejohn island must be changed and mackworth needs a lot of TLC\nI take all trails pretty seriously and I use it as many as I can. I currently live in Yarmouth, and it is easy for me to get onto the trail that goes through cousin‘s island over to Little John’s Island preserve. My observation after five years of traveling to this beautiful preserve is that everyone is walking around with their heads up in the air because they don’t know what to do because the parking lot has only four spots on a good day you may have 20 people who want to go on that re-preserve. Why Is it that these people who live in these homes around the preserve get to tell us when we can walk on that road or not this is not a private property thing this has to do with having access to a beautiful natural preserve that has been made by God and sitting on Main in this beautiful island and no one can even access it be"
+        },
+        {
+          "id": "a004169",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Used to be great, now DANGEROUS\nI’ve hiked over 600 miles this year alone using this app. I used to get to the trail, turn on the app, go into “Airplane Mode” to preserve battery life and then watch the curser move around the map as I explored trails and side trails for hours without issue. It WAS amazing and wholly reliable and above all else SAFE. I suggested the app to everyone I met on trail and off. I just updated the app, went out on the trail, but can no longer go into Airplane Mode, or all the black dotted line side trails vanish from the map. Why?!! Left with no safe alternative, I didn’t go into Airplane Mode to retain the side trails up on my map screen, which should have enabled me to explore other trails off of the AllTrails suggested hiking loop (the way I always do). BUT, with this new update, I lost internet connection and ALL of the black-dotted side trail lines INSTANTL"
+        },
+        {
+          "id": "a008985",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "I absolutely love it so far!\nI have tried to have a journal many times throughout my life and the one reason I kept failing at it was because it wasn’t fun. I looked at things like my handwriting and thought no one could read this even if they wanted to! I also didn’t like that if by chance the could read my handwriting they would be totally invading my privacy because anyone can open a notebook if they find it under your mattress. I also couldn’t add photos to it unless I printed them out and tapped them in. And my biggest problem of all was how tired my hand would get writing and how long it took (I have a lot to say). This app has solved all those issues! Typing everything insures that it is legible, the passcode options keeps it safe and private while the sync option ensures everything is backed up and can be accessed from more than one device which is super handy when you don’t want"
+        },
+        {
+          "id": "a009051",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "relation",
+          "quote": "The power of journaling!\nI’ve been using DayOne as my private journal for over 6 years.  I started using it when I realized I was never doing the journaling I wanted to do because 1.) writing on paper meant leaving it around the house for prying eyes, and 2.) I never had my journal on me when I had something to say.  Keeping my journal with its own password on my phone means I can jot down my thoughts anywhere - in the bathroom (honestly, the most common place when I started), sitting next to whomever I was ranting about, sitting in the doctor’s office before a procedure, in the car waiting for someone, etc.\n\nI have had multiple journaling templates over the years that provide a little guidance to my morning journaling - it is a place to collect data from my habits, build new practices into daily life, and the place that I process through my thoughts & feelings.  It helps me keep in mind"
+        },
+        {
+          "id": "a009222",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "BEWARE!!! PRIVATE INFORMATION AND PHOTOS LEAKED\nI spent the majority of 2021 using the day one app as my sole source of journaling and diary entries. They promoted privacy and advertised their affordable printed books. \n\nI filled the book with extremely sensitive and private diary entries, including nude photos of myself meant to only be had printed for my own personal collection. At the end of the year I ordered a book which ended up costing a fortune! I payed anyway because I wanted to have my words printed to have as a memory of the hardest year of my life. \n\nI noticed the address on the confirmation was incorrect so I emailed them immediately to update the address information. They updated the address and confirmed that it would be sent to the correct address. After months of waiting my book never arrived. I reached out to the company and they let me know that my book was delivered t"
+        },
+        {
+          "id": "a009660",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Enjoying the update\nI too was originally skeptical of being forced into their sync system.  I read their terms of service and frankly some of the language was frightening, but I had a couple email exchanges with their extremely responsive customer service and I was satisfied they could not use my private entries in the future.  I've been using for two months now and their sync service is fantastic.  I had period issues with iCloud with Day One Classic, but I've never had an issue so far syncing between my iMac, iPhone, and iPad.  \n\nThe bottom line is that for YEARS I struggled to consistently journal - since getting Dayone in 2012, and now Dayone 2 - I journal more than I have in my entire life.  It is awesome for capturing moments and recording my life.  I know some day there won't be a price you can put on having these entries.  It's so easy to capture photos in DayOne 2 and being able"
+        }
+      ]
+    },
+    "long_time_user": {
+      "count": 209,
+      "unique_count": 102,
+      "src_dist": {
+        "appstore_dayone_us": 61,
+        "appstore_alltrails_us": 41,
+        "appstore_fogofworld_us": 34,
+        "appstore_polarsteps_us": 19,
+        "appstore_dayone_au": 17,
+        "appstore_alltrails_gb": 8,
+        "appstore_fogofworld_au": 8,
+        "appstore_dayone_gb": 7
+      },
+      "cat_dist": {
+        "pain": 100,
+        "pricing": 8,
+        "praise": 88,
+        "emotion": 8,
+        "complaint": 2,
+        "relation": 3
+      },
+      "avg_intensity": 4.57,
+      "top_quotes": [
+        {
+          "id": "a004079",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Not as good as it used to be\nAlltrails is constantly changing things, they’ve made at least 4 changes in the last year so you can never get comfortable with it because it will change again. Map My Hike is far superior! Alltrails used to be able to take a picture and it would mark on the map where you took that pic, now it doesn’t, instead you have to add your pictures at the end of your hike, so if you do a long trip with pics and look at the route years later you have no idea where those spots were at. Also, because of the new horrible format, i’ve written numerous summaries of hikes & bicycle rides for the last few months and none of them were saved for some reason. It saved how i rated the hike and the pics i added on but it doesn’t save the summary!!! Also, there are very limited activities to label what you do where Map My Hike has everything from specific gym workouts to kayaking a"
+        },
+        {
+          "id": "a009051",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "relation",
+          "quote": "The power of journaling!\nI’ve been using DayOne as my private journal for over 6 years.  I started using it when I realized I was never doing the journaling I wanted to do because 1.) writing on paper meant leaving it around the house for prying eyes, and 2.) I never had my journal on me when I had something to say.  Keeping my journal with its own password on my phone means I can jot down my thoughts anywhere - in the bathroom (honestly, the most common place when I started), sitting next to whomever I was ranting about, sitting in the doctor’s office before a procedure, in the car waiting for someone, etc.\n\nI have had multiple journaling templates over the years that provide a little guidance to my morning journaling - it is a place to collect data from my habits, build new practices into daily life, and the place that I process through my thoughts & feelings.  It helps me keep in mind"
+        },
+        {
+          "id": "a009060",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "I used to Iove this app, now. It’s mostly ad-ware\nI used Day one for years as my go-to journaling app.  It had a great feature set, was easy to use and secure.  I got out of the writing habit a while back and the app was lost when I did an iPad refresh.  \nWhen I reinstalled the app now and started the process of restarting my diary habit, I discovered that the app I so enjoyed using has become what used to be called shareware.  \n\nOnly the most basic functions are free, and if you want anything more, they insist that you subscribe to the software as a service.  There is no option of simply hiding all of the “premium” features and I constantly stumble across them, repeatedly seeing the same ad pushing me to pay them a yearly fee to “unlock” all the features that used to be included.\n\nI personally would be happy to pay a one time fee again to enable a different feature set.  I believe that "
+        },
+        {
+          "id": "a009307",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "This app has saved my life many time. Literally.\nTime flies. About 10 years ago, I began a path of dark depression and anxiety. I was an avid skydiver and watched 11 of my friend perish on a plane I was supposed to be on. I own my own company but my anxiety was crippling me, even though I was so close to retiring at 40. \n\nI went and saw a doctor who put me on medications. For the worse. I lost everything. Even my dog just died. Now I have to live with my parents and somehow I’m total debt. \n\nThis app really helps me vent or say what I need to say. I learned that my so called “best friends” don’t want to hear it. So this is my avenue. I can even sync a separate journal to my father because sometimes it’s easier for me to write. People will never understand what I’ve been through, so I use this as my listening ear. \n\nI think my medication has caused brain damage. I will never be who I once"
+        },
+        {
+          "id": "a009660",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Enjoying the update\nI too was originally skeptical of being forced into their sync system.  I read their terms of service and frankly some of the language was frightening, but I had a couple email exchanges with their extremely responsive customer service and I was satisfied they could not use my private entries in the future.  I've been using for two months now and their sync service is fantastic.  I had period issues with iCloud with Day One Classic, but I've never had an issue so far syncing between my iMac, iPhone, and iPad.  \n\nThe bottom line is that for YEARS I struggled to consistently journal - since getting Dayone in 2012, and now Dayone 2 - I journal more than I have in my entire life.  It is awesome for capturing moments and recording my life.  I know some day there won't be a price you can put on having these entries.  It's so easy to capture photos in DayOne 2 and being able"
+        },
+        {
+          "id": "a008981",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Day One has come a long way!\nI have been using Day One for about 4 years now. I have always kept a journal since I was a kid but I wanted something password protected to use on my MacBook. When I first started using the Day One, it was limited and the phone app was incredibly buggy especially on iPhone. Over the years the developers have absolutely refined Day One into one of the best apps you can invest in on the App Store. I truly enjoy looking back over the years to see how far I have come. \n\nI mainly use this app as a “mind dump” whenever I feel overwhelmed and to record my dreams. Over time it has expanded into several different journals. I’m just now starting to use it to record smaller and simpler thoughts throughout the day to replace social media and it’s doing wonders for my mental health. Since it’s much more stable and reliable on iPhone it’s been a joy to use on-the-go. We a"
+        }
+      ]
+    },
+    "safety_lost_in_wild": {
+      "count": 109,
+      "unique_count": 49,
+      "src_dist": {
+        "appstore_alltrails_us": 44,
+        "appstore_alltrails_au": 21,
+        "appstore_alltrails_gb": 14,
+        "appstore_dayone_us": 8,
+        "appstore_alltrails_nz": 7,
+        "appstore_fogofworld_us": 6,
+        "appstore_dayone_au": 4,
+        "appstore_polarsteps_us": 4
+      },
+      "cat_dist": {
+        "praise": 52,
+        "pain": 45,
+        "complaint": 2,
+        "emotion": 3,
+        "relation": 4,
+        "pricing": 3
+      },
+      "avg_intensity": 4.56,
+      "top_quotes": [
+        {
+          "id": "a004066",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "So happy I found this app!\nReading the reviews on here from a few months ago, I’m assuming they’ve fixed the issues and updated it since then because I’m on an iphone7 and it always loads within a minute on my phone, I think people are accustomed to super fast things but if you think of what the app is loading you’d expect to wait just a few seconds longer. \nI found this app recently by just looking around for a trail app as I moved to a new area and really just need to find new little spots. I’ve used this app four times in the first week and already upgraded to pro for the offline capabilities and to just use it to its full potential. I love that people can review as I go highly off the reviews for what I’m looking for. Every trail I’ve found I’ve loved for different reasons and I’m literally telling everyone I know that hikes to check into it  and no one has recommended another one, s"
+        },
+        {
+          "id": "a004169",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Used to be great, now DANGEROUS\nI’ve hiked over 600 miles this year alone using this app. I used to get to the trail, turn on the app, go into “Airplane Mode” to preserve battery life and then watch the curser move around the map as I explored trails and side trails for hours without issue. It WAS amazing and wholly reliable and above all else SAFE. I suggested the app to everyone I met on trail and off. I just updated the app, went out on the trail, but can no longer go into Airplane Mode, or all the black dotted line side trails vanish from the map. Why?!! Left with no safe alternative, I didn’t go into Airplane Mode to retain the side trails up on my map screen, which should have enabled me to explore other trails off of the AllTrails suggested hiking loop (the way I always do). BUT, with this new update, I lost internet connection and ALL of the black-dotted side trail lines INSTANTL"
+        },
+        {
+          "id": "a009307",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "This app has saved my life many time. Literally.\nTime flies. About 10 years ago, I began a path of dark depression and anxiety. I was an avid skydiver and watched 11 of my friend perish on a plane I was supposed to be on. I own my own company but my anxiety was crippling me, even though I was so close to retiring at 40. \n\nI went and saw a doctor who put me on medications. For the worse. I lost everything. Even my dog just died. Now I have to live with my parents and somehow I’m total debt. \n\nThis app really helps me vent or say what I need to say. I learned that my so called “best friends” don’t want to hear it. So this is my avenue. I can even sync a separate journal to my father because sometimes it’s easier for me to write. People will never understand what I’ve been through, so I use this as my listening ear. \n\nI think my medication has caused brain damage. I will never be who I once"
+        },
+        {
+          "id": "rd0017",
+          "src": "reddit_r_dayoneapp",
+          "i": 5,
+          "cat": "pain",
+          "quote": "I just upgraded Day One to Version 2026.12.1 (1763). It removed the \"Upgrade to Day One Gold\" advertisement. That's great news. I'm on the Silver plan and will never need/want/use AI features. Thank you for listening to feedback.\n\n  However, I'm left with a bitter taste in my mouth on the direction Day One is (and has been) going.\n\n  Before Automattic, Day One was commited to keeping my data private. Now, it feels like they want access. I don't blame them. AI training on people's deepest thoughts would be a gold mine. I don't want Day One users to be their mother lode. Are we one dark pattern or questionable dialog away from breaking end-to-end encryption?\n\n  Before the Gold Level, I would've said, no. But now, I'm less certain. Day One needs to double down on their end-to-end encryption commitment. Make it absolutely clear that user's data will remain, and always remain, private. Give u"
+        },
+        {
+          "id": "a009304",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Worth It!\nI’ve tried numerous diary apps, to no avail. Most of them are just gimmicky plain text platforms with flashy colors that offer nothing unless you shell out cash. \n\nThis app is genuinely great. I will say that though the non-premium version works great and will absolutely suffice for those looking for a basic diary platform, the premium is really worth it if you’re willing to spend a little. However, I want to make it totally clear that the app doesn’t demand you buy the premium or withhold everything worthwhile without it. \n\nRegardless, this a great app. With premium I’m able to having multiple “diaries” (I categorize them by mood / occasion) with customizable “covers” (by color). I also can apply tags to each post, so it’s super easy to find old diary post in the archives by just looking through the tags. Plus there’s the awesome steps counter, location mark, format and font o"
+        },
+        {
+          "id": "a009116",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Amazing Concept But Seemingly Not Polishes\nUsing the app for the first time on an IPhone XS running iOS 13.3. I’ve heard great things, and wanted to switch from a handwritten journal, so decided to try out the basic version. \n\nWas writing my first note when I felt an extremely noticeable flicker (input box moving up and down slightly) when typing each letter, in both light and dark modes. Happens when the input box just gets large enough to have a scrollbar. \n\nAs I write this app review in the App Store, I don’t notice the same type of flickering, so I don’t think it’s an Apple bug. \n\nIt wouldn’t be that bad, except the premise of the app is mostly to type into a box, so giving it two stars for now until this is fixed. I don’t think I can use this app to journal if the flickering persists. \n\nAlso, I made some text bold (with the panel), and could not for the life of me change to not bold"
+        }
+      ]
+    },
+    "community_belonging": {
+      "count": 200,
+      "unique_count": 109,
+      "src_dist": {
+        "appstore_polarsteps_us": 51,
+        "appstore_polarsteps_gb": 42,
+        "appstore_alltrails_us": 35,
+        "appstore_dayone_us": 17,
+        "appstore_polarsteps_au": 14,
+        "appstore_alltrails_au": 11,
+        "appstore_alltrails_gb": 8,
+        "appstore_fogofworld_us": 7
+      },
+      "cat_dist": {
+        "relation": 31,
+        "pain": 48,
+        "praise": 117,
+        "pricing": 4
+      },
+      "avg_intensity": 4.5,
+      "top_quotes": [
+        {
+          "id": "a001639",
+          "src": "appstore_alltrails_au",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Best trail app ever!\nThe AllTrails app is a fantastic tool for outdoor enthusiasts. It offers a comprehensive database of hiking, running, and biking trails, making it easy to find the perfect adventure for any skill level. The app provides detailed trail maps, including elevation gain, difficulty level, and user reviews, helping users plan their outdoor activities with confidence.\n\nOne of the standout features of the AllTrails app is its offline map capability. This means that even if you're in an area with no cell service, you can still access trail maps and navigate through your chosen route. This is especially useful for remote wilderness areas or when traveling to unfamiliar locations.\n\nThe app also allows users to track their progress and record their hikes, runs, or bike rides. This feature is great for setting personal goals and keeping a log of your outdoor activities. Additiona"
+        },
+        {
+          "id": "a004192",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Fantastic! Except for a couple of things\nLet me start by saying I really love this app and use it weekly, even several times a week. The maps have helped me get back on track when my rambling exploring has been too rambly and it has helped me discover new awesome places to hike with my dog. In addition, it can be really helpful when I’m following something that is, for instance, a 6 mile hike but I don’t want to go that far, I can see shortcuts that will make it more the length I am after - though sometimes they are more adventurous than I expected!\n\nOn to the less good stuff: it can take a lot of poking around to figure out some of the functions and it can be hard to search by location. That is, it will let me search by proximity to my home location (I pay for the “pro” and consider it worth it) but when I’m looking for new places to explore in a particular area a little farther from my"
+        },
+        {
+          "id": "a016813",
+          "src": "appstore_polarsteps_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "AMAZING\nI absolutely love this app so far and you can tell because i NEVER write reviews for apps. I've been using a page on Notion to organize all my memories and photos, and while notion is amazing, this is so much better for keeping track of everything in my life i have been lucky enough to experience in my adventures and daily life. Beyond just traveling, which I unfortunately haven't been able to do much of yet, it is just so great for organizing my life.\n\nI have three big suggestions for improving the app, however. The first is that I really wish there was a gallery view option for the photos in each step. I really dislike that i have to scroll through all of the photos to see a specific photo or video i uploaded, and i think adding a option to see a gallery view of the photos would be great for instant access to all the memories. Additionally, I think it would be amazing if you co"
+        },
+        {
+          "id": "a005399",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Great App for Hiking, with Room for Improvement\nI’ve been using AllTrails for over a year now, and it’s become one of my go-to apps whenever I’m hiking or exploring new areas. The interface is clean, easy to navigate, and the premium version is well worth the price. I especially like being able to download maps for offline use and track my progress with distance completed and remaining.\n\nMy biggest issue is that some trail ratings don’t always match the actual difficulty. I’ve come across a few trails marked as easy or moderate that turned out to be much more challenging than expected. There are also times when the mapped trail doesn’t perfectly line up with the actual path. It’s usually only off by a little, but it can still be confusing.\n\nOne feature I’d love to see is more real-time trail information, such as trail closures, maintenance updates, seasonal hazards like ticks, or recent "
+        },
+        {
+          "id": "a004087",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Amazing trail results and information.\nFirst off, if developers are reading this… I see great potential in All Trails taking advantage of live activities! Just saying. Now back to the review. First off I should mention that I’ve tried a lot of hiking apps and this one is by far my favorite. It renders trails in the maps that never show up on other apps so that was a big plus. The information it gives on these trails is jam packed, and with an amazing community, you can see what real people have to say about the trail you’re thinking about hiking. After I hike a trail, I make sure I write a review and give as much personal information about it that I’d want the next hikers to know. I’m not the only one either, I don’t hike a trail without looking it up on this app and seeing what others think about it. Aside from others input on trails, this app has everything else you need to know about "
+        },
+        {
+          "id": "a001339",
+          "src": "appstore_alltrails_au",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Awesome App for Adventuring\nThe community is amazing. There’s strong collaboration across the platform to share experiences and gorgeous locations that you otherwise can’t find on your traditional Google or Apple maps. \n\nI personally appreciated the fact that it has the three grades of Easy, Intermediate and Hard. I like to use my hikes to fly out my drone (DJI Air 3) so I typically find myself on solo hikes - so starting with Easy and phasing into Intermediate/Hard over time really helped build my confidence. It’s definitely beginner friendly and helps you build your skills out there. \n\nThe downloadable maps are the game-changer (not sure if it’s a premium feature 🫣) but being able to use maps in low reception areas has unlocked so much opportunity to keep going without concern for getting lost. \n\n10/10 would recommend.\n\nBiggest piece of advice for newbies: start easy and build from the"
+        }
+      ]
+    },
+    "subscription_betrayal": {
+      "count": 40,
+      "unique_count": 18,
+      "src_dist": {
+        "appstore_alltrails_us": 22,
+        "appstore_alltrails_au": 7,
+        "appstore_dayone_us": 5,
+        "appstore_dayone_gb": 4,
+        "appstore_dayone_au": 2
+      },
+      "cat_dist": {
+        "pain": 18,
+        "pricing": 11,
+        "complaint": 6,
+        "praise": 5
+      },
+      "avg_intensity": 4.47,
+      "top_quotes": [
+        {
+          "id": "a004567",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "I am a premium customer and cannot wait for my membership to expire!\nIt has gotten even worse. There is now a “Peak” membership. They haven’t created any new functionality worth paying for so they took functionality, put it behind a hyper-premium paywall and doubled the price! \n\nBuyer beware when dealing with thieves. \n\nOnce again, I just tried to create a hiking route using this app. I eventually gave up in utter disgust and frustration. \n\nIt would seem logical that a user would want to use a combination of existing trails to create their own, customised route. Although there are at least 2 curated trails listed in the app in the park where I was looking, no trails appear on the map in the creation section. \n\nThe search function to find a starting place for creating a route is almost useless. Even the curated trails fail to appear when searched for by name. \n\nThe “smart” routing often h"
+        },
+        {
+          "id": "a009060",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "I used to Iove this app, now. It’s mostly ad-ware\nI used Day one for years as my go-to journaling app.  It had a great feature set, was easy to use and secure.  I got out of the writing habit a while back and the app was lost when I did an iPad refresh.  \nWhen I reinstalled the app now and started the process of restarting my diary habit, I discovered that the app I so enjoyed using has become what used to be called shareware.  \n\nOnly the most basic functions are free, and if you want anything more, they insist that you subscribe to the software as a service.  There is no option of simply hiding all of the “premium” features and I constantly stumble across them, repeatedly seeing the same ad pushing me to pay them a yearly fee to “unlock” all the features that used to be included.\n\nI personally would be happy to pay a one time fee again to enable a different feature set.  I believe that "
+        },
+        {
+          "id": "a004187",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Used to like it, but not anymore\nI used all trails for hiking and mountain biking quite a bit. I live in a very rural area where we build new trails all the time. I also travel around and build my own trails other places, I have built several trails, using all trail and mapped to the trail out, so others can enjoy however, a change has happened and the create a trail is now behind the paywall wall which I find absolutely ridiculous so now all your company is doing making it so others cannot enjoy the trails. That me and my friends are building. So they will never be trails accessible to anyone on all trails because they will not know where they’re at so I have now found two different trail apps that offer trail creation for absolutely free and apps from now on seems like a very bad business model to make it so only trails that existed are the only ones that will ever exist unless you hav"
+        },
+        {
+          "id": "a004167",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Free version is good wasn’t impressed with PRO at all\nI would give the free version 5 stars but the paid version 2-3. The free version allows me to see the maps I need and the standard trail when I’m within service areas or no signal just fine. I’ve used the free version for over 10-15 long hikes outside of cellphone service areas. I purchased the pro access today before an attempted long hike and it made absolutely no difference when I was in the middle of trying to hike a trail at 11,000 ft altitude snowshoeing through snowed over trails with way over 5 feet of snow. My main objective was accessing the topography maps and weather overlays. I downloaded the maps before hitting the trail, but once I was I was on the trail I didn’t have access to them since there was no signal. I got the same features as I did with the free version so I was somewhat disappointed. The app also constantly r"
+        },
+        {
+          "id": "a009114",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "A New Sacred Space for Personal Thoughts\nMy mom wanted me to get into writing my thoughts down into journal but I didn’t want to buy a physical one so I decided to go on the App Store and decided to look at what apps were available. This had lots of stars and reviews so I decided to give it a shot. \n\nAfter 1 week of use this app offers end-to-end encryption, photos, and reflections for things that you wrote on this day FOR FREE. Simply stunning and is personal. There’s no ads no sketchy app policy, it just works. Just ease of use, simplicity, and is made for thoughts and feelings. \n\nEven though some things are locked behind a paywall (subscription) is not as demanding as other apps. All I needed was the basics which this app delivers perfectly. I highly recommend giving this a try."
+        },
+        {
+          "id": "a004588",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Perfect for adventuring families\nI am an avid outdoorsman and family man and this tool is an invaluable tool in my adventure belt. I take my kids out all the time and using this tool to map out and get the best route for my kids to get an epic adventure is hands down the easiest way i have found. I have only bought three apps, and have always used the free version of apps. The free version of this one is great, but I think it is definitely worth the subscription for the extra tools available. Traveling or local use, you can’t go wrong with such a rock solid tool. I’ve used this for three years now and it has gotten me to some absolutely amazing places. Definitely a must."
+        }
+      ]
+    },
+    "nagging_upsell": {
+      "count": 145,
+      "unique_count": 71,
+      "src_dist": {
+        "appstore_dayone_us": 41,
+        "appstore_alltrails_us": 24,
+        "appstore_dayone_gb": 20,
+        "appstore_alltrails_gb": 16,
+        "appstore_dayone_au": 16,
+        "appstore_alltrails_au": 9,
+        "appstore_fogofworld_au": 4,
+        "appstore_fogofworld_us": 4
+      },
+      "cat_dist": {
+        "praise": 66,
+        "pricing": 8,
+        "pain": 63,
+        "complaint": 2,
+        "emotion": 6
+      },
+      "avg_intensity": 4.43,
+      "top_quotes": [
+        {
+          "id": "a004990",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Outdoor Lens Notifications Might Make me CANCEL my subscription!!!\nI used to love this app - and I pay for premium.  And it still has a ton of great features to track trails, and notify you if you’re off the trail.  But the new Outdoor Lens feature is SO ANNOYING I might just find another option!!!  Now, when I’m trying to take photos during a hike, it assumes I want to identify the species of the tree I photographed and takes me thru a whole bunch of prompts.  I accidentally added a photo to the lens logbook (for species identification) and now, every time I open the app it asks me if I want to identify that species.  And I can’t find a way to delete that from the logbook!!  Internet said I’d have to delete the ENTIRE activity (record of my hike), which I don’t want to do.  The constant push notifications from the stupid lens/species ID are overriding every useful feature and taking me "
+        },
+        {
+          "id": "a005779",
+          "src": "appstore_dayone_au",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Love it.\nWould like to be able to use my apple pencil when I'm in bed on my iPad but since I mostly use this app on my phone it's not a big deal. \n\nAnother little thing, I was writing an entry tonight and I wanted to be able to add a small bit of text at the bottom to attach to an asterisk from earlier in the entry but it seems you are unable to change the font size of just a snippet of text. Only the whole diary! I mean... I know its not a word processor or anything but this seems like it should be doable in a diary - something that is all about the words!\n\nAlso I don't want every single entry to show my home address under it! It looks cluttered and unnecessary, I never go anywhere exciting and it's a depressing reminder 😅. I have been going into the metadata and turning off after completing each entry but there must be a better way, if there is, I couldn't find it!\n\nOk another update e"
+        },
+        {
+          "id": "a009041",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Truly Lifechanging\nI’m not a big app reviewer but when it comes to my experience with Day One, I felt completely compelled to share the impact it has made on my life. \n\nWhen I left home to live across the country from the only life I knew, I wanted a companion in which to document every step of that journey to remember it by and relish the memories I documented for the rest of my life. \n\nI stumbled across Day One and quickly started to realize the magic behind it. Every day I started adding photos, jotting down everything in which to remember my journey, all with time stamps, geolocation, and more all at my fingertips.  \n\nAs my life shifted and changed, it’s companionship grew with me. \n\nFrom going through an abusive relationship, difficult career moves, the global pandemic, to a new relationship with love, marriage, and a baby on the way, Day One has been there with tons of supportive f"
+        },
+        {
+          "id": "a009082",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "One Huge Flaw\nNow my review is being censored?? I hate rewriting all this. \n\nThis app is exactly what you are looking for.  By far the best journal app.  The free and paid features are perfectly designed and the price is so sensible. I was literally about to buy it…\n\nBut! The windows desktop version is so trash. First it’s just a lousy browser in an app and it doesn’t even install like real software. It won’t send reminders like this version and it’s lacking other smart features too. It’s only a windows app store trash thing that can’t even create a shortcut.  Breaks every time you restart your computer because it’s using windows trash app store.  Why not let us install like a real piece of software? No reason for this? it’s free anyway? \n\nI would write a bad review there but the windows store is so bad that I remove it totally from my computer. (Like everyone else who has a brain).  I u"
+        },
+        {
+          "id": "a010021",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Half Liquid Glass, Half iOS 18\nDecember 2025:\nI’ve used Day One for ages now (over a decade?) and it’s been a great experience.\n\nHowever it needs further updated with Liquid Glass and other design elements in iOS 26.\n\nI’m glad the keyboard is there as that’s one of my favorite redesigns, and something about it feels slightly more useful/functional than iOS 18. The new lower bar/selector is there, and the Journals pop-up menu is super nice (though why isn’t the half-sized menu translucent like in Maps), but that bar is about it.\n\nThe handy Plus button for creating an entry is just asking for Liquid Glass, instead of that old iOS 18 flat style. Things already updated their Plus button. It’s a very minor detail, yet it’s an object that’s always seen.\n\nAnd what’s bothering me the most is the headers, inside entries themselves and when scrolling through journal entries. The headers are too “h"
+        },
+        {
+          "id": "a004075",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "MUST HAVE APP!\nI absolutely LOVE this app!! I hike alone 90% of the time and I love this for finding new trails, staying in trail and keeping someone in the know of my whereabouts. I love the pictures, reviews and recordings submitted by real people so I can understand whether it’s something I think I could handle or not. The only downsides I’ve come across so far are 1) when you’re flipping through submitted photos, you can tap in the white area near the persons name who submitted it in order to see how long ago it was (ie a month, week, year etc) BUT! Be careful!! I’ve accidentally hit “suggest hide” on a couple photos and you can’t undo that!!!! Super frustrating!!! I’m not trying to flag or hide anyone’s photos! I just wanna know when it was taken. I’m sorry people! 2) when you’re looking for trails in your area using the map, you have to zoom in/out to the perfect spot for the trail"
+        }
+      ]
+    },
+    "daily_journal_ritual": {
+      "count": 242,
+      "unique_count": 123,
+      "src_dist": {
+        "appstore_dayone_us": 102,
+        "appstore_dayone_au": 46,
+        "appstore_dayone_gb": 30,
+        "appstore_alltrails_us": 13,
+        "appstore_fogofworld_us": 12,
+        "appstore_dayone_nz": 11,
+        "appstore_polarsteps_us": 10,
+        "appstore_polarsteps_gb": 9
+      },
+      "cat_dist": {
+        "praise": 127,
+        "pain": 87,
+        "emotion": 11,
+        "relation": 9,
+        "pricing": 8
+      },
+      "avg_intensity": 4.5,
+      "top_quotes": [
+        {
+          "id": "a008486",
+          "src": "appstore_dayone_gb",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Well Worth Premium!!!\nA friend of mine at work first introduced me to day one. I used to use the iOS notes app for all my jotting down, to do lists and what not but needed something a little more customisable and easier to organise.\n\nEnter day one. I first had the free version which, will colours and tags, quickly became my daily note driver. I found it so useful to be able to compartmentalise the different areas of my life. Having templates make it easy to start a new to do list for the week, or add an idea to a regular endeavour of mine!\n\nDay One was so useful that I went for the premium version. I’m now up to 31 journals, £30 odd down for the year and I have ZERO regrets!!! This app is awesome!\n\nI still use notes for some uncategorised lists that I use almost everyday. The one thing iOS has over Day One is the ability to pin notes.\n\nI realise it’d take up space if this feature was ava"
+        },
+        {
+          "id": "a008985",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "I absolutely love it so far!\nI have tried to have a journal many times throughout my life and the one reason I kept failing at it was because it wasn’t fun. I looked at things like my handwriting and thought no one could read this even if they wanted to! I also didn’t like that if by chance the could read my handwriting they would be totally invading my privacy because anyone can open a notebook if they find it under your mattress. I also couldn’t add photos to it unless I printed them out and tapped them in. And my biggest problem of all was how tired my hand would get writing and how long it took (I have a lot to say). This app has solved all those issues! Typing everything insures that it is legible, the passcode options keeps it safe and private while the sync option ensures everything is backed up and can be accessed from more than one device which is super handy when you don’t want"
+        },
+        {
+          "id": "a009041",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Truly Lifechanging\nI’m not a big app reviewer but when it comes to my experience with Day One, I felt completely compelled to share the impact it has made on my life. \n\nWhen I left home to live across the country from the only life I knew, I wanted a companion in which to document every step of that journey to remember it by and relish the memories I documented for the rest of my life. \n\nI stumbled across Day One and quickly started to realize the magic behind it. Every day I started adding photos, jotting down everything in which to remember my journey, all with time stamps, geolocation, and more all at my fingertips.  \n\nAs my life shifted and changed, it’s companionship grew with me. \n\nFrom going through an abusive relationship, difficult career moves, the global pandemic, to a new relationship with love, marriage, and a baby on the way, Day One has been there with tons of supportive f"
+        },
+        {
+          "id": "a009049",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Perfect for Me\nI don’t know that this review is worth much as I have never used any other digital journal but for my many purposes, Day One is perfect.  I liked it so much I purchased another subscription for my spouse but she still prefers a paper journal with her fountain pen.  And here’s where the huge differences between the two forms really shows up.  When she wants to find the date when something happened, it’s a laborious search.  I just type the event or name or place into the search feature and I get all the hits, the most recent entry first.  With Day One I can add photos, video links, emails, texts, or even parts of daily newsletters I get as instantly as a 72 year old man can do anything instantly.  I have separate journals for books bought, borrowed, and read, for projects I’m working on, and for travelogues.  For my spouse to do any of those things is nye impossible in a pa"
+        },
+        {
+          "id": "a009051",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "relation",
+          "quote": "The power of journaling!\nI’ve been using DayOne as my private journal for over 6 years.  I started using it when I realized I was never doing the journaling I wanted to do because 1.) writing on paper meant leaving it around the house for prying eyes, and 2.) I never had my journal on me when I had something to say.  Keeping my journal with its own password on my phone means I can jot down my thoughts anywhere - in the bathroom (honestly, the most common place when I started), sitting next to whomever I was ranting about, sitting in the doctor’s office before a procedure, in the car waiting for someone, etc.\n\nI have had multiple journaling templates over the years that provide a little guidance to my morning journaling - it is a place to collect data from my habits, build new practices into daily life, and the place that I process through my thoughts & feelings.  It helps me keep in mind"
+        },
+        {
+          "id": "a009060",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "I used to Iove this app, now. It’s mostly ad-ware\nI used Day one for years as my go-to journaling app.  It had a great feature set, was easy to use and secure.  I got out of the writing habit a while back and the app was lost when I did an iPad refresh.  \nWhen I reinstalled the app now and started the process of restarting my diary habit, I discovered that the app I so enjoyed using has become what used to be called shareware.  \n\nOnly the most basic functions are free, and if you want anything more, they insist that you subscribe to the software as a service.  There is no option of simply hiding all of the “premium” features and I constantly stumble across them, repeatedly seeing the same ad pushing me to pay them a yearly fee to “unlock” all the features that used to be included.\n\nI personally would be happy to pay a one time fee again to enable a different feature set.  I believe that "
+        }
+      ]
+    },
+    "ai_backlash": {
+      "count": 91,
+      "unique_count": 42,
+      "src_dist": {
+        "appstore_dayone_us": 37,
+        "appstore_dayone_au": 21,
+        "appstore_alltrails_us": 8,
+        "appstore_dayone_gb": 8,
+        "appstore_dayone_nz": 7,
+        "appstore_alltrails_gb": 4,
+        "appstore_alltrails_au": 2,
+        "appstore_polarsteps_au": 2
+      },
+      "cat_dist": {
+        "praise": 47,
+        "pricing": 2,
+        "pain": 31,
+        "relation": 9,
+        "emotion": 2
+      },
+      "avg_intensity": 4.51,
+      "top_quotes": [
+        {
+          "id": "a004990",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Outdoor Lens Notifications Might Make me CANCEL my subscription!!!\nI used to love this app - and I pay for premium.  And it still has a ton of great features to track trails, and notify you if you’re off the trail.  But the new Outdoor Lens feature is SO ANNOYING I might just find another option!!!  Now, when I’m trying to take photos during a hike, it assumes I want to identify the species of the tree I photographed and takes me thru a whole bunch of prompts.  I accidentally added a photo to the lens logbook (for species identification) and now, every time I open the app it asks me if I want to identify that species.  And I can’t find a way to delete that from the logbook!!  Internet said I’d have to delete the ENTIRE activity (record of my hike), which I don’t want to do.  The constant push notifications from the stupid lens/species ID are overriding every useful feature and taking me "
+        },
+        {
+          "id": "a009051",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "relation",
+          "quote": "The power of journaling!\nI’ve been using DayOne as my private journal for over 6 years.  I started using it when I realized I was never doing the journaling I wanted to do because 1.) writing on paper meant leaving it around the house for prying eyes, and 2.) I never had my journal on me when I had something to say.  Keeping my journal with its own password on my phone means I can jot down my thoughts anywhere - in the bathroom (honestly, the most common place when I started), sitting next to whomever I was ranting about, sitting in the doctor’s office before a procedure, in the car waiting for someone, etc.\n\nI have had multiple journaling templates over the years that provide a little guidance to my morning journaling - it is a place to collect data from my habits, build new practices into daily life, and the place that I process through my thoughts & feelings.  It helps me keep in mind"
+        },
+        {
+          "id": "a009097",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Almost perfect!\nI found Day One when I started journaling at the beginning of this year. I hoped to recall moments from the day and record my feelings in entries, but I explore much more on Day One.\n\nTo start with, they have daily prompts to fill out throughout the day that you can write to take your mind away from whatever you’re doing for a second. I personally don’t use them anymore because I don’t have much time, but it could be helpful for others.\n\nYou can also create multiple journals for different aspects of your life, like a place to write your feelings to deal with stress, goals, habits, etc. I don’t struggle with telling my feelings, but at the end of the day I write down my extra thoughts in my journal. \n\nThere are also other features like video and audio recordings, some customization graphics, and syncing that come with Premium if you’re really devoted to journaling. I do no"
+        },
+        {
+          "id": "a009660",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Enjoying the update\nI too was originally skeptical of being forced into their sync system.  I read their terms of service and frankly some of the language was frightening, but I had a couple email exchanges with their extremely responsive customer service and I was satisfied they could not use my private entries in the future.  I've been using for two months now and their sync service is fantastic.  I had period issues with iCloud with Day One Classic, but I've never had an issue so far syncing between my iMac, iPhone, and iPad.  \n\nThe bottom line is that for YEARS I struggled to consistently journal - since getting Dayone in 2012, and now Dayone 2 - I journal more than I have in my entire life.  It is awesome for capturing moments and recording my life.  I know some day there won't be a price you can put on having these entries.  It's so easy to capture photos in DayOne 2 and being able"
+        },
+        {
+          "id": "a015110",
+          "src": "appstore_polarsteps_au",
+          "i": 5,
+          "cat": "praise",
+          "quote": "This app is by far the best holiday tracker\nThis app has the perfect combination of features to make it stand out against the rest. \n*Automatic GPS tracking (without much battery usage)\n*suggested posts based on photos and main stops\n*beautiful interface with the map and timeline below\n*making reels out of the content\n*turning it into a book at the end! I have gotten all my family onto this and buy them books for their birthdays.\n*and now.. AI trip suggestions of where to go which is actually better at knowing me than I know myself. It uses your past trips to make suggestions and it’s spot on! \n \nGreat Segway to some suggestions: \n- can the reels show the map as well please? Like those little map animations you see in YouTube videos. \n- can the app automatically draft posts from past trips based on your photos. At the moment I have to go back and forth between my photos app and polarstep"
+        },
+        {
+          "id": "rd0017",
+          "src": "reddit_r_dayoneapp",
+          "i": 5,
+          "cat": "pain",
+          "quote": "I just upgraded Day One to Version 2026.12.1 (1763). It removed the \"Upgrade to Day One Gold\" advertisement. That's great news. I'm on the Silver plan and will never need/want/use AI features. Thank you for listening to feedback.\n\n  However, I'm left with a bitter taste in my mouth on the direction Day One is (and has been) going.\n\n  Before Automattic, Day One was commited to keeping my data private. Now, it feels like they want access. I don't blame them. AI training on people's deepest thoughts would be a gold mine. I don't want Day One users to be their mother lode. Are we one dark pattern or questionable dialog away from breaking end-to-end encryption?\n\n  Before the Gold Level, I would've said, no. But now, I'm less certain. Day One needs to double down on their end-to-end encryption commitment. Make it absolutely clear that user's data will remain, and always remain, private. Give u"
+        }
+      ]
+    },
+    "battery_drain": {
+      "count": 33,
+      "unique_count": 13,
+      "src_dist": {
+        "appstore_fogofworld_us": 14,
+        "appstore_alltrails_us": 8,
+        "appstore_polarsteps_nz": 4,
+        "appstore_alltrails_au": 2,
+        "appstore_dayone_us": 2,
+        "appstore_polarsteps_us": 2,
+        "appstore_polarsteps_au": 1
+      },
+      "cat_dist": {
+        "pricing": 2,
+        "praise": 12,
+        "pain": 19
+      },
+      "avg_intensity": 4.55,
+      "top_quotes": [
+        {
+          "id": "a012196",
+          "src": "appstore_fogofworld_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Great app - fantastic for exploration!\nPlease read the entire review! This app is great and one-of-a-kind: any similar apps in terms if tracking require a subscription fee that is simply not worth it. Yes, a $30 price is expensive at first, but it is absolutely worth it. As someone who travels VERY often, it’s so cool to be able to see everywhere I visit. I’ve been using the app for 6 months now, and can speak on its functionality. I would say the cons are as follows: phone battery drain will be noticeable (I lose ~10% through FOW on a 14 Pro Max), if you forget to load the app every once in a while tracking will stop, and it is difficult to remove unwanted tracks. However, it needs to be taken into account that this app is 15 years old (meaning it has a history and is unlikely to be deleted). Furthermore, there are external websites and tools to delete unwanted lines (or add if you want"
+        },
+        {
+          "id": "a004590",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Amazing App with One Major Flaw\nThis app is absolutely fantastic. It will help you find amazing local trails and review them for others. It has wonderfully detailed maps and excellent trails all over the world.\n\nHowever, the amount of battery this app consumes is outrageous. On a 3-4 hour hike, my battery typically starts to die rapidly. It didn’t use to be like this, but on my iPhone 15\nPro it’s absolutely killing my battery. I looked at the battery app on my phone to discover that AllTrails is using up about 33% of my battery on its own, and this was previously not the case.\n\nNot sure what happened, but the app is still easily worth the 100$ asking price. It’s just unfortunate how hard it’s draining my battery currently. \n\nOh, and the Apple Watch support is kind of terrible and worthless. My Apple Watch frequently gets “desynced” from my phone (they display different miles and times). "
+        },
+        {
+          "id": "a004097",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Progress is Not Lost when Phone Dies :) !!\nI was so nervous that my phone battery was about to die and that it would lose all my hike progress. At 5% I was worried because we still had a mile left, I planned not to check my phone until I could plug it in because I was anxious about a data loss. I thought I would be okay but then Mom called me, I panicked and hurriedly chatted with her. End call, 2%. I picked up the pace, finally made it home, rushed up the stairs and found a plug. 1% and charging. I was so happy I wouldn’t have to find out, my data was surely saved as my phone didn’t die. I went to type in my password and as I did, my phone went dark, dead. I panicked and assumed the worst. I stood bedside while I waited for my phone to revive itself, had the data been lost? All that hard work erased? The apple logo appears and as fast as I could I opened the AllTrails application to fin"
+        },
+        {
+          "id": "a004270",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Terrible\nI paid for the membership mainly for the Apple Watch features, but it is completely useless.  First of all, you have to have your phone with you and have the app open on your phone which is a complete non-starter.  The Apple Watch app should be completely independent for this to be useful/valuable.  Second, it is almost impossible to get the app to even open on the watch (I had to force close the app on the watch and the phone, then open them at the same time… basically you have to get lucky for it to even work).  If you are lucky enough to get the Watch app to open, the top 1/4th of the map screen is blurred for no apparent reason AND the bright green trail line isn’t even visible.  It also drains the battery on your phone like crazy (not exactly what you want when you’re doing a multi day hike and need your phone to last as long as possible).  For me, this app is absolutely us"
+        },
+        {
+          "id": "a012600",
+          "src": "appstore_fogofworld_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Love the idea but...\nLove this! Great replacement for QuadStreaker which had become defunct sadly. \n\nFor me to truly become a die-hard digger here is what I would like to see and then you'll get my 5 stars:\n\n1. Battery use. Holy crap! Fog of World is a battery killer. This really limits the utility of the app. \n\n2. Why must I actively hit record? This is annoying. Just passively record my movement. QuadStreaker does this superbly well with very minimal battery impact. \n\n3. Import geo data from my photos!! All my photos have geo data. Please let us import tracks from that. \n\n4. Tracks are way too narrow. Are you really expecting me to discover tracks by walking into people's back yards or private property? This should be taken into consideration. \n\nThanks for the fun app and for reading my review."
+        },
+        {
+          "id": "a013557",
+          "src": "appstore_fogofworld_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Fun! Addicting! Use it all the time\nMy newest hobby is to keep the app on whenever I travel to try to get more routes uncovered. It was a battery drain on my iPhone 4 but my iPhone 5 is much better at both the battery and GPS signal. I've asked for a GPS for my birthday just to keep a better track of where I have been!!\n\nI wish it had a few more features like the ability to draw in areas somehow skipped by our phones, the ability to see others' maps, and more badges that we can acquire. I'm still waiting on the update because my trip to Russia still isn't included and technical support didn't know why.\n\nAlso, I've noticed that many people use the app when flying, and I consider that cheating because you're not really on the ground exploring. - but that's a personal opinion."
+        }
+      ]
+    },
+    "wearable_gap": {
+      "count": 61,
+      "unique_count": 29,
+      "src_dist": {
+        "appstore_alltrails_us": 27,
+        "appstore_alltrails_gb": 26,
+        "appstore_dayone_us": 4,
+        "appstore_alltrails_au": 2,
+        "appstore_fogofworld_us": 2
+      },
+      "cat_dist": {
+        "pain": 22,
+        "pricing": 8,
+        "relation": 4,
+        "praise": 25,
+        "complaint": 2
+      },
+      "avg_intensity": 4.61,
+      "top_quotes": [
+        {
+          "id": "a004066",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "So happy I found this app!\nReading the reviews on here from a few months ago, I’m assuming they’ve fixed the issues and updated it since then because I’m on an iphone7 and it always loads within a minute on my phone, I think people are accustomed to super fast things but if you think of what the app is loading you’d expect to wait just a few seconds longer. \nI found this app recently by just looking around for a trail app as I moved to a new area and really just need to find new little spots. I’ve used this app four times in the first week and already upgraded to pro for the offline capabilities and to just use it to its full potential. I love that people can review as I go highly off the reviews for what I’m looking for. Every trail I’ve found I’ve loved for different reasons and I’m literally telling everyone I know that hikes to check into it  and no one has recommended another one, s"
+        },
+        {
+          "id": "a004466",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Great tool!!! Just don’t rely on it Alone\nI’ve been backpacking for about 35 years (except during my time in the military), so I grew up navigating with maps, compasses, and terrain reading. That said, I actually enjoy having a piece of outdoor tech like AllTrails in my kit. It’s great for discovering routes, finding trailheads, and helping keep you on the trail when things get confusing.\n\nThat said, it’s not perfect. I’ve noticed the mileage can be off. On a recent trip the valley I was hiking to was measured at about 8.1 miles, but when my Garmin and AllTrails both showed 8 miles, I still hadn’t even reached the saddle yet. This has happened more than once.\n\nI also recently ran into a snow conditions issue. The trailhead was completely dry so I left my snowshoes in the car, but about 5–6 miles in I hit 2–3 feet of snow. That was fun! \n\nI like the app and use it regularly, but people sh"
+        },
+        {
+          "id": "a004590",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Amazing App with One Major Flaw\nThis app is absolutely fantastic. It will help you find amazing local trails and review them for others. It has wonderfully detailed maps and excellent trails all over the world.\n\nHowever, the amount of battery this app consumes is outrageous. On a 3-4 hour hike, my battery typically starts to die rapidly. It didn’t use to be like this, but on my iPhone 15\nPro it’s absolutely killing my battery. I looked at the battery app on my phone to discover that AllTrails is using up about 33% of my battery on its own, and this was previously not the case.\n\nNot sure what happened, but the app is still easily worth the 100$ asking price. It’s just unfortunate how hard it’s draining my battery currently. \n\nOh, and the Apple Watch support is kind of terrible and worthless. My Apple Watch frequently gets “desynced” from my phone (they display different miles and times). "
+        },
+        {
+          "id": "a004095",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Navigation (recording) Crashes\nBeen a loyal user for many years and recently upgraded to pro. There’s a lot to like about this app, albeit a little confusing at times. However, one thing that absolutely must be fixed, is the recently introduced app crash while navigating (or recording your route). Just spent three days/2 nights out on trail and the navigation crashed every bit of 4 times each day. We missed miles upon miles of recording because it would crash while in my pocket. Read a few other reviews where customer support told them to fix by making sure All Trails was the only thing running on their phone. I’m here to say I tried this and it continued to crash (also, that it’s a bit ridiculous that this be the explanation, considering Google maps and Waze can handle constant navigation for prolonged periods with multiple other apps open). It’s a huge miss if your trail navigation app"
+        },
+        {
+          "id": "a004270",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Terrible\nI paid for the membership mainly for the Apple Watch features, but it is completely useless.  First of all, you have to have your phone with you and have the app open on your phone which is a complete non-starter.  The Apple Watch app should be completely independent for this to be useful/valuable.  Second, it is almost impossible to get the app to even open on the watch (I had to force close the app on the watch and the phone, then open them at the same time… basically you have to get lucky for it to even work).  If you are lucky enough to get the Watch app to open, the top 1/4th of the map screen is blurred for no apparent reason AND the bright green trail line isn’t even visible.  It also drains the battery on your phone like crazy (not exactly what you want when you’re doing a multi day hike and need your phone to last as long as possible).  For me, this app is absolutely us"
+        },
+        {
+          "id": "a004400",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Dangerously inaccurate app\nFirst time using AllTrails, we used it on a 30 mile hike in Western Colorado. According to AllTrails, we had 7 miles left on the last day. This could not have been further from the truth. We had to backpack 15 miles the last day. Depending on AllTrails, we thought the last day was manageable. We did backpack 15 miles the last day but only because we absolutely had to get home that day. It was miserable and exhausting. If the inaccuracy was greater or if we were not as fit or if there was no water along the way, alltrails’ inaccuracy would have caused serious problems. I will never depend on AllTrails again and I am telling all of my hiking friends the dangers of using this app. Drop the money on a Garmin, do not depend on this app. To alltrails, if your map is inaccurate with distance then do not provide the distance. There is no shame in not having all the iss"
+        }
+      ]
+    },
+    "my_data_ownership": {
+      "count": 307,
+      "unique_count": 149,
+      "src_dist": {
+        "appstore_dayone_us": 87,
+        "appstore_alltrails_us": 42,
+        "appstore_polarsteps_us": 42,
+        "appstore_dayone_au": 32,
+        "appstore_dayone_gb": 31,
+        "appstore_fogofworld_us": 25,
+        "appstore_alltrails_gb": 20,
+        "appstore_polarsteps_gb": 8
+      },
+      "cat_dist": {
+        "pain": 124,
+        "praise": 128,
+        "pricing": 15,
+        "complaint": 7,
+        "relation": 16,
+        "emotion": 17
+      },
+      "avg_intensity": 4.57,
+      "top_quotes": [
+        {
+          "id": "a004990",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Outdoor Lens Notifications Might Make me CANCEL my subscription!!!\nI used to love this app - and I pay for premium.  And it still has a ton of great features to track trails, and notify you if you’re off the trail.  But the new Outdoor Lens feature is SO ANNOYING I might just find another option!!!  Now, when I’m trying to take photos during a hike, it assumes I want to identify the species of the tree I photographed and takes me thru a whole bunch of prompts.  I accidentally added a photo to the lens logbook (for species identification) and now, every time I open the app it asks me if I want to identify that species.  And I can’t find a way to delete that from the logbook!!  Internet said I’d have to delete the ENTIRE activity (record of my hike), which I don’t want to do.  The constant push notifications from the stupid lens/species ID are overriding every useful feature and taking me "
+        },
+        {
+          "id": "a007390",
+          "src": "appstore_dayone_gb",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Not working Again\nActivity feed wasn�t working agars ago then after an update (and with no known reason why) activity feed started working again. Now however it�s stopped working again. \n\nThis issue is ongoing and the fix seems to be taking a very long time :(\n\nEverything seems to be running smoothly and working like it should now. (Actually it has been for a while) \n\nI am currently trying Premium and the features you get and the features you unlock are brilliant! I thought just the free version was enough but once you try out the premium features you realise it�s a completely different experience. Thanks DayOne. You make my memories fun and a pleasure to keep. \n\nEdit: 3\n\nWe�re getting there...\n\nContacting support and conversations with support now works perfectly. \n\nYou just need to fix the location history now. \n\nAs always these people are always polite and helpful. I have increased my"
+        },
+        {
+          "id": "a008572",
+          "src": "appstore_dayone_gb",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Not working Again\nActivity feed wasn’t working agars ago then after an update (and with no known reason why) activity feed started working again. Now however it’s stopped working again. \n\nThis issue is ongoing and the fix seems to be taking a very long time :(\n\nEverything seems to be running smoothly and working like it should now. (Actually it has been for a while) \n\nI am currently trying Premium and the features you get and the features you unlock are brilliant! I thought just the free version was enough but once you try out the premium features you realise it’s a completely different experience. Thanks DayOne. You make my memories fun and a pleasure to keep. \n\nEdit: 3\n\nWe’re getting there...\n\nContacting support and conversations with support now works perfectly. \n\nYou just need to fix the location history now. \n\nAs always these people are always polite and helpful. I have increased my"
+        },
+        {
+          "id": "a009051",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "relation",
+          "quote": "The power of journaling!\nI’ve been using DayOne as my private journal for over 6 years.  I started using it when I realized I was never doing the journaling I wanted to do because 1.) writing on paper meant leaving it around the house for prying eyes, and 2.) I never had my journal on me when I had something to say.  Keeping my journal with its own password on my phone means I can jot down my thoughts anywhere - in the bathroom (honestly, the most common place when I started), sitting next to whomever I was ranting about, sitting in the doctor’s office before a procedure, in the car waiting for someone, etc.\n\nI have had multiple journaling templates over the years that provide a little guidance to my morning journaling - it is a place to collect data from my habits, build new practices into daily life, and the place that I process through my thoughts & feelings.  It helps me keep in mind"
+        },
+        {
+          "id": "a009097",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Almost perfect!\nI found Day One when I started journaling at the beginning of this year. I hoped to recall moments from the day and record my feelings in entries, but I explore much more on Day One.\n\nTo start with, they have daily prompts to fill out throughout the day that you can write to take your mind away from whatever you’re doing for a second. I personally don’t use them anymore because I don’t have much time, but it could be helpful for others.\n\nYou can also create multiple journals for different aspects of your life, like a place to write your feelings to deal with stress, goals, habits, etc. I don’t struggle with telling my feelings, but at the end of the day I write down my extra thoughts in my journal. \n\nThere are also other features like video and audio recordings, some customization graphics, and syncing that come with Premium if you’re really devoted to journaling. I do no"
+        },
+        {
+          "id": "a009184",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "I’ve never written a review, but this app deserves it\nThis app is EVERYTHING I need in a journaling app, and so much more! I’ve always been a pen to paper kind of journalist. One day I was sitting by a small river, with 3 different notebooks. As I was writing, I slipped a little bit on a rock, and almost dropped my notebook. I thought to my self, if I were to drop this notebook in the water, I’d lose everything in here. That made me think, maybe it’s time to go digital. At least it would all be backed up. I’ll fast forward a bit~ I tried several different apps, and I landed here. This app allows me to have everything in one place, it allows me to add pictures, songs, and really anything! It plays seamlessly between my computer, and phone (I pad if I wanted) and the convenience is incredible. It tracks where I made the entry, and the time (I’ve always had an interesting fascination with s"
+        }
+      ]
+    },
+    "memories_tears": {
+      "count": 54,
+      "unique_count": 26,
+      "src_dist": {
+        "appstore_dayone_us": 20,
+        "appstore_fogofworld_us": 12,
+        "appstore_alltrails_us": 7,
+        "appstore_alltrails_gb": 4,
+        "appstore_dayone_au": 4,
+        "appstore_dayone_gb": 2,
+        "appstore_polarsteps_gb": 2,
+        "appstore_polarsteps_us": 2
+      },
+      "cat_dist": {
+        "praise": 24,
+        "emotion": 1,
+        "pain": 27,
+        "relation": 2
+      },
+      "avg_intensity": 4.5,
+      "top_quotes": [
+        {
+          "id": "a009307",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "This app has saved my life many time. Literally.\nTime flies. About 10 years ago, I began a path of dark depression and anxiety. I was an avid skydiver and watched 11 of my friend perish on a plane I was supposed to be on. I own my own company but my anxiety was crippling me, even though I was so close to retiring at 40. \n\nI went and saw a doctor who put me on medications. For the worse. I lost everything. Even my dog just died. Now I have to live with my parents and somehow I’m total debt. \n\nThis app really helps me vent or say what I need to say. I learned that my so called “best friends” don’t want to hear it. So this is my avenue. I can even sync a separate journal to my father because sometimes it’s easier for me to write. People will never understand what I’ve been through, so I use this as my listening ear. \n\nI think my medication has caused brain damage. I will never be who I once"
+        },
+        {
+          "id": "a009660",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Enjoying the update\nI too was originally skeptical of being forced into their sync system.  I read their terms of service and frankly some of the language was frightening, but I had a couple email exchanges with their extremely responsive customer service and I was satisfied they could not use my private entries in the future.  I've been using for two months now and their sync service is fantastic.  I had period issues with iCloud with Day One Classic, but I've never had an issue so far syncing between my iMac, iPhone, and iPad.  \n\nThe bottom line is that for YEARS I struggled to consistently journal - since getting Dayone in 2012, and now Dayone 2 - I journal more than I have in my entire life.  It is awesome for capturing moments and recording my life.  I know some day there won't be a price you can put on having these entries.  It's so easy to capture photos in DayOne 2 and being able"
+        },
+        {
+          "id": "a008992",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Finally paid for it\nBeen using Day One off and on for over 10 years. Recently I’ve been dealing with trauma recovery and an eating disorder and was looking for something to do 3 times a day “check ins” to stop and recognize what my body feels, emotions etc to recognize they are happening, feel them and allow my nervous system to let the feelings subside in a healthy way. I spent a day looking at different “check in” apps and journals. Thought about just doing little notes in the habits app I use. Or the check in apps where you tap emotions and smiley faces. All dumb and none of the journaling apps really do what Day One does. So I downloaded it again and realized a perfect solution is to pay for premium and have a “daily checkins” journal and a regular one. When I write a long form proper entry I can put it in the journal…the short ones that are just noticing thoughts and feelings (an ex"
+        },
+        {
+          "id": "a009040",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Pinnacle of perfection - if subscription was optional\nAnyone else feeling the burnout? I love day one, and have used it consistently since 2012. Not gonna lie, it’s a fantastic, league-of-it’s-own app. \n\nBut I can’t give it five stars, because it, like many other apps out there, charges a subscription without a monthly benefit. I would gladly pay a one time purchase cost of even $100 for this app, because as I said, it’s excellent. But to be charged monthly or yearly simply so they can host it on their servers and provide the occasional update, seems a bit ridiculous. But companies continue to do it because not enough customers complain. So complain with me, guys! I’d happily host it myself or choose my cloud storage preference, especially for something like my own journal, which I’d prefer not to have in a small company’s hands anyway. \n\nHaving said all that, if you don’t mind being ove"
+        },
+        {
+          "id": "a004691",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Haven’t died yet!\nMy partner and I are...  let’s be honest, we’re getting old.  Recognizing that exercise is key in not becoming frail and old, we started walking in the forest... this has since turned to hiking and we’re in surprisingly spry health and energy.\n\nThat said, AllTrails has been essential for the last two years.  Finding new trails is simple and has an impressive search and filter system is easy and finds are surprising number of places.\n\nThe two caveats I would say are the Record function isn’t always the most accurate.  It gets interesting if you stop and take pictures every few feet.  And the Map is too big and red.  It was will appear as being a straight walk but the trail itself is a few miles of very intense switchbacks.  The topographic and the map itself are pretty accurate though if you want to track your location.\n\nNote that you should NEVER rely on a iPhone with a"
+        },
+        {
+          "id": "a002859",
+          "src": "appstore_alltrails_gb",
+          "i": 5,
+          "cat": "praise",
+          "quote": "Ground breaking\nI use for hiking - this app can transform your world. \n\nThe choice is amazing it’s a combination of google maps, Strava & trip advisor. \n\nThe information and guidance with 5 mins planning and research can quick turn you in to a local expert. \n\nPick the right shoes, clothing, hydration , snacks , bring a battery will take you into the very best that Mother Nature can offer. \n\nIt’s a great way to build and maintain fitness  and see the best of each season.  Use on your doorstep or on holiday- the GPS means you will never get lost.  \n\nMy fitness in my 50’s is better now than 20 years ago.  Alone or in a group hiking is also great for decompressing and maintaining your mental health , managing your weight is easier and you have better tolerance in your diet. \n\n& don’t forget your beer always tastes when you earn it🍺🥾"
+        }
+      ]
+    },
+    "import_migration": {
+      "count": 40,
+      "unique_count": 16,
+      "src_dist": {
+        "appstore_dayone_us": 12,
+        "appstore_fogofworld_us": 9,
+        "appstore_alltrails_us": 8,
+        "appstore_fogofworld_au": 4,
+        "appstore_dayone_au": 3,
+        "appstore_dayone_gb": 2,
+        "appstore_polarsteps_us": 2
+      },
+      "cat_dist": {
+        "complaint": 2,
+        "pain": 18,
+        "praise": 20
+      },
+      "avg_intensity": 4.53,
+      "top_quotes": [
+        {
+          "id": "a008486",
+          "src": "appstore_dayone_gb",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Well Worth Premium!!!\nA friend of mine at work first introduced me to day one. I used to use the iOS notes app for all my jotting down, to do lists and what not but needed something a little more customisable and easier to organise.\n\nEnter day one. I first had the free version which, will colours and tags, quickly became my daily note driver. I found it so useful to be able to compartmentalise the different areas of my life. Having templates make it easy to start a new to do list for the week, or add an idea to a regular endeavour of mine!\n\nDay One was so useful that I went for the premium version. I’m now up to 31 journals, £30 odd down for the year and I have ZERO regrets!!! This app is awesome!\n\nI still use notes for some uncategorised lists that I use almost everyday. The one thing iOS has over Day One is the ability to pin notes.\n\nI realise it’d take up space if this feature was ava"
+        },
+        {
+          "id": "a016816",
+          "src": "appstore_polarsteps_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Cannot get it to work for current trip!\nI’ve been traveling for a month and found out about this from a fellow traveler. It’s brilliant in concept but I cannot get it to track my current trip. It synced all of my trips from 7 years ago from my photos with all gps location details, and attached photos to those locations. But the point of me using it is for my current trip and it is just a blank slat. Does not import my photos, location, or dates at all. I’ve done everything I can think of, went into a deep dive in my iOS settings, went through the trip settings, my account settings, read through pretty much the ENTIRE help center, scoured Reddit, updated my phone, deleted my account and reinstalled it, restarted my phone etc and NOTHING WORKS!! It wants me to add everything manually down to the date I flew and the location I flew into and then the next place I stayed etc but at no point d"
+        },
+        {
+          "id": "a012198",
+          "src": "appstore_fogofworld_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Amazing App, A Few Additions Needed!\nI love this app and have been addicted for the past few months. I’ve been using programs on my computer to add past trips and it’s so much fun. I would love if a few more features were added, including regions of countries! For instance, I’d love to be able to see my explored area in square kilometers and percentage traveled in each of the 50 US states, Canadian provinces, Australian territories, etc. \n\nA bit more detailed information about there you’ve been would be great, including a way to view a list of your top countries ranked from most-visited to least-visited, maybe a list of the cities you’ve traveled to (if you made it within city boundaries on the map, it would count on your list), and maybe an additional page on the app that has a general checklist of popular sights/attractions around the world - if you visit one, it would check off on you"
+        },
+        {
+          "id": "a009116",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Amazing Concept But Seemingly Not Polishes\nUsing the app for the first time on an IPhone XS running iOS 13.3. I’ve heard great things, and wanted to switch from a handwritten journal, so decided to try out the basic version. \n\nWas writing my first note when I felt an extremely noticeable flicker (input box moving up and down slightly) when typing each letter, in both light and dark modes. Happens when the input box just gets large enough to have a scrollbar. \n\nAs I write this app review in the App Store, I don’t notice the same type of flickering, so I don’t think it’s an Apple bug. \n\nIt wouldn’t be that bad, except the premise of the app is mostly to type into a box, so giving it two stars for now until this is fixed. I don’t think I can use this app to journal if the flickering persists. \n\nAlso, I made some text bold (with the panel), and could not for the life of me change to not bold"
+        },
+        {
+          "id": "a009305",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Love this app\nI seriously love this app and have totally migrated over all my history stuff into it to have (hopefully) forever. I keep track of everything I do and this works perfect for me. It even integrates with the app Workflow! The app itself functions flawlessly for me and I intend to continue using it so as long as it exists! It's got some excellent features you'll love and that streamline things for you.\n\nMy gripes, although small, would improve this app even more:\nThe only thing I wish is that it used end-to-end encryption as everyone else has said. I don't keep anything secure in it but just that peace of mind would be nice.\nI also notice the On This Day widget acts weird... it shows stuff that wasn't really \"on this day\" at a glance.\n\nOther than that - it's great especially when paired with the Mac version.\n\nEDIT: Can we get a minor tweak to the book printing feature? The abi"
+        },
+        {
+          "id": "a004681",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Cluttered UI makes it almost unusable now\nWhat happened?  I used to use AllTrails all the time, but now the cluttered user interface makes it almost unusable.  In map/explore mode, a full third of the screen is perpetually blocked by a search input above filter options above mode selection, making it much harder to explore the map!  If you accidentally zoom in so no trailheads are visible, like when you are trying to zoom in on a feature or part of a trail you haven’t selected, half the screen gets blocked by a warning, and you can’t see anything again until you zoom out to make it go away.  These are things that could so easily be fixed to take up less real estate and be toggled visible.  \nI’m very disappointed that I’m going to have to find a new app for my hiking when this used to be perfect."
+        }
+      ]
+    },
+    "tracking_broken": {
+      "count": 6,
+      "unique_count": 2,
+      "src_dist": {
+        "appstore_polarsteps_nz": 4,
+        "appstore_alltrails_us": 2
+      },
+      "cat_dist": {
+        "pain": 6
+      },
+      "avg_intensity": 4.0,
+      "top_quotes": [
+        {
+          "id": "a004267",
+          "src": "appstore_alltrails_us",
+          "i": 4,
+          "cat": "pain",
+          "quote": "Good for finding trails, not recording hikes\nProbably the best app for finding good reviews of hikes. Unfortunately the recording leaves a lot to be desired. 1. HUGE power drain - just did a 3hr/5.5mile hike and my apple watch used 70% battery. It usually lasts all day no issue. Strava recording drains far less. 2. Found it paused about 1.5 miles in, but it was paused at .8 miles. Even if I did accidentally click pause, there was no way to tell until I noticed it hadn't been increasing numbers when I checked two times. I'd expect it to alert me to resume when it sensed movement. 3. After resuming from the pause, the GPS only updated my location when I opened the app or looked at my watch. So the rest of the hike has my track playing connect the dots every fork in the path when I checked the map. I stopped recording when we finished the loop, but it didn't record gps there so it ended abo"
+        },
+        {
+          "id": "a016397",
+          "src": "appstore_polarsteps_nz",
+          "i": 4,
+          "cat": "pain",
+          "quote": "Never again\nUsed this app twice now for long trips, won’t happen again. I would stop using it  now if I wasn’t mid-trip. \n• drains my battery even when I have tracking off when app is off\n• makes my phone super hot, effecting the brightness of my screen and making other apps get glitchy from heat - again, even when app is off\n• search function for places and locations is horrible and I have to find a lot of the places manually through comparing location with separate map app or just skip the recommended location altogether\n• notes are posted for entire step, cannot be added as captions to specific pictures • when loading a lot of pictures and want to get specific about some it’s not possible \n• slow to respond in general \n• last time I used it was a year ago and it has gotten markedly worst\n• apps like Wanderlog are far superior, more comprehensive and don’t appear to have the same probl"
+        }
+      ]
+    },
+    "data_loss_horror": {
+      "count": 29,
+      "unique_count": 14,
+      "src_dist": {
+        "appstore_alltrails_us": 12,
+        "appstore_polarsteps_us": 6,
+        "appstore_dayone_au": 3,
+        "appstore_dayone_nz": 3,
+        "appstore_dayone_us": 3,
+        "appstore_dayone_gb": 2
+      },
+      "cat_dist": {
+        "emotion": 4,
+        "complaint": 2,
+        "pricing": 2,
+        "pain": 19,
+        "praise": 2
+      },
+      "avg_intensity": 4.45,
+      "top_quotes": [
+        {
+          "id": "a009307",
+          "src": "appstore_dayone_us",
+          "i": 5,
+          "cat": "praise",
+          "quote": "This app has saved my life many time. Literally.\nTime flies. About 10 years ago, I began a path of dark depression and anxiety. I was an avid skydiver and watched 11 of my friend perish on a plane I was supposed to be on. I own my own company but my anxiety was crippling me, even though I was so close to retiring at 40. \n\nI went and saw a doctor who put me on medications. For the worse. I lost everything. Even my dog just died. Now I have to live with my parents and somehow I’m total debt. \n\nThis app really helps me vent or say what I need to say. I learned that my so called “best friends” don’t want to hear it. So this is my avenue. I can even sync a separate journal to my father because sometimes it’s easier for me to write. People will never understand what I’ve been through, so I use this as my listening ear. \n\nI think my medication has caused brain damage. I will never be who I once"
+        },
+        {
+          "id": "a016816",
+          "src": "appstore_polarsteps_us",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Cannot get it to work for current trip!\nI’ve been traveling for a month and found out about this from a fellow traveler. It’s brilliant in concept but I cannot get it to track my current trip. It synced all of my trips from 7 years ago from my photos with all gps location details, and attached photos to those locations. But the point of me using it is for my current trip and it is just a blank slat. Does not import my photos, location, or dates at all. I’ve done everything I can think of, went into a deep dive in my iOS settings, went through the trip settings, my account settings, read through pretty much the ENTIRE help center, scoured Reddit, updated my phone, deleted my account and reinstalled it, restarted my phone etc and NOTHING WORKS!! It wants me to add everything manually down to the date I flew and the location I flew into and then the next place I stayed etc but at no point d"
+        },
+        {
+          "id": "a004501",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "pricing",
+          "quote": "Great idea. Poor execution.\nSome major flaws of this app. It requires cellular or WiFi connection. Most hikes I have done do not have cell coverage. Another major flaw, when following directions on how to get to a hike, after arrival it completely dismisses the hike you are planning to do. You need to open the app again and look for your hike again. Another flaw, while recording, if you stop to take pictures or for whatever reason, it stops recording!!! This has happened to me many times and it happened again at today’s hike. Lost my trail. I had to open the app again and look where I was on the trail layers. It was as if you were dropped in a trail 3/4 of the way, but had no recollection of what you have already done. I’m AllTrails Pro subscriber. Deeply regretted."
+        },
+        {
+          "id": "a004278",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "emotion",
+          "quote": "This app truly has everything\nI have used this app on hikes in multiple countries on multiple continents. I’m astonished at how it has seemingly every hiking trail in the world on it. And it has saved my life a few times when it has shown me the way after some trail markers had disappeared. \n\nMost importantly are the great features of downloading offline maps (for when the Internet is low, as often happens on distant hikes), as well as information on specifics on the trails. \n\nFinally, this app gives great opportunities to scope out and plan future hikes easily, based on either location or any other criteria you want to search under.  My favorite is the map option where I can just scan the area and see which trails are available near me."
+        },
+        {
+          "id": "a006324",
+          "src": "appstore_dayone_au",
+          "i": 5,
+          "cat": "pain",
+          "quote": "Lost my memory!!\nIt is so sad! I bought this app with so many good reviews and it was useful for a while. But after three months, i just found that several journals started to disappear, even when I added them on those missing days but still don't work. Hope the technical ppl can't fix this problem. Cuz choosing this app is for keeping the memory, if the data missing, then why am I gonna use this?"
+        },
+        {
+          "id": "a005186",
+          "src": "appstore_alltrails_us",
+          "i": 5,
+          "cat": "emotion",
+          "quote": "Thank You\nLiterally saved my life in Iceland, on the Fimmvörðuháls trail. It was foggy, cold and rainy, I lost my way and opened the app and was able to find my way back to the trail."
+        }
+      ]
+    },
+    "zh_rage_price": {
+      "count": 24,
+      "unique_count": 13,
+      "src_dist": {
+        "appstore_yishengzuji_cn": 13,
+        "appstore_linggan_cn": 6,
+        "appstore_fogofworld_cn": 5
+      },
+      "cat_dist": {
+        "pain": 14,
+        "complaint": 6,
+        "pricing": 4
+      },
+      "avg_intensity": 4.0,
+      "top_quotes": [
+        {
+          "id": "a014201",
+          "src": "appstore_linggan_cn",
+          "i": 4,
+          "cat": "pain",
+          "quote": "吃相难看\n看到国内开发者开发软件有很多高分评价还是很开心的，但是作为一个同专业的人来说，作者吃相难看。\n1.关于画面，作为一个记录足迹的软件，功能繁多，臃肿。\n2.关于会员订阅，在功能界面有说到订阅会员后会有更多的地图种类，订阅后并没有看到和免费相比多出来什么。\n3.关于个人信息，我自己的记录想要导出必须要开会员，云同步需要开会员我能理解，但是我不能理解我需要导出自己的数据还需要开通一个终身会员。\n4.关于退款，因为没有试用，一开始选择支持作者，但是由于以上各种原因，我在购买48小时以内卸载软件选择的退款，退款理由是我无意购买此项目，但是被苹果告知退款失败，不符合退款需求，我希望作者可以告诉我原因，退款要求是什么呢？\n5.综上 大家如果真的不在乎以上我的看法以及确实需要并且喜欢这个软件，可以尝试支持开发者，但是如果你有和我一样的顾虑，希望购买前多多考虑！"
+        },
+        {
+          "id": "a017694",
+          "src": "appstore_yishengzuji_cn",
+          "i": 4,
+          "cat": "pain",
+          "quote": "致命伤不少\n同时买了另一个软件，用了几个月评价下 1. 经常漏记 经常遗忘某段足迹，这个是硬伤。拉胯 2. 经常崩溃 隔壁足迹软件几个月都没崩一次，这个软件经常提示已被杀死，有时候点进去会直接卡死，需要删掉后台重新进 推荐看中稳定性得不要犹豫，买隔壁的终身会员，几个月扔后台不会被杀，也不会丢失移动轨迹。 地图软件一开始那周还挺新鲜，过后打开就不会很频繁了，经常提示崩溃真的繁人，还有没有任何提示的丢失数据…… 今天看到回复评论有点无语。我是真想贴图出来，看看给我漏记了多少天，隔壁到现在没漏记过。 今天看到新的介绍，说隔壁同名软件好评都是刷的。。谁稳定自己没点数吗。虽然你这里功能是挺花里胡哨的。定位好像比隔壁精准不少。"
+        },
+        {
+          "id": "a018647",
+          "src": "appstore_yishengzuji_cn",
+          "i": 4,
+          "cat": "pain",
+          "quote": "定位变差了\n大概2023年开始用，觉得记录足迹很有意义，用了不久之后也开了会员，使用期间更新频次对于一个纯功能app来说算是频繁的了，特别是了解到开发者还是个人投入之后觉得很棒。但是每次更新并不觉得哪有使用上优化了，反而最重要的定位功能越来越不准确了，几乎每天的轨迹都会发生漂移，并且是在开了正常模式下，不是省电模式。不知道是不是开发者对于app的功能定位发生变化了。个人体感一款定位不准确的轨迹记录app不能再满足我的需求了，倒不如运动手表好用。决定在订阅到期后卸载了，最后希望这款app没有泄漏个人信息的隐患。"
+        },
+        {
+          "id": "a011718",
+          "src": "appstore_fogofworld_cn",
+          "i": 4,
+          "cat": "complaint",
+          "quote": "垃圾\n真是太垃圾了，难以置信这么贵，得到这么多人称赞的记录足迹类app，竟然不能记录以前的足迹！难道都是从出生就开始玩了这个？还是得重走一遍？而且导入和辅助记录还特别麻烦！付费软件里，最后悔的就是下载了这个，一生黑！"
+        },
+        {
+          "id": "a018112",
+          "src": "appstore_yishengzuji_cn",
+          "i": 4,
+          "cat": "complaint",
+          "quote": "垃圾\n就简单的想根据手机相册里的照片生成一个轨迹地图，前两年微信小程序都能办到的事，这破软件先收费，进去以后又是全年收费，掉钱眼儿里了？你好歹给用户一个体验再收费用户也乐意啊，真的是遇见这样的情愿1块钱喂了狗。"
+        },
+        {
+          "id": "a017793",
+          "src": "appstore_yishengzuji_cn",
+          "i": 4,
+          "cat": "pricing",
+          "quote": "最近每天打开都更新\n不知道在更新什么，更新介绍也都是一样的，每次更新还要卡半天，服了，才开了会员感觉这么频繁更新有点烦了，记录的轨迹也不准确，开着导航的行车轨迹都会漂移很远，不懂。"
+        }
+      ]
+    }
+  },
+  "coverage_pct": 56.8,
+  "total_high_signal": 2724
+}

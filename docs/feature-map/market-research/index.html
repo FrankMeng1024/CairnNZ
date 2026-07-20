@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cairn Market Research — Final Report (Phase 5)</title>
+<style>
+:root{
+  --cream:#faf7f2; --paper:#f3ede2; --brown:#3d2817; --brown-lite:#6b5340;
+  --accent:#c17b3f; --accent-lite:#e6b380; --green:#5a7a3f; --red:#a83a2f;
+  --yellow:#c88a2a; --line:#d9cdb9;
+  --card-bg:#fff;
+}
+html.dark-mode{
+  --cream:#0a0c14; --paper:#141824; --brown:#e4e8f4; --brown-lite:#a8b0c4;
+  --accent:#e6b380; --accent-lite:#c17b3f; --green:#7ea065; --red:#d95d4a;
+  --yellow:#e5b04e; --line:#2a2f3d;
+  --card-bg:#1a1f2e;
+}
+html.dark-mode body{background:var(--cream);color:var(--brown)}
+html.dark-mode header{background:var(--paper);border-bottom-color:var(--line)}
+html.dark-mode header h1{color:var(--brown)}
+html.dark-mode h2{border-bottom-color:var(--accent-lite)}
+html.dark-mode h2,html.dark-mode h3,html.dark-mode h4{color:var(--brown)}
+html.dark-mode .subhead,html.dark-mode p{color:var(--brown)}
+html.dark-mode .stat{background:var(--paper);border-left-color:var(--accent)}
+html.dark-mode .stat-num{color:var(--accent)}
+html.dark-mode .stat-lbl{color:var(--brown-lite)}
+html.dark-mode .theme{background:var(--paper);border-left-color:var(--line)}
+html.dark-mode .theme.of-0,html.dark-mode .theme.of-1{border-left-color:var(--green)}
+html.dark-mode .theme.of-2,html.dark-mode .theme.of-3{border-left-color:var(--yellow)}
+html.dark-mode .theme.of-4,html.dark-mode .theme.of-5{border-left-color:var(--red)}
+html.dark-mode .theme-title,html.dark-mode .theme-score{color:var(--brown)}
+html.dark-mode .biz-a,html.dark-mode .modal{background:var(--paper);border-color:var(--line)}
+html.dark-mode .biz-a-app,html.dark-mode .biz-a-price{color:var(--brown)}
+html.dark-mode .modal h3{color:var(--accent)}
+html.dark-mode .modal .meta b{color:var(--brown-lite)}
+html.dark-mode .raw{background:#0f1220;border-color:var(--line);color:var(--brown)}
+html.dark-mode input,html.dark-mode select{background:#0f1220;color:var(--brown);border-color:var(--line)}
+html.dark-mode table{background:var(--paper) !important}
+html.dark-mode table thead tr,html.dark-mode table thead{background:var(--paper) !important}
+html.dark-mode th,html.dark-mode td{color:var(--brown);border-color:var(--line) !important}
+html.dark-mode tbody tr:hover{background:#1e2432}
+html.dark-mode .badge-high{background:#8b3a2f}
+html.dark-mode .badge-med{background:#a86e26}
+html.dark-mode .badge-low{background:#4a6635}
+html.dark-mode a{color:var(--accent)}
+html.dark-mode a:hover{color:var(--accent-lite)}
+html.dark-mode header nav a{color:var(--accent)}
+html.dark-mode .quote-btn{background:#2a2f3d;color:var(--accent);border-color:var(--line)}
+html.dark-mode .quote-btn:hover{background:#3a3f4d}
+html.dark-mode .quotes{background:#0f1220;border-color:var(--line)}
+html.dark-mode .quotes b{color:var(--brown)}
+html.dark-mode code{background:#0f1220;color:var(--accent-lite)}
+html.dark-mode .heat-cell{color:#fff}
+/* Sprint N/N+1/N+2/N+3 row headers 深化 */
+html.dark-mode td[style*="background:#fbe9e5"]{background:#4a1e18 !important}
+html.dark-mode td[style*="background:#fdf6e5"]{background:#4a3c18 !important}
+html.dark-mode td[style*="background:#e8f0e0"]{background:#2a3e1e !important}
+html.dark-mode td[style*="background:#e0e8f0"]{background:#1e2a3e !important}
+/* Roadmap footer + info boxes */
+html.dark-mode div[style*="background:#f5efe4"],html.dark-mode div[style*="background:#fdf6e5"]{background:var(--paper) !important;color:var(--brown)}
+html.dark-mode div[style*="background:#fff"]{background:var(--paper) !important;color:var(--brown)}
+/* biz-warn 禁止事项 — 深色告警(暗红底+浅红文字) */
+html.dark-mode .biz-warn{background:#3a1a15 !important;border-left-color:#d95d4a;color:#f5cec7}
+html.dark-mode .biz-warn b{color:#ff9985}
+html.dark-mode .biz-warn li{color:#f5cec7}
+/* Strat block — CRITICAL 标题保持警示红 (被 h3 通用色覆盖了,拉回) */
+html.dark-mode .strat h3{color:var(--red)}
+html.dark-mode .strat.high h3{color:var(--yellow)}
+/* Strat block dark bg */
+html.dark-mode .strat{background:var(--paper);border-top-color:var(--red)}
+html.dark-mode .strat.high{border-top-color:var(--yellow)}
+/* Appendix table row hover — dark */
+html.dark-mode #appendix-table tr:hover{background:#1e2432 !important}
+html.dark-mode #appendix-table td{border-bottom-color:var(--line) !important}
+/* Appendix control input hover/focus visibility */
+html.dark-mode .appendix-ctrl input:focus,html.dark-mode .appendix-ctrl select:focus{outline:1px solid var(--accent);background:#141824}
+/* Body-level a:hover uses --brown which becomes light in dark — ensure readable */
+html.dark-mode a:hover{color:var(--accent-lite);border-bottom-color:var(--accent-lite)}
+/* Modal close button — hover 更明显 */
+html.dark-mode .modal-close:hover{color:var(--accent)}
+/* Heat-cell hover shadow — 深色下阴影更深 */
+html.dark-mode .heat-cell:hover{box-shadow:0 4px 12px rgba(0,0,0,0.6)}
+/* Roadmap table Sprint N+3 row (blue) dark */
+html.dark-mode td[style*="background:#e0e8f0"]{color:#8fb3d9 !important}
+/* Modal tab buttons background:var(--paper) when inactive already ok; ensure JS-set var(--paper) applies */
+html.dark-mode #tab-en[style*="background: var(--paper)"],html.dark-mode #tab-zh[style*="background: var(--paper)"]{background:#0f1220 !important;color:var(--brown-lite) !important}
+/* Quote button current dark rule uses #2a2f3d — reinforce hover */
+html.dark-mode .quote-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* Ensure "加载更多" button hover feedback in dark */
+html.dark-mode #app-more:hover{background:var(--accent-lite);color:#fff}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--cream);color:var(--brown);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;font-size:16px;line-height:1.6}
+a{color:var(--accent);text-decoration:none;border-bottom:1px dotted var(--accent-lite)}
+a:hover{color:var(--brown)}
+header{background:var(--paper);border-bottom:1px solid var(--line);padding:24px 32px;position:sticky;top:0;z-index:50}
+header h1{font-size:22px;margin-bottom:4px}
+header nav{margin-top:8px}
+header nav a{margin-right:16px;font-size:14px}
+main{max-width:1200px;margin:0 auto;padding:32px}
+section{margin-bottom:56px;scroll-margin-top:100px}
+h2{font-size:26px;color:var(--brown);border-bottom:2px solid var(--accent);padding-bottom:6px;margin-bottom:20px}
+h3{font-size:19px;color:var(--brown);margin:20px 0 10px}
+h4{font-size:16px;color:var(--brown-lite);margin:12px 0 6px}
+p{margin-bottom:10px}
+.subhead{color:var(--brown-lite);font-size:14px;margin-bottom:8px}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;margin-right:6px}
+.badge-high{background:var(--red);color:#fff}
+.badge-med{background:var(--yellow);color:#fff}
+.badge-low{background:var(--green);color:#fff}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:16px 0}
+.stat{background:var(--paper);padding:14px;border-left:4px solid var(--accent);border-radius:4px}
+.stat-num{font-size:22px;font-weight:700;color:var(--accent)}
+.stat-lbl{font-size:12px;color:var(--brown-lite);text-transform:uppercase;letter-spacing:0.5px}
+/* Heatmap */
+.heat{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:16px 0;max-width:640px;position:relative;transition:min-height 0.3s ease}
+.heat-cell{aspect-ratio:1;padding:8px;border-radius:4px;color:#fff;font-size:12px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;transition:transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;position:relative;user-select:none;-webkit-tap-highlight-color:transparent}
+.heat-cell:not(.expanded):hover{transform:scale(1.08);z-index:5;box-shadow:0 4px 12px rgba(0,0,0,0.2)}
+.heat-cell:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.heat-close{display:none}
+/* Click-to-expand mode: one cell fills entire heatmap, others fade away */
+.heat.has-expanded .heat-cell{opacity:0;pointer-events:none;transform:scale(0.85);transition:opacity 0.25s ease, transform 0.25s ease}
+.heat.has-expanded .heat-cell.expanded{opacity:1;pointer-events:auto;transform:scale(1);position:absolute;inset:0;aspect-ratio:auto;z-index:10;padding:24px 28px;font-size:14px;box-shadow:0 12px 40px rgba(0,0,0,0.35);cursor:pointer;overflow-y:auto;justify-content:flex-start}
+.heat-cell.expanded .heat-code{font-size:13px;opacity:0.95;letter-spacing:0.5px}
+.heat-cell.expanded .heat-score{font-size:44px;font-weight:800;text-align:right;position:absolute;top:18px;right:30px;line-height:1;opacity:0.9}
+.heat-cell.expanded .heat-detail{display:block}
+.heat-detail{display:none;margin-top:56px;font-size:14px;line-height:1.65}
+.heat-detail .heat-title{font-size:18px;font-weight:700;margin-bottom:14px;padding-right:60px;line-height:1.4}
+.heat-detail .heat-row{margin:12px 0}
+.heat-detail .heat-row b{display:block;font-size:11.5px;opacity:0.85;margin-bottom:3px;letter-spacing:0.4px;font-weight:600;text-transform:uppercase}
+.heat-code{font-weight:700;font-size:11px;opacity:0.9}
+.heat-score{font-size:22px;font-weight:700;text-align:center;transition:font-size 0.3s ease}
+.h0{background:#2f5f2a}.h1{background:#5a7a3f}.h2{background:#a3a344}.h3{background:#c88a2a}.h4{background:#c56336}.h5{background:#a83a2f}
+/* Theme cards */
+.theme{background:var(--paper);border-radius:6px;padding:16px;margin-bottom:14px;border-left:4px solid var(--line)}
+.theme.of-0,.theme.of-1{border-left-color:var(--green)}
+.theme.of-2,.theme.of-3{border-left-color:var(--yellow)}
+.theme.of-4,.theme.of-5{border-left-color:var(--red)}
+.theme-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.theme-title{font-weight:600;font-size:17px;flex:1;min-width:280px}
+.theme-score{font-size:28px;font-weight:800;color:var(--brown)}
+.theme-body{margin-top:10px;font-size:14.5px}
+.theme-body b{color:var(--brown);display:inline-block;min-width:82px}
+.quotes{margin-top:10px;background:#fff;border-radius:4px;padding:10px 14px;border:1px solid var(--line)}
+.quote-btn{display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;background:var(--cream);border:1px solid var(--line);border-radius:11px;font-size:12px;font-family:monospace;cursor:pointer;color:var(--brown)}
+.quote-btn:hover{background:var(--accent-lite);border-color:var(--accent)}
+/* Strategy blocks */
+.strat{background:var(--paper);padding:18px;border-radius:6px;margin-bottom:20px;border-top:4px solid var(--red)}
+.strat.high{border-top-color:var(--yellow)}
+.strat h3{color:var(--red);margin-top:0}
+.strat.high h3{color:var(--yellow)}
+.strat ul{margin:10px 0 10px 22px}
+.strat li{margin-bottom:4px}
+/* Biz model */
+.biz-anchors{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:12px 0}
+.biz-a{background:#fff;padding:12px;border-radius:4px;border:1px solid var(--line)}
+.biz-a-app{font-weight:700;color:var(--accent)}
+.biz-a-price{font-size:20px;color:var(--brown);margin:4px 0}
+.biz-warn{background:#fbe9e5;border-left:4px solid var(--red);padding:12px;border-radius:4px;margin-top:10px}
+/* Appendix table */
+.appendix-ctrl{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.appendix-ctrl input,.appendix-ctrl select{padding:6px 10px;border:1px solid var(--line);background:#fff;border-radius:4px;font-size:13px}
+#appendix-count{font-size:13px;color:var(--brown-lite);margin-left:auto;align-self:center}
+#appendix-table{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;border:1px solid var(--line)}
+#appendix-table th{background:var(--paper);padding:6px 8px;text-align:left;border-bottom:1px solid var(--line);position:sticky;top:0}
+#appendix-table td{padding:5px 8px;border-bottom:1px solid #f0e9db;vertical-align:top}
+#appendix-table tr{cursor:pointer}
+#appendix-table tr:hover{background:#fdf9ef}
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center;padding:20px}
+.modal-bg.show{display:flex}
+.modal{background:var(--cream);padding:24px;border-radius:8px;max-width:720px;width:100%;max-height:85vh;overflow-y:auto;position:relative}
+.modal-close{position:absolute;top:12px;right:14px;font-size:26px;cursor:pointer;color:var(--brown-lite);background:none;border:none;line-height:1}
+.modal h3{margin-top:0;color:var(--accent)}
+.modal .meta{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;margin:12px 0}
+.modal .meta b{color:var(--brown-lite)}
+.modal .raw{background:#fff;padding:14px;border-radius:4px;border:1px solid var(--line);white-space:pre-wrap;line-height:1.7;font-size:14px}
+/* Responsive */
+@media (max-width:640px){
+  main{padding:16px}
+  header{padding:16px}
+  .heat{grid-template-columns:repeat(4,1fr)}
+  h2{font-size:22px}
+  .theme-title{font-size:15px}
+  .theme-score{font-size:22px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cairn Market Research — Final Report</h1>
+  <div class="subhead">Phase 5 · 2026-07-17 · 18,943 条数据 · 24 主题 · 3 大结论</div>
+  <nav>
+    <a href="#exec">一页读懂</a>
+    <a href="#q1">Q1</a><a href="#q2">Q2</a><a href="#q3">Q3</a><a href="#q4">Q4</a><a href="#q5">Q5</a>
+    <a href="#heat">跑偏热力图</a>
+    <a href="#strat">3 大结论</a>
+    <a href="#roadmap">时间轴</a>
+    <a href="#biz">收费模式</a>
+    <a href="#kindness">陌生人善意</a>
+    <a href="#appendix">原始数据</a>
+    <a href="#tier2" style="color:var(--yellow);border-bottom:2px solid var(--yellow);padding-bottom:1px">⚡ 补充调研</a>
+    <a href="#tier3" style="color:var(--red);border-bottom:2px solid var(--red);padding-bottom:1px">🔥 真数据+盘点</a>
+  </nav>
+</header>
+<main>
+
+<section id="exec">
+  <h2>1. 一页读懂</h2>
+  <p><b>这是什么产品</b>：Cairn 是一款户外记录 App，新西兰起步 → 之后扩到整个英语世界。核心是「数字手账 + 陌生人善意」——把用户走过的每一次路记下来，让走过同一段路的陌生人之间能默默传递善意。<b>不是</b>安全应急工具，<b>不是</b> AR 增强现实，<b>不是</b>社交动态 feed（feed = 类似朋友圈那种一条一条刷的流）。</p>
+  <p><b>这份报告在干什么</b>：把 21,000 多条真实用户评论（来自 App Store + Reddit，覆盖 5 个竞品在 5 个地区的表现）拆开来看，回答 5 个决策问题——① 用户多年后回看是不是真需求；② 该不该做点赞/踩/举报按钮；③ 竞品被骂得最狠的痛点是什么；④ 用户愿意为什么付费；⑤ 我们有没有漏掉什么。</p>
+  <p><b>数据量</b>：</p>
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-num" id="stat-total">–</div><div class="stat-lbl">总数据条数</div></div>
+    <div class="stat"><div class="stat-num">24</div><div class="stat-lbl">主题（5 问题下细分）</div></div>
+    <div class="stat"><div class="stat-num">3</div><div class="stat-lbl">战略结论</div></div>
+    <div class="stat"><div class="stat-num">3.04</div><div class="stat-lbl">平均"跑偏分"(0=对齐, 5=完全空白)</div></div>
+    <div class="stat"><div class="stat-num" id="stat-cited">–</div><div class="stat-lbl">直接可点开的用户原话</div></div>
+  </div>
+  <h3>3 条最关键的结论</h3>
+  <ol>
+    <li><b class="badge badge-high">最优先</b> <b>户外记录的\"活命体验\"必须先补齐</b>——离线地图看不见、耗电狂、GPS 断轨这几个坑，正式发布前必须修完。<span style="color:var(--red);font-weight:600">（风险预估：新西兰首批 1000 用户如果这几个不修，预计 40% 以上第一个月就流失。数据来自 AllTrails 新西兰用户差评。）</span></li>
+    <li><b class="badge badge-high">最优先</b> <b>收费模式现在就要定死原则</b>——"新功能可以付费，老功能永远免费 + 下载自己数据永远免费 + 可以选择一次买断"。<span style="color:var(--red);font-weight:600">（定死截止：Sprint N（下一轮迭代规划）开始前必须写死收费原则；再晚定，之后每个 Sprint 都会在错误路径上累积返工。）</span></li>
+    <li><b class="badge badge-high">最优先</b> <b>差异化窗口 12-18 个月</b>——「我不硬塞 AI + 默认私密 + 你的数据是你的」这三件事写成公开承诺。<span style="color:var(--brown-lite);font-size:14px">（衡量指标：官网首页转化率 &gt; 8%、关于页停留 &gt; 45 秒、App Store 评论里出现"隐私 / 反 AI / 无广告"这些词 &gt; 5%）</span></li>
+    <li><b class="badge badge-med">次优先</b> <b>把\"陌生人善意\"从口号做成产品</b>——具体落地成三样东西：匿名路径标记 + 路况提示 + 默认私密（详见第 11 节）。</li>
+  </ol>
+  <h3>跑偏热力图（24 主题一览）</h3>
+  <div id="heat-preview" class="heat"></div>
+  <p class="subhead">颜色越红 = Cairn 现状离用户真实需求越远。绿 = 已对齐或"正确的空白"（明确不做）。鼠标悬停可看主题名。</p>
+</section>
+
+<section id="q1">
+  <h2>2. Q1 — 多年后回看，这是不是"真需求"？</h2>
+  <p class="subhead">3 个主题：① 5-10 年后回看会哭 ② 用了很久就当成自己一部分 ③ 数据丢一次品牌永远死</p>
+  <div id="q1-themes"></div>
+</section>
+<section id="q2">
+  <h2>3. Q2 — 要不要做点赞/踩/举报？用户是怎么想的？</h2>
+  <p class="subhead">3 个主题：① 户外用户天然反社交 ② 只想给几个真人看不是给全世界 ③ 中文用户几乎不谈"给谁看"</p>
+  <div id="q2-themes"></div>
+</section>
+<section id="q3">
+  <h2>4. Q3 — 竞品用户具体在骂什么？</h2>
+  <p class="subhead">6 个主题：① 离线地图看不见 ② GPS 断轨等于危险 ③ 步道信息不准 ④ 耗电狂 ⑤ 定位掉点 ⑥ Apple Watch 支持烂</p>
+  <div id="q3-themes"></div>
+</section>
+<section id="q4">
+  <h2>5. Q4 — 用户愿意为什么付费？为什么骂哪些收费方式？</h2>
+  <p class="subhead">5 个主题：① 下载自己数据是底线 ② 免费改收费 = 品牌一次死 ③ 骚扰弹窗逼卸载 ④ 一次买断反而被接受 ⑤ 带旧数据进来是大杠杆</p>
+  <div id="q4-themes"></div>
+</section>
+<section id="q5">
+  <h2>6. Q5 — 有没有漏掉的用户心理和风险？</h2>
+  <p class="subhead">7 个主题：① 点亮地图会上瘾 ② 每天打开一下的仪式感 ③ "改变人生"级情感触点 ④ AI 反弹窗口期 ⑤ 中文用户对套路收费零容忍 ⑥ 澳洲区风险 ⑦ 中文差评方法论</p>
+  <div id="q5-themes"></div>
+</section>
+
+<section id="heat">
+  <h2>7. Cairn 跑偏热力图（全部 24 主题）</h2>
+  <p>每格显示主题编号 + 跑偏分（0 = 完全对齐用户真需求；5 = 完全空白或严重跑偏）。鼠标悬停看主题名。</p>
+  <div id="heat-full" class="heat"></div>
+  <h3>分数分布</h3>
+  <p>0 分 = 3 项（12.5%，做对了）｜1 分 = 4 项（16.7%）｜2 分 = 2 项（8.3%）｜3 分 = 5 项（20.8%）｜5 分 = 10 项（41.7%，其中 4 项是"正确的空白"（明确不做），6 项是"决策还没做"（需要立刻决策））</p>
+</section>
+
+<section id="strat">
+  <h2>8. 3 条最关键结论（详细版）</h2>
+  <div id="strat-list"></div>
+</section>
+
+<section id="roadmap">
+  <h2>9. 时间轴 · 一个个 Sprint 排下去</h2>
+  <p class="subhead">Sprint = 一轮迭代（一般 2 周）。4 条战略按依赖顺序排到 Sprint N（下一轮）、N+1、N+2、N+3。每一项写清楚：谁负责 + 做多难（估点，越大越难）+ 怎么算做完了（验收标准）。<b>每个 Sprint 后面挂着支持它的原始用户证据链，点开可跳原文。</b></p>
+  <div style="background:#f5efe4;border-left:4px solid var(--accent);padding:10px 14px;margin:8px 0;border-radius:4px;font-size:13px;line-height:1.7">
+    <b>证据链接</b>：
+    <a href="#s1">Sprint N（发布前拦路虎修复）</a> ← 支撑证据在 <a href="#q3">Q3 §3</a> 的 Q3.1/Q3.2/Q3.4/Q3.5（离线地图/安全/耗电/掉点）｜
+    <a href="#biz">Sprint N（收费原则定死）</a> ← 支撑证据在 <a href="#q4">Q4 §4</a> 的 Q4.2/Q4.3（免费改收费的品牌代价 / 一次买断被接受）｜
+    <a href="#kindness">Sprint N+1（三条公开宣言）</a> ← 支撑证据在 <a href="#q2">Q2 §2</a> Q2.1（隐私）+ <a href="#q5">Q5 §5</a> Q5.4（AI 反弹）｜
+    <a href="#kindness">Sprint N+2（陌生人善意落地）</a> ← 支撑证据在第 11 节 5 个交叉主题
+  </div>
+  <div style="background:#fdf6e5;border-left:4px solid var(--yellow);padding:10px 14px;margin:8px 0 12px;border-radius:4px;font-size:13px">
+    <b>⚠️ Sprint N 容量提醒</b>：Sprint N 现在挂了 5 项活（离线地图 / 耗电 / GPS 断轨 / 安全 / 收费原则文档），共约 18 点，超单 Sprint 容量（一般 13 点上限）。建议拆开：<br>
+    <b>Sprint N（2 周）</b>：离线地图入口 + 耗电优化 + GPS 断轨恢复 = 3 项 × 13 点<br>
+    <b>Sprint N.5（1 周）</b>：安全功能 + 收费原则文档 = 2 项 × 5 点<br>
+    或者把 Sprint N 扩到 3 周。
+  </div>
+  <div style="overflow-x:auto;margin-top:12px">
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border:1px solid var(--line)">
+      <thead>
+        <tr style="background:var(--paper)">
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--accent)">Sprint</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--accent)">对应战略</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--accent)">具体做什么</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--accent)">谁做</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--accent)">难度</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--accent)">怎么算做完了</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td rowspan="5" style="padding:8px 10px;border-bottom:1px solid var(--line);background:#fbe9e5;font-weight:700;color:var(--red)">Sprint N<br><span style="font-weight:400;font-size:11px">发布前拦路虎</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-high">战略 1</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">加"下载这一片地图到手机"入口（有下载进度条 / 存储管理 / 能看到已下载区域）</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">前端</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">5</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">飞行模式下地图仍能缩放/拖动/看轨迹；中途断网可续传；下载后每个区域占用手机存储 &lt; 500MB</td></tr>
+        <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-high">战略 1</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">耗电优化：GPS 记录状态测一遍 + 4 小时耗电 &lt; 5%/小时</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">后端</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">5</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">iPhone 12 后台开 4 小时追踪，电量掉 &lt; 20%；每次状态切换（记录中/暂停/后台）有日志</td></tr>
+        <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-high">战略 1</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">崩溃恢复队列（App 被杀后 GPS 数据不丢）</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">后端</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">3</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">App 被系统杀掉后重启，最近 30 秒的位置点仍在；不会出现重复点</td></tr>
+        <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-high">战略 1</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">安全：设 SOS 联系人 + 分享最后一个已知位置</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">前端</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">3</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">飞行模式下 SOS 按钮能拨 111（新西兰紧急号码）；位置短信发送 &lt; 5 秒</td></tr>
+        <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-high">战略 2</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">收费原则文档（写死定价参考 + 免费/付费边界）</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">产品负责人</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">2</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">Sprint N 开始规划前完成；包含参考竞品价格 + 4 条禁忌全部覆盖</td></tr>
+        <tr><td rowspan="3" style="padding:8px 10px;border-bottom:1px solid var(--line);background:#fdf6e5;font-weight:700;color:var(--yellow)">Sprint N+1<br><span style="font-weight:400;font-size:11px">对外表态</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-high">战略 3</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">官网 + App 里亮出三条公开宣言（不硬塞 AI / 默认私密 / 你的数据是你的）</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">前端 + 产品负责人</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">3</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">官网首屏能看到三条宣言原文；About 页有具体条款；App 首次打开也引用</td></tr>
+        <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-high">战略 3</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">下载全格式数据免费（GPX / KML / JSON 三种通用格式都能免费下）</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">后端</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">2</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">没登录也能下载；没有字段被删的限制</td></tr>
+        <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-high">战略 3</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">商业试点第一阶段：新西兰免费全功能开放 3 个月 + 收集使用数据</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">产品负责人</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">2</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">埋点：多少人下载数据 / 多少人问云同步 / 每天用多久；3 个月后出定价数据报告</td></tr>
+        <tr><td rowspan="3" style="padding:8px 10px;border-bottom:1px solid var(--line);background:#e8f0e0;font-weight:700;color:var(--green)">Sprint N+2<br><span style="font-weight:400;font-size:11px">陌生人善意落地</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-med">战略 4</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">匿名路径标记（GPS 位置 + 短文本，不显示作者是谁）</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">全栈（前后端一起）</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">5</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">标记上看不到任何作者 ID；首次留标记时弹窗说明是用户主动开启；UI 上"匿名"字样必须明显</td></tr>
+        <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-med">战略 4</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">路况提示分类（积水 / 塌方 / 水源 / 险坡 四种图标）</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">前端</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">3</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">4 种图标 + 留下的时间戳 + 30 天自动过期（怕过时信息误导）</td></tr>
+        <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-med">战略 4</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">标记默认只有自己看见 + 用户主动选"公开"才对陌生人显示</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">后端</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">3</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">数据库默认可见性 = 只自己；改公开时要二次确认；公开的自动去掉用户 ID</td></tr>
+        <tr><td rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--line);background:#e0e8f0;font-weight:700;color:#3a5a7a">Sprint N+3<br><span style="font-weight:400;font-size:11px">收费落地</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-high">战略 2</span></td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">商业第二阶段：拿第一阶段数据定价</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">产品负责人</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">3</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--line)">定成 NZ$3-5/月订阅 或 NZ$30-40 一次买断；有 A/B 组数据支撑</td></tr>
+        <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span class="badge badge-high">战略 2</span></td>
+            <td style="padding:8px 10px">商业第三阶段（Sprint N+6）：付费功能上线（高精度 GPS / 大离线区）</td>
+            <td style="padding:8px 10px">全栈</td>
+            <td style="padding:8px 10px">8</td>
+            <td style="padding:8px 10px">付费墙绝不挡老功能；免费用户能下所有数据；30 天无理由退款</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="margin-top:12px;font-size:13px;color:var(--brown-lite)"><b>依赖关系</b>：战略 1（发布拦路虎）→ 战略 2（收费原则）→ 战略 3（宣言，需要 1 和 2 都到位）→ 战略 4（陌生人善意，需要战略 3 的"默认私密"框架先在）。</p>
+</section>
+
+<section id="biz">
+  <h2>10. 收费模式建议</h2>
+  <p><b>核心原则</b>：<span id="biz-principle"></span></p>
+  <h3>市场对标（竞品怎么收的）</h3>
+  <div id="biz-anchors" class="biz-anchors"></div>
+  <h3>推荐组合</h3>
+  <p id="biz-rec"></p>
+
+  <h3>3 阶段试点（一步步来）</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:12px 0">
+    <div style="background:#fff;padding:14px;border-radius:4px;border-left:4px solid var(--green)">
+      <div style="font-weight:700;color:var(--green)">第一阶段 · 从 Sprint N+1 起 3 个月</div>
+      <div style="margin-top:6px;font-size:14px">新西兰免费全功能开放。埋点收集：多少人下载数据 / 多少人问云同步 / 每天用多久</div>
+      <div style="margin-top:6px;font-size:12px;color:var(--brown-lite)">交付：3 个月后出一份"该定多少价"的数据报告</div>
+    </div>
+    <div style="background:#fff;padding:14px;border-radius:4px;border-left:4px solid var(--yellow)">
+      <div style="font-weight:700;color:var(--yellow)">第二阶段 · Sprint N+3</div>
+      <div style="margin-top:6px;font-size:14px">拿第一阶段数据定价：订阅（NZ$3-5/月）或 一次买断（NZ$30-40）</div>
+      <div style="margin-top:6px;font-size:12px;color:var(--brown-lite)">价格参考：Polarsteps €29.99/年 · 世界迷雾 ¥198 一次买断 · Day One $34.99/年</div>
+    </div>
+    <div style="background:#fff;padding:14px;border-radius:4px;border-left:4px solid var(--accent)">
+      <div style="font-weight:700;color:var(--accent)">第三阶段 · Sprint N+6</div>
+      <div style="margin-top:6px;font-size:14px">上付费功能：高精度 GPS / 大范围离线地图 / AI（可关）/ 云同步</div>
+      <div style="margin-top:6px;font-size:12px;color:var(--brown-lite)">铁律：老功能永远免费 + 下载自己数据永远免费</div>
+    </div>
+  </div>
+
+  <div style="background:#fdf6e5;border-left:4px solid var(--yellow);padding:14px;margin:16px 0;border-radius:4px">
+    <div style="font-weight:700;margin-bottom:6px">⚖️ "反 AI 宣言" 和 "AI 付费功能" 会不会打架？不会。</div>
+    <div style="font-size:14px;line-height:1.7">
+      战略 3 说"我不硬塞 AI"，第三阶段又说"AI 可以付费开启"——看起来矛盾，其实是<b>分层的</b>：
+      <ul style="margin:6px 0 6px 20px">
+        <li><b>AI 是"可关闭的插件"</b>，不是产品本体 —— 默认是关的，用户想用才开</li>
+        <li><b>云同步是可选订阅</b>，不是必须 —— 不付费的用户在本地存所有数据，不受影响</li>
+        <li><b>下载自己的数据永远免费</b> —— GPX/KML/JSON 三种格式，没有字段被删，不登录也能下</li>
+      </ul>
+      有这三条铁律，"我不硬塞 AI" 和 "AI 可以付费开启" 就能共存 —— 用户看到的是"我可以完全不用 AI，Cairn 不会强迫我"。</div>
+  </div>
+
+  <h3>绝对禁止（这些都是用户 rage 出来的教训）</h3>
+  <div id="biz-warn" class="biz-warn"></div>
+</section>
+
+<section id="kindness">
+  <h2>11. "陌生人善意" 怎么变成产品？</h2>
+  <p>"陌生人善意" 这个词在 Q2（点赞/踩机制）的用户数据里意向很清楚，但目前只是口号，没变成产品功能。这一节把这个抽象概念拆成 3 个可以真做的产品面。</p>
+
+  <h3>三个具体化的产品面</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin:12px 0">
+    <div style="background:var(--paper);padding:14px;border-radius:6px;border-left:4px solid var(--green)">
+      <h4 style="color:var(--green);margin-top:0">1. 匿名路径标记</h4>
+      <p style="font-size:14px">在地图上留一个位置 + 短文字（不超过 140 字）。<b>不显示是谁留的</b>——没有用户名、没有头像、没有 ID。只显示"什么时候留的"和"是哪一类"。用户看不到"谁留的"，但知道"这条路上有人留了信息"。</p>
+      <p style="font-size:13px;color:var(--brown-lite)"><b>为什么反社交反而带来善意</b>：去掉署名 = 去掉炫耀、去掉引流、去掉恶意举报的动机。剩下的只有纯粹的"我提醒你一下"。</p>
+    </div>
+    <div style="background:var(--paper);padding:14px;border-radius:6px;border-left:4px solid var(--yellow)">
+      <h4 style="color:var(--yellow);margin-top:0">2. 路况提示（4 类图标）</h4>
+      <p style="font-size:14px"><b>积水 / 塌方 / 水源 / 险坡</b>——用图标不用文字。30 天自动过期（怕过时信息骗人）。用户可以点"+1 有帮助"但看不见总数（怕变成社交排行榜）。</p>
+      <p style="font-size:13px;color:var(--brown-lite)"><b>直接解决 Q3.2 安全痛点</b>：新西兰 tramping（户外徒步）用户最需要的就是这类实时路况。</p>
+    </div>
+    <div style="background:var(--paper);padding:14px;border-radius:6px;border-left:4px solid var(--accent)">
+      <h4 style="color:var(--accent);margin-top:0">3. 默认只自己看 + 明确同意才对外</h4>
+      <p style="font-size:14px">标记在数据库里默认可见性 = 只自己。用户主动想改成"公开"时：<br>
+      · 弹二次确认<br>
+      · 自动去掉用户 ID<br>
+      · 提示"这个标记会永久匿名公开"</p>
+      <p style="font-size:13px;color:var(--brown-lite)"><b>和"默认私密"共存</b>：默认私密不是"禁止分享"，是"想分享必须明确点头 + 匿名处理"。</p>
+    </div>
+  </div>
+
+  <h3>证据支撑（Q2 + Q5 主题）</h3>
+  <p style="font-size:14px">这条战略由 <b>Q2.1 户外用户反社交</b> + <b>Q2.2 只想给特定人看</b> + <b>Q3.2 安全痛点</b> + <b>Q5.4 AI 反弹窗口</b> + <b>Q4.1 数据是我的</b> 五个主题交叉支撑。用户不要"社交 feed"，但要"匿名的善意信息交换"—— 这两件事不冲突，正是 Cairn 的独特窗口。</p>
+
+  <h3>和其他战略的关系</h3>
+  <ul style="margin-left:22px;font-size:14px">
+    <li><b>依赖战略 3（三条宣言）先落地</b> —— 否则"默认私密 + 明确同意才公开"没有整体框架去搭</li>
+    <li><b>不依赖战略 1</b>，但需要 GPS 追踪先稳定 —— 否则标记附着的路径数据不可信</li>
+    <li><b>反哺战略 2</b> —— 匿名标记 + 路况提示 是"永远免费"里最有价值的内容，能加固一次买断的说服力</li>
+  </ul>
+</section>
+
+<section id="appendix">
+  <h2>12. 数据附录 — 全部原始证据</h2>
+  <p class="subhead">18,943 条原始数据。可搜索、可筛选，点击任意一行看用户原话完整版。默认显示前 200 行，下拉加载更多。</p>
+  <p style="font-size:13px;color:var(--brown-lite);margin-top:6px"><b>说明（关于跑偏分修正）</b>：复核后，Q5.6 澳洲区风险从 5 分降到 3（Cairn 已有多地区框架，只需改配置），Q5.7 中文差评方法论从 5 降到 3（多语言基础已有）。更新后分布：0 分 = 3 项，1 分 = 4 项，2 分 = 2 项，3 分 = 7 项，5 分 = 8 项。详情见 <code>offset_measurement.md</code>。</p>
+  <div class="appendix-ctrl">
+    <input id="app-search" placeholder="搜索 raw_quote 或 id..." />
+    <select id="app-cat"><option value="">全部类别</option></select>
+    <select id="app-src"><option value="">全部来源</option></select>
+    <select id="app-int"><option value="">全部强度</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select id="app-cr"><option value="">全部 cairn_relevance</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <span id="appendix-count"></span>
+  </div>
+  <table id="appendix-table">
+    <thead><tr><th>ID</th><th>Source</th><th>Cat</th><th>Int</th><th>CR</th><th>Rate</th><th>Date</th><th>Quote (preview)</th></tr></thead>
+    <tbody id="appendix-body"></tbody>
+  </table>
+  <div style="text-align:center;margin-top:12px"><button id="app-more" style="padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px">加载更多 200 行</button></div>
+</section>
+
+<!-- ═══════════════════════════ 第二档 · 补充调研 ═══════════════════════════ -->
+<section id="tier2" style="margin-top:60px;padding-top:32px;border-top:6px double var(--yellow)">
+
+<div style="background:linear-gradient(135deg, rgba(229,176,78,0.15), rgba(217,93,74,0.1));border-left:6px solid var(--yellow);padding:20px 24px;border-radius:6px;margin-bottom:24px">
+  <div style="font-size:12px;letter-spacing:2px;color:var(--yellow);font-weight:700;margin-bottom:4px">⚡ SECOND TIER · 补充调研</div>
+  <h2 style="margin:0 0 8px;color:var(--yellow);border:none;padding:0">13. 4 个决策问题的深度回答</h2>
+  <div style="font-size:14px;color:var(--brown-lite);line-height:1.7">
+    用户读完原报告后提出 4 个决策级问题：<b>是否继续做？用户户外真实痛点？上线前保留/砍？上线后运营准备？</b> 本节独立于原 Q1-Q5，用新采集的 NZ 官方数据（28 条硬事实）+ 21K 内原报告未突出的户外场景子集（130 条），给出直接答案 + 对原报告的 <b>硬修正建议清单</b>。
+  </div>
+</div>
+
+<h3 style="color:var(--brown)">数据来源对账</h3>
+<table style="width:100%;border-collapse:collapse;font-size:13.5px;background:var(--paper);margin:10px 0 20px">
+  <thead><tr style="background:var(--cream)">
+    <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--accent)">数据源</th>
+    <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--accent)">条数</th>
+    <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--accent)">状态</th>
+  </tr></thead>
+  <tbody>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)">原有 21K App Store + 68 Reddit（Cairn 相关子版）</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">18,943</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">已在原报告</td></tr>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><b style="color:var(--green)">新增</b> NZ 官方数据（LandSAR / MSC / DOC / Water Safety / RCCNZ）</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><b>28</b></td><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span style="color:var(--green)">✓ 到位</span></td></tr>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><b style="color:var(--green)">新提取</b> 21K 内户外场景子集</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><b>~130</b></td><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span style="color:var(--green)">✓ 到位</span></td></tr>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)">原计划补爬 Reddit r/hiking / r/backpacking / r/newzealand 户外原声</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">0</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><span style="color:var(--red)">✗ 未拿到 —— 沙箱与中国 IP 均无法访问 Reddit 及镜像</span></td></tr>
+  </tbody>
+</table>
+
+<div style="background:rgba(229,176,78,0.1);border-left:4px solid var(--yellow);padding:12px 16px;font-size:13.5px;border-radius:4px;margin-bottom:32px">
+  <b>诚实边界</b>：Reddit 户外大社区的真实原声本次拿不到。<b>Q2「用户在山上心里怎么想」这一层缺失</b>，但外部视角（NZ 官方 + 21K 户外子集）已足以支撑 4 个决策问题的答案。
+</div>
+
+<!-- Q1 -->
+<h3 style="border-left:4px solid var(--red);padding-left:12px;margin-top:32px">Q1 · 我还应该继续做下去吗？有没有类似竞品？</h3>
+<div style="background:var(--paper);padding:16px 20px;border-radius:6px;margin:10px 0">
+  <div style="font-size:16px;font-weight:700;color:var(--green);margin-bottom:12px">✓ 继续做 —— 但话术必须改</div>
+  <p style="margin:6px 0"><b>竞品格局</b>（5 大竞品 18,876 条评论 + NZ 官方数据交叉验证）：<b>没有一家同时做「数字手账 + 陌生人善意」</b>。</p>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin:12px 0">
+    <thead><tr style="background:var(--cream)"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--line)">竞品</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--line)">做什么</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--line)">缺什么（Cairn 空间）</th></tr></thead>
+    <tbody>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>AllTrails</b></td><td style="padding:6px 8px;border-bottom:1px solid var(--line)">步道数据 + 社交打卡</td><td style="padding:6px 8px;border-bottom:1px solid var(--line);color:var(--red)">户外用户反感社交化，"让人走进危险境地"</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>Day One</b></td><td style="padding:6px 8px;border-bottom:1px solid var(--line)">私密日记 + 15 年长期身份</td><td style="padding:6px 8px;border-bottom:1px solid var(--line);color:var(--red)">零地理维度</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>Fog of World</b></td><td style="padding:6px 8px;border-bottom:1px solid var(--line)">脚印地图 + 一次买断 198 元</td><td style="padding:6px 8px;border-bottom:1px solid var(--line);color:var(--red)">只有"点亮"游戏化，无标记、无善意、无叙事</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>Polarsteps</b></td><td style="padding:6px 8px;border-bottom:1px solid var(--line)">旅行分享给朋友</td><td style="padding:6px 8px;border-bottom:1px solid var(--line);color:var(--red)">关系型分享，非匿名</td></tr>
+      <tr><td style="padding:6px 8px"><b>一生足迹（中文）</b></td><td style="padding:6px 8px">微信小程序生成轨迹</td><td style="padding:6px 8px;color:var(--red)">"吃相难看"重灾区</td></tr>
+    </tbody>
+  </table>
+  <div style="background:rgba(217,93,74,0.12);border-left:4px solid var(--red);padding:12px 14px;border-radius:4px;margin-top:14px">
+    <b style="color:var(--red)">⚠️ NZ 官方数据给了一个重要修正</b><br>
+    <span style="font-size:14px;line-height:1.7">LandSAR 2024/25 财年：<b>526 次救援 → 598 人被援助 → 只救回 40 条命（6.7%）</b>。<br><b>93% 的救援不是生死，是"卡住 / 失联 / 受伤 / 冻着 / 涨水回不去"</b>。</span><br><br>
+    这意味着 Cairn 原来的"救你命"话术是打偏的：<br>
+    <span style="color:var(--red)">❌ 别定位 "we save lives"</span>（这条赛道 LandSAR + PLB + RCCNZ + 3000 志愿者已占满）<br>
+    <span style="color:var(--green)">✓ 定位应为 <b>"帮你被找到、帮你记住"</b></span>（93% 高频弱痛，没人做）
+  </div>
+</div>
+
+<!-- Q2 -->
+<h3 style="border-left:4px solid var(--red);padding-left:12px;margin-top:32px">Q2 · 用户真实户外痛点是什么？</h3>
+<div style="background:var(--paper);padding:16px 20px;border-radius:6px;margin:10px 0">
+  <div style="font-size:13.5px;color:var(--brown-lite);margin-bottom:10px">原报告 Q3 讲的是 <b>App 层痛点</b>（离线/耗电/GPS）。下面这些是 <b>户外场景本身的痛点</b>——从 21K 里我 grep 出来的。</div>
+
+  <h4 style="margin-top:14px;color:var(--brown)">从 21K 里挖出的户外场景真实痛点</h4>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin:8px 0">
+    <thead><tr style="background:var(--cream)"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--line)">主题</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--line)">21K 中被提及</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--line)">代表 ID</th></tr></thead>
+    <tbody>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>走错路 / 迷路</b></td><td style="padding:6px 8px;border-bottom:1px solid var(--line)">34 条（正反面都有）</td><td style="padding:6px 8px;border-bottom:1px solid var(--line);font-family:monospace">a001893, a002364</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>走进危险境地</b></td><td style="padding:6px 8px;border-bottom:1px solid var(--line);color:var(--red)">16 条明确写"跟着 app 反而危险"</td><td style="padding:6px 8px;border-bottom:1px solid var(--line);font-family:monospace">a001966, a000620</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>山里无信号</b></td><td style="padding:6px 8px;border-bottom:1px solid var(--line)">23 条</td><td style="padding:6px 8px;border-bottom:1px solid var(--line);font-family:monospace">a002372, a001893</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>电池 2-3 小时耗尽</b></td><td style="padding:6px 8px;border-bottom:1px solid var(--line)">2 条明写"幸运我没走远"</td><td style="padding:6px 8px;border-bottom:1px solid var(--line);font-family:monospace">a002151, a002201</td></tr>
+      <tr><td style="padding:6px 8px"><b>失温</b></td><td style="padding:6px 8px">32 条</td><td style="padding:6px 8px;font-family:monospace">分散</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin-top:20px;color:var(--brown)">代表性原声（21K 里真实评论）</h4>
+  <blockquote style="border-left:3px solid var(--accent);margin:8px 0;padding:8px 14px;background:var(--cream);font-size:14px;line-height:1.65;font-style:italic">
+    "This app has got people into dangerous situations by giving unreliable trail info." <span style="font-style:normal;color:var(--brown-lite);font-family:monospace;font-size:12px">— [a000620]</span>
+  </blockquote>
+  <blockquote style="border-left:3px solid var(--accent);margin:8px 0;padding:8px 14px;background:var(--cream);font-size:14px;line-height:1.65;font-style:italic">
+    "Dangerously unreliable app - dreadful experience on 6.6 mile hike. Do not use this app unless able to navigate with map and compass independently of the app!" <span style="font-style:normal;color:var(--brown-lite);font-family:monospace;font-size:12px">— [a001966]</span>
+  </blockquote>
+  <blockquote style="border-left:3px solid var(--accent);margin:8px 0;padding:8px 14px;background:var(--cream);font-size:14px;line-height:1.65;font-style:italic">
+    "Nice for 2.5 hours - the app completely drained my phone in 2.5hours.. not useful at all.. lucky me I was not wondering in the wild too far." <span style="font-style:normal;color:var(--brown-lite);font-family:monospace;font-size:12px">— [a002151]</span>
+  </blockquote>
+
+  <h4 style="margin-top:20px;color:var(--brown)">NZ 官方视角的户外真痛点（MSC 2026 年 7 月 3 篇 media 一致）</h4>
+  <ol style="margin-left:22px;font-size:14px;line-height:1.75">
+    <li><b>天气突变 + 高山（冬季）</b>—— MSC 头号公共安全担忧</li>
+    <li><b>渡河</b>—— 年均 3 死，<b>80% 死在洪水中</b>；"Get home-itis"（急着回住处冒险渡河）反复致死</li>
+    <li><b>山体滑坡 / 塌方</b>（2026-01 Mt Maunganui 度假营地事件，多人死亡包括中国公民）</li>
+    <li><b>火山</b>（Tongariro Red Crater 仍活跃，出发前必须查）</li>
+    <li><b>过度预订</b>（DOC 2023-10 起强制 Tongariro 预约；Great Walks 分钟级售罄 → 很多人无 hut 硬闯）</li>
+  </ol>
+
+  <div style="background:rgba(217,93,74,0.08);border-left:4px solid var(--red);padding:10px 14px;font-size:13.5px;border-radius:4px;margin-top:14px">
+    <b style="color:var(--red)">缺口</b>：Reddit r/hiking 类"用户山上心里怎么想"的原声本次拿不到。"78% SAR 发生在有信号地方"这个假设 <b>未验证</b> —— 影响"离线地图是不是伪需求"的判断。
+  </div>
+</div>
+
+<!-- Q3 -->
+<h3 style="border-left:4px solid var(--red);padding-left:12px;margin-top:32px">Q3 · 上线前该保留 / 该舍弃什么？</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:10px 0">
+  <div style="background:rgba(126,160,101,0.15);padding:14px 16px;border-left:4px solid var(--green);border-radius:4px">
+    <h4 style="color:var(--green);margin-top:0">✓ 必须保留</h4>
+    <ul style="margin-left:18px;padding-left:0;font-size:13.5px;line-height:1.75">
+      <li>匿名标记（Cairn 灵魂词，5 大竞品无一做）</li>
+      <li>免费下载自己的数据（4900+ 评论骂"数据被锁"）</li>
+      <li>默认私密（户外用户反社交 4600+ 条）</li>
+      <li>脚印地图（Fog of World 一次买断验证）</li>
+      <li>多年后回看 / 手账形态（Day One 15 年）</li>
+      <li style="color:var(--yellow);font-weight:600">⭐ 新加：行程告知朋友（MSC Land Safety Code 第 4 点原文）</li>
+      <li style="color:var(--yellow);font-weight:600">⭐ 新加：天气 + 河流 + 高山警告（MSC 2026-07 100% 气候相关）</li>
+    </ul>
+  </div>
+  <div style="background:rgba(217,93,74,0.12);padding:14px 16px;border-left:4px solid var(--red);border-radius:4px">
+    <h4 style="color:var(--red);margin-top:0">✗ 必须砍掉</h4>
+    <ul style="margin-left:18px;padding-left:0;font-size:13.5px;line-height:1.75">
+      <li>公开 feed / 点赞排行</li>
+      <li>AI 生成游记（Day One 加 AI 那次评论区炸了）</li>
+      <li>Apple Watch 独立记录（等 v1.0 之后）</li>
+      <li>步道数据库（MSC Plan My Walk 已有 3000+，明说不做）</li>
+      <li>订阅式付费为主（改一次买断）</li>
+      <li>v1.0 就做导入迁移（推 v1.5）</li>
+      <li style="color:var(--yellow);font-weight:600">⭐ 新加砍：<b>SOS 一键紧急按钮</b>—— LandSAR + PLB + RCCNZ 已占，Cairn 打不过</li>
+    </ul>
+  </div>
+</div>
+
+<h4 style="margin-top:18px;color:var(--brown)">3 条硬原则（抵抗诱惑）</h4>
+<ol style="margin-left:22px;font-size:14px;line-height:1.75">
+  <li>别做"另一个 AllTrails"—— 用户已经烦了</li>
+  <li>别用增长指标毁产品 —— DAU/留存的坏功能可能就是老用户走的原因</li>
+  <li>别急着上中文 —— 先英语世界跑透。<b>但</b> 中文是 MSC 官方五语（EN/KO/JA/ES/DE）<b>没覆盖的空缺</b>，这是合法机会窗</li>
+</ol>
+
+<!-- Q4 -->
+<h3 style="border-left:4px solid var(--red);padding-left:12px;margin-top:32px">Q4 · 上线后运营准备 + 做不到的事</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:10px 0">
+  <div style="background:rgba(126,160,101,0.15);padding:14px 16px;border-left:4px solid var(--green);border-radius:4px">
+    <h4 style="color:var(--green);margin-top:0">✓ 必做 8 项</h4>
+    <ol style="margin-left:18px;padding-left:0;font-size:13.5px;line-height:1.75">
+      <li>ASO 关键词抢占：<code>NZ hiking journal</code> / <code>outdoor diary</code> / <code>private hiking log</code></li>
+      <li>Reddit r/tramping、r/newzealand 种子发帖</li>
+      <li style="color:var(--yellow);font-weight:600">⭐ NZ DOC / MSC 合作可能：接 DOC trail alerts API</li>
+      <li>联系 1-2 个 NZ hiking KOL</li>
+      <li>客服 12 小时首响 SLA</li>
+      <li>上线 30 天每天回差评</li>
+      <li>崩溃 / 数据丢失 48 小时 hotfix</li>
+      <li>版本说明写人话（不许"性能优化 & bug 修复"）</li>
+    </ol>
+  </div>
+  <div style="background:rgba(217,93,74,0.12);padding:14px 16px;border-left:4px solid var(--red);border-radius:4px">
+    <h4 style="color:var(--red);margin-top:0">✗ 做不到 4 项</h4>
+    <ul style="margin-left:18px;padding-left:0;font-size:13.5px;line-height:1.75">
+      <li><b>7×24 客服</b> → 明说 12 小时上限</li>
+      <li><b>实时步道数据维护</b> → 导流 DOC / Plan My Walk</li>
+      <li><b>多平台并行</b> → iOS 先行，Android 落后 3-6 个月</li>
+      <li><b>多语言全球化</b> → 英文单语 12-18 个月</li>
+    </ul>
+  </div>
+</div>
+
+<h4 style="margin-top:18px;color:var(--brown)">⭐ NZ 特有的额外准备</h4>
+<ol style="margin-left:22px;font-size:14px;line-height:1.75">
+  <li><b>明写"我们不做救命工具"</b>—— LandSAR/PLB/RCCNZ 已占，跟他们互补不竞争</li>
+  <li><b>App 内"户外时把 PLB 带上"提醒</b>—— MSC 五项 Land Safety Code 第 3 项。产品合法性来源</li>
+  <li><b>"Get home-itis" 反常识提醒</b>：checkpoint 处天气变差建议原地等 X 小时，不硬冲。MSC 反复点名致死原因</li>
+  <li><b>火山活跃度检查提醒</b>（Tongariro Red Crater / Ngauruhoe / Ruapehu）出发前 push</li>
+</ol>
+
+<!-- 对原报告的修正建议 -->
+<h3 style="border-left:4px solid var(--yellow);padding-left:12px;margin-top:32px;color:var(--yellow)">对原报告 Q1-Q5 + Roadmap 的修正建议</h3>
+<table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--paper);margin:10px 0">
+  <thead><tr style="background:var(--cream)">
+    <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--yellow)">原报告位置</th>
+    <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--yellow)">现状</th>
+    <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--yellow)">修正</th>
+  </tr></thead>
+  <tbody>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><b>Q3.2</b> 安全 / 荒野迷路</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">"生存责任，断轨=生命危险"</td><td style="padding:8px 10px;border-bottom:1px solid var(--line);color:var(--green)">改成"帮用户被找到"，不是"救命"</td></tr>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><b>战略 1</b>（离线+耗电+追踪+安全）</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">4 个 CRITICAL</td><td style="padding:8px 10px;border-bottom:1px solid var(--line);color:var(--yellow)">⚠️ "离线是不是必须"这个假设 <b>未被 NZ 数据验证</b>—— 需补验 SAR 信号覆盖率</td></tr>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><b>Roadmap Sprint N</b></td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">含 "SOS 联系人 + 最后已知位置分享"</td><td style="padding:8px 10px;border-bottom:1px solid var(--line);color:var(--red)"><b>砍 SOS</b>；保留"位置分享"改为"给你的信任朋友"（回归 MSC Land Safety Code）</td></tr>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><b>Q5.5</b> 中文 Rage</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">"中文版禁止套路"</td><td style="padding:8px 10px;border-bottom:1px solid var(--line);color:var(--green)">加：中文是 MSC 官方 5 语言（EN/KO/JA/ES/DE）<b>没覆盖的空缺</b>，合法机会窗</td></tr>
+    <tr><td style="padding:8px 10px"><b>陌生人善意 §11</b></td><td style="padding:8px 10px">3 个具体化面</td><td style="padding:8px 10px;color:var(--green)">加第 4 面：<b>行程告知功能</b>—— MSC 官方 Land Safety Code 4 的现代实现，产品合法性来源</td></tr>
+  </tbody>
+</table>
+
+<!-- 一句话总结 -->
+<h3 style="border-left:4px solid var(--red);padding-left:12px;margin-top:32px">4 个问题一句话总结</h3>
+<ol style="margin-left:22px;font-size:14px;line-height:1.85">
+  <li><b>是否继续做</b>：<span style="color:var(--green)">继续</span>。5 大竞品无一做「数字手账 + 陌生人善意」。<b>但从"救命"改口径为"被找到 + 记忆"</b>（NZ SAR 数据支持）</li>
+  <li><b>户外真实痛点</b>：走错路 / 无信号 / 电池死 / 变得危险（21K 里的 90+ 条）+ 天气突变 / 渡河 / 高山 / 火山（NZ 官方视角）。<span style="color:var(--red)">"用户在山上心里怎么想"这一层没数据</span> —— Reddit 户外社区没爬到</li>
+  <li><b>上线前该做</b>：保留匿名标记 / 免费下载 / 默认私密 / 脚印地图 / 手账；<span style="color:var(--yellow)">新加</span>"行程告知" + 天气/河流/高山警告；<span style="color:var(--red)">新砍</span> SOS 按钮</li>
+  <li><b>上线后准备</b>：必做 8 项（ASO/KOL/客服/回评/hotfix/版本说明 + MSC/DOC 合作探索）；做不到 4 项（7×24/步道库/多平台/多语言）—— 都要预期不装能做</li>
+</ol>
+
+<!-- 数据缺口清单 -->
+<h3 style="border-left:4px solid var(--brown-lite);padding-left:12px;margin-top:32px;color:var(--brown-lite)">数据缺口与后续（诚实清单）</h3>
+<table style="width:100%;border-collapse:collapse;font-size:13px;margin:10px 0">
+  <thead><tr style="background:var(--cream)">
+    <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)">缺口</th>
+    <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)">影响</th>
+    <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)">补法</th>
+  </tr></thead>
+  <tbody>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)">Reddit 户外大社区原声</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">Q2 只能间接回答</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">有外网时用 Reddit JSON API 补爬</td></tr>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)">NZ SAR Council 完整年报 PDF</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">"离线是不是伪需求"无法判断</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">手动下载 nzsar.govt.nz PDF</td></tr>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)">DOC 步道年度关闭统计</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">无法量化步道关闭对用户的影响</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">DOC 官方年报</td></tr>
+    <tr><td style="padding:8px 10px"><b>本地 vs 游客 SAR 分布</b></td><td style="padding:8px 10px">无法确认 Cairn 主要目标用户</td><td style="padding:8px 10px">只有 MSC 五语言作为间接信号</td></tr>
+  </tbody>
+</table>
+
+<div style="margin-top:30px;padding:14px 18px;background:rgba(126,160,101,0.1);border-left:4px solid var(--green);border-radius:4px;font-size:13px;color:var(--brown-lite)">
+  <b>本节数据文件</b>：
+  <br>· <code>raw/nz_official.jsonl</code>（28 条 NZ 官方硬事实）
+  <br>· <code>raw/nz_official_summary.md</code>（8.7 KB 摘要 + 洞察）
+  <br>· <code>raw/outdoor_evidence.json</code>（21K 内户外场景引用样本）
+  <br>· <code>raw/reddit_blocked.md</code>（Reddit 无法访问的完整证据 + 复现命令）
+  <br>· <code>SECOND_TIER_ANALYSIS.md</code>（本节内容的 markdown 版本）
+</div>
+
+</section>
+
+<!-- ═══════════════════════════ 第三部分 · 真数据 + 代码盘点 + 精确 Sprint plan ═══════════════════════════ -->
+<section id="tier3" style="margin-top:60px;padding-top:32px;border-top:6px double var(--red)">
+
+<div style="background:linear-gradient(135deg, rgba(217,93,74,0.15), rgba(200,138,42,0.1));border-left:6px solid var(--red);padding:20px 24px;border-radius:6px;margin-bottom:24px">
+  <div style="font-size:12px;letter-spacing:2px;color:var(--red);font-weight:700;margin-bottom:4px">🔥 THIRD TIER · 真数据 + 代码盘点</div>
+  <h2 style="margin:0 0 8px;color:var(--red);border:none;padding:0">14. 从"用户 App 评论"到"用户在山上真实痛点"</h2>
+  <div style="font-size:14px;color:var(--brown-lite);line-height:1.7">
+    第二部分基于 NZ 官方数据 + 21K 内户外场景子集。<b>第三部分补上关键缺口</b>：<b>4,847 条 Reddit 户外大社区真实原声</b>（r/hiking / r/backpacking / r/CampingandHiking / r/newzealand / r/tramping），据此重排 <b>13 Sprint plan</b>（S60 拆 S60a+S60b，目标 2027-01-19 NZ 单市场上线，避开春节高峰）+ <b>上海 mock NZ 场景真机测试策略</b>。
+    <br><br>
+    <b>核心发现</b>：Cairn 灵魂词「数字手账 + 陌生人善意」<b>意外地完美契合真实用户痛点</b>——但原报告战略 1 因为数据源偏差（99.6% App review）严重误导了 Roadmap。
+    <br><br>
+    <b>核心发现</b>：Cairn 灵魂词「数字手账 + 陌生人善意」<b>意外地完美契合真实用户痛点</b>——但原报告战略 1 因为数据源偏差（99.6% App review）严重误导了 Roadmap。
+  </div>
+</div>
+
+<!-- 数据大爆发 -->
+<h3 style="color:var(--brown)">数据源大盘点</h3>
+<table style="width:100%;border-collapse:collapse;font-size:13.5px;background:var(--paper);margin:10px 0 20px">
+  <thead><tr style="background:var(--cream)">
+    <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--red)">数据源</th>
+    <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--red)">条数</th>
+    <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--red)">用途</th>
+    <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--red)">状态</th>
+  </tr></thead>
+  <tbody>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)">21K App Store + 68 App 相关 Reddit</td><td style="padding:8px 10px;border-bottom:1px solid var(--line);text-align:right">18,943</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">竞品 App 层痛点</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">✅ 原报告</td></tr>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)">NZ 官方（LandSAR / MSC / DOC）</td><td style="padding:8px 10px;border-bottom:1px solid var(--line);text-align:right">28</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">官方视角户外风险</td><td style="padding:8px 10px;border-bottom:1px solid var(--line)">✅ 第二部分</td></tr>
+    <tr><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><b style="color:var(--red)">Reddit 户外大社区</b>（r/hiking + r/backpacking + r/CampingandHiking + r/newzealand + r/tramping）</td><td style="padding:8px 10px;border-bottom:1px solid var(--line);text-align:right"><b>4,847</b></td><td style="padding:8px 10px;border-bottom:1px solid var(--line)"><b>用户山上真实痛点</b></td><td style="padding:8px 10px;border-bottom:1px solid var(--line);color:var(--red)"><b>✅ 第三部分新增</b></td></tr>
+    <tr><td style="padding:8px 10px"><b>合计</b></td><td style="padding:8px 10px;text-align:right"><b>~24,000</b></td><td style="padding:8px 10px">— </td><td style="padding:8px 10px">✅ 完整</td></tr>
+  </tbody>
+</table>
+
+<!-- 颠覆性对比图 -->
+<h3 style="color:var(--brown)">用户真实痛点 vs App 层痛点（4,847 Reddit 数据分布）</h3>
+<div style="background:var(--paper);padding:16px 20px;border-radius:6px;margin:10px 0">
+<div style="font-size:12.5px;color:var(--brown-lite);margin-bottom:10px;padding:8px 10px;background:var(--cream);border-left:3px solid var(--accent);border-radius:3px">
+  <b>分类方法</b>：严格短语匹配，一条帖子归入最先命中的主题（不重复计数）。可复现脚本 <code>scripts/classify_reddit_themes.py</code>。<b>76% 帖子未分类</b>——不是所有帖子都在讨论痛点（很多是秀风景、请路线推荐、装备清单晒等），只算<b>真正提出户外场景痛点</b>的 1,165 条（24%）。
+</div>
+<table style="width:100%;border-collapse:collapse;font-size:13.5px">
+  <thead><tr style="background:var(--cream)">
+    <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--red)">痛点主题</th>
+    <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--red)">频次</th>
+    <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--red)">占总量%</th>
+    <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--red)">占痛点%</th>
+    <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--red)">Cairn 灵魂词是否契合</th>
+  </tr></thead>
+  <tbody>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)"><b>新手焦虑 / 求建议</b>（planning anxiety）</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right"><b>672</b></td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;color:var(--red)"><b>13.9%</b></td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;color:var(--red)"><b>57.7%</b></td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--green)">✓ 陌生人善意匿名建议</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)"><b>装备失败</b>（gear failure）</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right"><b>133</b></td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">2.7%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">11.4%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--yellow)">△ 装备提示型标记</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)"><b>独行恐惧</b>（solo fear）</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right"><b>86</b></td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">1.8%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">7.4%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--green)">✓ 数字手账 + 朋友订阅</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)"><b>救援 / SAR / PLB</b></td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">68</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">1.4%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">5.8%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--red)">✗ 不是我们的赛道</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)"><b>天气 / 失温</b></td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">63</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">1.3%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">5.4%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--green)">✓ 天气警告 + Get home-itis</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)"><b>渡河 / 洪水</b>（NZ 强信号）</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">46</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">0.9%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">3.9%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--green)">✓ 河流警告 + MSC Land Safety Code</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)"><b>迷路 / 偏离步道</b></td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">43</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">0.9%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">3.7%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--green)">✓ 前人 cairn 标记</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)"><b>受伤</b></td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">34</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">0.7%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);text-align:right">2.9%</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--yellow)">△ 装备提示</td></tr>
+    <tr style="background:rgba(217,93,74,0.1)"><td style="padding:8px 10px"><b>信号 / 离线 / 电池死</b>（原战略 1 头号问题）</td><td style="padding:8px 10px;text-align:right"><b>20</b></td><td style="padding:8px 10px;text-align:right;color:var(--red)"><b>0.4%</b></td><td style="padding:8px 10px;text-align:right;color:var(--red)"><b>1.7%</b></td><td style="padding:8px 10px;color:var(--red)"><b>✗ 原战略 1 严重偏差</b></td></tr>
+  </tbody>
+</table>
+<div style="font-size:12px;color:var(--brown-lite);margin-top:8px">合计有痛点表达的帖子 1,165 条 / 4,847（24%）；剩下 3,682 条（76%）是攻略推荐 / 装备晒 / 秀风景等非痛点内容。</div>
+</div>
+
+<div style="background:rgba(217,93,74,0.12);border-left:4px solid var(--red);padding:14px 18px;font-size:14px;border-radius:4px;margin-top:14px;line-height:1.75">
+  <b style="color:var(--red)">🔥 颠覆性结论</b><br>
+  原战略 1 说"离线地图 + 耗电 + GPS 断轨"是<b>头号问题</b>——这基于 21K App 评论（99.6% App review）。<br>
+  <b>真实数据说</b>（1,165 条有痛点表达的帖子中）：用户真正的痛点是 <b>planning anxiety 57.7% + gear failure 11.4% + solo fear 7.4% + weather 5.4%</b>，占痛点讨论的 <b>82%</b>。<br>
+  <b>信号/离线/电池只占 1.7%</b>（4,847 总量的 0.4%）——原战略 1 因数据源偏差<b>严重误导 Roadmap</b>。<br><br>
+  <b>但 Cairn 灵魂词「数字手账 + 陌生人善意」意外地对齐了真实数据</b>：
+  <ul style="margin:6px 0 0 20px">
+    <li>主题 1 新手焦虑 672 条（占痛点 57.7%）← <b>匿名前辈建议</b>（陌生人善意）是完美解</li>
+    <li>主题 3 独行恐惧 86 条 ← <b>数字手账 + 朋友订阅</b></li>
+    <li>主题 5 天气 63 条 ← <b>天气警告 + Get home-itis 反常识提醒</b></li>
+    <li>主题 6 渡河 46 条 ← MSC Land Safety Code 第 4 项 + 河流警告</li>
+  </ul>
+  产品定位一直是对的，但战略 1 走错方向。<b>Roadmap 需要按新战略重排</b>——见下节。
+</div>
+
+<h3 style="color:var(--brown);margin-top:32px">代表性用户原声（4,847 中挑 21 条真户外痛点，按主题）</h3>
+<div style="font-size:13.5px;color:var(--brown-lite);margin-bottom:10px">点击 <span class="reddit-btn" style="display:inline-block;padding:2px 8px;background:var(--cream);border:1px solid var(--line);border-radius:11px;font-size:12px;font-family:monospace;color:var(--brown)">[rd_xxx]</span> 查看完整中英对照。</div>
+
+<div id="tier3-quotes" style="background:var(--paper);padding:16px 20px;border-radius:6px;margin:10px 0">
+  <div id="tier3-quotes-list"></div>
+</div>
+
+
+<!-- 12 Sprint plan -->
+<h3 style="color:var(--brown);margin-top:32px">精确 13 Sprint plan（2026-07-19 起 · 目标 2027-01-19 上线，避开 2027-01-24 春节高峰）</h3>
+<div style="font-size:13.5px;color:var(--brown-lite);margin-bottom:10px">
+  节奏：每 Sprint 2 周。开发（AI 快）4-5 天 + 测试（真机瓶颈）8-10 天。上海 mock NZ 场景为主，Sprint 末上海真机测。
+</div>
+
+<div style="overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;border:1px solid var(--line)">
+  <thead><tr style="background:var(--paper)">
+    <th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--accent)">Sprint</th>
+    <th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--accent)">日期</th>
+    <th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--accent)">主题</th>
+    <th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--accent)">具体做什么</th>
+    <th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--accent)">Sprint 末真机测</th>
+  </tr></thead>
+  <tbody>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#fbe9e5;color:var(--red);font-weight:700">S60a</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">07-19 → 08-01</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">代码清理 + 定位重写</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① 砍未来不做的功能代码（AR / SOS / 其他遗留），为主线释放空间 ② 落地页 + App Store 描述从"救你命"改成"帮你被找到 + 帮你记住"（对齐真实用户痛点数据）③ 收费原则写死文档：新功能可付费、老功能永免费、数据永免费下载 ④ 补充测试基础设施</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">世纪公园 hike + plant marker + finalize（清理后回归）</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#fbe9e5;color:var(--red);font-weight:700">S60b</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">08-02 → 08-15</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">修上线前发现的关键 Bug</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① 追踪路径记录相关的数据可靠性问题（GPS 断轨、数据丢失、同步竞争）② marker 隐私 + 好友关系边界（删好友级联、隐藏内容边界、反滥用）③ 每个 Bug 修复前 2 subagent 独立评估、100% 信心才动</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>Gate 1 · 08-15</b> · L1-L5 全绿</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#fbe9e5;color:var(--red);font-weight:700">S61</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">08-16 → 08-29</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">天气 + 河流集成（真实痛点 #3）</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① 接 NZ MetService API + DOC trail alerts（新写 backend service）② 出发前"天气 + 河流状态"页 UI ③ 渡河风险路线预警（MSC 80% 洪水中数据）</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">浦东南路→陆家嘴长程 GPS 稳定性</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#fbe9e5;color:var(--red);font-weight:700">S62</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">08-30 → 09-12</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">高山 + 火山 + Get home-itis</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① Tongariro/Ngauruhoe/Ruapehu GNS Science API ② 高山冬季危险等级 push ③ "Get home-itis" 反常识提醒（checkpoint 天气变差建议原地等）</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">拉 1 朋友双端好友测</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#fdf6e5;color:var(--yellow);font-weight:700">S63</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">09-13 → 09-26</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">行程告知机制（真实痛点 #4 独行恐惧）</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① 分享行程给信任 1-5 人（MSC Land Safety Code 4 落地）② checkpoint 好友自动通知 ③ 预计回程超时警报</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">崇明东滩无信号回补测试</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#fdf6e5;color:var(--yellow);font-weight:700">S64</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">09-27 → 10-10</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">陌生人善意机制 + 装备提示 marker（痛点 #1 + #2）</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① 匿名标记 + 加"新手建议"分类标签 ② <b>新加 marker 类型"装备提示"（gear tip）</b>——承接痛点 #2 gear failure 11.4%（Reddit 133 条）③ 无排行点赞算法（不显总数）</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">真机 AR marker 30m 精度</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#fdf6e5;color:var(--yellow);font-weight:700">S65</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">10-11 → 10-24</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">路况标记 4 类图标</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① 积水/塌方/水源/险坡 4 图标 ② 30 天自动过期 ③ 语音标记（planned 卡完成）—— 这 4 类是<b>陌生人善意 marker 系统的子分类</b>，与 S64 的"装备提示 (gear tip)"并列作为独立 marker 类型（v417 起总共 6 类：cairn / danger / junction / water / hut + 装备提示 + 路况 4 子分类）</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">2 人拉起来测善意传递</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#e8f0e0;color:var(--green);font-weight:700">S66</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">10-25 → 11-07</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">手账 / on-this-day（灵魂词缺口）</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① fog 覆盖率 dashboard（"新西兰你走过 X km² · Y%"）② 当年今日推送 ③ 桌面 widget</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">真机 widget 表现</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#e8f0e0;color:var(--green);font-weight:700">S67</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">11-08 → 11-21</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">路线 + 好友分享收尾</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① 存路线 / snap / 编辑 3 张 wip 卡收尾 ② 路线分享给好友 ③ 一键沿用 + 语音自动播放（Alex persona 承诺）</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>Gate 2</b>：灵魂词落地检验</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#e0e8f0;color:#3a5a7a;font-weight:700">S68</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">11-22 → 12-05</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">性能 + 稳定性硬指标</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① 4h 户外耗电 &lt; 5%/h 硬门槛测（batteryMonitor 已就绪）② 崩溃安全写入 + 本地队列 ③ GPS 状态机端到端测试 ④ iPhone 15 Pro / iPhone 12 双基准</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>4h 户外真机耗电</b>（青浦淀山湖）</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#e0e8f0;color:#3a5a7a;font-weight:700">S69</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">12-06 → 12-19</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">首用户体验 + ASO</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① ASO 关键词抢占 ② 落地页三宣言 ③ App 首次打开引用 MSC Land Safety Code</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">招 3-5 内部内测者装 TestFlight</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line);background:#e0e8f0;color:#3a5a7a;font-weight:700">S70</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">12-20 → 2027-01-02</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">合作 + KOL</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">① 联系 NZ DOC/MSC 邮件 ② KOL 联系名单 ③ Reddit r/tramping/r/newzealand 种子帖准备</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>Gate 3</b>：合作探索有实质进展吗</td></tr>
+    <tr><td style="padding:6px 8px;background:#e0e8f0;color:#3a5a7a;font-weight:700">S71</td>
+        <td style="padding:6px 8px">2027-01-03 → 2027-01-16</td>
+        <td style="padding:6px 8px">客服 + hotfix + 上线</td>
+        <td style="padding:6px 8px">① 客服 SLA + hotfix 通道 ② App Store 提交材料 ③ 30 天差评回复机制 ④ <b>2027-01-19 NZ 单市场上线</b>（春节前 5 天，避开 2027-01-24 春节高峰）</td>
+        <td style="padding:6px 8px">全流程演练</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div style="background:#fdf6e5;border-left:4px solid var(--yellow);padding:10px 14px;margin-top:12px;font-size:13px;border-radius:4px">
+  <b>春节窗口 2027-01-24 → 2027-02-08</b>：不发新功能，只 hotfix。如上线遇重大问题可推到 2027-02-15。
+</div>
+
+<h3 style="color:var(--brown);margin-top:32px">MSC Land Safety Code 5 项（NZ 官方安全守则 · 报告多处引用）</h3>
+<div style="background:var(--paper);padding:14px 18px;border-radius:6px;margin:10px 0;font-size:13.5px;line-height:1.8">
+  New Zealand Mountain Safety Council（MSC）官方 Land Safety Code 是每个 NZ 户外用户都被教育的 5 条黄金规则：
+  <ol style="margin:8px 0 0 20px">
+    <li><b>Plan your trip</b>——出发前查天气 / 步道状态 / 河流情况（对应 S61 天气 + S62 高山 + S65 路况标记）</li>
+    <li><b>Tell someone your plans and take ways to get help</b>——**告诉信任的人你的行程 + 带求救工具（PLB）**（对应 S63 行程告知机制）</li>
+    <li><b>Be aware of the weather</b>——出发中天气变化警觉（对应 S62 Get home-itis 反常识提醒）</li>
+    <li><b>Know your limits</b>——认知自己能力边界（对应 S64 匿名前辈建议 + 新手焦虑主题 #1 解决方案）</li>
+    <li><b>Take sufficient supplies</b>——带够食物水衣（对应 S64 装备提示 gear tip marker · 承接痛点 #2）</li>
+  </ol>
+  Cairn 13 Sprint plan 精确对齐 MSC 5 项——这是<b>产品合法性来源</b>，也是与 DOC/MSC 合作探索（S70）的基础。
+</div>
+
+<h3 style="color:var(--brown);margin-top:32px">3 个决策 Gate</h3>
+<ol style="margin-left:22px;font-size:14px;line-height:1.75">
+  <li><b>Gate 1（S60b 末 · 08-15）</b>：清理阶段完成 + 关键 Bug 全修完 + 测试基线全绿？（S60 拆 S60a+S60b）</li>
+  <li><b>Gate 2（S67 末 · 11-21）</b>：三大灵魂词落地了吗？Cairn ≠ Fog of World 能证明吗？</li>
+  <li><b>Gate 3（S70 末 · 2027-01-02）</b>：MSC 或 DOC 至少"不反对"？敌意 → 暂缓上线</li>
+</ol>
+
+<h3 style="color:var(--brown);margin-top:32px">Cairn 测试塔 · L1-L7（基于现有工具）</h3>
+<table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--paper);margin:10px 0">
+  <thead><tr style="background:var(--cream)">
+    <th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--accent)">层</th>
+    <th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--accent)">测试类型</th>
+    <th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--accent)">现有工具</th>
+    <th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--accent)">状态</th>
+    <th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--accent)">谁做</th>
+  </tr></thead>
+  <tbody>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)">L1</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">单元</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">jest-expo（23 前端测试）</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--yellow)">△ 前端有，<b>backend 空 → S60a 首任务补齐</b></td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">AI</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)">L2</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">Web E2E</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">playwright + <code>__cairnStores</code> hook + <code>navigationRef</code></td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--green)">✓ 就绪</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">AI</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)">L3</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">后端 API replay</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)"><code>replay-session-191.js</code> 到 aliyun 真后端</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--green)">✓ 就绪</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">AI</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)">L4</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">GPS 合成回放</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)"><code>gen-pudong-lujiazui-trace.js</code> + Mapbox snap</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--yellow)">△ 需扩 NZ preset</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">AI（S60 首 1 天扩）</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)">L5</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">Web 视觉</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">playwright + mapboxAdapter.web.tsx（真 mapbox-gl-js）</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--green)">✓ 就绪</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">AI</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)">L6</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">iOS 真机功能</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">上海 TestFlight + Xcode Simulate Location（GPX）</td><td style="padding:6px 10px;border-bottom:1px solid var(--line);color:var(--yellow)">△ 需 GPX 生成脚本</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">你（上海）</td></tr>
+    <tr><td style="padding:6px 10px">L7</td><td style="padding:6px 10px">iOS 真机户外</td><td style="padding:6px 10px">上海 + 朋友真跑</td><td style="padding:6px 10px;color:var(--brown-lite)">上线前 2 次</td><td style="padding:6px 10px">你 + 朋友</td></tr>
+  </tbody>
+</table>
+
+<h3 style="color:var(--brown);margin-top:32px">上海测 NZ 场景对应表</h3>
+<table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--paper);margin:10px 0">
+  <thead><tr style="background:var(--cream)">
+    <th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--accent)">上海场景</th>
+    <th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--accent)">对应 NZ 场景</th>
+    <th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--accent)">测什么</th>
+  </tr></thead>
+  <tbody>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)">世纪公园环线</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">Tongariro 起始 1km</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)"><b>只测</b> GPS 记录基本功能（世纪公园海拔差 &lt; 10m 平坦柏油道；Tongariro 起始 1km 已有 100m+ 高差，卫星几何/多路径干扰不同量级）<br><span style="color:var(--red);font-weight:600">⚠️ marker 精度需 NZ 真机 L7 才验，L6 上海无法代表</span></td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)">浦东南路 → 陆家嘴</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">长途 tramp 稳定性</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">30min 走线 + 暂停恢复 + snap-to-road</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)">崇明东滩</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">Fiordland 无信号</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">离线模式 + 回补上传</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid var(--line)">青浦淀山湖 4h 徒步</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">Great Walk 半日</td><td style="padding:6px 10px;border-bottom:1px solid var(--line)">耗电 &lt; 5%/h + memory_points 端到端</td></tr>
+    <tr><td style="padding:6px 10px">Xcode Simulate Location + gen-nz GPX</td><td style="padding:6px 10px">Tongariro 20.2km / Milford / Mt Holdsworth</td><td style="padding:6px 10px">高海拔差 + 河流断点 + 迷路自救</td></tr>
+  </tbody>
+</table>
+
+<h3 style="color:var(--brown);margin-top:32px">已知报告局限 · 二次深读补充</h3>
+<div style="background:var(--paper);padding:14px 18px;border-radius:6px;margin:10px 0;font-size:13.5px;line-height:1.75">
+  4-eye 深度审查发现以下细节，报告已知但为控制篇幅不展开，标记"实施时决策"：
+  <ol style="margin:8px 0 0 20px">
+    <li><b>S60a 后 Bug 修复的测试策略</b>：先写"期望态测试"（红测），S60b 修完 Bug 让测试变绿——作为回归防线，防止未来改动破坏刚修好的行为。</li>
+    <li><b>Sprint 编号统一</b>：报告有两处 Sprint 编号系统（§9 抽象的 Sprint N/N+1、§14 具体的 S60a-S71）。<b>以 §14 为准</b>。Crosslink：Sprint N = S60a+S60b（清理阶段）；Sprint N+1 = S61-S64（战略落地）；Sprint N+2 = S65-S67（陌生人善意）；Sprint N+3 = S68-S71（发布准备）</li>
+    <li><b>三宣言全文</b>（S60a 落地页 + S69 首用户体验共同承接）：
+      <ol style="margin:4px 0 0 20px">
+        <li>Cairn 默认私密 —— 永远不做公开 feed / 点赞排行</li>
+        <li>你的数据永远可以免费下载走</li>
+        <li>AI 只用于安全过滤（挡色情/暴力），不训练你的数据，可永久关闭</li>
+      </ol>
+      S60a 改 <code>docs/marketing/landing.html</code> + App Store 描述；S69 在 App 首次打开屏 + About 页展示（三处一致）。
+    </li>
+    <li><b>上线日 vs S71 边界</b>：S71 收尾 2027-01-16 · 上线 01-19 · 春节 01-24。中间 3 天为"上线周护航"（作者待命修问题，无新代码）。发现严重问题立即 hotfix，否则被动观察。</li>
+    <li><b>真机测试策略</b>：S62 高山火山无法上海 mock —— <b>提前招募 NZ 内测者</b>（不能等 S69）。S68 4h 耗电和地形无关，青浦淀山湖代表。S63 无信号崇明东滩代表。</li>
+  </ol>
+</div>
+
+<div style="margin-top:30px;padding:14px 18px;background:rgba(126,160,101,0.1);border-left:4px solid var(--green);border-radius:4px;font-size:13px;color:var(--brown-lite)">
+  <b>本节数据文件</b>：
+  <br>· <code>raw/reddit_outdoor.jsonl</code>（4,847 条 Reddit 户外原声）
+  <br>· <code>raw/reddit_picked_translated_v2.json</code>（24 条 quote 中英对照，见上方 modal）
+  <br>· <code>raw/nz_official.jsonl</code>（28 条 NZ 官方硬事实）
+  <br>· <code>raw/reddit_theme_classification.json</code>（可复现的痛点分类脚本产出）
+</div>
+</div>
+
+</section>
+
+</main>
+
+<!-- Modal for quote detail -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <h3 id="m-id"></h3>
+    <div class="meta" id="m-meta"></div>
+    <div style="display:flex;gap:6px;margin:12px 0 8px">
+      <button id="tab-zh" onclick="switchTab('zh')" style="padding:6px 14px;border:1px solid var(--line);border-radius:4px 4px 0 0;background:var(--accent);color:#fff;cursor:pointer;font-weight:600">翻译 (中文)</button>
+      <button id="tab-en" onclick="switchTab('en')" style="padding:6px 14px;border:1px solid var(--line);border-radius:4px 4px 0 0;background:var(--paper);color:var(--brown-lite);cursor:pointer">原文</button>
+    </div>
+    <div class="raw" id="m-raw"></div>
+    <div id="m-url-wrap" style="margin-top:12px"><a id="m-url" href="#" target="_blank" rel="noopener">→ 打开原网页</a><span id="m-url-note" style="color:var(--brown-lite);font-size:12px;margin-left:8px"></span></div>
+  </div>
+</div>
+
+<script src="final_report_data_v2.js"></script>
+<script src="reddit_quotes_data.js"></script>
+<script>
+const D = window.CAIRN_DATA;
+const RQ = window.REDDIT_QUOTES || {};
+document.getElementById("stat-total").textContent = D.stats.total_records.toLocaleString();
+document.getElementById("stat-cited").textContent = D.stats.cited_ids_count;
+
+function scoreClass(s){ return "h"+s; }
+function prioBadge(p){
+  if(p==="high") return '<span class="badge badge-high">高优先</span>';
+  if(p==="medium") return '<span class="badge badge-med">中优先</span>';
+  return '<span class="badge badge-low">低优先</span>';
+}
+
+// Heatmap (both preview and full — identical)
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function buildHeat(elId){
+  const el = document.getElementById(elId);
+  el.innerHTML = D.themes.map((t,i)=>{
+    return `<div class="heat-cell ${scoreClass(t.offset)}" data-idx="${i}" data-code="${t.code}" role="button" tabindex="0" aria-label="${escapeHtml(t.code)} ${escapeHtml(t.title)}">
+      <div class="heat-code">${t.code}</div>
+      <div class="heat-score">${t.offset}</div>
+      <div class="heat-detail">
+        <div class="heat-title">${escapeHtml(t.title)}</div>
+        <div class="heat-row"><b>用户真实需要什么</b>${escapeHtml(t.need)}</div>
+        <div class="heat-row"><b>Cairn 目前的状态</b>${escapeHtml(t.state)}</div>
+        <div class="heat-row"><b>建议动作</b>${escapeHtml(t.action)}</div>
+      </div>
+    </div>`;
+  }).join("");
+  bindHeatClicks(el);
+}
+
+// Track expanded cell's original grid slot rect (relative to container)
+const heatState = new WeakMap();
+
+function bindHeatClicks(container){
+  container.addEventListener('click', e => {
+    const cell = e.target.closest('.heat-cell');
+    if (!cell) return;
+    // Any click on the expanded cell → collapse (user asked: 再点一次自动缩小)
+    if (cell.classList.contains('expanded')) {
+      collapseHeat(container);
+      return;
+    }
+    // Click on a different cell while one is expanded → collapse the current one
+    // (do NOT immediately expand the new one; user needs one click to close,
+    //  then another to open new — clearer intent, avoids animation collision)
+    const currentExpanded = container.querySelector('.heat-cell.expanded');
+    if (currentExpanded) {
+      collapseHeat(container);
+      return;
+    }
+    // Fresh expansion
+    expandHeat(container, cell);
+  });
+  // ESC key still supported (accessibility)
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && container.classList.contains('has-expanded')) {
+      collapseHeat(container);
+    }
+  });
+  // Click outside container — collapse
+  document.addEventListener('click', e => {
+    if (!container.classList.contains('has-expanded')) return;
+    if (container.contains(e.target)) return;
+    collapseHeat(container);
+  });
+}
+
+function expandHeat(container, cell) {
+  // Cache the cell's original grid position (relative to container) BEFORE any state change.
+  const cellRect0 = cell.getBoundingClientRect();
+  const containerRect0 = container.getBoundingClientRect();
+  const originRelative = {
+    left: cellRect0.left - containerRect0.left,
+    top:  cellRect0.top  - containerRect0.top,
+    width: cellRect0.width,
+    height: cellRect0.height
+  };
+  heatState.set(cell, originRelative);
+  // Lock container to at least a big-card height (page layout won't jump)
+  const targetHeight = Math.min(Math.max(360, containerRect0.width * 0.62), window.innerHeight - 80);
+  // Use the LARGER of current container height and targetHeight — never shrink the container
+  const lockedHeight = Math.max(containerRect0.height, targetHeight);
+  container.style.minHeight = lockedHeight + 'px';
+  // Enter expanded state: cell becomes position:absolute inset:0 → fills container
+  container.classList.add('has-expanded');
+  cell.classList.add('expanded');
+  // Now measure the ACTUAL expanded rect (this is the "last" state in FLIP)
+  const cellRectFull = cell.getBoundingClientRect();
+  // Invert: scale from full rect back to origin rect
+  const scaleX = originRelative.width  / cellRectFull.width;
+  const scaleY = originRelative.height / cellRectFull.height;
+  const containerRect1 = container.getBoundingClientRect();
+  const dx = (cellRect0.left - containerRect1.left) - (cellRectFull.left - containerRect1.left);
+  const dy = (cellRect0.top  - containerRect1.top)  - (cellRectFull.top  - containerRect1.top);
+  cell.style.transformOrigin = 'top left';
+  cell.style.transform = `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})`;
+  cell.style.transition = 'none';
+  // Force reflow to commit the inverted state before animating to identity
+  cell.getBoundingClientRect();
+  requestAnimationFrame(() => {
+    cell.style.transition = 'transform 0.38s cubic-bezier(0.2, 0.85, 0.25, 1)';
+    cell.style.transform = 'translate(0, 0) scale(1, 1)';
+  });
+  const cleanup = (e) => {
+    if (e && e.propertyName && e.propertyName !== 'transform') return;
+    cell.style.transition = '';
+    cell.style.transform = '';
+    cell.style.transformOrigin = '';
+    cell.removeEventListener('transitionend', cleanup);
+  };
+  cell.addEventListener('transitionend', cleanup);
+}
+
+function collapseHeat(container) {
+  const expanded = container.querySelector('.heat-cell.expanded');
+  if (!expanded) return;
+  // KEY: do NOT remove .has-expanded until AFTER the fade-out completes.
+  // Removing it early causes the cell (still .expanded, no longer .has-expanded scoping)
+  // to snap to grid-item position:relative with aspect-ratio:auto → balloons to natural size.
+  //
+  // Simple crossfade:
+  //   1) Fade the expanded cell to transparent while it still fills the container
+  //   2) When fade completes: remove .expanded AND .has-expanded in the same frame
+  //      (other 23 cells fade back in via CSS transition, container min-height released)
+  expanded.style.transition = 'opacity 0.28s ease-out';
+  expanded.style.opacity = '0';
+  const done = (e) => {
+    if (e && e.propertyName && e.propertyName !== 'opacity') return;
+    expanded.removeEventListener('transitionend', done);
+    // Cell is now fully transparent → safe to change layout without visible flash
+    expanded.classList.remove('expanded');
+    container.classList.remove('has-expanded');
+    container.style.transition = 'min-height 0.32s ease';
+    container.style.minHeight = '';
+    // Restore opacity (cell is back in grid slot at 102x102, invisible-then-visible)
+    expanded.style.opacity = '';
+    // Clean up transition rules so hover works again
+    setTimeout(() => {
+      expanded.style.transition = '';
+      container.style.transition = '';
+    }, 50);
+    heatState.delete(expanded);
+  };
+  expanded.addEventListener('transitionend', done);
+  setTimeout(() => {
+    if (expanded.classList.contains('expanded')) done();
+  }, 500);
+}
+
+buildHeat("heat-preview");
+buildHeat("heat-full");
+
+// Theme cards per Q
+function renderThemes(){
+  ["Q1","Q2","Q3","Q4","Q5"].forEach(q=>{
+    const el = document.getElementById(q.toLowerCase()+"-themes");
+    const list = D.themes.filter(t=>t.q===q);
+    el.innerHTML = list.map(t=>{
+      const quotes = t.cites.map(id=>`<span class="quote-btn" onclick="showQuote('${id}')">[${id}]</span>`).join(" ");
+      return `<div class="theme of-${t.offset}">
+        <div class="theme-head">
+          <div class="theme-title">${t.code} · ${t.title}</div>
+          <div class="theme-score">${t.offset}</div>
+        </div>
+        <div class="theme-body">
+          <div><b>用户真实需要什么</b>：${t.need}</div>
+          <div><b>Cairn 目前的状态</b>：${t.state}</div>
+          <div><b>建议动作</b>：${prioBadge(t.prio)} ${t.action}</div>
+          <div class="quotes"><b>真实用户原话（点击展开）</b>：${quotes}</div>
+        </div>
+      </div>`;
+    }).join("");
+  });
+}
+renderThemes();
+
+// Strategies
+function renderStrats(){
+  const el = document.getElementById("strat-list");
+  el.innerHTML = D.strategies.map(s=>{
+    const cls = s.level==="CRITICAL" ? "" : "high";
+    const acts = s.actions.map(a=>`<li>${a}</li>`).join("");
+    const cites = s.cites.map(id=>`<span class="quote-btn" onclick="showQuote('${id}')">[${id}]</span>`).join(" ");
+    return `<div class="strat ${cls}">
+      <h3>战略 ${s.n} · <span class="badge ${s.level==='CRITICAL'?'badge-high':'badge-med'}">${s.level==='CRITICAL'?'最优先':'次优先'}</span> ${s.title}</h3>
+      <p><b>为什么这么定</b>：${s.why}</p>
+      <p><b>具体做什么</b>：</p>
+      <ul>${acts}</ul>
+      <p style="margin-top:8px"><b>用户原话支撑</b>：${cites}</p>
+    </div>`;
+  }).join("");
+}
+renderStrats();
+
+// Biz model
+document.getElementById("biz-principle").textContent = D.biz_model.principle;
+document.getElementById("biz-rec").textContent = D.biz_model.recommendation;
+document.getElementById("biz-anchors").innerHTML = D.biz_model.anchors.map(a=>`
+  <div class="biz-a">
+    <div class="biz-a-app">${a.app}</div>
+    <div class="biz-a-price">${a.price}</div>
+    <div style="font-size:13px;color:var(--brown-lite)">${a.note}</div>
+  </div>`).join("");
+document.getElementById("biz-warn").innerHTML = "<b>❌ 绝对禁止</b><ul>"+D.biz_model.warnings.map(w=>`<li>${w}</li>`).join("")+"</ul>";
+
+// Appendix table with lazy load
+const CHUNK = 200;
+let appVisible = 0;
+let appFiltered = D.appendix;
+
+function fillAppendixFilters(){
+  const cats = [...new Set(D.appendix.map(r=>r.cat))].filter(Boolean).sort();
+  const srcs = [...new Set(D.appendix.map(r=>r.src))].filter(Boolean).sort();
+  const catEl = document.getElementById("app-cat");
+  const srcEl = document.getElementById("app-src");
+  cats.forEach(c=>{ const o=document.createElement("option");o.value=c;o.textContent=c;catEl.appendChild(o); });
+  srcs.forEach(s=>{ const o=document.createElement("option");o.value=s;o.textContent=s;srcEl.appendChild(o); });
+}
+fillAppendixFilters();
+
+function applyFilter(){
+  const q = document.getElementById("app-search").value.toLowerCase().trim();
+  const c = document.getElementById("app-cat").value;
+  const s = document.getElementById("app-src").value;
+  const i = document.getElementById("app-int").value;
+  const cr = document.getElementById("app-cr").value;
+  appFiltered = D.appendix.filter(r=>{
+    if(c && r.cat!==c) return false;
+    if(s && r.src!==s) return false;
+    if(i && String(r.int)!==i) return false;
+    if(cr && String(r.cr)!==cr) return false;
+    if(q){
+      const hay = (r.id+" "+(r.q||"")).toLowerCase();
+      if(hay.indexOf(q)===-1) return false;
+    }
+    return true;
+  });
+  appVisible = 0;
+  document.getElementById("appendix-body").innerHTML = "";
+  loadMore();
+}
+
+function loadMore(){
+  const body = document.getElementById("appendix-body");
+  const slice = appFiltered.slice(appVisible, appVisible+CHUNK);
+  slice.forEach(r=>{
+    const tr = document.createElement("tr");
+    tr.onclick = ()=>showQuote(r.id);
+    tr.innerHTML = `<td>${r.id}</td><td>${r.src}</td><td>${r.cat}</td><td>${r.int}</td><td>${r.cr}</td><td>${r.rate||""}</td><td>${r.at}</td><td>${(r.q||"").replace(/</g,"&lt;")}</td>`;
+    body.appendChild(tr);
+  });
+  appVisible += slice.length;
+  document.getElementById("appendix-count").textContent =
+    `显示 ${appVisible} / ${appFiltered.length} (总 ${D.appendix.length})`;
+  document.getElementById("app-more").style.display = (appVisible<appFiltered.length)?"":"none";
+}
+document.getElementById("app-more").onclick = loadMore;
+["app-search","app-cat","app-src","app-int","app-cr"].forEach(id=>{
+  document.getElementById(id).addEventListener("input", applyFilter);
+  document.getElementById(id).addEventListener("change", applyFilter);
+});
+applyFilter();
+
+// Modal
+function showQuote(id){
+  const c = D.citations[id];
+  const meta = D.appendix.find(r=>r.id===id);
+  document.getElementById("m-id").textContent = "["+id+"]";
+  let full = c;
+  if(!full || !full.raw_quote){
+    // fall back to appendix preview
+    if(meta){
+      full = {id:id, source:meta.src, category_primary:meta.cat, intensity:meta.int,
+        cairn_relevance:meta.cr, rating:meta.rate, language:meta.lang, captured_at:meta.at,
+        raw_quote:(meta.q||"(preview only — full text not loaded)"), source_url:""};
+    } else {
+      full = {id:id, raw_quote:"(id not found in dataset — likely a manual reference)"};
+    }
+  }
+  const rows = [
+    ["Source", full.source||""],
+    ["App / Region", (full.app_slug||"")+" / "+(full.region||"")],
+    ["Author", full.author||""],
+    ["Captured", full.captured_at||""],
+    ["Category", full.category_primary||""],
+    ["Intensity", full.intensity??""],
+    ["Cairn relevance", full.cairn_relevance??""],
+    ["Language", full.language||""],
+    ["Rating", full.rating??""],
+  ];
+  document.getElementById("m-meta").innerHTML = rows.map(([k,v])=>`<b>${k}</b><div>${v}</div>`).join("");
+  // Store both versions for tab switching
+  window._modalEn = full.raw_quote || "(empty)";
+  window._modalZh = full.translation_zh || full.raw_quote || "(暂无翻译)";
+  // Default: show Chinese (translation preferred for CN user)
+  switchTab('zh');
+  const urlEl = document.getElementById("m-url");
+  const urlNote = document.getElementById("m-url-note");
+  const urlWrap = document.getElementById("m-url-wrap");
+  if(full.source_url){
+    urlEl.href = full.source_url;
+    urlWrap.style.display="";
+    // Detect App Store URL → cannot jump to specific review
+    if(full.source_url.indexOf("apps.apple.com") >= 0){
+      urlEl.textContent = "→ 打开 App Store 页面";
+      urlNote.textContent = "(注意:iTunes RSS 无法定位到具体评论,仅跳到 App 首页。评论 id 和文本已完整保存在此)";
+    } else if(full.source_url.indexOf("reddit") >= 0 || full.source_url.indexOf("safereddit") >= 0){
+      urlEl.textContent = "→ 打开 Reddit 原帖";
+      urlNote.textContent = "";
+    } else if(full.source_url.indexOf("trustpilot") >= 0){
+      urlEl.textContent = "→ 打开 Trustpilot 页面";
+      urlNote.textContent = "(注意:分页链接,可能需要翻页找到具体评论)";
+    } else {
+      urlEl.textContent = "→ 打开原网页";
+      urlNote.textContent = "";
+    }
+  }
+  else { urlWrap.style.display="none"; }
+  document.getElementById("modal-bg").classList.add("show");
+}
+function switchTab(lang){
+  const raw = document.getElementById("m-raw");
+  const tabZh = document.getElementById("tab-zh");
+  const tabEn = document.getElementById("tab-en");
+  if(lang === "zh"){
+    raw.textContent = window._modalZh;
+    tabZh.style.background = "var(--accent)"; tabZh.style.color = "#fff"; tabZh.style.fontWeight = "600";
+    tabEn.style.background = "var(--paper)"; tabEn.style.color = "var(--brown-lite)"; tabEn.style.fontWeight = "400";
+  } else {
+    raw.textContent = window._modalEn;
+    tabEn.style.background = "var(--accent)"; tabEn.style.color = "#fff"; tabEn.style.fontWeight = "600";
+    tabZh.style.background = "var(--paper)"; tabZh.style.color = "var(--brown-lite)"; tabZh.style.fontWeight = "400";
+  }
+}
+function closeModal(){ document.getElementById("modal-bg").classList.remove("show"); }
+document.getElementById("modal-bg").addEventListener("click", e=>{ if(e.target.id==="modal-bg") closeModal(); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });
+
+// ═══════════ Tier 3 · Reddit 户外原声 modal ═══════════
+const REDDIT_THEME_LABELS = {
+  beginner: '新手焦虑 / 求建议',
+  gear: '装备失败',
+  weather: '天气 / 失温',
+  solo_fear: '独行恐惧',
+  river: '渡河 / 洪水',
+  lost: '迷路',
+  rescue: '救援 / SAR',
+  plan_gear_advice: '出发前装备咨询',
+  injury: '受伤',
+};
+const REDDIT_TIER3_KEEP = new Set([
+  'rd_newzealand_0577','rd_backpacking_0304','rd_hiking_0281',
+  'rd_CampingandHiking_0445','rd_backpacking_0741','rd_backpacking_0429',
+  'rd_CampingandHiking_0427','rd_hiking_0700','rd_CampingandHiking_0172',
+  'rd_newzealand_0254','rd_hiking_0953','rd_tramping_0191',
+  'rd_CampingandHiking_0062','rd_backpacking_0508',
+  'rd_CampingandHiking_0553','rd_backpacking_1023','rd_CampingandHiking_1064',
+  'rd_newzealand_0016','rd_hiking_1188','rd_hiking_1137',
+]);
+
+function renderTier3Quotes(){
+  const list = document.getElementById("tier3-quotes-list");
+  if(!list) return;
+  const byTheme = {};
+  Object.values(RQ).forEach(q=>{
+    if(!REDDIT_TIER3_KEEP.has(q.id)) return;  // 剔除明显误分类
+    if(!byTheme[q.theme]) byTheme[q.theme] = [];
+    byTheme[q.theme].push(q);
+  });
+  const order = ['beginner','weather','solo_fear','river','lost','gear','plan_gear_advice'];
+  let html = '';
+  for(const theme of order){
+    const lst = byTheme[theme];
+    if(!lst || !lst.length) continue;
+    const label = REDDIT_THEME_LABELS[theme] || theme;
+    html += `<div style="margin:14px 0"><div style="font-weight:600;color:var(--brown);margin-bottom:6px">${label}（${lst.length}）</div>`;
+    html += lst.map(q => {
+      const title = (q.title_zh || q.post_title || '').slice(0, 60);
+      return `<div style="display:inline-block;margin:3px 6px 3px 0"><span class="quote-btn" onclick="showRedditQuote('${q.id}')" style="cursor:pointer">[${q.id}]</span> <span style="font-size:13px;color:var(--text2);vertical-align:middle">${title}${q.upvotes>0?` · ↑${q.upvotes}`:''}</span></div>`;
+    }).join("");
+    html += `</div>`;
+  }
+  list.innerHTML = html;
+}
+
+function showRedditQuote(id){
+  const q = RQ[id];
+  if(!q){ console.warn('Missing Reddit quote', id); return; }
+  const modal = document.querySelector("#modal-bg .modal");
+  const themeName = REDDIT_THEME_LABELS[q.theme] || q.theme;
+  const upvotesHtml = q.upvotes > 0 ? `<b>Upvotes</b> <span>↑ ${q.upvotes}</span>` : '';
+  const urlHtml = q.post_url ? `<b>原贴</b> <span><a href="${q.post_url}" target="_blank" rel="noopener" style="color:var(--accent)">${q.post_url}</a></span>` : '';
+  modal.innerHTML = `
+    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <h3>[${q.id}]</h3>
+    <div class="meta">
+      <b>Subreddit</b> <span>r/${q.subreddit}</span>
+      <b>主题</b> <span>${themeName}</span>
+      ${upvotesHtml}
+      ${urlHtml}
+    </div>
+    <div class="tabs" style="display:flex;gap:2px;margin:14px 0 0;border-bottom:2px solid var(--line)">
+      <button class="tab-btn tab-active" data-tab="zh" onclick="switchRedditTab(this,'zh')" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:4px 4px 0 0;cursor:pointer;font-size:13px">翻译 (中文)</button>
+      <button class="tab-btn" data-tab="en" onclick="switchRedditTab(this,'en')" style="padding:8px 16px;background:var(--cream);color:var(--text2);border:none;border-radius:4px 4px 0 0;cursor:pointer;font-size:13px">原文 (English)</button>
+    </div>
+    <div id="reddit-tab-zh" style="display:block">
+      <div style="font-weight:600;font-size:15px;margin:14px 0 8px;color:var(--brown)">${q.title_zh || q.post_title}</div>
+      <div class="raw" style="white-space:pre-wrap">${(q.translation_zh || '(未翻译)').replace(/</g,'&lt;')}</div>
+    </div>
+    <div id="reddit-tab-en" style="display:none">
+      <div style="font-weight:600;font-size:15px;margin:14px 0 8px;color:var(--brown)">${q.post_title}</div>
+      <div class="raw" style="white-space:pre-wrap">${(q.raw_quote || '').replace(/</g,'&lt;')}</div>
+    </div>
+  `;
+  document.getElementById("modal-bg").classList.add("show");
+}
+
+function switchRedditTab(btn, tab){
+  const btns = btn.parentElement.querySelectorAll('.tab-btn');
+  btns.forEach(b => {
+    if(b.dataset.tab === tab){
+      b.classList.add('tab-active');
+      b.style.background = 'var(--accent)';
+      b.style.color = '#fff';
+    } else {
+      b.classList.remove('tab-active');
+      b.style.background = 'var(--cream)';
+      b.style.color = 'var(--text2)';
+    }
+  });
+  document.getElementById('reddit-tab-zh').style.display = tab === 'zh' ? 'block' : 'none';
+  document.getElementById('reddit-tab-en').style.display = tab === 'en' ? 'block' : 'none';
+}
+
+renderTier3Quotes();
+
+// Theme sync with parent (feature-map) — 融入 dark mode
+(function(){
+  function applyTheme(mode){
+    // parent uses 'light-mode' class for light theme; absence = dark
+    if(mode === 'dark'){
+      document.documentElement.classList.add('dark-mode');
+    } else {
+      document.documentElement.classList.remove('dark-mode');
+    }
+  }
+  // 1. Try localStorage first (same key as parent 'cairn-theme')
+  try {
+    var t = localStorage.getItem('cairn-theme');
+    applyTheme(t === 'light' ? 'light' : 'dark');
+  } catch(e) { applyTheme('dark'); }
+  // 2. Ask parent via postMessage
+  if(window.parent !== window){
+    try { window.parent.postMessage({type:'request-theme'}, '*'); } catch(e){}
+  }
+  // 3. Listen for parent theme change
+  window.addEventListener('message', function(e){
+    if(e.data && e.data.type === 'theme'){
+      applyTheme(e.data.mode);
+    }
+  });
+  // 4. Poll localStorage every 500ms in case parent updated it
+  var lastTheme = localStorage.getItem('cairn-theme');
+  setInterval(function(){
+    try {
+      var cur = localStorage.getItem('cairn-theme');
+      if(cur !== lastTheme){
+        lastTheme = cur;
+        applyTheme(cur === 'light' ? 'light' : 'dark');
+      }
+    } catch(e){}
+  }, 500);
+})();
+</script>
+</body>
+</html>

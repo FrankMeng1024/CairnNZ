@@ -1,0 +1,22 @@
+{
+  "captured": "2026-07-20",
+  "source": "Playwright web runtime · fetch hook · 11 screens visited",
+  "screens_visited": ["Home","Hiking","Running","Map","Routes","Friends","Memory","MapHistory","Plant","Settings","MarkerDetail"],
+  "total_api_calls": 182,
+  "unique_endpoints": 12,
+  "endpoints": {
+    "POST /api/edit-diag": 155,
+    "GET /api/routes": 3,
+    "GET /api/memory-subscriptions": 2,
+    "GET /api/auth/me": 1,
+    "GET /api/markers": 1,
+    "GET /api/sessions": 1,
+    "GET /api/circle/markers": 1,
+    "GET /api/friends": 1,
+    "GET /api/friends/requests": 1,
+    "GET /api/circle/fog": 1,
+    "GET /api/memory/points": 1,
+    "GET /api/sessions/:id": 1
+  },
+  "note": "web runtime capture. Native-only or triggered-by-user-action endpoints (like POST /api/sessions/start when starting hike) may not appear here - use nginx log as complement."
+}

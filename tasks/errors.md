@@ -70,3 +70,5 @@ DO NOT discard the commits.
 - git push origin master → github.com:443 timeout (企业网络间歇)
 - EAS Update 已 published (Update group d9eafbd1-2c43-4210-aa2b-a82114d254f1)
 - 下次 commit 前重推,commit 会 accumulate
+2026-07-08T15:05:10+08:00: v412 OTA git push origin master 失败, GitHub 443 timeout. Commit c3bf10c 已本地存, 待网络恢复重试。
+2026-07-08T19:01:35+08:00: v414 (dbbe9d6) git push failed - GitHub 443 unreachable. Commit local, waiting network to retry.

@@ -1,0 +1,80 @@
+{
+  "total_files": 183,
+  "reachable": 140,
+  "dead": 43,
+  "dead_by_dir": {
+    "modules/cairn-fog-layer": [
+      "modules/cairn-fog-layer/src/index.ts"
+    ],
+    "playwright.cleanup-baseline.config.ts": [
+      "playwright.cleanup-baseline.config.ts"
+    ],
+    "playwright.config.ts": [
+      "playwright.config.ts"
+    ],
+    "playwright.sprint72.config.ts": [
+      "playwright.sprint72.config.ts"
+    ],
+    "src/components/ActivityIcons": [
+      "src/components/ActivityIcons/FlagMarkerIcon.tsx",
+      "src/components/ActivityIcons/HikingIcon.tsx",
+      "src/components/ActivityIcons/RunningIcon.tsx"
+    ],
+    "src/components": [
+      "src/components/AimShutter.tsx",
+      "src/components/CairnStoneIcon.tsx",
+      "src/components/DistantMarkerArrow.tsx",
+      "src/components/ErrorBoundary.tsx"
+    ],
+    "src/components/Illustrations": [
+      "src/components/Illustrations/EmptyFriends.tsx",
+      "src/components/Illustrations/EmptyMarkers.tsx",
+      "src/components/Illustrations/EmptyRoutes.tsx"
+    ],
+    "src/components/trails": [
+      "src/components/trails/ActivityBigCard.tsx",
+      "src/components/trails/LeaveCairnCard.tsx",
+      "src/components/trails/RecentActivityRow.tsx",
+      "src/components/trails/TrailsHeader.tsx"
+    ],
+    "src/config": [
+      "src/config/fonts.ts",
+      "src/config/i18n.ts",
+      "src/config/routeThresholds.ts",
+      "src/config/trackDifficulty.ts"
+    ],
+    "src/features": [
+      "src/features/memory/services/fogFloorGeometry.ts"
+    ],
+    "src/hooks": [
+      "src/hooks/useBackFade.ts",
+      "src/hooks/useLikeReport.ts"
+    ],
+    "src/services": [
+      "src/services/contentFilter.ts",
+      "src/services/routing/mapmatch/coordSampling.ts"
+    ],
+    "src/stubs": [
+      "src/stubs/mapbox.web.ts"
+    ],
+    "src/utils": [
+      "src/utils/offRoute.ts"
+    ],
+    "tests": [
+      "tests/cleanup-baseline/all-screens.spec.ts",
+      "tests/sprint71/friend-system-v4-scenarios.spec.ts",
+      "tests/sprint72/helpers.ts",
+      "tests/sprint72/story-549-auto-login.spec.ts",
+      "tests/sprint72/story-550-refresh.spec.ts",
+      "tests/sprint72/story-551-unfinished-session.spec.ts",
+      "tests/sprint72/story-552-auto-pause.spec.ts",
+      "tests/sprint72/story-553-sampling-downgrade.spec.ts",
+      "tests/sprint72/story-554-flush-interval.spec.ts",
+      "tests/sprint72/story-555-hiking-refresh.spec.ts",
+      "tests/sprint72/story-556-hint.spec.ts",
+      "tests/sprint72/story-557-breadcrumb-hook.spec.ts",
+      "tests/sprint73/v404-cold-boot.spec.ts",
+      "tests/sprint74/v409-offline-reliability.spec.ts"
+    ]
+  }
+}
