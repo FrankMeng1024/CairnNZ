@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cairn — Plant Flow UI Mockup Comparison (2026-07-20)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: #ece4d3;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    color: #2a2620;
+    line-height: 1.45;
+  }
+  .page {
+    max-width: 1680px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+  h1 {
+    font-family: "Georgia", "Times New Roman", serif;
+    font-size: 32px;
+    font-weight: 600;
+    color: #3d4a2f;
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+  }
+  h1 .accent { color: #c88a2a; font-style: italic; }
+  .subhead {
+    color: #6a614e;
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+
+  /* ---- comparison table ---- */
+  .compare-table {
+    background: #f5efe4;
+    border: 1px solid #d6c9ac;
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 40px;
+    box-shadow: 0 2px 6px rgba(60, 50, 30, 0.06);
+  }
+  .compare-table h2 {
+    font-family: "Georgia", serif;
+    font-size: 18px;
+    color: #3d4a2f;
+    margin-bottom: 14px;
+    font-weight: 600;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  table th, table td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid #e5d9c0;
+    vertical-align: top;
+  }
+  table th {
+    background: #eaddc2;
+    font-weight: 600;
+    color: #3d4a2f;
+    font-family: "Georgia", serif;
+  }
+  table th:first-child { border-top-left-radius: 6px; }
+  table th:last-child { border-top-right-radius: 6px; }
+  table tr:last-child td { border-bottom: none; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .b-hi { background: #5d7c46; color: #fff; }
+  .b-md { background: #c88a2a; color: #fff; }
+  .b-lo { background: #b9a883; color: #fff; }
+
+  /* ---- direction sections ---- */
+  .direction {
+    margin-bottom: 56px;
+  }
+  .dir-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 8px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #5d7c46;
+  }
+  .dir-tag {
+    display: inline-block;
+    background: #5d7c46;
+    color: #f5efe4;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-family: "Georgia", serif;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    font-size: 14px;
+  }
+  .dir-title {
+    font-family: "Georgia", serif;
+    font-size: 22px;
+    color: #3d4a2f;
+    font-weight: 600;
+  }
+  .dir-subtitle {
+    color: #7a6f56;
+    font-size: 13px;
+    font-style: italic;
+  }
+  .dir-desc {
+    background: #f5efe4;
+    border-left: 3px solid #c88a2a;
+    padding: 12px 18px;
+    margin: 12px 0 20px;
+    font-size: 14px;
+    color: #4a4230;
+    border-radius: 0 6px 6px 0;
+  }
+  .dir-desc b { color: #3d4a2f; }
+  .nz-cell {
+    background: #eef2e6;
+    border: 1px solid #cddab9;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .nz-cell b { color: #5d7c46; }
+
+  /* ---- phone frames ---- */
+  .phone-row {
+    display: flex;
+    gap: 32px;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .phone-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .phone-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #7a6f56;
+    font-weight: 600;
+  }
+  .phone {
+    width: 375px;
+    height: 812px;
+    background: #f5efe4;
+    border: 8px solid #2a2620;
+    border-radius: 44px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 20px 40px rgba(60, 50, 30, 0.18), 0 4px 12px rgba(60, 50, 30, 0.1);
+  }
+  .notch {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 130px;
+    height: 26px;
+    background: #2a2620;
+    border-radius: 0 0 16px 16px;
+    z-index: 100;
+  }
+  .status-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 44px;
+    padding: 0 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 15px;
+    font-weight: 600;
+    color: #2a2620;
+    z-index: 50;
+  }
+  .status-bar .time { padding-left: 4px; }
+  .status-bar .icons { display: flex; gap: 6px; font-size: 13px; }
+
+  /* app header (nav) */
+  .nav {
+    position: absolute;
+    top: 44px;
+    left: 0; right: 0;
+    height: 52px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(245, 239, 228, 0.94);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(93, 124, 70, 0.15);
+    z-index: 40;
+  }
+  .nav .back {
+    color: #5d7c46;
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1;
+  }
+  .nav .title {
+    font-family: "Georgia", serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: #3d4a2f;
+  }
+  .nav .step {
+    font-size: 12px;
+    color: #7a6f56;
+    font-weight: 500;
+  }
+  .content {
+    position: absolute;
+    top: 96px;
+    left: 0; right: 0; bottom: 0;
+    overflow: hidden;
+  }
+
+  /* ============= CURRENT (baseline) ============= */
+  .cur-load {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 20px;
+  }
+  .cur-load .spinner {
+    width: 48px; height: 48px;
+    border: 4px solid #d6c9ac;
+    border-top-color: #5d7c46;
+    border-radius: 50%;
+    margin-bottom: 20px;
+  }
+  .cur-load .t {
+    font-size: 17px;
+    color: #3d4a2f;
+    margin-bottom: 8px;
+  }
+  .cur-load .s {
+    font-size: 13px;
+    color: #7a6f56;
+  }
+  .cur-load .bar {
+    width: 200px; height: 4px;
+    background: #d6c9ac;
+    border-radius: 2px;
+    margin-top: 32px;
+    overflow: hidden;
+    position: relative;
+  }
+  .cur-load .bar::after {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 60%;
+    background: #5d7c46;
+    border-radius: 2px;
+  }
+  .cur-map {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .cur-map .h {
+    padding: 16px 20px 8px;
+  }
+  .cur-map .h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #2a2620;
+    margin-bottom: 4px;
+  }
+  .cur-map .h2 {
+    font-size: 13px;
+    color: #7a6f56;
+  }
+  .cur-map .map {
+    flex: 1;
+    margin: 12px 16px;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #dfe6c9 0%, #c4d1a5 40%, #b8c893 100%);
+  }
+  .cur-map .map::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 30% 40%, rgba(93, 124, 70, 0.2) 0%, transparent 40%),
+      radial-gradient(ellipse at 70% 65%, rgba(200, 138, 42, 0.15) 0%, transparent 45%);
+  }
+  .pin-c {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -100%);
+    width: 32px; height: 40px;
+    filter: drop-shadow(0 3px 4px rgba(0,0,0,0.3));
+  }
+  .pin-c svg { width: 100%; height: 100%; }
+  .zoom-c {
+    position: absolute;
+    right: 12px; bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .zoom-c button {
+    width: 40px; height: 40px;
+    background: #f5efe4;
+    border: 1px solid #d6c9ac;
+    border-radius: 8px;
+    font-size: 20px;
+    font-weight: 500;
+    color: #3d4a2f;
+  }
+  .cur-map .empty-below {
+    height: 90px;
+    background: #f5efe4;
+  }
+  .cur-content .form {
+    padding: 20px;
+  }
+  .cur-content label {
+    display: block;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #7a6f56;
+    margin-bottom: 6px;
+    margin-top: 16px;
+    font-weight: 600;
+  }
+  .cur-content input, .cur-content textarea {
+    width: 100%;
+    background: #fff;
+    border: 1px solid #d6c9ac;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 15px;
+    color: #2a2620;
+    font-family: inherit;
+  }
+  .cur-content textarea { min-height: 80px; resize: none; }
+  .cur-content .vis {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .cur-content .vis .chip {
+    flex: 1;
+    padding: 8px 4px;
+    text-align: center;
+    background: #f5efe4;
+    border: 1px solid #d6c9ac;
+    border-radius: 20px;
+    font-size: 12px;
+    color: #4a4230;
+  }
+  .cur-content .vis .chip.on {
+    background: #5d7c46;
+    color: #fff;
+    border-color: #5d7c46;
+  }
+
+  /* ============= DIRECTION A: DOC Field Note ============= */
+  .a-bg { background: #f5efe4; }
+  .a-load {
+    height: 100%;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .a-illust {
+    height: 240px;
+    background: linear-gradient(180deg, #d9e5c1 0%, #c1d3a0 60%, #a5b881 100%);
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid #b0be8a;
+  }
+  .a-illust svg { width: 100%; height: 100%; }
+  .a-load-body {
+    padding: 24px 28px;
+    text-align: center;
+  }
+  .a-eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #c88a2a;
+    font-weight: 700;
+    margin-bottom: 10px;
+    font-family: "Georgia", serif;
+  }
+  .a-title {
+    font-family: "Georgia", serif;
+    font-size: 22px;
+    color: #3d4a2f;
+    font-weight: 600;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+  }
+  .a-title-alt {
+    font-size: 14px;
+    color: #7a6f56;
+    font-style: italic;
+    font-family: "Georgia", serif;
+  }
+  .a-subtitle {
+    font-size: 13px;
+    color: #7a6f56;
+    margin: 14px 0 20px;
+    line-height: 1.5;
+  }
+  .a-bar-wrap {
+    background: #eaddc2;
+    height: 3px;
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 0 20px 12px;
+  }
+  .a-bar-fill {
+    height: 100%;
+    width: 62%;
+    background: linear-gradient(90deg, #5d7c46, #7ea065);
+  }
+  .a-status {
+    font-size: 11px;
+    color: #7a6f56;
+    letter-spacing: 0.8px;
+    text-align: center;
+  }
+  .a-quote {
+    margin: 28px 24px 0;
+    padding: 14px 16px;
+    background: #eef2e6;
+    border-left: 3px solid #5d7c46;
+    border-radius: 0 6px 6px 0;
+    font-family: "Georgia", serif;
+    font-style: italic;
+    font-size: 13.5px;
+    color: #3d4a2f;
+    line-height: 1.55;
+  }
+  .a-quote .attr {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    letter-spacing: 1.2px;
+    color: #7a6f56;
+    text-transform: uppercase;
+    font-style: normal;
+  }
+
+  .a-map { height: 100%; display: flex; flex-direction: column; }
+  .a-map-h { padding: 14px 20px 10px; }
+  .a-map-eyebrow {
+    font-family: "Georgia", serif;
+    font-size: 11px;
+    color: #c88a2a;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .a-map-title {
+    font-family: "Georgia", serif;
+    font-size: 20px;
+    color: #3d4a2f;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .a-map-sub {
+    font-size: 12.5px;
+    color: #7a6f56;
+    line-height: 1.4;
+  }
+  .a-map-view {
+    flex: 1;
+    margin: 8px 16px 12px;
+    border-radius: 14px;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #dfe6c9 0%, #c4d1a5 40%, #b8c893 100%);
+    box-shadow: inset 0 0 0 1px rgba(93, 124, 70, 0.15);
+  }
+  .a-map-view::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 25% 30%, rgba(93, 124, 70, 0.25) 0%, transparent 40%),
+      radial-gradient(ellipse at 75% 70%, rgba(200, 138, 42, 0.18) 0%, transparent 45%),
+      radial-gradient(ellipse at 50% 50%, rgba(139, 105, 66, 0.1) 0%, transparent 60%);
+  }
+  .contour {
+    position: absolute;
+    inset: 0;
+    opacity: 0.35;
+  }
+  .a-badges {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .a-badge {
+    background: rgba(245, 239, 228, 0.95);
+    border: 1px solid rgba(93, 124, 70, 0.3);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 11px;
+    color: #3d4a2f;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+  }
+  .a-badge .dot {
+    width: 6px; height: 6px;
+    background: #5d7c46;
+    border-radius: 50%;
+  }
+  .a-lnt {
+    padding: 12px 20px 16px;
+    background: #f5efe4;
+    border-top: 1px solid #eaddc2;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .a-lnt .icon {
+    width: 28px; height: 28px;
+    background: #eef2e6;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 15px;
+  }
+  .a-lnt .txt {
+    font-size: 12px;
+    color: #4a4230;
+    font-family: "Georgia", serif;
+    font-style: italic;
+    line-height: 1.5;
+  }
+  .a-lnt .txt b { font-style: normal; color: #5d7c46; letter-spacing: 0.5px; }
+
+  .a-cta {
+    position: absolute;
+    bottom: 24px;
+    left: 20px; right: 20px;
+    background: #5d7c46;
+    color: #f5efe4;
+    padding: 14px;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 15px;
+    font-family: "Georgia", serif;
+    letter-spacing: 0.3px;
+    box-shadow: 0 4px 12px rgba(93, 124, 70, 0.3);
+  }
+
+  /* content step A: journal-y */
+  .a-content { padding: 20px; overflow-y: auto; height: 100%; }
+  .a-content-eyebrow {
+    font-family: "Georgia", serif;
+    font-size: 11px;
+    color: #c88a2a;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .a-content-title {
+    font-family: "Georgia", serif;
+    font-size: 20px;
+    color: #3d4a2f;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+  .a-field { margin-bottom: 14px; }
+  .a-field label {
+    font-family: "Georgia", serif;
+    font-size: 12px;
+    color: #7a6f56;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    display: block;
+  }
+  .a-field input, .a-field textarea {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1.5px dotted #b9a883;
+    padding: 6px 0;
+    font-family: "Georgia", serif;
+    font-size: 15px;
+    color: #2a2620;
+  }
+  .a-field textarea { min-height: 70px; resize: none; border-bottom: 1.5px dotted #b9a883; }
+  .a-vis {
+    background: #eef2e6;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-top: 12px;
+  }
+  .a-vis .lbl {
+    font-family: "Georgia", serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #5d7c46;
+    margin-bottom: 6px;
+  }
+  .a-vis .opts { display: flex; gap: 6px; }
+  .a-vis .chip {
+    flex: 1;
+    padding: 8px 4px;
+    background: #f5efe4;
+    border: 1px solid #cddab9;
+    border-radius: 16px;
+    text-align: center;
+    font-size: 11px;
+    color: #4a4230;
+  }
+  .a-vis .chip.on { background: #5d7c46; color: #fff; border-color: #5d7c46; }
+
+  /* ============= DIRECTION B: Trail App style ============= */
+  .b-bg { background: #f5efe4; }
+  .b-load {
+    height: 100%;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+  }
+  .b-load-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .b-load-pulse {
+    width: 44px; height: 44px;
+    background: #5d7c46;
+    border-radius: 50%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 20px;
+  }
+  .b-load-pulse::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border: 2px solid #7ea065;
+    border-radius: 50%;
+    opacity: 0.5;
+  }
+  .b-load-txt .t {
+    font-size: 16px;
+    font-weight: 700;
+    color: #2a2620;
+  }
+  .b-load-txt .s {
+    font-size: 12px;
+    color: #7a6f56;
+  }
+  .b-metrics {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .b-metric-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #eaddc2;
+    font-size: 13px;
+  }
+  .b-metric-row:last-child { border-bottom: none; }
+  .b-metric-row .k { color: #7a6f56; }
+  .b-metric-row .v { color: #2a2620; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .b-metric-row .v.loading { color: #b9a883; }
+  .b-nearby-h {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #7a6f56;
+    font-weight: 700;
+    margin: 8px 0;
+  }
+  .b-nearby {
+    background: #fff;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .b-nearby .n-pin {
+    width: 32px; height: 32px;
+    background: #eef2e6;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #5d7c46;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .b-nearby .n-body { flex: 1; min-width: 0; }
+  .b-nearby .n-t {
+    font-size: 13px;
+    font-weight: 600;
+    color: #2a2620;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .b-nearby .n-s {
+    font-size: 11px;
+    color: #7a6f56;
+    margin-top: 2px;
+  }
+  .b-nearby .n-dist {
+    font-size: 11px;
+    color: #5d7c46;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .b-map { height: 100%; display: flex; flex-direction: column; }
+  .b-map-h {
+    padding: 12px 20px;
+    background: #f5efe4;
+    border-bottom: 1px solid #eaddc2;
+  }
+  .b-map-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #2a2620;
+    margin-bottom: 2px;
+  }
+  .b-map-sub {
+    font-size: 12px;
+    color: #7a6f56;
+  }
+  .b-map-view {
+    flex: 1;
+    position: relative;
+    background: linear-gradient(135deg, #dfe6c9 0%, #c4d1a5 40%, #b8c893 100%);
+    overflow: hidden;
+  }
+  .b-map-view::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 25% 30%, rgba(93, 124, 70, 0.25) 0%, transparent 40%),
+      radial-gradient(ellipse at 75% 70%, rgba(200, 138, 42, 0.18) 0%, transparent 45%);
+  }
+  .b-hud {
+    position: absolute;
+    top: 12px; left: 12px; right: 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .b-hud-chip {
+    background: rgba(42, 38, 32, 0.85);
+    color: #f5efe4;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+  }
+  .b-hud-chip b { color: #a5c078; font-weight: 700; }
+  .b-nearby-list {
+    background: #fff;
+    padding: 14px 16px 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    border-top: 1px solid #eaddc2;
+  }
+  .b-nearby-list-h {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .b-nearby-list-h .t {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #3d4a2f;
+  }
+  .b-nearby-list-h .cnt {
+    font-size: 11px;
+    color: #7a6f56;
+  }
+  .b-nb-mini {
+    display: flex;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f5efe4;
+    align-items: center;
+  }
+  .b-nb-mini:last-child { border-bottom: none; }
+  .b-nb-mini .n-pin {
+    width: 24px; height: 24px;
+    background: #eef2e6;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #5d7c46;
+    font-size: 12px;
+  }
+  .b-nb-mini .n-t { flex: 1; font-size: 12px; color: #2a2620; }
+  .b-nb-mini .n-d { font-size: 11px; color: #5d7c46; font-weight: 600; }
+
+  /* content step B */
+  .b-content { padding: 20px; height: 100%; overflow-y: auto; }
+  .b-content .lbl {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #7a6f56;
+    font-weight: 700;
+    margin-bottom: 6px;
+    margin-top: 14px;
+  }
+  .b-content .lbl:first-child { margin-top: 0; }
+  .b-content input, .b-content textarea {
+    width: 100%;
+    background: #fff;
+    border: 1px solid #d6c9ac;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .b-content textarea { min-height: 60px; resize: none; }
+  .b-content .meta {
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: #4a4230;
+    display: flex;
+    justify-content: space-between;
+  }
+  .b-content .meta .k { color: #7a6f56; }
+  .b-content .meta .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* ============= DIRECTION C: Journal ============= */
+  .c-bg { background: #f5efe4; }
+  .c-journal-head {
+    padding: 20px 24px 16px;
+    text-align: center;
+    background:
+      linear-gradient(180deg, #f5efe4, #eee6d0);
+    border-bottom: 1px dashed #b9a883;
+  }
+  .c-date {
+    font-family: "Georgia", serif;
+    font-size: 12px;
+    color: #7a6f56;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .c-weather {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #4a4230;
+    font-family: "Georgia", serif;
+  }
+  .c-weather .sun {
+    font-size: 18px;
+  }
+  .c-page-num {
+    position: absolute;
+    right: 20px;
+    top: 108px;
+    font-family: "Georgia", serif;
+    font-size: 11px;
+    color: #b9a883;
+    font-style: italic;
+    letter-spacing: 0.5px;
+  }
+  .c-load-body {
+    padding: 32px 28px;
+    text-align: center;
+  }
+  .c-load-title {
+    font-family: "Georgia", serif;
+    font-size: 20px;
+    color: #3d4a2f;
+    font-style: italic;
+    margin-bottom: 12px;
+  }
+  .c-load-note {
+    font-family: "Georgia", serif;
+    font-size: 13px;
+    color: #7a6f56;
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+  .c-stamp {
+    display: inline-block;
+    padding: 10px 18px;
+    border: 1.5px dashed #c88a2a;
+    color: #c88a2a;
+    font-family: "Georgia", serif;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border-radius: 4px;
+    transform: rotate(-2deg);
+    margin: 8px 0 20px;
+  }
+  .c-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+  }
+  .c-dots span {
+    width: 8px; height: 8px;
+    background: #d6c9ac;
+    border-radius: 50%;
+  }
+  .c-dots span.on { background: #5d7c46; }
+
+  .c-map-body { padding: 16px 24px; height: 100%; display: flex; flex-direction: column; }
+  .c-map-title {
+    font-family: "Georgia", serif;
+    font-size: 18px;
+    color: #3d4a2f;
+    font-style: italic;
+    margin-bottom: 4px;
+  }
+  .c-map-sub {
+    font-family: "Georgia", serif;
+    font-size: 12px;
+    color: #7a6f56;
+    margin-bottom: 12px;
+  }
+  .c-map-frame {
+    flex: 1;
+    border: 1.5px solid #b9a883;
+    border-radius: 6px;
+    padding: 6px;
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(60,50,30,0.08);
+    position: relative;
+  }
+  .c-map-inner {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(135deg, #dfe6c9 0%, #c4d1a5 40%, #b8c893 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .c-map-inner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 30% 40%, rgba(93, 124, 70, 0.22) 0%, transparent 40%),
+      radial-gradient(ellipse at 70% 65%, rgba(200, 138, 42, 0.15) 0%, transparent 45%);
+  }
+  .c-note-hint {
+    background: #eee6d0;
+    border: 1px dashed #b9a883;
+    padding: 10px 14px;
+    margin-top: 12px;
+    border-radius: 4px;
+    font-family: "Georgia", serif;
+    font-style: italic;
+    font-size: 12.5px;
+    color: #7a6f56;
+    text-align: center;
+  }
+  .c-note-hint b { color: #5d7c46; font-style: normal; }
+
+  .c-content {
+    padding: 20px 24px;
+    height: 100%;
+    overflow-y: auto;
+    background:
+      repeating-linear-gradient(180deg, transparent 0px, transparent 27px, #eaddc2 27px, #eaddc2 28px);
+  }
+  .c-content .lbl {
+    font-family: "Georgia", serif;
+    font-size: 11px;
+    color: #c88a2a;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 12px;
+    margin-bottom: 2px;
+  }
+  .c-content .lbl:first-child { margin-top: 0; }
+  .c-content input, .c-content textarea {
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 4px 0;
+    font-family: "Georgia", serif;
+    font-size: 15px;
+    color: #2a2620;
+    line-height: 28px;
+  }
+  .c-content textarea { min-height: 84px; resize: none; }
+  .c-content .stamp-vis {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: rgba(238, 230, 208, 0.5);
+    border: 1px dashed #b9a883;
+    border-radius: 4px;
+  }
+  .c-content .stamp-vis .lbl { margin-top: 0; }
+  .c-content .stamp-vis .opts {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .c-content .stamp-vis .chip {
+    flex: 1;
+    padding: 6px 4px;
+    text-align: center;
+    background: #f5efe4;
+    border: 1px solid #b9a883;
+    border-radius: 3px;
+    font-family: "Georgia", serif;
+    font-size: 11px;
+    color: #4a4230;
+    letter-spacing: 0.5px;
+  }
+  .c-content .stamp-vis .chip.on {
+    background: #5d7c46;
+    color: #fff;
+    border-color: #5d7c46;
+  }
+
+  /* copy candidates panel */
+  .copy-block {
+    background: #f5efe4;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-top: 16px;
+    border: 1px solid #d6c9ac;
+  }
+  .copy-block h3 {
+    font-family: "Georgia", serif;
+    font-size: 14px;
+    color: #3d4a2f;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .copy-block .row {
+    display: flex;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px dashed #d6c9ac;
+    font-size: 13px;
+  }
+  .copy-block .row:last-child { border-bottom: none; }
+  .copy-block .row .n {
+    font-family: "Georgia", serif;
+    color: #c88a2a;
+    font-weight: 700;
+    min-width: 24px;
+  }
+  .copy-block .row .t {
+    color: #2a2620;
+    font-weight: 600;
+  }
+  .copy-block .row .s {
+    color: #7a6f56;
+    font-style: italic;
+    margin-left: 8px;
+  }
+
+  /* footer note */
+  .footer {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid #d6c9ac;
+    font-size: 13px;
+    color: #7a6f56;
+    text-align: center;
+  }
+  .footer b { color: #3d4a2f; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Plant Flow — <span class="accent">Leave a Cairn</span> UI Mockup Comparison</h1>
+  <div class="subhead">2026-07-20 · Cairn NZ Outdoor App · Product Designer Review · 4 directions (Current + A/B/C)</div>
+
+  <!-- ================= COMPARISON TABLE ================= -->
+  <div class="compare-table">
+    <h2>Direction Comparison</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:14%">Dimension</th>
+          <th style="width:20%">Current (baseline)</th>
+          <th style="width:22%">A · DOC Field Note</th>
+          <th style="width:22%">B · Trail Utility</th>
+          <th style="width:22%">C · Handwritten Journal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Information density</b></td>
+          <td><span class="badge b-lo">Low</span> Only spinner + title, big empty space below</td>
+          <td><span class="badge b-md">Medium</span> Illust + accuracy badge + LNT quote</td>
+          <td><span class="badge b-hi">High</span> Coords + altitude + accuracy + 3 nearby cairns</td>
+          <td><span class="badge b-lo">Low-Med</span> Date + weather + single-line note</td>
+        </tr>
+        <tr>
+          <td><b>Emotional temperature</b></td>
+          <td><span class="badge b-lo">Cool</span> Neutral system feel, "You are here?" reads flat</td>
+          <td><span class="badge b-hi">Warm</span> Māori greeting + serif type + LNT ethic</td>
+          <td><span class="badge b-lo">Cool</span> Tool-first, minimal warmth by design</td>
+          <td><span class="badge b-hi">Warm</span> Personal, tactile, diary-like</td>
+        </tr>
+        <tr>
+          <td><b>NZ / DOC signal</b></td>
+          <td><span class="badge b-lo">None</span></td>
+          <td><span class="badge b-hi">Strong</span> Māori words, LNT quote, sepia+sage, DOC handbook echoes</td>
+          <td><span class="badge b-lo">Weak</span> Just the color palette</td>
+          <td><span class="badge b-md">Medium</span> Handbook aesthetic but no Māori/DOC copy</td>
+        </tr>
+        <tr>
+          <td><b>Fills empty space</b></td>
+          <td><span class="badge b-lo">Fails</span> Bottom 40% of screen empty</td>
+          <td><span class="badge b-hi">Yes</span> LNT strip + accuracy badges + CTA</td>
+          <td><span class="badge b-hi">Yes</span> Nearby cairns list below map</td>
+          <td><span class="badge b-md">Partial</span> Ruled-paper texture + note hint</td>
+        </tr>
+        <tr>
+          <td><b>First-time user clarity</b></td>
+          <td><span class="badge b-md">OK</span> "You are here?" ambiguous — is it a question?</td>
+          <td><span class="badge b-hi">Clear</span> Eyebrow + title + subtitle hierarchy</td>
+          <td><span class="badge b-hi">Clear</span> Explicit label + metrics</td>
+          <td><span class="badge b-md">OK</span> Playful, may confuse utility-seekers</td>
+        </tr>
+        <tr>
+          <td><b>Risk</b></td>
+          <td>— Baseline</td>
+          <td>Copy needs Māori proofread; illustration effort</td>
+          <td>May feel generic (looks like AllTrails clone)</td>
+          <td>May feel too whimsical for serious hikers</td>
+        </tr>
+        <tr>
+          <td><b>Recommended for Cairn?</b></td>
+          <td>Current</td>
+          <td><span class="badge b-hi">★ Best fit</span> Matches Product Soul ("digital handbook + stranger kindness")</td>
+          <td>Good if we pivot toward power-user</td>
+          <td>Good for casual NZ tourist segment</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= CURRENT ================= -->
+  <div class="direction">
+    <div class="dir-header">
+      <span class="dir-tag" style="background:#7a6f56;">CURRENT</span>
+      <span class="dir-title">Baseline — as shipped in v416</span>
+      <span class="dir-subtitle">The state the 3 directions are compared against</span>
+    </div>
+    <div class="dir-desc">
+      <b>Problems observed:</b> "You are here?" reads as a system prompt, not a warm invitation. GPS loading screen is 95% empty. Below the map on Pin Adjust, ~90pt of white space with no purpose. No NZ / DOC / cultural signal anywhere.
+    </div>
+    <div class="phone-row">
+      <div class="phone-wrap">
+        <div class="phone-label">Step 1 · GPS Lock</div>
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">Leave a Cairn</span><span class="step">1 / 3</span></div>
+          <div class="content">
+            <div class="cur-load">
+              <div class="spinner"></div>
+              <div class="t">Locking your spot…</div>
+              <div class="s">Waiting for GPS</div>
+              <div class="bar"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-label">Step 2 · Pin Adjust</div>
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">Leave a Cairn</span><span class="step">2 / 3</span></div>
+          <div class="content">
+            <div class="cur-map">
+              <div class="h">
+                <div class="h1">You are here?</div>
+                <div class="h2">Drag the map to fine-tune. Use + / − to zoom.</div>
+              </div>
+              <div class="map">
+                <div class="pin-c">
+                  <svg viewBox="0 0 32 40"><path d="M16 0C7 0 0 7 0 16c0 12 16 24 16 24s16-12 16-24C32 7 25 0 16 0z" fill="#c88a2a"/><circle cx="16" cy="15" r="6" fill="#f5efe4"/></svg>
+                </div>
+                <div class="zoom-c"><button>+</button><button>−</button></div>
+              </div>
+              <div class="empty-below"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-label">Step 3 · Content</div>
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">Leave a Cairn</span><span class="step">3 / 3</span></div>
+          <div class="content">
+            <div class="cur-content">
+              <div class="form">
+                <label>Title</label>
+                <input placeholder="Give your cairn a name" />
+                <label>Message</label>
+                <textarea placeholder="Leave a note for the next traveller…"></textarea>
+                <label>Visibility</label>
+                <div class="vis">
+                  <div class="chip on">Public</div>
+                  <div class="chip">Friends</div>
+                  <div class="chip">Private</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DIRECTION A ================= -->
+  <div class="direction">
+    <div class="dir-header">
+      <span class="dir-tag">A</span>
+      <span class="dir-title">DOC Handbook Field Note</span>
+      <span class="dir-subtitle">Warm, serif-first, NZ cultural signals baked in — matches Product Soul</span>
+    </div>
+    <div class="dir-desc">
+      Feels like reading a page from a <b>DOC (Department of Conservation) trail hut ledger</b>. Serif type for headings, sepia eyebrows, sage green CTAs. Every screen carries a small piece of NZ context: an illustrated cairn on loading, a Māori bilingual greeting, a Leave-No-Trace ethic quote below the map. Fills empty space with meaning, not with widgets.
+    </div>
+    <div class="nz-cell">
+      <b>NZ culture elements used:</b> Māori greeting <i>"Kia ora"</i> · <i>"whenua"</i> (land) inline reference · Leave No Trace ethic quote (NZ Environmental Care Code line 4) · DOC handbook visual language (cream + sage + sepia + serif) · Illustrated cairn against a Kepler-style ridgeline
+    </div>
+
+    <div class="phone-row">
+      <div class="phone-wrap">
+        <div class="phone-label">Step 1 · GPS Lock</div>
+        <div class="phone a-bg">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">Leave a Cairn</span><span class="step">1 / 3</span></div>
+          <div class="content">
+            <div class="a-load">
+              <div class="a-illust">
+                <svg viewBox="0 0 375 240" preserveAspectRatio="xMidYMid slice">
+                  <!-- sky -->
+                  <rect width="375" height="240" fill="url(#skyA)"/>
+                  <defs>
+                    <linearGradient id="skyA" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stop-color="#d9e5c1"/>
+                      <stop offset="1" stop-color="#a5b881"/>
+                    </linearGradient>
+                  </defs>
+                  <!-- distant mountains -->
+                  <polygon points="0,180 60,120 110,150 170,90 240,140 300,110 375,160 375,240 0,240" fill="#8ea56a" opacity="0.9"/>
+                  <polygon points="0,200 80,150 150,180 220,140 290,175 375,150 375,240 0,240" fill="#748c56" opacity="0.85"/>
+                  <!-- foreground grass ridge -->
+                  <path d="M0,220 Q90,205 180,215 T375,210 L375,240 L0,240 Z" fill="#5d7c46"/>
+                  <!-- cairn stack -->
+                  <g transform="translate(187, 175)">
+                    <ellipse cx="0" cy="42" rx="34" ry="4" fill="rgba(42,38,32,0.15)"/>
+                    <path d="M-24,42 Q-28,32 -22,26 L22,26 Q28,32 24,42 Z" fill="#8b6942"/>
+                    <path d="M-18,26 Q-22,16 -16,10 L16,10 Q22,16 18,26 Z" fill="#a58363"/>
+                    <path d="M-12,10 Q-14,2 -10,-4 L10,-4 Q14,2 12,10 Z" fill="#c88a2a"/>
+                    <path d="M-7,-4 Q-9,-11 -5,-15 L5,-15 Q9,-11 7,-4 Z" fill="#b57324"/>
+                  </g>
+                  <!-- small trail -->
+                  <path d="M40,225 Q120,215 187,218 T340,220" stroke="#c88a2a" stroke-width="1.5" stroke-dasharray="3 4" fill="none" opacity="0.6"/>
+                </svg>
+              </div>
+              <div class="a-load-body">
+                <div class="a-eyebrow">Kia ora · Locating you</div>
+                <div class="a-title">Setting your marker</div>
+                <div class="a-subtitle">Reading this stretch of <i>whenua</i>. Your cairn will rest here for the next traveller to find.</div>
+              </div>
+              <div class="a-bar-wrap"><div class="a-bar-fill"></div></div>
+              <div class="a-status">GPS · Accuracy ±5m · locking</div>
+              <div class="a-quote">
+                "Leave the land as you found it. Cairns rest lightly."
+                <span class="attr">— NZ Environmental Care Code</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-label">Step 2 · Pin Adjust</div>
+        <div class="phone a-bg">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">Leave a Cairn</span><span class="step">2 / 3</span></div>
+          <div class="content">
+            <div class="a-map">
+              <div class="a-map-h">
+                <div class="a-map-eyebrow">Marker · Fine-tune</div>
+                <div class="a-map-title">Where does the cairn stand?</div>
+                <div class="a-map-sub">Drag the map. Pinch to zoom. The stone drops where the pin points.</div>
+              </div>
+              <div class="a-map-view">
+                <svg class="contour" viewBox="0 0 375 400" preserveAspectRatio="none">
+                  <path d="M0,80 Q80,60 180,90 T375,70" stroke="#5d7c46" stroke-width="0.7" fill="none"/>
+                  <path d="M0,140 Q100,120 200,150 T375,130" stroke="#5d7c46" stroke-width="0.7" fill="none"/>
+                  <path d="M0,210 Q120,190 220,220 T375,200" stroke="#5d7c46" stroke-width="0.7" fill="none"/>
+                  <path d="M0,290 Q100,270 200,300 T375,280" stroke="#5d7c46" stroke-width="0.7" fill="none"/>
+                  <path d="M40,60 Q140,80 250,50 T375,90" stroke="#c88a2a" stroke-width="0.6" fill="none" opacity="0.6"/>
+                </svg>
+                <div class="a-badges">
+                  <div class="a-badge"><span class="dot"></span>Accuracy ±4m</div>
+                  <div class="a-badge">Alt · 942 m</div>
+                </div>
+                <div class="pin-c" style="top:50%">
+                  <svg viewBox="0 0 32 40"><path d="M16 0C7 0 0 7 0 16c0 12 16 24 16 24s16-12 16-24C32 7 25 0 16 0z" fill="#c88a2a"/><circle cx="16" cy="15" r="6" fill="#f5efe4"/></svg>
+                </div>
+                <div class="zoom-c"><button>+</button><button>−</button></div>
+              </div>
+              <div class="a-lnt">
+                <div class="icon">🪨</div>
+                <div class="txt"><b>LEAVE NO TRACE</b> · Cairns rest lightly on the land. Take yours with you when you leave.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-label">Step 3 · Content</div>
+        <div class="phone a-bg">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">Leave a Cairn</span><span class="step">3 / 3</span></div>
+          <div class="content">
+            <div class="a-content">
+              <div class="a-content-eyebrow">Field note</div>
+              <div class="a-content-title">A word for the next traveller</div>
+              <div class="a-field">
+                <label>Title</label>
+                <input placeholder="Name this cairn…" />
+              </div>
+              <div class="a-field">
+                <label>Message</label>
+                <textarea placeholder="What did you see, feel, or want them to know?"></textarea>
+              </div>
+              <div class="a-vis">
+                <div class="lbl">Who may find it</div>
+                <div class="opts">
+                  <div class="chip on">Everyone</div>
+                  <div class="chip">Friends</div>
+                  <div class="chip">Just me</div>
+                </div>
+              </div>
+              <div class="a-cta" style="position:relative;bottom:auto;margin-top:20px">Plant the cairn</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="copy-block">
+      <h3>Copy candidates — Direction A</h3>
+      <div class="row"><span class="n">1</span><span class="t">"Setting your marker"</span><span class="s">— Neutral, respectful, no "you"</span></div>
+      <div class="row"><span class="n">2</span><span class="t">"Where's your cairn?"</span><span class="s">— Warm question, personal ownership</span></div>
+      <div class="row"><span class="n">3</span><span class="t">"Where does the cairn stand?"</span><span class="s">— Places the object, not the user (matches DOC tone)</span></div>
+      <div class="row"><span class="n">→</span><span class="t">Subtitle:</span><span class="s">"Drag the map. Pinch to zoom. The stone drops where the pin points."</span></div>
+    </div>
+  </div>
+
+  <!-- ================= DIRECTION B ================= -->
+  <div class="direction">
+    <div class="dir-header">
+      <span class="dir-tag" style="background:#3d4a2f;">B</span>
+      <span class="dir-title">Trail Utility — AllTrails / Strava style</span>
+      <span class="dir-subtitle">Data-dense, precise, tool-first. Fills empty space with useful signal.</span>
+    </div>
+    <div class="dir-desc">
+      Optimised for hikers who want <b>numbers first, feeling second</b>. Loading screen shows live coordinates, altitude, satellite count, and accuracy meter as they lock in. Below the map, a live list of "recent nearby cairns" — social proof + wayfinding at once. Less NZ warmth, more competence.
+    </div>
+    <div class="nz-cell">
+      <b>NZ culture elements used:</b> Palette only (cream / sage / sepia). No Māori copy. Would need to be layered in via nearby cairn titles ("Kepler Ridge Cache", "Tongariro Lookout"). Weakest cultural signal of the three — chosen if we position Cairn as a power-user tool rather than a cultural product.
+    </div>
+
+    <div class="phone-row">
+      <div class="phone-wrap">
+        <div class="phone-label">Step 1 · GPS Lock</div>
+        <div class="phone b-bg">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">New Cairn</span><span class="step">1 / 3</span></div>
+          <div class="content">
+            <div class="b-load">
+              <div class="b-load-head">
+                <div class="b-load-pulse">📍</div>
+                <div class="b-load-txt">
+                  <div class="t">Locking position…</div>
+                  <div class="s">Reading GPS · 8 satellites</div>
+                </div>
+              </div>
+              <div class="b-metrics">
+                <div class="b-metric-row"><span class="k">Latitude</span><span class="v">-45.0312° S</span></div>
+                <div class="b-metric-row"><span class="k">Longitude</span><span class="v">168.6626° E</span></div>
+                <div class="b-metric-row"><span class="k">Altitude</span><span class="v">942 m</span></div>
+                <div class="b-metric-row"><span class="k">Accuracy</span><span class="v">±4.2 m</span></div>
+                <div class="b-metric-row"><span class="k">Heading</span><span class="v loading">—</span></div>
+              </div>
+              <div class="b-nearby-h">Nearby cairns · within 2 km</div>
+              <div class="b-nearby">
+                <div class="n-pin">🪨</div>
+                <div class="n-body">
+                  <div class="n-t">Kepler Ridge Cache</div>
+                  <div class="n-s">by @lena · 2 days ago</div>
+                </div>
+                <div class="n-dist">340 m</div>
+              </div>
+              <div class="b-nearby">
+                <div class="n-pin">🪨</div>
+                <div class="n-body">
+                  <div class="n-t">Sunrise pointer</div>
+                  <div class="n-s">by @mihi · 1 week ago</div>
+                </div>
+                <div class="n-dist">890 m</div>
+              </div>
+              <div class="b-nearby">
+                <div class="n-pin">🪨</div>
+                <div class="n-body">
+                  <div class="n-t">Watch the scree here</div>
+                  <div class="n-s">by @tom · 3 weeks ago</div>
+                </div>
+                <div class="n-dist">1.4 km</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-label">Step 2 · Pin Adjust</div>
+        <div class="phone b-bg">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">New Cairn</span><span class="step">2 / 3</span></div>
+          <div class="content">
+            <div class="b-map">
+              <div class="b-map-h">
+                <div class="b-map-title">Set exact spot</div>
+                <div class="b-map-sub">Drag to fine-tune. Coords update live.</div>
+              </div>
+              <div class="b-map-view">
+                <div class="b-hud">
+                  <div class="b-hud-chip">-45.0312° · 168.6626°</div>
+                  <div class="b-hud-chip"><b>±4m</b></div>
+                </div>
+                <div class="pin-c" style="top:50%">
+                  <svg viewBox="0 0 32 40"><path d="M16 0C7 0 0 7 0 16c0 12 16 24 16 24s16-12 16-24C32 7 25 0 16 0z" fill="#c88a2a"/><circle cx="16" cy="15" r="6" fill="#f5efe4"/></svg>
+                </div>
+                <div class="zoom-c"><button>+</button><button>−</button></div>
+              </div>
+              <div class="b-nearby-list">
+                <div class="b-nearby-list-h">
+                  <span class="t">Nearby cairns</span><span class="cnt">3 within 2 km</span>
+                </div>
+                <div class="b-nb-mini"><div class="n-pin">🪨</div><div class="n-t">Kepler Ridge Cache</div><div class="n-d">340 m NW</div></div>
+                <div class="b-nb-mini"><div class="n-pin">🪨</div><div class="n-t">Sunrise pointer</div><div class="n-d">890 m E</div></div>
+                <div class="b-nb-mini"><div class="n-pin">🪨</div><div class="n-t">Watch the scree here</div><div class="n-d">1.4 km S</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-label">Step 3 · Content</div>
+        <div class="phone b-bg">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">New Cairn</span><span class="step">3 / 3</span></div>
+          <div class="content">
+            <div class="b-content">
+              <div class="lbl">Title</div>
+              <input placeholder="e.g. Kepler Ridge Cache" />
+              <div class="lbl">Note</div>
+              <textarea placeholder="Add details for others…"></textarea>
+              <div class="meta"><span class="k">Location</span><span class="v">-45.0312° · 168.6626°</span></div>
+              <div class="meta"><span class="k">Altitude</span><span class="v">942 m · ±4 m</span></div>
+              <div class="lbl">Visibility</div>
+              <div class="vis" style="display:flex;gap:6px">
+                <div class="chip" style="flex:1;padding:8px 4px;text-align:center;background:#5d7c46;color:#fff;border-radius:8px;font-size:12px">Public</div>
+                <div class="chip" style="flex:1;padding:8px 4px;text-align:center;background:#f5efe4;border:1px solid #d6c9ac;border-radius:8px;font-size:12px">Friends</div>
+                <div class="chip" style="flex:1;padding:8px 4px;text-align:center;background:#f5efe4;border:1px solid #d6c9ac;border-radius:8px;font-size:12px">Private</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="copy-block">
+      <h3>Copy candidates — Direction B</h3>
+      <div class="row"><span class="n">1</span><span class="t">"Locking position…"</span><span class="s">— Utilitarian, matches tool metaphor</span></div>
+      <div class="row"><span class="n">2</span><span class="t">"Set exact spot"</span><span class="s">— Imperative, no ambiguity</span></div>
+      <div class="row"><span class="n">3</span><span class="t">"New Cairn"</span><span class="s">— Nav title, keeps the flow name minimal</span></div>
+      <div class="row"><span class="n">→</span><span class="t">Subtitle:</span><span class="s">"Drag to fine-tune. Coords update live."</span></div>
+    </div>
+  </div>
+
+  <!-- ================= DIRECTION C ================= -->
+  <div class="direction">
+    <div class="dir-header">
+      <span class="dir-tag" style="background:#c88a2a;">C</span>
+      <span class="dir-title">Handwritten Journal</span>
+      <span class="dir-subtitle">Personal diary — date, weather, handwritten note feel</span>
+    </div>
+    <div class="dir-desc">
+      Feels like <b>opening a leather-bound journal on the trail</b>. Ruled paper texture, dashed borders, a rubber-stamp badge, page numbers in the corner. Every screen frames the moment as a private memory being pinned to a place. Warmer than B, more personal than A — but less institutional / less "NZ official".
+    </div>
+    <div class="nz-cell">
+      <b>NZ culture elements used:</b> Handbook aesthetic (dashed borders, ruled paper, rubber-stamp typography). No explicit Māori/DOC copy. Could be layered in via a hand-drawn cairn stamp. Best fit if we target NZ tourists / casual walkers rather than serious trampers.
+    </div>
+
+    <div class="phone-row">
+      <div class="phone-wrap">
+        <div class="phone-label">Step 1 · GPS Lock</div>
+        <div class="phone c-bg">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">Today's Cairn</span><span class="step">1 / 3</span></div>
+          <div class="content">
+            <div class="c-page-num">— page 42 —</div>
+            <div class="c-journal-head">
+              <div class="c-date">Monday · 20 July · 09:41</div>
+              <div class="c-weather"><span class="sun">☀︎</span><span>Fine · 14° · light NW wind</span></div>
+            </div>
+            <div class="c-load-body">
+              <div class="c-load-title">Finding this place…</div>
+              <div class="c-load-note">Give me a moment. I'm reading the ground beneath your boots so we can pin today's cairn here for good.</div>
+              <div class="c-stamp">GPS · locking · ±5m</div>
+              <div class="c-dots"><span class="on"></span><span class="on"></span><span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-label">Step 2 · Pin Adjust</div>
+        <div class="phone c-bg">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">Today's Cairn</span><span class="step">2 / 3</span></div>
+          <div class="content">
+            <div class="c-page-num">— page 43 —</div>
+            <div class="c-map-body">
+              <div class="c-map-title">Pin the spot</div>
+              <div class="c-map-sub">A little more to the left? Drag the map, and I'll mark it exact.</div>
+              <div class="c-map-frame">
+                <div class="c-map-inner">
+                  <div class="pin-c" style="top:50%">
+                    <svg viewBox="0 0 32 40"><path d="M16 0C7 0 0 7 0 16c0 12 16 24 16 24s16-12 16-24C32 7 25 0 16 0z" fill="#c88a2a"/><circle cx="16" cy="15" r="6" fill="#f5efe4"/></svg>
+                  </div>
+                  <div class="zoom-c"><button>+</button><button>−</button></div>
+                </div>
+              </div>
+              <div class="c-note-hint"><b>Tip.</b> The pin drops where the map crosshair sits. Zoom in for precision.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-label">Step 3 · Content</div>
+        <div class="phone c-bg">
+          <div class="notch"></div>
+          <div class="status-bar"><span class="time">9:41</span><span class="icons">• •• 📶</span></div>
+          <div class="nav"><span class="back">‹</span><span class="title">Today's Cairn</span><span class="step">3 / 3</span></div>
+          <div class="content">
+            <div class="c-content">
+              <div class="lbl">Title</div>
+              <input placeholder="A short name for today…" />
+              <div class="lbl">Today's note</div>
+              <textarea placeholder="What made you stop here?"></textarea>
+              <div class="stamp-vis">
+                <div class="lbl">Share with</div>
+                <div class="opts">
+                  <div class="chip on">Everyone</div>
+                  <div class="chip">Friends</div>
+                  <div class="chip">Just me</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="copy-block">
+      <h3>Copy candidates — Direction C</h3>
+      <div class="row"><span class="n">1</span><span class="t">"Finding this place…"</span><span class="s">— Poetic, first-person warm</span></div>
+      <div class="row"><span class="n">2</span><span class="t">"Pin the spot"</span><span class="s">— Short, physical, journal-like</span></div>
+      <div class="row"><span class="n">3</span><span class="t">"Today's Cairn"</span><span class="s">— Nav title, frames it as a daily entry</span></div>
+      <div class="row"><span class="n">→</span><span class="t">Subtitle:</span><span class="s">"A little more to the left? Drag the map, and I'll mark it exact."</span></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Recommendation from Senior Product Designer: <b>Direction A — DOC Handbook Field Note</b><br />
+    It is the only direction that simultaneously (1) fills the empty space with intent, (2) delivers the "digital handbook + stranger kindness" Product Soul, and (3) carries real NZ / Māori / DOC cultural signal.<br />
+    B is a fallback if Cairn shifts toward power-user positioning. C is a fallback for the casual-tourist segment.
+  </div>
+
+</div>
+</body>
+</html>
