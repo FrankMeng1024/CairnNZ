@@ -712,7 +712,7 @@ function ActivitiesTab() {
   }, [sessions, filter, sort]);
 
   if (sessions.length === 0) {
-    return <EmptyState icon="Map" title="No tracks walked yet" hint="Start hiking or running. Your tracks will live here." illustration={<IllustrationHalo size={220}><EmptyRoutes size={192} /></IllustrationHalo>} />;
+    return <EmptyState icon="Map" title="No tracks walked yet" hint="Start hiking or running. Your tracks will live here." illustration={<IllustrationHalo><EmptyRoutes size={192} /></IllustrationHalo>} />;
   }
 
   return (
@@ -1038,7 +1038,7 @@ function FlagsTab() {
             no actionable affordance. */}
         <View style={styles.emptyHero}>
           <View style={{ marginBottom: Spacing.md }}>
-            <IllustrationHalo size={220}>
+            <IllustrationHalo>
               <EmptyMarkers size={192} />
             </IllustrationHalo>
           </View>
@@ -1075,7 +1075,7 @@ function FlagsTab() {
       {scope === 'friends' && hasFetchedFriends && circleMarkers.length === 0 ? (
         <View style={styles.emptyHero}>
           <View style={{ marginBottom: Spacing.md }}>
-            <IllustrationHalo size={220}>
+            <IllustrationHalo>
               <EmptyMarkers size={192} />
             </IllustrationHalo>
           </View>

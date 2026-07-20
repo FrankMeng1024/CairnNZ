@@ -298,7 +298,7 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
 function EmptyState({ onAddFriend }: { onAddFriend: () => void }) {
   return (
     <View style={emptyStyles.container}>
-      <IllustrationHalo size={220}>
+      <IllustrationHalo>
         <EmptyFriends size={192} />
       </IllustrationHalo>
       <Text style={emptyStyles.heading}>Cairn is better with trail companions</Text>
