@@ -16,6 +16,8 @@ const User = require('../models/User');
 const { signToken } = require('../config/jwt');
 const authenticate = require('../middleware/authenticate');
 const { sendVerificationCode } = require('../services/emailService');
+const { validateBody } = require('../middleware/validate');
+const schemas = require('../middleware/schemas');
 
 const router = express.Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -51,7 +53,7 @@ function validatePassword(password) {
 }
 
 // ── POST /api/auth/register ────────────────────────────────────────────────
-router.post('/register', authLimiter, async (req, res) => {
+router.post('/register', authLimiter, validateBody(schemas.auth.register), async (req, res) => {
   const { name, email, password } = req.body;
 
   if (!name || typeof name !== 'string' || name.trim().length < 1)
@@ -98,7 +100,7 @@ router.post('/register', authLimiter, async (req, res) => {
 });
 
 // ── POST /api/auth/verify ──────────────────────────────────────────────────
-router.post('/verify', authLimiter, async (req, res) => {
+router.post('/verify', authLimiter, validateBody(schemas.auth.verify), async (req, res) => {
   const { email, code } = req.body;
 
   if (!email || !code)
@@ -158,7 +160,7 @@ router.post('/verify', authLimiter, async (req, res) => {
 });
 
 // ── POST /api/auth/resend ──────────────────────────────────────────────────
-router.post('/resend', resendLimiter, async (req, res) => {
+router.post('/resend', resendLimiter, validateBody(schemas.auth.resend), async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required.' });
 
@@ -183,7 +185,7 @@ router.post('/resend', resendLimiter, async (req, res) => {
 });
 
 // ── POST /api/auth/login ───────────────────────────────────────────────────
-router.post('/login', authLimiter, async (req, res) => {
+router.post('/login', authLimiter, validateBody(schemas.auth.login), async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password)
     return res.status(400).json({ error: 'Email and password are required.' });
@@ -221,7 +223,7 @@ router.post('/login', authLimiter, async (req, res) => {
 });
 
 // ── POST /api/auth/google ──────────────────────────────────────────────────
-router.post('/google', oauthLimiter, async (req, res) => {
+router.post('/google', oauthLimiter, validateBody(schemas.auth.google), async (req, res) => {
   const { id_token } = req.body;
   if (!id_token)
     return res.status(400).json({ error: 'id_token is required.' });
@@ -305,7 +307,7 @@ router.post('/refresh', authenticate, async (req, res) => {
 
 // ── PATCH /api/auth/password ───────────────────────────────────────────────
 // Set password (no current password needed) or change password (requires current)
-router.patch('/password', authenticate, async (req, res) => {
+router.patch('/password', authenticate, validateBody(schemas.auth.passwordChange), async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!validatePassword(newPassword))

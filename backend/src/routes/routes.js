@@ -13,11 +13,13 @@ const router = express.Router();
 const Route = require('../models/Route');
 const authenticate = require('../middleware/authenticate');
 const { isClientWriteable, PERMISSION } = require('../constants/permission');
+const { validateBody } = require('../middleware/validate');
+const schemas = require('../middleware/schemas');
 
 router.use(authenticate);
 
 // ── POST /api/routes ────────────────────────────────────────────────────────
-router.post('/', async (req, res) => {
+router.post('/', validateBody(schemas.route.create), async (req, res) => {
   const { name, description, points, waypoints, distance_m, elevation_gain_m, permission } = req.body;
 
   // v120 debug: dump body shape so we can see exactly why JSON.stringify
@@ -98,7 +100,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ── PUT /api/routes/:id ─────────────────────────────────────────────────────
-router.put('/:id', async (req, res) => {
+router.put('/:id', validateBody(schemas.route.update), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id || isNaN(id)) return res.status(400).json({ error: 'Invalid route ID.' });
 

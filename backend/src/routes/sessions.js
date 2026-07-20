@@ -13,6 +13,8 @@ const express = require('express');
 const Session = require('../models/Session');
 const authenticate = require('../middleware/authenticate');
 const idempotency = require('../middleware/idempotency');
+const { validateBody } = require('../middleware/validate');
+const schemas = require('../middleware/schemas');
 const pool = require('../config/db');
 const { deterministicCid } = require('../lib/deterministicCid');
 
@@ -39,7 +41,7 @@ router.get('/', authenticate, async (req, res) => {
 // Client uses the returned id for subsequent /append-points and final
 // PATCH calls. This decouples "start tracking" from "finish tracking" so
 // crashes mid-session don't lose data.
-router.post('/start', authenticate, idempotency, async (req, res) => {
+router.post('/start', authenticate, validateBody(schemas.session.start), idempotency, async (req, res) => {
   const { type, start_time } = req.body;
   if (!type || !['hiking', 'running'].includes(type)) {
     return res.status(400).json({ error: 'type must be "hiking" or "running".' });
@@ -63,7 +65,7 @@ router.post('/start', authenticate, idempotency, async (req, res) => {
 // ── PATCH /api/sessions/:id/append-points ──────────────────────────────────
 // Append a batch of GPS points to an active session. Used by the 60-second
 // incremental backup interval during tracking.
-router.patch('/:id/append-points', authenticate, idempotency, async (req, res) => {
+router.patch('/:id/append-points', authenticate, validateBody(schemas.session.appendPoints), idempotency, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id || isNaN(id)) {
     return res.status(400).json({ error: 'Invalid session ID.' });
@@ -88,7 +90,7 @@ router.patch('/:id/append-points', authenticate, idempotency, async (req, res) =
 // ── PATCH /api/sessions/:id ────────────────────────────────────────────────
 // Finalize a session at stop time: write end_time, distance_m, duration_s,
 // and (optional) name. Called from stopTracking after final point flush.
-router.patch('/:id', authenticate, idempotency, async (req, res) => {
+router.patch('/:id', authenticate, validateBody(schemas.session.update), idempotency, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id || isNaN(id)) {
     return res.status(400).json({ error: 'Invalid session ID.' });
@@ -166,7 +168,7 @@ router.patch('/:id', authenticate, idempotency, async (req, res) => {
 // 若 finalized_at 已非 NULL, 拒绝重放业务, 直接 200 返回当前状态 (§1.3)
 //
 // 事务任何一步失败 → rollback → 5xx → client 走离线分支 (§0.9 pendingSyncStore)
-router.patch('/:id/save', authenticate, idempotency, async (req, res) => {
+router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idempotency, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id || isNaN(id)) {
     return res.status(400).json({ error: 'Invalid session ID.' });

@@ -24,12 +24,14 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
+const { validateBody } = require('../middleware/validate');
+const schemas = require('../middleware/schemas');
 
 router.use(authenticate);
 
 const VALID_TYPES = new Set(['mark', 'route']);
 
-router.post('/', async (req, res) => {
+router.post('/', validateBody(schemas.hide.create), async (req, res) => {
   const userId = req.user.userId;
   const { item_type, item_id } = req.body || {};
 

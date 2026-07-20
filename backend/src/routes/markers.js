@@ -23,6 +23,8 @@ const { haversineM } = require('../utils/haversine');
 const nonceUtil = require('../utils/nonce');
 const abuseSignals = require('../utils/abuseSignals');
 const { isClientWriteable, PERMISSION } = require('../constants/permission');
+const { validateBody } = require('../middleware/validate');
+const schemas = require('../middleware/schemas');
 
 router.use(authenticate);
 
@@ -177,7 +179,7 @@ router.get('/public', async (req, res) => {
 });
 
 // ── Create marker ───────────────────────────────────────────────────────────
-router.post('/', idempotency, async (req, res) => {
+router.post('/', validateBody(schemas.marker.create), idempotency, async (req, res) => {
   try {
     const { type, text, lat, lng, alt, permission, approximate } = req.body;
 
@@ -235,7 +237,7 @@ router.post('/', idempotency, async (req, res) => {
 });
 
 // ── Update marker ───────────────────────────────────────────────────────────
-router.put('/:id', async (req, res) => {
+router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
   try {
     const { text, permission, type } = req.body;
     const markerId = req.params.id;

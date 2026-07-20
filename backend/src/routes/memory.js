@@ -20,6 +20,8 @@ const express = require('express');
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { deterministicCid } = require('../lib/deterministicCid');
+const { validateBody } = require('../middleware/validate');
+const schemas = require('../middleware/schemas');
 
 const router = express.Router();
 
@@ -33,7 +35,7 @@ const router = express.Router();
  * Response includes the cid for each accepted row so clients on
  * v0.2.6.2 (no cid) can backfill locally on next pull.
  */
-router.post('/points', authenticate, async (req, res) => {
+router.post('/points', authenticate, validateBody(schemas.memory.points), async (req, res) => {
   const userId = req.user.userId;
   const { points } = req.body;
 

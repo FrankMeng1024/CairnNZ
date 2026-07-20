@@ -14,12 +14,14 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
+const { validateBody } = require('../middleware/validate');
+const schemas = require('../middleware/schemas');
 
 // All routes require auth
 router.use(authenticate);
 
 // ── Send friend request ─────────────────────────────────────────────────────
-router.post('/request', async (req, res) => {
+router.post('/request', validateBody(schemas.friend.request), async (req, res) => {
   try {
     const { email } = req.body;
     const fromUserId = req.user.userId;
@@ -79,7 +81,7 @@ router.get('/requests', async (req, res) => {
 });
 
 // ── Accept friend request ───────────────────────────────────────────────────
-router.post('/accept', async (req, res) => {
+router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => {
   try {
     const { requestId } = req.body;
     if (!requestId) return res.status(400).json({ error: 'requestId required' });
@@ -110,7 +112,7 @@ router.post('/accept', async (req, res) => {
 });
 
 // ── Reject friend request ───────────────────────────────────────────────────
-router.post('/reject', async (req, res) => {
+router.post('/reject', validateBody(schemas.friend.reject), async (req, res) => {
   try {
     const { requestId } = req.body;
     await pool.execute(
