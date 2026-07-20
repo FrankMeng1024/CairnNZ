@@ -1,15 +1,12 @@
 /**
- * DistantMarkerArrow.tsx — v0.2.4 Branch B (RN UI)
+ * DistantMarkerArrow.tsx — 远场箭头引导
  *
  * 远场箭头引导:用户跟着箭头走近 mark。
  * - 距离 >30m: 屏幕边缘箭头 + 距离文字
  * - 距离 30-15m: 箭头脉动 + 触觉震动
- * - 距离 <15m: 隐藏箭头(交给 Unity AR 显示 cairn 实化)
+ * - 距离 <15m: 隐藏箭头
  *
- * Reviewer 修订:
- *   R-B7 触觉震动渐强 light → medium → heavy
- *   R-B6 文案情感化(放在 GuidanceCopy.ts)
- *   箭头方向 5Hz EMA α=0.3 平滑(防 GPS/罗盘抖动)
+ * 5Hz EMA α=0.3 平滑箭头方向(防 GPS/罗盘抖动)。
  *
  * 数据来源:
  *   - useMarkerStore: marker list with lat/lng
@@ -90,8 +87,8 @@ export function DistantMarkerArrow({
   // v0.2.5 OTA — show direction arrow much sooner. Original 15m only
   // helped for far hikes; users plant cairns 1-10m apart indoors and
   // were left with no indicator when the cairn was off-screen but only
-  // a few meters away. 3m floor lets the AR overlay take over once the
-  // user is right next to the cairn (Unity 3D model becomes visible).
+  // a few meters away. 3m floor lets the pin/callout take over once the
+  // user is right next to the cairn.
   visibleAboveMeters = 3,
   hideBelowMeters = 3,
 }: Props) {

@@ -1,12 +1,9 @@
 /**
  * debugUpload — user-initiated screenshot upload to /api/debug-snapshot.
  *
- * V10 (v0.2.6.x):
- *   Extracted from ARScreenLegacy's inline pickScreenshots /
- *   confirmUploadScreenshots so the Settings screen can also expose a
- *   debug-upload entry. AR's inline logic is NOT migrated this Sprint
- *   (regression risk in ARScreenLegacy is high); tech debt logged for
- *   v0.2.7.
+ * Settings screen exposes a "Upload debug screenshots" entry that lets a
+ * user pick images from their device and POST them to the backend for
+ * developer triage.
  *
  * Design decisions:
  *   - Returns a discriminated union (PickOutcome) instead of throwing for

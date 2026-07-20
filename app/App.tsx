@@ -200,9 +200,6 @@ function AppRoot() {
       crashLogger.install();
       crashLogger.breadcrumb('app_boot');
       markBootPhase('after_crashlogger_install');
-      // v417 AR removal: v0.2.5 flags cache + telemetry singleton init deleted
-      // (was loadFlagsCache/refreshFlagsFromBackend/initTelemetrySingleton for
-      //  ARScreen.useV025Enabled() and v025/debug-events telemetry — no longer needed)
       markBootPhase('after_ar_removal_noop');
       // v311: prime the h3 load gate from AsyncStorage. If a previous
       // session died mid-bulkImport (iOS watchdog SIGKILL on 581 sync

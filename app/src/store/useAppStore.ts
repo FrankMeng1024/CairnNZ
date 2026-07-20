@@ -187,12 +187,6 @@ export const useAppStore = create<AppState>((set) => ({
           set({ user });
           crashLogger.breadcrumb(`hydrate:cold_boot_prewarm user_id=${user.id}`);
           try { await useMarkerStore.getState().hydrate(user.id); } catch { /* swallow */ }
-          // v0.2.3 Stage 5 — A8 schema migration. Boot order (Plan
-          // V2-CONFLICT-2): markerStore hydrate → A8 → arOriginStore
-          // hydrate → UI mount. Preserves cairn world coords for v0.2.2
-          // upgraders, stamps schemaVersion=2 so A4 FSM can advance from
-          // COLD_INIT.
-          // v417 AR removal: runA8Migration + useArOriginStore.hydrate deleted
           // v405: hydrate memory points from AsyncStorage + attach memory
           // sync. 修复 happy path bug: pre-v405 attachMemorySync 只在
           // MemoryScreen 挂载时跑,用户 hike → save → pushMemoryNow 因

@@ -88,8 +88,8 @@ router.post('/', uploadLimiter, rawBody, async (req, res) => {
   try {
     await pool.execute(
       `INSERT INTO debug_snapshots
-       (snapshot_id, image_blob, image_bytes, image_format, meta, device_os, app_version, ar_mode, uploaded_ip)
-       VALUES (?, ?, ?, 'png', ?, ?, ?, ?, ?)`,
+       (snapshot_id, image_blob, image_bytes, image_format, meta, device_os, app_version, uploaded_ip)
+       VALUES (?, ?, ?, 'png', ?, ?, ?, ?)`,
       [
         id,
         buf,
@@ -97,7 +97,6 @@ router.post('/', uploadLimiter, rawBody, async (req, res) => {
         meta ? JSON.stringify(meta) : null,
         req.headers['x-cairn-device-os'] || null,
         req.headers['x-cairn-app-version'] || null,
-        req.headers['x-cairn-ar-mode'] || null,
         req.ip,
       ],
     );
@@ -116,7 +115,7 @@ router.post('/', uploadLimiter, rawBody, async (req, res) => {
 router.get('/latest', async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT id, snapshot_id, image_bytes, meta, device_os, app_version, ar_mode, uploaded_at
+      `SELECT id, snapshot_id, image_bytes, meta, device_os, app_version, uploaded_at
        FROM debug_snapshots ORDER BY uploaded_at DESC LIMIT 1`,
     );
     if (!rows.length) return res.status(404).json({ error: 'no snapshots yet' });
