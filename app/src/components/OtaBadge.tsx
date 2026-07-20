@@ -27,10 +27,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Manual OTA version counter. Bump this by 1 every time we ship an
 // OTA update so the user can visually confirm they're running the
 // latest bundle. The value is baked into the JS bundle, so when the
-// pill says "v418 · Up to date" the user knows v418's changes are live.
+// pill says "v419 · Up to date" the user knows v419's changes are live.
 //
 // Full version history archived at: docs/OTA_CHANGELOG.md
-export const OTA_VERSION = 418;
+export const OTA_VERSION = 419;
 
 
 type OtaState =
