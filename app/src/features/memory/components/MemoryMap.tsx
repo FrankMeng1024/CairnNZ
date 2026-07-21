@@ -160,6 +160,15 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
     if (idleThrottleTimerRef.current) clearTimeout(idleThrottleTimerRef.current);
     idleThrottleTimerRef.current = setTimeout(() => {
       idleThrottleTimerRef.current = null;
+      // v425 fix: skip pan-detect during 1s post-recenter window.
+      // Prior bug: onRegionIsChanging checked suppressPanDetectUntilRef
+      // (line ~327) but onMapIdle didn't. Result: after user tapped
+      // Recenter, camera flyTo settled → onMapIdle fired → if dist
+      // > 50m (because anchorRef just moved to GPS coord but map
+      // was still mid-transition or GPS coord had drifted), panned=true
+      // → onMapMoved() → parent re-shows Recenter pill → user must
+      // tap Recenter twice.
+      if (Date.now() < suppressPanDetectUntilRef.current) return;
       const dist = haversineM(
         { lat: anchorRef.current.lat, lng: anchorRef.current.lng },
         { lat: center[1], lng: center[0] }

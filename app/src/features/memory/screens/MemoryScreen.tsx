@@ -43,6 +43,8 @@ import { log, flushNow as flushLogsNow } from '../../../services/appLog';
 // being viewed — fixes login-time crash where eager-loading these on
 // Home (which has no fog UI) crashed the app.
 import { ForegroundUnlockManager } from '../components/ForegroundUnlockManager';
+// v425: fly to real explored point inside sibling region (bug 2 fix)
+import { useMarkerStore } from '../../../store/useMarkerStore';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
 import { useHierarchyRegions, findDeepestRegion, type Region } from '../store/useHierarchyRegions';
@@ -838,14 +840,62 @@ export function MemoryScreen() {
           regionId={hierarchyRegionId}
           onSelectSibling={(region: Region) => {
             log('memory.hierarchy_fly', { id: region.id, level: region.level });
-            // Center of bbox, zoom based on level
+            // v425 fix (bug 2): fly to a real explored point inside the region,
+            // not the geometric bbox center. bbox center may fall on water /
+            // unexplored terrain (e.g. Pudong bbox center is offshore).
+            // Priority: (1) closest memory point to bbox center, (2) closest
+            // marker, (3) bbox center as fallback.
             const [minLng, minLat, maxLng, maxLat] = region.bbox;
-            const centerLng = (minLng + maxLng) / 2;
-            const centerLat = (minLat + maxLat) / 2;
+            const bboxCenterLng = (minLng + maxLng) / 2;
+            const bboxCenterLat = (minLat + maxLat) / 2;
             const spanLng = maxLng - minLng;
             const spanLat = maxLat - minLat;
             const span = Math.max(spanLng, spanLat);
+
+            const inBbox = (lat: number, lng: number) =>
+              lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+            const points = useMemoryStore.getState().points;
+            const markers = useMarkerStore.getState().markers;
+
+            let flyLng = bboxCenterLng;
+            let flyLat = bboxCenterLat;
+            let foundExploredPoint = false;
+
+            // Pick point closest to bbox center from inside bbox
+            let bestDist = Infinity;
+            for (const p of points) {
+              if (!inBbox(p.lat, p.lng)) continue;
+              const dLat = p.lat - bboxCenterLat;
+              const dLng = p.lng - bboxCenterLng;
+              const d = dLat * dLat + dLng * dLng;
+              if (d < bestDist) {
+                bestDist = d;
+                flyLat = p.lat;
+                flyLng = p.lng;
+                foundExploredPoint = true;
+              }
+            }
+            // Fallback to closest marker if no memory point in bbox
+            if (!foundExploredPoint) {
+              bestDist = Infinity;
+              for (const m of markers) {
+                if (!inBbox(m.lat, m.lng)) continue;
+                const dLat = m.lat - bboxCenterLat;
+                const dLng = m.lng - bboxCenterLng;
+                const d = dLat * dLat + dLng * dLng;
+                if (d < bestDist) {
+                  bestDist = d;
+                  flyLat = m.lat;
+                  flyLng = m.lng;
+                  foundExploredPoint = true;
+                }
+              }
+            }
+
             // Zoom heuristic: bigger span → smaller zoom
+            // When flying to an actual point (not bbox center), boost zoom
+            // by 1 level — user wants to see the point in context, not
+            // the whole region.
             let zoom = 12;
             if (span > 60) zoom = 3;
             else if (span > 20) zoom = 4;
@@ -855,8 +905,10 @@ export function MemoryScreen() {
             else if (span > 0.3) zoom = 11;
             else if (span > 0.1) zoom = 13;
             else zoom = 14.5;
+            if (foundExploredPoint) zoom = Math.min(zoom + 1, 15);
+
             flyTokenRef.current += 1;
-            setFlyToTarget({ center: [centerLng, centerLat], zoom, token: flyTokenRef.current });
+            setFlyToTarget({ center: [flyLng, flyLat], zoom, token: flyTokenRef.current });
             setHierarchyRegionId(region.id);
           }}
           onGoUp={(parent: Region) => {
