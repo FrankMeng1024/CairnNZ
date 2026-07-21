@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HierarchyPanel 长名地区 UX 方案对比</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
+    background: #ede4d3;
+    padding: 40px 20px;
+    color: #3d2f1f;
+  }
+
+  h1 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #3d2f1f;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: #7a6a52;
+    margin-bottom: 32px;
+  }
+
+  .row {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 40px;
+    align-items: flex-start;
+  }
+
+  .col-label {
+    width: 100%;
+    font-size: 16px;
+    font-weight: 600;
+    color: #5d7c46;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #d5cdba;
+  }
+
+  .pattern-label {
+    font-size: 13px;
+    color: #7a6a52;
+    margin-bottom: 8px;
+    text-align: center;
+    max-width: 236px;
+  }
+  .pattern-label b { color: #3d2f1f; }
+
+  /* Panel — 完全按 HierarchyPanel.tsx 236pt 宽复刻 */
+  .panel {
+    width: 236px;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 14px 16px;
+    box-shadow: 0 4px 12px rgba(60, 40, 20, 0.15), 0 2px 4px rgba(60, 40, 20, 0.08);
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0ebe0;
+  }
+
+  .title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #3d2f1f;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Chip — 复刻 upChip styles */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #f5efe4;
+    border-radius: 10px;
+    flex-shrink: 0;
+    color: #5d7c46;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .chip .arrow {
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  /* Row list */
+  .list {
+    padding: 6px 0 10px;
+  }
+  .list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 13px;
+    color: #3d2f1f;
+  }
+  .list-item.here { color: #5d7c46; font-weight: 600; }
+  .list-item.locked { color: #b8ad95; font-style: italic; }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot.here { background: #5d7c46; }
+  .dot.marked { background: #b5823d; }
+  .dot.walked { border: 1.5px dashed #b5823d; background: transparent; }
+  .dot.locked { background: #d5cdba; }
+
+  .legend {
+    display: flex;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f0ebe0;
+    font-size: 11px;
+    color: #7a6a52;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* ============ Pattern 1 (现状 v424): truncate 尾 ============ */
+  .p1 .chip {
+    max-width: 110px;
+  }
+  .p1 .chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ============ Pattern 2: chip 独占一行 + wrap ============ */
+  .p2 .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .p2 .title {
+    white-space: normal;
+    line-height: 1.25;
+  }
+  .p2 .chip {
+    max-width: 100%;
+    align-self: flex-start;
+  }
+  .p2 .chip-text {
+    white-space: normal;
+    line-height: 1.3;
+  }
+
+  /* ============ Pattern 3: chip 同行 + auto font-shrink + 中间 truncate ============ */
+  .p3 .chip {
+    max-width: 130px;
+  }
+  .p3 .chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* JS 会算长度然后加 class */
+  .p3 .chip.shrink-1 .chip-text { font-size: 11px; }
+  .p3 .chip.shrink-2 .chip-text { font-size: 10px; letter-spacing: -0.2px; }
+  .p3 .chip.mid-truncate .chip-text {
+    /* 用 direction/unicode-bidi 实现中间省略 */
+    direction: rtl;
+    text-align: left;
+  }
+
+  /* ============ Pattern 4: ISO short code + full name on second line ============ */
+  .p4 .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .p4 .title {
+    white-space: normal;
+    line-height: 1.25;
+  }
+  .p4 .chip {
+    max-width: 100%;
+  }
+  .p4 .chip-code {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .p4 .chip-full {
+    color: #a89b7a;
+    font-weight: 400;
+    font-size: 11px;
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .notes {
+    background: #ffffff;
+    padding: 20px 24px;
+    border-radius: 12px;
+    margin-top: 20px;
+    box-shadow: 0 2px 6px rgba(60, 40, 20, 0.08);
+    max-width: 1000px;
+  }
+  .notes h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+    color: #3d2f1f;
+  }
+  .notes p, .notes li {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #5a4a34;
+    margin-bottom: 6px;
+  }
+  .notes .green { color: #5d7c46; font-weight: 600; }
+  .notes .red { color: #b53e3e; font-weight: 600; }
+  .notes .amber { color: #b5823d; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>HierarchyPanel 长名地区 UX 方案对比</h1>
+<p class="subtitle">
+  Panel 固定 236pt (设计取舍不动)。横向 4 个方案, 纵向 3 种长度地区名<br>
+  测试用: <b>New Zealand</b> (11 chars 现状已切) · <b>Manawatū-Whanganui</b> (18 chars) · <b>内蒙古自治区</b> (中文长)
+</p>
+
+<!-- 现状说明 -->
+<div class="row">
+  <div class="col-label">Pattern 1 — 现状 (v424 bug): maxWidth 110 + truncate 尾</div>
+  <div>
+    <div class="pattern-label"><b>New Zealand</b> (11 chars)</div>
+    <div class="panel p1">
+      <div class="header">
+        <span class="title">Canterbury</span>
+        <span class="chip"><span class="arrow">↑</span><span class="chip-text">New Zealand</span></span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>Canterbury</div>
+        <div class="list-item locked"><span class="dot locked"></span>4 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Manawatū-Whanganui</b> (18 chars)</div>
+    <div class="panel p1">
+      <div class="header">
+        <span class="title">Palmerston North</span>
+        <span class="chip"><span class="arrow">↑</span><span class="chip-text">Manawatū-Whanganui</span></span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>Palmerston North</div>
+        <div class="list-item"><span class="dot marked"></span>Whanganui</div>
+        <div class="list-item locked"><span class="dot locked"></span>3 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>内蒙古自治区</b> (中文, 现状会切成"内蒙古...")</div>
+    <div class="panel p1">
+      <div class="header">
+        <span class="title">呼和浩特</span>
+        <span class="chip"><span class="arrow">↑</span><span class="chip-text">内蒙古自治区</span></span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>呼和浩特</div>
+        <div class="list-item locked"><span class="dot locked"></span>4 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-label">Pattern 2 — chip 独占一行, 完整显示可 wrap 2 行 (推荐)</div>
+  <div>
+    <div class="pattern-label"><b>New Zealand</b></div>
+    <div class="panel p2">
+      <div class="header">
+        <span class="title">Canterbury</span>
+        <span class="chip"><span class="arrow">↑</span><span class="chip-text">New Zealand</span></span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>Canterbury</div>
+        <div class="list-item locked"><span class="dot locked"></span>4 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Manawatū-Whanganui</b></div>
+    <div class="panel p2">
+      <div class="header">
+        <span class="title">Palmerston North</span>
+        <span class="chip"><span class="arrow">↑</span><span class="chip-text">Manawatū-Whanganui</span></span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>Palmerston North</div>
+        <div class="list-item"><span class="dot marked"></span>Whanganui</div>
+        <div class="list-item locked"><span class="dot locked"></span>3 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>内蒙古自治区</b></div>
+    <div class="panel p2">
+      <div class="header">
+        <span class="title">呼和浩特</span>
+        <span class="chip"><span class="arrow">↑</span><span class="chip-text">内蒙古自治区</span></span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>呼和浩特</div>
+        <div class="list-item locked"><span class="dot locked"></span>4 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-label">Pattern 3 — chip 同行 + font auto-shrink (12→11→10pt) + 极限中间省略</div>
+  <div>
+    <div class="pattern-label"><b>New Zealand</b> (装得下, 无缩)</div>
+    <div class="panel p3">
+      <div class="header">
+        <span class="title">Canterbury</span>
+        <span class="chip"><span class="arrow">↑</span><span class="chip-text">New Zealand</span></span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>Canterbury</div>
+        <div class="list-item locked"><span class="dot locked"></span>4 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Manawatū-Whanganui</b> (缩到 10pt)</div>
+    <div class="panel p3">
+      <div class="header">
+        <span class="title">Palmerston N…</span>
+        <span class="chip shrink-2"><span class="arrow">↑</span><span class="chip-text">Manawatū-Whanganui</span></span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>Palmerston North</div>
+        <div class="list-item"><span class="dot marked"></span>Whanganui</div>
+        <div class="list-item locked"><span class="dot locked"></span>3 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>内蒙古自治区</b> (11pt)</div>
+    <div class="panel p3">
+      <div class="header">
+        <span class="title">呼和浩特</span>
+        <span class="chip shrink-1"><span class="arrow">↑</span><span class="chip-text">内蒙古自治区</span></span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>呼和浩特</div>
+        <div class="list-item locked"><span class="dot locked"></span>4 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-label">Pattern 4 — ISO/短码 chip + 灰色副文本全名 (航司/机场风格)</div>
+  <div>
+    <div class="pattern-label"><b>New Zealand</b> → NZ</div>
+    <div class="panel p4">
+      <div class="header">
+        <span class="title">Canterbury</span>
+        <span class="chip">
+          <span class="arrow">↑</span>
+          <span class="chip-code">NZ</span>
+          <span class="chip-full">New Zealand</span>
+        </span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>Canterbury</div>
+        <div class="list-item locked"><span class="dot locked"></span>4 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Manawatū-Whanganui</b> → MWT (ISO 3166-2)</div>
+    <div class="panel p4">
+      <div class="header">
+        <span class="title">Palmerston North</span>
+        <span class="chip">
+          <span class="arrow">↑</span>
+          <span class="chip-code">MWT</span>
+          <span class="chip-full">Manawatū-Whanganui</span>
+        </span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>Palmerston North</div>
+        <div class="list-item"><span class="dot marked"></span>Whanganui</div>
+        <div class="list-item locked"><span class="dot locked"></span>3 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>内蒙古自治区</b> → NM (国标缩写)</div>
+    <div class="panel p4">
+      <div class="header">
+        <span class="title">呼和浩特</span>
+        <span class="chip">
+          <span class="arrow">↑</span>
+          <span class="chip-code">NM</span>
+          <span class="chip-full">内蒙古自治区</span>
+        </span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span>呼和浩特</div>
+        <div class="list-item locked"><span class="dot locked"></span>4 more locked</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot marked"></span>marked</span>
+        <span class="legend-item"><span class="dot walked"></span>walked</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <h3>快评</h3>
+  <ul>
+    <li><span class="red">Pattern 1 (现状)</span> — 短名切, 长名切更狠 (`Manawa...`), 中文切 (`内蒙古...`). 用户看不到父级完整名. <b>不推荐, 就是 v424 bug 本身</b>.</li>
+    <li><span class="green">Pattern 2 (chip 独占一行 wrap)</span> — 任何长度都能显示. panel 高度按需增加 (chip 1 行还是 2 行). 视觉一致度好, 无需外部 mapping 表. Cost: header 从 1 行变 2 行 (增高 ~24pt). R2 Mapbox reverse geocode 长街道名也能撑住. <b>推荐</b>.</li>
+    <li><span class="amber">Pattern 3 (font shrink + 中间 truncate)</span> — 保持 1 行 layout 不变, 但字号不一致 (10-12pt 混). 极端长仍要切. 用户看到不同字号会觉得"这个国家怎么字比别的小". 短名/长名视觉体验差异大.</li>
+    <li><span class="amber">Pattern 4 (ISO 短码 + 副文本)</span> — 最紧凑一致 (chip 尺寸稳定). 但 (a) 需要维护 ISO 3166-1/2 mapping (国+region), (b) R2 Mapbox reverse geocode 结果 district/street 级别无短码, (c) 中文/日文/俄文用户不熟 ISO 缩写. <b>特殊场景可能好, 通用场景成本高</b>.</li>
+  </ul>
+  <h3>推荐结论</h3>
+  <p><b>Pattern 2</b> — chip 独占一行, 内部自动 wrap. 简单, 零 mapping, 无字号跳变, 任何未来数据源都能装. 唯一 cost 是 panel header 高度 +12~20pt (取决 chip 1 行还是 2 行), 但这个 cost 值得.</p>
+  <p><b>兜底</b>: chip 2 行还装不下的极端超长 (&gt; 40 chars, 应该 R2 才会出现) 才尾 truncate + tap-panel-header 展开一次 full text. R1 静态数据里最长的 Manawatū-Whanganui (18) 单行都够.</p>
+</div>
+
+</body>
+</html>

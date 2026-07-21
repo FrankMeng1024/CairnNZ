@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HierarchyPanel v5 — 多 sibling 场景 (10+ 打卡) 处理</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
+    background: #ede4d3; padding: 40px 24px; color: #3d2f1f;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: #7a6a52; margin-bottom: 20px; line-height: 1.5; }
+  .warning {
+    background: #fef3d9; border-left: 4px solid #b5823d;
+    padding: 12px 16px; margin-bottom: 24px; border-radius: 4px;
+    font-size: 13px; color: #5a4a34; line-height: 1.5;
+  }
+
+  .row {
+    display: flex; gap: 20px; flex-wrap: wrap;
+    margin-bottom: 40px; align-items: flex-start;
+  }
+  .col-label {
+    width: 100%; font-size: 15px; font-weight: 600; color: #5d7c46;
+    margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #d5cdba;
+  }
+  .col-label .badge {
+    font-size: 11px; font-weight: 500; color: #7a6a52; margin-left: 8px;
+  }
+
+  .panel {
+    width: 236px; background: #ffffff; border-radius: 16px;
+    padding: 14px 16px;
+    box-shadow: 0 4px 12px rgba(60, 40, 20, 0.15);
+    margin-bottom: 10px;
+  }
+
+  .header {
+    display: flex; align-items: center; gap: 8px;
+    padding-bottom: 10px; border-bottom: 1px solid #f0ebe0;
+  }
+  .title {
+    font-size: 15px; font-weight: 700; color: #3d2f1f;
+    flex: 1; min-width: 0;
+  }
+  .up-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; background: #f5efe4; border-radius: 14px;
+    flex-shrink: 0; color: #5d7c46; font-size: 14px; font-weight: 700;
+    line-height: 1;
+  }
+
+  .list {
+    padding: 6px 0;
+  }
+  .list-scroll {
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .list-scroll::-webkit-scrollbar { width: 4px; }
+  .list-scroll::-webkit-scrollbar-track { background: transparent; }
+  .list-scroll::-webkit-scrollbar-thumb { background: #d5cdba; border-radius: 2px; }
+
+  .list-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; font-size: 13px; color: #3d2f1f;
+  }
+  .list-item.here { color: #5d7c46; font-weight: 600; }
+  .list-item.locked { color: #b8ad95; font-style: italic; }
+  .list-item .name { flex: 1; min-width: 0; }
+  .list-item .dot { flex-shrink: 0; }
+
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block;
+  }
+  .dot.here { background: #5d7c46; }
+  .dot.marked { background: #b5823d; }
+  .dot.walked { border: 1.5px dashed #b5823d; background: transparent; }
+  .dot.locked { background: #d5cdba; }
+
+  .legend {
+    display: flex; gap: 10px; padding-top: 10px;
+    border-top: 1px solid #f0ebe0;
+    font-size: 11px; color: #7a6a52;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+
+  .show-more {
+    text-align: center;
+    padding: 6px 0;
+    font-size: 12px;
+    color: #5d7c46;
+    font-weight: 600;
+    cursor: pointer;
+    border-top: 1px dashed #e8e0d0;
+    margin-top: 4px;
+  }
+
+  .scroll-hint {
+    text-align: center;
+    padding: 4px 0;
+    font-size: 10px;
+    color: #b8ad95;
+    letter-spacing: 0.5px;
+  }
+
+  .compact .list-item { padding: 5px 0; font-size: 12px; }
+  .compact .dot { width: 6px; height: 6px; }
+
+  .notes {
+    background: #ffffff; padding: 20px 24px; border-radius: 12px;
+    margin-top: 20px; box-shadow: 0 2px 6px rgba(60, 40, 20, 0.08);
+    max-width: 1000px;
+  }
+  .notes h3 { font-size: 16px; margin-bottom: 12px; }
+  .notes p, .notes li { font-size: 13px; line-height: 1.6; color: #5a4a34; margin-bottom: 6px; }
+  .notes ul { padding-left: 20px; }
+  .green { color: #5d7c46; font-weight: 600; }
+  .red { color: #b53e3e; font-weight: 600; }
+  .amber { color: #b5823d; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>HierarchyPanel v5 — 多 sibling 场景 (10+ 打卡)</h1>
+<p class="subtitle">
+  场景: 用户在中国跨省出差, 已打卡 <b>10 个 region</b> (Shanghai, Beijing, Hangzhou, Chengdu, Shenzhen, Guangzhou, Xi'an, Nanjing, Chongqing, Kunming). Parent = China. 现有 R1 硬 cap = 4 explored + 1 locked, 会把 6 个已打卡藏在 "6 more locked" 里.
+</p>
+
+<div class="warning">
+  <b>R1 现状 bug</b>: 硬 cap 4 → "6 more locked" 里其实混着已打卡, 但显示为 locked (灰虚字), 语义错误 + 用户找不到回到那 6 个 region 的路. 这是产品设计漏洞, 不只是 UI 问题.
+</div>
+
+<!-- ============ 方案 A: 现状 (硬 cap 4 + locked 折叠) ============ -->
+<div class="row">
+  <div class="col-label">方案 A — 现状: 硬 cap 4 + 折成 "6 more locked" <span class="badge">R1 现状 bug</span></div>
+
+  <div>
+    <div class="panel">
+      <div class="header">
+        <span class="title">Shanghai</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span><span class="name">Shanghai</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Beijing</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Hangzhou</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Chengdu</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">6 more locked</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div style="padding-top: 20px; max-width: 400px; font-size: 13px; color: #5a4a34; line-height: 1.7;">
+    <b>问题</b>:<br>
+    · Shenzhen, Guangzhou, Xi'an, Nanjing, Chongqing, Kunming 6 个<b>已打卡</b>被折叠成 "6 more locked"<br>
+    · "locked" 字面 = 未探索, 但实际是已打卡. <span class="red">语义错误</span><br>
+    · 用户无法点回那 6 个 region<br>
+    · <span class="red">Data loss + interaction loss</span>
+  </div>
+</div>
+
+<!-- ============ 方案 B: 内 scroll (推荐) ============ -->
+<div class="row">
+  <div class="col-label">方案 B — sibling list 加 max-height + 内 scroll <span class="badge green">推荐</span></div>
+
+  <div>
+    <div class="panel">
+      <div class="header">
+        <span class="title">Shanghai</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list list-scroll">
+        <div class="list-item here"><span class="dot here"></span><span class="name">Shanghai</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Beijing</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Hangzhou</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Chengdu</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Shenzhen</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Guangzhou</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Xi'an</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Nanjing</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Chongqing</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Kunming</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">23 more locked</span></div>
+      </div>
+      <div class="scroll-hint">▼ scroll for more</div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div style="padding-top: 20px; max-width: 400px; font-size: 13px; color: #5a4a34; line-height: 1.7;">
+    <b>效果</b>:<br>
+    · 所有 10 个已打卡 region 都可见 (滚动)<br>
+    · max-height 240pt (~7 rows 可见, 剩 3 滚动)<br>
+    · 底部 <code>▼ scroll for more</code> 提示 (可选, 仅在超出时显示)<br>
+    · locked (未打卡) 仍折叠成 summary row 放最后<br>
+    · <span class="green">用户能点回任何已打卡</span><br>
+    · Panel 高度稳定, 内容溢出内滚
+  </div>
+</div>
+
+<!-- ============ 方案 C: 分组 + 全展开 ============ -->
+<div class="row">
+  <div class="col-label">方案 C — 分组: Explored / Locked 两段, Explored 全展开 <span class="badge">explicit hierarchy</span></div>
+
+  <div>
+    <div class="panel">
+      <div class="header">
+        <span class="title">Shanghai</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list list-scroll">
+        <div style="font-size: 10px; color: #7a6a52; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 0 2px;">Explored · 10</div>
+        <div class="list-item here"><span class="dot here"></span><span class="name">Shanghai</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Beijing</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Hangzhou</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Chengdu</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Shenzhen</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Guangzhou</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Xi'an</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Nanjing</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Chongqing</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Kunming</span></div>
+        <div style="font-size: 10px; color: #7a6a52; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 0 2px; border-top: 1px solid #f0ebe0; margin-top: 4px;">Locked · 23</div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">Tianjin</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">Wuhan</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">…</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div style="padding-top: 20px; max-width: 400px; font-size: 13px; color: #5a4a34; line-height: 1.7;">
+    <b>效果</b>:<br>
+    · 明确分组 Explored (10) / Locked (23)<br>
+    · Locked 每个也列出 (可点回去 = 探索目标)<br>
+    · 内 scroll, 高度稳定<br>
+    · <span class="amber">但</span>: 分组 title 占空间, R1 static tree 里 locked = 未来目标, 可能过多信息<br>
+    · panel 内容变多, 用户扫描时间变长
+  </div>
+</div>
+
+<!-- ============ 方案 D: 紧凑模式 (超 5 个时缩小行高) ============ -->
+<div class="row">
+  <div class="col-label">方案 D — Compact mode: sibling ≥ 5 时自动缩行高/字号 <span class="badge">不 scroll, 全部显示</span></div>
+
+  <div>
+    <div class="panel compact">
+      <div class="header">
+        <span class="title">Shanghai</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span><span class="name">Shanghai</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Beijing</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Hangzhou</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Chengdu</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Shenzhen</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Guangzhou</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Xi'an</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Nanjing</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Chongqing</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Kunming</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">23 more locked</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div style="padding-top: 20px; max-width: 400px; font-size: 13px; color: #5a4a34; line-height: 1.7;">
+    <b>效果</b>:<br>
+    · 全部 10 行都可见, 字号 12pt, dot 6pt, row 高度紧<br>
+    · panel 从 ~260pt 变 ~400pt (变高)<br>
+    · <span class="amber">panel 超出 viewport bottom</span> (viewport 844pt, panel 底在 168pt, 400pt panel 顶部到 568pt, 视觉压迫感)<br>
+    · 短 list (2-3 sibling) 字号仍 13pt, 长 list 变小 — 字号不一致<br>
+    · 用户在 20+ region 场景仍会超 (中国 34 省)
+  </div>
+</div>
+
+<!-- ============ 方案 E: 分页 (Show more btn) ============ -->
+<div class="row">
+  <div class="col-label">方案 E — 默认显示 5, 底部 "Show 5 more" 按钮 <span class="badge">progressive</span></div>
+
+  <div>
+    <div class="panel">
+      <div class="header">
+        <span class="title">Shanghai</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span><span class="name">Shanghai</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Beijing</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Hangzhou</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Chengdu</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Shenzhen</span></div>
+        <div class="show-more">Show 5 more explored</div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">23 more locked</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div style="padding-top: 20px; max-width: 400px; font-size: 13px; color: #5a4a34; line-height: 1.7;">
+    <b>效果</b>:<br>
+    · 默认紧凑 (5 rows), 用户 tap "Show 5 more" 分页展开<br>
+    · panel 逐步长高<br>
+    · 交互清晰, 不必要的隐藏<br>
+    · <span class="amber">但</span>: 需要 tap 才能看全, 一层交互. 短 list 也统一逻辑<br>
+    · 展开后能 collapse 吗? 需要额外 UI
+  </div>
+</div>
+
+<div class="notes">
+  <h3>结论</h3>
+  <ul>
+    <li><span class="red">A 现状</span> — 硬 cap + "6 more locked" 是<b>产品 bug</b>, 已打卡被折叠为 locked 语义错误. 必修.</li>
+    <li><span class="green">B 内 scroll</span> — 所有 explored 都可见, 用户可 scroll. Panel 高度稳定 (240-260pt). 视觉一致. R1 R2 都能扛. <b>推荐</b>.</li>
+    <li><span class="amber">C 分组 + Locked 也列出</span> — 明确, 但 R1 locked 是 static tree, 列 34 个中国省份意义不大. R2 可能有用. R1 阶段过度设计.</li>
+    <li><span class="amber">D Compact</span> — 字号不一致, panel 高度不稳定, 超 15+ sibling 仍失效. 治标.</li>
+    <li><span class="amber">E 分页 Show more</span> — 交互一层, 用户第一眼不知能展开. B 是更自然的 mobile UX.</li>
+  </ul>
+
+  <h3>最终推荐: B (max-height + 内 scroll)</h3>
+  <p><b>结合 v4 title/sibling 2 行 wrap</b>, 完整解决方案:</p>
+  <ol style="padding-left: 24px;">
+    <li>Header title + chip 走 v4 方案 B (title 2 行, chip 纯 ↑ 圆按钮)</li>
+    <li>Sibling list 加 <code>maxHeight: 240</code> + <code>ScrollView</code> 包裹 (React Native), overflow 内滚</li>
+    <li>去掉 <code>MAX_EXPLORED</code> cap — 所有 explored 都渲染, list 里显示<br>
+    · 不再把已打卡藏到 "locked"</li>
+    <li>Locked 独立处理: 保留 "N more locked" summary row 放最后 (未来探索目标, R1 静态数据里较多但不需一一列出)</li>
+    <li>Panel 超出 viewport 时可拖动 (RN <code>ScrollView</code> 天然支持)</li>
+  </ol>
+  <p><b>预估改动</b>: HierarchyPanel.tsx ~25 行 (v4 15 行 + 本次 sibling list 换 ScrollView 10 行). computeVisibleRows 函数需要重构: 不再 slice, 全返回.</p>
+
+  <h3>边界</h3>
+  <p><b>数据规模</b>: 一个用户在一个国家最多打卡多少? 中国 34 省, 美国 50 州, 世界 200+ 国家. 极限 100+ 用户会 scroll 一段. 但产品意图上"打卡 100 个区域"是产品的 aspirational goal, 界面必须支持.</p>
+</div>
+
+</body>
+</html>

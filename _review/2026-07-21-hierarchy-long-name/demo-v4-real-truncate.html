@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HierarchyPanel v4 — 真长名字对比 (装不下才有意义)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
+    background: #ede4d3;
+    padding: 40px 24px;
+    color: #3d2f1f;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: #7a6a52; margin-bottom: 20px; line-height: 1.5; }
+
+  .warning {
+    background: #fef3d9; border-left: 4px solid #b5823d;
+    padding: 12px 16px; margin-bottom: 24px; border-radius: 4px;
+    font-size: 13px; color: #5a4a34; line-height: 1.5;
+  }
+
+  .row {
+    display: flex; gap: 20px; flex-wrap: wrap;
+    margin-bottom: 40px; align-items: flex-start;
+  }
+  .col-label {
+    width: 100%; font-size: 15px; font-weight: 600; color: #5d7c46;
+    margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #d5cdba;
+  }
+  .col-label .badge {
+    font-size: 11px; font-weight: 500; color: #7a6a52; margin-left: 8px;
+  }
+
+  .panel {
+    width: 236px; background: #ffffff; border-radius: 16px; padding: 14px 16px;
+    box-shadow: 0 4px 12px rgba(60, 40, 20, 0.15);
+    margin-bottom: 10px;
+  }
+
+  .header {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding-bottom: 10px; border-bottom: 1px solid #f0ebe0;
+  }
+  .title {
+    font-size: 15px; font-weight: 700; color: #3d2f1f;
+    flex: 1; min-width: 0;
+  }
+  .up-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; background: #f5efe4; border-radius: 14px;
+    flex-shrink: 0; color: #5d7c46; font-size: 14px; font-weight: 700;
+    line-height: 1;
+  }
+
+  .list { padding: 6px 0 10px; }
+  .list-item {
+    display: flex; gap: 10px;
+    padding: 8px 0; font-size: 13px; color: #3d2f1f;
+  }
+  .list-item.here { color: #5d7c46; font-weight: 600; }
+  .list-item.locked { color: #b8ad95; font-style: italic; }
+  .list-item .name { flex: 1; min-width: 0; }
+  .list-item .dot { flex-shrink: 0; }
+
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block;
+  }
+  .dot.here { background: #5d7c46; }
+  .dot.marked { background: #b5823d; }
+  .dot.walked { border: 1.5px dashed #b5823d; background: transparent; }
+  .dot.locked { background: #d5cdba; }
+
+  .legend {
+    display: flex; gap: 10px; padding-top: 10px;
+    border-top: 1px solid #f0ebe0;
+    font-size: 11px; color: #7a6a52;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+
+  /* Header 方案 */
+  .header { align-items: center; }
+  .a .title, .c .title, .d .title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .b .header { align-items: flex-start; }
+  .b .title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.2;
+  }
+  .c .title {
+    /* auto-shrink by measured length via inline class */
+    font-size: 12px;
+    letter-spacing: -0.3px;
+  }
+
+  /* Sibling list 方案 */
+  .a .list-item { align-items: center; }
+  .a .list-item .dot { margin-top: 3px; }
+  .a .list-item .name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .b .list-item { align-items: flex-start; }
+  .b .list-item .dot { margin-top: 5px; }
+  .b .list-item .name {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.35;
+  }
+
+  .c .list-item { align-items: center; }
+  .c .list-item .dot { margin-top: 3px; }
+  .c .list-item .name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    letter-spacing: -0.2px;
+  }
+
+  .notes {
+    background: #ffffff; padding: 20px 24px; border-radius: 12px;
+    margin-top: 20px; box-shadow: 0 2px 6px rgba(60, 40, 20, 0.08);
+    max-width: 1000px;
+  }
+  .notes h3 { font-size: 16px; margin-bottom: 12px; }
+  .notes p, .notes li { font-size: 13px; line-height: 1.6; color: #5a4a34; margin-bottom: 6px; }
+  .notes ul { padding-left: 20px; }
+  .green { color: #5d7c46; font-weight: 600; }
+  .red { color: #b53e3e; font-weight: 600; }
+  .amber { color: #b5823d; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>HierarchyPanel v4 — 真装不下的长名字对比</h1>
+<p class="subtitle">
+  用<b>真的会 truncate 的</b>样本 (30+ chars 无空格 / 40+ chars 有空格). 你才能看到 wrap 与 truncate 的区别.<br>
+  Panel 236pt 宽固定. 4 sibling 一组: <br>
+  <b>Manawatū-Whanganui</b> (18) · <b>Democratic Republic of the Congo</b> (32) · <b>Ashgabat-Balkanabat-Türkmenbaşy</b> (31 无空格) · <b>The former Yugoslav Republic of Macedonia</b> (41)
+</p>
+
+<div class="warning">
+  <b>说明</b>: 之前 demo 用 "Federated States of Micronesia" (30 chars 但空格断得开) 在 236pt 里 web Chrome 一行居然装下了, 所以 A/B 看不出差别. 这次样本更长且含无空格串.
+</div>
+
+<!-- ============ 方案 A: 全单行 truncate 尾 ============ -->
+<div class="row">
+  <div class="col-label">方案 A — title + sibling 全单行 truncate 尾 <span class="badge">现状 v424 行为</span></div>
+
+  <div>
+    <div class="panel a">
+      <div class="header">
+        <span class="title">Democratic Republic of the Congo</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span><span class="name">Democratic Republic of the Congo</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Manawatū-Whanganui</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Ashgabat-Balkanabat-Türkmenbaşy</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">The former Yugoslav Republic of Macedonia</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">2 more locked</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div style="padding-top: 20px; max-width: 400px; font-size: 13px; color: #5a4a34; line-height: 1.7;">
+    <b>看到的问题</b>:<br>
+    · Title 被切 `Democratic Republic of the C…`<br>
+    · 4 个 sibling 全被切<br>
+    · 用户不知道 `Ashgabat-Balkana…` 后面是什么<br>
+    · Macedonia 那行完全看不到"of Macedonia"<br>
+    · <span class="red">信息层丢失严重</span>
+  </div>
+</div>
+
+<!-- ============ 方案 B: title + sibling 都 wrap 2 行 ============ -->
+<div class="row">
+  <div class="col-label">方案 B — title + sibling 都允许 wrap 2 行 <span class="badge green">推荐</span></div>
+
+  <div>
+    <div class="panel b">
+      <div class="header">
+        <span class="title">Democratic Republic of the Congo</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span><span class="name">Democratic Republic of the Congo</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Manawatū-Whanganui</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Ashgabat-Balkanabat-Türkmenbaşy</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">The former Yugoslav Republic of Macedonia</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">2 more locked</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div style="padding-top: 20px; max-width: 400px; font-size: 13px; color: #5a4a34; line-height: 1.7;">
+    <b>看到的效果</b>:<br>
+    · Title 2 行显示 `Democratic Republic / of the Congo` 完整<br>
+    · Congo, Manawatū, Macedonia 都完整可读<br>
+    · Ashgabat-Balkanabat-Türkmenbaşy 无空格串 → 2 行仍装不下 (从中间断词), <span class="amber">仍尾切 `…kmenbaşy`</span><br>
+    · Panel 高度 +40pt (从 ~220pt → ~260pt)<br>
+    · <span class="green">95% 场景解决, 5% 极端长无空格仍需要 tap 展开</span>
+  </div>
+</div>
+
+<!-- ============ 方案 C: 字号 auto-shrink ============ -->
+<div class="row">
+  <div class="col-label">方案 C — title + sibling 单行 + 字号 auto-shrink 到装下 <span class="badge">layout 稳但字号不一致</span></div>
+
+  <div>
+    <div class="panel c">
+      <div class="header">
+        <span class="title">Democratic Republic of the Congo</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span><span class="name" style="font-size:13px;">Palmerston North</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name" style="font-size:13px;">Manawatū-Whanganui</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name" style="font-size:9px;">Ashgabat-Balkanabat-Türkmenbaşy</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name" style="font-size:8px;">The former Yugoslav Republic of Macedonia</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">2 more locked</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div style="padding-top: 20px; max-width: 400px; font-size: 13px; color: #5a4a34; line-height: 1.7;">
+    <b>看到的问题</b>:<br>
+    · Title 字号变 12pt (原 15pt), 与其他 panel 不一致<br>
+    · Sibling 字号 13/13/9/8pt 交错, 视觉杂乱<br>
+    · Macedonia 那行 8pt 已经难读<br>
+    · <span class="amber">layout 稳但视觉杂乱</span>
+  </div>
+</div>
+
+<!-- ============ 方案 D: 单行 truncate + 该行 tap 展开 ============ -->
+<div class="row">
+  <div class="col-label">方案 D — 全单行 truncate, 用户 tap 该行才展开全文 <span class="badge">iOS Notes 风格</span></div>
+
+  <div>
+    <div class="panel d">
+      <div class="header">
+        <span class="title">Democratic Republic of the Congo</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span><span class="name">Democratic Republic of the Congo</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Manawatū-Whanganui</span></div>
+        <div class="list-item" style="background:#fef8ec;border-radius:6px;padding:6px 6px;margin:-2px -6px;">
+          <span class="dot walked" style="margin-top:2px;"></span>
+          <span class="name" style="white-space:normal;overflow:visible;line-height:1.35;">Ashgabat-Balkanabat-Türkmenbaşy <span style="font-size:10px;color:#7a6a52;">(tap to collapse)</span></span>
+        </div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">The former Yugoslav Republic of Macedonia</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">2 more locked</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div style="padding-top: 20px; max-width: 400px; font-size: 13px; color: #5a4a34; line-height: 1.7;">
+    <b>看到的效果</b>:<br>
+    · 默认切, 但用户点该行会展开全名 (示例: Ashgabat 那行是展开状态)<br>
+    · 点其他行会自动折叠 (accordion)<br>
+    · <span class="amber">优</span>: 需要 tap 才能看全, 不必要的名字保持紧凑<br>
+    · <span class="red">劣</span>: 用户第一眼不知道能点, tap-to-reveal 影响可发现性<br>
+    · 增加交互复杂度
+  </div>
+</div>
+
+<div class="notes">
+  <h3>结论</h3>
+  <ul>
+    <li><span class="red">A</span> — 现状, 30+ chars 全切, 信息丢. <b>不能接受</b>.</li>
+    <li><span class="green">B</span> — title 完整可读, sibling 长的 wrap, 无空格极长的 (Ashgabat) 仍尾切但读到大部分. Panel 高度按需增. 视觉一致 (字号统一). <b>推荐</b>.</li>
+    <li><span class="amber">C</span> — Layout 稳定, 但字号 8-13pt 交错视觉杂. Macedonia 变 8pt 已经难读. 不推荐.</li>
+    <li><span class="amber">D</span> — 增加交互 (tap-to-expand), 用户不知能点. 可作为 B 的补充 (2 行装不下时才 tap 展开), 但不建议单独用.</li>
+  </ul>
+
+  <h3>最终推荐: 方案 B (title + sibling 都 2 行 wrap)</h3>
+  <p>覆盖 95% 场景. 剩余 5% 无空格极端长 (Ashgabat/Türkmenbaşy 那类) 仍会尾切 — 但 20 chars 都能读到, 用户能识别足够信息. R2 Mapbox reverse geocode 极端 case 才需要担心.</p>
+
+  <h3>代码改动 (HierarchyPanel.tsx)</h3>
+  <p>~15 行:</p>
+  <ol style="padding-left: 20px; font-size: 12px; font-family: 'SF Mono', monospace; background: #f5efe4; padding: 12px 12px 12px 32px; border-radius: 6px;">
+    <li>Line 79: <code>Text</code> title <code>numberOfLines={1}</code> → <code>numberOfLines={2}</code></li>
+    <li>Line 87: 删除 <code>&lt;Text style={styles.upChipText}&gt;{parent.name}&lt;/Text&gt;</code></li>
+    <li>Line 114: sibling <code>Text</code> <code>numberOfLines={1}</code> → <code>numberOfLines={2}</code></li>
+    <li>styles.title 加 <code>flex: 1, lineHeight: 19</code></li>
+    <li>styles.upChip: 删 <code>flexDirection/gap/paddingH/V/maxWidth</code>; 加 <code>width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center'</code></li>
+    <li>styles.upChipText: 整块删除</li>
+    <li>styles.listItem 加 <code>alignItems: 'flex-start'</code>; styles.dot 加 <code>marginTop: 5</code></li>
+    <li>styles.listItemName 加 <code>lineHeight: 17</code></li>
+  </ol>
+</div>
+
+</body>
+</html>

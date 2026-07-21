@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HierarchyPanel — sibling list 长名处理</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
+    background: #ede4d3;
+    padding: 40px 24px;
+    color: #3d2f1f;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: #7a6a52; margin-bottom: 32px; line-height: 1.5; }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 40px; align-items: flex-start; }
+  .col-label {
+    width: 100%; font-size: 15px; font-weight: 600; color: #5d7c46;
+    margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #d5cdba;
+  }
+  .col-label .badge { font-size: 11px; font-weight: 500; color: #7a6a52; margin-left: 8px; }
+  .pattern-label { font-size: 12px; color: #7a6a52; margin-bottom: 8px; max-width: 236px; }
+  .pattern-label b { color: #3d2f1f; }
+
+  .panel {
+    width: 236px; background: #ffffff; border-radius: 16px; padding: 14px 16px;
+    box-shadow: 0 4px 12px rgba(60, 40, 20, 0.15), 0 2px 4px rgba(60, 40, 20, 0.08);
+    margin-bottom: 10px;
+  }
+
+  .header {
+    display: flex; align-items: center; gap: 8px;
+    padding-bottom: 10px; border-bottom: 1px solid #f0ebe0;
+  }
+  .title {
+    font-size: 15px; font-weight: 700; color: #3d2f1f;
+    flex: 1; min-width: 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; line-height: 1.2;
+  }
+  .up-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; background: #f5efe4; border-radius: 14px;
+    flex-shrink: 0; color: #5d7c46; font-size: 14px; font-weight: 700;
+  }
+
+  .list { padding: 6px 0 10px; }
+  .list-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; font-size: 13px; color: #3d2f1f;
+  }
+  .list-item.here { color: #5d7c46; font-weight: 600; }
+  .list-item.locked { color: #b8ad95; font-style: italic; }
+  .list-item .name { flex: 1; min-width: 0; }
+
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot.here { background: #5d7c46; }
+  .dot.marked { background: #b5823d; }
+  .dot.walked { border: 1.5px dashed #b5823d; background: transparent; }
+  .dot.locked { background: #d5cdba; }
+
+  .legend {
+    display: flex; gap: 10px; padding-top: 10px;
+    border-top: 1px solid #f0ebe0;
+    font-size: 11px; color: #7a6a52;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+
+  /* ============ 方案 A: sibling 单行 truncate 尾 ============ */
+  .a .list-item .name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ============ 方案 B: sibling 2 行 wrap ============ */
+  .b .list-item {
+    align-items: flex-start;
+  }
+  .b .list-item .dot { margin-top: 6px; }
+  .b .list-item .name {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.3;
+  }
+
+  /* ============ 方案 C: 单行 + 字号 auto-shrink ============ */
+  .c .list-item .name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .c .list-item .name.shrink-1 { font-size: 12px; }
+  .c .list-item .name.shrink-2 { font-size: 11px; letter-spacing: -0.2px; }
+
+  /* ============ 方案 D: 单行, 字号缩到装下为止 (数据不切), 极限也不切 ============ */
+  .d .list-item {
+    align-items: center;
+  }
+  .d .list-item .name {
+    white-space: nowrap;
+    /* 用 CSS transform 强行 fit — 演示用 inline style 每个 */
+  }
+
+  .notes {
+    background: #ffffff; padding: 20px 24px; border-radius: 12px; margin-top: 20px;
+    box-shadow: 0 2px 6px rgba(60, 40, 20, 0.08); max-width: 1000px;
+  }
+  .notes h3 { font-size: 16px; margin-bottom: 12px; }
+  .notes p, .notes li { font-size: 13px; line-height: 1.6; color: #5a4a34; margin-bottom: 6px; }
+  .notes ul { padding-left: 20px; }
+  .green { color: #5d7c46; font-weight: 600; }
+  .red { color: #b53e3e; font-weight: 600; }
+  .amber { color: #b5823d; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>HierarchyPanel — sibling list 长名字处理</h1>
+<p class="subtitle">
+  Header 已选定 <b>方案 B</b> (title 2 行 wrap, chip = 纯 ↑ 圆按钮).<br>
+  现在看 sibling list 里的长名字怎么办. 4 种方案对比, 每种用同一组 4 个 sibling: <br>
+  <b>Palmerston North · Manawatū-Whanganui · Napier · Federated States of Micronesia</b>
+</p>
+
+<!-- ============ 方案 A: sibling 也切 (现状) ============ -->
+<div class="row">
+  <div class="col-label">方案 A — sibling 单行 truncate 尾 <span class="badge">现状行为</span></div>
+  <div>
+    <div class="pattern-label">Sibling list 都被切</div>
+    <div class="panel a">
+      <div class="header">
+        <span class="title">Palmerston North</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span><span class="name">Palmerston North</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Manawatū-Whanganui</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Napier</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Federated States of Micronesia</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">2 more locked</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 方案 B: sibling 2 行 wrap ============ -->
+<div class="row">
+  <div class="col-label">方案 B — sibling 允许 wrap 2 行 (与 title 一致) <span class="badge">推荐</span></div>
+  <div>
+    <div class="pattern-label">长名 wrap 2 行, 短名 1 行, 视觉一致度好</div>
+    <div class="panel b">
+      <div class="header">
+        <span class="title">Palmerston North</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span><span class="name">Palmerston North</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Manawatū-Whanganui</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Napier</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Federated States of Micronesia</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">2 more locked</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 方案 C: 字号缩 ============ -->
+<div class="row">
+  <div class="col-label">方案 C — 单行 + 字号 auto-shrink (13→12→11pt) <span class="badge">layout 稳</span></div>
+  <div>
+    <div class="pattern-label">保持 1 行 layout, 长名缩字号</div>
+    <div class="panel c">
+      <div class="header">
+        <span class="title">Palmerston North</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span><span class="name">Palmerston North</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name shrink-1">Manawatū-Whanganui</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Napier</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name shrink-2">Federated States of Micronesia</span></div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">2 more locked</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 方案 D: 只显示前 N 字符 + 数字后缀 ============ -->
+<div class="row">
+  <div class="col-label">方案 D — 单行 truncate + tap 展开 (item 可点开看全名) <span class="badge">iOS Notes 风格</span></div>
+  <div>
+    <div class="pattern-label">默认切, 用户 tap 该行展开全名 (次要交互)</div>
+    <div class="panel a">
+      <div class="header">
+        <span class="title">Palmerston North</span>
+        <span class="up-btn">↑</span>
+      </div>
+      <div class="list">
+        <div class="list-item here"><span class="dot here"></span><span class="name">Palmerston North</span></div>
+        <div class="list-item"><span class="dot marked"></span><span class="name">Manawatū-Whanganui</span></div>
+        <div class="list-item"><span class="dot walked"></span><span class="name">Napier</span></div>
+        <div class="list-item" style="background:#fef8ec;border-radius:6px;padding-left:6px;padding-right:6px;margin:-2px -6px;">
+          <span class="dot marked"></span>
+          <span class="name" style="white-space:normal;line-height:1.3;">Federated States of Micronesia</span>
+        </div>
+        <div class="list-item locked"><span class="dot locked"></span><span class="name">2 more locked</span></div>
+      </div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <h3>快评</h3>
+  <ul>
+    <li><span class="red">A 单行切</span> — 与 title 处理不一致 (title 已换 B). 用户看不到某些 region 的完整名. 不推荐.</li>
+    <li><span class="green">B 2 行 wrap</span> — 与 title 处理一致. 4 sibling 中只有 2 个长的 wrap, 短的仍 1 行. panel 高度按需增. list 稳定. 推荐.</li>
+    <li><span class="amber">C 字号缩</span> — 4 个 sibling 字号不一致. 用户会觉得"Micronesia 那行怎么字比别的小". 视觉杂乱, 不推荐.</li>
+    <li><span class="amber">D 默认切 + tap 展开</span> — 交互一层, 用户第一眼不知道能点. 若非"名字太长, 但很少见, 显示不下也不算大问题"场景不适用. 不推荐.</li>
+  </ul>
+  <h3>推荐: B (与 title 一致)</h3>
+  <p>sibling <code>numberOfLines={2}</code> + <code>alignItems: 'flex-start'</code> (dot 顶对齐避免居中歪) + <code>lineHeight: 17</code>. list 单项高度从 fixed 变 flex.</p>
+  <p><b>边界</b>: 2 行也装不下的极端超长 (&gt; 35 chars 每行 ~ 20 chars 计) 仍尾 truncate. 长街道 R2 才会有.</p>
+</div>
+
+</body>
+</html>

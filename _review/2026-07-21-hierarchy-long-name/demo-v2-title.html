@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HierarchyPanel — title (左侧名字) 长度处理</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
+    background: #ede4d3;
+    padding: 40px 24px;
+    color: #3d2f1f;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: #7a6a52;
+    margin-bottom: 32px;
+    line-height: 1.5;
+  }
+
+  .row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 40px;
+    align-items: flex-start;
+  }
+  .col-label {
+    width: 100%;
+    font-size: 15px;
+    font-weight: 600;
+    color: #5d7c46;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #d5cdba;
+  }
+  .col-label .badge {
+    font-size: 11px;
+    font-weight: 500;
+    color: #7a6a52;
+    margin-left: 8px;
+  }
+  .pattern-label {
+    font-size: 12px;
+    color: #7a6a52;
+    margin-bottom: 8px;
+    max-width: 236px;
+  }
+  .pattern-label b { color: #3d2f1f; }
+
+  .panel {
+    width: 236px;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 14px 16px;
+    box-shadow: 0 4px 12px rgba(60, 40, 20, 0.15), 0 2px 4px rgba(60, 40, 20, 0.08);
+    margin-bottom: 10px;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0ebe0;
+  }
+
+  .title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #3d2f1f;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Chip 只保留箭头, 无文字 */
+  .up-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: #f5efe4;
+    border-radius: 14px;
+    flex-shrink: 0;
+    color: #5d7c46;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .list {
+    padding: 6px 0 10px;
+  }
+  .list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 13px;
+    color: #3d2f1f;
+  }
+  .list-item.here { color: #5d7c46; font-weight: 600; }
+  .list-item.locked { color: #b8ad95; font-style: italic; }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot.here { background: #5d7c46; }
+  .dot.marked { background: #b5823d; }
+  .dot.walked { border: 1.5px dashed #b5823d; background: transparent; }
+  .dot.locked { background: #d5cdba; }
+  .legend {
+    display: flex; gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f0ebe0;
+    font-size: 11px; color: #7a6a52;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+
+  /* ============ 方案 A: title 单行 truncate 尾 (v424 现状同等) ============ */
+  .a .title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ============ 方案 B: title 允许 2 行 wrap, 超出才 truncate ============ */
+  .b .title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.2;
+  }
+
+  /* ============ 方案 C: title 单行, 但字号 auto-shrink ============ */
+  .c .title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .c .title.shrink-1 { font-size: 13px; }
+  .c .title.shrink-2 { font-size: 12px; letter-spacing: -0.2px; }
+  .c .title.shrink-3 { font-size: 11px; letter-spacing: -0.3px; }
+
+  /* ============ 方案 D: title 完整 wrap 不限行 (可能变 3 行) ============ */
+  .d .title {
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  .notes {
+    background: #ffffff;
+    padding: 20px 24px;
+    border-radius: 12px;
+    margin-top: 20px;
+    box-shadow: 0 2px 6px rgba(60, 40, 20, 0.08);
+    max-width: 1000px;
+  }
+  .notes h3 { font-size: 16px; margin-bottom: 12px; }
+  .notes p, .notes li {
+    font-size: 13px; line-height: 1.6; color: #5a4a34;
+    margin-bottom: 6px;
+  }
+  .notes ul { padding-left: 20px; }
+  .green { color: #5d7c46; font-weight: 600; }
+  .red { color: #b53e3e; font-weight: 600; }
+  .amber { color: #b5823d; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>HierarchyPanel — title (左侧名字) 长度处理</h1>
+<p class="subtitle">
+  chip 简化为只有 <b>↑ 图标 (28×28pt)</b> 无文字 (chip = 返回上级按钮, 名字不重要)。<br>
+  纵向对比 title 4 种长度: <b>Canterbury</b> (10) · <b>Palmerston North</b> (16) · <b>Manawatū-Whanganui</b> (18) · <b>Federated States of Micronesia</b> (30)<br>
+  Panel 236pt 宽固定。
+</p>
+
+<!-- ============ 方案 A ============ -->
+<div class="row">
+  <div class="col-label">方案 A — 单行 truncate 尾 <span class="badge">(现状 v424 同等; 长名会切)</span></div>
+
+  <div>
+    <div class="pattern-label"><b>Canterbury</b></div>
+    <div class="panel a"><div class="header"><span class="title">Canterbury</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Canterbury</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Palmerston North</b> (16 chars)</div>
+    <div class="panel a"><div class="header"><span class="title">Palmerston North</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Palmerston North</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Manawatū-Whanganui</b> (18 chars)</div>
+    <div class="panel a"><div class="header"><span class="title">Manawatū-Whanganui</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Manawatū-Whanganui</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Federated States of Micronesia</b> (30 chars, R2 会有)</div>
+    <div class="panel a"><div class="header"><span class="title">Federated States of Micronesia</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Federated States of Micronesia</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 方案 B ============ -->
+<div class="row">
+  <div class="col-label">方案 B — title 允许 wrap 到 2 行 (最多 2 行, 超出仍 truncate) <span class="badge">推荐</span></div>
+
+  <div>
+    <div class="pattern-label"><b>Canterbury</b></div>
+    <div class="panel b"><div class="header"><span class="title">Canterbury</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Canterbury</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Palmerston North</b></div>
+    <div class="panel b"><div class="header"><span class="title">Palmerston North</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Palmerston North</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Manawatū-Whanganui</b></div>
+    <div class="panel b"><div class="header"><span class="title">Manawatū-Whanganui</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Manawatū-Whanganui</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Federated States of Micronesia</b></div>
+    <div class="panel b"><div class="header"><span class="title">Federated States of Micronesia</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Federated States of Micronesia</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 方案 C ============ -->
+<div class="row">
+  <div class="col-label">方案 C — 单行 + 字号 auto-shrink (15→13→12→11pt) <span class="badge">layout 不变</span></div>
+
+  <div>
+    <div class="pattern-label"><b>Canterbury</b> (15pt)</div>
+    <div class="panel c"><div class="header"><span class="title">Canterbury</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Canterbury</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Palmerston North</b> (13pt)</div>
+    <div class="panel c"><div class="header"><span class="title shrink-1">Palmerston North</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Palmerston North</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Manawatū-Whanganui</b> (12pt)</div>
+    <div class="panel c"><div class="header"><span class="title shrink-2">Manawatū-Whanganui</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Manawatū-Whanganui</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Federated States of Micronesia</b> (仍切)</div>
+    <div class="panel c"><div class="header"><span class="title shrink-3">Federated States of Micronesia</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Federated States of Micronesia</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 方案 D ============ -->
+<div class="row">
+  <div class="col-label">方案 D — 完全 wrap 不限行 <span class="badge">数据可能 3-4 行</span></div>
+
+  <div>
+    <div class="pattern-label"><b>Canterbury</b></div>
+    <div class="panel d"><div class="header"><span class="title">Canterbury</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Canterbury</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Palmerston North</b></div>
+    <div class="panel d"><div class="header"><span class="title">Palmerston North</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Palmerston North</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Manawatū-Whanganui</b></div>
+    <div class="panel d"><div class="header"><span class="title">Manawatū-Whanganui</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Manawatū-Whanganui</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pattern-label"><b>Federated States of Micronesia</b></div>
+    <div class="panel d"><div class="header"><span class="title">Federated States of Micronesia</span><span class="up-btn">↑</span></div>
+      <div class="list"><div class="list-item here"><span class="dot here"></span>Federated States of Micronesia</div><div class="list-item locked"><span class="dot locked"></span>4 more locked</div></div>
+      <div class="legend"><span class="legend-item"><span class="dot marked"></span>marked</span><span class="legend-item"><span class="dot walked"></span>walked</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <h3>快评 (只看 title 处理, chip 全部改成 ↑ 圆按钮)</h3>
+  <ul>
+    <li><span class="red">A 单行尾切</span> — 15 chars 以上就切. 30 chars 惨切. 已知数据里 Manawatū-Whanganui 就切.</li>
+    <li><span class="green">B 最多 2 行</span> — 30 chars 内全能装 (2 行). 只有极端 &gt; 40 才需要 truncate. 视觉稳定 (标题字号不变), header 高度按需增. 兼顾一致和信息完整.</li>
+    <li><span class="amber">C 字号 auto-shrink</span> — layout 完全不变, 但 4 个用户的 title 字号不一致看着乱. 30 chars 也仍要切 (11pt 也装不下).</li>
+    <li><span class="amber">D 完全 wrap</span> — 数据源不受控, 30-chars 名称占 3 行, panel 高度暴涨. 视觉不稳定, 罕见情况下 panel 高度差异过大.</li>
+  </ul>
+  <h3>推荐: B</h3>
+  <p>title <code>numberOfLines={2}</code> + <code>line-height: 1.2</code>. chip 改成纯 ↑ 按钮 (28×28). header 从 fixed-height 变 flex-height. Panel 里 sibling list 里的 <code>list-item</code> 也一样处理 (long name 允许 2 行).</p>
+  <p><b>兜底</b>: 2 行仍装不下 (&gt; 35 chars) 才 <code>ellipsis</code>. 全球国家 country level 罕见超过 30 chars, R2 street 级会有极长自动生成名, 那时才需要 tooltip / expand tap.</p>
+  <p><b>估计改动</b>: HierarchyPanel.tsx ~6 行 CSS + JSX 微调 (title 加 numberOfLines={2} + line-height, upChip 删掉 Text 保 Icon 改圆按钮).</p>
+</div>
+
+</body>
+</html>
