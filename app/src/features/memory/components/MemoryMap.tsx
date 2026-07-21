@@ -63,12 +63,19 @@ interface Props {
    * second gate for hiding the loading overlay.
    */
   onFogReady?: () => void;
+  /**
+   * v424: fly camera to arbitrary center+zoom, driven by HierarchyPanel
+   * region selection. Prop-based so parent controls timing. Bumping
+   * the `key` (v424Token) triggers a fresh flyTo even if center didn't
+   * change (rare). When null, no flyTo runs.
+   */
+  flyToTarget?: { center: [number, number]; zoom: number; token: number } | null;
 }
 
 const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12';
 const INITIAL_ZOOM = 16.5;
 
-export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved, onMapFullyReady, onFogReady, strangerMarks }: Props) {
+export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved, onMapFullyReady, onFogReady, strangerMarks, flyToTarget }: Props) {
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
   const mapViewRef = useRef<any>(null);
@@ -206,6 +213,25 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recenterToken]);
+
+  // v424: HierarchyPanel-driven flyTo. Bump `token` to re-trigger flyTo
+  // even if center didn't change. 800ms 动画略慢让用户感知空间过渡.
+  const lastFlyTokenRef = useRef<number>(0);
+  useEffect(() => {
+    if (!flyToTarget) return;
+    if (flyToTarget.token === lastFlyTokenRef.current) return;
+    lastFlyTokenRef.current = flyToTarget.token;
+    // 更新 anchor 到目标 center, 防止 flyTo 触发 pan-detected → 弹回 recenter pill
+    anchorRef.current = { lat: flyToTarget.center[1], lng: flyToTarget.center[0] };
+    setHasPannedAway(true);  // 已经不在自己 GPS 位置了, recenter pill 应该出现
+    suppressPanDetectUntilRef.current = Date.now() + 1000;
+    cameraRef.current?.setCamera?.({
+      centerCoordinate: flyToTarget.center,
+      zoomLevel: flyToTarget.zoom,
+      animationDuration: 800,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flyToTarget?.token]);
 
   const onRecenter = useCallback(() => {
     log('memory.map_recenter_btn');

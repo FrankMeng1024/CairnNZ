@@ -46,6 +46,8 @@ import {
   House,
   // sort icon used in filter bars
   ArrowUpDown,
+  // v424 — hierarchy popover on Memory tab (world/continent/country/city/district)
+  Layers,
 } from 'lucide-react-native';
 import { IconSize } from './tokens';
 
@@ -73,6 +75,7 @@ const ICON_MAP = {
   Mic,
   House,
   ArrowUpDown,
+  Layers,
 } as const;
 
 export type IconName = keyof typeof ICON_MAP;

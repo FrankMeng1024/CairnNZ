@@ -43,6 +43,9 @@ import { log, flushNow as flushLogsNow } from '../../../services/appLog';
 // being viewed — fixes login-time crash where eager-loading these on
 // Home (which has no fog UI) crashed the app.
 import { ForegroundUnlockManager } from '../components/ForegroundUnlockManager';
+// v424 hierarchy panel
+import { HierarchyPanel } from '../components/HierarchyPanel';
+import { useHierarchyRegions, findDeepestRegion, type Region } from '../store/useHierarchyRegions';
 
 interface FixState { lat: number; lng: number }
 /** S4 fix: extended freshness window to 10 minutes. Stale lat/lng is
@@ -107,6 +110,12 @@ export function MemoryScreen() {
   const [recenterToken, setRecenterToken] = useState(0);
   const [mountKey, setMountKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
+
+  // v424 hierarchy panel state
+  const [hierarchyOpen, setHierarchyOpen] = useState(false);
+  const [hierarchyRegionId, setHierarchyRegionId] = useState<string | null>(null);
+  const [flyToTarget, setFlyToTarget] = useState<{ center: [number, number]; zoom: number; token: number } | null>(null);
+  const flyTokenRef = useRef(0);
 
   // v360: full UX loading state machine — replaces v359's simple 3s
   // hard timeout. Industry benchmark (Nielsen 10s attention limit,
@@ -619,6 +628,7 @@ export function MemoryScreen() {
           centerLat={persistentCoord.lat}
           centerLng={persistentCoord.lng}
           recenterToken={recenterToken}
+          flyToTarget={flyToTarget}
           onMapMoved={() => setMapMoved(true)}
           onMapFullyReady={() => {
             log('v359.map_fully_ready_cb', {});
@@ -688,6 +698,32 @@ export function MemoryScreen() {
           {/* v334: Target icon to match HikingScreen.tsx recenter pill
               (decision E: "and an icon like Hiking, ..."). */}
           <Icon name="Target" size={22} color={Colors.primary} strokeWidth={2} />
+        </TouchableOpacity>
+      )}
+
+      {/* v424: Hierarchy button (left-bottom, mirrors Recenter position).
+          Always visible when we have coords. Tap → toggle popover.
+          Layers icon differentiates from Target crosshair on right. */}
+      {persistentCoord && (
+        <TouchableOpacity
+          style={[styles.hierarchyBtn, hierarchyOpen && styles.hierarchyBtnActive]}
+          onPress={() => {
+            if (hierarchyOpen) {
+              setHierarchyOpen(false);
+              return;
+            }
+            // Init to user's current deepest region on open
+            const start = findDeepestRegion(persistentCoord.lat, persistentCoord.lng);
+            setHierarchyRegionId(start?.id ?? null);
+            setHierarchyOpen(true);
+            log('memory.hierarchy_open', {
+              start_id: start?.id ?? null,
+              start_level: start?.level ?? null,
+            });
+          }}
+          activeOpacity={0.85}
+        >
+          <Icon name="Layers" size={22} color={hierarchyOpen ? '#fff' : Colors.primary} strokeWidth={2} />
         </TouchableOpacity>
       )}
 
@@ -794,7 +830,64 @@ export function MemoryScreen() {
         }}
       />
       <PaywallSheet visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
+
+      {/* v424: Hierarchy popover — only mounted when open to skip hooks cost.
+          Renders own backdrop + absolute-position panel. */}
+      {hierarchyOpen && hierarchyRegionId && (
+        <HierarchyPanelHost
+          regionId={hierarchyRegionId}
+          onSelectSibling={(region: Region) => {
+            log('memory.hierarchy_fly', { id: region.id, level: region.level });
+            // Center of bbox, zoom based on level
+            const [minLng, minLat, maxLng, maxLat] = region.bbox;
+            const centerLng = (minLng + maxLng) / 2;
+            const centerLat = (minLat + maxLat) / 2;
+            const spanLng = maxLng - minLng;
+            const spanLat = maxLat - minLat;
+            const span = Math.max(spanLng, spanLat);
+            // Zoom heuristic: bigger span → smaller zoom
+            let zoom = 12;
+            if (span > 60) zoom = 3;
+            else if (span > 20) zoom = 4;
+            else if (span > 8) zoom = 5.5;
+            else if (span > 3) zoom = 7;
+            else if (span > 1) zoom = 9;
+            else if (span > 0.3) zoom = 11;
+            else if (span > 0.1) zoom = 13;
+            else zoom = 14.5;
+            flyTokenRef.current += 1;
+            setFlyToTarget({ center: [centerLng, centerLat], zoom, token: flyTokenRef.current });
+            setHierarchyRegionId(region.id);
+          }}
+          onGoUp={(parent: Region) => {
+            log('memory.hierarchy_up', { id: parent.id, level: parent.level });
+            setHierarchyRegionId(parent.id);
+          }}
+          onClose={() => setHierarchyOpen(false)}
+        />
+      )}
     </View>
+  );
+}
+
+// v424: wrapper that runs useHierarchyRegions hook only when panel is open.
+function HierarchyPanelHost(props: {
+  regionId: string;
+  onSelectSibling: (r: Region) => void;
+  onGoUp: (r: Region) => void;
+  onClose: () => void;
+}) {
+  const { current, siblings, parent } = useHierarchyRegions(props.regionId);
+  if (!current) return null;
+  return (
+    <HierarchyPanel
+      current={current}
+      siblings={siblings}
+      parent={parent}
+      onSelectSibling={props.onSelectSibling}
+      onGoUp={props.onGoUp}
+      onClose={props.onClose}
+    />
   );
 }
 
@@ -833,6 +926,25 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 }, elevation: 4,
     borderWidth: 1, borderColor: '#e8dfc8',
+  },
+  // v424: Hierarchy button (left-bottom, mirrors Recenter). Always visible
+  // once GPS coords known. Layers icon → tap opens the region popover.
+  hierarchyBtn: {
+    position: 'absolute',
+    left: 16, bottom: 110,
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 }, elevation: 4,
+    borderWidth: 1, borderColor: '#e8dfc8',
+    zIndex: 25,
+  },
+  hierarchyBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+    shadowOpacity: 0.32,
+    shadowRadius: 12,
   },
   // BUG-D fix (v371 post-OTA): Pick friends top-right cluster — sits
   // inline with the scope toggle in the top bar. Replaces the bottom-

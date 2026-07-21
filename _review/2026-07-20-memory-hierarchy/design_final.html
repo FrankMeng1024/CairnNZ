@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Memory · Hierarchy Panel · Final</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #e8e2d4;
+  color: #2b241b;
+  padding: 32px 16px;
+}
+h1 { color: #5d7c46; font-size: 22px; margin-bottom: 6px; }
+.lead { color: #6a5f4f; font-size: 13px; margin-bottom: 20px; max-width: 1400px; line-height: 1.55; }
+.lead b { color: #a83a2f; }
+.row { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 24px; align-items: flex-start; }
+.col { flex: 0 0 auto; }
+.col h2 { color: #5d7c46; font-size: 14px; margin-bottom: 6px; font-weight: 700; }
+.col .tag {
+  display: inline-block;
+  background: #fff;
+  color: #5d7c46;
+  font-size: 9.5px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.caption { font-size: 11px; color: #7a6f5f; margin-top: 6px; max-width: 340px; line-height: 1.5; }
+
+/* iPhone frame */
+.phone {
+  width: 375px;
+  height: 812px;
+  background: #f5efe4;
+  border-radius: 44px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.15);
+  overflow: hidden;
+  position: relative;
+  border: 8px solid #1a1a1a;
+}
+.phone::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 28px;
+  background: #1a1a1a;
+  border-radius: 14px;
+  z-index: 50;
+}
+
+/* ── Mapbox outdoors-style base map (SVG) ────────────────────── */
+.map {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 30% 30%, #d4dcc0 0%, #c9d4b8 50%, #a8bb96 100%),
+    linear-gradient(180deg, #b8c9a4 0%, #a8bb96 100%);
+}
+.map svg { width: 100%; height: 100%; display: block; position: absolute; inset: 0; }
+
+/* Fog overlay (uses SVG mask to punch explored holes) */
+.fog {
+  position: absolute;
+  inset: 0;
+  background: rgba(58, 42, 24, 0.58);
+  pointer-events: none;
+  -webkit-mask-image: var(--fog-mask);
+  mask-image: var(--fog-mask);
+}
+/* Corridor lines (user's walked paths) drawn on top of the base but under fog */
+/* Actually we draw them inside the "holes" to look like they appear only where explored */
+
+/* Top: safe-area + back pill + place label pill */
+.safe-top { height: 60px; position: relative; z-index: 10; }
+.top-row {
+  position: absolute;
+  top: 60px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 10;
+}
+.back-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.94);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  font-size: 14px;
+  color: #5d7c46;
+  font-weight: 600;
+}
+.place-pill {
+  padding: 7px 12px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.94);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  font-size: 12px;
+  color: #2b241b;
+  font-weight: 500;
+}
+
+/* User dot */
+.user-dot {
+  position: absolute;
+  left: 52%;
+  top: 45%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #4a8b3f;
+  border: 3px solid #fff;
+  transform: translate(-50%,-50%);
+  box-shadow: 0 0 0 6px rgba(74,139,63,0.25);
+  z-index: 5;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    box-shadow: 0 0 0 12px rgba(74,139,63,0.05);
+    transform: translate(-50%,-50%) scale(1.03);
+  }
+}
+
+/* Marker pin (drop-shape) */
+.pin {
+  position: absolute;
+  width: 24px;
+  height: 30px;
+  transform: translate(-50%,-100%);
+  z-index: 4;
+}
+.pin svg { display: block; }
+
+/* Right-side Recenter button (existing) */
+.recenter-btn {
+  position: absolute;
+  right: 16px;
+  bottom: 110px;
+  width: 44px;
+  height: 44px;
+  background: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 10;
+}
+
+/* Left-side Hierarchy button (new) */
+.hierarchy-btn {
+  position: absolute;
+  left: 16px;
+  bottom: 110px;
+  width: 44px;
+  height: 44px;
+  background: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 10;
+  transition: all 200ms ease;
+}
+.hierarchy-btn.active {
+  background: #5d7c46;
+  box-shadow: 0 4px 12px rgba(93,124,70,0.4);
+}
+
+/* Popover panel */
+.popover {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 168px; /* icon top (110+44) + 14 gap */
+  width: 236px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.22), 0 2px 6px rgba(0,0,0,0.08);
+  z-index: 20;
+  overflow: hidden;
+  animation: popIn 240ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  transform-origin: 50% 100%;
+}
+.popover::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  margin-left: -6px;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  transform: rotate(45deg);
+  box-shadow: 3px 3px 4px rgba(0,0,0,0.06);
+}
+@keyframes popIn {
+  from { opacity: 0; transform: translateX(-50%) scale(0.85) translateY(6px); }
+  to { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+}
+
+.pop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid #f2ede2;
+}
+.pop-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #2b241b;
+  letter-spacing: -0.2px;
+}
+.pop-up {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 4px 8px;
+  background: #f5efe4;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #5d7c46;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pop-up svg { color: #5d7c46; }
+.pop-up.disabled { opacity: 0.35; }
+
+.pop-list { padding: 6px 0; }
+.pop-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+.pop-row + .pop-row { border-top: 1px solid #faf7f0; }
+.pop-row:hover { background: #faf7f0; }
+.pop-row .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pop-row .dot.solid { background: #b5823d; } /* explored with marks */
+.pop-row .dot.hollow { background: transparent; border: 2px solid #b5823d; width: 6px; height: 6px; } /* explored no marks */
+.pop-row .dot.locked { background: #d5cdba; }
+.pop-row .name {
+  flex: 1;
+  font-size: 14.5px;
+  color: #2b241b;
+  font-weight: 500;
+}
+.pop-row.here {
+  background: rgba(93,124,70,0.06);
+}
+.pop-row.here .name { color: #5d7c46; font-weight: 700; }
+.pop-row.locked-row {
+  cursor: default;
+}
+.pop-row.locked-row .name { color: #a89a82; font-size: 13px; font-style: italic; }
+.pop-row.locked-row:hover { background: transparent; }
+
+/* Legend at bottom of popover */
+.pop-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px 10px;
+  border-top: 1px solid #f2ede2;
+  background: #fbf8f1;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: #7a6f5f;
+  letter-spacing: 0.1px;
+}
+.legend-item .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.legend-item .dot.solid { background: #b5823d; }
+.legend-item .dot.hollow { background: transparent; border: 2px solid #b5823d; width: 5px; height: 5px; }
+.legend-item .dot.locked { background: #d5cdba; }
+
+.note-block {
+  background: #fff8ea;
+  border-left: 3px solid #c88a2a;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: #7a5a1a;
+  line-height: 1.55;
+  border-radius: 4px;
+  max-width: 1400px;
+}
+</style>
+</head>
+<body>
+
+<h1>Memory · Hierarchy Panel (Final)</h1>
+<div class="lead">
+User decisions locked in:<br>
+<b>1)</b> Top of panel: current-level name + <code>↑ ParentName</code> chip (up button carries destination name).<br>
+<b>2)</b> Tap a sibling → camera fly to that region, panel STAYS open (user can keep navigating). Tap outside or tap icon again = close.<br>
+<b>3)</b> No bottom hint text (UI self-explanatory).<br>
+<b>4)</b> "Go back down" = just tap an explored child inside the current level (no separate down button).<br>
+Icon = 3-layer stack glyph (left-bottom), differentiated from right-bottom Target recenter icon.
+</div>
+
+<div class="row">
+
+<!-- Screen 1: idle — Memory main page with new hierarchy icon on the left -->
+<div class="col">
+<span class="tag">Screen 1 · Idle</span>
+<h2>Memory main + hierarchy icon (left-bottom)</h2>
+<div class="phone">
+  <!-- Mapbox outdoors-style base -->
+  <div class="map">
+    <svg viewBox="0 0 359 796" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <!-- SVG mask: white = show base, black = fog covers -->
+        <mask id="fog-holes">
+          <rect width="359" height="796" fill="white"/>
+          <!-- Explored corridor: irregular blobs -->
+          <path d="M 130,320 C 140,300 170,290 200,300 C 230,310 260,340 250,380 C 240,410 200,420 170,410 C 140,395 120,360 130,320 Z"
+                fill="black"/>
+          <ellipse cx="240" cy="440" rx="35" ry="26" fill="black"/>
+          <ellipse cx="150" cy="470" rx="28" ry="20" fill="black"/>
+        </mask>
+      </defs>
+      <!-- Faint contour lines (outdoors style) -->
+      <g stroke="rgba(120,140,100,0.28)" stroke-width="0.6" fill="none">
+        <path d="M 20,120 Q 100,110 180,140 Q 260,170 340,150"/>
+        <path d="M 20,180 Q 100,170 180,200 Q 260,230 340,210"/>
+        <path d="M 20,240 Q 100,230 180,260 Q 260,290 340,270"/>
+        <path d="M 20,540 Q 100,530 180,560 Q 260,590 340,570"/>
+        <path d="M 20,620 Q 100,610 180,640 Q 260,670 340,650"/>
+        <path d="M 20,700 Q 100,690 180,720 Q 260,750 340,730"/>
+      </g>
+      <!-- Street grid (thin white lines) -->
+      <g stroke="rgba(255,255,255,0.35)" stroke-width="1.2" fill="none">
+        <line x1="0" y1="380" x2="359" y2="380"/>
+        <line x1="0" y1="460" x2="359" y2="460"/>
+        <line x1="180" y1="0" x2="180" y2="796"/>
+        <line x1="90" y1="0" x2="90" y2="796"/>
+      </g>
+      <!-- Corridor path lines only appear inside masked (explored) area -->
+      <g mask="url(#fog-holes-inverse)">
+        <!-- Actually we draw paths on top since fog masks them out visually — draw them where explored -->
+      </g>
+      <!-- User walked path (inside explored area) -->
+      <g stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round">
+        <path d="M 145,340 Q 175,315 205,320 Q 235,330 240,365 Q 232,395 195,400 Q 160,395 145,370 Z"/>
+        <path d="M 240,440 L 235,430"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- Fog overlay: full-screen sepia, punched with holes via SVG mask -->
+  <div class="fog" style="
+    -webkit-mask-image: radial-gradient(ellipse 60px 40px at 52% 45%, transparent 60%, black 100%),
+                         radial-gradient(ellipse 42px 32px at 67% 55%, transparent 60%, black 100%),
+                         radial-gradient(ellipse 34px 26px at 42% 59%, transparent 60%, black 100%);
+    -webkit-mask-composite: source-over;
+    mask-image: radial-gradient(ellipse 60px 40px at 52% 45%, transparent 60%, black 100%),
+                 radial-gradient(ellipse 42px 32px at 67% 55%, transparent 60%, black 100%),
+                 radial-gradient(ellipse 34px 26px at 42% 59%, transparent 60%, black 100%);
+  "></div>
+
+  <!-- Top bar -->
+  <div class="safe-top"></div>
+  <div class="top-row">
+    <div class="back-pill">‹ Back</div>
+    <div class="place-pill">Shanghai · Jing'an</div>
+  </div>
+
+  <!-- User dot -->
+  <div class="user-dot"></div>
+
+  <!-- Marker pins (2 self sepia + 1 friend blue) -->
+  <div class="pin" style="left:59%; top:56%;">
+    <svg viewBox="0 0 24 30">
+      <path d="M12 0 C5.4 0 0 5.4 0 12 C0 21 12 30 12 30 C12 30 24 21 24 12 C24 5.4 18.6 0 12 0 Z"
+            fill="#b5823d" stroke="#fff" stroke-width="1.5"/>
+      <circle cx="12" cy="12" r="4" fill="#fff"/>
+    </svg>
+  </div>
+  <div class="pin" style="left:44%; top:60%;">
+    <svg viewBox="0 0 24 30">
+      <path d="M12 0 C5.4 0 0 5.4 0 12 C0 21 12 30 12 30 C12 30 24 21 24 12 C24 5.4 18.6 0 12 0 Z"
+            fill="#b5823d" stroke="#fff" stroke-width="1.5"/>
+      <circle cx="12" cy="12" r="4" fill="#fff"/>
+    </svg>
+  </div>
+  <div class="pin" style="left:48%; top:47%;">
+    <svg viewBox="0 0 24 30">
+      <path d="M12 0 C5.4 0 0 5.4 0 12 C0 21 12 30 12 30 C12 30 24 21 24 12 C24 5.4 18.6 0 12 0 Z"
+            fill="#6a8bd4" stroke="#fff" stroke-width="1.5"/>
+      <circle cx="12" cy="12" r="4" fill="#fff"/>
+    </svg>
+  </div>
+
+  <!-- Left: hierarchy button (Layers icon) -->
+  <div class="hierarchy-btn">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5d7c46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+      <polyline points="2 17 12 22 22 17"></polyline>
+      <polyline points="2 12 12 17 22 12"></polyline>
+    </svg>
+  </div>
+
+  <!-- Right: recenter button (Target/crosshair icon, existing) -->
+  <div class="recenter-btn">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5d7c46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <circle cx="12" cy="12" r="6"></circle>
+      <circle cx="12" cy="12" r="2" fill="#5d7c46"></circle>
+    </svg>
+  </div>
+</div>
+<div class="caption">
+Real Cairn Memory page: outdoors basemap + sepia fog + white walked paths + 3 markers (2 self sepia, 1 friend blue) + green user dot. Left-bottom NEW <b>layers icon</b> (3 stacked polygons), right-bottom existing <b>target crosshair</b>. Two icons visually different, symmetric position.
+</div>
+</div>
+
+<!-- Screen 2: panel opened, showing Shanghai districts -->
+<div class="col">
+<span class="tag">Screen 2 · Panel open @ Shanghai</span>
+<h2>Tap layers icon → popover</h2>
+<div class="phone">
+  <!-- Same map underneath (dimmed slightly for focus) -->
+  <div class="map" style="opacity:0.85">
+    <svg viewBox="0 0 359 796" preserveAspectRatio="xMidYMid slice">
+      <g stroke="rgba(120,140,100,0.28)" stroke-width="0.6" fill="none">
+        <path d="M 20,120 Q 100,110 180,140 Q 260,170 340,150"/>
+        <path d="M 20,180 Q 100,170 180,200 Q 260,230 340,210"/>
+        <path d="M 20,240 Q 100,230 180,260 Q 260,290 340,270"/>
+        <path d="M 20,540 Q 100,530 180,560 Q 260,590 340,570"/>
+        <path d="M 20,620 Q 100,610 180,640 Q 260,670 340,650"/>
+        <path d="M 20,700 Q 100,690 180,720 Q 260,750 340,730"/>
+      </g>
+      <g stroke="rgba(255,255,255,0.35)" stroke-width="1.2" fill="none">
+        <line x1="0" y1="380" x2="359" y2="380"/>
+        <line x1="0" y1="460" x2="359" y2="460"/>
+        <line x1="180" y1="0" x2="180" y2="796"/>
+        <line x1="90" y1="0" x2="90" y2="796"/>
+      </g>
+      <g stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round">
+        <path d="M 145,340 Q 175,315 205,320 Q 235,330 240,365 Q 232,395 195,400 Q 160,395 145,370 Z"/>
+      </g>
+    </svg>
+  </div>
+  <div class="fog" style="
+    -webkit-mask-image: radial-gradient(ellipse 60px 40px at 52% 45%, transparent 60%, black 100%),
+                         radial-gradient(ellipse 42px 32px at 67% 55%, transparent 60%, black 100%),
+                         radial-gradient(ellipse 34px 26px at 42% 59%, transparent 60%, black 100%);
+    mask-image: radial-gradient(ellipse 60px 40px at 52% 45%, transparent 60%, black 100%),
+                 radial-gradient(ellipse 42px 32px at 67% 55%, transparent 60%, black 100%),
+                 radial-gradient(ellipse 34px 26px at 42% 59%, transparent 60%, black 100%);
+    opacity: 0.7;
+  "></div>
+
+  <div class="safe-top"></div>
+  <div class="top-row">
+    <div class="back-pill">‹ Back</div>
+    <div class="place-pill">Shanghai · Jing'an</div>
+  </div>
+
+  <div class="user-dot"></div>
+  <div class="pin" style="left:59%; top:56%;">
+    <svg viewBox="0 0 24 30"><path d="M12 0 C5.4 0 0 5.4 0 12 C0 21 12 30 12 30 C12 30 24 21 24 12 C24 5.4 18.6 0 12 0 Z" fill="#b5823d" stroke="#fff" stroke-width="1.5"/><circle cx="12" cy="12" r="4" fill="#fff"/></svg>
+  </div>
+
+  <!-- Popover -->
+  <div class="popover">
+    <div class="pop-header">
+      <div class="pop-title">Shanghai</div>
+      <div class="pop-up">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="19" x2="12" y2="5"></line>
+          <polyline points="5 12 12 5 19 12"></polyline>
+        </svg>
+        China
+      </div>
+    </div>
+    <div class="pop-list">
+      <div class="pop-row here">
+        <div class="dot solid" style="background:#5d7c46"></div>
+        <div class="name">Jing'an</div>
+      </div>
+      <div class="pop-row">
+        <div class="dot solid"></div>
+        <div class="name">Pudong</div>
+      </div>
+      <div class="pop-row">
+        <div class="dot solid"></div>
+        <div class="name">Xuhui</div>
+      </div>
+      <div class="pop-row">
+        <div class="dot hollow"></div>
+        <div class="name">Huangpu</div>
+      </div>
+      <div class="pop-row locked-row">
+        <div class="dot locked"></div>
+        <div class="name">12 more locked</div>
+      </div>
+    </div>
+    <div class="pop-legend">
+      <div class="legend-item"><div class="dot solid"></div>marked</div>
+      <div class="legend-item"><div class="dot hollow"></div>walked</div>
+    </div>
+  </div>
+
+  <!-- Active icon: filled sage -->
+  <div class="hierarchy-btn active">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+      <polyline points="2 17 12 22 22 17"></polyline>
+      <polyline points="2 12 12 17 22 12"></polyline>
+    </svg>
+  </div>
+
+  <div class="recenter-btn">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5d7c46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <circle cx="12" cy="12" r="6"></circle>
+      <circle cx="12" cy="12" r="2" fill="#5d7c46"></circle>
+    </svg>
+  </div>
+</div>
+<div class="caption">
+Popover: <b>Shanghai</b> title + <code>↑ China</code> chip (goes up to country). Body: 4 rows explored + 1 collapsed locked row. Solid dot = explored with marks; hollow ring = walked-through (no mark); grey = locked. Tap Pudong → camera flies, panel stays. Tap icon or map = close.
+</div>
+</div>
+
+<!-- Screen 3: after tap ↑ China -->
+<div class="col">
+<span class="tag">Screen 3 · One level up @ China</span>
+<h2>After tap ↑ China</h2>
+<div class="phone">
+  <div class="map" style="opacity:0.85">
+    <svg viewBox="0 0 359 796" preserveAspectRatio="xMidYMid slice">
+      <g stroke="rgba(120,140,100,0.28)" stroke-width="0.6" fill="none">
+        <path d="M 20,120 Q 100,110 180,140 Q 260,170 340,150"/>
+        <path d="M 20,240 Q 100,230 180,260 Q 260,290 340,270"/>
+        <path d="M 20,540 Q 100,530 180,560 Q 260,590 340,570"/>
+      </g>
+    </svg>
+  </div>
+  <div class="fog" style="
+    -webkit-mask-image: radial-gradient(circle 22px at 52% 45%, transparent 50%, black 100%),
+                         radial-gradient(circle 15px at 42% 62%, transparent 50%, black 100%),
+                         radial-gradient(circle 12px at 61% 58%, transparent 50%, black 100%);
+    mask-image: radial-gradient(circle 22px at 52% 45%, transparent 50%, black 100%),
+                 radial-gradient(circle 15px at 42% 62%, transparent 50%, black 100%),
+                 radial-gradient(circle 12px at 61% 58%, transparent 50%, black 100%);
+    opacity: 0.7;
+  "></div>
+
+  <div class="safe-top"></div>
+  <div class="top-row">
+    <div class="back-pill">‹ Back</div>
+    <div class="place-pill">China</div>
+  </div>
+
+  <div class="popover">
+    <div class="pop-header">
+      <div class="pop-title">China</div>
+      <div class="pop-up">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="19" x2="12" y2="5"></line>
+          <polyline points="5 12 12 5 19 12"></polyline>
+        </svg>
+        Asia
+      </div>
+    </div>
+    <div class="pop-list">
+      <div class="pop-row here">
+        <div class="dot solid" style="background:#5d7c46"></div>
+        <div class="name">Shanghai</div>
+      </div>
+      <div class="pop-row">
+        <div class="dot solid"></div>
+        <div class="name">Hangzhou</div>
+      </div>
+      <div class="pop-row">
+        <div class="dot solid"></div>
+        <div class="name">Chengdu</div>
+      </div>
+      <div class="pop-row">
+        <div class="dot hollow"></div>
+        <div class="name">Beijing</div>
+      </div>
+      <div class="pop-row locked-row">
+        <div class="dot locked"></div>
+        <div class="name">30+ more locked</div>
+      </div>
+    </div>
+    <div class="pop-legend">
+      <div class="legend-item"><div class="dot solid"></div>marked</div>
+      <div class="legend-item"><div class="dot hollow"></div>walked</div>
+    </div>
+  </div>
+
+  <div class="hierarchy-btn active">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+      <polyline points="2 17 12 22 22 17"></polyline>
+      <polyline points="2 12 12 17 22 12"></polyline>
+    </svg>
+  </div>
+  <div class="recenter-btn">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5d7c46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <circle cx="12" cy="12" r="6"></circle>
+      <circle cx="12" cy="12" r="2" fill="#5d7c46"></circle>
+    </svg>
+  </div>
+</div>
+<div class="caption">
+After ↑ tap: camera flies to China bbox, panel now shows <b>China</b> level. 4 explored cities (Shanghai/Hangzhou/Chengdu/Beijing) + 30+ locked collapsed. To go back to Shanghai just tap Shanghai here — no separate "down" button needed.
+</div>
+</div>
+
+<!-- Screen 4: top level — Asia -->
+<div class="col">
+<span class="tag">Screen 4 · Asia (2 levels up)</span>
+<h2>After tap ↑ Asia</h2>
+<div class="phone">
+  <div class="map" style="opacity:0.75">
+    <svg viewBox="0 0 359 796" preserveAspectRatio="xMidYMid slice">
+      <g stroke="rgba(120,140,100,0.2)" stroke-width="0.6" fill="none">
+        <path d="M 20,300 Q 180,290 340,320"/>
+        <path d="M 20,500 Q 180,490 340,520"/>
+      </g>
+    </svg>
+  </div>
+  <div class="fog" style="
+    -webkit-mask-image: radial-gradient(circle 14px at 55% 46%, transparent 50%, black 100%),
+                         radial-gradient(circle 10px at 45% 58%, transparent 50%, black 100%);
+    mask-image: radial-gradient(circle 14px at 55% 46%, transparent 50%, black 100%),
+                 radial-gradient(circle 10px at 45% 58%, transparent 50%, black 100%);
+    opacity: 0.7;
+  "></div>
+
+  <div class="safe-top"></div>
+  <div class="top-row">
+    <div class="back-pill">‹ Back</div>
+    <div class="place-pill">Asia</div>
+  </div>
+
+  <div class="popover">
+    <div class="pop-header">
+      <div class="pop-title">Asia</div>
+      <div class="pop-up">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="19" x2="12" y2="5"></line>
+          <polyline points="5 12 12 5 19 12"></polyline>
+        </svg>
+        World
+      </div>
+    </div>
+    <div class="pop-list">
+      <div class="pop-row here">
+        <div class="dot solid" style="background:#5d7c46"></div>
+        <div class="name">China</div>
+      </div>
+      <div class="pop-row">
+        <div class="dot solid"></div>
+        <div class="name">Malaysia</div>
+      </div>
+      <div class="pop-row locked-row">
+        <div class="dot locked"></div>
+        <div class="name">46 more locked</div>
+      </div>
+    </div>
+    <div class="pop-legend">
+      <div class="legend-item"><div class="dot solid"></div>marked</div>
+      <div class="legend-item"><div class="dot hollow"></div>walked</div>
+    </div>
+  </div>
+
+  <div class="hierarchy-btn active">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+      <polyline points="2 17 12 22 22 17"></polyline>
+      <polyline points="2 12 12 17 22 12"></polyline>
+    </svg>
+  </div>
+  <div class="recenter-btn">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5d7c46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <circle cx="12" cy="12" r="6"></circle>
+      <circle cx="12" cy="12" r="2" fill="#5d7c46"></circle>
+    </svg>
+  </div>
+</div>
+<div class="caption">
+Continental view: <b>Asia</b> — only 2 explored countries (China + Malaysia), rest 46 collapsed. <code>↑ World</code> chip goes to top. Panel shrinks organically as fewer explored items exist. No "empty state" needed.
+</div>
+</div>
+
+</div>
+
+<div style="margin-top:8px; max-width:1400px; padding:20px 24px; background:#fff; border-radius:12px; font-size:13.5px; color:#4a3d2c; line-height:1.7">
+<b>Interaction summary</b>:<br>
+• Tap left-bottom <b>layers icon</b> → popover opens above icon, icon fills sage green<br>
+• Popover title = current-level name (Shanghai / China / Asia / World)<br>
+• Top-right chip <code>↑ ParentName</code> → tap = fly camera to parent bbox, panel refreshes to that level<br>
+• List rows (max 5): explored siblings + 1 collapsed <b>locked</b> row<br>
+• Dot semantics: <b>solid sepia</b> = explored with marks · <b>hollow ring</b> = walked-through only · <b>grey solid</b> = locked (never visited)<br>
+• Tap any explored sibling → camera fly to that region, panel <b>stays open</b> so user can keep hopping<br>
+• Tap icon again / tap map outside popover → close (icon returns to white)<br>
+• "Go back down" = user just taps the child region name inside current level (China panel shows Shanghai; tap Shanghai → fly back)<br>
+• No bottom hint text — UI self-explanatory<br><br>
+
+<b>Right-side Recenter (unchanged)</b>: Target crosshair, appears only when user has manually panned. This new left-side hierarchy icon is <b>always visible</b> (unlike recenter which is gated).<br><br>
+
+<b>Approve to proceed with implementation?</b>
+</div>
+
+</body>
+</html>

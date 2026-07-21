@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cairn Memory Hierarchy — Design B v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #eee7d7;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    color: #2d2416;
+    padding: 32px 24px 48px;
+  }
+  .rationale {
+    max-width: 820px;
+    margin: 0 auto 28px;
+    background: #fdfaf1;
+    border: 1px solid #d9cfb8;
+    border-radius: 12px;
+    padding: 18px 22px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #3a2e1a;
+  }
+  .rationale h1 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+    color: #5d4a24;
+  }
+  .rationale strong { color: #5d7c46; }
+
+  .stage {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    flex-wrap: wrap;
+  }
+  .phone {
+    width: 375px;
+    height: 812px;
+    background: #000;
+    border-radius: 42px;
+    padding: 8px;
+    box-shadow: 0 24px 48px rgba(58, 42, 24, 0.22),
+                0 4px 8px rgba(0, 0, 0, 0.12);
+    position: relative;
+  }
+  .screen {
+    width: 100%;
+    height: 100%;
+    border-radius: 36px;
+    overflow: hidden;
+    position: relative;
+    background: #c9d4b8;
+  }
+  .caption {
+    position: absolute;
+    bottom: -34px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    color: #6b5a3a;
+    text-transform: uppercase;
+  }
+
+  /* ---------------- MAP LAYER ---------------- */
+  .map {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 340px 180px at 30% 22%, #b8c8a2 0%, #c9d4b8 55%),
+      radial-gradient(ellipse 220px 300px at 78% 66%, #a8bb96 0%, transparent 60%),
+      linear-gradient(160deg, #c9d4b8 0%, #bfc9a8 100%);
+  }
+  /* Subtle contour texture using layered gradients */
+  .map::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(38deg,
+        transparent 0px,
+        transparent 44px,
+        rgba(140, 155, 115, 0.14) 44px,
+        rgba(140, 155, 115, 0.14) 45px),
+      repeating-linear-gradient(-52deg,
+        transparent 0px,
+        transparent 68px,
+        rgba(120, 135, 100, 0.10) 68px,
+        rgba(120, 135, 100, 0.10) 69px);
+    pointer-events: none;
+  }
+  /* Small green landmarks / parks */
+  .park {
+    position: absolute;
+    background: #9db080;
+    border-radius: 50%;
+    opacity: 0.55;
+  }
+  .park.p1 { width: 32px; height: 22px; left: 62px; top: 220px; }
+  .park.p2 { width: 24px; height: 30px; left: 240px; top: 340px; }
+  .park.p3 { width: 40px; height: 26px; left: 140px; top: 520px; border-radius: 40%; }
+
+  /* Water sliver */
+  .water {
+    position: absolute;
+    left: -20px; top: 380px;
+    width: 260px; height: 80px;
+    background: linear-gradient(120deg, #b6c6cf, #a3b4c0);
+    transform: rotate(-14deg);
+    opacity: 0.6;
+    border-radius: 60px;
+  }
+
+  /* ---------------- FOG OVERLAY WITH HOLES ---------------- */
+  /* SVG mask covers entire screen with sepia fog, cut holes for explored zones */
+  .fog {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  /* ---------------- PATH LINES (only visible inside holes) ---------------- */
+  .paths {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  /* ---------------- MARKERS ---------------- */
+  .marker {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.28);
+  }
+  .marker::after {
+    content: '';
+    position: absolute;
+    top: 5px; left: 5px;
+    width: 8px; height: 8px;
+    background: #fff;
+    border-radius: 50%;
+  }
+  .marker.self { background: #b5823d; }
+  .marker.friend { background: #6a8bd4; }
+
+  /* User dot */
+  .user-dot {
+    position: absolute;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #4a8b3f;
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 4px rgba(74, 139, 63, 0.28),
+                0 2px 6px rgba(0, 0, 0, 0.28);
+    z-index: 5;
+  }
+  .user-dot::before {
+    content: '';
+    position: absolute;
+    inset: -12px;
+    border-radius: 50%;
+    border: 2px solid rgba(74, 139, 63, 0.5);
+    animation: pulse 2.2s ease-out infinite;
+  }
+  @keyframes pulse {
+    0% { transform: scale(0.6); opacity: 0.8; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+
+  /* ---------------- TOP NAV ---------------- */
+  .status-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 44px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 24px 6px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #2d2416;
+    z-index: 20;
+  }
+  .notch {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 118px;
+    height: 28px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 21;
+  }
+  .back-btn {
+    position: absolute;
+    top: 60px;
+    left: 16px;
+    background: #fff;
+    color: #5d7c46;
+    padding: 8px 16px 8px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* ---------------- BOTTOM CONTROLS ---------------- */
+  .btn-round {
+    position: absolute;
+    bottom: 110px;
+    width: 44px;
+    height: 44px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 3px 10px rgba(58, 42, 24, 0.22),
+                0 1px 2px rgba(0, 0, 0, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 15;
+    transition: all 0.2s ease;
+  }
+  .btn-recenter { right: 16px; }
+  .btn-hier { left: 16px; }
+  .btn-hier.active {
+    background: #5d7c46;
+    box-shadow: 0 3px 12px rgba(93, 124, 70, 0.45);
+  }
+  .btn-hier.active svg .stroke-path { stroke: #fff; }
+  .btn-hier.active svg .fill-path { fill: #fff; }
+
+  /* Bottom tab bar hint */
+  .tabbar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 86px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(58, 42, 24, 0.08);
+    display: flex;
+    z-index: 12;
+  }
+  .tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 10px;
+    font-size: 10px;
+    color: #8a7a5c;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .tab.active { color: #5d7c46; font-weight: 600; }
+  .tab-icon {
+    width: 24px; height: 24px;
+    margin-bottom: 3px;
+  }
+
+  /* ---------------- HIERARCHY POPOVER ---------------- */
+  .popover {
+    position: absolute;
+    left: 16px;
+    bottom: 168px;
+    width: 236px;
+    background: #fdfaf1;
+    border-radius: 16px;
+    box-shadow: 0 12px 32px rgba(58, 42, 24, 0.32),
+                0 2px 6px rgba(0, 0, 0, 0.12);
+    padding: 12px 6px 10px;
+    z-index: 20;
+    border: 1px solid rgba(93, 124, 70, 0.12);
+  }
+  .popover::after {
+    content: '';
+    position: absolute;
+    left: 20px;
+    bottom: -7px;
+    width: 14px; height: 14px;
+    background: #fdfaf1;
+    border-right: 1px solid rgba(93, 124, 70, 0.12);
+    border-bottom: 1px solid rgba(93, 124, 70, 0.12);
+    transform: rotate(45deg);
+  }
+  .popover-header {
+    padding: 2px 12px 8px;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #8a7a5c;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(93, 124, 70, 0.10);
+    margin-bottom: 4px;
+  }
+  .popover-header .breadcrumb {
+    color: #5d7c46;
+    font-weight: 600;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .row.current {
+    background: rgba(93, 124, 70, 0.12);
+  }
+  .row-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot.marked { background: #b5823d; }
+  .dot.explored { background: transparent; border: 1.5px solid #b5823d; }
+  .dot.locked { background: transparent; border: 1.5px dashed #b8ad94; }
+  .row-name {
+    color: #2d2416;
+    font-weight: 500;
+  }
+  .row.current .row-name { font-weight: 600; }
+  .row.locked .row-name { color: #a8987a; }
+  .row-meta {
+    font-size: 12px;
+    color: #8a7a5c;
+    font-variant-numeric: tabular-nums;
+  }
+  .row.locked .row-meta { color: #b8ad94; font-style: italic; }
+  .row-meta .marks-count {
+    color: #b5823d;
+    font-weight: 600;
+  }
+  .row-meta .explored-tag {
+    color: #5d7c46;
+    font-style: italic;
+  }
+
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Design B v2 — Three Decisions</h1>
+  <p><strong>Icon (stacked layers):</strong> three offset trapezoids read as "zoom out to a wider layer" — orthogonal to the right-side Target crosshair (which points inward at "me"). Left = zoom out, right = zoom in.</p>
+  <p><strong>Panel (single-level siblings):</strong> shows only the current level's peers under a breadcrumb. Current district highlighted. Max 5 rows keeps it thumb-reachable and non-scrolling for most cities.</p>
+  <p><strong>No-mark expression:</strong> filled sepia dot = has marks + count; hollow sepia ring + italic "explored" = walked-through only; dashed grey ring + "locked" = never visited. Three states, no color overload.</p>
+</div>
+
+<div class="stage">
+
+  <!-- ============ SCREEN 1: IDLE ============ -->
+  <div class="phone">
+    <div class="screen">
+      <div class="notch"></div>
+      <div class="status-bar">
+        <span>9:41</span>
+        <span>􀛨􀋦􀋨</span>
+      </div>
+
+      <!-- Base map -->
+      <div class="map">
+        <div class="water"></div>
+        <div class="park p1"></div>
+        <div class="park p2"></div>
+        <div class="park p3"></div>
+      </div>
+
+      <!-- Fog overlay with holes cut out for explored zones -->
+      <svg class="fog" viewBox="0 0 375 812" preserveAspectRatio="none">
+        <defs>
+          <mask id="fogMask1">
+            <rect width="375" height="812" fill="white"/>
+            <!-- Explored zone 1: Pudong (right/bottom, largest) -->
+            <ellipse cx="245" cy="470" rx="95" ry="70" fill="black"/>
+            <!-- Explored zone 2: Xuhui (left/mid) -->
+            <ellipse cx="90" cy="380" rx="55" ry="45" fill="black"/>
+            <!-- Explored zone 3: Huangpu (center, narrow corridor) -->
+            <ellipse cx="180" cy="310" rx="45" ry="32" fill="black"/>
+            <!-- Current: Jing'an (small, around user) -->
+            <ellipse cx="175" cy="440" rx="42" ry="38" fill="black"/>
+            <!-- Corridor connecting Jing'an -> Huangpu -->
+            <ellipse cx="178" cy="375" rx="22" ry="30" fill="black"/>
+            <!-- Corridor Jing'an -> Xuhui -->
+            <ellipse cx="130" cy="410" rx="30" ry="20" fill="black"/>
+            <!-- Corridor Jing'an -> Pudong -->
+            <ellipse cx="210" cy="455" rx="30" ry="22" fill="black"/>
+            <!-- Feather edges via soft blur simulated by second mask ring -->
+          </mask>
+        </defs>
+        <!-- Feather ring (lighter cream) -->
+        <rect width="375" height="812" fill="rgba(247, 242, 229, 0.55)" mask="url(#fogMask1)" style="filter: blur(6px);"/>
+        <!-- Main fog -->
+        <rect width="375" height="812" fill="rgba(58, 42, 24, 0.58)" mask="url(#fogMask1)"/>
+      </svg>
+
+      <!-- White trail paths (drawn inside holes) -->
+      <svg class="paths" viewBox="0 0 375 812">
+        <g fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.92">
+          <!-- Pudong loop -->
+          <path d="M 200 460 Q 230 440, 265 455 T 295 495 Q 285 515, 250 510 T 210 485 Z"/>
+          <path d="M 240 470 L 258 490"/>
+          <!-- Xuhui small loop -->
+          <path d="M 70 370 Q 85 355, 105 365 Q 115 385, 100 400 Q 80 400, 70 385 Z"/>
+          <!-- Huangpu -->
+          <path d="M 155 300 Q 175 290, 200 305 Q 210 325, 195 335 Q 170 335, 155 320 Z"/>
+          <!-- Jing'an current -->
+          <path d="M 160 430 Q 175 420, 195 435 Q 200 455, 185 465 Q 165 465, 158 450 Z"/>
+          <!-- Corridors -->
+          <path d="M 178 400 L 178 355" stroke-dasharray="3 3" opacity="0.75"/>
+          <path d="M 155 425 L 115 405" stroke-dasharray="3 3" opacity="0.75"/>
+          <path d="M 195 450 L 220 460" stroke-dasharray="3 3" opacity="0.75"/>
+        </g>
+      </svg>
+
+      <!-- Markers -->
+      <div class="marker self" style="left: 244px; top: 458px;"></div>
+      <div class="marker self" style="left: 268px; top: 480px;"></div>
+      <div class="marker friend" style="left: 88px; top: 372px;"></div>
+
+      <!-- User current dot in Jing'an -->
+      <div class="user-dot" style="left: 172px; top: 436px;"></div>
+
+      <!-- Back -->
+      <div class="back-btn">‹ Back</div>
+
+      <!-- Bottom controls -->
+      <div class="btn-round btn-hier" aria-label="Hierarchy view">
+        <!-- Stacked layers icon: 3 offset trapezoids -->
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <path class="fill-path" d="M12 3 L21 8 L12 13 L3 8 Z" fill="#5d7c46" opacity="0.35"/>
+          <path class="stroke-path" d="M3 12 L12 17 L21 12" stroke="#5d7c46" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
+          <path class="stroke-path" d="M3 16 L12 21 L21 16" stroke="#5d7c46" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <div class="btn-round btn-recenter" aria-label="Recenter">
+        <!-- Target crosshair (existing) -->
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="7" stroke="#5d7c46" stroke-width="1.8"/>
+          <circle cx="12" cy="12" r="1.6" fill="#5d7c46"/>
+          <line x1="12" y1="2" x2="12" y2="6" stroke="#5d7c46" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="12" y1="18" x2="12" y2="22" stroke="#5d7c46" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="2" y1="12" x2="6" y2="12" stroke="#5d7c46" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="18" y1="12" x2="22" y2="12" stroke="#5d7c46" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <!-- Tab bar -->
+      <div class="tabbar">
+        <div class="tab">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none">
+            <path d="M4 10 L12 4 L20 10 V19 A1 1 0 0 1 19 20 H5 A1 1 0 0 1 4 19 Z" stroke="#8a7a5c" stroke-width="1.8" stroke-linejoin="round"/>
+          </svg>
+          <span>Home</span>
+        </div>
+        <div class="tab active">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="10" r="6" stroke="#5d7c46" stroke-width="1.8"/>
+            <path d="M12 16 V21" stroke="#5d7c46" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <span>Memory</span>
+        </div>
+        <div class="tab">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none">
+            <circle cx="9" cy="9" r="4" stroke="#8a7a5c" stroke-width="1.8"/>
+            <path d="M2 21 Q 2 15, 9 15 Q 16 15, 16 21" stroke="#8a7a5c" stroke-width="1.8" fill="none"/>
+            <circle cx="17" cy="8" r="3" stroke="#8a7a5c" stroke-width="1.8"/>
+          </svg>
+          <span>Friends</span>
+        </div>
+        <div class="tab">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="8" stroke="#8a7a5c" stroke-width="1.8"/>
+            <path d="M12 8 V12 L15 14" stroke="#8a7a5c" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <span>Profile</span>
+        </div>
+      </div>
+
+    </div>
+    <div class="caption">Screen 1 — Idle</div>
+  </div>
+
+  <!-- ============ SCREEN 2: PANEL OPEN ============ -->
+  <div class="phone">
+    <div class="screen">
+      <div class="notch"></div>
+      <div class="status-bar">
+        <span>9:41</span>
+        <span>􀛨􀋦􀋨</span>
+      </div>
+
+      <div class="map">
+        <div class="water"></div>
+        <div class="park p1"></div>
+        <div class="park p2"></div>
+        <div class="park p3"></div>
+      </div>
+
+      <svg class="fog" viewBox="0 0 375 812" preserveAspectRatio="none">
+        <defs>
+          <mask id="fogMask2">
+            <rect width="375" height="812" fill="white"/>
+            <ellipse cx="245" cy="470" rx="95" ry="70" fill="black"/>
+            <ellipse cx="90" cy="380" rx="55" ry="45" fill="black"/>
+            <ellipse cx="180" cy="310" rx="45" ry="32" fill="black"/>
+            <ellipse cx="175" cy="440" rx="42" ry="38" fill="black"/>
+            <ellipse cx="178" cy="375" rx="22" ry="30" fill="black"/>
+            <ellipse cx="130" cy="410" rx="30" ry="20" fill="black"/>
+            <ellipse cx="210" cy="455" rx="30" ry="22" fill="black"/>
+          </mask>
+        </defs>
+        <rect width="375" height="812" fill="rgba(247, 242, 229, 0.55)" mask="url(#fogMask2)" style="filter: blur(6px);"/>
+        <rect width="375" height="812" fill="rgba(58, 42, 24, 0.58)" mask="url(#fogMask2)"/>
+      </svg>
+
+      <svg class="paths" viewBox="0 0 375 812">
+        <g fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.92">
+          <path d="M 200 460 Q 230 440, 265 455 T 295 495 Q 285 515, 250 510 T 210 485 Z"/>
+          <path d="M 240 470 L 258 490"/>
+          <path d="M 70 370 Q 85 355, 105 365 Q 115 385, 100 400 Q 80 400, 70 385 Z"/>
+          <path d="M 155 300 Q 175 290, 200 305 Q 210 325, 195 335 Q 170 335, 155 320 Z"/>
+          <path d="M 160 430 Q 175 420, 195 435 Q 200 455, 185 465 Q 165 465, 158 450 Z"/>
+          <path d="M 178 400 L 178 355" stroke-dasharray="3 3" opacity="0.75"/>
+          <path d="M 155 425 L 115 405" stroke-dasharray="3 3" opacity="0.75"/>
+          <path d="M 195 450 L 220 460" stroke-dasharray="3 3" opacity="0.75"/>
+        </g>
+      </svg>
+
+      <div class="marker self" style="left: 244px; top: 458px;"></div>
+      <div class="marker self" style="left: 268px; top: 480px;"></div>
+      <div class="marker friend" style="left: 88px; top: 372px;"></div>
+
+      <div class="user-dot" style="left: 172px; top: 436px;"></div>
+
+      <div class="back-btn">‹ Back</div>
+
+      <!-- Popover -->
+      <div class="popover">
+        <div class="popover-header">
+          <span>Shanghai ›</span>
+          <span class="breadcrumb">Districts</span>
+        </div>
+
+        <div class="row current">
+          <div class="row-left">
+            <div class="dot marked"></div>
+            <div class="row-name">Jing'an</div>
+          </div>
+          <div class="row-meta"><span class="marks-count">you're here</span></div>
+        </div>
+
+        <div class="row">
+          <div class="row-left">
+            <div class="dot marked"></div>
+            <div class="row-name">Pudong</div>
+          </div>
+          <div class="row-meta"><span class="marks-count">23 marks</span></div>
+        </div>
+
+        <div class="row">
+          <div class="row-left">
+            <div class="dot marked"></div>
+            <div class="row-name">Huangpu</div>
+          </div>
+          <div class="row-meta"><span class="marks-count">7 marks</span></div>
+        </div>
+
+        <div class="row">
+          <div class="row-left">
+            <div class="dot explored"></div>
+            <div class="row-name">Xuhui</div>
+          </div>
+          <div class="row-meta"><span class="explored-tag">explored</span></div>
+        </div>
+
+        <div class="row locked">
+          <div class="row-left">
+            <div class="dot locked"></div>
+            <div class="row-name">13 more districts</div>
+          </div>
+          <div class="row-meta">locked</div>
+        </div>
+      </div>
+
+      <!-- Bottom controls: hierarchy is ACTIVE -->
+      <div class="btn-round btn-hier active" aria-label="Hierarchy view (open)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <path class="fill-path" d="M12 3 L21 8 L12 13 L3 8 Z" fill="#ffffff" opacity="0.9"/>
+          <path class="stroke-path" d="M3 12 L12 17 L21 12" stroke="#ffffff" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
+          <path class="stroke-path" d="M3 16 L12 21 L21 16" stroke="#ffffff" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <div class="btn-round btn-recenter" aria-label="Recenter">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="7" stroke="#5d7c46" stroke-width="1.8"/>
+          <circle cx="12" cy="12" r="1.6" fill="#5d7c46"/>
+          <line x1="12" y1="2" x2="12" y2="6" stroke="#5d7c46" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="12" y1="18" x2="12" y2="22" stroke="#5d7c46" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="2" y1="12" x2="6" y2="12" stroke="#5d7c46" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="18" y1="12" x2="22" y2="12" stroke="#5d7c46" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <div class="tabbar">
+        <div class="tab">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none">
+            <path d="M4 10 L12 4 L20 10 V19 A1 1 0 0 1 19 20 H5 A1 1 0 0 1 4 19 Z" stroke="#8a7a5c" stroke-width="1.8" stroke-linejoin="round"/>
+          </svg>
+          <span>Home</span>
+        </div>
+        <div class="tab active">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="10" r="6" stroke="#5d7c46" stroke-width="1.8"/>
+            <path d="M12 16 V21" stroke="#5d7c46" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <span>Memory</span>
+        </div>
+        <div class="tab">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none">
+            <circle cx="9" cy="9" r="4" stroke="#8a7a5c" stroke-width="1.8"/>
+            <path d="M2 21 Q 2 15, 9 15 Q 16 15, 16 21" stroke="#8a7a5c" stroke-width="1.8" fill="none"/>
+            <circle cx="17" cy="8" r="3" stroke="#8a7a5c" stroke-width="1.8"/>
+          </svg>
+          <span>Friends</span>
+        </div>
+        <div class="tab">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="8" stroke="#8a7a5c" stroke-width="1.8"/>
+            <path d="M12 8 V12 L15 14" stroke="#8a7a5c" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <span>Profile</span>
+        </div>
+      </div>
+
+    </div>
+    <div class="caption">Screen 2 — Panel Open</div>
+  </div>
+
+</div>
+
+</body>
+</html>
