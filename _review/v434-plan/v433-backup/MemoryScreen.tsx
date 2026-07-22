@@ -46,7 +46,7 @@ import { ForegroundUnlockManager } from '../components/ForegroundUnlockManager';
 // v425: fly to real explored point inside sibling region (bug 2 fix)
 import { useMarkerStore } from '../../../store/useMarkerStore';
 // v427: async hierarchy from /api/hierarchy (world-wide data)
-import { fetchDeepest } from '../services/hierarchyService';
+import { fetchDeepestRegion } from '../services/hierarchyService';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
 // v427: hierarchy migrated to async /api/hierarchy — legacy static store deleted.
@@ -115,14 +115,13 @@ export function MemoryScreen() {
   const [mountKey, setMountKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
 
-  // v434 hierarchy panel state (2-layer tree: World → Country → City)
+  // v424 hierarchy panel state
   const [hierarchyOpen, setHierarchyOpen] = useState(false);
-  const [hierarchyTitleId, setHierarchyTitleId] = useState<string>('world');
-  const [hierarchyCurrentCityId, setHierarchyCurrentCityId] = useState<string | null>(null);
-  const [hierarchyCurrentCountryId, setHierarchyCurrentCountryId] = useState<string | null>(null);
-  // Race guard: increment on every panel-open request; async fetch only
-  // applies its state changes if this ref still matches at completion.
-  const panelOpenRequestIdRef = useRef(0);
+  const [hierarchyRegionId, setHierarchyRegionId] = useState<string | null>(null);
+  // v428: drill mode — set true when user taps the green (current) row to
+  // see that region's children instead of its siblings. Reset when user
+  // clicks any real sibling or goes up.
+  const [hierarchyDrill, setHierarchyDrill] = useState(false);
   const [flyToTarget, setFlyToTarget] = useState<{ center: [number, number]; zoom: number; token: number } | null>(null);
   const flyTokenRef = useRef(0);
   // v427: track map camera center so hierarchy panel opens based on
@@ -725,26 +724,15 @@ export function MemoryScreen() {
               setHierarchyOpen(false);
               return;
             }
-            // v434 panel-open: three-tier anchor fallback + race guard.
-            const myReqId = ++panelOpenRequestIdRef.current;
-            const anchor = cameraCenterRef.current ?? persistentCoord ?? { lat: 0, lng: 0 };
-            const { city, country } = await fetchDeepest(anchor.lat, anchor.lng);
-            // Drop stale response if user tapped again while we were waiting.
-            if (panelOpenRequestIdRef.current !== myReqId) return;
-            if (country) {
-              setHierarchyTitleId(country.id);
-              setHierarchyCurrentCityId(city?.id ?? null);
-              setHierarchyCurrentCountryId(country.id);
-            } else {
-              // Open ocean / no country match — open at world layer.
-              setHierarchyTitleId('world');
-              setHierarchyCurrentCityId(null);
-              setHierarchyCurrentCountryId(null);
-            }
+            // v427: use map camera center (not GPS) so user pans → opens
+            // panel for what they're looking at, not their physical position.
+            const anchor = cameraCenterRef.current ?? persistentCoord;
+            const region = await fetchDeepestRegion(anchor.lat, anchor.lng);
+            setHierarchyRegionId(region?.id ?? null);
             setHierarchyOpen(true);
-            log('v434.hierarchy_open', {
-              city_id: city?.id ?? null,
-              country_id: country?.id ?? null,
+            log('memory.hierarchy_open', {
+              start_id: region?.id ?? null,
+              start_level: region?.level ?? null,
               used_camera: cameraCenterRef.current !== null,
             });
           }}
@@ -858,24 +846,25 @@ export function MemoryScreen() {
       />
       <PaywallSheet visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
 
-      {/* v434: Hierarchy popover — 2-layer tree (World → Country → City).
-          Fetches panel data from /api/hierarchy/panel. */}
-      {hierarchyOpen && (
+      {/* v427: Hierarchy popover. Fetches its own data from /api/hierarchy.
+          Only mounted when open. */}
+      {hierarchyOpen && hierarchyRegionId && (
         <HierarchyPanel
-          titleId={hierarchyTitleId}
-          currentCityId={hierarchyCurrentCityId}
-          currentCountryId={hierarchyCurrentCountryId}
-          onSelectItem={(itemId, itemType, bbox) => {
-            log('v434.hierarchy_tap', { id: itemId, type: itemType });
-            if (itemType === 'country') {
-              // World layer → tap country: switch title, do NOT fly.
-              // currentCountryId stays tied to map center; user has not moved
-              // the map, so green in the future world layer will still reflect
-              // the actual location, not the tapped country.
-              setHierarchyTitleId(itemId);
+          regionId={hierarchyRegionId}
+          drill={hierarchyDrill}
+          onSelectSibling={(siblingId, siblingName, bbox, isHere) => {
+            log('memory.hierarchy_fly', { id: siblingId, isHere, drilling: isHere });
+            // v428 bug 2 fix: if user tapped the green (current) row, they
+            // want to DRILL INTO it — show its children as new siblings.
+            // No fly, no zoom, just re-fetch panel with drill=true.
+            if (isHere) {
+              setHierarchyDrill(true);
               return;
             }
-            // Country layer → tap city: fly + refetch panel with new here_city_id.
+            // Otherwise: fly to a real explored point in the region
+            // with a FIXED zoom (14 for point-focus, ignores bbox span).
+            // Priority: (1) closest memory point in bbox, (2) closest marker,
+            // (3) bbox center as fallback.
             const [minLng, minLat, maxLng, maxLat] = bbox;
             const bboxCenterLng = (minLng + maxLng) / 2;
             const bboxCenterLat = (minLat + maxLat) / 2;
@@ -912,16 +901,33 @@ export function MemoryScreen() {
 
             flyTokenRef.current += 1;
             setFlyToTarget({ center: [flyLng, flyLat], zoom, token: flyTokenRef.current });
-            // City tap = camera-changing action → update currentCityId +
-            // currentCountryId (country stays same since city is within it).
-            setHierarchyCurrentCityId(itemId);
-            // currentCountryId stays same — city is a child of current country.
+            // v428: switching to a real sibling clears drill mode — we're at
+            // a new peer level now, not drilling further.
+            setHierarchyDrill(false);
+            setHierarchyRegionId(siblingId);
           }}
-          onGoUp={() => {
-            log('v434.hierarchy_up', { from: hierarchyTitleId });
-            // ↑ = go to world layer. Do NOT change currentCityId /
-            // currentCountryId — those follow map center, not tap history.
-            setHierarchyTitleId('world');
+          onGoUp={(parentId) => {
+            log('memory.hierarchy_up', { id: parentId, was_drill: hierarchyDrill });
+            // v433 bug fix: if we're in drill mode (viewing children of the
+            // current region), ↑ should just EXIT drill and return to the
+            // same-level sibling view — NOT jump up to the grandparent.
+            //
+            // Repro before fix: Shanghai(省) → ↑ → China(国, drill=true showing
+            // provinces) → ↑ → **jumped straight to Asia** (should have gone
+            // back to viewing China's siblings = other countries).
+            //
+            // The correct tree walk is:
+            //   in Shanghai (drill=false, regionId=CN-31) → ↑ → China
+            //   in China   (drill=true,  regionId=China)   → ↑ → China (exit drill)
+            //   in China   (drill=false, regionId=China)   → ↑ → Asia
+            // i.e. ↑ never skips a level.
+            if (hierarchyDrill) {
+              setHierarchyDrill(false);
+              // regionId unchanged — panel re-fetches with drill=false and
+              // shows siblings at the same level as current.
+              return;
+            }
+            setHierarchyRegionId(parentId);
           }}
           onClose={() => setHierarchyOpen(false)}
         />
