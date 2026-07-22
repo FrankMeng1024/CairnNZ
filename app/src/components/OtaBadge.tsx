@@ -30,7 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // pill says "v421 · Up to date" the user knows v421's changes are live.
 //
 // Full version history archived at: docs/OTA_CHANGELOG.md
-export const OTA_VERSION = 429;
+export const OTA_VERSION = 430;
 
 
 type OtaState =

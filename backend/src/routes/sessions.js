@@ -36,6 +36,21 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// ── GET /api/sessions/unfinished ───────────────────────────────────────────
+// v430: return the most-recent session where POST /start was called but no
+// PATCH /save ever succeeded (finalized_at IS NULL). Client uses this to
+// detect kill-app-mid-hike scenarios where disk-side active file may have
+// been lost (e.g. user killed app before startHikeTrack finished writing).
+router.get('/unfinished', authenticate, async (req, res) => {
+  try {
+    const row = await Session.findLatestUnfinished(req.user.userId);
+    return res.json({ session: row });
+  } catch (err) {
+    console.error('[sessions/unfinished]', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // ── POST /api/sessions/start ───────────────────────────────────────────────
 // Begin an active session — creates an empty row, returns its id.
 // Client uses the returned id for subsequent /append-points and final

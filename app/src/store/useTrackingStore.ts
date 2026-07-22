@@ -255,7 +255,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const { startHikeTrack } = require('../services/hikeTrackWriter');
       const sid = get().sessionId;
       if (sid) {
-        void startHikeTrack(sid, {
+        // v430 fix: await instead of fire-and-forget. If user opens hike then
+        // immediately kills app, we need the disk meta file to be present so
+        // listActiveHikes() next launch finds it and shows UnfinishedRecoveryModal.
+        // Previous void-call could race: kill happens before write completes,
+        // leaving server-side dangling row with no client-side detection path.
+        await startHikeTrack(sid, {
           started_at: get().startedAt,
           activity_mode: get().activityMode,
         });

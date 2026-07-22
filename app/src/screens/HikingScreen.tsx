@@ -1111,11 +1111,14 @@ const stopSheetStyles = StyleSheet.create({
 type UIState = 'map' | 'plant' | 'detail';
 
 export function HikingScreen() {
-  // v428: sim-walker gate — persistent debugMode (Settings 5-tap) AND
-  // in-memory simWalkerActive (per-session opt-in). Both required.
+  // v430 fix: __DEV__ gate removed. User wanted sim-walker visible in
+  // production build when debugMode is toggled ON. Since debugMode requires
+  // 5-tap on version + is only user-reachable via Settings, this is safe
+  // — no accidental leak to normal users. Bundle still contains the
+  // sim-walker module (~10KB gzipped), acceptable pending R2 dynamic import.
   const debugMode = useSettingsStore((s) => s.debugMode);
   const simWalkerActive = useSimWalkerStore((s) => s.active);
-  const showSimWalker = __DEV__ && debugMode && simWalkerActive;
+  const showSimWalker = debugMode && simWalkerActive;
 
   const nav = useNavigation<Nav>();
   const { uiMode } = useAppStore();
@@ -1281,7 +1284,49 @@ export function HikingScreen() {
         const hikeTrackWriter = require('../services/hikeTrackWriter');
         if (typeof hikeTrackWriter.listActiveHikes !== 'function') return;
         const active = await hikeTrackWriter.listActiveHikes();
-        if (cancelled || !Array.isArray(active) || active.length === 0) return;
+        if (cancelled || !Array.isArray(active)) return;
+
+        // v430 dual-source detection: if disk has NO active file, ALSO
+        // check server for a dangling POST /start row that never got saved.
+        // Root cause: startHikeTrack fire-and-forget could lose the meta
+        // write if user killed app immediately after tapping Start (fixed
+        // separately by await, but backend-side detection catches historic
+        // rows too).
+        if (active.length === 0) {
+          try {
+            const { API_BASE_URL } = require('../config/api');
+            const { getToken } = require('../services/tokenStore');
+            const token = await getToken();
+            if (token) {
+              const controller = new AbortController();
+              const timer = setTimeout(() => controller.abort(), 5_000);
+              try {
+                const res = await fetch(`${API_BASE_URL}/api/sessions/unfinished`, {
+                  headers: { Authorization: `Bearer ${token}` },
+                  signal: controller.signal,
+                });
+                clearTimeout(timer);
+                if (res.ok) {
+                  const j = await res.json();
+                  if (j.session) {
+                    const s = j.session;
+                    setUnfinished({
+                      sessionId: `remote-${s.id}`,
+                      remoteId: s.id,
+                      activityMode: s.type || 'hiking',
+                      startedAt: Date.parse(s.start_time),
+                      distanceM: 0,
+                      durationS: 0,
+                      lastPointAt: Date.parse(s.start_time),
+                    });
+                    return;
+                  }
+                }
+              } catch { clearTimeout(timer); /* silent */ }
+            }
+          } catch { /* silent */ }
+          return;
+        }
 
         // v412 修 (real UI test): hikeTrackWriter.listActiveHikes 返回 snake_case
         // (session_id / last_ts), 老代码用 camelCase 匹配 filter 空. 兼容两种命名.
@@ -1544,6 +1589,19 @@ export function HikingScreen() {
           const hikeTrackWriter = require('../services/hikeTrackWriter');
           await hikeTrackWriter.discardActiveHike(u.sessionId);
         } catch { /* silent */ }
+        // v430 fix: also DELETE server-side row so it never appears as a
+        // too-short/ghost activity. Previous discard only removed local
+        // disk files, leaving the row created by POST /sessions/start
+        // orphaned on aliyun (finalized_at NULL, dist=0, dur=0).
+        if (u.remoteId) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { deleteRemoteSession } = require('../services/sessionService');
+            await deleteRemoteSession(u.remoteId);
+          } catch (err) {
+            crashLogger.breadcrumb(`v430:discard_remote_delete_failed ${String(err).slice(0, 80)}`);
+          }
+        }
         setUnfinished(null);
       }}
     />

@@ -53,6 +53,23 @@ const Session = {
     return rows;
   },
 
+  // v430: find latest unfinished session (POST /start done but no PATCH /save)
+  async findLatestUnfinished(userId) {
+    const [rows] = await pool.execute(
+      `SELECT id, type, start_time
+       FROM sessions
+       WHERE user_id = ?
+         AND finalized_at IS NULL
+         AND distance_m = 0
+         AND duration_s = 0
+         AND start_time > (NOW() - INTERVAL 72 HOUR)
+       ORDER BY id DESC
+       LIMIT 1`,
+      [userId]
+    );
+    return rows[0] || null;
+  },
+
   async deleteByIdAndUser(id, userId) {
     const [result] = await pool.execute(
       `DELETE FROM sessions WHERE id = ? AND user_id = ?`,
