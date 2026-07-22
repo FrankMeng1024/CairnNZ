@@ -236,9 +236,6 @@ export async function fetchPanelData(regionId: string, drill = false): Promise<P
     return null;  // v429: return null instead of throwing — panel shows error, no hang
   }
 }
-    return null;
-  }
-}
 
 /** Invalidate panel cache for a specific region (call after memory point changes) */
 export async function invalidatePanelCache(regionId?: string): Promise<void> {
