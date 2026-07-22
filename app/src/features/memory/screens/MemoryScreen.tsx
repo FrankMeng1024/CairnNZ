@@ -640,7 +640,6 @@ export function MemoryScreen() {
           centerLng={persistentCoord.lng}
           recenterToken={recenterToken}
           flyToTarget={flyToTarget}
-          highlightRegionId={hierarchyRegionId}
           onMapMoved={() => setMapMoved(true)}
           onCameraCenter={(lat, lng) => { cameraCenterRef.current = { lat, lng }; }}
           onMapFullyReady={() => {
@@ -908,10 +907,26 @@ export function MemoryScreen() {
             setHierarchyRegionId(siblingId);
           }}
           onGoUp={(parentId) => {
-            log('memory.hierarchy_up', { id: parentId });
-            // v428: going up always clears drill mode (parent is above,
-            // never a drilled-into child view).
-            setHierarchyDrill(false);
+            log('memory.hierarchy_up', { id: parentId, was_drill: hierarchyDrill });
+            // v433 bug fix: if we're in drill mode (viewing children of the
+            // current region), ↑ should just EXIT drill and return to the
+            // same-level sibling view — NOT jump up to the grandparent.
+            //
+            // Repro before fix: Shanghai(省) → ↑ → China(国, drill=true showing
+            // provinces) → ↑ → **jumped straight to Asia** (should have gone
+            // back to viewing China's siblings = other countries).
+            //
+            // The correct tree walk is:
+            //   in Shanghai (drill=false, regionId=CN-31) → ↑ → China
+            //   in China   (drill=true,  regionId=China)   → ↑ → China (exit drill)
+            //   in China   (drill=false, regionId=China)   → ↑ → Asia
+            // i.e. ↑ never skips a level.
+            if (hierarchyDrill) {
+              setHierarchyDrill(false);
+              // regionId unchanged — panel re-fetches with drill=false and
+              // shows siblings at the same level as current.
+              return;
+            }
             setHierarchyRegionId(parentId);
           }}
           onClose={() => setHierarchyOpen(false)}

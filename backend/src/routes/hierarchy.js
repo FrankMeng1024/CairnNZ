@@ -333,72 +333,12 @@ router.get('/panel', async (req, res) => {
   }
 });
 
-// GET /api/hierarchy/polygon/:region_id — v428
-// Returns the region's polygon as a GeoJSON FeatureCollection for map
-// highlighting. Uses ST_AsGeoJSON on the GEOMETRY column added in v428.
-//
-// Continent-level regions intentionally have POLYGON EMPTY (no highlight);
-// caller should render nothing when features is empty.
-router.get('/polygon/:region_id', async (req, res) => {
-  const regionId = req.params.region_id;
-  if (!regionId) return res.status(400).json({ error: 'region_id required' });
-  try {
-    // v428: geom is NOT NULL (SPATIAL INDEX requirement). world/continent
-    // rows have bbox-rectangle placeholder polygons. The polygon endpoint
-    // gates highlight by level — return empty FeatureCollection for
-    // level < 2 (world / continent), per user "不高亮" decision.
-    const [rows] = await pool.query(
-      `SELECT id, name_en, level, ST_AsGeoJSON(geom) AS geom_json
-         FROM regions WHERE id = ?`,
-      [regionId]
-    );
-    if (rows.length === 0) return res.status(404).json({ error: 'region not found' });
-    const r = rows[0];
-    // Cache aggressively — polygons rarely change (seed-time only)
-    res.set('Cache-Control', 'public, max-age=86400');
-    // Level gate: world (0) + continent (1) never render highlight
-    if (r.level < 2 || !r.geom_json) {
-      return res.json({
-        region_id: r.id,
-        type: 'FeatureCollection',
-        features: [],
-      });
-    }
-    let geometry;
-    try {
-      // MySQL2 driver may auto-parse ST_AsGeoJSON as object OR return string
-      // depending on version + column type. Handle both.
-      geometry = typeof r.geom_json === 'string'
-        ? JSON.parse(r.geom_json)
-        : r.geom_json;
-    } catch (e) {
-      console.error('[hierarchy/polygon] parse failed for', regionId, e.message);
-      return res.status(500).json({ error: 'geom parse failed' });
-    }
-    return res.json({
-      region_id: r.id,
-      type: 'FeatureCollection',
-      features: [{
-        type: 'Feature',
-        properties: { id: r.id, name_en: r.name_en, level: r.level },
-        geometry,
-      }],
-    });
-  } catch (err) {
-    // Column may not exist yet on old schema — return empty gracefully so
-    // v428 client falls back to no-highlight instead of crashing.
-    if (err && (err.code === 'ER_BAD_FIELD_ERROR' || /Unknown column 'geom'/.test(String(err.message || '')))) {
-      return res.json({
-        region_id: regionId,
-        type: 'FeatureCollection',
-        features: [],
-        _fallback: 'geom-column-missing',
-      });
-    }
-    console.error('[hierarchy/polygon]', err);
-    res.status(500).json({ error: 'db error' });
-  }
-});
+// v433: /polygon/:region_id endpoint removed — region highlight visual
+// feature was retired because polygon data (geoBoundaries ADM1) doesn't
+// align with Mapbox's proprietary admin boundary rendering, and the
+// mismatch was visually confusing to users. The `regions.geom` column is
+// KEPT — it's still needed by /deepest above to distinguish enclaves
+// (e.g. Shanghai vs Jiangsu) via ST_Contains.
 
 function fmtRegion(r) {
   return {

@@ -200,11 +200,10 @@ export function HierarchyPanel({ regionId, drill = false, onSelectSibling, onGoU
             >
               {visible.map((sib) => {
                 const isHere = sib.is_here;
-                // v430: count shown ONLY for marker rows (marked / here-with-markers).
-                // Walked rows don't show a number (per user: "走过的也不需要数字").
-                const shownCount = isHere
-                  ? data.here_marker_count
-                  : (sib.state === 'marked' ? sib.marker_count : 0);
+                // v433: numbers ONLY on non-current marked rows. is_here (green)
+                // hides its own count (user: "Shanghai 旁边不应该有 2 数字").
+                // Walked rows have no number either (v430).
+                const shownCount = !isHere && sib.state === 'marked' ? sib.marker_count : 0;
                 return (
                   <TouchableOpacity
                     key={sib.id}
@@ -251,16 +250,30 @@ export function HierarchyPanel({ regionId, drill = false, onSelectSibling, onGoU
           </View>
         ) : null}
 
-        {/* v430: locked summary row at bottom. Not expanded per user request
-            — only show total count of unvisited siblings, not their names.
-            Legend + Never/Marked/Walked labels removed (reserved for future
-            'friends' feature). */}
+        {/* v430: locked summary row — count only, not names */}
         {data && !error && data.locked_count > 0 ? (
           <View style={styles.lockedSummary} testID="hierarchy-locked-summary">
             <View style={[styles.dot, styles.dotLocked]} />
             <Text style={styles.lockedSummaryText}>
               {data.locked_count} more locked
             </Text>
+          </View>
+        ) : null}
+
+        {/* v433 legend: two states only — Marked (solid sepia) and Walked
+            (hollow sepia). No "Never" (that's the locked summary row above).
+            No "Friends" placeholder (reserved for a future feature — will be
+            added in its own release, not now). */}
+        {data && !error ? (
+          <View style={styles.legend} testID="hierarchy-legend">
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.dotMarked]} />
+              <Text style={styles.legendText}>Marked</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.dotWalked]} />
+              <Text style={styles.legendText}>Walked</Text>
+            </View>
           </View>
         ) : null}
       </Animated.View>
