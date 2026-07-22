@@ -174,6 +174,11 @@ export function SettingsScreen() {
   const nav = useNavigation<Nav>();
   const { uiMode, setUIMode, user, isLoggedIn, logout: appLogout } = useAppStore();
   const settings = useSettingsStore();
+  // v429 hotfix: hook must be called at component top level, not inside JSX.
+  // The previous inline `value={useSimWalkerStore((s) => s.active)}` in the
+  // Debug Switch was a hook-in-JSX violation causing hermes production crash.
+  const simWalkerActive = useSimWalkerStore((s) => s.active);
+  const setSimWalkerActive = useSimWalkerStore((s) => s.setActive);
 
   const [pendingMode, setPendingMode] = useState<UIMode>(uiMode);
 
@@ -803,8 +808,8 @@ export function SettingsScreen() {
               </View>
               <Switch
                 testID="settings-sim-walker-toggle"
-                value={useSimWalkerStore((s) => s.active)}
-                onValueChange={(v) => useSimWalkerStore.getState().setActive(v)}
+                value={simWalkerActive}
+                onValueChange={setSimWalkerActive}
                 trackColor={{ false: '#d5cdba', true: Colors.primary }}
               />
             </View>

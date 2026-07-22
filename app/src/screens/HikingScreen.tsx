@@ -42,7 +42,10 @@ import { MARKER_META, type MarkerType } from '../data/mockData';
 import type { Marker } from '../store/useMarkerStore';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
-import { SimWalkerOverlay } from '../dev/simWalker/SimWalkerOverlay';
+// v429 hotfix: SimWalkerOverlay static import removed to prevent gpsInjector
+// top-level side-effects from running on every HikingScreen mount (bundling
+// still includes the module but only runs when the gate is fully open).
+// useSimWalkerStore import stays because it's just a Zustand store, no side effect.
 import { useSimWalkerStore } from '../dev/simWalker/useSimWalkerStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 
@@ -2081,8 +2084,19 @@ export function HikingScreen() {
     {recoveryModalNode}
     {/* v428: dev-only GPS simulator overlay. Triple gate:
         __DEV__ (Hermes DCE in production) + debugMode (persistent) +
-        simWalkerActive (in-memory, cold-restart resets). */}
-    {showSimWalker && <SimWalkerOverlay />}
+        simWalkerActive (in-memory, cold-restart resets).
+        v429 hotfix: lazy-require inside gate so gpsInjector side-effects
+        don't run at HikingScreen mount time on production builds. */}
+    {showSimWalker && (() => {
+      try {
+        const { SimWalkerOverlay } = require('../dev/simWalker/SimWalkerOverlay');
+        return <SimWalkerOverlay />;
+      } catch (e: any) {
+        // eslint-disable-next-line no-console
+        console.warn('[sim-walker] failed to load:', e?.message);
+        return null;
+      }
+    })()}
     </>
   );
 }

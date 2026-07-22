@@ -14,6 +14,7 @@
 import { API_BASE_URL } from '../../../config/api';
 import { getToken } from '../../../services/tokenStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { log } from '../../../services/appLog';
 
 export type RegionLevel = 0 | 1 | 2 | 3 | 4; // world | continent | country | province | district
 
@@ -60,16 +61,37 @@ const PANEL_CACHE_TTL_MS = 60 * 1000; // 60s
 
 async function authedFetch(path: string): Promise<Response> {
   const token = await getToken();
-  return fetch(`${API_BASE_URL}${path}`, {
-    method: 'GET',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const url = `${API_BASE_URL}${path}`;
+  const t0 = Date.now();
+  log('v428.hierarchy.fetch_start', { path, has_token: !!token });
+  // v429: add 10s timeout so ios fetch cannot hang forever
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    log('v428.hierarchy.fetch_done', {
+      path, status: res.status, ok: res.ok, dur_ms: Date.now() - t0,
+    });
+    return res;
+  } catch (e: any) {
+    clearTimeout(timer);
+    log('v428.hierarchy.fetch_err', {
+      path, err: String(e?.name || e?.message || 'unknown'), dur_ms: Date.now() - t0,
+    });
+    throw e;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // Deepest region lookup (used to init "you are here")
 // ─────────────────────────────────────────────────────────────────────────
 export async function fetchDeepestRegion(lat: number, lng: number): Promise<Region | null> {
+  log('v428.hierarchy.deepest_call', { lat, lng });
   // Round to 2 decimals for cache key stability
   const key = `hierarchy:deepest:${lat.toFixed(2)},${lng.toFixed(2)}`;
   try {
@@ -93,7 +115,8 @@ export async function fetchDeepestRegion(lat: number, lng: number): Promise<Regi
       } catch { /* ignore */ }
     }
     return region ?? null;
-  } catch {
+  } catch (e: any) {
+    log('v428.hierarchy.deepest_err', { err: String(e?.name || e?.message || 'unknown'), lat, lng });
     return null;
   }
 }
@@ -177,27 +200,42 @@ function normalizePanelData(raw: any): PanelData {
 
 export async function fetchPanelData(regionId: string, drill = false): Promise<PanelData | null> {
   const key = `hierarchy:panel:${PANEL_CACHE_VERSION}:${regionId}${drill ? ':drill' : ''}`;
+  log('v428.hierarchy.panel_call', { regionId, drill });
   try {
     const cached = await AsyncStorage.getItem(key);
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Date.now() - parsed.ts < PANEL_CACHE_TTL_MS) {
+        log('v428.hierarchy.panel_cache_hit', { regionId, age_ms: Date.now() - parsed.ts });
         return parsed.data;
       }
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    log('v428.hierarchy.panel_cache_err', { err: String(e) });
+  }
 
   try {
     const qs = drill ? `&drill=1` : '';
     const res = await authedFetch(`/api/hierarchy/panel?region_id=${encodeURIComponent(regionId)}${qs}`);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      log('v428.hierarchy.panel_nok', { regionId, status: res.status });
+      return null;
+    }
     const raw = await res.json();
     const data = normalizePanelData(raw);
+    log('v428.hierarchy.panel_ok', {
+      regionId, sib_count: data.siblings?.length ?? 0,
+      marked: data.marked_count, walked: data.walked_count, locked: data.locked_count,
+    });
     try {
       await AsyncStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
     } catch { /* ignore */ }
     return data;
-  } catch {
+  } catch (e: any) {
+    log('v428.hierarchy.panel_throw', { regionId, err: String(e?.name || e?.message || 'unknown') });
+    return null;  // v429: return null instead of throwing — panel shows error, no hang
+  }
+}
     return null;
   }
 }
@@ -242,6 +280,7 @@ const EMPTY_FC: RegionPolygon = {
 };
 
 export async function fetchPolygon(regionId: string): Promise<RegionPolygon> {
+  log('v428.hierarchy.polygon_call', { regionId });
   const key = `hierarchy:polygon:${POLYGON_CACHE_VERSION}:${regionId}`;
   try {
     const cached = await AsyncStorage.getItem(key);
@@ -264,7 +303,8 @@ export async function fetchPolygon(regionId: string): Promise<RegionPolygon> {
       } catch { /* ignore */ }
     }
     return data;
-  } catch {
+  } catch (e: any) {
+    log('v428.hierarchy.polygon_throw', { regionId, err: String(e?.name || e?.message || 'unknown') });
     return { ...EMPTY_FC, region_id: regionId };
   }
 }
