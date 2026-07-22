@@ -200,114 +200,70 @@ router.get('/panel', async (req, res) => {
     // This is a heuristic but resolves the overlap correctly for enclave
     // cases (Shanghai bbox is smaller & centered on 121.5,31.2, closer to
     // typical Shanghai points than Jiangsu's bbox center).
+    // v430 speed: pure bbox+nearest-center in JS. Previous ST_Contains
+    // spatial JOIN was 3-36s (continent-level polygons are huge). Client
+    // only needs marked/walked ids + locked_count, so exact enclave
+    // resolution is unnecessary — nearest-bbox-center among siblings that
+    // contain the point is enough.
     const sibIds = siblingsRaw.map((s) => s.id);
     const pointCounts = new Map();
     const markerCounts = new Map();
     if (sibIds.length > 0) {
-      // v428: prefer spatial polygon lookup when geom column present.
-      // Uses ST_Contains join for exact assignment (no enclave heuristic needed).
-      let usedSpatial = false;
-      try {
-        const idPlaceholders = sibIds.map(() => '?').join(',');
-        const spatialQuery = `
-          SELECT s.id AS sibling_id, COUNT(*) AS cnt FROM memory_points p
-          INNER JOIN regions s ON s.id IN (${idPlaceholders})
-            AND s.level >= 2
-            AND ST_Contains(s.geom, ST_GeomFromText(CONCAT('POINT(', p.lng, ' ', p.lat, ')'), 4326, 'axis-order=long-lat'))
-          WHERE p.user_id = ?
-          GROUP BY s.id
-        `;
-        const markerQuery = spatialQuery.replace(/memory_points p/, 'markers p');
-        const [pointRows] = await pool.query(spatialQuery, [...sibIds, userId]);
-        const [markerRows] = await pool.query(markerQuery, [...sibIds, userId]);
-        for (const r of pointRows) pointCounts.set(r.sibling_id, Number(r.cnt));
-        for (const r of markerRows) markerCounts.set(r.sibling_id, Number(r.cnt));
-        usedSpatial = true;
-      } catch (spatialErr) {
-        // v428 fix: match by err.code (precise) not message regex.
-        if (spatialErr.code !== 'ER_BAD_FIELD_ERROR') {
-          throw spatialErr;
-        }
-        // Fall through to bbox heuristic below
-      }
+      const allMinLng = Math.min(...siblingsRaw.map(s => s.bbox_min_lng));
+      const allMinLat = Math.min(...siblingsRaw.map(s => s.bbox_min_lat));
+      const allMaxLng = Math.max(...siblingsRaw.map(s => s.bbox_max_lng));
+      const allMaxLat = Math.max(...siblingsRaw.map(s => s.bbox_max_lat));
 
-      if (!usedSpatial) {
-        // Legacy bbox nearest-center heuristic (pre-v428 schema)
-        const bboxOr = siblingsRaw
-          .map(() => '(lng BETWEEN ? AND ? AND lat BETWEEN ? AND ?)')
-          .join(' OR ');
-        const params = [userId];
-        for (const s of siblingsRaw) {
-          params.push(s.bbox_min_lng, s.bbox_max_lng, s.bbox_min_lat, s.bbox_max_lat);
-        }
-        const [pointRows] = await pool.query(
-          `SELECT lat, lng FROM memory_points WHERE user_id = ? AND (${bboxOr})`,
-          params
-        );
-        const [markerRows] = await pool.query(
-          `SELECT lat, lng FROM markers WHERE user_id = ? AND (${bboxOr})`,
-          params
-        );
-        const sibCenters = siblingsRaw.map((s) => ({
-          id: s.id,
-          cx: (s.bbox_min_lng + s.bbox_max_lng) / 2,
-          cy: (s.bbox_min_lat + s.bbox_max_lat) / 2,
-          minLng: s.bbox_min_lng, maxLng: s.bbox_max_lng,
-          minLat: s.bbox_min_lat, maxLat: s.bbox_max_lat,
-        }));
-        const assignToNearest = (rows, counts) => {
-          for (const p of rows) {
-            let bestSib = null;
-            let bestD = Infinity;
-            for (const sc of sibCenters) {
-              if (p.lng < sc.minLng || p.lng > sc.maxLng) continue;
-              if (p.lat < sc.minLat || p.lat > sc.maxLat) continue;
-              const dx = p.lng - sc.cx;
-              const dy = p.lat - sc.cy;
-              const d = dx * dx + dy * dy;
-              if (d < bestD) { bestD = d; bestSib = sc.id; }
-            }
-            if (bestSib) {
-              counts.set(bestSib, (counts.get(bestSib) || 0) + 1);
-            }
+      const [userPoints] = await pool.query(
+        `SELECT lng, lat FROM memory_points
+          WHERE user_id = ?
+            AND lng BETWEEN ? AND ?
+            AND lat BETWEEN ? AND ?
+          LIMIT 20000`,
+        [userId, allMinLng, allMaxLng, allMinLat, allMaxLat]
+      );
+      const [userMarkers] = await pool.query(
+        `SELECT lng, lat FROM markers
+          WHERE user_id = ?
+            AND lng BETWEEN ? AND ?
+            AND lat BETWEEN ? AND ?
+          LIMIT 5000`,
+        [userId, allMinLng, allMaxLng, allMinLat, allMaxLat]
+      );
+
+      const sibCenters = siblingsRaw.map((s) => ({
+        id: s.id,
+        cx: (s.bbox_min_lng + s.bbox_max_lng) / 2,
+        cy: (s.bbox_min_lat + s.bbox_max_lat) / 2,
+        minLng: s.bbox_min_lng, maxLng: s.bbox_max_lng,
+        minLat: s.bbox_min_lat, maxLat: s.bbox_max_lat,
+      }));
+
+      const assignToNearest = (rows, counts) => {
+        for (const p of rows) {
+          let bestSib = null;
+          let bestD = Infinity;
+          for (const sc of sibCenters) {
+            if (p.lng < sc.minLng || p.lng > sc.maxLng) continue;
+            if (p.lat < sc.minLat || p.lat > sc.maxLat) continue;
+            const dx = p.lng - sc.cx;
+            const dy = p.lat - sc.cy;
+            const d = dx * dx + dy * dy;
+            if (d < bestD) { bestD = d; bestSib = sc.id; }
           }
-        };
-        assignToNearest(pointRows, pointCounts);
-        assignToNearest(markerRows, markerCounts);
-      }
+          if (bestSib) counts.set(bestSib, (counts.get(bestSib) || 0) + 1);
+        }
+      };
+      assignToNearest(userPoints, pointCounts);
+      assignToNearest(userMarkers, markerCounts);
     }
 
     // "Explored here" for current region (v428: also count markers)
-    // v428: prefer spatial ST_Contains against current.geom if available,
-    // fall back to bbox count.
+    // v430: bbox count only. Previous ST_Contains was 30s on continent-level
+    // regions with huge geometry.
     let exploredHereCount = 0;
     let markerHereCount = 0;
-    let usedSpatialHere = false;
-    try {
-      const [pr] = await pool.query(
-        `SELECT COUNT(*) AS cnt FROM memory_points p
-          JOIN regions r ON r.id = ? AND r.level >= 2
-            AND ST_Contains(r.geom, ST_GeomFromText(CONCAT('POINT(', p.lng, ' ', p.lat, ')'), 4326, 'axis-order=long-lat'))
-          WHERE p.user_id = ?`,
-        [regionId, userId]
-      );
-      const [mr] = await pool.query(
-        `SELECT COUNT(*) AS cnt FROM markers p
-          JOIN regions r ON r.id = ? AND r.level >= 2
-            AND ST_Contains(r.geom, ST_GeomFromText(CONCAT('POINT(', p.lng, ' ', p.lat, ')'), 4326, 'axis-order=long-lat'))
-          WHERE p.user_id = ?`,
-        [regionId, userId]
-      );
-      exploredHereCount = Number(pr[0]?.cnt || 0);
-      markerHereCount = Number(mr[0]?.cnt || 0);
-      usedSpatialHere = true;
-    } catch (e) {
-      // v428 fix: match by err.code, not message regex.
-      if (e.code !== 'ER_BAD_FIELD_ERROR') {
-        throw e;
-      }
-    }
-    if (!usedSpatialHere) {
+    {
       const [ehRows] = await pool.query(
         `SELECT COUNT(*) AS cnt FROM memory_points
           WHERE user_id = ?

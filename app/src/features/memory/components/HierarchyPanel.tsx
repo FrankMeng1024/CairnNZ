@@ -128,9 +128,9 @@ export function HierarchyPanel({ regionId, drill = false, onSelectSibling, onGoU
         ...data.siblings
           .filter((s) => !s.is_here && s.state === 'walked')
           .sort((a, b) => b.point_count - a.point_count),
-        ...data.siblings
-          .filter((s) => !s.is_here && s.state === 'locked')
-          .sort((a, b) => a.name_en.localeCompare(b.name_en)),
+        // v430: locked siblings NOT expanded — client renders a single
+        // "+ N locked" summary row after all marked/walked. User only
+        // needs total count, not names of every unvisited province.
       ]
     : [];
 
@@ -200,19 +200,17 @@ export function HierarchyPanel({ regionId, drill = false, onSelectSibling, onGoU
             >
               {visible.map((sib) => {
                 const isHere = sib.is_here;
-                // v428: count shown = marker_count if any, else point_count.
-                // For the current row, use the dedicated here_* fields.
+                // v430: count shown ONLY for marker rows (marked / here-with-markers).
+                // Walked rows don't show a number (per user: "走过的也不需要数字").
                 const shownCount = isHere
-                  ? (data.here_marker_count > 0 ? data.here_marker_count : data.here_point_count)
-                  : (sib.marker_count > 0 ? sib.marker_count : sib.point_count);
+                  ? data.here_marker_count
+                  : (sib.state === 'marked' ? sib.marker_count : 0);
                 return (
                   <TouchableOpacity
                     key={sib.id}
                     testID={`hierarchy-row-${sib.id}`}
                     accessibilityState={{ selected: isHere }}
                     style={[styles.row, isHere && styles.rowHere]}
-                    // v428 bug 2 fix: green (isHere) row IS tappable — it means
-                    // "drill into me" (see me + my children). Pass isHere flag.
                     onPress={() => onSelectSibling(sib.id, sib.name_en, sib.bbox, isHere)}
                     activeOpacity={0.6}
                   >
@@ -229,7 +227,6 @@ export function HierarchyPanel({ regionId, drill = false, onSelectSibling, onGoU
                       style={[
                         styles.rowName,
                         isHere && styles.rowNameHere,
-                        sib.state === 'locked' && styles.rowNameLockedMuted,
                       ]}
                       numberOfLines={3}
                       adjustsFontSizeToFit={true}
@@ -254,22 +251,16 @@ export function HierarchyPanel({ regionId, drill = false, onSelectSibling, onGoU
           </View>
         ) : null}
 
-        {/* v428 footer: legend for the three dot states.
-            Replaces the useless "N visited · M unvisited" summary. */}
-        {data && !error ? (
-          <View style={styles.legend} testID="hierarchy-legend">
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, styles.dotMarked]} />
-              <Text style={styles.legendText}>Marked</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, styles.dotWalked]} />
-              <Text style={styles.legendText}>Walked</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, styles.dotLocked]} />
-              <Text style={styles.legendText}>Never</Text>
-            </View>
+        {/* v430: locked summary row at bottom. Not expanded per user request
+            — only show total count of unvisited siblings, not their names.
+            Legend + Never/Marked/Walked labels removed (reserved for future
+            'friends' feature). */}
+        {data && !error && data.locked_count > 0 ? (
+          <View style={styles.lockedSummary} testID="hierarchy-locked-summary">
+            <View style={[styles.dot, styles.dotLocked]} />
+            <Text style={styles.lockedSummaryText}>
+              {data.locked_count} more locked
+            </Text>
           </View>
         ) : null}
       </Animated.View>
@@ -419,6 +410,23 @@ const styles = StyleSheet.create({
   dotLocked: {
     backgroundColor: '#d5cdba',
   },
+  // v430: locked summary row (single line, non-tappable) at bottom
+  lockedSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f2ede2',
+    backgroundColor: '#fbf8f1',
+  },
+  lockedSummaryText: {
+    flex: 1,
+    fontSize: FontSize.small,
+    color: '#a89a82',
+    fontStyle: 'italic',
+  },
 
   scrollHint: {
     position: 'absolute',
@@ -451,7 +459,6 @@ const styles = StyleSheet.create({
     color: '#7a6f5f',
     letterSpacing: 0.1,
   },
-
   // v428: dot legend at bottom (replaces N-visited/M-unvisited copy).
   legend: {
     flexDirection: 'row',
