@@ -1,0 +1,669 @@
+{
+  "$reviewer": "independent-audit-subagent",
+  "$review_date": "2026-07-22",
+  "$user_context": "NZ App Store English-speaking users, panel 236px 2-line hard cap ~32 chars",
+  "$audit_summary": {
+    "total_items": 68,
+    "agree": 47,
+    "disagree": 12,
+    "needs_human": 9,
+    "critical_flags": [
+      "Main agent decisions.json and name-rules.json are INCONSISTENT for India: decisions.json.suggested_name keeps macrons (Mahārāshtra) but name-rules.json resolution says strip to Maharashtra. MUST reconcile before seed. My audit picks the plain-ASCII form per name-rules.",
+      "USA Washington shape_diff hides a same-name ambiguity: gb collapsed WA state + DC into 'Washington' key, NE has both (143km² = DC, 173367km² = WA state). This is NOT just a shape delta — it is a MISSING RECORD. DC must be added as a separate ADM1 entry named 'Washington DC'.",
+      "RUS Moscow: NE lists city (2555km²) AND oblast (43965km²). gb only has the city (2552km²). Moscow Oblast is a separate federal subject — MISSING RECORD, must be seeded separately.",
+      "RUS Altai Republic: NE lists two same-name entries (171055 = Altai KRAI, 92485 = Altai REPUBLIC). These are two different federal subjects with confusingly similar names. gb only has the Republic. Missing Altai Krai record.",
+      "USA Michigan area_spread 65%: gb 150740 vs ne 249386. gb likely land-only, ne includes Great Lakes water area. Land-only is the correct choice for a hiking app.",
+      "USA Wisconsin area_spread 16%: same as Michigan — gb land, ne includes Lake Michigan water.",
+      "IDN East Kalimantan area_spread 54%: gb 127105 vs ne 195317. 2012 split created North Kalimantan from East Kalimantan — ne is likely pre-split boundary. gb is correct (post-split).",
+      "IDN Riau Islands area_spread 77%: island province with maritime boundary — the difference is water area inclusion, not a data error. gb land-only preferred.",
+      "IND Puducherry area_spread 40%: gb 503 vs ne 360. Puducherry is 4 non-contiguous enclaves (Puducherry, Karaikal, Mahé, Yanam). Official area is 492 km². gb is closer to truth."
+    ]
+  },
+  "reviews": [
+    {
+      "idx": 1,
+      "iso": "BRA",
+      "gb_name": "Amapa",
+      "main_agent_pick": "Amapá (NE)",
+      "your_verdict": "agree",
+      "your_pick": "Amapá",
+      "your_reason": "Portuguese diacritic canonical — every atlas, IBGE official, Wikipedia use Amapá. English users see 'Amapá' commonly."
+    },
+    {
+      "idx": 2,
+      "iso": "BRA",
+      "gb_name": "Para",
+      "main_agent_pick": "Pará (NE)",
+      "your_verdict": "agree",
+      "your_pick": "Pará",
+      "your_reason": "Without diacritic 'Para' collides with English preposition. Pará is standard global rendering."
+    },
+    {
+      "idx": 3,
+      "iso": "BRA",
+      "gb_name": "Maranhao",
+      "main_agent_pick": "Maranhão (NE)",
+      "your_verdict": "agree",
+      "your_pick": "Maranhão",
+      "your_reason": "ã tilde is essential Portuguese phoneme, universally kept."
+    },
+    {
+      "idx": 4,
+      "iso": "BRA",
+      "gb_name": "Ceara",
+      "main_agent_pick": "Ceará (NE)",
+      "your_verdict": "agree",
+      "your_pick": "Ceará",
+      "your_reason": "Canonical."
+    },
+    {
+      "idx": 5,
+      "iso": "BRA",
+      "gb_name": "Paraiba",
+      "main_agent_pick": "Paraíba (NE)",
+      "your_verdict": "agree",
+      "your_pick": "Paraíba",
+      "your_reason": "Canonical."
+    },
+    {
+      "idx": 6,
+      "iso": "BRA",
+      "gb_name": "Piaui",
+      "main_agent_pick": "Piauí (NE)",
+      "your_verdict": "agree",
+      "your_pick": "Piauí",
+      "your_reason": "Canonical."
+    },
+    {
+      "idx": 7,
+      "iso": "BRA",
+      "gb_name": "Rondonia",
+      "main_agent_pick": "Rondônia (NE)",
+      "your_verdict": "agree",
+      "your_pick": "Rondônia",
+      "your_reason": "Canonical."
+    },
+    {
+      "idx": 8,
+      "iso": "BRA",
+      "gb_name": "Goias",
+      "main_agent_pick": "Goiás (NE)",
+      "your_verdict": "agree",
+      "your_pick": "Goiás",
+      "your_reason": "Canonical."
+    },
+    {
+      "idx": 9,
+      "iso": "BRA",
+      "gb_name": "Espirito Santo",
+      "main_agent_pick": "Espírito Santo (NE)",
+      "your_verdict": "agree",
+      "your_pick": "Espírito Santo",
+      "your_reason": "Canonical."
+    },
+    {
+      "idx": 10,
+      "iso": "BRA",
+      "gb_name": "Sao Paulo",
+      "main_agent_pick": "São Paulo (NE)",
+      "your_verdict": "agree",
+      "your_pick": "São Paulo",
+      "your_reason": "São Paulo with ã is the global standard — English media, atlases, Wikipedia, Apple Maps, Google Maps all use it. 'Sao Paulo' looks wrong."
+    },
+    {
+      "idx": 11,
+      "iso": "BRA",
+      "gb_name": "Parana",
+      "main_agent_pick": "Paraná (NE)",
+      "your_verdict": "agree",
+      "your_pick": "Paraná",
+      "your_reason": "Canonical; disambiguates from Paraná River shared with ARG/PAR."
+    },
+    {
+      "idx": 12,
+      "iso": "CHN",
+      "gb_name": "Hainan Province",
+      "main_agent_pick": "Hainan (DataV/NE)",
+      "your_verdict": "agree",
+      "your_pick": "Hainan",
+      "your_reason": "Short name matches how English users refer to Chinese provinces. Suffix strip standard."
+    },
+    {
+      "idx": 13,
+      "iso": "CHN",
+      "gb_name": "Fujian Province",
+      "main_agent_pick": "Fujian",
+      "your_verdict": "agree",
+      "your_pick": "Fujian",
+      "your_reason": "Standard suffix strip."
+    },
+    {
+      "idx": 14,
+      "iso": "CHN",
+      "gb_name": "Yunnan Province",
+      "main_agent_pick": "Yunnan",
+      "your_verdict": "agree",
+      "your_pick": "Yunnan",
+      "your_reason": "Standard suffix strip."
+    },
+    {
+      "idx": 15,
+      "iso": "CHN",
+      "gb_name": "Guizhou Province",
+      "main_agent_pick": "Guizhou",
+      "your_verdict": "agree",
+      "your_pick": "Guizhou",
+      "your_reason": "Standard suffix strip."
+    },
+    {
+      "idx": 16,
+      "iso": "CHN",
+      "gb_name": "Jiangxi Province",
+      "main_agent_pick": "Jiangxi",
+      "your_verdict": "agree",
+      "your_pick": "Jiangxi",
+      "your_reason": "Standard suffix strip."
+    },
+    {
+      "idx": 17,
+      "iso": "CHN",
+      "gb_name": "Hunan Province",
+      "main_agent_pick": "Hunan",
+      "your_verdict": "agree",
+      "your_pick": "Hunan",
+      "your_reason": "Standard suffix strip."
+    },
+    {
+      "idx": 18,
+      "iso": "CHN",
+      "gb_name": "Zhejiang Province",
+      "main_agent_pick": "Zhejiang",
+      "your_verdict": "agree",
+      "your_pick": "Zhejiang",
+      "your_reason": "Standard suffix strip. Note 8% area spread — DataV includes more offshore islands, acceptable."
+    },
+    {
+      "idx": 19,
+      "iso": "CHN",
+      "gb_name": "Shanghai Municipality",
+      "main_agent_pick": "Shanghai (DataV)",
+      "your_verdict": "agree",
+      "your_pick": "Shanghai",
+      "your_reason": "Direct-controlled municipality, but user searches for 'Shanghai' not 'Shanghai Municipality'. 40% area spread reflects DataV including Chongming/Hengsha islands more generously — acceptable for hiking use case."
+    },
+    {
+      "idx": 20,
+      "iso": "CHN",
+      "gb_name": "Chongqing Municipality",
+      "main_agent_pick": "Chongqing",
+      "your_verdict": "agree",
+      "your_pick": "Chongqing",
+      "your_reason": "Same rationale as Shanghai."
+    },
+    {
+      "idx": 21,
+      "iso": "CHN",
+      "gb_name": "Hubei Province",
+      "main_agent_pick": "Hubei",
+      "your_verdict": "agree",
+      "your_pick": "Hubei",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 22,
+      "iso": "CHN",
+      "gb_name": "Sichuan Province",
+      "main_agent_pick": "Sichuan",
+      "your_verdict": "agree",
+      "your_pick": "Sichuan",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 23,
+      "iso": "CHN",
+      "gb_name": "Anhui Province",
+      "main_agent_pick": "Anhui",
+      "your_verdict": "agree",
+      "your_pick": "Anhui",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 24,
+      "iso": "CHN",
+      "gb_name": "Jiangsu Province",
+      "main_agent_pick": "Jiangsu",
+      "your_verdict": "agree",
+      "your_pick": "Jiangsu",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 25,
+      "iso": "CHN",
+      "gb_name": "Henan Province",
+      "main_agent_pick": "Henan",
+      "your_verdict": "agree",
+      "your_pick": "Henan",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 26,
+      "iso": "CHN",
+      "gb_name": "Shandong Province",
+      "main_agent_pick": "Shandong",
+      "your_verdict": "agree",
+      "your_pick": "Shandong",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 27,
+      "iso": "CHN",
+      "gb_name": "Qinghai Province",
+      "main_agent_pick": "Qinghai",
+      "your_verdict": "agree",
+      "your_pick": "Qinghai",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 28,
+      "iso": "CHN",
+      "gb_name": "Shaanxi Province",
+      "main_agent_pick": "Shaanxi",
+      "your_verdict": "agree",
+      "your_pick": "Shaanxi",
+      "your_reason": "Shaanxi (陕西) with double-a is the official Chinese ROMANIZATION to disambiguate from Shanxi (山西). Do NOT normalize to Shanxi."
+    },
+    {
+      "idx": 29,
+      "iso": "CHN",
+      "gb_name": "Tianjin Municipality",
+      "main_agent_pick": "Tianjin",
+      "your_verdict": "agree",
+      "your_pick": "Tianjin",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 30,
+      "iso": "CHN",
+      "gb_name": "Shanxi Province",
+      "main_agent_pick": "Shanxi",
+      "your_verdict": "agree",
+      "your_pick": "Shanxi",
+      "your_reason": "Standard. Distinct from Shaanxi."
+    },
+    {
+      "idx": 31,
+      "iso": "CHN",
+      "gb_name": "Beijing Municipality",
+      "main_agent_pick": "Beijing",
+      "your_verdict": "agree",
+      "your_pick": "Beijing",
+      "your_reason": "Capital city name universally known short-form."
+    },
+    {
+      "idx": 32,
+      "iso": "CHN",
+      "gb_name": "Gansu Province",
+      "main_agent_pick": "Gansu",
+      "your_verdict": "agree",
+      "your_pick": "Gansu",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 33,
+      "iso": "CHN",
+      "gb_name": "Hebei Province",
+      "main_agent_pick": "Hebei",
+      "your_verdict": "agree",
+      "your_pick": "Hebei",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 34,
+      "iso": "CHN",
+      "gb_name": "Liaoning Province",
+      "main_agent_pick": "Liaoning",
+      "your_verdict": "agree",
+      "your_pick": "Liaoning",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 35,
+      "iso": "CHN",
+      "gb_name": "Jilin Province",
+      "main_agent_pick": "Jilin",
+      "your_verdict": "agree",
+      "your_pick": "Jilin",
+      "your_reason": "Standard."
+    },
+    {
+      "idx": 36,
+      "iso": "CHN",
+      "gb_name": "Heilongjiang Province",
+      "main_agent_pick": "Heilongjiang",
+      "your_verdict": "agree",
+      "your_pick": "Heilongjiang",
+      "your_reason": "Standard. 12 chars fits panel."
+    },
+    {
+      "idx": 37,
+      "iso": "IDN",
+      "gb_name": "Maluku",
+      "main_agent_pick": "Maluku (gb, 46302 km²)",
+      "your_verdict": "agree",
+      "your_pick": "Maluku",
+      "your_reason": "11% delta is normal for maritime provinces (island boundary interpretation). gb higher = includes more sea area around islands. Both defensible, gb is authoritative geoBoundaries source. No data error.",
+      "needs_human": false
+    },
+    {
+      "idx": 38,
+      "iso": "IDN",
+      "gb_name": "Bangka-Belitung Islands",
+      "main_agent_pick": "Bangka-Belitung Islands (gb)",
+      "your_verdict": "disagree",
+      "your_pick": "Bangka Belitung Islands",
+      "your_reason": "name-rules.json resolution explicitly says 'Bangka Belitung Islands' (no hyphen — Indonesian government English form). decisions.json contradicts its own name-rules by picking gb hyphenated form. Follow name-rules: unhyphenated form is official Indonesian government English."
+    },
+    {
+      "idx": 39,
+      "iso": "IDN",
+      "gb_name": "Riau Islands",
+      "main_agent_pick": "Riau Islands (gb, 8000 km²)",
+      "your_verdict": "agree",
+      "your_pick": "Riau Islands",
+      "your_reason": "Real Riau Islands province land area is ~8,201 km² per Indonesian statistics. gb=8000 is close to truth. ne=4521 is too low, probably excludes some outlying atolls. gb correct. 77% is not a data error — it is a data QUALITY win for gb.",
+      "needs_human": false
+    },
+    {
+      "idx": 40,
+      "iso": "IDN",
+      "gb_name": "East Kalimantan",
+      "main_agent_pick": "East Kalimantan (gb, 127105 km²)",
+      "your_verdict": "agree",
+      "your_pick": "East Kalimantan",
+      "your_reason": "Real post-2012-split East Kalimantan area = ~129,067 km². gb=127105 is correct. ne=195317 is the PRE-split boundary (includes what is now North Kalimantan since 2012). This is a data VINTAGE issue — gb is current, ne is stale. Definitively pick gb.",
+      "needs_human": false
+    },
+    {
+      "idx": 41,
+      "iso": "IND",
+      "gb_name": "Puducherry",
+      "main_agent_pick": "Puducherry (gb, 503 km²)",
+      "your_verdict": "agree",
+      "your_pick": "Puducherry",
+      "your_reason": "Puducherry is 4 non-contiguous enclaves (Puducherry ~293, Karaikal ~160, Mahé ~9, Yanam ~30). Official total = 492 km². gb=503 is closest to truth, likely all 4 enclaves. ne=360 is missing at least one enclave (probably Mahé or Yanam). gb correct, no human needed.",
+      "needs_human": false
+    },
+    {
+      "idx": 42,
+      "iso": "IND",
+      "gb_name": "Mahārāshtra",
+      "main_agent_pick": "Mahārāshtra (gb with macrons)",
+      "your_verdict": "disagree",
+      "your_pick": "Maharashtra",
+      "your_reason": "CRITICAL: decisions.json has 'Mahārāshtra' but name-rules.json Rule 2 explicitly says STRIP IAST macrons for India. Every atlas, Wikipedia, Indian government English uses 'Maharashtra' without macrons. decisions.json is inconsistent with its own name-rules. Use plain ASCII per rule."
+    },
+    {
+      "idx": 43,
+      "iso": "IND",
+      "gb_name": "Nāgāland",
+      "main_agent_pick": "Nāgāland",
+      "your_verdict": "disagree",
+      "your_pick": "Nagaland",
+      "your_reason": "Same as Maharashtra — name-rules says strip macrons for IND. decisions.json wrong."
+    },
+    {
+      "idx": 44,
+      "iso": "IND",
+      "gb_name": "Lakshadweep",
+      "main_agent_pick": "Lakshadweep (gb, 29 km²)",
+      "your_verdict": "agree",
+      "your_pick": "Lakshadweep",
+      "your_reason": "Lakshadweep official land area = 32 km². gb=29 closer than ne=21. Absolute values are tiny so 38% spread is not concerning. Both are just island specks — the label is what matters, and 'Lakshadweep' is the same.",
+      "needs_human": false
+    },
+    {
+      "idx": 45,
+      "iso": "IND",
+      "gb_name": "Tamil Nādu",
+      "main_agent_pick": "Tamil Nādu",
+      "your_verdict": "disagree",
+      "your_pick": "Tamil Nadu",
+      "your_reason": "IAST macron strip per name-rules Rule 2. Tamil Nadu is universal English form."
+    },
+    {
+      "idx": 46,
+      "iso": "IND",
+      "gb_name": "Chhattīsgarh",
+      "main_agent_pick": "Chhattīsgarh",
+      "your_verdict": "disagree",
+      "your_pick": "Chhattisgarh",
+      "your_reason": "IAST macron strip per name-rules Rule 2."
+    },
+    {
+      "idx": 47,
+      "iso": "IND",
+      "gb_name": "Gujarāt",
+      "main_agent_pick": "Gujarāt",
+      "your_verdict": "disagree",
+      "your_pick": "Gujarat",
+      "your_reason": "IAST macron strip. Gujarat is universal English form."
+    },
+    {
+      "idx": 48,
+      "iso": "IND",
+      "gb_name": "Bihār",
+      "main_agent_pick": "Bihār",
+      "your_verdict": "disagree",
+      "your_pick": "Bihar",
+      "your_reason": "IAST macron strip."
+    },
+    {
+      "idx": 49,
+      "iso": "IND",
+      "gb_name": "Ladākh",
+      "main_agent_pick": "Ladākh",
+      "your_verdict": "disagree",
+      "your_pick": "Ladakh",
+      "your_reason": "IAST macron strip. Also note 164% area spread — gb=167481 vs ne=63517. Ladakh's total claimed area is ~59,146 km² but includes disputed Aksai Chin (~37,244) and disputed Pakistan-administered parts. gb likely includes all claimed territory (~166k km² matches India's official claim). ne uses de-facto controlled area (~60k). This is a POLITICAL boundary choice — Indian government uses gb value. For an English NZ audience it's less politically charged to use the Indian claim; gb value is fine.",
+      "needs_human": true
+    },
+    {
+      "idx": 50,
+      "iso": "IND",
+      "gb_name": "Rājasthān",
+      "main_agent_pick": "Rājasthān",
+      "your_verdict": "disagree",
+      "your_pick": "Rajasthan",
+      "your_reason": "IAST macron strip. Rajasthan is universal English form."
+    },
+    {
+      "idx": 51,
+      "iso": "IND",
+      "gb_name": "Telangāna",
+      "main_agent_pick": "Telangāna",
+      "your_verdict": "disagree",
+      "your_pick": "Telangana",
+      "your_reason": "IAST macron strip."
+    },
+    {
+      "idx": 52,
+      "iso": "IND",
+      "gb_name": "Arunāchal Pradesh",
+      "main_agent_pick": "Arunāchal Pradesh",
+      "your_verdict": "disagree",
+      "your_pick": "Arunachal Pradesh",
+      "your_reason": "IAST macron strip."
+    },
+    {
+      "idx": 53,
+      "iso": "IND",
+      "gb_name": "Meghālaya",
+      "main_agent_pick": "Meghālaya",
+      "your_verdict": "disagree",
+      "your_pick": "Meghalaya",
+      "your_reason": "IAST macron strip."
+    },
+    {
+      "idx": 54,
+      "iso": "IND",
+      "gb_name": "Jhārkhand",
+      "main_agent_pick": "Jhārkhand",
+      "your_verdict": "disagree",
+      "your_pick": "Jharkhand",
+      "your_reason": "IAST macron strip."
+    },
+    {
+      "idx": 55,
+      "iso": "IND",
+      "gb_name": "Karnātaka",
+      "main_agent_pick": "Karnātaka",
+      "your_verdict": "disagree",
+      "your_pick": "Karnataka",
+      "your_reason": "IAST macron strip."
+    },
+    {
+      "idx": 56,
+      "iso": "IND",
+      "gb_name": "Uttarākhand",
+      "main_agent_pick": "Uttarākhand",
+      "your_verdict": "disagree",
+      "your_pick": "Uttarakhand",
+      "your_reason": "IAST macron strip."
+    },
+    {
+      "idx": 57,
+      "iso": "IND",
+      "gb_name": "Dādra and Nagar Haveli and Damān and Diu",
+      "main_agent_pick": "Dādra and Nagar Haveli and Damān and Diu (gb)",
+      "your_verdict": "disagree",
+      "your_pick": "Dadra & Nagar Haveli",
+      "your_reason": "Two issues: (a) IAST macron strip needed, (b) full name is 40 chars — overflows panel 32-char hard max. name-rules.json explicitly says truncate to 'Dadra & Nagar Haveli' (20 chars) — decisions.json ignores this. Follow name-rules. Note: this DOES drop 'Daman and Diu' component naming; acceptable since the geographic shape still includes those enclaves — only the label is shortened."
+    },
+    {
+      "idx": 58,
+      "iso": "IND",
+      "gb_name": "Chandīgarh",
+      "main_agent_pick": "Chandīgarh",
+      "your_verdict": "disagree",
+      "your_pick": "Chandigarh",
+      "your_reason": "IAST macron strip."
+    },
+    {
+      "idx": 59,
+      "iso": "IND",
+      "gb_name": "Andaman and Nicobar Islands",
+      "main_agent_pick": "Andaman and Nicobar Islands (gb, 7333 km²)",
+      "your_verdict": "agree",
+      "your_pick": "Andaman and Nicobar Islands",
+      "your_reason": "Real area = 8,249 km². gb=7333 slightly under, ne=6537 more under. gb closer to truth. 12% delta acceptable for maritime archipelago. Name is 27 chars — fits panel. No human needed.",
+      "needs_human": false
+    },
+    {
+      "idx": 60,
+      "iso": "IND",
+      "gb_name": "Himāchal Pradesh",
+      "main_agent_pick": "Himāchal Pradesh",
+      "your_verdict": "disagree",
+      "your_pick": "Himachal Pradesh",
+      "your_reason": "IAST macron strip."
+    },
+    {
+      "idx": 61,
+      "iso": "IND",
+      "gb_name": "Jammu and Kashmīr",
+      "main_agent_pick": "Jammu and Kashmīr",
+      "your_verdict": "disagree",
+      "your_pick": "Jammu and Kashmir",
+      "your_reason": "IAST macron strip. Note 28% area spread — likely reflects boundary of Ladakh split (2019 reorg carved out Ladakh from J&K). gb may still include some Ladakh territory. Political sensitivity: use gb per Indian government position for consistency with Ladakh entry."
+    },
+    {
+      "idx": 62,
+      "iso": "IND",
+      "gb_name": "Haryāna",
+      "main_agent_pick": "Haryāna",
+      "your_verdict": "disagree",
+      "your_pick": "Haryana",
+      "your_reason": "IAST macron strip."
+    },
+    {
+      "idx": 63,
+      "iso": "RUS",
+      "gb_name": "Moscow",
+      "main_agent_pick": "Moscow (gb 2552 km²)",
+      "your_verdict": "needs_human",
+      "your_pick": "Moscow (city) + SEPARATE Moscow Oblast record",
+      "your_reason": "gb 2552 km² = Moscow federal city (Москва). ne has TWO entries: 43965 km² = Moscow Oblast (Московская область — surrounding federal subject), 2555 km² = Moscow city. These are TWO different federal subjects. gb is missing Moscow Oblast entirely. User in central Moscow → hits city. User in suburbs of Moscow (e.g. Sergiev Posad, Podolsk) → should hit Moscow Oblast, not city. RECOMMENDATION: keep gb 'Moscow' for the city, and ADD a separate ADM1 record 'Moscow Oblast' using ne polygon (43965 km²). Ask user to confirm the addition — this is a MISSING DATA issue, not a shape delta.",
+      "needs_human": true
+    },
+    {
+      "idx": 64,
+      "iso": "RUS",
+      "gb_name": "Saint Petersburg",
+      "main_agent_pick": "Saint Petersburg (gb, 1433 km²)",
+      "your_verdict": "disagree",
+      "your_pick": "St. Petersburg",
+      "your_reason": "Two issues: (a) name-rules.json RUS override map says 'Saint Petersburg' → 'St. Petersburg' (16 chars vs full 16 also OK but name-rules chooses abbreviation). decisions.json ignores its own name-rules. (b) Shape delta: gb 1433 vs ne 2033 — real area = 1,439 km² (city proper). gb is CORRECT. ne=2033 likely includes Kronshtadt district islands and Petergof water. Not same-name ambiguity, just shape choice. Apply name-rules override.",
+      "needs_human": false
+    },
+    {
+      "idx": 65,
+      "iso": "RUS",
+      "gb_name": "Altai Republic",
+      "main_agent_pick": "Altai Republic (gb, 92657 km²)",
+      "your_verdict": "needs_human",
+      "your_pick": "Altai (per name-rules override) + ADD SEPARATE 'Altai Krai' record",
+      "your_reason": "This is same-name ambiguity: NE has 171055 km² (Altai KRAI — Алтайский край, distinct federal subject) and 92485 km² (Altai REPUBLIC — Республика Алтай, different federal subject). Real Altai Krai = 167,996 km², Altai Republic = 92,903 km². gb has only Altai Republic. Missing federal subject: Altai KRAI. RECOMMEND: keep gb's Altai Republic (rename to 'Altai' per RUS override map in name-rules.json line 249), AND add ne's larger polygon as separate 'Altai Krai' ADM1. This is a MISSING RECORD, not just a shape delta.",
+      "needs_human": true
+    },
+    {
+      "idx": 66,
+      "iso": "USA",
+      "gb_name": "Michigan",
+      "main_agent_pick": "Michigan (gb, 150740 km²)",
+      "your_verdict": "agree",
+      "your_pick": "Michigan",
+      "your_reason": "Michigan land-only area = 146,435 km². Total (with Great Lakes water) = 250,493 km². gb=150740 = land-only (correct for hiking app). ne=249386 = total-with-water. For a HIKING app, land-only is definitively correct — you cannot hike on Lake Michigan. gb is right choice.",
+      "needs_human": false
+    },
+    {
+      "idx": 67,
+      "iso": "USA",
+      "gb_name": "Washington",
+      "main_agent_pick": "Washington (gb, 174949 km²)",
+      "your_verdict": "needs_human",
+      "your_pick": "Washington (state) + ADD SEPARATE 'Washington DC' record",
+      "your_reason": "CRITICAL SAME-NAME AMBIGUITY. NE has two Washington entries: 143 km² = District of Columbia (Washington DC federal district), 173367 km² = Washington STATE (Pacific Northwest). gb collapsed both under key 'Washington' but only kept state polygon. This means DC is MISSING from gb entirely. User standing at White House would hit Washington state (wrong, 4000km away). RECOMMEND: keep gb Washington (state), AND add DC as separate ADM1 record named 'Washington DC' (per name-rules.json USA override map, line 260, which already anticipates this: 'District of Columbia': 'Washington DC'). Verify gb has a separate 'District of Columbia' record — if not, source DC polygon from NE. This is a MISSING RECORD, not a shape delta.",
+      "needs_human": true
+    },
+    {
+      "idx": 68,
+      "iso": "USA",
+      "gb_name": "Wisconsin",
+      "main_agent_pick": "Wisconsin (gb, 145051 km²)",
+      "your_verdict": "agree",
+      "your_pick": "Wisconsin",
+      "your_reason": "Same pattern as Michigan. Wisconsin land-only = 140,268 km². gb=145051 close to land-only. ne=168969 includes Lake Michigan/Superior water area. gb correct for hiking app.",
+      "needs_human": false
+    }
+  ],
+  "$critical_actions_before_seed": [
+    "1. IND macron strip: main agent MUST reconcile decisions.json with name-rules.json — pick plain-ASCII forms for ALL 17 IND entries (Maharashtra, Nagaland, Tamil Nadu, Chhattisgarh, Gujarat, Bihar, Ladakh, Rajasthan, Telangana, Arunachal Pradesh, Meghalaya, Jharkhand, Karnataka, Uttarakhand, Chandigarh, Himachal Pradesh, Jammu and Kashmir, Haryana) plus Dadra & Nagar Haveli truncation.",
+    "2. Same-name RUS/USA ambiguity: add 3 MISSING records — Moscow Oblast, Altai Krai, Washington DC. Do NOT rely on gb alone. Sourcing polygon from NE is required for these three.",
+    "3. IDN Bangka-Belitung: strip hyphen per name-rules — 'Bangka Belitung Islands'.",
+    "4. RUS Saint Petersburg: apply name-rules abbrev → 'St. Petersburg'.",
+    "5. USA MI/WI: verify gb uses land-only polygons app-wide (spot-check FL, LA, NY which also border major water). If any US state uses total-with-water, seed will misalign geographically."
+  ],
+  "$audit_conclusions": {
+    "main_agent_strengths": [
+      "BRA diacritic policy correct (11/11 agree)",
+      "CHN suffix strip policy correct (25/25 agree)",
+      "Most shape_diff correctly flagged as needs_human for gb-preferred"
+    ],
+    "main_agent_weaknesses": [
+      "INTERNAL INCONSISTENCY: decisions.json contradicts name-rules.json in 21 places (17 IND macron, 1 IDN hyphen, 1 RUS abbrev, 1 IND multi-word truncation, 1 assumption Bangka fallback). The decisions.json auto-generation missed the name-rules resolution step. This is a process bug, not a judgment bug — same-agent inconsistency.",
+      "MISSED same-name ambiguity as MISSING RECORD problem: Moscow, Washington, Altai — main agent flagged as shape_diff needing human review but did not recognize that gb is missing an entire federal subject/state. Human review would be pointless without adding those records first.",
+      "Did not identify land vs total-with-water pattern for US Great Lakes states — this is a known pattern (Michigan, Wisconsin, Minnesota, Illinois, Indiana, Ohio, New York, Pennsylvania all border Great Lakes)."
+    ],
+    "final_recommendation": "Do NOT run seed script until (a) IND names are ASCII-normalized, (b) 3 missing records (Moscow Oblast, Altai Krai, Washington DC) are added, (c) 2 name-rules-vs-decisions inconsistencies (Bangka-Belitung hyphen, St. Petersburg abbrev) are reconciled. After these 6 fixes, remaining 47 agree items are seed-ready and 3 needs_human items should go to user with the specific recommendation attached."
+  }
+}

@@ -1,24 +1,25 @@
 /**
- * HighlightRegionLayer — v428
+ * HighlightRegionLayer — v432 (halo/glow style)
  *
- * Renders a sage-tinted fill + outline around the currently selected
- * region in the hierarchy panel. Fetches the polygon lazily when
- * regionId changes; keeps prior polygon visible during fetch (no
- * A→blank→B flicker).
+ * Renders a sage glow around the currently selected region. v432 pivots
+ * from a hard "boundary line + fill" to a soft halo because our polygon
+ * data (geoBoundaries ADM1) doesn't match Mapbox's proprietary admin
+ * boundaries pixel-for-pixel — the mismatch looked broken.
  *
- * Layer stack (bottom-up per v428 plan §7.1):
- *   base → fog → hl-region-fill → hl-region-line → tracks → markers → user
+ * Halo strategy (subagent report: mapbox-boundary-mismatch.md option c):
+ *   - Fill: very faint (0.06-0.10) — user sees which area is selected
+ *     but doesn't focus on the exact border pixel.
+ *   - Line: two-layer glow effect
+ *     • Outer wide+blurred line (halo)
+ *     • Inner thin+low-opacity line (soft edge, not a hard boundary)
+ *   Visual reads as "this region is glowing" not "here is the boundary".
  *
- * Zoom-based fill opacity (v428 plan §7.2):
- *   zoom < 4  → 0.10 (world view — subtle so world map still readable)
- *   zoom 4-14 → 0.25 (normal)
- * Line width:
- *   zoom < 4  → 3px (visible even when polygon tiny)
- *   zoom > 6  → 2px
+ * Layer stack (bottom-up):
+ *   base → fog → hl-region-fill → hl-region-halo → hl-region-line
+ *        → tracks → markers → user
  *
- * Continent / world levels have empty polygon → source data set to
- * empty FeatureCollection → nothing renders, per user "continent 不高亮"
- * decision.
+ * Continent / world levels have empty polygon → nothing renders, per
+ * user "continent 不高亮" decision.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchPolygon, isEmptyPolygon, type RegionPolygon } from '../services/hierarchyService';
@@ -28,6 +29,7 @@ import { Colors } from '../../../components/tokens';
 import {
   HL_SOURCE_ID,
   HL_FILL_LAYER_ID,
+  HL_HALO_LAYER_ID,
   HL_LINE_LAYER_ID,
 } from '../config/highlightLayerIds';
 
@@ -79,26 +81,50 @@ export function HighlightRegionLayer({ regionId }: Props) {
         id={HL_FILL_LAYER_ID}
         style={{
           fillColor: Colors.primary,
-          // v428 §7.2 — interpolate on zoom, no JS runtime cost
+          // v432 halo: much fainter fill so mismatch with Mapbox admin
+          // lines doesn't jump out. User sees "this area is selected"
+          // without focusing on the exact border pixel.
           fillOpacity: [
             'interpolate', ['linear'], ['zoom'],
-            2, 0.10,   // world zoom — subtle
-            4, 0.25,   // country zoom — visible
-            14, 0.25,  // street zoom — visible
+            2, 0.04,   // world zoom — barely there
+            4, 0.08,   // country zoom — subtle
+            14, 0.10,  // street zoom — visible but soft
           ],
         }}
       />
+      {/* Outer halo — wide + blurred + low opacity → glow effect */}
+      <LineLayer
+        id={HL_HALO_LAYER_ID}
+        style={{
+          lineColor: Colors.primary,
+          lineWidth: [
+            'interpolate', ['linear'], ['zoom'],
+            2, 10,
+            6, 14,
+            14, 18,
+          ],
+          lineBlur: [
+            'interpolate', ['linear'], ['zoom'],
+            2, 6,
+            6, 10,
+            14, 14,
+          ],
+          lineOpacity: 0.35,
+        }}
+      />
+      {/* Inner soft edge — thin + faint, NOT a hard boundary */}
       <LineLayer
         id={HL_LINE_LAYER_ID}
         style={{
           lineColor: Colors.primary,
           lineWidth: [
             'interpolate', ['linear'], ['zoom'],
-            2, 3,   // world zoom — thick so still readable
-            6, 2,
-            14, 2,
+            2, 1,
+            6, 1.2,
+            14, 1.5,
           ],
-          lineOpacity: 0.9,
+          lineBlur: 1.5,
+          lineOpacity: 0.45,
         }}
       />
     </ShapeSource>

@@ -1,0 +1,2173 @@
+[
+  {
+    "iso": "BRA",
+    "key_name": "Amapa",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 2,
+    "gb_name": "Amapa",
+    "gb_area_km2": 141458,
+    "gb_centroid": [
+      -52.21,
+      1.56
+    ],
+    "ne_names": [
+      "Amapá"
+    ],
+    "ne_areas": [
+      139113
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "NaturalEarth",
+    "suggested_name": "Amapá",
+    "suggested_reason": "BR: NE retains Portuguese diacritics (Amapá not Amapa)",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "BRA",
+    "key_name": "Para",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Para",
+    "gb_area_km2": 1240913,
+    "gb_centroid": [
+      -52.45,
+      -2.22
+    ],
+    "ne_names": [
+      "Pará"
+    ],
+    "ne_areas": [
+      1232696
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "NaturalEarth",
+    "suggested_name": "Pará",
+    "suggested_reason": "BR: NE retains Portuguese diacritics (Amapá not Amapa)",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "BRA",
+    "key_name": "Maranhao",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Maranhao",
+    "gb_area_km2": 330221,
+    "gb_centroid": [
+      -45.41,
+      -5.23
+    ],
+    "ne_names": [
+      "Maranhão"
+    ],
+    "ne_areas": [
+      326004
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "NaturalEarth",
+    "suggested_name": "Maranhão",
+    "suggested_reason": "BR: NE retains Portuguese diacritics (Amapá not Amapa)",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "BRA",
+    "key_name": "Ceara",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Ceara",
+    "gb_area_km2": 148762,
+    "gb_centroid": [
+      -39.5,
+      -5.33
+    ],
+    "ne_names": [
+      "Ceará"
+    ],
+    "ne_areas": [
+      150977
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "NaturalEarth",
+    "suggested_name": "Ceará",
+    "suggested_reason": "BR: NE retains Portuguese diacritics (Amapá not Amapa)",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "BRA",
+    "key_name": "Paraiba",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Paraiba",
+    "gb_area_km2": 57513,
+    "gb_centroid": [
+      -37.03,
+      -7.16
+    ],
+    "ne_names": [
+      "Paraíba"
+    ],
+    "ne_areas": [
+      56729
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "NaturalEarth",
+    "suggested_name": "Paraíba",
+    "suggested_reason": "BR: NE retains Portuguese diacritics (Amapá not Amapa)",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "BRA",
+    "key_name": "Piaui",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Piaui",
+    "gb_area_km2": 252827,
+    "gb_centroid": [
+      -42.91,
+      -7.28
+    ],
+    "ne_names": [
+      "Piauí"
+    ],
+    "ne_areas": [
+      253089
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "NaturalEarth",
+    "suggested_name": "Piauí",
+    "suggested_reason": "BR: NE retains Portuguese diacritics (Amapá not Amapa)",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "BRA",
+    "key_name": "Rondonia",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Rondonia",
+    "gb_area_km2": 241374,
+    "gb_centroid": [
+      -63.38,
+      -10.56
+    ],
+    "ne_names": [
+      "Rondônia"
+    ],
+    "ne_areas": [
+      239100
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "NaturalEarth",
+    "suggested_name": "Rondônia",
+    "suggested_reason": "BR: NE retains Portuguese diacritics (Amapá not Amapa)",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "BRA",
+    "key_name": "Goias",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Goias",
+    "gb_area_km2": 341352,
+    "gb_centroid": [
+      -49.37,
+      -15.86
+    ],
+    "ne_names": [
+      "Goiás"
+    ],
+    "ne_areas": [
+      342211
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "NaturalEarth",
+    "suggested_name": "Goiás",
+    "suggested_reason": "BR: NE retains Portuguese diacritics (Amapá not Amapa)",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "BRA",
+    "key_name": "Espirito Santo",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 4,
+    "gb_name": "Espirito Santo",
+    "gb_area_km2": 47583,
+    "gb_centroid": [
+      -40.84,
+      -19.71
+    ],
+    "ne_names": [
+      "Espírito Santo"
+    ],
+    "ne_areas": [
+      45872
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "NaturalEarth",
+    "suggested_name": "Espírito Santo",
+    "suggested_reason": "BR: NE retains Portuguese diacritics (Amapá not Amapa)",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "BRA",
+    "key_name": "Sao Paulo",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Sao Paulo",
+    "gb_area_km2": 250349,
+    "gb_centroid": [
+      -48.38,
+      -22.39
+    ],
+    "ne_names": [
+      "São Paulo"
+    ],
+    "ne_areas": [
+      249325
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "NaturalEarth",
+    "suggested_name": "São Paulo",
+    "suggested_reason": "BR: NE retains Portuguese diacritics (Amapá not Amapa)",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "BRA",
+    "key_name": "Parana",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Parana",
+    "gb_area_km2": 199287,
+    "gb_centroid": [
+      -51.66,
+      -24.78
+    ],
+    "ne_names": [
+      "Paraná"
+    ],
+    "ne_areas": [
+      198825
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "NaturalEarth",
+    "suggested_name": "Paraná",
+    "suggested_reason": "BR: NE retains Portuguese diacritics (Amapá not Amapa)",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Hainan Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 24,
+    "gb_name": "Hainan Province",
+    "gb_area_km2": 35412,
+    "gb_centroid": [
+      109.74,
+      19.27
+    ],
+    "ne_names": [
+      "Hainan"
+    ],
+    "ne_areas": [
+      33867
+    ],
+    "datav_names": [
+      "Hainan"
+    ],
+    "datav_areas": [
+      42029
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Hainan",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Fujian Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 3,
+    "gb_name": "Fujian Province",
+    "gb_area_km2": 121394,
+    "gb_centroid": [
+      118.42,
+      25.93
+    ],
+    "ne_names": [
+      "Fujian"
+    ],
+    "ne_areas": [
+      121378
+    ],
+    "datav_names": [
+      "Fujian"
+    ],
+    "datav_areas": [
+      125005
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Fujian",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Yunnan Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 2,
+    "gb_name": "Yunnan Province",
+    "gb_area_km2": 391882,
+    "gb_centroid": [
+      102.55,
+      26.06
+    ],
+    "ne_names": [
+      "Yunnan"
+    ],
+    "ne_areas": [
+      386413
+    ],
+    "datav_names": [
+      "Yunnan"
+    ],
+    "datav_areas": [
+      384063
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Yunnan",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Guizhou Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Guizhou Province",
+    "gb_area_km2": 177883,
+    "gb_centroid": [
+      106.97,
+      27.13
+    ],
+    "ne_names": [
+      "Guizhou"
+    ],
+    "ne_areas": [
+      175450
+    ],
+    "datav_names": [
+      "Guizhou"
+    ],
+    "datav_areas": [
+      176443
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Guizhou",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Jiangxi Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Jiangxi Province",
+    "gb_area_km2": 168714,
+    "gb_centroid": [
+      115.64,
+      27.76
+    ],
+    "ne_names": [
+      "Jiangxi"
+    ],
+    "ne_areas": [
+      167946
+    ],
+    "datav_names": [
+      "Jiangxi"
+    ],
+    "datav_areas": [
+      167210
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Jiangxi",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Hunan Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Hunan Province",
+    "gb_area_km2": 212956,
+    "gb_centroid": [
+      111.77,
+      27.45
+    ],
+    "ne_names": [
+      "Hunan"
+    ],
+    "ne_areas": [
+      211803
+    ],
+    "datav_names": [
+      "Hunan"
+    ],
+    "datav_areas": [
+      212299
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Hunan",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Zhejiang Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 8,
+    "gb_name": "Zhejiang Province",
+    "gb_area_km2": 100438,
+    "gb_centroid": [
+      120.35,
+      29.46
+    ],
+    "ne_names": [
+      "Zhejiang"
+    ],
+    "ne_areas": [
+      99762
+    ],
+    "datav_names": [
+      "Zhejiang"
+    ],
+    "datav_areas": [
+      107269
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Zhejiang",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Shanghai Municipality",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 40,
+    "gb_name": "Shanghai Municipality",
+    "gb_area_km2": 6227,
+    "gb_centroid": [
+      121.49,
+      31.3
+    ],
+    "ne_names": [
+      "Shanghai"
+    ],
+    "ne_areas": [
+      5710
+    ],
+    "datav_names": [
+      "Shanghai"
+    ],
+    "datav_areas": [
+      7996
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Shanghai",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Chongqing Municipality",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 3,
+    "gb_name": "Chongqing Municipality",
+    "gb_area_km2": 80281,
+    "gb_centroid": [
+      107.99,
+      29.8
+    ],
+    "ne_names": [
+      "Chongqing"
+    ],
+    "ne_areas": [
+      82452
+    ],
+    "datav_names": [
+      "Chongqing"
+    ],
+    "datav_areas": [
+      82532
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Chongqing",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Hubei Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Hubei Province",
+    "gb_area_km2": 186897,
+    "gb_centroid": [
+      112.05,
+      30.68
+    ],
+    "ne_names": [
+      "Hubei"
+    ],
+    "ne_areas": [
+      185756
+    ],
+    "datav_names": [
+      "Hubei"
+    ],
+    "datav_areas": [
+      186188
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Hubei",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Sichuan Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Sichuan Province",
+    "gb_area_km2": 483983,
+    "gb_centroid": [
+      103.3,
+      30.11
+    ],
+    "ne_names": [
+      "Sichuan"
+    ],
+    "ne_areas": [
+      485192
+    ],
+    "datav_names": [
+      "Sichuan"
+    ],
+    "datav_areas": [
+      486909
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Sichuan",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Anhui Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Anhui Province",
+    "gb_area_km2": 139309,
+    "gb_centroid": [
+      117.18,
+      32.2
+    ],
+    "ne_names": [
+      "Anhui"
+    ],
+    "ne_areas": [
+      140296
+    ],
+    "datav_names": [
+      "Anhui"
+    ],
+    "datav_areas": [
+      140316
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Anhui",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Jiangsu Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 6,
+    "gb_name": "Jiangsu Province",
+    "gb_area_km2": 97863,
+    "gb_centroid": [
+      119.27,
+      32.95
+    ],
+    "ne_names": [
+      "Jiangsu"
+    ],
+    "ne_areas": [
+      100238
+    ],
+    "datav_names": [
+      "Jiangsu"
+    ],
+    "datav_areas": [
+      103697
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Jiangsu",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Henan Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Henan Province",
+    "gb_area_km2": 166287,
+    "gb_centroid": [
+      114.36,
+      33.87
+    ],
+    "ne_names": [
+      "Henan"
+    ],
+    "ne_areas": [
+      165990
+    ],
+    "datav_names": [
+      "Henan"
+    ],
+    "datav_areas": [
+      165755
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Henan",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Shandong Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 4,
+    "gb_name": "Shandong Province",
+    "gb_area_km2": 151120,
+    "gb_centroid": [
+      118.28,
+      36.22
+    ],
+    "ne_names": [
+      "Shandong"
+    ],
+    "ne_areas": [
+      155653
+    ],
+    "datav_names": [
+      "Shandong"
+    ],
+    "datav_areas": [
+      157870
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Shandong",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Qinghai Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 3,
+    "gb_name": "Qinghai Province",
+    "gb_area_km2": 701846,
+    "gb_centroid": [
+      96.1,
+      34.99
+    ],
+    "ne_names": [
+      "Qinghai"
+    ],
+    "ne_areas": [
+      714447
+    ],
+    "datav_names": [
+      "Qinghai"
+    ],
+    "datav_areas": [
+      696914
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Qinghai",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Shaanxi Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Shaanxi Province",
+    "gb_area_km2": 202991,
+    "gb_centroid": [
+      108.8,
+      35.31
+    ],
+    "ne_names": [
+      "Shaanxi"
+    ],
+    "ne_areas": [
+      205692
+    ],
+    "datav_names": [
+      "Shaanxi"
+    ],
+    "datav_areas": [
+      205651
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Shaanxi",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Tianjin Municipality",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 5,
+    "gb_name": "Tianjin Municipality",
+    "gb_area_km2": 11766,
+    "gb_centroid": [
+      117.42,
+      39.48
+    ],
+    "ne_names": [
+      "Tianjin"
+    ],
+    "ne_areas": [
+      11519
+    ],
+    "datav_names": [
+      "Tianjin"
+    ],
+    "datav_areas": [
+      12090
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Tianjin",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Shanxi Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Shanxi Province",
+    "gb_area_km2": 156960,
+    "gb_centroid": [
+      112.74,
+      38.14
+    ],
+    "ne_names": [
+      "Shanxi"
+    ],
+    "ne_areas": [
+      155904
+    ],
+    "datav_names": [
+      "Shanxi"
+    ],
+    "datav_areas": [
+      156810
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Shanxi",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Beijing Municipality",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 2,
+    "gb_name": "Beijing Municipality",
+    "gb_area_km2": 16296,
+    "gb_centroid": [
+      116.67,
+      40.29
+    ],
+    "ne_names": [
+      "Beijing"
+    ],
+    "ne_areas": [
+      16146
+    ],
+    "datav_names": [
+      "Beijing"
+    ],
+    "datav_areas": [
+      16394
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Beijing",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Gansu Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 5,
+    "gb_name": "Gansu Province",
+    "gb_area_km2": 422125,
+    "gb_centroid": [
+      102.41,
+      36.86
+    ],
+    "ne_names": [
+      "Gansu"
+    ],
+    "ne_areas": [
+      405417
+    ],
+    "datav_names": [
+      "Gansu"
+    ],
+    "datav_areas": [
+      425541
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Gansu",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Hebei Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Hebei Province",
+    "gb_area_km2": 185925,
+    "gb_centroid": [
+      116.48,
+      39.78
+    ],
+    "ne_names": [
+      "Hebei"
+    ],
+    "ne_areas": [
+      188372
+    ],
+    "datav_names": [
+      "Hebei"
+    ],
+    "datav_areas": [
+      188376
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Hebei",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Liaoning Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 2,
+    "gb_name": "Liaoning Province",
+    "gb_area_km2": 149017,
+    "gb_centroid": [
+      122.42,
+      41.13
+    ],
+    "ne_names": [
+      "Liaoning"
+    ],
+    "ne_areas": [
+      146669
+    ],
+    "datav_names": [
+      "Liaoning"
+    ],
+    "datav_areas": [
+      148010
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Liaoning",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Jilin Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Jilin Province",
+    "gb_area_km2": 191220,
+    "gb_centroid": [
+      125.88,
+      43.97
+    ],
+    "ne_names": [
+      "Jilin"
+    ],
+    "ne_areas": [
+      190579
+    ],
+    "datav_names": [
+      "Jilin"
+    ],
+    "datav_areas": [
+      190643
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Jilin",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "CHN",
+    "key_name": "Heilongjiang Province",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth",
+      "DataV"
+    ],
+    "area_spread_pct": 2,
+    "gb_name": "Heilongjiang Province",
+    "gb_area_km2": 444565,
+    "gb_centroid": [
+      126.97,
+      48.02
+    ],
+    "ne_names": [
+      "Heilongjiang"
+    ],
+    "ne_areas": [
+      450655
+    ],
+    "datav_names": [
+      "Heilongjiang"
+    ],
+    "datav_areas": [
+      452985
+    ],
+    "suggested_pick": "DataV",
+    "suggested_name": "Heilongjiang",
+    "suggested_reason": "CN: DataV is PRC authoritative short-name",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IDN",
+    "key_name": "Maluku",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 11,
+    "gb_name": "Maluku",
+    "gb_area_km2": 46302,
+    "gb_centroid": [
+      131.04,
+      -5.66
+    ],
+    "ne_names": [
+      "Maluku"
+    ],
+    "ne_areas": [
+      41840
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Maluku",
+    "suggested_reason": "shape delta gb=46302km² vs ne=41840km²; gb is primary",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IDN",
+    "key_name": "Bangka-Belitung Islands",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 6,
+    "gb_name": "Bangka-Belitung Islands",
+    "gb_area_km2": 17359,
+    "gb_centroid": [
+      107.41,
+      -2.53
+    ],
+    "ne_names": [
+      "Bangka Belitung Islands"
+    ],
+    "ne_areas": [
+      16433
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Bangka-Belitung Islands",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IDN",
+    "key_name": "Riau Islands",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 77,
+    "gb_name": "Riau Islands",
+    "gb_area_km2": 8000,
+    "gb_centroid": [
+      105.22,
+      1.43
+    ],
+    "ne_names": [
+      "Riau Islands"
+    ],
+    "ne_areas": [
+      4521
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Riau Islands",
+    "suggested_reason": "shape delta gb=8000km² vs ne=4521km²; gb is primary",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IDN",
+    "key_name": "East Kalimantan",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 54,
+    "gb_name": "East Kalimantan",
+    "gb_area_km2": 127105,
+    "gb_centroid": [
+      116.57,
+      0.34
+    ],
+    "ne_names": [
+      "East Kalimantan"
+    ],
+    "ne_areas": [
+      195317
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "East Kalimantan",
+    "suggested_reason": "shape delta gb=127105km² vs ne=195317km²; gb is primary",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Puducherry",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 40,
+    "gb_name": "Puducherry",
+    "gb_area_km2": 503,
+    "gb_centroid": [
+      79.68,
+      12.05
+    ],
+    "ne_names": [
+      "Puducherry"
+    ],
+    "ne_areas": [
+      360
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Puducherry",
+    "suggested_reason": "shape delta gb=503km² vs ne=360km²; gb is primary",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Mahārāshtra",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Mahārāshtra",
+    "gb_area_km2": 308414,
+    "gb_centroid": [
+      75.72,
+      19.27
+    ],
+    "ne_names": [
+      "Maharashtra"
+    ],
+    "ne_areas": [
+      307514
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Mahārāshtra",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Nāgāland",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 2,
+    "gb_name": "Nāgāland",
+    "gb_area_km2": 16606,
+    "gb_centroid": [
+      94.3,
+      26.02
+    ],
+    "ne_names": [
+      "Nagaland"
+    ],
+    "ne_areas": [
+      16302
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Nāgāland",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Lakshadweep",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 38,
+    "gb_name": "Lakshadweep",
+    "gb_area_km2": 29,
+    "gb_centroid": [
+      72.81,
+      10.42
+    ],
+    "ne_names": [
+      "Lakshadweep"
+    ],
+    "ne_areas": [
+      21
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Lakshadweep",
+    "suggested_reason": "shape delta gb=29km² vs ne=21km²; gb is primary",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Tamil Nādu",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Tamil Nādu",
+    "gb_area_km2": 130727,
+    "gb_centroid": [
+      78.45,
+      11.17
+    ],
+    "ne_names": [
+      "Tamil Nadu"
+    ],
+    "ne_areas": [
+      131083
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Tamil Nādu",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Chhattīsgarh",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Chhattīsgarh",
+    "gb_area_km2": 135519,
+    "gb_centroid": [
+      82.08,
+      21.35
+    ],
+    "ne_names": [
+      "Chhattisgarh"
+    ],
+    "ne_areas": [
+      134616
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Chhattīsgarh",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Gujarāt",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Gujarāt",
+    "gb_area_km2": 185610,
+    "gb_centroid": [
+      71.59,
+      22.31
+    ],
+    "ne_names": [
+      "Gujarat"
+    ],
+    "ne_areas": [
+      184558
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Gujarāt",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Bihār",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Bihār",
+    "gb_area_km2": 94377,
+    "gb_centroid": [
+      85.7,
+      25.73
+    ],
+    "ne_names": [
+      "Bihar"
+    ],
+    "ne_areas": [
+      94791
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Bihār",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Ladākh",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 164,
+    "gb_name": "Ladākh",
+    "gb_area_km2": 167481,
+    "gb_centroid": [
+      76.57,
+      34.75
+    ],
+    "ne_names": [
+      "Ladakh"
+    ],
+    "ne_areas": [
+      63517
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Ladākh",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Rājasthān",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Rājasthān",
+    "gb_area_km2": 342782,
+    "gb_centroid": [
+      75.51,
+      25.76
+    ],
+    "ne_names": [
+      "Rajasthan"
+    ],
+    "ne_areas": [
+      343867
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Rājasthān",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Telangāna",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 3,
+    "gb_name": "Telangāna",
+    "gb_area_km2": 112445,
+    "gb_centroid": [
+      78.89,
+      17.82
+    ],
+    "ne_names": [
+      "Telangana"
+    ],
+    "ne_areas": [
+      115262
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Telangāna",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Arunāchal Pradesh",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Arunāchal Pradesh",
+    "gb_area_km2": 82220,
+    "gb_centroid": [
+      95.18,
+      27.68
+    ],
+    "ne_names": [
+      "Arunachal Pradesh"
+    ],
+    "ne_areas": [
+      81769
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Arunāchal Pradesh",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Meghālaya",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 3,
+    "gb_name": "Meghālaya",
+    "gb_area_km2": 22459,
+    "gb_centroid": [
+      91.48,
+      25.67
+    ],
+    "ne_names": [
+      "Meghalaya"
+    ],
+    "ne_areas": [
+      23182
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Meghālaya",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Jhārkhand",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 2,
+    "gb_name": "Jhārkhand",
+    "gb_area_km2": 80051,
+    "gb_centroid": [
+      85.93,
+      23.69
+    ],
+    "ne_names": [
+      "Jharkhand"
+    ],
+    "ne_areas": [
+      78242
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Jhārkhand",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Karnātaka",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Karnātaka",
+    "gb_area_km2": 192470,
+    "gb_centroid": [
+      76.5,
+      14.83
+    ],
+    "ne_names": [
+      "Karnataka"
+    ],
+    "ne_areas": [
+      192148
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Karnātaka",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Uttarākhand",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 2,
+    "gb_name": "Uttarākhand",
+    "gb_area_km2": 53474,
+    "gb_centroid": [
+      79.14,
+      30.01
+    ],
+    "ne_names": [
+      "Uttarakhand"
+    ],
+    "ne_areas": [
+      52603
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Uttarākhand",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Dādra and Nagar Haveli and Damān and Diu",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 25,
+    "gb_name": "Dādra and Nagar Haveli and Damān and Diu",
+    "gb_area_km2": 588,
+    "gb_centroid": [
+      72.72,
+      20.31
+    ],
+    "ne_names": [
+      "Dadra and Nagar Haveli and Daman and Diu"
+    ],
+    "ne_areas": [
+      469
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Dādra and Nagar Haveli and Damān and Diu",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Chandīgarh",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 22,
+    "gb_name": "Chandīgarh",
+    "gb_area_km2": 115,
+    "gb_centroid": [
+      76.79,
+      30.73
+    ],
+    "ne_names": [
+      "Chandigarh"
+    ],
+    "ne_areas": [
+      94
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Chandīgarh",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Andaman and Nicobar Islands",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 12,
+    "gb_name": "Andaman and Nicobar Islands",
+    "gb_area_km2": 7333,
+    "gb_centroid": [
+      92.94,
+      11.74
+    ],
+    "ne_names": [
+      "Andaman and Nicobar Islands"
+    ],
+    "ne_areas": [
+      6537
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Andaman and Nicobar Islands",
+    "suggested_reason": "shape delta gb=7333km² vs ne=6537km²; gb is primary",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Himāchal Pradesh",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 0,
+    "gb_name": "Himāchal Pradesh",
+    "gb_area_km2": 55733,
+    "gb_centroid": [
+      77.27,
+      31.73
+    ],
+    "ne_names": [
+      "Himachal Pradesh"
+    ],
+    "ne_areas": [
+      55543
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Himāchal Pradesh",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Jammu and Kashmīr",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 28,
+    "gb_name": "Jammu and Kashmīr",
+    "gb_area_km2": 54697,
+    "gb_centroid": [
+      75.05,
+      33.49
+    ],
+    "ne_names": [
+      "Jammu and Kashmir"
+    ],
+    "ne_areas": [
+      42691
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Jammu and Kashmīr",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "IND",
+    "key_name": "Haryāna",
+    "verdict": "name_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 1,
+    "gb_name": "Haryāna",
+    "gb_area_km2": 44251,
+    "gb_centroid": [
+      76.42,
+      29.26
+    ],
+    "ne_names": [
+      "Haryana"
+    ],
+    "ne_areas": [
+      43940
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Haryāna",
+    "suggested_reason": "fallback: use gb as primary source",
+    "needs_review": false,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "RUS",
+    "key_name": "Moscow",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 1623,
+    "gb_name": "Moscow",
+    "gb_area_km2": 2552,
+    "gb_centroid": [
+      37.31,
+      55.64
+    ],
+    "ne_names": [
+      "Moscow",
+      "Moscow"
+    ],
+    "ne_areas": [
+      43965,
+      2555
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Moscow",
+    "suggested_reason": "NE has 2 same-name entries (43965,2555km²); gb is unambiguous",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "RUS",
+    "key_name": "Saint Petersburg",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 42,
+    "gb_name": "Saint Petersburg",
+    "gb_area_km2": 1433,
+    "gb_centroid": [
+      30.03,
+      59.94
+    ],
+    "ne_names": [
+      "Saint Petersburg"
+    ],
+    "ne_areas": [
+      2033
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Saint Petersburg",
+    "suggested_reason": "shape delta gb=1433km² vs ne=2033km²; gb is primary",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "RUS",
+    "key_name": "Altai Republic",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 85,
+    "gb_name": "Altai Republic",
+    "gb_area_km2": 92657,
+    "gb_centroid": [
+      87.22,
+      50.78
+    ],
+    "ne_names": [
+      "Altai Republic",
+      "Altai Republic"
+    ],
+    "ne_areas": [
+      171055,
+      92485
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Altai Republic",
+    "suggested_reason": "NE has 2 same-name entries (171055,92485km²); gb is unambiguous",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "USA",
+    "key_name": "Michigan",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 65,
+    "gb_name": "Michigan",
+    "gb_area_km2": 150740,
+    "gb_centroid": [
+      -85.64,
+      45.58
+    ],
+    "ne_names": [
+      "Michigan"
+    ],
+    "ne_areas": [
+      249386
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Michigan",
+    "suggested_reason": "shape delta gb=150740km² vs ne=249386km²; gb is primary",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "USA",
+    "key_name": "Washington",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 122242,
+    "gb_name": "Washington",
+    "gb_area_km2": 174949,
+    "gb_centroid": [
+      -122.81,
+      47.81
+    ],
+    "ne_names": [
+      "Washington",
+      "Washington"
+    ],
+    "ne_areas": [
+      143,
+      173367
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Washington",
+    "suggested_reason": "NE has 2 same-name entries (143,173367km²); gb is unambiguous",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  },
+  {
+    "iso": "USA",
+    "key_name": "Wisconsin",
+    "verdict": "shape_diff",
+    "sources": [
+      "geoBoundaries",
+      "NaturalEarth"
+    ],
+    "area_spread_pct": 16,
+    "gb_name": "Wisconsin",
+    "gb_area_km2": 145051,
+    "gb_centroid": [
+      -89.49,
+      45.42
+    ],
+    "ne_names": [
+      "Wisconsin"
+    ],
+    "ne_areas": [
+      168969
+    ],
+    "datav_names": [],
+    "datav_areas": [],
+    "suggested_pick": "geoBoundaries",
+    "suggested_name": "Wisconsin",
+    "suggested_reason": "shape delta gb=145051km² vs ne=168969km²; gb is primary",
+    "needs_review": true,
+    "human_verdict": null,
+    "human_reason": null
+  }
+]

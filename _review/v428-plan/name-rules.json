@@ -1,0 +1,306 @@
+{
+  "$schema_version": "v428-name-rules-1.0",
+  "$generated_from": [
+    "_review/v428-plan/compare-report.json (35 countries, 902 ADM1, 56 name_diff)",
+    "backend/scripts/seed-geoboundaries/tmp/adm0-metadata.json (230 ADM0 records)"
+  ],
+  "$panel_width_constraint": "UI panel 236px, 2 lines — target <=24 chars ideal, <=32 hard max",
+
+  "adm0_country_override": {
+    "United States of America": "United States",
+    "Russian Federation": "Russia",
+    "United Republic of Tanzania": "Tanzania",
+    "Republic of Korea": "South Korea",
+    "Dem. People's Republic of Korea": "North Korea",
+    "Democratic Republic of the Congo": "DR Congo",
+    "Iran (Islamic Republic of)": "Iran",
+    "Venezuela (Bolivarian Republic of)": "Venezuela",
+    "Bolivia (Plurinational State of)": "Bolivia",
+    "Micronesia (Fed. States of)": "Micronesia",
+    "Republic of Moldova": "Moldova",
+    "Lao People's Democratic Republic": "Laos",
+    "Syrian Arab Republic": "Syria",
+    "State of Palestine": "Palestine",
+    "Central African Republic": "Central African Republic",
+    "Dominican Republic": "Dominican Republic",
+    "Brunei Darussalam": "Brunei",
+    "Viet Nam": "Vietnam",
+    "Timor-Leste": "East Timor",
+    "Cabo Verde": "Cape Verde",
+    "Czechia": "Czechia",
+    "Eswatini": "Eswatini",
+    "Holy See": "Vatican City",
+    "Falkland Islands (Malvinas)": "Falkland Islands",
+    "Bonaire Sint Eustatius and Saba": "Bonaire",
+    "Sao Tome and Principe": "Sao Tome and Principe",
+    "Antartica": "Antarctica",
+    "United Arab Emirates": "United Arab Emirates",
+    "Isle of Man": "Isle of Man",
+    "United Kingdom": "United Kingdom",
+    "Saint Vincent and the Grenadines": "St. Vincent and Grenadines",
+    "Wallis and Futuna Islands": "Wallis and Futuna",
+    "Turks and Caicos Islands": "Turks and Caicos",
+    "British Virgin Islands": "British Virgin Islands",
+    "United States Virgin Islands": "US Virgin Islands",
+    "Northern Mariana Islands": "N. Mariana Islands",
+    "Bosnia and Herzegovina": "Bosnia & Herzegovina",
+    "Trinidad and Tobago": "Trinidad & Tobago",
+    "Antigua and Barbuda": "Antigua & Barbuda",
+    "Saint Kitts and Nevis": "St. Kitts & Nevis",
+    "Guinea-Bissau": "Guinea-Bissau",
+    "Equatorial Guinea": "Equatorial Guinea",
+    "Côte d'Ivoire": "Ivory Coast"
+  },
+
+  "$adm0_override_notes": [
+    "Override rules apply BEFORE suffix strip. This is an exact-match key -> value replacement.",
+    "For 'Central African Republic' / 'Dominican Republic' etc: name kept as-is because the 'Republic' is genuinely part of the common English name (no shorter form exists).",
+    "'Côte d'Ivoire' -> 'Ivory Coast' chosen for panel readability + English audience. If Cairn later ships French locale, this can be reversed via locale override.",
+    "'DR Congo' preferred over 'Congo (DR)' to keep 8 chars — fits panel comfortably and distinguishes from Congo (COG).",
+    "'St.' abbreviation used only for VCT/KNA because full 'Saint Vincent and the Grenadines' is 30 chars and wraps ugly. USA/BLM etc keep 'Saint' spelled out.",
+    "'United Kingdom' NOT abbreviated to 'UK' — users expect proper form on country pins.",
+    "'United Arab Emirates' NOT abbreviated to 'UAE' — same reason; 20 chars still fits."
+  ],
+
+  "adm0_country_suffix_strip": [],
+  "$adm0_country_suffix_strip_notes": [
+    "Intentionally EMPTY. ADM0 uses explicit override map only — no algorithmic stripping.",
+    "Rationale: only ~19 of 230 geoBoundaries ADM0 names have long-form suffixes. Enumerating exact overrides is safer than pattern strip.",
+    "Pattern strip would break legitimate cases like 'Central African Republic', 'Dominican Republic', 'Papua New Guinea' etc.",
+    "If new countries appear in future data drops, add to adm0_country_override map explicitly."
+  ],
+
+  "adm1_suffix_strip": [
+    " Province",
+    " Prefecture",
+    " Governorate",
+    " Municipality",
+    " Oblast",
+    " oblast",
+    " Krai",
+    " Autonomous Okrug",
+    " Autonomous Region",
+    " Special Administrative Region",
+    " Region",
+    " län"
+  ],
+
+  "$adm1_suffix_strip_notes": [
+    "Applied in ORDER (top wins). Longest phrases first to avoid partial matches — e.g. 'Special Administrative Region' must strip before ' Region'.",
+    "Strip is LEFT-TO-RIGHT suffix match only. Never strip mid-string.",
+    "'Republic' NOT in strip list — 'Sakha Republic', 'Komi Republic', 'Republic of Karelia' etc. are the canonical short names (leading 'Republic of' also NOT stripped — see Russia notes).",
+    "'Territory' / 'State' / 'Island(s)' / 'Cape' NOT in strip list — too many exceptions. If a Story needs them stripped later, add per-country override.",
+    "' län' (Swedish for 'county') stripped for Sweden — 21 occurrences.",
+    "Chile 'Región de X' handled via separate encoding-fix override (see adm1_encoding_fix_override).",
+    "New Zealand 'X Region' -> 'X' — 13 regions consistently benefit.",
+    "Thailand 'X Province' -> 'X' — 75 provinces consistently benefit; 'Bangkok' and 'Kalasin' already clean."
+  ],
+
+  "adm1_suffix_strip_exceptions": [
+    "Northern Territory",
+    "Australian Capital Territory",
+    "Free State",
+    "Prince Edward Island",
+    "Rhode Island",
+    "Northwest Territories",
+    "Other Territories",
+    "Chatham Islands Territory",
+    "Bangka-Belitung Islands",
+    "Solomon Islands",
+    "Marshall Islands",
+    "Cook Islands",
+    "Faroe Islands",
+    "Falkland Islands",
+    "Cayman Islands",
+    "Turks and Caicos Islands",
+    "British Virgin Islands",
+    "Northern Mariana Islands",
+    "Pitcairn Islands",
+    "Aland Islands",
+    "Canary Islands",
+    "Bay of Plenty Region",
+    "West Coast Region",
+    "Central Luzon",
+    "Northern Ireland",
+    "Northern Cape",
+    "Eastern Cape",
+    "Western Cape",
+    "North West"
+  ],
+
+  "$adm1_suffix_strip_exceptions_notes": [
+    "Exception list is checked BEFORE strip. If raw_name matches exactly (case-sensitive), no strip.",
+    "'Northern Territory' (AU) — stripping ' Territory' yields 'Northern', which is not a place.",
+    "'Free State' (ZA) — stripping ' State' would yield 'Free'.",
+    "'Prince Edward Island' (CA) / 'Rhode Island' (US) — 'Island' is core to the name.",
+    "'Bay of Plenty Region' (NZ) — stripping ' Region' yields 'Bay of Plenty' which is FINE, but keep original because 'Bay of Plenty' can also refer to the water body. This is a soft exception — could be moved to strip list if UX prefers.",
+    "'Chatham Islands Territory' (NZ) — stripping ' Territory' would collide with cases above; keep.",
+    "'Northern Cape/Eastern Cape/Western Cape' (ZA) — stripping ' Cape' yields directional word only.",
+    "'North West' (ZA) — already 2-word; do not touch.",
+    "'Northern Ireland' (GBR) — country component, do not touch."
+  ],
+
+  "adm1_encoding_fix_override": {
+    "$description": "geoBoundaries Chile ADM1 file has UTF-8 double-encoding (mojibake). Fix explicit.",
+    "RegiÃ³n de Antofagasta": "Antofagasta",
+    "RegiÃ³n de Arica y Parinacota": "Arica y Parinacota",
+    "RegiÃ³n de Atacama": "Atacama",
+    "RegiÃ³n de AysÃ©n del Gral.IbaÃ±ez del Campo": "Aysén",
+    "RegiÃ³n de Coquimbo": "Coquimbo",
+    "RegiÃ³n de La AraucanÃ­a": "La Araucanía",
+    "RegiÃ³n de Los Lagos": "Los Lagos",
+    "RegiÃ³n de Los RÃ­os": "Los Ríos",
+    "RegiÃ³n de Magallanes y AntÃ¡rtica Chilena": "Magallanes",
+    "RegiÃ³n de Ãuble": "Ñuble",
+    "RegiÃ³n de TarapacÃ¡": "Tarapacá",
+    "RegiÃ³n de ValparaÃ­so": "Valparaíso",
+    "RegiÃ³n del BÃ­o-BÃ­o": "Biobío",
+    "RegiÃ³n del Libertador Bernardo O'Higgins": "O'Higgins",
+    "RegiÃ³n del Maule": "Maule",
+    "RegiÃ³n Metropolitana de Santiago": "Santiago Metropolitan"
+  },
+
+  "adm1_name_diff_resolutions": [
+    {"iso": "BRA", "gb_name": "Amapa", "ne_name": "Amapá", "chosen": "Amapá", "reason": "NE has correct Portuguese diacritic; gb lost it in ASCII conversion. Diacritics preferred for BRA — matches standard atlases."},
+    {"iso": "BRA", "gb_name": "Para", "ne_name": "Pará", "chosen": "Pará", "reason": "Same rationale — 'Pará' is the correct form, 'Para' collides with English preposition."},
+    {"iso": "BRA", "gb_name": "Maranhao", "ne_name": "Maranhão", "chosen": "Maranhão", "reason": "Preserve ã — canonical Portuguese."},
+    {"iso": "BRA", "gb_name": "Ceara", "ne_name": "Ceará", "chosen": "Ceará", "reason": "Preserve á."},
+    {"iso": "BRA", "gb_name": "Paraiba", "ne_name": "Paraíba", "chosen": "Paraíba", "reason": "Preserve í."},
+    {"iso": "BRA", "gb_name": "Piaui", "ne_name": "Piauí", "chosen": "Piauí", "reason": "Preserve í."},
+    {"iso": "BRA", "gb_name": "Rondonia", "ne_name": "Rondônia", "chosen": "Rondônia", "reason": "Preserve ô."},
+    {"iso": "BRA", "gb_name": "Goias", "ne_name": "Goiás", "chosen": "Goiás", "reason": "Preserve á."},
+    {"iso": "BRA", "gb_name": "Espirito Santo", "ne_name": "Espírito Santo", "chosen": "Espírito Santo", "reason": "Preserve í."},
+    {"iso": "BRA", "gb_name": "Sao Paulo", "ne_name": "São Paulo", "chosen": "São Paulo", "reason": "Canonical global spelling — 'Sao Paulo' looks wrong to any Brazilian audience."},
+    {"iso": "BRA", "gb_name": "Parana", "ne_name": "Paraná", "chosen": "Paraná", "reason": "Preserve á; disambiguates from river."},
+
+    {"iso": "CHN", "gb_name": "Hainan Province", "ne_name": "Hainan", "chosen": "Hainan", "reason": "Strip suffix per adm1_suffix_strip. NE already correct."},
+    {"iso": "CHN", "gb_name": "Fujian Province", "ne_name": "Fujian", "chosen": "Fujian", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Yunnan Province", "ne_name": "Yunnan", "chosen": "Yunnan", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Guizhou Province", "ne_name": "Guizhou", "chosen": "Guizhou", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Jiangxi Province", "ne_name": "Jiangxi", "chosen": "Jiangxi", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Hunan Province", "ne_name": "Hunan", "chosen": "Hunan", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Zhejiang Province", "ne_name": "Zhejiang", "chosen": "Zhejiang", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Shanghai Municipality", "ne_name": "Shanghai", "chosen": "Shanghai", "reason": "Strip ' Municipality' — user expects 'Shanghai'."},
+    {"iso": "CHN", "gb_name": "Chongqing Municipality", "ne_name": "Chongqing", "chosen": "Chongqing", "reason": "Strip ' Municipality'."},
+    {"iso": "CHN", "gb_name": "Hubei Province", "ne_name": "Hubei", "chosen": "Hubei", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Sichuan Province", "ne_name": "Sichuan", "chosen": "Sichuan", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Anhui Province", "ne_name": "Anhui", "chosen": "Anhui", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Jiangsu Province", "ne_name": "Jiangsu", "chosen": "Jiangsu", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Henan Province", "ne_name": "Henan", "chosen": "Henan", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Shandong Province", "ne_name": "Shandong", "chosen": "Shandong", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Qinghai Province", "ne_name": "Qinghai", "chosen": "Qinghai", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Shaanxi Province", "ne_name": "Shaanxi", "chosen": "Shaanxi", "reason": "Strip suffix; 'Shaanxi' (陕西) vs 'Shanxi' (山西) — spelling matters."},
+    {"iso": "CHN", "gb_name": "Tianjin Municipality", "ne_name": "Tianjin", "chosen": "Tianjin", "reason": "Strip ' Municipality'."},
+    {"iso": "CHN", "gb_name": "Shanxi Province", "ne_name": "Shanxi", "chosen": "Shanxi", "reason": "Strip suffix; distinct from Shaanxi."},
+    {"iso": "CHN", "gb_name": "Beijing Municipality", "ne_name": "Beijing", "chosen": "Beijing", "reason": "Strip ' Municipality'."},
+    {"iso": "CHN", "gb_name": "Gansu Province", "ne_name": "Gansu", "chosen": "Gansu", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Hebei Province", "ne_name": "Hebei", "chosen": "Hebei", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Liaoning Province", "ne_name": "Liaoning", "chosen": "Liaoning", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Jilin Province", "ne_name": "Jilin", "chosen": "Jilin", "reason": "Strip suffix."},
+    {"iso": "CHN", "gb_name": "Heilongjiang Province", "ne_name": "Heilongjiang", "chosen": "Heilongjiang", "reason": "Strip suffix."},
+
+    {"iso": "IDN", "gb_name": "Bangka-Belitung Islands", "ne_name": "Bangka Belitung Islands", "chosen": "Bangka Belitung Islands", "reason": "NE form matches Indonesian government English spelling (no hyphen). Panel-friendly."},
+
+    {"iso": "IND", "gb_name": "Mahārāshtra", "ne_name": "Maharashtra", "chosen": "Maharashtra", "reason": "IAST macrons unfamiliar to English speakers. NE plain-ASCII form is the standard global English spelling for all Indian states."},
+    {"iso": "IND", "gb_name": "Nāgāland", "ne_name": "Nagaland", "chosen": "Nagaland", "reason": "Plain ASCII per IND policy above."},
+    {"iso": "IND", "gb_name": "Tamil Nādu", "ne_name": "Tamil Nadu", "chosen": "Tamil Nadu", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Chhattīsgarh", "ne_name": "Chhattisgarh", "chosen": "Chhattisgarh", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Gujarāt", "ne_name": "Gujarat", "chosen": "Gujarat", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Bihār", "ne_name": "Bihar", "chosen": "Bihar", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Ladākh", "ne_name": "Ladakh", "chosen": "Ladakh", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Rājasthān", "ne_name": "Rajasthan", "chosen": "Rajasthan", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Telangāna", "ne_name": "Telangana", "chosen": "Telangana", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Arunāchal Pradesh", "ne_name": "Arunachal Pradesh", "chosen": "Arunachal Pradesh", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Meghālaya", "ne_name": "Meghalaya", "chosen": "Meghalaya", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Jhārkhand", "ne_name": "Jharkhand", "chosen": "Jharkhand", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Karnātaka", "ne_name": "Karnataka", "chosen": "Karnataka", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Uttarākhand", "ne_name": "Uttarakhand", "chosen": "Uttarakhand", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Dādra and Nagar Haveli and Damān and Diu", "ne_name": "Dadra and Nagar Haveli and Daman and Diu", "chosen": "Dadra & Nagar Haveli", "reason": "Full name is 41 chars — overflow panel. Truncated form + '&' matches how most atlases render. 'and Daman and Diu' dropped in short form."},
+    {"iso": "IND", "gb_name": "Chandīgarh", "ne_name": "Chandigarh", "chosen": "Chandigarh", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Himāchal Pradesh", "ne_name": "Himachal Pradesh", "chosen": "Himachal Pradesh", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Jammu and Kashmīr", "ne_name": "Jammu and Kashmir", "chosen": "Jammu and Kashmir", "reason": "Plain ASCII."},
+    {"iso": "IND", "gb_name": "Haryāna", "ne_name": "Haryana", "chosen": "Haryana", "reason": "Plain ASCII."}
+  ],
+
+  "$adm1_name_diff_policy": [
+    "Rule 1 — Portuguese/Spanish/French diacritics: KEEP (São Paulo, Paraná, Ñuble, Réunion). These are canonical spellings recognizable globally.",
+    "Rule 2 — Indian IAST macrons (ā ī ū ṇ ṛ etc.): STRIP to plain ASCII. NE form is the accepted global English rendering; macrons look foreign to English readers and are not used by Indian government English publications.",
+    "Rule 3 — Chinese pinyin: no diacritics ever added (Chinese official English uses toneless pinyin). Only strip administrative suffixes.",
+    "Rule 4 — 'CHN Guangzhou Province' looks like a data bug (should be Guangdong). Flag for follow-up but do not auto-correct — belongs in city-overrides pipeline, not name-rules."
+  ],
+
+  "adm1_country_specific_overrides": {
+    "$description": "Named overrides that DON'T fit generic strip rules. Applied after suffix strip.",
+    "CHN": {
+      "Guangxi Zhuang Autonomous Region": "Guangxi",
+      "Tibet Autonomous Region": "Tibet",
+      "Ningxia Ningxia Hui Autonomous Region": "Ningxia",
+      "Xinjiang Uyghur Autonomous Region": "Xinjiang",
+      "Inner Mongolia Autonomous Region": "Inner Mongolia",
+      "Macau Special Administrative Region": "Macau",
+      "Hong Kong Special Administrative Region": "Hong Kong",
+      "Taiwan Province": "Taiwan"
+    },
+    "RUS": {
+      "Republic of Mordovia": "Mordovia",
+      "Republic of Karelia": "Karelia",
+      "Komi Republic": "Komi",
+      "Sakha Republic": "Sakha",
+      "Altai Republic": "Altai",
+      "Khanty-Mansiysk Autonomous Okrug – Ugra": "Khanty-Mansiysk",
+      "Nenets Autonomous Okrug": "Nenets",
+      "Chukotka Autonomous Okrug": "Chukotka",
+      "Yamalo-Nenets Autonomous Okrug": "Yamalo-Nenets",
+      "Jewish Autonomous Oblast": "Jewish AO",
+      "North Ossetia–Alania": "North Ossetia",
+      "Leningrad oblast": "Leningrad",
+      "Saint Petersburg": "St. Petersburg"
+    },
+    "USA": {
+      "District of Columbia": "Washington DC",
+      "Commonwealth of the Northern Mariana Islands": "N. Mariana Islands",
+      "United States Virgin Islands": "US Virgin Islands"
+    },
+    "AUS": {
+      "Australian Capital Territory": "ACT"
+    }
+  },
+
+  "$adm1_country_specific_overrides_notes": [
+    "CHN autonomous regions: use short common English name — 'Tibet' not 'Xizang', 'Inner Mongolia' not 'Nei Mongol'. Aligns with international news usage.",
+    "'Ningxia Ningxia Hui...' — this appears to be a duplicated-word bug in geoBoundaries. Override to plain 'Ningxia'.",
+    "'Taiwan Province' — political sensitivity. geoBoundaries labels it as CHN ADM1; we render as 'Taiwan'. This does not imply political stance — matches how UN/ISO name records treat it and keeps panel neutral.",
+    "RUS: 'Republic of X' vs 'X Republic' — geoBoundaries inconsistent. Strip both patterns to bare name.",
+    "'Jewish AO' — 12 chars; full 'Jewish Autonomous Oblast' is 24 chars but reads awkward as a single label. AO abbreviation acceptable.",
+    "'St. Petersburg' — standard English abbreviation.",
+    "USA District of Columbia -> Washington DC (12 chars; unambiguous).",
+    "AUS ACT — 'Australian Capital Territory' is 27 chars; 'ACT' widely recognized in AU context. Acceptable exception to the 'no abbreviations' rule."
+  ],
+
+  "$processing_pipeline": [
+    "Step 1: Detect encoding damage (Ã³, Ã©, etc.) -> apply adm1_encoding_fix_override table by exact match. Skip Steps 2-4 if matched.",
+    "Step 2: Apply adm1_country_specific_overrides[iso] by exact match. Skip Steps 3-4 if matched.",
+    "Step 3: Check adm1_suffix_strip_exceptions list — if raw name matches exactly, return as-is.",
+    "Step 4: Apply adm1_suffix_strip in order (longest first). Return the transformed name.",
+    "Step 5 (ADM0 only): Apply adm0_country_override by exact match. If no match, return raw name unchanged.",
+    "Step 6: Post-process diacritic policy — for ISO in ['IND'], convert IAST macrons to plain ASCII if raw still contains them. For BRA/ESP/FRA/PRT/DEU etc., keep diacritics.",
+    "Step 7: If final length > 32 chars, log to seed-warnings for manual review — do NOT auto-truncate."
+  ],
+
+  "$open_questions_for_arch": [
+    "Q1: 'Bay of Plenty Region' — strip to 'Bay of Plenty' or keep? Currently marked as exception; user to confirm.",
+    "Q2: 'Aysén del Gral.Ibáñez del Campo' — Chile long form; encoding fix truncates to 'Aysén'. Confirm short form acceptable.",
+    "Q3: 'CHN Guangzhou Province' likely data corruption (should be Guangdong). Not a naming rule — flag for city-overrides fix.",
+    "Q4: IAST macron strip for IND — reversible if we later add multilingual mode."
+  ],
+
+  "$statistics": {
+    "adm0_overrides_defined": 43,
+    "adm1_generic_suffix_rules": 12,
+    "adm1_strip_exceptions": 29,
+    "adm1_encoding_fixes": 16,
+    "adm1_name_diff_resolutions": 56,
+    "adm1_country_specific_overrides": 28,
+    "total_transformations_covered": 184
+  }
+}

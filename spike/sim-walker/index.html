@@ -1,0 +1,424 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SPIKE-006 · sim-walker</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  #map { position: absolute; inset: 0; }
+
+  #hud {
+    position: absolute; top: 12px; left: 12px; z-index: 10;
+    background: rgba(255,255,255,0.94); padding: 10px 14px; border-radius: 10px;
+    font-size: 12px; line-height: 1.5; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    min-width: 220px;
+  }
+  #hud b { color: #5d7c46; }
+  #hud .row { display: flex; justify-content: space-between; gap: 12px; }
+  #hud code { background: #f2ede2; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+
+  #status {
+    position: absolute; top: 12px; right: 12px; z-index: 10;
+    background: rgba(255,255,255,0.94); padding: 8px 12px; border-radius: 10px;
+    font-size: 11px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    max-width: 300px;
+  }
+  #status.info { color: #333; }
+  #status.ok   { color: #5d7c46; }
+  #status.err  { color: #b13a3a; }
+
+  #instructions {
+    position: absolute; bottom: 160px; left: 12px; z-index: 10;
+    background: rgba(93,124,70,0.94); color: white; padding: 8px 12px;
+    border-radius: 8px; font-size: 11px; max-width: 260px;
+  }
+
+  /* Joystick */
+  #joystick {
+    position: absolute; bottom: 20px; right: 20px; z-index: 10;
+    width: 140px; height: 140px; border-radius: 70px;
+    background: rgba(255,255,255,0.85);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    touch-action: none;
+    user-select: none;
+  }
+  #joystick .base { position: absolute; inset: 0; border-radius: 70px; border: 2px dashed #999; }
+  #joystick .stick {
+    position: absolute; left: 50%; top: 50%; width: 50px; height: 50px;
+    margin-left: -25px; margin-top: -25px; border-radius: 25px;
+    background: #5d7c46; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    transform: translate(0, 0);
+    transition: transform 0.15s ease-out;
+  }
+  #joystick.active .stick { transition: none; }
+  #joystick .label {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.9); padding: 2px 8px; border-radius: 4px;
+    font-size: 10px; color: #666; white-space: nowrap;
+  }
+
+  /* Controls */
+  #controls {
+    position: absolute; bottom: 20px; left: 20px; z-index: 10;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  #controls button {
+    background: white; border: 1px solid #ccc; padding: 8px 14px;
+    border-radius: 6px; font-size: 12px; cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  #controls button:hover { background: #f5efe4; }
+  #controls button.primary { background: #5d7c46; color: white; border-color: #5d7c46; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="hud">
+  <div class="row"><span>Status:</span> <b id="phase">Idle</b></div>
+  <div class="row"><span>Progress:</span> <code id="progress">0 / 0 m</code></div>
+  <div class="row"><span>Speed:</span> <code id="speed">0.0 m/s</code></div>
+  <div class="row"><span>Lat:</span> <code id="lat">—</code></div>
+  <div class="row"><span>Lng:</span> <code id="lng">—</code></div>
+  <div class="row"><span>Ticks emitted:</span> <code id="ticks">0</code></div>
+</div>
+
+<div id="status" class="info">Click <b>A</b> on map, then <b>B</b>, then <b>Plan route</b>.</div>
+
+<div id="instructions">
+  1. Click map = set A (green)<br>
+  2. Click again = set B (red)<br>
+  3. <b>Plan route</b> → Mapbox walking directions<br>
+  4. Hold + drag joystick = walk along route<br>
+  5. Reverse = walk backwards
+</div>
+
+<div id="controls">
+  <button id="plan-btn">Plan route</button>
+  <button id="reset-btn">Reset</button>
+  <button id="jump-shanghai">Jump: Shanghai</button>
+</div>
+
+<div id="joystick">
+  <div class="label">Push forward / backward</div>
+  <div class="base"></div>
+  <div class="stick"></div>
+</div>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+<script>
+// ────────────────────────────────────────────────────────────────
+// SPIKE-006 sim-walker
+// Proves: Mapbox Directions polyline + joystick progress control
+// can generate realistic snap-to-road GPS points on web.
+// ────────────────────────────────────────────────────────────────
+
+const MAPBOX_TOKEN = 'pk.eyJ1IjoiNzRqdHgiLCJhIjoiY21wOWQ3d3g0MG9zYTMzcHhraDQ2N3hiYyJ9.ICN7x0SsiUafGaN09Boy8w';
+mapboxgl.accessToken = MAPBOX_TOKEN;
+
+// Shanghai People's Square as default anchor
+const SHANGHAI = [121.4737, 31.2304];
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/streets-v12',
+  center: SHANGHAI,
+  zoom: 15,
+});
+
+// ── State ──────────────────────────────────────────────────────
+let ptA = null;      // {lng, lat}
+let ptB = null;
+let markerA = null;
+let markerB = null;
+let route = null;    // { coords: [[lng,lat],...], cumulativeM: [0, 12, 25, ...], totalM }
+let progressM = 0;   // current arc-length position along route
+let currentPos = null;
+let ticksEmitted = 0;
+let userMarker = null;
+let joystickInput = 0;  // -1..+1, +ve = forward
+let lastTick = 0;
+let tickInterval = null;
+
+// ── Haversine ──────────────────────────────────────────────────
+function haversineM(a, b) {
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
+  const dLat = toRad(b[1] - a[1]);
+  const dLng = toRad(b[0] - a[0]);
+  const lat1 = toRad(a[1]);
+  const lat2 = toRad(b[1]);
+  const x = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+// Interpolate along polyline by arc-length
+function positionAt(m) {
+  if (!route || !route.coords.length) return null;
+  const total = route.totalM;
+  const clamped = Math.max(0, Math.min(total, m));
+  // binary search on cumulativeM
+  const cum = route.cumulativeM;
+  let lo = 0, hi = cum.length - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= clamped) lo = mid;
+    else hi = mid;
+  }
+  const segStart = cum[lo];
+  const segEnd = cum[hi];
+  const segLen = segEnd - segStart;
+  const t = segLen > 0 ? (clamped - segStart) / segLen : 0;
+  const [aLng, aLat] = route.coords[lo];
+  const [bLng, bLat] = route.coords[hi];
+  return [
+    aLng + (bLng - aLng) * t,
+    aLat + (bLat - aLat) * t,
+  ];
+}
+
+// ── UI helpers ─────────────────────────────────────────────────
+function setStatus(text, kind = 'info') {
+  const el = document.getElementById('status');
+  el.textContent = text;
+  el.className = kind;
+}
+
+function setPhase(text) {
+  document.getElementById('phase').textContent = text;
+}
+
+function updateHUD() {
+  document.getElementById('progress').textContent =
+    `${progressM.toFixed(0)} / ${route ? route.totalM.toFixed(0) : 0} m`;
+  document.getElementById('ticks').textContent = String(ticksEmitted);
+  if (currentPos) {
+    document.getElementById('lat').textContent = currentPos[1].toFixed(6);
+    document.getElementById('lng').textContent = currentPos[0].toFixed(6);
+  }
+}
+
+// ── Map click: set A then B ────────────────────────────────────
+map.on('click', (e) => {
+  const c = [e.lngLat.lng, e.lngLat.lat];
+  if (!ptA) {
+    ptA = c;
+    if (markerA) markerA.remove();
+    markerA = new mapboxgl.Marker({ color: '#5d7c46' }).setLngLat(c).addTo(map);
+    setStatus('Point A set. Click again for B.');
+  } else if (!ptB) {
+    ptB = c;
+    if (markerB) markerB.remove();
+    markerB = new mapboxgl.Marker({ color: '#b13a3a' }).setLngLat(c).addTo(map);
+    setStatus('Both points set. Click "Plan route".');
+  } else {
+    // reset and start over
+    resetAll();
+    ptA = c;
+    markerA = new mapboxgl.Marker({ color: '#5d7c46' }).setLngLat(c).addTo(map);
+    setStatus('Point A set. Click again for B.');
+  }
+});
+
+// ── Plan button: fetch Mapbox Directions ───────────────────────
+async function planRoute() {
+  if (!ptA || !ptB) {
+    setStatus('Set both points first.', 'err');
+    return;
+  }
+  setStatus('Fetching walking route…');
+  setPhase('Planning');
+  const url = `https://api.mapbox.com/directions/v5/mapbox/walking/${ptA[0]},${ptA[1]};${ptB[0]},${ptB[1]}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+  try {
+    const res = await fetch(url);
+    const body = await res.json();
+    if (body.code !== 'Ok' || !body.routes || !body.routes.length) {
+      setStatus(`Directions failed: ${body.code || 'unknown'}`, 'err');
+      setPhase('Idle');
+      return;
+    }
+    const coords = body.routes[0].geometry.coordinates;
+    // Build cumulative arc-length table
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) {
+      cum.push(cum[i-1] + haversineM(coords[i-1], coords[i]));
+    }
+    route = { coords, cumulativeM: cum, totalM: cum[cum.length-1] };
+    progressM = 0;
+    ticksEmitted = 0;
+
+    // draw route polyline
+    if (map.getSource('route')) map.removeLayer('route-line'), map.removeSource('route');
+    map.addSource('route', {
+      type: 'geojson',
+      data: { type: 'Feature', geometry: body.routes[0].geometry, properties: {} },
+    });
+    map.addLayer({
+      id: 'route-line', type: 'line', source: 'route',
+      paint: { 'line-color': '#f18c30', 'line-width': 5, 'line-opacity': 0.75 },
+    });
+
+    // place user marker at A
+    currentPos = coords[0];
+    if (userMarker) userMarker.remove();
+    const userEl = document.createElement('div');
+    userEl.style.cssText = 'width:22px;height:22px;border-radius:11px;background:#1e88e5;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)';
+    userMarker = new mapboxgl.Marker(userEl).setLngLat(currentPos).addTo(map);
+
+    updateHUD();
+    setStatus(`Route ready · ${route.totalM.toFixed(0)}m · ${coords.length} vertices. Push joystick to walk.`, 'ok');
+    setPhase('Ready · idle');
+    startTickLoop();
+  } catch (err) {
+    setStatus(`Network error: ${err.message}`, 'err');
+    setPhase('Idle');
+  }
+}
+
+// ── Tick loop: joystickInput → progressM → position → emit ─────
+function startTickLoop() {
+  if (tickInterval) clearInterval(tickInterval);
+  lastTick = Date.now();
+  tickInterval = setInterval(() => {
+    if (!route) return;
+    const now = Date.now();
+    const dt = (now - lastTick) / 1000; // seconds
+    lastTick = now;
+
+    // joystick input * max speed (walking ~1.4 m/s comfortable, 3 m/s brisk)
+    const MAX_SPEED = 3.0;
+    const speed = joystickInput * MAX_SPEED;
+    progressM += speed * dt;
+    progressM = Math.max(0, Math.min(route.totalM, progressM));
+
+    currentPos = positionAt(progressM);
+    if (userMarker && currentPos) userMarker.setLngLat(currentPos);
+
+    // update HUD speed
+    document.getElementById('speed').textContent = `${Math.abs(speed).toFixed(2)} m/s`;
+    updateHUD();
+
+    // emit GPS tick (this is where a real integration would call
+    // window.__cairnStores.useTrackingStore.getState().addTrackPoint(...))
+    if (Math.abs(speed) > 0.05) {
+      ticksEmitted++;
+      // Expose to Playwright for verification
+      window.__spikeLastEmit = {
+        lat: currentPos[1], lng: currentPos[0],
+        speed, progressM, t: now,
+      };
+      if (!window.__spikeAllEmits) window.__spikeAllEmits = [];
+      window.__spikeAllEmits.push(window.__spikeLastEmit);
+    }
+
+    // Auto-stop when at end + no forward input
+    if (progressM >= route.totalM - 0.5 && joystickInput > 0) {
+      setPhase('Arrived · end of route');
+    } else if (Math.abs(speed) > 0.05) {
+      setPhase(speed > 0 ? 'Walking forward' : 'Walking backward');
+    } else {
+      setPhase('Ready · idle');
+    }
+  }, 100); // 10 Hz internal tick; production would emit every 2s to match Cairn watchPosition timeInterval
+}
+
+// ── Joystick ───────────────────────────────────────────────────
+const joystick = document.getElementById('joystick');
+const stick = joystick.querySelector('.stick');
+const JOY_MAX = 50;  // px
+
+let dragging = false;
+let dragStartY = 0;
+
+function joyStart(clientY) {
+  dragging = true;
+  dragStartY = clientY;
+  joystick.classList.add('active');
+}
+function joyMove(clientY) {
+  if (!dragging) return;
+  const dy = clientY - dragStartY;
+  const clamped = Math.max(-JOY_MAX, Math.min(JOY_MAX, dy));
+  stick.style.transform = `translate(0, ${clamped}px)`;
+  // negative Y (up) = forward
+  joystickInput = -clamped / JOY_MAX;
+}
+function joyEnd() {
+  dragging = false;
+  joystickInput = 0;
+  stick.style.transform = 'translate(0, 0)';
+  joystick.classList.remove('active');
+}
+
+joystick.addEventListener('mousedown', e => { e.preventDefault(); joyStart(e.clientY); });
+window.addEventListener('mousemove', e => joyMove(e.clientY));
+window.addEventListener('mouseup', joyEnd);
+joystick.addEventListener('touchstart', e => { e.preventDefault(); joyStart(e.touches[0].clientY); });
+window.addEventListener('touchmove', e => { if (dragging) joyMove(e.touches[0].clientY); });
+window.addEventListener('touchend', joyEnd);
+
+// ── Reset ──────────────────────────────────────────────────────
+function resetAll() {
+  if (markerA) markerA.remove();
+  if (markerB) markerB.remove();
+  if (userMarker) userMarker.remove();
+  markerA = markerB = userMarker = null;
+  ptA = ptB = route = currentPos = null;
+  progressM = 0;
+  ticksEmitted = 0;
+  joystickInput = 0;
+  if (tickInterval) clearInterval(tickInterval);
+  tickInterval = null;
+  if (map.getLayer('route-line')) map.removeLayer('route-line');
+  if (map.getSource('route')) map.removeSource('route');
+  window.__spikeAllEmits = [];
+  window.__spikeLastEmit = null;
+  updateHUD();
+  setStatus('Reset. Click A on map.');
+  setPhase('Idle');
+}
+
+document.getElementById('plan-btn').addEventListener('click', planRoute);
+document.getElementById('reset-btn').addEventListener('click', resetAll);
+document.getElementById('jump-shanghai').addEventListener('click', () => {
+  map.flyTo({ center: SHANGHAI, zoom: 15 });
+});
+
+// ── Playwright API surface ─────────────────────────────────────
+// Programmatic control for automated testing
+window.__spikeAPI = {
+  setA: (lng, lat) => {
+    if (markerA) markerA.remove();
+    ptA = [lng, lat];
+    markerA = new mapboxgl.Marker({ color: '#5d7c46' }).setLngLat(ptA).addTo(map);
+    setStatus('A set via API');
+  },
+  setB: (lng, lat) => {
+    if (markerB) markerB.remove();
+    ptB = [lng, lat];
+    markerB = new mapboxgl.Marker({ color: '#b13a3a' }).setLngLat(ptB).addTo(map);
+    setStatus('B set via API');
+  },
+  planRoute,
+  pushJoystick: (v) => { joystickInput = Math.max(-1, Math.min(1, v)); },
+  releaseJoystick: () => { joystickInput = 0; },
+  getState: () => ({
+    ptA, ptB,
+    routeReady: !!route,
+    routeTotalM: route?.totalM ?? 0,
+    routeVertexCount: route?.coords.length ?? 0,
+    progressM,
+    currentPos,
+    ticksEmitted,
+    emits: window.__spikeAllEmits ?? [],
+  }),
+  reset: resetAll,
+};
+
+console.log('[SPIKE-006] sim-walker loaded. Use window.__spikeAPI for programmatic control.');
+</script>
+</body>
+</html>

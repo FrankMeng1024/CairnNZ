@@ -26,7 +26,11 @@ const limiter = rateLimit({
 // Authenticate optional — allow anonymous log upload (e.g. boot before login)
 router.post('/', limiter, express.json({ limit: '2mb' }), async (req, res) => {
   const body = req.body || {};
-  const batch = Array.isArray(body.batch) ? body.batch : [];
+  // v430 fix: client (appLog.ts) sends `events`, curl tests use `batch`.
+  // Accept both — root cause of empty debug_events_v2 despite nginx 200 OK.
+  const batch = Array.isArray(body.batch) ? body.batch
+              : Array.isArray(body.events) ? body.events
+              : [];
   if (batch.length === 0) return res.json({ received: 0 });
 
   // Optional JWT
