@@ -118,6 +118,10 @@ export function MemoryScreen() {
   // v424 hierarchy panel state
   const [hierarchyOpen, setHierarchyOpen] = useState(false);
   const [hierarchyRegionId, setHierarchyRegionId] = useState<string | null>(null);
+  // v428: drill mode — set true when user taps the green (current) row to
+  // see that region's children instead of its siblings. Reset when user
+  // clicks any real sibling or goes up.
+  const [hierarchyDrill, setHierarchyDrill] = useState(false);
   const [flyToTarget, setFlyToTarget] = useState<{ center: [number, number]; zoom: number; token: number } | null>(null);
   const flyTokenRef = useRef(0);
   // v427: track map camera center so hierarchy panel opens based on
@@ -636,6 +640,7 @@ export function MemoryScreen() {
           centerLng={persistentCoord.lng}
           recenterToken={recenterToken}
           flyToTarget={flyToTarget}
+          highlightRegionId={hierarchyRegionId}
           onMapMoved={() => setMapMoved(true)}
           onCameraCenter={(lat, lng) => { cameraCenterRef.current = { lat, lng }; }}
           onMapFullyReady={() => {
@@ -847,9 +852,17 @@ export function MemoryScreen() {
       {hierarchyOpen && hierarchyRegionId && (
         <HierarchyPanel
           regionId={hierarchyRegionId}
-          onSelectSibling={(siblingId, siblingName, bbox) => {
-            log('memory.hierarchy_fly', { id: siblingId });
-            // v427 fix (bug 1): fly to a real explored point in the region
+          drill={hierarchyDrill}
+          onSelectSibling={(siblingId, siblingName, bbox, isHere) => {
+            log('memory.hierarchy_fly', { id: siblingId, isHere, drilling: isHere });
+            // v428 bug 2 fix: if user tapped the green (current) row, they
+            // want to DRILL INTO it — show its children as new siblings.
+            // No fly, no zoom, just re-fetch panel with drill=true.
+            if (isHere) {
+              setHierarchyDrill(true);
+              return;
+            }
+            // Otherwise: fly to a real explored point in the region
             // with a FIXED zoom (14 for point-focus, ignores bbox span).
             // Priority: (1) closest memory point in bbox, (2) closest marker,
             // (3) bbox center as fallback.
@@ -876,37 +889,29 @@ export function MemoryScreen() {
                 if (d < bestDist) { bestDist = d; flyLat = m.lat; flyLng = m.lng; foundExplored = true; }
               }
             }
-            // v427 fixed zoom by region level:
-            //   world/continent → 3-4 (need to see all)
-            //   country → 5-6
-            //   province/state → 8-9
-            //   district → 13-14
-            // But we don't know level of the SIBLING (bbox tells span roughly)
-            // If foundExplored, zoom in more since we have a real point.
             const spanLng = maxLng - minLng;
             const spanLat = maxLat - minLat;
             const span = Math.max(spanLng, spanLat);
             let zoom = 12;
-            if (span > 40) zoom = 3;         // continent
-            else if (span > 8) zoom = 5;     // country
-            else if (span > 2) zoom = 8;     // province
-            else if (span > 0.3) zoom = 11;  // large district
-            else zoom = 13;                  // small district
-            // When flying to a real point, use a consistent point-focused zoom
-            // regardless of the region's bbox span. User cares about "show me
-            // where I walked", not "show me the whole region outline".
+            if (span > 40) zoom = 3;
+            else if (span > 8) zoom = 5;
+            else if (span > 2) zoom = 8;
+            else if (span > 0.3) zoom = 11;
+            else zoom = 13;
             if (foundExplored) zoom = 14;
 
             flyTokenRef.current += 1;
             setFlyToTarget({ center: [flyLng, flyLat], zoom, token: flyTokenRef.current });
-            // v427 bug 2/3 fix: after clicking a sibling, DRILL INTO that region.
-            // Panel now shows the tapped region as current, and its own children
-            // as siblings. User can keep drilling. Re-opening panel later still
-            // uses map camera center (which is now over the tapped region).
+            // v428: switching to a real sibling clears drill mode — we're at
+            // a new peer level now, not drilling further.
+            setHierarchyDrill(false);
             setHierarchyRegionId(siblingId);
           }}
           onGoUp={(parentId) => {
             log('memory.hierarchy_up', { id: parentId });
+            // v428: going up always clears drill mode (parent is above,
+            // never a drilled-into child view).
+            setHierarchyDrill(false);
             setHierarchyRegionId(parentId);
           }}
           onClose={() => setHierarchyOpen(false)}

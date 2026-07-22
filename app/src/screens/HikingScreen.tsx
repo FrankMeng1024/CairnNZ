@@ -42,6 +42,9 @@ import { MARKER_META, type MarkerType } from '../data/mockData';
 import type { Marker } from '../store/useMarkerStore';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
+import { SimWalkerOverlay } from '../dev/simWalker/SimWalkerOverlay';
+import { useSimWalkerStore } from '../dev/simWalker/useSimWalkerStore';
+import { useSettingsStore } from '../store/useSettingsStore';
 
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -1105,6 +1108,12 @@ const stopSheetStyles = StyleSheet.create({
 type UIState = 'map' | 'plant' | 'detail';
 
 export function HikingScreen() {
+  // v428: sim-walker gate — persistent debugMode (Settings 5-tap) AND
+  // in-memory simWalkerActive (per-session opt-in). Both required.
+  const debugMode = useSettingsStore((s) => s.debugMode);
+  const simWalkerActive = useSimWalkerStore((s) => s.active);
+  const showSimWalker = __DEV__ && debugMode && simWalkerActive;
+
   const nav = useNavigation<Nav>();
   const { uiMode } = useAppStore();
   const isExpert = uiMode === 'expert';
@@ -2070,6 +2079,10 @@ export function HikingScreen() {
       {/* v412: 未完成 hike 恢复弹窗 — 挂在 Fragment 顶层, 见下方 */}
     </View>
     {recoveryModalNode}
+    {/* v428: dev-only GPS simulator overlay. Triple gate:
+        __DEV__ (Hermes DCE in production) + debugMode (persistent) +
+        simWalkerActive (in-memory, cold-restart resets). */}
+    {showSimWalker && <SimWalkerOverlay />}
     </>
   );
 }

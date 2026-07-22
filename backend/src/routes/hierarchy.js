@@ -74,8 +74,10 @@ router.get('/deepest', async (req, res) => {
       }
       // No polygon match — fall through to bbox lookup below
     } catch (spatialErr) {
-      // Column may not exist yet (pre-migration) — fall back silently
-      if (!/Unknown column|ST_IsEmpty|ST_Contains/.test(String(spatialErr.message || ''))) {
+      // Column may not exist yet (pre-migration) — fall back silently.
+      // v428 fix: match by err.code (precise) not message regex (would
+      // swallow real errors like ST_Contains SRID mismatch).
+      if (spatialErr.code !== 'ER_BAD_FIELD_ERROR') {
         throw spatialErr;
       }
     }
@@ -222,7 +224,8 @@ router.get('/panel', async (req, res) => {
         for (const r of markerRows) markerCounts.set(r.sibling_id, Number(r.cnt));
         usedSpatial = true;
       } catch (spatialErr) {
-        if (!/Unknown column|ST_IsEmpty|ST_Contains/.test(String(spatialErr.message || ''))) {
+        // v428 fix: match by err.code (precise) not message regex.
+        if (spatialErr.code !== 'ER_BAD_FIELD_ERROR') {
           throw spatialErr;
         }
         // Fall through to bbox heuristic below
@@ -299,7 +302,8 @@ router.get('/panel', async (req, res) => {
       markerHereCount = Number(mr[0]?.cnt || 0);
       usedSpatialHere = true;
     } catch (e) {
-      if (!/Unknown column|ST_IsEmpty|ST_Contains/.test(String(e.message || ''))) {
+      // v428 fix: match by err.code, not message regex.
+      if (e.code !== 'ER_BAD_FIELD_ERROR') {
         throw e;
       }
     }

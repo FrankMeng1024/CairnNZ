@@ -20,6 +20,7 @@ import { MemoryColors } from '../config/memoryConfig';
 import { FogLayer } from './FogLayer';
 import { MemoryFogBurstOverlay } from './MemoryFogBurstOverlay';
 import { CairnPinsLayer } from './CairnPinsLayer';
+import { HighlightRegionLayer } from './HighlightRegionLayer';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { log } from '../../../services/appLog';
 import { flushNow as flushLogsNow } from '../../../services/appLog';
@@ -71,6 +72,13 @@ interface Props {
    */
   onFogReady?: () => void;
   /**
+   * v428: id of region currently highlighted (sage fill + outline) via
+   * the hierarchy panel. null = no highlight. Continent / world level
+   * regions render empty polygon so nothing visible — panel is still
+   * usable for drill-down.
+   */
+  highlightRegionId?: string | null;
+  /**
    * v424: fly camera to arbitrary center+zoom, driven by HierarchyPanel
    * region selection. Prop-based so parent controls timing. Bumping
    * the `key` (v424Token) triggers a fresh flyTo even if center didn't
@@ -82,7 +90,7 @@ interface Props {
 const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12';
 const INITIAL_ZOOM = 16.5;
 
-export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onFogReady, strangerMarks, flyToTarget }: Props) {
+export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onFogReady, strangerMarks, flyToTarget, highlightRegionId }: Props) {
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
   const mapViewRef = useRef<any>(null);
@@ -430,6 +438,10 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
           setFogReady(true);
           onFogReady?.();
         }} />
+        {/* v428: hierarchy region highlight. Fill + line rendered above fog
+            but below CairnPinsLayer / UserLocation so the user's own assets
+            are never occluded. Empty polygon (continent/world) is a no-op. */}
+        <HighlightRegionLayer regionId={highlightRegionId ?? null} />
         {/* v380: render pins only AFTER fog is ready, so they appear
             on top of the fog mask layer.
             v387: additionally gate on initialRevealDone so server-hydrated

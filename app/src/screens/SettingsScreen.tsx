@@ -19,6 +19,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppStore, UIMode } from '../store/useAppStore';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { useSimWalkerStore } from '../dev/simWalker/useSimWalkerStore';
 import { logout } from '../services/authService';
 import { crashLogger } from '../services/crashLogger';
 import { getToken } from '../services/tokenStore';
@@ -772,6 +773,42 @@ export function SettingsScreen() {
               </View>
               <Icon name="ChevronRight" size={16} color={Colors.textMuted} />
             </TouchableOpacity>
+
+            {/* v428: Sim walker toggle — in-memory only, resets on cold restart.
+                Shows a joystick overlay on the Hike screen that emits fake GPS
+                points along a Mapbox walking route. Dev-only. */}
+            <View
+              testID="settings-sim-walker-row"
+              style={{
+                marginHorizontal: Spacing.base,
+                marginTop: Spacing.sm,
+                backgroundColor: '#fff',
+                padding: Spacing.base,
+                borderRadius: Radius.card,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <Icon name="Navigation2" size={20} color={Colors.primary} />
+                <View style={{ marginLeft: 12, flex: 1 }}>
+                  <Text style={{ color: Colors.textPrimary, fontSize: FontSize.body }}>
+                    Sim walker (fake GPS)
+                  </Text>
+                  <Text style={{ fontSize: 11, color: Colors.textMuted, marginTop: 2 }}>
+                    Off on next app launch.
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                testID="settings-sim-walker-toggle"
+                value={useSimWalkerStore((s) => s.active)}
+                onValueChange={(v) => useSimWalkerStore.getState().setActive(v)}
+                trackColor={{ false: '#d5cdba', true: Colors.primary }}
+              />
+            </View>
+
             <Text style={{
               marginHorizontal: Spacing.base,
               marginTop: 6,

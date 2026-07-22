@@ -1,26 +1,19 @@
 /**
- * HierarchyPanel — v427 (redesigned for zero-learning UX)
+ * HierarchyPanel — v428 (three-state model + drill-into-current)
+ *
+ * v428 fixes vs v427:
+ *   1. Three states restored: marked (sepia solid) / walked (sepia hollow) / locked (grey)
+ *   2. Tap green (current) row = drill into it → siblings become its children
+ *   3. All siblings shown (including locked) — no forced collapse. User scrolls.
+ *   4. Regionid change keeps old data visible until new arrives (no flicker)
+ *   5. Bottom legend explains dot colours (marked / walked / locked)
  *
  * Product intent:
- *   User taps the Layers icon → sees siblings of their current region,
- *   with how many memory points in each. Locked (unvisited) siblings
- *   are collapsed into a single "+ N more" summary row.
- *
- * Zero learning UX:
- *   - Only 2 states: EXPLORED (sepia dot + count) or LOCKED (grouped as summary)
- *   - Current region highlighted in sage
- *   - Tap ↑ button → go to parent level
- *   - Tap any explored sibling → drill into that region (also serves as fly-to)
- *   - Panel auto-loads from /api/hierarchy/panel
- *
- * All 5 v425/v426 bugs addressed:
- *   1. Fixed zoom (14 for point-focused, no bbox span variance)
- *   2/3. Current region persisted via parent (MemoryScreen owns it, this
- *        component is pure display)
- *   4. Full world data (240 countries, 294 provinces, etc.)
- *   5. World layer handled as continents-as-siblings in backend
+ *   User taps the Layers icon → sees current region + its siblings.
+ *   Colours tell whether they've been there / marked anything / never been.
+ *   Tap ↑ = go up. Tap green = drill down. Tap other row = fly to it.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -39,9 +32,25 @@ import { Icon } from '../../../components/Icon';
 import { fetchPanelData, type PanelData, type SiblingRow } from '../services/hierarchyService';
 
 interface Props {
+  /** id of current region; may include :drill suffix when the caller is
+   *  requesting the children view of that region. */
   regionId: string;
-  /** Called when user taps a sibling → drill into it (also flies map) */
-  onSelectSibling: (siblingId: string, siblingName: string, bbox: [number, number, number, number]) => void;
+  /** True when the caller wants a "drill into children" view rather than
+   *  the standard siblings view. Used when user taps the green (current)
+   *  row to drill in. */
+  drill?: boolean;
+  /**
+   * Called when user taps a sibling row.
+   *   - If sibling is `is_here` (green): user wants to drill INTO current →
+   *     panel should re-fetch with drill=true
+   *   - Otherwise: fly to that sibling
+   */
+  onSelectSibling: (
+    siblingId: string,
+    siblingName: string,
+    bbox: [number, number, number, number],
+    isHere: boolean,
+  ) => void;
   /** Called when user taps the ↑ chip → go to parent level */
   onGoUp: (parentId: string) => void;
   /** Called on backdrop tap or icon tap → close */
@@ -52,23 +61,35 @@ const LIST_MAX_HEIGHT = 260;
 const SCROLL_HINT_THRESHOLD = 6;
 const PANEL_WIDTH = 236;
 
-export function HierarchyPanel({ regionId, onSelectSibling, onGoUp, onClose }: Props) {
+export function HierarchyPanel({ regionId, drill = false, onSelectSibling, onGoUp, onClose }: Props) {
   const [data, setData] = useState<PanelData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showScrollHint, setShowScrollHint] = useState(false);
   const [isScrollable, setIsScrollable] = useState(false);
+  // v428 flicker fix: on regionId change, keep showing old data (dimmed)
+  // until new arrives. Only show spinner on the very first fetch.
+  const hasEverLoadedRef = useRef(false);
 
-  // Fetch panel data whenever regionId changes
+  // Fetch panel data whenever regionId or drill changes
   useEffect(() => {
     let cancelled = false;
+    // v428: always flag loading true on regionId/drill change. UI branches:
+    //   - loading && !data (first load): full spinner
+    //   - loading && data (subsequent fetch): keep list visible, dim via
+    //     stale style so user sees it's a fresh fetch
+    //   - !loading: normal
     setLoading(true);
     setError(null);
-    fetchPanelData(regionId)
+    fetchPanelData(regionId, drill)
       .then((d) => {
         if (cancelled) return;
-        if (!d) setError('Could not load region info');
-        else setData(d);
+        if (!d) {
+          setError('Could not load region info');
+        } else {
+          setData(d);
+          hasEverLoadedRef.current = true;
+        }
         setLoading(false);
       })
       .catch(() => {
@@ -78,7 +99,7 @@ export function HierarchyPanel({ regionId, onSelectSibling, onGoUp, onClose }: P
         }
       });
     return () => { cancelled = true; };
-  }, [regionId]);
+  }, [regionId, drill]);
 
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
@@ -93,25 +114,39 @@ export function HierarchyPanel({ regionId, onSelectSibling, onGoUp, onClose }: P
     setShowScrollHint(scrollable);
   }, []);
 
-  // Sort siblings: current (here) first, then explored by point count desc, then...
-  // wait: locked siblings are NOT shown individually. Only "+ N more" summary.
-  // So the visible list is: [here] + [other explored, by count desc].
+  // v428 sort:
+  //   1. current (here) first (green, always at top)
+  //   2. marked (has ≥1 flag) by marker_count desc
+  //   3. walked (has points but no marker) by point_count desc
+  //   4. locked (never been) alphabetical
   const visible: SiblingRow[] = data
     ? [
         ...data.siblings.filter((s) => s.is_here),
         ...data.siblings
-          .filter((s) => !s.is_here && s.state === 'explored')
+          .filter((s) => !s.is_here && s.state === 'marked')
+          .sort((a, b) => b.marker_count - a.marker_count),
+        ...data.siblings
+          .filter((s) => !s.is_here && s.state === 'walked')
           .sort((a, b) => b.point_count - a.point_count),
+        ...data.siblings
+          .filter((s) => !s.is_here && s.state === 'locked')
+          .sort((a, b) => a.name_en.localeCompare(b.name_en)),
       ]
     : [];
 
   return (
     <>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <Animated.View style={styles.panel} pointerEvents="box-none">
+      <Pressable style={styles.backdrop} onPress={onClose} testID="hierarchy-backdrop" />
+      <Animated.View style={styles.panel} pointerEvents="box-none" testID="hierarchy-panel">
         {/* Header: current name + ↑ round button (parent up) */}
         <View style={styles.header}>
-          <Text style={styles.title} numberOfLines={2}>
+          <Text
+            style={styles.title}
+            numberOfLines={3}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.75}
+            testID="hierarchy-title"
+          >
             {data?.current.name_en ?? 'Loading…'}
           </Text>
           {data?.parent ? (
@@ -120,6 +155,7 @@ export function HierarchyPanel({ regionId, onSelectSibling, onGoUp, onClose }: P
               onPress={() => onGoUp(data.parent!.id)}
               activeOpacity={0.7}
               accessibilityLabel={`Go up to ${data.parent.name_en}`}
+              testID="hierarchy-up-btn"
             >
               <Icon name="ArrowUp" size={16} color={Colors.primary} strokeWidth={2.5} />
             </TouchableOpacity>
@@ -127,16 +163,32 @@ export function HierarchyPanel({ regionId, onSelectSibling, onGoUp, onClose }: P
         </View>
 
         {/* Body */}
-        {loading ? (
+        {loading && !data ? (
           <View style={styles.loading}>
             <ActivityIndicator size="small" color={Colors.primary} />
           </View>
-        ) : error ? (
+        ) : error && !data ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : data ? (
-          <View style={styles.listContainer}>
+          <View style={[styles.listContainer, loading && styles.stale]}>
+            {/* v428 stale-content clarity: when regionId changed and new
+                fetch is in-flight, listContainer dims to 50% via `stale`
+                style so old data is visible but user sees "loading".
+                hasEverLoadedRef prevents this on the initial fetch. */}
+            {/* v428 empty-state banner: fresh users with no memory anywhere
+                yet. Shown when here + all siblings are locked. Encourages
+                first action rather than staring at grey dots. */}
+            {(data.explored_count === 0 &&
+              data.here_state === 'locked' &&
+              !data.parent) ? (
+              <View style={styles.emptyBanner} testID="hierarchy-empty-banner">
+                <Text style={styles.emptyBannerText}>
+                  Head out and start walking to unlock places.
+                </Text>
+              </View>
+            ) : null}
             <ScrollView
               style={styles.list}
               contentContainerStyle={styles.listContent}
@@ -148,43 +200,51 @@ export function HierarchyPanel({ regionId, onSelectSibling, onGoUp, onClose }: P
             >
               {visible.map((sib) => {
                 const isHere = sib.is_here;
-                const heCount = isHere ? data.here_point_count : sib.point_count;
+                // v428: count shown = marker_count if any, else point_count.
+                // For the current row, use the dedicated here_* fields.
+                const shownCount = isHere
+                  ? (data.here_marker_count > 0 ? data.here_marker_count : data.here_point_count)
+                  : (sib.marker_count > 0 ? sib.marker_count : sib.point_count);
                 return (
                   <TouchableOpacity
                     key={sib.id}
+                    testID={`hierarchy-row-${sib.id}`}
+                    accessibilityState={{ selected: isHere }}
                     style={[styles.row, isHere && styles.rowHere]}
-                    onPress={() => !isHere && onSelectSibling(sib.id, sib.name_en, sib.bbox)}
-                    activeOpacity={isHere ? 1 : 0.6}
-                    disabled={isHere}
+                    // v428 bug 2 fix: green (isHere) row IS tappable — it means
+                    // "drill into me" (see me + my children). Pass isHere flag.
+                    onPress={() => onSelectSibling(sib.id, sib.name_en, sib.bbox, isHere)}
+                    activeOpacity={0.6}
                   >
                     <View
                       style={[
                         styles.dot,
-                        isHere ? styles.dotHere : styles.dotExplored,
+                        isHere ? styles.dotHere
+                          : sib.state === 'marked' ? styles.dotMarked
+                          : sib.state === 'walked' ? styles.dotWalked
+                          : styles.dotLocked,
                       ]}
                     />
                     <Text
-                      style={[styles.rowName, isHere && styles.rowNameHere]}
-                      numberOfLines={2}
+                      style={[
+                        styles.rowName,
+                        isHere && styles.rowNameHere,
+                        sib.state === 'locked' && styles.rowNameLockedMuted,
+                      ]}
+                      numberOfLines={3}
+                      adjustsFontSizeToFit={true}
+                      minimumFontScale={0.75}
                     >
                       {sib.name_en}
                     </Text>
-                    {heCount > 0 ? (
+                    {shownCount > 0 ? (
                       <Text style={[styles.count, isHere && styles.countHere]}>
-                        {heCount}
+                        {shownCount}
                       </Text>
                     ) : null}
                   </TouchableOpacity>
                 );
               })}
-              {data.locked_count > 0 ? (
-                <View style={[styles.row, styles.rowLocked]}>
-                  <View style={[styles.dot, styles.dotLocked]} />
-                  <Text style={styles.rowNameLocked}>
-                    + {data.locked_count} unvisited
-                  </Text>
-                </View>
-              ) : null}
             </ScrollView>
             {isScrollable && showScrollHint ? (
               <View style={styles.scrollHint} pointerEvents="none">
@@ -194,14 +254,22 @@ export function HierarchyPanel({ regionId, onSelectSibling, onGoUp, onClose }: P
           </View>
         ) : null}
 
-        {/* Footer: simple hint */}
-        {data && !loading && !error ? (
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              {data.explored_count > 0
-                ? `${data.explored_count} visited · ${data.locked_count} unvisited`
-                : `${data.locked_count} unvisited`}
-            </Text>
+        {/* v428 footer: legend for the three dot states.
+            Replaces the useless "N visited · M unvisited" summary. */}
+        {data && !error ? (
+          <View style={styles.legend} testID="hierarchy-legend">
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.dotMarked]} />
+              <Text style={styles.legendText}>Marked</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.dotWalked]} />
+              <Text style={styles.legendText}>Walked</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.dotLocked]} />
+              <Text style={styles.legendText}>Never</Text>
+            </View>
           </View>
         ) : null}
       </Animated.View>
@@ -312,11 +380,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '700',
   },
-  rowNameLocked: {
-    flex: 1,
-    fontSize: FontSize.caption,
+  rowNameLockedMuted: {
     color: '#a89a82',
-    fontStyle: 'italic',
+    fontWeight: '400',
   },
   count: {
     fontSize: FontSize.small,
@@ -328,6 +394,11 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
 
+  // v428: three-state dot system.
+  //   dotHere    = green (current region)
+  //   dotMarked  = solid sepia (has ≥1 marker/flag)
+  //   dotWalked  = hollow sepia (has memory_points but no marker)
+  //   dotLocked  = solid grey (never been)
   dot: {
     width: 8,
     height: 8,
@@ -337,8 +408,13 @@ const styles = StyleSheet.create({
   dotHere: {
     backgroundColor: Colors.primary,
   },
-  dotExplored: {
+  dotMarked: {
     backgroundColor: MemoryColors.sepia,
+  },
+  dotWalked: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: MemoryColors.sepia,
   },
   dotLocked: {
     backgroundColor: '#d5cdba',
@@ -374,6 +450,52 @@ const styles = StyleSheet.create({
     fontSize: FontSize.tiny + 1.5,
     color: '#7a6f5f',
     letterSpacing: 0.1,
+  },
+
+  // v428: dot legend at bottom (replaces N-visited/M-unvisited copy).
+  legend: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f2ede2',
+    backgroundColor: '#fbf8f1',
+  },
+
+  // v428: empty-state banner for fresh users
+  emptyBanner: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#f5efe4',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f2ede2',
+  },
+  emptyBannerText: {
+    fontSize: FontSize.small,
+    color: '#7a6f5f',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  // v428 stale indicator (dim when new fetch in flight)
+  stale: {
+    opacity: 0.5,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    fontSize: FontSize.tiny + 0.5,
+    color: '#7a6f5f',
+    letterSpacing: 0.2,
   },
 });
 
