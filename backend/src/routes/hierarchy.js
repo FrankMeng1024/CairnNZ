@@ -406,7 +406,11 @@ router.get('/polygon/:region_id', async (req, res) => {
     }
     let geometry;
     try {
-      geometry = JSON.parse(r.geom_json);
+      // MySQL2 driver may auto-parse ST_AsGeoJSON as object OR return string
+      // depending on version + column type. Handle both.
+      geometry = typeof r.geom_json === 'string'
+        ? JSON.parse(r.geom_json)
+        : r.geom_json;
     } catch (e) {
       console.error('[hierarchy/polygon] parse failed for', regionId, e.message);
       return res.status(500).json({ error: 'geom parse failed' });
