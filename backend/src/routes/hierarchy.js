@@ -38,6 +38,9 @@ const router = express.Router();
 router.use(authenticate);
 
 // GET /api/hierarchy/deepest?lat=..&lng=..
+//
+// v428: uses polygon point-in-polygon (ST_Contains) for precision.
+// Falls back to bbox lookup if polygon column not present (mid-migration).
 router.get('/deepest', async (req, res) => {
   const lat = parseFloat(req.query.lat);
   const lng = parseFloat(req.query.lng);
@@ -45,9 +48,39 @@ router.get('/deepest', async (req, res) => {
     return res.status(400).json({ error: 'lat and lng required' });
   }
   try {
-    // Get ALL containing regions at highest level, then pick nearest-center.
-    // This handles enclave cases like Shanghai inside Jiangsu's bbox rect —
-    // deepest.level=3 for both, but Shanghai is smaller/closer so wins.
+    // v428: try polygon ST_Contains first (spatial index accelerated).
+    // MySQL 8 syntax: point must have SRID 4326 matching geom SRID.
+    // Only rows with non-empty geometry are candidates; continents (POLYGON EMPTY)
+    // are excluded from deepest lookup — they cannot be "where you are".
+    try {
+      // v428 note: no ORDER BY ST_Area in SQL to avoid MySQL 8
+      // sort_buffer_size limits on aliyun. Sort in JS after fetching (typical
+      // result set = 3-6 candidates so JS sort is trivial).
+      const [candidates] = await pool.query(
+        `SELECT id, parent_id, name_en, level,
+                bbox_min_lng, bbox_min_lat, bbox_max_lng, bbox_max_lat,
+                ST_Area(geom) AS area
+           FROM regions
+          WHERE level >= 2
+            AND ST_Contains(geom, ST_GeomFromText(CONCAT('POINT(', ?, ' ', ?, ')'), 4326, 'axis-order=long-lat'))`,
+        [lng, lat]
+      );
+      if (candidates.length > 0) {
+        // Sort deepest level first, then smallest area (handles enclaves like
+        // Shanghai inside Jiangsu — Shanghai wins on area).
+        candidates.sort((a, b) => (b.level - a.level) || (a.area - b.area));
+        const best = candidates[0];
+        return res.json({ region: fmtRegion(best) });
+      }
+      // No polygon match — fall through to bbox lookup below
+    } catch (spatialErr) {
+      // Column may not exist yet (pre-migration) — fall back silently
+      if (!/Unknown column|ST_IsEmpty|ST_Contains/.test(String(spatialErr.message || ''))) {
+        throw spatialErr;
+      }
+    }
+
+    // Legacy bbox fallback (pre-v428 schema OR polygon lookup missed)
     const [candidates] = await pool.query(
       `SELECT id, parent_id, name_en, level,
               bbox_min_lng, bbox_min_lat, bbox_max_lng, bbox_max_lat
@@ -113,14 +146,25 @@ router.get('/panel', async (req, res) => {
 
     // Siblings (same parent). For world, siblings = [world itself] which is meaningless;
     // in that case, siblings = children of world (i.e. continents).
+    //
+    // v428 drill mode: when client passes ?drill=1, treat current region as
+    // the container and return its CHILDREN as siblings. This lets the user
+    // "tap the green (current) row to drill into it and see what's inside".
+    // Semantically the panel then shows: current = <a child, first explored
+    // or first alphabetically>, siblings = all children of the region the
+    // user was on.
+    const drillMode = req.query.drill === '1' || req.query.drill === 'true';
     let siblingsRaw;
-    if (current.level === 0) {
-      // Special-case: world level. Show continents as siblings so user can drill down.
+    if (drillMode || current.level === 0) {
+      // Drill: children of current region are the new siblings.
+      // Level 0 (world): always drill (continents = "siblings" so user can pick one).
+      const parentIdForChildren = drillMode ? current.id : 'world';
       const [rows] = await pool.query(
         `SELECT id, parent_id, name_en, level,
                 bbox_min_lng, bbox_min_lat, bbox_max_lng, bbox_max_lat
-           FROM regions WHERE parent_id = 'world'
-          ORDER BY name_en`
+           FROM regions WHERE parent_id = ?
+          ORDER BY name_en`,
+        [parentIdForChildren]
       );
       siblingsRaw = rows;
     } else {
@@ -156,85 +200,238 @@ router.get('/panel', async (req, res) => {
     // typical Shanghai points than Jiangsu's bbox center).
     const sibIds = siblingsRaw.map((s) => s.id);
     const pointCounts = new Map();
+    const markerCounts = new Map();
     if (sibIds.length > 0) {
-      // Fetch all user memory points that fall in ANY sibling bbox in one query.
-      // Then assign each point to nearest-center sibling in JS.
-      const bboxOr = siblingsRaw
-        .map(() => '(lng BETWEEN ? AND ? AND lat BETWEEN ? AND ?)')
-        .join(' OR ');
-      const params = [userId];
-      for (const s of siblingsRaw) {
-        params.push(s.bbox_min_lng, s.bbox_max_lng, s.bbox_min_lat, s.bbox_max_lat);
+      // v428: prefer spatial polygon lookup when geom column present.
+      // Uses ST_Contains join for exact assignment (no enclave heuristic needed).
+      let usedSpatial = false;
+      try {
+        const idPlaceholders = sibIds.map(() => '?').join(',');
+        const spatialQuery = `
+          SELECT s.id AS sibling_id, COUNT(*) AS cnt FROM memory_points p
+          INNER JOIN regions s ON s.id IN (${idPlaceholders})
+            AND s.level >= 2
+            AND ST_Contains(s.geom, ST_GeomFromText(CONCAT('POINT(', p.lng, ' ', p.lat, ')'), 4326, 'axis-order=long-lat'))
+          WHERE p.user_id = ?
+          GROUP BY s.id
+        `;
+        const markerQuery = spatialQuery.replace(/memory_points p/, 'markers p');
+        const [pointRows] = await pool.query(spatialQuery, [...sibIds, userId]);
+        const [markerRows] = await pool.query(markerQuery, [...sibIds, userId]);
+        for (const r of pointRows) pointCounts.set(r.sibling_id, Number(r.cnt));
+        for (const r of markerRows) markerCounts.set(r.sibling_id, Number(r.cnt));
+        usedSpatial = true;
+      } catch (spatialErr) {
+        if (!/Unknown column|ST_IsEmpty|ST_Contains/.test(String(spatialErr.message || ''))) {
+          throw spatialErr;
+        }
+        // Fall through to bbox heuristic below
       }
-      const [pointRows] = await pool.query(
-        `SELECT lat, lng FROM memory_points WHERE user_id = ? AND (${bboxOr})`,
-        params
-      );
-      // For each point, find sibling whose bbox contains it AND whose center
-      // is closest. This picks the "smaller, closer" bbox (Shanghai over
-      // Jiangsu for a Shanghai-located point).
-      const sibCenters = siblingsRaw.map((s) => ({
-        id: s.id,
-        cx: (s.bbox_min_lng + s.bbox_max_lng) / 2,
-        cy: (s.bbox_min_lat + s.bbox_max_lat) / 2,
-        minLng: s.bbox_min_lng, maxLng: s.bbox_max_lng,
-        minLat: s.bbox_min_lat, maxLat: s.bbox_max_lat,
-      }));
-      for (const p of pointRows) {
-        let bestSib = null;
-        let bestD = Infinity;
-        for (const sc of sibCenters) {
-          if (p.lng < sc.minLng || p.lng > sc.maxLng) continue;
-          if (p.lat < sc.minLat || p.lat > sc.maxLat) continue;
-          const dx = p.lng - sc.cx;
-          const dy = p.lat - sc.cy;
-          const d = dx * dx + dy * dy;
-          if (d < bestD) { bestD = d; bestSib = sc.id; }
+
+      if (!usedSpatial) {
+        // Legacy bbox nearest-center heuristic (pre-v428 schema)
+        const bboxOr = siblingsRaw
+          .map(() => '(lng BETWEEN ? AND ? AND lat BETWEEN ? AND ?)')
+          .join(' OR ');
+        const params = [userId];
+        for (const s of siblingsRaw) {
+          params.push(s.bbox_min_lng, s.bbox_max_lng, s.bbox_min_lat, s.bbox_max_lat);
         }
-        if (bestSib) {
-          pointCounts.set(bestSib, (pointCounts.get(bestSib) || 0) + 1);
-        }
+        const [pointRows] = await pool.query(
+          `SELECT lat, lng FROM memory_points WHERE user_id = ? AND (${bboxOr})`,
+          params
+        );
+        const [markerRows] = await pool.query(
+          `SELECT lat, lng FROM markers WHERE user_id = ? AND (${bboxOr})`,
+          params
+        );
+        const sibCenters = siblingsRaw.map((s) => ({
+          id: s.id,
+          cx: (s.bbox_min_lng + s.bbox_max_lng) / 2,
+          cy: (s.bbox_min_lat + s.bbox_max_lat) / 2,
+          minLng: s.bbox_min_lng, maxLng: s.bbox_max_lng,
+          minLat: s.bbox_min_lat, maxLat: s.bbox_max_lat,
+        }));
+        const assignToNearest = (rows, counts) => {
+          for (const p of rows) {
+            let bestSib = null;
+            let bestD = Infinity;
+            for (const sc of sibCenters) {
+              if (p.lng < sc.minLng || p.lng > sc.maxLng) continue;
+              if (p.lat < sc.minLat || p.lat > sc.maxLat) continue;
+              const dx = p.lng - sc.cx;
+              const dy = p.lat - sc.cy;
+              const d = dx * dx + dy * dy;
+              if (d < bestD) { bestD = d; bestSib = sc.id; }
+            }
+            if (bestSib) {
+              counts.set(bestSib, (counts.get(bestSib) || 0) + 1);
+            }
+          }
+        };
+        assignToNearest(pointRows, pointCounts);
+        assignToNearest(markerRows, markerCounts);
       }
     }
 
-    // "Explored here" for current region
-    const [ehRows] = await pool.query(
-      `SELECT COUNT(*) AS cnt FROM memory_points
-        WHERE user_id = ?
-          AND lng BETWEEN ? AND ?
-          AND lat BETWEEN ? AND ?`,
-      [userId, current.bbox_min_lng, current.bbox_max_lng, current.bbox_min_lat, current.bbox_max_lat]
-    );
-    const exploredHereCount = Number(ehRows[0]?.cnt || 0);
+    // "Explored here" for current region (v428: also count markers)
+    // v428: prefer spatial ST_Contains against current.geom if available,
+    // fall back to bbox count.
+    let exploredHereCount = 0;
+    let markerHereCount = 0;
+    let usedSpatialHere = false;
+    try {
+      const [pr] = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM memory_points p
+          JOIN regions r ON r.id = ? AND r.level >= 2
+            AND ST_Contains(r.geom, ST_GeomFromText(CONCAT('POINT(', p.lng, ' ', p.lat, ')'), 4326, 'axis-order=long-lat'))
+          WHERE p.user_id = ?`,
+        [regionId, userId]
+      );
+      const [mr] = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM markers p
+          JOIN regions r ON r.id = ? AND r.level >= 2
+            AND ST_Contains(r.geom, ST_GeomFromText(CONCAT('POINT(', p.lng, ' ', p.lat, ')'), 4326, 'axis-order=long-lat'))
+          WHERE p.user_id = ?`,
+        [regionId, userId]
+      );
+      exploredHereCount = Number(pr[0]?.cnt || 0);
+      markerHereCount = Number(mr[0]?.cnt || 0);
+      usedSpatialHere = true;
+    } catch (e) {
+      if (!/Unknown column|ST_IsEmpty|ST_Contains/.test(String(e.message || ''))) {
+        throw e;
+      }
+    }
+    if (!usedSpatialHere) {
+      const [ehRows] = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM memory_points
+          WHERE user_id = ?
+            AND lng BETWEEN ? AND ?
+            AND lat BETWEEN ? AND ?`,
+        [userId, current.bbox_min_lng, current.bbox_max_lng, current.bbox_min_lat, current.bbox_max_lat]
+      );
+      const [ehMarkers] = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM markers
+          WHERE user_id = ?
+            AND lng BETWEEN ? AND ?
+            AND lat BETWEEN ? AND ?`,
+        [userId, current.bbox_min_lng, current.bbox_max_lng, current.bbox_min_lat, current.bbox_max_lat]
+      );
+      exploredHereCount = Number(ehRows[0]?.cnt || 0);
+      markerHereCount = Number(ehMarkers[0]?.cnt || 0);
+    }
 
+    // v428: three-state model
+    //   'marked'  → has ≥1 marker (implies user planted a flag/cairn here)
+    //   'walked'  → has memory_points but no marker (visited but didn't mark)
+    //   'locked'  → no memory_points, no markers (never been)
+    // 'here' is a UI concern (current region) and orthogonal to these states.
     const siblings = siblingsRaw.map((s) => {
-      const count = pointCounts.get(s.id) || 0;
+      const pcount = pointCounts.get(s.id) || 0;
+      const mcount = markerCounts.get(s.id) || 0;
       const isHere = s.id === regionId;
+      let state;
+      if (mcount > 0) state = 'marked';
+      else if (pcount > 0) state = 'walked';
+      else state = 'locked';
       return {
         id: s.id,
         name_en: s.name_en,
         level: s.level,
         bbox: [s.bbox_min_lng, s.bbox_min_lat, s.bbox_max_lng, s.bbox_max_lat],
         is_here: isHere,
-        state: count > 0 ? 'explored' : 'locked',
-        point_count: count,
+        state,
+        point_count: pcount,
+        marker_count: mcount,
       };
     });
 
-    const exploredCount = siblings.filter((s) => s.state === 'explored').length;
+    const markedCount = siblings.filter((s) => s.state === 'marked' && !s.is_here).length;
+    const walkedCount = siblings.filter((s) => s.state === 'walked' && !s.is_here).length;
     const lockedCount = siblings.filter((s) => s.state === 'locked' && !s.is_here).length;
 
     res.json({
       current: fmtRegion(current),
       parent: parent ? { id: parent.id, name_en: parent.name_en, level: parent.level } : null,
-      explored_here: exploredHereCount > 0,
+      // v428: dual counts for the current region
       here_point_count: exploredHereCount,
+      here_marker_count: markerHereCount,
+      here_state: markerHereCount > 0 ? 'marked' : exploredHereCount > 0 ? 'walked' : 'locked',
+      // legacy field kept for backwards compatibility
+      explored_here: exploredHereCount > 0,
       siblings,
-      explored_count: exploredCount,
+      marked_count: markedCount,
+      walked_count: walkedCount,
       locked_count: lockedCount,
+      // legacy field: sum of marked + walked
+      explored_count: markedCount + walkedCount,
     });
   } catch (err) {
     console.error('[hierarchy/panel]', err);
+    res.status(500).json({ error: 'db error' });
+  }
+});
+
+// GET /api/hierarchy/polygon/:region_id — v428
+// Returns the region's polygon as a GeoJSON FeatureCollection for map
+// highlighting. Uses ST_AsGeoJSON on the GEOMETRY column added in v428.
+//
+// Continent-level regions intentionally have POLYGON EMPTY (no highlight);
+// caller should render nothing when features is empty.
+router.get('/polygon/:region_id', async (req, res) => {
+  const regionId = req.params.region_id;
+  if (!regionId) return res.status(400).json({ error: 'region_id required' });
+  try {
+    // v428: geom is NOT NULL (SPATIAL INDEX requirement). world/continent
+    // rows have bbox-rectangle placeholder polygons. The polygon endpoint
+    // gates highlight by level — return empty FeatureCollection for
+    // level < 2 (world / continent), per user "不高亮" decision.
+    const [rows] = await pool.query(
+      `SELECT id, name_en, level, ST_AsGeoJSON(geom) AS geom_json
+         FROM regions WHERE id = ?`,
+      [regionId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'region not found' });
+    const r = rows[0];
+    // Cache aggressively — polygons rarely change (seed-time only)
+    res.set('Cache-Control', 'public, max-age=86400');
+    // Level gate: world (0) + continent (1) never render highlight
+    if (r.level < 2 || !r.geom_json) {
+      return res.json({
+        region_id: r.id,
+        type: 'FeatureCollection',
+        features: [],
+      });
+    }
+    let geometry;
+    try {
+      geometry = JSON.parse(r.geom_json);
+    } catch (e) {
+      console.error('[hierarchy/polygon] parse failed for', regionId, e.message);
+      return res.status(500).json({ error: 'geom parse failed' });
+    }
+    return res.json({
+      region_id: r.id,
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        properties: { id: r.id, name_en: r.name_en, level: r.level },
+        geometry,
+      }],
+    });
+  } catch (err) {
+    // Column may not exist yet on old schema — return empty gracefully so
+    // v428 client falls back to no-highlight instead of crashing.
+    if (err && (err.code === 'ER_BAD_FIELD_ERROR' || /Unknown column 'geom'/.test(String(err.message || '')))) {
+      return res.json({
+        region_id: regionId,
+        type: 'FeatureCollection',
+        features: [],
+        _fallback: 'geom-column-missing',
+      });
+    }
+    console.error('[hierarchy/polygon]', err);
     res.status(500).json({ error: 'db error' });
   }
 });
