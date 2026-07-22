@@ -93,6 +93,8 @@ app.use('/api/hide', require('./routes/hide'));
 app.use('/api/telemetry', require('./routes/telemetry'));
 app.use('/api/debug-snapshot', require('./routes/debug-snapshot'));
 app.use('/api/feature-flags', require('./routes/feature-flags'));
+// v427: Memory hierarchy world regions API
+app.use('/api/hierarchy', require('./routes/hierarchy'));
 // v417 AR removal: /api/v025/debug-events + /api/v025/worldmaps 路由删除（AR 功能已废弃）
 
 // 404 fallback

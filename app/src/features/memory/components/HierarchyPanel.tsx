@@ -1,32 +1,26 @@
 /**
- * HierarchyPanel — v425
+ * HierarchyPanel — v427 (redesigned for zero-learning UX)
  *
- * Memory tab 左下 icon 点开的 popover, 展示当前 region 的 siblings + 上一层入口.
+ * Product intent:
+ *   User taps the Layers icon → sees siblings of their current region,
+ *   with how many memory points in each. Locked (unvisited) siblings
+ *   are collapsed into a single "+ N more" summary row.
  *
- * UX 决策 (v425 更新):
- *   - 236pt 宽 (黄金比例, 屏中央偏下)
- *   - 顶部: current-level 名 (最多 2 行 wrap) + ↑ 圆按钮 (28×28, 无文字)
- *   - 中间: siblings 全部渲染 (删除 v424 的 MAX_EXPLORED 硬 cap), 超出内 scroll
- *          · list 最多 240pt 高度, 超出可垂直滚动
- *          · scroll 未到底部时右下角显示 "▼ scroll for more" 提示, 到底自动隐藏
- *          · sibling 名字最多 2 行 wrap, 无空格极长仍尾切
- *   - locked: 独立 summary row 放最后 ("N more locked"), 保持折叠
- *   - 底部: 图例 (marked / walked)
- *   - 点 sibling → fly to bbox, panel 保留
- *   - 点上级 ↑ → 切换到上一层
- *   - 点 icon 或点面板外 → 关闭
+ * Zero learning UX:
+ *   - Only 2 states: EXPLORED (sepia dot + count) or LOCKED (grouped as summary)
+ *   - Current region highlighted in sage
+ *   - Tap ↑ button → go to parent level
+ *   - Tap any explored sibling → drill into that region (also serves as fly-to)
+ *   - Panel auto-loads from /api/hierarchy/panel
  *
- * 修的 bug:
- *   - v424 BUG-01 (Critical): parent chip text 被 truncate ("New Zeala..."). Fix: chip 只留 icon 无文字.
- *   - v424 BUG-02 (Critical): 长 region 名 title/sibling 被单行 truncate. Fix: 2 行 wrap.
- *   - v424 BUG-03 (Critical, 语义错误): >4 explored 被折成 "6 more locked" 但实际是已打卡.
- *     Fix: 删掉 MAX_EXPLORED cap, 所有 explored 都渲染; locked 独立 summary row.
- *
- * 视觉:
- *   - font: 系统默认
- *   - Colors: MemoryColors.sepia (#b5823d) marked · #d5cdba locked · sage (#5d7c46) here
+ * All 5 v425/v426 bugs addressed:
+ *   1. Fixed zoom (14 for point-focused, no bbox span variance)
+ *   2/3. Current region persisted via parent (MemoryScreen owns it, this
+ *        component is pure display)
+ *   4. Full world data (240 countries, 294 provinces, etc.)
+ *   5. World layer handled as continents-as-siblings in backend
  */
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -35,60 +29,56 @@ import {
   Animated,
   Pressable,
   ScrollView,
+  ActivityIndicator,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
 import { Colors, Radius, FontSize } from '../../../components/tokens';
 import { MemoryColors } from '../config/memoryConfig';
 import { Icon } from '../../../components/Icon';
-import type { Region } from '../store/useHierarchyRegions';
+import { fetchPanelData, type PanelData, type SiblingRow } from '../services/hierarchyService';
 
 interface Props {
-  current: Region;
-  siblings: Region[];
-  parent: Region | null;
-  /** 点某个 sibling (fly to that bbox) */
-  onSelectSibling: (region: Region) => void;
-  /** 点上一层 (切换 current) */
-  onGoUp: (parent: Region) => void;
-  /** 点外部 or 关闭 */
+  regionId: string;
+  /** Called when user taps a sibling → drill into it (also flies map) */
+  onSelectSibling: (siblingId: string, siblingName: string, bbox: [number, number, number, number]) => void;
+  /** Called when user taps the ↑ chip → go to parent level */
+  onGoUp: (parentId: string) => void;
+  /** Called on backdrop tap or icon tap → close */
   onClose: () => void;
 }
 
-/**
- * 面板内容排序. v425: 不再 cap explored, 全部返回.
- * Locked 单独统计, 折叠成一行 summary.
- */
-function computeVisibleRows(current: Region, siblings: Region[]): {
-  visible: Region[];
-  lockedCount: number;
-} {
-  const locked = siblings.filter((s) => s.state === 'locked');
+const LIST_MAX_HEIGHT = 260;
+const SCROLL_HINT_THRESHOLD = 6;
+const PANEL_WIDTH = 236;
 
-  // Ensure current shows first, then marked, then walked. Explored 全渲染.
-  const sorted = [
-    ...siblings.filter((s) => s.state === 'here'),
-    ...siblings.filter((s) => s.state === 'marked' && s.id !== current.id),
-    ...siblings.filter((s) => s.state === 'walked' && s.id !== current.id),
-  ];
-
-  return { visible: sorted, lockedCount: locked.length };
-}
-
-const LIST_MAX_HEIGHT = 240;
-const SCROLL_HINT_THRESHOLD = 4;
-
-export function HierarchyPanel(props: Props) {
-  const { current, siblings, parent, onSelectSibling, onGoUp, onClose } = props;
-
-  const { visible, lockedCount } = useMemo(
-    () => computeVisibleRows(current, siblings),
-    [current, siblings]
-  );
-
-  // scroll hint: 当 list 内容可 scroll 且未到底部时显示. 初始默认显示 (list 可能超过 maxHeight).
+export function HierarchyPanel({ regionId, onSelectSibling, onGoUp, onClose }: Props) {
+  const [data, setData] = useState<PanelData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showScrollHint, setShowScrollHint] = useState(false);
   const [isScrollable, setIsScrollable] = useState(false);
+
+  // Fetch panel data whenever regionId changes
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetchPanelData(regionId)
+      .then((d) => {
+        if (cancelled) return;
+        if (!d) setError('Could not load region info');
+        else setData(d);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError('Network error');
+          setLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [regionId]);
 
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
@@ -98,104 +88,126 @@ export function HierarchyPanel(props: Props) {
   }, []);
 
   const onContentSizeChange = useCallback((_w: number, h: number) => {
-    // 若 content 超过 maxHeight, 说明可 scroll → 初始显示 hint
     const scrollable = h > LIST_MAX_HEIGHT - 1;
     setIsScrollable(scrollable);
     setShowScrollHint(scrollable);
   }, []);
 
+  // Sort siblings: current (here) first, then explored by point count desc, then...
+  // wait: locked siblings are NOT shown individually. Only "+ N more" summary.
+  // So the visible list is: [here] + [other explored, by count desc].
+  const visible: SiblingRow[] = data
+    ? [
+        ...data.siblings.filter((s) => s.is_here),
+        ...data.siblings
+          .filter((s) => !s.is_here && s.state === 'explored')
+          .sort((a, b) => b.point_count - a.point_count),
+      ]
+    : [];
+
   return (
     <>
-      {/* 全屏透明 backdrop, 点即关闭 */}
       <Pressable style={styles.backdrop} onPress={onClose} />
       <Animated.View style={styles.panel} pointerEvents="box-none">
-        {/* Header: current-level name + ↑ 圆按钮 (无文字) */}
+        {/* Header: current name + ↑ round button (parent up) */}
         <View style={styles.header}>
           <Text style={styles.title} numberOfLines={2}>
-            {current.name}
+            {data?.current.name_en ?? 'Loading…'}
           </Text>
-          {parent ? (
+          {data?.parent ? (
             <TouchableOpacity
-              style={styles.upChip}
-              onPress={() => onGoUp(parent)}
+              style={styles.upBtn}
+              onPress={() => onGoUp(data.parent!.id)}
               activeOpacity={0.7}
-              accessibilityLabel={`Go up to ${parent.name}`}
+              accessibilityLabel={`Go up to ${data.parent.name_en}`}
             >
               <Icon name="ArrowUp" size={16} color={Colors.primary} strokeWidth={2.5} />
             </TouchableOpacity>
           ) : null}
         </View>
 
-        {/* Sibling list — 内 scroll */}
-        <View style={styles.listContainer}>
-          <ScrollView
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            onScroll={onScroll}
-            scrollEventThrottle={16}
-            onContentSizeChange={onContentSizeChange}
-            showsVerticalScrollIndicator={true}
-            nestedScrollEnabled={true}
-          >
-            {visible.map((sib) => {
-              const isHere = sib.state === 'here';
-              return (
-                <TouchableOpacity
-                  key={sib.id}
-                  style={[styles.row, isHere && styles.rowHere]}
-                  onPress={() => !isHere && onSelectSibling(sib)}
-                  activeOpacity={isHere ? 1 : 0.6}
-                  disabled={isHere}
-                >
-                  <View
-                    style={[
-                      styles.dot,
-                      sib.state === 'here' && styles.dotHere,
-                      sib.state === 'marked' && styles.dotMarked,
-                      sib.state === 'walked' && styles.dotWalked,
-                    ]}
-                  />
-                  <Text
-                    style={[styles.rowName, isHere && styles.rowNameHere]}
-                    numberOfLines={2}
+        {/* Body */}
+        {loading ? (
+          <View style={styles.loading}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+          </View>
+        ) : error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : data ? (
+          <View style={styles.listContainer}>
+            <ScrollView
+              style={styles.list}
+              contentContainerStyle={styles.listContent}
+              onScroll={onScroll}
+              scrollEventThrottle={16}
+              onContentSizeChange={onContentSizeChange}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+            >
+              {visible.map((sib) => {
+                const isHere = sib.is_here;
+                const heCount = isHere ? data.here_point_count : sib.point_count;
+                return (
+                  <TouchableOpacity
+                    key={sib.id}
+                    style={[styles.row, isHere && styles.rowHere]}
+                    onPress={() => !isHere && onSelectSibling(sib.id, sib.name_en, sib.bbox)}
+                    activeOpacity={isHere ? 1 : 0.6}
+                    disabled={isHere}
                   >
-                    {sib.name}
+                    <View
+                      style={[
+                        styles.dot,
+                        isHere ? styles.dotHere : styles.dotExplored,
+                      ]}
+                    />
+                    <Text
+                      style={[styles.rowName, isHere && styles.rowNameHere]}
+                      numberOfLines={2}
+                    >
+                      {sib.name_en}
+                    </Text>
+                    {heCount > 0 ? (
+                      <Text style={[styles.count, isHere && styles.countHere]}>
+                        {heCount}
+                      </Text>
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+              {data.locked_count > 0 ? (
+                <View style={[styles.row, styles.rowLocked]}>
+                  <View style={[styles.dot, styles.dotLocked]} />
+                  <Text style={styles.rowNameLocked}>
+                    + {data.locked_count} unvisited
                   </Text>
-                </TouchableOpacity>
-              );
-            })}
-            {lockedCount > 0 ? (
-              <View style={[styles.row, styles.rowLocked]}>
-                <View style={[styles.dot, styles.dotLocked]} />
-                <Text style={styles.rowNameLocked}>{lockedCount} more locked</Text>
+                </View>
+              ) : null}
+            </ScrollView>
+            {isScrollable && showScrollHint ? (
+              <View style={styles.scrollHint} pointerEvents="none">
+                <Text style={styles.scrollHintText}>▼ more</Text>
               </View>
             ) : null}
-          </ScrollView>
-          {/* Dynamic scroll hint: 未到底且可滚动时显示 */}
-          {isScrollable && showScrollHint ? (
-            <View style={styles.scrollHint} pointerEvents="none">
-              <Text style={styles.scrollHintText}>▼ scroll for more</Text>
-            </View>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
 
-        {/* Legend at bottom */}
-        <View style={styles.legend}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, styles.dotMarked]} />
-            <Text style={styles.legendText}>marked</Text>
+        {/* Footer: simple hint */}
+        {data && !loading && !error ? (
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>
+              {data.explored_count > 0
+                ? `${data.explored_count} visited · ${data.locked_count} unvisited`
+                : `${data.locked_count} unvisited`}
+            </Text>
           </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, styles.dotWalked]} />
-            <Text style={styles.legendText}>walked</Text>
-          </View>
-        </View>
+        ) : null}
       </Animated.View>
     </>
   );
 }
-
-const PANEL_WIDTH = 236;
 
 const styles = StyleSheet.create({
   backdrop: {
@@ -209,7 +221,7 @@ const styles = StyleSheet.create({
   panel: {
     position: 'absolute',
     left: '50%',
-    bottom: 168, // icon top (110 + 44 icon) + 14 gap
+    bottom: 168,
     marginLeft: -(PANEL_WIDTH / 2),
     width: PANEL_WIDTH,
     backgroundColor: '#fff',
@@ -225,7 +237,7 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start', // v425: title 可能 2 行, top-align
+    alignItems: 'flex-start',
     gap: 8,
     paddingHorizontal: 14,
     paddingTop: 12,
@@ -238,10 +250,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textPrimary,
     letterSpacing: -0.2,
-    lineHeight: 20, // v425: 允许 2 行
-    flex: 1, // v425: 抢剩余空间
+    lineHeight: 20,
+    flex: 1,
   },
-  upChip: {
+  upBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -249,6 +261,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#f5efe4',
     flexShrink: 0,
+  },
+
+  loading: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  errorBox: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: FontSize.small,
+    color: '#a89a82',
+    textAlign: 'center',
   },
 
   listContainer: {
@@ -262,7 +288,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start', // v425: name 可能 2 行, top-align dot
+    alignItems: 'flex-start',
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -273,12 +299,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(93,124,70,0.06)',
   },
   rowLocked: {
-    // no cursor / press feedback needed
+    // no cursor / no press feedback
   },
   rowName: {
     flex: 1,
-    fontSize: FontSize.body - 0.5, // 14.5
-    lineHeight: 18, // v425: 2 行 wrap 需要 lineHeight
+    fontSize: FontSize.body - 0.5,
+    lineHeight: 18,
     color: Colors.textPrimary,
     fontWeight: '500',
   },
@@ -288,29 +314,31 @@ const styles = StyleSheet.create({
   },
   rowNameLocked: {
     flex: 1,
-    fontSize: FontSize.caption, // 13
+    fontSize: FontSize.caption,
     color: '#a89a82',
     fontStyle: 'italic',
+  },
+  count: {
+    fontSize: FontSize.small,
+    fontWeight: '600',
+    color: MemoryColors.sepia,
+    marginTop: 1,
+  },
+  countHere: {
+    color: Colors.primary,
   },
 
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginTop: 5, // v425: 与 rowName 顶行对齐 (baseline 视觉)
+    marginTop: 5,
   },
   dotHere: {
     backgroundColor: Colors.primary,
   },
-  dotMarked: {
+  dotExplored: {
     backgroundColor: MemoryColors.sepia,
-  },
-  dotWalked: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: MemoryColors.sepia,
-    width: 8,
-    height: 8,
   },
   dotLocked: {
     backgroundColor: '#d5cdba',
@@ -324,7 +352,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollHintText: {
-    fontSize: FontSize.tiny, // 9
+    fontSize: FontSize.tiny,
     color: '#a89a82',
     letterSpacing: 0.5,
     backgroundColor: 'rgba(255,255,255,0.9)',
@@ -333,30 +361,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
 
-  legend: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  footer: {
     paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 10,
     borderTopWidth: 1,
     borderTopColor: '#f2ede2',
     backgroundColor: '#fbf8f1',
-  },
-  legendItem: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
   },
-  legendDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginTop: 0, // legend dot 不需要 top offset
-  },
-  legendText: {
-    fontSize: FontSize.tiny + 1.5, // 10.5
+  footerText: {
+    fontSize: FontSize.tiny + 1.5,
     color: '#7a6f5f',
     letterSpacing: 0.1,
   },

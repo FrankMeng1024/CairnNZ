@@ -45,9 +45,11 @@ import { log, flushNow as flushLogsNow } from '../../../services/appLog';
 import { ForegroundUnlockManager } from '../components/ForegroundUnlockManager';
 // v425: fly to real explored point inside sibling region (bug 2 fix)
 import { useMarkerStore } from '../../../store/useMarkerStore';
+// v427: async hierarchy from /api/hierarchy (world-wide data)
+import { fetchDeepestRegion } from '../services/hierarchyService';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
-import { useHierarchyRegions, findDeepestRegion, type Region } from '../store/useHierarchyRegions';
+// v427: hierarchy migrated to async /api/hierarchy — legacy static store deleted.
 
 interface FixState { lat: number; lng: number }
 /** S4 fix: extended freshness window to 10 minutes. Stale lat/lng is
@@ -118,6 +120,9 @@ export function MemoryScreen() {
   const [hierarchyRegionId, setHierarchyRegionId] = useState<string | null>(null);
   const [flyToTarget, setFlyToTarget] = useState<{ center: [number, number]; zoom: number; token: number } | null>(null);
   const flyTokenRef = useRef(0);
+  // v427: track map camera center so hierarchy panel opens based on
+  // where user is looking, not their physical GPS position.
+  const cameraCenterRef = useRef<{ lat: number; lng: number } | null>(null);
 
   // v360: full UX loading state machine — replaces v359's simple 3s
   // hard timeout. Industry benchmark (Nielsen 10s attention limit,
@@ -632,6 +637,7 @@ export function MemoryScreen() {
           recenterToken={recenterToken}
           flyToTarget={flyToTarget}
           onMapMoved={() => setMapMoved(true)}
+          onCameraCenter={(lat, lng) => { cameraCenterRef.current = { lat, lng }; }}
           onMapFullyReady={() => {
             log('v359.map_fully_ready_cb', {});
             setMapReady(true);
@@ -709,18 +715,21 @@ export function MemoryScreen() {
       {persistentCoord && (
         <TouchableOpacity
           style={[styles.hierarchyBtn, hierarchyOpen && styles.hierarchyBtnActive]}
-          onPress={() => {
+          onPress={async () => {
             if (hierarchyOpen) {
               setHierarchyOpen(false);
               return;
             }
-            // Init to user's current deepest region on open
-            const start = findDeepestRegion(persistentCoord.lat, persistentCoord.lng);
-            setHierarchyRegionId(start?.id ?? null);
+            // v427: use map camera center (not GPS) so user pans → opens
+            // panel for what they're looking at, not their physical position.
+            const anchor = cameraCenterRef.current ?? persistentCoord;
+            const region = await fetchDeepestRegion(anchor.lat, anchor.lng);
+            setHierarchyRegionId(region?.id ?? null);
             setHierarchyOpen(true);
             log('memory.hierarchy_open', {
-              start_id: start?.id ?? null,
-              start_level: start?.level ?? null,
+              start_id: region?.id ?? null,
+              start_level: region?.level ?? null,
+              used_camera: cameraCenterRef.current !== null,
             });
           }}
           activeOpacity={0.85}
@@ -833,113 +842,77 @@ export function MemoryScreen() {
       />
       <PaywallSheet visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
 
-      {/* v424: Hierarchy popover — only mounted when open to skip hooks cost.
-          Renders own backdrop + absolute-position panel. */}
+      {/* v427: Hierarchy popover. Fetches its own data from /api/hierarchy.
+          Only mounted when open. */}
       {hierarchyOpen && hierarchyRegionId && (
-        <HierarchyPanelHost
+        <HierarchyPanel
           regionId={hierarchyRegionId}
-          onSelectSibling={(region: Region) => {
-            log('memory.hierarchy_fly', { id: region.id, level: region.level });
-            // v425 fix (bug 2): fly to a real explored point inside the region,
-            // not the geometric bbox center. bbox center may fall on water /
-            // unexplored terrain (e.g. Pudong bbox center is offshore).
-            // Priority: (1) closest memory point to bbox center, (2) closest
-            // marker, (3) bbox center as fallback.
-            const [minLng, minLat, maxLng, maxLat] = region.bbox;
+          onSelectSibling={(siblingId, siblingName, bbox) => {
+            log('memory.hierarchy_fly', { id: siblingId });
+            // v427 fix (bug 1): fly to a real explored point in the region
+            // with a FIXED zoom (14 for point-focus, ignores bbox span).
+            // Priority: (1) closest memory point in bbox, (2) closest marker,
+            // (3) bbox center as fallback.
+            const [minLng, minLat, maxLng, maxLat] = bbox;
             const bboxCenterLng = (minLng + maxLng) / 2;
             const bboxCenterLat = (minLat + maxLat) / 2;
-            const spanLng = maxLng - minLng;
-            const spanLat = maxLat - minLat;
-            const span = Math.max(spanLng, spanLat);
-
             const inBbox = (lat: number, lng: number) =>
               lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
             const points = useMemoryStore.getState().points;
             const markers = useMarkerStore.getState().markers;
-
             let flyLng = bboxCenterLng;
             let flyLat = bboxCenterLat;
-            let foundExploredPoint = false;
-
-            // Pick point closest to bbox center from inside bbox
+            let foundExplored = false;
             let bestDist = Infinity;
             for (const p of points) {
               if (!inBbox(p.lat, p.lng)) continue;
-              const dLat = p.lat - bboxCenterLat;
-              const dLng = p.lng - bboxCenterLng;
-              const d = dLat * dLat + dLng * dLng;
-              if (d < bestDist) {
-                bestDist = d;
-                flyLat = p.lat;
-                flyLng = p.lng;
-                foundExploredPoint = true;
-              }
+              const d = (p.lat - bboxCenterLat) ** 2 + (p.lng - bboxCenterLng) ** 2;
+              if (d < bestDist) { bestDist = d; flyLat = p.lat; flyLng = p.lng; foundExplored = true; }
             }
-            // Fallback to closest marker if no memory point in bbox
-            if (!foundExploredPoint) {
-              bestDist = Infinity;
+            if (!foundExplored) {
               for (const m of markers) {
                 if (!inBbox(m.lat, m.lng)) continue;
-                const dLat = m.lat - bboxCenterLat;
-                const dLng = m.lng - bboxCenterLng;
-                const d = dLat * dLat + dLng * dLng;
-                if (d < bestDist) {
-                  bestDist = d;
-                  flyLat = m.lat;
-                  flyLng = m.lng;
-                  foundExploredPoint = true;
-                }
+                const d = (m.lat - bboxCenterLat) ** 2 + (m.lng - bboxCenterLng) ** 2;
+                if (d < bestDist) { bestDist = d; flyLat = m.lat; flyLng = m.lng; foundExplored = true; }
               }
             }
-
-            // Zoom heuristic: bigger span → smaller zoom
-            // When flying to an actual point (not bbox center), boost zoom
-            // by 1 level — user wants to see the point in context, not
-            // the whole region.
+            // v427 fixed zoom by region level:
+            //   world/continent → 3-4 (need to see all)
+            //   country → 5-6
+            //   province/state → 8-9
+            //   district → 13-14
+            // But we don't know level of the SIBLING (bbox tells span roughly)
+            // If foundExplored, zoom in more since we have a real point.
+            const spanLng = maxLng - minLng;
+            const spanLat = maxLat - minLat;
+            const span = Math.max(spanLng, spanLat);
             let zoom = 12;
-            if (span > 60) zoom = 3;
-            else if (span > 20) zoom = 4;
-            else if (span > 8) zoom = 5.5;
-            else if (span > 3) zoom = 7;
-            else if (span > 1) zoom = 9;
-            else if (span > 0.3) zoom = 11;
-            else if (span > 0.1) zoom = 13;
-            else zoom = 14.5;
-            if (foundExploredPoint) zoom = Math.min(zoom + 1, 15);
+            if (span > 40) zoom = 3;         // continent
+            else if (span > 8) zoom = 5;     // country
+            else if (span > 2) zoom = 8;     // province
+            else if (span > 0.3) zoom = 11;  // large district
+            else zoom = 13;                  // small district
+            // When flying to a real point, use a consistent point-focused zoom
+            // regardless of the region's bbox span. User cares about "show me
+            // where I walked", not "show me the whole region outline".
+            if (foundExplored) zoom = 14;
 
             flyTokenRef.current += 1;
             setFlyToTarget({ center: [flyLng, flyLat], zoom, token: flyTokenRef.current });
-            setHierarchyRegionId(region.id);
+            // v427 bug 2/3 fix: after clicking a sibling, DRILL INTO that region.
+            // Panel now shows the tapped region as current, and its own children
+            // as siblings. User can keep drilling. Re-opening panel later still
+            // uses map camera center (which is now over the tapped region).
+            setHierarchyRegionId(siblingId);
           }}
-          onGoUp={(parent: Region) => {
-            log('memory.hierarchy_up', { id: parent.id, level: parent.level });
-            setHierarchyRegionId(parent.id);
+          onGoUp={(parentId) => {
+            log('memory.hierarchy_up', { id: parentId });
+            setHierarchyRegionId(parentId);
           }}
           onClose={() => setHierarchyOpen(false)}
         />
       )}
     </View>
-  );
-}
-
-// v424: wrapper that runs useHierarchyRegions hook only when panel is open.
-function HierarchyPanelHost(props: {
-  regionId: string;
-  onSelectSibling: (r: Region) => void;
-  onGoUp: (r: Region) => void;
-  onClose: () => void;
-}) {
-  const { current, siblings, parent } = useHierarchyRegions(props.regionId);
-  if (!current) return null;
-  return (
-    <HierarchyPanel
-      current={current}
-      siblings={siblings}
-      parent={parent}
-      onSelectSibling={props.onSelectSibling}
-      onGoUp={props.onGoUp}
-      onClose={props.onClose}
-    />
   );
 }
 

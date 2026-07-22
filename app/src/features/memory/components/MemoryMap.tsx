@@ -52,6 +52,13 @@ interface Props {
    */
   onMapMoved?: () => void;
   /**
+   * v427: fire on every camera change with the current center. Parent
+   * uses this to know where the user is looking on the map (for hierarchy
+   * panel init — user pans to Pudong then taps Layers, we want Pudong,
+   * not their physical GPS).
+   */
+  onCameraCenter?: (lat: number, lng: number) => void;
+  /**
    * v359: fired when Mapbox `onDidFinishRenderingMapFully` triggers —
    * the basemap is fully painted. Used by MemoryScreen as one of two
    * gates for hiding the loading overlay.
@@ -75,7 +82,7 @@ interface Props {
 const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12';
 const INITIAL_ZOOM = 16.5;
 
-export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved, onMapFullyReady, onFogReady, strangerMarks, flyToTarget }: Props) {
+export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onFogReady, strangerMarks, flyToTarget }: Props) {
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
   const mapViewRef = useRef<any>(null);
@@ -290,6 +297,13 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               const { log } = require('../../../services/appLog');
               log('v386.camera_zoom', { zoom: Number(z.toFixed(2)) });
+            }
+          }
+          // v427: propagate center to parent for hierarchy panel init
+          if (onCameraCenter) {
+            const c = e?.properties?.center ?? e?.geometry?.coordinates;
+            if (Array.isArray(c) && c.length >= 2 && typeof c[0] === 'number') {
+              onCameraCenter(c[1], c[0]);
             }
           }
         }}
