@@ -92,6 +92,8 @@ app.use('/api/circle', require('./routes/circle'));
 app.use('/api/hide', require('./routes/hide'));
 app.use('/api/telemetry', require('./routes/telemetry'));
 app.use('/api/debug-snapshot', require('./routes/debug-snapshot'));
+// v429 hotfix: appLog upload endpoint (client sends batched log tags)
+app.use('/api/edit-diag', require('./routes/edit-diag'));
 app.use('/api/feature-flags', require('./routes/feature-flags'));
 // v427: Memory hierarchy world regions API
 app.use('/api/hierarchy', require('./routes/hierarchy'));

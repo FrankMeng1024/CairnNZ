@@ -36,9 +36,18 @@ const Session = {
   },
 
   async findByUser(userId) {
+    // v429 fix: exclude dangling / unfinished rows (session_start called but
+    // no PATCH /save ever reached the server — usually app kill mid-hike).
+    // finalized_at IS NULL AND distance_m=0 AND duration_s=0 = ghost row.
+    // Keep older v3.3-flagged sessions (finalized_at IS NOT NULL) OR sessions
+    // that have real data (distance or duration > 0, even if PATCH never
+    // completed due to network — user can still see them and manually delete).
     const [rows] = await pool.execute(
       `SELECT id, user_id, route_id, type, start_time, end_time, distance_m, duration_s, name, created_at
-       FROM sessions WHERE user_id = ? ORDER BY start_time DESC`,
+       FROM sessions
+       WHERE user_id = ?
+         AND (finalized_at IS NOT NULL OR distance_m > 0 OR duration_s > 0)
+       ORDER BY start_time DESC`,
       [userId]
     );
     return rows;
