@@ -267,10 +267,9 @@ class GpsInjector {
   }
 
   private emit(lat: number, lng: number, speedMs: number, accuracy: number, ts: number): void {
-    // v442: use the sim-walker dev-only API that bypasses gate 3
-    // (stationary suppression). Without this, sim-walker's small step_m
-    // (5m default) triggers stationary suppression when accuracy>=step_m,
-    // so only the first fix went through.
+    // v443/v444: use __simwalkerAddTrackPoint if available (bypasses
+    // stationary suppression). If not, force-write via setState directly.
+    let path = 'unknown';
     let threw = false;
     try {
       const st = useTrackingStore.getState() as any;
@@ -279,23 +278,34 @@ class GpsInjector {
           { lat, lng, alt: null, accuracy, speed: speedMs },
           ts,
         );
+        path = 'dev_api';
       } else {
-        // Older bundle without the dev API — fall back to normal path.
-        useTrackingStore.getState().addTrackPoint(
-          { lat, lng, alt: null, accuracy, speed: speedMs },
-          ts,
-        );
+        // v444 fallback: direct setState so sim-walker works even on
+        // older bundles / partial rollout without the dev API.
+        useTrackingStore.setState((s: any) => {
+          const p = { lat, lng, alt: null, accuracy, speed: speedMs, t: Date.now() };
+          return {
+            trackPoints: [...(s.trackPoints || []), p],
+            trackPointsSmoothed: [...(s.trackPointsSmoothed || []), p],
+            trackPointsRaw: [...(s.trackPointsRaw || []), p],
+            lastCoordinate: { lat, lng, alt: null, accuracy, speed: speedMs },
+            lastCoordinateTime: Date.now(),
+          };
+        });
+        path = 'setState_fallback';
       }
     } catch (err) {
       threw = true;
-      log('v442.simwalker.emit_err', { err: String(err) });
+      log('v444.simwalker.emit_err', { err: String(err) });
     }
-    log('v442.simwalker.emit_wrote', {
+    const trackLen = (useTrackingStore.getState() as any).trackPoints?.length ?? -1;
+    log('v444.simwalker.emit_wrote', {
+      path,
       threw,
       lat: Number(lat.toFixed(6)),
       lng: Number(lng.toFixed(6)),
       speed: Number(speedMs.toFixed(2)),
-      trackPoints_after: (useTrackingStore.getState() as any).trackPoints?.length ?? -1,
+      trackPoints_after: trackLen,
     });
   }
 }

@@ -304,6 +304,22 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
             const c = e?.properties?.center ?? e?.geometry?.coordinates;
             if (Array.isArray(c) && c.length >= 2 && typeof c[0] === 'number') {
               onCameraCenter(c[1], c[0]);
+              // v443: log every ~20th to verify camera-center propagation
+              if (Math.random() < 0.05) {
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const { log } = require('../../../services/appLog');
+                log('v443.map.camera_center', {
+                  lat: Number(Number(c[1]).toFixed(4)),
+                  lng: Number(Number(c[0]).toFixed(4)),
+                });
+              }
+            } else if (Math.random() < 0.02) {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { log } = require('../../../services/appLog');
+              log('v443.map.camera_center_missing', {
+                keys: e ? Object.keys(e).join(',') : 'null',
+                props_keys: e?.properties ? Object.keys(e.properties).join(',') : 'null',
+              });
             }
           }
         }}
