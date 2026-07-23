@@ -49,10 +49,10 @@ export interface PanelData {
   locked_count: number;
 }
 
-const DEEPEST_CACHE_TTL_MS = 60 * 1000; // 60s (was 24h — was preventing panel from refreshing when user flew to a new city)
-const PANEL_CACHE_TTL_MS = 30 * 1000; // 30s (short — user memory changes)
-const DEEPEST_CACHE_VERSION = 'v4';
-const PANEL_CACHE_VERSION = 'v4';
+const DEEPEST_CACHE_TTL_MS = 60 * 1000; // 60s
+const PANEL_CACHE_TTL_MS = 15 * 1000; // 15s (v439 short — panel reads should be ~ms now anyway)
+const DEEPEST_CACHE_VERSION = 'v5';
+const PANEL_CACHE_VERSION = 'v5';
 
 async function authedFetch(path: string): Promise<Response> {
   const token = await getToken();

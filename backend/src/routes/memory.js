@@ -92,6 +92,20 @@ router.post('/points', authenticate, validateBody(schemas.memory.points), async 
       'INSERT INTO memory_points (user_id, lat, lng, ts, client_id) VALUES ? ON DUPLICATE KEY UPDATE client_id = VALUES(client_id)',
       [rows]
     );
+    // v439: attribute newly inserted points to unlocked_regions.
+    // Runs after the INSERT so ST_Contains sees the fresh points.
+    // Uses the pool (single-connection semantics ok for attribution).
+    try {
+      const { attributeMemoryPoints } = require('../lib/attributeMemoryPoints');
+      const tsList = rows.map((r) => r[3]); // rows[i] = [user_id, lat, lng, ts, client_id]
+      const minTs = Math.min(...tsList);
+      const maxTs = Math.max(...tsList);
+      await attributeMemoryPoints(pool, userId, minTs, maxTs);
+    } catch (attrErr) {
+      console.error(`[memory/points] ATTR_ERR user=${userId} err=${attrErr.message}`);
+      // Do NOT throw — memory_points already inserted. Attribution can be
+      // recomputed later via backfill if it fails here.
+    }
     // Confirm storage by selecting back the cids we just inserted.
     const validEcho = echo.filter((e) => e !== null);
     const cidList = validEcho.map((e) => e.cid);

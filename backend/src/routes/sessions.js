@@ -336,6 +336,21 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
         );
         accepted += slice.length;
       }
+      // v439: attribute newly-inserted points to unlocked_regions inside
+      // the same transaction so panel reads see fresh unlocks immediately
+      // after this /save call returns.
+      try {
+        const { attributeMemoryPoints } = require('../lib/attributeMemoryPoints');
+        const tsList = validRows.map((r) => r[3]);
+        const minTs = Math.min(...tsList);
+        const maxTs = Math.max(...tsList);
+        await attributeMemoryPoints(conn, userId, minTs, maxTs);
+      } catch (attrErr) {
+        console.error(`[sessions/save] ATTR_ERR user=${userId} session=${id} err=${attrErr.message}`);
+        // Do NOT rollback for attribution errors — the memory_points are
+        // already inserted correctly. Attribution can be recomputed via
+        // backfill script if it drifts.
+      }
     }
 
     await conn.commit();
