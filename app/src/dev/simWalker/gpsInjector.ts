@@ -24,7 +24,7 @@ export interface StepConfig {
 
 export const DEFAULT_STEP_CONFIG: StepConfig = {
   step_m: 5,
-  emit_ms: 1000,
+  emit_ms: 500,
   undo_count: 10,
 };
 
@@ -225,6 +225,14 @@ class GpsInjector {
   }
 
   private tick(): void {
+    // v445 diagnostic: log every tick regardless. If we see many
+    // v445.simwalker.tick_enter but few tick_emit, we know tick loop
+    // is alive but strength=0 (joystick released) most of the time.
+    log('v445.simwalker.tick_enter', {
+      hasPos: !!this.currentPos,
+      strength: Number(this.strength.toFixed(2)),
+      config: this.config,
+    });
     if (!this.currentPos) return;
     if (this.strength <= 0) {
       this.notify();

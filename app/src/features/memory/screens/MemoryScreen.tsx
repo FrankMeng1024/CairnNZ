@@ -601,6 +601,15 @@ export function MemoryScreen() {
   const onRecenter = () => {
     log('memory.recenter_tap');
     setRecenterToken((n) => n + 1);
+    // v445 fix: eagerly update cameraCenterRef to real GPS location so
+    // that reopening the hierarchy panel right after recenter uses the
+    // new location, not the stale KL/etc from previous fly-to. The map's
+    // onCameraChanged should also fire later, but relying on it alone
+    // was unreliable for imperative camera moves.
+    if (persistentCoord) {
+      cameraCenterRef.current = { lat: persistentCoord.lat, lng: persistentCoord.lng };
+      log('v445.recenter_camera_ref_set', { lat: persistentCoord.lat, lng: persistentCoord.lng });
+    }
     // R7 fix: only refetch GPS if we have nothing OR our cached fix is
     // older than the freshness window. Otherwise just camera-flyTo.
     const stale = !watcherFix || Date.now() - watcherFix.ts >= WATCHER_FIX_FRESH_MS;
