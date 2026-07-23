@@ -1,51 +1,56 @@
 /**
- * SimWalkerOverlay — v434 free-walk mode
+ * SimWalkerOverlay — v437 realistic sim with 3 quick-action buttons
  *
- * v434 rewrite. Removed:
- *   - Left-top HUD with A/B pickers, coord inputs, Plan/Reset buttons
- *   - Route planning (Mapbox Directions call) — no snap-to-road
- *   - All progress/phase/speed readouts
- *
- * What remains: a single 360° joystick anchored bottom-right of the
- * screen. Drag the thumb in any direction → user's simulated GPS
- * advances in that bearing at "1 step per 500 ms" (0.7 m per step at
- * full push, scaled by push distance). Release → stops.
- *
- * The injector uses whatever the user's current tracked position is
- * as the starting point when the overlay mounts (or updates whenever
- * the real GPS emits a fix before the user takes control).
+ * v437 changes vs v435:
+ *   - 3 speed mode buttons (walk / jog / run) — left of joystick
+ *   - Undo 5 emitted points button — top-right of joystick
+ *   - Reset start point (to current known GPS location) — below undo
+ *   - Emit cadence 3 s (matches production hike-track sampling)
+ *   - Realistic GPS: ±3 m jitter, accuracy 5-15, ±0.3 m/s speed noise
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   PanResponder,
   Animated,
+  TouchableOpacity,
   Platform,
 } from 'react-native';
 import { useTrackingStore } from '../../store/useTrackingStore';
-import { gpsInjector } from './gpsInjector';
+import { gpsInjector, type SpeedMode } from './gpsInjector';
 
 const JOY_SIZE = 160;
 const JOY_STICK = 60;
-const JOY_MAX = 55; // px thumb travel from centre
+const JOY_MAX = 55;
 
 export function SimWalkerOverlay() {
-  // Seed injector with the current known position at mount.
+  const [speedMode, setSpeedMode] = useState<SpeedMode>('walk');
+
   useEffect(() => {
     const cur = useTrackingStore.getState().lastCoordinate;
-    if (cur) {
-      gpsInjector.setStartPosition(cur.lat, cur.lng);
-    }
+    if (cur) gpsInjector.setStartPosition(cur.lat, cur.lng);
     gpsInjector.start();
-    return () => {
-      gpsInjector.stop();
-    };
+    return () => { gpsInjector.stop(); };
   }, []);
 
-  // ── Joystick — 2D PanResponder ────────────────────────────────────
+  const setSpeed = (m: SpeedMode) => {
+    setSpeedMode(m);
+    gpsInjector.setSpeedMode(m);
+  };
+
+  const doUndo5 = () => {
+    gpsInjector.undoSteps(5);
+  };
+
+  const doResetStart = () => {
+    const cur = useTrackingStore.getState().lastCoordinate;
+    if (cur) gpsInjector.setStartPosition(cur.lat, cur.lng);
+  };
+
+  // ── 360° Joystick ──
   const stickX = useRef(new Animated.Value(0)).current;
   const stickY = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
@@ -57,7 +62,6 @@ export function SimWalkerOverlay() {
         stickY.setValue(0);
       },
       onPanResponderMove: (_evt, gs) => {
-        // Clamp thumb to a circle of radius JOY_MAX.
         const dx = gs.dx;
         const dy = gs.dy;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -66,11 +70,6 @@ export function SimWalkerOverlay() {
         const cy = dy * clampScale;
         stickX.setValue(cx);
         stickY.setValue(cy);
-
-        // Convert (cx, cy) → bearing (0 = north, clockwise, radians)
-        //   In screen coords: +y is down.
-        //   "North" in screen = up = -y.
-        //   Bearing = atan2( +x, -y ).
         const bearingRad = Math.atan2(cx, -cy);
         const strength = Math.min(1, dist / JOY_MAX);
         gpsInjector.setJoystick(bearingRad, strength);
@@ -90,7 +89,36 @@ export function SimWalkerOverlay() {
 
   return (
     <View style={styles.root} pointerEvents="box-none">
-      {/* Bottom-right joystick (360°) */}
+      {/* Speed mode buttons — left of joystick */}
+      <View style={styles.speedCol} pointerEvents="auto">
+        {(['walk', 'jog', 'run'] as const).map((m) => {
+          const active = speedMode === m;
+          return (
+            <TouchableOpacity
+              key={m}
+              style={[styles.speedBtn, active && styles.speedBtnActive]}
+              onPress={() => setSpeed(m)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.speedBtnText, active && styles.speedBtnTextActive]}>
+                {m === 'walk' ? 'W' : m === 'jog' ? 'J' : 'R'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Action buttons — top of joystick */}
+      <View style={styles.actionCol} pointerEvents="auto">
+        <TouchableOpacity style={styles.actionBtn} onPress={doUndo5} activeOpacity={0.7}>
+          <Text style={styles.actionBtnText}>↶5</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} onPress={doResetStart} activeOpacity={0.7}>
+          <Text style={styles.actionBtnText}>⌂</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 360° Joystick — bottom right */}
       <View style={styles.joyRoot} {...panResponder.panHandlers} pointerEvents="auto">
         <View style={styles.joyBase} />
         <Animated.View
@@ -128,10 +156,7 @@ const styles = StyleSheet.create({
   },
   joyBase: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     borderRadius: JOY_SIZE / 2,
     borderWidth: 2,
     borderColor: '#999',
@@ -157,5 +182,69 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  // Speed mode column (left of joystick)
+  speedCol: {
+    position: 'absolute',
+    bottom: 30 + (JOY_SIZE - 128) / 2, // vertically centre against joystick
+    right: 20 + JOY_SIZE + 8,
+    width: 40,
+    alignItems: 'center',
+  },
+  speedBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#5d7c46',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  speedBtnActive: {
+    backgroundColor: '#5d7c46',
+  },
+  speedBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#5d7c46',
+  },
+  speedBtnTextActive: {
+    color: '#fff',
+  },
+  // Action buttons column (above joystick)
+  actionCol: {
+    position: 'absolute',
+    bottom: 30 + JOY_SIZE + 8,
+    right: 20 + (JOY_SIZE - 44) / 2,
+    width: 44,
+    alignItems: 'center',
+  },
+  actionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#5d7c46',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  actionBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#5d7c46',
   },
 });

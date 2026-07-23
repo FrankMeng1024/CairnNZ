@@ -1,48 +1,58 @@
 /**
- * sim-walker gpsInjector — v434 free-walk mode
+ * sim-walker gpsInjector — v437 realistic mode
  *
- * v434 rewrite: removed the "planned route" / A→B / progressM model
- * from the SPIKE-006 version. That was overkill and confusing. The
- * new model is dead simple:
+ * v437 changes vs v435:
+ *   - Speed modes: walk (1.4 m/s), jog (3.0), run (5.0)
+ *   - Dual-cadence: 500 ms internal tick (smooth joystick) + emit
+ *     only every 6th tick = 3 s emit period (matches production
+ *     `lastSamplingIntervalMs` = 3000 in useTrackingStore, so the
+ *     downstream distance/stationary gates behave identically to
+ *     real GPS)
+ *   - Realism: ±3 m gaussian jitter on lat/lng, accuracy 5-15 m
+ *     random, speed ±0.3 m/s gaussian noise
+ *   - History buffer for undo (10 samples ring, undo5() rewinds)
+ *   - Reset start point via setStartPosition() unchanged
  *
- *   - Overlay pushes a 2D vector (bearing radians, strength 0..1) from
- *     the joystick on every touch move.
- *   - This injector emits a fresh GPS fix every EMIT_PERIOD_MS (500 ms).
- *     Each fix advances the position by `strength * STEP_M` metres
- *     in the given bearing. STEP_M is tuned so strength=1 ≈ 1.4 m/s
- *     (normal human walking).
- *   - No route, no snap-to-road, no arrival phase. User goes wherever
- *     they push the stick.
- *   - When strength drops to 0 (finger released) emission pauses.
- *
- * The 3 emit sinks (useTrackingStore.addTrackPoint,
- * useMemoryStore.setLastWatcherFix, unlockEngine.processReading) are
- * unchanged — this is only the input side.
- *
- * Dev-only. Bundled out of production via isSimMode gate on the caller.
+ * See PLAN research notes in _review/v437-plan.
  */
 
 import { useTrackingStore } from '../../store/useTrackingStore';
 import { useMemoryStore } from '../../features/memory/store/useMemoryStore';
 import { processReading } from '../../features/memory/services/unlockEngine';
 
+export type SpeedMode = 'walk' | 'jog' | 'run';
+
+const SPEED_MODES: Record<SpeedMode, number> = {
+  walk: 1.4,
+  jog: 3.0,
+  run: 5.0,
+};
+
 export interface InjectorSnapshot {
   active: boolean;
   currentPos: { lat: number; lng: number } | null;
   bearingDeg: number;
   strength: number;
+  speedMode: SpeedMode;
   ticksEmitted: number;
+  historyLen: number;
 }
 
 export type InjectorListener = (snapshot: InjectorSnapshot) => void;
 
-/** 1.4 m/s * 0.5 s = 0.7 m per step at full stick */
-const STEP_M = 0.7;
-/** How often we emit a synthesized GPS fix (ms) */
-const EMIT_PERIOD_MS = 500;
-
-// Earth radius, WGS84 mean, used to convert metres → degrees.
+const INTERNAL_TICK_MS = 500;   // smooth joystick tick
+const EMIT_EVERY_N_TICKS = 6;   // emit every 6 * 500 = 3000 ms (prod cadence)
 const EARTH_R_M = 6_378_137;
+const JITTER_M_1_SIGMA = 3;      // realistic GPS drift
+const SPEED_NOISE_1_SIGMA = 0.3; // GPS Doppler noise
+const HISTORY_SIZE = 10;         // for undo N
+
+function boxMuller(): number {
+  // Standard normal N(0,1) via Box-Muller transform.
+  const u = Math.max(1e-9, Math.random());
+  const v = Math.max(1e-9, Math.random());
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
 
 function moveByBearing(
   lat: number,
@@ -50,7 +60,6 @@ function moveByBearing(
   bearingRad: number,
   distanceM: number,
 ): { lat: number; lng: number } {
-  // Small-distance flat approximation, good enough for <10 m steps.
   const dLat = (distanceM * Math.cos(bearingRad)) / EARTH_R_M;
   const dLng = (distanceM * Math.sin(bearingRad)) / (EARTH_R_M * Math.cos((lat * Math.PI) / 180));
   return {
@@ -61,23 +70,21 @@ function moveByBearing(
 
 class GpsInjector {
   private currentPos: { lat: number; lng: number } | null = null;
-  private bearingRad = 0; // 0 = north, increasing clockwise
-  private strength = 0;   // 0..1
+  private bearingRad = 0;   // 0 = north, clockwise, radians
+  private strength = 0;     // 0..1
+  private speedMode: SpeedMode = 'walk';
   private ticksEmitted = 0;
-  private emitHandle: ReturnType<typeof setInterval> | null = null;
+  private internalTickCount = 0;
+  private tickHandle: ReturnType<typeof setInterval> | null = null;
   private listeners = new Set<InjectorListener>();
+  private posHistory: Array<{ lat: number; lng: number }> = [];
 
-  /** Set the starting position for the sim. Call once when overlay mounts. */
   setStartPosition(lat: number, lng: number): void {
     this.currentPos = { lat, lng };
+    this.posHistory = [];
     this.notify();
   }
 
-  /**
-   * Push joystick vector.
-   *   bearingRad = angle in radians (0 = north, +π/2 = east)
-   *   strength   = 0..1 (0 = released, 1 = full push)
-   */
   setJoystick(bearingRad: number, strength: number): void {
     if (Number.isNaN(bearingRad) || Number.isNaN(strength)) return;
     this.bearingRad = bearingRad;
@@ -88,27 +95,46 @@ class GpsInjector {
     this.strength = 0;
   }
 
-  /** Start emitting fixes at EMIT_PERIOD_MS cadence. Idempotent. */
+  setSpeedMode(mode: SpeedMode): void {
+    if (SPEED_MODES[mode] !== undefined) this.speedMode = mode;
+    this.notify();
+  }
+
+  /** Rewind currentPos by N steps in history. Does NOT touch tracking store. */
+  undoSteps(n: number): void {
+    if (n <= 0 || this.posHistory.length === 0) return;
+    const take = Math.min(n, this.posHistory.length);
+    // Pop `take` items; the last popped becomes the new currentPos.
+    let restored: { lat: number; lng: number } | null = null;
+    for (let i = 0; i < take; i++) {
+      restored = this.posHistory.pop() ?? null;
+    }
+    if (restored) this.currentPos = restored;
+    this.notify();
+  }
+
   start(): void {
-    if (this.emitHandle) return;
-    this.emitHandle = setInterval(() => this.tick(), EMIT_PERIOD_MS);
+    if (this.tickHandle) return;
+    this.tickHandle = setInterval(() => this.tick(), INTERNAL_TICK_MS);
   }
 
   stop(): void {
-    if (this.emitHandle) {
-      clearInterval(this.emitHandle);
-      this.emitHandle = null;
+    if (this.tickHandle) {
+      clearInterval(this.tickHandle);
+      this.tickHandle = null;
     }
     this.strength = 0;
   }
 
   getSnapshot(): InjectorSnapshot {
     return {
-      active: this.emitHandle !== null,
+      active: this.tickHandle !== null,
       currentPos: this.currentPos,
       bearingDeg: (this.bearingRad * 180) / Math.PI,
       strength: this.strength,
+      speedMode: this.speedMode,
       ticksEmitted: this.ticksEmitted,
+      historyLen: this.posHistory.length,
     };
   }
 
@@ -127,27 +153,39 @@ class GpsInjector {
   private tick(): void {
     if (!this.currentPos) return;
     if (this.strength <= 0) {
-      // Idle — don't emit stationary fixes.
       this.notify();
       return;
     }
-    const stepM = STEP_M * this.strength;
-    const next = moveByBearing(
-      this.currentPos.lat,
-      this.currentPos.lng,
-      this.bearingRad,
-      stepM,
-    );
+    // Advance position smoothly every 500 ms tick.
+    const speedMs = SPEED_MODES[this.speedMode] * this.strength;
+    const stepM = speedMs * (INTERNAL_TICK_MS / 1000);
+    const next = moveByBearing(this.currentPos.lat, this.currentPos.lng, this.bearingRad, stepM);
     this.currentPos = next;
-    this.ticksEmitted += 1;
-    this.emit(next.lat, next.lng, stepM / (EMIT_PERIOD_MS / 1000), Date.now());
+    this.internalTickCount += 1;
+
+    // Emit only every 6 ticks = 3 s cadence (matches production).
+    if (this.internalTickCount % EMIT_EVERY_N_TICKS === 0) {
+      // Save pre-emit position for undo (history contains emitted positions).
+      this.posHistory.push({ lat: next.lat, lng: next.lng });
+      if (this.posHistory.length > HISTORY_SIZE) this.posHistory.shift();
+
+      // Apply jitter for realism. Random bearing + normal magnitude.
+      const jitterMag = Math.abs(boxMuller()) * JITTER_M_1_SIGMA;
+      const jitterBearing = Math.random() * 2 * Math.PI;
+      const jittered = moveByBearing(next.lat, next.lng, jitterBearing, jitterMag);
+
+      const speedNoisy = Math.max(0, speedMs + boxMuller() * SPEED_NOISE_1_SIGMA);
+      const accuracy = 5 + Math.random() * 10; // 5..15 m
+      this.emit(jittered.lat, jittered.lng, speedNoisy, accuracy, Date.now());
+      this.ticksEmitted += 1;
+    }
     this.notify();
   }
 
-  private emit(lat: number, lng: number, speedMs: number, ts: number): void {
+  private emit(lat: number, lng: number, speedMs: number, accuracy: number, ts: number): void {
     try {
       useTrackingStore.getState().addTrackPoint(
-        { lat, lng, alt: null, accuracy: 10, speed: speedMs },
+        { lat, lng, alt: null, accuracy, speed: speedMs },
         ts,
       );
     } catch (err) {
@@ -161,7 +199,7 @@ class GpsInjector {
       console.warn('[sim-walker] setLastWatcherFix threw', err);
     }
     try {
-      processReading({ lat, lng, accuracyM: 10, speedMs, timestampMs: ts });
+      processReading({ lat, lng, accuracyM: accuracy, speedMs, timestampMs: ts });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[sim-walker] processReading threw', err);
@@ -169,5 +207,4 @@ class GpsInjector {
   }
 }
 
-/** Singleton — one injector per app. */
 export const gpsInjector = new GpsInjector();
