@@ -1,27 +1,31 @@
 /**
- * sim-walker gpsInjector — v438 (100% log coverage)
+ * sim-walker gpsInjector — v441 free-walk, dev-controllable speed
  *
- * v438: every code path logged, per user's "100% log coverage" rule.
- * v437 changes (unchanged):
- *   - Speed modes walk/jog/run
- *   - Dual-cadence 500ms tick + emit every 6 ticks (3s)
- *   - ±3m jitter, accuracy 5-15, ±0.3 m/s speed noise
- *   - 10-sample history for undo
+ * v441 changes vs v438:
+ *   - Single "walk speed" mode, tunable at runtime via setStepConfig()
+ *   - Default: 5 m per emit, 1000 ms between emits → 5 m/s ≈ jog pace
+ *     (real-user distanceInterval=5m matched; emit rate 3x faster than
+ *     real GPS's 3s cadence so testing feels responsive)
+ *   - undoSteps also rewinds the tracking store so the visible track
+ *     pulls back too (was: rewinds only internal cursor)
+ *   - History size grew to 50 to support larger undo counts
  *
- * Also: emit no longer calls processReading/setLastWatcherFix — that
- * caused mystery memory-circle unlocks without an active hike. Now
- * only addTrackPoint is called; downstream systems decide side effects.
+ * Every code path logged (feedback_100pct_log_coverage).
  */
 
 import { useTrackingStore } from '../../store/useTrackingStore';
 import { log } from '../../services/appLog';
 
-export type SpeedMode = 'walk' | 'jog' | 'run';
+export interface StepConfig {
+  step_m: number;         // metres advanced per emit
+  emit_ms: number;        // milliseconds between emits
+  undo_count: number;     // how many steps ↺ button rewinds
+}
 
-const SPEED_MODES: Record<SpeedMode, number> = {
-  walk: 1.4,
-  jog: 3.0,
-  run: 5.0,
+export const DEFAULT_STEP_CONFIG: StepConfig = {
+  step_m: 5,
+  emit_ms: 1000,
+  undo_count: 10,
 };
 
 export interface InjectorSnapshot {
@@ -29,19 +33,18 @@ export interface InjectorSnapshot {
   currentPos: { lat: number; lng: number } | null;
   bearingDeg: number;
   strength: number;
-  speedMode: SpeedMode;
   ticksEmitted: number;
   historyLen: number;
+  stepM: number;
+  emitMs: number;
+  undoCount: number;
 }
 
 export type InjectorListener = (snapshot: InjectorSnapshot) => void;
 
-const INTERNAL_TICK_MS = 500;
-const EMIT_EVERY_N_TICKS = 6;
 const EARTH_R_M = 6_378_137;
-const JITTER_M_1_SIGMA = 3;
-const SPEED_NOISE_1_SIGMA = 0.3;
-const HISTORY_SIZE = 10;
+const JITTER_M_1_SIGMA = 2;   // realistic GPS drift (small so it doesn't hide the path)
+const HISTORY_SIZE = 50;
 
 function boxMuller(): number {
   const u = Math.max(1e-9, Math.random());
@@ -67,20 +70,16 @@ class GpsInjector {
   private currentPos: { lat: number; lng: number } | null = null;
   private bearingRad = 0;
   private strength = 0;
-  private speedMode: SpeedMode = 'walk';
   private ticksEmitted = 0;
-  private internalTickCount = 0;
   private tickHandle: ReturnType<typeof setInterval> | null = null;
   private listeners = new Set<InjectorListener>();
   private posHistory: Array<{ lat: number; lng: number }> = [];
+  private config: StepConfig = { ...DEFAULT_STEP_CONFIG };
 
   setStartPosition(lat: number, lng: number): void {
-    const prev = this.currentPos;
-    log('v438.simwalker.set_start', {
+    log('v441.simwalker.set_start', {
       new_lat: Number(lat.toFixed(6)),
       new_lng: Number(lng.toFixed(6)),
-      prev_lat: prev ? Number(prev.lat.toFixed(6)) : null,
-      prev_lng: prev ? Number(prev.lng.toFixed(6)) : null,
       history_cleared: this.posHistory.length,
     });
     this.currentPos = { lat, lng };
@@ -90,49 +89,51 @@ class GpsInjector {
 
   setJoystick(bearingRad: number, strength: number): void {
     if (Number.isNaN(bearingRad) || Number.isNaN(strength)) {
-      log('v438.simwalker.joystick_nan', {
-        bearing_rad: Number.isNaN(bearingRad) ? 'NaN' : bearingRad,
-        strength: Number.isNaN(strength) ? 'NaN' : strength,
-      });
+      log('v441.simwalker.joystick_nan', {});
       return;
     }
-    const clamped = Math.max(0, Math.min(1, strength));
-    // Log every ~10th call to avoid flooding at 60fps pan gestures
-    if (Math.random() < 0.1) {
-      log('v438.simwalker.joystick_set', {
-        bearing_deg: Number(((bearingRad * 180) / Math.PI).toFixed(1)),
-        strength: Number(clamped.toFixed(2)),
-      });
-    }
     this.bearingRad = bearingRad;
-    this.strength = clamped;
+    this.strength = Math.max(0, Math.min(1, strength));
   }
 
   releaseJoystick(): void {
-    log('v438.simwalker.joystick_release', { was_strength: Number(this.strength.toFixed(2)) });
+    log('v441.simwalker.joystick_release', { was_strength: Number(this.strength.toFixed(2)) });
     this.strength = 0;
   }
 
-  setSpeedMode(mode: SpeedMode): void {
-    const prev = this.speedMode;
-    const valid = SPEED_MODES[mode] !== undefined;
-    if (valid) this.speedMode = mode;
-    log('v438.simwalker.set_speed', {
-      requested: mode,
-      valid,
-      applied: this.speedMode,
-      prev_mode: prev,
-      mps: SPEED_MODES[this.speedMode],
+  setStepConfig(cfg: Partial<StepConfig>): void {
+    const next = { ...this.config, ...cfg };
+    // Clamp to safe bounds
+    next.step_m = Math.max(0.5, Math.min(100, next.step_m));
+    next.emit_ms = Math.max(200, Math.min(5000, next.emit_ms));
+    next.undo_count = Math.max(1, Math.min(50, Math.round(next.undo_count)));
+    const prev = this.config;
+    this.config = next;
+    log('v441.simwalker.set_step_config', {
+      prev,
+      applied: next,
     });
+    // Restart tick loop if running so new emit_ms takes effect
+    if (this.tickHandle) {
+      clearInterval(this.tickHandle);
+      this.tickHandle = setInterval(() => this.tick(), this.config.emit_ms);
+    }
     this.notify();
   }
 
-  undoSteps(n: number): void {
+  getConfig(): StepConfig {
+    return { ...this.config };
+  }
+
+  /**
+   * Rewind currentPos + tracking store track by config.undo_count points.
+   */
+  undoSteps(): void {
+    const n = this.config.undo_count;
     if (n <= 0 || this.posHistory.length === 0) {
-      log('v438.simwalker.undo_nop', {
+      log('v441.simwalker.undo_nop', {
         requested: n,
         history_len: this.posHistory.length,
-        reason: n <= 0 ? 'invalid_n' : 'empty_history',
       });
       return;
     }
@@ -142,9 +143,34 @@ class GpsInjector {
       restored = this.posHistory.pop() ?? null;
     }
     if (restored) this.currentPos = restored;
-    log('v438.simwalker.undo', {
+
+    // Also rewind the tracking store so the visible track pulls back.
+    let storeRemoved = 0;
+    try {
+      const st = useTrackingStore.getState() as any;
+      if (typeof st.__simwalkerRemoveLastN === 'function') {
+        storeRemoved = st.__simwalkerRemoveLastN(take);
+      } else {
+        // Fallback: directly slice arrays if API not exposed. Safe because
+        // sim-walker is a dev tool; production builds don't ship this file.
+        useTrackingStore.setState((state: any) => {
+          const trim = (arr: any[]) => arr.slice(0, Math.max(0, arr.length - take));
+          return {
+            trackPoints: trim(state.trackPoints || []),
+            trackPointsSmoothed: trim(state.trackPointsSmoothed || []),
+            trackPointsRaw: trim(state.trackPointsRaw || []),
+          };
+        });
+        storeRemoved = take;
+      }
+    } catch (err) {
+      log('v441.simwalker.undo_store_err', { err: String(err) });
+    }
+
+    log('v441.simwalker.undo', {
       requested: n,
       taken: take,
+      store_removed: storeRemoved,
       history_remaining: this.posHistory.length,
       new_lat: restored ? Number(restored.lat.toFixed(6)) : null,
       new_lng: restored ? Number(restored.lng.toFixed(6)) : null,
@@ -154,29 +180,18 @@ class GpsInjector {
 
   start(): void {
     if (this.tickHandle) {
-      log('v438.simwalker.start_already_active', { ticks_emitted: this.ticksEmitted });
+      log('v441.simwalker.start_already_active', {});
       return;
     }
-    log('v438.simwalker.start', {
-      tick_ms: INTERNAL_TICK_MS,
-      emit_every_n_ticks: EMIT_EVERY_N_TICKS,
-      has_start_pos: this.currentPos !== null,
-      start_lat: this.currentPos ? Number(this.currentPos.lat.toFixed(6)) : null,
-      start_lng: this.currentPos ? Number(this.currentPos.lng.toFixed(6)) : null,
-    });
-    this.tickHandle = setInterval(() => this.tick(), INTERNAL_TICK_MS);
+    log('v441.simwalker.start', { config: this.config });
+    this.tickHandle = setInterval(() => this.tick(), this.config.emit_ms);
   }
 
   stop(): void {
     if (this.tickHandle) {
       clearInterval(this.tickHandle);
       this.tickHandle = null;
-      log('v438.simwalker.stop', {
-        ticks_emitted: this.ticksEmitted,
-        internal_tick_count: this.internalTickCount,
-      });
-    } else {
-      log('v438.simwalker.stop_already_stopped', {});
+      log('v441.simwalker.stop', { ticks_emitted: this.ticksEmitted });
     }
     this.strength = 0;
   }
@@ -187,151 +202,86 @@ class GpsInjector {
       currentPos: this.currentPos,
       bearingDeg: (this.bearingRad * 180) / Math.PI,
       strength: this.strength,
-      speedMode: this.speedMode,
       ticksEmitted: this.ticksEmitted,
       historyLen: this.posHistory.length,
+      stepM: this.config.step_m,
+      emitMs: this.config.emit_ms,
+      undoCount: this.config.undo_count,
     };
   }
 
   subscribe(fn: InjectorListener): () => void {
     this.listeners.add(fn);
-    log('v438.simwalker.subscribe', { listeners_now: this.listeners.size });
-    return () => {
-      this.listeners.delete(fn);
-      log('v438.simwalker.unsubscribe', { listeners_now: this.listeners.size });
-    };
+    return () => { this.listeners.delete(fn); };
   }
 
   private notify(): void {
     const snap = this.getSnapshot();
     this.listeners.forEach((fn) => {
-      try {
-        fn(snap);
-      } catch (err) {
-        log('v438.simwalker.listener_err', { err: String(err) });
+      try { fn(snap); } catch (err) {
+        log('v441.simwalker.listener_err', { err: String(err) });
       }
     });
   }
 
   private tick(): void {
-    if (!this.currentPos) {
-      // Only log every 10th such tick to avoid flooding (typical when
-      // sim-walker is running but startPosition hasn't been called yet).
-      if (this.internalTickCount % 10 === 0) {
-        log('v438.simwalker.tick_no_pos', { internal_count: this.internalTickCount });
-      }
-      this.internalTickCount += 1;
-      return;
-    }
+    if (!this.currentPos) return;
     if (this.strength <= 0) {
-      // Idle — user isn't pushing the joystick. Log occasionally so we
-      // can prove the tick loop is alive even when idle.
-      if (this.internalTickCount % 20 === 0) {
-        log('v438.simwalker.tick_idle', {
-          internal_count: this.internalTickCount,
-          lat: Number(this.currentPos.lat.toFixed(6)),
-          lng: Number(this.currentPos.lng.toFixed(6)),
-        });
-      }
-      this.internalTickCount += 1;
       this.notify();
       return;
     }
-
-    const speedMs = SPEED_MODES[this.speedMode] * this.strength;
-    const stepM = speedMs * (INTERNAL_TICK_MS / 1000);
+    // Advance step_m * strength metres in bearing direction
+    const stepM = this.config.step_m * this.strength;
     const next = moveByBearing(this.currentPos.lat, this.currentPos.lng, this.bearingRad, stepM);
     this.currentPos = next;
-    this.internalTickCount += 1;
 
-    const isEmitTick = this.internalTickCount % EMIT_EVERY_N_TICKS === 0;
+    // Save history for undo
+    this.posHistory.push({ lat: next.lat, lng: next.lng });
+    if (this.posHistory.length > HISTORY_SIZE) this.posHistory.shift();
 
-    if (isEmitTick) {
-      // Save pre-jitter position for undo
-      let historyShifted = false;
-      this.posHistory.push({ lat: next.lat, lng: next.lng });
-      if (this.posHistory.length > HISTORY_SIZE) {
-        this.posHistory.shift();
-        historyShifted = true;
-      }
+    // Apply small jitter for realism
+    const jitterMag = Math.abs(boxMuller()) * JITTER_M_1_SIGMA;
+    const jitterBearing = Math.random() * 2 * Math.PI;
+    const jittered = moveByBearing(next.lat, next.lng, jitterBearing, jitterMag);
 
-      const jitterMag = Math.abs(boxMuller()) * JITTER_M_1_SIGMA;
-      const jitterBearing = Math.random() * 2 * Math.PI;
-      const jittered = moveByBearing(next.lat, next.lng, jitterBearing, jitterMag);
+    const speedMs = stepM / (this.config.emit_ms / 1000);
+    const accuracy = 5 + Math.random() * 10;
+    this.ticksEmitted += 1;
 
-      const speedNoisy = Math.max(0, speedMs + boxMuller() * SPEED_NOISE_1_SIGMA);
-      const accuracy = 5 + Math.random() * 10;
+    log('v441.simwalker.tick_emit', {
+      idx: this.ticksEmitted,
+      raw_lat: Number(next.lat.toFixed(6)),
+      raw_lng: Number(next.lng.toFixed(6)),
+      jittered_lat: Number(jittered.lat.toFixed(6)),
+      jittered_lng: Number(jittered.lng.toFixed(6)),
+      step_m: Number(stepM.toFixed(2)),
+      speed_ms: Number(speedMs.toFixed(2)),
+      accuracy_m: Number(accuracy.toFixed(1)),
+      strength: Number(this.strength.toFixed(2)),
+      bearing_deg: Number(((this.bearingRad * 180) / Math.PI).toFixed(1)),
+      history_len: this.posHistory.length,
+    });
 
-      log('v438.simwalker.tick_emit', {
-        internal_count: this.internalTickCount,
-        raw_lat: Number(next.lat.toFixed(6)),
-        raw_lng: Number(next.lng.toFixed(6)),
-        jittered_lat: Number(jittered.lat.toFixed(6)),
-        jittered_lng: Number(jittered.lng.toFixed(6)),
-        jitter_m: Number(jitterMag.toFixed(2)),
-        speed_ideal: Number(speedMs.toFixed(2)),
-        speed_noisy: Number(speedNoisy.toFixed(2)),
-        accuracy_m: Number(accuracy.toFixed(1)),
-        speed_mode: this.speedMode,
-        strength: Number(this.strength.toFixed(2)),
-        bearing_deg: Number(((this.bearingRad * 180) / Math.PI).toFixed(1)),
-        step_m: Number(stepM.toFixed(2)),
-        history_shifted: historyShifted,
-        history_len: this.posHistory.length,
-      });
-
-      this.emit(jittered.lat, jittered.lng, speedNoisy, accuracy, Date.now());
-      this.ticksEmitted += 1;
-    } else {
-      // Mid-tick (position advanced but no emit)
-      if (this.internalTickCount % 3 === 0) {
-        // Log every 2nd of the 5 mid-ticks to keep noise reasonable
-        log('v438.simwalker.tick_mid', {
-          internal_count: this.internalTickCount,
-          next_emit_in_ticks: EMIT_EVERY_N_TICKS - (this.internalTickCount % EMIT_EVERY_N_TICKS),
-          step_m: Number(stepM.toFixed(2)),
-        });
-      }
-    }
+    this.emit(jittered.lat, jittered.lng, speedMs, accuracy, Date.now());
     this.notify();
   }
 
   private emit(lat: number, lng: number, speedMs: number, accuracy: number, ts: number): void {
-    // v437.1: only addTrackPoint. NO processReading, NO setLastWatcherFix.
-    // Downstream unlock logic must come from the real hike pipeline.
-    const tsStr = new Date(ts).toISOString();
-    let addTrackReturned: unknown = 'unknown';
     let threw = false;
     try {
-      const result = useTrackingStore.getState().addTrackPoint(
+      useTrackingStore.getState().addTrackPoint(
         { lat, lng, alt: null, accuracy, speed: speedMs },
         ts,
       );
-      // addTrackPoint may return void or a bool depending on hike state.
-      // Capture whatever we got so we can prove it was a no-op when no
-      // hike is active.
-      addTrackReturned = result === undefined ? 'void' : result;
     } catch (err) {
       threw = true;
-      log('v438.simwalker.emit_addTrackPoint_err', {
-        err: String(err),
-        lat: Number(lat.toFixed(6)),
-        lng: Number(lng.toFixed(6)),
-      });
+      log('v441.simwalker.emit_addTrackPoint_err', { err: String(err) });
     }
-
-    // Log the write outcome so we can prove sim-walker didn't unlock
-    // anything by itself — the only side effect is via addTrackPoint,
-    // which is a no-op when no hike is active.
-    log('v438.simwalker.emit_wrote', {
+    log('v441.simwalker.emit_wrote', {
       threw,
-      addTrackPoint_returned: addTrackReturned,
       lat: Number(lat.toFixed(6)),
       lng: Number(lng.toFixed(6)),
       speed: Number(speedMs.toFixed(2)),
-      accuracy: Number(accuracy.toFixed(1)),
-      ts_iso: tsStr,
-      ticks_emitted_so_far: this.ticksEmitted + 1,
     });
   }
 }

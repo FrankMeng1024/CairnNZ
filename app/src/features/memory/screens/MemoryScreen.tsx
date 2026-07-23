@@ -940,6 +940,11 @@ export function MemoryScreen() {
 
             flyTokenRef.current += 1;
             setFlyToTarget({ center: [flyLng, flyLat], zoom, token: flyTokenRef.current });
+            // v440.1: fly-to via hierarchy panel counts as "map moved" —
+            // recenter icon should appear on the right so user can jump
+            // back to their real GPS. Same pattern as user pan/zoom.
+            setMapMoved(true);
+            log('v440.hierarchy_fly_set_mapmoved', { itemId, flyLat, flyLng });
             // v436: city tap moves the map → update currentCityId AND
             // currentCountryId. In country-layer, title IS the country, so
             // any city tapped is a child of it. This makes ↑ back to World
