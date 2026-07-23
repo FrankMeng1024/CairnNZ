@@ -725,56 +725,43 @@ export function MemoryScreen() {
               setHierarchyOpen(false);
               return;
             }
-            // v439.1 fix "close-reopen shows stale shanghai" + "2-stage flash":
-            //   1. If we already have a valid currentCityId from the last
-            //      city-tap, TRUST it. Fly may still be animating so
-            //      cameraCenterRef hasn't caught up yet — the tap intent
-            //      is more authoritative than the map's current position.
-            //   2. Only if no state exists (first-ever open, or after
-            //      clearing) do we call fetchDeepest.
-            //   3. Open panel BEFORE fetching so there's no 2-stage flash;
-            //      the panel component handles its own loading spinner.
+            // v441.1 fix "still shows KL after user manually pans to Shanghai":
+            //   Always compute green from the *current* map center via
+            //   fetchDeepest — the map center is the source of truth,
+            //   NOT the last city the user tapped.
+            //
+            //   To avoid the "2-stage flash" (panel opens showing loading,
+            //   then title/list appears), we FETCH FIRST, then open the
+            //   panel with the resolved state in a single setState batch.
             const myReqId = ++panelOpenRequestIdRef.current;
-            log('v439.hierarchy_open_tap', {
-              has_currentCity: hierarchyCurrentCityId !== null,
-              has_currentCountry: hierarchyCurrentCountryId !== null,
-              currentTitle: hierarchyTitleId,
-              cameraCenter: cameraCenterRef.current ? `${cameraCenterRef.current.lat.toFixed(4)},${cameraCenterRef.current.lng.toFixed(4)}` : null,
-            });
-
-            // Case A: we have a valid last-tapped city → trust it. No fetchDeepest.
-            if (hierarchyCurrentCityId && hierarchyCurrentCountryId) {
-              setHierarchyTitleId(hierarchyCurrentCountryId);
-              setHierarchyOpen(true);
-              log('v439.hierarchy_open_trust_state', {
-                city: hierarchyCurrentCityId,
-                country: hierarchyCurrentCountryId,
-              });
-              return;
-            }
-
-            // Case B: first open (no state) → fetch deepest.
             const anchor = cameraCenterRef.current ?? persistentCoord ?? { lat: 0, lng: 0 };
-            log('v439.hierarchy_open_fetch_deepest', { lat: anchor.lat, lng: anchor.lng });
+            log('v441.hierarchy_open_start', {
+              anchor_lat: Number(anchor.lat.toFixed(4)),
+              anchor_lng: Number(anchor.lng.toFixed(4)),
+              prev_city: hierarchyCurrentCityId,
+              prev_country: hierarchyCurrentCountryId,
+            });
             const { city, country } = await fetchDeepest(anchor.lat, anchor.lng);
             if (panelOpenRequestIdRef.current !== myReqId) {
-              log('v439.hierarchy_open_stale_drop', {});
+              log('v441.hierarchy_open_stale_drop', {});
               return;
             }
+            // Resolve state + open panel in one shot → no flash
             if (country) {
               setHierarchyTitleId(country.id);
               setHierarchyCurrentCityId(city?.id ?? null);
               setHierarchyCurrentCountryId(country.id);
+              log('v441.hierarchy_open_resolved', {
+                city: city?.id ?? null,
+                country: country.id,
+              });
             } else {
               setHierarchyTitleId('world');
               setHierarchyCurrentCityId(null);
               setHierarchyCurrentCountryId(null);
+              log('v441.hierarchy_open_ocean', {});
             }
             setHierarchyOpen(true);
-            log('v439.hierarchy_open_from_deepest', {
-              city_id: city?.id ?? null,
-              country_id: country?.id ?? null,
-            });
           }}
           activeOpacity={0.85}
         >
@@ -940,11 +927,18 @@ export function MemoryScreen() {
 
             flyTokenRef.current += 1;
             setFlyToTarget({ center: [flyLng, flyLat], zoom, token: flyTokenRef.current });
+            // v441.1: eagerly update cameraCenterRef to the fly target so
+            // that if user closes the panel and reopens immediately (before
+            // the map's onCameraChanged has fired), the reopen fetchDeepest
+            // sees the correct location. Real onCameraChanged will overwrite
+            // this later — either matching (fly succeeded) or diverging
+            // (user panned away, in which case that's the truth).
+            cameraCenterRef.current = { lat: flyLat, lng: flyLng };
             // v440.1: fly-to via hierarchy panel counts as "map moved" —
             // recenter icon should appear on the right so user can jump
             // back to their real GPS. Same pattern as user pan/zoom.
             setMapMoved(true);
-            log('v440.hierarchy_fly_set_mapmoved', { itemId, flyLat, flyLng });
+            log('v441.hierarchy_fly', { itemId, flyLat, flyLng });
             // v436: city tap moves the map → update currentCityId AND
             // currentCountryId. In country-layer, title IS the country, so
             // any city tapped is a child of it. This makes ↑ back to World
