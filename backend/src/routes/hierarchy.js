@@ -1,41 +1,30 @@
 /**
- * hierarchy.js — v434 (2-layer tree: World → Country → City)
+ * hierarchy.js — v436 (root-cause fix for attribution)
  *
- * Endpoints:
+ * Bugs fixed vs v434/v435:
+ *   1. USA showed as visited for every user — because USA bbox crosses
+ *      the antimeridian (Aleutians) → bbox_min_lng=-179 bbox_max_lng=+179,
+ *      i.e. "contains almost every longitude". Every point matched.
+ *   2. Indonesia showed as visited for a KL user — because IDN bbox
+ *      extends to 141°E,-11°S..6°N and KL(101.7,3.14) falls inside that
+ *      rectangle even though KL isn't in Indonesia.
+ *   3. Guangdong AND Shenzhen both lit — because Shenzhen sits inside
+ *      Guangdong's bbox, and the naive attribution counted both.
+ *   4. Jiangsu AND Shanghai both lit — same reason (Shanghai enclave
+ *      inside Jiangsu bbox rectangle).
  *
- *   GET /api/hierarchy/deepest?lat=..&lng=..
- *     Find deepest region containing the point. Returns:
- *     {
- *       city:    { id, name_en, bbox, country_id } | null,
- *       country: { id, name_en, bbox } | null,
- *     }
- *     - city = level-3 region whose geom contains (lat,lng), or null.
- *     - country = level-2 region containing the city, or null if no city.
- *     - Both null iff point is in open ocean.
+ * Root cause: bbox rectangle overlap. Fix: use ST_Contains(geom, POINT)
+ * for every attribution — real polygon boundaries, no rectangle noise.
  *
- *   GET /api/hierarchy/panel?title_id=..&here_city_id=..&here_country_id=..
- *     Returns the panel data. Contract:
- *     {
- *       title:  { id, name_en, level },        // level 0 (world) or 2 (country)
- *       parent: { id, name_en, level } | null, // null when title=world
- *       items:  [
- *         { id, name_en, state: 'marked'|'walked', bbox, is_here }
- *       ],
- *       locked_count: N
- *     }
- *     - title_id = 'world' → items = countries user visited; parent=null.
- *     - title_id = country id → items = level-3 children (cities/provinces)
- *       user visited under that country; parent = world.
- *     - is_here computed on server from here_city_id (country layer) or
- *       here_country_id (world layer).
- *     - locked_count = children of title NOT visited (attribution via bbox
- *       point-in-polygon on memory_points + markers).
+ * Attribution rule (deepest-child-only):
+ *   For each memory_point / marker, find the level-3 region whose
+ *   real geom contains the point, taking the smallest area if multiple.
+ *   That's the point's "home city". Its country_id gives the country.
+ *   Each point is attributed to EXACTLY ONE city and EXACTLY ONE country
+ *   — no double-counting.
  *
- * v434 changes:
- *   - Drop drill/continent/admin1-highlight logic
- *   - Delete /polygon endpoint (already gone in v433)
- *   - 2-layer only (level 0 and 2 for tree navigation; level 3 as children)
- *   - Never use 'continent' (level 1) rows in panel/deepest output
+ * World layer items = distinct home-countries of user's points/markers.
+ * Country layer items = distinct home-cities under that country.
  */
 const express = require('express');
 const pool = require('../config/db');
@@ -54,7 +43,6 @@ router.get('/deepest', async (req, res) => {
     return res.status(400).json({ error: 'lat and lng required' });
   }
   try {
-    // 1. Try to match a level-3 city/province via ST_Contains.
     let city = null;
     let country = null;
     try {
@@ -68,8 +56,6 @@ router.get('/deepest', async (req, res) => {
         [lng, lat]
       );
       if (rows.length > 0) {
-        // Prefer smallest-area match (handles enclaves like Shanghai vs Jiangsu,
-        // or Suzhou (new v434) vs Jiangsu).
         rows.sort((a, b) => a.area - b.area);
         const c = rows[0];
         city = {
@@ -80,12 +66,9 @@ router.get('/deepest', async (req, res) => {
         };
       }
     } catch (e) {
-      // Column missing or spatial error — treat as "no city match".
       if (e.code !== 'ER_BAD_FIELD_ERROR') throw e;
     }
 
-    // 2. Find the country (level=2). Prefer city.parent_id if we have one,
-    //    otherwise ST_Contains on level=2.
     if (city) {
       const [cRows] = await pool.query(
         `SELECT id, name_en, bbox_min_lng, bbox_min_lat, bbox_max_lng, bbox_max_lat
@@ -97,7 +80,6 @@ router.get('/deepest', async (req, res) => {
         country = { id: c.id, name_en: c.name_en, bbox: [c.bbox_min_lng, c.bbox_min_lat, c.bbox_max_lng, c.bbox_max_lat] };
       }
     } else {
-      // No city match — try country-level ST_Contains directly.
       try {
         const [rows] = await pool.query(
           `SELECT id, name_en, bbox_min_lng, bbox_min_lat, bbox_max_lng, bbox_max_lat
@@ -124,6 +106,83 @@ router.get('/deepest', async (req, res) => {
 });
 
 // -------------------------------------------------------------------
+// Helper — per user, compute the deepest-city + home-country for
+// every point + marker. Returns two Sets:
+//   { visitedCityIds, visitedCountryIds,
+//     markedCityIds,  markedCountryIds }
+//
+// One ST_Contains query per row is slow. We do it in a single query
+// with a lateral-join-ish approach: for each point, find the smallest
+// level-3 region containing it. That's 1 spatial-index-accelerated
+// query total (per point in the JOIN), then we group in JS.
+// -------------------------------------------------------------------
+async function computeUserAttribution(userId) {
+  // Query pattern: for each memory_point + marker of the user, find the
+  // level-3 region whose geom contains it, smallest area first.
+  //
+  // We select all matching (point_id, region_id, area) then keep the
+  // smallest-area region per point in JS. This is fast because:
+  //   - ST_Contains uses the SPATIAL INDEX on regions.geom
+  //   - Most points match 1 region (smallest area path taken instantly)
+  //   - JS pass is O(N) where N = matches, tiny in practice.
+  //
+  // NOTE we join on level=3 only. A point that doesn't fall in any
+  // level-3 region will be ignored — those are "in a country but not
+  // in any of our seeded cities". For v436 this is acceptable; the
+  // country layer just won't count them.
+
+  const [pointMatches] = await pool.query(
+    `SELECT mp.id AS pt_id, r.id AS region_id, r.parent_id AS country_id, ST_Area(r.geom) AS area
+       FROM memory_points mp
+       JOIN regions r
+         ON r.level = 3
+        AND ST_Contains(r.geom, ST_GeomFromText(CONCAT('POINT(', mp.lng, ' ', mp.lat, ')'), 4326, 'axis-order=long-lat'))
+      WHERE mp.user_id = ?`,
+    [userId]
+  );
+
+  const [markerMatches] = await pool.query(
+    `SELECT mk.id AS pt_id, r.id AS region_id, r.parent_id AS country_id, ST_Area(r.geom) AS area
+       FROM markers mk
+       JOIN regions r
+         ON r.level = 3
+        AND ST_Contains(r.geom, ST_GeomFromText(CONCAT('POINT(', mk.lng, ' ', mk.lat, ')'), 4326, 'axis-order=long-lat'))
+      WHERE mk.user_id = ?`,
+    [userId]
+  );
+
+  // Per point, keep the smallest-area region (deepest match).
+  function pickSmallest(matches) {
+    const byPt = new Map();
+    for (const m of matches) {
+      const cur = byPt.get(m.pt_id);
+      if (!cur || m.area < cur.area) byPt.set(m.pt_id, m);
+    }
+    return byPt;
+  }
+  const pointBest = pickSmallest(pointMatches);
+  const markerBest = pickSmallest(markerMatches);
+
+  const visitedCityIds = new Set();
+  const visitedCountryIds = new Set();
+  const markedCityIds = new Set();
+  const markedCountryIds = new Set();
+
+  for (const m of pointBest.values()) {
+    visitedCityIds.add(m.region_id);
+    visitedCountryIds.add(m.country_id);
+  }
+  for (const m of markerBest.values()) {
+    visitedCityIds.add(m.region_id);
+    visitedCountryIds.add(m.country_id);
+    markedCityIds.add(m.region_id);
+    markedCountryIds.add(m.country_id);
+  }
+
+  return { visitedCityIds, visitedCountryIds, markedCityIds, markedCountryIds };
+}
+
+// -------------------------------------------------------------------
 // GET /api/hierarchy/panel?title_id=..&here_city_id=..&here_country_id=..
 // -------------------------------------------------------------------
 router.get('/panel', async (req, res) => {
@@ -134,53 +193,36 @@ router.get('/panel', async (req, res) => {
   const userId = req.user.userId;
 
   try {
+    const attr = await computeUserAttribution(userId);
+
     if (titleId === 'world') {
-      // ================================================================
-      // World layer: items = countries user has any memory in
-      // ================================================================
-      // 1. Get user's memory_points + markers, group by country via bbox.
-      // 2. For attribution: for each point, find the deepest region (level=3
-      //    child of a country) whose bbox contains it → attribute to that
-      //    child's parent (country). Then union by country.
-      // 3. state = 'marked' if any marker exists in country's bbox, else 'walked'
-      // 4. is_here = (country.id === here_country_id)
-
-      // Fetch all memory_points bboxes for this user, then group per country
-      const [visitedCountries] = await pool.query(
-        `SELECT DISTINCT r.id, r.name_en, r.bbox_min_lng, r.bbox_min_lat, r.bbox_max_lng, r.bbox_max_lat
-           FROM regions r
-          WHERE r.level = 2
-            AND (
-              EXISTS (SELECT 1 FROM memory_points mp WHERE mp.user_id = ?
-                        AND mp.lng BETWEEN r.bbox_min_lng AND r.bbox_max_lng
-                        AND mp.lat BETWEEN r.bbox_min_lat AND r.bbox_max_lat)
-              OR EXISTS (SELECT 1 FROM markers mk WHERE mk.user_id = ?
-                        AND mk.lng BETWEEN r.bbox_min_lng AND r.bbox_max_lng
-                        AND mk.lat BETWEEN r.bbox_min_lat AND r.bbox_max_lat)
-            )`,
-        [userId, userId]
-      );
-
-      // Compute state per country (marked if any marker in bbox)
-      const items = [];
-      for (const c of visitedCountries) {
-        const [markerRows] = await pool.query(
-          `SELECT 1 FROM markers WHERE user_id = ?
-             AND lng BETWEEN ? AND ? AND lat BETWEEN ? AND ?
-             LIMIT 1`,
-          [userId, c.bbox_min_lng, c.bbox_max_lng, c.bbox_min_lat, c.bbox_max_lat]
+      // World layer: items = countries in visitedCountryIds
+      if (attr.visitedCountryIds.size === 0) {
+        // Fresh user
+        const [[{ total_countries }]] = await pool.query(
+          `SELECT COUNT(*) AS total_countries FROM regions WHERE level = 2`
         );
-        const state = markerRows.length > 0 ? 'marked' : 'walked';
-        items.push({
-          id: c.id,
-          name_en: c.name_en,
-          state,
-          bbox: [c.bbox_min_lng, c.bbox_min_lat, c.bbox_max_lng, c.bbox_max_lat],
-          is_here: c.id === hereCountryId,
+        return res.json({
+          title: { id: 'world', name_en: 'World', level: 0 },
+          parent: null,
+          items: [],
+          locked_count: total_countries,
         });
       }
+      const [countryRows] = await pool.query(
+        `SELECT id, name_en, bbox_min_lng, bbox_min_lat, bbox_max_lng, bbox_max_lat
+           FROM regions
+          WHERE level = 2 AND id IN (?)`,
+        [Array.from(attr.visitedCountryIds)]
+      );
+      const items = countryRows.map((c) => ({
+        id: c.id,
+        name_en: c.name_en,
+        state: attr.markedCountryIds.has(c.id) ? 'marked' : 'walked',
+        bbox: [c.bbox_min_lng, c.bbox_min_lat, c.bbox_max_lng, c.bbox_max_lat],
+        is_here: c.id === hereCountryId,
+      }));
 
-      // locked_count = total countries - visited count
       const [[{ total_countries }]] = await pool.query(
         `SELECT COUNT(*) AS total_countries FROM regions WHERE level = 2`
       );
@@ -194,12 +236,9 @@ router.get('/panel', async (req, res) => {
       });
     }
 
-    // ================================================================
-    // Country layer: items = level-3 children user has memory in
-    // ================================================================
+    // Country layer: items = children of titleId that user visited
     const [countryRows] = await pool.query(
-      `SELECT id, name_en, bbox_min_lng, bbox_min_lat, bbox_max_lng, bbox_max_lat
-         FROM regions WHERE id = ? AND level = 2`,
+      `SELECT id, name_en FROM regions WHERE id = ? AND level = 2`,
       [titleId]
     );
     if (countryRows.length === 0) {
@@ -207,42 +246,26 @@ router.get('/panel', async (req, res) => {
     }
     const country = countryRows[0];
 
-    // Fetch all level-3 children of this country
+    // All level-3 children of this country
     const [children] = await pool.query(
       `SELECT id, name_en, bbox_min_lng, bbox_min_lat, bbox_max_lng, bbox_max_lat
-         FROM regions WHERE parent_id = ? AND level = 3
-        ORDER BY name_en`,
+         FROM regions WHERE parent_id = ? AND level = 3`,
       [country.id]
     );
 
-    // For each child, check if user has memory (point or marker) in its bbox
-    const items = [];
-    for (const c of children) {
-      const [pointRows] = await pool.query(
-        `SELECT 1 FROM memory_points WHERE user_id = ?
-           AND lng BETWEEN ? AND ? AND lat BETWEEN ? AND ?
-           LIMIT 1`,
-        [userId, c.bbox_min_lng, c.bbox_max_lng, c.bbox_min_lat, c.bbox_max_lat]
-      );
-      const [markerRows] = await pool.query(
-        `SELECT 1 FROM markers WHERE user_id = ?
-           AND lng BETWEEN ? AND ? AND lat BETWEEN ? AND ?
-           LIMIT 1`,
-        [userId, c.bbox_min_lng, c.bbox_max_lng, c.bbox_min_lat, c.bbox_max_lat]
-      );
-      const hasPoint = pointRows.length > 0;
-      const hasMarker = markerRows.length > 0;
-      if (!hasPoint && !hasMarker) continue; // skip locked; will count into locked_count
-      const state = hasMarker ? 'marked' : 'walked';
-      items.push({
+    // Filter to children that the user actually visited (attribution)
+    const items = children
+      .filter((c) => attr.visitedCityIds.has(c.id))
+      .map((c) => ({
         id: c.id,
         name_en: c.name_en,
-        state,
+        state: attr.markedCityIds.has(c.id) ? 'marked' : 'walked',
         bbox: [c.bbox_min_lng, c.bbox_min_lat, c.bbox_max_lng, c.bbox_max_lat],
         is_here: c.id === hereCityId,
-      });
-    }
-    const locked_count = children.length - items.length;
+      }))
+      .sort((a, b) => a.name_en.localeCompare(b.name_en));
+
+    const locked_count = Math.max(0, children.length - items.length);
 
     return res.json({
       title: { id: country.id, name_en: country.name_en, level: 2 },

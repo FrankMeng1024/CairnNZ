@@ -912,10 +912,12 @@ export function MemoryScreen() {
 
             flyTokenRef.current += 1;
             setFlyToTarget({ center: [flyLng, flyLat], zoom, token: flyTokenRef.current });
-            // City tap = camera-changing action → update currentCityId +
-            // currentCountryId (country stays same since city is within it).
+            // v436: city tap moves the map → update currentCityId AND
+            // currentCountryId. In country-layer, title IS the country, so
+            // any city tapped is a child of it. This makes ↑ back to World
+            // correctly highlight the country the user just flew to.
             setHierarchyCurrentCityId(itemId);
-            // currentCountryId stays same — city is a child of current country.
+            setHierarchyCurrentCountryId(hierarchyTitleId === 'world' ? null : hierarchyTitleId);
           }}
           onGoUp={() => {
             log('v434.hierarchy_up', { from: hierarchyTitleId });
