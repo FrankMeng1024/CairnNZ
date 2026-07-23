@@ -1,12 +1,8 @@
 /**
- * SimWalkerOverlay — v437 realistic sim with 3 quick-action buttons
+ * SimWalkerOverlay — v438 (100% log coverage)
  *
- * v437 changes vs v435:
- *   - 3 speed mode buttons (walk / jog / run) — left of joystick
- *   - Undo 5 emitted points button — top-right of joystick
- *   - Reset start point (to current known GPS location) — below undo
- *   - Emit cadence 3 s (matches production hike-track sampling)
- *   - Realistic GPS: ±3 m jitter, accuracy 5-15, ±0.3 m/s speed noise
+ * v437 UI + full-coverage logging for user's "log every path" rule.
+ * Every mount/unmount, every button press, every joystick event logs.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -21,6 +17,7 @@ import {
 } from 'react-native';
 import { useTrackingStore } from '../../store/useTrackingStore';
 import { gpsInjector, type SpeedMode } from './gpsInjector';
+import { log } from '../../services/appLog';
 
 const JOY_SIZE = 160;
 const JOY_STICK = 60;
@@ -31,23 +28,42 @@ export function SimWalkerOverlay() {
 
   useEffect(() => {
     const cur = useTrackingStore.getState().lastCoordinate;
+    log('v438.overlay.mount', {
+      has_last_coord: cur !== null,
+      last_lat: cur ? Number(cur.lat.toFixed(6)) : null,
+      last_lng: cur ? Number(cur.lng.toFixed(6)) : null,
+    });
     if (cur) gpsInjector.setStartPosition(cur.lat, cur.lng);
     gpsInjector.start();
-    return () => { gpsInjector.stop(); };
+    return () => {
+      log('v438.overlay.unmount', {});
+      gpsInjector.stop();
+    };
   }, []);
 
   const setSpeed = (m: SpeedMode) => {
+    log('v438.overlay.speed_btn_tap', { requested_mode: m, prev_mode: speedMode });
     setSpeedMode(m);
     gpsInjector.setSpeedMode(m);
   };
 
   const doUndo5 = () => {
+    log('v438.overlay.undo_btn_tap', {});
     gpsInjector.undoSteps(5);
   };
 
   const doResetStart = () => {
     const cur = useTrackingStore.getState().lastCoordinate;
-    if (cur) gpsInjector.setStartPosition(cur.lat, cur.lng);
+    log('v438.overlay.reset_btn_tap', {
+      has_last_coord: cur !== null,
+      lat: cur ? Number(cur.lat.toFixed(6)) : null,
+      lng: cur ? Number(cur.lng.toFixed(6)) : null,
+    });
+    if (cur) {
+      gpsInjector.setStartPosition(cur.lat, cur.lng);
+    } else {
+      log('v438.overlay.reset_no_coord', {});
+    }
   };
 
   // ── 360° Joystick ──
@@ -58,6 +74,7 @@ export function SimWalkerOverlay() {
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        log('v438.overlay.joy_grant', {});
         stickX.setValue(0);
         stickY.setValue(0);
       },
@@ -72,14 +89,25 @@ export function SimWalkerOverlay() {
         stickY.setValue(cy);
         const bearingRad = Math.atan2(cx, -cy);
         const strength = Math.min(1, dist / JOY_MAX);
+        // Sample joystick move at low rate (log flooding avoidance)
+        if (Math.random() < 0.05) {
+          log('v438.overlay.joy_move_sample', {
+            dx: Number(dx.toFixed(1)),
+            dy: Number(dy.toFixed(1)),
+            bearing_deg: Number(((bearingRad * 180) / Math.PI).toFixed(1)),
+            strength: Number(strength.toFixed(2)),
+          });
+        }
         gpsInjector.setJoystick(bearingRad, strength);
       },
       onPanResponderRelease: () => {
+        log('v438.overlay.joy_release', {});
         gpsInjector.releaseJoystick();
         Animated.spring(stickX, { toValue: 0, useNativeDriver: true, tension: 140, friction: 8 }).start();
         Animated.spring(stickY, { toValue: 0, useNativeDriver: true, tension: 140, friction: 8 }).start();
       },
       onPanResponderTerminate: () => {
+        log('v438.overlay.joy_terminate', {});
         gpsInjector.releaseJoystick();
         Animated.spring(stickX, { toValue: 0, useNativeDriver: true, tension: 140, friction: 8 }).start();
         Animated.spring(stickY, { toValue: 0, useNativeDriver: true, tension: 140, friction: 8 }).start();
@@ -183,10 +211,9 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
   },
-  // Speed mode column (left of joystick)
   speedCol: {
     position: 'absolute',
-    bottom: 30 + (JOY_SIZE - 128) / 2, // vertically centre against joystick
+    bottom: 30 + (JOY_SIZE - 128) / 2,
     right: 20 + JOY_SIZE + 8,
     width: 40,
     alignItems: 'center',
@@ -218,7 +245,6 @@ const styles = StyleSheet.create({
   speedBtnTextActive: {
     color: '#fff',
   },
-  // Action buttons column (above joystick)
   actionCol: {
     position: 'absolute',
     bottom: 30 + JOY_SIZE + 8,

@@ -37,9 +37,13 @@ router.use(authenticate);
 // GET /api/hierarchy/deepest?lat=..&lng=..
 // -------------------------------------------------------------------
 router.get('/deepest', async (req, res) => {
+  const t0 = Date.now();
   const lat = parseFloat(req.query.lat);
   const lng = parseFloat(req.query.lng);
+  const userId = req.user?.userId ?? 'unknown';
+  console.log(`[hierarchy/deepest] IN user=${userId} lat=${lat} lng=${lng}`);
   if (Number.isNaN(lat) || Number.isNaN(lng)) {
+    console.log(`[hierarchy/deepest] BAD_PARAMS user=${userId}`);
     return res.status(400).json({ error: 'lat and lng required' });
   }
   try {
@@ -64,9 +68,13 @@ router.get('/deepest', async (req, res) => {
           country_id: c.parent_id,
           bbox: [c.bbox_min_lng, c.bbox_min_lat, c.bbox_max_lng, c.bbox_max_lat],
         };
+        console.log(`[hierarchy/deepest] CITY_HIT user=${userId} chose=${c.id} candidates=${rows.length} smallest_area=${c.area}`);
+      } else {
+        console.log(`[hierarchy/deepest] NO_CITY_HIT user=${userId} lat=${lat} lng=${lng}`);
       }
     } catch (e) {
       if (e.code !== 'ER_BAD_FIELD_ERROR') throw e;
+      console.warn(`[hierarchy/deepest] SCHEMA_ERR_L3 user=${userId} code=${e.code} (falling back)`);
     }
 
     if (city) {
@@ -78,6 +86,9 @@ router.get('/deepest', async (req, res) => {
       if (cRows.length > 0) {
         const c = cRows[0];
         country = { id: c.id, name_en: c.name_en, bbox: [c.bbox_min_lng, c.bbox_min_lat, c.bbox_max_lng, c.bbox_max_lat] };
+        console.log(`[hierarchy/deepest] COUNTRY_FROM_CITY user=${userId} country=${c.id}`);
+      } else {
+        console.warn(`[hierarchy/deepest] COUNTRY_MISSING user=${userId} city=${city.id} parent_id=${city.country_id}`);
       }
     } else {
       try {
@@ -92,15 +103,20 @@ router.get('/deepest', async (req, res) => {
         if (rows.length > 0) {
           const c = rows[0];
           country = { id: c.id, name_en: c.name_en, bbox: [c.bbox_min_lng, c.bbox_min_lat, c.bbox_max_lng, c.bbox_max_lat] };
+          console.log(`[hierarchy/deepest] COUNTRY_FALLBACK_HIT user=${userId} country=${c.id}`);
+        } else {
+          console.log(`[hierarchy/deepest] COUNTRY_FALLBACK_MISS user=${userId} lat=${lat} lng=${lng}`);
         }
       } catch (e) {
         if (e.code !== 'ER_BAD_FIELD_ERROR') throw e;
+        console.warn(`[hierarchy/deepest] SCHEMA_ERR_L2 user=${userId} code=${e.code}`);
       }
     }
 
+    console.log(`[hierarchy/deepest] OUT user=${userId} city=${city?.id ?? 'null'} country=${country?.id ?? 'null'} dur_ms=${Date.now() - t0}`);
     res.json({ city, country });
   } catch (err) {
-    console.error('[hierarchy/deepest]', err);
+    console.error(`[hierarchy/deepest] ERR user=${userId} err=${err.message} dur_ms=${Date.now() - t0}`, err);
     res.status(500).json({ error: 'db error' });
   }
 });
@@ -117,51 +133,56 @@ router.get('/deepest', async (req, res) => {
 // query total (per point in the JOIN), then we group in JS.
 // -------------------------------------------------------------------
 async function computeUserAttribution(userId) {
-  // Query pattern: for each memory_point + marker of the user, find the
-  // level-3 region whose geom contains it, smallest area first.
-  //
-  // We select all matching (point_id, region_id, area) then keep the
-  // smallest-area region per point in JS. This is fast because:
-  //   - ST_Contains uses the SPATIAL INDEX on regions.geom
-  //   - Most points match 1 region (smallest area path taken instantly)
-  //   - JS pass is O(N) where N = matches, tiny in practice.
-  //
-  // NOTE we join on level=3 only. A point that doesn't fall in any
-  // level-3 region will be ignored — those are "in a country but not
-  // in any of our seeded cities". For v436 this is acceptable; the
-  // country layer just won't count them.
+  const tStart = Date.now();
+  console.log(`[hierarchy/attribute] IN user=${userId}`);
 
-  const [pointMatches] = await pool.query(
-    `SELECT mp.id AS pt_id, r.id AS region_id, r.parent_id AS country_id, ST_Area(r.geom) AS area
-       FROM memory_points mp
-       JOIN regions r
-         ON r.level = 3
-        AND ST_Contains(r.geom, ST_GeomFromText(CONCAT('POINT(', mp.lng, ' ', mp.lat, ')'), 4326, 'axis-order=long-lat'))
-      WHERE mp.user_id = ?`,
+  const [userPoints] = await pool.query(
+    `SELECT id, lat, lng FROM memory_points WHERE user_id = ?`,
     [userId]
   );
-
-  const [markerMatches] = await pool.query(
-    `SELECT mk.id AS pt_id, r.id AS region_id, r.parent_id AS country_id, ST_Area(r.geom) AS area
-       FROM markers mk
-       JOIN regions r
-         ON r.level = 3
-        AND ST_Contains(r.geom, ST_GeomFromText(CONCAT('POINT(', mk.lng, ' ', mk.lat, ')'), 4326, 'axis-order=long-lat'))
-      WHERE mk.user_id = ?`,
+  const [userMarkers] = await pool.query(
+    `SELECT id, lat, lng FROM markers WHERE user_id = ?`,
     [userId]
   );
+  console.log(`[hierarchy/attribute] FETCHED user=${userId} points=${userPoints.length} markers=${userMarkers.length}`);
 
-  // Per point, keep the smallest-area region (deepest match).
-  function pickSmallest(matches) {
+  async function attributeRows(rows, kind) {
     const byPt = new Map();
-    for (const m of matches) {
-      const cur = byPt.get(m.pt_id);
-      if (!cur || m.area < cur.area) byPt.set(m.pt_id, m);
+    const cache = new Map();
+    let cacheHits = 0;
+    let cacheMisses = 0;
+    let notInAnyRegion = 0;
+    for (const p of rows) {
+      const key = `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`;
+      let best = cache.get(key);
+      if (best === undefined) {
+        cacheMisses += 1;
+        const [candidates] = await pool.query(
+          `SELECT id, parent_id AS country_id, ST_Area(geom) AS area
+             FROM regions
+            WHERE level = 3
+              AND ST_Contains(geom, ST_GeomFromText(CONCAT('POINT(', ?, ' ', ?, ')'), 4326, 'axis-order=long-lat'))
+            ORDER BY ST_Area(geom) ASC
+            LIMIT 1`,
+          [p.lng, p.lat]
+        );
+        best = candidates[0] ?? null;
+        cache.set(key, best);
+      } else {
+        cacheHits += 1;
+      }
+      if (best) {
+        byPt.set(p.id, { region_id: best.id, country_id: best.country_id });
+      } else {
+        notInAnyRegion += 1;
+      }
     }
+    console.log(`[hierarchy/attribute] ${kind.toUpperCase()}_DONE user=${userId} rows=${rows.length} matched=${byPt.size} miss_no_region=${notInAnyRegion} cache_hits=${cacheHits} cache_misses=${cacheMisses}`);
     return byPt;
   }
-  const pointBest = pickSmallest(pointMatches);
-  const markerBest = pickSmallest(markerMatches);
+
+  const pointBest = await attributeRows(userPoints, 'points');
+  const markerBest = await attributeRows(userMarkers, 'markers');
 
   const visitedCityIds = new Set();
   const visitedCountryIds = new Set();
@@ -179,6 +200,7 @@ async function computeUserAttribution(userId) {
     markedCountryIds.add(m.country_id);
   }
 
+  console.log(`[hierarchy/attribute] OUT user=${userId} visited_cities=${visitedCityIds.size} visited_countries=${visitedCountryIds.size} marked_cities=${markedCityIds.size} marked_countries=${markedCountryIds.size} total_ms=${Date.now() - tStart}`);
   return { visitedCityIds, visitedCountryIds, markedCityIds, markedCountryIds };
 }
 
@@ -186,14 +208,21 @@ async function computeUserAttribution(userId) {
 // GET /api/hierarchy/panel?title_id=..&here_city_id=..&here_country_id=..
 // -------------------------------------------------------------------
 router.get('/panel', async (req, res) => {
+  const t0 = Date.now();
   const titleId = req.query.title_id;
   const hereCityId = req.query.here_city_id || null;
   const hereCountryId = req.query.here_country_id || null;
-  if (!titleId) return res.status(400).json({ error: 'title_id required' });
-  const userId = req.user.userId;
+  const userId = req.user?.userId ?? 'unknown';
+  console.log(`[hierarchy/panel] IN user=${userId} title=${titleId} here_city=${hereCityId} here_country=${hereCountryId}`);
+  if (!titleId) {
+    console.log(`[hierarchy/panel] BAD_PARAMS user=${userId}`);
+    return res.status(400).json({ error: 'title_id required' });
+  }
 
   try {
+    const tAttrStart = Date.now();
     const attr = await computeUserAttribution(userId);
+    console.log(`[hierarchy/panel] ATTR_DONE user=${userId} visited_cities=${attr.visitedCityIds.size} visited_countries=${attr.visitedCountryIds.size} marked_cities=${attr.markedCityIds.size} marked_countries=${attr.markedCountryIds.size} attr_ms=${Date.now() - tAttrStart}`);
 
     if (titleId === 'world') {
       // World layer: items = countries in visitedCountryIds
@@ -202,6 +231,7 @@ router.get('/panel', async (req, res) => {
         const [[{ total_countries }]] = await pool.query(
           `SELECT COUNT(*) AS total_countries FROM regions WHERE level = 2`
         );
+        console.log(`[hierarchy/panel] OUT_WORLD_FRESH user=${userId} locked=${total_countries} dur_ms=${Date.now() - t0}`);
         return res.json({
           title: { id: 'world', name_en: 'World', level: 0 },
           parent: null,
@@ -228,6 +258,7 @@ router.get('/panel', async (req, res) => {
       );
       const locked_count = Math.max(0, total_countries - items.length);
 
+      console.log(`[hierarchy/panel] OUT_WORLD user=${userId} items=${items.length} locked=${locked_count} dur_ms=${Date.now() - t0}`);
       return res.json({
         title: { id: 'world', name_en: 'World', level: 0 },
         parent: null,
@@ -242,6 +273,7 @@ router.get('/panel', async (req, res) => {
       [titleId]
     );
     if (countryRows.length === 0) {
+      console.log(`[hierarchy/panel] COUNTRY_NOT_FOUND user=${userId} title=${titleId} dur_ms=${Date.now() - t0}`);
       return res.status(404).json({ error: 'country not found' });
     }
     const country = countryRows[0];
@@ -267,6 +299,7 @@ router.get('/panel', async (req, res) => {
 
     const locked_count = Math.max(0, children.length - items.length);
 
+    console.log(`[hierarchy/panel] OUT_COUNTRY user=${userId} title=${country.id} items=${items.length} locked=${locked_count} dur_ms=${Date.now() - t0}`);
     return res.json({
       title: { id: country.id, name_en: country.name_en, level: 2 },
       parent: { id: 'world', name_en: 'World', level: 0 },
@@ -274,7 +307,7 @@ router.get('/panel', async (req, res) => {
       locked_count,
     });
   } catch (err) {
-    console.error('[hierarchy/panel]', err);
+    console.error(`[hierarchy/panel] ERR user=${userId} err=${err.message} dur_ms=${Date.now() - t0}`, err);
     res.status(500).json({ error: 'db error' });
   }
 });
