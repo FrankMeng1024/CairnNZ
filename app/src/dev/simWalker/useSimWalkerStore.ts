@@ -28,19 +28,29 @@ interface SimWalkerState {
   /** Draggable overlay position (screen offset from bottom-right).
    *  Also in-memory only — no reason to persist a debug overlay position. */
   position: Position;
+  /**
+   * v442: the current sim-walker "start anchor" — where the ⟲ reset
+   * button will snap the sim to. MemoryMap / HikingMap read this and
+   * render a dashed circle around it so the user can see where they
+   * will jump back to. null when sim-walker isn't started.
+   */
+  startAnchor: { lat: number; lng: number } | null;
   toggle: () => void;
   setActive: (v: boolean) => void;
   setPosition: (p: Position) => void;
+  setStartAnchor: (a: { lat: number; lng: number } | null) => void;
   reset: () => void;
 }
 
-const DEFAULT_POSITION: Position = { x: 20, y: 20 }; // 20pt inset from bottom-right
+const DEFAULT_POSITION: Position = { x: 20, y: 20 };
 
 export const useSimWalkerStore = create<SimWalkerState>()((set) => ({
   active: false,
   position: DEFAULT_POSITION,
+  startAnchor: null,
   toggle: () => set((s) => ({ active: !s.active })),
   setActive: (active) => set({ active }),
   setPosition: (position) => set({ position }),
-  reset: () => set({ active: false, position: DEFAULT_POSITION }),
+  setStartAnchor: (startAnchor) => set({ startAnchor }),
+  reset: () => set({ active: false, position: DEFAULT_POSITION, startAnchor: null }),
 }));

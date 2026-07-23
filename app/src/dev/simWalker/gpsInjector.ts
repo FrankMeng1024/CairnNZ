@@ -267,21 +267,35 @@ class GpsInjector {
   }
 
   private emit(lat: number, lng: number, speedMs: number, accuracy: number, ts: number): void {
+    // v442: use the sim-walker dev-only API that bypasses gate 3
+    // (stationary suppression). Without this, sim-walker's small step_m
+    // (5m default) triggers stationary suppression when accuracy>=step_m,
+    // so only the first fix went through.
     let threw = false;
     try {
-      useTrackingStore.getState().addTrackPoint(
-        { lat, lng, alt: null, accuracy, speed: speedMs },
-        ts,
-      );
+      const st = useTrackingStore.getState() as any;
+      if (typeof st.__simwalkerAddTrackPoint === 'function') {
+        st.__simwalkerAddTrackPoint(
+          { lat, lng, alt: null, accuracy, speed: speedMs },
+          ts,
+        );
+      } else {
+        // Older bundle without the dev API — fall back to normal path.
+        useTrackingStore.getState().addTrackPoint(
+          { lat, lng, alt: null, accuracy, speed: speedMs },
+          ts,
+        );
+      }
     } catch (err) {
       threw = true;
-      log('v441.simwalker.emit_addTrackPoint_err', { err: String(err) });
+      log('v442.simwalker.emit_err', { err: String(err) });
     }
-    log('v441.simwalker.emit_wrote', {
+    log('v442.simwalker.emit_wrote', {
       threw,
       lat: Number(lat.toFixed(6)),
       lng: Number(lng.toFixed(6)),
       speed: Number(speedMs.toFixed(2)),
+      trackPoints_after: (useTrackingStore.getState() as any).trackPoints?.length ?? -1,
     });
   }
 }

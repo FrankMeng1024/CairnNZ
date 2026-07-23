@@ -17,11 +17,43 @@ import {
 } from 'react-native';
 import { useTrackingStore } from '../../store/useTrackingStore';
 import { gpsInjector, DEFAULT_STEP_CONFIG, type StepConfig } from './gpsInjector';
+import { useSimWalkerStore } from './useSimWalkerStore';
 import { log } from '../../services/appLog';
 
 const JOY_SIZE = 130;
 const JOY_STICK = 50;
 const JOY_MAX = 45;
+
+function haversineM(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const s1 = Math.sin(dLat / 2);
+  const s2 = Math.sin(dLng / 2);
+  const c = s1 * s1 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * s2 * s2;
+  return 2 * R * Math.atan2(Math.sqrt(c), Math.sqrt(1 - c));
+}
+
+function StartAnchorHint() {
+  const anchor = useSimWalkerStore((s) => s.startAnchor);
+  const [distM, setDistM] = useState(0);
+  useEffect(() => {
+    if (!anchor) return;
+    const tick = () => {
+      const cur = useTrackingStore.getState().lastCoordinate;
+      if (cur) setDistM(haversineM(anchor, cur));
+    };
+    tick();
+    const h = setInterval(tick, 500);
+    return () => clearInterval(h);
+  }, [anchor]);
+  if (!anchor) return null;
+  return (
+    <Text style={styles.anchorHint}>
+      起点距此 {distM < 1000 ? `${Math.round(distM)}m` : `${(distM/1000).toFixed(1)}km`}
+    </Text>
+  );
+}
 
 export function SimWalkerOverlay() {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -39,11 +71,15 @@ export function SimWalkerOverlay() {
       lat: cur ? Number(cur.lat.toFixed(6)) : null,
       lng: cur ? Number(cur.lng.toFixed(6)) : null,
     });
-    if (cur) gpsInjector.setStartPosition(cur.lat, cur.lng);
+    if (cur) {
+      gpsInjector.setStartPosition(cur.lat, cur.lng);
+      useSimWalkerStore.getState().setStartAnchor({ lat: cur.lat, lng: cur.lng });
+    }
     gpsInjector.start();
     return () => {
       log('v441.overlay.unmount', {});
       gpsInjector.stop();
+      useSimWalkerStore.getState().setStartAnchor(null);
     };
   }, []);
 
@@ -83,7 +119,10 @@ export function SimWalkerOverlay() {
       lat: cur ? Number(cur.lat.toFixed(6)) : null,
       lng: cur ? Number(cur.lng.toFixed(6)) : null,
     });
-    if (cur) gpsInjector.setStartPosition(cur.lat, cur.lng);
+    if (cur) {
+      gpsInjector.setStartPosition(cur.lat, cur.lng);
+      useSimWalkerStore.getState().setStartAnchor({ lat: cur.lat, lng: cur.lng });
+    }
   };
 
   // 360° joystick
@@ -156,6 +195,7 @@ export function SimWalkerOverlay() {
           />
           <Text style={styles.joyLabel}>拖动走 · {config.step_m}m/{Math.round(config.emit_ms/100)/10}s</Text>
         </View>
+        <StartAnchorHint />
       </View>
 
       {/* Settings modal */}
@@ -296,6 +336,17 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     fontWeight: '600',
+  },
+  anchorHint: {
+    marginTop: 8,
+    fontSize: 10,
+    color: '#333',
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    fontWeight: '600',
+    alignSelf: 'flex-start',
   },
   // Settings modal
   modalBackdrop: {

@@ -1265,6 +1265,91 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     set((s) => ({ markerIds: [...s.markerIds, markerId] }));
   },
 
+  /**
+   * v442: sim-walker dev-only track injection. Bypasses gate 3
+   * (stationary suppression) which was rejecting every step because
+   * step_m (5m) is smaller than the accuracy suppress radius (8-15m).
+   * Still runs gate 1 (teleport) and gate 4 (Kalman), so the visual
+   * track is smooth. Also updates lastCoordinate so the blue dot on
+   * the map follows the sim.
+   *
+   * Not exposed on the interface — sim-walker calls it via
+   * (getState() as any).__simwalkerAddTrackPoint(...).
+   */
+  __simwalkerAddTrackPoint: (coord: any, timestamp?: number) => {
+    set((s: any) => {
+      const acc = coord.accuracy ?? null;
+      const t = Date.now();
+      const rawPoint = { ...coord, t };
+
+      // Gate 1: teleport reject (safety) — only if a lastCoord exists
+      if (s.lastCoordinate && s.lastCoordinateTime) {
+        const dtS = (t - s.lastCoordinateTime) / 1000;
+        if (dtS > 0) {
+          const distM = haversineM(s.lastCoordinate, coord);
+          if (distM / dtS > TELEPORT_SPEED_MPS && distM > 30) {
+            return s;
+          }
+        }
+      }
+
+      // Gate 4: Kalman smooth
+      let smoothedLat = coord.lat;
+      let smoothedLng = coord.lng;
+      if (kalmanLat === null || kalmanLng === null) {
+        kalmanLat = kalmanInit(coord.lat, acc ?? 10, KALMAN_PROCESS_NOISE);
+        kalmanLng = kalmanInit(coord.lng, acc ?? 10, KALMAN_PROCESS_NOISE);
+      } else {
+        smoothedLat = kalmanUpdate(kalmanLat, coord.lat, acc ?? undefined);
+        smoothedLng = kalmanUpdate(kalmanLng, coord.lng, acc ?? undefined);
+      }
+      const smoothedPoint = {
+        lat: smoothedLat, lng: smoothedLng, alt: coord.alt,
+        accuracy: coord.accuracy, speed: coord.speed, t,
+      };
+
+      let addedDistance = 0;
+      if (s.lastCoordinate) {
+        addedDistance = haversineM(s.lastCoordinate, coord);
+        if (addedDistance > 200) addedDistance = 0;
+      }
+      const newAltHistory = [...s.altitudeHistory, coord.alt ?? null];
+      return {
+        trackPoints: [...s.trackPoints, rawPoint],
+        trackPointsSmoothed: [...s.trackPointsSmoothed, smoothedPoint],
+        trackPointsRaw: [...s.trackPointsRaw, rawPoint],
+        lastCoordinate: coord,
+        lastCoordinateTime: t,
+        lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
+        distanceM: s.distanceM + addedDistance,
+        elevationGainM: calculateElevationGain(newAltHistory),
+        altitudeHistory: newAltHistory,
+      };
+    });
+  },
+
+  /**
+   * v442: sim-walker undo — remove last N points from all track arrays.
+   * Dev-only. Not on interface.
+   */
+  __simwalkerRemoveLastN: (n: number): number => {
+    let removed = 0;
+    set((s: any) => {
+      const take = Math.min(n, s.trackPoints.length);
+      removed = take;
+      const trim = (arr: any[]) => arr.slice(0, Math.max(0, arr.length - take));
+      const newTrack = trim(s.trackPoints);
+      const lastRemaining = newTrack.length > 0 ? newTrack[newTrack.length - 1] : null;
+      return {
+        trackPoints: newTrack,
+        trackPointsSmoothed: trim(s.trackPointsSmoothed),
+        trackPointsRaw: trim(s.trackPointsRaw),
+        lastCoordinate: lastRemaining ? { lat: lastRemaining.lat, lng: lastRemaining.lng, alt: lastRemaining.alt, accuracy: lastRemaining.accuracy, speed: lastRemaining.speed } : s.lastCoordinate,
+      };
+    });
+    return removed;
+  },
+
   reset: () => {
     try { appStateSubscription?.remove(); } catch { /* no-op */ }
     appStateSubscription = null;
