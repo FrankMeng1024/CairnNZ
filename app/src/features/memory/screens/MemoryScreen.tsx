@@ -725,27 +725,55 @@ export function MemoryScreen() {
               setHierarchyOpen(false);
               return;
             }
-            // v434 panel-open: three-tier anchor fallback + race guard.
+            // v439.1 fix "close-reopen shows stale shanghai" + "2-stage flash":
+            //   1. If we already have a valid currentCityId from the last
+            //      city-tap, TRUST it. Fly may still be animating so
+            //      cameraCenterRef hasn't caught up yet — the tap intent
+            //      is more authoritative than the map's current position.
+            //   2. Only if no state exists (first-ever open, or after
+            //      clearing) do we call fetchDeepest.
+            //   3. Open panel BEFORE fetching so there's no 2-stage flash;
+            //      the panel component handles its own loading spinner.
             const myReqId = ++panelOpenRequestIdRef.current;
+            log('v439.hierarchy_open_tap', {
+              has_currentCity: hierarchyCurrentCityId !== null,
+              has_currentCountry: hierarchyCurrentCountryId !== null,
+              currentTitle: hierarchyTitleId,
+              cameraCenter: cameraCenterRef.current ? `${cameraCenterRef.current.lat.toFixed(4)},${cameraCenterRef.current.lng.toFixed(4)}` : null,
+            });
+
+            // Case A: we have a valid last-tapped city → trust it. No fetchDeepest.
+            if (hierarchyCurrentCityId && hierarchyCurrentCountryId) {
+              setHierarchyTitleId(hierarchyCurrentCountryId);
+              setHierarchyOpen(true);
+              log('v439.hierarchy_open_trust_state', {
+                city: hierarchyCurrentCityId,
+                country: hierarchyCurrentCountryId,
+              });
+              return;
+            }
+
+            // Case B: first open (no state) → fetch deepest.
             const anchor = cameraCenterRef.current ?? persistentCoord ?? { lat: 0, lng: 0 };
+            log('v439.hierarchy_open_fetch_deepest', { lat: anchor.lat, lng: anchor.lng });
             const { city, country } = await fetchDeepest(anchor.lat, anchor.lng);
-            // Drop stale response if user tapped again while we were waiting.
-            if (panelOpenRequestIdRef.current !== myReqId) return;
+            if (panelOpenRequestIdRef.current !== myReqId) {
+              log('v439.hierarchy_open_stale_drop', {});
+              return;
+            }
             if (country) {
               setHierarchyTitleId(country.id);
               setHierarchyCurrentCityId(city?.id ?? null);
               setHierarchyCurrentCountryId(country.id);
             } else {
-              // Open ocean / no country match — open at world layer.
               setHierarchyTitleId('world');
               setHierarchyCurrentCityId(null);
               setHierarchyCurrentCountryId(null);
             }
             setHierarchyOpen(true);
-            log('v434.hierarchy_open', {
+            log('v439.hierarchy_open_from_deepest', {
               city_id: city?.id ?? null,
               country_id: country?.id ?? null,
-              used_camera: cameraCenterRef.current !== null,
             });
           }}
           activeOpacity={0.85}
