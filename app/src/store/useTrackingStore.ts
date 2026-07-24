@@ -1282,29 +1282,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const t = Date.now();
       const rawPoint = { ...coord, t };
 
-      // Gate 1: teleport reject (safety) — only if a lastCoord exists
-      if (s.lastCoordinate && s.lastCoordinateTime) {
-        const dtS = (t - s.lastCoordinateTime) / 1000;
-        if (dtS > 0) {
-          const distM = haversineM(s.lastCoordinate, coord);
-          if (distM / dtS > TELEPORT_SPEED_MPS && distM > 30) {
-            return s;
-          }
-        }
-      }
+      // v447: NO gate 1 teleport check for sim-walker.
+      // Root cause of v445 "trackPoints stuck at 0":
+      // lastCoordinate was leftover from real GPS (Shanghai) — sim jumped
+      // to a distant start (KL etc) → distM/dtS >> TELEPORT_SPEED_MPS →
+      // return s → lastCoordinate never updated → gate stayed hit forever.
+      // sim-walker is dev-only and pre-jittered; no safety net needed.
 
-      // Gate 4: Kalman smooth
-      let smoothedLat = coord.lat;
-      let smoothedLng = coord.lng;
-      if (kalmanLat === null || kalmanLng === null) {
-        kalmanLat = kalmanInit(coord.lat, acc ?? 10, KALMAN_PROCESS_NOISE);
-        kalmanLng = kalmanInit(coord.lng, acc ?? 10, KALMAN_PROCESS_NOISE);
-      } else {
-        smoothedLat = kalmanUpdate(kalmanLat, coord.lat, acc ?? undefined);
-        smoothedLng = kalmanUpdate(kalmanLng, coord.lng, acc ?? undefined);
-      }
+      // v447: NO Kalman for sim-walker either. Position is already exact
+      // (5m step + 2m jitter). Kalman needs kalmanLat/kalmanLng module-
+      // level state that may have been dirtied by real GPS earlier.
       const smoothedPoint = {
-        lat: smoothedLat, lng: smoothedLng, alt: coord.alt,
+        lat: coord.lat, lng: coord.lng, alt: coord.alt,
         accuracy: coord.accuracy, speed: coord.speed, t,
       };
 
@@ -1313,7 +1302,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         addedDistance = haversineM(s.lastCoordinate, coord);
         if (addedDistance > 200) addedDistance = 0;
       }
-      const newAltHistory = [...s.altitudeHistory, coord.alt ?? null];
+      const newAltHistory = coord.alt !== null && coord.alt !== undefined
+        ? [...s.altitudeHistory, coord.alt]
+        : s.altitudeHistory;
       return {
         trackPoints: [...s.trackPoints, rawPoint],
         trackPointsSmoothed: [...s.trackPointsSmoothed, smoothedPoint],
@@ -1322,7 +1313,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         lastCoordinateTime: t,
         lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
         distanceM: s.distanceM + addedDistance,
-        elevationGainM: calculateElevationGain(newAltHistory),
+        elevationGainM: coord.alt !== null && coord.alt !== undefined
+          ? calculateElevationGain(newAltHistory)
+          : s.elevationGainM,
         altitudeHistory: newAltHistory,
       };
     });

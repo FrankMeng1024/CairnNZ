@@ -103,6 +103,7 @@ let PointAnnotation: any = null;
 let UserLocationComponent: any = null;
 let LineLayer: any = null;
 let ShapeSource: any = null;
+let CircleLayer: any = null;
 if (Platform.OS !== 'web') {
   try {
     const Mapbox = require('@rnmapbox/maps');
@@ -112,6 +113,7 @@ if (Platform.OS !== 'web') {
     UserLocationComponent = Mapbox.UserLocation;
     LineLayer = Mapbox.LineLayer;
     ShapeSource = Mapbox.ShapeSource;
+    CircleLayer = Mapbox.CircleLayer;
   } catch {
     // Mapbox native not available
   }
@@ -160,7 +162,7 @@ function CompassNeedle({ heading, size = 22 }: { heading: number | null; size?: 
 }
 
 // ── Map component (real Mapbox or fallback) ─────────────────────────────
-function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStart, userPos, instantCamera, followUser = true, onUserGesture, recenterImperativeRef }: {
+function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStart, userPos, instantCamera, followUser = true, onUserGesture, recenterImperativeRef, debugMode }: {
   markers: Marker[];
   // v78 #1: trackPoints carry an optional `t` (epoch ms) so we can split
   // the polyline at GPS-signal-loss gaps. When two consecutive points are
@@ -188,6 +190,12 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
   // v119: optional ref the parent fills with an imperative recenter()
   // function so the recenter button can flyTo the user's location even
   // when the cameraRef itself is private to HikingMap.
+  // v447: when true, skip Mapbox.UserLocation (native hardware GPS)
+  // and draw the blue dot from userPos ourselves. This is the ONLY way
+  // to make the puck follow sim-walker's synthetic position, because
+  // Mapbox.UserLocation is bound to CoreLocation at native level and
+  // ignores any coordinate prop we pass.
+  debugMode?: boolean;
   recenterImperativeRef?: React.MutableRefObject<(() => void) | null>;
 }) {
   const region = getCurrentRegion();
@@ -257,6 +265,33 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
   // auto-fly-to-puck animation that runs even when defaultSettings is
   // provided. Without this, "Resume" still flies in from globe view.
   const cameraRef = useRef<any>(null);
+  // v447: MapView ref so we can query current center via getCenter() for
+  // sim-walker's ⟲ button (which sets injector.currentPos to the map's
+  // viewport center — the "recenter to where I'm looking" gesture).
+  const mapViewRef = useRef<any>(null);
+
+  // v447: register a getter with mapCenterProvider so SimWalkerOverlay
+  // (which lives sibling-to-map and can't reach this ref directly) can
+  // pull the current viewport center on ⟲ tap.
+  useEffect(() => {
+    const getter = async () => {
+      try {
+        const m = mapViewRef.current;
+        if (!m || typeof m.getCenter !== 'function') return null;
+        const raw = m.getCenter();
+        const c = raw && typeof raw.then === 'function' ? await raw : raw;
+        if (Array.isArray(c) && c.length >= 2) return { lat: c[1], lng: c[0] };
+        if (c && typeof c.lat === 'number' && typeof c.lng === 'number') return { lat: c.lat, lng: c.lng };
+        return null;
+      } catch {
+        return null;
+      }
+    };
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { registerMapCenterGetter, unregisterMapCenterGetter } = require('../dev/simWalker/mapCenterProvider');
+    registerMapCenterGetter(getter);
+    return () => { unregisterMapCenterGetter(getter); };
+  }, []);
 
   // v119: expose an imperative recenter() to the parent so the recenter
   // button (rendered outside HikingMap) can flyTo the user's location
@@ -340,6 +375,7 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
   return (
     <View style={styles.mapBg}>
       <MapView
+        ref={mapViewRef}
         style={StyleSheet.absoluteFillObject}
         styleURL={getPrimaryMapStyle()}
         logoEnabled={false}
@@ -381,7 +417,26 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
             ? { centerCoordinate: [userPos.lng, userPos.lat], zoomLevel: 15 }
             : undefined}
         />
-        <UserLocationComponent visible={true} renderMode="normal" />
+        {/* v447: In debug mode, skip Mapbox.UserLocation (bound to
+             CoreLocation hardware, ignores our coord prop) and draw
+             the puck ourselves so it follows sim-walker's userPos. */}
+        {debugMode && userPos ? (
+          <ShapeSource
+            id="sim-walker-puck"
+            shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: [userPos.lng, userPos.lat] }, properties: {} } as any}
+          >
+            <CircleLayer
+              id="sim-walker-puck-halo"
+              style={{ circleRadius: 14, circleColor: '#1E88E5', circleOpacity: 0.25 }}
+            />
+            <CircleLayer
+              id="sim-walker-puck-dot"
+              style={{ circleRadius: 7, circleColor: '#1E88E5', circleStrokeWidth: 2, circleStrokeColor: '#ffffff' }}
+            />
+          </ShapeSource>
+        ) : (
+          <UserLocationComponent visible={true} renderMode="normal" />
+        )}
 
         {/* Track polyline — solid segments (good signal) */}
         {solidGeoJSON.features.length > 0 && (
@@ -500,6 +555,12 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
           // pointerEvents: 'auto' (the React Native default) — every
           // touch on this view is consumed and never reaches MapView.
         />
+      )}
+      {/* v447: dashed circle overlay marking the screen center. Only
+          visible in debug mode. This is the point the ⟲ button will
+          use as the new "current position" anchor when tapped. */}
+      {debugMode && (
+        <View pointerEvents="none" style={styles.debugCenterCircle} />
       )}
     </View>
   );
@@ -1762,6 +1823,7 @@ export function HikingScreen() {
           ? { lat: routePolyline[0].lat, lng: routePolyline[0].lng }
           : null}
         userPos={lastCoordinate ? { lat: lastCoordinate.lat, lng: lastCoordinate.lng } : null}
+        debugMode={debugMode}
         // Skip the globe → location fly-in whenever we already know
         // where the user is. This covers all the cases where the user
         // expects the map to "just be there":
@@ -2165,6 +2227,23 @@ const styles = StyleSheet.create({
 
   // Map
   mapBg: { flex: 1, backgroundColor: Colors.primaryBg, overflow: 'hidden' },
+  // v447: 60x60 dashed circle centered on the map viewport. Marks the
+  // point that ⟲ will teleport injector.currentPos to. Semi-transparent
+  // so it doesn't hide underlying map features. pointerEvents:'none' so
+  // it never blocks map pan/zoom gestures.
+  debugCenterCircle: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 60,
+    height: 60,
+    marginTop: -30,
+    marginLeft: -30,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(30,136,229,0.85)',
+  },
   topoRing: {
     position: 'absolute',
     borderWidth: 1.5,

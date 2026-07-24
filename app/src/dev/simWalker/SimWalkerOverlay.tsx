@@ -50,7 +50,7 @@ function StartAnchorHint() {
   if (!anchor) return null;
   return (
     <Text style={styles.anchorHint}>
-      起点距此 {distM < 1000 ? `${Math.round(distM)}m` : `${(distM/1000).toFixed(1)}km`}
+      已走 {distM < 1000 ? `${Math.round(distM)}m` : `${(distM/1000).toFixed(1)}km`}
     </Text>
   );
 }
@@ -112,16 +112,31 @@ export function SimWalkerOverlay() {
     gpsInjector.undoSteps();
   };
 
-  const doReset = () => {
-    const cur = useTrackingStore.getState().lastCoordinate;
-    log('v441.overlay.reset_tap', {
-      has_coord: cur !== null,
-      lat: cur ? Number(cur.lat.toFixed(6)) : null,
-      lng: cur ? Number(cur.lng.toFixed(6)) : null,
+  const doReset = async () => {
+    // v447: ⟲ 语义是"把地图中心当作新的当前位置"。
+    // Old semantics (回到 startAnchor) was wrong per user 2026-07-24.
+    // Query the current map viewport center via the provider registered
+    // by HikingScreen, then teleport injector.currentPos to it.
+    // Also clears lastCoordinate inside setStartPosition to defuse any
+    // teleport gates further downstream.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getCurrentMapCenter } = require('./mapCenterProvider');
+    const center = await getCurrentMapCenter();
+    log('v447.overlay.reset_tap', {
+      has_center: !!center,
+      lat: center ? Number(center.lat.toFixed(6)) : null,
+      lng: center ? Number(center.lng.toFixed(6)) : null,
     });
-    if (cur) {
-      gpsInjector.setStartPosition(cur.lat, cur.lng);
-      useSimWalkerStore.getState().setStartAnchor({ lat: cur.lat, lng: cur.lng });
+    if (center) {
+      gpsInjector.setStartPosition(center.lat, center.lng);
+      useSimWalkerStore.getState().setStartAnchor({ lat: center.lat, lng: center.lng });
+    } else {
+      // Fallback: if map isn't ready, fall back to lastCoordinate.
+      const cur = useTrackingStore.getState().lastCoordinate;
+      if (cur) {
+        gpsInjector.setStartPosition(cur.lat, cur.lng);
+        useSimWalkerStore.getState().setStartAnchor({ lat: cur.lat, lng: cur.lng });
+      }
     }
   };
 
@@ -181,7 +196,7 @@ export function SimWalkerOverlay() {
           </TouchableOpacity>
           <TouchableOpacity style={styles.btn} onPress={doReset} activeOpacity={0.7}>
             <Text style={styles.btnIcon}>⟲</Text>
-            <Text style={styles.btnLabel}>起点</Text>
+            <Text style={styles.btnLabel}>定位</Text>
           </TouchableOpacity>
         </View>
 

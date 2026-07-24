@@ -12,7 +12,7 @@
  * doesn't follow centerCoordinate prop updates after first mount.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
@@ -82,10 +82,49 @@ interface Props {
 const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12';
 const INITIAL_ZOOM = 16.5;
 
-export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onFogReady, strangerMarks, flyToTarget }: Props) {
+export type MemoryMapHandle = {
+  /**
+   * v447: Return the map's current viewport center. Handles the
+   * @rnmapbox/maps native API (async, returns [lng, lat]) and web
+   * adapter (mapbox-gl-js sync, returns {lng, lat}) uniformly.
+   * Returns null if map not ready.
+   */
+  getCurrentCenter: () => Promise<{ lat: number; lng: number } | null>;
+};
+
+export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
+  { centerLat, centerLng, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onFogReady, strangerMarks, flyToTarget },
+  ref,
+) {
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
   const mapViewRef = useRef<any>(null);
+
+  // v447: expose getCurrentCenter so parent can pull the true current
+  // map center at panel-open time. This is the reliable source, unlike
+  // onCameraChanged which never fired e.properties.center on native
+  // during a plain pan (root cause of v445 KL→Shanghai stale ref bug).
+  useImperativeHandle(ref, () => ({
+    getCurrentCenter: async () => {
+      try {
+        const m = mapViewRef.current;
+        if (!m) return null;
+        // Native: async, returns [lng, lat]. Web: sync, returns {lng, lat}.
+        const raw = m.getCenter ? m.getCenter() : null;
+        const c = raw && typeof raw.then === 'function' ? await raw : raw;
+        if (Array.isArray(c) && c.length >= 2 && typeof c[0] === 'number') {
+          return { lat: c[1], lng: c[0] };
+        }
+        if (c && typeof c.lat === 'number' && typeof c.lng === 'number') {
+          return { lat: c.lat, lng: c.lng };
+        }
+        return null;
+      } catch (err) {
+        log('v447.map.get_center_err', { err: String(err) });
+        return null;
+      }
+    },
+  }), []);
 
   // v302 N6: track whether the user has panned the map away from
   // the GPS-driven center. Hiking-style: don't auto-follow user
@@ -470,7 +509,7 @@ export function MemoryMap({ centerLat, centerLng, recenterToken = 0, onMapMoved,
           map renderer; pan/zoom signals bubble up via onMapMoved prop. */}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

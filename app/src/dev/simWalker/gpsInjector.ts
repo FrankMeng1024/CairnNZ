@@ -84,6 +84,16 @@ class GpsInjector {
     });
     this.currentPos = { lat, lng };
     this.posHistory = [];
+    // v447: also clear lastCoordinate in tracking store so gate 1
+    // (if re-enabled elsewhere) doesn't reject the first step from
+    // the new anchor. Belt-and-braces even after v447 gate removal.
+    try {
+      useTrackingStore.setState((s: any) => ({
+        ...s,
+        lastCoordinate: null,
+        lastCoordinateTime: null,
+      }));
+    } catch { /* ignore */ }
     this.notify();
   }
 

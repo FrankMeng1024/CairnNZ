@@ -29,7 +29,7 @@ import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStor
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
-import { MemoryMap } from '../components/MemoryMap';
+import { MemoryMap, type MemoryMapHandle } from '../components/MemoryMap';
 import { MemoryScopeToggle } from '../components/MemoryScopeToggle';
 import { MemoryFriendPickModal } from '../components/MemoryFriendPickModal';
 import { PaywallSheet } from '../components/PaywallSheet';
@@ -128,6 +128,12 @@ export function MemoryScreen() {
   // v427: track map camera center so hierarchy panel opens based on
   // where user is looking, not their physical GPS position.
   const cameraCenterRef = useRef<{ lat: number; lng: number } | null>(null);
+
+  // v447: imperative handle to MemoryMap so panel-open can pull the
+  // true current center from the map (not stale cameraCenterRef which
+  // only updates when onCameraChanged fires e.properties.center — a
+  // condition that never actually happens on native during plain pan).
+  const mapRef = useRef<MemoryMapHandle | null>(null);
 
   // v360: full UX loading state machine — replaces v359's simple 3s
   // hard timeout. Industry benchmark (Nielsen 10s attention limit,
@@ -646,6 +652,7 @@ export function MemoryScreen() {
           flash that v346-v351 had on every zoom gesture. */}
       {persistentCoord ? (
         <MemoryMap
+          ref={mapRef}
           centerLat={persistentCoord.lat}
           centerLng={persistentCoord.lng}
           recenterToken={recenterToken}
@@ -743,10 +750,26 @@ export function MemoryScreen() {
             //   then title/list appears), we FETCH FIRST, then open the
             //   panel with the resolved state in a single setState batch.
             const myReqId = ++panelOpenRequestIdRef.current;
-            const anchor = cameraCenterRef.current ?? persistentCoord ?? { lat: 0, lng: 0 };
-            log('v441.hierarchy_open_start', {
+            // v447: prefer live map center over stale cameraCenterRef.
+            // Root cause of v445 KL→Shanghai bug: onCameraChanged rarely
+            // populates e.properties.center on native during pan, so the
+            // ref stayed on the last hierarchy_fly target (KL) even after
+            // the user panned to Shanghai.
+            let liveCenter: { lat: number; lng: number } | null = null;
+            try {
+              liveCenter = (await mapRef.current?.getCurrentCenter?.()) ?? null;
+            } catch (err) {
+              log('v447.hierarchy_open_getcenter_err', { err: String(err) });
+            }
+            if (panelOpenRequestIdRef.current !== myReqId) {
+              log('v441.hierarchy_open_stale_drop', {});
+              return;
+            }
+            const anchor = liveCenter ?? cameraCenterRef.current ?? persistentCoord ?? { lat: 0, lng: 0 };
+            log('v447.hierarchy_open_start', {
               anchor_lat: Number(anchor.lat.toFixed(4)),
               anchor_lng: Number(anchor.lng.toFixed(4)),
+              source: liveCenter ? 'live' : cameraCenterRef.current ? 'ref' : 'coord',
               prev_city: hierarchyCurrentCityId,
               prev_country: hierarchyCurrentCountryId,
             });
