@@ -1280,7 +1280,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     set((s: any) => {
       const acc = coord.accuracy ?? null;
       const t = Date.now();
-      const rawPoint = { ...coord, t };
+      // v448: honour segmentBreak flag from sim-walker (⟲ relocate or
+      // ↶ undo). This mirror-tags the persisted point so the polyline
+      // splitter draws a gap instead of a straight line to the new
+      // anchor. Without this, the map shows a phantom line from the
+      // old position to wherever ⟲ dropped the puck.
+      const rawPoint: any = { ...coord, t };
+      if (coord.segmentBreak) rawPoint.segmentBreak = true;
 
       // v447: NO gate 1 teleport check for sim-walker.
       // Root cause of v445 "trackPoints stuck at 0":
@@ -1295,10 +1301,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const smoothedPoint = {
         lat: coord.lat, lng: coord.lng, alt: coord.alt,
         accuracy: coord.accuracy, speed: coord.speed, t,
+        ...(coord.segmentBreak ? { segmentBreak: true } : {}),
       };
 
+      // v448: after ⟲/↶, do NOT accumulate distance from the old
+      // position to the new anchor. Real distance resumes from the
+      // NEXT step (when segmentBreak=false again).
       let addedDistance = 0;
-      if (s.lastCoordinate) {
+      if (s.lastCoordinate && !coord.segmentBreak) {
         addedDistance = haversineM(s.lastCoordinate, coord);
         if (addedDistance > 200) addedDistance = 0;
       }
@@ -1333,11 +1343,24 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const trim = (arr: any[]) => arr.slice(0, Math.max(0, arr.length - take));
       const newTrack = trim(s.trackPoints);
       const lastRemaining = newTrack.length > 0 ? newTrack[newTrack.length - 1] : null;
+      // v448: recompute distanceM from the trimmed track so undo actually
+      // rewinds the counter. Sum haversineM between consecutive points,
+      // respecting the sim-walker 200m per-segment cap used on write.
+      let newDistanceM = 0;
+      for (let i = 1; i < newTrack.length; i++) {
+        const a = newTrack[i - 1];
+        const b = newTrack[i];
+        // Skip segment breaks — the polyline is discontinuous there.
+        if ((b as any).segmentBreak) continue;
+        const d = haversineM(a, b);
+        if (d <= 200) newDistanceM += d;
+      }
       return {
         trackPoints: newTrack,
         trackPointsSmoothed: trim(s.trackPointsSmoothed),
         trackPointsRaw: trim(s.trackPointsRaw),
         lastCoordinate: lastRemaining ? { lat: lastRemaining.lat, lng: lastRemaining.lng, alt: lastRemaining.alt, accuracy: lastRemaining.accuracy, speed: lastRemaining.speed } : s.lastCoordinate,
+        distanceM: newDistanceM,
       };
     });
     return removed;

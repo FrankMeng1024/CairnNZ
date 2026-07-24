@@ -75,6 +75,11 @@ class GpsInjector {
   private listeners = new Set<InjectorListener>();
   private posHistory: Array<{ lat: number; lng: number }> = [];
   private config: StepConfig = { ...DEFAULT_STEP_CONFIG };
+  // v448: consumed once by the next tick — signals that the emitted
+  // point should NOT be connected to the previous polyline. Used by
+  // setStartPosition (⟲) and undoSteps (↶) so the visual track resumes
+  // fresh from the new anchor instead of drawing a straight line to it.
+  private nextEmitDiscontinuous = false;
 
   setStartPosition(lat: number, lng: number): void {
     log('v441.simwalker.set_start', {
@@ -84,9 +89,11 @@ class GpsInjector {
     });
     this.currentPos = { lat, lng };
     this.posHistory = [];
-    // v447: also clear lastCoordinate in tracking store so gate 1
-    // (if re-enabled elsewhere) doesn't reject the first step from
-    // the new anchor. Belt-and-braces even after v447 gate removal.
+    // v448: next emit must be discontinuous — do NOT draw a line from
+    // wherever the user was to the new anchor. Also clear lastCoordinate
+    // so addedDistance is 0 for the first step (preventing a phantom
+    // distance jump). This flag is consumed once by the very next tick.
+    this.nextEmitDiscontinuous = true;
     try {
       useTrackingStore.setState((s: any) => ({
         ...s,
@@ -153,6 +160,10 @@ class GpsInjector {
       restored = this.posHistory.pop() ?? null;
     }
     if (restored) this.currentPos = restored;
+    // v448: after undo, do NOT draw a line from the new resume point
+    // to the last (removed) point. Set the discontinuity flag so the
+    // next emit gets segmentBreak=true.
+    this.nextEmitDiscontinuous = true;
 
     // Also rewind the tracking store so the visible track pulls back.
     let storeRemoved = 0;
@@ -287,13 +298,17 @@ class GpsInjector {
   private emit(lat: number, lng: number, speedMs: number, accuracy: number, ts: number): void {
     // v443/v444: use __simwalkerAddTrackPoint if available (bypasses
     // stationary suppression). If not, force-write via setState directly.
+    // v448: consume nextEmitDiscontinuous flag, pass to store so the
+    // point gets a segmentBreak marker that the polyline splitter uses.
+    const discontinue = this.nextEmitDiscontinuous;
+    this.nextEmitDiscontinuous = false;
     let path = 'unknown';
     let threw = false;
     try {
       const st = useTrackingStore.getState() as any;
       if (typeof st.__simwalkerAddTrackPoint === 'function') {
         st.__simwalkerAddTrackPoint(
-          { lat, lng, alt: null, accuracy, speed: speedMs },
+          { lat, lng, alt: null, accuracy, speed: speedMs, segmentBreak: discontinue },
           ts,
         );
         path = 'dev_api';
@@ -301,7 +316,7 @@ class GpsInjector {
         // v444 fallback: direct setState so sim-walker works even on
         // older bundles / partial rollout without the dev API.
         useTrackingStore.setState((s: any) => {
-          const p = { lat, lng, alt: null, accuracy, speed: speedMs, t: Date.now() };
+          const p = { lat, lng, alt: null, accuracy, speed: speedMs, t: Date.now(), segmentBreak: discontinue };
           return {
             trackPoints: [...(s.trackPoints || []), p],
             trackPointsSmoothed: [...(s.trackPointsSmoothed || []), p],
@@ -317,13 +332,16 @@ class GpsInjector {
       log('v444.simwalker.emit_err', { err: String(err) });
     }
     const trackLen = (useTrackingStore.getState() as any).trackPoints?.length ?? -1;
-    log('v444.simwalker.emit_wrote', {
+    const distNow = (useTrackingStore.getState() as any).distanceM ?? -1;
+    log('v448.simwalker.emit_wrote', {
       path,
       threw,
+      discontinue,
       lat: Number(lat.toFixed(6)),
       lng: Number(lng.toFixed(6)),
       speed: Number(speedMs.toFixed(2)),
       trackPoints_after: trackLen,
+      distanceM_after: Number(distNow.toFixed(2)),
     });
   }
 }

@@ -168,7 +168,10 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
   // the polyline at GPS-signal-loss gaps. When two consecutive points are
   // separated by more than GAP_THRESHOLD_MS in time, we render that
   // segment as a dashed "lost signal" line instead of a solid track.
-  trackPoints: Array<{ lat: number; lng: number; t?: number }>;
+  // v448: segmentBreak flag from sim-walker so ⟲/↶ can break the
+  // polyline cleanly instead of drawing a straight line to the new
+  // anchor. Only present on sim-walker-generated points.
+  trackPoints: Array<{ lat: number; lng: number; t?: number; segmentBreak?: boolean }>;
   onMarkerPress: (id: string) => void;
   showCompass?: boolean;
   // When a saved route is selected and the user isn't already at its
@@ -229,8 +232,17 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
         const p = trackPoints[i];
         const dt = (prev.t != null && p.t != null) ? (p.t - prev.t) : 0;
         const distM = haversineM({ lat: prev.lat, lng: prev.lng }, { lat: p.lat, lng: p.lng });
-        const isGap = dt > GAP_THRESHOLD_MS && distM > GAP_DIST_THRESHOLD_M;
-        if (isGap) {
+        // v448: sim-walker sets segmentBreak on the first tick after
+        // ⟲ (relocate) or ↶ (undo) so the polyline breaks cleanly at
+        // the new anchor instead of drawing a straight line to it.
+        const isSegmentBreak = (p as any).segmentBreak === true;
+        const isGap = !isSegmentBreak && dt > GAP_THRESHOLD_MS && distM > GAP_DIST_THRESHOLD_M;
+        if (isSegmentBreak) {
+          // Close the current segment, start a fresh one at the new
+          // point. No gap-dash rendering — just a clean break.
+          if (cur.coords.length >= 2) segs.push(cur);
+          cur = { coords: [[p.lng, p.lat]], gap: false };
+        } else if (isGap) {
           if (cur.coords.length >= 2) segs.push(cur);
           segs.push({ coords: [[prev.lng, prev.lat], [p.lng, p.lat]], gap: true });
           cur = { coords: [[p.lng, p.lat]], gap: false };
