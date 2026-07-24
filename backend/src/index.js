@@ -35,6 +35,8 @@ app.use(cors({
   origin: (origin, cb) => {
     // Allow requests with no origin (mobile apps, curl)
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    // v445 dev: allow any localhost port for Playwright web QA
+    if (/^https?:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
     cb(new Error(`CORS blocked: ${origin}`));
   },
   credentials: true,

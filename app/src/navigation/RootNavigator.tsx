@@ -88,6 +88,17 @@ export function RootNavigator() {
             const stores = (globalThis as unknown as { __cairnStores?: Record<string, unknown> }).__cairnStores ?? {};
             stores.navigationRef = navigationRef;
             stores.getCurrentRoute = () => navigationRef.isReady() ? navigationRef.getCurrentRoute()?.name : null;
+            // v446: expose settings + sim-walker stores for Playwright web QA.
+            // Lazy-require so production bundles that lock-tree-shake these
+            // can't accidentally include them.
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.useSettingsStore = require('../store/useSettingsStore').useSettingsStore;
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.useSimWalkerStore = require('../dev/simWalker/useSimWalkerStore').useSimWalkerStore;
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.gpsInjector = require('../dev/simWalker/gpsInjector').gpsInjector;
+            } catch { /* ignore */ }
             (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = stores;
           }
         } catch { /* ignore */ }

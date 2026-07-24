@@ -754,7 +754,38 @@ export function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Debug section — only visible when debug mode enabled (5-tap version to toggle) */}
+        {/* Debug section — v446: promoted to a first-class toggle (was 5-tap on version).
+            Debug Mode switch is always visible; child controls only show when ON. */}
+        <View style={{ marginTop: Spacing.xl }}>
+          <Text style={styles.sectionHeader}>DEBUG</Text>
+          <View
+            style={{
+              marginHorizontal: Spacing.base,
+              backgroundColor: '#fff',
+              paddingVertical: 14,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: Colors.textPrimary, fontSize: FontSize.body }}>
+                Debug Mode
+              </Text>
+              <Text style={{ fontSize: 11, color: Colors.textMuted, marginTop: 2 }}>
+                Enables sim-walker joystick + verbose telemetry.
+              </Text>
+            </View>
+            <Switch
+              testID="settings-debug-mode-toggle"
+              value={debugMode}
+              onValueChange={(v) => updateSetting('debugMode', v)}
+              trackColor={{ false: '#d5cdba', true: Colors.primary }}
+            />
+          </View>
+        </View>
+
         {debugMode && (
           <View style={{ marginTop: Spacing.xl }}>
             <Text style={styles.sectionHeader}>DEBUG</Text>
@@ -820,7 +851,7 @@ export function SettingsScreen() {
               fontSize: 11,
               color: Colors.textMuted,
             }}>
-              Tracks debug sessions and uploads them to your backend. Tap version below 5 times to disable.
+              Tracks debug sessions and uploads them to your backend.
             </Text>
           </View>
         )}
