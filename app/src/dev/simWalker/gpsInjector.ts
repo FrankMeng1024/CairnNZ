@@ -94,12 +94,25 @@ class GpsInjector {
     // so addedDistance is 0 for the first step (preventing a phantom
     // distance jump). This flag is consumed once by the very next tick.
     this.nextEmitDiscontinuous = true;
+    // v449: only touch lastCoordinate when tracking is actually active.
+    // SimWalkerOverlay mount ALSO calls setStartPosition (with the seed
+    // GPS position), and if we always write lastCoordinate here, that
+    // mount would inject a fake fix (accuracy=5) before the user even
+    // presses Start — polluting userPos/instantCamera checks and, worse,
+    // priming the teleport gate with fake state that would reject the
+    // first real GPS fix as "teleport" (distance > 30m + speed > threshold).
+    //
+    // When tracking IS active (user pressed ⟲ during a hike), we DO want
+    // the puck to jump immediately, so we update lastCoordinate here.
     try {
-      useTrackingStore.setState((s: any) => ({
-        ...s,
-        lastCoordinate: null,
-        lastCoordinateTime: null,
-      }));
+      const st = useTrackingStore.getState() as any;
+      if (st.status === 'active' || st.status === 'paused') {
+        useTrackingStore.setState((s: any) => ({
+          ...s,
+          lastCoordinate: { lat, lng, alt: null, accuracy: 5, speed: 0 },
+          lastCoordinateTime: Date.now(),
+        }));
+      }
     } catch { /* ignore */ }
     this.notify();
   }

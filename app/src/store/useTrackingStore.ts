@@ -675,6 +675,27 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // they tapped Stop, even if they only meant to check.
     {
       const pre = get();
+      // v449: sim-walker (debugMode + useSimWalkerStore.active) bypasses
+      // the too-short gate. Sim-walker data is dev-authored — user walked
+      // an intentional test path, refusing to save it as "too short"
+      // silently drops their work into a ghost DB row. Only real GPS
+      // sessions need the anti-stationary-noise guard.
+      //
+      // v449 subagent review fix: sim-walker's "on" flag lives on
+      // useSimWalkerStore.active (in-memory only, per its own file),
+      // NOT useSettingsStore. Prior v449 draft read the wrong store
+      // (undefined field), making bypass dead code.
+      let isSimWalkerActive = false;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useSettingsStore } = require('./useSettingsStore');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useSimWalkerStore } = require('../dev/simWalker/useSimWalkerStore');
+        const debug = useSettingsStore.getState().debugMode;
+        const swActive = useSimWalkerStore.getState().active;
+        isSimWalkerActive = !!(debug && swActive);
+      } catch { /* stores not loadable, treat as prod */ }
+
       // v198 too-short check: refuse if trackPoints<2 OR distanceM<20.
       // Original v118 design only guarded trackPoints<2, but a hiker who
       // taps Start, sits in place for a few minutes, and taps Stop will
@@ -684,20 +705,61 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // noise" from "actually walked".
       const tooShort =
         pre.status !== 'idle' &&
+        // v449: sim-walker bypass only applies if there IS at least 1
+        // point. If sim-walker is on but user never moved joystick,
+        // still discard as too-short (0-point save is worthless).
+        !(isSimWalkerActive && pre.trackPoints.length >= 1) &&
         (pre.trackPoints.length < 2 || pre.distanceM < 20);
+      // v449: emit structured log so we can diagnose too-short in
+      // production without relying on crashLogger.breadcrumb (which
+      // doesn't ship to aliyun debug_events_v2).
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { log } = require('../services/appLog');
+        log('v449.stop.too_short_check', {
+          tooShort,
+          pts: pre.trackPoints.length,
+          distanceM: Number(pre.distanceM.toFixed(2)),
+          remoteSessionId: pre.remoteSessionId,
+          isSimWalkerActive,
+          status: pre.status,
+        });
+      } catch { /* log module unavailable */ }
       if (tooShort) {
         crashLogger.breadcrumb(`session:stop:too-short pts=${pre.trackPoints.length} dist=${pre.distanceM.toFixed(1)}m — preserving session`);
         // v121 fix: ALWAYS delete the empty server row so it doesn't
         // appear in Activities as a 0km/0s ghost record. Whether the
         // user picks "Got it" (continue) or "End anyway" (discard),
         // the server-side row created by startSession() is meaningless.
-        // Clear the remoteSessionId locally so a subsequent stopTracking
-        // (after the user actually walks) falls through to the legacy
-        // POST /api/sessions path which will create a fresh row.
+        // v449: await the delete so a failing cleanup doesn't silently
+        // leave a shell. If it fails, keep remoteSessionId so a future
+        // stopTracking can retry — better than the fire-and-forget
+        // .catch(()=>{}) which permanently orphaned the row.
         if (pre.remoteSessionId) {
-          deleteRemoteSession(pre.remoteSessionId).catch(() => {});
+          // v449: deleteRemoteSession returns boolean, never throws
+          // (internal try/catch). Inspect the return value — don't rely
+          // on catch semantics that never fire.
+          const ok = await deleteRemoteSession(pre.remoteSessionId);
+          if (ok) {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { log } = require('../services/appLog');
+              log('v449.stop.shell_deleted', { remoteId: pre.remoteSessionId });
+            } catch { /* ignore */ }
+            set({ lastStopReason: 'too-short', remoteSessionId: null });
+          } else {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { log } = require('../services/appLog');
+              log('v449.stop.shell_delete_failed', { remoteId: pre.remoteSessionId });
+            } catch { /* ignore */ }
+            // Keep remoteSessionId so future stopTracking or SyncDaemon
+            // can retry deleting/using it. Better than orphaning.
+            set({ lastStopReason: 'too-short' });
+          }
+        } else {
+          set({ lastStopReason: 'too-short', remoteSessionId: null });
         }
-        set({ lastStopReason: 'too-short', remoteSessionId: null });
         return;
       }
     }
@@ -793,10 +855,30 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // so behavior is consistent whether stopTracking runs once or twice.
       // Don't save to local store; also skip legacy POST and finalize PATCH.
       // Clean up the server-side empty row if one was created.
-      if (s.trackPoints.length < 2 || s.distanceM < 20) {
+      // v449: sim-walker bypass — same reasoning as the pre-check gate.
+      // Fixed store reference: useSimWalkerStore.active is the real switch.
+      let isSimWalkerActive2 = false;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useSettingsStore } = require('./useSettingsStore');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useSimWalkerStore } = require('../dev/simWalker/useSimWalkerStore');
+        const debug = useSettingsStore.getState().debugMode;
+        const swActive = useSimWalkerStore.getState().active;
+        isSimWalkerActive2 = !!(debug && swActive);
+      } catch { /* ignore */ }
+      if (!(isSimWalkerActive2 && s.trackPoints.length >= 1) && (s.trackPoints.length < 2 || s.distanceM < 20)) {
         const remoteId = s.remoteSessionId;
         if (remoteId) {
-          deleteRemoteSession(remoteId).catch(() => {});
+          // v449: inspect boolean return (deleteRemoteSession never throws)
+          const ok = await deleteRemoteSession(remoteId);
+          if (!ok) {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { log } = require('../services/appLog');
+              log('v449.stop.shell_delete_failed_post', { remoteId });
+            } catch { /* ignore */ }
+          }
         }
         crashLogger.breadcrumb(`session:stop:too-short pts=${s.trackPoints.length} dist=${s.distanceM.toFixed(1)}m — discarded`);
         stopReason = 'too-short';
@@ -1355,6 +1437,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         const d = haversineM(a, b);
         if (d <= 200) newDistanceM += d;
       }
+      // v449: diag log so we can see undo's effect on save gates.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { log } = require('../services/appLog');
+        log('v449.simwalker.undo_recompute', {
+          take,
+          before_pts: s.trackPoints.length,
+          after_pts: newTrack.length,
+          before_dist: Number(s.distanceM.toFixed(2)),
+          after_dist: Number(newDistanceM.toFixed(2)),
+        });
+      } catch { /* ignore */ }
       return {
         trackPoints: newTrack,
         trackPointsSmoothed: trim(s.trackPointsSmoothed),

@@ -1829,7 +1829,7 @@ export function HikingScreen() {
     <View style={styles.container}>
       <HikingMap
         markers={markers}
-        trackPoints={(trackPointsSmoothed.length >= 2 ? trackPointsSmoothed : trackPoints).map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t }))}
+        trackPoints={(trackPointsSmoothed.length >= 2 ? trackPointsSmoothed : trackPoints).map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentBreak: (tp as any).segmentBreak }))}
         onMarkerPress={(id) => { setSelectedMarkerId(id); setUi('detail'); }}
         routeStart={routePolyline.length > 0
           ? { lat: routePolyline[0].lat, lng: routePolyline[0].lng }
