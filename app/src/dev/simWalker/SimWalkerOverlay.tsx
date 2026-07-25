@@ -80,6 +80,12 @@ export function SimWalkerOverlay() {
       log('v441.overlay.unmount', {});
       gpsInjector.stop();
       useSimWalkerStore.getState().setStartAnchor(null);
+      // O1: clear lastCoordinate on unmount so a stale sim-walker anchor
+      // doesn't poison the real-GPS teleport gate on the next hike. This
+      // is defense-in-depth — startTracking() already clears it too.
+      try {
+        useTrackingStore.setState({ lastCoordinate: null, lastCoordinateTime: null });
+      } catch { /* ignore */ }
     };
   }, []);
 

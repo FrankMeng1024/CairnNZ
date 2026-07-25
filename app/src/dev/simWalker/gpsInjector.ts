@@ -23,8 +23,11 @@ export interface StepConfig {
 }
 
 export const DEFAULT_STEP_CONFIG: StepConfig = {
-  step_m: 5,
-  emit_ms: 500,
+  // O1 real-walk defaults: 1.4m / 1200ms = 1.17 m/s (真实人步行 ≈ 5km/h).
+  // 之前 5m/500ms = 10m/s 是慢跑速度,数据看起来不像真 GPS。用户可通过
+  // ⚙ Settings 面板临时调 (测试用),不 persist 到 store。
+  step_m: 1.4,
+  emit_ms: 1200,
   undo_count: 10,
 };
 
@@ -43,7 +46,10 @@ export interface InjectorSnapshot {
 export type InjectorListener = (snapshot: InjectorSnapshot) => void;
 
 const EARTH_R_M = 6_378_137;
-const JITTER_M_1_SIGMA = 2;   // realistic GPS drift (small so it doesn't hide the path)
+// O1: 5m 一 sigma = 真机 GPS 水平精度 std,把 sim 数据的抖动结构做得更
+// 像真 GPS(之前 2m 太干净),数据入库后 snap-to-road / Kalman 后处理
+// 行为跟真机采集数据一致。
+const JITTER_M_1_SIGMA = 5;
 const HISTORY_SIZE = 50;
 
 function boxMuller(): number {
@@ -304,24 +310,32 @@ class GpsInjector {
     // without any discontinuity flag; polyline splitter treats them
     // exactly like real GPS. ⟲/↶ scenarios don't need visual breaks
     // per user 2026-07-25 clarification.
+    // O1: alt 从 null 改为合理默认值 (取 lastCoordinate.alt fallback 100m
+    // +/- 5m 随机漂移),让 sim 数据长得像真 GPS,不然 altitudeHistory 全 null,
+    // elevationGainM 永远 0 → hike detail 显示 "0m elevation" 明显不真。
+    const st0 = useTrackingStore.getState() as any;
+    const baseAlt = (st0.lastCoordinate && typeof st0.lastCoordinate.alt === 'number')
+      ? st0.lastCoordinate.alt
+      : 100;
+    const alt = baseAlt + (Math.random() - 0.5) * 10; // ±5m 漂移
     let path = 'unknown';
     let threw = false;
     try {
       const st = useTrackingStore.getState() as any;
       if (typeof st.__simwalkerAddTrackPoint === 'function') {
         st.__simwalkerAddTrackPoint(
-          { lat, lng, alt: null, accuracy, speed: speedMs },
+          { lat, lng, alt, accuracy, speed: speedMs },
           ts,
         );
         path = 'dev_api';
       } else {
         useTrackingStore.setState((s: any) => {
-          const p = { lat, lng, alt: null, accuracy, speed: speedMs, t: Date.now() };
+          const p = { lat, lng, alt, accuracy, speed: speedMs, t: Date.now() };
           return {
             trackPoints: [...(s.trackPoints || []), p],
             trackPointsSmoothed: [...(s.trackPointsSmoothed || []), p],
             trackPointsRaw: [...(s.trackPointsRaw || []), p],
-            lastCoordinate: { lat, lng, alt: null, accuracy, speed: speedMs },
+            lastCoordinate: { lat, lng, alt, accuracy, speed: speedMs },
             lastCoordinateTime: Date.now(),
           };
         });
