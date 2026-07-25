@@ -2,26 +2,31 @@
  * Icon — SVG icons via lucide-react-native.
  * metro.config.js overrides resolution to use CJS dist
  * instead of the ESM react-native field (which breaks Metro web).
+ * O1: cleaned 19 unused imports (BookOpen/Droplets/EyeOff/Footprints/
+ * GitBranch/House/LogOut/MessageCircle/Moon/PersonStanding/Phone/
+ * Search/Signal/SportShoe/ThumbsUp/Undo2/Unlock/Volume2/Zap). Metro
+ * doesn't tree-shake lucide-react-native CJS, so keeping unused
+ * imports means bundling ~50KB dead SVG per icon.
  */
 import React from 'react';
 import {
-  Mountain, PersonStanding, Map, Users, Settings2,
+  Mountain, Map, Users, Settings2,
   ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Play, Square, Flag,
-  TriangleAlert, Star, Navigation, Lock, Unlock,
+  TriangleAlert, Star, Navigation, Lock,
   Target, Timer, Heart, Zap, MapPin, Route,
   // Sprint 8
-  Droplets, X, Trash2, Navigation2, GitBranch,
+  Droplets, X, Trash2, Navigation2,
   Check, CircleCheck,
   // v284
   Scissors,
   // Sprint 9
-  LogIn, Eye, EyeOff, Mail, KeyRound, UserPlus,
+  LogIn, Eye, Mail, KeyRound, UserPlus,
   // Sprint 11
   Info, Send,
   // Sprint 12
-  BookOpen, Moon, Volume2, LogOut, User, ArrowUp, Save,
+  Moon, Volume2, LogOut, User, ArrowUp, Save,
   // Sprint 13
-  Globe, ThumbsUp,
+  Globe,
   // Sprint 19
   Compass,
   // Sprint 21
@@ -31,51 +36,45 @@ import {
   // Sprint 27
   PlayCircle,
   // Sprint 42+ (Phase 1-2)
-  Pause, Pencil, Undo2, TrendingUp, Phone, Signal, MessageCircle,
+  Pause, Pencil, TrendingUp, Phone,
   // Sprint 54
-  Search, Plus, Edit3,
+  Plus, Edit3,
   // v297 — pin-adjust zoom buttons
   Minus,
-  // Sprint 56 — activity icons
-  Footprints, SportShoe,
   // Sprint 57 — routes screen
   Milestone, Calendar,
   // v80 — voice memo
   Mic,
-  // v119 — hut marker (PlantSheet uses 'House' as the label)
-  House,
   // sort icon used in filter bars
   ArrowUpDown,
   // v424 — hierarchy popover on Memory tab (world/continent/country/city/district)
   Layers,
-  // O1 — pending sync banner + delete actions
+  // O1 — pending sync banner
   CloudOff,
 } from 'lucide-react-native';
 import { IconSize } from './tokens';
 
 const ICON_MAP = {
-  Mountain, PersonStanding, Map, Users, Settings2,
+  Mountain, Map, Users, Settings2,
   ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Play, Square, Flag,
-  TriangleAlert, Star, Navigation, Lock, Unlock,
+  TriangleAlert, Star, Navigation, Lock,
   Target, Timer, Heart, Zap, MapPin, Route,
-  Droplets, X, Trash2, Navigation2, GitBranch,
+  Droplets, X, Trash2, Navigation2,
   Check, CircleCheck,
   Scissors,
-  LogIn, Eye, EyeOff, Mail, KeyRound, UserPlus,
+  LogIn, Eye, Mail, KeyRound, UserPlus,
   Info, Send,
-  BookOpen, Moon, Volume2, LogOut, User, ArrowUp, Save,
-  Globe, ThumbsUp,
+  Moon, Volume2, LogOut, User, ArrowUp, Save,
+  Globe,
   Compass,
   Apple,
   RotateCcw, Download,
   PlayCircle,
-  Pause, Pencil, Undo2, TrendingUp, Phone, Signal, MessageCircle,
-  Search, Plus, Edit3,
+  Pause, Pencil, TrendingUp, Phone,
+  Plus, Edit3,
   Minus,
-  Footprints, SportShoe,
   Milestone, Calendar,
   Mic,
-  House,
   ArrowUpDown,
   Layers,
   CloudOff,

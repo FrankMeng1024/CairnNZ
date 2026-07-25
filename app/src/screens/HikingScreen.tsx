@@ -953,11 +953,13 @@ function MarkerDetailSheet({ marker, onClose, onDelete, lastCoordinate, onUpdate
 // stats (distance, time, elevation, point count) and lets them name it
 // before it's saved. Skipping the name uses the default "Hike — DD/MM/YYYY"
 // format so the Activities list always has a recognisable label.
+// O1: onSaveAsRoute prop removed — hike is an activity record, not a
+// route template. Route creation happens in RouteEditor from activity
+// detail, not inline at stop time.
 function StopSummarySheet({
   summary,
   onCancel,
   onConfirm,
-  onSaveAsRoute,
 }: {
   summary: {
     distanceM: number; durationS: number; elevationGainM: number;
@@ -966,7 +968,6 @@ function StopSummarySheet({
   };
   onCancel: () => void;
   onConfirm: (name: string) => void;
-  onSaveAsRoute?: (name: string) => void;
 }) {
   const [name, setName] = useState('');
   const insets = useSafeAreaInsets();
@@ -1080,15 +1081,9 @@ function StopSummarySheet({
             </TouchableOpacity>
           </View>
 
-          {/* Save as Route — only shown when a drawable path exists.
-              v120: when no path (trackPoints < 2) the button is hidden;
-              the redundant "no path recorded" amber banner was removed
-              per user feedback.
-              v450: "Save as Route" removed per user 2026-07-25 —
-              hike is an activity record, not a saved route template.
-              Route creation happens in RouteEditor from an activity
-              detail, not inline at stop time. Prop kept for backwards
-              compatibility with any caller that still supplies it. */}
+          {/* O1: Save-as-Route flow 完全移除 (v450 隐藏,O1 删除代码)。
+              Hike 是 activity 记录不是 route 模板。想创建 route 走
+              RouteEditor,从 activity detail 打开。 */}
         </Animated.View>
       </KeyboardAvoidingView>
     </Animated.View>
@@ -1161,18 +1156,8 @@ const stopSheetStyles = StyleSheet.create({
     paddingVertical: Spacing.md, borderRadius: Radius.button,
   },
   saveText: { fontSize: FontSize.body, fontWeight: '700', color: '#fff' },
-  saveRouteBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: Spacing.md, borderRadius: Radius.button,
-    borderWidth: 1.5, borderColor: Colors.primary,
-    backgroundColor: Colors.primaryBg,
-  },
-  saveRouteText: { fontSize: FontSize.body, fontWeight: '700', color: Colors.primary },
-  noPathNotice: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: Spacing.sm,
-  },
-  noPathText: { fontSize: FontSize.small, color: '#C8A030' },
+  // O1: removed saveRouteBtn/saveRouteText/noPathNotice/noPathText — dead
+  // styles from the deleted Save-as-Route flow.
 });
 
 // ── Main HikingScreen ──────────────────────────────────────────────────────
@@ -2154,46 +2139,7 @@ export function HikingScreen() {
             // else: 依赖 status === idle observer 回 selection 屏 +
             // TooShortSheet 提示 (line 1826 useEffect)
           }}
-          onSaveAsRoute={async (name) => {
-            // Snapshot trackPoints BEFORE stopTracking clears the store.
-            const ts = useTrackingStore.getState();
-            const points = ts.trackPoints.map(p => ({ lat: p.lat, lng: p.lng, alt: (p as any).alt ?? null }));
-            const distanceM = ts.distanceM;
-            const elevationGainM = ts.elevationGainM;
-            const date = new Date();
-            const dd = String(date.getDate()).padStart(2, '0');
-            const mm = String(date.getMonth() + 1).padStart(2, '0');
-            const yyyy = date.getFullYear();
-            const finalName = name.trim() || `Hike — ${dd}/${mm}/${yyyy}`;
-
-            stopTracking(name);
-            setStopSummary(null);
-
-            try {
-              const id = await useRouteStore.getState().addRoute({
-                name: finalName,
-                points,
-                waypoints: [],
-                distanceM,
-                elevationGainM,
-              });
-              if (id) {
-                // v126: reset stack so Back from RouteEditor lands on Routes list.
-                (nav as any).reset({
-                  index: 2,
-                  routes: [
-                    { name: 'Home' },
-                    { name: 'Routes', params: { initialTab: 'routes' } },
-                    { name: 'RouteEditor', params: { routeId: id } },
-                  ],
-                });
-              } else {
-                Alert.alert('Save failed', 'Server returned no ID. Check connection and try again.');
-              }
-            } catch (e: any) {
-              Alert.alert('Save failed', String(e?.message ?? e).slice(0, 120));
-            }
-          }}
+          // O1: removed onSaveAsRoute prop — hike is activity not template
         />
       )}
 

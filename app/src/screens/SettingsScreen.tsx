@@ -191,9 +191,7 @@ export function SettingsScreen() {
     updateSetting,
   } = settings;
 
-  // 5-tap version → toggle debug mode
-  const versionTapCount = useRef(0);
-  const versionTapTime = useRef(0);
+  // O1: 5-tap version secret backdoor removed — debugMode is a first-class Switch.
 
   // ── Change Password ─────────────────────────────────────────────────────
   const [showChangePw, setShowChangePw] = useState(false);
@@ -939,31 +937,9 @@ export function SettingsScreen() {
           Ngā mihi nui — thanks for using Cairn.
         </Text>
 
-        <TouchableOpacity
-          activeOpacity={0.6}
-          onPress={() => {
-            const now = Date.now();
-            if (now - versionTapTime.current > 1500) {
-              // Reset if tapping too slow
-              versionTapCount.current = 0;
-            }
-            versionTapTime.current = now;
-            versionTapCount.current += 1;
-            if (versionTapCount.current >= 5) {
-              versionTapCount.current = 0;
-              const next = !debugMode;
-              updateSetting('debugMode', next);
-              Alert.alert(
-                next ? 'Debug Mode ON' : 'Debug Mode OFF',
-                next
-                  ? 'Tracking sessions will record detailed logs. Open Debug screen via Settings → Debug section.'
-                  : 'Logs will not be recorded for new sessions.',
-              );
-            }
-          }}
-        >
-          <Text style={styles.version}>Cairn v0.1.0{debugMode ? ' · Debug ON' : ''}</Text>
-        </TouchableOpacity>
+        {/* O1: 5-tap version secret backdoor removed — debugMode is now
+            a first-class Switch in the DEBUG section above. */}
+        <Text style={styles.version}>Cairn v0.1.0{debugMode ? ' · Debug ON' : ''}</Text>
       </ScrollView>
     </SafeAreaView>
     </View>

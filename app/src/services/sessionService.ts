@@ -57,24 +57,9 @@ export interface RemoteSession {
   created_at: string;
 }
 
-/**
- * POST a completed session to the backend (legacy: all-in-one path).
- * Returns the remote session ID, or null on failure (caller continues with local only).
- */
-export async function syncSession(payload: SessionPayload): Promise<number | null> {
-  try {
-    const res = await authenticatedFetch('/api/sessions', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.session?.id ?? null;
-  } catch {
-    return null;
-  }
-}
+// O1: syncSession() removed — legacy all-in-one POST /api/sessions.
+// Backend endpoint removed (returns 404). Modern flow uses startSession()
+// → appendPoints() → saveHikeAtomic() (v412 atomic transaction).
 
 /**
  * Begin an active session — creates an empty row server-side, returns
