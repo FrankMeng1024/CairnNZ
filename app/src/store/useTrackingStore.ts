@@ -212,6 +212,24 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       sessionId: generateId(),
       remoteSessionId: null,
       startedAt,
+      // v450: reset pre-hike anchor state so any prior lastCoordinate
+      // (from sim-walker overlay ⟲ or a stale recenter action) does
+      // not poison the teleport gate. Without this reset, if the user
+      // panned/tapped ⟲ on the sim-walker overlay pre-hike, the fake
+      // anchor (accuracy=5, speed=0) would still be in lastCoordinate
+      // when real GPS starts — the first real fix could distance-jump
+      // far from the fake anchor, trip Gate 1 (teleport reject), and
+      // silently drop until lastCoordinate somehow refreshed.
+      lastCoordinate: null,
+      lastCoordinateTime: null,
+      lastFixTimestamp: null,
+      trackPoints: [],
+      trackPointsSmoothed: [],
+      trackPointsRaw: [],
+      distanceM: 0,
+      durationS: 0,
+      elevationGainM: 0,
+      altitudeHistory: [],
     });
 
     // Reset module-level state from any previous session
@@ -1360,15 +1378,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
    */
   __simwalkerAddTrackPoint: (coord: any, timestamp?: number) => {
     set((s: any) => {
-      const acc = coord.accuracy ?? null;
       const t = Date.now();
-      // v448: honour segmentBreak flag from sim-walker (⟲ relocate or
-      // ↶ undo). This mirror-tags the persisted point so the polyline
-      // splitter draws a gap instead of a straight line to the new
-      // anchor. Without this, the map shows a phantom line from the
-      // old position to wherever ⟲ dropped the puck.
-      const rawPoint: any = { ...coord, t };
-      if (coord.segmentBreak) rawPoint.segmentBreak = true;
+      // v450: strip segmentBreak — v448/v449 experimented with it,
+      // v450 removed on user request (undo/⟲ should NOT break line).
+      const { segmentBreak: _drop, ...cleanCoord } = coord;
+      const rawPoint = { ...cleanCoord, t };
 
       // v447: NO gate 1 teleport check for sim-walker.
       // Root cause of v445 "trackPoints stuck at 0":
@@ -1377,35 +1391,29 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // return s → lastCoordinate never updated → gate stayed hit forever.
       // sim-walker is dev-only and pre-jittered; no safety net needed.
 
-      // v447: NO Kalman for sim-walker either. Position is already exact
-      // (5m step + 2m jitter). Kalman needs kalmanLat/kalmanLng module-
-      // level state that may have been dirtied by real GPS earlier.
+      // v447: NO Kalman for sim-walker either. Position is already exact.
       const smoothedPoint = {
-        lat: coord.lat, lng: coord.lng, alt: coord.alt,
-        accuracy: coord.accuracy, speed: coord.speed, t,
-        ...(coord.segmentBreak ? { segmentBreak: true } : {}),
+        lat: cleanCoord.lat, lng: cleanCoord.lng, alt: cleanCoord.alt,
+        accuracy: cleanCoord.accuracy, speed: cleanCoord.speed, t,
       };
 
-      // v448: after ⟲/↶, do NOT accumulate distance from the old
-      // position to the new anchor. Real distance resumes from the
-      // NEXT step (when segmentBreak=false again).
       let addedDistance = 0;
-      if (s.lastCoordinate && !coord.segmentBreak) {
-        addedDistance = haversineM(s.lastCoordinate, coord);
+      if (s.lastCoordinate) {
+        addedDistance = haversineM(s.lastCoordinate, cleanCoord);
         if (addedDistance > 200) addedDistance = 0;
       }
-      const newAltHistory = coord.alt !== null && coord.alt !== undefined
-        ? [...s.altitudeHistory, coord.alt]
+      const newAltHistory = cleanCoord.alt !== null && cleanCoord.alt !== undefined
+        ? [...s.altitudeHistory, cleanCoord.alt]
         : s.altitudeHistory;
       return {
         trackPoints: [...s.trackPoints, rawPoint],
         trackPointsSmoothed: [...s.trackPointsSmoothed, smoothedPoint],
         trackPointsRaw: [...s.trackPointsRaw, rawPoint],
-        lastCoordinate: coord,
+        lastCoordinate: cleanCoord,
         lastCoordinateTime: t,
         lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
         distanceM: s.distanceM + addedDistance,
-        elevationGainM: coord.alt !== null && coord.alt !== undefined
+        elevationGainM: cleanCoord.alt !== null && cleanCoord.alt !== undefined
           ? calculateElevationGain(newAltHistory)
           : s.elevationGainM,
         altitudeHistory: newAltHistory,
@@ -1425,14 +1433,15 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const trim = (arr: any[]) => arr.slice(0, Math.max(0, arr.length - take));
       const newTrack = trim(s.trackPoints);
       const lastRemaining = newTrack.length > 0 ? newTrack[newTrack.length - 1] : null;
-      // v448: recompute distanceM from the trimmed track so undo actually
-      // rewinds the counter. Sum haversineM between consecutive points,
-      // respecting the sim-walker 200m per-segment cap used on write.
+      // v448/450: recompute distanceM from the trimmed track so undo
+      // actually rewinds the counter. Sum haversineM between
+      // consecutive points, respecting the sim-walker 200m per-segment
+      // cap used on write. (segmentBreak field no longer written but
+      // check preserved for historical data compatibility.)
       let newDistanceM = 0;
       for (let i = 1; i < newTrack.length; i++) {
         const a = newTrack[i - 1];
         const b = newTrack[i];
-        // Skip segment breaks — the polyline is discontinuous there.
         if ((b as any).segmentBreak) continue;
         const d = haversineM(a, b);
         if (d <= 200) newDistanceM += d;

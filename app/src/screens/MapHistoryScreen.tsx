@@ -317,12 +317,18 @@ function TrackPolyline({ session }: { session: TrackingSession }) {
   const color = session.activityMode === 'running' ? Colors.running : Colors.primary;
 
   if (pts.length < 2) {
-    // Too short to render a path. Distinguish "we got no fix at all"
-    // from "the activity ended before we could record more than one
-    // sample" — both are common for very short sessions.
-    const label = pts.length === 0
-      ? 'Activity too short to record path'
-      : 'Only one GPS sample — keep moving longer to record a path';
+    // v450: distinguish "still loading (points not yet fetched)" from
+    // "truly too short". Session store hydrates with trackPoints=[]
+    // then lazy-loads. If the session's stored distanceM > 0, we know
+    // it recorded a real path — just show a loading state instead of
+    // "too short" (which mislabels every not-yet-fetched hike).
+    const hasRecordedDistance = (session as any).distanceM > 0
+      || (session as any).distance_m > 0;
+    const label = hasRecordedDistance
+      ? 'Loading route…'
+      : pts.length === 0
+        ? 'Activity too short to record path'
+        : 'Only one GPS sample — keep moving longer to record a path';
     return (
       <View style={trackStyles.noGpsWrap}>
         <View style={[trackStyles.noGpsLine, { borderColor: color }]} />

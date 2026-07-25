@@ -76,7 +76,12 @@ function RecentRow({ onPress }: { onPress: (id: string) => void }) {
   }, [status]);
 
   // ── Live mode ──
-  if (status === 'tracking') {
+  // v450: only show "in progress" when there's actual tracked content.
+  // Previously, opening Hiking → tapping Start → tapping Back to Home
+  // would leave status='tracking' with 0 points and show a confusing
+  // "Hiking in progress · Resume" row with no info. Now: require at
+  // least some distance or duration before advertising an ongoing hike.
+  if (status === 'tracking' && (liveDistanceM > 0 || liveDurationS > 5)) {
     const isRun = liveActivityMode === 'running';
     const accent = isRun ? Colors.running : Colors.primary;
     const bg = isRun ? Colors.runningLight : Colors.primaryLight;
@@ -402,17 +407,27 @@ export function HomeScreen() {
           <Text style={styles.greeting}>{getGreeting(uiMode)}</Text>
         </View>
 
-        {/* v412: 离线未同步 hike pending 提示条 — 只在有 pending 时显示 */}
+        {/* v412: pending-sync banner — only when there are real pending
+             hikes. v450 (a) English copy — Cairn UI is English; the
+             pending banner was the last stray Chinese string. (b) filter
+             out zombie shell sessions (distanceM===0 && durationS===0):
+             those are startSession placeholders that never got real
+             points, they can't sync anything so they shouldn't count. */}
         {(() => {
-          const pendingCount = sessions.filter(
-            (s: any) => s.syncState === 'pending' || s.syncState === 'syncing'
-          ).length;
+          const pendingCount = sessions.filter((s: any) => {
+            const isPending = s.syncState === 'pending' || s.syncState === 'syncing';
+            if (!isPending) return false;
+            const hasContent = (s.distanceM ?? 0) > 0 || (s.durationS ?? 0) > 0;
+            return hasContent;
+          }).length;
           if (pendingCount === 0) return null;
           return (
             <View style={styles.pendingBanner}>
               <Icon name="CloudOff" size={14} color={Colors.textSecondary} strokeWidth={2} />
               <Text style={styles.pendingBannerText}>
-                {pendingCount} 条 hike 还没同步, 有网时会自动完成
+                {pendingCount === 1
+                  ? '1 hike pending sync — will complete when online'
+                  : `${pendingCount} hikes pending sync — will complete when online`}
               </Text>
             </View>
           );

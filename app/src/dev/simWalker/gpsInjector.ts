@@ -75,11 +75,6 @@ class GpsInjector {
   private listeners = new Set<InjectorListener>();
   private posHistory: Array<{ lat: number; lng: number }> = [];
   private config: StepConfig = { ...DEFAULT_STEP_CONFIG };
-  // v448: consumed once by the next tick — signals that the emitted
-  // point should NOT be connected to the previous polyline. Used by
-  // setStartPosition (⟲) and undoSteps (↶) so the visual track resumes
-  // fresh from the new anchor instead of drawing a straight line to it.
-  private nextEmitDiscontinuous = false;
 
   setStartPosition(lat: number, lng: number): void {
     log('v441.simwalker.set_start', {
@@ -89,30 +84,24 @@ class GpsInjector {
     });
     this.currentPos = { lat, lng };
     this.posHistory = [];
-    // v448: next emit must be discontinuous — do NOT draw a line from
-    // wherever the user was to the new anchor. Also clear lastCoordinate
-    // so addedDistance is 0 for the first step (preventing a phantom
-    // distance jump). This flag is consumed once by the very next tick.
-    this.nextEmitDiscontinuous = true;
-    // v449: only touch lastCoordinate when tracking is actually active.
-    // SimWalkerOverlay mount ALSO calls setStartPosition (with the seed
-    // GPS position), and if we always write lastCoordinate here, that
-    // mount would inject a fake fix (accuracy=5) before the user even
-    // presses Start — polluting userPos/instantCamera checks and, worse,
-    // priming the teleport gate with fake state that would reject the
-    // first real GPS fix as "teleport" (distance > 30m + speed > threshold).
-    //
-    // When tracking IS active (user pressed ⟲ during a hike), we DO want
-    // the puck to jump immediately, so we update lastCoordinate here.
+    // v450: no segmentBreak on ⟲ — user confirmed 2026-07-25 "定位是开始
+    // 用的,不会在走一半时用". Since ⟲ is only tapped before hike starts
+    // (or right at the first step), there is never an old polyline that
+    // needs breaking away from. Drop the discontinuity flag entirely.
+    // Also don't force distanceM=0 on next tick — the very first tick's
+    // addedDistance is naturally 0 since lastCoordinate matches the new
+    // anchor we just wrote.
+    // v450: write lastCoordinate unconditionally so the puck jumps to
+    // the new anchor immediately, regardless of hike status. User's ⟲
+    // is only pressed pre-start, so there's no teleport-gate concern.
+    // (v449's status check made ⟲ silently ineffective when status='idle',
+    //  which is exactly when the user uses it.)
     try {
-      const st = useTrackingStore.getState() as any;
-      if (st.status === 'active' || st.status === 'paused') {
-        useTrackingStore.setState((s: any) => ({
-          ...s,
-          lastCoordinate: { lat, lng, alt: null, accuracy: 5, speed: 0 },
-          lastCoordinateTime: Date.now(),
-        }));
-      }
+      useTrackingStore.setState((s: any) => ({
+        ...s,
+        lastCoordinate: { lat, lng, alt: null, accuracy: 5, speed: 0 },
+        lastCoordinateTime: Date.now(),
+      }));
     } catch { /* ignore */ }
     this.notify();
   }
@@ -173,10 +162,12 @@ class GpsInjector {
       restored = this.posHistory.pop() ?? null;
     }
     if (restored) this.currentPos = restored;
-    // v448: after undo, do NOT draw a line from the new resume point
-    // to the last (removed) point. Set the discontinuity flag so the
-    // next emit gets segmentBreak=true.
-    this.nextEmitDiscontinuous = true;
+    // v450: no segmentBreak on undo — user confirmed 2026-07-25 undo
+    // should visually pick up from where the trail was rewound to
+    // (which IS the restored point). Since undoSteps also trims the
+    // tracking store's trackPoints (via __simwalkerRemoveLastN), the
+    // polyline naturally resumes from the trimmed tail; no explicit
+    // break needed.
 
     // Also rewind the tracking store so the visible track pulls back.
     let storeRemoved = 0;
@@ -309,27 +300,23 @@ class GpsInjector {
   }
 
   private emit(lat: number, lng: number, speedMs: number, accuracy: number, ts: number): void {
-    // v443/v444: use __simwalkerAddTrackPoint if available (bypasses
-    // stationary suppression). If not, force-write via setState directly.
-    // v448: consume nextEmitDiscontinuous flag, pass to store so the
-    // point gets a segmentBreak marker that the polyline splitter uses.
-    const discontinue = this.nextEmitDiscontinuous;
-    this.nextEmitDiscontinuous = false;
+    // v450: segmentBreak removed. sim-walker points now write to store
+    // without any discontinuity flag; polyline splitter treats them
+    // exactly like real GPS. ⟲/↶ scenarios don't need visual breaks
+    // per user 2026-07-25 clarification.
     let path = 'unknown';
     let threw = false;
     try {
       const st = useTrackingStore.getState() as any;
       if (typeof st.__simwalkerAddTrackPoint === 'function') {
         st.__simwalkerAddTrackPoint(
-          { lat, lng, alt: null, accuracy, speed: speedMs, segmentBreak: discontinue },
+          { lat, lng, alt: null, accuracy, speed: speedMs },
           ts,
         );
         path = 'dev_api';
       } else {
-        // v444 fallback: direct setState so sim-walker works even on
-        // older bundles / partial rollout without the dev API.
         useTrackingStore.setState((s: any) => {
-          const p = { lat, lng, alt: null, accuracy, speed: speedMs, t: Date.now(), segmentBreak: discontinue };
+          const p = { lat, lng, alt: null, accuracy, speed: speedMs, t: Date.now() };
           return {
             trackPoints: [...(s.trackPoints || []), p],
             trackPointsSmoothed: [...(s.trackPointsSmoothed || []), p],
@@ -346,10 +333,9 @@ class GpsInjector {
     }
     const trackLen = (useTrackingStore.getState() as any).trackPoints?.length ?? -1;
     const distNow = (useTrackingStore.getState() as any).distanceM ?? -1;
-    log('v448.simwalker.emit_wrote', {
+    log('v450.simwalker.emit_wrote', {
       path,
       threw,
-      discontinue,
       lat: Number(lat.toFixed(6)),
       lng: Number(lng.toFixed(6)),
       speed: Number(speedMs.toFixed(2)),

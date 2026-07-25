@@ -1083,17 +1083,12 @@ function StopSummarySheet({
           {/* Save as Route — only shown when a drawable path exists.
               v120: when no path (trackPoints < 2) the button is hidden;
               the redundant "no path recorded" amber banner was removed
-              per user feedback. */}
-          {onSaveAsRoute && summary.trackPoints.length >= 2 && (
-            <TouchableOpacity
-              style={stopSheetStyles.saveRouteBtn}
-              onPress={() => dismiss(() => onSaveAsRoute(name))}
-              activeOpacity={0.85}
-            >
-              <Icon name="Route" size={14} color={Colors.primary} strokeWidth={2} />
-              <Text style={stopSheetStyles.saveRouteText}>Save as Route</Text>
-            </TouchableOpacity>
-          )}
+              per user feedback.
+              v450: "Save as Route" removed per user 2026-07-25 —
+              hike is an activity record, not a saved route template.
+              Route creation happens in RouteEditor from an activity
+              detail, not inline at stop time. Prop kept for backwards
+              compatibility with any caller that still supplies it. */}
         </Animated.View>
       </KeyboardAvoidingView>
     </Animated.View>
