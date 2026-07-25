@@ -713,7 +713,7 @@ export function SettingsScreen() {
             }}
           >
             <Text style={{ fontSize: FontSize.body, color: Colors.textPrimary }}>Clear uploaded hike data</Text>
-            <Icon name="Trash" size={IconSize.sm} color={Colors.textMuted} strokeWidth={2} />
+            <Icon name="Trash2" size={IconSize.sm} color={Colors.textMuted} strokeWidth={2} />
           </TouchableOpacity>
           <TouchableOpacity
             style={{
@@ -750,7 +750,7 @@ export function SettingsScreen() {
             }}
           >
             <Text style={{ fontSize: FontSize.body, color: '#c0392b' }}>Clear ALL hike data (danger)</Text>
-            <Icon name="Trash" size={IconSize.sm} color="#c0392b" strokeWidth={2} />
+            <Icon name="Trash2" size={IconSize.sm} color="#c0392b" strokeWidth={2} />
           </TouchableOpacity>
         </View>
 

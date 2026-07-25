@@ -48,6 +48,8 @@ import {
   ArrowUpDown,
   // v424 — hierarchy popover on Memory tab (world/continent/country/city/district)
   Layers,
+  // O1 — pending sync banner + delete actions
+  CloudOff,
 } from 'lucide-react-native';
 import { IconSize } from './tokens';
 
@@ -76,6 +78,7 @@ const ICON_MAP = {
   House,
   ArrowUpDown,
   Layers,
+  CloudOff,
 } as const;
 
 export type IconName = keyof typeof ICON_MAP;

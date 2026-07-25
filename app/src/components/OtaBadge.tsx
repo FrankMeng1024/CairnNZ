@@ -30,7 +30,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // pill says "v421 · Up to date" the user knows v421's changes are live.
 //
 // Full version history archived at: docs/OTA_CHANGELOG.md
-export const OTA_VERSION = 450;
+// O1: switch from numeric v451+ to O-series. Users see "O1 · Up to date"
+// on the OtaBadge. Future OTA versions increment as O2, O3, ...
+export const OTA_VERSION = 'O1';
 
 
 type OtaState =
@@ -299,7 +301,7 @@ export function OtaBadge({ inline = false, idleHidden = false }: Props) {
           ) : (
             <View style={[styles.dot, { backgroundColor: dotColor }]} />
           )}
-          <Text style={styles.label}>{`v${OTA_VERSION} · ${label}`}</Text>
+          <Text style={styles.label}>{`${OTA_VERSION} · ${label}`}</Text>
         </TouchableOpacity>
       </Animated.View>
 

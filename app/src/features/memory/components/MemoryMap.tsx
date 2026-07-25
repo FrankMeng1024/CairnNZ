@@ -18,7 +18,9 @@ import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { MemoryColors } from '../config/memoryConfig';
 import { FogLayer } from './FogLayer';
-import { MemoryFogBurstOverlay } from './MemoryFogBurstOverlay';
+// O1: MemoryFogBurstOverlay deleted (v303 Skia burst overlay, replaced by
+// v346 turf.buffer native fog corridor. Skia layer was pure visual sugar,
+// removing it saves ~140 lines + one continuous animation loop.)
 import { CairnPinsLayer } from './CairnPinsLayer';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { log } from '../../../services/appLog';
@@ -499,10 +501,8 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
         )}
       </MapView>
-      {/* v303 OTA: Skia 解锁扩散动画 overlay。在 MapView 之上 absoluteFill。
-          数据从 useMemoryStore.recentUnlocks 来,native fog 7/1 上线后保留
-          本组件不变(burst 永远纯 JS 视觉层)。 */}
-      <MemoryFogBurstOverlay mapViewRef={mapViewRef} />
+      {/* O1: MemoryFogBurstOverlay removed — v303 Skia burst is dead layer
+          after v346 native fog. Users don't miss it. Deletes ~140 lines. */}
       {/* v334: removed MemoryMap's internal Recenter pill — MemoryScreen
           now owns this UI (decision E: "icon like Hiking, only after I
           move the map, taps it to go back"). MemoryMap stays as a pure

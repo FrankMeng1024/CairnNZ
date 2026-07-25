@@ -87,7 +87,12 @@ export function RootNavigator() {
           if (Platform.OS === 'web' && typeof globalThis !== 'undefined') {
             const stores = (globalThis as unknown as { __cairnStores?: Record<string, unknown> }).__cairnStores ?? {};
             stores.navigationRef = navigationRef;
-            stores.getCurrentRoute = () => navigationRef.isReady() ? navigationRef.getCurrentRoute()?.name : null;
+            stores.getCurrentRoute = () => {
+              const ref: any = navigationRef;
+              if (!ref || typeof ref.isReady !== 'function' || !ref.isReady()) return null;
+              const r = ref.getCurrentRoute();
+              return r ? r.name : null;
+            };
             // v446: expose settings + sim-walker stores for Playwright web QA.
             // Lazy-require so production bundles that lock-tree-shake these
             // can't accidentally include them.

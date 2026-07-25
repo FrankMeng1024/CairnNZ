@@ -21,13 +21,16 @@
 import { useEffect, useRef } from 'react';
 import { AppState, InteractionManager } from 'react-native';
 import * as Location from 'expo-location';
-import { processReading, performInitialRevealIfNeeded, resetUnlockEngineForUser } from '../services/unlockEngine';
+// O1: unlockEngine deleted — memory unlock now only via flushHikingToMemory + sim-walker
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useAppStore } from '../../../store/useAppStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { useTrackingStore } from '../../../store/useTrackingStore';
 import { hydrateMemoryForUser, detachMemoryPersistence, flushMemoryNow } from '../services/memoryPersistence';
+// O1: unlockEngine service deleted — real-time GPS auto-unlock has been
+// dead since v322 (ForegroundUnlockManager watcher body has early `return`).
+// Memory now only unlocks via flushHikingToMemory (Save Hike) + sim-walker.
 // v305 OTA: H3 hex-cell fog layer — replaces turf.union polygon path.
 import { hydrateH3ForUser, detachH3Persistence, flushH3Now } from '../services/h3Persistence';
 import { attachMemorySync, detachMemorySync, pullMemoryFromServer, pushMemoryNow } from '../../../services/memorySync';
@@ -120,7 +123,6 @@ export function ForegroundUnlockManager() {
         } catch {/* ignore */}
         if (myGen !== userGenRef.current) return;
         detachMemorySync();
-        resetUnlockEngineForUser();
         useMemoryStore.getState().resetForUserSwitch();
         // O4 fix (v0.2.6.3): also clear cross-user marker state so
         // CairnPinsLayer doesn't flash the previous user's pins.
@@ -173,7 +175,6 @@ export function ForegroundUnlockManager() {
           require('../../../services/bootDiagnostics').markBootPhase('fgum_hasuser_async_enter');
         } catch {/* ignore */}
         detachMemorySync();
-        resetUnlockEngineForUser();
         // v345 fix: only clear marker store on actual user switch — NOT
         // on every FGUM mount. Pre-v345 this fired clearMarkers() on
         // every Memory-tab open (v322 moved FGUM into MemoryScreen, so
@@ -293,22 +294,11 @@ export function ForegroundUnlockManager() {
           // The setLastWatcherFix above is kept because it powers the
           // UserLocation blue dot + stableCoord flicker fix, both of
           // which are pure VISUAL position rendering (no fog clearing).
-          // When PHASE 2 (background SLC recording) ships, re-enable the
-          // call below — or replace with a SLC-driven 100m reveal.
+          // O1: removed dead branch (was `return;` then unreachable code
+          // calling performInitialRevealIfNeeded/processReading). The
+          // unlockEngine service is deleted in O1 as memory only unlocks
+          // via flushHikingToMemory (Save Hike) + sim-walker.
           return;
-          // eslint-disable-next-line no-unreachable
-          if (!enabledRef.current) return;
-          if (recordModeRef.current === 'session-only' && !sessionActiveRef.current) {
-            return;
-          }
-          performInitialRevealIfNeeded(loc.coords.latitude, loc.coords.longitude);
-          processReading({
-            lat: loc.coords.latitude,
-            lng: loc.coords.longitude,
-            accuracyM: loc.coords.accuracy ?? null,
-            speedMs: loc.coords.speed ?? null,
-            timestampMs: loc.timestamp ?? Date.now(),
-          });
         });
         log('memory.watcher_started', { mode: recordModeRef.current });
         if (cancelled) {
