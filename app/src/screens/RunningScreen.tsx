@@ -9,7 +9,7 @@
  * Uses useTrackingStore (real GPS via expo-location, graceful web fallback).
  * activityMode set to 'running' before startTracking.
  */
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, Easing, ScrollView,
   Platform, Alert,

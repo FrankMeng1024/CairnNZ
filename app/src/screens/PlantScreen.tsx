@@ -108,7 +108,8 @@ const INITIAL_DRAFT: PlantDraft = {
 export function PlantScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const addMarker = useMarkerStore((s) => s.addMarker);
-  const recordCircleUnlock = useMemoryStore((s) => s.recordCircleUnlock);
+  // O1: recordCircleUnlock selector removed (v351 stopped calling it, dead ref
+  // triggered re-render every time useMemoryStore changed)
   const userId = useAppStore((s) => s.user?.id ?? '');
   const [step, setStep] = useState<Step>('gps');
   const [draft, setDraft] = useState<PlantDraft>(INITIAL_DRAFT);
@@ -253,7 +254,7 @@ export function PlantScreen() {
         );
       }
     },
-    [addMarker, recordCircleUnlock, userId, nav, submitting]
+    [addMarker, userId, nav, submitting]
   );
 
   const onContentSubmit = (payload: {

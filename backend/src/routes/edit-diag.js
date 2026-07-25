@@ -12,7 +12,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const pool = require('../config/db');
-const authenticate = require('../middleware/authenticate');
+// O1: authenticate 死 require (manual JWT parse in the handler)
 
 const router = express.Router();
 

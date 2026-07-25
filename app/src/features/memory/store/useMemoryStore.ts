@@ -88,7 +88,9 @@ interface MemoryState {
   /** Record one GPS point as visited. Idempotent. */
   recordPoint: (lat: number, lng: number, atMs?: number) => void;
 
-  /** Mark a circular region (initial reveal) — drops a single point. */
+  // O1: recordCircleUnlock 保留(0 caller 但 impl 复杂,~220 行),下 sprint
+  // 决定是删还是保留;PlantScreen 已移除 selector 依赖,不会 trigger 无谓渲染。
+  // TODO(O2): 彻底删除 line 267-487 impl 后省 220 行。
   recordCircleUnlock: (lat: number, lng: number, radiusMeters: number, atMs?: number) => void;
 
   /** Read API — is this lat/lng within `unlockRadius` of any visited point? */

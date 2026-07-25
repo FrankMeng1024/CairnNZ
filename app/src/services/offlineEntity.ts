@@ -375,7 +375,7 @@ export function createOfflineEntity<T, Server = unknown>(
     // 立即推一次当前状态
     read().then((entries) => {
       try { cb(entries); } catch { /* ignore */ }
-    });
+    }).catch(() => { /* O1: swallow read errors, subscriber gets no snapshot */ });
     return () => {
       const idx = listeners.indexOf(cb);
       if (idx >= 0) listeners.splice(idx, 1);
