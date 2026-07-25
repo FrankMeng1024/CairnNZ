@@ -66,16 +66,9 @@ interface MemoryState {
   _bucketIndex: Map<string, VisitedPoint[]> | null;
   /** Bumped on geometry mutations. FogLayer keys its memo on this. */
   geometryVersion: number;
-  /**
-   * v303 OTA: 最近 5 秒内新解锁的点(给 Skia 扩散动画 overlay 用)。
-   * 不参与 geometryVersion / fog 几何 — 纯视觉副作用。每次 recordPoint
-   * 或 applyServerEchoForPushAligned 路径 push,5s 后 GC(由 overlay
-   * 组件读取时过滤,或在新 push 时清理过期)。
-   *
-   * 跟 v303 native fog 接口一致(bornAt 字段 = ts) — 7/1 native 上线后
-   * 这个数组继续 feed Skia overlay,native 跑底下 fog,**互不重复**。
-   */
-  recentUnlocks: Array<{ lat: number; lng: number; ts: number }>;
+  // O1: recentUnlocks removed — v303 Skia burst overlay 已在 v346 native
+  // fog 上线后被替代,MemoryFogBurstOverlay 已删。原来是"dead-writer"(每
+  // 次 recordPoint push 但无消费者),现在字段和 push 全清。
   /**
    * R4 fix (v0.2.6.4): cache the most recent GPS fix any watcher saw.
    * MemoryScreen reads this to avoid spawning a competing
@@ -101,8 +94,8 @@ interface MemoryState {
   /** Read API — is this lat/lng within `unlockRadius` of any visited point? */
   isExplored: (lat: number, lng: number) => boolean;
 
-  /** Read API — full list for the fog renderer. */
-  listVisitedPoints: () => VisitedPoint[];
+  // O1: removed listVisitedPoints() — 0 external callers. Consumers use
+  // useMemoryStore(s => s.points) selector directly.
 
   /** Mark unsynced points as synced by cid (sync service). Does NOT bump geometryVersion. */
   markPointsSyncedByCid: (cids: string[]) => void;
@@ -114,7 +107,8 @@ interface MemoryState {
    * Falls back to (ts, oldCid) matching for cases where localIdx is
    * unavailable.
    */
-  applyServerEchoForPush: (echo: Array<{ localIdx: number; ts: number; oldCid: string; newCid: string }>) => void;
+  // O1: applyServerEchoForPush interface removed — see impl comment below.
+  // applyServerEchoForPushAligned is the only variant memorySync uses.
 
   /**
    * N2 fix: receive the exact batch (the array memorySync sent) and
@@ -224,7 +218,6 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   points: [],
   _bucketIndex: null,
   geometryVersion: 0,
-  recentUnlocks: [],
   _unsyncedCount: 0,
   initialRevealDone: false,
   syncState: { inFlightCount: 0, lastSyncAt: 0 },
@@ -247,16 +240,12 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     const k = bucketKey(lat, lng);
     const arr = idx.get(k) ? [...idx.get(k)!, newPoint] : [newPoint];
     idx.set(k, arr);
-    // v303 OTA: recentUnlocks for Skia burst overlay (5s GC).
-    const nowMs = Date.now();
-    const recentBurst = get().recentUnlocks.filter((u) => nowMs - u.ts < 5000);
-    recentBurst.push({ lat, lng, ts });
+    // O1: recentUnlocks push removed — Skia burst overlay 死了不需要 feed
     set({
       points: newPoints,
       _bucketIndex: idx,
       geometryVersion: get().geometryVersion + 1,
       _unsyncedCount: get()._unsyncedCount + 1,
-      recentUnlocks: recentBurst,
     });
     // v305 OTA: dual-write to H3 cell store, AFTER setState so the two
     // stores update in the same JS tick — FogLayer (subscribed to
@@ -361,25 +350,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       geometryVersion: get().geometryVersion + 1,
       // synced=true above → DO NOT bump _unsyncedCount.
       _unsyncedCount: get()._unsyncedCount,
-      // v303 OTA R4 fix: 之前 recordCircleUnlock 不写 recentUnlocks,
-      // 用户首次 reveal(500m)看不到 Skia 解锁动画。修法:不 push 全部
-      // newPoints(几百个 burst 太多),只 push 中心点 + 4 个圆周采样点,
-      // 视觉是"中心一个大圈扩散开"。
-      recentUnlocks: (() => {
-        const nowMs = Date.now();
-        const recent = get().recentUnlocks.filter((u) => nowMs - u.ts < 5000);
-        // 中心点
-        recent.push({ lat, lng, ts });
-        // 4 个圆周采样(N/S/E/W,half radius 处)
-        const half = requestedRadius * 0.5;
-        const dLat = half * dLatPerM;
-        const dLng = half * dLngPerM;
-        recent.push({ lat: lat + dLat, lng, ts });
-        recent.push({ lat: lat - dLat, lng, ts });
-        recent.push({ lat, lng: lng + dLng, ts });
-        recent.push({ lat, lng: lng - dLng, ts });
-        return recent;
-      })(),
+      // O1: removed recentUnlocks Skia burst — v346 native fog 已取代
     });
     // v305 OTA: bulk-import the hex-grid newPoints into the H3 store so
     // the initial reveal (hundreds of points) clears the right cells.
@@ -424,7 +395,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     return false;
   },
 
-  listVisitedPoints: () => get().points,
+  // O1: listVisitedPoints() implementation removed (see interface comment above).
 
   /**
    * K5 fix: this only flips synced flags — geometry is unchanged, so
@@ -501,46 +472,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     });
   },
 
-  /**
-   * M11 fix: match echo entries by batch index passed back from server,
-   * AND fall back to (ts, oldCid) matching for legacy paths. Server now
-   * emits `null` placeholders so caller's batch[i] aligns to echo[i].
-   * (Kept for any non-migrated caller. Memory sync uses Aligned variant.)
-   */
-  applyServerEchoForPush: (echo) => {
-    if (echo.length === 0) return;
-    // Build lookup keyed by both (ts, oldCid) pair AND by stable
-    // batch identity (clientLocalIdx string the caller assigns).
-    const lookup = new Map<string, string>();
-    for (const e of echo) {
-      lookup.set(`${e.localIdx}`, e.newCid);
-      lookup.set(`${e.ts}|${e.oldCid}`, e.newCid);
-    }
-    const oldPoints = get().points;
-    let changed = 0;
-    const newPoints = oldPoints.map((p) => {
-      // Prefer cid match (current cid identifies the point uniquely
-      // post-echo); fall back to (ts, '') match for legacy v2 points.
-      const tsKey = `${p.ts}|${p.cid ?? ''}`;
-      const newCid = lookup.get(tsKey);
-      if (newCid && (newCid !== p.cid || !p.synced)) {
-        const wasSynced = p.synced ?? false;
-        if (!wasSynced) changed++;
-        return { ...p, cid: newCid, synced: true };
-      }
-      return p;
-    });
-    if (changed === 0 && newPoints === oldPoints) return;
-    set({
-      points: newPoints,
-      // M12: geometry unchanged; reuse existing bucket index. Note:
-      // index entries hold references to OLD point objects, but their
-      // lat/lng are identical so spatial queries still work. The
-      // _unsyncedCount tracks the actual flag state.
-      _unsyncedCount: Math.max(0, get()._unsyncedCount - changed),
-      syncState: { ...get().syncState, lastSyncAt: Date.now() },
-    });
-  },
+  // O1: applyServerEchoForPush (M11 legacy) removed — memorySync uses
+  // the Aligned variant only, and grep confirms 0 external callers.
 
   replacePoints: (points, initialRevealDone) => {
     try {

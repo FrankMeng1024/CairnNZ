@@ -56,8 +56,9 @@ const sessionStart = Date.now();
 interface BootCheckpoint {
   phase: string;
   ts: number;
-  /** OTA version label written at boot — lets server tell which bundle the user is on. */
-  ota_version?: number;
+  /** OTA version label written at boot — lets server tell which bundle the user is on.
+   *  O1: switched from number (v450) to string ('O1', 'O2', ...) — see OtaBadge. */
+  ota_version?: number | string;
 }
 
 let lastPhase = 'init';
@@ -120,7 +121,7 @@ export function markBootPhase(phase: string, extra?: Record<string, any>): void 
  *
  * Returns nothing — fire-and-forget upload.
  */
-export async function drainPreviousBootCheckpoint(otaVersion: number): Promise<void> {
+export async function drainPreviousBootCheckpoint(otaVersion: number | string): Promise<void> {
   try {
     // Read whatever the OS preserved from the previous boot. If the previous
     // boot already finished a "rotation" via this function, the truly-previous

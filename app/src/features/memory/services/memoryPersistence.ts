@@ -64,31 +64,8 @@ let currentUserId: string | null = null;
  */
 let generation = 0;
 
-/** base64 encode helper — Node-friendly + RN-friendly. Kept for the
- * persistence layer's potential future use (server payloads etc.); not
- * used by the v2 point-array schema below. */
-function bytesToBase64(bytes: Uint8Array): string {
-  if (typeof btoa === 'function') {
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-    return btoa(binary);
-  }
-  return Buffer.from(bytes).toString('base64');
-}
-
-function base64ToBytes(b64: string): Uint8Array {
-  if (typeof atob === 'function') {
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-  }
-  return new Uint8Array(Buffer.from(b64, 'base64'));
-}
-
-// Re-export to avoid TS dead-code warnings; consumers may use them later.
-void bytesToBase64;
-void base64ToBytes;
+// O1: removed bytesToBase64/base64ToBytes — 0 callers, `void` suppression
+// confirmed dead code. If future needed, standard btoa/atob is inline-cheap.
 
 interface SerializedPoint {
   /** lat (number) */
