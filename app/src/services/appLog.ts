@@ -138,7 +138,4 @@ export async function flushNow(): Promise<void> {
   }
 }
 
-/** Per-launch session id for cross-event correlation. */
-export function getSessionId(): string {
-  return SESSION_ID;
-}
+// O1: getSessionId() removed — 0 external callers.

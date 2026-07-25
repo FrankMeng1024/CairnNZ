@@ -96,7 +96,7 @@ app.use('/api/telemetry', require('./routes/telemetry'));
 app.use('/api/debug-snapshot', require('./routes/debug-snapshot'));
 // v429 hotfix: appLog upload endpoint (client sends batched log tags)
 app.use('/api/edit-diag', require('./routes/edit-diag'));
-app.use('/api/feature-flags', require('./routes/feature-flags'));
+// O1: /api/feature-flags 路由删除 — 0 client caller,DEFAULT_FLAGS 硬编码生效
 // v427: Memory hierarchy world regions API
 app.use('/api/hierarchy', require('./routes/hierarchy'));
 // v417 AR removal: /api/v025/debug-events + /api/v025/worldmaps 路由删除（AR 功能已废弃）

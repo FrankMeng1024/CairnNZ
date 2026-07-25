@@ -183,10 +183,4 @@ export function rotateCheckpoint(): void {
   })();
 }
 
-export function getBootSessionId(): string {
-  return sessionId;
-}
-
-export function getLastBootPhase(): string {
-  return lastPhase;
-}
+// O1: getBootSessionId + getLastBootPhase removed — 0 external callers.

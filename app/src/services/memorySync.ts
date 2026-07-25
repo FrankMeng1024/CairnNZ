@@ -474,10 +474,4 @@ export async function deleteAllMemoryFromServer(): Promise<boolean> {
   }
 }
 
-export function getSyncStatus(): { pendingCount: number; inFlight: boolean } {
-  const s = useMemoryStore.getState();
-  return {
-    pendingCount: s._unsyncedCount,
-    inFlight: s.syncState.inFlightCount > 0,
-  };
-}
+// O1: getSyncStatus() removed — 0 external callers.
