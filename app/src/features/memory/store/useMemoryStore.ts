@@ -230,9 +230,18 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     // ts breaks echo lookup → infinite retry.
     const ts = Math.floor(atMs);
     const points = get().points;
-    const recent = points.slice(-32);
-    for (const p of recent) {
-      if (distanceSqMeters({ lat, lng }, p) < CULL_THRESHOLD_SQ) return;
+    // O1: CULL 从 slice(-32) 改成走 bucket index 全量查 (9-cell sweep).
+    // 之前 32-tail scan 在长 hike 后段的邻近点 dedup 失败 → 服务器 UNIQUE
+    // 拦不住 (每个 uuid 不同),同一 cell 存多份。走 bucket index O(1) 查
+    // 附近所有已 recordPoint 的点,同 12.5m 内 skip。
+    const idxRef = get()._bucketIndex ?? buildBucketIndex(points);
+    const targetBuckets = computeBucketsForRadius({ lat, lng });
+    for (const k of targetBuckets) {
+      const bucketPts = idxRef.get(k);
+      if (!bucketPts) continue;
+      for (const p of bucketPts) {
+        if (distanceSqMeters({ lat, lng }, p) < CULL_THRESHOLD_SQ) return;
+      }
     }
     const newPoint: VisitedPoint = { lat, lng, ts, cid: uuidv4(), synced: false };
     const newPoints = [...points, newPoint];
