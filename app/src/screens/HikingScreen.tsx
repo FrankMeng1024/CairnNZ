@@ -1596,18 +1596,41 @@ export function HikingScreen() {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const hikeTrackWriter = require('../services/hikeTrackWriter');
           if (typeof hikeTrackWriter.readActiveHikeTail === 'function') {
-            const pts = await hikeTrackWriter.readActiveHikeTail(u.sessionId, Infinity);
+            const hikePts: any[] = await hikeTrackWriter.readActiveHikeTail(u.sessionId, Infinity);
+            // O1 R3: HikePoint 磁盘格式 {t, lat, lng, acc, alt, src, conf}
+            // 与 TrackPoint {lat, lng, alt, accuracy, speed, t} 字段错位
+            // (acc → accuracy)。之前直接 setState 用 hikePts 导致 accuracy 字段
+            // 丢失,route_points_raw 全 null。加 mapper 修正 + 恢复 lastCoordinate
+            // 避免 gate 3 stationary suppress 用 Infinity 分支不抑制。
+            const pts = hikePts.map((p: any) => ({
+              lat: p.lat,
+              lng: p.lng,
+              alt: p.alt ?? null,
+              accuracy: p.acc ?? null,
+              speed: null,
+              t: p.t,
+            }));
+            const last = pts[pts.length - 1];
             // 恢复到 tracking store
             // v412 4-eye fix (Critical #2): 用 u.activityMode 不硬编码, 保 running 语义
             useTrackingStore.setState({
               sessionId: u.sessionId,
               remoteSessionId: u.remoteId ?? null,
               trackPoints: pts,
+              trackPointsSmoothed: pts,
+              trackPointsRaw: pts,
               startedAt: u.startedAt,
               status: 'paused', // v412 4-eye fix (Blocker #1): 先设 paused, 让 resumeTracking 走 activate*Source
               distanceM: u.distanceM,
               durationS: u.durationS,
               activityMode: u.activityMode,
+              // O1 R3: 同步 seed lastCoordinate 到 tail 最后一点,不然
+              // resume 后的第一次 addTrackPoint 走 gate 3 的 Infinity 分支,
+              // stationary suppress 失效,jitter 全收进 track 虚增 distanceM
+              lastCoordinate: last
+                ? { lat: last.lat, lng: last.lng, alt: last.alt, accuracy: last.accuracy, speed: last.speed }
+                : null,
+              lastCoordinateTime: last?.t ?? null,
             } as any);
             if (typeof hikeTrackWriter.resumeHikeTrack === 'function') {
               await hikeTrackWriter.resumeHikeTrack(u.sessionId);

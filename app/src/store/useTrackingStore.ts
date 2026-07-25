@@ -1378,6 +1378,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
    */
   __simwalkerAddTrackPoint: (coord: any, timestamp?: number) => {
     set((s: any) => {
+      // O1 R6: gate on status — sim-walker overlay's tick loop is
+      // independent of the hike's pause state. If user pauses the hike
+      // (status='paused') but sim-walker keeps injecting, distance grows
+      // while duration is frozen → bogus data. Reject unless status is
+      // 'tracking' (or 'idle' for pre-Start-Hiking dry-run testing).
+      if (s.status === 'paused') return s;
       const t = Date.now();
       // v450: strip segmentBreak — v448/v449 experimented with it,
       // v450 removed on user request (undo/⟲ should NOT break line).

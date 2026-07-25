@@ -250,45 +250,63 @@ export function appendHikePoint(point: HikePoint): void {
   }
 }
 
+// O1 R1: mutex — flushBuffer 有多个 caller (30s timer, 50pts trigger,
+// stopTracking, background AppState). 无 mutex 时并发 flush 会 truncate
+// 已经写入的数据 (concurrent read-existing 拿旧 file,write 用旧+空 覆盖)。
+let flushInFlight: Promise<void> | null = null;
+
 async function flushBuffer(): Promise<void> {
-  if (!state) return;
-  const s = state; // narrow for TS
-  if (s.flushTimer) {
-    clearTimeout(s.flushTimer);
-    s.flushTimer = null;
+  if (flushInFlight) {
+    // 已有 flush 在跑,await 它。避免并发写 file truncate 数据。
+    await flushInFlight;
+    // await 完可能 buffer 又累积了新点,再走一次(非递归,是并列):
+    if (!state || state.buffer.length === 0) return;
   }
-  if (s.buffer.length === 0) return;
-  const toWrite = s.buffer;
-  s.buffer = [];
-  const fs = await getFs();
-  if (!fs) return;
-  const activePath = fs.documentDirectory + ACTIVE_DIR + s.sessionId + '.jsonl';
-  const lines = toWrite.map(p => JSON.stringify(p)).join('\n') + '\n';
+  flushInFlight = (async () => {
+    if (!state) return;
+    const s = state; // narrow for TS
+    if (s.flushTimer) {
+      clearTimeout(s.flushTimer);
+      s.flushTimer = null;
+    }
+    if (s.buffer.length === 0) return;
+    const toWrite = s.buffer;
+    s.buffer = [];
+    const fs = await getFs();
+    if (!fs) return;
+    const activePath = fs.documentDirectory + ACTIVE_DIR + s.sessionId + '.jsonl';
+    const lines = toWrite.map(p => JSON.stringify(p)).join('\n') + '\n';
+    try {
+      // expo-file-system/legacy doesn't have native append; use read+write.
+      // For crash safety we chunk the read to avoid holding entire file if huge.
+      // 30s buffer × 1h = ~120 flushes, each concat writes O(file_size).
+      // For 1h/3600pts file (~350KB), each write is 350KB × 120 = manageable.
+      let existing = '';
+      try {
+        const info = await fs.getInfoAsync(activePath);
+        if (info.exists) existing = await fs.readAsStringAsync(activePath);
+      } catch { /* best effort */ }
+      await fs.writeAsStringAsync(activePath, existing + lines);
+      // Update meta
+      const metaPath = fs.documentDirectory + META_DIR + s.sessionId + '.json';
+      try {
+        const metaRaw = await fs.readAsStringAsync(metaPath);
+        const meta: HikeMeta = JSON.parse(metaRaw);
+        meta.total_points = s.totalPoints;
+        meta.last_ts = toWrite[toWrite.length - 1]?.t;
+        await fs.writeAsStringAsync(metaPath, JSON.stringify(meta));
+      } catch { /* best effort */ }
+      s.lastFlushError = null;
+    } catch (e) {
+      s.lastFlushError = String(e).slice(0, 80);
+      // Re-buffer for next attempt (don't drop)
+      s.buffer = toWrite.concat(s.buffer);
+    }
+  })();
   try {
-    // expo-file-system/legacy doesn't have native append; use read+write.
-    // For crash safety we chunk the read to avoid holding entire file if huge.
-    // 30s buffer × 1h = ~120 flushes, each concat writes O(file_size).
-    // For 1h/3600pts file (~350KB), each write is 350KB × 120 = manageable.
-    let existing = '';
-    try {
-      const info = await fs.getInfoAsync(activePath);
-      if (info.exists) existing = await fs.readAsStringAsync(activePath);
-    } catch { /* best effort */ }
-    await fs.writeAsStringAsync(activePath, existing + lines);
-    // Update meta
-    const metaPath = fs.documentDirectory + META_DIR + s.sessionId + '.json';
-    try {
-      const metaRaw = await fs.readAsStringAsync(metaPath);
-      const meta: HikeMeta = JSON.parse(metaRaw);
-      meta.total_points = s.totalPoints;
-      meta.last_ts = toWrite[toWrite.length - 1]?.t;
-      await fs.writeAsStringAsync(metaPath, JSON.stringify(meta));
-    } catch { /* best effort */ }
-    s.lastFlushError = null;
-  } catch (e) {
-    s.lastFlushError = String(e).slice(0, 80);
-    // Re-buffer for next attempt (don't drop)
-    s.buffer = toWrite.concat(s.buffer);
+    await flushInFlight;
+  } finally {
+    flushInFlight = null;
   }
 }
 
