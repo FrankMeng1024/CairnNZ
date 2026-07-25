@@ -1,17 +1,14 @@
 /**
- * featureFlags — Sprint 66 灰度策略
+ * featureFlags — client-side feature toggles
  *
- * Will move to: app/src/config/featureFlags.ts
+ * O1: 简化。/api/feature-flags 后端路由已删,只保留有 real caller 的
+ * flags: editModeEnabled, midpointDragEnabled, editCorridorRadiusMeters。
+ * 其余 (enableUndo/dualSourceMode/enableDOCSource/enableMapboxSource/
+ * rerouteTimeoutMs/rerouteMaxDetourRatio) 全 0 caller 删除。
  *
- * 优先级（高→低）：
- *   1. AsyncStorage override (dev menu, 连点版本号 5 次解锁)
+ * 优先级(高→低):
+ *   1. AsyncStorage override (dev-only)
  *   2. 静态 default (本文件)
- *   3. (Sprint 67) Backend remote config
- *
- * Sprint 66 strategy:
- *   - core flags 默认 false (production 用户看不到 Edit 按钮)
- *   - dev/QA 通过 AsyncStorage override 打开做内测
- *   - Sprint 67 接 backend `/api/config/edit-mode` 远程灰度 1% → 10% → 100%
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,49 +16,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const STORAGE_KEY = '@cairn:feature_flags:v1';
 
 export interface FeatureFlags {
-  // Edit mode 主开关 (default false)
+  // Edit mode 主开关 (default true post-Sprint 66 wave 7)
   editModeEnabled: boolean;
 
-  // Midpoint drag 子开关 (default false)
+  // Midpoint drag 子开关 (default true post-Sprint 66 wave 7)
   midpointDragEnabled: boolean;
 
-  // Undo (P1，Sprint 66 不做)
-  enableUndo: boolean;
-
-  // 双源决策模式
-  // 'auto'      自动 DualSourceRouter
-  // 'mapbox-only' 强制 Mapbox（debug 用）
-  // 'doc-only'    强制 DOC（debug 用）
-  dualSourceMode: 'auto' | 'mapbox-only' | 'doc-only';
-
-  // 编辑 corridor 半径（米）
+  // 编辑 corridor 半径(米) — persistence snapshot 使用
   editCorridorRadiusMeters: number;
-
-  // Reroute 配置
-  rerouteTimeoutMs: number;
-  rerouteMaxDetourRatio: number;
-
-  // 数据源开关
-  enableDOCSource: boolean;
-  enableMapboxSource: boolean;
 }
 
 export const DEFAULT_FLAGS: FeatureFlags = {
-  // Sprint 66 Wave 7 (post-merge audit v29): dual-source edit UI is now
-  // wired into RouteEditorScreen and the entire useRouteEditStore
-  // pipeline (saveAndExit, beginEdit, persistence, recovery) has been
-  // hardened across v14-v28. Flipping defaults to true so the OTA build
-  // ships the feature live for all users. Previous default was false
-  // for a planned remote-config gradual rollout that never materialised.
   editModeEnabled: true,
   midpointDragEnabled: true,
-  enableUndo: false,              // P1 不做
-  dualSourceMode: 'auto',
   editCorridorRadiusMeters: 1000, // rules v4 锁定 1km
-  rerouteTimeoutMs: 8000,
-  rerouteMaxDetourRatio: 3.0,
-  enableDOCSource: true,
-  enableMapboxSource: true,
 };
 
 let cachedFlags: FeatureFlags | null = null;
@@ -104,7 +72,6 @@ export async function setFlagOverride<K extends keyof FeatureFlags>(
   const current = await getFlags();
   const next = { ...current, [key]: value };
   cachedFlags = next;
-  // Persist only the override fields (not all flags) to AsyncStorage
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     const existing = raw ? JSON.parse(raw) : {};

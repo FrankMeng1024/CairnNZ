@@ -131,52 +131,8 @@ router.get('/', async (req, res) => {
 //   - Anonymous: author_name is intentionally null even when the row's
 //     creator is the viewer's friend — Public marks are always anonymous
 //     in v1 (per v4 row Q + §10).
-router.get('/public', async (req, res) => {
-  const viewerId = req.user.userId;
-  const bbox = String(req.query.bbox || '');
-  const parts = bbox.split(',').map((s) => Number(s));
-  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) {
-    return res.status(400).json({
-      error: 'bbox required: lat_sw,lng_sw,lat_ne,lng_ne (4 numbers)',
-    });
-  }
-  const [latSw, lngSw, latNe, lngNe] = parts;
-  if (latSw >= latNe || lngSw >= lngNe) {
-    return res.status(400).json({ error: 'bbox: SW must be south-west of NE' });
-  }
-  // Reject pathological bbox sizes (>10° span = abuse risk, default world map
-  // never legitimately fetches more than a few degrees).
-  if (latNe - latSw > 10 || lngNe - lngSw > 10) {
-    return res.status(400).json({ error: 'bbox too large (max 10° span)' });
-  }
-
-  try {
-    const sql = `
-      SELECT m.id, m.type, m.text, m.lat, m.lng, m.alt,
-             m.permission, m.approximate, m.public_snapshot,
-             m.created_at, m.updated_at
-        FROM markers m
-   LEFT JOIN hidden_items h
-          ON h.user_id   = ?
-         AND h.item_type = 'mark'
-         AND h.item_id   = m.id
-       WHERE m.permission = 'public'
-         AND m.status = 'healthy'
-         AND m.lat BETWEEN ? AND ?
-         AND m.lng BETWEEN ? AND ?
-         AND h.user_id IS NULL
-    ORDER BY m.created_at DESC
-       LIMIT 50`;
-    const [rows] = await pool.execute(sql, [viewerId, latSw, latNe, lngSw, lngNe]);
-    // author_name always null (anonymous per v4)
-    return res.json({
-      markers: rows.map((m) => ({ ...m, author_name: null })),
-    });
-  } catch (err) {
-    console.error('[markers/public]', err.message);
-    return res.status(500).json({ error: 'Server error' });
-  }
-});
+// O1: /public route removed — 0 client callers. Feature was for Memory
+// tab stranger marks (v4 §7) but never wired to UI.
 
 // ── Create marker ───────────────────────────────────────────────────────────
 router.post('/', validateBody(schemas.marker.create), idempotency, async (req, res) => {

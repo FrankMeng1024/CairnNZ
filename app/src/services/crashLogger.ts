@@ -176,50 +176,10 @@ export const crashLogger = {
     }
   },
 
-  /**
-   * v163: read AsyncStorage 'cairn_v163_last_step' and upload as a
-   * synthetic crash report if it exists. Set by ViroARRitualOverlay
-   * before each shader-material registration. If the previous launch
-   * died mid-loop, this key tells us exactly which step was running
-   * when the native renderer brought the process down.
-   *
-   * Call from App.tsx boot, after uploadCrashIfAny.
-   */
-  async uploadV163CheckpointIfAny(apiBaseUrl: string): Promise<void> {
-    try {
-      const raw = await storage.getItem('cairn_v163_last_step');
-      if (!raw) return;
-      // Don't double-upload — clear it.
-      await storage.removeItem('cairn_v163_last_step');
-      // Successful completion is also stored; only treat 'about-to' as crash.
-      const isCrashCheckpoint = raw.startsWith('about-to-');
-      const sessionId = `v163-${isCrashCheckpoint ? 'CRASH' : 'OK'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const ts = Date.now();
-      const event = JSON.stringify({
-        ts,
-        session_id: sessionId,
-        event: 'v163_checkpoint',
-        checkpoint: raw,
-        is_crash: isCrashCheckpoint,
-      });
-      const url = apiBaseUrl.replace(/\/$/, '') + '/api/telemetry/sessions';
-      await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-ndjson',
-          'X-Cairn-Device-Os': 'ios',
-          'X-Cairn-App-Version': APP_VERSION_HEADER,
-          'X-Cairn-Activity-Mode': 'v163-checkpoint',
-          'X-Cairn-Started-At': String(ts),
-          'X-Cairn-Ended-At': String(ts),
-        },
-        body: event,
-      }).catch(() => {});
-      console.warn('[crashLogger] v163 checkpoint uploaded:', sessionId, raw);
-    } catch {
-      /* swallow */
-    }
-  },
+  // O1: uploadV163CheckpointIfAny removed — v163 AR shader checkpoint
+  // 逻辑,ViroARRitualOverlay 早被 v417 移除,setter 从此不存在,
+  // AsyncStorage 'cairn_v163_last_step' 永远读到 null。每次 boot 死跑
+  // storage.getItem() + early return,浪费一次 IO。
 
   /**
    * Drain any persisted crash and POST it directly to backend telemetry.

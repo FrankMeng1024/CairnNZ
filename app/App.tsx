@@ -310,10 +310,10 @@ function AppRoot() {
       // This bypasses debugLogger sessions (which only flush on tracking end)
       // so a sign-out/login crash actually reaches the server.
       crashLogger.uploadCrashIfAny(API_BASE_URL).catch(() => {});
-      // v163: also drain the AsyncStorage shader-registration checkpoint.
-      // If the previous launch crashed during ritualAR shader material
-      // registration, this surfaces the exact step that died.
-      crashLogger.uploadV163CheckpointIfAny(API_BASE_URL).catch(() => {});
+      // O1: v163 shader-registration checkpoint drain removed (AR/Viro
+      // functionality was removed in v417, so `cairn_v163_last_step`
+      // AsyncStorage key is never written anymore — reader was a dead
+      // boot-time IO round-trip).
 
       // Note: OTA update check + download UX is handled by <OtaBadge />
       // mounted on AuthScreen (top-right pill). No global Alert here.
