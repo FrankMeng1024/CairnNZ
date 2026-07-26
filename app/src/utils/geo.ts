@@ -187,50 +187,7 @@ export function kalmanUpdate(state: KalmanState, measurement: number, accuracy?:
   return state.x;
 }
 
-// ── GPS Point Validation ────────────────────────────────────────────────────
-
-export interface GPSPoint {
-  lat: number;
-  lng: number;
-  alt?: number | null;
-  accuracy?: number;
-  speed?: number | null;
-  heading?: number | null;
-  timestamp: number;
-}
-
-/**
- * Check if a new GPS point is consistent with the previous trajectory.
- * Rejects points that imply impossible movement (teleportation/drift).
- *
- * @param prev     Previous accepted point
- * @param current  New candidate point
- * @returns true if the point should be accepted
- */
-export function isConsistentPoint(prev: GPSPoint, current: GPSPoint): boolean {
-  const dt = (current.timestamp - prev.timestamp) / 1000; // seconds
-  if (dt <= 0) return false;
-
-  const distance = haversineM(
-    { lat: prev.lat, lng: prev.lng },
-    { lat: current.lat, lng: current.lng },
-  );
-
-  const impliedSpeed = distance / dt; // m/s
-
-  // Reject if implied speed > 50 m/s (180 km/h — impossible on foot/trail)
-  if (impliedSpeed > 50) return false;
-
-  // Reject if direction change > 150° at very low speed (drift detection)
-  // Only apply at speeds below 1.0 m/s — at walking/running speed, sharp turns are valid
-  if (prev.heading != null && current.heading != null && impliedSpeed < 1.0) {
-    const angleDiff = Math.abs(current.heading - prev.heading);
-    const normalized = angleDiff > 180 ? 360 - angleDiff : angleDiff;
-    if (normalized > 150) return false;
-  }
-
-  return true;
-}
+// O1 batch 38: GPSPoint + isConsistentPoint removed — 0 external callers
 
 // ── Dynamic Sampling Rate ───────────────────────────────────────────────────
 
@@ -307,151 +264,27 @@ try {
   g.__cairnGetSamplingInterval = getSamplingInterval;
 } catch { /* ignore */ }
 
-// ── GPS Track Smoother (combines Kalman + validation) ───────────────────────
+// O1 batch 38: SmoothedTrackState + createTrackSmoother + smoothGPSPoint +
+// getDebugLogger + logKalmanEvent removed — 0 external callers.
 
-export interface SmoothedTrackState {
-  latFilter: KalmanState | null;
-  lngFilter: KalmanState | null;
-  altFilter: KalmanState | null;
-  lastAccepted: GPSPoint | null;
-  movement: MovementState;
-  staticCount: number; // consecutive static readings
-}
-
-export function createTrackSmoother(): SmoothedTrackState {
-  return {
-    latFilter: null,
-    lngFilter: null,
-    altFilter: null,
-    lastAccepted: null,
-    movement: 'static',
-    staticCount: 0,
-  };
-}
-
-/**
- * Process a raw GPS point through Kalman filter + validation.
- * Returns smoothed coordinate or null if point rejected.
- */
-export function smoothGPSPoint(
-  state: SmoothedTrackState,
-  raw: GPSPoint,
-): Coordinate | null {
-  const accuracy = raw.accuracy ?? 10;
-
-  // First point: initialize filters
-  if (state.latFilter === null) {
-    state.latFilter = kalmanInit(raw.lat, accuracy);
-    state.lngFilter = kalmanInit(raw.lng, accuracy);
-    if (raw.alt != null) {
-      state.altFilter = kalmanInit(raw.alt, accuracy, 0.1); // altitude more volatile
-    }
-    state.lastAccepted = raw;
-    state.movement = classifyMovement(raw.speed ?? 0);
-    logKalmanEvent(raw, { lat: raw.lat, lon: raw.lng }, false, state.movement);
-    return { lat: raw.lat, lng: raw.lng, alt: raw.alt };
-  }
-
-  // Validate consistency
-  if (state.lastAccepted && !isConsistentPoint(state.lastAccepted, raw)) {
-    logKalmanEvent(raw, { lat: raw.lat, lon: raw.lng }, true, state.movement);
-    return null; // reject this point
-  }
-
-  // Update movement state
-  const speed = raw.speed ?? 0;
-  const newMovement = classifyMovement(speed);
-  if (newMovement === 'static') {
-    state.staticCount++;
-    // Only transition to static after 10 consecutive readings
-    if (state.staticCount >= 10) state.movement = 'static';
-  } else {
-    state.staticCount = 0;
-    state.movement = newMovement;
-  }
-
-  // Apply Kalman filter
-  const smoothedLat = kalmanUpdate(state.latFilter, raw.lat, accuracy);
-  const smoothedLng = kalmanUpdate(state.lngFilter!, raw.lng, accuracy);
-  let smoothedAlt: number | null = null;
-  if (raw.alt != null && state.altFilter) {
-    smoothedAlt = kalmanUpdate(state.altFilter, raw.alt, accuracy);
-  }
-
-  state.lastAccepted = raw;
-
-  logKalmanEvent(raw, { lat: smoothedLat, lon: smoothedLng }, false, state.movement);
-  return { lat: smoothedLat, lng: smoothedLng, alt: smoothedAlt };
-}
-
-// ── Debug logger hook (no-op in web; lazy import to avoid circular dep) ────
-let debugLoggerRef: { log: (e: unknown) => void } | null = null;
-function getDebugLogger() {
-  if (debugLoggerRef) return debugLoggerRef;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    debugLoggerRef = require('../services/debugLogger').debugLogger;
-  } catch {
-    debugLoggerRef = { log: () => {} };
-  }
-  return debugLoggerRef;
-}
-function logKalmanEvent(
-  input: GPSPoint,
-  output: { lat: number; lon: number },
-  rejected: boolean,
-  movement: 'static' | 'walking' | 'running' | 'driving',
-) {
-  try {
-    getDebugLogger()?.log({
-      ts: Date.now(),
-      event: 'kalman_output',
-      input: { lat: input.lat, lon: input.lng, accuracy_m: input.accuracy ?? 10 },
-      output,
-      rejected,
-      movement,
-    });
-  } catch { /* never let logging break GPS pipeline */ }
-}
-
-// ── Route Deviation Detection ───────────────────────────────────────────────
-
-/**
- * Calculate the minimum distance from a point to a polyline (series of segments).
- * Used for route deviation detection.
- */
-export function distanceToPolylineM(point: Coordinate, polyline: Coordinate[]): number {
-  if (polyline.length === 0) return Infinity;
-  if (polyline.length === 1) return haversineM(point, polyline[0]);
-
-  let minDist = Infinity;
-  for (let i = 0; i < polyline.length - 1; i++) {
-    const d = distanceToSegmentM(point, polyline[i], polyline[i + 1]);
-    if (d < minDist) minDist = d;
-  }
-  return minDist;
-}
+// O1 batch 38: distanceToPolylineM removed — 0 external callers.
+// (checkRouteDeviation also removed below as it was the only caller)
+// distanceToSegmentM kept — used by simplifyPolyline below.
 
 /**
  * Distance from a point to a line segment (in meters).
  * Projects the point onto the segment and computes perpendicular distance.
+ * Used by simplifyPolyline.
  */
 function distanceToSegmentM(p: Coordinate, a: Coordinate, b: Coordinate): number {
   const segLen = haversineM(a, b);
   if (segLen < 0.1) return haversineM(p, a); // degenerate segment
-
-  // Project p onto line ab using dot product ratio (flat-earth for short segments)
   const dx = b.lng - a.lng;
   const dy = b.lat - a.lat;
   const px = p.lng - a.lng;
   const py = p.lat - a.lat;
-
   const t = Math.max(0, Math.min(1, (px * dx + py * dy) / (dx * dx + dy * dy)));
-  const proj: Coordinate = {
-    lat: a.lat + t * dy,
-    lng: a.lng + t * dx,
-  };
-
+  const proj: Coordinate = { lat: a.lat + t * dy, lng: a.lng + t * dx };
   return haversineM(p, proj);
 }
 
@@ -507,89 +340,11 @@ export function simplifyPolyline<T extends Coordinate>(points: T[], epsilonM: nu
   return out;
 }
 
-/**
- * Check if user has deviated from the active route.
- * @param thresholdM  Deviation threshold in meters (default 50)
- */
-export function checkRouteDeviation(
-  userPosition: Coordinate,
-  routePoints: Coordinate[],
-  thresholdM = 50,
-): { deviated: boolean; distanceM: number } {
-  const distanceM = distanceToPolylineM(userPosition, routePoints);
-  return { deviated: distanceM > thresholdM, distanceM };
-}
+// O1 batch 38: checkRouteDeviation removed — 0 external callers; distanceToPolylineM also gone.
 
 /**
  * Check if user has arrived at a waypoint (within trigger radius).
  */
-export function isWithinRadius(
-  userPosition: Coordinate,
-  waypointLat: number,
-  waypointLng: number,
-  radiusM = 30,
-): boolean {
-  const dist = haversineM(userPosition, { lat: waypointLat, lng: waypointLng });
-  return dist <= radiusM;
-}
+// O1 batch 38: isWithinRadius removed — 0 external callers.
 
-// ── Marker Spacing Enforcement ──────────────────────────────────────────────
-
-/**
- * Check if a new marker can be placed at the given position.
- * Prevents the same user from clustering markers too close together.
- *
- * @param position     Where the user wants to place a marker
- * @param existingMarkers  User's existing markers (lat/lng pairs)
- * @param minSpacingM  Minimum distance between markers in meters (default 50)
- * @returns { allowed: boolean, nearestDistM: number, conflictId?: string }
- */
-export function checkMarkerSpacing(
-  position: Coordinate,
-  existingMarkers: Array<{ id: string; lat: number; lng: number }>,
-  minSpacingM = 50,
-): { allowed: boolean; nearestDistM: number; conflictId?: string } {
-  let nearestDist = Infinity;
-  let conflictId: string | undefined;
-
-  for (const marker of existingMarkers) {
-    const dist = haversineM(position, { lat: marker.lat, lng: marker.lng });
-    if (dist < nearestDist) {
-      nearestDist = dist;
-      if (dist < minSpacingM) {
-        conflictId = marker.id;
-      }
-    }
-  }
-
-  return {
-    allowed: nearestDist >= minSpacingM,
-    nearestDistM: nearestDist,
-    conflictId,
-  };
-}
-
-/**
- * Filter markers by density for display — cluster dense areas.
- * Returns markers that are at least minSpacingM apart from each other.
- * Earlier markers (by createdAt or array position) take priority.
- *
- * @param markers  All markers to filter
- * @param minSpacingM  Minimum display distance (default 15m for map)
- */
-export function filterByDensity<T extends { lat: number; lng: number }>(
-  markers: T[],
-  minSpacingM = 15,
-): T[] {
-  const result: T[] = [];
-  for (const marker of markers) {
-    const tooClose = result.some(
-      existing => haversineM(
-        { lat: existing.lat, lng: existing.lng },
-        { lat: marker.lat, lng: marker.lng },
-      ) < minSpacingM
-    );
-    if (!tooClose) result.push(marker);
-  }
-  return result;
-}
+// O1 batch 38: checkMarkerSpacing + filterByDensity removed — 0 external callers.
