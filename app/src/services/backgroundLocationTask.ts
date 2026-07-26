@@ -63,7 +63,7 @@ export async function persistBackgroundContext(
 }
 
 // Singleton queue of pending background updates — store drains this on each foreground tick
-type LocationCoords = {
+export type LocationCoords = {
   latitude: number;
   longitude: number;
   altitude: number | null;

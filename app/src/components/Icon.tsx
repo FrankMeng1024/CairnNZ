@@ -2,11 +2,9 @@
  * Icon — SVG icons via lucide-react-native.
  * metro.config.js overrides resolution to use CJS dist
  * instead of the ESM react-native field (which breaks Metro web).
- * O1: cleaned 19 unused imports (BookOpen/Droplets/EyeOff/Footprints/
- * GitBranch/House/LogOut/MessageCircle/Moon/PersonStanding/Phone/
- * Search/Signal/SportShoe/ThumbsUp/Undo2/Unlock/Volume2/Zap). Metro
- * doesn't tree-shake lucide-react-native CJS, so keeping unused
- * imports means bundling ~50KB dead SVG per icon.
+ * O1: cleaned unused imports. Metro doesn't tree-shake lucide-react-native
+ * CJS, so keeping unused imports means bundling ~50KB dead SVG per icon.
+ * Kept: only icons actually referenced by <Icon name="..." /> in src/.
  */
 import React from 'react';
 import {
@@ -20,7 +18,7 @@ import {
   // v284
   Scissors,
   // Sprint 9
-  LogIn, Eye, Mail, KeyRound, UserPlus,
+  LogIn, Eye, EyeOff, Mail, KeyRound, UserPlus,
   // Sprint 11
   Info, Send,
   // Sprint 12
@@ -51,6 +49,8 @@ import {
   Layers,
   // O1 — pending sync banner
   CloudOff,
+  // O1 — restored: friend chat / activity / running-mode / hut marker
+  MessageCircle, Footprints, PersonStanding, House,
 } from 'lucide-react-native';
 import { IconSize } from './tokens';
 
@@ -62,7 +62,7 @@ const ICON_MAP = {
   Droplets, X, Trash2, Navigation2,
   Check, CircleCheck,
   Scissors,
-  LogIn, Eye, Mail, KeyRound, UserPlus,
+  LogIn, Eye, EyeOff, Mail, KeyRound, UserPlus,
   Info, Send,
   Moon, Volume2, LogOut, User, ArrowUp, Save,
   Globe,
@@ -78,6 +78,7 @@ const ICON_MAP = {
   ArrowUpDown,
   Layers,
   CloudOff,
+  MessageCircle, Footprints, PersonStanding, House,
 } as const;
 
 export type IconName = keyof typeof ICON_MAP;

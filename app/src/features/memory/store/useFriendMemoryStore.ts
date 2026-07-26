@@ -86,7 +86,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           lat: Number(p.lat),
           lng: Number(p.lng),
           ts: Number(p.ts) || 0,
-        })).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+        })).filter((p: { lat: number; lng: number; ts: number }) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
       }
       set({
         friendMemory: next,

@@ -630,9 +630,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         startAutoPauseMonitor({
           getStatus: () => get().status,
           getPoints: () => get().trackPoints.map(p => ({
-            latitude: p.latitude,
-            longitude: p.longitude,
-            timestamp: p.timestamp,
+            latitude: p.lat,
+            longitude: p.lng,
+            timestamp: p.t,
             speed: p.speed ?? undefined,
           })),
           onSilentEnd: () => {
@@ -1000,7 +1000,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
       // 采样 memory_points: 从 memoryStore 里拉这次 hike 期间产生的 unsynced points
       const memoryUnsynced = useMemoryStore.getState().points
-        .filter((p: any) => !p.synced && p.ts >= s.startedAt && p.ts <= endedAt)
+        .filter((p: any) => !p.synced && p.ts >= s.startedAt! && p.ts <= endedAt)
         .map((p: any) => ({ lat: p.lat, lng: p.lng, ts: Math.floor(p.ts) }));
 
       const v412Payload = {
@@ -1039,7 +1039,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           // 服务器已把 memory 落库 → 标 client 端 memoryStore 里对应的点为 synced
           try {
             const cids = (useMemoryStore.getState().points || [])
-              .filter((p: any) => !p.synced && p.ts >= s.startedAt && p.ts <= endedAt)
+              .filter((p: any) => !p.synced && p.ts >= s.startedAt! && p.ts <= endedAt)
               .map((p: any) => p.cid);
             if (cids.length > 0 && typeof useMemoryStore.getState().markPointsSyncedByCid === 'function') {
               useMemoryStore.getState().markPointsSyncedByCid(cids);

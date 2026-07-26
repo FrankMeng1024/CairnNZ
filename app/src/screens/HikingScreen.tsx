@@ -1675,7 +1675,9 @@ export function HikingScreen() {
             const { deleteRemoteSession } = require('../services/sessionService');
             await deleteRemoteSession(u.remoteId);
           } catch (err) {
-            crashLogger.breadcrumb(`v430:discard_remote_delete_failed ${String(err).slice(0, 80)}`);
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const cl = require('../services/crashLogger');
+            (cl.crashLogger ?? cl.default)?.breadcrumb?.(`v430:discard_remote_delete_failed ${String(err).slice(0, 80)}`);
           }
         }
         setUnfinished(null);

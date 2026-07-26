@@ -1430,6 +1430,33 @@ const cardStyles = StyleSheet.create({
     backgroundColor: Colors.primaryBg,
     borderColor: Colors.primary + '50',
   },
+  // O1 — pending-sync grey card layout (LinearGradient fills the card,
+  // with a header row: circular icon + title + subtitle underneath).
+  routeCardGradient: {
+    flex: 1,
+    padding: Spacing.md,
+    borderRadius: Radius.card,
+  },
+  routeCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  iconCircle: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+  },
+  routeCardTitle: {
+    fontSize: FontSize.body,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  routeCardSubtitle: {
+    fontSize: FontSize.small,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
   activityBadge: {
     width: 40, height: 40, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
