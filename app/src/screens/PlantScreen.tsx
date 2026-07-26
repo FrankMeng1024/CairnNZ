@@ -36,7 +36,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 // v422 offline-first: 使 Plant flow 明确告知用户是否离线保存
 import networkMonitor from '../services/networkMonitor';
-import { MemoryColors, UnlockConfig } from '../features/memory/config/memoryConfig';
+import { MemoryColors } from '../features/memory/config/memoryConfig';
 import { MarkerType } from '../config/markerTypes';
 import { GpsLockStep } from '../features/plant/components/GpsLockStep';
 import { PinAdjustStep } from '../features/plant/components/PinAdjustStep';

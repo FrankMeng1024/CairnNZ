@@ -5,14 +5,12 @@
  * No local AsyncStorage persistence — source of truth is the server.
  */
 import { create } from 'zustand';
-import { generateId } from '../utils/geo';
 import {
   fetchRoutes,
   fetchRouteDetail,
   createRoute,
   updateRoute as apiUpdateRoute,
   deleteRoute as apiDeleteRoute,
-  incrementRouteRunCount,
 } from '../services/routeService';
 import { crashLogger } from '../services/crashLogger';
 
@@ -91,15 +89,8 @@ export interface Route {
 
 export interface RouteStore {
   routes: Route[];
-  activeRouteId: string | null;
-  /**
-   * v8-audit (V7-BUG-006): true only after a successful fetchRoutes
-   * resolution. Originally intended to gate a boot reconcileOrphans
-   * pass, but that boot call was never wired up. Kept because internal
-   * store logic (line 154/157) still uses it as a load-complete signal.
-   * If future work adds boot cleanup, this is the field to gate on.
-   */
-  routesLoadCompleted: boolean;
+  // O1 batch 35: activeRouteId removed — written only in setActiveRoute (dead) + deleteRoute;
+  // 0 external readers. routesLoadCompleted removed — only written internally; 0 external readers.
   /** Sprint 69 STORY-00538: subscribed-friend friend+public routes
    *  loaded from GET /api/circle/routes. Stored separately from `routes`
    *  (Mine) so Trails Friends sub-tab can render them without touching
@@ -122,43 +113,23 @@ export interface RouteStore {
   updateRoute: (id: string, updates: Partial<Route>) => Promise<void>;
   deleteRoute: (id: string) => Promise<void>;
 
-  // Waypoints (local-only until next save)
-  addWaypoint: (routeId: string, waypoint: Omit<Waypoint, 'id'>) => void;
-  removeWaypoint: (routeId: string, waypointId: string) => void;
-
-  // Navigation
-  setActiveRoute: (id: string | null) => void;
-  incrementRunCount: (id: string) => Promise<void>;
-
-  // Marker muting (local UI state — not persisted to backend)
-  muteMarker: (routeId: string, markerId: string) => void;
-  unmuteMarker: (routeId: string, markerId: string) => void;
-
-  // Legacy — kept for compatibility, calls loadRoutes
-  hydrate: () => Promise<void>;
+  // O1 batch 35: removed addWaypoint, removeWaypoint (0 external callers — waypoint UI not built),
+  // setActiveRoute, incrementRunCount, muteMarker, unmuteMarker, hydrate (0 external callers).
 }
 
 // ── Store ───────────────────────────────────────────────────────────────────
 
 export const useRouteStore = create<RouteStore>((set, get) => ({
   routes: [],
-  activeRouteId: null,
-  routesLoadCompleted: false,
   // Sprint 69 STORY-00538: initial empty until first loadCircleRoutes().
   circleRoutes: [],
   loadingCircleRoutes: false,
 
   loadRoutes: async () => {
-    // v8-audit (V7-BUG-006): set routesLoadCompleted=true only after
-    // a successful fetchRoutes resolution. Boot reconcile gates on
-    // this flag so a partial/paginated load doesn't silently
-    // delete extras for routes the backend still returns later.
-    set({ routesLoadCompleted: false });
     try {
       const routes = await fetchRoutes();
-      set({ routes, routesLoadCompleted: true });
+      set({ routes });
     } catch (err) {
-      // Don't flag completion on error — orphan reconcile must wait.
       throw err;
     }
   },
@@ -297,7 +268,6 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     }
     set((s) => ({
       routes: s.routes.filter(r => r.id !== id),
-      activeRouteId: s.activeRouteId === id ? null : s.activeRouteId,
     }));
     try {
       const { deleteExtras } = await import('../services/LocalRouteExtras');
@@ -342,67 +312,8 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     void before;
     return;
   },
-
-  addWaypoint: (routeId, waypointData) => {
-    const waypoint: Waypoint = { ...waypointData, id: generateId() };
-    set((s) => ({
-      routes: s.routes.map(r =>
-        r.id === routeId
-          ? { ...r, waypoints: [...r.waypoints, waypoint], updatedAt: Date.now() }
-          : r
-      ),
-    }));
-  },
-
-  removeWaypoint: (routeId, waypointId) => {
-    set((s) => ({
-      routes: s.routes.map(r =>
-        r.id === routeId
-          ? { ...r, waypoints: r.waypoints.filter(w => w.id !== waypointId), updatedAt: Date.now() }
-          : r
-      ),
-    }));
-  },
-
-  setActiveRoute: (id) => {
-    set((s) => ({
-      routes: s.routes.map(r => ({ ...r, isActive: r.id === id })),
-      activeRouteId: id,
-    }));
-  },
-
-  incrementRunCount: async (id) => {
-    set((s) => ({
-      routes: s.routes.map(r =>
-        r.id === id
-          ? { ...r, runCount: r.runCount + 1, lastRunAt: Date.now(), updatedAt: Date.now() }
-          : r
-      ),
-    }));
-    await incrementRouteRunCount(id);
-  },
-
-  muteMarker: (routeId, markerId) => {
-    set((s) => ({
-      routes: s.routes.map(r =>
-        r.id === routeId && !r.mutedMarkerIds.includes(markerId)
-          ? { ...r, mutedMarkerIds: [...r.mutedMarkerIds, markerId], updatedAt: Date.now() }
-          : r
-      ),
-    }));
-  },
-
-  unmuteMarker: (routeId, markerId) => {
-    set((s) => ({
-      routes: s.routes.map(r =>
-        r.id === routeId
-          ? { ...r, mutedMarkerIds: r.mutedMarkerIds.filter(id => id !== markerId), updatedAt: Date.now() }
-          : r
-      ),
-    }));
-  },
-
-  hydrate: async () => {
-    await get().loadRoutes();
-  },
+  // O1 batch 35: removed addWaypoint, removeWaypoint, setActiveRoute,
+  // incrementRunCount, muteMarker, unmuteMarker, hydrate — all had 0 external
+  // callers. No UI for waypoints/muting; run count incremented server-side
+  // via RunningScreen finish flow; hydrate was legacy alias for loadRoutes.
 }));
