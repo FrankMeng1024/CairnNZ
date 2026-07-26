@@ -16,7 +16,7 @@ import {
   Alert, Animated, Easing, Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import Svg, { Path, Circle as SvgCircle } from 'react-native-svg';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -1754,7 +1754,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     // Dim backdrop so the route picker reads as a modal layer instead
     // of a floating panel. Matches the rest of the app's bottom-sheet
-    // language (FlagPlantSheet, MarkerDetailSheet, etc).
+    // language (MarkerDetailSheet, StopSummarySheet, etc).
     backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'flex-end',
   },
