@@ -37,7 +37,6 @@ const STORAGE_KEY = '@cairn:offline_queue:v1';
 const MAX_ATTEMPTS = 8; // ~beyond this, drop with a breadcrumb
 
 export type OfflineOpKind =
-  | 'session_start'
   | 'session_append'
   | 'session_finalize'
   | 'marker_create';

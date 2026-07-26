@@ -13,7 +13,6 @@
 import { create } from 'zustand';
 import { storage } from './storage';
 import type { Coordinate } from '../utils/geo';
-import { authenticatedFetch } from '../services/apiService';
 import { deleteRemoteSession } from '../services/sessionService';
 import { crashLogger } from '../services/crashLogger';
 
@@ -100,55 +99,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return { sessions: next };
     });
 
-    // v73: when the incremental flow already created the server row
-    // (remoteId set during stopTracking), skip the legacy all-in-one
-    // POST. The row was already finalized via PATCH /api/sessions/:id.
-    // Without this guard we'd double-insert the session on every save.
-    if (session.remoteId != null) return;
-
-    // Sync to backend, capture remote ID
-    authenticatedFetch('/api/sessions', {
-      method: 'POST',
-      body: JSON.stringify({
-        type: session.activityMode,
-        start_time: new Date(session.startedAt).toISOString(),
-        end_time: new Date(session.endedAt).toISOString(),
-        distance_m: session.distanceM,
-        duration_s: session.durationS,
-        // User-assigned name (or our synthesised default). Without this
-        // the backend stores null → on next hydrate the activity list
-        // shows "Hike" generic instead of what the user typed in the
-        // post-stop summary sheet. Reported as v17 bug "I named it 1
-        // but Activities still shows Hike".
-        name: session.name ?? null,
-        route_points: session.trackPoints.length > 0 ? session.trackPoints : null,
-        // v77: also send raw audit track. Backend stores in route_points_raw.
-        // Only used by legacy "all-in-one POST" path (when start/append/finalize
-        // flow couldn't run, e.g. offline at start). Modern flow ships raw
-        // via finalizeSession PATCH — this path won't be hit when remoteId
-        // is already set (addSession early-returns above).
-        route_points_raw: session.trackPointsRaw && session.trackPointsRaw.length > 0
-          ? session.trackPointsRaw
-          : null,
-        flags: session.markerIds.length > 0 ? session.markerIds : null,
-      }),
-    }).then(async (res) => {
-      if (!res.ok) return;
-      const data = await res.json().catch(() => null);
-      const remoteId = data?.session?.id;
-      if (!remoteId) return;
-      // Patch remoteId into the stored session
-      set((s) => {
-        const updated = s.sessions.map((sess) =>
-          sess.id === session.id ? { ...sess, remoteId } : sess
-        );
-        const summaries = updated.map(({ trackPoints: _, ...rest }) => rest);
-        storage.setItem(sessionsKey(get().currentUserId), JSON.stringify(summaries));
-        return { sessions: updated };
-      });
-    }).catch(() => {
-      // Network failure — session remains in local store without remoteId
-    });
   },
 
   clearSessions: () => {
