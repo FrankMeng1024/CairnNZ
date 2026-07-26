@@ -31,11 +31,6 @@ export interface MemorySettings {
    *  (FogLayer returns null, user sees base map without fog) — for debug
    *  triage when H3 path misbehaves on real device. */
   useH3Fog: boolean;
-  /** O1 batch 28.6 (Bug 7): 走路是否实时解锁 memory。
-   *  true (默认) = 走路时 GPS 点实时进 memory,fog 实时清 (现有行为)
-   *  false = 只有 save hike/run 时才把这次的 GPS 点写入 memory
-   *  测试场景 (sim-walker) 用户希望关闭,避免 fog 被走垃圾数据覆盖。 */
-  unlockOnWalk: boolean;
 }
 
 interface MemorySettingsState extends MemorySettings {
@@ -52,8 +47,6 @@ const DEFAULTS: MemorySettings = {
   firstVisitDone: false,
   // v305 OTA: H3 hex fog 默认开启。
   useH3Fog: true,
-  // O1 batch 28.6: 默认走路时实时 unlock memory (现有行为)。
-  unlockOnWalk: true,
 };
 
 function persist(state: MemorySettings): void {
@@ -76,8 +69,6 @@ async function tryLoad(): Promise<MemorySettings | null> {
       firstVisitDone: Boolean(parsed.firstVisitDone ?? DEFAULTS.firstVisitDone),
       // v305 OTA: useH3Fog 默认 true(老用户字段不存在时也启用)。
       useH3Fog: typeof parsed.useH3Fog === 'boolean' ? parsed.useH3Fog : DEFAULTS.useH3Fog,
-      // O1 batch 28.6: unlockOnWalk 默认 true。
-      unlockOnWalk: typeof parsed.unlockOnWalk === 'boolean' ? parsed.unlockOnWalk : DEFAULTS.unlockOnWalk,
     };
   } catch {
     return null;
@@ -100,8 +91,8 @@ export const useMemorySettingsStore = create<MemorySettingsState>((set, get) => 
 
   set: (key, value) => {
     set({ [key]: value } as Partial<MemorySettingsState>);
-    const { foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone, useH3Fog, unlockOnWalk } = get();
-    persist({ foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone, useH3Fog, unlockOnWalk });
+    const { foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone, useH3Fog } = get();
+    persist({ foregroundAutoUnlockEnabled, recordMode, showFriendOverlay, firstVisitDone, useH3Fog });
   },
 
   reset: () => {

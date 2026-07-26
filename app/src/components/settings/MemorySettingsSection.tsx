@@ -24,7 +24,6 @@ export function MemorySettingsSection() {
   const fg = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
   const fri = useMemorySettingsStore((s) => s.showFriendOverlay);
   const recordMode = useMemorySettingsStore((s) => s.recordMode);
-  const unlockOnWalk = useMemorySettingsStore((s) => s.unlockOnWalk);
   const setSetting = useMemorySettingsStore((s) => s.set);
   const pointCount = useMemoryStore((s) => s.points.length);
   const userId = useAppStore((s) => s.user?.id ?? null);
@@ -99,15 +98,6 @@ export function MemorySettingsSection() {
         </View>
         <View style={styles.divider} />
         */}
-        <ToggleRow
-          iconName="Mountain"
-          iconBg={Colors.primaryLight}
-          label="Unlock memory while walking"
-          hint="When on, GPS points clear fog on the Memory map as you walk. When off, only saving a Hike or Run merges the points (useful for dirty-data testing)."
-          value={unlockOnWalk}
-          onToggle={() => setSetting('unlockOnWalk', !unlockOnWalk)}
-        />
-        <View style={styles.divider} />
         <ToggleRow
           iconName="Users"
           iconBg={Colors.runningLight}

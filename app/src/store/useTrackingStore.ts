@@ -1366,15 +1366,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         });
       }
     } catch { /* best effort - hikeTrackWriter can fail on web / setup issues */ }
-    // O1 batch 28.6 (Bug 7): 走路实时 unlock memory (默认开)。用户可在
-    // Settings 关闭 → 只有 save hike 时才 unlock (走 flushHikingToMemory)。
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const memSettings = require('../features/memory/store/useMemorySettingsStore');
-      if (memSettings.useMemorySettingsStore.getState().unlockOnWalk) {
-        useMemoryStore.getState().recordPoint(coord.lat, coord.lng, timestamp ?? Date.now());
-      }
-    } catch { /* silent */ }
+    // O4 rollback (2026-07-26): 删掉 O1 batch 28.6 real-GPS 里的 recordPoint
+    // 实时 unlock。走 v450 行为: memory 只在 Save Hike 后由 flushHikingToMemory
+    // 一次性合入,GPS 每点不再实时 unlock。
   },
 
   linkMarker: (markerId) => {
@@ -1444,18 +1438,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         altitudeHistory: newAltHistory,
       };
     });
-    // O1 batch 28.6 (Bug 7): 走路实时 unlock memory (若 unlockOnWalk=true)。
-    // 从 __simwalkerAddTrackPoint 出发,每 GPS 点也调 recordPoint 让 fog
-    // 实时清。默认开,用户可在 Settings 关掉 (只 save hike 时才 unlock)。
-    // set 里不方便调 (会重复 set),写在 set 外面 fire-and-forget。
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const memSettings = require('../features/memory/store/useMemorySettingsStore');
-      if (memSettings.useMemorySettingsStore.getState().unlockOnWalk) {
-        const t = timestamp ?? Date.now();
-        useMemoryStore.getState().recordPoint(coord.lat, coord.lng, t);
-      }
-    } catch { /* silent */ }
+    // O4 rollback (2026-07-26): 删掉 O1 batch 28.6 的"走路时实时 unlock
+    // memory"逻辑。用户 2026-07-26 明确: memory 记录用 v450 行为 —
+    // Save Hike 时 flushHikingToMemory 一次性把 trackPoints 合入 memory,
+    // 走路的时候 memory 不动。unlockOnWalk toggle + recordPoint 全删。
   },
 
   /**

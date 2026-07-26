@@ -37,15 +37,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // toggle / Bug5+6 log)。用户明确铁律: 每批 OTA 都 bump 版本号,首页
 // 显示新版号让用户一眼看到收到的 OTA。
 // O3 (2026-07-26 batch 28.8): O2 上线后用户报 10 新问题 → 查 aliyun log
-// 复现根因 → 修:
-//   - sim-walker subdivide 从"计算=20"改成 config.subdivide (默认 5) 且
-//     可在 overlay 设置里改 (25/400/5 是用户明确参数)
-//   - saveSettings 先关 modal 再改 config, 避免 setStepConfig 抛错时
-//     modal 卡住无法退出
-//   - 中文 UI 转英文: MemorySettingsSection "unlockOnWalk" toggle,
-//     HikingScreen stop sheet "放弃/保存" → "Discard/Save",
-//     UnfinishedRecoveryModal 5 处 → 全部英文
-export const OTA_VERSION = 'O3';
+// 复现根因 → 修 sim-walker subdivide 可配 + modal 关闭修复 + Chinese→English UI
+// O4 (2026-07-26 batch 29 ROLLBACK): O3 上线后用户测所有 sim-walker 问题
+// 依然没修复。用户明确要求回滚 sim-walker "真实用户模拟" 那段到 v450
+// (2026-07-25 用户说好用的版本):
+//   - gpsInjector.ts 完全回到 v450: 单点 emit, 5m/500ms/JITTER=2m, 无 subdivide
+//   - SimWalkerOverlay.tsx 回到 v450: 3 input fields (step_m/emit_ms/undo_count)
+//   - __simwalkerAddTrackPoint 里 recordPoint block 删除 (memory 不实时 unlock)
+//   - real-GPS addTrackPoint 里 recordPoint block 删除 (同理)
+//   - useMemorySettingsStore 里 unlockOnWalk field 删除
+//   - MemorySettingsSection 里 unlockOnWalk toggle 删除
+// 保留 (clean 部分, 不回退):
+//   - UnfinishedRecoveryModal 中文→英文
+//   - MemorySettingsSection Show friends' memory 英文 hint (unchanged)
+//   - HikingScreen stop sheet Discard/Save 英文
+//   - Chinese→English UI 全部保留
+export const OTA_VERSION = 'O4';
 
 
 type OtaState =

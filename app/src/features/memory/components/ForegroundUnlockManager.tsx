@@ -21,7 +21,7 @@
 import { useEffect, useRef } from 'react';
 import { AppState, InteractionManager } from 'react-native';
 import * as Location from 'expo-location';
-// O1: unlockEngine deleted — memory unlock now only via flushHikingToMemory + sim-walker
+// O1: unlockEngine deleted — memory unlock now only via flushHikingToMemory
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useAppStore } from '../../../store/useAppStore';
 import { useMemoryStore } from '../store/useMemoryStore';
@@ -29,7 +29,9 @@ import { useMarkerStore } from '../../../store/useMarkerStore';
 import { hydrateMemoryForUser, detachMemoryPersistence, flushMemoryNow } from '../services/memoryPersistence';
 // O1: unlockEngine service deleted — real-time GPS auto-unlock has been
 // dead since v322 (ForegroundUnlockManager watcher body has early `return`).
-// Memory now only unlocks via flushHikingToMemory (Save Hike) + sim-walker.
+// Memory now only unlocks via flushHikingToMemory (Save Hike). O4 rollback
+// (2026-07-26): removed the sim-walker realtime recordPoint path too.
+// sim-walker writes to trackPoints only; memory unlocks only after Save.
 // v305 OTA: H3 hex-cell fog layer — replaces turf.union polygon path.
 import { hydrateH3ForUser, detachH3Persistence, flushH3Now } from '../services/h3Persistence';
 import { attachMemorySync, detachMemorySync, pullMemoryFromServer, pushMemoryNow } from '../../../services/memorySync';
@@ -62,7 +64,8 @@ export function ForegroundUnlockManager() {
   // mode when the foreground watcher subscribed). All Q9+R6 gate logic
   // that read recordMode/sessionActive/trackingStatus was removed in
   // v346 (native fog) + O1 (unlockEngine deletion) — memory only
-  // unlocks via flushHikingToMemory (Save Hike) + sim-walker now.
+  // unlocks via flushHikingToMemory (Save Hike). O4: sim-walker no longer
+  // touches memory in realtime — same Save-only path.
   const recordMode = useMemorySettingsStore((s) => s.recordMode);
   const userId = useAppStore((s) => s.user?.id ?? null);
   // v314 fix: also require isLoggedIn=true. v312/v313 server data showed
@@ -294,7 +297,8 @@ export function ForegroundUnlockManager() {
           // O1: removed dead branch (was `return;` then unreachable code
           // calling performInitialRevealIfNeeded/processReading). The
           // unlockEngine service is deleted in O1 as memory only unlocks
-          // via flushHikingToMemory (Save Hike) + sim-walker.
+          // via flushHikingToMemory (Save Hike). O4: sim-walker no longer
+          // touches memory in realtime either — same Save-only path.
           return;
         });
         log('memory.watcher_started', { mode: recordModeRef.current });
