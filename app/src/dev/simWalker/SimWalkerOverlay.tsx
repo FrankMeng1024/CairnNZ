@@ -214,7 +214,7 @@ export function SimWalkerOverlay() {
               { transform: [{ translateX: stickX }, { translateY: stickY }] },
             ]}
           />
-          <Text style={styles.joyLabel}>拖动走 · {config.step_m}m/{Math.round(config.emit_ms/100)/10}s</Text>
+          <Text style={styles.joyLabel}>屏幕 {config.step_m}m/{Math.round(config.emit_ms/100)/10}s · GPS 真人 1m/s</Text>
         </View>
         <StartAnchorHint />
       </View>

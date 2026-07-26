@@ -24,6 +24,7 @@ export function MemorySettingsSection() {
   const fg = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
   const fri = useMemorySettingsStore((s) => s.showFriendOverlay);
   const recordMode = useMemorySettingsStore((s) => s.recordMode);
+  const unlockOnWalk = useMemorySettingsStore((s) => s.unlockOnWalk);
   const setSetting = useMemorySettingsStore((s) => s.set);
   const pointCount = useMemoryStore((s) => s.points.length);
   const userId = useAppStore((s) => s.user?.id ?? null);
@@ -98,6 +99,15 @@ export function MemorySettingsSection() {
         </View>
         <View style={styles.divider} />
         */}
+        <ToggleRow
+          iconName="Mountain"
+          iconBg={Colors.primaryLight}
+          label="走路实时解锁 Memory"
+          hint="开启后,走路时 GPS 每点即刻在 Memory 地图上清雾。关闭后,只有 Save 一次 Hike 或 Run 才把点合入 Memory (更适合脏数据测试)。"
+          value={unlockOnWalk}
+          onToggle={() => setSetting('unlockOnWalk', !unlockOnWalk)}
+        />
+        <View style={styles.divider} />
         <ToggleRow
           iconName="Users"
           iconBg={Colors.runningLight}

@@ -1366,6 +1366,15 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         });
       }
     } catch { /* best effort - hikeTrackWriter can fail on web / setup issues */ }
+    // O1 batch 28.6 (Bug 7): 走路实时 unlock memory (默认开)。用户可在
+    // Settings 关闭 → 只有 save hike 时才 unlock (走 flushHikingToMemory)。
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const memSettings = require('../features/memory/store/useMemorySettingsStore');
+      if (memSettings.useMemorySettingsStore.getState().unlockOnWalk) {
+        useMemoryStore.getState().recordPoint(coord.lat, coord.lng, timestamp ?? Date.now());
+      }
+    } catch { /* silent */ }
   },
 
   linkMarker: (markerId) => {
@@ -1391,7 +1400,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // while duration is frozen → bogus data. Reject unless status is
       // 'tracking' (or 'idle' for pre-Start-Hiking dry-run testing).
       if (s.status === 'paused') return s;
-      const t = Date.now();
+      // O1 batch 28.6: t 从参数 timestamp 拿 (sim-walker subdivide 模式
+      // 传模拟时间),或 fallback Date.now()。原硬编码 Date.now() 让
+      // rawPoint.t 永远是挂钟,session 时间轴无法反映模拟真人步行速度。
+      const t = timestamp ?? Date.now();
       // v450: strip segmentBreak — v448/v449 experimented with it,
       // v450 removed on user request (undo/⟲ should NOT break line).
       const { segmentBreak: _drop, ...cleanCoord } = coord;
@@ -1424,7 +1436,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         trackPointsRaw: [...s.trackPointsRaw, rawPoint],
         lastCoordinate: cleanCoord,
         lastCoordinateTime: t,
-        lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
+        lastFixTimestamp: t,
         distanceM: s.distanceM + addedDistance,
         elevationGainM: cleanCoord.alt !== null && cleanCoord.alt !== undefined
           ? calculateElevationGain(newAltHistory)
@@ -1432,6 +1444,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         altitudeHistory: newAltHistory,
       };
     });
+    // O1 batch 28.6 (Bug 7): 走路实时 unlock memory (若 unlockOnWalk=true)。
+    // 从 __simwalkerAddTrackPoint 出发,每 GPS 点也调 recordPoint 让 fog
+    // 实时清。默认开,用户可在 Settings 关掉 (只 save hike 时才 unlock)。
+    // set 里不方便调 (会重复 set),写在 set 外面 fire-and-forget。
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const memSettings = require('../features/memory/store/useMemorySettingsStore');
+      if (memSettings.useMemorySettingsStore.getState().unlockOnWalk) {
+        const t = timestamp ?? Date.now();
+        useMemoryStore.getState().recordPoint(coord.lat, coord.lng, t);
+      }
+    } catch { /* silent */ }
   },
 
   /**

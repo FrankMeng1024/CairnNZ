@@ -23,13 +23,21 @@ export interface StepConfig {
 }
 
 export const DEFAULT_STEP_CONFIG: StepConfig = {
-  // O1 real-walk defaults: 1.4m / 1200ms = 1.17 m/s (真实人步行 ≈ 5km/h).
-  // 之前 5m/500ms = 10m/s 是慢跑速度,数据看起来不像真 GPS。用户可通过
-  // ⚙ Settings 面板临时调 (测试用),不 persist 到 store。
-  step_m: 1.4,
-  emit_ms: 1200,
+  // O1 batch 28.6: 用户拍板 "屏幕视觉快 + GPS 数据像真人走"。
+  // 屏幕每 tick 跳 50m,tick 间隔 200ms → 视觉 250m/s (远快过真步速)。
+  // 每 tick 时把 50m 分段插值为 50 个 GPS 点 (每点 1m,每点 ts 累加 1s
+  // = 真人 1m/s 步速),存到 store 时是真实 walking pace 的数据。
+  // 用户目的: 测试向,一个人跑不了那么多地方,要数据像真的。
+  step_m: 50,
+  emit_ms: 200,
   undo_count: 10,
 };
+
+// O1 batch 28.6: 每步插值参数。真人步速 = 1.4m/s,插值每 1m 一个 GPS
+// 点,每点 ts +714ms (1000/1.4)。为简化,每点 ts 差用 1000ms,GPS 密度
+// 每秒 1 点 = 真机手机默认 GPS 采样率。
+const WALKING_STEP_M = 1;           // 每插值点间距 (真实 GPS 密度)
+const WALKING_STEP_MS = 1000;       // 每插值点时间差 (~1m/s 步速)
 
 export interface InjectorSnapshot {
   active: boolean;
@@ -81,6 +89,11 @@ class GpsInjector {
   private listeners = new Set<InjectorListener>();
   private posHistory: Array<{ lat: number; lng: number }> = [];
   private config: StepConfig = { ...DEFAULT_STEP_CONFIG };
+  // O1 batch 28.6: 模拟时间累加器。每次 subdivide 插值一个 walking step
+  // 就 +WALKING_STEP_MS。存到 store 时 rawPoint.t 用此值 (不是 Date.now)。
+  // start() / setStartPosition() 时初始化为 useTrackingStore.startedAt (若
+  // 无则 Date.now())。undo 时回退到 trackPoints 尾部 t + WALKING_STEP_MS。
+  private simTimeCursor: number | null = null;
 
   setStartPosition(lat: number, lng: number): void {
     log('v441.simwalker.set_start', {
@@ -90,6 +103,15 @@ class GpsInjector {
     });
     this.currentPos = { lat, lng };
     this.posHistory = [];
+    // O1 batch 28.6: ⟲ 是 pre-hike 用的 (用户明确 2026-07-25),此时
+    // simTimeCursor 应重置到 useTrackingStore.startedAt (或 Date.now
+    // 若 hike 未 start)。避免带上一次 hike 残余的模拟时间。
+    try {
+      const st: any = useTrackingStore.getState();
+      this.simTimeCursor = st.startedAt ?? Date.now();
+    } catch {
+      this.simTimeCursor = Date.now();
+    }
     // v450: no segmentBreak on ⟲ — user confirmed 2026-07-25 "定位是开始
     // 用的,不会在走一半时用". Since ⟲ is only tapped before hike starts
     // (or right at the first step), there is never an old polyline that
@@ -106,7 +128,7 @@ class GpsInjector {
       useTrackingStore.setState((s: any) => ({
         ...s,
         lastCoordinate: { lat, lng, alt: null, accuracy: 5, speed: 0 },
-        lastCoordinateTime: Date.now(),
+        lastCoordinateTime: this.simTimeCursor ?? Date.now(),
       }));
     } catch { /* ignore */ }
     this.notify();
@@ -194,6 +216,15 @@ class GpsInjector {
         });
         storeRemoved = take;
       }
+      // O1 batch 28.6: undo 后 simTimeCursor 回退到剩余 trackPoints 尾部,
+      // 避免新点 ts 跳跃出现 gap。
+      const finalPts = (useTrackingStore.getState() as any).trackPoints;
+      if (Array.isArray(finalPts) && finalPts.length > 0) {
+        const lastT = finalPts[finalPts.length - 1]?.t;
+        if (typeof lastT === 'number' && Number.isFinite(lastT)) {
+          this.simTimeCursor = lastT;
+        }
+      }
     } catch (err) {
       log('v441.simwalker.undo_store_err', { err: String(err) });
     }
@@ -214,7 +245,15 @@ class GpsInjector {
       log('v441.simwalker.start_already_active', {});
       return;
     }
-    log('v441.simwalker.start', { config: this.config });
+    // O1 batch 28.6: 每次 start 重置 simTimeCursor,避免上一次 hike
+    // 残余的模拟时间被继承。
+    try {
+      const st: any = useTrackingStore.getState();
+      this.simTimeCursor = st.startedAt ?? Date.now();
+    } catch {
+      this.simTimeCursor = Date.now();
+    }
+    log('v441.simwalker.start', { config: this.config, sim_ts_init: this.simTimeCursor });
     this.tickHandle = setInterval(() => this.tick(), this.config.emit_ms);
   }
 
@@ -225,6 +264,8 @@ class GpsInjector {
       log('v441.simwalker.stop', { ticks_emitted: this.ticksEmitted });
     }
     this.strength = 0;
+    // O1 batch 28.6: 清 simTimeCursor,下次 start 重新初始化。
+    this.simTimeCursor = null;
   }
 
   getSnapshot(): InjectorSnapshot {
@@ -269,39 +310,58 @@ class GpsInjector {
       this.notify();
       return;
     }
-    // Advance step_m * strength metres in bearing direction
+    // O1 batch 28.6: 屏幕视觉先前进 step_m * strength 米。
     const stepM = this.config.step_m * this.strength;
-    const next = moveByBearing(this.currentPos.lat, this.currentPos.lng, this.bearingRad, stepM);
-    this.currentPos = next;
+    const nextScreenPos = moveByBearing(this.currentPos.lat, this.currentPos.lng, this.bearingRad, stepM);
+    const startPos = this.currentPos;
+    this.currentPos = nextScreenPos;
 
-    // Save history for undo
-    this.posHistory.push({ lat: next.lat, lng: next.lng });
+    // Save history for undo (screen pos, 用于 ⟲/↶ 恢复)
+    this.posHistory.push({ lat: nextScreenPos.lat, lng: nextScreenPos.lng });
     if (this.posHistory.length > HISTORY_SIZE) this.posHistory.shift();
 
-    // Apply small jitter for realism
-    const jitterMag = Math.abs(boxMuller()) * JITTER_M_1_SIGMA;
-    const jitterBearing = Math.random() * 2 * Math.PI;
-    const jittered = moveByBearing(next.lat, next.lng, jitterBearing, jitterMag);
+    // O1 batch 28.6: 把 startPos → nextScreenPos 这段 (stepM 米) 分成
+    // walking pace 的子步子: 每 WALKING_STEP_M=1 米一个 GPS 点。这样存
+    // 到 store 里的 GPS 密度是真人手机默认采样 (~1 点/秒),而屏幕视觉
+    // 每 tick 跳 stepM 米。
+    const subdivideCount = Math.max(1, Math.floor(stepM / WALKING_STEP_M));
+    // 初始化 simTimeCursor (若 start() 时未初始化)。
+    if (this.simTimeCursor === null) {
+      try {
+        const st: any = useTrackingStore.getState();
+        this.simTimeCursor = st.startedAt ?? Date.now();
+      } catch {
+        this.simTimeCursor = Date.now();
+      }
+    }
 
-    const speedMs = stepM / (this.config.emit_ms / 1000);
-    const accuracy = 5 + Math.random() * 10;
     this.ticksEmitted += 1;
+    const accuracy = 5 + Math.random() * 10;
+    const speedMs = WALKING_STEP_M / (WALKING_STEP_MS / 1000); // 1 m/s
 
     log('v441.simwalker.tick_emit', {
       idx: this.ticksEmitted,
-      raw_lat: Number(next.lat.toFixed(6)),
-      raw_lng: Number(next.lng.toFixed(6)),
-      jittered_lat: Number(jittered.lat.toFixed(6)),
-      jittered_lng: Number(jittered.lng.toFixed(6)),
       step_m: Number(stepM.toFixed(2)),
-      speed_ms: Number(speedMs.toFixed(2)),
-      accuracy_m: Number(accuracy.toFixed(1)),
+      subdivide: subdivideCount,
+      sim_ts_start: this.simTimeCursor,
       strength: Number(this.strength.toFixed(2)),
       bearing_deg: Number(((this.bearingRad * 180) / Math.PI).toFixed(1)),
       history_len: this.posHistory.length,
     });
 
-    this.emit(jittered.lat, jittered.lng, speedMs, accuracy, Date.now());
+    // 每个 subdivide 点插值 + emit
+    for (let i = 1; i <= subdivideCount; i++) {
+      const frac = i / subdivideCount;
+      const interpLat = startPos.lat + (nextScreenPos.lat - startPos.lat) * frac;
+      const interpLng = startPos.lng + (nextScreenPos.lng - startPos.lng) * frac;
+      // 每点单独 jitter,不共享 (让 GPS 抖动看起来独立)
+      const jitterMag = Math.abs(boxMuller()) * JITTER_M_1_SIGMA;
+      const jitterBearing = Math.random() * 2 * Math.PI;
+      const jittered = moveByBearing(interpLat, interpLng, jitterBearing, jitterMag);
+      // simTimeCursor 前面已初始化为 non-null (line 289-296 fallback)。
+      this.simTimeCursor = (this.simTimeCursor ?? Date.now()) + WALKING_STEP_MS;
+      this.emit(jittered.lat, jittered.lng, speedMs, accuracy, this.simTimeCursor);
+    }
     this.notify();
   }
 
