@@ -144,6 +144,11 @@ router.get('/public', async (req, res) => {
     const minLng = Math.min(lng1, lng2);
     const maxLng = Math.max(lng1, lng2);
 
+    // Cap bbox span to ~22 km per side (0.2°) to prevent full-table scans
+    if (maxLat - minLat > 0.2 || maxLng - minLng > 0.2) {
+      return res.status(400).json({ error: 'bbox span too large (max 0.2° per side)' });
+    }
+
     const userId = req.user.userId;
     const [rows] = await pool.execute(
       `SELECT m.id, m.type, m.lat, m.lng, m.created_at
@@ -151,6 +156,7 @@ router.get('/public', async (req, res) => {
        LEFT JOIN hidden_items h
          ON h.user_id = ? AND h.item_type = 'mark' AND h.item_id = m.id
        WHERE m.permission = 'public'
+         AND m.status != 'hidden'
          AND m.user_id != ?
          AND m.lat BETWEEN ? AND ?
          AND m.lng BETWEEN ? AND ?
