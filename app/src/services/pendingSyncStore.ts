@@ -22,6 +22,17 @@
 
 const PENDING_DIR = 'cairn-pending-sync/';
 
+// O1 batch 28: 每个 mutation 打 breadcrumb,便于诊断 Home page 假 pending
+// sync banner + save&end 后错误弹 "上次未完成" 两个 bug 的时机问题。
+// 不影响正常路径,只加可观测性。用 lazy-require 避免 circular dep。
+function breadcrumb(msg: string): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cl = require('./crashLogger');
+    (cl.crashLogger ?? cl.default)?.breadcrumb?.(msg);
+  } catch {/* silent */}
+}
+
 export interface PendingHike {
   localId: string;                 // uuid, hike 结束时生成
   userId: string;                  // 归属用户
@@ -134,6 +145,7 @@ export async function savePending(hike: PendingHike): Promise<void> {
   await ensureDir(fs);
   const path = fs.documentDirectory + PENDING_DIR + hike.localId + '.json';
   await fs.writeAsStringAsync(path, JSON.stringify(hike));
+  breadcrumb(`pendingSync:save localId=${hike.localId} remoteId=${hike.remoteId ?? 'null'} pts=${hike.payload?.route_points?.length ?? 0}`);
 }
 
 export async function listPending(): Promise<PendingHike[]> {
@@ -158,6 +170,7 @@ export async function listPending(): Promise<PendingHike[]> {
   }
   // 按 createdAt 升序: 老的先重试
   hikes.sort((a, b) => a.createdAt - b.createdAt);
+  breadcrumb(`pendingSync:list count=${hikes.length}${hikes.length > 0 ? ' localIds=' + hikes.map(h => h.localId.slice(0, 8)).join(',') : ''}`);
   return hikes;
 }
 
@@ -167,6 +180,7 @@ export async function removePending(localId: string): Promise<void> {
   const path = fs.documentDirectory + PENDING_DIR + localId + '.json';
   try {
     await fs.deleteAsync(path, { idempotent: true });
+    breadcrumb(`pendingSync:remove localId=${localId}`);
   } catch {
     /* file might not exist; that's fine */
   }
@@ -182,6 +196,7 @@ export async function markAttempt(localId: string): Promise<void> {
     hike.lastAttemptAt = Date.now();
     hike.attemptCount = (hike.attemptCount || 0) + 1;
     await fs.writeAsStringAsync(path, JSON.stringify(hike));
+    breadcrumb(`pendingSync:attempt localId=${localId} n=${hike.attemptCount}`);
   } catch {
     /* silent — race with removePending is OK */
   }
@@ -196,6 +211,7 @@ export async function updateRemoteId(localId: string, remoteId: number): Promise
     const hike = JSON.parse(raw) as PendingHike;
     hike.remoteId = remoteId;
     await fs.writeAsStringAsync(path, JSON.stringify(hike));
+    breadcrumb(`pendingSync:updateRemoteId localId=${localId} remoteId=${remoteId}`);
   } catch {
     /* silent */
   }
