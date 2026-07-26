@@ -32,7 +32,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Full version history archived at: docs/OTA_CHANGELOG.md
 // O1: switch from numeric v451+ to O-series. Users see "O1 · Up to date"
 // on the OtaBadge. Future OTA versions increment as O2, O3, ...
-export const OTA_VERSION = 'O1';
+// O2 (2026-07-26 batch 28): 6 bug fix (Remember-me SecureStore / Memory
+// render sync / sim-walker subdivide / Stop 放弃-保存 / unlockOnWalk
+// toggle / Bug5+6 log)。用户明确铁律: 每批 OTA 都 bump 版本号,首页
+// 显示新版号让用户一眼看到收到的 OTA。
+export const OTA_VERSION = 'O2';
 
 
 type OtaState =
