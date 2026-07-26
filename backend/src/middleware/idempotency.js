@@ -84,10 +84,14 @@ async function idempotency(req, res, next) {
     const status = res.statusCode || 200;
     // Only cache successful responses (2xx). 4xx/5xx let client retry fresh.
     if (status >= 200 && status < 300) {
+      // O1 (2026-07-26): op_kind 从 req.originalUrl 派生 (完整 path 含
+      // sub-router 前缀)。原 req.path.split('/')[2] 在 sub-router 挂载
+      // 下拿到 undefined,op_kind 恒为 'unknown',分类维度失效。
+      const opKind = (req.originalUrl || req.path || '').split('?')[0].slice(0, 32) || 'unknown';
       pool.query(
         `INSERT IGNORE INTO idempotency_keys (op_id, op_kind, user_id, status_code, response_json)
          VALUES (?, ?, ?, ?, ?)`,
-        [opId, req.path.split('/')[2] || 'unknown', userId, status, JSON.stringify(body || {})],
+        [opId, opKind, userId, status, JSON.stringify(body || {})],
       ).catch((err) => {
         // eslint-disable-next-line no-console
         console.warn('[idempotency] write failed', err.message);

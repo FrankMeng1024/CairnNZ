@@ -339,17 +339,23 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
       // v439: attribute newly-inserted points to unlocked_regions inside
       // the same transaction so panel reads see fresh unlocks immediately
       // after this /save call returns.
-      try {
-        const { attributeMemoryPoints } = require('../lib/attributeMemoryPoints');
-        const tsList = validRows.map((r) => r[3]);
-        const minTs = Math.min(...tsList);
-        const maxTs = Math.max(...tsList);
-        await attributeMemoryPoints(conn, userId, minTs, maxTs);
-      } catch (attrErr) {
-        console.error(`[sessions/save] ATTR_ERR user=${userId} session=${id} err=${attrErr.message}`);
-        // Do NOT rollback for attribution errors — the memory_points are
-        // already inserted correctly. Attribution can be recomputed via
-        // backfill script if it drifts.
+      // O1 (2026-07-26): guard validRows.length > 0 — Math.min/max(...[])
+      // = ±Infinity 传入 attributeMemoryPoints 会触发 SQL warning + 无谓
+      // round-trip。若所有 memory_points 都被 reject (line 313-324),
+      // 无需 attribution。
+      if (validRows.length > 0) {
+        try {
+          const { attributeMemoryPoints } = require('../lib/attributeMemoryPoints');
+          const tsList = validRows.map((r) => r[3]);
+          const minTs = Math.min(...tsList);
+          const maxTs = Math.max(...tsList);
+          await attributeMemoryPoints(conn, userId, minTs, maxTs);
+        } catch (attrErr) {
+          console.error(`[sessions/save] ATTR_ERR user=${userId} session=${id} err=${attrErr.message}`);
+          // Do NOT rollback for attribution errors — the memory_points are
+          // already inserted correctly. Attribution can be recomputed via
+          // backfill script if it drifts.
+        }
       }
     }
 

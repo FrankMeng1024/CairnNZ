@@ -7,15 +7,25 @@
  * NONCE_TTL_MS. Each nonce is bound to (userId, markerId, ts) so it
  * cannot be replayed against a different marker or user.
  *
- * Secret: process.env.NONCE_SECRET. If unset, falls back to JWT_SECRET so
- * deployment doesn't break before the env is added.
+ * Secret: process.env.NONCE_SECRET, fallback to JWT_SECRET. If neither
+ * is set at call time, throws — HMAC secret must never be a hardcoded
+ * default in production (O1 2026-07-26 security fix, previously fell
+ * back to 'cairn-dev-nonce-secret-do-not-ship' which allowed offline
+ * pre-computation attacks on the marker vote / report signature).
  */
 const crypto = require('crypto');
 
 const NONCE_TTL_MS = 60 * 1000; // 60s
 
 function getSecret() {
-  return process.env.NONCE_SECRET || process.env.JWT_SECRET || 'cairn-dev-nonce-secret-do-not-ship';
+  const s = process.env.NONCE_SECRET || process.env.JWT_SECRET;
+  if (!s) {
+    throw new Error(
+      'NONCE_SECRET or JWT_SECRET must be set — refusing to sign/verify ' +
+      'HMAC nonces with a hardcoded default.',
+    );
+  }
+  return s;
 }
 
 function sign(userId, markerId, ts) {
