@@ -81,27 +81,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //     active/{sid}.jsonl 留在磁盘,下次冷启触发 UnfinishedRecoveryModal。
 //     修:改成 await flushNow + await renameToCompleted,保证 rename
 //     跑完才 return
-// O7 (2026-07-26 batch 32 + 33): 3 波 fix 合一:
-// batch 32 (subagent post-O6 audit):
-//   (a) hikeTrackWriter flushBuffer mutex race — chain-serialization fix
-//   (b) stopTracking 里 await flush 会被 wall timeout 中断重现 Bug 8 →
-//       2.5s inner timeout + bg rename fallback (用 .finally 保证 flush
-//       reject 也照跑 rename)
-//   (c) SimWalkerOverlay saveSettings 顺序 (close-first)
-//   (d) App.tsx AppState drainPending gate 用 wasBackgrounded flag 处理
-//       iOS 'inactive' 中转态
-// batch 33 (用户 12:11 真实 hike 报了 2 个新 bug):
-//   Bug (新): 静安寺新闸路直角转弯 memory 走成斜线 = RDP 10m tolerance
-//       corner-cut 真实右角。修:RDP tolerance 10m → 3m,corner 保留但
-//       drift/multi-path (10-25m) 仍过滤
-//   Bug (新): 真实 hike Save 后 activity detail "Loading route..." 然后
-//       session 消失。aliyun log 显示 too_short_check 后 zero save events →
-//       HikingScreen wall-clock 5s 比 stopTracking 内部预算 (snapTrack 8s +
-//       saveHikeAtomic 20s) 短太多, 内部还在跑 UI 就放弃了 → 若内部有
-//       throw 就永远丢。修:HikingScreen wall-clock 5s → 30s + stopTracking
-//       内部加 3 个高保真 aliyun log (about_to_addSession / addSession_ok /
-//       final) 下次能精确定位 die 的位置
-export const OTA_VERSION = 'O7';
+// O8 (2026-07-26 batch 34): O7 subagent audit 找到用户 12:11 丢 session
+// 的最可能根因是 stopTracking 里 uuidv4() 或其他同步操作抛错 (在 too_short_check
+// log 和 addSession log 之间的 unguarded 区域)。修:
+//   1. **顶层 try/catch 兜底整个 save 分支** — 抛错时先 log 到 aliyun
+//      (o8.stop.outer_throw),再用 best-effort fallback addSession 保证
+//      本地最少存下用户走的路径,syncState='pending'。stopTracking 完成
+//      cleanup 不 re-throw
+//   2. **uuidv4() 加 try/catch + fallback** — 若 crypto 不可用用 timestamp
+//      + Math.random 做 key。fallback 时 log o8.stop.uuidv4_fallback
+//   3. 加两个 aliyun 高保真 checkpoint:
+//      - o8.stop.save_branch_entered (进入 save 分支)
+//      - o8.stop.payload_built (v412Payload 构造完 uuidv4 前)
+//      这样和 O7 的 3 个 log 一起,总共 5 个 checkpoint 可以精确
+//      定位到哪一段死了
+export const OTA_VERSION = 'O8';
 
 
 type OtaState =

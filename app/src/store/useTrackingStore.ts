@@ -845,6 +845,28 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     const s = get();
     let stopReason: 'saved' | 'saved_pending' | 'too-short' | null = null;
     if (s.sessionId && s.startedAt) {
+      // O8 (2026-07-26): 顶层 try/catch 兜底 — 用户 12:11 真实 hike 里
+      // stopTracking 在 too_short_check 和 addSession 之间某处 die 但没
+      // 上到 aliyun (crashLogger.breadcrumb 不 ship)。这个块里有很多
+      // 未 try/catch 的同步点 (uuidv4, .map, region.code 访问等)。任何
+      // 一处抛错 stopTracking 就 reject → HikingScreen wall-clock catch
+      // → nav 到 activity detail 但 session 永远丢。这个 try/catch 兜底:
+      //   - 抛错时先 log 到 aliyun 保留证据 (o8.stop.outer_throw)
+      //   - 尝试 minimal fallback addSession 保存本地路径 (best-effort)
+      //   - 不 re-throw,stopTracking 正常 return 完成 cleanup
+      try {
+      // O8 checkpoint 1: 进入 save 分支
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { log } = require('../services/appLog');
+        log('o8.stop.save_branch_entered', {
+          sessionId: s.sessionId?.slice(0, 8),
+          startedAt: s.startedAt,
+          status: s.status,
+          trackPoints_n: s.trackPoints.length,
+          distanceM: Number(s.distanceM.toFixed(1)),
+        });
+      } catch { /* log unavailable */ }
       const region = getCurrentRegion();
       // Default name: "Hike — DD/MM/YYYY" / "Run — DD/MM/YYYY". Used
       // when the user skipped the post-stop name input. Keeps the
@@ -1012,7 +1034,29 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         route_points_raw: v412RouteRaw,
         memory_points: memoryUnsynced,
       };
-      const idempotencyKey = uuidv4();
+      // O8 checkpoint 2: payload built. 下一步 uuidv4 曾在其他 RN app 里
+      // 被报 throw (crypto.getRandomValues 不可用),先记一笔。
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { log } = require('../services/appLog');
+        log('o8.stop.payload_built', {
+          route_n: v412Route3.length,
+          raw_n: v412RouteRaw.length,
+          memory_unsynced_n: memoryUnsynced.length,
+        });
+      } catch { /* ignore */ }
+      let idempotencyKey: string;
+      try {
+        idempotencyKey = uuidv4();
+      } catch (uuidErr) {
+        // Fallback: 用 time + random 做 idempotencyKey (质量弱一些但 non-throw)
+        idempotencyKey = `fallback-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { log } = require('../services/appLog');
+          log('o8.stop.uuidv4_fallback', { err: String(uuidErr).slice(0, 100), key: idempotencyKey });
+        } catch { /* ignore */ }
+      }
       let v412Result: any = null;
       let v412Success = false;
 
@@ -1156,6 +1200,62 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         });
       } catch { /* log unavailable */ }
       } // end too-short guard
+      } catch (outerErr) {
+        // O8: 顶层 catch — 保存到 aliyun + best-effort fallback addSession
+        // 保证用户走的路径永远不丢。
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { log } = require('../services/appLog');
+          log('o8.stop.outer_throw', {
+            sessionId: s.sessionId?.slice(0, 8),
+            err: String(outerErr).slice(0, 200),
+            stopReason,
+            trackPoints_n: s.trackPoints.length,
+            distanceM: Number(s.distanceM.toFixed(1)),
+          });
+        } catch { /* log unavailable */ }
+        crashLogger.breadcrumb(`o8:stop_outer_throw ${String(outerErr).slice(0, 100)}`);
+        // Fallback addSession: 若还没跑就用最小可用 payload 存下。stopReason
+        // 保持 null → HomeScreen 会显示 'pending sync' 但至少 session 存在。
+        if (stopReason === null && s.sessionId && s.startedAt) {
+          try {
+            const region = getCurrentRegion();
+            useSessionStore.getState().addSession({
+              id: s.sessionId,
+              remoteId: s.remoteSessionId ?? undefined,
+              activityMode: s.activityMode,
+              regionCode: region?.code ?? 'nz',
+              startedAt: s.startedAt,
+              endedAt: Date.now(),
+              durationS: s.durationS,
+              distanceM: s.distanceM,
+              elevationGainM: s.elevationGainM,
+              trackPoints: s.trackPoints,
+              trackPointsRaw: s.trackPointsRaw.length > 0 ? s.trackPointsRaw : undefined,
+              markerIds: s.markerIds,
+              pausePins: s.pausePins.length > 0 ? s.pausePins : undefined,
+              name: (sessionName && sessionName.trim().length > 0)
+                ? sessionName.trim().slice(0, 60)
+                : `Hike — ${new Date(s.startedAt).toISOString().slice(0, 10)}`,
+              memoryNewCells: 0,
+              syncState: 'pending',
+            });
+            stopReason = 'saved_pending';
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { log } = require('../services/appLog');
+              log('o8.stop.fallback_addSession_ok', { sessionId: s.sessionId.slice(0, 8) });
+            } catch { /* ignore */ }
+          } catch (fallbackErr) {
+            crashLogger.breadcrumb(`o8:fallback_addSession_failed ${String(fallbackErr).slice(0, 80)}`);
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { log } = require('../services/appLog');
+              log('o8.stop.fallback_addSession_failed', { err: String(fallbackErr).slice(0, 150) });
+            } catch { /* ignore */ }
+          }
+        }
+      }
     }
 
     // v409 fix #4: rename hike-track active JSONL → completed 供未来 replay
