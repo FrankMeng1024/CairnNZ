@@ -960,6 +960,7 @@ function StopSummarySheet({
   summary,
   onCancel,
   onConfirm,
+  onDiscard,
 }: {
   summary: {
     distanceM: number; durationS: number; elevationGainM: number;
@@ -968,6 +969,7 @@ function StopSummarySheet({
   };
   onCancel: () => void;
   onConfirm: (name: string) => void;
+  onDiscard: () => void;
 }) {
   const [name, setName] = useState('');
   const insets = useSafeAreaInsets();
@@ -1062,14 +1064,17 @@ function StopSummarySheet({
             />
           </View>
 
-          {/* Actions: Resume left, Save right */}
+          {/* O1 batch 28.4: Actions 改成 放弃 (Discard) + 保存 (Save & End)
+              两个按钮。点 scrim 外部 = 继续 (dismiss(onCancel) 走
+              resumeTracking)。用户明确不需要 "继续" button (无学习成本)。
+              放弃 = 用户主动丢弃本次 hike (清 disk + remote + store)。 */}
           <View style={stopSheetStyles.actions}>
             <TouchableOpacity
               style={stopSheetStyles.cancelBtn}
-              onPress={() => dismiss(onCancel)}
+              onPress={() => dismiss(onDiscard)}
               activeOpacity={0.7}
             >
-              <Text style={stopSheetStyles.cancelText}>Resume</Text>
+              <Text style={stopSheetStyles.cancelText}>放弃</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[stopSheetStyles.saveBtn, { backgroundColor: accent }]}
@@ -1077,7 +1082,7 @@ function StopSummarySheet({
               activeOpacity={0.85}
             >
               <Icon name="Save" size={14} color="#fff" strokeWidth={2.5} />
-              <Text style={stopSheetStyles.saveText}>Save & End</Text>
+              <Text style={stopSheetStyles.saveText}>保存</Text>
             </TouchableOpacity>
           </View>
 
@@ -2107,6 +2112,35 @@ export function HikingScreen() {
             // (no distance/elev accumulation; Kalman jumps once on the
             // next fresh GPS point).
             resumeTracking();
+            setStopSummary(null);
+          }}
+          onDiscard={async () => {
+            // O1 batch 28.4: Discard 走完整清理路径 (与 recoveryModal.onDiscard
+            // 一致): 清 disk active/*.jsonl + 删 remote session + 清 store。
+            // 不清 memory_points (用户明确: 测试向,加 unlockOnWalk setting 让
+            // 用户自主控制走路时是否 unlock memory)。
+            const preState = useTrackingStore.getState();
+            const capturedSessionId = preState.sessionId;
+            const capturedRemoteId = preState.remoteSessionId;
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const hikeTrackWriter = require('../services/hikeTrackWriter');
+              if (capturedSessionId) {
+                await hikeTrackWriter.discardActiveHike(capturedSessionId);
+              }
+            } catch { /* silent */ }
+            if (capturedRemoteId) {
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const { deleteRemoteSession } = require('../services/sessionService');
+                await deleteRemoteSession(capturedRemoteId);
+              } catch (err) {
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const cl = require('../services/crashLogger');
+                (cl.crashLogger ?? cl.default)?.breadcrumb?.(`o1:stop_discard_remote_failed ${String(err).slice(0, 80)}`);
+              }
+            }
+            discardCurrentSession();
             setStopSummary(null);
           }}
           onConfirm={async (name) => {
