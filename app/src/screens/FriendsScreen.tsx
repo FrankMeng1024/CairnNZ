@@ -352,7 +352,6 @@ export function FriendsScreen() {
 
   const loadRequests = async () => {
     const reqs = await fetchFriendRequests();
-    console.log('[FriendsScreen] loadRequests got:', reqs);
     // fetchFriendRequests returns whatever backend gives — backend uses snake_case.
     // Normalize types and stash on state.
     setIncomingRequests(

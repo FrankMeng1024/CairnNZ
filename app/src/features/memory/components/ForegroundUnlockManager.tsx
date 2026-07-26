@@ -26,7 +26,6 @@ import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useAppStore } from '../../../store/useAppStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMarkerStore } from '../../../store/useMarkerStore';
-import { useTrackingStore } from '../../../store/useTrackingStore';
 import { hydrateMemoryForUser, detachMemoryPersistence, flushMemoryNow } from '../services/memoryPersistence';
 // O1: unlockEngine service deleted — real-time GPS auto-unlock has been
 // dead since v322 (ForegroundUnlockManager watcher body has early `return`).
@@ -58,13 +57,13 @@ export function ForegroundUnlockManager() {
     require('../../../services/bootDiagnostics').markBootPhase('fgum_render_enter');
   } catch {/* ignore */}
   const enabled = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
-  // Q9 + R6: recordMode gates whether watcher should record without
-  // an active session. `status` includes 'tracking' AND 'paused' as
-  // active session phases (lastCoordinate is null during pause but
-  // user is still in a session).
+  // O1: recordMode kept only as a log field for memory.watcher_started
+  // (diagnostic — tells us if user was in 'active' or 'passive' record
+  // mode when the foreground watcher subscribed). All Q9+R6 gate logic
+  // that read recordMode/sessionActive/trackingStatus was removed in
+  // v346 (native fog) + O1 (unlockEngine deletion) — memory only
+  // unlocks via flushHikingToMemory (Save Hike) + sim-walker now.
   const recordMode = useMemorySettingsStore((s) => s.recordMode);
-  const trackingStatus = useTrackingStore((s) => s.status);
-  const sessionActive = trackingStatus === 'tracking' || trackingStatus === 'paused';
   const userId = useAppStore((s) => s.user?.id ?? null);
   // v314 fix: also require isLoggedIn=true. v312/v313 server data showed
   // hydrate+pull running with isLoggedIn=false but user.id present
@@ -81,8 +80,6 @@ export function ForegroundUnlockManager() {
   enabledRef.current = enabled;
   const recordModeRef = useRef(recordMode);
   recordModeRef.current = recordMode;
-  const sessionActiveRef = useRef(sessionActive);
-  sessionActiveRef.current = sessionActive;
 
   // Memory tile hydration tied to user identity.
   // v0.2.6.2 fix (J1 B3): track a generation token so the cleanup +

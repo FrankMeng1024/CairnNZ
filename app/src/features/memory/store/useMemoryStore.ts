@@ -88,11 +88,6 @@ interface MemoryState {
   /** Record one GPS point as visited. Idempotent. */
   recordPoint: (lat: number, lng: number, atMs?: number) => void;
 
-  // O1: recordCircleUnlock 保留(0 caller 但 impl 复杂,~220 行),下 sprint
-  // 决定是删还是保留;PlantScreen 已移除 selector 依赖,不会 trigger 无谓渲染。
-  // TODO(O2): 彻底删除 line 267-487 impl 后省 220 行。
-  recordCircleUnlock: (lat: number, lng: number, radiusMeters: number, atMs?: number) => void;
-
   /** Read API — is this lat/lng within `unlockRadius` of any visited point? */
   isExplored: (lat: number, lng: number) => boolean;
 
@@ -122,9 +117,6 @@ interface MemoryState {
 
   /** Replace all points (called by persistence on hydrate / by sync on download). */
   replacePoints: (points: VisitedPoint[], initialRevealDone: boolean) => void;
-
-  /** Mark initial-reveal as done so we don't re-trigger. */
-  markInitialRevealDone: () => void;
 
   /** Clear all memory. */
   clearAll: () => void;
@@ -263,111 +255,6 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     // cellVersion) will see both stores consistent on next render.
     // Done last so any throw above doesn't desync.
     useH3VisitedStore.getState().addPointToCells(lat, lng, ts);
-  },
-
-  recordCircleUnlock: (lat, lng, radiusMeters, atMs = Date.now()) => {
-    if (!isFinite(lat) || !isFinite(lng)) return;
-    const ts = Math.floor(atMs);
-    // V6 fix (v0.2.6.6): if radiusMeters > the rendered fog hole
-    // (UnlockConfig.radiusMeters = 25m), we need MULTIPLE visited
-    // points to actually cover the requested area. A single point
-    // renders only a 25m circle in fogBuilder, so requesting "500m
-    // initial reveal" but writing one point gives the user the
-    // unintentional "two-circles-with-fog-between" effect they
-    // reported.
-    //
-    // Strategy: tile the requested circle with a hex grid of points
-    // spaced ~30m apart (5m less than 25m radius so circles overlap
-    // and the fog renderer paints a continuous area).
-    const pointSpacingM = 30;
-    const requestedRadius = Math.max(0, radiusMeters);
-    const points = get().points;
-    const recent = points.slice(-32);
-    // If asked for ≤ pointSpacing radius, behave as before — single
-    // point + cull-against-recent (plant flow path).
-    if (requestedRadius <= pointSpacingM) {
-      for (const p of recent) {
-        if (distanceSqMeters({ lat, lng }, p) < CULL_THRESHOLD_SQ) {
-          return; // existing nearby point — no new insertion needed
-        }
-      }
-      const newPoint: VisitedPoint = { lat, lng, ts, cid: uuidv4(), synced: false };
-      const idx = get()._bucketIndex ? new Map(get()._bucketIndex!) : buildBucketIndex(points);
-      const k = bucketKey(lat, lng);
-      const arr = idx.get(k) ? [...idx.get(k)!, newPoint] : [newPoint];
-      idx.set(k, arr);
-      set({
-        points: [...points, newPoint],
-        _bucketIndex: idx,
-        geometryVersion: get().geometryVersion + 1,
-        _unsyncedCount: get()._unsyncedCount + 1,
-      });
-      return;
-    }
-
-    // Larger radius (initial reveal): tile with a TRUE axial hex grid
-    // so fog circles overlap continuously (no off-axis gaps).
-    //
-    // R-round B3 fix: the previous concentric-ring layout left ~36m
-    // gaps between adjacent rings at off-axis angles → fog circles
-    // (25m radius each) did NOT overlap → the user's reported
-    // "two-circles-with-fog-between" pattern reappeared.
-    //
-    // v328+ fix: spacing dropped 40m → 20m. The 40m spacing left gaps
-    // between visited 25m cells (40m centers → 15m gap between cell
-    // edges). globalFogBuilder treats unvisited cells as fog so the
-    // gaps showed up as a checkerboard pattern inside the reveal
-    // circle. 20m spacing guarantees adjacent hex centers land in
-    // adjacent (sometimes same) res-11 cells → no gaps, row-run
-    // dissolve merges everything into a clean filled circle.
-    //
-    // R-round B4 fix: large-radius reveals are CLIENT-DERIVED (no user
-    // GPS evidence). They are computed deterministically and don't
-    // need to be pushed to backend — flagging them synced=true avoids
-    // a ~hundreds-of-points sync storm on first launch.
-    const idx = get()._bucketIndex ? new Map(get()._bucketIndex!) : buildBucketIndex(points);
-    const newPoints: VisitedPoint[] = [];
-    const cosLat = Math.cos((lat * Math.PI) / 180);
-    const dLatPerM = 1 / 111_000;
-    const dLngPerM = dLatPerM / Math.max(cosLat, 1e-6);
-    const hexSpacing = 20; // metres between hex tile centres (v328+: 40→20 for no-gap coverage)
-    const rowStep = hexSpacing * Math.sqrt(3) / 2; // ≈ 17.3m
-    const radiusSq = requestedRadius * requestedRadius;
-    // Iterate rows (north-south) and columns (east-west) over the
-    // bounding square, keep only points within the circle.
-    const rowsHalf = Math.ceil(requestedRadius / rowStep);
-    const colsHalf = Math.ceil(requestedRadius / hexSpacing);
-    for (let row = -rowsHalf; row <= rowsHalf; row++) {
-      const dy = row * rowStep;
-      // Alternate rows offset by hexSpacing/2 for the axial pattern.
-      const rowOffset = (row & 1) === 0 ? 0 : hexSpacing / 2;
-      for (let col = -colsHalf; col <= colsHalf; col++) {
-        const dx = col * hexSpacing + rowOffset;
-        if (dx * dx + dy * dy > radiusSq) continue;
-        const pLat = lat + dy * dLatPerM;
-        const pLng = lng + dx * dLngPerM;
-        newPoints.push({ lat: pLat, lng: pLng, ts, cid: uuidv4(), synced: true });
-      }
-    }
-    // Bucket-index every new point.
-    for (const p of newPoints) {
-      const k = bucketKey(p.lat, p.lng);
-      const arr = idx.get(k) ? [...idx.get(k)!, p] : [p];
-      idx.set(k, arr);
-    }
-    set({
-      points: [...points, ...newPoints],
-      _bucketIndex: idx,
-      geometryVersion: get().geometryVersion + 1,
-      // synced=true above → DO NOT bump _unsyncedCount.
-      _unsyncedCount: get()._unsyncedCount,
-      // O1: removed recentUnlocks Skia burst — v346 native fog 已取代
-    });
-    // v305 OTA: bulk-import the hex-grid newPoints into the H3 store so
-    // the initial reveal (hundreds of points) clears the right cells.
-    useH3VisitedStore.getState().bulkImport(
-      newPoints.map((p) => ({ lat: p.lat, lng: p.lng, ts: p.ts })),
-    );
   },
 
   /**
@@ -541,8 +428,6 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       useH3VisitedStore.getState().clear();
     }
   },
-
-  markInitialRevealDone: () => set({ initialRevealDone: true }),
 
   clearAll: () => set({
     points: [],

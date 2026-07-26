@@ -2180,9 +2180,10 @@ export function HikingScreen() {
       {/* v412: 未完成 hike 恢复弹窗 — 挂在 Fragment 顶层, 见下方 */}
     </View>
     {recoveryModalNode}
-    {/* v428: dev-only GPS simulator overlay. Triple gate:
-        __DEV__ (Hermes DCE in production) + debugMode (persistent) +
-        simWalkerActive (in-memory, cold-restart resets).
+    {/* v428: sim-walker overlay. v430 removed __DEV__ gate so users
+        can activate sim-walker in production builds via Settings
+        (debugMode 5-tap → simWalkerActive toggle). Actual gate at
+        line ~1174: debugMode && simWalkerActive.
         v429 hotfix: lazy-require inside gate so gpsInjector side-effects
         don't run at HikingScreen mount time on production builds. */}
     {showSimWalker && (() => {
@@ -2222,56 +2223,6 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: 'rgba(30,136,229,0.85)',
   },
-  topoRing: {
-    position: 'absolute',
-    borderWidth: 1.5,
-    backgroundColor: 'transparent',
-  },
-  trailLine: {
-    position: 'absolute', top: 240, left: 60, right: 80,
-    height: 2.5, backgroundColor: Colors.primaryMuted, borderRadius: 2,
-  },
-  trailLine2: {
-    position: 'absolute', top: 240, left: 60, width: 140, height: 120,
-    borderBottomWidth: 2.5, borderRightWidth: 2.5,
-    borderColor: Colors.primaryMuted, borderBottomRightRadius: 20,
-  },
-  trailLine3: {
-    position: 'absolute', top: 360, left: 200, width: 100, height: 80,
-    borderBottomWidth: 2.5, borderLeftWidth: 2.5,
-    borderColor: Colors.primaryDeep, borderBottomLeftRadius: 20,
-  },
-  locationDot: {
-    position: 'absolute', top: 290, left: W / 2 - 10,
-    width: 20, height: 20, alignItems: 'center', justifyContent: 'center',
-  },
-  locationDotInner: {
-    width: 14, height: 14, borderRadius: 7,
-    backgroundColor: Colors.primary, borderWidth: 2.5, borderColor: '#fff',
-  },
-  locationPulse: {
-    position: 'absolute', width: 28, height: 28, borderRadius: 14,
-    borderWidth: 1.5, borderColor: Colors.primaryDeep,
-  },
-  mapLabelWrap: {
-    position: 'absolute', bottom: 180, left: 0, right: 0,
-    alignItems: 'center', gap: 6,
-  },
-  mapLabel: {
-    fontSize: FontSize.h3, fontWeight: '600',
-    color: Colors.primary, opacity: 0.7,
-  },
-  mapSubLabel: {
-    fontSize: FontSize.small, color: Colors.primary, opacity: 0.5, marginTop: 2,
-  },
-  downloadBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderWidth: 1.5, borderColor: Colors.primaryMuted,
-    borderRadius: Radius.pill,
-    paddingHorizontal: 14, paddingVertical: 7, marginTop: 4,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-  },
-  downloadBtnText: { fontSize: FontSize.small, fontWeight: '700', color: Colors.primary },
   markerPin: {
     position: 'absolute', width: 24, height: 24, borderRadius: 12,
     borderWidth: 2, alignItems: 'center', justifyContent: 'center',
@@ -2310,10 +2261,6 @@ const styles = StyleSheet.create({
   routePillTextGroup: { flex: 1, gap: 1 },
   routePillText: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
   routePillHint: { fontSize: FontSize.small, color: Colors.primary, fontWeight: '500' },
-  routePillChevron: {
-    width: 28, height: 28, borderRadius: 8,
-    backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center',
-  },
 
   // Route picker sheet
   routePickerBackdrop: {
@@ -2353,29 +2300,6 @@ const styles = StyleSheet.create({
   routePickerName: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
   routePickerMeta: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
 
-  // (kept for unused ref cleanup)
-  selectSection: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.lg, gap: Spacing.sm },
-  selectLabel: { fontSize: FontSize.small, fontWeight: '700', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 },
-  routeCard: {
-    backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: Radius.card,
-    flexDirection: 'row', alignItems: 'center',
-    padding: Spacing.base, gap: Spacing.md,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-  },
-  routeCardSelected: { borderColor: Colors.primary, backgroundColor: Colors.primaryBg },
-  routeIconBadge: {
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  routeName: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
-  routeMeta: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
-  routeCheck: {
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
-  },
-
   // Top overlay
   topOverlay: { position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'box-none' },
   topRow: {
@@ -2403,12 +2327,6 @@ const styles = StyleSheet.create({
   gpsText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textPrimary },
   gpsTextOffline: { color: Colors.danger },
   gpsTextAmber: { color: Colors.severityWarning },
-  backChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 2,
-    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.md, paddingVertical: 7, ...Shadow.card,
-  },
-  backChipText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.primary },
 
   trackingBar: {
     flexDirection: 'row', alignItems: 'center',
@@ -2502,14 +2420,6 @@ const styles = StyleSheet.create({
   // Compass chip — bottom-left slot, mirrors the GPS chip in the top
   // overlay (same shadow, border, surface colour) so the page reads as
   // a coherent system rather than a pile of buttons.
-  compassChip: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10, shadowRadius: 12, elevation: 4,
-  },
   trackBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm,
     backgroundColor: 'rgba(255,255,255,0.95)',
@@ -2520,20 +2430,6 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
   trackBtnText: { fontSize: FontSize.body, fontWeight: '700', color: Colors.primary },
-  fab: {
-    width: 60, height: 60,
-    backgroundColor: Colors.primary, borderRadius: 30,
-    alignItems: 'center', justifyContent: 'center',
-    ...Shadow.fab,
-  },
-  fabLabel: { fontSize: 8, color: '#fff', fontWeight: '700', marginTop: 1 },
-  fabBadge: {
-    position: 'absolute', top: -4, right: -4,
-    minWidth: 18, height: 18, borderRadius: 9,
-    backgroundColor: Colors.danger, alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 4, borderWidth: 2, borderColor: '#fff',
-  },
-  fabBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff' },
 });
 
 const sheetStyles = StyleSheet.create({

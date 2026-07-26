@@ -1,10 +1,16 @@
 /**
- * editAnalytics — 19 telemetry events for Sprint 66 Route Edit feature.
+ * editAnalytics — telemetry events for Sprint 66 Route Edit feature.
  *
  * Wraps existing debugLogger to emit structured events that backend can
  * aggregate. Lazy-imports debugLogger so this is web-safe.
  *
- * Sprint 66 Wave 8.
+ * O1 audit (2026-07-26): kept 7 functions with live callers in
+ * useRouteEditStore. Pruned 12 functions that were declared in Sprint 66
+ * Wave 8 but never wired into RouteEditorScreen:
+ * logMidpointDragStarted, logMidpointDragCompleted, logRerouteRequested,
+ * logRerouteCompleted, logRerouteFailed, logDualSourceDecision,
+ * logEditOfflineBannerShown, logDocApiCall, logDocCacheHit,
+ * logDijkstraDuration, logDragFps, logDijkstraNodeCountP95.
  */
 
 type LogFn = (event: any) => void;
@@ -18,11 +24,7 @@ try {
   // ignore
 }
 
-interface BaseEvent {
-  ts: number;
-}
-
-// 1. edit_entered
+// edit_entered — fired when user opens the route editor screen.
 export function logEditEntered(args: {
   routeId: string;
   trackPointCount: number;
@@ -32,7 +34,7 @@ export function logEditEntered(args: {
   debugLog({ ts: Date.now(), event: 'edit_entered', ...args });
 }
 
-// 2. edit_exited
+// edit_exited — fired when user leaves the editor (save/cancel/back).
 export function logEditExited(args: {
   duration: number;
   edited: boolean;
@@ -42,50 +44,12 @@ export function logEditExited(args: {
   debugLog({ ts: Date.now(), event: 'edit_exited', ...args });
 }
 
-// 3. trim_applied
+// trim_applied — fired on start/end trim in the editor.
 export function logTrimApplied(args: { trimmedDistanceM: number; side: 'start' | 'end' }) {
   debugLog({ ts: Date.now(), event: 'trim_applied', ...args });
 }
 
-// 4. midpoint_drag_started
-export function logMidpointDragStarted(args: { originalLat: number; originalLng: number }) {
-  debugLog({ ts: Date.now(), event: 'midpoint_drag_started', ...args });
-}
-
-// 5. midpoint_drag_completed
-export function logMidpointDragCompleted(args: {
-  distanceFromOriginalM: number;
-  withinCorridor: boolean;
-}) {
-  debugLog({ ts: Date.now(), event: 'midpoint_drag_completed', ...args });
-}
-
-// 6. reroute_requested
-export function logRerouteRequested(args: { source: string; distanceM: number }) {
-  debugLog({ ts: Date.now(), event: 'reroute_requested', ...args });
-}
-
-// 7. reroute_completed
-export function logRerouteCompleted(args: {
-  source: string;
-  durationMs: number;
-  success: boolean;
-  fallbackUsed: boolean;
-}) {
-  debugLog({ ts: Date.now(), event: 'reroute_completed', ...args });
-}
-
-// 8. reroute_failed
-export function logRerouteFailed(args: { source: string; errorCode: string; durationMs: number }) {
-  debugLog({ ts: Date.now(), event: 'reroute_failed', ...args });
-}
-
-// 9. dual_source_decision
-export function logDualSourceDecision(args: { chosen: string; reason: string; confidence: string }) {
-  debugLog({ ts: Date.now(), event: 'dual_source_decision', ...args });
-}
-
-// 10. edit_save
+// edit_save — fired when a route edit is persisted.
 export function logEditSave(args: {
   totalEdits: number;
   finalLengthM: number;
@@ -95,48 +59,18 @@ export function logEditSave(args: {
   debugLog({ ts: Date.now(), event: 'edit_save', ...args });
 }
 
-// 11. edit_offline_banner_shown
-export function logEditOfflineBannerShown(args: { duration: number }) {
-  debugLog({ ts: Date.now(), event: 'edit_offline_banner_shown', ...args });
-}
-
-// 12. doc_api_call
-export function logDocApiCall(args: {
-  bboxArea: number;
-  durationMs: number;
-  featuresReturned: number;
-  success: boolean;
-}) {
-  debugLog({ ts: Date.now(), event: 'doc_api_call', ...args });
-}
-
-// 13. doc_cache_hit
-export function logDocCacheHit(args: { tileKey: string; age: number }) {
-  debugLog({ ts: Date.now(), event: 'doc_cache_hit', ...args });
-}
-
-// 14-16. Performance SLO (review v3.1 §17 added)
+// edit_start_duration — performance SLO: how long the editor took to
+// become interactive after the user tapped Edit.
 export function logEditStartDuration(args: { ms: number }) {
   debugLog({ ts: Date.now(), event: 'edit_start_duration', ...args });
 }
 
-export function logDijkstraDuration(args: { nodeCount: number; edgeCount: number; ms: number }) {
-  debugLog({ ts: Date.now(), event: 'dijkstra_duration', ...args });
-}
-
-export function logDragFps(args: { avgFps: number; minFps: number; sampleCount: number }) {
-  debugLog({ ts: Date.now(), event: 'drag_fps', ...args });
-}
-
-// 17-19. Failure / migration / corridor (review v3.1 §17 build-out)
+// route_save_failure — fired on catch when persisting an edited route.
 export function logRouteSaveFailure(args: { routeId: string; error: string }) {
   debugLog({ ts: Date.now(), event: 'route_save_failure', ...args });
 }
 
+// migrator_failure — fired when LegacyRouteMigrator returns { ok: false }.
 export function logMigratorFailure(args: { routeId: string; error: string; retry: boolean }) {
   debugLog({ ts: Date.now(), event: 'migrator_failure', ...args });
-}
-
-export function logDijkstraNodeCountP95(args: { nodeCount: number }) {
-  debugLog({ ts: Date.now(), event: 'dijkstra_node_count_p95', ...args });
 }

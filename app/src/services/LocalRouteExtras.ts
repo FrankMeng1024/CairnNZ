@@ -189,21 +189,9 @@ export async function backupExtras(routeId: string, snapshot: any): Promise<{ ok
   }
 }
 
-export async function loadBackup(routeId: string): Promise<{ snapshot: any; backedUpAt: number } | null> {
-  try {
-    const raw = await AsyncStorage.getItem(BACKUP_KEY_PREFIX + routeId);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    // TTL check
-    if (Date.now() - parsed.backedUpAt > parsed.ttlMs) {
-      await AsyncStorage.removeItem(BACKUP_KEY_PREFIX + routeId);
-      return null;
-    }
-    return { snapshot: parsed.snapshot, backedUpAt: parsed.backedUpAt };
-  } catch {
-    return null;
-  }
-}
+// O1: loadBackup removed — never called anywhere. Restore-from-backup
+// flow was planned in Sprint 67 but never implemented. capBackups /
+// deleteExtras still manage the write-only backup lifecycle (privacy).
 
 /**
  * Reconcile orphaned extras (routes deleted but extras remain).
