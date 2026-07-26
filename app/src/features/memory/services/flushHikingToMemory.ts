@@ -99,11 +99,34 @@ export function flushHikingToMemory(
 ): { newCells: number } {
   if (!trackPoints || trackPoints.length === 0) return { newCells: 0 };
 
+  // O5 (2026-07-26): sim-walker synthetic tracks have jitter ~2m sigma
+  // (see gpsInjector JITTER_M_1_SIGMA=2) which is way below the RDP
+  // tolerance of 10m. On a straight sim-walker walk, RDP collapses ~20
+  // dense points down to just 2 (start+end) → only 2 H3 hex cells (at
+  // res 11, ~24m edge) get unlocked instead of the ~5 the user actually
+  // walked through. This looked like "memory doesn't record" — root of
+  // user's Bug 10 in O2/O3 reports.
+  //
+  // Fix: when the sim-walker overlay is active, skip RDP entirely.
+  // Sim-walker points are already sparse (5m step) and clean; they don't
+  // need multi-path drift filtering. Real-GPS hikes still get RDP.
+  //
+  // Read state lazily to avoid a circular import (sim-walker → tracking
+  // → memory → sim-walker would be nasty).
+  let simWalkerActive = false;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('../../../dev/simWalker/useSimWalkerStore');
+    simWalkerActive = !!mod.useSimWalkerStore.getState().active;
+  } catch { /* module not present or web build tree-shakes it */ }
+
   // v352: simplify with 10m tolerance first. trackPoints are already
   // accuracy-filtered (≤25m) and stationary-suppressed by useTrackingStore,
   // but GPS multi-path / parallel-street drift still creates visible
   // 'two-direction' artifacts in fog reveal at lat 25-40m off main path.
-  const simplifiedPoints = rdpSimplifyTrackPoints(trackPoints);
+  const simplifiedPoints = simWalkerActive
+    ? trackPoints.filter((p) => isFinite(p.lat) && isFinite(p.lng))
+    : rdpSimplifyTrackPoints(trackPoints);
 
   // Pre-compute newCells via set-diff. Mirror bulkImportSync's NaN +
   // latLngToCell try/catch guards so the count matches what actually

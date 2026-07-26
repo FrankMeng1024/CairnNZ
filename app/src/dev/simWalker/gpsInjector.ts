@@ -122,6 +122,15 @@ class GpsInjector {
 
   setStepConfig(cfg: Partial<StepConfig>): void {
     const next = { ...this.config, ...cfg };
+    // O5 (2026-07-26): NaN guard. Overlay's TextInput sends strings that
+    // pass through parseFloat/parseInt; if user clears the field or types
+    // non-numeric input, we get NaN. Math.min/max with NaN returns NaN,
+    // which then propagates through moveByBearing into lat/lng of every
+    // emitted point → silently broken sim-walker until app reload.
+    // Fall back to the previous value when NaN is received.
+    if (!Number.isFinite(next.step_m)) next.step_m = this.config.step_m;
+    if (!Number.isFinite(next.emit_ms)) next.emit_ms = this.config.emit_ms;
+    if (!Number.isFinite(next.undo_count)) next.undo_count = this.config.undo_count;
     // Clamp to safe bounds
     next.step_m = Math.max(0.5, Math.min(100, next.step_m));
     next.emit_ms = Math.max(200, Math.min(5000, next.emit_ms));

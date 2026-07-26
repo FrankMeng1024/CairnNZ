@@ -52,7 +52,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //   - MemorySettingsSection Show friends' memory 英文 hint (unchanged)
 //   - HikingScreen stop sheet Discard/Save 英文
 //   - Chinese→English UI 全部保留
-export const OTA_VERSION = 'O4';
+// O5 (2026-07-26 batch 30): O4 回滚后 subagent 4-eyes 审查发现 v450 sim-walker
+// 有 3 个结构性 bug (回滚没解决,是 v450 code 本身的问题):
+//   1. flushHikingToMemory 用 RDP simplify (10m tolerance) 把 sim-walker 直线
+//      走 20 个点简化成 2 个 → memory 只解锁 2 个 hex cell 而不是 5 个。这是
+//      用户报的 Bug 10 "memory 走完没记录" 的真根因!修:检测 sim-walker
+//      active 时跳过 RDP,保留所有点让 H3 cell 全都能解锁
+//   2. __simwalkerAddTrackPoint 只 gate paused 不 gate idle → 用户开摇杆但
+//      没点 Start Hike 就走的话点会写到 trackPoints,然后点 Start Hike 触发
+//      startTracking reset 全丢。修:改为 gate 到 status !== 'tracking'
+//   3. setStepConfig 收到 NaN input (用户清空 field 或输入非数字) 会让
+//      config.step_m=NaN → 所有点 lat=NaN → 静默坏掉整个 session。修:
+//      添加 Number.isFinite fallback 到 previous config value
+export const OTA_VERSION = 'O5';
 
 
 type OtaState =

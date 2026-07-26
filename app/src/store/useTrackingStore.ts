@@ -1388,12 +1388,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
    */
   __simwalkerAddTrackPoint: (coord: any, timestamp?: number) => {
     set((s: any) => {
-      // O1 R6: gate on status — sim-walker overlay's tick loop is
-      // independent of the hike's pause state. If user pauses the hike
-      // (status='paused') but sim-walker keeps injecting, distance grows
-      // while duration is frozen → bogus data. Reject unless status is
-      // 'tracking' (or 'idle' for pre-Start-Hiking dry-run testing).
-      if (s.status === 'paused') return s;
+      // O5 (2026-07-26): only write when the hike is actively tracking.
+      // v450 accepted writes at any status which meant sim-walker points
+      // written before the user tapped "Start Hike" got wiped by
+      // startTracking (which resets trackPoints to []). Users would walk
+      // with the joystick pre-hike, then start the hike, and their walk
+      // history vanished — silent data loss.
+      // Fix: reject writes when status !== 'tracking'. If a dev needs to
+      // dry-run the joystick pre-hike, that's fine — the store position
+      // updates via setStartPosition, just no trackPoint accumulation.
+      if (s.status !== 'tracking') return s;
       // O1 batch 28.6: t 从参数 timestamp 拿 (sim-walker subdivide 模式
       // 传模拟时间),或 fallback Date.now()。原硬编码 Date.now() 让
       // rawPoint.t 永远是挂钟,session 时间轴无法反映模拟真人步行速度。
