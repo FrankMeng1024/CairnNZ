@@ -186,19 +186,5 @@ export async function migrateRouteIfNeeded(route: LegacyRoute): Promise<Migratio
   return { ok: true, migrated: true };
 }
 
-/**
- * Per-route migration retry helper for UI.
- *
- * Returns the latest result. Caller surfaces retry UI based on (ok=false, retry=true).
- */
-export async function retryMigration(route: LegacyRoute, maxAttempts: number = 3): Promise<MigrationResult> {
-  let lastResult: MigrationResult = { ok: false, error: 'No attempts made', retry: false };
-  for (let i = 0; i < maxAttempts; i++) {
-    lastResult = await migrateRouteIfNeeded(route);
-    if (lastResult.ok) return lastResult;
-    if (!('retry' in lastResult) || !lastResult.retry) return lastResult; // unrecoverable
-    // Exponential backoff
-    await new Promise(r => setTimeout(r, 200 * Math.pow(2, i)));
-  }
-  return lastResult;
-}
+// O1 batch 36: retryMigration removed — 0 external callers (useRouteEditStore has its own
+// retryMigration action that calls beginEdit, not this service function).

@@ -422,36 +422,8 @@ export async function markUploaded(sessionId: string): Promise<void> {
   } catch { /* best effort */ }
 }
 
-/**
- * Get current writer state (for diagnostics / __cairnStores web hook).
- */
-export function getWriterState(): { sessionId: string | null; totalPoints: number; bufferLen: number; lastError: string | null } {
-  if (!state) return { sessionId: null, totalPoints: 0, bufferLen: 0, lastError: null };
-  return {
-    sessionId: state.sessionId,
-    totalPoints: state.totalPoints,
-    bufferLen: state.buffer.length,
-    lastError: state.lastFlushError,
-  };
-}
-
-/**
- * Convert expo-location LocationCoords to HikePoint (used by
- * useTrackingStore.addTrackPoint hook).
- */
-export function coordsToHikePoint(coords: LocationCoords, source: 'fg' | 'bg' = 'fg'): HikePoint {
-  const conf = (coords.accuracy != null && coords.accuracy > 100) ? 0.5 : 1;
-  return {
-    t: coords.timestamp,
-    lat: coords.latitude,
-    lng: coords.longitude,
-    acc: coords.accuracy ?? undefined,
-    alt: coords.altitude ?? undefined,
-    src: source,
-    conf,
-  };
-}
-
+// O1 batch 36: getWriterState and coordsToHikePoint removed — 0 external callers
+// (JSDoc claimed useTrackingStore and __cairnStores web hook, but neither called them).
 /**
  * Force flush now — used before app suspension / stopTracking.
  */

@@ -214,9 +214,4 @@ export async function persistMemo(tempUri: string, markerId: string): Promise<st
   }
 }
 
-// Export Platform-checked status helper for UI
-export function isVoiceMemoSupported(): boolean {
-  // expo-av is in package.json + linked into the build; both iOS and Android supported.
-  // Web fallback would need a different recorder — not relevant for our app shape.
-  return Platform.OS === 'ios' || Platform.OS === 'android';
-}
+// O1 batch 36: isVoiceMemoSupported removed — 0 external callers.

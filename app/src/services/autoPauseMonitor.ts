@@ -163,14 +163,6 @@ export function stopAutoPauseMonitor(): void {
   state.promptedAt = null;
 }
 
-// Test-only reset — Playwright fast-forward scenarios call this.
-export function __resetAutoPauseForTest(): void {
-  stopAutoPauseMonitor();
-}
 
-// Test-only continue signal — user tapped "keep hiking" from notification.
-export function autoPauseUserContinued(): void {
-  crashLogger.breadcrumb('auto_pause:user_continued');
-  state.idleSince = null;
-  state.promptedAt = null;
-}
+// O1 batch 36: __resetAutoPauseForTest and autoPauseUserContinued removed — 0 external callers.
+

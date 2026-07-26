@@ -151,7 +151,7 @@ function fromBackend(row: {
 interface MarkerState {
   markers: Marker[];
   userId: string | null;
-  syncing: boolean;
+  // O1 batch 36: syncing removed — written in loadFromBackend but 0 external readers.
   /** Sprint 69 STORY-00537: subscribed-friend friend+public marks from
    *  GET /api/circle/markers. Separate from `markers` so Mine path stays
    *  intact; Trails Flags Friends-subtab + Map circle render both read this. */
@@ -191,7 +191,6 @@ interface MarkerState {
 export const useMarkerStore = create<MarkerState>((set, get) => ({
   markers: [],
   userId: null,
-  syncing: false,
   // Sprint 69 STORY-00537: initial empty until first loadCircleMarkers().
   circleMarkers: [],
   loadingCircle: false,
@@ -499,7 +498,6 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   },
 
   loadFromBackend: async () => {
-    set({ syncing: true });
     try {
       const res = await authenticatedFetch('/api/markers');
       if (!res.ok) return;
@@ -514,10 +512,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
           ...localOnly.filter((lo) => !serverMarkers.some((sm) => sm.id === lo.id)),
         ];
         if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(merged));
-        return { markers: merged, syncing: false };
+        return { markers: merged };
       });
     } catch {
-      set({ syncing: false });
+      // silent
     }
   },
 

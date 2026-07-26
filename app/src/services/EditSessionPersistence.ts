@@ -35,7 +35,8 @@ const LEGACY_STORAGE_KEY = '@cairn:edit_session_active';
  * whose schemaVersion does not match — protects forward / backward callers
  * from reading data they cannot interpret.
  */
-export const EDIT_SESSION_SCHEMA_VERSION = 1;
+// O1 batch 36: demoted from export — 0 external importers.
+const EDIT_SESSION_SCHEMA_VERSION = 1;
 
 const TTL_MS = 24 * 60 * 60 * 1000; // 24h
 // v4-audit (ARCH-016): allow up to 5min reverse clock skew (NTP

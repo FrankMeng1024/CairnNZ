@@ -172,15 +172,6 @@ export async function drainPreviousBootCheckpoint(otaVersion: number | string): 
  * lands in CHECKPOINT_KEY, not PREVIOUS_KEY — so even if rotate hasn't
  * finished, drain (which reads PREVIOUS_KEY first) won't be racy.
  */
-export function rotateCheckpoint(): void {
-  void (async () => {
-    try {
-      const raw = await AsyncStorage.getItem(CHECKPOINT_KEY);
-      if (raw) {
-        await AsyncStorage.setItem(PREVIOUS_KEY, raw);
-      }
-    } catch {/* ignore */}
-  })();
-}
+// O1 batch 36: rotateCheckpoint removed — 0 external callers; boot call was never wired up.
 
 // O1: getBootSessionId + getLastBootPhase removed — 0 external callers.

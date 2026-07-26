@@ -110,8 +110,8 @@ export class PointCloudIndex {
 }
 
 /** Convert meters to lat/lng degrees at given latitude. Conservative (uses lat for both).
- *  Exported so other modules (TrailGraph) can use the same conversion. */
-export function metersToDegrees(m: number, atLat: number): number {
+ *  O1 batch 36: demoted from export — 0 external importers (TrailGraph doesn't import it). */
+function metersToDegrees(m: number, atLat: number): number {
   // 1 deg latitude ≈ 111_000 m
   // 1 deg longitude ≈ 111_000 * cos(lat) m
   // We use the smaller (longitude) to over-include candidates.

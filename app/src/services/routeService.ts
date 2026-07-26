@@ -123,11 +123,5 @@ export async function deleteRoute(id: string): Promise<boolean> {
   }
 }
 
-export async function incrementRouteRunCount(id: string): Promise<boolean> {
-  try {
-    const res = await authenticatedFetch(`/api/routes/${id}/run`, { method: 'PATCH' });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
+// O1 batch 36: incrementRouteRunCount removed — last caller (useRouteStore.incrementRunCount)
+// was removed in batch 35; 0 external callers remain.
