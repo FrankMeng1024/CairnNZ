@@ -109,7 +109,7 @@ async function getLocation() {
   return Location;
 }
 
-export type TrackingStatus = 'idle' | 'requesting' | 'tracking' | 'paused';
+type TrackingStatus = 'idle' | 'requesting' | 'tracking' | 'paused';
 
 interface TrackingState {
   status: TrackingStatus;

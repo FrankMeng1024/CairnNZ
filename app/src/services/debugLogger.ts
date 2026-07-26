@@ -49,11 +49,11 @@ const META_DIR = 'cairn-logs/meta/';
 
 // Type helper: Omit on a discriminated union must distribute over each member.
 type DistributiveOmit<T, K extends keyof any> = T extends any ? Omit<T, K> : never;
-export type LogEventInput = DistributiveOmit<LogEvent, 'session_id'>;
+type LogEventInput = DistributiveOmit<LogEvent, 'session_id'>;
 
 type Subscriber = (event: LogEvent) => void;
 
-export interface DebugLoggerOptions {
+interface DebugLoggerOptions {
   enabled: boolean;
   deviceInfo: DeviceInfo;
 }
@@ -581,6 +581,3 @@ AppState.addEventListener('change', (state) => {
     debugLogger.persistMetaForKillSafety().catch(() => {});
   }
 });
-
-// Default export for convenience
-export default debugLogger;

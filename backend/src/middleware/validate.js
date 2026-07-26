@@ -39,26 +39,4 @@ function validateBody(schema) {
   };
 }
 
-function validateQuery(schema) {
-  return (req, res, next) => {
-    const { value, error } = schema.validate(req.query, {
-      abortEarly: false,
-      stripUnknown: false,
-      convert: true,
-    });
-    if (error) {
-      const details = error.details.map((d) => ({
-        field: d.path.join('.'),
-        message: d.message,
-      }));
-      return res.status(400).json({
-        error: 'Validation failed.',
-        details,
-      });
-    }
-    req.query = value;
-    return next();
-  };
-}
-
-module.exports = { validateBody, validateQuery };
+module.exports = { validateBody };

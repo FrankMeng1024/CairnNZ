@@ -47,7 +47,7 @@ async function idempotency(req, res, next) {
     // No op id, or malformed — proceed normally without caching.
     return next();
   }
-  const userId = req.user && (req.user.userId || req.user.id);
+  const userId = req.user && req.user.userId;
   if (!userId) {
     // Not authenticated — defensive, authenticate runs first normally.
     return next();

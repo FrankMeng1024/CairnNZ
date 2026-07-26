@@ -91,7 +91,7 @@ const sessionSave = Joi.object({
   flags: Joi.object().allow(null),
   route_id: Joi.number().integer().min(1).allow(null),
   name: Joi.string().max(100).allow(null, ''),
-  memory_points: Joi.array().items(pointObj).max(10000).allow(null),
+  memory_points: Joi.array().items(pointObj).max(1000).allow(null),
 });
 
 const sessionUpdate = Joi.object({
@@ -183,7 +183,7 @@ const memoryPointObj = Joi.object({
 });
 
 const memoryPoints = Joi.object({
-  points: Joi.array().items(memoryPointObj).min(1).max(5000).required(),
+  points: Joi.array().items(memoryPointObj).min(1).max(1000).required(),
 });
 
 module.exports = {

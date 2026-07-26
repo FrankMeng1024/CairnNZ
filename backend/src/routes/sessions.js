@@ -242,13 +242,8 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
       }
     }
   }
-  if (memory_points !== null && memory_points !== undefined && !Array.isArray(memory_points)) {
-    return res.status(400).json({ error: 'memory_points must be an array or null.' });
-  }
+  // memory_points: schema 已限 max(1000) + allow(null),此处不再重复检查。
   const memPts = Array.isArray(memory_points) ? memory_points : [];
-  if (memPts.length > 1000) {
-    return res.status(400).json({ error: 'memory_points batch too large (max 1000).' });
-  }
 
   const conn = await pool.getConnection();
   try {

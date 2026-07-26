@@ -104,4 +104,4 @@ async function run({ verbose = false } = {}) {
   }
 }
 
-module.exports = { run, BATCH_SIZE };
+module.exports = { run };
