@@ -6,6 +6,7 @@
  * pending_registrations: temp holding — not real users until code verified
  */
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const pool = require('../config/db');
 
 // ── users ──────────────────────────────────────────────────────────────────
@@ -96,7 +97,12 @@ async function getUserProviders(userId) {
 // ── pending_registrations ──────────────────────────────────────────────────
 
 function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  // O1 (2026-07-26) security fix: 用 crypto.randomInt (CSPRNG) 替代
+  // Math.random (xorshift128+, 可从 3-5 个观测值反推状态)。email 验证
+  // 码只有 6 位空间 (10^6),PRNG 可预测 = 攻击者用自己的注册请求观测
+  // 数个码后能预测受害者的下一个码 → 10 分钟 TTL 内 5 次输入尝试足够
+  // 命中 → 账号劫持。
+  return String(crypto.randomInt(100000, 1000000));
 }
 
 async function upsertPending(email, name, passwordHash) {
