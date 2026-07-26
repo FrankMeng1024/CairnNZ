@@ -30,10 +30,11 @@ const router = express.Router();
 /**
  * POST /api/memory/points
  * Body: { points: [{ lat, lng, ts, cid? }, ...] }
- * Returns: { accepted: N, rejected: N, points: [{ ts, cid }, ...] }
+ * Returns: { points: [{ ts, cid } | null, ...] }
  *
  * Response includes the cid for each accepted row so clients on
- * v0.2.6.2 (no cid) can backfill locally on next pull.
+ * v0.2.6.2 (no cid) can backfill locally on next pull. Null placeholders
+ * in the echo array preserve request/response index alignment.
  */
 router.post('/points', authenticate, validateBody(schemas.memory.points), async (req, res) => {
   const userId = req.user.userId;
@@ -43,7 +44,7 @@ router.post('/points', authenticate, validateBody(schemas.memory.points), async 
     return res.status(400).json({ error: 'points must be an array' });
   }
   if (points.length === 0) {
-    return res.json({ accepted: 0, rejected: 0, points: [] });
+    return res.json({ points: [] });
   }
   if (points.length > 1000) {
     return res.status(400).json({ error: 'batch too large (max 1000 points)' });
@@ -52,7 +53,6 @@ router.post('/points', authenticate, validateBody(schemas.memory.points), async 
   const tsUpperBound = Date.now() + 24 * 60 * 60 * 1000;
   const rows = [];
   const echo = [];
-  let rejected = 0;
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
     if (
@@ -63,7 +63,6 @@ router.post('/points', authenticate, validateBody(schemas.memory.points), async 
       p.lat < -90 || p.lat > 90 || p.lng < -180 || p.lng > 180 ||
       p.ts <= 0 || p.ts > tsUpperBound || p.ts > Number.MAX_SAFE_INTEGER
     ) {
-      rejected++;
       // M5: emit a null placeholder so request/response array indices stay aligned.
       echo.push(null);
       continue;
@@ -76,7 +75,7 @@ router.post('/points', authenticate, validateBody(schemas.memory.points), async 
   }
 
   if (rows.length === 0) {
-    return res.json({ accepted: 0, rejected, points: [] });
+    return res.json({ points: [] });
   }
 
   try {
@@ -121,13 +120,9 @@ router.post('/points', authenticate, validateBody(schemas.memory.points), async 
       if (e === null) return null;
       return confirmedSet.has(e.cid) ? e : null;
     });
-    const acceptedCount = finalEcho.filter((e) => e !== null).length;
-    return res.json({
-      accepted: acceptedCount,
-      duplicates: rows.length - acceptedCount,
-      rejected,
-      points: finalEcho,
-    });
+    // O1: dropped accepted/duplicates/rejected — client 只用 points echo,
+    // 三个数字纯 debug 遗留(memorySync 从不 read)。
+    return res.json({ points: finalEcho });
   } catch (err) {
     console.error('[memory/points:insert]', err.message);
     return res.status(500).json({ error: 'Server error' });

@@ -125,33 +125,14 @@ export async function appendPoints(
  * raw track and writes `route_points` (snap) + `route_points_raw` (raw)
  * in a single PATCH. Falls back to raw-as-route_points if snap fails.
  */
-export async function finalizeSession(
-  remoteId: number,
-  fields: {
-    end_time?: string;
-    distance_m?: number;
-    duration_s?: number;
-    name?: string | null;
-    route_points?: TrackPointLike[] | null;
-    route_points_raw?: TrackPointLike[] | null;
-  },
-): Promise<boolean> {
-  const opId = uuidv4();
-  const path = `/api/sessions/${remoteId}`;
-  try {
-    const res = await authenticatedFetch(path, {
-      method: 'PATCH',
-      body: JSON.stringify({ ...fields, client_op_id: opId }),
-    });
-    if (res.ok) return true;
-    if (res.status >= 400 && res.status < 500 && res.status !== 401) return false;
-    await enqueue(makeOp('session_finalize', path, 'PATCH', fields, opId));
-    return false;
-  } catch {
-    await enqueue(makeOp('session_finalize', path, 'PATCH', fields, opId));
-    return false;
-  }
-}
+/**
+ * finalizeSession — REMOVED in O1 (2026-07-26).
+ * v412 saveHikeAtomic (POST /api/sessions/:id/save) 完全取代了旧
+ * PATCH /api/sessions/:id 路径。0 call site 保留。若 offlineQueue 里
+ * 还有历史 'session_finalize' op,drain 依然会 PATCH 到老 endpoint
+ * (若 backend 还保留了 PATCH /:id 就仍能消化;若 backend 也移除该
+ * endpoint,drain 会 4xx 后掉 op)。
+ */
 
 /**
  * Fetch a single session WITH route_points + flags. Used by the

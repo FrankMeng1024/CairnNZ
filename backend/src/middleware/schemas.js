@@ -56,11 +56,6 @@ const markerUpdate = Joi.object({
   approximate: Joi.boolean(),
 }).min(1); // at least one field to update
 
-const markerVote = Joi.object({
-  vote: Joi.string().valid('helpful', 'report', 'clear').required(),
-  nonce: Joi.string().min(8).max(64).required(),
-});
-
 // ── Sessions ───────────────────────────────────────────────────────────
 const sessionStart = Joi.object({
   type: Joi.string().valid('hiking', 'running').required(),
@@ -195,7 +190,6 @@ module.exports = {
   marker: {
     create: markerCreate,
     update: markerUpdate,
-    vote: markerVote,
   },
   session: {
     start: sessionStart,

@@ -30,7 +30,7 @@ import { batteryMonitor } from '../services/batteryMonitor';
 import { networkMonitor } from '../services/networkMonitor';
 import { sessionRecorder } from '../services/sessionRecorder';
 import { telemetryUploader } from '../services/telemetryUploader';
-import { startSession, appendPoints as remoteAppendPoints, finalizeSession, deleteRemoteSession, saveHikeAtomic } from '../services/sessionService';
+import { startSession, appendPoints as remoteAppendPoints, deleteRemoteSession, saveHikeAtomic } from '../services/sessionService';
 import { crashLogger } from '../services/crashLogger';
 import { flushHikingToMemory } from '../features/memory/services/flushHikingToMemory';
 // v412: 用于 saveHikeAtomic idempotencyKey + memory unsynced 采样
