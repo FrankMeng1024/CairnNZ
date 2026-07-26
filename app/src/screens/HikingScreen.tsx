@@ -13,9 +13,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView,
-  TextInput, Alert, Animated, Easing, KeyboardAvoidingView, Platform,
+  Alert, Animated, Easing, Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -575,114 +574,6 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
         <View pointerEvents="none" style={styles.debugCenterCircle} />
       )}
     </View>
-  );
-}
-
-// ── Flag Plant Bottom Sheet ────────────────────────────────────────────────────
-// Premium bottom sheet: type selection + optional note.
-function FlagPlantSheet({ onClose, onSave }: {
-  onClose: () => void;
-  onSave: (type: MarkerType, note: string) => void;
-}) {
-  const [selectedType, setSelectedType] = useState<MarkerType | null>(null);
-  const [note, setNote] = useState('');
-  const [noteFocused, setNoteFocused] = useState(false);
-  const charCount = note.length;
-  const canSave = selectedType !== null;
-
-  // Slide-in animation
-  const slideY = useRef(new Animated.Value(400)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(slideY, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 1, duration: 220, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  const handleClose = () => {
-    Animated.parallel([
-      Animated.timing(slideY, { toValue: 400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-    ]).start(() => onClose());
-  };
-
-  const handleSave = () => {
-    if (!selectedType) return;
-    Animated.parallel([
-      Animated.timing(slideY, { toValue: 400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-    ]).start(() => onSave(selectedType, note));
-  };
-
-  return (
-    <Animated.View style={[sheetStyles.backdrop, { opacity }]}>
-      <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={handleClose} activeOpacity={1} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <Animated.View style={[sheetStyles.sheet, { transform: [{ translateY: slideY }] }]}>
-        {/* Handle */}
-        <View style={sheetStyles.handle} />
-        {/* Header */}
-        <View style={sheetStyles.header}>
-          <Text style={sheetStyles.title}>Plant a Flag</Text>
-          <TouchableOpacity style={sheetStyles.closeBtn} onPress={handleClose}>
-            <Icon name="X" size={IconSize.sm} color={Colors.textSecondary} strokeWidth={2.5} />
-          </TouchableOpacity>
-        </View>
-        {/* Flag type row */}
-        <View style={sheetStyles.typeRow}>
-          {FLAG_TYPES.map(flag => (
-            <TouchableOpacity
-              key={flag.id}
-              style={[sheetStyles.typeCard, selectedType === flag.id && { borderColor: Colors.primary, backgroundColor: Colors.primaryBg }]}
-              onPress={() => { setSelectedType(flag.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={[flag.bg, flag.bg.replace(')', ', 0.9)').replace('rgb', 'rgba')]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={[sheetStyles.typeIconBadge, { borderColor: flag.color + '40' }]}
-              >
-                <Icon name={flag.icon} size={IconSize.md} color={flag.color} strokeWidth={2} />
-              </LinearGradient>
-              <Text style={[sheetStyles.typeLabel, { color: selectedType === flag.id ? Colors.primary : Colors.textSecondary }]}>
-                {flag.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        {/* Note input */}
-        <View style={sheetStyles.noteWrap}>
-          <TextInput
-            style={[sheetStyles.noteInput, noteFocused && sheetStyles.noteInputFocused, charCount >= 50 && sheetStyles.noteInputError]}
-            placeholder="Describe this spot… (optional)"
-            placeholderTextColor={Colors.textMuted}
-            value={note}
-            onChangeText={t => setNote(t.slice(0, 50))}
-            multiline
-            numberOfLines={2}
-            onFocus={() => setNoteFocused(true)}
-            onBlur={() => setNoteFocused(false)}
-          />
-          <View style={sheetStyles.noteFooterRow}>
-            <Text style={sheetStyles.noteMaxLabel}>Max 50 characters</Text>
-            {(noteFocused || charCount > 0) && (
-              <Text style={[sheetStyles.charCount, charCount >= 50 ? { color: Colors.danger } : charCount >= 40 ? { color: Colors.severityCaution } : null]}>{charCount}/50</Text>
-            )}
-          </View>
-        </View>
-        {/* Save button */}
-        <TouchableOpacity
-          style={[sheetStyles.saveBtn, !canSave && sheetStyles.saveBtnDisabled]}
-          onPress={handleSave}
-          activeOpacity={canSave ? 0.8 : 1}
-        >
-          <Icon name="Flag" size={IconSize.sm} color={canSave ? '#fff' : Colors.textMuted} strokeWidth={2} />
-          <Text style={[sheetStyles.saveBtnText, !canSave && { color: Colors.textMuted }]}>Save Flag</Text>
-        </TouchableOpacity>
-      </Animated.View>
-      </KeyboardAvoidingView>
-    </Animated.View>
   );
 }
 
@@ -2027,73 +1918,6 @@ const styles = StyleSheet.create({
   },
   trackBtnText: { fontSize: FontSize.body, fontWeight: '700', color: Colors.primary },
 });
-
-const sheetStyles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.overlayDark,
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet,
-    padding: Spacing.xl, paddingBottom: Spacing.xxl + 8, gap: Spacing.md,
-    ...Shadow.overlay,
-  },
-  handle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: Colors.border, alignSelf: 'center', marginBottom: Spacing.xs,
-  },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary },
-  closeBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center',
-  },
-  typeRow: { flexDirection: 'row', gap: Spacing.sm },
-  typeCard: {
-    flex: 1, alignItems: 'center', gap: Spacing.xs, paddingVertical: Spacing.sm,
-    borderRadius: Radius.card, borderWidth: 1.5, borderColor: Colors.border,
-    backgroundColor: Colors.surface, ...Shadow.card,
-  },
-  typeIconBadge: {
-    width: 44, height: 44, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1,
-  },
-  typeLabel: { fontSize: FontSize.small, fontWeight: '700' },
-  noteWrap: { position: 'relative' },
-  noteInput: {
-    backgroundColor: Colors.bg, borderRadius: Radius.button,
-    padding: Spacing.md, fontSize: FontSize.body, color: Colors.textPrimary,
-    borderWidth: 1.5, borderColor: Colors.border, minHeight: 70,
-    textAlignVertical: 'top',
-  },
-  noteInputFocused: {
-    borderColor: Colors.primary,
-  },
-  noteInputError: {
-    borderColor: Colors.danger,
-  },
-  noteFooterRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginTop: 4, paddingHorizontal: 2,
-  },
-  noteMaxLabel: {
-    fontSize: FontSize.tiny, color: Colors.textMuted,
-  },
-  charCount: {
-    fontSize: FontSize.tiny, color: Colors.textMuted,
-  },
-  saveBtn: {
-    borderRadius: Radius.button, paddingVertical: Spacing.md,
-    alignItems: 'center', backgroundColor: Colors.primary,
-    flexDirection: 'row', gap: Spacing.xs, justifyContent: 'center',
-  },
-  saveBtnDisabled: { backgroundColor: Colors.border },
-  saveBtnText: { color: '#fff', fontWeight: '700', fontSize: FontSize.body },
-});
-
 const toastStyles = StyleSheet.create({
   toast: {
     position: 'absolute', bottom: 140, alignSelf: 'center',
