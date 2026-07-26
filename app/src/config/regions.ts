@@ -14,7 +14,7 @@ export interface BoundingBox {
   maxLng: number;
 }
 
-export interface Region {
+interface Region {
   code: string;          // e.g. 'nz', 'au', 'us-pnw'
   name: string;          // Display name
   centerLat: number;

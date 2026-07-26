@@ -5,7 +5,7 @@
 import { authenticatedFetch } from './apiService';
 import type { Route, RoutePoint, Waypoint } from '../store/useRouteStore';
 
-export interface RoutePayload {
+interface RoutePayload {
   name: string;
   description?: string;
   points: RoutePoint[];

@@ -45,7 +45,7 @@ interface PersistedVia {
   lat: number;
 }
 
-export interface RouteExtras {
+interface RouteExtras {
   routeId: string;
   schemaVersion: 1;
   /** Immutable original GPS trace. Set once at first edit; never mutated. */

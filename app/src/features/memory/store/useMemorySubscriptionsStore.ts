@@ -13,7 +13,7 @@
 import { create } from 'zustand';
 import { authenticatedFetch } from '../../../services/apiService';
 
-export interface MemorySubscription {
+interface MemorySubscription {
   friend_id: number;
   friend_name: string;
   subscribed_at?: string;

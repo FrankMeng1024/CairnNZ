@@ -48,9 +48,6 @@ import * as Haptics from 'expo-haptics';
 
 type Step = 'gps' | 'pin' | 'content';
 
-// Re-exported for backwards compatibility — prefer importing from
-// '../features/plant/services/noteEncoding' directly.
-export { TITLE_BODY_SEP, encodeTitleBody } from '../features/plant/services/noteEncoding';
 
 interface PlantDraft {
   /** v298 N5: GPS-locked anchor — set ONCE in step 1, never modified

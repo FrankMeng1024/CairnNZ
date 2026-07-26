@@ -15,7 +15,7 @@
 import { useEffect, useState } from 'react';
 import networkMonitor from '../services/networkMonitor';
 
-export interface OnlineOnlyResult {
+interface OnlineOnlyResult {
   online: boolean;
   /** 无网时的 UI hint 文案。可传给 button label 或 tooltip。 */
   reason: string | null;

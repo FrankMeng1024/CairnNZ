@@ -2869,8 +2869,3 @@ if (!globalThis.__cairnSaveFailureSubscribed) {
     }
   });
 }
-
-/** Helper exported for color-by-distance rendering. */
-export function distanceFromOriginalM(coord: LngLat, walkedIndex: PointCloudIndex | null): number {
-  return distanceToOriginalM(coord, walkedIndex);
-}

@@ -64,13 +64,13 @@ export interface RawPoint {
   t?: number;
 }
 
-export interface SnappedPoint {
+interface SnappedPoint {
   lat: number;
   lng: number;
   alt?: number | null;
 }
 
-export interface SnapTrackOptions {
+interface SnapTrackOptions {
   /**
    * Mapbox public token. Required.
    * Caller passes process.env.EXPO_PUBLIC_MAPBOX_TOKEN.
@@ -86,7 +86,7 @@ export interface SnapTrackOptions {
   signal?: AbortSignal;
 }
 
-export type SnapTrackReason =
+type SnapTrackReason =
   | 'no_input'
   | 'too_short'
   | 'no_token'
@@ -94,7 +94,7 @@ export type SnapTrackReason =
   | 'timed_out'
   | 'all_chunks_failed';
 
-export interface SnapTrackStats {
+interface SnapTrackStats {
   /** Number of Mapbox /matching API calls actually fired. */
   apiCalls: number;
   /** Number of chunks that succeeded with conf >= confMin. */
@@ -111,7 +111,7 @@ export interface SnapTrackStats {
   durationMs: number;
 }
 
-export type SnapTrackResult =
+type SnapTrackResult =
   | { ok: true; points: SnappedPoint[]; stats: SnapTrackStats }
   | { ok: false; reason: SnapTrackReason; stats: SnapTrackStats };
 

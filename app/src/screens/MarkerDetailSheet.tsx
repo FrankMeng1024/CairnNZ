@@ -15,7 +15,7 @@ import { haversineM, formatDistance } from '../utils/geo';
 import type { Marker } from '../store/useMarkerStore';
 import type { MarkerType } from '../data/mockData';
 
-export type FlagTypeEntry = {
+type FlagTypeEntry = {
   id: MarkerType;
   icon: IconName;
   label: string;

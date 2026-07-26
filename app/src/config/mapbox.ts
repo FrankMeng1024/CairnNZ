@@ -22,14 +22,14 @@ export function initMapbox() {
   }
 }
 
-export const MAP_STYLES = {
+const MAP_STYLES = {
   outdoors: 'mapbox://styles/mapbox/outdoors-v12',
   streets: 'mapbox://styles/mapbox/streets-v12',
   dark: 'mapbox://styles/mapbox/dark-v11',
   satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
 } as const;
 
-export type MapStyle = keyof typeof MAP_STYLES;
+type MapStyle = keyof typeof MAP_STYLES;
 
 /**
  * PRD3 E-013 — Cairn Topo style.

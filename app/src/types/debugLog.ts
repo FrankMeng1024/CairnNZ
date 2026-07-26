@@ -14,14 +14,14 @@
  * (broadcasts_played_count / deviations_count) — they were always 0.
  */
 
-export interface BaseEvent {
+interface BaseEvent {
   ts: number;            // Unix ms
   session_id: string;
   event: string;
 }
 
 // ── L2: GPS ─────────────────────────────────────────────────────────────────
-export interface GpsFixEvent extends BaseEvent {
+interface GpsFixEvent extends BaseEvent {
   event: 'gps_fix';
   lat: number;
   lon: number;
@@ -34,7 +34,7 @@ export interface GpsFixEvent extends BaseEvent {
   source: 'foreground' | 'background' | 'simulated';
 }
 
-export interface KalmanOutputEvent extends BaseEvent {
+interface KalmanOutputEvent extends BaseEvent {
   event: 'kalman_output';
   input: { lat: number; lon: number; accuracy_m: number };
   output: { lat: number; lon: number };
@@ -43,7 +43,7 @@ export interface KalmanOutputEvent extends BaseEvent {
 }
 
 // ── L2: Battery / Network / App state ───────────────────────────────────────
-export interface BatterySampleEvent extends BaseEvent {
+interface BatterySampleEvent extends BaseEvent {
   event: 'battery_sample';
   level_pct: number;
   is_charging: boolean;
@@ -53,7 +53,7 @@ export interface BatterySampleEvent extends BaseEvent {
   trigger: 'timer_60s' | 'level_change' | 'state_change' | 'session_start' | 'session_end';
 }
 
-export interface NetworkChangeEvent extends BaseEvent {
+interface NetworkChangeEvent extends BaseEvent {
   event: 'network_change';
   state: 'online' | 'offline';
   type: 'wifi' | 'cellular' | 'none' | 'unknown';
@@ -61,7 +61,7 @@ export interface NetworkChangeEvent extends BaseEvent {
   is_internet_reachable: boolean | null;
 }
 
-export interface AppStateChangeEvent extends BaseEvent {
+interface AppStateChangeEvent extends BaseEvent {
   event: 'app_state_change';
   from: 'active' | 'background' | 'inactive' | 'unknown';
   to: 'active' | 'background' | 'inactive' | 'unknown';
@@ -69,7 +69,7 @@ export interface AppStateChangeEvent extends BaseEvent {
 }
 
 // ── L2: Markers ─────────────────────────────────────────────────────────────
-export interface MarkerPlacedEvent extends BaseEvent {
+interface MarkerPlacedEvent extends BaseEvent {
   event: 'marker_placed';
   marker_id: string;
   type: string;
@@ -81,7 +81,7 @@ export interface MarkerPlacedEvent extends BaseEvent {
 }
 
 // ── L2: Errors ──────────────────────────────────────────────────────────────
-export interface ErrorEvent extends BaseEvent {
+interface ErrorEvent extends BaseEvent {
   event: 'error';
   source: string;
   message: string;
@@ -120,7 +120,7 @@ export interface MinuteSnapshotEvent extends BaseEvent {
 }
 
 // ── L4: User annotation ────────────────────────────────────────────────────
-export interface BreadcrumbEvent extends BaseEvent {
+interface BreadcrumbEvent extends BaseEvent {
   event: 'breadcrumb';
   /** Free-form tag, e.g. 'route_editor_open' / 'via_added' / 'trim_changed' */
   tag: string;

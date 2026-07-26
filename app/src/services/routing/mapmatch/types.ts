@@ -28,12 +28,6 @@ interface MatchRequestBuild {
   totalCoords: number;
 }
 
-export interface MatchedSegment {
-  /** Polyline returned by Mapbox for this segment. */
-  matchedPoints: LngLat[];
-  /** Average confidence across legs (0..1). */
-  confidence: number;
-}
 
 /**
  * v263 — one element per `body.matchings[]` entry returned by Mapbox.

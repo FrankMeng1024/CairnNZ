@@ -39,7 +39,7 @@ type OfflineOpKind =
   | 'session_finalize'
   | 'marker_create';
 
-export interface OfflineOp {
+interface OfflineOp {
   /** Client-generated UUID — server dedupes against this. */
   opId: string;
   kind: OfflineOpKind;

@@ -27,7 +27,7 @@ export const DEFAULT_STEP_CONFIG: StepConfig = {
   undo_count: 10,
 };
 
-export interface InjectorSnapshot {
+interface InjectorSnapshot {
   active: boolean;
   currentPos: { lat: number; lng: number } | null;
   bearingDeg: number;
@@ -39,7 +39,7 @@ export interface InjectorSnapshot {
   undoCount: number;
 }
 
-export type InjectorListener = (snapshot: InjectorSnapshot) => void;
+type InjectorListener = (snapshot: InjectorSnapshot) => void;
 
 const EARTH_R_M = 6_378_137;
 const JITTER_M_1_SIGMA = 1;   // realistic GPS noise (< step_m so forward progress is net positive)

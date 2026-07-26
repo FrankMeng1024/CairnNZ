@@ -15,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY = '@cairn:feature_flags:v1';
 
-export interface FeatureFlags {
+interface FeatureFlags {
   // Edit mode 主开关 (default true post-Sprint 66 wave 7)
   editModeEnabled: boolean;
 
@@ -26,7 +26,7 @@ export interface FeatureFlags {
   editCorridorRadiusMeters: number;
 }
 
-export const DEFAULT_FLAGS: FeatureFlags = {
+const DEFAULT_FLAGS: FeatureFlags = {
   editModeEnabled: true,
   midpointDragEnabled: true,
   editCorridorRadiusMeters: 1000, // rules v4 锁定 1km
