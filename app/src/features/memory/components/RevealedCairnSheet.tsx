@@ -25,6 +25,10 @@ interface Props {
   marker: Marker | null;
   authorName?: string;
   regionLabel?: string;
+  /** True if the current user has liked this marker in the current session. */
+  isLiked?: boolean;
+  /** True if the current user has already reported this marker. */
+  isReported?: boolean;
   onLike?: () => void;
   onReport?: () => void;
   onShare?: () => void;
@@ -52,7 +56,7 @@ function initialOf(name: string | undefined): string {
 }
 
 export function RevealedCairnSheet({
-  marker, authorName, regionLabel, onLike, onReport, onShare, onClose,
+  marker, authorName, regionLabel, isLiked, isReported, onLike, onReport, onShare, onClose,
 }: Props) {
   if (!marker) return null;
   const { title, body } = splitTitleBody(marker.note ?? '');
@@ -95,8 +99,8 @@ export function RevealedCairnSheet({
             )}
 
             <View style={styles.actions}>
-              <ActionBtn label="Like" onPress={onLike} />
-              <ActionBtn label="Report" onPress={onReport} />
+              <ActionBtn label={isLiked ? 'Liked ✓' : 'Like'} onPress={isLiked ? undefined : onLike} />
+              <ActionBtn label={isReported ? 'Reported' : 'Report'} onPress={isReported ? undefined : onReport} />
               <ActionBtn label="Share" onPress={onShare} />
             </View>
 

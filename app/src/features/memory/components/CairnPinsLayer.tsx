@@ -28,17 +28,20 @@
  */
 
 import React, { useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert, Share } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { useMarkerStore, Marker, type MarkerPermission } from '../../../store/useMarkerStore';
+import { useTrackingStore } from '../../../store/useTrackingStore';
 import { MysteryVisibilityConfig } from '../config/memoryConfig';
 import { haversineM } from '../../../utils/geo';
 import { MysteryCairnSheet } from './MysteryCairnSheet';
 import { RevealedCairnSheet } from './RevealedCairnSheet';
 import { CairnPinV10, MysteryPinV10, StrangerBlurredPinV10 } from './CairnPinV10';
+import { splitTitleBody } from '../../plant/services/noteEncoding';
+import { likeMarker, reportMarker, MarkerInteractionError } from '../../../services/markerInteractionService';
 import type { Tier } from './pinTier';
 
 export type { Tier };
@@ -79,6 +82,11 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   const ownIds = useMemoryStoreOwnIdsShim();
   const Mapbox = getMapbox();
   const [selection, setSelection] = useState<Selection>({ kind: 'none' });
+
+  // B6: track liked/reported markers locally (session only — server is truth).
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
+  const lastCoordinate = useTrackingStore((s) => s.lastCoordinate);
 
   // v413: friend memory union — 勾选 friend 后, friend 走过的地方也应视为 explored
   // (marker "?" 会变成真实内容). 反勾即时回缩.
@@ -190,6 +198,81 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       ? { kind: 'revealed', marker: m, tier }
       : { kind: 'mystery', marker: m, tier });
   }, [markers, ownIds]);
+
+  // B6 — Like handler (optimistic, rollback on network failure).
+  const handleLike = useCallback(() => {
+    if (selection.kind !== 'revealed') return;
+    const { id } = selection.marker;
+    if (likedIds.has(id)) return; // already liked in this session
+
+    // GPS: use real last coordinate, fall back to map center proxy.
+    const lat = lastCoordinate?.lat ?? centerLat;
+    const lng = lastCoordinate?.lng ?? centerLng;
+    const accuracy = lastCoordinate?.accuracy ?? undefined;
+
+    setLikedIds((prev) => new Set([...prev, id]));
+    likeMarker(id, lat, lng, accuracy).catch((err) => {
+      // TOO_FAR, NONCE_INVALID, SERVER_ERROR → rollback and inform user.
+      // 409 is handled inside likeMarker and resolves normally (no catch here).
+      setLikedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      const code = err instanceof MarkerInteractionError ? err.code : 'SERVER_ERROR';
+      if (code === 'TOO_FAR') {
+        Alert.alert('Too far', 'Get closer to the cairn to like it.');
+      } else if (code === 'RATE_LIMITED') {
+        Alert.alert('Slow down', 'Too many actions. Try again in a moment.');
+      }
+      // NONCE_INVALID + SERVER_ERROR: silent — network/server blip, don't alarm user.
+    });
+  }, [selection, likedIds, lastCoordinate, centerLat, centerLng]);
+
+  // B6 — Report handler: show reason picker then send.
+  const handleReport = useCallback(() => {
+    if (selection.kind !== 'revealed') return;
+    // Capture ID at call time (Alert fires async; closure must not see stale selection).
+    const targetId = selection.marker.id;
+    if (reportedIds.has(targetId)) {
+      Alert.alert('Already reported', 'You have already reported this cairn.');
+      return;
+    }
+
+    const sendReport = (reason: 'fake_ad' | 'info_mismatch' | 'dislike') => {
+      const lat = lastCoordinate?.lat ?? centerLat;
+      const lng = lastCoordinate?.lng ?? centerLng;
+      const accuracy = lastCoordinate?.accuracy ?? undefined;
+
+      setReportedIds((prev) => new Set([...prev, targetId]));
+      reportMarker(targetId, reason, lat, lng, accuracy)
+        .then(() => {
+          Alert.alert('Report sent', 'Thanks for letting us know.');
+        })
+        .catch((err) => {
+          setReportedIds((prev) => { const n = new Set(prev); n.delete(targetId); return n; });
+          const code = err instanceof MarkerInteractionError ? err.code : 'SERVER_ERROR';
+          if (code === 'TOO_FAR') {
+            Alert.alert('Too far', 'Get closer to the cairn to report it.');
+          } else if (code === 'RATE_LIMITED') {
+            Alert.alert('Slow down', 'Too many reports. Try again later.');
+          }
+        });
+    };
+
+    Alert.alert('Report this cairn', 'What is wrong with it?', [
+      { text: 'Spam / Ad', onPress: () => sendReport('fake_ad') },
+      { text: 'Wrong info', onPress: () => sendReport('info_mismatch') },
+      { text: "Don't like it", onPress: () => sendReport('dislike') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [selection, reportedIds, lastCoordinate, centerLat, centerLng]);
+
+  // B6 — Share handler.
+  const handleShare = useCallback(() => {
+    if (selection.kind !== 'revealed') return;
+    const { title } = splitTitleBody(selection.marker.note ?? '');
+    const message = title.length > 0
+      ? `"${title}" — shared via Cairn`
+      : 'Check out this cairn on Cairn';
+    Share.share({ message });
+  }, [selection]);
 
   if (!Mapbox.available) return null;
   const { SymbolLayer, ShapeSource, Images, Image: MbxImage, PointAnnotation, MarkerView } = Mapbox;
@@ -323,6 +406,11 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
         {selection.kind === 'revealed' && (
           <RevealedCairnSheet
             marker={selection.marker}
+            isLiked={likedIds.has(selection.marker.id)}
+            isReported={reportedIds.has(selection.marker.id)}
+            onLike={handleLike}
+            onReport={handleReport}
+            onShare={handleShare}
             onClose={() => setSelection({ kind: 'none' })}
           />
         )}
@@ -379,6 +467,11 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
         {selection.kind === 'revealed' && (
           <RevealedCairnSheet
             marker={selection.marker}
+            isLiked={likedIds.has(selection.marker.id)}
+            isReported={reportedIds.has(selection.marker.id)}
+            onLike={handleLike}
+            onReport={handleReport}
+            onShare={handleShare}
             onClose={() => setSelection({ kind: 'none' })}
           />
         )}
@@ -427,6 +520,11 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       {selection.kind === 'revealed' && (
         <RevealedCairnSheet
           marker={selection.marker}
+          isLiked={likedIds.has(selection.marker.id)}
+          isReported={reportedIds.has(selection.marker.id)}
+          onLike={handleLike}
+          onReport={handleReport}
+          onShare={handleShare}
           onClose={() => setSelection({ kind: 'none' })}
         />
       )}
