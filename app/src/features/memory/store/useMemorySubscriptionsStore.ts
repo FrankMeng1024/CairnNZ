@@ -25,7 +25,7 @@ interface State {
   loading: boolean;
   error: string | null;
   /** Last raw HTTP status from a mutation, for UI to map 409 → paywall trigger. */
-  lastMutationStatus: number | null;
+  // O1 batch 37: lastMutationStatus removed — 0 external readers; callers use the return value directly.
 
   load: () => Promise<void>;
   /** Returns server status code so caller can branch on 201/403/409. */
@@ -44,7 +44,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
   subscriptions: [],
   loading: false,
   error: null,
-  lastMutationStatus: null,
+  // O1 batch 37: lastMutationStatus removed
 
   load: async () => {
     // BUG-007 fix: single-flight guard. Multiple consumers (MapScreen +
@@ -97,14 +97,12 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         method: 'POST',
         body: JSON.stringify({ friend_id: friendId }),
       });
-      set({ lastMutationStatus: res.status });
       if (res.ok) {
         // Re-fetch to get the canonical row (name + email).
         await get().load();
       }
       return res.status;
     } catch {
-      set({ lastMutationStatus: 0 });
       return 0;
     }
   },
@@ -114,13 +112,11 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       const res = await authenticatedFetch(`/api/memory-subscriptions/${friendId}`, {
         method: 'DELETE',
       });
-      set({ lastMutationStatus: res.status });
       if (res.ok) {
         set({ subscriptions: get().subscriptions.filter((s) => s.friend_id !== friendId) });
       }
       return res.status;
     } catch {
-      set({ lastMutationStatus: 0 });
       return 0;
     }
   },
@@ -134,6 +130,6 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       subscriptions: [],
       loading: false,
       error: null,
-      lastMutationStatus: null,
+      // O1 batch 37: lastMutationStatus removed
     }),
 }));

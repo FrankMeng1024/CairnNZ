@@ -41,12 +41,7 @@ export const PinNudgeConfig = {
    * the user drags 500m away.
    */
   maxNudgeMeters: 50,
-  /**
-   * Minimum zoom level required for nudging to be meaningful. Below
-   * this, the pin would represent dozens of meters per pixel and
-   * dragging is meaningless.
-   */
-  minZoomForNudge: 16,
+  // O1 batch 37: minZoomForNudge removed — 0 external callers confirmed by grep audit.
 } as const;
 
 // ── Content limits ────────────────────────────────────────────────────
@@ -76,18 +71,4 @@ export const VisibilityConfig = {
   enablePublicOption: false,
 } as const;
 
-export type PlantConfigBundle = {
-  gps: typeof GpsSamplingConfig;
-  pin: typeof PinNudgeConfig;
-  content: typeof ContentConfig;
-  visibility: typeof VisibilityConfig;
-};
-
-export function getPlantConfig(): PlantConfigBundle {
-  return {
-    gps: GpsSamplingConfig,
-    pin: PinNudgeConfig,
-    content: ContentConfig,
-    visibility: VisibilityConfig,
-  };
-}
+// O1 batch 37: PlantConfigBundle + getPlantConfig() removed — 0 external callers.

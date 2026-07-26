@@ -41,7 +41,7 @@ interface FriendMemoryState {
   version: number;
 
   loading: boolean;
-  loadError: string | null;
+  // O1 batch 37: loadError removed — written internally but 0 external readers.
 
   /**
    * 从 backend 拉 GET /api/circle/fog, 填充 friendMemory.
@@ -63,11 +63,10 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
   friendMemory: {},
   version: 0,
   loading: false,
-  loadError: null,
 
   loadFriendFog: async () => {
     if (get().loading) return;
-    set({ loading: true, loadError: null });
+    set({ loading: true });
     try {
       const res = await authenticatedFetch('/api/circle/fog', { method: 'GET' });
       if (!res.ok) {
@@ -89,13 +88,12 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       set({
         friendMemory: next,
         loading: false,
-        loadError: null,
         version: get().version + 1,
       });
     } catch (err: any) {
       set({
         loading: false,
-        loadError: String(err?.message ?? err),
+        // O1 batch 37: loadError removed
       });
     }
   },
@@ -120,7 +118,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       friendMemory: {},
       version: 0,
       loading: false,
-      loadError: null,
+      // O1 batch 37: loadError removed
     });
   },
 }));

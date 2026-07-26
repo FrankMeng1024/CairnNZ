@@ -9,7 +9,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Animated, Easing, ActivityIndicator,
-  KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback,
+  KeyboardAvoidingView, Platform,
+  // O1 batch 37: Keyboard, TouchableWithoutFeedback removed — 0 JSX references.
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,7 +38,7 @@ interface Friend {
   sharing: boolean;
 }
 
-const OWN_EMAIL = 'me@cairn.app';
+// O1 batch 37: OWN_EMAIL removed — declared but never used.
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -573,11 +574,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: Spacing.sm,
     backgroundColor: Colors.bg,
   },
-  backBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 2,
-    paddingVertical: 6, paddingRight: Spacing.sm,
-  },
-  backText: { fontSize: FontSize.caption, fontWeight: '600', color: Colors.primary },
+  // O1 batch 37: backBtn, backText removed — 0 references in JSX.
   topTitle: {
     flex: 1, textAlign: 'center',
     fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary,
@@ -595,20 +592,7 @@ const styles = StyleSheet.create({
   },
   addTopBtnText: { fontSize: FontSize.small, fontWeight: '600', color: '#fff' },
 
-  shareBannerRow: {
-    paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm,
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
-    gap: 4,
-  },
-  sharePill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.primaryBg,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.md, paddingVertical: 4,
-  },
-  shareBannerText: { fontSize: FontSize.caption, fontWeight: '600', color: Colors.primary },
-  shareBannerSub: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2, paddingHorizontal: 2 },
+  // O1 batch 37: shareBannerRow, sharePill, shareBannerText, shareBannerSub removed — 0 JSX refs.
 
   scrollContent: { padding: Spacing.base, gap: Spacing.sm, paddingBottom: Spacing.xxl },
 
@@ -680,17 +664,7 @@ const styles = StyleSheet.create({
   addCardLabel: { fontSize: FontSize.body, fontWeight: '600', color: Colors.primary },
   addCardHint: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 1 },
 
-  infoBox: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: Radius.card,
-    padding: Spacing.md, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
-    marginTop: Spacing.xs,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
-  },
-  infoBoxText: {
-    flex: 1, fontSize: FontSize.small,
-    color: Colors.textSecondary, lineHeight: 18,
-  },
+  // O1 batch 37: infoBox, infoBoxText removed — 0 JSX references.
 });
 
 const cardStyles = StyleSheet.create({
@@ -717,14 +691,7 @@ const cardStyles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   metaDot: { fontSize: FontSize.small, color: Colors.textSecondary },
   meta: { fontSize: FontSize.small, color: Colors.textSecondary },
-  noShareLabel: {
-    fontSize: FontSize.tiny, fontWeight: '600', color: Colors.textMuted,
-    marginTop: 3, backgroundColor: Colors.border,
-    borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2,
-    alignSelf: 'flex-start',
-  },
-  toggleCol: { alignItems: 'center', gap: 2 },
-  toggleLabel: { fontSize: FontSize.tiny, color: Colors.textMuted, fontWeight: '500' },
+  // O1 batch 37: noShareLabel, toggleCol, toggleLabel removed — 0 JSX references.
 });
 
 const sheetStyles = StyleSheet.create({

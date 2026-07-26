@@ -99,17 +99,4 @@ export const MysteryPreviewConfig = {
   showTitleForPublic: false,
 } as const;
 
-// ── Friend share rules ────────────────────────────────────────────────
-export const ShareConfig = {
-  /**
-   * Default master switch when a friendship is created. Friends are
-   * not auto-shared — explicit opt-in keeps memory private by default.
-   */
-  defaultMasterSwitch: false,
-
-  /**
-   * Default per-activity inclusion when master switch is on. Activities
-   * get shared unless the user opts out at completion time.
-   */
-  defaultPerActivityInclude: true,
-} as const;
+// O1 batch 37: ShareConfig removed — 0 external callers confirmed by grep audit.

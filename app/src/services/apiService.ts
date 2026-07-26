@@ -81,13 +81,12 @@ export async function authenticatedFetch(
     }
 
     // Rule 4: hard signal, but tracking active → defer logout.
+    // O1 batch 37: sessionExpired was set here for deferred reauth surfacing, but
+    // 0 screens ever read it, so the deferred signal was never actionable. We now
+    // simply return without logging out (tracking continues; next app resume handles it).
     const tracking = useTrackingStore.getState().status;
     if (tracking === 'tracking' || tracking === 'paused') {
-      crashLogger.breadcrumb(`revoke:401_during_tracking_marked path=${path}`);
-      // Mark deferred reauth on the app store. hydrate() / AppState=active
-      // path is responsible for surfacing it to the user later.
-      const store = useAppStore.getState();
-      store.setSessionExpired(true);
+      crashLogger.breadcrumb(`revoke:401_during_tracking_deferred path=${path}`);
       return res;
     }
 
@@ -95,9 +94,7 @@ export async function authenticatedFetch(
     crashLogger.breadcrumb(`apiService:401_hard_logout path=${path}`);
     crashLogger.breadcrumb(`signout_reason=401_invalid path=${path}`);
     await clearToken();
-    const store = useAppStore.getState();
-    store.logout();
-    store.setSessionExpired(true);
+    useAppStore.getState().logout();
   }
 
   return res;

@@ -57,8 +57,8 @@ interface AppState {
   user: UserProfile | null;
   setUser: (user: UserProfile | null) => void;
   hydrated: boolean;
-  sessionExpired: boolean;
-  setSessionExpired: (v: boolean) => void;
+  // O1 batch 37: sessionExpired + setSessionExpired removed — field written by apiService.ts
+  // but 0 external readers; logout() reset also removed below.
   logout: () => void;
 
   // v412 4-eye fix (Critical #4): hydrationTs 供 HikingScreen 的 v412 unfinished recovery
@@ -73,7 +73,8 @@ interface AppState {
     startedAt?: number;
     ageMs?: number;
   } | null;
-  setPendingSessionResume: (v: AppState['pendingSessionResume']) => void;
+  // O1 batch 37: setPendingSessionResume removed — 0 external callers.
+  // pendingSessionResume is still set internally inside hydrate() via set().
 
   // Hydrate persisted settings on app start
   hydrate: () => Promise<void>;
@@ -105,19 +106,18 @@ export const useAppStore = create<AppState>((set) => ({
   user: null,
   setUser: (user) => set({ user }),
   hydrated: false,
-  sessionExpired: false,
-  setSessionExpired: (v) => set({ sessionExpired: v }),
+  // O1 batch 37: sessionExpired + setSessionExpired removed (0 external readers)
 
   // v412 4-eye fix (Critical #4): 供 HikingScreen recovery useEffect 依赖数组用
   hydrationTs: 0,
 
   // Sprint 72 STORY-00551
   pendingSessionResume: null,
-  setPendingSessionResume: (v) => set({ pendingSessionResume: v }),
+  // O1 batch 37: setPendingSessionResume removed (0 external callers)
 
   logout: () => {
     crashLogger.breadcrumb('logout:start');
-    set({ isLoggedIn: false, user: null, sessionExpired: false });
+    set({ isLoggedIn: false, user: null });
     crashLogger.breadcrumb('logout:state_cleared');
     useSessionStore.getState().clearSessions();
     crashLogger.breadcrumb('logout:sessions_cleared');

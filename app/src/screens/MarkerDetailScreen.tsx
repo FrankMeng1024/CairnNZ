@@ -474,15 +474,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
   },
-  pinHead: {
-    width: 28, height: 28,
-    borderRadius: 14,
-    borderWidth: 2.5,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.card,
-  },
+  // O1 batch 37: pinHead removed — 0 JSX references.
   panel: { flex: 1 },
   panelContent: {
     padding: Spacing.lg,

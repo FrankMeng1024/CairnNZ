@@ -167,7 +167,7 @@ interface TrackingState {
   resumeTracking: () => void;
   addTrackPoint: (coord: Coordinate, timestamp?: number) => void;
   linkMarker: (markerId: string) => void;
-  reset: () => void;
+  // O1 batch 37: reset removed — 0 external callers confirmed by grep audit.
   /** Clear lastStopReason after the screen has surfaced its notice. */
   clearLastStopReason: () => void;
   /** v118: discard the current too-short session entirely. Called when
@@ -1668,43 +1668,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     return removed;
   },
 
-  reset: () => {
-    try { appStateSubscription?.remove(); } catch { /* no-op */ }
-    appStateSubscription = null;
-    locationSubscription?.remove();
-    locationSubscription = null;
-    if (backgroundTaskActive && Location) {
-      Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => {});
-      backgroundTaskActive = false;
-    }
-    if (durationInterval) {
-      clearInterval(durationInterval);
-      durationInterval = null;
-    }
-    if (drainInterval) {
-      clearInterval(drainInterval);
-      drainInterval = null;
-    }
-    if (dynamicSamplingInterval) {
-      clearInterval(dynamicSamplingInterval);
-      dynamicSamplingInterval = null;
-    }
-    if (incrementalFlushInterval) {
-      clearInterval(incrementalFlushInterval);
-      incrementalFlushInterval = null;
-    }
-
-    // Stop monitors and end debug session (best effort)
-    batteryMonitor.stop().catch(() => {});
-    networkMonitor.stop();
-    sessionRecorder.stop();
-    debugLogger.endSession().catch(() => {});
-    persistBackgroundContext(null, false).catch(() => {});
-
-    lastSamplingIntervalMs = 3000;
-    backgroundGrantedCached = false;
-    set({ ...initialState });
-  },
+  // O1 batch 37: reset removed — 0 external callers confirmed by grep audit.
 
   clearLastStopReason: () => set({ lastStopReason: null }),
 

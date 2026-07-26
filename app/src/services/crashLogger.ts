@@ -150,13 +150,7 @@ export const crashLogger = {
     } catch { /* ignore */ }
   },
 
-  /**
-   * Snapshot of the recent-events ring buffer. Used by debug overlays
-   * to surface recent activity in the UI without waiting for a crash to upload.
-   */
-  getRecent(): string[] {
-    return [...recentEvents];
-  },
+  // O1 batch 37: getRecent removed — 0 external callers (debug overlay was never wired up).
 
   /**
    * Read & clear the last persisted crash. Call on app startup;
@@ -209,66 +203,6 @@ export const crashLogger = {
     }
   },
 
-  /**
-   * Proactively upload current breadcrumb buffer as a diagnostic snapshot.
-   * Bypasses the crash flow — no error is required, no persistence happens.
-   * Used by the debug screen to send recent activity for live debugging without
-   * waiting for a crash. Session is tagged with `diag-{tag}-{ts}` and
-   * activity_mode='diagnostic' so it's easy to filter on the backend.
-   *
-   * Best-effort, fire-and-forget. Returns the session_id used so the caller
-   * can show it on screen (so the user can tell the operator which one to look at).
-   */
-  async uploadDiagnostic(apiBaseUrl: string, tag: string): Promise<string> {
-    const ts = Date.now();
-    const sessionId = `diag-${tag}-${ts}-${Math.random().toString(36).slice(2, 8)}`;
-    try {
-      const events = recentEvents.map((line) => {
-        // Parse "ISO breadcrumb-text" → structured event
-        const m = line.match(/^([\d-]+T[\d:.]+Z)\s+(.+)$/);
-        if (m) {
-          return JSON.stringify({
-            ts: new Date(m[1]).getTime(),
-            session_id: sessionId,
-            event: 'breadcrumb',
-            message: m[2],
-          });
-        }
-        return JSON.stringify({
-          ts,
-          session_id: sessionId,
-          event: 'breadcrumb',
-          message: line,
-        });
-      });
-      // Header event (so first JSONL line carries session_id even if events is empty)
-      const headerEvent = JSON.stringify({
-        ts,
-        session_id: sessionId,
-        event: 'diagnostic_header',
-        tag,
-        breadcrumb_count: events.length,
-      });
-      const body = [headerEvent, ...events].join('\n');
-      const url = apiBaseUrl.replace(/\/$/, '') + '/api/telemetry/sessions';
-      await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-ndjson',
-          'X-Cairn-Device-Os': 'ios',
-          'X-Cairn-App-Version': APP_VERSION_HEADER,
-          'X-Cairn-Activity-Mode': 'diagnostic',
-          'X-Cairn-Started-At': String(ts),
-          'X-Cairn-Ended-At': String(ts),
-        },
-        body,
-      }).catch(() => { /* swallow */ });
-      // eslint-disable-next-line no-console
-      console.warn('[crashLogger] uploaded diagnostic:', sessionId);
-    } catch {
-      /* swallow */
-    }
-    return sessionId;
-  },
+  // O1 batch 37: uploadDiagnostic removed — 0 external callers (debug screen was never wired up).
 };
 

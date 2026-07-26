@@ -185,8 +185,9 @@ export function SettingsScreen() {
 
   // Destructure for ergonomic access
   const {
-    shareAfterAdd, nightMode, broadcastEnabled, locationShare,
-    tripSharing, voiceBroadcasts, dangerAlerts, routeDeviation,
+    shareAfterAdd, nightMode, locationShare,
+    tripSharing, dangerAlerts, routeDeviation,
+    // O1 batch 37: broadcastEnabled, voiceBroadcasts removed — no-op toggle fields, 0 JSX use.
     hapticFeedback, soundEffects, edgeWarningGlow,
     debugMode,
     updateSetting,
@@ -931,11 +932,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: Spacing.sm,
     backgroundColor: Colors.bg,
   },
-  backBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 2,
-    paddingVertical: 6, paddingRight: Spacing.sm,
-  },
-  backText: { fontSize: FontSize.caption, fontWeight: '600', color: Colors.primary },
+  // O1 batch 37: backBtn, backText removed — 0 JSX references.
   topTitle: {
     flex: 1, textAlign: 'center',
     fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary,
