@@ -2117,8 +2117,9 @@ export function HikingScreen() {
           onDiscard={async () => {
             // O1 batch 28.4: Discard 走完整清理路径 (与 recoveryModal.onDiscard
             // 一致): 清 disk active/*.jsonl + 删 remote session + 清 store。
-            // 不清 memory_points (用户明确: 测试向,加 unlockOnWalk setting 让
-            // 用户自主控制走路时是否 unlock memory)。
+            // 不清 memory_points — sim-walker/hike 走路时不实时写 memory
+            // (v450/O4 行为),memory 只在 Save Hike 时由 flushHikingToMemory
+            // 一次合入。Discard 不需要清 memory 因为根本没 unlock 过。
             const preState = useTrackingStore.getState();
             const capturedSessionId = preState.sessionId;
             const capturedRemoteId = preState.remoteSessionId;
