@@ -158,6 +158,12 @@ interface MarkerState {
   circleMarkers: Marker[];
   /** Loading flag for circle fetch — UI uses it for spinner state. */
   loadingCircle: boolean;
+  /** R2: Public markers from strangers within the current map viewport.
+   *  Loaded via GET /api/markers/public?bbox=. Anonymous (no author).
+   *  Shown as blurred stranger pins in the Memory map. */
+  publicMarkers: Marker[];
+  /** Loading flag for public markers fetch. */
+  loadingPublic: boolean;
   /** BUG-009 fix (Sprint 71 post-review round 3): in-flight hide ids.
    *  Set of mark ids whose POST /api/hide is async-running. loadCircleMarkers
    *  post-filters the response to exclude these — closes the GET-vs-POST
@@ -178,6 +184,8 @@ interface MarkerState {
   /** Sprint 69 STORY-00537: load subscribed-friend marks (friend+public
    *  tiers) from GET /api/circle/markers. Stored in `circleMarkers`. */
   loadCircleMarkers: () => Promise<void>;
+  /** R2: load public stranger markers within ~5.5km bbox around center. */
+  loadPublicMarkers: (centerLat: number, centerLng: number) => Promise<void>;
 }
 
 export const useMarkerStore = create<MarkerState>((set, get) => ({
@@ -187,6 +195,9 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   // Sprint 69 STORY-00537: initial empty until first loadCircleMarkers().
   circleMarkers: [],
   loadingCircle: false,
+  // R2: initial empty until first loadPublicMarkers().
+  publicMarkers: [],
+  loadingPublic: false,
   // BUG-009 fix: initial empty set of in-flight hide ids.
   hidingIds: [],
 
@@ -547,6 +558,45 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       set({ circleMarkers: circle, loadingCircle: false });
     } catch {
       set({ loadingCircle: false });
+    }
+  },
+
+  // R2: load public stranger markers within ±0.05° (~5.5km) of center.
+  // Single-flight guard mirrors loadCircleMarkers pattern.
+  loadPublicMarkers: async (centerLat: number, centerLng: number) => {
+    if (get().loadingPublic) return;
+    set({ loadingPublic: true });
+    const HALF_DEG = 0.05; // ~5.5 km
+    const lat1 = centerLat - HALF_DEG;
+    const lng1 = centerLng - HALF_DEG;
+    const lat2 = centerLat + HALF_DEG;
+    const lng2 = centerLng + HALF_DEG;
+    try {
+      const res = await authenticatedFetch(
+        `/api/markers/public?bbox=${lat1},${lng1},${lat2},${lng2}`,
+      );
+      if (!res.ok) { set({ loadingPublic: false }); return; }
+      const data = await res.json();
+      const rows: any[] = Array.isArray(data?.markers) ? data.markers : [];
+      // Backend returns id, type, lat, lng, created_at (anonymous).
+      // Build minimal Marker objects; fields not in response default to ''.
+      const publicMarkers: Marker[] = rows.map((row: any) => ({
+        id: String(row.id),
+        type: row.type ?? 'cairn',
+        regionCode: 'nz',
+        lat: Number(row.lat),
+        lng: Number(row.lng),
+        alt: undefined,
+        note: '',
+        authorId: '',
+        permission: 'public' as const,
+        createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+        synced: true,
+        voiceMemoUri: undefined,
+      }));
+      set({ publicMarkers, loadingPublic: false });
+    } catch {
+      set({ loadingPublic: false });
     }
   },
 

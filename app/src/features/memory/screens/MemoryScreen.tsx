@@ -16,7 +16,7 @@
  *       per 5 seconds.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Modal, Animated } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,12 +61,6 @@ const ONE_SHOT_TIMEOUT_MS = 12_000;
 const WATCHER_FIX_FRESH_MS = 10 * 60 * 1000; // 10 min — stale lat/lng OK for map display
 const FOCUS_REFETCH_DEBOUNCE_MS = 5_000;
 const FOCUS_REMOUNT_DEBOUNCE_MS = 5 * 60 * 1000; // v302 N3: 30s→5min — Mapbox cold reload is heavy (1-3s), don't redo it during the same session unless old.
-// BUG-011 fix (Sprint 71 post-review round 3): stable module-level empty
-// list used for the strangerMarks prop until F5 loader populates real
-// data. Avoids creating a new array literal on every MemoryScreen render,
-// which would churn MemoryMap props identity + force CairnPinsLayer
-// re-renders even when nothing relevant changed.
-const EMPTY_STRANGER_MARKS: import('../../../store/useMarkerStore').Marker[] = [];
 
 type FailReason = 'permission' | 'timeout' | 'error';
 
@@ -173,6 +167,29 @@ export function MemoryScreen() {
       void loadFriendFog();
     }
   }, [subscriptionsCount, loadFriendFog]);
+
+  // R2: public stranger markers. Subscribe to the store slice and provide
+  // a debounced loader triggered whenever the map camera center changes.
+  const publicMarkers = useMarkerStore((s) => s.publicMarkers);
+  const loadPublicMarkers = useMarkerStore((s) => s.loadPublicMarkers);
+  const publicLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleCameraCenter = useCallback(
+    (lat: number, lng: number) => {
+      cameraCenterRef.current = { lat, lng };
+      // Debounce: only fire 2s after the user stops panning.
+      if (publicLoadTimerRef.current) clearTimeout(publicLoadTimerRef.current);
+      publicLoadTimerRef.current = setTimeout(() => {
+        void loadPublicMarkers(lat, lng);
+      }, 2000);
+    },
+    [loadPublicMarkers],
+  );
+  // Cleanup debounce timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (publicLoadTimerRef.current) clearTimeout(publicLoadTimerRef.current);
+    };
+  }, []);
   // v363: user-dismissed banner state. When user taps the X close on
   // the slow-network banner, hide it for the rest of this Memory tab
   // session. Resets on mountKey bump.
@@ -671,7 +688,7 @@ export function MemoryScreen() {
           recenterToken={recenterToken}
           flyToTarget={flyToTarget}
           onMapMoved={() => setMapMoved(true)}
-          onCameraCenter={(lat, lng) => { cameraCenterRef.current = { lat, lng }; }}
+          onCameraCenter={handleCameraCenter}
           onMapFullyReady={() => {
             log('v359.map_fully_ready_cb', {});
             setMapReady(true);
@@ -688,7 +705,7 @@ export function MemoryScreen() {
           // Without this, CairnPinsLayer's strangerMarks defaulted to
           // undefined and Sprint 70 STORY-00543's visual layer was
           // structurally inert — caught by Devil's Advocate round 2.
-          strangerMarks={EMPTY_STRANGER_MARKS}
+          strangerMarks={publicMarkers}
           key={`map-${mountKey}`}
         />
       ) : failReason === 'permission' ? (

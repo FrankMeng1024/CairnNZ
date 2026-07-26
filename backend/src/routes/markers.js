@@ -121,17 +121,51 @@ router.get('/', async (req, res) => {
 });
 
 // ── Get Public markers within bbox (strangers' marks for Memory tab) ────────
-// v4 §7: GET /api/markers/public?bbox=lat1,lng1,lat2,lng2
-//   - returns Public marks from any user (including the viewer's friends —
-//     UI filters non-strangers in the Memory tab if needed)
-//   - LEFT JOIN hidden_items so the viewer doesn't see ones they hid
-//   - ORDER BY created_at DESC LIMIT 50 (per plan §7 line 314)
-//   - bbox is two corners: (lat1,lng1) = SW, (lat2,lng2) = NE
-//   - Anonymous: author_name is intentionally null even when the row's
-//     creator is the viewer's friend — Public marks are always anonymous
-//     in v1 (per v4 row Q + §10).
-// O1: /public route removed — 0 client callers. Feature was for Memory
-// tab stranger marks (v4 §7) but never wired to UI.
+// GET /api/markers/public?bbox=lat1,lng1,lat2,lng2
+//   bbox corners: (lat1,lng1) = SW, (lat2,lng2) = NE
+//   - Returns permission='public' marks from other users within bbox
+//   - Excludes viewer's own marks (user_id != viewer)
+//   - Excludes items the viewer has hidden (LEFT JOIN hidden_items)
+//   - Anonymous: no author info returned (v4 §10 design)
+//   - Max 50 results, ordered by created_at DESC
+router.get('/public', async (req, res) => {
+  try {
+    const { bbox } = req.query;
+    if (!bbox || typeof bbox !== 'string') {
+      return res.status(400).json({ error: 'bbox query param required (lat1,lng1,lat2,lng2)' });
+    }
+    const parts = bbox.split(',').map(Number);
+    if (parts.length !== 4 || parts.some((v) => !Number.isFinite(v))) {
+      return res.status(400).json({ error: 'bbox must be 4 comma-separated numbers' });
+    }
+    const [lat1, lng1, lat2, lng2] = parts;
+    const minLat = Math.min(lat1, lat2);
+    const maxLat = Math.max(lat1, lat2);
+    const minLng = Math.min(lng1, lng2);
+    const maxLng = Math.max(lng1, lng2);
+
+    const userId = req.user.userId;
+    const [rows] = await pool.execute(
+      `SELECT m.id, m.type, m.lat, m.lng, m.created_at
+       FROM markers m
+       LEFT JOIN hidden_items h
+         ON h.user_id = ? AND h.item_type = 'mark' AND h.item_id = m.id
+       WHERE m.permission = 'public'
+         AND m.user_id != ?
+         AND m.lat BETWEEN ? AND ?
+         AND m.lng BETWEEN ? AND ?
+         AND h.id IS NULL
+       ORDER BY m.created_at DESC
+       LIMIT 50`,
+      [userId, userId, minLat, maxLat, minLng, maxLng],
+    );
+
+    res.json({ markers: rows });
+  } catch (err) {
+    console.error('[markers/public]', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 // ── Create marker ───────────────────────────────────────────────────────────
 router.post('/', validateBody(schemas.marker.create), idempotency, async (req, res) => {
