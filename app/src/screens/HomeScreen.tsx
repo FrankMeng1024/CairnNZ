@@ -595,11 +595,6 @@ const cardStyles = StyleSheet.create({
     paddingHorizontal: Spacing.base,
     gap: Spacing.sm,
   },
-  iconBadge: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
   textCol: { flex: 1, gap: 5 },
   title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   subtitle: { fontSize: FontSize.small, color: Colors.textSecondary, lineHeight: 17 },

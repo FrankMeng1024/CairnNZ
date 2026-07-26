@@ -59,7 +59,6 @@ export type HikingMapProps = {
   // anchor. Only present on sim-walker-generated points.
   trackPoints: Array<{ lat: number; lng: number; t?: number; segmentBreak?: boolean }>;
   onMarkerPress: (id: string) => void;
-  showCompass?: boolean;
   // When a saved route is selected and the user isn't already at its
   // start, we draw a dashed "approach" line from the user's current
   // position to the route's first waypoint, plus a "Start" pin so the
@@ -89,7 +88,7 @@ export type HikingMapProps = {
 };
 
 export function HikingMap({
-  markers, trackPoints, onMarkerPress, showCompass, routeStart, userPos,
+  markers, trackPoints, onMarkerPress, routeStart, userPos,
   instantCamera, followUser = true, onUserGesture, recenterImperativeRef, debugMode,
 }: HikingMapProps) {
   const region = getCurrentRegion();

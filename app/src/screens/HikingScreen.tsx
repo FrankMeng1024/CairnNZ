@@ -32,7 +32,6 @@ import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../componen
 import { Icon } from '../components/Icon';
 import { StopSummarySheet } from './StopSummarySheet';
 import { MarkerDetailSheet } from './MarkerDetailSheet';
-import { FlagSavedToast } from './FlagSavedToast';
 import { CompassNeedle } from './CompassNeedle';
 import { BackButton } from '../components/BackButton';
 import { PulseDot } from '../components/PulseDot';
@@ -116,7 +115,6 @@ export function HikingScreen() {
 
   const [ui, setUi] = useState<UIState>('map');
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
-  const [showSavedToast, setShowSavedToast] = useState(false);
   // v118: followUser controls whether the live map auto-recenters on
   // each GPS update. true (default during tracking) = Mapbox snaps the
   // camera to the user. false = user has manually panned/zoomed; we
@@ -957,11 +955,6 @@ export function HikingScreen() {
           }}
           flagTypes={FLAG_TYPES}
         />
-      )}
-
-      {/* Flag Saved Toast */}
-      {showSavedToast && (
-        <FlagSavedToast onHide={() => setShowSavedToast(false)} />
       )}
 
       {/* Stop summary sheet — shown after user taps Stop, before

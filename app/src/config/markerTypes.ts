@@ -95,16 +95,6 @@ export const MARKER_TYPE_ORDER: MarkerType[] = [
   'cairn',
 ];
 
-/** All 5 types are primary in v105 (no longer separating cairn out). */
-export const PRIMARY_MARKER_TYPES: MarkerType[] = [
-  'danger',
-  'junction',
-  'water',
-  'hut',
-  'cairn',
-];
-
-export function getMarkerMeta(type: MarkerType | undefined | null): MarkerTypeMeta | null {
-  if (!type) return null;
-  return MARKER_TYPES[type] ?? null;
-}
+// O1 batch 32: removed PRIMARY_MARKER_TYPES (duplicate of MARKER_TYPE_ORDER,
+// 0 external callers) and getMarkerMeta helper (0 external callers; callers
+// use MARKER_TYPES[type] directly).
