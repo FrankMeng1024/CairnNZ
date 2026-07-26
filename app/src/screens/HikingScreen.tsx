@@ -29,7 +29,7 @@ import { useMarkerStore } from '../store/useMarkerStore';
 import { useRouteStore } from '../store/useRouteStore';
 import { getCurrentRegion } from '../config/regions';
 import { getPrimaryMapStyle } from '../config/mapbox';
-import { formatDistance, formatDuration, haversineM, createTrackSmoother, smoothGPSPoint, getSamplingInterval, classifyMovement, type SmoothedTrackState, type GPSPoint } from '../utils/geo';
+import { formatDistance, formatDuration, haversineM } from '../utils/geo';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
 import { StopSummarySheet } from './StopSummarySheet';
