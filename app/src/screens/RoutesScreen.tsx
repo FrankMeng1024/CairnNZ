@@ -24,7 +24,6 @@ import { BackButton } from '../components/BackButton';
 import { PressBtn } from '../components/PressBtn';
 import { formatDistance, formatDuration, haversineM } from '../utils/geo';
 import { MARKER_META, type MarkerType } from '../data/mockData';
-import { shareGPX, sharePDF } from '../services/exportService'; // kept for future Export action
 import { EmptyRoutes, EmptyMarkers, IllustrationHalo } from '../components/Illustrations';
 
 // ── Mapbox conditional import (for RouteSheet preview) ────────────────────
