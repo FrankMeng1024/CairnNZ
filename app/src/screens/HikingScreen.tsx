@@ -18,7 +18,6 @@ import {
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import Svg, { Path, Circle as SvgCircle } from 'react-native-svg';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -34,6 +33,8 @@ import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../componen
 import { Icon, type IconName } from '../components/Icon';
 import { StopSummarySheet } from './StopSummarySheet';
 import { MarkerDetailSheet } from './MarkerDetailSheet';
+import { FlagSavedToast } from './FlagSavedToast';
+import { CompassNeedle } from './CompassNeedle';
 import { BackButton } from '../components/BackButton';
 import { PulseDot } from '../components/PulseDot';
 import { PressBtn } from '../components/PressBtn';
@@ -116,48 +117,6 @@ if (Platform.OS !== 'web') {
   } catch {
     // Mapbox native not available
   }
-}
-
-// ── Compass needle ───────────────────────────────────────────────────────
-// Two-colour needle: red half points to north (top-half of the SVG when
-// heading=0), grey half points south. The whole needle rotates by
-// -heading so the red tip always points to true/magnetic north as the
-// phone yaws. A static "N" letter sits at the top of the bezel
-// (NOT rotating) so users can always anchor cardinal direction to the
-// device frame, even when the needle is wobbling.
-function CompassNeedle({ heading, size = 22 }: { heading: number | null; size?: number }) {
-  const angle = heading != null ? -heading : 0;
-  // Cardinal label common style — small, bold, letter-spaced. North is
-  // emphasised (full opacity), the other three are slightly muted so
-  // North still reads as primary while user gets a full bearing reference.
-  const cardinal = {
-    position: 'absolute' as const,
-    fontSize: 8, fontWeight: '800' as const, color: Colors.textPrimary, letterSpacing: 0.5,
-  };
-  const cardinalMuted = { ...cardinal, color: Colors.textMuted };
-  return (
-    <View style={{ width: size + 8, height: size + 8, alignItems: 'center', justifyContent: 'center' }}>
-      {/* Static N/E/S/W markers — never rotate, anchored to bezel.
-          Previously only N was shown, which made it impossible to read
-          a bearing once the device was off-axis. Adding E/S/W gives a
-          full directional reference. */}
-      <Text style={[cardinal, { top: -2 }]}>N</Text>
-      <Text style={[cardinalMuted, { right: -2, top: '50%' as any, marginTop: -4 }]}>E</Text>
-      <Text style={[cardinalMuted, { bottom: -2 }]}>S</Text>
-      <Text style={[cardinalMuted, { left: -2, top: '50%' as any, marginTop: -4 }]}>W</Text>
-      {/* Rotating two-colour needle */}
-      <View style={{ transform: [{ rotate: `${angle}deg` }] }}>
-        <Svg width={size} height={size} viewBox="0 0 24 24">
-          {/* North half — red, pointing up */}
-          <Path d="M 12 2 L 14.5 12 L 12 12 L 9.5 12 Z" fill="#d63031" />
-          {/* South half — grey, pointing down */}
-          <Path d="M 12 22 L 14.5 12 L 12 12 L 9.5 12 Z" fill="#9CA3AF" />
-          {/* Center pivot dot */}
-          <SvgCircle cx="12" cy="12" r="1.6" fill="#1f2937" />
-        </Svg>
-      </View>
-    </View>
-  );
 }
 
 // ── Map component (real Mapbox or fallback) ─────────────────────────────
@@ -574,28 +533,6 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
         <View pointerEvents="none" style={styles.debugCenterCircle} />
       )}
     </View>
-  );
-}
-
-// ── Flag Saved Toast ──────────────────────────────────────────────────────────
-function FlagSavedToast({ onHide }: { onHide: () => void }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const slideY = useRef(new Animated.Value(20)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.spring(slideY, { toValue: 0, useNativeDriver: true, tension: 200, friction: 14 }),
-    ]).start(() => {
-      setTimeout(() => {
-        Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }).start(onHide);
-      }, 1200);
-    });
-  }, []);
-  return (
-    <Animated.View style={[toastStyles.toast, { opacity, transform: [{ translateY: slideY }] }]}>
-      <Icon name="CircleCheck" size={16} color={Colors.success} strokeWidth={2} />
-      <Text style={toastStyles.text}>Flag saved</Text>
-    </Animated.View>
   );
 }
 
@@ -1917,16 +1854,4 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
   trackBtnText: { fontSize: FontSize.body, fontWeight: '700', color: Colors.primary },
-});
-const toastStyles = StyleSheet.create({
-  toast: {
-    position: 'absolute', bottom: 140, alignSelf: 'center',
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
-    backgroundColor: Colors.surface, borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
-    ...Shadow.elevated,
-  },
-  text: { fontSize: FontSize.caption, fontWeight: '700', color: Colors.textPrimary },
-});
-
-
+});
