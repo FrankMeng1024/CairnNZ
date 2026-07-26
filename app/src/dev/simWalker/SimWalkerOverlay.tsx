@@ -102,9 +102,18 @@ export function SimWalkerOverlay() {
       undo_count: parseInt(draft.undo_count, 10),
     };
     log('v441.overlay.save_settings', { draft, parsed: next });
-    gpsInjector.setStepConfig(next);
-    setConfig(gpsInjector.getConfig());
+    // O7 (2026-07-26): close modal FIRST so a downstream throw in
+    // setStepConfig cannot strand the user inside the settings modal.
+    // Was the underlying Bug 4 root cause per user 2026-07-26 report
+    // (two save_settings logs at 09:06:05 = user tapped 确定 twice
+    // because first tap didn't visibly close the modal).
     setSettingsOpen(false);
+    try {
+      gpsInjector.setStepConfig(next);
+      setConfig(gpsInjector.getConfig());
+    } catch (err) {
+      log('v441.overlay.save_settings_err', { err: String(err) });
+    }
   };
 
   const doUndo = () => {

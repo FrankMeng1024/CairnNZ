@@ -253,16 +253,17 @@ export function appendHikePoint(point: HikePoint): void {
 // O1 R1: mutex — flushBuffer 有多个 caller (30s timer, 50pts trigger,
 // stopTracking, background AppState). 无 mutex 时并发 flush 会 truncate
 // 已经写入的数据 (concurrent read-existing 拿旧 file,write 用旧+空 覆盖)。
-let flushInFlight: Promise<void> | null = null;
+// O6 fix: 老的 mutex 是 "check-then-set-null" pattern, 会有 race: A 完成
+// null-reset 之后, B 和 C 恰在同一 microtask tick 唤醒,但如果 B 的
+// IIFE 首个 await 之前又来了新点, C 看到 buffer 有内容再启一个 IIFE →
+// 两个 IIFE 并发写文件 truncate。改成 chain-serialization: 每次调用把
+// 自己接到上一个的 tail, 保证不管多少个 caller 都串行执行。
+let flushChainTail: Promise<void> = Promise.resolve();
 
 async function flushBuffer(): Promise<void> {
-  if (flushInFlight) {
-    // 已有 flush 在跑,await 它。避免并发写 file truncate 数据。
-    await flushInFlight;
-    // await 完可能 buffer 又累积了新点,再走一次(非递归,是并列):
-    if (!state || state.buffer.length === 0) return;
-  }
-  flushInFlight = (async () => {
+  // 排到 chain 尾部,保证前一个 flush 结束才开始。空-buffer 情况在
+  // IIFE 内部 early return,占极短时间,不影响吞吐。
+  const next = flushChainTail.then(async () => {
     if (!state) return;
     const s = state; // narrow for TS
     if (s.flushTimer) {
@@ -302,12 +303,11 @@ async function flushBuffer(): Promise<void> {
       // Re-buffer for next attempt (don't drop)
       s.buffer = toWrite.concat(s.buffer);
     }
-  })();
-  try {
-    await flushInFlight;
-  } finally {
-    flushInFlight = null;
-  }
+  });
+  // 用 catch 屏蔽 chain 里单次失败,避免一次抛错把整条 chain 变成
+  // rejected → 后续 flush 全部秒抛。
+  flushChainTail = next.catch(() => {});
+  await next;
 }
 
 /**

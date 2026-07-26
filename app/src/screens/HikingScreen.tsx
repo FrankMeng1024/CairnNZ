@@ -2158,12 +2158,20 @@ export function HikingScreen() {
             // finalize 各挂 30s → sheet 卡 60 秒,onConfirm 抛错 UI 不 unmount。
             // 现在: 最多 5 秒 sheet 关闭,数据本地写入(addSession 已 sync),
             // 网络重推交给 memorySync 自然的 backoff+schedulePush 重试。
-            const STOP_WALL_TIMEOUT_MS = 5000;
+            // O7 (2026-07-26): 5s → 30s。用户 12:11 真实 hike Save 后 session
+            // 消失,aliyun log 显示 too_short_check 后 zero save events。5s
+            // wall-clock 比 stopTracking 内部的 snapTrack(8s) + saveHikeAtomic
+            // (20s) 都短 → 5s 后 HikingScreen 认为失败,nav 到 activity detail,
+            // 但 stopTracking 内部继续跑; 内部若在某个 await 抛错 (未 catch),
+            // addSession 永远不跑 → session 永远丢。改 30s 让 stopTracking 内
+            // 部预算充足,避免 UI 提前放弃。UI 期间 sheet 保持 open 用户看到
+            // 保存中状态。若 30s 内还完成不了,用户可再手动继续。
+            const STOP_WALL_TIMEOUT_MS = 30000;
             let stopFailed = false;
             try {
               await Promise.race([
                 stopTracking(name),
-                new Promise<void>((_, reject) => setTimeout(() => reject(new Error('stopTracking_timeout_5s')), STOP_WALL_TIMEOUT_MS)),
+                new Promise<void>((_, reject) => setTimeout(() => reject(new Error('stopTracking_timeout_30s')), STOP_WALL_TIMEOUT_MS)),
               ]);
             } catch (err) {
               stopFailed = true;

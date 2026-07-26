@@ -81,7 +81,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //     active/{sid}.jsonl 留在磁盘,下次冷启触发 UnfinishedRecoveryModal。
 //     修:改成 await flushNow + await renameToCompleted,保证 rename
 //     跑完才 return
-export const OTA_VERSION = 'O6';
+// O7 (2026-07-26 batch 32 + 33): 3 波 fix 合一:
+// batch 32 (subagent post-O6 audit):
+//   (a) hikeTrackWriter flushBuffer mutex race — chain-serialization fix
+//   (b) stopTracking 里 await flush 会被 wall timeout 中断重现 Bug 8 →
+//       2.5s inner timeout + bg rename fallback (用 .finally 保证 flush
+//       reject 也照跑 rename)
+//   (c) SimWalkerOverlay saveSettings 顺序 (close-first)
+//   (d) App.tsx AppState drainPending gate 用 wasBackgrounded flag 处理
+//       iOS 'inactive' 中转态
+// batch 33 (用户 12:11 真实 hike 报了 2 个新 bug):
+//   Bug (新): 静安寺新闸路直角转弯 memory 走成斜线 = RDP 10m tolerance
+//       corner-cut 真实右角。修:RDP tolerance 10m → 3m,corner 保留但
+//       drift/multi-path (10-25m) 仍过滤
+//   Bug (新): 真实 hike Save 后 activity detail "Loading route..." 然后
+//       session 消失。aliyun log 显示 too_short_check 后 zero save events →
+//       HikingScreen wall-clock 5s 比 stopTracking 内部预算 (snapTrack 8s +
+//       saveHikeAtomic 20s) 短太多, 内部还在跑 UI 就放弃了 → 若内部有
+//       throw 就永远丢。修:HikingScreen wall-clock 5s → 30s + stopTracking
+//       内部加 3 个高保真 aliyun log (about_to_addSession / addSession_ok /
+//       final) 下次能精确定位 die 的位置
+export const OTA_VERSION = 'O7';
 
 
 type OtaState =

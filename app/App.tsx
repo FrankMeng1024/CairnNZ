@@ -170,6 +170,13 @@ function AppRoot() {
   const hydrated = useAppStore(s => s.hydrated);
   const hydrateSettings = useSettingsStore(s => s.hydrate);
   const lastAppState = useRef<string>(AppState.currentState);
+  // O7 (2026-07-26): track whether the app has passed through 'background'
+  // since the last drainPending fire. iOS lifecycle inserts 'inactive'
+  // between 'background' and 'active' on foregrounding, so a strict gate
+  // on background→active direct transition would miss most real wakes.
+  // Use this flag to record any pass-through of 'background' and clear
+  // it when drainPending fires on the next 'active'.
+  const wasBackgrounded = useRef<boolean>(false);
   // Post-merge audit (ARCH-020): track when feature flags are loaded from
   // AsyncStorage so that EditResumePrompt / MigratorRetryPrompt — which
   // call getFlagsSync() — see overrides on first paint, not just after
@@ -686,7 +693,17 @@ function AppRoot() {
       // 到磁盘,除非冷启否则一直显示"1 hike pending sync"。修:后台→前台
       // 时 fire-and-forget drainPending,让用户从 Settings 或 Home 切一下
       // 就能 self-heal。
-      if (prev !== 'active' && next === 'active') {
+      // O7 (2026-07-26 subagent audit): 需要处理 iOS lifecycle 特殊性 —
+      // iOS 前台化实际序列是 background → inactive → active (3 步),
+      // 严格 `prev==='background' && next==='active'` 直接对不上 (因为
+      // 'inactive' 会先插入)。同时 'inactive' 也可能来自 Control Center
+      // pull-down / FaceID / 来电闪 (非 backgrounding),不该触发 drain。
+      // 修:用 wasBackgrounded flag 记忆最近是否真的到过 background,
+      // 只在 wasBackgrounded && next === 'active' 时 trigger,fire 完清标记。
+      if (next === 'background') {
+        wasBackgrounded.current = true;
+      } else if (next === 'active' && wasBackgrounded.current) {
+        wasBackgrounded.current = false;
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { drainPending } = require('./src/services/syncDaemon');

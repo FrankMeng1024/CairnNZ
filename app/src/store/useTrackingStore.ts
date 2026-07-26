@@ -1097,6 +1097,23 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         }
       }
 
+      // O7 (2026-07-26): 用户报 12:11 真实 hike Save 后 activity detail
+      // "Loading route..." 然后 session 消失。aliyun 上 too_short_check
+      // 之后 zero save events → stopTracking 在这里之前 die 但 crashLogger
+      // 断点没上到 aliyun。加高保真 aliyun log 便于下次诊断。
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { log } = require('../services/appLog');
+        log('o7.stop.about_to_addSession', {
+          sessionId: s.sessionId?.slice(0, 8),
+          remoteId: remoteId ?? null,
+          finalName: (finalName ?? '').slice(0, 30),
+          hasStartedAt: !!s.startedAt,
+          v412Success,
+          trackPoints_n: (snappedTrackPoints ?? s.trackPoints).length,
+          distanceM: Number(s.distanceM.toFixed(1)),
+        });
+      } catch { /* log unavailable */ }
       useSessionStore.getState().addSession({
         id: s.sessionId,
         // Pre-populate remoteId so addSession knows to SKIP the legacy
@@ -1127,6 +1144,17 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         syncState: v412Success ? 'synced' : 'pending',
       });
       stopReason = v412Success ? 'saved' : 'saved_pending';
+      // O7: log addSession success so aliyun trace has definitive "session
+      // persisted locally" evidence. If this log is missing on next incident,
+      // addSession itself threw silently — very rare but flag will show it.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { log } = require('../services/appLog');
+        log('o7.stop.addSession_ok', {
+          sessionId: s.sessionId?.slice(0, 8),
+          stopReason,
+        });
+      } catch { /* log unavailable */ }
       } // end too-short guard
     }
 
@@ -1139,14 +1167,43 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // UnfinishedRecoveryModal 会弹一个用户明明已 saved 的 hike (Bug 8)。
     // 现在 await 让 rename 在 stopTracking return 前落盘。用户不会点完
     // Save 立刻杀 app,给 ~200ms 完成时间是可以接受的。
+    // O7 (2026-07-26 subagent audit): stopTracking 被 HikingScreen 的 5s
+    // wall-clock timeout 包住。若 flushNow 因 large 文件 (3-6h hike) 走
+    // 3-10s,wall timeout 会中断 stopTracking 让 renameToCompleted 从来
+    // 不跑 → 重现 Bug 8。修:flush 加 2.5s inner-timeout, 超时就 fire-
+    // and-forget 让 rename 挂到 flush.then 后台跑。这样 stopTracking 本身
+    // 在 2.5s 内 return,而 rename 保证会在磁盘 flush 完的下一 tick 触发,
+    // 即便用户此时杀 app 也已经启动了写盘序列 (iOS 会给几秒 grace period)。
     try {
       const priorSid = s.sessionId;
       if (priorSid) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { renameToCompleted, flushNow } = require('../services/hikeTrackWriter');
-        // Flush first,防止 buffer 里剩点还没写盘
-        await flushNow();
-        await renameToCompleted(priorSid, Date.now(), s.remoteSessionId ?? undefined);
+        const FLUSH_INNER_TIMEOUT_MS = 2500;
+        const flushPromise = flushNow();
+        const timedFlush = Promise.race([
+          flushPromise.then(() => 'ok' as const),
+          new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), FLUSH_INNER_TIMEOUT_MS)),
+        ]);
+        const result = await timedFlush;
+        if (result === 'ok') {
+          // Flush 在 budget 内完成 — 同步 await rename 保证 return 前落盘
+          await renameToCompleted(priorSid, Date.now(), s.remoteSessionId ?? undefined);
+        } else {
+          // Flush 超时 — 让它继续在后台跑,rename 挂到 chain 之后 fire-
+          // and-forget。stopTracking 立刻 return,不阻塞 UI。
+          // O7 review-fix: 用 finally 保证 flush 即便 reject,rename 也照
+          // 跑。renameToCompleted 内部会再 flushBuffer 一次 (tolerant of
+          // partial buffer),所以就算 flushNow reject 了 rename 也能把
+          // 磁盘上已经落盘的部分文件正确 rename → 不会因为 flush 部分失败
+          // 让 active/{sid}.jsonl 永远留在磁盘触发假 recovery。
+          const finalRemoteId = s.remoteSessionId ?? undefined;
+          void flushPromise
+            .catch(() => { /* swallow so finally runs */ })
+            .finally(() => renameToCompleted(priorSid, Date.now(), finalRemoteId))
+            .catch((err: unknown) => crashLogger.breadcrumb(`o7:rename_bg_failed ${String(err).slice(0, 80)}`));
+          crashLogger.breadcrumb(`o7:flush_slow_bg_rename sid=${priorSid.slice(0, 8)}`);
+        }
       }
     } catch (e) {
       crashLogger.breadcrumb(`v409:hikeTrackWriter:rename failed ${String(e).slice(0, 80)}`);
@@ -1163,6 +1220,15 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       void enforceTTL().catch(() => {});
     } catch { /* best effort */ }
 
+    // O7: final aliyun log before state reset. If we see this AND o7.stop.
+    // addSession_ok = save flow completed. If we see this but NO
+    // addSession_ok = something threw between addSession start and end.
+    // If we see NEITHER = stopTracking threw before reaching addSession.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { log } = require('../services/appLog');
+      log('o7.stop.final', { stopReason });
+    } catch { /* log unavailable */ }
     set({ ...initialState, lastStopReason: stopReason });
   },
 

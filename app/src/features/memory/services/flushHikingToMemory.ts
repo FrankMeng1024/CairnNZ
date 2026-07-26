@@ -60,6 +60,14 @@ import { lineString } from '@turf/helpers';
  * (route view, distance calculation) needs raw clean points. Only the
  * memory fog reveal benefits from path-level simplification. Filtering
  * at the memory boundary keeps activity data unchanged.
+ *
+ * O7 (2026-07-26): lowered tolerance from 10m to 3m. User reported real
+ * hike at 静安寺 新闸路 corner "walked a right-angle but memory unlocked
+ * a straight-line cutting the corner". Root cause: real right-angle
+ * corners have intermediate points within 10m of the direct-line
+ * simplification → RDP collapses them → H3 hex cells at the actual
+ * corner never get unlocked → visual "corner cutting". At 3m tolerance
+ * corners survive but drift/multi-path (10-25m) still gets filtered.
  */
 function rdpSimplifyTrackPoints(trackPoints: TrackPoint[]): TrackPoint[] {
   if (trackPoints.length < 3) return trackPoints;
@@ -67,8 +75,8 @@ function rdpSimplifyTrackPoints(trackPoints: TrackPoint[]): TrackPoint[] {
   if (valid.length < 3) return valid;
   try {
     const line = lineString(valid.map((p) => [p.lng, p.lat]));
-    // tolerance in degrees ≈ 10m at 31° lat (Shanghai)
-    const SIMPLIFY_TOLERANCE_DEG = 10 / 111320;
+    // O7: 3m tolerance instead of 10m. See docstring for reasoning.
+    const SIMPLIFY_TOLERANCE_DEG = 3 / 111320;
     const simplified = simplifyTurf(line, { tolerance: SIMPLIFY_TOLERANCE_DEG, highQuality: false });
     if (!simplified?.geometry?.coordinates) return valid;
     const simplifiedCoords = simplified.geometry.coordinates as [number, number][];
