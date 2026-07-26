@@ -1049,7 +1049,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           }
         } catch (v412Err: any) {
           v412Success = false;
-          crashLogger.breadcrumb(`v412:save_atomic_failed status=${v412Err?.status || 'net'} → pending`);
+          // O1 batch 28.2: 更细粒度 log,便于诊断 Bug 6 假 pending sync。
+          // 记录 status + body error message preview + payload size 判断
+          // 是网络挂 / 服务器 400/500 / idempotency 冲突。
+          const errStatus = v412Err?.status ?? 'net';
+          const errBody = v412Err?.body?.error ?? (v412Err?.message ?? '').slice(0, 100);
+          const pointsN = v412Payload?.route_points?.length ?? 0;
+          const memN = v412Payload?.memory_points?.length ?? 0;
+          crashLogger.breadcrumb(`v412:save_atomic_failed status=${errStatus} err="${errBody}" pts=${pointsN} mem=${memN} → pending`);
           // 写 pendingSyncStore, SyncDaemon 后续重试
           try {
             const { savePending } = require('../services/pendingSyncStore');

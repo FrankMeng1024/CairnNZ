@@ -1338,6 +1338,14 @@ export function HikingScreen() {
         if (typeof hikeTrackWriter.listActiveHikes !== 'function') return;
         const active = await hikeTrackWriter.listActiveHikes();
         if (cancelled || !Array.isArray(active)) return;
+        // O1 batch 28.2: log recovery 触发条件,便于诊断 Bug 5
+        // "save&end 后错误弹上次未完成"。若 active.length > 0 说明磁盘
+        // 还有 active/*.jsonl 未清 → save 路径 markUploaded 时机问题。
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const cl = require('../services/crashLogger');
+          (cl.crashLogger ?? cl.default)?.breadcrumb?.(`recovery:list active_n=${active.length}${active.length > 0 ? ' sids=' + active.map((f: any) => (f.session_id ?? f.sessionId ?? '?').slice(0, 8)).join(',') : ''}`);
+        } catch {/* silent */}
 
         // v430 dual-source detection: if disk has NO active file, ALSO
         // check server for a dangling POST /start row that never got saved.
