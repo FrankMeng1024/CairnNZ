@@ -427,7 +427,9 @@ type AuthView = 'splash' | 'login' | 'register' | 'verify' | 'welcome';
 // Remember-me persistence key. Stored value is a JSON-encoded
 // { email, password } pair. Cleared on Sign Out or when the user
 // signs in with the box unchecked.
-const REMEMBER_ME_KEY = 'cairn_remember_me';
+// O1 batch 28.5: 老 REMEMBER_ME_KEY (AsyncStorage 明文) 已废弃,改用
+// credentialsStore (SecureStore 加密)。首次开 app 会自动清理老 key。
+const OLD_REMEMBER_ME_KEY = 'cairn_remember_me';
 
 export function AuthScreen() {
   // Breadcrumb FIRST so even if hooks below crash we know we got here.
@@ -534,26 +536,21 @@ export function AuthScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const raw = await storage.getItem(REMEMBER_ME_KEY);
-        if (!raw || cancelled) return;
-        // O1 (2026-07-26) security: 只 rehydrate email + rememberMe boolean。
-        // 老 shape (含 password 明文) 被丢弃 - 攻击面: AsyncStorage/localStorage
-        // 无加密,iOS 越狱/Android root/iTunes 备份/Web XSS 全能读到明文密码。
-        // 密码要走 tokenStore (expo-secure-store) 或每次让用户输入。
-        const creds = JSON.parse(raw) as { email?: string; password?: string };
-        if (creds.email) setEmail(creds.email);
-        setRememberMe(true);
-        // 若老 shape 仍带 password,silent 迁移到新 shape (email only)。
-        if (creds.password !== undefined) {
-          try {
-            await storage.setItem(
-              REMEMBER_ME_KEY,
-              JSON.stringify({ email: creds.email ?? '' }),
-            );
-          } catch {
-            // Best-effort; user will still just have to enter password.
-          }
+        // O1 batch 28.5: 从 credentialsStore (SecureStore) hydrate。
+        // 首次运行同时清老 AsyncStorage key (若存在)。
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { loadCredentials } = require('../services/credentialsStore');
+        const creds = await loadCredentials();
+        if (cancelled) return;
+        if (creds) {
+          setEmail(creds.email);
+          setPassword(creds.password);
+          setRememberMe(true);
         }
+        // 一次性清老 AsyncStorage key (若有历史明文数据),不阻塞主流程
+        try {
+          await storage.removeItem(OLD_REMEMBER_ME_KEY);
+        } catch {/* silent */}
       } catch {
         // Corrupt/missing creds — ignore.
       }
@@ -665,18 +662,20 @@ export function AuthScreen() {
       }
 
       // Persist or clear remember-me credentials based on the checkbox.
-      // O1 (2026-07-26) security fix: 只存 email,不存 password。原设计
-      // 存 password 明文进 AsyncStorage/localStorage → OWASP Mobile M2。
-      // 用户下次要输密码,但 email 已预填 -> UX 只损失 1 步。
+      // O1 batch 28.5: 用 credentialsStore (SecureStore 加密)。rememberMe=true
+      // 存 {email, password},toggle off = 清 SecureStore (下次不预填密码)。
+      // 用户拍板: 测试向 sim-walker + 生产 UX 都要 remember-me 完整功能。
       if (!isRegister) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { saveCredentials, clearCredentials } = require('../services/credentialsStore');
           if (rememberMe) {
-            await storage.setItem(
-              REMEMBER_ME_KEY,
-              JSON.stringify({ email: email.trim().toLowerCase() }),
-            );
+            await saveCredentials({
+              email: email.trim().toLowerCase(),
+              password,
+            });
           } else {
-            await storage.removeItem(REMEMBER_ME_KEY);
+            await clearCredentials();
           }
         } catch {
           // Storage failure is non-fatal — the user is signed in either way.
