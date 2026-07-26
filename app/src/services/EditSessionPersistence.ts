@@ -393,18 +393,3 @@ export async function checkResumable(
   }
   return { available: true, session };
 }
-
-/**
- * Validate session against current route store.
- * If route was deleted on another device, return false.
- *
- * Caller (on resume modal Resume button):
- *   const valid = await validateSession(session, knownRouteIds);
- *   if (!valid) showError("Route no longer exists"); clearSession();
- */
-export function validateSession(
-  session: EditSessionSnapshot,
-  knownRouteIds: Set<string>,
-): boolean {
-  return knownRouteIds.has(session.routeId);
-}

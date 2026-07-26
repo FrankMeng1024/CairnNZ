@@ -39,25 +39,16 @@ const NZ: Region = {
   },
 };
 
-// Future regions — add here, zero code change in consumers
-// const AU: Region = { code: 'au', name: 'Australia', ... };
-// const JP: Region = { code: 'jp', name: 'Japan', ... };
-
-export const REGIONS: Record<string, Region> = {
-  nz: NZ,
-};
+// O1 (2026-07-26): removed REGIONS record + getRegion(code). Both had 0
+// external caller — multi-region was a Phase-2 aspiration never realized,
+// getCurrentRegion() is the only consumer and inlines NZ directly.
+// If Phase-2 multi-region ships: reintroduce REGIONS map + getRegion()
+// with the same shape.
 
 /**
  * Returns the currently active region.
  * Phase 1: always NZ. Phase 2: read from user preference store.
  */
 export function getCurrentRegion(): Region {
-  return REGIONS['nz'];
-}
-
-/**
- * Returns region by code, or NZ as fallback.
- */
-export function getRegion(code: string): Region {
-  return REGIONS[code] ?? REGIONS['nz'];
+  return NZ;
 }

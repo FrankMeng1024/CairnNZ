@@ -62,34 +62,6 @@ export function getFlagsSync(): FeatureFlags {
   return cachedFlags ?? DEFAULT_FLAGS;
 }
 
-/**
- * Override a flag. For dev menu use only.
- */
-export async function setFlagOverride<K extends keyof FeatureFlags>(
-  key: K,
-  value: FeatureFlags[K],
-): Promise<void> {
-  const current = await getFlags();
-  const next = { ...current, [key]: value };
-  cachedFlags = next;
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    const existing = raw ? JSON.parse(raw) : {};
-    existing[key] = value;
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
-  } catch {
-    // ignore
-  }
-}
-
-/**
- * Clear all overrides — restore defaults.
- */
-export async function clearFlagOverrides(): Promise<void> {
-  cachedFlags = DEFAULT_FLAGS;
-  try {
-    await AsyncStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // ignore
-  }
-}
+// O1 (2026-07-26): removed setFlagOverride + clearFlagOverrides — both
+// 0 external caller. 声明是 "dev menu use only" 但项目没接入 dev menu
+// 界面调用它们。若未来加 dev menu 需要 override,再补上。

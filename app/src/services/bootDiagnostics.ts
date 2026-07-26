@@ -61,7 +61,8 @@ interface BootCheckpoint {
   ota_version?: number | string;
 }
 
-let lastPhase = 'init';
+// O1 (2026-07-26): removed `let lastPhase` — 只 write 无 read
+// (原为 getLastBootPhase getter 提供,该 getter 已在 O1 早批次删除)。
 
 /**
  * Send a one-shot beacon to the server. Fire-and-forget; no awaiting.
@@ -102,7 +103,6 @@ function fireBeacon(phase: string, extra?: Record<string, any>): void {
  * fires a beacon (for live diagnostics).
  */
 export function markBootPhase(phase: string, extra?: Record<string, any>): void {
-  lastPhase = phase;
   try {
     const cp: BootCheckpoint = { phase, ts: Date.now() };
     void AsyncStorage.setItem(CHECKPOINT_KEY, JSON.stringify(cp)).catch(() => {});

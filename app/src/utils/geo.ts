@@ -62,19 +62,6 @@ export function formatDistance(
 }
 
 /**
- * Format distance with unit label.
- */
-export function formatDistanceWithUnit(
-  meters: number,
-  unit: DistanceUnit = 'km',
-): { value: string; label: string } {
-  return {
-    value: formatDistance(meters, unit),
-    label: unit,
-  };
-}
-
-/**
  * Format duration in seconds to mm:ss or h:mm:ss.
  */
 export function formatDuration(seconds: number): string {

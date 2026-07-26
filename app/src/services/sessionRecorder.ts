@@ -30,15 +30,14 @@ class MinuteAggregator {
   private inBackgroundStartMs: number | null = null;
   private inBackgroundTotalMs = 0;
   private wasCharging = false;
-  private windowStartMs: number;
   private batteryStartLevel: number | null = null;
 
   constructor() {
-    this.windowStartMs = Date.now();
+    const now = Date.now();
     this.batteryStartLevel = batteryMonitor.getCurrentLevel();
     const appState = AppState.currentState;
-    if (appState === 'active') this.screenOnStartMs = this.windowStartMs;
-    if (appState === 'background') this.inBackgroundStartMs = this.windowStartMs;
+    if (appState === 'active') this.screenOnStartMs = now;
+    if (appState === 'background') this.inBackgroundStartMs = now;
   }
 
   ingest(event: LogEvent): void {
@@ -165,7 +164,6 @@ class MinuteAggregator {
     this.inBackgroundStartMs = wasBackground ? now : null;
     this.inBackgroundTotalMs = 0;
     this.wasCharging = false;
-    this.windowStartMs = now;
     this.batteryStartLevel = batteryMonitor.getCurrentLevel();
   }
 }

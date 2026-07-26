@@ -229,10 +229,8 @@ export function checkG3({ stroke, snap }: G3Input): GateResult {
       threshold: CORRIDOR_M,
     };
   }
-  let worst = 0;
   for (const p of snap) {
     const d = pointToPolylineM(p, stroke);
-    if (d > worst) worst = d;
     if (d > CORRIDOR_M) {
       return {
         ok: false,
