@@ -51,7 +51,7 @@ interface RunMatchFailure {
   durationMs: number;
 }
 
-export type RunMatchResult = RunMatchSuccess | RunMatchFailure;
+type RunMatchResult = RunMatchSuccess | RunMatchFailure;
 
 const REPLACE_HALF_M = 200;     // each via's local replacement window radius
 const VIA_RADIUS_M_FOR_LOCAL = 25;

@@ -39,7 +39,7 @@ const META_DIR = HIKE_DIR + 'meta/';
 const FLUSH_INTERVAL_MS = 30_000;
 const FLUSH_POINT_COUNT = 50;
 
-export interface HikePoint {
+interface HikePoint {
   t: number;
   lat: number;
   lng: number;
@@ -406,24 +406,6 @@ export async function discardActiveHike(sessionId: string): Promise<void> {
   try { await fs.deleteAsync(metaPath, { idempotent: true }); } catch {}
 }
 
-/**
- * Mark a completed session as uploaded — used by cache cleanup to decide
- * which files are safe to delete when hitting the size cap.
- */
-export async function markUploaded(sessionId: string): Promise<void> {
-  const fs = await getFs();
-  if (!fs) return;
-  const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
-  try {
-    const metaRaw = await fs.readAsStringAsync(metaPath);
-    const meta: HikeMeta = JSON.parse(metaRaw);
-    meta.uploaded = true;
-    await fs.writeAsStringAsync(metaPath, JSON.stringify(meta));
-  } catch { /* best effort */ }
-}
-
-// O1 batch 36: getWriterState and coordsToHikePoint removed — 0 external callers
-// (JSDoc claimed useTrackingStore and __cairnStores web hook, but neither called them).
 /**
  * Force flush now — used before app suspension / stopTracking.
  */

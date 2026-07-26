@@ -218,7 +218,7 @@ interface CameraProps {
  * Imperative camera handle the parent obtains via ref.
  * Matches the subset of @rnmapbox/maps' CameraRef we actually call.
  */
-export interface CameraRef {
+interface CameraRef {
   setCamera: (config: {
     centerCoordinate?: [number, number];
     zoomLevel?: number;
