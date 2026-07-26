@@ -34,8 +34,7 @@ import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../componen
 import { Icon } from '../components/Icon';
 import { login, register, loginWithGoogle, verifyCode, resendCode } from '../services/authService';
 import { CairnLogo } from '../components/ActivityIcons/CairnLogo';
-import * as Google from 'expo-auth-session/providers/google';
-import { makeRedirectUri, Prompt } from 'expo-auth-session';
+// O1 batch 39: Google + makeRedirectUri + Prompt imports removed — 0 actual code references (Google OAuth deferred).
 import { crashLogger } from '../services/crashLogger';
 import { OtaBadge } from '../components/OtaBadge';
 
@@ -43,32 +42,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 const { height: SCREEN_H } = Dimensions.get('window');
 
 // ── Trail path SVG (draws from bottom to top over ~500ms) ─────────────────
-const TRAIL_PATH = 'M 60 160 Q 40 130 55 100 Q 70 70 50 45 Q 42 32 50 20';
-const TRAIL_LENGTH = 160;
-const AnimatedPath = Animated.createAnimatedComponent(Path);
-
-function TrailPath({ onComplete }: { onComplete?: () => void }) {
-  const dashOffset = useRef(new Animated.Value(TRAIL_LENGTH)).current;
-  useEffect(() => {
-    Animated.timing(dashOffset, {
-      toValue: 0, duration: 500, useNativeDriver: false,
-    }).start(() => onComplete?.());
-  }, []);
-  return (
-    <Svg width={120} height={180} style={{ position: 'absolute', bottom: 0, left: '50%', marginLeft: -60 }}>
-      <AnimatedPath
-        d={TRAIL_PATH}
-        stroke={Colors.primary}
-        strokeWidth={2.5}
-        strokeLinecap="round"
-        fill="none"
-        strokeDasharray={`${TRAIL_LENGTH} ${TRAIL_LENGTH}`}
-        strokeDashoffset={dashOffset}
-        opacity={0.5}
-      />
-    </Svg>
-  );
-}
+// O1 batch 39: TRAIL_PATH + TRAIL_LENGTH + AnimatedPath + TrailPath removed — function never called.
 
 // ── Animated Cairn Logo — 3-stone ellipse + waving triangle flag ──────────
 // Matches icon_logo_anim14.html: three stacked ellipses rising from base,
@@ -495,8 +469,7 @@ export function AuthScreen() {
   const tagline1Translate = useRef(new Animated.Value(-8)).current;
   const tagline2Opacity = useRef(new Animated.Value(0)).current;
   const tagline2Translate = useRef(new Animated.Value(-8)).current;
-  const [trailComplete, setTrailComplete] = useState(false);
-  void trailComplete;
+  // O1 batch 39: trailComplete state removed — TrailPath component removed.
   // Increments every time we (re-)enter splash so AnimatedCairn remounts and
   // replays its stone-rising animation from scratch — without this, the user
   // hits Back from Sign In and sees the stones already stacked.
@@ -1307,10 +1280,7 @@ const formStyles = StyleSheet.create({
   divLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   divText: { fontSize: FontSize.small, color: Colors.textMuted, whiteSpace: 'nowrap' } as any,
 
-  socialHint: {
-    fontSize: FontSize.tiny, color: Colors.textMuted, textAlign: 'center',
-    marginTop: -Spacing.xs, marginBottom: Spacing.sm,
-  },
+  // O1 batch 39: socialHint removed — 0 JSX references.
 
   // Apple — black
   appleBtn: {
