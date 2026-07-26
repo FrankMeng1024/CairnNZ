@@ -466,13 +466,4 @@ export async function detachMemoryPersistence(): Promise<void> {
   }
 }
 
-/** Test-only — reset all module state. */
-export function __resetForTest(): void {
-  clearTimers();
-  if (unsubscribe) {
-    unsubscribe();
-    unsubscribe = null;
-  }
-  currentUserId = null;
-  generation++;
-}
+

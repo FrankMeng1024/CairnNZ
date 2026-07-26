@@ -53,7 +53,7 @@ type MapStyle = keyof typeof MAP_STYLES;
  * `outdoors-v12`.  The constant is exported so all map screens can
  * reference a single source of truth.
  */
-export const CAIRN_TOPO_STYLE_URL =
+const CAIRN_TOPO_STYLE_URL =
   process.env.EXPO_PUBLIC_CAIRN_TOPO_STYLE_URL ?? MAP_STYLES.streets;
 
 /**
