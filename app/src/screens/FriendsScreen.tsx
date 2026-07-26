@@ -21,6 +21,7 @@ import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { PressBtn } from '../components/PressBtn';
 import { useFriendStore, sendFriendRequest, fetchFriendRequests, acceptFriendRequestAPI, rejectFriendRequestAPI } from '../store/useFriendStore';
+import { useMarkerStore } from '../store/useMarkerStore';
 import { EmptyFriends, IllustrationHalo } from '../components/Illustrations';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -307,6 +308,7 @@ export function FriendsScreen() {
   // user's view, regardless of who they were logged in as.)
   const storeFriends = useFriendStore(s => s.friends);
   const loadFriendsFromBackend = useFriendStore(s => s.loadFriendsFromBackend);
+  const loadCircleMarkers = useMarkerStore(s => s.loadCircleMarkers);
 
   const mapStoreFriend = (f: typeof storeFriends[0]): Friend => ({
     id: f.id,
@@ -365,8 +367,10 @@ export function FriendsScreen() {
     const ok = await acceptFriendRequestAPI(String(id));
     setBusyRequestId(null);
     if (ok) {
-      // Reload both lists
+      // Reload friends list + requests, then refresh circle markers so the
+      // new friend's flags appear on the map immediately (R10).
       await Promise.all([loadFriendsFromBackend(), loadRequests()]);
+      void loadCircleMarkers();
     }
   }
 
