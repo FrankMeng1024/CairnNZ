@@ -3,9 +3,8 @@
  *
  * v441 changes vs v438:
  *   - Single "walk speed" mode, tunable at runtime via setStepConfig()
- *   - Default: 5 m per emit, 1000 ms between emits → 5 m/s ≈ jog pace
- *     (real-user distanceInterval=5m matched; emit rate 3x faster than
- *     real GPS's 3s cadence so testing feels responsive)
+ *   - Default: 1.4 m per emit, 1200 ms between emits → 1.17 m/s ≈ walking pace
+ *     (matches real pedestrian GPS sampling cadence)
  *   - undoSteps also rewinds the tracking store so the visible track
  *     pulls back too (was: rewinds only internal cursor)
  *   - History size grew to 50 to support larger undo counts
@@ -23,8 +22,8 @@ export interface StepConfig {
 }
 
 export const DEFAULT_STEP_CONFIG: StepConfig = {
-  step_m: 5,
-  emit_ms: 500,
+  step_m: 1.4,
+  emit_ms: 1200,
   undo_count: 10,
 };
 
@@ -43,7 +42,7 @@ export interface InjectorSnapshot {
 export type InjectorListener = (snapshot: InjectorSnapshot) => void;
 
 const EARTH_R_M = 6_378_137;
-const JITTER_M_1_SIGMA = 2;   // realistic GPS drift (small so it doesn't hide the path)
+const JITTER_M_1_SIGMA = 1;   // realistic GPS noise (< step_m so forward progress is net positive)
 const HISTORY_SIZE = 50;
 
 function boxMuller(): number {
@@ -99,7 +98,7 @@ class GpsInjector {
     try {
       useTrackingStore.setState((s: any) => ({
         ...s,
-        lastCoordinate: { lat, lng, alt: null, accuracy: 5, speed: 0 },
+        lastCoordinate: { lat, lng, alt: 100, accuracy: 5, speed: 0 },
         lastCoordinateTime: Date.now(),
       }));
     } catch { /* ignore */ }
@@ -319,18 +318,18 @@ class GpsInjector {
       const st = useTrackingStore.getState() as any;
       if (typeof st.__simwalkerAddTrackPoint === 'function') {
         st.__simwalkerAddTrackPoint(
-          { lat, lng, alt: null, accuracy, speed: speedMs },
+          { lat, lng, alt: 100, accuracy, speed: speedMs },
           ts,
         );
         path = 'dev_api';
       } else {
         useTrackingStore.setState((s: any) => {
-          const p = { lat, lng, alt: null, accuracy, speed: speedMs, t: Date.now() };
+          const p = { lat, lng, alt: 100, accuracy, speed: speedMs, t: Date.now() };
           return {
             trackPoints: [...(s.trackPoints || []), p],
             trackPointsSmoothed: [...(s.trackPointsSmoothed || []), p],
             trackPointsRaw: [...(s.trackPointsRaw || []), p],
-            lastCoordinate: { lat, lng, alt: null, accuracy, speed: speedMs },
+            lastCoordinate: { lat, lng, alt: 100, accuracy, speed: speedMs },
             lastCoordinateTime: Date.now(),
           };
         });

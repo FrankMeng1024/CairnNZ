@@ -171,17 +171,6 @@ const stopSheetStyles = StyleSheet.create({
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center' },
   header: { gap: 4 },
   title: { fontSize: FontSize.h2, fontWeight: '800' },
-  subtitle: { fontSize: FontSize.small, color: Colors.textSecondary },
-  statsRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.bg, borderRadius: Radius.card,
-    paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm,
-    borderWidth: 1, borderColor: Colors.border,
-  },
-  stat: { flex: 1, alignItems: 'center', gap: 4 },
-  statDivider: { width: 1, height: 28, backgroundColor: Colors.border },
-  statValue: { fontSize: FontSize.body, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  points: { fontSize: FontSize.caption, color: Colors.textMuted, textAlign: 'center', marginTop: -Spacing.xs },
   inputWrap: { gap: 4 },
   memoryBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -196,14 +185,12 @@ const stopSheetStyles = StyleSheet.create({
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
-  inputLabel: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textPrimary },
   input: {
     backgroundColor: Colors.bg, borderRadius: Radius.button,
     paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
     fontSize: FontSize.body, color: Colors.textPrimary,
     borderWidth: 1.5, borderColor: Colors.border,
   },
-  inputHint: { fontSize: FontSize.tiny, color: Colors.textMuted, marginTop: 2 },
   actions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs },
   cancelBtn: {
     paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
