@@ -362,6 +362,9 @@ export function MemoryScreen() {
   const lastRefetchAtRef = useRef(0);
   // S3 fix: separate debounce for the EXPENSIVE map remount.
   const lastMountAtRef = useRef(0);
+  // O1 (2026-07-26): mountKey ref mirror,供 useFocusEffect 空 deps closure
+  // 读 latest 值 (原直接读 mountKey state 是 stale closure,log 恒 0)。
+  const mountKeyRef = useRef(0);
 
   useEffect(() => {
     if (!settingsHydrated) return;
@@ -390,13 +393,21 @@ export function MemoryScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
+      // O1 (2026-07-26) stale closure fix: 从 ref/store getState 拿 latest
+      // 值。原代码 mountKey / settingsHydrated 在 React.useCallback(fn, [])
+      // 空 deps 里读 = 永远拿首次 mount 时的 0 / false, log 数据完全失真
+      // (server 收到 v357.mountKey_bumped 恒 from:0 to:1, 追不到真 remount
+      // 序列)。改从 getState() 直接读避免 closure 陷阱,同时 setMountKey
+      // 走 functional updater 已经用 latest。
+      const settingsHydratedLatest = useMemorySettingsStore.getState().hydrated;
+      const mountKeyLatest = mountKeyRef.current;
       // v357 diagnostic: tab focus entry — fires BEFORE mountKey bump.
       // The pair (v357.tab_focus_entry → v357.mountKey_bumped) lets us
       // see whether mountKey actually bumped this focus (debounce-gated)
       // or was skipped (FOCUS_REMOUNT_DEBOUNCE_MS window still active).
       log('v357.tab_focus_entry', {
         points_n: useMemoryStore.getState().points.length,
-        mountKey_pre: mountKey,
+        mountKey_pre: mountKeyLatest,
         ms_since_last_mount: lastMountAtRef.current === 0 ? -1 : Date.now() - lastMountAtRef.current,
       });
       // v303 OTA 三修:扩充 tab_focus log,包含进入时的 state 快照,server
@@ -404,8 +415,8 @@ export function MemoryScreen() {
       log('memory.tab_focus', {
         points: useMemoryStore.getState().points.length,
         initialDone: useMemoryStore.getState().initialRevealDone,
-        settingsHydrated,
-        mountKey,
+        settingsHydrated: settingsHydratedLatest,
+        mountKey: mountKeyLatest,
       });
       const now = Date.now();
       // S3 fix: debounce map remount separately. Cheap to keep the
@@ -413,11 +424,13 @@ export function MemoryScreen() {
       // it down and reload Mapbox tiles.
       if (now - lastMountAtRef.current >= FOCUS_REMOUNT_DEBOUNCE_MS) {
         lastMountAtRef.current = now;
-        setMountKey((n) => n + 1);
-        // v357 diagnostic: mountKey was actually bumped this focus.
-        // Next MemoryScreen render will use a new key for MemoryMap →
-        // MapView remount → mapbox style reload → fog_layer_mount.
-        log('v357.mountKey_bumped', { from: mountKey, to: mountKey + 1 });
+        setMountKey((n) => {
+          const next = n + 1;
+          // v357 diagnostic: mountKey was actually bumped this focus.
+          log('v357.mountKey_bumped', { from: n, to: next });
+          mountKeyRef.current = next;
+          return next;
+        });
       }
       if (now - lastRefetchAtRef.current >= FOCUS_REFETCH_DEBOUNCE_MS) {
         lastRefetchAtRef.current = now;

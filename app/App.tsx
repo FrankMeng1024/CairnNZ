@@ -323,9 +323,19 @@ function AppRoot() {
       console.warn('[crashLogger init failed]', err);
     }
 
-    try { markBootPhase('ue_main_before_hydrate_settings'); hydrateSettings(); markBootPhase('ue_main_after_hydrate_settings'); } catch (err) {
+    // O1 (2026-07-26) fix: hydrateSettings() 是 async,原来用 sync
+    // try/catch 抓不到 promise rejection (BUG-V8-007 同类,line 344
+    // 已修 hydrate() 走 .catch,326 遗漏)。改成 .catch pattern。
+    try {
+      markBootPhase('ue_main_before_hydrate_settings');
+      hydrateSettings().catch((err: unknown) => {
+        // eslint-disable-next-line no-console
+        console.warn('[hydrateSettings failed]', err);
+      });
+      markBootPhase('ue_main_after_hydrate_settings');
+    } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn('[hydrateSettings failed]', err);
+      console.warn('[hydrateSettings failed sync]', err);
     }
     // v0.2.6 — hydrate Memory settings (foreground unlock + friend overlay
     // toggles) and Memory tile data (explored fog) for the current user.
