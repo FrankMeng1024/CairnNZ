@@ -250,6 +250,13 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   // settle) are ignored — the loading overlay only cares about the
   // first paint.
   const mapFullyReadyFiredRef = useRef(false);
+  // O1 batch 28.3: gate blue dot 到 map basemap 加载完成后一起出。
+  // 用户报 Bug 2: memory 里当前位置和地图出现时间不一样,有先后。
+  // 现象是 UserLocation `visible={true}` 立即渲染,而 basemap tiles 稍
+  // 后到位,视觉上蓝点先浮在灰底上 → 后地图出。加 mapReady state,
+  // onDidFinishLoadingMap 里 setMapReady(true) → UserLocation 直到
+  // mapReady 才 visible=true → basemap + blue dot 一起出。
+  const [mapReady, setMapReady] = useState(false);
 
   // v336: when recenterToken bumps, fly the camera back to the current
   // GPS coord WITHOUT remounting Camera (the old cameraKey strategy
@@ -378,6 +385,8 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
         onWillStartLoadingMap={() => { log('v357.mapbox_willStartLoadingMap', {}); }}
         onDidFinishLoadingMap={() => {
           log('v357.mapbox_didFinishLoadingMap', {});
+          // O1 batch 28.3: gate blue dot 一起出
+          setMapReady(true);
           // v361 fix: onDidFinishRenderingMapFully is unreliable —
           // v357 telemetry showed it never fired in a normal session
           // while onDidFinishLoadingMap did. The 8s timeout was being
@@ -394,6 +403,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           log('v357.mapbox_didFinishRenderingMapFully', {});
           // Backup: also fire here in case didFinishLoadingMap was
           // somehow missed (defensive — ref guard prevents duplicate).
+          setMapReady(true);
           if (!mapFullyReadyFiredRef.current && onMapFullyReady) {
             mapFullyReadyFiredRef.current = true;
             onMapFullyReady();
@@ -441,7 +451,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
 
             Result: small white-ringed blue dot. No 15px translucent halo
             that users were mistaking for a "default fog reveal circle". */}
-        <UserLocation visible={true} animated={true}>
+        <UserLocation visible={mapReady} animated={true}>
           {/* BUG-C fix (v371 post-OTA): User-location ring + dot now scale
               with zoom. Mapbox `circleRadius` default is screen pixels —
               constant size regardless of zoom — which at low zoom levels
