@@ -30,7 +30,7 @@ import { useMarkLikeStore } from '../features/marks/store/useMarkLikeStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import { useMemorySubscriptionsStore } from '../features/memory/store/useMemorySubscriptionsStore';
 import type { IconName } from '../components/Icon';
-import { GlassPanel, Elevation } from '../components/GlassPanel';
+import { Elevation } from '../components/GlassPanel';
 import { MapBottomPanel, type PanelMarkerItem } from '../components/MapBottomPanel';
 import { OfflineMapSheet } from '../components/OfflineMapSheet';
 import { MARKER_META, MarkerType } from '../data/mockData';
@@ -522,108 +522,6 @@ function EditMarkerSheet({
   );
 }
 
-// ── MarkerDetailSheet (STORY-00097) ───────────────────────────────────────────
-function MarkerDetailSheet({
-  marker, onClose, onDelete, onEdit, viewOnly,
-}: {
-  marker: Marker | null;
-  onClose: () => void;
-  onDelete?: (id: string) => void;
-  onEdit?: (marker: Marker) => void;
-  viewOnly?: boolean;
-}) {
-  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const insets = useSafeAreaInsets();
-
-  // Slide-in animation — same easing/duration as other sheets for consistency
-  const slideY = useRef(new Animated.Value(400)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (!marker) return;
-    Animated.parallel([
-      Animated.timing(slideY, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 1, duration: 220, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    ]).start();
-  }, [marker?.id]);
-
-  if (!marker) return null;
-  const meta = MARKER_META[marker.type as keyof typeof MARKER_META] ?? MARKER_META.free;
-  const flagType = FLAG_TYPES.find(f => f.id === marker.type);
-
-  const handleClose = () => {
-    Animated.parallel([
-      Animated.timing(slideY, { toValue: 400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-    ]).start(() => onClose());
-  };
-
-  return (
-    <Animated.View style={[styles.detailOverlay, { opacity }]}>
-      <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={handleClose} activeOpacity={1} />
-      <Animated.View style={[styles.detailSheet, { paddingBottom: Math.max(insets.bottom, Spacing.xl), transform: [{ translateY: slideY }] }]}>
-        <View style={styles.sheetHandle} />
-
-        {/* Header row: type badge + date */}
-        <View style={styles.detailHeaderRow}>
-          <LinearGradient
-            colors={[meta.bg, meta.bg.replace(')', ', 0.9)').replace('rgb', 'rgba')]}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={[styles.detailTypeBadge, { borderColor: meta.color + '50' }]}
-          >
-            <Icon name={(flagType?.icon ?? meta.iconName) as IconName} size={13} color={meta.color} strokeWidth={2.5} />
-            <Text style={[styles.detailTypeLabel, { color: meta.color }]}>{meta.label}</Text>
-          </LinearGradient>
-          <Text style={styles.detailMeta}>{new Date(marker.createdAt).toLocaleDateString()}</Text>
-        </View>
-
-        {/* Note */}
-        <Text style={styles.detailNote}>{marker.note || '(No note)'}</Text>
-
-        {/* Location pill — only when NOT already in view-location mode */}
-        {!viewOnly && (
-          <TouchableOpacity
-            style={styles.locationPill}
-            onPress={() => {
-              handleClose();
-              nav.navigate('Map' as any, { focusLat: marker.lat, focusLng: marker.lng, focusMarkerId: marker.id });
-            }}
-            activeOpacity={0.75}
-          >
-            <Icon name="MapPin" size={14} color={Colors.primary} strokeWidth={2} />
-            <Text style={styles.locationPillText}>View on map</Text>
-            <Text style={styles.locationCoords}>{marker.lat.toFixed(4)}, {marker.lng.toFixed(4)}</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Edit / Delete */}
-        <View style={styles.detailActions}>
-          <TouchableOpacity
-            style={styles.detailEditBtn}
-            onPress={() => { if (onEdit && marker) { onEdit(marker); handleClose(); } }}
-          >
-            <Icon name="Pencil" size={14} color={Colors.primary} strokeWidth={2} />
-            <Text style={styles.detailEditText}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.detailDeleteBtn}
-            onPress={() => {
-              if (marker && onDelete) {
-                Alert.alert('Delete Flag', `Delete "${marker.note || MARKER_META[marker.type as keyof typeof MARKER_META]?.label || 'this marker'}"? This cannot be undone.`, [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: () => { onDelete(marker.id); handleClose(); } },
-                ]);
-              }
-            }}
-          >
-            <Icon name="Trash2" size={14} color={Colors.danger} strokeWidth={2} />
-            <Text style={styles.detailDeleteText}>Delete</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-    </Animated.View>
-  );
-}
-
 // ── Main Map Screen ───────────────────────────────────────────────────────────
 export function MapScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -631,7 +529,7 @@ export function MapScreen() {
   const focusMarkerId: string | undefined = route.params?.focusMarkerId;
   const viewOnly = !!focusMarkerId; // "view flag location" mode — hides activity controls
 
-  const { uiMode, activityMode, setActivityMode, trackingState, setTrackingState,
+  const { activityMode, setActivityMode, trackingState, setTrackingState,
     trackingDistance, trackingDuration, incrementTracking } = useAppStore();
 
   // Real marker store
@@ -716,7 +614,6 @@ export function MapScreen() {
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
   const region = getCurrentRegion();
 
-  const [selectedMarker, setSelectedMarker] = useState<Marker | null>(null);
   const [editMarker, setEditMarker] = useState<Marker | null>(null);
   // Sprint 68 STORY-00532: tap-to-detail surface. Tap → opens MarkDetailSheet
   // (forms A/B/C); Edit button inside form A then opens EditMarkerSheet.
@@ -901,13 +798,6 @@ export function MapScreen() {
         onClose={() => setCreateVisible(false)}
         onConfirm={handleAddMarker}
       />
-      <MarkerDetailSheet
-        marker={selectedMarker}
-        onClose={() => setSelectedMarker(null)}
-        onDelete={(id) => deleteMarker(id)}
-        onEdit={(m) => setEditMarker(m)}
-        viewOnly={viewOnly}
-      />
       <EditMarkerSheet
         marker={editMarker}
         onClose={() => setEditMarker(null)}
@@ -1072,56 +962,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     backgroundColor: 'transparent',
   },
-  topoRing: {
-    position: 'absolute',
-    borderWidth: 1.5,
-    backgroundColor: 'transparent',
-  },
-  trailLine: {
-    position: 'absolute', top: 240, left: 60, right: 80,
-    height: 2.5, backgroundColor: Colors.primaryMuted, borderRadius: 2,
-  },
-  trailLine2: {
-    position: 'absolute', top: 240, left: 60, width: 140, height: 120,
-    borderBottomWidth: 2.5, borderRightWidth: 2.5,
-    borderColor: Colors.primaryMuted, borderBottomRightRadius: 20,
-  },
-  trailLine3: {
-    position: 'absolute', top: 360, left: 200, width: 100, height: 80,
-    borderBottomWidth: 2.5, borderLeftWidth: 2.5,
-    borderColor: Colors.primaryDeep, borderBottomLeftRadius: 20,
-  },
-  locationDot: {
-    position: 'absolute', top: 290, left: W / 2 - 10,
-    width: 20, height: 20, alignItems: 'center', justifyContent: 'center',
-  },
-  locationDotInner: {
-    width: 14, height: 14, borderRadius: 7,
-    backgroundColor: Colors.primary, borderWidth: 2.5, borderColor: '#fff',
-  },
-  locationPulse: {
-    position: 'absolute', width: 28, height: 28, borderRadius: 14,
-    borderWidth: 1.5, borderColor: Colors.primaryDeep,
-  },
-  mapLabelWrap: {
-    position: 'absolute', bottom: 180, left: 0, right: 0,
-    alignItems: 'center', gap: 6,
-  },
-  mapLabel: {
-    fontSize: FontSize.h3, fontWeight: '600',
-    color: Colors.primary, opacity: 0.7,
-  },
-  mapSubLabel: {
-    fontSize: FontSize.small, color: Colors.primary, opacity: 0.5, marginTop: 2,
-  },
-  downloadBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderWidth: 1.5, borderColor: Colors.primaryMuted,
-    borderRadius: Radius.pill,
-    paddingHorizontal: 14, paddingVertical: 7, marginTop: 4,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-  },
-  downloadBtnText: { fontSize: FontSize.small, fontWeight: '700', color: Colors.primary },
+  // O1 batch 33: removed SVG-placeholder styles (topoRing, trailLine, trailLine2,
+  // trailLine3, locationDot, locationDotInner, locationPulse, mapLabelWrap, mapLabel,
+  // mapSubLabel, downloadBtn, downloadBtnText) — 0 references in JSX.
   mapMarker: {
     position: 'absolute', width: 32, height: 32, borderRadius: 16,
     borderWidth: 2.5, alignItems: 'center', justifyContent: 'center',
@@ -1305,53 +1148,6 @@ const styles = StyleSheet.create({
   },
   editSheetDeleteText: { color: Colors.danger, fontWeight: '600', fontSize: FontSize.body },
   editSheetSaveFlex: { flex: 1 },
-
-  // MarkerDetailSheet (STORY-00097)
-  detailOverlay: {
-    ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end',
-    zIndex: 200, backgroundColor: Colors.overlayDark,
-  },
-  detailSheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet,
-    padding: Spacing.xl, gap: Spacing.md, ...Shadow.overlay,
-  },
-  detailHeaderRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
-  detailTypeBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    alignSelf: 'flex-start', borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
-    borderWidth: 1.5,
-  },
-  detailTypeLabel: { fontSize: FontSize.caption, fontWeight: '700' },
-  detailMeta: { fontSize: FontSize.caption, color: Colors.textSecondary },
-  detailNote: {
-    fontSize: FontSize.body, color: Colors.textPrimary, lineHeight: 22,
-    minHeight: 22,
-  },
-  locationPill: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
-    borderWidth: 1.5, borderColor: Colors.primary + '40', borderRadius: Radius.card,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    backgroundColor: Colors.primaryBg,
-  },
-  locationPillText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.primary, flex: 1 },
-  locationCoords: { fontSize: FontSize.tiny, color: Colors.textMuted, fontVariant: ['tabular-nums'] as any },
-  detailActions: { flexDirection: 'row', gap: Spacing.sm },
-  detailEditBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: Spacing.md, borderRadius: Radius.button,
-    borderWidth: 1.5, borderColor: Colors.primary, backgroundColor: Colors.primaryBg,
-  },
-  detailEditText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.primary },
-  detailDeleteBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: Spacing.md, borderRadius: Radius.button,
-    borderWidth: 1.5, borderColor: Colors.danger + '50', backgroundColor: Colors.dangerBg,
-  },
-  detailDeleteText: { fontSize: FontSize.body, fontWeight: '600', color: Colors.danger },
 
   // Activity mode modal (STORY-00099)
   modalOverlay: { flex: 1, backgroundColor: Colors.overlayDark, justifyContent: 'center', padding: Spacing.xl },
