@@ -15,11 +15,14 @@
  *     Returns: PNG binary (Content-Type: image/png)
  *
  * Storage: debug_snapshots table (LONGBLOB image_blob + JSON meta).
- * Auth: none (dev). Rate-limited to 60/5min/IP.
+ * Auth: POST no auth (rate-limited to 60/5min/IP for dev). GET requires
+ *   JWT auth (O1 2026-07-26 security fix — previously open, IDs auto-
+ *   increment + enumerable → device screenshots exfil risk).
  */
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const pool = require('../config/db');
+const authenticate = require('../middleware/authenticate');
 
 const router = express.Router();
 
@@ -109,10 +112,10 @@ router.post('/', uploadLimiter, rawBody, async (req, res) => {
 
 // ── GET /api/debug-snapshot/latest ─────────────────────────────────────
 // ⚠️ DEV TOOL ONLY (2026-07-20 phase3 decision "defer 到工具类的 controller")
-// Convenience: returns the newest snapshot's id + meta + size as JSON.
-// 前端不调; 保留供开发者浏览器直接访问 https://map.yiiling.cn/api/debug-snapshot/latest
-// 快速查看最新 device screenshot upload。
-router.get('/latest', async (req, res) => {
+// O1 (2026-07-26): 加 authenticate JWT gate。原来无 auth,任意匿名可
+// 拉最新 snapshot metadata → 用返回的 id 可以枚举 GET /:id binary。
+// 现在需要 JWT。
+router.get('/latest', authenticate, async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT id, snapshot_id, image_bytes, meta, device_os, app_version, uploaded_at
@@ -127,8 +130,10 @@ router.get('/latest', async (req, res) => {
 
 // ── GET /api/debug-snapshot/:id (binary png) ───────────────────────────
 // ⚠️ DEV TOOL ONLY (2026-07-20 phase3 decision) — 返回单张截图 binary。
-// 前端不调; 开发者 curl 或浏览器直接访问 dump PNG。
-router.get('/:id', async (req, res) => {
+// O1 (2026-07-26): 加 authenticate。原来无 auth + numeric id 可枚举 →
+// 任意用户能拉任意用户的设备截图 PII (map view/marker text/session
+// metadata)。现在需要 JWT。
+router.get('/:id', authenticate, async (req, res) => {
   const id = req.params.id;
   // Allow numeric id as well as snapshot_id string
   let row;

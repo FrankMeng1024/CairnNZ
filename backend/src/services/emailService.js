@@ -16,8 +16,21 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// O1 (2026-07-26) security fix: escape user-controlled `firstName` before
+// interpolating into the HTML template. Attack vector: attacker registers
+// with victim's email + name = `<a href="phish.example">verify here</a>`
+// (fits in Joi's 60-char name limit); victim's verification email renders
+// the anchor in the greeting → phishing. Plain-text arm doesn't render
+// HTML so escape only needed for the html: field.
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
 async function sendVerificationCode(toEmail, name, code) {
   const firstName = name.split(' ')[0];
+  const safeFirstName = escapeHtml(firstName);
 
   await transporter.sendMail({
     from: `"Cairn" <${process.env.EMAIL_FROM}>`,
@@ -30,7 +43,7 @@ async function sendVerificationCode(toEmail, name, code) {
           <span style="font-size:28px;font-weight:900;color:#2d2d2d;letter-spacing:-1px;">Cairn</span>
         </div>
         <div style="background:#fff;border-radius:16px;padding:32px;border:1px solid #e8e4de;">
-          <p style="margin:0 0 8px;font-size:16px;color:#2d2d2d;">Hi ${firstName},</p>
+          <p style="margin:0 0 8px;font-size:16px;color:#2d2d2d;">Hi ${safeFirstName},</p>
           <p style="margin:0 0 24px;font-size:15px;color:#6b6b6b;line-height:1.5;">
             Your verification code for Cairn is:
           </p>
