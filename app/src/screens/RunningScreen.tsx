@@ -11,8 +11,8 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, Easing, ScrollView,
-  Platform, Alert,
+  View, Text, StyleSheet, TouchableOpacity, Animated, Easing, ScrollView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -43,19 +43,14 @@ type RunState = 'pre' | 'running' | 'stopped';
 // On web Mapbox modules are absent; falls back to a static placeholder.
 let MapView: any = null;
 let CameraComponent: any = null;
-let PointAnnotation: any = null;
+// O1 batch 34: PointAnnotation, LineLayer, ShapeSource removed — declared but never used in JSX.
 let UserLocationComponent: any = null;
-let LineLayer: any = null;
-let ShapeSource: any = null;
 if (Platform.OS !== 'web') {
   try {
     const Mapbox = require('@rnmapbox/maps');
     MapView = Mapbox.MapView;
     CameraComponent = Mapbox.Camera;
-    PointAnnotation = Mapbox.PointAnnotation;
     UserLocationComponent = Mapbox.UserLocation;
-    LineLayer = Mapbox.LineLayer;
-    ShapeSource = Mapbox.ShapeSource;
   } catch {
     // @rnmapbox/maps not installed in this build (Expo Go) — fallback used.
   }
@@ -728,40 +723,15 @@ const preStyles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: Spacing.sm,
   },
-  backBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    marginBottom: Spacing.md, alignSelf: 'flex-start',
-  },
-  backText: { fontSize: FontSize.caption, color: Colors.primary, fontWeight: '600' },
+  // O1 batch 34: removed backBtn, backText, routeList, selectLabel, routeCard,
+  // routeCardSelected, routeCardSelectedGreen, routeIconBadge, routeName, routeMeta,
+  // checkBadge — dead keys from old list-based route selector UI (0 JSX references).
   title: {
     flex: 1, textAlign: 'center',
     fontSize: FontSize.h3, fontWeight: '700',
     color: Colors.textPrimary,
   },
   subtitle: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 4 },
-
-  routeList: { paddingHorizontal: Spacing.base, gap: Spacing.sm, marginBottom: Spacing.md },
-  selectLabel: { fontSize: FontSize.small, fontWeight: '700', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 },
-  routeCard: {
-    backgroundColor: Colors.surface, borderRadius: Radius.card,
-    flexDirection: 'row', alignItems: 'center',
-    padding: Spacing.base, gap: Spacing.md,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
-    borderLeftWidth: 3, borderLeftColor: 'transparent',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-  },
-  routeCardSelected: { borderLeftColor: Colors.running, backgroundColor: Colors.runningCardBg },
-  routeCardSelectedGreen: { borderLeftColor: Colors.primary, backgroundColor: Colors.primaryBg },
-  routeIconBadge: {
-    width: 48, height: 48, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  routeName: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
-  routeMeta: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
-  checkBadge: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: Colors.running, alignItems: 'center', justifyContent: 'center',
-  },
 
   // New compact layout
   bottomPanel: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.xs, gap: Spacing.sm },
@@ -779,10 +749,7 @@ const preStyles = StyleSheet.create({
   routePillTextGroup: { flex: 1, gap: 1 },
   routePillText: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
   routePillHint: { fontSize: FontSize.small, color: Colors.running, fontWeight: '500' },
-  routePillChevron: {
-    width: 28, height: 28, borderRadius: 8,
-    backgroundColor: Colors.runningLight, alignItems: 'center', justifyContent: 'center',
-  },
+  // O1 batch 34: routePillChevron removed — 0 JSX references (superseded by inline Icon in pill row).
 
   routePickerBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -826,12 +793,7 @@ const preStyles = StyleSheet.create({
   startBtnText: { color: '#fff', fontWeight: '700', fontSize: FontSize.body },
   lockHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
   lockHint: { fontSize: FontSize.small, color: Colors.textMuted, textAlign: 'center' },
-  shareBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderWidth: 1, borderColor: Colors.primary, borderRadius: 22,
-    paddingHorizontal: Spacing.lg, paddingVertical: 10,
-  },
-  shareBtnText: { color: Colors.primary, fontWeight: '600', fontSize: FontSize.caption },
+  // O1 batch 34: shareBtn, shareBtnText removed — 0 JSX references.
 
   summaryCard: {
     backgroundColor: Colors.surface, borderRadius: Radius.card,
@@ -886,7 +848,7 @@ const runStyles = StyleSheet.create({
   statItem: { flex: 1, alignItems: 'center' },
   statValue: { fontSize: FontSize.h2, fontWeight: '800', color: Colors.runningText, letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
   statLabel: { fontSize: FontSize.tiny, color: 'rgba(255,255,255,0.4)', marginTop: 2, letterSpacing: 0.5 },
-  gpsIndicator: { width: 8, height: 8, borderRadius: 4, marginBottom: 2 },
+  // O1 batch 34: gpsIndicator removed — superseded by PulseDot component (0 JSX references).
 
   compassArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.lg },
   compassRing: {
