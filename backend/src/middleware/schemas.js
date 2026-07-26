@@ -91,7 +91,12 @@ const sessionSave = Joi.object({
   flags: Joi.object().allow(null),
   route_id: Joi.number().integer().min(1).allow(null),
   name: Joi.string().max(100).allow(null, ''),
-  memory_points: Joi.array().items(pointObj).max(1000).allow(null),
+  // O1 batch 27 revert: 恢复 max=10000。batch 17 一度改成 1000 与 handler
+  // 手工检查对齐,但 batch 15 已删 handler 手工检查 → 现在两边都没保护 →
+  // saveHikeAtomic 长 hike (10h 可产 3000-4000 memory_points) 会 400 →
+  // pendingSyncStore 无限重试 → 用户 hike memory 永远丢。backend 事务里
+  // 有 CHUNK=1000 分批 INSERT,10000 上界足够所有真实 hike。
+  memory_points: Joi.array().items(pointObj).max(10000).allow(null),
 });
 
 const sessionUpdate = Joi.object({
@@ -183,7 +188,10 @@ const memoryPointObj = Joi.object({
 });
 
 const memoryPoints = Joi.object({
-  points: Joi.array().items(memoryPointObj).min(1).max(1000).required(),
+  // O1 batch 27 revert: 恢复 max=5000。POST /api/memory/points client 侧
+  // MAX_BATCH=500 所以真实 batch 不会 >500,但 initial reveal 或 backfill
+  // 可能一次 push 数千点,1000 太紧。
+  points: Joi.array().items(memoryPointObj).min(1).max(5000).required(),
 });
 
 module.exports = {
