@@ -317,15 +317,18 @@ function TrackPolyline({ session }: { session: TrackingSession }) {
   const color = session.activityMode === 'running' ? Colors.running : Colors.primary;
 
   if (pts.length < 2) {
-    // v450: distinguish "still loading (points not yet fetched)" from
-    // "truly too short". Session store hydrates with trackPoints=[]
-    // then lazy-loads. If the session's stored distanceM > 0, we know
-    // it recorded a real path — just show a loading state instead of
-    // "too short" (which mislabels every not-yet-fetched hike).
+    // v450 + O6: TrackPolyline is only rendered when isLoadingTrackPoints
+    // (loadedTrackPoints===null) is FALSE — the parent gates with `null`
+    // during load (see line ~979). So by the time we reach TrackPolyline,
+    // the fetch has completed (or hit our 15s timeout). If the session has
+    // distanceM>0 but we still have <2 points, the server has no route_points
+    // AND local cache is empty. Say "Route data unavailable" rather than
+    // "Loading route…" which would be misleading (nothing is loading).
+    // This is Bug 5's real user-visible fix: no more infinite spinner text.
     const hasRecordedDistance = (session as any).distanceM > 0
       || (session as any).distance_m > 0;
     const label = hasRecordedDistance
-      ? 'Loading route…'
+      ? 'Route data unavailable'
       : pts.length === 0
         ? 'Activity too short to record path'
         : 'Only one GPS sample — keep moving longer to record a path';
@@ -783,15 +786,27 @@ export function MapHistoryScreen() {
   useEffect(() => {
     if (!selectedSessionId) { setLoadedTrackPoints(null); return; }
     let cancelled = false;
+    // O6 (2026-07-26): 添加 15s 超时。之前 fetchSessionDetail 无超时,
+    // 若网络卡住 (server slow / 用户切飞行模式 mid-fetch) 就永远
+    // stuck 在 loadedTrackPoints=null 状态,TrackPolyline 显示
+    // "Loading route…" 转圈永远不停。这是 Bug 5 根因。超时后 fall
+    // through 到 local cache;如果 local 也空则显示 "Route data unavailable"。
+    const timeoutMs = 15000;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     (async () => {
       const session = sessions.find(s => s.id === selectedSessionId);
       const remoteId = session?.remoteId;
       if (remoteId != null) {
-        const detail = await fetchSessionDetail(remoteId);
-        if (!cancelled && detail?.route_points) {
+        const detailPromise = fetchSessionDetail(remoteId);
+        const timeoutPromise = new Promise<null>((resolve) => {
+          timeoutHandle = setTimeout(() => resolve(null), timeoutMs);
+        });
+        const detail = await Promise.race([detailPromise, timeoutPromise]);
+        if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
+        if (!cancelled && detail && (detail as any)?.route_points) {
           // Server points may use a different field shape (lat/lng/timestamp)
           // than the local TrackPoint (lat/lng/alt/t). Normalise.
-          const normalised = detail.route_points.map((p: any) => ({
+          const normalised = (detail as any).route_points.map((p: any) => ({
             lat: p.lat,
             lng: p.lng,
             alt: p.alt ?? null,
@@ -800,12 +815,19 @@ export function MapHistoryScreen() {
           setLoadedTrackPoints(normalised);
           return;
         }
+        // O6: server 请求 timeout 或 route_points 为空 → 落 local。
       }
-      // No remoteId yet (offline-only session) or fetch failed — fall back to local cache
+      // No remoteId yet (offline-only session) or fetch failed/timed out — fall
+      // back to local cache. If local also empty, set [] so UI can stop the
+      // spinner and show the correct message ("too short" for distanceM===0
+      // sessions, or a clean "no route data" state for others).
       const local = await loadTrackPoints(selectedSessionId);
-      if (!cancelled) setLoadedTrackPoints(local);
+      if (!cancelled) setLoadedTrackPoints(local ?? []);
     })().catch(() => { if (!cancelled) setLoadedTrackPoints([]); });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
+    };
   }, [selectedSessionId, sessions]);
 
   // Merge loaded track points into the selected session for display.

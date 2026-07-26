@@ -64,7 +64,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //   3. setStepConfig 收到 NaN input (用户清空 field 或输入非数字) 会让
 //      config.step_m=NaN → 所有点 lat=NaN → 静默坏掉整个 session。修:
 //      添加 Number.isFinite fallback 到 previous config value
-export const OTA_VERSION = 'O5';
+// O6 (2026-07-26 batch 31): O5 之后 subagent 又找到 3 个非 sim-walker bug —
+// 这些是用户 O2/O3 报的 Bug 5/6/8 的真根因:
+//   Bug 5 (activity list "Loading routes..." 一直转圈):
+//     MapHistoryScreen fetchSessionDetail 无 timeout,server slow / 网络卡
+//     就永远 stuck。修:15s Promise.race timeout + fall through 到 local
+//     cache;fetch 完但空则显示 "Route data unavailable" 而不是继续转
+//   Bug 6 (假 pending sync — home 显示 "1 hike pending sync"):
+//     syncDaemon.drainPending 契约声明 3 个 trigger (hydrate/NetInfo/
+//     AppState),但 AppState 那个从来没连过。session 若卡在 pending
+//     只能等冷启才 self-heal。修:App.tsx AppState listener 里加
+//     drainPending call — 用户前后台切一下就能触发 self-heal
+//   Bug 8 (recovery modal 弹出用户已保存的 hike):
+//     stopTracking 里 `void flushNow().then(renameToCompleted)` 是
+//     fire-and-forget。用户点 Save 后立即杀 app 会让 rename 没跑完,
+//     active/{sid}.jsonl 留在磁盘,下次冷启触发 UnfinishedRecoveryModal。
+//     修:改成 await flushNow + await renameToCompleted,保证 rename
+//     跑完才 return
+export const OTA_VERSION = 'O6';
 
 
 type OtaState =

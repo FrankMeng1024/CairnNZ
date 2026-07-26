@@ -1133,13 +1133,20 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // v409 fix #4: rename hike-track active JSONL → completed 供未来 replay
     // 或 cache 清理策略处理。同时清 persistBackgroundContext (hikeActive=false)
     // 以免 iOS 后续 fire background GPS 时误认为 hike 还在跑。
+    // O6 (2026-07-26): await 而不是 fire-and-forget。之前 `void flushNow()
+    // .then(renameToCompleted)` 是 fire-and-forget,用户点 Save 后立即杀
+    // app 会让 rename 没跑完,active/{sid}.jsonl 留在磁盘,下次冷启
+    // UnfinishedRecoveryModal 会弹一个用户明明已 saved 的 hike (Bug 8)。
+    // 现在 await 让 rename 在 stopTracking return 前落盘。用户不会点完
+    // Save 立刻杀 app,给 ~200ms 完成时间是可以接受的。
     try {
       const priorSid = s.sessionId;
       if (priorSid) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { renameToCompleted, flushNow } = require('../services/hikeTrackWriter');
         // Flush first,防止 buffer 里剩点还没写盘
-        void flushNow().then(() => renameToCompleted(priorSid, Date.now(), s.remoteSessionId ?? undefined));
+        await flushNow();
+        await renameToCompleted(priorSid, Date.now(), s.remoteSessionId ?? undefined);
       }
     } catch (e) {
       crashLogger.breadcrumb(`v409:hikeTrackWriter:rename failed ${String(e).slice(0, 80)}`);

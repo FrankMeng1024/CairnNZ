@@ -678,6 +678,21 @@ function AppRoot() {
         to: norm(next),
         tracking_active: trackingActive,
       });
+      // O6 (2026-07-26): 前后台切回时也触发 pendingSync drain。
+      // syncDaemon 契约声明有 3 个触发时机: (1) hydrate, (2) NetInfo, (3)
+      // AppState — 前两个已连,AppState 之前只用于 debug log 没接 drain。
+      // 后果: 若用户 saveHikeAtomic 落在 pendingSyncStore (20s 网络 timeout
+      // 竞争成功 server 但 client 已放弃),该 session syncState='pending'
+      // 到磁盘,除非冷启否则一直显示"1 hike pending sync"。修:后台→前台
+      // 时 fire-and-forget drainPending,让用户从 Settings 或 Home 切一下
+      // 就能 self-heal。
+      if (prev !== 'active' && next === 'active') {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { drainPending } = require('./src/services/syncDaemon');
+          void drainPending().catch(() => {});
+        } catch { /* best effort */ }
+      }
     });
     markBootPhase('ue_main_exit');
     return () => sub.remove();
