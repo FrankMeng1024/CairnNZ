@@ -575,7 +575,7 @@ export function checkMarkerSpacing(
  * Earlier markers (by createdAt or array position) take priority.
  *
  * @param markers  All markers to filter
- * @param minSpacingM  Minimum display distance (default 15m for map, 30m for AR)
+ * @param minSpacingM  Minimum display distance (default 15m for map)
  */
 export function filterByDensity<T extends { lat: number; lng: number }>(
   markers: T[],

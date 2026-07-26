@@ -39,11 +39,11 @@ interface Props {
   user: UserPos | null;
   /**
    * Distance threshold above which we render the arrow.
-   * Below this, the cairn should be visible in AR and we hide the arrow.
+   * Below this threshold the arrow is hidden (marker is nearby).
    */
   visibleAboveMeters?: number;
   /**
-   * Hide arrow when distance below this (cairn is implementing in AR).
+   * Hide arrow when distance is below this threshold.
    */
   hideBelowMeters?: number;
 }

@@ -155,7 +155,7 @@ class DebugLogger {
    * Round 7 audit B BLOCKER #2 fix:
    *   原 writeMetadata 仅在 endSession 路径调用。iOS app kill / suspend /
    *   crash 不触发 React unmount → 无 endSession → 无 meta 文件 →
-   *   listSessions 看不到 → 永远不上传。冷启动直接进 AR 然后 kill app
+   *   listSessions 看不到 → 永远不上传。冷启动直接 kill app
    *   场景下整个 PHASE3 数据黑洞。
    */
   async persistMetaForKillSafety(): Promise<void> {

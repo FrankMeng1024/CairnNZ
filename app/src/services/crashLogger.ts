@@ -44,9 +44,8 @@ interface CrashReport {
 }
 
 // Module-level ring buffer — captures last N events even if logger session is off.
-// v29 raised from 20 → 500 because AR debugging needs a wide window: GPS-driven
-// populate cycles and per-frame samples otherwise drown out the buildCairn /
-// populate:add breadcrumbs that pinpoint a bug.
+// v29 raised from 20 → 500: GPS-driven populate cycles and per-frame samples
+// otherwise drown out the buildCairn / populate:add breadcrumbs that pinpoint a bug.
 let recentEvents: string[] = [];
 const MAX_RECENT = 500;
 
@@ -153,8 +152,7 @@ export const crashLogger = {
 
   /**
    * Snapshot of the recent-events ring buffer. Used by debug overlays
-   * (e.g. AR diagnostic banner) to surface recent activity in the UI
-   * without waiting for a crash to upload.
+   * to surface recent activity in the UI without waiting for a crash to upload.
    */
   getRecent(): string[] {
     return [...recentEvents];
@@ -176,10 +174,9 @@ export const crashLogger = {
     }
   },
 
-  // O1: uploadV163CheckpointIfAny removed — v163 AR shader checkpoint
-  // 逻辑,ViroARRitualOverlay 早被 v417 移除,setter 从此不存在,
-  // AsyncStorage 'cairn_v163_last_step' 永远读到 null。每次 boot 死跑
-  // storage.getItem() + early return,浪费一次 IO。
+  // O1: uploadV163CheckpointIfAny removed — v163 shader checkpoint
+  // AsyncStorage 'cairn_v163_last_step' was never written after v417;
+  // reader was a dead boot-time IO round-trip.
 
   /**
    * Drain any persisted crash and POST it directly to backend telemetry.
@@ -215,7 +212,7 @@ export const crashLogger = {
   /**
    * Proactively upload current breadcrumb buffer as a diagnostic snapshot.
    * Bypasses the crash flow — no error is required, no persistence happens.
-   * Used by AR screen to send recent activity for live debugging without
+   * Used by the debug screen to send recent activity for live debugging without
    * waiting for a crash. Session is tagged with `diag-{tag}-{ts}` and
    * activity_mode='diagnostic' so it's easy to filter on the backend.
    *

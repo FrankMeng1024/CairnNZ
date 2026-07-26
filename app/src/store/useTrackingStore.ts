@@ -131,7 +131,7 @@ interface TrackingState {
    *  `trackPoints` but lat/lng have been passed through the filter. UI
    *  (NativeTrackMap polyline, MapHistoryScreen) uses this for the visual
    *  line so it doesn't sawtooth on raw GPS noise. Distance accumulation,
-   *  AR cairn placement, server upload all keep using the RAW
+   *  flag placement, server upload all keep using the RAW
    *  `trackPoints` so we never lose the audit trail or introduce drift
    *  into measurements. */
   trackPointsSmoothed: TrackPoint[];

@@ -10,7 +10,7 @@ import { useMemorySettingsStore } from './src/features/memory/store/useMemorySet
 // v322: ForegroundUnlockManager moved to MemoryScreen (lazy mount).
 import { MigratorRetryPrompt } from './MigratorRetryPrompt';
 import { getFlags } from './src/config/featureFlags';
-// v417 AR removal: v025 featureFlagsClient + telemetrySingleton deleted (AR feature scrapped)
+// v417: featureFlagsClient + telemetrySingleton deleted
 import { useAppStore } from './src/store/useAppStore';
 import { useSettingsStore } from './src/store/useSettingsStore';
 import { useTrackingStore } from './src/store/useTrackingStore';
@@ -317,10 +317,9 @@ function AppRoot() {
       // This bypasses debugLogger sessions (which only flush on tracking end)
       // so a sign-out/login crash actually reaches the server.
       crashLogger.uploadCrashIfAny(API_BASE_URL).catch(() => {});
-      // O1: v163 shader-registration checkpoint drain removed (AR/Viro
-      // functionality was removed in v417, so `cairn_v163_last_step`
-      // AsyncStorage key is never written anymore — reader was a dead
-      // boot-time IO round-trip).
+      // O1: v163 shader-registration checkpoint drain removed —
+      // `cairn_v163_last_step` AsyncStorage key is never written anymore
+      // (dead boot-time IO round-trip).
 
       // Note: OTA update check + download UX is handled by <OtaBadge />
       // mounted on AuthScreen (top-right pill). No global Alert here.

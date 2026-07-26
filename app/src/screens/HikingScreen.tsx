@@ -1,12 +1,11 @@
 /**
- * HikingScreen — Sprint 18 AR drag interaction + topo map
+ * HikingScreen — topo map + GPS tracking
  *
  * States:
  * 1. Map view: full-screen topo placeholder, GPS chip, back chip, FAB
  * 2. Tracking: stats bar appears above map
- * 3. AR flag picker: drag from corner to drop zone to plant (tap fallback preserved)
- * 4. Plant note sheet: optional note before saving
- * 5. Marker detail sheet: view / delete a marker
+ * 3. Plant note sheet: optional note before saving
+ * 4. Marker detail sheet: view / delete a marker
  *
  * expo-keep-awake: activates when status === 'tracking'
  * Real stores: useTrackingStore (GPS), useMarkerStore (flags)
@@ -141,7 +140,7 @@ function CompassNeedle({ heading, size = 22 }: { heading: number | null; size?: 
       {/* Static N/E/S/W markers — never rotate, anchored to bezel.
           Previously only N was shown, which made it impossible to read
           a bearing once the device was off-axis. Adding E/S/W gives a
-          full directional reference matching the AR compass dial. */}
+          full directional reference. */}
       <Text style={[cardinal, { top: -2 }]}>N</Text>
       <Text style={[cardinalMuted, { right: -2, top: '50%' as any, marginTop: -4 }]}>E</Text>
       <Text style={[cardinalMuted, { bottom: -2 }]}>S</Text>
@@ -578,8 +577,8 @@ function HikingMap({ markers, trackPoints, onMarkerPress, showCompass, routeStar
   );
 }
 
-// ── Flag Plant Bottom Sheet — replaces ARFlagPicker + PlantNoteSheet ─────────
-// Premium bottom sheet: type selection + optional note. No dark AR overlay.
+// ── Flag Plant Bottom Sheet ────────────────────────────────────────────────────
+// Premium bottom sheet: type selection + optional note.
 function FlagPlantSheet({ onClose, onSave }: {
   onClose: () => void;
   onSave: (type: MarkerType, note: string) => void;
@@ -2006,7 +2005,7 @@ export function HikingScreen() {
           // Tracking: two evenly-spaced controls — Compass (left) +
           // Place Flag (right). Both 56x56 frosted-glass circles. The
           // compass tap recentres the camera bearing to north; flag
-          // opens the AR placement screen.
+          // opens the plant sheet.
           <View style={styles.controlRow}>
             <View style={styles.controlSlot}>
               <TouchableOpacity

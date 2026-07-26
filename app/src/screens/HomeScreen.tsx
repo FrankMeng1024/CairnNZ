@@ -492,8 +492,7 @@ export function HomeScreen() {
           />
         </View>
 
-        {/* Tools — v0.2.6.4: Trails (=Routes renamed) / Friends /
-            Memory (=AR renamed) / Settings. AR is sealed. */}
+        {/* Tools — Trails / Friends / Memory / Settings */}
         <View style={styles.toolsRow}>
           <ToolBtn iconName="Route" label="Trails" onPress={() => nav.navigate('Routes')} />
           <ToolBtn iconName="Users" label="Friends" onPress={() => nav.navigate('Friends')} />

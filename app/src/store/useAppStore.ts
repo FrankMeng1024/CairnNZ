@@ -8,7 +8,7 @@ import { getMe } from '../services/authService';
 import { fetchSessions } from '../services/sessionService';
 import { useSessionStore, type ActivityMode as SessionActivityMode, type TrackPoint } from './useSessionStore';
 import { useMarkerStore } from './useMarkerStore';
-// v417 AR removal: useArOriginStore + runA8Migration deleted (AR feature scrapped)
+// v417: useArOriginStore + runA8Migration deleted
 import { isPlaywrightBypass } from '../utils/devFlags';
 import { crashLogger } from '../services/crashLogger';
 // v405: memorySync attach 从 FGUM 提前到 hydrate,让 stopTracking →
@@ -161,7 +161,7 @@ export const useAppStore = create<AppState>((set) => ({
       // 产品规则：任何 cold boot → 强制 AuthScreen，永远不 auto-login。
       // 用户想重开就要重登（记住邮箱 checkbox 已由 AuthScreen 处理）。
       //
-      // 但 pre-warm 数据要做：markers/sessions/AR origin 从本地缓存加载
+      // 但 pre-warm 数据要做：markers/sessions 从本地缓存加载
       // user.id 的槽位，登录成功后 UI 立刻可见，无空白等待。
       //
       // token 处理：
@@ -243,7 +243,6 @@ export const useAppStore = create<AppState>((set) => ({
           // Not logged in — load from guest slots only
           try { await useSessionStore.getState().hydrate('guest'); } catch { /* swallow */ }
           try { await useMarkerStore.getState().hydrate('guest'); } catch { /* swallow */ }
-          // v417 AR removal: runA8Migration + useArOriginStore.hydrate deleted
         }
       } catch {
         // Network unavailable — token preserved by getMe (see authService).
@@ -251,7 +250,6 @@ export const useAppStore = create<AppState>((set) => ({
         crashLogger.breadcrumb('hydrate:network_error_token_preserved');
         try { await useSessionStore.getState().hydrate('guest'); } catch { /* swallow */ }
         try { await useMarkerStore.getState().hydrate('guest'); } catch { /* swallow */ }
-        // v417 AR removal: runA8Migration + useArOriginStore.hydrate deleted
       }
     } catch (err) {
       // Last-resort safeguard: never block app boot on hydrate.

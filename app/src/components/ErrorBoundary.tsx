@@ -1,9 +1,8 @@
 /**
  * ErrorBoundary — React class component that catches render errors in
  * its subtree and surfaces them via crashLogger instead of showing the
- * RN red box. Used to wrap experimental/unstable subtrees (e.g. the
- * AR 3D overlay) so a render failure there doesn't take down the
- * surrounding screen.
+ * RN red box. Used to wrap experimental/unstable subtrees so a render
+ * failure there doesn't take down the surrounding screen.
  *
  * Note: only catches React render-time errors. Runtime errors inside
  * useEffect / event handlers / setTimeout still need their own try/catch.

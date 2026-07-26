@@ -1,7 +1,7 @@
 /**
  * Voice memo service — v80 #45.
  *
- * 5-second voice clip attached to an AR marker, recorded once on plant
+ * Short voice clip attached to a marker, recorded once on plant
  * (optional) and played back from the marker detail sheet. Uses
  * `expo-av` Audio.Recording + Audio.Sound.
  *

@@ -6,8 +6,8 @@
  *
  * v0.2.6.4: Restored v0.2.5 model after user feedback. The brief
  * stint with BottomTabNavigator was a misread of the spec — the
- * intent is "Routes is renamed Trails, AR is renamed Memory" inside
- * the existing tools row, not a wholesale tab-bar swap.
+ * intent is "Routes is renamed Trails, Memory replaces the old AR screen"
+ * inside the existing tools row, not a wholesale tab-bar swap.
  */
 import React from 'react';
 import { Platform } from 'react-native';
