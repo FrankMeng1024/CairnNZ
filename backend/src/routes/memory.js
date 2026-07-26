@@ -127,7 +127,6 @@ router.post('/points', authenticate, validateBody(schemas.memory.points), async 
     console.error('[memory/points:insert]', err.message);
     return res.status(500).json({ error: 'Server error' });
   }
-  }
 });
 
 /**
