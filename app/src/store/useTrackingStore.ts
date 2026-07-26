@@ -18,7 +18,7 @@
 import { create } from 'zustand';
 import { AppState, type AppStateStatus } from 'react-native';
 import {
-  haversineM, calculateElevationGain, generateId, getSamplingInterval, classifyMovement,
+  haversineM, generateId, getSamplingInterval, classifyMovement,
   kalmanInit, kalmanUpdate, type KalmanState,
 } from '../utils/geo';
 import { getCurrentRegion } from '../config/regions';
@@ -147,7 +147,7 @@ interface TrackingState {
   lastCoordinate: Coordinate | null;
   lastCoordinateTime: number | null;  // unix ms of last GPS fix
   lastFixTimestamp: number | null;    // GPS-fix timestamp (for dedupe)
-  altitudeHistory: (number | null)[];
+  // O1 batch 40: altitudeHistory removed — written but 0 external readers
 
   /** v116: why the most recent stopTracking() ended.
    *  - 'saved'     : session had ≥ 2 trackPoints, persisted to local + server
@@ -195,7 +195,6 @@ const initialState = {
   lastCoordinate: null,
   lastCoordinateTime: null,
   lastFixTimestamp: null,
-  altitudeHistory: [] as (number | null)[],
   lastStopReason: null as 'saved' | 'saved_pending' | 'too-short' | null,
 };
 
@@ -228,7 +227,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       distanceM: 0,
       durationS: 0,
       elevationGainM: 0,
-      altitudeHistory: [],
     });
 
     // Reset module-level state from any previous session
@@ -1174,11 +1172,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         // on Activity map). Keep original s.trackPoints as raw if snap
         // succeeded; otherwise leave existing raw untouched.
         trackPoints: snappedTrackPoints ?? s.trackPoints,
-        trackPointsRaw: snappedTrackPoints
-          ? s.trackPoints
-          : (s.trackPointsRaw.length > 0 ? s.trackPointsRaw : undefined),
+        // O1 batch 40: trackPointsRaw removed from TrackingSession — field was written but 0 external readers
         markerIds: s.markerIds,
-        pausePins: s.pausePins.length > 0 ? s.pausePins : undefined,
+        // O1 batch 40: pausePins removed from TrackingSession — 0 external readers
         name: finalName,
         memoryNewCells,
         // v412: 根据 saveHikeAtomic 结果标 syncState
@@ -1230,9 +1226,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               distanceM: s.distanceM,
               elevationGainM: s.elevationGainM,
               trackPoints: s.trackPoints,
-              trackPointsRaw: s.trackPointsRaw.length > 0 ? s.trackPointsRaw : undefined,
+              // O1 batch 40: trackPointsRaw removed from TrackingSession
               markerIds: s.markerIds,
-              pausePins: s.pausePins.length > 0 ? s.pausePins : undefined,
+              // O1 batch 40: pausePins removed from TrackingSession
               name: (sessionName && sessionName.trim().length > 0)
                 ? sessionName.trim().slice(0, 60)
                 : `Hike — ${new Date(s.startedAt).toISOString().slice(0, 10)}`,
@@ -1501,8 +1497,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         if (addedDistance > 200) addedDistance = 0;
       }
 
-      const newAltHistory = [...s.altitudeHistory, coord.alt ?? null];
-      const elevationGainM = calculateElevationGain(newAltHistory);
+      const elevationGainM = (() => {
+        if (coord.alt == null) return s.elevationGainM;
+        const prevAlt = s.trackPoints.length > 0 ? s.trackPoints[s.trackPoints.length - 1].alt : null;
+        if (prevAlt == null) return s.elevationGainM;
+        const delta = coord.alt - prevAlt;
+        return s.elevationGainM + (delta > 0 ? delta : 0);
+      })();
 
       return {
         trackPoints: [...s.trackPoints, rawPoint],
@@ -1513,7 +1514,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
         distanceM: s.distanceM + addedDistance,
         elevationGainM,
-        altitudeHistory: newAltHistory,
       };
     });
     // v409 fix #3: 每次 addTrackPoint 后 append 一行 JSONL 到磁盘。
@@ -1597,9 +1597,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         addedDistance = haversineM(s.lastCoordinate, cleanCoord);
         if (addedDistance > 200) addedDistance = 0;
       }
-      const newAltHistory = cleanCoord.alt !== null && cleanCoord.alt !== undefined
-        ? [...s.altitudeHistory, cleanCoord.alt]
-        : s.altitudeHistory;
+      const newElevationGainM = (() => {
+        if (cleanCoord.alt == null) return s.elevationGainM;
+        const prevAlt = s.trackPoints.length > 0 ? s.trackPoints[s.trackPoints.length - 1].alt : null;
+        if (prevAlt == null) return s.elevationGainM;
+        const delta = cleanCoord.alt - prevAlt;
+        return s.elevationGainM + (delta > 0 ? delta : 0);
+      })();
       return {
         trackPoints: [...s.trackPoints, rawPoint],
         trackPointsSmoothed: [...s.trackPointsSmoothed, smoothedPoint],
@@ -1608,10 +1612,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         lastCoordinateTime: t,
         lastFixTimestamp: t,
         distanceM: s.distanceM + addedDistance,
-        elevationGainM: cleanCoord.alt !== null && cleanCoord.alt !== undefined
-          ? calculateElevationGain(newAltHistory)
-          : s.elevationGainM,
-        altitudeHistory: newAltHistory,
+        elevationGainM: newElevationGainM,
       };
     });
     // O4 rollback (2026-07-26): 删掉 O1 batch 28.6 的"走路时实时 unlock

@@ -26,9 +26,7 @@ interface MarkLikeState {
   /** Toggle the like state for a mark. Idempotent — calling twice returns
    *  the original state. Returns the new liked status for that mark. */
   toggle: (markId: string) => boolean;
-  isLiked: (markId: string) => boolean;
-  /** Test helper — wipe in-memory state (used by tests; not exposed in UI). */
-  reset: () => void;
+  // O1 batch 40: isLiked, reset removed — 0 external callers confirmed by grep audit.
 }
 
 export const useMarkLikeStore = create<MarkLikeState>((set, get) => ({
@@ -44,6 +42,4 @@ export const useMarkLikeStore = create<MarkLikeState>((set, get) => ({
     set({ liked: [...set_] });
     return true;
   },
-  isLiked: (markId) => get().liked.includes(markId),
-  reset: () => set({ liked: [] }),
 }));

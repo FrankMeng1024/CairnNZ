@@ -49,7 +49,6 @@ function remoteToLocal(r: RemoteRoute): Route {
     runCount: r.run_count,
     lastRunAt: r.last_run_at ? new Date(r.last_run_at).getTime() : undefined,
     isActive: false,
-    mutedMarkerIds: [],
     // Sprint 69 STORY-00535: collapse server 'public' → undefined for local
     // type narrowing (clients should never see Public routes via /api/routes
     // because that endpoint scopes to the viewer's own; /api/circle/routes

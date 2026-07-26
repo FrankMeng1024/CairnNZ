@@ -42,10 +42,7 @@ export interface Marker {
   alt?: number;
   approximate?: boolean;   // true if placed with stale/no GPS signal
   gpsAgeS?: number;        // seconds since last GPS fix when placed
-  // PRD3 E-019 — user-attached photos. v1 has no upload UI, but the field
-  // exists so backend rows and types are forward-compatible. Photos are
-  // displayed inline in the marker detail sheet when present.
-  photoUrls?: string[];
+  // O1 batch 40: photoUrls removed — 0 external readers
   // v80 #45 — optional 5s voice memo. Stored as a local file:// URI in
   // FileSystem.documentDirectory. NOT uploaded to backend in v80 (next
   // iteration will add cloud upload + cross-device sync). The recording

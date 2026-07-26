@@ -33,13 +33,8 @@ export interface TrackingSession {
   distanceM: number;          // meters (convert to km/mi at display layer)
   elevationGainM: number;     // meters
   trackPoints: TrackPoint[];  // GPS breadcrumb trail (gated/clean)
-  /** v77: full audit track including stationary drift + low-accuracy
-   *  fixes (everything except teleport-rejected). Sent to server once
-   *  at session finalize for debug / re-processing. NOT used for
-   *  rendering or distance — those use `trackPoints`. */
-  trackPointsRaw?: TrackPoint[];
   markerIds: string[];        // markers planted during this session
-  pausePins?: Coordinate[];   // locations where user paused (rendered as flag pins)
+  // O1 batch 40: trackPointsRaw, pausePins removed — written into session but 0 external readers
   name?: string;              // user-assigned name (optional, auto-generated if absent)
   /** v333: number of NEW H3 cells unlocked in the Memory map by this
    *  session. LOCAL-ONLY — NOT included in the POST /api/sessions body
@@ -66,13 +61,11 @@ interface SessionState {
   deleteSession: (id: string) => void;
   clearSessions: () => void;       // called on logout to remove prior user's data
   getSessions: () => TrackingSession[];
-  getSessionsByRegion: (regionCode: string) => TrackingSession[];
+  // O1 batch 40: getSessionsByRegion, markSyncing removed — 0 external callers
   hydrate: (userId?: string) => Promise<void>;
   // v412: 已 Save 未同步 hike 的 syncState 管理
   /** SyncDaemon 上传成功后调用: syncState → 'synced', 更新 remoteId */
   markSynced: (localId: string, remoteId: number) => void;
-  /** SyncDaemon 上传前短暂标记 syncing (可选) */
-  markSyncing: (localId: string) => void;
   /** 用户长按灰卡"放弃"调用: 从 sessions 数组删除, 不通知服务器 */
   removeLocal: (localId: string) => void;
 }
@@ -144,8 +137,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   getSessions: () => get().sessions,
 
-  getSessionsByRegion: (regionCode) =>
-    get().sessions.filter((s) => s.regionCode === regionCode),
+  // O1 batch 40: getSessionsByRegion removed — 0 external callers
 
   // v412: SyncDaemon 上传成功后调用
   markSynced: (localId, remoteId) => {
@@ -159,15 +151,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       storage.setItem(sessionsKey(get().currentUserId), JSON.stringify(summaries));
       return { sessions: updated };
     });
-  },
-
-  // v412: SyncDaemon 开始上传时短暂标记 (可选, 用于 spinning icon)
-  markSyncing: (localId) => {
-    set((s) => ({
-      sessions: s.sessions.map((sess) =>
-        sess.id === localId ? { ...sess, syncState: 'syncing' as const } : sess
-      ),
-    }));
   },
 
   // v412: 用户长按灰卡"放弃"调用 (无 remoteId or 未成功同步的场景)

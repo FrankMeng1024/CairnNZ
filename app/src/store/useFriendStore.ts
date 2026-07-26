@@ -19,39 +19,18 @@ export interface Friend {
   email: string;
   addedAt: number;
   shareMarkers: boolean;    // whether this friend's markers are visible to me
-  isMuted: boolean;         // I've muted this friend's markers
-  lastSyncAt?: number;      // when their markers were last fetched
+  // O1 batch 40: isMuted, lastSyncAt removed — 0 external readers
 }
 
-export interface FriendRequest {
-  id: string;
-  fromUserId: string;
-  fromName: string;
-  fromEmail: string;
-  sentAt: number;
-  status: 'pending' | 'accepted' | 'rejected';
-}
+// O1 batch 40: FriendRequest interface removed — only consumed by dead actions/state
 
 interface FriendState {
   friends: Friend[];
-  requests: FriendRequest[];     // incoming requests
-  sentRequests: FriendRequest[]; // outgoing requests
+  // O1 batch 40: requests, sentRequests removed — 0 external readers
 
-  // Friend management
-  addFriend: (friend: Friend) => void;
-  removeFriend: (friendId: string) => void;
-  muteFriend: (friendId: string) => void;
-  unmuteFriend: (friendId: string) => void;
-  toggleShareMarkers: (friendId: string) => void;
-
-  // Requests
-  addIncomingRequest: (request: FriendRequest) => void;
-  acceptRequest: (requestId: string) => void;
-  rejectRequest: (requestId: string) => void;
-  addSentRequest: (request: FriendRequest) => void;
-
-  // Persistence
-  hydrate: () => Promise<void>;
+  // O1 batch 40: addFriend, removeFriend, muteFriend, unmuteFriend,
+  // toggleShareMarkers, addIncomingRequest, acceptRequest, rejectRequest,
+  // addSentRequest, hydrate all removed — 0 external callers confirmed by grep audit.
   loadFriendsFromBackend: () => Promise<void>;
 }
 
@@ -59,104 +38,8 @@ const STORAGE_KEY = 'cairn_friends';
 
 // ── Store ───────────────────────────────────────────────────────────────────
 
-export const useFriendStore = create<FriendState>((set, get) => ({
+export const useFriendStore = create<FriendState>(() => ({
   friends: [],
-  requests: [],
-  sentRequests: [],
-
-  addFriend: (friend) => {
-    set((s) => {
-      const friends = [...s.friends, friend];
-      persistFriends(friends);
-      return { friends };
-    });
-  },
-
-  removeFriend: (friendId) => {
-    set((s) => {
-      const friends = s.friends.filter(f => f.id !== friendId);
-      persistFriends(friends);
-      return { friends };
-    });
-  },
-
-  muteFriend: (friendId) => {
-    set((s) => {
-      const friends = s.friends.map(f =>
-        f.id === friendId ? { ...f, isMuted: true } : f
-      );
-      persistFriends(friends);
-      return { friends };
-    });
-  },
-
-  unmuteFriend: (friendId) => {
-    set((s) => {
-      const friends = s.friends.map(f =>
-        f.id === friendId ? { ...f, isMuted: false } : f
-      );
-      persistFriends(friends);
-      return { friends };
-    });
-  },
-
-  toggleShareMarkers: (friendId) => {
-    set((s) => {
-      const friends = s.friends.map(f =>
-        f.id === friendId ? { ...f, shareMarkers: !f.shareMarkers } : f
-      );
-      persistFriends(friends);
-      return { friends };
-    });
-  },
-
-  addIncomingRequest: (request) => {
-    set((s) => ({ requests: [...s.requests, request] }));
-  },
-
-  acceptRequest: (requestId) => {
-    set((s) => {
-      const request = s.requests.find(r => r.id === requestId);
-      const requests = s.requests.filter(r => r.id !== requestId);
-      if (request) {
-        const newFriend: Friend = {
-          id: request.fromUserId,
-          userId: request.fromUserId,
-          name: request.fromName,
-          email: request.fromEmail,
-          addedAt: Date.now(),
-          shareMarkers: true, // default: show their markers
-          isMuted: false,
-        };
-        const friends = [...s.friends, newFriend];
-        persistFriends(friends);
-        return { requests, friends };
-      }
-      return { requests };
-    });
-  },
-
-  rejectRequest: (requestId) => {
-    set((s) => ({
-      requests: s.requests.filter(r => r.id !== requestId),
-    }));
-  },
-
-  addSentRequest: (request) => {
-    set((s) => ({ sentRequests: [...s.sentRequests, request] }));
-  },
-
-  hydrate: async () => {
-    try {
-      const friendsStr = await AsyncStorage.getItem(STORAGE_KEY);
-      const friends: Friend[] = friendsStr ? JSON.parse(friendsStr) : [];
-      set({ friends });
-    } catch {
-      // Start fresh on parse error
-    }
-    // Sync from backend after loading local cache
-    get().loadFriendsFromBackend().catch(() => {});
-  },
 
   loadFriendsFromBackend: async () => {
     try {
@@ -170,9 +53,8 @@ export const useFriendStore = create<FriendState>((set, get) => ({
         email: r.email,
         addedAt: new Date(r.added_at).getTime(),
         shareMarkers: true,
-        isMuted: false,
       }));
-      set({ friends });
+      useFriendStore.setState({ friends });
       persistFriends(friends);
     } catch {
       // Network failure — keep local cache
@@ -216,7 +98,7 @@ export async function sendFriendRequest(
 /**
  * Fetch pending friend requests.
  */
-export async function fetchFriendRequests(): Promise<FriendRequest[]> {
+export async function fetchFriendRequests(): Promise<Array<{ id: string; fromUserId: string; fromName: string; fromEmail: string; sentAt: number; status: string }>> {
   try {
     const res = await authenticatedFetch('/api/friends/requests');
     if (!res.ok) return [];

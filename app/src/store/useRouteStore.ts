@@ -72,14 +72,8 @@ export interface Route {
   lastRunAt?: number;      // timestamp of last completion
   sharedBy?: string;       // friend name if received from a friend
   isActive: boolean;       // currently selected for navigation
-  mutedMarkerIds: string[]; // markers along route that user chose not to broadcast
+  // O1 batch 40: mutedMarkerIds, heroPhotoUrl, photoCredit removed — 0 external readers
   activityMode?: 'hiking' | 'running'; // inherited from the originating session
-  // PRD3 E-019 — hero photography. Optional (v1 ships without UI to upload).
-  // Stored as URL so backend can host or CDN-deliver. heroPhotoUrl is the
-  // single header image; photoCredit is required when heroPhotoUrl is set
-  // (NZ photographers get name + Tourism NZ / DOC partnership credit).
-  heroPhotoUrl?: string;
-  photoCredit?: string;
   // Sprint 69 STORY-00535: visibility tier persisted to backend (added by
   // Sprint 67 migration 018 to routes.permission ENUM). Default 'personal'
   // for legacy routes; new routes saved via the v1 Route create UI default
@@ -109,7 +103,7 @@ export interface RouteStore {
   loadRouteDetail: (id: string) => Promise<void>;
 
   // CRUD
-  addRoute: (route: Omit<Route, 'id' | 'createdAt' | 'updatedAt' | 'runCount' | 'isActive' | 'mutedMarkerIds'>) => Promise<string | null>;
+  addRoute: (route: Omit<Route, 'id' | 'createdAt' | 'updatedAt' | 'runCount' | 'isActive'>) => Promise<string | null>;
   updateRoute: (id: string, updates: Partial<Route>) => Promise<void>;
   deleteRoute: (id: string) => Promise<void>;
 
@@ -163,7 +157,6 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
         runCount: r.run_count ?? 0,
         lastRunAt: r.last_run_at ? new Date(r.last_run_at).getTime() : undefined,
         isActive: false,
-        mutedMarkerIds: [],
         permission: r.permission === 'personal' || r.permission === 'friend' ? r.permission : undefined,
         // Author name when friend tier; null on Public per anonymization.
         sharedBy: r.author_name ?? undefined,
@@ -199,7 +192,6 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       ...routeData,
       ...created,
       isActive: false,
-      mutedMarkerIds: [],
     };
     set((s) => ({ routes: [route, ...s.routes] }));
     return created.id;

@@ -715,9 +715,8 @@ import {
   LOOP_MIN_M,
   projectPointOntoBaseline,
   strokeWithinCorridor,
-  spliceBCEF,
   baselineSlice,
-  type BcefItem,
+  // O1 batch 40: spliceBCEF, BcefItem removed — 0 actual call sites (only in comments)
 } from './brush/bcef';
 
 /**
@@ -1975,7 +1974,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       const snappedPerStroke: LngLat[][] = [];
       // v260 BCEF: parallel array of {arcB, arcC, curve}. Same length as
       // snappedPerStroke / acceptedValidated. spliceBCEF takes this directly.
-      const bcefItems: BcefItem[] = [];
+      const bcefItems: Array<{ arcB: number; arcC: number; curve: LngLat[] }> = [];
       const acceptedValidated: ValidatedStroke[] = [];
       const rejectedStrokeIds: string[] = [];
       let firstRejectReason: string | null = null;
