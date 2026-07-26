@@ -35,8 +35,15 @@ app.use(cors({
   origin: (origin, cb) => {
     // Allow requests with no origin (mobile apps, curl)
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    // v445 dev: allow any localhost port for Playwright web QA
-    if (/^https?:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
+    // v445 dev: allow any localhost port for Playwright web QA.
+    // O1 (2026-07-26): gated to non-production so production 不会意外
+    // 放行任意 localhost:port (defense-in-depth,即便 Cairn 用 JWT
+    // Authorization header 而非 cookie,credentials:true + 无 gate 仍
+    // 是不必要的公开面)。
+    if (process.env.NODE_ENV !== 'production' &&
+        /^https?:\/\/localhost:\d+$/.test(origin)) {
+      return cb(null, true);
+    }
     cb(new Error(`CORS blocked: ${origin}`));
   },
   credentials: true,

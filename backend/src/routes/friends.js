@@ -8,7 +8,6 @@
  * POST   /api/friends/reject      — Reject a friend request
  * GET    /api/friends             — List all friends
  * DELETE /api/friends/:id         — Remove a friend
- * GET    /api/friends/:id/markers — Get friend's shared markers
  */
 const express = require('express');
 const router = express.Router();
@@ -157,32 +156,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// ── Get friend's shared markers ─────────────────────────────────────────────
-router.get('/:id/markers', async (req, res) => {
-  try {
-    const friendId = req.params.id;
-
-    // Verify friendship
-    const [friendship] = await pool.execute(
-      'SELECT id FROM friends WHERE user_id = ? AND friend_id = ?',
-      [req.user.userId, friendId]
-    );
-    if (friendship.length === 0) return res.status(403).json({ error: 'Not friends' });
-
-    // Get markers shared at group or public level
-    const [markers] = await pool.execute(
-      `SELECT id, type, text, lat, lng, permission, created_at
-       FROM markers
-       WHERE user_id = ? AND permission IN ("group", "public")
-       ORDER BY created_at DESC
-       LIMIT 100`,
-      [friendId]
-    );
-    res.json(markers);
-  } catch (err) {
-    console.error('[friends/markers]', err.message);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
+// O1 (2026-07-26): 删 GET /:id/markers 路由。Sprint 67 迁到全局
+// /api/circle/markers,client 已停止调用 GET /api/friends/:id/markers。
 
 module.exports = router;

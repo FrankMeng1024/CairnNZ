@@ -1,8 +1,9 @@
 /**
  * useFriendStore — Friend management store (Phase 2.5, E-004).
  *
- * Handles friend requests, acceptance, marker sharing visibility,
- * and friend marker data.
+ * Handles friend requests + acceptance. Sprint 67 移除 per-friend marker
+ * 视图,改用全局 /api/circle/markers。原来的 friendMarkers state +
+ * fetchFriendMarkers 全套已在 O1 删除。
  *
  * Sprint 49 — STORY-00167
  */
@@ -31,23 +32,10 @@ export interface FriendRequest {
   status: 'pending' | 'accepted' | 'rejected';
 }
 
-export interface FriendMarker {
-  id: string;
-  friendId: string;
-  friendName: string;
-  type: string;
-  text: string;
-  lat: number;
-  lng: number;
-  createdAt: number;
-  permission: 'group' | 'public';
-}
-
 interface FriendState {
   friends: Friend[];
   requests: FriendRequest[];     // incoming requests
   sentRequests: FriendRequest[]; // outgoing requests
-  friendMarkers: FriendMarker[];
 
   // Friend management
   addFriend: (friend: Friend) => void;
@@ -62,17 +50,12 @@ interface FriendState {
   rejectRequest: (requestId: string) => void;
   addSentRequest: (request: FriendRequest) => void;
 
-  // Friend markers
-  setFriendMarkers: (markers: FriendMarker[]) => void;
-  getVisibleFriendMarkers: () => FriendMarker[];
-
   // Persistence
   hydrate: () => Promise<void>;
   loadFriendsFromBackend: () => Promise<void>;
 }
 
 const STORAGE_KEY = 'cairn_friends';
-const MARKERS_KEY = 'cairn_friend_markers';
 
 // ── Store ───────────────────────────────────────────────────────────────────
 
@@ -80,7 +63,6 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   friends: [],
   requests: [],
   sentRequests: [],
-  friendMarkers: [],
 
   addFriend: (friend) => {
     set((s) => {
@@ -93,9 +75,8 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   removeFriend: (friendId) => {
     set((s) => {
       const friends = s.friends.filter(f => f.id !== friendId);
-      const friendMarkers = s.friendMarkers.filter(m => m.friendId !== friendId);
       persistFriends(friends);
-      return { friends, friendMarkers };
+      return { friends };
     });
   },
 
@@ -165,24 +146,11 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     set((s) => ({ sentRequests: [...s.sentRequests, request] }));
   },
 
-  setFriendMarkers: (markers) => {
-    set({ friendMarkers: markers });
-    AsyncStorage.setItem(MARKERS_KEY, JSON.stringify(markers)).catch(() => {});
-  },
-
-  getVisibleFriendMarkers: () => {
-    const { friends, friendMarkers } = get();
-    const mutedIds = new Set(friends.filter(f => f.isMuted).map(f => f.id));
-    return friendMarkers.filter(m => !mutedIds.has(m.friendId));
-  },
-
   hydrate: async () => {
     try {
       const friendsStr = await AsyncStorage.getItem(STORAGE_KEY);
-      const markersStr = await AsyncStorage.getItem(MARKERS_KEY);
       const friends: Friend[] = friendsStr ? JSON.parse(friendsStr) : [];
-      const friendMarkers: FriendMarker[] = markersStr ? JSON.parse(markersStr) : [];
-      set({ friends, friendMarkers });
+      set({ friends });
     } catch {
       // Start fresh on parse error
     }
@@ -285,18 +253,5 @@ export async function rejectFriendRequestAPI(requestId: string): Promise<boolean
     return res.ok;
   } catch {
     return false;
-  }
-}
-
-/**
- * Fetch friend's markers (for display on map).
- */
-export async function fetchFriendMarkers(friendId: string): Promise<FriendMarker[]> {
-  try {
-    const res = await authenticatedFetch(`/api/friends/${friendId}/markers`);
-    if (!res.ok) return [];
-    return await res.json();
-  } catch {
-    return [];
   }
 }

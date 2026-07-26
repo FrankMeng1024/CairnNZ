@@ -23,8 +23,6 @@ class MinuteAggregator {
   private gpsLostStartMs: number | null = null;
   private gpsLostTotalMs = 0;
   private lastGpsTs: number | null = null;
-  private broadcastsCount = 0;
-  private deviationsCount = 0;
   private errorsCount = 0;
   private networkChangesCount = 0;
   private screenOnStartMs: number | null = null;
@@ -61,12 +59,6 @@ class MinuteAggregator {
         }
         break;
       }
-      case 'broadcast_played':
-        this.broadcastsCount++;
-        break;
-      case 'deviation_start':
-        this.deviationsCount++;
-        break;
       case 'error':
         this.errorsCount++;
         break;
@@ -149,8 +141,6 @@ class MinuteAggregator {
       is_charging_any: this.wasCharging || batteryMonitor.getIsCharging(),
       screen_on_seconds: Math.round(screenOnMs / 1000),
       in_background_seconds: Math.round(inBackgroundMs / 1000),
-      broadcasts_played_count: this.broadcastsCount,
-      deviations_count: this.deviationsCount,
       errors_count: this.errorsCount,
       network_state_end: netState?.state ?? 'offline',
       network_changes_count: this.networkChangesCount,
@@ -168,8 +158,6 @@ class MinuteAggregator {
     this.gpsLostStartMs = null;
     this.gpsLostTotalMs = 0;
     this.lastGpsTs = null;
-    this.broadcastsCount = 0;
-    this.deviationsCount = 0;
     this.errorsCount = 0;
     this.networkChangesCount = 0;
     this.screenOnStartMs = wasScreenOn ? now : null;
@@ -228,8 +216,7 @@ class SessionRecorder {
       // Only log if there's any data
       if (
         snapshot.gps_points_count > 0 ||
-        snapshot.broadcasts_played_count > 0 ||
-        snapshot.deviations_count > 0
+        snapshot.errors_count > 0
       ) {
         debugLogger.log(snapshot);
       }

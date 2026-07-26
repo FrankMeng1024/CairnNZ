@@ -1,8 +1,17 @@
 /**
  * Debug logger event types — see docs/debug-logger-spec.md §2
  *
- * 11 event types in L2 + L3 minute snapshot + L4 user annotation.
- * All events share `ts` + `session_id` + `event` discriminator.
+ * O1 (2026-07-26) cleanup: removed dead event types that were declared
+ * but never emitted in production code:
+ * - DeviationStartEvent / DeviationEndEvent / DeviationAlertEvent
+ *   (route-deviation feature was cut)
+ * - BroadcastPlayedEvent (voice broadcast feature was cut)
+ * - WaypointArrivedEvent (waypoint arrival detection was cut)
+ * - SosTriggeredEvent (SOS button feature was cut)
+ * - UserAnnotationEvent (user tag/note feature never shipped)
+ *
+ * Also removed the corresponding counters from MinuteSnapshotEvent
+ * (broadcasts_played_count / deviations_count) — they were always 0.
  */
 
 export interface BaseEvent {
@@ -33,40 +42,6 @@ export interface KalmanOutputEvent extends BaseEvent {
   movement: 'static' | 'walking' | 'running' | 'driving';
 }
 
-// ── L2: Route deviation ─────────────────────────────────────────────────────
-export interface DeviationStartEvent extends BaseEvent {
-  event: 'deviation_start';
-  route_id: string | null;
-  distance_m: number;
-  lat: number;
-  lon: number;
-}
-
-export interface DeviationEndEvent extends BaseEvent {
-  event: 'deviation_end';
-  route_id: string | null;
-  max_distance_m: number;
-  duration_s: number;
-}
-
-export interface DeviationAlertEvent extends BaseEvent {
-  event: 'deviation_alert';
-  alert_type: 'alert' | 'suggest_free';
-  distance_m: number;
-  duration_s: number;
-}
-
-// ── L2: Broadcasts ──────────────────────────────────────────────────────────
-export interface BroadcastPlayedEvent extends BaseEvent {
-  event: 'broadcast_played';
-  priority: 'P0' | 'P1' | 'P2';
-  category: string;        // freeform: 'deviation' | 'waypoint' | 'danger' | etc.
-  message: string;
-  duration_ms: number;
-  trigger_to_play_latency_ms: number;
-  app_state: 'active' | 'background' | 'inactive';
-}
-
 // ── L2: Battery / Network / App state ───────────────────────────────────────
 export interface BatterySampleEvent extends BaseEvent {
   event: 'battery_sample';
@@ -93,7 +68,7 @@ export interface AppStateChangeEvent extends BaseEvent {
   tracking_active: boolean;
 }
 
-// ── L2: Markers / Waypoints / SOS ───────────────────────────────────────────
+// ── L2: Markers ─────────────────────────────────────────────────────────────
 export interface MarkerPlacedEvent extends BaseEvent {
   event: 'marker_placed';
   marker_id: string;
@@ -103,33 +78,6 @@ export interface MarkerPlacedEvent extends BaseEvent {
   accuracy_m: number | null;
   text_length: number;
   permission: 'personal' | 'group' | 'public';
-}
-
-export interface WaypointArrivedEvent extends BaseEvent {
-  event: 'waypoint_arrived';
-  waypoint_id: string;
-  route_id: string | null;
-  distance_at_trigger_m: number;
-  expected_radius_m: number;
-}
-
-export interface SosTriggeredEvent extends BaseEvent {
-  event: 'sos_triggered';
-  stage:
-    | 'longpress_start'
-    | 'longpress_complete'
-    | 'longpress_cancelled'
-    | 'countdown_start'
-    | 'countdown_cancelled'
-    | 'sms_sent'
-    | 'sms_failed'
-    | 'queued_offline';
-  contact_count?: number;
-  network_state?: 'online' | 'offline';
-  lat?: number;
-  lon?: number;
-  accuracy_m?: number | null;
-  error_message?: string;
 }
 
 // ── L2: Errors ──────────────────────────────────────────────────────────────
@@ -164,8 +112,6 @@ export interface MinuteSnapshotEvent extends BaseEvent {
   in_background_seconds: number;
 
   // Counters
-  broadcasts_played_count: number;
-  deviations_count: number;
   errors_count: number;
 
   // Network
@@ -173,23 +119,6 @@ export interface MinuteSnapshotEvent extends BaseEvent {
   network_changes_count: number;
 }
 
-// ── L4: User annotation ─────────────────────────────────────────────────────
-export interface UserAnnotationEvent extends BaseEvent {
-  event: 'user_annotation';
-  tag:
-    | 'gps_inaccurate'
-    | 'deviation_false_positive'
-    | 'deviation_missed'
-    | 'broadcast_jarring'
-    | 'marker_misplaced'
-    | 'other';
-  lat: number | null;
-  lon: number | null;
-  accuracy_m: number | null;
-  note?: string;
-}
-
-// ── Union ───────────────────────────────────────────────────────────────────
 // ── L4: User annotation ────────────────────────────────────────────────────
 export interface BreadcrumbEvent extends BaseEvent {
   event: 'breadcrumb';
@@ -202,20 +131,13 @@ export interface BreadcrumbEvent extends BaseEvent {
 export type LogEvent =
   | GpsFixEvent
   | KalmanOutputEvent
-  | DeviationStartEvent
-  | DeviationEndEvent
-  | DeviationAlertEvent
-  | BroadcastPlayedEvent
   | BatterySampleEvent
   | NetworkChangeEvent
   | AppStateChangeEvent
   | MarkerPlacedEvent
-  | WaypointArrivedEvent
-  | SosTriggeredEvent
   | ErrorEvent
   | MinuteSnapshotEvent
-  | BreadcrumbEvent
-  | UserAnnotationEvent;
+  | BreadcrumbEvent;
 
 // ── Session metadata ────────────────────────────────────────────────────────
 export interface SessionMetadata {

@@ -41,7 +41,6 @@ interface FriendMemoryState {
   version: number;
 
   loading: boolean;
-  lastLoadedAt: number | null;
   loadError: string | null;
 
   /**
@@ -64,7 +63,6 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
   friendMemory: {},
   version: 0,
   loading: false,
-  lastLoadedAt: null,
   loadError: null,
 
   loadFriendFog: async () => {
@@ -91,7 +89,6 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       set({
         friendMemory: next,
         loading: false,
-        lastLoadedAt: Date.now(),
         loadError: null,
         version: get().version + 1,
       });
@@ -123,7 +120,6 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       friendMemory: {},
       version: 0,
       loading: false,
-      lastLoadedAt: null,
       loadError: null,
     });
   },

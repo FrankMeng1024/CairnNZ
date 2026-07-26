@@ -56,7 +56,6 @@ interface Props {
    *  even across step transitions (N5 fix). */
   initialLat: number;
   initialLng: number;
-  accuracyM: number;
   onConfirm: (lat: number, lng: number) => void;
   onBack: () => void;
 }
@@ -93,7 +92,7 @@ function makeCircleGeoJson(lat: number, lng: number, radiusM: number): any {
 }
 
 export function PinAdjustStep({
-  gpsLat, gpsLng, initialLat, initialLng, accuracyM, onConfirm, onBack,
+  gpsLat, gpsLng, initialLat, initialLng, onConfirm, onBack,
 }: Props) {
   const Mapbox = getMapbox();
   // Safety: if the supplied initial pin is somehow outside the 50m
@@ -411,7 +410,7 @@ export function PinAdjustStep({
   };
 
   if (!Mapbox.available) {
-    return <PinAdjustFallback lat={startLat} lng={startLng} accuracyM={accuracyM}
+    return <PinAdjustFallback lat={startLat} lng={startLng}
                               onConfirm={() => onConfirm(pinLat, pinLng)}
                               onBack={onBack} />;
   }
@@ -614,7 +613,7 @@ export function PinAdjustStep({
 function PinAdjustFallback({
   lat, lng, onConfirm, onBack,
 }: {
-  lat: number; lng: number; accuracyM: number;
+  lat: number; lng: number;
   onConfirm: () => void; onBack: () => void;
 }) {
   return (

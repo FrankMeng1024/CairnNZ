@@ -293,7 +293,6 @@ export function PlantScreen() {
             gpsLng={draft.gpsLng}
             initialLat={draft.lat}
             initialLng={draft.lng}
-            accuracyM={draft.accuracyM ?? 5}
             onConfirm={(lat, lng) => {
               log('plant.step_pin_to_content');
               // Only update the pin coord — gpsLat/gpsLng stays frozen.
