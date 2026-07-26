@@ -36,7 +36,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // render sync / sim-walker subdivide / Stop 放弃-保存 / unlockOnWalk
 // toggle / Bug5+6 log)。用户明确铁律: 每批 OTA 都 bump 版本号,首页
 // 显示新版号让用户一眼看到收到的 OTA。
-export const OTA_VERSION = 'O2';
+// O3 (2026-07-26 batch 28.8): O2 上线后用户报 10 新问题 → 查 aliyun log
+// 复现根因 → 修:
+//   - sim-walker subdivide 从"计算=20"改成 config.subdivide (默认 5) 且
+//     可在 overlay 设置里改 (25/400/5 是用户明确参数)
+//   - saveSettings 先关 modal 再改 config, 避免 setStepConfig 抛错时
+//     modal 卡住无法退出
+//   - 中文 UI 转英文: MemorySettingsSection "unlockOnWalk" toggle,
+//     HikingScreen stop sheet "放弃/保存" → "Discard/Save",
+//     UnfinishedRecoveryModal 5 处 → 全部英文
+export const OTA_VERSION = 'O3';
 
 
 type OtaState =

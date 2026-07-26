@@ -58,9 +58,10 @@ function StartAnchorHint() {
 export function SimWalkerOverlay() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [config, setConfig] = useState<StepConfig>(DEFAULT_STEP_CONFIG);
-  const [draft, setDraft] = useState<{ step_m: string; emit_ms: string; undo_count: string }>({
+  const [draft, setDraft] = useState<{ step_m: string; emit_ms: string; subdivide: string; undo_count: string }>({
     step_m: String(DEFAULT_STEP_CONFIG.step_m),
     emit_ms: String(DEFAULT_STEP_CONFIG.emit_ms),
+    subdivide: String(DEFAULT_STEP_CONFIG.subdivide),
     undo_count: String(DEFAULT_STEP_CONFIG.undo_count),
   });
 
@@ -95,6 +96,7 @@ export function SimWalkerOverlay() {
     setDraft({
       step_m: String(cur.step_m),
       emit_ms: String(cur.emit_ms),
+      subdivide: String(cur.subdivide),
       undo_count: String(cur.undo_count),
     });
     setConfig(cur);
@@ -105,12 +107,20 @@ export function SimWalkerOverlay() {
     const next: Partial<StepConfig> = {
       step_m: parseFloat(draft.step_m),
       emit_ms: parseFloat(draft.emit_ms),
+      subdivide: parseInt(draft.subdivide, 10),
       undo_count: parseInt(draft.undo_count, 10),
     };
     log('v441.overlay.save_settings', { draft, parsed: next });
-    gpsInjector.setStepConfig(next);
-    setConfig(gpsInjector.getConfig());
+    // Close modal FIRST so a downstream throw in setStepConfig cannot
+    // strand the user inside the settings modal. Also prevents the
+    // double-tap symptom users hit when they didn't see the modal close.
     setSettingsOpen(false);
+    try {
+      gpsInjector.setStepConfig(next);
+      setConfig(gpsInjector.getConfig());
+    } catch (err) {
+      log('v441.overlay.save_settings_err', { err: String(err) });
+    }
   };
 
   const doUndo = () => {
@@ -214,7 +224,7 @@ export function SimWalkerOverlay() {
               { transform: [{ translateX: stickX }, { translateY: stickY }] },
             ]}
           />
-          <Text style={styles.joyLabel}>屏幕 {config.step_m}m/{Math.round(config.emit_ms/100)/10}s · GPS 真人 1m/s</Text>
+          <Text style={styles.joyLabel}>屏幕 {config.step_m}m/{Math.round(config.emit_ms/100)/10}s · GPS {config.subdivide}点/步</Text>
         </View>
         <StartAnchorHint />
       </View>
@@ -234,7 +244,7 @@ export function SimWalkerOverlay() {
                 keyboardType="decimal-pad"
               />
             </View>
-            <Text style={styles.modalRowHint}>推荐 5。越大跑得越快</Text>
+            <Text style={styles.modalRowHint}>推荐 25。越大跑得越快</Text>
 
             <View style={styles.modalRow}>
               <Text style={styles.modalRowLabel}>每步间隔(毫秒)</Text>
@@ -245,7 +255,18 @@ export function SimWalkerOverlay() {
                 keyboardType="number-pad"
               />
             </View>
-            <Text style={styles.modalRowHint}>推荐 1000(1 秒)。越小越快</Text>
+            <Text style={styles.modalRowHint}>推荐 400。越小越快</Text>
+
+            <View style={styles.modalRow}>
+              <Text style={styles.modalRowLabel}>子点数/步</Text>
+              <TextInput
+                style={styles.modalRowInput}
+                value={draft.subdivide}
+                onChangeText={(v) => setDraft((d) => ({ ...d, subdivide: v }))}
+                keyboardType="number-pad"
+              />
+            </View>
+            <Text style={styles.modalRowHint}>推荐 5。每步入库多少个 GPS 点</Text>
 
             <View style={styles.modalRow}>
               <Text style={styles.modalRowLabel}>撤销步数</Text>

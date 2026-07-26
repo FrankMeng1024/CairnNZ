@@ -117,7 +117,7 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
         <View style={styles.iconWrap}>
           <Icon name="MapPin" size={28} color={Colors.primary} strokeWidth={2} />
         </View>
-        <Text style={styles.title}>上次 {label.toLowerCase()} 未完成</Text>
+        <Text style={styles.title}>Unfinished {label.toLowerCase()}</Text>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{kmText}</Text>
@@ -125,11 +125,11 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
           </View>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{formatDuration(data.durationS)}</Text>
-            <Text style={styles.statLabel}>时长</Text>
+            <Text style={styles.statLabel}>duration</Text>
           </View>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{formatRelative(data.lastPointAt)}</Text>
-            <Text style={styles.statLabel}>最后记录</Text>
+            <Text style={styles.statLabel}>last point</Text>
           </View>
         </View>
         <TouchableOpacity
@@ -138,7 +138,7 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
           onPress={() => dismiss(onContinue)}
           testID="unfinished-continue"
         >
-          <Text style={styles.btnPrimaryText}>继续这条</Text>
+          <Text style={styles.btnPrimaryText}>Continue</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.btnSecondary}
@@ -146,7 +146,7 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
           onPress={() => dismiss(onDiscard)}
           testID="unfinished-discard"
         >
-          <Text style={styles.btnSecondaryText}>丢弃</Text>
+          <Text style={styles.btnSecondaryText}>Discard</Text>
         </TouchableOpacity>
       </Animated.View>
     </Animated.View>

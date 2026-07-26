@@ -1074,7 +1074,7 @@ function StopSummarySheet({
               onPress={() => dismiss(onDiscard)}
               activeOpacity={0.7}
             >
-              <Text style={stopSheetStyles.cancelText}>放弃</Text>
+              <Text style={stopSheetStyles.cancelText}>Discard</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[stopSheetStyles.saveBtn, { backgroundColor: accent }]}
@@ -1082,7 +1082,7 @@ function StopSummarySheet({
               activeOpacity={0.85}
             >
               <Icon name="Save" size={14} color="#fff" strokeWidth={2.5} />
-              <Text style={stopSheetStyles.saveText}>保存</Text>
+              <Text style={stopSheetStyles.saveText}>Save</Text>
             </TouchableOpacity>
           </View>
 

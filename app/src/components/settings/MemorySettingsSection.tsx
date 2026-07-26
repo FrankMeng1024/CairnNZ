@@ -102,8 +102,8 @@ export function MemorySettingsSection() {
         <ToggleRow
           iconName="Mountain"
           iconBg={Colors.primaryLight}
-          label="走路实时解锁 Memory"
-          hint="开启后,走路时 GPS 每点即刻在 Memory 地图上清雾。关闭后,只有 Save 一次 Hike 或 Run 才把点合入 Memory (更适合脏数据测试)。"
+          label="Unlock memory while walking"
+          hint="When on, GPS points clear fog on the Memory map as you walk. When off, only saving a Hike or Run merges the points (useful for dirty-data testing)."
           value={unlockOnWalk}
           onToggle={() => setSetting('unlockOnWalk', !unlockOnWalk)}
         />

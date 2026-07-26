@@ -17,27 +17,28 @@ import { useTrackingStore } from '../../store/useTrackingStore';
 import { log } from '../../services/appLog';
 
 export interface StepConfig {
-  step_m: number;         // metres advanced per emit
-  emit_ms: number;        // milliseconds between emits
+  step_m: number;         // metres advanced per emit (视觉屏幕跳距)
+  emit_ms: number;        // milliseconds between emits (视觉 tick 间隔)
+  subdivide: number;      // 每个 emit 生成多少个 GPS 中间点入 store
+                          //   (5 = 每 tick 生成 5 个 subdivide 点等距铺开)
   undo_count: number;     // how many steps ↺ button rewinds
 }
 
 export const DEFAULT_STEP_CONFIG: StepConfig = {
-  // O1 batch 28.6: 用户拍板 "屏幕视觉快 + GPS 数据像真人走"。
-  // 屏幕每 tick 跳 50m,tick 间隔 200ms → 视觉 250m/s (远快过真步速)。
-  // 每 tick 时把 50m 分段插值为 50 个 GPS 点 (每点 1m,每点 ts 累加 1s
-  // = 真人 1m/s 步速),存到 store 时是真实 walking pace 的数据。
-  // 用户目的: 测试向,一个人跑不了那么多地方,要数据像真的。
-  step_m: 50,
-  emit_ms: 200,
+  // O1 batch 28.8: 用户明确 25 / 400 / 5:
+  //   - step_m=25m: 屏幕每 tick 跳 25 米
+  //   - emit_ms=400ms: 每 400ms 一 tick → 屏幕 62.5m/s 视觉
+  //   - subdivide=5: 每 tick 生成 5 个 GPS 中间点入 store,不是硬编码 20
+  step_m: 25,
+  emit_ms: 400,
+  subdivide: 5,
   undo_count: 10,
 };
 
-// O1 batch 28.6: 每步插值参数。真人步速 = 1.4m/s,插值每 1m 一个 GPS
-// 点,每点 ts +714ms (1000/1.4)。为简化,每点 ts 差用 1000ms,GPS 密度
-// 每秒 1 点 = 真机手机默认 GPS 采样率。
-const WALKING_STEP_M = 1;           // 每插值点间距 (真实 GPS 密度)
-const WALKING_STEP_MS = 1000;       // 每插值点时间差 (~1m/s 步速)
+// walking pace 每步真实速度(用于每 subdivide 点 ts 累加): 1 m/s 步行速度。
+// GPS 点密度: subdivide 5 点/tick, tick 400ms → 每点 80ms 屏幕上 = 5 米真实
+// 步行 = 5s 模拟真实时间。存到 store 的 GPS 数据是真人步行 pace。
+const WALKING_SPEED_MS = 1;
 
 export interface InjectorSnapshot {
   active: boolean;
@@ -89,10 +90,11 @@ class GpsInjector {
   private listeners = new Set<InjectorListener>();
   private posHistory: Array<{ lat: number; lng: number }> = [];
   private config: StepConfig = { ...DEFAULT_STEP_CONFIG };
-  // O1 batch 28.6: 模拟时间累加器。每次 subdivide 插值一个 walking step
-  // 就 +WALKING_STEP_MS。存到 store 时 rawPoint.t 用此值 (不是 Date.now)。
-  // start() / setStartPosition() 时初始化为 useTrackingStore.startedAt (若
-  // 无则 Date.now())。undo 时回退到 trackPoints 尾部 t + WALKING_STEP_MS。
+  // O1 batch 28.8: 模拟时间累加器。每次 subdivide 插值一个 walking step
+  // 就 +walkStepMs (动态: (stepM/subdivide)/WALKING_SPEED_MS*1000)。存到
+  // store 时 rawPoint.t 用此值 (不是 Date.now)。start() / setStartPosition
+  // 时初始化为 useTrackingStore.startedAt (若无则 Date.now())。undo 时回退
+  // 到 trackPoints 尾部 t。
   private simTimeCursor: number | null = null;
 
   setStartPosition(lat: number, lng: number): void {
@@ -150,9 +152,14 @@ class GpsInjector {
 
   setStepConfig(cfg: Partial<StepConfig>): void {
     const next = { ...this.config, ...cfg };
-    // Clamp to safe bounds
+    // Clamp to safe bounds; guard against NaN from parseFloat/parseInt.
+    if (!Number.isFinite(next.step_m)) next.step_m = this.config.step_m;
+    if (!Number.isFinite(next.emit_ms)) next.emit_ms = this.config.emit_ms;
+    if (!Number.isFinite(next.subdivide)) next.subdivide = this.config.subdivide;
+    if (!Number.isFinite(next.undo_count)) next.undo_count = this.config.undo_count;
     next.step_m = Math.max(0.5, Math.min(100, next.step_m));
     next.emit_ms = Math.max(200, Math.min(5000, next.emit_ms));
+    next.subdivide = Math.max(1, Math.min(50, Math.round(next.subdivide)));
     next.undo_count = Math.max(1, Math.min(50, Math.round(next.undo_count)));
     const prev = this.config;
     this.config = next;
@@ -320,11 +327,10 @@ class GpsInjector {
     this.posHistory.push({ lat: nextScreenPos.lat, lng: nextScreenPos.lng });
     if (this.posHistory.length > HISTORY_SIZE) this.posHistory.shift();
 
-    // O1 batch 28.6: 把 startPos → nextScreenPos 这段 (stepM 米) 分成
-    // walking pace 的子步子: 每 WALKING_STEP_M=1 米一个 GPS 点。这样存
-    // 到 store 里的 GPS 密度是真人手机默认采样 (~1 点/秒),而屏幕视觉
-    // 每 tick 跳 stepM 米。
-    const subdivideCount = Math.max(1, Math.floor(stepM / WALKING_STEP_M));
+    // O1 batch 28.8: subdivide 走 config.subdivide (用户明确 5),不再
+    // 硬编码 floor(stepM/1m)。step_m=25 时以前 = 25 点/tick 太密,现在
+    // = 5 点/tick 更像真人手机采样。
+    const subdivideCount = Math.max(1, Math.floor(this.config.subdivide));
     // 初始化 simTimeCursor (若 start() 时未初始化)。
     if (this.simTimeCursor === null) {
       try {
@@ -337,7 +343,11 @@ class GpsInjector {
 
     this.ticksEmitted += 1;
     const accuracy = 5 + Math.random() * 10;
-    const speedMs = WALKING_STEP_M / (WALKING_STEP_MS / 1000); // 1 m/s
+    // 每 subdivide 点覆盖 stepM/subdivideCount 米,walking speed 1 m/s,
+    // 所以每点 = (metersPerSub / 1) * 1000 ms。ts 累加用这个。
+    const metersPerSub = stepM / subdivideCount;
+    const walkStepMs = (metersPerSub / WALKING_SPEED_MS) * 1000;
+    const speedMs = WALKING_SPEED_MS; // 存到 point.speed 的名义速度
 
     log('v441.simwalker.tick_emit', {
       idx: this.ticksEmitted,
@@ -359,7 +369,7 @@ class GpsInjector {
       const jitterBearing = Math.random() * 2 * Math.PI;
       const jittered = moveByBearing(interpLat, interpLng, jitterBearing, jitterMag);
       // simTimeCursor 前面已初始化为 non-null (line 289-296 fallback)。
-      this.simTimeCursor = (this.simTimeCursor ?? Date.now()) + WALKING_STEP_MS;
+      this.simTimeCursor = (this.simTimeCursor ?? Date.now()) + walkStepMs;
       this.emit(jittered.lat, jittered.lng, speedMs, accuracy, this.simTimeCursor);
     }
     this.notify();
