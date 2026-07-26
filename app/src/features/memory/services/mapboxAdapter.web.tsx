@@ -383,6 +383,14 @@ export function PointAnnotation({ coordinate, children }: PointAnnotationProps) 
 }
 
 // ── adapter export ────────────────────────────────────────────────────
+// O1 (2026-07-26) fix: 老代码 CircleLayer/SymbolLayer/Images/Image/
+// MarkerView 返回 null,但 MemoryMap.tsx 无条件 <CircleLayer .../> 渲染,
+// React on web 会 createElement(null,...) 抛 "Element type is invalid"
+// → Memory tab web 白屏。改成返回 no-op function 组件,JSX 渲染安全,
+// UI 上看不到东西但不 crash。Consumer 若真需要判断 web 应查
+// mapboxAdapter.ts 里的 sprite/circle 是否 web-supported。
+const NoopComponent = () => null;
+
 export function makeWebMapboxAdapter() {
   return {
     MapView,
@@ -393,13 +401,13 @@ export function makeWebMapboxAdapter() {
     FillLayer,
     ShapeSource,
     // v383: web doesn't need sprite-rendering — Memory map web is
-    // playwright-only and uses PointAnnotation. Stub the new exports
-    // so the TS interface is satisfied; consumers must check truthy.
-    CircleLayer: null,
-    SymbolLayer: null,
-    Images: null,
-    Image: null,
-    MarkerView: null,
+    // playwright-only and uses PointAnnotation. Stub as no-op React
+    // components so <CircleLayer .../> etc. renders safely as null.
+    CircleLayer: NoopComponent,
+    SymbolLayer: NoopComponent,
+    Images: NoopComponent,
+    Image: NoopComponent,
+    MarkerView: NoopComponent,
     available: true,
   };
 }
