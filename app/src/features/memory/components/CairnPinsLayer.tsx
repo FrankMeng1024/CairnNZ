@@ -204,11 +204,14 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
     if (selection.kind !== 'revealed') return;
     const { id } = selection.marker;
     if (likedIds.has(id)) return; // already liked in this session
+    if (!lastCoordinate) {
+      Alert.alert('No GPS fix', 'Wait for a GPS signal before liking a cairn.');
+      return;
+    }
 
-    // GPS: use real last coordinate, fall back to map center proxy.
-    const lat = lastCoordinate?.lat ?? centerLat;
-    const lng = lastCoordinate?.lng ?? centerLng;
-    const accuracy = lastCoordinate?.accuracy ?? undefined;
+    const lat = lastCoordinate.lat;
+    const lng = lastCoordinate.lng;
+    const accuracy = lastCoordinate.accuracy ?? undefined;
 
     setLikedIds((prev) => new Set([...prev, id]));
     likeMarker(id, lat, lng, accuracy).catch((err) => {
@@ -223,7 +226,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       }
       // NONCE_INVALID + SERVER_ERROR: silent — network/server blip, don't alarm user.
     });
-  }, [selection, likedIds, lastCoordinate, centerLat, centerLng]);
+  }, [selection, likedIds, lastCoordinate]);
 
   // B6 — Report handler: show reason picker then send.
   const handleReport = useCallback(() => {
@@ -234,11 +237,15 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       Alert.alert('Already reported', 'You have already reported this cairn.');
       return;
     }
+    if (!lastCoordinate) {
+      Alert.alert('No GPS fix', 'Wait for a GPS signal before reporting a cairn.');
+      return;
+    }
 
     const sendReport = (reason: 'fake_ad' | 'info_mismatch' | 'dislike') => {
-      const lat = lastCoordinate?.lat ?? centerLat;
-      const lng = lastCoordinate?.lng ?? centerLng;
-      const accuracy = lastCoordinate?.accuracy ?? undefined;
+      const lat = lastCoordinate.lat;
+      const lng = lastCoordinate.lng;
+      const accuracy = lastCoordinate.accuracy ?? undefined;
 
       setReportedIds((prev) => new Set([...prev, targetId]));
       reportMarker(targetId, reason, lat, lng, accuracy)
@@ -262,7 +269,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       { text: "Don't like it", onPress: () => sendReport('dislike') },
       { text: 'Cancel', style: 'cancel' },
     ]);
-  }, [selection, reportedIds, lastCoordinate, centerLat, centerLng]);
+  }, [selection, reportedIds, lastCoordinate]);
 
   // B6 — Share handler.
   const handleShare = useCallback(() => {

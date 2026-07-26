@@ -474,7 +474,8 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     // login flow that goes clearMarkers → hydrate would skip the
     // user-switch detection in hydrate (prevUserId is null after clear),
     // leaving prior user's subscriptions in-memory until next load().
-    set({ markers: [], userId: null, circleMarkers: [], hidingIds: [] });
+    set({ markers: [], userId: null, circleMarkers: [], hidingIds: [],
+      publicMarkers: [], loadingPublic: false });
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { useMemorySubscriptionsStore } = require('../features/memory/store/useMemorySubscriptionsStore');

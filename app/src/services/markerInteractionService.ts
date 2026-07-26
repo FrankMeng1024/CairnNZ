@@ -14,6 +14,7 @@
  *   - other non-2xx → throws with `code: 'SERVER_ERROR'`
  */
 import { authenticatedFetch } from './apiService';
+import { uuidv4 } from './offlineQueue';
 
 export class MarkerInteractionError extends Error {
   constructor(
@@ -75,7 +76,7 @@ export async function likeMarker(
     lat,
     lng,
     client_ts: Date.now(),
-    client_op_id: generateOpId(),
+    client_op_id: uuidv4(),
   };
   if (accuracy != null) body.accuracy = accuracy;
 
@@ -126,7 +127,7 @@ export async function reportMarker(
     lat,
     lng,
     client_ts: Date.now(),
-    client_op_id: generateOpId(),
+    client_op_id: uuidv4(),
   };
   if (accuracy != null) body.accuracy = accuracy;
 
@@ -158,9 +159,4 @@ async function handleVoteError(res: Response): Promise<never> {
     throw new MarkerInteractionError(message, 'NONCE_INVALID');
   }
   throw new MarkerInteractionError(message, 'SERVER_ERROR');
-}
-
-/** Lightweight random op ID for idempotency middleware. */
-function generateOpId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }

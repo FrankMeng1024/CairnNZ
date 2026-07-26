@@ -421,13 +421,19 @@ router.post('/:id/vote', voteRateLimit, idempotency, async (req, res) => {
     await conn.beginTransaction();
 
     const [[marker]] = await conn.execute(
-      `SELECT id, lat, lng, helpful_count, report_count, status
+      `SELECT id, user_id, lat, lng, helpful_count, report_count, status
          FROM markers WHERE id = ? FOR UPDATE`,
       [markerId],
     );
     if (!marker) {
       await conn.rollback();
       return res.status(404).json({ error: 'Marker not found' });
+    }
+
+    // Users cannot vote on their own markers
+    if (marker.user_id === userId) {
+      await conn.rollback();
+      return res.status(403).json({ error: 'Cannot vote on your own marker' });
     }
 
     // Server-side haversine gate (50m). Authoritative — client gate
