@@ -95,7 +95,8 @@ router.get('/', async (req, res) => {
   const userId = req.user.userId;
   try {
     const [rows] = await pool.execute(
-      `SELECT ms.friend_id, u.name AS friend_name, u.email AS friend_email, ms.subscribed_at
+      // O1: dropped u.email — client 0 consumer,纯泄漏。
+      `SELECT ms.friend_id, u.name AS friend_name, ms.subscribed_at
          FROM memory_subscriptions ms
          JOIN users u ON u.id = ms.friend_id
         WHERE ms.user_id = ?

@@ -129,7 +129,9 @@ router.post('/points', authenticate, validateBody(schemas.memory.points), async 
       points: finalEcho,
     });
   } catch (err) {
-    return res.status(500).json({ error: 'insert failed', detail: err.message });
+    console.error('[memory/points:insert]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
   }
 });
 
@@ -176,7 +178,8 @@ router.get('/points', authenticate, async (req, res) => {
       })),
     });
   } catch (err) {
-    return res.status(500).json({ error: 'query failed', detail: err.message });
+    console.error('[memory/points:query]', err.message);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -194,7 +197,8 @@ router.delete('/points', authenticate, async (req, res) => {
     );
     return res.json({ deleted: result.affectedRows ?? 0 });
   } catch (err) {
-    return res.status(500).json({ error: 'delete failed', detail: err.message });
+    console.error('[memory/points:delete]', err.message);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 

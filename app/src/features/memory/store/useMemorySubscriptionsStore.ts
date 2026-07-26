@@ -16,7 +16,6 @@ import { authenticatedFetch } from '../../../services/apiService';
 export interface MemorySubscription {
   friend_id: number;
   friend_name: string;
-  friend_email: string;
   subscribed_at?: string;
 }
 
