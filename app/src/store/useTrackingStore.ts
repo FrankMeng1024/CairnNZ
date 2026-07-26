@@ -37,9 +37,8 @@ import { flushHikingToMemory } from '../features/memory/services/flushHikingToMe
 import { uuidv4 } from '../services/offlineQueue';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import { useAppStore } from './useAppStore';
-// v402: snap-to-road + synchronous memory push at hike-save.
+// v402: snap-to-road at hike-save.
 import { snapTrack } from '../services/routing/snapTrack';
-import { pushMemoryNow } from '../services/memorySync';
 import {
   BACKGROUND_LOCATION_TASK,
   registerBackgroundTask,

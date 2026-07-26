@@ -38,16 +38,13 @@ export const Colors = {
   // Use these for safety-grade UI: weather warnings, deviation alerts, hazards.
   // Migrate from `warning` → `severityWarning` over time so true DOC orange
   // is reserved for safety markers (the on-track triangle waymarker).
-  severityNotice:  '#3D7A4B',   // safe / open  — green
   severityCaution: '#F0C419',   // notice       — yellow (MetService Watch)
   severityWarning: '#F26522',   // warning      — DOC step orange (#F26522)
   severityDanger:  '#D52B1E',   // severe       — red (MetService Severe)
   // O1: removed severityExtreme/alertRed/runningGrad/flagGrad — 0 external callers.
   // Soft background tints for severity ladder — use for banner/chip/icon-bg
-  severityNoticeBg:  'rgba(61,122,75,0.12)',
   severityCautionBg: 'rgba(240,196,25,0.14)',
   severityWarningBg: 'rgba(242,101,34,0.13)',
-  severityDangerBg:  'rgba(213,43,30,0.13)',
   // Aliases for the most-used colors above
   docOrange:       '#F26522',   // alias of severityWarning — for DOC waymarker pin
   night: '#5a4fcf',               // night/sleep mode icon color
@@ -135,9 +132,4 @@ export const Shadow = {
 
 // O1: removed Glass/DarkColors/SpringConfig/AnimationPreset — all 0 external
 // callers per subagent audit (Sprint 42 experimental dark mode never landed).
-
-export const Timing = {
-  fast: 150,
-  normal: 250,
-  slow: 400,
-} as const;
+// O1 batch 30: removed Timing — 0 external callers.

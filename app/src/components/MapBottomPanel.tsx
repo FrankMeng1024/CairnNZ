@@ -9,7 +9,7 @@ import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native
 import { Colors, Spacing, FontSize, Radius } from './tokens';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
-import { GlassPanel, Elevation } from './GlassPanel';
+import { GlassPanel } from './GlassPanel';
 
 // @gorhom/bottom-sheet — conditional import for graceful fallback
 let BottomSheet: any = null;

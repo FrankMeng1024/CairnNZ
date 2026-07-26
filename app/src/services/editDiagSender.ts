@@ -25,7 +25,7 @@ import { API_BASE_URL } from '../config/api';
 const EDIT_DIAG_PATH = '/api/edit-diag';
 const MAX_QUEUE_SIZE = 50;
 const MAX_BATCH_SIZE = 10;
-export const FLUSH_DEBOUNCE_MS = 5_000;
+const FLUSH_DEBOUNCE_MS = 5_000;
 const FLUSH_REQUEST_TIMEOUT_MS = 3_000;
 
 // === Event types ============================================================

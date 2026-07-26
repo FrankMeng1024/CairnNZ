@@ -12,7 +12,7 @@
  */
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Alert, Animated, Easing,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -37,10 +37,8 @@ import { CompassNeedle } from './CompassNeedle';
 import { BackButton } from '../components/BackButton';
 import { PulseDot } from '../components/PulseDot';
 import { PressBtn } from '../components/PressBtn';
-import { type MarkerType } from '../data/mockData';
 import { FLAG_TYPES } from '../data/flagTypes';
 import { HikingMap } from './HikingMap';
-import type { Marker } from '../store/useMarkerStore';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
 // v429 hotfix: SimWalkerOverlay static import removed to prevent gpsInjector
@@ -53,9 +51,8 @@ import { useSettingsStore } from '../store/useSettingsStore';
 
 // ── Main HikingScreen ──────────────────────────────────────────────────────
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-const { width: W } = Dimensions.get('window');
 
-type UIState = 'map' | 'plant' | 'detail';
+type UIState = 'map' | 'detail';
 
 export function HikingScreen() {
   // v430 fix: __DEV__ gate removed. User wanted sim-walker visible in
@@ -89,7 +86,6 @@ export function HikingScreen() {
   const trackPointsSmoothed = useTrackingStore(s => s.trackPointsSmoothed);
   const startTracking = useTrackingStore(s => s.startTracking);
   const stopTracking = useTrackingStore(s => s.stopTracking);
-  const linkMarker = useTrackingStore(s => s.linkMarker);
   // v120: pause + resume hooks for the Stop button. Tapping Stop pauses
   // tracking immediately (timer + GPS halt), then opens the summary
   // sheet. Resume button on the sheet re-arms tracking; the gap is
@@ -106,7 +102,6 @@ export function HikingScreen() {
   const activityMode = useTrackingStore(s => s.activityMode);
 
   // Real marker store
-  const addMarker = useMarkerStore(s => s.addMarker);
   const deleteMarker = useMarkerStore(s => s.deleteMarker);
   const getMarkersForRegion = useMarkerStore(s => s.getMarkersForRegion);
   const allMarkers = useMarkerStore(s => s.markers);
@@ -408,25 +403,6 @@ export function HikingScreen() {
   useKeepAwake();
 
   const selectedMarker = markers.find(m => m.id === selectedMarkerId) ?? null;
-
-  async function handlePlantSave(type: MarkerType, note: string) {
-    // Use last GPS coordinate if available, else region center
-    const lat = lastCoordinate?.lat ?? region.centerLat;
-    const lng = lastCoordinate?.lng ?? region.centerLng;
-    const marker = await addMarker({
-      type,
-      regionCode: region.code,
-      lat,
-      lng,
-      note,
-      authorId: 'local',
-      permission: 'personal',
-      sessionId: sessionId ?? undefined,
-    });
-    if (sessionId) linkMarker(marker.id);
-    setUi('map');
-    setShowSavedToast(true);
-  }
 
   function handleDeleteMarker() {
     if (selectedMarkerId) {
