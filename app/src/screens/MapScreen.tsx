@@ -34,6 +34,7 @@ import { GlassPanel, Elevation } from '../components/GlassPanel';
 import { MapBottomPanel, type PanelMarkerItem } from '../components/MapBottomPanel';
 import { OfflineMapSheet } from '../components/OfflineMapSheet';
 import { MARKER_META, MarkerType } from '../data/mockData';
+import { FLAG_TYPES } from '../data/flagTypes';
 import { getCurrentRegion } from '../config/regions';
 import { getPrimaryMapStyle } from '../config/mapbox';
 
@@ -57,20 +58,6 @@ if (Platform.OS !== 'web') {
 }
 
 const { width: W, height: H } = Dimensions.get('window');
-
-// ── Flag type config (matching HikingScreen FLAG_TYPES) ───────────────────────
-const FLAG_TYPES: {
-  id: MarkerType;
-  icon: IconName;
-  label: string;
-  color: string;
-  bg: string;
-}[] = [
-  { id: 'danger',   icon: 'TriangleAlert', label: 'Danger',   color: Colors.danger,   bg: Colors.dangerBg  },
-  { id: 'cairn',    icon: 'Mountain',      label: 'Cairn',    color: Colors.info,     bg: Colors.infoBg    },
-  { id: 'water',    icon: 'Droplets',      label: 'Water',    color: Colors.success,  bg: Colors.successBg },
-  { id: 'junction', icon: 'Navigation2',   label: 'Junction', color: Colors.docOrange,  bg: Colors.severityWarningBg },
-];
 
 // ── Pressable map marker with scale feedback ─────────────────────────────────
 function PressableMarker({ x, y, borderColor, bg, iconColor, iconName, onPress }: {

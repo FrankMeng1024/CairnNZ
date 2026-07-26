@@ -39,6 +39,8 @@ import { BackButton } from '../components/BackButton';
 import { PulseDot } from '../components/PulseDot';
 import { PressBtn } from '../components/PressBtn';
 import { MARKER_META, type MarkerType } from '../data/mockData';
+import { FLAG_TYPES } from '../data/flagTypes';
+import { MarkerPin } from './MarkerPin';
 import type { Marker } from '../store/useMarkerStore';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
@@ -52,47 +54,6 @@ import { useSettingsStore } from '../store/useSettingsStore';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 const { width: W } = Dimensions.get('window');
-
-// ── Flag type config with SVG icons ─────────────────────────────────────────
-const FLAG_TYPES: {
-  id: MarkerType;
-  icon: IconName;
-  label: string;
-  color: string;
-  bg: string;
-}[] = [
-  { id: 'danger',   icon: 'TriangleAlert', label: 'Danger',   color: Colors.danger,   bg: Colors.dangerBg  },
-  { id: 'cairn',    icon: 'Mountain',      label: 'Cairn',    color: Colors.info,     bg: Colors.infoBg    },
-  { id: 'water',    icon: 'Droplets',      label: 'Water',    color: Colors.success,  bg: Colors.successBg },
-  { id: 'junction', icon: 'Navigation2',   label: 'Junction', color: Colors.docOrange,  bg: Colors.severityWarningBg },
-];
-
-// ── Marker pin on map ─────────────────────────────────────────────────────
-function MarkerPin({ type, x, y, onPress, approximate }: {
-  type: MarkerType; x: number; y: number; onPress: () => void; approximate?: boolean;
-}) {
-  const meta = MARKER_META[type] || MARKER_META.free;
-  const iconName = FLAG_TYPES.find(f => f.id === type)?.icon || 'Flag';
-  const scale = useRef(new Animated.Value(1)).current;
-  return (
-    <Animated.View style={[styles.markerPin, { left: x, top: y, borderColor: meta.color, backgroundColor: meta.bg, transform: [{ scale }] }]}>
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={onPress}
-        onPressIn={() => Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, tension: 300, friction: 10 }).start()}
-        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 8 }).start()}
-        style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
-      >
-        <Icon name={iconName as IconName} size={11} color={meta.color} strokeWidth={2.5} />
-        {approximate && (
-          <View style={styles.approxBadge}>
-            <Text style={styles.approxBadgeText}>~</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
 
 // ── Mapbox conditional import ────────────────────────────────────────────
 // @rnmapbox/maps components are native-only — on web they may be undefined.
@@ -1661,14 +1622,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     ...Shadow.card,
   },
-  approxBadge: {
-    position: 'absolute', top: -4, right: -4,
-    width: 14, height: 14, borderRadius: 7,
-    backgroundColor: Colors.severityCaution, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: '#fff',
-  },
-  approxBadgeText: { fontSize: 9, fontWeight: '800', color: '#fff' },
-
   // Route selection (phase 1)
   bottomPanel: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.sm, gap: Spacing.sm },
   routePill: {
