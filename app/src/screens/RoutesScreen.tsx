@@ -1231,9 +1231,6 @@ const styles = StyleSheet.create({
   cardMeta: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
   flagName: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
   distanceText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary, marginRight: 2 },
-  filterRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm },
-  // Two-row filter container — replaces filterRow on FlagsTab where
-  // the type chip count + perm toggles + sort can't fit on a single row.
   filterColumn: {
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.sm,
@@ -1259,29 +1256,6 @@ const styles = StyleSheet.create({
   emptyIconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md, ...Shadow.card },
   emptyTitle: { fontSize: FontSize.h3, fontWeight: '600', color: Colors.textSecondary },
   emptyHint: { fontSize: FontSize.caption, color: Colors.textMuted, marginTop: 8, textAlign: 'center', paddingHorizontal: Spacing.xl },
-  newRouteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, paddingVertical: Spacing.md, borderRadius: Radius.card, borderWidth: 2, borderColor: Colors.primary, borderStyle: 'dashed', marginBottom: Spacing.sm },
-  newRouteBtnText: { fontSize: FontSize.body, fontWeight: '600', color: Colors.primary },
-
-  // v118: search input row at the top of the Routes list.
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    marginBottom: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: FontSize.body,
-    color: Colors.textPrimary,
-    padding: 0,
-  },
-
   // v118: hero empty-state when there are no routes at all (vs the
   // narrower "no match" message when filter/search hides everything).
   emptyHero: {

@@ -183,6 +183,3 @@ const styles = StyleSheet.create({
   closeBtnText: { fontSize: 13, color: 'rgba(247,242,229,0.8)' },
 });
 
-// Re-export for the `Marker` interface below — just re-asserting we
-// rely on these fields.
-export type _MarkerPropsUsed = Pick<Marker, 'lat' | 'lng' | 'createdAt'>;

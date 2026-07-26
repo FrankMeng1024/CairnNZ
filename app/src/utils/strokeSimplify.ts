@@ -22,7 +22,7 @@ import type { LngLat } from '../services/routing/corridor/PolylineSampler';
 export const MAPBOX_MATCHING_MAX_COORDS = 100;
 
 /** DP epsilon escalation ladder (meters). v6.3 plan §1.1 — empirical. */
-export const DP_EPSILON_LADDER_M = [5, 10, 20, 40] as const;
+const DP_EPSILON_LADDER_M = [5, 10, 20, 40] as const;
 
 /** Hard upper bound on raw input — defense against memory blow-up (plan §1.5). */
 export const MAX_STROKE_VERTICES_INPUT = 2000;
@@ -146,13 +146,13 @@ export function uniformSample(points: LngLat[], targetCount: number): LngLat[] {
 /**
  * Reason for simplify outcome — useful for telemetry (plan §13.1).
  */
-export type SimplifyReason =
+type SimplifyReason =
   | 'unchanged'           // ≤ 100 vertices, no simplify applied
   | `dp_eps_${number}`    // DP at this epsilon succeeded
   | 'uniform_fallback'    // DP ladder exhausted, used uniform sampling
   | 'rejected_too_long';  // Input > MAX_STROKE_VERTICES_INPUT
 
-export interface SimplifyResult {
+interface SimplifyResult {
   points: LngLat[];
   reason: SimplifyReason;
   inputCount: number;

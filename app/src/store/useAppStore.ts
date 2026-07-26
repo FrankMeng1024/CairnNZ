@@ -66,16 +66,6 @@ interface AppState {
   // 后组件 re-mount 或 冷启 hydrate 完成后, useEffect 重跑读盘检测未完成 hike.
   hydrationTs: number;
 
-  // Sprint 72 STORY-00551: pending unfinished session detected at hydrate.
-  // RootNavigator / HomeScreen reads this to show the "Continue your hike?" banner.
-  pendingSessionResume: {
-    sessionId: string;
-    startedAt?: number;
-    ageMs?: number;
-  } | null;
-  // O1 batch 37: setPendingSessionResume removed — 0 external callers.
-  // pendingSessionResume is still set internally inside hydrate() via set().
-
   // Hydrate persisted settings on app start
   hydrate: () => Promise<void>;
 }
@@ -110,10 +100,6 @@ export const useAppStore = create<AppState>((set) => ({
 
   // v412 4-eye fix (Critical #4): 供 HikingScreen recovery useEffect 依赖数组用
   hydrationTs: 0,
-
-  // Sprint 72 STORY-00551
-  pendingSessionResume: null,
-  // O1 batch 37: setPendingSessionResume removed (0 external callers)
 
   logout: () => {
     crashLogger.breadcrumb('logout:start');
@@ -258,10 +244,8 @@ export const useAppStore = create<AppState>((set) => ({
     }
 
     // Sprint 72 STORY-00551: check for an unfinished tracking session
-    // (survived a force-quit / iOS jetsam kill). If found, expose via
-    // pendingSessionResume so RootNavigator can show the "Continue your
-    // hike?" banner. Uses AsyncStorage direct read to bypass Zustand
-    // hydrate races.
+    // (survived a force-quit / iOS jetsam kill). Uses AsyncStorage direct
+    // read to bypass Zustand hydrate races.
     try {
       // Dynamic import to keep Zustand tests happy (jest 无 AsyncStorage mock)
       const AsyncStorageMod = await import('@react-native-async-storage/async-storage');
@@ -300,11 +284,6 @@ export const useAppStore = create<AppState>((set) => ({
           try { await AsyncStorage.removeItem('cairn_bg_active_session_id'); } catch { /* ignore */ }
         } else {
           crashLogger.breadcrumb(`v409:disk_hike_recovered id=${newest.session_id} pts=${newest.total_points} age_ms=${ageMs}`);
-          set({ pendingSessionResume: {
-            sessionId: newest.session_id,
-            startedAt: newest.started_at,
-            ageMs,
-          } });
         }
       } else if (activeSid) {
         // Legacy fallback: 老 marker 存在但磁盘无 → 仍走 Sprint 72 STORY-00551 逻辑
@@ -318,7 +297,6 @@ export const useAppStore = create<AppState>((set) => ({
           try { await AsyncStorage.removeItem('cairn_bg_active_session_id'); } catch { /* ignore */ }
         } else {
           crashLogger.breadcrumb(`unfinished_session:detected id=${activeSid} age_ms=${ageMs ?? 'unknown'}`);
-          set({ pendingSessionResume: { sessionId: activeSid, startedAt, ageMs } });
         }
       }
 

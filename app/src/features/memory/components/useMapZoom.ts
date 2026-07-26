@@ -48,13 +48,3 @@ export function setMapZoom(z: number) {
   });
 }
 
-// Kept for backward compat with v386 imports if any.
-// Returns nothing useful — components should switch to useMapZoom().
-export function useMapZoomShared() {
-  // Stub: returns a fake shared value compatible object.
-  return { value: _zoom };
-}
-export function useMapZoomProvider() {
-  // No-op now that store is module-level.
-  return { value: _zoom };
-}

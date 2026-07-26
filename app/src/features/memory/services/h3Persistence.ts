@@ -232,14 +232,3 @@ export async function detachH3Persistence(): Promise<void> {
     await flush(userId, snapshot);
   }
 }
-
-/** Test reset. */
-export function __resetForTest(): void {
-  clearTimers();
-  if (unsubscribe) {
-    unsubscribe();
-    unsubscribe = null;
-  }
-  currentUserId = null;
-  generation++;
-}

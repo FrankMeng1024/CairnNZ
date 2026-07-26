@@ -25,24 +25,22 @@
  */
 
 import type { LngLat } from '../services/routing/corridor/PolylineSampler';
-import { MAPBOX_MATCHING_MAX_COORDS, MAX_STROKE_VERTICES_INPUT } from './strokeSimplify';
+import { MAX_STROKE_VERTICES_INPUT } from './strokeSimplify';
 
 // === Thresholds (plan §1.3 — empirical, locked) =============================
 
 /**
- * G1: anchor distance — stroke endpoint must be within this many meters of
- * the original route. Authoritative implementation lives in
- * useRouteEditStore.strokeAnchorsToBaseline (uses kdbush). This constant
- * is exported for documentation + telemetry payloads.
+ * G1: anchor distance — authoritative implementation lives in
+ * useRouteEditStore.strokeAnchorsToBaseline (uses kdbush).
  */
-export const ANCHOR_M = 50;
+const ANCHOR_M = 50;
 
 /** G3: every snap polyline point must be within this many meters of the stroke. */
 export const CORRIDOR_M = 250;
 
 // === Types ===================================================================
 
-export type GateName =
+type GateName =
   | 'G0'
   | 'G0_post_simplify'
   | 'G0_5'
@@ -50,18 +48,13 @@ export type GateName =
   | 'G2'
   | 'G3';
 
-export type GateReason =
-  // G0
+type GateReason =
   | 'too_short'
   | 'too_long'
-  // G0_post_simplify
   | 'too_short_after_simplify'
-  // G0.5 (Mapbox response shape)
   | 'no_matchings'
   | 'snap_too_short'
-  // G1
   | 'no_endpoint_near_route'
-  // G2 (set in mapmatch client; surfaced here for completeness)
   | 'mapbox_nomatch'
   | 'mapbox_nosegment'
   | 'mapbox_4xx'
@@ -69,25 +62,22 @@ export type GateReason =
   | 'mapbox_timeout'
   | 'mapbox_aborted'
   | 'mapbox_other'
-  // G3
   | 'snap_exits_corridor';
 
-export interface GatePass {
+interface GatePass {
   ok: true;
   gate: GateName;
 }
 
-export interface GateFail {
+interface GateFail {
   ok: false;
   gate: GateName;
   reason: GateReason;
-  /** Numeric measurement that triggered the failure (meters / count). null if not applicable. */
   metric_value: number | null;
-  /** Threshold that the metric was compared against. null if not applicable. */
   threshold: number | null;
 }
 
-export type GateResult = GatePass | GateFail;
+type GateResult = GatePass | GateFail;
 
 // === Geometry helpers (local, pure) =========================================
 
@@ -209,17 +199,7 @@ export function checkG0_5(snap: LngLat[]): GateResult {
 
 // === G3 — corridor ==========================================================
 
-export interface G3Input {
-  /**
-   * The user's drawn stroke (post-simplify). G3 rejects if Mapbox snapped
-   * any output vertex more than CORRIDOR_M from this polyline. Empirically
-   * (spike-corridor-100v-results.md) only ~0.5% of urban cases trigger.
-   */
-  stroke: LngLat[];
-  snap: LngLat[];
-}
-
-export function checkG3({ stroke, snap }: G3Input): GateResult {
+export function checkG3({ stroke, snap }: { stroke: LngLat[]; snap: LngLat[] }): GateResult {
   if (stroke.length < 2 || snap.length < 2) {
     return {
       ok: false,
@@ -244,6 +224,3 @@ export function checkG3({ stroke, snap }: G3Input): GateResult {
   return { ok: true, gate: 'G3' };
 }
 
-// === Re-exports (so callers import everything from one place) ===============
-
-export { MAPBOX_MATCHING_MAX_COORDS, MAX_STROKE_VERTICES_INPUT };

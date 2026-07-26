@@ -176,7 +176,6 @@ interface EditState {
 
   enteredAtTs: number | null;
   editCount: number;
-  lastSaveAttemptFailed: boolean;
   isSaving: boolean;
   migratorRetry: { error: string; retry: boolean } | null;
   pendingBeginArgs: BeginEditArgs | null;
@@ -358,11 +357,6 @@ export function chainSessionWrite(fn: () => Promise<void>): Promise<void> {
   const next = sessionWriteChain.then(() => fn().catch(() => {}));
   sessionWriteChain = next.then(() => undefined, () => undefined);
   return next;
-}
-
-export const recentlyCancelledSessions = new Set<string>();
-export function isSessionRecentlyCancelled(sessionId: string): boolean {
-  return recentlyCancelledSessions.has(sessionId);
 }
 
 function deriveWorking(matched: LngLat[], startFrac: number, endFrac: number): LngLat[] {
@@ -1051,7 +1045,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   validationErrors: [],
   enteredAtTs: null,
   editCount: 0,
-  lastSaveAttemptFailed: false,
   isSaving: false,
   migratorRetry: null,
   pendingBeginArgs: null,
@@ -1154,7 +1147,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       validationErrors: [],
       enteredAtTs,
       editCount: 0,
-      lastSaveAttemptFailed: false,
       isSaving: false,
       migratorRetry: null,
       pendingBeginArgs: null,
@@ -1791,22 +1783,13 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const state = get();
     if (!state.isOpen) return;
     if (state.isSaving) return;
-    const cancelledId = state.sessionId;
     set(s => ({
       isOpen: false,
       isComputing: false,
       sessionId: null,
       editOpSeq: s.editOpSeq + 1,
     }));
-    if (cancelledId) {
-      recentlyCancelledSessions.add(cancelledId);
-      setTimeout(() => recentlyCancelledSessions.delete(cancelledId), 30_000);
-      chainSessionWrite(() => clearSession())
-        .catch(() => {})
-        .finally(() => recentlyCancelledSessions.delete(cancelledId));
-    } else {
-      chainSessionWrite(() => clearSession()).catch(() => {});
-    }
+    chainSessionWrite(() => clearSession()).catch(() => {});
   },
 
   applyMatchedAltitudes(altitudes) {
@@ -2646,7 +2629,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       return { ok: false, error: 'too-short' };
     }
 
-    set({ isSaving: true, lastSaveAttemptFailed: false });
+    set({ isSaving: true });
 
     let result;
     try {
@@ -2670,7 +2653,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       logRouteSaveFailure({ routeId: writeRouteId, error: String(err?.message ?? err).slice(0, 100) });
       set({
         lastError: `Save failed: ${String(err?.message ?? err).slice(0, 100)}`,
-        lastSaveAttemptFailed: true,
         isSaving: false,
       });
       return { ok: false, error: String(err?.message ?? err) };
@@ -2679,7 +2661,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       logRouteSaveFailure({ routeId: writeRouteId, error: result.error ?? 'unknown' });
       set({
         lastError: `Save failed: ${result.error ?? 'unknown'}`,
-        lastSaveAttemptFailed: true,
         isSaving: false,
       });
       return { ok: false, error: result.error };
@@ -2734,7 +2715,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         isOpen: false,
         routeId: null,
         enteredAtTs: null,
-        lastSaveAttemptFailed: false,
         isSaving: false,
         editOpSeq: s.editOpSeq + 1,
       };
@@ -2792,15 +2772,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       return;
     }
     set(s => ({ sessionId: null, editOpSeq: s.editOpSeq + 1 }));
-    if (state.sessionId) {
-      const cancelledId = state.sessionId;
-      recentlyCancelledSessions.add(cancelledId);
-      chainSessionWrite(() => clearSession())
-        .catch(() => {})
-        .finally(() => recentlyCancelledSessions.delete(cancelledId));
-    } else {
-      chainSessionWrite(() => clearSession()).catch(() => {});
-    }
+    chainSessionWrite(() => clearSession()).catch(() => {});
 
     if (state.enteredAtTs) {
       logEditExited({
@@ -2837,7 +2809,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         validationErrors: [],
         enteredAtTs: null,
         editCount: 0,
-        lastSaveAttemptFailed: false,
         isSaving: false,
         pendingBeginArgs: null,
         migratorRetry: null,
@@ -2871,7 +2842,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       validationErrors: [],
       enteredAtTs: null,
       editCount: 0,
-      lastSaveAttemptFailed: false,
       isSaving: false,
       pendingBeginArgs: null,
       migratorRetry: null,
@@ -2904,8 +2874,3 @@ if (!globalThis.__cairnSaveFailureSubscribed) {
 export function distanceFromOriginalM(coord: LngLat, walkedIndex: PointCloudIndex | null): number {
   return distanceToOriginalM(coord, walkedIndex);
 }
-export const BRUSH_RADII = {
-  CORRIDOR_RADIUS_M,
-  ENDPOINT_SNAP_M,
-  WARN_RADIUS_M: 200,
-};

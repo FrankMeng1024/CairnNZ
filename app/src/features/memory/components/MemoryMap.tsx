@@ -525,15 +525,4 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
   webStub: { flex: 1, backgroundColor: MemoryColors.cream },
-  recenterBtn: {
-    position: 'absolute',
-    right: 16,
-    bottom: 24,
-    width: 48, height: 48, borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: Colors.border,
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 }, elevation: 4,
-  },
 });
