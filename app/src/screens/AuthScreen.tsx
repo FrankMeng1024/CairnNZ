@@ -536,10 +536,24 @@ export function AuthScreen() {
       try {
         const raw = await storage.getItem(REMEMBER_ME_KEY);
         if (!raw || cancelled) return;
+        // O1 (2026-07-26) security: 只 rehydrate email + rememberMe boolean。
+        // 老 shape (含 password 明文) 被丢弃 - 攻击面: AsyncStorage/localStorage
+        // 无加密,iOS 越狱/Android root/iTunes 备份/Web XSS 全能读到明文密码。
+        // 密码要走 tokenStore (expo-secure-store) 或每次让用户输入。
         const creds = JSON.parse(raw) as { email?: string; password?: string };
         if (creds.email) setEmail(creds.email);
-        if (creds.password) setPassword(creds.password);
         setRememberMe(true);
+        // 若老 shape 仍带 password,silent 迁移到新 shape (email only)。
+        if (creds.password !== undefined) {
+          try {
+            await storage.setItem(
+              REMEMBER_ME_KEY,
+              JSON.stringify({ email: creds.email ?? '' }),
+            );
+          } catch {
+            // Best-effort; user will still just have to enter password.
+          }
+        }
       } catch {
         // Corrupt/missing creds — ignore.
       }
@@ -651,14 +665,15 @@ export function AuthScreen() {
       }
 
       // Persist or clear remember-me credentials based on the checkbox.
-      // Only on Sign In path (register flow does verify→welcome→home and
-      // the user can tick the box on next sign-in if they want).
+      // O1 (2026-07-26) security fix: 只存 email,不存 password。原设计
+      // 存 password 明文进 AsyncStorage/localStorage → OWASP Mobile M2。
+      // 用户下次要输密码,但 email 已预填 -> UX 只损失 1 步。
       if (!isRegister) {
         try {
           if (rememberMe) {
             await storage.setItem(
               REMEMBER_ME_KEY,
-              JSON.stringify({ email: email.trim().toLowerCase(), password }),
+              JSON.stringify({ email: email.trim().toLowerCase() }),
             );
           } else {
             await storage.removeItem(REMEMBER_ME_KEY);

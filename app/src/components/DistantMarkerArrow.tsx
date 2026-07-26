@@ -133,10 +133,14 @@ export function DistantMarkerArrow({
     return () => clearInterval(id);
   }, [marker, user]);
 
-  // Pulse animation when within 30m
+  // Pulse animation when within 30m.
+  // O1 (2026-07-26) fix: 加 cleanup 停 loop。原代码 Animated.loop(...).start()
+  // 返回的 CompositeAnimation 从未 stop → distance 由父组件 200ms 更新驱动,
+  // 每次跨过 30m 边界 useEffect re-run 会启动新 loop,老 loop 未 stop 叠加
+  // 泄漏 native driver 引用。
   useEffect(() => {
     if (distance !== null && distance < 30) {
-      Animated.loop(
+      const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1,
@@ -151,7 +155,9 @@ export function DistantMarkerArrow({
             useNativeDriver: true,
           }),
         ]),
-      ).start();
+      );
+      loop.start();
+      return () => loop.stop();
     } else {
       pulseAnim.setValue(0);
     }

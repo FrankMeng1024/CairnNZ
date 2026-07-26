@@ -127,7 +127,22 @@ function makeChunkOpId(baseOpId: string, idx: number): string {
   return `${baseOpId}-chunk-${idx}`;
 }
 
-export async function enqueue(op: OfflineOp): Promise<void> {
+// O1 (2026-07-26) race fix: enqueue 是 read-modify-write,并发调用
+// (session_append 网络失败 catch + AppState 触发 + user action 各路径
+// 同时打进来) 会 read stale queue → 各自 write → 后写覆盖前写,op 丢失
+// = GPS 轨迹永久丢一段。用 Promise chain 串行化 enqueue,同时 drain
+// 也走同一 chain 保证 enqueue vs drain 也不并发。参照
+// offlineEntity.ts:177 withLock 模式。
+let opChain: Promise<void> = Promise.resolve();
+
+function serialize<T>(fn: () => Promise<T>): Promise<T> {
+  const next = opChain.then(fn, fn);
+  // 让 chain 不因单次失败断掉;下一个 enqueue 仍能继续。
+  opChain = next.then(() => undefined, () => undefined);
+  return next;
+}
+
+async function enqueueImpl(op: OfflineOp): Promise<void> {
   // v409 fix #8: chunk session_append if payload too large.
   if (op.kind === 'session_append' && op.body?.points && Array.isArray(op.body.points)) {
     const bytes = estimatePayloadBytes(op.body);
@@ -166,6 +181,10 @@ export async function enqueue(op: OfflineOp): Promise<void> {
   crashLogger.breadcrumb(`offlineQueue:enqueue kind=${op.kind} size=${q.length}`);
 }
 
+export async function enqueue(op: OfflineOp): Promise<void> {
+  return serialize(() => enqueueImpl(op));
+}
+
 /**
  * Try to send each queued op. Stops on 401 (auth) so we don't loop
  * forever on a stale token. Drops 4xx (other) entries — bad payload
@@ -179,6 +198,11 @@ export async function drain(): Promise<void> {
     let q = await readQueue();
     if (q.length === 0) return;
     crashLogger.breadcrumb(`offlineQueue:drain:start size=${q.length}`);
+    // O1 (2026-07-26) race fix: 记录 drain 开始时的 opId 集合。drain 循环
+    // 里可能 await 每个 op 的 fetch (数秒),期间 enqueue 会串行加新 op 进 queue。
+    // 老代码 writeQueue(remaining) 直接覆盖 = 新加的 op 被抹掉 (GPS 轨迹丢)。
+    // 现在: drain 尾部 serialize + re-read + 保留 drain 期间新增的 op。
+    const drainStartIds = new Set(q.map((o) => o.opId));
     const remaining: OfflineOp[] = [];
     let stopped = false;
     for (const op of q) {
@@ -242,7 +266,25 @@ export async function drain(): Promise<void> {
         remaining.push(op);
       }
     }
-    await writeQueue(remaining);
+    await serialize(async () => {
+      const latest = await readQueue();
+      // 保留 drain 期间新加的 op (drainStartIds 里没有的) + drain 判定要 retain 的 op
+      const remainingIds = new Set(remaining.map((o) => o.opId));
+      const merged = [
+        ...latest.filter((o) => !drainStartIds.has(o.opId)),
+        ...remaining,
+      ];
+      // 去重: 若 latest 里有和 remaining 同 opId (enqueue 期间对同 op bump attempts),
+      // remaining 版本胜出 (attempts 已更新)
+      const seen = new Set<string>();
+      const deduped = merged.filter((o) => {
+        if (seen.has(o.opId)) return false;
+        seen.add(o.opId);
+        return true;
+      });
+      void remainingIds;
+      await writeQueue(deduped);
+    });
     crashLogger.breadcrumb(`offlineQueue:drain:end remaining=${remaining.length}`);
   } finally {
     draining = false;
