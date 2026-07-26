@@ -95,7 +95,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //      - o8.stop.payload_built (v412Payload 构造完 uuidv4 前)
 //      这样和 O7 的 3 个 log 一起,总共 5 个 checkpoint 可以精确
 //      定位到哪一段死了
-export const OTA_VERSION = 'O8';
+// O9 (2026-07-27 O1 batches 21-28): HikingScreen refactor — extract
+// HikingMap, MarkerPin, CompassNeedle, FlagSavedToast into standalone
+// files; consolidate FLAG_TYPES; clean dead imports. Pure refactor,
+// zero user-visible change. Bump per 每批OTA必升版本号铁律.
+export const OTA_VERSION = 'O9';
 
 
 type OtaState =
