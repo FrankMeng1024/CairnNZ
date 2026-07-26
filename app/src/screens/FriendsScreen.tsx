@@ -8,7 +8,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Switch, Animated, Easing, ActivityIndicator,
+  TextInput, Animated, Easing, ActivityIndicator,
   KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -75,9 +75,8 @@ function getStatusDotColor(online: boolean, lastSeen: string): string {
 }
 
 // ── Friend Card ─────────────────────────────────────────────────────────────
-function FriendCard({ friend, onToggleShare }: {
+function FriendCard({ friend }: {
   friend: Friend;
-  onToggleShare: () => void;
 }) {
   // Backend doesn't (yet) return online status / last seen — surface those
   // only when we have real data. Sentinel value 'N/A' means "unknown".
@@ -118,19 +117,6 @@ function FriendCard({ friend, onToggleShare }: {
             </>
           )}
         </View>
-        {!friend.sharing && (
-          <Text style={cardStyles.noShareLabel}>Not sharing flags</Text>
-        )}
-      </View>
-      <View style={cardStyles.toggleCol}>
-        <Text style={cardStyles.toggleLabel}>{friend.sharing ? 'Sharing' : 'Hidden'}</Text>
-        <Switch
-          value={friend.sharing}
-          onValueChange={onToggleShare}
-          trackColor={{ false: Colors.border, true: Colors.primaryLight }}
-          thumbColor="#fff"
-          style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
-        />
       </View>
     </View>
   );
@@ -321,7 +307,6 @@ export function FriendsScreen() {
   // user's view, regardless of who they were logged in as.)
   const storeFriends = useFriendStore(s => s.friends);
   const loadFriendsFromBackend = useFriendStore(s => s.loadFriendsFromBackend);
-  const toggleShareMarkersInStore = useFriendStore(s => s.toggleShareMarkers);
 
   const mapStoreFriend = (f: typeof storeFriends[0]): Friend => ({
     id: f.id,
@@ -394,8 +379,6 @@ export function FriendsScreen() {
 
   // STORY-00109: staggered entrance animations
   const screenOpacity = useRef(new Animated.Value(0)).current;
-  const bannerOpacity = useRef(new Animated.Value(0)).current;
-  const bannerTransY = useRef(new Animated.Value(12)).current;
   // STORY-00109: staggered entrance animations.
   // Slot count: 1 (request section, if any) + N friends + 1 add card.
   // We keep a generous pool of 12 to cover up to ~10 friends without realloc.
@@ -410,12 +393,6 @@ export function FriendsScreen() {
     // Screen fade-in: 280ms ease-out
     Animated.timing(screenOpacity, { toValue: 1, duration: 280, useNativeDriver: true }).start();
 
-    // Banner: fade + slide up, 250ms, delay 80ms
-    Animated.parallel([
-      Animated.timing(bannerOpacity, { toValue: 1, duration: 250, delay: 80, useNativeDriver: true }),
-      Animated.timing(bannerTransY, { toValue: 0, duration: 250, delay: 80, useNativeDriver: true }),
-    ]).start();
-
     // Cards: stagger 60ms, starting at delay ~160ms
     const cardAnimations = cardAnims.map((a) =>
       Animated.parallel([
@@ -426,14 +403,6 @@ export function FriendsScreen() {
     setTimeout(() => Animated.stagger(60, cardAnimations).start(), 160);
   }, []);
 
-  const toggleShare = (id: string) => {
-    // v416 fix (Bug F): 同步到 useFriendStore 才能持久化 (MMKV via persistFriends).
-    // 之前只更新本地 setFriends state, 关闭页面重新打开 useEffect 从 store 覆盖回来.
-    toggleShareMarkersInStore(id);
-    setFriends(prev => prev.map(f => f.id === id ? { ...f, sharing: !f.sharing } : f));
-  };
-
-  const sharingCount = friends.filter(f => f.sharing).length;
   const hasFriends = friends.length > 0;
 
   return (
@@ -451,21 +420,6 @@ export function FriendsScreen() {
 
       {hasFriends || incomingRequests.length > 0 ? (
         <>
-          {/* Share summary banner — only when there are actual friends */}
-          {hasFriends && (
-          <Animated.View style={{ opacity: bannerOpacity, transform: [{ translateY: bannerTransY }] }}>
-          <View style={styles.shareBannerRow}>
-            <View style={styles.sharePill}>
-              <Icon name="Users" size={12} color={Colors.primary} strokeWidth={2} />
-              <Text style={styles.shareBannerText}>
-                Sharing flags with {sharingCount}/{friends.length} friends
-              </Text>
-            </View>
-            <Text style={styles.shareBannerSub}>Toggle sharing individually per friend</Text>
-          </View>
-          </Animated.View>
-          )}
-
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {/* Pending incoming requests — at top so users see them first.
                 Single request: render the full card.
@@ -568,7 +522,6 @@ export function FriendsScreen() {
               >
                 <FriendCard
                   friend={friend}
-                  onToggleShare={() => toggleShare(friend.id)}
                 />
               </Animated.View>
             ))}
@@ -592,13 +545,6 @@ export function FriendsScreen() {
             </PressCard>
             </Animated.View>
 
-            {/* Info box */}
-            <View style={styles.infoBox}>
-              <Icon name="Info" size={14} color={Colors.textSecondary} strokeWidth={1.8} />
-              <Text style={styles.infoBoxText}>
-                When you turn off sharing, that friend won't see your new flags. Existing shared flags are not affected.
-              </Text>
-            </View>
           </ScrollView>
         </>
       ) : (

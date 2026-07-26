@@ -448,7 +448,6 @@ export function AuthScreen() {
   const [verifyError, setVerifyError] = useState('');
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0); // seconds remaining
-  const [devCode, setDevCode] = useState('');            // dev-only: code returned by backend
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -602,18 +601,13 @@ export function AuthScreen() {
 
   const validateEmail = (val: string) => {
     if (!val.trim()) return 'Email is required';
-    // TEMP DEMO REMOVE LATER: email format validation disabled so that
-    // pure-numeric demo logins ("1", "2", …) work. Restore the regex line
-    // below before production. The original validator was:
-    //   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) return 'Please enter a valid email';
+    if (view === 'register' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) return 'Please enter a valid email';
     return '';
   };
 
   const validatePassword = (val: string) => {
     if (!val) return 'Password is required';
-    // TEMP DEMO REMOVE LATER: 8-char minimum removed so single-char demo
-    // account passwords (1, 2, 3, …) work. Restore:
-    //   if (val.length < 8) return 'Minimum 8 characters';
+    if (view === 'register' && val.length < 8) return 'Minimum 8 characters';
     return '';
   };
 
@@ -656,7 +650,6 @@ export function AuthScreen() {
         setVerifyCode_('');
         setVerifyError('');
         setResendCooldown(60);
-        if (result.devCode) setDevCode(result.devCode);
         setView('verify');
         return;
       }
@@ -911,14 +904,6 @@ export function AuthScreen() {
               <Text style={{ fontWeight: '600', color: Colors.textPrimary }}>{verifyEmail}</Text>
               {'. Enter it below to verify your account.'}
             </Text>
-
-            {/* DEV ONLY: show code inline since email SMTP may not be configured */}
-            {!!devCode && (
-              <View style={{ backgroundColor: '#fff3cd', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#ffc107' }}>
-                <Text style={{ fontSize: 12, color: '#856404', fontWeight: '600' }}>DEV MODE — verification code:</Text>
-                <Text style={{ fontSize: 28, fontWeight: '900', color: '#856404', letterSpacing: 8, marginTop: 4 }}>{devCode}</Text>
-              </View>
-            )}
 
             {!!verifyError && (
               <View style={formStyles.apiBanner}>

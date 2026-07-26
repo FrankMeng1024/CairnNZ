@@ -465,7 +465,7 @@ export function HomeScreen() {
           <ActivityCard
             icon={(sz) => <RunningIcon size={sz} color={Colors.running} />}
             title="Running"
-            subtitle="Route planning · Voice guidance · Lock mode"
+            subtitle="Route planning · Lock mode"
             accentColor={Colors.running}
             lightBg={Colors.runningLight}
             cardBg="#e8f1f8"

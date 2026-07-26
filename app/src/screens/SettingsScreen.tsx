@@ -8,6 +8,7 @@
  * - Sprint 12 SVG icons retained
  */
 import React, { useState, useRef, useEffect } from 'react';
+import * as Application from 'expo-application';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Switch, Alert, Animated, TextInput, ActivityIndicator, Platform,
@@ -448,21 +449,6 @@ export function SettingsScreen() {
           />
         </View>
 
-        {/* ── Audio ── */}
-        <SectionHeader title="Voice Guidance" />
-        <View style={styles.card}>
-          <ToggleRow
-            iconName="Volume2"
-            iconColor={Colors.success}
-            iconBg={Colors.successBg}
-            label="Route announcements"
-            hint="Announce distance and off-route warnings while active"
-            value={broadcastEnabled}
-            onToggle={() => updateSetting('broadcastEnabled', !broadcastEnabled)}
-            pending={broadcastEnabled !== true}
-          />
-        </View>
-
         {/* ── Account ── */}
         <SectionHeader title="Account" />
         <View style={styles.card}>
@@ -584,16 +570,6 @@ export function SettingsScreen() {
         {/* Broadcast Section */}
         <SectionHeader title="Communications" />
         <View style={styles.card}>
-          <ToggleRow
-            iconName="Volume2"
-            iconColor={Colors.primary}
-            iconBg={Colors.primaryBg}
-            label="Voice Broadcasts"
-            hint="TTS announcements during activity"
-            value={voiceBroadcasts}
-            onToggle={() => updateSetting('voiceBroadcasts', !voiceBroadcasts)}
-          />
-          <View style={styles.divider} />
           <ToggleRow
             iconName="TriangleAlert"
             iconColor={Colors.danger}
@@ -939,7 +915,7 @@ export function SettingsScreen() {
 
         {/* O1: 5-tap version secret backdoor removed — debugMode is now
             a first-class Switch in the DEBUG section above. */}
-        <Text style={styles.version}>Cairn v0.1.0{debugMode ? ' · Debug ON' : ''}</Text>
+        <Text style={styles.version}>Cairn v{Application.nativeApplicationVersion ?? '0.2.5'}{debugMode ? ' · Debug ON' : ''}</Text>
       </ScrollView>
     </SafeAreaView>
     </View>
