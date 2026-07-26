@@ -127,7 +127,6 @@ router.get('/panel', async (req, res) => {
       const [rows] = await pool.query(
         `SELECT ur.region_id, r.name_en,
                 r.bbox_min_lng, r.bbox_min_lat, r.bbox_max_lng, r.bbox_max_lat,
-                ur.point_count,
                 (SELECT COUNT(*) FROM markers m
                   WHERE m.user_id = ur.user_id
                     AND m.lng BETWEEN r.bbox_min_lng AND r.bbox_max_lng
@@ -175,7 +174,6 @@ router.get('/panel', async (req, res) => {
     const [rows] = await pool.query(
       `SELECT ur.region_id, r.name_en,
               r.bbox_min_lng, r.bbox_min_lat, r.bbox_max_lng, r.bbox_max_lat,
-              ur.point_count,
               (SELECT COUNT(*) FROM markers m
                 WHERE m.user_id = ur.user_id
                   AND m.lng BETWEEN r.bbox_min_lng AND r.bbox_max_lng

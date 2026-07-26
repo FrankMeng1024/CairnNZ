@@ -94,8 +94,10 @@ export interface RouteStore {
   activeRouteId: string | null;
   /**
    * v8-audit (V7-BUG-006): true only after a successful fetchRoutes
-   * resolution. Boot reconcileOrphans gates on this so a partial /
-   * pre-load empty array isn't mistaken for "user has 0 routes".
+   * resolution. Originally intended to gate a boot reconcileOrphans
+   * pass, but that boot call was never wired up. Kept because internal
+   * store logic (line 154/157) still uses it as a load-complete signal.
+   * If future work adds boot cleanup, this is the field to gate on.
    */
   routesLoadCompleted: boolean;
   /** Sprint 69 STORY-00538: subscribed-friend friend+public routes
@@ -276,17 +278,11 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
 
   deleteRoute: async (id) => {
     crashLogger.breadcrumb(`route:delete:start id=${id}`);
-    // v8-audit (ARCH-V7-002): use per-id pending keys instead of one
-    // shared array. Boot drain reads all keys with the prefix and
-    // removes them individually; concurrent deleteRoute writes a
-    // distinct key so there's no read-modify-write race.
-    const PENDING_PREFIX = '@cairn:pending_route_cleanup:v2:';
-    try {
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-      await AsyncStorage.setItem(PENDING_PREFIX + id, String(Date.now()));
-    } catch (err) {
-      crashLogger.breadcrumb(`route:delete:pending-mark-error ${String(err).slice(0, 80)}`);
-    }
+    // O1 (2026-07-26): 删除 PENDING_PREFIX (@cairn:pending_route_cleanup:v2:)
+    // write-only 标记。用户明确说 "删除是毫秒级操作,没理由要 note 也不
+    // 需要考虑崩溃"。原设计: setItem 前 + removeItem 后 走 pending 标记,
+    // 便于 boot drain 补齐失败的 cascade。但 boot drain 从未实现,标记只
+    // 写不读,纯废动作。
     const before = get().routes.find(r => r.id === id);
     let backendOk = false;
     try {
@@ -297,13 +293,6 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       crashLogger.breadcrumb(`route:delete:remote-error ${String(err).slice(0, 80)}`);
     }
     if (!backendOk) {
-      // Drop the pending mark since backend delete didn't happen.
-      try {
-        const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-        await AsyncStorage.removeItem(PENDING_PREFIX + id);
-      } catch {
-        // ignore
-      }
       return;
     }
     set((s) => ({
@@ -349,13 +338,6 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       }
     } catch (err) {
       crashLogger.breadcrumb(`route:delete:session-error ${String(err).slice(0, 80)}`);
-    }
-    // Clear pending mark after successful cascade.
-    try {
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-      await AsyncStorage.removeItem(PENDING_PREFIX + id);
-    } catch {
-      // ignore
     }
     void before;
     return;

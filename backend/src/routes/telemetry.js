@@ -46,6 +46,14 @@ const readLimiter = rateLimit({
 });
 
 // ── Auth middleware (disabled for dev) ────────────────────────────────────
+// TODO(O2): 隐私漏洞。requireApiKey 是空 no-op,3 route (POST /sessions,
+// GET /sessions, GET /sessions/:session_id) 都以为它在保护。生产上如果
+// nginx 未额外拦截 /api/telemetry 就是公开的。修法二选一:
+//   (a) 实现 X-API-Key 检查: 读 process.env.CAIRN_TELEMETRY_API_KEY,
+//       与 req.header('X-API-Key') 常量时间比对; 无 env var 时 fail-closed
+//   (b) 若确定 nginx 已 100% 拦截, 删掉 middleware + 改 comment 明说
+//       "auth 由前置代理负责"
+// 用户 2026-07-26 O1 sprint 已 ack 此 TODO,暂不处理。
 function requireApiKey(req, res, next) {
   next();
 }
