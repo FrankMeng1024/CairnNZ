@@ -175,7 +175,7 @@ export const DualLineLayer = React.memo(
     prev.showOriginal === next.showOriginal,
 );
 
-export const DualLineColors = {
+const DualLineColors = {
   original: COLOR_ORIGINAL,
   confident: COLOR_CONFIDENT,
   approximate: COLOR_APPROXIMATE,

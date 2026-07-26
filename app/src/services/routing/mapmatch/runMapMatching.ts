@@ -29,12 +29,12 @@ import { haversineMeters } from '../corridor/PolylineSampler';
 import { matchSegment } from './MapMatchingClient';
 import type { MatchResult, MatchSegment, ViaPoint } from './types';
 
-export interface RunMatchArgs {
+interface RunMatchArgs {
   originalPoints: LngLat[];
   viaPoints: ViaPoint[];
 }
 
-export interface RunMatchSuccess {
+interface RunMatchSuccess {
   ok: true;
   matchedPoints: LngLat[];
   worstConfidence: number;
@@ -44,7 +44,7 @@ export interface RunMatchSuccess {
   cached: boolean;
 }
 
-export interface RunMatchFailure {
+interface RunMatchFailure {
   ok: false;
   reason: 'no-match' | 'network' | 'timeout' | 'auth' | 'rate-limit' | 'invalid-input' | 'too-long';
   detail?: string;

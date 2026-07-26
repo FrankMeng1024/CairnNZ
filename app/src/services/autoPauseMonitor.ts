@@ -17,7 +17,7 @@
 import { AppState } from 'react-native';
 import { crashLogger } from './crashLogger';
 
-export const AUTO_PAUSE = {
+const AUTO_PAUSE = {
   IDLE_SPEED_THRESHOLD_MS: 0.5,     // m/s — below this = "not moving"
   IDLE_RADIUS_M: 50,                // meters — total drift within window
   IDLE_WINDOW_MS: 15 * 60_000,      // must be idle for 15 min continuously

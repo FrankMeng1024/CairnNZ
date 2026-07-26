@@ -30,7 +30,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const STORAGE_KEY = 'cairn_last_fix_v1';
 const STALE_MS = 24 * 60 * 60 * 1000; // 24h — ignore cached fix if older
 
-export interface CachedFix {
+interface CachedFix {
   lat: number;
   lng: number;
   ts: number;

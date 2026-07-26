@@ -24,7 +24,7 @@
 import { create } from 'zustand';
 import { authenticatedFetch } from '../../../services/apiService';
 
-export interface FriendMemoryPoint {
+interface FriendMemoryPoint {
   lat: number;
   lng: number;
   ts: number;

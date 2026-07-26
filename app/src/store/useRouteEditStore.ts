@@ -86,7 +86,7 @@ const CORRIDOR_RADIUS_M = 250;
 const ENDPOINT_SNAP_M = 50;
 const TRIM_MIN_FRACTION = 0.05;
 
-export type EditTool = 'pan' | 'brush' | 'eraser';
+type EditTool = 'pan' | 'brush' | 'eraser';
 
 export interface BrushStroke {
   id: string;

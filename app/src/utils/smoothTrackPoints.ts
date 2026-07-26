@@ -16,7 +16,7 @@
 import { haversineM } from './geo';
 import { kalmanInit, kalmanUpdate } from './geo';
 
-export interface SmoothableTrackPoint {
+interface SmoothableTrackPoint {
   lat: number;
   lng: number;
   alt?: number | null;

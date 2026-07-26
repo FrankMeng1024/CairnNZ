@@ -21,7 +21,7 @@ export interface MatchSegment {
   viaIndicesInCoords: number[];
 }
 
-export interface MatchRequestBuild {
+interface MatchRequestBuild {
   /** Sequence of segments to match. Most edits = 1 segment; long routes = >1. */
   segments: MatchSegment[];
   /** Total coord count across all segments. For cost/budget tracking. */
@@ -48,7 +48,7 @@ export interface MatchedSegment {
  * callers continue to read `matchedPoints` / `confidence` which preserve
  * v262 behavior (= matchings[0] only).
  */
-export interface MapboxMatchSegment {
+interface MapboxMatchSegment {
   points: LngLat[];
   confidence: number;
 }

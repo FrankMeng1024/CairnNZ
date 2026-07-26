@@ -19,7 +19,7 @@ import { haversineMeters } from './PolylineSampler';
  * (only lng/lat matters). Kept as 'doc' to avoid churn in IndexedPoint
  * consumers; rename to 'walkable' the next time we touch this enum.
  */
-export type PointSource = 'original' | 'activity' | 'doc' | 'shared';
+type PointSource = 'original' | 'activity' | 'doc' | 'shared';
 
 export interface IndexedPoint {
   lng: number;

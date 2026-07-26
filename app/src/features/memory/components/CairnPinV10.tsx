@@ -56,7 +56,7 @@ const SIZES = {
   memory: { core: 44, crestW: 20, crestH: 16, crestOverlap: 0, glyph: 22, border: 3 },
   detail: { core: 32, crestW: 15, crestH: 12, crestOverlap: 0, glyph: 16, border: 2.5 },
 } as const;
-export type PinSize = keyof typeof SIZES;
+type PinSize = keyof typeof SIZES;
 
 // v387: scale derived from current zoom. PointAnnotation's host view
 // auto-sizes to the child View's measured frame on iOS, so by setting
@@ -211,7 +211,7 @@ function TypeGlyph({ type, darkColour }: { type: string; darkColour: string }) {
 
 // ─── Public Pin Components ─────────────────────────────────────────────────
 
-export interface CairnPinV10Props {
+interface CairnPinV10Props {
   tier: Tier;
   type: string;
   size?: PinSize;
@@ -314,7 +314,7 @@ export function CairnPinV10({ tier, type, size = 'memory' }: CairnPinV10Props) {
   );
 }
 
-export interface MysteryPinV10Props {
+interface MysteryPinV10Props {
   tier: Tier;
   size?: PinSize;
 }

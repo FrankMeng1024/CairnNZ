@@ -22,7 +22,7 @@ import * as SecureStore from 'expo-secure-store';
 
 const CREDENTIALS_KEY = 'cairn_remember_me';
 
-export interface StoredCredentials {
+interface StoredCredentials {
   email: string;
   password: string;
 }

@@ -43,7 +43,7 @@ interface VisibleInput {
   friendIds: ReadonlyArray<string | number>;
 }
 
-export interface VisibilityResult {
+interface VisibilityResult {
   visible: boolean;
   /** True only if visibility holds AND viewer's own fog covers the coord.
    *  Drives iron law 2 (can_like_report) and Detail Sheet form B vs C. */

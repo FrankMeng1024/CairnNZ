@@ -326,10 +326,6 @@ function buildFeatures(
   };
 }
 
-/** v251: exported for test/debug only — clears the module cache. */
-export function _clearBrushBuildCache(): void {
-  strokeBuildCache.clear();
-}
 
 export function BrushStrokeLayer({
   strokes,

@@ -20,9 +20,9 @@ import { storage } from '../../../store/storage';
 
 const STORAGE_KEY = 'cairn:memorySettings:v2';
 
-export type RecordMode = 'always' | 'session-only';
+type RecordMode = 'always' | 'session-only';
 
-export interface MemorySettings {
+interface MemorySettings {
   foregroundAutoUnlockEnabled: boolean;
   recordMode: RecordMode;
   showFriendOverlay: boolean;

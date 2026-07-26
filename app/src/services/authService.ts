@@ -11,7 +11,7 @@ export interface UserProfile {
   email: string;
 }
 
-export interface AuthResult {
+interface AuthResult {
   user?: UserProfile;
   token?: string;
   error?: string;

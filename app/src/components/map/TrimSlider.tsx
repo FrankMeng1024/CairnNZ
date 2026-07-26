@@ -23,7 +23,7 @@ import { Colors } from '../tokens';
 
 const TRIM_MIN_FRACTION = 0.05;
 
-export interface TrimSliderProps {
+interface TrimSliderProps {
   trimStartFrac: number;
   trimEndFrac: number;
   onTrimStartChange: (frac: number) => void;

@@ -17,7 +17,7 @@ export interface RoutePayload {
   permission?: 'personal' | 'friend';
 }
 
-export interface RemoteRoute {
+interface RemoteRoute {
   id: number;
   user_id: number;
   name: string;

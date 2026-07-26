@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-export interface Friend {
+interface Friend {
   id: string;
   userId: string;
   name: string;

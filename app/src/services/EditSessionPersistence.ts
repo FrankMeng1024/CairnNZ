@@ -50,7 +50,7 @@ interface PersistedViaPoint {
   lat: number;
 }
 
-export interface EditSessionSnapshot {
+interface EditSessionSnapshot {
   /**
    * v6.3: persisted blob's schema version. Required. Must equal
    * EDIT_SESSION_SCHEMA_VERSION at load — mismatched / missing blobs are

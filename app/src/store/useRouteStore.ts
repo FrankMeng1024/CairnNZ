@@ -37,8 +37,8 @@ export interface RoutePoint {
 // < 0.3), `mixed` is the transitional middle band. Classification
 // happens lazily after a hike completes — when the field is absent
 // the entire route is treated as a single 'free' segment by callers.
-export type RouteSegmentType = 'road' | 'free' | 'mixed';
-export interface RouteSegment {
+type RouteSegmentType = 'road' | 'free' | 'mixed';
+interface RouteSegment {
   type: RouteSegmentType;
   // Inclusive [startIndex, endIndex] into the route's points array.
   // Storing indices (not duplicated coords) keeps the route data flat
@@ -81,7 +81,7 @@ export interface Route {
   permission?: 'personal' | 'friend';
 }
 
-export interface RouteStore {
+interface RouteStore {
   routes: Route[];
   // O1 batch 35: activeRouteId removed — written only in setActiveRoute (dead) + deleteRoute;
   // 0 external readers. routesLoadCompleted removed — only written internally; 0 external readers.

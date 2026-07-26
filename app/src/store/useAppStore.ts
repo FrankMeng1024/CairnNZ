@@ -18,10 +18,10 @@ import { attachMemorySync, detachMemorySync } from '../services/memorySync';
 import { hydrateMemoryForUser, detachMemoryPersistence } from '../features/memory/services/memoryPersistence';
 
 export type UIMode = 'beginner' | 'expert';
-export type ActivityMode = 'hiking' | 'running';
-export type TrackingState = 'idle' | 'tracking' | 'paused';
+type ActivityMode = 'hiking' | 'running';
+type TrackingState = 'idle' | 'tracking' | 'paused';
 
-export interface UserProfile {
+interface UserProfile {
   id: string;
   name: string;
   email: string;

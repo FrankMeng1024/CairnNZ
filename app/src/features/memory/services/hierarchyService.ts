@@ -16,20 +16,20 @@ import { getToken } from '../../../services/tokenStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { log } from '../../../services/appLog';
 
-export interface CityHit {
+interface CityHit {
   id: string;
   name_en: string;
   country_id: string;
   bbox: [number, number, number, number];
 }
 
-export interface CountryHit {
+interface CountryHit {
   id: string;
   name_en: string;
   bbox: [number, number, number, number];
 }
 
-export interface DeepestResponse {
+interface DeepestResponse {
   city: CityHit | null;
   country: CountryHit | null;
 }

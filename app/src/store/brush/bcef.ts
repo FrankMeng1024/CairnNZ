@@ -30,7 +30,7 @@ export const LOOP_MIN_M = 5;   // |B - C| < 5m → reject as loop
 
 // ── primitive helpers ────────────────────────────────────────────────────
 
-export function haversineMetersLocal(a: LngLat, b: LngLat): number {
+function haversineMetersLocal(a: LngLat, b: LngLat): number {
   const R = 6_371_000;
   const toRad = (x: number) => (x * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
@@ -43,7 +43,7 @@ export function haversineMetersLocal(a: LngLat, b: LngLat): number {
   return 2 * R * Math.asin(Math.sqrt(x));
 }
 
-export function lerpLocal(a: LngLat, b: LngLat, t: number): LngLat {
+function lerpLocal(a: LngLat, b: LngLat, t: number): LngLat {
   const tt = Math.max(0, Math.min(1, t));
   const out: LngLat = {
     lng: a.lng + (b.lng - a.lng) * tt,

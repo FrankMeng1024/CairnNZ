@@ -45,14 +45,6 @@ export interface VisitedPoint {
   synced?: boolean;
 }
 
-/** Legacy v2 schema (tile bitmap) — declared so persistence can detect it. */
-export interface ExploredTile {
-  key: string;
-  bitmap: Uint8Array;
-  firstSeenAt: number;
-  lastSeenAt: number;
-}
-
 interface SyncState {
   /** Number of pushes currently in flight. > 0 means "syncing now". */
   inFlightCount: number;

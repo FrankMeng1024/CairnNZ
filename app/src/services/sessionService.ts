@@ -11,7 +11,7 @@ import { authenticatedFetch } from './apiService';
 import { enqueue, makeOp, uuidv4 } from './offlineQueue';
 
 // GPS point shape used by both legacy POST and new incremental flows.
-export interface TrackPointLike {
+interface TrackPointLike {
   lat: number;
   lng: number;
   alt?: number | null;
@@ -20,7 +20,7 @@ export interface TrackPointLike {
   timestamp?: string;
 }
 
-export interface SessionPayload {
+interface SessionPayload {
   type: 'hiking' | 'running';
   start_time: string;   // ISO date string
   end_time: string;     // ISO date string
@@ -37,7 +37,7 @@ export interface SessionPayload {
   flags?: Array<{ lat: number; lng: number; note: string; timestamp: string }>;
 }
 
-export interface RemoteSession {
+interface RemoteSession {
   id: number;
   user_id: number;
   type: 'hiking' | 'running';
@@ -163,7 +163,7 @@ export async function fetchSessionDetail(remoteId: number): Promise<RemoteSessio
  *   { ok: true, session_id, finalized_at, memory, idempotent_replay? }
  *   throw on 网络错误 / 5xx / 4xx (让 caller 走 pendingSyncStore)
  */
-export interface SaveHikeAtomicPayload {
+interface SaveHikeAtomicPayload {
   end_time: string;
   distance_m: number;
   duration_s: number;
@@ -173,7 +173,7 @@ export interface SaveHikeAtomicPayload {
   memory_points: Array<{ lat: number; lng: number; ts: number }>;
 }
 
-export interface SaveHikeAtomicResult {
+interface SaveHikeAtomicResult {
   ok: true;
   session_id: number;
   finalized_at: string;

@@ -8,7 +8,7 @@ import { create } from 'zustand';
 import { storage } from './storage';
 import { debugLogger } from '../services/debugLogger';
 
-export interface Settings {
+interface Settings {
   // Emergency
   tripSharing: boolean;
 

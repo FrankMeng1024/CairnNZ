@@ -27,15 +27,8 @@ export interface DownloadedPackInfo {
   sizeBytes?: number;
 }
 
-export type DownloadProgressCallback = (packId: string, progress: number) => void;
-export type DownloadErrorCallback = (packId: string, error: string) => void;
-
-/**
- * Get list of available offline packs for the current region.
- */
-export function getAvailablePacks(): OfflinePack[] {
-  return NZ_OFFLINE_PACKS;
-}
+type DownloadProgressCallback = (packId: string, progress: number) => void;
+type DownloadErrorCallback = (packId: string, error: string) => void;
 
 /**
  * Get downloaded packs from persistent storage.
@@ -161,14 +154,6 @@ export async function deletePack(packId: string): Promise<void> {
   const packs = await getDownloadedPacks();
   const filtered = packs.filter(p => p.id !== packId);
   await saveDownloadedPacks(filtered);
-}
-
-/**
- * Check if a pack is downloaded and complete.
- */
-export async function isPackDownloaded(packId: string): Promise<boolean> {
-  const packs = await getDownloadedPacks();
-  return packs.some(p => p.id === packId && p.status === 'complete');
 }
 
 // Internal helper

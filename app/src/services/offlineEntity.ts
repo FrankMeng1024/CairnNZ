@@ -39,7 +39,7 @@ const MAX_ATTEMPTS = 8;
 
 export type SyncState = 'pending' | 'syncing' | 'synced' | 'failed';
 
-export interface OfflineEntry<T> {
+interface OfflineEntry<T> {
   /** 前端生成 uuid, 也作为后端 idempotency key */
   localId: string;
   /** 业务数据本身 */
@@ -51,7 +51,7 @@ export interface OfflineEntry<T> {
   lastError?: string;
 }
 
-export interface OfflineEntityConfig<T, Server> {
+interface OfflineEntityConfig<T, Server> {
   /** 类型标识, 用于 log */
   kind: string;
   /**
@@ -81,7 +81,7 @@ export interface OfflineEntityConfig<T, Server> {
   isAuthError?: (error: any) => boolean;
 }
 
-export interface OfflineEntity<T> {
+interface OfflineEntity<T> {
   /** 存一条到本地, 立即返回 localId。前端可用 localId 立即渲染 placeholder。 */
   saveLocal: (data: T) => Promise<{ localId: string; savedAt: number }>;
   /** 列出所有本地未同步 (pending/syncing/failed) 的项。 */
@@ -120,7 +120,7 @@ let daemonWired = false;
 let daemonRunning = false;
 let daemonPendingSignal = false;
 
-export async function drainAllEntities(): Promise<void> {
+async function drainAllEntities(): Promise<void> {
   if (daemonRunning) {
     daemonPendingSignal = true;
     return;

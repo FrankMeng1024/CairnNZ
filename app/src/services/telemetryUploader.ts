@@ -22,7 +22,7 @@ import { networkMonitor } from './networkMonitor';
 import { useSettingsStore } from '../store/useSettingsStore';
 import type { SessionMetadata, DeviceInfo } from '../types/debugLog';
 
-export type UploadResult =
+type UploadResult =
   | { ok: true; sessionId: string; bytes: number }
   | { ok: false; sessionId: string; error: string; retryable: boolean };
 

@@ -136,7 +136,7 @@ export function flattenGeometry(
  * LineString → array with one part. MultiLineString → array of parts (same
  * order as the GeoJSON). Empty for unknown geometry types.
  */
-export function flattenGeometryToParts(
+function flattenGeometryToParts(
   geom: { type: string; coordinates: any },
 ): LngLat[][] {
   if (geom.type === 'LineString') {

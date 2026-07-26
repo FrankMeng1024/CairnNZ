@@ -34,7 +34,7 @@ import { crashLogger } from './crashLogger';
 const STORAGE_KEY = '@cairn:offline_queue:v1';
 const MAX_ATTEMPTS = 8; // ~beyond this, drop with a breadcrumb
 
-export type OfflineOpKind =
+type OfflineOpKind =
   | 'session_append'
   | 'session_finalize'
   | 'marker_create';

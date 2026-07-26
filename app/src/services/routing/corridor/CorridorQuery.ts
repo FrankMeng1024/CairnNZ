@@ -9,7 +9,7 @@
 import { PointCloudIndex } from './PointCloudIndex';
 import { haversineMeters } from './PolylineSampler';
 
-export interface CorridorCheck {
+interface CorridorCheck {
   inCorridor: boolean;
   /** Distance in meters to nearest "走过的点". Infinity if none. */
   distanceToWalkedM: number;
@@ -65,7 +65,7 @@ export function isPointInCorridor(
  * was a footgun: any future caller that didn't know the prefilter rule
  * would silently accept arbitrary off-corridor polylines.
  */
-export function isPolylineInCorridor(
+function isPolylineInCorridor(
   polyline: Array<{ lng: number; lat: number }>,
   index: PointCloudIndex,
   radiusMeters: number,
