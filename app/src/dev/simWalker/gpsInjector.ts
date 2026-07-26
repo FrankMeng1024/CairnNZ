@@ -49,6 +49,7 @@ export interface InjectorSnapshot {
   historyLen: number;
   stepM: number;
   emitMs: number;
+  subdivide: number;
   undoCount: number;
 }
 
@@ -285,6 +286,7 @@ class GpsInjector {
       historyLen: this.posHistory.length,
       stepM: this.config.step_m,
       emitMs: this.config.emit_ms,
+      subdivide: this.config.subdivide,
       undoCount: this.config.undo_count,
     };
   }
