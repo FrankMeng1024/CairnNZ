@@ -4,7 +4,7 @@
  * formatDistance() which respects user's preferred unit.
  */
 
-export type DistanceUnit = 'km' | 'mi';
+type DistanceUnit = 'km' | 'mi';
 
 export interface Coordinate {
   lat: number;
@@ -72,20 +72,6 @@ export function formatDuration(seconds: number): string {
     return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-/**
- * Elevation gain from a series of altitude readings.
- * Only counts positive ascent. Returns 0 if no altitude data.
- */
-export function calculateElevationGain(altitudes: (number | null | undefined)[]): number {
-  let gain = 0;
-  const valid = altitudes.filter((a): a is number => a != null);
-  for (let i = 1; i < valid.length; i++) {
-    const delta = valid[i] - valid[i - 1];
-    if (delta > 0) gain += delta;
-  }
-  return Math.round(gain);
 }
 
 /**
@@ -191,7 +177,7 @@ export function kalmanUpdate(state: KalmanState, measurement: number, accuracy?:
 
 // ── Dynamic Sampling Rate ───────────────────────────────────────────────────
 
-export type MovementState = 'static' | 'walking' | 'running';
+type MovementState = 'static' | 'walking' | 'running';
 
 /**
  * Determine movement state from speed.

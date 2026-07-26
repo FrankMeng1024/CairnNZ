@@ -28,10 +28,8 @@
  *     times (impossible by UI), the first wins. Fine.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState, type AppStateStatus } from 'react-native';
 import { authenticatedFetch } from './apiService';
 import { crashLogger } from './crashLogger';
-import networkMonitor from './networkMonitor';
 
 const STORAGE_KEY = '@cairn:offline_queue:v1';
 const MAX_ATTEMPTS = 8; // ~beyond this, drop with a breadcrumb
@@ -291,31 +289,6 @@ export async function drain(): Promise<void> {
 }
 
 /**
- * Wire AppState + networkMonitor triggers. Call once at app startup.
- * Returns an unsubscribe (unused in practice — wire-once).
- */
-export function subscribeOfflineQueueDrains(): () => void {
-  // Network coming back online → drain
-  const offNet = networkMonitor.onChange((s) => {
-    if (s.state === 'online') {
-      drain().catch(() => { /* swallow */ });
-    }
-  });
-  // App returning to foreground → drain (covers the "brief background"
-  // metro case where networkMonitor may not fire because the OS suspended
-  // it; but AppState always fires).
-  const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
-    if (next === 'active') {
-      drain().catch(() => { /* swallow */ });
-    }
-  });
-  return () => {
-    offNet();
-    try { sub.remove(); } catch { /* ignore */ }
-  };
-}
-
-/**
  * Generate a UUID v4 (string). Self-contained — no extra dep.
  * RFC 4122 §4.4 (random) compliant for our purposes (collision-free
  * for the realistic queue depth of dozens of ops).
@@ -327,17 +300,4 @@ export function uuidv4(): string {
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
-}
-
-/**
- * v409: expose queue read/clear for Playwright web replay + hydrate cold
- * start replay. Read is const-safe (returns a copy).
- */
-export async function readQueueSnapshot(): Promise<OfflineOp[]> {
-  const q = await readQueue();
-  return q.map(o => ({ ...o }));
-}
-
-export async function clearQueue(): Promise<void> {
-  await writeQueue([]);
 }

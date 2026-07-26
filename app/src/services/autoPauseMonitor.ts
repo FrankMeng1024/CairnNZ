@@ -26,7 +26,7 @@ export const AUTO_PAUSE = {
   EVAL_TICK_MS: 60_000,             // re-evaluate every 60s
 };
 
-export interface AutoPauseHooks {
+interface AutoPauseHooks {
   getStatus: () => 'idle' | 'tracking' | 'paused' | string;
   getPoints: () => Array<{ latitude: number; longitude: number; timestamp: number; speed?: number }>;
   onSilentEnd: () => void;

@@ -14,7 +14,7 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens'
 import { Icon } from '../components/Icon';
 import { previewMemoryGain } from '../features/memory/services/flushHikingToMemory';
 
-export type StopSummary = {
+type StopSummary = {
   distanceM: number;
   durationS: number;
   elevationGainM: number;

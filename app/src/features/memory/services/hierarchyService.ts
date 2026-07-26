@@ -151,12 +151,3 @@ export async function fetchPanelData(
     return null;
   }
 }
-
-/** Invalidate all panel cache (call after memory point / marker changes) */
-export async function invalidatePanelCache(): Promise<void> {
-  try {
-    const keys = await AsyncStorage.getAllKeys();
-    const panelKeys = keys.filter((k) => k.startsWith('hierarchy:panel:'));
-    if (panelKeys.length > 0) await AsyncStorage.multiRemove(panelKeys);
-  } catch { /* ignore */ }
-}

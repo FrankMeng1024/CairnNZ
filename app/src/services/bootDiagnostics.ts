@@ -111,57 +111,6 @@ export function markBootPhase(phase: string, extra?: Record<string, any>): void 
 }
 
 /**
- * Drain the previous boot's checkpoint. Call this at the START of
- * cold-start (after AsyncStorage is available, before any heavy init).
- * If the previous boot didn't reach 'boot_complete', report it.
- *
- * v300.1: rotates CHECKPOINT_KEY → PREVIOUS_KEY first, so that a
- * concurrent markBootPhase('module_loaded') that happened *before*
- * drain ran doesn't overwrite the previous boot's last-known phase.
- *
- * Returns nothing — fire-and-forget upload.
- */
-export async function drainPreviousBootCheckpoint(otaVersion: number | string): Promise<void> {
-  try {
-    // Read whatever the OS preserved from the previous boot. If the previous
-    // boot already finished a "rotation" via this function, the truly-previous
-    // value is at PREVIOUS_KEY. Otherwise (first-ever boot or upgrade) read
-    // the legacy CHECKPOINT_KEY which may also be empty.
-    let raw = await AsyncStorage.getItem(PREVIOUS_KEY);
-    if (!raw) {
-      raw = await AsyncStorage.getItem(CHECKPOINT_KEY);
-    }
-    if (raw) {
-      try {
-        const cp = JSON.parse(raw) as BootCheckpoint;
-        if (cp && cp.phase !== 'boot_complete') {
-          // Previous boot didn't reach completion — likely jetsam'd or crashed
-          // during render.
-          fireBeacon('previous_boot_died', {
-            previous_phase: cp.phase,
-            previous_ts: cp.ts,
-            ms_dead: Date.now() - cp.ts,
-            ota_version: otaVersion,
-          });
-        } else if (cp) {
-          // Optional: emit a "previous boot was healthy" beacon so we can
-          // distinguish "clean restart" from "crash" in the dataset.
-          fireBeacon('previous_boot_ok', {
-            previous_phase: cp.phase,
-            ota_version: otaVersion,
-          });
-        }
-      } catch {/* parse error — best effort */}
-    }
-    // Clear both keys; the current boot's markBootPhase calls will repopulate
-    // CHECKPOINT_KEY, and the next boot's rotateCheckpoint will move it to
-    // PREVIOUS_KEY before drain runs.
-    await AsyncStorage.removeItem(PREVIOUS_KEY);
-    await AsyncStorage.removeItem(CHECKPOINT_KEY);
-  } catch {/* ignore */}
-}
-
-/**
  * Rotate the checkpoint: copy CHECKPOINT_KEY (last boot's final phase) to
  * PREVIOUS_KEY before any markBootPhase of this boot overwrites it. Must run
  * BEFORE the very first markBootPhase of the current cold start.

@@ -31,21 +31,21 @@ import { API_BASE_URL } from '../config/api';
 import { OTA_VERSION } from '../components/OtaBadge';
 import { crashLogger } from './crashLogger';
 
-export interface PickedPhoto {
+interface PickedPhoto {
   uri: string;
   width: number;
   height: number;
 }
 
-export type UploadOrigin = 'ar' | 'settings';
+type UploadOrigin = 'ar' | 'settings';
 
-export interface UploadProgress {
+interface UploadProgress {
   index: number; // 1-based; matches the user-visible "i/N…" string
   total: number;
   ok: boolean;
 }
 
-export interface UploadResult {
+interface UploadResult {
   okCount: number;
   total: number;
   lastError: string | null;
@@ -56,7 +56,7 @@ export interface UploadResult {
  * for cancel/perm-denied would force every caller into try/catch which
  * obscures the intended flow.
  */
-export type PickOutcome =
+type PickOutcome =
   | { kind: 'photos'; photos: PickedPhoto[] }
   | { kind: 'canceled' }
   | { kind: 'permission_denied' }

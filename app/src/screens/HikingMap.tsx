@@ -48,7 +48,7 @@ if (Platform.OS !== 'web') {
   }
 }
 
-export type HikingMapProps = {
+type HikingMapProps = {
   markers: Marker[];
   // v78 #1: trackPoints carry an optional `t` (epoch ms) so we can split
   // the polyline at GPS-signal-loss gaps. When two consecutive points are

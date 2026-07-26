@@ -69,8 +69,3 @@ export async function readLastFix(): Promise<CachedFix | null> {
     return null;
   }
 }
-
-/** Clear on logout / user switch. */
-export function clearLastFix(): void {
-  void AsyncStorage.removeItem(STORAGE_KEY).catch(() => {/* ignore */});
-}

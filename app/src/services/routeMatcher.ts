@@ -29,7 +29,7 @@ const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
 const MAX_COORDS_PER_REQUEST = 100; // Mapbox Map Matching cap
 const HOME_TRIM_THRESHOLD_M = 30; // distance from match polyline that counts as "off-road"
 
-export interface MatchedRoute {
+interface MatchedRoute {
   /** snapped (or raw) coordinate pairs */
   points: Array<{ lat: number; lng: number }>;
   /** total distance in metres (from API or computed) */

@@ -26,7 +26,7 @@
  *  enough contrast to read on the cream map background AND visually distinct
  *  from neighbors. Order chosen so that small friend groups (≤3) avoid
  *  near-duplicates. */
-export const FRIEND_RING_PALETTE = [
+const FRIEND_RING_PALETTE = [
   '#c87941', // warm brown (matches Cairn flag)
   '#5d7c46', // primary sage
   '#3d7ab5', // running blue
@@ -37,7 +37,7 @@ export const FRIEND_RING_PALETTE = [
   '#8c5a3a', // espresso brown
 ] as const;
 
-export type MarkerTier = 'self' | 'friend' | 'stranger';
+type MarkerTier = 'self' | 'friend' | 'stranger';
 
 interface TierInput {
   viewerId: string | number | null;
@@ -50,7 +50,7 @@ interface TierInput {
  * FNV-1a 32-bit hash. Stable, fast, no deps.
  * Used to pick a deterministic palette index for a given user_id.
  */
-export function fnv1aHash(s: string): number {
+function fnv1aHash(s: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -60,7 +60,7 @@ export function fnv1aHash(s: string): number {
 }
 
 /** Returns one of FRIEND_RING_PALETTE deterministically. */
-export function colorFromUserId(userId: string | number): string {
+function colorFromUserId(userId: string | number): string {
   const idx = fnv1aHash(String(userId)) % FRIEND_RING_PALETTE.length;
   return FRIEND_RING_PALETTE[idx];
 }
@@ -75,7 +75,7 @@ export function colorFromUserId(userId: string | number): string {
  * visibility (use a separate visible() function for that, since visibility
  * also depends on fog coverage which lives outside this module).
  */
-export function getMarkerTier({
+function getMarkerTier({
   viewerId,
   markUserId,
   permission,

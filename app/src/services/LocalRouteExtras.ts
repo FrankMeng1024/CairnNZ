@@ -13,7 +13,7 @@ const KEY_PREFIX = '@cairn:route_extras:v1:';
 const BACKUP_KEY_PREFIX = '@cairn:route_extras_backup:';
 const BACKUP_TTL_DAYS = 30;
 
-export type SegmentSource = 'original' | 'doc' | 'mapbox' | 'straight' | 'mixed';
+type SegmentSource = 'original' | 'doc' | 'mapbox' | 'straight' | 'mixed';
 
 /**
  * EditSegment — segment metadata for an edit-aware Route geometry.
@@ -39,7 +39,7 @@ export interface EditSegment {
  * resumes user's vias instead of starting blank. Additive — pre-v236
  * records simply lack these fields, treated as "no vias, full route".
  */
-export interface PersistedVia {
+interface PersistedVia {
   id: string;
   lng: number;
   lat: number;
@@ -193,54 +193,8 @@ export async function backupExtras(routeId: string, snapshot: any): Promise<{ ok
 // flow was planned in Sprint 67 but never implemented. capBackups /
 // deleteExtras still manage the write-only backup lifecycle (privacy).
 
-/**
- * Reconcile orphaned extras (routes deleted but extras remain).
- * Called on app start. P1 in Sprint 67, but stub kept here.
- *
- * v2-audit (ARCH-016): debounce — record last-run timestamp in
- * AsyncStorage and skip if within MIN_INTERVAL. Caller can pass
- * { force: true } to override (used by tests + Settings → "Clean now").
- */
-const RECONCILE_TIMESTAMP_KEY = '@cairn:route_extras_reconcile_at';
 const CAPBACKUPS_TIMESTAMP_KEY = '@cairn:route_extras_capbackups_at';
 const RECONCILE_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
-
-export async function reconcileOrphans(
-  activeRouteIds: Set<string>,
-  options?: { force?: boolean },
-): Promise<number> {
-  let removed = 0;
-  try {
-    if (!options?.force) {
-      const last = await AsyncStorage.getItem(RECONCILE_TIMESTAMP_KEY);
-      if (last) {
-        const lastAt = parseInt(last, 10);
-        if (!Number.isNaN(lastAt) && Date.now() - lastAt < RECONCILE_MIN_INTERVAL_MS) {
-          return 0;
-        }
-      }
-    }
-    const allKeys = await AsyncStorage.getAllKeys();
-    const extrasKeys = allKeys.filter(k => k.startsWith(KEY_PREFIX));
-    for (const k of extrasKeys) {
-      const routeId = k.slice(KEY_PREFIX.length);
-      if (!activeRouteIds.has(routeId)) {
-        await AsyncStorage.removeItem(k);
-        await AsyncStorage.removeItem(BACKUP_KEY_PREFIX + routeId);
-        removed++;
-      }
-    }
-    // v5-audit (ARCH-007): only write debounce timestamp when work was
-    // done; mirrors capBackups guard. Otherwise no-op debouncing
-    // suppresses real reconciliation when the next cycle has new orphans.
-    if (removed > 0) {
-      await AsyncStorage.setItem(RECONCILE_TIMESTAMP_KEY, String(Date.now()));
-    }
-  } catch {
-    // ignore
-  }
-  return removed;
-}
 
 /**
  * Cap on backup count per user (review v3.1 angle 10 low #2).

@@ -44,7 +44,7 @@ const TTL_MS = 24 * 60 * 60 * 1000; // 24h
 // the session future-dated and clearing it.
 const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
 
-export interface PersistedViaPoint {
+interface PersistedViaPoint {
   id: string;
   lng: number;
   lat: number;

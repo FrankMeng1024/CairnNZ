@@ -31,7 +31,7 @@ const FLUSH_REQUEST_TIMEOUT_MS = 3_000;
 // === Event types ============================================================
 
 /** All event kinds we emit. Mirror plan §5.3. */
-export type TelemetryKind =
+type TelemetryKind =
   | 'brush_preview_started'
   | 'brush_preview_completed'
   | 'brush_mapbox_attempt'
