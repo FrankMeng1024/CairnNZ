@@ -22,24 +22,12 @@ const PERMISSION = Object.freeze({
 });
 
 /**
- * Valid permission values when reading or writing.
- * Includes 'group' so existing markers don't error out.
- */
-const ALL_VALID_PERMISSIONS = Object.freeze(['personal', 'friend', 'group', 'public']);
-
-/**
  * Permissions allowed for client write (POST/PATCH).
  *
  * v4.2 H1: `public` is rejected on all POST/PATCH for both markers and routes.
  * Only the seed scripts may insert 'public' rows directly into DB.
  */
 const CLIENT_WRITEABLE_PERMISSIONS = Object.freeze(['personal', 'friend', 'group']);
-
-/**
- * Permissions that mean "shared with friends in some way" — used for filtering
- * `circle/markers` and `circle/routes` queries.
- */
-const SHARED_VISIBILITY = Object.freeze(['friend', 'group', 'public']);
 
 /**
  * Normalize on read: collapse legacy 'group' → modern 'friend' before sending to client.
@@ -49,19 +37,6 @@ const SHARED_VISIBILITY = Object.freeze(['friend', 'group', 'public']);
  */
 function normalize(p) {
   return p === PERMISSION.GROUP_LEGACY ? PERMISSION.FRIEND : p;
-}
-
-/**
- * Normalize on write: accept either 'friend' or 'group' from client,
- * write as 'group' for markers (preserves existing ENUM), 'friend' for routes.
- *
- * @param {string} p - permission value from client
- * @param {'mark'|'route'} kind - which table is being written
- * @returns {string} - permission value to write to DB
- */
-function denormalizeForWrite(p, kind) {
-  if (kind === 'mark' && p === PERMISSION.FRIEND) return PERMISSION.GROUP_LEGACY;
-  return p;
 }
 
 /**
@@ -77,10 +52,7 @@ function isClientWriteable(p) {
 
 module.exports = {
   PERMISSION,
-  ALL_VALID_PERMISSIONS,
   CLIENT_WRITEABLE_PERMISSIONS,
-  SHARED_VISIBILITY,
   normalize,
-  denormalizeForWrite,
   isClientWriteable,
 };

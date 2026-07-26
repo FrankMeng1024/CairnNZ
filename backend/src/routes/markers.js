@@ -44,9 +44,11 @@ const VALID_TYPES = new Set(['like', 'report']);
 function userKey(prefix) {
   return (req) => `${prefix}:${req.user?.userId || req.ip}`;
 }
-function skipReplay(req) {
-  return req.get('X-Idempotent-Replay') === '1';
-}
+// O1 (2026-07-26): removed skipReplay helper — 逻辑上永远 no-op。
+// idempotency middleware (idempotency.js:67-73) 在 cache hit 时直接
+// res.json return,replay 请求根本走不到 rateLimit 下游。且 client
+// 从不 set X-Idempotent-Replay request header (它是 response header)。
+// skip: skipReplay 3 处引用同步删。
 
 const likeLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -54,7 +56,6 @@ const likeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: userKey('like'),
-  skip: skipReplay,
   handler: (req, res) => {
     abuseSignals.log(req, { kind: 'rate_limit', userId: req.user?.userId, payload: { route: 'vote.like' } });
     res.status(429).json({ error: 'Too many like actions. Slow down.' });
@@ -66,7 +67,6 @@ const reportLimiterMin = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: userKey('reportMin'),
-  skip: skipReplay,
   handler: (req, res) => {
     abuseSignals.log(req, { kind: 'rate_limit', userId: req.user?.userId, payload: { route: 'vote.report.min' } });
     res.status(429).json({ error: 'Too many report actions. Slow down.' });
@@ -78,7 +78,6 @@ const reportLimiterHour = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: userKey('reportHour'),
-  skip: skipReplay,
   handler: (req, res) => {
     abuseSignals.log(req, { kind: 'rate_limit', userId: req.user?.userId, payload: { route: 'vote.report.hour' } });
     res.status(429).json({ error: 'Hourly report limit reached.' });

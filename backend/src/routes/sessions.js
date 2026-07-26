@@ -103,8 +103,13 @@ router.patch('/:id/append-points', authenticate, validateBody(schemas.session.ap
 });
 
 // ── PATCH /api/sessions/:id ────────────────────────────────────────────────
+// DEPRECATED as of O1 (2026-07-26): client 已迁到 PATCH /:id/save
+// (saveHikeAtomic 一体化端点)。保留此 handler 只为兼容 offlineQueue 里
+// 可能残留的 v411 及更早 client 发的历史 session_finalize op。新 client
+// 从 v412 起不发 PATCH /:id。若 v460+ 时 offlineQueue 已完全排空,可删。
+//
 // Finalize a session at stop time: write end_time, distance_m, duration_s,
-// and (optional) name. Called from stopTracking after final point flush.
+// and (optional) name.
 router.patch('/:id', authenticate, validateBody(schemas.session.update), idempotency, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id || isNaN(id)) {
