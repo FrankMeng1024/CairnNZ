@@ -127,7 +127,11 @@ router.get('/', async (req, res) => {
 //   - Excludes viewer's own marks (user_id != viewer)
 //   - Excludes items the viewer has hidden (LEFT JOIN hidden_items)
 //   - Anonymous: no author info returned (v4 §10 design)
-//   - Max 50 results, ordered by created_at DESC
+//   - Type-Aware Baseline algorithm (MVP):
+//     · danger/junction: always show
+//     · water/hut/cairn: helpful_count >= 1 OR created_at within 60 days
+//   - Sorted: (helpful_count - report_count) DESC, created_at DESC
+//   - Max 100 results
 router.get('/public', async (req, res) => {
   try {
     const { bbox } = req.query;
@@ -150,8 +154,10 @@ router.get('/public', async (req, res) => {
     }
 
     const userId = req.user.userId;
+    const sixtyDaysAgo = Date.now() - 60 * 24 * 60 * 60 * 1000;
+
     const [rows] = await pool.execute(
-      `SELECT m.id, m.type, m.lat, m.lng, m.created_at
+      `SELECT m.id, m.type, m.lat, m.lng, m.created_at, m.helpful_count, m.report_count
        FROM markers m
        LEFT JOIN hidden_items h
          ON h.user_id = ? AND h.item_type = 'mark' AND h.item_id = m.id
@@ -161,9 +167,14 @@ router.get('/public', async (req, res) => {
          AND m.lat BETWEEN ? AND ?
          AND m.lng BETWEEN ? AND ?
          AND h.id IS NULL
-       ORDER BY m.created_at DESC
-       LIMIT 50`,
-      [userId, userId, minLat, maxLat, minLng, maxLng],
+         AND (
+           m.type IN ('danger', 'junction')
+           OR m.helpful_count >= 1
+           OR m.created_at >= ?
+         )
+       ORDER BY (m.helpful_count - m.report_count) DESC, m.created_at DESC
+       LIMIT 100`,
+      [userId, userId, minLat, maxLat, minLng, maxLng, sixtyDaysAgo],
     );
 
     res.json({ markers: rows });
