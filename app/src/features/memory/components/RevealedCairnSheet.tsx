@@ -60,7 +60,6 @@ export function RevealedCairnSheet({
 }: Props) {
   if (!marker) return null;
   const { title, body } = splitTitleBody(marker.note ?? '');
-  const hasVoice = Boolean(marker.voiceMemoUri);
   const ageText = formatAge(marker.createdAt);
 
   return (
@@ -81,18 +80,6 @@ export function RevealedCairnSheet({
             </View>
 
             {title.length > 0 && <Text style={styles.title}>{title}</Text>}
-
-            {hasVoice && (
-              <View style={styles.voiceCard}>
-                <View style={[styles.voicePlayBtn, { opacity: 0.4 }]}>
-                  <Text style={styles.voicePlayIcon}>▶</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.voiceWave, { opacity: 0.4 }]}>▁▃▆█▇▅▃▂▁▁▂▄▆▄▂▁▁▂▃▅▃▁</Text>
-                  <Text style={styles.voiceTime}>Voice playback coming soon</Text>
-                </View>
-              </View>
-            )}
 
             {body.length > 0 && (
               <Text style={styles.body}>{body}</Text>
@@ -169,22 +156,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 12, lineHeight: 24,
   },
-  voiceCard: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1, borderColor: Colors.border,
-    borderRadius: 12,
-    padding: 12,
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    marginBottom: 12,
-  },
-  voicePlayBtn: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: Colors.primary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  voicePlayIcon: { color: '#fff', fontSize: 12 },
-  voiceWave: { fontSize: 12, color: Colors.primary, letterSpacing: -1 },
-  voiceTime: { fontSize: 10, color: Colors.textSecondary, marginTop: 2 },
   body: {
     backgroundColor: Colors.surface,
     borderWidth: 1, borderColor: Colors.border,
