@@ -848,7 +848,7 @@ export function AuthScreen() {
                 lineHeight: 16,
               }}
             >
-              Your hiking data is encrypted and stored securely. Sign in to access it on any device.
+              Your hiking data is securely stored on your account. Sign in to access it on any device.
             </Text>
           </View>
         </Animated.View>
@@ -1128,7 +1128,7 @@ export function AuthScreen() {
               {/* Apple — disabled on web, requires physical iOS device */}
               <PressBtn
                 style={formStyles.appleBtn}
-                onPress={() => Alert.alert('Coming soon', 'Apple Sign In will be available in the next update. Please use email login for now.')}
+                onPress={() => Alert.alert('Coming soon', 'Apple Sign In is not available yet. Please use email login for now.')}
                 scale={0.98}
               >
                 <View style={styles.btnContent}>
