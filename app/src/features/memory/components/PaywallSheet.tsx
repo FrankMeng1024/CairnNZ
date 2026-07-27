@@ -10,7 +10,7 @@
  *   - Restore: mandatory "Restore purchases" per App Store Guidelines 3.1.1
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity, Alert, ActivityIndicator, Linking } from 'react-native';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
 import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
@@ -130,7 +130,7 @@ export function PaywallSheet({ visible, onClose, onSubscribed }: Props) {
           >
             {restoring
               ? <ActivityIndicator size="small" color={Colors.textMuted} style={{ marginTop: Spacing.md }} />
-              : <Text style={styles.foot}>Restore purchases · Privacy · Terms</Text>
+              : <Text style={styles.foot}>Restore purchases{'  ·  '}<Text style={styles.footLink} onPress={() => Linking.openURL('https://api.yiiling.cn/privacy')}>Privacy</Text></Text>
             }
           </TouchableOpacity>
         </Pressable>
@@ -206,5 +206,6 @@ const styles = StyleSheet.create({
   ctaText: { color: '#fff', fontSize: FontSize.body, fontWeight: '700', textAlign: 'center' },
   ctaSub: { color: 'rgba(255,255,255,0.8)', fontSize: FontSize.caption, textAlign: 'center', marginTop: 2 },
   foot: { textAlign: 'center', fontSize: FontSize.caption, color: Colors.textMuted, marginTop: Spacing.md },
+  footLink: { color: Colors.primary, textDecorationLine: 'underline' },
 });
 

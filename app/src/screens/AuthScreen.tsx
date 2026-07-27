@@ -19,7 +19,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   KeyboardAvoidingView, Platform, Animated, ScrollView, Dimensions, Alert,
-  ActivityIndicator,
+  ActivityIndicator, Linking,
 } from 'react-native';
 import Svg, { Path, Ellipse, Line, G } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -361,44 +361,6 @@ function FieldInput({ icon, placeholder, value, onChangeText, error, onBlur, key
   );
 }
 
-// ── Privacy Policy content ─────────────────────────────────────────────────
-const PRIVACY_POLICY = `Cairn Privacy Policy
-Effective date: May 2026
-
-1. What we collect
-• Account data: name, email address, hashed password (never stored in plain text)
-• Location data: GPS coordinates, only while you actively start a tracking session
-• Activity data: track routes, distance, duration, planted markers — associated with your account
-• Device info: OS type, app version (for crash reporting only)
-
-2. Why we collect it
-• Location: to record your track, calculate distance, and enable safety features
-• Account data: to identify you and protect your personal track history
-• We never collect your location in the background without an active session
-
-3. How we protect it
-• Passwords hashed with bcrypt (industry standard)
-• Data encrypted in transit (HTTPS/TLS)
-• JWT tokens expire after 7 days
-• You can delete your account and all associated data at any time
-
-4. Sharing
-• We do not sell your data to third parties — ever
-• Location and track data shared only with friends you explicitly add
-• We may use aggregated, anonymised statistics to improve the product
-
-5. Your rights
-• Access: request a copy of your data at any time
-• Deletion: delete your account and all data via Settings → Account → Delete Account
-• Portability: export your track history as GPX at any time
-• Correction: update your profile information at any time
-
-6. Applicable law
-Cairn complies with the New Zealand Privacy Act 2020 and, where applicable, the EU General Data Protection Regulation (GDPR).
-
-7. Contact
-privacy@cairnapp.nz`;
-
 // ── Auth Screen ────────────────────────────────────────────────────────────
 type AuthView = 'splash' | 'login' | 'register' | 'verify' | 'welcome';
 
@@ -431,7 +393,6 @@ export function AuthScreen() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [privacyChecked, setPrivacyChecked] = useState(false);
-  const [privacyExpanded, setPrivacyExpanded] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);  // STORY-00132: separate state
@@ -1147,21 +1108,13 @@ export function AuthScreen() {
                   {'I have read and agree to the '}
                   <Text
                     style={formStyles.privacyLink}
-                    onPress={() => setPrivacyExpanded(!privacyExpanded)}
+                    onPress={() => Linking.openURL('https://api.yiiling.cn/privacy')}
                   >
                     Privacy Policy
                   </Text>
                 </Text>
               </View>
               {!!privacyError && <Text style={formStyles.fieldError}>{privacyError}</Text>}
-
-              {privacyExpanded && (
-                <View style={formStyles.privacyExpanded}>
-                  <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled showsVerticalScrollIndicator>
-                    <Text style={formStyles.privacyContent}>{PRIVACY_POLICY}</Text>
-                  </ScrollView>
-                </View>
-              )}
             </>
           )}
 
@@ -1335,11 +1288,6 @@ const formStyles = StyleSheet.create({
   checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   privacyText: { flex: 1, fontSize: FontSize.caption, color: Colors.textSecondary, lineHeight: 20 },
   privacyLink: { color: Colors.primary, fontWeight: '600', textDecorationLine: 'underline' },
-  privacyExpanded: {
-    backgroundColor: Colors.surface, borderRadius: Radius.button,
-    padding: Spacing.md, marginTop: Spacing.sm, borderWidth: 1, borderColor: Colors.border,
-  },
-  privacyContent: { fontSize: FontSize.small, color: Colors.textSecondary, lineHeight: 18 },
   submitBtn: { marginTop: Spacing.lg },
 
   staySignedIn: {

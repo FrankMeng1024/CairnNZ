@@ -108,6 +108,79 @@ app.use('/api/edit-diag', require('./routes/edit-diag'));
 app.use('/api/hierarchy', require('./routes/hierarchy'));
 // v417 AR removal: /api/v025/debug-events + /api/v025/worldmaps 路由删除（AR 功能已废弃）
 
+// O11: Standalone privacy policy page (required for App Store submission)
+app.get('/privacy', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cairn Privacy Policy</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 700px; margin: 0 auto; padding: 32px 20px; color: #1a1a1a; line-height: 1.6; }
+    h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 32px; }
+    h2 { font-size: 16px; font-weight: 600; margin-top: 28px; margin-bottom: 8px; }
+    ul { padding-left: 20px; margin: 8px 0; }
+    li { margin-bottom: 6px; }
+    a { color: #5d7c46; }
+    footer { margin-top: 48px; font-size: 13px; color: #888; border-top: 1px solid #eee; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Cairn Privacy Policy</h1>
+  <p class="subtitle">Effective date: May 2026</p>
+
+  <h2>1. What we collect</h2>
+  <ul>
+    <li><strong>Account data:</strong> name, email address, hashed password (never stored in plain text)</li>
+    <li><strong>Location data:</strong> GPS coordinates, only while you actively start a tracking session</li>
+    <li><strong>Activity data:</strong> track routes, distance, duration, planted markers — associated with your account</li>
+    <li><strong>Device info:</strong> OS type, app version (for crash reporting only)</li>
+  </ul>
+
+  <h2>2. Why we collect it</h2>
+  <ul>
+    <li>Location: to record your track, calculate distance, and enable safety features</li>
+    <li>Account data: to identify you and protect your personal track history</li>
+    <li>We never collect your location in the background without an active session</li>
+  </ul>
+
+  <h2>3. How we protect it</h2>
+  <ul>
+    <li>Passwords hashed with bcrypt (industry standard)</li>
+    <li>Data encrypted in transit (HTTPS/TLS)</li>
+    <li>JWT tokens expire after 7 days</li>
+    <li>You can delete your account and all associated data at any time</li>
+  </ul>
+
+  <h2>4. Sharing</h2>
+  <ul>
+    <li>We do not sell your data to third parties — ever</li>
+    <li>Location and track data shared only with friends you explicitly add</li>
+    <li>We may use aggregated, anonymised statistics to improve the product</li>
+  </ul>
+
+  <h2>5. Your rights</h2>
+  <ul>
+    <li><strong>Access:</strong> request a copy of your data at any time</li>
+    <li><strong>Deletion:</strong> delete your account and all data via Settings → Account → Delete Account</li>
+    <li><strong>Portability:</strong> export your track history as GPX at any time</li>
+    <li><strong>Correction:</strong> update your profile information at any time</li>
+  </ul>
+
+  <h2>6. Applicable law</h2>
+  <p>Cairn complies with the New Zealand Privacy Act 2020 and, where applicable, the EU General Data Protection Regulation (GDPR).</p>
+
+  <h2>7. Contact</h2>
+  <p><a href="mailto:privacy@cairnapp.nz">privacy@cairnapp.nz</a></p>
+
+  <footer>© 2026 Cairn. All rights reserved.</footer>
+</body>
+</html>`);
+});
+
 // 404 fallback
 app.use((req, res) => {
   res.status(404).json({ message: 'Not found.' });
