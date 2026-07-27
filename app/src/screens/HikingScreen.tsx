@@ -962,16 +962,6 @@ export function HikingScreen() {
           onClose={() => { setSelectedMarkerId(null); setUi('map'); }}
           onDelete={handleDeleteMarker}
           lastCoordinate={lastCoordinate}
-          onUpdateMemo={(uri, durationMs) => {
-            // v80 #45: persist voiceMemoUri locally on the marker.
-            // Backend has columns ready (migration 010) but cloud upload is
-            // deferred to a future iteration. Local store update is enough
-            // for in-app playback to work.
-            useMarkerStore.getState().updateMarker(selectedMarker.id, {
-              voiceMemoUri: uri,
-              voiceMemoDurationMs: durationMs,
-            });
-          }}
           flagTypes={FLAG_TYPES}
         />
       )}

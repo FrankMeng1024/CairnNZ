@@ -10,19 +10,8 @@
  * inside the existing tools row, not a wholesale tab-bar swap.
  */
 import React from 'react';
-import { Platform } from 'react-native';
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-
-// v405: expose nav ref to Playwright web replay for asserting current
-// route name after auto-nav. Guarded on Platform.OS==='web' — native
-// bundle 不创建 ref instance,dSYM 里也不出现 navigationRef 符号。
-// v407 fix #8: v405 只 guard 了 onReady 里的 __cairnStores 挂载,
-// 但 module-level createNavigationContainerRef() 无 Platform 门,native
-// 依然 create ref 对象。现在 Platform.OS === 'web' 才创建。
-export const navigationRef = Platform.OS === 'web'
-  ? createNavigationContainerRef()
-  : null as unknown as ReturnType<typeof createNavigationContainerRef>;
 
 import { AuthScreen } from '../screens/AuthScreen';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -79,34 +68,8 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer
-      ref={navigationRef ?? undefined}
       onReady={() => {
         markBootPhase('navigation_container_ready', { isLoggedIn: !!isLoggedIn });
-        // v405: expose nav helpers to __cairnStores for Playwright replay
-        try {
-          if (Platform.OS === 'web' && typeof globalThis !== 'undefined') {
-            const stores = (globalThis as unknown as { __cairnStores?: Record<string, unknown> }).__cairnStores ?? {};
-            stores.navigationRef = navigationRef;
-            stores.getCurrentRoute = () => {
-              const ref: any = navigationRef;
-              if (!ref || typeof ref.isReady !== 'function' || !ref.isReady()) return null;
-              const r = ref.getCurrentRoute();
-              return r ? r.name : null;
-            };
-            // v446: expose settings + sim-walker stores for Playwright web QA.
-            // Lazy-require so production bundles that lock-tree-shake these
-            // can't accidentally include them.
-            try {
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              stores.useSettingsStore = require('../store/useSettingsStore').useSettingsStore;
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              stores.useSimWalkerStore = require('../dev/simWalker/useSimWalkerStore').useSimWalkerStore;
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              stores.gpsInjector = require('../dev/simWalker/gpsInjector').gpsInjector;
-            } catch { /* ignore */ }
-            (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = stores;
-          }
-        } catch { /* ignore */ }
       }}
     >
       <Stack.Navigator
@@ -132,7 +95,7 @@ export function RootNavigator() {
             <Stack.Screen name="Settings"    component={SettingsScreen} />
             <Stack.Screen name="Memory"      component={MemoryScreen} />
             <Stack.Screen name="Debug"       component={DebugScreen} />
-            <Stack.Screen name="MarkDetailDevPreview" component={MarkDetailDevPreviewScreen} />
+            {__DEV__ && <Stack.Screen name="MarkDetailDevPreview" component={MarkDetailDevPreviewScreen} />}
           </>
         ) : (
           <Stack.Screen

@@ -240,16 +240,6 @@ export function getSamplingInterval(
   }
 }
 
-// Sprint 72 STORY-00553: expose to Playwright web session for spec verification.
-// This module is imported by web-side code paths only when Platform.OS==='web'
-// (via useTrackingStore), so binding unconditionally at module load is safe;
-// native builds never evaluate this branch because they never reach the web
-// bundle. Kept minimal — one function reference.
-try {
-  const g = globalThis as unknown as { __cairnGetSamplingInterval?: typeof getSamplingInterval };
-  g.__cairnGetSamplingInterval = getSamplingInterval;
-} catch { /* ignore */ }
-
 // O1 batch 38: SmoothedTrackState + createTrackSmoother + smoothGPSPoint +
 // getDebugLogger + logKalmanEvent removed — 0 external callers.
 
