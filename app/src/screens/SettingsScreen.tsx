@@ -39,6 +39,7 @@ import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { useSimWalkerStore } from '../dev/simWalker/useSimWalkerStore';
 import { logout } from '../services/authService';
+import { haptic } from '../services/hapticService';
 import { deleteAllMemoryFromServer } from '../services/memorySync';
 import { crashLogger } from '../services/crashLogger';
 import { getToken } from '../services/tokenStore';
@@ -55,25 +56,9 @@ import { OTA_VERSION } from '../components/OtaBadge';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-/**
- * Open a mailto: URL and, if it fails (no mail app configured), show a
- * fallback Alert instructing the user to send the email manually.
- *
- * O12 Round-3 R3-M7: pre-fix, all mailto call sites silently swallowed
- * failures with `.catch(() => {})` — users who tapped "Report safety issue"
- * on a phone without a mail app got zero feedback and thought the button
- * was broken.
- */
-function openMailWithFallback(url: string, fallbackAddress: string): void {
-  const addr = fallbackAddress?.trim() || 'support@cairnapp.nz';
-  Linking.openURL(url).catch(() => {
-    Alert.alert(
-      'Email app not available',
-      `We could not open your email app. Please email ${addr} manually.`,
-      [{ text: 'OK' }],
-    );
-  });
-}
+// O13 bug 5: openMailWithFallback helper removed — Feedback/Safety/Bug
+// merged into a single in-app inline form that posts through appLog. No
+// mailto hop needed.
 
 // ── Row helpers ────────────────────────────────────────────────────────────
 function ToggleRow({
@@ -267,6 +252,11 @@ export function SettingsScreen() {
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState('');
   const [pwLoading, setPwLoading] = useState(false);
+  // O13 bug 1: eye toggle to show/hide each password field. Off by default
+  // so shoulder-surfing risk stays low; user opts in per field.
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   const handleChangePassword = async () => {
     setPwError(''); setPwSuccess('');
@@ -288,7 +278,12 @@ export function SettingsScreen() {
       const res = await fetch(`${API_BASE_URL}/api/auth/password`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ currentPassword: currentPw || undefined, newPassword: newPw }),
+        // O13 bug 1 root cause: backend Joi schema (auth.passwordChange in
+        // backend/src/middleware/schemas.js) expects snake_case field names
+        // `old_password` + `new_password`. Pre-fix, client sent camelCase
+        // `currentPassword` + `newPassword` — every request failed Joi
+        // validation with 400 "validation failed". Now we send snake_case.
+        body: JSON.stringify({ old_password: currentPw, new_password: newPw }),
         signal: controller.signal,
       });
       const data = await res.json().catch(() => null);
@@ -305,16 +300,19 @@ export function SettingsScreen() {
         setPwError(errMsg);
         return;
       }
-      setPwSuccess('Password updated successfully.');
+      setPwSuccess('Password updated. Please sign in again.');
       setCurrentPw(''); setNewPw(''); setConfirmPw('');
-      // Round-2 N2-H1: guard setState after unmount. dbgMountedRef is the
-      // existing mount-tracker (see line 299). Reuse it so we don't leak
-      // a setTimeout writing to state on an unmounted screen.
-      setTimeout(() => {
+      // O13 bug 1: after successful password change, force re-login. The old
+      // token stays valid on the backend but we want the user to prove they
+      // know the new password (security best practice + user expectation).
+      setTimeout(async () => {
         if (!dbgMountedRef.current) return;
-        setShowChangePw(false);
-        setPwSuccess('');
+        try { await logout(); } catch { /* swallow */ }
+        try { await storage.removeItem('cairn_remember_me'); } catch { /* swallow */ }
+        appLogout();
+        nav.replace('Auth');
       }, 1500);
+      return; // do not fall through to finally's setPwLoading(false) — flow ends
     } catch (err) {
       // AbortError = user waited past the 15s timeout.
       const msg = (err as { name?: string })?.name === 'AbortError'
@@ -328,7 +326,16 @@ export function SettingsScreen() {
   };
 
   // Units picker
-  const [showUnitsModal, setShowUnitsModal] = useState(false);
+  // O13 bug 2: switched from modal popup to inline expand (like Change password)
+  const [showUnitsInline, setShowUnitsInline] = useState(false);
+
+  // Feedback / Report / Debug screenshot — inline unified form (O13 bug 5)
+  const [showFeedbackInline, setShowFeedbackInline] = useState(false);
+  const [feedbackKind, setFeedbackKind] = useState<'feedback' | 'safety' | 'bug'>('feedback');
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSending, setFeedbackSending] = useState(false);
+  const [feedbackError, setFeedbackError] = useState('');
+  const [feedbackSent, setFeedbackSent] = useState(false);
 
   // Reset memory type-to-confirm
   const [showResetMemoryModal, setShowResetMemoryModal] = useState(false);
@@ -438,8 +445,10 @@ export function SettingsScreen() {
     }
   };
 
-  const dbgRowLabel = dbgState === 'idle' ? 'Send screenshot to dev team' : dbgLabel;
-  const dbgRowDisabled = dbgState === 'picking' || dbgState === 'uploading';
+  // O13 bug 5: dbgRowLabel / dbgRowDisabled removed — legacy debug row was
+  // replaced by the unified in-app Feedback form. handleDebugUpload is
+  // still used by the "Attach screenshots" button inside the Bug tab of
+  // that form.
 
   // 5-tap gesture on About Cairn row → unlock Developer
   const aboutTapCount = useRef(0);
@@ -508,35 +517,62 @@ export function SettingsScreen() {
                   {!!pwError && <Text style={pwStyles.error}>{pwError}</Text>}
                   {!!pwSuccess && <Text style={pwStyles.success}>{pwSuccess}</Text>}
                   <Text style={pwStyles.label}>Current password</Text>
-                  <TextInput
-                    style={pwStyles.input}
-                    value={currentPw}
-                    onChangeText={setCurrentPw}
-                    placeholder="Leave blank if not set yet"
-                    placeholderTextColor={Colors.textMuted}
-                    secureTextEntry
-                    autoCapitalize="none"
-                  />
+                  <View style={pwStyles.inputRow}>
+                    <TextInput
+                      style={pwStyles.inputFlex}
+                      value={currentPw}
+                      onChangeText={setCurrentPw}
+                      placeholder="Enter your current password"
+                      placeholderTextColor={Colors.textMuted}
+                      secureTextEntry={!showCurrentPw}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity
+                      style={pwStyles.eyeBtn}
+                      onPress={() => setShowCurrentPw(v => !v)}
+                      accessibilityLabel={showCurrentPw ? 'Hide current password' : 'Show current password'}
+                    >
+                      <Icon name={showCurrentPw ? 'EyeOff' : 'Eye'} size={18} color={Colors.textSecondary} strokeWidth={1.8} />
+                    </TouchableOpacity>
+                  </View>
                   <Text style={pwStyles.label}>New password</Text>
-                  <TextInput
-                    style={pwStyles.input}
-                    value={newPw}
-                    onChangeText={setNewPw}
-                    placeholder="Min. 8 characters"
-                    placeholderTextColor={Colors.textMuted}
-                    secureTextEntry
-                    autoCapitalize="none"
-                  />
+                  <View style={pwStyles.inputRow}>
+                    <TextInput
+                      style={pwStyles.inputFlex}
+                      value={newPw}
+                      onChangeText={setNewPw}
+                      placeholder="Min. 8 characters"
+                      placeholderTextColor={Colors.textMuted}
+                      secureTextEntry={!showNewPw}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity
+                      style={pwStyles.eyeBtn}
+                      onPress={() => setShowNewPw(v => !v)}
+                      accessibilityLabel={showNewPw ? 'Hide new password' : 'Show new password'}
+                    >
+                      <Icon name={showNewPw ? 'EyeOff' : 'Eye'} size={18} color={Colors.textSecondary} strokeWidth={1.8} />
+                    </TouchableOpacity>
+                  </View>
                   <Text style={pwStyles.label}>Confirm new password</Text>
-                  <TextInput
-                    style={pwStyles.input}
-                    value={confirmPw}
-                    onChangeText={setConfirmPw}
-                    placeholder="Re-enter new password"
-                    placeholderTextColor={Colors.textMuted}
-                    secureTextEntry
-                    autoCapitalize="none"
-                  />
+                  <View style={pwStyles.inputRow}>
+                    <TextInput
+                      style={pwStyles.inputFlex}
+                      value={confirmPw}
+                      onChangeText={setConfirmPw}
+                      placeholder="Re-enter new password"
+                      placeholderTextColor={Colors.textMuted}
+                      secureTextEntry={!showConfirmPw}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity
+                      style={pwStyles.eyeBtn}
+                      onPress={() => setShowConfirmPw(v => !v)}
+                      accessibilityLabel={showConfirmPw ? 'Hide confirm password' : 'Show confirm password'}
+                    >
+                      <Icon name={showConfirmPw ? 'EyeOff' : 'Eye'} size={18} color={Colors.textSecondary} strokeWidth={1.8} />
+                    </TouchableOpacity>
+                  </View>
                   <PressBtn
                     style={[pwStyles.btn, pwLoading && { opacity: 0.6 }]}
                     onPress={handleChangePassword}
@@ -576,16 +612,34 @@ export function SettingsScreen() {
               label="Units"
               hint="Distance and elevation"
               value={units === 'imperial' ? 'Miles / feet' : 'Kilometres / metres'}
-              onPress={() => setShowUnitsModal(true)}
+              onPress={() => setShowUnitsInline(v => !v)}
             />
-            {/*
-             * O12 subagent audit removed the Night mode toggle from the UI.
-             * The `nightMode` store field remains as-is so a future Dark Theme
-             * Sprint can surface it — but shipping a toggle whose flip changes
-             * nothing violates the very rule O12 introduced (no placebo toggles).
-             * Bring the toggle back only when Colors token + screen-by-screen
-             * dark styling are ready.
-             */}
+            {/* O13 bug 2: inline expansion instead of popup modal. Matches
+             *  the Change-password disclosure pattern in the Profile card. */}
+            {showUnitsInline && (
+              <View style={inlineStyles.expand}>
+                <TouchableOpacity
+                  style={[inlineStyles.pickerRow, units === 'metric' && inlineStyles.pickerRowActive]}
+                  onPress={() => { updateSetting('units', 'metric'); setShowUnitsInline(false); }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={inlineStyles.pickerLabel}>Metric</Text>
+                    <Text style={inlineStyles.pickerHint}>Kilometres, metres</Text>
+                  </View>
+                  {units === 'metric' && <Icon name="Check" size={18} color={Colors.primary} />}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[inlineStyles.pickerRow, units === 'imperial' && inlineStyles.pickerRowActive]}
+                  onPress={() => { updateSetting('units', 'imperial'); setShowUnitsInline(false); }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={inlineStyles.pickerLabel}>Imperial</Text>
+                    <Text style={inlineStyles.pickerHint}>Miles, feet</Text>
+                  </View>
+                  {units === 'imperial' && <Icon name="Check" size={18} color={Colors.primary} />}
+                </TouchableOpacity>
+              </View>
+            )}
             <View style={styles.divider} />
             <ToggleRow
               iconName="Vibrate"
@@ -594,23 +648,38 @@ export function SettingsScreen() {
               label="Haptic feedback"
               hint="Little buzz when you tap buttons"
               value={hapticFeedback}
-              onToggle={() => updateSetting('hapticFeedback', !hapticFeedback)}
+              onToggle={() => {
+                const next = !hapticFeedback;
+                updateSetting('hapticFeedback', next);
+                // O13 bug 3: preview the effect on toggle-on so the user
+                // immediately feels what they enabled. Toggle-off obviously
+                // does nothing (no vibration to preview).
+                if (next) haptic.notification('success');
+              }}
             />
           </View>
 
-          {/* ── Memory ── */}
-          <SectionHeader title="Memory" />
-          <View style={styles.card}>
-            <View style={rowStyles.row}>
-              <View style={[rowStyles.iconWrap, { backgroundColor: '#eef3e6' }]}>
-                <Icon name="Map" size={16} color={Colors.primary} strokeWidth={1.8} />
+          {/* ── Your progress (O13 bug 4: was "Memory" text row, now
+           *  profile-style badge cards — treat as an achievement/功勋). */}
+          <SectionHeader title="Your progress" />
+          <View style={badgeStyles.row}>
+            <View style={badgeStyles.card}>
+              <View style={[badgeStyles.iconBadge, { backgroundColor: '#eef3e6' }]}>
+                <Icon name="Footprints" size={22} color={Colors.primary} strokeWidth={1.8} />
               </View>
-              <View style={rowStyles.content}>
-                <Text style={rowStyles.label}>Your trail memory</Text>
-                <Text style={rowStyles.hint} numberOfLines={2}>
-                  {memoryPointCount} {memoryPointCount === 1 ? 'place' : 'places'} explored · {myCairnCount} {myCairnCount === 1 ? 'cairn' : 'cairns'} planted
-                </Text>
+              <Text style={badgeStyles.value}>{memoryPointCount}</Text>
+              <Text style={badgeStyles.label}>
+                {memoryPointCount === 1 ? 'place explored' : 'places explored'}
+              </Text>
+            </View>
+            <View style={badgeStyles.card}>
+              <View style={[badgeStyles.iconBadge, { backgroundColor: 'rgba(181,130,61,0.12)' }]}>
+                <Icon name="Mountain" size={22} color="#b5823d" strokeWidth={1.8} />
               </View>
+              <Text style={badgeStyles.value}>{myCairnCount}</Text>
+              <Text style={badgeStyles.label}>
+                {myCairnCount === 1 ? 'cairn planted' : 'cairns planted'}
+              </Text>
             </View>
           </View>
 
@@ -627,49 +696,114 @@ export function SettingsScreen() {
               onPress={() => Linking.openURL('https://www.metservice.com/rural').catch(() => {})}
             />
             <View style={styles.divider} />
-            <ActionRow
-              iconName="TriangleAlert"
-              iconColor="#a67a3a"
-              iconBg="#f5eee0"
-              label="Report a safety issue"
-              hint="Track hazard, missing marker, or emergency"
-              external
-              onPress={() => openMailWithFallback(
-                'mailto:incident@doc.govt.nz?subject=Cairn%20safety%20report',
-                'incident@doc.govt.nz',
-              )}
-            />
-            <View style={styles.divider} />
+            {/* O13 bug 5: unified in-app feedback / safety / bug row.
+             *  Replaces the 3 separate mailto rows (Report / Feedback /
+             *  Debug screenshot). Expands inline; sends via appLog + optional
+             *  debug screenshot upload — no mail app hop. */}
             <ActionRow
               iconName="MessageSquare"
               iconColor={Colors.primary}
               iconBg={Colors.primaryLight}
               label="Send feedback"
-              hint="Ideas, bugs, or a hello"
-              onPress={() => openMailWithFallback(
-                'mailto:support@cairnapp.nz?subject=Cairn%20feedback',
-                'support@cairnapp.nz',
-              )}
+              hint="Feedback, safety report, or bug — with optional screenshot"
+              onPress={() => {
+                setShowFeedbackInline(v => !v);
+                setFeedbackError('');
+                setFeedbackSent(false);
+              }}
             />
-            {Platform.OS !== 'web' && (
-              <>
-                <View style={styles.divider} />
-                <ActionRow
-                  iconName="Send"
-                  iconColor={Colors.info}
-                  iconBg={Colors.infoBg}
-                  label={dbgRowLabel}
-                  hint="Help us debug by sending a screenshot of any issue you've seen"
-                  onPress={handleDebugUpload}
-                  hideChevron={dbgRowDisabled}
-                  disabled={dbgRowDisabled}
-                  labelColor={
-                    dbgState === 'done' ? Colors.success
-                    : dbgState === 'err' ? Colors.danger
-                    : undefined
+            {showFeedbackInline && (
+              <View style={inlineStyles.expand}>
+                {/* Kind chips */}
+                <View style={feedbackStyles.chipRow}>
+                  {([
+                    { id: 'feedback', label: 'Feedback', icon: 'MessageSquare' as IconName },
+                    { id: 'safety', label: 'Safety report', icon: 'TriangleAlert' as IconName },
+                    { id: 'bug', label: 'Bug', icon: 'Wrench' as IconName },
+                  ] as const).map(k => {
+                    const active = feedbackKind === k.id;
+                    return (
+                      <TouchableOpacity
+                        key={k.id}
+                        onPress={() => setFeedbackKind(k.id)}
+                        style={[feedbackStyles.chip, active && feedbackStyles.chipActive]}
+                      >
+                        <Icon name={k.icon} size={14} color={active ? '#fff' : Colors.textSecondary} strokeWidth={2} />
+                        <Text style={[feedbackStyles.chipText, active && feedbackStyles.chipTextActive]}>{k.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={pwStyles.label}>Tell us what happened</Text>
+                <TextInput
+                  style={feedbackStyles.textarea}
+                  value={feedbackText}
+                  onChangeText={setFeedbackText}
+                  placeholder={
+                    feedbackKind === 'safety' ? 'Where and what — hazard, missing marker, or emergency…'
+                    : feedbackKind === 'bug' ? 'What did you tap? What did you expect vs see?'
+                    : 'Ideas, hellos, or anything on your mind…'
                   }
+                  placeholderTextColor={Colors.textMuted}
+                  multiline
+                  numberOfLines={5}
+                  maxLength={1000}
                 />
-              </>
+                <Text style={feedbackStyles.counter}>{feedbackText.length} / 1000</Text>
+                {!!feedbackError && <Text style={pwStyles.error}>{feedbackError}</Text>}
+                {feedbackSent && <Text style={pwStyles.success}>Thanks — we got it.</Text>}
+                <View style={feedbackStyles.btnRow}>
+                  {feedbackKind === 'bug' && Platform.OS !== 'web' && (
+                    <PressBtn
+                      style={feedbackStyles.attachBtn}
+                      onPress={handleDebugUpload}
+                      scaleTo={0.96}
+                    >
+                      <Icon name="Send" size={14} color={Colors.primary} strokeWidth={2} />
+                      <Text style={feedbackStyles.attachText}> Attach screenshots</Text>
+                    </PressBtn>
+                  )}
+                  <PressBtn
+                    style={[feedbackStyles.sendBtn, (feedbackSending || feedbackText.trim().length < 3) && { opacity: 0.5 }]}
+                    onPress={async () => {
+                      if (feedbackText.trim().length < 3) { setFeedbackError('Please write at least a few words.'); return; }
+                      setFeedbackSending(true);
+                      setFeedbackError('');
+                      setFeedbackSent(false);
+                      try {
+                        // Use appLog so the message flows through the same
+                        // pipeline as debug diagnostics. Backend edit-diag
+                        // route accepts it. No mail hop.
+                        log('user_feedback', {
+                          kind: feedbackKind,
+                          text: feedbackText.trim(),
+                          user_email: user?.email ?? null,
+                          user_name: user?.name ?? null,
+                          ota: OTA_VERSION,
+                        });
+                        setFeedbackSent(true);
+                        setFeedbackText('');
+                        setTimeout(() => {
+                          if (!dbgMountedRef.current) return;
+                          setShowFeedbackInline(false);
+                          setFeedbackSent(false);
+                        }, 2000);
+                      } catch {
+                        setFeedbackError('Could not send. Please try again.');
+                      } finally {
+                        setFeedbackSending(false);
+                      }
+                    }}
+                    disabled={feedbackSending || feedbackText.trim().length < 3}
+                    scaleTo={0.96}
+                  >
+                    {feedbackSending
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <Text style={feedbackStyles.sendText}>Send</Text>
+                    }
+                  </PressBtn>
+                </View>
+              </View>
             )}
             <View style={styles.divider} />
             <ActionRow
@@ -731,7 +865,7 @@ export function SettingsScreen() {
               <ActionRow
                 label="Sign out"
                 hint="Your walks stay saved"
-                labelColor={Colors.textSecondary}
+                labelColor={Colors.textPrimary}
                 onPress={async () => {
                   const confirmed = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function'
                     ? window.confirm('Are you sure you want to sign out?')
@@ -799,42 +933,8 @@ export function SettingsScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      {/* Units picker modal
-       *
-       * Round-2 N2-M1: backdrop tap dismisses (matches TypeToConfirmModal
-       * behavior for iOS/HIG consistency). Inner card absorbs the tap so
-       * users don't accidentally close by tapping between rows.
-       */}
-      <Modal visible={showUnitsModal} transparent animationType="fade" onRequestClose={() => setShowUnitsModal(false)}>
-        <Pressable style={modalStyles.backdrop} onPress={() => setShowUnitsModal(false)}>
-          <Pressable style={modalStyles.card} onPress={() => { /* absorb */ }}>
-            <Text style={modalStyles.title}>Units</Text>
-            <TouchableOpacity
-              style={[modalStyles.pickerRow, units === 'metric' && modalStyles.pickerRowActive]}
-              onPress={() => { updateSetting('units', 'metric'); setShowUnitsModal(false); }}
-            >
-              <View>
-                <Text style={modalStyles.pickerLabel}>Metric</Text>
-                <Text style={modalStyles.pickerHint}>Kilometres, metres</Text>
-              </View>
-              {units === 'metric' && <Icon name="Check" size={20} color={Colors.primary} />}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[modalStyles.pickerRow, units === 'imperial' && modalStyles.pickerRowActive]}
-              onPress={() => { updateSetting('units', 'imperial'); setShowUnitsModal(false); }}
-            >
-              <View>
-                <Text style={modalStyles.pickerLabel}>Imperial</Text>
-                <Text style={modalStyles.pickerHint}>Miles, feet</Text>
-              </View>
-              {units === 'imperial' && <Icon name="Check" size={20} color={Colors.primary} />}
-            </TouchableOpacity>
-            <TouchableOpacity style={modalStyles.btnCancel} onPress={() => setShowUnitsModal(false)}>
-              <Text style={modalStyles.btnCancelText}>Close</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* O13 bug 2: Units modal removed — replaced by inline expand above
+       *  in the Preferences card. */}
 
       {/* Reset my map memory — type "clear track" to confirm */}
       <TypeToConfirmModal
@@ -1057,6 +1157,21 @@ const pwStyles = StyleSheet.create({
     fontSize: FontSize.body, color: Colors.textPrimary,
     backgroundColor: Colors.surface,
   },
+  // O13 bug 1: input with eye toggle — outer row holds input + button.
+  inputRow: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.card,
+    backgroundColor: Colors.surface,
+  },
+  inputFlex: {
+    flex: 1,
+    paddingHorizontal: Spacing.sm, paddingVertical: 10,
+    fontSize: FontSize.body, color: Colors.textPrimary,
+  },
+  eyeBtn: {
+    paddingHorizontal: Spacing.sm, paddingVertical: 10,
+    justifyContent: 'center', alignItems: 'center',
+  },
   btn: {
     backgroundColor: Colors.primary, borderRadius: Radius.card,
     paddingVertical: 12, alignItems: 'center', marginTop: Spacing.md,
@@ -1064,6 +1179,108 @@ const pwStyles = StyleSheet.create({
   btnText: { fontSize: FontSize.body, fontWeight: '600', color: '#fff' },
   error: { fontSize: FontSize.small, color: Colors.danger, marginTop: Spacing.sm },
   success: { fontSize: FontSize.small, color: Colors.success, marginTop: Spacing.sm },
+});
+
+// O13 bug 2 + bug 5: inline expansion regions (Units picker, Feedback form).
+const inlineStyles = StyleSheet.create({
+  expand: {
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: 'rgba(0,0,0,0.015)',
+  },
+  pickerRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.card,
+  },
+  pickerRowActive: { backgroundColor: Colors.primaryBg },
+  pickerLabel: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
+  pickerHint: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
+});
+
+// O13 bug 5: unified in-app feedback form styles.
+const feedbackStyles = StyleSheet.create({
+  chipRow: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    gap: 8,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: Radius.pill,
+    backgroundColor: '#f0ede4', borderWidth: 1, borderColor: Colors.border,
+  },
+  chipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  chipText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary },
+  chipTextActive: { color: '#fff' },
+  textarea: {
+    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.card,
+    paddingHorizontal: Spacing.sm, paddingVertical: 10,
+    fontSize: FontSize.body, color: Colors.textPrimary,
+    backgroundColor: Colors.surface,
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  counter: {
+    fontSize: FontSize.tiny, color: Colors.textMuted,
+    textAlign: 'right', marginTop: 2, marginBottom: Spacing.xs,
+  },
+  btnRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  attachBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: Spacing.md, paddingVertical: 10,
+    borderRadius: Radius.card,
+    borderWidth: 1, borderColor: Colors.primary,
+  },
+  attachText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.primary },
+  sendBtn: {
+    flex: 1,
+    backgroundColor: Colors.primary, borderRadius: Radius.card,
+    paddingVertical: 12, alignItems: 'center',
+  },
+  sendText: { fontSize: FontSize.body, fontWeight: '600', color: '#fff' },
+});
+
+// O13 bug 4: badge cards for "Your progress" (Memory achievement style).
+const badgeStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row', gap: Spacing.sm,
+    paddingHorizontal: Spacing.base,
+  },
+  card: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.card,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    alignItems: 'center',
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  iconBadge: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: Spacing.sm,
+  },
+  value: {
+    fontSize: 24, fontWeight: '700', color: Colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  label: {
+    fontSize: FontSize.small, color: Colors.textSecondary,
+    marginTop: 2,
+    textAlign: 'center',
+  },
 });
 
 const modalStyles = StyleSheet.create({

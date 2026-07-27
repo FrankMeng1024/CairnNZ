@@ -128,7 +128,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Adds units='metric'|'imperial' setting for future formatDistance util.
 // Backend Delete Account + Terms of Service pages: handled by parallel session,
 // merge later. This branch does front-end only.
-export const OTA_VERSION = 'O12';
+// O13 (2026-07-27): Settings user feedback fixes:
+//   1. Change password: fixed camelCase→snake_case field bug that made every
+//      update fail server-side Joi validation. Added Eye/EyeOff toggle to all
+//      3 password fields. On success, auto-signout + nav.replace('Auth') so
+//      user re-authenticates with new password.
+//   2. Units picker: switched from modal popup to inline expansion (matches
+//      Change-password disclosure pattern in Profile card).
+//   3. Haptic toggle: playing a success notification haptic on toggle-on so
+//      user immediately feels what they enabled.
+//   4. Memory row: replaced text row with two "profile badge" cards showing
+//      places explored + cairns planted with big numbers + icon — treats
+//      progress as an achievement / 功勋.
+//   5. Feedback / Safety report / Debug screenshot: fused 3 separate mailto
+//      rows into a single unified inline form. Kind chip (Feedback/Safety/
+//      Bug) + textarea + optional screenshot attach on Bug. Sends via
+//      appLog pipeline — no mail app hop.
+//   6. Privacy Policy: backend now serves /privacy HTML from backend/public/
+//      privacy.html — no more 404. PRIVACY_URL points to API host + /privacy.
+//   7. Sign out row label: was textSecondary (too pale), now textPrimary.
+export const OTA_VERSION = 'O13';
 
 
 type OtaState =

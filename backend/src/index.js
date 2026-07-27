@@ -13,6 +13,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const cron = require('node-cron');
+const path = require('path');
 const pool = require('./config/db');
 const { run: cleanHiddenOrphans } = require('./cron/cleanHiddenItemsOrphans');
 
@@ -88,6 +89,14 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// ── Public legal / marketing pages ──────────────────────────────────────────
+// O13 bug 6: serve /privacy and /terms as HTML so App Store review + user
+// Settings row have a working URL. Files live in backend/public/.
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'privacy.html'));
+});
+app.use('/public', express.static(path.join(__dirname, '..', 'public')));
 
 // ── Routes ─────────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
