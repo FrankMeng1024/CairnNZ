@@ -19,12 +19,8 @@
         "NSLocationWhenInUseUsageDescription": "Cairn needs your location to track your track and show nearby markers.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Cairn needs background location to keep recording your track when the screen is locked or you switch apps.",
         "NSMotionUsageDescription": "Cairn reads device orientation to point the in-app compass to true north.",
-        "NSPhotoLibraryUsageDescription": "Cairn needs photo library access so you can attach photos to your routes and cairns.",
-        "NSPhotoLibraryAddUsageDescription": "Cairn saves the photos you capture in the app to your photo library.",
-        "NSMicrophoneUsageDescription": "Cairn uses the microphone for voice notes attached to flags (optional).",
         "UIBackgroundModes": [
-          "location",
-          "audio"
+          "location"
         ],
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -39,8 +35,6 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.RECORD_AUDIO",
         "android.permission.POST_NOTIFICATIONS"
       ]
     },
@@ -52,14 +46,6 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Cairn needs background location to keep recording your track when the screen is locked."
-        }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Cairn needs photo library access so you can attach photos to your routes and cairns.",
-          "cameraPermission": "Cairn uses the camera so you can capture photos for your routes and cairns.",
-          "microphonePermission": false
         }
       ],
       [
