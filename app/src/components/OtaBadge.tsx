@@ -99,7 +99,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // of dual subagent audits (rounds 10-14), batches 42-46. Removed ~600 LOC
 // of dead exported symbols (0-caller functions, un-exported internal types).
 // Zero user-visible change. Pure codebase hygiene.
-export const OTA_VERSION = 'O10';
+// O11 (2026-07-27): 用户 O8 上测出的 4 bug + O10 dead refs 修 + pre-launch cleanup:
+//   1. sim-walker 撤回撤不干净 — undoSteps 用 max(posHistory, trackPoints)
+//   2. 参数默认 20 / 400 / 3 (用户明确好用)
+//   3. StopSummarySheet Save/Discard 先 Keyboard.dismiss()
+//   4. Activity Detail "Route data unavailable" 修 — route_points 空数组
+//      也是 truthy 老 bug,现在检查 length >= 2 才走 server,否则 fall back
+//   Bonus: unfinished recovery jsonl 空的 session 静默 discard 不弹 modal
+//   O10 refs 修: App.tsx 删掉 drainPreviousBootCheckpoint/rotateCheckpoint/
+//     reconcileOrphans 调用 (对应 export 已在 O10 删了会 crash)
+export const OTA_VERSION = 'O11';
 
 
 type OtaState =
