@@ -577,18 +577,6 @@ export function MapScreen() {
     [likedSet]
   );
 
-  const doReport = async (m: Marker, reason: 'fake_ad' | 'info_mismatch' | 'dislike') => {
-    if (!lastCoord) { Alert.alert('Location unavailable', 'Enable location to report marks.'); return; }
-    try {
-      await reportMarker(m.id, reason, lastCoord.lat, lastCoord.lng, lastCoord.accuracy);
-    } catch (err) {
-      if (err instanceof MarkerInteractionError) {
-        if (err.code === 'TOO_FAR') Alert.alert('Too far', 'Move closer to report this mark.');
-        else Alert.alert('Error', 'Could not report this mark.');
-      }
-    }
-  };
-
   // BUG-002 fix: load circle markers + subscriptions when the user enters
   // Map. Cached after first fetch; cheap to keep current. Triggered once
   // per mount; FlagsTab Friends sub-tab (Sprint 69) ALSO triggers via its
@@ -626,6 +614,19 @@ export function MapScreen() {
   }, [storeMarkers, circleMarkers]);
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
   const region = getCurrentRegion();
+
+  const doReport = async (m: Marker, reason: 'fake_ad' | 'info_mismatch' | 'dislike') => {
+    if (!lastCoord) { Alert.alert('Location unavailable', 'Enable location to report marks.'); return; }
+    try {
+      await reportMarker(m.id, reason, lastCoord.lat, lastCoord.lng, lastCoord.accuracy);
+      Alert.alert('Reported', 'Thank you for your report.');
+    } catch (err) {
+      if (err instanceof MarkerInteractionError) {
+        if (err.code === 'TOO_FAR') Alert.alert('Too far', 'Move closer to report this mark.');
+        else Alert.alert('Error', 'Could not report this mark.');
+      }
+    }
+  };
 
   const [editMarker, setEditMarker] = useState<Marker | null>(null);
   // Sprint 68 STORY-00532: tap-to-detail surface. Tap → opens MarkDetailSheet
@@ -833,14 +834,22 @@ export function MapScreen() {
         onEdit={(m) => { setDetailMarker(null); setEditMarker(m); }}
         onLike={async (m) => {
           if (!lastCoord) { Alert.alert('Location unavailable', 'Enable location to like marks.'); return; }
+          // Optimistic: toggle immediately for instant UI feedback on spotty networks.
+          // Revert only on hard business-rule errors (TOO_FAR / RATE_LIMITED).
+          // 409 already-liked is treated as success (no revert) — the server agrees the like exists.
+          likeToggle(m.id);
           try {
             await likeMarker(m.id, lastCoord.lat, lastCoord.lng, lastCoord.accuracy);
-            likeToggle(m.id);
           } catch (err) {
             if (err instanceof MarkerInteractionError) {
-              if (err.code === 'TOO_FAR') Alert.alert('Too far', 'Move closer to like this mark.');
-              else if (err.code === 'RATE_LIMITED') Alert.alert('Slow down', 'You\'ve liked too many marks recently.');
-              else Alert.alert('Error', 'Could not like this mark.');
+              if (err.code === 'TOO_FAR') {
+                likeToggle(m.id); // revert
+                Alert.alert('Too far', 'Move closer to like this mark.');
+              } else if (err.code === 'RATE_LIMITED') {
+                likeToggle(m.id); // revert
+                Alert.alert('Slow down', 'You\'ve liked too many marks recently.');
+              }
+              // Other errors (network): keep optimistic state — over-record beats data-loss on trails
             }
           }
         }}

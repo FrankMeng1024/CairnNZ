@@ -186,7 +186,7 @@ export function SettingsScreen() {
   // Destructure for ergonomic access
   const {
     shareAfterAdd, nightMode, locationShare,
-    tripSharing, dangerAlerts, routeDeviation,
+    dangerAlerts, routeDeviation,
     // O1 batch 37: broadcastEnabled, voiceBroadcasts removed — no-op toggle fields, 0 JSX use.
     hapticFeedback, soundEffects, edgeWarningGlow,
     debugMode,
@@ -256,6 +256,9 @@ export function SettingsScreen() {
   };
 
   useEffect(() => {
+    // Force-clear debugMode in production builds so it can't survive an
+    // OTA update from a dev build that left it true in the persisted store.
+    if (!__DEV__ && debugMode) updateSetting('debugMode', false);
     dbgMountedRef.current = true;
     return () => {
       dbgMountedRef.current = false;
@@ -544,20 +547,6 @@ export function SettingsScreen() {
               </PressBtn>
             </>
           )}
-        </View>
-
-        {/* Emergency Section */}
-        <SectionHeader title="Safety" />
-        <View style={styles.card}>
-          <ToggleRow
-            iconName="Navigation2"
-            iconColor={Colors.severityWarning}
-            iconBg={Colors.severityWarningBg}
-            label="Trip Sharing"
-            hint="Notify contacts if you don't check in"
-            value={tripSharing}
-            onToggle={() => updateSetting('tripSharing', !tripSharing)}
-          />
         </View>
 
         {/* Broadcast Section */}
