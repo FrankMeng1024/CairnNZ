@@ -458,13 +458,47 @@ export async function pushMemoryNow(): Promise<void> {
   await pushPendingPoints();
 }
 
-/** Force-clear memory on the server. Uses its own controller so it
- *  doesn't abort an active push/pull. */
+/** Force-clear memory on the server.
+ *
+ * O12 fix (subagent audit C-N2 + Round-2 N2-C1): pre-fix, an in-flight
+ * OR pending-scheduled push could re-upload a batch AFTER the DELETE
+ * landed server-side, re-populating the exact points the user just
+ * asked to erase. Now we:
+ *   1. bump `epoch` so any push/pull already running will discard its
+ *      result at its next epoch check.
+ *   2. clear `pushTimer` so the 5s-debounced push cannot fire between
+ *      our epoch bump and the DELETE (Round-2 N2-C1: first fix only
+ *      caught in-flight aborts, missed scheduled timer).
+ *   3. abort the in-flight push + pull controllers immediately so their
+ *      HTTP requests don't complete the round-trip.
+ *   4. THEN issue the DELETE.
+ *   5. clearAll() locally on success.
+ * The DELETE still uses its own controller — the abort above only stops
+ * the earlier operations, not this new one.
+ */
 export async function deleteAllMemoryFromServer(): Promise<boolean> {
+  // (1) invalidate any in-flight push/pull results
+  epoch += 1;
+  // (2) cancel any debounced push scheduled to fire imminently
+  if (pushTimer) {
+    clearTimeout(pushTimer);
+    pushTimer = null;
+  }
+  // (3) abort push/pull if running — safe if already null
+  if (pushAbortController) {
+    try { pushAbortController.abort(); } catch { /* noop */ }
+    pushAbortController = null;
+  }
+  if (pullAbortController) {
+    try { pullAbortController.abort(); } catch { /* noop */ }
+    pullAbortController = null;
+  }
+  // (4) issue the DELETE
   const ctrl = new AbortController();
   try {
     const res = await fetchWithTimeout('/api/memory/points', { method: 'DELETE' }, ctrl);
     if (res.ok) {
+      // (5) local clear
       useMemoryStore.getState().clearAll();
       return true;
     }

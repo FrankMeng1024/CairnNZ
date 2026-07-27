@@ -118,7 +118,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //     reconcileOrphans 调用 (对应 export 已在 O10 删了会 crash)
 //   Pre-launch cleanup: T1/T2/T3/T4/T5/T6 (web test hooks, SOS stub, voice memo
 //     UI, Like/Report API, privacy copy, dev route guard)
-export const OTA_VERSION = 'O11';
+// O12 (2026-07-27): Settings MVP redesign. Full SettingsScreen rewrite based
+// on user-chosen Mockup 5 Option A. Removes 8 fake toggles / dead sections.
+// New sections: Profile / Preferences (Units/Night mode/Haptic) / Memory (readonly
+// stats) / About & Legal / Danger zone (Reset memory + Delete account with
+// type-to-confirm) / Sign out separated card / Developer 5-tap on About Cairn.
+// Also removes uiMode Explorer/Navigator system entirely (was dead double-switch).
+// Adds hapticService wrapper so the Haptic toggle actually gates the vibration.
+// Adds units='metric'|'imperial' setting for future formatDistance util.
+// Backend Delete Account + Terms of Service pages: handled by parallel session,
+// merge later. This branch does front-end only.
+export const OTA_VERSION = 'O12';
 
 
 type OtaState =

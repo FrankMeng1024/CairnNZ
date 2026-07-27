@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './Icon';
 import { Colors, Spacing, Radius, FontSize, Shadow } from './tokens';
+import { useDistance } from '../utils/distanceFormat';
 
 interface UnfinishedData {
   sessionId: string;
@@ -55,6 +56,8 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
   const insets = useSafeAreaInsets();
   const slideY = useRef(new Animated.Value(500)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  // O12 Round-3 R3-C1: settings-aware distance format.
+  const dist = useDistance();
 
   useEffect(() => {
     if (visible) {
@@ -93,7 +96,7 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
   if (!visible || !data) return null;
 
   const label = data.activityMode === 'running' ? 'Run' : 'Hike';
-  const kmText = (data.distanceM / 1000).toFixed(2);
+  const distText = dist.format(data.distanceM, 2);
 
   const dismiss = (then?: () => void) => {
     Animated.parallel([
@@ -120,8 +123,8 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
         <Text style={styles.title}>Unfinished {label.toLowerCase()}</Text>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{kmText}</Text>
-            <Text style={styles.statLabel}>km</Text>
+            <Text style={styles.statValue}>{distText}</Text>
+            <Text style={styles.statLabel}>{dist.unit}</Text>
           </View>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{formatDuration(data.durationS)}</Text>

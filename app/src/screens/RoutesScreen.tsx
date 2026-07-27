@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
+import { haptic } from '../services/hapticService';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -22,7 +22,8 @@ import { Icon, type IconName } from '../components/Icon';
 import { HikingIcon, RunningIcon } from '../components/ActivityIcons';
 import { BackButton } from '../components/BackButton';
 import { PressBtn } from '../components/PressBtn';
-import { formatDistance, formatDuration, haversineM } from '../utils/geo';
+import { formatDuration, haversineM } from '../utils/geo';
+import { useDistance } from '../utils/distanceFormat';
 import { MARKER_META, type MarkerType } from '../data/mockData';
 import { EmptyRoutes, EmptyMarkers, IllustrationHalo } from '../components/Illustrations';
 
@@ -315,6 +316,8 @@ function RouteSheet({
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(400)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  // O12: settings-aware distance format.
+  const dist = useDistance();
   // Keep snapshot so content doesn't vanish during close animation
   const snapshot = useRef(route);
   if (route !== null) snapshot.current = route;
@@ -377,12 +380,12 @@ function RouteSheet({
         <View style={routeSheetStyles.statsRow}>
           <View style={routeSheetStyles.statItem}>
             <Icon name="Milestone" size={14} color={Colors.primary} strokeWidth={2} />
-            <Text style={routeSheetStyles.statValue}>{(data.distanceM / 1000).toFixed(1)} km</Text>
+            <Text style={routeSheetStyles.statValue}>{dist.format(data.distanceM, 1)} {dist.unit}</Text>
           </View>
           <View style={routeSheetStyles.statDivider} />
           <View style={routeSheetStyles.statItem}>
             <Icon name="TrendingUp" size={14} color={Colors.primary} strokeWidth={2} />
-            <Text style={routeSheetStyles.statValue}>{Math.round(data.elevationGainM)} m</Text>
+            <Text style={routeSheetStyles.statValue}>{dist.formatElevation(data.elevationGainM)} {dist.elevUnit}</Text>
           </View>
           <View style={routeSheetStyles.statDivider} />
           <View style={routeSheetStyles.statItem}>
@@ -435,6 +438,8 @@ function ActivitySheet({
   const insets = useSafeAreaInsets();
   const deleteSession = useSessionStore(s => s.deleteSession);
   const slideAnim = useRef(new Animated.Value(400)).current;
+  // O12: settings-aware distance format.
+  const dist = useDistance();
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const snapshot = useRef(session);
   if (session !== null) snapshot.current = session;
@@ -500,7 +505,7 @@ function ActivitySheet({
           <View style={routeSheetStyles.statDivider} />
           <View style={routeSheetStyles.statItem}>
             <Icon name="Milestone" size={14} color={accent} strokeWidth={2} />
-            <Text style={[routeSheetStyles.statValue, { color: accent }]}>{formatDistance(data.distanceM, 'km', 1)} km</Text>
+            <Text style={[routeSheetStyles.statValue, { color: accent }]}>{dist.format(data.distanceM, 1)} {dist.unit}</Text>
           </View>
           <View style={routeSheetStyles.statDivider} />
           <View style={routeSheetStyles.statItem}>
@@ -532,6 +537,8 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
   const nav = useNavigation<Nav>();
   const routes = useRouteStore(s => s.routes);
   const deleteRoute = useRouteStore(s => s.deleteRoute);
+  // O12 Round-3 R3-C1: settings-aware distance format for route list.
+  const dist = useDistance();
   // Sprint 69 STORY-00538: circle routes slice + loader.
   const circleRoutes = useRouteStore(s => s.circleRoutes);
   const loadingCircleRoutes = useRouteStore(s => s.loadingCircleRoutes);
@@ -666,7 +673,7 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
             </LinearGradient>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardMeta}>{(item.distanceM / 1000).toFixed(1)} km · {item.waypoints.length} waypoints</Text>
+              <Text style={styles.cardMeta}>{dist.format(item.distanceM, 1)} {dist.unit} · {item.waypoints.length} waypoints</Text>
             </View>
             <Icon name="ChevronRight" size={16} color={Colors.textMuted} strokeWidth={2} />
           </PressBtn>
@@ -696,6 +703,8 @@ function ActivitiesTab() {
   // changed once before but the fix never made it into a commit, so it
   // regressed. This time it's persisted via git.
   const nav = useNavigation<Nav>();
+  // O12: settings-aware distance format.
+  const dist = useDistance();
 
   const visible = useMemo(() => {
     let list = sessions;
@@ -766,7 +775,7 @@ function ActivitiesTab() {
                     hardcoded to 'Run' / 'Hike' which silently dropped
                     whatever the user typed in the stop-summary sheet. */}
                 <Text style={styles.cardTitle}>{item.name || (isRun ? 'Run' : 'Hike')}</Text>
-                <Text style={styles.cardMeta}>{dateStr} · {formatDistance(item.distanceM, 'km', 1)} km · {formatDuration(item.durationS)}</Text>
+                <Text style={styles.cardMeta}>{dateStr} · {dist.format(item.distanceM, 1)} {dist.unit} · {formatDuration(item.durationS)}</Text>
               </View>
               <Icon name="ChevronRight" size={16} color={Colors.textMuted} strokeWidth={2} />
             </PressBtn>
@@ -881,7 +890,7 @@ function FlagEditSheet({
                 <TouchableOpacity
                   key={flag.id}
                   style={[sheetStyles.typeCard, isSelected && sheetStyles.typeCardSelected]}
-                  onPress={() => { setSelectedType(flag.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  onPress={() => { setSelectedType(flag.id); haptic.impact('light'); }}
                   activeOpacity={0.8}
                 >
                   <LinearGradient
@@ -979,6 +988,10 @@ function FlagsTab() {
   const loadingCircle = useMarkerStore(s => s.loadingCircle);
   const loadCircleMarkers = useMarkerStore(s => s.loadCircleMarkers);
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
+  // O12 Round-3 R3-C1: settings-aware short distance for marker list. Note:
+  // renamed from local `dist` shadow — the `const dist = (m) => ...` on
+  // line ~1032 has been renamed to `distComparator` to avoid clashing.
+  const userUnit = useDistance();
   const [typeFilter, setTypeFilter] = useState<MarkerType | 'all'>('all');
   const [permFilter, setPermFilter] = useState<MarkerPermission | 'all'>('all');
   const [sort, setSort] = useState<'recent' | 'nearest'>('recent');
@@ -1019,12 +1032,14 @@ function FlagsTab() {
     }
     // 'nearest' — needs lastCoord; fall back to recent if no GPS yet
     if (!lastCoord) return [...filtered].sort((a, b) => b.createdAt - a.createdAt);
-    const dist = (m: Marker) => {
+    // O12 Round-3 R3-C1: renamed from `dist` to avoid shadow with the
+    // useDistance() hook at FlagsTab scope.
+    const distComparator = (m: Marker) => {
       const dx = (m.lng - lastCoord.lng) * Math.cos((m.lat * Math.PI) / 180);
       const dy = m.lat - lastCoord.lat;
       return dx * dx + dy * dy; // squared euclidean is enough for ordering
     };
-    return [...filtered].sort((a, b) => dist(a) - dist(b));
+    return [...filtered].sort((a, b) => distComparator(a) - distComparator(b));
   }, [filtered, sort, lastCoord]);
 
   if (scope === 'mine' && markers.length === 0) {
@@ -1144,7 +1159,7 @@ function FlagsTab() {
           let distanceStr = '';
           if (lastCoord) {
             const distM = haversineM({ lat: lastCoord.lat, lng: lastCoord.lng }, { lat: item.lat, lng: item.lng });
-            distanceStr = distM < 1000 ? `${Math.round(distM)}m` : `${(distM / 1000).toFixed(1)}km`;
+            distanceStr = userUnit.formatShort(distM);
           }
           return (
             <PressBtn style={[styles.card, { borderLeftColor: meta.color }]} onPress={() => nav.navigate('MarkerDetail', { markerId: item.id })} scaleTo={0.97}>

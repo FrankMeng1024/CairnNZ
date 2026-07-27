@@ -17,9 +17,18 @@ import { crashLogger } from '../services/crashLogger';
 import { attachMemorySync, detachMemorySync } from '../services/memorySync';
 import { hydrateMemoryForUser, detachMemoryPersistence } from '../features/memory/services/memoryPersistence';
 
-export type UIMode = 'beginner' | 'expert';
-type ActivityMode = 'hiking' | 'running';
-type TrackingState = 'idle' | 'tracking' | 'paused';
+// O12 (2026-07-27): UIMode / uiMode / setUIMode removed. Was Explorer/Navigator
+// double-switch — dead code (only 'brg' placeholder stat used isExpert). Also
+// removed STORAGE_KEY_UI_MODE. Persisted 'cairn_ui_mode' key on old installs
+// is now orphaned — safe to ignore (MMKV/AsyncStorage will just carry a stale
+// entry no one reads). No migration needed.
+//
+// O12 Round-3 (2026-07-27): also removed mock tracking fields (activityMode /
+// setActivityMode / trackingState / setTrackingState / trackingDistance /
+// trackingDuration / incrementTracking). Only MapScreen consumed them and
+// its whole tracking-bar / start-tracking / mode-modal UI was dead (gated
+// behind viewOnly=false paths that no live nav.navigate produces). Real
+// activity mode + tracking state live in useTrackingStore.
 
 interface UserProfile {
   id: string;
@@ -27,30 +36,12 @@ interface UserProfile {
   email: string;
 }
 
-const STORAGE_KEY_UI_MODE = 'cairn_ui_mode';
 // Sprint 72 STORY-00549: 注销硬清标记 — 用户主动 logout 后写入,
 // 冷启动 hydrate 看到此标记 → 强制走 AuthScreen 不做 auto-login。
 // 用户下次成功登录时清除此标记。
 const STORAGE_KEY_LOGOUT_MARKER = 'cairn_logout_marker';
 
 interface AppState {
-  // UI Mode — core of STORY-00006
-  uiMode: UIMode;
-  setUIMode: (mode: UIMode) => void;
-
-  // Activity mode
-  activityMode: ActivityMode;
-  setActivityMode: (mode: ActivityMode) => void;
-
-  // Tracking state
-  trackingState: TrackingState;
-  setTrackingState: (state: TrackingState) => void;
-
-  // Mock elapsed tracking data
-  trackingDistance: number;    // km
-  trackingDuration: number;    // seconds
-  incrementTracking: () => void;
-
   // Auth
   isLoggedIn: boolean;
   setLoggedIn: (v: boolean) => void;
@@ -71,26 +62,6 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  uiMode: 'beginner',    // Default: beginner (Explorer) for new users
-  setUIMode: (mode) => {
-    set({ uiMode: mode });
-    storage.setItem(STORAGE_KEY_UI_MODE, mode);
-  },
-
-  activityMode: 'hiking',
-  setActivityMode: (mode) => set({ activityMode: mode }),
-
-  trackingState: 'idle',
-  setTrackingState: (state) => set({ trackingState: state }),
-
-  trackingDistance: 0,
-  trackingDuration: 0,
-  incrementTracking: () =>
-    set((s) => ({
-      trackingDistance: Math.round((s.trackingDistance + 0.01) * 100) / 100,
-      trackingDuration: s.trackingDuration + 3,
-    })),
-
   isLoggedIn: false,
   setLoggedIn: (v) => set({ isLoggedIn: v }),
   user: null,
@@ -109,6 +80,17 @@ export const useAppStore = create<AppState>((set) => ({
     crashLogger.breadcrumb('logout:sessions_cleared');
     useMarkerStore.getState().clearMarkers();
     crashLogger.breadcrumb('logout:markers_cleared');
+    // Round-5 R5-M6: also clear memory points + H3 fog cells so the next
+    // sign-in doesn't briefly show the previous user's data. Pre-fix,
+    // ForegroundUnlockManager cleaned this up on the next foreground tick
+    // (~100ms delay) — enough time for SettingsScreen memoryPointCount to
+    // flash ghost stats. Now cleared synchronously with markers/sessions.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useMemoryStore } = require('../features/memory/store/useMemoryStore');
+      useMemoryStore.getState().resetForUserSwitch();
+      crashLogger.breadcrumb('logout:memory_reset');
+    } catch { /* swallow — memoryStore may not be initialized on cold-boot logout */ }
     // v405: 断开 memory sync + memory persistence,避免 logout 后
     // 后续 pushPendingPoints 用旧 userId 推数据到新用户。
     try { detachMemorySync(); } catch { /* swallow */ }
@@ -125,10 +107,8 @@ export const useAppStore = create<AppState>((set) => ({
     // App.tsx await blocks and the loading View renders forever (or
     // worse, RN's default global handler kills the app).
     try {
-      const saved = await storage.getItem(STORAGE_KEY_UI_MODE);
-      if (saved === 'beginner' || saved === 'expert') {
-        set({ uiMode: saved });
-      }
+      // O12: uiMode restore removed. STORAGE_KEY_UI_MODE key on old installs
+      // will remain as orphaned MMKV entry — harmless.
 
       // Playwright bypass: only allowed in __DEV__ to prevent leaking into production builds.
       // Production builds ignore EXPO_PUBLIC_PLAYWRIGHT_BYPASS even if env leaks in.

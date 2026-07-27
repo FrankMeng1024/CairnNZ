@@ -601,10 +601,16 @@ function AppRoot() {
     markBootPhase('boot_complete', { ota: OTA_VERSION });
   }, []);
 
+  // O12 Round-3 R3-H1: also wait on settings hydrate so we don't flash
+  // DEFAULTS.units='metric' for imperial users on cold start. Both hydrates
+  // run in parallel (useEffect above), so the wait is bounded by the slower
+  // one — usually <200ms.
+  const settingsHydrated = useSettingsStore(s => s.hydrated);
+
   // Don't block forever on font loading — show app once hydrated even if
   // fonts errored. If they're loaded, body text will use Inter; if not,
   // it falls back to system default.
-  if (!hydrated) {
+  if (!hydrated || !settingsHydrated) {
     markBootPhase('render_wait_hydrate');
     return <View style={{ flex: 1 }} />;
   }

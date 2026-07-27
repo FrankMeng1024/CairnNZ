@@ -28,6 +28,7 @@ import { polylineLengthM } from '../../services/routing/corridor/PolylineSampler
 import { TrimSlider } from './TrimSlider';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../tokens';
 import { Icon } from '../Icon';
+import { useDistance } from '../../utils/distanceFormat';
 
 interface EditOverlayV274Props {
   onCancel: () => void;
@@ -41,6 +42,8 @@ type ToolKey = 'pan' | 'brush';
 export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element {
   const { onSave, onPreview, onBeautify } = props;
   const insets = useSafeAreaInsets();
+  // O12 Round-3 R3-C1: settings-aware distance format for trim readout.
+  const dist = useDistance();
 
   const isComputing = useRouteEditStore(s => s.isComputing);
   const lastError = useRouteEditStore(s => s.lastError);
@@ -304,7 +307,7 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                     <Text style={styles.trimHeaderText} numberOfLines={1}>Trim · drag handles</Text>
                     {totalLengthM > 0 && (trimStartFrac > 0 || trimEndFrac < 1) && (
                       <Text style={styles.trimReadout} numberOfLines={1}>
-                        {(editedLengthM / 1000).toFixed(2)} / {(totalLengthM / 1000).toFixed(2)} km
+                        {dist.format(editedLengthM, 2)} / {dist.format(totalLengthM, 2)} {dist.unit}
                       </Text>
                     )}
                   </View>

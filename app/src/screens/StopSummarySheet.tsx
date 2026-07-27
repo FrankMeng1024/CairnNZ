@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { previewMemoryGain } from '../features/memory/services/flushHikingToMemory';
+import { useDistance } from '../utils/distanceFormat';
 
 type StopSummary = {
   distanceM: number;
@@ -35,6 +36,10 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard }: Pr
   const insets = useSafeAreaInsets();
   const slideY = useRef(new Animated.Value(500)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  // O12 Round-3 R3-C1 + R3-M8: settings-aware units. Memory area is in
+  // km² (H3 res 11 = 0.00215 km²/cell) or mi² (× 0.386102 ≈ 0.000830 mi²/cell)
+  // when imperial. Users deserve consistent units across memory + distance.
+  const dist = useDistance();
 
   useEffect(() => {
     Animated.parallel([
@@ -97,14 +102,17 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard }: Pr
               number is consistent with what the user will see after Save.
               UX #11 fix: always show the chip (no silent absence). For
               too-short sessions show "Too short to record". km² is H3
-              res 11 avg cell area = 0.00215 km² (~2150 m²) per cell. */}
+              res 11 avg cell area = 0.00215 km² (~2150 m²) per cell.
+              O12 R3-M8: mi² conversion for imperial users (× 0.386102). */}
           <View style={stopSheetStyles.memoryBanner}>
             <Icon name="Map" size={18} color={accent} strokeWidth={2.2} />
             <Text style={[stopSheetStyles.memoryBannerText, { color: accent }]}>
               {summary.trackPoints.length < 2
                 ? 'Memory: Too short to record'
                 : memoryNewCells > 0
-                  ? `Memory: +${(memoryNewCells * 0.00215).toFixed(2)} km²`
+                  ? (dist.imperial
+                      ? `Memory: +${(memoryNewCells * 0.000830).toFixed(3)} mi²`
+                      : `Memory: +${(memoryNewCells * 0.00215).toFixed(2)} km²`)
                   : 'Memory: Familiar ground'}
             </Text>
           </View>

@@ -25,17 +25,13 @@ import { Marker } from '../../../store/useMarkerStore';
 import { MemoryColors, MysteryPreviewConfig } from '../config/memoryConfig';
 import { Colors } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
+import { useDistance } from '../../../utils/distanceFormat';
 
 interface Props {
   marker: Marker | null;
   userLat: number;
   userLng: number;
   onClose: () => void;
-}
-
-function formatDistance(m: number): string {
-  if (m < 1000) return `${Math.round(m)} m`;
-  return `${(m / 1000).toFixed(1)} km`;
 }
 
 function formatAge(planted: number): string {
@@ -75,6 +71,9 @@ function bearingArrow(deg: number): string {
 }
 
 export function MysteryCairnSheet({ marker, userLat, userLng, onClose }: Props) {
+  // O12: settings-aware short distance (m/ft near, km/mi far). Hook must be
+  // called unconditionally — early return moved below.
+  const dist = useDistance();
   if (!marker) return null;
   const distance = haversineM(
     { lat: userLat, lng: userLng },
@@ -97,7 +96,7 @@ export function MysteryCairnSheet({ marker, userLat, userLng, onClose }: Props) 
               <Meta label="ago" value={formatAge(marker.createdAt)} />
             )}
             {MysteryPreviewConfig.showDistanceBearing && (
-              <Meta label="away" value={formatDistance(distance)} />
+              <Meta label="away" value={dist.formatShort(distance)} />
             )}
           </View>
 

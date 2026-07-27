@@ -65,7 +65,9 @@ export function MapBottomPanel({ markers, onMarkerPress, onOfflinePress }: Props
         </View>
         <View style={styles.markerInfo}>
           <Text style={styles.markerTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.markerMeta}>{item.distance} · {item.timeAgo}</Text>
+          <Text style={styles.markerMeta}>
+            {item.distance ? `${item.distance} · ` : ''}{item.timeAgo}
+          </Text>
         </View>
         <Icon name="ChevronRight" size={16} color={Colors.textMuted} />
       </TouchableOpacity>

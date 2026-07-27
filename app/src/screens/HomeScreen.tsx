@@ -16,11 +16,12 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
 import { HikingIcon, RunningIcon, FlagMarkerIcon, CairnLogo } from '../components/ActivityIcons';
-import { useAppStore } from '../store/useAppStore';
+// O12: useAppStore import removed — uiMode was the only consumer.
 import { useSessionStore } from '../store/useSessionStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { useTrackingStore } from '../store/useTrackingStore';
-import { formatDistance, formatDuration, getRelativeTime } from '../utils/geo';
+import { formatDuration, getRelativeTime } from '../utils/geo';
+import { useDistance } from '../utils/distanceFormat';
 import { getCurrentRegion } from '../config/regions';
 import { OtaBadge } from '../components/OtaBadge';
 // v412: UnfinishedSessionBanner 已被 v412 UnfinishedRecoveryModal 取代 (HikingScreen 内)
@@ -29,14 +30,14 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-function getGreeting(mode: 'beginner' | 'expert') {
+function getGreeting() {
   const h = new Date().getHours();
-  const label = mode === 'expert' ? 'Navigator' : 'Explorer';
+  // O12: uiMode removed — greeting no longer branches on Explorer/Navigator.
   // PRD3 E-014: occasional Te Reo touch — Kia ora as morning variant
   // (registered translator review pending — Kia ora is a well-established greeting)
-  if (h >= 5 && h < 12) return `Kia ora, ${label}`;
-  if (h >= 12 && h < 18) return `Good afternoon, ${label}`;
-  return `Good evening, ${label}`;
+  if (h >= 5 && h < 12) return 'Kia ora, Explorer';
+  if (h >= 12 && h < 18) return 'Good afternoon, Explorer';
+  return 'Good evening, Explorer';
 }
 
 // ── Recent / Live activity row ───────────────────────────────────────────
@@ -57,6 +58,8 @@ function RecentRow({ onPress }: { onPress: (id: string) => void }) {
   const liveDurationS = useTrackingStore(s => s.durationS);
   const nav = useNavigation<Nav>();
   const pulse = useRef(new Animated.Value(1)).current;
+  // O12: user Units preference (metric/imperial).
+  const dist = useDistance();
 
   // Pulse the dot when live so the row visually communicates "this is
   // moving right now" rather than feeling identical to a stale entry.
@@ -104,7 +107,7 @@ function RecentRow({ onPress }: { onPress: (id: string) => void }) {
         <View style={recentStyles.textGroup}>
           <Text style={[recentStyles.badge, { color: accent }]}>{label} in progress</Text>
           <Text style={recentStyles.stat}>
-            {`${formatDistance(liveDistanceM, 'km', 2)} km · ${formatDuration(liveDurationS)}`}
+            {`${dist.format(liveDistanceM, 2)} ${dist.unit} · ${formatDuration(liveDurationS)}`}
           </Text>
         </View>
         <Text style={[recentStyles.when, { color: accent, fontWeight: '700' }]}>Resume</Text>
@@ -130,7 +133,7 @@ function RecentRow({ onPress }: { onPress: (id: string) => void }) {
   const bg = isRun ? Colors.runningLight : Colors.primaryLight;
   const label = isRun ? 'Run' : 'Hike';
   const stat = last.distanceM > 10
-    ? `${formatDistance(last.distanceM, 'km', 1)} km`
+    ? `${dist.format(last.distanceM, 1)} ${dist.unit}`
     : formatDuration(last.durationS);
   const when = getRelativeTime(last.startedAt);
 
@@ -232,7 +235,7 @@ export function HomeScreen() {
     require('../services/bootDiagnostics').markBootPhase('home_screen_render_start');
   } catch {/* ignore */}
   const nav = useNavigation<Nav>();
-  const uiMode = useAppStore(s => s.uiMode);
+  // O12: uiMode removed
   const sessions = useSessionStore(s => s.sessions);
   const allMarkers = useMarkerStore(s => s.markers);
   // v320: beacon after selectors read — confirms zustand subscriptions
@@ -404,7 +407,7 @@ export function HomeScreen() {
             </View>
             <Text style={styles.logo}>Cairn</Text>
           </View>
-          <Text style={styles.greeting}>{getGreeting(uiMode)}</Text>
+          <Text style={styles.greeting}>{getGreeting()}</Text>
         </View>
 
         {/* v412: pending-sync banner — only when there are real pending

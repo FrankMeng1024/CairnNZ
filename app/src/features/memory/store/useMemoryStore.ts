@@ -421,18 +421,26 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     }
   },
 
-  clearAll: () => set({
-    points: [],
-    _bucketIndex: null,
-    geometryVersion: get().geometryVersion + 1,
-    _unsyncedCount: 0,
-    initialRevealDone: false,
-    lastWatcherFix: null,
-    // N1 fix (v0.2.6.3): reset syncState too. Otherwise a logout
-    // mid-push leaves inFlightCount=1 in the store; the next user's
-    // MemorySummaryCard reads "Syncing…" indefinitely.
-    syncState: { inFlightCount: 0, lastSyncAt: 0 },
-  }),
+  clearAll: () => {
+    set({
+      points: [],
+      _bucketIndex: null,
+      geometryVersion: get().geometryVersion + 1,
+      _unsyncedCount: 0,
+      initialRevealDone: false,
+      lastWatcherFix: null,
+      // N1 fix (v0.2.6.3): reset syncState too. Otherwise a logout
+      // mid-push leaves inFlightCount=1 in the store; the next user's
+      // MemorySummaryCard reads "Syncing…" indefinitely.
+      syncState: { inFlightCount: 0, lastSyncAt: 0 },
+    });
+    // O12 Round-3 R3-C2: also clear the H3 visited store so the FogLayer
+    // does not keep displaying revealed cells after Reset Memory.
+    // replacePoints (line 420) already does this on empty; clearAll was
+    // missing the same call — the visible bug: user Resets Memory, server
+    // + points cleared, but FogLayer still shows walked-through fog holes.
+    useH3VisitedStore.getState().clear();
+  },
 
   bumpInFlight: (delta) => {
     const cur = get().syncState;
@@ -469,13 +477,18 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
    * Calls clearAll's logic plus syncState reset. Use anywhere a
    * caller previously had to update multiple slices.
    */
-  resetForUserSwitch: () => set({
-    points: [],
-    _bucketIndex: null,
-    geometryVersion: get().geometryVersion + 1,
-    _unsyncedCount: 0,
-    initialRevealDone: false,
-    syncState: { inFlightCount: 0, lastSyncAt: 0 },
-    lastWatcherFix: null,
-  }),
+  resetForUserSwitch: () => {
+    set({
+      points: [],
+      _bucketIndex: null,
+      geometryVersion: get().geometryVersion + 1,
+      _unsyncedCount: 0,
+      initialRevealDone: false,
+      syncState: { inFlightCount: 0, lastSyncAt: 0 },
+      lastWatcherFix: null,
+    });
+    // O12 Round-3 R3-C2: clear H3 fog cells too — switching user must
+    // not leave the previous user's revealed cells on the map.
+    useH3VisitedStore.getState().clear();
+  },
 }));

@@ -8,19 +8,22 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Dimensions, Modal,
+  View, Text, StyleSheet, TouchableOpacity, Dimensions,
   TextInput, Animated, Easing, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
+import { haptic } from '../services/hapticService';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { useAppStore } from '../store/useAppStore';
+// O12 Round-3: useAppStore import removed — MapScreen no longer reads any
+// AppState field after the mock activity/tracking system was deleted.
 import { useMarkerStore, type Marker, type MarkerPermission } from '../store/useMarkerStore';
 import { useFriendStore } from '../store/useFriendStore';
 import { useTrackingStore } from '../store/useTrackingStore';
+import { useDistance } from '../utils/distanceFormat';
+import { haversineM } from '../utils/geo';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { PressBtn } from '../components/PressBtn';
 import { Icon } from '../components/Icon';
@@ -247,7 +250,7 @@ function CreateMarkerSheet({
                 <TouchableOpacity
                   key={flag.id}
                   style={[styles.typeCard, isSelected && styles.typeCardSelected]}
-                  onPress={() => { setSelectedType(flag.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  onPress={() => { setSelectedType(flag.id); haptic.impact('light'); }}
                   activeOpacity={0.8}
                 >
                   <LinearGradient
@@ -404,7 +407,7 @@ function EditMarkerSheet({
                 <TouchableOpacity
                   key={flag.id}
                   style={[styles.typeCard, isSelected && styles.typeCardSelected]}
-                  onPress={() => { setSelectedType(flag.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  onPress={() => { setSelectedType(flag.id); haptic.impact('light'); }}
                   activeOpacity={0.8}
                 >
                   <LinearGradient
@@ -530,8 +533,13 @@ export function MapScreen() {
   const focusMarkerId: string | undefined = route.params?.focusMarkerId;
   const viewOnly = !!focusMarkerId; // "view flag location" mode — hides activity controls
 
-  const { activityMode, setActivityMode, trackingState, setTrackingState,
-    trackingDistance, trackingDuration, incrementTracking } = useAppStore();
+  // O12 Round-3: useAppStore mock fields (activityMode/setActivityMode,
+  // trackingState/setTrackingState, trackingDistance/trackingDuration/
+  // incrementTracking) all removed — the tracking bar + start-tracking
+  // button + activity-mode chip that consumed them were dead UI (real
+  // tracking runs in HikingScreen/RunningScreen via useTrackingStore).
+  // O12 Round-3 R3-C1 + R3-M5: settings-aware distance for MapBottomPanel.
+  const dist = useDistance();
 
   // Real marker store
   const storeMarkers = useMarkerStore(s => s.markers);
@@ -634,7 +642,7 @@ export function MapScreen() {
   // Form D never reaches here because RealMap only renders visible marks.
   const [detailMarker, setDetailMarker] = useState<Marker | null>(null);
   const [createVisible, setCreateVisible] = useState(false);
-  const [showModeModal, setShowModeModal] = useState(false);
+  // O12 Round-3: showModeModal state removed — modal was dead UI.
   const [offlineVisible, setOfflineVisible] = useState(false);
 
   // Auto-select the focused marker on mount
@@ -655,18 +663,12 @@ export function MapScreen() {
   const springOut = (val: Animated.Value) =>
     Animated.spring(val, { toValue: 1, useNativeDriver: true, tension: 300, friction: 8 }).start();
 
-  // Mock tracking timer
-  useEffect(() => {
-    if (trackingState !== 'tracking') return;
-    const t = setInterval(incrementTracking, 3000);
-    return () => clearInterval(t);
-  }, [trackingState]);
-
-  const formatDuration = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${sec.toString().padStart(2, '0')}`;
-  };
+  // O12 Round-3: Mock tracking timer removed. useAppStore.trackingState /
+  // trackingDistance / trackingDuration / incrementTracking were mock data
+  // sources — real tracking runs in HikingScreen/RunningScreen via
+  // useTrackingStore. MapScreen tracking bar has been removed too.
+  // O12 Round-3: formatDuration helper removed — was only used by the
+  // dead tracking bar.
 
   const handleAddMarker = async (type: MarkerType, note: string) => {
     const lat = lastCoord?.lat ?? region.centerLat;
@@ -682,7 +684,9 @@ export function MapScreen() {
     });
   };
 
-  const isTracking = trackingState === 'tracking';
+  // O12 Round-3: `const isTracking = trackingState === 'tracking'` removed —
+  // trackingState was a mock field, and all UI that read isTracking has been
+  // deleted.
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
@@ -697,93 +701,33 @@ export function MapScreen() {
             <Icon name="ChevronLeft" size={16} color={Colors.primary} strokeWidth={2.5} />
             <Text style={styles.backChipText}>Back</Text>
           </TouchableOpacity>
-          <View style={[styles.gpsChip, !isTracking && styles.gpsChipAmber]}>
-            <View style={[styles.gpsDot, { backgroundColor: isTracking ? Colors.success : Colors.severityWarning }]} />
-            <Text style={[styles.chipText, !isTracking && styles.chipTextAmber]}>
-              {isTracking ? 'GPS Connected ±5m' : 'Enable GPS'}
-            </Text>
+          <View style={styles.gpsChip}>
+            <View style={[styles.gpsDot, { backgroundColor: Colors.severityWarning }]} />
+            <Text style={[styles.chipText, styles.chipTextAmber]}>Enable GPS</Text>
           </View>
         </View>
 
-        {/* Activity mode chip — hidden in viewOnly mode */}
-        {!viewOnly && (
-          <TouchableOpacity style={styles.modeChip} onPress={() => setShowModeModal(true)}>
-            <Icon
-              name={activityMode === 'hiking' ? 'Mountain' : 'PersonStanding'}
-              size={16} color={Colors.primary} strokeWidth={1.8}
-            />
-            <Text style={styles.chipText}>{activityMode === 'hiking' ? 'Hiking' : 'Running'}</Text>
-          </TouchableOpacity>
-        )}
+        {/*
+         * O12 Round-3: Activity-mode chip removed. `useAppStore.activityMode`
+         * was mock-only — real tracking activity mode is picked in
+         * HikingScreen/RunningScreen entry (not here). This chip only wrote
+         * to the mock field and never influenced anything real.
+         */}
       </SafeAreaView>
 
-      {/* Tracking bar — hidden in viewOnly mode */}
-      {isTracking && !viewOnly && (
-        <View style={styles.trackingBar}>
-          {activityMode === 'running' ? (
-            <>
-              <View style={styles.trackingStatItem}>
-                <Text style={styles.trackingValueLg}>5:30</Text>
-                <Text style={styles.trackingUnit}>pace /km</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.trackingStatItem}>
-                <Text style={styles.trackingValue}>{trackingDistance.toFixed(2)}</Text>
-                <Text style={styles.trackingUnit}>km</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.trackingStatItem}>
-                <Text style={styles.trackingValue}>{formatDuration(trackingDuration)}</Text>
-                <Text style={styles.trackingUnit}>elapsed</Text>
-              </View>
-              <TouchableOpacity style={styles.stopBtn} onPress={() => setTrackingState('idle')}>
-                <Icon name="Square" size={12} color="#fff" strokeWidth={3} />
-                <Text style={styles.stopBtnText}>Stop</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <View style={styles.trackingStatItem}>
-                <Text style={styles.trackingValueLg}>{trackingDistance.toFixed(2)}</Text>
-                <Text style={styles.trackingUnit}>km</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.trackingStatItem}>
-                <Text style={styles.trackingValue}>{formatDuration(trackingDuration)}</Text>
-                <Text style={styles.trackingUnit}>elapsed</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.trackingStatItem}>
-                <Text style={styles.trackingValue}>850</Text>
-                <Text style={styles.trackingUnit}>elev m</Text>
-              </View>
-              <TouchableOpacity style={styles.stopBtn} onPress={() => setTrackingState('idle')}>
-                <Icon name="Square" size={12} color="#fff" strokeWidth={3} />
-                <Text style={styles.stopBtnText}>Stop</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      )}
+      {/*
+       * O12 Round-3: Tracking bar + Start-tracking button removed. They ran
+       * on useAppStore.trackingState mock state fed by a 3s incrementTracking
+       * timer — the whole system was fake data. Real tracking lives in
+       * HikingScreen/RunningScreen. MapScreen is now view-only (markers +
+       * flag creation FAB).
+       */}
 
       {/* Bottom controls — hidden in viewOnly mode */}
       {!viewOnly && (
       <SafeAreaView style={styles.bottomOverlay} edges={['bottom']} pointerEvents="box-none">
         <View style={styles.bottomRow}>
-          {/* Start/Stop tracking button */}
-          {!isTracking ? (
-            <TouchableOpacity
-              style={styles.startTrackingBtn}
-              onPress={() => setTrackingState('tracking')}
-            >
-              <Icon name="Play" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
-              <Text style={styles.startTrackingText}>
-                {activityMode === 'hiking' ? 'Start Hiking' : 'Start Running'}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={{ flex: 1 }} />
-          )}
+          <View style={{ flex: 1 }} />
 
           {/* FAB — STORY-00098: red badge showing flag count */}
           <Animated.View style={{ transform: [{ scale: fabScale }] }}>
@@ -897,16 +841,21 @@ export function MapScreen() {
         }}
       />
 
-      {/* Bottom Panel — hidden when viewing a specific marker or tracking */}
-      {!isTracking && !viewOnly && (
+      {/* Bottom Panel — hidden when viewing a specific marker */}
+      {!viewOnly && (
         <MapBottomPanel
-          markers={storeMarkers.map(m => ({
-            id: m.id,
-            type: m.type,
-            title: m.note || MARKER_META[m.type as keyof typeof MARKER_META]?.label || 'Marker',
-            distance: '--',
-            timeAgo: new Date(m.createdAt).toLocaleDateString(),
-          }))}
+          markers={storeMarkers.map(m => {
+            const dm = lastCoord
+              ? haversineM({ lat: lastCoord.lat, lng: lastCoord.lng }, { lat: m.lat, lng: m.lng })
+              : null;
+            return {
+              id: m.id,
+              type: m.type,
+              title: m.note || MARKER_META[m.type as keyof typeof MARKER_META]?.label || 'Marker',
+              distance: dm != null ? dist.formatShort(dm) : '',
+              timeAgo: new Date(m.createdAt).toLocaleDateString(),
+            };
+          })}
           onMarkerPress={(id) => {
             const m = storeMarkers.find(mk => mk.id === id);
             if (m) setEditMarker(m);
@@ -921,44 +870,12 @@ export function MapScreen() {
         onClose={() => setOfflineVisible(false)}
       />
 
-      {/* Activity mode modal — STORY-00099: LinearGradient icon badges */}
-      <Modal visible={showModeModal} transparent animationType="fade">
-        <TouchableOpacity style={styles.modalOverlay} onPress={() => setShowModeModal(false)} activeOpacity={1}>
-          <View style={styles.modeModal}>
-            <Text style={styles.modeModalTitle}>Activity Mode</Text>
-            {([
-              { id: 'hiking' as const, icon: 'Mountain' as IconName, label: 'Hiking Mode', hint: 'Map-first, full flag features', gradColors: [Colors.primaryLight, Colors.primaryBg] as [string, string] },
-              { id: 'running' as const, icon: 'PersonStanding' as IconName, label: 'Running Mode', hint: 'Voice-first, minimal UI, lock-screen safe', gradColors: [Colors.infoBg, Colors.infoBg] as [string, string] },
-            ]).map((m) => (
-              <TouchableOpacity
-                key={m.id}
-                style={[styles.modeModalRow, activityMode === m.id && styles.modeModalRowActive]}
-                onPress={() => { setActivityMode(m.id); setShowModeModal(false); }}
-              >
-                {/* LinearGradient icon badge */}
-                <LinearGradient
-                  colors={m.gradColors}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={styles.modeModalIconBadge}
-                >
-                  <Icon
-                    name={m.icon}
-                    size={22} color={activityMode === m.id ? Colors.primary : Colors.textSecondary}
-                    strokeWidth={1.8}
-                  />
-                </LinearGradient>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modeModalLabel}>{m.label}</Text>
-                  <Text style={styles.modeModalHint}>{m.hint}</Text>
-                </View>
-                {activityMode === m.id && (
-                  <Icon name="CircleCheck" size={18} color={Colors.primary} strokeWidth={2} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      {/*
+       * O12 Round-3: Activity-mode modal removed. useAppStore.activityMode /
+       * setActivityMode were mock — real mode is chosen when entering
+       * HikingScreen/RunningScreen. No entry point remained after the mode
+       * chip was removed above.
+       */}
     </View>
   );
 }
@@ -1025,40 +942,14 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
   },
-  gpsChipAmber: { backgroundColor: Colors.severityWarningBg, borderColor: Colors.severityWarning },
   chipTextAmber: { color: Colors.severityWarning },
   gpsDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success },
-  modeChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.82)', borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.md, paddingVertical: 7,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-  },
+  // O12 Round-3: modeChip / trackingBar / trackingStatItem / trackingValueLg /
+  // trackingValue / trackingUnit / statDivider / stopBtn / stopBtnText /
+  // startTrackingBtn / startTrackingText / gpsChipAmber styles removed —
+  // all referenced only by the deleted mock tracking bar / start-tracking /
+  // activity-mode chip UI.
   chipText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textPrimary },
-
-  // ── Tracking bar (STORY-00098) ───────────────────────────────────────────────
-  trackingBar: {
-    position: 'absolute', top: 90, left: Spacing.base, right: Spacing.base,
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.88)',
-    borderRadius: Radius.card, padding: Spacing.md,
-    gap: Spacing.sm,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 24, elevation: 6,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    borderLeftWidth: 3, borderLeftColor: Colors.primary,
-  },
-  trackingStatItem: { alignItems: 'center', flex: 1 },
-  trackingValueLg: { fontSize: FontSize.h2, fontWeight: '700', color: Colors.textPrimary, fontVariant: ['tabular-nums'] },
-  trackingValue: { fontSize: FontSize.caption, fontWeight: '700', color: Colors.textPrimary, fontVariant: ['tabular-nums'] },
-  trackingUnit: { fontSize: FontSize.tiny, color: Colors.textSecondary, marginTop: 1 },
-  statDivider: { width: 1, height: 28, backgroundColor: Colors.border },
-  stopBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.danger, borderRadius: Radius.button,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
-  },
-  stopBtnText: { color: '#fff', fontWeight: '700', fontSize: FontSize.small },
 
   // ── Bottom controls ──────────────────────────────────────────────────────────
   bottomOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, pointerEvents: 'box-none' },
@@ -1066,15 +957,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-end',
     paddingHorizontal: Spacing.base, paddingBottom: Spacing.lg, gap: Spacing.sm,
   },
-  startTrackingBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md,
-    borderWidth: 2, borderColor: Colors.primaryMuted,
-    ...Shadow.card,
-  },
-  startTrackingText: { fontSize: FontSize.body, fontWeight: '700', color: Colors.primary },
   fab: {
     backgroundColor: Colors.primary, borderRadius: Radius.circle,
     width: 60, height: 60, alignItems: 'center', justifyContent: 'center',
@@ -1181,22 +1063,6 @@ const styles = StyleSheet.create({
   editSheetDeleteText: { color: Colors.danger, fontWeight: '600', fontSize: FontSize.body },
   editSheetSaveFlex: { flex: 1 },
 
-  // Activity mode modal (STORY-00099)
-  modalOverlay: { flex: 1, backgroundColor: Colors.overlayDark, justifyContent: 'center', padding: Spacing.xl },
-  modeModal: {
-    backgroundColor: Colors.surface, borderRadius: Radius.cardLg,
-    padding: Spacing.base, ...Shadow.overlay,
-  },
-  modeModalTitle: { fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary, marginBottom: Spacing.md },
-  modeModalRow: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
-    padding: Spacing.md, borderRadius: Radius.card, marginBottom: Spacing.sm,
-  },
-  modeModalRowActive: { backgroundColor: Colors.primaryBg },
-  modeModalIconBadge: {
-    width: 44, height: 44, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  modeModalLabel: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
-  modeModalHint: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
+  // O12 Round-3: modalOverlay + modeModal* styles removed — activity mode
+  // modal was dead UI referencing removed mock fields.
 });

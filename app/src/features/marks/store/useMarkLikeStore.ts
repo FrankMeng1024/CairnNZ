@@ -1,9 +1,8 @@
 /**
  * useMarkLikeStore — Friend System v1 / Sprint 68 / STORY-00533
  *
- * Session-only fake Like state for the v1 Detail Sheet.
- *
- * v4 §4.12 binding:
+ * Session-only Like state for the v1 Detail Sheet. NOT mock — this is the
+ * spec'd v1 product behavior per v4 §4.12:
  *   - Tap ❤ → red fill + count +1 (visible in this app session only)
  *   - Cold restart → like state gone, button restored
  *   - NO HTTP, NO DB write — local Set only

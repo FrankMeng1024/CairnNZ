@@ -11,7 +11,8 @@ import {
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
 import { MARKER_META } from '../data/mockData';
-import { haversineM, formatDistance } from '../utils/geo';
+import { haversineM } from '../utils/geo';
+import { useDistance } from '../utils/distanceFormat';
 import type { Marker } from '../store/useMarkerStore';
 import type { MarkerType } from '../data/mockData';
 
@@ -34,6 +35,8 @@ type Props = {
 export function MarkerDetailSheet({ marker, onClose, onDelete, lastCoordinate, flagTypes }: Props) {
   const meta = MARKER_META[marker.type] || MARKER_META.free;
   const flagType = flagTypes.find(f => f.id === marker.type);
+  // O12: settings-aware short-distance format (m/ft near, km/mi far).
+  const dist = useDistance();
   const timeAgo = (() => {
     const diffMs = Date.now() - marker.createdAt;
     const mins = Math.floor(diffMs / 60000);
@@ -47,7 +50,7 @@ export function MarkerDetailSheet({ marker, onClose, onDelete, lastCoordinate, f
     ? haversineM(lastCoordinate, { lat: marker.lat, lng: marker.lng })
     : null;
   const distStr = distToMarker != null
-    ? formatDistance(distToMarker, 'km', 1) + ' km away'
+    ? `${dist.formatShort(distToMarker)} away`
     : '--';
 
   // Slide-in animation — same easing/duration as FlagPlantSheet for consistency

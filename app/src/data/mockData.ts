@@ -1,7 +1,13 @@
-/** Mock data for all screens */
-
-// O1 batch 31: removed MOCK_FRIENDS, MOCK_ROUTES, MOCK_MARKERS — all replaced
-// by real store data; zero import sites found by subagent grep audit.
+/**
+ * Marker metadata (labels, icons, colors) for each MarkerType.
+ *
+ * Historical note: this file used to be Mock data (MOCK_FRIENDS / MOCK_ROUTES
+ * / MOCK_MARKERS), but all real mock data was removed in O1 batch 31. What
+ * remains is legitimate config metadata — MARKER_META + MarkerType re-export.
+ * File name kept for backward compatibility with 8 existing import sites.
+ * Feel free to rename to markerMeta.ts in a follow-up cleanup (all changes
+ * are import-path only, no logic changes).
+ */
 
 // MarkerType moved to src/config/markerTypes.ts (PRD3 E-015 — single source).
 // Re-exported here to keep existing imports working.

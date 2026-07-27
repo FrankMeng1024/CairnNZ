@@ -51,6 +51,8 @@ import {
   CloudOff,
   // O1 — restored: friend chat / activity / running-mode / hut marker
   MessageCircle, Footprints, PersonStanding, House,
+  // O12 Settings redesign — new rows in About & Legal / Preferences / Danger / Developer
+  Vibrate, Ruler, Cloud, MessageSquare, Shield, FileText, Wrench, ExternalLink,
 } from 'lucide-react-native';
 import { IconSize } from './tokens';
 
@@ -79,6 +81,8 @@ const ICON_MAP = {
   Layers,
   CloudOff,
   MessageCircle, Footprints, PersonStanding, House,
+  // O12 Settings redesign
+  Vibrate, Ruler, Cloud, MessageSquare, Shield, FileText, Wrench, ExternalLink,
 } as const;
 
 export type IconName = keyof typeof ICON_MAP;

@@ -31,7 +31,7 @@ import { useRouteEditStore } from '../store/useRouteEditStore';
 import { useSessionStore, loadTrackPoints } from '../store/useSessionStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { snapToRoadAndTrim } from '../services/routeMatcher';
-import { formatDistance } from '../utils/geo';
+import { useDistance } from '../utils/distanceFormat';
 import { smoothTrackPoints } from '../utils/smoothTrackPoints';
 import { getCurrentRegion } from '../config/regions';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
@@ -80,6 +80,8 @@ export function RouteEditorScreen() {
   const fromSessionId = route.params?.fromSessionId as string | undefined;
   const fromSessionTrackPoints = route.params?.fromSessionTrackPoints as
     | Array<{ lat: number; lng: number }> | undefined;
+  // O12: settings-aware distance format.
+  const dist = useDistance();
 
   const addRoute = useRouteStore(s => s.addRoute);
   const updateRoute = useRouteStore(s => s.updateRoute);
@@ -901,7 +903,7 @@ export function RouteEditorScreen() {
                   <View style={styles.viewStatsInline}>
                     <Text style={styles.viewStatText}>{renderPoints.length} points</Text>
                     <Text style={styles.viewStatDot}>·</Text>
-                    <Text style={styles.viewStatText}>{formatDistance(polylineLengthM(renderPoints), 'km', 1)} km</Text>
+                    <Text style={styles.viewStatText}>{dist.format(polylineLengthM(renderPoints), 1)} {dist.unit}</Text>
                   </View>
                 )}
                 {/* Sprint 69 STORY-00535: visibility toggle. Personal | Friend,

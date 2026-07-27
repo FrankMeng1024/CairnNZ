@@ -22,7 +22,8 @@ import { useMarkerStore } from '../store/useMarkerStore';
 import { crashLogger } from '../services/crashLogger';
 import { getCurrentRegion } from '../config/regions';
 import { getPrimaryMapStyle } from '../config/mapbox';
-import { formatDistance, formatDuration, formatDate, getRelativeTime, haversineM, kalmanInit, kalmanUpdate, simplifyPolyline } from '../utils/geo';
+import { formatDuration, formatDate, getRelativeTime, haversineM, kalmanInit, kalmanUpdate, simplifyPolyline } from '../utils/geo';
+import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
@@ -419,6 +420,8 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
 }) {
   const isRun = session.activityMode === 'running';
   const dateStr = formatDate(session.startedAt);
+  // O12: settings-aware distance format.
+  const dist = useDistance();
   // Display label prefers the user-assigned name; falls back to type
   // when no name was set. Earlier versions hardcoded 'Run' / 'Hike'
   // here, dropping whatever the user typed in the stop-summary sheet.
@@ -428,8 +431,13 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
   const actDeepBg = isRun
     ? Colors.runningLight.replace('0.12', '0.24')
     : Colors.primaryLight.replace('0.15', '0.28');
-  const rawDistStr = formatDistance(session.distanceM, 'km', 1);
-  const distStr = rawDistStr === '--' ? 'No GPS' : `${rawDistStr} km`;
+  const rawDistStr = dist.format(session.distanceM, 1);
+  // O12 Round-3 R3-M3 + Round-5 R5-M2: rawDistStr never returns '--' (utils/geo.ts
+  // formatDistance changed to '0.00' fallback). "No GPS" threshold uses meters
+  // directly instead of parseFloat(rawDistStr) so it doesn't flip between units
+  // (a 50m session was 'No GPS' in imperial [0.0 mi] but '0.1 km' in metric).
+  // 20m is the practical GPS-noise floor.
+  const distStr = session.distanceM < 20 ? 'No GPS' : rawDistStr;
   const durationStr = formatDuration(session.durationS);
 
   const expandAnim = useRef(new Animated.Value(isExpanded ? 1 : 0)).current;
@@ -596,14 +604,14 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
         <View style={cardStyles.expandedStats}>
           <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.primary }]}>
             <Text style={cardStyles.expandedStatVal}>{distStr}</Text>
-            {distStr !== 'No GPS' && <Text style={cardStyles.expandedStatLbl}>km</Text>}
+            {distStr !== 'No GPS' && <Text style={cardStyles.expandedStatLbl}>{dist.unit}</Text>}
           </View>
           <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.running }]}>
             <Text style={cardStyles.expandedStatVal}>{durationStr}</Text>
             <Text style={cardStyles.expandedStatLbl}>time</Text>
           </View>
           <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.severityCaution }]}>
-            <Text style={cardStyles.expandedStatVal}>+{session.elevationGainM ?? 0}m</Text>
+            <Text style={cardStyles.expandedStatVal}>+{dist.formatElevation(session.elevationGainM ?? 0)}{dist.elevUnit}</Text>
             <Text style={cardStyles.expandedStatLbl}>elev</Text>
           </View>
           <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.flag }]}>
@@ -727,6 +735,8 @@ export function MapHistoryScreen() {
   const nav = useNavigation<Nav>();
   const route = useRoute<any>();
   const targetSessionId = route.params?.sessionId as string | undefined;
+  // O12: settings-aware distance format for detail modal + stat displays.
+  const dist = useDistance();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
@@ -1017,9 +1027,9 @@ export function MapHistoryScreen() {
           <View style={styles.trackStatBar}>
             <View style={[styles.trackStat, { borderLeftWidth: 2, borderLeftColor: Colors.running }]}>
               <Text style={styles.trackStatValue}>
-                {selectedSession.distanceM < 10 ? '0' : formatDistance(selectedSession.distanceM, 'km', 2)}
+                {selectedSession.distanceM < 10 ? '0' : dist.format(selectedSession.distanceM, 2)}
               </Text>
-              <Text style={styles.trackStatUnit}>km</Text>
+              <Text style={styles.trackStatUnit}>{dist.unit}</Text>
             </View>
             <View style={styles.trackStatDivider} />
             <View style={[styles.trackStat, { borderLeftWidth: 2, borderLeftColor: Colors.primary }]}>
@@ -1033,7 +1043,7 @@ export function MapHistoryScreen() {
             </View>
             <View style={styles.trackStatDivider} />
             <View style={[styles.trackStat, { borderLeftWidth: 2, borderLeftColor: Colors.textMuted }]}>
-              <Text style={styles.trackStatValue}>+{selectedSession.elevationGainM}m</Text>
+              <Text style={styles.trackStatValue}>+{dist.formatElevation(selectedSession.elevationGainM ?? 0)}{dist.elevUnit}</Text>
               <Text style={styles.trackStatUnit}>elev</Text>
             </View>
           </View>
@@ -1105,15 +1115,15 @@ export function MapHistoryScreen() {
         <View style={styles.singleSessionPanel}>
           <View style={styles.singleSessionStats}>
             <View style={styles.singleStat}>
-              <Text style={styles.singleStatValue}>{formatDistance(selectedSession.distanceM, 'km', 1)}</Text>
-              <Text style={styles.singleStatLabel}>km</Text>
+              <Text style={styles.singleStatValue}>{dist.format(selectedSession.distanceM, 1)}</Text>
+              <Text style={styles.singleStatLabel}>{dist.unit}</Text>
             </View>
             <View style={styles.singleStat}>
               <Text style={styles.singleStatValue}>{formatDuration(selectedSession.durationS)}</Text>
               <Text style={styles.singleStatLabel}>time</Text>
             </View>
             <View style={styles.singleStat}>
-              <Text style={styles.singleStatValue}>+{selectedSession.elevationGainM}m</Text>
+              <Text style={styles.singleStatValue}>+{dist.formatElevation(selectedSession.elevationGainM ?? 0)}{dist.elevUnit}</Text>
               <Text style={styles.singleStatLabel}>elev</Text>
             </View>
           </View>
@@ -1260,9 +1270,7 @@ export function MapHistoryScreen() {
                   : null;
                 const distLabel = distM === null
                   ? null
-                  : distM < 1000
-                    ? `${Math.round(distM)}m away`
-                    : `${(distM / 1000).toFixed(1)}km away`;
+                  : `${dist.formatShort(distM)} away`;
                 const subtitle = distLabel ?? (m.note ? m.note.substring(0, 40) : timeAgo);
                 return (
                   <PressRow key={m.id} onPress={() => setSelectedMarkerId(m.id)} style={{ marginBottom: 0 }}>

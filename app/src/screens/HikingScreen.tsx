@@ -15,7 +15,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Alert, Animated, Easing,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptic } from '../services/hapticService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -27,7 +27,8 @@ import { useTrackingStore } from '../store/useTrackingStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { useRouteStore } from '../store/useRouteStore';
 import { getCurrentRegion } from '../config/regions';
-import { formatDistance, formatDuration, haversineM } from '../utils/geo';
+import { formatDuration, haversineM } from '../utils/geo';
+import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { StopSummarySheet } from './StopSummarySheet';
@@ -64,8 +65,7 @@ export function HikingScreen() {
   const showSimWalker = debugMode && simWalkerActive;
 
   const nav = useNavigation<Nav>();
-  const { uiMode } = useAppStore();
-  const isExpert = uiMode === 'expert';
+  // O12: uiMode/isExpert removed — was dead double-switch (only 'brg' placeholder used it)
   const insets = useSafeAreaInsets();
 
   // Real tracking store
@@ -429,7 +429,9 @@ export function HikingScreen() {
     setUi('map');
   }
 
-  const distDisplay = formatDistance(distanceM, 'km', 1);
+  // O12: settings-aware distance format (metric vs imperial).
+  const dist = useDistance();
+  const distDisplay = dist.format(distanceM, 1);
   const durationDisplay = formatDuration(durationS);
 
   // v79 #1 fix: Signal-lost detection. Bumped 30s → 120s to match the
@@ -623,7 +625,7 @@ export function HikingScreen() {
             <Animated.View style={[{ height: 56 }, { transform: [{ scale: trackBtnScale }] }]}>
               <TouchableOpacity
                 style={styles.trackBtn}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); startTracking(); setPhase('tracking'); }}
+                onPress={() => { haptic.impact('medium'); startTracking(); setPhase('tracking'); }}
                 activeOpacity={1}
                 onPressIn={() => springIn(trackBtnScale)}
                 onPressOut={() => springOut(trackBtnScale)}
@@ -675,9 +677,7 @@ export function HikingScreen() {
                     ? null
                     : distFromUser < 100
                       ? '· at start'
-                      : distFromUser < 1000
-                        ? `· ${Math.round(distFromUser)}m away`
-                        : `· ${(distFromUser / 1000).toFixed(1)}km away`;
+                      : `· ${dist.formatShort(distFromUser)} away`;
                   return (
                     <TouchableOpacity
                       key={r.id}
@@ -696,8 +696,8 @@ export function HikingScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.routePickerName}>{r.name}</Text>
                         <Text style={styles.routePickerMeta}>
-                          {(r.distanceM / 1000).toFixed(1)} km
-                          {r.elevationGainM > 0 ? ` · ↑${Math.round(r.elevationGainM)}m` : ''}
+                          {dist.format(r.distanceM, 1)} {dist.unit}
+                          {r.elevationGainM > 0 ? ` · ↑${dist.formatElevation(r.elevationGainM)}${dist.elevUnit}` : ''}
                           {r.runCount > 0 ? ` · ${r.runCount}× done` : ''}
                           {distLabel ? ` ${distLabel}` : ''}
                           {tooFar ? ' · too far' : ''}
@@ -796,7 +796,7 @@ export function HikingScreen() {
           <View style={styles.trackingBar}>
             <View style={styles.trackingStat}>
               <Text style={styles.trackingValueLg}>{distDisplay}</Text>
-              <Text style={styles.trackingUnit}>km</Text>
+              <Text style={styles.trackingUnit}>{dist.unit}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.trackingStat}>
@@ -805,18 +805,10 @@ export function HikingScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.trackingStat}>
-              <Text style={styles.trackingValue}>+{elevationGainM}m</Text>
+              <Text style={styles.trackingValue}>+{dist.formatElevation(elevationGainM)}{dist.elevUnit}</Text>
               <Text style={styles.trackingUnit}>elev</Text>
             </View>
-            {isExpert && (
-              <>
-                <View style={styles.statDivider} />
-                <View style={styles.trackingStat}>
-                  <Text style={styles.trackingValue}>--</Text>
-                  <Text style={styles.trackingUnit}>brg</Text>
-                </View>
-              </>
-            )}
+            {/* O12: isExpert 'brg' stat removed — was hardcoded '--' dead placeholder */}
             {selectedRoute && (
               <PressBtn
                 style={styles.routeSwitchBtn}
@@ -832,7 +824,7 @@ export function HikingScreen() {
             <PressBtn
               style={styles.stopBtn}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                haptic.impact('medium');
                 // v120: tapping Stop = pause everything immediately.
                 // Timer freezes, GPS stops accumulating distance. The
                 // summary sheet opens; user picks Resume (un-pause) or
@@ -874,7 +866,7 @@ export function HikingScreen() {
             <Animated.View style={[{ flex: 1, height: 60 }, { transform: [{ scale: trackBtnScale }] }]}>
               <TouchableOpacity
                 style={styles.trackBtn}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); startTracking(); }}
+                onPress={() => { haptic.impact('medium'); startTracking(); }}
                 activeOpacity={1}
                 onPressIn={() => springIn(trackBtnScale)}
                 onPressOut={() => springOut(trackBtnScale)}
@@ -895,7 +887,7 @@ export function HikingScreen() {
                 style={styles.circleBtn}
                 activeOpacity={0.85}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  haptic.selection();
                   setCompassEnabled(v => !v);
                 }}
               >
@@ -925,7 +917,7 @@ export function HikingScreen() {
                   style={styles.circleBtn}
                   activeOpacity={0.85}
                   onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
+                    haptic.selection();
                     recenterImperativeRef.current?.();
                     // Re-enable follow after the flyTo animation has
                     // settled — otherwise the in-flight gesture from

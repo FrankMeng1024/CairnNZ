@@ -15,7 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
+import { haptic } from '../services/hapticService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -26,7 +26,8 @@ import { useRouteStore } from '../store/useRouteStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { getCurrentRegion } from '../config/regions';
 import { getPrimaryMapStyle } from '../config/mapbox';
-import { formatDistance, formatDuration } from '../utils/geo';
+import { formatDuration } from '../utils/geo';
+import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
@@ -115,6 +116,8 @@ export function RunningScreen() {
   const sessionId = useTrackingStore(s => s.sessionId);
   const linkMarker = useTrackingStore(s => s.linkMarker);
   const setActivityMode = useTrackingStore(s => s.setActivityMode);
+  // O12: settings-aware distance/pace formatting.
+  const dist = useDistance();
   const startTracking = useTrackingStore(s => s.startTracking);
   const stopTracking = useTrackingStore(s => s.stopTracking);
   // v116/v118: too-short modal hooks. v118 changed Alert → TooShortSheet
@@ -283,15 +286,15 @@ export function RunningScreen() {
     if (newCount >= 2) {
       setIsLocked(false);
       setTapCount(0);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic.notification('success');
     } else {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptic.impact('light');
       tapTimer.current = setTimeout(() => setTapCount(0), 500);
     }
   };
 
   async function handleStart() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic.impact('medium');
     setActivityMode('running');
     await startTracking();
     setRunState('running');
@@ -299,7 +302,7 @@ export function RunningScreen() {
   }
 
   function handleStop() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic.impact('medium');
     // v118: stopTracking has a too-short pre-check that preserves the
     // session and sets lastStopReason='too-short'. We only transition to
     // 'stopped' if a real stop happened (status moved off tracking).
@@ -320,10 +323,10 @@ export function RunningScreen() {
     if (!lastCoordinate) {
       // Should be rare — locked mode keeps GPS active. Don't throw,
       // just bail out silently with a haptic to acknowledge press.
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      haptic.notification('warning');
       return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    haptic.impact('heavy');
     const region = getCurrentRegion();
     try {
       const marker = await addMarker({
@@ -348,20 +351,23 @@ export function RunningScreen() {
   const activeRouteName = routes.find(r => r.id === selectedRoute)?.name;
 
   // Format display values
-  const distDisplay = locationAvailable ? formatDistance(distanceM, 'km', 2) : '--';
+  const distDisplay = locationAvailable ? dist.format(distanceM, 2) : '--';
   const durationDisplay = formatDuration(durationS);
-  // Pace: min/km (seconds per meter → minutes per km)
+  // Pace: min/km (or min/mi if imperial) — seconds per meter → minutes per unit
   const paceDisplay = (() => {
     if (!locationAvailable || distanceM < 10) return '--';
-    const secPerKm = durationS / (distanceM / 1000);
-    const paceMin = Math.floor(secPerKm / 60);
-    const paceSec = Math.round(secPerKm % 60);
+    // For imperial: seconds per mile (1609.344 m). For metric: seconds per km (1000 m).
+    const secPerUnit = dist.imperial
+      ? durationS / (distanceM / 1609.344)
+      : durationS / (distanceM / 1000);
+    const paceMin = Math.floor(secPerUnit / 60);
+    const paceSec = Math.round(secPerUnit % 60);
     return `${paceMin}'${String(paceSec).padStart(2, '0')}"`;
   })();
 
   // ── Stopped state ──────────────────────────────────────────────────────────
   if (runState === 'stopped') {
-    const distKm = formatDistance(distanceM, 'km', 2);
+    const summaryDist = dist.format(distanceM, 2);
 
     return (
       <SafeAreaView style={preStyles.container} edges={['top', 'bottom']}>
@@ -384,8 +390,8 @@ export function RunningScreen() {
           <View style={preStyles.summaryCard}>
             <View style={preStyles.summaryStatRow}>
               <View style={preStyles.summaryStat}>
-                <Text style={preStyles.summaryStatVal}>{distKm}</Text>
-                <Text style={preStyles.summaryStatLbl}>km</Text>
+                <Text style={preStyles.summaryStatVal}>{summaryDist}</Text>
+                <Text style={preStyles.summaryStatLbl}>{dist.unit}</Text>
               </View>
               <View style={preStyles.summaryDivider} />
               <View style={preStyles.summaryStat}>
@@ -577,8 +583,8 @@ export function RunningScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={preStyles.routePickerName}>{r.name}</Text>
                       <Text style={preStyles.routePickerMeta}>
-                        {(r.distanceM / 1000).toFixed(1)} km
-                        {r.elevationGainM > 0 ? ` · ↑${Math.round(r.elevationGainM)}m` : ''}
+                        {dist.format(r.distanceM, 1)} {dist.unit}
+                        {r.elevationGainM > 0 ? ` · ↑${dist.formatElevation(r.elevationGainM)}${dist.elevUnit}` : ''}
                         {r.runCount > 0 ? ` · ${r.runCount}× done` : ''}
                       </Text>
                     </View>
@@ -605,7 +611,7 @@ export function RunningScreen() {
           {/* Stats bar */}
           <SafeAreaView edges={['top']}>
             <View style={runStyles.statsBar}>
-              <StatItem value={distDisplay} label="km" />
+              <StatItem value={distDisplay} label={dist.unit} />
               <StatItem value={durationDisplay} label="elapsed" />
               <StatItem value={paceDisplay} label="pace" />
               <View style={[runStyles.statItem, { justifyContent: 'center' }]}>
@@ -639,9 +645,9 @@ export function RunningScreen() {
               <Text style={runStyles.lockPrimary}>{durationDisplay}</Text>
               {/* Secondary row */}
               <View style={runStyles.lockSecondary}>
-                <Text style={runStyles.lockSecStat}>{distDisplay} <Text style={runStyles.lockSecUnit}>km</Text></Text>
+                <Text style={runStyles.lockSecStat}>{distDisplay} <Text style={runStyles.lockSecUnit}>{dist.unit}</Text></Text>
                 <View style={runStyles.lockSecDivider} />
-                <Text style={runStyles.lockSecStat}>{paceDisplay} <Text style={runStyles.lockSecUnit}>min/km</Text></Text>
+                <Text style={runStyles.lockSecStat}>{paceDisplay} <Text style={runStyles.lockSecUnit}>min/{dist.unit}</Text></Text>
               </View>
               {/* Hint */}
               <Text style={runStyles.lockText}>Double-tap to unlock</Text>

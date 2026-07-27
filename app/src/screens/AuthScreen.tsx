@@ -414,7 +414,7 @@ export function AuthScreen() {
     require('../services/bootDiagnostics').markBootPhase('auth_screen_render_start');
   } catch {/* ignore */}
   const nav = useNavigation<Nav>();
-  const { setLoggedIn, setUIMode, setUser, hydrate } = useAppStore();
+  const { setLoggedIn, setUser, hydrate } = useAppStore();
   const [view, setView] = useState<AuthView>('splash');
   const [welcomeName, setWelcomeName] = useState('');
   const [verifyEmail, setVerifyEmail] = useState('');   // email to verify after register
@@ -679,8 +679,9 @@ export function AuthScreen() {
         require('../services/bootDiagnostics').markBootPhase('login_after_setLoggedIn');
       } catch {/* ignore */}
       if (isRegister) {
-        setUIMode('beginner');
-        setWelcomeName(result.user?.name || name.trim() || 'Explorer');
+        // O12: setUIMode removed — uiMode field deleted from useAppStore.
+        // Fallback greeting uses 'friend' (was 'Explorer' — dead uiMode label).
+        setWelcomeName(result.user?.name || name.trim() || 'friend');
         setView('welcome');
         setTimeout(() => nav.replace('Home'), 1800);
       } else {
@@ -767,8 +768,9 @@ export function AuthScreen() {
     setLoggedIn(true);
     if (result.user) setUser(result.user);
     await hydrate();
-    setUIMode('beginner');
-    setWelcomeName(result.user?.name || 'Explorer');
+    // O12: setUIMode removed — uiMode field deleted from useAppStore.
+    // Fallback greeting uses 'friend' (was 'Explorer' — dead uiMode label).
+    setWelcomeName(result.user?.name || 'friend');
     setView('welcome');
     setTimeout(() => nav.replace('Home'), 1800);
   };
@@ -977,9 +979,11 @@ export function AuthScreen() {
             </View>
             <Text style={formStyles.title}>{isRegister ? 'Create Account' : 'Sign In'}</Text>
           </View>
-          {isRegister && (
-            <Text style={formStyles.sub}>You'll start in Explorer mode. Switch anytime in Settings.</Text>
-          )}
+          {/*
+           * O12: removed the "You'll start in Explorer mode. Switch anytime in Settings."
+           * hint — Explorer/Navigator mode system was deleted (was a dead double-switch).
+           * No replacement copy needed here; the sign-up form is self-explanatory.
+           */}
 
           {/* API error banner */}
           {!!apiError && (

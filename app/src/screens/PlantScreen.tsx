@@ -44,7 +44,7 @@ import { ContentStep } from '../features/plant/components/ContentStep';
 import { VisibilityConfig } from '../features/plant/config/plantConfig';
 import { encodeTitleBody } from '../features/plant/services/noteEncoding';
 import { log } from '../services/appLog';
-import * as Haptics from 'expo-haptics';
+import { haptic } from '../services/hapticService';
 
 type Step = 'gps' | 'pin' | 'content';
 
@@ -212,7 +212,7 @@ export function PlantScreen() {
         // and-forget) so total added latency = 250ms of visible pause on
         // step 3 UI, which reads as "committing…" rather than a jerk.
         if (created?.id) {
-          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* silent */ }
+          try { haptic.notification('success'); } catch { /* silent */ }
           // v422: 若离线保存, 弹一次性 Alert 让用户知道 "已存本地, 联网自动上传".
           // 有网时不弹 (Haptic + 无缝跳转足以传达成功).
           const isOnline = networkMonitor.getState()?.state === 'online';
