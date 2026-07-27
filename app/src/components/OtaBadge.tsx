@@ -99,7 +99,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // of dual subagent audits (rounds 10-14), batches 42-46. Removed ~600 LOC
 // of dead exported symbols (0-caller functions, un-exported internal types).
 // Zero user-visible change. Pure codebase hygiene.
-export const OTA_VERSION = 'O10';
+// O11 (2026-07-27): 4 用户 bug 修:
+//   1. sim-walker 撤回撤不干净 — undoSteps 用 max(posHistory, trackPoints)
+//      作可撤上限; posHistory 空但 trackPoints 有内容时 currentPos 从
+//      trackPoints tail 恢复,避免下次 tick 从旧点画到别处
+//   2. 参数默认值改成用户明确的 20 / 400 / 3 (step_m / emit_ms / undo_count)
+//   3. StopSummarySheet Save / Discard 按下时先 Keyboard.dismiss() 收键盘,
+//      再 dismiss sheet — 修 "点 save 键盘不自动消失"
+//   4. Activity Detail 显示 "Route data unavailable" 但本地实际有 trackPoints —
+//      MapHistoryScreen 检查 route_points **数组长度 >= 2**,不是简单 truthy
+//      (空数组 [] 是 truthy, 老代码用 setLoadedTrackPoints([]) 跳过 local
+//      fallback)。现在 server 返回空/短 route_points 会正确 fall back 到
+//      loadTrackPoints(sessionId) 读本地缓存
+//   Bonus: 磁盘 jsonl 空的 unfinished session (sim-walker 没 write 到 disk /
+//      老 bug 遗留) 静默 discardActiveHike 而不弹 recovery modal, 避免用户
+//      点 continue 看到空 hike
+export const OTA_VERSION = 'O11';
 
 
 type OtaState =

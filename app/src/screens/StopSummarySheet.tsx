@@ -7,7 +7,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  TextInput, Animated, Easing, KeyboardAvoidingView, Platform,
+  TextInput, Animated, Easing, KeyboardAvoidingView, Platform, Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
@@ -131,14 +131,23 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard }: Pr
           <View style={stopSheetStyles.actions}>
             <TouchableOpacity
               style={stopSheetStyles.cancelBtn}
-              onPress={() => dismiss(onDiscard)}
+              onPress={() => {
+                Keyboard.dismiss();
+                dismiss(onDiscard);
+              }}
               activeOpacity={0.7}
             >
               <Text style={stopSheetStyles.cancelText}>Discard</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[stopSheetStyles.saveBtn, { backgroundColor: accent }]}
-              onPress={() => dismiss(() => onConfirm(name))}
+              onPress={() => {
+                // O11 (2026-07-27): 收起键盘再 dismiss.用户报 "点 save
+                // 键盘不自动消失" — 老代码只 dismiss sheet 但 TextInput
+                // 焦点还在,iOS 键盘不隐藏遮挡下面 UI 直到点别处。
+                Keyboard.dismiss();
+                dismiss(() => onConfirm(name));
+              }}
               activeOpacity={0.85}
             >
               <Icon name="Save" size={14} color="#fff" strokeWidth={2.5} />

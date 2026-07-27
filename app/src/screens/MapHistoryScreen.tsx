@@ -803,10 +803,17 @@ export function MapHistoryScreen() {
         });
         const detail = await Promise.race([detailPromise, timeoutPromise]);
         if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
-        if (!cancelled && detail && (detail as any)?.route_points) {
+        // O11 (2026-07-27): 检查 route_points **长度** >= 2, 不是简单 truthy。
+        // 空数组 [] 是 truthy → 老代码把空 route_points 也当成成功 fetch,
+        // setLoadedTrackPoints([]) → skip fall-back → "Route data unavailable"。
+        // 用户场景: syncState='pending' session 有 remoteId 但 server 的
+        // route_points=[] (saveHikeAtomic 失败, 只有 startSession 空 row)。
+        // 本地 trackPoints 完整,应该回 local cache 拿。
+        const remotePts = (detail as any)?.route_points;
+        if (!cancelled && detail && Array.isArray(remotePts) && remotePts.length >= 2) {
           // Server points may use a different field shape (lat/lng/timestamp)
           // than the local TrackPoint (lat/lng/alt/t). Normalise.
-          const normalised = (detail as any).route_points.map((p: any) => ({
+          const normalised = remotePts.map((p: any) => ({
             lat: p.lat,
             lng: p.lng,
             alt: p.alt ?? null,
@@ -815,7 +822,7 @@ export function MapHistoryScreen() {
           setLoadedTrackPoints(normalised);
           return;
         }
-        // O6: server 请求 timeout 或 route_points 为空 → 落 local。
+        // O6: server 请求 timeout 或 route_points 为空/太短 → 落 local。
       }
       // No remoteId yet (offline-only session) or fetch failed/timed out — fall
       // back to local cache. If local also empty, set [] so UI can stop the

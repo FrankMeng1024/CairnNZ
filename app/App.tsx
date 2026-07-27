@@ -26,12 +26,12 @@ import { API_BASE_URL } from './src/config/api';
 // v300 DIAG: jetsam-resistant boot tracing. ANY heavy module above
 // this line that crashes will leave no trace — but the next cold
 // start drains the AsyncStorage checkpoint and reports where we died.
-import { markBootPhase, drainPreviousBootCheckpoint, rotateCheckpoint } from './src/services/bootDiagnostics';
-
-// v300.1: rotate previous checkpoint to a dedicated key BEFORE markBootPhase
-// overwrites it. Without this, drainPreviousBootCheckpoint always reads
-// "module_loaded" because module_loaded was just written one line below.
-rotateCheckpoint();
+// O11 fix: drainPreviousBootCheckpoint/rotateCheckpoint were deleted
+// in O10 dead code sweep but App.tsx still called them — would crash
+// boot with "not a function" on iOS. Removed the calls; keep only
+// markBootPhase which still exists. Loss: no cold-start crash trace
+// via checkpoint drain (still have per-phase aliyun log events).
+import { markBootPhase } from './src/services/bootDiagnostics';
 
 // First side-effect: report that module loading completed. This runs
 // AFTER all the imports above (which is when iOS jetsam most likely
@@ -39,10 +39,6 @@ rotateCheckpoint();
 // for their session_id on server, JS bundle never finished parsing →
 // confirms the root cause hypothesis.
 markBootPhase('module_loaded', { ota: OTA_VERSION });
-// Drain whatever the previous boot recorded as its last phase. Fires
-// `boot.previous_boot_died` if the previous run didn't reach
-// 'boot_complete'.
-void drainPreviousBootCheckpoint(OTA_VERSION);
 
 // Must run at app entry — handles Google OAuth popup redirect on web
 WebBrowser.maybeCompleteAuthSession();
@@ -624,44 +620,11 @@ function AppRoot() {
           }
           crashLogger.breadcrumb(`route:pending-drain count=${pendingIds.length} succeeded=${succeededIds.size}`);
         }
-        // v6-audit (FUNC-001) + v8-audit (V7-BUG-006): wire reconcileOrphans.
-        // Wait for routesLoadCompleted (not just routes.length>0) so a
-        // partial fetch / paginated response can't trigger orphan
-        // deletion of routes the backend still owns.
-        const { reconcileOrphans } = await import('./src/services/LocalRouteExtras');
-        const { useRouteStore } = await import('./src/store/useRouteStore');
-        const deadline = Date.now() + 5000;
-        while (!useRouteStore.getState().routesLoadCompleted && Date.now() < deadline) {
-          await new Promise(r => setTimeout(r, 200));
-        }
-        if (useRouteStore.getState().routesLoadCompleted) {
-          const activeRouteIds = new Set(useRouteStore.getState().routes.map(r => r.id));
-          // v10-audit (BUG-BC-1): sanity check — if backend returned
-          // 0 routes BUT local AsyncStorage has any extras keys, this
-          // is suspicious (server bug / partial deploy / auth state).
-          // Skip reconcile rather than wipe everything.
-          if (activeRouteIds.size === 0) {
-            try {
-              const allKeys = await AsyncStorage.getAllKeys();
-              const hasExtras = allKeys.some(k => k.startsWith('@cairn:route_extras:v1:'));
-              if (hasExtras) {
-                crashLogger.breadcrumb('route:reconcile-skipped suspicious-empty-load');
-              } else {
-                // No extras and no routes — nothing to reconcile.
-                crashLogger.breadcrumb('route:reconcile-skipped no-extras');
-              }
-            } catch {
-              crashLogger.breadcrumb('route:reconcile-skipped sanity-check-failed');
-            }
-          } else {
-            const removed = await reconcileOrphans(activeRouteIds, { force: true });
-            if (removed > 0) {
-              crashLogger.breadcrumb(`route:reconcile-orphans removed=${removed}`);
-            }
-          }
-        } else {
-          crashLogger.breadcrumb('route:reconcile-skipped routes-not-loaded');
-        }
+        // O11 fix: v6-audit reconcileOrphans block removed — its dependencies
+        // (LocalRouteExtras.reconcileOrphans, useRouteStore.routesLoadCompleted)
+        // were deleted in O10 dead code sweep but the caller stayed → TS errors
+        // + boot crash. If orphan reconciliation is needed again, re-add both
+        // sides together.
       } catch (err) {
         crashLogger.breadcrumb(`route:pending-drain-error ${String(err).slice(0, 80)}`);
       }

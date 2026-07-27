@@ -22,9 +22,10 @@ export interface StepConfig {
 }
 
 export const DEFAULT_STEP_CONFIG: StepConfig = {
-  step_m: 1.4,
-  emit_ms: 1200,
-  undo_count: 10,
+  // O11 (2026-07-27): 用户明确 20/400/3 最好用.
+  step_m: 20,
+  emit_ms: 400,
+  undo_count: 3,
 };
 
 interface InjectorSnapshot {
@@ -157,16 +158,29 @@ class GpsInjector {
    */
   undoSteps(): void {
     const n = this.config.undo_count;
-    if (n <= 0 || this.posHistory.length === 0) {
+    // O11 (2026-07-27): 用户报 "撤回没法撤干净" — posHistory 是每 tick 1 条
+    // 但每次 setStartPosition (overlay mount / ⟲ reset) 会 wipe posHistory,
+    // trackPoints 不 wipe → 之后 undo 只能撤 posHistory 里的一小段, 视觉
+    // trackPoints 前段撤不掉. Fix: undo 也考虑 tracking store 里实际的
+    // trackPoints 长度 — 撤除数 = min(n, max(posHistory.length, trackPoints.length))
+    let trackPointsN = 0;
+    try {
+      trackPointsN = (useTrackingStore.getState() as any).trackPoints?.length ?? 0;
+    } catch { /* ignore */ }
+    const availableToUndo = Math.max(this.posHistory.length, trackPointsN);
+    if (n <= 0 || availableToUndo === 0) {
       log('v441.simwalker.undo_nop', {
         requested: n,
         history_len: this.posHistory.length,
+        trackPoints_n: trackPointsN,
       });
       return;
     }
-    const take = Math.min(n, this.posHistory.length);
+    const take = Math.min(n, availableToUndo);
     let restored: { lat: number; lng: number } | null = null;
-    for (let i = 0; i < take; i++) {
+    // 先 pop posHistory (够就用它, 不够 fall through 到 trackPoints)
+    const popFromHistory = Math.min(take, this.posHistory.length);
+    for (let i = 0; i < popFromHistory; i++) {
       restored = this.posHistory.pop() ?? null;
     }
     if (restored) this.currentPos = restored;
@@ -195,6 +209,18 @@ class GpsInjector {
           };
         });
         storeRemoved = take;
+      }
+      // O11 (2026-07-27): 若 posHistory 已空但 trackPoints 撤了内容, currentPos
+      // 还没 restore (restored 是 null). 取 trackPoints 剩下的最后一个作为新
+      // currentPos, 避免下一次 tick 从旧的 currentPos 又画到别处.
+      if (!restored) {
+        const remaining = (useTrackingStore.getState() as any).trackPoints;
+        if (Array.isArray(remaining) && remaining.length > 0) {
+          const tail = remaining[remaining.length - 1];
+          if (tail && Number.isFinite(tail.lat) && Number.isFinite(tail.lng)) {
+            this.currentPos = { lat: tail.lat, lng: tail.lng };
+          }
+        }
       }
     } catch (err) {
       log('v441.simwalker.undo_store_err', { err: String(err) });

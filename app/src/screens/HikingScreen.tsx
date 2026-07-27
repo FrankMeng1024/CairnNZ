@@ -302,16 +302,35 @@ export function HikingScreen() {
         let lastPointAt = latest.lastTs || latest.startedAt || Date.now();
         let distanceM = latest.distanceM || 0;
         let durationS = latest.durationS || 0;
+        // O11 (2026-07-27): 若磁盘 jsonl 是空 (sim-walker session 没 write
+        // 到 disk / 老 bug 导致 meta 存在但 points 丢), 弹 recovery modal 是
+        // 无意义的 — 用户 Continue 后 trackPoints=[], 看到空 hike. 跳过.
+        let hasPointsOnDisk = false;
         try {
           if (typeof hikeTrackWriter.readActiveHikeTail === 'function') {
             const tail = await hikeTrackWriter.readActiveHikeTail(latest.sessionId, 1);
             if (Array.isArray(tail) && tail.length > 0) {
               lastPointAt = tail[tail.length - 1].t || lastPointAt;
+              hasPointsOnDisk = true;
             }
           }
           const start = latest.startedAt || (lastPointAt - 40 * 60_000);
           durationS = Math.max(1, Math.floor((lastPointAt - start) / 1000));
         } catch { /* silent */ }
+        if (!hasPointsOnDisk) {
+          // 磁盘空 → 静默 discard 这个 meta+jsonl 避免下次再弹。
+          try {
+            const { discardActiveHike } = require('../services/hikeTrackWriter');
+            if (typeof discardActiveHike === 'function') {
+              await discardActiveHike(latest.sessionId);
+            }
+          } catch { /* silent */ }
+          try {
+            const cl = require('../services/crashLogger');
+            (cl.crashLogger ?? cl.default)?.breadcrumb?.(`recovery:skipped_empty sid=${latest.sessionId.slice(0, 8)}`);
+          } catch { /* silent */ }
+          return; // 不 setUnfinished
+        }
         setUnfinished({
           sessionId: latest.sessionId,
           remoteId: latest.remoteId ?? null,
