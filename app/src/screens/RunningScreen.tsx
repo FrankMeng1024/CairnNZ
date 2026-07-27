@@ -33,6 +33,7 @@ import { BackButton } from '../components/BackButton';
 import { PulseDot } from '../components/PulseDot';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { crashLogger } from '../services/crashLogger';
+import { checkAnnouncements, resetAnnouncements } from '../services/navigationAnnouncer';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -132,6 +133,21 @@ export function RunningScreen() {
   useRunKeepAwake();
 
   useEffect(() => { loadRoutes(); }, []);
+
+  // ── Navigation waypoint announcements ──────────────────────────────────────
+  // Fire TTS when the user approaches or arrives at a waypoint that has
+  // announceOnArrival=true. Only active while a run is in progress.
+  // Reset announcement state when the route changes or the run ends.
+  const activeWaypoints = routes.find(r => r.id === selectedRoute)?.waypoints ?? [];
+  useEffect(() => {
+    if (runState !== 'running' || !lastCoordinate) return;
+    checkAnnouncements(lastCoordinate, activeWaypoints);
+  }, [lastCoordinate, runState]);
+
+  // Clear announcement state when selected route changes or run stops.
+  useEffect(() => {
+    resetAnnouncements();
+  }, [selectedRoute, runState]);
 
   // Request foreground location permission on mount so the pre-start map's
   // UserLocation dot can render. If denied, dot is hidden but map still shows.
