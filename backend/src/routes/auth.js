@@ -231,7 +231,11 @@ router.post('/google', oauthLimiter, validateBody(schemas.auth.google), async (r
   try {
     const ticket = await googleClient.verifyIdToken({
       idToken: id_token,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      // Accept tokens from both Web client (Expo/web) and iOS native client
+      audience: [
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_IOS_CLIENT_ID,
+      ].filter(Boolean),
     });
     const payload = ticket.getPayload();
     if (!payload || !payload.email)

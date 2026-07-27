@@ -12,6 +12,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#faf7f2"
     },
+    "scheme": "cairn",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.yiiling.cairn",

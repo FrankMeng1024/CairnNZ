@@ -34,8 +34,11 @@ import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../componen
 import { Icon } from '../components/Icon';
 import { login, register, loginWithGoogle, verifyCode, resendCode } from '../services/authService';
 import { CairnLogo } from '../components/ActivityIcons/CairnLogo';
-// O1 batch 39: Google + makeRedirectUri + Prompt imports removed — 0 actual code references (Google OAuth deferred).
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { crashLogger } from '../services/crashLogger';
+
+WebBrowser.maybeCompleteAuthSession();
 import { OtaBadge } from '../components/OtaBadge';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -440,20 +443,15 @@ export function AuthScreen() {
   const googleFlowActive = useRef(false);
   const submitAttempted = useRef(false);  // STORY-00133: only validate on blur after first submit
 
-  // Google OAuth hook — CONFIRMED as sign-out crash root cause via OTA
-  // bisect on 2026-05-21. Re-disabled. Real fix requires app.json scheme
-  // for makeRedirectUri to work — coming in next build. Until then,
-  // Google sign-in shows alert and AnimatedCairn animation can be
-  // re-enabled (it's safe).
-  crashLogger.breadcrumb('AuthScreen:google_hook_skipped');
-  const googleRequest: any = null;
-  const googleResponse: any = null;
-  const promptGoogleAsync = async () => {
-    Alert.alert('Google Sign In', 'Coming in next app update. Please use email sign-in.');
-    return { type: 'dismiss' as const };
-  };
+  // Google OAuth — expo-auth-session native flow
+  // scheme: "cairn" in app.json enables makeRedirectUri to work correctly.
+  // iosClientId: iOS OAuth client (com.yiiling.cairn) — required for native flow.
+  // webClientId: Web client — also accepted by backend audience validation.
+  const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+  });
   void googleRequest;
-  void googleResponse;
 
   const splashFade = useRef(new Animated.Value(0)).current;
   const splashTranslate = useRef(new Animated.Value(8)).current;
@@ -737,12 +735,43 @@ export function AuthScreen() {
 
   const handleGoogleAuth = async () => {
     googleFlowActive.current = true;
-    setGoogleLoading(true);  // STORY-00132: immediate feedback
+    setGoogleLoading(true);
     resetErrors();
     await promptGoogleAsync();
-    setGoogleLoading(false);
-    googleFlowActive.current = false;
+    // Result handled by googleResponse useEffect below
+    // (loading/flag reset happens there after async completion)
   };
+
+  // Handle Google OAuth response — fires when user returns from browser
+  useEffect(() => {
+    if (!googleResponse) return;
+    if (googleResponse.type === 'success') {
+      const idToken = googleResponse.authentication?.idToken;
+      if (!idToken) {
+        setApiError('Google sign-in failed. Please try again.');
+        setGoogleLoading(false);
+        googleFlowActive.current = false;
+        return;
+      }
+      (async () => {
+        const result = await loginWithGoogle(idToken);
+        setGoogleLoading(false);
+        googleFlowActive.current = false;
+        if (result.error) { setApiError(result.error); return; }
+        try { await storage.removeItem('cairn_logout_marker'); } catch {/* ignore */}
+        setLoggedIn(true);
+        if (result.user) setUser(result.user);
+        await hydrate();
+        setUIMode('beginner');
+        setWelcomeName(result.user?.name || 'Explorer');
+        setView('welcome');
+        setTimeout(() => nav.replace('Home'), 1800);
+      })();
+    } else {
+      setGoogleLoading(false);
+      googleFlowActive.current = false;
+    }
+  }, [googleResponse]);
 
   // Resend cooldown countdown
   useEffect(() => {
