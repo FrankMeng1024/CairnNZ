@@ -55,12 +55,15 @@ export const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
 
   hydrate: async () => {
     const status = await getSubscriptionStatus();
-    set({
-      isPro: status.isPro,
-      isFoundingMember: status.isFoundingMember,
-      activeProductId: status.activeProductId,
-      hydrated: true,
-    });
+    // On network/SDK error, preserve last-known subscription state — do not overwrite Pro=true with false.
+    if (!status.fetchError) {
+      set({
+        isPro: status.isPro,
+        isFoundingMember: status.isFoundingMember,
+        activeProductId: status.activeProductId,
+      });
+    }
+    set({ hydrated: true });
   },
 
   onUserLogin: async (userId) => {
@@ -95,13 +98,19 @@ export const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
 
   restore: async () => {
     set({ purchasing: true });
-    const status = await restorePurchases();
-    set({
-      isPro: status.isPro,
-      isFoundingMember: status.isFoundingMember,
-      activeProductId: status.activeProductId,
-      purchasing: false,
-    });
-    return status;
+    try {
+      const status = await restorePurchases();
+      set({
+        isPro: status.isPro,
+        isFoundingMember: status.isFoundingMember,
+        activeProductId: status.activeProductId,
+      });
+      return status;
+    } catch (e: any) {
+      console.warn('[subscription] restore failed:', e?.message);
+      return { isPro: false, activeProductId: null, isFoundingMember: false };
+    } finally {
+      set({ purchasing: false });
+    }
   },
 }));

@@ -83,7 +83,9 @@ export async function logoutPurchases(): Promise<void> {
 export interface SubscriptionStatus {
   isPro: boolean;
   activeProductId: string | null;
-  isFoundingMember: boolean;  // has the founding_member entitlement or tag
+  isFoundingMember: boolean;
+  /** true when the status could not be fetched (network/SDK error) — last-known values preserved by store */
+  fetchError?: boolean;
 }
 
 /**
@@ -104,7 +106,7 @@ export async function getSubscriptionStatus(): Promise<SubscriptionStatus> {
     return { isPro, activeProductId, isFoundingMember };
   } catch (e: any) {
     console.warn('[purchases] getSubscriptionStatus failed:', e?.message);
-    return { isPro: false, activeProductId: null, isFoundingMember: false };
+    return { isPro: false, activeProductId: null, isFoundingMember: false, fetchError: true };
   }
 }
 
@@ -167,7 +169,7 @@ export async function restorePurchases(): Promise<SubscriptionStatus> {
     };
   } catch (e: any) {
     console.warn('[purchases] restore failed:', e?.message);
-    return { isPro: false, activeProductId: null, isFoundingMember: false };
+    return { isPro: false, activeProductId: null, isFoundingMember: false, fetchError: true };
   }
 }
 

@@ -130,8 +130,15 @@ export function PaywallSheet({ visible, onClose, onSubscribed }: Props) {
           >
             {restoring
               ? <ActivityIndicator size="small" color={Colors.textMuted} style={{ marginTop: Spacing.md }} />
-              : <Text style={styles.foot}>Restore purchases{'  ·  '}<Text style={styles.footLink} onPress={() => Linking.openURL('https://api.yiiling.cn/privacy')}>Privacy</Text></Text>
+              : <Text style={styles.foot}>Restore purchases</Text>
             }
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => Linking.openURL('https://api.yiiling.cn/privacy')}
+            testID="paywall-privacy"
+          >
+            <Text style={[styles.foot, styles.footLink]}>Privacy Policy</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
