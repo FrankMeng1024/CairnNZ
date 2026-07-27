@@ -276,11 +276,6 @@ export function MarkDetailSheet(props: Props) {
               ) : null}
             </View>
           ) : null}
-          {canLikeReport && liked ? (
-            <Text style={styles.likeCaption} testID="mark-detail-like-caption">
-              Saved on this device · sync coming in v1.1
-            </Text>
-          ) : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -427,10 +422,4 @@ const styles = StyleSheet.create({
   },
   // UX-Crit-1 fix: low-key caption telling the user the Like state is
   // local-only. Prevents "did it save?" confusion after restart.
-  likeCaption: {
-    fontSize: FontSize.caption,
-    color: Colors.textMuted,
-    fontStyle: 'italic',
-    marginTop: Spacing.xs,
-  },
 });

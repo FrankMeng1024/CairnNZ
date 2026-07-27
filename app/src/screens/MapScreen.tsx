@@ -37,6 +37,7 @@ import { MARKER_META, MarkerType } from '../data/mockData';
 import { FLAG_TYPES } from '../data/flagTypes';
 import { getCurrentRegion } from '../config/regions';
 import { getPrimaryMapStyle } from '../config/mapbox';
+import { likeMarker, reportMarker, MarkerInteractionError } from '../services/markerInteractionService';
 
 // Mapbox — conditional import (native only; web uses fallback)
 let MapboxGL: any = null;
@@ -576,6 +577,18 @@ export function MapScreen() {
     [likedSet]
   );
 
+  const doReport = async (m: Marker, reason: 'fake_ad' | 'info_mismatch' | 'dislike') => {
+    if (!lastCoord) { Alert.alert('Location unavailable', 'Enable location to report marks.'); return; }
+    try {
+      await reportMarker(m.id, reason, lastCoord.lat, lastCoord.lng, lastCoord.accuracy);
+    } catch (err) {
+      if (err instanceof MarkerInteractionError) {
+        if (err.code === 'TOO_FAR') Alert.alert('Too far', 'Move closer to report this mark.');
+        else Alert.alert('Error', 'Could not report this mark.');
+      }
+    }
+  };
+
   // BUG-002 fix: load circle markers + subscriptions when the user enters
   // Map. Cached after first fetch; cheap to keep current. Triggered once
   // per mount; FlagsTab Friends sub-tab (Sprint 69) ALSO triggers via its
@@ -818,16 +831,26 @@ export function MapScreen() {
         isLiked={isMarkLiked}
         onClose={() => setDetailMarker(null)}
         onEdit={(m) => { setDetailMarker(null); setEditMarker(m); }}
-        onLike={(m) => {
-          // Sprint 68 STORY-00533: session-only toggle. NO HTTP, NO DB write.
-          // Force a re-render of the sheet by closing+reopening — Zustand
-          // selector subscription handles the cheap fan-out automatically.
-          likeToggle(m.id);
+        onLike={async (m) => {
+          if (!lastCoord) { Alert.alert('Location unavailable', 'Enable location to like marks.'); return; }
+          try {
+            await likeMarker(m.id, lastCoord.lat, lastCoord.lng, lastCoord.accuracy);
+            likeToggle(m.id);
+          } catch (err) {
+            if (err instanceof MarkerInteractionError) {
+              if (err.code === 'TOO_FAR') Alert.alert('Too far', 'Move closer to like this mark.');
+              else if (err.code === 'RATE_LIMITED') Alert.alert('Slow down', 'You\'ve liked too many marks recently.');
+              else Alert.alert('Error', 'Could not like this mark.');
+            }
+          }
         }}
-        onReport={(_m) => {
-          // Sprint 68 STORY-00533: v1 fake report. Toast then nothing.
-          // v1.1 will wire to POST /api/markers/:id/vote (already live).
-          Alert.alert('Thank you', 'Thank you for reporting.', [{ text: 'OK' }]);
+        onReport={(m) => {
+          Alert.alert('Report mark', 'Why are you reporting this?', [
+            { text: 'Fake or ad', onPress: () => doReport(m, 'fake_ad') },
+            { text: 'Wrong info', onPress: () => doReport(m, 'info_mismatch') },
+            { text: 'Dislike', onPress: () => doReport(m, 'dislike') },
+            { text: 'Cancel', style: 'cancel' },
+          ]);
         }}
         onDelete={(m, semantic) => {
           if (semantic === 'own') {
