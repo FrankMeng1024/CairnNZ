@@ -1,12 +1,11 @@
 /**
  * v409 — Offline Reliability & Hike Data Survival
  *
- * Prereqs (main agent when running — this file is authored, NOT executed):
- *   cd app
- *   npx expo start --web --port 8082 --no-dev     # separate terminal
- *   npx playwright test tests/sprint74             # this file
+ * NOTE: __cairnStores removed in O11 (pre-launch cleanup) — these tests
+ * need to be rewritten to not depend on globalThis web hooks.
+ * See: fix/pre-launch-cleanup branch, Task 1.
  *
- * Design source: docs/audit-v404/v409-DESIGN.md
+ * Original design source: docs/audit-v404/v409-DESIGN.md
  * Test plan:     docs/audit-v404/v409-test-plan.md
  *
  * All interaction with the app goes through the v406 web hook
