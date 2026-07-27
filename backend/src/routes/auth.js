@@ -12,6 +12,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { OAuth2Client } = require('google-auth-library');
+const appleSignin = require('apple-signin-auth');
 const User = require('../models/User');
 const { signToken } = require('../config/jwt');
 const authenticate = require('../middleware/authenticate');
@@ -278,8 +279,62 @@ router.post('/google', oauthLimiter, validateBody(schemas.auth.google), async (r
   }
 });
 
-// ── GET /api/auth/me ───────────────────────────────────────────────────────
-router.get('/me', authenticate, async (req, res) => {
+// ── POST /api/auth/apple ───────────────────────────────────────────────────
+router.post('/apple', oauthLimiter, validateBody(schemas.auth.apple), async (req, res) => {
+  const { identity_token, full_name } = req.body;
+  if (!identity_token)
+    return res.status(400).json({ error: 'identity_token is required.' });
+
+  try {
+    const applePayload = await appleSignin.verifyIdToken(identity_token, {
+      audience: process.env.APPLE_CLIENT_ID, // Bundle ID, e.g. com.example.cairn
+      ignoreExpiration: false,
+    });
+
+    if (!applePayload || !applePayload.sub || !applePayload.email)
+      return res.status(401).json({ error: 'Invalid Apple token.' });
+
+    const email = applePayload.email.toLowerCase();
+    const appleSub = applePayload.sub; // unique stable user ID from Apple
+
+    // Build a display name: full_name is only sent on first login
+    const givenName = full_name?.givenName?.trim() || '';
+    const familyName = full_name?.familyName?.trim() || '';
+    const name = [givenName, familyName].filter(Boolean).join(' ') || email.split('@')[0];
+
+    // Delete any pending registration for this email
+    await User.deletePending(email);
+
+    // Find existing user by email or by apple oauth link
+    let user = await User.findByEmail(email);
+
+    if (!user) {
+      const oauthRow = await User.findOAuth('apple', appleSub);
+      if (oauthRow) {
+        user = await User.findById(oauthRow.user_id);
+      }
+    }
+
+    if (!user) {
+      // New user — create
+      const userId = await User.createOAuthUser(name, email);
+      await User.linkOAuth(userId, 'apple', appleSub);
+      user = await User.findById(userId);
+    } else {
+      // Existing user — ensure link exists
+      await User.linkOAuth(user.id, 'apple', appleSub);
+    }
+
+    const publicUser = User.toPublic(user);
+    const token = signToken({ userId: publicUser.id, email: publicUser.email });
+    return res.json({ user: publicUser, token });
+  } catch (err) {
+    console.error('[apple]', err);
+    return res.status(401).json({ error: 'Apple sign-in failed. Please try again.' });
+  }
+});
+
+// ── GET /api/auth/me ───────────────────────────────────────────────────────router.get('/me', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'Account not found.' });

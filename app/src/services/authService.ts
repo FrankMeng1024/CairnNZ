@@ -138,6 +138,26 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
   }
 }
 
+export async function loginWithApple(
+  identityToken: string,
+  fullName: { givenName?: string | null; familyName?: string | null } | null,
+): Promise<AuthResult> {
+  try {
+    const res = await post('/api/auth/apple', {
+      identity_token: identityToken,
+      full_name: fullName,
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { error: data?.error || 'Apple sign-in failed. Please try again.' };
+    }
+    await saveToken(data.token);
+    return { user: data.user, token: data.token };
+  } catch {
+    return { error: 'Unable to connect. Please try again.' };
+  }
+}
+
 export async function logout(): Promise<void> {
   await clearToken();
 }

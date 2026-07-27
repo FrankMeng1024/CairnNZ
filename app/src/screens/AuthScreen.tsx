@@ -32,10 +32,11 @@ import { useAppStore } from '../store/useAppStore';
 import { storage } from '../store/storage';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
-import { login, register, loginWithGoogle, verifyCode, resendCode } from '../services/authService';
+import { login, register, loginWithGoogle, loginWithApple, verifyCode, resendCode } from '../services/authService';
 import { CairnLogo } from '../components/ActivityIcons/CairnLogo';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { crashLogger } from '../services/crashLogger';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -434,6 +435,7 @@ export function AuthScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);  // STORY-00132: separate state
+  const [appleLoading, setAppleLoading] = useState(false);
   const [apiError, setApiError] = useState('');
   const [nameError, setNameError] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -772,6 +774,42 @@ export function AuthScreen() {
       googleFlowActive.current = false;
     }
   }, [googleResponse]);
+
+  const handleAppleAuth = async () => {
+    if (Platform.OS !== 'ios') return;
+    setAppleLoading(true);
+    resetErrors();
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) {
+        setApiError('Apple sign-in failed. Please try again.');
+        setAppleLoading(false);
+        return;
+      }
+      const result = await loginWithApple(credential.identityToken, credential.fullName ?? null);
+      setAppleLoading(false);
+      if (result.error) { setApiError(result.error); return; }
+      try { await storage.removeItem('cairn_logout_marker'); } catch {/* ignore */}
+      setLoggedIn(true);
+      if (result.user) setUser(result.user);
+      await hydrate();
+      setUIMode('beginner');
+      setWelcomeName(result.user?.name || 'Explorer');
+      setView('welcome');
+      setTimeout(() => nav.replace('Home'), 1800);
+    } catch (err: any) {
+      setAppleLoading(false);
+      // ERR_CANCELED is the user dismissing the sheet — not an error
+      if (err?.code !== 'ERR_CANCELED') {
+        setApiError('Apple sign-in failed. Please try again.');
+      }
+    }
+  };
 
   // Resend cooldown countdown
   useEffect(() => {
@@ -1154,19 +1192,23 @@ export function AuthScreen() {
                 <View style={formStyles.divLine} />
               </View>
 
-              {/* Apple — disabled on web, requires physical iOS device */}
-              <PressBtn
-                style={formStyles.appleBtn}
-                onPress={() => Alert.alert('Coming soon', 'Apple Sign In is not available yet. Please use email login for now.')}
-                scale={0.98}
-              >
-                <View style={styles.btnContent}>
-                  <Icon name="Apple" size={IconSize.sm} color="#fff" strokeWidth={1.8} />
-                  <View>
-                    <Text style={formStyles.appleBtnText}>Continue with Apple</Text>
+              {/* Apple — iOS only (Apple requires Sign In with Apple when other social logins are present) */}
+              {Platform.OS === 'ios' && (
+                <PressBtn
+                  style={formStyles.appleBtn}
+                  onPress={handleAppleAuth}
+                  scale={0.98}
+                  disabled={appleLoading || loading || googleLoading}
+                >
+                  <View style={styles.btnContent}>
+                    {appleLoading
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <Icon name="Apple" size={IconSize.sm} color="#fff" strokeWidth={1.8} />
+                    }
+                    <Text style={formStyles.appleBtnText}>{appleLoading ? 'Connecting…' : 'Continue with Apple'}</Text>
                   </View>
-                </View>
-              </PressBtn>
+                </PressBtn>
+              )}
 
               {/* Google */}
               <PressBtn style={formStyles.googleBtn} onPress={handleGoogleAuth} scale={0.98} disabled={googleLoading || loading}>

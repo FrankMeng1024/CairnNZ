@@ -163,6 +163,15 @@ const authGoogle = Joi.object({
   id_token: Joi.string().min(10).required(),
 });
 
+const authApple = Joi.object({
+  identity_token: Joi.string().min(10).required(),
+  // full_name is only sent on first sign-in; subsequent logins omit it
+  full_name: Joi.object({
+    givenName: Joi.string().max(100).allow(null, ''),
+    familyName: Joi.string().max(100).allow(null, ''),
+  }).allow(null),
+});
+
 const authPasswordChange = Joi.object({
   old_password: Joi.string().min(1).max(200).required(),
   new_password: Joi.string().min(8).max(200).required(),
@@ -220,6 +229,7 @@ module.exports = {
     login: authLogin,
     resend: authResend,
     google: authGoogle,
+    apple: authApple,
     passwordChange: authPasswordChange,
   },
   hide: {

@@ -41,6 +41,7 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8082,http://localhost:19006}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_IOS_CLIENT_ID=${GOOGLE_IOS_CLIENT_ID:-}
+      - APPLE_CLIENT_ID=${APPLE_CLIENT_ID:-}
       - EMAIL_FROM=${EMAIL_FROM:-}
       - EMAIL_PASS=${EMAIL_PASS:-}
       - TRUST_PROXY=${TRUST_PROXY:-1}
