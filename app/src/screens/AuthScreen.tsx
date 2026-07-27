@@ -848,7 +848,7 @@ export function AuthScreen() {
                 lineHeight: 16,
               }}
             >
-              Your tracks stay on this device. Sign in to sync new activity to the cloud.
+              Your hiking data is encrypted and stored securely. Sign in to access it on any device.
             </Text>
           </View>
         </Animated.View>
@@ -1128,7 +1128,7 @@ export function AuthScreen() {
               {/* Apple — disabled on web, requires physical iOS device */}
               <PressBtn
                 style={formStyles.appleBtn}
-                onPress={() => Alert.alert('Apple Sign In', 'Apple Sign In is available on iOS devices. Download the Cairn app from the App Store to use this feature.')}
+                onPress={() => Alert.alert('Coming soon', 'Apple Sign In will be available in the next update. Please use email login for now.')}
                 scale={0.98}
               >
                 <View style={styles.btnContent}>

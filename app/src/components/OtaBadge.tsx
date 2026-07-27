@@ -99,7 +99,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // of dual subagent audits (rounds 10-14), batches 42-46. Removed ~600 LOC
 // of dead exported symbols (0-caller functions, un-exported internal types).
 // Zero user-visible change. Pure codebase hygiene.
-// O11 (2026-07-27): 4 用户 bug 修:
+// O11 (2026-07-27): 用户 O8 上测出的 4 bug + O10 dead refs 修 + pre-launch cleanup:
 //   1. sim-walker 撤回撤不干净 — undoSteps 用 max(posHistory, trackPoints)
 //      作可撤上限; posHistory 空但 trackPoints 有内容时 currentPos 从
 //      trackPoints tail 恢复,避免下次 tick 从旧点画到别处
@@ -114,6 +114,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //   Bonus: 磁盘 jsonl 空的 unfinished session (sim-walker 没 write 到 disk /
 //      老 bug 遗留) 静默 discardActiveHike 而不弹 recovery modal, 避免用户
 //      点 continue 看到空 hike
+//   O10 refs 修: App.tsx 删掉 drainPreviousBootCheckpoint/rotateCheckpoint/
+//     reconcileOrphans 调用 (对应 export 已在 O10 删了会 crash)
+//   Pre-launch cleanup: T1/T2/T3/T4/T5/T6 (web test hooks, SOS stub, voice memo
+//     UI, Like/Report API, privacy copy, dev route guard)
 export const OTA_VERSION = 'O11';
 
 
