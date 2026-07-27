@@ -549,14 +549,6 @@ export function SettingsScreen() {
         {/* Emergency Section */}
         <SectionHeader title="Safety" />
         <View style={styles.card}>
-          <ActionRow
-            iconName="Phone"
-            iconColor={Colors.danger}
-            iconBg={Colors.dangerBg}
-            label="Emergency Contacts"
-            onPress={() => Alert.alert('Emergency Contacts', 'Configure in next update')}
-          />
-          <View style={styles.divider} />
           <ToggleRow
             iconName="Navigation2"
             iconColor={Colors.severityWarning}
@@ -731,6 +723,7 @@ export function SettingsScreen() {
 
         {/* Debug section — v446: promoted to a first-class toggle (was 5-tap on version).
             Debug Mode switch is always visible; child controls only show when ON. */}
+        {__DEV__ && (
         <View style={{ marginTop: Spacing.xl }}>
           <Text style={styles.sectionHeader}>DEBUG</Text>
           <View
@@ -760,8 +753,9 @@ export function SettingsScreen() {
             />
           </View>
         </View>
+        )}
 
-        {debugMode && (
+        {__DEV__ && debugMode && (
           <View style={{ marginTop: Spacing.xl }}>
             <Text style={styles.sectionHeader}>DEBUG</Text>
             <TouchableOpacity
