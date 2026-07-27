@@ -92,7 +92,22 @@ export const useAppStore = create<AppState>((set) => ({
     })),
 
   isLoggedIn: false,
-  setLoggedIn: (v) => set({ isLoggedIn: v }),
+  setLoggedIn: (v) => {
+    set({ isLoggedIn: v });
+    if (v) {
+      // Identify the user with RevenueCat on login so subscription state is scoped correctly.
+      // Lazy import avoids a circular dependency (purchasesService → RC → nothing → back).
+      Promise.resolve().then(async () => {
+        try {
+          const userId = useAppStore.getState().user?.id;
+          if (userId) {
+            const { useSubscriptionStore } = await import('./useSubscriptionStore');
+            await useSubscriptionStore.getState().onUserLogin(userId);
+          }
+        } catch { /* non-fatal */ }
+      });
+    }
+  },
   user: null,
   setUser: (user) => set({ user }),
   hydrated: false,
@@ -118,6 +133,13 @@ export const useAppStore = create<AppState>((set) => ({
     // 用户下次点 Sign In 成功后 AuthScreen 清此标记。
     storage.setItem(STORAGE_KEY_LOGOUT_MARKER, '1').catch(() => {});
     crashLogger.breadcrumb('logout:marker_set');
+    // Log out from RevenueCat so subscription state resets to anonymous.
+    Promise.resolve().then(async () => {
+      try {
+        const { useSubscriptionStore } = await import('./useSubscriptionStore');
+        await useSubscriptionStore.getState().onUserLogout();
+      } catch { /* non-fatal */ }
+    });
   },
 
   hydrate: async () => {
@@ -194,6 +216,11 @@ export const useAppStore = create<AppState>((set) => ({
           } catch (attachErr) {
             crashLogger.breadcrumb(`v405:mem_sync_attach_failed ${String(attachErr).slice(0, 80)}`);
           }
+          // O11: Hydrate RevenueCat subscription status on cold boot.
+          try {
+            const { useSubscriptionStore } = await import('./useSubscriptionStore');
+            await useSubscriptionStore.getState().hydrate();
+          } catch { /* non-fatal — subscription state defaults to isPro=false */ }
           // v404: fetch backend sessions on cold boot even though isLoggedIn=false.
           // 登录成功后 UI 需要立刻看到 activity 列表，避免登录后再等一轮网络。
           try {

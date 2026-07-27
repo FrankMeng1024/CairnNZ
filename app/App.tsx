@@ -31,6 +31,7 @@ import { API_BASE_URL } from './src/config/api';
 // boot with "not a function" on iOS. Removed the calls; keep only
 // markBootPhase which still exists.
 import { markBootPhase } from './src/services/bootDiagnostics';
+import { initPurchases } from './src/services/purchasesService';
 
 // First side-effect: report that module loading completed. This runs
 // AFTER all the imports above (which is when iOS jetsam most likely
@@ -54,6 +55,15 @@ try {
   markBootPhase('after_mapbox_init');
 } catch (e: any) {
   markBootPhase('initMapbox_threw', { msg: String(e?.message ?? e).slice(0, 200) });
+}
+
+// Initialize RevenueCat (iOS only — Android not in scope for v1).
+// Using the iOS public key from env. Safe to call at module load.
+try {
+  const rcApiKey = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
+  if (rcApiKey) initPurchases(rcApiKey);
+} catch {
+  // Non-fatal: subscription features degrade gracefully
 }
 
 // Pre-register background location TaskManager handler (no-op on web).

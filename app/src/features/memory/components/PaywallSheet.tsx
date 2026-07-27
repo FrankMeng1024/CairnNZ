@@ -4,31 +4,62 @@
  * Shown when the user taps a 6th friend (beyond the
  * memory_subscription_limit = 5 cap) in MemoryFriendPickModal.
  *
- * v1 binding (v4 §7 + §12):
- *   - TestFlight-only. NO real IAP. Tap "Subscribe" → "Coming soon" toast.
- *   - App Store public release requires real IAP (deferred to v1.2).
- *   - Keep $4.99 price in copy so the perceived value is set.
- *
- * UX: full-screen sheet with hero image, value props, single CTA.
+ * Pre-launch cleanup (O11): wired to real RevenueCat purchase flow.
+ *   - Monthly: NZD $5.99/month (cairn_pro_monthly)
+ *   - Annual:  NZD $39.99/year (cairn_pro_annual)
+ *   - Restore: mandatory "Restore purchases" per App Store Guidelines 3.1.1
  */
-import React from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
+import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
+  /** Called after a successful purchase so the parent can re-check entitlements */
+  onSubscribed?: () => void;
 }
 
-export function PaywallSheet({ visible, onClose }: Props) {
-  const onSubscribe = () => {
-    // v1: NO IAP. v1.2 wires real RevenueCat / StoreKit flow.
-    Alert.alert(
-      'Coming soon',
-      'Memory Pro will be available in the App Store release. For now, you have 5 friend slots.',
-      [{ text: 'OK', onPress: onClose }],
-    );
+export function PaywallSheet({ visible, onClose, onSubscribed }: Props) {
+  const buyMonthly = useSubscriptionStore(s => s.buyMonthly);
+  const buyAnnual = useSubscriptionStore(s => s.buyAnnual);
+  const restore = useSubscriptionStore(s => s.restore);
+  const purchasing = useSubscriptionStore(s => s.purchasing);
+  const [restoring, setRestoring] = useState(false);
+
+  const handleMonthly = async () => {
+    const result = await buyMonthly();
+    if (result.success) {
+      onSubscribed?.();
+      onClose();
+    } else if (!result.cancelled && result.error) {
+      Alert.alert('Purchase failed', result.error);
+    }
+  };
+
+  const handleAnnual = async () => {
+    const result = await buyAnnual();
+    if (result.success) {
+      onSubscribed?.();
+      onClose();
+    } else if (!result.cancelled && result.error) {
+      Alert.alert('Purchase failed', result.error);
+    }
+  };
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    const status = await restore();
+    setRestoring(false);
+    if (status.isPro) {
+      Alert.alert('Restored', 'Your Pro subscription has been restored.', [
+        { text: 'OK', onPress: () => { onSubscribed?.(); onClose(); } },
+      ]);
+    } else {
+      Alert.alert('No subscription found', 'No active Pro subscription was found for this Apple ID.');
+    }
   };
 
   return (
@@ -45,7 +76,7 @@ export function PaywallSheet({ visible, onClose }: Props) {
             <Icon name="X" size={20} color={Colors.textSecondary} strokeWidth={2.2} />
           </TouchableOpacity>
 
-          {/* Hero — sepia gradient circle with sparkle */}
+          {/* Hero */}
           <View style={styles.hero}>
             <View style={styles.heroCircle}>
               <Icon name="Heart" size={32} color={Colors.primary} strokeWidth={2.2} />
@@ -64,16 +95,44 @@ export function PaywallSheet({ visible, onClose }: Props) {
             <ValueRow icon="Heart" text="Support the makers of Cairn" />
           </View>
 
-          <View style={styles.priceRow}>
-            <Text style={styles.price}>$4.99</Text>
-            <Text style={styles.priceUnit}>per month</Text>
-          </View>
-
-          <TouchableOpacity style={styles.cta} onPress={onSubscribe} testID="paywall-subscribe">
-            <Text style={styles.ctaText}>Subscribe</Text>
+          {/* Annual CTA (primary) */}
+          <TouchableOpacity
+            style={[styles.cta, styles.ctaAnnual]}
+            onPress={handleAnnual}
+            disabled={purchasing || restoring}
+            testID="paywall-subscribe-annual"
+          >
+            {purchasing
+              ? <ActivityIndicator size="small" color="#fff" />
+              : (
+                <View>
+                  <Text style={styles.ctaText}>Annual — NZD $39.99 / year</Text>
+                  <Text style={styles.ctaSub}>Save 44% vs monthly</Text>
+                </View>
+              )
+            }
           </TouchableOpacity>
 
-          <Text style={styles.foot}>Restore purchases · Privacy · Terms</Text>
+          {/* Monthly CTA (secondary) */}
+          <TouchableOpacity
+            style={[styles.cta, styles.ctaMonthly]}
+            onPress={handleMonthly}
+            disabled={purchasing || restoring}
+            testID="paywall-subscribe-monthly"
+          >
+            <Text style={[styles.ctaText, { color: Colors.primary }]}>Monthly — NZD $5.99 / month</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleRestore}
+            disabled={purchasing || restoring}
+            testID="paywall-restore"
+          >
+            {restoring
+              ? <ActivityIndicator size="small" color={Colors.textMuted} style={{ marginTop: Spacing.md }} />
+              : <Text style={styles.foot}>Restore purchases · Privacy · Terms</Text>
+            }
+          </TouchableOpacity>
         </Pressable>
       </Pressable>
     </Modal>
@@ -129,19 +188,23 @@ const styles = StyleSheet.create({
     lineHeight: 22, marginTop: Spacing.sm, marginBottom: Spacing.lg,
   },
   valueList: { marginVertical: Spacing.md },
-  priceRow: {
-    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center',
-    gap: 4, marginTop: Spacing.md,
-  },
-  price: { fontSize: 32, fontWeight: '700', color: Colors.textPrimary },
-  priceUnit: { fontSize: FontSize.body, color: Colors.textSecondary },
   cta: {
-    backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
     borderRadius: Radius.button,
     alignItems: 'center',
+    marginTop: Spacing.sm,
+  },
+  ctaAnnual: {
+    backgroundColor: Colors.primary,
     marginTop: Spacing.lg,
   },
-  ctaText: { color: '#fff', fontSize: FontSize.body, fontWeight: '700' },
+  ctaMonthly: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
+  ctaText: { color: '#fff', fontSize: FontSize.body, fontWeight: '700', textAlign: 'center' },
+  ctaSub: { color: 'rgba(255,255,255,0.8)', fontSize: FontSize.caption, textAlign: 'center', marginTop: 2 },
   foot: { textAlign: 'center', fontSize: FontSize.caption, color: Colors.textMuted, marginTop: Spacing.md },
 });
+
