@@ -210,17 +210,44 @@ class GpsInjector {
         });
         storeRemoved = take;
       }
-      // O11 (2026-07-27): 若 posHistory 已空但 trackPoints 撤了内容, currentPos
-      // 还没 restore (restored 是 null). 取 trackPoints 剩下的最后一个作为新
-      // currentPos, 避免下一次 tick 从旧的 currentPos 又画到别处.
+      // O14 Bug 7 fix: undo semantic. Pre-fix, when posHistory was empty
+      // but trackPoints still had content, we set currentPos to the
+      // trackPoints tail — but the tail moves with every undo (that's
+      // the whole point), so "undo all the way back" landed the joystick
+      // on trackPoints[0], not the user's chosen anchor. Users expected
+      // undo-to-empty to return to the position they picked with the
+      // recentre button.
+      //
+      // New semantic: if posHistory drained but we still have trackPoints,
+      // rewind currentPos to the sim-walker's startAnchor (the joystick
+      // position at Start Hike). Only fall back to trackPoints tail if no
+      // anchor is known (user never recentred, so anchor unset).
       if (!restored) {
-        const remaining = (useTrackingStore.getState() as any).trackPoints;
-        if (Array.isArray(remaining) && remaining.length > 0) {
-          const tail = remaining[remaining.length - 1];
-          if (tail && Number.isFinite(tail.lat) && Number.isFinite(tail.lng)) {
-            this.currentPos = { lat: tail.lat, lng: tail.lng };
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { useSimWalkerStore } = require('./useSimWalkerStore');
+          const anchor = useSimWalkerStore.getState().startAnchor;
+          if (anchor && Number.isFinite(anchor.lat) && Number.isFinite(anchor.lng)) {
+            this.currentPos = { lat: anchor.lat, lng: anchor.lng };
+            // Sync the tracking store's lastCoordinate so the puck +
+            // recentre button follow the anchor. Without this, the map
+            // stays on the tail while the joystick sits on the anchor.
+            useTrackingStore.setState((s: any) => ({
+              ...s,
+              lastCoordinate: { lat: anchor.lat, lng: anchor.lng, alt: 100, accuracy: 5, speed: 0 },
+              lastCoordinateTime: Date.now(),
+            }));
+          } else {
+            // No anchor known — old behavior (tail fallback).
+            const remaining = (useTrackingStore.getState() as any).trackPoints;
+            if (Array.isArray(remaining) && remaining.length > 0) {
+              const tail = remaining[remaining.length - 1];
+              if (tail && Number.isFinite(tail.lat) && Number.isFinite(tail.lng)) {
+                this.currentPos = { lat: tail.lat, lng: tail.lng };
+              }
+            }
           }
-        }
+        } catch { /* swallow */ }
       }
     } catch (err) {
       log('v441.simwalker.undo_store_err', { err: String(err) });

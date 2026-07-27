@@ -8,6 +8,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   TextInput, Animated, Easing, KeyboardAvoidingView, Platform, Keyboard,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
@@ -29,9 +30,13 @@ type Props = {
   onCancel: () => void;
   onConfirm: (name: string) => void;
   onDiscard: () => void;
+  /** O14 Bug 4: when true, disable buttons + swap Save-button label to
+   *  a spinner so the user sees "Saving…" while stopTracking runs its
+   *  async flush → rename chain (up to 15s). */
+  saving?: boolean;
 };
 
-export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard }: Props) {
+export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard, saving = false }: Props) {
   const [name, setName] = useState('');
   const insets = useSafeAreaInsets();
   const slideY = useRef(new Animated.Value(500)).current;
@@ -138,28 +143,48 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard }: Pr
               放弃 = 用户主动丢弃本次 hike (清 disk + remote + store)。 */}
           <View style={stopSheetStyles.actions}>
             <TouchableOpacity
-              style={stopSheetStyles.cancelBtn}
+              style={[stopSheetStyles.cancelBtn, saving && { opacity: 0.4 }]}
               onPress={() => {
+                if (saving) return;
                 Keyboard.dismiss();
                 dismiss(onDiscard);
               }}
               activeOpacity={0.7}
+              disabled={saving}
             >
               <Text style={stopSheetStyles.cancelText}>Discard</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[stopSheetStyles.saveBtn, { backgroundColor: accent }]}
+              style={[stopSheetStyles.saveBtn, { backgroundColor: accent }, saving && { opacity: 0.7 }]}
               onPress={() => {
+                if (saving) return;
                 // O11 (2026-07-27): 收起键盘再 dismiss.用户报 "点 save
                 // 键盘不自动消失" — 老代码只 dismiss sheet 但 TextInput
                 // 焦点还在,iOS 键盘不隐藏遮挡下面 UI 直到点别处。
                 Keyboard.dismiss();
-                dismiss(() => onConfirm(name));
+                // O14 Bug 4: do NOT dismiss the sheet here. HikingScreen
+                // will keep it mounted, flip its `saving` prop true, wait
+                // for stopTracking to finish (flush + rename, up to 15s),
+                // then unmount the sheet. Pre-fix, we dismissed
+                // immediately → user saw a normal Hiking screen with
+                // Start Hiking button while stopTracking was still
+                // writing to disk → clicked around and confused state.
+                onConfirm(name);
               }}
               activeOpacity={0.85}
+              disabled={saving}
             >
-              <Icon name="Save" size={14} color="#fff" strokeWidth={2.5} />
-              <Text style={stopSheetStyles.saveText}>Save</Text>
+              {saving ? (
+                <>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={stopSheetStyles.saveText}>Saving…</Text>
+                </>
+              ) : (
+                <>
+                  <Icon name="Save" size={14} color="#fff" strokeWidth={2.5} />
+                  <Text style={stopSheetStyles.saveText}>Save</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
 

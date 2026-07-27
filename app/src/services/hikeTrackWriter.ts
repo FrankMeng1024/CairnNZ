@@ -395,9 +395,30 @@ export async function readActiveHikeTail(sessionId: string): Promise<HikePoint[]
 }
 
 /**
- * Discard an unfinished hike (user tapped Dismiss in ResumeBanner).
+ * Discard an unfinished hike (user tapped Dismiss in ResumeBanner
+ * or Discard in the stop sheet).
+ *
+ * O14 Bug 2 fix: pre-fix, this only deleted the JSONL + meta on
+ * disk. Module-scoped `state` was left with sessionId + non-empty
+ * buffer + a live flushTimer. 30s later the timer fired, flushBuffer
+ * ran, and it recreated the JSONL from the buffer — resurrecting
+ * the file we just deleted. The user then saw "unfinished hike"
+ * pop up on the next Hike-screen mount, even though they Discarded.
+ * Fix: first clear the in-memory state (cancel timer, drop buffer,
+ * null out `state`), then await any in-flight flush chain to drain,
+ * then delete on disk.
  */
 export async function discardActiveHike(sessionId: string): Promise<void> {
+  // (1) invalidate the module state so any queued flushBuffer becomes a no-op
+  if (state && state.sessionId === sessionId) {
+    if (state.flushTimer) { clearTimeout(state.flushTimer); state.flushTimer = null; }
+    state.buffer = [];
+    state = null;
+  }
+  // (2) wait for any in-flight flush chain tail to drain — it may still
+  // be mid-write when we get here (an addTrackPoint 50 lines ago triggered
+  // an immediate flush that hasn't returned yet)
+  try { await flushChainTail; } catch { /* swallow — chain rejects handled elsewhere */ }
   const fs = await getFs();
   if (!fs) return;
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';

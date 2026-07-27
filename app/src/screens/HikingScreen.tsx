@@ -134,6 +134,12 @@ export function HikingScreen() {
     activityMode: 'hiking' | 'running'; trackPoints: Array<{ lat: number; lng: number }>;
     startedAt: number;
   }>(null);
+  // O14 Bug 4: keep the sheet mounted with a "Saving…" spinner during
+  // stopTracking's async flush+rename chain. Pre-fix, the sheet dismissed
+  // immediately on tap-Save and the user saw the Hiking screen with the
+  // Start-Hiking button visible while tracking was still finalising
+  // (up to 30s) — very confusing.
+  const [savingHike, setSavingHike] = useState(false);
   // Initialize phase from current tracking status — if user has an active hike
   // and re-enters this screen (Home → Hiking again), jump straight to the
   // tracking UI instead of forcing the route picker.
@@ -218,7 +224,16 @@ export function HikingScreen() {
     // 只在非 tracking/paused 状态下检测: 用户已经在 recording 中不该弹恢复
     if (isTrackingOrPaused) return;
     let cancelled = false;
-    (async () => {
+    // O14 Bug 5 fix: wait 800ms before scanning disk. When the user
+    // just tapped Save, stopTracking's flush → rename chain may still
+    // be finalising active/{sid}.jsonl → completed. Racing straight
+    // into listActiveHikes would see the not-yet-renamed file and
+    // surface the just-Saved hike as "unfinished". 800ms is enough
+    // to cover 99% of finalise wall-times and is invisible to a user
+    // who arrived here by manual nav (not from Save).
+    const delayTimer = setTimeout(() => { runDetect(); }, 800);
+    const runDetect = async () => {
+      if (cancelled) return;
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const hikeTrackWriter = require('../services/hikeTrackWriter');
@@ -344,8 +359,8 @@ export function HikingScreen() {
           lastPointAt,
         });
       } catch { /* silent — v412 UI 恢复不影响主流程 */ }
-    })();
-    return () => { cancelled = true; };
+    };
+    return () => { cancelled = true; clearTimeout(delayTimer); };
   }, [hydrationTs, isTrackingOrPaused]);
 
   useEffect(() => { loadRoutes(); }, []);
@@ -359,6 +374,21 @@ export function HikingScreen() {
     let cancelled = false;
     (async () => {
       try {
+        // O14 Bug 3/6 fix: skip GPS prime when sim-walker is active.
+        // Pre-fix, entering Hiking screen while joystick is on would
+        // fetch a real GPS fix (usually the user's home) and clobber
+        // gpsInjector.currentPos in lastCoordinate — the next Start
+        // Hike then seeded from home, drew a long line to the joystick,
+        // and the "continues from where I stopped" complaint appeared.
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { useSimWalkerStore } = require('../dev/simWalker/useSimWalkerStore');
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { useSettingsStore: uss } = require('../store/useSettingsStore');
+          if (uss.getState().debugMode && useSimWalkerStore.getState().active) {
+            return;
+          }
+        } catch { /* swallow — sim-walker not loaded, proceed with real GPS prime */ }
         const perm = await Location.getForegroundPermissionsAsync();
         if (!perm.granted) {
           const req = await Location.requestForegroundPermissionsAsync();
@@ -965,6 +995,7 @@ export function HikingScreen() {
       {stopSummary && (
         <StopSummarySheet
           summary={stopSummary}
+          saving={savingHike}
           onCancel={() => {
             // v120: Resume — un-pause and dismiss the sheet. Tracking
             // resumes from where it left off. The gap between Stop
@@ -1005,6 +1036,11 @@ export function HikingScreen() {
             setStopSummary(null);
           }}
           onConfirm={async (name) => {
+            // O14 Bug 4 fix: flip saving state BEFORE dismissing the
+            // sheet so the sheet shows "Saving…" spinner + disabled
+            // buttons while stopTracking runs its flush+rename chain
+            // (up to 15s wall).
+            setSavingHike(true);
             // v405: Snapshot sessionId + trackPoints BEFORE stopTracking
             // clears the store. Needed for auto-nav to MapHistory below,
             // and for "too-short" defensive check (skip nav if session
@@ -1043,6 +1079,9 @@ export function HikingScreen() {
               // NB: stopTracking 内部的 promise 依然在后台跑(未 abort),
               // finalize + pushMemoryNow 该重试就重试。
             }
+            // O14 Bug 4: clear saving state + dismiss sheet in one go
+            // once stopTracking has finished (or wall-timed out).
+            setSavingHike(false);
             setStopSummary(null);
 
             // v405 fix (Happy Path bug #7,#8): 自动跳 Activity Detail,

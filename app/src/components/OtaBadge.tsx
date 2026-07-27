@@ -147,7 +147,43 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //   6. Privacy Policy: backend now serves /privacy HTML from backend/public/
 //      privacy.html — no more 404. PRIVACY_URL points to API host + /privacy.
 //   7. Sign out row label: was textSecondary (too pale), now textPrimary.
-export const OTA_VERSION = 'O13';
+// O14 (2026-07-28): sim-walker + discard/save + pending-sync bugs from user's
+// real-device test session:
+//   1/3/6. Long line drawn from home GPS to joystick location when Start
+//     Hike after ⟲ recentre — startTracking unconditionally nulled
+//     lastCoordinate; now seeds it from gpsInjector.currentPos when
+//     sim-walker active. HikingScreen's GPS-prime effect also skipped
+//     when sim-walker active. discardCurrentSession doesn't touch
+//     injector state so previous currentPos is intentionally reused.
+//   2. Discard → unfinished modal on next Hike open. Root cause:
+//     hikeTrackWriter.discardActiveHike deleted disk files but left
+//     module state + flushTimer alive, so 30s later the buffered
+//     flush recreated the JSONL. Fix: clear state + timer + drain
+//     the flush chain BEFORE deleting disk.
+//   4. Save Hike: sheet dismissed immediately, StopSummarySheet
+//     unmounted, HikingScreen showed Start-Hiking button while
+//     stopTracking's flush+rename ran (up to 30s). Confused users.
+//     Fix: keep sheet mounted with a "Saving…" spinner + disabled
+//     buttons until stopTracking's Promise resolves.
+//   5. Save → unfinished modal on next Hike open (worst confusion).
+//     Root cause: stopTracking's flush-timeout branch fired rename
+//     fire-and-forget; if user reopened Hike within 1-2s, active
+//     JSONL still on disk → recovery useEffect triggered. Fix:
+//     always await rename inside stopTracking; widen FLUSH_INNER_
+//     TIMEOUT_MS 2500ms → 15000ms; recovery useEffect defers scan
+//     by 800ms to swallow any tail race.
+//   7. Sim-walker Undo used trackPoints tail as fallback anchor when
+//     posHistory drained. Tail moved every undo → "undo all the way"
+//     never returned to user's recentred position. Fix: fall back to
+//     useSimWalkerStore.startAnchor, sync lastCoordinate so puck +
+//     recentre button follow.
+//   8. "1 pending sync" while user is online. saveHikeAtomic surfaced
+//     a single transient network hiccup as a permanent pending state.
+//     Fix: one immediate retry inside saveHikeAtomic (idempotency
+//     key stays the same so server treats as replay if the original
+//     did land). AppState background→active already triggers
+//     drainPending (App.tsx:551-588).
+export const OTA_VERSION = 'O14';
 
 
 type OtaState =

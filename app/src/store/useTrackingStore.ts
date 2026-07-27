@@ -205,22 +205,52 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
   startTracking: async () => {
     const startedAt = Date.now();
+    // O14 Bug 1/3/6 fix: sim-walker seed anchor.
+    //
+    // v450 unconditionally reset lastCoordinate=null on startTracking to
+    // guard against a stale anchor poisoning the teleport-reject gate
+    // when a real hike begins. But that same reset breaks sim-walker
+    // hikes: after the user taps ⟲ to place the joystick at a chosen
+    // spot, gpsInjector.currentPos holds that anchor. If we null out
+    // lastCoordinate here, the first real (background) GPS fix races
+    // in as trackPoint[0] (usually "home"), then the first sim tick
+    // emits a point at the joystick location → the line drawn between
+    // them is the "long line" the user reported.
+    //
+    // Fix: if sim-walker is active (debug mode + injector running),
+    // seed lastCoordinate from gpsInjector.currentPos so no cross-map
+    // jump is possible. Real-GPS mode still gets null (v450 behavior).
+    let seedLast: TrackingState['lastCoordinate'] = null;
+    let seedTime: number | null = null;
+    let seedFixTs: number | null = null;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useSimWalkerStore } = require('../dev/simWalker/useSimWalkerStore');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useSettingsStore } = require('./useSettingsStore');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { gpsInjector } = require('../dev/simWalker/gpsInjector');
+      if (
+        useSettingsStore.getState().debugMode &&
+        useSimWalkerStore.getState().active
+      ) {
+        const snap = gpsInjector.getSnapshot();
+        if (snap?.currentPos && Number.isFinite(snap.currentPos.lat) && Number.isFinite(snap.currentPos.lng)) {
+          seedLast = { lat: snap.currentPos.lat, lng: snap.currentPos.lng, alt: 100, accuracy: 5, speed: 0 };
+          seedTime = startedAt;
+          seedFixTs = startedAt;
+          crashLogger.breadcrumb(`o14.simwalker.seed lat=${snap.currentPos.lat.toFixed(4)} lng=${snap.currentPos.lng.toFixed(4)}`);
+        }
+      }
+    } catch { /* swallow — sim-walker modules may not be loaded */ }
     set({
       status: 'requesting',
       sessionId: generateId(),
       remoteSessionId: null,
       startedAt,
-      // v450: reset pre-hike anchor state so any prior lastCoordinate
-      // (from sim-walker overlay ⟲ or a stale recenter action) does
-      // not poison the teleport gate. Without this reset, if the user
-      // panned/tapped ⟲ on the sim-walker overlay pre-hike, the fake
-      // anchor (accuracy=5, speed=0) would still be in lastCoordinate
-      // when real GPS starts — the first real fix could distance-jump
-      // far from the fake anchor, trip Gate 1 (teleport reject), and
-      // silently drop until lastCoordinate somehow refreshed.
-      lastCoordinate: null,
-      lastCoordinateTime: null,
-      lastFixTimestamp: null,
+      lastCoordinate: seedLast,
+      lastCoordinateTime: seedTime,
+      lastFixTimestamp: seedFixTs,
       trackPoints: [],
       trackPointsSmoothed: [],
       trackPointsRaw: [],
@@ -1274,30 +1304,32 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       if (priorSid) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { renameToCompleted, flushNow } = require('../services/hikeTrackWriter');
-        const FLUSH_INNER_TIMEOUT_MS = 2500;
+        // O14 Bug 5 fix: pre-fix, FLUSH_INNER_TIMEOUT_MS=2500 was too aggressive.
+        // For large hikes flush took >2.5s, we fell into the fire-and-forget
+        // rename branch, stopTracking returned in <3s, user tapped Hike tab,
+        // recovery useEffect fired while active/{sid}.jsonl was still on disk
+        // (rename hadn't finished) → the just-Saved hike surfaced as
+        // "unfinished". Widen the flush timeout to 15s so 99% of hikes rename
+        // synchronously before stopTracking returns; the UI shows a saving
+        // spinner during this window (Bug 4 fix in StopSummarySheet).
+        const FLUSH_INNER_TIMEOUT_MS = 15000;
         const flushPromise = flushNow();
         const timedFlush = Promise.race([
           flushPromise.then(() => 'ok' as const),
           new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), FLUSH_INNER_TIMEOUT_MS)),
         ]);
         const result = await timedFlush;
-        if (result === 'ok') {
-          // Flush 在 budget 内完成 — 同步 await rename 保证 return 前落盘
+        // Regardless of flush ok/timeout, always await rename — the previous
+        // fire-and-forget branch was the root cause of Bug 5 (Save → unfinished
+        // modal on next open). renameToCompleted internally re-flushes the
+        // remaining buffer, so it tolerates a partial flush.
+        try {
           await renameToCompleted(priorSid, Date.now(), s.remoteSessionId ?? undefined);
-        } else {
-          // Flush 超时 — 让它继续在后台跑,rename 挂到 chain 之后 fire-
-          // and-forget。stopTracking 立刻 return,不阻塞 UI。
-          // O7 review-fix: 用 finally 保证 flush 即便 reject,rename 也照
-          // 跑。renameToCompleted 内部会再 flushBuffer 一次 (tolerant of
-          // partial buffer),所以就算 flushNow reject 了 rename 也能把
-          // 磁盘上已经落盘的部分文件正确 rename → 不会因为 flush 部分失败
-          // 让 active/{sid}.jsonl 永远留在磁盘触发假 recovery。
-          const finalRemoteId = s.remoteSessionId ?? undefined;
-          void flushPromise
-            .catch(() => { /* swallow so finally runs */ })
-            .finally(() => renameToCompleted(priorSid, Date.now(), finalRemoteId))
-            .catch((err: unknown) => crashLogger.breadcrumb(`o7:rename_bg_failed ${String(err).slice(0, 80)}`));
-          crashLogger.breadcrumb(`o7:flush_slow_bg_rename sid=${priorSid.slice(0, 8)}`);
+          if (result === 'timeout') {
+            crashLogger.breadcrumb(`o14:rename_after_flush_timeout sid=${priorSid.slice(0, 8)}`);
+          }
+        } catch (renameErr) {
+          crashLogger.breadcrumb(`o14:rename_failed ${String(renameErr).slice(0, 80)}`);
         }
       }
     } catch (e) {

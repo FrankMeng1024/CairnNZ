@@ -187,23 +187,51 @@ export async function saveHikeAtomic(
   idempotencyKey: string,
 ): Promise<SaveHikeAtomicResult> {
   const path = `/api/sessions/${remoteId}/save`;
+  // O14 Bug 8 fix: pre-fix, one transient network hiccup (iOS timer paused
+  // while backgrounded → fetch timeout, or a 5xx from proxy) marked the
+  // whole hike as "pending sync" and the banner stayed on until the next
+  // AppState background→active toggle. Add one immediate retry inside
+  // saveHikeAtomic so we don't fall into pending on a single flake.
+  // Idempotency key stays the same → server treats retry as replay if
+  // it did succeed on attempt 1 but the response never came back.
+  const doFetch = () => authenticatedFetch(path, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify(payload),
+  });
   let res: Response;
-  try {
-    res = await authenticatedFetch(path, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': idempotencyKey,
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (netErr: any) {
-    // 网络异常 (无网络 / 超时 / DNS 失败) → throw 让 caller 走 pendingSyncStore
-    const err: any = new Error(`saveHikeAtomic network error: ${netErr?.message || netErr}`);
-    err.status = 0;
-    err.cause = netErr;
-    throw err;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      res = await doFetch();
+      if (res.ok || res.status >= 400 && res.status < 500) {
+        // Success or a 4xx that a retry can't fix — break out.
+        break;
+      }
+      // 5xx — retry once if this was attempt 0.
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 500));
+        continue;
+      }
+      // Fall through to !res.ok handling below on attempt 1.
+      break;
+    } catch (netErr) {
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 500));
+        continue;
+      }
+      // Retry exhausted — surface network error.
+      const err: any = new Error(`saveHikeAtomic network error: ${(netErr as any)?.message || netErr}`);
+      err.status = 0;
+      err.cause = netErr;
+      throw err;
+    }
   }
+  // TypeScript: `res` is definitely assigned by the loop above (either the
+  // for-loop ran to completion via break, or we already threw).
+  res = res!;
   if (!res.ok) {
     // 4xx / 5xx / 网络异常都算失败, 让 caller 决定是否入 pendingSyncStore
     let errBody: any = null;
