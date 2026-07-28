@@ -214,7 +214,38 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //      set segmentBreak when the incoming point is >200m from the previous
 //      lastCoordinate. HikingMap already renders these as fresh polyline
 //      segments (line 125-128).
-export const OTA_VERSION = 'O15';
+// O16 (2026-07-28): unfinished-hike false-positive on save. User reported
+// "sim-walker save hike 成功也弹 unfinished modal" — 3 subagents deep-dove
+// the whole detection + cleanup chain and found 6 gaps:
+//   A1. HikingScreen recovery useEffect's remote /sessions/unfinished
+//       fallback (line 258-291) had NO cross-check against useSessionStore.
+//       sim-walker sessions never write local JSONL (only real GPS does),
+//       so listActiveHikes always returned [] → remote fallback always
+//       fired. Server row for a just-Saved sim-walker hike with pending
+//       sync still has finalized_at=NULL, distance_m=0, duration_s=0 →
+//       server returned it → modal popped. Fix: match by remoteId OR
+//       startedAt ±60s window against useSessionStore.sessions; skip
+//       modal + poke drainPending.
+//   B2. renameToCompleted unconditionally updated meta with ended_at
+//       even when active/{sid}.jsonl never existed (pure sim-walker).
+//       Orphan meta accumulated one per sim save forever. Fix: when
+//       activeExisted=false, delete meta instead of updating.
+//   B3. discardCurrentSession (TooShortSheet "End anyway") didn't call
+//       hikeTrackWriter.discardActiveHike. Left module state alive
+//       (sessionId, buffer, live 30s flushTimer) which could resurrect
+//       the JSONL. Fix: fire discardActiveHike inside discardCurrentSession.
+//   C1. useSessionStore.addSession didn't dedupe by id — double-tap Save
+//       or wall-clock catch retry could produce duplicate activity cards.
+//       Fix: findIndex by id and update in-place.
+//   C2. persistBackgroundContext(null,false) was fire-and-forget AFTER
+//       renameToCompleted — a stray background TaskManager fire during
+//       the 15s rename window could resurrect the JSONL. Fix: await
+//       persistBackgroundContext BEFORE rename so Path B gate closes first.
+//   C3. Disk-based unfinished branch (HikingScreen.tsx:405) was missing
+//       the same local-session cross-check as the remote branch. Fix:
+//       duplicate the localMatch logic and also call discardActiveHike
+//       to clean the orphan file.
+export const OTA_VERSION = 'O16';
 
 
 type OtaState =

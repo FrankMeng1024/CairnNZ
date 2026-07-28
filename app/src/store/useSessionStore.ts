@@ -77,8 +77,22 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   addSession: (session) => {
     const userId = get().currentUserId;
     set((s) => {
-      // Prepend newest first, prune oldest beyond MAX_SESSIONS
-      const next = [session, ...s.sessions].slice(0, MAX_SESSIONS);
+      // O16 C1: dedupe by session.id. Pre-fix, a double-tap Save race
+      // or a retry from HikingScreen's wall-clock catch could add the
+      // same local id twice, producing duplicate activity cards. Server
+      // handled its side via idempotent replay, but the client store
+      // was defenseless. Now: if an entry with the same id exists,
+      // update in-place with the fresh copy (which may carry a newly
+      // assigned remoteId or updated syncState).
+      const existingIdx = s.sessions.findIndex((x) => x.id === session.id);
+      let next;
+      if (existingIdx >= 0) {
+        next = s.sessions.slice();
+        next[existingIdx] = { ...next[existingIdx], ...session };
+      } else {
+        // Prepend newest first, prune oldest beyond MAX_SESSIONS
+        next = [session, ...s.sessions].slice(0, MAX_SESSIONS);
+      }
       // Store summary without trackPoints to keep localStorage small;
       // trackPoints stored separately under per-user key
       const summaries = next.map(({ trackPoints: _, ...rest }) => rest);

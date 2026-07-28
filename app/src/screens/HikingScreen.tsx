@@ -273,6 +273,62 @@ export function HikingScreen() {
                   const j = await res.json();
                   if (j.session) {
                     const s = j.session;
+                    // O16 A1 fix: cross-check the local session store BEFORE
+                    // surfacing an "unfinished hike" modal for the remote row.
+                    //
+                    // Root cause of user's report ("sim-walker save hike
+                    // 成功也弹 unfinished"): sim-walker never writes to disk
+                    // via appendHikePoint (__simwalkerAddTrackPoint only
+                    // mutates the store), so listActiveHikes returns []
+                    // → we fall into this remote branch. If the just-Saved
+                    // hike is `saved_pending` (server 5xx / wall timeout /
+                    // syncDaemon not drained yet), server row still has
+                    // finalized_at=NULL, distance_m=0, duration_s=0 →
+                    // /sessions/unfinished returns it → we prompt recovery
+                    // for a hike the user already Saved.
+                    //
+                    // Fix: look up useSessionStore.sessions by remoteId.
+                    // If found (ANY syncState: pending / synced / etc.),
+                    // the user already committed this locally — don't
+                    // pop the modal. Poke drainPending so the server
+                    // catches up.
+                    try {
+                      // eslint-disable-next-line @typescript-eslint/no-require-imports
+                      const { useSessionStore } = require('../store/useSessionStore');
+                      const localSessions = useSessionStore.getState().sessions;
+                      const remoteStartedAt = Date.parse(s.start_time);
+                      // O16 A1 + B1: broaden the match. Server may return
+                      // this row when saveHikeAtomic partially failed
+                      // (remoteId=null on local) OR before syncDaemon
+                      // caught up. Match by:
+                      //   (a) remoteId (fast path when save succeeded),
+                      //   (b) startedAt within a ±60s window (offline
+                      //       sim-walker save where remoteId is still
+                      //       null but the user clearly clicked Save).
+                      const localMatch = localSessions.find((ss: any) => {
+                        if (ss.remoteId != null && ss.remoteId === s.id) return true;
+                        if (Number.isFinite(remoteStartedAt) && Number.isFinite(ss.startedAt)) {
+                          if (Math.abs(ss.startedAt - remoteStartedAt) < 60_000) return true;
+                        }
+                        return false;
+                      });
+                      if (localMatch) {
+                        try {
+                          // eslint-disable-next-line @typescript-eslint/no-require-imports
+                          const cl = require('../services/crashLogger');
+                          (cl.crashLogger ?? cl.default)?.breadcrumb?.(
+                            `o16:unfinished_skip_local_match sid=${s.id} match_by=${localMatch.remoteId === s.id ? 'remoteId' : 'startedAt'}`,
+                          );
+                        } catch { /* swallow */ }
+                        // Nudge sync so the server row gets updated.
+                        try {
+                          // eslint-disable-next-line @typescript-eslint/no-require-imports
+                          const { drainPending } = require('../services/syncDaemon');
+                          void drainPending().catch(() => {});
+                        } catch { /* swallow */ }
+                        return;
+                      }
+                    } catch { /* swallow — if useSessionStore unavailable, fall through */ }
                     setUnfinished({
                       sessionId: `remote-${s.id}`,
                       remoteId: s.id,
@@ -346,6 +402,41 @@ export function HikingScreen() {
           } catch { /* silent */ }
           return; // 不 setUnfinished
         }
+        // O16 C3: local-session cross-check ALSO on the disk-based
+        // branch. Mixed sim-walker + real GPS sessions can leave an
+        // active JSONL that was renamed (unlikely) OR a stale one from
+        // a prior background TaskManager write. If the same startedAt
+        // (or remoteId) already exists in useSessionStore, the user
+        // clearly Saved this hike; don't re-surface it as unfinished.
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { useSessionStore } = require('../store/useSessionStore');
+          const localSessions = useSessionStore.getState().sessions;
+          const latchedStarted = latest.startedAt || lastPointAt;
+          const localMatch = localSessions.find((ss: any) => {
+            if (latest.remoteId != null && ss.remoteId === latest.remoteId) return true;
+            if (Number.isFinite(latchedStarted) && Number.isFinite(ss.startedAt)) {
+              if (Math.abs(ss.startedAt - latchedStarted) < 60_000) return true;
+            }
+            return false;
+          });
+          if (localMatch) {
+            try {
+              const cl = require('../services/crashLogger');
+              (cl.crashLogger ?? cl.default)?.breadcrumb?.(
+                `o16:unfinished_skip_local_disk sid=${latest.sessionId.slice(0, 8)}`,
+              );
+            } catch { /* silent */ }
+            // Also clean the orphan disk file so it doesn't keep triggering.
+            try {
+              const { discardActiveHike } = require('../services/hikeTrackWriter');
+              if (typeof discardActiveHike === 'function') {
+                await discardActiveHike(latest.sessionId);
+              }
+            } catch { /* silent */ }
+            return;
+          }
+        } catch { /* swallow — fall through and surface modal */ }
         setUnfinished({
           sessionId: latest.sessionId,
           remoteId: latest.remoteId ?? null,

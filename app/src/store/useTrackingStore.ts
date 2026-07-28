@@ -1302,6 +1302,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     try {
       const priorSid = s.sessionId;
       if (priorSid) {
+        // O16 C2 fix: close the background task marker BEFORE rename so
+        // the TaskManager Path B gate (STORAGE_KEY_SESSION) can't
+        // resurrect an active/{sid}.jsonl during the rename window.
+        // Pre-fix, persistBackgroundContext(null,false) was fire-and-
+        // forget AFTER rename — a stray background GPS fire in that
+        // 15s+ window could re-create the JSONL we just moved.
+        try { await persistBackgroundContext(null, false); } catch { /* swallow */ }
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { renameToCompleted, flushNow } = require('../services/hikeTrackWriter');
         // O14 Bug 5 fix: pre-fix, FLUSH_INNER_TIMEOUT_MS=2500 was too aggressive.
@@ -1335,8 +1342,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     } catch (e) {
       crashLogger.breadcrumb(`v409:hikeTrackWriter:rename failed ${String(e).slice(0, 80)}`);
     }
-    // 清 background context: hikeActive=false + sessionId=null
-    persistBackgroundContext(null, false).catch(() => {});
+    // O16 C2: persistBackgroundContext(null,false) moved above (before
+    // rename) so background TaskManager can't resurrect the JSONL
+    // during the rename window. No second call needed here.
 
     // v409 fix #14: trigger cache cleanup (size cap + TTL). Fire-and-forget
     // — cleanup 挂了不影响用户看到 Activity Detail。
@@ -1772,6 +1780,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     const s = get();
     if (s.remoteSessionId) {
       deleteRemoteSession(s.remoteSessionId).catch(() => {});
+    }
+    // O16 B3: also tear down hikeTrackWriter for this session. Pre-fix,
+    // discardCurrentSession (used by TooShortSheet "End anyway") cleared
+    // Zustand + AsyncStorage but left the hikeTrackWriter module state
+    // {sessionId, buffer, flushTimer} + meta/{sid}.json orphaned on disk.
+    // Any late GPS write and the 30s buffered flushTimer would then
+    // resurrect the JSONL, and next Hike screen entry would surface
+    // "unfinished hike" for a session the user clearly discarded.
+    // Mirrors the O14 Bug 2 fix already in place for StopSummarySheet.
+    if (s.sessionId) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { discardActiveHike } = require('../services/hikeTrackWriter');
+        void discardActiveHike(s.sessionId).catch(() => {});
+      } catch { /* swallow — writer may not be loaded on web */ }
     }
     crashLogger.breadcrumb(`session:discard pts=${s.trackPoints.length}`);
     set({ ...initialState });

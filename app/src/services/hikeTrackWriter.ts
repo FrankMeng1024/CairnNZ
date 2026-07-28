@@ -320,21 +320,39 @@ export async function renameToCompleted(sessionId: string, endedAt: number, remo
   if (!fs) { state = null; return; }
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
   const completedPath = fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl';
+  const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
+  // O16 B2: detect whether we actually have a JSONL to move. Sim-walker
+  // sessions never call appendHikePoint, so active/{sid}.jsonl never
+  // exists. Pre-fix, we still ran the meta update path — leaving an
+  // orphan meta file forever. Now: only update meta when we actually
+  // rename (there's a completed JSONL to pair with). Otherwise, delete
+  // the meta so the disk isn't leaking one file per sim-walker save.
+  let activeExisted = false;
   try {
     const info = await fs.getInfoAsync(activePath);
     if (info.exists) {
       await fs.moveAsync({ from: activePath, to: completedPath });
+      activeExisted = true;
     }
   } catch { /* best effort */ }
-  // Update meta
-  const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
-  try {
-    const metaRaw = await fs.readAsStringAsync(metaPath);
-    const meta: HikeMeta = JSON.parse(metaRaw);
-    meta.ended_at = endedAt;
-    if (remoteId !== undefined) meta.remote_id = remoteId;
-    await fs.writeAsStringAsync(metaPath, JSON.stringify(meta));
-  } catch { /* best effort */ }
+  if (activeExisted) {
+    // Real hike (or hybrid sim + real GPS): update meta with ended_at
+    // and remote_id so listActiveHikes doesn't see it as unfinished.
+    try {
+      const metaRaw = await fs.readAsStringAsync(metaPath);
+      const meta: HikeMeta = JSON.parse(metaRaw);
+      meta.ended_at = endedAt;
+      if (remoteId !== undefined) meta.remote_id = remoteId;
+      await fs.writeAsStringAsync(metaPath, JSON.stringify(meta));
+    } catch { /* best effort */ }
+  } else {
+    // Pure sim-walker case (no disk points ever written). No completed
+    // JSONL means the meta has no counterpart — delete it so
+    // meta/ directory doesn't accumulate one orphan per sim save.
+    try {
+      await fs.deleteAsync(metaPath, { idempotent: true });
+    } catch { /* best effort */ }
+  }
   state = null;
 }
 
