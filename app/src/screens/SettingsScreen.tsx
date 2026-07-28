@@ -27,7 +27,7 @@ import * as Application from 'expo-application';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Switch, Alert, TextInput, ActivityIndicator, Platform, Linking, Modal,
-  KeyboardAvoidingView, Pressable, Keyboard,
+  KeyboardAvoidingView, Pressable, Keyboard, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -336,6 +336,15 @@ export function SettingsScreen() {
   const [feedbackSending, setFeedbackSending] = useState(false);
   const [feedbackError, setFeedbackError] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
+  // O15 bug 3: attached screenshot previews (clip.yiiling pattern).
+  // Stored locally in state so user can see thumbnails + remove them.
+  // On Send, upload via existing uploadDebugScreenshots pipeline.
+  const [feedbackAttachments, setFeedbackAttachments] = useState<Array<{
+    uri: string; width: number; height: number; fileName?: string;
+  }>>([]);
+
+  // O15 bug 1: help modal explaining what "places explored" means.
+  const [showProgressHelp, setShowProgressHelp] = useState(false);
 
   // Reset memory type-to-confirm
   const [showResetMemoryModal, setShowResetMemoryModal] = useState(false);
@@ -373,77 +382,60 @@ export function SettingsScreen() {
     };
   }, []);
 
-  const handleDebugUpload = async () => {
+  // O15 bug 3: pick screenshots but DO NOT upload here. Add to
+  // feedbackAttachments state so user sees preview thumbnails and can
+  // remove any before Send. Actual upload happens inside handleSendFeedback
+  // when the user taps Send.
+  const handlePickAttachments = async () => {
     if (dbgState === 'picking' || dbgState === 'uploading') return;
     if (dbgResetTimer.current) {
       clearTimeout(dbgResetTimer.current);
       dbgResetTimer.current = null;
     }
-    log('settings.debug_upload.pick_open', { logged_in: isLoggedIn });
+    log('settings.feedback.pick_open', { logged_in: isLoggedIn });
     if (!dbgMountedRef.current) return;
     setDbgState('picking');
-    setDbgLabel('Opening Photos…');
-    const outcome = await pickDebugScreenshots({ selectionLimit: 3 });
+    // Cap the picker so total attachments (existing + new) can't exceed 5.
+    const remaining = Math.max(0, 5 - feedbackAttachments.length);
+    if (remaining === 0) {
+      setDbgState('idle');
+      setFeedbackError('Up to 5 attachments.');
+      return;
+    }
+    const outcome = await pickDebugScreenshots({ selectionLimit: remaining });
     if (!dbgMountedRef.current) return;
     if (outcome.kind === 'permission_denied') {
-      log('settings.debug_upload.pick_perm_denied');
-      dbgFlashAndReset('err', 'Photo permission denied', 4000);
+      log('settings.feedback.pick_perm_denied');
+      setDbgState('idle');
+      setFeedbackError('Photo permission denied. Enable in iOS/Android settings.');
       return;
     }
     if (outcome.kind === 'canceled') {
-      log('settings.debug_upload.pick_canceled');
-      if (!dbgMountedRef.current) return;
       setDbgState('idle');
-      setDbgLabel('');
       return;
     }
     if (outcome.kind === 'error') {
-      log('settings.debug_upload.pick_err', { error: outcome.message });
-      dbgFlashAndReset('err', outcome.message, 4000);
-      return;
-    }
-    const photos = outcome.photos;
-    log('settings.debug_upload.pick_done', { count: photos.length });
-    const noun = photos.length === 1 ? 'screenshot' : 'screenshots';
-    const confirmed = await new Promise<boolean>((resolve) =>
-      Alert.alert(
-        'Send to dev team?',
-        `${photos.length} ${noun} will be uploaded for debugging.`,
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-          { text: 'Send', onPress: () => resolve(true) },
-        ],
-      ),
-    );
-    if (!confirmed) {
-      log('settings.debug_upload.confirm_canceled');
-      if (!dbgMountedRef.current) return;
+      log('settings.feedback.pick_err', { error: outcome.message });
       setDbgState('idle');
-      setDbgLabel('');
+      setFeedbackError(outcome.message);
       return;
     }
-    if (!dbgMountedRef.current) return;
-    setDbgState('uploading');
-    setDbgLabel(`Uploading 0/${photos.length}…`);
-    log('settings.debug_upload.upload_start', { count: photos.length });
-    const result = await uploadDebugScreenshots(photos, 'settings', (p) => {
-      if (!dbgMountedRef.current) return;
-      setDbgLabel(`Uploading ${p.index}/${p.total}…`);
-    });
-    log('settings.debug_upload.upload_done', {
-      ok_count: result.okCount,
-      total: result.total,
-      partial: result.okCount > 0 && result.okCount < result.total,
-      last_error: result.lastError ?? undefined,
-    });
-    if (result.okCount === result.total) {
-      dbgFlashAndReset('done', `Sent ${result.okCount} — thanks!`);
-    } else if (result.okCount === 0) {
-      dbgFlashAndReset('err', result.lastError ?? 'All uploads failed');
-    } else {
-      dbgFlashAndReset('err', `${result.okCount}/${result.total} ok · ${result.lastError ?? ''}`);
-    }
+    // Success — add to previews. No upload yet.
+    setFeedbackAttachments((cur) => [
+      ...cur,
+      ...outcome.photos.map((p) => ({
+        uri: p.uri,
+        width: p.width,
+        height: p.height,
+      })),
+    ]);
+    setDbgState('idle');
+    setFeedbackError('');
+    log('settings.feedback.pick_added', { count: outcome.photos.length });
   };
+  // Legacy alias — some old sim-walker debug flows may still expect the
+  // pre-O13 name. Kept as an alias so no other file needs changes.
+  const handleDebugUpload = handlePickAttachments;
 
   // O13 bug 5: dbgRowLabel / dbgRowDisabled removed — legacy debug row was
   // replaced by the unified in-app Feedback form. handleDebugUpload is
@@ -602,6 +594,43 @@ export function SettingsScreen() {
             </View>
           )}
 
+          {/* ── Your progress (O15 bug 1: moved here from below Preferences,
+           *  right after Profile card so the badge feels like part of the
+           *  user's identity — achievement / 功勋). Section header includes
+           *  a ? tap that opens a modal explaining how "places explored"
+           *  is calculated. */}
+          <View style={progressStyles.headerRow}>
+            <Text style={styles.sectionHeader}>Your progress</Text>
+            <TouchableOpacity
+              onPress={() => setShowProgressHelp(true)}
+              style={progressStyles.helpBtn}
+              accessibilityLabel="How is progress calculated?"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Icon name="Info" size={14} color={Colors.textMuted} strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+          <View style={badgeStyles.row}>
+            <View style={badgeStyles.card}>
+              <View style={[badgeStyles.iconBadge, { backgroundColor: '#eef3e6' }]}>
+                <Icon name="Footprints" size={22} color={Colors.primary} strokeWidth={1.8} />
+              </View>
+              <Text style={badgeStyles.value}>{memoryPointCount}</Text>
+              <Text style={badgeStyles.label}>
+                {memoryPointCount === 1 ? 'place explored' : 'places explored'}
+              </Text>
+            </View>
+            <View style={badgeStyles.card}>
+              <View style={[badgeStyles.iconBadge, { backgroundColor: 'rgba(181,130,61,0.12)' }]}>
+                <Icon name="Mountain" size={22} color="#b5823d" strokeWidth={1.8} />
+              </View>
+              <Text style={badgeStyles.value}>{myCairnCount}</Text>
+              <Text style={badgeStyles.label}>
+                {myCairnCount === 1 ? 'cairn planted' : 'cairns planted'}
+              </Text>
+            </View>
+          </View>
+
           {/* ── Preferences ── */}
           <SectionHeader title="Preferences" />
           <View style={styles.card}>
@@ -618,25 +647,41 @@ export function SettingsScreen() {
              *  the Change-password disclosure pattern in the Profile card. */}
             {showUnitsInline && (
               <View style={inlineStyles.expand}>
+                <View style={styles.divider} />
                 <TouchableOpacity
-                  style={[inlineStyles.pickerRow, units === 'metric' && inlineStyles.pickerRowActive]}
+                  style={inlineStyles.pickerRow}
                   onPress={() => { updateSetting('units', 'metric'); setShowUnitsInline(false); }}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={inlineStyles.pickerLabel}>Metric</Text>
+                    <Text
+                      style={[
+                        inlineStyles.pickerLabel,
+                        units === 'metric' && inlineStyles.pickerLabelActive,
+                      ]}
+                    >
+                      Metric
+                    </Text>
                     <Text style={inlineStyles.pickerHint}>Kilometres, metres</Text>
                   </View>
-                  {units === 'metric' && <Icon name="Check" size={18} color={Colors.primary} />}
+                  {units === 'metric' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
                 </TouchableOpacity>
+                <View style={styles.divider} />
                 <TouchableOpacity
-                  style={[inlineStyles.pickerRow, units === 'imperial' && inlineStyles.pickerRowActive]}
+                  style={inlineStyles.pickerRow}
                   onPress={() => { updateSetting('units', 'imperial'); setShowUnitsInline(false); }}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={inlineStyles.pickerLabel}>Imperial</Text>
+                    <Text
+                      style={[
+                        inlineStyles.pickerLabel,
+                        units === 'imperial' && inlineStyles.pickerLabelActive,
+                      ]}
+                    >
+                      Imperial
+                    </Text>
                     <Text style={inlineStyles.pickerHint}>Miles, feet</Text>
                   </View>
-                  {units === 'imperial' && <Icon name="Check" size={18} color={Colors.primary} />}
+                  {units === 'imperial' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
                 </TouchableOpacity>
               </View>
             )}
@@ -659,29 +704,9 @@ export function SettingsScreen() {
             />
           </View>
 
-          {/* ── Your progress (O13 bug 4: was "Memory" text row, now
-           *  profile-style badge cards — treat as an achievement/功勋). */}
-          <SectionHeader title="Your progress" />
-          <View style={badgeStyles.row}>
-            <View style={badgeStyles.card}>
-              <View style={[badgeStyles.iconBadge, { backgroundColor: '#eef3e6' }]}>
-                <Icon name="Footprints" size={22} color={Colors.primary} strokeWidth={1.8} />
-              </View>
-              <Text style={badgeStyles.value}>{memoryPointCount}</Text>
-              <Text style={badgeStyles.label}>
-                {memoryPointCount === 1 ? 'place explored' : 'places explored'}
-              </Text>
-            </View>
-            <View style={badgeStyles.card}>
-              <View style={[badgeStyles.iconBadge, { backgroundColor: 'rgba(181,130,61,0.12)' }]}>
-                <Icon name="Mountain" size={22} color="#b5823d" strokeWidth={1.8} />
-              </View>
-              <Text style={badgeStyles.value}>{myCairnCount}</Text>
-              <Text style={badgeStyles.label}>
-                {myCairnCount === 1 ? 'cairn planted' : 'cairns planted'}
-              </Text>
-            </View>
-          </View>
+          {/* O15 bug 1: Progress moved to right below Profile card
+           *  (was between Preferences and About). Now the user sees
+           *  their achievement immediately after their identity. */}
 
           {/* ── About & Legal ── */}
           <SectionHeader title="About & Legal" />
@@ -750,17 +775,46 @@ export function SettingsScreen() {
                   maxLength={1000}
                 />
                 <Text style={feedbackStyles.counter}>{feedbackText.length} / 1000</Text>
+
+                {/* O15 bug 3: attachment preview grid (clip.yiiling pattern).
+                 *  64x64 thumbnails, ✕ button top-right, tap ✕ to remove. */}
+                {feedbackAttachments.length > 0 && (
+                  <View style={feedbackStyles.previewGrid}>
+                    {feedbackAttachments.map((att, idx) => (
+                      <View key={`${att.uri}-${idx}`} style={feedbackStyles.thumb}>
+                        <Image
+                          source={{ uri: att.uri }}
+                          style={feedbackStyles.thumbImg}
+                          resizeMode="cover"
+                        />
+                        <TouchableOpacity
+                          style={feedbackStyles.thumbX}
+                          onPress={() => setFeedbackAttachments((cur) => cur.filter((_, i) => i !== idx))}
+                          accessibilityLabel={`Remove attachment ${idx + 1}`}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Text style={feedbackStyles.thumbXText}>×</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
                 {!!feedbackError && <Text style={pwStyles.error}>{feedbackError}</Text>}
                 {feedbackSent && <Text style={pwStyles.success}>Thanks — we got it.</Text>}
                 <View style={feedbackStyles.btnRow}>
-                  {feedbackKind === 'bug' && Platform.OS !== 'web' && (
+                  {Platform.OS !== 'web' && feedbackAttachments.length < 5 && (
                     <PressBtn
                       style={feedbackStyles.attachBtn}
-                      onPress={handleDebugUpload}
+                      onPress={handlePickAttachments}
+                      disabled={dbgState === 'picking'}
                       scaleTo={0.96}
                     >
                       <Icon name="Send" size={14} color={Colors.primary} strokeWidth={2} />
-                      <Text style={feedbackStyles.attachText}> Attach screenshots</Text>
+                      <Text style={feedbackStyles.attachText}>
+                        {' '}
+                        {feedbackAttachments.length > 0 ? 'Add more' : 'Attach screenshots'}
+                      </Text>
                     </PressBtn>
                   )}
                   <PressBtn
@@ -771,18 +825,33 @@ export function SettingsScreen() {
                       setFeedbackError('');
                       setFeedbackSent(false);
                       try {
-                        // Use appLog so the message flows through the same
-                        // pipeline as debug diagnostics. Backend edit-diag
-                        // route accepts it. No mail hop.
+                        // O15 bug 3: send text feedback + upload any pending
+                        // attachments. Attachments go through the existing
+                        // debugUpload pipeline (POST /api/debug-snapshot);
+                        // the appLog carries a reference count so backend
+                        // can link them if needed.
+                        let attachmentUploaded = 0;
+                        if (feedbackAttachments.length > 0) {
+                          try {
+                            const result = await uploadDebugScreenshots(
+                              feedbackAttachments,
+                              'settings',
+                            );
+                            attachmentUploaded = result.okCount;
+                          } catch { /* attachments best-effort; text still sent */ }
+                        }
                         log('user_feedback', {
                           kind: feedbackKind,
                           text: feedbackText.trim(),
                           user_email: user?.email ?? null,
                           user_name: user?.name ?? null,
                           ota: OTA_VERSION,
+                          attachments_total: feedbackAttachments.length,
+                          attachments_ok: attachmentUploaded,
                         });
                         setFeedbackSent(true);
                         setFeedbackText('');
+                        setFeedbackAttachments([]);
                         setTimeout(() => {
                           if (!dbgMountedRef.current) return;
                           setShowFeedbackInline(false);
@@ -935,6 +1004,40 @@ export function SettingsScreen() {
 
       {/* O13 bug 2: Units modal removed — replaced by inline expand above
        *  in the Preferences card. */}
+
+      {/* O15 bug 1: Progress help modal — explains how the counts work. */}
+      <Modal
+        visible={showProgressHelp}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowProgressHelp(false)}
+      >
+        <Pressable
+          style={modalStyles.backdrop}
+          onPress={() => setShowProgressHelp(false)}
+          accessibilityLabel="Dismiss"
+        >
+          <Pressable style={modalStyles.card} onPress={() => { /* absorb */ }}>
+            <Text style={modalStyles.title}>How progress is counted</Text>
+            <Text style={helpStyles.body}>
+              <Text style={helpStyles.strong}>Places explored</Text> — the number of unique
+              map cells you've walked through. The world is divided into small
+              hexagon cells (about 25m across). Each time your GPS enters a
+              new cell during a hike or run, it's added to your total.
+            </Text>
+            <Text style={helpStyles.body}>
+              <Text style={helpStyles.strong}>Cairns planted</Text> — every cairn you have
+              dropped on the map. Cairns you find from friends do not count here.
+            </Text>
+            <TouchableOpacity
+              style={helpStyles.okBtn}
+              onPress={() => setShowProgressHelp(false)}
+            >
+              <Text style={helpStyles.okText}>Got it</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Reset my map memory — type "clear track" to confirm */}
       <TypeToConfirmModal
@@ -1182,23 +1285,46 @@ const pwStyles = StyleSheet.create({
 });
 
 // O13 bug 2 + bug 5: inline expansion regions (Units picker, Feedback form).
+// O15 bug 2: inline expansion styling harmonised with ActionRow.
+// Pre-fix, pickerRow had no leading icon column, an extra background
+// tint on the expand area, and pickerLabel was semi-bold whereas
+// ActionRow labels are 500. Now the expand section reuses ActionRow's
+// leading indent (52px, same as styles.divider) so labels align with
+// the parent ActionRow above, and pickerRow inherits the same padding
+// + typography as ActionRow itself.
 const inlineStyles = StyleSheet.create({
   expand: {
-    paddingHorizontal: Spacing.base,
-    paddingTop: Spacing.xs,
-    paddingBottom: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: 'rgba(0,0,0,0.015)',
+    // No background tint — sits flush inside the card.
+    paddingBottom: Spacing.xs,
   },
   pickerRow: {
     flexDirection: 'row', alignItems: 'center',
-    paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm,
-    borderRadius: Radius.card,
+    // Match ActionRow.paddingHorizontal = Spacing.base and add a
+    // 52px leading indent so the row starts at the same x-position
+    // as the parent ActionRow's label (skipping the 32px icon +
+    // 16px marginRight + Spacing.base padding).
+    paddingLeft: Spacing.base + 32 + Spacing.md,
+    paddingRight: Spacing.base,
+    paddingVertical: 12,
+    minHeight: 48,
   },
-  pickerRowActive: { backgroundColor: Colors.primaryBg },
-  pickerLabel: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
-  pickerHint: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
+  pickerRowActive: {
+    // No background — use a leading dot / trailing check for state.
+  },
+  pickerLabel: {
+    fontSize: FontSize.body,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+  },
+  pickerLabelActive: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  pickerHint: {
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
 });
 
 // O13 bug 5: unified in-app feedback form styles.
@@ -1233,6 +1359,36 @@ const feedbackStyles = StyleSheet.create({
     fontSize: FontSize.tiny, color: Colors.textMuted,
     textAlign: 'right', marginTop: 2, marginBottom: Spacing.xs,
   },
+  // O15 bug 3: attachment preview grid (clip.yiiling pattern).
+  // 64x64 thumbnails, flex-wrap so they overflow to next row after
+  // ~4-5 per row on mobile widths.
+  previewGrid: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6, marginBottom: Spacing.sm,
+  },
+  thumb: {
+    position: 'relative',
+    width: 64, height: 64,
+    borderRadius: 8, overflow: 'hidden',
+    borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.bg,
+  },
+  thumbImg: {
+    width: '100%', height: '100%',
+  },
+  thumbX: {
+    position: 'absolute', top: 3, right: 3,
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  thumbXText: {
+    color: '#fff', fontSize: 14, fontWeight: '700',
+    lineHeight: 16,
+    // Nudge up: the "×" glyph has extra bottom whitespace baked in
+    marginTop: -1,
+  },
   btnRow: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
     marginTop: Spacing.md,
@@ -1250,6 +1406,48 @@ const feedbackStyles = StyleSheet.create({
     paddingVertical: 12, alignItems: 'center',
   },
   sendText: { fontSize: FontSize.body, fontWeight: '600', color: '#fff' },
+});
+
+// O15 bug 1: "Your progress" header row with inline ? help icon.
+// sectionHeader already has marginHorizontal + marginTop, so headerRow
+// just wraps flex-row without extra padding — icon sits right after text.
+const progressStyles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row', alignItems: 'center',
+  },
+  helpBtn: {
+    marginLeft: 4,
+    padding: 4,
+    // Vertical align with the small uppercase section header text
+    marginTop: Spacing.xl - 2,
+    marginBottom: 2,
+  },
+});
+
+// O15 bug 1: "Your progress" help modal body text.
+const helpStyles = StyleSheet.create({
+  body: {
+    fontSize: FontSize.body,
+    color: Colors.textPrimary,
+    lineHeight: 22,
+    marginBottom: Spacing.md,
+  },
+  strong: {
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  okBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.card,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+  },
+  okText: {
+    color: '#fff',
+    fontSize: FontSize.body,
+    fontWeight: '600',
+  },
 });
 
 // O13 bug 4: badge cards for "Your progress" (Memory achievement style).

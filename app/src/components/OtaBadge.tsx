@@ -183,7 +183,38 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //     key stays the same so server treats as replay if the original
 //     did land). AppState background→active already triggers
 //     drainPending (App.tsx:551-588).
-export const OTA_VERSION = 'O14';
+// O15 (2026-07-28): Settings UX refinements from user's real-device inspection:
+//   1. Progress badges moved right under Profile card (was between
+//      Preferences and About). Section header now has a small ? tap
+//      that opens a modal explaining how "places explored" is counted
+//      (H3 cells) and what "cairns planted" means.
+//   2. Units inline expansion visually harmonised with ActionRow — no
+//      more tinted background block, rows use the same paddingHorizontal +
+//      typography as parent ActionRow, active state shown by primary-color
+//      label + right-side Check icon instead of a background swatch.
+//   3. Feedback attachments: screenshots are now added to a preview grid
+//      (clip.yiiling pattern — 64×64 thumbnails with a ✕ button top-right)
+//      instead of uploading immediately. User can see + delete each image
+//      before tapping Send; Send uploads everything in one go. Up to 5
+//      attachments; picker limit adjusted per remaining slots.
+//   Sim-walker residual bugs after O14 (same OTA batch):
+//   4. Undo of the last step "stopped at the second-to-last position".
+//      Root cause: `restored = pop() ?? null` set currentPos to the point
+//      we just deleted. Fix: pop-and-discard, currentPos = remaining
+//      posHistory tail (or startAnchor if drained). Puck now follows the
+//      polyline tail on every undo tick.
+//   5. Stop → the puck jumped to the real GPS position ("拉回真实位置").
+//      Root cause: pauseTracking unconditionally set lastCoordinate=null,
+//      then either the HikingScreen prime effect or resumeTracking's real
+//      GPS listener wrote home coordinates in. Fix: pauseTracking now
+//      detects sim-walker active and preserves lastCoordinate.
+//   6. Tap-recentre after Stop drew a connecting line from the old tail
+//      to the new anchor. Root cause: `__simwalkerAddTrackPoint` stripped
+//      the `segmentBreak` flag unconditionally (v450 comment). Fix: auto-
+//      set segmentBreak when the incoming point is >200m from the previous
+//      lastCoordinate. HikingMap already renders these as fresh polyline
+//      segments (line 125-128).
+export const OTA_VERSION = 'O15';
 
 
 type OtaState =

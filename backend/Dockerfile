@@ -23,6 +23,8 @@ RUN npm config set registry https://registry.npmmirror.com && \
 
 # Copy application source
 COPY src ./src
+# O13: static legal pages (privacy.html) served by express.
+COPY public ./public
 
 # Storage / log directories
 RUN mkdir -p /app/logs

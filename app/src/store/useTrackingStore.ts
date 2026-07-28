@@ -1375,9 +1375,34 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       clearInterval(durationInterval);
       durationInterval = null;
     }
-    // Clear lastCoordinate so the >200m glitch filter does not zero out
-    // legitimate distance after a resume far from the pause point.
-    set({ status: 'paused', lastCoordinate: null, lastFixTimestamp: null });
+    // O15 Bug 2 fix: only null out lastCoordinate for real-GPS mode.
+    // Pre-fix, sim-walker users saw the puck jump to their real home
+    // GPS after tapping Stop — because pauseTracking nulled the
+    // sim anchor, then the next `getCurrentPositionAsync` on mount
+    // (or an activateForeground on Resume) wrote real GPS in. Now:
+    // if sim-walker is active, keep lastCoordinate at injector.currentPos.
+    let keepAnchor = false;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useSimWalkerStore } = require('../dev/simWalker/useSimWalkerStore');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useSettingsStore } = require('./useSettingsStore');
+      if (useSettingsStore.getState().debugMode && useSimWalkerStore.getState().active) {
+        keepAnchor = true;
+      }
+    } catch { /* swallow */ }
+    if (keepAnchor) {
+      // Preserve lastCoordinate. Real GPS is paused; no new fixes will
+      // arrive until resume, and sim-walker tick already gates on
+      // status !== 'tracking' so it won't write while paused. The
+      // stored anchor is what the user tapped ⟲ to place.
+      set({ status: 'paused', lastFixTimestamp: null });
+    } else {
+      // Real-GPS mode: clear lastCoordinate so the >200m glitch filter
+      // does not zero out legitimate distance after a resume far from
+      // the pause point.
+      set({ status: 'paused', lastCoordinate: null, lastFixTimestamp: null });
+    }
   },
 
   resumeTracking: async () => {
@@ -1606,10 +1631,24 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // 传模拟时间),或 fallback Date.now()。原硬编码 Date.now() 让
       // rawPoint.t 永远是挂钟,session 时间轴无法反映模拟真人步行速度。
       const t = timestamp ?? Date.now();
-      // v450: strip segmentBreak — v448/v449 experimented with it,
-      // v450 removed on user request (undo/⟲ should NOT break line).
-      const { segmentBreak: _drop, ...cleanCoord } = coord;
-      const rawPoint = { ...cleanCoord, t };
+      // O15 Bug 3 fix: previously v450 stripped segmentBreak unconditionally,
+      // but the user reported a "connecting line" being drawn from the old
+      // trackPoints tail to the new sim-walker anchor when they tapped ⟲
+      // mid-hike (after Stop or between segments). We now auto-detect a
+      // large jump (>200m) and mark the incoming point as a segment break
+      // so HikingMap draws a fresh polyline segment starting at this point
+      // rather than a straight line from the previous tail. Undo/regular
+      // sim ticks keep addedDistance <= step_m*strength so they never
+      // trigger this.
+      const { segmentBreak: _dropSb, ...cleanCoord } = coord;
+      let autoSegmentBreak = false;
+      if (s.lastCoordinate) {
+        const jumpM = haversineM(s.lastCoordinate, cleanCoord);
+        if (jumpM > 200) autoSegmentBreak = true;
+      }
+      const rawPoint = autoSegmentBreak
+        ? { ...cleanCoord, t, segmentBreak: true }
+        : { ...cleanCoord, t };
 
       // v447: NO gate 1 teleport check for sim-walker.
       // Root cause of v445 "trackPoints stuck at 0":

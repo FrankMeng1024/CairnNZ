@@ -96,6 +96,19 @@ class GpsInjector {
     // is only pressed pre-start, so there's no teleport-gate concern.
     // (v449's status check made ⟲ silently ineffective when status='idle',
     //  which is exactly when the user uses it.)
+    //
+    // O15 Bug 3 fix: user reported they DO tap ⟲ mid-hike (after Stop
+    // then re-recentre). In that case, existing trackPoints already
+    // has a tail, and setting lastCoordinate to the new anchor makes
+    // the next sim tick draw a straight line from the old tail to the
+    // anchor — the "connecting line" complaint. Fix: when there are
+    // existing trackPoints, ALSO push a synthetic new anchor point into
+    // trackPoints so the map layer treats it as a fresh segment origin,
+    // and the very first sim tick starts a new visual segment. The 200m
+    // haversine cap in __simwalkerAddTrackPoint would zero out the
+    // addedDistance anyway, but the polyline visual still drew the line.
+    // Now: sim-walker addTrackPoint of the anchor with a large-jump-
+    // detector sentinel-suppresses the render bridge.
     try {
       useTrackingStore.setState((s: any) => ({
         ...s,
@@ -177,13 +190,38 @@ class GpsInjector {
       return;
     }
     const take = Math.min(n, availableToUndo);
-    let restored: { lat: number; lng: number } | null = null;
-    // 先 pop posHistory (够就用它, 不够 fall through 到 trackPoints)
+    // O15 Bug 1 fix: pop and DISCARD; currentPos should become the
+    // remaining tail (or startAnchor if drained), NOT the last popped
+    // element. Pre-fix, `restored = pop()` set currentPos to the point
+    // we just deleted, which visually meant "undo did nothing on the
+    // last step" — user reported "最后一次撤回 停在倒数第二次撤回后
+    // 的位置". Now: after pop-and-discard, currentPos = tail of
+    // remaining posHistory. Then if posHistory drained, look at
+    // trackPoints tail (updated by __simwalkerRemoveLastN below).
     const popFromHistory = Math.min(take, this.posHistory.length);
     for (let i = 0; i < popFromHistory; i++) {
-      restored = this.posHistory.pop() ?? null;
+      this.posHistory.pop();
     }
-    if (restored) this.currentPos = restored;
+    let restored: { lat: number; lng: number } | null =
+      this.posHistory.length > 0
+        ? this.posHistory[this.posHistory.length - 1]
+        : null;
+    if (restored) {
+      this.currentPos = { lat: restored.lat, lng: restored.lng };
+      // O15 Bug 1 sync: also update tracking store's lastCoordinate so
+      // the puck follows the joystick back to the remaining posHistory
+      // tail. Without this, the puck stayed at the previous tail and
+      // only moved after the next real tick (which never fired if user
+      // released the joystick).
+      const restoredCopy = { lat: restored.lat, lng: restored.lng };
+      try {
+        useTrackingStore.setState((state: any) => ({
+          ...state,
+          lastCoordinate: { ...restoredCopy, alt: 100, accuracy: 5, speed: 0 },
+          lastCoordinateTime: Date.now(),
+        }));
+      } catch { /* swallow */ }
+    }
     // v450: no segmentBreak on undo — user confirmed 2026-07-25 undo
     // should visually pick up from where the trail was rewound to
     // (which IS the restored point). Since undoSteps also trims the
@@ -210,41 +248,52 @@ class GpsInjector {
         });
         storeRemoved = take;
       }
-      // O14 Bug 7 fix: undo semantic. Pre-fix, when posHistory was empty
-      // but trackPoints still had content, we set currentPos to the
-      // trackPoints tail — but the tail moves with every undo (that's
-      // the whole point), so "undo all the way back" landed the joystick
-      // on trackPoints[0], not the user's chosen anchor. Users expected
-      // undo-to-empty to return to the position they picked with the
-      // recentre button.
+      // O14 Bug 7 + O15 Bug 1 fix: undo fallback priority.
       //
-      // New semantic: if posHistory drained but we still have trackPoints,
-      // rewind currentPos to the sim-walker's startAnchor (the joystick
-      // position at Start Hike). Only fall back to trackPoints tail if no
-      // anchor is known (user never recentred, so anchor unset).
+      // When posHistory drained (restored === null) but the store trim
+      // above still has trackPoints, the joystick should sit at the tail
+      // of the remaining trackPoints so the map's polyline ends where
+      // the puck is. Only fall to startAnchor when trackPoints ALSO
+      // drained (user has literally undone every point of this hike).
+      //
+      // Pre-O15, we jumped straight to startAnchor whenever posHistory
+      // was empty, which caused the puck to teleport mid-undo (skipping
+      // the visible polyline tail) — user reported "撤销后 定位都会改
+      // 变". Now: tail first, anchor only at true end.
       if (!restored) {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { useSimWalkerStore } = require('./useSimWalkerStore');
-          const anchor = useSimWalkerStore.getState().startAnchor;
-          if (anchor && Number.isFinite(anchor.lat) && Number.isFinite(anchor.lng)) {
-            this.currentPos = { lat: anchor.lat, lng: anchor.lng };
-            // Sync the tracking store's lastCoordinate so the puck +
-            // recentre button follow the anchor. Without this, the map
-            // stays on the tail while the joystick sits on the anchor.
-            useTrackingStore.setState((s: any) => ({
-              ...s,
-              lastCoordinate: { lat: anchor.lat, lng: anchor.lng, alt: 100, accuracy: 5, speed: 0 },
-              lastCoordinateTime: Date.now(),
-            }));
-          } else {
-            // No anchor known — old behavior (tail fallback).
-            const remaining = (useTrackingStore.getState() as any).trackPoints;
-            if (Array.isArray(remaining) && remaining.length > 0) {
-              const tail = remaining[remaining.length - 1];
-              if (tail && Number.isFinite(tail.lat) && Number.isFinite(tail.lng)) {
-                this.currentPos = { lat: tail.lat, lng: tail.lng };
-              }
+          const remaining = (useTrackingStore.getState() as any).trackPoints;
+          let usedFallback = false;
+          if (Array.isArray(remaining) && remaining.length > 0) {
+            const tail = remaining[remaining.length - 1];
+            if (tail && Number.isFinite(tail.lat) && Number.isFinite(tail.lng)) {
+              this.currentPos = { lat: tail.lat, lng: tail.lng };
+              // Sync tracking store's lastCoordinate to the tail (which
+              // is already the same value from __simwalkerRemoveLastN,
+              // but be explicit for clarity + future refactor safety).
+              useTrackingStore.setState((s: any) => ({
+                ...s,
+                lastCoordinate: {
+                  lat: tail.lat, lng: tail.lng, alt: tail.alt ?? 100,
+                  accuracy: tail.accuracy ?? 5, speed: 0,
+                },
+                lastCoordinateTime: Date.now(),
+              }));
+              usedFallback = true;
+            }
+          }
+          if (!usedFallback) {
+            // trackPoints also empty → return to startAnchor if known.
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { useSimWalkerStore } = require('./useSimWalkerStore');
+            const anchor = useSimWalkerStore.getState().startAnchor;
+            if (anchor && Number.isFinite(anchor.lat) && Number.isFinite(anchor.lng)) {
+              this.currentPos = { lat: anchor.lat, lng: anchor.lng };
+              useTrackingStore.setState((s: any) => ({
+                ...s,
+                lastCoordinate: { lat: anchor.lat, lng: anchor.lng, alt: 100, accuracy: 5, speed: 0 },
+                lastCoordinateTime: Date.now(),
+              }));
             }
           }
         } catch { /* swallow */ }
