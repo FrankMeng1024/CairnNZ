@@ -562,6 +562,21 @@ router.patch('/password', authenticate, passwordChangeLimiter, validateBody(sche
     // the CALLER stays signed in on this device (their old token would
     // otherwise fail authenticate.js's serverVer > jwtVer check).
     await User.bumpTokenVersion(user.id);
+    // Sprint 6 round-16 R16F7: also revoke caller's OLD jti explicitly.
+    // token_version bump alone would work (LRU cache expiry = 5min), but
+    // during that window a jti-cached-as-valid check would let an attacker
+    // on ANOTHER device slip through if they had the same old token. Belt
+    // + suspenders: revoke the specific old jti so any peer verification
+    // relying on the LRU rejects it immediately. Mirrors /account/restore.
+    if (req.user.jti) {
+      const expUnixMs = req.user.exp ? req.user.exp * 1000 : Date.now() + 30 * 24 * 60 * 60 * 1000;
+      try {
+        await TokenBlacklist.revoke(req.user.jti, req.user.userId, new Date(expUnixMs));
+      } catch (blErr) {
+        // Blacklist is defense-in-depth; token_version bump is authoritative.
+        console.warn('[password] blacklist revoke failed:', blErr.message);
+      }
+    }
     const refreshed = await User.findById(user.id);
     const newToken = signToken({
       userId: refreshed.id,

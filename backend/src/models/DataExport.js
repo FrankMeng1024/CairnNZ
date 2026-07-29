@@ -128,31 +128,36 @@ async function buildBundle(userId) {
   // chosen to be well beyond any legitimate user's data while keeping
   // total bundle < ~50 MB. If a user hits a cap, the bundle notes it in
   // meta.truncated so the operator can offer a manual full dump on request.
+  //
+  // Sprint 6 round-16 R16F6: fetch `LIMIT CAP+1` so we can distinguish
+  // "hit exactly CAP legit rows" from "server truncated". Discard the
+  // extra row before serializing.
   const CAP_SESSIONS = 20000;
   const CAP_MARKERS  = 50000;
   const CAP_MEMORY   = 200000;
   const CAP_ROUTES   = 5000;
   const CAP_FRIENDS  = 5000;
 
-  // Sprint 6 round-15 R15B5: `sessions` table was deprecated in O1
-  // (2026-07-26) — all live hike data lives in `memory_points` now.
-  // buildBundle used to hard-error at this SELECT because the table
-  // is gone. Now: swallow "table doesn't exist" and emit an empty
-  // array so the export still succeeds. Any other DB error rethrows.
+  // Sprint 6 round-15 R15B5 + round-16 R16F5: `sessions` table was
+  // deprecated in O1 (2026-07-26). Swallow ER_NO_SUCH_TABLE only —
+  // the earlier `/doesn't exist/i` fallback also matched "column X
+  // doesn't exist" / "database doesn't exist", which would silently
+  // return empty data on a real schema regression (GDPR Article 15
+  // violation: incomplete export served as complete).
   let sessions = [];
   try {
     const [rows] = await pool.execute(
       `SELECT id, type, start_time, end_time, distance_m, duration_s, name,
               route_points, route_points_raw, flags, finalized_at, created_at
-       FROM sessions WHERE user_id = ? ORDER BY start_time DESC LIMIT ${CAP_SESSIONS}`,
+       FROM sessions WHERE user_id = ? ORDER BY start_time DESC LIMIT ${CAP_SESSIONS + 1}`,
       [userId],
     );
     sessions = rows;
   } catch (err) {
-    if (err && (err.code === 'ER_NO_SUCH_TABLE' || /doesn't exist/i.test(err.message))) {
-      sessions = []; // table gone post-O1
+    if (err && err.code === 'ER_NO_SUCH_TABLE') {
+      sessions = []; // table gone post-O1 — expected, silent OK
     } else {
-      throw err;
+      throw err; // any other error (column dropped, permission, etc.) must fail loud
     }
   }
   bundle.sessions = sessions;
@@ -164,19 +169,19 @@ async function buildBundle(userId) {
   const [markers] = await pool.execute(
     `SELECT id, type, text, lat, lng, alt, permission, approximate,
             voice_memo_url, voice_memo_duration_ms, created_at, updated_at
-     FROM markers WHERE user_id = ? ORDER BY id DESC LIMIT ${CAP_MARKERS}`,
+     FROM markers WHERE user_id = ? ORDER BY id DESC LIMIT ${CAP_MARKERS + 1}`,
     [userId],
   );
   bundle.markers = markers;
 
   const [memory] = await pool.execute(
-    `SELECT lat, lng, ts, client_id FROM memory_points WHERE user_id = ? ORDER BY ts DESC LIMIT ${CAP_MEMORY}`,
+    `SELECT lat, lng, ts, client_id FROM memory_points WHERE user_id = ? ORDER BY ts DESC LIMIT ${CAP_MEMORY + 1}`,
     [userId],
   );
   bundle.memoryPoints = memory;
 
   const [routes] = await pool.execute(
-    `SELECT id, name, distance_m, permission, created_at FROM routes WHERE user_id = ? ORDER BY id DESC LIMIT ${CAP_ROUTES}`,
+    `SELECT id, name, distance_m, permission, created_at FROM routes WHERE user_id = ? ORDER BY id DESC LIMIT ${CAP_ROUTES + 1}`,
     [userId],
   );
   bundle.routes = routes;
@@ -187,7 +192,7 @@ async function buildBundle(userId) {
   const [friends] = await pool.execute(
     `SELECT f.friend_id AS user_id, u.name, f.created_at
      FROM friends f JOIN users u ON u.id = f.friend_id
-     WHERE f.user_id = ? LIMIT ${CAP_FRIENDS}`,
+     WHERE f.user_id = ? LIMIT ${CAP_FRIENDS + 1}`,
     [userId],
   );
   bundle.friends = friends;
@@ -207,23 +212,33 @@ async function buildBundle(userId) {
 
   bundle.meta = {
     rowCounts: {
-      sessions: sessions.length,
-      markers: markers.length,
-      memoryPoints: memory.length,
-      routes: routes.length,
-      friends: friends.length,
+      sessions: Math.min(sessions.length, CAP_SESSIONS),
+      markers: Math.min(markers.length, CAP_MARKERS),
+      memoryPoints: Math.min(memory.length, CAP_MEMORY),
+      routes: Math.min(routes.length, CAP_ROUTES),
+      friends: Math.min(friends.length, CAP_FRIENDS),
       notifications: notifications.length,
     },
-    // Sprint 6 R15B4: caller-visible signal that the cap was reached so
-    // the operator can offer a manual full dump if needed.
+    // Sprint 6 R15B4 + R16F6: caller-visible signal that the cap was
+    // reached. We fetched LIMIT CAP+1, so `> CAP` = server truncated,
+    // `== CAP` = user happens to have exactly CAP rows (rare, but real
+    // — a community account with exactly 5000 friends should not see
+    // `truncated: true` on a complete export).
     truncated: {
-      sessions:     sessions.length     >= CAP_SESSIONS,
-      markers:      markers.length      >= CAP_MARKERS,
-      memoryPoints: memory.length       >= CAP_MEMORY,
-      routes:       routes.length       >= CAP_ROUTES,
-      friends:      friends.length      >= CAP_FRIENDS,
+      sessions:     sessions.length     > CAP_SESSIONS,
+      markers:      markers.length      > CAP_MARKERS,
+      memoryPoints: memory.length       > CAP_MEMORY,
+      routes:       routes.length       > CAP_ROUTES,
+      friends:      friends.length      > CAP_FRIENDS,
     },
   };
+  // Sprint 6 R16F6: drop the CAP+1 sentinel row before serializing so
+  // the bundle contents match rowCounts.
+  if (bundle.meta.truncated.sessions)     bundle.sessions     = bundle.sessions.slice(0, CAP_SESSIONS);
+  if (bundle.meta.truncated.markers)      bundle.markers      = bundle.markers.slice(0, CAP_MARKERS);
+  if (bundle.meta.truncated.memoryPoints) bundle.memoryPoints = bundle.memoryPoints.slice(0, CAP_MEMORY);
+  if (bundle.meta.truncated.routes)       bundle.routes       = bundle.routes.slice(0, CAP_ROUTES);
+  if (bundle.meta.truncated.friends)      bundle.friends      = bundle.friends.slice(0, CAP_FRIENDS);
   return bundle;
 }
 
