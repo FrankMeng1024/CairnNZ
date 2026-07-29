@@ -12,16 +12,35 @@
  */
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const authenticate = require('../middleware/authenticate');
 const PushNotification = require('../models/PushNotification');
 
 router.use(authenticate);
 
+// Sprint 6 round-22 R22Q4: rate-limit /register to blunt token-hijack
+// enumeration attacks. Expo push tokens are opaque long random strings,
+// so an attacker can't guess them — but a token leak (via logs, an
+// old crash report, a compromised backup, etc.) combined with our
+// R17F7 "delete stale-owner row on register" would let an attacker
+// steal a specific user's push routing with a single API call. Cap
+// registers to 20 / 15 min / user so the attack becomes noisy (spike
+// detectable) and expensive (per-user quota isolates blast radius).
+// Legitimate re-registration on boot / permission-grant fires a
+// couple of times a day at most.
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 20,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => req.user?.userId ? `pushreg:${req.user.userId}` : ipKeyGenerator(req, res),
+  message: { error: 'Too many token registrations. Please try again later.' },
+});
+
 // ── POST /api/push/register ────────────────────────────────────────────────
 // Body: { token: string, platform: 'ios'|'android'|'web' }
 // Idempotent — the same (user, token) row is upserted with a fresh
 // last_seen_at. Called on app boot and after permission grant.
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   const { token, platform } = req.body || {};
   if (!token || typeof token !== 'string') return res.status(400).json({ error: 'token required' });
   if (!['ios', 'android', 'web'].includes(platform)) return res.status(400).json({ error: 'invalid platform' });
