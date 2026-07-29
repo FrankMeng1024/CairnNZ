@@ -324,6 +324,13 @@ router.delete('/:id', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────
 
 // GET /api/markers/:id/community-state — read counts + user's existing vote.
+// Sprint 6 round-17 R17F5: gate by permission + hidden status. Pre-fix,
+// any authenticated user could pass any markerId and read helpful_count,
+// report_count, status, hidden_at for any marker in the DB — including
+// permission='personal' markers belonging to other users, and markers
+// auto-hidden as abusive. Since marker IDs are sequential auto-increment,
+// this was trivially enumerable. Now: 404 if the caller doesn't own the
+// marker AND the marker is either personal (owner-only visible) or hidden.
 router.get('/:id/community-state', async (req, res) => {
   const markerId = Number(req.params.id);
   if (!Number.isInteger(markerId) || markerId <= 0) {
@@ -331,11 +338,23 @@ router.get('/:id/community-state', async (req, res) => {
   }
   try {
     const [[marker]] = await pool.execute(
-      `SELECT id, helpful_count, report_count, status, hidden_at
+      `SELECT id, user_id, permission, helpful_count, report_count, status, hidden_at
          FROM markers WHERE id = ?`,
       [markerId],
     );
     if (!marker) return res.status(404).json({ error: 'Marker not found' });
+    // R17F5: enforce visibility. Owner can always read. Non-owner: reject
+    // personal markers (never their business) + hidden markers (moderator
+    // signal, don't leak).
+    const isOwner = String(marker.user_id) === String(req.user.userId);
+    if (!isOwner) {
+      if (marker.permission === 'personal') {
+        return res.status(404).json({ error: 'Marker not found' });
+      }
+      if (marker.status === 'hidden') {
+        return res.status(404).json({ error: 'Marker not found' });
+      }
+    }
     const [voteRows] = await pool.execute(
       `SELECT type, reason FROM marker_votes WHERE marker_id = ? AND user_id = ?`,
       [markerId, req.user.userId],
@@ -358,13 +377,34 @@ router.get('/:id/community-state', async (req, res) => {
 });
 
 // GET /api/markers/:id/interact-nonce — short-lived HMAC nonce for /vote.
+// Sprint 6 round-17 R17F5: same visibility gate as /community-state. Pre-fix,
+// this endpoint minted valid HMAC nonces for ANY marker id regardless of
+// permission or hidden status — the /vote endpoint would then honor them,
+// letting an attacker vote on personal or hidden markers they shouldn't
+// even know exist.
 router.get('/:id/interact-nonce', async (req, res) => {
   const markerId = Number(req.params.id);
   if (!Number.isInteger(markerId) || markerId <= 0) {
     return res.status(400).json({ error: 'Invalid marker id' });
   }
-  const issued = nonceUtil.issue(req.user.userId, markerId);
-  res.json({ marker_id: markerId, ...issued });
+  try {
+    const [[marker]] = await pool.execute(
+      `SELECT user_id, permission, status FROM markers WHERE id = ?`,
+      [markerId],
+    );
+    if (!marker) return res.status(404).json({ error: 'Marker not found' });
+    const isOwner = String(marker.user_id) === String(req.user.userId);
+    if (!isOwner) {
+      if (marker.permission === 'personal' || marker.status === 'hidden') {
+        return res.status(404).json({ error: 'Marker not found' });
+      }
+    }
+    const issued = nonceUtil.issue(req.user.userId, markerId);
+    res.json({ marker_id: markerId, ...issued });
+  } catch (err) {
+    console.error('[markers/interact-nonce]', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // POST /api/markers/:id/vote — single canon-correct endpoint for like+report.

@@ -41,6 +41,23 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 async function registerToken(userId, token, platform) {
   if (!userId || !token || !platform) return;
+  // Sprint 6 round-17 R17F7: device-transfer safety. UNIQUE key on
+  // device_tokens is (user_id, token) — both user A and user B could
+  // independently INSERT the same physical Expo push token (iOS device
+  // handed over, restore-from-iCloud-backup that keeps the same token,
+  // shared family device). Pre-fix, when A queued a push, sendPending
+  // fetched tokens by user_id=A, got A's row, sent to Expo — and Expo
+  // delivered to whichever device physically owns that token NOW (=B).
+  // Recipient mixup, leaking A's private notifications to B.
+  //
+  // Fix: before inserting/updating this user's row, delete any OTHER
+  // user's row that carries this exact token. Only the LATEST device
+  // owner survives — Expo's push token is a physical-device concept,
+  // not a per-user credential, so co-ownership is never valid.
+  await pool.execute(
+    'DELETE FROM device_tokens WHERE token = ? AND user_id <> ?',
+    [token, userId],
+  );
   await pool.execute(
     `INSERT INTO device_tokens (user_id, token, platform, last_seen_at)
      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
@@ -154,6 +171,14 @@ const KIND_TO_PREF = {
 
 async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = null, title, body }) {
   if (!recipientUserId || !kind || !title) return null;
+  // Sprint 6 round-17 R17F8: reject whitespace-only title/body. `if (!title)`
+  // treats `' '` (single space) as truthy, so a caller passing a trimmed-
+  // empty display name would push a blank-title notification. Trim once,
+  // then re-check emptiness. Also normalize body to null if it's whitespace
+  // so the client doesn't render a phantom empty line.
+  const cleanTitle = String(title).trim();
+  if (!cleanTitle) return null;
+  const cleanBody = (body == null) ? null : String(body).trim() || null;
   // Sprint 6 review C8 fix: for kinds with a null relatedId (e.g.
   // announcements), the base dedupe key `${kind}:null` would collide
   // across all messages, making the 2nd announcement to a user a no-op.
@@ -177,7 +202,7 @@ async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = 
         `INSERT IGNORE INTO notification_log
           (recipient_user_id, actor_user_id, kind, related_id, title, body, status, dedupe_key)
          VALUES (?, ?, ?, ?, ?, ?, 'dropped_by_pref', ?)`,
-        [recipientUserId, actorUserId, kind, relatedId, title, body || null, dedupeKey],
+        [recipientUserId, actorUserId, kind, relatedId, cleanTitle, cleanBody, dedupeKey],
       );
       return null;
     }
@@ -186,7 +211,7 @@ async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = 
     `INSERT IGNORE INTO notification_log
       (recipient_user_id, actor_user_id, kind, related_id, title, body, status, dedupe_key)
      VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
-    [recipientUserId, actorUserId, kind, relatedId, title, body || null, dedupeKey],
+    [recipientUserId, actorUserId, kind, relatedId, cleanTitle, cleanBody, dedupeKey],
   );
   return result.insertId || null;
 }
