@@ -467,9 +467,19 @@ export function HikingScreen() {
 
   useEffect(() => { loadRoutes(); }, []);
 
+  // Sprint 6 round-11 R11B3: SAF-01 alert-visibility ref, shared by
+  // primary useEffect and AppState re-fire useEffect. Declared here so
+  // both effects can read/write it. Prevents stacked Alerts.
+  const saf01AlertShownRef = useRef(false);
+
   // O18 SAF-01: surface hard save failure with a modal Alert + Retry.
   useEffect(() => {
     if (!saveLostSessionId) return;
+    // Sprint 6 round-11 R11B3: guard against stacking with AppState-fired
+    // Alert. Primary and AppState effects share saf01AlertShownRef so
+    // only one Alert is on screen at a time.
+    if (saf01AlertShownRef.current) return;
+    saf01AlertShownRef.current = true;
     Alert.alert(
       "We couldn't save this hike",
       "Your device may be low on storage. Your hike is still recorded in the app. Tap Retry to try saving again, or Discard to remove it.",
@@ -478,6 +488,7 @@ export function HikingScreen() {
           text: 'Discard',
           style: 'destructive',
           onPress: () => {
+            saf01AlertShownRef.current = false;
             clearLastStopReason();
             try {
               discardCurrentSession();
@@ -532,6 +543,10 @@ export function HikingScreen() {
               console.warn('[SAF-01] retry failed:', e);
               // Keep saveLostSessionId set — the Alert will re-fire on
               // AppState=active (see R8B5 fix below) or next mount.
+            } finally {
+              // Sprint 6 round-11 R11B3: reset ref so a future re-fire
+              // (mount/AppState) can show the Alert again.
+              saf01AlertShownRef.current = false;
             }
           },
         },
@@ -546,8 +561,7 @@ export function HikingScreen() {
   // cancelable=false. Round-9 fix: (1) use the SAME async Retry handler
   // as the primary useEffect (not a stub that treated Retry === Discard),
   // and (2) guard against stacking Alerts by tracking `alertVisible` in
-  // a ref.
-  const saf01AlertShownRef = useRef(false);
+  // a ref. R11B3: ref hoisted above primary useEffect so both share.
   useEffect(() => {
     if (!saveLostSessionId) { saf01AlertShownRef.current = false; return; }
     // eslint-disable-next-line @typescript-eslint/no-require-imports

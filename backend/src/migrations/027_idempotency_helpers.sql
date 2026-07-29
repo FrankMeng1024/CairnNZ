@@ -1,78 +1,127 @@
--- Migration 027: idempotency helpers for Sprint 6 schema
+-- Migration 027: idempotency helpers for Sprint 6 schema (v2)
 --
--- Sprint 6 round-10 review R10B4: migrations 020, 021, 026 use ALTER
--- TABLE ADD COLUMN/INDEX/CONSTRAINT without IF NOT EXISTS (MySQL 8
--- doesn't support that clause). Re-running any of them throws
--- Duplicate errors. This migration replays 020/021/026 idempotently by
--- checking information_schema first — so a partial-failure re-run
--- can complete without manual cleanup.
+-- Sprint 6 round-10 R10B4: 020/021/026 use ALTER ADD COLUMN/CONSTRAINT
+-- without IF NOT EXISTS (MySQL 8 doesn't support). Re-running throws
+-- Duplicate errors.
+--
+-- Sprint 6 round-11 R11B1 fix: rewrote as inline PREPARE/EXECUTE blocks
+-- (no DELIMITER, no stored procedures, no CREATE ROUTINE privilege).
+-- Works via BOTH mysql CLI and mysql2 driver's multipleStatements path.
+-- Each guard is a self-contained conditional prepared statement.
+--
+-- Safe to run repeatedly — no-op if the target column / FK already exists.
 USE cairn;
 
-DELIMITER $$
+-- ─── users.date_of_birth ────────────────────────────────────────────────────
+SET @s := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='date_of_birth') = 0,
+    'ALTER TABLE users ADD COLUMN date_of_birth DATE NULL AFTER email',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-DROP PROCEDURE IF EXISTS ensure_col$$
-CREATE PROCEDURE ensure_col(
-  IN p_table VARCHAR(64),
-  IN p_col   VARCHAR(64),
-  IN p_ddl   TEXT
-)
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME   = p_table
-      AND COLUMN_NAME  = p_col
-  ) THEN
-    SET @s = CONCAT('ALTER TABLE ', p_table, ' ADD COLUMN ', p_col, ' ', p_ddl);
-    PREPARE stmt FROM @s;
-    EXECUTE stmt;
-    DEALLOCATE PREPARE stmt;
-  END IF;
-END$$
+-- ─── users.deleted_at ───────────────────────────────────────────────────────
+SET @s := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='deleted_at') = 0,
+    'ALTER TABLE users ADD COLUMN deleted_at DATETIME NULL',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-DROP PROCEDURE IF EXISTS ensure_fk$$
-CREATE PROCEDURE ensure_fk(
-  IN p_table   VARCHAR(64),
-  IN p_fk_name VARCHAR(64),
-  IN p_ddl     TEXT
-)
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
-    WHERE CONSTRAINT_SCHEMA = DATABASE()
-      AND TABLE_NAME        = p_table
-      AND CONSTRAINT_NAME   = p_fk_name
-      AND CONSTRAINT_TYPE   = 'FOREIGN KEY'
-  ) THEN
-    SET @s = CONCAT('ALTER TABLE ', p_table, ' ADD CONSTRAINT ', p_fk_name, ' ', p_ddl);
-    PREPARE stmt FROM @s;
-    EXECUTE stmt;
-    DEALLOCATE PREPARE stmt;
-  END IF;
-END$$
+-- ─── pending_registrations.date_of_birth ────────────────────────────────────
+SET @s := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pending_registrations' AND COLUMN_NAME='date_of_birth') = 0,
+    'ALTER TABLE pending_registrations ADD COLUMN date_of_birth DATE NULL AFTER password_hash',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-DELIMITER ;
+-- ─── 8 FK cascades from migration 026 ──────────────────────────────────────
+SET @s := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='token_blacklist' AND CONSTRAINT_NAME='fk_blacklist_user') = 0,
+    'ALTER TABLE token_blacklist ADD CONSTRAINT fk_blacklist_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-CALL ensure_col('users',                 'date_of_birth', 'DATE NULL AFTER email');
-CALL ensure_col('users',                 'deleted_at',    'DATETIME NULL AFTER updated_at');
-CALL ensure_col('pending_registrations', 'date_of_birth', 'DATE NULL AFTER password_hash');
+SET @s := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='device_tokens' AND CONSTRAINT_NAME='fk_device_tokens_user') = 0,
+    'ALTER TABLE device_tokens ADD CONSTRAINT fk_device_tokens_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-CALL ensure_fk('token_blacklist',  'fk_blacklist_user',
-  'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE');
-CALL ensure_fk('device_tokens',    'fk_device_tokens_user',
-  'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE');
-CALL ensure_fk('notification_log', 'fk_notif_recipient',
-  'FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE');
-CALL ensure_fk('notification_log', 'fk_notif_actor',
-  'FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL');
-CALL ensure_fk('user_push_prefs',  'fk_prefs_user',
-  'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE');
-CALL ensure_fk('data_exports',     'fk_data_exports_user',
-  'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE');
-CALL ensure_fk('blocked_users',    'fk_blocked_blocker',
-  'FOREIGN KEY (blocker_id) REFERENCES users(id) ON DELETE CASCADE');
-CALL ensure_fk('blocked_users',    'fk_blocked_blocked',
-  'FOREIGN KEY (blocked_id) REFERENCES users(id) ON DELETE CASCADE');
+SET @s := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='notification_log' AND CONSTRAINT_NAME='fk_notif_recipient') = 0,
+    'ALTER TABLE notification_log ADD CONSTRAINT fk_notif_recipient FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-DROP PROCEDURE IF EXISTS ensure_col;
-DROP PROCEDURE IF EXISTS ensure_fk;
+SET @s := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='notification_log' AND CONSTRAINT_NAME='fk_notif_actor') = 0,
+    'ALTER TABLE notification_log ADD CONSTRAINT fk_notif_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='user_push_prefs' AND CONSTRAINT_NAME='fk_prefs_user') = 0,
+    'ALTER TABLE user_push_prefs ADD CONSTRAINT fk_prefs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='data_exports' AND CONSTRAINT_NAME='fk_data_exports_user') = 0,
+    'ALTER TABLE data_exports ADD CONSTRAINT fk_data_exports_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='blocked_users' AND CONSTRAINT_NAME='fk_blocked_blocker') = 0,
+    'ALTER TABLE blocked_users ADD CONSTRAINT fk_blocked_blocker FOREIGN KEY (blocker_id) REFERENCES users(id) ON DELETE CASCADE',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='blocked_users' AND CONSTRAINT_NAME='fk_blocked_blocked') = 0,
+    'ALTER TABLE blocked_users ADD CONSTRAINT fk_blocked_blocked FOREIGN KEY (blocked_id) REFERENCES users(id) ON DELETE CASCADE',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;

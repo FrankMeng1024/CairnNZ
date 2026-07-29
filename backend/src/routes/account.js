@@ -12,6 +12,7 @@
  */
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const router = express.Router();
@@ -25,6 +26,9 @@ const { sendDataExportReady } = require('../services/emailService');
 const downloadLimiter = rateLimit({
   windowMs: 60 * 1000, max: 30,
   standardHeaders: true, legacyHeaders: false,
+  // Sprint 6 round-11 R11B5: /export/:token is unauthenticated, so IP-
+  // keyed. IPv6-safe via ipKeyGenerator helper (avoids v7+ ERR_ERL_KEY_GEN_IPV6).
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
   message: 'Too many download attempts. Please wait a minute.',
 });
 

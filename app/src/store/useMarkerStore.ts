@@ -30,6 +30,11 @@ import type { SyncState } from '../services/offlineEntity';
 // with user B's mid-transition. Mirrors the useSessionStore SAF-03 pattern.
 let markerHydrateInFlight: Promise<void> | null = null;
 let markerHydrateInFlightUserId: string | null = null;
+// Sprint 6 round-11 review R11B2: generation counter so clearMarkers
+// can invalidate any in-flight hydrate that hasn't yet written to
+// state. Pre-fix, logout during a slow hydrate let the hydrate's
+// storage-read resurrect the just-cleared markers a few ms later.
+let markerHydrateGeneration = 0;
 
 export type MarkerPermission = 'personal' | 'group' | 'public';
 
@@ -465,6 +470,12 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   },
 
   clearMarkers: () => {
+    // Sprint 6 round-11 review R11B2 fix: bump the generation counter
+    // so any in-flight hydrate() whose storage-read is still pending
+    // sees the mismatch and drops its `set(...)`. Pre-fix, a logout
+    // during a slow hydrate resurrected the just-cleared markers when
+    // the hydrate's storage-read completed after clearMarkers ran.
+    markerHydrateGeneration += 1;
     // v423 B3 fix: logout 时也清 offline marker queue. 否则 A logout → B login
     // 后 B 的 auth token 会上传 A 的 pending marker → server 归到 B 名下.
     // 顺序: 先 clear queue (async, 用 current userId), 再 reset state.
@@ -632,6 +643,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       if (sameUser) return;
     }
     const run = (async () => {
+      // Sprint 6 round-11 R11B2: snapshot the generation counter at
+      // start. If clearMarkers bumps it before we finish, drop our
+      // storage-read result rather than resurrecting stale data.
+      const genAtStart = markerHydrateGeneration;
       // BUG-010 fix: detect user-switch. If the in-memory userId differs
       // from the incoming one, drop cross-session slices so the prior user's
       // circleMarkers + hidingIds + memory subscriptions don't bleed into
@@ -667,6 +682,12 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       // Re-check userId in case a newer hydrate raced ahead — only apply
       // if we're still the current target user.
       if (get().userId !== undefined && get().userId !== userId && markerHydrateInFlightUserId !== userId) {
+        return;
+      }
+      // Sprint 6 round-11 R11B2: if clearMarkers bumped the generation
+      // while our storage-read was in flight, drop our result so we
+      // don't resurrect just-cleared data.
+      if (markerHydrateGeneration !== genAtStart) {
         return;
       }
       if (raw) {

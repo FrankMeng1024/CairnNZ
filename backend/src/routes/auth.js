@@ -11,6 +11,7 @@
  */
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const TokenBlacklist = require('../models/TokenBlacklist');
@@ -31,6 +32,10 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 10,
   standardHeaders: true, legacyHeaders: false,
+  // Sprint 6 round-11 R11B5: IPv6-safe keyGenerator. Without this,
+  // v7+ warns ERR_ERL_KEY_GEN_IPV6 and buckets all users of a carrier
+  // /64 together — either global lockout or trivial bypass.
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
   message: { error: 'Too many attempts. Please wait 15 minutes.' },
 });
 
@@ -39,12 +44,14 @@ const authLimiter = rateLimit({
 const oauthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 60,
   standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
   message: { error: 'Too many requests. Please try again shortly.' },
 });
 
 const resendLimiter = rateLimit({
   windowMs: 60 * 1000, max: 2,
   standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
   message: { error: 'Please wait before requesting another code.' },
 });
 
@@ -470,6 +477,10 @@ router.get('/me', authenticate, async (req, res) => {
 const refreshLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, max: 30,
   standardHeaders: true, legacyHeaders: false,
+  // Sprint 6 round-11 R11B5: /refresh is authenticated, so key by userId.
+  // Falls back to ipKeyGenerator only when authenticate hasn't populated
+  // req.user yet (should never happen since authenticate runs first).
+  keyGenerator: (req, res) => req.user?.userId ? `refresh:${req.user.userId}` : ipKeyGenerator(req, res),
   message: { error: 'Too many refresh attempts. Please sign in again.' },
 });
 router.post('/refresh', refreshLimiter, authenticate, async (req, res) => {
