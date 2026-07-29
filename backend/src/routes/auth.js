@@ -311,6 +311,25 @@ router.post('/google', oauthLimiter, validateBody(schemas.auth.google), async (r
     if (!payload || !payload.email)
       return res.status(401).json({ error: 'Invalid Google token.' });
 
+    // Sprint 6 round-33 R33B7: reject tokens where email_verified !== true.
+    // Pre-fix, we matched an existing Cairn account by email alone. A
+    // Google Workspace admin can set arbitrary email aliases on their
+    // tenant; a malicious admin creates victim@gmail.com as an alias,
+    // gets a Google id_token with that email (verified=false in the
+    // token), and our findByEmail returns the victim's Cairn account.
+    // linkOAuth then silently attaches the attacker's googleSub to the
+    // victim's account → attacker signs in as victim forever via Google.
+    // This is the classic "Sign in with Google" account-takeover CVE
+    // pattern (Microsoft/Auth0 2021 advisories). Google sets
+    // email_verified=true only for real gmail.com addresses and for
+    // Workspace domains that the admin has proven ownership of via DNS;
+    // aliases and unverified addresses get email_verified=false.
+    if (payload.email_verified !== true) {
+      return res.status(401).json({
+        error: 'Google account email is not verified. Please verify your email with Google first.',
+      });
+    }
+
     const email = payload.email.toLowerCase();
     const name = payload.name || payload.email.split('@')[0];
     const googleSub = payload.sub;
@@ -410,11 +429,18 @@ router.post('/apple', oauthLimiter, async (req, res) => {
     if (email) await User.deletePending(email);
 
     // Find existing user by oauth link first, then by email if a fallback.
+    // Sprint 6 round-33 R33B7: when matching an existing account BY EMAIL
+    // (not by oauth link), require email_verified. Mirrors the /google
+    // fix — a malicious Apple ID whose email isn't confirmed shouldn't
+    // be able to takeover an existing password-based Cairn account
+    // that happens to share the email. Match-by-appleSub (line 433) is
+    // always safe because sub is cryptographically bound to Apple's
+    // per-user per-app identity.
     let user = null;
     const oauthRow = await User.findOAuth('apple', appleSub);
     if (oauthRow) {
       user = await User.findById(oauthRow.user_id);
-    } else if (email) {
+    } else if (email && emailVerified) {
       user = await User.findByEmail(email);
     }
 
