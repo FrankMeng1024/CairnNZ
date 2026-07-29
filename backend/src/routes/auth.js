@@ -203,7 +203,17 @@ router.post('/verify', authLimiter, validateBody(schemas.auth.verify), async (re
 
     const user = await User.findById(userId);
     const publicUser = User.toPublic(user);
-    const token = signToken({ userId: publicUser.id, email: publicUser.email });
+    // Sprint 6 round-44 R44B5: include token_version in every issued
+    // token so future mass-revoke (bumpTokenVersion on password change /
+    // restore) invalidates ONLY tokens whose baseline is older than the
+    // bumped version. Missing claim defaults to 0 in authenticate.js,
+    // which used to work by accident — but explicit inclusion is
+    // future-proof and consistent with R15B2/R16F7 password paths.
+    const token = signToken({
+      userId: publicUser.id,
+      email: publicUser.email,
+      token_version: Number(user.token_version || 0),
+    });
 
     return res.status(201).json({ user: publicUser, token });
   } catch (err) {
@@ -276,7 +286,12 @@ router.post('/login', authLimiter, validateBody(schemas.auth.login), async (req,
     // so client can show restore modal. Token still issued so restore endpoint
     // can authenticate the caller.
     const publicUser = User.toPublic(user);
-    const token = signToken({ userId: publicUser.id, email: publicUser.email });
+    // Sprint 6 round-44 R44B5: include token_version — see /verify above.
+    const token = signToken({
+      userId: publicUser.id,
+      email: publicUser.email,
+      token_version: Number(user.token_version || 0),
+    });
 
     if (user.deleted_at) {
       const deletedAt = new Date(user.deleted_at);
@@ -359,7 +374,12 @@ router.post('/google', oauthLimiter, validateBody(schemas.auth.google), async (r
     }
 
     const publicUser = User.toPublic(user);
-    const token = signToken({ userId: publicUser.id, email: publicUser.email });
+    const token = signToken({
+      userId: publicUser.id,
+      email: publicUser.email,
+      // Sprint 6 R44B5: include token_version — see /verify above.
+      token_version: Number(user.token_version || 0),
+    });
 
     // O18 AUTH-01: soft-deleted account — same restore-modal hint as /login.
     if (user.deleted_at) {
@@ -470,7 +490,12 @@ router.post('/apple', oauthLimiter, async (req, res) => {
     }
 
     const publicUser = User.toPublic(user);
-    const token = signToken({ userId: publicUser.id, email: publicUser.email });
+    const token = signToken({
+      userId: publicUser.id,
+      email: publicUser.email,
+      // Sprint 6 R44B5: include token_version — see /verify above.
+      token_version: Number(user.token_version || 0),
+    });
 
     // Soft-delete handoff (same as /login and /google).
     if (user.deleted_at) {
@@ -532,7 +557,18 @@ const refreshLimiter = rateLimit({
 });
 router.post('/refresh', authenticate, refreshLimiter, async (req, res) => {
   try {
-    const newToken = signToken({ userId: req.user.userId, email: req.user.email });
+    // Sprint 6 R44B5: propagate token_version from the old token so
+    // the refreshed token carries the same version. If a bump happens
+    // AFTER refresh, both old + new tokens invalidate together — which
+    // is the intended universal-sign-out behavior. Fresh refresh should
+    // NOT preemptively re-fetch server version (that would let a
+    // just-refreshed token survive a subsequent password change on
+    // another device, defeating the mass-revoke).
+    const newToken = signToken({
+      userId: req.user.userId,
+      email: req.user.email,
+      token_version: Number(req.user.token_version || 0),
+    });
     return res.json({ token: newToken });
   } catch (err) {
     console.error('[refresh]', err);
