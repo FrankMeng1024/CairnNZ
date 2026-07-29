@@ -70,6 +70,19 @@ async function request(userId) {
 // `AND status='queued'` and skips the row if a peer already claimed it.
 async function buildPending({ batchSize = 5 } = {}) {
   await ensureDir();
+  // Sprint 6 round-39 R39B3: reset stale 'building' rows before claiming
+  // new queued work. Pre-fix, if a worker crashed mid-buildBundle (SIGKILL,
+  // OOM, container restart), its row stayed 'building' forever. request()
+  // treats 'building' as in-flight and returns the existing row → user is
+  // permanently locked out of new exports because the crash left a
+  // zombie row. Reset to 'queued' anything stuck in 'building' for over
+  // 15 minutes (a full export takes ~seconds; 15 min is generous headroom).
+  await pool.execute(
+    `UPDATE data_exports
+        SET status='queued'
+      WHERE status='building'
+        AND requested_at < DATE_SUB(NOW(), INTERVAL 15 MINUTE)`
+  );
   const safeBatch = Math.max(1, Math.min(Number(batchSize) || 5, 20));
   const [rows] = await pool.execute(
     `SELECT id, user_id, download_token FROM data_exports
@@ -98,12 +111,29 @@ async function buildPending({ batchSize = 5 } = {}) {
       await fsp.writeFile(tmpPath, json, 'utf8');
       await fsp.rename(tmpPath, filePath);
       const size = Buffer.byteLength(json, 'utf8');
-      await pool.execute(
-        `UPDATE data_exports SET status='ready', file_path=?, size_bytes=?, built_at=CURRENT_TIMESTAMP WHERE id=?`,
-        [filePath, size, row.id],
-      );
+      try {
+        await pool.execute(
+          `UPDATE data_exports SET status='ready', file_path=?, size_bytes=?, built_at=CURRENT_TIMESTAMP WHERE id=?`,
+          [filePath, size, row.id],
+        );
+      } catch (updateErr) {
+        // Sprint 6 round-39 R39B1: if the status='ready' UPDATE fails
+        // after the file has already landed on disk, we'd have an
+        // orphan file with no DB reference. Rethrow so the outer catch
+        // unlinks the file before marking the row 'failed'.
+        throw updateErr;
+      }
       built += 1;
     } catch (err) {
+      // Sprint 6 round-39 R39B1: clean up any partial file on failure
+      // so /export/... download attempts don't find a stale unlinked
+      // file, and purgeExpired (which only touches ready/sent rows)
+      // never needs to worry about failed-row disk leaks.
+      try {
+        const filePath = path.join(EXPORT_DIR, `${row.download_token}.json`);
+        await fsp.unlink(filePath).catch(() => { /* silent — file may never have landed */ });
+        await fsp.unlink(filePath + '.tmp').catch(() => { /* silent — tmp may not exist */ });
+      } catch { /* silent */ }
       await pool.execute(
         `UPDATE data_exports SET status='failed', error_msg=? WHERE id=?`,
         [String(err.message || err).slice(0, 300), row.id],
