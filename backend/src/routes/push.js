@@ -81,7 +81,14 @@ router.patch('/preferences', async (req, res) => {
   try {
     await PushNotification.updatePreferences(req.user.userId, dbPrefs);
     const updated = await PushNotification.getPreferences(req.user.userId);
-    return res.json(updated || {});
+    // Sprint 6 review C4: getPreferences may return null when the user
+    // has neither a user_push_prefs row nor a device_tokens row. That
+    // shouldn't happen right after updatePreferences (which upserts),
+    // but if it does, fall back to defaults so the client never sees {}.
+    return res.json(updated || {
+      friendRequests: true, markerReplies: true,
+      memoryHits: true, announcements: true,
+    });
   } catch (err) {
     console.error('[push/preferences PATCH]', err);
     return res.status(500).json({ error: 'Server error.' });

@@ -55,25 +55,53 @@ async function unregisterAllForUser(userId) {
 
 async function updatePreferences(userId, prefs) {
   const validKeys = ['pref_friend_requests', 'pref_marker_replies', 'pref_memory_hits', 'pref_announcements'];
-  const clauses = [];
-  const values = [];
+  const setFields = {};
   for (const k of validKeys) {
-    if (prefs[k] != null) {
-      clauses.push(`${k} = ?`);
-      values.push(prefs[k] ? 1 : 0);
-    }
+    if (prefs[k] != null) setFields[k] = prefs[k] ? 1 : 0;
   }
-  if (clauses.length === 0) return;
-  values.push(userId);
+  if (Object.keys(setFields).length === 0) return;
+  // Sprint 6 review C4 fix: promote to user_push_prefs (per-user) so a
+  // user without any device tokens can still store preferences. Row is
+  // upserted lazily on first write.
+  const cols = ['user_id', ...Object.keys(setFields)];
+  const placeholders = cols.map(() => '?').join(', ');
+  const updates = Object.keys(setFields).map(k => `${k} = VALUES(${k})`).join(', ');
+  const values = [userId, ...Object.values(setFields)];
   await pool.execute(
-    `UPDATE device_tokens SET ${clauses.join(', ')} WHERE user_id = ?`,
+    `INSERT INTO user_push_prefs (${cols.join(', ')})
+     VALUES (${placeholders})
+     ON DUPLICATE KEY UPDATE ${updates}`,
     values,
+  );
+  // Also mirror to device_tokens rows for backward compat during rollout
+  // — the enqueue gate below still reads BOTH sources so a legacy path
+  // continues to work. Drop this mirror once we're sure no reads go to
+  // device_tokens.pref_*.
+  const clauses = Object.keys(setFields).map(k => `${k} = ?`).join(', ');
+  await pool.execute(
+    `UPDATE device_tokens SET ${clauses} WHERE user_id = ?`,
+    [...Object.values(setFields), userId],
   );
 }
 
 async function getPreferences(userId) {
-  // Preferences are per-token — return the union (any device saying "on"
-  // wins). Absent user returns default all-on.
+  // Sprint 6 review C4: read from user_push_prefs first (source of truth
+  // after migration 024). Fall back to device_tokens union if the user
+  // hasn't written prefs yet — preserves legacy state during rollout.
+  const [prefsRows] = await pool.execute(
+    'SELECT pref_friend_requests, pref_marker_replies, pref_memory_hits, pref_announcements FROM user_push_prefs WHERE user_id = ? LIMIT 1',
+    [userId],
+  );
+  if (prefsRows.length > 0) {
+    const r = prefsRows[0];
+    return {
+      friendRequests: !!r.pref_friend_requests,
+      markerReplies:  !!r.pref_marker_replies,
+      memoryHits:     !!r.pref_memory_hits,
+      announcements:  !!r.pref_announcements,
+    };
+  }
+  // Legacy fallback — device_tokens union.
   const [rows] = await pool.execute(
     `SELECT MAX(pref_friend_requests) AS pref_friend_requests,
             MAX(pref_marker_replies)  AS pref_marker_replies,
@@ -82,7 +110,7 @@ async function getPreferences(userId) {
      FROM device_tokens WHERE user_id = ?`,
     [userId],
   );
-  if (rows.length === 0) return null;
+  if (rows.length === 0 || rows[0].pref_friend_requests == null) return null;
   const r = rows[0];
   return {
     friendRequests: !!(r.pref_friend_requests ?? 1),
@@ -106,15 +134,15 @@ async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = 
   if (!recipientUserId || !kind || !title) return null;
   const dedupeKey = `${kind}:${relatedId ?? 'null'}`;
   // Check user's preferences before queueing (server-side gate).
+  // Sprint 6 review C4: read from user_push_prefs (source of truth). Row
+  // may not exist — default is all-on, so absence = allow.
   const prefColumn = KIND_TO_PREF[kind];
   if (prefColumn) {
-    const [tokens] = await pool.execute(
-      `SELECT MAX(${prefColumn}) AS enabled FROM device_tokens WHERE user_id = ?`,
+    const [prefsRows] = await pool.execute(
+      `SELECT ${prefColumn} AS enabled FROM user_push_prefs WHERE user_id = ? LIMIT 1`,
       [recipientUserId],
     );
-    // enabled==null means user has no devices registered — still log so we
-    // have record; sendPending won't have targets to push to.
-    if (tokens.length > 0 && tokens[0].enabled === 0) {
+    if (prefsRows.length > 0 && prefsRows[0].enabled === 0) {
       // Record as dropped so the audit trail is intact.
       await pool.execute(
         `INSERT IGNORE INTO notification_log
