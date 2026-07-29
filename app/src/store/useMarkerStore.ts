@@ -25,6 +25,12 @@ import {
 } from '../services/markerOfflineEntities';
 import type { SyncState } from '../services/offlineEntity';
 
+// Sprint 6 review C3 (2026-07-30): serialize concurrent hydrate() calls
+// so a race between login + focus + nav can't overwrite user A's markers
+// with user B's mid-transition. Mirrors the useSessionStore SAF-03 pattern.
+let markerHydrateInFlight: Promise<void> | null = null;
+let markerHydrateInFlightUserId: string | null = null;
+
 export type MarkerPermission = 'personal' | 'group' | 'public';
 
 export interface Marker {
@@ -597,51 +603,80 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   },
 
   hydrate: async (userId: string) => {
-    // BUG-010 fix: detect user-switch. If the in-memory userId differs
-    // from the incoming one, drop cross-session slices so the prior user's
-    // circleMarkers + hidingIds + memory subscriptions don't bleed into
-    // the new session. (markers is keyed by userId in MMKV so it's safe
-    // to overwrite below either way.)
-    const prevUserId = get().userId;
-    if (prevUserId && prevUserId !== userId) {
-      set({ circleMarkers: [], hidingIds: [] });
-      // Dynamic import to avoid module-cycle between marker + memory stores.
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { useMemorySubscriptionsStore } = require('../features/memory/store/useMemorySubscriptionsStore');
-        useMemorySubscriptionsStore.getState().reset();
-      } catch (_e) {
-        // Subs store not loaded yet (cold start) — nothing to reset.
-      }
-      try {
-        // v413 (4-eye fix C3): reset friend memory cache on user-switch
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
-        useFriendMemoryStore.getState().reset();
-      } catch (_e) {
-        // Store not loaded yet — nothing to reset.
-      }
+    // Sprint 6 review C3 fix (2026-07-30): apply the same mutex pattern
+    // useSessionStore added in SAF-03 so overlapping hydrate calls (login
+    // + focus + nav all firing near-simultaneously) can't cross-pollute
+    // users. Without this, a rapid A→B→A user switch could leave marker
+    // state in a mixed order where the last write wins but the effect of
+    // an earlier hydrate arrived after the later one, leaking user B's
+    // markers into user A's view.
+    if (markerHydrateInFlight) {
+      const sameUser = markerHydrateInFlightUserId === userId;
+      await markerHydrateInFlight.catch(() => {});
+      if (sameUser) return;
     }
-    // 1. Load from local cache first (instant)
-    const key = storageKey(userId);
-    // O17 F-STO-06: opportunistically remove old 'cairn_markers' (pre-v0.2.6)
-    // legacy key. Stored a few KB per user; harmless dead data, but reclaims
-    // AsyncStorage budget on TestFlight installs upgraded across schema bump.
-    void storage.removeItem('cairn_markers').catch(() => {});
-    const raw = await storage.getItem(key);
-    if (raw) {
-      try {
-        const markers: Marker[] = JSON.parse(raw);
-        set({ markers, userId });
-      } catch {
-        storage.removeItem(key);
+    const run = (async () => {
+      // BUG-010 fix: detect user-switch. If the in-memory userId differs
+      // from the incoming one, drop cross-session slices so the prior user's
+      // circleMarkers + hidingIds + memory subscriptions don't bleed into
+      // the new session. (markers is keyed by userId in MMKV so it's safe
+      // to overwrite below either way.)
+      const prevUserId = get().userId;
+      if (prevUserId && prevUserId !== userId) {
+        set({ circleMarkers: [], hidingIds: [] });
+        // Dynamic import to avoid module-cycle between marker + memory stores.
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { useMemorySubscriptionsStore } = require('../features/memory/store/useMemorySubscriptionsStore');
+          useMemorySubscriptionsStore.getState().reset();
+        } catch (_e) {
+          // Subs store not loaded yet (cold start) — nothing to reset.
+        }
+        try {
+          // v413 (4-eye fix C3): reset friend memory cache on user-switch
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
+          useFriendMemoryStore.getState().reset();
+        } catch (_e) {
+          // Store not loaded yet — nothing to reset.
+        }
+      }
+      // 1. Load from local cache first (instant)
+      const key = storageKey(userId);
+      // O17 F-STO-06: opportunistically remove old 'cairn_markers' (pre-v0.2.6)
+      // legacy key. Stored a few KB per user; harmless dead data, but reclaims
+      // AsyncStorage budget on TestFlight installs upgraded across schema bump.
+      void storage.removeItem('cairn_markers').catch(() => {});
+      const raw = await storage.getItem(key);
+      // Re-check userId in case a newer hydrate raced ahead — only apply
+      // if we're still the current target user.
+      if (get().userId !== undefined && get().userId !== userId && markerHydrateInFlightUserId !== userId) {
+        return;
+      }
+      if (raw) {
+        try {
+          const markers: Marker[] = JSON.parse(raw);
+          set({ markers, userId });
+        } catch {
+          storage.removeItem(key);
+          set({ markers: [], userId });
+        }
+      } else {
         set({ markers: [], userId });
       }
-    } else {
-      set({ markers: [], userId });
+      // 2. Then fetch from backend (async, updates state when done)
+      get().loadFromBackend();
+    })();
+    markerHydrateInFlight = run;
+    markerHydrateInFlightUserId = userId;
+    try {
+      await run;
+    } finally {
+      if (markerHydrateInFlight === run) {
+        markerHydrateInFlight = null;
+        markerHydrateInFlightUserId = null;
+      }
     }
-    // 2. Then fetch from backend (async, updates state when done)
-    get().loadFromBackend();
   },
 }));
 
