@@ -508,9 +508,24 @@ router.post('/refresh', refreshLimiter, authenticate, async (req, res) => {
   }
 });
 
+// Sprint 6 round-15 R15B1: /password (change) had no rate limit. Auth
+// middleware runs first (authenticated token required), so keying by
+// userId is safe and consistent. 10 attempts / 15 min matches authLimiter
+// but scoped per-user so a shared-NAT office isn't collectively locked.
+const passwordChangeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 10,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => req.user?.userId ? `pwchange:${req.user.userId}` : ipKeyGenerator(req, res),
+  message: { error: 'Too many password change attempts. Please wait 15 minutes.' },
+});
+
 // ── PATCH /api/auth/password ───────────────────────────────────────────────
 // Set password (no current password needed) or change password (requires current)
-router.patch('/password', authenticate, validateBody(schemas.auth.passwordChange), async (req, res) => {
+// Sprint 6 round-15 R15B1: authenticate MUST run before the limiter so
+// req.user is populated when keyGenerator fires (express-rate-limit resolves
+// key before the handler, but middleware chain order is respected — placing
+// authenticate first sets req.user, then the limiter reads it).
+router.patch('/password', authenticate, passwordChangeLimiter, validateBody(schemas.auth.passwordChange), async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!validatePassword(newPassword))
@@ -532,8 +547,23 @@ router.patch('/password', authenticate, validateBody(schemas.auth.passwordChange
 
     const hash = await User.hashPassword(newPassword);
     await User.setPassword(user.id, hash);
+    // Sprint 6 round-15 R15B2: bump token_version so ALL other devices
+    // sign out on next request. Password change = universal sign-out
+    // (industry standard). Without this, an attacker who compromised a
+    // device could keep using its old token even after the legitimate
+    // owner changes the password. Pattern mirrors /account/restore.
+    // Re-fetch user for new token_version, then issue a fresh token so
+    // the CALLER stays signed in on this device (their old token would
+    // otherwise fail authenticate.js's serverVer > jwtVer check).
+    await User.bumpTokenVersion(user.id);
+    const refreshed = await User.findById(user.id);
+    const newToken = signToken({
+      userId: refreshed.id,
+      email: refreshed.email,
+      token_version: Number(refreshed.token_version || 0),
+    });
 
-    return res.json({ message: 'Password updated.' });
+    return res.json({ message: 'Password updated.', token: newToken });
   } catch (err) {
     console.error('[password]', err);
     return res.status(500).json({ error: 'Server error.' });
@@ -683,11 +713,21 @@ router.post('/password-reset/verify', authLimiter, validateBody(schemas.auth.pas
 
     const hash = await User.hashPassword(new_password);
     await User.setPassword(user.id, hash);
+    // Sprint 6 round-15 R15B2: bump token_version so ALL prior devices
+    // sign out. Password reset via email code is the classic
+    // account-takeover recovery path — a compromised device MUST NOT
+    // survive it. Mirror of /password path.
+    await User.bumpTokenVersion(user.id);
+    const refreshed = await User.findById(user.id);
 
-    // Issue fresh token (new jti — implicit hard sign-out of any other device
-    // using an old jti, once those old jtis are added to blacklist by /logout).
-    const publicUser = User.toPublic(user);
-    const token = signToken({ userId: publicUser.id, email: publicUser.email });
+    // Issue fresh token (new jti + new token_version — old tokens on other
+    // devices fail authenticate.js's serverVer > jwtVer check on next call).
+    const publicUser = User.toPublic(refreshed);
+    const token = signToken({
+      userId: publicUser.id,
+      email: publicUser.email,
+      token_version: Number(refreshed.token_version || 0),
+    });
     return res.json({ user: publicUser, token });
   } catch (err) {
     console.error('[password-reset/verify]', err);
