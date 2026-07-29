@@ -150,9 +150,16 @@ router.get('/public', async (req, res) => {
     }
 
     const userId = req.user.userId;
+    // Sprint 6 round-52 R52: also filter soft-deleted owners. Same class
+    // as R37 / R47 (soft-deleted user filter across circle + friends
+    // endpoints). Pre-fix, a public marker whose owner soft-deleted
+    // their account still appeared in the /public bbox feed for the
+    // 7-day grace period. Their content going away is signaled by the
+    // authSweep cascade — surfacing it in the meantime is stale UX.
     const [rows] = await pool.execute(
       `SELECT m.id, m.type, m.lat, m.lng, m.created_at
        FROM markers m
+       JOIN users u ON u.id = m.user_id AND u.deleted_at IS NULL
        LEFT JOIN hidden_items h
          ON h.user_id = ? AND h.item_type = 'mark' AND h.item_id = m.id
        WHERE m.permission = 'public'
