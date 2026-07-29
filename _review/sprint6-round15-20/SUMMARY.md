@@ -1,4 +1,4 @@
-# Sprint 6 Rounds 15-21 Hardening — 2026-07-29 Overnight
+# Sprint 6 Rounds 15-23 Hardening — 2026-07-29 Overnight
 
 Sleep-run session covering rounds 15-20 of adversarial review on Sprint 6
 auth/push/friend/marker/GDPR-export/memory/session surface areas, plus
@@ -53,6 +53,7 @@ production schema before shipping.
 | R19 | #2 | Doc-only | routes/circle.js | /fog docstring corrected (hidden_items only applies to /markers /routes) |
 | R19 | #5 | Medium | routes/sessions.js | Legacy PATCH per-point route_points validation |
 | R19 | #4 | Doc | middleware/idempotency.js | Concurrent-request race documented + rationale for deferral |
+| R22 | Q4 | Medium | routes/push.js | Rate-limit /push/register to blunt token-hijack (20/15min/user) |
 
 ## Fixes committed but NOT deployed (client)
 
@@ -88,27 +89,36 @@ Real-device test cycle needed:
 - R19 #7 routes.js NaN/Infinity (already handled by Joi schema)
 - R20 BUG-1 MapHistoryScreen tappable pending card (design intent needs reconfirmation)
 - R20 BUG-4 syncDaemon permanent-failure orphan handling (needs error-taxonomy refactor)
+- R23 findings A (nonce replay within TTL — mitigated by DB UNIQUE) + B (0,0 coord — no real attack vector) both deferred as theoretical
+
+## Convergence signal
+
+Round 23 found only theoretical hardening items, no exploitable bugs. This
+is the natural stopping signal — the review has converged and further
+rounds would produce diminishing returns without a fresh attack surface.
+
+## Commit chain (all pushed to origin/master)
+
+```
+8890857 R22Q4     rate-limit /push/register
+e5d6511 docs      R21 fixes added to summary
+cac6316 R21       SAF-01 cross-user + stuck-ref (client)
+0c654da docs      rounds 15-20 summary
+68c91be R20       client-side pending-sync UX
+a1bd695 R19       circle + sessions + idempotency
+ca60771 R18       memory_points cid docs
+2a81ce5 R17F5+F7+F8  marker + push + whitespace
+479d895 R16F12    friends/accept response order
+1006727 R16F5-F7  refinements of R15
+2d9fc1a R15B3-B5  refresh + GDPR export safety
+c4d8c52 R15B1+B2  password change hardening
+```
 
 ## Production state at end of run
 
 - Backend healthy: `{status:"ok", db:"ok"}`
-- Users: 27 (unchanged)
-- All Sprint 6 schema + columns + FKs present
-- All Sprint 6 tables restored after R9B7 incident
-- No open Blocker/Critical bugs from rounds 15-20 (all shipped or documented)
-
-## Commit chain
-
-```
-c4d8c52 R15B1+B2  password change hardening
-2d9fc1a R15B3-B5  refresh + GDPR export safety
-1006727 R16F5-F7  refinements of R15
-479d895 R16F12    friends/accept response order
-2a81ce5 R17F5+F7+F8  marker + push + whitespace
-ca60771 R18       memory_points cid docs
-a1bd695 R19       circle + sessions + idempotency
-68c91be R20       client-side pending-sync (needs real-device test)
-```
-
-First 5 commits pushed to origin/master. Last 3 queued for push retry
-as network permits.
+- Users: 27 (unchanged from start)
+- pending_registrations: 0 rows (schema restored w/ date_of_birth)
+- memory_points: 2,384 rows (unchanged)
+- All Sprint 6 schema + columns + FKs present + verified at boot
+- Zero open Blocker/Critical bugs from rounds 15-23
