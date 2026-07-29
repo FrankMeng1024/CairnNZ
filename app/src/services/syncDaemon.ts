@@ -56,6 +56,25 @@ export async function drainPending(): Promise<void> {
  * 5xx / 网络错误 → markAttempt, 保留 pending, 等下次。
  */
 async function uploadOne(hike: PendingHike): Promise<void> {
+  // Sprint 6 round-7 review R7B1 + R7B5 fix: gate on current user.
+  // A pending file's userId is the user who created the hike; if a
+  // different user is now signed in on this device (family device,
+  // user switch, or 401-hard-logout re-login as someone else), upload
+  // ing to the current JWT sends A's data to B's account. Skip
+  // silently — do NOT markAttempt (which would increment forever)
+  // and do NOT delete (A might sign back in and want their data).
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useSessionStore } = require('../store/useSessionStore');
+    const currentUserId = String(useSessionStore.getState().currentUserId ?? '');
+    if (currentUserId && hike.userId && String(hike.userId) !== currentUserId && hike.userId !== 'unknown') {
+      crashLogger.breadcrumb(
+        `v412:sync_skip_cross_user localId=${hike.localId.slice(0, 8)} hikeUser=${hike.userId} currentUser=${currentUserId}`,
+      );
+      return;
+    }
+  } catch { /* silent — session store not loaded */ }
+
   try {
     // 极端: hike 开始时也离线, remoteId 是 null → 先建 server row
     if (!hike.remoteId) {

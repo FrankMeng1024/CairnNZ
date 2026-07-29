@@ -251,6 +251,13 @@ export function HomeScreen() {
   // missed the case where hydrate replaced the local pending row with the
   // remote list (which never contains never-uploaded hikes), leaving the
   // banner invisible even though pendingSyncStore had the payload on disk.
+  // Sprint 6 round-7 review R7B2: refetch on any syncState change, not
+  // just sessions.length. markSynced flips syncState in-place without
+  // adding/removing rows, so length-based deps kept the banner stuck at
+  // stale count after a successful drain.
+  const pendingCountSignal = sessions
+    .filter(s => s.syncState === 'pending' || s.syncState === 'syncing')
+    .map(s => s.id).join(',');
   const [fsPendingCount, setFsPendingCount] = useState<number>(0);
   useEffect(() => {
     let cancelled = false;
@@ -265,7 +272,7 @@ export function HomeScreen() {
       }
     })();
     return () => { cancelled = true; };
-  }, [sessions.length]);
+  }, [pendingCountSignal]);
   // v320: beacon after selectors read — confirms zustand subscriptions
   // worked without throw. Heavy computation goes here (filter/sort/derive).
   try {

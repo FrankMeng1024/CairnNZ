@@ -224,7 +224,32 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (raw) {
         try {
           // Sessions loaded without trackPoints (loaded on demand)
-          const summaries: Omit<TrackingSession, 'trackPoints'>[] = JSON.parse(raw);
+          const parsed = JSON.parse(raw);
+          // Sprint 6 round-7 review R7B7: runtime shape validation.
+          // If storage contains a non-array (future migration wrote
+          // { version: 2, sessions: [...] } or corrupt {}), pre-fix
+          // code threw on .map → catch → silently wiped user data.
+          // Now: log to aliyun before wiping so we can diagnose.
+          if (!Array.isArray(parsed)) {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { log } = require('../services/appLog');
+              log('session_store.hydrate.non_array', {
+                userId, shape: typeof parsed, isNull: parsed === null,
+              });
+            } catch { /* silent */ }
+            storage.removeItem(sessionsKey(userId));
+            if (useSessionStore.getState().currentUserId === userId) {
+              set({ sessions: [] });
+            }
+            return;
+          }
+          // Skip malformed entries (missing id or startedAt) instead
+          // of injecting broken sessions into state. `.filter(s =>
+          // s.distanceM > 0)` downstream mishandles NaN + undefined.
+          const summaries = (parsed as any[]).filter(
+            s => s && typeof s.id === 'string' && typeof s.startedAt === 'number',
+          );
           const sessions: TrackingSession[] = summaries.map((s) => ({
             ...s,
             trackPoints: [],

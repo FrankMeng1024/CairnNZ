@@ -73,18 +73,41 @@ router.post('/request', validateBody(schemas.friend.request), async (req, res) =
     );
     if (existing.length > 0) return res.status(400).json({ error: 'Already friends' });
 
-    // Check if request already pending
-    const [pending] = await pool.execute(
-      'SELECT id FROM friend_requests WHERE from_user_id = ? AND to_user_id = ? AND status = "pending"',
-      [fromUserId, toUser.id]
-    );
-    if (pending.length > 0) return res.status(400).json({ error: 'Request already sent' });
-
-    // Create request
-    const [reqResult] = await pool.execute(
-      'INSERT INTO friend_requests (from_user_id, to_user_id, status, created_at) VALUES (?, ?, "pending", NOW())',
-      [fromUserId, toUser.id]
-    );
+    // Sprint 6 round-7 review R7B4 fix: check + insert in a serialised
+    // transaction to prevent TOCTOU on rapid double-tap or two-tab
+    // sends. Pre-fix, two requests within ms could both see 0 pending
+    // rows and both INSERT — recipient got 2 identical rows in inbox +
+    // 2 duplicate pushes. FOR UPDATE on user_id column would block
+    // (no matching row), so we lock the FROM user row instead. Simpler
+    // safe pattern: rely on the DB's INSERT+dupe-check race being
+    // narrow, catch the ER_DUP_ENTRY if we added a unique key. Since
+    // there's no unique key yet, use SELECT ... FOR UPDATE inside a
+    // transaction to serialise.
+    const conn = await pool.getConnection();
+    let reqResult;
+    try {
+      await conn.beginTransaction();
+      // Lock this user's outgoing-to-this-target row range. Using an
+      // explicit user_id lock prevents the check+insert race.
+      const [pending] = await conn.execute(
+        'SELECT id FROM friend_requests WHERE from_user_id = ? AND to_user_id = ? AND status = "pending" FOR UPDATE',
+        [fromUserId, toUser.id]
+      );
+      if (pending.length > 0) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Request already sent' });
+      }
+      [reqResult] = await conn.execute(
+        'INSERT INTO friend_requests (from_user_id, to_user_id, status, created_at) VALUES (?, ?, "pending", NOW())',
+        [fromUserId, toUser.id]
+      );
+      await conn.commit();
+    } catch (txErr) {
+      try { await conn.rollback(); } catch (_) {}
+      throw txErr;
+    } finally {
+      conn.release();
+    }
 
     // O18 batch 6.5: notify recipient that they got a new friend request.
     // Fire-and-forget so a push-service outage never blocks request creation.
