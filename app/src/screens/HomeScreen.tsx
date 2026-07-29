@@ -95,6 +95,9 @@ function RecentRow({ onPress }: { onPress: (id: string) => void }) {
         style={recentStyles.row}
         onPress={() => nav.navigate(target as any)}
         activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={`Resume ${label.toLowerCase()} in progress`}
+        accessibilityHint="Returns to the live tracking screen"
       >
         <Animated.View
           style={[recentStyles.dot, { backgroundColor: bg, transform: [{ scale: pulse }] }]}

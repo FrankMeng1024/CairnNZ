@@ -128,6 +128,24 @@ export const Shadow = {
     shadowRadius: 20,
     elevation: 4,
   },
+  // O18 batch 6.9 (CROSS-01): modal / sheet drop-shadow tokens. Batch 6.4
+  // FriendProfile modal + Batch 6.8 PaywallSheet were using inline objects
+  // that drifted from Shadow.card values. Consolidate here so any future
+  // modal uses the same visual weight.
+  sheet: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.10,
+    shadowRadius: 28,
+    elevation: 12,
+  },
+  modal: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 32,
+    elevation: 16,
+  },
 } as const;
 
 // O1: removed Glass/DarkColors/SpringConfig/AnimationPreset — all 0 external
