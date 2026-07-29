@@ -1235,7 +1235,12 @@ export function MapHistoryScreen() {
                     try {
                       const { default: Sharing } = await import('expo-sharing');
                       const isAvailable = await Sharing.isAvailableAsync();
-                      const dateStr = new Date(selectedSession.startedAt).toLocaleDateString();
+                      // Sprint 6 round-5 review R5B3: use formatDate so
+                      // the shared text respects the user's dateFormat
+                      // setting. Pre-fix, toLocaleDateString used device
+                      // locale which could disagree with the pref.
+                      const { formatDate } = require('../utils/dateFormat');
+                      const dateStr = formatDate(selectedSession.startedAt);
                       const kmOrMi = dist.imperial ? 'mi' : 'km';
                       const distValue = dist.imperial
                         ? (selectedSession.distanceM / 1609.344).toFixed(2)
@@ -1475,8 +1480,36 @@ export function MapHistoryScreen() {
               ) : (
                 <View style={styles.emptyState}>
                   <Icon name="Search" size={40} color={Colors.textMuted} strokeWidth={1.2} />
-                  <Text style={styles.emptyTitle}>No matches</Text>
-                  <Text style={styles.emptySubtitle}>Try a different search term.</Text>
+                  {/* Sprint 6 round-5 review R5B5: distinguish "empty
+                      search box + narrow filters" from "typed query
+                      returned nothing" so users know which knob to
+                      loosen. */}
+                  {(() => {
+                    const hasSearch = searchQuery.trim().length > 0;
+                    const hasFilter = typeFilter !== 'all' || periodFilter !== 'all';
+                    if (hasSearch && hasFilter) {
+                      return (
+                        <>
+                          <Text style={styles.emptyTitle}>No matches</Text>
+                          <Text style={styles.emptySubtitle}>Try clearing the filters or search term.</Text>
+                        </>
+                      );
+                    }
+                    if (hasFilter) {
+                      return (
+                        <>
+                          <Text style={styles.emptyTitle}>No hikes match your filters</Text>
+                          <Text style={styles.emptySubtitle}>Try All / All to see everything.</Text>
+                        </>
+                      );
+                    }
+                    return (
+                      <>
+                        <Text style={styles.emptyTitle}>No matches</Text>
+                        <Text style={styles.emptySubtitle}>Try a different search term.</Text>
+                      </>
+                    );
+                  })()}
                 </View>
               )
             ) : (

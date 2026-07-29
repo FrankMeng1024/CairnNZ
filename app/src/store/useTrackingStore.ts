@@ -163,6 +163,18 @@ interface TrackingState {
    * the hike. Cleared by clearLastStopReason() (same lifecycle).
    */
   saveLostSessionId: string | null;
+  // Sprint 6 round-5 review R5B2: also stash the payload + remoteId +
+  // idempotencyKey + activityMode when SAF-01 fires. Retry needs these
+  // to re-attempt savePending — the pendingSyncStore is empty (that's
+  // the whole reason SAF-01 fired in the first place). Reset on
+  // clearLastStopReason.
+  saveLostPayload: {
+    localId: string;
+    remoteId: number | null;
+    idempotencyKey: string;
+    activityMode: 'hiking' | 'running';
+    payload: any;
+  } | null;
 
   // Actions
   setActivityMode: (mode: ActivityMode) => void;
@@ -205,6 +217,13 @@ const initialState = {
   lastFixTimestamp: null,
   lastStopReason: null as 'saved' | 'saved_pending' | 'too-short' | 'save_lost' | null,
   saveLostSessionId: null as string | null,
+  saveLostPayload: null as null | {
+    localId: string;
+    remoteId: number | null;
+    idempotencyKey: string;
+    activityMode: 'hiking' | 'running';
+    payload: any;
+  },
 };
 
 export const useTrackingStore = create<TrackingState>((set, get) => ({
@@ -1154,10 +1173,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             crashLogger.breadcrumb(`v412:saved_to_pending localId=${s.sessionId.slice(0, 8)}`);
           } catch (persistErr) {
             crashLogger.breadcrumb(`v412:pending_persist_failed ${String(persistErr).slice(0, 60)}`);
-            // O18 SAF-01: pending persist failed too — surface to UI so
-            // the user knows their hike is at risk and can retry manually
-            // (instead of silently believing it saved).
-            set({ saveLostSessionId: s.sessionId });
+            // O18 SAF-01 + Sprint 6 round-5 R5B2: pending persist failed
+            // too — surface to UI so the user knows their hike is at risk
+            // and can retry manually. Stash the payload so Retry can
+            // re-attempt savePending (the store didn't accept our first
+            // write, but a retry after clearing storage might work).
+            set({
+              saveLostSessionId: s.sessionId,
+              saveLostPayload: {
+                localId: s.sessionId,
+                remoteId,
+                idempotencyKey,
+                activityMode: s.activityMode,
+                payload: v412Payload,
+              },
+            });
           }
         }
       } else {
@@ -1178,8 +1208,17 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           crashLogger.breadcrumb(`v412:no_remoteid_saved_to_pending`);
         } catch (persistErr) {
           crashLogger.breadcrumb(`v412:pending_persist_failed ${String(persistErr).slice(0, 60)}`);
-          // O18 SAF-01: same as branch above — surface hard failure.
-          set({ saveLostSessionId: s.sessionId });
+          // O18 SAF-01 + Sprint 6 R5B2: same as branch above — stash payload for retry.
+          set({
+            saveLostSessionId: s.sessionId,
+            saveLostPayload: {
+              localId: s.sessionId,
+              remoteId: null,
+              idempotencyKey,
+              activityMode: s.activityMode,
+              payload: v412Payload,
+            },
+          });
         }
       }
 
@@ -1379,7 +1418,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const { log } = require('../services/appLog');
       log('o7.stop.final', { stopReason });
     } catch { /* log unavailable */ }
-    set({ ...initialState, lastStopReason: stopReason });
+    // Sprint 6 round-5 review R5B1 fix: preserve saveLostSessionId
+    // across the state reset. Pre-fix, `set({ ...initialState, ... })`
+    // wiped the field to null in the same synchronous flush as it was
+    // set, so React subscribers only saw the null value and the SAF-01
+    // Alert never fired. Now: read the current value + carry it through.
+    // R5B2 companion: also carry saveLostPayload so Retry can re-attempt.
+    set((prev) => ({
+      ...initialState,
+      lastStopReason: stopReason,
+      saveLostSessionId: prev.saveLostSessionId,
+      saveLostPayload: prev.saveLostPayload,
+    }));
   },
 
   pauseTracking: () => {
@@ -1765,7 +1815,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
   // O1 batch 37: reset removed — 0 external callers confirmed by grep audit.
 
-  clearLastStopReason: () => set({ lastStopReason: null, saveLostSessionId: null }),
+  clearLastStopReason: () => set({ lastStopReason: null, saveLostSessionId: null, saveLostPayload: null }),
 
   discardCurrentSession: () => {
     // Full teardown for too-short sessions when user taps "End anyway".

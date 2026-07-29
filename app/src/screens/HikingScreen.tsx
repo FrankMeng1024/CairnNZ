@@ -103,6 +103,7 @@ export function HikingScreen() {
   // saveLostSessionId. We surface a modal Alert with a Retry button so
   // the user knows their hike is at risk and can act.
   const saveLostSessionId = useTrackingStore(s => s.saveLostSessionId);
+  const saveLostPayload = useTrackingStore(s => s.saveLostPayload);
   const discardCurrentSession = useTrackingStore(s => s.discardCurrentSession);
   const activityMode = useTrackingStore(s => s.activityMode);
 
@@ -486,15 +487,29 @@ export function HikingScreen() {
         {
           text: 'Retry',
           onPress: async () => {
+            // Sprint 6 round-5 review R5B2 fix: Retry re-attempts
+            // savePending with the captured payload FIRST, then drains.
+            // Pre-fix we drained a queue the session had never been
+            // added to (SAF-01 fires precisely when savePending threw),
+            // so retry was a silent no-op.
+            const payload = saveLostPayload;
             clearLastStopReason();
-            // Kick the sync daemon — will attempt saveHikeAtomic again
-            // for any pending session it finds.
             try {
+              if (payload) {
+                const { savePending } = require('../services/pendingSyncStore');
+                await savePending({
+                  ...payload,
+                  userId: 'unknown', // will be refined by daemon on drain
+                  createdAt: Date.now(),
+                  lastAttemptAt: null,
+                  attemptCount: 0,
+                });
+              }
               const { drainPending } = require('../services/syncDaemon');
               await drainPending();
             } catch (e) {
               // eslint-disable-next-line no-console
-              console.warn('[SAF-01] retry drain failed:', e);
+              console.warn('[SAF-01] retry failed:', e);
             }
           },
         },
@@ -614,6 +629,7 @@ export function HikingScreen() {
   // and long-hikers get the "you just crossed 1 km" signal.
   const lapStepM = dist.imperial ? 1609.344 : 1000;
   const lastLapCountRef = useRef(0);
+  const lapToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [lapToast, setLapToast] = useState<string | null>(null);
   useEffect(() => {
     if (!isTracking) {
@@ -621,12 +637,31 @@ export function HikingScreen() {
       return;
     }
     const currentLap = Math.floor(distanceM / lapStepM);
+    // Sprint 6 round-5 review R5B4: on burst distance jumps (background
+    // task backfill after long tunnel / jetsam), currentLap can jump
+    // multiple boundaries in one update. Show the range instead of
+    // silently swallowing the intermediate milestones.
     if (currentLap > lastLapCountRef.current) {
+      const prev = lastLapCountRef.current;
       lastLapCountRef.current = currentLap;
       haptic.impact('light');
-      setLapToast(`${currentLap} ${dist.imperial ? 'mi' : 'km'}`);
-      const t = setTimeout(() => setLapToast(null), 2000);
-      return () => clearTimeout(t);
+      const unit = dist.imperial ? 'mi' : 'km';
+      const msg = currentLap - prev > 1
+        ? `${prev + 1}–${currentLap} ${unit}`
+        : `${currentLap} ${unit}`;
+      // Clear any pending toast timer so bursts don't leave orphaned
+      // setTimeouts stacking up.
+      if (lapToastTimerRef.current) {
+        clearTimeout(lapToastTimerRef.current);
+      }
+      setLapToast(msg);
+      lapToastTimerRef.current = setTimeout(() => {
+        setLapToast(null);
+        lapToastTimerRef.current = null;
+      }, 2000);
+      return () => {
+        if (lapToastTimerRef.current) clearTimeout(lapToastTimerRef.current);
+      };
     }
   }, [distanceM, isTracking, lapStepM, dist.imperial]);
   const distDisplay = dist.format(distanceM, 1);
