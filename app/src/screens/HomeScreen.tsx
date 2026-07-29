@@ -35,9 +35,9 @@ function getGreeting() {
   // O12: uiMode removed — greeting no longer branches on Explorer/Navigator.
   // PRD3 E-014: occasional Te Reo touch — Kia ora as morning variant
   // (registered translator review pending — Kia ora is a well-established greeting)
-  if (h >= 5 && h < 12) return 'Kia ora, Explorer';
-  if (h >= 12 && h < 18) return 'Good afternoon, Explorer';
-  return 'Good evening, Explorer';
+  if (h >= 5 && h < 12) return 'Kia ora';
+  if (h >= 12 && h < 18) return 'Good afternoon';
+  return 'Good evening';
 }
 
 // ── Recent / Live activity row ───────────────────────────────────────────
@@ -182,6 +182,9 @@ function ActivityCard({
         onPressIn={() => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, tension: 200, friction: 10 }).start()}
         onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 8 }).start()}
         style={[cardStyles.card, { backgroundColor: cardBg, flex: 1 }]}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityHint={subtitle}
       >
         {/* Left panel */}
         <View style={[cardStyles.leftPanel, { width: panelW, backgroundColor: lightBg }]}>
@@ -215,6 +218,8 @@ function ToolBtn({ iconName, label, onPress }: { iconName: IconName; label: stri
         activeOpacity={1}
         onPressIn={() => Animated.spring(scale, { toValue: 0.93, useNativeDriver: true, tension: 300, friction: 10 }).start()}
         onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 8 }).start()}
+        accessibilityRole="button"
+        accessibilityLabel={label}
       >
         <View style={toolStyles.iconWrap}>
           <Icon name={iconName} size={20} color={Colors.primary} strokeWidth={1.8} />
@@ -248,7 +253,13 @@ export function HomeScreen() {
     });
   } catch {/* ignore */}
   const region = getCurrentRegion();
-  const markerCount = allMarkers.filter(m => m.regionCode === region.code).length;
+  // O17 P-RENDER-05: memoize marker count so HomeScreen doesn't recompute
+  // the .filter().length on every unrelated re-render (allMarkers is stable
+  // between hikes; region.code changes rarely).
+  const markerCount = React.useMemo(
+    () => allMarkers.filter(m => m.regionCode === region.code).length,
+    [allMarkers, region.code],
+  );
   const hasData = sessions.length > 0 || markerCount > 0;
   const hasRecent = sessions.length > 0;
 

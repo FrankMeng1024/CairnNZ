@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Cairn Settings — Mockup 1 (Novice)</title>
+<style>
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", sans-serif;
+    background: #ece7de;
+    color: #1a1a1a;
+    min-height: 100vh;
+  }
+
+  /* Top banner */
+  .banner {
+    background: linear-gradient(135deg, #5d7c46 0%, #6b8a52 100%);
+    color: #faf7f2;
+    padding: 20px 32px;
+    text-align: center;
+    font-size: 14px;
+    letter-spacing: 0.3px;
+  }
+  .banner strong { display: block; font-size: 17px; font-weight: 600; margin-bottom: 6px; letter-spacing: 0.2px; }
+  .banner span { opacity: 0.9; }
+
+  /* Layout */
+  .stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 80px;
+    gap: 40px;
+  }
+
+  /* iPhone 15 Pro frame */
+  .phone {
+    width: 413px;                 /* 393 content + 10 bezel each side */
+    height: 872px;                /* 852 content + 10 bezel each side */
+    background: #0a0a0a;
+    border-radius: 55px;
+    padding: 10px;
+    box-shadow:
+      0 30px 70px rgba(0,0,0,0.35),
+      0 8px 20px rgba(0,0,0,0.15),
+      inset 0 0 0 2px #2a2a2a;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .phone::before { /* side buttons hint */
+    content: ""; position: absolute; left: -3px; top: 180px;
+    width: 3px; height: 60px; background: #1a1a1a; border-radius: 2px 0 0 2px;
+  }
+  .phone::after {
+    content: ""; position: absolute; right: -3px; top: 220px;
+    width: 3px; height: 100px; background: #1a1a1a; border-radius: 0 2px 2px 0;
+  }
+  .screen {
+    width: 393px;
+    height: 852px;
+    background: #faf7f2;
+    border-radius: 45px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Dynamic island */
+  .island {
+    position: absolute;
+    top: 11px; left: 50%; transform: translateX(-50%);
+    width: 124px; height: 37px;
+    background: #0a0a0a;
+    border-radius: 20px;
+    z-index: 10;
+  }
+
+  /* iOS status bar */
+  .statusbar {
+    height: 54px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 30px 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a1a;
+    letter-spacing: -0.2px;
+  }
+  .statusbar .icons { display: flex; gap: 5px; align-items: center; font-size: 13px; }
+
+  /* Nav header */
+  .navbar {
+    padding: 8px 20px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .navbar .back {
+    color: #5d7c46;
+    font-size: 17px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+  }
+  .navbar .back:hover { opacity: 0.7; }
+
+  .page-title {
+    padding: 4px 20px 20px;
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.8px;
+    color: #1a1a1a;
+  }
+
+  /* Scroll area */
+  .scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 16px 30px;
+  }
+  .scroll::-webkit-scrollbar { width: 0; }
+
+  /* Identity card */
+  .identity {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 18px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(93,124,70,0.06);
+    margin-bottom: 28px;
+  }
+  .avatar {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7a9860 0%, #5d7c46 100%);
+    color: #faf7f2;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(93,124,70,0.25);
+  }
+  .identity-info { flex: 1; min-width: 0; }
+  .identity-name { font-size: 17px; font-weight: 600; color: #1a1a1a; letter-spacing: -0.2px; }
+  .identity-email { font-size: 14px; color: #6b6b6b; margin-top: 2px; }
+  .identity-link {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f0ebe2;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 14px;
+    color: #5d7c46;
+    cursor: pointer;
+  }
+  .identity-link:hover { opacity: 0.7; }
+  .identity-link .chev { color: #b8b0a4; font-size: 13px; }
+
+  /* Section */
+  .section-label {
+    font-size: 13px;
+    color: #6b6b6b;
+    padding: 0 4px 8px;
+    letter-spacing: 0.1px;
+    font-weight: 500;
+  }
+  .card {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    padding: 13px 16px;
+    gap: 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+    min-height: 52px;
+  }
+  .row:hover { background: #faf7f2; }
+  .row + .row { border-top: 1px solid #f2ede4; }
+  .row .ico {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .row .label-wrap { flex: 1; min-width: 0; }
+  .row .label { font-size: 16px; color: #1a1a1a; letter-spacing: -0.2px; }
+  .row .hint { font-size: 12px; color: #8a8578; margin-top: 2px; line-height: 1.35; }
+  .row .value { font-size: 15px; color: #8a8578; margin-right: 4px; }
+  .row .chev { color: #c8c1b3; font-size: 16px; font-weight: 300; }
+
+  /* Icon colors — warm, muted, avoid stark warnings */
+  .ico-units    { background: #eef3e6; color: #5d7c46; }
+  .ico-night    { background: #e8e6f0; color: #5f5b8a; }
+  .ico-haptic   { background: #f2ece0; color: #8a6e3b; }
+  .ico-map      { background: #eef3e6; color: #5d7c46; }
+  .ico-clear    { background: #f5e8e6; color: #b25a48; }
+  .ico-privacy  { background: #e8eef3; color: #4a6d8a; }
+  .ico-terms    { background: #f0ede4; color: #7a6a4a; }
+  .ico-weather  { background: #e6eef0; color: #4a7a8a; }
+  .ico-safety   { background: #f5eee0; color: #a67a3a; }
+  .ico-feedback { background: #eef3e6; color: #5d7c46; }
+  .ico-about    { background: #f0ede4; color: #6b6b6b; }
+  .ico-signout  { background: #f0ede4; color: #6b6b6b; }
+  .ico-delete   { background: #f5e8e6; color: #b25a48; }
+
+  /* Toggle */
+  .toggle {
+    width: 51px; height: 31px;
+    background: #e5e0d3;
+    border-radius: 31px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+  }
+  .toggle::after {
+    content: "";
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 27px; height: 27px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.1);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .toggle.on { background: #5d7c46; }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* Danger row (subtle, buried) */
+  .row.danger .label { color: #c44545; }
+  .row.signout .label { color: #6b6b6b; }
+
+  /* Section grouping hint - the friendlier "help" section label */
+  .friendly-hint {
+    font-size: 12px;
+    color: #8a8578;
+    padding: 4px 8px 18px;
+    line-height: 1.5;
+    font-style: italic;
+  }
+
+  /* Version footer (5-tap target) */
+  .version-footer {
+    text-align: center;
+    padding: 30px 0 20px;
+    font-size: 12px;
+    color: #b8b0a4;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* Home indicator */
+  .home-indicator {
+    position: absolute;
+    bottom: 8px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 5px;
+    background: #1a1a1a;
+    border-radius: 3px;
+    opacity: 0.8;
+  }
+
+  /* Rationale block */
+  .rationale {
+    max-width: 720px;
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 36px 40px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.06);
+    line-height: 1.65;
+  }
+  .rationale h2 {
+    font-size: 24px;
+    margin: 0 0 8px;
+    color: #1a1a1a;
+    letter-spacing: -0.4px;
+  }
+  .rationale .subtitle {
+    font-size: 14px;
+    color: #6b6b6b;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #f0ebe2;
+  }
+  .rationale h3 {
+    font-size: 16px;
+    margin: 24px 0 8px;
+    color: #5d7c46;
+    letter-spacing: -0.2px;
+  }
+  .rationale h3:first-of-type { margin-top: 0; }
+  .rationale p { margin: 0 0 12px; color: #333; font-size: 15px; }
+  .rationale ul { padding-left: 20px; margin: 8px 0 12px; }
+  .rationale li { margin-bottom: 6px; color: #333; font-size: 15px; }
+  .rationale .persona-quote {
+    background: #faf7f2;
+    border-left: 3px solid #5d7c46;
+    padding: 14px 18px;
+    margin: 16px 0 20px;
+    font-style: italic;
+    color: #555;
+    font-size: 14px;
+    border-radius: 0 8px 8px 0;
+  }
+  .rationale code {
+    background: #f0ebe2;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: "SF Mono", Menlo, monospace;
+  }
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <strong>Mockup 1 — Novice user perspective</strong>
+  <span>Designed for Sarah, 35, weekend day-hiker. Warm, plain-English labels. No shouty red buttons. Destructive actions buried at bottom.</span>
+</div>
+
+<div class="stage">
+
+  <!-- iPhone frame -->
+  <div class="phone">
+    <div class="screen">
+      <div class="island"></div>
+
+      <div class="statusbar">
+        <span>9:41</span>
+        <span class="icons">
+          <svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="6" width="3" height="5" rx="0.5" fill="#1a1a1a"/><rect x="4.5" y="4" width="3" height="7" rx="0.5" fill="#1a1a1a"/><rect x="9" y="2" width="3" height="9" rx="0.5" fill="#1a1a1a"/><rect x="13.5" y="0" width="3" height="11" rx="0.5" fill="#1a1a1a"/></svg>
+          <svg width="15" height="11" viewBox="0 0 15 11"><path d="M7.5 2C4.5 2 2 3.5 0.5 5.5L2 7C3 5.5 5 4.5 7.5 4.5C10 4.5 12 5.5 13 7L14.5 5.5C13 3.5 10.5 2 7.5 2ZM7.5 6C6 6 4.5 6.5 3.5 7.5L5 9C5.5 8.5 6.5 8 7.5 8C8.5 8 9.5 8.5 10 9L11.5 7.5C10.5 6.5 9 6 7.5 6ZM7.5 9.5L5.5 11L7.5 11L9.5 11L7.5 9.5Z" fill="#1a1a1a"/></svg>
+          <span style="border: 1.5px solid #1a1a1a; border-radius: 3px; padding: 1px 4px; font-size: 10px; font-weight: 700; margin-left: 2px;">86</span>
+        </span>
+      </div>
+
+      <div class="navbar">
+        <span class="back">‹ Back</span>
+        <span></span>
+      </div>
+
+      <div class="page-title">Settings</div>
+
+      <div class="scroll">
+
+        <!-- Identity card -->
+        <div class="identity">
+          <div class="avatar">S</div>
+          <div class="identity-info">
+            <div class="identity-name">Sarah Cooper</div>
+            <div class="identity-email">sarah.c@gmail.com</div>
+            <div class="identity-link">
+              <span>Change password</span>
+              <span class="chev">›</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1. Preferences → "Your app" -->
+        <div class="section-label">Your app</div>
+        <div class="card">
+          <div class="row">
+            <div class="ico ico-units">📏</div>
+            <div class="label-wrap">
+              <div class="label">Distance &amp; height</div>
+              <div class="hint">Kilometres or miles</div>
+            </div>
+            <span class="value">Kilometres</span>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <div class="ico ico-night">🌙</div>
+            <div class="label-wrap">
+              <div class="label">Dark mode</div>
+              <div class="hint">Easier on the eyes at dusk</div>
+            </div>
+            <div class="toggle" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="row">
+            <div class="ico ico-haptic">📳</div>
+            <div class="label-wrap">
+              <div class="label">Vibration feedback</div>
+              <div class="hint">Little buzz when you tap buttons</div>
+            </div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+        </div>
+
+        <!-- 2. Memory → "Your walks" -->
+        <div class="section-label">Your walks</div>
+        <div class="card">
+          <div class="row" style="cursor: default;">
+            <div class="ico ico-map">🗺️</div>
+            <div class="label-wrap">
+              <div class="label">47 places explored</div>
+              <div class="hint">3 cairns still to plant</div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="ico ico-clear">🧹</div>
+            <div class="label-wrap">
+              <div class="label">Clear my walk history</div>
+              <div class="hint">Start fresh — we'll ask you to confirm</div>
+            </div>
+            <span class="chev">›</span>
+          </div>
+        </div>
+
+        <!-- 3. About & Legal → "Help & info" -->
+        <div class="section-label">Help &amp; info</div>
+        <div class="card">
+          <div class="row">
+            <div class="ico ico-weather">☀️</div>
+            <div class="label-wrap">
+              <div class="label">Check the weather</div>
+              <div class="hint">Opens MetService — always check before you head out</div>
+            </div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <div class="ico ico-safety">🚨</div>
+            <div class="label-wrap">
+              <div class="label">Report a safety concern</div>
+              <div class="hint">Track hazard, missing marker, or emergency</div>
+            </div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <div class="ico ico-feedback">💬</div>
+            <div class="label-wrap">
+              <div class="label">Tell us what you think</div>
+              <div class="hint">We read every message</div>
+            </div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <div class="ico ico-privacy">🛡️</div>
+            <div class="label-wrap">
+              <div class="label">How we handle your data</div>
+              <div class="hint">Privacy policy in plain English</div>
+            </div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <div class="ico ico-terms">📄</div>
+            <div class="label-wrap">
+              <div class="label">Terms of use</div>
+            </div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <div class="ico ico-about">ℹ️</div>
+            <div class="label-wrap">
+              <div class="label">About Cairn</div>
+              <div class="hint">Version, credits, and the story behind us</div>
+            </div>
+            <span class="chev">›</span>
+          </div>
+        </div>
+
+        <!-- 4. Danger zone → "Account" (softened label) -->
+        <div class="section-label">Account</div>
+        <div class="card">
+          <div class="row signout">
+            <div class="ico ico-signout">⏻</div>
+            <div class="label-wrap">
+              <div class="label">Sign out</div>
+              <div class="hint">You can sign back in anytime — your walks stay saved</div>
+            </div>
+          </div>
+          <div class="row danger">
+            <div class="ico ico-delete">🗑️</div>
+            <div class="label-wrap">
+              <div class="label">Delete my account</div>
+              <div class="hint">7 days to change your mind before it's permanent</div>
+            </div>
+            <span class="chev" style="color: #d8a8a8;">›</span>
+          </div>
+        </div>
+
+        <div class="friendly-hint">
+          Tap the version below 5 times to open developer tools.
+        </div>
+
+        <div class="version-footer">
+          Cairn v1.0.0 (build 2026.10.15)
+        </div>
+
+      </div>
+
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <!-- Rationale -->
+  <div class="rationale">
+    <h2>Design rationale — Novice lens</h2>
+    <div class="subtitle">
+      Every decision below traces back to Sarah: 35, office worker, three walks under her belt, opens Settings when something confuses her.
+    </div>
+
+    <div class="persona-quote">
+      "I just want to change one thing. I don't want to feel like I'm going to break something. And please don't make me read a wall of text."
+    </div>
+
+    <h3>1. Section labels rewritten in plain English</h3>
+    <p>
+      The IA draft used engineering labels (Preferences, Memory, About &amp; Legal, Danger zone). Sarah doesn't parse "Preferences" — she scans for the thing she needs. So:
+    </p>
+    <ul>
+      <li><code>Preferences</code> → <strong>Your app</strong> (things about how the app behaves)</li>
+      <li><code>Memory</code> → <strong>Your walks</strong> (Sarah calls them walks, not "memory")</li>
+      <li><code>About &amp; Legal</code> → <strong>Help &amp; info</strong> (help comes first — she's looking for help before she's looking for legal)</li>
+      <li><code>Danger zone</code> → <strong>Account</strong> (the word "danger" scares her; grouping under "Account" is the standard iOS pattern she already knows from Apple ID)</li>
+    </ul>
+
+    <h3>2. Row-level hints under every meaningful label</h3>
+    <p>
+      Sarah opens Settings, sees "Haptic feedback", and thinks: <em>what does that even mean?</em> Under each row I added a one-line hint in the same warm voice: "Little buzz when you tap buttons." She never has to guess.
+    </p>
+
+    <h3>3. Order flipped — help before legal</h3>
+    <p>
+      In the IA draft, Privacy Policy comes first. But Sarah opens Settings for <em>help</em> 10x more often than for <em>legal</em>. I put Weather / Safety / Feedback at the top of "Help &amp; info", then Privacy / Terms / About below. Legal is still discoverable — it's just not first.
+    </p>
+
+    <h3>4. MetService weather framed as advice, not a link</h3>
+    <p>
+      "Check the weather — always check before you head out" is written like a trusted friend tells her. This is a NZ-specific safety norm (DOC guidance). It builds Cairn's credibility as an outdoor app that actually cares.
+    </p>
+
+    <h3>5. Destructive actions buried, colours muted</h3>
+    <p>
+      "Clear my walk history" uses a soft warm-red icon background (<code>#f5e8e6</code> / <code>#b25a48</code>) — not the aggressive iOS red (<code>#ff3b30</code>). It's still discoverable but doesn't scream. "Delete my account" gets slightly more saturated red text (<code>#c44545</code>) because it deserves gravity, but the chevron is a pale pink so the row doesn't visually shout across the whole page.
+    </p>
+    <p>
+      Sarah's biggest fear is "did I just delete everything?" — so both destructive rows have hints promising a confirmation step or 7-day recovery window.
+    </p>
+
+    <h3>6. Sign out has a reassuring hint</h3>
+    <p>
+      "You can sign back in anytime — your walks stay saved." Novices sometimes think signing out will lose their data. One sentence solves it.
+    </p>
+
+    <h3>7. Identity card at top — one-glance identity check</h3>
+    <p>
+      Letter avatar (S) in Cairn green, name, email, then a subtle "Change password" link under a divider. Sarah confirms she's in the right account before making changes. SSO users won't see the Change password link.
+    </p>
+
+    <h3>8. Icon palette — warm, muted, no warnings</h3>
+    <p>
+      Every icon uses a soft tinted background matching Cairn's palette (moss green, warm cream, dusty blue, soft rust). Zero use of stark iOS system colours. The destructive icons use the same muted rust as trail markers, not a fire-engine red.
+    </p>
+
+    <h3>9. Debug hidden behind a hint, not a mystery</h3>
+    <p>
+      A tiny italic line above the version tells Sarah what tapping 5x does — so if she accidentally triggers it, she isn't scared. Discoverable but non-intrusive.
+    </p>
+
+    <h3>10. What I explicitly did NOT do</h3>
+    <ul>
+      <li>No sub-section subheaders inside cards (Sarah scans the whole card as one unit)</li>
+      <li>No "advanced" or "developer" jargon anywhere visible</li>
+      <li>No red "Delete" filled buttons — only text colour changes</li>
+      <li>No overwhelming section per screen — 4 cards fit her mental model of "what kind of thing"</li>
+    </ul>
+
+    <h3>Open questions for you</h3>
+    <ul>
+      <li>Is "Your walks" too casual? Alternative: "My walks" or "Walk history"</li>
+      <li>Should the version string include the OTA build (<code>2026.10.15</code>) at launch, or hide until debug is unlocked?</li>
+      <li>Should the identity card show the current subscription tier (Founder / Free / Paid) for the paid tier launch, or wait until post-MVP?</li>
+    </ul>
+  </div>
+
+</div>
+
+</body>
+</html>

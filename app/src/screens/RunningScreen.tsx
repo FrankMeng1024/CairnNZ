@@ -67,12 +67,16 @@ function useRunKeepAwake() {
 function PulsingDot({ active }: { active: boolean }) {
   const pulse = useRef(new Animated.Value(0.8)).current;
   useEffect(() => {
-    Animated.loop(
+    // O17 P-RENDER-11: stop the loop on unmount. Without cleanup the loop
+    // keeps running past component unmount and leaks a native driver anim.
+    const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 1.2, duration: 1000, useNativeDriver: true }),
         Animated.timing(pulse, { toValue: 0.8, duration: 1000, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    anim.start();
+    return () => anim.stop();
   }, []);
   return (
     <Animated.View style={[runStyles.pulsingDot, { transform: [{ scale: pulse }], backgroundColor: active ? Colors.success : Colors.textMuted }]} />

@@ -50,7 +50,7 @@ function StartAnchorHint() {
   if (!anchor) return null;
   return (
     <Text style={styles.anchorHint}>
-      已走 {distM < 1000 ? `${Math.round(distM)}m` : `${(distM/1000).toFixed(1)}km`}
+      Walked {distM < 1000 ? `${Math.round(distM)}m` : `${(distM/1000).toFixed(1)}km`}
     </Text>
   );
 }

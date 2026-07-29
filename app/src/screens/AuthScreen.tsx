@@ -313,7 +313,13 @@ function PasswordInput({ value, onChangeText, placeholder, error, onBlur, isNew 
           onFocus={() => setFocused(true)}
           onBlur={() => { setFocused(false); onBlur?.(); }}
         />
-        <TouchableOpacity style={formStyles.eyeBtn} onPress={() => setShow(v => !v)}>
+        <TouchableOpacity
+          style={formStyles.eyeBtn}
+          onPress={() => setShow(v => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={show ? 'Hide password' : 'Show password'}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Icon name={show ? 'EyeOff' : 'Eye'} size={IconSize.sm} color={Colors.textMuted} strokeWidth={1.8} />
         </TouchableOpacity>
       </View>
@@ -574,7 +580,8 @@ export function AuthScreen() {
 
   const validateEmail = (val: string) => {
     if (!val.trim()) return 'Email is required';
-    if (view === 'register' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) return 'Please enter a valid email';
+    // O17: validate email format on both login and register (was register-only).
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) return 'Please enter a valid email';
     return '';
   };
 
@@ -729,7 +736,7 @@ export function AuthScreen() {
       } else if (msg) {
         setApiError(msg);
       } else {
-        setApiError('Something went wrong. Please try again.');
+        setApiError('We couldn\'t reach Cairn. Check your connection and try again.');
       }
     } finally {
       setLoading(false);
@@ -944,7 +951,7 @@ export function AuthScreen() {
         <Icon name="CircleCheck" size={56} color={Colors.primary} strokeWidth={1.5} />
         <Text style={[styles.appName, { marginTop: 16, marginBottom: 8 }]}>Welcome, {welcomeName}!</Text>
         <Text style={[styles.tagline, { textAlign: 'center', color: Colors.textSecondary, marginBottom: 4 }]}>Nau mai, haere mai</Text>
-        <Text style={[styles.tagline, { textAlign: 'center', color: Colors.textSecondary }]}>Your track starts now.</Text>
+        <Text style={[styles.tagline, { textAlign: 'center', color: Colors.textSecondary }]}>Welcome to Cairn. Ready for your first hike?</Text>
       </SafeAreaView>
     );
   }

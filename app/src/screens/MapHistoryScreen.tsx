@@ -492,7 +492,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
   const handleLongPressAbandon = () => {
     if (!isPendingSync) return;
     Alert.alert(
-      'Discard this activity?',
+      'Discard this hike?',
       '',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -503,7 +503,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
             // Second confirmation
             Alert.alert(
               'Confirm discard?',
-              'This activity will be permanently deleted and cannot be recovered.',
+              'This hike will be permanently deleted and cannot be recovered.',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -548,7 +548,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
                   <Icon name={isRun ? 'Footprints' : 'Mountain'} size={20} color={actColor} strokeWidth={2} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={cardStyles.routeCardTitle}>{actLabel}</Text>
+                  <Text style={cardStyles.routeCardTitle} numberOfLines={1}>{actLabel}</Text>
                   <Text style={cardStyles.routeCardSubtitle}>
                     {distStr} · {durationStr}
                   </Text>
@@ -714,7 +714,7 @@ function FlagDetailSheet({ marker, onClose, onDelete }: {
         </View>
         {/* Note */}
         <Text style={sheetStyles.noteLabel}>Note</Text>
-        <Text style={sheetStyles.noteText}>{marker.note || 'No note added'}</Text>
+        <Text style={sheetStyles.noteText} numberOfLines={4}>{marker.note || 'No note yet'}</Text>
         {/* Date */}
         <Text style={sheetStyles.dateLine}>Planted: {dateStr}</Text>
         {/* Delete */}
@@ -1017,7 +1017,7 @@ export function MapHistoryScreen() {
         {!selectedSession && (
           <View style={styles.mapLabelWrap}>
             <Icon name="Map" size={32} color={Colors.primary} strokeWidth={1.3} />
-            <Text style={styles.mapLabel}>Route Map</Text>
+            <Text style={styles.mapLabel}>History</Text>
             <Text style={styles.mapSubLabel}>Select a route below to view</Text>
           </View>
         )}
@@ -1081,16 +1081,19 @@ export function MapHistoryScreen() {
       <SafeAreaView style={styles.topBar} edges={['top']}>
         <View style={styles.topRow}>
           <BackButton variant="pill" />
-          <Text style={styles.topTitle}>{targetSessionId ? 'Activity Detail' : 'Route Map'}</Text>
-          {!targetSessionId && (
+          <Text style={styles.topTitle}>{targetSessionId ? 'Activity Detail' : 'History'}</Text>
+          {/* O17 COPY:C-70: Plan Route button was a stub — hidden in prod, dev-only preview */}
+          {!targetSessionId && __DEV__ && (
             <TouchableOpacity
               style={styles.planBtn}
               onPress={() => Alert.alert('Plan Route', 'Route planning coming soon')}
+              accessibilityLabel="Plan a new route (dev preview)"
             >
               <Icon name="Route" size={14} color="#fff" strokeWidth={2} />
               <Text style={styles.planBtnText}>Plan</Text>
             </TouchableOpacity>
           )}
+          {(!targetSessionId && !__DEV__) && <View style={{ width: 60 }} />}
           {targetSessionId && <View style={{ width: 60 }} />}
         </View>
 
@@ -1209,7 +1212,7 @@ export function MapHistoryScreen() {
             {sessions.length === 0 ? (
               <View style={styles.emptyState}>
                 <Icon name="Route" size={40} color={Colors.textMuted} strokeWidth={1.2} />
-                <Text style={styles.emptyTitle}>No sessions yet</Text>
+                <Text style={styles.emptyTitle}>No hikes yet</Text>
                 <Text style={styles.emptySubtitle}>Start hiking or running to see your routes here</Text>
                 <PressBtn
                   style={styles.emptyCta}

@@ -244,6 +244,19 @@ export async function saveHikeAtomic(
     throw err;
   }
   const body = await res.json();
+  // O17 EDGE_HUNT #22: validate response shape before marking session
+  // synced. Pre-O17, a malformed backend reply (missing session_id or
+  // ok=false) would still be cast to SaveHikeAtomicResult and the client
+  // would call markSynced(remoteId=undefined) → sessions list corrupted.
+  // Now: if the reply doesn't match the contract, throw so the retry /
+  // pending-sync path takes over.
+  if (!body || body.ok !== true || typeof body.session_id !== 'number') {
+    const err: any = new Error(
+      `saveHikeAtomic malformed response: ${JSON.stringify(body).slice(0, 200)}`,
+    );
+    err.malformed = true;
+    throw err;
+  }
   return body as SaveHikeAtomicResult;
 }
 

@@ -588,7 +588,7 @@ export function HikingScreen() {
     closeRoutePicker();
   };
 
-  const selectedRouteName = routes.find(r => r.id === selectedRoute)?.name ?? 'Free Hiking';
+  const selectedRouteName = routes.find(r => r.id === selectedRoute)?.name ?? 'Free Hike';
 
   // v412: 两个 return 分支 (phase='select' early return + Phase 2 主 return) 都需要挂
   // UnfinishedRecoveryModal, 抽成一个 node 避免复制粘贴导致 onContinue/onDiscard 逻辑分叉。
@@ -776,7 +776,7 @@ export function HikingScreen() {
                     <Icon name="Target" size={16} color={Colors.primary} strokeWidth={2} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.routePickerName}>Free Hiking</Text>
+                    <Text style={styles.routePickerName}>Free Hike</Text>
                     <Text style={styles.routePickerMeta}>No route · explore freely</Text>
                   </View>
                   {selectedRoute === null && <Icon name="Check" size={16} color={Colors.primary} strokeWidth={2.5} />}
@@ -933,7 +933,7 @@ export function HikingScreen() {
             {selectedRoute && (
               <PressBtn
                 style={styles.routeSwitchBtn}
-                onPress={() => Alert.alert('Route', activeRoute?.name ?? 'Free Hiking', [
+                onPress={() => Alert.alert('Route', activeRoute?.name ?? 'Free Hike', [
                   { text: 'Switch to Free', onPress: () => setSelectedRoute(null) },
                   { text: 'Cancel', style: 'cancel' },
                 ])}
@@ -944,6 +944,8 @@ export function HikingScreen() {
             )}
             <PressBtn
               style={styles.stopBtn}
+              accessibilityLabel="Stop hike"
+              accessibilityRole="button"
               onPress={() => {
                 haptic.impact('medium');
                 // v120: tapping Stop = pause everything immediately.

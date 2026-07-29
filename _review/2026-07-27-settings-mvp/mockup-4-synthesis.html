@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Cairn Settings — Final Synthesis</title>
+<style>
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", sans-serif;
+    background: #ece7de;
+    color: #1a1a1a;
+    min-height: 100vh;
+  }
+
+  /* Top banner */
+  .banner {
+    background: linear-gradient(135deg, #5d7c46 0%, #6b8a52 100%);
+    color: #faf7f2;
+    padding: 22px 32px;
+    text-align: center;
+    letter-spacing: 0.3px;
+  }
+  .banner strong { display: block; font-size: 18px; font-weight: 600; margin-bottom: 6px; letter-spacing: 0.2px; }
+  .banner span { opacity: 0.9; font-size: 14px; }
+
+  /* Layout */
+  .stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 80px;
+    gap: 40px;
+  }
+
+  /* iPhone 15 Pro frame */
+  .phone {
+    width: 413px;
+    height: 872px;
+    background: #0a0a0a;
+    border-radius: 55px;
+    padding: 10px;
+    box-shadow:
+      0 30px 70px rgba(0,0,0,0.35),
+      0 8px 20px rgba(0,0,0,0.15),
+      inset 0 0 0 2px #2a2a2a;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .phone::before {
+    content: ""; position: absolute; left: -3px; top: 180px;
+    width: 3px; height: 60px; background: #1a1a1a; border-radius: 2px 0 0 2px;
+  }
+  .phone::after {
+    content: ""; position: absolute; right: -3px; top: 220px;
+    width: 3px; height: 100px; background: #1a1a1a; border-radius: 0 2px 2px 0;
+  }
+  .screen {
+    width: 393px;
+    height: 852px;
+    background: #faf7f2;
+    border-radius: 45px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .island {
+    position: absolute;
+    top: 11px; left: 50%; transform: translateX(-50%);
+    width: 124px; height: 37px;
+    background: #0a0a0a;
+    border-radius: 20px;
+    z-index: 10;
+  }
+
+  .statusbar {
+    height: 54px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 30px 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a1a;
+    letter-spacing: -0.2px;
+  }
+  .statusbar .icons { display: flex; gap: 5px; align-items: center; font-size: 13px; }
+
+  .navbar {
+    padding: 8px 20px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .navbar .back {
+    color: #5d7c46;
+    font-size: 17px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+  }
+  .navbar .back:hover { opacity: 0.7; }
+
+  .page-title {
+    padding: 4px 20px 18px;
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.8px;
+    color: #1a1a1a;
+  }
+
+  .scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 16px 20px;
+  }
+  .scroll::-webkit-scrollbar { width: 0; }
+
+  /* Identity card — top */
+  .identity {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 16px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 6px 16px rgba(93,124,70,0.06);
+    margin-bottom: 24px;
+  }
+  .avatar {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7a9860 0%, #5d7c46 100%);
+    color: #faf7f2;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(93,124,70,0.25);
+  }
+  .identity-info { flex: 1; min-width: 0; }
+  .identity-name { font-size: 17px; font-weight: 600; color: #1a1a1a; letter-spacing: -0.2px; }
+  .identity-email { font-size: 14px; color: #6b6b6b; margin-top: 2px; }
+  .identity-action {
+    font-size: 14px;
+    color: #5d7c46;
+    display: flex; align-items: center; gap: 4px;
+    cursor: pointer;
+    padding: 6px 4px;
+    white-space: nowrap;
+  }
+  .identity-action:hover { opacity: 0.7; }
+  .identity-action .chev { color: #b8b0a4; font-size: 13px; }
+
+  /* Section */
+  .section-label {
+    font-size: 12px;
+    color: #8a8578;
+    padding: 0 6px 8px;
+    letter-spacing: 0.4px;
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+  .section-caption {
+    font-size: 12px;
+    color: #8a8578;
+    padding: 8px 6px 0;
+    line-height: 1.5;
+  }
+  .card {
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+    margin-bottom: 22px;
+    overflow: hidden;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    padding: 13px 16px;
+    gap: 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+    min-height: 52px;
+  }
+  .row:hover { background: #faf7f2; }
+  .row + .row { border-top: 1px solid #f2ede4; }
+  .row .ico {
+    width: 28px; height: 28px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .row.no-icon .label-wrap { padding-left: 2px; }
+  .row .label-wrap { flex: 1; min-width: 0; }
+  .row .label { font-size: 16px; color: #1a1a1a; letter-spacing: -0.2px; }
+  .row .sub { font-size: 12px; color: #8a8578; margin-top: 2px; line-height: 1.35; }
+  .row .value { font-size: 15px; color: #8a8578; margin-right: 2px; }
+  .row .chev { color: #c8c1b3; font-size: 16px; font-weight: 300; }
+  .row .ext { color: #b8b0a4; font-size: 13px; }
+
+  /* Muted, warm icon tiles (category rows only) */
+  .ico-units    { background: #eef3e6; color: #5d7c46; }
+  .ico-night    { background: #e8e6f0; color: #5f5b8a; }
+  .ico-haptic   { background: #f2ece0; color: #8a6e3b; }
+  .ico-memory   { background: #eef3e6; color: #5d7c46; }
+  .ico-privacy  { background: #e8eef3; color: #4a6d8a; }
+  .ico-terms    { background: #f0ede4; color: #7a6a4a; }
+  .ico-weather  { background: #e6eef0; color: #4a7a8a; }
+  .ico-safety   { background: #f5eee0; color: #a67a3a; }
+  .ico-feedback { background: #eef3e6; color: #5d7c46; }
+  .ico-about    { background: #f0ede4; color: #6b6b6b; }
+  .ico-debug    { background: #ede8de; color: #7a6a4a; }
+
+  /* Toggle */
+  .toggle {
+    width: 51px; height: 31px;
+    background: #e5e0d3;
+    border-radius: 31px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+  }
+  .toggle::after {
+    content: "";
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 27px; height: 27px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.1);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .toggle.on { background: #5d7c46; }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* Memory stats row (readonly, no chevron) */
+  .row.readonly { cursor: default; }
+  .row.readonly:hover { background: transparent; }
+  .row.readonly .stats {
+    font-size: 15px;
+    color: #6b6b6b;
+    letter-spacing: -0.1px;
+  }
+
+  /* Subtle destructive text (Clear memory) */
+  .row.subtle-danger .label { color: #b25a48; }
+
+  /* Delete Account — walled off, own section, red top-border */
+  .card.danger-zone {
+    border-top: 2px solid #c44545;
+    box-shadow: 0 1px 3px rgba(196,69,69,0.08), 0 4px 12px rgba(196,69,69,0.05);
+  }
+  .card.danger-zone .row .label { color: #c44545; font-weight: 500; }
+  .card.danger-zone .row .sub { color: #a67060; }
+
+  /* Sign out — muted grey text */
+  .row.signout .label { color: #6b6b6b; }
+
+  /* Developer section — softer than DEBUG */
+  .card.developer {
+    background: #fdfbf6;
+    border: 1px dashed #d4cdba;
+    box-shadow: none;
+  }
+  .developer-badge {
+    display: inline-block;
+    background: #ede8de;
+    color: #7a6a4a;
+    font-size: 10px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    vertical-align: middle;
+    font-weight: 600;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 22px 20px 24px;
+    font-size: 13px;
+    color: #8a8578;
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  /* Home indicator */
+  .home-indicator {
+    position: absolute;
+    bottom: 8px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 5px;
+    background: #1a1a1a;
+    border-radius: 3px;
+    opacity: 0.8;
+  }
+
+  /* Rationale block */
+  .rationale {
+    max-width: 780px;
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 40px 44px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.06);
+    line-height: 1.65;
+  }
+  .rationale h2 {
+    font-size: 26px;
+    margin: 0 0 8px;
+    color: #1a1a1a;
+    letter-spacing: -0.4px;
+  }
+  .rationale .subtitle {
+    font-size: 14px;
+    color: #6b6b6b;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #f0ebe2;
+  }
+  .rationale h3 {
+    font-size: 16px;
+    margin: 24px 0 10px;
+    color: #5d7c46;
+    letter-spacing: -0.2px;
+  }
+  .rationale h3:first-of-type { margin-top: 0; }
+  .rationale p { margin: 0 0 12px; color: #333; font-size: 15px; }
+  .rationale ul { padding-left: 22px; margin: 8px 0 14px; }
+  .rationale li { margin-bottom: 8px; color: #333; font-size: 15px; }
+  .rationale li strong { color: #1a1a1a; }
+  .rationale .versus {
+    background: #faf7f2;
+    border-left: 3px solid #5d7c46;
+    padding: 14px 18px;
+    margin: 14px 0 18px;
+    color: #444;
+    font-size: 14px;
+    border-radius: 0 8px 8px 0;
+  }
+  .rationale .versus strong { color: #5d7c46; display: block; margin-bottom: 4px; font-size: 13px; letter-spacing: 0.3px; text-transform: uppercase; }
+  .rationale code {
+    background: #f0ebe2;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: "SF Mono", Menlo, monospace;
+  }
+  .devnote {
+    background: #fdfbf6;
+    border: 1px dashed #d4cdba;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #6b6b6b;
+    margin: 18px 0 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <strong>Final synthesis — recommended for Cairn MVP</strong>
+  <span>Best of novice warmth + power precision + minimal restraint. Developer section shown unlocked.</span>
+</div>
+
+<div class="stage">
+
+  <!-- PHONE -->
+  <div class="phone">
+    <div class="screen">
+      <div class="island"></div>
+
+      <div class="statusbar">
+        <span>9:41</span>
+        <div class="icons"><span>••</span><span>􀇴</span><span>􀛨</span></div>
+      </div>
+
+      <div class="navbar">
+        <div class="back">‹ Back</div>
+        <div></div>
+      </div>
+
+      <div class="page-title">Settings</div>
+
+      <div class="scroll">
+
+        <!-- Identity card -->
+        <div class="identity">
+          <div class="avatar">F</div>
+          <div class="identity-info">
+            <div class="identity-name">Frank Meng</div>
+            <div class="identity-email">frank@cairn.app</div>
+          </div>
+          <div class="identity-action">Change password <span class="chev">›</span></div>
+        </div>
+
+        <!-- Section 1: Preferences -->
+        <div class="section-label">Preferences</div>
+        <div class="card">
+          <div class="row">
+            <div class="ico ico-units">􀋲</div>
+            <div class="label-wrap"><div class="label">Units</div></div>
+            <div class="value">Metric</div>
+            <div class="chev">›</div>
+          </div>
+          <div class="row">
+            <div class="ico ico-night">􀆹</div>
+            <div class="label-wrap"><div class="label">Night mode</div></div>
+            <div class="toggle"></div>
+          </div>
+          <div class="row">
+            <div class="ico ico-haptic">􀫸</div>
+            <div class="label-wrap"><div class="label">Haptic feedback</div></div>
+            <div class="toggle on"></div>
+          </div>
+        </div>
+
+        <!-- Section 2: Memory -->
+        <div class="section-label">Memory</div>
+        <div class="card">
+          <div class="row readonly">
+            <div class="ico ico-memory">􀋂</div>
+            <div class="label-wrap"><div class="label">Your cairns</div></div>
+            <div class="stats">47 places · 3 planted</div>
+          </div>
+          <div class="row subtle-danger no-icon">
+            <div class="label-wrap"><div class="label">Clear all memory</div></div>
+            <div class="chev">›</div>
+          </div>
+        </div>
+
+        <!-- Section 3: About & Legal -->
+        <div class="section-label">About &amp; Legal</div>
+        <div class="card">
+          <div class="row">
+            <div class="ico ico-privacy">􀉼</div>
+            <div class="label-wrap"><div class="label">Privacy Policy</div></div>
+            <div class="chev">›</div>
+          </div>
+          <div class="row">
+            <div class="ico ico-terms">􀉩</div>
+            <div class="label-wrap"><div class="label">Terms of Service</div></div>
+            <div class="chev">›</div>
+          </div>
+          <div class="row">
+            <div class="ico ico-weather">􀇥</div>
+            <div class="label-wrap"><div class="label">MetService weather</div></div>
+            <div class="ext">↗</div>
+          </div>
+          <div class="row">
+            <div class="ico ico-safety">􀊸</div>
+            <div class="label-wrap"><div class="label">Report a safety issue</div></div>
+            <div class="ext">↗</div>
+          </div>
+          <div class="row">
+            <div class="ico ico-feedback">􀌤</div>
+            <div class="label-wrap"><div class="label">Send feedback</div></div>
+            <div class="chev">›</div>
+          </div>
+          <div class="row">
+            <div class="ico ico-about">􀅴</div>
+            <div class="label-wrap"><div class="label">About Cairn</div></div>
+            <div class="value">v0.2.5 · O11</div>
+            <div class="chev">›</div>
+          </div>
+        </div>
+
+        <!-- Section 4: Account -->
+        <div class="section-label">Account</div>
+        <div class="card">
+          <div class="row signout no-icon">
+            <div class="label-wrap"><div class="label">Sign out</div></div>
+            <div class="chev">›</div>
+          </div>
+        </div>
+
+        <!-- Section 5: Delete Account (walled off) -->
+        <div class="card danger-zone">
+          <div class="row no-icon">
+            <div class="label-wrap">
+              <div class="label">Delete account</div>
+              <div class="sub">7-day cool-off period · you can cancel</div>
+            </div>
+            <div class="chev">›</div>
+          </div>
+        </div>
+
+        <!-- Section 6: Developer (unlocked after 5-tap on About Cairn) -->
+        <div class="section-label">Developer <span class="developer-badge">Unlocked</span></div>
+        <div class="card developer">
+          <div class="row">
+            <div class="ico ico-debug">􀤆</div>
+            <div class="label-wrap"><div class="label">Debug mode</div></div>
+            <div class="toggle"></div>
+          </div>
+          <div class="row">
+            <div class="ico ico-debug">􀤂</div>
+            <div class="label-wrap"><div class="label">Debug tools</div></div>
+            <div class="chev">›</div>
+          </div>
+        </div>
+        <div class="section-caption">Only for development and QA.</div>
+
+        <!-- Footer -->
+        <div class="footer">Ngā mihi nui — thanks for using Cairn.</div>
+
+      </div>
+
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <!-- RATIONALE -->
+  <div class="rationale">
+    <h2>Why this is the recommended synthesis</h2>
+    <div class="subtitle">Target user: 25–55 NZ tramping community. Not a novice, not a hacker — a grown-up who wants their app to work and get out of the way.</div>
+
+    <h3>Language: grown-up, not childish</h3>
+    <p>Section names are plain English adult vocabulary: <strong>Preferences, Memory, About &amp; Legal, Account</strong>. No "Your app", no "Your walks", no "Distance &amp; height". A 45-year-old tramper reading "Distance &amp; height" instead of "Units" will feel talked-down-to — this is the demographic that reads MetService discussion forums and DOC route notes.</p>
+    <div class="versus">
+      <strong>vs Mockup 1 (Novice)</strong>
+      Kept the warm cream palette and card grouping. Dropped the "Your app" / "Your walks" / "Distance &amp; height" relabels — those cross the line from friendly into patronising for the actual target user.
+    </div>
+
+    <h3>Icons: only where they help scanning</h3>
+    <p>Rule applied: <strong>category rows get an icon, verb rows don't.</strong> "Units", "Night mode", "Privacy Policy" — these are categories, a tile helps you locate them quickly. "Change password", "Clear all memory", "Sign out", "Delete account" — these are verbs you already read; adding an icon is decoration and adds visual noise.</p>
+    <div class="versus">
+      <strong>vs Mockup 3 (Minimal)</strong>
+      Kept the whitespace discipline and rejection of decorative icons on action rows. Added back category icons because with 6 rows in About &amp; Legal, pure text becomes a scanning burden for a user on a rainy trailhead with cold hands.
+    </div>
+
+    <h3>Sub-captions: only when they carry real info</h3>
+    <p>The one sub-caption in the whole screen is on <strong>Delete account: "7-day cool-off period · you can cancel"</strong> — that's genuinely useful because it reduces fear-of-clicking and it's true. No fabricated "saves ~18% battery" captions, no marketing prose.</p>
+    <p>Version metadata sits inline on About Cairn as <code>v0.2.5 · O11</code> — real data, correct location (right side value slot), also serving as the 5-tap Developer unlock target.</p>
+    <div class="versus">
+      <strong>vs Mockup 2 (Power)</strong>
+      Kept the precise version string and the walled-off danger zone with a visible red top-border. Dropped the fake performance sub-captions ("saves ~18% battery", "reduces GPS drift") — these are unverified promises and violate Cairn's "no fake promises" rule.
+    </div>
+
+    <h3>Memory: one line, real data only</h3>
+    <p><strong>"47 places · 3 planted"</strong> — no km², no elevation gained, no streaks. If the data store actually contains it today it goes in. If not, it stays out. The row is <code>readonly</code> (no chevron), signalling it's information not a control.</p>
+    <div class="versus">
+      <strong>vs Mockup 3 (Minimal)</strong>
+      Dropped the prose "You've collected 47 places over 12 walks..." — reads like a magazine and hides the two operational rows (view / clear) below it. Data as data, not narrative.
+    </div>
+
+    <h3>Danger zone: physically and visually separated</h3>
+    <p><strong>Sign out</strong> and <strong>Delete account</strong> are in <em>different sections</em> — grey Account card first, then a distinct Delete Account card with a 2px red top-border. A tired user tapping "Sign out" cannot mis-hit "Delete account" — they're not even in the same visual container.</p>
+    <p>The Delete row uses a red accent (border + red text label) but not a full red button. A big red button reads as "primary destructive action available" — we want the opposite: "only touch this if you really mean it."</p>
+
+    <h3>Developer section: revealed, not hidden crudely</h3>
+    <p>5-tap on the <strong>About Cairn</strong> row unlocks a <strong>Developer</strong> section at the bottom (shown here in its unlocked state). Chosen over "DEBUG" because "Developer" reads professional — matches how Apple's own Settings > Developer works.</p>
+    <p>Visual treatment differs from normal cards: warm off-white fill, dashed border, small "Unlocked" badge in the section header, and a section caption "Only for development and QA." — so it's clearly a different mode, not a shipping feature the user just discovered.</p>
+
+    <h3>Brand warmth: kept exactly one thing</h3>
+    <p><strong>"Ngā mihi nui — thanks for using Cairn."</strong> — one italic footer line, no emoji, no exclamation. This is the NZ touch that the target user recognises without feeling pandered to. It's genuine te reo, it's brief, and it's already in the codebase.</p>
+
+    <div class="devnote">
+      <strong>Files this mockup will inform:</strong> <code>packages/mobile/src/screens/SettingsScreen.tsx</code> · plus new rows/labels/copy. Section order and copy in this mockup are the source of truth for Sprint O12 Settings implementation.
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

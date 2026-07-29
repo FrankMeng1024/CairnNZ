@@ -523,7 +523,7 @@ export function RouteEditorScreen() {
     if (saving) return;
     const result = useRouteEditStore.getState().commitEditDraft();
     if (!result.ok) {
-      Alert.alert('Cannot save', result.error ?? 'Unknown error');
+      Alert.alert('Couldn\'t save your route', 'Check your connection and try again.');
       return;
     }
     setEditMode(false);
@@ -637,7 +637,7 @@ export function RouteEditorScreen() {
         nav.goBack();
       }
     } catch (e: any) {
-      Alert.alert('Save failed', e?.message ?? 'Unknown error');
+      Alert.alert('Save failed', 'Something got lost between here and our server. Try again in a moment.');
     } finally {
       setSaving(false);
     }

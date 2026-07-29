@@ -245,9 +245,8 @@ export function PlantScreen() {
         }
         setSubmitting(false);
         Alert.alert(
-          'Could not plant cairn',
-          (e?.message ? String(e.message) : 'Please try again in a moment.') +
-          '\n\nYour draft is saved — try again or come back later.',
+          "Couldn't plant this cairn",
+          'Your draft is saved — try again in a moment.',
         );
       }
     },

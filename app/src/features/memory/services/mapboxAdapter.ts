@@ -48,7 +48,7 @@ export function getMapbox(): MapboxAdapter {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const shim = require('./mapboxAdapter.web.tsx');
       cached = shim.makeWebMapboxAdapter();
-      console.log('[mapboxAdapter] web shim loaded', { available: cached?.available });
+      if (__DEV__) console.log('[mapboxAdapter] web shim loaded', { available: cached?.available });
     } catch (e) {
       console.warn('[mapboxAdapter] web shim load failed', e);
       cached = makeUnavailable();

@@ -32,6 +32,7 @@ import { API_BASE_URL } from './src/config/api';
 // markBootPhase which still exists. Loss: no cold-start crash trace
 // via checkpoint drain (still have per-phase aliyun log events).
 import { markBootPhase } from './src/services/bootDiagnostics';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 // First side-effect: report that module loading completed. This runs
 // AFTER all the imports above (which is when iOS jetsam most likely
@@ -671,8 +672,14 @@ export default function App() {
     // for one frame (tabs visually clipped under home indicator) then
     // jumped up ~34px when context populated. initialWindowMetrics is
     // measured natively at app start, available before React mounts.
+    // O17: mount ErrorBoundary at root. Pre-O17 the class was defined but
+    // never wrapped anywhere — a render error in RootNavigator subtree
+    // would show the RN red box (dev) or a blank screen (prod). Now: caught,
+    // logged to crashLogger, fallback banner shown. Guideline 2.5.1 stability.
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <AppRoot />
+      <ErrorBoundary tag="app_root">
+        <AppRoot />
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }

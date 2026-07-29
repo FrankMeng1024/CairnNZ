@@ -211,6 +211,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
 
   recordPoint: (lat, lng, atMs = Date.now()) => {
     if (!isFinite(lat) || !isFinite(lng)) return;
+    // O17 D-MEM-03: reject non-positive / non-finite timestamps at boundary.
+    // Prevents negative ts (some legacy replay paths pass 0 or NaN) from
+    // corrupting bucket dedupe + deterministic-cid hash.
+    if (!(atMs > 0) || !Number.isFinite(atMs)) return;
     // M6 fix (v0.2.6.3): force ts to integer at the boundary so server
     // and client agree on the deterministic-cid hash input. Fractional
     // ts breaks echo lookup → infinite retry.

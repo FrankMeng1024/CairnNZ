@@ -27,7 +27,7 @@ export const API_BASE_URL =
  * host as API_BASE_URL, which really serves the HTML.
  */
 export const PRIVACY_URL =
-  (ENV_URL || (typeof __DEV__ !== 'undefined' && __DEV__
+  ((ENV_URL || (typeof __DEV__ !== 'undefined' && __DEV__
     ? 'http://localhost:3001'
-    : 'https://api.yiiling.cn')) + '/privacy';
+    : 'https://api.yiiling.cn')).replace(/\/api\/?$/, '')) + '/privacy';
 

@@ -672,7 +672,7 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
               <Icon name="Route" size={18} color={Colors.primary} strokeWidth={1.8} />
             </LinearGradient>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>{item.name}</Text>
+              <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.cardMeta}>{dist.format(item.distanceM, 1)} {dist.unit} · {item.waypoints.length} waypoints</Text>
             </View>
             <Icon name="ChevronRight" size={16} color={Colors.textMuted} strokeWidth={2} />
@@ -774,7 +774,7 @@ function ActivitiesTab() {
                     back to the activity type. Previously this was
                     hardcoded to 'Run' / 'Hike' which silently dropped
                     whatever the user typed in the stop-summary sheet. */}
-                <Text style={styles.cardTitle}>{item.name || (isRun ? 'Run' : 'Hike')}</Text>
+                <Text style={styles.cardTitle} numberOfLines={1}>{item.name || (isRun ? 'Run' : 'Hike')}</Text>
                 <Text style={styles.cardMeta}>{dateStr} · {dist.format(item.distanceM, 1)} {dist.unit} · {formatDuration(item.durationS)}</Text>
               </View>
               <Icon name="ChevronRight" size={16} color={Colors.textMuted} strokeWidth={2} />
@@ -847,8 +847,8 @@ function FlagEditSheet({
 
   const confirmDelete = () => {
     Alert.alert(
-      'Delete Flag',
-      `Delete "${data.note || 'this flag'}"? This cannot be undone.`,
+      'Delete cairn',
+      `Delete "${data.note || 'this cairn'}"? This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => dismiss(() => onDelete(data.id)) },
@@ -1168,7 +1168,7 @@ function FlagsTab() {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.flagName} numberOfLines={1} ellipsizeMode="tail">{item.note || '(No note)'}</Text>
+                  <Text style={styles.flagName} numberOfLines={1} ellipsizeMode="tail">{item.note || 'No note yet'}</Text>
                   {item.approximate && <View style={styles.approxChip}><Text style={styles.approxChipText}>~</Text></View>}
                 </View>
                 <Text style={[styles.cardMeta, { color: meta.color }]}>{meta.label}</Text>
@@ -1179,7 +1179,7 @@ function FlagsTab() {
             </PressBtn>
           );
         }}
-        ListEmptyComponent={<View style={{ padding: Spacing.xl, alignItems: 'center' }}><Text style={styles.emptyHint}>No flags matching filter</Text></View>}
+        ListEmptyComponent={<View style={{ padding: Spacing.xl, alignItems: 'center' }}><Text style={styles.emptyHint}>No matching cairns. Try a different filter.</Text></View>}
       />
       {/* v299 N8: FlagEditSheet removed — Flags now navigate to
           read-only MarkerDetailScreen. */}

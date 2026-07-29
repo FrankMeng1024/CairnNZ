@@ -395,8 +395,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             const { Alert, Linking } = require('react-native');
             await new Promise<void>((resolve) => {
               Alert.alert(
-                'Improve hike tracking',
-                'Cairn needs to keep tracking your GPS when the screen is locked or the app is in the background. Please set Location permission to "Always Allow" in Settings.',
+                'Keep recording when screen is off?',
+                'Cairn keeps recording your hike when your screen is off or you switch apps. Set Location permission to "Always Allow" in Settings.',
                 [
                   {
                     text: 'Later',

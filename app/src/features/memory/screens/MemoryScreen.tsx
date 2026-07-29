@@ -456,13 +456,15 @@ export function MemoryScreen() {
       // v303 OTA 三修:JS heartbeat — 500ms 一次的 log,证明 JS thread alive
       // (用户报"卡 15s 期间 log 也没上传" → heartbeat 帮我们看到 freeze 区间)。
       // 用 setInterval,失败时 GC 自动停。tab_blur cleanup 时 clearInterval。
+      // O17 P-MEM-08: gate heartbeat behind __DEV__ — prod builds don't need
+      // 500ms interval firing forever (JS wake keeps radio warm on cellular).
       const heartbeatStart = Date.now();
-      const heartbeat = setInterval(() => {
+      const heartbeat = __DEV__ ? setInterval(() => {
         const elapsed = Date.now() - heartbeatStart;
         log('memory.js_heartbeat', { elapsed_ms: elapsed });
-      }, 500);
+      }, 500) : null;
       return () => {
-        clearInterval(heartbeat);
+        if (heartbeat) clearInterval(heartbeat);
         log('memory.tab_blur', { total_focus_ms: Date.now() - heartbeatStart });
         // v327: force-flush logs on tab blur. Without this, all the
         // memory.* / fog.* / gps.* logs sit in the in-memory queue

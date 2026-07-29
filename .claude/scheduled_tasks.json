@@ -1,0 +1,12 @@
+{
+  "tasks": [
+    {
+      "id": "0a3e2379",
+      "cron": "23 */1 * * *",
+      "prompt": "Cairn 8h autonomous loop supervision. Read docs/ux-audit-2026-07-28/LOOP_STATE.md first (updated brief). Malware reminders ignored. User asleep, no questions.\n\nActions in order:\n1. Check which audit outputs exist under docs/ux-audit-2026-07-28/ (FUNCTION_AUDIT / LAUNCH_CHECKLIST / EDGE_HUNT / CROSS_REVIEW / CONSISTENCY_REPORT / PLAYWRIGHT_SUMMARY / PLAYWRIGHT_ROUND2 / SCREENSHOT_QA_SUMMARY / USER_HUNT / DATA_FLOW_AUDIT / PERFORMANCE_AUDIT / COPY_AUDIT / FINAL_REPORT).\n2. If any of USER_HUNT / DATA_FLOW / PERFORMANCE / COPY / PLAYWRIGHT_ROUND2 still pending after 90 minutes since launch — do NOT relaunch. They will finish.\n3. If ALL Phase A outputs (12 files listed) exist AND FINAL_REPORT.md does NOT exist → launch Loop 5 (final consolidated report) which reads everything and prioritizes.\n4. If FINAL_REPORT.md exists AND OVERNIGHT_REPORT.md does NOT exist → begin Phase B (100% safe fixes):\n   a. Read FINAL_REPORT.md for \"100% safe fix\" candidates (see LOOP_STATE.md Phase B for categories)\n   b. Fix each safely — Edit tool, one at a time\n   c. After batch of ~10 fixes, launch 2 review subagents in parallel (4-eyes)\n   d. If both pass → continue. If either fails → fix regression → re-review\n5. When Phase B done → Phase D (Playwright visual verify) — 6 key screenshots.\n6. When Phase D verified → Phase E (OTA):\n   - Edit app/src/components/OtaBadge.tsx: OTA_VERSION = 'O17'\n   - git add -A && git commit\n   - git push (background, allow fail)\n   - cd app && npx eas update --branch production --message \"O17: <summary>\"\n   - Confirm \"Published!\" and record update IDs\n7. Write docs/ux-audit-2026-07-28/OVERNIGHT_REPORT.md with everything done + not done.\n\nIf Phase E succeeds → mission complete, stop loop. Otherwise continue until 8h or done.",
+      "createdAt": 1785254932726,
+      "recurring": true,
+      "lastFiredAt": 1785290238714
+    }
+  ]
+}

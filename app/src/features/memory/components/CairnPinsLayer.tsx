@@ -205,7 +205,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
     const { id } = selection.marker;
     if (likedIds.has(id)) return; // already liked in this session
     if (!lastCoordinate) {
-      Alert.alert('No GPS fix', 'Wait for a GPS signal before liking a cairn.');
+      Alert.alert('Finding your location', 'Finding your location — please wait a moment.');
       return;
     }
 
@@ -238,7 +238,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       return;
     }
     if (!lastCoordinate) {
-      Alert.alert('No GPS fix', 'Wait for a GPS signal before reporting a cairn.');
+      Alert.alert('Finding your location', 'Finding your location — please wait a moment before reporting.');
       return;
     }
 
@@ -250,7 +250,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       setReportedIds((prev) => new Set([...prev, targetId]));
       reportMarker(targetId, reason, lat, lng, accuracy)
         .then(() => {
-          Alert.alert('Report sent', 'Thanks for letting us know.');
+          Alert.alert('Report sent', "Thanks — we'll look into it.");
         })
         .catch((err) => {
           setReportedIds((prev) => { const n = new Set(prev); n.delete(targetId); return n; });
@@ -264,7 +264,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
     };
 
     Alert.alert('Report this cairn', 'What is wrong with it?', [
-      { text: 'Spam / Ad', onPress: () => sendReport('fake_ad') },
+      { text: 'Spam or ad', onPress: () => sendReport('fake_ad') },
       { text: 'Wrong info', onPress: () => sendReport('info_mismatch') },
       { text: "Don't like it", onPress: () => sendReport('dislike') },
       { text: 'Cancel', style: 'cancel' },

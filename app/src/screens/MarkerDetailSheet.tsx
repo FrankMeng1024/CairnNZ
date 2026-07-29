@@ -91,14 +91,14 @@ export function MarkerDetailSheet({ marker, onClose, onDelete, lastCoordinate, f
             {flagType && <Icon name={flagType.icon} size={14} color={meta.color} strokeWidth={2.5} />}
             <Text style={[detailStyles.typeLabel, { color: meta.color }]}>{meta.label}</Text>
           </View>
-          <TouchableOpacity style={detailStyles.closeChip} onPress={handleClose}>
+          <TouchableOpacity style={detailStyles.closeChip} onPress={handleClose} hitSlop={10} accessibilityLabel="Close">
             <Icon name="X" size={IconSize.sm} color={Colors.textSecondary} strokeWidth={2.5} />
           </TouchableOpacity>
         </View>
         {marker.note ? (
-          <Text style={detailStyles.note}>{marker.note}</Text>
+          <Text style={detailStyles.note} numberOfLines={3}>{marker.note}</Text>
         ) : (
-          <Text style={[detailStyles.note, { color: Colors.textMuted, fontStyle: 'italic' }]}>(No note)</Text>
+          <Text style={[detailStyles.note, { color: Colors.textMuted, fontStyle: 'italic' }]}>No note yet</Text>
         )}
         <View style={detailStyles.metaRow}>
           <Icon name="Timer" size={IconSize.sm} color={Colors.textMuted} strokeWidth={1.8} />

@@ -237,7 +237,7 @@ function CreateMarkerSheet({
           {/* Header */}
           <View style={styles.sheetHeaderRow}>
             <Text style={styles.sheetTitle}>Plant a Flag</Text>
-            <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose}>
+            <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose} hitSlop={10} accessibilityLabel="Close">
               <Icon name="X" size={IconSize.sm} color={Colors.textSecondary} strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
@@ -394,7 +394,7 @@ function EditMarkerSheet({
           <View style={styles.sheetHandle} />
           <View style={styles.sheetHeaderRow}>
             <Text style={styles.sheetTitle}>Edit Flag</Text>
-            <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose}>
+            <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose} hitSlop={10} accessibilityLabel="Close">
               <Icon name="X" size={IconSize.sm} color={Colors.textSecondary} strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
@@ -478,8 +478,8 @@ function EditMarkerSheet({
                 style={styles.editSheetDeleteBtn}
                 onPress={() => {
                   Alert.alert(
-                    'Delete Flag',
-                    `Delete "${marker.note || 'this flag'}"? This cannot be undone.`,
+                    'Delete cairn',
+                    `Delete "${marker.note || 'this cairn'}"? This cannot be undone.`,
                     [
                       { text: 'Cancel', style: 'cancel' },
                       { text: 'Delete', style: 'destructive', onPress: () => { onDelete(marker.id); onClose(); } },
@@ -624,10 +624,10 @@ export function MapScreen() {
   const region = getCurrentRegion();
 
   const doReport = async (m: Marker, reason: 'fake_ad' | 'info_mismatch' | 'dislike') => {
-    if (!lastCoord) { Alert.alert('Location unavailable', 'Enable location to report marks.'); return; }
+    if (!lastCoord) { Alert.alert('Location unavailable', 'Turn on location to report this cairn.'); return; }
     try {
       await reportMarker(m.id, reason, lastCoord.lat, lastCoord.lng, lastCoord.accuracy);
-      Alert.alert('Reported', 'Thank you for your report.');
+      Alert.alert('Report sent', "Thanks — we'll look into it.");
     } catch (err) {
       if (err instanceof MarkerInteractionError) {
         if (err.code === 'TOO_FAR') Alert.alert('Too far', 'Move closer to report this mark.');
@@ -777,7 +777,7 @@ export function MapScreen() {
         onClose={() => setDetailMarker(null)}
         onEdit={(m) => { setDetailMarker(null); setEditMarker(m); }}
         onLike={async (m) => {
-          if (!lastCoord) { Alert.alert('Location unavailable', 'Enable location to like marks.'); return; }
+          if (!lastCoord) { Alert.alert('Location unavailable', 'Turn on location to like this cairn.'); return; }
           // Optimistic: toggle immediately for instant UI feedback on spotty networks.
           // Revert only on hard business-rule errors (TOO_FAR / RATE_LIMITED).
           // 409 already-liked is treated as success (no revert) — the server agrees the like exists.
@@ -798,17 +798,17 @@ export function MapScreen() {
           }
         }}
         onReport={(m) => {
-          Alert.alert('Report mark', 'Why are you reporting this?', [
-            { text: 'Fake or ad', onPress: () => doReport(m, 'fake_ad') },
+          Alert.alert('Report this cairn', 'What is wrong with it?', [
+            { text: 'Spam or ad', onPress: () => doReport(m, 'fake_ad') },
             { text: 'Wrong info', onPress: () => doReport(m, 'info_mismatch') },
-            { text: 'Dislike', onPress: () => doReport(m, 'dislike') },
+            { text: "Don't like it", onPress: () => doReport(m, 'dislike') },
             { text: 'Cancel', style: 'cancel' },
           ]);
         }}
         onDelete={(m, semantic) => {
           if (semantic === 'own') {
             Alert.alert(
-              'Delete this mark?',
+              'Delete this cairn?',
               'This cannot be undone.',
               [
                 { text: 'Cancel', style: 'cancel' },

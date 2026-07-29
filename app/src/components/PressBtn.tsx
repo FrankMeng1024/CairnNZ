@@ -42,10 +42,20 @@ interface PressBtnProps {
   scaleTo?: number;
   disabled?: boolean;
   hitSlop?: { top?: number; bottom?: number; left?: number; right?: number };
+  // O17 C-66 a11y: forward accessibility props to the underlying pressable.
+  // Callers that pass accessibilityLabel/Role get VoiceOver labels without
+  // having to switch back to TouchableOpacity. Optional — pre-existing callers
+  // still render exactly as before.
+  accessibilityLabel?: string;
+  accessibilityRole?: 'button' | 'link' | 'none';
+  accessibilityHint?: string;
+  accessibilityState?: { disabled?: boolean; selected?: boolean; busy?: boolean };
+  testID?: string;
 }
 
 export function PressBtn({
   onPress, onLongPress, style, children, scaleTo = 0.97, disabled, hitSlop,
+  accessibilityLabel, accessibilityRole, accessibilityHint, accessibilityState, testID,
 }: PressBtnProps) {
   const scale = useRef(new Animated.Value(1)).current;
   const handlePressIn = () => {
@@ -66,6 +76,11 @@ export function PressBtn({
       onPressOut={handlePressOut}
       disabled={disabled}
       hitSlop={hitSlop}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={accessibilityRole ?? (accessibilityLabel ? 'button' : undefined)}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={accessibilityState ?? (disabled ? { disabled: true } : undefined)}
+      testID={testID}
       style={[style, { transform: [{ scale }] }]}
     >
       {children}

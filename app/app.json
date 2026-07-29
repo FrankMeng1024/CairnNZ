@@ -16,12 +16,12 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.yiiling.cairn",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Cairn needs your location to track your track and show nearby markers.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Cairn needs background location to keep recording your track when the screen is locked or you switch apps.",
-        "NSMotionUsageDescription": "Cairn reads device orientation to point the in-app compass to true north.",
-        "NSPhotoLibraryUsageDescription": "Cairn needs photo library access so you can attach photos to your routes and cairns.",
+        "NSLocationWhenInUseUsageDescription": "Cairn uses your location to record your hikes and show nearby cairns on the map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Cairn keeps recording your hike when the screen is off or you switch apps.",
+        "NSMotionUsageDescription": "Cairn uses your device orientation to show which way you're facing on the map.",
+        "NSPhotoLibraryUsageDescription": "Cairn attaches photos you pick to feedback reports so we can help faster.",
         "NSPhotoLibraryAddUsageDescription": "Cairn saves the photos you capture in the app to your photo library.",
-        "NSMicrophoneUsageDescription": "Cairn uses the microphone for voice notes attached to flags (optional).",
+        "NSMicrophoneUsageDescription": "Cairn uses the microphone for optional voice notes on your cairns.",
         "UIBackgroundModes": [
           "location",
           "audio"
@@ -51,7 +51,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Cairn needs background location to keep recording your track when the screen is locked."
+          "locationAlwaysAndWhenInUsePermission": "Cairn keeps recording your hike when the screen is off or you switch apps.",
+          "locationWhenInUsePermission": "Cairn uses your location to record your hikes and show nearby cairns on the map."
         }
       ],
       [

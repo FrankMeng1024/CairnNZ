@@ -624,6 +624,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     }
     // 1. Load from local cache first (instant)
     const key = storageKey(userId);
+    // O17 F-STO-06: opportunistically remove old 'cairn_markers' (pre-v0.2.6)
+    // legacy key. Stored a few KB per user; harmless dead data, but reclaims
+    // AsyncStorage budget on TestFlight installs upgraded across schema bump.
+    void storage.removeItem('cairn_markers').catch(() => {});
     const raw = await storage.getItem(key);
     if (raw) {
       try {

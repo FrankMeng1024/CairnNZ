@@ -523,6 +523,7 @@ export function SettingsScreen() {
                       style={pwStyles.eyeBtn}
                       onPress={() => setShowCurrentPw(v => !v)}
                       accessibilityLabel={showCurrentPw ? 'Hide current password' : 'Show current password'}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Icon name={showCurrentPw ? 'EyeOff' : 'Eye'} size={18} color={Colors.textSecondary} strokeWidth={1.8} />
                     </TouchableOpacity>
@@ -542,6 +543,7 @@ export function SettingsScreen() {
                       style={pwStyles.eyeBtn}
                       onPress={() => setShowNewPw(v => !v)}
                       accessibilityLabel={showNewPw ? 'Hide new password' : 'Show new password'}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Icon name={showNewPw ? 'EyeOff' : 'Eye'} size={18} color={Colors.textSecondary} strokeWidth={1.8} />
                     </TouchableOpacity>
@@ -561,6 +563,7 @@ export function SettingsScreen() {
                       style={pwStyles.eyeBtn}
                       onPress={() => setShowConfirmPw(v => !v)}
                       accessibilityLabel={showConfirmPw ? 'Hide confirm password' : 'Show confirm password'}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Icon name={showConfirmPw ? 'EyeOff' : 'Eye'} size={18} color={Colors.textSecondary} strokeWidth={1.8} />
                     </TouchableOpacity>
@@ -572,7 +575,12 @@ export function SettingsScreen() {
                     scaleTo={0.96}
                   >
                     {pwLoading
-                      ? <ActivityIndicator size="small" color="#fff" />
+                      ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <ActivityIndicator size="small" color="#fff" />
+                          <Text style={pwStyles.btnText}>Updating…</Text>
+                        </View>
+                      )
                       : <Text style={pwStyles.btnText}>Update password</Text>
                     }
                   </PressBtn>
@@ -718,7 +726,7 @@ export function SettingsScreen() {
               label="Check the weather"
               hint="Opens MetService NZ"
               external
-              onPress={() => Linking.openURL('https://www.metservice.com/rural').catch(() => {})}
+              onPress={() => Linking.openURL('https://www.metservice.com/rural').catch(() => Alert.alert('Cannot open link', 'Please try again later.'))}
             />
             <View style={styles.divider} />
             {/* O13 bug 5: unified in-app feedback / safety / bug row.
@@ -882,7 +890,7 @@ export function SettingsScreen() {
               label="Privacy Policy"
               hint="How we handle your data"
               external
-              onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}
+              onPress={() => Linking.openURL(PRIVACY_URL).catch(() => Alert.alert('Cannot open link', 'Please try again later.'))}
             />
             <View style={styles.divider} />
             <ActionRow
@@ -892,7 +900,7 @@ export function SettingsScreen() {
               label="Terms of Service"
               hint="Apple's standard app terms — a Cairn-specific version is coming"
               external
-              onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/').catch(() => {})}
+              onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/').catch(() => Alert.alert('Cannot open link', 'Please try again later.'))}
             />
             <View style={styles.divider} />
             <ActionRow
@@ -937,9 +945,9 @@ export function SettingsScreen() {
                 labelColor={Colors.textPrimary}
                 onPress={async () => {
                   const confirmed = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function'
-                    ? window.confirm('Are you sure you want to sign out?')
+                    ? window.confirm('Your hikes stay saved. You can sign back in anytime.')
                     : await new Promise<boolean>((resolve) =>
-                        Alert.alert('Sign out', 'Are you sure you want to sign out?', [
+                        Alert.alert('Sign out', 'Your hikes stay saved. You can sign back in anytime.', [
                           { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
                           { text: 'Sign out', style: 'destructive', onPress: () => resolve(true) },
                         ])

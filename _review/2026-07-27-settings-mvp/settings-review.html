@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Cairn Settings MVP Review — 2026-07-27</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#faf7f2;color:#1a1a1a;padding:24px;max-width:1800px;margin:0 auto;line-height:1.5}
+  h1{color:#5d7c46;margin:0 0 4px}
+  .subtitle{color:#6b6b6b;font-size:14px;margin-bottom:20px}
+  .legend{background:#fff;padding:12px 16px;border-radius:8px;margin-bottom:16px;border:1px solid #e5e0d5;font-size:13px}
+  .legend span{display:inline-block;margin-right:16px}
+  .status-real{color:#2c8a3d;font-weight:600}
+  .status-fake{color:#c44545;font-weight:600}
+  .status-partial{color:#c89432;font-weight:600}
+  .status-coming{color:#4a6da3;font-weight:600}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:24px}
+  thead{background:#5d7c46;color:#fff}
+  th,td{padding:11px 12px;text-align:left;vertical-align:top;border-bottom:1px solid #f0ebe0;font-size:13px}
+  th{font-weight:600;font-size:12px;letter-spacing:.4px;text-transform:uppercase}
+  .section-head td{background:#f0ebe0;font-weight:700;color:#5d7c46;font-size:12px;text-transform:uppercase;letter-spacing:1px;padding:8px 12px}
+  .name{font-weight:600;color:#111;white-space:nowrap;font-size:13px}
+  .decision{white-space:nowrap;text-align:center}
+  .decision select{width:110px;padding:5px 6px;border:1px solid #d5cdba;border-radius:6px;background:#fff;font-size:12px;font-family:inherit}
+  .decision select option[value="delete"]{color:#c44545}
+  .decision select option[value="keep"]{color:#2c8a3d}
+  .decision select option[value="implement"]{color:#4a6da3}
+  .decision select option[value="change"]{color:#c89432}
+  .decision select option[value="hide"]{color:#8a6b3d}
+  .my-rec{background:#f0f7ea;padding:8px 10px;border-left:3px solid #5d7c46;font-size:12px;line-height:1.4}
+  .my-rec-tag{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+  .rec-delete{background:#c44545;color:#fff}
+  .rec-keep{background:#2c8a3d;color:#fff}
+  .rec-implement{background:#4a6da3;color:#fff}
+  .rec-hide{background:#8a6b3d;color:#fff}
+  .rec-change{background:#c89432;color:#fff}
+  .rec-reason{color:#3a4a2a;font-size:11px;margin-top:2px}
+  .note{color:#6b6b6b;font-size:12px;font-style:italic;max-width:220px}
+  .work{font-size:11px;padding:2px 6px;border-radius:4px;display:inline-block}
+  .work-small{background:#e6f0d9;color:#2c8a3d}
+  .work-med{background:#fff2d9;color:#c89432}
+  .work-large{background:#ffe0e0;color:#c44545}
+  input[type=text]{width:98%;padding:5px 6px;border:1px solid #d5cdba;border-radius:5px;background:#fff;font-size:12px;font-family:inherit}
+  .new-section{background:#fdf5e6;border:2px dashed #c89432;padding:16px;border-radius:10px;margin-top:16px}
+  .new-section h2{color:#c89432;margin:0 0 12px}
+  .export-btn{position:fixed;bottom:20px;right:20px;background:#5d7c46;color:#fff;border:none;padding:12px 20px;border-radius:8px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.15);font-size:14px}
+  .export-btn:hover{background:#4a6538}
+  .out-box{background:#1a1a1a;color:#c8e6c9;padding:16px;border-radius:8px;font-family:'SF Mono',Monaco,Consolas,monospace;font-size:12px;line-height:1.6;white-space:pre;overflow:auto;margin-top:16px;display:none}
+  .audit-box{background:#e8f0f8;border:1px solid #4a6da3;padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px}
+  .audit-box h3{color:#4a6da3;margin:0 0 6px;font-size:14px}
+</style>
+</head>
+<body>
+
+<h1>Cairn Settings MVP Review</h1>
+<div class="subtitle">2026-07-27 · 每项都有<strong>我的推荐+理由</strong>,你复核后选定</div>
+
+<div class="audit-box">
+  <h3>🔍 Subagent 复核结果 (Opus 4, 2026-07-27)</h3>
+  <div><strong>整体评价</strong>: 85% 同意, 3 处覆盖 + 5 处遗漏, App Store 状态: 🟡 YELLOW (修完 3 处 → 🟢 GREEN)</div>
+  <div style="margin-top:8px;padding:8px 12px;background:#fff;border-radius:6px;border-left:4px solid #c44545">
+    <strong style="color:#c44545">⚠️ 3 处覆盖 (subagent 反对我的推荐)</strong>:
+    <ul style="margin:4px 0 0;padding-left:20px">
+      <li><strong>#7 Night mode</strong>: subagent 建议<span style="color:#4a6da3">实装</span>而不是删 — "AllTrails/Gaia/Komoot 都有, 3-5 天工作量小, 承诺一年多不做比没做更伤 trust". 5am/8pm 高山起步用户需要.</li>
+      <li><strong>#13 Route Deviation</strong>: subagent 建议<span style="color:#c44545">删</span>而不是隐藏 — "Dead UI 没 option value, git 里代码永远在, 未来 20 分钟就能恢复, 隐藏反而增加每次 UI 改动的维护税".</li>
+      <li><strong>#20 Debug Mode toggle</strong>: subagent 建议<span style="color:#8a6b3d">隐藏(5-tap 手势恢复)</span>而不是保留 — "App Store 2.2 会因'production 里有 debug/demo 内容'驳回. 恢复 5-tap version 手势".</li>
+    </ul>
+  </div>
+  <div style="margin-top:8px;padding:8px 12px;background:#fff;border-radius:6px;border-left:4px solid #c89432">
+    <strong style="color:#c89432">🎯 我遗漏的 5 项 (subagent 建议加)</strong>:
+    <ul style="margin:4px 0 0;padding-left:20px">
+      <li><strong>P0 Sign in with Apple 审计</strong>: 有 Google 登录 → Apple 强制 (App Store 4.8). 不是 Settings 行, 是 Auth 屏必查.</li>
+      <li><strong>P0 Location 权限文案</strong>: <code>NSLocationAlwaysAndWhenInUseUsageDescription</code> — 户外 App 审核员会盯这个, 文案模糊会驳回.</li>
+      <li><strong>P1 "Report safety issue"</strong>: mailto NZ DOC. 免费的信任信号 + 卸责我们自己没做安全功能.</li>
+      <li><strong>P1 MetService 天气链接</strong>: 外链 (不真接 API). NZ hiker 出发前必看 MetService. 一个按钮建立 credibility 而不做真实现.</li>
+      <li><strong>P2 Onboarding replay</strong>: "再看一次介绍" — reduces churn.</li>
+    </ul>
+    <div style="margin-top:6px;color:#8a5a3d"><strong>Subagent 明确<em>反对</em>加的</strong>: 111 SOS integration / PLB — RCCNZ liaison + massive liability, AllTrails 都不做, MVP 别碰.</div>
+  </div>
+  <div style="margin-top:8px;padding:8px 12px;background:#fff;border-radius:6px;border-left:4px solid #4a6da3">
+    <strong style="color:#4a6da3">🎁 Bonus 建议 (subagent 顺手加)</strong>:
+    <ul style="margin:4px 0 0;padding-left:20px">
+      <li>#2 Share flags: 改文案 "Auto-share past flags with new friends" 减认知负担</li>
+      <li>#6 Clear memory: 后端应做 30 天软删除 (NZ Privacy Act §22 IPP 9)</li>
+      <li>#18 Clear uploaded: 改叫 "Free up storage" 并显示释放的 MB 数. 64GB iPhone 用户 care.</li>
+      <li>N5 Feedback: 加 "Rate on App Store" (SKStoreReviewController) 便宜 +stars</li>
+      <li>N9 Te Reo Māori strings: 不做完整 i18n, 但个别 header/greeting 用毛利语 (已有 "Ngā mihi nui" 一处). 免费 NZ brand goodwill.</li>
+      <li>N2 Metric/Imperial: <strong>NZ MVP 不需要</strong>, 全 metric native. 把这 2-3 天挪去做 Delete Account + Privacy Policy 更划算.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="legend">
+  <strong>当前状态</strong>:
+  <span class="status-real">✅ 真实装</span>
+  <span class="status-fake">❌ 假开关(无底层实现)</span>
+  <span class="status-partial">⚠️ 半实装</span>
+  <span class="status-coming">🕒 Coming soon 明说</span>
+</div>
+
+<div class="legend">
+  <strong>决定选项</strong>:
+  <span style="color:#c44545">删除</span> ·
+  <span style="color:#2c8a3d">保留(不动)</span> ·
+  <span style="color:#8a6b3d">隐藏(代码保留,UI 藏)</span> ·
+  <span style="color:#c89432">改(改行为/文案)</span> ·
+  <span style="color:#4a6da3">实装(补底层)</span>
+</div>
+
+<table id="settings-table">
+<thead>
+<tr>
+  <th style="width:12%">配置项</th>
+  <th style="width:28%">产品作用(白话)</th>
+  <th style="width:8%">当前状态</th>
+  <th style="width:7%">工作量</th>
+  <th style="width:20%">🎯 我的推荐 + 理由</th>
+  <th style="width:10%">你的决定</th>
+  <th style="width:15%">备注</th>
+</tr>
+</thead>
+<tbody>
+
+<tr class="section-head"><td colspan="7">ACTIVITY PREFERENCES</td></tr>
+<tr data-id="1" data-my-rec="keep">
+  <td class="name">Interface Mode<br>(Explorer / Navigator)</td>
+  <td>首页 UI 密度选择: Explorer=简单大卡片新手友好, Navigator=数据密集老用户偏好. 影响 Home 界面样式.</td>
+  <td class="status-real">✅ 真实装</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-keep">保留</span><div class="rec-reason">真实功能, 户外 App 差异化点 (Strava/AllTrails 都没这种模式切换). 定位 Cairn 是"新老通吃"关键. MVP 必留.</div></div></td>
+  <td class="decision"><select><option value="keep" selected>保留</option><option value="delete">删除</option><option value="hide">隐藏</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+
+<tr class="section-head"><td colspan="7">SHARING</td></tr>
+<tr data-id="2" data-my-rec="keep">
+  <td class="name">Share flags with new friends by default</td>
+  <td>加新朋友时你已 planted 的公开 flag 是否自动对他们可见. 关掉的话新朋友加进来看不到你之前的 flag, 要手动分享.</td>
+  <td class="status-real">✅ 真实装</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-keep">保留</span><div class="rec-reason">真实装, 隐私控制维度. 但用户认知负担高 — 应改文案更清楚 "对新朋友默认公开旧 flag"或做成 onboarding 里问一次. MVP 保留.</div></div></td>
+  <td class="decision"><select><option value="keep" selected>保留</option><option value="delete">删除</option><option value="hide">隐藏</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+<tr data-id="3" data-my-rec="delete">
+  <td class="name">Live location sharing</td>
+  <td>朋友能实时看你当前位置(类似 Find My Friends / 微信共享位置). 徒步安全 + 情侣家人放心.</td>
+  <td class="status-fake">❌ 假开关</td>
+  <td><span class="work work-large">1-2 周</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-delete">删除</span><div class="rec-reason">假开关 misleading. 实装需 WebSocket + 后端 endpoint + 前端订阅 + 电池优化. 是户外强需求但 MVP 不做. 未来 Premium 或 Family plan.</div></div></td>
+  <td class="decision"><select><option value="delete" selected>删除</option><option value="keep">保留</option><option value="hide">隐藏</option><option value="implement">实装</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+
+<tr class="section-head"><td colspan="7">MEMORY</td></tr>
+<tr data-id="4" data-my-rec="keep">
+  <td class="name">Show friends' memory</td>
+  <td>地图叠一层朋友已探索区域(前提是他们分享给你了). 一起 hike 后能看到彼此走过的路.</td>
+  <td class="status-real">✅ 真实装</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-keep">保留</span><div class="rec-reason">Cairn 核心差异化 = memory + friends. 这个 toggle 是社交灵魂开关. 关掉可以纯个人使用. 必留.</div></div></td>
+  <td class="decision"><select><option value="keep" selected>保留</option><option value="delete">删除</option><option value="hide">隐藏</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+<tr data-id="5" data-my-rec="keep">
+  <td class="name">Stats: places visited · cairns left</td>
+  <td>只读数字. 你到过多少地点 + planted 多少 cairn. 用户成就感 + 数据感.</td>
+  <td class="status-real">✅ 真实装</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-keep">保留</span><div class="rec-reason">Zero cost, 成就感 payoff 高. Strava 靠这个上瘾. 建议未来做成独立 Profile 页更醒目.</div></div></td>
+  <td class="decision"><select><option value="keep" selected>保留</option><option value="delete">删除</option><option value="hide">隐藏</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..." value="P1: 未来移到 Profile 页"></td>
+</tr>
+<tr data-id="6" data-my-rec="keep">
+  <td class="name">Clear all my memory</td>
+  <td>销毁所有 memory 数据(云端+本地). 隐私控制 / GDPR / NZ Privacy Act 合规. Cairns 保留.</td>
+  <td class="status-real">✅ 真实装</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-keep">保留</span><div class="rec-reason">NZ Privacy Act + GDPR (未来欧洲) 强制要有此项. 必留. 但按钮该做二次确认 modal (已有 Alert.alert).</div></div></td>
+  <td class="decision"><select><option value="keep" selected>保留</option><option value="delete">删除</option><option value="hide">隐藏</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..." value="合规必需"></td>
+</tr>
+
+<tr class="section-head"><td colspan="7">DISPLAY</td></tr>
+<tr data-id="7" data-my-rec="delete">
+  <td class="name">Night mode</td>
+  <td>深色主题(护眼 + 户外夜间). 目前是 "Coming soon" 明说, 用户不误会.</td>
+  <td class="status-coming">🕒 Coming soon</td>
+  <td><span class="work work-med">3-5 天</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-delete">删除</span><div class="rec-reason">"Coming soon" 挂着一年多用户会失望. 要么真做要么删. MVP 户外 App 用户白天用为主, 优先级低.</div>
+  <div style="margin-top:6px;padding:4px 8px;background:#ffe0e0;border-left:2px solid #c44545;font-size:11px"><strong>⚠️ Subagent 反对</strong>: 建议 <span style="color:#4a6da3;font-weight:600">实装</span> — "AllTrails/Gaia/Komoot 都有, 3-5 天成本小. NZ hikers 5am 出发/8pm 下山 高山起步用户暗环境需要. Coming soon 挂一年 = trust 损失比没做还大. 做个 token-swap 极简版即可."</div>
+  </div></td>
+  <td class="decision"><select><option value="delete">删除</option><option value="keep">保留</option><option value="hide">隐藏</option><option value="implement" selected>实装(subagent 建议)</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+
+<tr class="section-head"><td colspan="7">ACCOUNT</td></tr>
+<tr data-id="8" data-my-rec="keep">
+  <td class="name">头像 + 邮箱显示 / 登录卡</td>
+  <td>顶部只读展示. 未登录时点击引导到 Sign In. 用户身份感 + 登录入口.</td>
+  <td class="status-real">✅ 真实装</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-keep">保留</span><div class="rec-reason">身份识别 + 登录入口, 标准配置. 建议头像可点击改(未来).</div></div></td>
+  <td class="decision"><select><option value="keep" selected>保留</option><option value="delete">删除</option><option value="hide">隐藏</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+<tr data-id="9" data-my-rec="keep">
+  <td class="name">Change Password</td>
+  <td>改密码. 三输入框. Server-side 已实装. 只有 email 用户能改, Google/Apple SSO 无此项.</td>
+  <td class="status-real">✅ 真实装</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-keep">保留</span><div class="rec-reason">邮箱注册用户刚需. 已 gate 只对 email 显示 (SSO 用户不看到). 必留.</div></div></td>
+  <td class="decision"><select><option value="keep" selected>保留</option><option value="delete">删除</option><option value="hide">隐藏</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+
+<tr class="section-head"><td colspan="7">SAFETY (T2 已删 Emergency Contacts)</td></tr>
+<tr data-id="10" data-my-rec="delete">
+  <td class="name">Trip Sharing</td>
+  <td>规划一段 hike, 超时不 check in 就自动通知紧急联系人. 独自徒步安全网(类似 Garmin inReach).</td>
+  <td class="status-fake">❌ 假开关</td>
+  <td><span class="work work-large">3-4 周</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-delete">删除</span><div class="rec-reason">安全类假开关是<strong>最危险的假开关</strong> — 用户以为有保护就冒险. Emergency Contacts 页已被 T2 删, 依赖全断. 需要联系人 UI + 后端 cron + 短信/邮件服务. 未来 Premium.</div></div></td>
+  <td class="decision"><select><option value="delete" selected>删除</option><option value="keep">保留</option><option value="hide">隐藏</option><option value="implement">实装</option></select></td>
+  <td><input type="text" placeholder="备注..." value="安全承诺不能一半"></td>
+</tr>
+
+<tr class="section-head"><td colspan="7">VOICE GUIDANCE</td></tr>
+<tr data-id="11a" data-my-rec="delete">
+  <td class="name">Voice Broadcasts</td>
+  <td>活动期间 TTS 语音播报(距离/进度). 户外看不到屏幕时用耳机听.</td>
+  <td class="status-fake">❌ 假开关</td>
+  <td><span class="work work-large">1-2 周</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-delete">删除</span><div class="rec-reason">TTS 依赖 expo-speech (未装) + 后台音频权限. 户外用户小众(要用耳机 + 特定场景 marathon/长途). MVP 不核心. 未来做.</div></div></td>
+  <td class="decision"><select><option value="delete" selected>删除</option><option value="keep">保留</option><option value="hide">隐藏</option><option value="implement">实装</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+<tr data-id="11b" data-my-rec="delete">
+  <td class="name">Route announcements</td>
+  <td>活动期间, 到关键点(转弯/waypoint)时语音提示. 类似汽车 GPS.</td>
+  <td class="status-fake">❌ 假开关</td>
+  <td><span class="work work-large">1-2 周</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-delete">删除</span><div class="rec-reason">依赖 Voice Broadcasts 基建 + Routes 功能. Routes 生态 MVP 不完整, 语音更没必要. 一起删.</div></div></td>
+  <td class="decision"><select><option value="delete" selected>删除</option><option value="keep">保留</option><option value="hide">隐藏</option><option value="implement">实装</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+
+<tr class="section-head"><td colspan="7">COMMUNICATIONS</td></tr>
+<tr data-id="12" data-my-rec="delete">
+  <td class="name">Danger Alerts</td>
+  <td>走到危险地点(悬崖/坏天气/封路)时语音警告. 户外安全 - 特别新人徒步.</td>
+  <td class="status-fake">❌ 假开关</td>
+  <td><span class="work work-large">1-2 月</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-delete">删除</span><div class="rec-reason"><strong>最危险的假开关</strong>. 承诺"危险警告"但零实现 = 法律风险(NZ Consumer Guarantee Act "fit for purpose"). 需要 hazard POI 数据源(NZ DOC 有开放数据但要 license) + TTS + geofence. v2 甚至 v3.</div></div></td>
+  <td class="decision"><select><option value="delete" selected>删除</option><option value="keep">保留</option><option value="hide">隐藏</option><option value="implement">实装</option></select></td>
+  <td><input type="text" placeholder="备注..." value="法律风险"></td>
+</tr>
+<tr data-id="13" data-my-rec="hide">
+  <td class="name">Route Deviation</td>
+  <td>跟着一条规划的路走, 偏离时提醒. 迷路预防.</td>
+  <td class="status-fake">❌ 假开关</td>
+  <td><span class="work work-med">1-2 周</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-hide">隐藏</span><div class="rec-reason">Routes 生态未来价值高, 是 Cairn 差异化候选. 现在保留代码骨架但 UI 隐藏, 免造成 misleading. 未来做 Routes 完整时一起点亮.</div>
+  <div style="margin-top:6px;padding:4px 8px;background:#ffe0e0;border-left:2px solid #c44545;font-size:11px"><strong>⚠️ Subagent 反对</strong>: 建议 <span style="color:#c44545;font-weight:600">彻底删</span> — "Dead UI 没 option value, git 里代码永远在, 未来 20 分钟就能恢复. 隐藏反而增加每次 UI 改动/accessibility audit 的维护税."</div>
+  </div></td>
+  <td class="decision"><select><option value="hide">隐藏</option><option value="delete" selected>删除(subagent 建议)</option><option value="keep">保留</option><option value="implement">实装</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+<tr data-id="14" data-my-rec="delete">
+  <td class="name">Broadcast Interval: 15s</td>
+  <td>控制语音广播/告警的间隔. 依赖 12+13.</td>
+  <td class="status-fake">❌ 假配置</td>
+  <td><span class="work work-small">2 小时</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-delete">删除</span><div class="rec-reason">依赖 12(删) + 13(隐藏). 孤儿配置. 一起删.</div></div></td>
+  <td class="decision"><select><option value="delete" selected>删除</option><option value="keep">保留</option><option value="hide">隐藏</option><option value="implement">实装</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+
+<tr class="section-head"><td colspan="7">FEEDBACK</td></tr>
+<tr data-id="15" data-my-rec="implement">
+  <td class="name">Haptic Feedback</td>
+  <td>关键操作(planted flag/hike 开始/警告)时手机震动. 无声反馈 + 户外体验 + 无障碍.</td>
+  <td class="status-partial">⚠️ 代码调 Haptics 但没读设置</td>
+  <td><span class="work work-small">1-2 小时</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-implement">实装</span><div class="rec-reason">现有 Haptics.selectionAsync() 调用 5-6 处 (HikingScreen 按键). 加 <code>if (hapticFeedback) Haptics...</code> gate 就完事. Zero risk. 户外必备(冷手戴手套听不见 tap 反馈).</div></div></td>
+  <td class="decision"><select><option value="implement" selected>实装</option><option value="delete">删除</option><option value="keep">保留</option><option value="hide">隐藏</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+<tr data-id="16" data-my-rec="delete">
+  <td class="name">Sound Effects</td>
+  <td>flag plant / waypoint 抵达时播音效(叮咚). 满足感 + 游戏化.</td>
+  <td class="status-fake">❌ 假开关(0 处 audio)</td>
+  <td><span class="work work-med">2-3 天</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-delete">删除</span><div class="rec-reason">户外 App 音效不礼貌(公园/山里打扰别人 + 自己听不见风声大). 需设计音效资源 + expo-av + 触发点. 投产比低. AllTrails/Strava 都没. 删.</div></div></td>
+  <td class="decision"><select><option value="delete" selected>删除</option><option value="keep">保留</option><option value="hide">隐藏</option><option value="implement">实装</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+<tr data-id="17" data-my-rec="delete">
+  <td class="name">Edge Warning Glow</td>
+  <td>危险附近时屏幕边缘闪红光. 应急视觉警告(余光看到).</td>
+  <td class="status-fake">❌ 假开关</td>
+  <td><span class="work work-large">1 周+</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-delete">删除</span><div class="rec-reason">依赖 Danger Alerts(删). 独立没意义. 户外强阳光下边缘发光效果差(屏幕反光). 一起删.</div></div></td>
+  <td class="decision"><select><option value="delete" selected>删除</option><option value="keep">保留</option><option value="hide">隐藏</option><option value="implement">实装</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+
+<tr class="section-head"><td colspan="7">HIKE DATA CACHE</td></tr>
+<tr data-id="18" data-my-rec="hide">
+  <td class="name">Clear uploaded hike data</td>
+  <td>清已同步到服务器的 hike 磁盘缓存. 释放空间但服务器还有. 安全操作.</td>
+  <td class="status-real">✅ 真实装</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-hide">隐藏(移到 Debug)</span><div class="rec-reason">普通用户看不懂 "uploaded vs local". 应该自动化(hikeTracksCache 已有 size cap). 保留代码但 UI 只在 Debug Mode 下显示.</div></div></td>
+  <td class="decision"><select><option value="hide" selected>隐藏</option><option value="keep">保留</option><option value="delete">删除</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+<tr data-id="19" data-my-rec="hide">
+  <td class="name">Clear ALL hike data (danger)</td>
+  <td>清所有 hike 磁盘(包括未同步). destructive. 高级 debug.</td>
+  <td class="status-real">✅ 真实装</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-hide">隐藏(移到 Debug)</span><div class="rec-reason">普通用户误点损失 = 天灾. 只在 Debug Mode 下显示. 有 Sign Out 走正常清理路径够了.</div></div></td>
+  <td class="decision"><select><option value="hide" selected>隐藏</option><option value="keep">保留</option><option value="delete">删除</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+
+<tr class="section-head"><td colspan="7">DEBUG</td></tr>
+<tr data-id="20" data-my-rec="keep">
+  <td class="name">Debug Mode toggle</td>
+  <td>开启后显示 Debug 入口 + Hiking 界面可开虚拟摇杆(sim-walker). 开发/测试用. T2 误藏, O11 已恢复.</td>
+  <td class="status-real">✅ 真实装(刚修好)</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-keep">保留</span><div class="rec-reason">你自己真机测试必需. App Store 审核不管 dev toggle(只要不违反 guideline). 建议加"仅限开发者"文案说明.</div>
+  <div style="margin-top:6px;padding:4px 8px;background:#ffe0e0;border-left:2px solid #c44545;font-size:11px"><strong>⚠️ Subagent 强烈反对</strong>: 建议 <span style="color:#8a6b3d;font-weight:600">5-tap 手势恢复</span> — "App Store 2.2 会因'production 里有 debug/demo 内容'驳回. 审核员会翻 toggle, 看到 sim-walker overlay, 标 'incomplete features'. 恢复到之前 5-tap-version 的隐藏方式."</div>
+  </div></td>
+  <td class="decision"><select><option value="keep">保留</option><option value="delete">删除</option><option value="hide" selected>5-tap 手势(subagent 建议)</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..." value="上 App Store 前必须"></td>
+</tr>
+<tr data-id="21" data-my-rec="keep">
+  <td class="name">Debug 入口(打开 Debug Mode 后)</td>
+  <td>跳转到 DebugScreen 深度诊断页(网络/store dump/OTA 状态等).</td>
+  <td class="status-real">✅ 真实装</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-keep">保留</span><div class="rec-reason">保留. 依赖 Debug Mode.</div></div></td>
+  <td class="decision"><select><option value="keep" selected>保留</option><option value="delete">删除</option><option value="hide">隐藏</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+
+<tr class="section-head"><td colspan="7">ACCOUNT ACTIONS</td></tr>
+<tr data-id="22" data-my-rec="keep">
+  <td class="name">Sign Out</td>
+  <td>退出登录. 清 credentials, 回 Auth 界面. 标准动作.</td>
+  <td class="status-real">✅ 真实装</td>
+  <td><span class="work work-small">已完成</span></td>
+  <td><div class="my-rec"><span class="my-rec-tag rec-keep">保留</span><div class="rec-reason">必留. 标准配置.</div></div></td>
+  <td class="decision"><select><option value="keep" selected>保留</option><option value="delete">删除</option><option value="hide">隐藏</option><option value="change">改</option></select></td>
+  <td><input type="text" placeholder="备注..."></td>
+</tr>
+
+</tbody>
+</table>
+
+<div class="new-section">
+  <h2>💡 我建议新增</h2>
+  <table id="new-settings-table">
+  <thead>
+    <tr>
+      <th style="width:12%">配置项</th>
+      <th style="width:34%">产品作用</th>
+      <th style="width:7%">优先级</th>
+      <th style="width:7%">工作量</th>
+      <th style="width:24%">🎯 我的推荐 + 理由</th>
+      <th style="width:8%">你的决定</th>
+      <th style="width:10%">备注</th>
+    </tr>
+  </thead>
+  <tbody>
+
+  <tr data-id="N1" data-my-rec="implement">
+    <td class="name">Delete Account</td>
+    <td>永久删账户 + 所有数据. <strong>App Store 强制要求</strong>(Guideline 5.1.1(v), 2022 起).</td>
+    <td style="color:#c44545;font-weight:600">P0 必须</td>
+    <td><span class="work work-med">1-2 天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-implement">实装(必须)</span><div class="rec-reason">App Store 2022 起硬性要求 Delete Account. 没有此项审核会驳回. 不做上不了架. 后端加 DELETE /api/users/me + 前端二次确认 modal.</div></div></td>
+    <td class="decision"><select><option value="implement" selected>实装</option><option value="delete">不加</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N2" data-my-rec="implement">
+    <td class="name">Units: Metric / Imperial</td>
+    <td>公制(km/m) vs 英制(mi/ft). NZ 默认公制. 美国/英国用户来了必需.</td>
+    <td style="color:#c89432;font-weight:600">P1 高</td>
+    <td><span class="work work-med">2-3 天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-implement">实装</span><div class="rec-reason">现在所有距离显示 hardcode km/m. 美国用户第一天就抱怨. 加个 <code>formatDistance</code> util + toggle 就完事. 未来出美国区必需.</div></div></td>
+    <td class="decision"><select><option value="implement" selected>实装</option><option value="delete">不加</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N3" data-my-rec="implement">
+    <td class="name">Privacy Policy / Terms of Service 链接</td>
+    <td>点击打开 legal 文档. <strong>App Store 强制</strong>要有. NZ Privacy Act 也要求.</td>
+    <td style="color:#c44545;font-weight:600">P0 必须</td>
+    <td><span class="work work-small">半天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-implement">实装(必须)</span><div class="rec-reason">App Store 审核硬性要求 Privacy Policy 链接. 无此项直接驳回. 建议 host 在 cairn.app/privacy 静态页. 半天工作量.</div></div></td>
+    <td class="decision"><select><option value="implement" selected>实装</option><option value="delete">不加</option></select></td>
+    <td><input type="text" placeholder="备注..." value="需先写 privacy policy(NZ Privacy Act 12 principles)"></td>
+  </tr>
+
+  <tr data-id="N4" data-my-rec="implement">
+    <td class="name">About / Version info</td>
+    <td>App 版本 + build number + OTA version. 用户报 bug 时能说清用哪版.</td>
+    <td style="color:#4a6da3">P2 中</td>
+    <td><span class="work work-small">半天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-implement">实装</span><div class="rec-reason">现在 OtaBadge 显示 O11 但没 app version. Support 排查必需. 半天做. Constants.expoConfig.version 已有.</div></div></td>
+    <td class="decision"><select><option value="implement" selected>实装</option><option value="delete">不加</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N5" data-my-rec="implement">
+    <td class="name">Feedback / Contact Us</td>
+    <td>用户报 bug / 建议入口. Mailto: 或表单.</td>
+    <td style="color:#c89432;font-weight:600">P1 高</td>
+    <td><span class="work work-small">半天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-implement">实装</span><div class="rec-reason">MVP 阶段用户反馈是黄金. mailto:support@cairn.app 简单版半天. 加个"Include diagnostics" toggle 附上 OTA_VERSION + user_id 更好.</div></div></td>
+    <td class="decision"><select><option value="implement" selected>实装</option><option value="delete">不加</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N6" data-my-rec="delete">
+    <td class="name">Data & Storage</td>
+    <td>显示 App 占用磁盘 + cache clear.</td>
+    <td style="color:#4a6da3">P2 中</td>
+    <td><span class="work work-med">2-3 天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-delete">不加</span><div class="rec-reason">iOS 系统 Settings 已经能看到 App 占用. 自己再做一份重复且低价值. MVP 不做, v2 若真有存储问题再加.</div></div></td>
+    <td class="decision"><select><option value="delete" selected>不加</option><option value="implement">实装</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N7" data-my-rec="delete">
+    <td class="name">GPS Accuracy Mode</td>
+    <td>High/Balanced/Low. 精度 vs 电量.</td>
+    <td style="color:#4a6da3">P2 中</td>
+    <td><span class="work work-med">1-2 天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-delete">不加</span><div class="rec-reason">现在动态采样已经很好(dynamicSampling 60s 自适应). 用户选择精度是伪需求 - 增加认知负担. Strava 也没. 除非未来做多日 hike 才有意义.</div></div></td>
+    <td class="decision"><select><option value="delete" selected>不加</option><option value="implement">实装</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N8" data-my-rec="delete">
+    <td class="name">Notifications 权限管理</td>
+    <td>选择性 opt in/out 通知.</td>
+    <td style="color:#4a6da3">P2 中</td>
+    <td><span class="work work-med">1-2 天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-delete">不加</span><div class="rec-reason">依赖 push notification 系统, 但 MVP 阶段还没做通知. 先加通知系统, 再加权限管理. iOS 系统 Settings 也能 opt out.</div></div></td>
+    <td class="decision"><select><option value="delete" selected>不加</option><option value="implement">实装</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N9" data-my-rec="delete">
+    <td class="name">Language Selector</td>
+    <td>切 UI 语言.</td>
+    <td style="color:#8a8a8a">P3 低</td>
+    <td><span class="work work-large">1-2 周</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-delete">不加</span><div class="rec-reason">MVP 只 NZ 英文用户. i18n 工作量大. 出中国区/欧洲区再做.</div></div></td>
+    <td class="decision"><select><option value="delete" selected>不加</option><option value="implement">实装</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N10" data-my-rec="delete">
+    <td class="name">Backup / Export my data</td>
+    <td>导出所有数据 zip. GDPR portability.</td>
+    <td style="color:#8a8a8a">P3 低</td>
+    <td><span class="work work-large">3-5 天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-delete">不加</span><div class="rec-reason">GDPR 建议但 App Store 不强求. NZ Privacy Act 也不强求(可以支持"给你 CSV"手动响应). MVP 不做, v2 或 Premium 加.</div></div></td>
+    <td class="decision"><select><option value="delete" selected>不加</option><option value="implement">实装</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N11" data-my-rec="implement" style="background:#e8f0f8">
+    <td class="name">Sign in with Apple 审计</td>
+    <td>(不是 Settings 行, 是 Auth 屏必查) 有 Google/Facebook 登录 → 必须提供 Apple 登录. App Store 4.8 强制.</td>
+    <td style="color:#c44545;font-weight:600">P0 必须</td>
+    <td><span class="work work-med">1-2 天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-implement">实装(subagent 遗漏项)</span><div class="rec-reason">Subagent 强调: 若 Auth 有 Google/Facebook 但没 Apple, 上架直接驳回 (4.8). 需要审 AuthScreen 加 SignInWithAppleButton.</div></div></td>
+    <td class="decision"><select><option value="implement" selected>实装</option><option value="delete">不加</option></select></td>
+    <td><input type="text" placeholder="备注..." value="Auth 屏必查"></td>
+  </tr>
+
+  <tr data-id="N12" data-my-rec="implement" style="background:#e8f0f8">
+    <td class="name">Location 权限文案</td>
+    <td>(不是 Settings 行, 是 Info.plist) NSLocationAlwaysAndWhenInUseUsageDescription 文案. 户外 App 模糊文案会被审核员驳回.</td>
+    <td style="color:#c44545;font-weight:600">P0 必须</td>
+    <td><span class="work work-small">1 小时</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-implement">实装(subagent 遗漏项)</span><div class="rec-reason">Subagent: "户外 App 审核员会盯这个". 写清楚为什么要位置权限 + 后台位置权限. app.json → plugins → expo-location config.</div></div></td>
+    <td class="decision"><select><option value="implement" selected>实装</option><option value="delete">不加</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N13" data-my-rec="implement" style="background:#e8f0f8">
+    <td class="name">"Report a safety issue"</td>
+    <td>Mailto NZ DOC 或表单. 用户报告 hazard/trail 问题.</td>
+    <td style="color:#c89432;font-weight:600">P1 高</td>
+    <td><span class="work work-small">半天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-implement">实装(subagent 建议)</span><div class="rec-reason">Subagent: "免费的信任信号 + 卸责我们自己没做安全功能. NZ DOC 有 email endpoint 可以直接 mailto:."</div></div></td>
+    <td class="decision"><select><option value="implement" selected>实装</option><option value="delete">不加</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N14" data-my-rec="implement" style="background:#e8f0f8">
+    <td class="name">MetService 天气链接</td>
+    <td>外链按钮跳 MetService.co.nz. 不真接 API, 只是快捷方式.</td>
+    <td style="color:#c89432;font-weight:600">P1 高</td>
+    <td><span class="work work-small">1 小时</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-implement">实装(subagent 建议)</span><div class="rec-reason">Subagent: "NZ hiker 出发前必看 MetService. 一个外链按钮建立 credibility 而不做真实现. AllTrails 类似 pattern."</div></div></td>
+    <td class="decision"><select><option value="implement" selected>实装</option><option value="delete">不加</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  <tr data-id="N15" data-my-rec="delete" style="background:#e8f0f8">
+    <td class="name">Onboarding replay</td>
+    <td>"再看一次入门介绍". 用户忘记怎么用可以重看.</td>
+    <td style="color:#4a6da3">P2 中</td>
+    <td><span class="work work-small">半天</span></td>
+    <td><div class="my-rec"><span class="my-rec-tag rec-delete">不加(MVP 可以后续)</span><div class="rec-reason">Subagent 建议加. 但我觉得依赖 onboarding flow 完备. Cairn 现在的 onboarding 还没打磨完, 先做 onboarding 再加 replay.</div></div></td>
+    <td class="decision"><select><option value="delete" selected>不加</option><option value="implement">实装</option></select></td>
+    <td><input type="text" placeholder="备注..."></td>
+  </tr>
+
+  </tbody>
+  </table>
+</div>
+
+<button class="export-btn" onclick="exportDecisions()">📋 导出决定</button>
+<div class="out-box" id="output"></div>
+
+<script>
+function exportDecisions() {
+  const lines = ['# Cairn Settings MVP 决定 - ' + new Date().toISOString().slice(0,10), ''];
+  document.querySelectorAll('#settings-table tbody tr[data-id]').forEach(tr => {
+    const id = tr.dataset.id;
+    const myRec = tr.dataset.myRec || '?';
+    const name = tr.querySelector('.name').innerText.replace(/\n/g, ' | ');
+    const decision = tr.querySelector('select').value;
+    const note = tr.querySelector('input[type=text]').value;
+    const marker = decision === myRec ? '✓ 同意我的推荐' : '⚠️ 覆盖我的推荐(我建议 ' + myRec + ')';
+    lines.push(`${id}. [${decision.toUpperCase()}] ${name}  |  ${marker}${note ? '  |  📝 ' + note : ''}`);
+  });
+  lines.push('', '## 新增建议', '');
+  document.querySelectorAll('#new-settings-table tbody tr[data-id]').forEach(tr => {
+    const id = tr.dataset.id;
+    const myRec = tr.dataset.myRec || '?';
+    const name = tr.querySelector('.name').innerText.replace(/\n/g, ' | ');
+    const decision = tr.querySelector('select').value;
+    const note = tr.querySelector('input[type=text]').value;
+    const marker = decision === myRec ? '✓ 同意我的推荐' : '⚠️ 覆盖我的推荐(我建议 ' + myRec + ')';
+    lines.push(`${id}. [${decision.toUpperCase()}] ${name}  |  ${marker}${note ? '  |  📝 ' + note : ''}`);
+  });
+  const out = document.getElementById('output');
+  out.innerText = lines.join('\n');
+  out.style.display = 'block';
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    out.innerText += '\n\n✅ 已复制到剪贴板! 粘贴给 agent 即可.';
+  }).catch(() => {
+    out.innerText += '\n\n(剪贴板复制失败, 手动 Ctrl+A 全选复制)';
+  });
+  window.scrollTo(0, document.body.scrollHeight);
+}
+</script>
+</body>
+</html>

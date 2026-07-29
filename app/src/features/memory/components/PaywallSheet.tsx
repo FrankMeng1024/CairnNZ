@@ -7,7 +7,7 @@
  * v1 binding (v4 §7 + §12):
  *   - TestFlight-only. NO real IAP. Tap "Subscribe" → "Coming soon" toast.
  *   - App Store public release requires real IAP (deferred to v1.2).
- *   - Keep $4.99 price in copy so the perceived value is set.
+ *   - Keep NZ$5.99 price in copy so the perceived value is set (NZ launch).
  *
  * UX: full-screen sheet with hero image, value props, single CTA.
  */
@@ -65,7 +65,7 @@ export function PaywallSheet({ visible, onClose }: Props) {
           </View>
 
           <View style={styles.priceRow}>
-            <Text style={styles.price}>$4.99</Text>
+            <Text style={styles.price}>NZ$5.99</Text>
             <Text style={styles.priceUnit}>per month</Text>
           </View>
 

@@ -113,12 +113,12 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard, savi
             <Icon name="Map" size={18} color={accent} strokeWidth={2.2} />
             <Text style={[stopSheetStyles.memoryBannerText, { color: accent }]}>
               {summary.trackPoints.length < 2
-                ? 'Memory: Too short to record'
+                ? "Just getting started — we'll add to your memory map next hike."
                 : memoryNewCells > 0
                   ? (dist.imperial
-                      ? `Memory: +${(memoryNewCells * 0.000830).toFixed(3)} mi²`
-                      : `Memory: +${(memoryNewCells * 0.00215).toFixed(2)} km²`)
-                  : 'Memory: Familiar ground'}
+                      ? `You revealed ${(memoryNewCells * 0.000830).toFixed(3)} mi² of new ground.`
+                      : `You revealed ${(memoryNewCells * 0.00215).toFixed(2)} km² of new ground.`)
+                  : 'Familiar ground'}
             </Text>
           </View>
 

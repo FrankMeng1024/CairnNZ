@@ -104,7 +104,7 @@ function FriendCard({ friend }: {
         )}
       </View>
       <View style={cardStyles.info}>
-        <Text style={cardStyles.name}>{friend.name}</Text>
+        <Text style={cardStyles.name} numberOfLines={1}>{friend.name}</Text>
         <View style={cardStyles.metaRow}>
           {hasStatus && (
             <Text style={cardStyles.meta}>

@@ -503,6 +503,9 @@ export function PinAdjustStep({
           style={styles.styleToggle}
           onPress={onToggleStyle}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={mapStyle === 'outdoors' ? 'Switch to satellite view' : 'Switch to outdoor map'}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Icon
             name={mapStyle === 'satellite' ? 'Map' : 'Globe'}
@@ -519,6 +522,9 @@ export function PinAdjustStep({
             onPress={() => doZoom(+ZOOM_STEP)}
             disabled={zoom >= MAX_ZOOM}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Zoom in"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Icon
               name="Plus"
@@ -532,6 +538,9 @@ export function PinAdjustStep({
             onPress={() => doZoom(-ZOOM_STEP)}
             disabled={zoom <= MIN_ZOOM}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Zoom out"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Icon
               name="Minus"
@@ -548,6 +557,9 @@ export function PinAdjustStep({
               style={[styles.zoomBtn, { marginTop: 6 }]}
               onPress={doRecenter}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Recenter on your location"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Icon
                 name="Target"

@@ -15,8 +15,8 @@
  *   - Delete prompts confirm, then removes + nav.goBack
  *   - publicSnapshot: once a marker has been public, what others
  *     see is frozen. If the owner has edited away from the snapshot,
- *     a small banner shows "Others see: «snapshot.note», pinned as
- *     «snapshot.type»" so the owner is reminded of the divergence.
+ *     a small banner shows "Others see: [snapshot.note], pinned as
+ *     [snapshot.type]" so the owner is reminded of the divergence.
  *   - Toggling public off/on flips visibility but never re-snapshots.
  */
 import React, { useMemo, useState, useCallback } from 'react';
@@ -368,7 +368,7 @@ export function MarkerDetailScreen() {
           /* ─── VIEW MODE ─── */
           <View>
             {privateTitle ? (
-              <Text style={styles.title}>{privateTitle}</Text>
+              <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{privateTitle}</Text>
             ) : (
               <Text style={styles.titleEmpty}>Untitled cairn</Text>
             )}
@@ -391,7 +391,7 @@ export function MarkerDetailScreen() {
                   {(() => {
                     const sm = MARKER_TYPES[snap.type];
                     const sn = splitTitleBody(snap.note);
-                    return `«${sn.title || sn.body || 'Untitled'}», pinned as ${sm?.label ?? snap.type}.`;
+                    return `"${sn.title || sn.body || 'Untitled'}", pinned as ${sm?.label ?? snap.type}.`;
                   })()}
                 </Text>
                 <Text style={styles.snapshotFootnote}>

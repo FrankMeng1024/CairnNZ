@@ -245,7 +245,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //       the same local-session cross-check as the remote branch. Fix:
 //       duplicate the localMatch logic and also call discardActiveHike
 //       to clean the orphan file.
-export const OTA_VERSION = 'O16';
+// O17 (2026-07-29): UX audit batch — 40+ safe fixes based on 13-audit corpus.
+//   Copy fixes (30): iOS purpose strings, error messages, empty states, unified
+//     report reasons across CairnPinsLayer + MapScreen, Free Hiking → Free Hike,
+//     Delete Flag / this mark → Delete cairn, No note added → No note yet,
+//     Discard this activity → Discard this hike, Route Map → History,
+//     "Something went wrong" → contextual copy, Auth splash + tracking permission
+//     alert re-worded, paywall $4.99 → NZ$5.99.
+//   A11y (11): PressBtn now forwards accessibilityLabel/Role; ActivityCard +
+//     ToolBtn labels; HikingScreen Stop button; AuthScreen password toggle;
+//     SettingsScreen 3× password eye toggles + hitSlop; PlantScreen zoom/style/
+//     recenter buttons + hitSlop.
+//   Perf (4): markerCount memoized (HomeScreen); PulsingDot Animated.loop
+//     cleanup (RunningScreen); MemoryScreen heartbeat gated to __DEV__;
+//     mapboxAdapter web-shim console.log gated to __DEV__.
+//   Safety (3): useMemoryStore recordPoint guards atMs; useMarkerStore hydrate
+//     opportunistically clears pre-v0.2.6 legacy 'cairn_markers' key;
+//     PRIVACY_URL strips trailing /api. Removed guillemets (french «») in
+//     public-snapshot banner. Plan Route stub gated to __DEV__.
+//   4-eyes review PASS (2 subagents, HIGH confidence). TypeScript --noEmit
+//   clean (only pre-existing test-file / turf-helpers warnings unchanged).
+export const OTA_VERSION = 'O17';
 
 
 type OtaState =

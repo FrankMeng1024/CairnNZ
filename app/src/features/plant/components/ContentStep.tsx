@@ -81,7 +81,7 @@ export function ContentStep({
             showsVerticalScrollIndicator={false}
           >
             <Text style={styles.title}>Leave a mark</Text>
-            <Text style={styles.sub}>A few words, a voice memo, or both.</Text>
+            <Text style={styles.sub}>A few words, and a photo if you'd like.</Text>
 
             {/* V5: cairn type picker */}
             <Text style={styles.label}>Type</Text>
@@ -129,9 +129,11 @@ export function ContentStep({
             />
             <Text style={styles.charCounter}>{text.length} / {ContentConfig.textMaxChars}</Text>
 
-            <View style={styles.voiceBox}>
-              <Text style={styles.voiceTodo}>🎤 Voice memo (coming soon, max {ContentConfig.voiceMaxSeconds}s)</Text>
-            </View>
+            {__DEV__ && (
+              <View style={styles.voiceBox}>
+                <Text style={styles.voiceTodo}>Voice memo (dev-only preview — coming in a later release)</Text>
+              </View>
+            )}
 
             <Text style={styles.label}>Who can see this</Text>
             <View style={styles.chipRow}>
