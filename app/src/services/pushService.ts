@@ -89,7 +89,28 @@ export async function registerForPush(): Promise<string | null> {
 }
 
 export async function unregisterCurrent(): Promise<void> {
-  const token = cachedToken;
+  // Sprint 6 round-13 R13B6 fix: cachedToken is module-level in-memory
+  // and null after cold boot. If the user logs in briefly and then
+  // logs out without triggering registerForPush to completion,
+  // unregisterCurrent silently no-ops and the backend keeps sending
+  // pushes until the 60-day sweep. Now: on null cachedToken, ask
+  // expo-notifications for the CURRENT device token so we can still
+  // unregister the correct row.
+  let token = cachedToken;
+  if (!token && Platform.OS !== 'web') {
+    try {
+      const Notifications = await import('expo-notifications');
+      const Device = await import('expo-device');
+      if (Device.isDevice) {
+        const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID
+          || (await import('expo-constants')).default.expoConfig?.extra?.eas?.projectId;
+        const tokenObj = await Notifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined,
+        );
+        token = tokenObj?.data ?? null;
+      }
+    } catch { /* silent — no token available */ }
+  }
   if (!token) return;
   try {
     await authenticatedFetch('/api/push/unregister', {

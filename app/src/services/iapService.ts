@@ -108,6 +108,15 @@ export async function initializePurchases(userId: string): Promise<boolean> {
 // rotated API keys, matches the semantic "logOut clears everything").
 export async function resetPurchases(): Promise<void> {
   const Purchases = await tryLoadModule();
+  // Sprint 6 round-14 R14B10 companion: clear the entitlement cache
+  // regardless of SDK state — pre-existing cache from user A must not
+  // leak to user B who logs in next. Runs BEFORE the SDK logout in
+  // case that throws.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { storage } = require('../store/storage');
+    await storage.removeItem(ENTITLEMENT_CACHE_KEY);
+  } catch { /* silent */ }
   if (!Purchases || !initialized) return;
   try {
     await Purchases.logOut();
@@ -175,13 +184,50 @@ export async function restorePurchases(): Promise<{ hasEntitlement: boolean }> {
   }
 }
 
+const ENTITLEMENT_CACHE_KEY = 'cairn_iap_entitlement_cache';
+const ENTITLEMENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
 export async function hasProEntitlement(): Promise<boolean> {
+  // Sprint 6 round-14 R14B10 fix: cache last-known entitlement to
+  // AsyncStorage so an offline/uninitialized read doesn't false-negative
+  // for a legitimate paying user. Airplane-mode / dead-zone hiking is
+  // exactly this app's target scenario.
   const Purchases = await tryLoadModule();
-  if (!Purchases || !initialized) return false;
+  const readCache = async (): Promise<{ has: boolean; ts: number } | null> => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { storage } = require('../store/storage');
+      const raw = await storage.getItem(ENTITLEMENT_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.has !== 'boolean' || typeof parsed?.ts !== 'number') return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+  const writeCache = async (has: boolean) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { storage } = require('../store/storage');
+      await storage.setItem(ENTITLEMENT_CACHE_KEY, JSON.stringify({ has, ts: Date.now() }));
+    } catch { /* silent */ }
+  };
+  if (!Purchases || !initialized) {
+    // Not ready to check live — fall back to cached value if fresh.
+    const cached = await readCache();
+    if (cached && Date.now() - cached.ts < ENTITLEMENT_CACHE_TTL_MS) return cached.has;
+    return false;
+  }
   try {
     const customerInfo = await Purchases.getCustomerInfo();
-    return !!customerInfo?.entitlements?.active?.[ENTITLEMENT_ID];
+    const has = !!customerInfo?.entitlements?.active?.[ENTITLEMENT_ID];
+    await writeCache(has); // refresh cache on successful check
+    return has;
   } catch {
+    // Offline / SDK error — return cached value if fresh, else false.
+    const cached = await readCache();
+    if (cached && Date.now() - cached.ts < ENTITLEMENT_CACHE_TTL_MS) return cached.has;
     return false;
   }
 }
