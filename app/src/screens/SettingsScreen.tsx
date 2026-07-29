@@ -245,6 +245,33 @@ export function SettingsScreen() {
   const allMarkers = useMarkerStore((s) => s.markers);
   const myCairnCount = user?.id ? allMarkers.filter((m) => m.authorId === user.id).length : 0;
 
+  // O18 SET-05 (batch 6.5): push notification preferences.
+  const [pushPrefs, setPushPrefs] = useState<{ friendRequests: boolean; markerReplies: boolean; memoryHits: boolean; announcements: boolean } | null>(null);
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { getPushPreferences } = require('../services/pushService');
+        const p = await getPushPreferences();
+        if (!cancelled && p) setPushPrefs(p);
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isLoggedIn]);
+  const togglePushPref = async (key: 'friendRequests' | 'markerReplies' | 'memoryHits' | 'announcements') => {
+    if (!pushPrefs) return;
+    const next = { ...pushPrefs, [key]: !pushPrefs[key] };
+    setPushPrefs(next); // optimistic
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { updatePushPreferences } = require('../services/pushService');
+      const server = await updatePushPreferences({ [key]: next[key] });
+      if (server) setPushPrefs(server);
+    } catch { /* revert on failure — server sends full state */ }
+  };
+
   // Change Password
   const [showChangePw, setShowChangePw] = useState(false);
   const [currentPw, setCurrentPw] = useState('');
@@ -777,6 +804,51 @@ export function SettingsScreen() {
           {/* O15 bug 1: Progress moved to right below Profile card
            *  (was between Preferences and About). Now the user sees
            *  their achievement immediately after their identity. */}
+
+          {/* ── O18 SET-05: Notifications ────────────────────────── */}
+          {isLoggedIn && pushPrefs && (
+            <>
+              <SectionHeader title="Notifications" />
+              <View style={styles.card}>
+                <ToggleRow
+                  iconName="Users"
+                  iconColor="#5d7c46"
+                  iconBg="#e6ede0"
+                  label="Friend requests"
+                  hint="When someone wants to add you"
+                  value={pushPrefs.friendRequests}
+                  onToggle={() => togglePushPref('friendRequests')}
+                />
+                <ToggleRow
+                  iconName="Flag"
+                  iconColor="#c47a00"
+                  iconBg="#f5e6cc"
+                  label="Cairn activity"
+                  hint="Replies and reactions on your cairns"
+                  value={pushPrefs.markerReplies}
+                  onToggle={() => togglePushPref('markerReplies')}
+                />
+                <ToggleRow
+                  iconName="Mountain"
+                  iconColor="#4a6b38"
+                  iconBg="#e0e8d5"
+                  label="Memory highlights"
+                  hint="When a friend hikes near a place you've been"
+                  value={pushPrefs.memoryHits}
+                  onToggle={() => togglePushPref('memoryHits')}
+                />
+                <ToggleRow
+                  iconName="Info"
+                  iconColor="#4a7a8a"
+                  iconBg="#e6eef0"
+                  label="Announcements"
+                  hint="Occasional product updates"
+                  value={pushPrefs.announcements}
+                  onToggle={() => togglePushPref('announcements')}
+                />
+              </View>
+            </>
+          )}
 
           {/* ── About & Legal ── */}
           <SectionHeader title="About & Legal" />

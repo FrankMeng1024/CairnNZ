@@ -76,10 +76,28 @@ router.post('/request', validateBody(schemas.friend.request), async (req, res) =
     if (pending.length > 0) return res.status(400).json({ error: 'Request already sent' });
 
     // Create request
-    await pool.execute(
+    const [reqResult] = await pool.execute(
       'INSERT INTO friend_requests (from_user_id, to_user_id, status, created_at) VALUES (?, ?, "pending", NOW())',
       [fromUserId, toUser.id]
     );
+
+    // O18 batch 6.5: notify recipient that they got a new friend request.
+    // Fire-and-forget so a push-service outage never blocks request creation.
+    try {
+      const [meRows] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [fromUserId]);
+      const myName = meRows[0]?.name || 'A hiker';
+      const PushNotification = require('../models/PushNotification');
+      PushNotification.enqueue({
+        recipientUserId: toUser.id,
+        actorUserId: fromUserId,
+        kind: 'friend_request',
+        relatedId: reqResult.insertId,
+        title: `${myName} wants to be your friend`,
+        body: 'Tap to review and accept.',
+      }).catch(err => console.error('[push] friend_request enqueue failed:', err.message));
+    } catch (pushErr) {
+      console.error('[push] friend_request trigger failed:', pushErr.message);
+    }
 
     res.status(201).json({ message: 'Friend request sent' });
   } catch (err) {
@@ -129,6 +147,24 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
 
     // Update request status
     await pool.execute('UPDATE friend_requests SET status = "accepted" WHERE id = ?', [requestId]);
+
+    // O18 batch 6.5: notify the original requester that their request
+    // was accepted. Fire-and-forget — do not block the response.
+    try {
+      const [meRows] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
+      const myName = meRows[0]?.name || 'A friend';
+      const PushNotification = require('../models/PushNotification');
+      PushNotification.enqueue({
+        recipientUserId: request.from_user_id,
+        actorUserId: req.user.userId,
+        kind: 'friend_accept',
+        relatedId: requestId,
+        title: `${myName} accepted your friend request`,
+        body: 'You can now see each other\'s cairns and share hikes.',
+      }).catch(err => console.error('[push] friend_accept enqueue failed:', err.message));
+    } catch (pushErr) {
+      console.error('[push] friend_accept trigger failed:', pushErr.message);
+    }
 
     res.json({ message: 'Friend request accepted' });
   } catch (err) {

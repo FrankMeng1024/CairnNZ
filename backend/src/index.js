@@ -17,6 +17,7 @@ const path = require('path');
 const pool = require('./config/db');
 const { run: cleanHiddenOrphans } = require('./cron/cleanHiddenItemsOrphans');
 const { run: authSweep } = require('./cron/authSweep');
+const { runDrain: pushDrain, runPurge: pushPurge } = require('./cron/pushDrain');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -104,6 +105,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/routes', require('./routes/routes'));
 app.use('/api/friends', require('./routes/friends'));
+app.use('/api/push', require('./routes/push'));
 app.use('/api/markers', require('./routes/markers'));
 app.use('/api/memory', require('./routes/memory'));
 app.use('/api/memory-subscriptions', require('./routes/memory-subscriptions'));
@@ -170,6 +172,23 @@ async function start() {
       });
     }, { timezone: 'UTC' });
     console.log('✓ Cron registered: authSweep (15 3 * * * UTC)');
+
+    // O18 batch 6.5: push drain every minute + daily purge at 03:30 UTC.
+    // Drain is aggressive so notifications feel real-time; if transport
+    // is disabled (no EXPO_PUSH_ACCESS_TOKEN) rows still drain via
+    // dropped_no_transport so the queue does not grow indefinitely.
+    cron.schedule('* * * * *', () => {
+      pushDrain({ verbose: false }).catch((err) => {
+        console.error('[cron/scheduler] pushDrain failed:', err.message);
+      });
+    }, { timezone: 'UTC' });
+    console.log('✓ Cron registered: pushDrain (every 1 min)');
+    cron.schedule('30 3 * * *', () => {
+      pushPurge({ verbose: true }).catch((err) => {
+        console.error('[cron/scheduler] pushPurge failed:', err.message);
+      });
+    }, { timezone: 'UTC' });
+    console.log('✓ Cron registered: pushPurge (30 3 * * * UTC)');
   }
 }
 

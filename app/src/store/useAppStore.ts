@@ -76,7 +76,19 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   isLoggedIn: false,
-  setLoggedIn: (v) => set({ isLoggedIn: v }),
+  setLoggedIn: (v) => {
+    set({ isLoggedIn: v });
+    // O18 batch 6.5: fire push registration once the user is actually
+    // logged in. Fire-and-forget — never block the UI on the permission
+    // prompt or the network round-trip.
+    if (v) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { registerForPush } = require('../services/pushService');
+        registerForPush().catch(() => { /* silent */ });
+      } catch { /* pushService import failed — silent */ }
+    }
+  },
   user: null,
   setUser: (user) => set({ user }),
   hydrated: false,
@@ -87,6 +99,14 @@ export const useAppStore = create<AppState>((set) => ({
 
   logout: () => {
     crashLogger.breadcrumb('logout:start');
+    // O18 batch 6.5: unregister push token before dropping auth state so
+    // the /unregister call goes out with a valid token. Fire-and-forget —
+    // never let a push failure block sign-out.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { unregisterCurrent } = require('../services/pushService');
+      unregisterCurrent().catch(() => { /* silent */ });
+    } catch { /* pushService import failed — silent */ }
     set({ isLoggedIn: false, user: null });
     crashLogger.breadcrumb('logout:state_cleared');
     useSessionStore.getState().clearSessions();
