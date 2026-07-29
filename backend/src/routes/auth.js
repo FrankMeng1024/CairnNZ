@@ -327,6 +327,88 @@ router.post('/google', oauthLimiter, validateBody(schemas.auth.google), async (r
   }
 });
 
+// ── POST /api/auth/apple (O18 batch 6.6 AUTH-02) ──────────────────────────
+// Sign in with Apple. Client sends the identity_token returned by
+// expo-apple-authentication. Server verifies signature against Apple's
+// JWKS + audience matches our bundle ID, then upserts a users row + links
+// via user_oauth (provider='apple'). First-time signup gets name from
+// `name` in the request body (client-supplied — Apple only sends it once,
+// on very first authorize).
+router.post('/apple', oauthLimiter, async (req, res) => {
+  const { identity_token, name: providedName } = req.body || {};
+  if (!identity_token) return res.status(400).json({ error: 'identity_token is required.' });
+  const audience = process.env.APPLE_BUNDLE_ID || process.env.APPLE_CLIENT_ID;
+  if (!audience) {
+    console.error('[apple] APPLE_BUNDLE_ID env not set');
+    return res.status(500).json({ error: 'Apple sign-in not configured on server.' });
+  }
+  try {
+    const { verifyAppleIdentityToken } = require('../services/appleAuth');
+    const payload = await verifyAppleIdentityToken(identity_token, audience);
+    if (!payload || !payload.sub) return res.status(401).json({ error: 'Invalid Apple token.' });
+    // Apple's `sub` is a stable per-user, per-app hash. Email is present
+    // only on the first authorize (or when the user consents to share it).
+    const appleSub = payload.sub;
+    const email = (payload.email || '').toLowerCase();
+    const emailVerified = payload.email_verified === true || payload.email_verified === 'true';
+    // Delete any pending registration for this email (it becomes void)
+    if (email) await User.deletePending(email);
+
+    // Find existing user by oauth link first, then by email if a fallback.
+    let user = null;
+    const oauthRow = await User.findOAuth('apple', appleSub);
+    if (oauthRow) {
+      user = await User.findById(oauthRow.user_id);
+    } else if (email) {
+      user = await User.findByEmail(email);
+    }
+
+    if (!user && email) {
+      // New user — create with the client-provided name (Apple only sends
+      // it on first authorize, hence the fallback to email local-part).
+      const displayName = (providedName && String(providedName).trim().slice(0, 60))
+        || email.split('@')[0]
+        || 'Cairn user';
+      const userId = await User.createOAuthUser(displayName, email);
+      await User.linkOAuth(userId, 'apple', appleSub);
+      user = await User.findById(userId);
+    } else if (user) {
+      await User.linkOAuth(user.id, 'apple', appleSub);
+    }
+
+    if (!user) {
+      // No email + no existing link — Apple withheld the email (private
+      // relay) and this is a fresh signup. We cannot create a user row
+      // without SOME email since email is the unique identifier for
+      // account recovery + friend-lookup. Ask the client to prompt the
+      // user or hand off to a manual email-entry step.
+      return res.status(400).json({
+        error: 'Apple did not share your email. Please sign up with email instead.',
+        hint: 'apple_no_email',
+      });
+    }
+
+    const publicUser = User.toPublic(user);
+    const token = signToken({ userId: publicUser.id, email: publicUser.email });
+
+    // Soft-delete handoff (same as /login and /google).
+    if (user.deleted_at) {
+      const deletedAt = new Date(user.deleted_at);
+      const restoreDeadline = new Date(deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      return res.json({
+        user: publicUser,
+        token,
+        hint: 'pending_deletion',
+        restore_deadline: restoreDeadline.toISOString(),
+      });
+    }
+    return res.json({ user: publicUser, token, emailVerified });
+  } catch (err) {
+    console.error('[apple]', err.message);
+    return res.status(401).json({ error: 'Apple sign-in failed. Please try again.' });
+  }
+});
+
 // ── GET /api/auth/me ───────────────────────────────────────────────────────
 router.get('/me', authenticate, async (req, res) => {
   try {

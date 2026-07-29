@@ -458,6 +458,7 @@ export function AuthScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);  // STORY-00132: separate state
+  const [appleLoading, setAppleLoading] = useState(false);    // O18 batch 6.6
   const [apiError, setApiError] = useState('');
   const [nameError, setNameError] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -821,6 +822,74 @@ export function AuthScreen() {
     await promptGoogleAsync();
     setGoogleLoading(false);
     googleFlowActive.current = false;
+  };
+
+  // O18 batch 6.6 AUTH-02: Sign in with Apple.
+  // Uses expo-apple-authentication. iOS only (Apple restricts the API).
+  // Web + Android fall back to the "coming soon" alert.
+  const handleAppleAuth = async () => {
+    resetErrors();
+    if (Platform.OS !== 'ios') {
+      Alert.alert('Apple Sign In', 'Apple Sign In is available on iOS only. Please use email or Google on this device.');
+      return;
+    }
+    setAppleLoading(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const AppleAuthentication = require('expo-apple-authentication');
+      const available = await AppleAuthentication.isAvailableAsync();
+      if (!available) {
+        Alert.alert('Apple Sign In', 'Apple Sign In is not available on this device (older iOS or unsupported region).');
+        return;
+      }
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      const idToken = credential.identityToken;
+      if (!idToken) {
+        Alert.alert('Apple Sign In failed', 'No identity token returned. Please try again.');
+        return;
+      }
+      // Apple only sends `fullName` on the very first authorize. Persist
+      // it so a retry (after crash / user cancels first attempt) can
+      // still send the display name.
+      let providedName: string | undefined;
+      if (credential.fullName && (credential.fullName.givenName || credential.fullName.familyName)) {
+        providedName = [credential.fullName.givenName, credential.fullName.familyName]
+          .filter(Boolean).join(' ').trim() || undefined;
+        try { await storage.setItem(`cairn_apple_name_${credential.user}`, providedName || ''); } catch { /* silent */ }
+      } else {
+        try {
+          const cached = await storage.getItem(`cairn_apple_name_${credential.user}`);
+          if (cached) providedName = cached;
+        } catch { /* silent */ }
+      }
+      const { loginWithApple } = require('../services/authService');
+      const result = await loginWithApple(idToken, providedName);
+      if (result.error) {
+        Alert.alert('Apple Sign In failed', result.error);
+        return;
+      }
+      if (result.hint === 'pending_deletion' && result.restoreDeadline) {
+        setRestoreDeadline(result.restoreDeadline);
+        setView('restore_confirm');
+        return;
+      }
+      if (result.user) setUser(result.user);
+      await hydrate();
+      setLoggedIn(true);
+    } catch (err: any) {
+      // Apple returns an error whose `code` includes ERR_REQUEST_CANCELED
+      // when the user swipes away — suppress the alert in that case.
+      const code = err?.code || '';
+      if (code === 'ERR_REQUEST_CANCELED' || code === 'ERR_CANCELED') return;
+      Alert.alert('Apple Sign In failed', err?.message || 'Please try again.');
+    } finally {
+      setAppleLoading(false);
+    }
   };
 
   // Resend cooldown countdown
@@ -1488,16 +1557,21 @@ export function AuthScreen() {
                 <View style={formStyles.divLine} />
               </View>
 
-              {/* Apple — disabled on web, requires physical iOS device */}
+              {/* Apple — real Sign in with Apple (O18 batch 6.6). Only
+                  offered on iOS + physical device. Web/Android/simulator
+                  falls back to the "coming soon" message. */}
               <PressBtn
                 style={formStyles.appleBtn}
-                onPress={() => Alert.alert('Coming soon', 'Apple Sign In is not available yet. Please use email login for now.')}
+                onPress={handleAppleAuth}
                 scale={0.98}
+                disabled={appleLoading || loading}
               >
                 <View style={styles.btnContent}>
-                  <Icon name="Apple" size={IconSize.sm} color="#fff" strokeWidth={1.8} />
+                  {appleLoading
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Icon name="Apple" size={IconSize.sm} color="#fff" strokeWidth={1.8} />}
                   <View>
-                    <Text style={formStyles.appleBtnText}>Continue with Apple</Text>
+                    <Text style={formStyles.appleBtnText}>{appleLoading ? 'Connecting…' : 'Continue with Apple'}</Text>
                   </View>
                 </View>
               </PressBtn>

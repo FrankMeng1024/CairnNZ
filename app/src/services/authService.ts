@@ -154,6 +154,33 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
   }
 }
 
+// O18 batch 6.6 AUTH-02: Sign in with Apple.
+// idToken = identity_token returned by expo-apple-authentication.signInAsync
+// providedName = only present on first authorize — Apple never resends it.
+//   Store it in AsyncStorage before calling this so a retry can still send
+//   the display name.
+export async function loginWithApple(
+  idToken: string,
+  providedName?: string,
+): Promise<AuthResult> {
+  try {
+    const res = await post('/api/auth/apple', { identity_token: idToken, name: providedName });
+    const data = await res.json();
+    if (!res.ok) {
+      return { error: data?.error || 'Apple sign-in failed. Please try again.', hint: data?.hint };
+    }
+    await saveToken(data.token);
+    return {
+      user: data.user,
+      token: data.token,
+      hint: data.hint,
+      restoreDeadline: data.restore_deadline,
+    };
+  } catch {
+    return { error: 'Unable to connect. Please try again.' };
+  }
+}
+
 export async function logout(): Promise<void> {
   // O18 AUTH-08: revoke jti server-side so the token can't be re-used
   // (e.g. if the user handed the phone off and someone lifted the token).
