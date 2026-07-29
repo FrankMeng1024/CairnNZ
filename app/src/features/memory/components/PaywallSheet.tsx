@@ -11,24 +11,84 @@
  *
  * UX: full-screen sheet with hero image, value props, single CTA.
  */
-import React from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
+import { getOfferings, purchasePackage, restorePurchases, type OfferingPackage } from '../../../services/iapService';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
+  onEntitled?: () => void;   // Batch 6.8: caller can react to a successful purchase.
 }
 
-export function PaywallSheet({ visible, onClose }: Props) {
-  const onSubscribe = () => {
-    // v1: NO IAP. v1.2 wires real RevenueCat / StoreKit flow.
-    Alert.alert(
-      'Coming soon',
-      'Memory Pro will be available in the App Store release. For now, you have 5 friend slots.',
-      [{ text: 'OK', onPress: onClose }],
-    );
+export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
+  const [offerings, setOfferings] = useState<OfferingPackage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const pkgs = await getOfferings();
+      if (!cancelled) {
+        setOfferings(pkgs);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [visible]);
+
+  const primaryPkg = offerings[0] || null;
+  const priceLabel = primaryPkg?.priceString || 'NZ$5.99 / month';
+
+  const onSubscribe = async () => {
+    if (!primaryPkg) {
+      // No offerings — SDK not initialised (no EAS build with RevenueCat
+      // native module yet). Fall back to "coming soon" so the user isn't
+      // stuck. Batch 6.10 Pre-Build gate flips this once the module is in.
+      Alert.alert(
+        'Coming soon',
+        'Memory Pro will be available in the App Store release. For now, you have 5 friend slots.',
+        [{ text: 'OK', onPress: onClose }],
+      );
+      return;
+    }
+    setPurchasing(true);
+    try {
+      const r = await purchasePackage(primaryPkg);
+      if (r.cancelled) return;   // silent — user tapped X
+      if (r.error) {
+        Alert.alert('Purchase failed', r.error);
+        return;
+      }
+      if (r.hasEntitlement) {
+        Alert.alert('Welcome to Memory Pro', 'You now have unlimited friend slots. Thank you for supporting Cairn!');
+        onEntitled?.();
+        onClose();
+      }
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
+  const onRestore = async () => {
+    setPurchasing(true);
+    try {
+      const r = await restorePurchases();
+      if (r.hasEntitlement) {
+        Alert.alert('Restored', 'Your Memory Pro subscription is active.');
+        onEntitled?.();
+        onClose();
+      } else {
+        Alert.alert('Nothing to restore', 'No active subscription found on this account.');
+      }
+    } finally {
+      setPurchasing(false);
+    }
   };
 
   return (
@@ -65,15 +125,24 @@ export function PaywallSheet({ visible, onClose }: Props) {
           </View>
 
           <View style={styles.priceRow}>
-            <Text style={styles.price}>NZ$5.99</Text>
-            <Text style={styles.priceUnit}>per month</Text>
+            <Text style={styles.price}>{priceLabel.split(' ')[0] || 'NZ$5.99'}</Text>
+            <Text style={styles.priceUnit}>{primaryPkg?.packageType === 'ANNUAL' ? 'per year' : 'per month'}</Text>
           </View>
 
-          <TouchableOpacity style={styles.cta} onPress={onSubscribe} testID="paywall-subscribe">
-            <Text style={styles.ctaText}>Subscribe</Text>
+          <TouchableOpacity
+            style={[styles.cta, purchasing && { opacity: 0.6 }]}
+            onPress={onSubscribe}
+            disabled={purchasing || loading}
+            testID="paywall-subscribe"
+          >
+            {purchasing
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.ctaText}>{primaryPkg ? 'Subscribe' : 'Continue'}</Text>}
           </TouchableOpacity>
 
-          <Text style={styles.foot}>Restore purchases · Privacy · Terms</Text>
+          <TouchableOpacity onPress={onRestore} disabled={purchasing} testID="paywall-restore">
+            <Text style={styles.foot}>Restore purchases · Privacy · Terms</Text>
+          </TouchableOpacity>
         </Pressable>
       </Pressable>
     </Modal>

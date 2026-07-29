@@ -87,6 +87,16 @@ export const useAppStore = create<AppState>((set) => ({
         const { registerForPush } = require('../services/pushService');
         registerForPush().catch(() => { /* silent */ });
       } catch { /* pushService import failed — silent */ }
+      // O18 batch 6.8: initialise RevenueCat purchases SDK. Idempotent
+      // + safe if the native module isn't in the current build.
+      try {
+        const currentUser = useAppStore.getState().user;
+        if (currentUser?.id) {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { initializePurchases } = require('../services/iapService');
+          initializePurchases(currentUser.id).catch(() => { /* silent */ });
+        }
+      } catch { /* iapService import failed — silent */ }
     }
   },
   user: null,
