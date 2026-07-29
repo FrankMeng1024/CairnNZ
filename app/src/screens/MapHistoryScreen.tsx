@@ -533,12 +533,23 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
   return (
     <View style={{ marginBottom: Spacing.sm }}>
       {isPendingSync ? (
-        // 灰卡: 主体 press 不可点 (noop), 但整块 onLongPress 触发放弃菜单
+        // O18 HIST-08: pending grey card is now tappable — triggers a manual
+        // syncDaemon.drainPending() so users can retry without waiting for
+        // the automatic cycle. Long-press still opens the abandon menu.
         <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => { /* noop — 灰卡不可点 */ }}
+          activeOpacity={0.7}
+          onPress={async () => {
+            try {
+              const { drainPending } = require('../services/syncDaemon');
+              await drainPending();
+            } catch (e) {
+              // eslint-disable-next-line no-console
+              console.warn('[HIST-08] manual sync trigger failed:', e);
+            }
+          }}
           onLongPress={handleLongPressAbandon}
           delayLongPress={800}
+          accessibilityLabel="Tap to retry sync, long-press to discard"
         >
           <View style={[cardStyles.routeCard, { opacity: 0.55 }]}>
             <LinearGradient
@@ -560,7 +571,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
                 <Icon name="CloudOff" size={12} color={Colors.textSecondary} strokeWidth={2} />
                 <Text style={{ color: Colors.textSecondary, fontSize: FontSize.caption }}>
-                  {session.syncState === 'syncing' ? 'Syncing…' : 'Saved offline, will upload when online'}
+                  {session.syncState === 'syncing' ? 'Syncing…' : 'Saved offline — tap to retry sync'}
                 </Text>
               </View>
             </LinearGradient>
@@ -746,6 +757,12 @@ export function MapHistoryScreen() {
   const [tab, setTab] = useState<'routes' | 'flags'>('routes');
   // O18 HIST-01: search filter for the history list.
   const [searchQuery, setSearchQuery] = useState('');
+  // O18 HIST-02: type filter (all / hiking / running), sort order, and time
+  // period (all / week / month / year). All client-side over local sessions.
+  const [typeFilter, setTypeFilter] = useState<'all' | 'hiking' | 'running'>('all');
+  const [sortOrder, setSortOrder] = useState<'recent' | 'oldest' | 'longest'>('recent');
+  const [periodFilter, setPeriodFilter] = useState<'all' | 'week' | 'month' | 'year'>('all');
+  const [showFilters, setShowFilters] = useState(false);
 
   const region = getCurrentRegion();
   const allSessions = useSessionStore(s => s.sessions);
@@ -754,12 +771,28 @@ export function MapHistoryScreen() {
     ? allSessions.filter(s => s.id === targetSessionId)
     : allSessions;
 
-  // O18 HIST-01: apply text search filter — matches on session name.
+  // O18 HIST-01/02: apply search + type + period filters, then sort.
   const filteredSessions = React.useMemo(() => {
+    let list = sessions;
+    // Type filter
+    if (typeFilter !== 'all') {
+      list = list.filter(s => s.activityMode === typeFilter);
+    }
+    // Period filter (based on startedAt)
+    if (periodFilter !== 'all') {
+      const cutoff = Date.now() - (periodFilter === 'week' ? 7 : periodFilter === 'month' ? 30 : 365) * 86400000;
+      list = list.filter(s => (s.startedAt ?? 0) >= cutoff);
+    }
+    // Search filter (name match)
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return sessions;
-    return sessions.filter(s => (s.name || '').toLowerCase().includes(q));
-  }, [sessions, searchQuery]);
+    if (q) list = list.filter(s => (s.name || '').toLowerCase().includes(q));
+    // Sort
+    const sorted = [...list];
+    if (sortOrder === 'recent') sorted.sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0));
+    else if (sortOrder === 'oldest') sorted.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+    else if (sortOrder === 'longest') sorted.sort((a, b) => (b.distanceM ?? 0) - (a.distanceM ?? 0));
+    return sorted;
+  }, [sessions, searchQuery, typeFilter, periodFilter, sortOrder]);
 
   // Auto-select the target session or first session on mount
   useEffect(() => {
@@ -1309,7 +1342,70 @@ export function MapHistoryScreen() {
                   <Icon name="X" size={14} color={Colors.textMuted} strokeWidth={2.2} />
                 </TouchableOpacity>
               )}
+              {/* O18 HIST-02: filter toggle. Tap opens a chip bar below. */}
+              <TouchableOpacity
+                onPress={() => setShowFilters(v => !v)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Show filters"
+              >
+                <Icon
+                  name="ArrowUpDown"
+                  size={16}
+                  color={(typeFilter !== 'all' || periodFilter !== 'all' || sortOrder !== 'recent' || showFilters) ? Colors.primary : Colors.textMuted}
+                  strokeWidth={2.2}
+                />
+              </TouchableOpacity>
             </View>
+            {showFilters && (
+              <View style={styles.filterBar}>
+                {/* Type row */}
+                <View style={styles.filterRow}>
+                  <Text style={styles.filterLabel}>Type</Text>
+                  {(['all', 'hiking', 'running'] as const).map(t => (
+                    <TouchableOpacity
+                      key={t}
+                      onPress={() => setTypeFilter(t)}
+                      style={[styles.filterChip, typeFilter === t && styles.filterChipActive]}
+                    >
+                      <Text style={[styles.filterChipText, typeFilter === t && styles.filterChipTextActive]}>
+                        {t === 'all' ? 'All' : t === 'hiking' ? 'Hikes' : 'Runs'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {/* Period row */}
+                <View style={styles.filterRow}>
+                  <Text style={styles.filterLabel}>When</Text>
+                  {(['all', 'week', 'month', 'year'] as const).map(p => (
+                    <TouchableOpacity
+                      key={p}
+                      onPress={() => setPeriodFilter(p)}
+                      style={[styles.filterChip, periodFilter === p && styles.filterChipActive]}
+                    >
+                      <Text style={[styles.filterChipText, periodFilter === p && styles.filterChipTextActive]}>
+                        {p === 'all' ? 'All' : p === 'week' ? '7 days' : p === 'month' ? '30 days' : '1 year'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {/* Sort row */}
+                <View style={styles.filterRow}>
+                  <Text style={styles.filterLabel}>Sort</Text>
+                  {(['recent', 'oldest', 'longest'] as const).map(o => (
+                    <TouchableOpacity
+                      key={o}
+                      onPress={() => setSortOrder(o)}
+                      style={[styles.filterChip, sortOrder === o && styles.filterChipActive]}
+                    >
+                      <Text style={[styles.filterChipText, sortOrder === o && styles.filterChipTextActive]}>
+                        {o === 'recent' ? 'Newest' : o === 'oldest' ? 'Oldest' : 'Longest'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
           </View>
         )}
 
@@ -1579,6 +1675,43 @@ const styles = StyleSheet.create({
     fontSize: FontSize.body,
     color: Colors.textPrimary,
     paddingVertical: 4,
+  },
+  // O18 HIST-02: filter chip bar (type / period / sort).
+  filterBar: {
+    marginTop: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  filterLabel: {
+    fontSize: FontSize.tiny,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    minWidth: 40,
+  },
+  filterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  filterChipText: {
+    fontSize: FontSize.tiny,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  filterChipTextActive: {
+    color: '#fff',
   },
   // O18 HIST-03: rename hike UI.
   sessionTitle: {
