@@ -52,7 +52,14 @@ router.post('/', validateBody(schemas.hide.create), async (req, res) => {
       [itemId]
     );
     if (!target) return res.status(404).json({ error: `${item_type} not found` });
-    if (target.user_id === userId) {
+    // Sprint 6 round-46 R46: fix type-coercion self-hide bypass. Same
+    // class as R38B2 / R45. target.user_id is Number (mysql2 for BIGINT
+    // UNSIGNED); userId is String (JWT payload). Strict `===` always
+    // false → user could hide their own marker/route, inserting a
+    // self-hide row that filters their own item out of /circle/markers
+    // and /circle/routes for themselves. UX bug (they'd wonder why
+    // their content vanished from the shared feed).
+    if (String(target.user_id) === String(userId)) {
       return res.status(400).json({
         error: `Cannot hide your own ${item_type}. Use DELETE to remove it.`,
       });
