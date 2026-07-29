@@ -40,14 +40,82 @@ export async function authenticatedFetch(
   const { skipLogoutOn401, ...fetchOptions } = options;
   const token = await getToken();
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...fetchOptions,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(fetchOptions.headers ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
+  // O18 SAF-07 (2026-07-29): user reported "network request failed" on
+  // hike upload AND direct upload — the fetch() throw path was previously
+  // invisible (no breadcrumb, no aliyun log, no status code). We now log
+  // BEFORE fetch so we see attempts, AND after any throw so we see the
+  // exact failure mode (DNS / timeout / TLS / offline / server-close).
+  const method = (fetchOptions.method || 'GET').toUpperCase();
+  const startedAt = Date.now();
+  const requestId = Math.random().toString(36).slice(2, 8);
+  let bodySize = 0;
+  if (fetchOptions.body != null) {
+    if (typeof fetchOptions.body === 'string') bodySize = fetchOptions.body.length;
+    else if ((fetchOptions.body as any).length != null) bodySize = (fetchOptions.body as any).length;
+  }
+  crashLogger.breadcrumb(`api:req id=${requestId} ${method} ${path} bodyBytes=${bodySize} hasToken=${!!token}`);
+  // Non-blocking aliyun log — helps diagnose network issues from a remote
+  // device where breadcrumbs are lost on crash. Guard against log module
+  // being unavailable / recursing on itself (log endpoint is same base URL).
+  const logAliyun = (event: string, data: any) => {
+    if (path.startsWith('/api/edit-diag')) return; // don't self-log the log endpoint
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { log } = require('./appLog');
+      log(event, data);
+    } catch { /* silent */ }
+  };
+  logAliyun('api.req', { id: requestId, method, path, bodyBytes: bodySize, hasToken: !!token });
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...fetchOptions,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(fetchOptions.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+  } catch (netErr: any) {
+    // O18 SAF-07: network throw path — this is what user hit. Log everything
+    // we know: error name (TypeError = network layer), message, elapsed ms,
+    // NetInfo state if available. Then re-throw so caller sees the failure.
+    const elapsedMs = Date.now() - startedAt;
+    const errName = netErr?.name || 'Error';
+    const errMsg = String(netErr?.message || netErr).slice(0, 200);
+    let netState: string = 'unknown';
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const NetInfo = require('@react-native-community/netinfo');
+      const state = await (NetInfo.default?.fetch?.() ?? NetInfo.fetch?.());
+      if (state) {
+        netState = `type=${state.type} conn=${state.isConnected} reach=${state.isInternetReachable}`;
+      }
+    } catch { /* NetInfo not available */ }
+    crashLogger.breadcrumb(
+      `api:net_error id=${requestId} ${method} ${path} ms=${elapsedMs} name=${errName} msg="${errMsg}" net=${netState}`
+    );
+    logAliyun('api.net_error', {
+      id: requestId, method, path, elapsedMs, errName, errMsg, netState, bodyBytes: bodySize,
+    });
+    throw netErr;
+  }
+
+  const elapsedMs = Date.now() - startedAt;
+  crashLogger.breadcrumb(`api:res id=${requestId} ${method} ${path} status=${res.status} ms=${elapsedMs}`);
+  if (res.status >= 400) {
+    // Peek the body for diagnostics without consuming it.
+    let bodyPreview = '';
+    try {
+      const peek = res.clone();
+      const text = await peek.text();
+      bodyPreview = text.slice(0, 300);
+    } catch { /* ignore */ }
+    logAliyun('api.err_status', {
+      id: requestId, method, path, status: res.status, elapsedMs, bodyPreview,
+    });
+  }
 
   if (res.status === 401) {
     // Header path is fastest (no body clone). Falls through to body check

@@ -243,6 +243,26 @@ export function HomeScreen() {
   // O12: uiMode removed
   const sessions = useSessionStore(s => s.sessions);
   const allMarkers = useMarkerStore(s => s.markers);
+  // O18 SAF-06 (2026-07-29): filesystem pending-sync is the authoritative
+  // source for "hikes waiting to upload". Reading only useSessionStore
+  // missed the case where hydrate replaced the local pending row with the
+  // remote list (which never contains never-uploaded hikes), leaving the
+  // banner invisible even though pendingSyncStore had the payload on disk.
+  const [fsPendingCount, setFsPendingCount] = useState<number>(0);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { listPending } = require('../services/pendingSyncStore');
+        const list = await listPending();
+        if (!cancelled) setFsPendingCount(Array.isArray(list) ? list.length : 0);
+      } catch {
+        if (!cancelled) setFsPendingCount(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sessions.length]);
   // v320: beacon after selectors read — confirms zustand subscriptions
   // worked without throw. Heavy computation goes here (filter/sort/derive).
   try {
@@ -436,12 +456,15 @@ export function HomeScreen() {
              those are startSession placeholders that never got real
              points, they can't sync anything so they shouldn't count. */}
         {(() => {
-          const pendingCount = sessions.filter((s: any) => {
+          const inMemoryPending = sessions.filter((s: any) => {
             const isPending = s.syncState === 'pending' || s.syncState === 'syncing';
             if (!isPending) return false;
             const hasContent = (s.distanceM ?? 0) > 0 || (s.durationS ?? 0) > 0;
             return hasContent;
           }).length;
+          // O18 SAF-06: use max(in-memory, filesystem) so the banner survives
+          // hydrate wiping the in-memory pending row.
+          const pendingCount = Math.max(inMemoryPending, fsPendingCount);
           if (pendingCount === 0) return null;
           return (
             // O18 HOME-02: banner is now tappable — invokes syncDaemon.drainPending

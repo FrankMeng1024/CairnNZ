@@ -13,9 +13,15 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
+const TokenBlacklist = require('../models/TokenBlacklist');
+const PasswordReset = require('../models/PasswordReset');
 const { signToken } = require('../config/jwt');
 const authenticate = require('../middleware/authenticate');
-const { sendVerificationCode } = require('../services/emailService');
+const {
+  sendVerificationCode,
+  sendPasswordResetCode,
+  sendAccountDeletionConfirmation,
+} = require('../services/emailService');
 const { validateBody } = require('../middleware/validate');
 const schemas = require('../middleware/schemas');
 
@@ -52,9 +58,22 @@ function validatePassword(password) {
   return typeof password === 'string' && password.length >= 8;
 }
 
+// O18 AUTH-06: returns whole-year age (birthday-aware) or null if the
+// input is not a parseable date.
+function ageInYears(isoDate) {
+  if (!isoDate) return null;
+  const dob = new Date(isoDate);
+  if (Number.isNaN(dob.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const m = now.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age -= 1;
+  return age;
+}
+
 // ── POST /api/auth/register ────────────────────────────────────────────────
 router.post('/register', authLimiter, validateBody(schemas.auth.register), async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, dateOfBirth } = req.body;
 
   if (!name || typeof name !== 'string' || name.trim().length < 1)
     return res.status(400).json({ error: 'Name is required.' });
@@ -64,6 +83,11 @@ router.post('/register', authLimiter, validateBody(schemas.auth.register), async
     return res.status(400).json({ error: 'Please enter a valid email address.' });
   if (!validatePassword(password))
     return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+
+  // O18 AUTH-06: enforce age >= 13 (COPPA + App Store).
+  const age = ageInYears(dateOfBirth);
+  if (age === null) return res.status(400).json({ error: 'Please enter a valid date of birth.' });
+  if (age < 13) return res.status(400).json({ error: 'Cairn is only available for people aged 13 and up.', hint: 'age_gate' });
 
   const normalEmail = email.toLowerCase().trim();
 
@@ -83,7 +107,8 @@ router.post('/register', authLimiter, validateBody(schemas.auth.register), async
     }
 
     const passwordHash = await User.hashPassword(password);
-    const code = await User.upsertPending(normalEmail, name.trim(), passwordHash);
+    // Store DOB in pending so verify step carries it to the real users row.
+    const code = await User.upsertPending(normalEmail, name.trim(), passwordHash, dateOfBirth);
 
     // Send email (non-blocking — don't fail registration if email fails)
     sendVerificationCode(normalEmail, name.trim(), code).catch(err =>
@@ -144,8 +169,8 @@ router.post('/verify', authLimiter, validateBody(schemas.auth.verify), async (re
       });
     }
 
-    // All good — create real user
-    const userId = await User.createUser(pending.name, normalEmail, pending.password_hash);
+    // All good — create real user (with DOB carried over from pending row).
+    const userId = await User.createUser(pending.name, normalEmail, pending.password_hash, pending.date_of_birth);
     await User.deletePending(normalEmail);
 
     const user = await User.findById(userId);
@@ -213,8 +238,23 @@ router.post('/login', authLimiter, validateBody(schemas.auth.login), async (req,
       return res.status(401).json({ error: 'Incorrect email or password.' });
     }
 
+    // O18 AUTH-01: soft-deleted account — return 200 with pending_deletion hint
+    // so client can show restore modal. Token still issued so restore endpoint
+    // can authenticate the caller.
     const publicUser = User.toPublic(user);
     const token = signToken({ userId: publicUser.id, email: publicUser.email });
+
+    if (user.deleted_at) {
+      const deletedAt = new Date(user.deleted_at);
+      const restoreDeadline = new Date(deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      return res.json({
+        user: publicUser,
+        token,
+        hint: 'pending_deletion',
+        restore_deadline: restoreDeadline.toISOString(),
+      });
+    }
+
     return res.json({ user: publicUser, token });
   } catch (err) {
     console.error('[login]', err);
@@ -267,6 +307,19 @@ router.post('/google', oauthLimiter, validateBody(schemas.auth.google), async (r
 
     const publicUser = User.toPublic(user);
     const token = signToken({ userId: publicUser.id, email: publicUser.email });
+
+    // O18 AUTH-01: soft-deleted account — same restore-modal hint as /login.
+    if (user.deleted_at) {
+      const deletedAt = new Date(user.deleted_at);
+      const restoreDeadline = new Date(deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      return res.json({
+        user: publicUser,
+        token,
+        hint: 'pending_deletion',
+        restore_deadline: restoreDeadline.toISOString(),
+      });
+    }
+
     return res.json({ user: publicUser, token });
   } catch (err) {
     console.error('[google]', err);
@@ -334,6 +387,204 @@ router.patch('/password', authenticate, validateBody(schemas.auth.passwordChange
   } catch (err) {
     console.error('[password]', err);
     return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── POST /api/auth/logout (O18 AUTH-08) ────────────────────────────────────
+// Revokes the current jti so the token can no longer be used, even if not
+// expired. Auth middleware LRU cache picks it up within 5 min; direct DB
+// check is authoritative. Idempotent — repeated calls with the same jti
+// simply refresh the row via ON DUPLICATE KEY.
+router.post('/logout', authenticate, async (req, res) => {
+  try {
+    if (!req.user.jti) {
+      // Legacy token without jti — can't revoke. Return 200 so frontend
+      // still clears local state.
+      return res.json({ message: 'Signed out.' });
+    }
+    // jti expiry = token expiry (from `exp` claim, unix seconds).
+    const expUnixMs = req.user.exp ? req.user.exp * 1000 : Date.now() + 30 * 24 * 60 * 60 * 1000;
+    await TokenBlacklist.revoke(req.user.jti, req.user.userId, new Date(expUnixMs));
+    res.set('X-Cairn-Auth-Invalid', 'true');
+    return res.json({ message: 'Signed out.' });
+  } catch (err) {
+    console.error('[logout]', err);
+    // Fail open — frontend still clears local state on 200
+    return res.json({ message: 'Signed out.' });
+  }
+});
+
+// ── POST /api/auth/password-reset/request (O18 AUTH-04) ───────────────────
+// Issues a 6-digit code emailed to the user. Returns 200 regardless of
+// whether the email exists (prevent enumeration). Rate limited to prevent
+// spam. Actual code delivery via email service.
+router.post('/password-reset/request', authLimiter, validateBody(schemas.auth.passwordResetRequest), async (req, res) => {
+  const { email } = req.body;
+  const normalEmail = email.toLowerCase().trim();
+
+  try {
+    const user = await User.findByEmail(normalEmail);
+    // Always return 200 — do not leak account existence.
+    if (!user) {
+      return res.json({ message: 'If an account exists for this email, a code has been sent.' });
+    }
+    // OAuth-only users have no password to reset — but still return 200 to
+    // avoid enumeration. Just don't issue a code.
+    if (!user.password_hash) {
+      return res.json({ message: 'If an account exists for this email, a code has been sent.' });
+    }
+
+    const code = await PasswordReset.issueCode(normalEmail);
+    sendPasswordResetCode(normalEmail, code).catch(err =>
+      console.error('[email] password reset send failed:', err.message)
+    );
+
+    const devPayload = process.env.NODE_ENV !== 'production' ? { dev_code: code } : {};
+    return res.json({ message: 'If an account exists for this email, a code has been sent.', ...devPayload });
+  } catch (err) {
+    console.error('[password-reset/request]', err);
+    return res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
+// ── POST /api/auth/password-reset/verify (O18 AUTH-04) ────────────────────
+// Verifies the emailed 6-digit code + sets a new password in one shot.
+// Uses timingSafeEqual internally. On success: password updated, all codes
+// for this email marked used, new JWT issued (with fresh jti).
+router.post('/password-reset/verify', authLimiter, validateBody(schemas.auth.passwordResetVerify), async (req, res) => {
+  const { email, code, new_password } = req.body;
+  const normalEmail = email.toLowerCase().trim();
+
+  if (!validatePassword(new_password))
+    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+
+  try {
+    const result = await PasswordReset.consumeCode(normalEmail, code);
+    if (!result.ok) {
+      const errorMap = {
+        not_found:          'No reset code found. Please request a new one.',
+        used:               'This code has already been used.',
+        expired:            'This code has expired. Please request a new one.',
+        too_many_attempts:  'Too many incorrect attempts. Please request a new code.',
+        mismatch:           'Incorrect code. Please try again.',
+      };
+      return res.status(400).json({ error: errorMap[result.reason] || 'Invalid code.', hint: result.reason });
+    }
+
+    const user = await User.findByEmail(normalEmail);
+    if (!user) {
+      // Race: user deleted between code issue and verify. Rare, defensive.
+      return res.status(400).json({ error: 'Account not found.' });
+    }
+
+    const hash = await User.hashPassword(new_password);
+    await User.setPassword(user.id, hash);
+
+    // Issue fresh token (new jti — implicit hard sign-out of any other device
+    // using an old jti, once those old jtis are added to blacklist by /logout).
+    const publicUser = User.toPublic(user);
+    const token = signToken({ userId: publicUser.id, email: publicUser.email });
+    return res.json({ user: publicUser, token });
+  } catch (err) {
+    console.error('[password-reset/verify]', err);
+    return res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
+// ── DELETE /api/auth/account (O18 AUTH-01) ─────────────────────────────────
+// Soft-delete: sets users.deleted_at. Cron sweep hard-deletes after 7 days.
+// User can restore during grace period via POST /account/restore. Also
+// revokes the current jti so the token is immediately unusable.
+router.delete('/account', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) return res.status(404).json({ error: 'Account not found.' });
+
+    // Idempotent: already deleted → return existing deadline.
+    let deletedAtIso;
+    if (user.deleted_at) {
+      deletedAtIso = new Date(user.deleted_at).toISOString();
+    } else {
+      await User.softDelete(user.id);
+      const updated = await User.findById(user.id);
+      deletedAtIso = new Date(updated.deleted_at).toISOString();
+    }
+
+    const restoreDeadline = new Date(new Date(deletedAtIso).getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    // Send confirmation email with restore instructions (non-blocking).
+    sendAccountDeletionConfirmation(user.email, user.name, restoreDeadline).catch(err =>
+      console.error('[email] deletion confirmation failed:', err.message)
+    );
+
+    // Revoke current jti so the client is signed out immediately.
+    if (req.user.jti) {
+      const expUnixMs = req.user.exp ? req.user.exp * 1000 : Date.now() + 30 * 24 * 60 * 60 * 1000;
+      await TokenBlacklist.revoke(req.user.jti, req.user.userId, new Date(expUnixMs)).catch(err =>
+        console.error('[logout during delete] revoke failed:', err.message)
+      );
+    }
+    res.set('X-Cairn-Auth-Invalid', 'true');
+    return res.json({
+      message: 'Account scheduled for deletion.',
+      deleted_at: deletedAtIso,
+      restore_deadline: restoreDeadline.toISOString(),
+    });
+  } catch (err) {
+    console.error('[account delete]', err);
+    return res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
+// ── POST /api/auth/account/restore (O18 AUTH-01) ──────────────────────────
+// Undoes soft-delete during grace period. After 7 days the cron sweep has
+// already hard-deleted the row; this returns 404 in that case.
+// Called from the restore modal which is triggered by hint: 'pending_deletion'
+// on login. Token in Authorization header is the one just issued by /login,
+// which is still valid because auth middleware allows it (row exists, jti
+// not blacklisted).
+router.post('/account/restore', authenticate, async (req, res) => {
+  try {
+    const restored = await User.restoreDeleted(req.user.userId);
+    if (!restored) {
+      // Either the user was never soft-deleted, or the row is already gone
+      // (past grace period). Either way, no-op — return current state.
+      const user = await User.findById(req.user.userId);
+      if (!user) return res.status(404).json({ error: 'Account not found. It may have been permanently deleted.' });
+      return res.json({ user: User.toPublic(user), message: 'Account is active.' });
+    }
+    const user = await User.findById(req.user.userId);
+    return res.json({ user: User.toPublic(user), message: 'Account restored.' });
+  } catch (err) {
+    console.error('[account restore]', err);
+    return res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
+// ── PATCH /api/auth/dob (O18 AUTH-06) ─────────────────────────────────────
+// Legacy DOB backfill. Users who registered before AUTH-06 migration have
+// dateOfBirth = null and get a modal on login prompting them to enter it.
+// Enforces >= 13 same as register. Cannot change DOB once set (prevents
+// gaming age gate).
+router.patch('/dob', authenticate, validateBody(schemas.auth.setDob), async (req, res) => {
+  const { dateOfBirth } = req.body;
+
+  const age = ageInYears(dateOfBirth);
+  if (age === null) return res.status(400).json({ error: 'Please enter a valid date of birth.' });
+  if (age < 13) return res.status(400).json({ error: 'Cairn is only available for people aged 13 and up.', hint: 'age_gate' });
+
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) return res.status(404).json({ error: 'Account not found.' });
+    if (user.date_of_birth) {
+      return res.status(409).json({ error: 'Date of birth already set. Contact support to change.' });
+    }
+    await User.setDateOfBirth(user.id, dateOfBirth);
+    const updated = await User.findById(user.id);
+    return res.json({ user: User.toPublic(updated) });
+  } catch (err) {
+    console.error('[dob patch]', err);
+    return res.status(500).json({ error: 'Server error. Please try again.' });
   }
 });
 

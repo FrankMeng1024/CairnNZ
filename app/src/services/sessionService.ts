@@ -187,6 +187,24 @@ export async function saveHikeAtomic(
   idempotencyKey: string,
 ): Promise<SaveHikeAtomicResult> {
   const path = `/api/sessions/${remoteId}/save`;
+  // O18 SAF-07 (2026-07-29): user reported "network request failed" on
+  // save + direct upload. Log attempt to aliyun BEFORE call so we can
+  // correlate v412 failure to request attempt (previously only o7.stop
+  // event was uploaded, not what happened inside saveHikeAtomic itself).
+  const routePtsN = payload.route_points?.length ?? 0;
+  const rawPtsN = payload.route_points_raw?.length ?? 0;
+  const memPtsN = payload.memory_points?.length ?? 0;
+  const payloadBytes = JSON.stringify(payload).length;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { log } = require('./appLog');
+    log('v412.save.attempt', {
+      remoteId, idempotencyKey: idempotencyKey.slice(0, 8),
+      routePtsN, rawPtsN, memPtsN, payloadBytes,
+      nameLen: (payload.name || '').length,
+      distance_m: payload.distance_m,
+    });
+  } catch { /* silent */ }
   // O14 Bug 8 fix: pre-fix, one transient network hiccup (iOS timer paused
   // while backgrounded → fetch timeout, or a 5xx from proxy) marked the
   // whole hike as "pending sync" and the banner stayed on until the next
@@ -203,6 +221,7 @@ export async function saveHikeAtomic(
     body: JSON.stringify(payload),
   });
   let res: Response;
+  let lastNetErrMsg = '';
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       res = await doFetch();
@@ -218,12 +237,21 @@ export async function saveHikeAtomic(
       // Fall through to !res.ok handling below on attempt 1.
       break;
     } catch (netErr) {
+      lastNetErrMsg = String((netErr as any)?.message || netErr).slice(0, 150);
       if (attempt === 0) {
         await new Promise((r) => setTimeout(r, 500));
         continue;
       }
-      // Retry exhausted — surface network error.
-      const err: any = new Error(`saveHikeAtomic network error: ${(netErr as any)?.message || netErr}`);
+      // Retry exhausted — surface network error. O18 SAF-07: log to aliyun.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { log } = require('./appLog');
+        log('v412.save.net_error', {
+          remoteId, idempotencyKey: idempotencyKey.slice(0, 8),
+          errMsg: lastNetErrMsg, payloadBytes,
+        });
+      } catch { /* silent */ }
+      const err: any = new Error(`saveHikeAtomic network error: ${lastNetErrMsg}`);
       err.status = 0;
       err.cause = netErr;
       throw err;
@@ -236,6 +264,16 @@ export async function saveHikeAtomic(
     // 4xx / 5xx / 网络异常都算失败, 让 caller 决定是否入 pendingSyncStore
     let errBody: any = null;
     try { errBody = await res.json(); } catch { /* ignore */ }
+    // O18 SAF-07: log HTTP failure to aliyun with status + body preview.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { log } = require('./appLog');
+      log('v412.save.http_error', {
+        remoteId, idempotencyKey: idempotencyKey.slice(0, 8),
+        status: res.status, errBody: JSON.stringify(errBody).slice(0, 200),
+        payloadBytes,
+      });
+    } catch { /* silent */ }
     const err: any = new Error(
       `saveHikeAtomic HTTP ${res.status}: ${errBody?.error || 'unknown'}`,
     );
@@ -251,12 +289,34 @@ export async function saveHikeAtomic(
   // Now: if the reply doesn't match the contract, throw so the retry /
   // pending-sync path takes over.
   if (!body || body.ok !== true || typeof body.session_id !== 'number') {
+    // O18 SAF-07: log malformed to aliyun.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { log } = require('./appLog');
+      log('v412.save.malformed', {
+        remoteId, idempotencyKey: idempotencyKey.slice(0, 8),
+        bodyPreview: JSON.stringify(body).slice(0, 200),
+      });
+    } catch { /* silent */ }
     const err: any = new Error(
       `saveHikeAtomic malformed response: ${JSON.stringify(body).slice(0, 200)}`,
     );
     err.malformed = true;
     throw err;
   }
+  // O18 SAF-07: success log too — makes it possible to see full request
+  // lifecycle in aliyun (attempt → ok) even without breadcrumb access.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { log } = require('./appLog');
+    log('v412.save.ok', {
+      remoteId, idempotencyKey: idempotencyKey.slice(0, 8),
+      session_id: body.session_id,
+      mem_accepted: body.memory?.accepted ?? null,
+      mem_rejected: body.memory?.rejected ?? null,
+      replay: !!body.idempotent_replay,
+    });
+  } catch { /* silent */ }
   return body as SaveHikeAtomicResult;
 }
 

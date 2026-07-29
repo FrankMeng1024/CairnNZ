@@ -139,10 +139,13 @@ const friendReject = Joi.object({
 });
 
 // ── Auth ───────────────────────────────────────────────────────────────
+// O18 AUTH-06: dateOfBirth required at register. Enforced <13 in the
+// route (Joi cannot easily do "must be >= 13 years ago" cross-field).
 const authRegister = Joi.object({
   name: Joi.string().min(1).max(60).required(),
   email: Joi.string().email().max(255).required(),
   password: Joi.string().min(8).max(200).required(),
+  dateOfBirth: Joi.string().isoDate().required(),
 });
 
 const authVerify = Joi.object({
@@ -163,9 +166,28 @@ const authGoogle = Joi.object({
   id_token: Joi.string().min(10).required(),
 });
 
+// O18 batch 6.3: field names match route handler (currentPassword/newPassword).
+// currentPassword optional because OAuth users setting password for first time
+// have no current password to verify.
 const authPasswordChange = Joi.object({
-  old_password: Joi.string().min(1).max(200).required(),
+  currentPassword: Joi.string().min(1).max(200).allow('', null),
+  newPassword: Joi.string().min(8).max(200).required(),
+});
+
+// O18 AUTH-04: password reset flow.
+const authPasswordResetRequest = Joi.object({
+  email: Joi.string().email().max(255).required(),
+});
+
+const authPasswordResetVerify = Joi.object({
+  email: Joi.string().email().max(255).required(),
+  code: Joi.string().length(6).pattern(/^\d+$/).required(),
   new_password: Joi.string().min(8).max(200).required(),
+});
+
+// O18 AUTH-06: legacy DOB backfill for pre-migration users.
+const authSetDob = Joi.object({
+  dateOfBirth: Joi.string().isoDate().required(),
 });
 
 // ── Hide ───────────────────────────────────────────────────────────────
@@ -221,6 +243,10 @@ module.exports = {
     resend: authResend,
     google: authGoogle,
     passwordChange: authPasswordChange,
+    // O18 batch 6.3
+    passwordResetRequest: authPasswordResetRequest,
+    passwordResetVerify: authPasswordResetVerify,
+    setDob: authSetDob,
   },
   hide: {
     create: hideCreate,

@@ -62,4 +62,81 @@ async function sendVerificationCode(toEmail, name, code) {
   });
 }
 
-module.exports = { sendVerificationCode };
+// O18 AUTH-04: password reset code email. Same visual language as the
+// register verification email; different subject + copy.
+async function sendPasswordResetCode(toEmail, code) {
+  await transporter.sendMail({
+    from: `"Cairn" <${process.env.EMAIL_FROM}>`,
+    to: toEmail,
+    subject: `${code} — reset your Cairn password`,
+    text: `You (or someone) asked to reset the password for your Cairn account.\n\nYour reset code is: ${code}\n\nThis code expires in 15 minutes. If you didn't request this, you can safely ignore this email — your password stays unchanged.\n\n— The Cairn Team`,
+    html: `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#faf7f2;">
+        <div style="text-align:center;margin-bottom:32px;">
+          <span style="font-size:28px;font-weight:900;color:#2d2d2d;letter-spacing:-1px;">Cairn</span>
+        </div>
+        <div style="background:#fff;border-radius:16px;padding:32px;border:1px solid #e8e4de;">
+          <p style="margin:0 0 8px;font-size:16px;color:#2d2d2d;">Reset your password</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#6b6b6b;line-height:1.5;">
+            Enter this code in Cairn to set a new password:
+          </p>
+          <div style="text-align:center;margin:0 0 24px;">
+            <span style="font-size:40px;font-weight:800;letter-spacing:12px;color:#5d7c46;font-family:monospace;">${code}</span>
+          </div>
+          <p style="margin:0;font-size:13px;color:#9b9b9b;text-align:center;">
+            Expires in 15 minutes · Do not share this code
+          </p>
+        </div>
+        <p style="margin:24px 0 0;font-size:12px;color:#b0b0b0;text-align:center;">
+          If you didn't ask to reset your password, ignore this email — your account stays unchanged.
+        </p>
+      </div>
+    `,
+  });
+}
+
+// O18 AUTH-01: account deletion confirmation with restore instructions.
+async function sendAccountDeletionConfirmation(toEmail, name, restoreDeadline) {
+  const firstName = escapeHtml(name.split(' ')[0]);
+  await transporter.sendMail({
+    from: `"Cairn" <${process.env.EMAIL_FROM}>`,
+    to: toEmail,
+    subject: 'Your Cairn account is scheduled for deletion',
+    text: `Hi ${name.split(' ')[0]},\n\nWe've received a request to delete your Cairn account. Your account and all its data will be permanently removed on ${restoreDeadline}.\n\nIf you change your mind, sign in to Cairn before that date and tap "Restore my account" — no data is lost until the deadline.\n\nIf you didn't request this, sign in immediately and tap Restore.\n\n— The Cairn Team`,
+    html: `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#faf7f2;">
+        <div style="text-align:center;margin-bottom:32px;">
+          <span style="font-size:28px;font-weight:900;color:#2d2d2d;letter-spacing:-1px;">Cairn</span>
+        </div>
+        <div style="background:#fff;border-radius:16px;padding:32px;border:1px solid #e8e4de;">
+          <p style="margin:0 0 8px;font-size:16px;color:#2d2d2d;">Hi ${firstName},</p>
+          <p style="margin:0 0 16px;font-size:15px;color:#6b6b6b;line-height:1.6;">
+            We've received a request to delete your Cairn account. Your account and all its data will be permanently removed on:
+          </p>
+          <p style="margin:0 0 24px;text-align:center;font-size:16px;font-weight:700;color:#c53d2e;">
+            ${restoreDeadline}
+          </p>
+          <p style="margin:0 0 8px;font-size:15px;color:#6b6b6b;line-height:1.6;">
+            If you change your mind:
+          </p>
+          <p style="margin:0 0 24px;font-size:15px;color:#2d2d2d;line-height:1.6;">
+            1. Sign in to Cairn before the date above<br>
+            2. Tap <strong>Restore my account</strong> when prompted
+          </p>
+          <p style="margin:0;font-size:13px;color:#9b9b9b;">
+            Nothing is lost until the deadline.
+          </p>
+        </div>
+        <p style="margin:24px 0 0;font-size:12px;color:#b0b0b0;text-align:center;">
+          If you didn't request this, sign in right now and tap Restore.
+        </p>
+      </div>
+    `,
+  });
+}
+
+module.exports = {
+  sendVerificationCode,
+  sendPasswordResetCode,
+  sendAccountDeletionConfirmation,
+};

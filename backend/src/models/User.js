@@ -9,6 +9,25 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const pool = require('../config/db');
 
+// O18 AUTH-06: normalize Joi.isoDate() input (which accepts full ISO datetime
+// like '1995-01-01T00:00:00.000Z') down to the 'YYYY-MM-DD' string MySQL's
+// DATE column expects. Any invalid or empty input becomes null so callers
+// can INSERT NULL for OAuth / legacy paths.
+function normalizeDob(input) {
+  if (input == null || input === '') return null;
+  // Date object (e.g. read from a DATE column via mysql2 driver) — format as UTC YYYY-MM-DD.
+  if (input instanceof Date) {
+    if (Number.isNaN(input.getTime())) return null;
+    return input.toISOString().slice(0, 10);
+  }
+  const s = String(input);
+  // Fast path — already a bare date.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // Full ISO — take the date part before 'T'.
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
 // ── users ──────────────────────────────────────────────────────────────────
 
 async function findByEmail(email) {
@@ -27,10 +46,13 @@ async function findById(id) {
   return rows[0] || null;
 }
 
-async function createUser(name, email, passwordHash) {
+async function createUser(name, email, passwordHash, dateOfBirth) {
+  // O18 AUTH-06: dateOfBirth accepted as ISO 'YYYY-MM-DD' string. Nullable
+  // for OAuth-only paths / legacy users; required by the register endpoint
+  // via schema validation.
   const [result] = await pool.execute(
-    'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
-    [name, email.toLowerCase(), passwordHash]
+    'INSERT INTO users (name, email, password_hash, date_of_birth) VALUES (?, ?, ?, ?)',
+    [name, email.toLowerCase(), passwordHash, normalizeDob(dateOfBirth)]
   );
   return result.insertId;
 }
@@ -50,6 +72,49 @@ async function setPassword(userId, passwordHash) {
   );
 }
 
+// O18 AUTH-06: legacy users can fill in their DOB later.
+async function setDateOfBirth(userId, dateOfBirth) {
+  await pool.execute(
+    'UPDATE users SET date_of_birth = ? WHERE id = ?',
+    [normalizeDob(dateOfBirth), userId]
+  );
+}
+
+// O18 AUTH-01: schedule the account for hard-delete via the cron sweep.
+// Idempotent — a second call within grace period keeps the original
+// deleted_at (cron uses the earliest timestamp).
+async function softDelete(userId) {
+  await pool.execute(
+    'UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL',
+    [userId]
+  );
+}
+
+// O18 AUTH-01: undo a soft-delete. Restore is only valid within grace
+// period; the cron sweep hard-deletes anything past 7 days.
+async function restoreDeleted(userId) {
+  const [result] = await pool.execute(
+    'UPDATE users SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL',
+    [userId]
+  );
+  return result.affectedRows > 0;
+}
+
+// O18 AUTH-01: cron helper — returns user rows whose grace period has expired.
+async function findHardDeleteCandidates(graceDays = 7) {
+  const [rows] = await pool.execute(
+    'SELECT id FROM users WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL ? DAY)',
+    [graceDays]
+  );
+  return rows.map(r => r.id);
+}
+
+// O18 AUTH-01: hard delete (cascades to sessions / oauth via FK). Called by
+// the cron sweep, not directly by API.
+async function hardDelete(userId) {
+  await pool.execute('DELETE FROM users WHERE id = ?', [userId]);
+}
+
 async function hashPassword(plain) {
   return bcrypt.hash(plain, 12);
 }
@@ -67,6 +132,13 @@ function toPublic(user) {
     // O18 HOME-05: expose registration timestamp so Profile can show
     // "You have been with Cairn for X days" without a separate endpoint.
     createdAt: user.created_at ? new Date(user.created_at).toISOString() : null,
+    // O18 AUTH-06: expose DOB so the client can gate the补录 modal — if
+    // this is null the user must fill it in within 30 days of first login
+    // after the deploy.
+    dateOfBirth: user.date_of_birth ? new Date(user.date_of_birth).toISOString().slice(0, 10) : null,
+    // O18 AUTH-01: expose soft-delete state so the client can show the
+    // "Restore account?" modal on login when the row is pending deletion.
+    deletedAt: user.deleted_at ? new Date(user.deleted_at).toISOString() : null,
   };
 }
 
@@ -108,21 +180,22 @@ function generateCode() {
   return String(crypto.randomInt(100000, 1000000));
 }
 
-async function upsertPending(email, name, passwordHash) {
+async function upsertPending(email, name, passwordHash, dateOfBirth) {
   const code = generateCode();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
   await pool.execute(
-    `INSERT INTO pending_registrations (email, name, password_hash, code, expires_at, attempts)
-     VALUES (?, ?, ?, ?, ?, 0)
+    `INSERT INTO pending_registrations (email, name, password_hash, date_of_birth, code, expires_at, attempts)
+     VALUES (?, ?, ?, ?, ?, ?, 0)
      ON DUPLICATE KEY UPDATE
-       name          = VALUES(name),
-       password_hash = VALUES(password_hash),
-       code          = VALUES(code),
-       expires_at    = VALUES(expires_at),
-       attempts      = 0,
-       updated_at    = CURRENT_TIMESTAMP`,
-    [email.toLowerCase(), name, passwordHash, code, expiresAt]
+       name           = VALUES(name),
+       password_hash  = VALUES(password_hash),
+       date_of_birth  = VALUES(date_of_birth),
+       code           = VALUES(code),
+       expires_at     = VALUES(expires_at),
+       attempts       = 0,
+       updated_at     = CURRENT_TIMESTAMP`,
+    [email.toLowerCase(), name, passwordHash, normalizeDob(dateOfBirth), code, expiresAt]
   );
   return code;
 }
@@ -153,6 +226,8 @@ module.exports = {
   // users
   findByEmail, findById, createUser, createOAuthUser, setPassword,
   hashPassword, comparePassword, toPublic,
+  // O18 batch 6.3
+  setDateOfBirth, softDelete, restoreDeleted, findHardDeleteCandidates, hardDelete,
   // user_oauth
   findOAuth, linkOAuth, getUserProviders,
   // pending

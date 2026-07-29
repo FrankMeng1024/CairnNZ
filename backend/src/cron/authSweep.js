@@ -1,0 +1,101 @@
+/**
+ * authSweep.js — O18 batch 6.3 (AUTH-01 + AUTH-04 + AUTH-08 cleanup)
+ *
+ * Daily cron job (03:15 UTC) that maintains all three auth-related tables:
+ *
+ *   1. AUTH-01 — hard-delete users past the 7-day grace period.
+ *      Users soft-deleted via DELETE /api/auth/account get their deleted_at
+ *      set. Cron finds rows older than the grace window and hard-deletes
+ *      them (which cascades to sessions / user_oauth via FK).
+ *
+ *   2. AUTH-08 — purge expired token_blacklist rows.
+ *      Once a JWT's `exp` has passed, the blacklist entry serves no purpose
+ *      and just takes space. Kept small so LRU cache stays hot.
+ *
+ *   3. AUTH-04 — purge stale password_reset_codes rows.
+ *      Codes expire after 15 min; keeping them around leaks metadata about
+ *      reset frequency and grows the index. Purge anything older than
+ *      1 hour (buffer for time-skew and forensic tail).
+ *
+ * All three are independent DELETEs — one failing does not block the others.
+ * The job is idempotent and safe to run manually.
+ *
+ * Manual invocation (used by integration test):
+ *   const { run } = require('./cron/authSweep');
+ *   await run({ verbose: true, graceDays: 7 });
+ *
+ * Schedule registration (in index.js):
+ *   const cron = require('node-cron');
+ *   const { run } = require('./cron/authSweep');
+ *   cron.schedule('15 3 * * *', () => run({ verbose: true }).catch(console.error), {
+ *     timezone: 'UTC',
+ *   });
+ */
+const User = require('../models/User');
+const TokenBlacklist = require('../models/TokenBlacklist');
+const PasswordReset = require('../models/PasswordReset');
+
+// Hard cap so a runaway sweep can't hard-delete 100k users in one run.
+// Anything beyond this defers to the next day's run.
+const MAX_HARD_DELETES_PER_RUN = 500;
+
+async function sweepHardDeletes(graceDays, verbose) {
+  let hardDeleted = 0;
+  const candidates = await User.findHardDeleteCandidates(graceDays);
+  const capped = candidates.slice(0, MAX_HARD_DELETES_PER_RUN);
+  for (const userId of capped) {
+    try {
+      await User.hardDelete(userId);
+      hardDeleted += 1;
+    } catch (err) {
+      // Per-user failure — log and continue. FK-cascade errors here
+      // usually indicate schema drift; surfacing them one-by-one is
+      // more useful than aborting the whole sweep.
+      console.error(`[authSweep] hardDelete userId=${userId} failed:`, err.message);
+    }
+  }
+  if (verbose && candidates.length > capped.length) {
+    console.warn(
+      `[authSweep] hardDelete cap reached — ${candidates.length - capped.length} deferred to next run`
+    );
+  }
+  return hardDeleted;
+}
+
+async function run({ verbose = false, graceDays = 7 } = {}) {
+  const startedAt = new Date();
+  let hardDeleted = 0;
+  let blacklistPurged = 0;
+  let resetCodesPurged = 0;
+
+  // Run each sub-task in isolation — one failing does not block the others.
+  try {
+    hardDeleted = await sweepHardDeletes(graceDays, verbose);
+  } catch (err) {
+    console.error('[authSweep] hardDelete sweep failed:', err.message, err.stack);
+  }
+
+  try {
+    blacklistPurged = await TokenBlacklist.purgeExpired();
+  } catch (err) {
+    console.error('[authSweep] blacklist purge failed:', err.message);
+  }
+
+  try {
+    resetCodesPurged = await PasswordReset.purgeStale();
+  } catch (err) {
+    console.error('[authSweep] reset code purge failed:', err.message);
+  }
+
+  const finishedAt = new Date();
+  const durationMs = finishedAt - startedAt;
+  if (verbose) {
+    console.log(
+      `[cron/authSweep] startedAt=${startedAt.toISOString()} durationMs=${durationMs} ` +
+      `hardDeleted=${hardDeleted} blacklistPurged=${blacklistPurged} resetCodesPurged=${resetCodesPurged}`
+    );
+  }
+  return { hardDeleted, blacklistPurged, resetCodesPurged, durationMs, startedAt, finishedAt };
+}
+
+module.exports = { run };

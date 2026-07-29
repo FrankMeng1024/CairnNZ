@@ -181,29 +181,105 @@ export const useAppStore = create<AppState>((set) => ({
           // v404: fetch backend sessions on cold boot even though isLoggedIn=false.
           // 登录成功后 UI 需要立刻看到 activity 列表，避免登录后再等一轮网络。
           try {
+            // O18 SAF-06 (2026-07-29): hydrate MUST preserve local pending
+            // sessions (syncState='pending' / 'syncing'). Pre-fix, this block
+            // did `setState({ sessions: remote.map(...) })` which wiped the
+            // in-memory pending-sync sessions the user had just saved (v412
+            // atomic-save failed → session stored locally with syncState:
+            // 'pending', addSession fired, UI shows grey card + HomeScreen
+            // pending banner). Then cold-boot / background→foreground fired
+            // this hydrate, remote list didn't include those locals (they
+            // never reached the server), setState replaced sessions → cards
+            // + banner both silently disappeared. User's data is not lost
+            // (pendingSyncStore filesystem still holds the payload) but the
+            // UI has no way to surface it, so users think the app ate their
+            // hike. Fix: load local storage first (which correctly captures
+            // syncState), keep anything with pending/syncing state OR no
+            // remoteId (never uploaded), then merge remote list on top for
+            // synced rows.
+            await useSessionStore.getState().hydrate(user.id);
+            const beforeMerge = useSessionStore.getState().sessions;
+            const preservedLocals = beforeMerge.filter((s) =>
+              s.syncState === 'pending' ||
+              s.syncState === 'syncing' ||
+              s.remoteId == null
+            );
             const remote = await fetchSessions();
-            const localSessionStore = useSessionStore.getState();
             const localByRemoteId = new Map<number, string>();
-            for (const s of localSessionStore.sessions) {
+            for (const s of beforeMerge) {
               if (s.remoteId != null && s.name) {
                 localByRemoteId.set(s.remoteId, s.name);
               }
             }
-            const sessions = remote.map((r) => ({
-              id: String(r.id),
-              remoteId: r.id,
-              activityMode: r.type as SessionActivityMode,
-              regionCode: 'nz',
-              startedAt: new Date(r.start_time).getTime(),
-              endedAt: new Date(r.end_time).getTime(),
-              durationS: r.duration_s,
-              distanceM: r.distance_m,
-              elevationGainM: 0,
-              trackPoints: [] as TrackPoint[],
-              markerIds: [] as string[],
-              name: r.name ?? localByRemoteId.get(r.id) ?? undefined,
-            }));
-            useSessionStore.setState({ sessions, currentUserId: user.id });
+            // Dedupe: any remote row whose id matches a preserved local's
+            // remoteId means the local uploaded before this hydrate ran —
+            // prefer the remote authoritative copy in that case.
+            const preservedRemoteIds = new Set(
+              preservedLocals.map((s) => s.remoteId).filter((v): v is number => v != null)
+            );
+            const remoteSessions = remote
+              .filter((r) => !preservedRemoteIds.has(r.id))
+              .map((r) => ({
+                id: String(r.id),
+                remoteId: r.id,
+                activityMode: r.type as SessionActivityMode,
+                regionCode: 'nz',
+                startedAt: new Date(r.start_time).getTime(),
+                endedAt: new Date(r.end_time).getTime(),
+                durationS: r.duration_s,
+                distanceM: r.distance_m,
+                elevationGainM: 0,
+                trackPoints: [] as TrackPoint[],
+                markerIds: [] as string[],
+                name: r.name ?? localByRemoteId.get(r.id) ?? undefined,
+                syncState: 'synced' as const,
+              }));
+            const merged = [...preservedLocals, ...remoteSessions];
+            // O18 SAF-06 (2026-07-29): rebuild orphaned pending rows.
+            // If a prior version of the app already wiped the in-memory
+            // pending session (bug fixed above), the payload may still be
+            // sitting on disk in pendingSyncStore. Rebuild a placeholder
+            // TrackingSession for each such file so the user sees the grey
+            // card + banner and can retry sync. Placeholders have empty
+            // trackPoints (loadTrackPoints will fall back to storage which
+            // is empty — the retry itself will re-populate on success via
+            // markSynced updating remoteId).
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { listPending } = require('../services/pendingSyncStore');
+              const disk = await listPending();
+              const existingLocalIds = new Set(merged.map((s) => s.id));
+              const orphans = (Array.isArray(disk) ? disk : []).filter((h: any) => (
+                h && h.localId && !existingLocalIds.has(h.localId)
+              ));
+              for (const h of orphans) {
+                const payload = h.payload ?? {};
+                merged.push({
+                  id: h.localId,
+                  remoteId: h.remoteId ?? undefined,
+                  activityMode: h.activityMode || 'hiking',
+                  regionCode: 'nz',
+                  startedAt: h.createdAt || Date.now(),
+                  endedAt: payload.end_time ? new Date(payload.end_time).getTime() : (h.createdAt || Date.now()),
+                  durationS: payload.duration_s || 0,
+                  distanceM: payload.distance_m || 0,
+                  elevationGainM: 0,
+                  trackPoints: [],
+                  markerIds: [],
+                  name: payload.name || undefined,
+                  syncState: 'pending' as const,
+                });
+              }
+              if (orphans.length > 0) {
+                crashLogger.breadcrumb(`hydrate:rebuilt_orphan_pending count=${orphans.length}`);
+              }
+            } catch (orphanErr) {
+              crashLogger.breadcrumb(`hydrate:orphan_rebuild_failed ${String(orphanErr).slice(0, 80)}`);
+            }
+            useSessionStore.setState({ sessions: merged, currentUserId: user.id });
+            crashLogger.breadcrumb(
+              `hydrate:merged preserved=${preservedLocals.length} remote=${remoteSessions.length}`
+            );
           } catch {
             try { await useSessionStore.getState().hydrate(user.id); } catch { /* swallow */ }
           }

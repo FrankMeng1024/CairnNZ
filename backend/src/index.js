@@ -16,6 +16,7 @@ const cron = require('node-cron');
 const path = require('path');
 const pool = require('./config/db');
 const { run: cleanHiddenOrphans } = require('./cron/cleanHiddenItemsOrphans');
+const { run: authSweep } = require('./cron/authSweep');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -160,6 +161,15 @@ async function start() {
       });
     }, { timezone: 'UTC' });
     console.log('✓ Cron registered: cleanHiddenItemsOrphans (0 3 * * 0 UTC)');
+
+    // O18 batch 6.3: daily auth sweep — hard-delete past grace, purge
+    // token_blacklist expired, purge stale password_reset_codes.
+    cron.schedule('15 3 * * *', () => {
+      authSweep({ verbose: true }).catch((err) => {
+        console.error('[cron/scheduler] authSweep failed:', err.message);
+      });
+    }, { timezone: 'UTC' });
+    console.log('✓ Cron registered: authSweep (15 3 * * * UTC)');
   }
 }
 
