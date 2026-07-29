@@ -155,7 +155,22 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
         return res.status(400).json({ error: 'Request already sent' });
       }
       [reqResult] = await conn.execute(
-        'INSERT INTO friend_requests (from_user_id, to_user_id, status, created_at) VALUES (?, ?, "pending", NOW())',
+        // Sprint 6 round-56 R56: use ON DUPLICATE KEY UPDATE. The
+        // friend_requests table has UNIQUE(from_user_id, to_user_id) —
+        // only one row per (from,to) pair EVER. R36B2's 30-day reject
+        // cooldown allows re-request after 30 days, but the raw INSERT
+        // would then hit ER_DUP_ENTRY on the historical row and the
+        // catch would throw "Server error" to the user. Fix: on
+        // duplicate, reset status='pending' + refresh created_at +
+        // clear resolved_at so a legitimate re-request after cooldown
+        // reuses the historical row instead of failing.
+        `INSERT INTO friend_requests (from_user_id, to_user_id, status, created_at)
+         VALUES (?, ?, 'pending', NOW())
+         ON DUPLICATE KEY UPDATE
+           status = 'pending',
+           created_at = NOW(),
+           resolved_at = NULL,
+           id = LAST_INSERT_ID(id)`,
         [fromUserId, toUser.id]
       );
       await conn.commit();
