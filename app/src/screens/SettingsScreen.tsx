@@ -1006,6 +1006,27 @@ export function SettingsScreen() {
                 hint="Your hikes stay saved"
                 labelColor={Colors.textPrimary}
                 onPress={async () => {
+                  // O18 AUTH-09: if a hike is active, warn that data will be
+                  // lost. Users tap Settings mid-hike more often than we'd
+                  // like — a silent sign-out clears the in-flight session.
+                  // eslint-disable-next-line @typescript-eslint/no-require-imports
+                  const { useTrackingStore } = require('../store/useTrackingStore');
+                  const trackingStatus = useTrackingStore.getState().status;
+                  if (trackingStatus === 'tracking' || trackingStatus === 'paused') {
+                    const proceed = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function'
+                      ? window.confirm("You're in the middle of a hike. Signing out will discard the current recording. Continue?")
+                      : await new Promise<boolean>((resolve) =>
+                          Alert.alert(
+                            'Sign out mid-hike?',
+                            "You're recording a hike right now. Signing out will discard this session. Save or stop first if you want to keep it.",
+                            [
+                              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                              { text: 'Sign out anyway', style: 'destructive', onPress: () => resolve(true) },
+                            ],
+                          )
+                        );
+                    if (!proceed) return;
+                  }
                   const confirmed = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function'
                     ? window.confirm('Your hikes stay saved. You can sign back in anytime.')
                     : await new Promise<boolean>((resolve) =>

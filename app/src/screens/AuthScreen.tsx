@@ -1038,7 +1038,41 @@ export function AuthScreen() {
             isNew={isRegister}
           />
           {isRegister && !passwordError && (
-            <Text style={[formStyles.fieldError, { color: Colors.textSecondary, fontWeight: '400' }]}>Minimum 8 characters</Text>
+            <>
+              <Text style={[formStyles.fieldError, { color: Colors.textSecondary, fontWeight: '400' }]}>Minimum 8 characters</Text>
+              {/* O18 AUTH-05: password strength meter. Simple heuristic
+                  (length + character variety), no external library. */}
+              {password.length > 0 && (() => {
+                const hasLower = /[a-z]/.test(password);
+                const hasUpper = /[A-Z]/.test(password);
+                const hasDigit = /\d/.test(password);
+                const hasSymbol = /[^a-zA-Z0-9]/.test(password);
+                const variety = [hasLower, hasUpper, hasDigit, hasSymbol].filter(Boolean).length;
+                let strength: 'weak' | 'ok' | 'strong' = 'weak';
+                if (password.length >= 12 && variety >= 3) strength = 'strong';
+                else if (password.length >= 8 && variety >= 2) strength = 'ok';
+                const color = strength === 'strong' ? Colors.success : strength === 'ok' ? Colors.warning : Colors.danger;
+                const label = strength === 'strong' ? 'Strong' : strength === 'ok' ? 'OK' : 'Weak';
+                return (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                    <View style={{ flexDirection: 'row', gap: 3, flex: 1 }}>
+                      {[0, 1, 2].map(i => (
+                        <View
+                          key={i}
+                          style={{
+                            flex: 1,
+                            height: 4,
+                            borderRadius: 2,
+                            backgroundColor: (strength === 'strong' || (strength === 'ok' && i < 2) || (strength === 'weak' && i < 1)) ? color : Colors.border,
+                          }}
+                        />
+                      ))}
+                    </View>
+                    <Text style={{ fontSize: FontSize.tiny, fontWeight: '700', color, minWidth: 44 }}>{label}</Text>
+                  </View>
+                );
+              })()}
+            </>
           )}
 
           {/* Remember me — Sign In only. Saves email + password to local
