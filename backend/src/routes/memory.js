@@ -67,6 +67,16 @@ router.post('/points', authenticate, validateBody(schemas.memory.points), async 
       echo.push(null);
       continue;
     }
+    // Sprint 6 round-18 R18 note: `client_id` column collation is
+    // utf8mb4_0900_ai_ci (case + accent insensitive). Two clients sending
+    // `cid='ABC123'` and `cid='abc123'` would collide on the UNIQUE key
+    // uk_user_cid and one point would be silently dropped via
+    // ON DUPLICATE KEY. Odds are zero in practice: Expo UUIDs are
+    // lowercase and `deterministicCid` returns hex — both already stable
+    // casing. Left as-is to preserve client-side sync-id parity; a
+    // future ALTER to utf8mb4_bin (or lowercase-normalization here)
+    // would need coordinated client rollout so the echo doesn't diverge
+    // from the client's locally cached cid. Filed as backlog risk item.
     const cid = (typeof p.cid === 'string' && p.cid.length > 0 && p.cid.length <= 36)
       ? p.cid
       : deterministicCid(userId, p.ts, p.lat, p.lng);
