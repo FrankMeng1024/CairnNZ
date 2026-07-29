@@ -196,14 +196,45 @@ async function listRecent(userId, limit = 50) {
 // queue doesn't grow indefinitely.
 async function sendPending({ batchSize = 100 } = {}) {
   const safeBatch = Math.max(1, Math.min(Number(batchSize) || 100, 500));
-  const [rows] = await pool.execute(
-    `SELECT id, recipient_user_id, kind, title, body
-     FROM notification_log
-     WHERE status = 'queued'
-     ORDER BY id ASC
-     LIMIT ${safeBatch}`,
-    [],
-  );
+  // Sprint 6 round-4 review R4B6: atomically claim rows via
+  // FOR UPDATE SKIP LOCKED so concurrent Node workers (or an accidental
+  // blue/green deploy overlap) don't double-send. MySQL 8.0.1+ supports
+  // this; on 5.7 the SKIP LOCKED clause is a syntax error and the query
+  // falls back to plain SELECT (unsafe under concurrency but doesn't
+  // crash single-worker deploys). aliyun runs MySQL 8, so this works.
+  const conn = await pool.getConnection();
+  let rows;
+  try {
+    await conn.beginTransaction();
+    [rows] = await conn.execute(
+      `SELECT id, recipient_user_id, kind, title, body
+       FROM notification_log
+       WHERE status = 'queued'
+       ORDER BY id ASC
+       LIMIT ${safeBatch}
+       FOR UPDATE SKIP LOCKED`,
+      [],
+    );
+    if (rows.length > 0) {
+      // Mark all claimed rows as 'sending' in a single transaction so
+      // another worker sees them as unavailable when it hits the same
+      // SELECT. Individual row status will be flipped to sent/failed/
+      // dropped_* below.
+      const ids = rows.map(r => r.id);
+      const placeholders = ids.map(() => '?').join(',');
+      await conn.execute(
+        `UPDATE notification_log SET status='sending' WHERE id IN (${placeholders})`,
+        ids,
+      );
+    }
+    await conn.commit();
+  } catch (claimErr) {
+    try { await conn.rollback(); } catch (_) {}
+    throw claimErr;
+  } finally {
+    conn.release();
+  }
+
   if (rows.length === 0) return { attempted: 0, sent: 0, dropped: 0, failed: 0 };
 
   const transportReady = !!process.env.EXPO_PUSH_ACCESS_TOKEN || process.env.PUSH_TRANSPORT === 'expo';

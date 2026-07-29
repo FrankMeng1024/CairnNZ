@@ -203,7 +203,13 @@ router.post('/resend', resendLimiter, validateBody(schemas.auth.resend), async (
       return res.status(400).json({ error: 'No pending registration found. Please register again.' });
 
     // Issue new code
-    const code = await User.upsertPending(normalEmail, pending.name, pending.password_hash);
+    // Sprint 6 round-4 review R4B1 fix: pass through the existing DOB
+    // when issuing a fresh code. Pre-fix, resend upserted with
+    // dateOfBirth=undefined → normalizeDob → NULL → verify created the
+    // user with no DOB → legacy-backfill modal fires on next login AND
+    // the age-gate the user just passed at register is silently
+    // discarded.
+    const code = await User.upsertPending(normalEmail, pending.name, pending.password_hash, pending.date_of_birth);
     sendVerificationCode(normalEmail, pending.name, code).catch(err =>
       console.error('[email] resend failed:', err.message)
     );

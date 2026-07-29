@@ -4,10 +4,11 @@
  * Shown when the user taps a 6th friend (beyond the
  * memory_subscription_limit = 5 cap) in MemoryFriendPickModal.
  *
- * v1 binding (v4 §7 + §12):
- *   - TestFlight-only. NO real IAP. Tap "Subscribe" → "Coming soon" toast.
- *   - App Store public release requires real IAP (deferred to v1.2).
- *   - Keep NZ$5.99 price in copy so the perceived value is set (NZ launch).
+ * Batch 6.8 (Sprint 6): wired to react-native-purchases via iapService.
+ * getOfferings() returns [] when the native module isn't in the current
+ * build — in that case Subscribe falls back to a "Coming soon" alert.
+ * Once the EAS build ships with react-native-purchases + a configured
+ * RC public key, real StoreKit / Play Billing runs.
  *
  * UX: full-screen sheet with hero image, value props, single CTA.
  */

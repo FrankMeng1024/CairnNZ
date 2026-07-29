@@ -53,6 +53,13 @@ let queue: LogRecord[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let inFlight = false;
 let appStateAttached = false;
+// Sprint 6 round-4 review R4B3 fix: track consecutive failures for the
+// current head batch. After MAX_HEAD_FAILURES 5xx / network errors, drop
+// the batch and move on — log-loss is preferable to log-inversion where
+// stale head events keep replaying and newer events (describing the
+// actual failure) get dropped by QUEUE_MAX.
+let headFailures = 0;
+const MAX_HEAD_FAILURES = 3;
 
 const SESSION_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 const DEVICE = { platform: Platform.OS, version: String(Platform.Version) };
@@ -125,14 +132,26 @@ export async function flushNow(): Promise<void> {
       // request.
       if (res.ok || (res.status >= 400 && res.status < 500)) {
         queue = queue.slice(batch.length);
+        headFailures = 0;
         if (queue.length > 0) scheduleFlush();
+      } else {
+        // 5xx: increment head-failure counter. On MAX, drop the batch.
+        headFailures += 1;
+        if (headFailures >= MAX_HEAD_FAILURES) {
+          queue = queue.slice(batch.length);
+          headFailures = 0;
+        }
       }
-      // 5xx: keep batch, retry on next emit.
     } finally {
       clearTimeout(timer);
     }
   } catch {
-    // Network / abort — keep queue, retry on next emit.
+    // Network / abort — same head-failure semantics as 5xx.
+    headFailures += 1;
+    if (headFailures >= MAX_HEAD_FAILURES) {
+      queue = queue.slice(batch.length);
+      headFailures = 0;
+    }
   } finally {
     inFlight = false;
   }

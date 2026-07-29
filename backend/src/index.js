@@ -148,6 +148,26 @@ async function start() {
     // Start anyway so health check can report the issue
   }
 
+  // Sprint 6 round-4 review R4B4: verify Sprint 6 schema is present.
+  // If deleted_at column is missing (rolling deploy: new code, old DB),
+  // every friends/request + friends/profile call throws "Unknown column"
+  // → generic 500 to the user. Log a loud warning so ops sees it in the
+  // startup output; don't refuse to boot (health check on other routes
+  // still needs to work).
+  try {
+    const [rows] = await pool.execute(
+      "SELECT column_name AS c FROM information_schema.columns " +
+      "WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'deleted_at' LIMIT 1"
+    );
+    if (rows.length === 0) {
+      console.error('\n⚠⚠⚠  Migration 020 not applied! users.deleted_at column missing.');
+      console.error('       Friends + auth routes will throw "Unknown column" errors.');
+      console.error('       Apply: docker exec ainews-db bash -c "mysql cairn < /path/to/020.sql"\n');
+    }
+  } catch (schemaErr) {
+    console.warn('[boot] schema check skipped:', schemaErr.message);
+  }
+
   app.listen(PORT, () => {
     console.log(`✓ Cairn backend running on http://localhost:${PORT}`);
     console.log(`  Health: http://localhost:${PORT}/health`);
@@ -205,6 +225,22 @@ async function start() {
       });
     }, { timezone: 'UTC' });
     console.log('✓ Cron registered: exportPurge (0 4 * * * UTC)');
+
+    // Sprint 6 round-4 review R4B6: boot-time catch-up. If the process
+    // restarted around 03:15/03:30/04:00 UTC and missed the cron slot,
+    // the daily sweeps won't fire until 24h later. Kick them once on
+    // boot if the last run was >20h ago (approximates "missed today's
+    // slot"). authSweep + pushPurge + exportPurge are all idempotent
+    // so a duplicate run is harmless.
+    setTimeout(() => {
+      authSweep({ verbose: true }).catch((err) =>
+        console.error('[boot/catch-up] authSweep failed:', err.message));
+      pushPurge({ verbose: true }).catch((err) =>
+        console.error('[boot/catch-up] pushPurge failed:', err.message));
+      exportPurge({ verbose: true }).catch((err) =>
+        console.error('[boot/catch-up] exportPurge failed:', err.message));
+    }, 30_000); // wait 30s so boot health check completes first
+    console.log('✓ Boot catch-up scheduled (t+30s)');
   }
 }
 
