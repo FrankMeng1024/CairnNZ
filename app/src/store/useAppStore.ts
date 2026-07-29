@@ -163,6 +163,23 @@ export const useAppStore = create<AppState>((set) => ({
     try { detachMemorySync(); } catch { /* swallow */ }
     try { void detachMemoryPersistence(); } catch { /* swallow */ }
     crashLogger.breadcrumb('logout:memory_sync_detached');
+    // Sprint 6 round-21 R21B1: also clear SAF-01 payload state + disk
+    // blob. Pre-fix, logout cleared sessions/markers/memory but the
+    // SAF-01 saveLostSessionId + saveLostPayload survived in-memory,
+    // and `cairn_saf01_payload` stayed on disk. Cross-user leak:
+    // User A's crash blob would be visible to User B on the same
+    // device after B signs in (Alert would re-fire with A's context).
+    // Now: reset trackingStore's SAF-01 fields + remove disk blob.
+    // Belt-and-suspenders with R21B2 (hydrateSaf01 userId gate).
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useTrackingStore } = require('./useTrackingStore');
+      useTrackingStore.setState({ saveLostSessionId: null, saveLostPayload: null });
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { storage: safStorage } = require('./storage');
+      safStorage.removeItem('cairn_saf01_payload').catch(() => {});
+      crashLogger.breadcrumb('logout:saf01_cleared');
+    } catch { /* swallow — trackingStore or storage not loaded */ }
     // Sprint 72 STORY-00549: 硬清标记 — 阻止下次冷启动 auto-login。
     // 用户下次点 Sign In 成功后 AuthScreen 清此标记。
     storage.setItem(STORAGE_KEY_LOGOUT_MARKER, '1').catch(() => {});

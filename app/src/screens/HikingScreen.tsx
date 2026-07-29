@@ -575,10 +575,26 @@ export function HikingScreen() {
     // only, so a state transition where saveLostSessionId nulls doesn't
     // decouple ref state from an Alert that may still be on-screen (iOS
     // Alert.alert doesn't auto-dismiss on state change).
+    //
+    // Sprint 6 round-21 R21B3: on background, iOS dismisses the Alert
+    // automatically but the ref stays true — the user comes back to
+    // foreground and the guard at line 584 blocks the re-show, so the
+    // SAF-01 prompt is stuck until app relaunch. Fix: when AppState
+    // transitions to 'background' or 'inactive', reset the ref so
+    // the next 'active' event can re-fire. Cancelable:false means the
+    // Alert can't be dismissed by tapping outside — only iOS itself
+    // dismisses on background — so this reset is only reached when
+    // the Alert really is gone.
     if (!saveLostSessionId) return;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { AppState } = require('react-native');
     const sub = AppState.addEventListener('change', (state: string) => {
+      if (state === 'background' || state === 'inactive') {
+        // iOS auto-dismissed the Alert. Clear the ref so the next
+        // foreground can re-show it.
+        saf01AlertShownRef.current = false;
+        return;
+      }
       if (state !== 'active') return;
       if (!useTrackingStore.getState().saveLostSessionId) return;
       if (saf01AlertShownRef.current) return;

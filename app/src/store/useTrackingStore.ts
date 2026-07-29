@@ -1877,6 +1877,19 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // on cold-boot so a hike that failed to Save AND we couldn't stash
     // in pendingSyncStore survives app termination. HikingScreen mount
     // calls this before rendering.
+    //
+    // Sprint 6 round-21 R21B2: gate restore on currentUserId match.
+    // Pre-fix, hydrateSaf01 unconditionally restored whatever it found
+    // on disk. Cross-user scenario:
+    //   1. User A's hike hits SAF-01 → payload persisted with userId=A
+    //   2. API 401 → useAppStore.logout() clears sessions/markers but
+    //      NOT the SAF-01 blob (R21B1 fixes the clear side)
+    //   3. User B signs in on the same device
+    //   4. HikingScreen mounts, hydrateSaf01 runs → restores A's
+    //      saveLostSessionId + saveLostPayload → Alert re-fires
+    //   5. B sees A's crash prompt and could Retry / Discard A's hike
+    // Now: compare payload.userId to current signed-in user. Mismatch =
+    // drop the blob (belongs to a previous account on this device).
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { storage } = require('./storage');
@@ -1884,6 +1897,27 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       if (!raw) return;
       const parsed = JSON.parse(raw);
       if (parsed?.saveLostSessionId && parsed?.saveLostPayload) {
+        // R21B2 cross-user check.
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { useAppStore } = require('./useAppStore');
+          const currentUserId = String(useAppStore.getState().user?.id ?? '');
+          const payloadUserId = String(parsed.saveLostPayload.userId ?? '');
+          // Empty currentUserId = not yet hydrated / signed out. Skip
+          // restore — the Alert would show against no active session
+          // context, and if it belongs to a returning user their next
+          // sign-in triggers a fresh HikingScreen mount that re-runs
+          // this function with a populated user.
+          if (!currentUserId) return;
+          // Mismatch = previous account on this device. Drop the blob
+          // AND clear disk so a subsequent sign-in as the correct user
+          // can still restore if THEY had a SAF-01 (would have written
+          // a fresh blob with their own userId).
+          if (payloadUserId && payloadUserId !== 'unknown' && payloadUserId !== currentUserId) {
+            storage.removeItem('cairn_saf01_payload');
+            return;
+          }
+        } catch { /* silent — useAppStore not loaded yet, safer to skip */ return; }
         set({
           saveLostSessionId: parsed.saveLostSessionId,
           saveLostPayload: parsed.saveLostPayload,
