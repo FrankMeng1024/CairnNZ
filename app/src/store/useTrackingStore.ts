@@ -194,6 +194,10 @@ interface TrackingState {
   // O1 batch 37: reset removed — 0 external callers confirmed by grep audit.
   /** Clear lastStopReason after the screen has surfaced its notice. */
   clearLastStopReason: () => void;
+  // Sprint 6 round-14 R14B9: on cold-boot, HikingScreen calls this to
+  // restore saveLostSessionId + saveLostPayload from AsyncStorage so
+  // the SAF-01 Alert re-fires after a force-quit / crash.
+  hydrateSaf01: () => Promise<void>;
   /** v118: discard the current too-short session entirely. Called when
    *  the user taps "End anyway" in the TooShortSheet — does the full
    *  cleanup (delete server row, stop subscriptions/intervals, reset
@@ -1194,6 +1198,25 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 userId: String(useAppStore.getState().user?.id ?? 'unknown'),
               },
             });
+            // Sprint 6 round-14 R14B9 fix: persist to AsyncStorage so a
+            // force-quit during the SAF-01 Alert doesn't permanently
+            // lose the hike. HikingScreen mount reads this back and
+            // re-fires the Alert.
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { storage } = require('./storage');
+              storage.setItem('cairn_saf01_payload', JSON.stringify({
+                saveLostSessionId: s.sessionId,
+                saveLostPayload: {
+                  localId: s.sessionId,
+                  remoteId,
+                  idempotencyKey,
+                  activityMode: s.activityMode,
+                  payload: v412Payload,
+                  userId: String(useAppStore.getState().user?.id ?? 'unknown'),
+                },
+              }));
+            } catch { /* silent */ }
           }
         }
       } else {
@@ -1226,6 +1249,23 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               userId: String(useAppStore.getState().user?.id ?? 'unknown'),
             },
           });
+          // Sprint 6 round-14 R14B9 fix: same persistence for the
+          // no-remoteId branch (hike started offline).
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { storage } = require('./storage');
+            storage.setItem('cairn_saf01_payload', JSON.stringify({
+              saveLostSessionId: s.sessionId,
+              saveLostPayload: {
+                localId: s.sessionId,
+                remoteId: null,
+                idempotencyKey,
+                activityMode: s.activityMode,
+                payload: v412Payload,
+                userId: String(useAppStore.getState().user?.id ?? 'unknown'),
+              },
+            }));
+          } catch { /* silent */ }
         }
       }
 
@@ -1822,7 +1862,35 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
   // O1 batch 37: reset removed — 0 external callers confirmed by grep audit.
 
-  clearLastStopReason: () => set({ lastStopReason: null, saveLostSessionId: null, saveLostPayload: null }),
+  clearLastStopReason: () => {
+    set({ lastStopReason: null, saveLostSessionId: null, saveLostPayload: null });
+    // Sprint 6 round-14 R14B9: also clear the persisted SAF-01 blob so
+    // a next-launch re-fire doesn't resurrect stale state.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { storage } = require('./storage');
+      storage.removeItem('cairn_saf01_payload');
+    } catch { /* silent */ }
+  },
+  hydrateSaf01: async () => {
+    // Sprint 6 round-14 R14B9: read persisted SAF-01 state from disk
+    // on cold-boot so a hike that failed to Save AND we couldn't stash
+    // in pendingSyncStore survives app termination. HikingScreen mount
+    // calls this before rendering.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { storage } = require('./storage');
+      const raw = await storage.getItem('cairn_saf01_payload');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed?.saveLostSessionId && parsed?.saveLostPayload) {
+        set({
+          saveLostSessionId: parsed.saveLostSessionId,
+          saveLostPayload: parsed.saveLostPayload,
+        });
+      }
+    } catch { /* silent — corrupt blob = drop */ }
+  },
 
   discardCurrentSession: () => {
     // Full teardown for too-short sessions when user taps "End anyway".

@@ -90,6 +90,9 @@ export const useAppStore = create<AppState>((set) => ({
     if (v) {
       const runOnce = () => {
         try {
+          // Sprint 6 round-14 R14B8: don't fire push/RC if user logged
+          // out between the setLoggedIn(true) and this retry firing.
+          if (!useAppStore.getState().isLoggedIn) return true;
           const currentUser = useAppStore.getState().user;
           if (!currentUser?.id) return false;
           try {

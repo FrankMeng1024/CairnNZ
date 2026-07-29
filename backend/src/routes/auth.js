@@ -644,7 +644,14 @@ router.post('/password-reset/verify', authLimiter, validateBody(schemas.auth.pas
         too_many_attempts:  'Too many incorrect attempts. Please request a new code.',
         mismatch:           'Incorrect or expired code. Please try again.',
       };
-      return res.status(400).json({ error: errorMap[result.reason] || 'Invalid code.', hint: result.reason });
+      // Sprint 6 round-14 R14B6 fix: DO NOT expose `hint: result.reason`
+      // in production — it defeated R13B5's error collapse by leaking
+      // the internal state (not_found vs mismatch etc.). Client callers
+      // that need the reason (e.g. auto-hide the code input on
+      // too_many_attempts) still get it in dev builds.
+      const body = { error: errorMap[result.reason] || 'Invalid code.' };
+      if (process.env.NODE_ENV !== 'production') body.hint = result.reason;
+      return res.status(400).json(body);
     }
 
     const user = await User.findByEmail(normalEmail);

@@ -472,6 +472,13 @@ export function HikingScreen() {
   // both effects can read/write it. Prevents stacked Alerts.
   const saf01AlertShownRef = useRef(false);
 
+  // Sprint 6 round-14 R14B9: on mount, hydrate SAF-01 state from disk
+  // so a force-quit during Alert display doesn't permanently lose the
+  // hike. hydrateSaf01 is a no-op if no persisted blob exists.
+  useEffect(() => {
+    useTrackingStore.getState().hydrateSaf01();
+  }, []);
+
   // O18 SAF-01: surface hard save failure with a modal Alert + Retry.
   useEffect(() => {
     if (!saveLostSessionId) return;

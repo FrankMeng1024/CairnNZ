@@ -165,8 +165,13 @@ async function buildBundle(userId) {
   );
   bundle.friends = friends;
 
+  // Sprint 6 round-14 R14B5 fix: drop notification body + related_id
+  // from the export. Body strings ("Alice wants to be your friend")
+  // contain OTHER users' names — GDPR-exportable data must be about
+  // the exporting user only, not references derived from others.
+  // Keep timestamp + kind + status for audit-trail proof.
   const [notifications] = await pool.execute(
-    `SELECT id, kind, related_id, title, body, status, created_at
+    `SELECT id, kind, status, created_at
      FROM notification_log WHERE recipient_user_id = ?
      ORDER BY id DESC LIMIT 500`,
     [userId],
