@@ -17,6 +17,8 @@
  *     so ts-collisions don't break the cursor.
  */
 const express = require('express');
+const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { deterministicCid } = require('../lib/deterministicCid');
@@ -27,6 +29,22 @@ const router = express.Router();
 
 // v412: deterministicCid 抽到 lib/deterministicCid.js, sessions.js /save 端点复用同一实现
 
+// Sprint 6 round-30 R30Q3: per-user rate limit on POST /points. Pre-fix,
+// only the batch cap of 1000 points enforced any bound. A malicious
+// (or badly-behaved retry-loop) client could POST 1000-point batches
+// back-to-back → unbounded MySQL write amplification + attributeMemoryPoints
+// runs an ST_Contains sweep per batch. Legitimate memory sync fires ~
+// every 30-60s during active hiking, so 120/5min/user leaves ~1 req/
+// 2.5s of headroom for retry storms without opening a DoS vector. Key
+// by userId (authenticate runs first); IP fallback defends the
+// unauthenticated-attempt edge that shouldn't happen post-authenticate.
+const pointsLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, max: 120,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => req.user?.userId ? `mempts:${req.user.userId}` : ipKeyGenerator(req, res),
+  message: { error: 'Too many memory point uploads. Slow down.' },
+});
+
 /**
  * POST /api/memory/points
  * Body: { points: [{ lat, lng, ts, cid? }, ...] }
@@ -36,7 +54,7 @@ const router = express.Router();
  * v0.2.6.2 (no cid) can backfill locally on next pull. Null placeholders
  * in the echo array preserve request/response index alignment.
  */
-router.post('/points', authenticate, validateBody(schemas.memory.points), async (req, res) => {
+router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.points), async (req, res) => {
   const userId = req.user.userId;
   const { points } = req.body;
 
