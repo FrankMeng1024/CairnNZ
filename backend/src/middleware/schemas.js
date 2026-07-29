@@ -39,7 +39,16 @@ const markerCreate = Joi.object({
   alt: alt,
   permission: Joi.string().valid('personal', 'group', 'public').default('personal'),
   approximate: Joi.boolean().default(false),
-  voice_memo_url: Joi.string().uri().max(512).allow(null),
+  // Sprint 6 round-25 R25F6: restrict voice_memo_url scheme to https only
+  // (no javascript:, no file:, no http:). Pre-fix, Joi.uri() accepted any
+  // scheme, so if the feature were wired up (currently the handler drops
+  // this field silently), a marker could store `javascript:alert(1)` or
+  // `http://attacker.com/tracking-pixel` → XSS in WebView, IP disclosure
+  // to attacker on playback, SSRF vector on server-side transcoding.
+  // Locking scheme now while the feature is still latent — no user impact
+  // (existing markers have null; new markers with http:// or unusual
+  // schemes would 400, which is desired).
+  voice_memo_url: Joi.string().uri({ scheme: ['https'] }).max(512).allow(null),
   voice_memo_duration_ms: Joi.number().integer().min(0).max(65535).allow(null),
 });
 
@@ -49,9 +58,15 @@ const markerUpdate = Joi.object({
     'shelter', 'hazard', 'note', 'free'
   ),
   text: Joi.string().max(250).allow(''),
-  lat: lat,
-  lng: lng,
-  alt: alt,
+  // Sprint 6 round-25 R25F3: removed lat/lng/alt from update schema. The
+  // handler at markers.js:237 only destructures {text, permission, type}
+  // and silently drops any lat/lng in the body. Pre-fix, a client PUT
+  // with lat/lng would pass Joi validation, return 200, and the user
+  // would believe they moved the marker — but the DB row was untouched.
+  // Data-integrity bug: user's mental model diverges from server state.
+  // If moving markers is a wanted feature, it needs a distinct endpoint
+  // (POST /:id/move with distance/authority checks). For now: reject
+  // any client attempt to move a marker via PUT with a clear error.
   permission: Joi.string().valid('personal', 'group', 'public'),
   approximate: Joi.boolean(),
 }).min(1); // at least one field to update
