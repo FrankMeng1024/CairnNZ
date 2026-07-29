@@ -1,4 +1,4 @@
-# Sprint 6 Rounds 15-23 Hardening — 2026-07-29 Overnight
+# Sprint 6 Rounds 15-27 Hardening — 2026-07-29 Overnight
 
 Sleep-run session covering rounds 15-20 of adversarial review on Sprint 6
 auth/push/friend/marker/GDPR-export/memory/session surface areas, plus
@@ -54,6 +54,9 @@ production schema before shipping.
 | R19 | #5 | Medium | routes/sessions.js | Legacy PATCH per-point route_points validation |
 | R19 | #4 | Doc | middleware/idempotency.js | Concurrent-request race documented + rationale for deferral |
 | R22 | Q4 | Medium | routes/push.js | Rate-limit /push/register to blunt token-hijack (20/15min/user) |
+| R25 | F3 | Data | middleware/schemas.js | markerUpdate schema drops lat/lng (mass-assignment silent-drop) |
+| R25 | F6 | Latent | middleware/schemas.js | voice_memo_url scheme locked to https-only |
+| R27 | B3 | DoS | routes/debug-snapshot.js | meta base64 size cap (6000 chars → 4KB decoded) |
 
 ## Fixes committed but NOT deployed (client)
 
@@ -90,6 +93,10 @@ Real-device test cycle needed:
 - R20 BUG-1 MapHistoryScreen tappable pending card (design intent needs reconfirmation)
 - R20 BUG-4 syncDaemon permanent-failure orphan handling (needs error-taxonomy refactor)
 - R23 findings A (nonce replay within TTL — mitigated by DB UNIQUE) + B (0,0 coord — no real attack vector) both deferred as theoretical
+- R24 client-side X-API-Key shipped as prep; server-side enable requires coordinated OTA
+- R25 findings F1 (type surface), F2 (permission='group' legacy), F4 (DELETE 404 conflation), F5 (POST dedupe), F8 (owner sees hidden-status) — mostly product decisions or coordinated Sprint items
+- R26 sessions table missing on aliyun but 0 client calls (verified 24h log = 0 errors) — documented as cleanup opportunity in memory `project_sessions_table_missing.md`
+- R27 findings 1/2/4/7 (POST no-auth is documented dev choice, snapshot_id UNIQUE, edit-diag packet limit, PNG-magic prefix) — coordinated Sprint items
 
 ## Convergence signal
 
@@ -97,9 +104,12 @@ Round 23 found only theoretical hardening items, no exploitable bugs. This
 is the natural stopping signal — the review has converged and further
 rounds would produce diminishing returns without a fresh attack surface.
 
-## Commit chain (all pushed to origin/master)
+## Commit chain (all pushed to origin/master, except last)
 
 ```
+d551b32 R27B3     debug-snapshot meta size cap (LOCAL — push retry pending)
+e14512b R25F3+F6  marker.update lat/lng drop + voice_memo scheme lock
+55d5203 R24       client-side X-API-Key prep for coordinated telemetry auth
 8890857 R22Q4     rate-limit /push/register
 e5d6511 docs      R21 fixes added to summary
 cac6316 R21       SAF-01 cross-user + stuck-ref (client)
