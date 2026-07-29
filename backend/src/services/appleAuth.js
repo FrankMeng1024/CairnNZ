@@ -25,7 +25,12 @@ let cachedAt = 0;
 
 async function fetchAppleKeys(force = false) {
   if (!force && cachedKeys && Date.now() - cachedAt < CACHE_TTL_MS) return cachedKeys;
-  const fetch = global.fetch || require('node-fetch');
+  // Sprint 6 review M12: rely on global.fetch (Node 18+). Same convention
+  // as PushNotification.
+  const fetch = global.fetch;
+  if (typeof fetch !== 'function') {
+    throw new Error('[appleAuth] global.fetch unavailable — Node 18+ required');
+  }
   const res = await fetch(APPLE_KEYS_URL);
   if (!res.ok) throw new Error(`Apple JWKS fetch failed: HTTP ${res.status}`);
   const jwks = await res.json();

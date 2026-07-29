@@ -27,7 +27,15 @@
  *   4. Flip the transport check below
  */
 const pool = require('../config/db');
-const fetch = global.fetch || require('node-fetch');
+
+// Sprint 6 review M12: Node 18+ has global fetch. Older runtimes would
+// need node-fetch — we don't declare that dep, so let's fail loudly
+// (at boot) rather than at first push. If you land on a pre-18 host,
+// add node-fetch and change this to a lazy require.
+const fetch = global.fetch;
+if (typeof fetch !== 'function') {
+  throw new Error('[push] global.fetch unavailable — Node 18+ required (or add node-fetch)');
+}
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
