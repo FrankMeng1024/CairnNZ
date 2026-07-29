@@ -96,9 +96,14 @@ router.get('/', async (req, res) => {
   try {
     const [rows] = await pool.execute(
       // O1: dropped u.email — client 0 consumer,纯泄漏。
+      // Sprint 6 R47: filter soft-deleted friends. Pre-fix, a
+      // subscription to a friend pending hard-delete still appeared
+      // in the list with cached name — user would then hit /circle/fog
+      // and see nothing new from them, wondering why. Better UX to
+      // drop the subscription entry entirely.
       `SELECT ms.friend_id, u.name AS friend_name, ms.subscribed_at
          FROM memory_subscriptions ms
-         JOIN users u ON u.id = ms.friend_id
+         JOIN users u ON u.id = ms.friend_id AND u.deleted_at IS NULL
         WHERE ms.user_id = ?
         ORDER BY ms.subscribed_at ASC`,
       [userId]

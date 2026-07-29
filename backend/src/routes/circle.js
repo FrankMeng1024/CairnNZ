@@ -106,12 +106,16 @@ router.get('/markers', async (req, res) => {
     // Filter: marker belongs to subscribed friend AND permission is shared tier
     // AND viewer has NOT hidden this marker.
     // Legacy 'group' included alongside 'friend' for markers ENUM.
+    // Sprint 6 R47: filter soft-deleted authors so a friend pending
+    // hard-delete stops appearing in the shared feed with their cached
+    // name. Their account is going away; showing their content is
+    // stale UX. Mirror of R37 fix on friends.js list endpoints.
     const sql = `
       SELECT m.id, m.user_id, m.type, m.text, m.lat, m.lng, m.alt,
              m.permission, m.approximate, m.created_at, m.updated_at,
              u.name AS author_name
         FROM markers m
-        JOIN users  u  ON u.id = m.user_id
+        JOIN users  u  ON u.id = m.user_id AND u.deleted_at IS NULL
    LEFT JOIN hidden_items h
           ON h.user_id   = ?
          AND h.item_type = 'mark'
@@ -151,12 +155,13 @@ router.get('/routes', async (req, res) => {
     }
     const placeholders = friendIds.map(() => '?').join(',');
 
+    // Sprint 6 R47: same soft-deleted filter as /circle/markers above.
     const sql = `
       SELECT r.id, r.user_id, r.name, r.description, r.points, r.distance_m,
              r.elevation_gain_m, r.permission, r.created_at, r.updated_at,
              u.name AS author_name
         FROM routes r
-        JOIN users u ON u.id = r.user_id
+        JOIN users u ON u.id = r.user_id AND u.deleted_at IS NULL
    LEFT JOIN hidden_items h
           ON h.user_id   = ?
          AND h.item_type = 'route'
