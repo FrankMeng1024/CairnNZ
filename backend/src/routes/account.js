@@ -60,16 +60,32 @@ router.post('/export', authenticate, exportRequestLimiter, async (req, res) => {
     // Email the (eventual) link. Client also gets the token so they can
     // poll status / show a download button without waiting for the email.
     try {
-      const publicBase = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
-      const url = `${publicBase}/api/account/export/${result.download_token}`;
-      const [rows] = await require('../config/db').execute(
-        'SELECT email, name FROM users WHERE id = ? LIMIT 1',
-        [req.user.userId],
-      );
-      if (rows[0]) {
-        sendDataExportReady(rows[0].email, rows[0].name, url).catch(err =>
-          console.error('[email] export ready send failed:', err.message)
+      // Sprint 6 R49: Host-header injection fix. Pre-fix, the fallback
+      // `${req.protocol}://${req.get('host')}` was user-controlled —
+      // attacker POSTs /export with header `Host: attacker.com` → email
+      // link points to https://attacker.com/api/account/export/<real-token>
+      // → victim clicks → attacker's access log captures the download
+      // token, then attacker retrieves the victim's data from the real
+      // backend at api.yiiling.cn.
+      //
+      // Fix: use ONLY env-configured PUBLIC_API_BASE_URL. If unset,
+      // fall back to the hardcoded production URL (api.yiiling.cn per
+      // app/src/config/api.ts) — never trust the Host header. Dev
+      // environments should set PUBLIC_API_BASE_URL to override.
+      const publicBase = process.env.PUBLIC_API_BASE_URL || 'https://api.yiiling.cn';
+      if (!/^https?:\/\//i.test(publicBase)) {
+        console.error('[account/export] PUBLIC_API_BASE_URL malformed — must start with http:// or https://');
+      } else {
+        const url = `${publicBase.replace(/\/$/, '')}/api/account/export/${result.download_token}`;
+        const [rows] = await require('../config/db').execute(
+          'SELECT email, name FROM users WHERE id = ? LIMIT 1',
+          [req.user.userId],
         );
+        if (rows[0]) {
+          sendDataExportReady(rows[0].email, rows[0].name, url).catch(err =>
+            console.error('[email] export ready send failed:', err.message)
+          );
+        }
       }
     } catch (err) {
       console.error('[export/email]', err.message);
