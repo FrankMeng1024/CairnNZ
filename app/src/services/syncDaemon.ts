@@ -35,6 +35,26 @@ export async function drainPending(): Promise<void> {
     do {
       pendingSignal = false;
       const list = await listPending();
+      // Sprint 6 round-11 R11B4 fix: safety-sweep — sessions marked
+      // syncState='pending' in-memory but with NO matching fs entry
+      // are "orphan pending" from a markSynced-then-removePending
+      // failure. Coerce them to 'synced' so the banner drops. Pre-fix
+      // the banner stuck at N forever until app reload.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useSessionStore } = require('../store/useSessionStore');
+        const sessions = useSessionStore.getState().sessions;
+        const pendingSet = new Set(list.map(h => h.localId));
+        for (const sess of sessions) {
+          if (sess.syncState === 'pending' && !pendingSet.has(sess.id)) {
+            if (typeof useSessionStore.getState().markSynced === 'function') {
+              useSessionStore.getState().markSynced(sess.id, sess.remoteId || 0);
+            }
+          }
+        }
+      } catch (e) {
+        crashLogger.breadcrumb(`v412:orphan_sweep_failed ${String(e).slice(0, 60)}`);
+      }
       if (list.length === 0) return;
       crashLogger.breadcrumb(`v412:sync_drain start count=${list.length}`);
       for (const hike of list) {

@@ -92,7 +92,7 @@ async function updatePreferences(userId, prefs) {
   await pool.execute(
     `INSERT INTO user_push_prefs (${cols.join(', ')})
      VALUES (${placeholders})
-     ON DUPLICATE KEY UPDATE ${updates}`,
+     ON DUPLICATE KEY UPDATE ${updates}, seeded_from_devices = 0`,
     values,
   );
   // Sprint 6 round-12 R12B10 fix: dropped the device_tokens mirror-write.

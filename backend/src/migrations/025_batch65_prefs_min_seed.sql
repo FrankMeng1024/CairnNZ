@@ -1,4 +1,4 @@
--- Migration 025: correct migration 024 seed semantics (round-4 review R4B5)
+-- Migration 025: correct migration 024 seed semantics (round-4 review R14B3 v2)
 --
 -- Migration 024 seeded user_push_prefs from `MAX(device_tokens.pref_*)`.
 -- Reviewer B flagged this as privacy-hostile: if a user had two devices
@@ -10,12 +10,14 @@
 -- so that a FUTURE re-migration (rollback + reapply, or DB restore)
 -- won't silently lose opt-outs.
 --
--- Idempotent: only rewrites rows we know still match the MAX seed.
+-- Sprint 6 round-14 R14B3 fix: after migration 029, this UPDATE also
+-- gates on `seeded_from_devices = 1`. Any user who manually PATCH'd
+-- prefs since 024 has that flag cleared (see PushNotification.js
+-- updatePreferences) — 025 re-run skips them, preserving their choice.
+-- Legacy pre-029 replay path unchanged (WHERE MAX=MIN mismatch still
+-- guards).
 USE cairn;
 
--- For each user_push_prefs row that matches MAX(device_tokens.pref_*),
--- reset it to MIN(device_tokens.pref_*). If the user has manually
--- changed prefs since seed, MAX won't match anymore and we skip.
 UPDATE user_push_prefs upp
 JOIN (
   SELECT user_id,
@@ -31,7 +33,8 @@ SET
   upp.pref_marker_replies  = CASE WHEN upp.pref_marker_replies  = dt.max_mr THEN dt.min_mr ELSE upp.pref_marker_replies  END,
   upp.pref_memory_hits     = CASE WHEN upp.pref_memory_hits     = dt.max_mh THEN dt.min_mh ELSE upp.pref_memory_hits     END,
   upp.pref_announcements   = CASE WHEN upp.pref_announcements   = dt.max_an THEN dt.min_an ELSE upp.pref_announcements   END
-WHERE dt.max_fr != dt.min_fr
-   OR dt.max_mr != dt.min_mr
-   OR dt.max_mh != dt.min_mh
-   OR dt.max_an != dt.min_an;
+WHERE (upp.seeded_from_devices IS NULL OR upp.seeded_from_devices = 1)
+  AND (dt.max_fr != dt.min_fr
+    OR dt.max_mr != dt.min_mr
+    OR dt.max_mh != dt.min_mh
+    OR dt.max_an != dt.min_an);

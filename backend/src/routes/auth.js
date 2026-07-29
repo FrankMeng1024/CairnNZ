@@ -55,6 +55,21 @@ const resendLimiter = rateLimit({
   message: { error: 'Please wait before requesting another code.' },
 });
 
+// Sprint 6 round-14 R14B2 fix: /password-reset/request needs uniform
+// response timing regardless of branch (rate-limited, validation-fail,
+// 500, success, non-existent email). Custom rate limiter that returns
+// the SAME 200 body + 250ms floor so an attacker can't distinguish
+// "authLimiter 429" from "real 200" by timing or body.
+const resetRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 10,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
+  handler: async (req, res) => {
+    await new Promise(r => setTimeout(r, 250));
+    return res.json({ message: 'If an account exists for this email, a code has been sent.' });
+  },
+});
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function validateEmail(email) {
@@ -571,7 +586,7 @@ router.post('/logout', authenticate, async (req, res) => {
 // Issues a 6-digit code emailed to the user. Returns 200 regardless of
 // whether the email exists (prevent enumeration). Rate limited to prevent
 // spam. Actual code delivery via email service.
-router.post('/password-reset/request', authLimiter, validateBody(schemas.auth.passwordResetRequest), async (req, res) => {
+router.post('/password-reset/request', resetRequestLimiter, validateBody(schemas.auth.passwordResetRequest), async (req, res) => {
   const { email } = req.body;
   const normalEmail = email.toLowerCase().trim();
 
@@ -613,7 +628,13 @@ router.post('/password-reset/request', authLimiter, validateBody(schemas.auth.pa
     return res.json({ message: 'If an account exists for this email, a code has been sent.', ...devPayload });
   } catch (err) {
     console.error('[password-reset/request]', err);
-    return res.status(500).json({ error: 'Server error. Please try again.' });
+    // Sprint 6 round-14 R14B2 fix: pad the 500 branch too — pre-fix, a
+    // DB blip returned sub-5ms 500 while success returned 250ms 200,
+    // giving an attacker a "existing account errored" vs "non-existent
+    // 200" distinguisher. Now: always wait for the pad + return the
+    // same 200 body regardless. Ops sees the failure in server logs.
+    await responsePad;
+    return res.json({ message: 'If an account exists for this email, a code has been sent.' });
   }
 });
 
