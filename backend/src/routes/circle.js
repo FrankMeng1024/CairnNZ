@@ -196,16 +196,38 @@ router.get('/fog', async (req, res) => {
     }
     const placeholders = friendIds.map(() => '?').join(',');
 
-    // One row per friend, points as a JSON array. Order by ts so client can
-    // reconstruct trail polylines if needed.
-    const sql = `
-      SELECT mp.user_id AS friend_id,
-             JSON_ARRAYAGG(JSON_OBJECT('lat', mp.lat, 'lng', mp.lng, 'ts', mp.ts)) AS points
-        FROM memory_points mp
-       WHERE mp.user_id IN (${placeholders})
-    GROUP BY mp.user_id`;
-
-    const [rows] = await pool.execute(sql, friendIds);
+    // Sprint 6 round-35 R35B1+B2: fog was silently broken for any friend
+    // with > ~10 memory_points. MySQL's default group_concat_max_len=1024
+    // causes JSON_ARRAYAGG to truncate at 1024 bytes → invalid JSON blob
+    // → JSON.parse throws → 500 for the whole /fog request. Real prod
+    // data shows heavy users have 500-700+ memory_points each (~54KB
+    // aggregated JSON) — every subscription to such a user was breaking.
+    //
+    // Fix: get a dedicated connection, bump group_concat_max_len to 16MB
+    // for this session only (doesn't affect other pool users), and cap
+    // points-per-friend at MAX_POINTS_PER_FRIEND via a subquery ORDER BY
+    // ts DESC LIMIT. The cap protects against sim-walker abuse producing
+    // 500k+ rows for a single friend.
+    const MAX_POINTS_PER_FRIEND = 20000;
+    const conn = await pool.getConnection();
+    let rows;
+    try {
+      await conn.execute('SET SESSION group_concat_max_len = 16777216');
+      const sql = `
+        SELECT sub.user_id AS friend_id,
+               JSON_ARRAYAGG(JSON_OBJECT('lat', sub.lat, 'lng', sub.lng, 'ts', sub.ts)) AS points
+          FROM (
+            SELECT user_id, lat, lng, ts
+              FROM memory_points
+             WHERE user_id IN (${placeholders})
+             ORDER BY ts DESC
+             LIMIT ${MAX_POINTS_PER_FRIEND * friendIds.length}
+          ) sub
+      GROUP BY sub.user_id`;
+      [rows] = await conn.execute(sql, friendIds);
+    } finally {
+      conn.release();
+    }
     // mysql2 returns JSON_ARRAYAGG as a parsed array on JSON-typed columns,
     // but JSON_OBJECT inside JSON_ARRAYAGG sometimes comes back as a string
     // depending on driver version. Normalize both shapes.
