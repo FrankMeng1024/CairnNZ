@@ -112,6 +112,12 @@ router.get('/deepest', async (req, res) => {
 router.get('/panel', async (req, res) => {
   const t0 = Date.now();
   const titleId = req.query.title_id;
+  // Sprint 6 round-28 R28 investigation: regions.id is VARCHAR(64) with
+  // ISO 3166 codes ('AF', 'NZL', 'CN-11', etc.), NOT integer. The prior
+  // subagent-flagged "is_here always false" concern (integer vs string
+  // strict-eq) was based on a wrong assumption. Both region_id and
+  // hereCountryId are strings, and `===` between two strings works
+  // correctly. Leaving as-is; no coercion needed.
   const hereCityId = req.query.here_city_id || null;
   const hereCountryId = req.query.here_country_id || null;
   const userId = req.user?.userId ?? 'unknown';
@@ -124,13 +130,21 @@ router.get('/panel', async (req, res) => {
   try {
     if (titleId === 'world') {
       // World layer: SELECT country rows from unlocked_regions
+      // Sprint 6 round-28 R28F1: use ST_Contains against regions.geom
+      // instead of bbox-only overlap. Pre-fix, overlapping bboxes (Russia
+      // crossing antimeridian, NZ mainland overlapping Chatham Islands
+      // bbox, etc.) counted the same marker for multiple regions →
+      // wrong `state='marked'` on the panel. `regions.geom` is populated
+      // (2884 rows all have geom) so ST_Contains is safe. Falling back
+      // to bbox as a coarse pre-filter would be a perf micro-opt but
+      // needlessly complex — MySQL 8's R-tree index on `geom` (KEY MUL
+      // per DESCRIBE regions) already accelerates ST_Contains.
       const [rows] = await pool.query(
         `SELECT ur.region_id, r.name_en,
                 r.bbox_min_lng, r.bbox_min_lat, r.bbox_max_lng, r.bbox_max_lat,
                 (SELECT COUNT(*) FROM markers m
                   WHERE m.user_id = ur.user_id
-                    AND m.lng BETWEEN r.bbox_min_lng AND r.bbox_max_lng
-                    AND m.lat BETWEEN r.bbox_min_lat AND r.bbox_max_lat) AS marker_count
+                    AND ST_Contains(r.geom, ST_SRID(POINT(m.lng, m.lat), 4326))) AS marker_count
            FROM unlocked_regions ur
            JOIN regions r ON r.id = ur.region_id
           WHERE ur.user_id = ? AND ur.region_level = 2`,
@@ -176,8 +190,7 @@ router.get('/panel', async (req, res) => {
               r.bbox_min_lng, r.bbox_min_lat, r.bbox_max_lng, r.bbox_max_lat,
               (SELECT COUNT(*) FROM markers m
                 WHERE m.user_id = ur.user_id
-                  AND m.lng BETWEEN r.bbox_min_lng AND r.bbox_max_lng
-                  AND m.lat BETWEEN r.bbox_min_lat AND r.bbox_max_lat) AS marker_count
+                  AND ST_Contains(r.geom, ST_SRID(POINT(m.lng, m.lat), 4326))) AS marker_count
          FROM unlocked_regions ur
          JOIN regions r ON r.id = ur.region_id
         WHERE ur.user_id = ? AND ur.region_level = 3 AND ur.parent_id = ?`,
