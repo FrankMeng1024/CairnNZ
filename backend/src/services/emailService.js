@@ -139,4 +139,33 @@ module.exports = {
   sendVerificationCode,
   sendPasswordResetCode,
   sendAccountDeletionConfirmation,
+  sendDataExportReady,
 };
+
+// O18 batch 6.7 (AUTH-GDPR): notify user their data export is ready.
+async function sendDataExportReady(toEmail, name, downloadUrl) {
+  if (!toEmail || !downloadUrl) return;
+  const displayName = name || 'there';
+  const safeName = escapeHtml(displayName);
+  const subject = 'Your Cairn data export is ready';
+  const html = `
+    <p>Hi ${safeName},</p>
+    <p>Your Cairn data export is ready. Click the link below to download the JSON bundle:</p>
+    <p><a href="${downloadUrl}">${downloadUrl}</a></p>
+    <p>The link expires in 24 hours. It contains your hikes, cairns, memory points, routes, friends, and notifications — everything on your account.</p>
+    <p>If you didn't request this, you can safely ignore this email.</p>
+    <p>— Cairn</p>
+  `;
+  const text =
+    `Hi ${displayName},\n\n` +
+    `Your Cairn data export is ready. Download the JSON bundle here:\n${downloadUrl}\n\n` +
+    `The link expires in 24 hours.\n\n` +
+    `If you didn't request this, you can safely ignore this email.\n\n— Cairn`;
+  await transporter.sendMail({
+    from: `"Cairn" <${process.env.EMAIL_FROM}>`,
+    to: toEmail,
+    subject,
+    html,
+    text,
+  });
+}

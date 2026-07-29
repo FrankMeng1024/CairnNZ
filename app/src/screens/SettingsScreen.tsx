@@ -1048,6 +1048,49 @@ export function SettingsScreen() {
             />
           </View>
 
+          {/* ── O18 batch 6.7 (AUTH-GDPR): Export my data ─── */}
+          {isLoggedIn && (
+            <View style={styles.card}>
+              <ActionRow
+                iconName="Download"
+                iconColor={Colors.primary}
+                iconBg={Colors.primaryLight}
+                label="Export my data"
+                hint="We'll email you a JSON bundle with everything on your account"
+                onPress={async () => {
+                  Alert.alert(
+                    'Export your data',
+                    'This will build a JSON bundle of your hikes, cairns, memory points, routes, friends, and notifications. We\'ll email you a download link within a few minutes.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Request export',
+                        onPress: async () => {
+                          try {
+                            // eslint-disable-next-line @typescript-eslint/no-require-imports
+                            const { requestDataExport } = require('../services/authService');
+                            const r = await requestDataExport();
+                            if (r.error) {
+                              Alert.alert('Export failed', r.error);
+                              return;
+                            }
+                            Alert.alert(
+                              'Export requested',
+                              'You\'ll receive an email within a few minutes with a download link. The link is valid for 24 hours.',
+                            );
+                          } catch {
+                            Alert.alert('Export failed', 'Please try again.');
+                          }
+                        },
+                      },
+                    ],
+                  );
+                }}
+                hideChevron
+              />
+            </View>
+          )}
+
           {/* ── Danger zone (destructive actions grouped) ── */}
           <SectionHeader title="Danger zone" />
           <View style={styles.card}>

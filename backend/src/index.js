@@ -18,6 +18,7 @@ const pool = require('./config/db');
 const { run: cleanHiddenOrphans } = require('./cron/cleanHiddenItemsOrphans');
 const { run: authSweep } = require('./cron/authSweep');
 const { runDrain: pushDrain, runPurge: pushPurge } = require('./cron/pushDrain');
+const { runBuild: exportBuild, runPurge: exportPurge } = require('./cron/exportWorker');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -106,6 +107,7 @@ app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/routes', require('./routes/routes'));
 app.use('/api/friends', require('./routes/friends'));
 app.use('/api/push', require('./routes/push'));
+app.use('/api/account', require('./routes/account'));
 app.use('/api/markers', require('./routes/markers'));
 app.use('/api/memory', require('./routes/memory'));
 app.use('/api/memory-subscriptions', require('./routes/memory-subscriptions'));
@@ -189,6 +191,20 @@ async function start() {
       });
     }, { timezone: 'UTC' });
     console.log('✓ Cron registered: pushPurge (30 3 * * * UTC)');
+
+    // O18 batch 6.7: GDPR export build every 2 min + nightly file purge.
+    cron.schedule('*/2 * * * *', () => {
+      exportBuild({ verbose: false }).catch((err) => {
+        console.error('[cron/scheduler] exportBuild failed:', err.message);
+      });
+    }, { timezone: 'UTC' });
+    console.log('✓ Cron registered: exportBuild (every 2 min)');
+    cron.schedule('0 4 * * *', () => {
+      exportPurge({ verbose: true }).catch((err) => {
+        console.error('[cron/scheduler] exportPurge failed:', err.message);
+      });
+    }, { timezone: 'UTC' });
+    console.log('✓ Cron registered: exportPurge (0 4 * * * UTC)');
   }
 }
 

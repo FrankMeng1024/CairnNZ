@@ -274,6 +274,56 @@ export async function restoreAccount(): Promise<AuthResult> {
   }
 }
 
+// O18 batch 6.7 (AUTH-GDPR): request a full data export.
+// Backend queues + emails the download link when ready. Client also
+// gets the token immediately so the UI can show "Export requested".
+export async function requestDataExport(): Promise<{
+  error?: string;
+  status?: string;
+  downloadToken?: string;
+  expiresAt?: string;
+}> {
+  const token = await getToken();
+  if (!token) return { error: 'not_signed_in' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/account/export`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data?.error || 'Could not request export.' };
+    return {
+      status: data.status,
+      downloadToken: data.download_token,
+      expiresAt: data.expires_at,
+    };
+  } catch {
+    return { error: 'Unable to connect. Please try again.' };
+  }
+}
+
+// O18 batch 6.7: list my previous export requests (status + timing).
+export async function fetchExportHistory(): Promise<Array<{
+  id: number;
+  status: string;
+  size_bytes: number | null;
+  requested_at: string;
+  built_at: string | null;
+  expires_at: string | null;
+  sent_at: string | null;
+}>> {
+  const token = await getToken();
+  if (!token) return [];
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/account/exports`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
 // O18 AUTH-06: legacy DOB backfill (users who registered before this
 // migration have dateOfBirth=null and get a modal on next login).
 // Backend enforces >= 13 same as register + immutable once set.
