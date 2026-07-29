@@ -72,10 +72,27 @@ router.post('/', uploadLimiter, rawBody, async (req, res) => {
   const id = (req.query.id || `snap-${Date.now()}`).toString().slice(0, 64);
   let meta = null;
   if (req.query.meta) {
-    try {
-      meta = JSON.parse(Buffer.from(req.query.meta, 'base64').toString('utf8'));
-    } catch (e) {
-      meta = { raw_meta: String(req.query.meta).slice(0, 200), parse_error: e.message };
+    // Sprint 6 round-27 R27B3: cap meta base64 length before decode.
+    // Pre-fix, an attacker could POST with a multi-MB base64 blob → decoded
+    // JSON parse (adversarial nested arrays) triggers V8 stack blowup or
+    // GC thrash. Since POST /debug-snapshot has no auth (dev endpoint,
+    // rate-limited 60/5min/IP), an attacker only needs one bad request to
+    // waste a chunk of server CPU. 4KB decoded is more than enough for
+    // any legitimate debug meta (device model + app version + a few flags).
+    const metaB64 = String(req.query.meta);
+    if (metaB64.length > 6000) {
+      meta = { parse_error: 'meta base64 exceeds 6000 chars — rejected' };
+    } else {
+      try {
+        const decoded = Buffer.from(metaB64, 'base64').toString('utf8');
+        if (decoded.length > 4096) {
+          meta = { parse_error: 'meta decoded exceeds 4KB — rejected' };
+        } else {
+          meta = JSON.parse(decoded);
+        }
+      } catch (e) {
+        meta = { raw_meta: metaB64.slice(0, 200), parse_error: e.message };
+      }
     }
   }
   const buf = req.body;
