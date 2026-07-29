@@ -23,11 +23,15 @@ export type UnitsPref = 'metric' | 'imperial';
 // O18 HIST-09: user-selectable date format. Default 'dmy' (DD/MM/YYYY, NZ/UK style).
 // 'mdy' = MM/DD/YYYY (US), 'ymd' = YYYY-MM-DD (ISO).
 export type DateFormatPref = 'dmy' | 'mdy' | 'ymd';
+// O18 MAP-01: user-selectable map layer (outdoors vs satellite).
+// Default 'outdoors' — matches existing getPrimaryMapStyle() behaviour.
+export type MapLayerPref = 'outdoors' | 'satellite';
 
 interface Settings {
   // Preferences
   units: UnitsPref;
   dateFormat: DateFormatPref;
+  mapLayer: MapLayerPref;
   nightMode: boolean;
   hapticFeedback: boolean;
 
@@ -52,6 +56,7 @@ const REMOVED_KEYS = [
 const DEFAULTS: Settings = {
   units: 'metric',       // NZ default — user can switch in Settings
   dateFormat: 'dmy',     // NZ default — DD/MM/YYYY
+  mapLayer: 'outdoors',  // default map style (topographic-ish)
   nightMode: false,
   hapticFeedback: true,
   debugMode: false,
@@ -139,6 +144,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         if (migrated.dateFormat !== 'dmy' && migrated.dateFormat !== 'mdy' && migrated.dateFormat !== 'ymd') {
           delete migrated.dateFormat;
         }
+        if (migrated.mapLayer !== 'outdoors' && migrated.mapLayer !== 'satellite') {
+          delete migrated.mapLayer;
+        }
         const boolFields = [
           'nightMode', 'hapticFeedback', 'debugMode',
           'debugAnnotationFabVisible', 'telemetryUploadEnabled', 'telemetryWifiOnly',
@@ -184,6 +192,7 @@ function pick(state: SettingsState): Settings {
   return {
     units: state.units,
     dateFormat: state.dateFormat,
+    mapLayer: state.mapLayer,
     nightMode: state.nightMode,
     hapticFeedback: state.hapticFeedback,
     debugMode: state.debugMode,

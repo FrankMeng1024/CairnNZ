@@ -64,6 +64,9 @@ function toPublic(user) {
     name: user.name,
     email: user.email,
     hasPassword: !!user.password_hash,
+    // O18 HOME-05: expose registration timestamp so Profile can show
+    // "You have been with Cairn for X days" without a separate endpoint.
+    createdAt: user.created_at ? new Date(user.created_at).toISOString() : null,
   };
 }
 

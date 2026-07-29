@@ -21,7 +21,8 @@ import { useRouteStore } from '../store/useRouteStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { crashLogger } from '../services/crashLogger';
 import { getCurrentRegion } from '../config/regions';
-import { getPrimaryMapStyle } from '../config/mapbox';
+import { getMapStyleForLayer, getPrimaryMapStyle } from '../config/mapbox';
+import { useSettingsStore } from '../store/useSettingsStore';
 import { formatDuration, formatDate, getRelativeTime, haversineM, kalmanInit, kalmanUpdate, simplifyPolyline } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
@@ -92,6 +93,8 @@ function PressRow({
 function NativeTrackMap({ session, markers }: { session: TrackingSession; markers: Marker[] }) {
   const pts = session.trackPoints;
   const color = session.activityMode === 'running' ? Colors.running : Colors.primary;
+  // O18 MAP-01: react to user's saved map layer preference.
+  const mapLayer = useSettingsStore((s) => s.mapLayer);
   // v198 Bug 5: track whether the user has panned the camera away from
   // the initial fit. When true, render a small recenter button that
   // re-fits to the route bbox. Pattern matches HikingScreen's recenter.
@@ -145,7 +148,7 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
     <View style={StyleSheet.absoluteFillObject}>
     <MapView
       style={StyleSheet.absoluteFillObject}
-      styleURL={getPrimaryMapStyle()}
+      styleURL={getMapStyleForLayer(mapLayer)}
       logoEnabled={false}
       attributionEnabled={false}
       scaleBarEnabled={false}
@@ -1096,7 +1099,10 @@ export function MapHistoryScreen() {
           <BackButton variant="pill" />
           <Text style={styles.topTitle}>{targetSessionId ? 'Activity Detail' : 'History'}</Text>
           {/* O17 COPY:C-70: Plan Route button was a stub — hidden in prod, dev-only preview */}
-          {!targetSessionId && __DEV__ && (
+          {/* O18 VER-07: always render a right-side spacer matching the
+              BackButton pill width so the centered title stays visually
+              centered whether Plan is shown or not. */}
+          {!targetSessionId && __DEV__ ? (
             <TouchableOpacity
               style={styles.planBtn}
               onPress={() => Alert.alert('Plan Route', 'Route planning coming soon')}
@@ -1105,9 +1111,9 @@ export function MapHistoryScreen() {
               <Icon name="Route" size={14} color="#fff" strokeWidth={2} />
               <Text style={styles.planBtnText}>Plan</Text>
             </TouchableOpacity>
+          ) : (
+            <View style={{ width: 68 }} />
           )}
-          {(!targetSessionId && !__DEV__) && <View style={{ width: 60 }} />}
-          {targetSessionId && <View style={{ width: 60 }} />}
         </View>
 
         {/* Tab bar — only show when viewing all sessions */}

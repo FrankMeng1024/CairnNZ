@@ -7,6 +7,44 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NZ_OFFLINE_PACKS, type OfflinePack } from '../config/offlinePacks';
 
+/**
+ * O18 ROUTE-08: build an on-the-fly OfflinePack around a specific route's
+ * geometry. Adds a small buffer (~1km) so the user gets the surrounding
+ * context, not just the exact line. Returns null if the route has no
+ * points (defensive — a route with 0 points is a UI bug).
+ *
+ * Uses `route-{routeId}` as the pack id so users can re-download the
+ * same route without polluting the pack list, and can delete cleanly.
+ */
+export function packFromRoute(
+  routeId: string,
+  name: string,
+  points: Array<{ lat: number; lng: number }>,
+): OfflinePack | null {
+  if (!points.length) return null;
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (const p of points) {
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lng < minLng) minLng = p.lng;
+    if (p.lng > maxLng) maxLng = p.lng;
+  }
+  // ~0.01deg ≈ 1.1km latitude / ~0.9km at NZ longitudes — enough context
+  // without exploding tile count.
+  const pad = 0.01;
+  return {
+    id: `route-${routeId}`,
+    name: `Route: ${name}`,
+    description: 'Offline tiles for this saved route.',
+    bounds: [minLng - pad, minLat - pad, maxLng + pad, maxLat + pad],
+    minZoom: 10,
+    maxZoom: 15,
+    // Rough estimate — actual size depends on tile density; users see the
+    // final size in the download progress.
+    estimatedSizeMB: 25,
+  };
+}
+
 // Mapbox offlineManager — conditional import
 let offlineManager: any = null;
 try {

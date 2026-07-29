@@ -547,6 +547,8 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
   // Filter + sort state — local-only, resets if user leaves the tab.
   const [filter, setFilter] = useState<'all' | 'hiking' | 'running'>('all');
   const [sort, setSort] = useState<'recent' | 'distance-desc' | 'distance-asc'>('recent');
+  // O18 ROUTE-07: text search over route name.
+  const [routeSearch, setRouteSearch] = useState('');
   // Sprint 69 STORY-00538: Mine|Friends scope sub-tab.
   const [scope, setScope] = useState<'mine' | 'friends'>('mine');
   // v375: track whether we've completed at least one Friends fetch.
@@ -570,6 +572,9 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
   const visible = useMemo(() => {
     let list = scope === 'mine' ? routes : circleRoutes;
     if (filter !== 'all') list = list.filter(r => r.activityMode === filter);
+    // O18 ROUTE-07: apply free-text search on route name.
+    const q = routeSearch.trim().toLowerCase();
+    if (q) list = list.filter(r => (r.name ?? '').toLowerCase().includes(q));
     if (sort === 'recent') {
       list = [...list].sort((a, b) => b.updatedAt - a.updatedAt);
     } else if (sort === 'distance-desc') {
@@ -578,7 +583,7 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
       list = [...list].sort((a, b) => a.distanceM - b.distanceM);
     }
     return list;
-  }, [routes, circleRoutes, scope, filter, sort]);
+  }, [routes, circleRoutes, scope, filter, sort, routeSearch]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -628,6 +633,21 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
       ) : null}
       {((scope === 'mine' && routes.length > 0) || (scope === 'friends' && circleRoutes.length > 0)) && (
         <>
+      {/* O18 ROUTE-07: text search over route name. */}
+      <View style={styles.searchWrap}>
+        <Icon name="Search" size={16} color={Colors.textMuted} strokeWidth={2} />
+        <TextInput
+          style={styles.searchInput}
+          value={routeSearch}
+          onChangeText={setRouteSearch}
+          placeholder="Search routes by name…"
+          placeholderTextColor={Colors.textMuted}
+          autoCorrect={false}
+          autoCapitalize="none"
+          clearButtonMode="while-editing"
+          accessibilityLabel="Search routes"
+        />
+      </View>
       <FilterSortBar
         filters={[
           { id: 'all', label: 'All' },
@@ -1199,11 +1219,32 @@ export function RoutesScreen() {
   const initialTab = route.params?.initialTab ?? 'activities';
   const [tab, setTab] = useState<Tab>(initialTab);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
+  const loadCircleRoutes = useRouteStore(s => s.loadCircleRoutes);
+  const loadCircleMarkers = useMarkerStore(s => s.loadCircleMarkers);
   const nav = useNavigation<Nav>();
+  // O18 HOME-03: manual refresh state — spins the icon during network work,
+  // avoids duplicate concurrent calls, and gives users a way to re-check
+  // when they know they should have new data (friend just shared).
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadRoutes();
   }, []);
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      if (tab === 'routes') {
+        await Promise.all([loadRoutes(), loadCircleRoutes().catch(() => {})]);
+      } else if (tab === 'flags') {
+        await loadCircleMarkers().catch(() => {});
+      }
+      // Activities tab has no server refresh — sessions are local + auto-sync.
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -1211,7 +1252,27 @@ export function RoutesScreen() {
       <View style={styles.header}>
         <BackButton variant="pill" onPress={() => nav.goBack()} />
         <Text style={styles.title}>Routes</Text>
-        <View style={{ minWidth: 60 }} />
+        {/* O18 HOME-03: manual refresh — visible on Routes / Cairns tabs
+            (Activities uses local sessions, no server refresh). */}
+        {tab !== 'activities' ? (
+          <TouchableOpacity
+            onPress={handleRefresh}
+            disabled={refreshing}
+            style={{ minWidth: 60, alignItems: 'flex-end', paddingRight: Spacing.base }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh"
+          >
+            <Icon
+              name="RotateCcw"
+              size={IconSize.sm}
+              color={refreshing ? Colors.textMuted : Colors.primary}
+              strokeWidth={2}
+            />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ minWidth: 60 }} />
+        )}
       </View>
       <SegmentControl active={tab} onChange={setTab} />
       <View style={{ flex: 1 }}>
@@ -1227,6 +1288,23 @@ export function RoutesScreen() {
 // ── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
+  // O18 ROUTE-07: routes search box (same pattern as MapHistory search).
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+    marginHorizontal: Spacing.base,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.sm,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    borderRadius: 10,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: FontSize.body,
+    color: Colors.textPrimary,
+    paddingVertical: 4,
+  },
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: Spacing.sm,

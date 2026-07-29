@@ -34,6 +34,10 @@ interface UserProfile {
   id: string;
   name: string;
   email: string;
+  // O18 HOME-05: registration timestamp from backend `toPublic`. Optional
+  // because older builds and the offline JWT-fallback path (auth.js:287)
+  // do not populate it.
+  createdAt?: string;
 }
 
 // Sprint 72 STORY-00549: 注销硬清标记 — 用户主动 logout 后写入,

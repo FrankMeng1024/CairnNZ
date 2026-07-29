@@ -491,6 +491,17 @@ export function SettingsScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={profileStyles.name}>{user.name}</Text>
                   <Text style={profileStyles.email}>{user.email}</Text>
+                  {/* O18 HOME-05: "Member for X days" — no rewards, no
+                      streaks (per user note: not habit-tracking app). Just
+                      a quiet acknowledgement of time spent together. */}
+                  {user.createdAt && (() => {
+                    const days = Math.max(1, Math.floor((Date.now() - new Date(user.createdAt).getTime()) / 86400000));
+                    return (
+                      <Text style={profileStyles.memberFor}>
+                        Member for {days} {days === 1 ? 'day' : 'days'}
+                      </Text>
+                    );
+                  })()}
                 </View>
               </View>
               <View style={styles.dividerFlush} />
@@ -1301,6 +1312,10 @@ const profileStyles = StyleSheet.create({
   },
   email: {
     fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2,
+  },
+  // O18 HOME-05: subtle "Member for X days" line under email.
+  memberFor: {
+    fontSize: FontSize.tiny, color: Colors.textMuted, marginTop: 4,
   },
 });
 

@@ -637,7 +637,22 @@ export function RouteEditorScreen() {
         nav.goBack();
       }
     } catch (e: any) {
-      Alert.alert('Save failed', 'Something got lost between here and our server. Try again in a moment.');
+      // O18 VER-05: map known backend errors to human copy — do not lose
+      // signal when the failure is permanent (rate limited, name conflict).
+      const raw = String(e?.message ?? '').toLowerCase();
+      let body: string;
+      if (raw.includes('rate') && raw.includes('limit')) {
+        body = 'You are saving very quickly. Wait a moment and try again.';
+      } else if (raw.includes('name') && (raw.includes('taken') || raw.includes('duplicate'))) {
+        body = 'A route with this name already exists. Try a different name.';
+      } else if (raw.includes('unauthor') || raw.includes('401')) {
+        body = 'Your session expired. Sign in again and try saving.';
+      } else if (raw.includes('network') || raw.includes('fetch')) {
+        body = 'Check your connection and try again.';
+      } else {
+        body = 'Something got lost between here and our server. Try again in a moment.';
+      }
+      Alert.alert('Save failed', body);
     } finally {
       setSaving(false);
     }

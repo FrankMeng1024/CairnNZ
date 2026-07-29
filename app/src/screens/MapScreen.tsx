@@ -22,6 +22,7 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useMarkerStore, type Marker, type MarkerPermission } from '../store/useMarkerStore';
 import { useFriendStore } from '../store/useFriendStore';
 import { useTrackingStore } from '../store/useTrackingStore';
+import { useSettingsStore } from '../store/useSettingsStore';
 import { useDistance } from '../utils/distanceFormat';
 import { haversineM } from '../utils/geo';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
@@ -39,7 +40,7 @@ import { OfflineMapSheet } from '../components/OfflineMapSheet';
 import { MARKER_META, MarkerType } from '../data/mockData';
 import { FLAG_TYPES } from '../data/flagTypes';
 import { getCurrentRegion } from '../config/regions';
-import { getPrimaryMapStyle } from '../config/mapbox';
+import { getMapStyleForLayer, getPrimaryMapStyle } from '../config/mapbox';
 import { likeMarker, reportMarker, MarkerInteractionError } from '../services/markerInteractionService';
 
 // Mapbox — conditional import (native only; web uses fallback)
@@ -95,6 +96,10 @@ function RealMap({
   friendIds: ReadonlyArray<string | number>;
 }) {
   const region = getCurrentRegion();
+  // O18 MAP-01: react to user's saved map layer preference.
+  const mapLayer = useSettingsStore((s) => s.mapLayer);
+  const updateSetting = useSettingsStore((s) => s.updateSetting);
+  const styleURL = React.useMemo(() => getMapStyleForLayer(mapLayer), [mapLayer]);
 
   // If Mapbox not available (Expo Go), show upgrade prompt
   if (!MapView) {
@@ -138,7 +143,7 @@ function RealMap({
     <View style={styles.mapContainer}>
       <MapView
         style={StyleSheet.absoluteFillObject}
-        styleURL={getPrimaryMapStyle()}
+        styleURL={styleURL}
         logoEnabled={false}
         attributionEnabled={false}
         compassEnabled={true}
@@ -186,6 +191,23 @@ function RealMap({
           );
         })}
       </MapView>
+      {/* O18 MAP-01: floating layer toggle (outdoors ↔ satellite).
+          Tap flips the setting; the setting is persisted globally so
+          MapHistoryScreen / HikingMap pick up the same choice next time. */}
+      <TouchableOpacity
+        style={styles.layerToggle}
+        onPress={() => updateSetting('mapLayer', mapLayer === 'outdoors' ? 'satellite' : 'outdoors')}
+        accessibilityRole="button"
+        accessibilityLabel={mapLayer === 'outdoors' ? 'Switch to satellite view' : 'Switch to outdoor map'}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Icon
+          name={mapLayer === 'satellite' ? 'Map' : 'Globe'}
+          size={18}
+          color={Colors.primary}
+          strokeWidth={2}
+        />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -885,6 +907,17 @@ const styles = StyleSheet.create({
   mapContainer: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: Colors.primaryBg, overflow: 'hidden',
+  },
+  // O18 MAP-01: floating layer toggle overlay.
+  layerToggle: {
+    position: 'absolute',
+    top: 100, right: 12,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 }, elevation: 3,
   },
   mapFallback: {
     flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md,

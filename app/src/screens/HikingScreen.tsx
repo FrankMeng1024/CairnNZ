@@ -40,6 +40,7 @@ import { PressBtn } from '../components/PressBtn';
 import { FLAG_TYPES } from '../data/flagTypes';
 import { HikingMap } from './HikingMap';
 import { TooShortSheet } from '../components/TooShortSheet';
+import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
 import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
 // v429 hotfix: SimWalkerOverlay static import removed to prevent gpsInjector
 // top-level side-effects from running on every HikingScreen mount (bundling
@@ -139,6 +140,10 @@ export function HikingScreen() {
     activityMode: 'hiking' | 'running'; trackPoints: Array<{ lat: number; lng: number }>;
     startedAt: number;
   }>(null);
+  // O18 ONB-04: shared permission-denied modal state. When the user
+  // rejects GPS on the initial prime effect (line ~525) or on Start Hike,
+  // show a modal with Open Settings + Not now instead of silent return.
+  const [permissionDeniedVisible, setPermissionDeniedVisible] = useState(false);
   // O14 Bug 4: keep the sheet mounted with a "Saving…" spinner during
   // stopTracking's async flush+rename chain. Pre-fix, the sheet dismissed
   // immediately on tap-Save and the user saw the Hiking screen with the
@@ -525,7 +530,14 @@ export function HikingScreen() {
         const perm = await Location.getForegroundPermissionsAsync();
         if (!perm.granted) {
           const req = await Location.requestForegroundPermissionsAsync();
-          if (!req.granted) return;
+          if (!req.granted) {
+            // O18 ONB-04: user denied GPS — surface the shared modal so
+            // they know why hiking won't start, and offer Open Settings.
+            // Prior behavior silently returned; users tapped Start Hiking
+            // and nothing visible happened.
+            if (!cancelled) setPermissionDeniedVisible(true);
+            return;
+          }
         }
         const fix = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
@@ -1306,6 +1318,13 @@ export function HikingScreen() {
         activityMode={activityMode}
         onContinue={() => clearLastStopReason()}
         onDiscard={() => { clearLastStopReason(); discardCurrentSession(); }}
+      />
+      {/* O18 ONB-04: permission-denied modal — shown when GPS was rejected
+          during the initial hiking prime. Replaces prior silent return. */}
+      <PermissionDeniedModal
+        visible={permissionDeniedVisible}
+        featureName="Hiking"
+        onDismiss={() => setPermissionDeniedVisible(false)}
       />
       {/* v412: 未完成 hike 恢复弹窗 — 挂在 Fragment 顶层, 见下方 */}
     </View>

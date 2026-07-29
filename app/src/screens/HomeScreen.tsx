@@ -260,6 +260,14 @@ export function HomeScreen() {
     () => allMarkers.filter(m => m.regionCode === region.code).length,
     [allMarkers, region.code],
   );
+  // O18 HOME-04: period filter for stats (week/month/year/all).
+  const [statsPeriod, setStatsPeriod] = useState<'week' | 'month' | 'year' | 'all'>('all');
+  const periodSessionCount = React.useMemo(() => {
+    if (statsPeriod === 'all') return sessions.length;
+    const now = Date.now();
+    const cutoff = now - (statsPeriod === 'week' ? 7 : statsPeriod === 'month' ? 30 : 365) * 86400000;
+    return sessions.filter(s => (s.startedAt ?? 0) >= cutoff).length;
+  }, [sessions, statsPeriod]);
   const hasData = sessions.length > 0 || markerCount > 0;
   const hasRecent = sessions.length > 0;
 
@@ -436,29 +444,63 @@ export function HomeScreen() {
           }).length;
           if (pendingCount === 0) return null;
           return (
-            <View style={styles.pendingBanner}>
+            // O18 HOME-02: banner is now tappable — invokes syncDaemon.drainPending
+            // so users don't have to wait for the automatic retry cycle.
+            <TouchableOpacity
+              style={styles.pendingBanner}
+              onPress={async () => {
+                try {
+                  const { drainPending } = require('../services/syncDaemon');
+                  await drainPending();
+                } catch (e) {
+                  // eslint-disable-next-line no-console
+                  console.warn('[HOME-02] manual sync trigger failed:', e);
+                }
+              }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Retry pending sync now"
+            >
               <Icon name="CloudOff" size={14} color={Colors.textSecondary} strokeWidth={2} />
               <Text style={styles.pendingBannerText}>
                 {pendingCount === 1
-                  ? '1 hike pending sync — will complete when online'
-                  : `${pendingCount} hikes pending sync — will complete when online`}
+                  ? '1 hike pending sync — tap to retry now'
+                  : `${pendingCount} hikes pending sync — tap to retry now`}
               </Text>
-            </View>
+            </TouchableOpacity>
           );
         })()}
 
-        {/* Stats strip — only when data exists */}
+        {/* Stats strip — only when data exists.
+            O18 HOME-04: added period toggle (week / month / year / all). */}
         {hasData && (
-          <View style={styles.statsRow}>
-            <View style={styles.statChip}>
-              <Icon name="Route" size={12} color={Colors.primary} strokeWidth={2} />
-              <Text style={styles.statText}>{plural(sessions.length, 'session')}</Text>
+          <>
+            <View style={styles.periodToggle}>
+              {(['week', 'month', 'year', 'all'] as const).map(p => (
+                <TouchableOpacity
+                  key={p}
+                  onPress={() => setStatsPeriod(p)}
+                  style={[styles.periodChip, statsPeriod === p && styles.periodChipActive]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show ${p} stats`}
+                >
+                  <Text style={[styles.periodChipText, statsPeriod === p && styles.periodChipTextActive]}>
+                    {p === 'all' ? 'All' : p === 'week' ? 'Week' : p === 'month' ? 'Month' : 'Year'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
-            <View style={styles.statChip}>
-              <FlagMarkerIcon size={14} stoneColor={Colors.flag} flagColor={Colors.primary} />
-              <Text style={styles.statText}>{plural(markerCount, 'cairn')}</Text>
+            <View style={styles.statsRow}>
+              <View style={styles.statChip}>
+                <Icon name="Route" size={12} color={Colors.primary} strokeWidth={2} />
+                <Text style={styles.statText}>{plural(periodSessionCount, 'session')}</Text>
+              </View>
+              <View style={styles.statChip}>
+                <FlagMarkerIcon size={14} stoneColor={Colors.flag} flagColor={Colors.primary} />
+                <Text style={styles.statText}>{plural(markerCount, 'cairn')}</Text>
+              </View>
             </View>
-          </View>
+          </>
         )}
 
         {/* Recent activity — above the cards so user sees it before cards */}
@@ -549,6 +591,32 @@ const styles = StyleSheet.create({
   greeting: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textSecondary },
 
   statsRow: { flexDirection: 'row', gap: Spacing.sm },
+  // O18 HOME-04: period toggle above stats row.
+  periodToggle: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: Spacing.xs,
+  },
+  periodChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  periodChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  periodChipText: {
+    fontSize: FontSize.tiny,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  periodChipTextActive: {
+    color: '#fff',
+  },
   // v412: 离线未同步提示条
   pendingBanner: {
     flexDirection: 'row',

@@ -15,7 +15,8 @@ import {
 import { Colors, Spacing, FontSize, Shadow } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
 import { getCurrentRegion } from '../config/regions';
-import { getPrimaryMapStyle } from '../config/mapbox';
+import { getMapStyleForLayer, getPrimaryMapStyle } from '../config/mapbox';
+import { useSettingsStore } from '../store/useSettingsStore';
 import { haversineM } from '../utils/geo';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { MARKER_META } from '../data/mockData';
@@ -92,6 +93,8 @@ export function HikingMap({
   instantCamera, followUser = true, onUserGesture, recenterImperativeRef, debugMode,
 }: HikingMapProps) {
   const region = getCurrentRegion();
+  // O18 MAP-01: react to user's saved map layer preference (outdoors / satellite).
+  const mapLayer = useSettingsStore((s) => s.mapLayer);
 
   // v79 #1 fix: split the track into solid + gap segments by time AND
   // distance. v78 used 30s alone, but real walking data showed 30-90s
@@ -279,7 +282,7 @@ export function HikingMap({
       <MapView
         ref={mapViewRef}
         style={StyleSheet.absoluteFillObject}
-        styleURL={getPrimaryMapStyle()}
+        styleURL={getMapStyleForLayer(mapLayer)}
         logoEnabled={false}
         attributionEnabled={false}
         // Mapbox's built-in compass is hidden — we draw our own as a

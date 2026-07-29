@@ -80,8 +80,11 @@ function getStatusDotColor(online: boolean, lastSeen: string): string {
 function FriendCard({ friend }: {
   friend: Friend;
 }) {
-  // Backend doesn't (yet) return online status / last seen — surface those
-  // only when we have real data. Sentinel value 'N/A' means "unknown".
+  // FRI-06 (O18 user decision): backend doesn't return real online/lastSeen/
+  // sharedMarkers yet. The UI already gates on `hasStatus` and `> 0` so a
+  // fresh install shows neither the dot nor the meta text. Fields are kept
+  // in the model so the plumbing is ready when backend catches up — do NOT
+  // render them until backend provides real data.
   const hasStatus = friend.online || (friend.lastSeen && friend.lastSeen !== 'N/A');
   const statusColor = getStatusDotColor(friend.online, friend.lastSeen);
   const avatarGradStart = Colors.primaryLight;

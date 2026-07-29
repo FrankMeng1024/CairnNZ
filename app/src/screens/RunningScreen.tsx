@@ -33,6 +33,7 @@ import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { PulseDot } from '../components/PulseDot';
 import { TooShortSheet } from '../components/TooShortSheet';
+import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
 import { crashLogger } from '../services/crashLogger';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -102,6 +103,8 @@ export function RunningScreen() {
   // O18 RUN-07: capture sessionId at Stop so 'View activity detail' can
   // navigate to MapHistory even after stopTracking clears the store's id.
   const [stoppedSessionId, setStoppedSessionId] = useState<string | number | null>(null);
+  // O18 ONB-04: shared permission-denied modal state.
+  const [permissionDeniedVisible, setPermissionDeniedVisible] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
   const [showRoutePicker, setShowRoutePicker] = useState(false);
   // foregroundGranted gates UserLocation rendering on the pre-start map.
@@ -162,6 +165,13 @@ export function RunningScreen() {
         if (!granted && perm.canAskAgain) {
           const ask = await Location.requestForegroundPermissionsAsync();
           if (!cancelled && ask.status === 'granted') granted = true;
+        }
+        // O18 ONB-04: if the user denied (either via canAskAgain=false or
+        // explicit deny), surface the shared modal so they know why the
+        // map won't center + can jump to Settings. Prior behavior was
+        // silent — foregroundGranted stayed false with no user feedback.
+        if (!granted && !cancelled) {
+          setPermissionDeniedVisible(true);
         }
         if (granted) {
           if (!cancelled) setForegroundGranted(true);
@@ -803,6 +813,12 @@ export function RunningScreen() {
           discardCurrentSession();
           setRunState('stopped');
         }}
+      />
+      {/* O18 ONB-04: permission-denied modal for Running. */}
+      <PermissionDeniedModal
+        visible={permissionDeniedVisible}
+        featureName="Running"
+        onDismiss={() => setPermissionDeniedVisible(false)}
       />
     </View>
   );

@@ -72,3 +72,16 @@ const CAIRN_TOPO_STYLE_URL =
 export function getPrimaryMapStyle(): string {
   return CAIRN_TOPO_STYLE_URL;
 }
+
+/**
+ * O18 MAP-01: user-selectable layer switch (outdoors vs satellite).
+ * Called by MapScreen / MapHistoryScreen / HikingMap so the same choice
+ * applies across every map surface. Plant flow keeps its own inline
+ * toggle (per v299 UX) — do NOT wire this to PinAdjustStep.
+ */
+export type MapLayer = 'outdoors' | 'satellite';
+
+export function getMapStyleForLayer(layer: MapLayer): string {
+  if (layer === 'satellite') return MAP_STYLES.satellite;
+  return getPrimaryMapStyle();
+}

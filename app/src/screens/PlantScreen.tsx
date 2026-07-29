@@ -244,10 +244,24 @@ export function PlantScreen() {
           // Best-effort — can't help if storage itself is broken.
         }
         setSubmitting(false);
-        Alert.alert(
-          "Couldn't plant this cairn",
-          'Your draft is saved — try again in a moment.',
-        );
+        // O18 VER-05: map known backend error codes to human copy so a
+        // permanent failure (rate limited / duplicate / too close) isn't
+        // presented as "try again in a moment" — which invites the user
+        // into an infinite retry loop.
+        const raw = String(e?.message ?? '').toLowerCase();
+        let body: string;
+        if (raw.includes('rate') && raw.includes('limit')) {
+          body = 'You are creating cairns very quickly. Wait a minute and try again.';
+        } else if (raw.includes('too close') || raw.includes('duplicate')) {
+          body = 'There is already a cairn near here. Try a different spot.';
+        } else if (raw.includes('unauthor') || raw.includes('401')) {
+          body = 'Your session expired. Sign in again and your draft will be waiting.';
+        } else if (raw.includes('network') || raw.includes('fetch')) {
+          body = 'Your draft is saved. We\'ll try again once you have signal.';
+        } else {
+          body = 'Your draft is saved — try again in a moment.';
+        }
+        Alert.alert("Couldn't plant this cairn", body);
       }
     },
     [addMarker, userId, nav, submitting]

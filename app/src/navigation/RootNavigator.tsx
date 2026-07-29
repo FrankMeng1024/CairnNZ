@@ -28,6 +28,8 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { MemoryScreen } from '../features/memory/screens/MemoryScreen';
 import { MarkDetailDevPreviewScreen } from '../features/marks/dev/MarkDetailDevPreviewScreen';
 import { MarkerDetailScreen } from '../screens/MarkerDetailScreen';
+import { OnboardingModal, hasCompletedOnboarding } from '../features/onboarding/OnboardingModal';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { useAppStore } from '../store/useAppStore';
 import { markBootPhase } from '../services/bootDiagnostics';
 
@@ -65,6 +67,29 @@ export function RootNavigator() {
   // beacon but no `navigation_container_ready`, the death is inside
   // NavigationContainer's mount.
   markBootPhase('navigator_before_jsx');
+
+  // Batch 6.0 (ONB-01/02/04): show onboarding once per install for
+  // authenticated users. We hydrate the flag lazily so the initial mount
+  // isn't blocked — `onboardingChecked === false` means "still checking"
+  // and no modal renders. Once checked, `showOnboarding` decides.
+  const [onboardingChecked, setOnboardingChecked] = React.useState(false);
+  const [showOnboarding, setShowOnboarding] = React.useState(false);
+  React.useEffect(() => {
+    if (!isLoggedIn) {
+      // Signed out — reset so a fresh sign-in re-checks the flag.
+      setOnboardingChecked(false);
+      setShowOnboarding(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const done = await hasCompletedOnboarding();
+      if (cancelled) return;
+      setShowOnboarding(!done);
+      setOnboardingChecked(true);
+    })();
+    return () => { cancelled = true; };
+  }, [isLoggedIn]);
 
   return (
     <NavigationContainer
@@ -105,6 +130,16 @@ export function RootNavigator() {
           />
         )}
       </Stack.Navigator>
+      {isLoggedIn && onboardingChecked && (
+        <OnboardingModal
+          visible={showOnboarding}
+          onFinish={() => setShowOnboarding(false)}
+        />
+      )}
+      {/* HOME-06: global offline banner — visible on every authenticated
+          screen when the device drops offline. Hidden when logged out
+          (Auth screen has no offline-dependent actions worth flagging). */}
+      {isLoggedIn && <OfflineBanner />}
     </NavigationContainer>
   );
 }

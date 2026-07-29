@@ -219,7 +219,7 @@ export function MarkDetailDevPreviewScreen() {
         onReport={(_m) => Alert.alert('Thank you', 'Thank you for reporting.')}
         onDelete={(m, semantic) =>
           Alert.alert(
-            semantic === 'own' ? 'Delete this mark?' : 'Hide this mark permanently?',
+            semantic === 'own' ? 'Delete this cairn?' : 'Hide this cairn permanently?',
             semantic === 'own'
               ? 'This cannot be undone.'
               : "You won't see it again on your map. (Other users still see it.)",
