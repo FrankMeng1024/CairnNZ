@@ -132,11 +132,22 @@ export interface PushPreferences {
 }
 
 export async function getPushPreferences(): Promise<PushPreferences | null> {
+  // Sprint 6 round-43 R43B5: log preference fetch failures so a
+  // 401 (auth expired) or 500 (server issue) is diagnosable instead
+  // of silently rendering defaults + overwriting server state on
+  // next PATCH. Return value stays null on any failure — no behavior
+  // change, purely observability.
   try {
     const res = await authenticatedFetch('/api/push/preferences');
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // eslint-disable-next-line no-console
+      console.warn('[pushService] getPushPreferences non-OK:', res.status);
+      return null;
+    }
     return await res.json();
-  } catch {
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[pushService] getPushPreferences threw:', String(err).slice(0, 200));
     return null;
   }
 }
@@ -149,9 +160,16 @@ export async function updatePushPreferences(
       method: 'PATCH',
       body: JSON.stringify(update),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Sprint 6 R43B5: log so a 401 doesn't look like a no-op success.
+      // eslint-disable-next-line no-console
+      console.warn('[pushService] updatePushPreferences non-OK:', res.status);
+      return null;
+    }
     return await res.json();
-  } catch {
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[pushService] updatePushPreferences threw:', String(err).slice(0, 200));
     return null;
   }
 }
@@ -169,11 +187,18 @@ export interface NotificationLogEntry {
 }
 
 export async function fetchNotificationLog(limit = 50): Promise<NotificationLogEntry[]> {
+  // Sprint 6 R43B5: log failures for diagnosability.
   try {
     const res = await authenticatedFetch(`/api/push/log?limit=${limit}`);
-    if (!res.ok) return [];
+    if (!res.ok) {
+      // eslint-disable-next-line no-console
+      console.warn('[pushService] fetchNotificationLog non-OK:', res.status);
+      return [];
+    }
     return await res.json();
-  } catch {
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[pushService] fetchNotificationLog threw:', String(err).slice(0, 200));
     return [];
   }
 }
