@@ -10,8 +10,14 @@ const pool = require('../config/db');
 
 function log(req, { kind, userId = null, markerId = null, payload = null }) {
   // Fire-and-forget. Caller does not await.
-  const ip =
-    (req && (req.ip || req.headers?.['x-forwarded-for']?.split(',')[0]?.trim())) || null;
+  // Sprint 6 R57: use req.ip only, dropping the x-forwarded-for header
+  // fallback. Pre-fix, fallback `req.headers['x-forwarded-for']` was
+  // attacker-controllable in any env where nginx trust-proxy wasn't
+  // configured. In production, Express with `app.set('trust proxy', 1)`
+  // already populates req.ip correctly from the first upstream hop —
+  // the fallback was pure dead code that opened a small IP-spoofing
+  // vector for abuse_signals in misconfigured dev/test setups.
+  const ip = (req && req.ip) || null;
   const payloadJson = payload ? JSON.stringify(payload) : null;
   pool
     .execute(
