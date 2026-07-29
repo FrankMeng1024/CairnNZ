@@ -122,12 +122,39 @@ async function buildBundle(userId) {
   );
   bundle.user = users[0] || null;
 
-  const [sessions] = await pool.execute(
-    `SELECT id, type, start_time, end_time, distance_m, duration_s, name,
-            route_points, route_points_raw, flags, finalized_at, created_at
-     FROM sessions WHERE user_id = ? ORDER BY start_time DESC`,
-    [userId],
-  );
+  // Sprint 6 round-15 R15B4: hard row caps on every table to prevent OOM
+  // + JSON.stringify time-bomb on power users (sim-walker abuse can grow
+  // memory_points to 500k+; a heavy user could have 10k+ markers). Caps
+  // chosen to be well beyond any legitimate user's data while keeping
+  // total bundle < ~50 MB. If a user hits a cap, the bundle notes it in
+  // meta.truncated so the operator can offer a manual full dump on request.
+  const CAP_SESSIONS = 20000;
+  const CAP_MARKERS  = 50000;
+  const CAP_MEMORY   = 200000;
+  const CAP_ROUTES   = 5000;
+  const CAP_FRIENDS  = 5000;
+
+  // Sprint 6 round-15 R15B5: `sessions` table was deprecated in O1
+  // (2026-07-26) — all live hike data lives in `memory_points` now.
+  // buildBundle used to hard-error at this SELECT because the table
+  // is gone. Now: swallow "table doesn't exist" and emit an empty
+  // array so the export still succeeds. Any other DB error rethrows.
+  let sessions = [];
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, type, start_time, end_time, distance_m, duration_s, name,
+              route_points, route_points_raw, flags, finalized_at, created_at
+       FROM sessions WHERE user_id = ? ORDER BY start_time DESC LIMIT ${CAP_SESSIONS}`,
+      [userId],
+    );
+    sessions = rows;
+  } catch (err) {
+    if (err && (err.code === 'ER_NO_SUCH_TABLE' || /doesn't exist/i.test(err.message))) {
+      sessions = []; // table gone post-O1
+    } else {
+      throw err;
+    }
+  }
   bundle.sessions = sessions;
 
   // Sprint 6 round-13 R13B1 fix: whitelist marker columns. Pre-fix,
@@ -137,19 +164,19 @@ async function buildBundle(userId) {
   const [markers] = await pool.execute(
     `SELECT id, type, text, lat, lng, alt, permission, approximate,
             voice_memo_url, voice_memo_duration_ms, created_at, updated_at
-     FROM markers WHERE user_id = ? ORDER BY id DESC`,
+     FROM markers WHERE user_id = ? ORDER BY id DESC LIMIT ${CAP_MARKERS}`,
     [userId],
   );
   bundle.markers = markers;
 
   const [memory] = await pool.execute(
-    'SELECT lat, lng, ts, client_id FROM memory_points WHERE user_id = ? ORDER BY ts DESC',
+    `SELECT lat, lng, ts, client_id FROM memory_points WHERE user_id = ? ORDER BY ts DESC LIMIT ${CAP_MEMORY}`,
     [userId],
   );
   bundle.memoryPoints = memory;
 
   const [routes] = await pool.execute(
-    'SELECT id, name, distance_m, permission, created_at FROM routes WHERE user_id = ? ORDER BY id DESC',
+    `SELECT id, name, distance_m, permission, created_at FROM routes WHERE user_id = ? ORDER BY id DESC LIMIT ${CAP_ROUTES}`,
     [userId],
   );
   bundle.routes = routes;
@@ -160,7 +187,7 @@ async function buildBundle(userId) {
   const [friends] = await pool.execute(
     `SELECT f.friend_id AS user_id, u.name, f.created_at
      FROM friends f JOIN users u ON u.id = f.friend_id
-     WHERE f.user_id = ?`,
+     WHERE f.user_id = ? LIMIT ${CAP_FRIENDS}`,
     [userId],
   );
   bundle.friends = friends;
@@ -186,6 +213,15 @@ async function buildBundle(userId) {
       routes: routes.length,
       friends: friends.length,
       notifications: notifications.length,
+    },
+    // Sprint 6 R15B4: caller-visible signal that the cap was reached so
+    // the operator can offer a manual full dump if needed.
+    truncated: {
+      sessions:     sessions.length     >= CAP_SESSIONS,
+      markers:      markers.length      >= CAP_MARKERS,
+      memoryPoints: memory.length       >= CAP_MEMORY,
+      routes:       routes.length       >= CAP_ROUTES,
+      friends:      friends.length      >= CAP_FRIENDS,
     },
   };
   return bundle;

@@ -489,16 +489,22 @@ router.get('/me', authenticate, async (req, res) => {
 // looped to keep issuing new jtis indefinitely. 30/hour/IP is well
 // above legit periodic-refresh usage (client refreshes every 30 min
 // during active hiking = 2/hour).
+// Sprint 6 round-11 R11B5 + round-15 R15B3: /refresh is authenticated,
+// but express-rate-limit runs BEFORE authenticate in the chain (order
+// below), so req.user is not yet populated at key-eval time. The old
+// keyGenerator claimed userId keying but always fell through to IP —
+// meaning a shared-NAT office shared one 30/hr bucket instead of
+// per-user 30/hr. Fix: swap middleware order so authenticate runs
+// first, THEN limiter reads req.user.userId. Note: on invalid tokens
+// authenticate short-circuits with 401 and the limiter never runs —
+// this is intentional (invalid tokens don't consume real-user quota).
 const refreshLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, max: 30,
   standardHeaders: true, legacyHeaders: false,
-  // Sprint 6 round-11 R11B5: /refresh is authenticated, so key by userId.
-  // Falls back to ipKeyGenerator only when authenticate hasn't populated
-  // req.user yet (should never happen since authenticate runs first).
   keyGenerator: (req, res) => req.user?.userId ? `refresh:${req.user.userId}` : ipKeyGenerator(req, res),
   message: { error: 'Too many refresh attempts. Please sign in again.' },
 });
-router.post('/refresh', refreshLimiter, authenticate, async (req, res) => {
+router.post('/refresh', authenticate, refreshLimiter, async (req, res) => {
   try {
     const newToken = signToken({ userId: req.user.userId, email: req.user.email });
     return res.json({ token: newToken });
