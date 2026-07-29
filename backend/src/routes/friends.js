@@ -46,8 +46,13 @@ router.post('/request', validateBody(schemas.friend.request), async (req, res) =
 
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
-    // Find target user
-    const [users] = await pool.execute('SELECT id, name, email FROM users WHERE email = ?', [email]);
+    // Find target user (Sprint 6 review M1: exclude soft-deleted accounts
+    // so a friend request can't be sent to a user pending deletion, and
+    // enumeration via 404-vs-existing responses stays uniform).
+    const [users] = await pool.execute(
+      'SELECT id, name, email FROM users WHERE email = ? AND deleted_at IS NULL',
+      [email],
+    );
     if (users.length === 0) return res.status(404).json({ error: 'User not found' });
 
     const toUser = users[0];
@@ -293,17 +298,20 @@ router.get('/:id/profile', async (req, res) => {
   try {
     const targetId = Number(req.params.id);
     if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid user id' });
+    // Sprint 6 review M9: collapse "not friends" and "user gone" to the
+    // SAME 404 body so the caller can't tell whether a friend has
+    // soft-deleted their account (privacy leak via 403 vs 404).
     const [friends] = await pool.execute(
       'SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ? LIMIT 1',
       [req.user.userId, targetId],
     );
-    if (friends.length === 0) return res.status(403).json({ error: 'Not friends' });
+    if (friends.length === 0) return res.status(404).json({ error: 'Profile not available' });
 
     const [users] = await pool.execute(
       'SELECT id, name, email, created_at FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1',
       [targetId],
     );
-    if (users.length === 0) return res.status(404).json({ error: 'User not found' });
+    if (users.length === 0) return res.status(404).json({ error: 'Profile not available' });
 
     const [friendCountRows] = await pool.execute(
       'SELECT COUNT(*) AS n FROM friends WHERE user_id = ?',
