@@ -38,7 +38,16 @@ router.post('/', async (req, res) => {
   if (!Number.isInteger(friendId) || friendId <= 0) {
     return res.status(400).json({ error: 'friend_id (integer) required' });
   }
-  if (friendId === userId) {
+  // Sprint 6 round-51 R51: fix type-coercion self-subscribe bypass.
+  // friendId is Number (from Number() cast); userId = req.user.userId
+  // is String (JWT payload per User.toPublic). Strict `===` between
+  // Number and String is always false → user could subscribe to
+  // themselves. Trigger would reject at trg_memory_subscription_cap
+  // (self isn't in the friends table for user_id=self), so no data
+  // corruption — but the client sees a confusing 403 instead of a
+  // clean 400 for a policy-level rejection. Coerce for consistency
+  // with R38B2 / R45 / R46 / R47.
+  if (String(friendId) === String(userId)) {
     return res.status(400).json({ error: 'Cannot subscribe to yourself' });
   }
 
