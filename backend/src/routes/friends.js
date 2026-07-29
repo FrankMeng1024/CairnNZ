@@ -187,10 +187,14 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
 // ── Get pending incoming requests ───────────────────────────────────────────
 router.get('/requests', async (req, res) => {
   try {
+    // Sprint 6 round-37 R37: filter soft-deleted senders. Pre-fix, an
+    // incoming pending request from a user pending-deletion still
+    // rendered — user could accept only to have the friendship
+    // cascade-deleted by the authSweep cron minutes later.
     const [requests] = await pool.execute(
       `SELECT fr.id, fr.from_user_id, u.name as from_name, u.email as from_email, fr.created_at as sent_at
        FROM friend_requests fr
-       JOIN users u ON u.id = fr.from_user_id
+       JOIN users u ON u.id = fr.from_user_id AND u.deleted_at IS NULL
        WHERE fr.to_user_id = ? AND fr.status = "pending"
        ORDER BY fr.created_at DESC`,
       [req.user.userId]
@@ -313,10 +317,14 @@ router.post('/reject', validateBody(schemas.friend.reject), async (req, res) => 
 // ── List friends ────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
+    // Sprint 6 round-37 R37: filter soft-deleted friends. Pre-fix, a
+    // soft-deleted friend still appeared in the friend list with cached
+    // name/email — user thinks they can share hikes with them but the
+    // account is pending hard-delete.
     const [friends] = await pool.execute(
       `SELECT f.friend_id as id, u.name, u.email, f.created_at as added_at
        FROM friends f
-       JOIN users u ON u.id = f.friend_id
+       JOIN users u ON u.id = f.friend_id AND u.deleted_at IS NULL
        WHERE f.user_id = ?
        ORDER BY f.created_at DESC`,
       [req.user.userId]
@@ -337,11 +345,14 @@ router.get('/', async (req, res) => {
 // before Express could try /requests/:id as a fallback.
 router.get('/requests/outbound', async (req, res) => {
   try {
+    // Sprint 6 round-37 R37: filter soft-deleted targets. Outbound
+    // pending request to a user pending-deletion is dead-on-arrival —
+    // hide it from my outbound list.
     const [rows] = await pool.execute(
       `SELECT fr.id, fr.to_user_id, u.name AS to_name, u.email AS to_email,
               fr.status, fr.created_at AS sent_at
        FROM friend_requests fr
-       JOIN users u ON u.id = fr.to_user_id
+       JOIN users u ON u.id = fr.to_user_id AND u.deleted_at IS NULL
        WHERE fr.from_user_id = ? AND fr.status = 'pending'
        ORDER BY fr.created_at DESC`,
       [req.user.userId],
