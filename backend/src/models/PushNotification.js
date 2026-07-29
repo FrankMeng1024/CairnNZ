@@ -196,6 +196,18 @@ async function listRecent(userId, limit = 50) {
 // queue doesn't grow indefinitely.
 async function sendPending({ batchSize = 100 } = {}) {
   const safeBatch = Math.max(1, Math.min(Number(batchSize) || 100, 500));
+  // Sprint 6 round-8 review R8B3 fix: recover rows stuck in 'sending'.
+  // If the process crashed / SIGKILL between the transactional claim
+  // (UPDATE to 'sending') and the per-row status write, rows stayed
+  // in 'sending' forever and next drain's SELECT (status='queued')
+  // never re-visited them. Every drain start: re-queue 'sending' rows
+  // older than 5 min. Fresh 'sending' rows from a concurrent worker
+  // (with FOR UPDATE SKIP LOCKED) stay claimed.
+  await pool.execute(
+    `UPDATE notification_log SET status='queued'
+     WHERE status='sending' AND created_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)`,
+  ).catch((err) => console.warn('[push] stale-sending recovery failed:', err.message));
+
   // Sprint 6 round-4 review R4B6: atomically claim rows via
   // FOR UPDATE SKIP LOCKED so concurrent Node workers (or an accidental
   // blue/green deploy overlap) don't double-send. MySQL 8.0.1+ supports

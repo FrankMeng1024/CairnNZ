@@ -174,6 +174,10 @@ interface TrackingState {
     idempotencyKey: string;
     activityMode: 'hiking' | 'running';
     payload: any;
+    // Sprint 6 round-8 review R8B8: capture the userId at Save time
+    // (not Retry time) so a Retry after a user switch does not upload
+    // to the wrong account. syncDaemon R7B5 gate reads this.
+    userId: string;
   } | null;
 
   // Actions
@@ -223,6 +227,7 @@ const initialState = {
     idempotencyKey: string;
     activityMode: 'hiking' | 'running';
     payload: any;
+    userId: string;
   },
 };
 
@@ -1186,6 +1191,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 idempotencyKey,
                 activityMode: s.activityMode,
                 payload: v412Payload,
+                userId: String(useAppStore.getState().user?.id ?? 'unknown'),
               },
             });
           }
@@ -1217,6 +1223,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               idempotencyKey,
               activityMode: s.activityMode,
               payload: v412Payload,
+              userId: String(useAppStore.getState().user?.id ?? 'unknown'),
             },
           });
         }

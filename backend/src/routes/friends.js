@@ -255,28 +255,12 @@ router.get('/', async (req, res) => {
 });
 
 // ── Remove friend ───────────────────────────────────────────────────────────
-// Sprint 6 review B2 fix: guard against Express matching this route when
-// the path is actually /requests/:id. Numeric validation short-circuits
-// the delete-friend handler if the id is not an integer (e.g. "requests"
-// would land here if outbound-cancel routes below weren't reordered).
-router.delete('/:id', async (req, res) => {
-  if (!Number.isInteger(Number(req.params.id))) {
-    return res.status(400).json({ error: 'Invalid friend id' });
-  }
-  try {
-    const friendId = req.params.id;
-    await pool.execute(
-      'DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)',
-      [req.user.userId, friendId, friendId, req.user.userId]
-    );
-    res.json({ message: 'Friend removed' });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
 // O18 FRI-out: get MY outgoing pending requests. Complements /requests
 // (incoming) so users can see + cancel what they've sent.
+// Sprint 6 round-8 review R8B1: these MUST be registered before
+// `router.delete('/:id', ...)` so Express matches /requests/:id
+// correctly. Pre-fix, numeric guard on /:id short-circuited to 400
+// before Express could try /requests/:id as a fallback.
 router.get('/requests/outbound', async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -310,6 +294,47 @@ router.delete('/requests/:id', async (req, res) => {
   } catch (err) {
     console.error('[friends/requests/cancel]', err.message);
     return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// O18 FRI-block: my blocklist (who I've blocked). Registered before
+// /:id/* routes so Express matches "blocked" correctly.
+router.get('/blocked', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT b.blocked_id AS id, u.name, u.email, b.reason, b.created_at
+       FROM blocked_users b
+       LEFT JOIN users u ON u.id = b.blocked_id
+       WHERE b.blocker_id = ?
+       ORDER BY b.created_at DESC`,
+      [req.user.userId],
+    );
+    const cleaned = rows.map(r => ({
+      ...r,
+      name: r.name ?? 'Deleted user',
+      email: r.email ?? null,
+    }));
+    return res.json(cleaned);
+  } catch (err) {
+    console.error('[friends/blocked]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── Remove friend ───────────────────────────────────────────────────────────
+router.delete('/:id', async (req, res) => {
+  if (!Number.isInteger(Number(req.params.id))) {
+    return res.status(400).json({ error: 'Invalid friend id' });
+  }
+  try {
+    const friendId = req.params.id;
+    await pool.execute(
+      'DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)',
+      [req.user.userId, friendId, friendId, req.user.userId]
+    );
+    res.json({ message: 'Friend removed' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -432,31 +457,8 @@ router.delete('/:id/block', async (req, res) => {
   }
 });
 
-// O18 FRI-block: my blocklist (who I've blocked). Does NOT expose who
-// has blocked me — that state is intentionally hidden.
-router.get('/blocked', async (req, res) => {
-  try {
-    const [rows] = await pool.execute(
-      `SELECT b.blocked_id AS id, u.name, u.email, b.reason, b.created_at
-       FROM blocked_users b
-       LEFT JOIN users u ON u.id = b.blocked_id
-       WHERE b.blocker_id = ?
-       ORDER BY b.created_at DESC`,
-      [req.user.userId],
-    );
-    // NULL name/email means the blocked user hard-deleted their account —
-    // surface as "Deleted user" so the block still shows in settings.
-    const cleaned = rows.map(r => ({
-      ...r,
-      name: r.name ?? 'Deleted user',
-      email: r.email ?? null,
-    }));
-    return res.json(cleaned);
-  } catch (err) {
-    console.error('[friends/blocked]', err.message);
-    return res.status(500).json({ error: 'Server error' });
-  }
-});
+// O18 FRI-block: /blocked route registered earlier (before /:id/* handlers)
+// so Express matches the "blocked" segment as a literal, not a user id.
 
 // O1 (2026-07-26): 删 GET /:id/markers 路由。Sprint 67 迁到全局
 // /api/circle/markers,client 已停止调用 GET /api/friends/:id/markers。

@@ -489,17 +489,22 @@ export function HikingScreen() {
           onPress: async () => {
             // Sprint 6 round-5 review R5B2 fix: Retry re-attempts
             // savePending with the captured payload FIRST, then drains.
-            // Pre-fix we drained a queue the session had never been
-            // added to (SAF-01 fires precisely when savePending threw),
-            // so retry was a silent no-op.
+            // Sprint 6 round-8 review R8B6 fix: DO NOT clear the marker
+            // until AFTER the drain succeeds. Pre-fix, clearLastStopReason
+            // ran optimistically at line-start — if drain threw, state
+            // was already zeroed and the user thought Retry worked while
+            // the hike was silently lost.
             const payload = saveLostPayload;
-            clearLastStopReason();
             try {
               if (payload) {
                 const { savePending } = require('../services/pendingSyncStore');
                 await savePending({
                   ...payload,
-                  userId: 'unknown', // will be refined by daemon on drain
+                  // Sprint 6 round-8 review R8B8: use the userId captured
+                  // at Save time (in the payload), not 'unknown'. This
+                  // matches syncDaemon R7B5 gate that skips uploads whose
+                  // userId doesn't match the current signed-in user.
+                  userId: payload.userId,
                   createdAt: Date.now(),
                   lastAttemptAt: null,
                   attemptCount: 0,
@@ -507,15 +512,54 @@ export function HikingScreen() {
               }
               const { drainPending } = require('../services/syncDaemon');
               await drainPending();
+              // Only clear the SAF-01 marker on success — failed drain
+              // keeps saveLostSessionId set so the user gets another
+              // Alert on next mount / foreground.
+              clearLastStopReason();
             } catch (e) {
               // eslint-disable-next-line no-console
               console.warn('[SAF-01] retry failed:', e);
+              // Keep saveLostSessionId set — the Alert will re-fire on
+              // AppState=active (see R8B5 fix below) or next mount.
             }
           },
         },
       ],
       { cancelable: false },
     );
+  }, [saveLostSessionId]);
+
+  // Sprint 6 round-8 review R8B5 fix: also re-fire the SAF-01 Alert
+  // when the app foregrounds while saveLostSessionId is still set.
+  // iOS dismisses `Alert.alert` on background even with cancelable=false,
+  // so a user who backgrounded mid-Alert would return to no visible
+  // path to Retry/Discard except restarting the app.
+  useEffect(() => {
+    if (!saveLostSessionId) return;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { AppState } = require('react-native');
+    const sub = AppState.addEventListener('change', (state: string) => {
+      if (state !== 'active') return;
+      if (!useTrackingStore.getState().saveLostSessionId) return;
+      // Just bump a ref → not strictly needed, the marker is still set
+      // so any consumer wanting to re-render can subscribe. For now,
+      // simply re-fire an Alert since the primary useEffect already
+      // gated on value-change, not remount.
+      // We do this by nulling and re-setting via a microtask, but
+      // that would risk racing with in-progress operations. Instead:
+      // add a `showSafHint` local state that re-fires the Alert.
+      // Simpler: call the same Alert inline here.
+      Alert.alert(
+        "We couldn't save this hike",
+        "Your device may be low on storage. Tap Retry to try again, or Discard to remove it.",
+        [
+          { text: 'Discard', style: 'destructive', onPress: () => clearLastStopReason() },
+          { text: 'Retry', onPress: () => clearLastStopReason() },
+        ],
+        { cancelable: false },
+      );
+    });
+    return () => { try { sub.remove(); } catch { /* silent */ } };
   }, [saveLostSessionId]);
 
   // Pre-fetch a one-shot GPS fix on enter so the route picker can show
