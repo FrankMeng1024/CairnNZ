@@ -159,12 +159,20 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
 // providedName = only present on first authorize — Apple never resends it.
 //   Store it in AsyncStorage before calling this so a retry can still send
 //   the display name.
+// rawNonce = plain (unhashed) nonce that the client sent (hashed) to Apple.
+//   Backend hashes it + compares to payload.nonce claim to prevent replay
+//   attacks (Sprint 6 review C7).
 export async function loginWithApple(
   idToken: string,
   providedName?: string,
+  rawNonce?: string,
 ): Promise<AuthResult> {
   try {
-    const res = await post('/api/auth/apple', { identity_token: idToken, name: providedName });
+    const res = await post('/api/auth/apple', {
+      identity_token: idToken,
+      name: providedName,
+      raw_nonce: rawNonce,
+    });
     const data = await res.json();
     if (!res.ok) {
       return { error: data?.error || 'Apple sign-in failed. Please try again.', hint: data?.hint };

@@ -837,16 +837,29 @@ export function AuthScreen() {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const AppleAuthentication = require('expo-apple-authentication');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const Crypto = require('expo-crypto');
       const available = await AppleAuthentication.isAvailableAsync();
       if (!available) {
         Alert.alert('Apple Sign In', 'Apple Sign In is not available on this device (older iOS or unsupported region).');
         return;
       }
+      // Sprint 6 review C7 fix: generate a random nonce, SHA-256 it, and
+      // pass the hash to Apple. Apple echoes the hash in the identity_token
+      // and the backend verifies it matches. This prevents identity_token
+      // replay attacks — App Store review checklist item.
+      const rawNonce = Math.random().toString(36).slice(2) + Date.now().toString(36) +
+                       Math.random().toString(36).slice(2);
+      const hashedNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        rawNonce,
+      );
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
+        nonce: hashedNonce,
       });
       const idToken = credential.identityToken;
       if (!idToken) {
@@ -868,7 +881,7 @@ export function AuthScreen() {
         } catch { /* silent */ }
       }
       const { loginWithApple } = require('../services/authService');
-      const result = await loginWithApple(idToken, providedName);
+      const result = await loginWithApple(idToken, providedName, rawNonce);
       if (result.error) {
         Alert.alert('Apple Sign In failed', result.error);
         return;

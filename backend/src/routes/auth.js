@@ -341,7 +341,7 @@ router.post('/google', oauthLimiter, validateBody(schemas.auth.google), async (r
 // `name` in the request body (client-supplied — Apple only sends it once,
 // on very first authorize).
 router.post('/apple', oauthLimiter, async (req, res) => {
-  const { identity_token, name: providedName } = req.body || {};
+  const { identity_token, name: providedName, raw_nonce } = req.body || {};
   if (!identity_token) return res.status(400).json({ error: 'identity_token is required.' });
   const audience = process.env.APPLE_BUNDLE_ID || process.env.APPLE_CLIENT_ID;
   if (!audience) {
@@ -352,6 +352,27 @@ router.post('/apple', oauthLimiter, async (req, res) => {
     const { verifyAppleIdentityToken } = require('../services/appleAuth');
     const payload = await verifyAppleIdentityToken(identity_token, audience);
     if (!payload || !payload.sub) return res.status(401).json({ error: 'Invalid Apple token.' });
+
+    // Sprint 6 review C7 fix: verify nonce to prevent identity_token replay
+    // attacks. Client generated a random rawNonce, hashed it (SHA-256), and
+    // sent the hash to Apple. Apple echoed the HASH in the JWT's `nonce`
+    // claim. We hash the raw_nonce the client sent and compare — mismatch
+    // means someone is replaying a token they intercepted.
+    if (raw_nonce) {
+      const crypto = require('crypto');
+      const expected = crypto.createHash('sha256').update(String(raw_nonce)).digest('hex');
+      // Apple returns nonce as HEX in the JWT claim (per Apple docs).
+      // Case-insensitive compare for safety.
+      if (!payload.nonce || String(payload.nonce).toLowerCase() !== expected.toLowerCase()) {
+        console.warn('[apple] nonce mismatch — potential replay attack');
+        return res.status(401).json({ error: 'Apple sign-in failed. Please try again.', hint: 'nonce_mismatch' });
+      }
+    } else {
+      // No raw_nonce sent by client — accept for backward compat with pre-C7
+      // TestFlight builds, but log a warning. Remove this allow-list once
+      // the C7-fixed client is the only one in circulation.
+      console.warn('[apple] no raw_nonce sent by client (pre-C7 build?)');
+    }
     // Apple's `sub` is a stable per-user, per-app hash. Email is present
     // only on the first authorize (or when the user consents to share it).
     const appleSub = payload.sub;
