@@ -1157,83 +1157,55 @@ export function SettingsScreen() {
 
       {/* Delete account — type "delete account" to confirm.
        *
-       * O12: honest implementation. Backend does not yet expose a delete
-       * endpoint with a real cool-off / cancel flow, so shipping a modal
-       * that promises "7 days to change your mind" would be a lie (there
-       * is no server-side scheduled deletion table nor a cancel endpoint,
-       * and the client has no UI to invoke a cancel path). Until the
-       * backend + legal copy are ready, deletion is a manual request
-       * routed to privacy@cairnapp.nz. This still satisfies Apple App
-       * Store Guideline 5.1.1(v) — an in-app path exists — and it does
-       * not misrepresent the mechanism to the user.
+       * O18 AUTH-01 (2026-07-29): replaced the mailto fallback with a real
+       * backend soft-delete + 7-day grace period. DELETE /api/auth/account
+       * marks the row deleted_at, revokes current jti, and sends a
+       * confirmation email with a restore link. The client shows the exact
+       * deadline and signs the user out. If they sign in again within 7
+       * days, backend returns hint='pending_deletion' and AuthScreen
+       * routes to the restore modal.
        */}
       <TypeToConfirmModal
         visible={showDeleteAccountModal}
         title="Delete your account?"
-        body="This signs you out on this device and emails our privacy team to permanently delete your account. Your hikes, cairns, and memory will be removed. This cannot be undone."
+        body="Your account will be scheduled for permanent deletion. You'll have 7 days to sign in and restore it before all your hikes, cairns, and memory are permanently erased."
         keyword="delete account"
-        confirmLabel="Send deletion request"
+        confirmLabel="Delete account"
         onCancel={() => setShowDeleteAccountModal(false)}
         onConfirm={async () => {
           crashLogger.breadcrumb('settings:delete_account_confirmed');
           setShowDeleteAccountModal(false);
-          // Open the user's mail app with a pre-filled deletion request.
-          // Subject includes the account email so the team can act on it
-          // without a manual lookup step.
-          const subject = encodeURIComponent('Delete my Cairn account');
-          const body = encodeURIComponent(
-            `Please permanently delete my Cairn account and all associated data.\n\n` +
-              `Account email: ${user?.email ?? '(unknown)'}\n` +
-              `Account name: ${user?.name ?? '(unknown)'}\n` +
-              `Request date: ${new Date().toISOString()}\n`,
-          );
-          // Round-2 V-N2 + N2-M5: breadcrumb every branch so support can
-          // diagnose "why didn't privacy@cairnapp.nz get my email" reports.
-          crashLogger.breadcrumb('settings:delete_account_mailto_attempt');
-          // Round-3 R3-H3: track mailto success vs failure so we can show
-          // a different Alert. Pre-fix, mailto failure silently continued
-          // and the Alert lied ("we've opened an email...") — users could
-          // not tell if the request had actually been sent.
-          let mailtoOpened = false;
           try {
-            await Linking.openURL(`mailto:privacy@cairnapp.nz?subject=${subject}&body=${body}`);
-            crashLogger.breadcrumb('settings:delete_account_mailto_opened');
-            mailtoOpened = true;
-          } catch {
-            crashLogger.breadcrumb('settings:delete_account_mailto_failed');
-            // Mail app unavailable — fall through, still sign out. User will
-            // see a distinct alert below.
-          }
-          // Clear stored credentials so this device does not auto-fill the
-          // deleted account on next launch (subagent audit — H-N5).
-          try { await storage.removeItem('cairn_remember_me'); } catch { /* swallow */ }
-          // Round-5 R5-C1: clear the stored auth token locally. Prior comments
-          // implied this REVOKES the backend session (cross-device sign-out),
-          // but authService.logout() only does clearToken() — no HTTP call.
-          // Other devices keep their valid JWT until natural expiry. If/when
-          // backend adds a real POST /api/auth/logout that server-side
-          // invalidates tokens, hook it in here.
-          try {
-            await logout();
-            crashLogger.breadcrumb('settings:delete_account_token_cleared');
-          } catch {
-            crashLogger.breadcrumb('settings:delete_account_token_clear_failed');
-          }
-          // Round-2 V-N4: sign out LOCALLY before showing the Alert. If the
-          // user dismisses the Alert by other means (background+kill etc)
-          // we still guarantee the sign-out. Pre-fix this depended on the
-          // user tapping OK — an easily-missed edge case.
-          appLogout();
-          if (mailtoOpened) {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { deleteAccount } = require('../services/authService');
+            const r = await deleteAccount();
+            if (r.error) {
+              crashLogger.breadcrumb(`settings:delete_account_error ${String(r.error).slice(0, 60)}`);
+              Alert.alert('Could not delete account', r.error);
+              return;
+            }
+            crashLogger.breadcrumb(`settings:delete_account_scheduled deadline=${r.restoreDeadline}`);
+            const deadlineStr = r.restoreDeadline
+              ? new Date(r.restoreDeadline).toLocaleDateString()
+              : '7 days';
+            // Clear stored credentials so this device does not auto-fill.
+            try { await storage.removeItem('cairn_remember_me'); } catch { /* swallow */ }
+            // Local logout — deleteAccount already revoked the jti server-side,
+            // but we still need to clear the token locally to hit AuthScreen.
+            try {
+              await logout();
+            } catch { /* swallow */ }
+            appLogout();
             Alert.alert(
-              'Deletion request opened',
-              'We\'ve opened an email to privacy@cairnapp.nz. Please send it — our team will delete your account within 5 business days. You have been signed out on this device.',
+              'Account scheduled for deletion',
+              `Your account will be permanently deleted on ${deadlineStr}. To restore it, sign in with your email and password before that date.`,
               [{ text: 'OK' }],
             );
-          } else {
+          } catch (err) {
+            crashLogger.breadcrumb(`settings:delete_account_threw ${String(err).slice(0, 80)}`);
             Alert.alert(
-              'Email app not available',
-              'We could not open your email app. To request deletion, please email privacy@cairnapp.nz manually — include your account email so we can process it. You have been signed out on this device.',
+              'Could not delete account',
+              'Please check your connection and try again. If the problem persists, email privacy@cairnapp.nz.',
               [{ text: 'OK' }],
             );
           }

@@ -9,12 +9,19 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
+  hasPassword?: boolean;
+  createdAt?: string | null;
+  dateOfBirth?: string | null;     // O18 AUTH-06 — 'YYYY-MM-DD' or null
+  deletedAt?: string | null;        // O18 AUTH-01 — soft-delete timestamp
+  providers?: string[];
 }
 
 interface AuthResult {
   user?: UserProfile;
   token?: string;
   error?: string;
+  hint?: string;                    // 'age_gate' | 'use_oauth' | 'pending_deletion'
+  restoreDeadline?: string;         // ISO — only when hint='pending_deletion'
   // 2-step registration: backend sent a code, frontend shows verify screen
   step?: 'verify';
   email?: string;
@@ -32,13 +39,14 @@ async function post(path: string, body: object): Promise<Response> {
 export async function register(
   name: string,
   email: string,
-  password: string
+  password: string,
+  dateOfBirth: string,   // O18 AUTH-06 — 'YYYY-MM-DD'
 ): Promise<AuthResult> {
   try {
-    const res = await post('/api/auth/register', { name, email, password });
+    const res = await post('/api/auth/register', { name, email, password, dateOfBirth });
     const data = await res.json();
     if (!res.ok) {
-      return { error: data?.error || data?.message || 'Registration failed.' };
+      return { error: data?.error || data?.message || 'Registration failed.', hint: data?.hint };
     }
     // Backend sends a verification code — frontend must show the verify screen
     // dev_code is only present in non-production builds
@@ -78,10 +86,18 @@ export async function login(email: string, password: string): Promise<AuthResult
     const res = await post('/api/auth/login', { email, password });
     const data = await res.json();
     if (!res.ok) {
-      return { error: data?.error || data?.message || 'Sign in failed. Check your email and password.' };
+      return { error: data?.error || data?.message || 'Sign in failed. Check your email and password.', hint: data?.hint };
     }
     await saveToken(data.token);
-    return { user: data.user, token: data.token };
+    // O18 AUTH-01: backend surfaces hint='pending_deletion' when the account
+    // was soft-deleted. Token is still valid so restore endpoint can auth,
+    // caller decides whether to show restore modal or block sign-in.
+    return {
+      user: data.user,
+      token: data.token,
+      hint: data.hint,
+      restoreDeadline: data.restore_deadline,
+    };
   } catch {
     return { error: 'Unable to connect. Please try again.' };
   }
@@ -139,7 +155,119 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
 }
 
 export async function logout(): Promise<void> {
+  // O18 AUTH-08: revoke jti server-side so the token can't be re-used
+  // (e.g. if the user handed the phone off and someone lifted the token).
+  // Best-effort: local clearToken always runs even if the backend call fails.
+  const token = await getToken();
+  if (token) {
+    try {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch { /* silent — network offline is fine, blacklist is a nice-to-have */ }
+  }
   await clearToken();
+}
+
+// O18 AUTH-04: request a 6-digit password reset code by email.
+// Returns 200 always (privacy — do not leak account existence).
+export async function passwordResetRequest(email: string): Promise<{ error?: string; devCode?: string }> {
+  try {
+    const res = await post('/api/auth/password-reset/request', { email });
+    const data = await res.json();
+    if (!res.ok) return { error: data?.error || 'Could not send reset code.' };
+    return { devCode: data.dev_code };
+  } catch {
+    return { error: 'Unable to connect. Please try again.' };
+  }
+}
+
+// O18 AUTH-04: verify the code and set a new password. Returns a fresh
+// JWT + user profile on success so the caller can sign the user in.
+export async function passwordResetVerify(
+  email: string,
+  code: string,
+  newPassword: string,
+): Promise<AuthResult> {
+  try {
+    const res = await post('/api/auth/password-reset/verify', {
+      email, code, new_password: newPassword,
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { error: data?.error || 'Reset failed.', hint: data?.hint };
+    }
+    await saveToken(data.token);
+    return { user: data.user, token: data.token };
+  } catch {
+    return { error: 'Unable to connect. Please try again.' };
+  }
+}
+
+// O18 AUTH-01: soft-delete the current account. Returns the grace deadline
+// so the UI can display "Restore before <date>". Auth middleware will
+// invalidate the current token via jti blacklist as a side-effect.
+export async function deleteAccount(): Promise<{
+  error?: string;
+  deletedAt?: string;
+  restoreDeadline?: string;
+}> {
+  const token = await getToken();
+  if (!token) return { error: 'not_signed_in' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/account`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data?.error || 'Could not delete account.' };
+    return { deletedAt: data.deleted_at, restoreDeadline: data.restore_deadline };
+  } catch {
+    return { error: 'Unable to connect. Please try again.' };
+  }
+}
+
+// O18 AUTH-01: restore a soft-deleted account. Token in header is the one
+// just issued by /login post-delete (still valid because auth middleware
+// allows it — the row exists, jti not blacklisted).
+export async function restoreAccount(): Promise<AuthResult> {
+  const token = await getToken();
+  if (!token) return { error: 'not_signed_in' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/account/restore`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data?.error || 'Restore failed.' };
+    return { user: data.user };
+  } catch {
+    return { error: 'Unable to connect. Please try again.' };
+  }
+}
+
+// O18 AUTH-06: legacy DOB backfill (users who registered before this
+// migration have dateOfBirth=null and get a modal on next login).
+// Backend enforces >= 13 same as register + immutable once set.
+export async function patchDob(dateOfBirth: string): Promise<AuthResult> {
+  const token = await getToken();
+  if (!token) return { error: 'not_signed_in' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/dob`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ dateOfBirth }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data?.error || 'Could not save date of birth.', hint: data?.hint };
+    return { user: data.user };
+  } catch {
+    return { error: 'Unable to connect. Please try again.' };
+  }
 }
 
 /**

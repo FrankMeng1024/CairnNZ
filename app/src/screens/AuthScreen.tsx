@@ -32,7 +32,9 @@ import { useAppStore } from '../store/useAppStore';
 import { storage } from '../store/storage';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
-import { login, register, loginWithGoogle, verifyCode, resendCode } from '../services/authService';
+import { login, register, loginWithGoogle, verifyCode, resendCode,
+  passwordResetRequest, passwordResetVerify, patchDob, restoreAccount,
+} from '../services/authService';
 import { CairnLogo } from '../components/ActivityIcons/CairnLogo';
 // O1 batch 39: Google + makeRedirectUri + Prompt imports removed — 0 actual code references (Google OAuth deferred).
 import { crashLogger } from '../services/crashLogger';
@@ -401,7 +403,14 @@ Cairn complies with the New Zealand Privacy Act 2020 and, where applicable, the 
 privacy@cairnapp.nz`;
 
 // ── Auth Screen ────────────────────────────────────────────────────────────
-type AuthView = 'splash' | 'login' | 'register' | 'verify' | 'welcome';
+// O18 AUTH-04/06: 'forgot_request' and 'forgot_verify' are the new forgot-
+// password flow. 'dob_backfill' is the modal shown to pre-migration users
+// on next login (nullable dateOfBirth). 'restore_confirm' is shown when
+// login returns hint='pending_deletion'.
+type AuthView =
+  | 'splash' | 'login' | 'register' | 'verify' | 'welcome'
+  | 'forgot_request' | 'forgot_verify'
+  | 'dob_backfill' | 'restore_confirm';
 
 // Remember-me persistence key. Stored value is a JSON-encoded
 // { email, password } pair. Cleared on Sign Out or when the user
@@ -431,6 +440,19 @@ export function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  // O18 AUTH-06: date of birth captured at register. Stored as 'YYYY-MM-DD'
+  // string (matches backend Joi.isoDate schema). Empty until user picks.
+  const [dob, setDob] = useState('');
+  const [dobError, setDobError] = useState('');
+  // O18 AUTH-04: forgot-password state — reset email, 6-digit code, new pw.
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotCode, setForgotCode] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  // O18 AUTH-01: post-login restore-modal state.
+  const [restoreDeadline, setRestoreDeadline] = useState('');
+  const [restoreLoading, setRestoreLoading] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
   const [privacyExpanded, setPrivacyExpanded] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -590,6 +612,30 @@ export function AuthScreen() {
     return '';
   };
 
+  // O18 AUTH-06: 'YYYY-MM-DD' validator + whole-year age check. UI keeps
+  // the input a single ISO date string; keyboard is 'numbers-and-punctuation'
+  // so users can type the format directly. A future picker widget can drop
+  // in without changing this contract.
+  const validateDob = (val: string) => {
+    if (!val || !val.trim()) return 'Date of birth is required';
+    const m = val.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return 'Use YYYY-MM-DD (e.g. 1998-06-15)';
+    const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    const dt = new Date(Date.UTC(y, mo - 1, d));
+    if (
+      dt.getUTCFullYear() !== y ||
+      dt.getUTCMonth() !== mo - 1 ||
+      dt.getUTCDate() !== d
+    ) return 'Not a real date';
+    const now = new Date();
+    let age = now.getUTCFullYear() - y;
+    const nm = now.getUTCMonth() - (mo - 1);
+    if (nm < 0 || (nm === 0 && now.getUTCDate() < d)) age -= 1;
+    if (age < 13) return 'Cairn is for people 13 and up';
+    if (age > 120) return 'Please enter a valid date';
+    return '';
+  };
+
   const handleAuth = async () => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -603,6 +649,11 @@ export function AuthScreen() {
     const eErr = validateEmail(email); if (eErr) { setEmailError(eErr); valid = false; }
     const pErr = validatePassword(password); if (pErr) { setPasswordError(pErr); valid = false; }
     if (isRegister && password !== confirm) { setConfirmError('Passwords do not match'); valid = false; }
+    // O18 AUTH-06: DOB required at register only (login doesn't need it).
+    if (isRegister) {
+      const dErr = validateDob(dob);
+      if (dErr) { setDobError(dErr); valid = false; } else { setDobError(''); }
+    }
     if (isRegister && !privacyChecked) { setPrivacyError('Please agree to continue'); valid = false; }
     if (!valid) return;
 
@@ -610,7 +661,7 @@ export function AuthScreen() {
     setApiError('');
     try {
       const result = isRegister
-        ? await register(name.trim(), email.trim().toLowerCase(), password)
+        ? await register(name.trim(), email.trim().toLowerCase(), password, dob.trim())
         : await login(email.trim().toLowerCase(), password);
 
       if (result.error) {
@@ -630,6 +681,27 @@ export function AuthScreen() {
         setVerifyError('');
         setResendCooldown(60);
         setView('verify');
+        return;
+      }
+
+      // O18 AUTH-01: soft-deleted account — show restore modal instead of
+      // continuing to Home. Token is already saved by login() so restore
+      // endpoint can authenticate; user must explicitly choose Restore or
+      // Cancel (Cancel = sign out without restoring, account will hard-
+      // delete when cron sweeps past the deadline).
+      if (result.hint === 'pending_deletion' && result.restoreDeadline) {
+        setRestoreDeadline(result.restoreDeadline);
+        setView('restore_confirm');
+        return;
+      }
+
+      // O18 AUTH-06: legacy account with no DOB on file (pre-migration
+      // user) — prompt them to backfill before proceeding. Only fires
+      // once because DOB is immutable once set.
+      if (!isRegister && result.user && result.user.dateOfBirth == null) {
+        setDob('');
+        setDobError('');
+        setView('dob_backfill');
         return;
       }
 
@@ -954,6 +1026,219 @@ export function AuthScreen() {
     );
   }
 
+  // ── O18 AUTH-01: restore confirmation modal ─────────────────────────────
+  // Shown after login when backend flagged hint='pending_deletion'. User
+  // must choose Restore (undo soft-delete, continue as normal) or Cancel
+  // (sign out without restoring — account hard-deletes on cron sweep).
+  if (view === 'restore_confirm') {
+    const deadlineStr = restoreDeadline
+      ? new Date(restoreDeadline).toLocaleDateString()
+      : '';
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]} edges={['top', 'bottom']}>
+        <Icon name="TriangleAlert" size={56} color={Colors.danger} strokeWidth={1.5} />
+        <Text style={[styles.appName, { marginTop: 16, marginBottom: 8 }]}>Restore your account?</Text>
+        <Text style={[styles.tagline, { textAlign: 'center', color: Colors.textSecondary, marginBottom: 16 }]}>
+          You scheduled this account for deletion. It will be permanently deleted on {deadlineStr}. Restore to keep it.
+        </Text>
+        <TouchableOpacity
+          testID="btn-restore-account"
+          style={{ backgroundColor: Colors.primary, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 999, marginTop: 12 }}
+          disabled={restoreLoading}
+          onPress={async () => {
+            setRestoreLoading(true);
+            try {
+              const r = await restoreAccount();
+              if (r.error) {
+                Alert.alert('Restore failed', r.error);
+                return;
+              }
+              if (r.user) setUser(r.user);
+              await hydrate();
+              setLoggedIn(true);
+            } finally {
+              setRestoreLoading(false);
+            }
+          }}>
+          <Text style={{ color: '#fff', fontWeight: '600' }}>{restoreLoading ? 'Restoring…' : 'Restore account'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID="btn-cancel-restore"
+          style={{ paddingHorizontal: 24, paddingVertical: 12, marginTop: 8 }}
+          onPress={async () => {
+            // Just sign out — do not restore. Account will hard-delete on cron.
+            try {
+              const { logout: logoutSvc } = require('../services/authService');
+              await logoutSvc();
+            } catch { /* silent */ }
+            setView('splash');
+          }}>
+          <Text style={{ color: Colors.textSecondary }}>Not now</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // ── O18 AUTH-06: legacy DOB backfill modal ──────────────────────────────
+  // Only shown once (immutable once set). Same >= 13 validation as register.
+  if (view === 'dob_backfill') {
+    return (
+      <SafeAreaView style={[styles.container, { padding: 24 }]} edges={['top', 'bottom']}>
+        <View style={{ marginTop: 40 }}>
+          <Text style={[styles.appName, { marginBottom: 8 }]}>One quick thing</Text>
+          <Text style={[styles.tagline, { color: Colors.textSecondary, marginBottom: 24 }]}>
+            We ask new members to confirm they're 13 or older. This is a one-time step.
+          </Text>
+          <TextInput
+            testID="input-dob-backfill"
+            style={formStyles.input}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={Colors.textMuted}
+            value={dob}
+            onChangeText={(v) => { setDob(v); if (dobError) setDobError(''); }}
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+          />
+          {dobError ? <Text style={formStyles.errorText}>{dobError}</Text> : null}
+          <TouchableOpacity
+            testID="btn-save-dob"
+            style={[styles.primaryBtn, { marginTop: 24 }]}
+            disabled={loading}
+            onPress={async () => {
+              const err = validateDob(dob);
+              if (err) { setDobError(err); return; }
+              setLoading(true);
+              try {
+                const r = await patchDob(dob.trim());
+                if (r.error) {
+                  setDobError(r.error);
+                  return;
+                }
+                if (r.user) setUser(r.user);
+                await hydrate();
+                setLoggedIn(true);
+              } finally {
+                setLoading(false);
+              }
+            }}>
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Continue</Text>}
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── O18 AUTH-04: forgot password step 1 — request code by email ─────────
+  if (view === 'forgot_request') {
+    return (
+      <SafeAreaView style={[styles.container, { padding: 24 }]} edges={['top', 'bottom']}>
+        <TouchableOpacity onPress={() => handleViewChange('login')} style={{ marginTop: 16 }}>
+          <Text style={{ color: Colors.textSecondary }}>← Back to sign in</Text>
+        </TouchableOpacity>
+        <View style={{ marginTop: 24 }}>
+          <Text style={[styles.appName, { marginBottom: 8 }]}>Reset password</Text>
+          <Text style={[styles.tagline, { color: Colors.textSecondary, marginBottom: 24 }]}>
+            Enter your account email. We'll send a 6-digit code.
+          </Text>
+          <TextInput
+            testID="input-forgot-email"
+            style={formStyles.input}
+            placeholder="Email"
+            placeholderTextColor={Colors.textMuted}
+            value={forgotEmail}
+            onChangeText={(v) => { setForgotEmail(v); if (forgotError) setForgotError(''); }}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+          />
+          {forgotError ? <Text style={formStyles.errorText}>{forgotError}</Text> : null}
+          <TouchableOpacity
+            testID="btn-send-reset-code"
+            style={[styles.primaryBtn, { marginTop: 24 }]}
+            disabled={forgotLoading}
+            onPress={async () => {
+              const eErr = validateEmail(forgotEmail);
+              if (eErr) { setForgotError(eErr); return; }
+              setForgotLoading(true);
+              try {
+                const r = await passwordResetRequest(forgotEmail.trim().toLowerCase());
+                if (r.error) { setForgotError(r.error); return; }
+                // dev builds get the code back in the response — auto-fill.
+                if (r.devCode) setForgotCode(r.devCode);
+                setForgotError('');
+                setView('forgot_verify');
+              } finally {
+                setForgotLoading(false);
+              }
+            }}>
+            {forgotLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Send code</Text>}
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── O18 AUTH-04: forgot password step 2 — enter code + new password ─────
+  if (view === 'forgot_verify') {
+    return (
+      <SafeAreaView style={[styles.container, { padding: 24 }]} edges={['top', 'bottom']}>
+        <TouchableOpacity onPress={() => handleViewChange('forgot_request')} style={{ marginTop: 16 }}>
+          <Text style={{ color: Colors.textSecondary }}>← Back</Text>
+        </TouchableOpacity>
+        <View style={{ marginTop: 24 }}>
+          <Text style={[styles.appName, { marginBottom: 8 }]}>Enter code</Text>
+          <Text style={[styles.tagline, { color: Colors.textSecondary, marginBottom: 24 }]}>
+            Check {forgotEmail}. Enter the 6-digit code and choose a new password.
+          </Text>
+          <TextInput
+            testID="input-forgot-code"
+            style={[formStyles.input, { letterSpacing: 8, textAlign: 'center', fontSize: 20 }]}
+            placeholder="000000"
+            placeholderTextColor={Colors.textMuted}
+            value={forgotCode}
+            onChangeText={(v) => { setForgotCode(v.replace(/[^0-9]/g, '').slice(0, 6)); if (forgotError) setForgotError(''); }}
+            keyboardType="number-pad"
+            maxLength={6}
+          />
+          <TextInput
+            testID="input-forgot-new-password"
+            style={[formStyles.input, { marginTop: 12 }]}
+            placeholder="New password (8+ characters)"
+            placeholderTextColor={Colors.textMuted}
+            value={forgotNewPassword}
+            onChangeText={(v) => { setForgotNewPassword(v); if (forgotError) setForgotError(''); }}
+            secureTextEntry
+          />
+          {forgotError ? <Text style={formStyles.errorText}>{forgotError}</Text> : null}
+          <TouchableOpacity
+            testID="btn-reset-password"
+            style={[styles.primaryBtn, { marginTop: 24 }]}
+            disabled={forgotLoading}
+            onPress={async () => {
+              if (forgotCode.length !== 6) { setForgotError('Enter the 6-digit code'); return; }
+              if (forgotNewPassword.length < 8) { setForgotError('Password must be 8+ characters'); return; }
+              setForgotLoading(true);
+              try {
+                const r = await passwordResetVerify(
+                  forgotEmail.trim().toLowerCase(),
+                  forgotCode,
+                  forgotNewPassword,
+                );
+                if (r.error) { setForgotError(r.error); return; }
+                if (r.user) setUser(r.user);
+                await hydrate();
+                setLoggedIn(true);
+              } finally {
+                setForgotLoading(false);
+              }
+            }}>
+            {forgotLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Reset password & sign in</Text>}
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // ── Login / Register ────────────────────────────────────────────────────
   const isRegister = view === 'register';
 
@@ -1094,6 +1379,24 @@ export function AuthScreen() {
             </View>
           )}
 
+          {/* O18 AUTH-04: Forgot password link — login view only. */}
+          {!isRegister && (
+            <TouchableOpacity
+              testID="link-forgot-password"
+              style={{ alignSelf: 'flex-end', marginTop: Spacing.xs, paddingVertical: 4, paddingHorizontal: 4 }}
+              onPress={() => {
+                setForgotEmail(email.trim().toLowerCase());
+                setForgotCode('');
+                setForgotNewPassword('');
+                setForgotError('');
+                setView('forgot_request');
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={{ color: Colors.primary, fontSize: FontSize.caption, fontWeight: '600' }}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
+
           {isRegister && (
             <>
               <Text style={formStyles.label}>Confirm Password</Text>
@@ -1105,6 +1408,23 @@ export function AuthScreen() {
                 onBlur={() => { if (confirm && confirm !== password) setConfirmError('Passwords do not match'); }}
                 isNew
               />
+              {/* O18 AUTH-06: date of birth required (COPPA + App Store). */}
+              <Text style={formStyles.label}>Date of birth</Text>
+              <TextInput
+                testID="input-dob"
+                style={[formStyles.input, dobError ? formStyles.inputError : null]}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={Colors.textMuted}
+                value={dob}
+                onChangeText={(v) => { setDob(v); if (dobError) setDobError(''); }}
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {dobError ? <Text style={formStyles.errorText}>{dobError}</Text> : (
+                <Text style={formStyles.hintText}>You must be 13+ to use Cairn.</Text>
+              )}
             </>
           )}
 
@@ -1278,6 +1598,17 @@ const formStyles = StyleSheet.create({
   apiError: { flex: 1, fontSize: FontSize.small, color: Colors.danger, fontWeight: '500' },
 
   label: { fontSize: FontSize.caption, fontWeight: '600', color: Colors.textSecondary, marginTop: Spacing.md, marginBottom: Spacing.xs },
+  // O18 AUTH-06: bare TextInput used by DOB field (no PasswordInput wrapper).
+  // Matches inputWrap + inputInner combined so visual is consistent with the
+  // rest of the form.
+  input: {
+    backgroundColor: Colors.surface, borderRadius: Radius.button,
+    borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    fontSize: FontSize.body, color: Colors.textPrimary,
+  },
+  errorText: { fontSize: FontSize.small, color: Colors.danger, fontWeight: '600', marginTop: 3, marginLeft: 2 },
+  hintText: { fontSize: FontSize.small, color: Colors.textMuted, marginTop: 3, marginLeft: 2 },
   inputWrap: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: Colors.surface, borderRadius: Radius.button,

@@ -37,7 +37,16 @@ interface UserProfile {
   // O18 HOME-05: registration timestamp from backend `toPublic`. Optional
   // because older builds and the offline JWT-fallback path (auth.js:287)
   // do not populate it.
-  createdAt?: string;
+  createdAt?: string | null;
+  // O18 AUTH-06: date of birth (YYYY-MM-DD or null for legacy pre-migration
+  // users). Absence prompts the DOB backfill modal on next login.
+  dateOfBirth?: string | null;
+  // O18 AUTH-01: soft-delete timestamp; when set backend returns hint=
+  // 'pending_deletion' on /login so the client can surface the restore modal.
+  deletedAt?: string | null;
+  // O18 AUTH-06: OAuth link providers (google, apple...) exposed by /me.
+  hasPassword?: boolean;
+  providers?: string[];
 }
 
 // Sprint 72 STORY-00549: 注销硬清标记 — 用户主动 logout 后写入,
