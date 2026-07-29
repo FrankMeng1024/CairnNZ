@@ -57,8 +57,18 @@ async function issueCode(email) {
 // Returns the latest valid row for (email, code) or null. "Valid" means
 // not-used, not-expired, and under the attempt cap. Increments attempts
 // on any lookup (even wrong code) so a brute-force attempt count is real.
+//
+// Sprint 6 round-6 review R6B2 fix: reject obviously-malformed codes
+// BEFORE incrementing attempts, so an unauthenticated attacker knowing
+// only the victim's email can't burn the attempt cap with empty strings.
+// A legitimate typo (5 digits, or with a space) still hits the counter,
+// but pathological inputs (empty, non-numeric, wrong length) short-out.
 async function consumeCode(email, code) {
   const normalizedEmail = email.toLowerCase();
+  // Cheap early-out — no DB touch on obviously bad input.
+  if (typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+    return { ok: false, reason: 'mismatch' };
+  }
   const [rows] = await pool.execute(
     `SELECT id, expires_at, used_at, attempts
      FROM password_reset_codes

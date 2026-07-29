@@ -135,30 +135,36 @@ async function sendAccountDeletionConfirmation(toEmail, name, restoreDeadline) {
   });
 }
 
-module.exports = {
-  sendVerificationCode,
-  sendPasswordResetCode,
-  sendAccountDeletionConfirmation,
-  sendDataExportReady,
-};
-
 // O18 batch 6.7 (AUTH-GDPR): notify user their data export is ready.
+// Sprint 6 round-6 review R6B4 fix: escape both the display name AND
+// the download URL. Anchor href needs the scheme validated (https only)
+// to prevent javascript: injection; body text needs HTML-entity escape
+// for &, <, >, ", '.
 async function sendDataExportReady(toEmail, name, downloadUrl) {
   if (!toEmail || !downloadUrl) return;
+  // Reject non-https URLs — the download endpoint is always https in
+  // production. This closes the javascript: / data: / vbscript:
+  // attribute-injection surface.
+  const urlStr = String(downloadUrl);
+  if (!/^https:\/\//i.test(urlStr)) {
+    console.error('[email] sendDataExportReady refusing non-https URL');
+    return;
+  }
   const displayName = name || 'there';
   const safeName = escapeHtml(displayName);
+  const safeUrl = escapeHtml(urlStr);
   const subject = 'Your Cairn data export is ready';
   const html = `
     <p>Hi ${safeName},</p>
     <p>Your Cairn data export is ready. Click the link below to download the JSON bundle:</p>
-    <p><a href="${downloadUrl}">${downloadUrl}</a></p>
+    <p><a href="${safeUrl}">${safeUrl}</a></p>
     <p>The link expires in 24 hours. It contains your hikes, cairns, memory points, routes, friends, and notifications — everything on your account.</p>
     <p>If you didn't request this, you can safely ignore this email.</p>
     <p>— Cairn</p>
   `;
   const text =
     `Hi ${displayName},\n\n` +
-    `Your Cairn data export is ready. Download the JSON bundle here:\n${downloadUrl}\n\n` +
+    `Your Cairn data export is ready. Download the JSON bundle here:\n${urlStr}\n\n` +
     `The link expires in 24 hours.\n\n` +
     `If you didn't request this, you can safely ignore this email.\n\n— Cairn`;
   await transporter.sendMail({
@@ -169,3 +175,15 @@ async function sendDataExportReady(toEmail, name, downloadUrl) {
     text,
   });
 }
+
+// Sprint 6 round-6 review R6B3 fix: exports moved AFTER all declarations.
+// Pre-fix, sendDataExportReady was appended after the export block. Works
+// today because `function` declarations hoist — but if refactored to
+// `const foo = async () => {}` (matches ES-module style elsewhere) the
+// export becomes undefined at require time with no runtime error.
+module.exports = {
+  sendVerificationCode,
+  sendPasswordResetCode,
+  sendAccountDeletionConfirmation,
+  sendDataExportReady,
+};
