@@ -145,12 +145,20 @@ const friendRequest = Joi.object({
   email: Joi.string().email().max(255).required(),
 });
 
+// Sprint 6 round-42 R42: schemas MUST match client field names + handler
+// destructure to avoid the R31 class of "schema/handler drift = every
+// request 400s" bug. Client (useFriendStore.acceptFriendRequestAPI,
+// rejectFriendRequestAPI) sends `{ requestId }` (camelCase). Handler
+// destructures `{ requestId }`. Schema was requiring `request_id`
+// (snake_case) — Joi with stripUnknown:false rejects unknown fields,
+// so every /accept and /reject was returning 400 Validation failed.
+// Fix: schema uses `requestId` to match both sides.
 const friendAccept = Joi.object({
-  request_id: Joi.number().integer().min(1).required(),
+  requestId: Joi.number().integer().min(1).required(),
 });
 
 const friendReject = Joi.object({
-  request_id: Joi.number().integer().min(1).required(),
+  requestId: Joi.number().integer().min(1).required(),
 });
 
 // ── Auth ───────────────────────────────────────────────────────────────
