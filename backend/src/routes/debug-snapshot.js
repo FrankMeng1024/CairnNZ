@@ -167,7 +167,13 @@ router.get('/:id', authenticate, async (req, res) => {
       row = r[0];
     }
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    // Sprint 6 R53: don't leak err.message to client — MySQL error
+    // messages can contain schema details (table/column names) or
+    // even data snippets on constraint violations. Log server-side,
+    // return generic. Same pattern as other 500 handlers in this
+    // codebase (see friends.js, markers.js, memory-subs).
+    console.error('[debug-snapshot/get]', err.message);
+    return res.status(500).json({ error: 'Server error' });
   }
   if (!row) return res.status(404).json({ error: 'not found' });
   res.setHeader('Content-Type', `image/${row.image_format || 'png'}`);
