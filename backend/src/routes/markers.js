@@ -469,9 +469,33 @@ router.post('/:id/vote', voteRateLimit, idempotency, async (req, res) => {
       await conn.rollback();
       return res.status(404).json({ error: 'Marker not found' });
     }
+    // Sprint 6 round-38 R38B1: reject votes on markers whose owner has
+    // soft-deleted their account. Pre-fix, the marker row survived the
+    // owner's soft-delete (owner has 7-day grace before hard-delete
+    // cascades), and votes kept accumulating on this orphan marker —
+    // helpful_count / report_count would then vanish when authSweep
+    // hard-deletes the owner. Now: check user existence + not-deleted
+    // as part of the tx (no FOR UPDATE on users, we just need a
+    // snapshot; hard-delete happens outside this request's window).
+    const [[owner]] = await conn.execute(
+      `SELECT 1 AS ok FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+      [marker.user_id],
+    );
+    if (!owner) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Marker not found' });
+    }
 
-    // Users cannot vote on their own markers
-    if (marker.user_id === userId) {
+    // Users cannot vote on their own markers.
+    // Sprint 6 round-38 R38B2: fix type-coercion bypass. marker.user_id
+    // comes from mysql2 as a Number (BIGINT UNSIGNED for small values);
+    // req.user.userId comes from JWT payload as a String (per
+    // User.toPublic `id: String(user.id)`). Strict `===` between number
+    // and string is always false → the own-marker guard silently
+    // failed, letting a user like their own marker to boost helpful_count.
+    // Interact-nonce and /community-state already coerce via String() —
+    // this endpoint didn't. Coerce both sides to String for consistency.
+    if (String(marker.user_id) === String(userId)) {
       await conn.rollback();
       return res.status(403).json({ error: 'Cannot vote on your own marker' });
     }
