@@ -73,7 +73,14 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
     if (users.length === 0) return res.status(404).json({ error: 'User not found' });
 
     const toUser = users[0];
-    if (toUser.id === fromUserId) return res.status(400).json({ error: 'Cannot add yourself' });
+    // Sprint 6 round-45 R45: fix type-coercion self-request bypass.
+    // toUser.id from mysql2 is Number (BIGINT UNSIGNED for small vals);
+    // fromUserId = req.user.userId is String (JWT payload per
+    // User.toPublic `id: String(user.id)`). Strict `===` between number
+    // and string is always false → self-request guard silently failed,
+    // letting a user friend-request themselves. Same class as R38B2
+    // (own-marker vote) and R45's block-self check below.
+    if (String(toUser.id) === String(fromUserId)) return res.status(400).json({ error: 'Cannot add yourself' });
 
     // Sprint 6 round-13 R13B3 fix: block check moved INSIDE the tx.
     // Pre-fix, isBlocked check ran outside — a concurrent /block from
@@ -483,7 +490,11 @@ router.post('/:id/block', async (req, res) => {
   try {
     const targetId = Number(req.params.id);
     if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid user id' });
-    if (targetId === req.user.userId) return res.status(400).json({ error: 'Cannot block yourself' });
+    // Sprint 6 round-45 R45: fix type-coercion self-block bypass.
+    // targetId is Number (from Number() cast); req.user.userId is String
+    // (JWT payload). Strict `===` between them is always false. Coerce
+    // both to String to enforce the "no self-block" guard.
+    if (String(targetId) === String(req.user.userId)) return res.status(400).json({ error: 'Cannot block yourself' });
     const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 200) : null;
 
     const conn = await pool.getConnection();
