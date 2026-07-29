@@ -392,7 +392,6 @@ Effective date: May 2026
 5. Your rights
 • Access: request a copy of your data at any time
 • Deletion: delete your account and all data via Settings → Account → Delete Account
-• Portability: export your track history as GPX at any time
 • Correction: update your profile information at any time
 
 6. Applicable law

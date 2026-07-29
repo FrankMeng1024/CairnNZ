@@ -1207,22 +1207,68 @@ export function MapHistoryScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                onPress={() => {
-                  setRenameText(selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike'));
-                  setRenameEditing(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Rename hike"
-                accessibilityHint="Double tap to edit the hike name"
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.sessionTitle} numberOfLines={1}>
-                    {selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike')}
-                  </Text>
-                  <Icon name="Pencil" size={14} color={Colors.textMuted} strokeWidth={2} />
-                </View>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <TouchableOpacity
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    setRenameText(selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike'));
+                    setRenameEditing(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Rename hike"
+                  accessibilityHint="Double tap to edit the hike name"
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.sessionTitle} numberOfLines={1}>
+                      {selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike')}
+                    </Text>
+                    <Icon name="Pencil" size={14} color={Colors.textMuted} strokeWidth={2} />
+                  </View>
+                </TouchableOpacity>
+                {/* O18 SHR-01: text-based share for a hike. Bundles the name +
+                    core stats + a cairnapp.nz link into the system share sheet.
+                    Image capture (react-native-view-shot) is installed and
+                    will be wired in a follow-up sprint after the EAS build
+                    picks up the native module. */}
+                <TouchableOpacity
+                  onPress={async () => {
+                    try {
+                      const { default: Sharing } = await import('expo-sharing');
+                      const isAvailable = await Sharing.isAvailableAsync();
+                      const dateStr = new Date(selectedSession.startedAt).toLocaleDateString();
+                      const kmOrMi = dist.imperial ? 'mi' : 'km';
+                      const distValue = dist.imperial
+                        ? (selectedSession.distanceM / 1609.344).toFixed(2)
+                        : (selectedSession.distanceM / 1000).toFixed(2);
+                      const durationH = Math.floor(selectedSession.durationS / 3600);
+                      const durationM = Math.floor((selectedSession.durationS % 3600) / 60);
+                      const durationStr = durationH > 0 ? `${durationH}h ${durationM}m` : `${durationM}m`;
+                      const activityLabel = selectedSession.activityMode === 'running' ? 'run' : 'hike';
+                      const message = `I went for a ${activityLabel} on ${dateStr}: ${distValue} ${kmOrMi} in ${durationStr}. Tracked with Cairn — cairnapp.nz`;
+                      if (isAvailable) {
+                        // expo-sharing is meant for files. For text-only share
+                        // fall back to Share.share (react-native built-in).
+                        // eslint-disable-next-line @typescript-eslint/no-require-imports
+                        const { Share } = require('react-native');
+                        await Share.share({ message, title: 'Cairn hike' });
+                      } else {
+                        // eslint-disable-next-line @typescript-eslint/no-require-imports
+                        const { Share } = require('react-native');
+                        await Share.share({ message, title: 'Cairn hike' });
+                      }
+                    } catch (e) {
+                      // eslint-disable-next-line no-console
+                      console.warn('[SHR-01] share failed:', e);
+                    }
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share this hike"
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ marginLeft: Spacing.sm }}
+                >
+                  <Icon name="Send" size={18} color={Colors.primary} strokeWidth={2} />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
           <View style={styles.singleSessionStats}>
