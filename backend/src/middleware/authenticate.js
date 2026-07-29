@@ -85,17 +85,27 @@ async function authenticate(req, res, next) {
       }
     }
   } catch (err) {
-    // Same fail-open policy as blacklist check: transient DB errors only.
+    // Sprint 6 round-55 R55: match the R6B7 fail-closed policy applied
+    // to the blacklist check above. Pre-fix, the token_version check
+    // failed OPEN on any non-transient error — an attacker with a
+    // pre-bump stale token could pair the request with a query storm
+    // elsewhere to force this catch block, then serve their revoked
+    // session through. Now: only transient DB codes fail-open; anything
+    // else logs + rejects.
     const CONN_CODES = new Set([
       'ECONNREFUSED', 'ETIMEDOUT', 'PROTOCOL_CONNECTION_LOST',
-      'ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET',
+      'ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'PROTOCOL_ENQUEUE_HANDSHAKE_TWICE',
     ]);
     const code = err && (err.code || err.errno);
-    if (!CONN_CODES.has(String(code))) {
+    if (CONN_CODES.has(String(code))) {
       // eslint-disable-next-line no-console
-      console.error('[authenticate] token_version check unexpected error:', err.message);
+      console.warn('[authenticate] token_version check failed with transient DB error, allowing:', code);
+    } else {
+      // eslint-disable-next-line no-console
+      console.error('[authenticate] token_version check unexpected error, failing closed:', err.message);
+      res.set('X-Cairn-Auth-Invalid', 'true');
+      return res.status(401).json({ message: 'Authentication service unavailable.', code: 'TOKEN_INVALID' });
     }
-    // Continue on transient — same UX policy as blacklist path.
   }
   req.user = decoded;
   next();
