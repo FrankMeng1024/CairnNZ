@@ -569,7 +569,17 @@ router.post('/password-reset/request', authLimiter, validateBody(schemas.auth.pa
       return res.json({ message: 'If an account exists for this email, a code has been sent.' });
     }
 
-    const code = await PasswordReset.issueCode(normalEmail);
+    // Sprint 6 review C3: issueCode may throw rate_limited — catch and
+    // return the same generic 200 body (privacy uniform).
+    let code;
+    try {
+      code = await PasswordReset.issueCode(normalEmail);
+    } catch (issueErr) {
+      if (issueErr && issueErr.rateLimited) {
+        return res.json({ message: 'If an account exists for this email, a code has been sent.' });
+      }
+      throw issueErr;
+    }
     sendPasswordResetCode(normalEmail, code).catch(err =>
       console.error('[email] password reset send failed:', err.message)
     );

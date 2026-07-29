@@ -27,10 +27,26 @@ function generateCode() {
 
 async function issueCode(email) {
   const normalizedEmail = email.toLowerCase();
+  // Sprint 6 review C3 fix: aggregate rate limit across issued codes.
+  // Pre-fix, an attacker could call /request repeatedly, each new row
+  // resetting the 5-attempt cap on the latest code — effectively
+  // unlimited guessing. Now: cap to 3 codes issued per email per 15min
+  // window. Fits legit "typo → retry" while blocking automation.
+  const [recent] = await pool.execute(
+    `SELECT COUNT(*) AS n FROM password_reset_codes
+     WHERE email = ? AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)`,
+    [normalizedEmail],
+  );
+  if ((recent[0]?.n ?? 0) >= 3) {
+    // Do NOT throw — caller returns the same "200 If an account exists…"
+    // message regardless (privacy). Return null so caller skips the
+    // email send but the response body stays uniform.
+    const err = new Error('rate_limited');
+    err.rateLimited = true;
+    throw err;
+  }
   const code = generateCode();
   const expiresAt = new Date(Date.now() + CODE_TTL_MS);
-  // Insert a new row rather than upsert so the audit trail exists —
-  // security incidents often want to see how many resets were requested.
   await pool.execute(
     'INSERT INTO password_reset_codes (email, code, expires_at) VALUES (?, ?, ?)',
     [normalizedEmail, code, expiresAt]
