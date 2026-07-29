@@ -123,8 +123,16 @@ function RecentRow({ onPress }: { onPress: (id: string) => void }) {
   // v413 UX fix (Bug A): filter out zombie sessions (name=undefined + distance=0 + duration=0).
   // 这些是 offline pending 从未 drain 成功的残余 (case-6 test data 之类).
   // 显示"Hike 00:00 · Nh ago"对用户是无信息噪音, 应该隐藏直到真数据.
+  //
+  // Sprint 6 round-20 R20B2: also filter out pending/syncing sessions.
+  // The Recent pill navigates to Activity Detail on tap; a pending
+  // session has no remoteId, so the detail screen would call
+  // fetchSessionDetail(undefined) and show "Route data unavailable".
+  // User-visible bug: tapping a hike they know they just finished to
+  // land on a broken screen. Only surface fully synced hikes here.
   const validSessions = sessions.filter((s) =>
     (s.distanceM > 0 || s.durationS > 0) && s.startedAt
+      && s.syncState !== 'pending' && s.syncState !== 'syncing'
   );
   if (validSessions.length === 0) return null;
   const last = validSessions.reduce((best, s) => s.startedAt > best.startedAt ? s : best);

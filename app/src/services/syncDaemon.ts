@@ -47,8 +47,26 @@ export async function drainPending(): Promise<void> {
         const pendingSet = new Set(list.map(h => h.localId));
         for (const sess of sessions) {
           if (sess.syncState === 'pending' && !pendingSet.has(sess.id)) {
-            if (typeof useSessionStore.getState().markSynced === 'function') {
-              useSessionStore.getState().markSynced(sess.id, sess.remoteId || 0);
+            // Sprint 6 round-20 R20B5: only mark synced if we have a REAL
+            // remoteId. Pre-fix, `sess.remoteId || 0` silently converted
+            // pending-without-remoteId cards to synced-with-remoteId=0.
+            // The UI then treated them as tappable synced cards, but
+            // fetchSessionDetail(0) would 404 → user sees "Route data
+            // unavailable" and the local trackPoints are the only truth
+            // (silent data-loss risk if trackPoints storage also lost).
+            // Truthy remoteId → orphan sweep is safe (real server row).
+            // Falsy remoteId → keep as pending; the pendingSyncStore
+            // fs entry may have been lost, but the correct recovery is
+            // to re-enqueue rather than silently succeed.
+            if (sess.remoteId && typeof useSessionStore.getState().markSynced === 'function') {
+              useSessionStore.getState().markSynced(sess.id, sess.remoteId);
+            } else {
+              // Missing remoteId + missing fs entry = orphan. Leave in
+              // pending state so the banner + long-press-discard
+              // affordance remain visible to the user.
+              crashLogger.breadcrumb(
+                `v412:orphan_pending_no_remoteid localId=${String(sess.id).slice(0, 8)}`,
+              );
             }
           }
         }

@@ -93,7 +93,22 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       // was defenseless. Now: if an entry with the same id exists,
       // update in-place with the fresh copy (which may carry a newly
       // assigned remoteId or updated syncState).
-      const existingIdx = s.sessions.findIndex((x) => x.id === session.id);
+      //
+      // Sprint 6 round-20 R20B7: also dedupe by remoteId. Race scenario:
+      // (a) local pending session with UUID id and remoteId assigned
+      //     from POST /sessions/start
+      // (b) remote hydrate GET /api/sessions returns the same row with
+      //     id = String(remoteId) (numeric)
+      // First dedupe by id misses; second dedupe by remoteId catches it
+      // and merges in-place. Prevents ghost duplicate card that would
+      // appear after a race between drainPending completion and remote
+      // list refresh.
+      let existingIdx = s.sessions.findIndex((x) => x.id === session.id);
+      if (existingIdx < 0 && session.remoteId) {
+        existingIdx = s.sessions.findIndex(
+          (x) => x.remoteId && x.remoteId === session.remoteId,
+        );
+      }
       let next;
       if (existingIdx >= 0) {
         next = s.sessions.slice();
@@ -253,6 +268,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           const sessions: TrackingSession[] = summaries.map((s) => ({
             ...s,
             trackPoints: [],
+            // Sprint 6 round-20 R20B6: hydrate MUST preserve syncState so
+            // pending cards stay as non-tappable placeholders. If storage
+            // was written by an older build without the field (or by a
+            // hydrate path that stripped it), infer from remoteId: a
+            // stored remoteId means the card was previously synced; no
+            // remoteId means the upload never finished and the card
+            // must present as pending. Fall through to explicit value if
+            // present (don't override recorded state).
+            syncState: s.syncState
+              || (s.remoteId ? 'synced' as const : 'pending' as const),
           }));
           // Re-check currentUserId in case a newer hydrate raced ahead —
           // only apply if we're still the current user.
