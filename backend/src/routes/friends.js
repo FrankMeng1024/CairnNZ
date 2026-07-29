@@ -130,23 +130,44 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
     const { requestId } = req.body;
     if (!requestId) return res.status(400).json({ error: 'requestId required' });
 
-    // Verify request belongs to this user
-    const [requests] = await pool.execute(
-      'SELECT * FROM friend_requests WHERE id = ? AND to_user_id = ? AND status = "pending"',
-      [requestId, req.user.userId]
-    );
-    if (requests.length === 0) return res.status(404).json({ error: 'Request not found' });
+    // Sprint 6 review B2 fix: wrap accept flow in a transaction so a
+    // failed second INSERT doesn't leave a half-friendship. Also
+    // re-check the request status inside the tx (concurrent double-tap
+    // could race between SELECT and INSERT).
+    const conn = await pool.getConnection();
+    let request;
+    try {
+      await conn.beginTransaction();
+      // Lock the request row so a concurrent accept can't succeed too.
+      const [requests] = await conn.execute(
+        'SELECT * FROM friend_requests WHERE id = ? AND to_user_id = ? AND status = "pending" FOR UPDATE',
+        [requestId, req.user.userId],
+      );
+      if (requests.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ error: 'Request not found' });
+      }
+      request = requests[0];
 
-    const request = requests[0];
-
-    // Create friendship (bidirectional)
-    await pool.execute(
-      'INSERT INTO friends (user_id, friend_id, created_at) VALUES (?, ?, NOW()), (?, ?, NOW())',
-      [req.user.userId, request.from_user_id, request.from_user_id, req.user.userId]
-    );
-
-    // Update request status
-    await pool.execute('UPDATE friend_requests SET status = "accepted" WHERE id = ?', [requestId]);
+      // Bidirectional insert with ON DUPLICATE KEY UPDATE so a re-accept
+      // (or a legacy half-friendship) heals instead of erroring.
+      await conn.execute(
+        `INSERT INTO friends (user_id, friend_id, created_at)
+         VALUES (?, ?, NOW()), (?, ?, NOW())
+         ON DUPLICATE KEY UPDATE created_at = created_at`,
+        [req.user.userId, request.from_user_id, request.from_user_id, req.user.userId],
+      );
+      await conn.execute(
+        'UPDATE friend_requests SET status = "accepted" WHERE id = ?',
+        [requestId],
+      );
+      await conn.commit();
+    } catch (txErr) {
+      try { await conn.rollback(); } catch (_) {}
+      throw txErr;
+    } finally {
+      conn.release();
+    }
 
     // O18 batch 6.5: notify the original requester that their request
     // was accepted. Fire-and-forget — do not block the response.
@@ -206,7 +227,14 @@ router.get('/', async (req, res) => {
 });
 
 // ── Remove friend ───────────────────────────────────────────────────────────
+// Sprint 6 review B2 fix: guard against Express matching this route when
+// the path is actually /requests/:id. Numeric validation short-circuits
+// the delete-friend handler if the id is not an integer (e.g. "requests"
+// would land here if outbound-cancel routes below weren't reordered).
 router.delete('/:id', async (req, res) => {
+  if (!Number.isInteger(Number(req.params.id))) {
+    return res.status(400).json({ error: 'Invalid friend id' });
+  }
   try {
     const friendId = req.params.id;
     await pool.execute(

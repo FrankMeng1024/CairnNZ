@@ -306,12 +306,13 @@ export function SettingsScreen() {
       const res = await fetch(`${API_BASE_URL}/api/auth/password`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        // O13 bug 1 root cause: backend Joi schema (auth.passwordChange in
-        // backend/src/middleware/schemas.js) expects snake_case field names
-        // `old_password` + `new_password`. Pre-fix, client sent camelCase
-        // `currentPassword` + `newPassword` — every request failed Joi
-        // validation with 400 "validation failed". Now we send snake_case.
-        body: JSON.stringify({ old_password: currentPw, new_password: newPw }),
+        // O18 batch 6.3 fix (2026-07-29): schema realigned to camelCase to
+        // match the route handler (auth.js:446 reads currentPassword /
+        // newPassword). Sprint 6 subagent review B1 caught this — the
+        // O13 fix here had drifted after the schema was refactored during
+        // Batch 6.3, resulting in 100% failure on password change. Both
+        // client + schema now agree on camelCase.
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
         signal: controller.signal,
       });
       const data = await res.json().catch(() => null);

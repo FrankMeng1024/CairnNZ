@@ -63,6 +63,11 @@ async function request(userId) {
 // Cron / worker loop — build every queued row. In prod this runs every
 // few minutes; users may need to wait a bit before their download link
 // is live. On error we mark the row failed and record the message.
+//
+// Sprint 6 review C2 fix: two callers (POST /export inline setImmediate +
+// cron every 2 min) could race and build the same row twice, wasting DB
+// + writing the file twice. The status-transition UPDATE now includes
+// `AND status='queued'` and skips the row if a peer already claimed it.
 async function buildPending({ batchSize = 5 } = {}) {
   await ensureDir();
   const safeBatch = Math.max(1, Math.min(Number(batchSize) || 5, 20));
@@ -71,14 +76,27 @@ async function buildPending({ batchSize = 5 } = {}) {
      WHERE status = 'queued' ORDER BY id ASC LIMIT ${safeBatch}`,
     [],
   );
-  let built = 0, failed = 0;
+  let built = 0, failed = 0, skipped = 0;
   for (const row of rows) {
     try {
-      await pool.execute(`UPDATE data_exports SET status='building' WHERE id=?`, [row.id]);
+      // Atomic claim: only proceed if we're the first to flip queued→building.
+      const [claim] = await pool.execute(
+        `UPDATE data_exports SET status='building' WHERE id=? AND status='queued'`,
+        [row.id],
+      );
+      if (claim.affectedRows === 0) {
+        // Peer already claimed — skip silently.
+        skipped += 1;
+        continue;
+      }
       const bundle = await buildBundle(row.user_id);
       const filePath = path.join(EXPORT_DIR, `${row.download_token}.json`);
       const json = JSON.stringify(bundle);
-      await fsp.writeFile(filePath, json, 'utf8');
+      // Atomic write via temp file + rename so a crash mid-write doesn't
+      // leave a truncated bundle.
+      const tmpPath = filePath + '.tmp';
+      await fsp.writeFile(tmpPath, json, 'utf8');
+      await fsp.rename(tmpPath, filePath);
       const size = Buffer.byteLength(json, 'utf8');
       await pool.execute(
         `UPDATE data_exports SET status='ready', file_path=?, size_bytes=?, built_at=CURRENT_TIMESTAMP WHERE id=?`,
@@ -93,7 +111,7 @@ async function buildPending({ batchSize = 5 } = {}) {
       failed += 1;
     }
   }
-  return { attempted: rows.length, built, failed };
+  return { attempted: rows.length, built, failed, skipped };
 }
 
 async function buildBundle(userId) {

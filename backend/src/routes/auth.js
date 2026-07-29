@@ -145,16 +145,22 @@ router.post('/verify', authLimiter, validateBody(schemas.auth.verify), async (re
       return res.status(400).json({ error: 'This code has expired. Please register again.', hint: 'expired' });
     }
 
-    // Too many attempts
-    if (pending.attempts >= 5) {
-      await User.deletePending(normalEmail);
-      return res.status(400).json({ error: 'Too many incorrect attempts. Please register again.', hint: 'locked' });
-    }
+    // Sprint 6 review B1 fix: compare the code BEFORE the too-many-attempts
+    // gate so a legit user who typed a wrong digit on attempt 4 can still
+    // successfully verify on attempt 5. Pre-fix, the `>= 5` guard fired
+    // BEFORE the compare, wiping the pending row and locking out even the
+    // correct code.
+    const codeMatches = String(pending.code) === String(code).trim();
 
-    // Wrong code
-    if (String(pending.code) !== String(code).trim()) {
+    // Wrong code path (increment + check attempts)
+    if (!codeMatches) {
       await User.incrementPendingAttempts(normalEmail);
-      const remaining = 4 - pending.attempts;
+      const nextAttempts = (pending.attempts || 0) + 1;
+      if (nextAttempts >= 5) {
+        await User.deletePending(normalEmail);
+        return res.status(400).json({ error: 'Too many incorrect attempts. Please register again.', hint: 'locked' });
+      }
+      const remaining = 5 - nextAttempts;
       return res.status(400).json({ error: `Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.` });
     }
 

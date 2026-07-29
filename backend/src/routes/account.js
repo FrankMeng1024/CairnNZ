@@ -11,12 +11,22 @@
  * TTL + one-row-per-user invariant.
  */
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const router = express.Router();
 const authenticate = require('../middleware/authenticate');
 const DataExport = require('../models/DataExport');
 const { sendDataExportReady } = require('../services/emailService');
+
+// Sprint 6 review C1 fix: rate-limit the unauthenticated download route
+// to blunt token-brute and timing side-channel attacks. 30 req / min / IP
+// is comfortably above legitimate re-tries (email link tap → download).
+const downloadLimiter = rateLimit({
+  windowMs: 60 * 1000, max: 30,
+  standardHeaders: true, legacyHeaders: false,
+  message: 'Too many download attempts. Please wait a minute.',
+});
 
 // Authed routes
 router.post('/export', authenticate, async (req, res) => {
@@ -75,17 +85,19 @@ router.get('/exports', authenticate, async (req, res) => {
   }
 });
 
-// Download — unauthenticated, gated by the 64-hex token + expiry.
-router.get('/export/:token', async (req, res) => {
+// Download — unauthenticated, gated by the 64-hex token + expiry + rate limit.
+// Sprint 6 review C1: collapse all failure modes to a single 404 body to
+// remove the timing side channel between "not found" / "expired" / "file
+// missing" / "wrong status".
+router.get('/export/:token', downloadLimiter, async (req, res) => {
   try {
     const row = await DataExport.findByToken(req.params.token);
-    if (!row) return res.status(404).send('Export not found.');
-    if (row.status !== 'ready') return res.status(409).send(`Export status: ${row.status}.`);
+    if (!row || row.status !== 'ready') return res.status(404).send('Not found or expired.');
     if (row.expires_at && new Date(row.expires_at) < new Date()) {
-      return res.status(410).send('This download link has expired.');
+      return res.status(404).send('Not found or expired.');
     }
     if (!row.file_path || !fs.existsSync(row.file_path)) {
-      return res.status(410).send('Export file no longer available.');
+      return res.status(404).send('Not found or expired.');
     }
     await DataExport.markSent(row.id).catch(() => { /* silent */ });
     res.setHeader('Content-Type', 'application/json');
