@@ -501,13 +501,29 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   },
 
   loadFromBackend: async () => {
+    // Sprint 6 review NB1 fix (2026-07-30): capture the userId at call
+    // time so a stale response arriving AFTER a rapid A→B user switch
+    // cannot write A's server markers under B's MMKV key. Pre-fix, this
+    // was the exact leak the C3 mutex was supposed to close, but the
+    // mutex only serialised hydrate() — loadFromBackend was fire-and-
+    // forget and outlived the mutex window.
+    const capturedUserId = get().userId;
     try {
       const res = await authenticatedFetch('/api/markers');
       if (!res.ok) return;
       const rows = await res.json();
       const serverMarkers: Marker[] = rows.map(fromBackend);
 
+      // If the user changed while the fetch was in flight, drop the
+      // response on the floor. The new user's hydrate will fetch its
+      // own markers.
+      if (get().userId !== capturedUserId) return;
+
       set((s) => {
+        // Second guard inside the setState (belt + suspenders — Zustand
+        // is synchronous but we want to be sure the check is atomic
+        // with the write).
+        if (s.userId !== capturedUserId) return { markers: s.markers };
         // Merge: server markers replace any with same id, keep local-only
         const localOnly = s.markers.filter((m) => !m.synced);
         const merged = [

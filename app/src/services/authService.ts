@@ -268,23 +268,41 @@ export async function deleteAccount(): Promise<{
 // allows it — the row exists, jti not blacklisted).
 // Sprint 6 review M10: backend now returns a fresh JWT on successful
 // restore so we save it in place of the old (about-to-be-revoked) token.
+// Sprint 6 review NB2: distinguish network failure from SecureStore
+// failure so the UI can present the right recovery path. Pre-fix, a
+// SecureStore write failure AFTER the backend committed the restore
+// would silently drop the new token, locking the user out.
 export async function restoreAccount(): Promise<AuthResult> {
   const token = await getToken();
   if (!token) return { error: 'not_signed_in' };
+  let res: Response;
+  let data: any;
   try {
-    const res = await fetch(`${API_BASE_URL}/api/auth/account/restore`, {
+    res = await fetch(`${API_BASE_URL}/api/auth/account/restore`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
-    const data = await res.json();
-    if (!res.ok) return { error: data?.error || 'Restore failed.' };
-    if (data.token) {
-      await saveToken(data.token);
-    }
-    return { user: data.user, token: data.token };
+    data = await res.json();
   } catch {
     return { error: 'Unable to connect. Please try again.' };
   }
+  if (!res.ok) return { error: data?.error || 'Restore failed.' };
+  // Backend already committed the restore + revoked the old jti. Getting
+  // the new token into SecureStore is now the critical step — if it
+  // fails, surface a specific error so AuthScreen can retry the save
+  // (with user gesture / new keychain unlock) rather than dropping the
+  // user to a broken state.
+  if (data.token) {
+    try {
+      await saveToken(data.token);
+    } catch (saveErr: any) {
+      return {
+        error: 'Restore succeeded on server but we couldn\'t save the new session. Please sign in with email + password to continue.',
+        hint: 'save_token_failed',
+      };
+    }
+  }
+  return { user: data.user, token: data.token };
 }
 
 // O18 batch 6.7 (AUTH-GDPR): request a full data export.
