@@ -72,3 +72,26 @@ DO NOT discard the commits.
 - 下次 commit 前重推,commit 会 accumulate
 2026-07-08T15:05:10+08:00: v412 OTA git push origin master 失败, GitHub 443 timeout. Commit c3bf10c 已本地存, 待网络恢复重试。
 2026-07-08T19:01:35+08:00: v414 (dbbe9d6) git push failed - GitHub 443 unreachable. Commit local, waiting network to retry.
+
+## 2026-07-30 — Sprint 6 review batch push blocked (9 commits pending)
+
+After Sprint 6 8h sleep run, github.com:443 timeout returned for the
+review-fixes batch. Commits ARE all local + backend already deployed
+to aliyun via docker cp.
+
+Local commits ahead of origin/master (in order):
+- 0a93df0 Sprint 6 review C3: useMarkerStore.hydrate mutex
+- 628d12c Sprint 6 review C4: push preferences moved to per-user table
+- 25e821f Sprint 6 review C7: Apple Sign In nonce validation
+- 1761464 Sprint 6 review batch 2: fix C5 C8 C9 M8 M9
+- f75fcba Sprint 6 review batch 3: fix M1 M9 (friends privacy hardening)
+- 39aa859 Sprint 6 review C3: password reset aggregate rate limit
+- 38f7ee4 Sprint 6 review M2: export history exposes error_msg
+- 7e5953e Sprint 6 review M10: restore issues fresh JWT + revokes old jti
+- cc5fa58 Sprint 6 review M12: fail fast on missing global.fetch
+- 042f2ac Sprint 6 review M7: PaywallSheet handles success-without-entitlement
+
+All aliyun deployments succeeded (health checks passing after each).
+
+Retry push at next network availability. Commits are the guarantee.
+
