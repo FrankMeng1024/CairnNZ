@@ -149,11 +149,31 @@ router.patch('/:id', authenticate, validateBody(schemas.session.update), idempot
   // device loads, fresh installs, and brush-edit baselines all see the
   // same clean geometry. The raw audit track stays in route_points_raw
   // forever as a backup. Accept null to clear / fall back to raw.
+  //
+  // Sprint 6 round-19 R19: per-point sanity check. Pre-fix, this legacy
+  // path only checked Array.isArray — a malicious client could POST
+  // [{lat:NaN, lng:Infinity}, ...] and it landed in the JSON column,
+  // later shown to viewers and used by map render. The /save path
+  // (still active) validates per-point; PATCH is deprecated but still
+  // mounted, so we bring the guarantees to parity.
+  function isValidPoint(p) {
+    return p && typeof p === 'object'
+      && typeof p.lat === 'number' && isFinite(p.lat) && p.lat >= -90 && p.lat <= 90
+      && typeof p.lng === 'number' && isFinite(p.lng) && p.lng >= -180 && p.lng <= 180;
+  }
   if (route_points !== undefined) {
     if (route_points !== null && !Array.isArray(route_points)) {
       return res.status(400).json({ error: 'route_points must be an array or null.' });
     }
+    if (Array.isArray(route_points) && route_points.length > 0 && !route_points.every(isValidPoint)) {
+      return res.status(400).json({ error: 'route_points contains invalid coordinates (NaN, Infinity, or out of range).' });
+    }
     fields.routePoints = route_points;
+  }
+  if (route_points_raw !== undefined && Array.isArray(route_points_raw) && route_points_raw.length > 0) {
+    if (!route_points_raw.every(isValidPoint)) {
+      return res.status(400).json({ error: 'route_points_raw contains invalid coordinates.' });
+    }
   }
   try {
     // Reject finalization if the session has no drawable path.

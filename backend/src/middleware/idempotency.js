@@ -53,6 +53,18 @@ async function idempotency(req, res, next) {
     return next();
   }
 
+  // Sprint 6 round-19 R19 known race: two concurrent requests with the
+  // same (op_id, user_id) both miss the SELECT below (row not yet
+  // inserted), both proceed into the handler, both write via
+  // INSERT IGNORE. Only one row wins the cache, but both handlers
+  // already executed side effects. In practice the second execution is
+  // a no-op at the DB layer because the underlying business tables
+  // enforce UNIQUE constraints (memory_points uk_user_cid, sessions
+  // finalized_at FOR UPDATE, marker_votes UNIQUE user_id+marker_id) —
+  // the second handler simply returns zero-count success instead of
+  // replaying the first handler's cached response. Fix would require
+  // upfront reservation (INSERT placeholder → SELECT FOR UPDATE loop),
+  // deferred pending real-world evidence of retry-storm impact.
   // Look up cached response.
   try {
     const [rows] = await pool.query(

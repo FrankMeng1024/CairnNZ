@@ -15,10 +15,21 @@
  *
  * All three endpoints share:
  *   - viewer must be authenticated
+ *
+ * /markers and /routes additionally:
  *   - LEFT JOIN hidden_items: any (mark|route, item_id) the viewer has hidden
- *     is filtered out (per v4 §5: "Hide from me" is a personal blacklist that
- *     also removes the item even if it would otherwise be visible through a
- *     friend's fog UNION).
+ *     is filtered out (per v4 §5: "Hide from me" is a personal blacklist).
+ *
+ * /fog does NOT use hidden_items — hidden_items only supports item_type of
+ * 'mark' or 'route' (see migration 021). Fog is friend-scoped GPS history;
+ * to stop seeing a friend's fog, unsubscribe them via
+ * DELETE /api/memory-subscriptions/:friendId. Fog respects that
+ * unsubscribe via getSubscribedFriendIds() at query time.
+ *
+ * Sprint 6 round-19 R19: prior docstring incorrectly claimed /fog also
+ * used hidden_items — a contract-vs-code mismatch. Product intent is
+ * "unsubscribe = don't see fog", not "hide individual fog points",
+ * matching what the code actually does.
  *
  * GET /api/circle/markers  — UNION of mutual-friends' (Friend + Public) markers
  * GET /api/circle/routes   — UNION of mutual-friends' (Friend + Public) routes
