@@ -31,7 +31,14 @@ async function fetchAppleKeys(force = false) {
   if (typeof fetch !== 'function') {
     throw new Error('[appleAuth] global.fetch unavailable — Node 18+ required');
   }
-  const res = await fetch(APPLE_KEYS_URL);
+  // Sprint 6 R48: bound Apple JWKS fetch with 8s timeout. Pre-fix, a
+  // hung / slow Apple endpoint would block every concurrent /apple
+  // sign-in request indefinitely (no cache = every login re-fetches;
+  // an attacker with 60 forged `kid` values per rate-limit window
+  // could force 60 outbound calls per user). AbortSignal.timeout is
+  // native in Node 18+. If Apple is slow, sign-in fails fast with a
+  // 401 (upstream verify catch) instead of hanging Node handlers.
+  const res = await fetch(APPLE_KEYS_URL, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`Apple JWKS fetch failed: HTTP ${res.status}`);
   const jwks = await res.json();
   const map = new Map();
