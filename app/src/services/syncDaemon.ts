@@ -67,9 +67,21 @@ async function uploadOne(hike: PendingHike): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { useSessionStore } = require('../store/useSessionStore');
     const currentUserId = String(useSessionStore.getState().currentUserId ?? '');
-    if (currentUserId && hike.userId && String(hike.userId) !== currentUserId && hike.userId !== 'unknown') {
+    // Sprint 6 round-9 review R9B5: reject 'unknown' userId outright.
+    // Pre-fix, the escape clause `hike.userId !== 'unknown'` let SAF-01
+    // fallback rows upload under whoever was signed in next — cross-user
+    // leak. Now: no matching userId AND no valid userId → skip. Rows
+    // stay on disk waiting for a matching sign-in.
+    const hikeUser = hike.userId ? String(hike.userId) : '';
+    if (!hikeUser || hikeUser === 'unknown') {
       crashLogger.breadcrumb(
-        `v412:sync_skip_cross_user localId=${hike.localId.slice(0, 8)} hikeUser=${hike.userId} currentUser=${currentUserId}`,
+        `v412:sync_skip_unknown_user localId=${hike.localId.slice(0, 8)}`,
+      );
+      return;
+    }
+    if (currentUserId && hikeUser !== currentUserId) {
+      crashLogger.breadcrumb(
+        `v412:sync_skip_cross_user localId=${hike.localId.slice(0, 8)} hikeUser=${hikeUser} currentUser=${currentUserId}`,
       );
       return;
     }

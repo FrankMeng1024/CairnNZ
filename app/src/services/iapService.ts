@@ -33,6 +33,10 @@ const ENTITLEMENT_ID = 'memory_pro';
 
 let purchasesModule: any = null;
 let initialized = false;
+// Sprint 6 round-9 review R9B6: track the currently-configured user so
+// a user-switch on the same device correctly re-identifies with RevenueCat
+// instead of leaving the SDK bound to the previous user.
+let currentAppUserID: string | null = null;
 
 async function tryLoadModule() {
   if (purchasesModule) return purchasesModule;
@@ -51,12 +55,28 @@ async function tryLoadModule() {
 }
 
 export async function initializePurchases(userId: string): Promise<boolean> {
-  if (initialized) return true;
   if (Platform.OS === 'web') return false;
   const Purchases = await tryLoadModule();
   if (!Purchases) {
     crashLogger.breadcrumb('iap:sdk_unavailable — feature-gating in fallback mode');
     return false;
+  }
+  // Sprint 6 round-9 review R9B6 fix: if already initialized for a
+  // DIFFERENT user, call Purchases.logIn(newUser) to re-identify. Pre-
+  // fix, the early return `if (initialized) return true` left the SDK
+  // bound to the first user forever; all subsequent B-user purchases
+  // attributed to A's RC account, and Restore surfaced A's subs to B.
+  if (initialized) {
+    if (currentAppUserID === userId) return true;
+    try {
+      await Purchases.logIn(userId);
+      currentAppUserID = userId;
+      crashLogger.breadcrumb(`iap:user_switched from=${currentAppUserID} to=${userId}`);
+      return true;
+    } catch (err: any) {
+      crashLogger.breadcrumb(`iap:login_failed ${String(err?.message || err).slice(0, 80)}`);
+      return false;
+    }
   }
   const apiKey = Platform.OS === 'ios'
     ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY
@@ -68,11 +88,26 @@ export async function initializePurchases(userId: string): Promise<boolean> {
   try {
     Purchases.configure({ apiKey, appUserID: userId });
     initialized = true;
+    currentAppUserID = userId;
     crashLogger.breadcrumb(`iap:initialized user_id=${userId}`);
     return true;
   } catch (err: any) {
     crashLogger.breadcrumb(`iap:init_failed ${String(err?.message || err).slice(0, 80)}`);
     return false;
+  }
+}
+
+// Sprint 6 round-9 review R9B6: called from useAppStore.logout() so the
+// SDK stops attributing purchases to the just-signed-out user.
+export async function resetPurchases(): Promise<void> {
+  const Purchases = await tryLoadModule();
+  if (!Purchases || !initialized) return;
+  try {
+    await Purchases.logOut();
+    currentAppUserID = null;
+    crashLogger.breadcrumb('iap:logged_out');
+  } catch (err: any) {
+    crashLogger.breadcrumb(`iap:logout_failed ${String(err?.message || err).slice(0, 80)}`);
   }
 }
 

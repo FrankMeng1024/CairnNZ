@@ -512,10 +512,21 @@ export function HikingScreen() {
               }
               const { drainPending } = require('../services/syncDaemon');
               await drainPending();
-              // Only clear the SAF-01 marker on success — failed drain
-              // keeps saveLostSessionId set so the user gets another
-              // Alert on next mount / foreground.
-              clearLastStopReason();
+              // Sprint 6 round-9 review R9B4 fix: drainPending catches
+              // per-hike errors internally (markAttempt) so a "successful"
+              // drain doesn't prove OUR hike uploaded. Explicitly check
+              // whether our localId is still in the pending queue before
+              // clearing the SAF-01 marker. If it's still there, keep the
+              // marker set so the user gets another chance.
+              const { listPending } = require('../services/pendingSyncStore');
+              const stillPending = (await listPending()).some(
+                (h: any) => h.localId === payload?.localId,
+              );
+              if (!stillPending) {
+                clearLastStopReason();
+              }
+              // else: leave saveLostSessionId set — Alert re-fires on
+              // next AppState=active or mount.
             } catch (e) {
               // eslint-disable-next-line no-console
               console.warn('[SAF-01] retry failed:', e);
@@ -529,38 +540,72 @@ export function HikingScreen() {
     );
   }, [saveLostSessionId]);
 
-  // Sprint 6 round-8 review R8B5 fix: also re-fire the SAF-01 Alert
-  // when the app foregrounds while saveLostSessionId is still set.
-  // iOS dismisses `Alert.alert` on background even with cancelable=false,
-  // so a user who backgrounded mid-Alert would return to no visible
-  // path to Retry/Discard except restarting the app.
+  // Sprint 6 round-8 review R8B5 fix + round-9 R9B3 fix: re-fire the
+  // SAF-01 Alert when the app foregrounds while saveLostSessionId is
+  // still set. iOS dismisses `Alert.alert` on background even with
+  // cancelable=false. Round-9 fix: (1) use the SAME async Retry handler
+  // as the primary useEffect (not a stub that treated Retry === Discard),
+  // and (2) guard against stacking Alerts by tracking `alertVisible` in
+  // a ref.
+  const saf01AlertShownRef = useRef(false);
   useEffect(() => {
-    if (!saveLostSessionId) return;
+    if (!saveLostSessionId) { saf01AlertShownRef.current = false; return; }
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { AppState } = require('react-native');
     const sub = AppState.addEventListener('change', (state: string) => {
       if (state !== 'active') return;
       if (!useTrackingStore.getState().saveLostSessionId) return;
-      // Just bump a ref → not strictly needed, the marker is still set
-      // so any consumer wanting to re-render can subscribe. For now,
-      // simply re-fire an Alert since the primary useEffect already
-      // gated on value-change, not remount.
-      // We do this by nulling and re-setting via a microtask, but
-      // that would risk racing with in-progress operations. Instead:
-      // add a `showSafHint` local state that re-fires the Alert.
-      // Simpler: call the same Alert inline here.
+      if (saf01AlertShownRef.current) return;
+      saf01AlertShownRef.current = true;
       Alert.alert(
         "We couldn't save this hike",
-        "Your device may be low on storage. Tap Retry to try again, or Discard to remove it.",
+        "Your device may be low on storage. Your hike is still recorded in the app. Tap Retry to try saving again, or Discard to remove it.",
         [
-          { text: 'Discard', style: 'destructive', onPress: () => clearLastStopReason() },
-          { text: 'Retry', onPress: () => clearLastStopReason() },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => {
+              saf01AlertShownRef.current = false;
+              clearLastStopReason();
+              try { discardCurrentSession(); } catch { /* best-effort */ }
+            },
+          },
+          {
+            text: 'Retry',
+            onPress: async () => {
+              const payload = useTrackingStore.getState().saveLostPayload;
+              try {
+                if (payload) {
+                  const { savePending } = require('../services/pendingSyncStore');
+                  await savePending({
+                    ...payload,
+                    userId: payload.userId,
+                    createdAt: Date.now(),
+                    lastAttemptAt: null,
+                    attemptCount: 0,
+                  });
+                }
+                const { drainPending } = require('../services/syncDaemon');
+                await drainPending();
+                const { listPending } = require('../services/pendingSyncStore');
+                const stillPending = (await listPending()).some(
+                  (h: any) => h.localId === payload?.localId,
+                );
+                if (!stillPending) clearLastStopReason();
+              } catch (err) {
+                // eslint-disable-next-line no-console
+                console.warn('[SAF-01 AppState retry] failed:', err);
+              } finally {
+                saf01AlertShownRef.current = false;
+              }
+            },
+          },
         ],
         { cancelable: false },
       );
     });
     return () => { try { sub.remove(); } catch { /* silent */ } };
-  }, [saveLostSessionId]);
+  }, [saveLostSessionId, discardCurrentSession, clearLastStopReason]);
 
   // Pre-fetch a one-shot GPS fix on enter so the route picker can show
   // accurate distance-from-start labels and apply the "too far" filter

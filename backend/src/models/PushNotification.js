@@ -292,14 +292,26 @@ async function sendPending({ batchSize = 100 } = {}) {
         dropped += 1;
         continue;
       }
-      const res = await fetch(EXPO_PUSH_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.EXPO_PUSH_ACCESS_TOKEN}`,
-        },
-        body: JSON.stringify(messages),
-      });
+      // Sprint 6 round-9 review R9B2 fix: bound the Expo push fetch to
+      // 30s. Pre-fix, a stalled DNS/TCP/TLS would let the request outlive
+      // the 5-min R8B3 recovery, causing a DOUBLE SEND when recovery
+      // re-queued and a second drain claimed the row.
+      const abortCtrl = new AbortController();
+      const abortTimer = setTimeout(() => abortCtrl.abort(), 30_000);
+      let res;
+      try {
+        res = await fetch(EXPO_PUSH_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.EXPO_PUSH_ACCESS_TOKEN}`,
+          },
+          body: JSON.stringify(messages),
+          signal: abortCtrl.signal,
+        });
+      } finally {
+        clearTimeout(abortTimer);
+      }
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
         await pool.execute(

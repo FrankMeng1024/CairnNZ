@@ -117,6 +117,13 @@ export const useAppStore = create<AppState>((set) => ({
       const { unregisterCurrent } = require('../services/pushService');
       unregisterCurrent().catch(() => { /* silent */ });
     } catch { /* pushService import failed — silent */ }
+    // Sprint 6 round-9 review R9B6: log out of RevenueCat so post-logout
+    // purchases don't attribute to the just-signed-out user's RC account.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { resetPurchases } = require('../services/iapService');
+      resetPurchases().catch(() => { /* silent */ });
+    } catch { /* iapService import failed — silent */ }
     set({ isLoggedIn: false, user: null });
     crashLogger.breadcrumb('logout:state_cleared');
     useSessionStore.getState().clearSessions();
