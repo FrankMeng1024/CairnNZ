@@ -175,8 +175,12 @@ router.post('/sessions', uploadLimiter, requireApiKey, async (req, res) => {
       bytes: rawSizeBytes,
     });
   } catch (err) {
+    // Sprint 6 R54: don't return err.code to client. MySQL error codes
+    // like ER_DUP_ENTRY / ER_NO_SUCH_TABLE reveal schema state. Same
+    // rationale as R53 debug-snapshot fix. Server-side log retains
+    // both code + message for ops diagnostics.
     console.error('[telemetry] insert error:', err.code, err.message);
-    return res.status(500).json({ error: 'Database insert failed.', code: err.code });
+    return res.status(500).json({ error: 'Database insert failed.' });
   }
 });
 

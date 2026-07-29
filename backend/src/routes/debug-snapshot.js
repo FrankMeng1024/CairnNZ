@@ -122,8 +122,10 @@ router.post('/', uploadLimiter, rawBody, async (req, res) => {
     );
     res.json({ id, bytes: buf.length, ok: true });
   } catch (err) {
+    // Sprint 6 R54: don't leak err.message. Same rationale as R53 —
+    // MySQL error messages reveal schema.
     console.error('[debug-snapshot] insert failed:', err.message);
-    res.status(500).json({ error: 'insert failed', message: err.message });
+    res.status(500).json({ error: 'insert failed' });
   }
 });
 
@@ -141,7 +143,9 @@ router.get('/latest', authenticate, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'no snapshots yet' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: 'query failed', message: err.message });
+    // Sprint 6 R54: don't leak err.message. Log server-side, return generic.
+    console.error('[debug-snapshot/latest] query failed:', err.message);
+    res.status(500).json({ error: 'query failed' });
   }
 });
 
