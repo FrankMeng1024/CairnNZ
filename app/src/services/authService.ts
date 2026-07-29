@@ -266,6 +266,8 @@ export async function deleteAccount(): Promise<{
 // O18 AUTH-01: restore a soft-deleted account. Token in header is the one
 // just issued by /login post-delete (still valid because auth middleware
 // allows it — the row exists, jti not blacklisted).
+// Sprint 6 review M10: backend now returns a fresh JWT on successful
+// restore so we save it in place of the old (about-to-be-revoked) token.
 export async function restoreAccount(): Promise<AuthResult> {
   const token = await getToken();
   if (!token) return { error: 'not_signed_in' };
@@ -276,7 +278,10 @@ export async function restoreAccount(): Promise<AuthResult> {
     });
     const data = await res.json();
     if (!res.ok) return { error: data?.error || 'Restore failed.' };
-    return { user: data.user };
+    if (data.token) {
+      await saveToken(data.token);
+    }
+    return { user: data.user, token: data.token };
   } catch {
     return { error: 'Unable to connect. Please try again.' };
   }

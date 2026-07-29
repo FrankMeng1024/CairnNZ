@@ -708,7 +708,20 @@ router.post('/account/restore', authenticate, async (req, res) => {
       return res.json({ user: User.toPublic(user), message: 'Account is active.' });
     }
     const user = await User.findById(req.user.userId);
-    return res.json({ user: User.toPublic(user), message: 'Account restored.' });
+    // Sprint 6 review M10: issue a fresh JWT (new jti) on restore so any
+    // other sessions using the pre-delete jti (e.g. an idle old device)
+    // don't leak back in. Same "restore = fresh sign-in" contract as
+    // /login and /google.
+    const publicUser = User.toPublic(user);
+    const token = signToken({ userId: publicUser.id, email: publicUser.email });
+    // Revoke the caller's current jti so the OLD token stops working.
+    if (req.user.jti) {
+      const expUnixMs = req.user.exp ? req.user.exp * 1000 : Date.now() + 30 * 24 * 60 * 60 * 1000;
+      await TokenBlacklist.revoke(req.user.jti, req.user.userId, new Date(expUnixMs)).catch(err =>
+        console.error('[restore] revoke old jti failed:', err.message)
+      );
+    }
+    return res.json({ user: publicUser, token, message: 'Account restored.' });
   } catch (err) {
     console.error('[account restore]', err);
     return res.status(500).json({ error: 'Server error. Please try again.' });
