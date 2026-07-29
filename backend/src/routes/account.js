@@ -73,8 +73,11 @@ router.post('/export', authenticate, async (req, res) => {
 router.get('/exports', authenticate, async (req, res) => {
   try {
     const pool = require('../config/db');
+    // Sprint 6 review M2: expose error_msg on the history endpoint so
+    // users have visibility into WHY an export failed (previously they
+    // saw status='failed' with no diagnostic and retried into infinity).
     const [rows] = await pool.execute(
-      `SELECT id, status, size_bytes, requested_at, built_at, expires_at, sent_at
+      `SELECT id, status, size_bytes, requested_at, built_at, expires_at, sent_at, error_msg
        FROM data_exports WHERE user_id = ? ORDER BY id DESC LIMIT 20`,
       [req.user.userId],
     );
