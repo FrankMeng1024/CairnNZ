@@ -33,6 +33,17 @@ router.post('/', limiter, express.json({ limit: '2mb' }), async (req, res) => {
               : [];
   if (batch.length === 0) return res.json({ received: 0 });
 
+  // Sprint 6 round-31 R31B2: cap batch length so a single request can't
+  // dump thousands of events. Pre-fix, 6000 req/5min/IP × 2MB body =
+  // 12GB/5min disk-fill vector per IP even after body-size cap. Legitimate
+  // client (appLog.ts) batches ~50-100 events per flush. 500 leaves 5x
+  // headroom over normal; anything larger is either misconfigured client
+  // or malicious. Extra events past 500 silently truncated with a
+  // received_capped signal in the response so ops can spot the pattern.
+  const CAP = 500;
+  const originalLen = batch.length;
+  const cappedBatch = batch.length > CAP ? batch.slice(0, CAP) : batch;
+
   // Optional JWT
   let userId = null;
   const authz = req.headers.authorization;
@@ -47,7 +58,7 @@ router.post('/', limiter, express.json({ limit: '2mb' }), async (req, res) => {
   try {
     const values = [];
     const params = [];
-    for (const item of batch) {
+    for (const item of cappedBatch) {
       const tag = String(item.tag || '').slice(0, 96);
       const session_id = String(item.session_id || 'unknown').slice(0, 64);
       const ts = Number(item.ts || Date.now());
@@ -60,7 +71,9 @@ router.post('/', limiter, express.json({ limit: '2mb' }), async (req, res) => {
       `INSERT INTO debug_events_v2 (user_id, session_instance_id, phase, step, seq, timestamp_unix_ms, outcome, diagnostic) VALUES ${values.join(',')}`,
       params
     );
-    res.json({ received: batch.length });
+    const resp = { received: cappedBatch.length };
+    if (originalLen > CAP) resp.truncated_from = originalLen;
+    res.json(resp);
   } catch (err) {
     console.error('[edit-diag]', err.message);
     res.status(500).json({ error: 'insert failed' });
