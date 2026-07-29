@@ -457,7 +457,16 @@ router.get('/me', authenticate, async (req, res) => {
 //   2. useTrackingStore periodic refresh during active hiking (every 30 min)
 // Any 401 here means the token is truly invalid — frontend treats this as
 // a hard signout signal (see apiService.ts iron rule).
-router.post('/refresh', authenticate, async (req, res) => {
+// Sprint 6 review C5: rate-limit refresh so a stolen token cannot be
+// looped to keep issuing new jtis indefinitely. 30/hour/IP is well
+// above legit periodic-refresh usage (client refreshes every 30 min
+// during active hiking = 2/hour).
+const refreshLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 30,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Too many refresh attempts. Please sign in again.' },
+});
+router.post('/refresh', refreshLimiter, authenticate, async (req, res) => {
   try {
     const newToken = signToken({ userId: req.user.userId, email: req.user.email });
     return res.json({ token: newToken });
@@ -506,6 +515,23 @@ router.patch('/password', authenticate, validateBody(schemas.auth.passwordChange
 // simply refresh the row via ON DUPLICATE KEY.
 router.post('/logout', authenticate, async (req, res) => {
   try {
+    // Sprint 6 review C9 fix: also delete THIS user's push tokens so a
+    // cold-boot logout (where the client no longer has the token cached
+    // in memory) still stops pushes reaching the previous account. If
+    // the client passes an explicit push_token in the body we prefer
+    // that (deletes only the current device); otherwise fall back to
+    // unregistering ALL tokens for this user (safer default).
+    try {
+      const PushNotification = require('../models/PushNotification');
+      if (req.body?.push_token && typeof req.body.push_token === 'string') {
+        await PushNotification.unregisterToken(req.body.push_token);
+      } else {
+        await PushNotification.unregisterAllForUser(req.user.userId);
+      }
+    } catch (pushErr) {
+      console.error('[logout] push unregister failed:', pushErr.message);
+    }
+
     if (!req.user.jti) {
       // Legacy token without jti — can't revoke. Return 200 so frontend
       // still clears local state.
@@ -632,6 +658,15 @@ router.delete('/account', authenticate, async (req, res) => {
       await TokenBlacklist.revoke(req.user.jti, req.user.userId, new Date(expUnixMs)).catch(err =>
         console.error('[logout during delete] revoke failed:', err.message)
       );
+    }
+    // Sprint 6 review M9 fix: also unregister all push tokens for the
+    // soft-deleted user. Their choice to delete should stop notifications
+    // immediately, not wait for the 7-day cron sweep.
+    try {
+      const PushNotification = require('../models/PushNotification');
+      await PushNotification.unregisterAllForUser(req.user.userId);
+    } catch (pushErr) {
+      console.error('[account delete] push unregister failed:', pushErr.message);
     }
     res.set('X-Cairn-Auth-Invalid', 'true');
     return res.json({

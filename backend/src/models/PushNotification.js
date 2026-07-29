@@ -132,7 +132,14 @@ const KIND_TO_PREF = {
 
 async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = null, title, body }) {
   if (!recipientUserId || !kind || !title) return null;
-  const dedupeKey = `${kind}:${relatedId ?? 'null'}`;
+  // Sprint 6 review C8 fix: for kinds with a null relatedId (e.g.
+  // announcements), the base dedupe key `${kind}:null` would collide
+  // across all messages, making the 2nd announcement to a user a no-op.
+  // Add a per-hour bucket suffix so announcements dedupe within an hour
+  // but new announcements later still land.
+  const dedupeKey = relatedId != null
+    ? `${kind}:${relatedId}`
+    : `${kind}:null:${Math.floor(Date.now() / (60 * 60 * 1000))}`;
   // Check user's preferences before queueing (server-side gate).
   // Sprint 6 review C4: read from user_push_prefs (source of truth). Row
   // may not exist — default is all-on, so absence = allow.

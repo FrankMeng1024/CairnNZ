@@ -477,7 +477,18 @@ export function AuthScreen() {
   const googleRequest: any = null;
   const googleResponse: any = null;
   const promptGoogleAsync = async () => {
-    Alert.alert('Google Sign In', 'Coming in next app update. Please use email sign-in.');
+    // Sprint 6 review M8: Google backend endpoint /api/auth/google works,
+    // but the client-side OAuth flow requires EXPO_PUBLIC_GOOGLE_CLIENT_ID
+    // + iOS client ID configured in Google Cloud Console. Until the user
+    // completes that Pre-Build gate setup (see sprint-6-pre-build-gate.md
+    // section 4), we honestly say "not configured yet" rather than
+    // pretending the button will do something. Backend contract is ready
+    // to accept id_token via loginWithGoogle whenever the client can
+    // produce one.
+    Alert.alert(
+      'Google Sign In',
+      'Google Sign In needs a build configured with your Google OAuth client. Use email sign-in in the meantime.',
+    );
     return { type: 'dismiss' as const };
   };
   void googleRequest;
