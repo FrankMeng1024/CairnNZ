@@ -17,6 +17,8 @@
  */
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { validateBody } = require('../middleware/validate');
@@ -24,6 +26,21 @@ const schemas = require('../middleware/schemas');
 
 // All routes require auth
 router.use(authenticate);
+
+// Sprint 6 round-36 R36B3: rate-limit POST /friends/request to blunt
+// friend-spam + email enumeration. Pre-fix, a single authenticated user
+// could POST /request against 10k different emails/hour, using the 404
+// vs 200 response as an email-existence oracle across the entire
+// userbase. Combined with rejection-loop replay (R36B2), a determined
+// harasser could DoS a victim's push tokens. Cap: 30/hour/user — a
+// legitimate user might friend 5-10 people in a day; 30/hour has 3-6x
+// headroom. Key per-user (authenticate runs first).
+const friendRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 30,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => req.user?.userId ? `frireq:${req.user.userId}` : ipKeyGenerator(req, res),
+  message: { error: 'Too many friend requests. Please wait an hour.' },
+});
 
 // O18 FRI-block: helper — returns true if either direction is blocked.
 // Called from /request to prevent messaging blocked users.
@@ -39,7 +56,7 @@ async function isBlocked(userA, userB) {
 }
 
 // ── Send friend request ─────────────────────────────────────────────────────
-router.post('/request', validateBody(schemas.friend.request), async (req, res) => {
+router.post('/request', friendRequestLimiter, validateBody(schemas.friend.request), async (req, res) => {
   try {
     const { email } = req.body;
     const fromUserId = req.user.userId;
@@ -101,12 +118,33 @@ router.post('/request', validateBody(schemas.friend.request), async (req, res) =
       }
       // Lock this user's outgoing-to-this-target row range. Using an
       // explicit user_id lock prevents the check+insert race.
+      //
+      // Sprint 6 round-36 R36B1+B2:
+      //   B1 — also check REVERSE direction. Pre-fix, if target had a
+      //        pending request TO me, I could still POST /request → two
+      //        pending rows exist (A→B and B→A), producing asymmetric
+      //        audit trails and double push notifications on accept.
+      //   B2 — reject-cooldown. Pre-fix, once target rejected me, I
+      //        could immediately re-request (row flips pending → rejected
+      //        but the guard only stopped on pending). Infinite harassment
+      //        loop. Now: reject a fresh request if a rejected row exists
+      //        in either direction within the last 30 days.
       const [pending] = await conn.execute(
-        'SELECT id FROM friend_requests WHERE from_user_id = ? AND to_user_id = ? AND status = "pending" FOR UPDATE',
-        [fromUserId, toUser.id]
+        `SELECT id, status FROM friend_requests
+           WHERE ((from_user_id = ? AND to_user_id = ?)
+               OR (from_user_id = ? AND to_user_id = ?))
+             AND (status = 'pending'
+                  OR (status = 'rejected'
+                      AND resolved_at IS NOT NULL
+                      AND resolved_at > DATE_SUB(NOW(), INTERVAL 30 DAY)))
+           FOR UPDATE`,
+        [fromUserId, toUser.id, toUser.id, fromUserId]
       );
       if (pending.length > 0) {
         await conn.rollback();
+        // Uniform 400 message so the client can't distinguish "pending"
+        // from "recently rejected" (rejected leaks a signal about the
+        // target's intent — better UX + privacy to collapse both).
         return res.status(400).json({ error: 'Request already sent' });
       }
       [reqResult] = await conn.execute(
