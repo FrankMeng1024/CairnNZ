@@ -575,15 +575,20 @@ router.post('/password-reset/request', authLimiter, validateBody(schemas.auth.pa
   const { email } = req.body;
   const normalEmail = email.toLowerCase().trim();
 
+  // Sprint 6 round-13 R13B5 fix: pad the response to a fixed budget so
+  // an attacker can't tell a real-account POST (SELECT users + INSERT
+  // reset_code + kick email = ~15-30ms) from a non-existent-account
+  // POST (SELECT users only = ~2ms). We race the real work against a
+  // 250ms floor. All branches wait the same total time before responding.
+  const responsePad = new Promise(resolve => setTimeout(resolve, 250));
+
   try {
     const user = await User.findByEmail(normalEmail);
     // Always return 200 — do not leak account existence.
-    if (!user) {
-      return res.json({ message: 'If an account exists for this email, a code has been sent.' });
-    }
-    // OAuth-only users have no password to reset — but still return 200 to
-    // avoid enumeration. Just don't issue a code.
-    if (!user.password_hash) {
+    if (!user || !user.password_hash) {
+      // OAuth-only or non-existent: no code issued, but wait for the
+      // pad so timing matches the real branch.
+      await responsePad;
       return res.json({ message: 'If an account exists for this email, a code has been sent.' });
     }
 
@@ -594,6 +599,7 @@ router.post('/password-reset/request', authLimiter, validateBody(schemas.auth.pa
       code = await PasswordReset.issueCode(normalEmail);
     } catch (issueErr) {
       if (issueErr && issueErr.rateLimited) {
+        await responsePad;
         return res.json({ message: 'If an account exists for this email, a code has been sent.' });
       }
       throw issueErr;
@@ -603,6 +609,7 @@ router.post('/password-reset/request', authLimiter, validateBody(schemas.auth.pa
     );
 
     const devPayload = process.env.NODE_ENV !== 'production' ? { dev_code: code } : {};
+    await responsePad;
     return res.json({ message: 'If an account exists for this email, a code has been sent.', ...devPayload });
   } catch (err) {
     console.error('[password-reset/request]', err);
@@ -624,12 +631,18 @@ router.post('/password-reset/verify', authLimiter, validateBody(schemas.auth.pas
   try {
     const result = await PasswordReset.consumeCode(normalEmail, code);
     if (!result.ok) {
+      // Sprint 6 round-13 R13B5 fix: collapse `not_found` and `mismatch`
+      // into one identical response so an attacker POSTing random codes
+      // can't enumerate emails via the error string. Retain distinct
+      // strings only for terminal states (used / expired / too_many)
+      // where the response is state-agnostic (once the user has burned
+      // a code, telling them why is fine).
       const errorMap = {
-        not_found:          'No reset code found. Please request a new one.',
+        not_found:          'Incorrect or expired code. Please try again.',
         used:               'This code has already been used.',
         expired:            'This code has expired. Please request a new one.',
         too_many_attempts:  'Too many incorrect attempts. Please request a new code.',
-        mismatch:           'Incorrect code. Please try again.',
+        mismatch:           'Incorrect or expired code. Please try again.',
       };
       return res.status(400).json({ error: errorMap[result.reason] || 'Invalid code.', hint: result.reason });
     }

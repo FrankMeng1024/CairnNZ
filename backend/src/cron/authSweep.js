@@ -34,6 +34,7 @@
 const User = require('../models/User');
 const TokenBlacklist = require('../models/TokenBlacklist');
 const PasswordReset = require('../models/PasswordReset');
+const pool = require('../config/db');
 
 // Hard cap so a runaway sweep can't hard-delete 100k users in one run.
 // Anything beyond this defers to the next day's run.
@@ -87,15 +88,31 @@ async function run({ verbose = false, graceDays = 7 } = {}) {
     console.error('[authSweep] reset code purge failed:', err.message);
   }
 
+  // Sprint 6 round-13 R13B2 fix: purge old resolved friend_requests.
+  // Pre-fix, rejected/accepted rows accumulated forever — the table
+  // grew unbounded because no cron cleaned them. 90-day window keeps
+  // recent history usable for support triage but caps storage.
+  let friendReqsPurged = 0;
+  try {
+    const [result] = await pool.execute(
+      `DELETE FROM friend_requests
+       WHERE status IN ('rejected','accepted')
+         AND created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)`,
+    );
+    friendReqsPurged = result.affectedRows || 0;
+  } catch (err) {
+    console.error('[authSweep] friend_requests purge failed:', err.message);
+  }
+
   const finishedAt = new Date();
   const durationMs = finishedAt - startedAt;
   if (verbose) {
     console.log(
       `[cron/authSweep] startedAt=${startedAt.toISOString()} durationMs=${durationMs} ` +
-      `hardDeleted=${hardDeleted} blacklistPurged=${blacklistPurged} resetCodesPurged=${resetCodesPurged}`
+      `hardDeleted=${hardDeleted} blacklistPurged=${blacklistPurged} resetCodesPurged=${resetCodesPurged} friendReqsPurged=${friendReqsPurged}`
     );
   }
-  return { hardDeleted, blacklistPurged, resetCodesPurged, durationMs, startedAt, finishedAt };
+  return { hardDeleted, blacklistPurged, resetCodesPurged, friendReqsPurged, durationMs, startedAt, finishedAt };
 }
 
 module.exports = { run };

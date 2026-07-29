@@ -130,8 +130,14 @@ async function buildBundle(userId) {
   );
   bundle.sessions = sessions;
 
+  // Sprint 6 round-13 R13B1 fix: whitelist marker columns. Pre-fix,
+  // SELECT * pulled in report_count, helpful_count, status, hidden_at
+  // (moderator-only fields) and any voice_memo internal reference —
+  // fields the user never intended to be part of their own data export.
   const [markers] = await pool.execute(
-    'SELECT * FROM markers WHERE user_id = ? ORDER BY id DESC',
+    `SELECT id, type, text, lat, lng, alt, permission, approximate,
+            voice_memo_url, voice_memo_duration_ms, created_at, updated_at
+     FROM markers WHERE user_id = ? ORDER BY id DESC`,
     [userId],
   );
   bundle.markers = markers;
@@ -148,8 +154,11 @@ async function buildBundle(userId) {
   );
   bundle.routes = routes;
 
+  // Sprint 6 round-13 R13B1 fix: drop friends' emails. A friend never
+  // consented to have their email leave the system inside another
+  // user's downloadable bundle. Keep user_id + display name only.
   const [friends] = await pool.execute(
-    `SELECT f.friend_id AS user_id, u.name, u.email, f.created_at
+    `SELECT f.friend_id AS user_id, u.name, f.created_at
      FROM friends f JOIN users u ON u.id = f.friend_id
      WHERE f.user_id = ?`,
     [userId],

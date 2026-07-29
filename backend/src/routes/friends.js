@@ -58,15 +58,15 @@ router.post('/request', validateBody(schemas.friend.request), async (req, res) =
     const toUser = users[0];
     if (toUser.id === fromUserId) return res.status(400).json({ error: 'Cannot add yourself' });
 
-    // O18 FRI-block: either direction blocked → return same "not found"
-    // error we return for a bad email. This is intentional — surfacing
-    // "you are blocked" or "you blocked this person" would leak state
-    // to the blocker's side and violate the block contract.
-    if (await isBlocked(fromUserId, toUser.id)) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    // Sprint 6 round-13 R13B3 fix: block check moved INSIDE the tx.
+    // Pre-fix, isBlocked check ran outside — a concurrent /block from
+    // the target could commit AFTER the check but BEFORE our INSERT,
+    // leaving a pending request between blocked users. Now checked
+    // under the same connection with the friend_requests FOR UPDATE
+    // lock; block insert on the target user must wait for the tx.
 
-    // Check if already friends
+    // Check if already friends (outside tx OK — friendship is set once
+    // and doesn't race with /request).
     const [existing] = await pool.execute(
       'SELECT id FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)',
       [fromUserId, toUser.id, toUser.id, fromUserId]
@@ -75,18 +75,25 @@ router.post('/request', validateBody(schemas.friend.request), async (req, res) =
 
     // Sprint 6 round-7 review R7B4 fix: check + insert in a serialised
     // transaction to prevent TOCTOU on rapid double-tap or two-tab
-    // sends. Pre-fix, two requests within ms could both see 0 pending
-    // rows and both INSERT — recipient got 2 identical rows in inbox +
-    // 2 duplicate pushes. FOR UPDATE on user_id column would block
-    // (no matching row), so we lock the FROM user row instead. Simpler
-    // safe pattern: rely on the DB's INSERT+dupe-check race being
-    // narrow, catch the ER_DUP_ENTRY if we added a unique key. Since
-    // there's no unique key yet, use SELECT ... FOR UPDATE inside a
-    // transaction to serialise.
+    // sends. Round-13 R13B3: also block-check inside tx.
     const conn = await pool.getConnection();
     let reqResult;
     try {
       await conn.beginTransaction();
+      // Block check inside the tx — read after locking so a concurrent
+      // /block that commits mid-flight is either visible here or waits
+      // for our tx to complete.
+      const [blocks] = await conn.execute(
+        `SELECT 1 FROM blocked_users
+         WHERE (blocker_id = ? AND blocked_id = ?)
+            OR (blocker_id = ? AND blocked_id = ?)
+         LIMIT 1`,
+        [fromUserId, toUser.id, toUser.id, fromUserId],
+      );
+      if (blocks.length > 0) {
+        await conn.rollback();
+        return res.status(404).json({ error: 'User not found' });
+      }
       // Lock this user's outgoing-to-this-target row range. Using an
       // explicit user_id lock prevents the check+insert race.
       const [pending] = await conn.execute(
