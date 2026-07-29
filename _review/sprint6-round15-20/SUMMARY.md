@@ -1,4 +1,4 @@
-# Sprint 6 Rounds 15-20 Hardening — 2026-07-29 Overnight
+# Sprint 6 Rounds 15-21 Hardening — 2026-07-29 Overnight
 
 Sleep-run session covering rounds 15-20 of adversarial review on Sprint 6
 auth/push/friend/marker/GDPR-export/memory/session surface areas, plus
@@ -65,6 +65,9 @@ test cycle before OTA per memory `feedback_ota_real_device_test_required.md`.
 | R20B5 | Blocker/data | services/syncDaemon.ts | orphan-sweep only marks synced when remoteId truthy |
 | R20B2 | Critical | screens/HomeScreen.tsx | recent-pill filters out pending sessions |
 | R20B7 | Critical | store/useSessionStore.ts | addSession dedupes by remoteId too |
+| R21B2 | Critical | store/useTrackingStore.ts | hydrateSaf01 gates on currentUserId (cross-user leak) |
+| R21B1 | Critical | store/useAppStore.ts | logout clears SAF-01 state + disk blob |
+| R21B3 | Medium | screens/HikingScreen.tsx | AppState listener resets ref on background transition |
 
 Real-device test cycle needed:
 1. Offline hike → force airplane mode → save
