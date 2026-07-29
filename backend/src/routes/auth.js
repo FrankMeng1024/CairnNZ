@@ -541,7 +541,8 @@ router.post('/logout', authenticate, async (req, res) => {
     try {
       const PushNotification = require('../models/PushNotification');
       if (req.body?.push_token && typeof req.body.push_token === 'string') {
-        await PushNotification.unregisterToken(req.body.push_token);
+        // Sprint 6 round-12 R12B1: pass user_id so we don't cross-user delete.
+        await PushNotification.unregisterToken(req.body.push_token, req.user.userId);
       } else {
         await PushNotification.unregisterAllForUser(req.user.userId);
       }

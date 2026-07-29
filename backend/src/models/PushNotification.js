@@ -51,9 +51,23 @@ async function registerToken(userId, token, platform) {
   );
 }
 
-async function unregisterToken(token) {
+// Sprint 6 round-12 review R12B1 fix: scope by (user_id, token) since
+// the UNIQUE key is composite. Pre-fix, `DELETE WHERE token = ?` on a
+// shared-device / restore-from-backup scenario where user B has the
+// same Expo token registered would silently nuke B's row too. When
+// userId is not known (legacy call sites), fall back to token-only to
+// preserve backward compat, but log a warning.
+async function unregisterToken(token, userId) {
   if (!token) return;
-  await pool.execute('DELETE FROM device_tokens WHERE token = ?', [token]);
+  if (userId != null) {
+    await pool.execute(
+      'DELETE FROM device_tokens WHERE user_id = ? AND token = ?',
+      [userId, token],
+    );
+  } else {
+    console.warn('[push] unregisterToken called without userId — falling back to token-only DELETE (potential cross-user impact)');
+    await pool.execute('DELETE FROM device_tokens WHERE token = ?', [token]);
+  }
 }
 
 async function unregisterAllForUser(userId) {
@@ -81,15 +95,15 @@ async function updatePreferences(userId, prefs) {
      ON DUPLICATE KEY UPDATE ${updates}`,
     values,
   );
-  // Also mirror to device_tokens rows for backward compat during rollout
-  // — the enqueue gate below still reads BOTH sources so a legacy path
-  // continues to work. Drop this mirror once we're sure no reads go to
-  // device_tokens.pref_*.
-  const clauses = Object.keys(setFields).map(k => `${k} = ?`).join(', ');
-  await pool.execute(
-    `UPDATE device_tokens SET ${clauses} WHERE user_id = ?`,
-    [...Object.values(setFields), userId],
-  );
+  // Sprint 6 round-12 R12B10 fix: dropped the device_tokens mirror-write.
+  // It was intended as backward-compat during rollout, but no read path
+  // now falls through to device_tokens.pref_* except the legacy fallback
+  // in getPreferences (kept for users whose user_push_prefs row doesn't
+  // exist yet — those users never had prefs stored, so the fallback
+  // returns default all-on, which is correct semantics). Dropping the
+  // mirror also fixes the race where PATCH /preferences before POST
+  // /register wrote to a zero-row device_tokens (silent no-op) leaving
+  // stale defaults visible until registration.
 }
 
 async function getPreferences(userId) {

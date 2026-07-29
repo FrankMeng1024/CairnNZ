@@ -563,7 +563,12 @@ export function HikingScreen() {
   // and (2) guard against stacking Alerts by tracking `alertVisible` in
   // a ref. R11B3: ref hoisted above primary useEffect so both share.
   useEffect(() => {
-    if (!saveLostSessionId) { saf01AlertShownRef.current = false; return; }
+    // Sprint 6 round-12 R12B5: don't reset saf01AlertShownRef here.
+    // The ref must be driven by button handlers (Discard/Retry finally)
+    // only, so a state transition where saveLostSessionId nulls doesn't
+    // decouple ref state from an Alert that may still be on-screen (iOS
+    // Alert.alert doesn't auto-dismiss on state change).
+    if (!saveLostSessionId) return;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { AppState } = require('react-native');
     const sub = AppState.addEventListener('change', (state: string) => {

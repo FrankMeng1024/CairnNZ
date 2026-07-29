@@ -41,7 +41,10 @@ router.post('/unregister', async (req, res) => {
   const { token } = req.body || {};
   if (!token) return res.status(400).json({ error: 'token required' });
   try {
-    await PushNotification.unregisterToken(token);
+    // Sprint 6 round-12 R12B1: pass user_id so we don't cross-user delete
+    // when the same Expo token exists for multiple accounts (shared device
+    // / restore-from-backup).
+    await PushNotification.unregisterToken(token, req.user.userId);
     return res.json({ message: 'Token removed.' });
   } catch (err) {
     console.error('[push/unregister]', err);

@@ -148,21 +148,50 @@ async function start() {
     // Start anyway so health check can report the issue
   }
 
-  // Sprint 6 round-4 review R4B4: verify Sprint 6 schema is present.
-  // If deleted_at column is missing (rolling deploy: new code, old DB),
-  // every friends/request + friends/profile call throws "Unknown column"
-  // → generic 500 to the user. Log a loud warning so ops sees it in the
-  // startup output; don't refuse to boot (health check on other routes
-  // still needs to work).
+  // Sprint 6 round-4 R4B4 + round-12 R12B3: verify ALL Sprint 6 schema
+  // is present. Pre-fix, only users.deleted_at was checked → a partial
+  // migration failure silently masked all Sprint 6 tables. Endpoints
+  // would 500 with "Table doesn't exist" and the deploy looked green.
   try {
-    const [rows] = await pool.execute(
-      "SELECT column_name AS c FROM information_schema.columns " +
-      "WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'deleted_at' LIMIT 1"
-    );
-    if (rows.length === 0) {
-      console.error('\n⚠⚠⚠  Migration 020 not applied! users.deleted_at column missing.');
-      console.error('       Friends + auth routes will throw "Unknown column" errors.');
-      console.error('       Apply: docker exec ainews-db bash -c "mysql cairn < /path/to/020.sql"\n');
+    const requiredCols = [
+      ['users', 'deleted_at'],
+      ['users', 'date_of_birth'],
+      ['pending_registrations', 'date_of_birth'],
+    ];
+    const requiredTables = [
+      'token_blacklist',      // migration 020
+      'password_reset_codes', // migration 020
+      'blocked_users',        // migration 021
+      'device_tokens',        // migration 022
+      'notification_log',     // migration 022
+      'user_push_prefs',      // migration 024
+      'data_exports',         // migration 023
+    ];
+    const missingCols = [];
+    for (const [table, col] of requiredCols) {
+      const [rows] = await pool.execute(
+        "SELECT column_name AS c FROM information_schema.columns " +
+        "WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1",
+        [table, col]
+      );
+      if (rows.length === 0) missingCols.push(`${table}.${col}`);
+    }
+    const missingTables = [];
+    for (const t of requiredTables) {
+      const [rows] = await pool.execute(
+        "SELECT table_name AS t FROM information_schema.tables " +
+        "WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1",
+        [t]
+      );
+      if (rows.length === 0) missingTables.push(t);
+    }
+    if (missingCols.length > 0 || missingTables.length > 0) {
+      console.error('\n⚠⚠⚠  Sprint 6 schema drift detected!');
+      if (missingCols.length > 0) console.error('   Missing columns:', missingCols.join(', '));
+      if (missingTables.length > 0) console.error('   Missing tables:', missingTables.join(', '));
+      console.error('       Apply pending migrations from backend/src/migrations/ then restart.\n');
+    } else {
+      console.log('✓ Sprint 6 schema check: all tables + columns present');
     }
   } catch (schemaErr) {
     console.warn('[boot] schema check skipped:', schemaErr.message);
@@ -226,21 +255,48 @@ async function start() {
     }, { timezone: 'UTC' });
     console.log('✓ Cron registered: exportPurge (0 4 * * * UTC)');
 
-    // Sprint 6 round-4 review R4B6: boot-time catch-up. If the process
-    // restarted around 03:15/03:30/04:00 UTC and missed the cron slot,
-    // the daily sweeps won't fire until 24h later. Kick them once on
-    // boot if the last run was >20h ago (approximates "missed today's
-    // slot"). authSweep + pushPurge + exportPurge are all idempotent
-    // so a duplicate run is harmless.
-    setTimeout(() => {
-      authSweep({ verbose: true }).catch((err) =>
-        console.error('[boot/catch-up] authSweep failed:', err.message));
-      pushPurge({ verbose: true }).catch((err) =>
-        console.error('[boot/catch-up] pushPurge failed:', err.message));
-      exportPurge({ verbose: true }).catch((err) =>
-        console.error('[boot/catch-up] exportPurge failed:', err.message));
-    }, 30_000); // wait 30s so boot health check completes first
-    console.log('✓ Boot catch-up scheduled (t+30s)');
+    // Sprint 6 round-4 R4B6 + round-12 R12B4: boot-time catch-up with
+    // DB-ready gate. Pre-fix, setTimeout(30s) hard-coded — on fresh
+    // docker-compose boot where mysql init takes 45-90s, all three
+    // sweeps hit ETIMEDOUT and swallow the error silently, defeating
+    // the whole point of catch-up. Now: probe SELECT 1 with exponential
+    // backoff up to 15min, then run sweeps sequentially so first-boot
+    // pool pressure is manageable.
+    (async () => {
+      const probeIntervals = [5_000, 10_000, 20_000, 40_000, 60_000, 120_000, 300_000]; // ~9 min total
+      let ready = false;
+      for (const interval of probeIntervals) {
+        await new Promise(r => setTimeout(r, interval));
+        try {
+          await pool.execute('SELECT 1');
+          ready = true;
+          break;
+        } catch (probeErr) {
+          console.warn(`[boot/catch-up] DB not ready (${probeErr.code || probeErr.message}), retrying...`);
+        }
+      }
+      if (!ready) {
+        console.error('[boot/catch-up] DB never became ready within ~9 min — skipping catch-up');
+        return;
+      }
+      // Sequential to avoid piling on first-boot pool pressure.
+      try {
+        await authSweep({ verbose: true });
+      } catch (err) {
+        console.error('[boot/catch-up] authSweep failed:', err.message);
+      }
+      try {
+        await pushPurge({ verbose: true });
+      } catch (err) {
+        console.error('[boot/catch-up] pushPurge failed:', err.message);
+      }
+      try {
+        await exportPurge({ verbose: true });
+      } catch (err) {
+        console.error('[boot/catch-up] exportPurge failed:', err.message);
+      }
+    })().catch(err => console.error('[boot/catch-up] outer:', err.message));
+    console.log('✓ Boot catch-up scheduled (DB-ready gated)');
   }
 }
 
