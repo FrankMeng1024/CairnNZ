@@ -224,7 +224,7 @@ function CreateMarkerSheet({
   const permIconNames: Record<'personal' | 'group' | 'public', IconName> = {
     personal: 'Lock', group: 'Users', public: 'Globe',
   };
-  const permLabels = { personal: 'Only me', group: 'Friends', public: 'Public' };
+  const permLabels = { personal: 'Just me', group: 'Friends', public: 'Public' };
 
   if (!visible) return null;
 
@@ -236,7 +236,7 @@ function CreateMarkerSheet({
           <View style={styles.sheetHandle} />
           {/* Header */}
           <View style={styles.sheetHeaderRow}>
-            <Text style={styles.sheetTitle}>Plant a Flag</Text>
+            <Text style={styles.sheetTitle}>Plant a Cairn</Text>
             <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose} hitSlop={10} accessibilityLabel="Close">
               <Icon name="X" size={IconSize.sm} color={Colors.textSecondary} strokeWidth={2.5} />
             </TouchableOpacity>
@@ -382,7 +382,7 @@ function EditMarkerSheet({
   const permIconNames: Record<MarkerPermission, IconName> = {
     personal: 'Lock', group: 'Users', public: 'Globe',
   };
-  const permLabels: Record<MarkerPermission, string> = { personal: 'Only me', group: 'Friends', public: 'Public' };
+  const permLabels: Record<MarkerPermission, string> = { personal: 'Just me', group: 'Friends', public: 'Public' };
 
   if (!visible || !marker) return null;
 

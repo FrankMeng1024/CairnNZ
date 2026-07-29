@@ -120,7 +120,12 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
         <View style={styles.iconWrap}>
           <Icon name="MapPin" size={28} color={Colors.primary} strokeWidth={2} />
         </View>
-        <Text style={styles.title}>Unfinished {label.toLowerCase()}</Text>
+        <Text style={styles.title}>Resume this {label.toLowerCase()}?</Text>
+        {/* O18 SAF-06: subtitle makes it explicit the hike was preserved
+            through a force-quit / crash so users know their data is safe. */}
+        <Text style={styles.subtitle}>
+          We saved everything up to your last GPS fix. Continue where you left off, or discard and start fresh.
+        </Text>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{distText}</Text>
@@ -186,6 +191,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSize.h2, fontWeight: '800',
     color: Colors.textPrimary, textAlign: 'center',
+  },
+  // O18 SAF-06: subtitle reassures users that their data is intact.
+  subtitle: {
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    lineHeight: 20,
   },
   statsRow: {
     flexDirection: 'row',

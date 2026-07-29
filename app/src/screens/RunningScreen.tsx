@@ -18,7 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { haptic } from '../services/hapticService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, CommonActions } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useTrackingStore } from '../store/useTrackingStore';
@@ -99,6 +99,9 @@ export function RunningScreen() {
   const routes = useRouteStore(s => s.routes);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
   const [runState, setRunState] = useState<RunState>('pre');
+  // O18 RUN-07: capture sessionId at Stop so 'View activity detail' can
+  // navigate to MapHistory even after stopTracking clears the store's id.
+  const [stoppedSessionId, setStoppedSessionId] = useState<string | number | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
   const [showRoutePicker, setShowRoutePicker] = useState(false);
   // foregroundGranted gates UserLocation rendering on the pre-start map.
@@ -124,6 +127,12 @@ export function RunningScreen() {
   const dist = useDistance();
   const startTracking = useTrackingStore(s => s.startTracking);
   const stopTracking = useTrackingStore(s => s.stopTracking);
+  // O18 RUN-01: pause / resume actions from the shared tracking store
+  // (previously only Hiking wired these — parity gap).
+  const pauseTracking = useTrackingStore(s => s.pauseTracking);
+  const resumeTracking = useTrackingStore(s => s.resumeTracking);
+  // O18 RUN-02: signal-lost detection (parity with Hiking §566).
+  const trackPoints = useTrackingStore(s => s.trackPoints);
   // v116/v118: too-short modal hooks. v118 changed Alert → TooShortSheet
   // and the session is now preserved on too-short stops.
   const lastStopReason = useTrackingStore(s => s.lastStopReason);
@@ -310,9 +319,15 @@ export function RunningScreen() {
     // v118: stopTracking has a too-short pre-check that preserves the
     // session and sets lastStopReason='too-short'. We only transition to
     // 'stopped' if a real stop happened (status moved off tracking).
+    // O18 RUN-07: capture sessionId before stopTracking clears it so
+    // 'View activity detail' can navigate to MapHistory.
+    const capturedId = useTrackingStore.getState().sessionId;
     stopTracking();
     const stillTracking = useTrackingStore.getState().status !== 'idle';
-    if (!stillTracking) setRunState('stopped');
+    if (!stillTracking) {
+      setStoppedSessionId(capturedId ?? null);
+      setRunState('stopped');
+    }
   }
 
   // Plant a cairn at the user's current GPS position.
@@ -334,7 +349,9 @@ export function RunningScreen() {
     const region = getCurrentRegion();
     try {
       const marker = await addMarker({
-        type: 'cairn',
+        // O18 MARK-10: unify quick-plant default with PlantScreen's DEFAULT_TYPE
+        // (danger). Runner uses quick-plant to flag a hazard mid-run.
+        type: 'danger',
         regionCode: region.code,
         lat: lastCoordinate.lat,
         lng: lastCoordinate.lng,
@@ -357,6 +374,13 @@ export function RunningScreen() {
   // Format display values
   const distDisplay = locationAvailable ? dist.format(distanceM, 2) : '--';
   const durationDisplay = formatDuration(durationS);
+  // O18 RUN-02: signal-lost chip (parity with HikingScreen). Fires at 2 min
+  // of no accepted GPS fix during active tracking.
+  const RUN_SIGNAL_GAP_MS = 120_000;
+  const lastTrackT = trackPoints.length > 0 ? trackPoints[trackPoints.length - 1].t : null;
+  const signalLostFor = (lastTrackT != null) ? (Date.now() - lastTrackT) : 0;
+  const signalLost = lastTrackT != null && signalLostFor > RUN_SIGNAL_GAP_MS;
+  const signalLostMin = Math.floor(signalLostFor / 60_000);
   // Pace: min/km (or min/mi if imperial) — seconds per meter → minutes per unit
   const paceDisplay = (() => {
     if (!locationAvailable || distanceM < 10) return '--';
@@ -411,7 +435,33 @@ export function RunningScreen() {
           </View>
         </View>
         <View style={preStyles.footer}>
-          <TouchableOpacity onPress={() => { setRunState('pre'); }}>
+          {/* O18 RUN-07: parity with Hiking — offer a path to Activity Detail
+              after Run Complete. Primary CTA stays "New Run" to keep the
+              running loop tight; the detail link is secondary text. */}
+          {stoppedSessionId != null && (
+            <TouchableOpacity
+              onPress={() => {
+                nav.dispatch(
+                  CommonActions.reset({
+                    index: 2,
+                    routes: [
+                      { name: 'Home' },
+                      { name: 'Routes', params: { initialTab: 'activities' } },
+                      { name: 'MapHistory', params: { sessionId: stoppedSessionId } },
+                    ],
+                  })
+                );
+              }}
+              style={{ alignSelf: 'center', paddingVertical: Spacing.sm, marginBottom: Spacing.xs }}
+              accessibilityRole="button"
+              accessibilityLabel="View this run in Activity Detail"
+            >
+              <Text style={{ color: Colors.primary, fontSize: FontSize.body, fontWeight: '600' }}>
+                View activity detail →
+              </Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => { setStoppedSessionId(null); setRunState('pre'); }}>
               <LinearGradient
                 colors={[Colors.primary, Colors.primaryDark]}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -612,6 +662,18 @@ export function RunningScreen() {
         activeOpacity={1}
       >
         <View style={runStyles.bg}>
+          {/* O18 RUN-02: Signal-lost chip (parity with Hiking).
+              Visible only during active tracking after 2 min of no fix. */}
+          {status === 'tracking' && signalLost && (
+            <SafeAreaView edges={['top']}>
+              <View style={runStyles.signalLostPill}>
+                <View style={runStyles.signalLostDot} />
+                <Text style={runStyles.signalLostText}>
+                  {signalLostMin >= 1 ? `Signal lost · ${signalLostMin} min` : 'Signal lost'}
+                </Text>
+              </View>
+            </SafeAreaView>
+          )}
           {/* Stats bar */}
           <SafeAreaView edges={['top']}>
             <View style={runStyles.statsBar}>
@@ -670,10 +732,36 @@ export function RunningScreen() {
                 <TouchableOpacity
                   style={runStyles.stopBtn}
                   onPress={handleStop}
+                  accessibilityRole="button"
+                  accessibilityLabel="Stop run"
                 >
                   <Icon name="Square" size={IconSize.sm} color="#fff" strokeWidth={2.5} />
                   <Text style={runStyles.stopBtnText}>Stop</Text>
                 </TouchableOpacity>
+                {/* O18 RUN-01: independent Pause / Resume so a runner can
+                    answer a call without ending the session. */}
+                {status === 'tracking' && (
+                  <TouchableOpacity
+                    style={runStyles.pauseBtn}
+                    onPress={() => { haptic.impact('light'); pauseTracking(); }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Pause run"
+                  >
+                    <Icon name="Pause" size={IconSize.sm} color={Colors.running} strokeWidth={2.5} />
+                    <Text style={runStyles.pauseBtnText}>Pause</Text>
+                  </TouchableOpacity>
+                )}
+                {status === 'paused' && (
+                  <TouchableOpacity
+                    style={runStyles.resumeBtn}
+                    onPress={() => { haptic.impact('light'); resumeTracking(); }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Resume run"
+                  >
+                    <Icon name="Play" size={IconSize.sm} color="#fff" strokeWidth={2.5} />
+                    <Text style={runStyles.resumeBtnText}>Resume</Text>
+                  </TouchableOpacity>
+                )}
                 {/* Plant Cairn — middle position. Only reachable after
                     unlock, which is the deliberate friction that keeps
                     running cairns meaningful (see route-rules.md §7.3). */}
@@ -917,6 +1005,33 @@ const runStyles = StyleSheet.create({
     ...Shadow.fab,
   },
   stopBtnText: { color: '#fff', fontWeight: '800', fontSize: FontSize.h3 },
+  // O18 RUN-01: independent Pause + Resume buttons for Running.
+  pauseBtn: {
+    flex: 1.5, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: Radius.button,
+    paddingVertical: Spacing.lg, alignItems: 'center',
+    flexDirection: 'row', gap: Spacing.xs, justifyContent: 'center',
+    borderWidth: 1, borderColor: Colors.running,
+  },
+  pauseBtnText: { color: Colors.running, fontWeight: '800', fontSize: FontSize.body },
+  resumeBtn: {
+    flex: 1.5, backgroundColor: Colors.running, borderRadius: Radius.button,
+    paddingVertical: Spacing.lg, alignItems: 'center',
+    flexDirection: 'row', gap: Spacing.xs, justifyContent: 'center',
+    ...Shadow.fab,
+  },
+  resumeBtnText: { color: '#fff', fontWeight: '800', fontSize: FontSize.body },
+  // O18 RUN-02: signal-lost chip (parity with Hiking).
+  signalLostPill: {
+    flexDirection: 'row', alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginHorizontal: Spacing.base, marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: Radius.chip,
+    borderWidth: 1, borderColor: Colors.severityWarning,
+    gap: 6,
+  },
+  signalLostDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.severityWarning },
+  signalLostText: { fontSize: 11, fontWeight: '700', color: Colors.severityWarning, letterSpacing: 0.2 },
   relockBtn: {
     flex: 1, borderRadius: Radius.button, paddingVertical: Spacing.lg,
     alignItems: 'center', justifyContent: 'center',

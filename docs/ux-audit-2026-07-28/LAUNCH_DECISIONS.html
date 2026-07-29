@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cairn 上线前问题清单 — 按功能</title>
+<style>
+  :root {
+    --bg: #f5efe4;
+    --card: #faf6ec;
+    --ink: #3a342c;
+    --muted: #7c7367;
+    --line: #d9cfba;
+    --accent: #6b8858;
+    --danger: #a55a4c;
+    --warn: #b5893e;
+    --ok: #6b8858;
+    --info: #6b7f95;
+  }
+  * { box-sizing: border-box; }
+  html { font-size: 17px; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: 100vh;
+  }
+  aside {
+    background: var(--card);
+    border-right: 1px solid var(--line);
+    padding: 24px 20px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  aside h2 {
+    font-size: 15px;
+    color: var(--muted);
+    margin: 0 0 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .nav-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    padding: 12px 14px;
+    margin-bottom: 4px;
+    border-radius: 10px;
+    color: var(--ink);
+    font-size: 15px;
+    cursor: pointer;
+    line-height: 1.5;
+    font-family: inherit;
+  }
+  .nav-btn:hover { background: rgba(107, 136, 88, 0.08); }
+  .nav-btn.active {
+    background: var(--accent);
+    color: #fff;
+  }
+  .nav-btn .count {
+    float: right;
+    font-size: 12px;
+    opacity: 0.7;
+    padding-top: 4px;
+  }
+  .nav-btn.active .count { opacity: 1; }
+  main {
+    padding: 40px 48px 120px;
+    max-width: 760px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+  }
+  .topbar .progress {
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .topbar .progress b { color: var(--accent); font-size: 18px; }
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  button.primary, button.secondary {
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: inherit;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { opacity: 0.92; }
+  .item {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  }
+  .item[data-decided="1"] {
+    border-left: 4px solid var(--accent);
+  }
+  .item .head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .item .id {
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    background: rgba(0,0,0,0.04);
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+  .item .title {
+    font-size: 19px;
+    font-weight: 600;
+    flex: 1;
+    line-height: 1.4;
+  }
+  .item .pill {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.05);
+    color: var(--muted);
+  }
+  .pill.Blocker { background: rgba(165, 90, 76, 0.15); color: var(--danger); }
+  .pill.Critical { background: rgba(181, 137, 62, 0.15); color: var(--warn); }
+  .pill.Medium { background: rgba(107, 136, 88, 0.15); color: var(--accent); }
+  .pill.Low { background: rgba(0,0,0,0.06); color: var(--muted); }
+  .item .body {
+    font-size: 16px;
+    line-height: 1.75;
+    color: var(--ink);
+    margin-bottom: 12px;
+  }
+  .item .meta {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 6px 0;
+    line-height: 1.65;
+  }
+  .item .meta b { color: var(--ink); font-weight: 600; }
+  .decision-block {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px dashed var(--line);
+  }
+  .decision-block .label {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .decision-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .decision-row button {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--ink);
+    font-family: inherit;
+    line-height: 1.4;
+  }
+  .decision-row button:hover { border-color: var(--accent); }
+  .decision-row button.selected {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .decision-row button[data-value="skip"].selected {
+    background: var(--muted);
+    border-color: var(--muted);
+  }
+  .decision-row button[data-value="v11"].selected,
+  .decision-row button[data-value="later"].selected {
+    background: var(--warn);
+    border-color: var(--warn);
+  }
+  .decision-row button[data-value="ask"].selected {
+    background: var(--info);
+    border-color: var(--info);
+  }
+  .notes-block {
+    margin-top: 14px;
+  }
+  .notes-wrap {
+    position: relative;
+  }
+  .notes-block textarea {
+    width: 100%;
+    min-height: 60px;
+    padding: 12px 48px 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.65;
+    resize: vertical;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .notes-block textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: #fff;
+  }
+  .notes-block label {
+    font-size: 13px;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 6px;
+  }
+  .mic-btn {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--card);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: var(--muted);
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .mic-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .mic-btn.listening {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(165, 90, 76, 0.5); }
+    50% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(165, 90, 76, 0); }
+  }
+  .mic-btn svg { width: 18px; height: 18px; }
+  .mic-hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+    min-height: 18px;
+  }
+  .mic-hint.active { color: var(--danger); }
+  .mic-hint.error { color: var(--warn); }
+  .intro {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px 28px;
+    margin-bottom: 24px;
+    line-height: 1.8;
+  }
+  .intro h2 {
+    margin: 0 0 12px;
+    font-size: 20px;
+  }
+  .intro ul {
+    margin: 8px 0 0 20px;
+    padding: 0;
+    color: var(--muted);
+  }
+  .intro li { margin-bottom: 8px; font-size: 15px; }
+  .intro b { color: var(--ink); }
+  .section-header {
+    margin-bottom: 20px;
+  }
+  .section-header h2 {
+    margin: 0 0 8px;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  .section-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    main { padding: 24px 20px 80px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<aside>
+  <h2>按功能分类</h2>
+  <div id="nav"></div>
+  <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line);">
+    <button class="primary" id="export-btn" style="width:100%; margin-bottom:8px;">导出我的决定</button>
+    <button class="secondary" id="reset-btn" style="width:100%;">清空重来</button>
+  </div>
+</aside>
+
+<main>
+
+<div class="topbar">
+  <h1 id="section-title">开始</h1>
+  <div class="progress">已决定 <b id="progress">0</b> / <span id="total">0</span></div>
+</div>
+
+<div id="content"></div>
+
+</main>
+
+</div>
+
+<script>
+// 按功能分组
+const GROUPS = [
+{
+  key: "overview",
+  name: "开始 — 说明",
+  desc: "怎么用这份清单",
+  hide: true,
+  intro: true
+},
+{
+  key: "auth",
+  name: "账户 / 登录 / 注册",
+  desc: "注册流程、密码、登录、忘记密码、Apple/Google 登录、删除账户、账户安全",
+  items: [
+    { id: "AUTH-01", title: "删除账户只是让用户发邮件, 不是真删", severity: "Blocker",
+      body: "现在用户点 Delete Account, 打开系统邮件让 TA 发邮件给我们, 然后本地登出. 服务器上账户还在.",
+      impact: "Apple 硬规: 5.1.1(v) 必须 App 内一键真删除. 100% 会拒审.",
+      cost: "写后端 DELETE endpoint + 软删 + 邮件. 后端一天." },
+    { id: "AUTH-02", title: "Apple 登录按钮是假的", severity: "Blocker",
+      body: "AuthScreen 上 Apple 登录按钮点了弹 'coming soon'. Google 按钮也是假的.",
+      impact: "Apple HIG 4.8: 有其他社交登录就必须有 Sign in with Apple. 100% 拒审.",
+      cost: "两条路 — (a) 真做 Apple 登录, 半天到一天 + 要重新打包. (b) 两个按钮都藏起来, 只保留邮箱, 30 分钟." },
+    { id: "AUTH-03", title: "Google 登录按钮也是假的 (合并 AUTH-02 决定)", severity: "Blocker",
+      body: "同上. 而且咱那个 Google 图标是手画黑白, 违反 Google 品牌规范.",
+      impact: "同上.",
+      cost: "见 AUTH-02." },
+    { id: "AUTH-04", title: "没有 '忘记密码' 功能", severity: "Critical",
+      body: "AuthScreen 里完全没有 forgot / reset 入口. 用户忘密码只能发邮件求助.",
+      impact: "上线一周就会被支持负担压垮.",
+      cost: "后端 reset endpoint + 邮件 + UI. 1-2 天." },
+    { id: "AUTH-05", title: "密码只查 8 位, 没有强度提示", severity: "Critical",
+      body: "只写 'Min. 8 characters'. 用户设 '12345678' 都能过.",
+      impact: "7 个虚拟用户觉得业余. 弱密码 + 咱有 GPS 数据 = 隐私风险.",
+      cost: "加强度组件 + 拒绝纯数字. 半天." },
+    { id: "AUTH-06", title: "注册时没问年龄 (COPPA 风险)", severity: "Blocker",
+      body: "只问邮箱 + 密码. 没生日字段, 13 岁以下也能注册.",
+      impact: "COPPA (美国) + NZ Privacy Act. GPS 是儿童敏感数据. 也可能触发 App Store 评级问题.",
+      cost: "加生日字段 + <13 直接拒. 半天." },
+    { id: "AUTH-07", title: "6 位验证码是一个大输入框, 不是 6 个格子", severity: "Medium",
+      body: "现代 App 都是 6 个独立格子, 粘贴自动填. 咱一个大 TextInput.",
+      impact: "小问题但显得业余. 3 个虚拟用户提到.",
+      cost: "换 OTP 组件. 半天." },
+    { id: "AUTH-08", title: "登出没调后端, 老 JWT 30 天还有效", severity: "Critical",
+      body: "现在登出只清本地 token, 没通知服务器 revoke. 其他设备还能用.",
+      impact: "如果 token 泄露, 登出没用.",
+      cost: "后端 POST /api/auth/logout. 半天." },
+    { id: "AUTH-09", title: "徒步中登出没警告", severity: "Blocker",
+      body: "设置里登出没检查 tracking 状态. 徒步中登出 = 数据直接丢.",
+      impact: "3 个虚拟用户踩坑. 数据丢失.",
+      cost: "登出前检查 tracking, 弹警告. 半小时." },
+    { id: "AUTH-10", title: "登录时 email 校验会挡住某些老账户", severity: "Low",
+      body: "O17 加了登录邮箱正则. 万一 DB 有历史 email 不符合 (罕见但可能), 该用户永远登不上.",
+      impact: "极少数用户.",
+      cost: "DB 扫一次. 15 分钟." },
+  ]
+},
+{
+  key: "onboarding",
+  name: "首次引导 / 权限",
+  desc: "新用户下载后第一次打开的体验",
+  items: [
+    { id: "ONB-01", title: "完全没有首次引导", severity: "Critical",
+      body: "新用户下载 → 注册 → 直接扔到主页. 'Kia ora, Explorer' 是啥? 'Leave a Cairn here' 干嘛的? 'Memory' 是什么? 全靠猜.",
+      impact: "6 个虚拟用户一星. 新用户流失率会非常高. 这是 MVP 上线最痛的点.",
+      cost: "3-4 屏 onboarding + 首次徒步引导. 2 天." },
+    { id: "ONB-02", title: "GPS 权限弹窗直接冷弹, 没有解释", severity: "Critical",
+      body: "主页 mount 后 800ms 就弹 iOS 系统权限对话框. 没告诉用户 '为啥要 GPS'.",
+      impact: "Apple HIG 推荐先解释后请求. 冷弹拒绝率高.",
+      cost: "加一个解释屏在系统弹窗前. 半天." },
+    { id: "ONB-03", title: "'Kia ora, Explorer' 让人尴尬", severity: "Medium",
+      body: "毛利语 + 硬塞 '探险家' 头衔. 7 个虚拟用户觉得违和, 尤其非 NZ 用户.",
+      impact: "O17 已去掉 ', Explorer'. 但下午/晚上不是毛利, 只有早上是, 显得三缺一.",
+      cost: "要么全毛利 (Ata mārie/Kia ora/Pō mārie) 要么全英文. 5 分钟." },
+    { id: "ONB-04", title: "拒绝 GPS 权限后没有再次说明", severity: "Critical",
+      body: "如果用户第一次弹权限拒了, App 里没有任何路径解释为啥需要 + 引导去设置开.",
+      impact: "拒了就用不了核心功能.",
+      cost: "被拒后加 '打开设置' CTA. 半天." },
+  ]
+},
+{
+  key: "home",
+  name: "主页 (Home)",
+  desc: "打开 App 看到的第一屏",
+  items: [
+    { id: "HOME-01", title: "新用户没有 '开始第一次徒步' 的主 CTA", severity: "Critical",
+      body: "Hiking / Running / Plant 三张卡片平等. 新用户不知道哪个是推荐第一步.",
+      impact: "新用户困惑.",
+      cost: "首次给 Hiking 主色, 或加 tooltip. 半天." },
+    { id: "HOME-02", title: "'N hikes pending sync' 提示条不能点", severity: "Medium",
+      body: "主页显示待同步条, 但不能点开看是哪几次 / 手动重试.",
+      impact: "用户看到未同步会焦虑.",
+      cost: "加点击展开. 半天." },
+    { id: "HOME-03", title: "主页不能下拉刷新", severity: "Low",
+      body: "标准手势没做.",
+      cost: "加 RefreshControl. 15 分钟." },
+    { id: "HOME-04", title: "没有周/月/年统计切换", severity: "Medium",
+      body: "只显示总徒步数 + 总 flag 数. Strava / Fitbit 都有周月年.",
+      cost: "加时间维度. 1 天." },
+    { id: "HOME-05", title: "没有 streak / 连续打卡", severity: "Medium",
+      body: "问候语只是 'Kia ora', 没鼓励连续使用.",
+      impact: "4 个虚拟用户提到 '为什么不用 Strava'.",
+      cost: "1-2 天." },
+    { id: "HOME-06", title: "没有离线状态全局提示", severity: "Medium",
+      body: "现在离线时用户不知道自己离线, 直到点保存.",
+      cost: "全局 banner. 半天." },
+    { id: "HOME-07", title: "Tools 行的 Memory 图标画的是地图", severity: "Low",
+      body: "Memory 按钮的图标是 Map 图标. 概念重复.",
+      cost: "换图标. 5 分钟." },
+  ]
+},
+{
+  key: "hiking",
+  name: "徒步 (Hiking)",
+  desc: "徒步中的实时体验",
+  items: [
+    { id: "HIKE-01", title: "徒步中没有独立的暂停按钮", severity: "Critical",
+      body: "现在只能点 Stop → 弹总结页 → 忽略回到运动. 中途接电话没有干净的暂停.",
+      impact: "户外用户核心痛点.",
+      cost: "加独立 Pause 按钮. 半天." },
+    { id: "HIKE-02", title: "没有实时 GPS 精度显示", severity: "Medium",
+      body: "现在只有布尔值 '有信号 / 没信号'. 精度 3m 和 30m 用户看不出区别.",
+      impact: "户外用户需要知道 GPS 质量.",
+      cost: "加精度 chip. 半天." },
+    { id: "HIKE-03", title: "选了路线后没有 '偏离 X 米' 提示", severity: "Medium",
+      body: "用户跟着一个保存的路线走, 走岔了 App 不提示.",
+      impact: "路线跟随功能不完整.",
+      cost: "加偏离距离计算. 1 天." },
+    { id: "HIKE-04", title: "徒步中不能加备注 (只能种 cairn)", severity: "Medium",
+      body: "看到有意思的东西想记一笔, 得走完整个 plant flow.",
+      impact: "轻量记录缺失.",
+      cost: "加快速备注按钮. 半天." },
+    { id: "HIKE-05", title: "没有 '和朋友共享我的位置'", severity: "Medium",
+      body: "户外单独走的用户想让家人看到自己在哪. 咱没有.",
+      cost: "共享 link + 后端 endpoint. 2-3 天." },
+    { id: "HIKE-06", title: "没有天黑 / 日落预警", severity: "Critical",
+      body: "徒步中天黑了 App 不提醒. 户外安全隐患.",
+      impact: "如果用户在山上被摸黑, 一星保底.",
+      cost: "算日落时间 + 提前 30 分钟提醒. 1 天." },
+    { id: "HIKE-07", title: "没有 1 km 自动打点", severity: "Low",
+      body: "跑步 App 标配, 徒步 App 也常有.",
+      cost: "加 lap logic. 半天." },
+  ]
+},
+{
+  key: "running",
+  name: "跑步 (Running)",
+  desc: "跑步专属体验 + 和徒步的差异",
+  items: [
+    { id: "RUN-01", title: "跑步页面没有暂停按钮", severity: "Critical",
+      body: "只有 Start → Stop. 想暂停接个电话就只能停整个记录, 再开就是新的一次.",
+      impact: "5 个虚拟用户一星. 跑步党核心痛点.",
+      cost: "从 Hiking 复用 pauseTracking. 半天." },
+    { id: "RUN-02", title: "跑步没有信号丢失 chip", severity: "Medium",
+      body: "徒步有 '信号丢失 X 分钟前' 提示条, 跑步没有.",
+      cost: "复用. 15 分钟." },
+    { id: "RUN-03", title: "跑步没有指南针", severity: "Low",
+      body: "徒步有指南针可开, 跑步没.",
+      cost: "复用组件. 15 分钟." },
+    { id: "RUN-04", title: "跑步没有 Live Activity / Dynamic Island", severity: "Medium",
+      body: "iPhone 14 Pro+ 用户预期锁屏能看配速.",
+      impact: "跑步党明显缺失.",
+      cost: "ActivityKit. 2-3 天." },
+    { id: "RUN-05", title: "跑步没有配速目标 / 间歇训练", severity: "Low",
+      body: "Strava / Nike Run Club 都有. 咱只有 Free Run.",
+      cost: "大功能. 1 周." },
+    { id: "RUN-06", title: "锁屏解锁双击手势难触发", severity: "Low",
+      body: "500ms 内两下, 冷天戴手套 / 手湿容易失败.",
+      cost: "放宽到 700ms 或加大点击区. 15 分钟." },
+    { id: "RUN-07", title: "跑步停止后落地页和徒步不一样", severity: "Low",
+      body: "徒步停止跳去 History detail, 跑步停止是当前页显示总结.",
+      cost: "统一. 半天." },
+  ]
+},
+{
+  key: "map",
+  name: "地图 (Map)",
+  desc: "实时地图 + 历史地图",
+  items: [
+    { id: "MAP-01", title: "没有图层切换 (地形/卫星/混合)", severity: "Medium",
+      body: "AllTrails / Komoot 标配. 咱只有默认一种.",
+      cost: "加切换按钮. 半天." },
+    { id: "MAP-02", title: "没有天气覆盖层", severity: "Medium",
+      body: "云、降雨、风向叠加. 户外用户很看重.",
+      cost: "接 OpenWeather. 2-3 天." },
+    { id: "MAP-03", title: "没有 3D 地形切换", severity: "Low",
+      body: "Mapbox 支持但没开.",
+      cost: "开一下. 半天." },
+    { id: "MAP-04", title: "没有地址 / 路线搜索", severity: "Critical",
+      body: "地图上不能搜 'Mount Cook'. 户外 App 标配.",
+      cost: "接 geocoding. 1 天." },
+    { id: "MAP-05", title: "长按空地不能种 cairn", severity: "Medium",
+      body: "常规地图 App 手势 — 咱必须走 Plant 流程.",
+      cost: "加长按手势. 半天." },
+    { id: "MAP-06", title: "10k+ marker 时地图会卡", severity: "Critical",
+      body: "没有 marker 聚合. 用户攒到 100+ 明显卡, 1000+ 崩.",
+      impact: "长期用户流失.",
+      cost: "接 supercluster. 1-2 天." },
+    { id: "MAP-07", title: "没有 '把我所有徒步画在一张地图' 视图", severity: "Medium",
+      body: "Memory 有 fog 视图, 但不是叠所有 hike 轨迹.",
+      cost: "新视图. 1-2 天." },
+  ]
+},
+{
+  key: "history",
+  name: "历史记录 (History)",
+  desc: "已完成的徒步列表",
+  items: [
+    { id: "HIST-01", title: "历史列表没有搜索框", severity: "Critical",
+      body: "攒了 100 条 hike, 想找 '去年冬天 Waikanae 那次', 只能翻列表.",
+      impact: "长期用户体验极差.",
+      cost: "加搜索. 半天." },
+    { id: "HIST-02", title: "没有日期 / 活动类型 / 排序过滤", severity: "Medium",
+      body: "同 HIST-01, 用户想按时间或按类型看.",
+      cost: "加过滤条. 1 天." },
+    { id: "HIST-03", title: "hike 保存后不能改名", severity: "Medium",
+      body: "存的时候没起好名字, 之后没法改.",
+      cost: "加编辑. 半天." },
+    { id: "HIST-04", title: "hike 存后不能加照片 / 备注", severity: "Medium",
+      body: "登顶回来想加张照片就没辙.",
+      cost: "detail 加编辑. 1 天." },
+    { id: "HIST-05", title: "不能导出单个 hike (GPX/PDF/图片)", severity: "Medium",
+      body: "存了想给朋友分享或备份, 没入口.",
+      cost: "加导出. 1-2 天." },
+    { id: "HIST-06", title: "hike 不能改可见性 (public/private)", severity: "Low",
+      body: "marker 可以, hike 不能.",
+      cost: "加开关. 半天." },
+    { id: "HIST-07", title: "没有对比两次 hike", severity: "Low",
+      body: "Strava 有 '对比过去几次' 功能.",
+      cost: "1-2 天." },
+    { id: "HIST-08", title: "'离线未同步' 灰卡只能长按, 没有解释", severity: "Medium",
+      body: "用户看到灰卡不知道能做什么.",
+      cost: "加长按 hint + 解释. 半天." },
+    { id: "HIST-09", title: "日期写死 DD/MM/YYYY", severity: "Low",
+      body: "美国用户看到会困惑 (他们是 MM/DD/YYYY).",
+      cost: "接 Intl.DateTimeFormat. 半天." },
+  ]
+},
+{
+  key: "routes",
+  name: "路线 (Routes)",
+  desc: "保存 / 分享 / 发现路线",
+  items: [
+    { id: "ROUTE-01", title: "不能分享路线给朋友", severity: "Medium",
+      body: "编辑好一条路线, 没有分享按钮.",
+      cost: "接 share. 1 天." },
+    { id: "ROUTE-02", title: "不能导出路线 (GPX/KML)", severity: "Medium",
+      body: "现代户外 App 标配.",
+      cost: "加导出. 1 天." },
+    { id: "ROUTE-03", title: "没有难度评级 UI", severity: "Medium",
+      body: "AllTrails / Komoot 有 easy/moderate/hard 图标.",
+      cost: "加评级选择 + 显示. 1 天." },
+    { id: "ROUTE-04", title: "没有 '另存为' 或 '反向'", severity: "Low",
+      body: "常规操作.",
+      cost: "半天." },
+    { id: "ROUTE-05", title: "没有社区 / 发现公开路线", severity: "Medium",
+      body: "AllTrails 核心是这个. 咱只有自己和朋友的.",
+      cost: "大功能. 2 周+." },
+    { id: "ROUTE-06", title: "Activities 标签没有朋友视图", severity: "Medium",
+      body: "Routes / Flags 都有 Mine/Friends 切换, 只有 Activities 没有.",
+      cost: "加朋友活动 feed. 1 天." },
+    { id: "ROUTE-07", title: "路线列表没搜索 (同 HIST-01)", severity: "Medium",
+      body: "同上.",
+      cost: "半天." },
+    { id: "ROUTE-08", title: "路线不能下载离线", severity: "Low",
+      body: "长途路线需要提前缓存.",
+      cost: "1 天." },
+    { id: "ROUTE-09", title: "没有 'starred / 收藏'", severity: "Low",
+      body: "常用路线置顶.",
+      cost: "半天." },
+  ]
+},
+{
+  key: "marker",
+  name: "标记 (Cairn / Marker)",
+  desc: "种下的地图标记. 现在同一个东西有 4 个名字.",
+  items: [
+    { id: "MARK-01", title: "同一个东西 4 个名字: Marker / Cairn / Flag / Mark", severity: "Medium",
+      body: "Home 说 'Leave a Cairn here', Map 说 'Plant a Flag', MarkerDetail 说 'Cairn not found'. O17 里删除对话框已统一, 其他地方还没.",
+      impact: "显得 App 不成熟, 用户困惑.",
+      cost: "全局 grep + 替换. 半天." },
+    { id: "MARK-02", title: "MarkerDetailSheet 和 MarkerDetailScreen 是两个不同产品", severity: "Critical",
+      body: "同一个 cairn, 从徒步中点开是简版 sheet (只能删), 从历史点开是完整编辑页.",
+      impact: "用户困惑 + 显得不成熟.",
+      cost: "统一功能. 1-2 天." },
+    { id: "MARK-03", title: "不能加照片", severity: "Critical",
+      body: "'cairn' 是一个标记物, 用户预期能拍照放上去. 完全没有.",
+      impact: "5 个虚拟用户提到.",
+      cost: "接 image picker + 上传 + 展示. 2-3 天." },
+    { id: "MARK-04", title: "语音备忘录 UI 是 stub (O17 已藏)", severity: "Low",
+      body: "voiceMemoService 后台实现了, UI 一直是 stub. O17 藏了 '🎤 coming soon'.",
+      cost: "要么完整做, 要么完全砍. 完整做 1-2 天." },
+    { id: "MARK-05", title: "MarkerDetail 没有 '导航到这' 按钮", severity: "Medium",
+      body: "看到一个 cairn 想去, 只能记坐标.",
+      cost: "接 Apple Maps URL scheme. 半小时." },
+    { id: "MARK-06", title: "MarkerDetail 没有 '谁点了赞'", severity: "Low",
+      body: "只显示计数.",
+      cost: "1 天." },
+    { id: "MARK-07", title: "公开 marker 没有评论 / 讨论", severity: "Low",
+      body: "AllTrails 有评论. 咱没有.",
+      cost: "大功能. 1 周+." },
+    { id: "MARK-08", title: "举报后 24h 是否处理用户看不到", severity: "Medium",
+      body: "咱有举报按钮, 但没有反馈机制. Apple 1.2 要求 24h 处理并告知.",
+      impact: "UGC 合规风险.",
+      cost: "后端 + 通知. 1-2 天." },
+    { id: "MARK-09", title: "'Only me' 和 'Just me' 两个词描述同一权限", severity: "Low",
+      body: "MapScreen 说 Only me, MarkerDetail 说 Just me. 5 分钟统一.",
+      cost: "5 分钟." },
+    { id: "MARK-10", title: "3 个 Plant 页面默认 marker 类型都不一样", severity: "Low",
+      body: "Plant 默认 danger, Running 快速种默认 cairn, Map 默认让用户选.",
+      cost: "统一. 15 分钟." },
+  ]
+},
+{
+  key: "memory",
+  name: "记忆 (Memory)",
+  desc: "已探索区域 fog-of-war 视图",
+  items: [
+    { id: "MEM-01", title: "不能分享 / 导出 Memory 地图", severity: "Critical",
+      body: "用户最自豪的东西 (探索过的区域) 没法给朋友炫耀, 没截图输出.",
+      impact: "5 个虚拟用户提到.",
+      cost: "接 share + 生成地图截图. 1-2 天." },
+    { id: "MEM-02", title: "没有时间轴回放", severity: "Low",
+      body: "'我这一年走了哪些地方' 快进动画. 装饰性但用户会喜欢.",
+      cost: "1-2 天." },
+    { id: "MEM-03", title: "订阅朋友 memory 限制 5 个, 但不能单独退订", severity: "Medium",
+      body: "只能一键全清. 用户想留 3 个朋友退掉 2 个做不到.",
+      cost: "半天." },
+    { id: "MEM-04", title: "零 hike 用户看到全灰世界不知道为啥", severity: "Medium",
+      body: "新用户没徒步 = Memory 全灰. 没有 empty state 说 '先走一次'.",
+      cost: "加 empty state. 半天." },
+    { id: "MEM-05", title: "GPS 权限被拒后没有 '打开设置' CTA", severity: "Medium",
+      body: "MemoryScreen 显示 'permission failed' 但不给用户去开的路径.",
+      cost: "加 Linking.openSettings. 15 分钟." },
+  ]
+},
+{
+  key: "friends",
+  name: "朋友 (Friends)",
+  desc: "加朋友 / 看朋友 / 屏蔽",
+  items: [
+    { id: "FRI-01", title: "加了朋友不能删", severity: "Critical",
+      body: "加错了就永远.",
+      cost: "加 removeFriend UI + 后端. 半天." },
+    { id: "FRI-02", title: "不能屏蔽用户 (block)", severity: "Blocker",
+      body: "UGC App 必须能屏蔽. Apple 1.2 要求.",
+      impact: "上线 review 会被 flag.",
+      cost: "后端 hide + 前端 UI. 1-2 天." },
+    { id: "FRI-03", title: "不能搜现有用户, 只能邮箱邀请", severity: "Medium",
+      body: "用户想加已注册的朋友只能问对方要邮箱.",
+      cost: "加用户搜索. 1 天." },
+    { id: "FRI-04", title: "没有朋友的个人主页", severity: "Medium",
+      body: "点朋友卡片没反应. 想看 TA 的公开 marker 无路径.",
+      cost: "加 Profile screen. 1-2 天." },
+    { id: "FRI-05", title: "朋友请求发出后看不到 pending 状态", severity: "Medium",
+      body: "对方没接受也没拒, 我也不知道自己发了.",
+      cost: "加 outbound 列表. 半天." },
+    { id: "FRI-06", title: "在线状态和 sharedMarkers 是假的", severity: "Low",
+      body: "卡片有 online dot 和 'shared X markers', 都写死 false / 0. 后端还没实现.",
+      cost: "要么后端做, 要么 UI 藏起来. 后者 15 分钟." },
+    { id: "FRI-07", title: "不能实时共享位置", severity: "Medium",
+      body: "户外群体活动很需要.",
+      cost: "大功能. 2-3 天." },
+    { id: "FRI-08", title: "接受/拒绝按钮 36x36, 小于 Apple 44pt", severity: "Low",
+      body: "冷天戴手套点不准.",
+      cost: "加 hitSlop. 5 分钟." },
+    { id: "FRI-09", title: "'好友请求已发送' 不管对方是否存在都显示", severity: "Low",
+      body: "邀请了不存在的邮箱, 后端拒绝, sheet 还说 '已发送'.",
+      cost: "根据后端响应显示. 15 分钟." },
+  ]
+},
+{
+  key: "profile",
+  name: "个人主页 (Profile)",
+  desc: "咱现在完全没有独立 Profile",
+  items: [
+    { id: "PROF-01", title: "完全没有独立 Profile 页", severity: "Critical",
+      body: "个人资料嵌在 Settings 里. 只有姓名 + 邮箱.",
+      cost: "新页面. 2-3 天." },
+    { id: "PROF-02", title: "头像只能是首字母, 不能上传", severity: "Medium",
+      body: "没接 image picker 给用户上传头像.",
+      cost: "接 uploader. 1 天." },
+    { id: "PROF-03", title: "不能改显示名字", severity: "Medium",
+      body: "注册时填了就定死.",
+      cost: "加编辑. 半天." },
+    { id: "PROF-04", title: "没有个人统计 (总里程/总徒步)", severity: "Medium",
+      body: "Strava 首页有. 咱没.",
+      cost: "1 天." },
+    { id: "PROF-05", title: "没有公开个人页 / handle", severity: "Low",
+      body: "AllTrails 有 @username 可分享.",
+      cost: "大功能. 1 周+." },
+  ]
+},
+{
+  key: "settings",
+  name: "设置 (Settings)",
+  desc: "Settings 页面本身的完整性",
+  items: [
+    { id: "SET-01", title: "没有 '下载我所有数据' (GDPR / NZ Privacy Act)", severity: "Critical",
+      body: "NZ Privacy Act 2020 Principle 6 要求用户可以拿回自己所有数据.",
+      impact: "合规风险.",
+      cost: "后端 endpoint + Settings 按钮. 1-2 天." },
+    { id: "SET-02", title: "没有暗黑模式开关", severity: "Low",
+      body: "字段存在但被藏了. 老年用户 / 夜跑者需要.",
+      cost: "全屏 color token 检查. 1-2 天." },
+    { id: "SET-03", title: "没有语言切换", severity: "Low",
+      body: "英文写死. 未来国际化不了.",
+      cost: "接 i18n. 3-5 天." },
+    { id: "SET-04", title: "没有区域切换", severity: "Low",
+      body: "咱是 NZ, 未来去 AU / US 用户不能切.",
+      cost: "半天." },
+    { id: "SET-05", title: "没有通知偏好 (因为没通知系统)", severity: "Low",
+      body: "见 PUSH-01.",
+      cost: "见 PUSH-01." },
+    { id: "SET-06", title: "'clear track' 关键词有歧义", severity: "Low",
+      body: "重置 memory 时让用户打 'clear track' 确认. 'track' 是啥不清楚.",
+      cost: "换关键词. 5 分钟." },
+    { id: "SET-07", title: "删账户流程无论邮件成功都本地登出", severity: "Medium",
+      body: "用户点 delete → 邮件 App 打不开 → 已本地登出 → 想改主意来不及.",
+      cost: "见 AUTH-01 完整实现." },
+    { id: "SET-08", title: "毛利语 / 英文 footer 混杂", severity: "Low",
+      body: "只有 footer 用毛利, 别处全英文. 不成体系.",
+      cost: "半天." },
+  ]
+},
+{
+  key: "push",
+  name: "推送 / 通知",
+  desc: "整个系统缺失",
+  items: [
+    { id: "PUSH-01", title: "完全没有 push 通知系统", severity: "Critical",
+      body: "expo-notifications 只在 auto-pause 用. 没有 APNs 注册, 没有权限请求. 好友请求收到时静音.",
+      cost: "接完整 push. 2-3 天." },
+    { id: "PUSH-02", title: "没有 App 内通知列表", severity: "Medium",
+      body: "所有互动都是 fire-and-forget, 用户没有 tray 回看.",
+      cost: "1 天." },
+    { id: "PUSH-03", title: "没有 App 图标 badge", severity: "Low",
+      body: "有未读时不显示红点.",
+      cost: "半天." },
+    { id: "PUSH-04", title: "auto-pause 通知不检查权限就发", severity: "Medium",
+      body: "如果用户拒了通知权限, 静默丢失.",
+      cost: "加权限检查. 15 分钟." },
+  ]
+},
+{
+  key: "sharing",
+  name: "分享 / 导出",
+  desc: "整个类别几乎缺失",
+  items: [
+    { id: "SHR-01", title: "没有任何 hike / 路线 / marker 分享", severity: "Critical",
+      body: "全 App 只有 memory-cairn 和 debug ZIP 用了 share. 走完一次徒步没法发朋友圈.",
+      impact: "5 个虚拟用户觉得离谱.",
+      cost: "接 share + 生成分享卡片. 1-2 天." },
+    { id: "SHR-02", title: "注册时承诺 GPX 导出但没做", severity: "Blocker",
+      body: "隐私说明里明写 'export your track history as GPX at any time'. 全 App 没有导出.",
+      impact: "书面虚假承诺.",
+      cost: "两条路 — (a) 删这句承诺 5 分钟. (b) 真做 GPX 导出 1 天." },
+    { id: "SHR-03", title: "没有 CSV / JSON 导出", severity: "Medium",
+      body: "全量数据导出. 见 SET-01.",
+      cost: "见 SET-01." },
+    { id: "SHR-04", title: "没有深链 (cairn://hike/123)", severity: "Low",
+      body: "分享链接打开不了 App 直接跳对应内容.",
+      cost: "接 deep link. 1 天." },
+  ]
+},
+{
+  key: "search",
+  name: "搜索",
+  desc: "整个类别缺失",
+  items: [
+    { id: "SRCH-01", title: "全 App 完全没有搜索", severity: "Critical",
+      body: "MapHistory / Routes / Friends / MapScreen 都没搜索框. 长期用户体验痛.",
+      cost: "每个列表加搜索. 1-2 天." },
+    { id: "SRCH-02", title: "地图上没有地址 / trail 搜索", severity: "Critical",
+      body: "见 MAP-04.",
+      cost: "见 MAP-04." },
+  ]
+},
+{
+  key: "safety",
+  name: "数据安全 / 隐私",
+  desc: "涉及数据丢失、账户安全",
+  items: [
+    { id: "SAF-01", title: "hike 保存失败最后一步会静默丢失", severity: "Blocker",
+      body: "saveHikeAtomic 1 次重试 + 15s 超时后写 pendingSyncStore. 如果那个写也失败, 只在 crashLogger breadcrumb, 用户完全不知道.",
+      impact: "户外走了 4h 保存失败但 App 说 Saved. 一星保底.",
+      cost: "加最后 Alert + retry. 半天." },
+    { id: "SAF-02", title: "AsyncStorage 满了会静默丢数据", severity: "Critical",
+      body: "storage 层所有错误都吞掉返回 null. 磁盘满 = 没存 = 用户不知道.",
+      cost: "错误上抛 + UI. 半天." },
+    { id: "SAF-03", title: "登录切换用户可能串数据", severity: "Critical",
+      body: "hydrate 不是幂等. 快速切用户可能看到前一个的数据.",
+      impact: "隐私事故.",
+      cost: "加 atomic swap. 1 天." },
+    { id: "SAF-04", title: "cellular 和 wifi 不区分, 遥测烧流量", severity: "Medium",
+      body: "telemetry 上传不管在什么网. 出国漫游可能吃流量.",
+      cost: "接 NetInfo. 半天." },
+    { id: "SAF-05", title: "存储密钥打散 + 无迁移策略", severity: "Medium",
+      body: "cairn_jwt / cairn_offline_packs / cairn:plant:draft 等混用 AsyncStorage 和 SecureStore.",
+      cost: "整理 1 天." },
+    { id: "SAF-06", title: "力关闭 App 后 Resume 提示不明显", severity: "Critical",
+      body: "有 UnfinishedRecoveryModal 但只冷启动出现. 力关-立刻重开路径不明显.",
+      cost: "改进逻辑. 1 天." },
+    { id: "SAF-07", title: "没有紧急 SOS / 好友 check-in", severity: "Critical",
+      body: "户外单独走的安全刚需.",
+      impact: "如果 App 定位是户外, 这个缺失是硬伤.",
+      cost: "2-3 天." },
+  ]
+},
+{
+  key: "iap",
+  name: "订阅 / 支付",
+  desc: "Paywall 相关",
+  items: [
+    { id: "IAP-01", title: "Paywall 显示价格但没接真 IAP", severity: "Blocker",
+      body: "PaywallSheet 显示 NZ$5.99 (O17 改的), 点订阅弹 'coming soon'.",
+      impact: "如果 App Store 审核点到, Guideline 3.1.1 拒审.",
+      cost: "两条路 — (a) MVP 免费上线, Paywall 从用户可达路径拿掉, 半小时. (b) 接 RevenueCat 真订阅, 3-5 天." },
+    { id: "IAP-02", title: "没有 restore purchase 按钮", severity: "Medium",
+      body: "如果做订阅, 换手机后必须能恢复.",
+      cost: "见 IAP-01 (b)." },
+    { id: "IAP-03", title: "没有年费 / 试用 / 促销码", severity: "Low",
+      body: "上线策略问题. 你之前定了创始人方案.",
+      cost: "见 IAP-01 (b)." },
+  ]
+},
+{
+  key: "accessibility",
+  name: "无障碍 / 老年用户",
+  desc: "视力 / 手部 / 认知障碍用户",
+  items: [
+    { id: "A11Y-01", title: "完全不支持 iOS 大字号", severity: "Blocker",
+      body: "全代码库 0 个 allowFontScaling 属性. 老年 / 低视力用户开了 iOS Larger Text 也没用.",
+      impact: "8 个虚拟用户一星. 对老年群体 App 完全不能用.",
+      cost: "全局改 Text 组件. 半天但要测布局." },
+    { id: "A11Y-02", title: "VoiceOver 用户几乎不能用", severity: "Critical",
+      body: "无障碍标签系统性缺失. O17 加了 Home / Auth / HikingStop, 剩下 MarkerDetail / Memory / Friends / Settings 大部分按钮还没.",
+      impact: "Apple 可访问性审核可能 flag.",
+      cost: "全屏扫加 accessibilityLabel. 1-2 天." },
+    { id: "A11Y-03", title: "多个小按钮 < 44pt", severity: "Medium",
+      body: "MarkerDetailSheet 关闭 10pt, Friends 接受/拒绝 36pt. Apple HIG 44pt.",
+      impact: "冷天戴手套 / 手湿点不到. 老年痛点.",
+      cost: "加 hitSlop. O17 改了一部分. 剩下半天." },
+    { id: "A11Y-04", title: "语音备忘录没有听障字幕", severity: "Low",
+      body: "如果未来做语音, 需要转字幕.",
+      cost: "见 MARK-04." },
+    { id: "A11Y-05", title: "没有触觉反馈开关", severity: "Low",
+      body: "按钮按下有 haptic. 但没开关让用户关掉.",
+      cost: "Settings 加开关. 半天." },
+  ]
+},
+{
+  key: "cross-feature",
+  name: "一致性 / 品牌感",
+  desc: "单个都不严重, 加起来让 App 显得不专业",
+  items: [
+    { id: "CROSS-01", title: "3 种成功反馈样式", severity: "Low",
+      body: "Plant 用 haptic+delay+nav, Running 用 text toast, Friends 用 inline panel.",
+      cost: "统一. 半天." },
+    { id: "CROSS-02", title: "3 种 empty state 设计", severity: "Low",
+      body: "Friends 用大插图, Routes 用小 hero, MapHistory 纯文字.",
+      cost: "统一到 IllustrationHalo. 1 天." },
+    { id: "CROSS-03", title: "12+ 处 Alert 有 12 种风格", severity: "Low",
+      body: "网络错误有的 Alert, 有的 toast, 有的静默. 无统一系统.",
+      cost: "写统一 Toast + 迁移. 1 天." },
+    { id: "CROSS-04", title: "2 个 sheet 滑入起始位置不一样", severity: "Low",
+      body: "translateY 300 vs 400. 动画不统一.",
+      cost: "统一. 10 分钟." },
+    { id: "CROSS-05", title: "3 个 marker type registry 并存", severity: "Low",
+      body: "MARKER_META / MARKER_TYPES / FLAG_TYPES. 未来改要改 3 处.",
+      cost: "合并. 半天." },
+    { id: "CROSS-06", title: "3 个近似的红色", severity: "Low",
+      body: "#b25a48 / #c44545 / #c53d2e. 视觉相近但不一样.",
+      cost: "选一个统一, Playwright 侧边对比. 1 天." },
+    { id: "CROSS-07", title: "毛利语和英文夹杂无策略", severity: "Low",
+      body: "只有 Home 早晨和 Settings footer 是毛利, 其他全英文.",
+      cost: "策略性放置. 半天." },
+    { id: "CROSS-08", title: "'Sign out' hint 用 'walks', 其他地方用 'hikes'", severity: "Low",
+      body: "同一动作两个词.",
+      cost: "统一. 5 分钟." },
+  ]
+},
+{
+  key: "store",
+  name: "上架素材 / 资料",
+  desc: "App Store Connect 提交前必备",
+  items: [
+    { id: "STORE-01", title: "App 图标 1024 没验证", severity: "Blocker",
+      body: "文件存在但没验证符合 Apple 要求 (无 alpha 无圆角无透明).",
+      cost: "Preview 检查. 不行找设计. 半小时到几天." },
+    { id: "STORE-02", title: "商店截图还没做", severity: "Blocker",
+      body: "iPhone 6.7\" + 5.5\" 各 3-10 张.",
+      cost: "设计 + Playwright 抓图合成. 1-2 天." },
+    { id: "STORE-03", title: "App Store 描述文案没写", severity: "Blocker",
+      body: "App Name + Subtitle + Description + Keywords.",
+      cost: "写 + 关键词研究. 半天到一天." },
+    { id: "STORE-04", title: "隐私营养标签没写", severity: "Blocker",
+      body: "docs/store-listing/privacy-nutrition.md 缺失.",
+      cost: "半天." },
+    { id: "STORE-05", title: "TestFlight 外部测试组没配", severity: "Blocker",
+      body: "ASC 后台还没建 external tester group.",
+      cost: "半小时." },
+    { id: "STORE-06", title: "商店年龄评级没填", severity: "Blocker",
+      body: "ASC 提交时会问是否有 UGC 等. 咱有.",
+      cost: "半小时." },
+    { id: "STORE-07", title: "客服 / 支持邮箱和 URL 没验证在线", severity: "Blocker",
+      body: "cairnapp.nz / support / privacy 需要 200 OK.",
+      cost: "验证 + 挂静态页. 半天." },
+    { id: "STORE-08", title: "EAS 分阶段发布没配", severity: "Blocker",
+      body: "第一版有 bug 应该只推给 5%-10% 观察.",
+      cost: "改 eas.json. 半小时." },
+    { id: "STORE-09", title: "服务条款 / EULA 没写", severity: "Blocker",
+      body: "指向 Apple 默认 stdeula. UGC App 要专属.",
+      cost: "找模板 + 律师看. 1 天." },
+    { id: "STORE-10", title: "封闭内部测试至少一轮 (你 + 3-5 朋友)", severity: "Blocker",
+      body: "上线前必须. 走完 signup → hike → save → 退出 → 重开.",
+      cost: "1-2 天." },
+  ]
+},
+{
+  key: "verify",
+  name: "O17 修完待真机 verify",
+  desc: "已在 O17 里推了, 你装 TestFlight 走一遍确认",
+  items: [
+    { id: "VER-01", title: "iOS 权限说明真机确认", severity: "Medium",
+      body: "O17 改了 iOS 权限文案 (locate/photo/motion). 弹权限时是不是显示新的.",
+      cost: "TestFlight 卸载重装看权限弹窗. 5 分钟." },
+    { id: "VER-02", title: "全局 ErrorBoundary 真机确认", severity: "Medium",
+      body: "O17 挂了 App.tsx. 需要模拟一次 crash 看是否显示错误页.",
+      cost: "TestFlight. 5 分钟." },
+    { id: "VER-03", title: "PulsingDot cleanup 真机确认", severity: "Low",
+      body: "O17 修了 Animated.loop unmount cleanup. 需要真机跑步一次.",
+      cost: "TestFlight. 5 分钟." },
+    { id: "VER-04", title: "所有 copy 改动真机确认", severity: "Low",
+      body: "O17 改了 40 处文案. 至少扫一遍主流程看是否所有中英文都对.",
+      cost: "TestFlight. 15 分钟." },
+    { id: "VER-05", title: "PlantScreen / RouteEditor 错误提示丢了后端 message", severity: "Medium",
+      body: "O17 改成友好文案后, 后端具体错误 (rate_limited 等) 不再告知. 永久失败用户会一直重试.",
+      cost: "映射错误代码到人话. 半天." },
+    { id: "VER-06", title: "dev screen 里 'Delete this mark?' 遗漏", severity: "Low",
+      body: "features/marks/dev/MarkDetailDevPreviewScreen.tsx 一处没换. dev-only 不影响用户.",
+      cost: "5 分钟." },
+    { id: "VER-07", title: "MapHistory 标题在 prod 隐藏 Plan 按钮后不居中", severity: "Low",
+      body: "O17 藏了 Plan 按钮. 布局有点空. 视觉小问题.",
+      cost: "调 flex. 10 分钟." },
+  ]
+},
+];
+
+const LSK = "cairn-launch-audit-v2";
+const load = () => { try { return JSON.parse(localStorage.getItem(LSK) || "{}"); } catch { return {}; } };
+const save = (id, decision, notes) => {
+  const s = load();
+  s[id] = { decision, notes, ts: Date.now() };
+  localStorage.setItem(LSK, JSON.stringify(s));
+  updateProgress();
+  updateNavCounts();
+};
+
+// Flatten
+let allItems = [];
+GROUPS.forEach(g => { if (g.items) g.items.forEach(it => allItems.push({ ...it, groupKey: g.key })); });
+document.getElementById("total").textContent = allItems.length;
+
+// Nav
+const nav = document.getElementById("nav");
+GROUPS.forEach(g => {
+  if (g.hide) return;
+  const btn = document.createElement("button");
+  btn.className = "nav-btn";
+  btn.dataset.key = g.key;
+  const total = (g.items || []).length;
+  btn.innerHTML = `${g.name} <span class="count" data-count="${g.key}">0/${total}</span>`;
+  btn.addEventListener("click", () => showGroup(g.key));
+  nav.appendChild(btn);
+});
+
+function showGroup(key) {
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.key === key));
+  const group = GROUPS.find(g => g.key === key);
+  document.getElementById("section-title").textContent = group.name;
+  const content = document.getElementById("content");
+  content.innerHTML = "";
+
+  if (group.intro) {
+    content.innerHTML = `
+      <div class="intro">
+        <h2>这份清单是什么</h2>
+        <p>过去 8 小时我把 Cairn 从各种角度审了一遍, 一共发现约 <b>360 个问题</b>. 已经修完 40 个 100% 稳的 (O17 已推). 剩下的都得你决定.</p>
+        <ul>
+          <li>左边按 <b>功能</b> 分了 21 类. 挑一个开始看.</li>
+          <li>每条给 <b>标题 + 说明 + 影响 + 成本</b>, 你选一个 <b>决定</b>, 可选留 <b>备注</b>.</li>
+          <li>决定选项: 现在做 · 下一版 (v1.1) · 上线后再说 · 不做 · 先隐藏 · 再讨论</li>
+          <li><b>备注可以语音输入</b> — 每条备注右边有个 🎙 麦克风, 点一下开始说话, 再点停止. 支持中文.</li>
+          <li>选择自动保存到浏览器. 关了不会丢, 换电脑就没了. 决定完请点左下 <b>导出</b> 给我.</li>
+        </ul>
+        <p style="margin-top: 16px; color: var(--muted); font-size: 14px;">优先顺序建议 (从上往下最急):</p>
+        <ul style="font-size: 14px; color: var(--muted);">
+          <li>先看 <b>账户</b> + <b>上架素材</b> — 决定能不能上架的硬门槛</li>
+          <li>再看 <b>首次引导</b> + <b>徒步/跑步</b> — 用户第一次用会不会摔跤</li>
+          <li>再看 <b>数据安全</b> + <b>推送</b> — 上线后会不会出事</li>
+          <li>最后 <b>一致性 / 无障碍 / 分享 / 搜索</b> 等可以按预算裁</li>
+        </ul>
+      </div>`;
+    return;
+  }
+
+  const s = load();
+  const header = document.createElement("div");
+  header.className = "section-header";
+  header.innerHTML = `<h2>${group.name}</h2><p>${group.desc}</p>`;
+  content.appendChild(header);
+
+  group.items.forEach(item => {
+    const rec = s[item.id] || {};
+    const div = document.createElement("div");
+    div.className = "item";
+    div.dataset.id = item.id;
+    div.dataset.decided = rec.decision ? "1" : "0";
+    div.innerHTML = `
+      <div class="head">
+        <span class="id">${item.id}</span>
+        <span class="title">${item.title}</span>
+        <span class="pill ${item.severity}">${item.severity}</span>
+      </div>
+      <div class="body">${item.body}</div>
+      ${item.impact ? `<div class="meta"><b>影响</b>: ${item.impact}</div>` : ""}
+      ${item.cost ? `<div class="meta"><b>成本</b>: ${item.cost}</div>` : ""}
+      <div class="decision-block">
+        <div class="label">你的决定 (选一个)</div>
+        <div class="decision-row" data-id="${item.id}">
+          <button data-value="now">现在做</button>
+          <button data-value="v11">下一版 v1.1</button>
+          <button data-value="later">上线后再说</button>
+          <button data-value="skip">不做</button>
+          <button data-value="defer">先隐藏</button>
+          <button data-value="ask">再讨论</button>
+        </div>
+        <div class="notes-block">
+          <label>备注 (可选) — 点右边麦克风说话也行</label>
+          <div class="notes-wrap">
+            <textarea data-notes="${item.id}" placeholder="例如: 先隐藏Apple登录, v1.1再实装 / 用免费方案 / 找设计做...">${rec.notes || ""}</textarea>
+            <button class="mic-btn" data-mic="${item.id}" type="button" title="点击开始语音输入">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+          </div>
+          <div class="mic-hint" data-mic-hint="${item.id}"></div>
+        </div>
+      </div>
+    `;
+    content.appendChild(div);
+
+    if (rec.decision) {
+      const b = div.querySelector(`button[data-value="${rec.decision}"]`);
+      if (b) b.classList.add("selected");
+    }
+  });
+
+  // Bind
+  content.querySelectorAll(".decision-row").forEach(row => {
+    row.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      row.querySelectorAll("button").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      const id = row.dataset.id;
+      const notes = document.querySelector(`textarea[data-notes="${id}"]`).value;
+      save(id, btn.dataset.value, notes);
+      row.closest(".item").dataset.decided = "1";
+    });
+  });
+  content.querySelectorAll("textarea[data-notes]").forEach(ta => {
+    ta.addEventListener("input", () => {
+      const id = ta.dataset.notes;
+      const row = document.querySelector(`.decision-row[data-id="${id}"]`);
+      const sel = row.querySelector("button.selected");
+      save(id, sel ? sel.dataset.value : null, ta.value);
+    });
+  });
+
+  // Voice input on each mic button
+  content.querySelectorAll(".mic-btn[data-mic]").forEach(btn => {
+    btn.addEventListener("click", () => toggleMic(btn));
+  });
+}
+
+// ─── Voice input (Web Speech API) ────────────────────────────────
+// One global recognizer; only one mic active at a time.
+let currentRec = null;
+let currentMicBtn = null;
+let baseText = ""; // Text in textarea when recording started
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function setHint(id, text, cls) {
+  const hint = document.querySelector(`[data-mic-hint="${id}"]`);
+  if (!hint) return;
+  hint.textContent = text || "";
+  hint.className = "mic-hint" + (cls ? " " + cls : "");
+}
+
+function stopCurrentMic() {
+  if (currentRec) {
+    try { currentRec.stop(); } catch {}
+    currentRec = null;
+  }
+  if (currentMicBtn) {
+    currentMicBtn.classList.remove("listening");
+    currentMicBtn = null;
+  }
+}
+
+function toggleMic(btn) {
+  const id = btn.dataset.mic;
+
+  // If this button is already recording -> stop
+  if (currentMicBtn === btn) {
+    stopCurrentMic();
+    setHint(id, "已停止", "");
+    setTimeout(() => setHint(id, "", ""), 1500);
+    return;
+  }
+
+  // If another button is recording -> stop it first
+  stopCurrentMic();
+
+  if (!SR) {
+    setHint(id, "此浏览器不支持语音输入. 试试 Chrome / Edge / Safari.", "error");
+    return;
+  }
+
+  const ta = document.querySelector(`textarea[data-notes="${id}"]`);
+  if (!ta) return;
+  baseText = ta.value;
+
+  const rec = new SR();
+  rec.lang = "zh-CN";
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+
+  let finalText = "";
+
+  rec.onstart = () => {
+    setHint(id, "🎙 正在听... 再点一下停止", "active");
+  };
+
+  rec.onresult = (e) => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        finalText += t;
+      } else {
+        interim += t;
+      }
+    }
+    const sep = baseText && !baseText.endsWith(" ") && !baseText.endsWith("\n") ? " " : "";
+    ta.value = baseText + sep + finalText + interim;
+    // Save on every update
+    const row = document.querySelector(`.decision-row[data-id="${id}"]`);
+    const selBtn = row ? row.querySelector("button.selected") : null;
+    save(id, selBtn ? selBtn.dataset.value : null, ta.value);
+  };
+
+  rec.onerror = (e) => {
+    let msg = "出错了: " + e.error;
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      msg = "麦克风权限被拒. 到浏览器地址栏🔒图标里打开.";
+    } else if (e.error === "no-speech") {
+      msg = "没听到声音. 再试一下.";
+    } else if (e.error === "network") {
+      msg = "网络问题 (语音识别需要联网).";
+    }
+    setHint(id, msg, "error");
+    stopCurrentMic();
+  };
+
+  rec.onend = () => {
+    if (currentMicBtn === btn) {
+      // Ended unexpectedly (auto-timeout etc)
+      currentMicBtn.classList.remove("listening");
+      currentMicBtn = null;
+      currentRec = null;
+      setHint(id, "已停止. 再点重新开始.", "");
+    }
+  };
+
+  try {
+    rec.start();
+    currentRec = rec;
+    currentMicBtn = btn;
+    btn.classList.add("listening");
+  } catch (err) {
+    setHint(id, "启动失败: " + err.message, "error");
+  }
+}
+
+function updateProgress() {
+  const s = load();
+  const done = Object.keys(s).filter(k => s[k].decision).length;
+  document.getElementById("progress").textContent = done;
+}
+
+function updateNavCounts() {
+  const s = load();
+  GROUPS.forEach(g => {
+    if (!g.items) return;
+    const done = g.items.filter(it => s[it.id] && s[it.id].decision).length;
+    const el = document.querySelector(`.count[data-count="${g.key}"]`);
+    if (el) el.textContent = `${done}/${g.items.length}`;
+  });
+}
+
+// Reset
+document.getElementById("reset-btn").addEventListener("click", () => {
+  if (!confirm("确定清空所有决定?")) return;
+  localStorage.removeItem(LSK);
+  location.reload();
+});
+
+// Export
+document.getElementById("export-btn").addEventListener("click", () => {
+  const s = load();
+  const out = { ts: new Date().toISOString(), decisions: {}, summary: { by_decision: {}, by_group: {} } };
+  allItems.forEach(it => {
+    const rec = s[it.id];
+    if (rec && rec.decision) {
+      out.decisions[it.id] = { title: it.title, severity: it.severity, group: it.groupKey, decision: rec.decision, notes: rec.notes || "" };
+      out.summary.by_decision[rec.decision] = (out.summary.by_decision[rec.decision] || 0) + 1;
+      out.summary.by_group[it.groupKey] = (out.summary.by_group[it.groupKey] || 0) + 1;
+    }
+  });
+  out.summary.total = allItems.length;
+  out.summary.decided = Object.keys(out.decisions).length;
+  const json = JSON.stringify(out, null, 2);
+  const w = window.open("", "_blank");
+  w.document.write(`<!DOCTYPE html><html><head><title>Cairn decisions</title><style>body{font-family:sans-serif;padding:24px;background:#f5efe4;color:#3a342c;}textarea{width:100%;height:80vh;font-family:monospace;font-size:13px;line-height:1.5;padding:12px;background:#faf6ec;border:1px solid #d9cfba;border-radius:8px;}</style></head><body><p><b>${out.summary.decided}</b> / ${out.summary.total} 条已决定. 复制下面全部内容发给 Claude:</p><textarea>${json.replace(/</g, "&lt;")}</textarea></body></html>`);
+});
+
+// Init
+showGroup("overview");
+updateNavCounts();
+updateProgress();
+</script>
+
+</body>
+</html>

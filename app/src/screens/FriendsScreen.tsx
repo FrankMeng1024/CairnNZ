@@ -194,7 +194,20 @@ function AddFriendSheet({ onDismiss }: { onDismiss: () => void }) {
         dismiss();
       }, 2000);
     } else {
-      setValidationError(result.error || 'Failed to send request');
+      // O18 FRI-09: map known backend errors to human copy so a rejected
+      // "user not found" doesn't get silently mis-labeled as "sent".
+      const raw = (result.error || '').toLowerCase();
+      let msg: string;
+      if (raw.includes('not found') || raw.includes('no user') || raw.includes('does not exist')) {
+        msg = 'No one at Cairn uses that email yet. Ask them to sign up first.';
+      } else if (raw.includes('already') && (raw.includes('friend') || raw.includes('request'))) {
+        msg = 'You already sent a request or are friends with this person.';
+      } else if (raw.includes('yourself') || raw.includes('self')) {
+        msg = "You can't friend yourself.";
+      } else {
+        msg = result.error || "Couldn't send. Check your connection and try again.";
+      }
+      setValidationError(msg);
       setAddState('idle');
     }
   };
@@ -493,6 +506,9 @@ export function FriendsScreen() {
                               onPress={() => handleAccept(req.id)}
                               scaleTo={0.94}
                               disabled={busyRequestId === String(req.id)}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+                              accessibilityLabel="Accept friend request"
+                              accessibilityRole="button"
                             >
                               {busyRequestId === String(req.id) ? (
                                 <ActivityIndicator size="small" color="#fff" />
@@ -505,6 +521,9 @@ export function FriendsScreen() {
                               onPress={() => handleReject(req.id)}
                               scaleTo={0.94}
                               disabled={busyRequestId === String(req.id)}
+                              hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                              accessibilityLabel="Decline friend request"
+                              accessibilityRole="button"
                             >
                               <Icon name="X" size={IconSize.sm} color={Colors.textSecondary} strokeWidth={2.4} />
                             </PressBtn>

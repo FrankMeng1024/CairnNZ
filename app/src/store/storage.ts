@@ -4,7 +4,10 @@
  * API is async on both platforms.
  *
  * Errors are caught and logged: storage failures must not block app boot.
- * getItem returns null on failure; setItem/removeItem swallow errors.
+ * getItem returns null on failure; setItem/removeItem swallow errors by
+ * default, but callers may pass `strict: true` to opt into throwing so
+ * critical writes (session data, plant drafts) don't disappear silently
+ * on a full disk (O18 SAF-02).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -26,7 +29,7 @@ export const storage = {
       return null;
     }
   },
-  setItem: async (key: string, value: string): Promise<void> => {
+  setItem: async (key: string, value: string, opts?: { strict?: boolean }): Promise<void> => {
     try {
       if (isWeb) {
         if (typeof window !== 'undefined' && window.localStorage) {
@@ -38,6 +41,9 @@ export const storage = {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(`[storage] setItem(${key}) failed:`, err);
+      // O18 SAF-02: strict callers get the error so they can surface a
+      // "disk full" message to the user instead of silently losing data.
+      if (opts?.strict) throw err;
     }
   },
   removeItem: async (key: string): Promise<void> => {

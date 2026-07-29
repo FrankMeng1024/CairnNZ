@@ -154,7 +154,15 @@ interface TrackingState {
    *  - 'too-short' : < 2 trackPoints, session was discarded (no path to draw)
    *  - null        : initial state, or after the consuming screen has shown the notice and cleared it
    *  Screens watch this to surface a friendly explanation when a stop produces no Activities-list entry. */
-  lastStopReason: 'saved' | 'saved_pending' | 'too-short' | null;
+  lastStopReason: 'saved' | 'saved_pending' | 'too-short' | 'save_lost' | null;
+
+  /**
+   * O18 SAF-01: when both saveHikeAtomic AND its pendingSyncStore fallback
+   * fail (e.g. AsyncStorage disk full), we set this flag so the UI can
+   * surface a hard error with a Retry button instead of silently losing
+   * the hike. Cleared by clearLastStopReason() (same lifecycle).
+   */
+  saveLostSessionId: string | null;
 
   // Actions
   setActivityMode: (mode: ActivityMode) => void;
@@ -195,7 +203,8 @@ const initialState = {
   lastCoordinate: null,
   lastCoordinateTime: null,
   lastFixTimestamp: null,
-  lastStopReason: null as 'saved' | 'saved_pending' | 'too-short' | null,
+  lastStopReason: null as 'saved' | 'saved_pending' | 'too-short' | 'save_lost' | null,
+  saveLostSessionId: null as string | null,
 };
 
 export const useTrackingStore = create<TrackingState>((set, get) => ({
@@ -1145,6 +1154,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             crashLogger.breadcrumb(`v412:saved_to_pending localId=${s.sessionId.slice(0, 8)}`);
           } catch (persistErr) {
             crashLogger.breadcrumb(`v412:pending_persist_failed ${String(persistErr).slice(0, 60)}`);
+            // O18 SAF-01: pending persist failed too — surface to UI so
+            // the user knows their hike is at risk and can retry manually
+            // (instead of silently believing it saved).
+            set({ saveLostSessionId: s.sessionId });
           }
         }
       } else {
@@ -1165,6 +1178,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           crashLogger.breadcrumb(`v412:no_remoteid_saved_to_pending`);
         } catch (persistErr) {
           crashLogger.breadcrumb(`v412:pending_persist_failed ${String(persistErr).slice(0, 60)}`);
+          // O18 SAF-01: same as branch above — surface hard failure.
+          set({ saveLostSessionId: s.sessionId });
         }
       }
 
@@ -1750,7 +1765,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
   // O1 batch 37: reset removed — 0 external callers confirmed by grep audit.
 
-  clearLastStopReason: () => set({ lastStopReason: null }),
+  clearLastStopReason: () => set({ lastStopReason: null, saveLostSessionId: null }),
 
   discardCurrentSession: () => {
     // Full teardown for too-short sessions when user taps "End anyway".

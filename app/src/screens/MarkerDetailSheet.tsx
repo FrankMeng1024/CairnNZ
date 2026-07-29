@@ -53,8 +53,8 @@ export function MarkerDetailSheet({ marker, onClose, onDelete, lastCoordinate, f
     ? `${dist.formatShort(distToMarker)} away`
     : '--';
 
-  // Slide-in animation — same easing/duration as FlagPlantSheet for consistency
-  const slideY = useRef(new Animated.Value(400)).current;
+  // Slide-in animation — O18 CROSS-04: unified translateY=300 across all sheets.
+  const slideY = useRef(new Animated.Value(300)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.parallel([
@@ -68,7 +68,7 @@ export function MarkerDetailSheet({ marker, onClose, onDelete, lastCoordinate, f
   const handleClose = () => {
     setDeleteConfirm(false);
     Animated.parallel([
-      Animated.timing(slideY, { toValue: 400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.timing(slideY, { toValue: 300, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(opacity, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
     ]).start(() => onClose());
   };
@@ -76,7 +76,7 @@ export function MarkerDetailSheet({ marker, onClose, onDelete, lastCoordinate, f
   const handleDelete = () => {
     if (!deleteConfirm) { setDeleteConfirm(true); return; }
     Animated.parallel([
-      Animated.timing(slideY, { toValue: 400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.timing(slideY, { toValue: 300, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(opacity, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
     ]).start(() => onDelete());
   };
@@ -127,7 +127,7 @@ export function MarkerDetailSheet({ marker, onClose, onDelete, lastCoordinate, f
           onPress={handleDelete}
         >
           <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
-          <Text style={[detailStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Flag'}</Text>
+          <Text style={[detailStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Cairn'}</Text>
         </TouchableOpacity>
       </Animated.View>
     </Animated.View>

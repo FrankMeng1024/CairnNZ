@@ -53,6 +53,8 @@ import {
   MessageCircle, Footprints, PersonStanding, House,
   // O12 Settings redesign — new rows in About & Legal / Preferences / Danger / Developer
   Vibrate, Ruler, Cloud, MessageSquare, Shield, FileText, Wrench, ExternalLink,
+  // O18 HIST-01 — history list search box
+  Search,
 } from 'lucide-react-native';
 import { IconSize } from './tokens';
 
@@ -83,6 +85,8 @@ const ICON_MAP = {
   MessageCircle, Footprints, PersonStanding, House,
   // O12 Settings redesign
   Vibrate, Ruler, Cloud, MessageSquare, Shield, FileText, Wrench, ExternalLink,
+  // O18 HIST-01
+  Search,
 } as const;
 
 export type IconName = keyof typeof ICON_MAP;

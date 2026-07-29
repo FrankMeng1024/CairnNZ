@@ -16,6 +16,13 @@ import type { Coordinate } from '../utils/geo';
 import { deleteRemoteSession } from '../services/sessionService';
 import { crashLogger } from '../services/crashLogger';
 
+// O18 SAF-03: serialize concurrent hydrate() calls so a race between the
+// post-login hydrate and any background hydrate can't overwrite each other
+// in a mixed-user order. Second caller waits for first to finish, then
+// no-ops if user matches.
+let hydrateInFlight: Promise<void> | null = null;
+let hydrateInFlightUserId: string | null = null;
+
 export type ActivityMode = 'hiking' | 'running';
 
 export interface TrackPoint extends Coordinate {
@@ -59,6 +66,8 @@ interface SessionState {
   currentUserId: string;            // 'guest' before login, real userId after
   addSession: (session: TrackingSession) => void;
   deleteSession: (id: string) => void;
+  /** O18 HIST-03: rename a completed hike. Persists via storage.setItem. */
+  renameSession: (id: string, name: string) => void;
   clearSessions: () => void;       // called on logout to remove prior user's data
   getSessions: () => TrackingSession[];
   // O1 batch 40: getSessionsByRegion, markSyncing removed — 0 external callers
@@ -106,6 +115,26 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return { sessions: next };
     });
 
+  },
+
+  // O18 HIST-03: rename a saved hike. Persists the summary list to storage.
+  // Trims empty names to keep display fallbacks working; caller can gate on
+  // trimmed length before invoking.
+  renameSession: (id, name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const userId = get().currentUserId;
+    set((state) => {
+      const next = state.sessions.map((s) => s.id === id ? { ...s, name: trimmed } : s);
+      // Persist summaries (no trackPoints, matches hydrate's read shape).
+      try {
+        const summaries = next.map(({ trackPoints, ...rest }) => rest);
+        storage.setItem(sessionsKey(userId), JSON.stringify(summaries));
+      } catch (err) {
+        crashLogger.breadcrumb(`session:rename:persist_failed ${String(err).slice(0, 60)}`);
+      }
+      return { sessions: next };
+    });
   },
 
   clearSessions: () => {
@@ -180,23 +209,52 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   hydrate: async (userId = 'guest') => {
-    set({ currentUserId: userId });
-    const raw = await storage.getItem(sessionsKey(userId));
-    if (raw) {
-      try {
-        // Sessions loaded without trackPoints (loaded on demand)
-        const summaries: Omit<TrackingSession, 'trackPoints'>[] = JSON.parse(raw);
-        const sessions: TrackingSession[] = summaries.map((s) => ({
-          ...s,
-          trackPoints: [],
-        }));
-        set({ sessions });
-      } catch {
-        storage.removeItem(sessionsKey(userId));
-        set({ sessions: [] });
+    // O18 SAF-03: mutex — if a hydrate is already running for this user,
+    // await it and return (no double-write). If it's running for a DIFFERENT
+    // user, still await (avoid overlapping writes) then run ours after so
+    // the latest requested user wins deterministically.
+    if (hydrateInFlight) {
+      const sameUser = hydrateInFlightUserId === userId;
+      await hydrateInFlight.catch(() => {});
+      if (sameUser) return;
+    }
+    const run = (async () => {
+      set({ currentUserId: userId });
+      const raw = await storage.getItem(sessionsKey(userId));
+      if (raw) {
+        try {
+          // Sessions loaded without trackPoints (loaded on demand)
+          const summaries: Omit<TrackingSession, 'trackPoints'>[] = JSON.parse(raw);
+          const sessions: TrackingSession[] = summaries.map((s) => ({
+            ...s,
+            trackPoints: [],
+          }));
+          // Re-check currentUserId in case a newer hydrate raced ahead —
+          // only apply if we're still the current user.
+          if (useSessionStore.getState().currentUserId === userId) {
+            set({ sessions });
+          }
+        } catch {
+          storage.removeItem(sessionsKey(userId));
+          if (useSessionStore.getState().currentUserId === userId) {
+            set({ sessions: [] });
+          }
+        }
+      } else {
+        if (useSessionStore.getState().currentUserId === userId) {
+          set({ sessions: [] });
+        }
       }
-    } else {
-      set({ sessions: [] });
+    })();
+    hydrateInFlight = run;
+    hydrateInFlightUserId = userId;
+    try {
+      await run;
+    } finally {
+      if (hydrateInFlight === run) {
+        hydrateInFlight = null;
+        hydrateInFlightUserId = null;
+      }
     }
   },
 }));

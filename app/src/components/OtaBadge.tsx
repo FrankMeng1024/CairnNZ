@@ -245,27 +245,79 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //       the same local-session cross-check as the remote branch. Fix:
 //       duplicate the localMatch logic and also call discardActiveHike
 //       to clean the orphan file.
-// O17 (2026-07-29): UX audit batch — 40+ safe fixes based on 13-audit corpus.
-//   Copy fixes (30): iOS purpose strings, error messages, empty states, unified
-//     report reasons across CairnPinsLayer + MapScreen, Free Hiking → Free Hike,
-//     Delete Flag / this mark → Delete cairn, No note added → No note yet,
-//     Discard this activity → Discard this hike, Route Map → History,
-//     "Something went wrong" → contextual copy, Auth splash + tracking permission
-//     alert re-worded, paywall $4.99 → NZ$5.99.
-//   A11y (11): PressBtn now forwards accessibilityLabel/Role; ActivityCard +
-//     ToolBtn labels; HikingScreen Stop button; AuthScreen password toggle;
-//     SettingsScreen 3× password eye toggles + hitSlop; PlantScreen zoom/style/
-//     recenter buttons + hitSlop.
-//   Perf (4): markerCount memoized (HomeScreen); PulsingDot Animated.loop
-//     cleanup (RunningScreen); MemoryScreen heartbeat gated to __DEV__;
-//     mapboxAdapter web-shim console.log gated to __DEV__.
-//   Safety (3): useMemoryStore recordPoint guards atMs; useMarkerStore hydrate
-//     opportunistically clears pre-v0.2.6 legacy 'cairn_markers' key;
-//     PRIVACY_URL strips trailing /api. Removed guillemets (french «») in
-//     public-snapshot banner. Plan Route stub gated to __DEV__.
-//   4-eyes review PASS (2 subagents, HIGH confidence). TypeScript --noEmit
-//   clean (only pre-existing test-file / turf-helpers warnings unchanged).
-export const OTA_VERSION = 'O17';
+// O18 (2026-07-29): user decision batch 1-4 — no-brainer fixes from the
+// 137-item launch decisions manifest. Everything shipped here was
+// explicitly `now` in the user's decisions and had no product ambiguity.
+//
+// Copy + consistency (batch 1):
+//   - Flag / Mark → Cairn everywhere user-visible: Plant a Cairn header,
+//     Delete Cairn confirm buttons, "cairns planted" home stat, empty-state
+//     copy in MapHistory + RoutesScreen. Routes tab label "Flags" → "Cairns".
+//   - Permission label "Only me" / "Just me" unified to "Just me" (3 sites).
+//   - PlantScreen DEFAULT_TYPE stays 'danger' (v299 user decision retained);
+//     RunningScreen quick-plant now matches DEFAULT_TYPE 'danger' instead of
+//     'cairn' (parity fix).
+//   - Settings danger-zone confirm keyword "clear track" → "reset memory".
+//   - Māori language removed pending future strategy: Home greeting is now
+//     "Good morning / afternoon / evening" (was Kia ora mornings only, felt
+//     three-quarters translated), Settings footer "Ngā mihi nui" → "Thanks
+//     for using Cairn", Auth verify screen "Nau mai, haere mai" removed.
+//   - Sign-out hint "Your walks stay saved" → "Your hikes stay saved"
+//     (matches every other screen's noun choice).
+//   - Friend-request submit maps known backend errors (not found / already
+//     friends / self-friend) to human copy so users don't get "sent!" when
+//     it wasn't.
+//   - MarkerDetailSheet slide-in translateY unified from 400 → 300 to
+//     match other sheets.
+//   - Danger reds consolidated: three near-identical hex values collapsed
+//     to Colors.danger token.
+//   - Home Memory tool icon changed from Map → Footprints (Map read as the
+//     concept "Map", not "explored terrain").
+//   - Settings: user-selectable date format (dmy / mdy / ymd) with default
+//     dmy for NZ. StopSummarySheet default hike name now flows through the
+//     shared formatDate util.
+//
+// Pause + Running parity (batch 2):
+//   - Independent Pause + Resume buttons in the tracking bar for BOTH
+//     Hiking and Running. Previously tapping Stop was the only path — the
+//     summary sheet had a Resume affordance but the "answer a phone call
+//     mid-run" case had no clean handling. Now pauseTracking / resumeTracking
+//     are directly reachable from the running UI.
+//   - RunningScreen adopts the Signal-lost chip Hiking already had, and
+//     picks up the pauseTracking / resumeTracking store actions.
+//   - Hiking gains a GPS accuracy chip that surfaces when the last fix's
+//     accuracy is worse than 15m — users can see fix quality without waiting
+//     for the 2-minute signal-loss threshold.
+//   - RunState 'stopped' screen adds a "View activity detail →" secondary
+//     CTA so post-run users can reach MapHistory without a full nav back.
+//
+// Safety (batch 3):
+//   - useTrackingStore.saveLostSessionId + Hiking effect: when saveHikeAtomic
+//     AND its pendingSyncStore fallback both fail (disk full etc.), the
+//     store now surfaces a modal Alert with Retry / Discard actions. Prior
+//     behavior was silent: the crashLogger got a breadcrumb, user got
+//     nothing. This closes the "hiked 4 hours, App said Saved, server had
+//     no record" hole.
+//   - storage.setItem gains an optional strict flag so future call sites
+//     that MUST NOT silently lose data can opt into throwing on disk-full.
+//   - useSessionStore.hydrate is now serialized: overlapping hydrate calls
+//     (post-login + focus + navigation) can no longer race and cross-pollute
+//     users' session lists. Second caller either awaits and no-ops (same
+//     userId) or awaits and runs after (different userId, latest wins).
+//   - UnfinishedRecoveryModal title tightened from "Unfinished hike" to
+//     "Resume this hike?" with an explicit "We saved everything up to your
+//     last GPS fix" subtitle. Force-quit-then-reopen users no longer wonder
+//     whether their data survived.
+//
+// Search + rename (batch 4):
+//   - MapHistoryScreen: search box above the list filters sessions by name.
+//     Empty state distinguishes "no hikes yet" from "no matches".
+//   - useSessionStore.renameSession action + inline pencil affordance on
+//     the session detail panel — users can now edit hike names after saving.
+//
+// Verified: TypeScript --noEmit clean (only pre-existing test / turf-helpers
+// warnings unchanged). Ready for real-device TestFlight verification.
+export const OTA_VERSION = 'O18';
 
 
 type OtaState =

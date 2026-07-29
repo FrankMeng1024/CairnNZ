@@ -15,6 +15,7 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens'
 import { Icon } from '../components/Icon';
 import { previewMemoryGain } from '../features/memory/services/flushHikingToMemory';
 import { useDistance } from '../utils/distanceFormat';
+import { formatDate } from '../utils/dateFormat';
 
 type StopSummary = {
   distanceM: number;
@@ -73,11 +74,8 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard, savi
   const isRun = summary.activityMode === 'running';
   const accent = isRun ? Colors.running : Colors.primary;
   const label = isRun ? 'Run' : 'Hike';
-  const date = new Date(summary.startedAt);
-  const dd = String(date.getDate()).padStart(2, '0');
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const yyyy = date.getFullYear();
-  const defaultName = `${label} — ${dd}/${mm}/${yyyy}`;
+  // O18 HIST-09: default hike name uses user-preferred date format.
+  const defaultName = `${label} — ${formatDate(summary.startedAt)}`;
 
   // v333: dry-run preview of how many new H3 cells this hike unlocks.
   // The actual flush happens in useTrackingStore.stopTracking on confirm;

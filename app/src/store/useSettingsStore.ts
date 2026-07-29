@@ -20,10 +20,14 @@ import { storage } from './storage';
 import { debugLogger } from '../services/debugLogger';
 
 export type UnitsPref = 'metric' | 'imperial';
+// O18 HIST-09: user-selectable date format. Default 'dmy' (DD/MM/YYYY, NZ/UK style).
+// 'mdy' = MM/DD/YYYY (US), 'ymd' = YYYY-MM-DD (ISO).
+export type DateFormatPref = 'dmy' | 'mdy' | 'ymd';
 
 interface Settings {
   // Preferences
   units: UnitsPref;
+  dateFormat: DateFormatPref;
   nightMode: boolean;
   hapticFeedback: boolean;
 
@@ -47,6 +51,7 @@ const REMOVED_KEYS = [
 
 const DEFAULTS: Settings = {
   units: 'metric',       // NZ default — user can switch in Settings
+  dateFormat: 'dmy',     // NZ default — DD/MM/YYYY
   nightMode: false,
   hapticFeedback: true,
   debugMode: false,
@@ -131,6 +136,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         if (migrated.units !== 'metric' && migrated.units !== 'imperial') {
           delete migrated.units;
         }
+        if (migrated.dateFormat !== 'dmy' && migrated.dateFormat !== 'mdy' && migrated.dateFormat !== 'ymd') {
+          delete migrated.dateFormat;
+        }
         const boolFields = [
           'nightMode', 'hapticFeedback', 'debugMode',
           'debugAnnotationFabVisible', 'telemetryUploadEnabled', 'telemetryWifiOnly',
@@ -175,6 +183,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 function pick(state: SettingsState): Settings {
   return {
     units: state.units,
+    dateFormat: state.dateFormat,
     nightMode: state.nightMode,
     hapticFeedback: state.hapticFeedback,
     debugMode: state.debugMode,

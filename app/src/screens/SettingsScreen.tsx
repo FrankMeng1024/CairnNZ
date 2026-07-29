@@ -6,7 +6,7 @@
  *   2. Preferences   — Units / Night mode / Haptic feedback
  *   3. Memory        — readonly stats
  *   4. About & Legal — MetService / Report safety / Feedback / Privacy / Terms / About Cairn
- *   5. Danger zone   — Reset my map memory (type "clear track") + Delete account (type "delete account")
+ *   5. Danger zone   — Reset my map memory (type "reset memory") + Delete account (type "delete account")
  *   6. Account       — Sign out (grey card, below Danger)
  *   7. Footer        — "Ngā mihi nui — thanks for using Cairn."
  *   Hidden Developer — unlocked by 5-tap on About Cairn row
@@ -236,6 +236,7 @@ export function SettingsScreen() {
   // Sprint, but the SettingsScreen toggle is hidden (no consumer yet).
   const hapticFeedback = useSettingsStore((s) => s.hapticFeedback);
   const units = useSettingsStore((s) => s.units);
+  const dateFormat = useSettingsStore((s) => s.dateFormat);
   const debugMode = useSettingsStore((s) => s.debugMode);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
 
@@ -328,6 +329,8 @@ export function SettingsScreen() {
   // Units picker
   // O13 bug 2: switched from modal popup to inline expand (like Change password)
   const [showUnitsInline, setShowUnitsInline] = useState(false);
+  // O18 HIST-09: date format picker (inline expand, same pattern as units).
+  const [showDateInline, setShowDateInline] = useState(false);
 
   // Feedback / Report / Debug screenshot — inline unified form (O13 bug 5)
   const [showFeedbackInline, setShowFeedbackInline] = useState(false);
@@ -694,6 +697,54 @@ export function SettingsScreen() {
               </View>
             )}
             <View style={styles.divider} />
+            {/* O18 HIST-09: date format picker (dmy / mdy / ymd) */}
+            <ActionRow
+              iconName="Calendar"
+              iconColor={Colors.primary}
+              iconBg={Colors.primaryLight}
+              label="Date format"
+              hint="How dates appear across the app"
+              value={dateFormat === 'mdy' ? 'MM/DD/YYYY' : dateFormat === 'ymd' ? 'YYYY-MM-DD' : 'DD/MM/YYYY'}
+              onPress={() => setShowDateInline(v => !v)}
+            />
+            {showDateInline && (
+              <View style={inlineStyles.expand}>
+                <View style={styles.divider} />
+                <TouchableOpacity
+                  style={inlineStyles.pickerRow}
+                  onPress={() => { updateSetting('dateFormat', 'dmy'); setShowDateInline(false); }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[inlineStyles.pickerLabel, dateFormat === 'dmy' && inlineStyles.pickerLabelActive]}>DD/MM/YYYY</Text>
+                    <Text style={inlineStyles.pickerHint}>New Zealand / UK · e.g. 29/07/2026</Text>
+                  </View>
+                  {dateFormat === 'dmy' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
+                </TouchableOpacity>
+                <View style={styles.divider} />
+                <TouchableOpacity
+                  style={inlineStyles.pickerRow}
+                  onPress={() => { updateSetting('dateFormat', 'mdy'); setShowDateInline(false); }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[inlineStyles.pickerLabel, dateFormat === 'mdy' && inlineStyles.pickerLabelActive]}>MM/DD/YYYY</Text>
+                    <Text style={inlineStyles.pickerHint}>United States · e.g. 07/29/2026</Text>
+                  </View>
+                  {dateFormat === 'mdy' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
+                </TouchableOpacity>
+                <View style={styles.divider} />
+                <TouchableOpacity
+                  style={inlineStyles.pickerRow}
+                  onPress={() => { updateSetting('dateFormat', 'ymd'); setShowDateInline(false); }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[inlineStyles.pickerLabel, dateFormat === 'ymd' && inlineStyles.pickerLabelActive]}>YYYY-MM-DD</Text>
+                    <Text style={inlineStyles.pickerHint}>ISO · e.g. 2026-07-29</Text>
+                  </View>
+                  {dateFormat === 'ymd' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
+                </TouchableOpacity>
+              </View>
+            )}
+            <View style={styles.divider} />
             <ToggleRow
               iconName="Vibrate"
               iconColor="#8a6e3b"
@@ -920,7 +971,7 @@ export function SettingsScreen() {
             <ActionRow
               label="Reset my map memory"
               hint="Clears every place you have walked. Your hikes and cairns are kept."
-              labelColor="#b25a48"
+              labelColor={Colors.danger}
               onPress={() => setShowResetMemoryModal(true)}
             />
             {isLoggedIn && (
@@ -929,7 +980,7 @@ export function SettingsScreen() {
                 <ActionRow
                   label="Delete account"
                   hint="Permanent — opens confirmation before we email our team"
-                  labelColor="#b25a48"
+                  labelColor={Colors.danger}
                   onPress={() => setShowDeleteAccountModal(true)}
                 />
               </>
@@ -941,7 +992,7 @@ export function SettingsScreen() {
             <View style={[styles.card, { marginTop: Spacing.xl }]}>
               <ActionRow
                 label="Sign out"
-                hint="Your walks stay saved"
+                hint="Your hikes stay saved"
                 labelColor={Colors.textPrimary}
                 onPress={async () => {
                   const confirmed = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function'
@@ -1005,7 +1056,7 @@ export function SettingsScreen() {
           )}
 
           {/* ── Footer ── */}
-          <Text style={styles.footer}>Ngā mihi nui — thanks for using Cairn.</Text>
+          <Text style={styles.footer}>Thanks for using Cairn.</Text>
 
         </ScrollView>
       </SafeAreaView>
@@ -1047,12 +1098,12 @@ export function SettingsScreen() {
         </Pressable>
       </Modal>
 
-      {/* Reset my map memory — type "clear track" to confirm */}
+      {/* Reset my map memory — type "reset memory" to confirm */}
       <TypeToConfirmModal
         visible={showResetMemoryModal}
         title="Reset your map memory?"
         body="This clears every place you have walked on your map. Your saved hikes and cairns are kept. This cannot be undone."
-        keyword="clear track"
+        keyword="reset memory"
         confirmLabel="Reset memory"
         onCancel={() => setShowResetMemoryModal(false)}
         onConfirm={async () => {
@@ -1544,7 +1595,7 @@ const modalStyles = StyleSheet.create({
     backgroundColor: Colors.primary,
     minWidth: 96, alignItems: 'center',
   },
-  btnConfirmDestructive: { backgroundColor: '#c44545' },
+  btnConfirmDestructive: { backgroundColor: Colors.danger },
   btnConfirmDisabled: { opacity: 0.4 },
   btnConfirmText: { fontSize: FontSize.body, fontWeight: '700', color: '#fff' },
 

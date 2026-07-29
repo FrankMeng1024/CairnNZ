@@ -950,7 +950,6 @@ export function AuthScreen() {
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]} edges={['top', 'bottom']}>
         <Icon name="CircleCheck" size={56} color={Colors.primary} strokeWidth={1.5} />
         <Text style={[styles.appName, { marginTop: 16, marginBottom: 8 }]}>Welcome, {welcomeName}!</Text>
-        <Text style={[styles.tagline, { textAlign: 'center', color: Colors.textSecondary, marginBottom: 4 }]}>Nau mai, haere mai</Text>
         <Text style={[styles.tagline, { textAlign: 'center', color: Colors.textSecondary }]}>Welcome to Cairn. Ready for your first hike?</Text>
       </SafeAreaView>
     );

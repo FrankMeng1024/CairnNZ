@@ -7,7 +7,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert,
-  Dimensions, Animated, Easing, Platform,
+  Dimensions, Animated, Easing, Platform, TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -723,7 +723,7 @@ function FlagDetailSheet({ marker, onClose, onDelete }: {
           onPress={handleDelete}
         >
           <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
-          <Text style={[sheetStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Flag'}</Text>
+          <Text style={[sheetStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Cairn'}</Text>
         </TouchableOpacity>
       </Animated.View>
     </>
@@ -741,6 +741,8 @@ export function MapHistoryScreen() {
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [tab, setTab] = useState<'routes' | 'flags'>('routes');
+  // O18 HIST-01: search filter for the history list.
+  const [searchQuery, setSearchQuery] = useState('');
 
   const region = getCurrentRegion();
   const allSessions = useSessionStore(s => s.sessions);
@@ -748,6 +750,13 @@ export function MapHistoryScreen() {
   const sessions = targetSessionId
     ? allSessions.filter(s => s.id === targetSessionId)
     : allSessions;
+
+  // O18 HIST-01: apply text search filter — matches on session name.
+  const filteredSessions = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter(s => (s.name || '').toLowerCase().includes(q));
+  }, [sessions, searchQuery]);
 
   // Auto-select the target session or first session on mount
   useEffect(() => {
@@ -763,6 +772,10 @@ export function MapHistoryScreen() {
     }
   }, []);
   const deleteSession = useSessionStore(s => s.deleteSession);
+  // O18 HIST-03: rename hike from the detail panel.
+  const renameSession = useSessionStore(s => s.renameSession);
+  const [renameEditing, setRenameEditing] = useState(false);
+  const [renameText, setRenameText] = useState('');
   const allMarkers = useMarkerStore(s => s.markers);
   const markers = allMarkers.filter(m => m.regionCode === region.code);
   const deleteMarker = useMarkerStore(s => s.deleteMarker);
@@ -1116,6 +1129,63 @@ export function MapHistoryScreen() {
       {/* Bottom panel — simplified for single session, full list for all sessions */}
       {targetSessionId && selectedSession ? (
         <View style={styles.singleSessionPanel}>
+          {/* O18 HIST-03: hike name + rename affordance. Tap the title to edit. */}
+          <View style={{ marginBottom: Spacing.sm }}>
+            {renameEditing ? (
+              <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
+                <TextInput
+                  style={styles.renameInput}
+                  value={renameText}
+                  onChangeText={setRenameText}
+                  autoFocus
+                  maxLength={60}
+                  onSubmitEditing={() => {
+                    const t = renameText.trim();
+                    if (t) renameSession(selectedSession.id, t);
+                    setRenameEditing(false);
+                  }}
+                  returnKeyType="done"
+                  placeholder="Hike name"
+                  placeholderTextColor={Colors.textMuted}
+                />
+                <TouchableOpacity
+                  onPress={() => {
+                    const t = renameText.trim();
+                    if (t) renameSession(selectedSession.id, t);
+                    setRenameEditing(false);
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Save new name"
+                >
+                  <Icon name="Check" size={20} color={Colors.primary} strokeWidth={2.5} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setRenameEditing(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Cancel rename"
+                >
+                  <Icon name="X" size={20} color={Colors.textMuted} strokeWidth={2.5} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={() => {
+                  setRenameText(selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike'));
+                  setRenameEditing(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Rename hike"
+                accessibilityHint="Double tap to edit the hike name"
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.sessionTitle} numberOfLines={1}>
+                    {selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike')}
+                  </Text>
+                  <Icon name="Pencil" size={14} color={Colors.textMuted} strokeWidth={2} />
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
           <View style={styles.singleSessionStats}>
             <View style={styles.singleStat}>
               <Text style={styles.singleStatValue}>{dist.format(selectedSession.distanceM, 1)}</Text>
@@ -1207,24 +1277,62 @@ export function MapHistoryScreen() {
       <View style={styles.listPanel}>
         <View style={styles.panelHandle} />
 
+        {/* O18 HIST-01: search box, above the tabs. Only shown when not
+            drilled into a single session detail. */}
+        {!targetSessionId && sessions.length > 0 && (
+          <View style={{ paddingHorizontal: Spacing.base, paddingBottom: Spacing.sm }}>
+            <View style={styles.searchWrap}>
+              <Icon name="Search" size={16} color={Colors.textMuted} strokeWidth={2} />
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search hikes by name…"
+                placeholderTextColor={Colors.textMuted}
+                autoCorrect={false}
+                autoCapitalize="none"
+                clearButtonMode="while-editing"
+                accessibilityLabel="Search hikes"
+              />
+              {searchQuery.length > 0 && Platform.OS !== 'ios' && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Clear search"
+                >
+                  <Icon name="X" size={14} color={Colors.textMuted} strokeWidth={2.2} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
         {tab === 'routes' ? (
           <ScrollView showsVerticalScrollIndicator={false}>
-            {sessions.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Icon name="Route" size={40} color={Colors.textMuted} strokeWidth={1.2} />
-                <Text style={styles.emptyTitle}>No hikes yet</Text>
-                <Text style={styles.emptySubtitle}>Start hiking or running to see your routes here</Text>
-                <PressBtn
-                  style={styles.emptyCta}
-                  onPress={() => nav.replace('Hiking')}
-                  scaleTo={0.96}
-                >
-                  <Icon name="Play" size={14} color="#fff" strokeWidth={2.5} />
-                  <Text style={styles.emptyCtaText}>Start a Hike</Text>
-                </PressBtn>
-              </View>
+            {filteredSessions.length === 0 ? (
+              sessions.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Icon name="Route" size={40} color={Colors.textMuted} strokeWidth={1.2} />
+                  <Text style={styles.emptyTitle}>No hikes yet</Text>
+                  <Text style={styles.emptySubtitle}>Start hiking or running to see your routes here</Text>
+                  <PressBtn
+                    style={styles.emptyCta}
+                    onPress={() => nav.replace('Hiking')}
+                    scaleTo={0.96}
+                  >
+                    <Icon name="Play" size={14} color="#fff" strokeWidth={2.5} />
+                    <Text style={styles.emptyCtaText}>Start a Hike</Text>
+                  </PressBtn>
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Icon name="Search" size={40} color={Colors.textMuted} strokeWidth={1.2} />
+                  <Text style={styles.emptyTitle}>No matches</Text>
+                  <Text style={styles.emptySubtitle}>Try a different search term.</Text>
+                </View>
+              )
             ) : (
-              sessions.map(s => (
+              filteredSessions.map(s => (
                 <SessionCard
                   key={s.id}
                   session={s}
@@ -1258,7 +1366,7 @@ export function MapHistoryScreen() {
             {markers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Icon name="Flag" size={40} color={Colors.textMuted} strokeWidth={1.2} />
-                <Text style={styles.emptyTitle}>No flags planted</Text>
+                <Text style={styles.emptyTitle}>No cairns planted</Text>
                 <Text style={styles.emptySubtitle}>Open the map to place your first flag</Text>
               </View>
             ) : (
@@ -1451,6 +1559,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg, paddingVertical: 10,
   },
   emptyCtaText: { fontSize: FontSize.caption, fontWeight: '700', color: '#fff' },
+  // O18 HIST-01: search input above the history list.
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    borderRadius: 10,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Platform.OS === 'ios' ? 9 : 4,
+    marginTop: Spacing.xs,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: FontSize.body,
+    color: Colors.textPrimary,
+    paddingVertical: 4,
+  },
+  // O18 HIST-03: rename hike UI.
+  sessionTitle: {
+    fontSize: FontSize.body, fontWeight: '700', color: Colors.textPrimary,
+  },
+  renameInput: {
+    flex: 1,
+    fontSize: FontSize.body,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.primary,
+    paddingVertical: 4,
+  },
 });
 
 const cardStyles = StyleSheet.create({

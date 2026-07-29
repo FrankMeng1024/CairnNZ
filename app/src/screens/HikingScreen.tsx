@@ -97,6 +97,11 @@ export function HikingScreen() {
   // PRESERVED, so "Got it" simply dismisses and tracking continues.
   const lastStopReason = useTrackingStore(s => s.lastStopReason);
   const clearLastStopReason = useTrackingStore(s => s.clearLastStopReason);
+  // O18 SAF-01: hard save failure watcher. When both saveHikeAtomic AND
+  // its pendingSyncStore fallback failed (disk full etc.), the store sets
+  // saveLostSessionId. We surface a modal Alert with a Retry button so
+  // the user knows their hike is at risk and can act.
+  const saveLostSessionId = useTrackingStore(s => s.saveLostSessionId);
   const discardCurrentSession = useTrackingStore(s => s.discardCurrentSession);
   const activityMode = useTrackingStore(s => s.activityMode);
 
@@ -455,6 +460,43 @@ export function HikingScreen() {
   }, [hydrationTs, isTrackingOrPaused]);
 
   useEffect(() => { loadRoutes(); }, []);
+
+  // O18 SAF-01: surface hard save failure with a modal Alert + Retry.
+  useEffect(() => {
+    if (!saveLostSessionId) return;
+    Alert.alert(
+      "We couldn't save this hike",
+      "Your device may be low on storage. Your hike is still recorded in the app. Tap Retry to try saving again, or Discard to remove it.",
+      [
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => {
+            clearLastStopReason();
+            try {
+              discardCurrentSession();
+            } catch { /* best-effort */ }
+          },
+        },
+        {
+          text: 'Retry',
+          onPress: async () => {
+            clearLastStopReason();
+            // Kick the sync daemon — will attempt saveHikeAtomic again
+            // for any pending session it finds.
+            try {
+              const { drainPending } = require('../services/syncDaemon');
+              await drainPending();
+            } catch (e) {
+              // eslint-disable-next-line no-console
+              console.warn('[SAF-01] retry drain failed:', e);
+            }
+          },
+        },
+      ],
+      { cancelable: false },
+    );
+  }, [saveLostSessionId]);
 
   // Pre-fetch a one-shot GPS fix on enter so the route picker can show
   // accurate distance-from-start labels and apply the "too far" filter
@@ -911,6 +953,17 @@ export function HikingScreen() {
             </Text>
           </View>
         )}
+        {/* O18 HIKE-02: GPS accuracy chip — visible while tracking whenever
+            accuracy is worse than 15m so users know the fix quality without
+            waiting for signal-loss threshold. */}
+        {isTracking && !signalLost && lastCoordinate?.accuracy != null && lastCoordinate.accuracy > 15 && (
+          <View style={styles.accuracyPill}>
+            <Icon name="Navigation" size={11} color={Colors.textSecondary} strokeWidth={2.2} />
+            <Text style={styles.accuracyText}>
+              GPS ±{Math.round(lastCoordinate.accuracy)}m
+            </Text>
+          </View>
+        )}
 
         {/* Tracking stats bar */}
         {isTrackingOrPaused && (
@@ -940,6 +993,40 @@ export function HikingScreen() {
                 scaleTo={0.9}
               >
                 <Icon name="Route" size={12} color={Colors.primary} strokeWidth={2.5} />
+              </PressBtn>
+            )}
+            {/* O18 HIKE-01: Independent Pause / Resume button. Tapping
+                Pause halts timer + GPS accumulation without opening the
+                summary sheet — user can answer a call and continue.
+                When paused, this button becomes Resume. */}
+            {status === 'tracking' && (
+              <PressBtn
+                style={styles.pauseBtn}
+                accessibilityLabel="Pause hike"
+                accessibilityRole="button"
+                onPress={() => {
+                  haptic.impact('light');
+                  pauseTracking();
+                }}
+                scaleTo={0.95}
+              >
+                <Icon name="Pause" size={12} color={Colors.primary} strokeWidth={3} />
+                <Text style={styles.pauseBtnText}>Pause</Text>
+              </PressBtn>
+            )}
+            {status === 'paused' && !stopSummary && (
+              <PressBtn
+                style={styles.resumeBtn}
+                accessibilityLabel="Resume hike"
+                accessibilityRole="button"
+                onPress={() => {
+                  haptic.impact('light');
+                  resumeTracking();
+                }}
+                scaleTo={0.95}
+              >
+                <Icon name="Play" size={12} color="#fff" strokeWidth={3} />
+                <Text style={styles.resumeBtnText}>Resume</Text>
               </PressBtn>
             )}
             <PressBtn
@@ -1355,6 +1442,19 @@ const styles = StyleSheet.create({
   },
   signalLostDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.severityWarning },
   signalLostText: { fontSize: 11, fontWeight: '700', color: Colors.severityWarning, letterSpacing: 0.2 },
+  // O18 HIKE-02: GPS accuracy chip — same shape as signalLostPill but
+  // neutral color (Colors.textSecondary). Only rendered when accuracy > 15m
+  // during active tracking (so 3m and 30m fixes read very differently).
+  accuracyPill: {
+    flexDirection: 'row', alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginHorizontal: Spacing.base, marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: Radius.chip,
+    borderWidth: 1, borderColor: Colors.textMuted,
+    gap: 6,
+  },
+  accuracyText: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary, letterSpacing: 0.2 },
   // Tracking stats panel — values intentionally compact (14pt) so the
   // panel doesn't dominate the map view. The numbers are reference
   // information; users glance at them, they don't read them like a
@@ -1374,6 +1474,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
   },
   stopBtnText: { color: '#fff', fontWeight: '700', fontSize: FontSize.small },
+  // O18 HIKE-01: independent Pause + Resume buttons alongside Stop.
+  pauseBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: Colors.primaryLight, borderRadius: Radius.button,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
+    borderWidth: 1, borderColor: Colors.primary,
+    marginRight: Spacing.xs,
+  },
+  pauseBtnText: { color: Colors.primary, fontWeight: '700', fontSize: FontSize.small },
+  resumeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: Colors.primary, borderRadius: Radius.button,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
+    marginRight: Spacing.xs,
+  },
+  resumeBtnText: { color: '#fff', fontWeight: '700', fontSize: FontSize.small },
 
   // Bottom overlay
   bottomOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, pointerEvents: 'box-none' },

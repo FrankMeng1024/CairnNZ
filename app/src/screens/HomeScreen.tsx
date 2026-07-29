@@ -35,7 +35,7 @@ function getGreeting() {
   // O12: uiMode removed — greeting no longer branches on Explorer/Navigator.
   // PRD3 E-014: occasional Te Reo touch — Kia ora as morning variant
   // (registered translator review pending — Kia ora is a well-established greeting)
-  if (h >= 5 && h < 12) return 'Kia ora';
+  if (h >= 5 && h < 12) return 'Good morning';
   if (h >= 12 && h < 18) return 'Good afternoon';
   return 'Good evening';
 }
@@ -456,7 +456,7 @@ export function HomeScreen() {
             </View>
             <View style={styles.statChip}>
               <FlagMarkerIcon size={14} stoneColor={Colors.flag} flagColor={Colors.primary} />
-              <Text style={styles.statText}>{plural(markerCount, 'flag')}</Text>
+              <Text style={styles.statText}>{plural(markerCount, 'cairn')}</Text>
             </View>
           </View>
         )}
@@ -510,7 +510,7 @@ export function HomeScreen() {
         <View style={styles.toolsRow}>
           <ToolBtn iconName="Route" label="Trails" onPress={() => nav.navigate('Routes')} />
           <ToolBtn iconName="Users" label="Friends" onPress={() => nav.navigate('Friends')} />
-          <ToolBtn iconName="Map" label="Memory" onPress={() => nav.navigate('Memory')} />
+          <ToolBtn iconName="Footprints" label="Memory" onPress={() => nav.navigate('Memory')} />
           <ToolBtn iconName="Settings2" label="Settings" onPress={() => nav.navigate('Settings')} />
         </View>
 

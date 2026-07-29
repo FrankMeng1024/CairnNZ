@@ -72,7 +72,7 @@ function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'activities', label: 'Activities' },
     { id: 'routes', label: 'Routes' },
-    { id: 'flags', label: 'Flags' },
+    { id: 'flags', label: 'Cairns' },
   ];
   return (
     <View style={segStyles.container}>
@@ -843,7 +843,7 @@ function FlagEditSheet({
   if (!data) return null;
 
   const permIconNames: Record<MarkerPermission, IconName> = { personal: 'Lock', group: 'Users', public: 'Globe' };
-  const permLabels: Record<MarkerPermission, string> = { personal: 'Only me', group: 'Friends', public: 'Public' };
+  const permLabels: Record<MarkerPermission, string> = { personal: 'Just me', group: 'Friends', public: 'Public' };
 
   const confirmDelete = () => {
     Alert.alert(
@@ -1056,7 +1056,7 @@ function FlagsTab() {
               <EmptyMarkers size={192} />
             </IllustrationHalo>
           </View>
-          <Text style={styles.emptyHeroTitle}>No flags planted yet</Text>
+          <Text style={styles.emptyHeroTitle}>No cairns planted yet</Text>
           <Text style={styles.emptyHeroBody}>
             Leave a mark when you find something worth noting —{'\n'}
             a viewpoint, a junction, a hut.
