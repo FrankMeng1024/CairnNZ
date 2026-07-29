@@ -248,13 +248,26 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
 router.post('/reject', validateBody(schemas.friend.reject), async (req, res) => {
   try {
     const { requestId } = req.body;
-    await pool.execute(
-      // Sprint 6 round-14 R14B7: set resolved_at for accurate 90-day purge.
-      'UPDATE friend_requests SET status = "rejected", resolved_at = NOW() WHERE id = ? AND to_user_id = ?',
+    // Sprint 6 round-29 R29B1: guard on status='pending'. Pre-fix, a
+    // recipient could POST /reject with an already-accepted requestId,
+    // flipping status back to 'rejected' and rewriting resolved_at to
+    // now — while the actual friends table rows from the earlier /accept
+    // remained committed. Result: friend_requests audit lied (says
+    // rejected), users are still friends, authSweep 90-day purge clock
+    // reset on every replay. Now: reject only 'pending' requests; any
+    // other status returns 404 so client shows a stale-state error.
+    const [result] = await pool.execute(
+      'UPDATE friend_requests SET status = "rejected", resolved_at = NOW() WHERE id = ? AND to_user_id = ? AND status = "pending"',
       [requestId, req.user.userId]
     );
+    if (result.affectedRows === 0) {
+      // Row missing, not owned by caller, or already resolved. Same
+      // 404 for all three so we don't leak which request IDs exist.
+      return res.status(404).json({ error: 'Request not found or not pending' });
+    }
     res.json({ message: 'Request rejected' });
   } catch (err) {
+    console.error('[friends/reject]', err.message);
     res.status(500).json({ error: 'Server error' });
   }
 });
