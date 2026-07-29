@@ -124,19 +124,31 @@ class TelemetryUploader {
       // populate the metadata columns even though the body is JSONL.
       // Backend routes/telemetry.js reads X-Cairn-* headers when content-type is x-ndjson.
       const deviceInfo = this.getDeviceInfo();
+      // Sprint 6 round-24 R24: include X-API-Key when configured. Pre-fix,
+      // client had `telemetryApiKey` in settings but never sent it — server
+      // requireApiKey was a no-op so uploads worked but were unauthenticated.
+      // With this header, the coordinated Sprint that enables server-side
+      // enforcement won't 401 users whose settings hold the key. Safe to
+      // ship independently: server currently ignores the header, so this
+      // change is a no-op on today's backend but ready for the coordinated
+      // enable.
+      const uploadHeaders: Record<string, string> = {
+        'Content-Type': 'application/x-ndjson',
+        'X-Cairn-Device-Model': deviceInfo.model ?? '',
+        'X-Cairn-Device-Os': deviceInfo.os ?? '',
+        'X-Cairn-Os-Version': deviceInfo.os_version ?? '',
+        'X-Cairn-App-Version': deviceInfo.app_version ?? '',
+        'X-Cairn-Build-Number': deviceInfo.build_number ?? '',
+        'X-Cairn-Activity-Mode': meta?.activity_mode ?? '',
+        'X-Cairn-Started-At': meta?.started_at ? String(meta.started_at) : '',
+        'X-Cairn-Ended-At': meta?.ended_at ? String(meta.ended_at) : '',
+      };
+      if (settings.telemetryApiKey) {
+        uploadHeaders['X-API-Key'] = settings.telemetryApiKey;
+      }
       const resp = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-ndjson',
-          'X-Cairn-Device-Model': deviceInfo.model ?? '',
-          'X-Cairn-Device-Os': deviceInfo.os ?? '',
-          'X-Cairn-Os-Version': deviceInfo.os_version ?? '',
-          'X-Cairn-App-Version': deviceInfo.app_version ?? '',
-          'X-Cairn-Build-Number': deviceInfo.build_number ?? '',
-          'X-Cairn-Activity-Mode': meta?.activity_mode ?? '',
-          'X-Cairn-Started-At': meta?.started_at ? String(meta.started_at) : '',
-          'X-Cairn-Ended-At': meta?.ended_at ? String(meta.ended_at) : '',
-        },
+        headers: uploadHeaders,
         body: jsonl,
       });
 

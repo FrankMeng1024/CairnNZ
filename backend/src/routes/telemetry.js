@@ -54,6 +54,16 @@ const readLimiter = rateLimit({
 //   (b) 若确定 nginx 已 100% 拦截, 删掉 middleware + 改 comment 明说
 //       "auth 由前置代理负责"
 // 用户 2026-07-26 O1 sprint 已 ack 此 TODO,暂不处理。
+//
+// Sprint 6 round-24 R24 investigation (2026-07-29): confirmed the
+// client-side telemetryUploader.ts:127-141 does NOT send X-API-Key
+// header. Server env var CAIRN_TELEMETRY_API_KEY is set on aliyun but
+// unused. Enabling option (a) server-side without a coordinated client
+// OTA that adds the header would 401 every crash-report upload from
+// every real user, breaking the crash reporter permanently. Fix must
+// be shipped as: (1) client OTA adds X-API-Key header from settings,
+// (2) verify field of view on real device sends the header, (3) THEN
+// enable server-side enforcement. Deferred to a coordinated Sprint.
 function requireApiKey(req, res, next) {
   next();
 }

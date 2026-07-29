@@ -184,16 +184,29 @@ export const crashLogger = {
       if (!report) return;
       const { sessionId, jsonl } = buildCrashJsonl(report);
       const url = apiBaseUrl.replace(/\/$/, '') + '/api/telemetry/sessions';
+      // Sprint 6 round-24 R24: include X-API-Key when configured in
+      // settings. Same rationale as telemetryUploader.ts fix — a
+      // future coordinated Sprint will enable server-side key enforcement,
+      // and by that time this header must already be shipping in the
+      // client. Header omitted when key isn't configured, matching the
+      // server-side pass-through behavior today.
+      const crashHeaders: Record<string, string> = {
+        'Content-Type': 'application/x-ndjson',
+        'X-Cairn-Device-Os': 'ios',
+        'X-Cairn-App-Version': APP_VERSION_HEADER,
+        'X-Cairn-Activity-Mode': 'crash',
+        'X-Cairn-Started-At': String(report.ts),
+        'X-Cairn-Ended-At': String(report.ts),
+      };
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useSettingsStore } = require('../store/useSettingsStore');
+        const key = useSettingsStore.getState().telemetryApiKey;
+        if (key) crashHeaders['X-API-Key'] = key;
+      } catch { /* silent — settings store not loaded during crash boot */ }
       await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-ndjson',
-          'X-Cairn-Device-Os': 'ios',
-          'X-Cairn-App-Version': APP_VERSION_HEADER,
-          'X-Cairn-Activity-Mode': 'crash',
-          'X-Cairn-Started-At': String(report.ts),
-          'X-Cairn-Ended-At': String(report.ts),
-        },
+        headers: crashHeaders,
         body: jsonl,
       }).catch(() => { /* swallow — already persisted is gone, but next crash will try again */ });
       // eslint-disable-next-line no-console
