@@ -312,7 +312,9 @@ export function RunningScreen() {
       haptic.notification('success');
     } else {
       haptic.impact('light');
-      tapTimer.current = setTimeout(() => setTapCount(0), 500);
+      // O18 RUN-06: relax the double-tap window from 500 → 700ms so cold
+      // hands / wet fingers / glove use don't miss the second tap.
+      tapTimer.current = setTimeout(() => setTapCount(0), 700);
     }
   };
 

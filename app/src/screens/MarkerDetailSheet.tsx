@@ -28,11 +28,16 @@ type Props = {
   marker: Marker;
   onClose: () => void;
   onDelete: () => void;
+  /** O18 MARK-02: optional handler to jump into the full MarkerDetailScreen
+   *  for editing. Sheet stays as the quick-view surface; the Screen owns
+   *  edit/permission/snapshot. Providing this prop reveals a "See details"
+   *  affordance so users know they can go deeper. */
+  onOpenDetail?: () => void;
   lastCoordinate: { lat: number; lng: number } | null;
   flagTypes: FlagTypeEntry[];
 };
 
-export function MarkerDetailSheet({ marker, onClose, onDelete, lastCoordinate, flagTypes }: Props) {
+export function MarkerDetailSheet({ marker, onClose, onDelete, onOpenDetail, lastCoordinate, flagTypes }: Props) {
   const meta = MARKER_META[marker.type] || MARKER_META.free;
   const flagType = flagTypes.find(f => f.id === marker.type);
   // O12: settings-aware short-distance format (m/ft near, km/mi far).
@@ -87,9 +92,23 @@ export function MarkerDetailSheet({ marker, onClose, onDelete, lastCoordinate, f
       <Animated.View style={[detailStyles.sheet, { transform: [{ translateY: slideY }] }]}>
         <View style={detailStyles.handle} />
         <View style={detailStyles.headerRow}>
-          <View style={[detailStyles.typeBadge, { backgroundColor: meta.bg, borderColor: meta.color }]}>
-            {flagType && <Icon name={flagType.icon} size={14} color={meta.color} strokeWidth={2.5} />}
-            <Text style={[detailStyles.typeLabel, { color: meta.color }]}>{meta.label}</Text>
+          <View style={detailStyles.headerLeft}>
+            <View style={[detailStyles.typeBadge, { backgroundColor: meta.bg, borderColor: meta.color }]}>
+              {flagType && <Icon name={flagType.icon} size={14} color={meta.color} strokeWidth={2.5} />}
+              <Text style={[detailStyles.typeLabel, { color: meta.color }]}>{meta.label}</Text>
+            </View>
+            {/* O18 MARK-02: permission chip parity with MarkerDetailScreen. */}
+            <View style={detailStyles.permChip}>
+              <Icon
+                name={marker.permission === 'personal' ? 'Lock' : marker.permission === 'group' ? 'Users' : 'Globe'}
+                size={11}
+                color={Colors.textSecondary}
+                strokeWidth={2}
+              />
+              <Text style={detailStyles.permText}>
+                {marker.permission === 'personal' ? 'Just me' : marker.permission === 'group' ? 'Friends' : 'Public'}
+              </Text>
+            </View>
           </View>
           <TouchableOpacity style={detailStyles.closeChip} onPress={handleClose} hitSlop={10} accessibilityLabel="Close">
             <Icon name="X" size={IconSize.sm} color={Colors.textSecondary} strokeWidth={2.5} />
@@ -129,6 +148,19 @@ export function MarkerDetailSheet({ marker, onClose, onDelete, lastCoordinate, f
           <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
           <Text style={[detailStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Cairn'}</Text>
         </TouchableOpacity>
+        {/* O18 MARK-02: See details → jumps to MarkerDetailScreen for edit /
+            snapshot management. Sheet stays as the quick-view surface. */}
+        {onOpenDetail && (
+          <TouchableOpacity
+            style={detailStyles.detailsBtn}
+            onPress={onOpenDetail}
+            accessibilityRole="button"
+            accessibilityLabel="See full details"
+          >
+            <Text style={detailStyles.detailsBtnText}>See details</Text>
+            <Icon name="ChevronRight" size={16} color={Colors.primary} strokeWidth={2} />
+          </TouchableOpacity>
+        )}
       </Animated.View>
     </Animated.View>
   );
@@ -147,12 +179,23 @@ const detailStyles = StyleSheet.create({
     backgroundColor: Colors.border, alignSelf: 'center', marginBottom: Spacing.sm,
   },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  // O18 MARK-02: left side of header now holds type + permission chips.
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   typeBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     alignSelf: 'flex-start', borderRadius: Radius.pill,
     paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderWidth: 1.5,
   },
   typeLabel: { fontSize: FontSize.caption, fontWeight: '700' },
+  // O18 MARK-02: permission chip parity with MarkerDetailScreen.
+  permChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.surfaceMuted,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  permText: { fontSize: FontSize.tiny, fontWeight: '600', color: Colors.textSecondary },
   closeChip: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center',
@@ -167,4 +210,15 @@ const detailStyles = StyleSheet.create({
     flexDirection: 'row', gap: Spacing.xs, justifyContent: 'center',
   },
   deleteBtnText: { color: Colors.danger, fontWeight: '600', fontSize: FontSize.body },
+  // O18 MARK-02: See details link at the bottom of the sheet.
+  detailsBtn: {
+    marginTop: Spacing.xs,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2,
+    paddingVertical: Spacing.sm,
+  },
+  detailsBtnText: {
+    color: Colors.primary,
+    fontWeight: '600',
+    fontSize: FontSize.body,
+  },
 });

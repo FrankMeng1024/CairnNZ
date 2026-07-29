@@ -606,6 +606,29 @@ export function HikingScreen() {
 
   // O12: settings-aware distance format (metric vs imperial).
   const dist = useDistance();
+
+  // O18 HIKE-07: quiet 1 km / 1 mi auto-lap. Fires a light haptic + brief
+  // toast each time distanceM crosses a unit-appropriate boundary. Does
+  // NOT persist laps to the store (persistence + full split UI is a
+  // future project) — this is purely a live feedback nudge so runners
+  // and long-hikers get the "you just crossed 1 km" signal.
+  const lapStepM = dist.imperial ? 1609.344 : 1000;
+  const lastLapCountRef = useRef(0);
+  const [lapToast, setLapToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isTracking) {
+      lastLapCountRef.current = Math.floor(distanceM / lapStepM);
+      return;
+    }
+    const currentLap = Math.floor(distanceM / lapStepM);
+    if (currentLap > lastLapCountRef.current) {
+      lastLapCountRef.current = currentLap;
+      haptic.impact('light');
+      setLapToast(`${currentLap} ${dist.imperial ? 'mi' : 'km'}`);
+      const t = setTimeout(() => setLapToast(null), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [distanceM, isTracking, lapStepM, dist.imperial]);
   const distDisplay = dist.format(distanceM, 1);
   const durationDisplay = formatDuration(durationS);
 
@@ -965,6 +988,14 @@ export function HikingScreen() {
             </Text>
           </View>
         )}
+        {/* O18 HIKE-07: transient lap toast — appears for 2s each time
+            the user crosses a 1 km / 1 mi boundary during tracking. */}
+        {isTracking && lapToast && (
+          <View style={styles.lapToast}>
+            <Icon name="Milestone" size={11} color={Colors.primary} strokeWidth={2.2} />
+            <Text style={styles.lapToastText}>{lapToast}</Text>
+          </View>
+        )}
         {/* O18 HIKE-02: GPS accuracy chip — visible while tracking whenever
             accuracy is worse than 15m so users know the fix quality without
             waiting for signal-loss threshold. */}
@@ -1175,6 +1206,14 @@ export function HikingScreen() {
           marker={selectedMarker}
           onClose={() => { setSelectedMarkerId(null); setUi('map'); }}
           onDelete={handleDeleteMarker}
+          onOpenDetail={() => {
+            // O18 MARK-02: dismiss sheet + open full MarkerDetailScreen for
+            // edit / permission / snapshot management.
+            const id = selectedMarker.id;
+            setSelectedMarkerId(null);
+            setUi('map');
+            nav.navigate('MarkerDetail', { markerId: id });
+          }}
           lastCoordinate={lastCoordinate}
           flagTypes={FLAG_TYPES}
         />
@@ -1474,6 +1513,17 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   accuracyText: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary, letterSpacing: 0.2 },
+  // O18 HIKE-07: lap toast — brief celebration when 1 km / 1 mi crossed.
+  lapToast: {
+    flexDirection: 'row', alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginHorizontal: Spacing.base, marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+    backgroundColor: Colors.primaryLight, borderRadius: Radius.chip,
+    borderWidth: 1, borderColor: Colors.primary,
+    gap: 6,
+  },
+  lapToastText: { fontSize: 11, fontWeight: '700', color: Colors.primary, letterSpacing: 0.2 },
   // Tracking stats panel — values intentionally compact (14pt) so the
   // panel doesn't dominate the map view. The numbers are reference
   // information; users glance at them, they don't read them like a
