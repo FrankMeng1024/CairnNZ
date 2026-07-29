@@ -69,6 +69,16 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
         Alert.alert('Welcome to Memory Pro', 'You now have unlimited friend slots. Thank you for supporting Cairn!');
         onEntitled?.();
         onClose();
+      } else if (r.success) {
+        // Sprint 6 review M7: purchase succeeded but entitlement didn't
+        // flip on immediately (rare — RC entitlement provisioning delay
+        // or webhook lag). Give the user a clear status + a "try later"
+        // path instead of a silent dead-end.
+        Alert.alert(
+          'Purchase received',
+          'Thank you! Your subscription is being activated — this can take a minute. If you don\'t see access shortly, tap Restore purchases.',
+          [{ text: 'OK', onPress: onClose }],
+        );
       }
     } finally {
       setPurchasing(false);
