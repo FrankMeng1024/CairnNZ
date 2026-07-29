@@ -32,8 +32,22 @@ const downloadLimiter = rateLimit({
   message: 'Too many download attempts. Please wait a minute.',
 });
 
+// Sprint 6 round-32 R32B1: rate-limit POST /export per-user. Pre-fix, a
+// user could spam the endpoint — each call triggers setImmediate →
+// DataExport.buildPending which processes ANY queued export row in the
+// system (not just this user's), wasting CPU and DB pool on other users'
+// pending exports. Legitimate use: user taps "Export my data" maybe
+// twice in a bad-signal retry — 5 requests / hour / user is plenty and
+// isolates blast radius per-user (shared-NAT offices don't collide).
+const exportRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 5,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => req.user?.userId ? `export:${req.user.userId}` : ipKeyGenerator(req, res),
+  message: { error: 'Too many export requests. Please wait an hour.' },
+});
+
 // Authed routes
-router.post('/export', authenticate, async (req, res) => {
+router.post('/export', authenticate, exportRequestLimiter, async (req, res) => {
   try {
     const result = await DataExport.request(req.user.userId);
     // Kick a build immediately in the background so small exports feel
