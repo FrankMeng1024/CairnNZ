@@ -318,9 +318,13 @@ router.get('/:id/profile', async (req, res) => {
       [targetId],
     );
     const [hikeCountRows] = await pool.execute(
+      // Sprint 6 round-4 review R4B8: use `finalized_at IS NOT NULL` as
+      // the source of truth for "completed hike". Pre-fix, an OR'd
+      // `distance_m > 0` also counted in-progress unfinalized sessions
+      // (e.g. sim-walker rows), inflating a friend's hike count.
       `SELECT COUNT(*) AS n FROM sessions
        WHERE user_id = ?
-         AND (finalized_at IS NOT NULL OR distance_m > 0)`,
+         AND finalized_at IS NOT NULL`,
       [targetId],
     );
     return res.json({

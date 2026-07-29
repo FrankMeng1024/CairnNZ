@@ -331,6 +331,9 @@ export async function requestDataExport(): Promise<{
 }
 
 // O18 batch 6.7: list my previous export requests (status + timing).
+// Sprint 6 round-4 review R4B9: coerce size_bytes to Number since MySQL2
+// can return BIGINT as a string on some driver configs. TS type says
+// number|null and any UI arithmetic (e.g. formatBytes) breaks on string.
 export async function fetchExportHistory(): Promise<Array<{
   id: number;
   status: string;
@@ -347,7 +350,17 @@ export async function fetchExportHistory(): Promise<Array<{
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return [];
-    return await res.json();
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return [];
+    return rows.map((r: any) => ({
+      id: Number(r.id),
+      status: String(r.status ?? ''),
+      size_bytes: r.size_bytes == null ? null : Number(r.size_bytes),
+      requested_at: String(r.requested_at ?? ''),
+      built_at: r.built_at ?? null,
+      expires_at: r.expires_at ?? null,
+      sent_at: r.sent_at ?? null,
+    }));
   } catch {
     return [];
   }

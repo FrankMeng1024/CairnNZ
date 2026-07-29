@@ -23,12 +23,14 @@
  * How to read logs (dev team):
  *   ssh root@122.51.174.118
  *   docker exec ainews-db mysql -uroot -p<pw> cairn -e "
- *     SELECT id, kind, JSON_EXTRACT(payload, '$.tag') AS tag,
- *            JSON_EXTRACT(payload, '$.session_id') AS session,
- *            uploaded_at, JSON_EXTRACT(payload, '$.ctx') AS ctx
- *       FROM edit_diagnostics
- *      WHERE kind = 'app_log' AND uploaded_at > NOW() - INTERVAL 1 HOUR
- *      ORDER BY uploaded_at DESC LIMIT 100;"
+ *     SELECT id, phase AS tag, step, outcome, diagnostic, received_at
+ *       FROM debug_events_v2
+ *      WHERE received_at > NOW() - INTERVAL 1 HOUR
+ *      ORDER BY id DESC LIMIT 100;"
+ *
+ * Note: `phase` column stores the tag (v429 hotfix migrated from the
+ * older edit_diagnostics table). `step` is the JSON context. `diagnostic`
+ * has the payload. `kind` on the client wrapper is dropped server-side.
  */
 
 import { AppState, Platform } from 'react-native';
