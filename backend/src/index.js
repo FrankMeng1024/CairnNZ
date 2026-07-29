@@ -185,13 +185,36 @@ async function start() {
       );
       if (rows.length === 0) missingTables.push(t);
     }
-    if (missingCols.length > 0 || missingTables.length > 0) {
+    // Sprint 6 round-14 R14B4: also verify FKs from migration 026. Without
+    // CASCADE, hardDelete leaves orphan rows silently.
+    const requiredFks = [
+      'fk_blacklist_user',
+      'fk_device_tokens_user',
+      'fk_notif_recipient',
+      'fk_notif_actor',
+      'fk_prefs_user',
+      'fk_data_exports_user',
+      'fk_blocked_blocker',
+      'fk_blocked_blocked',
+    ];
+    const missingFks = [];
+    for (const fk of requiredFks) {
+      const [rows] = await pool.execute(
+        "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS " +
+        "WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = ? " +
+        "AND CONSTRAINT_TYPE = 'FOREIGN KEY' LIMIT 1",
+        [fk]
+      );
+      if (rows.length === 0) missingFks.push(fk);
+    }
+    if (missingCols.length > 0 || missingTables.length > 0 || missingFks.length > 0) {
       console.error('\n⚠⚠⚠  Sprint 6 schema drift detected!');
       if (missingCols.length > 0) console.error('   Missing columns:', missingCols.join(', '));
       if (missingTables.length > 0) console.error('   Missing tables:', missingTables.join(', '));
+      if (missingFks.length > 0) console.error('   Missing FKs (migration 026):', missingFks.join(', '));
       console.error('       Apply pending migrations from backend/src/migrations/ then restart.\n');
     } else {
-      console.log('✓ Sprint 6 schema check: all tables + columns present');
+      console.log('✓ Sprint 6 schema check: all tables + columns + FKs present');
     }
   } catch (schemaErr) {
     console.warn('[boot] schema check skipped:', schemaErr.message);

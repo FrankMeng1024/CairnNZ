@@ -83,11 +83,16 @@ router.post('/request', validateBody(schemas.friend.request), async (req, res) =
       // Block check inside the tx — read after locking so a concurrent
       // /block that commits mid-flight is either visible here or waits
       // for our tx to complete.
+      // Sprint 6 round-14 R14B1 fix: FOR SHARE lock on blocked_users so
+      // a concurrent /block on the same target holds a matching read
+      // lock; the two txs serialise on the blocked_users rows they
+      // both touch instead of interleaving.
       const [blocks] = await conn.execute(
         `SELECT 1 FROM blocked_users
          WHERE (blocker_id = ? AND blocked_id = ?)
             OR (blocker_id = ? AND blocked_id = ?)
-         LIMIT 1`,
+         LIMIT 1
+         FOR SHARE`,
         [fromUserId, toUser.id, toUser.id, fromUserId],
       );
       if (blocks.length > 0) {
@@ -193,7 +198,9 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
         [req.user.userId, request.from_user_id, request.from_user_id, req.user.userId],
       );
       await conn.execute(
-        'UPDATE friend_requests SET status = "accepted" WHERE id = ?',
+        // Sprint 6 round-14 R14B7: set resolved_at so authSweep purge
+        // uses the actual resolution time, not creation time.
+        'UPDATE friend_requests SET status = "accepted", resolved_at = NOW() WHERE id = ?',
         [requestId],
       );
       await conn.commit();
@@ -234,7 +241,8 @@ router.post('/reject', validateBody(schemas.friend.reject), async (req, res) => 
   try {
     const { requestId } = req.body;
     await pool.execute(
-      'UPDATE friend_requests SET status = "rejected" WHERE id = ? AND to_user_id = ?',
+      // Sprint 6 round-14 R14B7: set resolved_at for accurate 90-day purge.
+      'UPDATE friend_requests SET status = "rejected", resolved_at = NOW() WHERE id = ? AND to_user_id = ?',
       [requestId, req.user.userId]
     );
     res.json({ message: 'Request rejected' });
@@ -427,7 +435,7 @@ router.post('/:id/block', async (req, res) => {
       );
       // Cancel any pending requests either direction.
       await conn.execute(
-        `UPDATE friend_requests SET status = 'rejected'
+        `UPDATE friend_requests SET status = 'rejected', resolved_at = NOW()
          WHERE status = 'pending'
            AND ((from_user_id = ? AND to_user_id = ?)
              OR (from_user_id = ? AND to_user_id = ?))`,

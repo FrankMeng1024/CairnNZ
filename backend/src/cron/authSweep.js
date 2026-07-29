@@ -88,18 +88,25 @@ async function run({ verbose = false, graceDays = 7 } = {}) {
     console.error('[authSweep] reset code purge failed:', err.message);
   }
 
-  // Sprint 6 round-13 R13B2 fix: purge old resolved friend_requests.
-  // Pre-fix, rejected/accepted rows accumulated forever — the table
-  // grew unbounded because no cron cleaned them. 90-day window keeps
-  // recent history usable for support triage but caps storage.
+  // Sprint 6 round-13 R13B2 + round-14 R14B7 fix: purge resolved
+  // friend_requests using resolved_at (accurate resolution time)
+  // rather than created_at (which would delete a recently-accepted
+  // 91-day-old request). Also purge abandoned pending requests older
+  // than 180 days.
   let friendReqsPurged = 0;
   try {
-    const [result] = await pool.execute(
+    const [resolved] = await pool.execute(
       `DELETE FROM friend_requests
        WHERE status IN ('rejected','accepted')
-         AND created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)`,
+         AND resolved_at IS NOT NULL
+         AND resolved_at < DATE_SUB(NOW(), INTERVAL 90 DAY)`,
     );
-    friendReqsPurged = result.affectedRows || 0;
+    const [abandoned] = await pool.execute(
+      `DELETE FROM friend_requests
+       WHERE status = 'pending'
+         AND created_at < DATE_SUB(NOW(), INTERVAL 180 DAY)`,
+    );
+    friendReqsPurged = (resolved.affectedRows || 0) + (abandoned.affectedRows || 0);
   } catch (err) {
     console.error('[authSweep] friend_requests purge failed:', err.message);
   }
