@@ -211,25 +211,33 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
       conn.release();
     }
 
+    // Sprint 6 round-16 R16F-friends: respond BEFORE the push enqueue.
+    // Pre-fix, the SELECT for myName + PushNotification.enqueue could
+    // both throw — the outer catch would 500 the caller even though the
+    // friendship transaction already committed. Result: user sees "Server
+    // error" but on refresh their friend is actually added. Now: response
+    // ships first, push is best-effort in the background.
+    res.json({ message: 'Friend request accepted' });
+
     // O18 batch 6.5: notify the original requester that their request
     // was accepted. Fire-and-forget — do not block the response.
-    try {
-      const [meRows] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
-      const myName = meRows[0]?.name || 'A friend';
-      const PushNotification = require('../models/PushNotification');
-      PushNotification.enqueue({
-        recipientUserId: request.from_user_id,
-        actorUserId: req.user.userId,
-        kind: 'friend_accept',
-        relatedId: requestId,
-        title: `${myName} accepted your friend request`,
-        body: 'You can now see each other\'s cairns and share hikes.',
-      }).catch(err => console.error('[push] friend_accept enqueue failed:', err.message));
-    } catch (pushErr) {
-      console.error('[push] friend_accept trigger failed:', pushErr.message);
-    }
-
-    res.json({ message: 'Friend request accepted' });
+    (async () => {
+      try {
+        const [meRows] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
+        const myName = meRows[0]?.name || 'A friend';
+        const PushNotification = require('../models/PushNotification');
+        await PushNotification.enqueue({
+          recipientUserId: request.from_user_id,
+          actorUserId: req.user.userId,
+          kind: 'friend_accept',
+          relatedId: requestId,
+          title: `${myName} accepted your friend request`,
+          body: 'You can now see each other\'s cairns and share hikes.',
+        });
+      } catch (pushErr) {
+        console.error('[push] friend_accept post-response enqueue failed:', pushErr.message);
+      }
+    })();
   } catch (err) {
     console.error('[friends/accept]', err.message);
     res.status(500).json({ error: 'Server error' });
