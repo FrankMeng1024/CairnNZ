@@ -188,7 +188,13 @@ router.post('/sessions', uploadLimiter, requireApiKey, async (req, res) => {
 // 不进 client bundle; 保留供 SSH+curl 分析线上 crash log。
 router.get('/sessions', readLimiter, requireApiKey, async (req, res) => {
   const since = req.query.since;
-  const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+  // Sprint 6 R50: clamp limit [1, 200] — pre-fix, a negative like
+  // ?limit=-500 passed the `|| 50` (only 0/NaN are falsy for Number),
+  // then Math.min(-500, 200) = -500, then MySQL rejected LIMIT -500
+  // with a 500 error to the caller. Not exploitable, just poor
+  // input handling. Same clamp pattern as PushNotification.listRecent.
+  const rawLimit = parseInt(req.query.limit, 10);
+  const limit = Math.max(1, Math.min(Number.isFinite(rawLimit) ? rawLimit : 50, 200));
 
   let where = '';
   const params = [];
