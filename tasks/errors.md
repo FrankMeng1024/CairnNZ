@@ -95,3 +95,16 @@ All aliyun deployments succeeded (health checks passing after each).
 
 Retry push at next network availability. Commits are the guarantee.
 
+## 2026-07-30 (late) — round-4 review commit push blocked
+
+Commit 2182446 (Sprint 6 round-4 review: R4B1 R4B3 R4B4 R4B6 R4B7)
+local, backend already deployed. github.com:443 unreachable across
+3 retry attempts (immediate / +2min / +5min).
+
+Round-4 review found 11 new issues; 5 fixed in this commit (highest
+impact: R4B1 DOB wipe on resend). 6 tracked as noted / Medium.
+
+Round 5+ challenge review round completed — no NEW blockers found
+introduced by round-4 fixes.
+
+
