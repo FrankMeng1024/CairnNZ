@@ -81,22 +81,36 @@ export const useAppStore = create<AppState>((set) => ({
     // O18 batch 6.5: fire push registration once the user is actually
     // logged in. Fire-and-forget — never block the UI on the permission
     // prompt or the network round-trip.
+    // Sprint 6 round-10 review R10B3 fix: some call sites (AuthScreen
+    // register/verify path) call setLoggedIn BEFORE setUser. On those
+    // paths, useAppStore.getState().user is still null → we'd skip
+    // registerForPush / initializePurchases entirely and the RC SDK
+    // would never bind for the new user. Now: retry on the next tick
+    // if user is null at first read, giving setUser a chance to run.
     if (v) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { registerForPush } = require('../services/pushService');
-        registerForPush().catch(() => { /* silent */ });
-      } catch { /* pushService import failed — silent */ }
-      // O18 batch 6.8: initialise RevenueCat purchases SDK. Idempotent
-      // + safe if the native module isn't in the current build.
-      try {
-        const currentUser = useAppStore.getState().user;
-        if (currentUser?.id) {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { initializePurchases } = require('../services/iapService');
-          initializePurchases(currentUser.id).catch(() => { /* silent */ });
-        }
-      } catch { /* iapService import failed — silent */ }
+      const runOnce = () => {
+        try {
+          const currentUser = useAppStore.getState().user;
+          if (!currentUser?.id) return false;
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { registerForPush } = require('../services/pushService');
+            registerForPush().catch(() => { /* silent */ });
+          } catch { /* silent */ }
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { initializePurchases } = require('../services/iapService');
+            initializePurchases(String(currentUser.id)).catch(() => { /* silent */ });
+          } catch { /* silent */ }
+          return true;
+        } catch { return false; }
+      };
+      if (!runOnce()) {
+        // user is not populated yet — try again after setUser fires.
+        setTimeout(() => { runOnce(); }, 100);
+        // and again at 1s in case setUser is delayed by hydrate.
+        setTimeout(() => { runOnce(); }, 1000);
+      }
     }
   },
   user: null,

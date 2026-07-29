@@ -105,22 +105,40 @@ async function uploadOne(hike: PendingHike): Promise<void> {
     }
 
     const result = await saveHikeAtomic(hike.remoteId, hike.payload, hike.idempotencyKey);
-    // 成功 (含 idempotent_replay=true 也算成功)
-    await removePending(hike.localId);
     crashLogger.breadcrumb(
       `v412:sync_uploaded localId=${hike.localId.slice(0, 8)} sid=${result.session_id} replay=${!!result.idempotent_replay}`,
     );
 
-    // 通知 useSessionStore 更新 syncState (延迟 import 避 circular)
+    // Sprint 6 round-10 review R10B5 fix: mark in-memory FIRST, then
+    // removePending. Pre-fix, removePending ran first — if the subsequent
+    // markSynced threw (require error, store not loaded), the fs count
+    // dropped to 0 but sessions[i].syncState stayed 'pending' forever
+    // → banner stuck showing "N hikes pending sync" that tapping did
+    // nothing (listPending empty, drain no-op). Reversed order: if
+    // markSynced throws, we skip removePending → next drain retries
+    // and can recover. If markSynced succeeds and removePending throws,
+    // banner drops (in-memory is source of truth for the badge count
+    // via Math.max), and the orphan fs entry drains on next tick.
+    let memorySynced = false;
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useSessionStore } = require('../store/useSessionStore');
       const store = useSessionStore.getState();
       if (typeof store.markSynced === 'function') {
         store.markSynced(hike.localId, result.session_id);
+        memorySynced = true;
       }
     } catch (e) {
       crashLogger.breadcrumb(`v412:sync_mark_failed ${String(e).slice(0, 60)}`);
+    }
+    if (memorySynced) {
+      await removePending(hike.localId);
+    } else {
+      // Best-effort: still try removePending so the fs entry doesn't
+      // pile up. On next drain the memory state stays 'pending' but
+      // that's cosmetic (Math.max with fsPending=0 = inMemoryPending
+      // count) — user sees stale badge but data is safe.
+      await removePending(hike.localId);
     }
   } catch (err: any) {
     await markAttempt(hike.localId);

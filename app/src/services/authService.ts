@@ -145,10 +145,20 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
     const res = await post('/api/auth/google', { id_token: idToken });
     const data = await res.json();
     if (!res.ok) {
-      return { error: data?.error || 'Google sign-in failed. Please try again.' };
+      return { error: data?.error || 'Google sign-in failed. Please try again.', hint: data?.hint };
     }
     await saveToken(data.token);
-    return { user: data.user, token: data.token };
+    // Sprint 6 round-10 review R10B7 fix: forward pending_deletion +
+    // restoreDeadline from backend so AuthScreen's restore_confirm view
+    // fires on Google login the same way it does for password + Apple.
+    // Pre-fix, Google users with a soft-deleted account got logged in
+    // silently and their account continued sliding toward hard-delete.
+    return {
+      user: data.user,
+      token: data.token,
+      hint: data.hint,
+      restoreDeadline: data.restore_deadline,
+    };
   } catch {
     return { error: 'Unable to connect. Please try again.' };
   }

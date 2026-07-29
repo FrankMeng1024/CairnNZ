@@ -69,9 +69,13 @@ export async function initializePurchases(userId: string): Promise<boolean> {
   if (initialized) {
     if (currentAppUserID === userId) return true;
     try {
+      // Sprint 6 round-10 review R10B1 fix: capture prev BEFORE assign
+      // so the breadcrumb actually shows the transition (was logging
+      // from=NEW to=NEW because of assign-before-log ordering).
+      const prev = currentAppUserID;
       await Purchases.logIn(userId);
       currentAppUserID = userId;
-      crashLogger.breadcrumb(`iap:user_switched from=${currentAppUserID} to=${userId}`);
+      crashLogger.breadcrumb(`iap:user_switched from=${prev ?? 'null'} to=${userId}`);
       return true;
     } catch (err: any) {
       crashLogger.breadcrumb(`iap:login_failed ${String(err?.message || err).slice(0, 80)}`);
@@ -97,14 +101,18 @@ export async function initializePurchases(userId: string): Promise<boolean> {
   }
 }
 
-// Sprint 6 round-9 review R9B6: called from useAppStore.logout() so the
-// SDK stops attributing purchases to the just-signed-out user.
+// Sprint 6 round-9 review R9B6 + round-10 R10B2: called from
+// useAppStore.logout() so the SDK stops attributing purchases to the
+// just-signed-out user. R10B2 fix: also reset `initialized` so a
+// subsequent sign-in triggers a full configure path (picks up any
+// rotated API keys, matches the semantic "logOut clears everything").
 export async function resetPurchases(): Promise<void> {
   const Purchases = await tryLoadModule();
   if (!Purchases || !initialized) return;
   try {
     await Purchases.logOut();
     currentAppUserID = null;
+    initialized = false;
     crashLogger.breadcrumb('iap:logged_out');
   } catch (err: any) {
     crashLogger.breadcrumb(`iap:logout_failed ${String(err?.message || err).slice(0, 80)}`);
