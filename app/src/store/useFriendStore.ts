@@ -137,3 +137,123 @@ export async function rejectFriendRequestAPI(requestId: string): Promise<boolean
     return false;
   }
 }
+
+// ── O18 FRI-out: outbound requests (I sent) ─────────────────────────────
+
+export interface OutboundRequest {
+  id: number;
+  toUserId: number;
+  toName: string;
+  toEmail: string;
+  sentAt: number;
+}
+
+export async function fetchOutboundRequests(): Promise<OutboundRequest[]> {
+  try {
+    const res = await authenticatedFetch('/api/friends/requests/outbound');
+    if (!res.ok) return [];
+    const rows = await res.json();
+    return (Array.isArray(rows) ? rows : []).map((r: any) => ({
+      id: r.id,
+      toUserId: r.to_user_id,
+      toName: r.to_name,
+      toEmail: r.to_email,
+      sentAt: r.sent_at ? new Date(r.sent_at).getTime() : Date.now(),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function cancelOutboundRequest(requestId: number): Promise<boolean> {
+  try {
+    const res = await authenticatedFetch(`/api/friends/requests/${requestId}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ── O18 PROF-03: minimal profile card ───────────────────────────────────
+
+export interface FriendProfile {
+  id: number;
+  name: string;
+  email: string;
+  memberSince: string | null;
+  friendCount: number;
+  hikeCount: number;
+}
+
+export async function fetchFriendProfile(friendId: number | string): Promise<FriendProfile | null> {
+  try {
+    const res = await authenticatedFetch(`/api/friends/${friendId}/profile`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// ── O18 FRI-block: block / unblock / blocklist ──────────────────────────
+
+export interface BlockedUser {
+  id: number;
+  name: string;
+  email: string | null;
+  reason: string | null;
+  createdAt: string;
+}
+
+export async function blockUser(
+  targetId: number | string,
+  reason?: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await authenticatedFetch(`/api/friends/${targetId}/block`, {
+      method: 'POST',
+      body: JSON.stringify(reason ? { reason } : {}),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { success: false, error: data.error || 'Block failed' };
+    }
+    // Refresh local friend list — block auto-removes friendship.
+    try {
+      await useFriendStore.getState().loadFriendsFromBackend();
+    } catch { /* silent */ }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error' };
+  }
+}
+
+export async function unblockUser(targetId: number | string): Promise<boolean> {
+  try {
+    const res = await authenticatedFetch(`/api/friends/${targetId}/block`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchBlockedUsers(): Promise<BlockedUser[]> {
+  try {
+    const res = await authenticatedFetch('/api/friends/blocked');
+    if (!res.ok) return [];
+    const rows = await res.json();
+    return (Array.isArray(rows) ? rows : []).map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      reason: r.reason,
+      createdAt: r.created_at,
+    }));
+  } catch {
+    return [];
+  }
+}

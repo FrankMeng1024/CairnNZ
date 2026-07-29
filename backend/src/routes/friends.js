@@ -2,12 +2,18 @@
  * Friends Routes — /api/friends
  *
  * Endpoints:
- * POST   /api/friends/request     — Send friend request by email
- * GET    /api/friends/requests    — Get pending incoming requests
- * POST   /api/friends/accept      — Accept a friend request
- * POST   /api/friends/reject      — Reject a friend request
- * GET    /api/friends             — List all friends
- * DELETE /api/friends/:id         — Remove a friend
+ * POST   /api/friends/request       — Send friend request by email
+ * GET    /api/friends/requests      — Get pending incoming requests
+ * GET    /api/friends/requests/outbound — O18 FRI-out: my sent requests
+ * POST   /api/friends/accept        — Accept a friend request
+ * POST   /api/friends/reject        — Reject a friend request
+ * DELETE /api/friends/requests/:id  — O18 FRI-out: cancel my outbound
+ * GET    /api/friends               — List all friends
+ * DELETE /api/friends/:id           — Remove a friend
+ * GET    /api/friends/:id/profile   — O18 PROF-03: minimal profile card
+ * POST   /api/friends/:id/block     — O18 FRI-block: block a user
+ * DELETE /api/friends/:id/block     — O18 FRI-block: unblock
+ * GET    /api/friends/blocked       — O18 FRI-block: my blocklist
  */
 const express = require('express');
 const router = express.Router();
@@ -18,6 +24,19 @@ const schemas = require('../middleware/schemas');
 
 // All routes require auth
 router.use(authenticate);
+
+// O18 FRI-block: helper — returns true if either direction is blocked.
+// Called from /request to prevent messaging blocked users.
+async function isBlocked(userA, userB) {
+  const [rows] = await pool.execute(
+    `SELECT 1 FROM blocked_users
+     WHERE (blocker_id = ? AND blocked_id = ?)
+        OR (blocker_id = ? AND blocked_id = ?)
+     LIMIT 1`,
+    [userA, userB, userB, userA],
+  );
+  return rows.length > 0;
+}
 
 // ── Send friend request ─────────────────────────────────────────────────────
 router.post('/request', validateBody(schemas.friend.request), async (req, res) => {
@@ -33,6 +52,14 @@ router.post('/request', validateBody(schemas.friend.request), async (req, res) =
 
     const toUser = users[0];
     if (toUser.id === fromUserId) return res.status(400).json({ error: 'Cannot add yourself' });
+
+    // O18 FRI-block: either direction blocked → return same "not found"
+    // error we return for a bad email. This is intentional — surfacing
+    // "you are blocked" or "you blocked this person" would leak state
+    // to the blocker's side and violate the block contract.
+    if (await isBlocked(fromUserId, toUser.id)) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     // Check if already friends
     const [existing] = await pool.execute(
@@ -153,6 +180,182 @@ router.delete('/:id', async (req, res) => {
     res.json({ message: 'Friend removed' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// O18 FRI-out: get MY outgoing pending requests. Complements /requests
+// (incoming) so users can see + cancel what they've sent.
+router.get('/requests/outbound', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT fr.id, fr.to_user_id, u.name AS to_name, u.email AS to_email,
+              fr.status, fr.created_at AS sent_at
+       FROM friend_requests fr
+       JOIN users u ON u.id = fr.to_user_id
+       WHERE fr.from_user_id = ? AND fr.status = 'pending'
+       ORDER BY fr.created_at DESC`,
+      [req.user.userId],
+    );
+    return res.json(rows);
+  } catch (err) {
+    console.error('[friends/requests/outbound]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// O18 FRI-out: cancel a pending outbound request I sent.
+router.delete('/requests/:id', async (req, res) => {
+  try {
+    const requestId = Number(req.params.id);
+    if (!Number.isInteger(requestId)) return res.status(400).json({ error: 'Invalid request id' });
+    const [result] = await pool.execute(
+      `DELETE FROM friend_requests
+       WHERE id = ? AND from_user_id = ? AND status = 'pending'`,
+      [requestId, req.user.userId],
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Request not found' });
+    return res.json({ message: 'Request cancelled' });
+  } catch (err) {
+    console.error('[friends/requests/cancel]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// O18 PROF-03: minimal profile card for a friend. Only accessible if the
+// requester + target are actually friends (privacy — non-friends see
+// nothing beyond name/email). Returns friend-count + hike-count so the
+// UI can render a light "Hiker Bio" card.
+router.get('/:id/profile', async (req, res) => {
+  try {
+    const targetId = Number(req.params.id);
+    if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid user id' });
+    const [friends] = await pool.execute(
+      'SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ? LIMIT 1',
+      [req.user.userId, targetId],
+    );
+    if (friends.length === 0) return res.status(403).json({ error: 'Not friends' });
+
+    const [users] = await pool.execute(
+      'SELECT id, name, email, created_at FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+      [targetId],
+    );
+    if (users.length === 0) return res.status(404).json({ error: 'User not found' });
+
+    const [friendCountRows] = await pool.execute(
+      'SELECT COUNT(*) AS n FROM friends WHERE user_id = ?',
+      [targetId],
+    );
+    const [hikeCountRows] = await pool.execute(
+      `SELECT COUNT(*) AS n FROM sessions
+       WHERE user_id = ?
+         AND (finalized_at IS NOT NULL OR distance_m > 0)`,
+      [targetId],
+    );
+    return res.json({
+      id: users[0].id,
+      name: users[0].name,
+      email: users[0].email,
+      memberSince: users[0].created_at,
+      friendCount: friendCountRows[0]?.n ?? 0,
+      hikeCount: hikeCountRows[0]?.n ?? 0,
+    });
+  } catch (err) {
+    console.error('[friends/profile]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// O18 FRI-block: block a user. Side effects:
+//   - Deletes any active friendship both directions
+//   - Cancels any pending friend request both directions
+//   - Blocks future requests both directions (isBlocked check on /request)
+// Idempotent — blocking an already-blocked user simply refreshes reason.
+router.post('/:id/block', async (req, res) => {
+  try {
+    const targetId = Number(req.params.id);
+    if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid user id' });
+    if (targetId === req.user.userId) return res.status(400).json({ error: 'Cannot block yourself' });
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 200) : null;
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      // Insert block (idempotent).
+      await conn.execute(
+        `INSERT INTO blocked_users (blocker_id, blocked_id, reason)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE reason = VALUES(reason)`,
+        [req.user.userId, targetId, reason],
+      );
+      // Remove any existing friendship both directions.
+      await conn.execute(
+        `DELETE FROM friends
+         WHERE (user_id = ? AND friend_id = ?)
+            OR (user_id = ? AND friend_id = ?)`,
+        [req.user.userId, targetId, targetId, req.user.userId],
+      );
+      // Cancel any pending requests either direction.
+      await conn.execute(
+        `UPDATE friend_requests SET status = 'rejected'
+         WHERE status = 'pending'
+           AND ((from_user_id = ? AND to_user_id = ?)
+             OR (from_user_id = ? AND to_user_id = ?))`,
+        [req.user.userId, targetId, targetId, req.user.userId],
+      );
+      await conn.commit();
+    } catch (err) {
+      try { await conn.rollback(); } catch (_) {}
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return res.json({ message: 'User blocked' });
+  } catch (err) {
+    console.error('[friends/block]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// O18 FRI-block: unblock. Note: does NOT re-friend — user must send a
+// new request if they want to reconnect (matches standard block/unblock UX).
+router.delete('/:id/block', async (req, res) => {
+  try {
+    const targetId = Number(req.params.id);
+    if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid user id' });
+    await pool.execute(
+      'DELETE FROM blocked_users WHERE blocker_id = ? AND blocked_id = ?',
+      [req.user.userId, targetId],
+    );
+    return res.json({ message: 'User unblocked' });
+  } catch (err) {
+    console.error('[friends/unblock]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// O18 FRI-block: my blocklist (who I've blocked). Does NOT expose who
+// has blocked me — that state is intentionally hidden.
+router.get('/blocked', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT b.blocked_id AS id, u.name, u.email, b.reason, b.created_at
+       FROM blocked_users b
+       LEFT JOIN users u ON u.id = b.blocked_id
+       WHERE b.blocker_id = ?
+       ORDER BY b.created_at DESC`,
+      [req.user.userId],
+    );
+    // NULL name/email means the blocked user hard-deleted their account —
+    // surface as "Deleted user" so the block still shows in settings.
+    const cleaned = rows.map(r => ({
+      ...r,
+      name: r.name ?? 'Deleted user',
+      email: r.email ?? null,
+    }));
+    return res.json(cleaned);
+  } catch (err) {
+    console.error('[friends/blocked]', err.message);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 

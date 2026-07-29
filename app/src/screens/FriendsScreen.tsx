@@ -21,7 +21,8 @@ import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../componen
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { PressBtn } from '../components/PressBtn';
-import { useFriendStore, sendFriendRequest, fetchFriendRequests, acceptFriendRequestAPI, rejectFriendRequestAPI } from '../store/useFriendStore';
+import { Alert } from 'react-native';
+import { useFriendStore, sendFriendRequest, fetchFriendRequests, acceptFriendRequestAPI, rejectFriendRequestAPI, blockUser, fetchFriendProfile, fetchOutboundRequests, cancelOutboundRequest, type OutboundRequest, type FriendProfile } from '../store/useFriendStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { EmptyFriends, IllustrationHalo } from '../components/Illustrations';
 
@@ -77,8 +78,9 @@ function getStatusDotColor(online: boolean, lastSeen: string): string {
 }
 
 // ── Friend Card ─────────────────────────────────────────────────────────────
-function FriendCard({ friend }: {
+function FriendCard({ friend, onLongPress }: {
   friend: Friend;
+  onLongPress?: (friend: Friend) => void;
 }) {
   // FRI-06 (O18 user decision): backend doesn't return real online/lastSeen/
   // sharedMarkers yet. The UI already gates on `hasStatus` and `> 0` so a
@@ -90,8 +92,20 @@ function FriendCard({ friend }: {
   const avatarGradStart = Colors.primaryLight;
   const avatarGradEnd = Colors.primaryDeep;
 
+  // O18 FRI-block + PROF-03: long-press opens action sheet (View profile /
+  // Block / Remove). Tap does nothing yet (profile view is separate flow).
+  const handleLongPress = () => {
+    if (onLongPress) onLongPress(friend);
+  };
+
   return (
-    <View style={cardStyles.card}>
+    <TouchableOpacity
+      onLongPress={handleLongPress}
+      delayLongPress={500}
+      activeOpacity={0.8}
+      testID={`friend-card-${friend.id}`}
+    >
+      <View style={cardStyles.card}>
       <View style={cardStyles.avatarWrap}>
         <LinearGradient
           colors={[avatarGradStart, avatarGradEnd]}
@@ -124,6 +138,7 @@ function FriendCard({ friend }: {
         </View>
       </View>
     </View>
+    </TouchableOpacity>
   );
 }
 
@@ -354,6 +369,13 @@ export function FriendsScreen() {
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
   const [requestsExpanded, setRequestsExpanded] = useState(false);
 
+  // O18 FRI-out: outbound (I-sent) requests.
+  const [outboundRequests, setOutboundRequests] = useState<OutboundRequest[]>([]);
+  // O18 PROF-03: profile card modal state.
+  const [profileFriend, setProfileFriend] = useState<Friend | null>(null);
+  const [profileData, setProfileData] = useState<FriendProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+
   const loadRequests = async () => {
     const reqs = await fetchFriendRequests();
     // fetchFriendRequests returns whatever backend gives — backend uses snake_case.
@@ -365,6 +387,80 @@ export function FriendsScreen() {
         from_email: r.from_email,
         sent_at: r.sent_at,
       })),
+    );
+    // O18 FRI-out: also refresh outbound.
+    try {
+      const out = await fetchOutboundRequests();
+      setOutboundRequests(out);
+    } catch { /* silent */ }
+  };
+
+  // O18 FRI-block + PROF-03: long-press action sheet on any friend card.
+  const handleFriendLongPress = (friend: Friend) => {
+    Alert.alert(
+      friend.name,
+      friend.email,
+      [
+        {
+          text: 'View profile',
+          onPress: async () => {
+            setProfileFriend(friend);
+            setProfileData(null);
+            setProfileLoading(true);
+            const p = await fetchFriendProfile(friend.id);
+            setProfileData(p);
+            setProfileLoading(false);
+          },
+        },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              `Block ${friend.name}?`,
+              'They will no longer see your public cairns, and this friendship will be removed. You can unblock later in Settings.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Block',
+                  style: 'destructive',
+                  onPress: async () => {
+                    const r = await blockUser(friend.id);
+                    if (r.error) {
+                      Alert.alert('Block failed', r.error);
+                      return;
+                    }
+                    await loadFriendsFromBackend();
+                    void loadCircleMarkers();
+                  },
+                },
+              ],
+            );
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  };
+
+  // O18 FRI-out: cancel my outbound request.
+  const handleCancelOutbound = async (req: OutboundRequest) => {
+    Alert.alert(
+      `Cancel request to ${req.toName}?`,
+      '',
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Cancel request',
+          style: 'destructive',
+          onPress: async () => {
+            const ok = await cancelOutboundRequest(req.id);
+            if (ok) {
+              setOutboundRequests((prev) => prev.filter((r) => r.id !== req.id));
+            }
+          },
+        },
+      ],
     );
   };
 
@@ -549,9 +645,40 @@ export function FriendsScreen() {
               >
                 <FriendCard
                   friend={friend}
+                  onLongPress={handleFriendLongPress}
                 />
               </Animated.View>
             ))}
+
+            {/* O18 FRI-out: outbound requests section — only when non-empty. */}
+            {outboundRequests.length > 0 && (
+              <View style={{ marginTop: Spacing.md }}>
+                <Text style={{ fontSize: FontSize.small, fontWeight: '700', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: Spacing.xs }}>
+                  Sent
+                </Text>
+                {outboundRequests.map((r) => (
+                  <View key={r.id} style={[cardStyles.card, { opacity: 0.75 }]}>
+                    <View style={cardStyles.avatarWrap}>
+                      <View style={[cardStyles.avatar, { backgroundColor: Colors.border, justifyContent: 'center', alignItems: 'center' }]}>
+                        <Text style={cardStyles.avatarText}>{r.toName?.[0]?.toUpperCase() ?? '?'}</Text>
+                      </View>
+                    </View>
+                    <View style={cardStyles.info}>
+                      <Text style={cardStyles.name} numberOfLines={1}>{r.toName}</Text>
+                      <Text style={cardStyles.meta}>Request pending</Text>
+                    </View>
+                    <TouchableOpacity
+                      testID={`btn-cancel-outbound-${r.id}`}
+                      onPress={() => handleCancelOutbound(r)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={{ paddingHorizontal: Spacing.sm }}
+                    >
+                      <Text style={{ color: Colors.danger, fontSize: FontSize.small, fontWeight: '600' }}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
 
             {/* Add friend card */}
             <Animated.View style={{
@@ -581,6 +708,58 @@ export function FriendsScreen() {
       {/* Add Friend Sheet */}
       {showAdd && (
         <AddFriendSheet onDismiss={() => setShowAdd(false)} />
+      )}
+
+      {/* O18 PROF-03: Friend profile modal.
+       * Minimal card — name, email, member-since, friend count, hike count.
+       * Fetched on demand from GET /api/friends/:id/profile.
+       */}
+      {profileFriend && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24, zIndex: 100 }}>
+          <View style={{ backgroundColor: Colors.surface, borderRadius: Radius.card, padding: Spacing.lg, width: '100%', maxWidth: 340 }}>
+            <View style={{ alignItems: 'center', marginBottom: Spacing.md }}>
+              <LinearGradient
+                colors={[Colors.primaryLight, Colors.primaryDeep]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={{ width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center' }}
+              >
+                <Text style={{ color: '#fff', fontSize: 24, fontWeight: '700' }}>{profileFriend.initials}</Text>
+              </LinearGradient>
+              <Text style={{ fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary, marginTop: Spacing.sm }}>{profileFriend.name}</Text>
+              <Text style={{ fontSize: FontSize.caption, color: Colors.textSecondary }}>{profileFriend.email}</Text>
+            </View>
+            {profileLoading ? (
+              <ActivityIndicator color={Colors.primary} style={{ marginVertical: 20 }} />
+            ) : profileData ? (
+              <View style={{ paddingVertical: Spacing.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: Colors.border }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary }}>{profileData.hikeCount}</Text>
+                    <Text style={{ fontSize: FontSize.caption, color: Colors.textMuted }}>hikes</Text>
+                  </View>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary }}>{profileData.friendCount}</Text>
+                    <Text style={{ fontSize: FontSize.caption, color: Colors.textMuted }}>friends</Text>
+                  </View>
+                </View>
+                {profileData.memberSince && (
+                  <Text style={{ fontSize: FontSize.caption, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.sm }}>
+                    Member since {new Date(profileData.memberSince).toLocaleDateString()}
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <Text style={{ color: Colors.textMuted, textAlign: 'center', marginVertical: 20 }}>Profile unavailable.</Text>
+            )}
+            <TouchableOpacity
+              testID="btn-close-profile"
+              style={{ backgroundColor: Colors.primary, paddingVertical: 12, borderRadius: 999, marginTop: Spacing.md }}
+              onPress={() => { setProfileFriend(null); setProfileData(null); }}
+            >
+              <Text style={{ color: '#fff', textAlign: 'center', fontWeight: '600' }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
     </SafeAreaView>
     </Animated.View>
