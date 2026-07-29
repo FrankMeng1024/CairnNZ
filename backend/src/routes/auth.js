@@ -766,14 +766,23 @@ router.post('/account/restore', authenticate, async (req, res) => {
       if (!user) return res.status(404).json({ error: 'Account not found. It may have been permanently deleted.' });
       return res.json({ user: User.toPublic(user), message: 'Account is active.' });
     }
+    // Sprint 6 round-9 R9B8 fix: bump token_version BEFORE issuing the
+    // new token. Every existing token (including our current one) had
+    // the pre-bump token_version claim (or none for pre-migration
+    // tokens); they'll all be rejected on next request by authenticate
+    // middleware. Then we mint a fresh JWT that includes the new
+    // token_version so THIS caller keeps working.
+    await User.bumpTokenVersion(req.user.userId);
+    // Reload user to get the new token_version.
     const user = await User.findById(req.user.userId);
-    // Sprint 6 review M10: issue a fresh JWT (new jti) on restore so any
-    // other sessions using the pre-delete jti (e.g. an idle old device)
-    // don't leak back in. Same "restore = fresh sign-in" contract as
-    // /login and /google.
     const publicUser = User.toPublic(user);
-    const token = signToken({ userId: publicUser.id, email: publicUser.email });
-    // Revoke the caller's current jti so the OLD token stops working.
+    const token = signToken({
+      userId: publicUser.id,
+      email: publicUser.email,
+      token_version: Number(user.token_version || 0),
+    });
+    // Also revoke the caller's current jti for defense in depth (belt
+    // and suspenders with token_version).
     if (req.user.jti) {
       const expUnixMs = req.user.exp ? req.user.exp * 1000 : Date.now() + 30 * 24 * 60 * 60 * 1000;
       await TokenBlacklist.revoke(req.user.jti, req.user.userId, new Date(expUnixMs)).catch(err =>

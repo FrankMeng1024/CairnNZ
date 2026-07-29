@@ -100,6 +100,17 @@ async function restoreDeleted(userId) {
   return result.affectedRows > 0;
 }
 
+// Sprint 6 round-9 R9B8 fix: bump token_version to invalidate ALL
+// outstanding JWTs for this user (any device with a pre-bump token).
+// Called from /account/restore so a compromised-account restore doesn't
+// leave silently-still-valid sessions on 5 other devices.
+async function bumpTokenVersion(userId) {
+  await pool.execute(
+    'UPDATE users SET token_version = token_version + 1 WHERE id = ?',
+    [userId]
+  );
+}
+
 // O18 AUTH-01: cron helper — returns user rows whose grace period has expired.
 async function findHardDeleteCandidates(graceDays = 7) {
   const [rows] = await pool.execute(
@@ -228,6 +239,7 @@ module.exports = {
   hashPassword, comparePassword, toPublic,
   // O18 batch 6.3
   setDateOfBirth, softDelete, restoreDeleted, findHardDeleteCandidates, hardDelete,
+  bumpTokenVersion,
   // user_oauth
   findOAuth, linkOAuth, getUserProviders,
   // pending

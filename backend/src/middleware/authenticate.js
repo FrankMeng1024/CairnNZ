@@ -14,6 +14,7 @@
  */
 const { verifyToken } = require('../config/jwt');
 const TokenBlacklist = require('../models/TokenBlacklist');
+const pool = require('../config/db');
 
 async function authenticate(req, res, next) {
   const header = req.headers.authorization;
@@ -65,6 +66,36 @@ async function authenticate(req, res, next) {
         return res.status(401).json({ message: 'Authentication service unavailable.', code: 'TOKEN_INVALID' });
       }
     }
+  }
+  // Sprint 6 round-9 R9B8 fix: check token_version. If user's server-
+  // side token_version is > jwt.token_version (or jwt claim missing +
+  // server nonzero), token was minted before a mass-revoke event
+  // (currently: /account/restore). Reject.
+  try {
+    const [rows] = await pool.execute(
+      'SELECT token_version FROM users WHERE id = ? LIMIT 1',
+      [decoded.userId]
+    );
+    if (rows.length > 0) {
+      const serverVer = Number(rows[0].token_version || 0);
+      const jwtVer = Number(decoded.token_version || 0);
+      if (serverVer > jwtVer) {
+        res.set('X-Cairn-Auth-Invalid', 'true');
+        return res.status(401).json({ message: 'Signed out on all devices. Sign in again.', code: 'TOKEN_INVALID' });
+      }
+    }
+  } catch (err) {
+    // Same fail-open policy as blacklist check: transient DB errors only.
+    const CONN_CODES = new Set([
+      'ECONNREFUSED', 'ETIMEDOUT', 'PROTOCOL_CONNECTION_LOST',
+      'ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET',
+    ]);
+    const code = err && (err.code || err.errno);
+    if (!CONN_CODES.has(String(code))) {
+      // eslint-disable-next-line no-console
+      console.error('[authenticate] token_version check unexpected error:', err.message);
+    }
+    // Continue on transient — same UX policy as blacklist path.
   }
   req.user = decoded;
   next();
