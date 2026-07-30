@@ -65,6 +65,31 @@ async function maybeCleanup() {
   }
 }
 
+// ── Admin gate for GET endpoints ───────────────────────────────────────
+// Sprint 6 R95 BUG-1+2 fix: pre-fix, O1 2026-07-26 加了 authenticate 但
+// GET /latest 和 GET /:id 查询里都没有 WHERE user_id → 任何登录用户拉
+// 到全库最新一张截图 + 通过 id 拉到任意用户的截图 (PII: map view,
+// marker text, session metadata)。auth 只挡了匿名,没挡跨用户。
+//
+// debug_snapshots 表没有 user_id 列 (verified via SHOW COLUMNS on aliyun),
+// 加列要 schema 迁移。更干净的修复:GET 端点本来就是 "DEV TOOL ONLY"
+// (comment 明确写了),客户端只调 POST 上传,GET 从来只有开发者拿数据用。
+// 所以直接用 env whitelist gate:DEBUG_SNAPSHOT_ADMIN_USER_IDS 逗号分隔
+// user_id 列表。fail-closed: 未配置 → 403 all GET。POST 保持无 auth
+// (兼容当前 debugUpload.ts 上传路径,rate-limited 60/5min/IP)。
+function requireDebugAdmin(req, res, next) {
+  const raw = process.env.DEBUG_SNAPSHOT_ADMIN_USER_IDS || '';
+  const allowedIds = raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (allowedIds.length === 0) {
+    return res.status(403).json({ error: 'debug-snapshot GET disabled' });
+  }
+  const userId = String(req.user?.userId || '');
+  if (!allowedIds.includes(userId)) {
+    return res.status(403).json({ error: 'not authorized for debug-snapshot GET' });
+  }
+  next();
+}
+
 // ── POST /api/debug-snapshot ───────────────────────────────────────────
 router.post('/', uploadLimiter, rawBody, async (req, res) => {
   // Opportunistic TTL purge before each upload (no separate cron).
@@ -143,7 +168,7 @@ router.post('/', uploadLimiter, rawBody, async (req, res) => {
 // O1 (2026-07-26): 加 authenticate JWT gate。原来无 auth,任意匿名可
 // 拉最新 snapshot metadata → 用返回的 id 可以枚举 GET /:id binary。
 // 现在需要 JWT。
-router.get('/latest', authenticate, async (req, res) => {
+router.get('/latest', authenticate, requireDebugAdmin, async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT id, snapshot_id, image_bytes, meta, device_os, app_version, uploaded_at
@@ -163,7 +188,7 @@ router.get('/latest', authenticate, async (req, res) => {
 // O1 (2026-07-26): 加 authenticate。原来无 auth + numeric id 可枚举 →
 // 任意用户能拉任意用户的设备截图 PII (map view/marker text/session
 // metadata)。现在需要 JWT。
-router.get('/:id', authenticate, async (req, res) => {
+router.get('/:id', authenticate, requireDebugAdmin, async (req, res) => {
   const id = req.params.id;
   // Allow numeric id as well as snapshot_id string
   let row;
