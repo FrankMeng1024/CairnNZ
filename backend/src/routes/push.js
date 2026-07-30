@@ -43,6 +43,12 @@ const registerLimiter = rateLimit({
 router.post('/register', registerLimiter, async (req, res) => {
   const { token, platform } = req.body || {};
   if (!token || typeof token !== 'string') return res.status(400).json({ error: 'token required' });
+  // Sprint 6 R67: bound token length. VARCHAR(255) column would
+  // ER_DATA_TOO_LONG on oversized input under STRICT_TRANS_TABLES.
+  // Real Expo push tokens are 40-50 chars (ExponentPushToken[...]);
+  // 255 leaves ample headroom for future Expo format changes.
+  // Attacker submitting 10KB token = clean 400 instead of ambiguous 500.
+  if (token.length > 255) return res.status(400).json({ error: 'token too long' });
   if (!['ios', 'android', 'web'].includes(platform)) return res.status(400).json({ error: 'invalid platform' });
   try {
     await PushNotification.registerToken(req.user.userId, token, platform);
@@ -58,7 +64,13 @@ router.post('/register', registerLimiter, async (req, res) => {
 // device handoff doesn't keep receiving the previous user's pushes.
 router.post('/unregister', async (req, res) => {
   const { token } = req.body || {};
-  if (!token) return res.status(400).json({ error: 'token required' });
+  // Sprint 6 R67: same validation as /register — type + length bound.
+  // Pre-fix, an object body-field would coerce to '[object Object]' in
+  // the WHERE clause, resulting in a mysterious no-op 200 response.
+  // Clean 400 makes the failure obvious to the client.
+  if (!token || typeof token !== 'string' || token.length > 255) {
+    return res.status(400).json({ error: 'token required (string, max 255 chars)' });
+  }
   try {
     // Sprint 6 round-12 R12B1: pass user_id so we don't cross-user delete
     // when the same Expo token exists for multiple accounts (shared device
