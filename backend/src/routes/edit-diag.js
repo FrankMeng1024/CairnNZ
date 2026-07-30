@@ -49,8 +49,15 @@ router.post('/', limiter, express.json({ limit: '2mb' }), async (req, res) => {
   const authz = req.headers.authorization;
   if (authz && authz.startsWith('Bearer ')) {
     try {
-      const jwt = require('jsonwebtoken');
-      const decoded = jwt.verify(authz.slice(7), process.env.JWT_SECRET);
+      // Sprint 6 R72: use the shared verifyToken helper (pins algorithm
+      // to HS256 per R34B7). Pre-fix, this file called `jwt.verify` raw
+      // with no algorithm allowlist — a jsonwebtoken lib regression
+      // could accept an unexpected algorithm on future upgrade. Route
+      // logic unchanged; catch stays silent for invalid tokens because
+      // /edit-diag is intentionally auth-optional (client boot logs
+      // arrive before login).
+      const { verifyToken } = require('../config/jwt');
+      const decoded = verifyToken(authz.slice(7));
       userId = decoded.userId || null;
     } catch { /* ignore invalid */ }
   }
