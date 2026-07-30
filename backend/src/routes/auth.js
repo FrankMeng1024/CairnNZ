@@ -32,10 +32,34 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 10,
   standardHeaders: true, legacyHeaders: false,
-  // Sprint 6 round-11 R11B5: IPv6-safe keyGenerator. Without this,
-  // v7+ warns ERR_ERL_KEY_GEN_IPV6 and buckets all users of a carrier
-  // /64 together — either global lockout or trivial bypass.
-  keyGenerator: (req, res) => ipKeyGenerator(req, res),
+  // Sprint 6 R89 BUG-1: key by (IP, email) so a NAT-shared attacker
+  // hammering victim@x.com does NOT collectively lock every legit user
+  // behind the same NAT out of register/verify/login/reset. Pre-fix,
+  // this single authLimiter instance mounted on 4 endpoints (register,
+  // verify, login, password-reset/verify) shared one IP-only bucket
+  // across all four → 10 total attempts (any endpoint, any email) per
+  // /64 per 15min → carrier CGNAT / coffee-shop wifi trivially
+  // collectively-locked. Also blocked the recovery path (password-
+  // reset/verify) using the same counter that the attacker filled up,
+  // so victims had no way out.
+  //
+  // Compromise: keyed by IP + normalized email. Attacker from one IP
+  // targeting ONE email → 10 tries then locked out for that specific
+  // (IP, email) pair. Legit user behind same NAT with a different
+  // email → separate bucket, unaffected. Attacker without knowing the
+  // target email → no efficient way to burn any specific victim's
+  // quota. Missing email in body (malformed request) → fall back to
+  // IP-only so bots blasting the endpoint with garbage still get
+  // rate-limited.
+  //
+  // Sprint 6 round-11 R11B5: IPv6-safe keyGenerator via ipKeyGenerator
+  // for the IP portion.
+  keyGenerator: (req, res) => {
+    const ip = ipKeyGenerator(req, res);
+    const rawEmail = req.body && typeof req.body.email === 'string' ? req.body.email : '';
+    const email = rawEmail.toLowerCase().trim().slice(0, 254);
+    return email ? `auth:${ip}:${email}` : `auth:${ip}`;
+  },
   message: { error: 'Too many attempts. Please wait 15 minutes.' },
 });
 
