@@ -209,16 +209,17 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
 // ── Get pending incoming requests ───────────────────────────────────────────
 router.get('/requests', async (req, res) => {
   try {
-    // Sprint 6 round-37 R37: filter soft-deleted senders. Pre-fix, an
-    // incoming pending request from a user pending-deletion still
-    // rendered — user could accept only to have the friendship
-    // cascade-deleted by the authSweep cron minutes later.
+    // Sprint 6 R74: cap pending list at 200. Combined with R36B3 rate
+    // limit on POST /request (30/hour), no legitimate user has more
+    // than a handful of pending incoming requests. 200 covers a
+    // popular user with a large fan base.
     const [requests] = await pool.execute(
       `SELECT fr.id, fr.from_user_id, u.name as from_name, u.email as from_email, fr.created_at as sent_at
        FROM friend_requests fr
        JOIN users u ON u.id = fr.from_user_id AND u.deleted_at IS NULL
        WHERE fr.to_user_id = ? AND fr.status = "pending"
-       ORDER BY fr.created_at DESC`,
+       ORDER BY fr.created_at DESC
+       LIMIT 200`,
       [req.user.userId]
     );
     res.json(requests);
@@ -343,12 +344,16 @@ router.get('/', async (req, res) => {
     // soft-deleted friend still appeared in the friend list with cached
     // name/email — user thinks they can share hikes with them but the
     // account is pending hard-delete.
+    // Sprint 6 R74: cap at 1000. Users with more than 1000 friends are
+    // pathological (Cairn's UX doesn't render a scroll of 1000 friends
+    // meaningfully). Prevents multi-MB responses on hydrate.
     const [friends] = await pool.execute(
       `SELECT f.friend_id as id, u.name, u.email, f.created_at as added_at
        FROM friends f
        JOIN users u ON u.id = f.friend_id AND u.deleted_at IS NULL
        WHERE f.user_id = ?
-       ORDER BY f.created_at DESC`,
+       ORDER BY f.created_at DESC
+       LIMIT 1000`,
       [req.user.userId]
     );
     res.json(friends);
@@ -370,13 +375,15 @@ router.get('/requests/outbound', async (req, res) => {
     // Sprint 6 round-37 R37: filter soft-deleted targets. Outbound
     // pending request to a user pending-deletion is dead-on-arrival —
     // hide it from my outbound list.
+    // Sprint 6 R74: cap at 200 (matches inbound pending cap).
     const [rows] = await pool.execute(
       `SELECT fr.id, fr.to_user_id, u.name AS to_name, u.email AS to_email,
               fr.status, fr.created_at AS sent_at
        FROM friend_requests fr
        JOIN users u ON u.id = fr.to_user_id AND u.deleted_at IS NULL
        WHERE fr.from_user_id = ? AND fr.status = 'pending'
-       ORDER BY fr.created_at DESC`,
+       ORDER BY fr.created_at DESC
+       LIMIT 200`,
       [req.user.userId],
     );
     return res.json(rows);
@@ -408,12 +415,14 @@ router.delete('/requests/:id', async (req, res) => {
 // /:id/* routes so Express matches "blocked" correctly.
 router.get('/blocked', async (req, res) => {
   try {
+    // Sprint 6 R74: cap at 1000. Same rationale as friend list.
     const [rows] = await pool.execute(
       `SELECT b.blocked_id AS id, u.name, u.email, b.reason, b.created_at
        FROM blocked_users b
        LEFT JOIN users u ON u.id = b.blocked_id
        WHERE b.blocker_id = ?
-       ORDER BY b.created_at DESC`,
+       ORDER BY b.created_at DESC
+       LIMIT 1000`,
       [req.user.userId],
     );
     const cleaned = rows.map(r => ({
