@@ -92,9 +92,18 @@ async function softDelete(userId) {
 
 // O18 AUTH-01: undo a soft-delete. Restore is only valid within grace
 // period; the cron sweep hard-deletes anything past 7 days.
+// Sprint 6 R86 BUG-1: enforce the grace-period check IN the SQL, not
+// just as documentation. Pre-fix, if authSweep hasn't run yet (server
+// downtime, missed cron), a user could restore an account 8-10 days
+// after soft-delete, silently bypassing the 7-day policy. Now: SQL
+// itself refuses the UPDATE if deleted_at is older than 7 days.
+// Caller (auth.js /account/restore) already handles affectedRows === 0.
 async function restoreDeleted(userId) {
   const [result] = await pool.execute(
-    'UPDATE users SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL',
+    `UPDATE users SET deleted_at = NULL
+      WHERE id = ?
+        AND deleted_at IS NOT NULL
+        AND deleted_at > DATE_SUB(NOW(), INTERVAL 7 DAY)`,
     [userId]
   );
   return result.affectedRows > 0;
@@ -128,8 +137,19 @@ async function findHardDeleteCandidates(graceDays = 7) {
 
 // O18 AUTH-01: hard delete (cascades to sessions / oauth via FK). Called by
 // the cron sweep, not directly by API.
+// Sprint 6 R86 BUG-3: race with concurrent /account/restore. Pre-fix,
+// authSweep did SELECT ids → then per-id `DELETE FROM users WHERE id=?`
+// without re-checking deleted_at. If /restore commits between the two
+// steps (rare but possible during boot-catchup + user manual retry),
+// the row's deleted_at is now NULL, hardDelete blindly kills the row
+// anyway. Now: gate the DELETE on `deleted_at < NOW() - 7 DAY` — if
+// the row was restored in the window, DELETE finds nothing (correct).
 async function hardDelete(userId) {
-  await pool.execute('DELETE FROM users WHERE id = ?', [userId]);
+  const [result] = await pool.execute(
+    'DELETE FROM users WHERE id = ? AND deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL 7 DAY)',
+    [userId]
+  );
+  return result.affectedRows > 0;
 }
 
 async function hashPassword(plain) {
