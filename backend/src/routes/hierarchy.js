@@ -33,6 +33,18 @@ router.get('/deepest', async (req, res) => {
     console.log(`[hierarchy/deepest] BAD_PARAMS user=${userId}`);
     return res.status(400).json({ error: 'lat and lng required' });
   }
+  // Sprint 6 R70: enforce lat/lng valid range. Pre-fix, parseFloat
+  // accepted Infinity ("Infinity" → Infinity, passes isNaN false) and
+  // out-of-range values (lat=999, lng=-500). ST_GeomFromText with
+  // invalid coords either wastes a full ST_Contains scan across
+  // regions.geom or errors out — MySQL 8 accepts POINT(999 999)
+  // but no region contains it, so it's a silent CPU waste. Cleaner
+  // to 400 up front.
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90
+      || !Number.isFinite(lng) || lng < -180 || lng > 180) {
+    console.log(`[hierarchy/deepest] OUT_OF_RANGE user=${userId} lat=${lat} lng=${lng}`);
+    return res.status(400).json({ error: 'lat/lng out of range' });
+  }
   try {
     let city = null;
     let country = null;
