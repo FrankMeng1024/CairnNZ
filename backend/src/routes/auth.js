@@ -16,6 +16,7 @@ const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const TokenBlacklist = require('../models/TokenBlacklist');
 const PasswordReset = require('../models/PasswordReset');
+const pool = require('../config/db');
 const { signToken } = require('../config/jwt');
 const authenticate = require('../middleware/authenticate');
 const {
@@ -179,15 +180,37 @@ router.post('/verify', authLimiter, validateBody(schemas.auth.verify), async (re
 
   const normalEmail = email.toLowerCase().trim();
 
+  // Sprint 6 R89 BUG-2: serialize concurrent /verify for the same email.
+  // Pre-fix, verify was a series of unlocked queries (findPending →
+  // compare code → findByEmail → createUser → deletePending). Two
+  // concurrent requests with a valid code both read pending, both
+  // passed the findByEmail == null gate, both called createUser →
+  // one won on the users.email UNIQUE index, the other threw
+  // ER_DUP_ENTRY and got surfaced to the user as a 500 despite having
+  // sent the correct code. Fix: SELECT ... FOR UPDATE on the pending
+  // row for the duration of the check + createUser + deletePending
+  // sequence, all inside one transaction. Second concurrent request
+  // waits, then sees the pending row deleted → returns the standard
+  // 'No pending registration' 400.
+  const conn = await pool.getConnection();
   try {
-    const pending = await User.findPending(normalEmail);
+    await conn.beginTransaction();
 
-    if (!pending)
+    const [pendingRows] = await conn.execute(
+      'SELECT * FROM pending_registrations WHERE email = ? LIMIT 1 FOR UPDATE',
+      [normalEmail]
+    );
+    const pending = pendingRows[0];
+
+    if (!pending) {
+      await conn.rollback();
       return res.status(400).json({ error: 'No pending registration found. Please register again.' });
+    }
 
     // Expired
     if (new Date() > new Date(pending.expires_at)) {
-      await User.deletePending(normalEmail);
+      await conn.execute('DELETE FROM pending_registrations WHERE email = ?', [normalEmail]);
+      await conn.commit();
       return res.status(400).json({ error: 'This code has expired. Please register again.', hint: 'expired' });
     }
 
@@ -200,20 +223,29 @@ router.post('/verify', authLimiter, validateBody(schemas.auth.verify), async (re
 
     // Wrong code path (increment + check attempts)
     if (!codeMatches) {
-      await User.incrementPendingAttempts(normalEmail);
+      await conn.execute(
+        'UPDATE pending_registrations SET attempts = attempts + 1 WHERE email = ?',
+        [normalEmail]
+      );
       const nextAttempts = (pending.attempts || 0) + 1;
       if (nextAttempts >= 5) {
-        await User.deletePending(normalEmail);
+        await conn.execute('DELETE FROM pending_registrations WHERE email = ?', [normalEmail]);
+        await conn.commit();
         return res.status(400).json({ error: 'Too many incorrect attempts. Please register again.', hint: 'locked' });
       }
+      await conn.commit();
       const remaining = 5 - nextAttempts;
       return res.status(400).json({ error: `Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.` });
     }
 
     // Check if real user appeared in the meantime (e.g. Google OAuth raced)
-    const existingUser = await User.findByEmail(normalEmail);
-    if (existingUser) {
-      await User.deletePending(normalEmail);
+    const [existingRows] = await conn.execute(
+      'SELECT id FROM users WHERE email = ? LIMIT 1',
+      [normalEmail]
+    );
+    if (existingRows.length > 0) {
+      await conn.execute('DELETE FROM pending_registrations WHERE email = ?', [normalEmail]);
+      await conn.commit();
       return res.status(409).json({
         error: 'This email was registered via Google Sign In while you were verifying. Please sign in with Google.',
         hint: 'use_oauth',
@@ -222,8 +254,14 @@ router.post('/verify', authLimiter, validateBody(schemas.auth.verify), async (re
     }
 
     // All good — create real user (with DOB carried over from pending row).
-    const userId = await User.createUser(pending.name, normalEmail, pending.password_hash, pending.date_of_birth);
-    await User.deletePending(normalEmail);
+    // O18 AUTH-06: dateOfBirth normalized in User.normalizeDob.
+    const [insertResult] = await conn.execute(
+      'INSERT INTO users (name, email, password_hash, date_of_birth) VALUES (?, ?, ?, ?)',
+      [pending.name, normalEmail, pending.password_hash, pending.date_of_birth]
+    );
+    const userId = insertResult.insertId;
+    await conn.execute('DELETE FROM pending_registrations WHERE email = ?', [normalEmail]);
+    await conn.commit();
 
     const user = await User.findById(userId);
     const publicUser = User.toPublic(user);
@@ -241,8 +279,11 @@ router.post('/verify', authLimiter, validateBody(schemas.auth.verify), async (re
 
     return res.status(201).json({ user: publicUser, token });
   } catch (err) {
+    try { await conn.rollback(); } catch (_) { /* already committed or rolled back */ }
     console.error('[verify]', err);
     return res.status(500).json({ error: 'Server error. Please try again.' });
+  } finally {
+    conn.release();
   }
 });
 
