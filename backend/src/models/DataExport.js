@@ -289,11 +289,15 @@ async function markSent(id) {
 }
 
 // Cron sweep — mark expired rows + delete files. Called nightly.
+// Sprint 6 R81: batch. Under normal load a few rows per night; if
+// ever 10k+ (mass account expiry), the loop would take seconds per
+// unlink. Cap at 500 per run — cron re-fires nightly for the tail.
 async function purgeExpired() {
   const [expired] = await pool.execute(
     `SELECT id, file_path FROM data_exports
      WHERE (expires_at < NOW() OR (built_at IS NOT NULL AND built_at < DATE_SUB(NOW(), INTERVAL 30 DAY)))
-       AND status IN ('ready', 'sent')`,
+       AND status IN ('ready', 'sent')
+     LIMIT 500`,
   );
   let filesDeleted = 0;
   for (const row of expired) {

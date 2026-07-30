@@ -390,11 +390,15 @@ async function sendPending({ batchSize = 100 } = {}) {
 
 // Cron sweep — purge old device_tokens + notification_log rows.
 async function purgeStale() {
+  // Sprint 6 R81: batch both DELETEs. Same class as R77/R78. Under
+  // normal load device_tokens purges 0-10/day, notification_log
+  // 0-1000/day. Cap at 10000 keeps each transaction bounded even
+  // during pathological states (e.g. mass sign-outs).
   const [deviceResult] = await pool.execute(
-    'DELETE FROM device_tokens WHERE last_seen_at < DATE_SUB(NOW(), INTERVAL 60 DAY)',
+    'DELETE FROM device_tokens WHERE last_seen_at < DATE_SUB(NOW(), INTERVAL 60 DAY) LIMIT 10000',
   );
   const [logResult] = await pool.execute(
-    'DELETE FROM notification_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)',
+    'DELETE FROM notification_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY) LIMIT 10000',
   );
   return {
     devicesPurged: deviceResult.affectedRows,
