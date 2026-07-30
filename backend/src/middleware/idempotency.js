@@ -21,6 +21,7 @@
  *   - DB write fails → next retry will execute again (safe because same UUID)
  */
 const pool = require('../config/db');
+const crypto = require('crypto');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -53,6 +54,24 @@ async function idempotency(req, res, next) {
     return next();
   }
 
+  // Sprint 6 R87 BUG-2: idempotency_keys PK is `op_id CHAR(36)` alone
+  // (verified via SHOW CREATE TABLE on aliyun). If user A registers
+  // op_id=X and user B later uses the same op_id, B's INSERT IGNORE
+  // silently drops (PK collision on op_id), and B's read filter
+  // `WHERE op_id=? AND user_id=?` never finds a row → B's idempotency
+  // protection completely fails. Attacker could sniff/enumerate a
+  // victim's op_ids to poison their idempotency layer.
+  //
+  // App-layer fix without schema migration: derive storage-key by
+  // hashing (userId + opId) then formatting as a UUID-shape string
+  // that fits CHAR(36). Same (user, op) always maps to the same key,
+  // so idempotency semantics preserved for the same user. Different
+  // users with same op_id map to different keys → no PK collision.
+  // Format is not a real UUID but CHAR(36) is a fixed-width string
+  // column so it accepts any 36-char value.
+  const hash = crypto.createHash('sha256').update(`${userId}:${opId}`).digest('hex');
+  const storageKey = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+
   // Sprint 6 round-19 R19 known race: two concurrent requests with the
   // same (op_id, user_id) both miss the SELECT below (row not yet
   // inserted), both proceed into the handler, both write via
@@ -69,7 +88,7 @@ async function idempotency(req, res, next) {
   try {
     const [rows] = await pool.query(
       'SELECT status_code, response_json FROM idempotency_keys WHERE op_id = ? AND user_id = ? LIMIT 1',
-      [opId, userId],
+      [storageKey, userId],
     );
     if (rows && rows.length > 0) {
       const row = rows[0];
@@ -103,7 +122,7 @@ async function idempotency(req, res, next) {
       pool.query(
         `INSERT IGNORE INTO idempotency_keys (op_id, op_kind, user_id, status_code, response_json)
          VALUES (?, ?, ?, ?, ?)`,
-        [opId, opKind, userId, status, JSON.stringify(body || {})],
+        [storageKey, opKind, userId, status, JSON.stringify(body || {})],
       ).catch((err) => {
         // eslint-disable-next-line no-console
         console.warn('[idempotency] write failed', err.message);
