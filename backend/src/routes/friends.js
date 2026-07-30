@@ -136,6 +136,25 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
       //        but the guard only stopped on pending). Infinite harassment
       //        loop. Now: reject a fresh request if a rejected row exists
       //        in either direction within the last 30 days.
+      // Sprint 6 R84 BUG-6: if there's a stale accepted friend_requests row
+      // (from A→B previously friends, then A unfriended B — friends row
+      // deleted but friend_requests.status stayed 'accepted'), R56's
+      // ON DUPLICATE KEY UPDATE below would silently flip accepted→pending,
+      // destroying the audit trail of the original acceptance. Detect
+      // that case here and DELETE the stale row first so the subsequent
+      // INSERT creates a fresh record for the new request.
+      const [staleAccepted] = await conn.execute(
+        `SELECT id FROM friend_requests
+           WHERE from_user_id = ? AND to_user_id = ? AND status = 'accepted'
+           FOR UPDATE`,
+        [fromUserId, toUser.id]
+      );
+      if (staleAccepted.length > 0) {
+        await conn.execute(
+          'DELETE FROM friend_requests WHERE id = ?',
+          [staleAccepted[0].id]
+        );
+      }
       const [pending] = await conn.execute(
         `SELECT id, status FROM friend_requests
            WHERE ((from_user_id = ? AND to_user_id = ?)
@@ -253,6 +272,43 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
         return res.status(404).json({ error: 'Request not found' });
       }
       request = requests[0];
+
+      // Sprint 6 R84 BUG-5: re-verify from_user still exists + not
+      // soft-deleted. Pre-fix, if the requester soft-deleted their
+      // account between /request and /accept, INSERT into friends
+      // succeeded producing a friendship with a ghost user. authSweep
+      // would purge later but /accept created stale rows in the
+      // meantime — and the push notification at line 289+ would fire
+      // to a doomed recipient.
+      const [[fromUser]] = await conn.execute(
+        `SELECT 1 AS ok FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+        [request.from_user_id],
+      );
+      if (!fromUser) {
+        await conn.rollback();
+        return res.status(404).json({ error: 'Request not found' });
+      }
+      // Sprint 6 R84 BUG-2: re-check block state inside the tx. Pre-fix,
+      // a concurrent /block from either side would queue behind our
+      // friend_requests row lock — /accept commits the friendship
+      // first, then /block DELETEs it. Friendship briefly exists +
+      // push notification fires to the requester saying "accepted".
+      // Now: check blocked_users under FOR SHARE (same pattern as
+      // R14B1 in /request path) so /block's INSERT into blocked_users
+      // serializes with our check.
+      const [blocks] = await conn.execute(
+        `SELECT 1 FROM blocked_users
+         WHERE (blocker_id = ? AND blocked_id = ?)
+            OR (blocker_id = ? AND blocked_id = ?)
+         LIMIT 1
+         FOR SHARE`,
+        [req.user.userId, request.from_user_id, request.from_user_id, req.user.userId],
+      );
+      if (blocks.length > 0) {
+        await conn.rollback();
+        // Same 404 as request-not-found to avoid leaking block state.
+        return res.status(404).json({ error: 'Request not found' });
+      }
 
       // Bidirectional insert with ON DUPLICATE KEY UPDATE so a re-accept
       // (or a legacy half-friendship) heals instead of erroring.
