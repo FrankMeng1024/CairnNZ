@@ -213,6 +213,18 @@ router.get('/fog', async (req, res) => {
     // points-per-friend at MAX_POINTS_PER_FRIEND via a subquery ORDER BY
     // ts DESC LIMIT. The cap protects against sim-walker abuse producing
     // 500k+ rows for a single friend.
+    // Sprint 6 R71: use per-friend ROW_NUMBER window function instead
+    // of a global LIMIT. Pre-fix, `LIMIT MAX_POINTS_PER_FRIEND * friendIds.length`
+    // was a GLOBAL cap across all friends' points after ORDER BY ts DESC.
+    // Consequence: if 1 friend has 100k points and 4 have 10 each, the
+    // subquery could pull 100k rows all from friend #1 (their points are
+    // newest), and friends #2-5 get zero — even though each user's cap
+    // is 20k. Fairness broken.
+    //
+    // Fix: ROW_NUMBER() PARTITION BY user_id ORDER BY ts DESC, then
+    // filter rn <= 20000. MySQL 8 supports window functions natively.
+    // Now each friend gets up to MAX_POINTS_PER_FRIEND of THEIR OWN
+    // newest points, independent of the others' density.
     const MAX_POINTS_PER_FRIEND = 20000;
     const conn = await pool.getConnection();
     let rows;
@@ -222,12 +234,12 @@ router.get('/fog', async (req, res) => {
         SELECT sub.user_id AS friend_id,
                JSON_ARRAYAGG(JSON_OBJECT('lat', sub.lat, 'lng', sub.lng, 'ts', sub.ts)) AS points
           FROM (
-            SELECT user_id, lat, lng, ts
+            SELECT user_id, lat, lng, ts,
+                   ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY ts DESC) AS rn
               FROM memory_points
              WHERE user_id IN (${placeholders})
-             ORDER BY ts DESC
-             LIMIT ${MAX_POINTS_PER_FRIEND * friendIds.length}
           ) sub
+         WHERE sub.rn <= ${MAX_POINTS_PER_FRIEND}
       GROUP BY sub.user_id`;
       [rows] = await conn.execute(sql, friendIds);
     } finally {
