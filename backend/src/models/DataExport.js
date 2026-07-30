@@ -51,12 +51,23 @@ async function request(userId) {
   if (existing.length > 0) return { existing: true, ...existing[0] };
 
   const token = generateToken();
-  const expiresAt = new Date(Date.now() + EXPORT_TTL_MS);
+  // Sprint 6 R92 BUG-3: let the DB compute expires_at as UTC seconds
+  // from now. Pre-fix, `new Date(Date.now() + EXPORT_TTL_MS)` was sent
+  // as a JS Date to mysql2 which reformatted it via the pool's
+  // configured timezone (default 'local'). On any host whose local TZ
+  // != DB session TZ, the stored DATETIME drifts by that offset — the
+  // effective TTL becomes 24h ± offset. The read path (isExpired)
+  // already uses UTC_TIMESTAMP(); this makes the write path symmetric.
+  const ttlSec = Math.floor(EXPORT_TTL_MS / 1000);
   const [result] = await pool.execute(
     `INSERT INTO data_exports (user_id, status, download_token, expires_at)
-     VALUES (?, 'queued', ?, ?)`,
-    [userId, token, expiresAt],
+     VALUES (?, 'queued', ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? SECOND))`,
+    [userId, token, ttlSec],
   );
+  // Return the expected expiresAt as a JS Date for API-response purposes.
+  // Small drift vs the DB's actual value (<1s) is fine — clients use this
+  // only for display, not for enforcement.
+  const expiresAt = new Date(Date.now() + EXPORT_TTL_MS);
   return { existing: false, id: result.insertId, status: 'queued', download_token: token, expires_at: expiresAt };
 }
 
@@ -288,6 +299,22 @@ async function markSent(id) {
   );
 }
 
+// Sprint 6 R92 BUG-3: TZ-safe expiry check. Delegates the clock to the
+// DB (`UTC_TIMESTAMP()` vs stored DATETIME) so Node<->MySQL TZ mismatch
+// cannot silently shift the effective expiry. Callers get a boolean
+// derived from a single WHERE that either matches (still-valid, no
+// row returned by the "expired" query) or does not (expired, row
+// exists in the check).
+async function isExpired(id) {
+  const [rows] = await pool.execute(
+    `SELECT 1 FROM data_exports
+      WHERE id = ? AND expires_at IS NOT NULL AND expires_at < UTC_TIMESTAMP()
+      LIMIT 1`,
+    [id],
+  );
+  return rows.length > 0;
+}
+
 // Cron sweep — mark expired rows + delete files. Called nightly.
 // Sprint 6 R81: batch. Under normal load a few rows per night; if
 // ever 10k+ (mass account expiry), the loop would take seconds per
@@ -312,4 +339,4 @@ async function purgeExpired() {
   return { rowsExpired: expired.length, filesDeleted };
 }
 
-module.exports = { request, buildPending, findByToken, markSent, purgeExpired, buildBundle };
+module.exports = { request, buildPending, findByToken, markSent, purgeExpired, buildBundle, isExpired };

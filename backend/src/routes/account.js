@@ -148,7 +148,25 @@ router.get('/export/:token', downloadLimiter, async (req, res) => {
   try {
     const row = await DataExport.findByToken(req.params.token);
     if (!row || row.status !== 'ready') return res.status(404).send('Not found or expired.');
-    if (row.expires_at && new Date(row.expires_at) < new Date()) {
+    // Sprint 6 R92 BUG-3: TZ-safe expiry check. Pre-fix, this compared
+    // `new Date(row.expires_at) < new Date()` in Node. row.expires_at
+    // comes from mysql2 as a JS Date reconstructed via the pool's
+    // configured timezone (default 'local'). Two failure modes:
+    //   (a) MySQL server session TZ != Node TZ → Date reconstructed
+    //       with a wall-clock offset up to ±12h, silently extending or
+    //       truncating the export token's 24h window.
+    //   (b) mysql2 timezone config drift between environments (prod
+    //       aliyun UTC vs a future dev laptop in Pacific/Auckland)
+    //       produces different expiry behavior for the same DB row.
+    // Current aliyun deploy is UTC/UTC symmetric so no user impact
+    // today; the fix is defense-in-depth against future drift.
+    //
+    // Fix: ask DataExport to check expiry via SQL (`WHERE expires_at >
+    // UTC_TIMESTAMP()`) so the DB alone owns the clock and its own
+    // stored DATETIME. Move the check into findByToken semantically:
+    // treat "expired per SQL" the same as "not found".
+    const nowExpired = row.expires_at && await DataExport.isExpired(row.id);
+    if (nowExpired) {
       return res.status(404).send('Not found or expired.');
     }
     if (!row.file_path || !fs.existsSync(row.file_path)) {
