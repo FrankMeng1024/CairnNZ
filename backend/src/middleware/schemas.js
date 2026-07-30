@@ -189,6 +189,18 @@ const authGoogle = Joi.object({
   id_token: Joi.string().min(10).required(),
 });
 
+// Sprint 6 R63: apple schema. Pre-fix, POST /apple had no validateBody,
+// relying on inline `if (!identity_token)` guard. All other fields
+// (name, raw_nonce) were coerced via `String(x).trim().slice()` at
+// use time — not vulnerable, but inconsistent with the rest of auth.
+// A schema makes the input contract explicit and rejects oversized
+// name / raw_nonce payloads before any processing.
+const authApple = Joi.object({
+  identity_token: Joi.string().min(10).max(4000).required(),
+  raw_nonce: Joi.string().max(200).allow(null, ''),
+  name: Joi.string().max(60).allow(null, ''),
+});
+
 // O18 batch 6.3: field names match route handler (currentPassword/newPassword).
 // currentPassword optional because OAuth users setting password for first time
 // have no current password to verify.
@@ -265,6 +277,7 @@ module.exports = {
     login: authLogin,
     resend: authResend,
     google: authGoogle,
+    apple: authApple,
     passwordChange: authPasswordChange,
     // O18 batch 6.3
     passwordResetRequest: authPasswordResetRequest,

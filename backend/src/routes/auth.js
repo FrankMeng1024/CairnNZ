@@ -407,7 +407,7 @@ router.post('/google', oauthLimiter, validateBody(schemas.auth.google), async (r
 // via user_oauth (provider='apple'). First-time signup gets name from
 // `name` in the request body (client-supplied — Apple only sends it once,
 // on very first authorize).
-router.post('/apple', oauthLimiter, async (req, res) => {
+router.post('/apple', oauthLimiter, validateBody(schemas.auth.apple), async (req, res) => {
   const { identity_token, name: providedName, raw_nonce } = req.body || {};
   if (!identity_token) return res.status(400).json({ error: 'identity_token is required.' });
   const audience = process.env.APPLE_BUNDLE_ID || process.env.APPLE_CLIENT_ID;
