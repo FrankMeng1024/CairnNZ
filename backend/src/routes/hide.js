@@ -22,6 +22,8 @@
  */
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { validateBody } = require('../middleware/validate');
@@ -29,9 +31,22 @@ const schemas = require('../middleware/schemas');
 
 router.use(authenticate);
 
+// Sprint 6 R61: rate-limit hide-item creation. Pre-fix, no throttle
+// on POST /hide. A user could hide 10k items rapidly, spamming
+// hidden_items INSERTs. PK dedupes duplicates so no data corruption,
+// but wastes DB pool and grows the table. Legitimate use is "user
+// taps Hide on a marker" a few times per session; 200/hour is
+// enormously generous headroom.
+const hideLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 200,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => req.user?.userId ? `hide:${req.user.userId}` : ipKeyGenerator(req, res),
+  message: { error: 'Too many hide requests. Please slow down.' },
+});
+
 const VALID_TYPES = new Set(['mark', 'route']);
 
-router.post('/', validateBody(schemas.hide.create), async (req, res) => {
+router.post('/', hideLimiter, validateBody(schemas.hide.create), async (req, res) => {
   const userId = req.user.userId;
   const { item_type, item_id } = req.body || {};
 
