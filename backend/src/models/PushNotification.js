@@ -176,21 +176,32 @@ async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = 
   // empty display name would push a blank-title notification. Trim once,
   // then re-check emptiness. Also normalize body to null if it's whitespace
   // so the client doesn't render a phantom empty line.
-  const cleanTitle = String(title).trim();
+  //
+  // Sprint 6 R69: clamp title/body/kind to DB column widths.
+  // notification_log has VARCHAR(120) title, VARCHAR(400) body, VARCHAR(40)
+  // kind. Callers interpolate user.name (up to 100 chars) into title
+  // ("Alice wants to be your friend" = up to 125 chars) → ER_DATA_TOO_LONG
+  // under STRICT_TRANS_TABLES → the entire push enqueue path 500s.
+  // Truncate rather than reject so the notification still fires with a
+  // clipped title.
+  const cleanTitle = String(title).trim().slice(0, 120);
   if (!cleanTitle) return null;
-  const cleanBody = (body == null) ? null : String(body).trim() || null;
+  const cleanBody = (body == null) ? null : (String(body).trim().slice(0, 400) || null);
+  // kind is caller-controlled but from a fixed set — clamp defensively.
+  const cleanKind = String(kind).slice(0, 40);
   // Sprint 6 review C8 fix: for kinds with a null relatedId (e.g.
   // announcements), the base dedupe key `${kind}:null` would collide
   // across all messages, making the 2nd announcement to a user a no-op.
   // Add a per-hour bucket suffix so announcements dedupe within an hour
   // but new announcements later still land.
+  // R69: use cleanKind for consistency with the INSERT columns.
   const dedupeKey = relatedId != null
-    ? `${kind}:${relatedId}`
-    : `${kind}:null:${Math.floor(Date.now() / (60 * 60 * 1000))}`;
+    ? `${cleanKind}:${relatedId}`
+    : `${cleanKind}:null:${Math.floor(Date.now() / (60 * 60 * 1000))}`;
   // Check user's preferences before queueing (server-side gate).
   // Sprint 6 review C4: read from user_push_prefs (source of truth). Row
   // may not exist — default is all-on, so absence = allow.
-  const prefColumn = KIND_TO_PREF[kind];
+  const prefColumn = KIND_TO_PREF[cleanKind];
   if (prefColumn) {
     const [prefsRows] = await pool.execute(
       `SELECT ${prefColumn} AS enabled FROM user_push_prefs WHERE user_id = ? LIMIT 1`,
@@ -202,7 +213,7 @@ async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = 
         `INSERT IGNORE INTO notification_log
           (recipient_user_id, actor_user_id, kind, related_id, title, body, status, dedupe_key)
          VALUES (?, ?, ?, ?, ?, ?, 'dropped_by_pref', ?)`,
-        [recipientUserId, actorUserId, kind, relatedId, cleanTitle, cleanBody, dedupeKey],
+        [recipientUserId, actorUserId, cleanKind, relatedId, cleanTitle, cleanBody, dedupeKey],
       );
       return null;
     }
@@ -211,7 +222,7 @@ async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = 
     `INSERT IGNORE INTO notification_log
       (recipient_user_id, actor_user_id, kind, related_id, title, body, status, dedupe_key)
      VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
-    [recipientUserId, actorUserId, kind, relatedId, cleanTitle, cleanBody, dedupeKey],
+    [recipientUserId, actorUserId, cleanKind, relatedId, cleanTitle, cleanBody, dedupeKey],
   );
   return result.insertId || null;
 }
