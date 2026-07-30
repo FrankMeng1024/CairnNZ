@@ -110,12 +110,30 @@ router.get('/exports', authenticate, async (req, res) => {
     // Sprint 6 review M2: expose error_msg on the history endpoint so
     // users have visibility into WHY an export failed (previously they
     // saw status='failed' with no diagnostic and retried into infinity).
+    //
+    // Sprint 6 R62: sanitize error_msg before returning to client. Raw
+    // err.message from mysql2/fs errors can contain schema details
+    // ("Unknown column 'x' in field list", "Table X doesn't exist",
+    // "Cannot enlarge memory arrays"), leaking backend internals to
+    // any authenticated user via their own export history. Same class
+    // as R53/R54 (500-handler err.message leaks). Fix: map internal
+    // messages to user-friendly categories.
     const [rows] = await pool.execute(
       `SELECT id, status, size_bytes, requested_at, built_at, expires_at, sent_at, error_msg
        FROM data_exports WHERE user_id = ? ORDER BY id DESC LIMIT 20`,
       [req.user.userId],
     );
-    return res.json(rows);
+    const sanitized = rows.map((r) => {
+      if (!r.error_msg) return { ...r, error_msg: null };
+      const raw = String(r.error_msg).toLowerCase();
+      // Only surface a stable, user-actionable category.
+      let category = 'internal_error';
+      if (raw.includes('no space') || raw.includes('enospc')) category = 'server_disk_full';
+      else if (raw.includes('timeout')) category = 'timeout';
+      else if (raw.includes('too large') || raw.includes('too many rows')) category = 'too_much_data';
+      return { ...r, error_msg: category };
+    });
+    return res.json(sanitized);
   } catch (err) {
     console.error('[export/history]', err);
     return res.status(500).json({ error: 'Server error.' });
