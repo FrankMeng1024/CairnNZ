@@ -110,6 +110,9 @@ router.get('/markers', async (req, res) => {
     // hard-delete stops appearing in the shared feed with their cached
     // name. Their account is going away; showing their content is
     // stale UX. Mirror of R37 fix on friends.js list endpoints.
+    // Sprint 6 R75: cap /circle/markers at 5000. Pathological friend
+    // with 10k+ markers would otherwise dominate the shared feed. Same
+    // class as R73 marker list cap.
     const sql = `
       SELECT m.id, m.user_id, m.type, m.text, m.lat, m.lng, m.alt,
              m.permission, m.approximate, m.created_at, m.updated_at,
@@ -124,7 +127,8 @@ router.get('/markers', async (req, res) => {
          AND m.permission IN ('friend','group','public')
          AND m.status = 'healthy'
          AND h.user_id IS NULL
-    ORDER BY m.created_at DESC`;
+    ORDER BY m.created_at DESC
+    LIMIT 5000`;
 
     const [markers] = await pool.execute(sql, [viewerId, ...friendIds]);
 
@@ -169,7 +173,8 @@ router.get('/routes', async (req, res) => {
        WHERE r.user_id IN (${placeholders})
          AND r.permission IN ('friend','public')
          AND h.user_id IS NULL
-    ORDER BY r.created_at DESC`;
+    ORDER BY r.created_at DESC
+    LIMIT 1000`;
 
     const [routes] = await pool.execute(sql, [viewerId, ...friendIds]);
     // Public routes anonymized (parity with markers).
