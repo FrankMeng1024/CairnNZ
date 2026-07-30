@@ -251,11 +251,26 @@ async function sendPending({ batchSize = 100 } = {}) {
   // (UPDATE to 'sending') and the per-row status write, rows stayed
   // in 'sending' forever and next drain's SELECT (status='queued')
   // never re-visited them. Every drain start: re-queue 'sending' rows
-  // older than 5 min. Fresh 'sending' rows from a concurrent worker
-  // (with FOR UPDATE SKIP LOCKED) stay claimed.
+  // whose last-touched time is older than the recovery threshold.
+  //
+  // Sprint 6 R91 BUG-1: use sent_at (last-touched clock) not created_at
+  // (birth clock). Pre-fix, a row enqueued at T0 that sat in 'queued'
+  // for 4:59 and then got claimed at T0+4:59 would be re-queued at
+  // T0+5:00+eps while the first send was STILL IN FLIGHT (Expo fetch
+  // has a 30s abort but the whole drain tick is 60s), producing a
+  // double push to the user. The claim UPDATE below now also writes
+  // sent_at=CURRENT_TIMESTAMP so this recovery clock actually reflects
+  // "how long since claim" rather than "how long since enqueue".
+  //
+  // Pre-existing rows written before this deploy have sent_at=NULL
+  // when in 'sending' state. Include those in the recovery so any
+  // orphans from the old-code path still get retried (fall-through:
+  // COALESCE with created_at for legacy rows). New rows will always
+  // have sent_at populated at claim time.
   await pool.execute(
     `UPDATE notification_log SET status='queued'
-     WHERE status='sending' AND created_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)`,
+     WHERE status='sending'
+       AND COALESCE(sent_at, created_at) < DATE_SUB(NOW(), INTERVAL 5 MINUTE)`,
   ).catch((err) => console.warn('[push] stale-sending recovery failed:', err.message));
 
   // Sprint 6 round-4 review R4B6: atomically claim rows via
@@ -284,8 +299,15 @@ async function sendPending({ batchSize = 100 } = {}) {
       // dropped_* below.
       const ids = rows.map(r => r.id);
       const placeholders = ids.map(() => '?').join(',');
+      // Sprint 6 R91 BUG-1: also stamp sent_at=CURRENT_TIMESTAMP on claim
+      // to act as "last-touched" clock for the stale-sending recovery
+      // above. Semantically sent_at was "when it terminally completed";
+      // widening to "last touched" is fine because every terminal write
+      // below overwrites sent_at with the true completion time. In-flight
+      // rows carry the claim timestamp so recovery has a real clock to
+      // compare against instead of the row's birth clock.
       await conn.execute(
-        `UPDATE notification_log SET status='sending' WHERE id IN (${placeholders})`,
+        `UPDATE notification_log SET status='sending', sent_at=CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
         ids,
       );
     }
