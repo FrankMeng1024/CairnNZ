@@ -675,7 +675,10 @@ router.post('/logout', authenticate, async (req, res) => {
     // unregistering ALL tokens for this user (safer default).
     try {
       const PushNotification = require('../models/PushNotification');
-      if (req.body?.push_token && typeof req.body.push_token === 'string') {
+      // Sprint 6 R68: also bound push_token length (matches R67 pattern
+      // for /push/register + /push/unregister). Oversized token → clean
+      // fall-through to unregisterAllForUser instead of a doomed DELETE.
+      if (req.body?.push_token && typeof req.body.push_token === 'string' && req.body.push_token.length <= 255) {
         // Sprint 6 round-12 R12B1: pass user_id so we don't cross-user delete.
         await PushNotification.unregisterToken(req.body.push_token, req.user.userId);
       } else {
