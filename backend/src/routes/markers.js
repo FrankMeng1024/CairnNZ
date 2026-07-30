@@ -448,12 +448,25 @@ router.post('/:id/vote', voteRateLimit, idempotency, async (req, res) => {
   }
 
   // GPS quality gate
-  if (typeof accuracy === 'number' && accuracy > MAX_GPS_ACCURACY_M) {
-    abuseSignals.log(req, { kind: 'gps_low_accuracy', userId, markerId, payload: { accuracy } });
-    return res.status(400).json({ error: 'GPS accuracy too low' });
+  // Sprint 6 R83 BUG-2: NaN bypass. typeof NaN === 'number' is true,
+  // NaN > MAX is false, so a client sending accuracy=NaN escaped the
+  // gate entirely. Require Number.isFinite before the comparison.
+  if (typeof accuracy === 'number') {
+    if (!Number.isFinite(accuracy) || accuracy > MAX_GPS_ACCURACY_M) {
+      abuseSignals.log(req, { kind: 'gps_low_accuracy', userId, markerId, payload: { accuracy } });
+      return res.status(400).json({ error: 'GPS accuracy too low' });
+    }
   }
   // Clock skew gate
-  if (typeof client_ts === 'number') {
+  // Sprint 6 R83 BUG-1: previously `if (typeof client_ts === 'number')`
+  // let a client that OMITS client_ts skip the skew check entirely,
+  // opening a replay window. Now: REQUIRE client_ts to be a finite
+  // number, reject if missing or invalid.
+  if (!Number.isFinite(client_ts)) {
+    abuseSignals.log(req, { kind: 'client_ts_missing', userId, markerId });
+    return res.status(400).json({ error: 'client_ts required as finite number' });
+  }
+  {
     const skew = Math.abs(Date.now() - client_ts);
     if (skew > MAX_TIMESTAMP_SKEW_MS) {
       abuseSignals.log(req, { kind: 'clock_skew', userId, markerId, payload: { skew } });
@@ -476,11 +489,32 @@ router.post('/:id/vote', voteRateLimit, idempotency, async (req, res) => {
     await conn.beginTransaction();
 
     const [[marker]] = await conn.execute(
-      `SELECT id, user_id, lat, lng, helpful_count, report_count, status
+      `SELECT id, user_id, lat, lng, helpful_count, report_count, status, permission
          FROM markers WHERE id = ? FOR UPDATE`,
       [markerId],
     );
     if (!marker) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Marker not found' });
+    }
+    // Sprint 6 R83 BUG-3: reject votes on already-hidden markers.
+    // Pre-fix, votes kept incrementing helpful_count/report_count on
+    // status='hidden' markers (auto-hidden by 5-report threshold or
+    // admin-hidden). Wasted DB writes and produced misleading
+    // per-marker stats. 404 preserves the R17F5 pattern (don't leak
+    // hidden state to non-owners).
+    if (marker.status === 'hidden') {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Marker not found' });
+    }
+    // Sprint 6 R83 BUG-4: defense-in-depth against permission='personal'
+    // votes by non-owners. R17F5 gated /interact-nonce so a non-owner
+    // shouldn't get a valid nonce for a personal marker in the first
+    // place, but permission-flip race (owner marks public → nonce
+    // issued → owner flips to personal → non-owner still holds the
+    // nonce) or leaked nonce would bypass. Mirror the R17F5 gate here:
+    // non-owner + personal marker = 404 (same as R17F5).
+    if (marker.permission === 'personal' && String(marker.user_id) !== String(userId)) {
       await conn.rollback();
       return res.status(404).json({ error: 'Marker not found' });
     }
