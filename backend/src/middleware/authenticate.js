@@ -72,17 +72,33 @@ async function authenticate(req, res, next) {
   // server nonzero), token was minted before a mass-revoke event
   // (currently: /account/restore). Reject.
   try {
+    // Sprint 6 R88 BUG-4: reject when the user row is absent. Pre-fix,
+    // rows.length === 0 (user hard-deleted, or JWT minted for a
+    // non-existent userId with a valid signature) skipped the if-branch
+    // and fell through to req.user = decoded → ghost-user API access
+    // (attacker with a leaked historical JWT for an erased account, or
+    // a token from a debug/test path referencing a non-existent id, was
+    // silently accepted). Now: 401 immediately.
+    //
+    // NOT extended to deleted_at IS NOT NULL — soft-deleted accounts
+    // MUST retain auth so the user can call /account/restore during
+    // the 7-day grace window. That endpoint mounts authenticate; if
+    // we rejected here, restore becomes uncallable. Soft-delete
+    // invalidation is out-of-scope until /account/delete bumps
+    // token_version (currently only /account/restore does).
     const [rows] = await pool.execute(
       'SELECT token_version FROM users WHERE id = ? LIMIT 1',
       [decoded.userId]
     );
-    if (rows.length > 0) {
-      const serverVer = Number(rows[0].token_version || 0);
-      const jwtVer = Number(decoded.token_version || 0);
-      if (serverVer > jwtVer) {
-        res.set('X-Cairn-Auth-Invalid', 'true');
-        return res.status(401).json({ message: 'Signed out on all devices. Sign in again.', code: 'TOKEN_INVALID' });
-      }
+    if (rows.length === 0) {
+      res.set('X-Cairn-Auth-Invalid', 'true');
+      return res.status(401).json({ message: 'Account not found.', code: 'TOKEN_INVALID' });
+    }
+    const serverVer = Number(rows[0].token_version || 0);
+    const jwtVer = Number(decoded.token_version || 0);
+    if (serverVer > jwtVer) {
+      res.set('X-Cairn-Auth-Invalid', 'true');
+      return res.status(401).json({ message: 'Signed out on all devices. Sign in again.', code: 'TOKEN_INVALID' });
     }
   } catch (err) {
     // Sprint 6 round-55 R55: match the R6B7 fail-closed policy applied
