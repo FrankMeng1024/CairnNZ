@@ -393,6 +393,39 @@ async function sendPending({ batchSize = 100 } = {}) {
         failed += 1;
         continue;
       }
+      // Sprint 6 R91 BUG-3: parse per-ticket status and delete tokens
+      // Expo has told us are dead (DeviceNotRegistered). Pre-fix, a
+      // token from an uninstalled app / revoked-permission device stayed
+      // in device_tokens for 60 days (until purgeStale swept by
+      // last_seen_at, which was only refreshed by register calls and so
+      // never fired for dead devices). Every subsequent enqueue for that
+      // user re-sent to the dead token, wasting Expo quota and — per
+      // Expo's own docs — risking cross-user delivery if APNs/FCM
+      // reassigns the token to a different install (rare but real).
+      //
+      // Response shape: { data: [{ status: 'ok'|'error', message?,
+      // details?: { error?: 'DeviceNotRegistered' | ... } }, ...] } with
+      // one entry per message in the request order. We correlate back to
+      // the token by index (same order as `messages` above), skipping
+      // the web-filtered tokens that never entered the request.
+      let expoBody = null;
+      try { expoBody = await res.clone().json(); } catch (_) { /* non-JSON 200 — treat as sent */ }
+      if (expoBody && Array.isArray(expoBody.data)) {
+        const requestedTokens = tokens.filter(t => t.platform !== 'web');
+        for (let i = 0; i < expoBody.data.length && i < requestedTokens.length; i++) {
+          const ticket = expoBody.data[i];
+          if (ticket && ticket.status === 'error' && ticket.details && ticket.details.error === 'DeviceNotRegistered') {
+            const deadToken = requestedTokens[i].token;
+            await pool.execute(
+              `DELETE FROM device_tokens WHERE token = ? AND user_id = ?`,
+              [deadToken, row.recipient_user_id],
+            ).catch((err) => {
+              console.warn(`[push] failed to delete dead token: ${err.message}`);
+            });
+            console.log(`[push] deleted DeviceNotRegistered token user=${row.recipient_user_id}`);
+          }
+        }
+      }
       await pool.execute(
         `UPDATE notification_log SET status='sent', sent_at=CURRENT_TIMESTAMP WHERE id=?`,
         [row.id],
