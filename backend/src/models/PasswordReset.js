@@ -100,11 +100,32 @@ async function consumeCode(email, code) {
   const storedBuf = Buffer.from(storedCode, 'utf8');
   if (codeBuf.length !== storedBuf.length) return { ok: false, reason: 'mismatch' };
   if (!crypto.timingSafeEqual(codeBuf, storedBuf)) return { ok: false, reason: 'mismatch' };
-  // Mark used so replay fails.
-  await pool.execute(
-    'UPDATE password_reset_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?',
+  // Sprint 6 R92 BUG-2: atomic claim. Pre-fix, mark-used was a naked
+  // UPDATE with no WHERE guard on used_at. Two concurrent consumeCode
+  // calls with the correct code (attacker racing legitimate reset;
+  // client with retry logic on network flap) both:
+  //   1. SELECT the row → both see used_at = NULL
+  //   2. Pass the `if (row.used_at)` gate
+  //   3. Pass timingSafeEqual
+  //   4. Both fire the mark-used UPDATE
+  //   5. Both return { ok: true }
+  // Caller then executes password reset twice with the same code —
+  // if the two callers submit different newPasswords, last writer wins
+  // (attacker's if their tx commits second). Race window is short but
+  // deterministic under concurrent /verify.
+  //
+  // Fix: UPDATE with `WHERE ... AND used_at IS NULL` gate + check
+  // affectedRows === 1 as the single-consumer claim. Second concurrent
+  // call sees affectedRows = 0 and reports 'used' (matches the state
+  // as far as the caller is concerned — the code has now been used).
+  const [claim] = await pool.execute(
+    'UPDATE password_reset_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL',
     [row.id]
   );
+  if (claim.affectedRows !== 1) {
+    // Lost the race — another concurrent call consumed this code first.
+    return { ok: false, reason: 'used' };
+  }
   return { ok: true };
 }
 
