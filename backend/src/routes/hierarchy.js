@@ -123,15 +123,15 @@ router.get('/deepest', async (req, res) => {
 // -------------------------------------------------------------------
 router.get('/panel', async (req, res) => {
   const t0 = Date.now();
-  const titleId = req.query.title_id;
-  // Sprint 6 round-28 R28 investigation: regions.id is VARCHAR(64) with
-  // ISO 3166 codes ('AF', 'NZL', 'CN-11', etc.), NOT integer. The prior
-  // subagent-flagged "is_here always false" concern (integer vs string
-  // strict-eq) was based on a wrong assumption. Both region_id and
-  // hereCountryId are strings, and `===` between two strings works
-  // correctly. Leaving as-is; no coercion needed.
-  const hereCityId = req.query.here_city_id || null;
-  const hereCountryId = req.query.here_country_id || null;
+  // Sprint 6 R85 BUG-4: force String type. Express parses repeated
+  // query params (`?title_id=a&title_id=b`) into arrays. If a client
+  // (or attacker) sends an array, mysql2 serializes it as `IN (...)`,
+  // silently returning wrong country data or polluting the `is_here`
+  // strict-equality check. Coerce all here_* to string so arrays
+  // become '[object Object]'-like strings that don't match anything.
+  const titleId = typeof req.query.title_id === 'string' ? req.query.title_id.slice(0, 64) : null;
+  const hereCityId = typeof req.query.here_city_id === 'string' ? req.query.here_city_id.slice(0, 64) : null;
+  const hereCountryId = typeof req.query.here_country_id === 'string' ? req.query.here_country_id.slice(0, 64) : null;
   const userId = req.user?.userId ?? 'unknown';
   console.log(`[hierarchy/panel] IN user=${userId} title=${titleId} here_city=${hereCityId} here_country=${hereCountryId}`);
   if (!titleId) {

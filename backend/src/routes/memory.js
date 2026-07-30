@@ -176,11 +176,18 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
  */
 router.get('/points', authenticate, async (req, res) => {
   const userId = req.user.userId;
-  const afterTs = Number(req.query.after_ts) || 0;
-  const afterCid = typeof req.query.after_cid === 'string' ? req.query.after_cid : '';
-  const until = Number(req.query.until) || Number.MAX_SAFE_INTEGER;
-  const requested = Number(req.query.limit) || 5000;
-  const limit = Math.max(1, Math.min(10000, requested));
+  // Sprint 6 R85 BUG-3: clamp to finite non-negative. Pre-fix, `Number("Infinity")`
+  // returns Infinity (truthy, || 0 doesn't trigger), which mysql2 would
+  // serialize into a BIGINT parameter → SQL type error → 500. Same for
+  // NaN via crafted input. Now: force finite integer, default to 0 for
+  // afterTs and MAX_SAFE_INTEGER for until.
+  const rawAfterTs = Number(req.query.after_ts);
+  const afterTs = Number.isFinite(rawAfterTs) && rawAfterTs >= 0 ? rawAfterTs : 0;
+  const afterCid = typeof req.query.after_cid === 'string' ? req.query.after_cid.slice(0, 36) : '';
+  const rawUntil = Number(req.query.until);
+  const until = Number.isFinite(rawUntil) && rawUntil >= 0 ? rawUntil : Number.MAX_SAFE_INTEGER;
+  const requested = Number(req.query.limit);
+  const limit = Math.max(1, Math.min(10000, Number.isFinite(requested) ? requested : 5000));
   try {
     const [rows] = await pool.query(
       `SELECT lat, lng, ts, client_id FROM memory_points
