@@ -73,8 +73,21 @@ interface SessionState {
   // O1 batch 40: getSessionsByRegion, markSyncing removed — 0 external callers
   hydrate: (userId?: string) => Promise<void>;
   // v412: 已 Save 未同步 hike 的 syncState 管理
-  /** SyncDaemon 上传成功后调用: syncState → 'synced', 更新 remoteId */
-  markSynced: (localId: string, remoteId: number) => void;
+  /**
+   * SyncDaemon 上传成功后调用: syncState → 'synced', 更新 remoteId
+   * R97: 变 upsert 语义。找不到 localId 时若提供 upsertData 就插入新条目
+   * (offline save → hydrate 时序竞争丢 sessions 的兜底)
+   */
+  markSynced: (localId: string, remoteId: number, upsertData?: {
+    activityMode: ActivityMode;
+    regionCode?: string;
+    startedAt: number;
+    endedAt: number;
+    durationS?: number;
+    distanceM?: number;
+    elevationGainM?: number;
+    name?: string;
+  }) => void;
   /** 用户长按灰卡"放弃"调用: 从 sessions 数组删除, 不通知服务器 */
   removeLocal: (localId: string) => void;
 }
@@ -197,14 +210,53 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   // O1 batch 40: getSessionsByRegion removed — 0 external callers
 
-  // v412: SyncDaemon 上传成功后调用
-  markSynced: (localId, remoteId) => {
+  // v412: SyncDaemon 上传成功后调用。R97: 改成 upsert 语义。
+  // 之前 markSynced 只在 memory sessions 里 find + mutate,如果找不到
+  // localId 就 silent no-op。用户 offline save 后:
+  //   - hydrate 时序 vs drainPending 竞争,或 fetchSessions 已把内存
+  //     覆盖掉那条本地 session
+  //   - drainPending 从磁盘 pendingSyncStore 拿到该条,uploadOne 成功
+  //   - markSynced silent no-op → sessions 数组没这条
+  //   - removePending 删了磁盘 pending → 磁盘也没
+  //   - 服务器有数据 + 内存/磁盘 UI 双空 → activity 永久消失,用户看不到
+  //
+  // 修复:markSynced 找不到 localId 时,upsert 一条 synced session
+  // (需 caller 传 hike 里 payload 摘要,activityMode 等)。
+  // 语义变"确保这条 session 以 synced 状态在 store 里存在",不再
+  // 假设 addSession 早就跑过。
+  markSynced: (localId, remoteId, upsertData) => {
     set((s) => {
-      const updated = s.sessions.map((sess) =>
-        sess.id === localId
-          ? { ...sess, remoteId, syncState: 'synced' as const }
-          : sess
-      );
+      const idx = s.sessions.findIndex((sess) => sess.id === localId);
+      let updated: TrackingSession[];
+      if (idx >= 0) {
+        // Found: 原路径 in-place mutate
+        updated = s.sessions.map((sess, i) =>
+          i === idx
+            ? { ...sess, remoteId, syncState: 'synced' as const }
+            : sess
+        );
+      } else if (upsertData) {
+        // R97: 内存里没这条,upsert 补一条 synced entry
+        const upsertSession: TrackingSession = {
+          id: localId,
+          remoteId,
+          activityMode: upsertData.activityMode,
+          regionCode: upsertData.regionCode ?? 'nz',
+          startedAt: upsertData.startedAt,
+          endedAt: upsertData.endedAt,
+          durationS: upsertData.durationS ?? 0,
+          distanceM: upsertData.distanceM ?? 0,
+          elevationGainM: upsertData.elevationGainM ?? 0,
+          trackPoints: [],
+          markerIds: [],
+          name: upsertData.name,
+          syncState: 'synced' as const,
+        };
+        updated = [upsertSession, ...s.sessions];
+      } else {
+        // 无 upsertData 兜底:保持原 silent no-op 行为(不该发生,但防御性)
+        return {};
+      }
       const summaries = updated.map(({ trackPoints: _, ...rest }) => rest);
       storage.setItem(sessionsKey(get().currentUserId), JSON.stringify(summaries));
       return { sessions: updated };

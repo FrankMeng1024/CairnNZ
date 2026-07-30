@@ -163,7 +163,27 @@ async function uploadOne(hike: PendingHike): Promise<void> {
       const { useSessionStore } = require('../store/useSessionStore');
       const store = useSessionStore.getState();
       if (typeof store.markSynced === 'function') {
-        store.markSynced(hike.localId, result.session_id);
+        // R97: 传 upsertData 让 markSynced 在找不到 localId 时 upsert 一条
+        // synced session。offline save 后 hydrate 时序竞争 或者 fetchSessions
+        // 覆盖内存 sessions 会让内存里没有这条,原 markSynced silent no-op
+        // → removePending 删磁盘 → 服务器有数据但 UI 永远看不见。
+        // 现在:找不到 localId → upsert 一条能显示的 synced entry。
+        const rp = hike.payload?.route_points;
+        const startedAt = Array.isArray(rp) && rp.length > 0 && typeof rp[0]?.t === 'number'
+          ? rp[0].t
+          : hike.createdAt;
+        const endedAt = hike.payload?.end_time
+          ? new Date(hike.payload.end_time).getTime()
+          : Date.now();
+        const upsertData = {
+          activityMode: hike.activityMode,
+          startedAt,
+          endedAt,
+          durationS: hike.payload?.duration_s ?? 0,
+          distanceM: hike.payload?.distance_m ?? 0,
+          name: hike.payload?.name,
+        };
+        store.markSynced(hike.localId, result.session_id, upsertData);
         memorySynced = true;
       }
     } catch (e) {
