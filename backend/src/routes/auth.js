@@ -346,7 +346,14 @@ router.post('/google', oauthLimiter, validateBody(schemas.auth.google), async (r
     }
 
     const email = payload.email.toLowerCase();
-    const name = payload.name || payload.email.split('@')[0];
+    // Sprint 6 R65: clamp name to 60 chars (matches Joi authRegister
+    // schema max + column-safe 100 char DB width). Pre-fix, a Google
+    // user with a very long displayName ("First Middle Last with lots
+    // of parts" or a JWT-encoded name) would trigger ER_DATA_TOO_LONG
+    // on createOAuthUser under STRICT_TRANS_TABLES. Apple path
+    // (auth.js:470) already does this clamping — bring Google to parity.
+    const rawName = payload.name || payload.email.split('@')[0];
+    const name = String(rawName).trim().slice(0, 60) || 'Cairn user';
     const googleSub = payload.sub;
 
     // Delete any pending registration for this email (it becomes void)
