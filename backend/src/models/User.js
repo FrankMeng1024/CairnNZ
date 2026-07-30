@@ -112,9 +112,15 @@ async function bumpTokenVersion(userId) {
 }
 
 // O18 AUTH-01: cron helper — returns user rows whose grace period has expired.
+// Sprint 6 R76: hard-cap query at 1000 rows. cron/authSweep.sweepHardDeletes
+// already trims to MAX_HARD_DELETES_PER_RUN=500 via slice, but that's a
+// JS-side slice after the full result set arrives. If ever 100k users
+// are pending-delete simultaneously (mass event / migration), the DB
+// returns 100k rows and Node holds them all briefly before slicing.
+// Query-side LIMIT bounds memory usage upstream.
 async function findHardDeleteCandidates(graceDays = 7) {
   const [rows] = await pool.execute(
-    'SELECT id FROM users WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL ? DAY)',
+    'SELECT id FROM users WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT 1000',
     [graceDays]
   );
   return rows.map(r => r.id);
