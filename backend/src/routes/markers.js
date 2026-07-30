@@ -175,7 +175,7 @@ router.get('/public', async (req, res) => {
          AND m.user_id != ?
          AND m.lat BETWEEN ? AND ?
          AND m.lng BETWEEN ? AND ?
-         AND h.id IS NULL
+         AND h.user_id IS NULL
        ORDER BY m.created_at DESC
        LIMIT 50`,
       [userId, userId, minLat, maxLat, minLng, maxLng],

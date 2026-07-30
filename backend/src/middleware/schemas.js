@@ -125,19 +125,51 @@ const sessionUpdate = Joi.object({
 }).min(1);
 
 // ── Routes ─────────────────────────────────────────────────────────────
+// Sprint 6 R94 BUG-1: schema aligned to what client (routeService.ts) sends
+// and what handler (routes.js POST /) destructures. Pre-fix, schema demanded
+// { name, route_points, distance_m, region_code, visibility } while client
+// sent { name, points, waypoints, description, distance_m, elevation_gain_m,
+// permission } and handler destructured the client shape. validate.js has
+// stripUnknown:false → every POST /api/routes 400'd on 'unknown field:
+// points'. Endpoint completely dead — matches memory
+// project_routes_endpoint_dead.md: last DB row 2026-06-28.
+//
+// Field naming matches:
+//   client (RoutePayload in app/src/services/routeService.ts): name, points,
+//     waypoints?, description?, distance_m?, elevation_gain_m?, permission?
+//   handler (routes.js:23):                       same as above
+//   route model Route.create(...):                same names via camelCase
+//
+// pointObj matches lat/lng/alt/t/acc from other schemas. waypointObj is a
+// looser {lat, lng, name?} — waypoints have no time component (they're
+// user-placed markers along the route, not GPS samples).
+const waypointObj = Joi.object({
+  lat: lat.required(),
+  lng: lng.required(),
+  name: Joi.string().max(100).allow('', null),
+}).unknown(true); // Allow other UI-only fields (icon, id) — server ignores.
+
 const routeCreate = Joi.object({
   name: Joi.string().min(1).max(100).required(),
-  route_points: Joi.array().items(pointObj).min(2).max(10000).required(),
+  points: Joi.array().items(pointObj).min(2).max(10000).required(),
+  waypoints: Joi.array().items(waypointObj).max(500).allow(null),
+  description: Joi.string().max(1000).allow('', null),
   distance_m: Joi.number().min(0).max(1000000),
-  region_code: Joi.string().max(8).default('nz'),
-  visibility: Joi.string().valid('personal', 'group', 'public').default('personal'),
+  elevation_gain_m: Joi.number().min(0).max(100000),
+  // Schema accepts 'public' so handler can return its explicit
+  // "not allowed for client writes" 400 message (better UX than a
+  // generic Joi validation error).
+  permission: Joi.string().valid('personal', 'group', 'friend', 'public'),
 });
 
 const routeUpdate = Joi.object({
   name: Joi.string().min(1).max(100),
-  route_points: Joi.array().items(pointObj).min(2).max(10000),
+  points: Joi.array().items(pointObj).min(2).max(10000),
+  waypoints: Joi.array().items(waypointObj).max(500).allow(null),
+  description: Joi.string().max(1000).allow('', null),
   distance_m: Joi.number().min(0).max(1000000),
-  visibility: Joi.string().valid('personal', 'group', 'public'),
+  elevation_gain_m: Joi.number().min(0).max(100000),
+  permission: Joi.string().valid('personal', 'group', 'friend', 'public'),
 }).min(1);
 
 // ── Friends ────────────────────────────────────────────────────────────
