@@ -66,7 +66,10 @@ router.post('/', limiter, express.json({ limit: '2mb' }), async (req, res) => {
     const values = [];
     const params = [];
     for (const item of cappedBatch) {
-      const tag = String(item.tag || '').slice(0, 96);
+      // Sprint 6 R79: tag slice was 96 but debug_events_v2.phase is
+      // VARCHAR(64). Under STRICT_TRANS_TABLES, a 64+ char tag would
+      // ER_DATA_TOO_LONG the INSERT. Align slice to column width.
+      const tag = String(item.tag || '').slice(0, 64);
       const session_id = String(item.session_id || 'unknown').slice(0, 64);
       const ts = Number(item.ts || Date.now());
       const seq = Number(item.seq || 0);
