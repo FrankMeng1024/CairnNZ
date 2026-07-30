@@ -46,7 +46,24 @@ async function isBlacklisted(jti) {
     [jti]
   );
   const blacklisted = rows.length > 0;
-  cachePut(jti, blacklisted);
+  // Sprint 6 R89 BUG-4: only cache POSITIVE results. Pre-fix, we cached
+  // `false` (not-blacklisted) results too. In a multi-node deploy (pm2
+  // cluster, docker replicas, or one node + one cron worker), Node A
+  // caches "jti X is not blacklisted (false)" at T=0. User then logs out
+  // on Node B → Node B writes to DB + caches `true` locally, but Node A
+  // still holds `false` in its local cache. Requests to Node A with
+  // token X remain authenticated for up to CACHE_TTL_MS (5 min) —
+  // the revoke is effectively bypassed on peer nodes for 5 minutes.
+  //
+  // Positive-only caching: negatives always hit the DB (cheap — indexed
+  // PK lookup, empty result), positives are cached (typical: never
+  // blacklisted, so the negative-path DB round-trip is the norm anyway).
+  // Correctness restored without needing shared cache (Redis/pub-sub).
+  //
+  // Comment on line 13-16 pre-R89 claimed "actual invalidation window is
+  // bounded by JWT expiry, not cache TTL" — that was wrong for peer
+  // nodes. Kept the comment shape but corrected the reasoning.
+  if (blacklisted) cachePut(jti, true);
   return blacklisted;
 }
 
