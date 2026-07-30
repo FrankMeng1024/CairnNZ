@@ -15,7 +15,7 @@
  *   - Mutex: 同一时刻只允许一个 drain, 但记 pendingSignal 保证 drain 中新触发不丢
  */
 
-import { listPending, removePending, markAttempt, updateRemoteId, type PendingHike } from './pendingSyncStore';
+import { listPending, removePending, markAttempt, updateRemoteId, resetForResync, type PendingHike } from './pendingSyncStore';
 import { saveHikeAtomic, startSession } from './sessionService';
 import { crashLogger } from './crashLogger';
 
@@ -179,6 +179,31 @@ async function uploadOne(hike: PendingHike): Promise<void> {
       await removePending(hike.localId);
     }
   } catch (err: any) {
+    // R96 修补 A.4 + review B1/B2: detect SESSION_NOT_FOUND_RESYNC 场景。
+    // aliyun sessions 表被 R9B7 auto-migration 误删,重建后 auto_increment
+    // 从 202 开始。pending 里 payload.remoteId 是死指针(比如指向 88),
+    // PATCH /:id/save 会返回 404 + code=SESSION_NOT_FOUND_RESYNC。
+    //
+    // Review B1: 必须同时换 idempotencyKey — middleware 用
+    // sha256(userId:opId) 作 cache key,老 key 会 replay 之前的 404,
+    // resync 永远回不了 200。resetForResync 一次搞定(清 remoteId + 新 key)。
+    //
+    // Review B2: 若 resetForResync 落盘失败(fs write error),不能 markAttempt
+    // 累加,否则重启后又读到旧死指针 + attemptCount 涨飞。直接 return 跳过
+    // 本轮,下次触发再试。成功也不 markAttempt(这次不算失败,算"路径调整")。
+    if (err?.status === 404 && err?.body?.code === 'SESSION_NOT_FOUND_RESYNC') {
+      const ok = await resetForResync(hike.localId);
+      if (ok) {
+        crashLogger.breadcrumb(
+          `v412:sync_resync_needed localId=${hike.localId.slice(0, 8)} — cleared remoteId + new idempotencyKey`,
+        );
+      } else {
+        crashLogger.breadcrumb(
+          `v412:sync_resync_reset_failed localId=${hike.localId.slice(0, 8)} — will retry next drain`,
+        );
+      }
+      return; // 不 markAttempt: 这是路径调整,不是失败重试
+    }
     await markAttempt(hike.localId);
     crashLogger.breadcrumb(
       `v412:sync_upload_failed localId=${hike.localId.slice(0, 8)} status=${err?.status || 'net'}`,

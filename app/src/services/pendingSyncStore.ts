@@ -202,7 +202,11 @@ export async function markAttempt(localId: string): Promise<void> {
   }
 }
 
-export async function updateRemoteId(localId: string, remoteId: number): Promise<void> {
+export async function updateRemoteId(localId: string, remoteId: number | null): Promise<void> {
+  // R96 修补 A.3: 允许 remoteId = null。原签名只接受 number 用于"补 remoteId
+  // (原本 null 现在有了)"; 现在也用于"清 remoteId" —— syncDaemon 拿到
+  // SESSION_NOT_FOUND_RESYNC 后调 updateRemoteId(id, null) 让 pending 走
+  // startSession + saveHikeAtomic 重传路径,避免死指针无限 404。
   const fs = await getFs();
   if (!fs) return;
   const path = fs.documentDirectory + PENDING_DIR + localId + '.json';
@@ -211,8 +215,40 @@ export async function updateRemoteId(localId: string, remoteId: number): Promise
     const hike = JSON.parse(raw) as PendingHike;
     hike.remoteId = remoteId;
     await fs.writeAsStringAsync(path, JSON.stringify(hike));
-    breadcrumb(`pendingSync:updateRemoteId localId=${localId} remoteId=${remoteId}`);
+    breadcrumb(`pendingSync:updateRemoteId localId=${localId} remoteId=${remoteId ?? 'null'}`);
   } catch {
     /* silent */
+  }
+}
+
+/**
+ * R96 修补 A.5 (B1 review): 原子重置 pending 为"未开始 remote"状态。
+ * 用在 SESSION_NOT_FOUND_RESYNC 场景:remoteId 是死指针,需要清 null
+ * 让下次 drain 重新 startSession + saveHikeAtomic。**同时必须换新
+ * idempotencyKey** —— idempotency middleware 用 sha256(userId:opId)
+ * 作 cache key,老 key 会命中之前的"404 replay",resync 永远回不了 200。
+ * 新 key 让 middleware 认为是全新请求。
+ *
+ * 返回 true 表示成功清空 + 新 key 已落盘;false 表示 fs 失败,caller
+ * 要跳过本轮避免 markAttempt 无脑累加。
+ */
+export async function resetForResync(localId: string): Promise<boolean> {
+  const fs = await getFs();
+  if (!fs) return false;
+  const path = fs.documentDirectory + PENDING_DIR + localId + '.json';
+  try {
+    const raw = await fs.readAsStringAsync(path);
+    const hike = JSON.parse(raw) as PendingHike;
+    hike.remoteId = null;
+    // 生成新 idempotency key (UUID v4 简化实现:32 hex + 4 dash)
+    // 不引 uuid 包避免 bundle 增大;crypto.randomUUID 在 hermes/RN 上不一定有,
+    // 退回到 Math.random 拼接(碰撞几率 ~2^-100,可接受)。
+    const rand = (n: number) => Math.random().toString(16).slice(2, 2 + n).padEnd(n, '0');
+    hike.idempotencyKey = `${rand(8)}-${rand(4)}-${rand(4)}-${rand(4)}-${rand(12)}`;
+    await fs.writeAsStringAsync(path, JSON.stringify(hike));
+    breadcrumb(`pendingSync:resetForResync localId=${localId} newKey=${hike.idempotencyKey.slice(0, 8)}`);
+    return true;
+  } catch {
+    return false;
   }
 }

@@ -94,7 +94,12 @@ router.patch('/:id/append-points', authenticate, validateBody(schemas.session.ap
   }
   try {
     const ok = await Session.appendPoints(id, req.user.userId, points);
-    if (!ok) return res.status(404).json({ error: 'Session not found.' });
+    // R96 修补 A.1 扩展 (review M4): append-points 也带 SESSION_NOT_FOUND_RESYNC
+    // code。offlineQueue drain 拿到 4xx 直接 drop op (line 240-243 that class 4xx),
+    // 但客户端能 detect 该 code 做后续处理(未来 client OTA 里 offlineQueue 加
+    // 特判逻辑)。当前 hike 中丢一个 batch 数据在 hikeTrackWriter 磁盘另一路
+    // 还有备份,saveHikeAtomic 时通过 route_points_raw 兜底,不算硬伤。
+    if (!ok) return res.status(404).json({ error: 'Session not found.', code: 'SESSION_NOT_FOUND_RESYNC' });
     return res.status(200).json({ ok: true, appended: points.length });
   } catch (err) {
     console.error('[sessions/append-points]', err);
@@ -277,7 +282,11 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     );
     if (!rows[0]) {
       await conn.rollback();
-      return res.status(404).json({ error: 'Session not found.' });
+      // R96 修补 A.1: session id 不存在 (可能被 R9B7 auto-migration 误删,
+      // client pending 队列里的 remoteId 是死指针)。带 code 让 client 能
+      // detect 该场景 → 清 remoteId → 下次触发 syncDaemon 走
+      // 'startSession + saveHikeAtomic' 路径重新入库,而不是无限 404 重试。
+      return res.status(404).json({ error: 'Session not found.', code: 'SESSION_NOT_FOUND_RESYNC' });
     }
 
     // v3.3 已 finalize 判定 (backend subagent B2 修): finalized_at 非 NULL OR

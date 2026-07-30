@@ -284,7 +284,19 @@ export const useAppStore = create<AppState>((set) => ({
               s.syncState === 'syncing' ||
               s.remoteId == null
             );
-            const remote = await fetchSessions();
+            // R96 修补 C.2: fetchSessions 5xx/网络错时不清 UI。
+            // 之前 fetchSessions 遇 500 静默返回 [],这里无条件用空数组
+            // 覆盖 → 用户 activity 卡片全消失(即使本地 AsyncStorage 里还
+            // 有数据)。现在 5xx 会 throw,此处 catch 后 remote=null,
+            // 意味"保持本地状态,不 merge"。
+            let remote: Awaited<ReturnType<typeof fetchSessions>> | null = null;
+            try {
+              remote = await fetchSessions();
+            } catch (e) {
+              // 服务器错/网络错 → 保留本地 hydrate 结果,不清 UI
+              crashLogger.breadcrumb(`hydrate:fetchSessions_failed ${String(e).slice(0, 60)} — keeping local state`);
+              remote = null;
+            }
             const localByRemoteId = new Map<number, string>();
             for (const s of beforeMerge) {
               if (s.remoteId != null && s.name) {
@@ -297,24 +309,34 @@ export const useAppStore = create<AppState>((set) => ({
             const preservedRemoteIds = new Set(
               preservedLocals.map((s) => s.remoteId).filter((v): v is number => v != null)
             );
-            const remoteSessions = remote
-              .filter((r) => !preservedRemoteIds.has(r.id))
-              .map((r) => ({
-                id: String(r.id),
-                remoteId: r.id,
-                activityMode: r.type as SessionActivityMode,
-                regionCode: 'nz',
-                startedAt: new Date(r.start_time).getTime(),
-                endedAt: new Date(r.end_time).getTime(),
-                durationS: r.duration_s,
-                distanceM: r.distance_m,
-                elevationGainM: 0,
-                trackPoints: [] as TrackPoint[],
-                markerIds: [] as string[],
-                name: r.name ?? localByRemoteId.get(r.id) ?? undefined,
-                syncState: 'synced' as const,
-              }));
-            const merged = [...preservedLocals, ...remoteSessions];
+            // R96 修补 C.2: remote === null 表示 fetchSessions 失败(5xx/网络错)。
+            // 此时 remoteSessions=[] + preservedLocals 拿到全部 beforeMerge
+            // 意味 "保留本地不清 UI"。如果 remote 是真实数组(可能为空),
+            // 走正常 merge。
+            const remoteSessions = remote == null
+              ? []
+              : remote
+                  .filter((r) => !preservedRemoteIds.has(r.id))
+                  .map((r) => ({
+                    id: String(r.id),
+                    remoteId: r.id,
+                    activityMode: r.type as SessionActivityMode,
+                    regionCode: 'nz',
+                    startedAt: new Date(r.start_time).getTime(),
+                    endedAt: new Date(r.end_time).getTime(),
+                    durationS: r.duration_s,
+                    distanceM: r.distance_m,
+                    elevationGainM: 0,
+                    trackPoints: [] as TrackPoint[],
+                    markerIds: [] as string[],
+                    name: r.name ?? localByRemoteId.get(r.id) ?? undefined,
+                    syncState: 'synced' as const,
+                  }));
+            // remote 失败时不能丢已 hydrate 的 synced sessions,补一份进来
+            const preservedAllLocals = remote == null
+              ? beforeMerge  // 保留全部本地(含 synced 已从本地 hydrate 的)
+              : preservedLocals;
+            const merged = [...preservedAllLocals, ...remoteSessions];
             // O18 SAF-06 (2026-07-29): rebuild orphaned pending rows.
             // If a prior version of the app already wiped the in-memory
             // pending session (bug fixed above), the payload may still be

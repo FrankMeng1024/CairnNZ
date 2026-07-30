@@ -330,12 +330,20 @@ export async function deleteRemoteSession(remoteId: number): Promise<boolean> {
   }
 }
 export async function fetchSessions(): Promise<RemoteSession[]> {
-  try {
-    const res = await authenticatedFetch('/api/sessions');
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data?.sessions ?? [];
-  } catch {
+  // R96 修补 C.1: 5xx / 网络错 → throw,不再吞成空数组。
+  // 之前 fetchSessions 遇 500 静默返回 [],useAppStore.hydrate 无条件用
+  // 空 remote 覆盖本地 → 用户重开 app 看到"activity 全消失"。
+  // 现在:
+  //   - 2xx: 返回真实数据
+  //   - 4xx: 返回 []（认为服务器说"没有",可能是 auth 问题让 caller 保守走）
+  //   - 5xx / 网络错: throw,让 useAppStore.hydrate catch → 保留本地 preservedLocals
+  const res = await authenticatedFetch('/api/sessions');
+  if (!res.ok) {
+    if (res.status >= 500) {
+      throw new Error(`fetchSessions server error ${res.status}`);
+    }
     return [];
   }
+  const data = await res.json();
+  return data?.sessions ?? [];
 }

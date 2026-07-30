@@ -97,6 +97,23 @@ const pointObj = Joi.object({
   acc: Joi.number().min(0).allow(null),
 });
 
+// R96: memory_points 字段名 schema/handler 不一致修复。
+// 之前 sessionSave.memory_points 用 pointObj(字段名 `t`),但:
+//  - client sessionService.ts:171 发的是 `ts`(和 memory_points 表列名一致)
+//  - handler routes/sessions.js:344 检查的也是 `p.ts`
+// → Joi 用 pointObj 严格模式拒 `ts` → 400 或 rejected 全部
+// → 结果: v412 saveHikeAtomic 走的 memory_points 100% 全丢
+// 修法: 内联定义 memoryPointObjInline(与 line 271 的 memoryPointObj 同,
+// 因 memoryPointObj 定义在下方无法 forward reference)。字段用 `ts`,
+// 匹配 client + handler + DB 列名 memory_points.ts。
+const memoryPointObjInline = Joi.object({
+  lat: lat.required(),
+  lng: lng.required(),
+  alt: alt,
+  ts: Joi.number().integer().min(0).required(),
+  cid: Joi.string().min(1).max(128).allow(null),
+});
+
 const sessionSave = Joi.object({
   end_time: isoDate.required(),
   distance_m: Joi.number().min(0).max(1000000).default(0),
@@ -111,7 +128,7 @@ const sessionSave = Joi.object({
   // saveHikeAtomic 长 hike (10h 可产 3000-4000 memory_points) 会 400 →
   // pendingSyncStore 无限重试 → 用户 hike memory 永远丢。backend 事务里
   // 有 CHUNK=1000 分批 INSERT,10000 上界足够所有真实 hike。
-  memory_points: Joi.array().items(pointObj).max(10000).allow(null),
+  memory_points: Joi.array().items(memoryPointObjInline).max(10000).allow(null),
 });
 
 const sessionUpdate = Joi.object({
