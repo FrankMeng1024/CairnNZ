@@ -822,7 +822,20 @@ router.post('/password-reset/verify', authLimiter, validateBody(schemas.auth.pas
 // Soft-delete: sets users.deleted_at. Cron sweep hard-deletes after 7 days.
 // User can restore during grace period via POST /account/restore. Also
 // revokes the current jti so the token is immediately unusable.
-router.delete('/account', authenticate, async (req, res) => {
+//
+// Sprint 6 R60: rate-limit to prevent confirmation-email spam. Endpoint is
+// idempotent (repeated calls return same deletedAt), but each call still
+// fires sendAccountDeletionConfirmation. Attacker on a compromised session
+// could POST DELETE /account 100x → 100 confirmation emails to victim.
+// Cap 3/day/user matches R59 wipe cadence — one legitimate delete + retry
+// on failure has plenty of headroom.
+const deleteAccountLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, max: 3,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => req.user?.userId ? `deleteAcct:${req.user.userId}` : ipKeyGenerator(req, res),
+  message: { error: 'Too many delete-account requests. Please try again tomorrow.' },
+});
+router.delete('/account', authenticate, deleteAccountLimiter, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'Account not found.' });
