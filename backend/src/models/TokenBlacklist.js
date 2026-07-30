@@ -62,9 +62,16 @@ async function revoke(jti, userId, expiresAt) {
 }
 
 // Cron helper — remove expired entries so the table stays small.
+// Sprint 6 R77: batch the DELETE. Pre-fix, a mass-logout event could
+// leave 100k+ expired blacklist rows. A single unbounded DELETE
+// would lock the table (or at least many pages) for seconds, blocking
+// concurrent isBlacklisted checks during auth. Batch at 10k rows per
+// call keeps each transaction short. Cron re-fires next scheduled run
+// to catch residuals (blacklist grows slowly in real life — full
+// purge in one run is typical).
 async function purgeExpired() {
   const [result] = await pool.execute(
-    'DELETE FROM token_blacklist WHERE expires_at < NOW()'
+    'DELETE FROM token_blacklist WHERE expires_at < NOW() LIMIT 10000'
   );
   return result.affectedRows;
 }

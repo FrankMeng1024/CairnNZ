@@ -109,11 +109,14 @@ async function consumeCode(email, code) {
 }
 
 // Cron helper — clean out expired / used codes older than 24h.
+// Sprint 6 R77: batch DELETE to avoid long table lock. Same pattern as
+// TokenBlacklist.purgeExpired.
 async function purgeStale() {
   const [result] = await pool.execute(
     `DELETE FROM password_reset_codes
-     WHERE expires_at < DATE_SUB(NOW(), INTERVAL 1 DAY)
-        OR used_at   < DATE_SUB(NOW(), INTERVAL 1 DAY)`
+     WHERE (expires_at < DATE_SUB(NOW(), INTERVAL 1 DAY)
+        OR used_at   < DATE_SUB(NOW(), INTERVAL 1 DAY))
+     LIMIT 10000`
   );
   return result.affectedRows;
 }
