@@ -591,6 +591,17 @@ const passwordChangeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 10,
   standardHeaders: true, legacyHeaders: false,
   keyGenerator: (req, res) => req.user?.userId ? `pwchange:${req.user.userId}` : ipKeyGenerator(req, res),
+  // Sprint 6 R89 BUG-3: only count FAILED password changes. Pre-fix,
+  // this limiter counted every request incl. successful ones. A legit
+  // user (QA rig, kiosk, testflight cycling passwords) could hit 10
+  // successful changes in 15 min and self-lock. This limiter's purpose
+  // is anti-brute-force against currentPassword — the attacker's
+  // requests fail (401) and get counted; the legit user's succeed
+  // (200) and are exempt. deleteAccountLimiter and refreshLimiter
+  // deliberately do NOT get this treatment: their purpose is anti-
+  // abuse of the terminal action (delete account, refresh a stolen
+  // token) where the successful case IS the abuse.
+  skipSuccessfulRequests: true,
   message: { error: 'Too many password change attempts. Please wait 15 minutes.' },
 });
 
