@@ -205,12 +205,27 @@ router.get('/points', authenticate, async (req, res) => {
   }
 });
 
+// Sprint 6 R59: rate-limit the wipe endpoint. Pre-fix, DELETE
+// /memory/points had no throttle — a bug or malicious action could
+// trigger a full data wipe with a single call. Legitimate use is
+// "user taps Clear my memory in Settings" once (with client-side
+// confirmation dialog). Cap at 3 wipes / day / user — allows a
+// user to retry after failure but blunts accidental-loop / abuse
+// scenarios. If a user really needs to wipe multiple times in a
+// day, they can wait or contact support.
+const wipeLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, max: 3,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => req.user?.userId ? `memwipe:${req.user.userId}` : ipKeyGenerator(req, res),
+  message: { error: 'Too many memory wipe requests. Please try again tomorrow.' },
+});
+
 /**
  * DELETE /api/memory/points
  * Wipes all of the authenticated user's memory points. Used by the
  * Settings → "Clear my memory" action.
  */
-router.delete('/points', authenticate, async (req, res) => {
+router.delete('/points', authenticate, wipeLimiter, async (req, res) => {
   const userId = req.user.userId;
   try {
     const [result] = await pool.query(
