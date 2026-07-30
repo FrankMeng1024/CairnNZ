@@ -71,8 +71,14 @@ router.post('/', limiter, express.json({ limit: '2mb' }), async (req, res) => {
       // ER_DATA_TOO_LONG the INSERT. Align slice to column width.
       const tag = String(item.tag || '').slice(0, 64);
       const session_id = String(item.session_id || 'unknown').slice(0, 64);
-      const ts = Number(item.ts || Date.now());
-      const seq = Number(item.seq || 0);
+      // Sprint 6 R80: bound ts and seq to non-negative. debug_events_v2
+      // has BIGINT UNSIGNED for both; a client-supplied negative value
+      // would ER_DATA_OUT_OF_RANGE under STRICT_TRANS_TABLES, poisoning
+      // the whole batch INSERT. Coerce negatives to 0.
+      const rawTs = Number(item.ts || Date.now());
+      const ts = Number.isFinite(rawTs) && rawTs >= 0 ? rawTs : Date.now();
+      const rawSeq = Number(item.seq || 0);
+      const seq = Number.isFinite(rawSeq) && rawSeq >= 0 ? rawSeq : 0;
       const ctx = item.ctx ? JSON.stringify(item.ctx).slice(0, 1024) : '';
       values.push('(?, ?, ?, ?, ?, ?, ?, ?)');
       params.push(userId, session_id, tag, 'log', seq, ts, 'ok', ctx);
