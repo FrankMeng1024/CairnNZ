@@ -106,6 +106,15 @@ router.post('/', uploadLimiter, rawBody, async (req, res) => {
   }
 
   try {
+    // Sprint 6 R64: truncate device_os / app_version headers to match
+    // the VARCHAR(16) column width. STRICT_TRANS_TABLES is enabled on
+    // aliyun (verified), so an oversized header would ER_DATA_TOO_LONG
+    // and 500 the whole snapshot upload. Newer devices may legitimately
+    // send "iPadOS 17.5.1 (Sim)" (>16 chars). Truncate server-side
+    // rather than reject — a partial header is better than a lost
+    // debug snapshot.
+    const deviceOs = String(req.headers['x-cairn-device-os'] || '').slice(0, 16) || null;
+    const appVersion = String(req.headers['x-cairn-app-version'] || '').slice(0, 16) || null;
     await pool.execute(
       `INSERT INTO debug_snapshots
        (snapshot_id, image_blob, image_bytes, image_format, meta, device_os, app_version, uploaded_ip)
@@ -115,8 +124,8 @@ router.post('/', uploadLimiter, rawBody, async (req, res) => {
         buf,
         buf.length,
         meta ? JSON.stringify(meta) : null,
-        req.headers['x-cairn-device-os'] || null,
-        req.headers['x-cairn-app-version'] || null,
+        deviceOs,
+        appVersion,
         req.ip,
       ],
     );

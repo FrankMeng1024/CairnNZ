@@ -90,18 +90,26 @@ router.post('/sessions', uploadLimiter, requireApiKey, async (req, res) => {
       return res.status(400).json({ error: 'JSONL first line not parseable.' });
     }
     eventsCount = (rawJsonl.match(/\n/g) || []).length + 1;
+    // Sprint 6 R64: truncate header values to match DB column widths.
+    // telemetry_sessions has VARCHAR(64) for device_model and VARCHAR(16)
+    // for os/os_version/app_version/build_number/activity_mode. Under
+    // STRICT_TRANS_TABLES (verified on aliyun), an oversized header
+    // yields ER_DATA_TOO_LONG and 500s the whole upload. Newer devices
+    // legitimately report OS strings > 16 chars; truncate rather than
+    // reject. Same fix as debug-snapshot R64.
+    const clamp = (v, n) => v ? String(v).slice(0, n) : null;
     deviceInfo = {
-      model: req.header('X-Cairn-Device-Model') || null,
-      os: req.header('X-Cairn-Device-Os') || null,
-      os_version: req.header('X-Cairn-Os-Version') || null,
-      app_version: req.header('X-Cairn-App-Version') || null,
-      build_number: req.header('X-Cairn-Build-Number') || null,
+      model: clamp(req.header('X-Cairn-Device-Model'), 64),
+      os: clamp(req.header('X-Cairn-Device-Os'), 16),
+      os_version: clamp(req.header('X-Cairn-Os-Version'), 16),
+      app_version: clamp(req.header('X-Cairn-App-Version'), 16),
+      build_number: clamp(req.header('X-Cairn-Build-Number'), 16),
     };
     const sa = req.header('X-Cairn-Started-At');
     const ea = req.header('X-Cairn-Ended-At');
     startedAt = sa ? Number(sa) : null;
     endedAt = ea ? Number(ea) : null;
-    activityMode = req.header('X-Cairn-Activity-Mode') || null;
+    activityMode = clamp(req.header('X-Cairn-Activity-Mode'), 16);
   } else if (body && typeof body === 'object') {
     sessionId = body.session_id;
     deviceInfo = body.device_info || {};
