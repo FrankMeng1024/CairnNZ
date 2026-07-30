@@ -15,6 +15,16 @@
 import { useTrackingStore } from '../../store/useTrackingStore';
 import { log } from '../../services/appLog';
 
+// R98: inline haversine — 不引 utils/geo 避免循环依赖
+function haversineM(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
 export interface StepConfig {
   step_m: number;         // metres advanced per emit
   emit_ms: number;        // milliseconds between emits
@@ -77,9 +87,39 @@ class GpsInjector {
   private config: StepConfig = { ...DEFAULT_STEP_CONFIG };
 
   setStartPosition(lat: number, lng: number): void {
+    // R98 log: 记 prev_last vs new 差异,以及 tp tail(如果 tracking 中)
+    // 好查"⟲ 后画斜线"这类 bug
+    let prevLastLat: number | null = null;
+    let prevLastLng: number | null = null;
+    let tpTailLat: number | null = null;
+    let tpTailLng: number | null = null;
+    let status: string | null = null;
+    let tpLen = 0;
+    try {
+      const st = useTrackingStore.getState() as any;
+      prevLastLat = st.lastCoordinate ? Number(st.lastCoordinate.lat.toFixed(6)) : null;
+      prevLastLng = st.lastCoordinate ? Number(st.lastCoordinate.lng.toFixed(6)) : null;
+      status = st.status;
+      tpLen = Array.isArray(st.trackPoints) ? st.trackPoints.length : 0;
+      if (tpLen > 0) {
+        const tail = st.trackPoints[tpLen - 1];
+        tpTailLat = Number(tail.lat.toFixed(6));
+        tpTailLng = Number(tail.lng.toFixed(6));
+      }
+    } catch { /* silent */ }
+    const jumpFromLast = prevLastLat != null && prevLastLng != null
+      ? haversineM({ lat: prevLastLat, lng: prevLastLng }, { lat, lng })
+      : null;
     log('v441.simwalker.set_start', {
       new_lat: Number(lat.toFixed(6)),
       new_lng: Number(lng.toFixed(6)),
+      prev_last_lat: prevLastLat,
+      prev_last_lng: prevLastLng,
+      tp_tail_lat: tpTailLat,
+      tp_tail_lng: tpTailLng,
+      jump_from_last_m: jumpFromLast != null ? Math.round(jumpFromLast) : null,
+      status,
+      tp_len: tpLen,
       history_cleared: this.posHistory.length,
     });
     this.currentPos = { lat, lng };

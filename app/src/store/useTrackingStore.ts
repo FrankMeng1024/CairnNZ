@@ -1747,25 +1747,48 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // dry-run the joystick pre-hike, that's fine — the store position
       // updates via setStartPosition, just no trackPoint accumulation.
       if (s.status !== 'tracking') return s;
-      // O1 batch 28.6: t 从参数 timestamp 拿 (sim-walker subdivide 模式
-      // 传模拟时间),或 fallback Date.now()。原硬编码 Date.now() 让
-      // rawPoint.t 永远是挂钟,session 时间轴无法反映模拟真人步行速度。
       const t = timestamp ?? Date.now();
-      // O15 Bug 3 fix: previously v450 stripped segmentBreak unconditionally,
-      // but the user reported a "connecting line" being drawn from the old
-      // trackPoints tail to the new sim-walker anchor when they tapped ⟲
-      // mid-hike (after Stop or between segments). We now auto-detect a
-      // large jump (>200m) and mark the incoming point as a segment break
-      // so HikingMap draws a fresh polyline segment starting at this point
-      // rather than a straight line from the previous tail. Undo/regular
-      // sim ticks keep addedDistance <= step_m*strength so they never
-      // trigger this.
+      // R98 根因修复:jump detection 基准从 s.lastCoordinate 改成
+      // trackPoints tail。原来的 bug:
+      //   1. 用户拖地图到别处 → 按 ⟲ (setStartPosition)
+      //   2. setStartPosition 把 s.lastCoordinate 硬改到新位置 (B),
+      //      但 trackPoints 数组没变,tail 还是原来位置 (A)
+      //   3. 下次 tick emit 位置 B' (B 附近一步),__simwalkerAddTrackPoint
+      //      用 s.lastCoordinate=B vs B' 算 jumpM ≈ step_m << 200m
+      //      → autoSegmentBreak=false,addedDistance=step_m
+      //   4. rawPoint 直接 append 到 trackPoints tail=A 后面 → 渲染 A→B'
+      //      斜线,save 到 route_points 里也是这条斜线
+      // 修:用 trackPoints tail 作基准 (真正会画到 polyline 的上一点),
+      // 而不是 lastCoordinate (可能被 setStartPosition 硬改过的辅助 state)
       const { segmentBreak: _dropSb, ...cleanCoord } = coord;
+      const tpTail = s.trackPoints.length > 0 ? s.trackPoints[s.trackPoints.length - 1] : null;
+      let jumpFromTail = 0;
+      let jumpFromLast = 0;
       let autoSegmentBreak = false;
-      if (s.lastCoordinate) {
-        const jumpM = haversineM(s.lastCoordinate, cleanCoord);
-        if (jumpM > 200) autoSegmentBreak = true;
+      if (tpTail) {
+        jumpFromTail = haversineM(tpTail, cleanCoord);
+        if (jumpFromTail > 200) autoSegmentBreak = true;
       }
+      if (s.lastCoordinate) {
+        jumpFromLast = haversineM(s.lastCoordinate, cleanCoord);
+      }
+      // R98 log: 同时打两个基准,debug 时一眼能看出是否被 lastCoordinate 骗过
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { log } = require('../services/appLog');
+        log('simwalker.tp.add', {
+          incoming_lat: Number(cleanCoord.lat?.toFixed(6)),
+          incoming_lng: Number(cleanCoord.lng?.toFixed(6)),
+          tp_tail_lat: tpTail ? Number(tpTail.lat.toFixed(6)) : null,
+          tp_tail_lng: tpTail ? Number(tpTail.lng.toFixed(6)) : null,
+          last_coord_lat: s.lastCoordinate ? Number(s.lastCoordinate.lat.toFixed(6)) : null,
+          last_coord_lng: s.lastCoordinate ? Number(s.lastCoordinate.lng.toFixed(6)) : null,
+          jump_from_tail_m: Math.round(jumpFromTail),
+          jump_from_last_m: Math.round(jumpFromLast),
+          auto_break: autoSegmentBreak,
+          tp_len: s.trackPoints.length,
+        });
+      } catch { /* silent */ }
       const rawPoint = autoSegmentBreak
         ? { ...cleanCoord, t, segmentBreak: true }
         : { ...cleanCoord, t };
@@ -1783,14 +1806,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         accuracy: cleanCoord.accuracy, speed: cleanCoord.speed, t,
       };
 
+      // R98: addedDistance 也用 tp tail 基准。原来用 lastCoordinate 会
+      // 在 ⟲ 场景下把新地点当"上次采样",算出 step_m 距离虚增 distanceM。
+      // 用 tp tail 保证 distanceM 只反映真实连续段。跳跃 >200m 时
+      // (autoSegmentBreak=true) 视作新段起点,不算入 distanceM。
       let addedDistance = 0;
-      if (s.lastCoordinate) {
-        addedDistance = haversineM(s.lastCoordinate, cleanCoord);
-        if (addedDistance > 200) addedDistance = 0;
+      if (tpTail && !autoSegmentBreak) {
+        addedDistance = jumpFromTail;
+        if (addedDistance > 200) addedDistance = 0; // 兜底,不应该触发因为上面已 break
       }
       const newElevationGainM = (() => {
         if (cleanCoord.alt == null) return s.elevationGainM;
-        const prevAlt = s.trackPoints.length > 0 ? s.trackPoints[s.trackPoints.length - 1].alt : null;
+        const prevAlt = tpTail ? tpTail.alt : null;
         if (prevAlt == null) return s.elevationGainM;
         const delta = cleanCoord.alt - prevAlt;
         return s.elevationGainM + (delta > 0 ? delta : 0);
