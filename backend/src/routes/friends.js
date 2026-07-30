@@ -498,12 +498,29 @@ router.delete('/:id', async (req, res) => {
   if (!Number.isInteger(Number(req.params.id))) {
     return res.status(400).json({ error: 'Invalid friend id' });
   }
+  // Sprint 6 R90 BUG-1: self-guard for symmetry with /block, and to
+  // prevent a client bug from turning a stray own-id delete into a
+  // silent 200 (see affectedRows guard below).
+  if (String(Number(req.params.id)) === String(req.user.userId)) {
+    return res.status(400).json({ error: 'Cannot unfriend yourself' });
+  }
   try {
     const friendId = req.params.id;
-    await pool.execute(
+    // Sprint 6 R90 BUG-1: check affectedRows. Pre-fix, DELETE returned
+    // 200 "Friend removed" even when no row was touched (already
+    // unfriended, non-existent friendship, wrong id). This diverges from
+    // sibling endpoints (/reject, /requests/:id, /:id/profile all 404
+    // on missing row) and causes phantom-success in the client UI: the
+    // client marks the friend as removed locally, then rehydrates and
+    // sees the row still present. Also serves as a weak existence oracle
+    // via response-timing correlated with UNIQUE key lookup.
+    const [result] = await pool.execute(
       'DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)',
       [req.user.userId, friendId, friendId, req.user.userId]
     );
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Friendship not found' });
+    }
     res.json({ message: 'Friend removed' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

@@ -95,23 +95,47 @@ async function run({ verbose = false, graceDays = 7 } = {}) {
   // than 180 days.
   let friendReqsPurged = 0;
   try {
-    // Sprint 6 R78: same batch pattern as R77 (TokenBlacklist +
-    // PasswordReset). Prevents long table lock on pathological
-    // states.
-    const [resolved] = await pool.execute(
-      `DELETE FROM friend_requests
-       WHERE status IN ('rejected','accepted')
-         AND resolved_at IS NOT NULL
-         AND resolved_at < DATE_SUB(NOW(), INTERVAL 90 DAY)
-       LIMIT 10000`,
-    );
-    const [abandoned] = await pool.execute(
-      `DELETE FROM friend_requests
-       WHERE status = 'pending'
-         AND created_at < DATE_SUB(NOW(), INTERVAL 180 DAY)
-       LIMIT 10000`,
-    );
-    friendReqsPurged = (resolved.affectedRows || 0) + (abandoned.affectedRows || 0);
+    // Sprint 6 R90 BUG-2: actually loop the delete. Pre-fix, the comment
+    // claimed "same batch pattern as R77" but the code executed exactly
+    // one DELETE with LIMIT 10000, once per day. If daily inflow of
+    // resolvable requests exceeded 10k (backlog after outage, mass
+    // migration, sustained /request spam despite R36B3's 30/hour cap ×
+    // many attackers × long tail), the table would grow permanently:
+    // every day 10k in, 10k out, plus whatever exceeds 10k in a burst
+    // never catches up. Loop until the batch returns less than LIMIT so
+    // one run drains a full backlog. Still short per-transaction (10k
+    // rows at a time) to avoid long table locks. Hard iteration cap
+    // (100) bounds cron duration if a pathological state is hit
+    // (~1M rows/run; anything beyond means an incident).
+    const BATCH = 10000;
+    const MAX_ITER = 100;
+    let iter = 0;
+    while (iter < MAX_ITER) {
+      const [r] = await pool.execute(
+        `DELETE FROM friend_requests
+         WHERE status IN ('rejected','accepted')
+           AND resolved_at IS NOT NULL
+           AND resolved_at < DATE_SUB(NOW(), INTERVAL 90 DAY)
+         LIMIT ?`,
+        [BATCH],
+      );
+      friendReqsPurged += r.affectedRows || 0;
+      if ((r.affectedRows || 0) < BATCH) break;
+      iter += 1;
+    }
+    iter = 0;
+    while (iter < MAX_ITER) {
+      const [r] = await pool.execute(
+        `DELETE FROM friend_requests
+         WHERE status = 'pending'
+           AND created_at < DATE_SUB(NOW(), INTERVAL 180 DAY)
+         LIMIT ?`,
+        [BATCH],
+      );
+      friendReqsPurged += r.affectedRows || 0;
+      if ((r.affectedRows || 0) < BATCH) break;
+      iter += 1;
+    }
   } catch (err) {
     console.error('[authSweep] friend_requests purge failed:', err.message);
   }
