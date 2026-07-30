@@ -108,9 +108,17 @@ router.get('/', async (req, res) => {
     // markUserId comparison in markVisibility/markTier returns 'stranger'
     // for the user's OWN marks, making own Personal marks invisible after
     // backend hydrate.
+    // Sprint 6 R73: hard cap own-marker list at 5000. Pre-fix, no LIMIT
+    // meant a user with N markers downloaded all N at once. Typical
+    // hikers have 10-100; sim-walker abuse or an unhinged tester could
+    // create thousands, producing multi-MB responses that stall the
+    // app on cold-start hydrate. 5000 is well beyond any realistic
+    // legitimate use (a hiker leaving one mark per hike, 3 hikes/week,
+    // for 30 years = ~4700). Client already sorts by created_at DESC
+    // so the newest 5000 win.
     const [markers] = await pool.execute(
       `SELECT id, user_id, type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at
-       FROM markers WHERE user_id = ? ORDER BY created_at DESC`,
+       FROM markers WHERE user_id = ? ORDER BY created_at DESC LIMIT 5000`,
       [req.user.userId]
     );
     res.json(markers);
