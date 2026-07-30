@@ -71,13 +71,20 @@ router.post('/', limiter, express.json({ limit: '2mb' }), async (req, res) => {
       // ER_DATA_TOO_LONG the INSERT. Align slice to column width.
       const tag = String(item.tag || '').slice(0, 64);
       const session_id = String(item.session_id || 'unknown').slice(0, 64);
-      // Sprint 6 R80: bound ts and seq to non-negative. debug_events_v2
-      // has BIGINT UNSIGNED for both; a client-supplied negative value
-      // would ER_DATA_OUT_OF_RANGE under STRICT_TRANS_TABLES, poisoning
-      // the whole batch INSERT. Coerce negatives to 0.
-      const rawTs = Number(item.ts || Date.now());
+      // Sprint 6 R80 + R82 BUG-6 fix: bound ts and seq to non-negative.
+      // debug_events_v2 has BIGINT UNSIGNED for both; a client-supplied
+      // negative value would ER_DATA_OUT_OF_RANGE under STRICT_TRANS_TABLES,
+      // poisoning the whole batch INSERT. Coerce negatives to 0.
+      //
+      // R82 BUG-6: original `Number(item.ts || Date.now())` short-circuits
+      // when item.ts is 0 or null → server clock silently replaces client
+      // ts. For seq, first-event `seq=0` is a legitimate common case that
+      // the || 0 handled correctly only by coincidence. Now: explicit
+      // "field absent" check via `item.ts == null` (matches null + undefined)
+      // preserves client 0 as-is.
+      const rawTs = item.ts == null ? Date.now() : Number(item.ts);
       const ts = Number.isFinite(rawTs) && rawTs >= 0 ? rawTs : Date.now();
-      const rawSeq = Number(item.seq || 0);
+      const rawSeq = item.seq == null ? 0 : Number(item.seq);
       const seq = Number.isFinite(rawSeq) && rawSeq >= 0 ? rawSeq : 0;
       const ctx = item.ctx ? JSON.stringify(item.ctx).slice(0, 1024) : '';
       values.push('(?, ?, ?, ?, ?, ?, ?, ?)');
