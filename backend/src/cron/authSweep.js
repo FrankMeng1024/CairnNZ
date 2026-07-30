@@ -95,16 +95,21 @@ async function run({ verbose = false, graceDays = 7 } = {}) {
   // than 180 days.
   let friendReqsPurged = 0;
   try {
+    // Sprint 6 R78: same batch pattern as R77 (TokenBlacklist +
+    // PasswordReset). Prevents long table lock on pathological
+    // states.
     const [resolved] = await pool.execute(
       `DELETE FROM friend_requests
        WHERE status IN ('rejected','accepted')
          AND resolved_at IS NOT NULL
-         AND resolved_at < DATE_SUB(NOW(), INTERVAL 90 DAY)`,
+         AND resolved_at < DATE_SUB(NOW(), INTERVAL 90 DAY)
+       LIMIT 10000`,
     );
     const [abandoned] = await pool.execute(
       `DELETE FROM friend_requests
        WHERE status = 'pending'
-         AND created_at < DATE_SUB(NOW(), INTERVAL 180 DAY)`,
+         AND created_at < DATE_SUB(NOW(), INTERVAL 180 DAY)
+       LIMIT 10000`,
     );
     friendReqsPurged = (resolved.affectedRows || 0) + (abandoned.affectedRows || 0);
   } catch (err) {
