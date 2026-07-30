@@ -77,6 +77,11 @@ router.post('/sessions', uploadLimiter, requireApiKey, async (req, res) => {
   //   2. JSONL string: raw newline-delimited JSON events
   let sessionId, deviceInfo, startedAt, endedAt, eventsCount, rawJsonl, activityMode;
 
+  // Sprint 6 R64/R66: helper to clamp client-supplied strings to
+  // DB column widths under STRICT_TRANS_TABLES. Used by both the
+  // JSONL header path (below) and the JSON body path (further below).
+  const clamp = (v, n) => v ? String(v).slice(0, n) : null;
+
   if (typeof body === 'string') {
     // JSONL upload — first event must contain session_id.
     // Device info comes from X-Cairn-* headers since the body is raw events only.
@@ -97,7 +102,6 @@ router.post('/sessions', uploadLimiter, requireApiKey, async (req, res) => {
     // yields ER_DATA_TOO_LONG and 500s the whole upload. Newer devices
     // legitimately report OS strings > 16 chars; truncate rather than
     // reject. Same fix as debug-snapshot R64.
-    const clamp = (v, n) => v ? String(v).slice(0, n) : null;
     deviceInfo = {
       model: clamp(req.header('X-Cairn-Device-Model'), 64),
       os: clamp(req.header('X-Cairn-Device-Os'), 16),
@@ -122,6 +126,20 @@ router.post('/sessions', uploadLimiter, requireApiKey, async (req, res) => {
   } else {
     return res.status(400).json({ error: 'Body must be JSON object or JSONL string.' });
   }
+
+  // Sprint 6 R66: apply the same VARCHAR clamping to the JSON body path
+  // that R64 applied to the header path. Both branches feed the same
+  // INSERT/UPDATE at line 163-167. Pre-fix, an oversized deviceInfo.os
+  // or activityMode from a body upload would ER_DATA_TOO_LONG under
+  // STRICT_TRANS_TABLES.
+  deviceInfo = {
+    model: clamp(deviceInfo.model, 64),
+    os: clamp(deviceInfo.os, 16),
+    os_version: clamp(deviceInfo.os_version, 16),
+    app_version: clamp(deviceInfo.app_version, 16),
+    build_number: clamp(deviceInfo.build_number, 16),
+  };
+  activityMode = clamp(activityMode, 16);
 
   if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 64) {
     return res.status(400).json({ error: 'Invalid session_id.' });
