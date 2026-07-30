@@ -136,16 +136,25 @@ app.use((err, req, res, _next) => {
 // ── Start ──────────────────────────────────────────────────────────────────
 async function start() {
   // Verify DB connection at startup
+  // Sprint 6 R58: wrap in try/finally so a failing SELECT 1 doesn't
+  // leak the connection. Pre-fix, if the ping threw, control jumped
+  // to the outer catch and conn.release() was skipped. Over boot
+  // retries with a flaky DB, the pool (connectionLimit=10 per R41)
+  // would drain and the process would eventually queue-full itself.
+  let bootConn;
   try {
-    const conn = await pool.getConnection();
-    await conn.execute('SELECT 1');
-    conn.release();
+    bootConn = await pool.getConnection();
+    await bootConn.execute('SELECT 1');
     console.log('✓ Database connected');
   } catch (err) {
     console.error('\n⚠  Database connection failed:', err.code || err.message);
     console.error('   Run: mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS cairn;"');
     console.error('   Then verify DB_HOST, DB_USER, DB_PASSWORD in .env\n');
     // Start anyway so health check can report the issue
+  } finally {
+    if (bootConn) {
+      try { bootConn.release(); } catch { /* silent — release-of-already-released is safe to ignore */ }
+    }
   }
 
   // Sprint 6 round-4 R4B4 + round-12 R12B3: verify ALL Sprint 6 schema
