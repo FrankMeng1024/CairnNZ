@@ -2,7 +2,7 @@
   "expo": {
     "name": "Cairn",
     "slug": "cairn",
-    "version": "0.2.5",
+    "version": "0.2.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -20,11 +20,8 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Cairn keeps recording your hike when the screen is off or you switch apps.",
         "NSMotionUsageDescription": "Cairn uses your device orientation to show which way you're facing on the map.",
         "NSPhotoLibraryUsageDescription": "Cairn attaches photos you pick to feedback reports so we can help faster.",
-        "NSPhotoLibraryAddUsageDescription": "Cairn saves the photos you capture in the app to your photo library.",
-        "NSMicrophoneUsageDescription": "Cairn uses the microphone for optional voice notes on your cairns.",
         "UIBackgroundModes": [
-          "location",
-          "audio"
+          "location"
         ],
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -40,7 +37,6 @@
         "ACCESS_BACKGROUND_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.RECORD_AUDIO",
         "android.permission.POST_NOTIFICATIONS"
       ]
     },

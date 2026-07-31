@@ -1600,7 +1600,11 @@ export function AuthScreen() {
                 </View>
               </PressBtn>
 
-              {/* Google */}
+              {/* Google — R99: hidden until O2 R1 wires real OAuth.
+                  App Store Guideline 4.8 rejects stub sign-in buttons that
+                  only show 'coming soon' alerts. Hide until backing OAuth
+                  is fully implemented. Email + Apple remain visible. */}
+              {false && (
               <PressBtn style={formStyles.googleBtn} onPress={handleGoogleAuth} scale={0.98} disabled={googleLoading || loading}>
                 <View style={styles.btnContent}>
                   {googleLoading
@@ -1610,6 +1614,7 @@ export function AuthScreen() {
                   <Text style={formStyles.googleBtnText}>{googleLoading ? 'Connecting…' : 'Continue with Google'}</Text>
                 </View>
               </PressBtn>
+              )}
             </>
           )}
 
