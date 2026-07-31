@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.yiiling.cairn",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Cairn uses your location to record your hikes and show nearby cairns on the map.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Cairn keeps recording your hike when the screen is off or you switch apps.",
