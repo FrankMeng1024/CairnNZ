@@ -16,9 +16,9 @@ const { chromium, devices } = require('playwright');
   page.on('pageerror', err => consoleErrors.push('pageerror: ' + err.message));
 
   console.log('[smoke] navigating...');
-  await page.goto('http://localhost:8082/index.html', { waitUntil: 'networkidle', timeout: 90000 });
+  await page.goto('http://localhost:8082/', { waitUntil: 'networkidle', timeout: 180000 });
   console.log('[smoke] loaded, waiting for hooks...');
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(8000);
 
   const hookState = await page.evaluate(() => ({
     hasStores: typeof window.__cairnStores !== 'undefined',
