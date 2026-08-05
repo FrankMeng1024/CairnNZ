@@ -18,13 +18,18 @@ Pod::Spec.new do |s|
   # MapboxMaps 不重打包它。本 build log 已证 librnmapbox-maps.a + MapboxMaps.framework
   # 并存编译通过,没 duplicate symbol。
   #
-  # R101 (2026-08-05): 删掉这行 static_framework=true —— 现在 Podfile 全局
-  # 有 useFrameworks:static (R100 加的 expo-build-properties), 所有 pod 一起
-  # 用 static framework。podspec 层再声明 static_framework=true 反而让 CocoaPods
-  # 把 target 生成为"框架里嵌框架", source files 不放进 build phase, target
-  # 空跑不编译, ExpoModulesProvider.swift 里 import 找不到 module。build
-  # d932bfc2 fail 就是这个。
-  # s.static_framework = true  # 删 - 由 Podfile 全局 useFrameworks:static 接管
+  # R101 (2026-08-05): 删掉 static_framework=true。
+  # 之前诊断认为它跟 Podfile useFrameworks:static 互斥, 后 subagent 反驳:
+  # static_framework=true 在 Podfile use_frameworks!:linkage=>:static 下
+  # 实际是 no-op (兼容), 不是互斥。删除动作无害但也不是修复。
+  #
+  # R102 (2026-08-05): 真根因 —— source_files glob 从 podspec 所在目录
+  # 解析。podspec 在 modules/cairn-fog-layer/ios/CairnFogLayer.podspec,
+  # 原来写 "ios/**/*.{h,m,mm,swift,metal}" → 解析成 ios/ios/**/* → 匹配 0
+  # 文件 → target 空跑不编译 → 没 modulemap → import CairnFogLayer 失败。
+  # 对比 expo-apple-authentication podspec 也在 ios/ 目录, source_files
+  # 写 "**/*.{h,m,swift}" (无 ios/ 前缀), 编译成功。
+  # s.static_framework = true  # R101 删 - no-op 无害
   s.swift_version    = '5.0'
 
   s.dependency 'ExpoModulesCore'
@@ -40,7 +45,10 @@ Pod::Spec.new do |s|
     'SWIFT_COMPILATION_MODE' => 'wholemodule',
   }
 
-  s.source_files = "ios/**/*.{h,m,mm,swift,metal}"
+  # R102 fix: podspec 在 ios/ 目录, glob 相对 podspec 目录解析。
+  # 原来 "ios/**/*.{h,m,mm,swift,metal}" → 解析成 ios/ios/**/* 匹配 0 文件。
+  # 改成 "**/*.{h,m,mm,swift,metal}" 匹配当前目录下所有源文件 (同 expo-apple-authentication)。
+  s.source_files = "**/*.{h,m,mm,swift,metal}"
   # v303 subagent fix: do NOT also list .metal as resources — Xcode
   # auto-compiles .metal under source_files into the framework's
   # metallib. Listing it in resources additionally caused "multiple
