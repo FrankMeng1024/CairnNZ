@@ -11,6 +11,7 @@ import sys
 PORT = int(os.environ.get("PORT", 7788))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_JS  = os.path.join(BASE_DIR, 'js', 'data.js')
+FLOWS_JSON = os.path.join(BASE_DIR, 'flows', 'data.json')
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -18,26 +19,41 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         # Never cache JS or CSS so edits are reflected on next page load
-        if self.path and (self.path.endswith('data.js') or self.path.endswith('.js') or '.js?' in self.path or self.path.endswith('.css') or '.css?' in self.path):
+        if self.path and (self.path.endswith('data.js') or self.path.endswith('.js') or '.js?' in self.path or self.path.endswith('.css') or '.css?' in self.path or self.path.endswith('.json') or '.json?' in self.path):
             self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
         super().end_headers()
 
     def do_POST(self):
-        if self.path != '/save-data':
-            self.send_error(404)
+        if self.path == '/save-data':
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+            try:
+                state = json.loads(body)
+            except json.JSONDecodeError as e:
+                self._json(400, {'ok': False, 'error': str(e)})
+                return
+            try:
+                _write_data_js(state)
+                self._json(200, {'ok': True})
+            except Exception as e:
+                self._json(500, {'ok': False, 'error': str(e)})
             return
-        length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(length)
-        try:
-            state = json.loads(body)
-        except json.JSONDecodeError as e:
-            self._json(400, {'ok': False, 'error': str(e)})
+        if self.path == '/save-flows':
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+            try:
+                state = json.loads(body)
+            except json.JSONDecodeError as e:
+                self._json(400, {'ok': False, 'error': str(e)})
+                return
+            try:
+                with open(FLOWS_JSON, 'w', encoding='utf-8') as f:
+                    json.dump(state, f, ensure_ascii=False, indent=2)
+                self._json(200, {'ok': True})
+            except Exception as e:
+                self._json(500, {'ok': False, 'error': str(e)})
             return
-        try:
-            _write_data_js(state)
-            self._json(200, {'ok': True})
-        except Exception as e:
-            self._json(500, {'ok': False, 'error': str(e)})
+        self.send_error(404)
 
     def _json(self, code, obj):
         payload = json.dumps(obj).encode()

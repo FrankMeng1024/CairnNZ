@@ -1,0 +1,2526 @@
+{
+  "screens": [
+    {
+      "name": "🌱 首次进入",
+      "rows": [
+        {
+          "id": "N01",
+          "pre": "刚下载完 app，还没注册过任何账号。打开 app → 走完注册 → 邮箱验证码通过后进入 app 的第一时间",
+          "action": "看眼前的第一屏",
+          "expect": "整屏白底。屏幕中间偏上：一个 Cairn logo 图标（一堆石头堆叠的图形，约 64px）。图标下方标题 “Discover Cairn” (大字加粗)。标题下面小字副标题 “Your quiet companion for the outdoors.”。再下方有 4 个小圆点，最左边那个是绿色长条（当前进度），另 3 个灰色圆点。底部一个绿色大按钮，白字 “Get started”。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "N02",
+          "pre": "在 N01 描述的 “Discover Cairn” 屏上",
+          "action": "点绿色大按钮 “Get started”",
+          "expect": "屏幕淡入切换到第 2 屏。图标变成 hiking icon (一个走路的人图形)。标题 “Track every hike”。副标题 “Cairn quietly records your route, distance, and elevation. No chatter, no leaderboards.” (两行)。底部 4 个圆点，第二个变绿色长条。底部按钮变成 “Next”。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "N03",
+          "pre": "在 N02 描述的 “Track every hike” 屏上",
+          "action": "点 “Next”",
+          "expect": "淡入切换第 3 屏。图标变成 flag marker icon (一面小旗子插在石堆上)。标题 “Leave a cairn”。副标题 “Drop a small marker with a note. Keep it for yourself, or share with friends walking the same trail.”。4 个圆点第三个绿色长条。按钮 “Next”。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "N04",
+          "pre": "在 N03 描述的 “Leave a cairn” 屏上",
+          "action": "点 “Next”",
+          "expect": "淡入切换第 4 屏。图标变成脚印图形 (Footprints icon)。标题 “Uncover your map”。副标题 “Every step reveals fog on your map. Over months, you build a personal atlas of where you have walked.”。4 个圆点第四个绿色长条。底部按钮 “Enable Location”，按钮下方还有一行灰色小字 “iOS will ask for permission next.”",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "N05",
+          "pre": "在 N04 描述的 “Uncover your map” 屏上",
+          "action": "点 “Enable Location” 按钮",
+          "expect": "iOS 系统权限弹窗从底部弹出，显示 Cairn 请求位置权限。选 “Allow While Using App” (或 “Allow Once”)。弹窗消失后，onboarding 整个 Modal 淡出关闭。用户进入 Home 主页。之后再次杀掉 app 重新打开，onboarding 再也不出现。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "N06",
+          "pre": "在 N04 “Uncover your map” 屏上",
+          "action": "点 “Enable Location” 按钮，iOS 弹权限时选 “Don't Allow”",
+          "expect": "系统权限弹窗关闭后，onboarding 切换到第 5 屏 (denied 屏)。图标变成一个灰色地图 pin 图形。标题 “You can still use Cairn”。副标题 “Without location, we can't record your hikes or reveal your map. When you're ready, turn on location in Settings.”。没有圆点。底部主按钮绿色的 “Open Settings”。主按钮下方还有一个次按钮，灰字 “Later”。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "N07",
+          "pre": "在 N06 描述的 “You can still use Cairn” 屏上",
+          "action": "点 “Open Settings”",
+          "expect": "跳转到 iOS 系统设置里 Cairn 的权限页 (能看到 Location / Notifications 等开关)。同时 Cairn 已经标记 onboarding 完成——从 iOS 设置切回 Cairn (或下次冷启)，直接进 Home，不再走 onboarding。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "N08",
+          "pre": "在 N06 “You can still use Cairn” 屏上",
+          "action": "点 “Later”",
+          "expect": "Modal 淡出关闭，进入 Home 主页。onboarding 标记完成，下次冷启不再出现。GPS 功能 (开始 hike / 放 cairn / 进 Memory tab) 在需要时会再次触发权限询问。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "N09",
+          "pre": "onboarding 4 屏走到一半 (比如 N02 或 N03 屏)",
+          "action": "iOS 从屏幕底部往上滑手势退出 app，或者双击 home 键把 app 划走杀掉，然后重新打开 app",
+          "expect": "❓ 待确认: 应该重新从 N01 “Discover Cairn” 屏开始 (onboarding 未完成不该记录完成 flag)。 但代码里 finish() 才写 storage flag，走到一半没写，所以理论上重启应该重新走——需要真机验证。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "N10",
+          "pre": "用户之前已经装过 Cairn 老版本 (还没有 onboarding 那版)，正常使用中，现在升级到含 onboarding 的新版",
+          "action": "打开升级后的 app，登录状态还在",
+          "expect": "会看到完整 4 屏 onboarding (代码注释说 legacy 用户也要完整看一遍——'都完整看 4 屏, 我要自己测')。如果 GPS 已经授权过，第 4 屏底部按钮变成 “Done” 而不是 “Enable Location”，且按钮下方那行小字 “iOS will ask for permission next.” 不出现。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "🔐 登录 / 注册",
+      "rows": [
+        {
+          "id": "L01",
+          "pre": "冷启 app，没有登录过任何账号。app 启动后 splash 屏淡入(400ms)显示",
+          "action": "看眼前 splash 屏",
+          "expect": "整屏白底浅绿光晕背景。屏幕中间偏上：动画 Cairn logo(3 颗石头从底部逐个升起，堆完最上面一颗后一面三角旗从上方掉落插入，微微飘动)。石头下方大字 wordmark \"Cairn\"(黑色，超粗体，56px)。下方两行淡灰色副标题 \"Leave a mark.\" / \"Guide the next.\"。底部 CTA 区：可能有一个 OTA 状态小胶囊(可有可无)，下面一个绿色圆角胖按钮(白字加 login 图标) \"Sign In\"，再下面一个白底绿边次按钮(加 user-plus 图标) \"Create Account\"。最下方一行浅灰小字 \"Your hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L02",
+          "pre": "在 L01 描述的 splash 屏上",
+          "action": "点绿色主按钮 \"Sign In\"",
+          "expect": "淡入切换到登录表单屏。顶部一个 \"← Back\" 灰色小链接。下方标题行 \"Sign In\"(左边一个小的 Cairn logo 图标 28px)。下面两个输入框：\"Email\" 标签 + 邮件图标输入框(占位符 \"your@email.com\", 自动聚焦)；\"Password\" 标签 + 钥匙图标输入框(占位符 \"••••••••\", 右侧眼睛图标切显示/隐藏)。密码框下方左侧一个复选框 + \"Remember me on this device\" 文案。右侧一行绿色小字链接 \"Forgot password?\"。下方绿色胖按钮(login 图标) \"Sign In\"。按钮下方灰色小字 \"You'll stay signed in for 30 days.\"。再下方一条分隔线 \"or continue with\"。最下方一个黑色胖按钮(苹果图标) \"Continue with Apple\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L03",
+          "pre": "在 L02 描述的登录表单屏上，两个输入框都是空的",
+          "action": "邮箱输入框留空，直接点 \"Sign In\" 按钮",
+          "expect": "邮箱输入框变红边，下方红字 \"Email is required\"。密码框也会变红边，下方红字 \"Password is required\"(注: 验证一次性触发)。按钮不出现 loading。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L04",
+          "pre": "在 L02 描述的登录表单屏上",
+          "action": "邮箱框输入 abc(缺少 @ 和域名)，密码框输入任意密码，点 \"Sign In\"",
+          "expect": "邮箱框变红边，下方红字 \"Please enter a valid email\"。不发起网络请求。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L05",
+          "pre": "在 L02 描述的登录表单屏上",
+          "action": "邮箱框输入合法邮箱如 test@example.com，密码框留空，点 \"Sign In\"",
+          "expect": "密码框变红边，下方红字 \"Password is required\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L06",
+          "pre": "在 L02 描述的登录表单屏上",
+          "action": "邮箱输入一个已注册账号的邮箱，密码框故意输错(比如 wrongpass)，点 \"Sign In\"",
+          "expect": "按钮变 loading spinner 大约 200-800ms。表单顶部弹出红色横幅(三角警告图标 + 红色文字)。❓ 待你确认: 后端返回的原文我预期是 \"Invalid email or password\" 之类，但代码里 `data?.error || data?.message || 'Sign in failed. Check your email and password.'` 的兜底文案是 \"Sign in failed. Check your email and password.\"。真机确认后端 401 返回的是哪种。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L07",
+          "pre": "在 L02 描述的登录表单屏上",
+          "action": "邮箱和密码都填对(一个真实账号)，先勾选 \"Remember me on this device\"，再点 \"Sign In\"",
+          "expect": "按钮变 loading spinner。约 500-2000ms 后整屏切换到 Home 主页。凭证(邮箱+密码)保存在 SecureStore 加密里。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L08",
+          "pre": "在 L07 里勾了 remember me 成功登过一次；然后在 Home 里主动 Sign Out，再重开 app",
+          "action": "回到 splash 屏点 \"Sign In\" 进登录表单",
+          "expect": "邮箱框和密码框都已自动预填之前登录的邮箱和密码，\"Remember me on this device\" 复选框也已经勾上。只需再点 \"Sign In\" 就能登入(不会跳过登录屏，用户仍需点按钮)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L09",
+          "pre": "在 L02 描述的登录表单屏上，邮箱框可能已经输入了内容",
+          "action": "点右侧绿色小链接 \"Forgot password?\"",
+          "expect": "整屏切换到 \"Reset password\" 屏。顶部一个 \"← Back to sign in\" 灰色链接。标题大字 \"Reset password\"。副标题 \"Enter your account email. We'll send a 6-digit code.\"。一个输入框(占位符 \"Email\", 若登录屏已填过邮箱则预填)。下方绿色胖按钮 \"Send code\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L10",
+          "pre": "在 L09 描述的 \"Reset password\" 屏上",
+          "action": "邮箱框留空或填一个非邮箱字符串，点 \"Send code\"",
+          "expect": "邮箱框下方红字。❓ 待你确认: 空 = \"Email is required\"；格式错 = \"Please enter a valid email\"(与登录复用 `validateEmail`)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L11",
+          "pre": "在 L09 描述的 \"Reset password\" 屏上",
+          "action": "邮箱填一个合法邮箱(不管是否注册过)，点 \"Send code\"",
+          "expect": "按钮变 loading spinner。约 500-2000ms 后切换到 \"Enter code\" 屏。为防用户探测账号是否存在，无论邮箱是否真的注册过，前端都进入下一屏。标题 \"Enter code\"，副标题 \"Check <邮箱>. Enter the 6-digit code and choose a new password.\"。一个大居中数字输入框(占位符 \"000000\", 6 位数字)，下方一个密码框(占位符 \"New password (8+ characters)\")。绿色胖按钮 \"Reset password & sign in\"。dev build 里 6 位码会自动预填(生产不会)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L12",
+          "pre": "在 L11 描述的 \"Enter code\" 屏上",
+          "action": "6 位码输入不满 6 位就点 \"Reset password & sign in\"",
+          "expect": "输入框下方红字 \"Enter the 6-digit code\"(客户端本地校验，不发请求)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L13",
+          "pre": "在 L11 描述的 \"Enter code\" 屏上",
+          "action": "6 位码填满 6 位，但新密码填少于 8 位(比如 abc)，点 \"Reset password & sign in\"",
+          "expect": "红字 \"Password must be 8+ characters\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L14",
+          "pre": "在 L11 描述的 \"Enter code\" 屏上",
+          "action": "6 位码故意填错(比如 000000)，密码填一个 ≥ 8 位的新密码，点 \"Reset password & sign in\"",
+          "expect": "loading 后红字。❓ 待你确认: 后端错误原文，代码里兜底是 \"Reset failed.\"。真实后端可能返回 \"Invalid or expired code\" 之类。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L15",
+          "pre": "在 L11 描述的 \"Enter code\" 屏上",
+          "action": "6 位码填对，密码填一个 ≥ 8 位的新密码，点 \"Reset password & sign in\"",
+          "expect": "loading 后直接进入 Home 主页(密码已重置 + 拿到新 JWT + 自动登录，不用再手动登录一次)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L16",
+          "pre": "在 L02 描述的登录表单屏上，设备是真机 iPhone(不是模拟器)",
+          "action": "点黑色胖按钮 \"Continue with Apple\"",
+          "expect": "按钮先变 loading (label 变成 \"Connecting…\")。iOS 系统 \"Sign in with Apple\" 弹窗从底部滑起，显示邮箱选择和隐藏邮箱选项(Hide My Email)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L17",
+          "pre": "L16 弹出的 iOS Apple 系统弹窗上",
+          "action": "选一个邮箱，点 \"Continue\"，如需 Face ID 就通过",
+          "expect": "弹窗关闭，按钮 loading 消失，整屏切换到 Home 主页(拿到 Apple identity_token 后调后端 /api/auth/apple 换 JWT)。首次授权会同步把 Apple 返回的姓名一次性存下来供之后使用。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L18",
+          "pre": "L16 弹出的 iOS Apple 系统弹窗上",
+          "action": "点弹窗右上或系统 Cancel 关掉",
+          "expect": "弹窗关闭，回到登录表单，按钮 loading 消失，无错误横幅(代码里 `ERR_REQUEST_CANCELED` 静默不弹 Alert)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L19",
+          "pre": "在 L02 描述的登录表单屏上，设备是 iPad 或 web 或非 iOS 设备",
+          "action": "点 \"Continue with Apple\"",
+          "expect": "iOS 弹窗不出现。改弹一个系统 Alert，标题 \"Apple Sign In\"，正文 \"Apple Sign In is available on iOS only. Please use email or Google on this device.\"，只有一个 \"OK\" 按钮。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L20",
+          "pre": "在 L02 描述的登录表单屏上",
+          "action": "翻找 \"Continue with Google\" 按钮",
+          "expect": "看不到 Google 按钮。当前版本(R99 起)整个 Google JSX 块被 `{false &&}` 屏蔽，仅显示 Apple。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L21",
+          "pre": "在 L01 描述的 splash 屏上",
+          "action": "点白底次按钮 \"Create Account\"",
+          "expect": "淡入切换到注册表单屏。顶部 \"← Back\" 链接。标题行 \"Create Account\"(左侧小 Cairn logo)。输入字段自上而下：\n1. \"Name\" 标签 + user 图标输入框，占位符 \"Your name\"(自动聚焦)\n2. \"Email\" 标签 + 邮件图标输入框，占位符 \"your@email.com\"\n3. \"Password\" 标签 + 钥匙图标输入框，占位符 \"Min. 8 characters\"(眼睛图标)。有内容时下方出现 \"Minimum 8 characters\" 提示和 3 段进度条 + \"Weak\" / \"OK\" / \"Strong\" 标签\n4. \"Confirm Password\" 标签 + 钥匙输入框，占位符 \"Re-enter password\"\n5. \"Date of birth\" 标签 + 输入框，占位符 \"YYYY-MM-DD\"(数字键盘)，下方小字 \"You must be 13+ to use Cairn.\"\n下方一行复选框 + \"I have read and agree to the Privacy Policy\"(Privacy Policy 是可点击的绿色下划线链接)。底部绿色胖按钮(user-plus 图标) \"Create Account\"。注册屏没有 Apple 按钮。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L22",
+          "pre": "在 L21 描述的注册表单屏上",
+          "action": "所有 5 个字段填对，勾选 Privacy Policy，但生日框留空，点 \"Create Account\"",
+          "expect": "生日框下方红字 \"Date of birth is required\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L23",
+          "pre": "在 L21 描述的注册表单屏上",
+          "action": "生日框输入 \"2020-01-01\"(不到 13 岁)，其他字段都填对并勾选隐私，点 \"Create Account\"",
+          "expect": "生日框下方红字 \"Cairn is for people 13 and up\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L24",
+          "pre": "在 L21 描述的注册表单屏上",
+          "action": "生日框输入 \"abc\" 或 \"1998/06/15\"(不是 YYYY-MM-DD 格式)",
+          "expect": "生日框下方红字 \"Use YYYY-MM-DD (e.g. 1998-06-15)\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L25",
+          "pre": "在 L21 描述的注册表单屏上",
+          "action": "生日框输入 \"2099-01-01\"(未来日期)或 \"1800-01-01\"(> 120 岁)",
+          "expect": "分两种情况：\n- 未来日期(比如 2099-01-01)：如果 UTC 换算年龄 < 13，红字 \"Cairn is for people 13 and up\"；如果计算年龄 > 120，红字 \"Please enter a valid date\"\n- 无效日期(如 2020-02-30)：红字 \"Not a real date\"\n❓ 待你确认: 具体哪个错误取决于日期语义，代码是分支判断。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L26",
+          "pre": "在 L21 描述的注册表单屏上",
+          "action": "所有字段都填对，但不勾 \"I have read and agree to the Privacy Policy\"，点 \"Create Account\"",
+          "expect": "复选框下方红字 \"Please agree to continue\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L27",
+          "pre": "在 L21 描述的注册表单屏上",
+          "action": "两次密码不一致(比如密码 abc12345 但确认框填 xyz12345)，点 \"Create Account\"",
+          "expect": "确认框下方红字 \"Passwords do not match\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L28",
+          "pre": "在 L21 描述的注册表单屏上",
+          "action": "邮箱填一个已经注册过的邮箱，其他字段都合法，点 \"Create Account\"",
+          "expect": "按钮 loading，然后顶部弹红色横幅，文案 \"An account with this email already exists. Please sign in instead, or use \\\"Continue with Google\\\" if you signed up with Google.\"(前端根据后端返回里含 'already exists' / 'already registered' 关键字改写的文案)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L29",
+          "pre": "在 L21 描述的注册表单屏上",
+          "action": "所有字段填对，密码 ≥ 8 位，Privacy Policy 勾选，点 \"Create Account\"",
+          "expect": "按钮 loading，成功后切换到 \"Check your email\" 验证屏。顶部 \"← Back\"，标题 \"Check your email\"(小 Cairn logo)。副标题 \"We sent a 6-digit code to <你填的邮箱>. Enter it below to verify your account.\"。\"Verification Code\" 标签 + 锁图标数字输入框(占位符 \"123456\", 只接受数字，最多 6 位，自动聚焦，OTP autofill)。绿色胖按钮 \"Verify Email\"。下方一行 \"Didn't receive it?\" + 灰色不可点 \"Resend in 60s\"(60 秒倒计时)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L30",
+          "pre": "在 L29 描述的 \"Check your email\" 屏上，倒计时还在(<60s)",
+          "action": "点 \"Resend in Ns\" 链接",
+          "expect": "文字颜色为灰色 `Colors.textSecondary`，touch 不激活(`disabled={resendCooldown > 0}`)，什么都不发生。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L31",
+          "pre": "在 L29 描述的 \"Check your email\" 屏上，等待 60 秒后",
+          "action": "点变成绿色的 \"Resend code\" 链接",
+          "expect": "邮箱再收一封新的 6 位码邮件，倒计时重置为 60。链接立刻再变回灰色 \"Resend in 60s\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L32",
+          "pre": "在 L29 描述的 \"Check your email\" 屏上",
+          "action": "输入错误的 6 位码(比如 000000)，点 \"Verify Email\"",
+          "expect": "loading 后输入框变红边，下方红字。❓ 待你确认: 后端返回的原文；代码兜底是 \"Verification failed.\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L33",
+          "pre": "在 L29 描述的 \"Check your email\" 屏上",
+          "action": "输入正确的 6 位码，点 \"Verify Email\"",
+          "expect": "loading 后切换到欢迎屏：绿色对勾大圆图标(56px)，大字 \"Welcome, <你的名字>!\"，下方灰字 \"Welcome to Cairn. Ready for your first hike?\"。1.8 秒后自动进入 Home 主页(register.replace)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L34",
+          "pre": "老用户账号，之前注册时不带生日字段(数据库 dateOfBirth = null)",
+          "action": "邮箱+密码正常登录(点 \"Sign In\")",
+          "expect": "loading 后不进入 Home，而是切换到 \"One quick thing\" 补生日屏。大字 \"One quick thing\"，副标题 \"We ask new members to confirm they're 13 or older. This is a one-time step.\"。一个输入框(占位符 \"YYYY-MM-DD\", 数字键盘, 最多 10 字符)。绿色胖按钮 \"Continue\"。没有返回按钮。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L35",
+          "pre": "在 L34 描述的补生日屏上",
+          "action": "输入合法且 ≥ 13 岁的生日(如 1998-06-15)，点 \"Continue\"",
+          "expect": "按钮变 loading spinner。❓ 已知问题(见现有 note): 用户之前反馈 \"填完点 Continue 闪退\"。R100 已加日志追踪 `dob_backfill:*` breadcrumbs。等下次 build 后再重测。理论上应该: 保存成功 → 直接进 Home 主页。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L36",
+          "pre": "在 L34 描述的补生日屏上",
+          "action": "输入 \"2020-01-01\"(< 13 岁)，点 \"Continue\"",
+          "expect": "输入框下方红字 \"Cairn is for people 13 and up\"(客户端本地校验，不发请求)。不进 Home。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L37",
+          "pre": "在 L34 描述的补生日屏上",
+          "action": "iOS 从屏幕左边缘往右滑手势(swipe back)，或找返回按钮",
+          "expect": "没有返回按钮，swipe back 不生效(此屏是根屏，Stack.replace 已把 Auth 屏替换掉)。用户必须补完生日才能离开。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L38",
+          "pre": "账号在 7 天软删除冷静期内(用户之前删过号但未过期)",
+          "action": "用同一邮箱+密码在 splash → \"Sign In\" 屏登录",
+          "expect": "loading 后不进 Home，而是切换到 \"Restore your account?\" 屏。屏幕居中：红色三角警告图标(56px)。大字 \"Restore your account?\"。副标题 \"You scheduled this account for deletion. It will be permanently deleted on <日期>. Restore to keep it.\"(日期用本地格式)。绿色圆角按钮 \"Restore account\"。下方灰色链接按钮 \"Not now\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L39",
+          "pre": "在 L38 描述的 \"Restore your account?\" 屏上",
+          "action": "点 \"Restore account\"",
+          "expect": "按钮 loading 变 \"Restoring…\"，约 500-2000ms 后进入 Home 主页。账号软删除标记被清，之前的所有 hike / marker / friends 全部恢复。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L40",
+          "pre": "在 L38 描述的 \"Restore your account?\" 屏上",
+          "action": "点 \"Not now\"",
+          "expect": "退回 splash 屏。账号仍在软删除状态，到期后会被 cron 硬删除。之前刚登录时保存的 JWT 会被后端 logout 端点撤销。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L41",
+          "pre": "已登录过，token 未过期。杀掉 app(向上滑手势划走) 再重开",
+          "action": "冷启 app",
+          "expect": "先看到系统 launch screen，然后 app 直接进 Home 主页(不再显示 splash 或 \"Sign In\" 屏)。/api/auth/me 用存的 JWT 校验通过。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L42",
+          "pre": "已登录，在 Settings 里主动 Sign Out",
+          "action": "然后杀 app，再冷启 app",
+          "expect": "冷启后回到 splash 屏(登录状态清除，`cairn_logout_marker` 存在于 storage 阻止自动登录)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L43",
+          "pre": "已登录并正常使用中，把 app 切后台 24 小时以上",
+          "action": "再从后台回前台",
+          "expect": "无缝回 Home 主页(token 仍在有效期内)，不重登，不 loading 转圈。❓ 待你确认: 若 token 距过期 <3 天，代码会 hydrate 时自动 refresh，界面依然无缝。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L44",
+          "pre": "已登录使用中，token 在服务器端被 revoke(比如后台强踢或 jti blacklist)",
+          "action": "app 内做任何需要 auth 的操作(比如同步 hike)",
+          "expect": "被 apiService 的 X-Cairn-Auth-Invalid header 检测到，清 token 后弹回 splash 屏。❓ 待你确认: 是否有 toast 提示 \"session expired\"，还是直接静默跳转。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L45",
+          "pre": "已登录，正在使用中，突然断网",
+          "action": "在 app 内做任意操作(切 tab / 查 hike 列表 等)",
+          "expect": "不清 token，不踢回登录屏。已缓存的数据继续可看。❓ 待你确认: 是否有全局 \"离线\" toast 或 banner；hike 列表能看到本地已同步数据，但下拉刷新时看是否有网络错误提示。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "L46",
+          "pre": "在 L02 登录屏 或 L21 注册屏上",
+          "action": "键盘弹起遮住下半屏时，从表单空白区域向下滑动，或点空白区",
+          "expect": "❓ 待你确认: 代码里用了 `KeyboardAvoidingView` + `keyboardShouldPersistTaps=\"handled\"`。理论上向下滑 ScrollView 键盘会收起(iOS 默认)。点空白区目前**可能不会**收键盘(因为空白区在 TouchableOpacity 覆盖下)。真机测。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "🏠 主页",
+      "rows": [
+        {
+          "id": "H01",
+          "pre": "刚注册完新账号或第一次登录，从来没走过任何 hike，也没放过任何 cairn 标记",
+          "action": "看眼前的 Home 主页",
+          "expect": "整屏白底浅色。顶部左侧一行：小 Cairn logo(28px, 3 颗石头+旗帜) + 大字黑体 \"Cairn\"；右侧灰色小字问候语：早上 5-12 点是 \"Good morning\"，中午 12-18 点 \"Good afternoon\"，晚上 \"Good evening\"。\n\n没有 stats chip 行(因为没数据)。没有 Recent 活动条。\n\n下面 2 大 1 小共 3 张活动卡：\n- Hiking 卡(绿色系)：左侧圆角面板+走路 icon，右侧标题 \"Hiking\"，副标题 \"Track your route · Explore at your pace\"，右端一个圆形 chevron 箭头\n- Running 卡(蓝色系)：跑步 icon，标题 \"Running\"，副标题 \"Route planning · Lock mode\"\n- Leave a Cairn 卡(橙/棕色系, 更矮，flex=0.4)：旗子石堆 icon，标题 \"Leave a Cairn here\"，副标题 \"Drop a note for friends or your future self\"\n\n底部 tools 行：4 个白色小方块按钮(每个都是绿色圆图标 + 灰色小 label)：\n- \"Trails\" (route 图标)\n- \"Friends\" (users 图标)\n- \"Memory\" (footprints 图标)\n- \"Settings\" (settings2 图标)\n\n⚠️ 首次进入 800ms 后弹 iOS 位置权限请求(如未授权)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H02",
+          "pre": "已经完成 3+ 次 hike，都成功同步到服务器",
+          "action": "看 Home 主页",
+          "expect": "顶部 header 同 H01。\n\n多出来 stats 区：\n- 上方一行 period 切换胶囊 chips：\"Week\" / \"Month\" / \"Year\" / \"All\"，默认 \"All\" 选中(绿底白字)，其余白底灰字\n- 下方 stats 行：白色圆角胶囊：\"N sessions\"(route 图标) 和 \"M cairns\"(小旗石堆图标)。M = 该 region 内 marker 数。\n\n再下方 Recent 活动条(仅当最近一条 hike 在 24 小时内)：白色圆角，左侧小圆(hiking/running 图标)，中间粗体 \"Hike\" 或 \"Run\" + 距离(如 \"3.4 km\")，右侧灰色相对时间(如 \"2h ago\")，最右一个 chevron。点它进 hike 详情。\n\n下面 3 张活动卡和底部 tools 行同 H01。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H03",
+          "pre": "有 1 条 hike 保存后离线未同步(存在本地 pendingSyncStore 里)，或多条(3 条)",
+          "action": "看 Home 主页顶部",
+          "expect": "在 Cairn logo header 下方、stats 区上方，出现一条浅米色/褐色横幅(pendingBanner)：左侧 CloudOff 云带斜杠图标，右侧文字：\n- 1 条时: \"1 hike pending sync — tap to retry now\"\n- N 条时: \"N hikes pending sync — tap to retry now\"\n\n整条横幅可点击(accessibilityLabel=\"Retry pending sync now\")，点后会立即调 `drainPending()` 尝试上传。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H04",
+          "pre": "在 H03 描述的状态下(断网 + 本地有 pending hike)",
+          "action": "点米色 pending sync 横幅",
+          "expect": "❓ 待你确认: 因为断网，`drainPending()` 会失败(fetch throw)。代码里 catch 只 `console.warn`，用户界面上没有可见反馈。真机确认: (a) 横幅是否变 loading spinner，(b) 是否有 toast，(c) 还是完全静默。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H05",
+          "pre": "冷启，之前有一次 hike 因为 app 被杀或崩溃没正常结束(磁盘 `active/*.jsonl` 有残留)",
+          "action": "登录后进入 Home 主页；然后从 Home 点 Hiking 卡进 Hiking 屏",
+          "expect": "Home 屏本身没有专门的横幅提示(v412 起 UnfinishedSessionBanner 已删除)。进入 Hiking 屏 800ms 后从底部滑出 UnfinishedRecoveryModal：大字 \"Resume this hike?\"(或 \"Resume this run?\")，副标题 \"We saved everything up to your last GPS fix. Continue where you left off, or discard and start fresh.\"，中间 3 列 stats: 距离 + 时长 + last point 相对时间。下方 2 个按钮 \"Continue\"(绿主按钮) 和 \"Discard\"(灰次按钮)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H06",
+          "pre": "在 H05 描述的 UnfinishedRecoveryModal 上",
+          "action": "点 \"Discard\" 按钮",
+          "expect": "modal 关闭，磁盘 active/*.jsonl 被删除，如果有 remoteId 也调 DELETE /api/sessions/<id> 删服务器行。回到 Hiking 屏的正常初始态(路线选择/Free Hike)。这条未完成 hike 从此消失。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H07",
+          "pre": "在 H02 描述的 Home 主页上",
+          "action": "点 Recent 活动条(某条 hike)",
+          "expect": "整屏切换到该 hike 的地图详情/回放屏(MapHistory route, sessionId 参数)。❓ 待你确认: 详情屏的样式细节这里不展开，那是另一个 tab 的用户流。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H08",
+          "pre": "在 H02 描述的 Home 主页上",
+          "action": "点 Hiking 大卡片",
+          "expect": "整屏切换到 Hiking 屏(见 K01)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H09",
+          "pre": "在 H02 描述的 Home 主页上",
+          "action": "点 Running 大卡片",
+          "expect": "整屏切换到 Running 屏(类似 hiking 但独立)。❓ 详细行为见 Running tab(R prefix)，本 tab 不深入。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H10",
+          "pre": "在 H02 描述的 Home 主页上",
+          "action": "点 \"Leave a Cairn here\" 小卡片",
+          "expect": "整屏切换到 Plant 屏(放旗子标记)。同时会 fire-and-forget `log('home.tap_plant')`。❓ 详细 Plant UI 见对应 tab。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H11",
+          "pre": "在 H02 描述的 Home 主页上",
+          "action": "点底部 tools 行 \"Trails\" 按钮",
+          "expect": "整屏切换到 Routes 屏(路线列表/编辑)。类似的 \"Friends\" → Friends 屏，\"Memory\" → Memory 地图屏(fog reveal)，\"Settings\" → Settings 屏。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H12",
+          "pre": "在 H02 描述的 Home 主页上，正在活跃 hike 中(status='tracking')并且已经有 >0 距离或 >5s 时长",
+          "action": "从 Hiking 屏 swipe back 或返回到 Home",
+          "expect": "Recent 活动条变成绿色带脉动圆点(pulse 缩放 1.0 → 1.4 循环)：左侧圆点里放 hiking 或 running 图标，中间粗体 \"Hiking in progress\" 或 \"Running in progress\" + 实时距离和时长(比如 \"1.23 km · 05:42\")，右侧绿色粗体 \"Resume\" + chevron。点它跳回 Hiking 或 Running 屏继续。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H13",
+          "pre": "已经完成 1+ 条 hike",
+          "action": "点 period 切换 chips 里的 \"Week\"",
+          "expect": "\"Week\" chip 变绿底白字，其他 3 个变白底灰字。stats 行 sessions 数字重新计算：只统计 startedAt 在最近 7 天(7 × 86400000 ms)内的 session。cairns 数不受 period 影响(始终是当前 region 全部)。同理 Month = 30 天，Year = 365 天，All = 全部。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "H14",
+          "pre": "在 H02 描述的 Home 主页上，只有 dev/debug build(`__DEV__==true`)",
+          "action": "看主页最底部",
+          "expect": "toolsRow 下面多出一个不起眼的小灰字链接 \"[dev] MarkDetail preview\"(11px 灰色)。点它进入 MarkDetailDevPreview 屏。生产 build 看不到。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "🥾 徒步 Hiking",
+      "rows": [
+        {
+          "id": "K01",
+          "pre": "在 Home 主页上(见 H02)，位置权限已经授权过一次(在 H01 首次进 Home 时或之前 onboarding 时给过)",
+          "action": "点绿色 Hiking 大卡片",
+          "expect": "整屏切换到 Hiking 屏 phase='select'。全屏地图背景(HikingMap，Mapbox 地形样式)。\n\n顶部 overlay：左侧圆形返回按钮 \"←\"，右侧一个琥珀色 GPS chip: 黄点 + \"Enable GPS\"(因为还没 startTracking, status='idle')。\n\n底部 overlay：\n- 上方一个白色圆角胶囊(routePill): 左侧圆形 icon 底(默认 Target 靶心图标)，中间粗体路线名 \"Free Hike\"(未选路线时)+副标题 \"Tap to change route\"，右侧向上 chevron\n- 下方一个绿色大圆角胖按钮(56px 高): play 图标 + \"Start Hiking\" 白字\n\n地图会自动定位到用户当前位置。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K02",
+          "pre": "从未授权过位置权限或权限被拒",
+          "action": "从 Home 点绿色 Hiking 大卡进入 Hiking 屏",
+          "expect": "进入 phase='select' 屏。若 permission denied 且 canAskAgain 也是 false，弹 PermissionDeniedModal：MapPin 图标 + 大字 \"Hiking needs your location\"(featureName 由调用侧传，通常是 \"Hiking\")，副标题 \"Turn on location for Cairn in Settings to use this feature.\"。绿色胖按钮 \"Open Settings\" 直接跳 iOS Settings；灰色链接 \"Not now\" 关闭 modal(用户点了后回到 select 屏但 GPS chip 仍是 \"Enable GPS\")。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K03",
+          "pre": "在 K01 描述的 Hiking 屏 phase='select' 上，位置已授权",
+          "action": "点绿色胖按钮 \"Start Hiking\"",
+          "expect": "触发 medium haptic 震动。按钮短暂缩放 0.97 反馈。phase 切换到 'tracking'。\n\n顶部 GPS chip 从 amber(黄色)变绿色: 绿色脉动 PulseDot + \"GPS\" 字样(或断连时 \"GPS Offline\")。\n\n多出一条 trackingBar 白色胶囊：\n- 距离(大字)+ 单位 \"km\" 或 \"mi\"\n- 分隔竖线 → 时长(如 \"00:00\")+ \"elapsed\"\n- 分隔竖线 → \"+0m\" + \"elev\"\n- (若选了路线)一个 Route 小圆按钮\n- 一个白色胶囊 \"Pause\"(pause 图标)\n- 一个红色胶囊 \"Stop\"(square 图标)\n\n底部 overlay 变成两个 56px 圆按钮：左侧 compass 圆(默认是 lid/closed 状态图标)，右侧橙色 Place Flag 圆(旗子图标)。\n\n地图上开始画绿色路径 polyline(v78 起用 Kalman 平滑后)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K04",
+          "pre": "在 K03 描述的 tracking 中",
+          "action": "点白色 \"Pause\" 胶囊",
+          "expect": "light haptic 震动。status 变 'paused'。距离/时长不再增加，GPS 停止记录点。Pause 按钮变成绿色胶囊 \"Resume\"(play 图标)。地图上已画的路径保留。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K05",
+          "pre": "在 K04 描述的 paused 状态下",
+          "action": "点绿色 \"Resume\" 胶囊",
+          "expect": "light haptic 震动。status 恢复 'tracking'。计时继续，GPS 恢复记录。中间暂停期不产生轨迹点，会被视为 signal-loss gap。Resume 变回 \"Pause\"。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K06",
+          "pre": "在 K03 描述的 tracking 中，仅走了 3 秒 / < 5 米 / GPS 只捕到 1 个点",
+          "action": "点红色 \"Stop\" 胶囊",
+          "expect": "medium haptic。tracking pause + 从下方滑出 StopSummarySheet。stopTracking 时 `lastStopReason='too_short'` 被 set → 触发 TooShortSheet: MapPin 图标(56px 圆底)，大字 \"Keep going a little longer\"，副标题 \"We haven't captured enough GPS points to draw your path yet. Walk a few more seconds and your hike will save automatically when you stop.\"。绿色胖按钮 \"Got it — keep going\"(点它 = 恢复 tracking，session 保留)，下方灰色链接 \"End hike anyway\"(强制放弃)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K07",
+          "pre": "在 K03 描述的 tracking 中，已经走了几分钟并有清晰路径",
+          "action": "点红色 \"Stop\" 胶囊",
+          "expect": "medium haptic + pauseTracking + 从下方滑出 StopSummarySheet：\n- 顶部 handle 小灰条\n- 大字标题绿色 \"Hike complete\"(或跑步时 \"Run complete\")\n- Memory banner 胶囊: 地图图标 + 绿色文字 \"You revealed X.XX km² of new ground.\"(或 \"Familiar ground\" / \"Just getting started — we'll add to your memory map next hike.\")\n- 名称输入框，占位符是默认名 \"Hike — Aug 5\"(带 formatDate)，最多 60 字符\n- 底部 2 按钮：白底次按钮 \"Discard\"(左)，绿底主按钮 \"Save\"(save 图标, 右)\n\n点 sheet 外面的 scrim = 相当于 cancel = 恢复 tracking(dismiss+onCancel)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K08",
+          "pre": "在 K07 描述的 StopSummarySheet 上",
+          "action": "输入名字(或留空)，点绿色 \"Save\" 按钮",
+          "expect": "键盘先收起。按钮变 loading + label 变 \"Saving…\" spinner。sheet 保持挂载。stopTracking 后台做 flush + rename active/{sid}.jsonl → completed，最多 15 秒。\n\n成功后 sheet 关闭 + phase 切回 'select' + 若有网络成功上传，Home 主页会立即看到新 hike 卡片；若断网或上传失败，会存 pendingSyncStore 并显示 H03 的 pending banner。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K09",
+          "pre": "在 K07 描述的 StopSummarySheet 上",
+          "action": "点白色 \"Discard\" 按钮",
+          "expect": "键盘收起。sheet 关闭。整段 hike 数据被丢弃：磁盘 active file 删掉，如果有 remoteId 也 DELETE。回到 Hiking phase='select' 空态，什么记录都不留。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K10",
+          "pre": "在 K03 描述的 tracking 中",
+          "action": "从屏幕左边缘 swipe back 或按 tab 切到别的 tab",
+          "expect": "GPS + timer **继续后台记录**(useKeepAwake 保持屏幕不锁)。回到 Home 会看到 Recent 条变成 \"Hiking in progress\" 绿色脉动 pill + \"Resume\" 按钮(见 H12)。点它跳回 Hiking 屏，看到熟悉的 trackingBar 和地图上的路径继续画。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K11",
+          "pre": "在 K03 描述的 tracking 中",
+          "action": "按 iPhone 侧边按钮锁屏 10 分钟",
+          "expect": "❓ 待你确认: 代码用 `useKeepAwake` + expo-location background permission。真机确认 GPS 是否真的在后台继续采样(点应该持续增加，锁屏解开后路径应该连续)，采样率是否自动降频省电。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K12",
+          "pre": "在 K03 描述的 tracking 中，15 分钟静止不动",
+          "action": "把手机放桌上等待",
+          "expect": "❓ 待你确认: 需求写的是 \"你好像停下来了，要暂停吗？\"通知，但代码里我没搜到具体 auto-pause 通知逻辑。真机测: (a) 是否有本地通知弹出，(b) 是否自动 pause，(c) 还是完全没这个功能。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K13",
+          "pre": "在 K03 描述的 tracking 中",
+          "action": "iOS 后台把 app 杀掉(用户手动或 iOS jetsam)，然后重开 app 并点 Hiking 卡进 Hiking 屏",
+          "expect": "800ms 后 UnfinishedRecoveryModal 从底部滑出(见 H05)：\"Resume this hike?\" + 副标题 \"We saved everything up to your last GPS fix. Continue where you left off, or discard and start fresh.\" + 3 列 stats(距离/时长/last point 相对时间) + 绿色 \"Continue\" + 灰色 \"Discard\"。点 Continue 恢复到之前 tracking 状态；点 Discard 见 H06。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K14",
+          "pre": "在 K03 tracking 中，地图上有别人插的 cairn marker(比如自己上次或朋友的)",
+          "action": "地图上点这个 marker(小旗子/石堆图标)",
+          "expect": "❓ 待你确认: 代码里 `onMarkerPress={(id) => { setSelectedMarkerId(id); setUi('detail'); }}` — 应该会弹一个 MarkerDetailSheet 显示 marker 详情/内容/删除按钮。具体 UI 我这次没深读 MarkerDetailSheet.tsx。真机测。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K15",
+          "pre": "在 K03 tracking 中",
+          "action": "快速连续点 \"Pause\" \"Resume\" \"Stop\" 好几下(比如 5 次)",
+          "expect": "❓ 待你确认: PressBtn 有 scaleTo 缩放反馈，理论上 haptic 会连续触发。状态机应该是 last-one-wins。但 Stop 按下会 `pauseTracking()` + `setStopSummary(...)` 挂 sheet，如果之后再点原地 Pause / Resume 可能触发混乱状态。真机测: (a) 不 crash，(b) 最后一个动作生效，(c) 没多个 sheet 叠加。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K16",
+          "pre": "在 K07 tracking 结束点 Save 后 sheet 显示 \"Saving…\" 期间",
+          "action": "把 app 切后台 5 秒再回前台",
+          "expect": "❓ 待你确认: stopTracking 的 flush + rename 是异步的。理论上后台仍会继续跑完(iOS 会给几秒时间)。回前台看: (a) sheet 是否还在 \"Saving…\"，(b) 已经完成关闭，(c) 出错弹 SAF-01 Alert。SAF-01 Alert 文案是 \"We couldn't save this hike\" + \"Your device may be low on storage. Your hike is still recorded in the app. Tap Retry to try saving again, or Discard to remove it.\"，按钮 Discard(红色) + Retry。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K17",
+          "pre": "在室内没 GPS 信号(比如地下室 / 大楼中心)",
+          "action": "在 Hiking phase='select' 点 \"Start Hiking\" 后走 5 分钟",
+          "expect": "顶部 GPS chip 会显示: 若 `locationAvailable=false` → 红色 \"GPS Offline\"；若采样点 accuracy > 15m 但 <30s 未 signal-lost → 灰色 pill \"GPS ±<N>m\"(N=Math.round accuracy)；若最新采样 > 30s → 显示 \"Signal lost\" pill(若 >=1min 是 \"Signal lost · N min\")。垃圾点(低 accuracy) 会被 Kalman 平滑过滤，但仍会累积。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K18",
+          "pre": "在 K03 tracking 中",
+          "action": "打开飞行模式 5 分钟，然后关闭飞行模式",
+          "expect": "GPS 硬件仍在工作(飞行模式不禁 GPS)，采样继续，路径继续画。5 分钟内的所有点都记录在本地磁盘 active/{sid}.jsonl 里。飞行模式关闭 = 网络恢复 = syncDaemon 自动 drainPending 上传队列。用户界面上看不到明显变化。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K19",
+          "pre": "在 K03 tracking 中",
+          "action": "从屏幕顶部下拉 iOS 控制中心，再收起",
+          "expect": "hiking 不受影响：GPS 继续，timer 继续，路径继续。控制中心不会杀 app，所有 haptic/keep-awake 状态延续。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K20",
+          "pre": "在 K01 描述的 phase='select' 屏上点 \"Start Hiking\"，但 GPS 还没定第一个点就立刻杀 app(比如 2 秒内 swipe up 划走)",
+          "action": "重开 app，登录后进入 Hiking 屏",
+          "expect": "❓ 待你确认: `startHikeTrack` 是 await 过的，所以磁盘 meta 应该已经写入。有两种情况:\n- (a) POST /sessions/start 已成功创建远端 row，但 trackPoints=[]，distanceM=0，durationS=0 → 800ms 后触发 recovery 检测。若 disk active file 有 → 弹 UnfinishedRecoveryModal。若 disk 无 → 走 v430 dual-source: 查 /api/sessions/unfinished，服务器可能返回 zombie session → 弹 modal，`data.distance_m=0` 时会经 O16 A1 检查跳过。\n- (b) 若什么记录都没写成 → 正常显示 phase='select'，无 modal。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K21",
+          "pre": "在 K03 tracking 中，右下角 flag 圆按钮",
+          "action": "点橙色 Place Flag 圆按钮",
+          "expect": "❓ 待你确认: 代码里应该会打开 plant note sheet(见 UIState='plant' 或 'detail')。具体的 sheet 内容(是否有 flagType 选择 + note 输入)本次没深读，需要用户真机确认。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "K22",
+          "pre": "在 K03 tracking 中，左下角 compass 圆按钮 lid 状态(默认关)",
+          "action": "点 compass 按钮",
+          "expect": "selection haptic 震动。compassEnabled 切 true。button 内容从 lid 图标换成 CompassNeedle 组件(实时罗盘针): 北红南灰的针 + 静态 \"N\" 字母。指针跟随 iPhone 传感器旋转(低通滤波 0.3 平滑)。再点一次关闭，回到 lid 图标(省电)。若定位权限缺失或磁力计不可用，指针不显示，退回 lid。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "🏃 跑步 Running",
+      "rows": [
+        {
+          "id": "R01",
+          "pre": "在 Home 主页上 (顶部 Cairn logo,中间 Hiking / Running / Memory / Map 四个大按钮或类似入口)。用户已登录,GPS 权限已给过",
+          "action": "点跑步入口 (Running 按钮)",
+          "expect": "进入 RunningScreen 的 pre-start 状态。整屏全屏 Mapbox 地图 (户外底图),地图中心是用户当前 GPS 位置 (蓝点)。左上角一个白色圆角药丸按钮 (BackButton pill variant),里面是返回箭头图标。右上角一个白色药丸小 chip,左侧一个橙色小圆点,右边灰色小字 \"Enable GPS\"。屏幕底部一个白色圆角卡片: 左边 40x40 圆角图标框 (跑鞋色 running 主题淡橙底 + Target 图标),中间加粗黑字 \"Free Run\",下面一行淡橙色小字 \"Tap to change route\",右边一个 ChevronUp (向上箭头) 图标。卡片下方一条绿→深绿渐变的大圆角按钮,白色 Play 三角图标 + 白字加粗 \"Start Running\"。按钮下方居中一行灰色小字加锁图标 \"Screen locks automatically\"",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "R02",
+          "pre": "在 R01 描述的 Running 屏 pre-start 状态,\"Free Run\" 已选中",
+          "action": "点绿色大按钮 \"Start Running\",跑起来,让计时走 5 分钟以上,人真的动一段距离",
+          "expect": "❓ 待你确认: 屏幕会切到 running 状态。顶部一条黑底数据条,4 列: 距离数字 (单位标签 \"km\" 或 \"mi\")、时长 (格式如 \"5:23\")、配速 (如 \"5'32\\\"\")、GPS 状态 (小圆点 + \"GPS\" 或 \"Offline\")。屏幕中间一个圆环,里面一个大的导航箭头图标,下面小字 \"KEEP GOING\" (大写间距字母)。中间下方大字白色轻字体显示时长 (elapsed),下面一行 distance + pace 副数据。最底部有 \"Double-tap to unlock\" 字样和两个小圆点。屏幕在 5 分钟内会保持常亮 (useKeepAwake),距离/配速/时长应该每秒都在跳,不卡顿",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "R03",
+          "pre": "在 running 状态里,刚开始跑不到 3 秒或者移动不到 5 米 (基本原地没动)",
+          "action": "先在屏幕上快速双击解锁 (locked 状态需要两下 tap 才能解锁,tap 间隔 < 700ms),等 unlockedRow 淡入。unlockedRow 从左到右应该是: 红色 Stop 按钮、白色边框 Pause 按钮、绿色 Plant 按钮、深灰 Lock 按钮。点红色的 \"Stop\" 按钮",
+          "expect": "❓ 待你确认: 屏幕上弹出 TooShortSheet (从底部滑上来的 sheet)。sheet 里应该说明当前 session 太短、不会被保存,并给两个按钮: 一个继续 (代码 onContinue → clearLastStopReason,session 保留继续跑),一个 \"End anyway\" (discard 掉)。当前代码没有 Alert.alert \"太短了\" + \"Got it\",而是走 TooShortSheet 组件——具体文案我在 TooShortSheet.tsx 里没读,需要真机确认按钮字面文字。当前实现没有震动 (haptic.impact('medium') 是点 Stop 时的震动,不是 too-short 的专门反馈)",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "R04",
+          "pre": "正常跑完一段够长的距离/时间 (超过 too-short 阈值),仍在 running 状态里",
+          "action": "双击解锁,点红色大按钮 \"Stop\"",
+          "expect": "屏幕切到 stopped 状态。SafeAreaView 白底,顶部一行三段布局: 左边 BackButton (inline variant),中间加粗字 \"Run Complete\",右边留空。顶部标题下面淡灰色小字 \"Session saved\"。屏幕中间一个大的 CircleCheck (对号圆圈) 图标 (56px,主题绿色),下方一个白色圆角 summaryCard。card 里横向 3 段用竖线分隔: 左段大字距离 + 小字单位 \"km\"/\"mi\";中段大字 elapsed 时长 + 小字 \"elapsed\";右段大字配速 + 小字 \"pace\"。card 下方: 如果本次 session 保存成功,会有一行主题绿色小字 \"View activity detail →\" (可点跳 MapHistory)。最底部一条绿色渐变大按钮,白色 PlayCircle 图标 + 白字 \"New Run\" (不是 \"保存/放弃\" 二选一——当前实现里 stop 后 session 已自动保存,再没有二选一)",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "R05",
+          "pre": "在 R04 描述的 Run Complete 屏上",
+          "action": "点绿色大按钮 \"New Run\"",
+          "expect": "屏幕回到 pre-start 状态 (R01 那个屏)。stoppedSessionId 被清零,runState 回到 'pre'。地图重新 fly-in 到当前 GPS,\"Free Run\" 卡片、\"Start Running\" 按钮都回来。不是返回 Home 主页,而是留在 RunningScreen 让用户能立刻再开一段跑",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "R06",
+          "pre": "在 running 状态里,已经双击解锁看到 unlockedRow (Stop / Pause / Plant / Lock 四个按钮)",
+          "action": "点中间的绿色 \"Plant\" 按钮 (Plant 是 MapPin 图标 + 白字 \"Plant\")",
+          "expect": "触发 heavy haptic。当前代码用当前 GPS 坐标调 addMarker,type 硬编码为 'danger' (代码注释说 O18 MARK-10: 与 PlantScreen 的 DEFAULT_TYPE 对齐——跑步中快速标记一个 hazard)。地图上不会有可见变化 (running 屏没有渲染 markers 层)。屏幕底部会弹一个居中的黑色半透明小圆角 toast,白色加粗小字 \"Cairn planted\",约 1.5 秒后自动消失。如果 addMarker 抛错,toast 变 \"Failed to plant cairn\",约 2 秒后消失。❓ 待你确认: 没有跳详情;当前实现里 planted 只写 store + linkMarker 到当前 session,不导航",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "🗺️ 地图",
+      "rows": [
+        {
+          "id": "M01",
+          "pre": "在 Home 主页 (顶部 Cairn logo + 主要 tab / 入口)。用户已登录,GPS 权限已给过",
+          "action": "点 Map 入口 (Map tab / Map 按钮进入 MapScreen)",
+          "expect": "整屏 Mapbox 地图 (户外底图,styleURL 由 useSettingsStore.mapLayer 决定,默认 'outdoors')。顶部 SafeAreaView 一行: 左上一个白色药丸小 chip \"← Back\" (蓝色 ChevronLeft + 主题色小字 \"Back\"),旁边一个白色药丸小 chip \"● Enable GPS\" (橙色小圆点 + 橙色小字 \"Enable GPS\") ❓ 待你确认: 如果 GPS 已给权限,这个 chip 应该会变色或换字,但代码里这个 chip 是硬编码显示 \"Enable GPS\",没有条件切换——需要真机看权限已给的情况下这里显示什么。地图上会显示当前用户位置 (Mapbox UserLocation 组件 renderMode=\"native\"),蓝色圆点。所有已有 markers 用彩色圆角 pin (32x32 圆) 渲染在真实 GPS 坐标上。右下有一个绿色圆形 FAB (60x60),白色 MapPin 图标,右上角红色小圆徽章显示自己 markers 数量。右侧中上 (top:100,right:12) 一个 40x40 白色圆角按钮 (Map 或 Globe 图标),用于切换 outdoors / satellite 底图。底部有 MapBottomPanel (卡片式 markers 列表)",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M02",
+          "pre": "在 M01 描述的 Map 屏上,地图已加载出来",
+          "action": "用双指缩放地图,用一指拖动地图",
+          "expect": "❓ 待你确认: 地图应该流畅平移和缩放。所有 markers 是 Mapbox PointAnnotation,会跟着地图坐标同步移动。缩放时 pins 大小不变 (还是 32x32)。⚠️ 已知性能未在代码里做优化: 没有 cluster / LOD (无 marker 聚合),500+ marker 时可能卡——需要真机验证性能",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M03",
+          "pre": "在 Map 屏上,地图上同时存在: 自己的 markers、朋友的 markers (来自 subscribed 好友,调用 loadPublicMarkers 拉取)、陌生人 public markers",
+          "action": "看视觉区分",
+          "expect": "代码在 getMarkerTierVisuals 里定义了三种 tier: 自己 (self) → 内联 32x32 白底 pin + type 颜色边框 + type 图标,不加环。朋友 (friend) → pin 外面套一个 36x36 半径 2px 的彩色实线环 (颜色由 colorFromUserId 稳定生成,每个 friend 一个色)。陌生人 (stranger) → pin 整体 opacity 0.6 (代码注释: \"desaturated feel without filter chain\")",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M04",
+          "pre": "在 Map 屏上,地图上有自己的 marker",
+          "action": "点一个自己的 marker (pin 是白底 + type 色边框,没有彩色环)",
+          "expect": "打开 MarkDetailSheet (form A 或 B,取决于 permission)。sheet 里应该有 marker 的 type 标签、note 文本、时间、位置、Edit 按钮 (Pencil 图标 + 蓝色小字 \"Edit\")、Delete 按钮 (Trash2 图标 + 红色小字 \"Delete\")。permission 是 personal 就显示 Lock 图标 + 灰字 \"Personal\";permission 是 public 会同时有 Heart Like 按钮 (显示 \"Like\" 或 \"1 Liked\") 和 Flag Report 按钮。❓ 待你确认: form A/B/C/D 的具体差异要真机对照 marks/components/MarkDetailSheet.tsx 完整看",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M05",
+          "pre": "在 Map 屏上,地图上有朋友的 marker (带彩色环)",
+          "action": "点一个朋友的 marker",
+          "expect": "打开 MarkDetailSheet (form C — friend 视角)。sheet 内应该有: 朋友的 authorId (❓ 待你确认: 是否显示头像 + 名字,代码里 User 图标是 Colors.textSecondary 灰色,不像有头像组件),marker 内容 + type + note,Heart Like 按钮 (\"Like\" 或 \"1 Liked\"),Trash2 图标 + 灰色小字 \"Hide from my map\" (不是 Delete——因为不是自己的)。permission 图标显示 Users (Friend) 或 Globe (Public)",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M06",
+          "pre": "在 M04 打开的自己 marker 的 MarkDetailSheet 上",
+          "action": "点 \"Delete\" 按钮 (Trash2 图标 + 红色文字)",
+          "expect": "弹出 iOS 原生 Alert.alert (代码 line 832 附近): 标题 \"Delete this cairn?\",内容 \"This cannot be undone.\",两个按钮: 灰色 \"Cancel\" 和红色破坏色 \"Delete\"。点 \"Delete\" → 调 deleteMarker(m.id),Sheet 关闭,marker 从地图和 store 里消失",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M07",
+          "pre": "在 M05 打开的朋友 marker 的 MarkDetailSheet 上",
+          "action": "点 \"Hide from my map\" 按钮 (Trash2 图标 + 红色文字,但语义是隐藏不是删)",
+          "expect": "弹出 iOS Alert.alert (代码 line 851 附近): 标题 \"Hide this mark?\",内容 \"You won't see it on your map again. Other users still see it.\",两个按钮: 灰色 \"Cancel\" 和红色破坏色 \"Hide\"。点 \"Hide\" → 调 hideMark(m.id) 走 POST /api/hide + 本地 cache wipe,Sheet 关闭,该朋友 marker 从当前用户的地图上消失。注意 UX-Med-4 fix 之后文案不再用 \"permanently\" 这种吓人词",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M08",
+          "pre": "在 MarkDetailSheet 上,marker 的 permission 是 public (Globe 图标),且不是自己发的",
+          "action": "点 Heart Like 按钮 (显示 \"Like\" 时白色未激活)",
+          "expect": "先做 optimistic toggle (立即变红心)。然后调 likeMarker(m.id, lat, lng, accuracy) 走服务器 API,accuracy 是当前 lastCoord.accuracy。如果服务器返回 TOO_FAR (距离太远),revert 心为白色,弹 Alert \"Too far\" — \"Move closer to like this mark.\"。RATE_LIMITED 类似 revert + Alert \"Slow down\" — \"You've liked too many marks recently.\"。409 already-liked = 服务器承认已点过,前端保持红心。再点一次相同流程 (再走一次 toggle),第二次会 unlike",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M09",
+          "pre": "在 Map 屏地图空白区域 (没有 marker 也没有 UI overlay)",
+          "action": "长按地图 (long-press)",
+          "expect": "❓ 待你确认: 代码 MapScreen.tsx 里没有找到 onLongPress / MapView 的 onLongPress prop,也没找到从长按创建 marker 的 handler。当前实现应该是 \"没反应\" (放 cairn 要通过右下角绿色 FAB → CreateMarkerSheet 走)。需要真机确认长按是否真的没有任何反馈,或者 Mapbox 默认长按行为 (可能会弹放大镜等系统 UI)",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M10",
+          "pre": "地图之前已经浏览过一片区域 (Mapbox 已缓存 tiles),现在把 iPhone 切飞行模式或者关 Wi-Fi + 数据",
+          "action": "打开 app 进 Map 屏,浏览之前看过的区域",
+          "expect": "❓ 待你确认: MapScreen 里没有主动实现 offline tile 逻辑,依赖 Mapbox SDK 自己的 tile cache。OfflineMapSheet 组件 (styles.js 引用) 是一个显式的离线下载 UI,由 MapBottomPanel 的某个入口打开——用户先要主动 download 才有 tiles 缓存。断网时 markers/routes 仍然从本地 store (useMarkerStore 有 persist,useRouteStore 有 persist) 读出,能显示在坐标上。真机需要验证: (a) 未主动下载区域断网后还看得见地图 tiles 吗;(b) markers 是否照常显示",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M11",
+          "pre": "地图上有任意 marker (自己 / 朋友 / 陌生人 都算)",
+          "action": "长按 (long-press) 某个 marker",
+          "expect": "❓ 待你确认: MapScreen 里 PointAnnotation 只监听 onSelected (点击),没有单独的长按 handler。Marker 长按应该没有专属行为——需要真机确认长按 pin 是否会触发 iOS 默认放大预览、或者只是变成普通 tap",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M12",
+          "pre": "地图上有 500+ 个 markers (需要用测试数据 seed 出来)",
+          "action": "快速缩放和平移地图",
+          "expect": "❓ 待你确认: 代码里 markers 用 markers.map() 全量渲染 PointAnnotation,没有 cluster 也没有视口裁剪。500+ pins 全渲染极可能卡帧,尤其在 pan/zoom 时。需要真机测帧率,如果掉帧就是一个可开 Story 的性能 bug",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M13",
+          "pre": "在 Map 屏上",
+          "action": "两指旋转地图 + 两指下拉倾斜地图 (Mapbox 默认支持 rotateEnabled + pitchEnabled)",
+          "expect": "❓ 待你确认: MapView 没显式禁用 rotate / pitch,应该都能转和倾斜。pin 是 PointAnnotation 图元,Mapbox 会自动保持 pin 相对屏幕竖直 (不跟着地图倾斜),坐标不会因为倾斜而漂移。需要真机看倾斜 60° 时 pin 姿态和 label 是否漂",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "M14",
+          "pre": "在 Map 屏上,已经把地图拖走离开了当前 GPS 位置",
+          "action": "找回到当前位置的按钮",
+          "expect": "❓ 待你确认: MapScreen 代码里没找到显式的 \"回到我位置\" recenter 按钮 (只有 top:100,right:12 那个 satellite/outdoor 切换按钮)。UserLocation 组件本身会显示蓝点,但没有 recenter 按钮把 Camera 拉回去。可能是缺失功能,或者由 MapBottomPanel 内部提供——需要真机确认",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "🌫️ 记忆 Memory",
+      "rows": [
+        {
+          "id": "E01",
+          "pre": "用户已登录、GPS 权限已给过、之前走过一段路 (有 fog 记录)。从 Home 或者底部 tab 进 Memory tab",
+          "action": "打开 Memory tab",
+          "expect": "屏幕根背景 cream (奶油色 MemoryColors.cream)。顶部 SafeAreaView + insets.top + 8 高的一行: 左边一个白色药丸 BackButton (pill variant),右边一个白色药丸 MemoryScopeToggle: 两段 \"Mine\" \"Friends\" (英文原文),默认 \"Mine\" 高亮 (sage 主色底 + 深绿字);当 scope=friends 时,pill 右边会展开出第三段 Users 图标 (直径 44px,width+opacity 220ms cubic 动画)。屏幕主体是 MemoryMap: 一张 Mapbox 底图上盖 sepia 色调的 fog 层 (走过的地方 fog 有洞露出底图,没走过的地方全被 fog 遮住)。左下角 (left:16,bottom:110) 一个 48x48 白色圆角按钮,里面主题绿色 Layers 图标 (打开 HierarchyPanel)。右下角同高 (right:16,bottom:110) 一个 48x48 白色圆角按钮,主题绿色 Target 图标 (recenter),但代码里 recenter 按钮只在 mapMoved=true 时显示。第一次进入 (firstVisitDone=false) 会弹 hint Modal: 标题 \"Walk to unlock your memory\",正文 \"The map starts covered in fog. As you walk around, the fog clears and the places you have been become part of your memory.\\n\\nCairns left by you and others appear as you discover them.\",一个绿底白字大按钮 \"Got it\"",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "E02",
+          "pre": "在 E01 描述的 Memory tab 上,scope 当前是 \"Mine\"",
+          "action": "点顶部 MemoryScopeToggle 上的 \"Friends\" 段",
+          "expect": "toggle 高亮切到 \"Friends\" 段 (\"Mine\" 变灰,\"Friends\" 变主题绿高亮)。同时 pill 右侧展开出第三段 Users 图标 (44px 宽,220ms cubic 动画滑出),这个 Users 图标就是打开好友选择器的按钮。fog 层会切换为 friend memory: 从 useFriendMemoryStore 读订阅朋友的走过区域,和自己的 fog union 起来显示",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "E03",
+          "pre": "在 E02 描述的 Friends 视角上",
+          "action": "点 MemoryScopeToggle 右边展开出的 Users 图标 (第三段)",
+          "expect": "打开 MemoryFriendPickModal (从底部弹出的 sheet,自定义 slide 动画 280ms Easing.out(cubic))。sheet 顶部有 4px 灰色 handle 条,下方一行 header: 左边加粗大字 \"Show friends on your map\",副标题小字显示订阅数量 \"{n} of {limit} picked\" (limit 默认是 5,来自 useMemorySubscriptionsStore.limit);右上角 X 关闭图标。header 下是一个 FlatList,每行显示一个好友: 左边 name 或 email 加粗字,如果 name 和 email 不同下面显示灰色 email 小字;右边: 已订阅显示绿色 Check 图标,未订阅且未到 cap 显示浅绿圆圈 + 主题绿色 Plus 图标 (\"add\"),已到 cap 且未订阅显示 Warning 色 Lock 图标",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "E04",
+          "pre": "在 E03 打开的 MemoryFriendPickModal 上,已经勾了 5 个朋友 (subs.length === limit === 5)",
+          "action": "点第 6 个未订阅、显示 Lock 图标那一行",
+          "expect": "触发 onCapHit(friendId) → 关闭 MemoryFriendPickModal,弹出 PaywallSheet (Modal, animationType=\"slide\")。sheet 内容: 右上角 X 关闭按钮;中间上方一个圆角 hero circle,内含主题绿 Heart 图标;下方大标题加粗 \"See more of your friends' world\";副标题 \"You've reached the free tier of 5 friend memories. Upgrade to see all your friends' fog, marks, and routes on your map.\";再下一列 3 个 value row 每行小圆圈加图标 + 一行文字: (Map 图标) \"Unlimited friend memories on your map\", (Users 图标) \"Switch between many friends instantly\", (Heart 图标) \"Support the makers of Cairn\";再下方一行价格 \"NZ$5.99\" + \"per month\" (offerings 没加载出来时 fallback 是 \"NZ$5.99 / month\");大绿色 CTA 按钮 \"Subscribe\" (offerings 未加载时按钮文字变 \"Continue\");最底一行小灰字 \"Restore purchases · Privacy · Terms\"",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "E05",
+          "pre": "在 Memory tab 上,已经有 fog 数据",
+          "action": "两指缩放地图到不同层级 (从街道级 zoom-out 到国家级)",
+          "expect": "❓ 待你确认: 代码里 HierarchyPanel (v434 2-layer World → Country → City) 是一个显式的按钮触发的 popover,不是随 zoom 自动显示的 label。屏幕上不会自动出现 \"国家/省/市名字\" 的浮标。需要点左下角 Layers 图标才能看到区划层级。真机需验证是否 zoom 时确实没有自动 label 层",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "E06",
+          "pre": "点开左下角 Layers 按钮,HierarchyPanel 已经从屏幕中下弹出",
+          "action": "点 panel 里某一行区划 (city 或 country)",
+          "expect": "HierarchyPanel 是一个 236px 宽的白色浮层 popover,底距 168px。header 里加粗大字是当前 titleId 对应的名字 (\"World\" 或某个国家名如 \"New Zealand\");如果不在 world 层,右上角有一个圆角 ArrowUp 按钮 (灰底,回到 world 层)。列表每行左边一个 8px 圆点 (marked=实心 sepia 色,walked=空心 sepia 圆环,is_here=实心主题绿),右边行名字 (name_en)。tap city (country 层内): 触发 onSelectItem, 父级 (MemoryScreen) 拿到 bbox 计算飞行目标 (优先找 bbox 内已 explored 的 fog point 或 marker,没有就用 bbox 中心),setFlyToTarget → 地图 flyTo。tap country (world 层): 父级只切 title 到那个国家,不飞地图。底部一栏 legend 小字: \"Marked\" 实心圆 + \"Walked\" 空心圆。列表底部如果有 locked_count > 0,会有一行灰字 \"{n} more locked\" 表示还有多少未解锁的兄弟区域",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "E07",
+          "pre": "在 MemoryFriendPickModal 里已经勾了 5 个朋友",
+          "action": "关闭 modal 回到 Memory tab,看 fog 视觉",
+          "expect": "❓ 待你确认: 5 个 friend 的走过区域和自己的 fog union 起来,在同一张 map 上叠加显示为一片 fog-cleared 的透明区域 (代码在 useFriendMemoryStore.loadFriendFog + FogLayer 里做 union)。加载时长受网络影响 (每 friend 独立拉 /api/circle/fog),真机需要计时验证是否 3 秒内完成。当前代码有 loadingState 三级 loading (0-2s / 2-5s / 5s+),8 秒硬超时后会弹 \"Weak signal — still loading map…\" 的白色药丸 banner",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "E08",
+          "pre": "在 Settings 屏 (Settings tab) 上",
+          "action": "找 \"清空我的记忆\" / \"Clear memory\" 相关按钮并点它确认",
+          "expect": "❓ 待你确认: 我没读 SettingsScreen,不知道这个按钮的具体英文原文和确认流程。需要看 SettingsScreen.tsx 确认按钮的英文原文 (可能是 \"Clear memory\" \"Reset my memory\" \"Erase fog data\") 以及确认弹窗的英文文案。逻辑上应该走 useMemoryStore 的 reset action,把 points / initialRevealDone 清空,回 Memory tab 看到全黑 (完整 fog 覆盖)",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "E09",
+          "pre": "新用户从没给过位置权限,直接从 Home 点 Memory tab",
+          "action": "看 Memory tab 首屏",
+          "expect": "MemoryScreen mount 时会 request Location foreground permission (代码 useEffect getForegroundPermissionsAsync → requestForegroundPermissionsAsync)。用户点 \"Don't Allow\" 后,failReason 被设为 'permission',persistentCoord 为空。屏幕主体 (waitingForGps 视图) 居中显示: 标题深 sepia 色 \"Location permission needed\",副标题灰色小字 \"Memory needs your location to draw the map.\",一个 sepia 色实心大按钮 \"Open Settings\" (点走 Linking.openSettings()) 和下方灰色小字次按钮 \"Try again\" (bump refetchToken)。不 crash",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "E10",
+          "pre": "在 Memory tab 上,fog + friend memory 都加载完毕",
+          "action": "在 MemoryScopeToggle 上快速点击 \"Mine\" ↔ \"Friends\" 十次以上",
+          "expect": "❓ 待你确认: setScope 是 useMemoryScopeStore 的 zustand action,同步执行。scope 变化会触发 useEffect (subscriptionsCount>0 时 loadFriendFog),但 friendMemory 已缓存,refetch 应该只是同步替换 slice。真机需验证快切时 fog 层是否闪烁 (透明度动画有没有卡顿) 以及 race",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "E11",
+          "pre": "已经订阅了朋友 A (在 MemoryFriendPickModal 里 A 显示绿 Check 图标),Friends 视角能看到 A 的 fog",
+          "action": "打开 MemoryFriendPickModal,点朋友 A 那一行 (当前是 subscribed 状态)",
+          "expect": "触发 unsubscribe(friendId)。isSubscribed 变 false,Check 图标变回 Plus 圆圈。subscriptions.length 减 1。同时 subscriptionsCount useEffect 被触发,重新调 loadFriendFog() 拉新的 friend list (不含 A) 的 fog。❓ 待你确认: A 的 fog 是应该立刻从当前 map 消失还是要等 loadFriendFog 拉回来才更新——需要真机计时",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "E12",
+          "pre": "订阅了朋友 B,B 之后把自己的账号删掉了",
+          "action": "打开 Memory tab 或 refresh friend fog",
+          "expect": "❓ 待你确认: 代码里 loadFriendFog 走 GET /api/circle/fog 返回 friend id → points 映射。如果 B 已删号,后端应该返回 200 但 friend list 里不含 B (或者返回 B 的 points 为空)。前端 MemoryFriendPickModal 里 friends 是从 useFriendStore 拿的,B 应该也已经从 friend list 里消失,PickModal 里看不到 B 那一行了。不 crash。前端没有专门的 \"该订阅无效\" 提示——静默清理。真机需要在服务器侧真的删一个测试账号验证",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "🗂️ Trails（活动/标记/路线合集）",
+      "rows": [
+        {
+          "id": "T01",
+          "pre": "在 Home 主页,点 Routes 入口进入 RoutesScreen (代码里这个屏名叫 RoutesScreen,但顶栏标题就叫 \"Routes\")",
+          "action": "看默认落地的 tab",
+          "expect": "SafeAreaView 顶部一行 header: 左边白色药丸 BackButton (pill variant),中间加粗大字 \"Routes\",右边如果不在 activities tab 会有一个 RotateCcw refresh 图标 (Colors.primary 绿色),在 activities 上是留 60px 空白。header 下面 SegmentControl 三段: \"Activities\" / \"Routes\" / \"Cairns\",默认选中 (initialTab) 是 'activities' 除非有 route.params.initialTab。ActivitiesTab 内容: 没有 Mine/Friends 切换 (代码注释 v4 §10 binding: Activities is Mine-only)。如果 sessions.length===0 显示 EmptyState (Map 图标 + 标题 \"No tracks walked yet\" + 副标题 \"Start hiking or running. Your tracks will live here.\" + IllustrationHalo 包着的 EmptyRoutes 插画)。有 session 时: 顶部 FilterSortBar (chips: \"All\" / \"Hiking\" / \"Running\" + sort chip \"Recent\" / \"Longest\" / \"Most time\"),列表每一条卡片: 左边圆角 badge (running=橙色 RunningIcon,hiking=绿色 HikingIcon),中间加粗 name 或 fallback \"Run\"/\"Hike\" + 灰色小字 \"{date} · {distance} {unit} · {duration}\",右边 ChevronRight",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "T02",
+          "pre": "在 RoutesScreen 上,当前选中 Activities tab",
+          "action": "点 SegmentControl 上的 \"Cairns\" 段 (代码里 tab id 是 'flags' 但 label 是 \"Cairns\")",
+          "expect": "切换到 FlagsTab。顶部先出现 ScopeTabBar: 白色药丸 pill 内两段 \"Mine\" / \"Friends\",默认 \"Mine\" 高亮 (subscription-style toggle,和 MemoryScopeToggle 视觉一致但独立组件)。Mine 且 markers.length === 0 时: 显示 emptyHero — IllustrationHalo 包 EmptyMarkers 插画,加粗 sepia 标题 \"No cairns planted yet\",副标题 \"Leave a mark when you find something worth noting —\\na viewpoint, a junction, a hut.\",绿色 CTA 按钮 (Plus + \"Plant a new mark\") 点了跳 Plant 屏",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "T03",
+          "pre": "在 FlagsTab 上切到 \"Friends\" 段,circle/markers 已经 fetch 过一轮但返回空",
+          "action": "看空态",
+          "expect": "hasFetchedFriends=true 且 circleMarkers.length===0 → 显示同样布局的 emptyHero: IllustrationHalo + EmptyMarkers 插画,加粗标题 \"No marks from your friends yet\",副标题 \"Marks your friends share at Friend tier\\nwill show up here.\"。没有 CTA 按钮 (不能替朋友种)",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "T04",
+          "pre": "在 RoutesScreen 上",
+          "action": "点 SegmentControl 上的 \"Routes\" 段 (tab id 'routes')",
+          "expect": "切到 RoutesTab。顶部 ScopeTabBar 两段 \"Mine\" / \"Friends\",默认 Mine。scope=Mine 且 routes.length===0 时: emptyHero — Route 图标 (40px 主题绿) 在圆角 badge 里,标题 \"No saved routes yet\",正文 \"Routes are paths you've already walked.\\nOpen an Activity, tap Save as Route, and it'll show up here.\" (\"Save as Route\" 加粗主题绿),绿色 CTA \"View Activities\" (Map 图标 + 文字) 点了会切回 Activities tab",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "T05",
+          "pre": "在 RoutesTab 上切到 \"Friends\" 段,hasFetchedFriends=true 且 circleRoutes.length>0",
+          "action": "点某条朋友的 route 卡片",
+          "expect": "长按会 setSelectedRoute 打开 RouteSheet;点 (nav.navigate('RouteEditor', { routeId: item.id })) 会直接进 RouteEditorScreen。RouteSheet 是从底部弹出的 sheet: header 左边 route name + 右边 X 关闭。中间 statsRow 4 段: Milestone 图标 + \"{km} km\", TrendingUp 图标 + \"{elev} m\", Flag 图标 + \"{n} waypoints\", RotateCcw 图标 + \"{n}× used\"。最下 actions 只有一个大按钮: readOnly=true (friend route) 时按钮文字变成 \"Friend route (view only)\",opacity 0.5,disabled;点了不动。scope=mine 是 \"View\" 可点进 RouteEditor",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "T06",
+          "pre": "Activities tab 有 500+ session 数据 (需要 seed)",
+          "action": "滚到列表底部",
+          "expect": "❓ 待你确认: FlatList 是 React Native 默认虚拟化,理论上不会一次性全渲染。但每条 card 包 gradient badge + Icon,视图复杂度不低。500 条真机需测滚动流畅度。没有分页 (loadRoutes 一次全拉),数据量大时初始加载会慢",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "T07",
+          "pre": "在 RoutesScreen 任意 tab (activities / routes / flags)",
+          "action": "试下拉刷新",
+          "expect": "❓ 待你确认: 代码里 FlatList 没有配 RefreshControl / onRefresh。当前刷新入口是 header 右上角的 RotateCcw 图标按钮 (只在 routes / flags tab 显示),点了 handleRefresh(): routes tab 会并发调 loadRoutes() + loadCircleRoutes(),flags tab 调 loadCircleMarkers(),activities tab 没有服务器刷新 (sessions 是本地 + auto-sync)。真机要验证下拉手势是不是完全没反应",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "🛤️ 路线列表 / 编辑",
+      "rows": [
+        {
+          "id": "P01",
+          "pre": "在 RoutesScreen 的 Routes tab (点 SegmentControl 上 \"Routes\"),scope 是 \"Mine\" 且用户还没建过任何 route (routes.length===0)",
+          "action": "看空态",
+          "expect": "屏幕主体是 emptyHero (居中): 圆角 badge 内 Route 图标 40px 主题绿,加粗大字标题 \"No saved routes yet\",正文 \"Routes are paths you've already walked.\\nOpen an Activity, tap Save as Route, and it'll show up here.\" (\"Save as Route\" 字加粗主题绿),下方绿色圆角 CTA 按钮 Map 图标 + 白字 \"View Activities\"。点这个 CTA (代码 line 610: onGoToActivities → setTab('activities')) 会切到 Activities tab (不是原 P01 描述的 \"无反应\"—— O1 batch 已修复,现在有正确 handler)",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P02",
+          "pre": "在 Routes tab 有至少一条 route",
+          "action": "长按某条 route 卡片 (onLongPress)",
+          "expect": "❓ 待你确认: 代码里 long-press 会 setSelectedRoute(item) 打开 RouteSheet (不是 4 项操作面板 编辑/删除/复制/分享)。RouteSheet 内容: header 左边 route name (numberOfLines=1),右边 X 关闭。statsRow: 距离/爬升/waypoints/used。actions 只有一个大按钮 \"View\" (Map 图标 + 白字)——没有 复制/分享/编辑/删除 四个分开的操作,只有 View 一条路径。真正的编辑/删除入口在 View 打开的 RouteEditor 屏里的 Delete + Edit + Save 三按钮",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P03",
+          "pre": "在 Routes tab 有自己 route,已经用点击 (不是长按) 打开了 RouteEditorScreen (view-mode)",
+          "action": "屏幕底部有 3 个按钮: Delete (红边框 + 红字 + Trash2 图标), Edit (绿边框 + 绿字 + Edit3 图标), Save (绿底白字 + Check 图标)。点绿色边框的 \"Edit\" 按钮",
+          "expect": "❓ 待你确认: 进入 edit-mode。BrushOverlay 组件挂载 (捕获底部笔刷手势区域),EditOverlayV274 卡片显示编辑工具条 (Cancel / Save / Preview / Beautify)。地图 gestures (scroll/zoom/pitch/rotate) 只在 editActiveTool==='pan' 时启用,笔刷模式禁用。需要真机看实际工具条布局",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P04",
+          "pre": "在 Routes tab 切到 \"Friends\" 段,列表里有朋友分享的 route",
+          "action": "点该 route (进入 RouteEditor 只读) 或者长按 (打开 RouteSheet readOnly=true)",
+          "expect": "❓ 待你确认: RouteSheet readOnly=true 时,底部 View 按钮变文字 \"Friend route (view only)\",opacity 0.5,disabled=true,点不动 (不像原描述 \"灰但可点\")。但是如果用户直接点卡片而不是长按,nav.navigate('RouteEditor',{ routeId })—— 代码里 friends tab 也走同一个 nav,可能进 RouteEditor 后能看到 \"Edit\" 按钮,但保存会失败 (backend 拒绝 non-owner 编辑) 或者 RouteEditor 内部有 owner 校验隐藏 Edit 按钮——需要真机验证 friend route 进入 RouteEditor 后 Edit 按钮是否可见/可点",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P05",
+          "pre": "在 Routes tab (Mine) 有多条 route (hiking + running 混合)",
+          "action": "点顶部 FilterSortBar 的 filter chip 切换 \"All\" / \"Hiking\" / \"Running\"",
+          "expect": "filter state 变化,useMemo 重算 visible 列表。All 显示全部;Hiking 只显示 activityMode==='hiking' 的;Running 只显示 activityMode==='running' 的。sort chip (右边) 显示当前排序 (\"Recent\" / \"Longest\" / \"Shortest\")。sort 变化时列表重排。如果过滤后 visible 为空,列表空态显示 \"No routes match this filter.\" (灰色小字居中)",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P06",
+          "pre": "在 RouteSheet (自己 route 的长按浮层) 上",
+          "action": "找 \"复制\" 按钮",
+          "expect": "❓ 待你确认: RouteSheet 里没有复制按钮 (代码 line 414 附近只有一个 View 按钮)。复制功能可能不存在于当前实现。真机需要在 RouteEditor 里再找 \"Duplicate\" 或类似入口——如果全屏也没有,这是缺失功能需要开 Story",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P07",
+          "pre": "在 RouteSheet 上",
+          "action": "找 \"分享\" 按钮",
+          "expect": "❓ 待你确认: RouteSheet 里没有分享按钮 (代码 line 414 附近只有一个 View 按钮)。当前实现没有系统 Share Sheet 入口。可能通过 RouteEditor 底部或 Settings 分享,但代码里没搜到 Share 相关调用。缺失,需要开 Story",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P08",
+          "pre": "在 RouteEditorScreen 的 view-mode 底部",
+          "action": "看可见性 (visibility) 切换。用户想把 route 从 \"个人\" 切到 \"朋友\"",
+          "expect": "在 viewSummary 卡片下方有一行 permissionRow 两个 chip: 左边 Lock 图标 + \"Just me\" (personal),右边 Users 图标 + \"Friends\" (friend,默认)。点 Lock chip 切 personal,点 Users chip 切 friend。当前选中的 chip 边框和背景变主题绿 primaryBg。没有 \"公开 (public)\" 选项 (代码注释 v4 §11: no 'public' option in v1 UI)。切换需要 Save 生效,不是即时同步——真机需要验证 Save 后朋友端可见性刷新的时间",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P09",
+          "pre": "在 Routes tab 上",
+          "action": "找 \"新建 route\" 按钮",
+          "expect": "❓ 待你确认: 代码 line 671 附近的注释明确说 \"New Route button is also gone (per route-rules.md §2.3 manual drawing is forbidden)\"。这意味着当前实现里 **不允许手动画 route**,route 只能从 Activity (走过的 hike/run) \"Save as Route\" 派生。没有独立的 \"新建 route → 编辑器空态\" 入口——原 P09 场景不存在。用户想建 route 必须先走一次 hike/run",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P10",
+          "pre": "从一个已保存的 Activity (MapHistory) 点 \"Save as Route\" 后,自动进入 RouteEditor",
+          "action": "在名字输入框里填名字,点绿色 \"Save\" 按钮",
+          "expect": "在 view-mode 下,viewSummary 顶部 TextInput placeholder 是 \"Route name (required)\"。填了名字后 canSaveView 变 true,右边绿色 Save 按钮从 disabled(opacity 0.4) 变可点。点 \"Save\": 调 handleViewSave → useRouteStore.saveRoute(...) 走 backend。permission 默认 'friend' (代码 line 105 useState 初值 'friend')。成功后 nav.dispatch reset 到 RouteEditor + Home。失败弹 Alert (name 已用: \"That name is taken.\";网络失败: \"Save failed\" / \"Could not save route — check your connection.\";rate limit: \"Rate limited\"; 401: \"Not authorized\")",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P11",
+          "pre": "在 RouteEditorScreen edit-mode (已经点过 Edit 进入),画了几笔笔刷改动",
+          "action": "用 iOS 左边缘 swipe back 手势 (只在 Android 有 hardwareBackPress handler,iOS 用 nav gestureEnabled)",
+          "expect": "❓ 待你确认: 代码 line 292 里只对 Android 注册 BackHandler.addEventListener 触发 \"Discard edits?\" Alert (两按钮: \"Keep editing\" cancel + \"Discard\" destructive)。iOS 的 swipe back 手势是否会被同一个 Alert 拦住,代码里没看到 useEffect + navigation.addListener('beforeRemove') 之类的钩子,可能就直接返回没确认——需要真机验证。edit-mode 内的 Cancel 按钮会弹 Alert \"Discard edits?\" \"Keep editing\" / \"Discard\",这个是明确实现的",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P12",
+          "pre": "RouteEditor edit-mode 已经加了 300 个 brush stroke point",
+          "action": "继续画 + 反复 undo / redo",
+          "expect": "❓ 待你确认: 代码里 editBrushStrokes 是 store 数组,undo/redo 深度上限没在快速搜索中找到。300 点是 stroke 内部 point,不是 waypoints。真机需要测: (a) 撤销深度是否够 (至少 20 步),(b) memory 是否炸 (每笔 stroke 是完整几何数组),(c) BrushOverlay 手势是否掉帧",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P13",
+          "pre": "在 RouteEditor view-mode",
+          "action": "名字框留空,点绿色 \"Save\" 按钮",
+          "expect": "canSaveView 依赖 name.trim().length > 0,所以 Save 按钮 disabled=true, opacity 0.4,点不动。如果 name 不算空但真调了 handleViewSave,里面 line 540 有 !name.trim() 判断,直接弹 Alert \"Name required\" / \"Please name this route before saving.\" 不 return 到 backend。没有自动命名逻辑",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P14",
+          "pre": "RouteEditor edit-mode",
+          "action": "用手指拖动 route 上的某个已存在的点到新位置 (drag)",
+          "expect": "❓ 待你确认: 代码里 edit 工具是 brush stroke (笔刷模式), pan, eraser 这些,没找到显式的 \"拖点\" (drag waypoint) 交互。当前实现可能不是通过拖点编辑,而是通过笔刷覆盖新几何 → 系统重算 waypoints。真机需要验证 edit-mode 下点 point 会不会有 drag 手势,还是只能靠笔刷",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P15",
+          "pre": "RouteEditor edit-mode",
+          "action": "在两个已存在的点之间用笔刷或工具插入一个新点",
+          "expect": "❓ 待你确认: 同 P14,edit 交互靠笔刷 stroke,不是 tap-to-add-point。笔刷会生成新几何路径,系统再重采样成 waypoints。是否有 \"精准插入两点间新点\" 的工具,需要真机看 EditOverlayV274 的实际工具条选项",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "P16",
+          "pre": "RouteEditor edit-mode",
+          "action": "尝试删掉 route 中间某个点",
+          "expect": "❓ 待你确认: 有 eraser 工具 (代码里 editActiveTool 可能包含 'eraser',但要看 EditOverlayV274)。eraser 应该按笔刷范围抹掉一段路径 (不是单点)。删完后 renderPoints 重算,线段自动连接。真机需要看 eraser 的粒度",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "📍 放 Cairn (Plant)",
+      "rows": [
+        {
+          "id": "C01",
+          "pre": "已登录，站在 Home 主屏 (未开始 hike，未 tracking)。GPS 已授权。",
+          "action": "点 Home 屏 ToolsRow 里的 “Plant Cairn” 入口 (放石头堆图标的按钮)",
+          "expect": "淡入进入 Plant 流程第 1 步 GPS Lock 屏。整屏 cream 色 (MemoryColors.cream) 背景。中间一个 5 秒 GPS 采样进度圈，圈里/下方实时显示当前 accuracy (米)。底部一个次按钮 “Cancel”。❓ GPS Lock 屏具体文案是否有 “Getting your location…” 标题——GpsLockStep 组件文案待你确认。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "C02",
+          "pre": "在 Plant 第 1 步 (GPS Lock)，GPS 已经取到定位且 accuracy < 阈值",
+          "action": "等 5 秒采样自动结束 (不点任何按钮)",
+          "expect": "淡入切到第 2 步 Pin Adjust。屏幕上半部 Mapbox 卫星底图，中心一个可拖动 pin (标注在刚锁定的 GPS 坐标)。pin 周围一个 50m 半径圈 (v298 N5: 圈中心 = 锁定的 GPS 锚点，不随 pin 拖动而移动)。底部 “Confirm” 主按钮 + “Back” 次按钮。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "C03",
+          "pre": "在 Plant 第 2 步 Pin Adjust，pin 在初始 GPS 锁定点上",
+          "action": "长按 pin 并拖到圈外 (超过 50m 半径)",
+          "expect": "❓ 待确认：预期 pin 被限制在 50m 圈内 (拖出时自动 snap 回圈边界，或者 pin 变红/禁用 Confirm 按钮)。PinAdjustStep 具体交互待你在真机确认。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "C04",
+          "pre": "在 Plant 第 2 步 Pin Adjust，pin 在 50m 圈内某位置",
+          "action": "点 “Confirm”",
+          "expect": "淡入切到第 3 步 Content。表单从上到下：①Type chip 行 (5 个可选：Cairn / Danger / Water / Camp / Free — 具体值 MARKER_TYPE_ORDER；默认高亮 “danger”，v299 N6)。②Title 输入框 (占位 “Title (max NN)”，NN=ContentConfig.titleMaxChars)。③Note 多行输入框 (占位 “Tell whoever finds this…”)。④Voice memo 录音按钮 (UI stub — 目前只是 UI，v0.2.5 未接真实录音服务)。⑤Visibility chip 行 3 个：“Just me”(Lock icon) / “Friends”(Users icon) / “Anyone”(Globe icon)，默认根据 VisibilityConfig.defaultLevel 高亮 (默认 “Friends”)。底部主按钮 “Plant Cairn”，次按钮 “Back”。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "C05",
+          "pre": "在 Plant 第 3 步 Content，Title 已填 “Test cairn”，Note 已填 “trail junction”，Type 保持默认 “danger”，Visibility 保持默认 “Friends”，网络在线",
+          "action": "点 “Plant Cairn” 主按钮",
+          "expect": "按钮短暂显示 loading 态 (submitting=true)，成功后：① 触发 iOS success haptic (轻震一下)。② 250ms 停顿。③ nav.replace 到 MarkerDetail 详情页 (D01 描述的屏)。④ Back 键返回直接回 Home，不再回 Plant 流程 (replace 用了)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "C06",
+          "pre": "在 Plant 第 3 步 Content，Title 已填内容，网络离线 (飞行模式)",
+          "action": "点 “Plant Cairn”",
+          "expect": "iOS 系统 Alert 弹出：标题 “Cairn planted (offline)”，正文 “Saved locally. We'll upload it as soon as you're back online.”，唯一按钮 “OK”。点 OK 后走 C05 一样的 haptic + replace 到 MarkerDetail。详情页顶部有 SyncBadge 显示 pending/syncing 状态 (不是 synced)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "C07",
+          "pre": "在 Plant 第 3 步 Content，网络在线，但服务器返回 429 (rate limit)",
+          "action": "点 “Plant Cairn”",
+          "expect": "iOS Alert：标题 “Couldn't plant this cairn”，正文 “You are creating cairns very quickly. Wait a minute and try again.”，唯一按钮 “OK”。点 OK 后停留在 Content step 3 (不清空输入，用户可再试)。草稿会写到 AsyncStorage 的 draftKey 里，下次进 Plant 流程自动 hydrate 回第 3 步。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "C08",
+          "pre": "在 Plant 第 3 步 Content，网络在线但服务器返回 “too close” / “duplicate”",
+          "action": "点 “Plant Cairn”",
+          "expect": "iOS Alert：标题 “Couldn't plant this cairn”，正文 “There is already a cairn near here. Try a different spot.”，唯一按钮 “OK”。点 OK 停留在 step 3。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "C09",
+          "pre": "上一次 Plant 因错误失败，草稿已存 AsyncStorage (draftKey，有 lat/lng)",
+          "action": "关掉 app 完全杀死进程 → 重新打开 → 从 Home 再点 Plant Cairn 入口",
+          "expect": "❓ 待确认：预期直接跳到 Content step 3 (跳过 GPS + Pin Adjust)，Title/Note/Type/Visibility 全部还原上次草稿内容。PlantScreen useEffect 里读到 parsed.lat != null && parsed.lng != null 时 setStep('content')。需要真机验证 hydrate 时序。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "👥 好友",
+      "rows": [
+        {
+          "id": "F01",
+          "pre": "已登录，账号里 0 个好友、0 条 incoming friend request、0 条 outbound request",
+          "action": "从 Home 屏 ToolsRow 点进 Friends tab",
+          "expect": "淡入 (280ms) 进入 Friends 屏。顶部 top bar：左 “Back” pill 按钮 (BackButton variant pill)、中间标题 “Friends”、右一个绿色小 pill 按钮 “Add” (带 UserPlus 图标 12px)。屏幕中间空状态：一个 halo 光晕 + EmptyFriends 插画 (192px)，下方大字标题 “Cairn is better with trail companions”，副标题 “Invite friends to share markers and stay connected on the track.”，底下绿色主按钮 “Add a Friend” (带 UserPlus 图标)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "F02",
+          "pre": "在 F01 描述的 Friends 空状态屏上",
+          "action": "点空状态下的绿色主按钮 “Add a Friend”",
+          "expect": "屏幕底部滑出 Add Friend Sheet (280ms，Easing.out(cubic)，暗色 0.35 backdrop 220ms 淡入)。sheet 顶部有一条灰色 handle。里面从上到下：①illustration 圆 (72px，Users icon 40px，primary 色)。②h3 大字 “Add a Friend”。③副标题 “Send them a friend request inside Cairn — they accept it next time they open the app.”。④label “Their Cairn email”。⑤输入框 (Mail icon + placeholder “The email they signed up with”)。⑥绿色主按钮 “Send Request” (带 Send 图标)，输入空时按钮 opacity 0.4 disabled。⑦次按钮 “Cancel” (灰字)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "F03",
+          "pre": "在 F02 的 Add Friend Sheet 上",
+          "action": "在输入框输入非法邮箱 (比如 “notanemail”) 然后点 “Send Request”",
+          "expect": "输入框边框变红 (Colors.danger)。红色小字错误提示 “Enter a valid email” 出现在输入框下方。按钮不进 loading 态。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "F04",
+          "pre": "在 F02 的 Add Friend Sheet 上",
+          "action": "在输入框输入某个真实注册用户的邮箱 (比如 “friend@example.com”) 然后点 “Send Request”",
+          "expect": "按钮内容变 ActivityIndicator 白色小转圈 (loading 态)。请求成功后 sheet 切换成 success state：中间绿色对勾圆图标 (CircleCheck 40px)，下面大字 “Friend request sent”，再下面小字显示刚才输入的邮箱。2 秒后 sheet 自动向下滑出关闭 (dismiss 动画)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "F05",
+          "pre": "在 F02 的 Add Friend Sheet 上",
+          "action": "输入一个 Cairn 里不存在的邮箱 (比如 “nobody@nowhere.tld”) 然后点 “Send Request”",
+          "expect": "按钮转圈后错误提示 “No one at Cairn uses that email yet. Ask them to sign up first.” 显示在输入框下方 (Colors.danger 红字)。sheet 不关。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "F06",
+          "pre": "在 F02 的 Add Friend Sheet 上",
+          "action": "输入自己的邮箱后点 “Send Request”",
+          "expect": "错误提示 “You can't friend yourself.” 显示 (Colors.danger 红字)。sheet 不关。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "F07",
+          "pre": "已登录，账号里有 2 个已确认的好友 Alice 和 Bob，收到 1 条 incoming friend request (from Charlie)",
+          "action": "从 Home 进 Friends tab",
+          "expect": "顶部 top bar 同 F01。ScrollView 从上到下：①一个 requestSection：小标签 “1 friend request” (uppercase 700)，下面一张 requestCard — 左圆形 avatar 显示 “C” initials，中间上 “Charlie” 下 “charlie@example.com”，右两个圆按钮：绿色 accept (Check icon) + 灰色 reject (X icon)。②两张 Friend Cards (Alice 和 Bob) — 每张：44px 圆头像 (LinearGradient primary → primaryDeep, 2 letter initials 白字) + 名字 + email (❓ meta 行目前留空——代码 hasStatus 门控，backend 未返回 online/lastSeen)。③底部一张 dashed 边框绿色 “Add a friend” 卡片 (占位入口，带 UserPlus 图标 + label “Add a friend” + hint “By their Cairn email”)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "F08",
+          "pre": "在 F07 屏上，Charlie 的 request card 显示中",
+          "action": "点 Charlie request card 右侧的绿色圆按钮 (Check icon)",
+          "expect": "按钮变成 ActivityIndicator 白色小转圈。请求成功后：①request section 消失。②Alice/Bob 下面新增一张 Charlie 的 Friend Card。③map 上 Charlie 分享的 markers 立刻可见 (loadCircleMarkers 重跑)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "F09",
+          "pre": "在 F07 屏上，Charlie 的 request card 显示中",
+          "action": "点 Charlie request card 右侧的灰色圆按钮 (X icon)",
+          "expect": "按钮变成 loading 态。请求成功后 request section 消失，Alice/Bob 好友列表不变，Charlie 不加入好友。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "F10",
+          "pre": "在 F07 屏上，Alice 的 Friend Card 显示中",
+          "action": "长按 Alice 的 Friend Card (delayLongPress 500ms)",
+          "expect": "iOS ActionSheet 弹起，title “Alice”，message 是 Alice email。三个选项：①“View profile” (默认色)。②“Block” (destructive 红色)。③“Cancel” (灰色)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "F11",
+          "pre": "在 F10 的 ActionSheet 上",
+          "action": "点 “View profile”",
+          "expect": "屏幕上叠加一个半透明黑色 (rgba(0,0,0,0.55)) 全屏 modal。中间白卡：顶部大 avatar (64px 圆，LinearGradient，白色 initials 24px 粗体)。下面居中 name (h3 粗)。email (灰小字)。分隔线。中部三格：左 “{hikeCount}” + 灰字 “hikes”；右 “{friendCount}” + 灰字 “friends”。下方灰字 “Member since {date}” (根据 dateFormat 设置)。底部绿色宽按钮 “Close”。加载时中间显示 primary 色 ActivityIndicator。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "F12",
+          "pre": "已登录，账号有 1 条 outbound friend request (I 发给别人的，还未被接受) 加 0 好友 0 incoming",
+          "action": "从 Home 进 Friends tab",
+          "expect": "顶部 top bar 同 F01。ScrollView 里：❓ 待确认：outbound 区应该出现在 “Sent” 小标签下，一张灰色卡片 (opacity 0.75)，左灰色圆 (对方 name 首字母)，中 name + 副文 “Request pending”，右红色文字按钮 “Cancel”。点 Cancel 触发 iOS Alert “Cancel request to {name}?” 两个按钮 “Keep” / “Cancel request” (红字)。代码在，需真机确认 outbound-only 场景是否也显示 empty state 或直接跳到 Sent 区。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "⚙️ 设置",
+      "rows": [
+        {
+          "id": "S01",
+          "pre": "已登录，账号 name=“Frank”，email=“frank@example.com”，createdAt = 30 天前",
+          "action": "从 Home ToolsRow 点进 Settings",
+          "expect": "顶部 top bar：左 “Back” pill、中间标题 “Settings”、右侧空白 spacer (对称)。往下第一张卡：Profile 卡。里面从上到下：①letter avatar 圆 (44px，primaryLight 底色，primary 色大字首字母 “F”)。②name “Frank” (body 粗)。③email “frank@example.com” (small 灰)。④一行小字 “Member for 30 days” (tiny，textMuted)。分隔线。⑤ActionRow “Change password” (无 icon，末尾 ChevronRight)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S02",
+          "pre": "在 S01 描述的 Settings 屏，Profile 卡展开中，未登录",
+          "action": "看第一张卡 (未登录状态)",
+          "expect": "Profile 卡内容变成一个 ActionRow：左 primaryLight 圆 (User icon primary 色)，中上 “Sign in to save your data” (body 500)，中下 “Your sessions will sync across devices” (small 灰)，右 ChevronRight。点整行 → nav.replace(“Auth”)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S03",
+          "pre": "在 S01 屏，Profile 卡展开中",
+          "action": "点 “Change password” 行",
+          "expect": "行下方 inline 展开表单：①label “Current password” + 输入框 + 右边一个眼睛按钮 (Eye/EyeOff)。②label “New password” + 输入框 (占位 “Min. 8 characters”) + 眼睛按钮。③label “Confirm new password” + 输入框 + 眼睛按钮。④底部绿色宽按钮 “Update password”。所有输入框默认 secureTextEntry (密码遮盖)，点眼睛切明文。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S04",
+          "pre": "在 S03 的 Change password 表单，Current 输错 / New 少于 8 字符 / New 与 Confirm 不一致",
+          "action": "点 “Update password”",
+          "expect": "按钮变 loading (ActivityIndicator + “Updating…”)，然后错误红字显示在表单顶部：①New 少于 8 字符 → “New password must be at least 8 characters.”。②Confirm 不一致 → “New passwords do not match.”。③Current 错 → 后端返回错误映射到文案 (常见 “Failed to update password (HTTP 401).”)。④网络超时 15s → “Network timed out. Please try again.”",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S05",
+          "pre": "S03 表单填对：Current 正确，New = 至少 8 字符，Confirm 相同",
+          "action": "点 “Update password”",
+          "expect": "按钮 loading。成功后：①绿字 “Password updated. Please sign in again.” 显示 1.5 秒。②自动 logout (清 token、清 remember_me)，nav.replace(“Auth”) — 用户回到登录屏。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S06",
+          "pre": "S01 屏往下滑",
+          "action": "看 “YOUR PROGRESS” 区",
+          "expect": "区标题 “Your progress” (uppercase 700 灰 letterSpacing 1)，右边紧跟一个 Info (?) 小图标按钮。下方两张并排 badge 卡：左 — Footprints 图标圆 (44px, #eef3e6 底, primary 色)、大数字 (memoryPointCount)、小字 “places explored” (单数 “place”)；右 — Mountain 图标圆 (44px, brown-tint 底, #b5823d 色)、大数字 (myCairnCount)、小字 “cairns planted” (单数 “cairn”)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S07",
+          "pre": "在 S06 “Your progress” 标题旁",
+          "action": "点 Info (?) 图标",
+          "expect": "居中弹出 Modal (半透明黑 backdrop 0.45 淡入)。白卡：标题 “How progress is counted”。正文两段：①粗字 “Places explored” — “the number of unique map cells you've walked through. The world is divided into small hexagon cells (about 25m across). Each time your GPS enters a new cell during a hike or run, it's added to your total.” ②粗字 “Cairns planted” — “every cairn you have dropped on the map. Cairns you find from friends do not count here.” 底部绿色按钮 “Got it”。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S08",
+          "pre": "S01 屏继续下滑",
+          "action": "看 “PREFERENCES” 区",
+          "expect": "区标题 “Preferences”。卡里 3 个 ActionRow / ToggleRow 分隔：①ActionRow “Units” — Ruler icon primary 色，hint “Distance and elevation”，value 显示当前 “Miles / feet” 或 “Kilometres / metres”，末尾 ChevronRight。②ActionRow “Date format” — Calendar icon primary 色，hint “How dates appear across the app”，value 显示 “DD/MM/YYYY” / “MM/DD/YYYY” / “YYYY-MM-DD”。③ToggleRow “Haptic feedback” — Vibrate icon brown 色，label “Haptic feedback”，hint “Little buzz when you tap buttons”，右 Switch。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S09",
+          "pre": "在 S08 屏，Preferences 卡显示中",
+          "action": "点 “Units” 行",
+          "expect": "行下方 inline 展开：①分隔线。②“Metric” + hint “Kilometres, metres”，当前选中显示 primary 色 Check 图标。③分隔线。④“Imperial” + hint “Miles, feet”，当前选中显示 primary Check。点某项即写 updateSetting('units', ...) 并折叠。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S10",
+          "pre": "在 S08 屏，Preferences 卡显示中",
+          "action": "点 “Date format” 行",
+          "expect": "inline 展开 3 项：①“DD/MM/YYYY” + hint “New Zealand / UK · e.g. 29/07/2026”。②“MM/DD/YYYY” + hint “United States · e.g. 07/29/2026”。③“YYYY-MM-DD” + hint “ISO · e.g. 2026-07-29”。当前项右侧 primary Check。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S11",
+          "pre": "在 S08 屏，Haptic feedback 关闭中",
+          "action": "点 “Haptic feedback” 的 Switch",
+          "expect": "Switch 翻绿。同时 iOS 触发一次 success haptic (轻震一下预览)。再点则关闭 (关闭时不震)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S12",
+          "pre": "已登录，Notifications 服务已返回 pushPrefs (friendRequests / markerReplies / memoryHits / announcements 4 项)",
+          "action": "S08 下面继续看 “NOTIFICATIONS” 区 (仅登录 + pushPrefs 返回后可见)",
+          "expect": "区标题 “Notifications”。卡里 4 个 ToggleRow：①“Friend requests” + hint “When someone wants to add you” (Users icon 绿色)。②“Cairn activity” + hint “Replies and reactions on your cairns” (Flag icon 橙色)。③“Memory highlights” + hint “When a friend hikes near a place you've been” (Mountain icon 深绿)。④“Announcements” + hint “Occasional product updates” (Info icon 蓝灰)。每行右 Switch，点击后 optimistic 更新 UI + PATCH server pushPreferences。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S13",
+          "pre": "继续下滑",
+          "action": "看 “ABOUT & LEGAL” 区第 1 行",
+          "expect": "区标题 “About & Legal”。第 1 行 ActionRow：Cloud icon 蓝灰色，label “Check the weather”，hint “Opens MetService NZ”，末尾 ExternalLink icon (非 ChevronRight)。点击 Linking.openURL('https://www.metservice.com/rural')。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S14",
+          "pre": "在 S13 About & Legal 区",
+          "action": "点第 2 行 “Send feedback” (MessageSquare icon primary 色，hint “Feedback, safety report, or bug — with optional screenshot”)",
+          "expect": "行下方 inline 展开表单：①chip row 三选一：“Feedback” (MessageSquare icon) / “Safety report” (TriangleAlert icon) / “Bug” (Wrench icon)，默认选中 Feedback (primary 底白字)。②label “Tell us what happened”。③多行 textarea (占位随 chip 变，Feedback → “Ideas, hellos, or anything on your mind…”，Safety → “Where and what — hazard, missing marker, or emergency…”，Bug → “What did you tap? What did you expect vs see?”)。④字符计数 “{n} / 1000”。⑤(附件预览格，若已附)。⑥按钮行：左次按钮 “Attach screenshots” (Send icon primary)，右绿色主按钮 “Send”。填字 < 3 时 Send disabled (opacity 0.5)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S15",
+          "pre": "在 S14 展开的 Feedback 表单里",
+          "action": "点 “Attach screenshots”，iOS 图库权限已授权，选 2 张图",
+          "expect": "预览格出现 2 个 64x64 缩略图，每个右上角有 ✕ 按钮。附件数达到 5 后 “Attach screenshots” 按钮消失。附件超过 5 张 → 红字 “Up to 5 attachments.”",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S16",
+          "pre": "S14 表单填了 ≥ 3 字符 + 1 附件",
+          "action": "点 “Send”",
+          "expect": "按钮变 ActivityIndicator 白色小转圈。附件先 uploadDebugScreenshots → 服务器保存。然后 log 'user_feedback' 事件。成功后绿字 “Thanks — we got it.” 显示 2 秒，然后整个 inline 表单折叠隐藏。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S17",
+          "pre": "S13 About & Legal 区往下",
+          "action": "看 “Privacy Policy” / “Terms of Service” / “About Cairn” 3 行",
+          "expect": "① “Privacy Policy” (Shield icon 蓝灰色，hint “How we handle your data”，末尾 ExternalLink) → 打 PRIVACY_URL。② “Terms of Service” (FileText icon 棕色，hint “Apple's standard app terms — a Cairn-specific version is coming”，末尾 ExternalLink) → 打 Apple standard EULA URL。③ “About Cairn” (Info icon 灰，value 显示 “v{appVersion} · {OTA_VERSION}”，无 chevron)，点击处理 5-tap gesture (下面 S23 讲)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S18",
+          "pre": "已登录，S17 下面还有一张 Export 卡",
+          "action": "看 “Export my data” 行 (仅登录可见)",
+          "expect": "独立一张卡：Download icon primary 色，label “Export my data”，hint “We'll email you a JSON bundle with everything on your account”，无 chevron。点击弹 iOS Alert “Export your data”，正文说明 + 2 按钮 “Cancel” / “Request export”。点 Request export → 若成功另一个 Alert “Export requested” 提示邮件到达 + 链接 24 小时有效。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S19",
+          "pre": "继续下滑",
+          "action": "看 “DANGER ZONE” 区",
+          "expect": "区标题 “Danger zone”。卡内一到两行 (登录可见 2 行，未登录只 1 行)：①ActionRow “Reset my map memory” (无 icon，label 红色 Colors.danger，hint “Clears every place you have walked. Your hikes and cairns are kept.”) → 点开 TypeToConfirmModal (title “Reset your map memory?”，keyword “reset memory”)。②ActionRow “Delete account” (仅登录，红字 label，hint “Permanent — opens confirmation before we email our team”) → TypeToConfirmModal (title “Delete your account?”，keyword “delete account”)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S20",
+          "pre": "在 S19 Danger zone",
+          "action": "点 “Reset my map memory”",
+          "expect": "居中 fade 弹 Modal。白卡：标题 “Reset your map memory?”，正文 “This clears every place you have walked on your map. Your saved hikes and cairns are kept. This cannot be undone.”，小字 “Type reset memory to confirm.”，输入框 (placeholder “reset memory”)，底部 “Cancel” + “Reset memory” 红按钮 (输入不匹配时 disabled opacity 0.4)。输入 “reset memory” 后 “Reset memory” 变可点，点击调 deleteAllMemoryFromServer，失败弹 iOS Alert “Could not reset memory” “Check your connection and try again.”",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S21",
+          "pre": "在 S19 Danger zone (已登录)",
+          "action": "点 “Delete account”",
+          "expect": "Modal 结构同 S20，但：标题 “Delete your account?”，正文 “Your account will be scheduled for permanent deletion. You'll have 7 days to sign in and restore it before all your hikes, cairns, and memory are permanently erased.”，keyword “delete account”，红按钮 “Delete account”。输入并点确认 → DELETE /api/auth/account (7 天 grace period 软删)。成功后自动 logout + iOS Alert “Account scheduled for deletion” 显示 restore 截止日期。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S22",
+          "pre": "已登录，Danger 卡下面还有一张 Sign out 卡",
+          "action": "看 “Sign out” 行",
+          "expect": "灰色卡：ActionRow 无 icon，label 深色 “Sign out”，hint “Your hikes stay saved”，末尾 ChevronRight。点击 → 若正在 tracking 一场 hike 弹警告 “Sign out mid-hike?” 说明会丢失当前录制，两按钮 “Cancel” / “Sign out anyway”(红)。若非 tracking 弹普通 “Sign out” Alert “Your hikes stay saved. You can sign back in anytime.” 两按钮 “Cancel” / “Sign out”(红)。确认后走 logout 清 token + appLogout()。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "S23",
+          "pre": "在 S17 About Cairn 行，Debug mode 目前 OFF",
+          "action": "连点 “About Cairn” 行 5 次，3 秒内完成",
+          "expect": "5 tap 达到后：iOS Alert “Developer mode” “Debug tools unlocked. Scroll down to see them.” 单按钮。关闭 Alert 后往下滑，出现一个新区 “DEVELOPER”：卡内 3 行——①ToggleRow “Debug mode” (Wrench icon primary，hint “Enables sim-walker + verbose telemetry”，右 Switch = ON)。②ActionRow “Open Debug screen” (Settings2 icon 灰) → nav.navigate('Debug')。③ToggleRow “Sim walker (fake GPS)” (Navigation2 icon primary，hint “Off on next app launch”)。区下方一行斜体小字 “Only for development and QA.” 底部 footer 斜体小字 “Thanks for using Cairn.”",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "🎬 Hike 回放",
+      "rows": [
+        {
+          "id": "V01",
+          "pre": "已登录，账号有 3 条 hike sessions 已同步 (全 synced，非 pending)",
+          "action": "从 Home ToolsRow 点进 History (或点 Home 主页顶部 “Recent activities” 里某条 hike 卡片)",
+          "expect": "淡入进入 MapHistory 屏 (若走 “History” 入口 route.params 无 sessionId；若走某 hike 卡入口带 sessionId → 直接 V04 单条模式)。屏上半是 map 区 (Colors.mapBg 底)。屏顶叠加 top bar：左 “Back” pill，中间标题 “History”，右侧 __DEV__ 下才有紫 “Plan” 小 pill；生产时只是同宽 spacer。中间 tab bar (仅 list 模式)：pill 状 tab，选中 “Routes ({N=3})” (Route icon)。底部滑板 listPanel：小 handle + search box (Search icon + placeholder “Search hikes by name…” + ArrowUpDown 过滤按钮)。下方 3 张 SessionCard，每张：LinearGradient 40px 圆图 (Hiking icon 或 Running icon)，中间 pill 类型标签 (“Hike”/“Run”) + primary 大字 duration + small 灰字 “{date} · {distance}”，右 ChevronRight。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "V02",
+          "pre": "在 V01 list 屏，search + filter 全空",
+          "action": "点 top bar 右下的 ArrowUpDown 过滤按钮",
+          "expect": "search box 下方展开 filterBar：3 行 chip：①“Type” — “All” / “Hikes” / “Runs”。②“When” — “All” / “7 days” / “30 days” / “1 year”。③“Sort” — “Newest” / “Oldest” / “Longest”。当前选中 chip 是 primary 底白字，其他白底灰字。点任一 chip 立即重排列表。search box + type/period/sort 任一非默认时 ArrowUpDown 图标变 primary 色。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "V03",
+          "pre": "在 V01 list 屏",
+          "action": "点某张 SessionCard (未选中)",
+          "expect": "SessionCard 展开：右 chevron 变成 ChevronDown。展开区 (210px 高，Easing.out cubic 280ms 展开动画) 里从上到下：①4 个 capsule 排 (每格左侧不同颜色 border：primary/running/severityCaution/flag)：{distance} + unit / {duration} + “time” / “+{elev}{elevUnit}” + “elev” / {markerIds.length} + “flags”。②routePreviewCard (120px 高，primaryBg 底，topo 圆环装饰，右上两 chip：MapPin+distance / Timer+duration，中间左下角 primary 色斜标 “Preview”)。③绿色 pill 主按钮 “View on Map” (Map icon + 白字)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "V04",
+          "pre": "从某张 SessionCard 点 “View on Map”，或从 Home 直接点 hike 卡片带 sessionId 进入",
+          "action": "已到达 MapHistory 单条模式屏 (targetSessionId 有值)",
+          "expect": "map 区显示真实 Mapbox NativeTrackMap：从 session.trackPoints 画一条 polyline (color = running 色 / primary 色)，起点用 14px 圆 dot (borderColor=color)，终点用 18px 白圆 (border=color 3px)。track bounding box 若太短 (< 555m) 自动扩到 ~600m 视野。route 附近的 markers (bbox + 200m buffer) 用 28px 圆 (borderColor=meta.color) 显示。map 右下角有 recenter 按钮 (Target icon) 仅在用户手势 pan 后出现。map 上层顶部 stat bar 4 格：distance / time / flags / elev。底部 singleSessionPanel 白卡：hike 名字 + Pencil icon 提示可改名，右侧 Send icon (分享按钮)。中间 3 个大字 stat：distance/time/elev。底部一行 2 按钮：左 “Save as Route” (primary，Route icon)，右 “Delete” (danger 红，Trash2 icon)。首次点 Delete 变 “Confirm Delete”，再点才删除。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "V05",
+          "pre": "在 V04 单条屏，hike 有 name = “Sunday walk”",
+          "action": "点顶部 “Sunday walk” 标题 (带 Pencil icon 的行)",
+          "expect": "标题变成输入框 (autofocus, maxLength 60, placeholder “Hike name”)，右侧两个 icon 按钮：Check (primary) 保存 + X (灰) 取消。回车或点 Check → 调 renameSession(id, newName) 更新。点 X 或空值 → 恢复原名。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "V06",
+          "pre": "V04 单条屏，session 有 ≥ 2 个 trackPoint (loadedTrackPoints 已加载完)",
+          "action": "点底部 “Save as Route” 按钮",
+          "expect": "nav.navigate('RouteEditor', { fromSessionId, fromSessionTrackPoints: [...] }) — 打开 RouteEditor 屏进入草稿模式，name 预填 (类似 “Hike Jun 9”)，camera 自动 fit 到 polyline。若 loadedTrackPoints == null 或 length < 2 → 按钮 opacity 0.4 且 disabled 无法点。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "V07",
+          "pre": "V04 单条屏",
+          "action": "点 “Delete” 按钮 (第 1 次)",
+          "expect": "按钮变红底白字 “Confirm Delete”。再次点击才真删 deleteSession(id) 并 nav.goBack()。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "V08",
+          "pre": "V04 单条屏，session.syncState = 'pending' 或 'syncing' (offline 保存的 hike 还未上传)",
+          "action": "看这条 pending session 在 list 模式 (V01) 里的显示",
+          "expect": "该 SessionCard 变灰卡 (opacity 0.55，LinearGradient 底)：主体 header 行——40px 白色半透明圆里放 Footprints/Mountain icon (activity 色)，右侧上 “{name}”，下 “{distance} · {duration}”。下面小字带 CloudOff icon (12px)：状态 syncing 时 “Syncing…”，pending 时 “Saved offline — tap to retry sync”。点整卡 → 触发 syncDaemon.drainPending() 手动重试。长按 (800ms) → iOS Alert “Discard this hike?” 两按钮，再确认 “Confirm discard?” 才真 abandonPending 删除。展开区 (V03 那种 4-capsule + preview + View on Map) 在 pending 状态下不渲染 (仅正常同步的 session 才可展开)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "📌 Marker 详情",
+      "rows": [
+        {
+          "id": "D01",
+          "pre": "刚在 Plant flow (C05) 成功放下一个 “test cairn”，marker.authorId=userId (是自己)，permission=group，syncState=synced",
+          "action": "自动进入 MarkerDetail 屏 (nav.replace)",
+          "expect": "屏顶 mapHero (最少 280px 高)：Mapbox 地图，center 到 marker.lng/lat，zoom 16.5。中间一颗 CairnPin 徽章 (v10 reliquary medallion，tier 根据 owner+permission 判定：owner 显 gold crown 'self' tier)。map 左上叠一个 “Back” pill (BackButton variant pill)。底部 ScrollView panel：①headerRow：type badge (MARKER_TYPES.danger 时橙红 bg + icon + label “Danger”) + visBadge 白底灰边 (Users icon + “Friends”)。②view mode：大字标题 (privateTitle) 若空则斜体 “Untitled cairn”。③body (privateBody 灰字若无则不显示)。④metaList 两行小字：Calendar+dateStr / MapPin+ “{lat.toFixed(5)}, {lng.toFixed(5)}”。⑤actionRow (owner)：左 ghost 按钮 “Delete” (Trash2 danger 色)，右 primary 深棕按钮 “Edit” (Pencil 白色)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "D02",
+          "pre": "在 D01 屏 (自己的 marker，网络在线)",
+          "action": "点 “Edit” 按钮",
+          "expect": "panel 切换成 edit mode：①uppercase label “Type” + 5 chip 行 (MARKER_TYPE_ORDER: cairn/danger/water/camp/free 各带 icon 和 label；当前选中变 bg + border)。②label “Title” + 输入框 (maxLength=ContentConfig.titleMaxChars, placeholder “Title (max N)”)。③label “Note” + 多行 textArea (占位 “Tell whoever finds this…”)。④label “Who can see this” + 3 permission chip：“Just me”(Lock) / “Friends”(Users) / “Anyone”(Globe)，若 VisibilityConfig.enablePublicOption=false 则不显示 Anyone。⑤lockedField 小灰条 (Lock icon + 斜体 “Location is fixed where you planted it.”)。⑥actionRow：ghost “Cancel” + primary “Save” (Saving 时改 “Saving…” + opacity 0.6)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "D03",
+          "pre": "在 D02 edit mode，把 Type 从 danger 改成 water，Title 改成 “Fresh stream”，permission 改成 personal",
+          "action": "点 “Save”",
+          "expect": "按钮短暂显示 “Saving…”。updateMarker(id, {type, note, permission}) 成功后：①edit mode 收起，回 view mode。②typeBadge 变成 water 蓝色。③visBadge 变 “Just me” + Lock icon。④标题显示 “Fresh stream”。⑤log 'marker.edit_save'。⑥出错 → iOS Alert “Could not save” “Please try again in a moment.”",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "D04",
+          "pre": "在 D01 屏 (自己的 marker，网络离线)",
+          "action": "看 action row",
+          "expect": "两按钮 opacity 0.4 且 disabled：文案变 “Delete · Needs internet” 和 “Edit · Needs internet” (useOnlineOnly hook 判定)。点击无响应。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "D05",
+          "pre": "在 D01 屏 (自己的 marker，网络在线)",
+          "action": "点 “Delete” 按钮",
+          "expect": "iOS Alert 弹起：标题 “Delete this cairn?”，正文 “It will be removed from your Memory and (if shared) from public view. This cannot be undone.”，两按钮 “Cancel” (灰) / “Delete” (destructive 红)。点 Delete → deleteMarker(id) + nav.goBack()。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "D06",
+          "pre": "从 RoutesScreen 的 Flags tab 点了一个别人 (friend) 分享给我的 marker (marker.authorId=friend.id ≠ me)",
+          "action": "进入 MarkerDetail",
+          "expect": "mapHero + panel 结构同 D01，但：①CairnPin tier 显示 'friend' (green star)。②view mode 底部**不显示** actionRow (Edit/Delete)。isOwner=false 时 owner-only 区完全不渲染。③其他内容都可看：title/body/date/coord。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "D07",
+          "pre": "自己 marker，permission 曾经设为 public 并已同步到 server (marker.publicSnapshot 有值)，现在自己把 title 从 “Old title” 改成 “New title”",
+          "action": "回到 view mode",
+          "expect": "actionRow 上方多出一块 snapshotBanner 白卡：①headerRow：Globe icon + uppercase 小字 “Public viewers see”。②body 一行：“\"Old title\", pinned as Danger.” (或对应 snapshot.type 的 label)。③灰斜体小字 “Public content is frozen at the moment you first shared.” 仅当 snap 存在且 snap.type != current 或 snap.note != current 时显示。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "D08",
+          "pre": "刚 Plant 完 (C06 offline 场景)，marker.syncState = 'pending' 或 'syncing'",
+          "action": "看屏顶 headerRow",
+          "expect": "typeBadge 旁多一个 SyncBadge 徽章 (pending → 沙漏/云图标 + “Waiting to sync”，syncing → 转圈)。synced 时 SyncBadge 隐藏 (仅非 synced 状态渲染)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "D09",
+          "pre": "markerId 是一个不存在的 id (或已被 deleteMarker 但页面还在)",
+          "action": "打开该 MarkerDetail",
+          "expect": "整屏 fallback 状态：顶部一行 “Back” pill (SafeAreaView top edges)。中间居中大字 “Cairn not found” (sepia 色)，下方灰小字 “This cairn may have been removed or hasn't synced yet.”。没有地图、没有按钮，只能返回。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "D10",
+          "pre": "从 Plant flow (C05/C06) 到达 MarkerDetail (nav.replace)",
+          "action": "点顶部 “Back” pill",
+          "expect": "回到 Home 屏。因为进入时用了 nav.replace 而非 nav.push，所以返回栈里没有中间的 Plant 屏幕。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "🔮 AR（暂不做）",
+      "rows": [
+        {
+          "id": "A01",
+          "pre": "已登录，有 marker 已保存到本地/服务器",
+          "action": "找 “AR” 入口",
+          "expect": "❓ AR 目前 defer，尚未 build 实装。RootNavigator 的 Stack 只有 Auth/Home/Hiking/Running/Routes/MapHistory/Map/RouteEditor/Plant/MarkerDetail/Friends/Settings/Memory/Debug，无 AR 或 ARScreen 屏。搜索 app/src/**/*AR*.tsx 无匹配 ARScreen。用户可能会问 “AR 在哪” — 目前 UI 里没有入口，规划中 defer 到未来 Sprint。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "A02",
+          "pre": "假设 AR 未来 build 实装，站在 marker 附近，AR 模式打开",
+          "action": "进入 AR 视角",
+          "expect": "❓ AR 目前 defer，尚未 build 实装。原计划：iPhone 后置摄像头 + 3D marker 悬浮在真实场景上，用户绕行可看不同角度。具体交互 (指南针指向、距离/高度显示、marker tap 详情) 待你在 Sprint 计划时确认。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "A03",
+          "pre": "假设 AR 未来 build 实装，摄像头指向 marker 位置",
+          "action": "看 AR overlay 元素",
+          "expect": "❓ AR 目前 defer，尚未 build 实装。原计划元素待你确认：距离数字 (m)、方向箭头、marker type 图标浮 3D、tap 后弹 MarkerDetail sheet。当前 codebase 没有 Viro / expo-three / react-native-ar 依赖，实装前需要先选型。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    },
+    {
+      "name": "⚡ 全局（跨页面）",
+      "rows": [
+        {
+          "id": "G01",
+          "pre": "app 冷启 (完全杀掉进程)，用户上次已登录",
+          "action": "点 iOS Home Screen 上的 Cairn 图标启动 app",
+          "expect": "①splash screen 显示 Cairn logo。②App.tsx AppRoot 挂载：hydrate() + hydrateSettings() 并行读 AsyncStorage。③尚未 hydrated 时显示纯白 <View flex:1/> (不闪 Auth)。④hydrated 完 render RootNavigator，isLoggedIn=true 直接进 Home 屏。⑤OTA check 后台异步跑 (v303 fix：不自动 reloadAsync，由 OtaBadge 提示用户手动 tap 刷新)。⑥若 crashLogger 上一次 session 有 crash 记录 → uploadCrashIfAny(API_BASE_URL) 上传后端。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "G02",
+          "pre": "app 从后台切回前台 (未杀)",
+          "action": "按 iPhone home 键把 app 划到后台，等 30 秒，再点 icon 唤起",
+          "expect": "AppState 从 background → inactive → active。App.tsx listener 检测 wasBackgrounded=true 时触发 syncDaemon.drainPending() 后台跑一遍 (offline 期间存下来的 hikes/markers 自动重试上传)。UI 不刷新，直接停在切走时的那屏。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "G03",
+          "pre": "在任何屏 (Home / Hiking / MapHistory / …)，网络突然断掉 (打开飞行模式)",
+          "action": "看屏幕",
+          "expect": "整个 app 顶部 (SafeAreaView top 之下) 淡入 (220ms) 一条 OfflineBanner：小胶囊背景 (Colors.surface 半透明)，CloudOff icon 14px + 灰字 “You're offline. Some actions will sync when you're back.” pointerEvents='none' 不挡下面点击。任何屏切换都保持可见 (RootNavigator 层级)。仅在 isLoggedIn=true 时挂载 (Auth 屏没有 OfflineBanner)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "G04",
+          "pre": "在 G03 offline banner 显示中",
+          "action": "关闭飞行模式，网恢复",
+          "expect": "OfflineBanner 淡出 (200ms) + 上滑 20px 消失。同时 networkMonitor onChange 触发 → syncDaemon.drainPending() 自动跑 → 任何 pendingSyncStore 里的 hikes/markers 排队上传。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "G05",
+          "pre": "app 冷启，用户未登录 (清过缓存 / 从没登过)",
+          "action": "启动 app",
+          "expect": "hydrated 后 RootNavigator isLoggedIn=false → 只挂 Auth 屏。Auth 屏顶右角有 OtaBadge (显示 OTA 版本)。走完 login → app.tsx crashLogger.breadcrumb('app_boot') 后 isLoggedIn=true → 切到 Home。首次登录且 hasCompletedOnboarding()=false → OnboardingModal 从底部弹起 (N01-N10 描述的 4 屏流程)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "G06",
+          "pre": "app 完成 4 屏 onboarding 后，用户在 Home 上",
+          "action": "杀掉 app 重开",
+          "expect": "AsyncStorage 里 onboardingCompleted flag 已存 → hasCompletedOnboarding()=true → onboardingChecked=true 且 showOnboarding=false → 直接进 Home，不再走 onboarding。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "G07",
+          "pre": "在 iPhone 上，任何屏",
+          "action": "把 iPhone 从竖屏旋转到横屏",
+          "expect": "app 保持竖屏不响应 (app.json orientation=\"portrait\" 全局锁定)。iPhone 系统 UI 转 landscape 后再转回，app 继续 portrait。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "G08",
+          "pre": "app 后台运行 (未杀)，正在 tracking 一场 hike (useTrackingStore.status=='tracking')",
+          "action": "iPhone 息屏 5 分钟后再唤起，app 切回前台",
+          "expect": "①GPS 后台任务 (BACKGROUND_LOCATION_TASK, expo-task-manager 注册) 继续接收定位。②AppState 从 background → active 时 debugLogger.log('app_state_change', tracking_active:true)。③trackingStore 收到期间累积的定位点 (未丢)。④UI 立刻显示最新距离/时长/pace。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "G09",
+          "pre": "推送通知：Friend request 通知达到 iOS 通知中心",
+          "action": "在锁屏或通知中心点开该通知",
+          "expect": "❓ 待确认：推送 payload 应有 deep link (比如 cairn://friends 或 universal link) 打开 app 直接跳到 Friends 屏对应 request。但 grep 全 codebase 未找到 Linking.addEventListener / URL scheme 相关的 listener 代码 — universal link/deep link **未在 client 实装**。目前点击通知只是普通打开 app 到上次那屏。需要真机 + 后端确认 payload 结构和期望行为。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        },
+        {
+          "id": "G10",
+          "pre": "任何屏 render 阶段 JS 抛异常 (未捕获)",
+          "action": "看结果",
+          "expect": "App.tsx 根节点包了 ErrorBoundary (O17)。子树报错时不再显示 iOS 红盒或空白：ErrorBoundary catch 后 log 到 crashLogger (下次 boot 上传 backend)，显示 fallback banner (tag=\"app_root\")。用户能继续用 (Boundary 之外的部分)。",
+          "note": "",
+          "tested": false,
+          "ai_status": "untested",
+          "ai_reason": "",
+          "ai_screenshot": ""
+        }
+      ]
+    }
+  ]
+}
