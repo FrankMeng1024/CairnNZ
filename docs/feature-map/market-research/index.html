@@ -105,7 +105,8 @@ h3{font-size:19px;color:var(--brown);margin:20px 0 10px}
 h4{font-size:16px;color:var(--brown-lite);margin:12px 0 6px}
 p{margin-bottom:10px}
 .subhead{color:var(--brown-lite);font-size:14px;margin-bottom:8px}
-.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;margin-right:6px}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;margin-right:6px;transition:transform .12s cubic-bezier(.2,.8,.2,1),box-shadow .12s;cursor:default}
+.badge:hover{transform:translateY(-1px) scale(1.03);box-shadow:0 2px 6px rgba(0,0,0,.12)}
 .badge-high{background:#7c1d1d;color:#fff}
 .badge-med{background:#b45309;color:#fff}
 .badge-low{background:#4b5563;color:#fff}
