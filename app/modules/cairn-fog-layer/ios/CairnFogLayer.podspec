@@ -17,7 +17,14 @@ Pod::Spec.new do |s|
   # rnmapbox post_install 只动 MapboxMaps* pods,不动我们这个 pod;我们 depend
   # MapboxMaps 不重打包它。本 build log 已证 librnmapbox-maps.a + MapboxMaps.framework
   # 并存编译通过,没 duplicate symbol。
-  s.static_framework = true
+  #
+  # R101 (2026-08-05): 删掉这行 static_framework=true —— 现在 Podfile 全局
+  # 有 useFrameworks:static (R100 加的 expo-build-properties), 所有 pod 一起
+  # 用 static framework。podspec 层再声明 static_framework=true 反而让 CocoaPods
+  # 把 target 生成为"框架里嵌框架", source files 不放进 build phase, target
+  # 空跑不编译, ExpoModulesProvider.swift 里 import 找不到 module。build
+  # d932bfc2 fail 就是这个。
+  # s.static_framework = true  # 删 - 由 Podfile 全局 useFrameworks:static 接管
   s.swift_version    = '5.0'
 
   s.dependency 'ExpoModulesCore'
