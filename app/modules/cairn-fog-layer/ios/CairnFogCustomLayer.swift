@@ -53,7 +53,7 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
     private static let kInFlightBuffers = 3
     private var uniformBuffers: [MTLBuffer] = []
     private var uniformBufferIndex: Int = 0
-    private let inFlightSemaphore = DispatchSemaphore(value: kInFlightBuffers)
+    private let inFlightSemaphore = DispatchSemaphore(value: Self.kInFlightBuffers)
     private var startTimestamp: TimeInterval = Date().timeIntervalSince1970
     // v303 subagent #3 fix: expose pipeline build status to JS for
     // remote debug via isPipelineReady ping.
@@ -341,7 +341,9 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
             desc.depthAttachmentPixelFormat = cfg.depthFmt
             desc.stencilAttachmentPixelFormat = cfg.stencilFmt
             desc.rasterSampleCount = actualSampleCount
-            let ca = desc.colorAttachments[0]!
+            // R105 (Xcode 26): colorAttachments[0] 返回 non-optional MTLRenderPipeline...Descriptor,
+            // 原来 `!` force-unwrap 会有 "unnecessary force-unwrap" warning-as-error 风险. 删.
+            let ca = desc.colorAttachments[0]
             ca.pixelFormat = cfg.colorFmt
             ca.isBlendingEnabled = true
             ca.rgbBlendOperation = .add
@@ -422,9 +424,17 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         let contents = uBuffer.contents()
 
         // 1. projectionMatrix (64 bytes)
-        memcpy(contents.advanced(by: offset), [proj], 64); offset += 64
+        // R105+ (Xcode 26): [proj] 隐式 array-to-pointer 在严格 mode 报 warning-as-error
+        // 风险 (SWIFT_TREAT_WARNINGS_AS_ERRORS=YES 时). 改 withUnsafeBytes 显式取指针.
+        withUnsafeBytes(of: proj) { buf in
+            memcpy(contents.advanced(by: offset), buf.baseAddress, 64)
+        }
+        offset += 64
         // 2. inverseProjection (64 bytes)
-        memcpy(contents.advanced(by: offset), [inv], 64);  offset += 64
+        withUnsafeBytes(of: inv) { buf in
+            memcpy(contents.advanced(by: offset), buf.baseAddress, 64)
+        }
+        offset += 64
         // 3. circles (256 × 16 = 4096 bytes)
         // R105 (Xcode 26): 显式丢弃 withUnsafeBufferPointer 返回值防止 warning-as-error
         _ = circlesCopy.withUnsafeBufferPointer { ptr in
