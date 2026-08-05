@@ -8,12 +8,39 @@ __tests__/
 **/*.spec.ts
 **/*.spec.tsx
 **/__tests__/
+__mocks__/
+__fixtures__/
+
+# Dev / review / spike / research (not runtime — R104)
+_self_test_out/
+_review/
+_spike/
+.mapbox-test/
+research/
+
+# Environment / credentials (safety net — .gitignore has these; .easignore MUST too — R104)
+.env
+.env.*
+!.env.example
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+web-build/
+.metro-health-check*
+
+# AR assets (feature deferred R99, 0 code refs — R104)
+assets/ar/
 
 # Dev scripts (icon generation, smoke tests, etc.)
-# IMPORTANT: do NOT exclude scripts/ as a whole — eas-build-pre-install hook
-# in package.json runs `node ./scripts/download-unity-framework.js` on the
-# EAS server, so that one file MUST survive the .easignore filter.
-# Exclude only the dev-only scripts (icon/sprite generation, etc.) by name.
+# scripts/ 里现在只有 eas-build-pre-install hook 不需要的东西, 但保留 scripts/
+# 目录不整体排除, 以防未来 hook 再引用 scripts 里其他文件.
+# (R99 之前 hook 用 scripts/download-unity-framework.js, R103 起改用内联
+#  xcodebuild -downloadComponent MetalToolchain, 不再依赖 scripts/.)
 scripts/gen_*.mjs
 scripts/generate-icons.js
 scripts/v156_patch.md
@@ -53,6 +80,6 @@ npm-debug.log*
 # Source maps not needed in build (Expo regenerates)
 *.map
 
-# Unity framework binary — downloaded at build time by eas-build-pre-install hook.
-# Never commit or upload; EAS re-downloads fresh each build from GitHub Release.
+# Unity framework binary — R99 前 AR/Unity build 时用, 已删除功能. R103 起
+# eas-build-pre-install hook 只跑 xcodebuild -downloadComponent MetalToolchain.
 unity/builds/
