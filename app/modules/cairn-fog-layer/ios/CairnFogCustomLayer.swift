@@ -20,6 +20,12 @@ import simd
 import MapboxMaps
 #endif
 
+// R107: file-scope constant, 避免 non-final class 里 stored property initializer
+// 引用 static/Self 的 Swift 语言限制. R105.1 用 Self.kInFlightBuffers 触发
+// "covariant 'Self' cannot be referenced from stored property initializer".
+// file-scope let 在文件加载时初始化, 类里所有地方直接用 kInFlightBuffers.
+private let kInFlightBuffers = 3
+
 #if canImport(MapboxMaps)
 
 public class CairnFogCustomLayer: NSObject, CustomLayerHost {
@@ -50,10 +56,11 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
     // 改 triple-buffered ring:3 个 buffer,每帧轮换;semaphore.wait()
     // 保证 in-flight 帧 <= 3;commandBuffer.addCompletedHandler 里 signal。
     // 标准 Metal best practice (Apple sample MetalNBuffering)。
-    private static let kInFlightBuffers = 3
+    // R107: kInFlightBuffers 移到 file scope, 避免 stored property init 里
+    // 引用 static/Self 的 Swift 限制. class 内所有引用直接用 kInFlightBuffers.
     private var uniformBuffers: [MTLBuffer] = []
     private var uniformBufferIndex: Int = 0
-    private let inFlightSemaphore = DispatchSemaphore(value: Self.kInFlightBuffers)
+    private let inFlightSemaphore = DispatchSemaphore(value: kInFlightBuffers)
     private var startTimestamp: TimeInterval = Date().timeIntervalSince1970
     // v303 subagent #3 fix: expose pipeline build status to JS for
     // remote debug via isPipelineReady ping.
@@ -310,7 +317,7 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         self.lastSampleCount = 0  // 未知,等 render
 
         self.uniformBuffers.removeAll(keepingCapacity: true)
-        for i in 0..<Self.kInFlightBuffers {
+        for i in 0..<kInFlightBuffers {
             guard let buf = metalDevice.makeBuffer(length: uniformByteSize, options: .storageModeShared) else {
                 self.pipelineError = "uniform buffer #\(i) allocation failed (size=\(uniformByteSize))"
                 NSLog("[CairnFog] FATAL: \(self.pipelineError ?? "")")
@@ -341,9 +348,11 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
             desc.depthAttachmentPixelFormat = cfg.depthFmt
             desc.stencilAttachmentPixelFormat = cfg.stencilFmt
             desc.rasterSampleCount = actualSampleCount
-            // R105 (Xcode 26): colorAttachments[0] 返回 non-optional MTLRenderPipeline...Descriptor,
-            // 原来 `!` force-unwrap 会有 "unnecessary force-unwrap" warning-as-error 风险. 删.
-            let ca = desc.colorAttachments[0]
+            // R107 (Xcode 26 iOS 26 SDK): colorAttachments[i] 返回 Optional
+            // (MTLRenderPipelineColorAttachmentDescriptor?), 必须 force-unwrap.
+            // R105.1 错误猜测这是 non-optional 删了 !, 导致 8 处属性访问全炸.
+            // build 35846c1b 证实此 API 是 Optional, 恢复 !.
+            let ca = desc.colorAttachments[0]!
             ca.pixelFormat = cfg.colorFmt
             ca.isBlendingEnabled = true
             ca.rgbBlendOperation = .add
@@ -371,7 +380,7 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         // GPU 最多卡 3 帧后必定 signal,实际通常 < 16ms)。
         _ = inFlightSemaphore.wait(timeout: .distantFuture)
         let bufIdx = uniformBufferIndex
-        uniformBufferIndex = (uniformBufferIndex + 1) % Self.kInFlightBuffers
+        uniformBufferIndex = (uniformBufferIndex + 1) % kInFlightBuffers
         let uBuffer = uniformBuffers[bufIdx]
         // 帧完成后 signal,允许下一个 slot 被 wait 拿走
         mtlCommandBuffer.addCompletedHandler { [weak self] _ in
@@ -426,12 +435,13 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         // 1. projectionMatrix (64 bytes)
         // R105+ (Xcode 26): [proj] 隐式 array-to-pointer 在严格 mode 报 warning-as-error
         // 风险 (SWIFT_TREAT_WARNINGS_AS_ERRORS=YES 时). 改 withUnsafeBytes 显式取指针.
-        withUnsafeBytes(of: proj) { buf in
+        // R107: 显式 _ = 丢弃返回值, build 35846c1b log 显示这里有 unused-result warning.
+        _ = withUnsafeBytes(of: proj) { buf in
             memcpy(contents.advanced(by: offset), buf.baseAddress, 64)
         }
         offset += 64
         // 2. inverseProjection (64 bytes)
-        withUnsafeBytes(of: inv) { buf in
+        _ = withUnsafeBytes(of: inv) { buf in
             memcpy(contents.advanced(by: offset), buf.baseAddress, 64)
         }
         offset += 64

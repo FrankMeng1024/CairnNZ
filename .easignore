@@ -1,7 +1,42 @@
-# Root-level .easignore — excludes files outside app/ that EAS picks up
-# because EAS archives the entire git repo root, not just app/
+# Root-level .easignore — EAS 只读这个位置的 .easignore (git repo root),
+# app/.easignore 会被完全忽略 (subagent spike 2026-08-05 确认, Expo 官方规则).
+#
+# ⚠️ 有 .easignore 时 .gitignore 全部失效, 所以所有需要排除的都必须在这里.
 
-# Unity build cache (1.7GB) — never needed by EAS
+# ============================================================
+# 大头 (500+ MB, 之前 upload 592MB 主要来源)
+# ============================================================
+# node_modules — EAS 服务器会自己 npm ci, 不需要客户端上传
+node_modules/
+**/node_modules/
+app/node_modules/
+
+# expo prebuild 会重新生成 native project, 不需要上传
+app/ios/
+app/android/
+ios/
+android/
+
+# ============================================================
+# Root 层大目录 (subagent 实测: docs 244MB, debug-snapshots 199MB)
+# ============================================================
+docs/
+debug-snapshots/
+_review/
+_spike/
+_debug/
+_diag/
+_research/
+backup/
+sandbox/
+research/
+tasks/
+spike/
+.tmp-debug/
+.tmp-snaps/
+.playwright-mcp/
+
+# Unity build cache (v303 遗留, AR feature 已 defer)
 UnityARLib/Library/
 UnityARLib/Temp/
 UnityARLib/Obj/
@@ -10,10 +45,97 @@ UnityARLib/Builds/
 UnityARLib/Logs/
 UnityARLib/MemoryCaptures/
 UnityARLib/Recordings/
-
-# Other non-app directories
-sandbox/
-research/
-debug-snapshots/
-.playwright-mcp/
 unity_setup/
+
+# 后端 (独立部署, EAS 不需要)
+backend/
+
+# ============================================================
+# app/ 内 dev/test/build artifacts
+# ============================================================
+# Tests (jest)
+app/__tests__/
+app/**/*.test.ts
+app/**/*.test.tsx
+app/**/*.spec.ts
+app/**/*.spec.tsx
+app/**/__tests__/
+app/__mocks__/
+app/__fixtures__/
+
+# Dev / review / spike (app 层)
+app/_self_test_out/
+app/_review/
+app/_spike/
+app/.mapbox-test/
+app/research/
+
+# Environment / credentials (safety net)
+app/.env
+app/.env.*
+!app/.env.example
+.env
+.env.*
+!.env.example
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+web-build/
+app/web-build/
+.metro-health-check*
+
+# AR assets (feature deferred, 0 code refs)
+app/assets/ar/
+
+# Dev scripts
+app/scripts/gen_*.mjs
+app/scripts/generate-icons.js
+app/scripts/v156_patch.md
+app/pw_screenshot.js
+app/pw_shot.js
+
+# QA / UX / arch docs (app 层)
+app/docs/
+
+# Expo web export (43MB, 只用于 web target)
+app/dist/
+dist/
+
+# Expo dev cache
+app/.expo/
+app/.expo-shared/
+app/expo-env.d.ts
+.expo/
+
+# HTML prototypes
+*.html
+app/*.html
+
+# TypeScript build info
+*.tsbuildinfo
+app/*.tsbuildinfo
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Coverage / logs
+coverage/
+app/coverage/
+*.log
+npm-debug.log*
+
+# Source maps not needed in build
+*.map
+
+# Git
+.git/
