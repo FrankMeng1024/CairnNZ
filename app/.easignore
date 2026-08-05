@@ -1,5 +1,15 @@
 # EAS ignore — keep ONLY what's needed at runtime.
 # Everything below is dev/test/build-output, not part of the running app.
+#
+# ⚠️ CRITICAL: 有 .easignore 时 EAS 忽略 .gitignore, 所以所有 gitignore
+# 的东西也必须在这里显式列出 (R106 修 592MB 上传体积 bug).
+
+# Node dependencies (EAS 服务器会自己 npm install, 不需要上传 ~500MB node_modules)
+node_modules/
+
+# Native project 目录 (EAS 会跑 expo prebuild 重新生成)
+ios/
+android/
 
 # Tests (jest)
 __tests__/
@@ -18,7 +28,7 @@ _spike/
 .mapbox-test/
 research/
 
-# Environment / credentials (safety net — .gitignore has these; .easignore MUST too — R104)
+# Environment / credentials (safety net — R104)
 .env
 .env.*
 !.env.example
@@ -37,10 +47,6 @@ web-build/
 assets/ar/
 
 # Dev scripts (icon generation, smoke tests, etc.)
-# scripts/ 里现在只有 eas-build-pre-install hook 不需要的东西, 但保留 scripts/
-# 目录不整体排除, 以防未来 hook 再引用 scripts 里其他文件.
-# (R99 之前 hook 用 scripts/download-unity-framework.js, R103 起改用内联
-#  xcodebuild -downloadComponent MetalToolchain, 不再依赖 scripts/.)
 scripts/gen_*.mjs
 scripts/generate-icons.js
 scripts/v156_patch.md
@@ -80,6 +86,5 @@ npm-debug.log*
 # Source maps not needed in build (Expo regenerates)
 *.map
 
-# Unity framework binary — R99 前 AR/Unity build 时用, 已删除功能. R103 起
-# eas-build-pre-install hook 只跑 xcodebuild -downloadComponent MetalToolchain.
+# Unity framework binary
 unity/builds/
